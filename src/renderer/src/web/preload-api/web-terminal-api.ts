@@ -176,6 +176,8 @@ export function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
     onPortForwardsChanged: () => noopUnsubscribe,
     onDetectedPortsChanged: () => noopUnsubscribe,
     browseDir: () => Promise.resolve({ entries: [], resolvedPath: '', pathFlavor: 'posix' }),
+    probeReadiness: () =>
+      Promise.reject(new Error('SSH host readiness probing is unavailable in the web client.')),
     onCredentialRequest: () => noopUnsubscribe,
     onCredentialResolved: () => noopUnsubscribe,
     submitCredential: () => Promise.resolve()

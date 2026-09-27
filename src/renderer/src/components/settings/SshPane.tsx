@@ -19,6 +19,7 @@ import { HostRemoveDialog } from '../sidebar/HostRemoveDialog'
 import { resolveSshHostRemoval } from '../sidebar/ssh-host-remove-resolution'
 import { getAllWorktreesFromState } from '@/store/selectors'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
+import { openHttpLink } from '@/lib/http-link-routing'
 import { translate } from '@/i18n/i18n'
 import { useSshAddTargetIntent } from './use-ssh-add-target-intent'
 export { getSshPaneSearchEntries } from './ssh-search'
@@ -31,6 +32,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
   // global store (via useIpcEvents.ts). Reading from the store avoids
   // duplicating the onStateChanged listener and per-target getState IPC calls.
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
+  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -191,6 +193,17 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
     setEditingId(target.id)
     setForm(getEditingTargetForSshTarget(target))
     setShowForm(true)
+  }
+
+  // Why: a service link is an explicit "open this" action, so it targets Orca's
+  // browser tab with forceInApp rather than the Link Routing preference; with no
+  // active workspace openHttpLink falls back to the system browser.
+  const handleOpenServiceLink = (url: string): void => {
+    openHttpLink(url, {
+      worktreeId: activeWorktreeId,
+      forceInApp: true,
+      sourceOwner: { kind: 'local' }
+    })
   }
 
   const handleConnect = async (targetId: string): Promise<void> => {
@@ -401,6 +414,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
                     onRemove={(id) =>
                       requestRemoveTarget({ id, label: target.label }, requestRemove)
                     }
+                    onOpenServiceLink={handleOpenServiceLink}
                   />
                 ))}
               </div>

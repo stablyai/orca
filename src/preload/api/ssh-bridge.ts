@@ -5,6 +5,7 @@ import type {
   SshConfigHostListResult,
   SshConfigHostResolution,
   SshConfigImportResult,
+  SshReadinessReport,
   SshTargetAddResult,
   SshTargetCreateInput,
   SshTarget,
@@ -151,6 +152,9 @@ export const sshApi = {
     resolvedPath: string
     pathFlavor: FilesystemPathFlavor
   }> => ipcRenderer.invoke('ssh:browseDir', args),
+
+  probeReadiness: (args: { targetId: string }): Promise<SshReadinessReport> =>
+    ipcRenderer.invoke('ssh:probeReadiness', args),
 
   onCredentialRequest: (
     callback: (data: {

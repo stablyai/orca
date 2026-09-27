@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { MAX_SSH_SERVICE_LINKS } from '../../../../shared/ssh-service-links'
 import { EMPTY_FORM } from './ssh-target-draft'
 import { buildSshTargetSavePayload } from './ssh-target-save-payload'
 
@@ -87,5 +88,72 @@ describe('buildSshTargetSavePayload', () => {
     if (!result.ok) {
       expect(result.error).toContain('Terminal timeout')
     }
+  })
+
+  it('persists trimmed service links and clears the field when the list is emptied', () => {
+    const saved = buildSshTargetSavePayload({
+      ...EMPTY_FORM,
+      host: 'grafana.example.com',
+      serviceLinks: [
+        { id: 'row-1', label: ' Grafana ', url: ' https://build-box.example.ts.net ' }
+      ]
+    })
+
+    expect(saved.ok).toBe(true)
+    if (!saved.ok) {
+      throw new Error(saved.error)
+    }
+    // Why: the draft id is render identity only, so save must not carry it into storage.
+    expect(saved.payload.target.serviceLinks).toEqual([
+      { label: 'Grafana', url: 'https://build-box.example.ts.net' }
+    ])
+    expect(saved.payload.target.serviceLinks?.[0]).not.toHaveProperty('id')
+    expect(saved.payload.updates.serviceLinks).toEqual([
+      { label: 'Grafana', url: 'https://build-box.example.ts.net' }
+    ])
+
+    const cleared = buildSshTargetSavePayload({ ...EMPTY_FORM, host: 'grafana.example.com' })
+
+    expect(cleared.ok).toBe(true)
+    if (!cleared.ok) {
+      throw new Error(cleared.error)
+    }
+    expect(cleared.payload.target).not.toHaveProperty('serviceLinks')
+    // Why: the update merge needs the explicit undefined to remove a link the user deleted.
+    expect(cleared.payload.updates.serviceLinks).toBeUndefined()
+  })
+
+  it('rejects a service link whose URL is not http(s) or whose label is empty', () => {
+    const badUrl = buildSshTargetSavePayload({
+      ...EMPTY_FORM,
+      host: 'grafana.example.com',
+      serviceLinks: [{ id: 'row-1', label: 'Grafana', url: 'javascript:alert(1)' }]
+    })
+    const emptyLabel = buildSshTargetSavePayload({
+      ...EMPTY_FORM,
+      host: 'grafana.example.com',
+      serviceLinks: [{ id: 'row-1', label: '  ', url: 'https://grafana.example.com' }]
+    })
+
+    for (const result of [badUrl, emptyLabel]) {
+      expect(result.ok).toBe(false)
+      if (!result.ok) {
+        expect(result.error).toContain('Each service link needs a label of 1 to')
+      }
+    }
+  })
+
+  it('rejects more service links than the maximum', () => {
+    const result = buildSshTargetSavePayload({
+      ...EMPTY_FORM,
+      host: 'grafana.example.com',
+      serviceLinks: Array.from({ length: MAX_SSH_SERVICE_LINKS + 1 }, (_, index) => ({
+        id: `row-${index}`,
+        label: `service-${index}`,
+        url: `https://service-${index}.example`
+      }))
+    })
+
+    expect(result.ok).toBe(false)
   })
 })

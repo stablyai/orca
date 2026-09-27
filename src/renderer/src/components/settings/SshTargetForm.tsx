@@ -12,6 +12,7 @@ import {
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { SshHostAdvancedFields } from './SshHostAdvancedFields'
+import { SshServiceLinksEditor } from './SshServiceLinksEditor'
 import {
   applyParsedSshHostInput,
   hasAdvancedConnectionValues,
@@ -242,6 +243,12 @@ export function SshTargetForm({
                 form={form}
                 disabled={false}
                 onFormChange={onFormChange}
+              />
+              <SshServiceLinksEditor
+                links={form.serviceLinks}
+                onChange={(updater) =>
+                  onFormChange((f) => ({ ...f, serviceLinks: updater(f.serviceLinks) }))
+                }
               />
             </div>
           </div>

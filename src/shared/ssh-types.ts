@@ -9,6 +9,10 @@ export const DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS = 24 * 60 * 60
 export const DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS = 0
 export const SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD = 'relay.configureGraceTime'
 
+/** A named service hosted on an SSH host (e.g. Grafana), opened straight from the
+ *  host card. `url` is always http(s) — see normalizeSshServiceLinks. */
+export type SshServiceLink = { label: string; url: string }
+
 export type SshTarget = {
   id: string
   label: string
@@ -52,6 +56,9 @@ export type SshTarget = {
   /** Port forwards to auto-restore on connect/reconnect. Persisted so
    *  forwards survive app restarts. */
   portForwards?: SavedPortForward[]
+  /** Named services on this host, shown as openable buttons on its card. Persisted
+   *  so the links survive app restarts; http(s) only. */
+  serviceLinks?: SshServiceLink[]
   /** Reuse a system OpenSSH connection across setup commands. Undefined means
    *  enabled; false is an explicit per-target compatibility opt-out. */
   systemSshConnectionReuse?: boolean
@@ -299,6 +306,32 @@ export type DetectedPort = {
 export type EnrichedDetectedPort = DetectedPort & {
   advertisedUrl?: string
   advertisedProtocol?: 'http' | 'https'
+}
+
+// ─── SSH Host Readiness ────────────────────────────────────────────
+
+/** Per-check verdict. `unknown` is not a failure: the host could not be asked. */
+export type SshReadinessState = 'ok' | 'miss' | 'unknown'
+
+export type SshReadinessCheckKey =
+  | 'node'
+  | 'toolchain'
+  | 'github'
+  | 'gh-auth'
+  | 'git-identity'
+  | 'claude'
+  | 'codex'
+
+export type SshReadinessCheck = {
+  key: SshReadinessCheckKey
+  state: SshReadinessState
+  detail: string
+}
+
+export type SshReadinessReport = {
+  checks: SshReadinessCheck[]
+  /** ms epoch when the probe ran, stamped by the parsing side. */
+  probedAt: number
 }
 
 /** Outcome of `ssh:terminateSessions`. Uses the fixed verdict vocabulary from

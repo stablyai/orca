@@ -33,6 +33,7 @@ export {
   listRegisteredSshTargets
 } from '../ssh/ssh-target-registry'
 import { registerSshBrowseHandler } from './ssh-browse'
+import { registerSshHostReadinessHandler } from './ssh-host-readiness-handler'
 import { registerCredentialHandler } from './ssh-passphrase'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import {
@@ -211,6 +212,7 @@ export function registerSshHandlers(
   refreshActiveRelaySessions()
   registerPowerMonitorReconnect()
   registerSshBrowseHandler(() => connectionManager)
+  registerSshHostReadinessHandler(() => connectionManager)
   setSshConnectionManagerResolver(() => connectionManager)
 
   registerSshTargetCrudHandlers()

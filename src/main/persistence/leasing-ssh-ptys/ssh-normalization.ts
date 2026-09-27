@@ -5,6 +5,7 @@ import type {
 } from '../../../shared/ssh-types'
 import { LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../../../shared/ssh-types'
 import { normalizeSshPendingPtyKill } from '../../../shared/ssh-pending-pty-kill'
+import { normalizeSshServiceLinks } from '../../../shared/ssh-service-links'
 
 export type LegacySshTarget = SshTarget & {
   remoteWorkspaceSyncEnabled?: unknown
@@ -33,6 +34,13 @@ export function normalizeSshTarget(t: SshTarget): SshTarget {
   const normalized: SshTarget = {
     ...target,
     configHost: target.configHost ?? target.label ?? target.host
+  }
+  // Why: a persisted link is only ever clicked, so it is filtered to http(s) here
+  // as well — hand-edited or downgraded state must not reach the open path.
+  const serviceLinks = normalizeSshServiceLinks(target.serviceLinks)
+  delete normalized.serviceLinks
+  if (serviceLinks) {
+    normalized.serviceLinks = serviceLinks
   }
   // Why: old SSH form persisted 10800 even without a user choice; treat that legacy default as the new implicit default.
   if (
