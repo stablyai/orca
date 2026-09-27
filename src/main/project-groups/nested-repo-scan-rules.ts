@@ -18,6 +18,7 @@ export type NestedRepoScanFilesystem = {
 type IgnoreRule = {
   pattern: string
   segmentPatterns: GlobSegment[]
+  memoizePathWalk: boolean
   negate: boolean
   basenameOnly: boolean
   baseSegments: string[]
@@ -92,7 +93,20 @@ function compileGlobSegment(pattern: string): GlobSegment {
   return { pattern }
 }
 
+let globMatchSteps = 0
+
+/**
+ * Monotonic count of matcher steps taken since process start.
+ *
+ * Budget tests assert on a delta so an algorithmic regression fails deterministically instead of
+ * riding on how fast the machine running the suite happens to be.
+ */
+export function readNestedRepoGlobMatchSteps(): number {
+  return globMatchSteps
+}
+
 function globSegmentMatches(segment: GlobSegment, value: string): boolean {
+  globMatchSteps++
   if (typeof segment === 'string') {
     return segment === value
   }
@@ -103,6 +117,7 @@ function globSegmentMatches(segment: GlobSegment, value: string): boolean {
   let starMatchIndex = 0
   // Retry only the latest star, avoiding combinatorial regular-expression backtracking.
   while (valueIndex < value.length) {
+    globMatchSteps++
     const token = pattern[patternIndex]
     if (token === '*') {
       starIndex = patternIndex++
@@ -123,25 +138,53 @@ function globSegmentMatches(segment: GlobSegment, value: string): boolean {
   return patternIndex === pattern.length
 }
 
-function pathSegmentsMatch(patternSegments: GlobSegment[], candidateSegments: string[]): boolean {
+function pathSegmentsMatch(
+  patternSegments: GlobSegment[],
+  candidateSegments: string[],
+  memoize: boolean
+): boolean {
+  const memoStride = candidateSegments.length + 1
+  // Allocating the table costs more than the walk it would save on the overwhelmingly common
+  // shapes, so only rules that can actually revisit a pair pay for it.
+  const visited = memoize ? new Map<number, boolean>() : undefined
   const matchFrom = (patternIndex: number, candidateIndex: number): boolean => {
+    globMatchSteps++
     if (patternIndex >= patternSegments.length) {
       return candidateIndex >= candidateSegments.length
     }
-    const pattern = patternSegments[patternIndex]
-    if (pattern === '**') {
-      return (
-        matchFrom(patternIndex + 1, candidateIndex) ||
-        (candidateIndex < candidateSegments.length && matchFrom(patternIndex, candidateIndex + 1))
-      )
+    const memoKey = patternIndex * memoStride + candidateIndex
+    const memoized = visited?.get(memoKey)
+    if (memoized !== undefined) {
+      return memoized
     }
-    return (
-      candidateIndex < candidateSegments.length &&
-      globSegmentMatches(pattern, candidateSegments[candidateIndex] ?? '') &&
-      matchFrom(patternIndex + 1, candidateIndex + 1)
-    )
+    const pattern = patternSegments[patternIndex]
+    const matched =
+      pattern === '**'
+        ? matchFrom(patternIndex + 1, candidateIndex) ||
+          (candidateIndex < candidateSegments.length && matchFrom(patternIndex, candidateIndex + 1))
+        : candidateIndex < candidateSegments.length &&
+          globSegmentMatches(pattern, candidateSegments[candidateIndex] ?? '') &&
+          matchFrom(patternIndex + 1, candidateIndex + 1)
+    visited?.set(memoKey, matched)
+    return matched
   }
   return matchFrom(0, 0)
+}
+
+function compilePathSegments(pattern: string): GlobSegment[] {
+  const segments: GlobSegment[] = []
+  for (const segment of pattern.split('/')) {
+    // `**` spans zero or more segments, so `**/**` accepts exactly what `**` accepts: collapsing a
+    // run keeps one adversarial line from handing the path matcher dozens of forking segments.
+    if (segment === '**') {
+      if (segments.at(-1) !== '**') {
+        segments.push(segment)
+      }
+      continue
+    }
+    segments.push(compileGlobSegment(segment))
+  }
+  return segments
 }
 
 function parseGitignoreRules(content: string, baseSegments: string[]): IgnoreRule[] {
@@ -155,13 +198,15 @@ function parseGitignoreRules(content: string, baseSegments: string[]): IgnoreRul
       const anchored = unprefixed.startsWith('/')
       const pattern = unprefixed.replace(/^\/+/, '').replace(/\/+$/, '')
       const basenameOnly = !anchored && !pattern.includes('/')
+      const segmentPatterns = basenameOnly
+        ? [compileGlobSegment(pattern)]
+        : compilePathSegments(pattern)
       return {
         pattern,
-        segmentPatterns: basenameOnly
-          ? [compileGlobSegment(pattern)]
-          : pattern
-              .split('/')
-              .map((segment) => (segment === '**' ? segment : compileGlobSegment(segment))),
+        segmentPatterns,
+        // One `**` walks the candidate segments once; two or more reach the same (pattern,
+        // candidate) pair by many routes, which is what turns the walk exponential.
+        memoizePathWalk: segmentPatterns.filter((segment) => segment === '**').length > 1,
         negate,
         basenameOnly,
         baseSegments
@@ -183,7 +228,7 @@ export function isIgnoredNestedRepoDirectory(
     const relativeSegments = segments.slice(rule.baseSegments.length)
     const matches = rule.basenameOnly
       ? relativeSegments.some((segment) => globSegmentMatches(rule.segmentPatterns[0], segment))
-      : pathSegmentsMatch(rule.segmentPatterns, relativeSegments)
+      : pathSegmentsMatch(rule.segmentPatterns, relativeSegments, rule.memoizePathWalk)
     if (matches) {
       ignored = !rule.negate
     }
