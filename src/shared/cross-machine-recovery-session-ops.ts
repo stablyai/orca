@@ -94,6 +94,24 @@ export function recoveryImportDestination(
   return worktreeHasSessionTabs(session, worktreeId) ? 'occupied' : 'empty'
 }
 
+/**
+ * Whether `incoming` is the first write of an import into a worktree `prior` holds no terminal
+ * membership for. Imports land only on an empty destination, so that write carries the host's
+ * own membership decision rather than a stale renderer replay the topology fence rejects.
+ */
+export function landsRecoveryImport(
+  incoming: WorkspaceSessionState,
+  prior: WorkspaceSessionState,
+  worktreeId: string
+): boolean {
+  const importKey = incoming.recoveryImportKeyByWorktreeId?.[worktreeId]
+  return (
+    importKey !== undefined &&
+    importKey !== prior.recoveryImportKeyByWorktreeId?.[worktreeId] &&
+    (prior.tabsByWorktree[worktreeId]?.length ?? 0) === 0
+  )
+}
+
 /** Dormant imported bindings of one worktree, awaiting an explicit Resume. */
 export function listRecoveryRecords(
   records: Readonly<Record<string, SleepingAgentSessionRecord>> | undefined,

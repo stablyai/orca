@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import {
+  applyCrossMachineRecoveryOp,
+  type RecoveryWorkspaceFragment
+} from '../../shared/cross-machine-recovery-session-ops'
+import type { Tab } from '../../shared/tab-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import {
   retireTerminalSurfaceFromPersistence,
   sanitizeWorkspaceSessionTerminalRetirements
 } from './mobile-session-terminal-persistence-retirement'
@@ -412,5 +418,159 @@ describe('mobile session terminal persistence retirement', () => {
     expect(session.terminalSurfaceTombstonesByPaneKey).toEqual({})
     expect(Object.keys(session.terminalTopologyRevisionByRepoId ?? {})).toEqual([REPO_ID])
     expect(session.terminalTopologyRevisionByRepoId?.[REPO_ID]).toBe(1_000)
+  })
+})
+
+const LANDING_ID = `${REPO_ID}::/landing`
+
+function landingTab(id: string, contentType: Tab['contentType'], groupId: string): Tab {
+  return {
+    id,
+    entityId: id,
+    groupId,
+    worktreeId: LANDING_ID,
+    contentType,
+    label: id,
+    customLabel: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 1
+  }
+}
+
+function landingFragment(): RecoveryWorkspaceFragment {
+  return {
+    worktreeId: LANDING_ID,
+    terminalTabs: [
+      {
+        id: 'recovered',
+        worktreeId: LANDING_ID,
+        ptyId: null,
+        title: 'claude',
+        customTitle: null,
+        color: null,
+        sortOrder: 0,
+        createdAt: 1
+      }
+    ],
+    terminalLayoutsByTabId: {
+      recovered: {
+        root: {
+          type: 'split',
+          direction: 'vertical',
+          first: { type: 'leaf', leafId: 'a' },
+          second: { type: 'leaf', leafId: 'b' }
+        },
+        activeLeafId: 'a',
+        expandedLeafId: null
+      }
+    },
+    unifiedTabs: [
+      landingTab('recovered', 'terminal', 'terminals'),
+      landingTab('/landing/README.md', 'editor', 'files')
+    ],
+    tabGroups: [
+      {
+        id: 'terminals',
+        worktreeId: LANDING_ID,
+        activeTabId: 'recovered',
+        tabOrder: ['recovered']
+      },
+      {
+        id: 'files',
+        worktreeId: LANDING_ID,
+        activeTabId: '/landing/README.md',
+        tabOrder: ['/landing/README.md']
+      }
+    ],
+    tabGroupLayout: {
+      type: 'split',
+      direction: 'horizontal',
+      first: { type: 'leaf', groupId: 'terminals' },
+      second: { type: 'leaf', groupId: 'files' },
+      ratio: 0.35
+    },
+    activeGroupId: 'terminals',
+    openFiles: [],
+    activeFileId: null,
+    browserWorkspaces: [],
+    browserPagesByWorkspace: {},
+    activeBrowserTabId: null,
+    activeTabType: 'terminal',
+    activeTabId: 'recovered'
+  }
+}
+
+function landImport(session: WorkspaceSessionState, importKey: string): WorkspaceSessionState {
+  const { session: landed, outcome } = applyCrossMachineRecoveryOp(session, {
+    kind: 'import',
+    importKey,
+    fragment: landingFragment(),
+    records: []
+  })
+  expect(outcome).toEqual({ ok: true, claimed: null })
+  return landed
+}
+
+describe('recovery import landing in a fenced repo', () => {
+  const host: WorkspaceSessionState = {
+    ...getDefaultWorkspaceSession(),
+    terminalTopologyRevisionByRepoId: { [REPO_ID]: 3 }
+  }
+
+  function expectLandedLayout(session: WorkspaceSessionState): void {
+    expect(session.tabsByWorktree[LANDING_ID]?.map((tab) => tab.id)).toEqual(['recovered'])
+    expect(session.terminalLayoutsByTabId.recovered?.root).toMatchObject({ type: 'split' })
+    expect(session.unifiedTabs?.[LANDING_ID]?.map((tab) => tab.id)).toEqual([
+      'recovered',
+      '/landing/README.md'
+    ])
+    expect(session.tabGroups?.[LANDING_ID]?.map((group) => group.tabOrder)).toEqual([
+      ['recovered'],
+      ['/landing/README.md']
+    ])
+    expect(session.tabGroupLayouts?.[LANDING_ID]).toMatchObject({ type: 'split', ratio: 0.35 })
+  }
+
+  it.each([
+    ['the renderer, which never carries the host fence', getDefaultWorkspaceSession()],
+    ['the headless runtime writer, which carries it', host]
+  ])('keeps the imported terminal layout written by %s', (_writer, base) => {
+    const incoming = landImport(base, 'import-1')
+
+    expectLandedLayout(sanitizeWorkspaceSessionTerminalRetirements(incoming, host))
+  })
+
+  it('rebases a later stale write onto the landed membership', () => {
+    const landed = sanitizeWorkspaceSessionTerminalRetirements(
+      landImport(getDefaultWorkspaceSession(), 'import-1'),
+      host
+    )
+    const stale = {
+      ...landImport(getDefaultWorkspaceSession(), 'import-1'),
+      tabsByWorktree: { [LANDING_ID]: [] }
+    }
+
+    expect(
+      sanitizeWorkspaceSessionTerminalRetirements(stale, landed).tabsByWorktree[LANDING_ID]?.map(
+        (tab) => tab.id
+      )
+    ).toEqual(['recovered'])
+  })
+
+  it('keeps host-admitted terminals when a landing races them', () => {
+    const admitted = {
+      ...host,
+      tabsByWorktree: {
+        [LANDING_ID]: [{ ...landingFragment().terminalTabs[0], id: 'host-admitted' }]
+      }
+    }
+
+    expect(
+      sanitizeWorkspaceSessionTerminalRetirements(
+        landImport(getDefaultWorkspaceSession(), 'import-1'),
+        admitted
+      ).tabsByWorktree[LANDING_ID]?.map((tab) => tab.id)
+    ).toEqual(['host-admitted'])
   })
 })

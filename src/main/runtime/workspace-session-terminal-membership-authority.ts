@@ -1,3 +1,4 @@
+import { landsRecoveryImport } from '../../shared/cross-machine-recovery-session-ops'
 import type { Tab, TabGroup } from '../../shared/tab-types'
 import type {
   TerminalLayoutSnapshot,
@@ -236,7 +237,8 @@ export function rebaseWorkspaceSessionTerminalMembership(
     const revision = terminalTopologyRevisionByRepoId[repoId] ?? 0
     const priorRevision = prior.terminalTopologyRevisionByRepoId[repoId] ?? 0
     const incomingRevision = incoming.terminalTopologyRevisionByRepoId?.[repoId] ?? 0
-    if (revision <= 0 || incomingRevision > priorRevision) {
+    const fenced = revision > 0 && incomingRevision <= priorRevision
+    if (!fenced || landsRecoveryImport(incoming, prior, worktreeId)) {
       continue
     }
     rebasedMembership = true
