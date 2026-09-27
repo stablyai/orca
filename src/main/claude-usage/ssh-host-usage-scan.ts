@@ -137,7 +137,11 @@ export function mergeClaudeUsageWithSshHosts(
     return local
   }
   return {
-    sessions: [...local.sessions, ...snapshots.flatMap((snapshot) => snapshot.sessions)],
+    // Why: Recent Sessions takes the head of this list, so it must stay newest-first
+    // like the local scan's `finalizeClaudeSessions` output, not local-then-remote.
+    sessions: [...local.sessions, ...snapshots.flatMap((snapshot) => snapshot.sessions)].sort(
+      (left, right) => right.lastTimestamp.localeCompare(left.lastTimestamp)
+    ),
     dailyAggregates: [
       ...local.dailyAggregates,
       ...snapshots.flatMap((snapshot) => snapshot.dailyAggregates)

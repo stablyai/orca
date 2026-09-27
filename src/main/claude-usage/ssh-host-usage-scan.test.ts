@@ -11,11 +11,15 @@ import type {
 } from './types'
 import type { SshClaudeUsageScanParams } from './ssh-usage-relay-contract'
 
-function session(sessionId: string, locationKey: string): ClaudeUsageSession {
+function session(
+  sessionId: string,
+  locationKey: string,
+  lastTimestamp = '2026-09-01T11:00:00.000Z'
+): ClaudeUsageSession {
   return {
     sessionId,
     firstTimestamp: '2026-09-01T10:00:00.000Z',
-    lastTimestamp: '2026-09-01T11:00:00.000Z',
+    lastTimestamp,
     model: 'claude-opus-5',
     lastCwd: '/home/dev/repo',
     lastGitBranch: null,
@@ -181,6 +185,33 @@ describe('mergeClaudeUsageWithSshHosts', () => {
     expect(merged.dailyAggregates.map((row) => [row.day, row.projectKey])).toEqual([
       ['2026-09-01', 'ssh:box|cwd:/a'],
       ['2026-09-02', 'cwd:/a']
+    ])
+  })
+
+  it('keeps sessions newest-first so Recent Sessions sees host sessions', () => {
+    const local = {
+      sessions: [
+        session('local-new', 'cwd:/a', '2026-09-03T00:00:00.000Z'),
+        session('local-old', 'cwd:/a', '2026-09-01T00:00:00.000Z')
+      ],
+      dailyAggregates: []
+    }
+    const merged = mergeClaudeUsageWithSshHosts(local, {
+      box: {
+        scannedAt: 1,
+        sessions: [
+          session('remote-newest', 'ssh:box|cwd:/a', '2026-09-04T00:00:00.000Z'),
+          session('remote-mid', 'ssh:box|cwd:/a', '2026-09-02T00:00:00.000Z')
+        ],
+        dailyAggregates: []
+      }
+    })
+
+    expect(merged.sessions.map((row) => row.sessionId)).toEqual([
+      'remote-newest',
+      'local-new',
+      'remote-mid',
+      'local-old'
     ])
   })
 
