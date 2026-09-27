@@ -237,6 +237,34 @@ because those terminals die with orcad. A daemon that answered and then failed i
 probe is also `degraded`, not `absent`: it still holds live sessions, and calling those
 exited would be the verdict `ssh-execution-boundary.md` forbids guessing.
 
+## Security events
+
+orcad writes one line to stderr (the journal under systemd) for each pairing and connection
+event, so an operator can audit who paired, who connected and what was refused. The desktop
+app never enables this.
+
+Each line is `ORCA_SECURITY_EVENT ` followed by one JSON object with an `event` name and a `ts`
+(epoch milliseconds):
+
+| `event` | Fields |
+|---|---|
+| `pairing_offer_issued` | `deviceId`, `scope`, `reach`, `invalidatedPending` (unused offers this issue replaced) |
+| `device_paired` | `deviceId`, `scope` (first successful use of an offer) |
+| `device_removed` | `deviceId`, `scope` |
+| `connection_accepted` | `deviceId`, `scope`, `transport` (`direct` or `relay`) |
+| `connection_rejected` | `transport`, `code`, `reason` (a fixed server string, at most 80 characters) |
+| `events_suppressed` | `group` (`rejections` or `operator`), `count` |
+
+- **Metadata only:** tokens, pairing links, keys and client-supplied text never appear in an
+  event.
+- **Rate budgets:** rejections and operator events have separate budgets of 60 events per
+  minute each, so a flood of refused connections cannot hide pairing or removal events.
+- **Suppression is reported:** events dropped over budget are counted, and an
+  `events_suppressed` line reports the count when the window ends, even if no further event
+  arrives, and when orcad stops.
+- **Lifecycle:** the logger is installed when the runtime starts and removed in orcad's
+  cleanup, so a stopped runtime never writes through it.
+
 ## What is not covered
 
 Named here so nothing reads as implemented that is not:
@@ -251,8 +279,8 @@ Named here so nothing reads as implemented that is not:
 - **libc slot.** There is no honest health value to publish until native libc detection owns
   it.
 - **`degradations[]`.** The readiness contract does not publish this collection yet.
-- **Credential administration** (list / revoke / rotate devices, expiring pending offers,
-  structured security logging).
+- **Credential administration** (list / revoke / rotate devices, expiring pending offers).
+  Structured security events are covered [above](#security-events).
 - **Pinned-port fail-closed.** A pinned `--port` still falls back to an OS-assigned port on
   conflict.
 - **Reconciling `webClientUrl` with reachability** under the loopback default.

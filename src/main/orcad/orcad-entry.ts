@@ -143,6 +143,7 @@ async function startOrcadRuntime(
     | undefined
   let uninstallHookStatusRepublish = (): void => {}
   let uninstallObservedStatusIdentity = (): void => {}
+  let disableSecurityEvents = (): void => {}
   registerCleanup(async () => {
     try {
       await rpc?.stop()
@@ -159,6 +160,8 @@ async function startOrcadRuntime(
           // orcad restart goes back to killing every running terminal.
           await stopOrcadDaemon()
         } finally {
+          // Why first: the logger is process-global; a stopped runtime must not keep writing through it.
+          disableSecurityEvents()
           uninstallObservedStatusIdentity()
           uninstallHookStatusRepublish()
           agentHookServer.stop()
@@ -291,8 +294,10 @@ async function startOrcadRuntime(
 
   // Why only here: an unattended server needs a pairing/connection audit trail on stderr (the journal);
   // the desktop app never enables it.
-  const { enableSecurityEventLog } = await import('../runtime/security-event-log')
+  const { enableSecurityEventLog, disableSecurityEventLog } =
+    await import('../runtime/security-event-log')
   enableSecurityEventLog({ write: (line) => process.stderr.write(`${line}\n`) })
+  disableSecurityEvents = disableSecurityEventLog
 
   const bindHost = resolveOrcadBindHost(options.bind)
   rpc = new OrcaRuntimeRpcServer({
