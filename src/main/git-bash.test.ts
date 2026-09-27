@@ -169,4 +169,44 @@ describe('Git Bash path discovery', () => {
     )
     expect(isGitForWindowsBashLauncherPath('bash.exe')).toBe(false)
   })
+
+  it('identifies a launcher in an install folder named anything else', () => {
+    // Layout confirmed against a real Git 2.55 install: bin, cmd, mingw64, usr, git-bash.exe.
+    const renamedInstall = (path: string): boolean =>
+      [
+        'C:\\Tools\\Git-2.55\\bin\\bash.exe',
+        'C:\\Tools\\Git-2.55\\usr\\bin\\bash.exe',
+        'C:\\Tools\\Git-2.55\\cmd\\git.exe'
+      ].includes(path)
+    expect(
+      isGitForWindowsBashLauncherPath('C:\\Tools\\Git-2.55\\bin\\bash.exe', {
+        exists: renamedInstall
+      })
+    ).toBe(true)
+    expect(
+      isGitForWindowsBashLauncherPath('C:\\Users\\a\\scoop\\apps\\git\\current\\bin\\bash.exe', {
+        exists: (path) => path.startsWith('C:\\Users\\a\\scoop\\apps\\git\\current\\')
+      })
+    ).toBe(true)
+  })
+
+  it('refuses a bash that is not a Git for Windows launcher, even where every path exists', () => {
+    const everythingExists = (): boolean => true
+    // A directly launched MSYS bash: no install root sits inside `usr`, so the markers cannot be met.
+    expect(
+      isGitForWindowsBashLauncherPath('C:\\Program Files\\Git\\usr\\bin\\bash.exe', {
+        exists: (path) => !path.includes('\\usr\\usr\\') && !path.includes('\\usr\\cmd\\')
+      })
+    ).toBe(false)
+    // Cygwin has bin\bash.exe but no cmd\git.exe.
+    expect(
+      isGitForWindowsBashLauncherPath('C:\\cygwin64\\bin\\bash.exe', {
+        exists: (path) => path !== 'C:\\cygwin64\\cmd\\git.exe'
+      })
+    ).toBe(false)
+    expect(
+      isGitForWindowsBashLauncherPath('C:\\Tools\\sh\\bash.exe', { exists: everythingExists })
+    ).toBe(false)
+    expect(isGitForWindowsBashLauncherPath('bash.exe', { exists: everythingExists })).toBe(false)
+  })
 })

@@ -114,10 +114,42 @@ export function isGitForWindowsBashPath(shellPath: string): boolean {
   return /(?:^|\\)(?:git|portablegit)(?:\\usr)?\\bin\\bash\.exe$/.test(normalized)
 }
 
-/** Git for Windows' `bin\bash.exe` is a launcher: it runs `..\usr\bin\bash.exe` as a child and waits. */
-export function isGitForWindowsBashLauncherPath(shellPath: string): boolean {
-  return /(?:^|\\)(?:git|portablegit)\\bin\\bash\.exe$/.test(
-    pathWin32.normalize(shellPath).toLowerCase()
+/**
+ * Files only a Git for Windows install root carries. `usr\bin\bash.exe` is the launcher's own
+ * hand-off target; `cmd\git.exe` is what separates that root from a Cygwin or MSYS2 one.
+ */
+const GIT_FOR_WINDOWS_ROOT_MARKERS = [
+  ['usr', 'bin', 'bash.exe'],
+  ['cmd', 'git.exe']
+] as const
+
+/**
+ * Git for Windows' `bin\bash.exe` is a launcher: it runs `..\usr\bin\bash.exe` as a child and waits.
+ *
+ * The installer's folder is named `Git`, but a user-chosen install directory, an unzipped
+ * PortableGit, and Scoop's `apps\git\current` are equally real, so a folder this does not recognize
+ * falls back to the install layout instead of denying the hand-off.
+ */
+export function isGitForWindowsBashLauncherPath(
+  shellPath: string,
+  options: Pick<GitBashPathOptions, 'exists'> = {}
+): boolean {
+  const normalized = pathWin32.normalize(shellPath)
+  if (/(?:^|\\)(?:git|portablegit)\\bin\\bash\.exe$/.test(normalized.toLowerCase())) {
+    return true
+  }
+  const binDirectory = pathWin32.dirname(normalized)
+  if (
+    pathWin32.basename(normalized).toLowerCase() !== 'bash.exe' ||
+    pathWin32.basename(binDirectory).toLowerCase() !== 'bin'
+  ) {
+    return false
+  }
+  // `usr\bin\bash.exe` lands here too, and is refused because no install root sits inside `usr`.
+  const installRoot = pathWin32.dirname(binDirectory)
+  const exists = options.exists ?? existsSync
+  return GIT_FOR_WINDOWS_ROOT_MARKERS.every((marker) =>
+    exists(pathWin32.join(installRoot, ...marker))
   )
 }
 
