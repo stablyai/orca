@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { createReadStream, readdirSync } from 'node:fs'
 import { chmod, link, mkdir, open, rm } from 'node:fs/promises'
 import { basename, join } from 'node:path'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess, type ProcessResult } from '../../shared/child-process/run-process'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { getZipExtractorCommand } from '../../shared/zip-extractor-command'
 import { getMainHttpClient, type MainHttpClient } from '../network/http-client'
@@ -57,13 +57,7 @@ export async function materializeCachedOrcadBunRuntime(
     options.signal?.throwIfAborted()
     const extractedDir = join(temporaryDir, 'extracted')
     await mkdir(extractedDir)
-    const command = getZipExtractorCommand(archivePath, extractedDir)
-    const result = await runProcess({
-      program: command.file,
-      args: command.args,
-      timeoutMs: 120_000,
-      signal: options.signal
-    })
+    const result = await extractArchive(archivePath, extractedDir, options.signal)
     options.signal?.throwIfAborted()
     if (result.code !== 0) {
       throw new Error(`Bun archive extraction failed: ${result.stderr || result.stdout}`)
@@ -87,6 +81,36 @@ export async function materializeCachedOrcadBunRuntime(
     return runtimePath
   } finally {
     await rm(temporaryDir, { recursive: true, force: true })
+  }
+}
+
+/**
+ * Why ENOENT gets its own message: `unzip` is absent from a minimal POSIX install, and a bare
+ * `spawn unzip ENOENT` names neither the missing tool nor the override. No cwd is passed, so
+ * ENOENT here can only mean the extractor itself.
+ */
+async function extractArchive(
+  archivePath: string,
+  extractDir: string,
+  signal?: AbortSignal
+): Promise<ProcessResult> {
+  const command = getZipExtractorCommand(archivePath, extractDir)
+  try {
+    return await runProcess({
+      program: command.file,
+      args: command.args,
+      timeoutMs: 120_000,
+      signal
+    })
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      throw new Error(
+        `Bun archive extraction could not run ${command.file}: install ${command.label}, ` +
+          'or set ORCA_UNZIP_BIN to an unzip-compatible extractor.',
+        { cause: error }
+      )
+    }
+    throw error
   }
 }
 
