@@ -53,17 +53,20 @@ async function runWslCommand(distro: string, command: string): Promise<string> {
   return result.stdout
 }
 
+/**
+ * Only stat's trailing strerror text is portable: GNU coreutils says `cannot statx`,
+ * BusyBox says `can't stat`, so matching the verb made a BusyBox distro report a
+ * successful cleanup as a permanent failure. The tail stays English because the probe
+ * pins LC_ALL=C, and stat is the only thing in that probe that writes to stderr.
+ */
+const WSL_MISSING_PATH_STDERR = /: (?:No such file or directory|Not a directory)\r?\n?$/
+
 function isWslMissingPathError(error: unknown): boolean {
   if (typeof error !== 'object' || error === null || !('exitCode' in error)) {
     return false
   }
   const stderr = 'stderr' in error && typeof error.stderr === 'string' ? error.stderr : ''
-  return (
-    error.exitCode === 1 &&
-    /^stat: cannot stat(?:x)? [\s\S]+: (?:No such file or directory|Not a directory)\r?\n?$/.test(
-      stderr
-    )
-  )
+  return error.exitCode === 1 && WSL_MISSING_PATH_STDERR.test(stderr)
 }
 
 export function toLocalWorktreeRuntimePath(
