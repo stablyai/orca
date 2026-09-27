@@ -2863,6 +2863,10 @@ html.native-shell .app-layout {
   max-width: 420px;
 }
 
+/* Why: embedded card in the diff flow, not a floating popup — use the
+   documented "subtle lift" tier (shadow-xs) rather than a hand-rolled shadow.
+   Restated under `.dark` (same value) so this still outranks the base
+   `.orca-diff-comment-popover` dark shadow at equal selector specificity. */
 .orca-diff-comment-inline > .orca-diff-comment-draft-card {
   position: relative;
   left: auto;
@@ -2870,15 +2874,11 @@ html.native-shell .app-layout {
   width: 100%;
   max-width: 420px;
   z-index: 1;
-  box-shadow:
-    0 2px 6px rgba(0, 0, 0, 0.08),
-    0 4px 12px rgba(0, 0, 0, 0.08);
+  @apply shadow-xs;
 }
 
 .dark .orca-diff-comment-inline > .orca-diff-comment-draft-card {
-  box-shadow:
-    0 2px 6px rgba(0, 0, 0, 0.35),
-    0 4px 14px rgba(0, 0, 0, 0.28);
+  @apply shadow-xs;
 }
 
 .orca-diff-comment-draft-margin {
