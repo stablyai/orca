@@ -89,7 +89,8 @@ export async function waitForWorktreeStartupFollowup(
 export function waitForWorktreeStartupDraft(
   host: WorktreeStartupReadinessHost,
   handle: string,
-  agent: TuiAgent
+  agent: TuiAgent,
+  options: { timeoutMs?: number; requireComposerMarker?: boolean } = {}
 ): Promise<string | null> {
   const ptyId = host.getPtyId(handle)
   if (!ptyId) {
@@ -118,11 +119,14 @@ export function waitForWorktreeStartupDraft(
       resolve(value)
     }
     const observe = (data: string): void => {
+      if (settled) {
+        return
+      }
       const result = scanner.observe(data)
       if (result.ready) {
         return finish(ptyId)
       }
-      if (result.armQuietTimer) {
+      if (result.armQuietTimer && !options.requireComposerMarker) {
         if (quietTimer) {
           clearTimeout(quietTimer)
         }
@@ -130,10 +134,13 @@ export function waitForWorktreeStartupDraft(
       }
     }
     unsubscribe = host.subscribeToData(ptyId, observe)
+    hardTimer = setTimeout(
+      () => finish(null),
+      options.timeoutMs ?? resolveDraftPasteReadyTimeoutMs(agent)
+    )
     const replay = host.readRecentOutput(ptyId)
     if (replay) {
       observe(replay)
     }
-    hardTimer = setTimeout(() => finish(null), resolveDraftPasteReadyTimeoutMs(agent))
   })
 }
