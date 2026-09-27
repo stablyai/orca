@@ -5462,7 +5462,18 @@
             "3fdccf0277": "Espaçamento Interno Vertical",
             "651c993c32": "Família de Fonte",
             "64f6b4fdf6": "Foco Segue o Mouse",
-            "18a9f63aff": "Cor do Divisor no Modo Claro"
+            "18a9f63aff": "Cor do Divisor no Modo Claro",
+            "fitWideGlyphs": {
+              "wide": "largo",
+              "cjk": "cjk",
+              "korean": "coreano",
+              "hangul": "hangul",
+              "chinese": "chinês",
+              "japanese": "japonês",
+              "fallback": "alternativa",
+              "spacing": "espaçamento",
+              "center": "centralizar"
+            }
           },
           "windows": {
             "search": {
@@ -10321,7 +10332,9 @@
         },
         "TerminalRenderingSection": {
           "fffab5890b": "Exibe imagens diretamente no terminal usando os protocolos gráficos SIXEL, iTerm2 (IIP) e Kitty.",
-          "08db7947d8": "Imagens Inline"
+          "08db7947d8": "Imagens Inline",
+          "fitWideGlyphs": "Ajustar e centralizar caracteres largos",
+          "fitWideGlyphsDescription": "Amplia caracteres coreanos, chineses e japoneses desenhados com uma fonte alternativa até perto da largura de duas células, sem ultrapassar a altura da linha, e os centraliza para que o texto não pareça espaçado."
         },
         "keep": {
           "local": {

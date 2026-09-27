@@ -37,6 +37,7 @@ import { resolveTerminalInlineImagesEnabled } from '../../../../../shared/termin
 import { windowBackdropActive } from '@/app-shell/appearance/window-backdrop'
 import { contrastRatio, hexToRgb, over, type Rgba } from '../../../../../shared/color/rgba-contrast'
 import { getTerminalFontSizeOverride } from './terminal-font-size-overrides'
+import { resolveTerminalFitWideGlyphs } from '@/lib/pane-manager/terminal-wide-glyph-fit'
 
 export function hexToRgba(hex: string, alpha: number): string {
   const [r, g, b] = hexToRgb(hex)
@@ -227,6 +228,11 @@ export function applyTerminalAppearance(
     )
     // Why only 'true': 'left'/'right' are handled in the keydown policy, which needs Option composable at the xterm level.
     pane.terminal.options.macOptionIsMeta = effectiveMacOptionAsAlt === 'true'
+    // Why value-gated: a write clears the renderer and rebuilds the glyph atlas.
+    const fitWideGlyphs = resolveTerminalFitWideGlyphs(settings.terminalFitWideGlyphs)
+    if (pane.terminal.options.fitWideGlyphs !== fitWideGlyphs) {
+      pane.terminal.options.fitWideGlyphs = fitWideGlyphs
+    }
     manager.setPaneLigaturesEnabled(pane.id, ligaturesEnabled)
     manager.setPaneInlineImagesEnabled(
       pane.id,

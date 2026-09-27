@@ -19,6 +19,7 @@ import { resolveTerminalMinimumContrastRatio } from '../../../../../../shared/te
 import { resolveTerminalFontWeights } from '../../../../../../shared/terminal/appearance/terminal-fonts'
 import { resolveTerminalLigaturesEnabled } from '../../../../../../shared/terminal/appearance/terminal-ligatures'
 import { normalizeTerminalLineHeight } from '../../../../../../shared/terminal/appearance/terminal-line-height-settings'
+import { resolveTerminalFitWideGlyphs } from '@/lib/pane-manager/terminal-wide-glyph-fit'
 import { PREVIEW_BUFFER } from './terminal-preview-content'
 import { Switch } from '@/components/ui/switch'
 import { useTranslate } from '@/i18n/use-translate'
@@ -140,6 +141,7 @@ export function TerminalSettingsPreview({
       fontWeight: weights.fontWeight,
       fontWeightBold: weights.fontWeightBold,
       lineHeight: terminalLineHeight,
+      fitWideGlyphs: resolveTerminalFitWideGlyphs(settings.terminalFitWideGlyphs),
       theme: composedTheme ?? undefined,
       allowTransparency:
         settings.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1,
@@ -190,6 +192,7 @@ export function TerminalSettingsPreview({
     // Mirror shape for the permanently unfocused preview cursor.
     terminal.options.cursorInactiveStyle = settings.terminalCursorStyle
     terminal.options.cursorBlink = settings.terminalCursorBlink
+    terminal.options.fitWideGlyphs = resolveTerminalFitWideGlyphs(settings.terminalFitWideGlyphs)
   }, [
     settings.terminalFontSize,
     settings.terminalFontWeightBold,
@@ -198,7 +201,8 @@ export function TerminalSettingsPreview({
     settings.terminalFontWeight,
     terminalLineHeight,
     settings.terminalCursorStyle,
-    settings.terminalCursorBlink
+    settings.terminalCursorBlink,
+    settings.terminalFitWideGlyphs
   ])
 
   useEffect(() => {

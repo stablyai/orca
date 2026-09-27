@@ -12767,7 +12767,18 @@
             "64f6b4fdf6": "Odak Fareyi İzler",
             "18a9f63aff": "Açık Mod Ayırıcı Rengi",
             "kitty_import": "Kitty’den içe aktar",
-            "kitty_import_description": "Desteklenen ayarları kitty.conf dosyasından bir kez içe aktarır."
+            "kitty_import_description": "Desteklenen ayarları kitty.conf dosyasından bir kez içe aktarır.",
+            "fitWideGlyphs": {
+              "wide": "geniş",
+              "cjk": "cjk",
+              "korean": "korece",
+              "hangul": "hangul",
+              "chinese": "çince",
+              "japanese": "japonca",
+              "fallback": "yedek yazı tipi",
+              "spacing": "aralık",
+              "center": "ortala"
+            }
           },
           "windows": {
             "search": {
@@ -14085,7 +14096,9 @@
         },
         "TerminalRenderingSection": {
           "fffab5890b": "SIXEL, iTerm2 (IIP) ve Kitty grafik protokollerini kullanarak görüntüleri doğrudan terminalde gösterin.",
-          "08db7947d8": "Satır İçi Görüntüler"
+          "08db7947d8": "Satır İçi Görüntüler",
+          "fitWideGlyphs": "Geniş karakterleri sığdır ve ortala",
+          "fitWideGlyphsDescription": "Yedek yazı tipiyle çizilen Korece, Çince ve Japonca karakterleri satır yüksekliğini aşmadan iki hücre genişliğine yaklaşacak şekilde büyütür ve metin aralıklı görünmesin diye ortalar."
         },
         "CursorAccountsSection": {
           "source": {
