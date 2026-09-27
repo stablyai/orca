@@ -9,13 +9,19 @@ export function workerTerminalLeaseIsCurrent(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
   dispatchId: string,
-  resource: WorkerTerminalResourceRow
+  resource: WorkerTerminalResourceRow,
+  options: { allowDurableExitedIdentityFallback?: boolean } = {}
 ): boolean {
   const worker = db.getWorkerDispatch(dispatchId)
   if (isStructuredWorkerHandle(resource.terminal_handle)) {
     return structuredWorkerTerminalLeaseIsCurrent(db, dispatchId, worker, resource)
   }
   const authority = runtime.getOrchestrationDispatchAuthority(resource.terminal_handle)
+  const paneKey = runtime.getTerminalPaneKey(resource.terminal_handle) ??
+    (options.allowDurableExitedIdentityFallback ? resource.pane_key : null)
+  const processIncarnation =
+    runtime.getTerminalProcessIncarnation(resource.terminal_handle) ??
+    (options.allowDurableExitedIdentityFallback ? resource.process_incarnation : null)
   // Exited PTYs retain identity and host evidence but no longer mint launch authority.
   return Boolean(
     worker?.agent_terminal_handle === resource.terminal_handle &&
@@ -24,8 +30,8 @@ export function workerTerminalLeaseIsCurrent(
       : runtime.getTerminalLivenessVerdict(resource.terminal_handle)?.status === 'exited') &&
     db.isDispatchProcessCurrent({
       dispatchId,
-      paneKey: runtime.getTerminalPaneKey(resource.terminal_handle),
-      processIncarnation: runtime.getTerminalProcessIncarnation(resource.terminal_handle)
+      paneKey,
+      processIncarnation
     }) &&
     !db.workerTerminalResourceHasIdentityConflict(resource.id)
   )

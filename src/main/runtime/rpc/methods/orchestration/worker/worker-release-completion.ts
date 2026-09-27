@@ -184,7 +184,11 @@ async function completeWorkerTerminalReleaseOnce(
     }
   }
 
-  if (!workerTerminalLeaseIsCurrent(runtime, db, dispatchId, resource)) {
+  if (
+    !workerTerminalLeaseIsCurrent(runtime, db, dispatchId, resource, {
+      allowDurableExitedIdentityFallback: observation.status === 'exited'
+    })
+  ) {
     const retained = db.revertWorkerTerminalReleaseToRetained(resource.id, 'identity_unproven')
     return {
       dispatchId,
@@ -231,7 +235,11 @@ async function completeWorkerTerminalReleaseOnce(
       archive: archiveSummary(releasing)
     }
   }
-  if (!workerTerminalLeaseIsCurrent(runtime, db, dispatchId, releasing)) {
+  if (
+    !workerTerminalLeaseIsCurrent(runtime, db, dispatchId, releasing, {
+      allowDurableExitedIdentityFallback: observation.status === 'exited'
+    })
+  ) {
     const retained = db.revertWorkerTerminalReleaseToRetained(resource.id, 'identity_unproven')
     return {
       dispatchId,
