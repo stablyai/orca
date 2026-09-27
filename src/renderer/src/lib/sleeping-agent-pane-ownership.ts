@@ -38,7 +38,7 @@ export function getSleepingRecordTabId(record: SleepingAgentSessionRecord): stri
   )
 }
 
-/** True only when the record names a terminal tab and none of its tab ids exists in the worktree. */
+/** True only when the record names a terminal tab and none of its tab ids exists in any worktree. */
 export function sleepingRecordTabIsGone(
   record: SleepingAgentSessionRecord,
   state: AppStoreState
@@ -56,8 +56,10 @@ export function sleepingRecordTabIsGone(
   if (candidates.length === 0) {
     return false
   }
-  const tabs = state.tabsByWorktree[record.worktreeId] ?? []
-  return !tabs.some((tab) => candidates.includes(tab.id))
+  // Why every worktree: a tab can be re-homed while its record and live-PTY claim keep the old id.
+  return !Object.values(state.tabsByWorktree).some((tabs) =>
+    tabs.some((tab) => candidates.includes(tab.id))
+  )
 }
 
 function getLegacyPaneTabId(record: SleepingAgentSessionRecord): string | null {

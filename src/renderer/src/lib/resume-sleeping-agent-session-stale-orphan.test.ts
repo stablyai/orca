@@ -146,4 +146,19 @@ describe('resumeSleepingAgentSessionsForWorktree stale records under a skipped c
     expect(launched).toBe(0)
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
   })
+
+  it('keeps a stale record under a skipped claim when its tab was re-homed to another worktree', () => {
+    // The live-PTY claim follows the tab id, not the worktree, so the pane still owns the record.
+    const record = makeRecord({ capturedAt: STALE_CAPTURED_AT })
+    seed([record], [])
+    useAppStore.setState({ tabsByWorktree: { 'wt-2': [makeTerminalTab('tab-1', 'wt-2')] } })
+
+    const launched = resumeSleepingAgentSessionsForWorktree('wt-1', {
+      suppressNavigation: true,
+      skipClaimKeys: new Set([getProviderSessionClaimKey(record)])
+    })
+
+    expect(launched).toBe(0)
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
+  })
 })
