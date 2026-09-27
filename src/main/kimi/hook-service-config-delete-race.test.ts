@@ -3,10 +3,14 @@ import type * as NodeFs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const deleteRace = vi.hoisted((): { path: string | null } => ({ path: null }))
+const deleteRace = vi.hoisted((): { path: string | null; code: string } => ({
+  path: null,
+  code: 'ENOENT'
+}))
 
-// Why: simulates the config file vanishing between writeConfigToml's existsSync
-// check and its statSync mode read (e.g. a concurrent uninstall or user delete).
+// Why: simulates the config file (or an ancestor directory) vanishing between
+// writeConfigToml's existsSync check and its statSync mode read — e.g. a
+// concurrent uninstall, user delete, or a directory replaced by a file.
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
   const statSync = (
@@ -14,7 +18,9 @@ vi.mock('node:fs', async (importOriginal) => {
     options?: NodeFs.StatSyncOptions
   ): NodeFs.Stats | NodeFs.BigIntStats | undefined => {
     if (typeof target === 'string' && target === deleteRace.path) {
-      throw Object.assign(new Error('ENOENT: no such file or directory, stat'), { code: 'ENOENT' })
+      throw Object.assign(new Error(`${deleteRace.code}: simulated race`), {
+        code: deleteRace.code
+      })
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: forwarding actual.statSync's own overload signature.
     return actual.statSync(target, options as NodeFs.StatSyncOptions)
@@ -46,6 +52,7 @@ beforeEach(() => {
 
 afterEach(() => {
   deleteRace.path = null
+  deleteRace.code = 'ENOENT'
   if (originalHome === undefined) {
     delete process.env.HOME
   } else {
@@ -65,16 +72,20 @@ afterEach(() => {
 })
 
 describe('KimiHookService config delete race', () => {
-  it('still writes the config when it is deleted between the existence check and the mode stat', () => {
-    fs.mkdirSync(join(home, '.kimi-code'), { recursive: true })
-    fs.writeFileSync(configPath(), 'api_key = "fixture-only"\n')
-    deleteRace.path = configPath()
+  it.each(['ENOENT', 'ENOTDIR'])(
+    'still writes the config when the mode stat fails with %s',
+    (code) => {
+      fs.mkdirSync(join(home, '.kimi-code'), { recursive: true })
+      fs.writeFileSync(configPath(), 'api_key = "fixture-only"\n')
+      deleteRace.path = configPath()
+      deleteRace.code = code
 
-    expect(() => new KimiHookService().install()).not.toThrow()
+      expect(() => new KimiHookService().install()).not.toThrow()
 
-    const config = fs.readFileSync(configPath(), 'utf-8')
-    for (const event of KIMI_HOOK_EVENTS) {
-      expect(config).toContain(`event = "${event}"`)
+      const config = fs.readFileSync(configPath(), 'utf-8')
+      for (const event of KIMI_HOOK_EVENTS) {
+        expect(config).toContain(`event = "${event}"`)
+      }
     }
-  })
+  )
 })
