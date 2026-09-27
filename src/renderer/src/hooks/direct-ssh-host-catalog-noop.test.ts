@@ -135,4 +135,28 @@ describe('direct SSH host catalog publication', () => {
     expect(listener).not.toHaveBeenCalled()
     hydration.stop()
   })
+
+  // Why these two shapes: the gate must fail closed on a field no previous row carried, so a
+  // `Repo` field added after this gate landed still publishes without anyone revisiting the
+  // comparison. `'auto'` is documented as semantically identical to an absent
+  // `issueSourcePreference`, which makes it the sharpest case for the strict own-key policy.
+  it.each([
+    {
+      label: 'an optional key no previous row carried',
+      changed: { ...remoteRepo, issueSourcePreference: 'auto' } satisfies Repo
+    },
+    {
+      label: 'a nested record no previous row carried',
+      changed: { ...remoteRepo, upstream: { owner: 'octo', repo: 'remote' } } satisfies Repo
+    }
+  ])('publishes when a fetched row gains $label', async ({ changed }) => {
+    const { store, hydration, listener, folderRepo, setFetched } = fixture()
+    setFetched([changed, folderRepo])
+    await hydration.capturePreparationInput(authority, 'wake-refresh')
+    expect(listener).toHaveBeenCalledOnce()
+    expect(store.getState().repos).toContainEqual(changed)
+    await hydration.capturePreparationInput(authority, 'wake-refresh')
+    expect(listener).toHaveBeenCalledOnce()
+    hydration.stop()
+  })
 })
