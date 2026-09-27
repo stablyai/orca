@@ -18,7 +18,6 @@ import {
 import { execSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
-import os from 'node:os'
 import path from 'node:path'
 import { runProcess, type ProcessResult } from '../../../src/shared/child-process/run-process'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
@@ -28,6 +27,7 @@ import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-sh
 import {
   assertElectronResolvedIsolatedHome,
   createElectronHomeIsolation,
+  e2eFixtureTmpdir,
   type ElectronHomeIsolation
 } from './electron-home-isolation'
 
@@ -139,7 +139,7 @@ export function createRestartSession(
   extraEnv: Record<string, string> = {}
 ): RestartSession {
   const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
-  const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-restart-'))
+  const userDataDir = mkdtempSync(path.join(e2eFixtureTmpdir(), 'orca-e2e-restart-'))
   const headful = shouldLaunchHeadful(testInfo)
   const homeIsolation = createRestartLaunchIsolation(userDataDir, headful, extraEnv)
   let runtimeWsPort: number | null = null
@@ -149,7 +149,7 @@ export function createRestartSession(
   // both launches and obscure restart failures.
   writeFileSync(
     path.join(userDataDir, 'orca-data.json'),
-    `${JSON.stringify(getE2ECompletedOnboardingProfile(), null, 2)}\n`
+    `${JSON.stringify(getE2ECompletedOnboardingProfile(extraEnv), null, 2)}\n`
   )
 
   const seedCodexResumeRollout = (sessionId: string, cwd: string): string => {

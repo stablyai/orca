@@ -22,7 +22,6 @@ import {
   type TestInfo
 } from '@stablyai/playwright-test'
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import { TEST_REPO_PATH_FILE } from '../global-setup'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
@@ -31,7 +30,8 @@ import { retryTransientMainEvaluate } from './electron-main-evaluate-retry'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
 import {
   assertElectronResolvedIsolatedHome,
-  createElectronHomeIsolation
+  createElectronHomeIsolation,
+  e2eFixtureTmpdir
 } from './electron-home-isolation'
 import { createSeededTestRepo, isValidGitRepo } from './seeded-test-repo'
 
@@ -188,7 +188,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     // this Electron fixture has released watchers, terminals, and daemons.
     void registerPostElectronShutdownCleanup
     const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
-    const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-userdata-'))
+    const userDataDir = mkdtempSync(path.join(e2eFixtureTmpdir(), 'orca-e2e-userdata-'))
 
     if (dismissOnboarding) {
       // Why: onboarding renders a fullscreen `fixed inset-0 z-[100]` overlay
@@ -196,9 +196,10 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       // every other test. Seed a completed-onboarding fresh-install profile:
       // an empty file would make persistence treat the profile as an
       // existing-user upgrade cohort and mount the telemetry notice overlay.
+      const profile = getE2ECompletedOnboardingProfile({ ...launchEnv, ...orcaAppExtraEnv })
       writeFileSync(
         path.join(userDataDir, 'orca-data.json'),
-        `${JSON.stringify(getE2ECompletedOnboardingProfile(), null, 2)}\n`
+        `${JSON.stringify(profile, null, 2)}\n`
       )
     }
     const headful = shouldLaunchHeadful(testInfo)

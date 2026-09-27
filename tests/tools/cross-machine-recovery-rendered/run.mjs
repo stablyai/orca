@@ -62,7 +62,9 @@ const guardRecords = expected
 const unguarded = captured.filter(
   (file) => !guardRecords.some((record) => record.screenshot === file)
 )
-const leaking = guardRecords.filter((record) => record.leaks.length > 0)
+const refused = guardRecords.filter(
+  (record) => record.leaks.length > 0 || record.evidenceGaps.length > 0
+)
 const report = {
   scope:
     'Recover Sessions picker per provider state against a fake cc-sync provider, the two-profile import placeholders, and the placeholder in a 50px pane, in hidden Electron windows.',
@@ -71,8 +73,8 @@ const report = {
   missing,
   machineIdentityGuard: {
     checks:
-      'username, hostname, short hostname and home path in the renderer text and every terminal buffer, before and after each capture',
-    passed: leaking.length === 0 && unguarded.length === 0,
+      'username, hostname, short hostname and home path in the renderer text and every terminal buffer, before and after each capture; a blank read or a rendered terminal it could not read also refuses',
+    passed: refused.length === 0 && unguarded.length === 0,
     unguarded,
     records: guardRecords
   }

@@ -9,16 +9,21 @@ export type MachineIdentityKind = (typeof MACHINE_IDENTITY_KINDS)[number]
 
 export type MachineIdentity = Record<MachineIdentityKind, string>
 
+/** Why the guard could not vouch for a capture: its read of the renderer came back incomplete. */
+export type ScreenshotEvidenceGap = 'blank-rendered-text' | 'unread-terminal'
+
 /** What the guard read from the renderer before a capture and what it found there. */
 export type ScreenshotIdentityGuardRecord = {
   screenshot: string
   renderedTextChars: number
   terminalBuffers: number
   terminalChars: number
+  unreadTerminals: number
+  evidenceGaps: ScreenshotEvidenceGap[]
   leaks: MachineIdentityKind[]
 }
 
-type RenderedText = { dom: string; terminals: string[] }
+type RenderedText = { dom: string; terminals: string[]; unreadTerminals: number }
 
 export function readMachineIdentity(): MachineIdentity {
   const hostname = os.hostname()
@@ -48,7 +53,10 @@ export function findMachineIdentityLeaks(
   })
 }
 
-/** The renderer's visible text and field values plus every terminal buffer, mounted or parked. */
+/**
+ * The renderer's visible text and field values plus every terminal buffer, mounted or parked,
+ * and how many rendered terminals no pane manager exposed for reading.
+ */
 export function readRenderedText(page: Page): Promise<RenderedText> {
   return page.evaluate(() => {
     const bufferText = (buffer: IBuffer): string => {
@@ -66,6 +74,10 @@ export function readRenderedText(page: Page): Promise<RenderedText> {
     const parked = Object.values(window.__store!.getState().localOnlyScrollbackByTabId).flatMap(
       (byLeaf) => Object.values(byLeaf)
     )
+    const readTerminalElements = new Set(panes.map((pane) => pane.terminal.element))
+    const unreadTerminals = [...document.querySelectorAll('.xterm')].filter(
+      (element) => !readTerminalElements.has(element as HTMLElement)
+    ).length
     const fieldValues = [
       ...document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea')
     ].map((field) => field.value)
@@ -77,7 +89,8 @@ export function readRenderedText(page: Page): Promise<RenderedText> {
           bufferText(pane.terminal.buffer.alternate)
         ]),
         ...parked
-      ]
+      ],
+      unreadTerminals
     }
   })
 }
@@ -87,12 +100,18 @@ export async function guardScreenshotAgainstMachineIdentity(
   page: Page,
   screenshot: string
 ): Promise<ScreenshotIdentityGuardRecord> {
-  const { dom, terminals } = await readRenderedText(page)
+  const { dom, terminals, unreadTerminals } = await readRenderedText(page)
+  const evidenceGaps: ScreenshotEvidenceGap[] = [
+    ...(dom.trim() === '' ? (['blank-rendered-text'] as const) : []),
+    ...(unreadTerminals > 0 ? (['unread-terminal'] as const) : [])
+  ]
   return {
     screenshot,
     renderedTextChars: dom.length,
     terminalBuffers: terminals.length,
     terminalChars: terminals.reduce((sum, text) => sum + text.length, 0),
+    unreadTerminals,
+    evidenceGaps,
     leaks: findMachineIdentityLeaks([dom, ...terminals].join('\n'), readMachineIdentity())
   }
 }

@@ -4,7 +4,9 @@ import path from 'node:path'
 
 /** Launch env overlay that pins pane shells to a prompt showing no user, host or path. */
 export const HERMETIC_SHELL_ENV = { ORCA_E2E_HERMETIC_SHELL: '1' }
-const HERMETIC_SHELL = process.platform === 'darwin' ? '/bin/zsh' : '/bin/bash'
+/** Windows ignores SHELL, so hermetic profiles pin this shell setting; cmd.exe reads PROMPT. */
+export const HERMETIC_WINDOWS_SHELL = 'cmd.exe'
+const HERMETIC_WINDOWS_PROMPT = '$G$S'
 const HERMETIC_PROMPT_FILES = {
   '.zshrc': "PROMPT='%# '\nRPROMPT=''\n",
   '.bash_profile': "PS1='\\$ '\n"
@@ -31,6 +33,7 @@ type ElectronHomeIsolationOptions = {
   extraEnv: Record<string, string>
   userDataDir: string
   realHome?: string
+  platform?: NodeJS.Platform
 }
 
 export type ElectronHomeIsolation = {
@@ -46,6 +49,50 @@ function normalizeComparablePath(candidatePath: string, platform = process.platf
 
 export function areSameHomePath(left: string, right: string, platform = process.platform): boolean {
   return normalizeComparablePath(left, platform) === normalizeComparablePath(right, platform)
+}
+
+function isPathWithin(candidate: string, root: string, platform: NodeJS.Platform): boolean {
+  const pathApi = platform === 'win32' ? path.win32 : path.posix
+  const fold = (value: string) => (platform === 'win32' ? value.toLowerCase() : value)
+  const relative = pathApi.relative(fold(pathApi.resolve(root)), fold(pathApi.resolve(candidate)))
+  return !relative.startsWith('..') && !pathApi.isAbsolute(relative)
+}
+
+export function isHermeticShellEnv(env: NodeJS.ProcessEnv | Record<string, string>): boolean {
+  return env.ORCA_E2E_HERMETIC_SHELL === '1'
+}
+
+/** Profile settings a hermetic launch seeds: Windows pane shells come from this setting, not SHELL. */
+export function hermeticProfileSettings(
+  env: NodeJS.ProcessEnv | Record<string, string>,
+  platform = process.platform
+): { terminalWindowsShell?: string } {
+  return isHermeticShellEnv(env) && platform === 'win32'
+    ? { terminalWindowsShell: HERMETIC_WINDOWS_SHELL }
+    : {}
+}
+
+/**
+ * Temp root for fixtures a pane or the UI may print. Windows keeps %TEMP% inside the profile,
+ * where every fixture path would spell the developer's home, so those move to the drive root.
+ */
+export function resolveE2EFixtureTmpdir(
+  realHome: string,
+  tmpdir: string,
+  platform: NodeJS.Platform
+): string {
+  if (!isPathWithin(tmpdir, realHome, platform)) {
+    return tmpdir
+  }
+  return platform === 'win32'
+    ? path.win32.join(path.win32.parse(tmpdir).root, 'orca-e2e')
+    : '/tmp/orca-e2e'
+}
+
+export function e2eFixtureTmpdir(): string {
+  const root = resolveE2EFixtureTmpdir(os.homedir(), os.tmpdir(), process.platform)
+  mkdirSync(root, { recursive: true })
+  return root
 }
 
 function assertOverlayDoesNotReplaceIsolation(
@@ -71,7 +118,8 @@ export function createElectronHomeIsolation({
   launchEnv,
   extraEnv,
   userDataDir,
-  realHome = os.homedir()
+  realHome = os.homedir(),
+  platform = process.platform
 }: ElectronHomeIsolationOptions): ElectronHomeIsolation {
   assertOverlayDoesNotReplaceIsolation(launchEnv, 'launchEnv')
   assertOverlayDoesNotReplaceIsolation(extraEnv, 'orcaAppExtraEnv')
@@ -87,14 +135,20 @@ export function createElectronHomeIsolation({
   if (areSameHomePath(isolatedHome, realHome)) {
     throw new Error('Refusing to launch E2E with the developer home as its isolated HOME')
   }
-  const hermeticShell = { ...launchEnv, ...extraEnv }.ORCA_E2E_HERMETIC_SHELL === '1'
+  const hermeticShell = isHermeticShellEnv({ ...launchEnv, ...extraEnv })
+  const posixHermeticShell = hermeticShell && platform !== 'win32'
   // Why: stock prompts print user@host into screenshots; ZDOTDIR reaches these rc files even
   // under macOS login(1), which resets HOME to the account's real home.
-  if (hermeticShell) {
+  if (posixHermeticShell) {
     for (const [file, content] of Object.entries(HERMETIC_PROMPT_FILES)) {
       writeFileSync(path.join(isolatedHome, file), content)
     }
   }
+  const hermeticShellEnv = !hermeticShell
+    ? {}
+    : posixHermeticShell
+      ? { SHELL: platform === 'darwin' ? '/bin/zsh' : '/bin/bash', ZDOTDIR: isolatedHome }
+      : { PROMPT: HERMETIC_WINDOWS_PROMPT }
 
   return {
     isolatedHome,
@@ -103,7 +157,7 @@ export function createElectronHomeIsolation({
       ...stripAmbientHomeAndCodexEnv(inheritedEnv),
       ...launchEnv,
       ...extraEnv,
-      ...(hermeticShell ? { SHELL: HERMETIC_SHELL, ZDOTDIR: isolatedHome } : {}),
+      ...hermeticShellEnv,
       HOME: isolatedHome,
       USERPROFILE: isolatedHome,
       ORCA_E2E_USER_DATA_DIR: userDataDir,

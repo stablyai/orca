@@ -34,14 +34,19 @@ Open the output directory printed at the end of the run to inspect the eleven sc
 `report.json`, and one `.identity-guard.json` per screenshot. The report records the Playwright
 exit status, captured and missing screenshots, and the guard's result. The runner
 exits nonzero if Playwright fails or any expected screenshot is missing. It also exits nonzero
-if the guard detects this machine's username, hostname, or home path, or a screenshot has no
-guard record.
+if the guard detects this machine's username, hostname, or home path, if its read of the renderer
+came back blank or missed a rendered terminal, or if a screenshot has no guard record.
 
-The guard checks every capture so screenshots can be shared. Pane shells start with a neutral prompt
-from a fixture shell config in the disposable home. Fixture paths echoed by the terminal live
-under the OS temp directory. Before and after each capture, the guard checks visible text, form
-field values, and every terminal buffer for the machine's identity: its username, full or short
-hostname, or home path. If it finds any, it refuses the capture and writes no PNG.
+The guard checks every capture so screenshots can be shared. Pane shells start with a neutral prompt:
+zsh or bash read a fixture shell config in the disposable home, and on Windows the profile pins
+`cmd.exe`, which reads a bare `PROMPT`. Fixture paths echoed by the terminal live under the OS
+temp directory, or under an `orca-e2e` directory at the drive root when that temp directory sits
+inside the home directory, as Windows `%TEMP%` does. Before and after each capture, the guard
+checks visible text, form field values, and every terminal buffer for the machine's identity: its
+username, full or short hostname, or home path. It also requires non-blank page text and a buffer
+for every rendered terminal. If any check fails, it refuses the capture and writes no PNG.
+Playwright's own failure screenshots are off for these specs; a failing test captures
+`test-failed-<n>.png` through the same guard instead.
 
 The specs use a fake cc-sync provider and a fake `claude` CLI. They check Orca rendering and
 recovery behavior; cc-sync transport and real Claude resume are outside this check.

@@ -19,7 +19,10 @@ import {
   openRecoverSessionsFromJumpPalette
 } from './helpers/cross-machine-recovery-picker-fixtures'
 import { HERMETIC_SHELL_ENV } from './helpers/electron-home-isolation'
-import { captureHiddenRendererScreenshot } from './helpers/hidden-renderer-screenshot'
+import {
+  captureGuardedFailureScreenshots,
+  captureHiddenRendererScreenshot
+} from './helpers/hidden-renderer-screenshot'
 
 const LEAKED_ENV = {
   ORCA_ENVIRONMENT: 'e2e-remote-environment',
@@ -45,7 +48,14 @@ async function assertWindowsStayHidden(electronApp: ElectronApplication): Promis
   expect(windows.every((window) => !window.visible && !window.focused)).toBe(true)
 }
 
-test.use({ orcaAppExtraEnv: { ...LEAKED_ENV, ...HERMETIC_SHELL_ENV } })
+// Why: Playwright's own failure screenshot would bypass the identity guard.
+test.use({ screenshot: 'off', orcaAppExtraEnv: { ...LEAKED_ENV, ...HERMETIC_SHELL_ENV } })
+
+test.afterEach(async ({ orcaPage }, testInfo) => {
+  if (testInfo.status !== testInfo.expectedStatus) {
+    await captureGuardedFailureScreenshots([orcaPage], testInfo)
+  }
+})
 
 test.describe('Cross-machine recovery picker', () => {
   test('lists provider items, re-runs divergence, cancels, and reveals the local worktree', async ({

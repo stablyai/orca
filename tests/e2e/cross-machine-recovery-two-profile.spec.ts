@@ -6,7 +6,6 @@
  */
 import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import type { ElectronApplication, Page, TestInfo } from '@stablyai/playwright-test'
 import {
@@ -38,12 +37,16 @@ import { emitClaudeHookPayload, readHookEndpoint } from './helpers/agent-hook-en
 import { createSeededTestRepo } from './helpers/seeded-test-repo'
 import { getActiveWorktreeId, waitForSessionReady } from './helpers/store'
 import { createFakeClaudeCli } from './helpers/fake-claude-cli'
+import { buildFakeAgentCommandOverride } from './helpers/fake-agent-command-override'
 import {
-  buildFakeAgentCommandOverride,
-  FAKE_AGENT_WINDOWS_SHELL
-} from './helpers/fake-agent-command-override'
-import { HERMETIC_SHELL_ENV } from './helpers/electron-home-isolation'
-import { captureHiddenRendererScreenshot } from './helpers/hidden-renderer-screenshot'
+  e2eFixtureTmpdir,
+  HERMETIC_SHELL_ENV,
+  HERMETIC_WINDOWS_SHELL
+} from './helpers/electron-home-isolation'
+import {
+  captureGuardedFailureScreenshots,
+  captureHiddenRendererScreenshot
+} from './helpers/hidden-renderer-screenshot'
 import { RECOVERY_SCREENSHOT_DIR } from './helpers/cross-machine-recovery-picker-fixtures'
 import {
   recoveredSessionPlaceholder as placeholder,
@@ -369,6 +372,9 @@ function expectArgvRun(argv: readonly string[], run: readonly string[]): void {
   expect(argv.slice(at, at + run.length)).toEqual(run)
 }
 
+// Why: Playwright's own failure screenshot would bypass the identity guard.
+test.use({ screenshot: 'off' })
+
 // oxlint-disable-next-line no-empty-pattern -- This test owns both hidden Electron profiles.
 test('exports a workspace from one profile and imports it into another', async ({}, testInfo) => {
   test.setTimeout(300_000)
@@ -377,8 +383,8 @@ test('exports a workspace from one profile and imports it into another', async (
     ORCA_BACKGROUND_LAUNCH: '1',
     ...HERMETIC_SHELL_ENV
   })
-  // Why tmpdir: the pane echoes this path, and test-results sits under the developer's home.
-  const fakeClaudeDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-fake-claude-'))
+  // Why outside home: the pane echoes this path, and test-results sits under the developer's home.
+  const fakeClaudeDir = mkdtempSync(path.join(e2eFixtureTmpdir(), 'orca-e2e-fake-claude-'))
   const fakeClaude = createFakeClaudeCli(fakeClaudeDir)
   mkdirSync(testInfo.outputDir, { recursive: true })
   const profileB = createRestartSession(testInfo, {
@@ -456,7 +462,9 @@ test('exports a workspace from one profile and imports it into another', async (
     expect(exported.layout.groupLayout).toMatchObject({ type: 'split', ratio: 0.35 })
     await close(profileA, a.app)
 
-    const checkoutRoot = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-recovery-b-')))
+    const checkoutRoot = realpathSync(
+      mkdtempSync(path.join(e2eFixtureTmpdir(), 'orca-e2e-recovery-b-'))
+    )
     const checkoutB = path.join(checkoutRoot, 'checkout')
     execFileSync('git', ['clone', '--quiet', repoA, checkoutB])
     const descriptorFile = path.join(testInfo.outputDir, 'descriptor.json')
@@ -480,8 +488,12 @@ test('exports a workspace from one profile and imports it into another', async (
         })
       },
       {
-        agentCommand: buildFakeAgentCommandOverride(path.join(fakeClaude.binDir, 'claude')),
-        terminalWindowsShell: FAKE_AGENT_WINDOWS_SHELL
+        agentCommand: buildFakeAgentCommandOverride(
+          path.join(fakeClaude.binDir, 'claude'),
+          process.platform,
+          HERMETIC_WINDOWS_SHELL
+        ),
+        terminalWindowsShell: HERMETIC_WINDOWS_SHELL
       }
     )
     await addRepo(b.page, checkoutB, 1)
@@ -636,6 +648,12 @@ test('exports a workspace from one profile and imports it into another', async (
       )
     ).toBe(true)
     await close(profileB, b.app)
+  } catch (error) {
+    await captureGuardedFailureScreenshots(
+      await Promise.all([...running].map((app) => app.firstWindow())),
+      testInfo
+    )
+    throw error
   } finally {
     for (const app of running) {
       await closeElectronAppForE2E(app)

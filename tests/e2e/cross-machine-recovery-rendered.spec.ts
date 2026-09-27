@@ -15,7 +15,10 @@ import {
   type RecoveryRenderedScenario
 } from './helpers/cross-machine-recovery-picker-fixtures'
 import { HERMETIC_SHELL_ENV } from './helpers/electron-home-isolation'
-import { captureHiddenRendererScreenshot } from './helpers/hidden-renderer-screenshot'
+import {
+  captureGuardedFailureScreenshots,
+  captureHiddenRendererScreenshot
+} from './helpers/hidden-renderer-screenshot'
 
 const SHOWS: Record<RecoveryRenderedScenario, (dialog: Locator, row: Locator) => Promise<void>> = {
   complete: async (_dialog, row) => {
@@ -47,7 +50,14 @@ const SHOWS: Record<RecoveryRenderedScenario, (dialog: Locator, row: Locator) =>
   }
 }
 
-test.use({ orcaAppExtraEnv: HERMETIC_SHELL_ENV })
+// Why: Playwright's own failure screenshot would bypass the identity guard.
+test.use({ screenshot: 'off', orcaAppExtraEnv: HERMETIC_SHELL_ENV })
+
+test.afterEach(async ({ orcaPage }, testInfo) => {
+  if (testInfo.status !== testInfo.expectedStatus) {
+    await captureGuardedFailureScreenshots([orcaPage], testInfo)
+  }
+})
 
 test.describe('Cross-machine recovery rendered picker states', () => {
   test.skip(
