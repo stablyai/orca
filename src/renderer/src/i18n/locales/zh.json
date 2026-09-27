@@ -22605,6 +22605,10 @@
           "9353305ea6": "Claude Code 跟随终端主题"
         }
       },
+      "TerminalRendering": {
+        "imePreeditInGrid": "在终端单元格中绘制输入法组字",
+        "imePreeditInGridDescription": "将使用输入法（韩语、日语、中文）正在组字的文本渲染为光标处的终端单元格。关闭后改用浮动叠加层。"
+      },
       "nativeChat": {
         "followUpBehaviorTitle": "将后续消息加入队列",
         "scrollToLatestOnSendTitle": "发送时滚动到最新消息",

@@ -37,6 +37,7 @@ import { resolveTerminalInlineImagesEnabled } from '../../../../../shared/termin
 import { windowBackdropActive } from '@/app-shell/appearance/window-backdrop'
 import { contrastRatio, hexToRgb, over, type Rgba } from '../../../../../shared/color/rgba-contrast'
 import { getTerminalFontSizeOverride } from './terminal-font-size-overrides'
+import { resolveTerminalImePreeditInGrid } from '@/lib/pane-manager/terminal-input/terminal-ime-grid-preedit'
 
 export function hexToRgba(hex: string, alpha: number): string {
   const [r, g, b] = hexToRgb(hex)
@@ -227,6 +228,10 @@ export function applyTerminalAppearance(
     )
     // Why only 'true': 'left'/'right' are handled in the keydown policy, which needs Option composable at the xterm level.
     pane.terminal.options.macOptionIsMeta = effectiveMacOptionAsAlt === 'true'
+    // Read at compositionstart, so an open composition keeps the path it started on.
+    pane.terminal.options.imePreeditInGrid = resolveTerminalImePreeditInGrid(
+      settings.terminalImePreeditInGrid
+    )
     manager.setPaneLigaturesEnabled(pane.id, ligaturesEnabled)
     manager.setPaneInlineImagesEnabled(
       pane.id,

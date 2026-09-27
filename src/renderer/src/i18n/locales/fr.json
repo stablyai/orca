@@ -23241,6 +23241,10 @@
           "9353305ea6": "Aligner Claude Code sur le thème du terminal"
         }
       },
+      "TerminalRendering": {
+        "imePreeditInGrid": "Afficher la composition IME dans les cellules du terminal",
+        "imePreeditInGridDescription": "Affiche le texte en cours de composition avec une méthode de saisie (coréen, japonais, chinois) sous forme de cellules du terminal au curseur. Désactivez pour utiliser la superposition flottante."
+      },
       "nativeChat": {
         "followUpBehaviorTitle": "Mettre les messages suivants en file d’attente",
         "scrollToLatestOnSendTitle": "Défiler jusqu’au dernier message à l’envoi",

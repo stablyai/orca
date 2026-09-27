@@ -23638,6 +23638,10 @@
           "9353305ea6": "Match Claude Code to terminal theme"
         }
       },
+      "TerminalRendering": {
+        "imePreeditInGrid": "Draw IME Composition in Terminal Cells",
+        "imePreeditInGridDescription": "Render text being composed with an input method (Korean, Japanese, Chinese) as terminal cells at the cursor. Turn off to use the floating overlay instead."
+      },
       "nativeChat": {
         "followUpBehaviorTitle": "Queue follow-ups",
         "scrollToLatestOnSendTitle": "Scroll to latest when sending",

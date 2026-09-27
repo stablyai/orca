@@ -15,7 +15,7 @@ import {
   isTerminalImePreeditInGrid,
   setTerminalImePreeditAnchor,
   setTerminalImePreeditHidesTail
-} from '@/lib/pane-manager/terminal-ime-grid-preedit'
+} from '@/lib/pane-manager/terminal-input/terminal-ime-grid-preedit'
 
 type Rig = {
   container: HTMLElement
