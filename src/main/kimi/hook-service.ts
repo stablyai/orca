@@ -149,7 +149,15 @@ function writeConfigToml(configPath: string, text: string): void {
     } catch {
       // Fall through to the atomic write path.
     }
-    mode = statSync(configPath).mode & 0o777
+    try {
+      mode = statSync(configPath).mode & 0o777
+    } catch (error) {
+      // Why: file was deleted between the existsSync check and here — nothing to preserve.
+      const code = error instanceof Error && 'code' in error ? error.code : undefined
+      if (code !== 'ENOENT') {
+        throw error
+      }
+    }
   }
   const tmpPath = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)
   try {
