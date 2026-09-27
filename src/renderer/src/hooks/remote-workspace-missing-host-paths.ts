@@ -97,12 +97,15 @@ export function purgeClientRowsForMissingHostPaths(
   const state = store.getState()
   const retainedKeys = new Set<string>()
   const staleIds = Object.keys(state.tabsByWorktree).filter((worktreeId) => {
-    if (placedWorktreeIds.has(worktreeId)) {
-      return false
-    }
     const parsed = splitWorktreeId(worktreeId)
     const pathKey = parsed ? normalizeRuntimePathForComparison(parsed.worktreePath) : null
     if (!parsed || !pathKey || !missingKeys.has(pathKey)) {
+      return false
+    }
+    // A catalog row still names this worktree (e.g. two ids share the path, so placement
+    // refused both); its tabs survive, so the path is not released.
+    if (placedWorktreeIds.has(worktreeId)) {
+      retainedKeys.add(pathKey)
       return false
     }
     // A repo id registered on another host too could name a live local path; leave it alone.

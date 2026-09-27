@@ -313,6 +313,38 @@ describe('host snapshot rows under a path the host reports gone', () => {
     expect(store.getState().tabsByWorktree[REMOVED_ID]?.map((tab) => tab.id)).toContain('GHOST')
   })
 
+  it('keeps the conflict when two placed worktrees share the gone path', async () => {
+    const store = createStore()
+    const twinId = `repoB::${REMOVED}`
+    const { worktreesByRepo } = store.getState()
+    store.setState({
+      repos: [repoRow('repoA', TARGET_ID), repoRow('repoB', TARGET_ID)],
+      worktreesByRepo: {
+        ...worktreesByRepo,
+        repoA: [
+          ...(worktreesByRepo.repoA ?? []),
+          makeWorktree({
+            id: REMOVED_ID,
+            repoId: 'repoA',
+            path: REMOVED,
+            hostId: `ssh:${TARGET_ID}`
+          })
+        ],
+        repoB: [
+          makeWorktree({ id: twinId, repoId: 'repoB', path: REMOVED, hostId: `ssh:${TARGET_ID}` })
+        ]
+      }
+    })
+    addClientGhostRow(store)
+
+    await applySnapshot(store, existence({ exists: false }))
+
+    // Placement refuses the ambiguous path, and the purge must not drop a row the catalog names;
+    // the row survives, so the next upload would re-publish it and the target cannot sync.
+    expect(store.getState().tabsByWorktree[REMOVED_ID]?.map((tab) => tab.id)).toEqual(['GHOST'])
+    expect(syncStatus(store)?.phase).toBe('conflict')
+  })
+
   it('matches client rows whose key spells the host path differently', async () => {
     const store = createStore()
     const trailingSlashId = `repoA::${REMOVED}/`
