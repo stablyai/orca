@@ -34,9 +34,17 @@ const item = mountFixture<MobileDiffReviewQueueItem>({
   changedSinceReview: false
 })
 
-function clientAnsweringOpenDiff(reply: RpcResponse) {
+const NO_RENDERER: RpcResponse = {
+  id: 'request-1',
+  ok: false,
+  error: { code: 'runtime_error', message: 'renderer_unavailable' }
+}
+const OPENED: RpcResponse = { id: 'request-1', ok: true, result: { opened: true } }
+
+function clientAnsweringOpenDiff(replies: RpcResponse[]) {
   const send = vi.fn(async (method: string, _params?: unknown): Promise<RpcResponse> => {
-    if (method === 'files.openDiff') {
+    const reply = method === 'files.openDiff' ? replies.shift() : undefined
+    if (reply) {
       return reply
     }
     if (method === 'session.tabs.list') {
@@ -124,31 +132,26 @@ describe('review screen Open in Session', () => {
     }
   }
 
-  it('explains, and turns the action off, when the host has no renderer to open a tab', async () => {
-    const { client } = clientAnsweringOpenDiff({
-      id: 'request-1',
-      ok: false,
-      error: { code: 'runtime_error', message: 'renderer_unavailable' }
-    })
+  it('explains a host with no renderer, and asks again on the next tap (#14315)', async () => {
+    // A serve host can gain a window, or the client be replaced, while the review stays open.
+    const { client } = clientAnsweringOpenDiff([NO_RENDERER, OPENED])
     const onOpenSession = vi.fn()
     const view = mount(client, onOpenSession)
-    expect(view.interactions().sessionTabsUnavailable).toBe(false)
 
     await act(async () => {
       await view.interactions().openInSession()
     })
-
     expect(onOpenSession).not.toHaveBeenCalled()
     expect(view.actionError()).toBe(SESSION_TABS_UNAVAILABLE_MESSAGE)
-    expect(view.interactions().sessionTabsUnavailable).toBe(true)
+
+    await act(async () => {
+      await view.interactions().openInSession()
+    })
+    expect(onOpenSession).toHaveBeenCalledTimes(1)
   })
 
-  it('still returns to the session when a desktop host opens the diff tab', async () => {
-    const { client, send } = clientAnsweringOpenDiff({
-      id: 'request-1',
-      ok: true,
-      result: { opened: true }
-    })
+  it('returns to the session when a desktop host opens the diff tab', async () => {
+    const { client, send } = clientAnsweringOpenDiff([OPENED])
     const onOpenSession = vi.fn()
     const view = mount(client, onOpenSession)
 
@@ -163,6 +166,5 @@ describe('review screen Open in Session', () => {
     })
     expect(onOpenSession).toHaveBeenCalledTimes(1)
     expect(view.actionError()).toBeNull()
-    expect(view.interactions().sessionTabsUnavailable).toBe(false)
   })
 })

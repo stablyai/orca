@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
 import { translate } from '../../../i18n/mobile-i18n'
 import type { ConnectionState } from '../../../transport/connection/connection-state'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
@@ -78,7 +78,6 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
     onOpenSession,
     onReconnect
   } = input
-  const [sessionTabsUnavailable, setSessionTabsUnavailable] = useState(false)
 
   // Bumped by every file the reader picks, so a slow save or stage never overrides a newer pick.
   const navigationRef = useRef(0)
@@ -199,8 +198,8 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
           staged: target.staged
         })
         // Why: a host with no renderer (orca serve, orcad) has no tab to open; this screen is the diff view.
+        // Not latched: a serve host can gain a window, or the client be replaced, while this screen is open.
         if (isRendererUnavailableReply(response)) {
-          setSessionTabsUnavailable(true)
           setActionError(
             translate(
               'session.useDiffReviewInteractions.sessionTabsUnavailable',
@@ -240,7 +239,6 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
     runGitMutation,
     saveComposer,
     sendPromptToTerminal,
-    sessionTabsUnavailable,
     loadTerminals,
     // The sheet's own lines and the terminals it already listed; the draft clears once the note is saved.
     sendRange: async (
