@@ -582,8 +582,3 @@ export function createRelayServer(
     cellIncarnation
   }
 }
-
-export function closeWithDrain(socket: WebSocket, graceMs: number): void {
-  socket.send(JSON.stringify({ type: 'drain', graceMs, recovery: 'resolve-director' }))
-  closeRelayWebSocket(socket, RELAY_CLOSE_CODE.DRAINING, 'resolve configured director')
-}
