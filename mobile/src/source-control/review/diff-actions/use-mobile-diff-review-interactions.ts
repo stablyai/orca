@@ -1,4 +1,4 @@
-import { useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { translate } from '../../../i18n/mobile-i18n'
 import type { ConnectionState } from '../../../transport/connection/connection-state'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
@@ -13,6 +13,7 @@ import type { MobileDiffReviewNoteDraft } from '../review-notes/use-mobile-diff-
 import { sourceFileDiffOpenRun } from '../../../files/session-documents/mobile-source-file-open-operations'
 import { selectOpenedSessionDiff } from '../diff-state/select-opened-session-diff'
 import { refusedRpcMessageOrFallback } from '../../../transport/rpc/rpc-refusal-message'
+import { isRendererUnavailableReply } from '../../../transport/rpc/renderer-unavailable-reply'
 import { useMobileDiffReviewCommentActions } from '../review-notes/use-mobile-diff-review-comment-actions'
 import { useMobileDiffReviewGitActions } from './use-mobile-diff-review-git-actions'
 import { useMobileDiffReviewSendActions } from './use-mobile-diff-review-send-actions'
@@ -47,6 +48,9 @@ type InteractionInput = {
   onReconnect: ((hostId: string) => void | Promise<void>) | null
 }
 
+export const SESSION_TABS_UNAVAILABLE_MESSAGE =
+  'This host has no desktop to open tabs in. The diff is shown here instead.'
+
 export function useMobileDiffReviewInteractions(input: InteractionInput) {
   const {
     client,
@@ -74,6 +78,7 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
     onOpenSession,
     onReconnect
   } = input
+  const [sessionTabsUnavailable, setSessionTabsUnavailable] = useState(false)
 
   // Bumped by every file the reader picks, so a slow save or stage never overrides a newer pick.
   const navigationRef = useRef(0)
@@ -193,6 +198,17 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
           relativePath: target.relativePath,
           staged: target.staged
         })
+        // Why: a host with no renderer (orca serve, orcad) has no tab to open; this screen is the diff view.
+        if (isRendererUnavailableReply(response)) {
+          setSessionTabsUnavailable(true)
+          setActionError(
+            translate(
+              'session.useDiffReviewInteractions.sessionTabsUnavailable',
+              SESSION_TABS_UNAVAILABLE_MESSAGE
+            )
+          )
+          return
+        }
         try {
           sourceFileDiffOpenRun.interpret(response)
         } catch (error) {
@@ -224,6 +240,7 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
     runGitMutation,
     saveComposer,
     sendPromptToTerminal,
+    sessionTabsUnavailable,
     loadTerminals,
     // The sheet's own lines and the terminals it already listed; the draft clears once the note is saved.
     sendRange: async (

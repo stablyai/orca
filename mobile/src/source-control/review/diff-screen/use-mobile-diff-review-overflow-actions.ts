@@ -88,7 +88,11 @@ export function useMobileDiffReviewOverflowActions(
               id: 'openInSession',
               label: t('components.diffReviewDrawers.openInSession', 'Open in Session'),
               icon: FileText,
-              disabled: !item || item.scope === 'branch' || item.scope === 'commit',
+              disabled:
+                !item ||
+                item.scope === 'branch' ||
+                item.scope === 'commit' ||
+                controller.sessionTabsUnavailable,
               onPress: () => void controller.openInSession()
             }
           ]

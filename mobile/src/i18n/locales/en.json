@@ -2775,7 +2775,8 @@
       "actionFailed": "Source control action failed"
     },
     "useDiffReviewInteractions": {
-      "openFailed": "Unable to open in session"
+      "openFailed": "Unable to open in session",
+      "sessionTabsUnavailable": "This host has no desktop to open tabs in. The diff is shown here instead."
     },
     "useDiffReviewSendActions": {
       "copyFailed": "Unable to copy the review notes",
