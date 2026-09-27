@@ -191,6 +191,19 @@ describe('Git Bash path discovery', () => {
     ).toBe(true)
   })
 
+  // Each marker is individually necessary, so dropping one from the predicate cannot stay green.
+  it.each([
+    ['usr\\bin\\bash.exe', 'C:\\Tools\\Git-2.55\\usr\\bin\\bash.exe'],
+    ['cmd\\git.exe', 'C:\\Tools\\Git-2.55\\cmd\\git.exe'],
+    ['git-bash.exe', 'C:\\Tools\\Git-2.55\\git-bash.exe']
+  ])('refuses a renamed install root missing only %s', (_label, missingMarker) => {
+    expect(
+      isGitForWindowsBashLauncherPath('C:\\Tools\\Git-2.55\\bin\\bash.exe', {
+        exists: (path) => path !== missingMarker
+      })
+    ).toBe(false)
+  })
+
   it('refuses a bash that is not a Git for Windows launcher, even where every path exists', () => {
     const everythingExists = (): boolean => true
     // A directly launched MSYS bash: no install root sits inside `usr`, so the markers cannot be met.
