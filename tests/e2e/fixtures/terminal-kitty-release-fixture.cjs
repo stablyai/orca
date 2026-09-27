@@ -3,6 +3,7 @@
 // A PROBE marker is kept out of that log and acknowledged in a separate file,
 // so the spec knows every byte sent before it has already been recorded.
 const fs = require('node:fs')
+const { createInputProbeSplitter } = require('./terminal-input-probe-splitter.cjs')
 
 const ESC = '\x1b'
 const PROBE = `${ESC}]orca-kitty-probe${ESC}\\`
@@ -18,12 +19,13 @@ if (process.stdin.isTTY) {
 process.stdin.resume()
 // CSI > 3 u: push DISAMBIGUATE_ESCAPE_CODES | REPORT_EVENT_TYPES.
 process.stdout.write(`${ESC}[>3uKITTY_RELEASE_FIXTURE_READY`)
+const splitProbe = createInputProbeSplitter(PROBE)
 process.stdin.on('data', (chunk) => {
-  const logged = chunk.split(PROBE).join('')
+  const { logged, probes } = splitProbe(chunk)
   if (inputLogPath && logged) {
     fs.appendFileSync(inputLogPath, logged)
   }
-  if (probeAckPath && chunk.includes(PROBE)) {
+  if (probeAckPath && probes > 0) {
     fs.appendFileSync(probeAckPath, 'ack\n')
   }
   if (chunk.includes('\x03') || chunk.includes(`${ESC}[99;5u`)) {

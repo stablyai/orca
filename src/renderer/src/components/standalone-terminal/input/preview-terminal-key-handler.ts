@@ -187,6 +187,8 @@ export function installPreviewTerminalKeyHandler(args: {
         optionKittyReleases.armNativeDeadKey(event)
         return true
       case 'scrollViewport':
+        // Why: under kitty release reporting the orphan keyup would reach the agent and scroll back to the bottom (#17606).
+        nativeOnlyShortcutTracker.armKeyDown(event)
         if (action.position === 'top') {
           terminal.scrollToTop()
         } else {
