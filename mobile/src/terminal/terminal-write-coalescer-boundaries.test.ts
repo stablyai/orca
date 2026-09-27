@@ -8,6 +8,13 @@ import {
 } from './terminal-write-coalescer'
 
 const webViewSource = readFileSync(new URL('./TerminalWebView.tsx', import.meta.url), 'utf8')
+// C7.5 moved everything that is not `react-native-webview` into the controller both components
+// share, so the coalescer's boundaries are read there; the component is still read for the two
+// WebView lifecycle events that reach it.
+const controllerSource = readFileSync(
+  new URL('./use-terminal-webview-controller.ts', import.meta.url),
+  'utf8'
+)
 
 // Simulates TerminalWebView's postMessage: ready → deliver, not ready → queue.
 // There is no React render harness in the node environment, so the boundary
@@ -105,27 +112,27 @@ describe('terminal write coalescer boundaries', () => {
   })
 
   it('routes handle.write through the coalescer whose delivery posts the write command', () => {
-    expect(webViewSource).toContain(
+    expect(controllerSource).toContain(
       "createTerminalWriteCoalescer((data) => postMessage({ type: 'write', data }))"
     )
-    const writeStart = webViewSource.indexOf('write(data: string) {')
+    const writeStart = controllerSource.indexOf('write(data: string) {')
     expect(writeStart).toBeGreaterThanOrEqual(0)
-    const writeBody = webViewSource.slice(writeStart, writeStart + 120)
+    const writeBody = controllerSource.slice(writeStart, writeStart + 120)
     expect(writeBody).toContain('writeCoalescer.write(data)')
     expect(writeBody).not.toContain('postMessage')
   })
 
   it('clears the coalescer before posting init and clear (snapshot supersession)', () => {
     // Anchor on the init() signature (unique) — 'init(' alone also matches comments.
-    const initStart = webViewSource.indexOf('initialData?: string,')
-    const initClear = webViewSource.indexOf('writeCoalescer.clear()', initStart)
-    const initPost = webViewSource.indexOf("type: 'init'", initStart)
+    const initStart = controllerSource.indexOf('initialData?: string,')
+    const initClear = controllerSource.indexOf('writeCoalescer.clear()', initStart)
+    const initPost = controllerSource.indexOf("type: 'init'", initStart)
     expect(initStart).toBeGreaterThanOrEqual(0)
     expect(initClear).toBeGreaterThan(initStart)
     expect(initClear).toBeLessThan(initPost)
 
-    const clearStart = webViewSource.indexOf('clear() {', initPost)
-    const clearBody = webViewSource.slice(clearStart, clearStart + 160)
+    const clearStart = controllerSource.indexOf('clear() {', initPost)
+    const clearBody = controllerSource.slice(clearStart, clearStart + 160)
     expect(clearStart).toBeGreaterThanOrEqual(0)
     expect(clearBody.indexOf('writeCoalescer.clear()')).toBeGreaterThanOrEqual(0)
     expect(clearBody.indexOf('writeCoalescer.clear()')).toBeLessThan(
@@ -135,9 +142,9 @@ describe('terminal write coalescer boundaries', () => {
 
   it('flushes pending writes before resize and reflow so boundaries observe prior bytes', () => {
     for (const method of ['resize', 'reflow'] as const) {
-      const start = webViewSource.indexOf(`${method}(cols: number, rows: number) {`)
+      const start = controllerSource.indexOf(`${method}(cols: number, rows: number) {`)
       expect(start).toBeGreaterThanOrEqual(0)
-      const body = webViewSource.slice(start, start + 300)
+      const body = controllerSource.slice(start, start + 300)
       const flushIndex = body.indexOf('writeCoalescer.flushNow()')
       const postIndex = body.indexOf(`postMessage({ type: '${method}'`)
       expect(flushIndex).toBeGreaterThanOrEqual(0)
@@ -146,19 +153,26 @@ describe('terminal write coalescer boundaries', () => {
   })
 
   it('clears the coalescer in both document-lifecycle hooks alongside pendingMessages', () => {
-    for (const hook of ['const handleLoadStart', 'const handleContentProcessDidTerminate']) {
-      const start = webViewSource.indexOf(hook)
-      expect(start).toBeGreaterThanOrEqual(0)
-      const body = webViewSource.slice(start, webViewSource.indexOf('}, [', start))
-      expect(body).toContain('pendingMessages.clear()')
-      expect(body).toContain('writeCoalescer.clear()')
-    }
+    // Both hooks now reach one function, so the clearing is asserted once where it lives and the
+    // two WebView events are asserted to be the callers. Reading only the component would pass on
+    // a `resetReadiness` that had quietly stopped clearing either one.
+    const start = controllerSource.indexOf('const resetReadiness = useCallback')
+    expect(start).toBeGreaterThanOrEqual(0)
+    const body = controllerSource.slice(start, controllerSource.indexOf('}, [', start))
+    expect(body).toContain('pendingMessages.clear()')
+    expect(body).toContain('writeCoalescer.clear()')
+    expect(webViewSource).toContain('onLoadStart={resetReadiness}')
+    const terminated = webViewSource.indexOf('const handleContentProcessDidTerminate')
+    expect(terminated).toBeGreaterThanOrEqual(0)
+    expect(webViewSource.slice(terminated, webViewSource.indexOf('}, [', terminated))).toContain(
+      'resetReadiness()'
+    )
   })
 
   it('clears the coalescer on unmount so no timer leaks', () => {
-    const cleanupStart = webViewSource.indexOf('useEffect(() => {\n    return () => {')
+    const cleanupStart = controllerSource.indexOf('useEffect(() => {\n    return () => {')
     expect(cleanupStart).toBeGreaterThanOrEqual(0)
-    const cleanupBody = webViewSource.slice(cleanupStart, cleanupStart + 160)
+    const cleanupBody = controllerSource.slice(cleanupStart, cleanupStart + 160)
     expect(cleanupBody).toContain('writeCoalescer.clear()')
   })
 })

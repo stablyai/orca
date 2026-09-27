@@ -42,7 +42,11 @@ const mutants: Record<string, Mutation> = {
   'tasks-route-repo-list': 'task-screen-repo-envelope',
   'linear-select-workspace': 'linear-workspace-context-reload',
   'terminal-input-send-refused': 'terminal-send-refusal-restores-draft',
-  'terminal-worktree-connection-resolved': 'worktree-connection-first-repo'
+  'terminal-worktree-connection-resolved': 'worktree-connection-first-repo',
+  'pr-sidebar-checks-refused': 'pr-sidebar-checks-failure-state',
+  'tk-item-detail-metadata': 'assignable-user-avatar-null-collapse',
+  'worktree-catalog-snapshot-unreadable': 'worktree-catalog-unchecked-reader',
+  'mobile-web-bundle-fetch-paged': 'mobile-web-bundle-chunk-placement'
 }
 /**
  * The archived tree's visible state, pinned per seed: b1 serves the poisoned empty inventory, b2

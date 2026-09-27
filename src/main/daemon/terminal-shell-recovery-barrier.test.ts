@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { POST_REPLAY_DEAD_TUI_RESET } from '../../shared/terminal-mode-reset-profiles'
+import { PROCESS_BOUNDARY_GROUND } from '../../shared/terminal-mode-reset-profiles'
 import { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
 import type { PtyIngressEmission } from '../../shared/pty-startup-ingress'
 
@@ -53,7 +53,7 @@ describe('TerminalShellRecoveryBarrier', () => {
     resolveConfirm?.(true)
     await vi.waitFor(() => expect(released).toHaveLength(3))
     expect(released[1]).toEqual({
-      data: POST_REPLAY_DEAD_TUI_RESET,
+      data: PROCESS_BOUNDARY_GROUND,
       rawStartSeq: 100 + TRIGGER.length,
       rawEndSeq: 100 + TRIGGER.length,
       transformed: true
@@ -82,7 +82,7 @@ describe('TerminalShellRecoveryBarrier', () => {
     await vi.waitFor(() => expect(released).toHaveLength(4))
     expect(released.map((emission) => emission.data)).toEqual([
       TRIGGER,
-      POST_REPLAY_DEAD_TUI_RESET,
+      PROCESS_BOUNDARY_GROUND,
       'late-1',
       'late-2'
     ])
@@ -166,10 +166,10 @@ describe('TerminalShellRecoveryBarrier', () => {
     await vi.waitFor(() =>
       expect(released.map((emission) => emission.data)).toEqual([
         TRIGGER,
-        POST_REPLAY_DEAD_TUI_RESET,
+        PROCESS_BOUNDARY_GROUND,
         'first-prompt',
         '\x1b[?1049hAGAIN\x1b]133;D;9\x07',
-        POST_REPLAY_DEAD_TUI_RESET,
+        PROCESS_BOUNDARY_GROUND,
         'second-prompt'
       ])
     )
@@ -275,7 +275,7 @@ describe('TerminalShellRecoveryBarrier', () => {
       expect(released.map((emission) => emission.data)).toEqual([
         head,
         '37\x07',
-        POST_REPLAY_DEAD_TUI_RESET,
+        PROCESS_BOUNDARY_GROUND,
         'PROMPT'
       ])
     )
@@ -310,7 +310,7 @@ describe('TerminalShellRecoveryBarrier', () => {
     await vi.waitFor(() =>
       expect(released.map((emission) => emission.data)).toEqual([
         TRIGGER,
-        POST_REPLAY_DEAD_TUI_RESET,
+        PROCESS_BOUNDARY_GROUND,
         'after-poison'
       ])
     )
@@ -374,7 +374,7 @@ describe('TerminalShellRecoveryBarrier', () => {
 
     await vi.waitFor(() =>
       expect(released.map((emission) => emission.data)).toEqual([
-        POST_REPLAY_DEAD_TUI_RESET,
+        PROCESS_BOUNDARY_GROUND,
         'SHELL-PROMPT'
       ])
     )

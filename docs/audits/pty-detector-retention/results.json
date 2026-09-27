@@ -1,0 +1,94 @@
+{
+  "node": "v26.6.0",
+  "platform": "darwin",
+  "bundles": {
+    "before": "139646a3dc9316a104f472c86e674be062da8fbdf5a35563624557d44d27f471",
+    "after": "a2efe55354954f78e187fd65a247b51d97017776892979b631725ff686065168"
+  },
+  "results": [
+    {
+      "kind": "command-code-detector",
+      "fixed": false,
+      "inputChars": 65536,
+      "count": 32,
+      "heapDelta": 2112688
+    },
+    {
+      "kind": "url-bound-pty",
+      "fixed": false,
+      "inputChars": 65536,
+      "count": 32,
+      "heapDelta": 2173848
+    },
+    {
+      "kind": "url-before-binding",
+      "fixed": false,
+      "inputChars": 65536,
+      "count": 32,
+      "heapDelta": 2148824
+    },
+    {
+      "kind": "command-code-detector",
+      "fixed": false,
+      "inputChars": 4194304,
+      "count": 8,
+      "heapDelta": 33557144
+    },
+    {
+      "kind": "url-bound-pty",
+      "fixed": false,
+      "inputChars": 4194304,
+      "count": 8,
+      "heapDelta": 33569168
+    },
+    {
+      "kind": "url-before-binding",
+      "fixed": false,
+      "inputChars": 4194304,
+      "count": 8,
+      "heapDelta": 33568936
+    },
+    {
+      "kind": "command-code-detector",
+      "fixed": true,
+      "inputChars": 65536,
+      "count": 32,
+      "heapDelta": 41400
+    },
+    {
+      "kind": "url-bound-pty",
+      "fixed": true,
+      "inputChars": 65536,
+      "count": 32,
+      "heapDelta": 204112
+    },
+    {
+      "kind": "url-before-binding",
+      "fixed": true,
+      "inputChars": 65536,
+      "count": 32,
+      "heapDelta": 575512
+    },
+    {
+      "kind": "command-code-detector",
+      "fixed": true,
+      "inputChars": 4194304,
+      "count": 8,
+      "heapDelta": 6504
+    },
+    {
+      "kind": "url-bound-pty",
+      "fixed": true,
+      "inputChars": 4194304,
+      "count": 8,
+      "heapDelta": 47112
+    },
+    {
+      "kind": "url-before-binding",
+      "fixed": true,
+      "inputChars": 4194304,
+      "count": 8,
+      "heapDelta": 144504
+    }
+  ]
+}

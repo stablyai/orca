@@ -42,7 +42,6 @@ function installHost(options: {
   items?: AgentJournalRenderItem[]
   hasSession?: boolean
   claimStatus?: string
-  runtimeKind?: string
   deathEvidence?: unknown
   record?: unknown
   close?: () => Promise<void>
@@ -54,7 +53,7 @@ function installHost(options: {
       ? {
           location: { executionHostId: 'local', wslDistro: null },
           lease: {
-            runtimeKind: options.runtimeKind ?? 'native',
+            runtimeKind: 'native',
             claimStatus: options.claimStatus ?? 'live',
             deathEvidence: options.deathEvidence ?? null,
             runtimeFence: 3
@@ -106,8 +105,8 @@ describe('structured worker observation', () => {
     expect(observeStructuredWorker(IDENTITY).status).toBe('exited')
   })
 
-  it('is unverifiable when the lease moved to a terminal owner', () => {
-    installHost({ runtimeKind: 'tui' })
+  it('is unverifiable when a terminal an older build recorded holds the lease', () => {
+    installHost({ claimStatus: 'conflicted' })
     expect(observeStructuredWorker(IDENTITY).status).toBe('unverifiable')
   })
 })
@@ -130,7 +129,7 @@ describe('structured worker stop', () => {
 
   it.each([
     { hasSession: false },
-    { runtimeKind: 'tui' },
+    { claimStatus: 'conflicted' },
     { claimStatus: 'released' },
     { record: null }
   ])('retains without positive exit evidence: %j', async (options) => {

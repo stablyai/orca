@@ -182,9 +182,11 @@ export abstract class AgentHookServerState {
     }
   ): 'accept' | 'restart' | 'suppress'
   protected abstract isClosedAgentStatusTabForPaneKey(paneKey: string): boolean
+  protected abstract takeRetiredPaneRestartId(paneKey: string): string | undefined
   protected abstract recordRetiredPaneFence(
     paneKeys: ReadonlySet<string>,
-    aliases: readonly RetiredPaneAlias[]
+    aliases: readonly RetiredPaneAlias[],
+    retirementId?: string
   ): void
   protected abstract markPaneClosedForAgentStatus(paneKey: string): void
   protected abstract attachStatusTiming(
@@ -211,9 +213,9 @@ export abstract class AgentHookServerState {
   ): EnrichedAgentHookEventPayload | undefined
   protected abstract emitEnrichedStatus(enriched: EnrichedAgentHookEventPayload): void
   protected abstract clearAssistantMessageRetry(paneKey: string): void
-  protected abstract clearCodexSubagentPoll(paneKey: string): void
-  protected abstract clearAllCodexSubagentPolls(): void
-  protected abstract scheduleCodexSubagentPoll(
+  protected abstract clearTranscriptPoll(paneKey: string): void
+  protected abstract clearAllTranscriptPolls(): void
+  protected abstract scheduleTranscriptPoll(
     source: AgentHookSource,
     body: unknown,
     original: EnrichedAgentHookEventPayload

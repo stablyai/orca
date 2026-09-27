@@ -78,7 +78,8 @@ function isSameHostState(a: TerminalPaneHostState, b: TerminalPaneHostState): bo
   )
 }
 
-let cachedState: AppState | null = null
+// Identity checks must not keep a retired store alive after the last pane unmounts.
+let cachedState: WeakRef<AppState> | null = null
 let cachedByWorktreeId = new Map<string, TerminalPaneHostState>()
 let previousByWorktreeId = new Map<string, TerminalPaneHostState>()
 
@@ -100,10 +101,10 @@ export function selectTerminalPaneHostState(
   state: AppState,
   worktreeId: string
 ): TerminalPaneHostState {
-  if (state !== cachedState) {
+  if (state !== cachedState?.deref()) {
     previousByWorktreeId = cachedByWorktreeId
     cachedByWorktreeId = new Map()
-    cachedState = state
+    cachedState = new WeakRef(state)
   }
   const cached = cachedByWorktreeId.get(worktreeId)
   if (cached) {

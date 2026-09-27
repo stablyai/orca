@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useHostClient, useForceReconnect } from '../transport/client-context'
+import { connectionRetryAction } from '../transport/connection-retry-action'
 import type {
-  AiVaultListResult,
   AiVaultScanIssue,
   AiVaultScope,
   AiVaultSession
@@ -27,8 +27,6 @@ export type AgentHistoryScreenState =
   | { kind: 'unsupported' }
   | { kind: 'error'; message: string }
   | { kind: 'ready'; sessions: AiVaultSession[]; issues: AiVaultScanIssue[] }
-
-type StatusWithCapabilities = { capabilities?: string[] }
 
 export type MobileAgentHistoryStateParams = {
   hostId: string
@@ -96,11 +94,10 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
         if (!isCurrent()) {
           return
         }
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
         const status = interpretOrThrowRefusalMessage(
           () => agentHistoryHostStatusRead.interpret(statusReply),
           'Unable to reach host'
-        ) as StatusWithCapabilities
+        )
         setHostStatusResult(status)
         if (!status.capabilities?.includes(MOBILE_AI_VAULT_CAPABILITY)) {
           setScreenState({ kind: 'unsupported' })
@@ -127,12 +124,17 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
         if (!isCurrent()) {
           return
         }
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
         const result = interpretOrThrowRefusalMessage(
           () => agentHistorySessionScan.interpret(reply),
           'Unable to load agent sessions'
-        ) as AiVaultListResult
-        setScreenState({ kind: 'ready', sessions: result.sessions, issues: result.issues })
+        )
+        setScreenState({
+          kind: 'ready',
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reader checks both containers; the rows stay the host's own records because `agent` is a vocabulary this client echoes back on resume. aivault-history-screen-listed `normal` records a full row: every member the cards and the resume path read unguarded.
+          sessions: result.sessions as AiVaultSession[],
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same reader, same container check; the issue rows are the host's AiVaultScanIssue and are only counted, never read member-wise (MobileAgentSessionHistoryPanel.tsx:335).
+          issues: result.issues as AiVaultScanIssue[]
+        })
       } catch (err) {
         if (!isCurrent()) {
           return
@@ -173,13 +175,16 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
     }
   }, [loadSessions, scope])
 
-  const retry = useCallback(() => {
-    if (connState !== 'connected' && hostId) {
-      void forceReconnect(hostId)
-      return
-    }
-    void loadSessions({ scope, force: false })
-  }, [connState, forceReconnect, hostId, loadSessions, scope])
+  const retry = useMemo(
+    () =>
+      connectionRetryAction({
+        hostId,
+        needsReconnect: connState !== 'connected',
+        forceReconnect,
+        reload: () => void loadSessions({ scope, force: false })
+      }),
+    [connState, forceReconnect, hostId, loadSessions, scope]
+  )
 
   return {
     connState,

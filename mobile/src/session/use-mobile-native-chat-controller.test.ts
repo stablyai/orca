@@ -33,6 +33,7 @@ const structuredOptionSnapshot: SessionOptionDescriptor[] = [
       choices: [{ value: 'gpt-fast', label: 'GPT Fast' }]
     },
     valueSource: 'reported',
+    transport: 'agent-session',
     settable: true
   }
 ]

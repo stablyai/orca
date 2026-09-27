@@ -27,6 +27,7 @@ type IpcPtyConnectContext = {
   /** True only for the one buffered exit consumed by this connect attempt. */
   isExpectedExitCurrent: () => boolean
   ownsPtyId: (id: string) => boolean
+  handleExplicitlyClosedConnect?: (id: string) => boolean
   bind: (id: string) => void
   isCurrent: (id: string) => boolean
   setCallbacks: (callbacks: PtyConnectOptions['callbacks']) => void
@@ -38,7 +39,7 @@ export async function connectIpcPty(
   context: IpcPtyConnectContext
 ): Promise<void | string | PtyConnectResult> {
   const { transportOptions, handlers } = context
-  const { onPtySpawn } = transportOptions
+  const { onPtySpawn, retainDisposedSpawn } = transportOptions
   context.setCallbacks(options.callbacks)
   ensurePtyDispatcher()
 
@@ -88,33 +89,37 @@ export async function connectIpcPty(
     // recorded before we asked for a PTY, so it belongs to that earlier owner, not to us.
     const priorIncarnationFence = currentPreHandlerPtySequence()
     const spawnResult = await spawnIpcPty(transportOptions, options, admittedSessionId)
-    const retireFreshSpawn = async (): Promise<void> => {
+    const retireFreshSpawn = async (path: 'disposed' | 'refused'): Promise<void> => {
+      if (context.handleExplicitlyClosedConnect?.(spawnResult.id)) {
+        return
+      }
       // A newer generation may already own a recycled id; an id-only kill would retire its PTY.
-      if (
-        !spawnResult.isReattach &&
-        !spawnResult.coldRestore &&
-        !context.ownsPtyId(spawnResult.id)
-      ) {
+      if (spawnResult.isReattach || spawnResult.coldRestore || context.ownsPtyId(spawnResult.id)) {
+        return
+      }
+      // Only disposed transports can have a successor; live refusal must still retire the PTY (#11003).
+      const retained = path === 'disposed' && retainDisposedSpawn?.() === true
+      if (!retained) {
         await window.api.pty.kill(spawnResult.id)
       }
     }
 
     if (context.isDestroyed()) {
-      await retireFreshSpawn()
+      await retireFreshSpawn('disposed')
       return
     }
     if (options.admitPtyId && !options.admitPtyId(spawnResult.id)) {
-      await retireFreshSpawn()
+      await retireFreshSpawn('refused')
       return context.isDestroyed() ? undefined : spawnResult
     }
     if (context.isDestroyed()) {
-      await retireFreshSpawn()
+      await retireFreshSpawn('disposed')
       return
     }
     if (spawnResult.isReattach && !admittedSessionId) {
       context.getCallbacks().onReattachDetermined?.()
       if (context.isDestroyed()) {
-        await retireFreshSpawn()
+        await retireFreshSpawn('disposed')
         return
       }
     }

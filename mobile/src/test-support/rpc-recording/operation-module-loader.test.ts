@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createElement } from 'react'
@@ -11,21 +11,84 @@ import { operationModuleLoader } from './operation-module-loader'
  * loader does rather than by what one screen happens to import today.
  */
 const roots: string[] = []
-function loaderOver(files: Record<string, string>): ReturnType<typeof operationModuleLoader> {
+function sourceTree(files: Record<string, string>): string {
   const root = mkdtempSync(join(tmpdir(), 'rpc-loader-'))
   roots.push(root)
   for (const [name, source] of Object.entries(files)) {
     mkdirSync(join(root, 'mobile/src'), { recursive: true })
     writeFileSync(join(root, 'mobile/src', name), source)
   }
-  return operationModuleLoader(root)
+  return root
+}
+function loaderOver(files: Record<string, string>): ReturnType<typeof operationModuleLoader> {
+  return operationModuleLoader(sourceTree(files))
 }
 
 afterAll(() => {
+  for (const root of roots) {
+    rmSync(root, { recursive: true, force: true })
+  }
   roots.length = 0
 })
 
 describe('the mounted module loader', () => {
+  it('reuses code without sharing exports, module state, mounting dependencies or effects', () => {
+    const root = sourceTree({
+      'state.ts': `
+        import { mounted, initial } from 'scenario-device'
+        mounted()
+        let count = initial
+        export const next = () => ++count
+      `,
+      'operation.ts': `export { next } from './state'`
+    })
+    let mounts = 0
+    function scenario(initial: number) {
+      return operationModuleLoader(
+        root,
+        undefined,
+        [],
+        new Map([['scenario-device', { initial, mounted: () => mounts++ }]])
+      )
+    }
+    const firstLoader = scenario(0)
+    const first = firstLoader.load<{ next: () => number }>('mobile/src/operation.ts')
+    expect(first.next()).toBe(1)
+    expect(first.next()).toBe(2)
+    expect(firstLoader.load('mobile/src/operation.ts')).toBe(first)
+    const second = scenario(10).load<{ next: () => number }>('mobile/src/operation.ts')
+    expect(second).not.toBe(first)
+    expect(second.next()).toBe(11)
+    expect(first.next()).toBe(3)
+    expect(mounts).toBe(2)
+  })
+
+  it('keeps mutations, exposure code and later source edits distinct on a warm cache', () => {
+    const source = 'const value: number = 1; export const read = () => value'
+    const root = sourceTree({ 'value.ts': source })
+    const path = 'mobile/src/value.ts'
+    const baseline = operationModuleLoader(root).load<{ read: () => number }>(path)
+    const mutation = { name: 'value', file: 'value.ts', before: '= 1', after: '= 2' }
+    for (let index = 0; index < 2; index++) {
+      const mutated = operationModuleLoader(root, mutation, [
+        ['value.ts', '\nexports.exposed = () => value + 10']
+      ])
+      const result = mutated.load<{ read: () => number; exposed: () => number }>(path)
+      expect(result.read()).toBe(2)
+      expect(result.exposed()).toBe(12)
+      expect(mutated.mutationsApplied()).toBe(1)
+    }
+    expect(baseline.read()).toBe(1)
+    const fresh = operationModuleLoader(root).load<{ read: () => number; exposed?: unknown }>(path)
+    expect(fresh.read()).toBe(1)
+    expect(fresh.exposed).toBeUndefined()
+    writeFileSync(join(root, path), source.replace('= 1', '= 3'))
+    expect(operationModuleLoader(root).load<{ read: () => number }>(path).read()).toBe(3)
+    expect(() => operationModuleLoader(root, mutation).load(path)).toThrow(
+      'Mutant anchor matched 0 sites'
+    )
+  })
+
   /**
    * Product sources compile with the automatic runtime and never import React, so a classic
    * `React.createElement` emit throws `React is not defined` on the first render of every screen.

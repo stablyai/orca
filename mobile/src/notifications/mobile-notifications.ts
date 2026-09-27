@@ -29,13 +29,10 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
   const params = { includeDesktopSuppressed: true }
   const unsubscribeStream = client.subscribe('notifications.subscribe', params, (data: unknown) => {
     const event = data as DismissNotificationEvent | SubscribeResult | { type: string }
+    // No dispose-before-ready arm: every transport detaches this listener inside
+    // `unsubscribeStream()`, so a callback that runs at all runs before disposal.
     if (event.type === 'ready') {
       subscriptionId = (event as SubscribeResult).subscriptionId
-      if (disposed) {
-        unsubscribeServer(subscriptionId)
-        unsubscribeStream()
-        return
-      }
       // A max watermark asks only which delivered pushes are stale; socket history
       // never becomes a second OS-notification delivery route.
       void requestNotificationCatchup(client, hostId, () => disposed).catch(() => {})

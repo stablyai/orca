@@ -7,6 +7,7 @@ import {
   setRuntimeBrowserCommandsFactory,
   setRuntimeBrowserUnavailableCause
 } from '../runtime-browser-commands-factory'
+import { __cancelLegacyWorkerTerminalRecoveryRetriesForTests } from '../runtime-legacy-worker-terminal-recovery-controller'
 import { setRuntimeTerminalUnavailableCause } from '../native-terminal-availability'
 import { setRuntimeDesktopSurface } from '../runtime-desktop-surface'
 import { installFakeAppEnvironment } from '../../../../config/scripts/vitest-host-ports-setup'
@@ -178,6 +179,8 @@ export const exportedBeforeEach = beforeEach
 export const exportedBeginWatcherInstall = beginWatcherInstall
 export const exportedBuildAgentPromptPasteBytes = buildAgentPromptPasteBytes
 export const exportedBuildPreview = buildPreview
+export const exportedCancelLegacyWorkerTerminalRecoveryRetriesForTests =
+  __cancelLegacyWorkerTerminalRecoveryRetriesForTests
 export const exportedClearConfiguredWorktreeSharedDirectoriesCacheForTests =
   clearConfiguredWorktreeSharedDirectoriesCacheForTests
 export const exportedClearSubmodulePathsCacheForTests = clearSubmodulePathsCacheForTests

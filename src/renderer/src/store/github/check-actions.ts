@@ -12,7 +12,11 @@ import {
 } from './cache-identity'
 import { isFresh, withBoundedCacheEntry } from './cache-policy'
 import { debouncedSaveCache } from './cache-persistence'
-import { inflightChecksRequests } from './request-coordination'
+import {
+  inflightChecksRequests,
+  nextProviderRequestId,
+  ownsInflightRequest
+} from './request-coordination'
 import { getGitHubRepoSourceSettings, getGitHubWorkItemRequestContext } from './work-item-routing'
 
 export const createCheckActions = (
@@ -87,18 +91,26 @@ export const createCheckActions = (
       return cachedChecks
     }
 
-    const inflightRequest = inflightChecksRequests.get(inflightKey)
-    if (inflightRequest) {
-      if (
-        (options?.force && !inflightRequest.force) ||
-        (options?.noCache && !inflightRequest.noCache)
-      ) {
-        await inflightRequest.promise.catch(() => {})
-      } else {
+    let waitedForUpgrade = false
+    for (;;) {
+      const inflightRequest = inflightChecksRequests.get(inflightKey)
+      if (!inflightRequest) {
+        break
+      }
+      const weakerThanRequested =
+        (options?.force && !inflightRequest.force) || (options?.noCache && !inflightRequest.noCache)
+      if (!weakerThanRequested) {
         return inflightRequest.promise
       }
+      // Why: wait out one weaker request so peers can share the upgrade, but never twice — a steady stream of weaker callers would otherwise starve this one forever.
+      if (waitedForUpgrade) {
+        break
+      }
+      waitedForUpgrade = true
+      await inflightRequest.promise.catch(() => {})
     }
 
+    const requestId = nextProviderRequestId()
     const request = (async () => {
       try {
         const requestContext = getGitHubWorkItemRequestContext(
@@ -131,6 +143,12 @@ export const createCheckActions = (
                 noCache: Boolean(options?.force || options?.noCache),
                 sourceContext: options?.sourceContext
               })) as PRCheckDetail[])
+        // Why: the bounded upgrade wait can leave us running beside a stronger request for this
+        // key. Both bypass gh's cache here, but the later-started one holds the newer run state —
+        // let only the key's current owner write checksCache and the PR status it derives.
+        if (!ownsInflightRequest(inflightChecksRequests, inflightKey, requestId)) {
+          return checks
+        }
         set((s) => {
           const nextState: Partial<AppState> = {
             checksCache: withBoundedCacheEntry(s.checksCache, cacheKey, {
@@ -168,13 +186,16 @@ export const createCheckActions = (
           return latestCached.data
         }
         return []
-      } finally {
+      }
+    })().finally(() => {
+      if (ownsInflightRequest(inflightChecksRequests, inflightKey, requestId)) {
         inflightChecksRequests.delete(inflightKey)
       }
-    })()
+    })
 
     inflightChecksRequests.set(inflightKey, {
       promise: request,
+      requestId,
       force: Boolean(options?.force),
       noCache: Boolean(options?.force || options?.noCache)
     })

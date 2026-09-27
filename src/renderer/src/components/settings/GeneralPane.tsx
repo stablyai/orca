@@ -134,6 +134,34 @@ export function GeneralPane({
         />
         <SearchableSetting
           title={translate(
+            'auto.components.settings.GeneralPane.editor_preview_tabs',
+            'Reuse a preview tab when browsing files'
+          )}
+          description={translate(
+            'auto.components.settings.GeneralPane.editor_preview_tabs_description',
+            'Single-clicking a file in the Explorer, or following a link in Markdown source, reuses one italic preview tab per group instead of opening a new one. Editing, double-clicking, or pinning keeps that tab open. Turn this off to give every file its own tab.'
+          )}
+          keywords={['preview', 'tab', 'editor', 'explorer', 'reuse', 'replace', 'italic']}
+        >
+          <SettingsSwitchRow
+            label={translate(
+              'auto.components.settings.GeneralPane.editor_preview_tabs',
+              'Reuse a preview tab when browsing files'
+            )}
+            description={translate(
+              'auto.components.settings.GeneralPane.editor_preview_tabs_description',
+              'Single-clicking a file in the Explorer, or following a link in Markdown source, reuses one italic preview tab per group instead of opening a new one. Editing, double-clicking, or pinning keeps that tab open. Turn this off to give every file its own tab.'
+            )}
+            checked={settings.editorPreviewTabsEnabled ?? true}
+            onChange={() =>
+              updateSettings({
+                editorPreviewTabsEnabled: !(settings.editorPreviewTabsEnabled ?? true)
+              })
+            }
+          />
+        </SearchableSetting>
+        <SearchableSetting
+          title={translate(
             'auto.components.settings.GeneralPane.5cb5475664',
             'Confirm before closing pinned tabs'
           )}
@@ -155,6 +183,35 @@ export function GeneralPane({
             checked={settings.confirmClosePinnedTab ?? true}
             onChange={() =>
               updateSettings({ confirmClosePinnedTab: !(settings.confirmClosePinnedTab ?? true) })
+            }
+          />
+        </SearchableSetting>
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.GeneralPane.confirm_running_terminal_close',
+            'Confirm before closing running terminals'
+          )}
+          description={translate(
+            'auto.components.settings.GeneralPane.confirm_running_terminal_close_description',
+            'Ask before stopping a running agent or command when closing a terminal.'
+          )}
+          keywords={['terminal', 'agent', 'command', 'confirm', 'close', 'OMP']}
+        >
+          <SettingsSwitchRow
+            label={translate(
+              'auto.components.settings.GeneralPane.confirm_running_terminal_close',
+              'Confirm before closing running terminals'
+            )}
+            description={translate(
+              'auto.components.settings.GeneralPane.confirm_running_terminal_close_description',
+              'Ask before stopping a running agent or command when closing a terminal.'
+            )}
+            checked={!settings.skipCloseTerminalWithRunningProcessConfirm}
+            onChange={() =>
+              updateSettings({
+                skipCloseTerminalWithRunningProcessConfirm:
+                  !settings.skipCloseTerminalWithRunningProcessConfirm
+              })
             }
           />
         </SearchableSetting>

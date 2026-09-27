@@ -1,9 +1,6 @@
-import { getAgentPromptSubmitDelayMs } from '../../shared/agent-prompt-injection'
+import { resolveAgentPromptSubmitDelayForAgent } from '../../shared/agent-prompt-injection'
+import type { TuiAgent } from '../../shared/tui-agent'
 import { iterateTerminalInputChunks } from '../../shared/terminal-input'
-import {
-  agentSessionPtyWriteGate,
-  type AgentSessionPtyWriteAdmittance
-} from './agent-session-pty-write-gate'
 
 export type RuntimeTerminalWriteOptions = {
   signal?: AbortSignal
@@ -17,7 +14,8 @@ export class RuntimeTerminalWriter {
   constructor(
     private readonly write: (ptyId: string, data: string) => boolean,
     private readonly getWriteHostPlatform: (ptyId: string) => NodeJS.Platform = () =>
-      process.platform
+      process.platform,
+    private readonly getAgent: (ptyId: string) => TuiAgent | null = () => null
   ) {}
 
   async writeAction(
@@ -26,15 +24,12 @@ export class RuntimeTerminalWriter {
     payload: string,
     options: RuntimeTerminalWriteOptions = {}
   ): Promise<void> {
-    // Why: the lease is checked before the mobile floor is reserved, so a refused send never takes
-    // a claim it will not use.
-    const admitted = agentSessionPtyWriteGate.assertAdmitted(ptyId)
     // Why: direct terminal.send can carry paste-sized text from RPC/mobile
     // clients; chunk text before PTY/ConPTY while preserving suffix separation.
     const text = typeof action.text === 'string' ? action.text : ''
     const hasSuffix = action.enter || action.interrupt
     if (text) {
-      await this.writeChunks(ptyId, text, options, admitted)
+      await this.writeChunks(ptyId, text, options)
     }
     if (hasSuffix) {
       const suffix = (action.enter ? '\r' : '') + (action.interrupt ? '\x03' : '')
@@ -42,16 +37,14 @@ export class RuntimeTerminalWriter {
         // Why: same hazard as the agent-prompt path -- Enter must not overtake text the
         // execution host is still ingesting, and a flat 500 ms cannot cover 16 MB.
         await waitForTerminalWriteDelay(
-          getAgentPromptSubmitDelayMs(
+          resolveAgentPromptSubmitDelayForAgent(
             this.getWriteHostPlatform(ptyId),
-            Buffer.byteLength(text, 'utf8')
+            text,
+            this.getAgent(ptyId)
           ),
           options.signal
         )
       }
-      // Why: the 500ms text/suffix pause is long enough for a handoff to complete, so the submit
-      // is re-checked against the fence the text was admitted under.
-      agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
       try {
         await options.beforeWrite?.(ptyId)
       } catch (error) {
@@ -60,7 +53,6 @@ export class RuntimeTerminalWriter {
         }
         throw error
       }
-      agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
       options.reserveWrite?.(ptyId)
       if (!this.write(ptyId, suffix)) {
         throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
@@ -72,7 +64,6 @@ export class RuntimeTerminalWriter {
       return
     }
     await options.beforeWrite?.(ptyId)
-    agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
     options.reserveWrite?.(ptyId)
     if (!this.write(ptyId, payload)) {
       throw new Error('terminal_not_writable')
@@ -83,19 +74,12 @@ export class RuntimeTerminalWriter {
   async writeChunks(
     ptyId: string,
     text: string,
-    options: RuntimeTerminalWriteOptions = {},
-    admitted: AgentSessionPtyWriteAdmittance = agentSessionPtyWriteGate.assertAdmitted(ptyId)
+    options: RuntimeTerminalWriteOptions = {}
   ): Promise<void> {
     const chunks = iterateTerminalInputChunks(text)
     let chunk = chunks.next()
-    let firstChunk = true
     while (!chunk.done) {
-      if (!firstChunk) {
-        agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
-      }
-      firstChunk = false
       await options.beforeWrite?.(ptyId)
-      agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
       options.reserveWrite?.(ptyId)
       if (!this.write(ptyId, chunk.value)) {
         throw new Error('terminal_not_writable')

@@ -47,6 +47,7 @@ describe('structured Codex session options', () => {
         restoredCodexSessionOptions({
           model: 'gpt-live',
           effort: 'high',
+          approvalPolicy: 'never',
           threadId: 'thread-injected',
           input: 'input-injected'
         })

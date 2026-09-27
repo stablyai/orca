@@ -1,5 +1,11 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcUncheckedPayloadReader } from '../transport/rpc-reader-payload'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import {
+  aiVaultResumePreparationSchema,
+  browserTabCreatedSchema,
+  fileTapOpenedSchema,
+  sessionLaunchUnreadReplySchema
+} from './session-launch-reply-schema'
 
 // Opening things from the session screen: a tapped terminal path, a new markdown note or browser
 // tab, the legacy-Codex resume repin, and the structured agent chat.
@@ -22,7 +28,7 @@ export const fileTapOpenRun = bindDeferredRpcOperation(
     method: 'files.open',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('tapped-file-opened')
+    read: rpcResultVariant('tapped-file-opened', fileTapOpenedSchema)
   })
 )
 
@@ -36,7 +42,7 @@ export const sessionMarkdownNoteCreate = bindDeferredRpcOperation(
     method: 'files.createFile',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('markdown-note-created')
+    read: rpcResultVariant('markdown-note-created', sessionLaunchUnreadReplySchema)
   })
 )
 
@@ -47,7 +53,7 @@ export const sessionBrowserTabCreate = bindDeferredRpcOperation(
     method: 'browser.tabCreate',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('browser-tab-created')
+    read: rpcResultVariant('browser-tab-created', browserTabCreatedSchema)
   })
 )
 
@@ -62,7 +68,7 @@ export const aiVaultResumePreparationRun = bindDeferredRpcOperation(
     method: 'aiVault.prepareSessionResume',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('ai-vault-resume-preparation')
+    read: rpcResultVariant('ai-vault-resume-preparation', aiVaultResumePreparationSchema)
   })
 )
 
@@ -77,7 +83,7 @@ export const structuredAgentSupportProbe = bindDeferredRpcOperation(
     method: 'agentSession.createSupport',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('structured-create-support')
+    read: rpcResultVariant('structured-create-support', sessionLaunchUnreadReplySchema)
   })
 )
 
@@ -92,7 +98,7 @@ export const structuredAgentSessionCreate = bindDeferredRpcOperation(
     method: 'agentSession.create',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('structured-session-created')
+    read: rpcResultVariant('structured-session-created', sessionLaunchUnreadReplySchema)
   })
 )
 
@@ -103,6 +109,6 @@ export const nativeChatSessionOptionsWrite = bindDeferredRpcOperation(
     method: 'settings.mutateNativeChatSessionOptions',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('native-chat-session-options-written')
+    read: rpcResultVariant('native-chat-session-options-written', sessionLaunchUnreadReplySchema)
   })
 )

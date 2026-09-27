@@ -19,10 +19,20 @@ import type {
   AutomationListProjectionCache,
   AutomationStorageAuthority
 } from '../scheduling-automations/automation-owner-projection'
+import type { ProfileStatePersistenceAuthority } from './profile-state-authority'
+import type { AutomationRun } from '../../../shared/automations-types'
+
+export type DurableProfileStateMutation<T> = {
+  value: T
+  /** 'if-dirty' fences an existing change without rewriting an already durable generation. */
+  persist?: boolean | 'if-dirty'
+  rollback?: () => void
+}
 
 export type StoreRuntimeOptions = {
   dataFile?: string
   storageAuthority?: AutomationStorageAuthority
+  profileStateAuthority?: ProfileStatePersistenceAuthority
 }
 
 /** Mutable coordination state shared only with this Store's private collaborators. */
@@ -30,30 +40,39 @@ export class StoreRuntimeState {
   state!: PersistedState
   readonly dataFile: string
   readonly storageAuthority: AutomationStorageAuthority
+  readonly profileStateAuthority: ProfileStatePersistenceAuthority | undefined
   automationListProjectionCache: AutomationListProjectionCache | null = null
   activeViewPreference!: ActiveViewPreference
   readonly terminalScrollbackSnapshotStorage: TerminalScrollbackSnapshotStorage
   writeTimer: ReturnType<typeof setTimeout> | null = null
   pendingWrite: Promise<void> | null = null
   pendingSnapshotFileWork: Promise<void> | null = null
-  readonly staleTempCleanup: Promise<void>
   writeGeneration = 0
-  inFlightAsyncTmpFile: string | null = null
-  backupRotationInFlight = false
   writesFrozen = false
+  fatalMutationError: Error | null = null
+  durableMutationPhase: 'mutate' | 'rollback' | null = null
+  profileMaintenancePending = false
+  pendingProfileMaintenance: Promise<void> | null = null
+  readonly pendingProfileFlushes = new Set<Promise<void>>()
   quitFlushStarted = false
   quitFlushPromise: Promise<void> | null = null
   lastWrittenStateHash: string | null = null
   lastDurableWriteGeneration = -1
   firstPendingSaveAt: number | null = null
+  /** Known dirty domains, or null when a caller requires a complete-document fallback. */
+  dirtyProfileStateDomains: Set<string> | null = new Set()
+  pendingAutomationRunsAfter: readonly AutomationRun[] | undefined
   githubCacheDirty = false
   githubCacheGeneration = 0
   pendingGithubCacheWrite: Promise<void> | null = null
   readonly staleGithubCacheTempCleanup: Promise<void>
+  /** Reclaim compatibility-export temps left by a process killed during rename. */
+  readonly staleProfileStateTempCleanup: Promise<void>
   readonly gitUsernameCache = new Map<string, string>()
   readonly protectedSecrets = new ProtectedSecretPersistence()
   loadNeedsSave = false
   flushOrThrow!: () => void
+  runDurableMutation!: <T>(mutate: () => DurableProfileStateMutation<T>) => Promise<T>
   settingsChangeListeners = new Set<
     (
       updates: Partial<GlobalSettings>,
@@ -72,9 +91,12 @@ export class StoreRuntimeState {
   constructor(options: StoreRuntimeOptions = {}) {
     this.dataFile = options.dataFile ?? getDataFile()
     this.storageAuthority = options.storageAuthority ?? 'desktop'
-    this.staleTempCleanup = removeStaleDurableWriteTempFiles(this.dataFile, {
-      minimumAgeMs: STALE_DURABLE_WRITE_TEMP_AGE_MS
-    })
+    this.profileStateAuthority = options.profileStateAuthority
+    this.staleProfileStateTempCleanup = this.profileStateAuthority
+      ? removeStaleDurableWriteTempFiles(this.dataFile, {
+          minimumAgeMs: STALE_DURABLE_WRITE_TEMP_AGE_MS
+        })
+      : Promise.resolve()
     this.staleGithubCacheTempCleanup = removeStaleDurableWriteTempFiles(
       getGithubCacheFile(this.dataFile),
       { minimumAgeMs: STALE_DURABLE_WRITE_TEMP_AGE_MS }

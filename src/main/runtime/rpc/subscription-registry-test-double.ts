@@ -1,6 +1,7 @@
 import type { SubscriptionRegistration } from '../orca-runtime'
 
 type Cleanup = () => void | Promise<void>
+type Entry = { cleanup: Cleanup; version: number }
 
 export type SubscriptionRegistryDouble = {
   registerSubscriptionCleanup: (id: string, cleanup: Cleanup, connectionId?: string) => void
@@ -10,7 +11,12 @@ export type SubscriptionRegistryDouble = {
     connectionId?: string
   ) => SubscriptionRegistration
   cleanupSubscription: (id: string) => void
-  cleanupSubscriptionIfOwnedByConnection: (id: string, connectionId: string | undefined) => boolean
+  cleanupSubscriptionIfOwnedByConnection: (
+    id: string,
+    connectionId: string | undefined,
+    throughVersion?: number
+  ) => boolean
+  getSubscriptionRegistrationVersion: () => number
   cleanupSubscriptionsForConnection: (connectionId: string) => void
   /** Test-only inspection; the runtime deliberately exposes no such accessor. */
   peekCleanup: (id: string) => Cleanup | undefined
@@ -32,8 +38,9 @@ export type SubscriptionRegistryDouble = {
  * subscribe/teardown must use this instead of a bare Map.
  */
 export function createSubscriptionRegistryDouble(): SubscriptionRegistryDouble {
-  const cleanups = new Map<string, Cleanup>()
-  const inFlight = new Map<string, { cleanup: Cleanup; promise: Promise<void> }>()
+  const cleanups = new Map<string, Entry>()
+  const inFlight = new Map<string, { entry: Entry; promise: Promise<void> }>()
+  let registrationVersion = 0
   const byConnection = new Map<string, Set<string>>()
   const connectionByEntry = new Map<string, string>()
 
@@ -54,25 +61,25 @@ export function createSubscriptionRegistryDouble(): SubscriptionRegistryDouble {
   }
 
   const cleanupAndWait = (id: string): Promise<void> => {
-    const cleanup = cleanups.get(id)
-    if (!cleanup) {
+    const entry = cleanups.get(id)
+    if (!entry) {
       return Promise.resolve()
     }
     // Mirrors cleanupSubscriptionAndWait: join an in-flight attempt for this exact owner.
     const existing = inFlight.get(id)
-    if (existing?.cleanup === cleanup) {
+    if (existing?.entry === entry) {
       return existing.promise
     }
     let result: void | Promise<void>
     try {
-      result = cleanup()
+      result = entry.cleanup()
     } catch (error) {
       result = Promise.reject(error)
     }
     const promise = Promise.resolve(result)
       .then(() => {
         // Only the generation that registered this callback may retire it.
-        if (cleanups.get(id) !== cleanup) {
+        if (cleanups.get(id) !== entry) {
           return
         }
         cleanups.delete(id)
@@ -83,7 +90,7 @@ export function createSubscriptionRegistryDouble(): SubscriptionRegistryDouble {
           inFlight.delete(id)
         }
       })
-    inFlight.set(id, { cleanup, promise })
+    inFlight.set(id, { entry, promise })
     return promise
   }
 
@@ -92,7 +99,7 @@ export function createSubscriptionRegistryDouble(): SubscriptionRegistryDouble {
     void cleanupAndWait(id).catch(() => undefined)
   }
 
-  const cleanupOwned = (id: string, expected: Cleanup): void => {
+  const cleanupOwned = (id: string, expected: Entry): void => {
     if (cleanups.get(id) !== expected) {
       return
     }
@@ -103,15 +110,16 @@ export function createSubscriptionRegistryDouble(): SubscriptionRegistryDouble {
     id: string,
     cleanup: Cleanup,
     connectionId?: string
-  ): void => {
+  ): Entry => {
     const existing = cleanups.get(id)
     if (existing) {
       removeIndex(id)
       cleanupOwned(id, existing)
     }
-    cleanups.set(id, cleanup)
+    const entry = { cleanup, version: ++registrationVersion }
+    cleanups.set(id, entry)
     if (!connectionId) {
-      return
+      return entry
     }
     let set = byConnection.get(connectionId)
     if (!set) {
@@ -120,27 +128,29 @@ export function createSubscriptionRegistryDouble(): SubscriptionRegistryDouble {
     }
     set.add(id)
     connectionByEntry.set(id, connectionId)
+    return entry
   }
 
   return {
     registerSubscriptionCleanup,
     registerOwnedSubscriptionCleanup: (id, cleanup, connectionId) => {
-      registerSubscriptionCleanup(id, cleanup, connectionId)
+      const entry = registerSubscriptionCleanup(id, cleanup, connectionId)
       return {
-        releaseIfCurrent: () => cleanupOwned(id, cleanup)
+        releaseIfCurrent: () => cleanupOwned(id, entry)
       }
     },
     cleanupSubscription,
-    cleanupSubscriptionIfOwnedByConnection: (id, connectionId) => {
-      if (!connectionId) {
-        cleanupSubscription(id)
-        return true
-      }
+    getSubscriptionRegistrationVersion: () => registrationVersion,
+    cleanupSubscriptionIfOwnedByConnection: (id, connectionId, throughVersion) => {
+      const entry = cleanups.get(id)
       // Mirrors the production early-out: an unregistered id is already gone, not refused.
-      if (!cleanups.has(id)) {
+      if (!entry) {
         return true
       }
-      if (connectionByEntry.get(id) !== connectionId) {
+      if (throughVersion !== undefined && entry.version > throughVersion) {
+        return false
+      }
+      if (connectionId && connectionByEntry.get(id) !== connectionId) {
         return false
       }
       cleanupSubscription(id)
@@ -163,6 +173,6 @@ export function createSubscriptionRegistryDouble(): SubscriptionRegistryDouble {
         byConnection.delete(connectionId)
       }
     },
-    peekCleanup: (id) => cleanups.get(id)
+    peekCleanup: (id) => cleanups.get(id)?.cleanup
   }
 }

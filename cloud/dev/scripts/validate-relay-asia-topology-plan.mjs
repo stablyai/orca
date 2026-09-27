@@ -2,24 +2,40 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 const REGION = 'asia-east2'
+// Mirrors local.relay_gce_topology in infra/terraform/relay-gce-cells.tf, which Terraform
+// cannot export to JS; the census test below the validator equates the two by reading the
+// .tf source, so this pair and the topology `check` assert cannot drift apart.
+export const RELAY_CELL_BACKEND_TIMEOUT_SECONDS = 86_400
+export const RELAY_CELL_CONNECTION_DRAIN_SECONDS = 60
+// Not a topology local: the default of var.relay_gce_cell_log_sample_rate, which no
+// environment overrides. The same census test equates it with variables.tf.
+export const RELAY_CELL_LOG_SAMPLE_RATE = 1
 const CELL_SHAPES = {
   production: {
     domain: 'relay.onorca.dev',
     project: 'onorca-cloud',
+    databasePoolMax: '16',
     cells: {
       'production-gce-c27': 'asia-east2-a',
       'production-gce-c28': 'asia-east2-b',
-      'production-gce-c29': 'asia-east2-c'
-    }
+      'production-gce-c29': 'asia-east2-c',
+      'production-gce-c30': 'asia-east2-a'
+    },
+    waves: [
+      ['production-gce-c27', 'production-gce-c28', 'production-gce-c29'],
+      ['production-gce-c30']
+    ]
   },
   staging: {
     domain: 'relay-staging.onorca.dev',
     project: 'onorca-cloud-staging',
-    cells: { 'staging-gce-c4': 'asia-east2-a' }
+    databasePoolMax: '10',
+    cells: { 'staging-gce-c4': 'asia-east2-a' },
+    waves: [['staging-gce-c4']]
   }
 }
 
-function parseArguments(argv) {
+export function parseRelayAsiaTopologyPlanArguments(argv) {
   const values = {}
   for (let index = 0; index < argv.length; index += 2) {
     const key = argv[index]
@@ -32,8 +48,11 @@ function parseArguments(argv) {
   }
   if (!(values.environment in CELL_SHAPES)) throw new Error('--environment is invalid')
   const cells = values['cell-ids'].split(',').map((value) => value.trim()).filter(Boolean)
-  const expectedCells = Object.keys(CELL_SHAPES[values.environment].cells)
-  if (new Set(cells).size !== cells.length || JSON.stringify(cells.sort()) !== JSON.stringify(expectedCells.sort())) {
+  const sorted = JSON.stringify([...cells].sort())
+  if (
+    new Set(cells).size !== cells.length ||
+    !CELL_SHAPES[values.environment].waves.some((wave) => JSON.stringify([...wave].sort()) === sorted)
+  ) {
     throw new Error('--cell-ids must be the exact reviewed Asia topology set')
   }
   if (values.region !== REGION) throw new Error('--region must be asia-east2')
@@ -82,7 +101,8 @@ function requireCellTemplate(change, config, cellId) {
     (after?.network_interface?.[0]?.access_config?.length ?? 0) !== 0 ||
     startupValue(script, 'ORCA_RELAY_REGION') !== REGION ||
     startupValue(script, 'ORCA_RELAY_CELL_CAPACITY') !== '6000' ||
-    startupValue(script, 'ORCA_RELAY_DATABASE_POOL_MAX') !== '10' ||
+    startupValue(script, 'ORCA_RELAY_DATABASE_POOL_MAX') !==
+      CELL_SHAPES[config.environment].databasePoolMax ||
     startupValue(script, 'ORCA_RELAY_CELL_CONNECTION_HARD_CAP') !== '3000' ||
     startupValue(script, 'ORCA_RELAY_CELL_CONNECTION_UNOBSERVED_BOUND') !== '60' ||
     startupValue(script, 'ORCA_RELAY_IMAGE_DIGEST') !== config.image.split('@')[1] ||
@@ -117,8 +137,8 @@ function requireCellBackend(change, config, cellId) {
   const hostname = cellId.split('-').at(-1)
   const name = `${relayGceName(config.environment)}-${hostname}`
   if (
-    after?.timeout_sec !== 86_400 ||
-    after?.connection_draining_timeout_sec !== 300 ||
+    after?.timeout_sec !== RELAY_CELL_BACKEND_TIMEOUT_SECONDS ||
+    after?.connection_draining_timeout_sec !== RELAY_CELL_CONNECTION_DRAIN_SECONDS ||
     after?.load_balancing_scheme !== 'EXTERNAL_MANAGED' ||
     after?.protocol !== 'HTTP' ||
     after?.port_name !== 'relay' ||
@@ -280,6 +300,12 @@ export function validateRelayAsiaTopologyPlan(plan, config) {
     (action) => action === 'no-op' || action === 'read'
   ))
   for (const change of changes) {
+    const cellId = /^google_compute_(?:instance_template|instance_group_manager|backend_service)\.relay_gce_cell\["([^"]+)"\]$/
+      .exec(change.address)?.[1]
+    // Usually a stale committed image; the workflow overlays live images so this stays empty.
+    if (cellId && !config.cells.includes(cellId)) {
+      throw new Error(`${change.address} changes a live cell outside the planned wave`)
+    }
     const allowedActions = required.get(change.address)
     if (!allowedActions || !allowedActions.some((expected) => sameActions(change, expected))) {
       throw new Error(`${change.address} has an unreviewed topology action`)
@@ -289,7 +315,7 @@ export function validateRelayAsiaTopologyPlan(plan, config) {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const config = parseArguments(process.argv.slice(2))
+  const config = parseRelayAsiaTopologyPlanArguments(process.argv.slice(2))
   const plan = JSON.parse(readFileSync(config.planJson, 'utf8'))
   console.log(JSON.stringify(validateRelayAsiaTopologyPlan(plan, config)))
 }

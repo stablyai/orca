@@ -37,7 +37,8 @@ describe('NativeChatToolRun awaiting-input row', () => {
       />
     )
     expect(screen.getByText('Awaiting user input:')).toBeInTheDocument()
-    expect(screen.getByText(/Running Read/)).toBeInTheDocument()
+    expect(screen.getByText('Reading 1 file')).toBeInTheDocument()
+    expect(screen.getByText('Read a.ts')).toBeInTheDocument()
   })
 
   it('preserves errors from failed question calls', () => {
@@ -78,7 +79,7 @@ describe('NativeChatToolRun awaiting-input row', () => {
 
     expect(screen.getByText('Asked:')).not.toHaveClass('animate-pulse')
     expect(screen.getByText(QUESTION)).toBeInTheDocument()
-    // A run that is only the ask has no work left to head, so it draws no `1×`.
+    // A run that is only the ask has no work left to head, so it draws no header.
     expect(container.querySelector('button')).toBeNull()
   })
 
@@ -91,8 +92,10 @@ describe('NativeChatToolRun awaiting-input row', () => {
     render(<NativeChatToolRun blocks={blocks} expandSignal activeTurnIsWorking />)
 
     expect(screen.getByText('Awaiting user input:')).toBeInTheDocument()
-    // One call ran; being asked a question is not work to count.
-    expect(screen.getByText('1×')).toBeInTheDocument()
+    // One call ran; being asked a question is not work to summarize. The agent
+    // is blocked on the reader, so the run reads settled, not in progress.
+    expect(screen.getByText('Read 1 file')).toBeInTheDocument()
+    expect(screen.queryByText('Reading 1 file')).toBeNull()
   })
 
   it('draws the row from the tool name when the payload names no question', () => {

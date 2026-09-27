@@ -3,10 +3,6 @@ import { PLUGIN_WORKSPACE_TERMINAL_LIMIT } from '../../shared/plugins/plugin-hos
 import type { PluginHostServices } from './plugin-host-methods'
 import { PluginSecretsStore } from './plugin-secrets-store'
 import { PluginKvStore } from './plugin-storage-store'
-import {
-  describeAgentSessionPtyWriteRefusal,
-  isAgentSessionPtyWriteRefusedError
-} from '../../shared/agent-session-pty-write-admission'
 
 /** Structural subset of OrcaRuntimeService exposed to plugin facade bindings. */
 export type PluginRuntimeDelegate = {
@@ -63,17 +59,8 @@ export function bindPluginHostServices(input: {
         .map((terminal) => ({ id: terminal.handle }))
     },
     sendTerminalText: async (terminalId, action) => {
-      try {
-        const result = await delegate.sendTerminal(terminalId, action)
-        return { accepted: result.accepted }
-      } catch (error) {
-        // Why: the plugin API carries only `accepted`, so a lease refusal would read as a silent
-        // drop; restate it as the message idiom plugin methods already surface to callers.
-        if (isAgentSessionPtyWriteRefusedError(error)) {
-          throw new Error(describeAgentSessionPtyWriteRefusal(error.refusal))
-        }
-        throw error
-      }
+      const result = await delegate.sendTerminal(terminalId, action)
+      return { accepted: result.accepted }
     },
     dispatchPluginNotification: (notification) => delegate.dispatchPluginNotification(notification),
     storage: {

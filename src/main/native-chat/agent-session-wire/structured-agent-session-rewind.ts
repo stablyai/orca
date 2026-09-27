@@ -19,7 +19,6 @@ import { admitAndRunAgentSessionMutation } from './structured-agent-session-muta
 import { conversationCommandBlocked } from './structured-conversation-command-admission'
 import { rewindRefusal } from './structured-rewind-refusal'
 import { persistRewindRecord, recoverStructuredRewind } from './structured-rewind-recovery'
-import { replaceClaudeRewindOwner } from './structured-rewind-claude-owner'
 import { mergeRetainedHostLifecycleRows } from './structured-rewind-retained-host-rows'
 
 export async function rewindStructuredAgentSession(
@@ -36,7 +35,7 @@ export async function rewindStructuredAgentSession(
       adapter: context.deps.adapter,
       callerKey: caller.callerKey,
       envelope: params.envelope,
-      journal: context.sessions.get(sessionId)?.journal,
+      journal: () => context.sessions.get(sessionId)?.journal,
       publish: (journal) => context.publish(sessionId, journal),
       flushStreamedEvents: context.flushStreamedEvents,
       now: context.now,
@@ -100,7 +99,6 @@ export async function rewindStructuredAgentSession(
             return rewindRefusal('invalid-target')
           }
           let boundary = selected
-          let claude: Parameters<typeof replaceClaudeRewindOwner>[3] | undefined
           if (key.provider === 'codex' && head.provider === 'codex') {
             if (key.threadId !== head.threadId) {
               return rewindRefusal('invalid-target')
@@ -114,32 +112,6 @@ export async function rewindStructuredAgentSession(
                 readAgentJournalTurn(item.body)?.turnId === key.turnId
               )
             })
-          } else if (key.provider === 'claude' && head.provider === 'claude') {
-            if (key.sessionId !== head.sessionId) {
-              return rewindRefusal('invalid-target')
-            }
-            const previous = snapshot.items
-              .slice(0, boundary)
-              .map((item) => parseAgentJournalItemKey(providerKey(item.itemId)))
-              .findLast(
-                (identity) =>
-                  identity?.provider === 'claude' && identity.sessionId === key.sessionId
-              )
-            if (previous?.provider !== 'claude') {
-              return rewindRefusal('invalid-target')
-            }
-            const prompts = snapshot.items
-              .slice(boundary)
-              .filter((item) => item.body.kind === 'message' && item.body.role === 'user')
-            const prompt =
-              prompts.length === 1
-                ? parseAgentJournalItemKey(providerKey(prompts[0]!.itemId))
-                : null
-            claude = {
-              targetUuid: previous.uuid,
-              previousLeafUuid: head.leafUuid ?? '',
-              ...(prompt?.provider === 'claude' ? { dropsTurn: prompt.uuid } : {})
-            }
           } else {
             return rewindRefusal('invalid-target')
           }
@@ -168,44 +140,39 @@ export async function rewindStructuredAgentSession(
           }
           await persistRewindRecord(store, sessionId, ctx.fence, prepared)
           ctx.publish()
-          const provider = claude
-            ? await replaceClaudeRewindOwner(attachContext, caller.callerKey, params, claude)
-            : await ctx.adapter.rewind!({
-                sessionId,
-                fence: ctx.fence,
-                beforeTurnId: key.provider === 'codex' ? key.turnId : '',
-                onPrepared: async (items) => {
-                  const retained = mergeRetainedHostLifecycleRows(
-                    prepared.retained,
-                    items.map(({ identity, body }) => ({
-                      itemId: agentJournalItemKey(identity),
-                      body,
-                      observedAt: ctx.now()
-                    }))
-                  )
-                  if (
-                    retained.length > 10_000 ||
-                    Buffer.byteLength(JSON.stringify(retained), 'utf8') >
-                      AGENT_SESSION_HISTORY_MAX_PAGE_BYTES
-                  ) {
-                    throw new Error('agent_session_rewind:history-limit')
-                  }
-                  prepared = { ...prepared, retained }
-                  await persistRewindRecord(store, sessionId, ctx.fence, prepared)
-                },
-                onReverted: async () => {
-                  await persistRewindRecord(store, sessionId, ctx.fence, {
-                    ...prepared,
-                    providerApplied: true
-                  })
-                }
+          const provider = await ctx.adapter.rewind!({
+            sessionId,
+            fence: ctx.fence,
+            beforeTurnId: key.provider === 'codex' ? key.turnId : '',
+            onPrepared: async (items) => {
+              const retained = mergeRetainedHostLifecycleRows(
+                prepared.retained,
+                items.map(({ identity, body }) => ({
+                  itemId: agentJournalItemKey(identity),
+                  body,
+                  observedAt: ctx.now()
+                }))
+              )
+              if (
+                retained.length > 10_000 ||
+                Buffer.byteLength(JSON.stringify(retained), 'utf8') >
+                  AGENT_SESSION_HISTORY_MAX_PAGE_BYTES
+              ) {
+                throw new Error('agent_session_rewind:history-limit')
+              }
+              prepared = { ...prepared, retained }
+              await persistRewindRecord(store, sessionId, ctx.fence, prepared)
+            },
+            onReverted: async () => {
+              await persistRewindRecord(store, sessionId, ctx.fence, {
+                ...prepared,
+                providerApplied: true
               })
+            }
+          })
           const fence = store.getRecord(sessionId)!.lease.runtimeFence
           if (!provider.ok) {
-            const reason =
-              'reason' in provider
-                ? provider.reason
-                : (provider.refusal.rewindReason ?? 'outcome-unknown')
+            const reason = provider.reason
             if (reason !== 'outcome-unknown') {
               await persistRewindRecord(store, sessionId, fence, {
                 ...prepared,

@@ -4,6 +4,7 @@ import { joinPath } from '@/lib/path'
 import type { OpenFile } from '../types/open-file'
 import { toOpenConflictMetadata } from '../git/git-status-reconciliation'
 import { resolveEditorOpenTargetGroupId } from '../tabs/editor-open-target-group'
+import { resolveEditorPreviewIntent } from '../tabs/editor-preview-tab-setting'
 import {
   getReplaceablePreviewFileId,
   openWorkspaceEditorItem,
@@ -17,7 +18,7 @@ export function createOpenConflictFile(
   return {
     openConflictFile: (worktreeId, worktreePath, entry, language, options) => {
       const absolutePath = joinPath(worktreePath, entry.path)
-      const isPreview = options?.preview ?? false
+      const isPreview = resolveEditorPreviewIntent(get(), options?.preview)
       let editorItemTargetGroupId = options?.targetGroupId
       let openedConflictFile = true
       set((s) => {

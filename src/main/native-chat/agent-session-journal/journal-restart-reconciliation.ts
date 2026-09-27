@@ -91,6 +91,12 @@ export async function reconcileJournalSubmissionsAgainstHistory(input: {
     history: unseenHistory(input.journal, input.history)
   })) {
     if (outcome.outcome === 'unknown') {
+      // Narrowing failed: the submission stays unconfirmed, so record why.
+      console.warn('[journal-reconcile] submission left unconfirmed:', {
+        clientMessageId: outcome.clientMessageId,
+        reason: outcome.reason,
+        fence: input.fence
+      })
       continue
     }
     await input.journal.resolveDispatch(

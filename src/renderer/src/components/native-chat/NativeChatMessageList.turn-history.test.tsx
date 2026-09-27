@@ -57,6 +57,7 @@ function session(items: AgentJournalRenderItem[]): NativeChatLiveSession {
     agent: 'codex',
     hasMore: false,
     loadingEarlier: false,
+    olderHistoryGeneration: 0,
     loadEarlier: vi.fn(),
     readPhase: 'ready'
   }
@@ -203,7 +204,7 @@ describe('turn history presentation', () => {
     expect(screen.getByText('after')).toBeInTheDocument()
     expect(screen.getByText('before')).toBeInTheDocument()
     expect(scrollTo).toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: /1× Diff/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Edited 1 file/ }))
     expect(screen.queryByText('Edited file')).toBeNull()
     fireEvent.click(header)
     expect(header).toHaveAttribute('aria-expanded', 'false')

@@ -18,11 +18,11 @@ import { decodeStructuredAgentSessionOptionValue } from '../../shared/structured
 // admission and nothing about identity, which the echo settles later.
 
 /** Keys Codex accepts as per-turn overrides. An unlisted key would otherwise
- *  become an arbitrary client-controlled `turn/start` parameter. */
+ *  become an arbitrary client-controlled `turn/start` parameter. Permission posture is owned by
+ *  Agent Permissions and applied when the thread opens. */
 const CODEX_TURN_OPTION_KEYS = new Set([
   'model',
   'effort',
-  'approvalPolicy',
   'approvalsReviewer',
   'personality',
   'serviceTier',
@@ -90,10 +90,16 @@ function codexTurnOptions(host: CodexTurnHost): Record<string, string> {
  */
 export async function startCodexTurn(
   host: CodexTurnHost,
-  input: { clientMessageId: string; body: AgentJournalMessageItem; timeoutMs?: number }
+  input: {
+    clientMessageId: string
+    body: AgentJournalMessageItem
+    requestedAt?: number
+    timeoutMs?: number
+  }
 ): Promise<boolean> {
-  // Armed before the write: the echo can land while the response is in flight.
-  if (!host.dispatchEchoes.arm(input.clientMessageId)) {
+  // Armed before the write: the echo and `turn/started` can both land while the
+  // response is in flight, and the start must snapshot this send in its frontier.
+  if (!host.dispatchEchoes.arm(input.clientMessageId, input.requestedAt)) {
     return false
   }
   await host.connection.request(
@@ -117,7 +123,7 @@ export async function startCodexTurn(
  */
 export async function dispatchCodexTurn(
   session: CodexTurnHost,
-  input: { clientMessageId: string; body: AgentJournalMessageItem },
+  input: { clientMessageId: string; body: AgentJournalMessageItem; requestedAt?: number },
   timeoutMs: number | undefined
 ): Promise<AgentSessionDispatchOutcome> {
   try {

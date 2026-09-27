@@ -168,7 +168,7 @@ async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
       throw new Error('activateTerminalTab: window.__store is unavailable')
     }
     const state = store.getState()
-    state.setActiveTabType('terminal')
+    state.setActiveTabType('terminal', store.getState().activeWorktreeId)
     state.setActiveTab(targetTabId)
   }, tabId)
 
@@ -189,7 +189,7 @@ async function createActiveTerminalTab(page: Page, worktreeId: string): Promise<
     const state = store.getState()
     const tab = state.createTab(worktreeId, undefined, undefined, { activate: true })
     state.setActiveTab(tab.id)
-    state.setActiveTabType('terminal')
+    state.setActiveTabType('terminal', store.getState().activeWorktreeId)
     return tab.id
   }, worktreeId)
 

@@ -28,7 +28,7 @@ export function registerMobileAndTerminalCloseIpcBridge(
           runtimeEnvironmentId,
           mode: 'edit'
         })
-        store.setActiveTabType('editor')
+        store.setActiveTabType('editor', worktreeId)
         store.revealWorktreeInSidebar(worktreeId)
       }
     )
@@ -46,7 +46,7 @@ export function registerMobileAndTerminalCloseIpcBridge(
         store.openDiff(worktreeId, filePath, relativePath, language, staged, {
           runtimeEnvironmentId
         })
-        store.setActiveTabType('editor')
+        store.setActiveTabType('editor', worktreeId)
         store.revealWorktreeInSidebar(worktreeId)
       }
     )

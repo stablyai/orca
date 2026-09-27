@@ -9,7 +9,7 @@ main/agent-hooks/managed-hook-owner-identity.ts
 main/agent-hooks/managed-hook-runtime.ts
 main/app-icon.ts
 main/automations/precheck-runner.ts
-main/claude-accounts/keychain.ts
+main/macos-keychain/generic-password.ts
 main/computer/macos-computer-use-permission-status.ts
 main/computer/macos-computer-use-permissions.ts
 main/computer/macos-native-provider-transport.ts
@@ -37,7 +37,6 @@ main/providers/macos-login-session-pty-probe.ts
 main/providers/process-cwd.ts
 main/pty-descendant-termination.ts
 main/pty/posix-pty-foreground-group.ts
-main/pty/posix-pty-process-groups.ts
 main/pty/windows-environment-path.ts
 main/rate-limits/codex-fetcher.ts
 main/runtime/tls-certificate.ts
@@ -54,7 +53,6 @@ main/zsh-startup-hook-pty-harness.ts
 relay/agent-exec-handler.ts
 relay/external-automations-handler.ts
 relay/fs-handler-git-fallback.ts
-relay/fs-handler-utils.ts
 relay/fs-list-files-fallback-chain.ts
 relay/git-handler.ts
 relay/pty-shell-utils.ts
@@ -63,5 +61,4 @@ relay/workspace-space-scan.ts
 shared/fish-binary-requirement.ts
 shared/process-table-snapshot-reader.ts
 shared/pty-slave-line-discipline-echo.ts
-shared/ripgrep-process-availability.ts
 shared/shell-process-readiness.ts

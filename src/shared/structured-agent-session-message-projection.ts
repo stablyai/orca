@@ -14,9 +14,16 @@ export function projectStructuredAgentSessionMessages(
   projectItems = projectStructuredItemsToNativeChat
 ): NativeChatMessage[] {
   const optimistic = reconcileStructuredAgentSessionOutbox(outbox, submissions)
-  const journalled = new Set(items.map((item) => item.itemId))
+  // Refused sends are ledger evidence, not conversation history; local drafts remain in the outbox.
+  const rejected = new Set(
+    submissions
+      .filter((submission) => submission.dispatchState === 'rejected')
+      .map((submission) => agentJournalSubmissionKey(submission.clientMessageId))
+  )
+  const visibleItems = items.filter((item) => !rejected.has(item.itemId))
+  const journalled = new Set(visibleItems.map((item) => item.itemId))
   return [
-    ...projectItems(items),
+    ...projectItems(visibleItems),
     ...optimistic
       .filter((entry) => !journalled.has(agentJournalSubmissionKey(entry.clientMessageId)))
       .map((entry): NativeChatMessage => ({

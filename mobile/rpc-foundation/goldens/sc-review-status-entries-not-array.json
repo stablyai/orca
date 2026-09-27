@@ -3,9 +3,9 @@
   "family": "git.review-preparation",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "b5f4b14e07fc7281b954ff5f16d5803e2dfb1bc2a97dcbe6a0991697a5980c49",
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
   "adapterSha256": "c582ce355b0704b38d7e84cbce352630096c91231bf09aecd1f6dbb409fed17f",
   "scenarioSha256": "37ba7780ca9525ab313c0a9c781ce5bb26344e63af9272c32ae889621f383b2b",
   "platform": "darwin",
@@ -13,8 +13,18 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "6cfd467eb392": {
+    "6decf368b25a": {
+      "committed": "uncommitted",
+      "status": {
+        "ok": true,
+        "status": {
+          "$rpc": "null"
+        }
+      }
+    },
+    "819619d80f7c": {
       "name": "git.status#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -47,20 +57,6 @@
         }
       }
     },
-    "6decf368b25a": {
-      "committed": "uncommitted",
-      "status": {
-        "ok": true,
-        "status": {
-          "$rpc": "null"
-        }
-      }
-    },
-    "96e616bda11d": {
-      "name": "git.status#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo42::/p\"}}",
-      "sent": 1
-    },
     "da676cfabd9b": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -71,6 +67,11 @@
           "$rpc": "null"
         }
       }
+    },
+    "ddee63fd3bf5": {
+      "name": "git.status#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
     }
   },
   "recording": {
@@ -79,8 +80,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["6cfd467eb392"],
-          "payloads": ["96e616bda11d"],
+          "sender": ["819619d80f7c"],
+          "payloads": ["ddee63fd3bf5"],
           "settlements": {
             "status": "da676cfabd9b"
           },

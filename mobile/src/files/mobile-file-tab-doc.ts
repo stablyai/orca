@@ -1,7 +1,7 @@
 import { buildImageDataUri } from '../../../src/shared/image-data-uri'
 import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
 import { buildMobileDiffLines, type MobileDiffLine } from '../session/mobile-diff-lines'
-import { mobileDiffImageDataUri, type MobileBinaryDiffResult } from './mobile-diff-image-preview'
+import { mobileDiffImageDataUri } from './mobile-diff-image-preview'
 import {
   fileTabDiffRead,
   fileTabImageRead,
@@ -37,10 +37,7 @@ export async function resolveMobileFileTabDoc(
       filePath: relativePath,
       staged: request.diffSource === 'staged'
     })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-    const result = fileTabDiffRead.interpret(reply) as
-      | { kind: 'text'; originalContent: string; modifiedContent: string }
-      | MobileBinaryDiffResult
+    const result = fileTabDiffRead.interpret(reply)
     if (result.kind !== 'text') {
       // Render image diffs (add/modify/delete) from the base64 the host already
       // sends; only non-previewable binaries stay unavailable.
@@ -57,12 +54,7 @@ export async function resolveMobileFileTabDoc(
   const artifactKind = classifyMobileArtifact(relativePath)
   if (artifactKind === 'image') {
     const preview = await fileTabImageRead.request(client, { worktree, relativePath })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-    const result = fileTabImageRead.interpret(preview) as {
-      content: string
-      isImage?: boolean
-      mimeType?: string
-    }
+    const result = fileTabImageRead.interpret(preview)
     const dataUri = result.isImage ? buildImageDataUri(result.mimeType, result.content) : null
     if (!dataUri) {
       throw new Error('binary_file')
@@ -71,12 +63,7 @@ export async function resolveMobileFileTabDoc(
   }
 
   const reply = await fileTabTextRead.request(client, { worktree, relativePath })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-  const result = fileTabTextRead.interpret(reply) as {
-    content: string
-    truncated: boolean
-    byteLength: number
-  }
+  const result = fileTabTextRead.interpret(reply)
   if (artifactKind === 'html') {
     return { status: 'ready', kind: 'html', content: result.content }
   }

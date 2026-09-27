@@ -99,16 +99,15 @@ export function openCodeDatabaseScanIssue(dbPath: string, error: unknown): AiVau
       ? `OpenCode is writing to ${name} right now, so its history was skipped. It is read again on the next refresh.`
       : kind === 'unreadable'
         ? `OpenCode history in ${name} could not be read: ${errorMessage(error)}`
-        : `OpenCode history in ${name} could not be read. ${unreadableShareAdvice(dbPath)}`
+        : unreadableShareDetail(dbPath, name)
   return { agent: 'opencode', kind: 'scope', path: dbPath, message: detail }
 }
 
-function unreadableShareAdvice(dbPath: string): string {
-  // Named only when the evidence supports it; a generic share gets generic copy.
-  // Deliberately not "flush the write-ahead log": checkpointing changes nothing
-  // here, and telling the user to try it would send them after a fix that cannot
-  // work. The share itself is the blocker.
+function unreadableShareDetail(dbPath: string, name: string): string {
+  // A known limitation, not a failure the user can act on: nothing they do on
+  // the Windows side makes the share hand out SQLite's locks. Deliberately not
+  // "flush the write-ahead log" either — checkpointing changes nothing here.
   return isWslUncPath(dbPath)
-    ? 'Windows cannot open SQLite databases over the \\\\wsl.localhost share, so this history has to be read from inside the distro.'
-    : 'Its write-ahead log cannot be opened read-only on this filesystem. Exit OpenCode cleanly to flush the log.'
+    ? "OpenCode sessions inside WSL can't be searched from Windows yet."
+    : `OpenCode history in ${name} could not be read. Its write-ahead log cannot be opened read-only on this filesystem. Exit OpenCode cleanly to flush the log.`
 }

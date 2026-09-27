@@ -27,6 +27,7 @@ import { homeAccountsMountAdapters } from './home-accounts-mount-adapters'
 import { hostScreenMountAdapters } from './host-screen-mount-adapters'
 import { hostWorktreeActionMountAdapters } from './host-worktree-action-mount-adapters'
 import { hostedReviewMountAdapters } from './hosted-review-mount-adapters'
+import { mobileWebBundleMountAdapters } from './mobile-web-bundle-mount-adapters'
 import { nativeChatPagingMountAdapters } from './native-chat-paging-mount-adapters'
 import { nativeChatWriteMountAdapters } from './native-chat-write-mount-adapters'
 import { newTabAgentMountAdapters } from './new-tab-agent-mount-adapters'
@@ -37,6 +38,7 @@ import {
 import { newWorkspaceMountAdapters } from './new-workspace-mount-adapters'
 import { newWorkspaceRepositoryMountAdapters } from './new-workspace-repository-mount-adapters'
 import { pairingJournalMountAdapters } from './pairing-journal-mount-adapters'
+import { prSidebarMountAdapters } from './pr-sidebar-mount-adapters'
 import { pushDismissalMountAdapters } from './push-dismissal-mount-adapters'
 import {
   pushRegistrationMountAdapters,
@@ -46,11 +48,18 @@ import { relayCredentialMountAdapters } from './relay-credential-mount-adapters'
 import { sessionNotesMountAdapters } from './session-notes-mount-adapters'
 import { sessionScreenReadMountAdapters } from './session-screen-read-mount-adapters'
 import { sessionScreenTabMountAdapters } from './session-screen-tab-mount-adapters'
+import { sessionStartupMountAdapters } from './session-startup-mount-adapters'
 import { sessionTabMountAdapters } from './session-tab-mount-adapters'
+import { sessionTerminalCreateMountAdapters } from './session-terminal-create-mount-adapters'
+import { sessionTerminalDisplayModeMountAdapters } from './session-terminal-display-mode-mount-adapters'
 import { sessionTerminalGestureMountAdapters } from './session-terminal-gesture-mount-adapters'
 import { sessionTerminalInputMountAdapters } from './session-terminal-input-mount-adapters'
 import { settingsMountAdapters, settingsMountExposures } from './settings-mount-adapters'
 import { sourceControlMountAdapters } from './source-control-mount-adapters'
+import {
+  sourceControlScreenReadMountAdapters,
+  sourceControlScreenReadMountExposures
+} from './source-control-screen-read-mount-adapters'
 import { structuredAgentLaunchMountAdapters } from './structured-agent-launch-mount-adapters'
 import { taskItemChecksStatusMountAdapters } from './task-item-checks-status-mount-adapters'
 import { taskItemConversationMountAdapters } from './task-item-conversation-mount-adapters'
@@ -121,6 +130,7 @@ export const MOUNTED_OPERATION_MODULES: readonly MountedOperationModule[] = [
     mounts: hostWorktreeActionMountAdapters
   },
   { source: 'hosted-review-mount-adapters.ts', mounts: hostedReviewMountAdapters },
+  { source: 'mobile-web-bundle-mount-adapters.ts', mounts: mobileWebBundleMountAdapters },
   { source: 'native-chat-paging-mount-adapters.ts', mounts: nativeChatPagingMountAdapters },
   { source: 'native-chat-write-mount-adapters.ts', mounts: nativeChatWriteMountAdapters },
   { source: 'new-tab-agent-mount-adapters.ts', mounts: newTabAgentMountAdapters },
@@ -135,6 +145,7 @@ export const MOUNTED_OPERATION_MODULES: readonly MountedOperationModule[] = [
     exposes: notificationTestScreenMountExposures
   },
   { source: 'pairing-journal-mount-adapters.ts', mounts: pairingJournalMountAdapters },
+  { source: 'pr-sidebar-mount-adapters.ts', mounts: prSidebarMountAdapters },
   { source: 'push-dismissal-mount-adapters.ts', mounts: pushDismissalMountAdapters },
   {
     source: 'push-registration-mount-adapters.ts',
@@ -148,7 +159,16 @@ export const MOUNTED_OPERATION_MODULES: readonly MountedOperationModule[] = [
     mounts: sessionScreenReadMountAdapters
   },
   { source: 'session-screen-tab-mount-adapters.ts', mounts: sessionScreenTabMountAdapters },
+  { source: 'session-startup-mount-adapters.ts', mounts: sessionStartupMountAdapters },
   { source: 'session-tab-mount-adapters.ts', mounts: sessionTabMountAdapters },
+  {
+    source: 'session-terminal-create-mount-adapters.ts',
+    mounts: sessionTerminalCreateMountAdapters
+  },
+  {
+    source: 'session-terminal-display-mode-mount-adapters.ts',
+    mounts: sessionTerminalDisplayModeMountAdapters
+  },
   {
     source: 'session-terminal-gesture-mount-adapters.ts',
     mounts: sessionTerminalGestureMountAdapters
@@ -163,6 +183,11 @@ export const MOUNTED_OPERATION_MODULES: readonly MountedOperationModule[] = [
     exposes: settingsMountExposures
   },
   { source: 'source-control-mount-adapters.ts', mounts: sourceControlMountAdapters },
+  {
+    source: 'source-control-screen-read-mount-adapters.ts',
+    mounts: sourceControlScreenReadMountAdapters,
+    exposes: sourceControlScreenReadMountExposures
+  },
   {
     source: 'structured-agent-launch-mount-adapters.ts',
     mounts: structuredAgentLaunchMountAdapters

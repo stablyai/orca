@@ -482,6 +482,12 @@ describe('Claude structured journal translation', () => {
     })
     // The turn still settles: the error is an extra row, not a stuck lifecycle.
     expect(lifecycleAppends(state.items).at(-1)).toEqual(['turn-lifecycle:user-1', 'completed'])
+    // The arm stays `completed` on purpose — the host watched this turn finish —
+    // and `outcome` is the only thing that says it failed. Widening the arm
+    // instead would move every reader that switches on it.
+    expect(state.items.findLast((item) => item.identity.provider === 'legacy')?.body).toMatchObject(
+      { kind: 'turn', state: 'completed', outcome: 'failure' }
+    )
   })
 
   it('drops the stream state of turns that ended without their final frame', () => {
@@ -863,7 +869,6 @@ function prompt(
   return {
     ...input,
     suggestions: [],
-    answers: new Map(),
     settle: () => {}
   }
 }

@@ -1,5 +1,6 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcUncheckedPayloadReader } from '../transport/rpc-reader-payload'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { missedNotificationsSchema } from './notification-reply-schema'
 
 /**
  * The catch-up read that tells this device which of the banners still in its OS tray the host has
@@ -16,7 +17,7 @@ export const pushMissedSinceRead = bindDeferredRpcOperation(
     method: 'notifications.getMissedSince',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('missed-notifications')
+    read: rpcResultVariant('missed-notifications', missedNotificationsSchema)
   })
 )
 

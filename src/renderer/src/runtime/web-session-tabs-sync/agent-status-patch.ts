@@ -14,6 +14,7 @@ import type {
 } from './state'
 import {
   isClientOwnedAgentStatus,
+  isMirroredAgentStatusOwnedBy,
   isFencedClientAgentStatus,
   hostAgentStatusPiercesClientAuthority,
   isMirroredAgentPaneKeyForTabs,
@@ -60,6 +61,9 @@ export function buildMirroredAgentStatusPatch(
   currentTerminalTabs: readonly TerminalTab[],
   terminalSurfaceTabs: readonly TerminalSurface[],
   mirroredTerminalTabs: readonly MirroredTerminalTab[],
+  environmentId: string,
+  worktreeId: string,
+  retractedTabIds: ReadonlySet<string>,
   now: number,
   batchContext?: WebSessionTabsBatchContext
 ): Pick<WebSessionTabsSyncState, 'agentStatusByPaneKey' | 'agentStatusEpoch' | 'sortEpoch'> | null {
@@ -100,7 +104,13 @@ export function buildMirroredAgentStatusPatch(
     }
     const existing =
       nextByPaneKey.get(hostEntry.paneKey) ?? state.agentStatusByPaneKey[hostEntry.paneKey]
-    const entry = withMirroredEvidenceReceipt(hostEntry, existing, now)
+    const entry = withMirroredEvidenceReceipt(
+      hostEntry.connectionId === undefined
+        ? { ...hostEntry, connectionId: environmentId }
+        : hostEntry,
+      existing,
+      now
+    )
     // Why: keep fresher OSC state while taking remapped ownership metadata from the authoritative host snapshot.
     const hostIdentityPredatesCurrentTurn =
       existing !== undefined &&
@@ -149,6 +159,15 @@ export function buildMirroredAgentStatusPatch(
 
   for (const paneKey of batchAgentPaneKeysForTabs(state, mirroredTabIds, batchContext)) {
     if (!isMirroredAgentPaneKeyForTabs(paneKey, mirroredTabIds)) {
+      continue
+    }
+    if (
+      !isMirroredAgentStatusOwnedBy(state.agentStatusByPaneKey[paneKey], environmentId, worktreeId)
+    ) {
+      continue
+    }
+    // The retirement sweep must see the live row to suppress ghost retention.
+    if (isMirroredAgentPaneKeyForTabs(paneKey, retractedTabIds)) {
       continue
     }
     if (nextByPaneKey.has(paneKey)) {

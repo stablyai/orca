@@ -120,7 +120,7 @@ const INVENTORY: readonly InventoryGroup[] = [
       ['src/shared/agent-title-core.ts', 4],
       ['src/shared/agent-title-evidence.ts', 2],
       ['src/shared/agent-title-identity.ts', 11],
-      ['src/shared/terminal-title-agent-type.ts', 14]
+      ['src/shared/terminal-title-agent-type.ts', 15]
     ]
   },
   {

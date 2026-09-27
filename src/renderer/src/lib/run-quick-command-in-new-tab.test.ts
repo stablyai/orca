@@ -152,6 +152,62 @@ describe('runQuickCommandInNewTab', () => {
     expect(mockState.setRecentQuickCommandForGroup).toHaveBeenCalledWith('group-1', 'agent-review')
   })
 
+  it('submits OpenCode2 quick prompts after its TUI is ready', () => {
+    mocks.launchAgentInNewTab.mockReturnValue({
+      surface: { kind: 'local-terminal', tabId: 'tab-opencode2' }
+    })
+    mockState.unifiedTabsByWorktree['repo::worktree'] = [
+      { entityId: 'tab-opencode2', contentType: 'terminal', groupId: 'group-1' }
+    ]
+
+    runQuickCommandInNewTab({
+      command: {
+        id: 'agent-opencode2',
+        label: 'OpenCode2 review',
+        action: 'agent-prompt',
+        agent: 'opencode2',
+        prompt: 'Review this diff'
+      },
+      worktreeId: 'repo::worktree',
+      groupId: 'group-1'
+    })
+
+    expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith({
+      agent: 'opencode2',
+      prompt: 'Review this diff',
+      promptDelivery: 'submit-after-ready',
+      worktreeId: 'repo::worktree',
+      groupId: 'group-1',
+      launchSource: 'quick_command',
+      quickCommandLabel: 'OpenCode2 review'
+    })
+  })
+
+  it('uses the same ready-state path for plain OpenCode installs', () => {
+    mocks.launchAgentInNewTab.mockReturnValue({
+      surface: { kind: 'local-terminal', tabId: 'tab-opencode' }
+    })
+    mockState.unifiedTabsByWorktree['repo::worktree'] = [
+      { entityId: 'tab-opencode', contentType: 'terminal', groupId: 'group-1' }
+    ]
+
+    runQuickCommandInNewTab({
+      command: {
+        id: 'agent-opencode',
+        label: 'OpenCode review',
+        action: 'agent-prompt',
+        agent: 'opencode',
+        prompt: 'Review this diff'
+      },
+      worktreeId: 'repo::worktree',
+      groupId: 'group-1'
+    })
+
+    expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith(
+      expect.objectContaining({ agent: 'opencode', promptDelivery: 'submit-after-ready' })
+    )
+  })
+
   it('falls back to the active group when context-menu group resolution is missing', () => {
     mockState.activeGroupIdByWorktree['repo::worktree'] = 'active-group'
     mocks.launchAgentInNewTab.mockReturnValue({

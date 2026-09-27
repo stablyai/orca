@@ -189,7 +189,6 @@ export function RemoteBrowserPagePane({
     submitAddressBar
   } = useRemoteBrowserPageNavigation({
     browserTab,
-    isActive,
     stagedPage,
     addressBarValue,
     setAddressBarValueFromPage,

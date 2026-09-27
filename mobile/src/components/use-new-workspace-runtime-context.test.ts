@@ -12,7 +12,10 @@ type PublishedState = Pick<
   'runtimeSettings' | 'trustedOrcaHooks' | 'availableProviders'
 >
 
-const TRUSTED_HOOKS = { '/repo/orca.yaml': 'sha-1' }
+// A real PersistedTrustedOrcaHooks record, keyed by repo id with a per-hook approval. The earlier
+// fixture kept a content hash directly under the key, which is not a shape `ui.get` ever answers
+// and which the checked reader drops as an unreadable repo entry.
+const TRUSTED_HOOKS = { 'repo-1': { setup: { contentHash: 'sha-1', approvedAt: 1700000000000 } } }
 const UI_WITH_TRUST = { ui: { trustedOrcaHooks: TRUSTED_HOOKS } }
 const SETTINGS = { defaultTuiAgent: 'codex', visibleTaskProviders: ['github', 'linear'] }
 

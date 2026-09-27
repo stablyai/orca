@@ -80,9 +80,9 @@ describe('bare-handle direct mail to a structured session', () => {
     expect(getLivePaneKey.call(paneKeyStub, handle)).toBeNull()
   })
 
-  it('withholds the pane key when the lease moved to a terminal owner', () => {
+  it('withholds the pane key when a terminal an older build recorded holds the lease', () => {
     const handle = registerWorker()
-    installRecord({ runtimeKind: 'tui', claimStatus: 'live' })
+    installRecord({ runtimeKind: 'native', claimStatus: 'conflicted' })
     expect(getLivePaneKey.call(paneKeyStub, handle)).toBeNull()
   })
 })

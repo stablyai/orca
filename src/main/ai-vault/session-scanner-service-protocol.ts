@@ -10,6 +10,7 @@ import type {
   AiVaultSearchStatus
 } from '../../shared/ai-vault-search-types'
 import type { AiVaultSearchSettings } from '../../shared/ai-vault-search-settings'
+import type { SessionSearchHostScope } from '../ai-vault-search/session-search-service'
 import type { SessionSearchScanRoots } from '../ai-vault-search/session-search-scan-roots'
 import type { ReadAiVaultFirstUserPromptArgs } from './session-first-user-prompt-read'
 import type { SessionParseCachePersistenceOptions } from './session-parse-cache-persistence'
@@ -26,6 +27,7 @@ export type AiVaultServiceOperation =
   | 'searchSessions'
   | 'searchStatus'
   | 'searchReconcile'
+  | 'searchClear'
 
 // Typed from the union so a new operation cannot be added without landing here,
 // and held as strings so recognising one costs no assertion.
@@ -36,7 +38,8 @@ const AI_VAULT_SERVICE_OPERATIONS: ReadonlySet<string> = new Set<AiVaultServiceO
   'firstPrompt',
   'searchSessions',
   'searchStatus',
-  'searchReconcile'
+  'searchReconcile',
+  'searchClear'
 ])
 
 export type AiVaultServiceSubagentRequest = {
@@ -80,9 +83,16 @@ export type AiVaultServiceRequestBody =
       operation: 'firstPrompt'
       request: ReadAiVaultFirstUserPromptArgs
     }
-  | { type: 'request'; operation: 'searchSessions'; request: AiVaultSearchRequest }
+  | {
+      type: 'request'
+      operation: 'searchSessions'
+      request: AiVaultSearchRequest
+      /** What the host made of a scope identity; outside `request` so no wire cap applies. */
+      hostScope?: SessionSearchHostScope
+    }
   | { type: 'request'; operation: 'searchStatus' }
   | { type: 'request'; operation: 'searchReconcile' }
+  | { type: 'request'; operation: 'searchClear' }
 
 export type AiVaultServiceRequest = AiVaultServiceRequestBody & { id: number }
 
@@ -104,6 +114,7 @@ export type AiVaultServiceResultValue =
   | { operation: 'searchSessions'; value: AiVaultSearchResponse }
   | { operation: 'searchStatus'; value: AiVaultSearchStatus }
   | { operation: 'searchReconcile'; value: null }
+  | { operation: 'searchClear'; value: null }
 
 export type AiVaultServiceChildMessage =
   | { type: 'sessionSearchRoots'; id: number }

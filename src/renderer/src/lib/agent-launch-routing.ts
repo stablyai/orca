@@ -5,6 +5,7 @@ import {
   resolveStructuredNativeChatSupport
 } from '../../../shared/structured-native-chat-launch-route'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import type { WorkspaceLaunchKind } from '../../../shared/workspace-launch-kind'
 import {
   decideInitialAgentTabViewMode,
   type NativeChatLaunchPromptDelivery
@@ -28,7 +29,7 @@ export type AgentLaunchRoutingInput = {
   executionHostId: string
   /** Capabilities of the target host; `null` = not yet established. */
   hostCapabilities: readonly string[] | null
-  workspaceKind?: 'git-worktree' | 'folder' | 'floating'
+  workspaceKind?: WorkspaceLaunchKind
   projectRuntime?: ProjectExecutionRuntimeResolution | null
   promptDelivery?: NativeChatLaunchPromptDelivery
   launchText?: string

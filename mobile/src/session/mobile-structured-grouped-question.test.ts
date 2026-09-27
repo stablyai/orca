@@ -74,9 +74,12 @@ describe('mobile structured grouped questions', () => {
       kind: 'advance',
       draft: { promptKey: PROMPT_KEY, answers: [{ questionId: 'q1', optionIds: ['q1:choice-1'] }] }
     })
+    // Read it non-optionally: an absent advance must fail here, not fall to the null draft and
+    // leave the assertion below describing the first step again.
+    expect(advance).toBeDefined()
     const second = projectGroupedQuestion(
       questions,
-      advance!.kind === 'advance' ? advance.draft : null,
+      advance!.kind === 'advance' ? advance!.draft : null,
       PROMPT_KEY
     )
     expect(second).toMatchObject({ question: 'Which regions? (2 of 2)', multiSelect: true })

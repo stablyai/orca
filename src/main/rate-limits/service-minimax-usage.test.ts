@@ -29,8 +29,8 @@ vi.mock('./kimi-fetcher', () => ({
   fetchKimiRateLimits: vi.fn()
 }))
 
-vi.mock('./opencode-go-usage-fetcher', () => ({
-  fetchOpenCodeGoRateLimits: vi.fn()
+vi.mock('./opencode-go-usage-source-selection', () => ({
+  fetchOpenCodeGoUsage: vi.fn()
 }))
 
 vi.mock('./minimax/minimax-fetcher', () => ({
@@ -39,6 +39,14 @@ vi.mock('./minimax/minimax-fetcher', () => ({
 
 vi.mock('./grok-fetcher', () => ({
   fetchGrokRateLimits: vi.fn()
+}))
+
+vi.mock('./cursor-fetcher', () => ({
+  fetchCursorRateLimits: vi.fn()
+}))
+
+vi.mock('./cursor-auth', () => ({
+  readCursorAuthSession: vi.fn()
 }))
 
 vi.mock('./grok-auth', () => ({

@@ -11,6 +11,7 @@ import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import {
   structuredAgentSessionSendRequest,
+  updateStructuredAgentSessionOutboxEntry,
   type StructuredAgentSessionOutboxEntry
 } from '../../../../shared/structured-agent-session-outbox'
 import { writeOutbox } from './structured-agent-session-outbox-storage'
@@ -63,7 +64,7 @@ export function dispatchStructuredAgentSessionOutboxEntry(args: {
   fence: number
   dispatchGeneration: number
   dispatchGenerationRef: MutableRef<number>
-  dispatchingRef: MutableRef<boolean>
+  inFlightIdRef: MutableRef<string | null>
   blockedIdRef: MutableRef<string | null>
   outboxRef: MutableRef<StructuredAgentSessionOutboxEntry[]>
   setOutbox: (entries: StructuredAgentSessionOutboxEntry[]) => void
@@ -72,19 +73,22 @@ export function dispatchStructuredAgentSessionOutboxEntry(args: {
   createOperationId: () => string
 }): { promise: Promise<boolean>; started: boolean } {
   const start = async (): Promise<boolean> => {
-    args.dispatchingRef.current = true
-    const staged = [
-      { ...args.next, state: 'dispatching' as const, lastAttemptAt: Date.now() },
-      ...args.persisted.slice(1)
-    ]
+    args.inFlightIdRef.current = args.next.clientMessageId
+    const staged = updateStructuredAgentSessionOutboxEntry(
+      args.persisted,
+      args.next.clientMessageId,
+      (entry) => ({ ...entry, state: 'dispatching' as const, lastAttemptAt: Date.now() })
+    )
     if (!writeOutbox(args.sessionId, staged)) {
-      args.dispatchingRef.current = false
+      args.inFlightIdRef.current = null
       args.blockedIdRef.current = args.next.clientMessageId
       args.setError('Message could not be saved to the outbox')
       return false
     }
     args.outboxRef.current = staged
     args.setOutbox(staged)
+    // No `finally` release below: `applyDisposition` frees single-flight as part of the state
+    // write that re-runs the drain, and a microtask later would leave the queue no trigger.
     try {
       const result = await callStructuredAgentSession<
         AgentSessionMutationResult<AgentSessionSendResult>
@@ -119,10 +123,6 @@ export function dispatchStructuredAgentSessionOutboxEntry(args: {
         })
       )
       return false
-    } finally {
-      if (args.dispatchGenerationRef.current === args.dispatchGeneration) {
-        args.dispatchingRef.current = false
-      }
     }
   }
   return args.next.source === 'launch'

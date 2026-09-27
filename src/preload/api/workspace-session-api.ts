@@ -15,6 +15,8 @@ export type WorkspaceSessionApi = {
   session: {
     // hostId defaults to the 'local' partition on main, so omitting it stays backward-compatible.
     get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
+    /** Partitions persistence holds, so boot reads them all instead of guessing from the catalog. */
+    listHostIds: () => Promise<ExecutionHostId[]>
     set: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => Promise<void>
     patch: (args: WorkspaceSessionPatch, hostId?: ExecutionHostId) => Promise<void>
     flush: () => Promise<void>

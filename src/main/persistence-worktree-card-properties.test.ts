@@ -1,8 +1,8 @@
+import { closeTestStores, testState, createStore, writeDataFile } from './persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { testState, createStore, writeDataFile } from './persistence-test-harness'
 
 // Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
@@ -52,7 +52,8 @@ describe('Store', () => {
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
   // ── worktree-card property migration ───────────────────────────────

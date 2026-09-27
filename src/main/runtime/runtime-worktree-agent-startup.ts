@@ -1,18 +1,17 @@
 import type { AgentLaunchPreferences } from '../../shared/agent-session-host-authority'
+import { tuiAgentToAgentKind } from '../../shared/agent-kind'
 import type { Repo } from '../../shared/repo-types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
+import { launchSourceSchema } from '../../shared/telemetry-property-schemas'
 import { repoIsRemote } from '../../shared/agent-launch-remote'
 import { getRepoSshConnectionId } from '../../shared/execution-host'
 import { isTuiAgent, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import { isTuiAgentEnabled, pickTuiAgent } from '../../shared/tui-agent-selection'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../shared/tui-agent-launch-defaults'
+import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '../../shared/tui-agent-startup'
-import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
 import {
+  markAntigravityWorkspaceTrusted,
   markCodexProjectTrusted,
   markCopilotFolderTrusted,
   markCursorWorkspaceTrusted
@@ -31,6 +30,10 @@ type StartupEnvironment = {
   repo: Repo
   settings: ReturnType<RuntimeStore['getSettings']>
   getLaunchPlatform: () => NodeJS.Platform
+  /** Replaces the configured arguments for this launch; `null` means none. */
+  agentArgs?: string | null
+  /** Caller-supplied telemetry attribution, validated leniently at the host boundary. */
+  launchSource?: string
 }
 
 export async function buildWorktreeStartupForDraft(
@@ -73,22 +76,13 @@ export async function buildWorktreeStartupForDraft(
     return null
   }
 
-  const isRemote = repoIsRemote(repo)
-  const platform = environment.getLaunchPlatform()
-  const shell = resolveLocalWindowsAgentStartupShell({
-    platform,
-    isRemote,
-    terminalWindowsShell: settings.terminalWindowsShell
-  })
-  const launchArgs = {
+  const launchArgs = resolveAgentStartupPlanInputs({
     agent,
-    cmdOverrides: settings.agentCmdOverrides ?? {},
-    agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
-    agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
-    platform,
-    shell,
-    isRemote
-  }
+    settings,
+    platform: environment.getLaunchPlatform(),
+    isRemote: repoIsRemote(repo),
+    ...(environment.agentArgs !== undefined ? { agentArgs: environment.agentArgs } : {})
+  })
   const draftPlan = buildAgentDraftLaunchPlan({ ...launchArgs, draft: content })
   if (draftPlan) {
     return {
@@ -139,29 +133,22 @@ export function buildWorktreeStartupForAgent(
   if (!isTuiAgentEnabled(agent, settings.disabledTuiAgents)) {
     throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
   }
-  const platform = environment.getLaunchPlatform()
-  const isRemote = repoIsRemote(repo)
-  const sessionOptions = environment.toSessionOptions(environment.launchPreferences)
   const startupPlan = buildAgentStartupPlan({
-    agent,
-    prompt: environment.prompt ?? '',
-    cmdOverrides: settings.agentCmdOverrides ?? {},
-    agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
-    agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
-    sessionOptions,
-    sessionOptionsOverrideAgentArgs: Boolean(sessionOptions),
-    platform,
-    shell: resolveLocalWindowsAgentStartupShell({
-      platform,
-      isRemote,
-      terminalWindowsShell: settings.terminalWindowsShell
+    ...resolveAgentStartupPlanInputs({
+      agent,
+      settings,
+      platform: environment.getLaunchPlatform(),
+      isRemote: repoIsRemote(repo),
+      ...(environment.agentArgs !== undefined ? { agentArgs: environment.agentArgs } : {}),
+      sessionOptions: environment.toSessionOptions(environment.launchPreferences)
     }),
-    isRemote,
+    prompt: environment.prompt ?? '',
     allowEmptyPromptLaunch: true
   })
   if (!startupPlan) {
     throw new Error(`Could not build launch command for ${agent}.`)
   }
+  const telemetry = agentLaunchTelemetry(agent, environment.launchSource)
   return {
     agent,
     startup: {
@@ -170,7 +157,8 @@ export function buildWorktreeStartupForAgent(
       ...(startupPlan.startupCommandDelivery
         ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
         : {}),
-      ...(startupPlan.env ? { env: startupPlan.env } : {})
+      ...(startupPlan.env ? { env: startupPlan.env } : {}),
+      ...(telemetry ? { telemetry } : {})
     },
     ...(startupPlan.followupPrompt
       ? {
@@ -181,6 +169,20 @@ export function buildWorktreeStartupForAgent(
         }
       : {})
   }
+}
+
+function agentLaunchTelemetry(
+  agent: TuiAgent,
+  launchSource: string | undefined
+): WorktreeStartupLaunch['telemetry'] | undefined {
+  const parsed = launchSourceSchema.safeParse(launchSource)
+  return parsed.success
+    ? {
+        agent_kind: tuiAgentToAgentKind(agent),
+        launch_source: parsed.data,
+        request_kind: 'new'
+      }
+    : undefined
 }
 
 export async function markLocalWorktreeTrusted(
@@ -199,6 +201,8 @@ export async function markLocalWorktreeTrusted(
     } else if (preset === 'codex') {
       // Why: the Codex write queues behind any in-flight hook grant, so the agent must not launch until it lands.
       await markCodexProjectTrusted(workspacePath)
+    } else if (preset === 'antigravity') {
+      markAntigravityWorkspaceTrusted(workspacePath)
     }
   } catch {
     // Best-effort: the user can still accept the agent trust prompt manually.

@@ -109,6 +109,8 @@ function setSidebarState(settings: GlobalSettings, statusBarVisible = true): voi
     setAgentDashboardDrawerOpen: vi.fn(),
     fetchAllWorktrees: vi.fn(),
     repos: [],
+    // The toolchain banner indexes this map. The real store always has one.
+    detectedWorktreesByRepo: {},
     setSidebarWidth: vi.fn(),
     settings,
     sidebarOpen: true,

@@ -3,9 +3,9 @@
   "family": "session.pr-triage",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "b5f4b14e07fc7281b954ff5f16d5803e2dfb1bc2a97dcbe6a0991697a5980c49",
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
   "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
   "scenarioSha256": "58ad4e4d5b0200c44f329236e10fd81918a1cc36b33b22cba24662c79dd61b4e",
   "platform": "darwin",
@@ -13,23 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "39a17efe1de6": {
+    "2540affc8fa5": {
       "name": "session.tabs.createTerminal#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}",
-      "sent": 1
-    },
-    "681fc4d59b92": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "Created terminal response was invalid",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "80e637504768": {
-      "name": "session.tabs.createTerminal#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -66,6 +52,21 @@
         }
       }
     },
+    "478ad4afe83e": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "The host sent a reply this app could not read (session.tabs.createTerminal)",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "94d38f1838f6": {
+      "name": "session.tabs.createTerminal#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}"
+    },
     "a4273b38df83": {
       "launched": "unlaunched"
     }
@@ -76,10 +77,10 @@
       {
         "id": "invalid",
         "observation": {
-          "sender": ["80e637504768"],
-          "payloads": ["39a17efe1de6"],
+          "sender": ["2540affc8fa5"],
+          "payloads": ["94d38f1838f6"],
           "settlements": {
-            "launch": "681fc4d59b92"
+            "launch": "478ad4afe83e"
           },
           "state": "a4273b38df83",
           "effects": []

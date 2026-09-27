@@ -200,6 +200,8 @@ function buildAgentResumeInvocation(
       return `${baseCommand} resume ${sessionArg}`
     case 'rovo':
       return `${baseCommand} rovodev run --restore ${sessionArg}`
+    case 'opencode2':
+      return `${baseCommand} --standalone --session ${sessionArg}`
     case 'opencode':
     case 'pi':
     // Why: Kimi Code resumes with `kimi --session <id>` (alias `-S`). Sessions
@@ -210,6 +212,10 @@ function buildAgentResumeInvocation(
       return `${baseCommand} --session ${sessionArg}`
     case 'copilot':
       return `${baseCommand} --resume=${sessionArg}`
+    // Why: `muse resume <uuid>` reopens the session (resume is workspace-scoped,
+    // so the cwd prefix from buildAiVaultResumeCommand is required).
+    case 'muse':
+      return `${baseCommand} resume ${sessionArg}`
     case 'cline':
       return `${baseCommand} --id ${sessionArg}`
     case 'claude':

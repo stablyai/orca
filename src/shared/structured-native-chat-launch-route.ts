@@ -13,6 +13,7 @@ import type { GlobalSettings } from './global-settings-types'
 import type { ProjectExecutionRuntimeResolution } from './project-execution-runtime'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from './protocol-version'
 import type { TuiAgent } from './tui-agent'
+import type { WorkspaceLaunchKind } from './workspace-launch-kind'
 
 export type NativeChatDefaultSettings = Pick<
   GlobalSettings,
@@ -44,7 +45,8 @@ export type StructuredNativeChatSupportInput = {
   executionHostId: string
   /** Capabilities of the host this launch would run on. `null` = not yet established. */
   hostCapabilities: readonly string[] | null
-  workspaceKind?: 'git-worktree' | 'folder' | 'floating'
+  /** Host-derived. Absent means the kind was never established, which is not evidence of any kind. */
+  workspaceKind?: WorkspaceLaunchKind
   projectRuntime?: ProjectExecutionRuntimeResolution | null
   requiresTuiLaunchCommand?: boolean
   /** An existing PTY agent keeps its execution transport. */

@@ -5,13 +5,21 @@ import {
   DEFAULT_JOURNAL_PAYLOAD_LIMITS,
   type JournalPayloadLimits
 } from '../agent-session-journal/journal-payload-bounds'
-import { codexGoalRowText } from '../../codex/codex-goal-journal-rows'
-import { classifyProviderFrame } from './provider-frame-disposition'
+import { codexGoalRowText, codexThreadGoalState } from '../../codex/codex-goal-journal-rows'
+import {
+  classifyProviderFrame,
+  hasTypedProviderFrameTranslator
+} from './provider-frame-disposition'
 
 export type UnhandledProviderFrameJournalItem = {
   body: AgentJournalStatusItem
   /** Why the frame surfaced. Error frames are exempt from generic-row caps. */
   classification: 'timeline-substantive' | 'error-surface'
+}
+
+export type UnhandledProviderFrameJournalItemOptions = {
+  /** A typed translator accepted this exact frame, not merely this frame kind. */
+  coveredByTypedTranslator?: boolean
 }
 
 function serializeProviderPayload(payload: unknown): string {
@@ -76,8 +84,20 @@ export function unhandledProviderFrameJournalItem(
   provider: string,
   kind: string,
   payload: unknown,
-  limits: JournalPayloadLimits = DEFAULT_JOURNAL_PAYLOAD_LIMITS
+  limits: JournalPayloadLimits = DEFAULT_JOURNAL_PAYLOAD_LIMITS,
+  options: UnhandledProviderFrameJournalItemOptions = {}
 ): UnhandledProviderFrameJournalItem | null {
+  // A kind a typed translator owns never degrades to its opcode here, in either
+  // direction: "no row" is that translator's decision, not a gap this fallback
+  // has to cover. Checked before classification, because the payload sniffer
+  // inside it promotes a covered frame that reports a failure and would
+  // otherwise print `${provider} · ${kind}` beside the typed row.
+  if (
+    options.coveredByTypedTranslator === true &&
+    hasTypedProviderFrameTranslator(provider, kind)
+  ) {
+    return null
+  }
   const classification = classifyProviderFrame(provider, kind, payload)
   if (
     classification === 'stream-into-item' ||
@@ -119,6 +139,7 @@ export function unhandledProviderFrameJournalItem(
   const goalText = provider === 'codex' ? codexGoalRowText(method, payload) : null
   const display = message ? boundInlineText(message, limits) : null
   const goalDisplay = goalText ? boundInlineText(goalText, limits) : null
+  const threadGoal = provider === 'codex' ? codexThreadGoalState(method, payload) : null
   return {
     body: {
       kind: 'status',
@@ -127,7 +148,21 @@ export function unhandledProviderFrameJournalItem(
         : (goalDisplay?.text ?? display?.text ?? `${provider} · ${kind}`),
       ...(compaction ? { presentation: 'compaction' } : {}),
       ...(tone ? { tone } : {}),
-      providerFrame: { provider, kind, payload: bounded }
+      providerFrame: { provider, kind, payload: bounded },
+      ...(threadGoal
+        ? {
+            threadGoal:
+              threadGoal.state === 'set'
+                ? {
+                    state: 'set' as const,
+                    goal: {
+                      ...threadGoal.goal,
+                      objective: boundInlineText(threadGoal.goal.objective, limits).text
+                    }
+                  }
+                : threadGoal
+          }
+        : {})
     },
     classification: classification === 'error-surface' ? 'error-surface' : 'timeline-substantive'
   }

@@ -55,6 +55,137 @@ afterEach(async () => {
 })
 
 describe('prepared worktree creation with real Git', () => {
+  it.each([false, true])(
+    'attaches the prepared HEAD and runs the hook (base advanced: %s)',
+    async (advanceBase) => {
+      const { repoPath, root } = await createRepo()
+      const preparedPath = join(root, 'prepared checkout')
+      const finalPath = join(root, 'final checkout')
+      const hooksPath = join(root, 'hooks')
+      await mkdir(hooksPath)
+      await writeFile(
+        join(hooksPath, 'post-checkout'),
+        '#!/bin/sh\nprintf \'%s\\n\' "$@" >> checkout-hook.txt\ngit symbolic-ref --short HEAD >> checkout-hook.txt\n',
+        { mode: 0o755 }
+      )
+      git(repoPath, ['config', 'core.hooksPath', hooksPath])
+      git(repoPath, ['config', 'branch.autoSetupMerge', 'always'])
+      await prepareWorktreeCreateCheckout(
+        repoPath,
+        preparedPath,
+        'main',
+        createWorktreePreparationLockReason('attach-with-hook')
+      )
+      expect(existsSync(join(preparedPath, 'checkout-hook.txt'))).toBe(false)
+      if (advanceBase) {
+        await writeFile(join(repoPath, 'version.txt'), 'advanced\n')
+        git(repoPath, ['commit', '--quiet', '-am', 'advance base'])
+      }
+      const targetHead = git(repoPath, ['rev-parse', 'HEAD'])
+      await finalizePreparedWorktree(repoPath, preparedPath, finalPath, 'feature/attached', 'main')
+
+      expect(git(finalPath, ['rev-parse', 'HEAD'])).toBe(targetHead)
+      expect(git(finalPath, ['symbolic-ref', '--short', 'HEAD'])).toBe('feature/attached')
+      expect(
+        git(finalPath, ['for-each-ref', '--format=%(upstream)', 'refs/heads/feature/attached'])
+      ).toBe('')
+      expect(await readFile(join(finalPath, 'checkout-hook.txt'), 'utf8')).toBe(
+        `${targetHead}\n${targetHead}\n1\nfeature/attached\n`
+      )
+      await rm(join(finalPath, 'checkout-hook.txt'))
+      expect(await readFile(join(finalPath, 'version.txt'), 'utf8')).toBe(
+        advanceBase ? 'advanced\n' : 'one\n'
+      )
+      expect(git(finalPath, ['status', '--porcelain'])).toBe('')
+    }
+  )
+
+  it('never publishes a branch at a HEAD changed before attachment', async () => {
+    const { repoPath, root } = await createRepo()
+    const preparedPath = join(root, 'prepared-race')
+    const finalPath = join(root, 'final-race')
+    await prepareWorktreeCreateCheckout(
+      repoPath,
+      preparedPath,
+      'main',
+      createWorktreePreparationLockReason('head-race')
+    )
+    const expectedHead = git(repoPath, ['rev-parse', 'HEAD'])
+    git(repoPath, ['checkout', '--quiet', '-b', 'other'])
+    await writeFile(join(repoPath, 'version.txt'), 'other\n')
+    git(repoPath, ['commit', '--quiet', '-am', 'other commit'])
+    const otherHead = git(repoPath, ['rev-parse', 'HEAD'])
+    git(repoPath, ['checkout', '--quiet', 'main'])
+
+    const original = gitRunner.gitExecFileAsync
+    const spy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation((args, options) => {
+      if (args.includes('checkout') || args.includes('switch')) {
+        git(finalPath, ['reset', '--hard', otherHead])
+      }
+      return original(args, options)
+    })
+    try {
+      await finalizePreparedWorktree(repoPath, preparedPath, finalPath, 'feature/race', 'main')
+    } finally {
+      spy.mockRestore()
+    }
+    expect(git(repoPath, ['rev-parse', 'main'])).toBe(expectedHead)
+    expect(git(finalPath, ['rev-parse', 'HEAD'])).toBe(expectedHead)
+    expect(git(finalPath, ['symbolic-ref', '--short', 'HEAD'])).toBe('feature/race')
+    expect(await readFile(join(finalPath, 'version.txt'), 'utf8')).toBe('one\n')
+  })
+
+  it('accepts a commit made by the post-checkout hook during attachment', async () => {
+    const { repoPath, root } = await createRepo()
+    const preparedPath = join(root, 'prepared-hook-commit')
+    const finalPath = join(root, 'final-hook-commit')
+    const hooksPath = join(root, 'hooks')
+    await mkdir(hooksPath)
+    await writeFile(
+      join(hooksPath, 'post-checkout'),
+      '#!/bin/sh\nprintf "invoked\\n" >> hook-invocations.txt\ngit add hook-invocations.txt\ngit commit --quiet -m "hook commit"\n',
+      { mode: 0o755 }
+    )
+    git(repoPath, ['config', 'core.hooksPath', hooksPath])
+    await prepareWorktreeCreateCheckout(
+      repoPath,
+      preparedPath,
+      'main',
+      createWorktreePreparationLockReason('hook-commit')
+    )
+    const baseHead = git(repoPath, ['rev-parse', 'HEAD'])
+
+    await finalizePreparedWorktree(repoPath, preparedPath, finalPath, 'feature/hook-commit', 'main')
+
+    expect(git(finalPath, ['symbolic-ref', '--short', 'HEAD'])).toBe('feature/hook-commit')
+    expect(git(finalPath, ['rev-parse', 'HEAD^'])).toBe(baseHead)
+    expect(git(finalPath, ['show', '-s', '--format=%s', 'HEAD'])).toBe('hook commit')
+    expect(await readFile(join(finalPath, 'hook-invocations.txt'), 'utf8')).toBe('invoked\n')
+    expect(git(finalPath, ['status', '--porcelain'])).toBe('')
+  })
+
+  it('cleans up a branch when post-checkout rejects the attachment', async () => {
+    const { repoPath, root } = await createRepo()
+    const preparedPath = join(root, 'prepared-hook-failure')
+    const finalPath = join(root, 'final-hook-failure')
+    const hooksPath = join(root, 'hooks')
+    await mkdir(hooksPath)
+    await writeFile(join(hooksPath, 'post-checkout'), '#!/bin/sh\nexit 1\n', { mode: 0o755 })
+    git(repoPath, ['config', 'core.hooksPath', hooksPath])
+    await prepareWorktreeCreateCheckout(
+      repoPath,
+      preparedPath,
+      'main',
+      createWorktreePreparationLockReason('hook-failure')
+    )
+
+    await expect(
+      finalizePreparedWorktree(repoPath, preparedPath, finalPath, 'feature/hook-failure', 'main')
+    ).rejects.toThrow()
+    expect(existsSync(finalPath)).toBe(false)
+    expect(git(repoPath, ['branch', '--list', 'feature/hook-failure'])).toBe('')
+  })
+
   it('retains preparation ownership when the removal command cannot start', async () => {
     const fixture = await createRepo()
     const repoPath = await realpath(fixture.repoPath)
@@ -65,7 +196,7 @@ describe('prepared worktree creation with real Git', () => {
     await prepareWorktreeCreateCheckout(repoPath, preparedPath, 'main', lockReason)
     const original = gitRunner.gitExecFileAsync
     const spy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation((args, options) => {
-      if (args.includes('remove') && args.includes(preparedPath)) {
+      if (args.includes('remove') && args.some((arg) => areWorktreePathsEqual(arg, preparedPath))) {
         return Promise.reject(new Error('injected removal launch failure'))
       }
       return original(args, options)
@@ -113,7 +244,7 @@ describe('prepared worktree creation with real Git', () => {
     const spy = vi
       .spyOn(gitRunner, 'gitExecFileAsync')
       .mockImplementation(async (args, options) => {
-        if (args.includes('remove') && args.includes(stalePath)) {
+        if (args.includes('remove') && args.some((arg) => areWorktreePathsEqual(arg, stalePath))) {
           markRemovalStarted()
           await removalGate
         }
@@ -145,7 +276,8 @@ describe('prepared worktree creation with real Git', () => {
       expect(existsSync(stalePath)).toBe(false)
       const remaining = await listWorktrees(repoPath, { includeCreatePreparations: true })
       expect(remaining).toHaveLength(2)
-      expect(remaining.map((w) => w.path)).toEqual(expect.arrayContaining([repoPath, finalPath]))
+      expect(remaining.some((w) => areWorktreePathsEqual(w.path, repoPath))).toBe(true)
+      expect(remaining.some((w) => areWorktreePathsEqual(w.path, finalPath))).toBe(true)
       expect(hasPendingStalePreparationCleanup()).toBe(false)
     } finally {
       releaseRemoval()

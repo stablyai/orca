@@ -3,9 +3,13 @@ import { fetchCodexRateLimits } from '../codex-fetcher'
 import { fetchGeminiRateLimits } from '../gemini-usage-fetcher'
 import { fetchGrokRateLimits } from '../grok-fetcher'
 import { readGrokAuthSession } from '../grok-auth'
+import { fetchCursorRateLimits } from '../cursor-fetcher'
+import { readCursorAuthSession } from '../cursor-auth'
 import { fetchMiniMaxRateLimits } from '../minimax/minimax-fetcher'
-import { fetchOpenCodeGoRateLimits } from '../opencode-go-usage-fetcher'
+import { createHash } from 'node:crypto'
+import { fetchOpenCodeGoUsage } from '../opencode-go-usage-source-selection'
 import { RateLimitServiceFetchPolicy } from './service-fetch-policy'
+import type { SettledProviderResult } from './service-sibling-provider-result'
 import type {
   ClaudeRuntimeAuthPreparation,
   InternalRateLimitState,
@@ -38,9 +42,8 @@ export type FetchAllCyclePrepared = {
     PromiseSettledResult<ProviderRateLimits>,
     PromiseSettledResult<ProviderRateLimits>
   ]
-  grokResultPromise: Promise<
-    { status: 'fulfilled'; value: ProviderRateLimits } | { status: 'rejected'; reason: unknown }
-  >
+  grokResultPromise: Promise<SettledProviderResult>
+  cursorResultPromise: Promise<SettledProviderResult>
 }
 
 export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServiceFetchPolicy {
@@ -76,6 +79,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const openCodeGoConfig = this.openCodeGoConfigResolver?.()
     const cookie = openCodeGoConfig?.sessionCookie ?? ''
     const workspaceIdOverride = openCodeGoConfig?.workspaceIdOverride ?? ''
+    const openCodeGoApiKey = openCodeGoConfig?.apiKey ?? ''
     const miniMaxConfigResult = this.resolveMiniMaxConfig()
     const miniMaxCookie = miniMaxConfigResult.config.sessionCookie
     const miniMaxGroupId = miniMaxConfigResult.config.groupId
@@ -88,7 +92,11 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     this.grokAuthConfigured = grokAuthReadResult.status === 'ok'
 
     // Discard stale data on config change — it belongs to a different session/workspace.
-    const currentConfigHash = `${cookie}|${workspaceIdOverride}`
+    // Digest, not the key: this string only has to change when the account does.
+    const apiKeyFingerprint = openCodeGoApiKey
+      ? createHash('sha256').update(openCodeGoApiKey).digest('hex')
+      : ''
+    const currentConfigHash = `${cookie}|${workspaceIdOverride}|${apiKeyFingerprint}`
     const opencodeConfigChanged = currentConfigHash !== this.lastOpencodeConfigHash
     if (opencodeConfigChanged) {
       this.lastOpencodeConfigHash = currentConfigHash
@@ -121,8 +129,21 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       minimax: miniMaxConfigChanged
         ? this.withFetchingStatus(null, 'minimax')
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
-      grok: this.withFetchingStatus(previousState.grok, 'grok')
+      grok: this.withFetchingStatus(previousState.grok, 'grok'),
+      cursor: this.withFetchingStatus(previousState.cursor, 'cursor')
     })
+
+    // Why: the Cursor probe reads the macOS Keychain, so it is awaited inside the
+    // provider's own promise instead of blocking the rest of the cycle on it.
+    const cursorResultPromise = readCursorAuthSession()
+      .then((authReadResult) => {
+        this.cursorAuthConfigured = authReadResult.status === 'ok'
+        return fetchCursorRateLimits({ signal, authReadResult })
+      })
+      .then(
+        (value) => ({ status: 'fulfilled', value }) as const,
+        (reason) => ({ status: 'rejected', reason }) as const
+      )
 
     const missingWslCodexHome =
       codexFetchGated || codexHomePath ? null : this.getMissingWslCodexHomeResult(codexTarget)
@@ -158,11 +179,18 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
               signal
             })),
         fetchGeminiRateLimits(geminiCliOAuthEnabled),
-        fetchOpenCodeGoRateLimits(
+        fetchOpenCodeGoUsage({
+          settingsApiKey: openCodeGoApiKey,
+          // Why here: the key can also come from the environment or OpenCode's
+          // own store, so presence is only known once the fetch resolves it.
+          onApiKeyResolved: (resolution) => {
+            this.openCodeGoApiKeyConfigured = resolution.status === 'found'
+          },
           cookie,
-          workspaceIdOverride || undefined,
-          this.networkProxySettingsResolver?.()
-        ),
+          workspaceIdOverride: workspaceIdOverride || undefined,
+          networkProxySettings: this.networkProxySettingsResolver?.(),
+          signal
+        }),
         this.fetchKimiWithResolvedHome(),
         miniMaxConfigResult.error
           ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
@@ -202,7 +230,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         kimiResult,
         miniMaxResult
       ],
-      grokResultPromise
+      grokResultPromise,
+      cursorResultPromise
     }
   }
 }

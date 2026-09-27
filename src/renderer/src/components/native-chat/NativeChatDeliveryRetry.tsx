@@ -1,5 +1,8 @@
 import { RotateCcw } from 'lucide-react'
-import type { StructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
+import {
+  admitStructuredAgentSessionOutboxEntry,
+  type StructuredAgentSessionOutboxEntry
+} from '../../../../shared/structured-agent-session-outbox'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 
@@ -12,12 +15,10 @@ export function NativeChatDeliveryRetry({
   blockedClientMessageId: string | null
   retry: (clientMessageId: string) => void
 }): React.JSX.Element | null {
-  // Why: only the head can hold the queue, so Retry must never name or resend a later entry.
-  const head = outbox[0]
-  const retryable =
-    head && (head.state === 'unconfirmed' || head.clientMessageId === blockedClientMessageId)
-      ? head
-      : null
+  // Why: read through the drain's own rule, so Retry can never name an entry other than the one
+  // the queue actually stopped on -- which is no longer always the head.
+  const admission = admitStructuredAgentSessionOutboxEntry(outbox, blockedClientMessageId)
+  const retryable = admission.state === 'blocked' ? admission.entry : null
   if (!retryable) {
     return null
   }

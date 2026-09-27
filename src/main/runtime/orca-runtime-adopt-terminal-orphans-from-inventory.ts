@@ -1,5 +1,10 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import {
+  recordPtySurface,
+  spawnSurfaceClaimSequence,
+  SURFACE_CLAIM_WITHOUT_STANDING
+} from './pty-recorded-surface-topology'
+import {
   observeStructuredWorker,
   resolveStructuredWorkerAuthority
 } from './structured-worker-authority'
@@ -60,6 +65,10 @@ export class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends OrcaRuntim
         getPty: (handle) => this.getLivePtyForHandle(handle)?.pty ?? null,
         getLeaves: (ptyId) => this.getLeavesForPty(ptyId),
         getLeaf: (tabId, leafId) => this.leaves.get(this.getLeafKey(tabId, leafId)),
+        replayPersistedSurface: (pty, tabId, paneKey) =>
+          recordPtySurface(pty, tabId, paneKey, SURFACE_CLAIM_WITHOUT_STANDING),
+        recordAdoptedSurface: (pty, tabId, paneKey) =>
+          recordPtySurface(pty, tabId, paneKey, spawnSurfaceClaimSequence(this.graphSequence)),
         getMobileSnapshots: () => this.mobileSessionTabsByWorktree.values(),
         getSession: (worktreeId) => this.getWorkspaceSessionForWorktree(worktreeId),
         setSession: (worktreeId, next) => this.setWorkspaceSessionForWorktree(worktreeId, next),

@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 import { renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { editor as MonacoEditor, IDisposable } from 'monaco-editor'
 import type { DecoratedDiffComment } from './decorated-diff-comment'
 import type * as ReactDomClientModule from 'react-dom/client'
 import type * as DiffCommentZoneCardModule from './diff-comment-zone-card'
@@ -48,63 +47,10 @@ vi.mock('react-dom/client', async (importOriginal) => {
 })
 
 import { useDiffCommentDecorator } from './useDiffCommentDecorator'
-
-type FakeEditor = {
-  editor: MonacoEditor.ICodeEditor
-  domNode: HTMLElement
-  zones: Map<string, MonacoEditor.IViewZone>
-  emitMouseMove: (lineNumber: number) => void
-}
-
-function createFakeEditor(): FakeEditor {
-  const domNode = document.createElement('div')
-  document.body.appendChild(domNode)
-  const zones = new Map<string, MonacoEditor.IViewZone>()
-  let nextZoneId = 0
-  const mouseMoveListeners: ((e: { target: { position: { lineNumber: number } } }) => void)[] = []
-  const noopDisposable: IDisposable = { dispose: () => {} }
-
-  const editor = {
-    getDomNode: () => domNode,
-    getModel: () => ({}),
-    getOption: () => 19,
-    getTopForLineNumber: () => 0,
-    getScrollTop: () => 0,
-    getLayoutInfo: () => ({ height: 400 }),
-    setScrollTop: () => {},
-    deltaDecorations: () => [],
-    getTargetAtClientPoint: () => null,
-    onMouseMove: (listener: (e: { target: { position: { lineNumber: number } } }) => void) => {
-      mouseMoveListeners.push(listener)
-      return noopDisposable
-    },
-    onMouseLeave: () => noopDisposable,
-    onDidScrollChange: () => noopDisposable,
-    changeViewZones: (callback: (accessor: MonacoEditor.IViewZoneChangeAccessor) => void) =>
-      callback({
-        addZone: (zone: MonacoEditor.IViewZone) => {
-          const id = `zone-${(nextZoneId += 1)}`
-          zones.set(id, zone)
-          return id
-        },
-        removeZone: (id: string) => {
-          zones.delete(id)
-        },
-        layoutZone: () => {}
-      } as unknown as MonacoEditor.IViewZoneChangeAccessor)
-  } as unknown as MonacoEditor.ICodeEditor
-
-  return {
-    editor,
-    domNode,
-    zones,
-    emitMouseMove: (lineNumber) => {
-      for (const listener of mouseMoveListeners) {
-        listener({ target: { position: { lineNumber } } })
-      }
-    }
-  }
-}
+import {
+  createFakeDiffCommentEditor,
+  type FakeDiffCommentEditor
+} from './diff-comment-editor-test-fixture'
 
 const FILE_PATH = 'src/index.ts'
 const REVIEW_SURFACE_ID = 'pr:acme/widgets:42'
@@ -134,7 +80,7 @@ async function flushDeferredUnmounts(): Promise<void> {
 }
 
 // Asserted as one object so a failure reports every lifecycle number at once.
-function lifecycleTotals(fake: FakeEditor): Record<string, number> {
+function lifecycleTotals(fake: FakeDiffCommentEditor): Record<string, number> {
   return {
     createRootCalls: rootCounts.created,
     rootUnmounts: rootCounts.unmounted,
@@ -152,7 +98,7 @@ type DecoratorProps = {
   comments: readonly DecoratedDiffComment[]
 }
 
-function renderDecorator(fake: FakeEditor, initialProps: DecoratorProps) {
+function renderDecorator(fake: FakeDiffCommentEditor, initialProps: DecoratorProps) {
   return renderHook(
     ({ commentableLineNumbers, comments }: DecoratorProps) =>
       useDiffCommentDecorator({
@@ -196,7 +142,7 @@ function countingCommentableLines(length: number): {
 
 describe('useDiffCommentDecorator commentable-line churn', () => {
   it('joins the commentable-line array once, not once per render, for a stable array', () => {
-    const fake = createFakeEditor()
+    const fake = createFakeDiffCommentEditor()
     const comments = [reviewNote(1)]
     // reviewCommentLineNumbers carries every added and context line of the patch.
     const { lines, joins } = countingCommentableLines(4_000)
@@ -210,7 +156,7 @@ describe('useDiffCommentDecorator commentable-line churn', () => {
   })
 
   it('still re-keys on a fresh-but-equal array so the comment set survives a review refresh', () => {
-    const fake = createFakeEditor()
+    const fake = createFakeDiffCommentEditor()
     const comments = [reviewNote(1)]
     const hook = renderDecorator(fake, {
       commentableLineNumbers: freshCommentableLines(),
@@ -228,7 +174,7 @@ describe('useDiffCommentDecorator commentable-line churn', () => {
   })
 
   it('keeps every comment root and view zone alive across value-equal review refreshes', async () => {
-    const fake = createFakeEditor()
+    const fake = createFakeDiffCommentEditor()
     const comments = [reviewNote(1), reviewNote(2), reviewNote(3)]
     const hook = renderDecorator(fake, {
       commentableLineNumbers: freshCommentableLines(),
@@ -255,7 +201,7 @@ describe('useDiffCommentDecorator commentable-line churn', () => {
   })
 
   it('does not accumulate orphan zones when refreshes interleave with new review comments', async () => {
-    const fake = createFakeEditor()
+    const fake = createFakeDiffCommentEditor()
     let comments = [reviewNote(1)]
     const hook = renderDecorator(fake, {
       commentableLineNumbers: freshCommentableLines(),
@@ -277,7 +223,7 @@ describe('useDiffCommentDecorator commentable-line churn', () => {
   })
 
   it('rebuilds the add-button overlay when the commentable lines really change', async () => {
-    const fake = createFakeEditor()
+    const fake = createFakeDiffCommentEditor()
     const comments = [reviewNote(1)]
     const hook = renderDecorator(fake, {
       commentableLineNumbers: [10, 11, 12] as readonly number[],
@@ -302,7 +248,7 @@ describe('useDiffCommentDecorator commentable-line churn', () => {
   })
 
   it('removes its zones from Monaco when the model swaps under a retained editor', async () => {
-    const fake = createFakeEditor()
+    const fake = createFakeDiffCommentEditor()
     const comments = [reviewNote(1)]
     const hook = renderHook(
       ({ monacoModelIdentity }) =>

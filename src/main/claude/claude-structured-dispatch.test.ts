@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { dispatchClaudeTurn, resolveClaudeReplayWaiter } from './claude-structured-dispatch'
+import { dispatchClaudeTurn, resolveClaudeReplayTurn } from './claude-structured-dispatch'
 import { readClaudeImage } from './claude-structured-dispatch-content'
 import { claudeUnwrittenUserMessageError } from './claude-agent-sdk-user-message-queue'
 import type { ClaudeSession } from './claude-structured-session-state'
@@ -12,6 +12,10 @@ import {
   userMessage,
   userReplayFrame
 } from './claude-structured-dispatch-test-support'
+
+function resolveClaudeReplayWaiter(...args: Parameters<typeof resolveClaudeReplayTurn>): boolean {
+  return resolveClaudeReplayTurn(...args) !== null
+}
 
 describe('Claude structured dispatch image limits', () => {
   it.each(['isMeta', 'isSynthetic', 'isCompactSummary'])(
@@ -52,7 +56,7 @@ describe('Claude structured dispatch image limits', () => {
     expect(session.dispatchWaiters).toHaveLength(0)
   })
 
-  it('recovers the active identity when a replay lands after the child died', async () => {
+  it('settles a retired identity without reopening a turn after the child died', async () => {
     const session = sessionFor()
     const dispatched = dispatchClaudeTurn(session, {
       clientMessageId: 'client-1',
@@ -65,7 +69,7 @@ describe('Claude structured dispatch image limits', () => {
     expect(session.dispatchWaiters).toHaveLength(0)
     expect(session.retiredDispatchWaiters).toHaveLength(1)
 
-    expect(resolveClaudeReplayWaiter(session, userReplayFrame(sentUuid!, 'one'))).toBe(true)
+    expect(resolveClaudeReplayWaiter(session, userReplayFrame(sentUuid!, 'one'))).toBe(false)
     expect(session.retiredDispatchWaiters).toHaveLength(0)
   })
 

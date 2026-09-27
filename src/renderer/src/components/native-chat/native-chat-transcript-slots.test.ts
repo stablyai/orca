@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import type { NativeChatTurnStatus } from '../../../../shared/native-chat-turn-status'
+import {
+  selectNativeChatTurnStatuses,
+  type NativeChatTurnStatus
+} from '../../../../shared/native-chat-turn-status'
+import { selectStructuredAgentSettledTurns } from '../../../../shared/structured-agent-session-turn-timing'
 import type { NativeChatResolvedPrompt } from './native-chat-resolution-receipt'
 import type { NativeChatTurnDiff } from './native-chat-turn-diffs'
 import {
@@ -40,13 +44,64 @@ function build(
     turnStatuses: NO_STATUSES,
     turnDiffs: new Map<string, NativeChatTurnDiff>(),
     showTurnStatus: true,
+    expandedTurnKeys: new Set<string>(),
     isWorking: false,
     lifecycleWorking: false,
     ...overrides
   })
 }
 
+function toolRun(id: string): NativeChatMessage {
+  return {
+    id,
+    role: 'assistant',
+    blocks: [{ type: 'tool-call', name: 'shell', input: { command: 'ls' }, state: 'completed' }],
+    timestamp: 1,
+    source: 'transcript'
+  }
+}
+
 describe('transcript slots', () => {
+  // The trailing run is the one still live while the turn works. Prose or a
+  // further run after it settles it; a reasoning aside leaves it live.
+  it('marks the last row that speaks or acts as the trailing run', () => {
+    const trailing = (messages: NativeChatMessage[]) =>
+      build(messages)
+        .filter((slot) => slot.trailingRun)
+        .map((slot) => slot.message.id)
+
+    expect(trailing([text('u', 'go', 'user'), toolRun('a'), text('b', 'Done.')])).toEqual(['b'])
+    expect(trailing([text('u', 'go', 'user'), toolRun('a'), toolRun('b')])).toEqual(['b'])
+    expect(
+      trailing([text('u', 'go', 'user'), toolRun('a'), text('r', 'hmm', 'reasoning')])
+    ).toEqual(['a'])
+    expect(trailing([toolRun('a'), text('u', 'again', 'user')])).toEqual(['a'])
+  })
+
+  // Approving a call lets that call run, and it sits in the run above the
+  // receipt. A question's receipt blocks the agent on the reader, so it does not.
+  it('keeps the run above an approval receipt trailing, but not above a question', () => {
+    const resolution = {
+      state: 'resolved' as const,
+      selectedOptionId: 'yes',
+      resolvedBy: 'desktop',
+      resolvedAt: 1
+    }
+    const receipts = new Map<string, NativeChatResolvedPrompt>([
+      ['approval', { kind: 'approval', title: 'Run?', detail: 'ls', options: [], resolution }],
+      ['question', { kind: 'question', question: 'Which?', options: [], resolution }]
+    ])
+    const trailing = (receiptId: string) =>
+      build([text('u', 'go', 'user'), toolRun('a'), text(receiptId, 'Run?', 'system')], {
+        receipts
+      })
+        .filter((slot) => slot.trailingRun)
+        .map((slot) => slot.message.id)
+
+    expect(trailing('approval')).toEqual(['a'])
+    expect(trailing('question')).toEqual(['question'])
+  })
+
   // A counted row that draws nothing is a gap in the transcript: it reserves
   // estimated height for a bubble that never appears.
   it('gives no slot to a message with nothing to draw', () => {
@@ -105,5 +160,48 @@ describe('transcript slots', () => {
     expect(nativeChatSlotIndexOf(slots, 'b')).toBe(1)
     expect(nativeChatSlotIndexOf(slots, 'blank')).toBe(-1)
     expect(nativeChatSlotIndexOf(slots, undefined)).toBe(-1)
+  })
+})
+
+describe('a send the host rejected', () => {
+  const DIAGNOSTIC =
+    'The provider stopped before it finished starting: claude stream-json exited (code 1): claude: not signed in.'
+
+  // The restarted child died before starting, so the send was rejected and the exit wrote why.
+  // The local clock had watched the send go pending and stop; that must not settle a turn that
+  // never ran and fold the one row naming the cause behind a "Worked for 0s".
+  it('leaves the row naming the cause on screen', () => {
+    const messages = [
+      text('orca:first-start', DIAGNOSTIC, 'system'),
+      text('orca:dead', 'Reply with exactly: DEAD', 'user'),
+      text('orca:restart-exit', DIAGNOSTIC, 'system')
+    ]
+    const settledByTurn = selectStructuredAgentSettledTurns(
+      [],
+      [
+        {
+          clientMessageId: 'dead',
+          fence: 5,
+          payloadFingerprint: 'fp',
+          dispatchState: 'rejected',
+          providerItemId: null,
+          reason: 'provider_write_failed: claude: not signed in',
+          submittedAt: 1,
+          resolvedAt: 2
+        }
+      ]
+    )
+    const turnStatuses = selectNativeChatTurnStatuses(
+      { 'orca:dead': { startedAt: 900, workedSeconds: 0 } },
+      { activeTurnKey: 'orca:dead', isWorking: false, thinking: false, settledByTurn }
+    )
+
+    const slots = build(messages, { turnStatuses })
+
+    expect(slots.map((slot) => [slot.message.id, slot.folded, slot.status])).toEqual([
+      ['orca:first-start', false, undefined],
+      ['orca:dead', false, undefined],
+      ['orca:restart-exit', false, undefined]
+    ])
   })
 })

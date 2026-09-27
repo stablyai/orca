@@ -45,7 +45,7 @@ describe('createTerminalAndSendPrompt', () => {
   it('throws when the created-terminal response is malformed', async () => {
     const client = clientReturning(success({ tab: { type: 'terminal' } }))
     await expect(createTerminalAndSendPrompt(client, 'wt-1', 'p')).rejects.toThrow(
-      'Created terminal response was invalid'
+      'The host sent a reply this app could not read (session.tabs.createTerminal)'
     )
     expect(client.sendRequest).toHaveBeenCalledTimes(1)
   })

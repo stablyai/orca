@@ -11,11 +11,9 @@ import type {
   AgentSessionOperationDecision,
   AgentSessionOperationRow
 } from './agent-session-operation-ledger'
-import {
-  agentSessionLeaseAdmitsWriter,
-  isAgentSessionFenceCurrent
-} from './agent-session-lease-adjudication'
+import { agentSessionLeaseAdmitsWriter } from './agent-session-lease-adjudication'
 import type { AgentSessionLease } from './agent-session-record'
+import { terminalOwnerRefusalMessage } from './agent-session-legacy-handoff-lease'
 import type { AgentSessionMutationEnvelope, AgentSessionWireRefusal } from './agent-session-wire'
 
 /**
@@ -29,12 +27,17 @@ export function computeAgentSessionPayloadFingerprint(input: {
   sessionId: string
   fields: Record<string, unknown>
 }): string {
-  const canonical = canonicalize({
+  return canonicalAgentSessionDigest({
     method: input.method,
     sessionId: input.sessionId,
     fields: input.fields
   })
-  return createHash('sha256').update(canonical).digest('hex')
+}
+
+/** The same digest for an operation that has no session to name — a launch decides which surface it
+ *  gets, so it has no session id until after it runs. */
+export function canonicalAgentSessionDigest(value: Record<string, unknown>): string {
+  return createHash('sha256').update(canonicalize(value)).digest('hex')
 }
 
 function canonicalize(value: unknown): string {
@@ -76,10 +79,11 @@ export type AgentSessionMutationAdmission =
 
 /**
  * Fixed order: fingerprint agreement, then the ledger (so a retry replays
- * before anything else can refuse it), then the lease, then the fence. Putting
- * the ledger ahead of the fence is deliberate — a retry that crossed an owner
- * change must still return its recorded answer instead of a stale-checkpoint
- * refusal the client would then resend as a second effect.
+ * before anything else can refuse it), then the lease.
+ *
+ * `expectedRuntimeFence` is not checked: each write names its own target (a
+ * turn, an item revision, an epoch) or is last-writer-wins, so an owner restart
+ * the client has not seen yet refuses nothing. Older hosts still check it.
  */
 export function admitAgentSessionMutation(input: {
   envelope: AgentSessionMutationEnvelope
@@ -110,26 +114,13 @@ export function admitAgentSessionMutation(input: {
   if (leaseRefusal) {
     return { decision: 'refused', refusal: leaseRefusal }
   }
-  if (
-    envelope.expectedRuntimeFence === null ||
-    !isAgentSessionFenceCurrent(lease, envelope.expectedRuntimeFence)
-  ) {
-    return {
-      decision: 'refused',
-      refusal: {
-        code: 'agent_session_checkpoint_stale',
-        message: `Expected runtime fence ${envelope.expectedRuntimeFence ?? 'none'}; the session is at ${lease.runtimeFence}.`,
-        currentFence: lease.runtimeFence
-      }
-    }
-  }
   return { decision: 'admit', row: ledger.row }
 }
 
 /** Why the single admission oracle said no, mapped to what the client can do
  *  about it. The predicate itself is never re-implemented here. */
 function refuseUnlessWriterAdmitted(lease: AgentSessionLease): AgentSessionWireRefusal | null {
-  if (lease.runtimeKind === 'native' && agentSessionLeaseAdmitsWriter(lease)) {
+  if (agentSessionLeaseAdmitsWriter(lease)) {
     return null
   }
   if (lease.unreconciled) {
@@ -141,13 +132,12 @@ function refuseUnlessWriterAdmitted(lease: AgentSessionLease): AgentSessionWireR
   if (lease.handoffStage !== null) {
     return {
       code: 'agent_session_conflict',
-      message: `The session is mid-handoff (${lease.handoffStage}).`
-    }
-  }
-  if (lease.runtimeKind === 'tui' && agentSessionLeaseAdmitsWriter(lease)) {
-    return {
-      code: 'agent_session_conflict',
-      message: 'The agent terminal owns this session.'
+      message:
+        lease.claimStatus === 'conflicted'
+          ? terminalOwnerRefusalMessage(lease)
+          : lease.handoffStage === 'new-owner-proving'
+            ? 'The chat is still starting.'
+            : "Orca has not yet confirmed that this chat's previous agent process stopped. Reopen the chat to check again."
     }
   }
   return {

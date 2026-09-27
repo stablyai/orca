@@ -334,6 +334,93 @@ describe('connectPanePty', () => {
     expect(window.api.agentStatus.reconcileEndedProcess).toHaveBeenCalledWith(paneKey)
   })
 
+  it('clears stale sleeping identity after a confirmed return to shell', async () => {
+    vi.useFakeTimers()
+    const { connectPanePty } = await import('./pty-connection')
+    vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('zsh')
+    const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
+    const ptyId = 'pty-sleeping-confirmed-shell'
+    const transport = createMockTransport(ptyId)
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      dataCallbackRef.current = callbacks.onData ?? null
+      return { id: ptyId }
+    })
+    transportFactoryQueue.push(transport)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+
+    connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps({ isVisibleRef: { current: false } }) as never
+    )
+    await vi.advanceTimersByTimeAsync(20)
+    await flushAsyncTicks()
+    mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
+      launchConfig: { agentArgs: '', agentEnv: {} },
+      identity: { agentType: 'codex' }
+    }
+    mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
+      paneKey,
+      worktreeId: 'wt-1',
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 'sess-1' },
+      capturedAt: 1,
+      updatedAt: 1
+    }
+
+    dataCallbackRef.current?.('\x1b]133;D;0\x07')
+    await vi.advanceTimersByTimeAsync(350)
+
+    expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledExactlyOnceWith(paneKey)
+    expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
+    expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      agent: null,
+      shellForeground: true
+    })
+  })
+
+  it('keeps sleeping identity when the foreground check still sees the agent', async () => {
+    vi.useFakeTimers()
+    const { connectPanePty } = await import('./pty-connection')
+    vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('codex')
+    const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
+    const ptyId = 'pty-sleeping-leaked-shell-marker'
+    const transport = createMockTransport(ptyId)
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      dataCallbackRef.current = callbacks.onData ?? null
+      return { id: ptyId }
+    })
+    transportFactoryQueue.push(transport)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+
+    connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps({ isVisibleRef: { current: false } }) as never
+    )
+    await vi.advanceTimersByTimeAsync(20)
+    await flushAsyncTicks()
+    mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
+      launchConfig: { agentArgs: '', agentEnv: {} },
+      identity: { agentType: 'codex' }
+    }
+    mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
+      paneKey,
+      worktreeId: 'wt-1',
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 'sess-1' },
+      capturedAt: 1,
+      updatedAt: 1
+    }
+
+    dataCallbackRef.current?.('\x1b]133;D;0\x07')
+    await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
+    await flushAsyncTicks()
+
+    expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
+    expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toMatchObject({ agent: 'codex' })
+  })
+
   it('reconciles a pane that HAS a status row, whose own drop removes it first', async () => {
     // Why this shape: the sibling test above covers a pane with no row, where the deferred drop
     // early-returns and never touches the pane's accepted-status bookkeeping. That is not the

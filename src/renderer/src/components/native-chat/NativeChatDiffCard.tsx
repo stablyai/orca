@@ -152,13 +152,13 @@ export function NativeChatDiffCard({
         type="button"
         onClick={() => hasBody && setExpanded(!expanded)}
         className={cn(
-          'group flex w-full items-center gap-1.5 px-2 py-1 text-left',
+          'group/diff-card flex w-full items-center gap-1.5 px-2 py-1 text-left',
           hasBody ? 'cursor-pointer hover:bg-accent/30' : 'cursor-default'
         )}
         aria-expanded={hasBody ? expanded : undefined}
       >
         <VerbIcon kind={file.changeKind} />
-        <span className="shrink-0 text-[11px] text-muted-foreground group-hover:text-foreground/80">
+        <span className="shrink-0 text-[11px] text-muted-foreground group-hover/diff-card:text-foreground/80">
           {verbLabel(file)}
         </span>
         {hasBody ? (

@@ -164,7 +164,7 @@ describe('FloatingTerminalPanel close behavior', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
   })
-  it('creates new floating terminal tabs without globally activating createTab', async () => {
+  it('creates new floating terminal tabs active in the floating group', async () => {
     setFloatingTabs([makeTab({ id: 'tab-1' })])
 
     const element = await renderPanel(true)
@@ -175,10 +175,10 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(mocks.createTab).toHaveBeenCalledWith(
       FLOATING_TERMINAL_WORKTREE_ID,
       'floating-group',
-      undefined,
-      { activate: false }
+      undefined
     )
-    expect(mocks.activateTab).toHaveBeenCalledWith('created-tab')
+    // Why: createTab itself activates the new tab within the floating group.
+    expect(mocks.activateTab).not.toHaveBeenCalled()
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('created-tab')
   })
 
@@ -439,10 +439,10 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(mocks.createTab).toHaveBeenCalledWith(
       FLOATING_TERMINAL_WORKTREE_ID,
       'floating-group',
-      undefined,
-      { activate: false }
+      undefined
     )
-    expect(mocks.activateTab).toHaveBeenCalledWith('created-tab')
+    // Why: createTab itself activates the new tab within the floating group.
+    expect(mocks.activateTab).not.toHaveBeenCalled()
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('created-tab')
 
     ;(tabBar.props.onClose as (tabId: string) => void)('tab-1')

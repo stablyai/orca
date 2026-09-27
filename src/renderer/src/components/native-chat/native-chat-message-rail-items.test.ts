@@ -5,6 +5,7 @@ import type { NativeChatTurnDiff } from './native-chat-turn-diffs'
 import { buildNativeChatTranscriptSlots } from './native-chat-transcript-slots'
 import {
   buildNativeChatRailItems,
+  mergeNativeChatRailOutline,
   selectNativeChatRailTicks,
   NATIVE_CHAT_RAIL_MAX_TICKS,
   type NativeChatRailItem
@@ -47,6 +48,7 @@ function slotsOf(messages: NativeChatMessage[]) {
     turnStatuses: { active: null, completedByTurn: {} },
     turnDiffs: new Map<string, NativeChatTurnDiff>(),
     showTurnStatus: false,
+    expandedTurnKeys: new Set<string>(),
     isWorking: false,
     lifecycleWorking: false
   })
@@ -144,7 +146,52 @@ describe('rail tick sampling', () => {
 
   it('returns ticks in thread order', () => {
     const ticks = selectNativeChatRailTicks({ items: railItems(120), activeId: 'm63' })
-    const indexes = ticks.map((tick) => tick.slotIndex)
+    const indexes = ticks.map((tick) => tick.slotIndex ?? -1)
     expect(indexes).toEqual([...indexes].sort((left, right) => left - right))
+  })
+})
+
+describe('rail outline merge', () => {
+  const loaded = [
+    { id: 'u3', slotIndex: 0, text: 'third', hasImages: false },
+    { id: 'u4', slotIndex: 2, text: 'fourth', hasImages: false }
+  ]
+
+  it('puts outline entries first in outline order, with no slot', () => {
+    const merged = mergeNativeChatRailOutline(
+      [
+        { id: 'u1', text: 'first', hasImages: false },
+        { id: 'u2', text: '', hasImages: true }
+      ],
+      loaded
+    )
+    expect(merged).toEqual([
+      { id: 'u1', slotIndex: null, text: 'first', hasImages: false },
+      { id: 'u2', slotIndex: null, text: '', hasImages: true },
+      ...loaded
+    ])
+  })
+
+  it('lets a loaded item replace its outline entry, keeping the loaded slot', () => {
+    const merged = mergeNativeChatRailOutline(
+      [
+        { id: 'u1', text: 'first', hasImages: false },
+        { id: 'u3', text: 'stale preview', hasImages: false }
+      ],
+      loaded
+    )
+    expect(merged.map((item) => [item.id, item.slotIndex, item.text])).toEqual([
+      ['u1', null, 'first'],
+      ['u3', 0, 'third'],
+      ['u4', 2, 'fourth']
+    ])
+  })
+
+  it('is the loaded list itself when there is no outline to add', () => {
+    expect(mergeNativeChatRailOutline(null, loaded)).toBe(loaded)
+    expect(mergeNativeChatRailOutline([], loaded)).toBe(loaded)
+    expect(mergeNativeChatRailOutline([{ id: 'u3', text: 'x', hasImages: false }], loaded)).toBe(
+      loaded
+    )
   })
 })

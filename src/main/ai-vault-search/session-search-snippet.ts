@@ -4,11 +4,13 @@ import {
   SESSION_SEARCH_SNIPPET_MARK_OPEN
 } from './session-search-engine-types'
 import {
+  andExpression,
   orExpression,
+  phraseExpression,
   scopedExpression,
   type SessionSearchQueryPlan
 } from './session-search-query-planner'
-import type { SessionSearchScope } from './session-search-engine-types'
+import type { SessionSearchRoute, SessionSearchScope } from './session-search-engine-types'
 
 // What FTS5 wraps a match in before this module rewrites it to the public
 // marks. Private-use code points, and not `[[`, because two different jobs here
@@ -35,15 +37,17 @@ export const EMPTY_SNIPPET: SessionSearchSnippet = { text: '', truncated: false 
 /**
  * The window of one message that shows why it matched.
  *
- * The expression is the plan's OR form rather than the route's, so a hit found
- * through typo repair is marked with the repaired terms it was actually
- * retrieved by, and a phrase hit still marks each of its words.
+ * Marked with the expression the route retrieved by, so a phrase hit is one
+ * highlight over the words as typed, stop words included, and an OR hit marks
+ * each term it was found through. The plan is the effective one, so a hit
+ * found through typo repair is marked with the repaired terms.
  */
 export function sessionSearchSnippet(
   db: SyncDatabase,
   scope: SessionSearchScope,
   rowid: number,
-  plan: SessionSearchQueryPlan
+  plan: SessionSearchQueryPlan,
+  route: SessionSearchRoute
 ): SessionSearchSnippet {
   // Why: the identifier shadow column is word soup; a hit that also matches in a
   // prose column should be shown from there. Column -1 (any column) is the
@@ -83,10 +87,8 @@ export function sessionSearchSnippet(
          JOIN sessions s ON s.id = m.session_row_id
          WHERE messages_fts MATCH ? AND messages_fts.rowid IN (SELECT ?)`
       )
-      .get(scopedExpression(scope, orExpression(plan.terms)), rowid) as
-      | Record<string, string>
-      | undefined
-    if (!row) {
+      .get(scopedExpression(scope, routeExpression(plan, route)), rowid)
+    if (!isSnippetRow(row)) {
       return EMPTY_SNIPPET
     }
     // A snippet with nothing highlighted tells the user nothing; omit it.
@@ -101,6 +103,24 @@ export function sessionSearchSnippet(
   } catch {
     return EMPTY_SNIPPET
   }
+}
+
+function isSnippetRow(value: unknown): value is Record<string, string> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    Object.values(value).every((column) => typeof column === 'string')
+  )
+}
+
+function routeExpression(plan: SessionSearchQueryPlan, route: SessionSearchRoute): string {
+  if (route.endsWith('phrase')) {
+    return phraseExpression(plan.phrase)
+  }
+  if (route.endsWith('and')) {
+    return andExpression(plan.phrase)
+  }
+  return orExpression(plan.terms)
 }
 
 /** One run of the snippet's own text, or one mark FTS5 put between two runs. */

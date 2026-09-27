@@ -20,6 +20,13 @@ import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
 import type { TerminalPaneContextController } from './use-terminal-pane-context-actions'
 
+// Why: mirrors xterm's SelectionService.shouldForceSelection — a shifted click
+// (Option-click on Mac, via macOptionClickForcesSelection) is never forwarded
+// as a mouse report, so the TUI cannot paste and Orca must own it instead.
+function terminalForcesSelectionForClick(event: React.MouseEvent): boolean {
+  return navigator.userAgent.includes('Mac') ? event.altKey : event.shiftKey
+}
+
 export function useTerminalPaneMobileActions(controller: TerminalPaneContextController) {
   const {
     cwd,
@@ -90,7 +97,11 @@ export function useTerminalPaneMobileActions(controller: TerminalPaneContextCont
     },
     []
   )
-  const getPrimarySelectionMiddleClickPane = useCallback(
+  // Why: any terminal pane target must arm native-paste suppression, even one
+  // in mouse-tracking mode where the TUI (not Orca) owns the click and performs
+  // its own PRIMARY paste from the forwarded mouse report — otherwise
+  // Chromium's unsuppressed native paste lands on top of it (#21762).
+  const findTerminalPaneForMiddleClick = useCallback(
     (target: EventTarget | null) => {
       if (!terminalShouldHandleMiddleClick(target)) {
         return null
@@ -99,14 +110,12 @@ export function useTerminalPaneMobileActions(controller: TerminalPaneContextCont
       if (!manager) {
         return null
       }
-      const clickedPane =
+      return (
         manager.getPanes().find((pane) => pane.container.contains(target as Node)) ??
         manager.getActivePane() ??
-        manager.getPanes()[0]
-      if (!clickedPane || clickedPane.terminal.modes.mouseTrackingMode !== 'none') {
-        return null
-      }
-      return clickedPane
+        manager.getPanes()[0] ??
+        null
+      )
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
     [terminalShouldHandleMiddleClick]
@@ -116,13 +125,27 @@ export function useTerminalPaneMobileActions(controller: TerminalPaneContextCont
       if (event.button !== 1 || !isPrimarySelectionEnabled()) {
         return
       }
-      const clickedPane = getPrimarySelectionMiddleClickPane(event.target)
-      if (!clickedPane) {
+      const targetPane = findTerminalPaneForMiddleClick(event.target)
+      if (!targetPane) {
         return
       }
+      // Why: arm the shared suppression window unconditionally — it, not
+      // preventDefault, is what swallows Chromium's native follow-up paste
+      // (fired on mouseup, not mousedown; see usePrimarySelectionPaste.ts).
+      // Only the paste-to-PTY below is gated on tracking mode, since a
+      // tracking TUI still needs the click forwarded as a mouse report and
+      // must not have propagation stopped — unless the modifier makes xterm
+      // withhold the report, in which case nobody else will paste.
       event.preventDefault()
-      event.stopPropagation()
       armPrimarySelectionNativePasteSuppression()
+      if (
+        targetPane.terminal.modes.mouseTrackingMode !== 'none' &&
+        !terminalForcesSelectionForClick(event)
+      ) {
+        return
+      }
+      const clickedPane = targetPane
+      event.stopPropagation()
       clickedPane.terminal.focus()
       void readPrimarySelectionText().then(async (text) => {
         if (!text) {
@@ -185,21 +208,27 @@ export function useTerminalPaneMobileActions(controller: TerminalPaneContextCont
       })
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-    [getPrimarySelectionMiddleClickPane, tabId, worktreeId]
+    [findTerminalPaneForMiddleClick, tabId, worktreeId]
   )
   const handlePrimarySelectionAuxClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>): void => {
+      if (event.button !== 1 || !isPrimarySelectionEnabled()) {
+        return
+      }
+      const targetPane = findTerminalPaneForMiddleClick(event.target)
+      if (!targetPane) {
+        return
+      }
+      event.preventDefault()
+      armPrimarySelectionNativePasteSuppression()
       if (
-        event.button === 1 &&
-        isPrimarySelectionEnabled() &&
-        getPrimarySelectionMiddleClickPane(event.target)
+        targetPane.terminal.modes.mouseTrackingMode === 'none' ||
+        terminalForcesSelectionForClick(event)
       ) {
-        event.preventDefault()
         event.stopPropagation()
-        armPrimarySelectionNativePasteSuppression()
       }
     },
-    [getPrimarySelectionMiddleClickPane]
+    [findTerminalPaneForMiddleClick]
   )
   const activatePaneTitleInteraction = useCallback((paneId: number): void => {
     managerRef.current?.setActivePane(paneId, { focus: false })
@@ -241,7 +270,6 @@ export function useTerminalPaneMobileActions(controller: TerminalPaneContextCont
     restorePaneTerminalFit,
     restoreAllTerminalFits,
     terminalShouldHandleMiddleClick,
-    getPrimarySelectionMiddleClickPane,
     handlePrimarySelectionMiddleMouseDown,
     handlePrimarySelectionAuxClick,
     activatePaneTitleInteraction,

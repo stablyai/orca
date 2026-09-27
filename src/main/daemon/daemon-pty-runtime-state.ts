@@ -237,8 +237,12 @@ export abstract class DaemonPtyRuntimeState {
     return this.protocolVersion >= GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION
   }
 
-  canProvideAuthoritativeBufferSnapshot(_id: string): boolean {
-    return this.supportsAuthoritativeBufferSnapshots
+  // Why the id is read rather than ignored: the contract promises a fact about THIS pty, and
+  // getProviderForPty falls back to the local provider for any id it cannot place. A
+  // remote-runtime id therefore reaches this adapter, and answering from the protocol flag
+  // alone returned `true` for a session this daemon has never owned.
+  canProvideAuthoritativeBufferSnapshot(id: string): boolean {
+    return this.supportsAuthoritativeBufferSnapshots && this.activeSessionIds.has(id)
   }
 
   protected get canDelegateBackgroundToDaemon(): boolean {

@@ -16,7 +16,7 @@ type Props = {
   images: MobileNativeChatImageAttachments
   onMicPress: () => void
   micActive: boolean
-  dictationMode: 'toggle' | 'hold'
+  dictationMode: string | undefined
   onMicPressIn: () => void
   onMicPressOut: () => void
   inputLockReason: MobileNativeChatInputLockReason | null

@@ -1,9 +1,7 @@
 import * as ExpoCrypto from 'expo-crypto'
-import {
-  DeviceCredentialInstalledSchema,
-  PairingGetEndpointsResultSchema,
-  type DeviceResumeConfirmed,
-  type MobileRelayEndpoint
+import type {
+  DeviceResumeConfirmed,
+  MobileRelayEndpoint
 } from '../../../src/shared/mobile-relay-credential-contract'
 import {
   MobileRelayCredentialBundleSchema,
@@ -57,9 +55,7 @@ export async function rotateMobileRelayCredential(args: {
       newResumeTokenHash: pending.hash,
       expectedCurrentHash: bundle.current.hash
     })
-    const installed = DeviceCredentialInstalledSchema.parse(
-      relayCredentialProvision.interpret(installReply)
-    )
+    const installed = relayCredentialProvision.interpret(installReply)
     endpoints = await getEndpoints(args.client, pending.reqId)
     if (
       endpoints.installStatus?.state !== 'committed' ||
@@ -167,7 +163,7 @@ export async function persistResumeConfirmation(args: {
 
 async function getEndpoints(client: RpcClient, installReqId: string) {
   const reply = await relayPairingEndpointsRead.request(client, { installReqId })
-  return PairingGetEndpointsResultSchema.parse(relayPairingEndpointsRead.interpret(reply))
+  return relayPairingEndpointsRead.interpret(reply)
 }
 
 function encodeBase64Url(value: Uint8Array): string {

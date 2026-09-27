@@ -21,7 +21,6 @@ import type {
   AgentSessionExecutionLocation,
   AgentSessionLaunchArgs,
   AgentSessionLaunchEnv,
-  AgentSessionOwnerRuntimeKind,
   AgentSessionRecord
 } from '../../../shared/agent-session-record'
 import {
@@ -60,9 +59,13 @@ export type AgentSessionAttachParams = {
   provider: AgentSessionHandleProvider
   agent: AgentSessionHandleProvider
   accountHome: AgentSessionAccountHome
-  runtimeKind: AgentSessionOwnerRuntimeKind
+  /** Always `native`; kept on the params because the operation fingerprint covers it. */
+  runtimeKind: 'native'
   /** Host-resolved defaults for a create-by-intent; remote attach schemas do not accept them. */
   options?: Readonly<Record<string, string>>
+  /** The tab id a create reserves for this chat, taken when its tab is published. Never on the
+   *  attach fingerprint: which tab shows the chat is not which conversation it attaches to. */
+  surfaceTabId?: string
   launchArgs?: string[]
   /** Omitted only for create-by-intent; the adapter proves the durable handle. */
   providerHandle?: Exclude<AgentSessionProviderHandle, { kind: 'opaque' }>
@@ -177,7 +180,7 @@ export type AttachedJournal = {
  * record store handed this host the lease and before `onAttached` starts a
  * provider child, so nothing can be appending to the provider's history while it
  * is read, and the window stays valid until the resume consumes it. Every other
- * settlement site — a proven child exit, a handoff suspend — runs while the host
+ * settlement site — a proven child exit — runs while the host
  * may still start another child, and a read there could be overtaken before it
  * is acted on. Orca still never re-sends: this decides state only.
  */
@@ -313,9 +316,11 @@ export function reserveRequestFor(input: {
     provider: params.provider,
     accountHome: params.accountHome,
     ...(params.options ? { options: params.options } : {}),
+    ...(params.envelope.expectedRuntimeFence === null && params.surfaceTabId
+      ? { surfaceTabId: params.surfaceTabId }
+      : {}),
     ...(authority.launchArgs ? { launchArgs: authority.launchArgs } : {}),
     ...(authority.launchEnv ? { launchEnv: authority.launchEnv } : {}),
-    runtimeKind: params.runtimeKind,
     ...(params.adopt
       ? {
           // Fence 1 is a new record's first, and the owner probe requires the head link to carry

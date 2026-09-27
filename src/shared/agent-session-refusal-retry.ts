@@ -2,21 +2,12 @@ import type { AgentSessionWireRefusalCode } from './agent-session-wire'
 
 export type AgentSessionRefusalOperationState = 'settled-rejected' | 'pending-admission' | 'unknown'
 
-const HANDOFF_SETTLED_REFUSALS = new Set<AgentSessionWireRefusalCode>([
-  'structured_agent_session_unsupported',
-  'agent_session_checkpoint_stale',
-  'agent_session_conflict',
-  'agent_session_operation_conflict'
-])
-
 export function agentSessionRefusalOperationState(
-  method: string,
   code: AgentSessionWireRefusalCode
 ): AgentSessionRefusalOperationState {
-  if (method === 'agentSession.requestHandoff' && HANDOFF_SETTLED_REFUSALS.has(code)) {
-    return 'settled-rejected'
-  }
   switch (code) {
+    // The host tried to restart the owner for this send and could not; a Retry tries again.
+    case 'agent_session_owner_restart_failed':
     case 'agent_session_operation_conflict':
     case 'agent_session_operation_expired':
     case 'agent_session_operation_invalid':

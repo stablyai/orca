@@ -56,6 +56,15 @@
         "anti-slop/no-module-mocking": "off"
       }
     },
+    // mock-descendant-sweep.ts (daemon and relay) is a test-only side-effect shim: its whole body
+    // is one vi.mock that keeps mock PTY PIDs away from the host process table, and it exists so
+    // 60 suites do not each inline the same hoisted factory. It is never imported by product code.
+    {
+      "files": ["**/mock-descendant-sweep.ts"],
+      "rules": {
+        "anti-slop/no-module-mocking": "off"
+      }
+    },
     // The exemptions below are file-scoped rather than inline `oxlint-disable` comments
     // because the root lint scan does not load this plugin, so an inline directive naming
     // an anti-slop rule always reads back as an unused directive there.
@@ -73,7 +82,18 @@
       }
     },
     {
-      "files": ["**/browser-pane/annotate/**"],
+      "files": [
+        "**/browser-pane/annotate/**",
+        "**/browser-pane/ClientHostedBrowserPagePane.markup.test.tsx"
+      ],
+      "rules": {
+        "anti-slop/no-shape-in-symbol-names": "off"
+      }
+    },
+    // The markup tests outside annotate/ drive its API, whose payload key is `shapes`
+    // (`MarkupOverlay.onComplete({ imageElement, shapes })`): the domain term, not a structure.
+    {
+      "files": ["**/browser-pane/*.markup.test.tsx"],
       "rules": {
         "anti-slop/no-shape-in-symbol-names": "off"
       }

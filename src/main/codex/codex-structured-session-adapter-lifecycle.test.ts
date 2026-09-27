@@ -152,7 +152,7 @@ describe('CodexStructuredSessionAdapter lifecycle', () => {
         sessionId: 'session-2',
         itemId: 'codex-item-1',
         kind: 'approval',
-        optionId: 'accept',
+        response: { kind: 'option', optionId: 'accept' },
         fence: 1,
         commit: async () => undefined
       })

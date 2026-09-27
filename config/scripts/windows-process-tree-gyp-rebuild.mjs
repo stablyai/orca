@@ -39,9 +39,13 @@ const CREATION_TIME_PATCH_MARKERS = [
   ['src/process.cc', 'GetProcessCreationTime(pinfo)'],
   ['src/process.cc', 'GetProcessTimes(hProcess, &creationTime'],
   ['src/process_worker.cc', 'object.Set("creationTimeMs"'],
+  ['src/addon.cc', 'exports.Set("getProcessCreationTime"'],
   ['lib/index.js', '["CreationTime"] = 4'],
+  ['lib/index.js', 'exports.getProcessCreationTime'],
   ['lib/index.ts', 'CreationTime = 4'],
-  ['typings/windows-process-tree.d.ts', 'creationTimeMs?: number']
+  ['lib/index.ts', 'export const getProcessCreationTime'],
+  ['typings/windows-process-tree.d.ts', 'creationTimeMs?: number'],
+  ['typings/windows-process-tree.d.ts', 'export const getProcessCreationTime']
 ]
 
 export const WINDOWS_PROCESS_TREE_NODE_ADDON_API_HEADERS = [

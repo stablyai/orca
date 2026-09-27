@@ -545,7 +545,6 @@ describe('remote hidden-output restore abandonment (issue2-hidden-output-skip)',
         >
         return byPaneKey[entry.paneKey]?.launchConfig
       }),
-      getAgentLaunchConfigForStatusMetadata: vi.fn(() => undefined),
       clearSleepingAgentSession: vi.fn((paneKey: string) => {
         delete (mockStoreState.sleepingAgentSessionsByPaneKey as Record<string, unknown>)[paneKey]
       }),

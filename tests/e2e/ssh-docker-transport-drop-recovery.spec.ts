@@ -1,8 +1,6 @@
-import path from 'node:path'
-import { readFileSync } from 'node:fs'
+import { readPersistedProfileState } from './helpers/persisted-profile-state'
 import type { ElectronApplication } from '@playwright/test'
 import { test, expect } from './helpers/orca-app'
-import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 import { sshRemotePtyLeaseAllowsReattach, type SshRemotePtyLease } from '../../src/shared/ssh-types'
 import { toRelaySshPtyId } from '../../src/shared/ssh-pty-id'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
@@ -60,13 +58,8 @@ const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
  * drift from the fan-out it exists to bound.
  */
 function readSshLeases(userDataDir: string, targetId: string): SshRemotePtyLease[] {
-  const dataPath = path.join(
-    userDataDir,
-    'profiles',
-    DEFAULT_LOCAL_ORCA_PROFILE_ID,
-    'orca-data.json'
-  )
-  const parsed = JSON.parse(readFileSync(dataPath, 'utf8')) as {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test owns the persisted fixture; optional fields are checked at use sites.
+  const parsed = readPersistedProfileState(userDataDir) as {
     sshRemotePtyLeases?: SshRemotePtyLease[]
   }
   return (parsed.sshRemotePtyLeases ?? []).filter((lease) => lease.targetId === targetId)

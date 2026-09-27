@@ -9,7 +9,7 @@
 // whole-transcript scan.
 
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { deriveNativeChatRowContent } from './native-chat-row-content'
+import { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
 
 /** What a row contains, reduced to the few numbers that drive its height. */
 export type NativeChatRowContentMetrics = {
@@ -26,6 +26,9 @@ export type NativeChatRowChromeMetrics = {
   hasReceipt: boolean
   hasStatus: boolean
   hasTurnDiff: boolean
+  /** Behind a folded turn: prose and tool activity draw nothing, so estimating
+   *  them would reserve a screen of height for a row that paints a roster. */
+  folded?: boolean
 }
 
 const LINE_HEIGHT_PX = 22
@@ -98,6 +101,9 @@ export function estimateNativeChatRowHeight(
   if (chrome.hasReceipt) {
     height = RECEIPT_PX
     partCount = 1
+  } else if (chrome.folded === true) {
+    height = content.subagentGroupCount * SUBAGENT_ROW_PX
+    partCount = height > 0 ? 1 : 0
   } else {
     height = content.textLines * LINE_HEIGHT_PX
     if (content.role === 'user' && content.textLines > 0) {

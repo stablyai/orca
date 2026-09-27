@@ -1,8 +1,6 @@
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
-import { playDesktopNotificationSound } from '@/lib/desktop-notification-sound'
-import { showBlockedNotificationFallbackToast } from '@/lib/blocked-notification-fallback'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
 import { shareCompatibleTitleIdentityGroup } from '../../../../shared/agent-title-owner'
 import {
@@ -21,6 +19,10 @@ import {
   resolveAgentAttention,
   type AgentAttentionDeliveryRequest
 } from '@/attention/agent-attention-policy'
+import {
+  deliverAgentAttentionNotification,
+  readAgentAttentionNotificationSound
+} from '@/attention/agent-attention-notification-delivery'
 
 const AGENT_NOTIFICATION_SNAPSHOT_MAX_AGE_MS = 10_000
 
@@ -133,8 +135,7 @@ export function dispatchTerminalNotification(
 
   // Desktop settings are applied in main after independent mobile delivery.
 
-  const customSoundId = state.settings?.notifications?.customSoundId ?? 'system'
-  const customSoundVolume = state.settings?.notifications?.customSoundVolume ?? null
+  const sound = readAgentAttentionNotificationSound(state.settings ?? {})
   // Why: pane keys are reused across turns. A rich OS notification must not
   // expose the previous turn's prompt if the current turn has no fresh hook snapshot yet.
   const agentSnapshot = agentStatus
@@ -161,8 +162,8 @@ export function dispatchTerminalNotification(
       : null
 
   const requestDelivery = (request: AgentAttentionDeliveryRequest): void => {
-    void window.api.notifications
-      .dispatch({
+    deliverAgentAttentionNotification(
+      {
         source: event.source,
         ...(notificationId ? { notificationId } : {}),
         worktreeId: request.workspaceId,
@@ -171,22 +172,9 @@ export function dispatchTerminalNotification(
         terminalTitle: event.terminalTitle,
         isActiveWorktree: request.workspaceIsActive,
         ...agentSnapshot
-      })
-      .then((result) => {
-        if (result.delivered) {
-          void playDesktopNotificationSound(customSoundId, customSoundVolume)
-          return
-        }
-        // Why: macOS is silently swallowing notifications (permission off or
-        // prompt unanswered) — surface an in-app pointer at the fix instead of
-        // letting the alert vanish without a trace.
-        if (result.reason === 'blocked-by-system') {
-          showBlockedNotificationFallbackToast()
-        }
-      })
-      .catch((err) => {
-        console.warn('Failed to dispatch notification:', err)
-      })
+      },
+      sound
+    )
   }
 
   applyAgentAttention(attentionDecision, {

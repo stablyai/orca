@@ -5,12 +5,8 @@ import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
-import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
 import { buildAgentStartupPlan } from '../../shared/tui-agent-startup'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../shared/tui-agent-launch-defaults'
+import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
 
 export class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends OrcaRuntimeWithRunCreateMobileSessionTerminal {
   protected async resolveMobileSessionTerminalCommand(
@@ -50,24 +46,16 @@ export class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends OrcaRunt
     if (!isTuiAgentEnabled(opts.agent, settings.disabledTuiAgents)) {
       throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
     }
-    // Why: mobile may be iOS while the shell host is Windows/macOS/Linux or SSH Linux; quote for the host shell.
-    const platform = this.getAgentLaunchPlatformForWorkspace(workspace)
-    // Why: SSH runs the CLI through the relay shim (plain `orca`), so the Linux-only `orca-ide` rename must not apply.
-    const isRemote = Boolean(workspace.connectionId)
-    const queuedShell = resolveLocalWindowsAgentStartupShell({
-      platform,
-      isRemote,
-      terminalWindowsShell: settings.terminalWindowsShell
-    })
     const startupPlan = buildAgentStartupPlan({
-      agent: opts.agent,
+      ...resolveAgentStartupPlanInputs({
+        agent: opts.agent,
+        settings,
+        // Why: mobile may be iOS while the shell host is Windows/macOS/Linux or SSH Linux; quote for the host shell.
+        platform: this.getAgentLaunchPlatformForWorkspace(workspace),
+        // Why: SSH runs the CLI through the relay shim (plain `orca`), so the Linux-only `orca-ide` rename must not apply.
+        isRemote: Boolean(workspace.connectionId)
+      }),
       prompt: opts.agentPrompt ?? '',
-      cmdOverrides: settings.agentCmdOverrides ?? {},
-      agentArgs: resolveTuiAgentLaunchArgs(opts.agent, settings.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(opts.agent, settings.agentDefaultEnv),
-      platform,
-      shell: queuedShell,
-      isRemote,
       allowEmptyPromptLaunch: true
     })
     if (!startupPlan) {

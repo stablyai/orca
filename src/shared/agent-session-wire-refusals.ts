@@ -18,7 +18,9 @@ export const AGENT_SESSION_WIRE_REFUSAL_CODES = [
   'agent_session_already_resolved',
   'agent_session_identity_required',
   'agent_session_journal_unreadable',
-  'execution_owner_reconciling'
+  'execution_owner_reconciling',
+  // Older clients hold an unknown code as a blocked send with the host's message shown.
+  'agent_session_owner_restart_failed'
 ] as const
 export type AgentSessionWireRefusalCode = (typeof AGENT_SESSION_WIRE_REFUSAL_CODES)[number]
 
@@ -33,6 +35,9 @@ export function isAgentSessionWireRefusalCode(
   )
 }
 
+/** What the host last proved about a session's provider process; see the SSH execution boundary. */
+export type AgentSessionOwnerVerdict = 'live' | 'unverifiable' | 'exited'
+
 export type AgentSessionWireRefusal = {
   rewindReason?: AgentSessionRewindReason
   code: AgentSessionWireRefusalCode
@@ -43,4 +48,7 @@ export type AgentSessionWireRefusal = {
   resolution?: AgentJournalResolution
   /** On a lost compare-and-set: the revision the host actually holds. */
   currentRevision?: number
+  /** On a durably failed create: `exited` proves nothing runs for the session, so a new
+   *  operation cannot collide with this one. Absent (older hosts) reads as unverifiable. */
+  ownerVerdict?: AgentSessionOwnerVerdict
 }

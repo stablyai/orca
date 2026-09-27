@@ -3,12 +3,17 @@ import { getDefaultVoiceSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { getFeatureTipForModal } from './feature-tip-modal-state'
 
-function makeSettings(voiceEnabled = false): Pick<GlobalSettings, 'voice'> {
+// Session search defaults on so tests about the older tips don't see the session-search tip first.
+function makeSettings(
+  voiceEnabled = false,
+  sessionSearchEnabled = true
+): Pick<GlobalSettings, 'voice' | 'aiVaultSearch'> {
   return {
     voice: {
       ...getDefaultVoiceSettings(),
       enabled: voiceEnabled
-    }
+    },
+    aiVaultSearch: { enabled: sessionSearchEnabled, historyDays: null }
   }
 }
 
@@ -19,7 +24,8 @@ describe('feature tip modal state', () => {
       modalData: { tipId: 'voice-dictation' },
       seenTipIds: ['voice-dictation'],
       featureInteractions: {},
-      settings: makeSettings()
+      settings: makeSettings(),
+      webClient: false
     })
 
     expect(tip?.id).toBe('voice-dictation')
@@ -31,7 +37,8 @@ describe('feature tip modal state', () => {
       modalData: {},
       seenTipIds: [],
       featureInteractions: {},
-      settings: makeSettings()
+      settings: makeSettings(),
+      webClient: false
     })
 
     expect(tip?.id).toBe('orca-cli')
@@ -43,7 +50,8 @@ describe('feature tip modal state', () => {
       modalData: {},
       seenTipIds: ['voice-dictation'],
       featureInteractions: {},
-      settings: makeSettings()
+      settings: makeSettings(),
+      webClient: false
     })
 
     expect(tip?.id).toBe('orca-cli')
@@ -55,7 +63,8 @@ describe('feature tip modal state', () => {
       modalData: {},
       seenTipIds: ['orca-cli'],
       featureInteractions: {},
-      settings: makeSettings()
+      settings: makeSettings(),
+      webClient: false
     })
 
     expect(tip?.id).toBe('cmd-j-palette')
@@ -67,7 +76,8 @@ describe('feature tip modal state', () => {
       modalData: {},
       seenTipIds: ['voice-dictation', 'orca-cli', 'cmd-j-palette'],
       featureInteractions: {},
-      settings: makeSettings()
+      settings: makeSettings(),
+      webClient: false
     })
 
     expect(tip).toBeNull()
@@ -79,7 +89,8 @@ describe('feature tip modal state', () => {
       modalData: {},
       seenTipIds: ['voice-dictation', 'cmd-j-palette'],
       featureInteractions: {},
-      settings: makeSettings()
+      settings: makeSettings(),
+      webClient: false
     })
 
     expect(tip).toBeNull()
@@ -93,7 +104,8 @@ describe('feature tip modal state', () => {
       featureInteractions: {
         'voice-dictation': { firstInteractedAt: 100, interactionCount: 1 }
       },
-      settings: makeSettings()
+      settings: makeSettings(),
+      webClient: false
     })
 
     expect(tip).toBeNull()

@@ -7,6 +7,7 @@ import {
   type NativeChatSessionStatus
 } from '../../../../shared/native-chat-types'
 import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat-streaming'
+import { compareNativeChatMessagesByTime } from '../../../../shared/native-chat-transcript-projection'
 import {
   hasImagePromptMarker,
   isImageSourceUserTurn,
@@ -104,27 +105,14 @@ function messageSortRank(message: NativeChatMessage): number {
   return 0
 }
 
-// Why: null timestamps (sources that can't supply one, e.g. scrape segments)
-// sort before any real timestamp within their tier so they don't jump to the
-// end. Ties break on id for a stable, deterministic order.
+// Rank first; within a tier the transcript's shared time order.
 export function compareMessages(a: NativeChatMessage, b: NativeChatMessage): number {
   const ar = messageSortRank(a)
   const br = messageSortRank(b)
   if (ar !== br) {
     return ar - br
   }
-  const at = a.timestamp ?? Number.NEGATIVE_INFINITY
-  const bt = b.timestamp ?? Number.NEGATIVE_INFINITY
-  if (at !== bt) {
-    return at - bt
-  }
-  if (a.id < b.id) {
-    return -1
-  }
-  if (a.id > b.id) {
-    return 1
-  }
-  return 0
+  return compareNativeChatMessagesByTime(a, b)
 }
 
 /**

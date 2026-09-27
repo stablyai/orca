@@ -14,11 +14,11 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
     initializedHandlesRef,
     terminalDiagnosticsRef,
     webReadyHandlesRef,
+    subscribedDocumentsRef,
     activeHandleRef,
     pendingActiveTerminalHandleRef,
     activeSessionTab,
     unsubscribeTerminal,
-    measureViewportOnce,
     subscribeToTerminal,
     nativeChatStream,
     readMarkdownTab,
@@ -44,6 +44,8 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
   const handleTerminalWebReady = useCallback(
     (handle: string) => {
       const wasAlreadyReady = webReadyHandlesRef.current.has(handle)
+      // Why: web-ready announces a new document; the handle also re-attaches on theme or text-size changes, which keep the document.
+      subscribedDocumentsRef.current.delete(handle)
       webReadyHandlesRef.current.add(handle)
       nativeChatStream.notifyWebReady(handle, wasAlreadyReady)
       terminalDiagnosticsRef.current.webViewReady(
@@ -60,20 +62,15 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
         }
         return
       }
-      // Why: first subscribe may skip (no WebView ref); await measure so it carries the viewport, else it races measureViewportOnce and skips.
       // Why: a just-created tab can lose activeHandleRef to a lagging snapshot; honor the pending marker so its web-ready subscribe still fires.
-      const isIntendedActive = () =>
+      const isIntendedActive =
         handle === activeHandleRef.current || handle === pendingActiveTerminalHandleRef.current
-      if (isIntendedActive() && !terminalUnsubsRef.current.has(handle)) {
-        void (async () => {
-          await measureViewportOnce(handle)
-          if (isIntendedActive() && !terminalUnsubsRef.current.has(handle)) {
-            subscribeToTerminal(handle)
-          }
-        })()
+      // Why: subscribeToTerminal measures the viewport first for a fresh document, so the dims ride this subscribe.
+      if (isIntendedActive && !terminalUnsubsRef.current.has(handle)) {
+        subscribeToTerminal(handle)
       }
     },
-    [measureViewportOnce, nativeChatStream, subscribeToTerminal, unsubscribeTerminal]
+    [nativeChatStream, subscribeToTerminal, unsubscribeTerminal]
   )
 
   useEffect(() => {

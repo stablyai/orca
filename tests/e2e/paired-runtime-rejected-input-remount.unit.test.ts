@@ -323,7 +323,6 @@ describe('host-rejected paired-runtime input reaches a pane remount', () => {
       suppressedPtyExitIds: {},
       agentLaunchConfigByPaneKey: {},
       getAgentLaunchConfigForStatusEntry: vi.fn(),
-      getAgentLaunchConfigForStatusMetadata: vi.fn(),
       clearSleepingAgentSession: vi.fn(),
       registerAgentLaunchConfig: vi.fn(),
       clearAgentLaunchConfig: vi.fn(),

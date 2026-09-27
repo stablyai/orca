@@ -71,6 +71,7 @@ function createPane(): ManagedPaneInternal {
     ligaturesAddon: null,
     webLinksAddon: {} as never,
     webglAddon: null,
+    imageAddon: null,
     compositionHandler: null,
     pendingSplitScrollState: null,
     debugLabel: null
@@ -578,6 +579,7 @@ describe('openTerminal — addon and provider wiring', () => {
       ligaturesAddon: null,
       webLinksAddon,
       webglAddon: null,
+      imageAddon: null,
       compositionHandler: null,
       pendingSplitScrollState: null,
       debugLabel: null
@@ -601,7 +603,7 @@ describe('openTerminal — addon and provider wiring', () => {
     pane.terminalGpuAcceleration = 'auto'
     pane.gpuRenderingEnabled = true
 
-    openTerminal(pane, true)
+    openTerminal(pane, { ligatures: true })
     expect(pane.ligaturesAddon).not.toBeNull()
     expect(pane.webglAddon).not.toBeNull()
     const addons = vi.mocked(pane.terminal.loadAddon).mock.calls.map(([addon]) => addon)

@@ -3,7 +3,9 @@ import type {
   AiVaultSearchRequestSchema,
   AiVaultSearchResponseSchema,
   AiVaultSearchHitSchema,
-  AiVaultSearchStatusSchema
+  AiVaultSearchHostOutcomeSchema,
+  AiVaultSearchStatusSchema,
+  AiVaultSetSearchEnabledParamsSchema
 } from './ai-vault-search-contract'
 
 /**
@@ -20,3 +22,9 @@ export type AiVaultSearchResponse = z.infer<typeof AiVaultSearchResponseSchema>
  */
 export type AiVaultSearchHit = z.infer<typeof AiVaultSearchHitSchema>
 export type AiVaultSearchStatus = z.infer<typeof AiVaultSearchStatusSchema>
+/** Only an all-computers merge reports these; a single-host answer omits them. */
+export type AiVaultSearchHostOutcome = z.infer<typeof AiVaultSearchHostOutcomeSchema>
+/** Turning indexing on or off for one host; the response is that host's `AiVaultSearchStatus`. */
+export type AiVaultSetSearchEnabledParams = z.infer<typeof AiVaultSetSearchEnabledParamsSchema>
+
+export type { AiVaultSearchScopeIdentity } from './ai-vault-search-scope'

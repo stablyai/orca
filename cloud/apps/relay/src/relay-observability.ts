@@ -1,9 +1,10 @@
 import { monitorEventLoopDelay, performance } from 'node:perf_hooks'
 import { RELAY_REGION_METRIC_SEGMENTS, type RelayRegion } from '@orca-cloud/relay-contract'
 import type { ControlRenewalOutcome } from './assignment-store.js'
+import type { ControlRenewalFlush } from './control-renewal-batch.js'
 import type { CellInventoryHoldCounts } from './cell-inventory-hold-samples.js'
 import type { PostgresPoolPressureCounts } from './postgres-pool-pressure.js'
-import type { RelayReadinessObservation } from './relay-readiness.js'
+import type { RelayReadinessGraceEvent, RelayReadinessObservation } from './relay-readiness.js'
 
 export type RelayRuntimeCounts = {
   totalConnections: number
@@ -53,6 +54,7 @@ export interface RelayRuntimeObserver {
   recordReconnect(): void
   recordSql(durationMs: number, success: boolean): void
   recordControlRenewal?(durationMs: number, outcome: ControlRenewalOutcome): void
+  recordControlRenewalFlush?(flush: ControlRenewalFlush): void
   recordControlActivityRecovery?(success: boolean): void
   recordAssignmentAdmission?(outcome: AssignmentAdmissionOutcome): void
   recordAssignmentRejectionReason?(lane: AssignmentAdmissionLane, reason: string): void
@@ -119,6 +121,8 @@ type RelayMetricDeltas = {
   controlRttObserved: number
   controlRenewalLatenciesMs: number[]
   controlRenewalsByOutcome: Record<string, number>
+  controlRenewalFlushLatenciesMs: number[]
+  controlRenewalFlushRowsMax: number
   controlActivityRecoveries: number
   controlActivityRecoveryFailures: number
 }
@@ -164,6 +168,8 @@ const emptyDeltas = (): RelayMetricDeltas => ({
   controlRttObserved: 0,
   controlRenewalLatenciesMs: [],
   controlRenewalsByOutcome: {},
+  controlRenewalFlushLatenciesMs: [],
+  controlRenewalFlushRowsMax: 0,
   controlActivityRecoveries: 0,
   controlActivityRecoveryFailures: 0
 })
@@ -274,6 +280,14 @@ export class RelayObservability implements RelayRuntimeObserver {
       (this.deltas.controlRenewalsByOutcome[outcome] ?? 0) + 1
   }
 
+  recordControlRenewalFlush(flush: ControlRenewalFlush): void {
+    this.deltas.controlRenewalFlushLatenciesMs.push(flush.durationMs)
+    this.deltas.controlRenewalFlushRowsMax = Math.max(
+      this.deltas.controlRenewalFlushRowsMax,
+      flush.rows
+    )
+  }
+
   recordControlActivityRecovery(success: boolean): void {
     if (success) this.deltas.controlActivityRecoveries++
     else this.deltas.controlActivityRecoveryFailures++
@@ -281,12 +295,26 @@ export class RelayObservability implements RelayRuntimeObserver {
 
   recordReadiness(observation: RelayReadinessObservation): void {
     this.write({
-      severity: observation.ready ? 'INFO' : 'WARNING',
+      severity: observation.ready && !observation.degraded ? 'INFO' : 'WARNING',
       message: 'Orca Relay readiness check',
       event: 'orca_relay_readiness_check',
       metricVersion: 1,
       ...this.identity,
       ...observation
+    })
+  }
+
+  recordReadinessGrace(event: RelayReadinessGraceEvent): void {
+    const entered = event.grace === 'entered'
+    this.write({
+      severity: event.grace === 'recovered' ? 'INFO' : 'WARNING',
+      message: entered
+        ? 'Orca Relay readiness entered last-known-good grace'
+        : 'Orca Relay readiness left last-known-good grace',
+      event: entered ? 'orca_relay_readiness_grace_entered' : 'orca_relay_readiness_grace_left',
+      metricVersion: 1,
+      ...this.identity,
+      ...event
     })
   }
 
@@ -365,6 +393,7 @@ export class RelayObservability implements RelayRuntimeObserver {
       roundMs(percentile(deltas.clientAcceptStageSamplesMs[stage], 0.95))
     const controlRtt = latencySummary(deltas.controlRttSamplesMs)
     const controlRenewal = latencySummary(deltas.controlRenewalLatenciesMs)
+    const controlRenewalFlush = latencySummary(deltas.controlRenewalFlushLatenciesMs)
     const memory = process.memoryUsage()
     const p99 = this.eventLoop.count === 0 ? 0 : this.eventLoop.percentile(99) / 1_000_000
     this.eventLoop.reset()
@@ -433,9 +462,16 @@ export class RelayObservability implements RelayRuntimeObserver {
         deltas.controlRenewalsByOutcome.control_activity_not_found ?? 0,
       controlActivityRecoveriesDelta: deltas.controlActivityRecoveries,
       controlActivityRecoveryFailuresDelta: deltas.controlActivityRecoveryFailures,
+      // Meaning changed when renewals began batching: for a batched row this is
+      // the flush's duration, not that row's own statement latency. The
+      // per-flush fields below are the ones to read for statement cost.
       controlRenewalLatencyMsP50: controlRenewal.p50,
       controlRenewalLatencyMsP95: controlRenewal.p95,
       controlRenewalLatencyMsMax: controlRenewal.max,
+      controlRenewalFlushesDelta: deltas.controlRenewalFlushLatenciesMs.length,
+      controlRenewalFlushRowsMax: deltas.controlRenewalFlushRowsMax,
+      controlRenewalFlushLatencyMsP95: controlRenewalFlush.p95,
+      controlRenewalFlushLatencyMsMax: controlRenewalFlush.max,
       httpLatencyMsMax: roundMs(deltas.httpLatencyMsMax),
       heapUsedBytes: memory.heapUsed,
       heapTotalBytes: memory.heapTotal,

@@ -1,4 +1,5 @@
 import type { AgentSessionStoreState } from './agent-session-record-store-file'
+import { AgentSessionTabTable } from './agent-session-tab-table'
 import type { AgentSessionConversationCommandRecord } from '../../shared/agent-session-conversation-command'
 
 export function commitConversationCommandRecord(
@@ -20,8 +21,7 @@ export function commitConversationCommandRecord(
     if (!state.records.has(command.replacementSessionId)) {
       throw new Error('agent_session_identity_required')
     }
-    state.visibleSessionIds.delete(sessionId)
-    state.visibleSessionIds.add(command.replacementSessionId)
-    state.visibleSessionIdsIndexPresent = true
+    state.sessionTabs ??= new AgentSessionTabTable()
+    state.sessionTabs.move(sessionId, command.replacementSessionId)
   }
 }

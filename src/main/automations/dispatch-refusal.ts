@@ -43,17 +43,17 @@ export function describeScheduledRefusal(input: {
  * and doc:94 asks for both. Never dispatches: the reason is the one the
  * scheduler would have written for the same record.
  */
-export function recordRefusedAutomationRun(input: {
+export async function recordRefusedAutomationRun(input: {
   store: Store
   runs: AutomationRunWriter
   automation: Automation
   allowRemoteHostScheduling: boolean
-}): void {
+}): Promise<void> {
   const target = resolveAutomationRunTarget(input.store, input.automation, {
     allowRemoteHostScheduling: input.allowRemoteHostScheduling
   })
-  const run = input.runs.createRun(input.automation, Date.now(), 'manual')
-  input.runs.updateRun({
+  const run = await input.runs.createRun(input.automation, Date.now(), 'manual')
+  await input.runs.updateRun({
     runId: run.id,
     status: 'skipped_unavailable',
     workspaceId: input.automation.workspaceId,
@@ -66,21 +66,24 @@ export function recordRefusedAutomationRun(input: {
  * stalled. Folds on the fixed sentence and the unchanged nextRunAt, so a record that stays
  * broken writes one row rather than one per tick, and never throws back into the tick.
  */
-export function recordUnevaluableAutomation(input: {
+export async function recordUnevaluableAutomation(input: {
   runs: AutomationRunWriter
   automation: Automation
   error: unknown
-}): void {
+}): Promise<void> {
   const { automation } = input
   try {
     // nextRunAt deliberately stays put: the record is retried so a repaired schedule resumes
     // on its own. The fold is what keeps that from writing a row — and logging — every tick.
-    if (input.runs.repeatSkip(automation.id, UNEVALUABLE_SCHEDULE, automation.nextRunAt)) {
+    if (await input.runs.repeatSkip(automation.id, UNEVALUABLE_SCHEDULE, automation.nextRunAt)) {
       return
     }
     console.error('[automations] failed to evaluate automation:', automation.id, input.error)
-    const run = input.runs.createRun(automation, automation.nextRunAt)
-    input.runs.updateRun({
+    const run = await input.runs.createRun(automation, automation.nextRunAt)
+    if (run.status !== 'pending') {
+      return
+    }
+    await input.runs.updateRun({
       runId: run.id,
       status: 'skipped_unavailable',
       workspaceId: automation.workspaceId,
@@ -101,12 +104,12 @@ export function recordUnevaluableAutomation(input: {
  * Sends the dispatch request through the renderer channel, closing the run out as
  * `dispatch_failed` when the send throws — a failed send is not an unreadable schedule.
  */
-export function sendRendererDispatch(
+export async function sendRendererDispatch(
   channel: Pick<WebContents, 'send'> | null,
   payload: AutomationDispatchRequest,
   runs: AutomationRunWriter,
   run: AutomationRun
-): AutomationRun {
+): Promise<AutomationRun> {
   try {
     channel?.send('automations:dispatchRequested', payload)
     return run
@@ -153,13 +156,16 @@ export function missedBeyondGrace(input: {
   return input.now - input.scheduledFor > graceMs + jitterMs
 }
 
-export function recordMissedRun(input: {
+export async function recordMissedRun(input: {
   runs: AutomationRunWriter
   automation: Automation
   scheduledFor: number
-}): void {
-  const missed = input.runs.createRun(input.automation, input.scheduledFor)
-  input.runs.updateRun({
+}): Promise<void> {
+  const missed = await input.runs.createRun(input.automation, input.scheduledFor)
+  if (missed.status !== 'pending') {
+    return
+  }
+  await input.runs.updateRun({
     runId: missed.id,
     status: 'skipped_missed',
     workspaceId: input.automation.workspaceId,

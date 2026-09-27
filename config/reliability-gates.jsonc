@@ -11,6 +11,422 @@
   },
   "gates": [
     {
+      "id": "terminal-preview.connection-settings-ownership",
+      "title": "Terminal preview connections survive unrelated settings updates",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "renderer-unit",
+      "surfaces": [
+        "dashboard terminal preview connection",
+        "preview settings updates",
+        "preview box fit and grid claim"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "remote-runtime"],
+      "coverageNotes": "Mounted production component and real settings action with cloned IPC replies, inert xterm/input adapters, and simulated metrics. Local/remote-qualified renderer identities covered; no physical provider, native geometry, focus, IME or rendered app claim. Subsequent hidden/offscreen Electron component proof uses real xterm and synthetic snapshots, preserving the rendered terminal across unrelated updates and measuring equivalent fallback scale/fit requests after a font-size change.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/blob/main/src/renderer/src/components/dashboard-popout/AgentTerminalPreview.tsx",
+        "https://github.com/stablyai/orca/pull/23099"
+      ],
+      "invariant": "Equal composed theme with unchanged PTY, mode, contrast and font/shaping settings keeps the current preview owner. Relevant changes replace it once, preserve explicit fit/grid negotiation, and reject retired pending completions.",
+      "oracle": "Ten unrelated settings replies produce one connect and xterm construction, no pre-unmount teardown, then one final cleanup. Changed colors/mode/contrast/font/shaping replace owners; pending retired connections never construct and obsolete grid claims are canceled.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/dashboard-popout/AgentTerminalPreview.settings-lifetime.test.tsx src/renderer/src/components/dashboard-popout/AgentTerminalPreview.settings-geometry.test.tsx src/renderer/src/components/dashboard-popout/AgentTerminalPreview.test.tsx src/renderer/src/components/dashboard-popout/AgentTerminalPreview.option-dead-key.test.tsx src/renderer/src/components/dashboard-popout/AgentTerminalPreview.clipboard-routes.test.tsx"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/dashboard-popout/AgentTerminalPreview.settings-lifetime.test.tsx",
+        "src/renderer/src/components/dashboard-popout/AgentTerminalPreview.settings-geometry.test.tsx",
+        "src/renderer/src/components/dashboard-popout/AgentTerminalPreview.test.tsx",
+        "src/renderer/src/components/dashboard-popout/AgentTerminalPreview.option-dead-key.test.tsx",
+        "src/renderer/src/components/dashboard-popout/AgentTerminalPreview.clipboard-routes.test.tsx"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/dashboard-popout/AgentTerminalPreview.settings-lifetime.test.tsx",
+          "assertions": [
+            "keeps one preview connection across ten unrelated settings snapshots",
+            "ignores an old pending connection after a relevant theme change",
+            "does not install a terminal after unmounting a pending connection"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/dashboard-popout/AgentTerminalPreview.settings-geometry.test.tsx",
+          "assertions": [
+            "ignores a pending connection retired by a metric change",
+            "cancels an obsolete metric owner grid claim before the next change"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-25",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/dashboard-popout/AgentTerminalPreview.settings-lifetime.test.tsx src/renderer/src/components/dashboard-popout/AgentTerminalPreview.settings-geometry.test.tsx src/renderer/src/components/dashboard-popout/AgentTerminalPreview.test.tsx src/renderer/src/components/dashboard-popout/AgentTerminalPreview.option-dead-key.test.tsx src/renderer/src/components/dashboard-popout/AgentTerminalPreview.clipboard-routes.test.tsx",
+          "result": "passed",
+          "durationSeconds": 2.23,
+          "summary": "63 tests /5 suites pass. Lifetime regressions: original 7 fail/7 pass, candidate14 pass; all8 metric/shaping cases pass both original and corrected candidate."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 15,
+        "scope": "Focused deterministic suites; local elapsed recorded, p95 not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Local checks and independent adverse review only; no CI soak."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Original reconnects/reconstructs11 times for10 unrelated updates; candidate1. Seven of14 lifetime cases fail original. Original and corrected candidate both pass all8 geometry preservation cases."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Ten unrelated settings replies: connect/constructor11 to1, pre-unmount unsubscribe/dispose10 to0. One previous-theme ref and shallow comparison added; CPU/heap overhead unmeasured. No timer/polling/subprocess/subscriber added; broad settings render/composition work remains."
+      },
+      "knownGaps": [
+        "No full-dashboard interaction, native focus/input/IME, ligature shaping or physical PTY validation. Hidden Electron component rendering and one font-size transition were checked; fit endpoint was inert.",
+        "No live SSH/WSL/relay or Linux/Windows run. Provider/wire ownership and folder/git workspace paths unchanged.",
+        "Selection/buffer/input state now persists across unrelated and live cursor/scroll updates instead of incidental resets. Small comparison/ref overhead unmeasured.",
+        "No CI soak, heap, main snapshot serialization or frame latency claim."
+      ],
+      "promotionCriteria": [
+        "Retain count, stale-owner and explicit metric fit/grid oracles; add rendered native and provider/platform evidence plus CI soak."
+      ],
+      "demotionRule": "Keep experimental until soak; investigate failures without weakening owner counts, changed-theme behavior, fit/grid claims or late-disposal assertions."
+    },
+    {
+      "id": "workspace-hooks.execution-host-ownership",
+      "title": "Hook reads and writes use the stored repository execution owner",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "workspace-runtime",
+      "layer": "cross-layer-unit",
+      "surfaces": [
+        "desktop worktree hook IPC",
+        "runtime repository hooks",
+        "issue-command read and write",
+        "hosted-review own-store host resolution"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": [],
+      "coverageNotes": "Actual hydration and authoritative desktop owner selection with mocked filesystem, Git, inspection and provider boundaries; synthetic local/SSH/runtime rows. No physical provider or native platform certification.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/blob/main/src/main/ipc/hooks/register-worktree-hook-file-handlers.ts"
+      ],
+      "invariant": "Hook file operations follow the authoritative repository row in this process Store: canonical SSH selects its target, explicit local and self-addressed runtime rows use registered local files, and missing SSH providers never substitute local I/O.",
+      "oracle": "Nine desktop/runtime operations never use local I/O for canonical SSH or dial a stale legacy target; legacy SSH/local/runtime controls retain behavior, folder skips remain, missing providers do not gain local fallback.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/hooks/worktree-hook-execution-host.test.ts"
+      ],
+      "testFiles": ["src/main/ipc/hooks/worktree-hook-execution-host.test.ts"],
+      "assertionRefs": [
+        {
+          "file": "src/main/ipc/hooks/worktree-hook-execution-host.test.ts",
+          "assertions": [
+            "routes %s to the stored owner",
+            "refuses an unreachable canonical SSH write without touching local files"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-26",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/hooks/worktree-hook-execution-host.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.739,
+          "summary": "Independent68pass/original37fail31controls. Eleven additional authority/unavailable-provider/encoded-ID/folder controls pass; author102unique permanent tests across four suites."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "Focused renderer-unit suites, p95 not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Author and independent local evidence only; no CI soak."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Frozen permanent suite68pass; original sources37fail31controls; independently reproduced with eleven extra controls."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Incorrect local/stale-target routes9to0 for each of four changed identity shapes. This is correctness evidence only, no latency/CPU/heap gain. Existing host resolver reused, no polling, cache or inventory/subprocess fanout added."
+      },
+      "knownGaps": [
+        "CI soak pending.",
+        "Physical SSH/WSL/remote-runtime, native Linux/Windows, mobile and mixed-version integration untested. Local/daemon PTY data, identity and liveness unchanged.",
+        "Runtime absent-provider issue-command write still returns ok:true without a write; this preexisting convention is not a completion claim.",
+        "Only own-store rows use the generalized helper; generic runtime dispatch still rejects hosts this process does not execute.",
+        "No actual filesystem writes, provider operations, native UI or packaged app validation in routing fixtures."
+      ],
+      "promotionCriteria": [
+        "Retain exact route, no-local-fallback and authority oracles; obtain CI soak and physical host evidence before promotion."
+      ],
+      "demotionRule": "Keep experimental until soak; investigate authority/routing failures without replacing exact-target or no-local-I/O assertions."
+    },
+    {
+      "id": "runtime-files.renderer-document-watch-ownership",
+      "title": "Filesystem watches stay owned by their renderer document",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "runtime-platform",
+      "layer": "ipc-contract",
+      "surfaces": [
+        "desktop file explorer watchers",
+        "desktop editor file watchers",
+        "direct SSH file watchers"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "ssh", "wsl"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "ssh", "wsl"],
+      "coverageNotes": "Actual desktop local/WSL subscription and SSH watcher controller logic under mocked filesystem/provider handles on macOS. Document events use an EventEmitter sender. Live remote/native Windows/Linux/WSL and rendered reload reattachment are unproved; PTY/process liveness and wire formats are unaffected.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/blob/main/src/main/ipc/filesystem-watcher-listener-lifecycle.ts"
+      ],
+      "invariant": "A replaced or crashed renderer document retains no file watches or pending ownership and cannot recreate them from an old asynchronous continuation. Shared roots retain live sibling owners; blocked and same-document navigation retain the current document. Shutdown removes registered lifecycle listeners.",
+      "oracle": "Run repeated reloads/crash, pending local/SSH installation cancellation with late success, aborted-install joiners, reconnect retry snapshots, failed-removal restoration and shutdown/reopen. Require zero obsolete roots/intent/listeners, no stale setup/retry, physical handle disposal and preservation of sibling notifications and same-tick remote handoff.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/filesystem-watcher-document-lifetime.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-remote-cancellation.test.ts src/main/ipc/filesystem-watcher-native-capacity.test.ts --reporter=dot"
+      ],
+      "testFiles": [
+        "src/main/ipc/filesystem-watcher-document-lifetime.test.ts",
+        "src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts",
+        "src/main/ipc/filesystem-watcher-remote-cancellation.test.ts",
+        "src/main/ipc/filesystem-watcher-native-capacity.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/ipc/filesystem-watcher-document-lifetime.test.ts",
+          "assertions": [
+            "retains zero roots and listeners across 15 reloads and a renderer crash",
+            "does not revive a cancelled %s setup for a joiner whose document reloaded",
+            "does not re-arm an old provider snapshot into the same WebContents after replacement",
+            "does not restore a replaced sibling document after an awaited %s removal recovery",
+            "keeps same-document and blocked navigations alive, and removes lifecycle listeners at shutdown"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-25",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/filesystem-watcher-document-lifetime.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-remote-cancellation.test.ts src/main/ipc/filesystem-watcher-native-capacity.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 1.08,
+          "summary": "45 tests across four focused suites pass. Broader watcher suite passes 146 plus one existing skipped; isolated publication without sibling #22995 passes 145 plus one existing skipped."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 15,
+        "scope": "Focused deterministic IPC-contract suites; p95 not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Local validation only; no CI soak."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Seven permanent regressions fail with HEAD source substituted: cancelled joiner resurrection for local and SSH, restoration into replaced local/SSH documents, stale provider retry, shutdown listener retention, and root retention. All 13 document ownership cases pass after the change."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "15 reloads plus crash: retained local/SSH/desired roots 16→0 each; pending setup aborted; sender lifecycle listeners 1→0. Actual ownership modules with synthetic handles; no native process/heap/latency claim. No new timer, polling, process scan or provider fanout; existing root cleanup runs at document end."
+      },
+      "knownGaps": [
+        "No native Windows/Linux/WSL or live SSH execution.",
+        "No rendered Electron reload-reattachment/paint run or CI soak; broader watcher process isolation is a separate gate."
+      ],
+      "promotionCriteria": [
+        "Retain lifecycle, count and sibling-delivery assertions and add cross-platform and rendered reload evidence before promotion."
+      ],
+      "demotionRule": "Keep experimental until soak evidence; investigate lifecycle failures without suppressing assertions or retrying unexplained failures."
+    },
+    {
+      "id": "ephemeral-vm-recipe.output-tail-parity",
+      "title": "Recipe output capture preserves UTF-8 tails and releases settled storage",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "ephemeral-vm-runtime-store",
+      "layer": "shared-node-process-contract",
+      "surfaces": ["VM recipe stdout and stderr", "recipe cancellation and process errors"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "Actual recipe capture with synthetic child streams and real forced GC, plus real macOS shell output and descendant cancellation. Linux and Windows native execution, live VM providers and remote lifecycle journeys remain untested. Local/daemon PTY, SSH ownership, WSL launch, mobile and relay wire behavior are unaffected.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/blob/01ce5edf1aeec8a4b5cf06f531434be7d7c0cbcd/src/shared/ephemeral-vm-recipe-process.ts"
+      ],
+      "invariant": "Decoded stdout and stderr callback contents and order remain unchanged, final tails are the last capped run of raw output bytes with any leading partial UTF-8 sequence dropped, and success or failure releases capture storage without recapturing late output.",
+      "oracle": "Compare byte-bounded tails against the old per-chunk model and an independent code-point model across compaction, growth, oversized chunks and mid-character splits. Feed split and malformed UTF-8 through actual stream decoding. Require at most 5 MiB moved through the capture for 4 MiB of output with zero encoding, collectible backing buffers after close and error, zero late capture work with preserved callbacks, one decode per stream, unchanged tails on forced cancellation or synchronous kill-close, and every capture limit clamped to a bounded byte count.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/ephemeral-vm-recipe-process.test.ts src/shared/ephemeral-vm-recipe-output-capture.test.ts src/shared/growing-byte-buffer.test.ts src/main/ephemeral-vm-recipe-runner.test.ts"
+      ],
+      "testFiles": [
+        "src/shared/ephemeral-vm-recipe-process.test.ts",
+        "src/shared/ephemeral-vm-recipe-output-capture.test.ts",
+        "src/shared/growing-byte-buffer.test.ts",
+        "src/main/ephemeral-vm-recipe-runner.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/shared/ephemeral-vm-recipe-output-capture.test.ts",
+          "assertions": [
+            "matches the old per-chunk UTF-8 tail for limit %s across varied chunk boundaries",
+            "retains the same code-point tail for limit %s wherever byte boundaries fall",
+            "preserves stream decoding, callback boundaries and independent tails",
+            "moves at most 5 MiB through the capture for 4 MiB of output",
+            "releases capture storage after %s while preserving late callbacks",
+            "decodes once per stream when force-kill closes synchronously",
+            "clamps a $limit capture limit to a bounded byte count"
+          ]
+        },
+        {
+          "file": "src/shared/growing-byte-buffer.test.ts",
+          "assertions": [
+            "reads and writes correctly after the head offset has advanced",
+            "keeps a bounded suffix stable across many small appends without unbounded growth"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-26",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/ephemeral-vm-recipe-process.test.ts src/shared/ephemeral-vm-recipe-output-capture.test.ts src/shared/growing-byte-buffer.test.ts src/main/ephemeral-vm-recipe-runner.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.48,
+          "summary": "60 tests across four suites passed, including forced-GC lifetime, synchronous SIGKILL-close and the shared byte buffer's head-offset cases."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 15,
+        "scope": "focused Node process and capture contracts with forced GC"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Author and independent local runs pass; no CI or soak history collected."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Baseline moves 943,194,112 bytes for 4 MiB output and fails the permanent 5 MiB budget. An earlier ring prototype retained two backing buffers after error and encoded late output after close; both permanent lifetime cases fail there and pass after cleanup correction. Dropping the head offset from GrowingByteBuffer keeps the byte budget but takes 12.36 ms instead of 0.25 ms."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "4 MiB in 4 KiB chunks, seven paired samples, macOS: the old per-chunk re-encode moves 943,194,112 bytes in 265.78 ms median; raw-byte capture into GrowingByteBuffer moves 4,194,304 appended plus 1,048,576 decoded bytes, encodes nothing, and takes 0.25 ms. End to end through runRecipeCommand is 0.26 ms with no output callback and 0.78 ms with one (the callback decoder is the work setEncoding already did). A 64-byte one-shot is 0.075 to 0.206 microseconds; retained storage reserves spare capacity and can exceed a string. No new polling, timers, subprocesses, wire fields or deadline changes."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive CI passes or 14 days of soak history.",
+        "Exercise native Windows and Linux recipe output and cancellation."
+      ],
+      "knownGaps": [
+        "Synthetic output timings do not establish typical recipe prevalence, end-to-end provisioning gains or UI latency.",
+        "Retained storage reserves spare capacity and can use more memory than a string; CJK bytes can exceed UTF-16 storage. Tiny output is slower, and an oversized single chunk still copies its capped tail.",
+        "Malformed UTF-8 now yields a different tail than the old policy: replacement characters no longer inflate the byte count, so a malformed tail keeps more real output. No production override of the cap was found, and odd caps are clamped rather than coerced per chunk.",
+        "Live VM providers, SSH lifecycle journeys, and native Windows or Linux termination were not run."
+      ],
+      "demotionRule": "Keep experimental or demote if output differs, discarded bytes return, settled capture remains reachable, cancellation loses its tail, or the deterministic encoding budget regresses. Never weaken the oracle or increase retries to obtain a pass."
+    },
+    {
+      "id": "agent-session.trust-preflight-completion",
+      "title": "Agent launch preflight waits for its trust owner to settle",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "agent-session-runtime",
+      "layer": "cross-layer-unit",
+      "surfaces": [
+        "agent trust IPC",
+        "renderer agent preflight",
+        "Codex continuation launch admission"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "ssh"],
+      "coverageNotes": "Actual main IPC handler, renderer preflight, session-continuation caller and config mutation queue with fake Electron bridge, config writer, launch and remote owner. Counts prove admission ordering only; no native PTY/CLI, actual config mutation or live provider evidence. Recognized native Codex launch preparation already awaits trust deeper in the stack.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/blob/main/src/main/ipc/agent-trust.ts"],
+      "invariant": "Trust preflight settles after the selected owner mutation settles, or after a bounded deadline if that mutation never settles; rejected, abandoned and SSH-unreachable writes leave the workspace untrusted and never fall back to local trust.",
+      "oracle": "Held local write or actual queue predecessor yields zero continuation launch calls until release, then exactly one; delayed local rejection settles successfully afterward. SSH awaits its remote writer and never invokes local trust. A never-settling local or SSH write resolves the handler at the deadline with a named warning, no leaked timer and no local fallback, and a rejection arriving after the deadline stays handled. An already-complete write admits the launch on microtasks with zero timers. Two concurrent launches for one workspace settle independently.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts tests/e2e/agent-trust-completion.unit.test.ts src/renderer/src/lib/agent-trust-preflight.test.ts src/renderer/src/lib/launch-agent-session-continuation.test.ts src/main/remote-agent-trust-presets.test.ts"
+      ],
+      "testFiles": [
+        "tests/e2e/agent-trust-completion.unit.test.ts",
+        "src/renderer/src/lib/agent-trust-preflight.test.ts",
+        "src/renderer/src/lib/launch-agent-session-continuation.test.ts",
+        "src/main/remote-agent-trust-presets.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "tests/e2e/agent-trust-completion.unit.test.ts",
+          "assertions": [
+            "holds the actual session-continuation launch call until the local write settles",
+            "keeps renderer preflight pending behind the actual config mutation queue",
+            "settles best-effort only after a queued local trust failure",
+            "bounds a never-settling local write and continues untrusted",
+            "admits an already-complete write without waiting for any timer",
+            "absorbs a local rejection that arrives after the deadline",
+            "bounds a never-settling SSH trust write without a local fallback",
+            "settles two concurrent launches for the same workspace independently",
+            "keeps remote failures best-effort without a local fallback"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-27",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts tests/e2e/agent-trust-completion.unit.test.ts src/renderer/src/lib/agent-trust-preflight.test.ts src/renderer/src/lib/launch-agent-session-continuation.test.ts src/main/remote-agent-trust-presets.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.199,
+          "summary": "36 tests across four suites pass: 15 in the trust-completion suite, of which four are the deadline cases this candidate adds, plus 8 renderer preflight, 7 continuation-launch and 6 remote-preset tests. No native launch, PTY or actual config write."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "Focused mocked preflight/continuation/remote trust suites; p95 not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Author and independent local mocked evidence; CI soak and native platform evidence pending."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Re-run at this head against the same 15-test suite. Pre-await implementation: 5 fail/10 pass - the three launch-admission orderings plus the never-settling local and SSH cases, the SSH one only by exhausting the test timeout. Unbounded-await implementation: 3 fail/12 pass - never-settling local write, post-deadline rejection and never-settling SSH write all hang to the test timeout. The already-complete-write case passes unbounded too, so it is a timer control, not a red. This head: 15 pass, 36 across the four suites."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "No new subprocess, polling, retry or trust operation. Existing queue/write await is newly visible to IPC/caller and is capped by one per-call deadline timer, cleared on settlement, so a stuck predecessor degrades to the agent's own trust prompt instead of an indefinite caller wait. Reliability fix, no performance gain claim."
+      },
+      "knownGaps": [
+        "CI soak pending.",
+        "No live Codex CLI, PTY, trust prompt, native Electron app or actual trust-config mutation was exercised.",
+        "Windows/Linux/WSL/daemon/remote-runtime behavior was not executed; remote owner is mocked. No routing/wire/PTY ownership change.",
+        "Recognized native Codex launch preparation already awaits trust deeper; do not infer all actual launches currently race.",
+        "Abandoning a write at the deadline does not cancel it; a legitimate slow write (WSL grant sessions run to 30s) can land after the launch already started, restoring the pre-fix ordering for that case only.",
+        "The deadline value is a reasoned cap over observed lane holders, not a measured p95.",
+        "Only the trust IPC handler is exercised. The candidate also bounds the local worktree-startup write in src/main/ipc/worktree-remote.ts, and no test in these suites covers that call site.",
+        "The cap is per call site, not global: the awaited Codex trust writes in runtime/runtime-worktree-agent-startup.ts, startup/codex-launch-preparation.ts and startup/codex-session-resume-launch.ts remain unbounded, so the bounded-wait invariant covers this gate's surfaces only."
+      ],
+      "promotionCriteria": [
+        "Retain pending-write/queue/launch-boundary red-green evidence and remote owner assertions; obtain actual platform/session evidence and CI soak before promotion."
+      ],
+      "demotionRule": "Remain experimental until repeated independent/CI evidence; investigate ordering or unbounded-wait regressions without weakening completion or deadline assertions."
+    },
+    {
       "id": "agent-session.journal-streaming-replay",
       "title": "Journal replay bounds obsolete revision memory without changing recovery",
       "maturity": "experimental",
@@ -81,6 +497,81 @@
       ],
       "promotionCriteria": ["Retain red/green heap and value assertions and complete CI soak."],
       "demotionRule": "Keep experimental until cross-platform and soak evidence; investigate failures without weakening content or memory assertions."
+    },
+    {
+      "id": "relay-performance.ai-vault-ready-ownership",
+      "title": "AI Vault readiness releases canceled request owners",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "desktop-runtime",
+      "layer": "relay-service-client-contract",
+      "surfaces": ["AI Vault sidecar startup", "SSH title lookup cancellation"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["ssh"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["ssh"],
+      "coverageNotes": "Production relay client with synthetic child events and real forced GC. Native remote process execution and live SSH remain untested. Local/daemon PTY, WSL shell selection and mobile terminal stream are unaffected.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/issues/23024"],
+      "invariant": "Canceled unsent calls release request payloads before sidecar readiness, disposal releases all pending readiness owners, and live calls still start exactly once through cancellation and startup failures.",
+      "oracle": "Hold ready and cancel 1,000 title calls; require zero retained request arrays after GC and one child. Dispose before ready and require uncanceled payload collection and zero timers. Race ready with abort and spawn failure with a second lane; require only live calls delivered and successful results. Preserve existing restart and cancel-ack behavior.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/relay/ai-vault-service-ready-retention.test.ts src/relay/ai-vault-service-client.test.ts src/relay/ai-vault-service-restart-policy.test.ts src/relay/ai-vault-service-spawn.test.ts src/relay/ai-vault-handler.test.ts src/shared/promise-settlement-waiters.test.ts"
+      ],
+      "testFiles": [
+        "src/relay/ai-vault-service-ready-retention.test.ts",
+        "src/relay/ai-vault-service-client.test.ts",
+        "src/relay/ai-vault-service-restart-policy.test.ts",
+        "src/relay/ai-vault-service-spawn.test.ts",
+        "src/relay/ai-vault-handler.test.ts",
+        "src/shared/promise-settlement-waiters.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/relay/ai-vault-service-ready-retention.test.ts",
+          "assertions": [
+            "releases canceled request payloads while readiness remains pending",
+            "releases uncanceled readiness payloads when the client is disposed",
+            "does not send a call canceled in the turn that readiness arrives",
+            "retries an unsent lane after spawn fails while the other lane starts a child"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-25",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/relay/ai-vault-service-ready-retention.test.ts src/relay/ai-vault-service-client.test.ts src/relay/ai-vault-service-restart-policy.test.ts src/relay/ai-vault-service-spawn.test.ts src/relay/ai-vault-handler.test.ts src/shared/promise-settlement-waiters.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.616,
+          "summary": "38 tests across six suites passed, including real forced-GC retention and startup/cancel races."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "focused Node contract tests with forced GC"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Local runs passed; CI/soak history not collected."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Baseline retains all 1,000 canceled arrays and the disposed uncanceled payload; both permanent regressions fail there and pass after the fix. Independent spawn-failure race failed on the initial prototype, passed on baseline and passes after correction."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Synthetic cold-start churn retains 1,000 to zero canceled arrays; incremental heap 34,771,464 to 492,504 bytes. One shared startup reaction, no new polling, timers, process starts, timeout changes or wire fields."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive CI passes or 14 days of soak history.",
+        "Exercise real SSH sidecar cancellation and restart on Linux and Windows."
+      ],
+      "knownGaps": [
+        "Synthetic churn does not measure typical user frequency or UI latency.",
+        "Physical sidecar/native Windows/Linux and live SSH paths were not exercised."
+      ],
+      "demotionRule": "Keep experimental or demote if canceled payloads survive GC, disposal retains startup owners, or live lanes stall/duplicate after startup failure."
     },
     {
       "id": "runtime.connection-owned-host-status",
@@ -482,6 +973,145 @@
       "demotionRule": "Keep experimental until soak and platform evidence support promotion; do not relax value or identity assertions to hide failures."
     },
 
+    {
+      "id": "workspace-session.ssh-host-partition-round-trip",
+      "title": "An SSH workspace round-trips through its own partition without losing tabs, editor files or browser state",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "workspace-session-persistence",
+      "layer": "persistence-integration",
+      "surfaces": [
+        "workspace session partitions",
+        "direct SSH remote workspace sync",
+        "boot session hydration"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "ssh"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "ssh"],
+      "coverageNotes": "Drives the real Store against a temp profile, the real remoteWorkspace:setForConnectedTargets handler, the real session projection and the real pull-side merge. The relay transport is faked at the multiplexer boundary, so no live SSH host or relay is exercised; the partition routing and projection code under test is platform-independent. Runtime (orca environment) partitions, PTY lifecycle and mobile rendering are unaffected.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/12721",
+        "https://github.com/stablyai/orca/issues/18173",
+        "https://github.com/stablyai/orca/blob/main/src/shared/workspace-session-partition-owner.ts"
+      ],
+      "invariant": "Every workspace the `ssh:<targetId>` partition names is hydrated at boot and published to the host, whatever kind of state it holds - terminal tabs, open editor files with unsaved hot-exit drafts, browser workspaces, tab groups, or host-qualified visit recency. An empty tab row is read as a gap, never as evidence the tabs were closed, so a replace-session upload can never delete a populated host list. A workspace the local partition already holds terminal tabs for is left untouched, and every workspace routes back to the partition that owns it. Adoption never destroys what it was not told about: a host row the partition holds nothing for cannot replace a populated base row, and a bare id the read found contested is gap-filled rather than replaced, because that is exactly the id where `local` and `ssh:<targetId>` are not one workspace written twice. Tab-, pane- and file-keyed rows are recovered through the same indexes the split routed them by. An explicit empty tab row written by this build survives the round trip as a present empty row and is declined by the shared seeding predicate. Boot enumerates the partitions persistence actually holds rather than inferring them from the repo catalog, so a target whose only workspace is a folder is read like any other; a folder workspace routes to the same partition main's RuntimeWorkspaceSessionController writes it to, so one workspace is never written into two stores; and a workspace adopted out of a partition routes back to that partition even on a boot whose repo catalog cannot name the host, so the write cannot re-strand what the read just reunited. `contested` means a repo id the catalog registers on more than one host, or two SSH partitions naming one id - never the mere co-presence of 'local' and `ssh:<targetId>`, which is the repair's own input.",
+      "oracle": "Assert the renderer routes an SSH folder workspace to `ssh:<targetId>`, that its save carries the folder row to that partition and leaves none behind in 'local' (main applies a patch field-wise, so a partition write that omits the row erases it), and that an SSH partition no repo names is still read. Assert a bare id whose repo the catalog registers on two hosts keeps the local workspace's unsaved dirtyDraftContent and never names the rival partition as its write target, while two SSH partitions naming one id resolve to the same winner on every boot. Seed a real Store the way shipping builds leave it: the local blob holds the worktree key with an empty list while `ssh:<targetId>` holds the real one, with a second populated SSH partition present. Publish through the IPC handler with no session argument (the path the debounced writer takes) and assert the host snapshot carries the runtime-authored tabs rather than []. Separately drive the shipping split (buildWorkspaceSessionHostSnapshots) and feed its own output back through the real boot read, pinning the write and read halves to each other rather than to a hand-built fixture: an SSH workspace with open editor files, an unsaved dirtyDraftContent and no terminal tabs must come back intact, as must one with no tabsByWorktree key at all. Export and re-import through the real projection and merge through mergeDirectSshRemoteWorkspaceSession, asserting tabs survive a publish, the next pull, and an older client publishing an empty list for them. Assert the reunited workspace routes to `ssh:<targetId>`, that a workspace the base holds tabs for is not modified, and that a contested id claimed by an SSH and a runtime host does not send the SSH rows into the rotating runtime partition.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/ssh-host-partition-session-export.test.ts src/renderer/src/lib/workspace-session-ssh-partition-round-trip.test.ts src/renderer/src/lib/workspace-session-ssh-partition-ownership.test.ts src/renderer/src/lib/workspace-session-host-contention.test.ts src/shared/workspace-session-partition-owner.test.ts"
+      ],
+      "testFiles": [
+        "src/main/ipc/ssh-host-partition-session-export.test.ts",
+        "src/renderer/src/lib/workspace-session-ssh-partition-round-trip.test.ts",
+        "src/renderer/src/lib/workspace-session-ssh-partition-ownership.test.ts",
+        "src/renderer/src/lib/workspace-session-host-contention.test.ts",
+        "src/shared/workspace-session-partition-owner.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/ipc/ssh-host-partition-session-export.test.ts",
+          "assertions": [
+            "publishes tabs the runtime persisted into the target ssh partition",
+            "never replaces the host snapshot with an empty list for a worktree that has tabs"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/workspace-session-ssh-partition-round-trip.test.ts",
+          "assertions": [
+            "hydrates tabs the runtime persisted into the ssh partition",
+            "adopts the stranded workspace rows alongside its tabs",
+            "adopts a hibernated agent record the host partition alone holds",
+            "leaves a workspace the local partition already holds tabs for untouched",
+            "routes the reunited workspace back to the partition that owns it",
+            "does not delete the worktree tabs across a publish and the next pull",
+            "publishes the stranded tabs rather than an empty list",
+            "does not let an empty host row destroy an unsaved draft the base alone holds",
+            "still adopts a populated host row over the base leftovers",
+            "adopts the layout of a tab the host slice names only in unifiedTabs",
+            "does not overwrite a contested workspace's own rows with the ssh workspace's",
+            "still fills a gap on a contested id",
+            "does not let a legacy bare recency key move another host workspace of the same id",
+            "still adopts a host-qualified recency key, which names its own owner",
+            "writes an SSH workspace emptied by this build into the partition that owns it",
+            "restores that tombstone as an explicit empty row, not a deleted key",
+            "leaves the restored workspace un-seeded by the shared seeding predicate",
+            "does not adopt a stale populated ssh row over a tombstone in the owning partition",
+            "resurrects the legacy-transition shape exactly once and not again",
+            "publishes the tombstone rather than a row the host can read as unknown"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/workspace-session-ssh-partition-ownership.test.ts",
+          "assertions": [
+            "routes a folder workspace to the partition main writes it to",
+            "keeps a folder row out of the local partition so a save cannot erase main\u2019s copy",
+            "reads an ssh partition that only a folder workspace owns",
+            "returns adopted rows to the partition they were read from with no repo catalog",
+            "gap-fills instead of replacing, so the local workspace keeps its unsaved draft",
+            "never names the rival partition as the write target for a contested id",
+            "gap-fills a contested id from the same partition on every boot",
+            "does not adopt a partition the catalog says does not own the workspace",
+            "does not adopt a contested id the assembled session holds no row for"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/workspace-session-host-contention.test.ts",
+          "assertions": [
+            "keeps an SSH claimant out of the rotating runtime partition",
+            "does not strand the runtime co-claimant when the SSH row is written"
+          ]
+        },
+        {
+          "file": "src/shared/workspace-session-partition-owner.test.ts",
+          "assertions": [
+            "gives an SSH host its own partition, matching what the runtime already writes"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-15",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/ssh-host-partition-session-export.test.ts src/renderer/src/lib/workspace-session-ssh-partition-round-trip.test.ts src/renderer/src/lib/workspace-session-ssh-partition-ownership.test.ts src/renderer/src/lib/workspace-session-host-contention.test.ts src/shared/workspace-session-partition-owner.test.ts",
+          "result": "passed",
+          "durationSeconds": 7.13,
+          "summary": "64 tests passed across 5 files: the real Store publish, the shipping write/read split round trip, the older-client empty-publish skew direction, the contested-bare-id and empty-host-row guards, the closed-last-terminal tombstone boundary, and the partition-ownership suite covering folder-workspace routing, the persistence-side partition census, read-source write-back, and the catalog attribution that keeps a residue partition from winning the read."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "Real Store on a temp profile plus renderer partition units; no launched app and no relay."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Deterministic local validation only; no CI soak yet. The tests have no timers, network or real relay."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Against pristine main 12f53da542d, 9 of the 11 assertions that target the original defect fail: the boot read returns no tabs, the export publishes an empty tabsByWorktreePath row, the round trip ends with the tabs deleted, routing answers local instead of ssh:target-1, and an older client's empty publish deletes the tabs on pull. The remaining assertions guard the fix itself rather than main's bug: review found that gating adoption on terminal tabs stranded editor-only and browser-only SSH workspaces, destroying unsaved hot-exit drafts no other channel can recover. The gate now discovers a workspace through an exhaustive switch over the field-ownership table, and reintroducing the tabs-only gate fails 6 assertions including the write/read round trip."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "Boot adds one session:get per SSH host that owns a repo, issued in parallel with the existing runtime partition reads and served from already-loaded main state. The publish fallback adds one partition read and a shallow keyed-record merge per target, which returns its input unchanged when nothing is stranded and stays the same order as the projection it feeds."
+      },
+      "knownGaps": [
+        "No live SSH host or relay is exercised; the multiplexer is faked at the request boundary.",
+        "The publish fallback reads only 'local' and the target's own partition, so it cannot see the local/runtime rivalry or a second SSH partition the renderer's read can. Bounded rather than closed: a key either side would judge differently is one whose repo id resolves ambiguously or to another host, and the export already publishes those to nobody.",
+        "A lingering `ssh:<targetId>` partition for a connection the user removed is now read by the census. Its rows stay in that partition rather than spilling into 'local', and the deregistered-repo residue sweep already clears repo-backed ones, but a folder workspace left behind by a removed connection is not swept.",
+        "Rows stranded beside a workspace the local partition already holds terminal tabs for are deliberately not recovered, and no assertion claims they are.",
+        "One-shot resurrection in the legacy-transition shape: where an older build left an empty local row while the runtime partition still holds that workspace's tabs, boot adopts them back once. Non-destructive, and non-recurrence is now asserted rather than argued - a workspace this build empties writes its empty row to the owning partition and leaves no local row behind, so there is nothing left to resurrect from.",
+        "A contested bare id is gap-filled rather than replaced, so rows stranded beside a contested workspace stay stranded. Separating them needs host-qualified keys through the tab store, which is the same open gap `workspace-session-host-contention.ts` records.",
+        "A `local` row left by a repo registration the user removed, whose repo id the catalog now resolves to the SSH host alone, is neither ambiguous nor foreign, so a populated host row still replaces it - including an unsaved `dirtyDraftContent`. Unchanged from main; closing it needs host-qualified keys, the same gap `workspace-session-host-contention.ts` records.",
+        "A bare `lastVisitedAtByWorktreeId` stamp left in 'local' for a workspace now owned by an SSH partition gap-fills rather than replaces, so the workspace can keep an older Cmd+J position for one boot after the migration.",
+        "`lastVisitedAtByWorktreeId` still discovers a workspace as adoptable from a recency entry alone. Harmless now that a recency row cannot replace another host's entry for the same bare id, but it means recency is a discovery trigger and no other field of its kind is."
+      ],
+      "promotionCriteria": [
+        "Complete the CI soak requirement with no unexplained flakes.",
+        "Add coverage for a live SSH target before claiming the ssh provider is exercised end to end."
+      ],
+      "demotionRule": "Keep experimental until CI soak completes. Investigate any failure without weakening the empty-row-is-a-gap oracle, which is the assertion the data-loss fix rests on."
+    },
     {
       "id": "agent-session.history-forward-read-budget",
       "title": "Journal catch-up reads only the next page and one lookahead row",
@@ -8787,6 +9417,77 @@
       "demotionRule": "Demote if discovery and launch can resolve different authorities, a scoped Floating probe overwrites the active-project inventory, or local context selection adds recurring scans or retained in-flight entries."
     },
     {
+      "id": "agent-session.opencode2-hook-cleanup",
+      "title": "OpenCode 2 setup releases acquired hook owners after failure",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "agent-integrations",
+      "layer": "main-unit",
+      "surfaces": ["OpenCode 2 generated plugin setup and unload"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": [],
+      "coverageNotes": "Actual generated wrapper with synthetic factories, prompt registrations and event iterators. Supporting generated-module tests cover both OpenCode variants; no native provider execution.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/blob/main/src/main/opencode2/status-plugin-setup-source.ts"
+      ],
+      "invariant": "After a hook factory is acquired, prompt registration failure or a throwing/rejecting prompt disposer cannot skip hook disposal. Unload waits for in-flight event delivery before disposing the hook factory and remains fail-open.",
+      "oracle": "Fault-injected setup and unload each call hook disposal once. The ordered control completes delivery and subscription before hook cleanup. Normal unload disposes both owners once.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/opencode2/status-plugin-setup-lifetime.test.ts"
+      ],
+      "testFiles": ["src/main/opencode2/status-plugin-setup-lifetime.test.ts"],
+      "assertionRefs": [
+        {
+          "file": "src/main/opencode2/status-plugin-setup-lifetime.test.ts",
+          "assertions": [
+            "disposes the factory after prompt registration %s",
+            "disposes the factory after prompt cleanup %s",
+            "waits for in-flight delivery before factory cleanup after a prompt cleanup failure"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-26",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/opencode2/status-plugin-setup-lifetime.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.125,
+          "summary": "10 permanent cases pass; baseline seven fail and three controls pass. Fresh-main run including existing setup/lineage suites: 59 pass."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "Synthetic wrapper unit suite; p95 not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Local deterministic validation only; no CI soak."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Baseline seven failures and three controls; candidate ten passed. Hook disposal after prompt registration/cleanup failure changes from zero to one."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "No new polling, scans, subprocesses or successful-startup awaits. Failure paths now await the existing hook disposer; teardown retains event-delivery ordering. No latency or heap improvement claimed."
+      },
+      "knownGaps": [
+        "Native Linux/Windows, SSH/WSL and remote-runtime plugin execution not run.",
+        "Local/daemon PTY and mobile/relay transport behavior is unaffected.",
+        "Pending non-abortable registration, event delivery or disposal promises can still delay cleanup; no timeout or cancellation redesign.",
+        "Malformed form normalization remains a separate defect.",
+        "CI soak pending."
+      ],
+      "promotionCriteria": [
+        "Retain cleanup-count and delivery-order oracles; add provider/platform execution and CI soak."
+      ],
+      "demotionRule": "Keep experimental until soak; investigate failures without weakening cleanup or delivery-order assertions."
+    },
+    {
       "id": "agent-session.provider-ownership",
       "title": "Provider sessions are resumed once per workspace ownership claim",
       "maturity": "experimental",
@@ -9797,6 +10498,83 @@
         "Current command uses deterministic fake providers for the main/renderer contracts, not a real remote PTY."
       ],
       "demotionRule": "Cannot promote without deterministic oracle and runtime history."
+    },
+    {
+      "id": "worktree-listing.execution-host-ownership",
+      "title": "Worktree listings keep canonical SSH ownership and mutation fencing",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "worktree-listing",
+      "layer": "main-unit",
+      "surfaces": [
+        "detected worktree listing",
+        "known worktree catalog",
+        "worktree list and listAll"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": [],
+      "coverageNotes": "Actual handlers, hydration, ownership, scan cache and provider authority with mocked providers/Git/store/IPC. Independent controls use real lineage pruning and an in-memory map. No physical SSH or native Git.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/blob/main/src/main/ipc/worktrees/listing/register-worktree-catalog-handlers.ts"
+      ],
+      "invariant": "Canonical SSH listings use the owning provider and cannot register remote roots locally or reuse local cache authority. A listing overtaken by a mutation or root revision cannot prune newer lineage.",
+      "oracle": "Both SSH owner spellings reach five read forms without local Git/root registration; disconnection and authority rotation invalidate detected answers. Both catalog channels suppress side effects after mutation/root revision. Two direct canonical scans require two provider listings instead of one cached listing.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/worktrees-canonical-ssh-listing.test.ts"
+      ],
+      "testFiles": ["src/main/ipc/worktrees-canonical-ssh-listing.test.ts"],
+      "assertionRefs": [
+        {
+          "file": "src/main/ipc/worktrees-canonical-ssh-listing.test.ts",
+          "assertions": [
+            "keeps %s on the direct SSH boundary",
+            "reports disconnection without replaying an authoritative local-cache answer",
+            "preserves lineage when %s is overtaken by a %s"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-26",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/worktrees-canonical-ssh-listing.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.884,
+          "summary": "26 permanent cases pass on isolated current main. Separate independent run40pass;8current-main related suites61pass. Author64scoped pass on shared checkout. Original permanent13fail/13controls. Initial candidate lineage regression repaired and revalidated."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "Focused mocked-provider unit suites; p95 not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Local author/independent/current-main validation only; no CI soak."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Original permanent13fail13controls; repaired26pass. Initial candidate lost actual lineage in2independent races; repaired40pass includes these controls."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "No added polling or concurrency; listAll remains bounded at8. Canonical SSH roots avoid local cache/registration. Trade-off:2connected direct scans use2provider listings instead of1cached result. No CPU/latency/heap improvement claim."
+      },
+      "knownGaps": [
+        "CI soak pending.",
+        "Local and daemon PTY, terminal output and mobile wire are unaffected.",
+        "Native Linux/Windows, live SSH/WSL and paired runtime-host integrations not executed. Generic runtime rows retain refusal.",
+        "Catalog list/listAll may still return a superseded plain-array snapshot; this gate prevents stale lineage side effects, not all response staleness.",
+        "Canonical forgetRemovedForExecutionHost remains outside scope; no new destructive authorization.",
+        "Filesystem classifier and registry defects are separate repairs; this gate only prevents listing-induced local-root admission.",
+        "Canonical SSH bypasses the improper5second local cache, increasing provider calls. No replacement cache or physical cancellation claim."
+      ],
+      "promotionCriteria": [
+        "Retain exact-owner, no-local-I/O, cache-admission and overtaken-lineage controls; collect CI soak and real provider coverage."
+      ],
+      "demotionRule": "Keep experimental until soak; investigate host/lineage regressions without weakening ownership assertions or adding blind retries."
     },
     {
       "id": "xterm-addon.boundary-containment",
@@ -17339,6 +18117,86 @@
       "demotionRule": "Demote or quarantine if the gate flakes once without a product bug or harness bug filed to the owner."
     },
     {
+      "id": "runtime-events.renderer-subscription-ownership",
+      "title": "Runtime events stay owned by their renderer subscription",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "runtime-platform",
+      "layer": "ipc-contract",
+      "surfaces": [
+        "renderer runtime events",
+        "remote runtime reconnect replay",
+        "renderer Linear refresh"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["remote-runtime"],
+      "coverageNotes": "Actual renderer manager, bridge, store actions, adapter and preload dispatcher with synthetic IPC boundaries on macOS. No rendered/native lifecycle, live peer or real provider network claim.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/blob/main/src/renderer/src/hooks/runtime-client-events-sync.ts"
+      ],
+      "invariant": "Only the current subscription attempt can cause renderer event work or reconnect recovery. Current early frames and other hosts survive; canceled late setup handles dispose.",
+      "oracle": "Hold setup, clean up the bridge, deliver100 events and a replay, and require zero provider read dispatches/cache publications/recovery/re-subscriptions. Require initial/live delivery, same-ID replacement, rekey, stop during synchronous setup, sibling host survival and late disposal.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/runtime-client-events-sync-ownership.test.ts src/renderer/src/hooks/ipc-events/runtime-client-ipc-bridge-ownership.test.ts src/renderer/src/hooks/runtime-client-events-sync.test.ts src/renderer/src/hooks/ipc-events/runtime-reconnect-host-status.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/preload/runtime-environment-subscriptions.test.ts"
+      ],
+      "testFiles": [
+        "src/renderer/src/hooks/runtime-client-events-sync-ownership.test.ts",
+        "src/renderer/src/hooks/ipc-events/runtime-client-ipc-bridge-ownership.test.ts",
+        "src/renderer/src/hooks/runtime-client-events-sync.test.ts",
+        "src/renderer/src/hooks/ipc-events/runtime-reconnect-host-status.test.ts",
+        "src/renderer/src/runtime/runtime-client-events.test.ts",
+        "src/preload/runtime-environment-subscriptions.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/hooks/ipc-events/runtime-client-ipc-bridge-ownership.test.ts",
+          "assertions": [
+            "does no Linear read dispatch or cache publication after cleanup while setup is pending",
+            "does no replay recovery or resubscription after cleanup",
+            "accepts a fresh bridge early frame while rejecting the previous bridge frame"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-25",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/runtime-client-events-sync-ownership.test.ts src/renderer/src/hooks/ipc-events/runtime-client-ipc-bridge-ownership.test.ts src/renderer/src/hooks/runtime-client-events-sync.test.ts src/renderer/src/hooks/ipc-events/runtime-reconnect-host-status.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/preload/runtime-environment-subscriptions.test.ts",
+          "result": "passed",
+          "durationSeconds": 2.12,
+          "summary": "41 tests /6 suites pass;13 new regressions have12 failures /1 pass against original production source."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 15,
+        "scope": "Focused deterministic renderer/preload suites; p95 not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Local validation only; no CI soak."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "12/13 new tests fail original source; candidate41 tests pass.100 stale dispatches/publications become0 each."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "No new timers, scans or IPC. Per-event O(1) owner guard adds paired median0.026ms/10k pending events and0.062ms/10k settled events. Each benchmark delivers2.2million events with no per-event desired/key reads. Synthetic timing, no rendered latency claim."
+      },
+      "knownGaps": [
+        "No native Windows/Linux/WSL, live SSH/remote or rendered app lifecycle test.",
+        "Already-admitted asynchronous handlers are not canceled; physical listener cleanup still waits for setup settlement.",
+        "No CI soak or mounted render/network/heap measurement."
+      ],
+      "promotionCriteria": [
+        "Retain actual composed dispatch/publication and late-disposal oracles; add CI soak and cross-platform lifecycle evidence before promotion."
+      ],
+      "demotionRule": "Keep experimental until soak; investigate failures without suppressing ownership assertions or unexplained retries."
+    },
+    {
       "id": "runtime-files.watcher-process-isolation",
       "title": "Runtime and SSH relay watcher faults stay process-isolated without disrupting host services",
       "maturity": "experimental",
@@ -20136,6 +20994,236 @@
         "Default config paths are shared with GNOME on a disposable hosted CI runner; nested mode refuses non-GitHub-Actions execution."
       ],
       "demotionRule": "Keep experimental on unexplained failures; retain exact bytes and participation checks without retries, skips, or longer deadlines."
+    },
+    {
+      "id": "relay.control-activation-ownership",
+      "title": "Closed queued controls leave persistence for the live retry",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "relay",
+      "layer": "registry-unit-and-local-websocket",
+      "surfaces": ["relay host control activation"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["relay"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["relay"],
+      "coverageNotes": "Actual registry queue with controlled store latency plus local WebSocket proof and connection-capacity suites on macOS. No PostgreSQL or live remote host run. PTY, daemon, SSH process state, WSL execution and folder/git workspace behavior are unaffected.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/blob/main/cloud/apps/relay/src/host-session-registry.ts"
+      ],
+      "invariant": "A closed queued transport starts no durable activation; an already-started activation retains cleanup, and a live successor becomes the indexed control without concurrent same-host activation.",
+      "oracle": "Queue a closed control before a live retry behind stalled persistence. With controlled 4s store calls, require two total activations, one release for the already-started closed control, and live readiness at 4s. Existing tests retain cleanup when closure happens during I/O.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay exec vitest run ../../../cloud/apps/relay/src/host-session-registry.test.ts ../../../cloud/apps/relay/src/host-session-client-accept.test.ts ../../../cloud/apps/relay/src/relay-host-proof-failure.blackbox.test.ts ../../../cloud/apps/relay/src/relay-connection-hard-cap.blackbox.test.ts --silent=false"
+      ],
+      "testFiles": [
+        "cloud/apps/relay/src/host-session-registry.test.ts",
+        "cloud/apps/relay/src/host-session-client-accept.test.ts",
+        "cloud/apps/relay/src/relay-host-proof-failure.blackbox.test.ts",
+        "cloud/apps/relay/src/relay-connection-hard-cap.blackbox.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "cloud/apps/relay/src/host-session-registry.test.ts",
+          "assertions": [
+            "skips a closed queued control so its live retry avoids abandoned database work",
+            "does not publish a control that closes during activation",
+            "does not rebind a control that closes during activation",
+            "fails a control waiting behind a stalled activation without breaking serialization"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-25",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay exec vitest run ../../../cloud/apps/relay/src/host-session-registry.test.ts ../../../cloud/apps/relay/src/host-session-client-accept.test.ts ../../../cloud/apps/relay/src/relay-host-proof-failure.blackbox.test.ts ../../../cloud/apps/relay/src/relay-connection-hard-cap.blackbox.test.ts --silent=false",
+          "result": "passed",
+          "durationSeconds": 0.407,
+          "summary": "88 tests across four files passed; relay typecheck passed separately."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "Focused unit and local socket suites; p95 not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Local validation only; no CI soak."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Baseline regression failed: three activation calls, two releases, live ready at 8s. Guarded registry passed with two calls, one release, live ready at 4s under controlled store latency."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Deletes abandoned persistence before it starts. No new timer, polling, queue, provider call or wire change; existing FIFO and post-I/O cleanup remain."
+      },
+      "knownGaps": [
+        "No real PostgreSQL contention benchmark or live remote host/physical mobile run.",
+        "Windows/Linux execution and CI soak are not recorded; queue cleanup after a never-settling predecessor remains unchanged."
+      ],
+      "promotionCriteria": [
+        "Retain red/green count and latency assertions; collect cross-platform and CI soak evidence."
+      ],
+      "demotionRule": "Keep experimental until soak evidence; investigate lifecycle failures without retries or weakening count, identity or cleanup assertions."
+    },
+    {
+      "id": "relay.assignment-headroom-scope",
+      "title": "Single-cell admission preserves capacity with bounded headroom reads",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "relay",
+      "layer": "sqlite-store-integration",
+      "surfaces": ["relay assignment admission", "relay migration target capacity"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["relay"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["relay"],
+      "coverageNotes": "Actual assignment store and SQLite tests on macOS. No real PostgreSQL or live remote host/physical phone run. Local/daemon PTY, SSH execution ownership, WSL, folder/git workspace behavior and transport framing are unaffected.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/issues/23035"],
+      "invariant": "A single-cell capacity check reads only that cell while retaining snapshot freshness, incarnation, outstanding reservation and missing-limit policy; new placement retains the full fleet inventory.",
+      "oracle": "With 32 capped cells, an existing active host stays on its pinned cell and reads one headroom row; new placement reads all 32. Missing, expired or prior-incarnation snapshots, capacity exhaustion and outstanding debt still refuse the active pinned host; an uncapped cell remains admissible.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay exec vitest run ../../../cloud/apps/relay/src/assignment-headroom-scope.test.ts ../../../cloud/apps/relay/src/assignment-connection-headroom.test.ts ../../../cloud/apps/relay/src/assignment-store.test.ts ../../../cloud/apps/relay/src/assignment-store-lock-order.test.ts ../../../cloud/apps/relay/src/cell-inventory-lock-contention.test.ts ../../../cloud/apps/relay/src/assignment-isolated-cell-replacement.test.ts ../../../cloud/apps/relay/src/regional-rehome-target-selection.test.ts --silent=false"
+      ],
+      "testFiles": [
+        "cloud/apps/relay/src/assignment-headroom-scope.test.ts",
+        "cloud/apps/relay/src/assignment-connection-headroom.test.ts",
+        "cloud/apps/relay/src/assignment-store.test.ts",
+        "cloud/apps/relay/src/assignment-store-lock-order.test.ts",
+        "cloud/apps/relay/src/cell-inventory-lock-contention.test.ts",
+        "cloud/apps/relay/src/assignment-isolated-cell-replacement.test.ts",
+        "cloud/apps/relay/src/regional-rehome-target-selection.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "cloud/apps/relay/src/assignment-headroom-scope.test.ts",
+          "assertions": [
+            "reads one cell for a sticky assignment even when the capped fleet grows",
+            "still considers the full fleet for a new placement",
+            "rejects the pinned active host with %s",
+            "preserves admission for cells without a connection limit",
+            "counts outstanding reservations at the admission boundary"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-25",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay exec vitest run ../../../cloud/apps/relay/src/assignment-headroom-scope.test.ts ../../../cloud/apps/relay/src/assignment-connection-headroom.test.ts ../../../cloud/apps/relay/src/assignment-store.test.ts ../../../cloud/apps/relay/src/assignment-store-lock-order.test.ts ../../../cloud/apps/relay/src/cell-inventory-lock-contention.test.ts ../../../cloud/apps/relay/src/assignment-isolated-cell-replacement.test.ts ../../../cloud/apps/relay/src/regional-rehome-target-selection.test.ts --silent=false",
+          "result": "passed",
+          "durationSeconds": 0.513,
+          "summary": "189 tests across seven files passed; independent root rerun also passed189 tests. Relay typecheck passed separately."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "Focused SQLite store/capacity/lock-order suites; p95 not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Local validation only; no CI soak."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Baseline two count regressions failed: sticky headroom 32 rows instead of 1 and uncapped target 31 unrelated rows instead of 0. Narrowed query passes all eight regression cases."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Actual sticky path result rows 32 to 1; no new timer, polling, queue, cache or provider call. Supplemental SQLite query benchmark with 32 cells and 400 active reservations each measured median per-query 0.285ms to 0.022ms; not a production PostgreSQL latency claim."
+      },
+      "knownGaps": [
+        "Real PostgreSQL query plan and concurrent admission not rerun for the scoped variant.",
+        "Windows/Linux execution, live remote host/mobile flows and CI soak are not recorded."
+      ],
+      "promotionCriteria": [
+        "Retain red/green row budget and semantic admission cases; collect PostgreSQL, cross-platform and CI soak evidence."
+      ],
+      "demotionRule": "Keep experimental until soak evidence; investigate admission/ownership regressions without weakening row or capacity assertions."
+    },
+    {
+      "id": "terminal-history.tombstone-rescan-ownership",
+      "title": "Shell-history cleanup reuses one directory listing while preserving deletion ownership",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "desktop-runtime",
+      "layer": "main-filesystem-contract",
+      "surfaces": ["shell-history tombstone cleanup", "native and WSL history deletion"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "wsl"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "wsl"],
+      "coverageNotes": "Actual macOS temp-filesystem deletion and fake WSL cleanup ownership. Live Windows, Linux and WSL execution untested; SSH and daemon replay unaffected because every path here is host-local.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/issues/23030"],
+      "invariant": "Only renamed tombstones are recursively removed, active plus retry admissions stay at 64, retries retain their delays and exhaustion behavior, a root displaced at the cap is admitted from another root's freed slot, and no tombstone is handed to removal twice per listing.",
+      "oracle": "Drain 1,024 real directory entries in controlled batches using at most 8 directory listings and 64 active removals. Exercise late arrivals discovered after the listing, both roots draining under one shared cap, a failing listing mid-drain, delayed failure retries, exhausted attempt budgets, and cancellation of an in-flight listing.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/terminal-history-tombstone-scan-cost.test.ts src/main/terminal-history-async-delete.test.ts src/main/terminal-history-tombstone-retry.test.ts src/main/terminal-history-gc-fs-call-count.test.ts src/main/terminal-history-gc.test.ts src/main/terminal-history.test.ts"
+      ],
+      "testFiles": [
+        "src/main/terminal-history-tombstone-scan-cost.test.ts",
+        "src/main/terminal-history-async-delete.test.ts",
+        "src/main/terminal-history-tombstone-retry.test.ts",
+        "src/main/terminal-history-gc-fs-call-count.test.ts",
+        "src/main/terminal-history-gc.test.ts",
+        "src/main/terminal-history.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/terminal-history-tombstone-scan-cost.test.ts",
+          "assertions": [
+            "drains 1024 tombstones without re-reading the directory per completion",
+            "picks up a tombstone created after the queued names were read",
+            "drains both roots within the shared admission cap without per-completion reads",
+            "keeps draining after a directory read fails mid-drain",
+            "drops an in-flight refill during fixture cleanup",
+            "preserves delayed failure retries while successful removals replenish the queue",
+            "does not retry a tombstone past its attempt budget when another root frees slots"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-26",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/terminal-history-tombstone-scan-cost.test.ts src/main/terminal-history-async-delete.test.ts src/main/terminal-history-tombstone-retry.test.ts src/main/terminal-history-gc-fs-call-count.test.ts src/main/terminal-history-gc.test.ts src/main/terminal-history.test.ts",
+          "result": "passed",
+          "durationSeconds": 1.95,
+          "summary": "86 tests across six suites passed, repeated three times with no flakes."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 15,
+        "scope": "focused temp-filesystem history tests"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Local author and independent runs pass; CI/soak history not collected."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Pre-change main lists the tombstone directory 1,026 times for 1,024 tombstones and fails the bounded-listing oracle. Reusing one listing reduces it to 6 while still removing every entry."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Five real-filesystem samples per version, 1,024 tombstone directories each holding a meta.json, macOS arm64 / Node 24, identical harness. Median directory listings 1,026 to 6, names enumerated 494,348 to 1,077, blocking main-thread time in the rescan path 820 to 7 ms (the listings themselves 266 to 2.7 ms, and now off-thread), total drain 886 to 75 ms. The remaining ~70 ms is the recursive rm itself and is unchanged. Average concurrent removals 62 of 64, restored from the 46 an event-loop-deferred refill left idle. No polling, no new timers, and no work deferred past process exit."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive CI passes or 14 days of soak history.",
+        "Run native Windows and WSL history cleanup on real filesystems."
+      ],
+      "knownGaps": [
+        "No rendered UI latency measurement or physical Windows/Linux/WSL run.",
+        "One listing is retained per root while it drains, about 160 KB per 1,024 tombstones, shrinking as names are consumed.",
+        "A small backlog still costs roughly one listing per completion batch, of a directory that is nearly empty by then.",
+        "A tombstone that exhausts its retries stays on disk until the next startup, unchanged from before."
+      ],
+      "demotionRule": "Keep experimental or demote if the reused listing strands a displaced root, crosses the admission cap, rearms an exhausted retry through another root, hands one tombstone to removal twice, or touches a recreated live history path."
     }
   ]
 }

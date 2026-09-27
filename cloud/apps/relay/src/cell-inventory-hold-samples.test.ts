@@ -67,4 +67,68 @@ describe('cell inventory hold samples', () => {
     expect(samples.consumeCounts().cellInventoryHolds).toBe(2)
     expect(samples.consumeCounts()).toEqual(emptyCellInventoryHoldCounts())
   })
+
+  // Why: this is the case the hold metrics alone cannot see. A NOWAIT grab that
+  // fails has no duration, so a retry storm used to leave every hold field at
+  // zero while the lock was saturated.
+  it('counts failed acquisitions in a window that recorded no holds', () => {
+    const samples = new CellInventoryHoldSamples()
+    for (let attempt = 0; attempt < 65; attempt++) samples.recordUnavailable()
+
+    const counts = samples.readCounts()
+
+    expect(counts.cellInventoryLockUnavailable).toBe(65)
+    expect(counts.cellInventoryHolds).toBe(0)
+    expect(counts.cellInventoryHoldMsMax).toBe(0)
+  })
+
+  it('reports failed acquisitions alongside the holds that did succeed', () => {
+    const samples = samplesOf([12, 34])
+    samples.recordUnavailable(3)
+
+    expect(samples.readCounts()).toMatchObject({
+      cellInventoryHolds: 2,
+      cellInventoryHoldMsMax: 34,
+      cellInventoryLockUnavailable: 3
+    })
+  })
+
+  it('ignores a failure count that is not a positive number', () => {
+    const samples = new CellInventoryHoldSamples()
+    samples.recordUnavailable(0)
+    samples.recordUnavailable(-2)
+    samples.recordUnavailable(Number.NaN)
+
+    expect(samples.readCounts()).toEqual(emptyCellInventoryHoldCounts())
+  })
+
+  it('resets failed acquisitions on consume', () => {
+    const samples = new CellInventoryHoldSamples()
+    samples.recordUnavailable(4)
+
+    expect(samples.consumeCounts().cellInventoryLockUnavailable).toBe(4)
+    expect(samples.consumeCounts()).toEqual(emptyCellInventoryHoldCounts())
+  })
+
+  // Why: the alert reads one max across every lock, so the label is the only
+  // thing that says whether a long hold was the inventory or a rehome target row.
+  it('names the site of the longest hold and reports rehome target rows apart', () => {
+    const samples = new CellInventoryHoldSamples()
+    samples.record(40)
+    samples.record(170, 'rehome-target-row')
+    samples.record(90, 'rehome-target-row')
+
+    expect(samples.readCounts()).toMatchObject({
+      cellInventoryHoldMsMax: 170,
+      cellInventoryHolds: 3,
+      cellInventoryHoldMaxSite: 'rehome-target-row',
+      rehomeTargetRowHoldMsMax: 170,
+      rehomeTargetRowHolds: 2
+    })
+    samples.record(300)
+    expect(samples.readCounts()).toMatchObject({
+      cellInventoryHoldMaxSite: 'inventory',
+      rehomeTargetRowHoldMsMax: 170
+    })
+  })
 })

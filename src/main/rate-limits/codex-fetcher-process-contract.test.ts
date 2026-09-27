@@ -41,6 +41,8 @@ const STUB_CODEX_SOURCE = `
 const expectedArgs = [
   '-c',
   'approval_policy=never',
+  '-c',
+  'features.plugins=false',
   '-s',
   'read-only',
   '-a',

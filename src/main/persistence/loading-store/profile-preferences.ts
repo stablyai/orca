@@ -159,7 +159,7 @@ export function getSettingsMutationOperations(
     bumpLocalWorktreeScanGeneration,
     removeRetainedBlob: (slot) =>
       owner[profilePreferencesContext].runtime.protectedSecrets.removeRetainedBlob(slot),
-    scheduleSave: () => scheduleSave(owner[profilePreferencesContext].scheduling),
+    scheduleSave: () => scheduleSave(owner[profilePreferencesContext].scheduling, ['settings']),
     notifySettingsChanged: (updates, originWebContentsId) =>
       notifySettingsChanged(owner, updates, originWebContentsId)
   }
@@ -183,7 +183,7 @@ export function getFeatureInteractionOperations(
 ): FeatureInteractionOperations {
   return {
     state: owner[profilePreferencesContext].runtime.state,
-    scheduleSave: () => scheduleSave(owner[profilePreferencesContext].scheduling),
+    scheduleSave: (domains) => scheduleSave(owner[profilePreferencesContext].scheduling, domains),
     notifyUIChanged: () => notifyUIChanged(owner),
     getUI: () => owner.getUI()
   }

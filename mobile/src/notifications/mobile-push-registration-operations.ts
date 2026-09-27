@@ -1,5 +1,9 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcUncheckedPayloadReader } from '../transport/rpc-reader-payload'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import {
+  notificationUnreadReplySchema,
+  pushRouteRegistrationSchema
+} from './notification-reply-schema'
 
 // The two sends that keep this device's push route on a host current.
 //
@@ -13,7 +17,7 @@ export const pushRouteRegister = bindDeferredRpcOperation(
     method: 'notifications.registerPush',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('push-registration')
+    read: rpcResultVariant('push-registration', pushRouteRegistrationSchema)
   })
 )
 
@@ -24,6 +28,6 @@ export const pushRouteUnregister = bindDeferredRpcOperation(
     method: 'notifications.unregisterPush',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('push-unregistered')
+    read: rpcResultVariant('push-unregistered', notificationUnreadReplySchema)
   })
 )

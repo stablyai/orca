@@ -138,10 +138,6 @@ export type DirtyMarkdownDraft = {
   content: string
 }
 
-export type TerminalCreateResult = {
-  tab: Extract<MobileSessionTab, { type: 'terminal' }>
-}
-
 export type MobileNewTabAgentLoadState = 'idle' | 'loading' | 'loaded' | 'error'
 
 export type MobileDisplayMode = 'auto' | 'phone' | 'desktop'

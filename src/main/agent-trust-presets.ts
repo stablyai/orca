@@ -6,7 +6,7 @@ import { getOrcaManagedCodexHomePath } from './codex/codex-home-paths'
 import { upsertProjectTrustLevel } from './codex/config-toml-trust'
 import { runExclusivelyForCodexTrustConfig } from './codex/codex-trust-config-mutation-queue'
 
-export type AgentTrustPreset = 'cursor' | 'copilot' | 'codex'
+export type AgentTrustPreset = 'cursor' | 'copilot' | 'codex' | 'antigravity'
 
 /**
  * Pre-mark a workspace as trusted for cursor-agent, GitHub Copilot CLI, or
@@ -75,9 +75,9 @@ export function markCopilotFolderTrusted(workspacePath: string): void {
   try {
     if (existsSync(configPath)) {
       const raw = readFileSync(configPath, 'utf-8')
-      const parsed = JSON.parse(raw)
-      if (parsed && typeof parsed === 'object') {
-        config = parsed as Record<string, unknown>
+      const parsed: unknown = JSON.parse(raw)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        config = Object.fromEntries(Object.entries(parsed))
       }
     }
   } catch {
@@ -95,6 +95,59 @@ export function markCopilotFolderTrusted(workspacePath: string): void {
   }
   const next = [...existing.filter((e) => typeof e === 'string'), absPath]
   config.trustedFolders = next
+  if (!existsSync(configDir)) {
+    mkdirSync(configDir, { recursive: true })
+  }
+  writeFileAtomically(configPath, `${JSON.stringify(config, null, 2)}\n`)
+}
+
+/**
+ * The Antigravity CLI (agy) keeps its trusted workspaces in
+ * ~/.gemini/antigravity-cli/settings.json under `trustedWorkspaces`, a flat
+ * array of absolute paths in native OS form.
+ *
+ * Verified empirically against agy 1.2.7 on Windows: accepting the CLI's
+ * "Do you trust the contents of this project?" prompt for a freshly created
+ * worktree appended exactly that worktree's path to this array. Note this is
+ * NOT ~/.gemini/trustedFolders.json — that file belongs to the Gemini CLI and
+ * agy does not consult it.
+ *
+ * Trust is exact-path and NOT inherited by subdirectories: `C:\Users\<you>`
+ * was already present in the array, yet launching agy in a descendant still
+ * raised the prompt and appended the descendant separately. Every new child
+ * worktree therefore needs its own entry, which is precisely what this
+ * per-worktree preflight provides.
+ *
+ * We append in-place so the sibling keys in the same file (model, permissions,
+ * toolPermission, agentMode, …) survive untouched.
+ */
+export function markAntigravityWorkspaceTrusted(workspacePath: string): void {
+  const absPath = canonicalize(workspacePath)
+  const configDir = join(homedir(), '.gemini', 'antigravity-cli')
+  const configPath = join(configDir, 'settings.json')
+  let config: Record<string, unknown> = {}
+  try {
+    if (existsSync(configPath)) {
+      const raw = readFileSync(configPath, 'utf-8')
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === 'object') {
+        config = parsed as Record<string, unknown>
+      }
+    }
+  } catch {
+    // Why: a corrupted settings.json is the user's to fix — refuse to
+    // overwrite it from this side-effect path. agy rewrites the file itself
+    // once the user accepts the trust prompt manually.
+    return
+  }
+  const existing = Array.isArray(config.trustedWorkspaces) ? config.trustedWorkspaces : []
+  const normalizedExisting = existing.map((entry) =>
+    typeof entry === 'string' ? canonicalize(entry) : null
+  )
+  if (normalizedExisting.includes(absPath)) {
+    return
+  }
+  config.trustedWorkspaces = [...existing.filter((e) => typeof e === 'string'), absPath]
   if (!existsSync(configDir)) {
     mkdirSync(configDir, { recursive: true })
   }

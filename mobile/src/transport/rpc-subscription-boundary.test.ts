@@ -1,8 +1,9 @@
-import { readFileSync, readdirSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { extname, join, relative, resolve } from 'node:path'
 import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
+import { censusSourceFiles } from '../test-support/census-source-files'
 import { readScenarios } from '../test-support/rpc-recording/scenario-input'
 import { RPC_SUBSCRIPTION_SITES, type RpcSubscriptionSite } from './rpc-subscription-inventory'
 
@@ -38,16 +39,6 @@ const sourceExtensions = new Set(['.js', '.jsx', '.ts', '.tsx'])
 /** The port's own implementation and the oracle that scripts it. Neither consumes a stream. */
 const EXCLUDED_DIRECTORIES = ['src/transport/', 'src/test-support/']
 
-function sourceFiles(directory: string): string[] {
-  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const path = join(directory, entry.name)
-    if (entry.isDirectory()) {
-      return entry.name === 'node_modules' ? [] : sourceFiles(path)
-    }
-    return [path]
-  })
-}
-
 function parse(path: string, source: string): ts.SourceFile {
   const extension = extname(path)
   return ts.createSourceFile(
@@ -80,7 +71,7 @@ export function subscribedMethods(path: string, source: string): string[] {
 }
 
 const scanned = scannedRoots
-  .flatMap(sourceFiles)
+  .flatMap(censusSourceFiles)
   .filter((path) => sourceExtensions.has(extname(path)))
   .filter((path) => !/\.test\.tsx?$/.test(path))
   .map((path) => relative(mobileRoot, path).split(/[/\\]/).join('/'))

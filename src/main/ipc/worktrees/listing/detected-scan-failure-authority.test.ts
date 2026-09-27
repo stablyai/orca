@@ -56,8 +56,10 @@ function wslHostFailure(): Error {
   })
 }
 
+const store = createStore()
+
 async function listDetected(): Promise<DetectedWorktreeListResult> {
-  const result = await listDetectedWorktreesForCapturedRepo(createStore(), repo, () => true)
+  const result = await listDetectedWorktreesForCapturedRepo(store, repo, () => true)
   return result as DetectedWorktreeListResult
 }
 
@@ -81,7 +83,7 @@ describe('detected worktree listing authority', () => {
     // Why: the retained rows must carry the cause, or the user sees inert worktrees with no explanation.
     expect(result.unavailableReason).toContain('Command failed: wsl.exe')
     // The destructive halves of a fresh scan must not run against a listing that failed.
-    expect(isRegisteredWorktreePath(REPO_PATH)).toBe(false)
+    expect(isRegisteredWorktreePath(REPO_PATH, store)).toBe(false)
     expect(removeWorktreeLineage).not.toHaveBeenCalled()
   })
 
@@ -118,7 +120,7 @@ describe('detected worktree listing authority', () => {
 
     expect(result.authoritative).toBe(false)
     expect(result.unavailableReason).toContain('No such file or directory')
-    expect(isRegisteredWorktreePath(REPO_PATH)).toBe(false)
+    expect(isRegisteredWorktreePath(REPO_PATH, store)).toBe(false)
     expect(removeWorktreeLineage).not.toHaveBeenCalled()
   })
 
@@ -136,7 +138,7 @@ describe('detected worktree listing authority', () => {
     expect(result.source).toBe('git')
     expect(result.worktrees).toEqual([])
     expect(result.unavailableReason).toBeUndefined()
-    expect(isRegisteredWorktreePath(REPO_PATH)).toBe(true)
+    expect(isRegisteredWorktreePath(REPO_PATH, store)).toBe(true)
   })
 
   it('keeps an empty listing authoritative when the repo path is gone', async () => {
@@ -161,6 +163,6 @@ describe('detected worktree listing authority', () => {
 
     expect(result.authoritative).toBe(true)
     expect(result.worktrees.map((worktree) => worktree.path)).toEqual([REPO_PATH])
-    expect(isRegisteredWorktreePath(REPO_PATH)).toBe(true)
+    expect(isRegisteredWorktreePath(REPO_PATH, store)).toBe(true)
   })
 })

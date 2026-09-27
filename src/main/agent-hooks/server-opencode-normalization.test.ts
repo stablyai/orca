@@ -26,26 +26,26 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('OpenCode hook normalization', () => {
+describe.each(['opencode', 'opencode2'] as const)('%s hook normalization', (source) => {
   it('SessionBusy maps to working', () => {
     const result = _internals.normalizeHookPayload(
-      'opencode',
+      source,
       buildBody({ hook_event_name: 'SessionBusy' }),
       'production'
     )
     expect(result?.payload.state).toBe('working')
-    expect(result?.payload.agentType).toBe('opencode')
+    expect(result?.payload.agentType).toBe(source)
   })
 
   it('SessionBusy does NOT clear the cached user prompt', () => {
     // Why: OpenCode caches the user's MessagePart before SessionBusy fires, so the cached prompt is this turn's; clearing it would clobber the dashboard.
     _internals.normalizeHookPayload(
-      'opencode',
+      source,
       buildBody({ hook_event_name: 'MessagePart', role: 'user', text: 'new prompt' }),
       'production'
     )
     const result = _internals.normalizeHookPayload(
-      'opencode',
+      source,
       buildBody({ hook_event_name: 'SessionBusy' }),
       'production'
     )
@@ -55,17 +55,17 @@ describe('OpenCode hook normalization', () => {
 
   it('SessionIdle maps to done', () => {
     const result = _internals.normalizeHookPayload(
-      'opencode',
+      source,
       buildBody({ hook_event_name: 'SessionIdle' }),
       'production'
     )
     expect(result?.payload.state).toBe('done')
-    expect(result?.payload.agentType).toBe('opencode')
+    expect(result?.payload.agentType).toBe(source)
   })
 
   it('PermissionRequest maps to waiting', () => {
     const result = _internals.normalizeHookPayload(
-      'opencode',
+      source,
       buildBody({ hook_event_name: 'PermissionRequest' }),
       'production'
     )
@@ -75,17 +75,17 @@ describe('OpenCode hook normalization', () => {
   it('AskUserQuestion maps to waiting', () => {
     // Why: AskUserQuestion leaves the agent idle-but-waiting on a human, so it must map to `waiting` (red dot) like permission.asked, not stay `working`.
     const result = _internals.normalizeHookPayload(
-      'opencode',
+      source,
       buildBody({ hook_event_name: 'AskUserQuestion' }),
       'production'
     )
     expect(result?.payload.state).toBe('waiting')
-    expect(result?.payload.agentType).toBe('opencode')
+    expect(result?.payload.agentType).toBe(source)
   })
 
   it('unknown event name returns null', () => {
     const result = _internals.normalizeHookPayload(
-      'opencode',
+      source,
       buildBody({ hook_event_name: 'SomeOtherEvent' }),
       'production'
     )
@@ -94,7 +94,7 @@ describe('OpenCode hook normalization', () => {
 
   it('MessagePart with role=user surfaces text as the prompt and stays working', () => {
     const result = _internals.normalizeHookPayload(
-      'opencode',
+      source,
       buildBody({
         hook_event_name: 'MessagePart',
         role: 'user',
@@ -106,12 +106,12 @@ describe('OpenCode hook normalization', () => {
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.prompt).toBe('hi there')
     expect(result?.hasExplicitPrompt).toBe(true)
-    expect(result?.promptInteractionKey).toBe('opencode-message-msg-1')
+    expect(result?.promptInteractionKey).toBe(`${source}-message-msg-1`)
   })
 
   it('MessagePart with role=assistant populates lastAssistantMessage', () => {
     const result = _internals.normalizeHookPayload(
-      'opencode',
+      source,
       buildBody({
         hook_event_name: 'MessagePart',
         role: 'assistant',
@@ -126,7 +126,7 @@ describe('OpenCode hook normalization', () => {
   it('caps oversized MessagePart text from stale (pre-throttle) plugin builds', () => {
     // Why: stale plugin builds re-post the full reply on every part update, so the listener must cap the text to keep per-event work O(cap).
     const assistant = _internals.normalizeHookPayload(
-      'opencode',
+      source,
       buildBody({
         hook_event_name: 'MessagePart',
         role: 'assistant',
@@ -138,7 +138,7 @@ describe('OpenCode hook normalization', () => {
 
     // Why: prompt is capped at 200 by normalizeAgentStatusObject; assert oversized input still stays within that bound.
     const user = _internals.normalizeHookPayload(
-      'opencode',
+      source,
       buildBody({
         hook_event_name: 'MessagePart',
         role: 'user',
@@ -152,17 +152,17 @@ describe('OpenCode hook normalization', () => {
 
   it('subsequent SessionIdle preserves cached prompt + assistant message', () => {
     _internals.normalizeHookPayload(
-      'opencode',
+      source,
       buildBody({ hook_event_name: 'MessagePart', role: 'user', text: 'hi' }),
       'production'
     )
     _internals.normalizeHookPayload(
-      'opencode',
+      source,
       buildBody({ hook_event_name: 'MessagePart', role: 'assistant', text: 'hello back' }),
       'production'
     )
     const done = _internals.normalizeHookPayload(
-      'opencode',
+      source,
       buildBody({ hook_event_name: 'SessionIdle' }),
       'production'
     )

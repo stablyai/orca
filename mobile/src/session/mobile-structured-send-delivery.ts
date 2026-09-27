@@ -43,7 +43,7 @@ export function mobileStructuredSendDelivery(
     return { outcome: 'unknown', operationIdSpent: false, error: null }
   }
   if (result.status === 'refused') {
-    const refusalState = agentSessionRefusalOperationState('agentSession.send', result.code)
+    const refusalState = agentSessionRefusalOperationState(result.code)
     if (refusalState === 'unknown') {
       return { outcome: 'unknown', operationIdSpent: false, error: null }
     }

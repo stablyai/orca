@@ -2,14 +2,18 @@ import type { AgentJournalItemIdentity } from '../../shared/agent-session-journa
 import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { codexJournalItem, CodexThreadItem } from './codex-structured-item-translation'
+import type { CodexRowLinkage } from './codex-subagent-linkage'
 
 export type CodexItemStreamDeps = {
   sink: StructuredAgentSessionEventSink
+  /** The turn a delta-only item belongs to, read the way its first delta names it. */
+  turnIdFor: (threadId: string, params: unknown) => string | null
   identityFor: (
     threadId: string,
-    params: unknown,
+    turnId: string | null,
     item: CodexThreadItem
   ) => AgentJournalItemIdentity
+  linkageFor: CodexRowLinkage
   coalesceMs?: number
   maxRetainedBytes?: number
   maxTotalRetainedBytes?: number
@@ -39,7 +43,12 @@ export type CodexStructuredItemStreamHandleResult = {
 export type CodexStructuredItemStreams = {
   readonly persistentCount: number
   canTrack: (threadId: string, item: CodexThreadItem, identity: AgentJournalItemIdentity) => boolean
-  track: (threadId: string, item: CodexThreadItem, identity: AgentJournalItemIdentity) => boolean
+  track: (
+    threadId: string,
+    turnId: string | null,
+    item: CodexThreadItem,
+    identity: AgentJournalItemIdentity
+  ) => boolean
   handle: (
     threadId: string,
     method: string,

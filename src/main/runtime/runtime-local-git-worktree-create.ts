@@ -1,4 +1,5 @@
 import type { LocalGitExecOptions } from '../git/repo-default-base-ref'
+import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
 import type { GitPushTarget, GitWorktreeInfo } from '../../shared/worktree/types'
 import type { Repo } from '../../shared/repo-types'
 import { resolveCreatedWorktree } from '../ipc/created-worktree-reconciliation'
@@ -151,6 +152,9 @@ export async function createRuntimeLocalGitWorktree(args: {
           })
         : null
     // This path has no create-span recorder, so the miss reason is only observable on the IPC path.
+    if (preparedAttempt?.status === 'miss' && preparedAttempt.rearm) {
+      args.rearm.fire = preparedAttempt.rearm
+    }
     if (preparedAttempt?.status === 'hit') {
       addResult = preparedAttempt.result
       // Deferred, not fired: re-arming is a full `reset --hard`, and the caller still has
@@ -190,6 +194,8 @@ export async function createRuntimeLocalGitWorktree(args: {
     }
     throw error
   }
+  // Why: the worktree is listable from here on; scans that began before it appeared are stale.
+  runWorktreeChangeInvalidators(args.repo.id)
   if (shouldRetireGeneratedName) {
     await retireGeneratedWorktreeName(
       args.store as Parameters<typeof retireGeneratedWorktreeName>[0],

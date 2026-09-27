@@ -2,6 +2,10 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal-wait-blocked-reason-legacy-alias'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { RunRow, TaskRow } from '../../../../orchestration/types'
+import type {
+  OrchestrationCallerIdentity,
+  OrchestrationSessionCaller
+} from '../../../../orchestration/orchestration-caller-identity'
 import { resolveDispatchCreator } from '../runs/dispatch-creator'
 import { resolveDispatchCallerWorktreeId } from '../../orchestration-caller-workspace'
 import {
@@ -38,18 +42,25 @@ export async function startLocalWorker(args: {
   runtime: OrcaRuntimeService
   db: OrchestrationDb
   run: RunRow
-  coordinatorPane: string | null
+  coordinator: OrchestrationCallerIdentity | null
+  callerSession?: OrchestrationSessionCaller
   existingTask?: TaskRow
   orchestrationMutation?: WorkerStartMutation
   /** Settings-driven; the executing host still gets to refuse below. */
   mode: WorkerStartModeReceipt
 }): Promise<unknown> {
-  const { params, runtime, db, run, coordinatorPane, existingTask, orchestrationMutation } = args
+  const { params, runtime, db, run, coordinator, callerSession, existingTask } = args
+  const { orchestrationMutation } = args
+  const coordinatorPane = coordinator?.paneKey ?? null
   const requestedWorktree = params.worktree ?? 'current'
   const createsWorktree = requestedWorktree === 'new-child' || requestedWorktree === 'new-top-level'
   const { agent, launch } = prepareLocalWorkerStart({ params, createsWorktree, runtime })
 
-  const coordinatorWorktreeId = await resolveDispatchCallerWorktreeId(runtime, params.from)
+  const coordinatorWorktreeId = await resolveDispatchCallerWorktreeId(
+    runtime,
+    params.from,
+    callerSession
+  )
   const creationWorktree = createsWorktree
     ? await runtime.showManagedWorktree(`id:${coordinatorWorktreeId}`)
     : undefined
@@ -70,7 +81,7 @@ export async function startLocalWorker(args: {
       runtime,
       terminal: params.terminal,
       from: params.from,
-      coordinatorPane,
+      coordinator,
       resolvedWorktreeId: resolvedWorktree?.id
     })
   }
@@ -95,7 +106,7 @@ export async function startLocalWorker(args: {
       : 'existing_worktree'
   }
   const started = db.createStartingWorkerDispatch({
-    creator: resolveDispatchCreator(runtime, params.from),
+    creator: resolveDispatchCreator(runtime, params.from, callerSession),
     maxDepth: runtime.getNestedWorkerMaxDepth(),
     taskId: existingTask?.id,
     taskSpec: params.spec,
@@ -103,10 +114,12 @@ export async function startLocalWorker(args: {
     taskDeps: parseTaskDeps(params.deps),
     taskParentId: params.parent,
     taskRunId: run.id,
-    taskCreatedByTerminalHandle: params.from,
+    // A handle-less session creates root Tasks: Task lineage is recorded by terminal only.
+    taskCreatedByTerminalHandle: coordinator?.terminalHandle ?? undefined,
     taskCreatedByPaneKey: coordinatorPane ?? undefined,
-    taskCreatedByProcessIncarnation:
-      runtime.getTerminalProcessIncarnation(params.from) ?? undefined,
+    taskCreatedByProcessIncarnation: coordinator?.terminalHandle
+      ? (runtime.getTerminalProcessIncarnation(coordinator.terminalHandle) ?? undefined)
+      : undefined,
     taskCreatedByRunGeneration: run.consumer_generation,
     retryOf: params.retryOf,
     startOptions,

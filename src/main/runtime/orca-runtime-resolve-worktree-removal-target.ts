@@ -14,17 +14,13 @@ import type { ForceDeleteWorktreeBranchResult } from '../../shared/worktree/crea
 import type { RuntimeTerminalRename } from '../../shared/runtime-types'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
-import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
 import { terminalShellOverrideRefusal } from './terminal-shell-override-host-support'
 import { resolveTerminalStartupCwd } from '../../shared/terminal-startup-cwd'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
 import { resolveBareAgentLaunchCommand } from './runtime-agent-launch-resolution'
 import { buildAgentStartupPlan } from '../../shared/tui-agent-startup'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../shared/tui-agent-launch-defaults'
+import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
 
 export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWithRemoveManagedWorktree {
   protected async resolveWorktreeRemovalTarget(
@@ -203,12 +199,6 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
     // Why: `workspace.repo` is display metadata and may be a row from another host; the launch
     // shape must match the PTY route this scope already resolved.
     const isRemote = Boolean(workspace.connectionId)
-    const queuedShell = resolveLocalWindowsAgentStartupShell({
-      platform,
-      isRemote,
-      // A requested shell is the one this PTY will actually be, so it owns the quoting family.
-      terminalWindowsShell: opts.shellOverride ?? settings.terminalWindowsShell
-    })
     if (opts.startupAgent && !isTuiAgentEnabled(opts.startupAgent, settings.disabledTuiAgents)) {
       throw new Error(`Agent ${opts.startupAgent} is disabled. Choose an enabled agent.`)
     }
@@ -224,18 +214,18 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
       return opts
     }
 
-    const sessionOptions = this.toAgentSessionOptions(opts.launchPreferences)
     const startupPlan = buildAgentStartupPlan({
-      agent,
-      prompt: '',
-      cmdOverrides: settings.agentCmdOverrides ?? {},
-      agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
-      sessionOptions,
-      sessionOptionsOverrideAgentArgs: Boolean(sessionOptions),
-      platform,
-      shell: queuedShell,
-      isRemote,
+      ...resolveAgentStartupPlanInputs({
+        agent,
+        settings,
+        platform,
+        isRemote,
+        ...(opts.agentArgs !== undefined ? { agentArgs: opts.agentArgs } : {}),
+        // A requested shell is the one this PTY will actually be, so it owns the quoting family.
+        windowsShellOverride: opts.shellOverride,
+        sessionOptions: this.toAgentSessionOptions(opts.launchPreferences)
+      }),
+      prompt: opts.startupPrompt ?? '',
       allowEmptyPromptLaunch: true
     })
     if (!startupPlan) {
@@ -245,6 +235,11 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
         throw new Error(`Could not build launch command for ${opts.startupAgent}.`)
       }
       return opts
+    }
+    // A prompt this launch command cannot carry has nowhere to go from here — the create returns
+    // options, not a live PTY — so refuse rather than spawn the agent and drop the text.
+    if (opts.startupPrompt && startupPlan.followupPrompt) {
+      throw new Error(`Agent ${agent} does not take a startup prompt on its launch command.`)
     }
 
     await this.markWorkspaceTrustedForAgent(agent, workspace.connectionId, workspace.path)

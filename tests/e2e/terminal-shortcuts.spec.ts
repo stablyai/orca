@@ -152,7 +152,7 @@ async function seedFloatingTerminalTabSwitchScenario(page: Page): Promise<{
       state.createTab(backgroundWorktreeId)
     state.createTab(backgroundWorktreeId)
     state.setActiveTab(backgroundFirst.id)
-    state.setActiveTabType('terminal')
+    state.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
 
     const floatingFirst = state.createTab(floatingWorktreeId, undefined, undefined, {
       activate: false

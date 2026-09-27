@@ -51,6 +51,10 @@ if (untracked.stdout.trim() !== '') {
     `Untracked product sources would not be pinned by the baseline:\n${untracked.stdout.trim()}`
   )
 }
+// Ten minutes, not two: the corpus already records in ~110s, so the old 120s budget killed the run
+// on any cold cache and reported it as a truncated failure rather than as a timeout.
+const RECORDING_TIMEOUT_MS = 600_000
+
 const require = createRequire(resolve(root, 'mobile/package.json'))
 const result = await runProcess({
   program: process.execPath,
@@ -60,11 +64,16 @@ const result = await runProcess({
     ...RECORDING_DRIVERS.map((driver) => `src/test-support/rpc-recording/${driver}`)
   ],
   cwd: resolve(root, 'mobile'),
-  timeoutMs: 120_000,
+  timeoutMs: RECORDING_TIMEOUT_MS,
   env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1', RPC_FOUNDATION_MODE: '--record' }
 })
 process.stdout.write(result.stdout)
 process.stderr.write(result.stderr)
+if (result.timedOut) {
+  // Why: a killed run writes a partial reporter line and nothing else, which reads as a failing
+  // test rather than as a run that never finished.
+  throw new Error(`Recording did not finish within ${RECORDING_TIMEOUT_MS / 1000}s and was killed.`)
+}
 if (result.code !== 0) {
   process.exitCode = 1
 }

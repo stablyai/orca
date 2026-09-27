@@ -52,7 +52,7 @@ describe('session search over real relay frames', () => {
     expect(JSON.stringify(raw)).not.toContain('/host/transcript')
     expect(JSON.stringify(raw)).not.toContain('/host/codex')
     expect(JSON.stringify(raw)).not.toContain('resumeCommand')
-    expect(service.search).toHaveBeenLastCalledWith({ query: 'needle', limit: 20 })
+    expect(service.search).toHaveBeenLastCalledWith({ query: 'needle', limit: 20 }, undefined)
     expect(service.reconcile).not.toHaveBeenCalled()
     expect(await client.searchStatus()).toMatchObject({ enabled: true, generation: 7 })
     await expect(mux.request('aiVault.searchSessions', { query: 42 })).rejects.toThrow()

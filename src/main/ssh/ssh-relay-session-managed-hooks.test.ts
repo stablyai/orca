@@ -3,6 +3,8 @@ import {
   AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD,
   AGENT_HOOK_INSTALL_PLUGINS_METHOD
 } from '../../shared/agent-hook-relay'
+import { getDefaultSettings } from '../../shared/constants'
+import type { Store } from '../persistence'
 import { SshRelaySession } from './ssh-relay-session'
 import type { SshConnection } from './ssh-connection'
 import { createMockDeps, mockDeploySuccess } from './ssh-relay-session-test-fixtures'
@@ -116,6 +118,7 @@ describe('SshRelaySession managed hooks', () => {
       ([method]) => method === AGENT_HOOK_INSTALL_PLUGINS_METHOD
     )
     expect(muxRequestMock.mock.calls[pluginsIndex]?.[1]).toMatchObject({
+      opencode2PluginSource: expect.stringContaining('/hook/opencode2'),
       piExtensionSource: expect.stringContaining('/hook/pi'),
       ompExtensionSource: expect.stringContaining('/hook/omp'),
       primeAgentExtensionSource: expect.stringContaining('/hook/prime-agent')
@@ -157,5 +160,46 @@ describe('SshRelaySession managed hooks', () => {
         claudeVersion: '2.1.261'
       })
     )
+  })
+  it('refreshes OpenCode sources on settings changes and releases its subscription', async () => {
+    muxRequestMock.mockResolvedValue({ agents: [] })
+    const { mockStore, mockConn, mockPortForward, getMainWindow } = createMockDeps()
+    const settings = getDefaultSettings('/synthetic-home')
+    settings.disabledTuiAgents = ['opencode']
+    mockStore.getSettings = () => settings
+    let listener: Parameters<Store['onSettingsChanged']>[0] | undefined
+    const cleanup = vi.fn(() => {
+      listener = undefined
+    })
+    mockStore.onSettingsChanged = (callback) => {
+      listener = callback
+      return cleanup
+    }
+    const session = new SshRelaySession(
+      'target-settings',
+      getMainWindow,
+      mockStore,
+      mockPortForward
+    )
+    await session.establish(mockConn)
+    const lastSources = () =>
+      muxRequestMock.mock.calls.findLast(
+        ([method]) => method === AGENT_HOOK_INSTALL_PLUGINS_METHOD
+      )?.[1]
+    expect(lastSources()).toMatchObject({
+      opencodePluginSource: '',
+      opencode2PluginSource: expect.stringContaining('/hook/opencode2')
+    })
+    settings.disabledTuiAgents = ['opencode2']
+    listener?.({ disabledTuiAgents: settings.disabledTuiAgents }, settings)
+    expect(lastSources()).toMatchObject({
+      opencodePluginSource: expect.stringContaining('/hook/opencode'),
+      opencode2PluginSource: ''
+    })
+    settings.agentStatusHooksEnabled = false
+    listener?.({ agentStatusHooksEnabled: false }, settings)
+    expect(lastSources()).toMatchObject({ opencodePluginSource: '', opencode2PluginSource: '' })
+    session.dispose()
+    expect(cleanup).toHaveBeenCalledOnce()
   })
 })

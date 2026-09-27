@@ -37,6 +37,8 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   /** Fully qualified provider identity; never a credential or mailbox lookup key. */
   providerAlias?: AgentStatusProviderAlias
   paneKey: string
+  /** Live host acknowledgement of this renderer’s exact pane retirement. */
+  authorityRestartId?: string
   launchToken?: string
   terminalHandle?: string
   tabId?: string

@@ -1,5 +1,6 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 
 export const mobileDiffReviewControlStyles = StyleSheet.create({
   footer: {
@@ -116,7 +117,8 @@ export const mobileDiffReviewControlStyles = StyleSheet.create({
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel,
     color: colors.textPrimary,
-    fontSize: typography.bodySize,
+    // Through the seam, as the commit bar is: 14px focuses into a zoomed page on iOS.
+    fontSize: TEXT_INPUT_FONT_SIZE,
     lineHeight: 20,
     padding: spacing.md,
     textAlignVertical: 'top'

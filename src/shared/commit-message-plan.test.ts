@@ -318,6 +318,31 @@ describe('planCommitMessageGeneration', () => {
     })
   })
 
+  it('plans Muse exec with a positional prompt and no workspace side effects', () => {
+    const result = planCommitMessageGeneration({ agentId: 'muse', model: 'default' }, 'PROMPT')
+
+    expect(result).toEqual({
+      ok: true,
+      plan: {
+        binary: 'muse',
+        args: [
+          'exec',
+          '--no-session-log',
+          '--approval-mode',
+          'never',
+          '--disable-sandbox',
+          '--disable-shell',
+          '--disable-write',
+          '--disable-web-tools',
+          '--',
+          'PROMPT'
+        ],
+        stdinPayload: null,
+        label: 'Muse'
+      }
+    })
+  })
+
   it('uses preset agent command overrides as the spawn command prefix', () => {
     const result = planCommitMessageGeneration(
       {

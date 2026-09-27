@@ -1,5 +1,4 @@
 import { PTY_LIVE_NOTE, describeUnconfirmedStop } from '../shared/pty-liveness-verdict'
-import { structuredChatPtyWriteRefusalCopy } from '../shared/agent-session-pty-write-refusal-copy'
 import { describeTerminalWaitBlockedReason } from '../shared/terminal-wait-blocked-reason-legacy-alias'
 import { formatListingHostScope, type WithAnnotatedHostScope } from './omitted-host-scope-selectors'
 import type {
@@ -176,12 +175,6 @@ function formatTerminalReadLimitedWarning(terminal: RuntimeTerminalRead): string
 }
 
 export function formatTerminalSend(result: { send: RuntimeTerminalSend }): string {
-  if (result.send.agentSessionRefusal) {
-    const copy = structuredChatPtyWriteRefusalCopy(result.send.agentSessionRefusal, 'terminal-send')
-    if (copy) {
-      return copy
-    }
-  }
   if (!result.send.accepted) {
     const reason = result.send.refusedReason ? `: ${result.send.refusedReason}` : ''
     return `Input refused by ${result.send.handle}${reason}.`

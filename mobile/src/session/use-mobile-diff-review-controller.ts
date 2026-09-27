@@ -38,7 +38,8 @@ type ControllerInput = {
   initialFilter: MobileDiffReviewQueueFilter
   initialTarget: MobileDiffReviewInitialTarget | null
   onOpenSession: () => void
-  onReconnect: (hostId: string) => void | Promise<void>
+  /** Null on the page, where the shell owns the connection. */
+  onReconnect: ((hostId: string) => void | Promise<void>) | null
 }
 
 export function useMobileDiffReviewController(input: ControllerInput) {
@@ -119,7 +120,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     }
     const branchEntries =
       screenState.branchCompare && canOpenMobileBranchCompareDiff(screenState.branchCompare.summary)
-        ? screenState.branchCompare.entries
+        ? (screenState.branchCompare.entries ?? [])
         : []
     return buildMobileDiffReviewQueue({
       worktreeId,

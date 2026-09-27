@@ -7,6 +7,7 @@ export type TuiAgent =
   | 'codex' // OpenAI Codex
   | 'autohand' // Autohand Code CLI
   | 'opencode' // OpenCode
+  | 'opencode2' // OpenCode 2 beta
   | 'mimo-code'
   | 'pi' // Pi (pi.dev)
   | 'omp' // OMP (omp.sh)
@@ -36,4 +37,6 @@ export type TuiAgent =
   | 'devin' // Devin CLI
   | 'ante' // Ante (Antigma Labs)
   | 'trae' // Trae CLI
+  | 'muse' // Muse (Meta `muse` CLI)
+  | 'zcode' // ZCode (Z.ai `zcode` CLI)
   | 'prime-agent' // Prime Agent (Prime Intellect)

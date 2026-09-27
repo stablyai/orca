@@ -54,7 +54,13 @@ export function fakeClaude(
     initProof?: 'init' | 'session-start' | 'none'
     initAccount?: unknown
     initCommands?: unknown
+    /** The initialize result's `models`, which the SDK also answers `list_models` from. */
+    initModels?: unknown[]
+    /** What `get_context_usage` answers; defaults to an empty, unusable report. */
+    contextUsage?: unknown
     exitBeforeInit?: string
+    /** Host-clock delay before the CLI answers initialize, as on a loaded machine. */
+    initDelayMs?: number
     settings?: unknown
     replayUuid?: string | null
     replayUuids?: (string | null)[]
@@ -74,7 +80,7 @@ export function fakeClaude(
     const route = routes[subtype]
     return route ? route(params) : undefined
   }
-  const openConnection = (async (launch, handlers = {}) => {
+  const openConnection: typeof openClaudeStreamJsonConnection = async (launch, handlers = {}) => {
     const connection: FakeConnection = {
       launch,
       handlers,
@@ -83,11 +89,18 @@ export function fakeClaude(
       closeCount: 0,
       pid: 4321,
       closed: false,
+      pauseReading: () => {},
+      resumeReading: () => {},
       initializationResult: async () => {
         connection.calls.push({ subtype: 'initialize' })
+        if (options.initDelayMs !== undefined) {
+          await new Promise((resolve) => setTimeout(resolve, options.initDelayMs))
+        }
         if (options.exitBeforeInit) {
+          connection.closed = true
           handlers.onExit?.(new Error(options.exitBeforeInit))
-          return { models: [] }
+          // The SDK rejects pending control requests once the transport ends.
+          throw new Error('Query closed before response received')
         }
         if (options.initProof === 'session-start') {
           handlers.onMessage?.({
@@ -112,10 +125,14 @@ export function fakeClaude(
           })
         }
         return {
-          models: [{ value: 'claude-sonnet', displayName: 'Sonnet' }],
+          models: options.initModels ?? [{ value: 'claude-sonnet', displayName: 'Sonnet' }],
           ...(options.initCommands === undefined ? {} : { commands: options.initCommands }),
           ...(options.initAccount === undefined ? {} : { account: options.initAccount })
         }
+      },
+      getContextUsage: async () => {
+        connection.calls.push({ subtype: 'get_context_usage' })
+        return options.contextUsage ?? {}
       },
       getSettings: async () => {
         connection.calls.push({ subtype: 'get_settings' })
@@ -162,7 +179,10 @@ export function fakeClaude(
         connection.calls.push({ subtype: 'stop_task', params: { taskId } })
         routed('stop_task', { taskId })
       },
-      send: async (message) => {
+      send: async (message, beforeDispatch) => {
+        if (beforeDispatch) {
+          await beforeDispatch()
+        }
         connection.sent.push(message)
         if (message.type === 'user' && options.replayUuid !== null) {
           const configuredReplayUuid = options.replayUuids
@@ -187,17 +207,31 @@ export function fakeClaude(
     }
     connections.push(connection)
     return connection
-  }) as typeof openClaudeStreamJsonConnection
+  }
   return { connections, openConnection, routes }
 }
 
+/** Acquisition resolves only once startup has landed, as suites written before
+ *  publish-first expect; `adapterAtPublishFor` observes the published window itself. */
 export function adapterFor(
+  ...args: Parameters<typeof adapterAtPublishFor>
+): ClaudeStructuredSessionAdapter {
+  const adapter = adapterAtPublishFor(...args)
+  const acquire = adapter.acquire
+  adapter.acquire = async (input) => {
+    const acquisition = await acquire(input)
+    await adapter.drainStartup(input.identity.sessionId)
+    return acquisition
+  }
+  return adapter
+}
+
+export function adapterAtPublishFor(
   claude: ReturnType<typeof fakeClaude>,
   launch: Partial<ClaudeStructuredLaunch> = {},
   events: ClaudeStructuredSessionEvent[] = [],
   persistedHandles: unknown[] = [],
-  initTimeoutMs?: number,
-  readTranscriptLeaf?: ClaudeStructuredSessionAdapterDeps['readTranscriptLeaf'],
+  requestTimeoutMs?: number,
   persistHandle?: ClaudeStructuredSessionAdapterDeps['persistHandle'],
   onBackgroundTasksChanged?: ClaudeStructuredSessionAdapterDeps['onBackgroundTasksChanged'],
   onDispatchSettledLate?: ClaudeStructuredSessionAdapterDeps['onDispatchSettledLate']
@@ -210,22 +244,22 @@ export function adapterFor(
       claudeConfigDir: '/accounts/claude',
       providerSessionId: PROVIDER_SESSION_ID,
       resumeLeafUuid: null,
-      resumed: false,
+      resumesTranscript: false,
+      continuesChain: false,
       ...launch
     }),
     onEvent: (event) => events.push(event),
     openConnection: claude.openConnection,
     readProcessStartTime: async () => 1_700_000_000_000,
     now: () => 1_700_000_000_500,
-    ...(initTimeoutMs === undefined ? {} : { initTimeoutMs }),
+    ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
     persistHandle:
       persistHandle ??
       (async (handle) => {
         persistedHandles.push(handle)
       }),
     ...(onBackgroundTasksChanged ? { onBackgroundTasksChanged } : {}),
-    ...(onDispatchSettledLate ? { onDispatchSettledLate } : {}),
-    ...(readTranscriptLeaf ? { readTranscriptLeaf } : {})
+    ...(onDispatchSettledLate ? { onDispatchSettledLate } : {})
   })
 }
 
@@ -239,7 +273,6 @@ export async function acquired(
     claude,
     launch,
     events,
-    undefined,
     undefined,
     undefined,
     undefined,

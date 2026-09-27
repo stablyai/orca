@@ -82,12 +82,12 @@ export const TERMINAL_VIEWPORT_METHODS_AFTER_STREAMS = [
   defineMethod({
     name: 'terminal.unsubscribe',
     params: TerminalUnsubscribe,
-    handler: async (params, { runtime, connectionId }) => {
-      // Why: only the connection that owns the subscription may retire it — a stale
-      // unsubscribe from the pre-reconnect socket names an id the replacement now owns.
+    handler: async (params, { runtime, connectionId, subscriptionRegistrationVersion }) => {
+      // Fence both socket replacement and a newer subscription on the same socket.
       let unsubscribed = runtime.cleanupSubscriptionIfOwnedByConnection(
         params.subscriptionId,
-        connectionId
+        connectionId,
+        subscriptionRegistrationVersion
       )
       // Why: older builds send a bare-handle subscriptionId, so also try the reconstructed `${terminal}:${clientId}` composite key.
       // Why AND over the calls that ran: a clientless stream registers under the bare id
@@ -97,7 +97,8 @@ export const TERMINAL_VIEWPORT_METHODS_AFTER_STREAMS = [
         unsubscribed =
           runtime.cleanupSubscriptionIfOwnedByConnection(
             `${params.subscriptionId}:${params.client.id}`,
-            connectionId
+            connectionId,
+            subscriptionRegistrationVersion
           ) && unsubscribed
       }
       return { unsubscribed }

@@ -182,6 +182,45 @@ describe('openCodexAppServerConnection', () => {
     await connection.close()
   })
 
+  it('reports the spawned pid before it sends the handshake', async () => {
+    const { child, spawnImpl, written } = stubChild()
+    answerInitialize(child)
+    const writtenAtSpawn: number[] = []
+
+    const connection = await openCodexAppServerConnection(
+      { command: 'codex', args: ['app-server'] },
+      {
+        onSpawned: async (pid) => {
+          writtenAtSpawn.push(written.length)
+          expect(pid).toBe(child.pid)
+        }
+      },
+      spawnImpl
+    )
+
+    // The owner is durable before initialize, so a crash mid-handshake leaves it stoppable.
+    expect(writtenAtSpawn).toEqual([0])
+    expect(written[0]).toMatchObject({ method: 'initialize' })
+    await connection.close()
+  })
+
+  it('reaps the child and never handshakes when its spawn cannot be recorded', async () => {
+    const { spawnImpl, written } = stubChild()
+
+    await expect(
+      openCodexAppServerConnection(
+        { command: 'codex', args: ['app-server'] },
+        {
+          onSpawned: async () => {
+            throw new Error('agent_session_checkpoint_stale')
+          }
+        },
+        spawnImpl
+      )
+    ).rejects.toThrow('agent_session_checkpoint_stale')
+    expect(written).toEqual([])
+  })
+
   it('completes the handshake and keeps the child alive across calls', async () => {
     const notifications: { method: string; params: unknown }[] = []
     const connection = await openFakeServer({

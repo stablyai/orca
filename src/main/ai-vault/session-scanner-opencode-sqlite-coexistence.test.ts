@@ -13,7 +13,9 @@ vi.mock('./session-scanner-opencode-sqlite-worker-spawn', async () => {
     import('./session-scanner-opencode-sqlite-list'),
     import('./session-scanner-opencode-sqlite')
   ])
+  const { listOpenCode2SqliteSessions } = await import('./session-scanner-opencode2-sqlite-list')
   return {
+    listOpenCode2SqliteSessionsViaWorker: listOpenCode2SqliteSessions,
     listOpenCodeSqliteSessionsViaWorker: listOpenCodeSqliteSessions,
     parseOpenCodeSqliteSessionViaWorker: parseOpenCodeSqliteSession
   }
@@ -51,6 +53,7 @@ function isolatedScanRoots(root: string) {
     droidSessionsDir: join(root, 'droid-sessions'),
     droidProjectsDir: join(root, 'droid-projects'),
     kimiSessionsDir: join(root, 'kimi-sessions'),
+    museSessionsDir: join(root, 'muse-sessions'),
     ompSessionsDir: join(root, 'omp-sessions'),
     primeAgentSessionsDir: join(root, 'prime-agent-sessions')
   }
