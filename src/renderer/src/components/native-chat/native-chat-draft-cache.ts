@@ -5,6 +5,7 @@ import type { JSONContent } from '@tiptap/react'
 // draft would be lost on every TUI/GUI round-trip. Mirrors the attachment cache
 // so both halves of an unsent message survive toggles and reconnects.
 
+import { setAgentUnsentDraft } from '@/lib/agent-unsent-draft'
 import { setBoundedScopeCacheEntry } from './native-chat-composer-scope-cache'
 
 const draftCache = new Map<string, { text: string; document?: JSONContent }>()
@@ -14,6 +15,9 @@ export function readNativeChatDraftCache(scopeKey: string): string {
 }
 
 export function writeNativeChatDraftCache(scopeKey: string, draft: string): void {
+  // The scope key is the pane key, so the sidebar can show that this pane holds
+  // an unsent message. Sending clears the draft, which clears the flag here too.
+  setAgentUnsentDraft(scopeKey, 'native-chat', draft.trim() !== '')
   // An empty draft carries no state worth retaining; drop the entry so a stale
   // scope key never resurrects cleared text.
   if (draft === '') {
@@ -21,11 +25,17 @@ export function writeNativeChatDraftCache(scopeKey: string, draft: string): void
     return
   }
   // LRU-bounded so unsent drafts for permanently-removed panes can't accumulate.
-  setBoundedScopeCacheEntry(draftCache, scopeKey, {
-    text: draft,
-    document:
-      draftCache.get(scopeKey)?.text === draft ? draftCache.get(scopeKey)?.document : undefined
-  })
+  setBoundedScopeCacheEntry(
+    draftCache,
+    scopeKey,
+    {
+      text: draft,
+      document:
+        draftCache.get(scopeKey)?.text === draft ? draftCache.get(scopeKey)?.document : undefined
+    },
+    // Why: an evicted draft is gone, so its marker would be a phantom.
+    (evictedScopeKey) => setAgentUnsentDraft(evictedScopeKey, 'native-chat', false)
+  )
 }
 
 export function clearNativeChatDraftCacheForTests(): void {

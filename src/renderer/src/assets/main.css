@@ -1270,14 +1270,14 @@ html.native-shell .app-layout {
   transition: width 200ms ease;
 }
 
-/* Why: light-mode sidebar-accent/40 is nearly invisible on the sidebar, while
-   agent rows stack on top of the card hover. Keep nested rows quieter than the
-   workspace card without changing the established dark-mode balance. */
-.worktree-sidebar-card-hover:hover {
+/* Why: one wash at a time. The card yields its hover to a nested agent row, so the
+   row under the cursor carries the card's own mix instead of stacking a second,
+   weaker wash on top of it. */
+.worktree-sidebar-card-hover:hover:not(:has(.worktree-agent-row-hover:hover)) {
   background: color-mix(in srgb, var(--sidebar-foreground) 4%, transparent);
 }
 
-.dark .worktree-sidebar-card-hover:hover {
+.dark .worktree-sidebar-card-hover:hover:not(:has(.worktree-agent-row-hover:hover)) {
   background: color-mix(in srgb, var(--sidebar-accent) 40%, transparent);
 }
 
@@ -1338,6 +1338,18 @@ html.native-shell .app-layout {
   background: color-mix(in srgb, var(--sidebar-foreground) 1.25%, transparent);
 }
 
+/* Why: scoped to the sidebar card so dashboard and activity rows, which have no card to
+   match, keep their own weight. Selected rows and the full list's lineage rows carry a fill
+   of their own, so they keep the rules that follow. */
+[data-worktree-card-surface]
+  .worktree-agent-row-hover:hover:not(
+    [data-focused-agent-pane='true'],
+    .worktree-agent-lineage-parent-row,
+    .worktree-agent-lineage-child-row
+  ) {
+  background: color-mix(in srgb, var(--sidebar-foreground) 4%, transparent);
+}
+
 .worktree-agent-row-hover[data-focused-agent-pane='true'] {
   /* Why: a borderless fill. --sidebar-accent ≈ --sidebar in light mode, so the
      selection wash mixes sidebar-foreground into the accent to stay legible
@@ -1347,6 +1359,16 @@ html.native-shell .app-layout {
 
 .dark .worktree-agent-row-hover:hover {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.dark
+  [data-worktree-card-surface]
+  .worktree-agent-row-hover:hover:not(
+    [data-focused-agent-pane='true'],
+    .worktree-agent-lineage-parent-row,
+    .worktree-agent-lineage-child-row
+  ) {
+  background: color-mix(in srgb, var(--sidebar-accent) 40%, transparent);
 }
 
 .dark .worktree-agent-row-hover[data-focused-agent-pane='true'] {
@@ -1659,20 +1681,30 @@ html.native-shell .app-layout {
   content: none;
 }
 
+/* Why: the compact list strips the lineage fill above, so these rows take the same wash as
+   a plain row; the selected row keeps its own. */
 [data-compact-agent-list='true']
-  .compact-agent-row.worktree-agent-lineage-parent-row.worktree-agent-row-hover:hover,
+  .compact-agent-row.worktree-agent-lineage-parent-row.worktree-agent-row-hover:hover:not(
+    [data-focused-agent-pane='true']
+  ),
 [data-compact-agent-list='true']
-  .compact-agent-row.worktree-agent-lineage-child-row.worktree-agent-row-hover:hover {
-  background: color-mix(in srgb, var(--sidebar-foreground) 1.25%, transparent);
+  .compact-agent-row.worktree-agent-lineage-child-row.worktree-agent-row-hover:hover:not(
+    [data-focused-agent-pane='true']
+  ) {
+  background: color-mix(in srgb, var(--sidebar-foreground) 4%, transparent);
 }
 
 .dark
   [data-compact-agent-list='true']
-  .compact-agent-row.worktree-agent-lineage-parent-row.worktree-agent-row-hover:hover,
+  .compact-agent-row.worktree-agent-lineage-parent-row.worktree-agent-row-hover:hover:not(
+    [data-focused-agent-pane='true']
+  ),
 .dark
   [data-compact-agent-list='true']
-  .compact-agent-row.worktree-agent-lineage-child-row.worktree-agent-row-hover:hover {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  .compact-agent-row.worktree-agent-lineage-child-row.worktree-agent-row-hover:hover:not(
+    [data-focused-agent-pane='true']
+  ) {
+  background: color-mix(in srgb, var(--sidebar-accent) 40%, transparent);
 }
 
 [data-compact-agent-list='true']

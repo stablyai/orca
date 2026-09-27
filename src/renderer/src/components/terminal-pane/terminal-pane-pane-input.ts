@@ -9,6 +9,9 @@ import {
 } from './terminal-ime-candidate-key-release-guard'
 import { installTerminalImeCompositionTracker } from './terminal-ime-composition-tracker'
 import { installTerminalImeComposerPlaceholderMask } from './terminal-ime-composer-placeholder-mask'
+import { readTerminalComposerDraftPresence } from './terminal-composer-draft-probe'
+import { registerAgentUnsentDraftProbe } from '@/lib/agent-unsent-draft'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { installTerminalImeLinuxCandidateState } from './terminal-ime-linux-candidate-state'
 import { installTerminalImeNativeTextForwarder } from './terminal-ime-native-text-forwarder'
 import { installTerminalIosHangulPreedit } from './terminal-ios-hangul-preedit'
@@ -34,6 +37,8 @@ import { resetTerminalKeyboardProtocolAfterInterrupt } from './terminal-pane-lif
 
 type PaneInputContext = {
   pane: ManagedPane
+  /** Needed for the pane key the unsent-draft registry is keyed by. */
+  tabId: string
   managerRef: React.RefObject<PaneManager | null>
   paneKittyKeyboardModesRef: UseTerminalPaneLifecycleDeps['paneKittyKeyboardModesRef']
   settingsRef: React.RefObject<Record<string, unknown> | null | undefined>
@@ -45,6 +50,7 @@ type PaneInputContext = {
 export function installTerminalPaneInputHandling(context: PaneInputContext): void {
   const {
     pane,
+    tabId,
     managerRef,
     paneKittyKeyboardModesRef,
     settingsRef,
@@ -64,6 +70,12 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
     : null
   const imeCompositionTracker = installTerminalImeCompositionTracker(pane.terminal.element)
   const imeComposerPlaceholderMask = installTerminalImeComposerPlaceholderMask(pane.terminal)
+  // Why: only this pane can read its own composer, and only when asked — the
+  // registry runs this at most once per burst of input.
+  const unregisterUnsentDraftProbe = registerAgentUnsentDraftProbe(
+    makePaneKey(tabId, pane.leafId),
+    () => readTerminalComposerDraftPresence(pane.terminal)
+  )
   const iosHangulPreedit = isIosWeb
     ? installTerminalIosHangulPreedit({
         terminalElement: pane.terminal.element,
@@ -75,6 +87,7 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
     : null
   imeCompositionDisposablesRef.current.set(pane.id, {
     dispose: () => {
+      unregisterUnsentDraftProbe()
       imeComposerPlaceholderMask.dispose()
       imeCompositionTracker.dispose()
       linuxImeCandidateState?.dispose()

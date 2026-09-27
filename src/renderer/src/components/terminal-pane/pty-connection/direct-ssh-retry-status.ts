@@ -1,4 +1,5 @@
 import { reportWorkerTerminalUserInput } from '@/lib/worker-terminal-takeover-report'
+import { scheduleAgentUnsentDraftCheck } from '@/lib/agent-unsent-draft'
 import { useAppStore } from '@/store'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
@@ -275,6 +276,9 @@ export function installDirectSshRetryStatus(session: ConnectPanePtySession): voi
   }
   session.recordTerminalInputForHibernation = (): void => {
     useAppStore.getState().recordTerminalInput(session.cacheKey)
+    // Why here: this is the one place every real keystroke reaches, and typing is
+    // the only thing that changes what the agent's composer holds.
+    scheduleAgentUnsentDraftCheck(session.cacheKey)
   }
   // Why: onData mixes real user input with xterm's parser auto-replies (focus
   // reports, DA/DSR/CPR responses). Recording those replies as activity makes

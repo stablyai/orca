@@ -5710,6 +5710,17 @@
           "d1113f4660": "Failed to open browser",
           "fed49903c9": "{{value0}} live {{value1}}"
         },
+        "worktreeHoverCard": {
+          "asleep": "Sleeping",
+          "childWorkspaces_one": "{{count}} child workspace",
+          "childWorkspaces_other": "{{count}} child workspaces",
+          "issue": "Issue #{{number}}",
+          "lastActivity": "Last activity {{ago}} ago",
+          "moreSubagents": "+{{count}} more",
+          "pinned": "Pinned",
+          "sleeping": "Sleeping, nothing running in this workspace",
+          "unread": "Unread activity"
+        },
         "WorktreeContextMenu": {
           "c39c37676a": "Create a group and move this project into it.",
           "6664418e98": "New Project Group",
@@ -6039,9 +6050,10 @@
           "card": {
             "compact": {
               "agents": {
-                "a128d7006b": "{{value0}} {{value1}} child {{value2}}",
+                "0c1debfe84": "Collapse {{value0}}",
                 "289a1d2ca7": "Expand {{value0}}. {{value1}}",
-                "0c1debfe84": "Collapse {{value0}}"
+                "a128d7006b": "{{value0}} {{value1}} child {{value2}}",
+                "unsentDraft": "Message typed but not sent"
               }
             }
           },

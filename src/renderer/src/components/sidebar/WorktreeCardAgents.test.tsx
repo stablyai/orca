@@ -218,7 +218,7 @@ describe('WorktreeCardAgents', () => {
 
     expect(markup).toContain('role="group"')
     expect(markup).toContain('Run tests')
-    expect(markup).toContain('title="Codex"')
+    expect(markup).toContain('compact-agent-row')
     expect(markup).not.toContain('data-testid="agent-row"')
   })
 

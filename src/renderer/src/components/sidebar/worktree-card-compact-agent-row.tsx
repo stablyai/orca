@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef } from 'react'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, PencilLine } from 'lucide-react'
 import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { AgentIcon } from '@/lib/agent-catalog'
@@ -14,6 +14,9 @@ import { useAgentRowConversationName } from '@/components/dashboard/use-agent-ro
 import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
 import CacheTimer, { usePromptCacheCountdownForPane } from './CacheTimer'
 import { formatShortTimeAgo } from '@/lib/short-time-ago'
+import { useAgentUnsentDraft } from '@/lib/agent-unsent-draft'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { CompactAgentRowHover } from './worktree-card-compact-agent-hover'
 
 function getCompactAgentPrimary(
   agent: DashboardAgentRowData,
@@ -137,15 +140,22 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const held = heldMessageRef.current
   const stableMessage =
     turnHoldable && !currentMessage && held?.turn === turn ? held.message : undefined
+  const assistantMessage = stableMessage ?? currentMessage
   const secondary = getCompactAgentSecondary(agent, now, stableMessage)
   // Why: sidebar truncation must preserve the passive-vs-active distinction.
   const leadingText = dotState === 'monitoring' ? secondary : primary
   const trailingText =
     dotState === 'monitoring' ? (primary === secondary ? '' : primary) : secondary
-  const rowTitle = `${leadingText}${trailingText ? ` - ${trailingText}` : ''}`
+  // Why: the card lists the children a session spawned; the row only had room for a count.
+  const hoverSubagents = (agent.entry.subagents ?? []).map((subagent) => ({
+    id: subagent.id,
+    name: subagent.description?.trim() || subagent.agentType?.trim() || subagent.id,
+    dotState: subagent.state
+  }))
   const model = agent.entry.model?.trim() ?? ''
   const shortTime = getCompactAgentTime(agent, now)
   const cacheTimer = usePromptCacheCountdownForPane(agent.paneKey, cacheTimerActive)
+  const hasUnsentDraft = useAgentUnsentDraft(agent.paneKey)
 
   const handleActivate = useCallback(
     (e: React.MouseEvent) => {
@@ -213,22 +223,20 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
           />
         </button>
       ) : null}
-      {/* Why: the row's actionable disabled reason must win on every hit area. */}
+      {/* Why: the row's actionable disabled reason must win on every hit area, and the
+          hover card already names the state for every row that has one. */}
       <AgentStateDot
         state={dotState}
         size="sm"
-        title={sendTargetDisabledReason ? null : undefined}
+        title={sendTargetStatus && !sendTargetDisabledReason ? undefined : null}
         tooltipSide="right"
       />
       {!hideIcon && (
-        <span className="inline-flex shrink-0" title={formatAgentTypeLabel(agent.agentType)}>
+        <span className="inline-flex shrink-0">
           <AgentIcon agent={agentTypeToIconAgent(agent.agentType)} size={13} />
         </span>
       )}
-      <span
-        className="min-w-0 flex-1 truncate"
-        title={sendTargetDisabledReason ? undefined : rowTitle}
-      >
+      <span className="min-w-0 flex-1 truncate">
         {/* Why: the selected-row fill is strong enough to wash out the dimmed
             prompt/secondary text, so lift both toward full foreground when focused. */}
         <span className={isFocusedPane ? 'text-foreground' : 'text-muted-foreground/90'}>
@@ -247,7 +255,6 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
             'min-w-0 max-w-24 truncate font-mono text-[10px]',
             isFocusedPane ? 'text-foreground/70' : 'text-muted-foreground/70'
           )}
-          title={model}
         >
           {model}
         </span>
@@ -261,6 +268,34 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
         >
           +{childAgentCount}
         </span>
+      )}
+      {/* Why: a written-but-unsent message is easy to forget once the row scrolls
+          away; it is a reminder, not an alert, so it stays muted. */}
+      {hasUnsentDraft && !sendTargetStatus && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              role="img"
+              className={cn(
+                'inline-flex shrink-0 items-center',
+                isFocusedPane ? 'text-foreground/70' : 'text-muted-foreground/70'
+              )}
+              aria-label={translate(
+                'auto.components.sidebar.worktree.card.compact.agents.unsentDraft',
+                'Message typed but not sent'
+              )}
+              data-agent-unsent-draft="true"
+            >
+              <PencilLine className="size-2.5" aria-hidden />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={4}>
+            {translate(
+              'auto.components.sidebar.worktree.card.compact.agents.unsentDraft',
+              'Message typed but not sent'
+            )}
+          </TooltipContent>
+        </Tooltip>
       )}
       {cacheTimer && <CacheTimer startedAt={cacheTimer.startedAt} ttlMs={cacheTimer.ttlMs} />}
       {shortTime && (
@@ -277,7 +312,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     </>
   )
 
-  return (
+  const row = (
     <div
       draggable={false}
       className={cn(
@@ -306,5 +341,27 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     >
       {rowBody}
     </div>
+  )
+
+  // Why: send-target mode turns the row into a picker whose disabled reason is the
+  // only thing worth surfacing, so the preview card stays out of that flow.
+  if (sendTargetStatus) {
+    return row
+  }
+
+  return (
+    <CompactAgentRowHover
+      agentType={agent.agentType}
+      dotState={dotState}
+      primary={primary}
+      secondary={secondary}
+      secondaryIsAssistantMessage={assistantMessage.length > 0 && secondary === assistantMessage}
+      model={model}
+      shortTime={shortTime}
+      hideIdentityIcon={agent.rowSource === 'subagent'}
+      subagents={hoverSubagents}
+    >
+      {row}
+    </CompactAgentRowHover>
   )
 })

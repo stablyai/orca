@@ -59,7 +59,6 @@ describe('worktree card agent summary', () => {
 
     const markup = renderCompactAgentRow({ agent, now: 2000, onActivate: vi.fn() })
 
-    expect(markup).toContain('title="Monitoring background tasks - Run background checks"')
     expect(markup).toMatch(
       /Monitoring background tasks<\/span><span[^>]*> - Run background checks<\/span>/
     )
@@ -78,15 +77,23 @@ describe('worktree card agent summary', () => {
     })
 
     // The dot sits inside the row, so its own state title would shadow the reason on hover.
-    expect(orderedTitles(disabled)).toEqual(['Agent needs permission', 'Claude'])
+    expect(orderedTitles(disabled)).toEqual(['Agent needs permission'])
 
-    const eligible = renderCompactAgentRow({ agent, now: 2000, onActivate: vi.fn() })
+    const eligible = renderCompactAgentRow({
+      agent,
+      now: 2000,
+      onActivate: vi.fn(),
+      sendTargetStatus: 'eligible'
+    })
 
-    expect(orderedTitles(eligible)).toEqual([
-      'Claude',
-      'Monitoring background tasks - Run background checks'
-    ])
+    // Send-target rows have no hover card, so the dot keeps naming the state.
+    expect(orderedTitles(eligible)).toEqual([])
     expect(eligible).toContain('data-slot="tooltip-trigger"')
+
+    const ordinary = renderCompactAgentRow({ agent, now: 2000, onActivate: vi.fn() })
+
+    expect(orderedTitles(ordinary)).toEqual([])
+    expect(ordinary).toContain('data-slot="hover-card-trigger"')
   })
 
   it('lists interrupted outcomes before clean completions', () => {
