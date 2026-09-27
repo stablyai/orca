@@ -289,6 +289,11 @@ async function startOrcadRuntime(
   // Recovery binds terminal and dispatch identities; only now can startup observations be fenced.
   observedStatusCapture.attach(runtime)
 
+  // Why only here: an unattended server needs a pairing/connection audit trail on stderr (the journal);
+  // the desktop app never enables it.
+  const { enableSecurityEventLog } = await import('../runtime/security-event-log')
+  enableSecurityEventLog({ write: (line) => process.stderr.write(`${line}\n`) })
+
   const bindHost = resolveOrcadBindHost(options.bind)
   rpc = new OrcaRuntimeRpcServer({
     runtime,
