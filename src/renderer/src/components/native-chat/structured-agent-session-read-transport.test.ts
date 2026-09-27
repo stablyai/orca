@@ -335,6 +335,25 @@ describe('structured agent-session read transport unattached refusals', () => {
     }
   })
 
+  it('stops re-asking a history whose journal file is not a usable database', async () => {
+    vi.useFakeTimers()
+    try {
+      const applyError = vi.fn()
+      const transport = startWithHydration(async () => undefined, applyError)
+      await flushPromises()
+      // The host raises it with the bare code as the message; the RPC layer's code is generic.
+      attempts[0].onError({ code: 'runtime_error', message: 'agent_session_journal_unreadable' })
+      attempts[0].closed.resolve({ unsubscribe: attempts[0].unsubscribe })
+      await flushPromises()
+      expect(applyError).toHaveBeenCalledExactlyOnceWith('agent_session_journal_unreadable')
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(attempts).toHaveLength(1)
+      transport.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('restarts the grace once a read lands, so a later refusal is transitional again', async () => {
     vi.useFakeTimers()
     try {

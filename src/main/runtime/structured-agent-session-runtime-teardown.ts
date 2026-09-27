@@ -10,6 +10,8 @@ import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wi
 export type InstalledRuntime = {
   host: StructuredAgentSessionHost
   adapter: { closeAll(): Promise<void> }
+  /** Flushed and closed last, so the settled statuses teardown itself wrote are saved. */
+  savedStatus?: { close(): void }
   /** Resolves after every observed adapter exit has published, and every
    *  recovery callback it raised has settled. */
   waitForRecovery: () => Promise<void>
@@ -34,7 +36,13 @@ export async function tearDownRuntime(
 ): Promise<void> {
   // Drain an in-flight recovery before stopping children; recovery may still
   // be writing lifecycle rows or acquiring a replacement child.
-  await installed.waitForRecovery()
+  try {
+    await installed.waitForRecovery()
+  } catch (error) {
+    // Teardown stops here, but the settled statuses already recorded still reach disk.
+    installed.savedStatus?.close()
+    throw error
+  }
   const failures: unknown[] = []
   // Host teardown runs FIRST, which inverts the older order. It is what stops this host's
   // provider children now: it evicts each owned session through the adapter, and that eviction
@@ -65,6 +73,7 @@ export async function tearDownRuntime(
   } catch (error) {
     failures.push(error)
   }
+  installed.savedStatus?.close()
   if (failures.length === 1) {
     throw failures[0]
   }

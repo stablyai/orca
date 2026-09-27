@@ -19,6 +19,7 @@ import {
 import { resolveStructuredLaunchSeedOptions } from '../../shared/native-chat-session-option-defaults'
 import { hasPersistedStructuredAgentSessionStore as hasPersistedStructuredAgentSessionStoreOnDisk } from './structured-agent-session-runtime'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
+import { structuredAgentSessionStartupPriority } from './saved-structured-agent-session-restoration'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 
@@ -256,8 +257,17 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
     }
     // Durable agent records must exist before daemon inventory can be reconciled against them.
     await this.ensureStructuredAgentSessionHost()
+    const host = getStructuredAgentSessionHost()
+    // Not awaited: the pass lists status first and opens journals behind every reader.
+    void host
+      ?.restoreStartupSessions?.(
+        structuredAgentSessionStartupPriority(
+          this.store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID) ?? null
+        )
+      )
+      .catch((error) => console.error('[structured-agent-session] startup pass failed', error))
     await this.refreshMobileSessionPtyRecords()
-    await getStructuredAgentSessionHost()?.reconcileRestartLeases()
+    await host?.reconcileRestartLeases()
   }
 
   protected hasPersistedStructuredAgentSessionStore(): boolean {

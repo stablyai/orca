@@ -4,6 +4,7 @@ import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
+import type { AgentSessionSavedStatusStore } from '../../runtime/agent-session-saved-status-store'
 import type { AgentSessionSpawnTokenScan } from '../../runtime/agent-session-spawn-token-process-scan'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type {
@@ -112,6 +113,8 @@ export type StructuredAgentSessionHostDeps = {
   now?: () => number
   /** The idle sweep's period and window. Tests drive these; production takes the defaults. */
   idleSweep?: { intervalMs?: number; idleMs?: number }
+  /** Waits before each retry of a startup reconcile that did not complete; tests shorten them. */
+  startupReconcileRetryDelaysMs?: readonly number[]
   /** Whether an orchestration dispatch still owns this session's worker; absent answers no. */
   hasOpenDispatch?: (record: AgentSessionRecord) => boolean
   onEventSinkError?: (input: { sessionId: string; error: unknown }) => void
@@ -125,6 +128,8 @@ export type StructuredAgentSessionHostDeps = {
    *  removed from. Both production hosts pass one — the desktop and headless `orcad`; absent,
    *  every reader of that store simply lists no structured session. */
   statusSink?: StructuredAgentSessionStatusSink
+  /** Each chat's last settled status, for the startup pass; absent, every listed chat is opened. */
+  savedStatus?: Pick<AgentSessionSavedStatusStore, 'read' | 'record' | 'prune'>
   /** Host model catalog surface; absent means every catalog read answers `unknown`. */
   modelCatalog?: AgentModelCatalogService
 }

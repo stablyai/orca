@@ -19,6 +19,7 @@ import { workerTerminalLeaseIsCurrent } from './worker-terminal-release-lease'
 import { resolveStructuredWorkerForDispatch } from '../../orchestration-structured-worker-lifecycle'
 import { stopStructuredWorkerForRelease } from './structured-worker-release-stop'
 import { isStructuredWorkerHandle } from '../../../../structured-worker-identity'
+import { prepareStructuredHostForWorkerRelease } from './structured-worker-release-host'
 
 export {
   archiveSummary,
@@ -93,20 +94,7 @@ async function completeWorkerTerminalReleaseOnce(
 ): Promise<WorkerReleaseReceipt> {
   const { runtime, db, dispatchId, resource } = args
   if (isStructuredWorkerHandle(resource.terminal_handle)) {
-    // Observation and archive capture both read the structured host, and after a restart nothing
-    // has installed it yet — the startup recovery reconciler runs exactly this path. Installing it
-    // here is what lets the release see the session instead of reporting it unreadable.
-    //
-    // NOT yet handled, and deliberately follow-up: rebinding a restarted runtime to a structured
-    // worker's redrive subscription. Until that exists, a worker that survives a restart has its
-    // parked mail wait for the next arrival rather than a settle edge.
-    await runtime.ensureStructuredAgentSessionHost().catch((error: unknown) => {
-      console.warn(
-        '[orchestration] structured host install failed before release',
-        dispatchId,
-        error
-      )
-    })
+    await prepareStructuredHostForWorkerRelease(runtime, dispatchId)
   }
   const worker = db.getWorkerDispatch(dispatchId)
   if (!worker || worker.agent_terminal_handle !== resource.terminal_handle) {

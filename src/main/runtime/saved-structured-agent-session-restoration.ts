@@ -1,6 +1,11 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { Tab } from '../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import {
+  getActiveSidebarWorkspaceId,
+  normalizeWorkspaceSessionKeyToWorkspaceId
+} from '../../shared/workspace-scope'
+import type { StructuredAgentSessionStartupPriority } from '../native-chat/agent-session-wire/structured-agent-session-restart-restore'
 
 function savedSessionId(tab: Tab): string | null {
   if (tab.executionHostId && tab.executionHostId !== LOCAL_EXECUTION_HOST_ID) {
@@ -40,4 +45,25 @@ export function collectSavedStructuredAgentSessionIds(
     add(tab)
   }
   return selected
+}
+
+/** Which workspaces the startup pass reaches first: the one the window last showed, then any with
+ *  a saved tab. Null without a saved desktop session (`orca serve`, SSH), keeping listing order. */
+export function structuredAgentSessionStartupPriority(
+  session: WorkspaceSessionState | null
+): StructuredAgentSessionStartupPriority | undefined {
+  if (!session) {
+    return undefined
+  }
+  const withTabs = [
+    ...Object.keys(session.unifiedTabs ?? {}),
+    ...Object.keys(session.tabsByWorktree ?? {})
+  ].map(normalizeWorkspaceSessionKeyToWorkspaceId)
+  return {
+    activeWorkspaceId: getActiveSidebarWorkspaceId(
+      session.activeWorkspaceKey ?? null,
+      session.activeWorktreeId
+    ),
+    visibleWorkspaceIds: new Set(withTabs)
+  }
 }

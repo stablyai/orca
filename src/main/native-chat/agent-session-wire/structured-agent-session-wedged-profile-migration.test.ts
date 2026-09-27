@@ -105,7 +105,10 @@ function wedgedRecord(overrides: WedgeOverrides): PersistedAgentSessionRecord {
   }
 }
 
-async function seedStore(record: PersistedAgentSessionRecord): Promise<void> {
+async function seedStore(
+  record: PersistedAgentSessionRecord,
+  options: { listed?: boolean } = {}
+): Promise<void> {
   const directory = join(root, 'store')
   await mkdir(directory, { recursive: true })
   await writeFile(
@@ -116,7 +119,8 @@ async function seedStore(record: PersistedAgentSessionRecord): Promise<void> {
       records: { [record.sessionId]: record },
       operations: {},
       retiredClaimKeys: [],
-      unusableRecords: {}
+      unusableRecords: {},
+      ...(options.listed ? { visibleSessionIds: [record.sessionId] } : {})
     }),
     'utf-8'
   )
@@ -254,13 +258,15 @@ describe('already-wedged profiles become usable on load', () => {
                 }
               ]
             }
-      await seedStore(providerRecord)
+      await seedStore(providerRecord, { listed: true })
       await seedRunningTurn(provider)
       openHost()
 
-      await host.restoreReadableSessions()
+      await host.restoreStartupSessions()
 
-      expect(host.hasSession(SESSION)).toBe(true)
+      // Opened only to settle its status, so the pass closed it again; a read reopens it.
+      expect(host.hasSession(SESSION)).toBe(false)
+      await host.history({ sessionId: SESSION, direction: 'tail' })
       const firstCursor = restoredJournal().cursor()
       expect(activeStructuredAgentSessionTurnId(restoredJournal().snapshot().items)).toBe(null)
       expect(store.getRecord(SESSION)?.lease).toMatchObject({
@@ -277,7 +283,8 @@ describe('already-wedged profiles become usable on load', () => {
         hostId: 'local'
       })
       openHost()
-      await host.restoreReadableSessions()
+      await host.restoreStartupSessions()
+      await host.history({ sessionId: SESSION, direction: 'tail' })
 
       expect(restoredJournal().cursor()).toEqual(firstCursor)
       expect(activeStructuredAgentSessionTurnId(restoredJournal().snapshot().items)).toBe(null)
@@ -407,7 +414,7 @@ describe('already-wedged profiles become usable on load', () => {
     )
     openHost()
 
-    await host.restoreReadableSessions()
+    await host.restoreStartupSessions()
 
     const lease = store.getRecord(SESSION)!.lease
     expect(lease).toMatchObject({ handoffStage: null, unreconciled: false })
@@ -436,7 +443,7 @@ describe('already-wedged profiles become usable on load', () => {
       probeOwner: async () => ({ outcome: 'identity-matched', matchedOn: ['spawn-token'] })
     })
 
-    await host.restoreReadableSessions()
+    await host.restoreStartupSessions()
 
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'conflicted',
@@ -451,7 +458,7 @@ describe('already-wedged profiles become usable on load', () => {
     await seedStore(wedgedRecord({ claimStatus: 'released', handoffStage: 'recovering' }))
     openHost()
 
-    await host.restoreReadableSessions()
+    await host.restoreStartupSessions()
 
     const lease = store.getRecord(SESSION)!.lease
     expect(lease).toMatchObject({ handoffStage: null, unreconciled: false })
@@ -484,7 +491,7 @@ describe('already-wedged profiles become usable on load', () => {
       }
     })
 
-    await host.restoreReadableSessions()
+    await host.restoreStartupSessions()
 
     const lease = store.getRecord(SESSION)!.lease
     expect(lease).toMatchObject({ handoffStage: null, unreconciled: false })
@@ -525,7 +532,7 @@ describe('already-wedged profiles become usable on load', () => {
       stopOwnerProcess: (pid) => order.push(`stop:${pid}`)
     })
 
-    await host.restoreReadableSessions()
+    await host.restoreStartupSessions()
     expect(order).toEqual([])
     expect(scan).not.toHaveBeenCalled()
     const fence = store.getRecord(SESSION)?.lease.runtimeFence ?? null
@@ -543,7 +550,7 @@ describe('already-wedged profiles become usable on load', () => {
       })
     )
     openHost({ probeOwner: async () => ({ outcome: 'indeterminate', reason: 'no answer' }) })
-    await host.restoreReadableSessions()
+    await host.restoreStartupSessions()
 
     const refused = await host.attach(CALLER, hostTestAttachParams(13))
 

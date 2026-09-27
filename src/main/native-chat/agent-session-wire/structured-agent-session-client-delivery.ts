@@ -1,4 +1,5 @@
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
+import type { StructuredAgentSessionSavedStatus } from '../../../shared/structured-agent-session-saved-status'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 import type {
@@ -63,6 +64,10 @@ export class StructuredAgentSessionClientDelivery {
 
   publishRestored = (sessionId: string): void =>
     this.statusFeed.publish(sessionId, undefined, { replay: true })
+
+  seedStatus = (sessionId: string, saved: StructuredAgentSessionSavedStatus): void => {
+    this.statusFeed.seedRestored(sessionId, saved)
+  }
 
   subscribeStatus = (subscriber: StructuredAgentSessionStatusSubscriber): (() => void) =>
     this.statusFeed.subscribe(subscriber)

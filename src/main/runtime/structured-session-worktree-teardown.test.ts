@@ -97,7 +97,7 @@ function installHost(options: {
       }
     },
     hasSession: (sessionId: string) => held.has(sessionId),
-    getPersistedVisibleSessionTabIndex: () => ({ present: true, sessionIds: [...visible] }),
+    listVisibleSessionIds: () => [...visible],
     setSessionTabVisibility: async (sessionId: string, isVisible: boolean) => {
       if (!isVisible) {
         visible.delete(sessionId)

@@ -66,10 +66,7 @@ function installHost(options: {
       }
     },
     hasSession: () => options.hasSession ?? true,
-    getPersistedVisibleSessionTabIndex: () => ({
-      present: true,
-      sessionIds: options.tabListed ? [SESSION_ID] : []
-    }),
+    listVisibleSessionIds: () => (options.tabListed ? [SESSION_ID] : []),
     journalSnapshot: async () => ({ items: options.items ?? [idleTurn()] })
   }
 }

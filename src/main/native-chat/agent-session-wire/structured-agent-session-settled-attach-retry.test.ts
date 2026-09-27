@@ -341,7 +341,7 @@ describe('settled attach retry', () => {
       probeOwner: async () => ({ outcome: 'pid-absent' }),
       now: () => NOW
     })
-    await host.restoreReadableSessions()
+    await host.restoreStartupSessions()
     await startAgent()
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'live',

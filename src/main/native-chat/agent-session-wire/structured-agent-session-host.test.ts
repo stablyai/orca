@@ -595,11 +595,11 @@ describe('restart', () => {
     acquire.mockClear()
     const listRecords = vi.spyOn(store, 'listRecords')
 
-    await host.restoreReadableSessions()
+    await host.restoreStartupSessions()
     const restoreReads = listRecords.mock.calls.length
-    await host.restoreReadableSessions()
+    await host.restoreStartupSessions()
 
-    expect(host.listSessionTabs()).toEqual([
+    expect(host.listPersistedSessionTabs([SESSION])).toEqual([
       { sessionId: SESSION, workspaceId: 'workspace-1', agent: 'codex' }
     ])
     const history = await host.history({ sessionId: SESSION, direction: 'tail' })
@@ -622,7 +622,7 @@ describe('restart', () => {
     await reboot(async () => ({ outcome: 'pid-absent' }))
     acquire.mockClear()
 
-    await host.restoreReadableSessions()
+    await host.restoreStartupSessions()
     // The recovery stage clears on evidence at startup; the child comes back only once work
     // starts it — here the explicit attach a send's delivery would make.
     const fence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
@@ -645,7 +645,7 @@ describe('restart', () => {
   it('answers native for a chat whose start is still in flight', async () => {
     await attach()
     await reboot(async () => ({ outcome: 'pid-absent' }))
-    await host.restoreReadableSessions()
+    await host.restoreStartupSessions()
     const started = Promise.withResolvers<void>()
     const release = Promise.withResolvers<void>()
     const settled = acquire.getMockImplementation()

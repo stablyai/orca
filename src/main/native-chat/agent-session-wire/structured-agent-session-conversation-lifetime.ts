@@ -17,6 +17,8 @@ import type { StructuredAgentSessionHostSession } from './structured-agent-sessi
 import { StructuredAgentSessionIdleSweep } from './structured-agent-session-idle-sweep'
 import { AGENT_SESSION_NOT_ATTACHED } from './structured-agent-session-mutation-admission'
 import { adapterSupportsRecord } from './structured-agent-session-provider-support'
+import { isUnusableSqliteDatabaseError } from '../../sqlite/sqlite-read-failure'
+import type { StructuredAgentSessionStartupStep } from './structured-agent-session-restart-restore'
 
 export type StructuredAgentSessionConversationLifetime = ReturnType<
   typeof createStructuredAgentSessionConversationLifetime
@@ -44,11 +46,8 @@ export function createStructuredAgentSessionConversationLifetime(host: {
     closeStructuredAgentSessionConversationUnderSerialize(
       {
         sessions,
-        closeStatus: (id) => {
-          const tabs = deps().store.getVisibleSessionTabIndex()
-          // A legacy store cannot say, so the row stays; restart is the boundary that forgets.
-          host.closeStatus(id, { listed: !tabs.present || tabs.sessionIds.includes(id) })
-        }
+        closeStatus: (id) =>
+          host.closeStatus(id, { listed: deps().store.listVisibleSessionIds().includes(id) })
       },
       sessionId
     )
@@ -108,13 +107,27 @@ export function createStructuredAgentSessionConversationLifetime(host: {
         if (disposed) {
           throw new Error(AGENT_SESSION_NOT_ATTACHED.code)
         }
-        const session = await host.open(sessionId)
+        const session = await host.open(sessionId).catch((error: unknown) => {
+          // Final: the same file answers the same on every retry. Anything else stays retryable.
+          throw isUnusableSqliteDatabaseError(error)
+            ? new Error('agent_session_journal_unreadable')
+            : error
+        })
         if (!session) {
           throw new Error('agent_session_identity_required')
         }
         return session
       })
     },
+    isDisposed: (): boolean => disposed,
+    /** The startup pass's per-chat step, under the session's lock and never after quit began. A
+     *  conversation the step opens only to derive status closes again as the idle sweep's would. */
+    startupStep: ((sessionId, step) =>
+      serialize(sessionId, async () =>
+        disposed
+          ? undefined
+          : step({ session: sessions.get(sessionId), close: () => closeConversation(sessionId) })
+      )) satisfies StructuredAgentSessionStartupStep,
     /** Ends a chat's resources, not the chat: its record and journal stay on disk, and what is
      *  still queued will not be sent. */
     close: (sessionId: string): Promise<void> =>

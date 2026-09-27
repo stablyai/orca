@@ -119,7 +119,11 @@ forgot the row would strand a permanently working-looking agent.
 Two rules the ingest must keep:
 
 - **Never persist a structured row.** The journal is the durable truth for a
-  structured session and the host republishes on restore. A structured row in
+  structured session and the host republishes on restore: for each listed chat,
+  from its saved settled status when its journal still stands at the position
+  that status was computed at, and otherwise from the journal. That saved copy
+  is the host's own cache (`agent-session-saved-status.db`), never this store's
+  file. A structured row in
   `last-status.json` would hydrate as `restoredUnconfirmed` and then fight the
   live republish. The serializer skips rows carrying `structuredHost`, and
   hydrate drops any such row found on disk. Applying one therefore also skips

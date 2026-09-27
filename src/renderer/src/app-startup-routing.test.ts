@@ -376,6 +376,16 @@ describe('renderer startup runtime routing', () => {
     )
   })
 
+  it('never holds the session writer on the structured tab projection (L13)', () => {
+    const source = readSource(STARTUP_HYDRATION_PATH)
+    const projectIndex = source.indexOf("timeRendererStartupStep('project-structured-session-tabs'")
+    const unlockIndex = source.indexOf('actions.setHydrationSucceeded(true)')
+
+    expect(projectIndex).toBeGreaterThanOrEqual(0)
+    expect(source.slice(projectIndex - 'void '.length, projectIndex)).toBe('void ')
+    expect(source.slice(projectIndex, unlockIndex)).not.toContain('await ')
+  })
+
   it('probes local runtime capabilities before any startup gate can hold the answer back', () => {
     const source = readSource(STARTUP_HYDRATION_PATH)
     const probeIndex = source.indexOf('void ensureLocalRuntimeCapabilities()')

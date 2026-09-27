@@ -24,6 +24,19 @@ export const AGENT_SESSION_UNATTACHED_REFUSAL_CODE = 'agent_session_ownership_un
  */
 export const AGENT_SESSION_UNATTACHED_READ_GRACE_MS = 5_000
 
+/** Raised for a chat whose journal file is not a usable database. */
+export const AGENT_SESSION_JOURNAL_UNREADABLE_REFUSAL_CODE = 'agent_session_journal_unreadable'
+
+function isReadRefusal(error: unknown, code: string): boolean {
+  if (typeof error === 'string') {
+    return error === code
+  }
+  if (typeof error !== 'object' || error === null) {
+    return false
+  }
+  return ('code' in error && error.code === code) || ('message' in error && error.message === code)
+}
+
 /**
  * Whether a read failure is that refusal.
  *
@@ -31,15 +44,22 @@ export const AGENT_SESSION_UNATTACHED_READ_GRACE_MS = 5_000
  * bare refusal code, and the raw failure payload a stream delivers to its error callback.
  */
 export function isUnattachedAgentSessionReadRefusal(error: unknown): boolean {
+  return isReadRefusal(error, AGENT_SESSION_UNATTACHED_REFUSAL_CODE)
+}
+
+/**
+ * A read refusal no retry can change: re-asking reads the same unusable file. Matched on the
+ * message, which a read raises as the bare code: a send's refusal under the same code carries its
+ * cause as the message instead, and that cause can clear.
+ */
+export function isFinalAgentSessionReadRefusal(error: unknown): boolean {
   if (typeof error === 'string') {
-    return error === AGENT_SESSION_UNATTACHED_REFUSAL_CODE
+    return error === AGENT_SESSION_JOURNAL_UNREADABLE_REFUSAL_CODE
   }
-  if (typeof error !== 'object' || error === null) {
-    return false
-  }
-  const { code, message } = error as { code?: unknown; message?: unknown }
   return (
-    code === AGENT_SESSION_UNATTACHED_REFUSAL_CODE ||
-    message === AGENT_SESSION_UNATTACHED_REFUSAL_CODE
+    typeof error === 'object' &&
+    error !== null &&
+    'message' in error &&
+    error.message === AGENT_SESSION_JOURNAL_UNREADABLE_REFUSAL_CODE
   )
 }

@@ -26,10 +26,7 @@ function installRecord(
 ): void {
   hostRef.current = lease
     ? {
-        getPersistedVisibleSessionTabIndex: () => ({
-          present: true,
-          sessionIds: tabListed ? [SESSION_ID] : []
-        }),
+        listVisibleSessionIds: () => (tabListed ? [SESSION_ID] : []),
         deps: {
           store: {
             getRecord: () => ({

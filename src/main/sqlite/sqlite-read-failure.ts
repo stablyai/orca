@@ -6,7 +6,9 @@
 /** Primary result codes; extended codes pack the primary code in the low byte. */
 const SQLITE_BUSY = 5
 const SQLITE_LOCKED = 6
+const SQLITE_CORRUPT = 11
 const SQLITE_CANTOPEN = 14
+const SQLITE_NOTADB = 26
 
 // Shared with the Codex index-heal pass, which only ever sees a relayed message
 // string (app-server RPC drops `errcode`), so message matching is not optional.
@@ -22,6 +24,27 @@ function primaryErrcode(error: unknown): number | null {
 
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+// SQLite reports a torn file at the first statement that reads a page, so this matches the message
+// as well as the code.
+const UNUSABLE_DATABASE =
+  /SQLITE_CORRUPT|SQLITE_NOTADB|file is not a database|database disk image is malformed/i
+
+/** True when the file is not a usable database at all, which no retry can change. */
+export function isUnusableSqliteDatabaseError(error: unknown): boolean {
+  const errcode = primaryErrcode(error)
+  if (errcode === SQLITE_CORRUPT || errcode === SQLITE_NOTADB) {
+    return true
+  }
+  if (!(error instanceof Error)) {
+    return false
+  }
+  const code = 'code' in error ? error.code : undefined
+  return (
+    (typeof code === 'string' && UNUSABLE_DATABASE.test(code)) ||
+    UNUSABLE_DATABASE.test(error.message)
+  )
 }
 
 /**

@@ -64,7 +64,9 @@ export class AgentSessionStoreTransactionQueue {
     private diskStoreFound: boolean,
     public state: AgentSessionStoreState,
     private diskRevision: string,
-    private needsRewrite: boolean
+    private needsRewrite: boolean,
+    /** Re-applied to every reload of another writer's file; true when it changed the state. */
+    private readonly normalizeLoaded: (state: AgentSessionStoreState) => boolean = () => false
   ) {
     this.diskRecoveredFromBackup = recoveredFromBackup
   }
@@ -73,7 +75,8 @@ export class AgentSessionStoreTransactionQueue {
     filePath: string,
     hostId: string,
     loaded: LoadedAgentSessionStore,
-    diskRevision: string
+    diskRevision: string,
+    normalizeLoaded?: (state: AgentSessionStoreState) => boolean
   ): AgentSessionStoreTransactionQueue {
     return new AgentSessionStoreTransactionQueue(
       filePath,
@@ -83,7 +86,8 @@ export class AgentSessionStoreTransactionQueue {
       loaded.storeFound,
       loaded.state,
       diskRevision,
-      loaded.needsRewrite
+      loaded.needsRewrite,
+      normalizeLoaded
     )
   }
 
@@ -165,9 +169,10 @@ export class AgentSessionStoreTransactionQueue {
       throw new Error('agent_session_legacy_required')
     }
     markLoadedLeasesUnreconciled(loaded.state)
+    const normalized = this.normalizeLoaded(loaded.state)
     this.state = loaded.state
     this.diskRevision = diskRevision
-    this.needsRewrite = loaded.needsRewrite
+    this.needsRewrite = loaded.needsRewrite || normalized
   }
 }
 

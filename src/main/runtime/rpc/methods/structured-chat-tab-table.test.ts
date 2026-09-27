@@ -277,10 +277,7 @@ describe('a chat tab across /clear', () => {
 
     await openHost()
     expect(store.getSessionTabId(replacement)).toBe(SOURCE_TAB)
-    expect(host.getPersistedVisibleSessionTabIndex()).toEqual({
-      present: true,
-      sessionIds: [replacement]
-    })
+    expect(host.listVisibleSessionIds()).toEqual([replacement])
   })
 
   it('gives a reopened cleared conversation the same id when an older build drops the table', async () => {
@@ -387,7 +384,7 @@ describe('a create that reserves its tab', () => {
     await host.flushAllStreamedEvents()
 
     await openHost()
-    expect(host.getPersistedVisibleSessionTabIndex().sessionIds).toEqual([])
+    expect(host.listVisibleSessionIds()).toEqual([])
     expect(await createChat('session-bravo', 'reserved-tab')).toMatchObject({
       ok: true,
       value: { tabId: 'reserved-tab' }

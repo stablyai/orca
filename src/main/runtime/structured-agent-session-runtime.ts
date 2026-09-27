@@ -19,6 +19,7 @@ import {
   type InstalledRuntime
 } from './structured-agent-session-runtime-teardown'
 import { AgentSessionRecoveryCapsule } from './agent-session-recovery-capsule'
+import { AgentSessionSavedStatusStore } from './agent-session-saved-status-store'
 import { createCodexStructuredLaunchResolver } from '../codex/codex-structured-launch-resolution'
 import type { CodexStructuredPermissionPolicy } from '../codex/codex-structured-permission-policy'
 import {
@@ -74,6 +75,8 @@ export type StructuredAgentSessionRuntimeDeps = {
   hostId: string
   /** Key id this host's claims are minted under. */
   claimKeyId: string
+  /** The saved workspace session's chat tabs; seeds a store that predates any tab index. */
+  savedTabSessionIds?: () => readonly string[]
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
   resolveCodexCommand?: (options?: { pathEnv?: string | null; homePath?: string }) => string
   resolveClaudeCommand?: () => string
@@ -197,7 +200,8 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
   const { resolveCodexEnvironment, resolveClaudeInheritedEnv } = envResolvers
   const store = await AgentSessionRecordStore.open({
     directory: join(deps.stateDirectory, RECORD_STORE_DIR_NAME),
-    hostId: deps.hostId
+    hostId: deps.hostId,
+    ...(deps.savedTabSessionIds ? { savedTabSessionIds: deps.savedTabSessionIds } : {})
   })
   // Why: only the durable store can identify a provider child lost before record publication.
   void (deps.reapOrphanChildren ?? stopOrphanAgentSessionChildren)({ store }).catch((error) => {
@@ -296,10 +300,12 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
   const adapter = new StructuredAgentSessionAdapterRouter({ codex, claude }, async () => {
     await Promise.all([codex.closeAll(), claude.closeAll()])
   })
+  const savedStatus = AgentSessionSavedStatusStore.open(deps.stateDirectory)
   host = new StructuredAgentSessionHost({
     store,
     adapter,
     recoveryCapsule: new AgentSessionRecoveryCapsule(deps.stateDirectory),
+    savedStatus,
     journalRoot: deps.stateDirectory,
     claimKeyId: deps.claimKeyId,
     probeOwner: createStructuredAgentSessionOwnerProbe(deps.hostId),
@@ -321,6 +327,7 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
   return {
     host,
     adapter,
+    savedStatus,
     waitForRecovery: lifecycle.drain
   }
 }
