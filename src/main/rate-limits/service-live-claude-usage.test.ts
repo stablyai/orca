@@ -516,4 +516,43 @@ describe('RateLimitService', () => {
       expect(fetchClaudeRateLimits).not.toHaveBeenCalled()
     })
   })
+
+  it('ignores an idle session re-posting an older snapshot of the same window', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 18))
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+      await service.refresh()
+      const resetsAt = Math.floor(Date.now() / 1000) + 3600
+
+      service.ingestLiveClaudeRateLimits({
+        configDir: null,
+        fiveHour: { used_percentage: 99, resets_at: resetsAt },
+        sevenDay: null
+      })
+      await vi.advanceTimersByTimeAsync(60 * 1000)
+      const updatedAt = service.getState().claude?.updatedAt
+
+      // Another, idle session of the same account still carries its snapshot from earlier in the window.
+      service.ingestLiveClaudeRateLimits({
+        configDir: null,
+        fiveHour: { used_percentage: 91, resets_at: resetsAt },
+        sevenDay: null
+      })
+      expect(service.getState().claude?.session?.usedPercent).toBe(99)
+      expect(service.getState().claude?.updatedAt).toBe(updatedAt)
+
+      // After the window resets, the lower value of the new window is taken.
+      service.ingestLiveClaudeRateLimits({
+        configDir: null,
+        fiveHour: { used_percentage: 2, resets_at: resetsAt + 5 * 3600 },
+        sevenDay: null
+      })
+      expect(service.getState().claude?.session?.usedPercent).toBe(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
