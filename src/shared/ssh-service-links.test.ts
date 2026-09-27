@@ -100,4 +100,17 @@ describe('normalizeSshServiceLink', () => {
       normalizeSshServiceLinks([{ label: 'Grafana', url: 'HTTPS://Example.com/d/x' }])
     ).toEqual([{ label: 'Grafana', url: 'HTTPS://Example.com/d/x' }])
   })
+
+  it('drops a link identical to an earlier one', () => {
+    expect(
+      normalizeSshServiceLinks([
+        { label: 'Grafana', url: 'https://grafana.example' },
+        { label: 'Grafana', url: 'https://grafana.example' },
+        { label: 'Grafana', url: 'https://grafana.example/d/other' }
+      ])
+    ).toEqual([
+      { label: 'Grafana', url: 'https://grafana.example' },
+      { label: 'Grafana', url: 'https://grafana.example/d/other' }
+    ])
+  })
 })

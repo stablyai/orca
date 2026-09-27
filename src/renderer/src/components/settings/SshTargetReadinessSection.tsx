@@ -130,6 +130,8 @@ export function SshTargetReadinessSection({
       }
     } catch (err) {
       if (mountedRef.current) {
+        // Why: a report from before the failure would read as the host's current state.
+        setReport(null)
         setError(
           err instanceof Error
             ? err.message
@@ -148,6 +150,8 @@ export function SshTargetReadinessSection({
 
   const checks = report?.checks ?? []
   const hasLoginAction = checks.some((check) => loginCommandFor(check) !== null)
+  // Why: the probe needs a POSIX shell; an all-unknown report means it could not run at all.
+  const probeUnsupported = checks.length > 0 && checks.every((check) => check.state === 'unknown')
 
   return (
     <div className="basis-full space-y-2 border-t border-border/50 pt-3">
@@ -172,6 +176,15 @@ export function SshTargetReadinessSection({
       </div>
 
       {error ? <p className="text-xs text-destructive [overflow-wrap:anywhere]">{error}</p> : null}
+
+      {probeUnsupported ? (
+        <p className="text-xs text-muted-foreground">
+          {translate(
+            'auto.components.settings.SshTargetReadinessSection.probeUnsupported',
+            'This host could not run the readiness check. It needs a POSIX shell, so Windows hosts are not checked yet.'
+          )}
+        </p>
+      ) : null}
 
       {checks.length > 0 ? (
         <ul className="space-y-2">

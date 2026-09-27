@@ -1,3 +1,4 @@
+import { StringDecoder } from 'node:string_decoder'
 import type { SshConnectionManager } from './ssh-connection-manager'
 import type { SshExecOptions } from './ssh-connection-utils'
 
@@ -89,9 +90,12 @@ export async function captureSshExecChannel(
       resolve(result)
     }
 
+    // Why decoders: a UTF-8 character can span two chunks; decoding each chunk alone corrupts it.
+    const stdoutDecoder = new StringDecoder('utf8')
+    const stderrDecoder = new StringDecoder('utf8')
     const onStdoutData = (data: Buffer): void => {
       if (stdoutByteLimit === null) {
-        stdout += data.toString()
+        stdout += stdoutDecoder.write(data)
         return
       }
       const remaining = stdoutByteLimit - stdoutBytes
@@ -101,7 +105,7 @@ export async function captureSshExecChannel(
       // Why: cut on the byte budget so a flooding host cannot grow the buffer; a half line is dropped by the parser.
       const chunk = data.length > remaining ? data.subarray(0, remaining) : data
       stdoutBytes += chunk.length
-      stdout += chunk.toString()
+      stdout += stdoutDecoder.write(chunk)
     }
     const onStderrData = (data: Buffer): void => {
       // Why: stderr only feeds error messages; a chatty or hostile host must not grow it without bound.
@@ -111,7 +115,7 @@ export async function captureSshExecChannel(
       }
       const chunk = data.length > remaining ? data.subarray(0, remaining) : data
       stderrBytes += chunk.length
-      stderr += chunk.toString()
+      stderr += stderrDecoder.write(chunk)
     }
     // `exit` fires before `close`; capturing the code is what lets a caller tell a failed command (that still printed output) from an empty reply.
     const onExit = (code: number | null): void => {
@@ -121,7 +125,11 @@ export async function captureSshExecChannel(
       rejectOnce(error)
     }
     const onClose = (): void => {
-      resolveOnce({ stdout, stderr, exitCode })
+      resolveOnce({
+        stdout: stdout + stdoutDecoder.end(),
+        stderr: stderr + stderrDecoder.end(),
+        exitCode
+      })
     }
 
     channel.on('data', onStdoutData)

@@ -102,7 +102,7 @@ export function SshServiceLinksEditor({
       <p className="text-[11px] text-muted-foreground">
         {translate(
           'auto.components.settings.SshServiceLinksEditor.helper',
-          'Shown as buttons on this host card. http:// and https:// URLs only.'
+          'Shown as buttons on this host card. http:// and https:// URLs only, without a user name or password in the URL.'
         )}
       </p>
     </div>

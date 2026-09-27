@@ -8617,7 +8617,7 @@
           "urlField": "Service link URL",
           "urlPlaceholder": "https://grafana.example.com",
           "remove": "Remove link",
-          "helper": "Shown as buttons on this host card. http:// and https:// URLs only."
+          "helper": "Shown as buttons on this host card. http:// and https:// URLs only, without a user name or password in the URL."
         },
         "SshTargetCard": {
           "a883f5a00f": "terminal timeout: {{value0}}",
@@ -12237,7 +12237,8 @@
           "checkFailed": "Could not check readiness.",
           "readiness": "Readiness",
           "check": "Check",
-          "loginHint": "Run it in a terminal on this host; the sign-in page opens here."
+          "loginHint": "Run it in a terminal on this host; the sign-in page opens here.",
+          "probeUnsupported": "This host could not run the readiness check. It needs a POSIX shell, so Windows hosts are not checked yet."
         }
       },
       "right": {

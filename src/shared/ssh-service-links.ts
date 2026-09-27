@@ -54,11 +54,15 @@ export function normalizeSshServiceLinks(value: unknown): SshServiceLink[] | und
     return undefined
   }
   const links: SshServiceLink[] = []
+  const seen = new Set<string>()
   for (const entry of value) {
     const link = normalizeSshServiceLink(entry)
-    if (!link) {
+    // Why dedupe: identical links add nothing and would collide as render keys on the card.
+    const identity = link ? `${link.url}\u0000${link.label}` : ''
+    if (!link || seen.has(identity)) {
       continue
     }
+    seen.add(identity)
     links.push(link)
     if (links.length === MAX_SSH_SERVICE_LINKS) {
       break

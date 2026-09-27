@@ -24,4 +24,25 @@ describe('captureSshExecChannel', () => {
     expect(result.stderr.length).toBe(64 * 1024)
     expect(result.exitCode).toBe(1)
   })
+
+  it('decodes a UTF-8 character split across two chunks', async () => {
+    const channel = Object.assign(new EventEmitter(), { stderr: new EventEmitter() })
+    const pending = captureSshExecChannel(fakeConnection(channel), 'true', {
+      timeoutMs: 5_000,
+      timeoutMessage: 'timed out'
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+    const euro = Buffer.from('cost \u20ac5', 'utf8')
+    const split = euro.indexOf(0xe2) + 2
+    channel.emit('data', euro.subarray(0, split))
+    channel.emit('data', euro.subarray(split))
+    channel.stderr.emit('data', euro.subarray(0, split))
+    channel.stderr.emit('data', euro.subarray(split))
+    channel.emit('exit', 0)
+    channel.emit('close')
+    const result = await pending
+    expect(result.stdout).toBe('cost \u20ac5')
+    expect(result.stderr).toBe('cost \u20ac5')
+  })
 })

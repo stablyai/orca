@@ -98,7 +98,7 @@ fi
 # Why absent claude stays unknown: a failed exec and a missing binary look identical here,
 # and "not logged in" is a claim we would be making up. Only parsed JSON yields ok or miss.
 # Both parsers run with stderr discarded: a non-zero exit is the unknown path, not a report.
-orca_claude_out=$($orca_timeout claude auth status 2>/dev/null)
+orca_claude_out=$($orca_timeout claude auth status --json 2>/dev/null)
 orca_claude_parsed=
 if command -v node >/dev/null 2>&1; then
   orca_claude_parsed=$(printf '%s' "$orca_claude_out" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const j=JSON.parse(s);process.stdout.write((j&&j.loggedIn===true?"ok":"miss")+" "+(j&&typeof j.authMethod==="string"?j.authMethod:""))}catch(e){process.stdout.write("unknown ")}})' 2>/dev/null)
