@@ -1,4 +1,7 @@
+import { useEffect, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { TerminalCopyFeedbackPopup } from './TerminalCopyFeedbackPopup'
+import { pruneTerminalCopyFlashLeafIds } from './terminal-copy-flash-store'
 import CodexRestartChip from '../CodexRestartChip'
 import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
 import { TerminalRemoteRuntimeReconnectBanner } from './TerminalRemoteRuntimeReconnectBanner'
@@ -9,6 +12,7 @@ import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
 import { shouldShowMobileDriverOverlay } from './mobile-driver-overlay-visibility'
 import { shouldChatTakeOverMobileSurface } from '../native-chat/native-chat-send-eligibility'
 import type { TerminalPaneController } from './use-terminal-pane-controller'
+import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 
 export function TerminalPaneCodexRestartPortals({
   controller
@@ -192,6 +196,58 @@ export function TerminalPaneMobileDriverPortals({
           `mobile-driver-banner-${pane.id}`
         )
       })}
+    </>
+  )
+}
+
+export function TerminalPaneCopyFeedbackPortals({
+  controller
+}: {
+  controller: TerminalPaneController
+}): React.JSX.Element {
+  const { managedPanes } = controller
+  // Key on the leafIds, not the managedPanes array identity: getPanes() returns a fresh array
+  // on every call, so an array-identity dependency would fire this effect on every render
+  // instead of only when panes are actually added or removed.
+  const leafIdsKey = useMemo(
+    () => managedPanes.map((pane) => pane.leafId).join(','),
+    [managedPanes]
+  )
+  const previousLeafIdsRef = useRef<ReadonlySet<TerminalLeafId>>(new Set())
+  // Closed panes would otherwise keep pending flash timers alive. Diffs against this surface's
+  // own previous leafIds (only ever removing what this surface itself used to own) instead of
+  // "keep only my current panes": the flash store is one map shared by every concurrently
+  // mounted PaneManager surface, so a keep-only-mine prune would delete live state that
+  // belongs to a different surface's still-open panes.
+  useEffect(() => {
+    const currentLeafIds = new Set(managedPanes.map((pane) => pane.leafId))
+    const removedLeafIds = new Set(
+      [...previousLeafIdsRef.current].filter((leafId) => !currentLeafIds.has(leafId))
+    )
+    previousLeafIdsRef.current = currentLeafIds
+    if (removedLeafIds.size > 0) {
+      pruneTerminalCopyFlashLeafIds(removedLeafIds)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- leafIdsKey is the change signal; managedPanes churns identity every render.
+  }, [leafIdsKey])
+  // On unmount (surface closed entirely), release every leafId this surface was still tracking.
+  useEffect(
+    () => () => {
+      if (previousLeafIdsRef.current.size > 0) {
+        pruneTerminalCopyFlashLeafIds(previousLeafIdsRef.current)
+      }
+    },
+    []
+  )
+  return (
+    <>
+      {managedPanes.map((pane) =>
+        createPortal(
+          <TerminalCopyFeedbackPopup leafId={pane.leafId} terminal={pane.terminal} />,
+          pane.container,
+          `copy-feedback-${pane.leafId}`
+        )
+      )}
     </>
   )
 }

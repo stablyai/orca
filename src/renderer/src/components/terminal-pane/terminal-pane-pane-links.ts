@@ -18,6 +18,7 @@ import { installTerminalLinkPointerGesture } from './terminal-link-pointer-gestu
 import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
 import { handleOscLink } from './terminal-osc-link-routing'
 import { copyTerminalSelection } from './terminal-selection-copy'
+import { notifyTerminalSelectionCopyFlash } from './terminal-copy-flash-store'
 import { readTerminalClipboardSelection } from './terminal-clipboard-selection-text'
 import { installTerminalNativeCopyGutterTrim } from './terminal-native-copy-gutter'
 import { installMouseHideWhileTyping } from './mouse-hide-while-typing'
@@ -164,7 +165,15 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
       void copyTerminalSelection({
         terminal: pane.terminal,
         writeClipboardText: window.api.ui.writeTerminalClipboardText
-      }).catch(() => {})
+      })
+        .then((copied) => {
+          // Selection changes stop firing at mouse release; the quiet window shows
+          // one popup per drag instead of one per character.
+          if (copied) {
+            notifyTerminalSelectionCopyFlash(pane.leafId)
+          }
+        })
+        .catch(() => {})
     })
   )
   if (settingsRef.current?.terminalMouseHideWhileTyping) {

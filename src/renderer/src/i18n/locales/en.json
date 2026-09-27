@@ -3211,6 +3211,9 @@
             "cff67afad1": "Copy Context",
             "15dd899676": "Add to {{value0}}…"
           },
+          "TerminalCopyFeedbackPopup": {
+            "ab2ac75664": "copied to clipboard"
+          },
           "TerminalErrorToast": {
             "e4aa243f8c": "Restart daemon",
             "retry": "Retry",
