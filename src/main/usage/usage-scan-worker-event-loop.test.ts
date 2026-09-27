@@ -6,7 +6,11 @@ import { join, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { Worker } from 'node:worker_threads'
 import { scanCodexUsageFiles } from '../codex-usage/scanner'
-import { UsageScanWorkerClient, scanCodexUsageOnWorker } from './usage-scan-worker-client'
+import {
+  UsageScanWorkerClient,
+  scanClaudeUsageOnWorker,
+  scanCodexUsageOnWorker
+} from './usage-scan-worker-client'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
 
 // Why this test exists: "the scan no longer blocks the main process" is not a
@@ -185,6 +189,36 @@ afterAll(() => {
 })
 
 describe('usage scan worker event-loop occupancy', () => {
+  it('scans only the selected Claude config directory through the real worker', async () => {
+    const configDir = join(corpusRoot, 'selected-claude')
+    const projectsDir = join(configDir, 'projects', 'repo')
+    mkdirSync(projectsDir, { recursive: true })
+    const transcriptPath = join(projectsDir, 'selected.jsonl')
+    writeFileSync(
+      transcriptPath,
+      JSON.stringify({
+        type: 'assistant',
+        sessionId: 'selected-session',
+        timestamp: '2026-04-09T10:00:00.000Z',
+        cwd: WORKTREES[0].path,
+        message: {
+          model: 'claude-sonnet-4-6',
+          usage: { input_tokens: 100, output_tokens: 20 }
+        }
+      })
+    )
+    const client = createWorkerClient()
+    const result = await withCorpusEnv(() =>
+      scanClaudeUsageOnWorker((body) => client.scan(body), WORKTREES, [], {
+        configDir,
+        includeWslHomes: false
+      })
+    )
+    expect(result.source.map((file) => file.path)).toEqual([transcriptPath])
+    expect(result.sessions).toHaveLength(1)
+    expect(result.sessions[0].sessionId).toBe('selected-session')
+  })
+
   it('costs the calling thread a fraction of the JS time the same scan does inline', async () => {
     // Calling thread first: the baseline is measured with no worker alive, and
     // the worker arm then reads an OS cache the inline arm already warmed,

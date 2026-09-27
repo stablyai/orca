@@ -1,6 +1,8 @@
 import { basename } from 'node:path'
 import { stat } from 'node:fs/promises'
 import { createReadStream } from 'node:fs'
+import { isWslUncPath } from '../../shared/wsl-paths'
+import { openTranscriptReadStream, wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
 import { createInterface } from 'node:readline'
 import type { ClaudeUsageParsedTurn, ClaudeUsageProcessedFile } from './types'
 
@@ -172,6 +174,19 @@ function buildClaudeUsageDedupeKey(parsed: ClaudeUsageSourceRecord): string | nu
   return null
 }
 
+async function statClaudeUsageFile(filePath: string): Promise<{ mtimeMs: number; size: number }> {
+  const fileStat = isWslUncPath(filePath)
+    ? await wslGatedStat(filePath, 'scan')
+    : await stat(filePath)
+  return { mtimeMs: fileStat.mtimeMs, size: fileStat.size }
+}
+
+function createClaudeUsageReadStream(filePath: string): NodeJS.ReadableStream {
+  return isWslUncPath(filePath)
+    ? openTranscriptReadStream(filePath, { encoding: 'utf-8' }, 'scan')
+    : createReadStream(filePath, { encoding: 'utf-8' })
+}
+
 export function parseClaudeUsageRecord(line: string): ClaudeUsageParsedTurn | null {
   const parsed = parseClaudeUsageSourceRecord(line)
   return parsed ? stripClaudeSourceMetadata(parsed) : null
@@ -181,7 +196,7 @@ export async function parseClaudeUsageFile(filePath: string): Promise<ClaudeUsag
   const turns: ClaudeUsageParsedSourceTurn[] = []
   const fallbackSessionId = basename(filePath, '.jsonl')
   const lines = createInterface({
-    input: createReadStream(filePath, { encoding: 'utf-8' }),
+    input: createClaudeUsageReadStream(filePath),
     crlfDelay: Infinity
   })
 
@@ -199,12 +214,12 @@ export async function readClaudeUsageScanFile(filePath: string): Promise<{
   processedFile: ClaudeUsageProcessedFile
   turns: ClaudeUsageParsedSourceTurn[]
 }> {
-  const fileStat = await stat(filePath)
+  const fileStat = await statClaudeUsageFile(filePath)
   let lineCount = 0
   const turns: ClaudeUsageParsedSourceTurn[] = []
   const fallbackSessionId = basename(filePath, '.jsonl')
   const lines = createInterface({
-    input: createReadStream(filePath, { encoding: 'utf-8' }),
+    input: createClaudeUsageReadStream(filePath),
     crlfDelay: Infinity
   })
 

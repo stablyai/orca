@@ -19,6 +19,7 @@ import type {
   MuseUsageSession
 } from '../muse-usage/types'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
+import type { ClaudeUsageScanTarget } from '../claude-usage/scanner'
 
 // Why (#20940): the first-party usage scans walk whole rollout/transcript
 // corpora and read SQLite synchronously, all on the Electron main process. They
@@ -39,6 +40,7 @@ export type UsageScanWorkerRequestBody =
       providerId: 'claude'
       worktrees: UsageScanWorktreeRef[]
       previous: ClaudeUsagePersistedFile[]
+      target?: ClaudeUsageScanTarget
     }
   | { providerId: 'codex'; worktrees: UsageScanWorktreeRef[]; previous: CodexUsagePersistedFile[] }
   | {

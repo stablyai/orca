@@ -710,6 +710,16 @@ describe('ClaudeUsageStore', () => {
     expect(readFileSync(join(tempUserData, 'orca-claude-usage.json'), 'utf-8')).toContain('\n')
   })
 
+  it('passes the current runtime target into Claude transcript scans', async () => {
+    const target = { configDir: '/selected/.claude' }
+    const store = new ClaudeUsageStore(createBackingStore(), async () => target)
+    await store.setEnabled(true)
+
+    await store.refresh(true)
+
+    expect(scanClaudeUsageFilesViaWorker).toHaveBeenCalledWith([], [], target)
+  })
+
   it('joins a scan that is already in flight when the run finished before it started', async () => {
     const worktreeId = 'repo-1::/workspace/repo-a'
     const store = createStoreWithState({
