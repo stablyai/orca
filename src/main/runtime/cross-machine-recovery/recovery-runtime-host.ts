@@ -54,7 +54,7 @@ export type CrossMachineRecoveryHost = {
   isProviderSessionLive(binding: RecoveryBindingKey): boolean
   /** Runtime-owned so resume and replay hosts built for separate calls share one view. */
   resumeHolds: RecoveryResumeHolds
-  /** Probed from `--help` of the claude command a local launch resolves, override included. */
+  /** Probed from `--help` of the claude command a local resume types, through its shell. */
   supportsClaudeAppendSystemPrompt(): Promise<boolean>
   activateWorktree(worktreeId: string): Promise<void>
 }

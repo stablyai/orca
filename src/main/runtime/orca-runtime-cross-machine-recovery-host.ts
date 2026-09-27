@@ -13,7 +13,7 @@ export class OrcaRuntimeWithCrossMachineRecoveryHost extends OrcaRuntimeWithCros
   private readonly crossMachineRecoveryResumeHolds = createRecoveryResumeHolds()
   private readonly claudeAppendSystemPromptProbe = createClaudeHelpFlagProbe(
     CLAUDE_APPEND_SYSTEM_PROMPT_FLAG,
-    () => this.requireStore().getSettings().agentCmdOverrides
+    () => this.requireStore().getSettings()
   )
 
   // Why: addRepo is installed on the final runtime prototype, so callers holding that type supply it.
