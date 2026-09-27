@@ -116,11 +116,15 @@ export function isGitForWindowsBashPath(shellPath: string): boolean {
 
 /**
  * Files only a Git for Windows install root carries. `usr\bin\bash.exe` is the launcher's own
- * hand-off target; `cmd\git.exe` is what separates that root from a Cygwin or MSYS2 one.
+ * hand-off target, and the other two separate that root from a Cygwin or MSYS2 one: neither ships a
+ * `cmd\` directory, and `git-bash.exe` is Git for Windows' own launcher rather than an upstream git
+ * binary, so no Cygwin package can put it here. All three confirmed present on a real Git 2.x
+ * install and absent from a real Cygwin root.
  */
 const GIT_FOR_WINDOWS_ROOT_MARKERS = [
   ['usr', 'bin', 'bash.exe'],
-  ['cmd', 'git.exe']
+  ['cmd', 'git.exe'],
+  ['git-bash.exe']
 ] as const
 
 /**
