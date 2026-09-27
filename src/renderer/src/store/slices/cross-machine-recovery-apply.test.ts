@@ -5,6 +5,7 @@ import type {
   CrossMachineRecoveryApplyOp,
   RecoveryWorkspaceFragment
 } from '../../../../shared/cross-machine-recovery-session-ops'
+import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
 import { handleCrossMachineRecoveryApplyRequest } from './cross-machine-recovery-apply'
 import { buildOwnedEditorFileId } from './editor/file-ids/editor-file-ids'
 import { createStoreSessionMockApi } from './store-session-test-harness'
@@ -81,6 +82,59 @@ function fragment(): RecoveryWorkspaceFragment {
 
 function importOp(): CrossMachineRecoveryApplyOp {
   return { kind: 'import', importKey: 'key', fragment: fragment(), records: [record] }
+}
+
+const SECOND_PANE_KEY = 'tab-two:3c2b1a00-0000-4000-8000-000000000002'
+const IMPORTED_FILE = '/repo1/wt/src/a.ts'
+
+const secondRecord: SleepingAgentSessionRecord = {
+  ...record,
+  paneKey: SECOND_PANE_KEY,
+  tabId: 'tab-two',
+  providerSession: { key: 'session_id', id: 'session-2' },
+  recovery: { importKey: 'key', sourcePaneKey: 'src-tab-two:src-leaf' }
+}
+
+function leaf(groupId: string): TabGroupLayoutNode {
+  return { type: 'leaf', groupId }
+}
+
+function splitImportOp(
+  tabGroupLayout: TabGroupLayoutNode,
+  activeGroupId: string,
+  groupIds: readonly string[] = ['group-new', 'group-file', 'group-two']
+): CrossMachineRecoveryApplyOp {
+  const base = fragment()
+  const groupOf = (groupId: string): string => (groupIds.includes(groupId) ? groupId : 'group-new')
+  const unifiedTabs = [
+    makeUnifiedTab({ id: 'tab-new', worktreeId: WT, groupId: 'group-new' }),
+    makeUnifiedTab({
+      id: IMPORTED_FILE,
+      entityId: IMPORTED_FILE,
+      worktreeId: WT,
+      groupId: groupOf('group-file'),
+      contentType: 'editor',
+      label: 'a.ts'
+    }),
+    makeUnifiedTab({ id: 'tab-two', worktreeId: WT, groupId: groupOf('group-two') })
+  ]
+  return {
+    kind: 'import',
+    importKey: 'key',
+    records: [record, secondRecord],
+    fragment: {
+      ...base,
+      terminalTabs: [...base.terminalTabs, makeTab({ id: 'tab-two', worktreeId: WT, ptyId: null })],
+      terminalLayoutsByTabId: { ...base.terminalLayoutsByTabId, 'tab-two': makeLayout() },
+      unifiedTabs,
+      tabGroups: groupIds.map((id) => {
+        const tabOrder = unifiedTabs.flatMap((tab) => (tab.groupId === id ? [tab.id] : []))
+        return makeTabGroup({ id, worktreeId: WT, activeTabId: tabOrder[0] ?? null, tabOrder })
+      }),
+      tabGroupLayout,
+      activeGroupId
+    }
+  }
 }
 
 function setup() {
@@ -342,8 +396,136 @@ describe('cross-machine recovery renderer apply', () => {
     ])
     expect(state.activeGroupIdByWorktree[WT]).toBe('group-new')
     expect(state.openFiles).toEqual([])
-    expect(state.sleepingAgentSessionsByPaneKey[PANE_KEY]).toBeUndefined()
+    expect(state.sleepingAgentSessionsByPaneKey[PANE_KEY]).toEqual(record)
     expect(state.recoveryImportKeyByWorktreeId[WT]).toBeUndefined()
+    const rewritten = session.set.mock.calls[1][0]
+    expect(rewritten.sleepingAgentSessionsByPaneKey[PANE_KEY]).toEqual(record)
+    expect(rewritten.recoveryImportKeyByWorktreeId ?? {}).toEqual({})
+  })
+
+  it('drops the dormant binding of each recovered terminal the rollback removes, keeping the rest', async () => {
+    const { store, session, apply } = setup()
+    session.flush.mockImplementationOnce(async () => {
+      store.getState().setTabCustomTitle('tab-two', 'mine')
+      throw new Error('disk full')
+    })
+
+    expect(await apply(splitImportOp(leaf('group-new'), 'group-new', ['group-new']))).toEqual({
+      requestId: 'r1',
+      error: 'disk full'
+    })
+
+    const state = store.getState()
+    expect(state.tabsByWorktree[WT]?.map((tab) => tab.id)).toEqual(['tab-two'])
+    expect(state.sleepingAgentSessionsByPaneKey).toEqual({ [SECOND_PANE_KEY]: secondRecord })
+    expect(session.set.mock.calls[1][0].sleepingAgentSessionsByPaneKey).toEqual({
+      [SECOND_PANE_KEY]: secondRecord
+    })
+  })
+
+  it('prunes a removed import group from the split layout and moves the active group to a survivor', async () => {
+    const { store, session, apply } = setup()
+    const op = splitImportOp(
+      {
+        type: 'split',
+        direction: 'horizontal',
+        ratio: 0.3,
+        first: leaf('group-new'),
+        second: leaf('group-file')
+      },
+      'group-new',
+      ['group-new', 'group-file']
+    )
+    session.flush.mockImplementationOnce(async () => {
+      store.getState().setEditorDraft(IMPORTED_FILE, 'unsaved import edit')
+      store.getState().markFileDirty(IMPORTED_FILE, true)
+      throw new Error('disk full')
+    })
+
+    expect(await apply(op)).toEqual({ requestId: 'r1', error: 'disk full' })
+
+    const state = store.getState()
+    expect(state.groupsByWorktree[WT]?.map((group) => group.id)).toEqual(['group-file'])
+    expect(state.layoutByWorktree[WT]).toEqual(leaf('group-file'))
+    expect(state.activeGroupIdByWorktree[WT]).toBe('group-file')
+    const rewritten = session.set.mock.calls[1][0]
+    expect(rewritten.tabGroupLayouts[WT]).toEqual(leaf('group-file'))
+    expect(rewritten.activeGroupIdByWorktree[WT]).toBe('group-file')
+  })
+
+  it('keeps surviving branches and split ratios when rollback removes a nested import group', async () => {
+    const { store, session, apply } = setup()
+    const op = splitImportOp(
+      {
+        type: 'split',
+        direction: 'horizontal',
+        ratio: 0.25,
+        first: leaf('group-file'),
+        second: {
+          type: 'split',
+          direction: 'vertical',
+          ratio: 0.6,
+          first: leaf('group-new'),
+          second: leaf('group-two')
+        }
+      },
+      'group-two'
+    )
+    session.flush.mockImplementationOnce(async () => {
+      store.getState().setEditorDraft(IMPORTED_FILE, 'unsaved import edit')
+      store.getState().markFileDirty(IMPORTED_FILE, true)
+      store.getState().setTabCustomTitle('tab-two', 'mine')
+      throw new Error('disk full')
+    })
+
+    expect(await apply(op)).toEqual({ requestId: 'r1', error: 'disk full' })
+
+    const expectRolledBackLayout = (): void => {
+      const state = store.getState()
+      expect(state.groupsByWorktree[WT]?.map((group) => group.id)).toEqual([
+        'group-file',
+        'group-two'
+      ])
+      expect(state.layoutByWorktree[WT]).toEqual({
+        type: 'split',
+        direction: 'horizontal',
+        ratio: 0.25,
+        first: leaf('group-file'),
+        second: leaf('group-two')
+      })
+      expect(state.activeGroupIdByWorktree[WT]).toBe('group-two')
+    }
+    expectRolledBackLayout()
+    store.getState().reconcileWorktreeTabModel(WT)
+    expectRolledBackLayout()
+  })
+
+  it('drops every removed import group from a split the user resized while the import failed', async () => {
+    const { store, session, apply } = setup()
+    const op = splitImportOp(
+      {
+        type: 'split',
+        direction: 'horizontal',
+        ratio: 0.3,
+        first: leaf('group-new'),
+        second: leaf('group-two')
+      },
+      'group-new',
+      ['group-new', 'group-two']
+    )
+    session.flush.mockImplementationOnce(async () => {
+      store.getState().setTabGroupSplitRatio(WT, '', 0.7)
+      store.getState().focusGroup(WT, 'group-two')
+      throw new Error('disk full')
+    })
+
+    expect(await apply(op)).toEqual({ requestId: 'r1', error: 'disk full' })
+
+    const state = store.getState()
+    expect(state.groupsByWorktree[WT] ?? []).toEqual([])
+    expect(state.layoutByWorktree[WT]).toBeUndefined()
+    expect(state.activeGroupIdByWorktree[WT]).toBeUndefined()
+    expect(state.sleepingAgentSessionsByPaneKey).toEqual({})
   })
 
   it('keeps an imported file the user edited, with its tab, when the import fails to persist', async () => {

@@ -3,11 +3,13 @@ import { shallow } from 'zustand/shallow'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import type { AppState } from '../types'
 import type { OpenFile } from './editor'
-import { sanitizeRecentTabIds } from './tab-group-state'
+import { sanitizeRecentTabIds, selectHydratedActiveGroupId } from './tab-group-state'
+import { pruneTabGroupLayoutForGroups } from './tabs-hydration'
 
 type RecoveryStore = Pick<StoreApi<AppState>, 'setState'>
 type Row = { id: string }
 type Rows<T extends Row> = Record<string, T[]>
+type GroupLayout = Pick<AppState, 'layoutByWorktree' | 'activeGroupIdByWorktree'>
 
 function addedRows<T extends Row>(
   before: readonly T[] | undefined,
@@ -93,6 +95,44 @@ function withoutTabs(groups: readonly TabGroup[], dropped: ReadonlySet<string>):
         : group.activeTabId
     return { ...group, tabOrder, recentTabIds, activeTabId }
   })
+}
+
+function withEntry<T>(record: Record<string, T>, key: string, value: T | undefined) {
+  if (record[key] === value) {
+    return record
+  }
+  const next = { ...record }
+  if (value === undefined) {
+    delete next[key]
+  } else {
+    next[key] = value
+  }
+  return next
+}
+
+// Why: the split view renders every layout leaf, so a removed group's leaf would stay an empty pane.
+function withLayoutOfGroups(
+  { layoutByWorktree, activeGroupIdByWorktree }: GroupLayout,
+  worktreeId: string,
+  groups: TabGroup[]
+): GroupLayout {
+  const groupIds = new Set(groups.map((group) => group.id))
+  const layout = layoutByWorktree[worktreeId]
+  const activeGroupId = activeGroupIdByWorktree[worktreeId]
+  return {
+    layoutByWorktree: withEntry(
+      layoutByWorktree,
+      worktreeId,
+      (layout && pruneTabGroupLayoutForGroups(layout, groupIds)) ?? undefined
+    ),
+    activeGroupIdByWorktree: withEntry(
+      activeGroupIdByWorktree,
+      worktreeId,
+      activeGroupId && groupIds.has(activeGroupId)
+        ? activeGroupId
+        : selectHydratedActiveGroupId(groups)
+    )
+  }
 }
 
 function droppedImportRows(before: AppState, staged: AppState, current: AppState, id: string) {
@@ -181,24 +221,31 @@ export function rollbackImportedWorkspace(
     const importGroupsGone = !keptGroups.some((group) => ownedGroupIds.has(group.id))
     const worktreeKeys = [id]
     const tabKeys = [...dropped.terminals]
+    const groupsByWorktree = importGroupsGone
+      ? revertRows(
+          { ...current.groupsByWorktree, [id]: strippedGroups },
+          before.groupsByWorktree,
+          staged.groupsByWorktree,
+          id,
+          emptiedGroupIds
+        )
+      : { ...current.groupsByWorktree, [id]: keptGroups }
+    const groupLayout: GroupLayout = importGroupsGone
+      ? {
+          layoutByWorktree: entries((s) => s.layoutByWorktree, worktreeKeys),
+          activeGroupIdByWorktree: entries((s) => s.activeGroupIdByWorktree, worktreeKeys)
+        }
+      : {
+          layoutByWorktree: current.layoutByWorktree,
+          activeGroupIdByWorktree: current.activeGroupIdByWorktree
+        }
     return {
       tabsByWorktree: rows((s) => s.tabsByWorktree, dropped.terminals),
       unifiedTabsByWorktree: rows((s) => s.unifiedTabsByWorktree, dropped.tabs),
-      groupsByWorktree: importGroupsGone
-        ? revertRows(
-            { ...current.groupsByWorktree, [id]: strippedGroups },
-            before.groupsByWorktree,
-            staged.groupsByWorktree,
-            id,
-            emptiedGroupIds
-          )
-        : { ...current.groupsByWorktree, [id]: keptGroups },
-      ...(importGroupsGone
-        ? {
-            layoutByWorktree: entries((s) => s.layoutByWorktree, worktreeKeys),
-            activeGroupIdByWorktree: entries((s) => s.activeGroupIdByWorktree, worktreeKeys)
-          }
-        : {}),
+      groupsByWorktree,
+      ...(emptiedGroupIds.size > 0
+        ? withLayoutOfGroups(groupLayout, id, groupsByWorktree[id] ?? [])
+        : groupLayout),
       openFiles:
         dropped.files.size > 0
           ? current.openFiles.filter((file) => !dropped.files.has(file.id))
