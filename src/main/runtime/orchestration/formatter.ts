@@ -1,3 +1,4 @@
+import { isTerminalMailbox } from './terminal-mailbox-subscriptions'
 import type { MessageRow } from './types'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../shared/orchestration-rpc-contract'
 import type { OrchestrationCliCommand } from './cli-command'
@@ -114,7 +115,7 @@ export function formatMessagePointer(
   mailboxHandle?: string,
   cliCommand: OrchestrationCliCommand = 'orca'
 ): string {
-  if (mailboxHandle && /^term_[a-zA-Z0-9_-]+$/.test(mailboxHandle)) {
+  if (mailboxHandle && isTerminalMailbox(mailboxHandle)) {
     return `\nOrchestration mail is available. Run \`${cliCommand} orchestration inbox --terminal ${mailboxHandle} --full\`. Inspection does not acknowledge messages.\n`
   }
   const noun = count === 1 ? 'message' : 'messages'

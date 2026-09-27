@@ -1,3 +1,4 @@
+import { orchestrationCompatibilityHostScopesEqual } from '../orchestration-compatibility-host-scope'
 import type { OrchestrationMailboxPointerSubmitTarget } from './mailbox-pointer-submit'
 import type {
   TerminalMailboxSubscriptionState,
@@ -31,13 +32,6 @@ export type TerminalMailboxSubscriptionBinding = Readonly<{
 }>
 
 export type CurrentTerminalMailboxAuthority = Omit<TerminalMailboxSubscriptionBinding, 'createdAt'>
-
-function hostScopesEqual(
-  left: TerminalMailboxSubscriptionBinding['hostScope'],
-  right: TerminalMailboxSubscriptionBinding['hostScope']
-): boolean {
-  return JSON.stringify(left) === JSON.stringify(right)
-}
 
 /** Registrations belong to this runtime; no authority is restored after restart. */
 export class TerminalMailboxSubscriptions {
@@ -174,7 +168,7 @@ export class TerminalMailboxSubscriptions {
       left.paneKey === right.paneKey &&
       left.ptyId === right.ptyId &&
       left.processIncarnation === right.processIncarnation &&
-      hostScopesEqual(left.hostScope, right.hostScope)
+      orchestrationCompatibilityHostScopesEqual(left.hostScope, right.hostScope)
     )
   }
 
@@ -199,7 +193,7 @@ export class TerminalMailboxSubscriptions {
       current.paneKey === binding.paneKey &&
       current.ptyId === binding.ptyId &&
       current.processIncarnation === binding.processIncarnation &&
-      hostScopesEqual(current.hostScope, binding.hostScope)
+      orchestrationCompatibilityHostScopesEqual(current.hostScope, binding.hostScope)
     )
   }
 
