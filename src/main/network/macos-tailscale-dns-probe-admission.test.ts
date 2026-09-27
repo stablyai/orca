@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { formatAgentCliFailureMessage } from '../text-generation/source-control-agent-failure'
 import {
   __resetMacTailscaleDnsDiagnosticCacheForTests,
-  withMacTailscaleDnsHint
+  parseMacTailscaleDnsDiagnostic,
+  withMacTailscaleDnsHint,
+  withMacTailscaleDnsHintForDiagnostic
 } from './macos-tailscale-dns-diagnostic'
 
 vi.mock('node:child_process', () => ({ execFileSync: vi.fn() }))
@@ -65,18 +67,17 @@ describe('macOS DNS probe admission', () => {
     expect(execFileSync).toHaveBeenCalledOnce()
   })
 
-  it('keeps the five-minute cache for relevant errors and skips unrelated expiry probes', () => {
+  it('reuses the sample inside the five-minute window and refreshes it after', () => {
     expect(withMacTailscaleDnsHint('ENOTFOUND')).toContain('Tailscale MagicDNS')
+
     vi.mocked(Date.now).mockReturnValue(300_999)
+    vi.mocked(execFileSync).mockReturnValue(PUBLIC_DNS)
     expect(withMacTailscaleDnsHint('ENOTFOUND')).toContain('Tailscale MagicDNS')
-    expect(execFileSync).toHaveBeenCalledOnce()
 
     vi.mocked(Date.now).mockReturnValue(301_000)
-    withMacTailscaleDnsHint('permission denied')
-    expect(execFileSync).toHaveBeenCalledOnce()
-    vi.mocked(execFileSync).mockReturnValue(PUBLIC_DNS)
+    expect(withMacTailscaleDnsHint('permission denied')).toBe('permission denied')
+    // The invariant is the resolver state the next relevant error reports, not the probe count.
     expect(withMacTailscaleDnsHint('ENOTFOUND')).toBe('ENOTFOUND')
-    expect(execFileSync).toHaveBeenCalledTimes(2)
   })
 
   it.each(['empty output', 'failed command'])('retains negative caching for %s', (failure) => {
@@ -88,6 +89,54 @@ describe('macOS DNS probe admission', () => {
     })
     expect(withMacTailscaleDnsHint('ENOTFOUND')).toBe('ENOTFOUND')
     expect(withMacTailscaleDnsHint('EAI_AGAIN')).toBe('EAI_AGAIN')
+    expect(execFileSync).toHaveBeenCalledOnce()
+  })
+
+  it.each([
+    'EAI_NONAME',
+    'EAI_FAIL',
+    'ENODATA',
+    'getaddrinfo failed',
+    'could not resolve host orca.example',
+    'Name or service not known',
+    'ERR_NAME_RESOLUTION_FAILED',
+    'Temporary failure in name resolution'
+  ])('diagnoses the resolution failure wording %s', (detail) => {
+    expect(withMacTailscaleDnsHint('Codex failed.', detail)).toContain('Tailscale MagicDNS')
+  })
+
+  it('never lets probe admission change the message the hint decision would produce', () => {
+    const diagnostic = parseMacTailscaleDnsDiagnostic(MAGIC_DNS)
+    const details = [
+      'permission denied',
+      'authentication failed',
+      'PTY timeout',
+      'invalid JSON',
+      '',
+      'ENOTFOUND',
+      'EAI_AGAIN',
+      'EAI_NONAME',
+      'getaddrinfo failed',
+      'could not resolve host orca.example',
+      'connection refused',
+      'websocket closed'
+    ]
+
+    for (const detail of details) {
+      __resetMacTailscaleDnsDiagnosticCacheForTests()
+      expect(withMacTailscaleDnsHint('Codex failed.', detail)).toBe(
+        withMacTailscaleDnsHintForDiagnostic('Codex failed.', detail, diagnostic)
+      )
+    }
+  })
+
+  it('does not append or re-probe for a message that already carries the hint', () => {
+    const hinted = withMacTailscaleDnsHint('Codex failed.', 'ENOTFOUND')
+    expect(execFileSync).toHaveBeenCalledOnce()
+    // Past the cache window, so a second probe would run if the hint were re-admitted.
+    vi.mocked(Date.now).mockReturnValue(301_000)
+
+    expect(withMacTailscaleDnsHint(hinted, 'ENOTFOUND')).toBe(hinted)
     expect(execFileSync).toHaveBeenCalledOnce()
   })
 
