@@ -37,6 +37,7 @@ type CodexAccountRegistrationDependencies = {
   managedHomePaths: CodexManagedHomePath
   managedHomes: CodexManagedHomeLifecycle
   login: (managedHomePath: string) => Promise<void>
+  provisionManagedHooks: (managedHome: ManagedCodexHomeLocation) => Promise<void>
 }
 
 export class CodexAccountRegistration {
@@ -49,6 +50,7 @@ export class CodexAccountRegistration {
     try {
       this.prepareManagedHomeForLogin(managedHomePath, accountId)
       await this.dependencies.login(managedHomePath)
+      await this.dependencies.provisionManagedHooks(managedHome)
       return await this.persistCapturedAccount(accountId, managedHome)
     } catch (error) {
       this.dependencies.managedHomes.removeUnlessUnproven(error, managedHomePath, accountId)
@@ -66,6 +68,7 @@ export class CodexAccountRegistration {
     try {
       this.prepareManagedHomeForLogin(managedHomePath, accountId)
       this.dependencies.managedHomes.importAuthFromHome(sourceHome, managedHomePath, accountId)
+      await this.dependencies.provisionManagedHooks(managedHome)
       return await this.persistCapturedAccount(accountId, managedHome)
     } catch (error) {
       this.dependencies.managedHomes.removeUnlessUnproven(error, managedHomePath, accountId)
