@@ -126,4 +126,43 @@ describe('receiver launch authority', () => {
       state: 'host_unverifiable'
     })
   })
+  it.each(['current_target_unverifiable', 'pty_not_writable', 'live_idle_not_observed'])(
+    'preserves delivery uncertainty %s while current authority is valid',
+    (reason) => {
+      const f = fixture()
+      f.invoke('subscribe')
+      const registry = f.runtime.terminalMailboxSubscriptions
+      registry.record(
+        'term_self',
+        'host_unverifiable',
+        'unverifiable',
+        reason,
+        ['mail-1'],
+        registry.generation('term_self')
+      )
+      expect(f.invoke('status')).toMatchObject({
+        state: 'host_unverifiable',
+        wake: 'unverifiable',
+        reason,
+        messageIds: ['mail-1']
+      })
+      expect(
+        registry.matches('term_self', f.runtime.resolveOrchestrationPointerSubmitTarget())
+      ).toBe(true)
+      expect(f.invoke('status')).toMatchObject({ state: 'host_unverifiable', reason })
+    }
+  )
+  it('restores authority-only uncertainty after reconnect', () => {
+    const f = fixture()
+    f.invoke('subscribe')
+    f.disconnect()
+    expect(f.runtime.terminalMailboxSubscriptions.status('term_self').reason).toBe(
+      'current_authority_unverifiable'
+    )
+    f.changeCurrent({ ...f.authority, ptyId: 'pty' })
+    expect(f.invoke('status')).toMatchObject({
+      state: 'active',
+      reason: 'current_authority_restored'
+    })
+  })
 })

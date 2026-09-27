@@ -218,7 +218,10 @@ export class TerminalMailboxSubscriptions {
       this.deactivate(handle, entry, 'stale_replaced', 'current_authority_replaced')
       return false
     }
-    if (entry.status.state === 'host_unverifiable') {
+    if (
+      entry.status.state === 'host_unverifiable' &&
+      entry.status.reason === 'current_authority_unverifiable'
+    ) {
       entry.status = {
         ...entry.status,
         state: 'active',

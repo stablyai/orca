@@ -118,35 +118,38 @@ test('Windows Orca delivers subscribed mailbox pointers to a native WSL PTY', as
   await ensureTerminalVisible(orcaPage)
   const wslAgentStage = stageWslGoldenStubAgent(DISTRO!)
   test.skip(!wslAgentStage, 'WSL distro would not accept the staged agent detector.')
-  await useWslRuntimeForActiveProject(orcaPage, DISTRO!)
-  const userDataDir = await readUserDataDir(electronApp)
-  const client = new RuntimeClient(userDataDir, 30_000, null, null)
-  const before = await client.call<RuntimeTerminalListResult>('terminal.list')
-  const existingHandles = new Set(before.result.terminals.map((terminal) => terminal.handle))
-  const suffix = randomUUID()
-  const root = `/tmp/orca-mailbox-${suffix}`
-  const script = `${root}/agent.py`
-  const ledger = `${root}/ledger.jsonl`
-  const title = `${root}/title`
-  const control = `${root}/control.json`
-  const cli = `${root}/orca-candidate`
-  const nodePath = runWsl(['wslpath', '-u', process.execPath]).trim()
-  writeWslFile(script, MAIL_PANE_PYTHON_AGENT_SOURCE)
-  writeWslFile(ledger, '')
-  writeWslFile(title, '')
-  writeWslFile(control, '')
-  writeWslFile(cli, `#!/bin/sh\nexec ${quote(nodePath)} ${quote(CLI_ENTRY)} "$@"\n`, true)
-  const launchCommand = `/usr/bin/python3 ${[script, ledger, title, control, cli].map(quote).join(' ')}`
-  await orcaPage.evaluate(async (command) => {
-    await window.__store?.getState().updateSettings({
-      defaultTuiAgent: 'codex',
-      agentCmdOverrides: { codex: command },
-      disabledTuiAgents: []
-    })
-  }, launchCommand)
-
   let createdTerminalHandle: string | null = null
+  let root: string | null = null
+  let cleanupClient: RuntimeClient | null = null
   try {
+    await useWslRuntimeForActiveProject(orcaPage, DISTRO!)
+    const userDataDir = await readUserDataDir(electronApp)
+    const client = new RuntimeClient(userDataDir, 30_000, null, null)
+    cleanupClient = client
+    const before = await client.call<RuntimeTerminalListResult>('terminal.list')
+    const existingHandles = new Set(before.result.terminals.map((terminal) => terminal.handle))
+    const suffix = randomUUID()
+    root = `/tmp/orca-mailbox-${suffix}`
+    const script = `${root}/agent.py`
+    const ledger = `${root}/ledger.jsonl`
+    const title = `${root}/title`
+    const control = `${root}/control.json`
+    const cli = `${root}/orca-candidate`
+    const nodePath = runWsl(['wslpath', '-u', process.execPath]).trim()
+    writeWslFile(script, MAIL_PANE_PYTHON_AGENT_SOURCE)
+    writeWslFile(ledger, '')
+    writeWslFile(title, '')
+    writeWslFile(control, '')
+    writeWslFile(cli, `#!/bin/sh\nexec ${quote(nodePath)} ${quote(CLI_ENTRY)} "$@"\n`, true)
+    const launchCommand = `/usr/bin/python3 ${[script, ledger, title, control, cli].map(quote).join(' ')}`
+    await orcaPage.evaluate(async (command) => {
+      await window.__store?.getState().updateSettings({
+        defaultTuiAgent: 'codex',
+        agentCmdOverrides: { codex: command },
+        disabledTuiAgents: []
+      })
+    }, launchCommand)
+
     await orcaPage.getByRole('button', { name: /^(New tab|새 탭)$/ }).click({ force: true })
     const codexLaunch = orcaPage.getByRole('menuitem', { name: /^Codex(?:\s|$)/i }).first()
     await expect(codexLaunch).toBeVisible({ timeout: 15_000 })
@@ -249,12 +252,17 @@ test('Windows Orca delivers subscribed mailbox pointers to a native WSL PTY', as
         .join('')
     ).not.toContain(body)
   } finally {
-    if (createdTerminalHandle) {
-      await client
+    if (createdTerminalHandle && cleanupClient) {
+      await cleanupClient
         .call('terminal.close', { terminal: createdTerminalHandle })
         .catch(() => undefined)
     }
-    runWsl(['sh', '-c', `rm -rf ${quote(root)}`])
-    removeWslGoldenStubAgent(DISTRO!, wslAgentStage!)
+    try {
+      if (root) {
+        runWsl(['sh', '-c', `rm -rf ${quote(root)}`])
+      }
+    } finally {
+      removeWslGoldenStubAgent(DISTRO!, wslAgentStage!)
+    }
   }
 })

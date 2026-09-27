@@ -6,6 +6,7 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
+import { TerminalMailboxSubscriptions } from './orchestration/terminal-mailbox-subscriptions'
 import { makePaneKey } from '../../shared/stable-pane-id'
 
 const LEAF = '11111111-1111-4111-8111-111111111111'
@@ -87,5 +88,31 @@ describe('onPtyExit agent-status reconciliation', () => {
     runtimeWithBoundPane(reconcile).onPtyExit(PTY, -1)
 
     expect(reconcile).not.toHaveBeenCalled()
+  })
+})
+
+describe('terminal subscriptions require certified process exit', () => {
+  it.each([
+    { code: -1, options: {}, retired: false },
+    { code: 0, options: {}, retired: true },
+    { code: -1, options: { hostExitConfirmed: true }, retired: true },
+    { code: -1, options: { providerExitObserved: true }, retired: true }
+  ])('retires only with host evidence: $code / $options', ({ code, options, retired }) => {
+    const retire = vi.spyOn(TerminalMailboxSubscriptions.prototype, 'retirePty')
+    try {
+      runtimeWithBoundPane(vi.fn(), { connectionId: 'ssh-conn-1' }).onPtyExit(
+        PTY,
+        code,
+        undefined,
+        options
+      )
+      if (retired) {
+        expect(retire).toHaveBeenCalledExactlyOnceWith(PTY)
+      } else {
+        expect(retire).not.toHaveBeenCalled()
+      }
+    } finally {
+      retire.mockRestore()
+    }
   })
 })

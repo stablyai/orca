@@ -22,7 +22,7 @@ import { waitForSessionReady } from './helpers/store'
 const RUN_REMOTE_SSH =
   process.env.ORCA_E2E_SSH_SUBSCRIPTION === '1' || process.env.ORCA_E2E_SSH_US === '1'
 const SSH_HOST =
-  process.env.ORCA_E2E_SSH_SUBSCRIPTION_HOST ?? process.env.ORCA_E2E_SSH_US_HOST ?? '100.73.93.61'
+  process.env.ORCA_E2E_SSH_SUBSCRIPTION_HOST ?? process.env.ORCA_E2E_SSH_US_HOST ?? ''
 const SSH_USER =
   process.env.ORCA_E2E_SSH_SUBSCRIPTION_USER ?? process.env.ORCA_E2E_SSH_US_USER ?? 'ubuntu'
 const SSH_PASSWORD = process.env.ORCA_E2E_SSH_SUBSCRIPTION_PASSWORD
@@ -249,7 +249,7 @@ async function reconnect(
 test.describe('SSH terminal mailbox subscription', () => {
   test.describe.configure({ timeout: 360_000 })
   test.skip(
-    !RUN_REMOTE_SSH,
+    !RUN_REMOTE_SSH || !SSH_HOST,
     'Set ORCA_E2E_SSH_SUBSCRIPTION=1 to run against a configured SSH host.'
   )
 
