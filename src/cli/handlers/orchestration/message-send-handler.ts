@@ -2,6 +2,8 @@ import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
+import type { RuntimeStatus } from '../../../shared/runtime-types'
+import { ORCHESTRATION_MESSAGE_NOTIFY_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import { requireWorkerDoneSettlement } from '../orchestration-worker-settlement'
 import { getOptionalStructuredMessagePayload } from './message-payload'
 import { callOrchestrationMutation } from './mutation-request'
@@ -60,6 +62,20 @@ function rejectLifecycleGroupRecipient(type: string | undefined, to: string): vo
 
 export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
   'orchestration send': async ({ flags, client, cwd, json }) => {
+    const notifyFlag = flags.get('no-notify')
+    if (notifyFlag !== undefined && ![true, false, 'true', 'false'].includes(notifyFlag)) {
+      throw new RuntimeClientError('invalid_argument', '--no-notify accepts only true or false.')
+    }
+    const noNotify = notifyFlag === true || notifyFlag === 'true'
+    if (noNotify) {
+      const status = await client.call<RuntimeStatus>('status.get')
+      if (!status.result.capabilities?.includes(ORCHESTRATION_MESSAGE_NOTIFY_RUNTIME_CAPABILITY)) {
+        throw new RuntimeClientError(
+          'incompatible_runtime',
+          'The connected Orca runtime does not support --no-notify. Update Orca before sending.'
+        )
+      }
+    }
     const to = getOptionalStringFlag(flags, 'to')
     const type = getOptionalStringFlag(flags, 'type')
     if (to) {
@@ -86,6 +102,7 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
     const sendParams = {
       from,
       to,
+      ...(noNotify ? { notify: false } : {}),
       run: getOptionalStringFlag(flags, 'run'),
       subject: getRequiredStringFlag(flags, 'subject'),
       body: getOptionalStringFlag(flags, 'body'),

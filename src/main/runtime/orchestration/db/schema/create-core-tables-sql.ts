@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS runs (
 CREATE TABLE IF NOT EXISTS messages (
   id            TEXT NOT NULL,
   run_id        TEXT NOT NULL DEFAULT '${LEGACY_RUN_ID}',
+  notify INTEGER NOT NULL DEFAULT 1 CHECK(notify IN (0, 1)),
   delivery_contract TEXT NOT NULL DEFAULT 'current_delivery'
     CHECK(delivery_contract IN ('legacy_direct', 'current_delivery', 'audit_only')),
   from_handle   TEXT NOT NULL,

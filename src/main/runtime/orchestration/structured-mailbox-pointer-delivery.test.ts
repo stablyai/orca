@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { OrchestrationDb } from './db'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import {
   OrchestrationStructuredMailboxPointerDelivery,
@@ -128,6 +129,45 @@ function harness(options: {
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
 
 describe('structured mailbox pointer delivery', () => {
+  it('does not submit a structured turn for silent mail, including a later mixed batch', async () => {
+    const db = new OrchestrationDb(':memory:')
+    try {
+      const send: StructuredMailboxPointerHost['send'] = vi.fn(async () => ({
+        kind: 'sent' as const,
+        state: 'accepted' as const
+      }))
+      const mailbox = IDENTITY.handle
+      const delivery = new OrchestrationStructuredMailboxPointerDelivery({
+        getDb: () => db,
+        getMessageWaiters: () => undefined,
+        resolveStructuredTarget: (handle) =>
+          handle === mailbox ? { sessionId: IDENTITY.sessionId, dispatchId: null } : null,
+        host: {
+          readGateFacts: () => structuredSessionGateFacts(idleJournal()),
+          currentFence: () => 4,
+          send
+        }
+      })
+      const silent = db.insertMessage({
+        from: 'a',
+        to: mailbox,
+        subject: 'external',
+        notify: false
+      })
+      delivery.deliverForHandle(mailbox)
+      await flush()
+      expect(send).not.toHaveBeenCalled()
+      const normal = db.insertMessage({ from: 'a', to: mailbox, subject: 'native' })
+      delivery.deliverForHandle(mailbox)
+      await flush()
+      expect(send).toHaveBeenCalledTimes(1)
+      expect(db.getMessageById(silent.id)).toMatchObject({ notify: 0, delivered_at: null, read: 0 })
+      expect(db.getMessageById(normal.id)?.delivered_at).not.toBeNull()
+    } finally {
+      db.close()
+    }
+  })
+
   it('claims only mailboxes whose assignee is a structured worker', () => {
     const { delivery } = harness({ journal: idleJournal() })
     expect(delivery.deliverForHandle('dispatch:d1')).toBe(true)

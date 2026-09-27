@@ -40,6 +40,12 @@ export function sendFederatedControlMail(args: {
   if (!federatedTarget || !dispatchId) {
     return undefined
   }
+  if (params.notify === false) {
+    throw new OrchestrationError(
+      'capability_unsupported',
+      'notify=false is not supported across federated runtimes.'
+    )
+  }
   if (federatedTarget.protocol_version < ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION) {
     throw new OrchestrationError(
       'capability_unsupported',
