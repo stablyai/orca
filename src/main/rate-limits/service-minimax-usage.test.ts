@@ -45,6 +45,10 @@ vi.mock('./cursor-fetcher', () => ({
   fetchCursorRateLimits: vi.fn()
 }))
 
+vi.mock('./antigravity-fetcher', () => ({
+  fetchAntigravityRateLimits: vi.fn()
+}))
+
 vi.mock('./cursor-auth', () => ({
   readCursorAuthSession: vi.fn()
 }))

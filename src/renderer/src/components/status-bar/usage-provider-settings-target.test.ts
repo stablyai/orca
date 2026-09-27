@@ -6,7 +6,6 @@ describe('getUsageProviderAccountsSectionId', () => {
     expect(getUsageProviderAccountsSectionId('claude')).toBe('accounts-claude')
     expect(getUsageProviderAccountsSectionId('codex')).toBe('accounts-codex')
     expect(getUsageProviderAccountsSectionId('gemini')).toBe('accounts-gemini')
-    expect(getUsageProviderAccountsSectionId('antigravity')).toBe('accounts-gemini')
     expect(getUsageProviderAccountsSectionId('opencode-go')).toBe('accounts-opencode-go')
     expect(getUsageProviderAccountsSectionId('minimax')).toBe('accounts-minimax')
     expect(getUsageProviderAccountsSectionId('grok')).toBe('accounts-grok')
@@ -14,5 +13,9 @@ describe('getUsageProviderAccountsSectionId', () => {
 
   it('does not invent an Accounts section for CLI-owned Kimi credentials', () => {
     expect(getUsageProviderAccountsSectionId('kimi')).toBeNull()
+  })
+
+  it('does not deep-link Antigravity into Gemini settings now that it reads its own runtime', () => {
+    expect(getUsageProviderAccountsSectionId('antigravity')).toBeNull()
   })
 })

@@ -12,6 +12,7 @@ import { formatRateLimitWindowChipLabel } from '@/lib/window-label-formatter'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
 import { translate } from '@/i18n/i18n'
 import { isCursorUsageBucket } from '../../../../shared/cursor-usage-buckets'
+import { isAntigravityUsageBucket } from '../../../../shared/antigravity-usage-buckets'
 
 function MiniBar({
   usedPct,
@@ -97,10 +98,13 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
 // Why: Gemini exposes extra experimental buckets that made the pre-existing verbose footer noisy.
 const STATUS_BAR_BUCKET_NAMES = new Set(['Flash', 'Pro', '1.5 Pro'])
 
-// Why: the allowlist above is Gemini's. Cursor's pools are its whole meter — filtering
-// them out leaves a signed-in account with an icon and no number at all.
+// Why: the allowlist above is Gemini's. Cursor's and Antigravity's buckets are
+// their whole meter — filtering them out leaves a signed-in/running account
+// with an icon and no number at all.
 function isVisibleStatusBarBucket(name: string): boolean {
-  return STATUS_BAR_BUCKET_NAMES.has(name) || isCursorUsageBucket(name)
+  return (
+    STATUS_BAR_BUCKET_NAMES.has(name) || isCursorUsageBucket(name) || isAntigravityUsageBucket(name)
+  )
 }
 
 function VerboseProviderUsage({

@@ -9,9 +9,11 @@ export function getUsageProviderAccountsSectionId(
     case 'codex':
       return 'accounts-codex'
     case 'gemini':
-    case 'antigravity':
-      // Why: Antigravity usage currently shares Gemini's OAuth configuration.
       return 'accounts-gemini'
+    case 'antigravity':
+      // Why: Antigravity reads its own local runtime, not an Orca-managed
+      // credential — there is no settings section to deep-link into.
+      return null
     case 'opencode-go':
       return 'accounts-opencode-go'
     case 'minimax':
