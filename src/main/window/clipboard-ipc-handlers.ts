@@ -39,7 +39,10 @@ import {
 import { saveClipboardImageBufferInRuntime } from './clipboard-runtime-image-upload'
 import { readWindowsClipboardImageFileAsPng } from './clipboard-windows-image-file'
 import { buildClipboardImageThumbnail } from './clipboard-image-thumbnail'
-import { writeTerminalClipboardText } from './clipboard-terminal-text-write'
+import {
+  enqueueTerminalClipboardWrite,
+  writeTerminalClipboardText
+} from './clipboard-terminal-text-write'
 import { isDashboardPopoutRenderer } from './dashboard-popout-window'
 
 let trustedClipboardRendererWebContentsId: number | null = null
@@ -191,7 +194,9 @@ export function registerClipboardHandlers(store: Store): void {
   })
   ipcMain.handle('clipboard:writeTerminalText', async (event, text: string) => {
     assertTrustedClipboardTextSender(event)
-    return writeTerminalClipboardText(await assertClipboardTextWriteWithinLimitWithYield(text))
+    return enqueueTerminalClipboardWrite(async () =>
+      writeTerminalClipboardText(await assertClipboardTextWriteWithinLimitWithYield(text))
+    )
   })
   ipcMain.handle('clipboard:writeSelectionText', async (event, text: string) => {
     assertTrustedClipboardSender(event)

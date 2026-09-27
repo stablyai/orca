@@ -17,7 +17,10 @@ vi.mock('../../shared/child-process/run-process', () => ({
   runProcess: runProcessMock
 }))
 
-import { writeTerminalClipboardText } from './clipboard-terminal-text-write'
+import {
+  enqueueTerminalClipboardWrite,
+  writeTerminalClipboardText
+} from './clipboard-terminal-text-write'
 
 const WAYLAND = { platform: 'linux', env: { WAYLAND_DISPLAY: 'wayland-1' } } as const
 
@@ -98,5 +101,41 @@ describe('writeTerminalClipboardText', () => {
     await expect(writeTerminalClipboardText('text', WAYLAND)).rejects.toThrow(
       'Clipboard write verification failed'
     )
+  })
+})
+
+describe('enqueueTerminalClipboardWrite', () => {
+  it('finishes writes in request order even when an earlier one resolves later', async () => {
+    const finished: string[] = []
+    let releaseFirst: () => void = () => undefined
+    const first = enqueueTerminalClipboardWrite(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseFirst = () => {
+            finished.push('first')
+            resolve()
+          }
+        })
+    )
+    const second = enqueueTerminalClipboardWrite(async () => {
+      finished.push('second')
+    })
+
+    await Promise.resolve()
+    expect(finished).toEqual([])
+    releaseFirst()
+    await Promise.all([first, second])
+
+    expect(finished).toEqual(['first', 'second'])
+  })
+
+  it('keeps later writes running after an earlier write rejects', async () => {
+    const failed = enqueueTerminalClipboardWrite(async () => {
+      throw new Error('Clipboard write verification failed')
+    })
+    const next = enqueueTerminalClipboardWrite(async () => undefined)
+
+    await expect(failed).rejects.toThrow('Clipboard write verification failed')
+    await expect(next).resolves.toBeUndefined()
   })
 })

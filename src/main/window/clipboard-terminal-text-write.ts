@@ -8,6 +8,15 @@ type TerminalClipboardHost = {
   env: NodeJS.ProcessEnv
 }
 
+let pendingTerminalClipboardWrite: Promise<void> = Promise.resolve()
+
+// Why: validation and the Wayland pre-read both yield, so rapid copies could land out of order.
+export function enqueueTerminalClipboardWrite(write: () => Promise<void>): Promise<void> {
+  const next = pendingTerminalClipboardWrite.then(write)
+  pendingTerminalClipboardWrite = next.catch(() => undefined)
+  return next
+}
+
 // Why skip identical text on Wayland (#23229): after an agent's wl-copy, wlroots ignores our
 // older-serial set_selection without `cancelled`, and Chromium then serves its stale copy forever.
 export async function writeTerminalClipboardText(
