@@ -1,6 +1,7 @@
 import type { BrowserScreencastFrame } from './browser-screencast-protocol'
 import { DirectRpcClient } from './direct-rpc-client'
 import type { ConnectionLogSink, ConnectionState, ForegroundNudgeReason } from './types'
+import type { ConnectionRouteProvider } from './connection-route'
 import type { UnvalidatedRpcRequestPort } from './unvalidated-rpc-request-port'
 
 // Re-export shim: the options type moved to the port module with the sender it belongs to,
@@ -55,6 +56,7 @@ export type RpcClient = UnvalidatedRpcRequestPort & {
 }
 
 export type ConnectOptions = {
+  routeProvider?: ConnectionRouteProvider
   onStateChange?: (state: ConnectionState) => void
   onLog?: ConnectionLogSink
 }

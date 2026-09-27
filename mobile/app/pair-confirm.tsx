@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable, ActivityIndicator, BackHandler } fro
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
+import type { ConnectionRoute } from '../src/transport/connection-route'
 import { resolvePairConfirmRouteState } from '../src/transport/pair-confirm-state'
 import {
   startPreProfilePairing,
@@ -16,6 +17,9 @@ import {
   loadMobileOnboardingSteps,
   mobileOnboardingDestination
 } from '../src/onboarding/mobile-onboarding-plan'
+import { routeFromSshProfile, wsEndpointPort, type SshProfile } from '../src/ssh/ssh-profile'
+import { loadSshProfiles } from '../src/ssh/ssh-profile-store'
+import { clearRecalledPairingCode, rememberPairingCode } from '../src/transport/pairing-code-recall'
 
 type Status = 'awaiting-confirm' | 'connecting' | 'error'
 
@@ -34,6 +38,8 @@ export default function PairConfirmScreen() {
   const [status, setStatus] = useState<Status>('awaiting-confirm')
   const [errorMessage, setErrorMessage] = useState('')
   const [logs, setLogs] = useState<ConnectionLogEntry[]>([])
+  const [profiles, setProfiles] = useState<SshProfile[]>([])
+  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null)
   // Why: collect logs in a ref so the rpc-client callback (which closures
   // over the initial state setter) always sees the freshest list and we
   // batch fewer setState calls when entries arrive in bursts.
@@ -64,6 +70,27 @@ export default function PairConfirmScreen() {
     }, [cancel])
   )
 
+  useFocusEffect(
+    useCallback(() => {
+      let current = true
+      void loadSshProfiles()
+        .then((entries) => {
+          if (!current) {
+            return
+          }
+          setProfiles(entries)
+          // Drop the selection if its profile was deleted while we were away.
+          setSelectedProfileId((selected) =>
+            selected !== null && !entries.some((entry) => entry.id === selected) ? null : selected
+          )
+        })
+        .catch(() => {})
+      return () => {
+        current = false
+      }
+    }, [])
+  )
+
   const setPairConfirmRootRef = useCallback((node: View | null): void => {
     if (node !== null) {
       mountedRef.current = true
@@ -80,13 +107,33 @@ export default function PairConfirmScreen() {
     if (!offer) {
       return
     }
+    void rememberPairingCode(params.code ?? '').catch(() => {})
     setStatus('connecting')
     logsRef.current = []
     setLogs([])
     activePairingAttemptRef.current?.dispose()
 
+    const selectedProfile = profiles.find((entry) => entry.id === selectedProfileId)
+    const jumpProfile = selectedProfile?.jumpProfileId
+      ? profiles.find((entry) => entry.id === selectedProfile.jumpProfileId)
+      : undefined
+    // Why: an unusable route must not escape as an unhandled rejection — the
+    // screen is already on 'connecting' and would spin forever.
+    let connectionRoute: ConnectionRoute | undefined
+    try {
+      connectionRoute = selectedProfile
+        ? routeFromSshProfile(selectedProfile, wsEndpointPort(offer.endpoint), jumpProfile)
+        : undefined
+    } catch (error) {
+      setStatus('error')
+      setErrorMessage(
+        `Cannot use this SSH connection: ${error instanceof Error ? error.message : String(error)}`
+      )
+      return
+    }
     const attempt = startPreProfilePairing({
       offer,
+      connectionRoute,
       timeoutMs: PAIRING_OVERALL_TIMEOUT_MS,
       connectOptions: {
         onLog: (entry) => {
@@ -114,6 +161,7 @@ export default function PairConfirmScreen() {
       // pairing would keep the stale endpoint/relay. Close it so the
       // Refresh any cached client from the newly persisted pairing profile.
       refreshHostClient(hostId)
+      void clearRecalledPairingCode().catch(() => {})
       const onboardingSteps = await loadMobileOnboardingSteps()
       if (!mountedRef.current) {
         return
@@ -154,6 +202,39 @@ export default function PairConfirmScreen() {
             <Text style={styles.subtitle}>
               You opened a pairing link from your desktop. Confirm to add it to your hosts.
             </Text>
+            <View style={styles.routeStack}>
+              <Text style={styles.routeLabel}>Connection route</Text>
+              <Pressable
+                style={styles.routeRow}
+                accessibilityRole="button"
+                onPress={() => setSelectedProfileId(null)}
+              >
+                <Text style={styles.routeText}>Direct connection</Text>
+                {selectedProfileId === null && <Text style={styles.routeCheck}>✓</Text>}
+              </Pressable>
+              {profiles.map((profile) => (
+                <Pressable
+                  key={profile.id}
+                  style={styles.routeRow}
+                  accessibilityRole="button"
+                  onPress={() => setSelectedProfileId(profile.id)}
+                >
+                  <View style={styles.routeTextStack}>
+                    <Text style={styles.routeText}>Through SSH: {profile.name}</Text>
+                    <Text style={styles.routeDetail}>
+                      {profile.username}@{profile.host}:{profile.port}
+                    </Text>
+                  </View>
+                  {selectedProfileId === profile.id && <Text style={styles.routeCheck}>✓</Text>}
+                </Pressable>
+              ))}
+              <Pressable
+                style={styles.secondaryButton}
+                onPress={() => router.push('/ssh-connections')}
+              >
+                <Text style={styles.secondaryButtonText}>Set up SSH connections</Text>
+              </Pressable>
+            </View>
             <View style={styles.actionStack}>
               <Pressable style={styles.primaryButton} onPress={() => void confirm()}>
                 <Text style={styles.primaryButtonText}>Pair</Text>
@@ -184,8 +265,18 @@ export default function PairConfirmScreen() {
               </View>
             )}
             <View style={styles.actionStack}>
-              <Pressable style={styles.primaryButton} onPress={cancel}>
-                <Text style={styles.primaryButtonText}>Back to home</Text>
+              <Pressable
+                style={styles.primaryButton}
+                onPress={() => {
+                  setStatus('awaiting-confirm')
+                  setErrorMessage('')
+                  void confirm()
+                }}
+              >
+                <Text style={styles.primaryButtonText}>Try again</Text>
+              </Pressable>
+              <Pressable style={styles.secondaryButton} onPress={cancel}>
+                <Text style={styles.secondaryButtonText}>Back to home</Text>
               </Pressable>
             </View>
           </>
@@ -239,6 +330,34 @@ const styles = StyleSheet.create({
     maxWidth: 360,
     alignSelf: 'center'
   },
+  routeStack: {
+    width: '100%',
+    maxWidth: 360,
+    alignSelf: 'center',
+    marginBottom: spacing.lg
+  },
+  routeLabel: {
+    color: colors.textSecondary,
+    fontSize: typography.metaSize,
+    marginBottom: spacing.sm
+  },
+  routeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.bgPanel,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    borderRadius: radii.row,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    marginBottom: spacing.sm,
+    gap: spacing.md
+  },
+  routeTextStack: { flex: 1 },
+  routeText: { color: colors.textPrimary, fontSize: typography.bodySize },
+  routeDetail: { color: colors.textSecondary, fontSize: typography.metaSize, marginTop: 2 },
+  routeCheck: { color: colors.textSecondary, fontSize: typography.bodySize, fontWeight: '600' },
   primaryButton: {
     width: '100%',
     backgroundColor: colors.textPrimary,
