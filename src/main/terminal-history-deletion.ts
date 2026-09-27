@@ -98,8 +98,15 @@ function refillHistoryRemovalQueue(historyRoot: string, queue: HistoryRemovalQue
 async function readTombstoneNames(historyRoot: string): Promise<string[]> {
   try {
     return await readdir(getPendingDeleteRoot(historyRoot))
-  } catch {
-    // Absent or unreadable tombstone root: nothing to admit, and a later completion re-reads it.
+  } catch (err) {
+    // An absent root is the normal steady state; anything else means tombstones may linger until a
+    // later completion re-reads, so it is worth a line.
+    const code = err && typeof err === 'object' && 'code' in err ? String(err.code) : ''
+    if (code !== 'ENOENT') {
+      console.warn(
+        `[pty:history] Failed to read pending history removals for ${historyRoot}: ${err instanceof Error ? err.message : String(err)}`
+      )
+    }
     return []
   }
 }
