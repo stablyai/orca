@@ -13,6 +13,8 @@ import { useAppStore } from '@/store'
 import { isDormantRecoveryRecord } from '../../../../shared/agent-session-resume'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 
+const ACTION_LABEL_CLASS_NAME = 'py-1.5 text-center whitespace-normal wrap-anywhere'
+
 type RecoveredSessionResumeButtonProps = {
   worktreeId: string
   binding: RecoveryBindingKey
@@ -62,19 +64,33 @@ export function RecoveredSessionResumeButton({
   }
   return (
     <div
-      className="pointer-events-none absolute inset-x-0 top-0 z-40 flex justify-center p-2"
+      className="@container/recovered-session pointer-events-none absolute inset-x-0 top-0 z-40 scrollbar-sleek flex max-h-full flex-col items-center overflow-y-auto"
       data-testid="recovered-session-placeholder"
       data-pane-key={paneKey}
     >
-      <div className="pointer-events-auto flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2 text-card-foreground shadow-xs">
-        <span className="text-xs text-muted-foreground">
+      <div
+        className="pointer-events-auto m-2 flex flex-wrap items-center justify-center gap-3 rounded-lg border border-border bg-card px-3 py-2 text-card-foreground shadow-xs @max-md/recovered-session:flex-col @max-md/recovered-session:items-stretch @max-md/recovered-session:gap-2 @max-md/recovered-session:self-stretch @max-md/recovered-session:p-2 @max-[8rem]/recovered-session:m-0.5 @max-[8rem]/recovered-session:gap-1 @max-[8rem]/recovered-session:p-0.5"
+        data-testid="recovered-session-placeholder-card"
+      >
+        <span className="text-center text-xs text-muted-foreground wrap-anywhere">
           {translate('crossMachineRecovery.recoveredSession', 'Recovered session')}
         </span>
-        <Button type="button" size="sm" disabled={pending} onClick={resume}>
-          {translate('crossMachineRecovery.resume', 'Resume')}
+        <Button type="button" size="sm" className="h-auto" disabled={pending} onClick={resume}>
+          <span className={ACTION_LABEL_CLASS_NAME}>
+            {translate('crossMachineRecovery.resume', 'Resume')}
+          </span>
         </Button>
-        <Button type="button" size="sm" variant="outline" disabled={pending} onClick={startShell}>
-          {translate('crossMachineRecovery.startShellInstead', 'Start shell instead')}
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-auto"
+          disabled={pending}
+          onClick={startShell}
+        >
+          <span className={ACTION_LABEL_CLASS_NAME}>
+            {translate('crossMachineRecovery.startShellInstead', 'Start shell instead')}
+          </span>
         </Button>
       </div>
     </div>

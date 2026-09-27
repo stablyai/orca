@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import { isTerminalLeafId, type TerminalLeafId } from '../../../../shared/stable-pane-id'
@@ -108,6 +108,31 @@ describe('RecoveredSessionResumePortals', () => {
     await Promise.resolve()
     expect(paneReleased).not.toHaveBeenCalled()
     stopListening()
+  })
+
+  it('stacks into wrapping full-width actions when its pane is narrow', () => {
+    renderPortals('recovery')
+
+    expect(screen.getByTestId('recovered-session-placeholder').className.split(' ')).toEqual(
+      expect.arrayContaining(['@container/recovered-session', 'max-h-full', 'overflow-y-auto'])
+    )
+    expect(screen.getByTestId('recovered-session-placeholder-card').className.split(' ')).toEqual(
+      expect.arrayContaining([
+        'flex-wrap',
+        '@max-md/recovered-session:flex-col',
+        '@max-md/recovered-session:items-stretch',
+        '@max-md/recovered-session:self-stretch'
+      ])
+    )
+    expect(screen.getByText('Recovered session').className.split(' ')).toContain('wrap-anywhere')
+    for (const name of ['Resume', 'Start shell instead']) {
+      const button = screen.getByRole('button', { name })
+      expect(button.className.split(' ')).toContain('h-auto')
+      expect(button.className.split(' ')).not.toContain('h-8')
+      expect(within(button).getByText(name).className.split(' ')).toEqual(
+        expect.arrayContaining(['whitespace-normal', 'wrap-anywhere'])
+      )
+    }
   })
 
   it('offers no Resume for ordinary sleeping records', () => {

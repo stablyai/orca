@@ -337,6 +337,22 @@ function placeholder(page: Page, paneKey: string) {
   return page.locator(`[data-testid="recovered-session-placeholder"][data-pane-key="${paneKey}"]`)
 }
 
+function clippedPlaceholderParts(page: Page, paneKey: string): Promise<string[]> {
+  return placeholder(page, paneKey).evaluate((overlay) => {
+    const pane = overlay.parentElement!.getBoundingClientRect()
+    return [...overlay.querySelectorAll('span, button')]
+      .filter((part) => {
+        const box = part.getBoundingClientRect()
+        return (
+          box.left < pane.left - 0.5 ||
+          box.right > pane.right + 0.5 ||
+          part.scrollWidth > part.clientWidth
+        )
+      })
+      .map((part) => part.textContent ?? '')
+  })
+}
+
 function ptyCount(page: Page, tabId: string): Promise<number> {
   return page.evaluate(
     (tabId) => window.__store!.getState().ptyIdsByTabId[tabId]?.length ?? 0,
@@ -550,6 +566,13 @@ test('exports a workspace from one profile and imports it into another', async (
       ].sort()
     )
     expect(fakeClaude.launches()).toHaveLength(1)
+    for (const paneKey of [
+      bound[PROVIDER.sleepA].localPaneKey,
+      bound[PROVIDER.sleepB].localPaneKey,
+      structuredPane
+    ]) {
+      expect(await clippedPlaceholderParts(b.page, paneKey)).toEqual([])
+    }
     await screenshot(b.page, testInfo, '3-structured-placeholder')
 
     await placeholder(b.page, structuredPane).getByRole('button', { name: 'Resume' }).click()
