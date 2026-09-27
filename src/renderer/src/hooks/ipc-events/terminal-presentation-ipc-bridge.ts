@@ -1,7 +1,7 @@
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/sync-runtime-graph'
 import { planMobileTerminalTabMount } from '@/lib/mobile-terminal-tab-mount'
-import { resolveTerminalTabPtyOwnership } from '@/lib/terminal-tab-for-pty-id'
+import { resolveTerminalRevealTarget } from '@/lib/terminal-reveal-tab-adoption'
 import { SPLIT_TERMINAL_PANE_EVENT } from '@/constants/terminal'
 import type { SplitTerminalPaneDetail } from '@/constants/terminal'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
@@ -54,32 +54,21 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
           })
           const shouldActivate = terminalPresentation === 'focused'
           const shouldSurfaceOwner = terminalPresentation !== 'background' && surfaceOwner !== false
+          // Why: a split pane revealed from mobile is only bound in the persisted layout until
+          // its pane mounts, and its row can sit under another worktree key (#10486, STA-7961).
+          const revealTarget = resolveTerminalRevealTarget(store, {
+            ...(ptyId ? { ptyId } : {}),
+            ...(tabId !== undefined ? { tabId } : {}),
+            ...(leafId ? { leafId } : {}),
+            ...(splitFromLeafId ? { splitFromLeafId } : {})
+          })
+          // Why: every surfacing site below must use the owner's key, not the event's, or
+          // verifyTerminalRevealIdentity looks the tab up under a key that does not hold it.
+          const ownerWorktreeId = revealTarget?.worktreeId ?? worktreeId
           if (shouldActivate) {
-            activateTerminalInitiatedWorktree(store, worktreeId)
+            activateTerminalInitiatedWorktree(store, ownerWorktreeId)
           }
-          const worktreeTabs = store.tabsByWorktree[worktreeId] ?? []
-          // Why: a split pane revealed from mobile is only bound in the persisted
-          // layout until its pane mounts; missing it minted a duplicate tab (#10486).
-          const ownership = ptyId
-            ? resolveTerminalTabPtyOwnership(
-                store,
-                worktreeId,
-                ptyId,
-                tabId !== undefined ? { preferTabId: tabId } : {}
-              )
-            : { kind: 'none' as const }
-          const existingTab =
-            ownership.kind === 'owned'
-              ? worktreeTabs.find((candidate) => candidate.id === ownership.tabId)
-              : undefined
-          const isSplitReveal = Boolean(ptyId && tabId && leafId && splitFromLeafId)
-          const splitTargetTab = isSplitReveal
-            ? worktreeTabs.find((candidate) => candidate.id === tabId)
-            : undefined
-          if (isSplitReveal && !splitTargetTab) {
-            throw new Error(`Terminal tab ${tabId} not found`)
-          }
-          const reusedTab = existingTab ?? splitTargetTab
+          const reusedTab = revealTarget?.tab
           const tab =
             reusedTab ??
             (ptyId
@@ -130,8 +119,8 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
             store.setActiveTab(tab.id)
           }
           if (shouldSurfaceOwner) {
-            store.revealWorktreeInSidebar(worktreeId)
-            focusTerminalInitiatedTab(tab.id, leafId, worktreeId)
+            store.revealWorktreeInSidebar(ownerWorktreeId)
+            focusTerminalInitiatedTab(tab.id, leafId, ownerWorktreeId)
           }
           // Why: only stamp the runtime title on fresh tabs; reused tabs may have a user customTitle it would overwrite on focus.
           if (title && !reusedTab) {
@@ -172,7 +161,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
                 new CustomEvent<SplitTerminalPaneDetail>(SPLIT_TERMINAL_PANE_EVENT, {
                   detail: {
                     tabId: tab.id,
-                    worktreeId,
+                    worktreeId: ownerWorktreeId,
                     paneRuntimeId: -1,
                     direction: splitDirection ?? 'horizontal',
                     sourceLeafId: splitFromLeafId,
@@ -212,14 +201,17 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
             })
           }
           if (ptyId && terminalPresentation === 'background') {
-            requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tab.id] })
+            requestBackgroundTerminalWorktreeMount({
+              worktreeId: ownerWorktreeId,
+              tabIds: [tab.id]
+            })
           }
           if (requestId) {
             // Why: attest the actual binding; recovery callers compare it with their expected identity.
             const identity =
               ptyId && tabId && leafId
                 ? verifyTerminalRevealIdentity(useAppStore.getState(), {
-                    worktreeId,
+                    worktreeId: ownerWorktreeId,
                     tabId: tab.id,
                     leafId,
                     ptyId

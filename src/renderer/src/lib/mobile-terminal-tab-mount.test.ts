@@ -1,19 +1,28 @@
+// Ownership itself is worktree-agnostic; this planner is where the worktree scope lives, because
+// it mounts the tab under the requested worktree and a row filed elsewhere cannot be mounted there.
 import { describe, expect, it, vi } from 'vitest'
-import type { AppState } from '@/store/types'
-import { planMobileTerminalTabMount } from './mobile-terminal-tab-mount'
-import type { TerminalTabPtyOwnershipState } from './terminal-tab-for-pty-id'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
+import { makeTerminalTab } from '@/store/slices/worktrees-slice-test-fixtures'
+import {
+  planMobileTerminalTabMount,
+  type MobileTerminalTabMountState
+} from './mobile-terminal-tab-mount'
 
-function state(tabCount = 1): TerminalTabPtyOwnershipState {
-  return {
-    tabsByWorktree: {
-      wt: Array.from({ length: tabCount }, (_, index) => ({
-        id: `tab-${index}`,
-        ptyId: `wt@@${index}`
-      }))
-    } as unknown as AppState['tabsByWorktree'],
-    terminalLayoutsByTabId: {},
-    ptyIdsByTabId: {}
+/** `tabCount` rows in `wt`, each with its own single-leaf layout bound to `wt@@<index>`. */
+function state(tabCount = 1): MobileTerminalTabMountState {
+  const tabs: TerminalTab[] = []
+  const terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot> = {}
+  for (let index = 0; index < tabCount; index += 1) {
+    const leafId = `leaf-${index}`
+    tabs.push(makeTerminalTab({ id: `tab-${index}`, worktreeId: 'wt', sortOrder: index }))
+    terminalLayoutsByTabId[`tab-${index}`] = {
+      root: { type: 'leaf', leafId },
+      activeLeafId: leafId,
+      expandedLeafId: null,
+      ptyIdsByLeafId: { [leafId]: `wt@@${index}` }
+    }
   }
+  return { tabsByWorktree: { wt: tabs }, terminalLayoutsByTabId, ptyIdsByTabId: {} }
 }
 
 describe('planMobileTerminalTabMount', () => {
@@ -63,6 +72,12 @@ describe('planMobileTerminalTabMount', () => {
       worktreeId: 'wt',
       tabIds: ['tab-173']
     })
+  })
+
+  it('refuses a pty whose owning row is filed under another worktree key', () => {
+    // Absorbed from the deleted terminal-tab-for-pty-id suite: the lookup no longer scopes by
+    // worktree, so the planner must, or a stale handle mounts a hidden workspace (#8597).
+    expect(planMobileTerminalTabMount(state(), { worktreeId: 'other', ptyId: 'wt@@0' })).toBeNull()
   })
 
   it('does not mount a hidden worktree for a stale direct tab id', () => {
