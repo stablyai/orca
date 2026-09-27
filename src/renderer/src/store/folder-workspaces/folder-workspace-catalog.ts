@@ -166,7 +166,8 @@ export function getFolderWorkspaceCatalogReplacementIdentities(
 
 export function clearRestoredFolderWorkspaceSessionOwners(
   owners: AppState['restoredRuntimeHostIdByWorkspaceSessionKey'] | undefined,
-  state: Pick<AppState, 'folderWorkspaces' | 'projectGroups'>
+  state: Pick<AppState, 'folderWorkspaces' | 'projectGroups'>,
+  options?: { hydratedFolderWorkspaceHostIds?: ReadonlySet<ExecutionHostId> }
 ): AppState['restoredRuntimeHostIdByWorkspaceSessionKey'] {
   const next: AppState['restoredRuntimeHostIdByWorkspaceSessionKey'] = {}
   for (const [key, hostId] of Object.entries(owners ?? {})) {
@@ -176,7 +177,13 @@ export function clearRestoredFolderWorkspaceSessionOwners(
       continue
     }
     const workspace = state.folderWorkspaces.find((entry) => entry.id === scope.folderWorkspaceId)
-    if (workspace && !state.projectGroups.some((group) => group.id === workspace.projectGroupId)) {
+    if (!workspace) {
+      if (!options?.hydratedFolderWorkspaceHostIds?.has(hostId)) {
+        next[key] = hostId
+      }
+      continue
+    }
+    if (!state.projectGroups.some((group) => group.id === workspace.projectGroupId)) {
       // Why: ownership resolves via the project group; if that catalog is still missing, keep the restored host owner so a session write doesn't move runtime tabs local.
       next[key] = hostId
     }
