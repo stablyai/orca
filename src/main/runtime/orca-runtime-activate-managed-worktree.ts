@@ -210,8 +210,10 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
     agent: TuiAgent,
     timeoutMs: number
   ): Promise<void> {
+    const initialPtyId =
+      this.getLivePtyForHandle(handle)?.pty.ptyId ?? this.getLiveLeafForHandle(handle).leaf.ptyId
     const ptyId = await waitForWorktreeStartupDraft(
-      this.getWorktreeStartupReadinessHost(),
+      { ...this.getWorktreeStartupReadinessHost(), getPtyId: () => initialPtyId },
       handle,
       agent,
       { timeoutMs, requireComposerMarker: true }
@@ -219,8 +221,8 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
     if (!ptyId) {
       throw new Error('timeout')
     }
-    const live = this.getLivePtyForHandle(handle)?.pty
-    if (live?.ptyId !== ptyId || !live.connected) {
+    this.assertLiveTerminalHandleTargetsPty(handle, ptyId)
+    if (!this.ptysById.get(ptyId)?.connected) {
       throw new Error('terminal_handle_stale')
     }
   }
