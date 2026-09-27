@@ -41,27 +41,20 @@ function parseFrame(value: unknown): BridgeFrame | null {
 
 /** Splits bridge stdout into frames, skipping any line that is not one. */
 export function createFrameReader(onFrame: (frame: BridgeFrame) => void): (text: string) => void {
-  let pending: unknown[] = []
+  // Each frame ships as its line completes; a consumer throw escapes the stdout listener and is fatal anyway.
   const parser = createNdjsonParser(
     (value) => {
-      pending.push(value)
-    },
-    undefined,
-    // Notebook display frames can contain large images; preserve the existing unrestricted size.
-    { maxLineBytes: Number.POSITIVE_INFINITY }
-  )
-  return (text) => {
-    // Preserve the final partial record before a consumer can throw or feed more input.
-    parser.feed(text)
-    const complete = pending
-    pending = []
-    for (const value of complete) {
       const frame = parseFrame(value)
       if (frame) {
         onFrame(frame)
       }
-    }
-  }
+    },
+    // The bridge keeps fd 1 to itself, so an unreadable line means the frame channel is damaged.
+    (error) => console.warn('[notebook-kernel] Dropped an unreadable bridge record:', error),
+    // Notebook display frames can contain large images; preserve the existing unrestricted size.
+    { maxLineBytes: Number.POSITIVE_INFINITY }
+  )
+  return (text) => parser.feed(text)
 }
 
 export type NotebookKernel = {
