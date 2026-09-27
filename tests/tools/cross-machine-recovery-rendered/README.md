@@ -5,7 +5,7 @@ From the repo root, run
 Add `SKIP_BUILD=1` to reuse the current `electron-vite build --mode e2e` output.
 Every Orca window stays hidden and unfocused; screenshots come from the renderer over the Chrome DevTools Protocol.
 
-The script runs two Playwright specs with `ORCA_RECOVERY_RENDERED_DIR` pointed at a fresh
+The script runs three Playwright specs with `ORCA_RECOVERY_RENDERED_DIR` pointed at a fresh
 `.bench-fixtures/cross-machine-recovery-rendered-*` directory (gitignored):
 
 - `tests/e2e/cross-machine-recovery-rendered.spec.ts` opens Recover Sessions from the Cmd-J
@@ -15,6 +15,10 @@ The script runs two Playwright specs with `ORCA_RECOVERY_RENDERED_DIR` pointed a
 - `tests/e2e/cross-machine-recovery-two-profile.spec.ts` exports a workspace from one profile,
   imports it into a second one, and captures `two-profile-1-before-import.png` through
   `two-profile-4-after-resume-and-shell.png`, including the Recovered session placeholders.
+- `tests/e2e/recovered-session-placeholder-narrow-pane.spec.ts` narrows a split terminal pane from
+  480px down to the 50px divider clamp and checks that the placeholder's text stays inside the
+  pane with no word broken across lines. At 50px it captures the collapsed menu trigger
+  (`placeholder-50px-compact.png`) and its open menu (`placeholder-50px-menu.png`).
 
 `report.json` lists the captured and missing screenshots. The script exits non-zero when a spec
 fails or a screenshot is missing.

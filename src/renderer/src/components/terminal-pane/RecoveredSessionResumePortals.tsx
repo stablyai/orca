@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { History } from 'lucide-react'
 import {
   recoveryBindingKeyOf,
   type RecoveryBindingKey
@@ -6,6 +7,14 @@ import {
 import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { releaseDormantRecoveryPaneToShell } from '@/lib/dormant-recovery-shell-release'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
@@ -62,23 +71,27 @@ export function RecoveredSessionResumeButton({
       })
       .finally(() => setPending(false))
   }
+  const recoveredSessionLabel = translate(
+    'crossMachineRecovery.recoveredSession',
+    'Recovered session'
+  )
+  const resumeLabel = translate('crossMachineRecovery.resume', 'Resume')
+  const startShellLabel = translate('crossMachineRecovery.startShellInstead', 'Start shell instead')
   return (
     <div
-      className="@container/recovered-session pointer-events-none absolute inset-x-0 top-0 z-40 scrollbar-sleek flex max-h-full flex-col items-center overflow-y-auto"
+      className="@container/recovered-session pointer-events-none absolute inset-x-0 top-0 z-40 scrollbar-sleek flex max-h-full flex-col items-center overflow-y-auto pt-(--orca-pane-title-height)"
       data-testid="recovered-session-placeholder"
       data-pane-key={paneKey}
     >
       <div
-        className="pointer-events-auto m-2 flex flex-wrap items-center justify-center gap-3 rounded-lg border border-border bg-card px-3 py-2 text-card-foreground shadow-xs @max-md/recovered-session:flex-col @max-md/recovered-session:items-stretch @max-md/recovered-session:gap-2 @max-md/recovered-session:self-stretch @max-md/recovered-session:p-2 @max-[8rem]/recovered-session:m-0.5 @max-[8rem]/recovered-session:gap-1 @max-[8rem]/recovered-session:p-0.5"
+        className="pointer-events-auto m-2 flex flex-wrap items-center justify-center gap-3 rounded-lg border border-border bg-card px-3 py-2 text-card-foreground shadow-xs @max-md/recovered-session:flex-col @max-md/recovered-session:items-stretch @max-md/recovered-session:gap-2 @max-md/recovered-session:self-stretch @max-md/recovered-session:p-2 @max-[10rem]/recovered-session:hidden"
         data-testid="recovered-session-placeholder-card"
       >
         <span className="text-center text-xs text-muted-foreground wrap-anywhere">
-          {translate('crossMachineRecovery.recoveredSession', 'Recovered session')}
+          {recoveredSessionLabel}
         </span>
         <Button type="button" size="sm" className="h-auto" disabled={pending} onClick={resume}>
-          <span className={ACTION_LABEL_CLASS_NAME}>
-            {translate('crossMachineRecovery.resume', 'Resume')}
-          </span>
+          <span className={ACTION_LABEL_CLASS_NAME}>{resumeLabel}</span>
         </Button>
         <Button
           type="button"
@@ -88,10 +101,43 @@ export function RecoveredSessionResumeButton({
           disabled={pending}
           onClick={startShell}
         >
-          <span className={ACTION_LABEL_CLASS_NAME}>
-            {translate('crossMachineRecovery.startShellInstead', 'Start shell instead')}
-          </span>
+          <span className={ACTION_LABEL_CLASS_NAME}>{startShellLabel}</span>
         </Button>
+      </div>
+      <div
+        className="pointer-events-auto m-1 hidden @max-[10rem]/recovered-session:flex"
+        data-testid="recovered-session-placeholder-compact"
+      >
+        <DropdownMenu>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              {/* Why: keep Tooltip and Dropdown from composing refs onto the same button (Radix setRef crash loop). */}
+              <span className="inline-flex">
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="outline"
+                    aria-label={recoveredSessionLabel}
+                    disabled={pending}
+                  >
+                    <History />
+                  </Button>
+                </DropdownMenuTrigger>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent sideOffset={4}>{recoveredSessionLabel}</TooltipContent>
+          </Tooltip>
+          <DropdownMenuContent align="start">
+            <DropdownMenuLabel>{recoveredSessionLabel}</DropdownMenuLabel>
+            <DropdownMenuItem disabled={pending} onSelect={resume}>
+              {resumeLabel}
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled={pending} onSelect={startShell}>
+              {startShellLabel}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   )

@@ -11,7 +11,8 @@ mkdirSync(parent, { recursive: true })
 const output = mkdtempSync(path.join(parent, 'cross-machine-recovery-rendered-'))
 const specs = [
   'tests/e2e/cross-machine-recovery-rendered.spec.ts',
-  'tests/e2e/cross-machine-recovery-two-profile.spec.ts'
+  'tests/e2e/cross-machine-recovery-two-profile.spec.ts',
+  'tests/e2e/recovered-session-placeholder-narrow-pane.spec.ts'
 ]
 const run = spawnSync(
   'npx',
@@ -41,13 +42,15 @@ const expected = [
   'two-profile-1-before-import.png',
   'two-profile-2-imported-layout.png',
   'two-profile-3-structured-placeholder.png',
-  'two-profile-4-after-resume-and-shell.png'
+  'two-profile-4-after-resume-and-shell.png',
+  'placeholder-50px-compact.png',
+  'placeholder-50px-menu.png'
 ]
 const captured = readdirSync(output).filter((file) => file.endsWith('.png'))
 const missing = expected.filter((file) => !captured.includes(file))
 const report = {
   scope:
-    'Recover Sessions picker per provider state against a fake cc-sync provider, and the two-profile import placeholders, in hidden Electron windows.',
+    'Recover Sessions picker per provider state against a fake cc-sync provider, the two-profile import placeholders, and the placeholder in a 50px pane, in hidden Electron windows.',
   playwrightExitStatus: run.status,
   captured: captured.sort(),
   missing
