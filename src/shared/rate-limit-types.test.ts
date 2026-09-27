@@ -16,11 +16,13 @@ describe('RateLimitState', () => {
       antigravity: null,
       minimax: null,
       grok: null,
+      zhipu: null,
       cursor: null,
       minimaxCookieConfigured: false,
       minimaxApiKeyConfigured: false,
       opencodeGoApiKeyConfigured: false,
       grokAuthConfigured: false,
+      zhipuCredentialsConfigured: false,
       cursorAuthConfigured: false,
       claudeTarget: { runtime: 'host', wslDistro: null },
       codexTarget: { runtime: 'host', wslDistro: null },
@@ -32,6 +34,8 @@ describe('RateLimitState', () => {
     expect(state.minimax).toBeNull()
     expect(state.minimaxCookieConfigured).toBe(false)
     expect(state.minimaxApiKeyConfigured).toBe(false)
+    expect(state.zhipu).toBeNull()
+    expect(state.zhipuCredentialsConfigured).toBe(false)
     expect(state.cursor).toBeNull()
     expect(state.cursorAuthConfigured).toBe(false)
   })

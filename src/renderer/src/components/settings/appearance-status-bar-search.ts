@@ -5,6 +5,7 @@ import { translateSearchKeyword } from './settings-search-keywords'
 import { getAntigravityStatusBarToggleSearchEntry } from './appearance-status-bar-antigravity-toggle-search'
 import { getMiniMaxStatusBarToggleSearchEntry } from './appearance-status-bar-minimax-toggle-search'
 import { getGrokStatusBarToggleSearchEntry } from './appearance-status-bar-grok-toggle-search'
+import { getZhipuStatusBarToggleSearchEntry } from './appearance-status-bar-zhipu-toggle-search'
 import { getCursorStatusBarToggleSearchEntry } from './appearance-status-bar-cursor-toggle-search'
 
 export const getStatusBarToggles = createLocalizedCatalog(
@@ -168,6 +169,7 @@ export const getStatusBarToggles = createLocalizedCatalog(
     },
     getMiniMaxStatusBarToggleSearchEntry(),
     getGrokStatusBarToggleSearchEntry(),
+    getZhipuStatusBarToggleSearchEntry(),
     getCursorStatusBarToggleSearchEntry(),
     {
       id: 'ssh',

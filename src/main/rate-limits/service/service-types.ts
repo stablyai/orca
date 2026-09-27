@@ -109,6 +109,7 @@ export type InternalRateLimitState = {
   antigravity: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
   grok: ProviderRateLimits | null
+  zhipu: ProviderRateLimits | null
   cursor: ProviderRateLimits | null
 }
 

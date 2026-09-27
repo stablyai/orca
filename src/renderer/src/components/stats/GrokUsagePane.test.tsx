@@ -31,7 +31,9 @@ const mockStoreState = {
       error: null,
       status: 'ok'
     },
-    grokAuthConfigured: true
+    grokAuthConfigured: true,
+    zhipu: null,
+    zhipuCredentialsConfigured: false
   }),
   refreshGrokRateLimits: storeMocks.refreshGrokRateLimits,
   openSettingsPage: storeMocks.openSettingsPage,

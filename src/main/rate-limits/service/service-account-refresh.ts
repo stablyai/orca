@@ -1,4 +1,5 @@
 import { consumeCodexRateLimitResetCredit } from '../codex-fetcher'
+import { hasZhipuCredentials } from '../../zhipu/zhipu-credential-store'
 import { RateLimitServiceInactiveAccounts } from './service-inactive-accounts'
 import {
   normalizeCodexAccountSelectionTarget,
@@ -35,6 +36,16 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     this.updateState({
       ...this.state,
       minimax: this.withFetchingStatus(null, 'minimax')
+    })
+  }
+
+  invalidateZhipuCredentialState(): void {
+    this.zhipuFetchGeneration += 1
+    this.zhipuCredentialsConfigured = hasZhipuCredentials()
+    // Why: saving/forgetting the token can race an in-flight fetch; clear the visible snapshot before any old-token result returns.
+    this.updateState({
+      ...this.state,
+      zhipu: this.withFetchingStatus(null, 'zhipu')
     })
   }
 

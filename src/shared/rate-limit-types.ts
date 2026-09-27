@@ -56,6 +56,7 @@ export type ProviderRateLimits = {
     | 'kimi'
     | 'minimax'
     | 'grok'
+    | 'zhipu'
     | 'antigravity'
     | 'cursor'
   /** 5-hour session window, null if not available. */
@@ -138,6 +139,7 @@ export type RateLimitState = {
   antigravity: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
   grok: ProviderRateLimits | null
+  zhipu: ProviderRateLimits | null
   cursor: ProviderRateLimits | null
   /**
    * True when a MiniMax session cookie is persisted on disk. The cookie lives
@@ -162,6 +164,8 @@ export type RateLimitState = {
   opencodeGoApiKeyConfigured: boolean
   /** True when main finds a Grok CLI session file (~/.grok/auth.json or GROK_HOME). */
   grokAuthConfigured: boolean
+  /** True when encrypted Zhipu/Z.AI usage credentials are persisted on disk. */
+  zhipuCredentialsConfigured: boolean
   /**
    * True when main finds a Cursor session on this machine: the macOS Keychain
    * item cursor-agent writes, its legacy auth.json, or the Cursor IDE's own

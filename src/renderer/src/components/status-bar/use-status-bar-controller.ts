@@ -115,6 +115,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     minimaxApiKeyConfigured: rateLimits.minimaxApiKeyConfigured,
     opencodeGoApiKeyConfigured: rateLimits.opencodeGoApiKeyConfigured,
     grokAuthConfigured: rateLimits.grokAuthConfigured,
+    zhipuCredentialsConfigured: rateLimits.zhipuCredentialsConfigured,
     cursorAuthConfigured: rateLimits.cursorAuthConfigured
   }
   const visibleClaude = getVisibleUsageProvider('claude', claude, usageSettings)
@@ -124,6 +125,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const visibleAntigravity = getVisibleUsageProvider('antigravity', antigravity, usageSettings)
   const visibleMiniMax = getVisibleUsageProvider('minimax', minimax, usageSettings)
   const visibleGrok = getVisibleUsageProvider('grok', grok, usageSettings)
+  const visibleZhipu = getVisibleUsageProvider('zhipu', rateLimits.zhipu, usageSettings)
   const visibleCursor = getVisibleUsageProvider('cursor', cursor, usageSettings)
   const showClaude =
     visibleClaude !== null &&
@@ -151,6 +153,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     visibleGrok !== null &&
     statusBarItems.includes('grok') &&
     isStatusBarItemAvailable('grok', detectedAgentIds)
+  // Why: Zhipu uses a stored web token, not a CLI on PATH, so detection-gating does not apply.
+  const showZhipu = visibleZhipu !== null && statusBarItems.includes('zhipu')
   // Why: a Cursor session can come from the IDE alone, so PATH detection of
   // cursor-agent would hide a real meter from IDE-only users.
   const showCursor = visibleCursor !== null && statusBarItems.includes('cursor')
@@ -172,11 +176,12 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showAntigravity ||
     showMiniMax ||
     showGrok ||
+    showZhipu ||
     showCursor
   const anyVisible = hasVisibleUsageMeters || showResourceUsage
   // Why: include Settings so durable managed accounts count — a configured user isn't shown the empty state while snapshots hydrate.
   const isEmptyUsageState = isUsageEmptyState(
-    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, cursor },
+    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, zhipu: rateLimits.zhipu, cursor },
     usageSettings
   )
   // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later.
@@ -190,6 +195,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     antigravity?.status === 'fetching' ||
     minimax?.status === 'fetching' ||
     grok?.status === 'fetching' ||
+    rateLimits.zhipu?.status === 'fetching' ||
     cursor?.status === 'fetching'
 
   const compact = containerWidth < 900
@@ -210,6 +216,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showKimi ? visibleKimi : null,
     showMiniMax ? visibleMiniMax : null,
     showGrok ? visibleGrok : null,
+    showZhipu ? visibleZhipu : null,
     showCursor ? visibleCursor : null
   ].filter((p): p is ProviderRateLimits => p !== null)
 

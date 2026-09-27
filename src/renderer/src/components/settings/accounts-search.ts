@@ -217,6 +217,28 @@ export const getAccountsGrokSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const getAccountsZhipuSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate('auto.components.settings.accounts.search.zhipu.title', 'Zhipu / Z.AI Usage'),
+    description: translate(
+      'auto.components.settings.accounts.search.zhipu.description',
+      'Token-based GLM Coding Plan quota refreshes.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.accounts.search.zhipuKeyword', 'zhipu'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.zai', 'z.ai'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.glm', 'glm'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.28a55be40f', 'token'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.e949b08ffb',
+        'rate limit'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.c759741d77', 'quota'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.86edc96bc9', 'status bar')
+    ]
+  }
+])
+
 export const getAccountsCursorSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate('auto.components.settings.accounts.search.cursor.title', 'Cursor Usage'),
@@ -257,5 +279,6 @@ export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsS
   ...getAccountsOpencodeSearchEntries(),
   ...getAccountsMiniMaxSearchEntries(),
   ...getAccountsGrokSearchEntries(),
+  ...getAccountsZhipuSearchEntries(),
   ...getAccountsCursorSearchEntries()
 ])

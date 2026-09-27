@@ -77,6 +77,7 @@ function usageSettings(overrides: Partial<UsageProviderSettings> = {}): UsagePro
     minimaxApiKeyConfigured: false,
     opencodeGoApiKeyConfigured: false,
     grokAuthConfigured: false,
+    zhipuCredentialsConfigured: false,
     cursorAuthConfigured: false,
     ...overrides
   }
@@ -440,6 +441,7 @@ describe('isUsageEmptyState', () => {
           antigravity: undefined,
           minimax: undefined,
           grok: undefined,
+          zhipu: undefined,
           cursor: undefined
         },
         usageSettings()
@@ -459,6 +461,7 @@ describe('isUsageEmptyState', () => {
           antigravity: provider('unavailable', { provider: 'antigravity' }),
           minimax: provider('unavailable', { provider: 'minimax' }),
           grok: provider('unavailable', { provider: 'grok' }),
+          zhipu: provider('unavailable', { provider: 'zhipu' }),
           cursor: provider('unavailable', { provider: 'cursor' })
         },
         usageSettings()
@@ -478,6 +481,7 @@ describe('isUsageEmptyState', () => {
           antigravity: provider('unavailable', { provider: 'antigravity' }),
           minimax: provider('unavailable', { provider: 'minimax' }),
           grok: provider('unavailable', { provider: 'grok' }),
+          zhipu: provider('unavailable', { provider: 'zhipu' }),
           cursor: provider('unavailable', { provider: 'cursor' })
         },
         usageSettings({
@@ -512,6 +516,7 @@ describe('isUsageEmptyState', () => {
           antigravity: null,
           minimax: provider('unavailable', { provider: 'minimax' }),
           grok: provider('unavailable', { provider: 'grok' }),
+          zhipu: provider('unavailable', { provider: 'zhipu' }),
           cursor: provider('unavailable', { provider: 'cursor' })
         },
         usageSettings()
@@ -531,6 +536,7 @@ describe('isUsageEmptyState', () => {
           antigravity: null,
           grok: provider('unavailable', { provider: 'grok' }),
           minimax: provider('unavailable', { provider: 'minimax' }),
+          zhipu: provider('unavailable', { provider: 'zhipu' }),
           cursor: provider('unavailable', { provider: 'cursor' })
         },
         usageSettings({ antigravityUsageConfigured: true, geminiCliOAuthEnabled: true })
@@ -552,6 +558,7 @@ describe('isUsageEmptyState', () => {
           antigravity: null,
           grok: provider('unavailable', { provider: 'grok' }),
           minimax: provider('unavailable', { provider: 'minimax' }),
+          zhipu: provider('unavailable', { provider: 'zhipu' }),
           cursor: provider('unavailable', { provider: 'cursor' })
         },
         usageSettings({ antigravityUsageConfigured: true })

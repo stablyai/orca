@@ -7,6 +7,7 @@ const DEFAULT_ON_KIMI_STATUS_BAR_ITEM: StatusBarItem = 'kimi'
 const DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM: StatusBarItem = 'minimax'
 const DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM: StatusBarItem = 'antigravity'
 const DEFAULT_ON_GROK_STATUS_BAR_ITEM: StatusBarItem = 'grok'
+const DEFAULT_ON_ZHIPU_STATUS_BAR_ITEM: StatusBarItem = 'zhipu'
 const DEFAULT_ON_CURSOR_STATUS_BAR_ITEM: StatusBarItem = 'cursor'
 
 export function hydrateStatusBarItems(ui: PersistedUIState): StatusBarItem[] {
@@ -17,6 +18,7 @@ export function hydrateStatusBarItems(ui: PersistedUIState): StatusBarItem[] {
     ['_minimaxStatusBarDefaultAdded', DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM],
     ['_antigravityStatusBarDefaultAdded', DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM],
     ['_grokStatusBarDefaultAdded', DEFAULT_ON_GROK_STATUS_BAR_ITEM],
+    ['_zhipuStatusBarDefaultAdded', DEFAULT_ON_ZHIPU_STATUS_BAR_ITEM],
     ['_cursorStatusBarDefaultAdded', DEFAULT_ON_CURSOR_STATUS_BAR_ITEM]
   ] as const
   for (const [flag, item] of defaults) {

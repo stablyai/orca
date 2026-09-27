@@ -118,6 +118,8 @@ export type PersistedUIState = {
   _antigravityStatusBarDefaultAdded?: boolean
   /** One-shot migration flag for adding the default-on Grok status item. */
   _grokStatusBarDefaultAdded?: boolean
+  /** One-shot migration flag for adding the default-on Zhipu status item. */
+  _zhipuStatusBarDefaultAdded?: boolean
   /** One-shot migration flag for adding the default-on Cursor status item. */
   _cursorStatusBarDefaultAdded?: boolean
   statusBarItems: StatusBarItem[]

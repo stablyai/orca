@@ -21,6 +21,7 @@ import {
   DEFAULT_POLL_MS
 } from './service-types'
 import { readGrokAuthSession } from '../grok-auth'
+import { hasZhipuCredentials } from '../../zhipu/zhipu-credential-store'
 
 export abstract class RateLimitServiceState {
   protected state: InternalRateLimitState = {
@@ -32,9 +33,11 @@ export abstract class RateLimitServiceState {
     antigravity: null,
     minimax: null,
     grok: null,
+    zhipu: null,
     cursor: null
   }
   protected grokAuthConfigured = readGrokAuthSession().status === 'ok'
+  protected zhipuCredentialsConfigured = hasZhipuCredentials()
   // Why: the Cursor probe reads the macOS Keychain, so it cannot run synchronously
   // at construction the way Grok's auth-file probe does; each fetch cycle sets it.
   protected cursorAuthConfigured = false
@@ -51,6 +54,7 @@ export abstract class RateLimitServiceState {
     kimi: 0,
     minimax: 0,
     grok: 0,
+    zhipu: 0,
     antigravity: 0,
     cursor: 0
   }
@@ -63,6 +67,7 @@ export abstract class RateLimitServiceState {
     kimi: 0,
     minimax: 0,
     grok: 0,
+    zhipu: 0,
     antigravity: 0,
     cursor: 0
   }
@@ -81,8 +86,10 @@ export abstract class RateLimitServiceState {
   protected lastClaudeAuthSnapshot: { configDir: string | null; provenance: string } | null = null
   protected opencodeFetchGeneration = 0
   protected minimaxFetchGeneration = 0
+  protected zhipuFetchGeneration = 0
   protected lastOpencodeConfigHash = ''
   protected lastMiniMaxConfigHash = ''
+  protected lastZhipuConfigHash = ''
   protected codexHomePathResolver: CodexHomePathResolver | null = null
   protected codexFetchTarget: NormalizedCodexAccountSelectionTarget = {
     runtime: 'host',

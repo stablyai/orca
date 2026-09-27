@@ -15,6 +15,18 @@ export function createMiniMaxCredentialsApi(): NonNullable<
   }
 }
 
+export function createZhipuCredentialsApi(): NonNullable<Partial<PreloadApi>['zhipuCredentials']> {
+  const notConfigured = { configured: false, baseUrl: null }
+  const unsupportedError = new Error(
+    'Zhipu credential storage is only available in the desktop app.'
+  )
+  return {
+    getStatus: () => Promise.resolve(notConfigured),
+    save: () => Promise.reject(unsupportedError),
+    clear: () => Promise.resolve(notConfigured),
+    importFromCcSwitch: () => Promise.reject(unsupportedError)
+  }
+}
 export function createCursorAccountsApi(): NonNullable<Partial<PreloadApi>['cursorAccounts']> {
   // Why an explanation and not a bare `signedIn: false`: Cursor's session lives on
   // the machine running Orca, and this bridge cannot read it. The host may well be

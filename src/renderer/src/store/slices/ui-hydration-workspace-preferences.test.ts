@@ -140,6 +140,7 @@ describe('createUISlice hydratePersistedUI', () => {
       'minimax',
       'antigravity',
       'grok',
+      'zhipu',
       'cursor'
     ])
     expect(setUI).toHaveBeenCalledWith({
@@ -151,6 +152,7 @@ describe('createUISlice hydratePersistedUI', () => {
         'minimax',
         'antigravity',
         'grok',
+        'zhipu',
         'cursor'
       ],
       _portsStatusBarDefaultAdded: true,
@@ -158,6 +160,7 @@ describe('createUISlice hydratePersistedUI', () => {
       _minimaxStatusBarDefaultAdded: true,
       _antigravityStatusBarDefaultAdded: true,
       _grokStatusBarDefaultAdded: true,
+      _zhipuStatusBarDefaultAdded: true,
       _cursorStatusBarDefaultAdded: true
     })
   })
@@ -175,6 +178,7 @@ describe('createUISlice hydratePersistedUI', () => {
         _minimaxStatusBarDefaultAdded: true,
         _antigravityStatusBarDefaultAdded: true,
         _grokStatusBarDefaultAdded: true,
+        _zhipuStatusBarDefaultAdded: true,
         _cursorStatusBarDefaultAdded: true
       })
     )

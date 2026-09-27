@@ -40,6 +40,10 @@ vi.mock('./grok-fetcher', () => ({
   fetchGrokRateLimits: vi.fn()
 }))
 
+vi.mock('./zhipu-fetcher', () => ({
+  fetchZhipuRateLimits: vi.fn()
+}))
+
 vi.mock('./cursor-fetcher', () => ({
   fetchCursorRateLimits: vi.fn()
 }))
@@ -55,6 +59,13 @@ vi.mock('./grok-auth', () => ({
 vi.mock('../minimax/minimax-cookie-store', () => ({
   hasMiniMaxSessionCookie: vi.fn(() => false)
 }))
+
+vi.mock('../zhipu/zhipu-credential-store', () => ({
+  hasZhipuCredentials: vi.fn(() => false),
+  readZhipuCredentials: vi.fn(() => null)
+}))
+
+const allowsBackgroundClaudePty = process.platform !== 'win32'
 
 describe('RateLimitService', () => {
   beforeEach(() => {
@@ -380,8 +391,8 @@ describe('RateLimitService', () => {
           wslLinuxConfigDir: '/home/jin/.claude',
           stripAuthEnv: true
         }),
-        allowPtyFallback: true,
-        allowUsagePanelSupplement: true,
+        allowPtyFallback: allowsBackgroundClaudePty,
+        allowUsagePanelSupplement: allowsBackgroundClaudePty,
         signal: expect.any(AbortSignal)
       })
     )
@@ -409,7 +420,7 @@ describe('RateLimitService', () => {
       expect.objectContaining({
         authPreparation: expect.objectContaining({ provenance: 'system' }),
         allowPtyFallback: false,
-        allowUsagePanelSupplement: true,
+        allowUsagePanelSupplement: allowsBackgroundClaudePty,
         signal: expect.any(AbortSignal)
       })
     )
@@ -427,7 +438,7 @@ describe('RateLimitService', () => {
       expect.objectContaining({
         authPreparation: undefined,
         allowPtyFallback: false,
-        allowUsagePanelSupplement: true,
+        allowUsagePanelSupplement: allowsBackgroundClaudePty,
         signal: expect.any(AbortSignal)
       })
     )
@@ -455,7 +466,7 @@ describe('RateLimitService', () => {
       expect.objectContaining({
         authPreparation: expect.objectContaining({ provenance: 'wsl:Ubuntu:system' }),
         allowPtyFallback: false,
-        allowUsagePanelSupplement: true,
+        allowUsagePanelSupplement: allowsBackgroundClaudePty,
         signal: expect.any(AbortSignal)
       })
     )
@@ -571,7 +582,10 @@ describe('RateLimitService', () => {
     })
 
     expect(fetchClaudeRateLimits).toHaveBeenLastCalledWith(
-      expect.objectContaining({ allowPtyFallback: true, allowUsagePanelSupplement: true })
+      expect.objectContaining({
+        allowPtyFallback: allowsBackgroundClaudePty,
+        allowUsagePanelSupplement: allowsBackgroundClaudePty
+      })
     )
 
     expect(service.getState().inactiveClaudeAccounts).not.toEqual(

@@ -37,6 +37,10 @@ vi.mock('./minimax/minimax-fetcher', () => ({
   fetchMiniMaxRateLimits: vi.fn()
 }))
 
+vi.mock('./zhipu-fetcher', () => ({
+  fetchZhipuRateLimits: vi.fn()
+}))
+
 vi.mock('./grok-fetcher', () => ({
   fetchGrokRateLimits: vi.fn()
 }))
@@ -59,6 +63,11 @@ vi.mock('../minimax/minimax-cookie-store', () => ({
 
 vi.mock('../minimax/minimax-api-key-store', () => ({
   hasMiniMaxApiKey: vi.fn(() => false)
+}))
+
+vi.mock('../zhipu/zhipu-credential-store', () => ({
+  hasZhipuCredentials: vi.fn(() => false),
+  readZhipuCredentials: vi.fn(() => null)
 }))
 
 describe('RateLimitService', () => {

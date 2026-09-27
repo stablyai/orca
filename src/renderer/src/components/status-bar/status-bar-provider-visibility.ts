@@ -21,6 +21,7 @@ export type UsageProviderSettings = Pick<
   // store, neither of which the renderer can see; main reports presence.
   opencodeGoApiKeyConfigured: boolean
   grokAuthConfigured: boolean
+  zhipuCredentialsConfigured: boolean
   cursorAuthConfigured: boolean
 }
 
@@ -33,6 +34,7 @@ type UsageProviderSnapshots = {
   antigravity: ProviderRateLimits | null | undefined
   minimax: ProviderRateLimits | null | undefined
   grok: ProviderRateLimits | null | undefined
+  zhipu: ProviderRateLimits | null | undefined
   cursor: ProviderRateLimits | null | undefined
 }
 
@@ -86,6 +88,7 @@ export function hasUsageProviderSettings(
     settings?.minimaxCookieConfigured === true ||
     settings?.minimaxApiKeyConfigured === true ||
     settings?.grokAuthConfigured === true ||
+    settings?.zhipuCredentialsConfigured === true ||
     settings?.cursorAuthConfigured === true
   )
 }
@@ -123,6 +126,9 @@ export function hasUsageProviderSettingsForProvider(
   }
   if (providerId === 'grok') {
     return settings.grokAuthConfigured === true
+  }
+  if (providerId === 'zhipu') {
+    return settings.zhipuCredentialsConfigured === true
   }
   if (providerId === 'cursor') {
     return settings.cursorAuthConfigured === true
@@ -181,6 +187,7 @@ export function isUsageEmptyState(
     antigravitySnapshotPending ||
     isProviderSnapshotPending(providers.minimax) ||
     isProviderSnapshotPending(providers.grok) ||
+    isProviderSnapshotPending(providers.zhipu) ||
     isProviderSnapshotPending(providers.cursor)
   ) {
     return false
@@ -195,6 +202,7 @@ export function isUsageEmptyState(
     !isProviderConfigured(providers.antigravity) &&
     !isProviderConfigured(providers.minimax) &&
     !isProviderConfigured(providers.grok) &&
+    !isProviderConfigured(providers.zhipu) &&
     !isProviderConfigured(providers.cursor)
   )
 }
