@@ -152,15 +152,21 @@ describe('materializeCachedOrcadBunRuntime', () => {
     expect(await readdir(join(cacheRoot, 'bun', `v${ORCAD_BUN_VERSION}`, TARGET))).toEqual([])
   })
 
-  it('names the absent extractor and the override when it cannot be launched', async () => {
+  // Both cases spawn for real, so the assertion is against the errno Node actually reports:
+  // a missing program rejects asynchronously with ENOENT, while a program path whose parent is a
+  // regular file throws ENOTDIR synchronously out of `spawn` itself.
+  it.each([
+    ['absent', (): string => join(cacheRoot, 'absent-extractor')],
+    ['unreachable through a file', (): string => join(cacheRoot, 'plain-file', 'unzip')]
+  ])('names the %s extractor and the override when it cannot be launched', async (_label, path) => {
     const archive = new TextEncoder().encode('unextractable archive')
     ORCAD_BUN_RELEASE_ASSETS[TARGET].sha256 = sha256(archive)
-    // A real spawn, so the assertion is against the errno Node actually reports.
+    await writeFile(join(cacheRoot, 'plain-file'), 'not a directory')
     const { runProcess: spawnForReal } = await vi.importActual<{
       runProcess: typeof runProcess
     }>('../../shared/child-process/run-process')
     vi.mocked(runProcess).mockImplementationOnce(spawnForReal)
-    vi.stubEnv('ORCA_UNZIP_BIN', join(cacheRoot, 'absent-extractor'))
+    vi.stubEnv('ORCA_UNZIP_BIN', path())
 
     await expect(
       materializeCachedOrcadBunRuntime(TARGET, cacheRoot, { fetcher: responseFetcher(archive) })

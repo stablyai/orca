@@ -4,6 +4,7 @@ import { chmod, link, mkdir, open, rm } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { runProcess, type ProcessResult } from '../../shared/child-process/run-process'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
+import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import { getZipExtractorCommand } from '../../shared/zip-extractor-command'
 import { getMainHttpClient, type MainHttpClient } from '../network/http-client'
 import { findOrcadCachePath } from './orcad-cache-path'
@@ -85,9 +86,13 @@ export async function materializeCachedOrcadBunRuntime(
 }
 
 /**
- * Why ENOENT gets its own message: `unzip` is absent from a minimal POSIX install, and a bare
- * `spawn unzip ENOENT` names neither the missing tool nor the override. No cwd is passed, so
- * ENOENT here can only mean the extractor itself.
+ * Why the extractor needs a message of its own: `unzip` is absent from a minimal POSIX install,
+ * and a bare `spawn unzip ENOENT` names neither the missing tool nor the override. A misconfigured
+ * `ORCA_UNZIP_BIN` whose parent is a file reports ENOTDIR instead, which is the same verdict.
+ *
+ * The errno is the program path's, not the caller's: `runProcess` leaves cwd unset, so the child
+ * inherits the parent's without resolving it. Measured on macOS, Linux and Windows — spawn still
+ * succeeds from a deleted cwd, even though `process.cwd()` itself throws ENOENT there.
  */
 async function extractArchive(
   archivePath: string,
@@ -103,7 +108,7 @@ async function extractArchive(
       signal
     })
   } catch (error) {
-    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+    if (isDefinitiveAbsence(error)) {
       throw new Error(
         `Bun archive extraction could not run ${command.file}: install ${command.label}, ` +
           'or set ORCA_UNZIP_BIN to an unzip-compatible extractor.',
