@@ -2,9 +2,10 @@ import { spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 
-const scriptPath = 'config/scripts/claude-usage-yield-benchmark.mjs'
+const scriptPath = fileURLToPath(new URL('./claude-usage-yield-benchmark.mjs', import.meta.url))
 const tempDirs = []
 
 afterEach(() => {
