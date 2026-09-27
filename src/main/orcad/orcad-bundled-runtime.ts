@@ -53,7 +53,11 @@ export function handoffToBundledOrcad(): boolean {
   if (process.platform !== 'win32') {
     process.on('SIGHUP', ignoreHangup)
   }
-  const forwards = (['SIGINT', 'SIGTERM'] as const).map((signal) => {
+  // Why SIGUSR2: it rotates the pairing offer inside the runtime; without a listener here Node's
+  // default action would terminate this launcher instead. Windows has no SIGUSR2.
+  const forwarded: ('SIGINT' | 'SIGTERM' | 'SIGUSR2')[] =
+    process.platform === 'win32' ? ['SIGINT', 'SIGTERM'] : ['SIGINT', 'SIGTERM', 'SIGUSR2']
+  const forwards = forwarded.map((signal) => {
     const forward = (): void => {
       if (process.platform === 'win32') {
         // Detached Windows children have a separate console; kill() skips durable shutdown.

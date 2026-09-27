@@ -143,6 +143,7 @@ async function startOrcadRuntime(
     | undefined
   let uninstallHookStatusRepublish = (): void => {}
   let uninstallObservedStatusIdentity = (): void => {}
+  let uninstallPairingRotation = (): void => {}
   registerCleanup(async () => {
     try {
       await rpc?.stop()
@@ -159,6 +160,7 @@ async function startOrcadRuntime(
           // orcad restart goes back to killing every running terminal.
           await stopOrcadDaemon()
         } finally {
+          uninstallPairingRotation()
           uninstallObservedStatusIdentity()
           uninstallHookStatusRepublish()
           agentHookServer.stop()
@@ -329,7 +331,7 @@ async function startOrcadRuntime(
 
   if (!options.noPairing) {
     const { installOrcadPairingRotation } = await import('./orcad-pairing-rotation')
-    installOrcadPairingRotation({
+    uninstallPairingRotation = installOrcadPairingRotation({
       rpc,
       userDataPath: runtimeUserDataPath,
       pairingAddress: options.pairingAddress
