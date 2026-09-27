@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
 import { subscribeConnectionLogBackgroundFlush } from './connection-log-background-flush'
 
 type AppStateListener = (next: string) => void
@@ -16,12 +16,12 @@ vi.mock('react-native', () => ({
 }))
 
 describe('subscribeConnectionLogBackgroundFlush', () => {
-  let flush: ReturnType<typeof vi.fn>
+  let flush: Mock<() => void>
 
   beforeEach(() => {
     vi.clearAllMocks()
     appStateListener = null
-    flush = vi.fn()
+    flush = vi.fn<() => void>()
   })
 
   it('flushes when the app goes to the background', () => {
