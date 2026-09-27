@@ -47,6 +47,7 @@ import { createFeedbackDraftSlice } from './slices/feedback-draft'
 import { createTaskCreationDraftsSlice } from './slices/task-creation-drafts'
 import { createRemoteServerUpdatesSlice } from './slices/remote-server-updates'
 import { createTerminalQuickCommandHostsSlice } from './slices/terminal-quick-command-hosts'
+import { createAddRepoCloneStatusSlice } from './slices/add-repo-clone-status'
 import { e2eConfig } from '@/lib/e2e-config'
 import type { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-session'
 import {
@@ -120,7 +121,8 @@ export const useAppStore = create<AppState>()(
         ...createFeedbackDraftSlice(...a),
         ...createTaskCreationDraftsSlice(...a),
         ...createRemoteServerUpdatesSlice(...a),
-        ...createTerminalQuickCommandHostsSlice(...a)
+        ...createTerminalQuickCommandHostsSlice(...a),
+        ...createAddRepoCloneStatusSlice(...a)
       }
     })
   )

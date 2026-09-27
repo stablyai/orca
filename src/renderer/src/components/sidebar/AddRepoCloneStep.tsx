@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Folder } from 'lucide-react'
+import { CircleStop, Folder } from 'lucide-react'
 import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,6 +20,7 @@ type CloneStepProps = {
   onDestChange: (value: string) => void
   onPickDestination: () => void
   onClone: () => void
+  onCancelClone: () => void
 }
 
 export function CloneStep({
@@ -35,7 +36,8 @@ export function CloneStep({
   onUrlChange,
   onDestChange,
   onPickDestination,
-  onClone
+  onClone,
+  onCancelClone
 }: CloneStepProps): React.JSX.Element {
   const [browsingDestination, setBrowsingDestination] = useState(false)
   const isRemoteClone = Boolean(runtimeEnvironmentId || sshTargetId)
@@ -212,6 +214,21 @@ export function CloneStep({
               />
             </div>
           </div>
+        )}
+
+        {isCloning && (
+          <>
+            <p className="text-[11px] text-muted-foreground">
+              {translate(
+                'auto.components.sidebar.AddRepoSteps.cloneContinuesInBackground',
+                'Closing this dialog keeps the clone running in the background.'
+              )}
+            </p>
+            <Button variant="outline" className="w-full" onClick={onCancelClone}>
+              <CircleStop className="size-3.5" />
+              {translate('auto.components.sidebar.AddRepoSteps.cancelClone', 'Cancel clone')}
+            </Button>
+          </>
         )}
       </div>
     </>

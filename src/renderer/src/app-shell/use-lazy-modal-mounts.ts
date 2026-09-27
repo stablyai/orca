@@ -11,6 +11,10 @@ export function useLazyModalMounts(): {
   shouldMountAddRepoDialog: boolean
 } {
   const activeModal = useAppStore((s) => s.activeModal)
+  // Why: a clone kept running in the background after the dialog closed must
+  // keep this component mounted, or its hook state (progress, the promise
+  // continuation that adds the repo on completion) is torn down with it.
+  const isAddRepoCloneInFlight = useAppStore((s) => s.isAddRepoCloneInFlight)
   const [mountedLazyModalIds, setMountedLazyModalIds] = useState<Set<LazyModalId>>(() => new Set())
   const [shouldMountAddRepoDialog, setShouldMountAddRepoDialog] = useState(false)
   const unmountAddRepoDialogTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -24,8 +28,11 @@ export function useLazyModalMounts(): {
       setShouldMountAddRepoDialog(true)
       return
     }
+    if (isAddRepoCloneInFlight) {
+      return
+    }
     if (shouldMountAddRepoDialog && !unmountAddRepoDialogTimerRef.current) {
-      // Why: AddRepoDialog's close effect aborts in-flight clone work; keep one closed render before unmounting hidden SSH/remote subscriptions.
+      // Why: keep one closed render before unmounting hidden SSH/remote subscriptions (a clone still in flight is handled above, by isAddRepoCloneInFlight).
       unmountAddRepoDialogTimerRef.current = setTimeout(() => {
         setShouldMountAddRepoDialog(false)
         unmountAddRepoDialogTimerRef.current = null
@@ -37,7 +44,7 @@ export function useLazyModalMounts(): {
         unmountAddRepoDialogTimerRef.current = null
       }
     }
-  }, [activeModal, shouldMountAddRepoDialog])
+  }, [activeModal, isAddRepoCloneInFlight, shouldMountAddRepoDialog])
 
   const resolvedMountedLazyModalIds = resolveMountedLazyModalIds(activeModal, mountedLazyModalIds)
   if (resolvedMountedLazyModalIds !== mountedLazyModalIds) {
