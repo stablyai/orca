@@ -369,6 +369,23 @@ describe('tui agent startup plans', () => {
     })
   })
 
+  it('launches Reasonix through the installed reasonix executable', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'reasonix',
+      prompt: 'fix it',
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    expect(plan).toEqual({
+      agent: 'reasonix',
+      launchCommand: 'reasonix',
+      expectedProcess: 'reasonix',
+      followupPrompt: 'fix it',
+      launchConfig: { agentCommand: 'reasonix', agentArgs: '', agentEnv: {} }
+    })
+  })
+
   it.each([
     ['yolo', 'linux', 'posix', undefined, "muse --trust-workspace '--yolo'"],
     ['manual', 'linux', 'posix', { muse: '' }, 'muse --trust-workspace'],

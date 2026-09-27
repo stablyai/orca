@@ -496,7 +496,8 @@
           "mimo_code_label": "MiMo Code",
           "muse_label": "Muse",
           "opencode2_label": "OpenCode 2",
-          "zcode_label": "ZCode"
+          "zcode_label": "ZCode",
+          "reasonix_label": "Reasonix"
         },
         "skill": {
           "cli": {

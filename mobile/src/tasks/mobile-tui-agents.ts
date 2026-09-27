@@ -23,6 +23,7 @@ export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>>
   trae: 'www.trae.cn',
   muse: 'dev.meta.ai',
   zcode: 'zcode.z.ai',
+  reasonix: 'esengine.github.io',
   omp: 'omp.sh',
   'prime-agent': 'primeintellect.ai',
   gemini: 'gemini.google.com',

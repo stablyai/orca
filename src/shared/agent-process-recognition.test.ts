@@ -305,6 +305,41 @@ describe('agent process recognition', () => {
     expect(isRecognizedAgentType('qwen')).toBe(true)
   })
 
+  it('recognizes Reasonix by its installed reasonix executable', () => {
+    expect(recognizeAgentProcess('/home/dev/.local/bin/reasonix')).toEqual({
+      agent: 'reasonix',
+      processName: 'reasonix'
+    })
+    expect(recognizeAgentProcess('C:/Users/dev/AppData/Roaming/npm/reasonix.cmd')).toEqual({
+      agent: 'reasonix',
+      processName: 'reasonix'
+    })
+    expect(isExpectedAgentProcess('/usr/local/bin/reasonix', 'reasonix')).toBe(true)
+    expect(isRecognizedAgentType('reasonix')).toBe(true)
+  })
+
+  it('does not recognize Reasonix headless one-shot commands as interactive agents', () => {
+    expect(recognizeAgentProcessFromCommandLine('reasonix -p "summarize this diff"')).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        'reasonix --print "summarize this diff" --output-format json'
+      )
+    ).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('reasonix run "implement the TODOs"')).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine('reasonix run --model mimo-pro "add unit tests"')
+    ).toBeNull()
+    // Why: bare `reasonix` and its resume forms reopen the interactive TUI, so they still host a live session.
+    expect(recognizeAgentProcessFromCommandLine('reasonix')).toEqual({
+      agent: 'reasonix',
+      processName: 'reasonix'
+    })
+    expect(recognizeAgentProcessFromCommandLine('reasonix --continue')).toEqual({
+      agent: 'reasonix',
+      processName: 'reasonix'
+    })
+  })
+
   it('recognizes agent CLIs launched through interpreter wrappers', () => {
     expect(
       recognizeAgentProcessFromCommandLine('node /Users/dev/.nvm/versions/node/bin/codex')

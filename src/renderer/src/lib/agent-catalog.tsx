@@ -135,6 +135,14 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://zcode.z.ai/en/docs'
   },
   {
+    id: 'reasonix',
+    label: translate('auto.lib.agent.catalog.reasonix_label', 'Reasonix'),
+    cmd: 'reasonix',
+    searchAliases: ['deepseek'],
+    faviconDomain: 'esengine.github.io',
+    homepageUrl: 'https://github.com/esengine/DeepSeek-Reasonix'
+  },
+  {
     id: 'pi',
     label: translate('auto.lib.agent.catalog.302934c5d9', 'Pi'),
     cmd: 'pi',

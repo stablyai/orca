@@ -385,7 +385,8 @@
           "d443a47995": "Prime Agent",
           "mimo_code_label": "MiMo Code",
           "muse_label": "Muse",
-          "zcode_label": "ZCode"
+          "zcode_label": "ZCode",
+          "reasonix_label": "Reasonix"
         },
         "skill": {
           "cli": {
