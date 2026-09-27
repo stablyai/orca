@@ -2,6 +2,7 @@ import type { Server as HttpServer } from 'node:http'
 import type { Server as HttpsServer } from 'node:https'
 import type { WebSocket, WebSocketServer } from 'ws'
 import type { RemoteRuntimeServerHeartbeat } from './remote-runtime-server-heartbeat'
+import { closeWebSocketWithinFlushBound } from './ws-bounded-close'
 
 type WebSocketMessagePayload = string | Uint8Array<ArrayBufferLike>
 export type WebSocketMessageHandler = {
@@ -146,8 +147,5 @@ export async function stopNodeWebSocketTransport(args: {
 // Terminate soon after 1013: half-open phones may never ACK and retain WS capacity; the error listener handles closing resets.
 export function rejectNodeWebSocketOverCapacity(ws: WebSocket): void {
   ws.on('error', () => {})
-  ws.close(1013, 'Maximum connections reached')
-  const terminateTimer = setTimeout(() => ws.terminate(), 1_000)
-  terminateTimer.unref?.()
-  ws.once('close', () => clearTimeout(terminateTimer))
+  closeWebSocketWithinFlushBound(ws, 1013, 'Maximum connections reached')
 }
