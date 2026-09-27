@@ -9,6 +9,24 @@ describe('worker start outcome classification', () => {
     expect(isUnknownWorkerStartOutcome(error, 'worktree_create')).toBe(true)
   })
 
+  it('keeps a live agent readiness timeout unknown for same-handle recovery', () => {
+    const error = Object.assign(new Error('timeout'), {
+      code: 'terminal_wait_timeout',
+      terminalLive: true
+    })
+
+    expect(isUnknownWorkerStartOutcome(error, 'agent_readiness')).toBe(true)
+  })
+
+  it('keeps an exited readiness timeout definite', () => {
+    const error = Object.assign(new Error('timeout'), {
+      code: 'terminal_wait_timeout',
+      terminalLive: false
+    })
+
+    expect(isUnknownWorkerStartOutcome(error, 'agent_readiness')).toBe(false)
+  })
+
   it('treats a lost connection during worktree create as unknown', () => {
     expect(isUnknownWorkerStartOutcome(new Error('connection reset'), 'worktree_create')).toBe(true)
     expect(isUnknownWorkerStartOutcome(new Error('request timed out'), 'worktree_create')).toBe(

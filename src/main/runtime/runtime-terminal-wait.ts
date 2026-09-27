@@ -1,3 +1,4 @@
+import type { ReadTerminalScreenReadiness } from './terminal-screen-readiness'
 import type {
   RuntimeTerminalWait as RuntimeTerminalWaitResult,
   RuntimeTerminalWaitCondition
@@ -25,6 +26,7 @@ import type { RuntimeTerminalIdlePolls } from './runtime-terminal-idle-polls'
 import type { RuntimeTerminalWaiterRegistry } from './runtime-terminal-waiter-registry'
 
 type RuntimeTerminalWaitDependencies = {
+  getScreenReadiness?: ReadTerminalScreenReadiness
   defaultTimeoutMs: number
   getLivePty(handle: string): { pty: RuntimePtyWorktreeRecord } | null
   getLiveLeaf(handle: string): { leaf: RuntimeLeafRecord }
@@ -50,6 +52,10 @@ export class RuntimeTerminalWait {
   /** Why one helper per record kind: every satisfaction site must rank the same way,
    *  or the immediate check and the poll disagree about the same pane. */
   private ptySatisfied(pty: RuntimePtyWorktreeRecord, waitText: string): boolean {
+    const screen = this.deps.getScreenReadiness?.(pty.ptyId, waitText)
+    if (screen) {
+      return screen.ready
+    }
     return isTuiIdleSatisfied({
       record: pty,
       readPositiveBodyEvidence: () =>
@@ -62,6 +68,10 @@ export class RuntimeTerminalWait {
   }
 
   private leafSatisfied(leaf: RuntimeLeafRecord, waitText: string): boolean {
+    const screen = this.deps.getScreenReadiness?.(leaf.ptyId, waitText)
+    if (screen) {
+      return screen.ready
+    }
     return isTuiIdleSatisfied({
       record: leaf,
       rendererTitle: leaf.paneTitle ?? this.deps.getTabTitle(leaf.tabId),
@@ -71,6 +81,11 @@ export class RuntimeTerminalWait {
       firstPartyStatus: this.deps.getFirstPartyAgentStatus(leaf.ptyId),
       quiescenceMs: this.deps.quiescenceMs
     })
+  }
+
+  private blockedReason(ptyId: string | null | undefined, text: string) {
+    const screen = this.deps.getScreenReadiness?.(ptyId, text)
+    return screen ? screen.blockedReason : detectTerminalWaitBlockedReason(text)
   }
 
   async wait(
@@ -92,7 +107,8 @@ export class RuntimeTerminalWait {
         pty.pty.tailPartialLine,
         pty.pty.preview
       )
-      const ptyBlockedReason = detectTerminalWaitBlockedReason(ptyWaitText)
+      const ptyBlockedReason =
+        condition === 'tui-idle' ? this.blockedReason(pty.pty.ptyId, ptyWaitText) : null
       if (condition === 'tui-idle' && ptyBlockedReason) {
         return buildPtyTerminalWaitBlockedResult(handle, condition, pty.pty, ptyBlockedReason)
       }
@@ -122,7 +138,9 @@ export class RuntimeTerminalWait {
         if (effectiveTimeoutMs > 0) {
           waiter.timeout = setTimeout(() => {
             this.waiters.remove(waiter)
-            reject(new Error('timeout'))
+            reject(
+              createTerminalWaitTimeoutError(this.deps.getLivePty(handle)?.pty.connected === true)
+            )
           }, effectiveTimeoutMs)
         }
         this.waiters.add(waiter)
@@ -138,7 +156,7 @@ export class RuntimeTerminalWait {
             live.pty.tailPartialLine,
             live.pty.preview
           )
-          const blockedReason = detectTerminalWaitBlockedReason(livePtyWaitText)
+          const blockedReason = this.blockedReason(live.pty.ptyId, livePtyWaitText)
           if (blockedReason) {
             this.waiters.resolve(
               waiter,
@@ -173,7 +191,8 @@ export class RuntimeTerminalWait {
     }
 
     const leafWaitText = buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
-    const leafBlockedReason = detectTerminalWaitBlockedReason(leafWaitText)
+    const leafBlockedReason =
+      condition === 'tui-idle' ? this.blockedReason(leaf.ptyId, leafWaitText) : null
     if (condition === 'tui-idle' && leafBlockedReason) {
       return buildTerminalWaitBlockedResult(handle, condition, leaf, leafBlockedReason)
     }
@@ -216,7 +235,13 @@ export class RuntimeTerminalWait {
       if (effectiveTimeoutMs > 0) {
         waiter.timeout = setTimeout(() => {
           this.waiters.remove(waiter)
-          reject(new Error('timeout'))
+          let terminalLive = false
+          try {
+            terminalLive = getTerminalState(this.deps.getLiveLeaf(handle).leaf) === 'running'
+          } catch {
+            // The handle may have gone stale while the timeout callback ran.
+          }
+          reject(createTerminalWaitTimeoutError(terminalLive))
         }, effectiveTimeoutMs)
       }
 
@@ -235,7 +260,7 @@ export class RuntimeTerminalWait {
             live.leaf.tailPartialLine,
             live.leaf.preview
           )
-          const blockedReason = detectTerminalWaitBlockedReason(liveLeafWaitText)
+          const blockedReason = this.blockedReason(live.leaf.ptyId, liveLeafWaitText)
           if (blockedReason) {
             this.waiters.resolve(
               waiter,
@@ -271,4 +296,13 @@ export class RuntimeTerminalWait {
       }
     })
   }
+}
+
+function createTerminalWaitTimeoutError(
+  terminalLive: boolean
+): Error & { code: 'terminal_wait_timeout'; terminalLive: boolean } {
+  return Object.assign(new Error('timeout'), {
+    code: 'terminal_wait_timeout' as const,
+    terminalLive
+  })
 }

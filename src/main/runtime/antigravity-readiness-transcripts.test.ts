@@ -1,17 +1,5 @@
-/**
- * Pins Antigravity readiness to captured transcripts instead of hand-written fixtures.
- *
- * Five detector attempts were tuned against a five-line screen someone typed from memory, and
- * three of them shipped worse behaviour than the bug they replaced. Nothing here asserts what
- * Antigravity prints: the transcripts do. Six are recorded from a live `agy`; the rest name
- * themselves as skipped until someone can reach them.
- *
- * One case is pinned as a KNOWN DEFECT: the shipped detector refuses a ready screen whose retained
- * tail ends on the error block. That asserts what it does, not what it should.
- *
- * Capture protocol: docs/reference/agent-pty-transcript-capture.md
- * What each transcript decides: docs/reference/antigravity-readiness-evidence.md
- */
+// Replays captured agy screens through the real runtime wait at their recorded 120×40 grid.
+// Capture protocol: docs/reference/agent-pty-transcript-capture.md.
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
@@ -35,10 +23,9 @@ const EVIDENCE_DOC = join(
   'reference',
   'antigravity-readiness-evidence.md'
 )
-// Why asymmetric: a ready verdict has to survive the settle window, while a refusal only has to
-// hold for one poll. Keeping the refusal short keeps seven transcripts off the suite's clock.
-const READY_TIMEOUT_MS = 2_000
-const REFUSAL_TIMEOUT_MS = 600
+// Allow the 2s idle poll to observe the asynchronously rendered snapshot before timing out.
+const READY_TIMEOUT_MS = 3_500
+const REFUSAL_TIMEOUT_MS = READY_TIMEOUT_MS
 /** Antigravity's binary, as Orca launches and probes it (`tui-agent-config.ts` detectCmd). */
 const ANTIGRAVITY_COMMAND = 'agy'
 // String.fromCharCode, not a literal: the formatter rewrites an escape sequence into a raw
@@ -53,23 +40,20 @@ type TranscriptCase = {
   what: string
   /** What a correct detector must answer. Not what the shipped one answers. */
   expectReady: boolean
-  /**
-   * Set where the shipped detector contradicts the transcript. The case then runs inverted, so
-   * CI pins the defect instead of going permanently red — and flips to failing the moment
-   * someone fixes it, which is exactly when these expectations need re-reading.
-   */
-  knownDefect?: string
+  beforeShutdown?: boolean
 }
 
 const TRANSCRIPTS: readonly TranscriptCase[] = [
   {
     name: 'antigravity-ready-api-key-gemini-model',
+    beforeShutdown: true,
     capture: 'B',
     what: 'ready screen, API-key identity — the account row reads "Gemini API key", not an email',
     expectReady: true
   },
   {
     name: 'antigravity-ready-account-info-hidden',
+    beforeShutdown: true,
     capture: 'B',
     what: 'ready screen with AGY_CLI_HIDE_ACCOUNT_INFO=1 — no account row at all',
     expectReady: true
@@ -104,11 +88,11 @@ const TRANSCRIPTS: readonly TranscriptCase[] = [
     name: 'antigravity-busy-turn-ended',
     capture: 'E',
     what: 'the turn has ended and the composer has returned, process still alive',
-    expectReady: true,
-    knownDefect: 'refused: the retained tail ends on the error block, with no composer row in it'
+    expectReady: true
   },
   {
     name: 'antigravity-dialog-dismissed',
+    beforeShutdown: true,
     capture: 'D',
     what: 'the screen immediately after the model picker is dismissed',
     expectReady: true
@@ -152,6 +136,19 @@ function fixturePath(name: string): string {
   return join(FIXTURE_DIR, `${name}.txt`)
 }
 
+function liveCapture(transcript: TranscriptCase): string {
+  const raw = readFileSync(fixturePath(transcript.name), 'utf8')
+  if (!transcript.beforeShutdown) {
+    return raw
+  }
+  // These recordings include process shutdown, which erases the live shortcut footer.
+  const shutdown = `${ESC}[>4m${ESC}[=0;1u`
+  const offset = raw.lastIndexOf(shutdown)
+  expect(offset).toBeGreaterThan(0)
+  expect(raw.slice(offset)).toContain(`${ESC}[?2004l`)
+  return raw.slice(0, offset)
+}
+
 /**
  * A `tui-idle` wait ends three ways, and only one of them is readiness: it resolves satisfied, it
  * resolves unsatisfied with a blocked reason, or it rejects with `timeout` because nothing ever
@@ -167,6 +164,7 @@ async function readinessVerdict(
     // capture carries the OSC bytes, so the pane wears whatever the CLI actually set.
     paneTitle: extractLastOscTitle(transcript) ?? ANTIGRAVITY_COMMAND,
     foregroundProcess: ANTIGRAVITY_COMMAND,
+    size: { cols: 120, rows: 40 },
     data: transcript
   })
   try {
@@ -190,29 +188,19 @@ describe('Antigravity readiness, decided by captured transcripts', () => {
     const captured = existsSync(path)
     const label = `capture ${transcript.capture}: ${transcript.what}`
 
-    // A pinned defect asserts what the detector DOES, so CI is honest rather than permanently
-    // red; fixing the detector flips this case to failing, which is when these expectations
-    // need re-reading. The correct answer stays in `expectReady` and in the test's name.
-    const shipped =
-      transcript.knownDefect === undefined ? transcript.expectReady : !transcript.expectReady
-    const verdictName =
-      transcript.knownDefect === undefined
-        ? `${label} → ${transcript.expectReady ? 'ready' : 'not ready'}`
-        : `${label} → must be ${transcript.expectReady ? 'ready' : 'not ready'}; KNOWN DEFECT, ${transcript.knownDefect}`
+    const verdictName = `${label} → ${transcript.expectReady ? 'ready' : 'not ready'}`
 
     it.skipIf(!captured)(
       verdictName,
       async () => {
-        // A refusal only has to hold for one poll; a ready verdict has to survive the settle
-        // window. Keeping the refusal short keeps eleven transcripts off the suite's clock.
         const verdict = await readinessVerdict(
-          readFileSync(path, 'utf8'),
+          liveCapture(transcript),
           transcript.expectReady ? READY_TIMEOUT_MS : REFUSAL_TIMEOUT_MS
         )
         // A silent dialog carries no blocked-signal wording, so the assertion is only that Orca
         // does not call the pane ready and type a prompt into a dialog that owns the screen.
         expect({ ready: verdict.ready, outcome: verdict.outcome }).toMatchObject({
-          ready: shipped
+          ready: transcript.expectReady
         })
       },
       READY_TIMEOUT_MS + 10_000
@@ -249,19 +237,10 @@ describe('Antigravity readiness, decided by captured transcripts', () => {
 })
 
 describe('scaffold self-check', () => {
-  // Why these two live here: when a transcript lands and fails, the failure has to mean the
-  // capture disagreed with the detector — not that the harness or the timeouts are broken.
-  // Neither case is evidence about Antigravity; both are shapes the current detector already
-  // decides, used only to prove the plumbing reaches a verdict.
+  // Verify both completion paths independently of the capture inventory.
   it('reaches a ready verdict through the harness', async () => {
     const verdict = await readinessVerdict(
-      [
-        'Antigravity CLI 1.0.3',
-        'user@example.com (Antigravity Business)',
-        'Gemini 3.5 Flash (High)',
-        '~/orca/workspaces/orca/agy-dispatch-issue',
-        '>'
-      ].join('\n'),
+      readFileSync(fixturePath('antigravity-ready-default-127'), 'utf8'),
       READY_TIMEOUT_MS
     )
     expect(verdict.ready).toBe(true)

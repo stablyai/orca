@@ -12,6 +12,7 @@ export type TranscriptPaneOptions = {
   paneTitle: string
   foregroundProcess: string | null
   data: string
+  size?: { cols: number; rows: number }
   launchAgent?: TuiAgent
   /** Set for a pane whose PTY lives on an SSH host or WSL distro rather than locally. */
   connectionId?: string
@@ -73,6 +74,9 @@ export async function createTranscriptPane(
       }
     ]
   })
+  if (options.size) {
+    runtime.seedHeadlessTerminal(TRANSCRIPT_PANE_PTY_ID, '\x1b[0m', options.size)
+  }
   if (options.launchAgent) {
     runtime.registerPty(TRANSCRIPT_PANE_PTY_ID, TRANSCRIPT_PANE_WORKTREE_ID, null, {
       tabId: TRANSCRIPT_PANE_TAB_ID,

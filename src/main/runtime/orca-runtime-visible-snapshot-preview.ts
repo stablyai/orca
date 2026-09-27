@@ -9,9 +9,38 @@ import {
 } from './orca-runtime-postlude'
 import { projectTerminalVisibleLines } from './orca-runtime-terminal-projection'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
+import {
+  classifyTerminalScreenReadiness,
+  type TerminalScreenReadiness
+} from './terminal-screen-readiness'
 import { withTimeout } from './runtime-async-boundaries'
 
 export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptureProviderTerminalBuffer {
+  protected getTerminalScreenReadiness(
+    ptyId: string | null | undefined,
+    retainedText: string
+  ): TerminalScreenReadiness | null {
+    const agent = this.getPaneAgentForTuiIdle(ptyId)
+    if (
+      !ptyId ||
+      (agent ? agent !== 'antigravity' : !retainedText.toLowerCase().includes('antigravity cli'))
+    ) {
+      return null
+    }
+    const cached = this.providerVisibleStateByPtyId.get(ptyId)
+    if (
+      cached?.generation === this.getPtyLifecycleGeneration(ptyId) &&
+      cached.sequence >= this.getPtyOutputSequence(ptyId) &&
+      (!cached.headlessWriteChain ||
+        cached.headlessWriteChain === this.headlessTerminals.get(ptyId)?.writeChain)
+    ) {
+      return classifyTerminalScreenReadiness({ tail: cached.lines, draft: cached.draft })
+    }
+    // A pending or unreachable screen cannot prove that typing is safe.
+    void this.readVisibleTerminalState(ptyId).catch(() => {})
+    return { ready: false, blockedReason: null }
+  }
+
   protected async visibleSnapshotPreview(ptyId: string, preview: string): Promise<string> {
     const knownAlternateScreen = this.isTerminalAlternateScreen(ptyId)
     const providerModeUnknown =
@@ -39,11 +68,22 @@ export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptur
       return pending.promise
     }
     let entry: { generation: number; promise: Promise<RuntimeVisibleTerminalState | null> }
-    const promise = this.loadVisibleTerminalState(ptyId).finally(() => {
-      if (this.providerVisibleStateReadsByPtyId.get(ptyId) === entry) {
-        this.providerVisibleStateReadsByPtyId.delete(ptyId)
-      }
-    })
+    const promise = this.loadVisibleTerminalState(ptyId)
+      .then((state) => {
+        if (
+          state &&
+          state.generation === this.getPtyLifecycleGeneration(ptyId) &&
+          state.sequence >= this.getPtyOutputSequence(ptyId)
+        ) {
+          this.providerVisibleStateByPtyId.set(ptyId, state)
+        }
+        return state
+      })
+      .finally(() => {
+        if (this.providerVisibleStateReadsByPtyId.get(ptyId) === entry) {
+          this.providerVisibleStateReadsByPtyId.delete(ptyId)
+        }
+      })
     entry = { generation, promise }
     this.providerVisibleStateReadsByPtyId.set(ptyId, entry)
     return promise
@@ -63,6 +103,8 @@ export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptur
     if (
       cached?.generation === generation &&
       outputSequence <= cached.sequence &&
+      (!cached.headlessWriteChain ||
+        cached.headlessWriteChain === this.headlessTerminals.get(ptyId)?.writeChain) &&
       (!trackedMode || trackedMode.isAlternateScreen === cached.isAlternateScreen)
     ) {
       return cached
@@ -125,15 +167,18 @@ export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptur
       return null
     }
     const generation = this.getPtyLifecycleGeneration(ptyId)
-    await state.writeChain
+    const writeChain = state.writeChain
+    await writeChain
     if (
       this.headlessTerminals.get(ptyId) !== state ||
+      state.writeChain !== writeChain ||
       this.getPtyLifecycleGeneration(ptyId) !== generation
     ) {
       return null
     }
     return {
       ...projectTerminalVisibleLines(state.emulator),
+      headlessWriteChain: writeChain,
       isAlternateScreen: state.emulator.isAlternateScreen,
       sequence: state.outputSequence,
       generation
