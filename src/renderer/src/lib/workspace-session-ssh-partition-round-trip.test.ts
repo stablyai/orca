@@ -328,10 +328,7 @@ describe('ssh host partition rows the host has nothing for', () => {
     )
   })
 
-  it('still adopts a populated host row over the base leftovers', async () => {
-    // The other side of the same rule: the guard must be about the host having nothing, not about
-    // the base having something, or adoption stops repairing the split it exists for.
-    const partitions = emptyHostRowsOverBaseDraft(false)
+  function withHostOpenFile(partitions: ReturnType<typeof emptyHostRowsOverBaseDraft>) {
     partitions[SSH_HOST_ID] = session({
       ...partitions[SSH_HOST_ID],
       openFilesByWorktree: {
@@ -345,12 +342,41 @@ describe('ssh host partition rows the host has nothing for', () => {
         ]
       }
     })
+    return partitions
+  }
+
+  it('still adopts a populated host row over the base leftovers', async () => {
+    // The other side of the same rule: the guard must be about the host having nothing, not about
+    // the base having something, or adoption stops repairing the split it exists for.
+    const partitions = withHostOpenFile(emptyHostRowsOverBaseDraft(false))
+    const [baseFile] = partitions.local.openFilesByWorktree?.[WORKTREE_ID] ?? []
+    partitions.local.openFilesByWorktree = {
+      [WORKTREE_ID]: [{ ...baseFile, dirtyDraftContent: undefined }]
+    }
 
     const read = await fetchWorkspaceSessionWithRuntimeHostOwners(partitionedApi(partitions), repos)
 
     expect(
       read.session.openFilesByWorktree?.[WORKTREE_ID]?.map((file) => file.relativePath)
     ).toEqual(['src/host.ts'])
+  })
+
+  it('keeps an unsaved draft the populated host row does not list', async () => {
+    // Replacing the row must not be how a draft dies: nothing downstream can recover it.
+    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
+      partitionedApi(withHostOpenFile(emptyHostRowsOverBaseDraft(false))),
+      repos
+    )
+
+    expect(
+      read.session.openFilesByWorktree?.[WORKTREE_ID]?.map((file) => [
+        file.relativePath,
+        file.dirtyDraftContent
+      ])
+    ).toEqual([
+      ['src/host.ts', undefined],
+      ['src/main.ts', 'unsaved work']
+    ])
   })
 
   it('adopts the layout of a tab the host slice names only in unifiedTabs', async () => {

@@ -16,6 +16,7 @@ import {
   reconcileHostWonUnifiedRows,
   type HostWonTabRow
 } from './workspace-session-base-tab-carryover'
+import { carryBaseEntriesIntoHostRows } from './workspace-session-base-row-carryover'
 
 /**
  * Fold rows a host partition holds alone back into the session the readers assemble.
@@ -52,7 +53,8 @@ import {
  * The base keeps a workspace it holds **terminal tabs** for only while the host partition holds
  * none. When both hold tabs the base row is the leftover — `local` is never pruned for an SSH
  * workspace, so letting it win revived closed tabs and hid live ones (#22503, #23390) — and the
- * host row replaces it; `baseTabsTheHostNeverListed` picks the base tabs that survive. An EMPTY
+ * host row replaces it; `baseTabsTheHostNeverListed` picks the base tabs that survive, and
+ * `carryBaseEntriesIntoHostRows` the unsaved editor drafts and newer browsers. An EMPTY
  * host row is not ownership (it may be #12721's poisoned list), so the base keeps its tabs.
  * An EMPTY base tab row is not a live copy either: an empty list is not evidence
  * that anything was closed (`mergeDirectSshRemoteWorkspaceSession` argues this at length, and
@@ -421,7 +423,9 @@ export function adoptStrandedHostPartitionSession(
         break
     }
   }
-  reconcileHostWonUnifiedRows(next, base, hostWonRows)
+  // Why after the walk: a replaced row's base-only entries are picked against the row that won.
+  const carriedSurfaces = carryBaseEntriesIntoHostRows(next, base, host)
+  reconcileHostWonUnifiedRows(next, base, hostWonRows, carriedSurfaces)
   // Why contested ids are withheld: the write path would route the whole bare id here, carrying the
   // co-claimant's rows into this host's partition — the loss the gap-fill above exists to prevent.
   const adoptedWorkspaceIds = new Set(
