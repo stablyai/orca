@@ -42,4 +42,24 @@ describe('TerminalProcessExitOverlay', () => {
 
     expect(screen.getByRole('alert').textContent).toContain('exit code 7')
   })
+
+  it('does not claim preserved output the pane cannot show', () => {
+    render(
+      <TerminalProcessExitOverlay
+        processExit={{
+          paneId: 1,
+          exitCode: 7,
+          reason: 'process-failed',
+          startup: null,
+          outputPreserved: false
+        }}
+        onRestart={vi.fn()}
+        onClose={vi.fn()}
+      />
+    )
+
+    const detail = screen.getByRole('alert').textContent
+    expect(detail).toContain('exit code 7')
+    expect(detail).not.toContain('preserved')
+  })
 })

@@ -3075,6 +3075,7 @@
             "capacityDetail": "Git Bash 已达到 128 个控制台的上限。关闭未使用的 Git Bash 终端，然后重新启动此终端。",
             "failedTitle": "终端已退出",
             "failedDetail": "Shell 进程以退出代码 {{code}} 结束。输出已保留。",
+            "failedDetailWithoutOutput": "Shell 进程以退出代码 {{code}} 结束。",
             "close": "关闭",
             "restart": "重新启动"
           },

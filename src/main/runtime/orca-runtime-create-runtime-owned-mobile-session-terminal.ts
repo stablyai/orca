@@ -35,13 +35,18 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
       supportsSplitGroupPlacement?: boolean
       launchConfig?: SleepingAgentLaunchConfig
       signal?: AbortSignal
+      shellOverride?: string
+      /** False keeps a desktop tab's id class: the host mints the id a desktop spawn would get. */
+      serveOwned?: boolean
+      surfaceOwner?: false
     } = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
     const cwd = this.resolveWorkspaceTerminalStartupCwd(workspace, opts.cwd)
     // Why: SshPtyProvider treats sessionId as a relay reattach; only synthesize local serve ids so SSH fresh terminals still call pty.spawn.
     const stableSessionId =
-      opts.identity?.sessionId ?? (workspace.connectionId ? undefined : `serve-${randomUUID()}`)
+      opts.identity?.sessionId ??
+      (workspace.connectionId || opts.serveOwned === false ? undefined : `serve-${randomUUID()}`)
     const isNewSession = stableSessionId !== undefined && opts.identity?.sessionId === undefined
     const terminal = await this.createTerminal(`id:${worktreeId}`, {
       focus: false,
@@ -52,6 +57,11 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
       ...(opts.launchConfig ? { launchConfig: opts.launchConfig } : {}),
       ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
       ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
+      // Why local only: an SSH host resolves its own shell, and the runtime refuses a pick there.
+      ...(opts.shellOverride && !workspace.connectionId
+        ? { shellOverride: opts.shellOverride }
+        : {}),
+      ...(opts.surfaceOwner === false ? { surfaceOwner: false } : {}),
       startupCommandDelivery: opts.startupCommandDelivery,
       ...(opts.identity
         ? {

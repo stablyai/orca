@@ -3075,6 +3075,7 @@
             "capacityDetail": "Git Bash が 128 個のコンソール上限に達しました。不要な Git Bash ターミナルを閉じてから、このターミナルを再起動してください。",
             "failedTitle": "ターミナルが終了しました",
             "failedDetail": "シェルプロセスが終了コード {{code}} で終了しました。出力は保持されています。",
+            "failedDetailWithoutOutput": "シェルプロセスが終了コード {{code}} で終了しました。",
             "close": "閉じる",
             "restart": "再起動"
           },

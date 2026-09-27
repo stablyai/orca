@@ -180,6 +180,7 @@ describe('useIpcEvents rate-limit hydration', () => {
         agentStatus: { onSet: () => () => {} },
         ui: makeEvents({
           consumePendingOpenSettings: () => Promise.resolve(false),
+          listTerminalExitRecords: () => Promise.resolve([]),
           getZoomLevel: vi.fn(() => 0)
         })
       }

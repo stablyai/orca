@@ -1,5 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { randomUUID } from 'node:crypto'
+import { TerminalExitRecords } from './terminal-exit-records'
 import { preserveTerminalRetirementProofs } from './mobile-session-terminal-retirement-proof'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { replaceConversationInSnapshot } from './structured-conversation-tab-replacement'
@@ -112,7 +113,15 @@ export class OrcaRuntimeWithRuntimeId {
     const stamped =
       snapshotVersion === snapshot.snapshotVersion ? snapshot : { ...snapshot, snapshotVersion }
     this.mobileSessionTabsByWorktree.set(worktreeId, stamped)
+    this.terminalExitRecords.releaseDepartedLeaves(existing?.tabs, stamped.tabs)
     return stamped
+  }
+
+  /** The only other change to a stored snapshot; its leaves depart with it. */
+  protected deleteMobileSessionSnapshot(worktreeId: string): void {
+    const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
+    this.mobileSessionTabsByWorktree.delete(worktreeId)
+    this.terminalExitRecords.releaseDepartedLeaves(existing?.tabs, undefined)
   }
 
   protected structuredAgentSessionTabRestorePromise: Promise<void> | null = null
@@ -235,6 +244,15 @@ export class OrcaRuntimeWithRuntimeId {
   // Why: exact-stop is the current sleep transaction boundary; its exit must
   // leave the renderer's intentional sleeping surface available for wake.
   protected intentionalHandlelessPtyStops = new Map<string, string | null>()
+
+  protected exitedTerminalRestartsByLeafId = new Map<string, Promise<void>>()
+
+  readonly terminalExitRecords = new TerminalExitRecords({
+    onRecordsChanged: () =>
+      this.notifier?.terminalExitRecordsChanged?.(this.terminalExitRecords.list()),
+    onWorktreeChanged: (worktreeId) =>
+      this.touchMobileSessionTabsForWorktree(worktreeId, { immediate: true })
+  })
 
   // Why: coalesces title/status-driven session.tabs emits so spinner churn
   // doesn't fan out (and per-client JSON.stringify) a snapshot several times a

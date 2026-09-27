@@ -1,6 +1,7 @@
 import { ipcRenderer } from 'electron'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import type { TerminalTabCreateReply } from '../../shared/terminal-reveal-identity'
+import type { TerminalExitRecord } from '../../shared/terminal-surface-exit'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -153,6 +154,16 @@ export const uiTerminalAndSessionTabsApi = {
     ipcRenderer.on('ui:focusTerminal', listener)
     return () => ipcRenderer.removeListener('ui:focusTerminal', listener)
   },
+  onTerminalExitRecordsChanged: (
+    callback: (records: TerminalExitRecord[]) => void
+  ): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, records: TerminalExitRecord[]) =>
+      callback(records)
+    ipcRenderer.on('terminalExitRecords:changed', listener)
+    return () => ipcRenderer.removeListener('terminalExitRecords:changed', listener)
+  },
+  listTerminalExitRecords: (): Promise<TerminalExitRecord[]> =>
+    ipcRenderer.invoke('terminalExitRecords:list'),
   onFocusEditorTab: (
     callback: (data: {
       tabId: string

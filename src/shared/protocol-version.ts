@@ -148,6 +148,11 @@ export const SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY =
 // repeating the host's whole bounded list on every title tick.
 export const SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY =
   'session-tabs.retirement-proof-delta.v1' as const
+// Why: a kept leaf whose process died has no handle, which an older client reads as a terminal
+// still starting and waits on forever. Only a client advertising this receives the leaf with its
+// `exited` record; any other client gets the leaf retired, exactly as before main kept it.
+export const SESSION_TABS_TERMINAL_EXIT_STATE_RUNTIME_CAPABILITY =
+  'session-tabs.terminal-exit-state.v1' as const
 export const AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY =
   'agent-session.session-boundary.v1' as const
 export { REMOTE_SERVER_UPDATE_CAPABILITY } from './remote-server-update'

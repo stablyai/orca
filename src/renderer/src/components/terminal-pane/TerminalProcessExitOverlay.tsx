@@ -27,10 +27,15 @@ export function TerminalProcessExitOverlay({
         'auto.components.terminal.pane.TerminalProcessExitOverlay.capacityDetail',
         'Git Bash reached its 128-console limit. Close unused Git Bash terminals, then restart this terminal.'
       )
-    : translate(
-        'auto.components.terminal.pane.TerminalProcessExitOverlay.failedDetail',
-        'The shell process ended with exit code {{code}}. Its output is preserved.'
-      ).replace('{{code}}', String(processExit.exitCode))
+    : processExit.outputPreserved === false
+      ? translate(
+          'auto.components.terminal.pane.TerminalProcessExitOverlay.failedDetailWithoutOutput',
+          'The shell process ended with exit code {{code}}.'
+        ).replace('{{code}}', String(processExit.exitCode))
+      : translate(
+          'auto.components.terminal.pane.TerminalProcessExitOverlay.failedDetail',
+          'The shell process ended with exit code {{code}}. Its output is preserved.'
+        ).replace('{{code}}', String(processExit.exitCode))
 
   return (
     <div className="pointer-events-none absolute inset-0 z-40 flex items-end justify-center p-4">

@@ -5,6 +5,7 @@ import type { RpcContext } from '../core'
 import { projectSessionTabAgentStatus } from './session-tab-agent-status-projection'
 import { projectSessionTabBrowserPlacements } from './session-tab-browser-placement-projection'
 import { createSessionTabsRetirementProofDelta } from './session-tabs-retirement-proof-delta'
+import { projectSessionTabTerminalExits } from './session-tab-terminal-exit-projection'
 import { isStructuredNativeChatEnabled } from './structured-agent-session-policy'
 
 type SessionTabsInventory = {
@@ -32,11 +33,14 @@ export function projectSessionTabsForClient(
   structuredNativeChatEnabled: boolean
 ): RuntimeMobileSessionTabsResult {
   return projectSessionTabBrowserPlacements(
-    projectSessionTabAgentStatus(
-      snapshot,
-      clientKind,
-      clientCapabilities,
-      structuredNativeChatEnabled
+    projectSessionTabTerminalExits(
+      projectSessionTabAgentStatus(
+        snapshot,
+        clientKind,
+        clientCapabilities,
+        structuredNativeChatEnabled
+      ),
+      clientCapabilities
     ),
     clientCapabilities
   )

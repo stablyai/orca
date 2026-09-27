@@ -51,6 +51,8 @@ export type PaneProcessExit = {
   exitCode: number
   reason: 'git-bash-console-capacity' | 'process-failed'
   startup: PtyPaneStartup
+  /** False when the pane remounted with no saved copy of the exited process's output to show. */
+  outputPreserved?: false
 }
 
 export type PtyConnectionDeps = {

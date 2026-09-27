@@ -3075,6 +3075,7 @@
             "capacityDetail": "Git Bash가 128개 콘솔 한도에 도달했습니다. 사용하지 않는 Git Bash 터미널을 닫은 후 이 터미널을 다시 시작하세요.",
             "failedTitle": "터미널이 종료되었습니다",
             "failedDetail": "셸 프로세스가 종료 코드 {{code}}로 끝났습니다. 출력은 보존됩니다.",
+            "failedDetailWithoutOutput": "셸 프로세스가 종료 코드 {{code}}로 끝났습니다.",
             "close": "닫기",
             "restart": "다시 시작"
           },

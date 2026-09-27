@@ -3231,6 +3231,7 @@
             "capacityDetail": "Git Bash reached its 128-console limit. Close unused Git Bash terminals, then restart this terminal.",
             "failedTitle": "Terminal exited",
             "failedDetail": "The shell process ended with exit code {{code}}. Its output is preserved.",
+            "failedDetailWithoutOutput": "The shell process ended with exit code {{code}}.",
             "close": "Close",
             "restart": "Restart"
           },
