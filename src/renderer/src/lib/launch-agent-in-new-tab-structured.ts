@@ -7,6 +7,7 @@ export type StructuredNewTabLaunchArgs = {
   /** Planned on the structured route with an already-trimmed prompt; empty means no prompt. */
   plan: AgentSessionLaunchPlan
   targetGroupId?: string
+  activate?: boolean
   /** Lets a workspace reveal itself after ID allocation but before tab ownership. */
   beforeOpen?: (sessionId: string) => boolean | void
 }
@@ -28,6 +29,7 @@ export function launchAgentInStructuredNewTab(
   const launch = beginStructuredAgentSessionProvisionalLaunch({
     plan: args.plan,
     hooks: {},
+    ...(args.activate !== undefined ? { activate: args.activate } : {}),
     ...(args.beforeOpen ? { beforeOpen: args.beforeOpen } : {}),
     ...(args.targetGroupId ? { targetGroupId: args.targetGroupId } : {})
   })

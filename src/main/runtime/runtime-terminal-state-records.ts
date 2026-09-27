@@ -110,6 +110,7 @@ export type RuntimePtyTitleTrackerEntry = {
 export type RuntimeHeadlessTerminal = {
   emulator: HeadlessEmulator
   outputSequence: number
+  rendererHydrationSequence?: number
   writeChain: Promise<void>
   ownership: PtyShellOwnershipMirror
 }

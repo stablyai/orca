@@ -36,7 +36,7 @@ describe('StatusIndicator', () => {
   it('renders working as a yellow spinner ring', () => {
     const markup = renderMarkup('working')
 
-    expect(markup).toContain('border-yellow-500')
+    expect(markup).toContain('border-agent-working')
     expect(markup).toContain('border-t-transparent')
     // Why: rotation must come from the compositor-driven CSS animation, not a
     // JS clock writing per-element styles on the input thread (STA-3328).
@@ -44,7 +44,7 @@ describe('StatusIndicator', () => {
     expect(markup).toContain('data-agent-spinner')
     // Why: under reduced motion the top border is filled so the static ring
     // reads as a complete marker, not a broken partial spinner (#9515).
-    expect(markup).toContain('motion-reduce:border-t-yellow-500')
+    expect(markup).toContain('motion-reduce:border-t-agent-working')
   })
 
   it('renders monitoring as a static heartbeat glyph', () => {

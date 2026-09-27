@@ -60,7 +60,7 @@ function makeRuntimeMissingFromInventory(
 }
 
 describe('inventory sweep liveness verdicts', () => {
-  it('records an abnormal SSH exit as unverifiable at the runtime boundary', () => {
+  it('records an abnormal SSH exit as unverifiable at the runtime boundary', async () => {
     const runtime = makeRuntimeMissingFromInventory(() => null)
 
     runtime.onPtyExit(REMOTE_PTY_ID, -1)
@@ -69,6 +69,7 @@ describe('inventory sweep liveness verdicts', () => {
       status: 'unverifiable',
       reason: SSH_EXIT_UNCONFIRMED_REASON
     })
+    expect(await runtime.verifyTerminalPreviewLiveness(REMOTE_PTY_ID)).toBe('unverifiable')
   })
 
   it('preserves a more specific lost-contact reason across an abnormal SSH exit', () => {
@@ -83,7 +84,7 @@ describe('inventory sweep liveness verdicts', () => {
     })
   })
 
-  it('accepts a current owning-host exit even when its numeric code is negative', () => {
+  it('accepts a current owning-host exit even when its numeric code is negative', async () => {
     const runtime = makeRuntimeMissingFromInventory(() => null)
     runtime.markPtyLivenessUnverifiable(REMOTE_PTY_ID, 'inventory transport failed')
 
@@ -92,6 +93,7 @@ describe('inventory sweep liveness verdicts', () => {
     // A host-delivered exit frame is the one signal that observes the process, so it both clears
     // the lost-contact doubt and is retained as the certificate itself.
     expect(runtime.getPtyLivenessVerdict(REMOTE_PTY_ID)).toEqual({ status: 'exited' })
+    expect(await runtime.verifyTerminalPreviewLiveness(REMOTE_PTY_ID)).toBe('exited')
   })
 
   it('records lost contact when no provider can answer for the PTY', async () => {

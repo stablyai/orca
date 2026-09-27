@@ -86,6 +86,12 @@ vi.mock('lucide-react', () => ({
   Columns2: function Columns2(props: Record<string, unknown>) {
     return { type: 'Columns2', props }
   },
+  Eye: function Eye(props: Record<string, unknown>) {
+    return { type: 'Eye', props }
+  },
+  EyeOff: function EyeOff(props: Record<string, unknown>) {
+    return { type: 'EyeOff', props }
+  },
   Minimize2: function Minimize2(props: Record<string, unknown>) {
     return { type: 'Minimize2', props }
   },
@@ -216,6 +222,13 @@ useAppStoreExport.getState = () => ({
 
 vi.mock('@/store', () => ({
   useAppStore: useAppStoreExport
+}))
+
+// This file calls SortableTab as a plain function against a hand-rolled hook runtime, and
+// zustand resolves the real react, not the mock above. Identity passthrough is faithful
+// here: the component is invoked once, so there is no second snapshot to compare against.
+vi.mock('zustand/react/shallow', () => ({
+  useShallow: <S, U>(selector: (state: S) => U) => selector
 }))
 
 type ReactElementLike = {

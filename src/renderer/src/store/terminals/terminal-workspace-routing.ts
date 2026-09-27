@@ -8,6 +8,7 @@ import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shel
 import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connection'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getIndexedRepoMap, getIndexedWorktreeMap } from '../worktree-repo-index'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 
 export function isWindowsRendererRuntime(): boolean {
   return typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
@@ -86,8 +87,19 @@ export function worktreeUsesRemoteConnection(
 
 export function getRemoteConnectionIdForWorktree(
   state: Pick<AppState, 'folderWorkspaces' | 'projectGroups' | 'repos' | 'worktreesByRepo'>,
-  worktreeId: string
+  worktreeId: string,
+  /**
+   * Explicit selections, including local, outrank a same-id workspace on another host.
+   */
+  pickedExecutionHostId?: ExecutionHostId
 ): string | null {
+  const picked = parseExecutionHostId(pickedExecutionHostId)
+  if (picked?.kind === 'ssh') {
+    return picked.targetId
+  }
+  if (picked?.kind === 'runtime' || picked?.kind === 'local') {
+    return null
+  }
   const parsedWorkspaceKey = parseWorkspaceKey(worktreeId)
   if (parsedWorkspaceKey?.type === 'folder') {
     return getFolderWorkspaceConnectionId(state, parsedWorkspaceKey.folderWorkspaceId) ?? null

@@ -38,7 +38,7 @@ export type ProspectiveWorkspace = {
   kind: ProspectiveWorkspaceKind
   repoId?: string
   worktreeId?: string
-  /** Only for workspaces that do not exist yet; with `worktreeId` the store's owner resolution wins. */
+  /** Explicit host selected by a caller listing workspaces across hosts. */
   executionHostId?: string
   runtimeEnvironmentId?: string | null
 }
@@ -67,7 +67,7 @@ export { workspaceKindForWorktreeId }
 
 function resolveExecutionHostId(store: AgentLaunchRouteStore, workspace: ProspectiveWorkspace) {
   if (workspace.worktreeId) {
-    return getExecutionHostIdForWorktree(store, workspace.worktreeId)
+    return workspace.executionHostId ?? getExecutionHostIdForWorktree(store, workspace.worktreeId)
   }
   if (workspace.runtimeEnvironmentId) {
     return toRuntimeExecutionHostId(workspace.runtimeEnvironmentId)
@@ -95,6 +95,10 @@ function resolveTranscriptIsLocalReadable(
   workspace: ProspectiveWorkspace,
   executionHostId: string
 ): boolean {
+  const host = parseExecutionHostId(executionHostId)
+  if (workspace.executionHostId) {
+    return host?.kind === 'ssh' ? isNativeChatTranscriptLocalReadable(host.targetId) : true
+  }
   if (workspace.worktreeId) {
     const connectionId = getConnectionIdFromState(store, workspace.worktreeId)
     // Why: right after creation the worktree row has not landed, and only `undefined` — "cannot
@@ -105,7 +109,6 @@ function resolveTranscriptIsLocalReadable(
         : connectionId
     )
   }
-  const host = parseExecutionHostId(executionHostId)
   return host?.kind === 'ssh' ? isNativeChatTranscriptLocalReadable(host.targetId) : true
 }
 

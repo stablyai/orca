@@ -85,6 +85,8 @@ export type BackgroundMountTerminalWorktreeDetail = {
 
 export type WakeHibernatedAgentsWorktreeDetail = {
   worktreeId: string
+  /** Omitted for workspace-wide wake; a grid action targets only its own tab. */
+  tabIds?: readonly string[]
   /** Mutable collector: mounted panes that consume (or latch) the in-place
    *  hibernation wake add their provider-session claim keys here so the
    *  dispatcher's follow-up generic resume skips those sessions instead of

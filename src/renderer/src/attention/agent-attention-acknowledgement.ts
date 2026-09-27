@@ -143,6 +143,8 @@ export function applyAgentAttentionAcknowledgement(
     viewedGroupId: string
     subjectKeys: string[]
     viewedUnreadSubjectKey?: string | null
+    /** A group bell can carry attention without a subject marker. */
+    hasGroupUnread?: boolean
   }
 ): void {
   const subjectKeysToClear = new Set(args.subjectKeys)
@@ -150,7 +152,7 @@ export function applyAgentAttentionAcknowledgement(
     subjectKeysToClear.add(args.viewedUnreadSubjectKey)
   }
 
-  if (args.subjectKeys.length === 0 && subjectKeysToClear.size === 0) {
+  if (args.subjectKeys.length === 0 && subjectKeysToClear.size === 0 && !args.hasGroupUnread) {
     return
   }
 

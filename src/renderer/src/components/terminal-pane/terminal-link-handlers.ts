@@ -1,11 +1,14 @@
+import {
+  preferLongestNonOverlappingLinks,
+  type ProvidedFileLink
+} from './terminal-file-link-overlap'
 import { createTerminalPathExistenceBatch } from './terminal-path-existence-batch'
-import type { IDisposable, ILink, ILinkProvider, Terminal } from '@xterm/xterm'
+import type { IDisposable, ILinkProvider, Terminal } from '@xterm/xterm'
 import {
   extractTerminalFileLinkCandidates,
   extractTerminalFileLinks,
   resolveTerminalFileLink
 } from '@/lib/terminal-links'
-import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { isRemoteRuntimeFileOperation } from '@/runtime/runtime-file-client'
 import {
   buildCandidateLogicalLinesForBufferPosition,
@@ -22,8 +25,7 @@ import {
 import {
   buildHardWrappedPathLogicalLineCandidates,
   buildWrappedLogicalLine,
-  rangeForParsedFileLink,
-  type WrappedLogicalLine
+  rangeForParsedFileLink
 } from './wrapped-terminal-link-ranges'
 import {
   getTerminalPathExistsCacheKey,
@@ -54,7 +56,9 @@ export type LinkHandlerDeps = {
   worktreePath: string
   startupCwd: string
   getPaneLinkCwd?: (paneId: number) => string | null
-  managerRef: React.RefObject<PaneManager | null>
+  managerRef: React.RefObject<{
+    getPanes: () => { id: number; terminal: Pick<Terminal, 'buffer' | 'clearSelection'> }[]
+  } | null>
   linkProviderDisposablesRef: React.RefObject<Map<number, IDisposable>>
   pathExistsCache: Map<string, boolean>
   runtimeEnvironmentId?: string | null
@@ -62,38 +66,7 @@ export type LinkHandlerDeps = {
   wslDistro?: string | null
   getRuntimeEnvironmentIdForPane?: (paneId: number) => string | null
   getLinkActionContext?: (paneId: number) => TerminalLinkActionContext | null
-}
-
-type ProvidedFileLink = {
-  link: ILink
-  logicalLine: WrappedLogicalLine
-}
-
-function rangesOverlap(left: ILink['range'], right: ILink['range']): boolean {
-  const leftStartsAfterRightEnds =
-    left.start.y > right.end.y || (left.start.y === right.end.y && left.start.x > right.end.x)
-  const rightStartsAfterLeftEnds =
-    right.start.y > left.end.y || (right.start.y === left.end.y && right.start.x > left.end.x)
-  return !leftStartsAfterRightEnds && !rightStartsAfterLeftEnds
-}
-
-function preferLongestNonOverlappingLinks(links: ProvidedFileLink[]): ProvidedFileLink[] {
-  const selected: ProvidedFileLink[] = []
-  const byLengthDescending = [...links].sort(
-    (a, b) =>
-      b.link.text.length - a.link.text.length ||
-      a.link.range.start.y - b.link.range.start.y ||
-      a.link.range.start.x - b.link.range.start.x
-  )
-  for (const link of byLengthDescending) {
-    if (!selected.some((existing) => rangesOverlap(existing.link.range, link.link.range))) {
-      selected.push(link)
-    }
-  }
-  return selected.sort(
-    (a, b) =>
-      a.link.range.start.y - b.link.range.start.y || a.link.range.start.x - b.link.range.start.x
-  )
+  isCurrent?: () => boolean
 }
 
 export function createFilePathLinkProvider(
@@ -105,6 +78,10 @@ export function createFilePathLinkProvider(
   const { startupCwd, managerRef, pathExistsCache, worktreeId, worktreePath } = deps
   return {
     provideLinks: (bufferLineNumber, callback) => {
+      if (deps.isCurrent?.() === false) {
+        callback(undefined)
+        return
+      }
       const pane = managerRef.current?.getPanes().find((candidate) => candidate.id === paneId)
       if (!pane) {
         callback(undefined)
@@ -187,6 +164,9 @@ export function createFilePathLinkProvider(
                   range,
                   text: parsed.displayText,
                   activate: (event) => {
+                    if (deps.isCurrent?.() === false) {
+                      return
+                    }
                     if (
                       handleTerminalFileLink(
                         mappedPath,
@@ -238,6 +218,10 @@ export function createFilePathLinkProvider(
       )
         .then(
           (resolvedLinks) => {
+            if (deps.isCurrent?.() === false) {
+              callback(undefined)
+              return
+            }
             const latestFingerprints = new Set(
               buildCandidateLogicalLinesForBufferPosition(buffer, bufferLineNumber).map(
                 (logicalLine) => logicalLine.fingerprint
@@ -275,7 +259,7 @@ export function installFilePathLinkClickFallback(
 ): IDisposable {
   const mouseUpListenerOptions = { capture: true }
   const handleMouseUp = (event: MouseEvent): void => {
-    if (!isTerminalLinkDirectActivation(event)) {
+    if (deps.isCurrent?.() === false || !isTerminalLinkDirectActivation(event)) {
       return
     }
 

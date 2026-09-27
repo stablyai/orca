@@ -61,6 +61,8 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-editor-surface: var(--editor-surface);
+  --color-agent-working: var(--color-yellow-500);
+  --color-agent-unread: var(--color-amber-500);
   --color-agent-question: var(--agent-question);
   --color-agent-question-text: var(--agent-question-text);
   --color-chart-1: var(--chart-1);

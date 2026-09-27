@@ -28,6 +28,7 @@ vi.mock('@xterm/xterm', () => ({
     resize = vi.fn()
     reset = vi.fn()
     onData = vi.fn(() => ({ dispose: vi.fn() }))
+    loadAddon = vi.fn()
     dispose = vi.fn(() => this.screen.remove())
     constructor(public options: ITerminalOptions) {
       harness.instances.push(this)
@@ -212,15 +213,15 @@ it.each([
   async ({ updates, cols, rows, scale, anchor }) => {
     render(<AgentTerminalPreview ptyId="pty-1" />)
     await settleGeometry()
-    expect(fit).toHaveBeenLastCalledWith('pty-1', 60, 15)
+    expect(fit).toHaveBeenLastCalledWith('pty-1', 60, 15, expect.any(String))
     await act(async () => useAppStore.getState().updateSettings(updates))
     await settleGeometry()
 
     expect(fit).toHaveBeenCalledTimes(2)
-    expect(fit).toHaveBeenLastCalledWith('pty-1', cols, rows)
+    expect(fit).toHaveBeenLastCalledWith('pty-1', cols, rows, expect.any(String))
     expect(harness.instances).toHaveLength(2)
     expect(connect).toHaveBeenCalledTimes(2)
-    expect(unsubscribe).toHaveBeenCalledExactlyOnceWith('pty-1')
+    expect(unsubscribe).toHaveBeenCalledExactlyOnceWith('pty-1', expect.any(String))
     expect(harness.instances[1]?.container?.style.transform).toBe(scale)
     expect(harness.instances[1]?.container?.style.transformOrigin).toBe(anchor)
   }
@@ -239,7 +240,7 @@ it('ignores a pending connection retired by a metric change', async () => {
   expect(connect).toHaveBeenCalledTimes(2)
   expect(harness.instances).toHaveLength(1)
   expect(harness.instances[0]?.options.fontSize).toBe(18)
-  expect(fit).toHaveBeenCalledExactlyOnceWith('pty-1', 50, 15)
+  expect(fit).toHaveBeenCalledExactlyOnceWith('pty-1', 50, 15, expect.any(String))
 })
 
 it('cancels an obsolete metric owner grid claim before the next change', async () => {
@@ -250,5 +251,5 @@ it('cancels an obsolete metric owner grid claim before the next change', async (
   await settleGeometry()
   expect(harness.instances).toHaveLength(3)
   expect(fit).toHaveBeenCalledTimes(2)
-  expect(fit).toHaveBeenLastCalledWith('pty-1', 50, 10)
+  expect(fit).toHaveBeenLastCalledWith('pty-1', 50, 10, expect.any(String))
 })

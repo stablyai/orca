@@ -48,7 +48,8 @@ const viewCases: { entry: WorktreeNavHistorySimpleViewEntry; label: string }[] =
   { entry: 'tasks', label: 'Tasks' },
   { entry: 'automations', label: 'Automations' },
   { entry: 'artifacts', label: 'Artifacts' },
-  { entry: 'skills', label: 'Skills' }
+  { entry: 'skills', label: 'Skills' },
+  { entry: 'sessions', label: 'Sessions' }
 ]
 
 function makeGitHubWorkItem(overrides: Partial<GitHubWorkItem> = {}): GitHubWorkItem {

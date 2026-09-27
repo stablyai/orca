@@ -1,7 +1,6 @@
-import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { separateImagePasteFromFollowingText } from '../../../../shared/image-paste-following-text'
 import { shellEscapePath } from './pane-helpers'
-import type { PtyTransport } from './pty-transport'
+import type { TerminalDropSurface, TerminalDropTransport } from './terminal-drop-surface'
 import { wrapTerminalBracketedPasteText } from './terminal-bracketed-paste'
 import { canPasteImageDropPathRaw, isImageDropPath } from './terminal-drop-image-path'
 import {
@@ -30,8 +29,8 @@ export async function writeTerminalDropPathsToCapturedTarget({
   operationTimeoutMs = TERMINAL_PASTE_OPERATION_TIMEOUT_MS
 }: {
   dropTarget: CapturedTerminalDropTarget
-  manager: PaneManager
-  paneTransports: Map<number, PtyTransport>
+  manager: TerminalDropSurface
+  paneTransports: Map<number, TerminalDropTransport>
   paths: readonly string[]
   targetShell: TerminalTargetShell
   operationTimeoutMs?: number

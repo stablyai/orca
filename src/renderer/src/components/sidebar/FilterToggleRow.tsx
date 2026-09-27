@@ -37,18 +37,19 @@ export function FilterToggleRow({
       className={cn(
         // Why pl-* and not px-2 + pl-6: Tailwind v4 emits px as padding-inline,
         // which outranks a physical pl-6 override and flattens the indent.
-        'flex w-full items-center justify-between gap-2 rounded-[5px] py-1.5 pr-2 text-[12px] font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+        // text-left: a button centers by default, which shows the moment a label wraps.
+        'flex w-full items-center justify-between gap-2 rounded-[5px] py-1.5 pr-2 text-left text-[12px] font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
         indented ? 'pl-7' : 'pl-2'
       )}
     >
       <span
         className={cn(
-          'inline-flex items-center gap-2',
+          'inline-flex min-w-0 items-center gap-2',
           indented ? 'text-muted-foreground' : 'text-foreground'
         )}
       >
-        <span className="text-muted-foreground">{icon}</span>
-        {label}
+        <span className="shrink-0 text-muted-foreground">{icon}</span>
+        <span className="min-w-0">{label}</span>
       </span>
       <span className="inline-flex items-center gap-2">
         {shortcutLabel ? <DropdownMenuShortcut>{shortcutLabel}</DropdownMenuShortcut> : null}
