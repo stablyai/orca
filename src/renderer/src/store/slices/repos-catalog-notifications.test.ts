@@ -212,3 +212,18 @@ it('still clears restored folder owners after a successful all-host refresh', as
     unrelated: 'runtime:kept'
   })
 })
+
+it('does not publish an all-host refresh whose restored owners need no cleanup', async () => {
+  const store = seed()
+  store.setState({ restoredRuntimeHostIdByWorkspaceSessionKey: { unrelated: 'runtime:kept' } })
+  const initial = store.getState()
+  const changed = vi.fn()
+  const unsubscribe = store.subscribe(changed)
+  await store.getState().fetchFolderWorkspacesForAllHosts()
+  unsubscribe()
+  expect(changed).not.toHaveBeenCalled()
+  expect(store.getState()).toBe(initial)
+  expect(store.getState().restoredRuntimeHostIdByWorkspaceSessionKey).toBe(
+    initial.restoredRuntimeHostIdByWorkspaceSessionKey
+  )
+})
