@@ -99,6 +99,12 @@ export function removeFloatingTerminalTabFromStore(entityId: string): void {
   }
 }
 
+export function setFloatingKeybindings(keybindings: KeybindingOverrides): void {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: setupFloatingTerminalPanelTest seeds storeBox.state with a FloatingPanelStoreState before every test.
+  const state = storeBox.state as FloatingPanelStoreState
+  state.keybindings = keybindings
+}
+
 export function setFloatingTabs(tabs: TerminalTab[]): void {
   const state = storeBox.state as FloatingPanelStoreState
   const groupId = 'floating-group'

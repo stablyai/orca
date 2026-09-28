@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 
 export type UseDetectedAgentsResult = {
@@ -20,6 +21,32 @@ export type AgentDetectionTarget =
   | { kind: 'local'; worktreeId?: string | null; contextKey?: string }
   | { kind: 'ssh'; connectionId: string }
   | { kind: 'runtime'; environmentId: string }
+
+type DetectedAgentIdsState = Pick<
+  AppState,
+  | 'detectedAgentIds'
+  | 'localDetectedAgentIdsByContext'
+  | 'remoteDetectedAgentIds'
+  | 'runtimeDetectedAgentIds'
+>
+
+/** Null while the target is unresolved or its first detection is in flight. */
+export function selectDetectedAgentIds(
+  s: DetectedAgentIdsState,
+  target: AgentDetectionTarget | undefined
+): TuiAgent[] | null {
+  if (target === undefined) {
+    return null
+  }
+  if (target.kind === 'ssh' && target.connectionId) {
+    return s.remoteDetectedAgentIds[target.connectionId] ?? null
+  }
+  if (target.kind === 'runtime' && target.environmentId) {
+    return s.runtimeDetectedAgentIds[target.environmentId] ?? null
+  }
+  const contextKey = target.kind === 'local' ? target.contextKey : undefined
+  return contextKey ? (s.localDetectedAgentIdsByContext[contextKey] ?? null) : s.detectedAgentIds
+}
 
 function normalizeAgentDetectionTarget(
   target: AgentDetectionTarget | string | null | undefined
@@ -74,20 +101,7 @@ export function useDetectedAgents(
         ? `runtime:${targetId}`
         : null
 
-  const detectedIds = useAppStore((s) => {
-    if (isUnknown) {
-      return null
-    }
-    if (targetKind === 'ssh' && targetId) {
-      return s.remoteDetectedAgentIds[targetId] ?? null
-    }
-    if (targetKind === 'runtime' && targetId) {
-      return s.runtimeDetectedAgentIds[targetId] ?? null
-    }
-    return localContextKey
-      ? (s.localDetectedAgentIdsByContext[localContextKey] ?? null)
-      : s.detectedAgentIds
-  })
+  const detectedIds = useAppStore((s) => selectDetectedAgentIds(s, target))
   const isLoading = useAppStore((s) => {
     if (isUnknown) {
       return true

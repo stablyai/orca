@@ -1,8 +1,11 @@
 // @vitest-environment happy-dom
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { handleSwitchTabAcrossAllTypes } from '../hooks/ipc-tab-switch'
-import { switchFloatingWorkspaceTab } from '@/lib/floating-workspace-terminal-actions'
+import {
+  launchFloatingWorkspaceAgentShortcut,
+  switchFloatingWorkspaceTab
+} from '@/lib/floating-workspace-terminal-actions'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
 import type { Tab } from '../../../shared/tab-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
@@ -12,16 +15,24 @@ import {
 } from './editor/editor-autosave'
 import { handleTerminalWorkspaceKeyDown } from './terminal-workspace-keydown'
 import type { TerminalActivationController } from './use-terminal-activation-actions'
+import {
+  resolveTerminalAgentTabShortcut,
+  type TerminalAgentTabShortcut
+} from './terminal-agent-tab-shortcut'
 
-const mocks = vi.hoisted(() => ({
-  state: {} as Record<string, unknown>,
-  closeTerminalTab: vi.fn(),
-  closeStructuredAgentSession: vi.fn(async () => 'closed'),
-  callRuntimeRpc: vi.fn(async () => ({ ok: true })),
-  cancelStructuredAgentLaunch: vi.fn(),
-  floatingFocused: false,
-  targetInsideFloatingPanel: false
-}))
+const mocks = vi.hoisted(() => {
+  const agentShortcut: TerminalAgentTabShortcut = { actionId: null, agent: null }
+  return {
+    state: {} as Record<string, unknown>,
+    closeTerminalTab: vi.fn(),
+    closeStructuredAgentSession: vi.fn(async () => 'closed'),
+    callRuntimeRpc: vi.fn(async () => ({ ok: true })),
+    cancelStructuredAgentLaunch: vi.fn(),
+    agentShortcut,
+    floatingFocused: false,
+    targetInsideFloatingPanel: false
+  }
+})
 
 vi.mock('../store', () => ({ useAppStore: { getState: () => mocks.state } }))
 vi.mock('../hooks/ipc-tab-switch', () => ({
@@ -38,13 +49,14 @@ vi.mock('@/lib/floating-workspace-terminal-actions', () => ({
   isEmptyFloatingWorkspacePanelVisible: () => false,
   isEventTargetInsideFloatingWorkspacePanel: () => mocks.targetInsideFloatingPanel,
   isFloatingWorkspacePanelFocused: () => mocks.floatingFocused,
+  launchFloatingWorkspaceAgentShortcut: vi.fn(),
   switchFloatingWorkspaceTab: vi.fn()
 }))
 vi.mock('@/lib/terminal-shortcut-capture-notification', () => ({
   showTerminalShortcutCaptureNotification: vi.fn()
 }))
 vi.mock('./terminal-agent-tab-shortcut', () => ({
-  resolveTerminalAgentTabShortcut: () => ({ actionId: null, agent: null })
+  resolveTerminalAgentTabShortcut: vi.fn(() => mocks.agentShortcut)
 }))
 
 vi.mock('./terminal/terminal-tab-actions', () => ({ closeTerminalTab: mocks.closeTerminalTab }))
@@ -329,5 +341,45 @@ describe('shared tab navigation routing', () => {
     expect(switchFloatingWorkspaceTab).toHaveBeenCalledTimes(2)
     expect(switchFloatingWorkspaceTab).toHaveBeenLastCalledWith(mocks.state, 1, 'all-types')
     expect(handleSwitchTabAcrossAllTypes).not.toHaveBeenCalled()
+  })
+})
+
+describe('agent tab shortcuts', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.floatingFocused = false
+    mocks.agentShortcut = { actionId: 'tab.newAgent.claude', agent: 'claude' }
+    mocks.state = { activeWorktreeId: controller.activeWorktreeId }
+  })
+
+  afterEach(() => {
+    mocks.agentShortcut = { actionId: null, agent: null }
+  })
+
+  function pressAgentShortcut(): void {
+    handleTerminalWorkspaceKeyDown(
+      new KeyboardEvent('keydown', { key: '1', ctrlKey: true, cancelable: true }),
+      controller,
+      'darwin'
+    )
+  }
+
+  it('launches the agent in the active workspace', () => {
+    pressAgentShortcut()
+    expect(resolveTerminalAgentTabShortcut).toHaveBeenCalledWith(
+      expect.objectContaining({ activeWorktreeId: controller.activeWorktreeId })
+    )
+    expect(controller.handleNewAgentTab).toHaveBeenCalledWith('claude')
+    expect(launchFloatingWorkspaceAgentShortcut).not.toHaveBeenCalled()
+  })
+
+  it('resolves and launches the agent in the floating panel when it owns focus', () => {
+    mocks.floatingFocused = true
+    pressAgentShortcut()
+    expect(resolveTerminalAgentTabShortcut).toHaveBeenCalledWith(
+      expect.objectContaining({ activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID })
+    )
+    expect(launchFloatingWorkspaceAgentShortcut).toHaveBeenCalledWith('claude')
+    expect(controller.handleNewAgentTab).not.toHaveBeenCalled()
   })
 })
