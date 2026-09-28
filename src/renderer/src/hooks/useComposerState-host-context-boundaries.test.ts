@@ -251,6 +251,29 @@ describe('useComposerState host-context boundaries', () => {
     expect(submitSection).toContain('runtimeEnvironmentId: folderTargetRuntimeEnvironmentId')
   })
 
+  it('carries selected local folder runtime context into agent detection', () => {
+    const targetSection = sourceBetween(
+      COMPOSER_SOURCE.runtimeTarget,
+      'const folderSourceRepos = useMemo',
+      'const folderTargetSshState'
+    )
+
+    expect(targetSection).toContain('getWslDistroFromPath(selectedProjectGroup.parentPath)')
+    expect(targetSection).toContain('getLocalRepoProjectExecutionRuntimeContext(')
+    expect(targetSection).toContain('getProjectRuntimePreflightContext(projectRuntime)')
+    expect(targetSection).toContain('folderSourceRepos.find((repo) => repo.id === repoId)')
+    expect(targetSection).toContain("projectRuntime.runtime.reason === 'project-override'")
+    expect(targetSection).toContain('return undefined')
+    expect(targetSection.indexOf('if (projectRuntime) {')).toBeLessThan(
+      targetSection.indexOf('const wslDistro =')
+    )
+    expect(targetSection.indexOf('const sourceRepo =')).toBeLessThan(
+      targetSection.indexOf('const wslDistro =')
+    )
+    expect(targetSection).toContain('localPreflightContextKey(folderTargetLocalPreflightContext)')
+    expect(targetSection).toContain('localPreflightContext: folderTargetLocalPreflightContext')
+  })
+
   it('detects composer agents against the repo host: SSH, then runtime, then local (#7082)', () => {
     // Why: a repo owned by a paired runtime must show the runtime's agents, not
     // the local machine's. SSH stays first priority; runtime falls through before

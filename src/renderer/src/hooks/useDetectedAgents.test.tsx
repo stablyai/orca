@@ -202,6 +202,22 @@ afterEach(async () => {
   roots.length = 0
 })
 
+describe('useDetectedAgents (local context call site)', () => {
+  it('routes an explicit local preflight context to its keyed cache', async () => {
+    detectLocalAgents.mockResolvedValueOnce(['claude'])
+
+    await renderProbe({
+      kind: 'local',
+      localPreflightContext: { wslDistro: 'Ubuntu' },
+      localPreflightContextKey: 'wsl:Ubuntu'
+    })
+
+    expect(detectLocalAgents).toHaveBeenCalledWith({ wslDistro: 'Ubuntu' })
+    expect(useAppStore.getState().localDetectedAgentIdsByContext['wsl:Ubuntu']).toEqual(['claude'])
+    expect(useAppStore.getState().detectedAgentIds).toBeNull()
+  })
+})
+
 describe('useDetectedAgents (ssh call site)', () => {
   it('fires remote detection once on mount and does not thrash after an empty result', async () => {
     const root = await renderProbe({ kind: 'ssh', connectionId: 'ssh-1' })
