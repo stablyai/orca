@@ -7,7 +7,8 @@ import {
   GitMerge,
   GitPullRequest,
   GitPullRequestClosed,
-  LoaderCircle
+  LoaderCircle,
+  RefreshCw
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -32,6 +33,7 @@ import type { TaskSourceContext } from '../../../../../shared/task-source-contex
 import type { PullRequestPageProjectOrigin } from '../page-types'
 import { WorkItemStateBadge } from '../presentation/state-badge'
 import { changePullRequestState, mergePullRequest, setPullRequestAutoMerge } from './merge-actions'
+import { updatePullRequestBranch } from './update-branch-action'
 
 export function PRActionsPanel({
   item,
@@ -142,6 +144,29 @@ export function PRActionsPanel({
             </TooltipContent>
           </Tooltip>
           <DropdownMenuContent align="start" className="w-52">
+            {mergePresentation.updateBranchAvailable && (
+              <>
+                <DropdownMenuItem
+                  disabled={!canMergeWithRepoContext || mergePending}
+                  onSelect={() =>
+                    void updatePullRequestBranch({
+                      item,
+                      repoPath,
+                      repoId,
+                      sourceContext,
+                      prRepo,
+                      mergeTarget,
+                      setMergePending,
+                      onMutated
+                    })
+                  }
+                >
+                  <RefreshCw className="size-4" />
+                  {translate('auto.components.PullRequestPage.updateBranch', 'Update branch')}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+              </>
+            )}
             {mergePresentation.autoMergeAction && (
               <DropdownMenuItem
                 disabled={!canMergeWithRepoContext || mergePending}

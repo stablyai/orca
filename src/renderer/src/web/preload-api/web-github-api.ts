@@ -100,6 +100,8 @@ export function createGitHubApi(): WebGitHubApi {
     },
     setPRAutoMerge: (args) =>
       route<WebGitHubResult<'setPRAutoMerge'>>(GITHUB_WEB_RPC_METHODS.setPRAutoMerge, args),
+    updatePRBranch: (args) =>
+      route<WebGitHubResult<'updatePRBranch'>>(GITHUB_WEB_RPC_METHODS.updatePRBranch, args),
     updatePRState: (args) =>
       route<WebGitHubResult<'updatePRState'>>(GITHUB_WEB_RPC_METHODS.updatePRState, args),
     requestPRReviewers: (args) =>

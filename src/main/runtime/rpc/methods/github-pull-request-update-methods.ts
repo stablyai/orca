@@ -8,6 +8,7 @@ import {
   RequestPrReviewers,
   SetPrAutoMerge,
   UpdatePr,
+  UpdatePrBranch,
   UpdatePrState,
   UpdatePrTitle
 } from '../../../../shared/rpc-contract/github-pull-request-update-params'
@@ -47,6 +48,12 @@ export const GITHUB_PULL_REQUEST_UPDATE_METHODS = [
         params.method,
         params.prRepo ?? null
       )
+  }),
+  defineMethod({
+    name: 'github.updatePRBranch',
+    params: UpdatePrBranch,
+    handler: async (params, { runtime }) =>
+      runtime.updateRepoPRBranch(params.repo, params.prNumber, params.prRepo ?? null)
   }),
   defineMethod({
     name: 'github.updatePRState',

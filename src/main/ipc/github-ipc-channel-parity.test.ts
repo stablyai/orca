@@ -45,6 +45,7 @@ const EXPECTED_GITHUB_IPC_CHANNELS = [
   'gh:updatePRTitle',
   'gh:mergePR',
   'gh:setPRAutoMerge',
+  'gh:updatePRBranch',
   'gh:updatePRState',
   'gh:markPRReadyForReview',
   'gh:rerunPRChecks',

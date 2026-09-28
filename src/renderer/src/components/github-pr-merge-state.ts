@@ -32,6 +32,8 @@ export type GitHubPRMergeStatePresentation = {
   tooltip: string
   directMergeAvailable: boolean
   autoMergeAction: GitHubPRAutoMergeAction | null
+  // Set when the head branch is behind base and GitHub's "Update branch" applies.
+  updateBranchAvailable?: boolean
 }
 
 const MUTED_TONE = 'border-border/60 bg-background/70 text-muted-foreground'
@@ -87,7 +89,19 @@ function passedChecksMergePresentation(
   }
 }
 
+// Why: GitHub offers "Update branch" whenever the head is behind base, even when
+// review or other blockers also apply — so derive it from mergeStateStatus alone,
+// independent of which blocker the base presentation returned first.
 export function presentGitHubPRMergeState(
+  item: GitHubPRMergeStateInput
+): GitHubPRMergeStatePresentation {
+  return {
+    ...computeGitHubPRMergeStatePresentation(item),
+    updateBranchAvailable: item.state === 'open' && item.mergeStateStatus === 'BEHIND'
+  }
+}
+
+function computeGitHubPRMergeStatePresentation(
   item: GitHubPRMergeStateInput
 ): GitHubPRMergeStatePresentation {
   const autoMergeAction =
