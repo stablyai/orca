@@ -27,7 +27,7 @@ export type OrcadDaemonStartup =
  * Bring the daemon up and install it as the local PTY provider.
  *
  * Fail-open, like the desktop: a host that cannot start a daemon must still serve git,
- * worktrees and non-persistent terminals. What it must NOT do is keep claiming persistence
+ * worktrees and other non-terminal services. What it must NOT do is keep claiming persistence
  * — `daemonOwnsFreshPersistentPtys()` is what the runtime reads for that, and it answers
  * false here without any extra bookkeeping.
  */
@@ -40,15 +40,14 @@ export async function startOrcadDaemon(): Promise<OrcadDaemonStartup> {
     const reason = error instanceof Error ? error.message : String(error)
     console.error(
       `[orcad] The terminal daemon did not start: ${reason}\n` +
-        '[orcad] Terminals will run in-process and WILL NOT survive an orcad restart.'
+        '[orcad] New terminals are unavailable until the terminal service recovers.'
     )
     return { state: 'unavailable', reason }
   }
   if (!daemonOwnsFreshPersistentPtys()) {
-    const reason = 'daemon adopted in degraded mode; fresh terminals run on the local provider'
+    const reason = 'daemon adopted in degraded mode; new terminals are unavailable'
     console.warn(
-      `[orcad] ${reason}. Existing daemon sessions keep working, but new terminals will not ` +
-        'survive an orcad restart until the daemon is restarted.'
+      `[orcad] ${reason}. Existing daemon sessions retain their owners; retry the terminal service to create new terminals.`
     )
     return { state: 'degraded', reason }
   }

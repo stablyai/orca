@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
-import { LocalPtyProvider } from '../providers/local-pty-provider'
+import { createUnavailablePtyProvider } from '../providers/unavailable-pty-provider'
 import {
   registerPtyHandlers,
   registerSshPtyProvider,
@@ -24,7 +24,6 @@ type SettledControllerDouble = {
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
-vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
@@ -159,8 +158,7 @@ describe('registerPtyHandlers', () => {
     expect(provider.write).toHaveBeenCalledWith('pty-refused', 'input')
   })
   describe('controller probePtyLiveness routing', () => {
-    it('proves absence for an id the in-process local provider never owned', async () => {
-      setLocalPtyProvider(new LocalPtyProvider())
+    it('proves absence only after the daemon answers for a previously unseen id', async () => {
       const controller = registerAgentClaimController()
 
       await expect(controller.probePtyLiveness('pty-from-prior-run')).resolves.toBe(false)
@@ -190,7 +188,6 @@ describe('registerPtyHandlers', () => {
     it('answers unknown for SSH-owned ids whose provider has no probe', async () => {
       const connectionId = 'ssh-probe-1'
       const ptyId = `ssh:${connectionId}@@remote-pty`
-      setLocalPtyProvider(new LocalPtyProvider())
       registerSshPtyProvider(connectionId, createAgentClaimProvider({}) as never)
       setPtyOwnership(ptyId, connectionId)
       const controller = registerAgentClaimController()
@@ -210,7 +207,6 @@ describe('registerPtyHandlers', () => {
     it('answers unknown for remote-scoped ids without consulting local providers', async () => {
       // Why: a locally routed provider would answer confidently — and wrongly —
       // for a PTY that lives on a remote Orca host.
-      setLocalPtyProvider(new LocalPtyProvider())
       const controller = registerAgentClaimController()
 
       await expect(controller.probePtyLiveness('remote:some-remote-pty')).resolves.toBeNull()
@@ -252,12 +248,12 @@ describe('registerPtyHandlers', () => {
       localProvider.attach.mockRejectedValueOnce(new Error('Session not found'))
       await expect(controller.attach(daemonPtyId)).resolves.toBe(false)
 
-      // The in-process local provider streams without attach; never called.
-      const inProcess = new LocalPtyProvider()
-      const inProcessAttach = vi.spyOn(inProcess, 'attach')
-      setLocalPtyProvider(inProcess)
+      const unavailable = createUnavailablePtyProvider()
+      const unavailableAttach = vi.spyOn(unavailable, 'attach')
+      setLocalPtyProvider(unavailable)
       await expect(controller.attach(daemonPtyId)).resolves.toBe(false)
-      expect(inProcessAttach).not.toHaveBeenCalled()
+      expect(unavailableAttach).toHaveBeenCalledWith(daemonPtyId)
+      await expect(controller.probePtyLiveness(daemonPtyId)).resolves.toBeNull()
     } finally {
       unregisterSshPtyProvider('ssh-attach')
       clearPtyOwnershipForConnection('ssh-attach')

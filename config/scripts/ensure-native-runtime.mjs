@@ -3,7 +3,6 @@
 import { spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
-import { release } from 'node:os'
 import { basename, dirname, resolve } from 'node:path'
 import {
   ensureWindowsProcessTreeCommandLinePatch,
@@ -13,19 +12,13 @@ import {
 } from './windows-process-tree-gyp-rebuild.mjs'
 
 const require = createRequire(import.meta.url)
-const { assertNodePtyJobOwnership, nodePtyAddonPath } = require('./node-pty-job-ownership.cjs')
 const { assertWindowsProcessTreeCreationTime } = require('./windows-process-tree-creation-time.cjs')
 const scriptPath = import.meta.filename
 const projectDir = resolve(import.meta.dirname, '../..')
 const runtime = readRuntimeArg()
 
-const NATIVE_MODULES = [
-  'node-pty',
-  ...(process.platform === 'win32'
-    ? ['@orca/windows-registry', '@vscode/windows-process-tree']
-    : [])
-]
-const NODE_PTY_CONPTY_RUNTIME_FILES = ['conpty.dll', 'OpenConsole.exe']
+const NATIVE_MODULES =
+  process.platform === 'win32' ? ['@orca/windows-registry', '@vscode/windows-process-tree'] : []
 const CHILD_CHECK_FLAG = '--check-only'
 
 if (process.argv.includes(CHILD_CHECK_FLAG)) {
@@ -64,23 +57,7 @@ function readRuntimeArg() {
 
 function ensureNodeRuntime() {
   const initial = runNodeCheck()
-  const patchedNodePtyRebuildReason = getPatchedNodePtyRebuildReason()
-  if (initial.ok && !patchedNodePtyRebuildReason) {
-    return
-  }
-
-  if (patchedNodePtyRebuildReason) {
-    console.warn(`[native-runtime] ${patchedNodePtyRebuildReason}`)
-    if (!initial.ok) {
-      printCheckError(initial)
-    }
-    const failedModules = initial.failures.map((failure) => failure.moduleName)
-    const rebuildModules = [
-      'node-pty',
-      ...failedModules.filter((moduleName) => moduleName !== 'node-pty')
-    ]
-    rebuildNodeRuntimeModules(rebuildModules)
-    verifyNodeRuntimeAfterRebuild()
+  if (initial.ok) {
     return
   }
 
@@ -106,22 +83,13 @@ function verifyNodeRuntimeAfterRebuild() {
 
 function ensureElectronRuntime() {
   const initial = runElectronCheck()
-  const patchedNodePtyRebuildReason = getPatchedNodePtyRebuildReason()
-  if (initial.ok && !patchedNodePtyRebuildReason) {
+  if (initial.ok) {
     return
   }
-
-  if (patchedNodePtyRebuildReason) {
-    console.warn(`[native-runtime] ${patchedNodePtyRebuildReason}`)
-    if (!initial.ok) {
-      printCheckError(initial)
-    }
-  } else {
-    console.warn(
-      `[native-runtime] ${formatRuntimeLabel('electron')} cannot load native modules; rebuilding native deps for Electron.`
-    )
-    printCheckError(initial)
-  }
+  console.warn(
+    `[native-runtime] ${formatRuntimeLabel('electron')} cannot load native modules; rebuilding native deps for Electron.`
+  )
+  printCheckError(initial)
   runNodeScript(['config/scripts/rebuild-native-deps.mjs'])
 
   const final = runElectronCheck()
@@ -281,107 +249,8 @@ function loadNativeModule(moduleName) {
     registry.getRegistryKey(registry.HK.CU, 'Environment')
     return
   }
-  if (moduleName === 'node-pty') {
-    loadNodePtyNativeModule()
-    return
-  }
 
   require(moduleName)
-}
-
-function loadNodePtyNativeModule() {
-  require('node-pty')
-
-  const { loadNativeModule } = require('node-pty/lib/utils')
-  const nativeName = getNodePtyNativeModuleName()
-  // Why: node-pty's Windows JS wrapper defers conpty.node/pty.node until a
-  // terminal is created, so require('node-pty') alone can miss ABI mismatches.
-  const native = loadNativeModule(nativeName)
-  assertNodePtyWindowsConptyRuntime(native?.dir)
-  assertNodePtyJobOwnership({
-    nativeName,
-    native,
-    addonPath: nodePtyAddonPath(require.resolve('node-pty/lib/utils'), native, nativeName)
-  })
-  if (requiresPatchedNodePtySourceBuild() && !isNodePtyReleaseBuildDir(native?.dir)) {
-    throw new Error(
-      `node-pty resolved to ${native.dir}; expected build/Release so Orca's node-pty patch is active`
-    )
-  }
-}
-
-function assertNodePtyWindowsConptyRuntime(nativeDir) {
-  if (process.platform !== 'win32' || !isNodePtyReleaseBuildDir(nativeDir)) {
-    return
-  }
-  const runtimeDir = resolve(projectDir, 'node_modules', 'node-pty', 'build', 'Release', 'conpty')
-  const missingFile = NODE_PTY_CONPTY_RUNTIME_FILES.find(
-    (filename) => !existsSync(resolve(runtimeDir, filename))
-  )
-  if (missingFile) {
-    throw new Error(`node-pty ConPTY runtime file is missing: ${resolve(runtimeDir, missingFile)}`)
-  }
-}
-
-function getNodePtyNativeModuleName() {
-  if (process.platform !== 'win32') {
-    return 'pty'
-  }
-
-  return getWindowsBuildNumber() >= 18309 ? 'conpty' : 'pty'
-}
-
-function getPatchedNodePtyRebuildReason() {
-  if (!requiresPatchedNodePtySourceBuild()) {
-    return null
-  }
-
-  // Why: a loadable upstream node-pty prebuild is not enough; Orca's Unix and
-  // Windows patches only land in the source-built build/Release artifacts.
-  const nodePtyDir = resolve(projectDir, 'node_modules', 'node-pty')
-  const artifactPaths = patchedNodePtyArtifactPaths(nodePtyDir)
-  const missingArtifact = artifactPaths.find((artifactPath) => !existsSync(artifactPath))
-
-  if (!missingArtifact) {
-    return null
-  }
-
-  return 'Patched node-pty build artifacts are missing; rebuilding native deps.'
-}
-
-function patchedNodePtyArtifactPaths(nodePtyDir) {
-  if (process.platform === 'win32') {
-    const releaseDir = resolve(nodePtyDir, 'build', 'Release')
-    return [
-      resolve(releaseDir, 'conpty.node'),
-      ...NODE_PTY_CONPTY_RUNTIME_FILES.map((filename) => resolve(releaseDir, 'conpty', filename))
-    ]
-  }
-
-  const artifactPaths = [resolve(nodePtyDir, 'build', 'Release', 'pty.node')]
-  // Why: node-pty only builds spawn-helper on macOS; Linux builds only pty.node.
-  if (process.platform === 'darwin') {
-    artifactPaths.push(resolve(nodePtyDir, 'build', 'Release', 'spawn-helper'))
-  }
-  return artifactPaths
-}
-
-function requiresPatchedNodePtySourceBuild() {
-  const nodePtyPatchPath = resolve(projectDir, 'config', 'patches', 'node-pty@1.1.0.patch')
-  if (!existsSync(nodePtyPatchPath)) {
-    return false
-  }
-
-  return existsSync(resolve(projectDir, 'node_modules', 'node-pty'))
-}
-
-function isNodePtyReleaseBuildDir(nativeDir) {
-  return typeof nativeDir === 'string' && nativeDir.replace(/\\/g, '/').includes('build/Release/')
-}
-
-function getWindowsBuildNumber() {
-  const match = /(\d+)\.(\d+)\.(\d+)/g.exec(release())
-  return match && match.length === 4 ? Number.parseInt(match[3], 10) : 0
 }
 
 function rebuildNodeRuntimeModules(moduleNames) {
@@ -401,9 +270,6 @@ function rebuildNodeRuntimeModules(moduleNames) {
     }
     console.warn(`[native-runtime] Rebuilding ${moduleName} with node-gyp.`)
     runPnpm(['exec', 'node-gyp', 'rebuild'], { cwd: moduleDir })
-    if (moduleName === 'node-pty' && process.platform === 'win32') {
-      runNodeScript([resolve(moduleDir, 'scripts', 'post-install.js')])
-    }
   }
 }
 

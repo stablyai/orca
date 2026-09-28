@@ -1,6 +1,7 @@
+import type { BunPtySpawnArgs } from './pty-subprocess/bun-pty-process-contract'
 // Foreground process reporting: node-pty names, agent enrichment and its cache.
 import { describe, expect, it, vi } from 'vitest'
-import type * as LocalPtyUtils from '../providers/local-pty-utils'
+import type * as PtySpawnValidation from '../providers/pty-spawn-validation'
 
 const {
   spawnMock,
@@ -22,12 +23,15 @@ const {
   })
 }))
 
-vi.mock('node-pty', () => ({
-  spawn: spawnMock
+vi.mock('./pty-subprocess/bun-pty-process', () => ({
+  canUseBunPty: () => true,
+  spawnBunPty: ({ file, args, ...options }: BunPtySpawnArgs) =>
+    spawnMock(file, args, { ...options, name: options.env.TERM ?? 'xterm-256color' })
 }))
 
 vi.mock('../pwsh', () => ({
-  isPwshAvailable: isPwshAvailableMock
+  isPwshAvailable: isPwshAvailableMock,
+  isPwshAvailableAsync: isPwshAvailableMock
 }))
 
 // Resolve PowerShell family names to deterministic absolute paths so these
@@ -46,8 +50,8 @@ vi.mock('../providers/windows-powershell-executable', () => ({
   getWindowsCmdPath: () => CMD_ABS
 }))
 
-vi.mock('../providers/local-pty-utils', async (importOriginal) => {
-  const actual = await importOriginal<typeof LocalPtyUtils>()
+vi.mock('../providers/pty-spawn-validation', async (importOriginal) => {
+  const actual = await importOriginal<typeof PtySpawnValidation>()
   return {
     ...actual,
     getNodePtySpawnHelperCandidates: () => [import.meta.filename],

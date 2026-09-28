@@ -21,6 +21,7 @@ const AUTO_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 const AUTO_UPDATE_RETRY_INTERVAL_MS = 60 * 60 * 1000
 
 type UpdaterHandlerContext = {
+  onNativeInstallEvent?: (event: 'ready' | 'error', error?: unknown) => void
   autoUpdater: ElectronAutoUpdater
   clearBackgroundCheckLaunchPending: () => void
   clearAvailableUpdateContext: () => void
@@ -64,6 +65,7 @@ type UpdaterHandlerContext = {
 }
 
 export function registerAutoUpdaterHandlers({
+  onNativeInstallEvent,
   autoUpdater,
   clearBackgroundCheckLaunchPending,
   clearAvailableUpdateContext,
@@ -101,6 +103,7 @@ export function registerAutoUpdaterHandlers({
   setUserInitiatedCheck
 }: UpdaterHandlerContext): void {
   registerMacUpdaterEvents({
+    onNativeInstallEvent,
     getCurrentStatus,
     hasInstallableDownloadedVersion,
     getPendingInstallVersion,
@@ -111,7 +114,7 @@ export function registerAutoUpdaterHandlers({
   })
 
   autoUpdater.on('checking-for-update', () => {
-    if (!markUpdateCheckEventAttempt()) {
+    if (isQuitAndInstallHandoffActive() || !markUpdateCheckEventAttempt()) {
       return
     }
     clearBackgroundCheckLaunchPending()
@@ -125,7 +128,7 @@ export function registerAutoUpdaterHandlers({
 
   autoUpdater.on('update-available', (info) => {
     const attemptId = getActiveUpdateCheckEventAttemptId()
-    if (attemptId === null) {
+    if (isQuitAndInstallHandoffActive() || attemptId === null) {
       return
     }
     clearBackgroundCheckLaunchPending()
@@ -174,7 +177,7 @@ export function registerAutoUpdaterHandlers({
             : await fetchChangelog(info.version, app.getVersion()).catch(() => null)
 
         // Why: async fetch may take seconds; bail if a newer event superseded this attempt to avoid a stale 'available' broadcast.
-        if (!isActiveUpdateCheckAttempt(attemptId)) {
+        if (isQuitAndInstallHandoffActive() || !isActiveUpdateCheckAttempt(attemptId)) {
           return
         }
         if (getCurrentStatus().state !== 'checking' && getCurrentStatus().state !== 'idle') {
@@ -215,7 +218,7 @@ export function registerAutoUpdaterHandlers({
   })
 
   autoUpdater.on('update-not-available', () => {
-    if (getActiveUpdateCheckEventAttemptId() === null) {
+    if (isQuitAndInstallHandoffActive() || getActiveUpdateCheckEventAttemptId() === null) {
       return
     }
     clearBackgroundCheckLaunchPending()
@@ -292,8 +295,8 @@ export function registerAutoUpdaterHandlers({
       sendStatus(linuxPackageStatus)
       return
     }
-    // On macOS, defer 'downloaded' until Squirrel.Mac finishes processing; other platforms are ready immediately.
-    if (process.platform === 'darwin' && !macInstallerReady) {
+    // Explicit-only Mac installs stage only after the install request and durable handoff.
+    if (process.platform === 'darwin' && autoUpdater.autoInstallOnAppQuit && !macInstallerReady) {
       // Keep the UI at 100% downloaded while Squirrel processes, to avoid a premature "ready to install".
       recordUpdaterLifecycle('macos_waiting_for_squirrel', { version: info.version })
       sendStatus({ state: 'downloading', percent: 100, version: info.version })

@@ -1,3 +1,6 @@
+import { prepareWslDaemonReattachHooks } from '../../../wsl/wsl-daemon-reattach-hooks'
+import { isAgentStatusHooksEnabled } from '../../../agent-hooks/managed-agent-hook-controls'
+import { parseAppWslPtyId } from '../../../../shared/wsl-pty-id'
 import type { PtySpawnResult } from '../../../providers/types'
 import { ptyIncarnationById, deletePtyOwnership } from '../provider/ownership-state'
 import { ptySizes } from '../delivery/visibility-state'
@@ -164,6 +167,13 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
       ctx.rejectedRegistrationCandidate = ctx.result
       assertSpawnReplyWasLive(ctx.result)
     }
+    if (parseAppWslPtyId(ctx.result.id)) {
+      const actualOwner = tryGetProviderForAgentSessionOwner(ctx.result.id)
+      if (!actualOwner) {
+        throw new Error('execution_owner_unavailable')
+      }
+      ctx.provider = actualOwner
+    }
     ctx.rejectedRegistrationCandidate ??= ctx.result
     if (ctx.pendingRegistrationPtyId !== ctx.result.id) {
       if (ctx.pendingRegistrationPtyId) {
@@ -190,7 +200,14 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
         ctx.snapshotKittyFlagsCoverReconciledSeq = false
       }
     }
-    ensureWslHookRelayForReattach(ctx.result, args.connectionId)
+    const guestHooks = await prepareWslDaemonReattachHooks({
+      result: ctx.result,
+      sessions: ctx.deps.options?.wslDaemonSessions,
+      hooksEnabled: isAgentStatusHooksEnabled(ctx.deps.getSettings?.())
+    })
+    if (!guestHooks) {
+      ensureWslHookRelayForReattach(ctx.result, args.connectionId)
+    }
     ctx.deps.runtime?.preparePtyExecutionContext?.(
       ctx.result.id,
       args.connectionId
@@ -269,7 +286,7 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
       }
     }
     if (ctx.isNewDaemonSession && ctx.sessionId !== undefined) {
-      clearProviderPtyState(ctx.sessionId)
+      clearProviderPtyState(ctx.effectiveSessionAppId ?? ctx.sessionId)
     }
     throw spawnError
   } finally {

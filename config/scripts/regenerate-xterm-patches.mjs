@@ -27,6 +27,11 @@ import {
   pnpmDiffEnvironment
 } from './xterm-patch-text.mjs'
 
+import {
+  assertMappedSourcesMatch,
+  assertMappedPatchDerivation
+} from './xterm-sourcemap-source-contract.mjs'
+
 const DEFAULT_REPO_ROOT = path.resolve(import.meta.dirname, '..', '..')
 const MANIFEST_RELATIVE_PATH = path.join('config', 'patches', 'xterm-upstream.json')
 
@@ -274,6 +279,12 @@ function assertToolchain(upstreamRoot, manifest) {
  */
 function assertPristineSourceMatches(pristineDir, upstreamRoot, packageEntry) {
   const stampFile = packageEntry.versionStampFile
+  if (packageEntry.sourceMaps) {
+    for (const map of packageEntry.sourceMaps) {
+      assertMappedSourcesMatch(path.join(pristineDir, map), upstreamRoot)
+    }
+    return
+  }
   const sourceRoot = path.join(pristineDir, 'src')
   const drifted = listFilesRelative(sourceRoot)
     .map((relative) => path.join('src', relative))
@@ -312,7 +323,7 @@ function buildPackage(upstreamRoot, packageEntry, manifest) {
 
 /** Proves the pinned toolchain still reproduces the untouched published bundles. */
 function assertReproducesPristineBundles(pristineDir, upstreamRoot, packageEntry) {
-  const packageRoot = path.join(upstreamRoot, packageEntry.packageDir)
+  const packageRoot = path.join(upstreamRoot, packageEntry.outputDir ?? packageEntry.packageDir)
   const drifted = listFilesRelative(pristineDir)
     .filter((relative) =>
       packageEntry.generatedPaths.some((prefix) => toPosix(relative).startsWith(prefix))
@@ -340,7 +351,7 @@ function toPosix(value) {
 function overlayBuildOutput(pristineDir, upstreamRoot, packageEntry, destination) {
   rmSync(destination, { recursive: true, force: true })
   cpSync(pristineDir, destination, { recursive: true })
-  const packageRoot = path.join(upstreamRoot, packageEntry.packageDir)
+  const packageRoot = path.join(upstreamRoot, packageEntry.outputDir ?? packageEntry.packageDir)
   for (const relative of listFilesRelative(pristineDir)) {
     // package.json carries the registry's version/commit stamp, which the build
     // tree has no way to reproduce and which we never want to patch.
@@ -431,7 +442,14 @@ function regeneratePackage(packageEntry, manifest, context) {
     )
   }
   const patch = diffFolders(pristineDir, patchedDir)
-  assertSourceDerivationsAgree(source, patch)
+  if (packageEntry.sourceMaps) {
+    for (const map of packageEntry.sourceMaps) {
+      assertMappedSourcesMatch(path.join(patchedDir, map), upstreamRoot)
+      assertMappedPatchDerivation(source, patch, map)
+    }
+  } else {
+    assertSourceDerivationsAgree(source, patch)
+  }
   return { patch, source }
 }
 

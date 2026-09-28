@@ -5,10 +5,7 @@ import {
 } from '../../shared/local-build-compatibility'
 import type { DaemonPtyAdapter } from '../daemon/daemon-pty-adapter'
 import { DaemonPtyRouter } from '../daemon/daemon-pty-router'
-import { DegradedDaemonPtyProvider } from '../daemon/degraded-daemon-pty-provider'
 import { getDaemonProvider } from '../daemon/daemon-init'
-import { getLocalPtyProvider } from '../ipc/pty'
-import { LocalPtyProvider } from '../providers/local-pty-provider'
 
 export type LocalBuildCompatibilityResult = {
   liveTerminalCount: number
@@ -21,23 +18,11 @@ async function getLiveDaemonProtocols(): Promise<{
 }> {
   const provider = getDaemonProvider()
   if (!provider) {
-    const localProvider = getLocalPtyProvider()
-    if (!(localProvider instanceof LocalPtyProvider)) {
-      throw new Error('Could not verify terminal preservation. Restart Orca and try again.')
-    }
-    const localProcesses = await localProvider.listProcesses()
-    if (localProcesses.length > 0) {
-      throw new Error(
-        'Local build switching is blocked while non-persistent fallback terminals are running.'
-      )
-    }
-    throw new Error('The terminal service is still starting. Try again in a moment.')
-  }
-  if (provider instanceof DegradedDaemonPtyProvider) {
     throw new Error(
-      'Local build switching is blocked while the terminal service is in fallback mode. Restart Orca first.'
+      'The terminal service is unavailable. Retry starting it before switching builds.'
     )
   }
+
   const adapters =
     provider instanceof DaemonPtyRouter ? provider.getAllAdapters() : [provider as DaemonPtyAdapter]
   const sessions = await Promise.all(

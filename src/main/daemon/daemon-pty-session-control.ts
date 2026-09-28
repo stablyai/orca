@@ -142,7 +142,9 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
             cwd:
               normalizeWslColdRestoreCwd({
                 recoveredCwd: detected.cwd,
-                requestedCwd: this.initialCwds.get(id) ?? resolveSafePtyDefaultCwd(),
+                requestedCwd:
+                  this.initialCwds.get(id) ?? this.guest?.defaultCwd ?? resolveSafePtyDefaultCwd(),
+                guestExecution: this.guest !== null,
                 wslDistro
               }) ?? ''
           }

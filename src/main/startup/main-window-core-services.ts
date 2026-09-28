@@ -2,7 +2,7 @@ import type { BrowserWindow } from 'electron'
 import { registerCoreHandlers } from '../ipc/register-core-handlers/register-core-handlers'
 import { attachMainWindowServices } from '../window/attach-main-window-services'
 import { initTccPromptNotice } from '../macos-tcc-prompt-notice'
-import { resolveUpdateInstallMode } from '../updater'
+import { getMainProcessUpdaterOptions } from './main-process-updater'
 import { mainProcessState as state } from './main-process-state'
 import { prepareCodexAiVaultSessionResume } from '../codex/codex-ai-vault-session-resume'
 import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
@@ -111,9 +111,10 @@ export function attachMainWindowCoreServices(
     store,
     runtime,
     prepareCodexRuntimeHomeForLaunch,
-    (target) => claudeRuntimeAuth.prepareForClaudeLaunch(target),
+    (target, execution) => claudeRuntimeAuth.prepareForClaudeLaunch(target, execution),
     {
       prepareCodexSessionResume: prepareCodexSessionResumeForLaunch,
+      wslDaemonSessions: state.wslDaemonSessions,
       awaitLocalPtyStartup: () => state.localPtyStartupReady,
       awaitLocalPtyProviderStartup: () => state.localPtyProviderStartupReady,
       onBeforeRendererReload: ({ ignoreCache, webContentsId }) => {
@@ -126,12 +127,7 @@ export function attachMainWindowCoreServices(
       isRecoveryReloadInFlight,
       onCodexHomePtySpawned: handleCodexHomePtySpawned,
       onPtyExit: handlePtyExit,
-      onBeforeUpdateQuit: async () => {
-        await preserveAgentAuthBeforeRestart({ codexRuntimeHome, claudeRuntimeAuth, store })
-        await store.writeLatestProfileStateJsonCompatibilityExportAsync()
-      },
-      onBeforeUpdateQuitFailure: 'abort',
-      updateInstallMode: resolveUpdateInstallMode(state.isServeMode),
+      ...getMainProcessUpdaterOptions(),
       onWorktreeLifecycle: emitPluginWorktreeLifecycle
     }
   )

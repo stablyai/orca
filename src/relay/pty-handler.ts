@@ -1,5 +1,5 @@
 /* oxlint-disable max-lines */
-import type { IPty } from 'node-pty'
+import type { TerminalProcess } from '../shared/terminal-process'
 import { killWithDescendantSweep } from '../main/pty-descendant-termination'
 import { bunRelayPtyModule } from './relay-pty-runtime'
 import {
@@ -100,7 +100,7 @@ import {
 } from '../shared/claimed-agent-pty-owner'
 import type { RelayPtySourceOutput } from './relay-pty-source-output'
 import { signalPosixPtyForegroundGroup } from '../main/pty/posix-pty-foreground-group'
-import { readPtsName } from '../main/pty/node-pty-pts-name'
+import { readPtsName } from '../main/pty/terminal-slave-device'
 import type { RelayPtySourcePublication } from './relay-pty-source-publication'
 import type {
   PtySourceRecoveryRequest,
@@ -197,7 +197,7 @@ function parseSourceRecoveryRequest(value: unknown): PtySourceRecoveryRequest | 
 type ManagedPty = {
   id: string
   incarnationId: string
-  pty: IPty
+  pty: TerminalProcess
   initialCwd: string
   /** Why a chunk deque: rebuilding a rolling 100KB string per PTY chunk copied the
    * whole window on every write once saturated. Readers are attach/adopt/revive only. */
@@ -284,7 +284,7 @@ type ManagedStartupCommand = {
 }
 
 // Why: Windows ConPTY rejects signals; forward them only on POSIX.
-function killPtyProcess(pty: IPty, signal: string): void {
+function killPtyProcess(pty: TerminalProcess, signal: string): void {
   if (process.platform === 'win32') {
     pty.kill()
     return
@@ -842,7 +842,21 @@ export class PtyHandler {
   }
 
   /** Wire onData/onExit listeners for a managed PTY and store it. */
-  private wireAndStore(managed: ManagedPty): void {
+  private async wireAndStore(managed: ManagedPty): Promise<void> {
+    try {
+      this.wireManagedPty(managed)
+    } catch (error) {
+      // Failed listener admission must not orphan the already-spawned native owner.
+      try {
+        await this.disposePtyForRelayShutdown(managed, false)
+      } catch (cleanupError) {
+        throw new AggregateError([error, cleanupError], 'PTY listener admission and cleanup failed')
+      }
+      throw error
+    }
+  }
+
+  private wireManagedPty(managed: ManagedPty): void {
     managed.physicalExit = new PhysicalExitTracker()
     this.ptys.set(managed.id, managed)
     // Why: a PTY joining the pool under this paneKey means the surface exists again (reopened pane
@@ -1966,7 +1980,7 @@ export class PtyHandler {
     this.sourcePublication?.activate(id, managed.incarnationId, context)
     const sourceActivation =
       context && this.sourcePublication?.receivingActivation?.(id, context.clientId)
-    this.wireAndStore(managed)
+    await this.wireAndStore(managed)
     if (context?.isStale() && !params.agentSessionEnsure && !params.agentSessionCreateOperationId) {
       // Why: if the client reconnected while pty.spawn was in flight, the
       // response is discarded and no renderer can own this PTY. Shut it down
@@ -2149,13 +2163,7 @@ export class PtyHandler {
     if (this.reapPtyProvenExited(managed)) {
       return
     }
-    // The patched node-pty retires `_fd` in the same block that gives up the
-    // master (config/patches/node-pty@1.1.0.patch), which makes a resize past
-    // that point a no-op rather than a TIOCSWINSZ aimed at a reused descriptor.
-    // That covers only part of the window and does not cover this process at
-    // all: libuv closes the fd synchronously inside `uv_close`, before the JS
-    // `'close'` that runs `_close()`, and a relay host installs node-pty from
-    // npm, where the patch is not applied. So the catch below stays.
+    // Backend resize can race native terminal disposal; keep teardown errors local to this PTY.
     try {
       managed.pty.resize(cols, rows)
     } catch (err) {
@@ -2999,7 +3007,7 @@ export class PtyHandler {
     const shellLaunch = getRelayShellLaunchConfig(shell, spawnEnv, process.platform, {
       terminalWindowsWslDistro
     })
-    let term: IPty
+    let term: TerminalProcess
     try {
       term = await ptyMod.spawn(shell, shellLaunch.args, {
         name: spawnEnv.TERM ?? 'xterm-256color',
@@ -3027,7 +3035,7 @@ export class PtyHandler {
       }
       return
     }
-    this.wireAndStore({
+    await this.wireAndStore({
       id: entry.id,
       incarnationId: randomUUID(),
       pty: term,

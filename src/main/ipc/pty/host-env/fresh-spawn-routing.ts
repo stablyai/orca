@@ -1,6 +1,5 @@
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
-import type { IPtyProvider } from '../../../providers/types'
 import { beginTerminalInstall } from '../../watcher-removal-gate'
 
 export function isClaudeLaunchCommand(command: string | undefined): boolean {
@@ -10,22 +9,6 @@ export function isClaudeLaunchCommand(command: string | undefined): boolean {
   return /(^|[\s;&|('"`])(?:[^\s;&|('"`]*[\\/])?claude(?:\.cmd|\.exe)?($|[\s;&|)'"`])/i.test(
     command
   )
-}
-
-export function routesFreshSpawnsToLocalProvider(provider: IPtyProvider): boolean {
-  return provider.routesFreshSpawnsToLocalProvider === true
-}
-
-export function recoverFreshSpawnProviderRouting(
-  provider: IPtyProvider,
-  connectionId: string | null | undefined,
-  sessionId: string | undefined,
-  isNewSession = sessionId === undefined
-): Promise<boolean> | undefined {
-  if (connectionId || (!isNewSession && sessionId) || !routesFreshSpawnsToLocalProvider(provider)) {
-    return
-  }
-  return provider.recoverFreshSpawnRouting?.()
 }
 
 export function beginPtySpawnForWorktree(

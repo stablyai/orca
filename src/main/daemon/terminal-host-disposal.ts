@@ -1,3 +1,4 @@
+import type { TerminalStartupSession } from './terminal-startup-session'
 import { shutdownTerminalHostSessions } from './terminal-host-session-shutdown'
 import type { TerminalSessionTeardown } from './terminal-session-teardown'
 import type { Session } from './session'
@@ -13,6 +14,7 @@ type TerminalHostDisposalOptions = {
   pendingCreations: ReadonlyMap<string, Promise<void>>
   sessionTeardown: TerminalSessionTeardown
   sessions: Map<string, Session>
+  startupSessions?: Map<string, TerminalStartupSession>
   onFinalCheckpoint?: FinalCheckpoint
   killedTombstones: { clear: () => void }
 }
@@ -21,6 +23,7 @@ export async function disposeTerminalHostSessions({
   pendingCreations,
   sessionTeardown,
   sessions,
+  startupSessions,
   onFinalCheckpoint,
   killedTombstones
 }: TerminalHostDisposalOptions): Promise<void> {
@@ -30,6 +33,7 @@ export async function disposeTerminalHostSessions({
   }
   const existingTeardowns = sessionTeardown.requestImmediateAll()
   await Promise.all([
+    ...[...(startupSessions?.values() ?? [])].map((attempt) => attempt.discard()),
     shutdownTerminalHostSessions(
       sessions,
       onFinalCheckpoint,

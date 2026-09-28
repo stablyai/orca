@@ -1,3 +1,5 @@
+import { registerWslPtyProvider } from './pty/provider/registry'
+import { toAppWslPtyId } from '../../shared/wsl-pty-id'
 import { describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { registerSshPtyProvider, getLocalPtyProvider } from './pty'
@@ -6,7 +8,6 @@ import { ptyOwnership } from './pty/provider/ownership-state'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
-vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
@@ -75,6 +76,45 @@ describe('scoped activation PTY inventory', () => {
     const list = (scope?: unknown) => handlers.get('pty:listSessions')!(null, scope)
     return { localList, remoteLists, startup, list }
   }
+
+  it('includes both guest owners in local scope and refuses partial guest inventory', async () => {
+    const { list, remoteLists } = install()
+    const firstOwner = { distro: 'Ubuntu', relayBuildId: 'build-a' }
+    const secondOwner = { distro: 'Debian', relayBuildId: 'build-b' }
+    const firstId = toAppWslPtyId(firstOwner, 'pty2:guest:1')
+    const secondId = toAppWslPtyId(secondOwner, 'pty2:guest:1')
+    const first = vi.fn(async () => [
+      { id: firstId, cwd: '/folder one', title: 'guest', worktreeId: 'folder-project' }
+    ])
+    const second = vi.fn(async () => [{ id: secondId, cwd: '/folder two', title: 'guest' }])
+    const releaseFirst = registerWslPtyProvider(firstOwner, {
+      ...getLocalPtyProvider(),
+      listProcesses: first
+    })
+    const releaseSecond = registerWslPtyProvider(secondOwner, {
+      ...getLocalPtyProvider(),
+      listProcesses: second
+    })
+    try {
+      const rows = await list({ connectionId: null })
+      if (!Array.isArray(rows)) {
+        throw new Error('Expected session inventory')
+      }
+      expect(rows.map((row: { id: string }) => row.id)).toEqual(['local', firstId, secondId])
+      expect(rows[1]).toMatchObject({ cwd: '/folder one', worktreeId: 'folder-project' })
+      expect(remoteLists.every((remote) => remote.mock.calls.length === 0)).toBe(true)
+      second.mockRejectedValue(new Error('disconnected'))
+      await expect(list({ connectionId: null })).rejects.toThrow('unverifiable')
+      releaseSecond()
+      await expect(list({ connectionId: null })).rejects.toThrow('unverifiable')
+      expect(await list({ connectionId: 'host-17' })).toHaveLength(1)
+    } finally {
+      releaseFirst()
+      releaseSecond()
+      ptyOwnership.delete(firstId)
+      ptyOwnership.delete(secondId)
+    }
+  })
 
   it('queries only the chosen SSH provider and preserves workspace and ownership evidence', async () => {
     const { list, localList, remoteLists, startup } = install()

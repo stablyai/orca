@@ -177,6 +177,9 @@ function installWillQuitHandler(): void {
           })
         : Promise.resolve()
     // Why: cancels relay restart/reinstall timers and kills wsl.exe children deterministically, not via stdio-pipe teardown.
+    // Fence delayed guest owner publication before the final profile write.
+    const wslDaemonShutdown = state.wslDaemonSessions?.dispose() ?? Promise.resolve()
+    void wslDaemonShutdown.catch(() => {})
     wslHookRelayManager.disposeAll()
     const statsFlush = state.stats?.flushAsync() ?? Promise.resolve()
     // Why: agent-browser daemon processes would otherwise linger after quit, holding ports and stale session state on disk.
@@ -250,6 +253,7 @@ function installWillQuitHandler(): void {
     // temp+rename swap means a write cut short by the deadline leaves the old file intact.
     settleTeardownWithinDeadline([
       { name: 'daemon', promise: daemonTeardown },
+      { name: 'wsl-daemons', promise: wslDaemonShutdown },
       { name: 'browser', promise: browserShutdown },
       { name: 'runtime-rpc', promise: rpcStopAndClear },
       { name: 'watchers', promise: watcherShutdown },

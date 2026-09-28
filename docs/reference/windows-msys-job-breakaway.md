@@ -5,10 +5,11 @@ object unless the job is created **without** `JOB_OBJECT_LIMIT_BREAKAWAY_OK`.
 `terminatePtyJob` then reports `terminated` and leaves the child running — the
 orphan that holds a worktree directory open.
 
-The denial is already in `config/patches/node-pty@1.1.0.patch`
-(`usesCygwinRuntime`, added in #19068). This page records the measurement
-behind it, because the failure mode it prevents is indistinguishable from a
-stale native addon and the gates of the day could not tell the two apart.
+Current terminals use the Bun Windows job implementation in
+`src/main/daemon/pty-subprocess/windows-bun-pty-job.ts`; native MSYS coverage remains
+in `src/main/windows/windows-msys-job.win32.test.ts`. The node-pty patch and addon
+rebuild commands below describe the retired backend and are historical evidence,
+not installation instructions for the current build.
 
 ## The mechanism
 

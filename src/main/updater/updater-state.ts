@@ -65,6 +65,8 @@ export abstract class UpdaterState {
   // Why: once install has committed, late 'error' events must not clear quittingForUpdate — that would re-enable dock activate mid-installer.
   protected updateInstallCommitted = false
   // Why: recovery must only run after the native quitAndInstall call; pre-native errors must not clear quittingForUpdate or look like install recovery.
+  protected macNativeStaging = false
+  protected macNativeStagingTimer: ReturnType<typeof setTimeout> | null = null
   protected quitAndInstallNativeInvoked = false
   protected persistLastUpdateCheckAt: ((timestamp: number) => void) | null = null
   protected _getLastUpdateCheckAt: (() => number | null) | null = null

@@ -1,4 +1,6 @@
-import { describe, expect, it, vi } from 'vitest'
+import { DaemonPtyAdapter } from '../daemon/daemon-pty-adapter'
+import { DaemonPtyRouter } from '../daemon/daemon-pty-router'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import {
   openCodeBuildPtyEnvMock,
   openCodeClearPtyMock,
@@ -17,7 +19,6 @@ import {
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
-vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
@@ -115,7 +116,7 @@ describe('registerPtyHandlers', () => {
     expect(internals.pendingPtyRegistrationIncarnations.size).toBe(0)
     clearProviderPtyState(ptyId)
   })
-  it('adopts a live controller-owned local fallback when listings cannot serialize claims', async () => {
+  it('adopts a live controller-owned terminal when listings cannot serialize claims', async () => {
     const sessions: {
       id: string
       incarnationId: string
@@ -132,7 +133,6 @@ describe('registerPtyHandlers', () => {
       spawn: physicalSpawn,
       authoritativeOwnerListings: false
     })
-    Object.assign(provider, { routesFreshSpawnsToLocalProvider: true })
     setLocalPtyProvider(provider as never)
     const controller = registerAgentClaimController()
     const request = {
@@ -156,25 +156,23 @@ describe('registerPtyHandlers', () => {
     clearProviderPtyState('pty-local-claim')
   })
   it.each(['runtime controller', 'renderer IPC'] as const)(
-    'recovers degraded fresh-spawn routing before %s chooses daemon host semantics',
+    '%s preserves daemon identity while the router recovers fresh spawning',
     async (entryPoint) => {
-      let degraded = true
-      const daemonSpawn = vi.fn(async (options: { sessionId?: string }) => ({
+      const adapter = new DaemonPtyAdapter({
+        socketPath: '/test/recovery.sock',
+        tokenPath: '/test/recovery.token'
+      })
+      const daemonSpawn = vi.spyOn(adapter, 'spawn').mockImplementation(async (options) => ({
         id: options.sessionId ?? 'unexpected-fallback-id'
       }))
-      const provider = createAgentClaimProvider({ spawn: daemonSpawn })
-      const recoverFreshSpawnRouting = vi.fn(async () => {
-        degraded = false
-        return true
+      const recoverFreshSpawnRouting = vi.fn(async () => true)
+      const provider = new DaemonPtyRouter({
+        current: adapter,
+        legacy: [],
+        probeFreshSpawn: recoverFreshSpawnRouting
       })
-      Object.defineProperties(provider, {
-        routesFreshSpawnsToLocalProvider: {
-          configurable: true,
-          get: () => (degraded ? true : undefined)
-        },
-        recoverFreshSpawnRouting: { value: recoverFreshSpawnRouting }
-      })
-      setLocalPtyProvider(provider as never)
+      onTestFinished(() => provider.dispose())
+      setLocalPtyProvider(provider)
       const controller = registerAgentClaimController()
       const worktreeId = 'repo::/tmp/recovered-daemon-routing'
       const spawnArgs = {
@@ -199,23 +197,21 @@ describe('registerPtyHandlers', () => {
     }
   )
   it('recovers degraded routing for a fresh runtime session with a stable id', async () => {
-    let degraded = true
-    const daemonSpawn = vi.fn(async (options: { sessionId?: string; isNewSession?: boolean }) => ({
+    const adapter = new DaemonPtyAdapter({
+      socketPath: '/test/recovery.sock',
+      tokenPath: '/test/recovery.token'
+    })
+    const daemonSpawn = vi.spyOn(adapter, 'spawn').mockImplementation(async (options) => ({
       id: options.sessionId ?? 'unexpected-fallback-id'
     }))
-    const provider = createAgentClaimProvider({ spawn: daemonSpawn })
-    const recoverFreshSpawnRouting = vi.fn(async () => {
-      degraded = false
-      return true
+    const recoverFreshSpawnRouting = vi.fn(async () => true)
+    const provider = new DaemonPtyRouter({
+      current: adapter,
+      legacy: [],
+      probeFreshSpawn: recoverFreshSpawnRouting
     })
-    Object.defineProperties(provider, {
-      routesFreshSpawnsToLocalProvider: {
-        configurable: true,
-        get: () => (degraded ? true : undefined)
-      },
-      recoverFreshSpawnRouting: { value: recoverFreshSpawnRouting }
-    })
-    setLocalPtyProvider(provider as never)
+    onTestFinished(() => provider.dispose())
+    setLocalPtyProvider(provider)
     const controller = registerAgentClaimController()
 
     await controller.spawn({

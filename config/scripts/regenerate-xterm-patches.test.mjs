@@ -1,3 +1,4 @@
+import { assertMappedPatchDerivation } from './xterm-sourcemap-source-contract.mjs'
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -487,7 +488,13 @@ describe('committed xterm patch artifacts', () => {
     for (const packageEntry of manifest.packages) {
       const patch = await readFile(path.join(REPO_ROOT, packageEntry.patch), 'utf8')
       const source = await readFile(path.join(REPO_ROOT, packageEntry.sourcePatch), 'utf8')
-      expect(sourceHunks(source)).toBe(sourceHunks(patch))
+      if (packageEntry.sourceMaps) {
+        for (const map of packageEntry.sourceMaps) {
+          expect(() => assertMappedPatchDerivation(source, patch, map)).not.toThrow()
+        }
+      } else {
+        expect(sourceHunks(source)).toBe(sourceHunks(patch))
+      }
       expect(generatedHunks(patch, packageEntry.generatedPaths)).not.toBe('')
     }
   })

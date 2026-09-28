@@ -65,6 +65,7 @@ export class DaemonTerminalAdmission {
     }
     this.createOrAttachInFlight++
     let routedSessionId = payload.sessionId
+    let exitedDuringAdmission = false
     let result: CreateOrAttachResult
     let spawnPreparation: PendingPtySpawnPreparation | null = null
     try {
@@ -120,7 +121,13 @@ export class DaemonTerminalAdmission {
         onSessionResolved: (sessionId) => {
           routedSessionId = sessionId
         },
-        streamClient: this.createStreamClient(clientId, () => routedSessionId)
+        streamClient: this.createStreamClient(
+          clientId,
+          () => routedSessionId,
+          () => {
+            exitedDuringAdmission = true
+          }
+        )
       })
     } finally {
       if (spawnPreparation) {
@@ -139,7 +146,9 @@ export class DaemonTerminalAdmission {
       this.options.host.detach(routedSessionId, result.attachToken)
       throw new TerminalAttachCanceledError(routedSessionId)
     }
-    this.options.attachments.attach(routedSessionId, clientId, result.attachToken)
+    if (!exitedDuringAdmission) {
+      this.options.attachments.attach(routedSessionId, clientId, result.attachToken)
+    }
     this.options.streamDataBatcher.refreshSessionDroppability(routedSessionId)
     if (this.options.transientFactRelay.isBackgrounded(routedSessionId)) {
       this.options.streamDataBatcher.enqueueControlEvent(clientId, routedSessionId, {
@@ -171,7 +180,8 @@ export class DaemonTerminalAdmission {
 
   private createStreamClient(
     clientId: string,
-    sessionId: () => string
+    sessionId: () => string,
+    onExitObserved: () => void
   ): CreateOrAttachOptions['streamClient'] {
     return {
       onData: (data, rawLength = data.length, transformed = false, seq) => {
@@ -191,6 +201,7 @@ export class DaemonTerminalAdmission {
         })
       },
       onExit: (code, incarnationId, cause) => {
+        onExitObserved()
         const routedSessionId = sessionId()
         this.options.log.log('session-exited', {
           sessionId: routedSessionId,

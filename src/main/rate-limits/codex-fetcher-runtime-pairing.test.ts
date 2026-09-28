@@ -14,7 +14,7 @@ const { childSpawnMock, readFileMock, resolveCodexCommandMock, ptySpawnMock } = 
 vi.mock('node:child_process', () => ({ spawn: childSpawnMock }))
 vi.mock('node:fs/promises', () => ({ readFile: readFileMock }))
 vi.mock('../codex-cli/command', () => ({ resolveCodexCommand: resolveCodexCommandMock }))
-vi.mock('node-pty', () => ({ spawn: ptySpawnMock }))
+vi.mock('./hidden-daemon-pty', () => ({ spawnHiddenDaemonPty: ptySpawnMock }))
 vi.mock('../codex/codex-state-db', () => ({ isCodexStateDbBackfillPending: vi.fn(() => false) }))
 vi.mock('../codex/codex-state-db-backfill-recovery', () => ({
   startCodexStateDbBackfillRecoveryInBackground: vi.fn(() => Promise.resolve(null))

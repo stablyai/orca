@@ -10,7 +10,7 @@ import {
   isSshPtyNotFoundError
 } from './ssh-pty-errors'
 import { isProvenExitedPtyAttachRefusal } from '../../shared/pty-attach-absence-evidence'
-import { toAppSshPtyId, toRelaySshPtyId } from './ssh-pty-id'
+import { sshRelayPtyIdMapping, type RelayPtyIdMapping } from './relay-pty-id-mapping'
 import type { PtySpawnOptions, PtySpawnResult } from './types'
 import type { SshPtySpawnExitRaceTracker } from './ssh-pty-spawn-exit-race'
 import type {
@@ -177,18 +177,27 @@ export type { PtySourceRecoveryRequest }
 
 const RESTORE_REQUIRED_ATTACH_ATTEMPTS = 2
 
-export async function reattachSshPtySession(args: {
-  mux: SshChannelMultiplexer
-  connectionId: string
-  sessionId: string
-  options: PtySpawnOptions
-  rememberPtyIncarnation?: (relayPtyId: string, incarnationId: unknown) => void
-  installSourceActivation?: (
-    relayPtyId: string,
-    activation: PtySourceReceivingActivation
-  ) => SshPtyReceivingActivationLease
-}): Promise<SshPtyReattachResult> {
-  const relaySessionId = toRelaySshPtyId(args.connectionId, args.sessionId)
+type RelayPtyReattachIdentity =
+  | { connectionId: string; idMapping?: never }
+  | { connectionId?: never; idMapping: RelayPtyIdMapping }
+
+function reattachIds(identity: RelayPtyReattachIdentity): RelayPtyIdMapping {
+  return identity.idMapping ?? sshRelayPtyIdMapping(identity.connectionId)
+}
+
+export async function reattachSshPtySession(
+  args: RelayPtyReattachIdentity & {
+    mux: SshChannelMultiplexer
+    sessionId: string
+    options: PtySpawnOptions
+    rememberPtyIncarnation?: (relayPtyId: string, incarnationId: unknown) => void
+    installSourceActivation?: (
+      relayPtyId: string,
+      activation: PtySourceReceivingActivation
+    ) => SshPtyReceivingActivationLease
+  }
+): Promise<SshPtyReattachResult> {
+  const relaySessionId = reattachIds(args).toRelayPtyId(args.sessionId)
   console.warn(`[ssh-pty] spawn() called with sessionId=${args.sessionId}, attempting pty.attach`)
   try {
     // Why: expected pane identity prevents a reused relay id from attaching the wrong shell.
@@ -217,7 +226,7 @@ export async function reattachSshPtySession(args: {
       `[ssh-pty] pty.attach succeeded for ${args.sessionId}, replay=${!!attachResult.replay}`
     )
     return {
-      id: toAppSshPtyId(args.connectionId, relaySessionId),
+      id: reattachIds(args).toAppPtyId(relaySessionId),
       isReattach: true,
       ...(attachResult.replay ? { replay: attachResult.replay } : {}),
       ...(attachResult.incarnationId ? { incarnationId: attachResult.incarnationId } : {}),
@@ -262,7 +271,7 @@ export async function reattachSshPtySessionWithExitFence(
   let result: SshPtyReattachResult | undefined
   try {
     result = await reattachSshPtySession(args)
-    const relayPtyId = toRelaySshPtyId(args.connectionId, result.id)
+    const relayPtyId = reattachIds(args).toRelayPtyId(result.id)
     if (
       args.exitRaceTracker.didMatchingExitArrive(operation, {
         id: relayPtyId,
@@ -329,9 +338,6 @@ export async function reattachSshPtySessionForSpawn(
   // and positive evidence the PTY is live. Claiming expiry here made the caller retire the pane
   // binding and cold-restore the agent into a second copy of a running session.
   throw new Error(
-    `${SSH_PTY_SOURCE_RESTORE_REQUIRED_ERROR}: ${toRelaySshPtyId(
-      args.connectionId,
-      args.sessionId
-    )} ${restoreRequiredReason}`
+    `${SSH_PTY_SOURCE_RESTORE_REQUIRED_ERROR}: ${reattachIds(args).toRelayPtyId(args.sessionId)} ${restoreRequiredReason}`
   )
 }

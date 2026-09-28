@@ -110,9 +110,6 @@ export class OrcaRuntimeWithWaitForLeafPtyId extends OrcaRuntimeWithRestoreLiveP
     },
     trailingOutput: { data: string; seq: number }[] = []
   ): void {
-    if (!snapshot.data) {
-      return
-    }
     // Why: a redraw byte can create a suffix-only model before the renderer settles; replace it with the exact snapshot already sent mobile.
     this.providerSnapshotPreferredPtys.add(ptyId)
     this.disposeHeadlessTerminal(ptyId)
@@ -120,7 +117,7 @@ export class OrcaRuntimeWithWaitForLeafPtyId extends OrcaRuntimeWithRestoreLiveP
       ptyId,
       snapshot.data,
       { cols: snapshot.cols, rows: snapshot.rows },
-      { cwd: snapshot.cwd, oscLinks: snapshot.oscLinks }
+      { cwd: snapshot.cwd, oscLinks: snapshot.oscLinks, allowEmpty: true }
     )
     for (const chunk of trailingOutput) {
       this.trackHeadlessTerminalData(ptyId, chunk.data, chunk.seq)

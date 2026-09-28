@@ -8,6 +8,8 @@ export type DaemonStartOptions = {
   pidPath?: string
   launchNonce?: string
   startedAtMs?: number
+  linuxStartTicks?: string
+  bootId?: string
   publishEndpointOwnership?: DaemonServerOptions['publishEndpointOwnership']
   entryPath?: string
   appVersion?: string
@@ -30,6 +32,8 @@ export type DaemonHandle = {
 
 export async function startDaemon(opts: DaemonStartOptions): Promise<DaemonHandle> {
   const server = new DaemonServer({
+    linuxStartTicks: opts.linuxStartTicks,
+    bootId: opts.bootId,
     socketPath: opts.socketPath,
     tokenPath: opts.tokenPath,
     ...(opts.pidPath ? { pidPath: opts.pidPath } : {}),

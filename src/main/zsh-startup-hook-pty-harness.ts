@@ -11,16 +11,19 @@
  * command being typed, so matching on stdout matches the echo of the probe as
  * readily as its output.
  */
-import { spawnSync } from 'node:child_process'
+import { runProcessSync } from '../shared/child-process/run-process'
+import { runBundledBunFixture } from './bundled-bun-test-execution'
+import { spawnBunPty } from './daemon/pty-subprocess/bun-pty-process'
+import { z } from 'zod'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import * as pty from 'node-pty'
 
-export const hasZsh = process.platform !== 'win32' && spawnSync('zsh', ['--version']).status === 0
+export const hasZsh =
+  process.platform !== 'win32' && runProcessSync({ program: 'zsh', args: ['--version'] }).code === 0
 
 export const ZSH_PATH = hasZsh
-  ? (spawnSync('sh', ['-c', 'command -v zsh'], { encoding: 'utf8' }).stdout || '').trim()
+  ? (runProcessSync({ program: 'sh', args: ['-c', 'command -v zsh'] }).stdout || '').trim()
   : ''
 
 /** OSC sequences the wrapper emits, as the terminal would receive them. */
@@ -89,13 +92,30 @@ function parseValues(resultPath: string): Record<string, string> {
  * so a slow prompt framework makes the run slower, never flaky.
  */
 export async function runZshPty(options: ZshPtyOptions): Promise<ZshPtyRun> {
+  if (!process.versions.bun) {
+    return z
+      .object({
+        output: z.string(),
+        values: z.record(z.string(), z.string()),
+        exitedBeforePrompt: z.boolean()
+      })
+      .parse(
+        await runBundledBunFixture(
+          __filename,
+          'runZshPty',
+          options,
+          (options.timeoutMs ?? 20_000) + 5_000
+        )
+      )
+  }
   const sentinel = '@@ORCA-PTY-READY@@'
   const workDir = mkdtempSync(join(tmpdir(), 'orca-zsh-pty-'))
   const resultPath = join(workDir, 'probe.txt')
   const timeoutMs = options.timeoutMs ?? 20_000
 
-  const proc = pty.spawn(ZSH_PATH, ['-l', '-i'], {
-    name: 'xterm-256color',
+  const proc = spawnBunPty({
+    file: ZSH_PATH,
+    args: ['-l', '-i'],
     cols: 200,
     rows: 40,
     cwd: options.cwd ?? workDir,

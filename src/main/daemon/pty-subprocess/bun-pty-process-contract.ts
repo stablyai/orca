@@ -1,5 +1,6 @@
-import type * as pty from 'node-pty'
+import type { TerminalProcess } from '../../../shared/terminal-process'
 import type { JobTerminationOutcome } from '../../windows/windows-pty-job'
+import type { WindowsBunPtyJobNative } from './windows-bun-pty-native'
 import type { WindowsBunPtyJob } from './windows-bun-pty-job'
 import type { createWindowsBunPtyLaunch } from './windows-bun-pty-launch'
 
@@ -41,7 +42,8 @@ export type BunRuntime = {
   ): BunSubprocess
 }
 
-export type BunPtyProcess = pty.IPty & {
+export type BunPtyProcess = TerminalProcess & {
+  handleFlowControl: boolean
   destroy(): void
   processNameIsSpawnFile?: true
   jobRootProcessIsWrapper?: true
@@ -59,13 +61,18 @@ export type BunPtySpawnArgs = {
   env: Record<string, string>
   cols: number
   rows: number
+  windowsJobKillOnClose?: boolean
 }
 
 export type SpawnBunPtyDeps = {
   platform?: NodeJS.Platform
   runtime?: BunRuntime
   assignHostJob?: () => boolean
-  createJob?: (pid: number) => WindowsBunPtyJob | null
+  createJob?: (
+    pid: number,
+    native?: WindowsBunPtyJobNative | null,
+    killOnClose?: boolean
+  ) => WindowsBunPtyJob | null
   createWindowsLaunch?: typeof createWindowsBunPtyLaunch
   readProcessTable?: () => string
   signalProcessGroup?: (pgid: number, signal: NodeJS.Signals) => void

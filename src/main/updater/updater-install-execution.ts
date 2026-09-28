@@ -1,4 +1,4 @@
-import { BrowserWindow } from 'electron'
+import { BrowserWindow, autoUpdater as nativeUpdater } from 'electron'
 import { killAllPty } from '../ipc/pty'
 import { withUpdaterSpan } from '../observability/instrumentation'
 import { runWithLaunchPath } from '../startup/hydrate-shell-path'
@@ -105,6 +105,27 @@ export abstract class UpdaterInstallExecution extends UpdaterPackageRecovery {
         }
         // Why: mark before the call so a sync 'error' during quitAndInstall can recover; pre-native errors must not look like install failure.
         this.quitAndInstallNativeInvoked = true
+        if (
+          process.platform === 'darwin' &&
+          this.updateInstallMode === 'supervised-headless-serve' &&
+          !isMacInstallerReady()
+        ) {
+          this.macNativeStaging = true
+          this.macNativeStagingTimer = setTimeout(() => {
+            this.macNativeStagingTimer = null
+            // Native staging cannot be cancelled; its durable handoff must survive late readiness.
+            this.sendInstallFailureStatus({
+              state: 'error',
+              version: pendingVersion,
+              retryable: false,
+              message:
+                'The server update is still being prepared. Orca remains running and will restart when preparation finishes. Do not start another update.'
+            })
+          }, 120_000)
+          this.macNativeStagingTimer.unref?.()
+          nativeUpdater.checkForUpdates()
+          return
+        }
         // Why: invoke before killAllPty/removing close listeners so a sync 'error' can recover while windows and PTYs are intact.
         const supervisorOwnsRelaunch = this.updateInstallMode === 'supervised-headless-serve'
         runWithLaunchPath(() =>
@@ -172,13 +193,52 @@ export abstract class UpdaterInstallExecution extends UpdaterPackageRecovery {
         // A synchronous throw carries the same installer text the 'error' event would have.
         message: quitAndInstallNativeInvokedBeforeReset
           ? this.withInstallFailureCause(this.getPreCommitInstallFailureMessage(), error)
-          : 'Could not restart to install the update. Quit and reopen Orca, then try again.'
+          : this.updateInstallMode === 'supervised-headless-serve'
+            ? this.getPreCommitInstallFailureMessage()
+            : 'Could not restart to install the update. Quit and reopen Orca, then try again.'
       })
     }
   }
 
+  protected handleMacNativeInstallReady(): void {
+    if (!this.macNativeStaging || !this.quitAndInstallInProgress) {
+      return
+    }
+    this.macNativeStaging = false
+    if (this.macNativeStagingTimer) {
+      clearTimeout(this.macNativeStagingTimer)
+    }
+    this.macNativeStagingTimer = null
+    this.updateInstallCommitted = true
+    armUpdateInstallExitWatchdog()
+    // A serve process can acquire desktop windows after startup.
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.removeAllListeners('close')
+    }
+    // MacUpdater observes readiness before our listener, so this cannot add a pending quit callback.
+    try {
+      runWithLaunchPath(() => this.getAutoUpdater().quitAndInstall(true, false))
+    } catch (error) {
+      recordUpdaterLifecycle('post_commit_cleanup_failed', {
+        errorType: error instanceof Error ? error.name : typeof error
+      })
+    }
+  }
+
+  protected handleMacNativeInstallError(error: unknown): void {
+    if (!this.macNativeStaging) {
+      return
+    }
+    this.macNativeStaging = false
+    this.handleQuitAndInstallFailure(error)
+  }
+
   // Why: quitAndInstall failures arrive via 'error'; recover only after native invoke and before commit, else clearing quittingForUpdate lets dock activate reopen the old process mid-installer.
   protected handleQuitAndInstallFailure(error?: unknown): boolean {
+    // JS check errors cannot cancel an independently running native staging operation.
+    if (this.macNativeStaging) {
+      return true
+    }
     if (
       !this.quitAndInstallInProgress ||
       !this.quitAndInstallNativeInvoked ||

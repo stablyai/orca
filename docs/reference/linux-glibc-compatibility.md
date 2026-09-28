@@ -17,8 +17,7 @@ requirement.
 ## Why this needs attention
 
 A native module (`.node`) links against the glibc of the machine that compiled
-it. Our release CI compiles node-pty from source on GitHub's `ubuntu-latest`
-runner, whose glibc rises over time as the image is bumped. A binary compiled on
+it. Build runners' glibc rises over time as their images are bumped. A binary compiled on
 a newer glibc can reference symbol versions that do not exist on an older target,
 and the dynamic loader then refuses to load it:
 
@@ -26,8 +25,8 @@ and the dynamic loader then refuses to load it:
 /lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.34' not found (required by .../pty.node)
 ```
 
-Because the Orca main process loads node-pty at startup, that failure crashes the
-whole app before a window appears — this is exactly what shipped in v1.4.150 and
+Older Orca releases loaded node-pty in the main process at startup, so that failure
+crashed the whole app before a window appeared. This shipped in v1.4.150 and
 broke launch on Ubuntu 20.04 ([#9902](https://github.com/stablyai/orca/issues/9902)).
 
 The specific trap is glibc's 2.32–2.34 "libpthread/libutil merge", which moved
@@ -45,20 +44,11 @@ the floor, so node-pty was the sole blocker.
 
 ## How we keep the floor
 
-**1. Pin the relocated symbols (the fix).**
-[`config/patches/node-pty@1.1.0.patch`](../../config/patches/node-pty@1.1.0.patch)
-adds a `.symver` shim in `src/unix/pty.cc` that binds `openpty`, `forkpty`, and
-`pthread_sigmask` to their pre-merge version node — `GLIBC_2.2.5` on x64,
-`GLIBC_2.17` on arm64 (each architecture's baseline glibc). glibc still ships
-those as compatibility aliases, so the reference resolves on both new build hosts
-and old targets.
-
-The catch: gcc defaults to `--as-needed` and, since the pinned symbols now
-resolve from libc's compat aliases at build time, it drops `libutil`/`libpthread`
-from `DT_NEEDED`. On the target those libraries are where the symbols actually
-live, so the patch's `binding.gyp` `ldflags` force
-`-Wl,--no-as-needed,-l:libutil.so.1,-l:libpthread.so.0` back into `DT_NEEDED`.
-The shim is guarded by `#if defined(__linux__)`; macOS and Windows are untouched.
+**1. Use the qualified bundled terminal runtime.** Desktop and headless terminal
+services use pinned Bun. The former node-pty symbol-version patch is retired;
+the historical failure above still explains why every native artifact needs a
+floor check. Native dependencies compiled from source must use a compatible
+sysroot or explicitly preserve the older symbol versions and required libraries.
 
 **2. Gate packaging (the regression guard).**
 [`config/scripts/verify-linux-glibc-floor.cjs`](../../config/scripts/verify-linux-glibc-floor.cjs)
@@ -76,12 +66,11 @@ only in libutil. A future runner bump, a new native dependency, or a dropped
 ldflag therefore fails the release build instead of shipping a Linux app that
 crashes on launch.
 
-> The gate is a static invariant, not an integration test. The load path was
-> verified by hand for this fix (real Ubuntu 20.04, x64 + arm64: `require`
-> node-pty and spawn a shell). A CI smoke test that loads the packaged
-> `pty.node` in a glibc-2.31 container and spawns a shell is the recommended
-> follow-up — it would make the load path self-verifying and stay valid even if
-> the build ever moves to an old-glibc sysroot.
+The static gate is paired with
+`config/scripts/run-linux-packaged-terminal-floor-smoke.mjs`, which launches the
+packaged Bun daemon through the packaged Electron client in Ubuntu 20.04. It
+checks real shell output, resize, history/snapshots, reconnect and exit handling
+on the release architectures.
 
 The one carve-out is the `sherpa-onnx` speech prebuilt, which already requires
 `GLIBCXX_3.4.29` (GCC 11). It loads lazily in the speech worker
@@ -92,8 +81,8 @@ app itself still launches on stock 20.04.
 
 **3. Qualify the bundled headless runtime and its native dependencies.**
 Orcad and the SSH relay use pinned Bun for terminals. They do not install node-pty
-prebuilds or compile node-pty on the remote host. Desktop Electron still uses the
-patched node-pty dependency and the build gates above.
+prebuilds or compile node-pty on the remote host. Desktop Electron uses the same
+terminal service runtime; the build gates above cover its packaged artifacts.
 
 The Bun runtime catalog selects glibc or musl artifacts for each supported CPU.
 The bundled-runtime CI checks the Linux glibc floor and runs native dependency
@@ -107,7 +96,7 @@ proof that a host cannot start.
 - Prefer packages that ship prebuilt binaries compiled against an old toolchain
   (manylinux / `glibc 2.17`-class), like `@parcel/watcher`.
 - For a module we compile from source, if the gate flags it, either pin the
-  offending symbols the way node-pty does, or build it in an old-glibc container.
+  offending symbols to compatible versions, or build it in an old-glibc container.
 - To check locally on a Linux host, list what a binary requires (skipping the
   weak `0x02`-flagged needs the loader tolerates):
 

@@ -1,3 +1,4 @@
+import type { WslAccountExecutionContext } from '../wsl/wsl-account-execution-context'
 import type { Store } from '../persistence'
 import {
   getSelectedClaudeAccountIdForTarget,
@@ -16,11 +17,30 @@ export class ClaudeRuntimeAuthService extends ClaudeRuntimeAuthSync {
   }
 
   async prepareForClaudeLaunch(
-    target?: ClaudeAccountSelectionTarget
+    target?: ClaudeAccountSelectionTarget,
+    execution?: WslAccountExecutionContext
   ): Promise<ClaudeRuntimeAuthPreparation> {
-    const effectiveTarget = target ?? this.getDefaultAccountSelectionTarget()
-    await this.syncForCurrentSelection(effectiveTarget)
-    return this.getPreparation(effectiveTarget)
+    const effectiveTarget = { ...(target ?? this.getDefaultAccountSelectionTarget()) }
+    const captured = execution ? Object.freeze({ ...execution }) : undefined
+    return this.serializeMutation(async () => {
+      const selected = getSelectedClaudeAccountIdForTarget(
+        this.store.getSettings(),
+        effectiveTarget
+      )
+      const before = captured ? this.getPreparation(effectiveTarget, captured) : undefined
+      await this.doSyncForCurrentSelection(effectiveTarget, captured)
+      const preparation = this.getPreparation(effectiveTarget, captured)
+      if (
+        captured &&
+        (selected !==
+          getSelectedClaudeAccountIdForTarget(this.store.getSettings(), effectiveTarget) ||
+          before?.configDir !== preparation.configDir ||
+          before?.wslLinuxConfigDir !== preparation.wslLinuxConfigDir)
+      ) {
+        throw new Error('Claude account selection changed during guest preparation')
+      }
+      return { ...preparation, ...(captured ? { wslExecution: captured } : {}) }
+    })
   }
 
   async prepareForRateLimitFetch(

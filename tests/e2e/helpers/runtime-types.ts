@@ -1,3 +1,4 @@
+import type { PaneManager } from '../../../src/renderer/src/lib/pane-manager/pane-manager'
 import type { AppState } from '../../../src/renderer/src/store/types'
 import type { OpenFile, RightSidebarTab } from '../../../src/renderer/src/store/slices/editor'
 import type {
@@ -27,6 +28,7 @@ export type ManagedPaneHandle = ManagedPane & ManagedPaneInternal
 // Why not optional: window.__paneManagers only ever holds real PaneManager instances, and
 // marking the methods optional made every call site a possibly-undefined invocation.
 export type PaneManagerLike = {
+  movePane: PaneManager['movePane']
   getActivePane(): ManagedPaneHandle | null
   getPanes(limit?: number): ManagedPaneHandle[]
   splitPane(paneId: number, direction: 'vertical' | 'horizontal'): ManagedPaneHandle | null

@@ -1,3 +1,4 @@
+import { spawnHiddenDaemonPty } from './hidden-daemon-pty'
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import { extractCodexAuthError } from '../../shared/codex-auth-errors'
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
@@ -30,11 +31,28 @@ export async function fetchCodexRateLimitsViaPty(
   if (options?.signal?.aborted) {
     return abortedCodexRateLimitResult()
   }
-  const pty = await import('node-pty')
-  if (options?.signal?.aborted) {
-    return abortedCodexRateLimitResult()
-  }
   const command = resolveCommand()
+
+  let term: Awaited<ReturnType<typeof spawnHiddenDaemonPty>>
+  try {
+    term = await spawnHiddenDaemonPty(
+      command.command,
+      command.args,
+      {
+        name: 'xterm-256color',
+        cols: 120,
+        rows: 40,
+        cwd: command.cwd,
+        env: command.env
+      },
+      options?.signal
+    )
+  } catch (error) {
+    if (options?.signal?.aborted) {
+      return abortedCodexRateLimitResult()
+    }
+    throw error
+  }
 
   return new Promise<ProviderRateLimits>((resolve) => {
     let output = ''
@@ -43,13 +61,6 @@ export async function fetchCodexRateLimitsViaPty(
     let settleTimer: ReturnType<typeof setTimeout> | null = null
     let timeout: ReturnType<typeof setTimeout> | null = null
 
-    const term = pty.spawn(command.command, command.args, {
-      name: 'xterm-256color',
-      cols: 120,
-      rows: 40,
-      cwd: command.cwd,
-      env: command.env
-    })
     const termDisposables: { dispose: () => void }[] = [registerHiddenRateLimitPty(term)]
 
     let statusEnter: ReturnType<typeof setTimeout> | null = null
@@ -201,6 +212,25 @@ export async function fetchCodexRateLimitsViaPty(
     if (onDataDisposable) {
       termDisposables.push(onDataDisposable)
     }
+
+    termDisposables.push(
+      term.onError((error) => {
+        if (resolved) {
+          return
+        }
+        resolved = true
+        clearSettleTimers()
+        cleanupHiddenRateLimitPty(term, termDisposables, { kill: true })
+        resolve({
+          provider: 'codex',
+          session: null,
+          weekly: null,
+          updatedAt: Date.now(),
+          error: error.message,
+          status: 'error'
+        })
+      })
+    )
 
     const onExitDisposable = term.onExit(() => {
       cleanupHiddenRateLimitPty(term, termDisposables, { kill: false })

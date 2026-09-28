@@ -10,7 +10,7 @@
  * temp file so the worker fixture can pick it up at runtime.
  */
 
-import { execSync } from 'node:child_process'
+import { execFileSync, execSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -62,6 +62,37 @@ export default function globalSetup(): void {
       timeout: CLI_E2E_BUILD_TIMEOUT_MS
     })
     console.error('[e2e] CLI build complete.')
+  }
+  const terminalEntry = path.join(root, 'out', 'terminal-daemon', 'daemon-entry.js')
+  const terminalGate = path.join(root, 'out', 'terminal-daemon', 'windows-bun-pty-gate-entry.js')
+  const runtimeDirectory = path.join(
+    root,
+    'out',
+    'cli-runtime',
+    `${process.platform}-${process.arch}`
+  )
+  const runtimeManifest = path.join(runtimeDirectory, 'runtime.json')
+  const runtimeBinary = path.join(
+    runtimeDirectory,
+    process.platform === 'win32' ? 'bun-runtime.exe' : 'bun-runtime'
+  )
+  if (!existsSync(runtimeManifest) || !existsSync(runtimeBinary)) {
+    execFileSync(
+      process.execPath,
+      ['config/scripts/build-cli-runtime.mjs', '--arch', process.arch],
+      {
+        cwd: root,
+        stdio: 'inherit',
+        timeout: CLI_E2E_BUILD_TIMEOUT_MS
+      }
+    )
+  }
+  if (!process.env.SKIP_BUILD || !existsSync(terminalEntry) || !existsSync(terminalGate)) {
+    execSync('node config/scripts/build-terminal-daemon.mjs', {
+      cwd: root,
+      stdio: 'inherit',
+      timeout: CLI_E2E_BUILD_TIMEOUT_MS
+    })
   }
   if (process.env.ORCA_E2E_WEB_CLIENT === '1') {
     if (process.env.SKIP_BUILD && existsSync(outWeb)) {

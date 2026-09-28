@@ -1,3 +1,4 @@
+import type { WslAccountExecutionContext } from '../wsl/wsl-account-execution-context'
 import type { CodexManagedAccount } from '../../shared/managed-account-types'
 import type { Store } from '../persistence'
 import { CodexCredentialAbsenceGrace } from './codex-credential-absence-grace'
@@ -41,12 +42,12 @@ export abstract class CodexRuntimeHomeState {
   abstract prepareForCodexLaunch(
     target?: CodexAccountSelectionTarget,
     launchEnv?: NodeJS.ProcessEnv,
-    options?: { unavailableManagedHomePath?: string }
+    options?: { unavailableManagedHomePath?: string; wslExecution?: WslAccountExecutionContext }
   ): string | null
   abstract prepareForCodexLaunchAsync(
     target?: CodexAccountSelectionTarget,
     launchEnv?: NodeJS.ProcessEnv,
-    options?: { unavailableManagedHomePath?: string }
+    options?: { unavailableManagedHomePath?: string; wslExecution?: WslAccountExecutionContext }
   ): Promise<string | null>
   abstract beginHostSystemDefaultSessionMigrationLaunch(
     codexHomePath: string | null,
@@ -83,7 +84,8 @@ export abstract class CodexRuntimeHomeState {
   ): boolean | null
   protected abstract startWslSessionBridgeForLaunch(
     target: CodexAccountSelectionTarget,
-    runtimeHomePath: string | null
+    runtimeHomePath: string | null,
+    execution?: WslAccountExecutionContext
   ): void
 
   abstract getHostCodexHomePathsForSessionDiscovery(): string[]
@@ -100,14 +102,19 @@ export abstract class CodexRuntimeHomeState {
   abstract reconcileLegacySharedHomeForRetainedPanes(): void
   abstract syncActiveWslSelectionsBeforeRestart(): Promise<void>
 
-  protected abstract getWslSystemCodexHomePath(target: CodexAccountSelectionTarget): string | null
+  protected abstract getWslSystemCodexHomePath(
+    target: CodexAccountSelectionTarget,
+    execution?: WslAccountExecutionContext
+  ): string | null
   protected abstract finishWslLaunchPreparation(
     target: CodexAccountSelectionTarget,
-    homePath: string | null
+    homePath: string | null,
+    execution?: WslAccountExecutionContext
   ): void
   protected abstract syncWslConfigAndGlobalInstructionsForLaunch(
     target: CodexAccountSelectionTarget,
-    runtimeHomePath: string | null
+    runtimeHomePath: string | null,
+    execution?: WslAccountExecutionContext
   ): void
   abstract prepareForRateLimitFetch(
     target?: CodexAccountSelectionTarget
@@ -136,19 +143,22 @@ export abstract class CodexRuntimeHomeState {
     target: CodexAccountSelectionTarget
   ): string | null
   protected abstract getWslCodexHomePathForSelection(
-    target: CodexAccountSelectionTarget
+    target: CodexAccountSelectionTarget,
+    execution?: WslAccountExecutionContext
   ): string | null
   protected abstract getWslLaunchCodexHomePath(
     account: CodexManagedAccount,
-    targetDistro: string | undefined
+    targetDistro: string | undefined,
+    execution?: WslAccountExecutionContext
   ): string | null
   protected abstract startLegacyWslAuthDrain(
     target: CodexAccountSelectionTarget,
-    options?: { throwOnFailure?: boolean }
+    options?: { throwOnFailure?: boolean; wslExecution?: WslAccountExecutionContext }
   ): Promise<void>
   protected abstract resolveLegacyWslAuthDestination(
     distro: string,
-    runtimeAuthContents: string
+    runtimeAuthContents: string,
+    execution?: WslAccountExecutionContext
   ): Promise<LegacyWslRuntimeAuthDestination | null>
   protected abstract joinWslPath(basePath: string, ...segments: string[]): string
   protected abstract resolveWslDefaultTarget(

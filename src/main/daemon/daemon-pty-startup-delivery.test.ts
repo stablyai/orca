@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { rmSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import * as localPtyUtils from '../providers/local-pty-utils'
+import * as localPtyUtils from '../providers/pty-spawn-validation'
 import {
   createMockSubprocess,
   startDaemonAdapterHarness,

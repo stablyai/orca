@@ -57,7 +57,7 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.ref }}
 
-      # Why: the build's plain-Node daemon smoke load resolves node-pty.
+      # Build checks require the Electron runtime and Windows native addons.
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: node
@@ -77,6 +77,8 @@ jobs:
           VITE_EXPOSE_STORE: 'true'
         run: |
           status=0
+          pnpm run build:cli || status=1
+          pnpm run build:terminal-daemon || status=1
           pnpm run build:relay &
           relay_pid=$!
           npx electron-vite build --mode e2e || status=1

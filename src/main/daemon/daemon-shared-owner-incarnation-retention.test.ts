@@ -2,8 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
-import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
-import { LocalPtyProvider } from '../providers/local-pty-provider'
+import { DaemonPtyRouter } from './daemon-pty-router'
 import type { PtyProcessInfo } from '../providers/types'
 import { TerminalSessionOwnerUnverifiedError } from './daemon-errors'
 
@@ -59,17 +58,14 @@ function adapterFixture(label: string, pid: number) {
 async function fixture() {
   const current = adapterFixture('current', 999_999_997)
   const legacy = adapterFixture('legacy', 999_999_998)
-  const fallback = new LocalPtyProvider()
-  vi.spyOn(fallback, 'listProcesses').mockResolvedValue([])
-  const provider = new DegradedDaemonPtyProvider({
+  const provider = new DaemonPtyRouter({
     current: current.adapter,
-    legacy: [legacy.adapter],
-    fallback
+    legacy: [legacy.adapter]
   })
   cleanups.push(() => provider.dispose())
   await current.publishIdentity(0)
   await legacy.publishIdentity(0)
-  const recovery = provider['ownerRecovery']
+  const recovery = provider['ownerResolver']
   return { current, legacy, provider, recovery }
 }
 
@@ -78,44 +74,40 @@ function processInfo(id: string, incarnationId: string): PtyProcessInfo {
 }
 
 describe('shared daemon owner incarnation retirement', () => {
-  it('releases both private indexes after repeated authenticated daemon replacements', async () => {
+  it('releases the owner index after repeated authenticated daemon replacements', async () => {
     const { current, legacy, provider, recovery } = await fixture()
     legacy.setProcesses([processInfo('legacy-live', 'legacy-incarnation')])
     for (let generation = 0; generation < 16; generation++) {
       const id = `retired-${generation}`
       current.setProcesses([processInfo(id, `incarnation-${generation}`)])
-      await provider.discoverDaemonSessions()
+      await provider.discoverLegacySessions()
       await expect(provider.probePtyLiveness(`unmapped-${generation}`)).resolves.toBe(false)
-      expect(recovery['livenessResolver']['routeIncarnations'].get(id)).toBe(
-        `incarnation-${generation}`
-      )
+      expect(recovery['routeIncarnations'].get(id)).toBe(`incarnation-${generation}`)
       current.setProcesses([])
       await current.publishIdentity(generation + 1)
-      expect([...provider['sessionProviders'].keys()]).toEqual(['legacy-live'])
-      expect([...recovery['attachResolver']['routeIncarnations'].keys()]).toEqual(['legacy-live'])
-      expect([...recovery['livenessResolver']['routeIncarnations'].keys()]).toEqual(['legacy-live'])
+      expect([...provider['sessionAdapters'].keys()]).toEqual(['legacy-live'])
+      expect([...recovery['routeIncarnations'].keys()]).toEqual(['legacy-live'])
     }
   })
 
   it('preserves the same session ID after another provider publishes its successor', async () => {
     const { current, legacy, provider, recovery } = await fixture()
     current.setProcesses([processInfo('same-id', 'old-incarnation')])
-    await provider.discoverDaemonSessions()
+    await provider.discoverLegacySessions()
     await provider.probePtyLiveness('unmapped-old')
     current.setProcesses([])
     legacy.setProcesses([processInfo('same-id', 'new-incarnation')])
-    await provider.discoverDaemonSessions()
+    await provider.discoverLegacySessions()
     await provider.probePtyLiveness('unmapped-new')
     await current.publishIdentity(1)
-    expect(provider['sessionProviders'].get('same-id')).toBe(legacy.adapter)
-    expect(recovery['attachResolver']['routeIncarnations'].get('same-id')).toBe('new-incarnation')
-    expect(recovery['livenessResolver']['routeIncarnations'].get('same-id')).toBe('new-incarnation')
+    expect(provider['sessionAdapters'].get('same-id')).toBe(legacy.adapter)
+    expect(recovery['routeIncarnations'].get('same-id')).toBe('new-incarnation')
   })
 
   it('keeps matching-incarnation direct attach without consulting another inventory', async () => {
     const { current, legacy, provider } = await fixture()
     legacy.setProcesses([processInfo('live', 'live-incarnation')])
-    await provider.discoverDaemonSessions()
+    await provider.discoverLegacySessions()
     await provider.probePtyLiveness('unmapped')
     await current.publishIdentity(1)
     current.request.mockClear()
@@ -139,7 +131,7 @@ describe('shared daemon owner incarnation retirement', () => {
   it('retains authoritative incarnation mismatch refusal after another daemon changes', async () => {
     const { current, legacy, provider } = await fixture()
     legacy.setProcesses([processInfo('live', 'current-incarnation')])
-    await provider.discoverDaemonSessions()
+    await provider.discoverLegacySessions()
     await current.publishIdentity(1)
     await expect(
       provider.spawn({

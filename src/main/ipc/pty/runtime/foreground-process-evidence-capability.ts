@@ -1,19 +1,20 @@
-import { getProvider, registeredPtyProviders } from '../provider/registry'
+import { getProvider, registeredPtyProviders, localProvider } from '../provider/registry'
 
 /** Probe the owning provider before opting into the no-process-table inventory projection. */
 export async function supportsForegroundProcessEvidenceFromRuntimeController(
   connectionId?: string | null
 ): Promise<boolean> {
-  if (connectionId === null) {
-    return true
-  }
-  if (connectionId === undefined) {
-    const providers = registeredPtyProviders()
+  if (connectionId === undefined || connectionId === null) {
+    const providers = registeredPtyProviders().filter(
+      (entry) => connectionId === undefined || entry.connectionId === null
+    )
     const supported = await Promise.all(
-      providers.map(async ({ provider, connectionId: providerConnectionId }) =>
-        providerConnectionId === null
+      providers.map(async ({ provider }) =>
+        provider === localProvider
           ? true
-          : ((await provider.supportsForegroundProcessEvidence?.()) ?? false)
+          : ((await Promise.resolve()
+              .then(() => provider.supportsForegroundProcessEvidence?.())
+              .catch(() => false)) ?? false)
       )
     )
     return supported.every(Boolean)

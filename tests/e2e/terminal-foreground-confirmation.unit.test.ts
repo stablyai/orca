@@ -5,8 +5,14 @@ const { spawnMock, resolveForegroundMock } = vi.hoisted(() => ({
   resolveForegroundMock: vi.fn()
 }))
 
-vi.mock('node-pty', () => ({ spawn: spawnMock }))
-vi.mock('../../src/main/pwsh', () => ({ isPwshAvailable: vi.fn(() => false) }))
+vi.mock('../../src/main/daemon/pty-subprocess/bun-pty-process', () => ({
+  canUseBunPty: () => true,
+  spawnBunPty: spawnMock
+}))
+vi.mock('../../src/main/pwsh', () => ({
+  isPwshAvailable: vi.fn(() => false),
+  isPwshAvailableAsync: vi.fn(async () => false)
+}))
 vi.mock('../../src/main/providers/windows-powershell-executable', () => ({
   resolveWindowsPowerShellExecutablePath: () =>
     'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',

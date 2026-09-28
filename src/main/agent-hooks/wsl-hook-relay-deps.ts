@@ -60,7 +60,7 @@ export type WslHookRelayManagerDeps = {
   readBundle: (jsPath: string) => Buffer
   listDistros: () => Promise<string[]>
   isDistroRunning: typeof isWslDistroRunning
-  prepareRuntime: (distro: string) => Promise<string>
+  prepareRuntime: (distro: string, user?: string) => Promise<string>
   spawnRelay: typeof spawnWslRelayProcess
   runInstall: typeof runWslInstallProcess
   waitForSentinel: typeof waitForWslRelaySentinel
@@ -99,7 +99,8 @@ export const defaultWslHookRelayDeps: WslHookRelayManagerDeps = {
   readBundle: (jsPath) => readFileSync(jsPath),
   listDistros: () => listWslDistrosAsync(),
   isDistroRunning: isWslDistroRunning,
-  prepareRuntime: (distro) => ensureWslBunRuntime(createRunningWslRuntimeRunner(distro)),
+  prepareRuntime: (distro, user) =>
+    ensureWslBunRuntime(createRunningWslRuntimeRunner(distro, undefined, user)),
   spawnRelay: spawnWslRelayProcess,
   runInstall: runWslInstallProcess,
   waitForSentinel: waitForWslRelaySentinel,

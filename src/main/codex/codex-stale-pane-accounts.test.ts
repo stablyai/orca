@@ -244,6 +244,26 @@ describe('codex pane account registry', () => {
     expect(hasRecordedLegacySharedCodexPane()).toBe(false)
   })
 
+  it('preserves guest account provenance when native inventory is empty', () => {
+    const guestId = 'wsl:Ubuntu@@daemon-build@@guest-pty'
+    recordCodexPaneAccount(guestId, {
+      selectionKey: 'wsl:Ubuntu',
+      accountId: 'captured-account',
+      homeRoute: 'account-home'
+    })
+    recordCodexPaneAccount('legacy-windows-owned-wsl', {
+      selectionKey: 'wsl:Ubuntu',
+      accountId: null,
+      homeRoute: 'wsl-home'
+    })
+
+    reconcileCodexPaneAccountsWithLivePtys([])
+    _internals.resetCache()
+
+    expect(getCodexPaneAccount(guestId)).toMatchObject({ accountId: 'captured-account' })
+    expect(getCodexPaneAccount('legacy-windows-owned-wsl')).toBeNull()
+  })
+
   it('forgets a PTY so a reused id cannot inherit a dead pane account', () => {
     recordCodexPaneAccount('pty-1', { selectionKey: 'host', accountId: 'account-a' })
 

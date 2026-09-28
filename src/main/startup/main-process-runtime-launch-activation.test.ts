@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import type { UpdaterSetupOptions } from '../updater'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const electronApp = vi.hoisted(() => ({
@@ -13,6 +14,16 @@ const electronApp = vi.hoisted(() => ({
 const launchHooks = vi.hoisted(() => ({
   duringInstallDirRepair: (): void => {},
   failBeforeWindow: false
+}))
+
+const updater = vi.hoisted(() => ({
+  setupAutoUpdater: vi.fn<(window: unknown, options?: UpdaterSetupOptions) => void>(),
+  resolveUpdateInstallMode: vi.fn(() => 'supervised-headless-serve'),
+  preserveAuth: vi.fn(async () => {})
+}))
+vi.mock('../updater', () => updater)
+vi.mock('../agent-auth-restart-preservation', () => ({
+  preserveAgentAuthBeforeRestart: updater.preserveAuth
 }))
 
 vi.mock('electron', () => ({ app: electronApp, powerMonitor: { on: vi.fn() } }))
@@ -36,7 +47,6 @@ vi.mock('../ipc/pty', () => ({
   getLocalPtyProvider: vi.fn(),
   registerHeadlessPtyRuntime: vi.fn()
 }))
-vi.mock('../providers/local-pty-provider', () => ({ LocalPtyProvider: class {} }))
 vi.mock('../browser/offscreen-browser-backend', () => ({ OffscreenBrowserBackend: class {} }))
 vi.mock('../browser/browser-manager', () => ({ browserManager: {} }))
 vi.mock('./main-process-relay-status', () => ({
@@ -101,6 +111,7 @@ vi.mock('./main-process-i18n-menu', () => ({
   initializeMainProcessI18nAndMenu: vi.fn(async () => {})
 }))
 
+const { getServeOptions, printServeReady } = await import('./main-process-serve')
 const { initializeMainProcessReady } = await import('./main-process-ready')
 const { mainProcessState: state } = await import('./main-process-state')
 const { createServeDesktopActivationGate } = await import('./serve-desktop-activation')
@@ -145,6 +156,8 @@ describe('desktop startup activation', () => {
   }
 
   beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(getServeOptions).mockReset()
     windows = []
     showWindowWithoutStealingFocus.mockClear()
     ipcHandles = new Set()
@@ -217,6 +230,69 @@ describe('desktop startup activation', () => {
 
     expect(windows).toHaveLength(0)
     expect(state.desktopActivationGate).toBeNull()
+  })
+
+  it('configures the windowless serve updater after proxy setup and before readiness', async () => {
+    state.isServeMode = true
+    vi.mocked(getServeOptions).mockReturnValue({
+      json: true,
+      noPairing: true,
+      mobilePairing: false,
+      recipeJson: false,
+      pairingAddress: null,
+      projectRoot: null
+    })
+    const flushPendingAsync = vi.fn(async () => {})
+    const exportCompatibility = vi.fn(async () => {})
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: serve startup and updater callbacks use only these store methods.
+    state.store = {
+      getUI: () => ({}),
+      updateUI: vi.fn(),
+      flushPendingAsync,
+      writeLatestProfileStateJsonCompatibilityExportAsync: exportCompatibility
+    } as unknown as NonNullable<typeof state.store>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: auth preservation is mocked and only the presence of these services is checked.
+    state.codexRuntimeHome = {} as NonNullable<typeof state.codexRuntimeHome>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: auth preservation and headless PTY registration are mocked.
+    state.claudeRuntimeAuth = {} as NonNullable<typeof state.claudeRuntimeAuth>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these are the runtime methods called by the actual serve launch branch.
+    state.runtime = {
+      refreshRestoredOrchestrationAuthority: vi.fn(),
+      reconcileLegacyWorkerTerminals: vi.fn(),
+      syncWindowGraph: vi.fn()
+    } as unknown as NonNullable<typeof state.runtime>
+    let releaseProxy = (): void => {}
+    state.initialProxyApplicationReady = new Promise<void>((resolve) => {
+      releaseProxy = resolve
+    })
+    const openMainWindow = vi.fn(() => {
+      throw new Error('serve must not construct a window')
+    })
+    const startup = initializeMainProcessReady({ openMainWindow, handleMacAppActivation: vi.fn() })
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect(updater.setupAutoUpdater).not.toHaveBeenCalled()
+    releaseProxy()
+    await startup
+    expect(openMainWindow).not.toHaveBeenCalled()
+    expect(updater.resolveUpdateInstallMode).toHaveBeenCalledWith(true)
+    expect(updater.setupAutoUpdater).toHaveBeenCalledWith(
+      null,
+      expect.objectContaining({
+        installMode: 'supervised-headless-serve',
+        onBeforeQuitFailure: 'abort'
+      })
+    )
+    expect(updater.setupAutoUpdater.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(printServeReady).mock.invocationCallOrder[0]
+    )
+    const options = updater.setupAutoUpdater.mock.calls[0][1]!
+    await options.onBeforeQuit!()
+    expect(updater.preserveAuth).toHaveBeenCalledOnce()
+    expect(exportCompatibility).toHaveBeenCalledOnce()
+    expect(flushPendingAsync).toHaveBeenCalledOnce()
+    exportCompatibility.mockRejectedValueOnce(new Error('export failed'))
+    await expect(options.onBeforeQuit!()).rejects.toThrow('export failed')
+    expect(flushPendingAsync).toHaveBeenCalledTimes(2)
   })
 
   it('holds every launch mode behind the gate until startup settles it', () => {

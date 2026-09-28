@@ -1,6 +1,6 @@
 import type * as ChildProcess from 'node:child_process'
 import { describe, expect, it, vi } from 'vitest'
-import type { IPty } from 'node-pty'
+import type { TerminalProcess } from '../../shared/terminal-process'
 
 // Module-level, so it intercepts the module's own import binding. A spyOn of a
 // require()'d child_process does not: the first version of this test passed
@@ -13,7 +13,20 @@ vi.mock('node:child_process', async (importOriginal) => ({
 
 import { readWindowsPtyJobProcessIds } from './windows-pty-job-membership'
 
-const pty = (pid = 100): IPty => ({ pid }) as unknown as IPty
+const pty = (pid = 100): TerminalProcess => ({
+  pid,
+  cols: 80,
+  rows: 24,
+  process: 'cmd.exe',
+  onData: () => ({ dispose() {} }),
+  onExit: () => ({ dispose() {} }),
+  write() {},
+  resize() {},
+  clear() {},
+  kill() {},
+  pause() {},
+  resume() {}
+})
 
 describe('readWindowsPtyJobProcessIds', () => {
   it('never spawns a child process to answer', () => {

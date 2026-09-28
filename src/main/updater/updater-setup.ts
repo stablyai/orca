@@ -111,7 +111,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     super.dismissAvailableUpdate()
   }
 
-  setupAutoUpdater(mainWindow: BrowserWindow, opts?: UpdaterSetupOptions): void {
+  setupAutoUpdater(mainWindow: BrowserWindow | null, opts?: UpdaterSetupOptions): void {
     this.mainWindowRef = mainWindow
     this.onBeforeQuitCleanup = opts?.onBeforeQuit ?? null
     this.onBeforeQuitFailure = opts?.onBeforeQuitFailure ?? 'continue'
@@ -170,6 +170,13 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     this.autoUpdaterInitialized = true
 
     registerAutoUpdaterHandlers({
+      onNativeInstallEvent: (event, error) => {
+        if (event === 'ready') {
+          this.handleMacNativeInstallReady()
+        } else {
+          this.handleMacNativeInstallError(error)
+        }
+      },
       autoUpdater,
       clearBackgroundCheckLaunchPending: () => this.clearBackgroundCheckLaunchPending(),
       clearAvailableUpdateContext: () => this.clearAvailableUpdateContext(),

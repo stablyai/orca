@@ -1,3 +1,4 @@
+import { isWslDaemonRecovery } from '../../../shared/wsl-pty-consumer-recovery'
 import {
   serializeCompleteProfileStateDomains,
   serializeSelectiveProfileStateDomains
@@ -9,6 +10,7 @@ import { collectFolderWorkspaceDiffComments } from '../../folder-workspace-diff-
 import {
   PROTECTED_SECRET_SLOT,
   sshPtyOwnerLeaseSecretSlot,
+  wslPtyOwnerLeaseSecretSlot,
   type ProtectedSecretRetentionUpdate
 } from '../../protected-secret-persistence'
 import { stripRetiredGlobalSettings } from '../applying-settings/terminal-settings-migrations'
@@ -105,6 +107,16 @@ export class StateSerializationSecretHandlingOperations {
               this.runtime.state.workspaceSession
             )
           }
+          break
+        case 'wslPtyConsumerRecoveries':
+          stateToSave[domain] = (this.runtime.state.wslPtyConsumerRecoveries ?? []).map((record) =>
+            isWslDaemonRecovery(record)
+              ? record
+              : {
+                  ...record,
+                  ownerLease: encrypt(wslPtyOwnerLeaseSecretSlot(record), record.ownerLease)
+                }
+          )
           break
         case 'sshRemotePtyLeases':
           stateToSave[domain] = this.runtime.state.sshRemotePtyLeases
@@ -203,6 +215,21 @@ export class StateSerializationSecretHandlingOperations {
       folderWorkspaceDiffComments: collectFolderWorkspaceDiffComments(
         this.runtime.state.folderWorkspaces
       ),
+      ...(this.runtime.state.wslPtyConsumerRecoveries !== undefined
+        ? {
+            wslPtyConsumerRecoveries: this.runtime.state.wslPtyConsumerRecoveries.map((record) =>
+              isWslDaemonRecovery(record)
+                ? record
+                : {
+                    ...record,
+                    ownerLease: encryptToSentinel(
+                      wslPtyOwnerLeaseSecretSlot(record),
+                      record.ownerLease
+                    )
+                  }
+            )
+          }
+        : {}),
       sshPtyConsumerRecoveries: (this.runtime.state.sshPtyConsumerRecoveries ?? []).map(
         (record) => ({
           ...record,

@@ -19,6 +19,7 @@ import {
   ORCAD_TEMPLATE_MANIFEST_FILENAME,
   ORCAD_TEMPLATE_TARGETS_DIR,
   ORCAD_VERSION_FILENAME,
+  ORCAD_WINDOWS_CONPTY_ARTIFACTS,
   orcadArtifactFilenames,
   orcadTemplateCommonFilenames
 } from '../../shared/orcad-artifacts'
@@ -90,6 +91,9 @@ function createTemplate(target: OrcadBunTarget = TARGET): {
   write(runtimePath, 'bun-executable')
   if (target.startsWith('win32-')) {
     write(join(templateDir, 'windows-process-tree.node'), 'process-table')
+    for (const filename of ORCAD_WINDOWS_CONPTY_ARTIFACTS) {
+      write(join(templateDir, filename), filename)
+    }
   }
   write(
     join(templateDir, ORCAD_TEMPLATE_MANIFEST_FILENAME),

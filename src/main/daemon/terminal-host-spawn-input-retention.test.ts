@@ -123,6 +123,52 @@ describe('TerminalHost completed spawn inputs', () => {
     }
   })
 
+  it('releases observer-path spawn inputs and native cleanup captures after the shell receipt', async () => {
+    const receipt = Promise.withResolvers<void>()
+    const observed = Promise.withResolvers<void>()
+    let cleanupCapture: WeakRef<object> | undefined
+    const host = new TerminalHost({
+      spawnSubprocess: async (options) => {
+        const handle = subprocess()
+        const nativeCleanupState = { handle, env: options.env }
+        cleanupCapture = new WeakRef(nativeCleanupState)
+        const attempt = options.onSpawnAttempt?.(
+          () => handle,
+          async () => nativeCleanupState.handle.forceKill()
+        )
+        if (!attempt) {
+          throw new Error('Production spawn observer was not installed')
+        }
+        if (attempt.failure) {
+          throw attempt.failure.error
+        }
+        handle.emitData('BEFORE-RECEIPT\r\n')
+        observed.resolve()
+        await receipt.promise
+        return handle
+      }
+    })
+    const created = startWithInputs(host, 'observed-pending')
+    try {
+      await observed.promise
+      await collect()
+      expect(created.refs.map((ref) => ref.deref() !== undefined)).toEqual(Array(4).fill(true))
+      expect(cleanupCapture?.deref()).toBeDefined()
+      expect(host.listSessions()).toHaveLength(0)
+      receipt.resolve()
+      expect((await created.creation).historySeeded).toBe(true)
+      await collect()
+      expect(created.refs.map((ref) => ref.deref() === undefined)).toEqual(Array(4).fill(true))
+      expect(cleanupCapture?.deref()).toBeUndefined()
+      expect(host.listSessions()).toHaveLength(1)
+      expect(host.getSnapshot('observed-pending')?.snapshotAnsi).toContain('BEFORE-RECEIPT')
+    } finally {
+      receipt.resolve()
+      await created.creation
+      await host.dispose()
+    }
+  })
+
   it('reaps exited sessions, preserves exit evidence and releases claimed generations', async () => {
     const handles: ReturnType<typeof subprocess>[] = []
     const reaped: string[] = []

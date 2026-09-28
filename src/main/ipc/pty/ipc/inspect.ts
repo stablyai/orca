@@ -1,3 +1,7 @@
+import {
+  createLocalInventoryAuthority,
+  type LocalInventoryAuthorityDeps
+} from '../provider/local-inventory-authority'
 import { getPtyIpc } from '../../pty-host-bindings'
 import { parseAppSshPtyId } from '../../../providers/ssh-pty-id'
 import { inspectPtyProviderProcessForRenderer } from '../../../providers/pty-process-inspection'
@@ -13,6 +17,7 @@ import {
   getProvider,
   hasPtyProviderForInspection,
   registeredPtyProviders,
+  localProvider,
   sshProviders,
   tryGetProviderForPty
 } from '../provider/registry'
@@ -25,9 +30,11 @@ import {
   settlePendingPaneSerializer
 } from '../pane/serializer-state'
 
-export function installPtyInspectIpcHandlers(deps: {
-  getLocalPtyProviderStartupPromise: (connectionId?: string | null) => Promise<void> | undefined
-}): void {
+export function installPtyInspectIpcHandlers(
+  deps: LocalInventoryAuthorityDeps & {
+    getLocalPtyProviderStartupPromise: (connectionId?: string | null) => Promise<void> | undefined
+  }
+): void {
   const ipcMain = getPtyIpc()
   const { getLocalPtyProviderStartupPromise } = deps
 
@@ -57,16 +64,31 @@ export function installPtyInspectIpcHandlers(deps: {
           await getLocalPtyProviderStartupPromise()
         }
       }
+      const localAuthority = createLocalInventoryAuthority(
+        scope === undefined || scope.connectionId === null ? deps : {}
+      )
       const deduped = new Map<string, PtyListedSession>()
       const admission = new PtyProcessListAdmission()
       await visitPtyProcessListingsInBatches(
-        scope === undefined
-          ? registeredPtyProviders()
+        scope === undefined || scope.connectionId === null
+          ? registeredPtyProviders().filter(
+              ({ connectionId }) => scope === undefined || connectionId === null
+            )
           : [{ provider: getProvider(scope.connectionId), connectionId: scope.connectionId }],
-        ({ provider, connectionId }) =>
-          connectionId === null || scope !== undefined
-            ? provider.listProcesses()
-            : provider.listProcesses().catch(() => []),
+        async ({ provider, connectionId }) => {
+          try {
+            return await provider.listProcesses()
+          } catch (error) {
+            if (connectionId === null && provider !== localProvider) {
+              localAuthority.failed(provider, error)
+              return []
+            }
+            if (connectionId !== null && scope === undefined) {
+              return []
+            }
+            throw error
+          }
+        },
         ({ provider, connectionId }, sessions) => {
           for (const rawSession of sessions) {
             const session = admission.admit(rawSession)
@@ -90,6 +112,9 @@ export function installPtyInspectIpcHandlers(deps: {
           }
         }
       )
+      if (scope === undefined || scope.connectionId === null) {
+        localAuthority.assertComplete()
+      }
       return Array.from(deduped.values())
     }
   )

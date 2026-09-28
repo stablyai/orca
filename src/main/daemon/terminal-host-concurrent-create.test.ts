@@ -165,7 +165,7 @@ describe('concurrent createOrAttach across the async spawn', () => {
     await host.dispose()
   })
 
-  it('waits for an in-flight spawn before disposing its session', async () => {
+  it('cleans up an in-flight spawn without publishing after shutdown starts', async () => {
     let releaseSpawn: () => void = () => {}
     const spawnGate = new Promise<void>((resolve) => {
       releaseSpawn = resolve
@@ -179,6 +179,7 @@ describe('concurrent createOrAttach across the async spawn', () => {
     })
 
     const creation = host.createOrAttach(createOptions('shutdown-race'))
+    const rejected = expect(creation).rejects.toThrow('Terminal host is shutting down')
     const disposal = host.dispose()
     let disposed = false
     void disposal.then(() => {
@@ -189,7 +190,7 @@ describe('concurrent createOrAttach across the async spawn', () => {
     expect(disposed).toBe(false)
 
     releaseSpawn()
-    await creation
+    await rejected
     await disposal
 
     expect(subprocess.forceKill).toHaveBeenCalledOnce()

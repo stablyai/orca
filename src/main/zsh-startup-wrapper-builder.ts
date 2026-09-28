@@ -39,7 +39,7 @@ import {
 
 /** Runtime values the hook re-exports after the user's own startup files ran. */
 export type ZshWrapperRestoreSpec = {
-  /** The managed WSL CLI dir onto PATH — local wrappers only; a no-op outside WSL. */
+  /** The managed WSL CLI dir onto PATH; a no-op outside WSL. */
   managedWslCli: boolean
   /** Orca's agent-teams shim dir back onto PATH. */
   agentTeamsPath: boolean

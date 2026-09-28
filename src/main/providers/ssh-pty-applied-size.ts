@@ -8,7 +8,7 @@ const SSH_PTY_APPLIED_SIZE_TIMEOUT_MS = 1_000
 
 export function createSshPtyAppliedSizeReader(
   mux: SshChannelMultiplexer,
-  connectionId: string
+  owner: string | ((id: string) => string)
 ): (id: string) => Promise<AppliedPtySize | null> {
   let supported: boolean | null = null
   return async (id) => {
@@ -16,19 +16,19 @@ export function createSshPtyAppliedSizeReader(
       return null
     }
     try {
-      const result = (await mux.request(
+      const result = await mux.request(
         'pty.getSize',
         {
-          id: toRelaySshPtyId(connectionId, id)
+          id: typeof owner === 'string' ? toRelaySshPtyId(owner, id) : owner(id)
         },
         { timeoutMs: SSH_PTY_APPLIED_SIZE_TIMEOUT_MS }
-      )) as {
-        cols?: unknown
-        rows?: unknown
-      } | null
+      )
       supported = true
       if (
         !result ||
+        typeof result !== 'object' ||
+        !('cols' in result) ||
+        !('rows' in result) ||
         !Number.isInteger(result.cols) ||
         !Number.isInteger(result.rows) ||
         Number(result.cols) <= 0 ||

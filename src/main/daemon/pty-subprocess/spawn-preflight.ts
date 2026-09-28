@@ -1,13 +1,18 @@
-import type * as pty from 'node-pty'
+import '../xterm-env-polyfill'
+import { Terminal } from '@xterm/headless'
+import {
+  installDeviceAttributesResponder,
+  STARTUP_DA1_RESPONSE
+} from '../startup-device-attributes-responder'
+import type { BunPtyProcess } from './bun-pty-process-contract'
+import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import { statSync } from 'node:fs'
 import { release } from 'node:os'
 import { getCmdExePath } from '../../../shared/windows-batch-spawn'
 import {
-  ensureNodePtySpawnHelperExecutable,
-  getNodePtySpawnHelperCandidates,
   validateWorkingDirectoryAsync,
   WorkingDirectoryValidationAbortedError
-} from '../../providers/local-pty-utils'
+} from '../../providers/pty-spawn-validation'
 import { resolveSafePtyDefaultCwd } from '../../providers/pty-default-cwd'
 import { TerminalAttachCanceledError } from '../daemon-errors'
 import { DaemonProtocolError } from '../types'
@@ -15,25 +20,12 @@ import { canUseBunPty, spawnBunPty } from './bun-pty-process'
 
 const PTY_SPAWN_HEALTH_TIMEOUT_MS = 4_000
 
-async function loadNodePty(): Promise<typeof pty> {
-  return import('node-pty')
-}
-
 function daemonEnvironmentDiagSuffix(): string {
   const orca = process.env.ORCA_APP_VERSION?.trim() || '0.0.0-dev'
   const systemVersion =
     (process as NodeJS.Process & { getSystemVersion?: () => string }).getSystemVersion?.() ||
     release()
   return ` (orca: ${orca}, arch: ${process.arch}, platform: ${process.platform} ${systemVersion})`
-}
-
-function formatMissingDaemonPathError(kind: 'helper' | 'cwd', path: string): DaemonProtocolError {
-  const detailName = kind === 'helper' ? 'helper' : 'cwd'
-  const step = kind === 'helper' ? 'posix_spawn' : 'daemon_cwd'
-  const missingTarget = kind === 'helper' ? 'node-pty install' : 'working directory'
-  return new DaemonProtocolError(
-    `Daemon's ${missingTarget} is gone (worktree deleted?). Restart Orca. node-pty: ${step} failed: ENOENT (errno 2, No such file or directory) - ${detailName}='${path}'${daemonEnvironmentDiagSuffix()}`
-  )
 }
 
 function isExistingDirectory(path: string | undefined): path is string {
@@ -81,29 +73,9 @@ function preflightDaemonCwd(): void {
   if (repairDaemonCwd()) {
     return
   }
-  throw formatMissingDaemonPathError('cwd', daemonCwd)
-}
-
-function preflightMacNodePtySpawnEnvironment(): void {
-  if (process.platform !== 'darwin' || canUseBunPty()) {
-    return
-  }
-  let candidates: string[]
-  try {
-    candidates = getNodePtySpawnHelperCandidates()
-  } catch {
-    throw formatMissingDaemonPathError('helper', '<unresolved>')
-  }
-  for (const candidate of candidates) {
-    try {
-      if (statSync(candidate).isFile()) {
-        return
-      }
-    } catch {
-      // Try the next node-pty native location.
-    }
-  }
-  throw formatMissingDaemonPathError('helper', candidates[0] ?? '<unresolved>')
+  throw new DaemonProtocolError(
+    `Daemon working directory is unavailable: '${daemonCwd}'. Restart Orca.${daemonEnvironmentDiagSuffix()}`
+  )
 }
 
 function preflightUnixPtySpawnEnvironment(): void {
@@ -112,11 +84,6 @@ function preflightUnixPtySpawnEnvironment(): void {
   }
   // Why: detached daemons can outlive their launch cwd; repair before every spawn.
   preflightDaemonCwd()
-  preflightMacNodePtySpawnEnvironment()
-}
-
-function isNativeWindowsPath(path: string): boolean {
-  return /^[A-Za-z]:[\\/]/.test(path) || path.startsWith('\\\\')
 }
 
 export async function preflightPtySpawn(args: {
@@ -126,12 +93,12 @@ export async function preflightPtySpawn(args: {
   signal?: AbortSignal
 }): Promise<void> {
   if (!canUseBunPty()) {
-    ensureNodePtySpawnHelperExecutable()
+    throw new DaemonProtocolError('Terminal service requires the bundled Bun runtime')
   }
   preflightUnixPtySpawnEnvironment()
   try {
     if (process.platform === 'win32') {
-      if (args.cwdWasExplicit && isNativeWindowsPath(args.validationCwd)) {
+      if (args.cwdWasExplicit && isWindowsAbsolutePathLike(args.validationCwd)) {
         await validateWorkingDirectoryAsync(
           args.validationCwd,
           args.signal ? { signal: args.signal } : {}
@@ -163,7 +130,10 @@ export function formatPtySpawnError(err: unknown, shellPath: string, spawnCwd: s
 }
 
 export async function runPtySpawnHealthProbe(): Promise<void> {
-  const requiresShellIdentity = process.platform === 'win32' && canUseBunPty()
+  if (!canUseBunPty()) {
+    throw new DaemonProtocolError('Terminal service requires the bundled Bun runtime')
+  }
+  const requiresShellIdentity = process.platform === 'win32'
   const cwd = isExistingDirectory(process.env.ORCA_USER_DATA_PATH)
     ? process.env.ORCA_USER_DATA_PATH
     : resolveSafePtyDefaultCwd()
@@ -171,7 +141,7 @@ export async function runPtySpawnHealthProbe(): Promise<void> {
     process.platform === 'win32'
       ? { file: getCmdExePath(), args: ['/d', '/c', 'exit', '0'] }
       : { file: '/bin/sh', args: ['-c', 'exit 0'] }
-  let proc: pty.IPty
+  let proc: BunPtyProcess
   try {
     const env: Record<string, string> = { TERM: 'xterm-256color' }
     for (const [key, value] of Object.entries(process.env)) {
@@ -179,21 +149,29 @@ export async function runPtySpawnHealthProbe(): Promise<void> {
         env[key] = value
       }
     }
-    proc = canUseBunPty()
-      ? spawnBunPty({ ...command, cols: 2, rows: 1, cwd, env })
-      : (await loadNodePty()).spawn(command.file, command.args, {
-          name: 'xterm-256color',
-          cols: 2,
-          rows: 1,
-          cwd,
-          env
-        })
+    proc = spawnBunPty({ ...command, cols: 2, rows: 1, cwd, env, windowsJobKillOnClose: true })
   } catch (err) {
     throw formatPtySpawnError(err, command.file, cwd)
   }
 
   return new Promise<void>((resolve, reject) => {
     let settled = false
+    const terminal = new Terminal({ cols: 2, rows: 1, scrollback: 0 })
+    const releaseResponder = installDeviceAttributesResponder({
+      parser: terminal.parser,
+      response: STARTUP_DA1_RESPONSE,
+      reply: (data) => {
+        if (settled) {
+          return
+        }
+        try {
+          proc.write(data)
+        } catch (error) {
+          finish(formatPtySpawnError(error, command.file, cwd), { kill: true })
+        }
+      }
+    })
+    let dataDisposable: { dispose(): void } | undefined
     let exitDisposable: { dispose(): void } | undefined
     const finish = (error?: Error, opts?: { kill?: boolean }): void => {
       if (settled) {
@@ -202,6 +180,9 @@ export async function runPtySpawnHealthProbe(): Promise<void> {
       settled = true
       clearTimeout(timer)
       exitDisposable?.dispose()
+      dataDisposable?.dispose()
+      releaseResponder()
+      terminal.dispose()
       if (opts?.kill) {
         try {
           proc.kill()
@@ -220,9 +201,15 @@ export async function runPtySpawnHealthProbe(): Promise<void> {
         kill: true
       })
     }, PTY_SPAWN_HEALTH_TIMEOUT_MS)
+    // ConPTY waits for DA1 even when the probe shell immediately exits.
+    dataDisposable = proc.onData((data) => {
+      if (!settled) {
+        terminal.write(data)
+      }
+    })
     exitDisposable = proc.onExit(({ exitCode }) => {
       if (exitCode === 0) {
-        const shellPid = 'shellProcessId' in proc ? proc.shellProcessId : undefined
+        const shellPid = proc.shellProcessId
         if (
           requiresShellIdentity &&
           (typeof shellPid !== 'number' ||
@@ -238,15 +225,15 @@ export async function runPtySpawnHealthProbe(): Promise<void> {
         finish(new Error(`PTY spawn health check exited with code ${exitCode}`))
       }
     })
+    if (settled) {
+      exitDisposable.dispose()
+    }
   })
 }
 
 export function preflightPtySpawnHealth(): boolean {
-  if (process.platform === 'win32' && !canUseBunPty()) {
-    return false
-  }
   if (!canUseBunPty()) {
-    ensureNodePtySpawnHelperExecutable()
+    throw new DaemonProtocolError('Terminal service requires the bundled Bun runtime')
   }
   preflightUnixPtySpawnEnvironment()
   return true

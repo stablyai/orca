@@ -156,3 +156,12 @@ describe('Windows Bun PTY job ownership', () => {
     expect(warn).toHaveBeenCalledOnce()
   })
 })
+
+it('arms kill-on-close only for explicitly transient PTY jobs', () => {
+  const native = createNative()
+  const job = createWindowsBunPtyJob(11, native, true)
+  expect(job).not.toBeNull()
+  expect(native.configureJob).toHaveBeenCalledWith(7, 0x2000)
+  job?.close()
+  expect(native.closeHandle).toHaveBeenCalledWith(7)
+})

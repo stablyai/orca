@@ -1,21 +1,5 @@
-/**
- * Boots the BUILT terminal daemon (out/main/daemon-entry.js) under plain Node —
- * the exact way production forks it (ELECTRON_RUN_AS_NODE = a plain-Node
- * process) — and asserts it starts, serves a real PTY, and stops.
- *
- * Why this exists: native-smoke CI (and packaging) went green while
- * v1.4.129-rc.1 shipped a daemon that exited code 1 at module load because an
- * electron `require` leaked into its bundle graph. Nothing executed the built
- * entry under plain Node, so the outage was invisible until an adopted old
- * daemon died in the field. This runs on every PR that touches the daemon.
- *
- * Hard assertions (fail the job):
- *   - the daemon signals `{ type: 'ready' }` over IPC within the timeout, and
- *   - it terminates when asked (no hang / zombie).
- * Best-effort (logged skip, never fails): an end-to-end `ptySpawnHealth` RPC,
- * because node-pty spawn can be flaky on constrained CI runners.
- */
-import { fork } from 'node:child_process'
+/** Boots the shipped standalone daemon with its verified Bun runtime and a real PTY. */
+import { daemonSmokeEntry, spawnDaemonSmoke } from './daemon-smoke-launch.mjs'
 import { connect } from 'node:net'
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
@@ -23,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 const projectDir = resolve(import.meta.dirname, '../..')
-const entryPath = join(projectDir, 'out', 'main', 'daemon-entry.js')
+const entryPath = daemonSmokeEntry(projectDir)
 
 const READY_TIMEOUT_MS = 30_000
 const PTY_HEALTH_TIMEOUT_MS = 10_000
@@ -132,21 +116,14 @@ function runDaemonRpc(socketPath, tokenPath, protocolVersion, request, timeoutMs
   })
 }
 
-// Best-effort: constrained CI runners can make node-pty spawn flaky.
 async function runPtySpawnHealthCheck(socketPath, tokenPath, protocolVersion) {
-  try {
-    await runDaemonRpc(
-      socketPath,
-      tokenPath,
-      protocolVersion,
-      { id: 'health-1', type: 'ptySpawnHealth' },
-      PTY_HEALTH_TIMEOUT_MS
-    )
-    return true
-  } catch (error) {
-    log(`PTY spawn health check skipped (best-effort): ${error.message}`)
-    return false
-  }
+  await runDaemonRpc(
+    socketPath,
+    tokenPath,
+    protocolVersion,
+    { id: 'health-1', type: 'ptySpawnHealth' },
+    PTY_HEALTH_TIMEOUT_MS
+  )
 }
 
 async function main() {
@@ -157,31 +134,21 @@ async function main() {
   const launchNonce = randomUUID()
   const protocolVersion = readProtocolVersion()
 
-  log(`forking ${entryPath} under plain Node (${process.execPath})`)
-  const child = fork(
+  log(`launching ${entryPath} under verified bundled Bun`)
+  const child = spawnDaemonSmoke(projectDir, userDataDir, [
+    '--socket',
+    socketPath,
+    '--token',
+    tokenPath,
+    '--pid-record',
+    pidPath,
+    '--launch-nonce',
+    launchNonce,
+    '--entry-path',
     entryPath,
-    [
-      '--socket',
-      socketPath,
-      '--token',
-      tokenPath,
-      '--pid-record',
-      pidPath,
-      '--launch-nonce',
-      launchNonce,
-      '--entry-path',
-      entryPath,
-      '--app-version',
-      'daemon-boot-smoke'
-    ],
-    {
-      // Plain Node: no ELECTRON_RUN_AS_NODE. process.execPath is already node in
-      // CI, and this is exactly the runtime where a leaked `require("electron")`
-      // throws MODULE_NOT_FOUND — the failure this smoke exists to catch.
-      stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
-      env: { ...process.env, ORCA_USER_DATA_PATH: userDataDir }
-    }
-  )
+    '--app-version',
+    'daemon-boot-smoke'
+  ])
 
   let stderr = ''
   child.stderr?.on('data', (chunk) => {
@@ -252,10 +219,8 @@ async function main() {
     stderr += '[boot-smoke] stderr released at readiness, mirroring production\n'
     child.disconnect()
 
-    const ptyHealthy = await runPtySpawnHealthCheck(socketPath, tokenPath, protocolVersion)
-    if (ptyHealthy) {
-      log('ptySpawnHealth OK — daemon spawned a real PTY end-to-end')
-    }
+    await runPtySpawnHealthCheck(socketPath, tokenPath, protocolVersion)
+    log('ptySpawnHealth OK — daemon spawned a real PTY end-to-end')
 
     await new Promise((resolveExit, rejectExit) => {
       const timer = setTimeout(() => {
@@ -298,7 +263,7 @@ async function main() {
       throw new Error(`daemon leaked private bind names: ${leaked.join(', ')}`)
     }
 
-    log('PASS: daemon booted, served, and shut down under plain Node')
+    log('PASS: daemon booted, served, and shut down under bundled Bun')
   } finally {
     cleanup()
   }

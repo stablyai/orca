@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import * as processRunner from '../../shared/child-process/run-process'
 import { runProcess, spawnProcess } from '../../shared/child-process/run-process'
-import { ORCAD_BUN_VERSION } from '../../shared/orcad-bun-runtime'
+import { ORCAD_BUN_VERSION, orcadBunVersionProbeArgs } from '../../shared/orcad-bun-runtime'
 import { orcadBunRuntimeFilename } from '../../shared/orcad-artifacts'
 import SyncDatabase from '../sqlite/sync-database'
 import { appendTurns, writeOpenCodeSqliteDatabase } from './session-scanner-opencode-sqlite-fixture'
@@ -64,9 +64,11 @@ for (const [runtime, executable] of [
   describe.skipIf(!existsSync(executable))(`OpenCode SQLite process under ${runtime}`, () => {
     it('uses the deployed runtime and reads live WAL, full prompts and captures in one persistent child', async () => {
       if (runtime === 'Bun') {
-        expect((await runProcess({ program: executable, args: ['--version'] })).stdout.trim()).toBe(
-          ORCAD_BUN_VERSION
-        )
+        expect(
+          (
+            await runProcess({ program: executable, args: [...orcadBunVersionProbeArgs()] })
+          ).stdout.trim()
+        ).toBe(ORCAD_BUN_VERSION)
       }
       expect(existsSync(`${dbPath}-wal`)).toBe(true)
       const spawn = vi.spyOn(processRunner, 'spawnProcess')

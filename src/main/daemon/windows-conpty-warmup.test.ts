@@ -1,11 +1,6 @@
+import type { BunPtySpawnArgs } from './pty-subprocess/bun-pty-process-contract'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type * as pty from 'node-pty'
 import { warmWindowsConptyOnce } from './windows-conpty-warmup'
-import { assignHostProcessToKillOnCloseJob } from '../windows/windows-pty-job'
-
-vi.mock('../windows/windows-pty-job', () => ({
-  assignHostProcessToKillOnCloseJob: vi.fn(() => true)
-}))
 
 function setPlatform(platform: NodeJS.Platform): () => void {
   const original = process.platform
@@ -25,48 +20,48 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-function makeFakePty(): { proc: pty.IPty; fireExit: () => void } {
+function makeFakePty() {
   let exitListener: (() => void) | null = null
+  const dispose = vi.fn()
   const proc = {
     pid: 4321,
     kill: vi.fn(),
     onExit: vi.fn((listener: () => void) => {
       exitListener = listener
-      return { dispose: () => undefined }
+      return { dispose }
     })
-  } as unknown as pty.IPty
-  return { proc, fireExit: () => exitListener?.() }
+  }
+  return { proc, dispose, fireExit: () => exitListener?.() }
 }
 
 describe('warmWindowsConptyOnce', () => {
   it('is a no-op off Windows', async () => {
     restorePlatform = setPlatform('darwin')
-    const spawnPty = vi.fn() as unknown as typeof pty.spawn
+    const spawnPty = vi.fn()
 
     warmWindowsConptyOnce(spawnPty)
     await flushImmediates()
 
     expect(spawnPty).not.toHaveBeenCalled()
-    expect(assignHostProcessToKillOnCloseJob).not.toHaveBeenCalled()
   })
 
   it('spawns a short-lived cmd.exe with the bundled ConPTY on Windows', async () => {
     restorePlatform = setPlatform('win32')
-    const { proc, fireExit } = makeFakePty()
-    const spawnPty = vi.fn(() => proc) as unknown as typeof pty.spawn
+    const { proc, fireExit, dispose } = makeFakePty()
+    const spawnPty = vi.fn((_args: BunPtySpawnArgs) => proc)
 
     warmWindowsConptyOnce(spawnPty)
     await flushImmediates()
 
     expect(spawnPty).toHaveBeenCalledTimes(1)
-    expect(assignHostProcessToKillOnCloseJob).toHaveBeenCalledBefore(vi.mocked(spawnPty))
-    const [file, args, options] = vi.mocked(spawnPty).mock.calls[0]
-    expect(String(file).toLowerCase()).toContain('cmd')
-    expect(args).toEqual(['/c', 'exit'])
-    expect(options).toMatchObject({ useConptyDll: true, cols: 2, rows: 1 })
+    const options = vi.mocked(spawnPty).mock.calls[0][0]
+    expect(String(options.file).toLowerCase()).toContain('cmd')
+    expect(options.args).toEqual(['/d', '/c', 'exit', '0'])
+    expect(options).toMatchObject({ windowsJobKillOnClose: true, cols: 2, rows: 1 })
 
     // A clean exit must not leave the kill timer to fire later.
     fireExit()
+    expect(dispose).toHaveBeenCalledOnce()
     expect(proc.kill).not.toHaveBeenCalled()
   })
 
@@ -75,7 +70,7 @@ describe('warmWindowsConptyOnce', () => {
     vi.useFakeTimers()
     try {
       const { proc } = makeFakePty()
-      const spawnPty = vi.fn(() => proc) as unknown as typeof pty.spawn
+      const spawnPty = vi.fn((_args: BunPtySpawnArgs) => proc)
 
       warmWindowsConptyOnce(spawnPty)
       await vi.runOnlyPendingTimersAsync()
@@ -91,9 +86,31 @@ describe('warmWindowsConptyOnce', () => {
     restorePlatform = setPlatform('win32')
     const spawnPty = vi.fn(() => {
       throw new Error('conpty unavailable')
-    }) as unknown as typeof pty.spawn
+    })
 
     expect(() => warmWindowsConptyOnce(spawnPty)).not.toThrow()
     await flushImmediates()
+  })
+
+  it('disposes an already-exited probe and clears its kill timer', async () => {
+    restorePlatform = setPlatform('win32')
+    vi.useFakeTimers()
+    const dispose = vi.fn()
+    const kill = vi.fn()
+    try {
+      warmWindowsConptyOnce(() => ({
+        kill,
+        onExit(listener) {
+          listener({ exitCode: 0 })
+          return { dispose }
+        }
+      }))
+      await vi.runOnlyPendingTimersAsync()
+      expect(dispose).toHaveBeenCalledOnce()
+      expect(vi.getTimerCount()).toBe(0)
+      expect(kill).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

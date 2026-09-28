@@ -1,8 +1,14 @@
+import type { WslAccountExecutionContext } from '../wsl/wsl-account-execution-context'
 import { createHash } from 'node:crypto'
 import { posix as pathPosix } from 'node:path'
 import { wslCodexRuntimeHomeForGuestHome } from '../pty/codex-home-wsl-env'
 import { WSL_SESSION_BRIDGE_TIMEOUT_MS } from '../codex/wsl-codex-session-bridge-script'
-import { runWslProcess } from '../wsl/wsl-runner'
+import { runCapturedCodexWslProcess } from './captured-wsl-account-process'
+import {
+  captureDrainOptions,
+  drainOwnerKey,
+  type LegacyWslRuntimeAuthDrainOptions
+} from './legacy-wsl-runtime-auth-drain-owner'
 import { compareCodexAuthFreshness, codexAuthIsFresher } from './codex-auth-identity'
 import {
   APPLY_LEGACY_AUTH_SCRIPT,
@@ -25,15 +31,6 @@ export type LegacyWslRuntimeAuthDestination = {
 type LegacyWslRuntimeInspection = {
   authContents: string
   credentials: { kind: 'missing' } | { kind: 'present'; contents: string }
-}
-
-type LegacyWslRuntimeAuthDrainOptions = {
-  distro: string
-  guestHomeLinuxPath: string
-  legacyPanePresent: boolean
-  resolveDestination: (
-    runtimeAuthContents: string
-  ) => LegacyWslRuntimeAuthDestination | null | Promise<LegacyWslRuntimeAuthDestination | null>
 }
 
 const drainQueueByDistro = new Map<string, Promise<void>>()
@@ -69,7 +66,8 @@ export function startLegacyWslRuntimeAuthDrain(
   options: LegacyWslRuntimeAuthDrainOptions,
   startOptions: { throwOnFailure?: boolean } = {}
 ): Promise<void> {
-  const key = options.distro.trim().toLowerCase()
+  options = captureDrainOptions(options)
+  const key = drainOwnerKey(options)
   if (completedDistroKeys.has(key)) {
     return Promise.resolve()
   }
@@ -104,22 +102,26 @@ function logDrainFailure(task: Promise<void>): Promise<void> {
 export async function drainLegacyWslRuntimeAuth(
   options: LegacyWslRuntimeAuthDrainOptions
 ): Promise<'complete' | 'pending'> {
-  const distroKey = options.distro.trim().toLowerCase()
+  options = captureDrainOptions(options)
+  const distroKey = drainOwnerKey(options)
   const paths = resolveLegacyRuntimePaths(options.guestHomeLinuxPath)
-  const inspection = await runWslProcess({
-    distro: options.distro,
-    loginPath: 'none',
-    script: INSPECT_LEGACY_AUTH_SCRIPT,
-    args: [paths.runtimeHome, paths.activeHome, paths.marker],
-    timeoutMs: 5_000,
-    maxOutputBytes: 2 * 1024 * 1024
-  })
+  const inspection = await runCapturedCodexWslProcess(
+    {
+      distro: options.distro,
+      loginPath: 'none',
+      script: INSPECT_LEGACY_AUTH_SCRIPT,
+      args: [paths.runtimeHome, paths.activeHome, paths.marker],
+      timeoutMs: 5_000,
+      maxOutputBytes: 2 * 1024 * 1024
+    },
+    options.execution
+  )
   if (inspection.code === MARKER_PRESENT_EXIT) {
     return 'complete'
   }
   if (inspection.code === LEGACY_HOME_ABSENT_EXIT) {
     if (!options.legacyPanePresent) {
-      return finalizeAbsentLegacyAuth(options.distro, paths)
+      return finalizeAbsentLegacyAuth(options.distro, paths, options.execution)
     }
     return 'pending'
   }
@@ -147,29 +149,34 @@ export async function drainLegacyWslRuntimeAuth(
   ].join('\0')
   const bridgeAllSessions =
     deleteSource || pendingSessionBridgeRouteByDistro.get(distroKey) !== sessionBridgeRoute
-  const result = await runWslProcess({
-    distro: options.distro,
-    loginPath: 'none',
-    script: APPLY_LEGACY_AUTH_SCRIPT,
-    args: [
-      paths.runtimeHome,
-      paths.activeHome,
-      paths.marker,
-      destination.linuxHomePath,
-      sha256(inspected.authContents),
-      sha256(destination.authContents),
-      promoteAuth ? '1' : '0',
-      deleteSource ? '1' : '0',
-      inspected.credentials.kind === 'present' ? sha256(inspected.credentials.contents) : 'missing',
-      bridgeAllSessions ? 'full' : 'recent'
-    ],
-    timeoutMs: bridgeAllSessions ? WSL_SESSION_BRIDGE_TIMEOUT_MS : 5_000,
-    maxOutputBytes: 16 * 1024
-  })
+  const result = await runCapturedCodexWslProcess(
+    {
+      distro: options.distro,
+      loginPath: 'none',
+      script: APPLY_LEGACY_AUTH_SCRIPT,
+      args: [
+        paths.runtimeHome,
+        paths.activeHome,
+        paths.marker,
+        destination.linuxHomePath,
+        sha256(inspected.authContents),
+        sha256(destination.authContents),
+        promoteAuth ? '1' : '0',
+        deleteSource ? '1' : '0',
+        inspected.credentials.kind === 'present'
+          ? sha256(inspected.credentials.contents)
+          : 'missing',
+        bridgeAllSessions ? 'full' : 'recent'
+      ],
+      timeoutMs: bridgeAllSessions ? WSL_SESSION_BRIDGE_TIMEOUT_MS : 5_000,
+      maxOutputBytes: 16 * 1024
+    },
+    options.execution
+  )
   try {
     assertSuccessfulDrainStep('apply', result)
   } catch {
-    return recoverAfterFailedApply(options.distro, paths)
+    return recoverAfterFailedApply(options.distro, paths, options.execution)
   }
   if (!deleteSource) {
     rememberPendingRoute(distroKey, sessionBridgeRoute)
@@ -179,16 +186,20 @@ export async function drainLegacyWslRuntimeAuth(
 
 async function recoverAfterFailedApply(
   distro: string,
-  paths: ReturnType<typeof resolveLegacyRuntimePaths>
+  paths: ReturnType<typeof resolveLegacyRuntimePaths>,
+  execution?: WslAccountExecutionContext
 ): Promise<'complete' | 'pending'> {
-  const recovery = await runWslProcess({
-    distro,
-    loginPath: 'none',
-    script: INSPECT_LEGACY_AUTH_SCRIPT,
-    args: [paths.runtimeHome, paths.activeHome, paths.marker],
-    timeoutMs: 5_000,
-    maxOutputBytes: 2 * 1024 * 1024
-  })
+  const recovery = await runCapturedCodexWslProcess(
+    {
+      distro,
+      loginPath: 'none',
+      script: INSPECT_LEGACY_AUTH_SCRIPT,
+      args: [paths.runtimeHome, paths.activeHome, paths.marker],
+      timeoutMs: 5_000,
+      maxOutputBytes: 2 * 1024 * 1024
+    },
+    execution
+  )
   if (recovery.code === MARKER_PRESENT_EXIT) {
     return 'complete'
   }
@@ -248,16 +259,20 @@ function resolveLegacyRuntimePaths(guestHomeLinuxPath: string): {
 
 async function finalizeAbsentLegacyAuth(
   distro: string,
-  paths: ReturnType<typeof resolveLegacyRuntimePaths>
+  paths: ReturnType<typeof resolveLegacyRuntimePaths>,
+  execution?: WslAccountExecutionContext
 ): Promise<'complete' | 'pending'> {
-  const result = await runWslProcess({
-    distro,
-    loginPath: 'none',
-    script: FINALIZE_ABSENT_AUTH_SCRIPT,
-    args: [paths.runtimeHome, paths.activeHome, paths.marker],
-    timeoutMs: 5_000,
-    maxOutputBytes: 16 * 1024
-  })
+  const result = await runCapturedCodexWslProcess(
+    {
+      distro,
+      loginPath: 'none',
+      script: FINALIZE_ABSENT_AUTH_SCRIPT,
+      args: [paths.runtimeHome, paths.activeHome, paths.marker],
+      timeoutMs: 5_000,
+      maxOutputBytes: 16 * 1024
+    },
+    execution
+  )
   if (result.code === LEGACY_HOME_STILL_PRESENT_EXIT) {
     return 'pending'
   }

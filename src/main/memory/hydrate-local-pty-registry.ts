@@ -9,7 +9,6 @@ import { splitWorktreeId, worktreeIdComparisonKey } from '../../shared/worktree/
 import { getDaemonProvider } from '../daemon/daemon-init'
 import type { DaemonPtyAdapter } from '../daemon/daemon-pty-adapter'
 import type { DaemonPtyRouter } from '../daemon/daemon-pty-router'
-import type { DegradedDaemonPtyProvider } from '../daemon/degraded-daemon-pty-provider'
 import type { SessionInfo } from '../daemon/types'
 import { isFolderWorkspaceIdForRepo } from '../ipc/worktrees/folder-workspace-model'
 import type { Store } from '../persistence'
@@ -251,7 +250,7 @@ function getVerifiedFolderWorktreeIds(
 }
 
 async function collectSessionInfos(
-  provider: DaemonPtyRouter | DaemonPtyAdapter | DegradedDaemonPtyProvider,
+  provider: DaemonPtyRouter | DaemonPtyAdapter,
   signal: AbortSignal
 ): Promise<DaemonInventory> {
   const adapters =

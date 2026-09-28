@@ -6,6 +6,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { agentHookServer } from '../../agent-hooks/server'
 import { buildProfileStateCutoverFixture } from '../profile-state-cutover-fixture'
 import type { Store } from '../loading-store/store'
+import type { WslDaemonRecovery } from '../../../shared/wsl-daemon-recovery'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 import { createLiveProfileStateStore } from './profile-state-live-store-factory'
 import {
@@ -81,6 +82,44 @@ function readState(input: ReturnType<typeof options>) {
 }
 
 describe('live profile authority admission', () => {
+  it('recovers the exact guest daemon owner after the SQLite writer is closed and reopened', async () => {
+    const input = options()
+    const recovery: WslDaemonRecovery = {
+      kind: 'daemon',
+      distro: 'Ubuntu',
+      relayBuildId: 'captured-user-daemon',
+      endpoint: {
+        distro: 'Ubuntu',
+        distributionId: 'guest-registration',
+        userName: 'alice',
+        userId: '1000',
+        home: '/home/alice',
+        runtime: '/home/alice/.orca/bun',
+        entry: '/home/alice/.orca/daemon.js',
+        envBinary: '/usr/bin/env',
+        socket: '/home/alice/.orca/control.sock',
+        tokenPath: '/home/alice/.orca/control.token',
+        serverBuildId: 'captured-build'
+      }
+    }
+    const first = await open(input)
+    await first.store.upsertWslDaemonRecovery(recovery)
+    expect(readState(input).wslPtyConsumerRecoveries).toEqual([recovery])
+    await first.store.freezeWritesAsync()
+
+    const reopened = await open(input)
+    expect(reopened.store.getWslDaemonRecovery(recovery)).toEqual(recovery)
+    await expect(
+      reopened.store.upsertWslDaemonRecovery({
+        ...recovery,
+        endpoint: { ...recovery.endpoint, userName: 'bob', userId: '1001' }
+      })
+    ).rejects.toThrow('owner identity cannot change')
+    expect(readState(input).wslPtyConsumerRecoveries).toEqual([recovery])
+    const otherProfile = await open(options())
+    expect(otherProfile.store.getWslDaemonRecovery(recovery)).toBeNull()
+  })
+
   it.each([false, true])(
     'hands unbound aliases to admitted startup only (worker refused=%s)',
     async (refused) => {

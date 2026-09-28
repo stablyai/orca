@@ -180,13 +180,17 @@ class BunPtyJob implements WindowsBunPtyJob {
 
 export function createWindowsBunPtyJob(
   rootPid: number,
-  native: WindowsBunPtyJobNative | null = loadWindowsBunPtyJobNative()
+  native: WindowsBunPtyJobNative | null = loadWindowsBunPtyJobNative(),
+  killOnClose = false
 ): WindowsBunPtyJob | null {
   if (!native || !Number.isInteger(rootPid) || rootPid <= 0) {
     return null
   }
   const job = native.createJob()
-  if (job === null || !native.configureJob(job, 0)) {
+  if (
+    job === null ||
+    !native.configureJob(job, killOnClose ? JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE : 0)
+  ) {
     if (job !== null) {
       native.closeHandle(job)
     }

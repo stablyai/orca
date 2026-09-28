@@ -21,7 +21,6 @@ import {
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
-vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
@@ -287,6 +286,7 @@ describe('registerPtyHandlers', () => {
     }
     let controller: RuntimeSpawnController | null = null
     const runtime = {
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term_trusted'),
       setPtyController: vi.fn((value) => {
         controller = value
       }),
@@ -353,6 +353,8 @@ describe('registerPtyHandlers', () => {
     } as never)
     let controller: RuntimeSpawnController | null = null
     const runtime = {
+      createPreAllocatedTerminalHandle: vi.fn(() => null),
+      registerPreAllocatedHandleForPty: vi.fn(),
       setPtyController: vi.fn((value) => {
         controller = value
       }),
@@ -401,6 +403,9 @@ describe('registerPtyHandlers', () => {
     }
     let controller: RuntimeSpawnController | null = null
     const runtime = {
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term_test'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
       setPtyController: vi.fn((value) => {
         controller = value
       })
@@ -454,6 +459,9 @@ describe('registerPtyHandlers', () => {
   })
   it('ignores renderer-provided ORCA_TERMINAL_HANDLE for local PTY spawns', async () => {
     const runtime = {
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term_trusted'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
       setPtyController: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
       preAllocateHandleForPty: vi.fn(() => 'term_trusted'),
@@ -473,7 +481,11 @@ describe('registerPtyHandlers', () => {
     const env = spawnCall[2].env as Record<string, string>
     expect(env.ORCA_TERMINAL_HANDLE).toBe('term_trusted')
     expect(env.ORCA_WSL_CLI_DIR).toBeUndefined()
-    expect(runtime.preAllocateHandleForPty).toHaveBeenCalledWith(expect.any(String))
+    expect(runtime.createPreAllocatedTerminalHandle).toHaveBeenCalledOnce()
+    expect(runtime.registerPreAllocatedHandleForPty).toHaveBeenCalledWith(
+      expect.any(String),
+      'term_trusted'
+    )
   })
   it('forwards the trusted Orca terminal handle into managed WSL terminals', async () => {
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -482,6 +494,9 @@ describe('registerPtyHandlers', () => {
       value: 'win32'
     })
     const runtime = {
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term_wsl'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
       setPtyController: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
       preAllocateHandleForPty: vi.fn(() => 'term_wsl'),
@@ -535,6 +550,9 @@ describe('registerPtyHandlers', () => {
       value: 'win32'
     })
     const runtime = {
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term_wsl'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
       setPtyController: vi.fn(),
       preAllocateHandleForPty: vi.fn(() => 'term_wsl'),
       onPtySpawned: vi.fn(),

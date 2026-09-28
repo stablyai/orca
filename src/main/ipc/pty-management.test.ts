@@ -13,6 +13,7 @@ const {
   removeHandlerMock,
   getDaemonProviderMock,
   restartDaemonMock,
+  retryDaemonPtyProviderMock,
   getCurrentDaemonMacTccAttributionHealthMock,
   getDaemonFolderAccessMismatchMock,
   refreshDaemonFolderAccessProbeMock,
@@ -22,6 +23,7 @@ const {
   removeHandlerMock: vi.fn(),
   getDaemonProviderMock: vi.fn(),
   restartDaemonMock: vi.fn(),
+  retryDaemonPtyProviderMock: vi.fn(),
   getCurrentDaemonMacTccAttributionHealthMock: vi.fn(async () => 'unknown'),
   getDaemonFolderAccessMismatchMock: vi.fn<
     () => { daemonScope: string; cwdClass: string; freshDaemonAccess: string } | null
@@ -48,6 +50,7 @@ vi.mock('../daemon/daemon-folder-access-reset', () => ({
 vi.mock('../daemon/daemon-init', () => ({
   getDaemonProvider: getDaemonProviderMock,
   restartDaemon: restartDaemonMock,
+  retryDaemonPtyProvider: retryDaemonPtyProviderMock,
   getCurrentDaemonMacTccAttributionHealth: getCurrentDaemonMacTccAttributionHealthMock
 }))
 
@@ -62,8 +65,14 @@ vi.mock('../daemon/daemon-pty-router', () => {
   class DaemonPtyRouter {
     private allAdapters: unknown[]
     private current: unknown
-    constructor(opts: { current: unknown; legacy: unknown[] }) {
+    freshSpawnsUnavailable = false
+    async recoverFreshSpawnRouting(): Promise<boolean> {
+      this.freshSpawnsUnavailable = false
+      return true
+    }
+    constructor(opts: { current: unknown; legacy: unknown[]; probeFreshSpawn?: unknown }) {
       this.current = opts.current
+      this.freshSpawnsUnavailable = Boolean(opts.probeFreshSpawn)
       this.allAdapters = [opts.current, ...opts.legacy]
     }
     getAllAdapters() {
@@ -78,38 +87,6 @@ vi.mock('../daemon/daemon-pty-router', () => {
     }
   }
   return { DaemonPtyRouter }
-})
-
-// Why: the handler also branches on `provider instanceof DegradedDaemonPtyProvider`
-// (for getAllAdapters) and reports `degraded` from it. The real constructor
-// subscribes to adapter events, so keep only the accessors pty-management uses.
-vi.mock('../daemon/degraded-daemon-pty-provider', () => {
-  class DegradedDaemonPtyProvider {
-    private allAdapters: unknown[]
-    private current: unknown
-    private routesFreshToFallback = true
-    constructor(opts: { current: unknown; legacy: unknown[] }) {
-      this.current = opts.current
-      this.allAdapters = [opts.current, ...opts.legacy]
-    }
-    getCurrentAdapter() {
-      return this.current
-    }
-    getLegacyAdapters() {
-      return this.allAdapters.slice(1)
-    }
-    get routesFreshSpawnsToLocalProvider(): true | undefined {
-      return this.routesFreshToFallback ? true : undefined
-    }
-    async recoverFreshSpawnRouting(): Promise<boolean> {
-      this.routesFreshToFallback = false
-      return true
-    }
-    getAllAdapters() {
-      return this.allAdapters
-    }
-  }
-  return { DegradedDaemonPtyProvider }
 })
 
 type HandlerMap = Record<string, (event: unknown, args?: unknown) => unknown>
@@ -179,11 +156,11 @@ async function makeRouter(current: MockAdapter, legacy: MockAdapter[] = []) {
 }
 
 async function makeDegradedProvider(current: MockAdapter, legacy: MockAdapter[] = []) {
-  const { DegradedDaemonPtyProvider } = await import('../daemon/degraded-daemon-pty-provider')
-  return new DegradedDaemonPtyProvider({
+  const { DaemonPtyRouter } = await import('../daemon/daemon-pty-router')
+  return new DaemonPtyRouter({
     current: current as never,
     legacy: legacy as never,
-    fallback: undefined as never
+    probeFreshSpawn: async () => false
   })
 }
 
@@ -191,6 +168,7 @@ describe('pty:management IPC handlers', () => {
   beforeEach(() => {
     getDaemonProviderMock.mockReset()
     restartDaemonMock.mockReset()
+    retryDaemonPtyProviderMock.mockReset()
     getCurrentDaemonMacTccAttributionHealthMock.mockReset()
     getCurrentDaemonMacTccAttributionHealthMock.mockResolvedValue('unknown')
     getDaemonFolderAccessMismatchMock.mockReset().mockReturnValue(null)
@@ -635,6 +613,28 @@ describe('pty:management IPC handlers', () => {
 
       expect(getDaemonFolderAccessMismatchMock).toHaveBeenCalledWith(null)
       expect(result.folderAccessMismatch).toBeNull()
+    })
+  })
+
+  describe('retry', () => {
+    it('retries initialization without stopping sessions', async () => {
+      retryDaemonPtyProviderMock.mockResolvedValue(undefined)
+      const { registerDaemonManagementHandlers } = await importFresh()
+      registerDaemonManagementHandlers()
+      await expect(buildHandlerMap()['pty:management:retry']({})).resolves.toEqual({
+        success: true
+      })
+      expect(retryDaemonPtyProviderMock).toHaveBeenCalledOnce()
+      expect(restartDaemonMock).not.toHaveBeenCalled()
+    })
+    it('reports failure without invoking destructive restart', async () => {
+      retryDaemonPtyProviderMock.mockRejectedValue(new Error('service unavailable'))
+      const { registerDaemonManagementHandlers } = await importFresh()
+      registerDaemonManagementHandlers()
+      await expect(buildHandlerMap()['pty:management:retry']({})).resolves.toEqual({
+        success: false
+      })
+      expect(restartDaemonMock).not.toHaveBeenCalled()
     })
   })
 

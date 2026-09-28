@@ -1,3 +1,7 @@
+import {
+  assertWslAccountExecutionTarget,
+  type WslAccountExecutionContext
+} from '../wsl/wsl-account-execution-context'
 import { join, win32 as pathWin32 } from 'node:path'
 import { parseWslUncPath, toLinuxPath, toWindowsWslUncPath } from '../../shared/wsl-paths'
 import {
@@ -20,7 +24,10 @@ export abstract class CodexRuntimeHomeWsl extends CodexRuntimeHomeWslCore {
     return this.getWslCodexHomePathForSelection(target)
   }
 
-  protected getWslCodexHomePathForSelection(target: CodexAccountSelectionTarget): string | null {
+  protected getWslCodexHomePathForSelection(
+    target: CodexAccountSelectionTarget,
+    execution?: WslAccountExecutionContext
+  ): string | null {
     const settings = this.store.getSettings()
     const account = this.getActiveAccount(
       settings.codexManagedAccounts,
@@ -28,24 +35,34 @@ export abstract class CodexRuntimeHomeWsl extends CodexRuntimeHomeWslCore {
     )
     if (account) {
       const targetDistro = this.resolveWslDefaultTarget(target).wslDistro?.trim()
-      const accountHome = this.getWslLaunchCodexHomePath(account, targetDistro)
+      const accountHome = this.getWslLaunchCodexHomePath(account, targetDistro, execution)
       if (accountHome) {
         return accountHome
       }
     }
-    return this.getWslSystemCodexHomePath(target)
+    return this.getWslSystemCodexHomePath(target, execution)
   }
 
   protected getWslLaunchCodexHomePath(
     account: CodexManagedAccount,
-    targetDistro: string | undefined
+    targetDistro: string | undefined,
+    execution?: WslAccountExecutionContext
   ): string | null {
     const wslHome = this.getWslManagedHomeIdentity(account)
     if (!wslHome) {
+      if (execution) {
+        throw new Error('Selected Codex account has no captured WSL home')
+      }
       return null
+    }
+    if (execution && !wslHome.linuxHomePath.startsWith(`${execution.home.replace(/\/$/, '')}/`)) {
+      throw new Error('Selected Codex account does not belong to the captured WSL home')
     }
     const accountDistro = wslHome.distro
     if (targetDistro && accountDistro.toLowerCase() !== targetDistro.toLowerCase()) {
+      if (execution) {
+        throw new Error('Selected Codex account does not belong to the captured WSL distro')
+      }
       return null
     }
     if (/^[A-Za-z]:[\\/]/.test(account.managedHomePath)) {
@@ -56,7 +73,7 @@ export abstract class CodexRuntimeHomeWsl extends CodexRuntimeHomeWslCore {
 
   protected startLegacyWslAuthDrain(
     target: CodexAccountSelectionTarget,
-    options: { throwOnFailure?: boolean } = {}
+    options: { throwOnFailure?: boolean; wslExecution?: WslAccountExecutionContext } = {}
   ): Promise<void> {
     if (process.platform !== 'win32') {
       return Promise.resolve()
@@ -65,7 +82,11 @@ export abstract class CodexRuntimeHomeWsl extends CodexRuntimeHomeWslCore {
     if (!distro) {
       return Promise.resolve()
     }
-    const guestHome = getWslHome(distro)
+    const execution = options.wslExecution
+    if (execution) {
+      assertWslAccountExecutionTarget(execution, target)
+    }
+    const guestHome = execution?.home ?? getWslHome(distro)
     const guestHomeLinuxPath = guestHome ? toLinuxPath(guestHome).trim() : ''
     if (!guestHomeLinuxPath.startsWith('/')) {
       return Promise.resolve()
@@ -83,8 +104,9 @@ export abstract class CodexRuntimeHomeWsl extends CodexRuntimeHomeWslCore {
         distro,
         guestHomeLinuxPath,
         legacyPanePresent,
+        ...(execution ? { execution } : {}),
         resolveDestination: (runtimeAuthContents) =>
-          this.resolveLegacyWslAuthDestination(distro, runtimeAuthContents)
+          this.resolveLegacyWslAuthDestination(distro, runtimeAuthContents, execution)
       },
       options
     )
@@ -92,23 +114,32 @@ export abstract class CodexRuntimeHomeWsl extends CodexRuntimeHomeWslCore {
 
   protected async resolveLegacyWslAuthDestination(
     distro: string,
-    runtimeAuthContents: string
+    runtimeAuthContents: string,
+    execution?: WslAccountExecutionContext
   ): Promise<LegacyWslRuntimeAuthDestination | null> {
     const accountHomes = this.store.getSettings().codexManagedAccounts.flatMap((account) => {
       const wslHome = this.getWslManagedHomeIdentity(account)
-      return wslHome?.distro.toLowerCase() === distro.toLowerCase()
+      return wslHome?.distro.toLowerCase() === distro.toLowerCase() &&
+        (!execution || wslHome.linuxHomePath.startsWith(`${execution.home.replace(/\/$/, '')}/`))
         ? [{ account, linuxPath: wslHome.linuxHomePath }]
         : []
     })
     const accounts = accountHomes.map(({ account }) => account)
-    const systemHome = this.getWslSystemCodexHomePath({ runtime: 'wsl', wslDistro: distro })
+    const systemHome = this.getWslSystemCodexHomePath(
+      { runtime: 'wsl', wslDistro: distro },
+      execution
+    )
     const parsedSystemHome = systemHome ? parseWslUncPath(systemHome) : null
     let reads: WslCodexAuthRead[]
     try {
-      reads = await readWslCodexAuths(distro, [
-        ...accountHomes.map(({ linuxPath }) => linuxPath),
-        ...(parsedSystemHome ? [parsedSystemHome.linuxPath] : [])
-      ])
+      reads = await readWslCodexAuths(
+        distro,
+        [
+          ...accountHomes.map(({ linuxPath }) => linuxPath),
+          ...(parsedSystemHome ? [parsedSystemHome.linuxPath] : [])
+        ],
+        execution
+      )
     } catch {
       reads = accountHomes.map(() => ({ kind: 'unreadable' }))
       if (parsedSystemHome) {

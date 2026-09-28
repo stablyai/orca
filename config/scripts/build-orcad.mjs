@@ -1,13 +1,12 @@
 #!/usr/bin/env node
-// Ship Bun with orcad; keep module loading compatible with legacy Node launchers.
+// Ship orcad with its pinned Bun runtime.
 import { fork, spawnSync } from 'node:child_process'
 import { build } from 'esbuild'
 import {
   buildOrcadEntry,
   buildOrcadLauncher,
   ORCAD_BUN_TARGET,
-  externalNativeAddons,
-  ORCAD_EXTERNAL_MODULES,
+  buildOrcadChildEntry,
   ORCAD_CHILD_ENTRY_POINTS
 } from './orcad-entry-build.mjs'
 import { createRequire } from 'node:module'
@@ -26,6 +25,7 @@ import { basename, dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 import { smokeProfileStateWorkers } from './profile-state-worker-smoke.mjs'
 import { materializeWatcherPackage } from './orcad-watcher-package.mjs'
+import { materializeWindowsConpty } from './build-windows-conpty.mjs'
 import { parcelWatcherWrapperSource } from './parcel-watcher-bundle.mjs'
 import { stageOrcadWindowsProcessTree } from './orcad-windows-process-tree.mjs'
 import {
@@ -38,7 +38,7 @@ import {
   ORCAD_RIPGREP_ARTIFACTS
 } from '../../src/shared/orcad-artifacts.ts'
 import { computeOrcadFullVersion } from './orcad-artifact-version.mjs'
-import { ORCAD_BUN_VERSION } from '../../src/shared/orcad-bun-runtime.ts'
+import { ORCAD_BUN_VERSION, orcadBunVersionProbeArgs } from '../../src/shared/orcad-bun-runtime.ts'
 import { orcadAgentBrowserNativeName } from '../../src/shared/orcad-agent-browser-name.ts'
 
 const ROOT = join(import.meta.dirname, '..', '..')
@@ -103,7 +103,10 @@ if (!bunRuntimeSource) {
   throw new Error('ORCAD_BUN_RUNTIME_PATH is required; run `pnpm build:orcad`')
 }
 if (targetIsCurrent) {
-  const version = spawnSync(bunRuntimeSource, ['--version'], { encoding: 'utf8' })
+  const version = spawnSync(bunRuntimeSource, orcadBunVersionProbeArgs(), {
+    encoding: 'utf8',
+    timeout: 10_000
+  })
   if (version.status !== 0 || version.stdout.trim() !== ORCAD_BUN_VERSION) {
     throw new Error(
       `ORCAD_BUN_RUNTIME_PATH must be Bun ${ORCAD_BUN_VERSION}; got ${version.stdout.trim() || version.stderr.trim()}`
@@ -118,6 +121,9 @@ if (!targetIsWindows) {
 }
 await stageParcelWatcher(BUILD_TARGET)
 stageOrcadWindowsProcessTree(ROOT, OUT_DIR, BUILD_TARGET)
+if (targetIsWindows) {
+  await materializeWindowsConpty(targetArch, join(OUT_DIR, 'conpty'))
+}
 const emojiDatasetOutput = join(OUT_DIR, ORCAD_EMOJI_SHORTCODE_DATASET)
 mkdirSync(dirname(emojiDatasetOutput), { recursive: true })
 copyFileSync(
@@ -148,37 +154,14 @@ cpSync(join(ROOT, 'resources', 'licenses', 'ripgrep'), join(OUT_DIR, 'ripgrep', 
   recursive: true
 })
 
-/** Why one call per child and not one `outdir` build: esbuild mirrors each entry's source
- *  directory under `outdir`, and both children must land flat beside orcad.js — that is where
- *  their runtime resolvers look for them. */
-function buildForkedChild(entryPoint, outfile) {
-  return build({
-    entryPoints: [entryPoint],
-    bundle: true,
-    platform: 'node',
-    target: ORCAD_BUN_TARGET,
-    format: 'cjs',
-    outfile,
-    external: ORCAD_EXTERNAL_MODULES,
-    plugins: [externalNativeAddons],
-    metafile: true,
-    minify: true,
-    sourcemap: false,
-    define: {
-      'process.env.NODE_ENV': '"production"'
-    },
-    logLevel: 'error'
-  })
-}
-
 const childResults = await Promise.all([
-  buildForkedChild(WATCHER_ENTRY, WATCHER_OUT_FILE),
-  buildForkedChild(DAEMON_ENTRY, DAEMON_OUT_FILE),
-  buildForkedChild(PTY_GATE_ENTRY, PTY_GATE_OUT_FILE),
+  buildOrcadChildEntry(WATCHER_ENTRY, WATCHER_OUT_FILE),
+  buildOrcadChildEntry(DAEMON_ENTRY, DAEMON_OUT_FILE),
+  buildOrcadChildEntry(PTY_GATE_ENTRY, PTY_GATE_OUT_FILE),
   ...Object.entries(ORCAD_CHILD_ENTRY_POINTS)
     .filter(([role]) => !['watcher', 'daemon', 'ptyGate'].includes(role))
     .map(([, entry]) =>
-      buildForkedChild(join(ROOT, entry), join(OUT_DIR, `${basename(entry, '.ts')}.js`))
+      buildOrcadChildEntry(join(ROOT, entry), join(OUT_DIR, `${basename(entry, '.ts')}.js`))
     )
 ])
 
@@ -213,26 +196,19 @@ const metafiles = [
   result.metafile,
   ...childResults.map((child) => child.metafile)
 ]
-const electronImporters = collectImporters(
-  metafiles,
-  (specifier) => specifier === 'electron' || specifier.startsWith('electron/')
-)
-const sqliteImporters = collectImporters(metafiles, (specifier) => specifier === 'node:sqlite')
-
 const graphErrors = []
-if (electronImporters.size > 0) {
-  graphErrors.push(
-    `${electronImporters.size} module(s) in the bundle import electron:\n${[...electronImporters]
-      .map((file) => `  - ${file}`)
-      .join('\n')}`
+for (const forbidden of ['electron', 'node:sqlite', 'node-pty']) {
+  const importers = collectImporters(
+    metafiles,
+    (specifier) => specifier === forbidden || specifier.startsWith(`${forbidden}/`)
   )
-}
-if (sqliteImporters.size > 0) {
-  graphErrors.push(
-    `${sqliteImporters.size} module(s) in the bundle import node:sqlite:\n${[...sqliteImporters]
-      .map((file) => `  - ${file}`)
-      .join('\n')}`
-  )
+  if (importers.size > 0) {
+    graphErrors.push(
+      `${importers.size} module(s) in the bundle import ${forbidden}:\n${[...importers]
+        .map((file) => `  - ${file}`)
+        .join('\n')}`
+    )
+  }
 }
 
 if (graphErrors.length > 0) {
@@ -296,28 +272,27 @@ if (graphErrors.length > 0) {
   }
 }
 
-try {
-  if (targetIsCurrent) {
-    await smokeProfileStateWorkers(OUT_DIR, { runtimePath: bunRuntimeOutput })
-  }
-} catch (error) {
-  console.error('[build-orcad] profile state worker check failed:', error)
-  process.exitCode = 1
-}
-
-// Why a content hash and not ORCAD_VERSION alone: the remote install directory is keyed on
-// this string, so two different builds carrying one version would share a directory — and an
-// already-`.install-complete` dir is never re-uploaded. The deploy would silently run stale
-// bytes while reporting the new version.
+// Remote install directories are keyed by content, including every shipped companion.
 if (process.exitCode !== 1) {
   const fullVersion = computeOrcadFullVersion(OUT_DIR, {
     target: BUILD_TARGET,
     agentBrowserFilename: AGENT_BROWSER_NAME
   })
-  writeFileSync(join(OUT_DIR, ORCAD_VERSION_FILENAME), fullVersion)
-  console.log(
-    `[build-orcad] ok — ${fullVersion}, ${(output.bytes / 1024 / 1024).toFixed(2)} MB, ${Object.keys(output.inputs).length} modules, zero electron and node:sqlite imports, Bun ${ORCAD_BUN_VERSION} included.`
-  )
+  const versionPath = join(OUT_DIR, ORCAD_VERSION_FILENAME)
+  writeFileSync(versionPath, fullVersion)
+  try {
+    // Windows preflight verifies the installed version before launching its native child.
+    if (targetIsCurrent) {
+      await smokeProfileStateWorkers(OUT_DIR, { runtimePath: bunRuntimeOutput })
+    }
+    console.log(
+      `[build-orcad] ok — ${fullVersion}, ${(output.bytes / 1024 / 1024).toFixed(2)} MB, ${Object.keys(output.inputs).length} modules, zero electron and node:sqlite imports, Bun ${ORCAD_BUN_VERSION} included.`
+    )
+  } catch (error) {
+    rmSync(versionPath, { force: true })
+    console.error('[build-orcad] profile state worker check failed:', error)
+    process.exitCode = 1
+  }
 }
 
 // Verify the shipped native watcher actually subscribes under the bundled runtime.

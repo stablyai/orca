@@ -19,7 +19,10 @@ const entries = [
   'port-scan-command-worker-entry.js'
 ]
 
-describe.skipIf(!existsSync(runtime))('packaged orcad companion processes', () => {
+const built = existsSync(join(directory, '.version'))
+const required = process.env.ORCA_TEST_REQUIRE_ORCAD_ARTIFACTS === '1'
+
+describe.skipIf(!built && !required)('packaged orcad companion processes', () => {
   it('reads a transcript and executes a probe without checkout dependencies', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca companion artifacts '))
     try {

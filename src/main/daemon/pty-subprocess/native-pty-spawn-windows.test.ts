@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { spawnNativeDaemonPty } from './native-pty-spawn'
+import { PtySpawnCleanupError, spawnNativeDaemonPty } from './native-pty-spawn'
 import { WindowsBunPtySpawnUnconfirmedError } from './windows-bun-pty-spawn-receipt'
 
 const attempts = ['pwsh.exe', 'powershell.exe', 'cmd.exe'].map((shellPath) => ({
@@ -102,6 +102,40 @@ describe('Windows Bun shell fallback after gated spawn', () => {
     expect(proc.destroy).toHaveBeenCalledOnce()
     expect(spawnBunPty).toHaveBeenCalledOnce()
   })
+
+  it.each([0, 1])(
+    'preserves failed cleanup after cancellation of attempt %s',
+    async (canceledIndex) => {
+      const controller = new AbortController()
+      const cleanupError = new Error('physical process still live')
+      const spawnBunPty = vi.fn(({ file }: { file: string }) =>
+        createProcess(async () => {
+          await Promise.resolve()
+          if (file === attempts[canceledIndex]!.shellPath) {
+            controller.abort()
+          }
+          throw new Error('spawn failed')
+        })
+      )
+      const result = spawnNativeDaemonPty(
+        {
+          ...args,
+          signal: controller.signal,
+          onSpawnAttempt: ({ shellPath }) => ({
+            discard: async () => {
+              if (shellPath === attempts[canceledIndex]!.shellPath) {
+                throw cleanupError
+              }
+            }
+          })
+        },
+        { canUseBunPty: () => true, spawnBunPty }
+      )
+      await expect(result).rejects.toBeInstanceOf(PtySpawnCleanupError)
+      await expect(result).rejects.toHaveProperty('cause', cleanupError)
+      expect(spawnBunPty).toHaveBeenCalledTimes(canceledIndex + 1)
+    }
+  )
 
   it.each([0, 1])(
     'stops at an ambiguous attempt %s to avoid running its startup command twice',

@@ -115,9 +115,9 @@ patchedDependencies:
   '@xterm/addon-search@0.17.0-beta.300': eee5338dd2621ece46e79c61ec06766cd7fadaf79ffdb24e2a8ab68e97ef31f0
   '@xterm/addon-serialize@0.15.0-beta.300': b35533fe252e7e45433150170348889f4e08a6c17f7017ac34ea694d831fec7f
   '@xterm/addon-webgl@0.20.0-beta.299': 94687e89a0115e6e6aa102837f986debdc029c091527ee5eb4a4e17ceaf9473e
+  '@xterm/headless@6.1.0-beta.302': 7f6b065658ad4b8e970a53df82d6582f0fd498bb4810cb2107865ce3bda7845d
   '@xterm/xterm@6.1.0-beta.303': dd0ccc59cd1ccf99f4d76e5aa2456da165fa0804dce19a833d7638bd07ffa393
   lint-staged@16.4.0: 7333b3837f80a7fbd045964db6d76ba4fc118e49134bdbabb00585b6b7b60673
-  node-pty@1.1.0: 92c95cffab383d86b3b13a460c75a08074468ebf1f3911db8e874e083201f192
 
 importers:
 
@@ -146,7 +146,7 @@ importers:
         version: 0.15.0-beta.300(patch_hash=b35533fe252e7e45433150170348889f4e08a6c17f7017ac34ea694d831fec7f)(@xterm/xterm@6.1.0-beta.303(patch_hash=dd0ccc59cd1ccf99f4d76e5aa2456da165fa0804dce19a833d7638bd07ffa393))
       '@xterm/headless':
         specifier: 6.1.0-beta.302
-        version: 6.1.0-beta.302
+        version: 6.1.0-beta.302(patch_hash=7f6b065658ad4b8e970a53df82d6582f0fd498bb4810cb2107865ce3bda7845d)
       agent-browser:
         specifier: ~0.27.0
         version: 0.27.0
@@ -159,9 +159,6 @@ importers:
       jsonc-parser:
         specifier: ^3.3.1
         version: 3.3.1
-      node-pty:
-        specifier: ^1.1.0
-        version: 1.1.0(patch_hash=92c95cffab383d86b3b13a460c75a08074468ebf1f3911db8e874e083201f192)
       posthog-node:
         specifier: ^5.52.5
         version: 5.52.5
@@ -6015,9 +6012,6 @@ packages:
   node-int64@0.4.0:
     resolution: {integrity: sha512-O5lz91xSOeoXP6DulyHfllpq+Eg00MWitZIbtPfoSEvqIHdl5gfcY6hYzDWnj0qD5tz52PI08u9qUvSVeUBeHw==}
 
-  node-pty@1.1.0:
-    resolution: {integrity: sha512-20JqtutY6JPXTUnL0ij1uad7Qe1baT46lyolh2sSENDd4sTzKZ4nmAFkeAARDKwmlLjPx6XKRlwRUxwjOy+lUg==}
-
   node-releases@2.0.54:
     resolution: {integrity: sha512-YHs7BmmcsdAI5Ozuf8JZo6PT0mv2GIWC9vMfvUC3dp65M8hn7Ux8CPL+2oBI7juNuj9d0ndhTcznq2ODBps9cQ==}
     engines: {node: '>=18'}
@@ -10521,7 +10515,7 @@ snapshots:
     dependencies:
       '@xterm/xterm': 6.1.0-beta.303(patch_hash=dd0ccc59cd1ccf99f4d76e5aa2456da165fa0804dce19a833d7638bd07ffa393)
 
-  '@xterm/headless@6.1.0-beta.302': {}
+  '@xterm/headless@6.1.0-beta.302(patch_hash=7f6b065658ad4b8e970a53df82d6582f0fd498bb4810cb2107865ce3bda7845d)': {}
 
   '@xterm/xterm@6.1.0-beta.303(patch_hash=dd0ccc59cd1ccf99f4d76e5aa2456da165fa0804dce19a833d7638bd07ffa393)': {}
 
@@ -13097,10 +13091,6 @@ snapshots:
       which: 6.0.1
 
   node-int64@0.4.0: {}
-
-  node-pty@1.1.0(patch_hash=92c95cffab383d86b3b13a460c75a08074468ebf1f3911db8e874e083201f192):
-    dependencies:
-      node-addon-api: 7.1.1
 
   node-releases@2.0.54: {}
 

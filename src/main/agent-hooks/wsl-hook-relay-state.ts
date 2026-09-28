@@ -2,6 +2,7 @@ import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 
 export type WslRelayDistroState = {
   distro: string
+  user?: string
   phase: 'starting' | 'running' | 'failed'
   child?: { kill: () => void }
   mux?: SshChannelMultiplexer

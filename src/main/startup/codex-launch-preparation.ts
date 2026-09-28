@@ -1,3 +1,4 @@
+import { assertWslAccountExecutionTarget } from '../wsl/wsl-account-execution-context'
 import { app } from 'electron'
 import type { CodexHomeLaunchContext } from '../ipc/pty'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
@@ -13,6 +14,12 @@ export async function prepareCodexRuntimeHomeForLaunch(
   launchEnv?: NodeJS.ProcessEnv,
   launchContext?: CodexHomeLaunchContext
 ): Promise<string | null> {
+  const wslExecution = launchContext?.wslExecution
+    ? Object.freeze({ ...launchContext.wslExecution })
+    : undefined
+  if (wslExecution) {
+    assertWslAccountExecutionTarget(wslExecution, target)
+  }
   const runtimeHome = state.codexRuntimeHome
   if (!runtimeHome) {
     throw new Error('Codex runtime home service is not initialized')
@@ -48,7 +55,8 @@ export async function prepareCodexRuntimeHomeForLaunch(
   // the fallbacks below all key off `null`, which means "system default", so
   // swallowing the refusal would launch the wrong account (#STA-4422).
   let runtimeHomePath = await runtimeHome.prepareForCodexLaunchAsync(target, launchEnv, {
-    unavailableManagedHomePath: launchContext?.unavailableManagedHomePath
+    unavailableManagedHomePath: launchContext?.unavailableManagedHomePath,
+    ...(wslExecution ? { wslExecution } : {})
   })
   if (runtimeHomePath === null && !realHomeHooksPrepared) {
     // Why: launch prep can reject an untrusted managed home and clear its
@@ -57,7 +65,8 @@ export async function prepareCodexRuntimeHomeForLaunch(
     realHomeHooksPrepared = await ensureRealHomeHooksIfSelected()
     if (realHomeHooksPrepared) {
       runtimeHomePath = await runtimeHome.prepareForCodexLaunchAsync(target, launchEnv, {
-        unavailableManagedHomePath: launchContext?.unavailableManagedHomePath
+        unavailableManagedHomePath: launchContext?.unavailableManagedHomePath,
+        ...(wslExecution ? { wslExecution } : {})
       })
     }
   }
@@ -65,6 +74,10 @@ export async function prepareCodexRuntimeHomeForLaunch(
     // Why: Codex runs on the user's real ~/.codex; the managed-home hook
     // install below would target a home Codex never reads on this lane.
     return null
+  }
+  // Guest preparation installs hooks through the captured user’s relay and honors hooks-off.
+  if (wslExecution) {
+    return runtimeHomePath
   }
   const hookTarget =
     target?.runtime === 'wsl'

@@ -123,7 +123,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
 
   it('adopts the winner when a launched daemon loses the endpoint race', async () => {
     // Why: losing the publish race is an expected outcome, not a crash. Reporting it as a
-    // startup failure strands this app on local non-persistent PTYs beside a healthy daemon.
+    // startup failure blocks new terminals beside a healthy daemon.
     const mod = await importFresh()
     await mod.initDaemonPtyProvider(undefined, { macosLoginSessionWatch: true })
 
@@ -458,7 +458,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     try {
       const handle = await launcher('/fake/socket', '/fake/token', '/fake/daemon.pid', 'launch-new')
 
-      expect(handle.mode).toBe('degraded-new-pty-fallback')
+      expect(handle.mode).toBe('fresh-spawns-unavailable')
       expect(forkMock.mock.calls.length).toBe(forkCallsBefore)
       handle.releaseAdoptionLease?.()
     } finally {
@@ -563,7 +563,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     try {
       const handle = await launcher('/fake/socket', '/fake/token', '/fake/daemon.pid', 'launch-new')
 
-      expect(handle.mode).toBe('degraded-new-pty-fallback')
+      expect(handle.mode).toBe('fresh-spawns-unavailable')
       handle.releaseAdoptionLease?.()
     } finally {
       warn.mockRestore()

@@ -1,6 +1,5 @@
 import { readFileSync } from 'node:fs'
 import { setLocalPtyProvider } from '../ipc/pty'
-import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
 import { getDaemonRuntimeDir as getRuntimeDir } from './daemon-launch-paths'
 import { parseDaemonPidFile, type ParsedDaemonPid } from './daemon-pid-file-parse'
 import type { DaemonProvider } from './daemon-provider-routing'
@@ -25,17 +24,9 @@ export function getDaemonSpawner(): DaemonSpawner | null {
   return spawner
 }
 
-// Why: a narrow getter (not a raw export) keeps the "swap on restart" invariant in one place (replaceDaemonProvider).
-/**
- * Whether the installed provider is a daemon that will own FRESH terminals too.
- *
- * Why not `getDaemonProvider() !== null`: DegradedDaemonPtyProvider routes the daemon's
- * EXISTING sessions to the daemon but spawns new ones on the in-process local provider, so
- * those die with this process. A host that answered "I can recover persistent local PTYs"
- * from that state would be advertising recovery for terminals that cannot be recovered.
- */
+/** Existing sessions can remain attached while an unhealthy service refuses new terminals. */
 export function daemonOwnsFreshPersistentPtys(): boolean {
-  return adapter !== null && !(adapter instanceof DegradedDaemonPtyProvider)
+  return adapter !== null && !adapter.freshSpawnsUnavailable
 }
 
 /** Endpoint coordinates of the daemon this process installed, for out-of-band health probes. */
@@ -100,10 +91,7 @@ export async function listLiveDaemonPtyIds(): Promise<string[] | null> {
   if (!adapter) {
     return null
   }
-  const adapters =
-    adapter instanceof DaemonPtyRouter || adapter instanceof DegradedDaemonPtyProvider
-      ? adapter.getAllAdapters()
-      : [adapter]
+  const adapters = adapter instanceof DaemonPtyRouter ? adapter.getAllAdapters() : [adapter]
   const inventories = await Promise.allSettled(
     adapters.map((daemonAdapter) => daemonAdapter.listProcesses())
   )

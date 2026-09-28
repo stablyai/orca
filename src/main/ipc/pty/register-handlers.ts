@@ -1,14 +1,15 @@
+import { parseAppWslPtyId } from '../../../shared/wsl-pty-id'
+import { makePaneKey } from '../../../shared/stable-pane-id'
+import { resolveStablePaneOwner } from './pane/stable-owner'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { Store } from '../../persistence'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { LocalPtyProvider } from '../../providers/local-pty-provider'
 import type { TerminalStartupCwdMissingDirFallback } from '../../../shared/terminal-startup-cwd'
 import {
   getHiddenRendererPtyDeliveryDebug,
   resetRendererScopedHiddenPtyDeliveryState
 } from '../pty-hidden-delivery-gate'
-import { localProvider } from './provider/registry'
 import { finishPtyShutdown } from './provider/liveness'
 import type { GetSelectedCodexHomePath, PrepareClaudeAuth } from './host-env/types'
 import { installPtyInspectIpcHandlers } from './ipc/inspect'
@@ -34,7 +35,6 @@ import {
 } from './delivery/visibility-state'
 import {
   setRebindProviderListeners,
-  setDidFinishLoadHandler,
   setRendererGateResetState
 } from './provider/listener-lifecycle'
 import {
@@ -44,12 +44,10 @@ import {
 } from './delivery/debug'
 import {
   registerRendererLifecycleResetHandlers,
-  clearRendererGateResetHandlers,
-  clearDidFinishLoadHandler
+  clearRendererGateResetHandlers
 } from './delivery/lifecycle-reset'
 import { createPtyIpcSession, type PtyIpcSessionOptions, type PtyRendererDelivery } from './session'
 import { wirePtyIpcSession } from './delivery/wire-session'
-import { configureLocalPtyProvider } from './provider/local-configure'
 import { bindProviderListeners } from './provider/bind-listeners'
 import { installSessionSshOutputIntake } from './delivery/ssh-intake'
 import { installPtySerializeBufferIpc } from './ipc/serialize-buffer'
@@ -146,12 +144,6 @@ export function registerPtyHandlers(
     options
   })
   wirePtyIpcSession(session)
-  configureLocalPtyProvider({
-    runtime,
-    getSettings,
-    getSelectedCodexHomePath,
-    trustedTerminalHandleEnv: session.trustedTerminalHandleEnv
-  })
   installSessionSshOutputIntake(session)
   bindProviderListeners(session)
   setRebindProviderListeners(() => bindProviderListeners(session))
@@ -178,23 +170,6 @@ export function registerPtyHandlers(
     mainWindow.webContents.on('render-process-gone', resetRendererPtyDeliveryGateState)
   }
 
-  // Why: only LocalPtyProvider PTYs (main-process) can be orphaned on reload; daemon sessions survive by design and cleanup would kill them.
-  clearDidFinishLoadHandler()
-  if (mainWindow && localProvider instanceof LocalPtyProvider) {
-    const lp = localProvider
-    const finishLoadHandler = () => {
-      // Why: always advance to keep the generation monotonic, but skip the sweep on crash/freeze-recovery reload — it would kill live local PTYs before session restore (#5787).
-      const generation = lp.advanceGeneration()
-      if (options?.isRecoveryReloadInFlight?.(mainWindow.webContents.id)) {
-        return
-      }
-      // Why: the retained provider onExit callback is the only physical-exit proof; it clears ownership after the OS reaps it.
-      lp.killOrphanedPtys(generation - 1)
-    }
-    setDidFinishLoadHandler(finishLoadHandler, mainWindow.webContents)
-    mainWindow.webContents.on('did-finish-load', finishLoadHandler)
-  }
-
   const assertFolderWorkspacePtyPathUsable = (
     worktreeId: string | undefined
   ): Promise<void> | void => assertFolderWorkspacePtyPathUsableImpl(store, worktreeId)
@@ -207,8 +182,22 @@ export function registerPtyHandlers(
     args: Parameters<typeof prepareCodexResumeHome>[1]
   ): ReturnType<typeof prepareCodexResumeHome> =>
     prepareCodexResumeHome(options?.prepareCodexSessionResume, args)
-  const adoptStablePaneBound = (args: Parameters<typeof adoptStablePane>[2]) =>
-    adoptStablePane(runtime, store, args)
+  const adoptStablePaneBound = async (args: Parameters<typeof adoptStablePane>[2]) => {
+    if (!args.connectionId && options?.wslDaemonSessions) {
+      const binding = resolveStablePaneOwner(
+        runtime,
+        store,
+        makePaneKey(args.tabId, args.leafId),
+        args.worktreeId,
+        args.connectionId
+      )
+      const owner = binding?.ptyId ? parseAppWslPtyId(binding.ptyId) : null
+      if (owner) {
+        await options.wslDaemonSessions.reconnect(owner)
+      }
+    }
+    return adoptStablePane(runtime, store, args)
+  }
 
   // Why: route through getProviderForPty() so CLI commands work for remote PTYs too; localProvider would silently fail for them.
   installPtyRuntimeController({
@@ -280,6 +269,6 @@ export function registerPtyHandlers(
   })
   installPtyWriteIpcHandlers({ mainWindow, runtime })
   installPtyResizeVisibilityIpc(session)
-  installPtyInspectIpcHandlers({ getLocalPtyProviderStartupPromise })
+  installPtyInspectIpcHandlers({ getLocalPtyProviderStartupPromise, store, runtime })
   installPtyKillIpcHandler(killDeps)
 }

@@ -9,7 +9,6 @@ import {
   mkTempProject,
   runRebuildScript,
   writeFakeElectronRebuild,
-  writeFakeNodePtyConptyPayload,
   writeFakeUsableElectronPackage,
   writeFakeWindowsProcessTreeWithNodeAddonApi
 } from './rebuild-native-deps-test-fixtures.mjs'
@@ -75,7 +74,6 @@ describe.runIf(process.platform === 'win32')('rebuild-native-deps stale addon un
       try {
         writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
         writeFakeElectronRebuild(projectDir)
-        writeFakeNodePtyConptyPayload(projectDir, process.arch)
         writeFakeWindowsProcessTreeWithNodeAddonApi(projectDir)
         holder = await stageLoadedStaleAddon(projectDir)
 

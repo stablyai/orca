@@ -30,7 +30,8 @@ const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_WORKTREE_ID',
   'ORCA_AGENT_LAUNCH_TOKEN',
   // Not identity but equally per-spawn: an inherited copy names another launch's CLI.
-  'ORCA_WSL_CLI_DIR'
+  'ORCA_WSL_CLI_DIR',
+  'ORCA_CODEX_LAUNCH_PREFLIGHT'
 ] as const
 const WINDOWS_PATH_ENV_KEY_RE = /^path$/i
 
@@ -172,6 +173,9 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
   removeAppImageRuntimeEnv(env)
   removeInheritedNoColor(env)
   env.LANG ??= 'en_US.UTF-8'
+  if (process.platform === 'win32') {
+    env.PYTHONUTF8 ??= '1'
+  }
   return env
 }
 

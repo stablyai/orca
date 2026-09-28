@@ -1,9 +1,12 @@
+import { TerminalAttachCanceledError } from './daemon-errors'
 import { buildStartupCommandSubmission } from '../../shared/startup-command-submission'
 import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
 import { getDaemonSessionResultMetadata } from './daemon-create-or-attach-result'
 import { enumerateDirectoryOnce } from './directory-enumeration-probe'
 import { normalizePtySize } from './daemon-pty-size'
 import { Session } from './session'
+import { TerminalStartupSession } from './terminal-startup-session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 import { shellPathSupportsPtyStartupBarrier } from './shell-ready'
 import type { InternalCreateOrAttachOptions } from './terminal-host-agent-session-claim'
 import type { CreateOrAttachResult } from './terminal-host-create-contract'
@@ -11,13 +14,13 @@ import type { TerminalHostOptions } from './terminal-host-options'
 import type { TerminalHostTombstones } from './terminal-host-tombstones'
 import type { TerminalSessionTeardown } from './terminal-session-teardown'
 import { resolveDaemonSessionScrollbackRows } from './daemon-session-scrollback-window'
-import { TerminalAttachCanceledError } from './daemon-errors'
 import { waitForTerminalAttachOperation } from './terminal-attach-cancellation'
 import { SessionNotFoundError } from './types'
 import { resolveWslSessionContext } from './wsl-session-context'
 
 type TerminalHostSessionCreateDependencies = {
   sessions: Map<string, Session>
+  startupSessions: Map<string, TerminalStartupSession>
   /** Re-checks the host's shutdown fence and this request's cancellation after any await. */
   assertCreateAllowed: () => void
   sessionTeardown: TerminalSessionTeardown
@@ -113,8 +116,25 @@ async function spawnAndPublishSession(
   // Why before the fork: the shell's own cwd may already have fallen back, so probe the requested path.
   const cwdReadableByDaemon =
     opts.cwd && !wslDistro ? await isCwdReadableByThisProcess(opts.cwd) : null
+  const startup = new TerminalStartupSession(
+    opts.sessionId,
+    deps.startupSessions,
+    (subprocess, onExit, requireSynchronousOutput) =>
+      createSession(opts, deps, ctx, subprocess, onExit, requireSynchronousOutput),
+    createSessionExitHandler(deps.onSessionExit, opts.sessionId, opts.agentSessionGeneration)
+  )
+  await startup.clearPreviousAttempt()
   const subprocess = await deps.spawnSubprocess({
     sessionId: opts.sessionId,
+    onSpawnAttempt: (createHandle, discardNative) => {
+      const discard = () => startup.discard()
+      try {
+        startup.prepare(createHandle, true, discardNative)
+        return { discard }
+      } catch (error) {
+        return { discard, failure: { error } }
+      }
+    },
     cols: size.cols,
     rows: size.rows,
     cwd: opts.cwd,
@@ -131,54 +151,22 @@ async function spawnAndPublishSession(
     ...(opts.cancelSignal ? { cancelSignal: opts.cancelSignal } : {})
   })
 
-  // Why: a fallback shell does not emit the preferred shell's ready marker;
-  // retaining the stale capability would indefinitely queue its first command.
-  const shellReadySupported =
-    (opts.shellReadySupported ?? false) &&
-    (subprocess.shellPath === undefined || shellPathSupportsPtyStartupBarrier(subprocess.shellPath))
-  const session = new Session({
-    sessionId: opts.sessionId,
-    cols: size.cols,
-    rows: size.rows,
-    terminalHandle: opts.env?.ORCA_TERMINAL_HANDLE,
-    launchAgent: opts.launchAgent,
-    subprocess,
-    ownerBackend: resolvePtyOwnerBackend({
-      platform: process.platform,
-      shellPath: subprocess.shellPath,
-      wslDistro
-    }),
-    shellReadySupported,
-    scrollback: resolveDaemonSessionScrollbackRows(),
-    historySeedChunks: opts.historySeedChunks,
-    ...(opts.startupIngress ? { startupIngress: opts.startupIngress } : {}),
-    wslDistro,
-    onExit: createSessionExitHandler(
-      deps.onSessionExit,
-      opts.sessionId,
-      opts.agentSessionGeneration
-    ),
-    ...(deps.reportReadinessEvent ? { reportReadinessEvent: deps.reportReadinessEvent } : {}),
-    ...(opts.shellReadyTimeoutMs !== undefined
-      ? { shellReadyTimeoutMs: opts.shellReadyTimeoutMs }
-      : {})
-  })
-
-  if (opts.isCanceled?.()) {
-    // Retain cleanup ownership if the native child refuses to exit.
-    deps.sessions.set(opts.sessionId, session)
-    await session.forceKillAndDisposeSubprocess()
-    if (deps.sessions.get(opts.sessionId) === session) {
-      session.dispose()
-      deps.sessions.delete(opts.sessionId)
-      deps.onDeadSessionRemoved(opts.sessionId)
+  const session = startup.current ?? startup.prepare(() => subprocess, false)
+  const shellReadySupported = supportsStartupBarrier(opts, subprocess)
+  try {
+    deps.assertCreateAllowed()
+    opts.cancelSignal?.throwIfAborted()
+    if (opts.isCanceled?.()) {
+      throw new TerminalAttachCanceledError(opts.sessionId)
     }
-    throw new TerminalAttachCanceledError(opts.sessionId)
+  } catch (error) {
+    await startup.discard()
+    throw error
   }
 
   deps.sessions.set(opts.sessionId, session)
   deps.onSessionCreated(opts.sessionId, opts.agentSessionGeneration, session.isAlive)
-  const token = session.attachClient(opts.streamClient)
+  const token = session.attachClient(opts.streamClient, startup.observedBeforeConfirmation)
 
   const startupCommandWritten =
     Boolean(opts.command) && !subprocess.startupCommandDeliveredInShellArgs
@@ -207,7 +195,7 @@ async function spawnAndPublishSession(
     )
   }
 
-  return {
+  const result: CreateOrAttachResult = {
     isNew: true,
     snapshot: null,
     pid: subprocess.pid,
@@ -217,14 +205,45 @@ async function spawnAndPublishSession(
     ...(cwdReadableByDaemon !== null ? { cwdReadableByDaemon } : {}),
     attachToken: token
   }
+  startup.publish()
+  return result
 }
 
-function createSessionExitHandler(
-  onSessionExit: TerminalHostSessionCreateDependencies['onSessionExit'],
-  sessionId: string,
-  generation: string | undefined
-): () => void {
-  return () => onSessionExit(sessionId, generation)
+function createSession(
+  opts: InternalCreateOrAttachOptions,
+  deps: TerminalHostSessionCreateDependencies,
+  { size, wslDistro }: { size: { cols: number; rows: number }; wslDistro: string | undefined },
+  subprocess: SubprocessHandle,
+  onExit: () => void,
+  requireSynchronousOutput: boolean
+): Session {
+  // Why: a fallback shell does not emit the preferred shell's ready marker;
+  // retaining the stale capability would indefinitely queue its first command.
+  const shellReadySupported = supportsStartupBarrier(opts, subprocess)
+  return new Session({
+    sessionId: opts.sessionId,
+    cols: size.cols,
+    rows: size.rows,
+    terminalHandle: opts.env?.ORCA_TERMINAL_HANDLE,
+    launchAgent: opts.launchAgent,
+    subprocess,
+    ownerBackend: resolvePtyOwnerBackend({
+      platform: process.platform,
+      shellPath: subprocess.shellPath,
+      wslDistro
+    }),
+    shellReadySupported,
+    scrollback: resolveDaemonSessionScrollbackRows(),
+    historySeedChunks: opts.historySeedChunks,
+    ...(opts.startupIngress ? { startupIngress: opts.startupIngress } : {}),
+    wslDistro,
+    onExit,
+    requireSynchronousOutput,
+    ...(deps.reportReadinessEvent ? { reportReadinessEvent: deps.reportReadinessEvent } : {}),
+    ...(opts.shellReadyTimeoutMs !== undefined
+      ? { shellReadyTimeoutMs: opts.shellReadyTimeoutMs }
+      : {})
+  })
 }
 
 // Why enumeration: a shell's cwd listing is what TCC withholds, and it can withhold it while
@@ -232,4 +251,23 @@ function createSessionExitHandler(
 // unexpected error reads as readable so it can never masquerade as one.
 async function isCwdReadableByThisProcess(cwd: string): Promise<boolean> {
   return (await enumerateDirectoryOnce(cwd)) !== 'denied'
+}
+
+function supportsStartupBarrier(
+  opts: InternalCreateOrAttachOptions,
+  subprocess: SubprocessHandle
+): boolean {
+  return (
+    (opts.shellReadySupported ?? false) &&
+    (subprocess.shellPath === undefined || shellPathSupportsPtyStartupBarrier(subprocess.shellPath))
+  )
+}
+
+// Keep request buffers out of the live session's exit closure.
+function createSessionExitHandler(
+  onSessionExit: TerminalHostSessionCreateDependencies['onSessionExit'],
+  sessionId: string,
+  generation: string | undefined
+): () => void {
+  return () => onSessionExit(sessionId, generation)
 }

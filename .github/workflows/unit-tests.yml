@@ -52,6 +52,9 @@ jobs:
       - name: Install Electron package binary for tests
         run: node config/scripts/install-electron-package-binary.mjs
 
+      - name: Prepare pinned Bun for real terminal tests
+        run: node config/scripts/build-orcad-bun.mjs --runtime-only --out-dir out/orcad
+
       - name: Test shard
         env:
           ORCA_BALANCE_UNIT_SHARDS: '1'
@@ -61,19 +64,19 @@ jobs:
           pnpm exec vitest run --config config/vitest.config.ts \
             --exclude=src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts \
             --exclude=src/main/daemon/shell-ready.test.ts \
-            --exclude=src/main/daemon/node-pty-fd-leak.test.ts \
+            --exclude=src/main/daemon/bun-pty-fd-lifecycle.integration.test.ts \
             --exclude=src/main/providers/local-pty-shell-ready-zsh-launch-environment.test.ts \
             --exclude=src/main/providers/__tests__/shell-ready-framework-example.test.ts \
             --exclude=src/main/pty/omp-shell-wrapper-alias-safety.test.ts \
-            --exclude=src/main/pty/omp-shell-wrapper.node-pty.test.ts \
+            --exclude=src/main/pty/omp-shell-wrapper.bun.test.ts \
             --exclude=src/main/shell-startup-feature-channel.test.ts \
-            --exclude=src/main/terminal-history-fish-session.node-pty.test.ts \
+            --exclude=src/main/terminal-history-fish-session.bun.test.ts \
             --exclude=src/main/zsh-scoped-histfile.live-shell.test.ts \
             --exclude=src/main/zsh-startup-hook-user-config-equivalence.live-shell.test.ts \
             --exclude=src/main/zsh-wrapper-version-mismatch.live-shell.test.ts \
-            --exclude=src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts \
-            --exclude=src/shared/fish-query-reply-child-stdin.node-pty.test.ts \
-            --exclude=src/shared/pty-reply-echo-shapes.node-pty.test.ts \
+            --exclude=src/main/daemon/pty-subprocess/bun-tests/fish-color-scheme-child-stdin.bun.test.ts \
+            --exclude=src/main/daemon/pty-subprocess/bun-tests/fish-query-reply-child-stdin.bun.test.ts \
+            --exclude=src/main/daemon/pty-subprocess/bun-tests/pty-reply-echo-shapes.bun.test.ts \
             --exclude=src/shared/startup-shell-portability.live-shell.test.ts \
             --exclude=src/shared/posix-command-path-lookup.test.ts \
             --exclude=tests/e2e/relay-region-compatibility.unit.test.ts \

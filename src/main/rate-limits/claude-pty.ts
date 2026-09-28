@@ -1,3 +1,4 @@
+import { spawnHiddenDaemonPty } from './hidden-daemon-pty'
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import { buildConfiguredProxyEnv, type NetworkProxySettings } from '../../shared/network-proxy'
 import { resolveClaudeCommand } from '../codex-cli/command'
@@ -48,9 +49,77 @@ export async function fetchViaPty(options?: {
   if (options?.signal?.aborted) {
     return abortedClaudeUsageResult()
   }
-  const pty = await import('node-pty')
-  if (options?.signal?.aborted) {
-    return abortedClaudeUsageResult()
+
+  const claudeCommand = resolveClaudeCommand()
+
+  // Windows CLI shims require their existing cmd.exe wrapper.
+  const spawnEnv = applyClaudeEnvPatch(
+    { ...process.env, TERM: 'xterm-256color' } as Record<string, string>,
+    options?.authPreparation?.envPatch ?? {},
+    { stripAuthEnv: options?.authPreparation?.stripAuthEnv ?? false }
+  )
+  // Why: this hidden usage PTY spawns `claude` directly, not the user's shell
+  // wrapper, so without the configured proxy it would reach api.anthropic.com
+  // from the app's own IP — bypassing the proxy the user set for Claude and
+  // risking rate-limit/geo signals on the account. Falls back to {} when unset.
+  const proxyEnv = buildConfiguredProxyEnv(options?.networkProxySettings)
+  Object.assign(spawnEnv, proxyEnv)
+  const authPreparation = options?.authPreparation
+  const wslConfig =
+    authPreparation?.runtime === 'wsl' &&
+    authPreparation.wslDistro &&
+    authPreparation.wslLinuxConfigDir
+      ? {
+          distro: authPreparation.wslDistro,
+          linuxConfigDir: authPreparation.wslLinuxConfigDir
+        }
+      : null
+  const spawnFile = wslConfig ? 'wsl.exe' : process.platform === 'win32' ? 'cmd.exe' : claudeCommand
+  const spawnArgs = wslConfig
+    ? [
+        '-d',
+        wslConfig.distro,
+        '--exec',
+        'bash',
+        '-lc',
+        // Why: Windows-side env does not cross into the distro without WSLENV,
+        // so export the configured proxy inside the command for the inner claude.
+        [
+          // Why: hidden usage probes must not inherit a root-like WSL cwd;
+          // keep Claude discovery bounded to a tiny temp directory.
+          ...getHiddenRateLimitWslCwdSetupCommands(),
+          `export CLAUDE_CONFIG_DIR=${quoteHiddenRateLimitShellValue(wslConfig.linuxConfigDir)}`,
+          ...Object.entries(proxyEnv).map(
+            ([key, value]) => `export ${key}=${quoteHiddenRateLimitShellValue(value)}`
+          ),
+          'exec claude'
+        ].join(' && ')
+      ]
+    : process.platform === 'win32'
+      ? ['/c', `"${claudeCommand}"`]
+      : []
+
+  let term: Awaited<ReturnType<typeof spawnHiddenDaemonPty>>
+  try {
+    term = await spawnHiddenDaemonPty(
+      spawnFile,
+      spawnArgs,
+      {
+        name: 'xterm-256color',
+        cols: 120,
+        rows: 40,
+        // Why: hidden usage PTYs must not inherit the process cwd (e.g. / or a
+        // drive root), which can trigger unbounded file discovery.
+        cwd: resolveHiddenRateLimitPtyCwd(),
+        env: withCliRuntimeOnPath(claudeCommand, spawnEnv)
+      },
+      options?.signal
+    )
+  } catch (error) {
+    if (options?.signal?.aborted) {
+      return abortedClaudeUsageResult()
+    }
+    throw error
   }
 
   return new Promise<ProviderRateLimits>((resolve) => {
@@ -63,67 +132,6 @@ export async function fetchViaPty(options?: {
     let stopSettleTimer: ReturnType<typeof setTimeout> | null = null
     let claude21UsageSettleTimer: ReturnType<typeof setTimeout> | null = null
 
-    const claudeCommand = resolveClaudeCommand()
-
-    // Why: node-pty cannot spawn .cmd/.bat batch scripts directly on Windows —
-    // those need cmd.exe as an interpreter. Always route through cmd.exe on win32
-    // and ensure the command path is properly quoted if it contains spaces.
-    const isWin32 = process.platform === 'win32'
-    const spawnEnv = applyClaudeEnvPatch(
-      { ...process.env, TERM: 'xterm-256color' } as Record<string, string>,
-      options?.authPreparation?.envPatch ?? {},
-      { stripAuthEnv: options?.authPreparation?.stripAuthEnv ?? false }
-    )
-    // Why: this hidden usage PTY spawns `claude` directly, not the user's shell
-    // wrapper, so without the configured proxy it would reach api.anthropic.com
-    // from the app's own IP — bypassing the proxy the user set for Claude and
-    // risking rate-limit/geo signals on the account. Falls back to {} when unset.
-    const proxyEnv = buildConfiguredProxyEnv(options?.networkProxySettings)
-    Object.assign(spawnEnv, proxyEnv)
-    const authPreparation = options?.authPreparation
-    const wslConfig =
-      authPreparation?.runtime === 'wsl' &&
-      authPreparation.wslDistro &&
-      authPreparation.wslLinuxConfigDir
-        ? {
-            distro: authPreparation.wslDistro,
-            linuxConfigDir: authPreparation.wslLinuxConfigDir
-          }
-        : null
-    const spawnFile = wslConfig ? 'wsl.exe' : isWin32 ? 'cmd.exe' : claudeCommand
-    const spawnArgs = wslConfig
-      ? [
-          '-d',
-          wslConfig.distro,
-          '--exec',
-          'bash',
-          '-lc',
-          // Why: Windows-side env does not cross into the distro without WSLENV,
-          // so export the configured proxy inside the command for the inner claude.
-          [
-            // Why: hidden usage probes must not inherit a root-like WSL cwd;
-            // keep Claude discovery bounded to a tiny temp directory.
-            ...getHiddenRateLimitWslCwdSetupCommands(),
-            `export CLAUDE_CONFIG_DIR=${quoteHiddenRateLimitShellValue(wslConfig.linuxConfigDir)}`,
-            ...Object.entries(proxyEnv).map(
-              ([key, value]) => `export ${key}=${quoteHiddenRateLimitShellValue(value)}`
-            ),
-            'exec claude'
-          ].join(' && ')
-        ]
-      : isWin32
-        ? ['/c', `"${claudeCommand}"`]
-        : []
-
-    const term = pty.spawn(spawnFile, spawnArgs, {
-      name: 'xterm-256color',
-      cols: 120,
-      rows: 40,
-      // Why: hidden usage PTYs must not inherit the process cwd (e.g. / or a
-      // drive root), which can trigger unbounded file discovery.
-      cwd: resolveHiddenRateLimitPtyCwd(),
-      env: withCliRuntimeOnPath(claudeCommand, spawnEnv)
-    })
     const termDisposables: { dispose: () => void }[] = [registerHiddenRateLimitPty(term)]
     let enterInterval: ReturnType<typeof setInterval> | null = null
     let timeout: ReturnType<typeof setTimeout> | null = null
@@ -318,12 +326,10 @@ export async function fetchViaPty(options?: {
         }
       }
     })
-    if (onDataDisposable) {
-      termDisposables.push(onDataDisposable)
-    }
+    termDisposables.push(onDataDisposable)
 
-    const onExitDisposable = term.onExit(() => {
-      cleanupHiddenRateLimitPty(term, termDisposables, { kill: false })
+    const finish = (failure?: Error): void => {
+      cleanupHiddenRateLimitPty(term, termDisposables, { kill: Boolean(failure) })
       clearFollowupTimers()
       if (!resolved) {
         resolved = true
@@ -332,7 +338,9 @@ export async function fetchViaPty(options?: {
           timeout = null
         }
         const clean = stripTerminalControlSequences(output)
-        const { session, weekly, fableWeekly } = parseClaudePtyUsage(clean)
+        const { session, weekly, fableWeekly } = failure
+          ? { session: null, weekly: null, fableWeekly: null }
+          : parseClaudePtyUsage(clean)
         resolve({
           provider: 'claude',
           session,
@@ -340,15 +348,15 @@ export async function fetchViaPty(options?: {
           fableWeekly,
           updatedAt: Date.now(),
           error:
-            session || weekly || fableWeekly
+            failure?.message ??
+            (session || weekly || fableWeekly
               ? null
-              : withMacTailscaleDnsHint('CLI exited before /usage rendered', clean),
+              : withMacTailscaleDnsHint('CLI exited before /usage rendered', clean)),
           status: session || weekly || fableWeekly ? 'ok' : 'error'
         })
       }
-    })
-    if (onExitDisposable) {
-      termDisposables.push(onExitDisposable)
     }
+    termDisposables.push(term.onError(finish))
+    termDisposables.push(term.onExit(() => finish()))
   })
 }

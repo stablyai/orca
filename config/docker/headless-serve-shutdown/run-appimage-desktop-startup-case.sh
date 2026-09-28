@@ -47,7 +47,13 @@ declare -A tree_start_ticks=()
 read_start_ticks() {
   local pid=$1
   [[ -r "/proc/$pid/stat" ]] || return 1
-  awk '{print $22}' "/proc/$pid/stat"
+  local stat
+  local -a fields
+  stat=$(<"/proc/$pid/stat") || return 1
+  # comm is parenthesized and may contain spaces or parentheses.
+  read -r -a fields <<< "${stat##*) }"
+  ((${#fields[@]} >= 20)) || return 1
+  printf '%s\n' "${fields[19]}"
 }
 
 identity_alive() {
@@ -55,7 +61,7 @@ identity_alive() {
   local expected_ticks=$2
   [[ -n "$expected_ticks" ]] || return 1
   [[ -r "/proc/$pid/stat" ]] || return 1
-  [[ $(awk '{print $22}' "/proc/$pid/stat" 2>/dev/null || true) == "$expected_ticks" ]] || return 1
+  [[ $(read_start_ticks "$pid" 2>/dev/null || true) == "$expected_ticks" ]] || return 1
   local process_state
   process_state=$(ps -o stat= -p "$pid" 2>/dev/null | tr -d '[:space:]' || true)
   [[ -n "$process_state" && "$process_state" != Z* ]]
@@ -82,6 +88,27 @@ collect_process_tree() {
       tree_start_ticks["$child"]="$child_ticks"
       frontier+=("$child")
     done < <(ps -eo pid=,ppid= | awk -v parent="$parent" '$2 == parent {print $1}')
+  done
+}
+
+# Detached services can outlive every ancestor visible in the startup tree.
+collect_state_processes() {
+  local signal=$1 stat_file pid ticks
+  for stat_file in /proc/[0-9]*/stat; do
+    pid=${stat_file#/proc/}
+    pid=${pid%/stat}
+    [[ "$pid" != "$$" && -O "$stat_file" ]] || continue
+    ticks=$(read_start_ticks "$pid" 2>/dev/null || true)
+    [[ -n "$ticks" ]] || continue
+    if ! grep -zFxq -- "HOME=$state_dir/home" "/proc/$pid/environ" 2>/dev/null; then
+      continue
+    fi
+    identity_alive "$pid" "$ticks" || continue
+    if [[ "${tree_start_ticks[$pid]-}" != "$ticks" ]]; then
+      tree_pids+=("$pid")
+      tree_start_ticks["$pid"]=$ticks
+      kill -s "$signal" "$pid" 2>/dev/null || true
+    fi
   done
 }
 
@@ -117,9 +144,12 @@ signal_owned_processes() {
 
 wait_for_owned_exit() {
   local timeout_seconds=$1
+  local signal=$2
+  local empty_passes=0
   local deadline=$((SECONDS + timeout_seconds))
   local pid ticks alive
   while ((SECONDS < deadline)); do
+    collect_state_processes "$signal"
     alive=0
     for pid in "${tree_pids[@]}"; do
       ticks=${tree_start_ticks[$pid]-}
@@ -129,7 +159,10 @@ wait_for_owned_exit() {
       fi
     done
     if ((alive == 0)); then
-      return 0
+      empty_passes=$((empty_passes + 1))
+      ((empty_passes < 2)) || return 0
+    else
+      empty_passes=0
     fi
     sleep 0.2
   done
@@ -179,11 +212,12 @@ cleanup() {
   local status=$?
   trap - EXIT
   signal_process_group TERM || true
+  collect_state_processes TERM
   signal_owned_processes TERM || true
-  if ! wait_for_owned_exit 10; then
+  if ! wait_for_owned_exit 10 TERM; then
     signal_process_group KILL || true
     signal_owned_processes KILL || true
-    wait_for_owned_exit 5 || status=1
+    wait_for_owned_exit 5 KILL || status=1
   fi
   capture_launcher_status || true
   if ((status != 0)); then

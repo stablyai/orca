@@ -79,7 +79,12 @@ describe('serve desktop activation wiring', () => {
   })
 
   it('keeps the headless install policy after desktop promotion', () => {
-    expect(windowCoreSource).toContain(
+    expect(windowCoreSource).toContain('...getMainProcessUpdaterOptions()')
+    const updaterSource = readFileSync(
+      join(process.cwd(), 'src/main/startup/main-process-updater.ts'),
+      'utf8'
+    )
+    expect(updaterSource).toContain(
       'updateInstallMode: resolveUpdateInstallMode(state.isServeMode)'
     )
   })

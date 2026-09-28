@@ -1,6 +1,6 @@
 import { writeBundledCliRuntimeFixture } from './bundled-cli-runtime-fixture.mjs'
 import { existsSync } from 'node:fs'
-import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -17,6 +17,34 @@ const FpmTarget = require('app-builder-lib/out/targets/FpmTarget').default
 const electronBuilderNativeRebuild = require('./electron-builder-native-rebuild.cjs')
 
 describe('electron-builder config', () => {
+  it('preserves the pinned Bun vendor signature without excluding other application code', () => {
+    const ignored = (path) =>
+      electronBuilderConfig.mac.signIgnore.some((pattern) => path.match(pattern))
+    expect(ignored('/Orca.app/Contents/Resources/cli-runtime/bun-runtime')).toBe(true)
+    expect(ignored('/Orca.app/Contents/MacOS/Orca')).toBe(false)
+    expect(ignored('/Orca.app/Contents/Resources/terminal-daemon/daemon-entry.js')).toBe(false)
+    expect(ignored('/Orca.app/Contents/Resources/cli-runtime/bun-runtime-extra')).toBe(false)
+  })
+
+  it('refuses a macOS package if signing changed the pinned runtime bytes', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-signed-runtime-'))
+    const directory = join(root, 'Orca.app', 'Contents', 'Resources', 'cli-runtime')
+    const context = {
+      appOutDir: root,
+      electronPlatformName: 'darwin',
+      arch: 3,
+      packager: { appInfo: { productFilename: 'Orca' } }
+    }
+    try {
+      await writeBundledCliRuntimeFixture(directory, 'darwin', 'arm64')
+      expect(() => electronBuilderConfig.afterSign(context)).not.toThrow()
+      await writeFile(join(directory, 'bun-runtime'), 'changed by signing')
+      expect(() => electronBuilderConfig.afterSign(context)).toThrow('checksum mismatch')
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   it('keeps the packaged app identity aligned with local-build validation', () => {
     expect(electronBuilderConfig.appId).toBe(
       require('../../src/shared/local-build-compatibility-contract.json').appId
@@ -26,6 +54,7 @@ describe('electron-builder config', () => {
   it('excludes repo-only source trees from app.asar', () => {
     expect(electronBuilderConfig.files).toEqual(
       expect.arrayContaining([
+        '!.build{,/**/*}',
         '!src{,/**/*}',
         '!config{,/**/*}',
         '!docs{,/**/*}',
@@ -454,6 +483,10 @@ describe('arch-aware packaging guard', () => {
     scratch = await mkdtemp(join(tmpdir(), 'orca-electron-builder-guard-'))
     bundleDir = join(scratch, 'mobile-web')
     await writeMobileWebBundleFixtureTree({ outDir: bundleDir })
+    const daemonDirectory = join(scratch, 'out', 'terminal-daemon')
+    await mkdir(daemonDirectory, { recursive: true })
+    await writeFile(join(daemonDirectory, 'daemon-entry.js'), '')
+    await writeFile(join(daemonDirectory, 'windows-bun-pty-gate-entry.js'), '')
     for (const platform of ['darwin', 'linux', 'win32']) {
       for (const arch of ['x64', 'arm64']) {
         const directory = join(scratch, 'out', 'cli-runtime', `${platform}-${arch}`)
@@ -506,6 +539,23 @@ describe('arch-aware packaging guard', () => {
     } else {
       expect(packWindows).toThrow('@vscode/windows-process-tree')
       expect(packWindows).toThrow('Windows packaging requires a Windows host')
+    }
+  })
+})
+
+describe('shared Bun terminal daemon packaging', () => {
+  it('packages the standalone entries with one shared CLI runtime on every platform', () => {
+    for (const platform of ['mac', 'linux', 'win']) {
+      const resources = electronBuilderConfig[platform].extraResources
+      expect(resources.filter((resource) => resource.to === 'terminal-daemon')).toEqual([
+        {
+          from: 'out/terminal-daemon',
+          to: 'terminal-daemon',
+          filter: ['daemon-entry.js', 'windows-bun-pty-gate-entry.js']
+        }
+      ])
+      expect(resources.filter((resource) => resource.to === 'cli-runtime')).toHaveLength(1)
+      expect(resources.some((resource) => resource.to === 'orcad-template')).toBe(false)
     }
   })
 })

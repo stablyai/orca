@@ -41,6 +41,13 @@ __orca_deferred_init() {
   builtin typeset -g _orca_deferred_init_done=1
   builtin typeset -g precmd_functions
   precmd_functions=(${precmd_functions:#__orca_deferred_init})
+  if [ -n "${ORCA_WSL_CLI_DIR:-}" ]; then
+    if [ -x "$ORCA_WSL_CLI_DIR/${ORCA_CLI_COMMAND:-}" ]; then
+      export PATH="$ORCA_WSL_CLI_DIR${PATH:+:$PATH}"
+    else
+      printf 'Orca CLI unavailable: cannot run %s. Check WSL Windows-drive mount options.\n' "$ORCA_WSL_CLI_DIR/${ORCA_CLI_COMMAND:-}" >&2
+    fi
+  fi
   if __orca_has_feature overlay; then
     # Why: remote startup files can re-export user defaults after relay spawn.
     [[ -n "${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="${ORCA_OPENCODE_CONFIG_DIR}"

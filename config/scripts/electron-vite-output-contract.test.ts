@@ -139,7 +139,7 @@ describe('Electron Vite output contract', () => {
       throw new Error('Expected main-process external predicate')
     }
 
-    expect(external('node-pty', undefined, false)).toBe(true)
+    expect(external('node-pty', undefined, false)).toBe(false)
     expect(external('@parcel/watcher', undefined, false)).toBe(true)
     expect(external('electron', undefined, false)).toBe(true)
     expect(external('node:fs', undefined, false)).toBe(true)

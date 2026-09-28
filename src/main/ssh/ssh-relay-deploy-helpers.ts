@@ -1,4 +1,4 @@
-import type { ClientChannel } from 'ssh2'
+import type { Writable } from 'node:stream'
 import { createSshOperationAbortError } from './ssh-connection-utils'
 import { RELAY_SENTINEL, RELAY_SENTINEL_TIMEOUT_MS } from './relay-protocol'
 import type { MultiplexerTransport } from './ssh-channel-multiplexer'
@@ -12,8 +12,24 @@ export { execCommand, isUnconfirmedSshCommandTermination } from './ssh-relay-exe
 const MAX_RELAY_STARTUP_BUFFER_BYTES = 64 * 1024
 const RELAY_SENTINEL_BUFFER = Buffer.from(RELAY_SENTINEL, 'utf-8')
 
+/** Shared startup boundary for SSH channels and guest-process pipes. */
+export type RelayStartupChannel = {
+  stdin: Pick<Writable, 'write' | 'on' | 'off'>
+  stderr: {
+    on(event: 'data', listener: (data: Buffer) => void): unknown
+    on(event: 'error', listener: (error: Error) => void): unknown
+  }
+  on(event: 'data', listener: (data: Buffer) => void): unknown
+  on(event: 'exit', listener: (code: number | null) => void): unknown
+  on(event: 'error', listener: (error: Error) => void): unknown
+  on(event: 'close', listener: () => void): unknown
+  pause(): unknown
+  resume(): unknown
+  close(): void
+}
+
 export function waitForSentinel(
-  channel: ClientChannel,
+  channel: RelayStartupChannel,
   signal?: AbortSignal
 ): Promise<MultiplexerTransport> {
   return new Promise<MultiplexerTransport>((resolve, reject) => {

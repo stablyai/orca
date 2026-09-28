@@ -45,7 +45,6 @@ const ENTRY_POINTS = [
 // relay build already does (config/scripts/build-relay.mjs).
 const EXTERNAL = [
   'electron',
-  'node-pty',
   '@parcel/watcher',
   'better-sqlite3',
   'keytar',

@@ -342,7 +342,7 @@ export function hasRecordedManagedHostCodexPane(): boolean {
   )
 }
 
-/** Drops records whose daemon PTYs are authoritatively absent. */
+/** Native daemon inventory can retire native records, including legacy Windows-owned WSL. */
 export function reconcileCodexPaneAccountsWithLivePtys(livePtyIds: readonly string[]): void {
   // Why: this deletes every pane not in the live list. Against an empty stand-in
   // it is a no-op, but the write it guards would still persist that stand-in
@@ -362,7 +362,7 @@ export function reconcileCodexPaneAccountsWithLivePtys(livePtyIds: readonly stri
     changed = true
   }
   for (const ptyId of Object.keys(registry.panes)) {
-    if (!livePtyIdSet.has(ptyId)) {
+    if (!ptyId.startsWith('wsl:') && !ptyId.startsWith('ssh:') && !livePtyIdSet.has(ptyId)) {
       delete registry.panes[ptyId]
       changed = true
     }

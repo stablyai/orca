@@ -1,4 +1,4 @@
-import type * as pty from 'node-pty'
+import type { TerminalProcess } from '../../../shared/terminal-process'
 import { ptyShellProcessId } from '../../windows/windows-pty-job'
 import { getAgentForegroundContextPaths } from '../../providers/agent-foreground-context-paths'
 import { confirmPtyShellForeground } from './pty-shell-foreground-confirmation'
@@ -49,7 +49,7 @@ export type PtyForegroundProcessTracker = {
 }
 
 export function createPtyForegroundProcessTracker(args: {
-  process: pty.IPty
+  process: TerminalProcess
   shellPath: string
   cwd?: string
   sessionId: string

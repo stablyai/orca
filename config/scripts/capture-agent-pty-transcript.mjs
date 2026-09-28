@@ -19,7 +19,6 @@ import {
 
 const REPO_ROOT = resolve(import.meta.dirname, '..', '..')
 const FIXTURE_DIR = join(REPO_ROOT, 'src', 'main', 'runtime', '__fixtures__')
-const STOP_KEY = 0x1d // Ctrl-], consumed by the recorder and never forwarded to the agent.
 const NAME_RE = /^[a-z0-9][a-z0-9-]*$/
 
 const USAGE = `Capture a raw agent PTY transcript into src/main/runtime/__fixtures__/.
@@ -121,10 +120,6 @@ function runScan(files, redact) {
 }
 
 function resolveSpawn(command) {
-  // node-pty cannot run a .cmd/.bat shim directly on Windows; those need cmd.exe.
-  if (process.platform === 'win32' && /\.(cmd|bat)$/i.test(command[0])) {
-    return { file: 'cmd.exe', args: ['/c', `"${command[0]}"`, ...command.slice(1)] }
-  }
   return { file: command[0], args: command.slice(1) }
 }
 
@@ -137,87 +132,33 @@ async function runCapture(options, command) {
   const outPath = options.out ? resolve(options.out) : join(FIXTURE_DIR, `${name}.txt`)
   mkdirSync(dirname(outPath), { recursive: true })
 
-  const pty = await import('node-pty').catch((error) => {
-    console.error(
-      `node-pty failed to load. Build it for plain node first:
-  node config/scripts/ensure-native-runtime.mjs --runtime=node
-${String(error)}`
-    )
-    return null
-  })
-  if (pty === null) {
-    return 2
-  }
-
+  const { spawnTranscriptPty } = await import('./pty-transcript-bun-runtime.mjs')
+  const { recordPtyTranscript } = await import('./pty-transcript-recording.mjs')
   const cols = options.cols ?? process.stdout.columns ?? 120
   const rows = options.rows ?? process.stdout.rows ?? 40
   const { file, args } = resolveSpawn(command)
-  const term = pty.spawn(file, args, {
-    name: 'xterm-256color',
-    cols,
-    rows,
-    cwd: process.cwd(),
-    env: { ...process.env, TERM: 'xterm-256color' },
-    encoding: null
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(([, value]) => value !== undefined)
+  )
+  const exitCode = await recordPtyTranscript({
+    spawn: (onBytes) =>
+      spawnTranscriptPty(
+        {
+          file,
+          args,
+          cols,
+          rows,
+          cwd: process.cwd(),
+          env: { ...env, TERM: 'xterm-256color' },
+          windowsJobKillOnClose: true
+        },
+        onBytes
+      ),
+    sink: createWriteStream(outPath),
+    stdin: process.stdin,
+    stdout: process.stdout,
+    options
   })
-
-  const sink = createWriteStream(outPath)
-  let recording = true
-  term.onData((chunk) => {
-    const bytes = typeof chunk === 'string' ? Buffer.from(chunk, 'utf8') : chunk
-    // Why recording stops before the kill: an agent repaints an idle frame on its way out, so
-    // a transcript that keeps writing through shutdown ends on that frame instead of on the
-    // state you stopped to capture. A mid-turn or dialog capture cannot survive that.
-    if (recording) {
-      sink.write(bytes)
-    }
-    process.stdout.write(bytes)
-  })
-
-  const wasRaw = process.stdin.isTTY === true && process.stdin.isRaw === true
-  if (process.stdin.isTTY) {
-    process.stdin.setRawMode(true)
-  }
-  process.stdin.resume()
-  let stopping = false
-  const stop = () => {
-    if (stopping) {
-      return
-    }
-    stopping = true
-    recording = false
-    try {
-      term.kill()
-    } catch {
-      // The agent may have exited on its own; the transcript is already on disk.
-    }
-  }
-  process.stdin.on('data', (chunk) => {
-    if (chunk.includes(STOP_KEY)) {
-      stop()
-      return
-    }
-    term.write(chunk.toString('binary'))
-  })
-  // Why scripted input: a dialog capture has to be driven, and CI (or an agent) has no TTY to
-  // type into. The keystrokes ride the same PTY a human's would, so the capture is unchanged.
-  const sendTimers = options.sends.map((send) => setTimeout(() => term.write(send.text), send.atMs))
-  const durationTimer = options.duration === null ? null : setTimeout(stop, options.duration * 1000)
-
-  const exitCode = await new Promise((resolveExit) => {
-    term.onExit(({ exitCode: code }) => resolveExit(code ?? 0))
-  })
-  for (const timer of sendTimers) {
-    clearTimeout(timer)
-  }
-  if (durationTimer !== null) {
-    clearTimeout(durationTimer)
-  }
-  if (process.stdin.isTTY) {
-    process.stdin.setRawMode(wasRaw)
-  }
-  process.stdin.pause()
-  await new Promise((done) => sink.end(done))
 
   writeMeta(outPath, { command, cols, rows, note: options.note ?? null, exitCode })
   const findings = scanTranscriptForSecrets(readFileSync(outPath, 'utf8'))
@@ -265,7 +206,9 @@ async function main() {
     console.error(USAGE)
     return 2
   }
-  return runCapture(options, command)
+  const { relaunchTranscriptWithBun } = await import('./pty-transcript-bun-runtime.mjs')
+  const relaunched = await relaunchTranscriptWithBun(REPO_ROOT, process.argv.slice(2))
+  return relaunched ?? runCapture(options, command)
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

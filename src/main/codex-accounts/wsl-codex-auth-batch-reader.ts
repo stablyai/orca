@@ -1,4 +1,5 @@
-import { runWslProcess } from '../wsl/wsl-runner'
+import { runCapturedCodexWslProcess } from './captured-wsl-account-process'
+import type { WslAccountExecutionContext } from '../wsl/wsl-account-execution-context'
 
 export type WslCodexAuthRead =
   | { kind: 'missing' | 'unreadable' }
@@ -6,19 +7,23 @@ export type WslCodexAuthRead =
 
 export async function readWslCodexAuths(
   distro: string,
-  linuxHomePaths: readonly string[]
+  linuxHomePaths: readonly string[],
+  execution?: WslAccountExecutionContext
 ): Promise<WslCodexAuthRead[]> {
   if (linuxHomePaths.length === 0) {
     return []
   }
-  const result = await runWslProcess({
-    distro,
-    loginPath: 'none',
-    script: READ_AUTHS_SCRIPT,
-    args: linuxHomePaths,
-    timeoutMs: 5_000,
-    maxOutputBytes: 2 * 1024 * 1024
-  })
+  const result = await runCapturedCodexWslProcess(
+    {
+      distro,
+      loginPath: 'none',
+      script: READ_AUTHS_SCRIPT,
+      args: linuxHomePaths,
+      timeoutMs: 5_000,
+      maxOutputBytes: 2 * 1024 * 1024
+    },
+    execution
+  )
   if (result.code !== 0 || result.timedOut) {
     return linuxHomePaths.map(() => ({ kind: 'unreadable' }))
   }

@@ -1,3 +1,4 @@
+import type { WslAccountExecutionContext } from '../../../wsl/wsl-account-execution-context'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import {
   normalizeAgentProviderSession,
@@ -25,6 +26,7 @@ export type PreparedCodexResumeHome = {
 }
 
 export type PrepareCodexResumeHomeArgs = {
+  wslExecution?: WslAccountExecutionContext
   connectionId?: string | null
   launchAgent?: TuiAgent
   providerSession?: AgentProviderSessionMetadata
@@ -50,7 +52,8 @@ export function prepareCodexResumeHome(
       providerSession,
       target: args.target,
       launchEnv: args.launchEnv,
-      workspacePath: args.workspacePath
+      workspacePath: args.workspacePath,
+      ...(args.wslExecution ? { wslExecution: args.wslExecution } : {})
     })
   }
 }

@@ -1,7 +1,8 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
-import { sshProviders } from '../provider/registry'
+import { localProvider, setLocalPtyProvider, sshProviders } from '../provider/registry'
 import { listProcessesWithHostScopeFromRuntimeController } from './inventory-operations'
+import { createUnavailablePtyProvider } from '../../../providers/unavailable-pty-provider'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 
 /**
@@ -21,7 +22,12 @@ import type { PtyRuntimeControllerDeps } from './controller-deps'
  * `kind === 'ssh'` in `orca-runtime-refresh-pty-worktree-records-with-controller-inventory.ts`.
  */
 describe('the hosts a PTY inventory can report having queried', () => {
+  const originalProvider = localProvider
+  beforeEach(() => {
+    setLocalPtyProvider({ ...createUnavailablePtyProvider(), listProcesses: async () => [] })
+  })
   afterEach(() => {
+    setLocalPtyProvider(originalProvider)
     sshProviders.clear()
   })
 

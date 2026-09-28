@@ -1,5 +1,5 @@
 // Validates a PTY working directory before spawn, so node-pty cannot fail with
-// an opaque ENOENT. Split from local-pty-utils to keep that file under its line
+// an opaque ENOENT. Split from pty-spawn-validation to keep that file under its line
 // cap; the async path carries the cancellation contract described below.
 
 import { existsSync, statSync } from 'node:fs'

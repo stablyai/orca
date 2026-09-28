@@ -115,7 +115,7 @@ export class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRuntimeWithA
     size?: { cols: number; rows: number },
     metadata: HeadlessSeedMetadata = {}
   ): void {
-    if (!data) {
+    if (!data && !metadata.allowEmpty) {
       return
     }
     const existing = this.headlessTerminals.get(ptyId)

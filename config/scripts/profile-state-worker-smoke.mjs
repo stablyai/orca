@@ -82,7 +82,7 @@ function runWorker(entry, workerData, steps, timeoutMs) {
   })
 }
 
-/** Exercise the shipped entries and copied state before publishing their content version. */
+/** Exercise the shipped entries and copied state with their installed content version. */
 export async function smokeProfileStateWorkers(outDir, { timeoutMs = 30_000, runtimePath } = {}) {
   if (runtimePath) {
     const nonce = randomUUID()

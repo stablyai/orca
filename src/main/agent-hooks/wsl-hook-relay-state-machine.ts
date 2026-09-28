@@ -40,17 +40,17 @@ export function markWslRelayFailed(
 }
 
 export function resumeWslStoppedRelays(
-  stopped: Map<string, string | undefined>,
+  stopped: Map<string, { distro: string; user?: string; codexHomePath?: string }>,
   isDistroRunning: (distro: string) => Promise<boolean>,
-  ensure: (distro: string, home: string | undefined) => void
+  ensure: (distro: string, home: string | undefined, user?: string) => void
 ): void {
-  const distros = [...stopped]
+  const owners = [...stopped.values()]
   stopped.clear()
-  for (const [distro, home] of distros) {
+  for (const { distro, codexHomePath: home, user } of owners) {
     void isDistroRunning(distro)
       .then((running) => {
         if (running) {
-          ensure(distro, home)
+          ensure(distro, home, ...(user ? [user] : []))
         }
       })
       .catch(() => undefined)

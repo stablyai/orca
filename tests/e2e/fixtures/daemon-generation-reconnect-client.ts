@@ -159,7 +159,12 @@ function createRuntimeClosePath(
       pendingShutdowns.push(shutdown)
       return true
     },
-    listProcesses: (options) => router.listProcesses(options),
+    listProcesses: (connectionId, options) => {
+      if (connectionId) {
+        throw new Error('Generation fixture only owns local terminals')
+      }
+      return router.listProcesses(options)
+    },
     hasPty: (ptyId) => router.hasPty(ptyId),
     getForegroundProcess: (ptyId) => router.getForegroundProcess(ptyId)
   })
@@ -270,6 +275,9 @@ async function main(): Promise<void> {
         router.dispose()
       }
       router = await connectThroughDesktopDiscovery(config, burst)
+    }
+    if (!router) {
+      throw new Error('Reconnect fixture requires at least one discovery burst')
     }
     await connectParallelRuntimeClients(config)
     const { dispatcher, targets, pendingShutdowns } = await createRuntimeClosePath(config, router)

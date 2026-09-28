@@ -1,3 +1,5 @@
+import { wslPtyOwnerKey } from '../shared/wsl-pty-consumer-recovery'
+import type { WslPtyOwner } from '../shared/wsl-pty-id'
 import { getSecretStore } from '../shared/secret-store'
 
 export const PROTECTED_SECRET_SLOT = {
@@ -9,6 +11,10 @@ export const PROTECTED_SECRET_SLOT = {
 
 export function sshPtyOwnerLeaseSecretSlot(targetId: string): string {
   return `sshPtyConsumerRecoveries.ownerLease:${targetId}`
+}
+
+export function wslPtyOwnerLeaseSecretSlot(owner: WslPtyOwner): string {
+  return `wslPtyConsumerRecoveries.ownerLease:${wslPtyOwnerKey(owner)}`
 }
 
 export type ProtectedSecretDecryption = {

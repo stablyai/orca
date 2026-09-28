@@ -78,6 +78,25 @@ describe('computer-use e2e workflow', () => {
     expect(triggerPaths).not.toContain('src/shared/runtime-types.ts')
   })
 
+  it('prepares pinned Bun and ConPTY before native Windows shell fixtures', () => {
+    const workflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/computer-e2e.yml'), 'utf8')
+    )
+    const steps = workflow.jobs['native-smoke'].steps
+    const preparation = steps.findIndex((step) =>
+      step.run?.includes('await buildCliRuntime(process.platform, process.arch)')
+    )
+    const fixtures = steps.findIndex((step) =>
+      step.run?.includes('windows-shell-preflight-runtime.windows.test.ts')
+    )
+    expect(preparation).toBeGreaterThan(-1)
+    expect(steps[preparation].if).toBe("runner.os == 'Windows'")
+    expect(preparation).toBeLessThan(fixtures)
+    const gateBuild = steps.findIndex((step) => step.run === 'pnpm run build:terminal-daemon')
+    expect(gateBuild).toBeGreaterThan(-1)
+    expect(gateBuild).toBeLessThan(fixtures)
+  })
+
   it('runs focused computer-use regression tests in the PR native-smoke job', () => {
     const workflow = parse(
       readFileSync(join(projectDir, '.github/workflows/computer-e2e.yml'), 'utf8')

@@ -5,7 +5,6 @@ import { registerPtyHandlers, setLocalPtyProvider } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
-vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
@@ -147,6 +146,9 @@ describe('registerPtyHandlers', () => {
 
     function setup(): { listener: SerializeListener; controller: SerializeController } {
       const runtime = {
+        createPreAllocatedTerminalHandle: vi.fn(() => 'term_test'),
+        registerPreAllocatedHandleForPty: vi.fn(),
+        registerPty: vi.fn(),
         setPtyController: vi.fn(),
         onPtySpawned: vi.fn(),
         onPtyData: vi.fn(),
@@ -305,6 +307,9 @@ describe('registerPtyHandlers', () => {
   describe('main buffer snapshot dispatch', () => {
     it('returns a hidden-output recovery snapshot with clamped scrollback', async () => {
       const runtime = {
+        createPreAllocatedTerminalHandle: vi.fn(() => 'term_test'),
+        registerPreAllocatedHandleForPty: vi.fn(),
+        registerPty: vi.fn(),
         setPtyController: vi.fn(),
         getPtyOutputSequence: vi.fn(() => 42),
         serializeHiddenOutputRecoveryBuffer: vi.fn().mockResolvedValue({
@@ -348,6 +353,9 @@ describe('registerPtyHandlers', () => {
         source: 'headless'
       })
       const runtime = {
+        createPreAllocatedTerminalHandle: vi.fn(() => 'term_test'),
+        registerPreAllocatedHandleForPty: vi.fn(),
+        registerPty: vi.fn(),
         setPtyController: vi.fn(),
         getPtyOutputSequence: vi.fn(() => 640),
         notePtyDataGap: vi.fn(),
@@ -389,6 +397,9 @@ describe('registerPtyHandlers', () => {
       const provider = installObservableDaemonTestProvider()
       provider.getBufferSnapshot.mockResolvedValue(null)
       const runtime = {
+        createPreAllocatedTerminalHandle: vi.fn(() => 'term_test'),
+        registerPreAllocatedHandleForPty: vi.fn(),
+        registerPty: vi.fn(),
         setPtyController: vi.fn(),
         getPtyOutputSequence: vi.fn(() => 640),
         notePtyDataGap: vi.fn(),
@@ -422,12 +433,14 @@ describe('registerPtyHandlers', () => {
       const mockProc = createMockProc()
       spawnMock.mockReturnValue(mockProc.proc)
       const runtime = {
+        createPreAllocatedTerminalHandle: vi.fn(() => null),
+        registerPreAllocatedHandleForPty: vi.fn(),
         setPtyController: vi.fn(),
         registerPty: vi.fn(),
         noteTerminalSpawnCommand: vi.fn(),
         onPtySpawned: vi.fn(),
         onPtyExit: vi.fn(),
-        onPtyData: vi.fn(),
+        onPtyData: vi.fn(() => 2_472),
         preAllocateHandleForPty: vi.fn(() => null),
         getPtyOutputSequence: vi.fn(() => 2_472),
         hasRemoteTerminalViewSubscriber: vi.fn(() => false),

@@ -1,3 +1,4 @@
+import type { TerminalStartupSession } from './terminal-startup-session'
 import type { Session } from './session'
 import {
   SessionNotFoundError,
@@ -47,6 +48,7 @@ const REMOTE_FOREGROUND_TOMBSTONE_RETENTION_MS = 2_000
 
 export class TerminalHost {
   private sessions = new Map<string, Session>()
+  private startupSessions = new Map<string, TerminalStartupSession>()
   // Serializes creates for one id across async spawn validation.
   private pendingCreations = new Map<string, Promise<void>>()
   private sessionTeardown = new TerminalSessionTeardown(this.sessions)
@@ -112,6 +114,7 @@ export class TerminalHost {
           }
           return await createOrAttachTerminalSession(options, {
             sessions: this.sessions,
+            startupSessions: this.startupSessions,
             assertCreateAllowed: () => this.assertCreateOrAttachAllowed(options),
             sessionTeardown: this.sessionTeardown,
             killedTombstones: this.killedTombstones,
@@ -321,7 +324,14 @@ export class TerminalHost {
     if (this.disposePromise) {
       return this.disposePromise
     }
-    const disposePromise = this.disposeSessions()
+    const disposePromise = disposeTerminalHostSessions({
+      pendingCreations: this.pendingCreations,
+      sessionTeardown: this.sessionTeardown,
+      sessions: this.sessions,
+      startupSessions: this.startupSessions,
+      onFinalCheckpoint: this.onFinalCheckpoint,
+      killedTombstones: this.killedTombstones
+    })
     this.disposePromise = disposePromise
     void disposePromise.catch(() => {
       // Why: keep failed native owners retryable on a later shutdown request.
@@ -330,15 +340,5 @@ export class TerminalHost {
       }
     })
     return disposePromise
-  }
-
-  private disposeSessions(): Promise<void> {
-    return disposeTerminalHostSessions({
-      pendingCreations: this.pendingCreations,
-      sessionTeardown: this.sessionTeardown,
-      sessions: this.sessions,
-      onFinalCheckpoint: this.onFinalCheckpoint,
-      killedTombstones: this.killedTombstones
-    })
   }
 }

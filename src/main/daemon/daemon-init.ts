@@ -1,5 +1,5 @@
 export { createLegacyDaemonAdapters } from './daemon-legacy-adapters'
-export { initDaemonPtyProvider } from './daemon-provider-init'
+export { initDaemonPtyProvider, retryDaemonPtyProvider } from './daemon-provider-init'
 export { restartDaemon, type RestartDaemonResult } from './daemon-provider-restart'
 export {
   daemonOwnsFreshPersistentPtys,

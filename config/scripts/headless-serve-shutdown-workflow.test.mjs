@@ -1,7 +1,10 @@
-import { readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 import { parse } from 'yaml'
 import { describe, expect, it } from 'vitest'
+import { runProcess } from '../../src/shared/child-process/run-process'
 
 const workflow = parse(readFileSync('.github/workflows/pr.yml', 'utf8'))
 const headlessLinuxGuide = readFileSync('docs/reference/headless-linux-server.md', 'utf8')
@@ -71,6 +74,49 @@ describe('headless serve shutdown PR gate', () => {
       steps.filter((step) => step.run?.includes('run-headless-serve-shutdown-docker.mjs'))
     ).toHaveLength(1)
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'can observe empty logs before the child is scheduled',
+    async () => {
+      const directory = mkdtempSync(join(tmpdir(), 'orca-shutdown-readiness-'))
+      const preparation = signalCase.slice(
+        signalCase.indexOf('stdout_log='),
+        signalCase.indexOf('ulimit -c')
+      )
+      expect(signalCase.indexOf('ulimit -c')).toBeLessThan(signalCase.indexOf('setsid env'))
+      try {
+        const negative = await runProcess({
+          program: 'bash',
+          args: [
+            '-c',
+            'set -euo pipefail\nstate_dir=$1\ncat "$state_dir/stdout.log" "$state_dir/stderr.log"',
+            'missing-logs',
+            directory
+          ],
+          timeoutMs: 5000
+        })
+        expect(negative.code).not.toBe(0)
+        const result = await runProcess({
+          program: 'bash',
+          args: [
+            '-c',
+            `set -euo pipefail
+state_dir=$1
+${preparation}
+cat "$stdout_log" "$stderr_log"`,
+            'readiness-fixture',
+            directory
+          ],
+          timeoutMs: 5000
+        })
+        expect(result.code, result.stderr).toBe(0)
+        expect(result.stdout).toBe('')
+        expect(result.stderr).toBe('')
+      } finally {
+        rmSync(directory, { recursive: true, force: true })
+      }
+    }
+  )
 
   it('keeps readiness polling finite and leak-free', () => {
     expect(signalCase).toContain('read_ready_line()')

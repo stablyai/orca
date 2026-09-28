@@ -1,3 +1,4 @@
+import type { DaemonTransientPtys } from './daemon-transient-pty'
 import { performance } from 'node:perf_hooks'
 import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-system-resolver-health'
 import type { ConnectedDaemonClient, DaemonClientConnections } from './daemon-client-connections'
@@ -14,6 +15,7 @@ import type { TerminalHost } from './terminal-host'
 import { SessionNotFoundError, type DaemonRequest } from './types'
 
 type DaemonRequestRouterOptions = {
+  transientPtys: DaemonTransientPtys
   host: TerminalHost
   connections: DaemonClientConnections
   lifecycle: DaemonServerLifecycle
@@ -32,9 +34,17 @@ export class DaemonRequestRouter {
 
   async route(clientId: string, request: DaemonRequest): Promise<unknown> {
     const client = this.options.connections.get(clientId)
+    const paired = Boolean(client?.authenticatedPairEstablished && client.streamSocket)
     switch (request.type) {
+      case 'createTransientPty':
+      case 'writeTransientPty':
+      case 'closeTransientPty':
+        if (request.type === 'createTransientPty' && !this.options.lifecycle.isAcceptingWork()) {
+          throw new Error('Terminal service is shutting down')
+        }
+        return this.options.transientPtys.route(clientId, request, paired)
       case 'startHistorySeedTransfer': {
-        if (!client?.authenticatedPairEstablished || client.streamSocket === null) {
+        if (!paired) {
           throw new Error('Daemon client connection is incomplete; reconnect')
         }
         return {
@@ -144,7 +154,7 @@ export class DaemonRequestRouter {
           { teardownSnapshot: request.payload.teardownSnapshot === true }
         )
       case 'ping':
-        return { pong: true }
+        return this.options.transientPtys.ping()
       case 'systemResolverHealth':
         return { health: await readCurrentProcessMacSystemResolverHealth() }
       case 'ptySpawnHealth':

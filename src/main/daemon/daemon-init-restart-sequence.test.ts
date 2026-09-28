@@ -94,7 +94,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(adapterInstances[1].disconnectOnly).toHaveBeenCalledOnce()
     expect(spawnerInstances[0].shutdown).not.toHaveBeenCalled()
     expect(mod.getDaemonProvider()).toBe(originalProvider)
-    expect(unbindLocalProviderListenersMock).toHaveBeenCalledOnce()
+    expect(unbindLocalProviderListenersMock).not.toHaveBeenCalled()
     expect(rebindLocalProviderListenersMock).toHaveBeenCalledTimes(2)
   })
 
@@ -103,20 +103,23 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     ensureRunningOverrides.push(async () => ({
       socketPath: '/fake/degraded-socket',
       tokenPath: '/fake/degraded-token',
-      mode: 'degraded-new-pty-fallback'
+      mode: 'fresh-spawns-unavailable'
     }))
     await mod.initDaemonPtyProvider()
 
-    const { DegradedDaemonPtyProvider } = await import('./degraded-daemon-pty-provider')
+    const { DaemonPtyRouter } = await import('./daemon-pty-router')
     const provider = mod.getDaemonProvider()
-    expect(provider).toBeInstanceOf(DegradedDaemonPtyProvider)
-    const degradedProvider = provider as InstanceType<typeof DegradedDaemonPtyProvider>
+    expect(provider).toBeInstanceOf(DaemonPtyRouter)
+    if (!(provider instanceof DaemonPtyRouter)) {
+      throw new Error('Expected daemon router')
+    }
+    const degradedProvider = provider
 
     const originalAdapter = adapterInstances[0]
     originalAdapter.listProcesses.mockResolvedValueOnce([
       { id: 'preserved-current-session', cwd: '/repo', title: 'shell' }
     ])
-    await degradedProvider.discoverDaemonSessions()
+    await degradedProvider.discoverLegacySessions()
 
     const order: string[] = []
     degradedProvider.onExit((payload) => {
@@ -361,12 +364,12 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     await mod.restartDaemon()
     void originalEnsureRunning // keep ref so tslint doesn't complain
 
-    // Full 7-step order; Step 3 (cleanup) has no observable in the dead-socket branch, so it's pinned implicitly by resetHandle running after unbind.
+    // Keep subscriptions through replacement I/O; detach only immediately before the swap.
     expect(trace).toEqual([
       'fanout',
-      'unbind',
       'resetHandle',
       'ensureRunning',
+      'unbind',
       'replaceProvider',
       'rebind'
     ])
@@ -526,10 +529,9 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(adapterInstances).toHaveLength(3)
   })
 
-  it('throws when restartDaemon is called before initDaemonPtyProvider', async () => {
+  it('initializes when restartDaemon is called before initDaemonPtyProvider', async () => {
     const mod = await importFresh()
-    await expect(mod.restartDaemon()).rejects.toThrow(
-      'restartDaemon called before initDaemonPtyProvider'
-    )
+    await expect(mod.restartDaemon()).resolves.toEqual({ killedCount: 0 })
+    expect(mod.getDaemonProvider()).not.toBeNull()
   })
 })

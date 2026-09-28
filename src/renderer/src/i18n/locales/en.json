@@ -18427,5 +18427,12 @@
   },
   "common": {
     "retry": "Retry"
+  },
+  "terminal": {
+    "service": {
+      "retryFailed": "The terminal service is still unavailable. Retry preserves existing sessions. You can also use Restart daemon below; restarting closes its running sessions.",
+      "unavailable": "New terminals are unavailable. Retry the terminal service without stopping existing sessions.",
+      "retry": "Retry terminal service"
+    }
   }
 }

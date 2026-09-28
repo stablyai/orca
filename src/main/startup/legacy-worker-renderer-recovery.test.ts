@@ -126,7 +126,7 @@ describe('legacy worker renderer recovery', () => {
       )
       await startup
       expect(reconcile).toHaveBeenCalledOnce()
-      expect(daemonSignal?.aborted).toBe(true)
+      expect(daemonSignal?.aborted).toBe(false)
     } finally {
       vi.useRealTimers()
     }

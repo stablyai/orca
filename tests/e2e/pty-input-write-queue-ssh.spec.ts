@@ -1,6 +1,6 @@
 import { mkdirSync } from 'node:fs'
 import path from 'node:path'
-import { expect, test } from './helpers/orca-app'
+import { test } from './helpers/orca-app'
 import { connectDockerSshRelayTarget } from './helpers/docker-ssh-relay-connection'
 import {
   cleanupDockerSshRelayTarget,
@@ -100,7 +100,7 @@ test.describe('PTY input write queue over SSH', () => {
     }
   })
 
-  test('keeps fish query replies out of the next child stdin on an upstream relay pty', async ({
+  test('keeps fish query replies out of the next child stdin on a relay terminal', async ({
     orcaPage
   }, testInfo) => {
     test.slow()
@@ -147,13 +147,6 @@ test.describe('PTY input write queue over SSH', () => {
       await waitForSessionReady(orcaPage)
       await waitForActiveWorktree(orcaPage)
       await connectDockerSshRelayTarget(orcaPage, target)
-      const relayExports = execDockerSshRelayTargetCommand(
-        target,
-        'module=$(find /root/.orca-remote -type d -path \'*/node_modules/node-pty\' | head -n 1); node -e "const p=require(process.argv[1]); console.log(Object.keys(p.native || {}).join(\',\'))" "$module"'
-      )
-      testInfo.annotations.push({ type: 'relay-node-pty-exports', description: relayExports })
-      expect(relayExports).not.toContain('echoState')
-
       await ensureTerminalVisible(orcaPage, 45_000)
       await waitForActiveTerminalManager(orcaPage, 60_000)
       const ptyId = await waitForActivePanePtyId(orcaPage, 60_000)

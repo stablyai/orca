@@ -406,7 +406,7 @@ const DIRECT_SINGLE_SOURCE_SURFACES: readonly {
     marker: 'isCursorAgentTitle'
   },
   {
-    path: 'src/main/providers/local-pty-session-activation.ts',
+    path: 'src/main/daemon/pty-subprocess.ts',
     classification: 'action-consumer',
     marker: 'launchAgent'
   },

@@ -17,18 +17,18 @@ describe('Windows signing workflow contract', () => {
       name === 'Install SignPath PowerShell module' ? [index] : []
     )
     const buildIndex = stepNames.indexOf('Build Windows release artifacts')
-    const verifyNodePtyIndex = stepNames.indexOf('Verify Windows node-pty ConPTY runtime')
+    const verifyRuntimeIndex = stepNames.indexOf('Verify Windows Bun and ConPTY runtime')
     const uploadIndex = stepNames.indexOf('Upload unsigned Windows installer for SignPath')
     const downloadIndex = stepNames.indexOf('Download signed Windows installer from SignPath')
 
-    expect(verifyNodePtyIndex).toBe(buildIndex + 1)
-    expect(installStepIndexes).toEqual([verifyNodePtyIndex + 1])
+    expect(verifyRuntimeIndex).toBe(buildIndex + 1)
+    expect(installStepIndexes).toEqual([verifyRuntimeIndex + 1])
     expect(installStepIndexes[0]).toBeLessThan(uploadIndex)
 
-    expect(steps[verifyNodePtyIndex].run).toContain(
-      'dist/win-unpacked/resources/node_modules/node-pty/build/Release'
-    )
-    expect(steps[verifyNodePtyIndex].run).toContain('conpty/conpty.dll')
+    expect(steps[verifyRuntimeIndex].run).toContain('dist/win-unpacked/resources/cli-runtime')
+    expect(steps[verifyRuntimeIndex].run).toContain('verifyCliRuntimeDirectory')
+    expect(steps[verifyRuntimeIndex].run).toContain("'win32', 'x64'")
+    expect(steps[verifyRuntimeIndex].run).toContain('$LASTEXITCODE')
 
     const uploadThroughDownloadScript = steps
       .slice(uploadIndex, downloadIndex + 1)
@@ -456,3 +456,32 @@ describe('Windows NSIS uninstaller signing', () => {
     delete require.cache[require.resolve(configPath)]
   })
 })
+
+it.each(['release-cut.yml', 'windows-signing-rehearsal.yml'])(
+  'finalizes signed Bun identity before packaging in %s',
+  (filename) => {
+    const workflow = readWorkflow(`.github/workflows/${filename}`)
+    const steps = Object.values(workflow.jobs).flatMap((job) => job.steps ?? [])
+    const stage = steps.find((step) => step.run?.includes("$list -contains 'Orca.exe'"))
+    expect(stage.run).toContain("'*windows_process_tree.node'")
+    expect(stage.run).not.toContain('conpty_console_list.node')
+    const restoreIndex = steps.findIndex(
+      (step) => step.name === 'Restore signed inner binaries into unpacked app'
+    )
+    const restore = steps[restoreIndex]
+    expect(restore.run).toContain(
+      "node config/scripts/finalize-signed-cli-runtime.mjs $root 'signing-stage'"
+    )
+    expect(restore.run).toContain(
+      "if ($LASTEXITCODE -ne 0) { throw 'Signed runtime identity finalization failed.' }"
+    )
+    expect(restore.run.indexOf('finalize-signed-cli-runtime.mjs')).toBeGreaterThan(
+      restore.run.indexOf('if ($failures.Count -gt 0)')
+    )
+    const rebuildIndex = steps.findIndex(
+      (step) =>
+        step.run?.includes('electron-builder --config') && step.run?.includes('--prepackaged')
+    )
+    expect(rebuildIndex).toBeGreaterThan(restoreIndex)
+  }
+)

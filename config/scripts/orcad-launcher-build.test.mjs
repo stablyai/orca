@@ -1,5 +1,5 @@
 import { existsSync, realpathSync, statSync } from 'node:fs'
-import { copyFile, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { copyFile, cp, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -47,6 +47,9 @@ describe.skipIf(!existsSync(bundledRuntime))('bundled launcher application bound
   beforeAll(async () => {
     await copyFile(bundledRuntime, join(directory, orcadBunRuntimeFilename(process.platform)))
     await writeFile(join(directory, '.build-target'), `${process.platform}-${process.arch}\n`)
+    if (process.platform === 'win32') {
+      await cp(resolve('out/orcad/conpty'), join(directory, 'conpty'), { recursive: true })
+    }
     await writeFile(
       join(directory, 'orcad-app.js'),
       `

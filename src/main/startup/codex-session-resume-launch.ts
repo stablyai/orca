@@ -1,3 +1,6 @@
+import { prepareCapturedWslCodexSessionResume } from '../codex/codex-wsl-session-resume'
+import { getSelectedCodexAccountIdForTarget } from '../codex-accounts/runtime-selection'
+import type { WslAccountExecutionContext } from '../wsl/wsl-account-execution-context'
 import { app } from 'electron'
 import type { AgentProviderSessionMetadata } from '../../shared/agent-session-resume'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
@@ -14,6 +17,7 @@ import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-p
 import { mainProcessState as state } from './main-process-state'
 
 export async function prepareCodexSessionResumeForLaunch(args: {
+  wslExecution?: WslAccountExecutionContext
   providerSession: AgentProviderSessionMetadata
   target: CodexAccountSelectionTarget
   launchEnv?: NodeJS.ProcessEnv
@@ -21,6 +25,19 @@ export async function prepareCodexSessionResumeForLaunch(args: {
 }): Promise<CodexSessionResumePreparation | null> {
   const runtimeHome = state.codexRuntimeHome
   const store = state.store
+  if (args.target.runtime === 'wsl' && args.wslExecution) {
+    if (!store) {
+      throw new Error('Codex session resume requires profile account state')
+    }
+    const settings = store.getSettings()
+    return prepareCapturedWslCodexSessionResume({
+      execution: args.wslExecution,
+      target: args.target,
+      providerSession: args.providerSession,
+      accounts: settings.codexManagedAccounts,
+      selectedAccountId: getSelectedCodexAccountIdForTarget(settings, args.target)
+    })
+  }
   if (args.target.runtime === 'wsl' || !runtimeHome || !store) {
     return null
   }

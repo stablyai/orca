@@ -3,9 +3,14 @@ import process from 'node:process'
 import { main, resolveOrcadExitCode } from './orcad-entry'
 import {
   ORCAD_PROFILE_PREFLIGHT_FLAG,
+  ORCAD_NATIVE_PREFLIGHT_CHILD_FLAG,
   ORCAD_STARTUP_PREFLIGHT_FLAG
 } from '../../shared/orcad-profile-preflight'
-import { preflightBundledOrcadStartup, runOrcadProfilePreflight } from './orcad-profile-preflight'
+import {
+  preflightBundledOrcadStartup,
+  runOrcadProfilePreflight,
+  runBundledWindowsProfilePreflight
+} from './orcad-profile-preflight'
 
 function failStartup(error: unknown): void {
   console.error('orcad: failed to start:', error)
@@ -25,11 +30,19 @@ try {
   }
   const flag = process.argv[2]
   if (
-    (flag === ORCAD_PROFILE_PREFLIGHT_FLAG || flag === ORCAD_STARTUP_PREFLIGHT_FLAG) &&
+    flag === ORCAD_PROFILE_PREFLIGHT_FLAG &&
+    process.platform === 'win32' &&
+    process.argv.length === 4
+  ) {
+    void runBundledWindowsProfilePreflight(process.argv[3]).catch(failStartup)
+  } else if (
+    (flag === ORCAD_PROFILE_PREFLIGHT_FLAG ||
+      flag === ORCAD_STARTUP_PREFLIGHT_FLAG ||
+      flag === ORCAD_NATIVE_PREFLIGHT_CHILD_FLAG) &&
     process.argv.length === 4
   ) {
     void runOrcadProfilePreflight(process.argv[3], {
-      nativeFeatures: flag === ORCAD_PROFILE_PREFLIGHT_FLAG
+      nativeFeatures: flag !== ORCAD_STARTUP_PREFLIGHT_FLAG
     }).catch(failStartup)
   } else {
     void preflightBundledOrcadStartup()

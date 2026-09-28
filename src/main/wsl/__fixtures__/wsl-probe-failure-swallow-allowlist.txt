@@ -29,3 +29,7 @@ main/wsl.ts
 # point of the module (#16463). A failed stat drops to the next candidate for
 # that one call and is re-asked on the next, so there is no value to pin.
 main/wsl-interop-spawn-directory.ts
+
+# Artifact verification failures refuse installation or replacement; no negative
+# discovery result is cached.
+main/wsl/wsl-guest-artifact-install-script.ts

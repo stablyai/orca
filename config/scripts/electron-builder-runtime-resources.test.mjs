@@ -15,7 +15,6 @@ const {
   findAsarEntry,
   isPackagedExternalSpecifier,
   packageNameFromSpecifier,
-  prunePackagedNodePty,
   prunePackagedParcelWatcher,
   prunePackagedSherpaOnnx,
   prunePackagedRuntimeTypeAndSourceMapArtifacts,
@@ -189,80 +188,13 @@ describe('packaged runtime resources', () => {
     expect(findAsarEntry(['/out/main/index.js'], 'out/main/index.js')).toBe('/out/main/index.js')
   })
 
-  it('prunes non-target node-pty architecture outputs from packaged runtime resources', async () => {
-    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-node-pty-prune-'))
-    try {
-      const nodePtyDir = join(resourcesDir, 'node_modules', 'node-pty')
-      const prebuildsDir = join(nodePtyDir, 'prebuilds')
-      const binDir = join(nodePtyDir, 'bin')
-      await mkdir(join(prebuildsDir, 'darwin-arm64'), { recursive: true })
-      await mkdir(join(prebuildsDir, 'darwin-x64'), { recursive: true })
-      await mkdir(join(prebuildsDir, 'linux-x64'), { recursive: true })
-      await mkdir(join(prebuildsDir, 'win32-x64'), { recursive: true })
-      await mkdir(join(binDir, 'darwin-arm64-148'), { recursive: true })
-      await mkdir(join(binDir, 'darwin-x64-148'), { recursive: true })
-      await mkdir(join(nodePtyDir, 'third_party', 'conpty'), {
-        recursive: true
-      })
-      await mkdir(join(nodePtyDir, 'deps', 'winpty'), { recursive: true })
-
-      prunePackagedNodePty(resourcesDir, 'darwin', 3)
-
-      await expect(readdir(prebuildsDir)).resolves.toEqual(['darwin-arm64'])
-      await expect(readdir(binDir)).resolves.toEqual(['darwin-arm64-148'])
-      await expect(readdir(join(nodePtyDir, 'third_party'))).resolves.toEqual([])
-      await expect(readdir(join(nodePtyDir, 'deps'))).resolves.toEqual([])
-      expect(() => prunePackagedNodePty(resourcesDir, 'darwin', 4)).toThrow(
-        'Unsupported packaged runtime architecture: 4'
-      )
-    } finally {
-      await removeTree(resourcesDir)
-    }
-  })
-
-  it('copies the Windows node-pty ConPTY runtime beside the rebuilt addon', async () => {
-    for (const [arch, electronArch] of [
-      ['x64', 1],
-      ['arm64', 3]
-    ]) {
-      const resourcesDir = await mkdtemp(join(tmpdir(), `orca-node-pty-conpty-${arch}-`))
-      try {
-        const nodePtyDir = join(resourcesDir, 'node_modules', 'node-pty')
-        const releaseDir = join(nodePtyDir, 'build', 'Release')
-        const conptyRoot = join(nodePtyDir, 'third_party', 'conpty', '0.1.0')
-        await mkdir(releaseDir, { recursive: true })
-        await writeFile(join(releaseDir, 'conpty.node'), 'native addon placeholder', 'utf8')
-        for (const sourceArch of ['x64', 'arm64']) {
-          const sourceDir = join(conptyRoot, `win10-${sourceArch}`)
-          await mkdir(sourceDir, { recursive: true })
-          await writeFile(join(sourceDir, 'conpty.dll'), `dll payload ${sourceArch}`, 'utf8')
-          await writeFile(
-            join(sourceDir, 'OpenConsole.exe'),
-            `console payload ${sourceArch}`,
-            'utf8'
-          )
-        }
-
-        prunePackagedNodePty(resourcesDir, 'win32', electronArch)
-
-        await expect(readFile(join(releaseDir, 'conpty', 'conpty.dll'), 'utf8')).resolves.toBe(
-          `dll payload ${arch}`
-        )
-        await expect(readFile(join(releaseDir, 'conpty', 'OpenConsole.exe'), 'utf8')).resolves.toBe(
-          `console payload ${arch}`
-        )
-      } finally {
-        await removeTree(resourcesDir)
-      }
-    }
-  })
-
   it('includes external main dependencies in the packaged runtime closure', () => {
     // Why: the main process imports '@parcel/watcher' for filesystem change
     // events; if it is absent from the packaged closure the serve host silently
     // stops propagating file changes to clients (regression guard for #4851).
     const packaged = createPackagedRuntimeNodeModuleResources()
     const packagedTargets = packaged.map((resource) => resource.to)
+    expect(packagedTargets).not.toContain(join('node_modules', 'node-pty'))
     expect(packagedTargets).toContain(join('node_modules', '@parcel', 'watcher'))
     expect(
       packagedTargets.some((target) =>
@@ -398,6 +330,24 @@ describe('packaged runtime resources', () => {
     }
   })
 
+  it.each(['x64', 'arm64'])('rejects a missing packaged %s Bun ConPTY provider', async (arch) => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-packaged-conpty-'))
+    try {
+      const runtimeDir = join(root, 'resources', 'cli-runtime')
+      await writeBundledCliRuntimeFixture(runtimeDir, 'win32', arch)
+      await removeTree(join(runtimeDir, 'conpty'))
+      await expect(
+        electronBuilderConfig.afterPack({
+          appOutDir: root,
+          electronPlatformName: 'win32',
+          arch: arch === 'x64' ? 1 : 3
+        })
+      ).rejects.toThrow(/conpty/)
+    } finally {
+      await removeTree(root)
+    }
+  })
+
   it.skipIf(process.platform === 'win32')(
     'prunes non-target native packages before the Linux glibc gate',
     async () => {
@@ -431,6 +381,8 @@ describe('packaged runtime resources', () => {
           process.arch === 'x64'
             ? { electronArch: 3, machine: 0xb7, nonTarget: 'x64' }
             : { electronArch: 1, machine: 0x3e, nonTarget: 'arm64' }
+        await mkdir(join(resourcesDir, 'terminal-daemon'), { recursive: true })
+        await writeFile(join(resourcesDir, 'terminal-daemon', 'daemon-entry.js'), '')
         await writeBundledCliRuntimeFixture(
           join(resourcesDir, 'cli-runtime'),
           'linux',
@@ -513,13 +465,24 @@ describe('packaged runtime resources', () => {
           'utf8'
         )
         await writeFile(join(unpackedCliDir, 'cli-bin.js'), "require('./index.js')\n", 'utf8')
-        await writeBundledCliRuntimeFixture(join(resourcesDir, 'cli-runtime'), 'linux', 'x64')
+        await mkdir(join(resourcesDir, 'terminal-daemon'), { recursive: true })
+        await writeFile(
+          join(resourcesDir, 'terminal-daemon', 'daemon-entry.js'),
+          'console.error("Usage: daemon-entry <socket>"); process.exit(1)\n'
+        )
+        const quotedNode = `'${process.execPath.replaceAll("'", "'\\''")}'`
+        await writeBundledCliRuntimeFixture(
+          join(resourcesDir, 'cli-runtime'),
+          'linux',
+          process.arch,
+          `#!/bin/sh\nexec ${quotedNode} "$@"\n`
+        )
         await writeFile(launcherPath, '#!/usr/bin/env bash\n', { encoding: 'utf8', mode: 0o644 })
 
         await electronBuilderConfig.afterPack({
           appOutDir: join(root, 'linux-unpacked'),
           electronPlatformName: 'linux',
-          arch: 1,
+          arch: process.arch === 'arm64' ? 3 : 1,
           packager: { appInfo: { version: '9.9.9' } }
         })
 

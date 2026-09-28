@@ -250,6 +250,20 @@ describe('per-job path classification', () => {
     })
   })
 
+  it('runs real shell contracts when readiness probes or terminal inspection change', () => {
+    for (const file of [
+      'src/main/shell-prompt-readiness-probe.ts',
+      'src/main/line-editor-ready-output-scanner.ts',
+      'src/main/daemon/session-shell-ready-barrier.ts',
+      'src/main/daemon/bun-pty-fd-lifecycle.integration.test.ts',
+      'src/shared/shell-process-readiness.ts',
+      'src/shared/shell-terminal-path.test.ts',
+      'src/shared/pty-slave-line-discipline-echo.ts'
+    ]) {
+      expect(classifyPrJobs([file]).shell_contracts).toBe(true)
+    }
+  })
+
   it('runs shell contracts when wrapper templates or live-shell fixtures change', () => {
     expectClassification(['src/main/shell-templates.ts'], {
       shell_contracts: true,
@@ -371,7 +385,7 @@ describe('per-job path classification', () => {
       '.github/actions/install-node-dependencies/action.yml',
       'config/scripts/ensure-native-runtime.mjs',
       'config/scripts/rebuild-native-deps.mjs',
-      'config/patches/node-pty@1.1.0.patch'
+      'config/patches/@vscode__windows-process-tree@0.8.0.patch'
     ]) {
       expect(classifyPrJobs([file]).native_cache_changed, file).toBe(true)
     }
@@ -621,5 +635,18 @@ describe('PR Checks skip wiring', () => {
       expect(verifyStep.env[envVar]).toBe(`\${{ needs.code_paths.outputs.${job} }}`)
       expect(verifyStep.run).toContain(`"$${envVar}"`)
     }
+  })
+})
+
+describe('bundled terminal runtime packaging gates', () => {
+  it.each([
+    ['config/bundled-cli-runtime.cjs', true, true],
+    ['config/scripts/bundled-cli-runtime.test.mjs', false, false],
+    ['config/scripts/run-linux-packaged-terminal-floor-smoke.mjs', true, false],
+    ['config/scripts/run-linux-packaged-terminal-floor-smoke.test.mjs', false, false],
+    ['config/scripts/finalize-signed-cli-runtime.mjs', false, true],
+    ['config/scripts/finalize-signed-cli-runtime.test.mjs', false, false]
+  ])('selects package checks for %s', (file, linux, windows) => {
+    expect(classifyPrJobs([file])).toMatchObject({ package: linux, package_windows: windows })
   })
 })

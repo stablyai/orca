@@ -22,6 +22,9 @@ esac
 state_dir=$(mktemp -d "/tmp/orca-shutdown-${signal_name}.XXXXXX")
 stdout_log="$state_dir/stdout.log"
 stderr_log="$state_dir/stderr.log"
+# The parent can poll before the background shell opens its redirections.
+: >"$stdout_log"
+: >"$stderr_log"
 ulimit -c 0
 
 sleep 300 &

@@ -13,7 +13,12 @@ const runtime = join(
   `${process.platform}-${process.arch}`,
   cliRuntimeFilename(process.platform)
 )
-const env = { ...process.env, ORCA_BACKGROUND_LAUNCH: '1', BUN_EXECUTABLE: runtime }
+const env = {
+  ...process.env,
+  ORCA_BACKGROUND_LAUNCH: '1',
+  BUN_EXECUTABLE: runtime,
+  ORCA_TEST_REQUIRE_CLI_ARTIFACTS: '1'
+}
 function run(args, environment = env) {
   const result = runProcessSync({
     program: process.execPath,
@@ -59,6 +64,9 @@ run([
   'src/main/browser/wsl-browser-network-bun.integration.test.ts',
   'src/main/cli/windows-cli-bun.integration.test.ts',
   'src/cli/cli-bun-runtime.integration.test.ts',
+  'src/cli/runtime/cli-bun-environment.integration.test.ts',
+  'src/shared/child-process/fork-process-bun.integration.test.ts',
+  'src/shared/bun-owned-runtime-args.integration.test.ts',
   'src/cli/runtime/serve-bun-ipc.integration.test.ts',
   'src/cli/cli-bin.integration.test.ts',
   'src/cli/cli-bin-signals.integration.test.ts',

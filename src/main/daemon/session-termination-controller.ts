@@ -38,6 +38,15 @@ export class SessionTerminationController {
     this.physicalExit.markExited()
   }
 
+  forceKillForDisposal(): void {
+    try {
+      this.deps.subprocess.forceKill()
+    } catch {
+      /* child may already be gone */
+    }
+    this.clearTerminating()
+  }
+
   clearTerminating(): void {
     this._isTerminating = false
   }

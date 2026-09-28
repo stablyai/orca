@@ -9,7 +9,7 @@
  * handler. The write-side is just two calls — `register` on spawn,
  * `unregister` on teardown.
  *
- * Scope: local PTYs only. SSH-backed PTYs execute on a remote host, so
+ * Scope: host-native PTYs only. SSH and guest WSL PTYs execute elsewhere, so
  * their memory does not contribute to Orca's process footprint and
  * cannot be queried with our local `ps` tree.
  */
@@ -21,7 +21,7 @@ export type PtyRegistration = {
   paneKey: string | null
   // Why number | null: captured at spawn time so the collector does not have
   // to reach back into the IPC module on every snapshot to resolve it. It is
-  // nullable because node-pty can return a process whose pid is briefly
+  // nullable because a PTY backend can return a process whose pid is briefly
   // unavailable (spawn succeeded but the OS hasn't published the pid yet);
   // storing null lets the collector render a zero-attribution row for that
   // PTY instead of throwing and dropping the whole snapshot.
@@ -31,6 +31,10 @@ export type PtyRegistration = {
 const registry = new Map<string, PtyRegistration>()
 
 export function registerPty(entry: PtyRegistration): void {
+  // Guest PIDs can collide with unrelated Windows processes.
+  if (entry.ptyId.startsWith('wsl:')) {
+    return
+  }
   registry.set(entry.ptyId, entry)
 }
 

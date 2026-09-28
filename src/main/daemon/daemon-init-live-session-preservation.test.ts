@@ -76,6 +76,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       }
     })
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The spawner fixture captures the launcher passed by initDaemonPtyProvider.
     const launcher = spawnerInstances[0].launcher as (
       socketPath: string,
       tokenPath: string
@@ -117,6 +118,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       }
     })
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The spawner fixture captures the launcher passed by initDaemonPtyProvider.
     const launcher = spawnerInstances[0].launcher as (
       socketPath: string,
       tokenPath: string
@@ -135,6 +137,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The spawner fixture captures the launcher passed by initDaemonPtyProvider.
     const launcher = spawnerInstances[0].launcher as (
       socketPath: string,
       tokenPath: string
@@ -216,6 +219,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       }
     })
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The spawner fixture captures the launcher passed by initDaemonPtyProvider.
     const launcher = spawnerInstances[0].launcher as (
       socketPath: string,
       tokenPath: string
@@ -255,6 +259,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       }
     })
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The spawner fixture captures the launcher passed by initDaemonPtyProvider.
     const launcher = spawnerInstances[0].launcher as (
       socketPath: string,
       tokenPath: string
@@ -292,6 +297,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       }
     })
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The spawner fixture captures the launcher passed by initDaemonPtyProvider.
     const launcher = spawnerInstances[0].launcher as (
       socketPath: string,
       tokenPath: string
@@ -328,11 +334,12 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       }
     })
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The spawner fixture captures the launcher passed by initDaemonPtyProvider.
     const launcher = spawnerInstances[0].launcher as (
       socketPath: string,
       tokenPath: string
     ) => Promise<{
-      mode?: 'degraded-new-pty-fallback'
+      mode?: 'fresh-spawns-unavailable'
       shutdown(): Promise<void>
     }>
     checkDaemonHealthMock.mockResolvedValueOnce('pty-spawn-unhealthy')
@@ -340,7 +347,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     const handle = await launcher('/fake/socket', '/fake/token')
 
     expect(requestMock).toHaveBeenCalledWith('listSessions', undefined, expect.any(Number))
-    expect(handle.mode).toBe('degraded-new-pty-fallback')
+    expect(handle.mode).toBe('fresh-spawns-unavailable')
     expect(killStaleDaemonMock).not.toHaveBeenCalled()
     expect(forkMock).not.toHaveBeenCalled()
   })
@@ -362,6 +369,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       }
     })
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The spawner fixture captures the launcher passed by initDaemonPtyProvider.
     const launcher = spawnerInstances[0].launcher as (
       socketPath: string,
       tokenPath: string
@@ -399,6 +407,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The spawner fixture captures the launcher passed by initDaemonPtyProvider.
     const launcher = spawnerInstances[0].launcher as (
       socketPath: string,
       tokenPath: string

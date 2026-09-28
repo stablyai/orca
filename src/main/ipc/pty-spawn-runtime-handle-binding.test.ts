@@ -15,7 +15,6 @@ import { registerPtyHandlers, registerSshPtyProvider } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
-vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
@@ -84,6 +83,7 @@ describe('registerPtyHandlers', () => {
       acknowledgeDataEvent: vi.fn()
     } as never)
     const runtime = {
+      registerPty: vi.fn(),
       setPtyController: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_remote'),
@@ -200,6 +200,7 @@ describe('registerPtyHandlers', () => {
   it('threads the validated pane identity into registerPty for a renderer PTY spawn (#7587)', async () => {
     const leafId = '88888888-8888-4888-8888-888888888888'
     const runtime = {
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term_seam'),
       setPtyController: vi.fn(),
       preAllocateHandleForPty: vi.fn(() => 'term_seam'),
       registerPreAllocatedHandleForPty: vi.fn(),
@@ -226,7 +227,7 @@ describe('registerPtyHandlers', () => {
       expect.any(String),
       'wt-1',
       null,
-      { tabId: 'tab-1', leafId, incarnationId: expect.any(String) },
+      { tabId: 'tab-1', leafId, terminalHandle: 'term_seam', incarnationId: expect.any(String) },
       false
     )
   })
@@ -339,6 +340,7 @@ describe('registerPtyHandlers', () => {
   })
   it('omits the pane identity from registerPty when the leafId is not a terminal leaf (#7587)', async () => {
     const runtime = {
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term_seam'),
       setPtyController: vi.fn(),
       preAllocateHandleForPty: vi.fn(() => 'term_seam'),
       registerPreAllocatedHandleForPty: vi.fn(),
@@ -502,6 +504,7 @@ describe('registerPtyHandlers', () => {
     }
     let controller: RuntimeSpawnController | null = null
     const runtime = {
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term_wrong'),
       setPtyController: vi.fn((value) => {
         controller = value
       }),

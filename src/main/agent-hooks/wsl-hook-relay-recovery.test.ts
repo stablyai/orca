@@ -14,21 +14,24 @@ function waitFor(condition: () => boolean, timeoutMs = 3_000): Promise<void> {
 }
 
 describe('WslRelayRecovery', () => {
-  it('re-ensures the distro when the restart timer fires and the distro is running', async () => {
-    const restart = vi.fn()
-    const recovery = new WslRelayRecovery({
-      isDistroRunning: async () => true,
-      warn: vi.fn(),
-      isDisposed: () => false,
-      isCurrent: () => true,
-      restart,
-      dropState: vi.fn()
-    })
-    const state = makeState()
-    recovery.scheduleRestart(state)
-    await waitFor(() => restart.mock.calls.length === 1)
-    expect(restart).toHaveBeenCalledWith('Ubuntu')
-  })
+  it.each([undefined, 'alice'])(
+    're-ensures the same user %s when the running distro recovers',
+    async (user) => {
+      const restart = vi.fn()
+      const recovery = new WslRelayRecovery({
+        isDistroRunning: async () => true,
+        warn: vi.fn(),
+        isDisposed: () => false,
+        isCurrent: () => true,
+        restart,
+        dropState: vi.fn()
+      })
+      const state = { ...makeState(), user }
+      recovery.scheduleRestart(state)
+      await waitFor(() => restart.mock.calls.length === 1)
+      expect(restart).toHaveBeenCalledWith('Ubuntu', ...(user ? [user] : []))
+    }
+  )
 
   it('drops the state instead of booting a stopped distro', async () => {
     const restart = vi.fn()

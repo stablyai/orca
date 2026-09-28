@@ -21,18 +21,19 @@ const shellContractFiles = [
   'src/main/providers/local-pty-shell-ready-zsh-launch-environment.test.ts',
   'src/main/providers/__tests__/shell-ready-framework-example.test.ts',
   'src/main/pty/omp-shell-wrapper-alias-safety.test.ts',
-  'src/main/pty/omp-shell-wrapper.node-pty.test.ts',
+  'src/main/pty/omp-shell-wrapper.bun.test.ts',
   'src/main/shell-startup-feature-channel.test.ts',
   'src/main/zsh-scoped-histfile.live-shell.test.ts',
   'src/main/zsh-startup-hook-user-config-equivalence.live-shell.test.ts',
   'src/main/zsh-wrapper-version-mismatch.live-shell.test.ts',
   'src/shared/posix-command-path-lookup.test.ts'
 ]
-const patchedNodePtyContractFiles = [
-  'src/main/daemon/node-pty-fd-leak.test.ts',
-  'src/shared/fish-query-reply-child-stdin.node-pty.test.ts'
+const additionalNativeShellContractFiles = [
+  'src/main/daemon/pty-subprocess/bun-tests/pty-reply-echo-shapes.bun.test.ts',
+  'src/main/daemon/bun-pty-fd-lifecycle.integration.test.ts',
+  'src/main/daemon/pty-subprocess/bun-tests/fish-query-reply-child-stdin.bun.test.ts'
 ]
-const nativeShellContractFiles = [...shellContractFiles, ...patchedNodePtyContractFiles]
+const nativeShellContractFiles = [...shellContractFiles, ...additionalNativeShellContractFiles]
 const testFilePatterns = [
   'config/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}',
   'src/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}',
@@ -47,6 +48,16 @@ const realZshUsage =
   /(?:spawnSync|execFileSync|spawn)\(\s*['"](?:\/(?:usr\/)?bin\/)?zsh['"]|spawnSync\(\s*['"]which['"]\s*,\s*\[\s*['"]zsh['"]|name:\s*['"]zsh['"]\s*,\s*path:\s*executablePath|from '[^']*zsh-startup-hook-pty-harness'/
 
 describe('PR workflow parallelism', () => {
+  it('keeps every explicitly selected shell test on disk', () => {
+    const step = workflow.jobs.shell_contracts.steps.find(
+      (candidate) => candidate.name === 'Test real shell contracts'
+    )
+    expect(step).toBeDefined()
+    const files = step.run.match(/src\/[\w./-]+\.test\.ts/g) ?? []
+    expect(files.length).toBeGreaterThan(0)
+    expect(files.filter((file) => !existsSync(file))).toEqual([])
+  })
+
   it('keeps lightweight orchestration jobs on the free slim runner', () => {
     expect(workflow.jobs.code_paths['runs-on']).toBe('ubuntu-slim')
     expect(workflow.jobs.typecheck['runs-on']).toBe('ubuntu-24.04-arm')
@@ -227,7 +238,9 @@ describe('PR workflow parallelism', () => {
       (step) => step.name === 'Build package inputs'
     )
 
-    expect(buildStep.run).toContain('scripts=(build:relay build:electron-vite:parallel)')
+    expect(buildStep.run).toContain(
+      'scripts=(build:relay build:terminal-daemon build:electron-vite:parallel)'
+    )
     expect(buildStep.run).toContain('pnpm run "$script" &')
     expect(
       workflow.jobs.package.steps.find(
@@ -404,14 +417,14 @@ describe('PR workflow parallelism', () => {
         'steps.requested-node.outputs.node-version || steps.default-node.outputs.node-version'
       )
       expect(cacheStep.with.key).toContain('steps.native-cache-scope.outputs.scope')
-      expect(cacheStep.with.key).toContain('config/patches/node-pty@1.1.0.patch')
+      expect(cacheStep.with.key).not.toContain('node-pty')
       expect(cacheStep.with.key).toContain(
         'config/patches/@vscode__windows-process-tree@0.8.0.patch'
       )
       expect(cacheStep.with.key).toContain('.github/actions/install-node-dependencies/action.yml')
       expect(cacheStep.with.key).toContain('config/scripts/ensure-native-runtime.mjs')
       expect(cacheStep.with.key).toContain('config/scripts/rebuild-native-deps.mjs')
-      expect(cacheStep.with.path).toContain('node-pty@*/node_modules/node-pty/build')
+      expect(cacheStep.with.path).not.toContain('node-pty')
       expect(cacheStep.with.path).toContain('native/windows-registry/build')
       expect(cacheStep.with.path).toContain('@vscode+windows-process-tre*')
       expect(cacheStep.with['restore-keys']).toBeUndefined()

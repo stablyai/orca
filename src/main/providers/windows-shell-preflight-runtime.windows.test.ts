@@ -10,7 +10,8 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import * as pty from 'node-pty'
+import { z } from 'zod'
+import { runBundledBunFixture } from '../bundled-bun-test-execution'
 import { afterEach, describe, expect, it } from 'vitest'
 import { resolveGitBashPath } from '../git-bash'
 import {
@@ -69,51 +70,18 @@ async function runPty(options: {
   input?: string
   timeoutMs?: number
 }): Promise<string> {
-  const proc = pty.spawn(options.shellPath, options.shellArgs, {
-    name: 'xterm-256color',
-    cols: 100,
-    rows: 30,
-    cwd: options.cwd,
-    env: options.env
-  })
-  let output = ''
-  proc.onData((data) => {
-    output += data
-  })
-  let exited = false
-  const exitPromise = new Promise<number>((resolve) => {
-    proc.onExit(({ exitCode }) => {
-      exited = true
-      resolve(exitCode)
-    })
-  })
-  let timeout: ReturnType<typeof setTimeout> | undefined
-  const timeoutPromise = new Promise<never>((_resolve, reject) => {
-    timeout = setTimeout(
-      () => reject(new Error(`timed out waiting for Windows shell PTY:\n${output}`)),
-      options.timeoutMs ?? 10_000
+  const result = z
+    .object({ output: z.string(), exitCode: z.number() })
+    .parse(
+      await runBundledBunFixture(
+        join(__dirname, '../daemon/windows-shell-preflight-bun-fixture.ts'),
+        'runWindowsShellPreflight',
+        options,
+        (options.timeoutMs ?? 10_000) + 5_000
+      )
     )
-  })
-
-  try {
-    if (options.input) {
-      proc.write(options.input.replaceAll('\n', '\r'))
-    }
-    const exitCode = await Promise.race([exitPromise, timeoutPromise])
-    expect(exitCode, output).toBe(0)
-    return output
-  } finally {
-    if (timeout) {
-      clearTimeout(timeout)
-    }
-    if (!exited) {
-      try {
-        proc.kill()
-      } catch {
-        // The PTY may have exited while cleanup was starting.
-      }
-    }
-  }
+  expect(result.exitCode, result.output).toBe(0)
+  return result.output
 }
 
 afterEach(() => {

@@ -47,6 +47,7 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
   ): boolean {
     // Why: a pinned dev jump owns the feed until it settles; a background check would repoint it mid-flight and download the wrong build.
     if (
+      this.isQuitAndInstallHandoffActive() ||
       this.activeUpdateSource !== 'release' ||
       this.isPinnedBuildActive ||
       this.localBuildSelectionInProgress ||
@@ -69,7 +70,7 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
     const attemptId = this.beginUpdateCheckAttempt()
     const autoUpdater = this.getAutoUpdater()
     const launch = (): Promise<unknown> | undefined => {
-      if (!this.isActiveUpdateCheckAttempt(attemptId)) {
+      if (this.isQuitAndInstallHandoffActive() || !this.isActiveUpdateCheckAttempt(attemptId)) {
         return undefined
       }
       this.markUpdateCheckLaunched(attemptId)
@@ -77,9 +78,13 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
     }
     const run = this.pinDefaultReleaseFeed().then(launch)
     void Promise.resolve(run)
-      .then(() => this.handleSettledUpdateCheckPromise(attemptId))
+      .then(() => {
+        if (!this.isQuitAndInstallHandoffActive()) {
+          this.handleSettledUpdateCheckPromise(attemptId)
+        }
+      })
       .catch((err) => {
-        if (!this.isActiveUpdateCheckAttempt(attemptId)) {
+        if (this.isQuitAndInstallHandoffActive() || !this.isActiveUpdateCheckAttempt(attemptId)) {
           return
         }
         const wasUserInitiated = this.getSettledCheckUserInitiated()

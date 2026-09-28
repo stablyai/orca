@@ -3,7 +3,7 @@
 /**
  * Prove the compiled addon supports table and synchronous process creation-time reads.
  *
- * Unlike node-pty, this package ships a prebuilt `.node` at the same
+ * This package ships a prebuilt `.node` at the same
  * `build/Release/` path node-gyp writes to, so neither a load nor a path check
  * can tell a stale prebuilt from a source build. pnpm patches the source tree
  * and leaves that prebuilt in place, which is how `ProcessDataFlag.CreationTime`
@@ -11,8 +11,7 @@
  * read true and every row came back without `creationTimeMs`.
  *
  * `supportedProcessDataFlags` is exported by the patched `addon.cc`, so its
- * presence is the binary's own answer. Shared by the Node and Electron probes
- * the way `node-pty-job-ownership.cjs` is.
+ * presence is the binary's own answer, checked by both Node and Electron probes.
  */
 
 /** `ProcessDataFlags::CREATIONTIME` in src/process.h. */

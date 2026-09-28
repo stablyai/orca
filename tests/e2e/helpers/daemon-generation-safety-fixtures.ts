@@ -1,4 +1,4 @@
-import { fork, type ChildProcess } from 'node:child_process'
+import { fork, type ChildProcess, type ForkOptions } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
@@ -73,6 +73,26 @@ export async function launchDaemonGeneration(options: {
   const tokenPath = getDaemonTokenPath(runtime.daemonDir, protocolVersion)
   const logPath = path.join(runtime.rootDir, `${label}.daemon.log`)
   let startupLog = ''
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    NODE_PATH: path.join(process.cwd(), 'node_modules'),
+    ORCA_USER_DATA_PATH: runtime.userDataDir,
+    ORCA_BACKGROUND_LAUNCH: '1'
+  }
+  for (const key of [
+    'ELECTRON_RUN_AS_NODE',
+    'NODE_OPTIONS',
+    'BUN_OPTIONS',
+    'BUN_INSPECT',
+    'BUN_INSPECT_BRK',
+    'BUN_INSPECT_WAIT',
+    'BUN_CONPTY_LIBRARY'
+  ]) {
+    delete env[key]
+  }
+  if (runtime.bunRuntime.conptyLibraryPath) {
+    env.BUN_CONPTY_LIBRARY = runtime.bunRuntime.conptyLibraryPath
+  }
   const child = fork(
     runtime.entryPath,
     [
@@ -87,18 +107,16 @@ export async function launchDaemonGeneration(options: {
       '--refuse-dispose',
       String(refuseDispose)
     ],
-    {
-      cwd: runtime.userDataDir,
-      execPath: runtime.electronPath,
-      windowsHide: true,
-      env: {
-        ...process.env,
-        ELECTRON_RUN_AS_NODE: '1',
-        NODE_PATH: path.join(process.cwd(), 'node_modules'),
-        ORCA_USER_DATA_PATH: runtime.userDataDir
-      },
-      stdio: ['ignore', 'ignore', 'pipe', 'ipc']
-    }
+    Object.assign(
+      {
+        cwd: runtime.userDataDir,
+        execPath: runtime.bunRuntime.execPath,
+        execArgv: ['--no-env-file'],
+        env,
+        stdio: ['ignore', 'ignore', 'pipe', 'ipc']
+      } satisfies ForkOptions,
+      { windowsHide: true }
+    )
   )
   child.stderr?.on('data', (chunk: Buffer) => {
     startupLog = `${startupLog}${chunk.toString('utf8')}`.slice(-MAX_CAPTURED_CHARS)

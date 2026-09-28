@@ -4,15 +4,20 @@
 //   node tests/e2e/capture-opencode-tui-repro.mjs
 // Then run the captured replay test documented in terminal-foreground-redraw-freeze.spec.ts.
 
-import { createRequire } from 'node:module'
 import { createWriteStream, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 
-const require = createRequire(import.meta.url)
-const pty = require('node-pty')
+import {
+  relaunchTranscriptWithBun,
+  spawnTranscriptPty
+} from '../../config/scripts/pty-transcript-bun-runtime.mjs'
 
 const scriptDir = import.meta.dirname
 const repoRoot = path.resolve(scriptDir, '..', '..')
+const relaunched = await relaunchTranscriptWithBun(repoRoot, process.argv.slice(2), process.argv[1])
+if (relaunched !== null) {
+  process.exit(relaunched)
+}
 
 function readOption(name, fallback) {
   const index = process.argv.indexOf(name)
@@ -121,22 +126,21 @@ mkdirSync(path.dirname(outputPath), { recursive: true })
 writeFileSync(harnessPath, harnessSource)
 
 const out = createWriteStream(outputPath)
-const command = process.platform === 'win32' ? 'bun.exe' : 'bun'
-const child = pty.spawn(command, ['run', './orca-opencode-tui-repro.tsx'], {
-  cwd: opencodePackagePath,
-  cols: 120,
-  rows: 40,
-  name: 'xterm-256color',
-  env: {
-    ...process.env,
-    FORCE_COLOR: '1',
-    TERM: 'xterm-256color'
-  }
-})
-
-child.onData((data) => {
-  out.write(data)
-})
+const child = await spawnTranscriptPty(
+  {
+    file: process.execPath,
+    args: ['run', './orca-opencode-tui-repro.tsx'],
+    cwd: opencodePackagePath,
+    cols: 120,
+    rows: 40,
+    env: {
+      ...process.env,
+      FORCE_COLOR: '1',
+      TERM: 'xterm-256color'
+    }
+  },
+  (bytes) => out.write(bytes)
+)
 
 child.onExit(({ exitCode }) => {
   out.end(() => {

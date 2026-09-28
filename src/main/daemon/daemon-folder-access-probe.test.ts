@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { runProcessMock } = vi.hoisted(() => ({ runProcessMock: vi.fn() }))
+const { runProcessMock, runtimeMock } = vi.hoisted(() => ({
+  runProcessMock: vi.fn(),
+  runtimeMock: vi.fn()
+}))
+vi.mock('./daemon-bun-runtime', () => ({ resolveDesktopDaemonBunRuntime: runtimeMock }))
 vi.mock('../../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
 
 import { probeFolderAccessForFreshDaemon } from './daemon-folder-access-probe'
@@ -11,6 +15,7 @@ type RunProcessSpec = {
   env: NodeJS.ProcessEnv
   timeoutMs: number
   maxOutputBytes: number
+  onChildTerminated?: () => void
 }
 
 function settled(stdout: string, overrides: Record<string, unknown> = {}): void {
@@ -33,6 +38,7 @@ const DOCUMENTS = '/Users/alice/Documents/repo'
 
 beforeEach(() => {
   runProcessMock.mockReset()
+  runtimeMock.mockResolvedValue(null)
 })
 
 describe('probeFolderAccessForFreshDaemon', () => {
@@ -72,7 +78,8 @@ describe('probeFolderAccessForFreshDaemon', () => {
     settled('{"outcome":"ok"}\n')
     await probeFolderAccessForFreshDaemon(DOCUMENTS)
 
-    expect(lastSpec().timeoutMs).toBe(3_000)
+    expect(lastSpec().timeoutMs).toBeGreaterThan(0)
+    expect(lastSpec().timeoutMs).toBeLessThanOrEqual(3_000)
     expect(lastSpec().maxOutputBytes).toBe(1024)
   })
 
@@ -120,3 +127,134 @@ describe('probeFolderAccessForFreshDaemon', () => {
     await expect(probeFolderAccessForFreshDaemon(DOCUMENTS)).resolves.toBe('unknown')
   })
 })
+
+it('uses the same Bun executable as a fresh desktop daemon', async () => {
+  runtimeMock.mockResolvedValue({
+    execPath: '/app/cli-runtime/bun-runtime',
+    entryPath: '/app/terminal-daemon/daemon-entry.js'
+  })
+  settled('{"outcome":"ok"}\n')
+  await expect(probeFolderAccessForFreshDaemon(DOCUMENTS)).resolves.toBe('ok')
+  expect(lastSpec().program).toBe('/app/cli-runtime/bun-runtime')
+  expect(lastSpec().env.ELECTRON_RUN_AS_NODE).toBeUndefined()
+})
+
+it('bounds runtime resolution and never launches a child after the deadline', async () => {
+  vi.useFakeTimers()
+  try {
+    let finish!: (value: null) => void
+    runtimeMock.mockReturnValue(
+      new Promise<null>((resolve) => {
+        finish = resolve
+      })
+    )
+    const result = probeFolderAccessForFreshDaemon(DOCUMENTS)
+    await vi.advanceTimersByTimeAsync(3_000)
+    await expect(result).resolves.toBe('unknown')
+    finish(null)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(runProcessMock).not.toHaveBeenCalled()
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('gives the child only the budget left after runtime resolution', async () => {
+  vi.useFakeTimers()
+  try {
+    runtimeMock.mockImplementation(
+      () => new Promise((resolve) => setTimeout(() => resolve(null), 2_000))
+    )
+    settled('{"outcome":"ok"}\n')
+    const result = probeFolderAccessForFreshDaemon(DOCUMENTS)
+    await vi.advanceTimersByTimeAsync(2_000)
+    await expect(result).resolves.toBe('ok')
+    expect(lastSpec().timeoutMs).toBe(1_000)
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('releases a launch pin that resolves after the caller deadline', async () => {
+  vi.useFakeTimers()
+  try {
+    const releaseLaunchPin = vi.fn()
+    let finish:
+      | ((value: { execPath: string; entryPath: string; releaseLaunchPin: () => void }) => void)
+      | undefined
+    runtimeMock.mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve
+      })
+    )
+    const result = probeFolderAccessForFreshDaemon(DOCUMENTS)
+    await vi.advanceTimersByTimeAsync(3_000)
+    await expect(result).resolves.toBe('unknown')
+    finish?.({ execPath: 'bun', entryPath: 'daemon-entry.js', releaseLaunchPin })
+    await vi.advanceTimersByTimeAsync(1)
+    expect(releaseLaunchPin).toHaveBeenCalledTimes(1)
+    expect(runProcessMock).not.toHaveBeenCalled()
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it.each([false, true])(
+  'releases the launch pin when child termination is confirmed (failure=%s)',
+  async (failure) => {
+    const releaseLaunchPin = vi.fn()
+    runtimeMock.mockResolvedValue({
+      execPath: 'bun',
+      entryPath: 'daemon-entry.js',
+      releaseLaunchPin
+    })
+    runProcessMock.mockImplementation(async (spec: RunProcessSpec) => {
+      expect(releaseLaunchPin).not.toHaveBeenCalled()
+      spec.onChildTerminated?.()
+      if (failure) {
+        throw new Error('spawn failed')
+      }
+      return { code: 0, stdout: '{"outcome":"ok"}', timedOut: false }
+    })
+    await expect(probeFolderAccessForFreshDaemon(DOCUMENTS)).resolves.toBe(
+      failure ? 'unknown' : 'ok'
+    )
+    expect(releaseLaunchPin).toHaveBeenCalledTimes(1)
+  }
+)
+
+it.each(['resolve', 'reject'])(
+  'retains the runtime after abort and process promise %s until confirmed termination',
+  async (outcome) => {
+    vi.useFakeTimers()
+    try {
+      const releaseLaunchPin = vi.fn()
+      runtimeMock.mockResolvedValue({
+        execPath: 'bun',
+        entryPath: 'daemon-entry.js',
+        releaseLaunchPin
+      })
+      let settle: (() => void) | undefined
+      runProcessMock.mockImplementation(
+        () =>
+          new Promise((resolve, reject) => {
+            settle = () =>
+              outcome === 'resolve'
+                ? resolve({ code: null, stdout: '', timedOut: true })
+                : reject(new Error('could not kill child'))
+          })
+      )
+      const result = probeFolderAccessForFreshDaemon(DOCUMENTS)
+      await vi.advanceTimersByTimeAsync(3_000)
+      await expect(result).resolves.toBe('unknown')
+      expect(releaseLaunchPin).not.toHaveBeenCalled()
+      settle?.()
+      await vi.advanceTimersByTimeAsync(1)
+      expect(releaseLaunchPin).not.toHaveBeenCalled()
+      lastSpec().onChildTerminated?.()
+      expect(releaseLaunchPin).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  }
+)

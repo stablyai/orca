@@ -235,3 +235,40 @@ describe('rebuild-native-deps Electron install fallback', () => {
     }
   })
 })
+
+describe('rebuild-native-deps empty native selection', () => {
+  it.each([
+    { name: 'ordinary rebuild', args: ['--platform=linux'], env: {} },
+    { name: 'forced rebuild', args: ['--platform=linux', '--force'], env: {} },
+    {
+      name: 'environment-forced rebuild',
+      args: ['--platform=linux'],
+      env: { ORCA_FORCE_NATIVE_REBUILD: '1' }
+    },
+    {
+      name: 'cross-architecture rebuild',
+      args: ['--platform=linux', `--arch=${process.arch === 'arm64' ? 'x64' : 'arm64'}`],
+      env: {}
+    }
+  ])('installs Electron without scanning unrelated addons: $name', ({ args, env }) => {
+    const projectDir = mkTempProject()
+    try {
+      const logPath = join(projectDir, 'rebuild.log')
+      writeFakeElectronPackage(projectDir)
+      writeFakeElectronGet(projectDir)
+      writeFakeElectronExtractor(projectDir, { createExecutable: true })
+      writeFakeElectronRebuild(projectDir, { logPathEnv: 'ORCA_REBUILD_TEST_LOG' })
+      const result = runRebuildScript(projectDir, { ...env, ORCA_REBUILD_TEST_LOG: logPath }, args)
+      expect(result.status, result.stderr).toBe(0)
+      expect(readFileSync(join(projectDir, 'node_modules/electron/path.txt'), 'utf8')).toBe(
+        'electron'
+      )
+      expect(readFileSync(join(projectDir, 'electron-get.log'), 'utf8')).toBe(
+        'download attempted\n'
+      )
+      expect(existsSync(logPath)).toBe(false)
+    } finally {
+      removeTreeSync(projectDir)
+    }
+  })
+})

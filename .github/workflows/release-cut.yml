@@ -1506,7 +1506,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Load packaged node-pty on the Linux floor
+      - name: Qualify packaged Bun terminal on the Linux floor
         if: matrix.platform == 'linux-x64' || matrix.platform == 'linux-arm64'
         uses: nick-fields/retry@v4
         with:
@@ -1514,7 +1514,7 @@ jobs:
           max_attempts: 3
           retry_wait_seconds: 30
           command: >-
-            node config/scripts/run-linux-packaged-node-pty-floor-smoke.mjs
+            node config/scripts/run-linux-packaged-terminal-floor-smoke.mjs
             --app-dir ${{ matrix.unpacked_dir }}
 
       # Why: SignPath signs GitHub workflow artifacts, so Windows builds must
@@ -1541,22 +1541,12 @@ jobs:
           # app.asar - the exact defect this chain exists to remove.
           ORCA_WIN_UNINSTALLER_EXPORT_PATH: ${{ runner.temp }}\uninstaller-signing\unsigned\orca-uninstaller.exe
 
-      - name: Verify Windows node-pty ConPTY runtime
+      - name: Verify Windows Bun and ConPTY runtime
         if: matrix.platform == 'win' && github.run_attempt == 1
         shell: pwsh
         run: |
-          $runtimeDir = 'dist/win-unpacked/resources/node_modules/node-pty/build/Release'
-          $requiredFiles = @(
-            "$runtimeDir/conpty.node",
-            "$runtimeDir/conpty/conpty.dll",
-            "$runtimeDir/conpty/OpenConsole.exe"
-          )
-          foreach ($file in $requiredFiles) {
-            if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
-              throw "Missing Windows node-pty runtime file: $file"
-            }
-            Get-Item -LiteralPath $file
-          }
+          node -e "require('./config/bundled-cli-runtime.cjs').verifyCliRuntimeDirectory('dist/win-unpacked/resources/cli-runtime', 'win32', 'x64')"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Install SignPath PowerShell module
         if: matrix.platform == 'win' && github.run_attempt == 1
@@ -1564,7 +1554,7 @@ jobs:
 
       # ── Windows inner-binary signing (issue #7785) ─────────────────────
       # Why: SignPath cannot deep-sign inside NSIS installers, so inner PE
-      # files (Orca.exe, node-pty *.node, DLLs) are signed via a separate zip
+      # files (Orca.exe, Bun, native addons, DLLs) are signed via a separate zip
       # request, then the installer is rebuilt from the signed tree before the
       # existing installer signing request below. The NSIS uninstaller rides
       # this same request (it is the MDE update cluster: old-uninstaller.exe /
@@ -1606,8 +1596,8 @@ jobs:
           if (-not ($list -contains 'Orca.exe')) {
             throw 'Orca.exe was not staged for signing; unpacked layout changed?'
           }
-          if (-not ($list | Where-Object { $_ -like '*conpty_console_list.node' })) {
-            throw 'node-pty conpty_console_list.node was not staged; this is the file from issue #7785.'
+          if (-not ($list | Where-Object { $_ -like '*windows_process_tree.node' })) {
+            throw 'Windows process inspection addon was not staged for signing.'
           }
 
           Set-Content -Path 'inner-signing-list.txt' -Value ($list -join "`n")
@@ -1789,6 +1779,8 @@ jobs:
             $failures | ForEach-Object { Write-Host "::error::$_" }
             throw "Signed inner artifact did not round-trip cleanly ($($failures.Count) failures)."
           }
+          node config/scripts/finalize-signed-cli-runtime.mjs $root 'signing-stage'
+          if ($LASTEXITCODE -ne 0) { throw 'Signed runtime identity finalization failed.' }
 
       # Why gated separately from the inner restore above: if SignPath's
       # windows-inner-binaries-zip artifact configuration does not (yet) cover the

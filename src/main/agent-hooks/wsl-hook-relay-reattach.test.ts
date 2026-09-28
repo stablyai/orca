@@ -13,6 +13,11 @@ describe('ensureWslHookRelayForReattach', () => {
   })
 
   it.each([
+    [
+      'guest daemon owner',
+      { id: 'wsl:Ubuntu@@owner@@terminal', isReattach: true, wslDistro: 'Ubuntu' },
+      null
+    ],
     ['fresh WSL spawn', { wslDistro: 'Ubuntu' }, null],
     ['native reattach', { isReattach: true, wslDistro: null }, null],
     ['legacy reattach without ownership context', { isReattach: true }, null],

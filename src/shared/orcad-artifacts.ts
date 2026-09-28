@@ -11,6 +11,13 @@
 export const ORCAD_BUN_RUNTIME_FILENAME = 'bun-runtime'
 export const ORCAD_WINDOWS_BUN_RUNTIME_FILENAME = 'bun-runtime.exe'
 export const ORCAD_WINDOWS_PROCESS_TREE_FILENAME = 'windows-process-tree.node'
+export const ORCAD_WINDOWS_CONPTY_ARTIFACTS = [
+  'conpty/conpty.dll',
+  'conpty/OpenConsole.exe',
+  'conpty/LICENSE.txt',
+  'conpty/Microsoft.Windows.Console.ConPTY.nuspec',
+  'conpty/conpty.json'
+] as const
 
 export function orcadBunRuntimeFilename(target: string): string {
   return target === 'win32' || target.startsWith('win32-')
@@ -106,7 +113,7 @@ export function orcadArtifactFilenames(target = ''): string[] {
       : artifact.filename
   )
   if (target === 'win32' || target.startsWith('win32-')) {
-    filenames.push(ORCAD_WINDOWS_PROCESS_TREE_FILENAME)
+    filenames.push(ORCAD_WINDOWS_PROCESS_TREE_FILENAME, ...ORCAD_WINDOWS_CONPTY_ARTIFACTS)
   }
   return filenames
 }

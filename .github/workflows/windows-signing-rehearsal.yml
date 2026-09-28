@@ -1,7 +1,7 @@
 ﻿# Windows inner-binary signing rehearsal.
 #
 # Why: SignPath cannot deep-sign inside NSIS installers, so shipping signed
-# inner binaries (Orca.exe, node-pty *.node, DLLs — see issue #7785) requires
+# inner binaries (Orca.exe, Bun, native addons, DLLs — see issue #7785) requires
 # a two-request flow: sign the unpacked PE files first, then build the NSIS
 # installer from the signed tree, then sign the installer. The NSIS uninstaller
 # rides that same first request — it is captured through electron-builder's sign
@@ -164,8 +164,8 @@ jobs:
           if (-not ($list -contains 'Orca.exe')) {
             throw 'Orca.exe was not staged for signing; unpacked layout changed?'
           }
-          if (-not ($list | Where-Object { $_ -like '*conpty_console_list.node' })) {
-            throw 'node-pty conpty_console_list.node was not staged; this is the file from issue #7785.'
+          if (-not ($list | Where-Object { $_ -like '*windows_process_tree.node' })) {
+            throw 'Windows process inspection addon was not staged for signing.'
           }
 
           Set-Content -Path 'inner-signing-list.txt' -Value ($list -join "`n")
@@ -252,6 +252,8 @@ jobs:
             $failures | ForEach-Object { Write-Host "::error::$_" }
             throw "Signed inner artifact did not round-trip cleanly ($($failures.Count) failures)."
           }
+          node config/scripts/finalize-signed-cli-runtime.mjs $root 'signing-stage'
+          if ($LASTEXITCODE -ne 0) { throw 'Signed runtime identity finalization failed.' }
 
       - name: Restore signed uninstaller for the installer rebuild
         shell: pwsh

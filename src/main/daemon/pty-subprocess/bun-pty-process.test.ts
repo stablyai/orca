@@ -72,9 +72,10 @@ function createBunHarness({ closeImmediately = true } = {}) {
   }
 }
 
-function spawn(deps?: Parameters<typeof spawnBunPty>[1]) {
+function spawn(deps?: Parameters<typeof spawnBunPty>[1], windowsJobKillOnClose = false) {
   return spawnBunPty(
     {
+      windowsJobKillOnClose,
       file: '/bin/sh',
       args: ['-l'],
       cwd: '/tmp',
@@ -284,30 +285,129 @@ describe('Bun.Terminal PTY adapter', () => {
     expect(harness.terminal.close).not.toHaveBeenCalled()
   })
 
-  it('contains a native terminal write failure and suppresses later writes', () => {
-    const harness = createBunHarness()
-    harness.terminal.write = vi.fn(() => {
-      throw new Error('terminal closed')
+  it('retires only the failed writer and waits for observed termination', async () => {
+    const failed = createBunHarness()
+    failed.terminal.write = vi.fn(() => {
+      throw new Error('native write failed')
     })
     const proc = spawn()
+    const onExit = vi.fn()
+    proc.onExit(onExit)
+    const witness = createBunHarness()
+    const witnessProc = spawn()
 
     expect(() => proc.write('first')).not.toThrow()
     proc.write('second')
+    proc.resize(100, 30)
+    witnessProc.write('still live')
+    witnessProc.resize(90, 30)
 
-    expect(harness.terminal.write).toHaveBeenCalledOnce()
+    expect(failed.terminal.write).toHaveBeenCalledOnce()
+    expect(failed.processHandle.kill).toHaveBeenCalledExactlyOnceWith('SIGKILL')
+    expect(failed.terminal.resize).not.toHaveBeenCalled()
+    expect(onExit).not.toHaveBeenCalled()
+    expect(witness.processHandle.kill).not.toHaveBeenCalled()
+    expect(witness.terminal.write).toHaveBeenCalledWith('still live')
+    expect(witness.terminal.resize).toHaveBeenCalledWith(90, 30)
+
+    failed.resolveExit(137)
+    await failed.processHandle.exited
+    expect(onExit).toHaveBeenCalledExactlyOnceWith({ exitCode: 137 })
   })
 
-  it('contains a native terminal resize failure and suppresses later resizes', () => {
+  it('keeps input and future resize usable after a failed resize on an open terminal', () => {
     const harness = createBunHarness()
-    harness.terminal.resize = vi.fn(() => {
-      throw new Error('terminal closed')
+    vi.mocked(harness.terminal.resize).mockImplementationOnce(() => {
+      throw new Error('Failed to resize terminal')
     })
     const proc = spawn()
 
     expect(() => proc.resize(120, 40)).not.toThrow()
+    expect({ cols: proc.cols, rows: proc.rows }).toEqual({ cols: 80, rows: 24 })
+    proc.write('still live')
     proc.resize(100, 30)
 
-    expect(harness.terminal.resize).toHaveBeenCalledOnce()
+    expect(harness.terminal.resize).toHaveBeenCalledTimes(2)
+    expect(harness.terminal.write).toHaveBeenCalledWith('still live')
+    expect({ cols: proc.cols, rows: proc.rows }).toEqual({ cols: 100, rows: 30 })
+    expect(harness.processHandle.kill).not.toHaveBeenCalled()
+  })
+
+  it('retires a terminal that closes during resize without inventing its exit', async () => {
+    const harness = createBunHarness()
+    vi.mocked(harness.terminal.resize).mockImplementationOnce(() => {
+      harness.terminal.closed = true
+      throw new Error('Terminal is closed')
+    })
+    const proc = spawn()
+    const onExit = vi.fn()
+    proc.onExit(onExit)
+    expect(() => proc.resize(120, 40)).not.toThrow()
+    expect(harness.processHandle.kill).toHaveBeenCalledExactlyOnceWith('SIGKILL')
+    expect(onExit).not.toHaveBeenCalled()
+    harness.resolveExit(137)
+    await harness.processHandle.exited
+    expect(onExit).toHaveBeenCalledExactlyOnceWith({ exitCode: 137 })
+  })
+
+  it('retries a failed kill even when the native terminal closed during the write', () => {
+    const harness = createBunHarness()
+    harness.terminal.write = vi.fn(() => {
+      harness.terminal.closed = true
+      throw new Error('native write failed')
+    })
+    harness.processHandle.kill.mockImplementationOnce(() => {
+      throw new Error('kill failed')
+    })
+    const proc = spawn()
+    expect(() => proc.write('first')).not.toThrow()
+    expect(() => proc.write('second')).not.toThrow()
+    expect(harness.processHandle.kill).toHaveBeenCalledTimes(2)
+    expect(harness.terminal.write).toHaveBeenCalledOnce()
+  })
+
+  it('retires the owned Windows job after write failure and drains output before exit', async () => {
+    const harness = createBunHarness({ closeImmediately: false })
+    harness.terminal.write = vi.fn(() => {
+      throw new Error('broken pipe')
+    })
+    const job = {
+      listProcessIds: () => [4321],
+      pause: () => true,
+      resume: () => true,
+      terminate: vi.fn(() => 'terminated' as const),
+      close: vi.fn()
+    }
+    const proc = spawn({
+      platform: 'win32',
+      assignHostJob: () => true,
+      createJob: () => job,
+      createWindowsLaunch: () => ({
+        command: ['cmd.exe'],
+        clearCommand: ['cmd.exe'],
+        env: {},
+        windowsVerbatimArguments: true,
+        release() {},
+        dispose() {},
+        async waitForSpawn() {},
+        readShellProcessId: () => 4321
+      })
+    })
+    const onExit = vi.fn()
+    const onData = vi.fn()
+    proc.onExit(onExit)
+    proc.onData(onData)
+    proc.write('failed')
+    expect(job.terminate).toHaveBeenCalledOnce()
+    expect(onExit).not.toHaveBeenCalled()
+    harness.resolveExit(1)
+    await harness.processHandle.exited
+    expect(onExit).not.toHaveBeenCalled()
+    harness.emitData(new TextEncoder().encode('last output'))
+    harness.finishTerminal()
+    expect(onData).toHaveBeenCalledWith('last output')
+    expect(onExit).toHaveBeenCalledExactlyOnceWith({ exitCode: 1 })
+    expect(job.close).toHaveBeenCalledOnce()
   })
 
   it('pauses and resumes the POSIX producer process group once per transition', async () => {
@@ -376,111 +476,114 @@ describe('Bun.Terminal PTY adapter', () => {
     ])
   })
 
-  it('gates a Windows shell behind exact job ownership and exposes owned capabilities', async () => {
-    const harness = createBunHarness({ closeImmediately: false })
-    const assignHostJob = vi.fn(() => true)
-    const release = vi.fn()
-    const dispose = vi.fn()
-    const waitForSpawn = vi.fn(async () => {})
-    let reportedShellPid: number | undefined
-    const job = {
-      listProcessIds: vi.fn(() => [4321, 4322]),
-      pause: vi.fn(() => true),
-      resume: vi.fn(() => true),
-      terminate: vi.fn(() => 'terminated' as const),
-      close: vi.fn()
-    }
-    const createJob = vi.fn(() => job)
-    const createWindowsLaunch = vi.fn(() => ({
-      command: ['cmd.exe', '/d /c launch.cmd'],
-      clearCommand: ['cmd.exe', '/d /c clear.cmd'],
-      env: { TERM: 'xterm-256color', ORCA_BUN_PTY_JOB_GATE: 'gate' },
-      windowsVerbatimArguments: true as const,
-      release,
-      dispose,
-      waitForSpawn,
-      readShellProcessId: () => reportedShellPid
-    }))
-    const proc = spawn({
-      platform: 'win32',
-      assignHostJob,
-      createJob,
-      createWindowsLaunch
-    })
+  it.each([false, true])(
+    'gates Windows job ownership with kill-on-close=%s',
+    async (killOnClose) => {
+      const harness = createBunHarness({ closeImmediately: false })
+      const assignHostJob = vi.fn(() => true)
+      const release = vi.fn()
+      const dispose = vi.fn()
+      const waitForSpawn = vi.fn(async () => {})
+      let reportedShellPid: number | undefined
+      const job = {
+        listProcessIds: vi.fn(() => [4321, 4322]),
+        pause: vi.fn(() => true),
+        resume: vi.fn(() => true),
+        terminate: vi.fn(() => 'terminated' as const),
+        close: vi.fn()
+      }
+      const createJob = vi.fn(() => job)
+      const createWindowsLaunch = vi.fn(() => ({
+        command: ['cmd.exe', '/d /c launch.cmd'],
+        clearCommand: ['cmd.exe', '/d /c clear.cmd'],
+        env: { TERM: 'xterm-256color', ORCA_BUN_PTY_JOB_GATE: 'gate' },
+        windowsVerbatimArguments: true as const,
+        release,
+        dispose,
+        waitForSpawn,
+        readShellProcessId: () => reportedShellPid
+      }))
+      const proc = spawn(
+        { platform: 'win32', assignHostJob, createJob, createWindowsLaunch },
+        killOnClose
+      )
 
-    expect(harness.spawn.mock.calls[0]?.[0]).toEqual(['cmd.exe', '/d /c launch.cmd'])
-    expect(harness.spawn.mock.calls[0]?.[1]).toMatchObject({
-      windowsVerbatimArguments: true,
-      env: { ORCA_BUN_PTY_JOB_GATE: 'gate' },
-      terminal: harness.terminal
-    })
-    expect(assignHostJob.mock.invocationCallOrder[0]).toBeLessThan(
-      harness.spawn.mock.invocationCallOrder[0]
-    )
-    expect(createJob).toHaveBeenCalledWith(4321)
-    expect(createJob.mock.invocationCallOrder[0]).toBeLessThan(release.mock.invocationCallOrder[0])
-    await proc.waitForSpawn?.()
-    expect(waitForSpawn).toHaveBeenCalledWith(harness.processHandle.exited)
+      expect(harness.spawn.mock.calls[0]?.[0]).toEqual(['cmd.exe', '/d /c launch.cmd'])
+      expect(harness.spawn.mock.calls[0]?.[1]).toMatchObject({
+        windowsVerbatimArguments: true,
+        env: { ORCA_BUN_PTY_JOB_GATE: 'gate' },
+        terminal: harness.terminal
+      })
+      expect(assignHostJob.mock.invocationCallOrder[0]).toBeLessThan(
+        harness.spawn.mock.invocationCallOrder[0]
+      )
+      expect(createJob).toHaveBeenCalledWith(4321, undefined, killOnClose)
+      expect(createJob.mock.invocationCallOrder[0]).toBeLessThan(
+        release.mock.invocationCallOrder[0]
+      )
+      await proc.waitForSpawn?.()
+      expect(waitForSpawn).toHaveBeenCalledWith(harness.processHandle.exited)
 
-    proc.pause()
-    proc.pause()
-    proc.resume()
-    proc.resume()
-    expect(job.pause).toHaveBeenCalledOnce()
-    expect(job.resume).toHaveBeenCalledOnce()
-    expect(proc.jobRootProcessIsWrapper).toBe(true)
-    expect(readWindowsPtyJobProcessIds(proc)).toBeNull()
-    expect(harness.spawn.mock.calls[0]?.[1]).not.toHaveProperty('ipc')
-    reportedShellPid = 4322
-    expect(proc.shellProcessId).toBe(4322)
-    expect(readWindowsPtyJobProcessIds(proc)).toEqual(new Set([4322]))
-    job.listProcessIds.mockReturnValueOnce([4321, 4323])
-    expect(readWindowsPtyJobProcessIds(proc)).toBeNull()
-    expect(proc.shellProcessId).toBe(4322)
-    expect(proc.listOwnedProcessIds?.()).toEqual([4321, 4322])
-    expect(proc.terminateOwnedTree?.()).toBe('terminated')
-
-    job.terminate.mockClear()
-    proc.signalProcess?.('SIGINT')
-    expect(job.terminate).toHaveBeenCalledOnce()
-    expect(harness.processHandle.kill).not.toHaveBeenCalled()
-
-    proc.clear()
-    proc.clear()
-    expect(harness.spawn.mock.calls[1]?.[0]).toEqual(['cmd.exe', '/d /c clear.cmd'])
-    expect(harness.spawn.mock.calls[1]?.[1]).toMatchObject({
-      terminal: harness.terminal,
-      windowsVerbatimArguments: true
-    })
-    expect(harness.spawn).toHaveBeenCalledTimes(2)
-
-    const lastOutput = vi.fn()
-    const onExit = vi.fn()
-    proc.onData(lastOutput)
-    proc.onExit(onExit)
-    harness.resolveExit(0)
-    await harness.processHandle.exited
-    await Promise.resolve()
-    expect(onExit).not.toHaveBeenCalled()
-    expect(job.close).not.toHaveBeenCalled()
-    harness.emitData(new TextEncoder().encode('final ConPTY frame'))
-    harness.finishTerminal()
-    expect(lastOutput).toHaveBeenCalledWith('final ConPTY frame')
-    expect(onExit).toHaveBeenCalledOnce()
-    expect(job.close).toHaveBeenCalledOnce()
-    expect(dispose).toHaveBeenCalledOnce()
-    expect(job.resume).toHaveBeenCalledOnce()
-    job.resume.mockImplementation(() => {
-      throw new Error('job already closed')
-    })
-    expect(() => {
+      proc.pause()
       proc.pause()
       proc.resume()
-      proc.kill()
-      proc.destroy()
-    }).not.toThrow()
-    expect(job.resume).toHaveBeenCalledOnce()
-  })
+      proc.resume()
+      expect(job.pause).toHaveBeenCalledOnce()
+      expect(job.resume).toHaveBeenCalledOnce()
+      expect(proc.jobRootProcessIsWrapper).toBe(true)
+      expect(readWindowsPtyJobProcessIds(proc)).toBeNull()
+      expect(harness.spawn.mock.calls[0]?.[1]).not.toHaveProperty('ipc')
+      reportedShellPid = 4322
+      expect(proc.shellProcessId).toBe(4322)
+      expect(readWindowsPtyJobProcessIds(proc)).toEqual(new Set([4322]))
+      job.listProcessIds.mockReturnValueOnce([4321, 4323])
+      expect(readWindowsPtyJobProcessIds(proc)).toBeNull()
+      expect(proc.shellProcessId).toBe(4322)
+      expect(proc.listOwnedProcessIds?.()).toEqual([4321, 4322])
+      expect(proc.terminateOwnedTree?.()).toBe('terminated')
+
+      job.terminate.mockClear()
+      proc.signalProcess?.('SIGINT')
+      expect(job.terminate).toHaveBeenCalledOnce()
+      expect(harness.processHandle.kill).not.toHaveBeenCalled()
+
+      proc.clear()
+      proc.clear()
+      expect(harness.spawn.mock.calls[1]?.[0]).toEqual(['cmd.exe', '/d /c clear.cmd'])
+      expect(harness.spawn.mock.calls[1]?.[1]).toMatchObject({
+        terminal: harness.terminal,
+        windowsVerbatimArguments: true
+      })
+      expect(harness.spawn).toHaveBeenCalledTimes(2)
+
+      const lastOutput = vi.fn()
+      const onExit = vi.fn()
+      proc.onData(lastOutput)
+      proc.onExit(onExit)
+      harness.resolveExit(0)
+      await harness.processHandle.exited
+      await Promise.resolve()
+      expect(onExit).not.toHaveBeenCalled()
+      expect(job.close).not.toHaveBeenCalled()
+      harness.emitData(new TextEncoder().encode('final ConPTY frame'))
+      harness.finishTerminal()
+      expect(lastOutput).toHaveBeenCalledWith('final ConPTY frame')
+      expect(onExit).toHaveBeenCalledOnce()
+      expect(job.close).toHaveBeenCalledOnce()
+      expect(dispose).toHaveBeenCalledOnce()
+      expect(job.resume).toHaveBeenCalledOnce()
+      job.resume.mockImplementation(() => {
+        throw new Error('job already closed')
+      })
+      expect(() => {
+        proc.pause()
+        proc.resume()
+        proc.kill()
+        proc.destroy()
+      }).not.toThrow()
+      expect(job.resume).toHaveBeenCalledOnce()
+    }
+  )
 
   it('does not release a Windows gate without exact job ownership', async () => {
     const harness = createBunHarness()

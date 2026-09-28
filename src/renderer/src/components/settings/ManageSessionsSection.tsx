@@ -1,3 +1,4 @@
+import { TerminalServiceRetryNotice } from './TerminalServiceRetryNotice'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import type { PtyManagementSession } from '../../../../preload/api-types'
@@ -19,6 +20,7 @@ import { translate } from '@/i18n/i18n'
 type ConfirmKind = 'killOne'
 
 export function ManageSessionsSection(): React.JSX.Element {
+  const [serviceUnavailable, setServiceUnavailable] = useState(false)
   const [sessions, setSessions] = useState<PtyManagementSession[]>([])
   const [isRefreshing, setIsRefreshing] = useState(true)
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
@@ -82,6 +84,7 @@ export function ManageSessionsSection(): React.JSX.Element {
         return result.sessions
       }
       setSessions(result.sessions)
+      setServiceUnavailable(result.degraded || result.unavailable === true)
       return result.sessions
     } catch (err) {
       console.error('[manage-sessions] listSessions failed', err)
@@ -218,6 +221,7 @@ export function ManageSessionsSection(): React.JSX.Element {
           showManageSessionsButton={false}
           refreshRevision={attributionRefreshRevision}
         />
+        {serviceUnavailable && <TerminalServiceRetryNotice onRecovered={() => void refresh()} />}
         <ManageSessionsTable
           sessions={sessions}
           hasLoadedOnce={hasLoadedOnce}

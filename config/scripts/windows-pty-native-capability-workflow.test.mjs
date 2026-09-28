@@ -56,7 +56,6 @@ describe('packaged Windows PTY native capability routing', () => {
       expect(cache.with.key).toContain('config/scripts/rebuild-native-deps.mjs')
     }
     expect(ensureNativeRuntime).toContain("runPnpm(['exec', 'node-gyp', 'rebuild']")
-    expect(ensureNativeRuntime).toContain("resolve(moduleDir, 'scripts', 'post-install.js')")
     expect(build.run).toBe('pnpm run build:release:parallel')
     expect(build.env.ORCA_REUSE_WINDOWS_CLI_LAUNCHER).toBe('1')
     expect(prepare.run).toBe('node config/scripts/ensure-native-runtime.mjs --runtime=electron')
@@ -66,15 +65,15 @@ describe('packaged Windows PTY native capability routing', () => {
     expect(verify.run).toContain('"$PACKAGE_WINDOWS"')
   })
 
-  it('keeps the native probe event-based, scoped, and runnable in packaged Node mode', () => {
+  it('keeps the native probe event-based, scoped, and runnable under the packaged Bun runtime', () => {
     const driver = readFileSync('tests/tools/windows-pty-native-capability-smoke/run.mjs', 'utf8')
     const probe = readFileSync(
-      'tests/tools/windows-pty-native-capability-smoke/packaged-node-pty-capability-probe.cjs',
+      'tests/tools/windows-pty-native-capability-smoke/packaged-bun-capability-probe.cjs',
       'utf8'
     )
     const source = `${driver}\n${probe}`
 
-    expect(driver).toContain("ELECTRON_RUN_AS_NODE: '1'")
+    expect(driver).toContain("'bun-runtime.exe'")
     expect(source).not.toMatch(/\b(?:sleep|tasklist|taskkill)\b/i)
     expect(source).not.toContain('maxRetries')
     expect(source).not.toContain('retryDelay')
@@ -83,6 +82,6 @@ describe('packaged Windows PTY native capability routing', () => {
     expect(probe).toContain("'System32', 'wscript.exe'")
     expect(probe).toContain('real-orca-detached-launcher.vbs')
     expect(probe).not.toMatch(/cmd\.exe|start "" \/b/i)
-    expect(probe).toContain('native.terminateJob(target._pty, target.pid)')
+    expect(probe).toContain('target.terminateOwnedTree()')
   })
 })

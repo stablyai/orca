@@ -2,6 +2,10 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { homedir, tmpdir } from 'node:os'
 import path from 'node:path'
 import { build } from 'esbuild'
+import {
+  resolveDaemonBunRuntime,
+  type DaemonBunRuntime
+} from '../../../src/main/daemon/daemon-bun-runtime'
 import type { TestInfo } from '@playwright/test'
 
 const TEMP_PREFIX = 'orca-9749-dg-'
@@ -24,6 +28,7 @@ export type DaemonGenerationRuntime = {
   legacyCloseClientEntryPath: string
   canaryPath: string
   electronPath: string
+  bunRuntime: DaemonBunRuntime
   retainDiagnostics(generations: readonly DiagnosticGeneration[]): void
   remove(): void
 }
@@ -91,13 +96,13 @@ async function buildFixtureEntry(entryPoint: string, outfile: string): Promise<v
     format: 'cjs',
     target: 'node20',
     packages: 'external',
-    external: ['node-pty'],
+    external: ['bun:ffi', 'bun:sqlite'],
     logLevel: 'silent'
   })
 }
 
 export async function createDaemonGenerationRuntime(
-  testInfo: TestInfo
+  testInfo: Pick<TestInfo, 'outputDir' | 'outputPath'>
 ): Promise<DaemonGenerationRuntime> {
   const tempRoot = process.platform === 'darwin' ? path.join(path.sep, 'tmp') : tmpdir()
   const rootDir = mkdtempSync(path.join(tempRoot, TEMP_PREFIX))
@@ -105,7 +110,7 @@ export async function createDaemonGenerationRuntime(
   const userDataDir = path.join(rootDir, 'user-data')
   const daemonDir = path.join(userDataDir, 'daemon')
   mkdirSync(daemonDir, { recursive: true })
-  const entryPath = path.join(rootDir, 'daemon-generation-entry.cjs')
+  const entryPath = path.join(rootDir, 'daemon-entry.js')
   const reconnectClientEntryPath = path.join(rootDir, 'daemon-generation-reconnect-client.cjs')
   const legacyCloseClientEntryPath = path.join(rootDir, 'daemon-generation-legacy-close-client.cjs')
   const repoRoot = process.cwd()
@@ -121,7 +126,28 @@ export async function createDaemonGenerationRuntime(
     path.join(repoRoot, 'tests/e2e/fixtures/daemon-generation-legacy-close-client.ts'),
     legacyCloseClientEntryPath
   )
+  await buildFixtureEntry(
+    path.join(repoRoot, 'src/main/daemon/pty-subprocess/windows-bun-pty-gate-entry.ts'),
+    path.join(rootDir, 'windows-bun-pty-gate-entry.js')
+  )
+  const bunRuntime = await resolveDaemonBunRuntime({
+    bundleDir: rootDir,
+    runtimeDir: path.join(repoRoot, 'out', 'cli-runtime', `${process.platform}-${process.arch}`),
+    platform: process.platform,
+    arch: process.arch,
+    ...(process.platform === 'win32'
+      ? {
+          windowsProcessTreeDir: path.join(
+            repoRoot,
+            'node_modules',
+            '@vscode',
+            'windows-process-tree'
+          )
+        }
+      : {})
+  })
   return {
+    bunRuntime,
     rootDir,
     userDataDir,
     daemonDir,

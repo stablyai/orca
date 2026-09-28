@@ -490,7 +490,7 @@ jobs:
       # present, so without this the fish barrier is only covered by config-shape
       # assertions and never actually exercised.
       # Why release-4: DECSET 2031 arming lives in the fish 4.0 Rust tty_handoff, and
-      # fish-color-scheme-child-stdin.node-pty.test.ts (#9993) needs it. Noble ships
+      # fish-color-scheme-child-stdin.bun.test.ts (#9993) needs it. Noble ships
       # 3.7, so the PPA is what makes that lane real.
       - name: Install zsh and fish
         run: |
@@ -560,25 +560,28 @@ jobs:
         with:
           native-runtime: node
 
+      - name: Prepare pinned Bun for real terminal tests
+        run: node config/scripts/build-orcad-bun.mjs --runtime-only --out-dir out/orcad
+
       - name: Test real shell contracts
         run: |
           node config/scripts/run-bun-profile-tests.mjs --maxWorkers=1 src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts
           pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 \
             src/main/daemon/shell-ready.test.ts \
-            src/main/daemon/node-pty-fd-leak.test.ts \
+            src/main/daemon/bun-pty-fd-lifecycle.integration.test.ts \
             src/main/providers/local-pty-shell-ready-zsh-launch-environment.test.ts \
             src/main/providers/__tests__/shell-ready-framework-example.test.ts \
             src/main/pty/codex-shell-launch-preflight.test.ts \
             src/main/pty/omp-shell-wrapper-alias-safety.test.ts \
-            src/main/pty/omp-shell-wrapper.node-pty.test.ts \
+            src/main/pty/omp-shell-wrapper.bun.test.ts \
             src/main/shell-startup-feature-channel.test.ts \
-            src/main/terminal-history-fish-session.node-pty.test.ts \
+            src/main/terminal-history-fish-session.bun.test.ts \
             src/main/zsh-scoped-histfile.live-shell.test.ts \
             src/main/zsh-startup-hook-user-config-equivalence.live-shell.test.ts \
             src/main/zsh-wrapper-version-mismatch.live-shell.test.ts \
-            src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts \
-            src/shared/fish-query-reply-child-stdin.node-pty.test.ts \
-            src/shared/pty-reply-echo-shapes.node-pty.test.ts \
+            src/main/daemon/pty-subprocess/bun-tests/fish-color-scheme-child-stdin.bun.test.ts \
+            src/main/daemon/pty-subprocess/bun-tests/fish-query-reply-child-stdin.bun.test.ts \
+            src/main/daemon/pty-subprocess/bun-tests/pty-reply-echo-shapes.bun.test.ts \
             src/shared/startup-shell-portability.live-shell.test.ts \
             src/shared/posix-command-path-lookup.test.ts
 
@@ -629,7 +632,7 @@ jobs:
           persist-credentials: false
 
       # Why no native-runtime: the provider drives the prebuilt agent-browser binary
-      # shipped in node_modules and never touches node-pty.
+      # shipped in node_modules without loading native terminal code.
       - uses: ./.github/actions/install-node-dependencies
 
       # Why the runner's Google Chrome and not its chromium: Ubuntu 24.04 only ships an
@@ -668,7 +671,7 @@ jobs:
           persist-credentials: false
 
       # Why no native-runtime: the builder is esbuild and the render check is a browser. Nothing
-      # in this job loads node-pty.
+      # in this job loads native terminal code.
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: node
@@ -843,7 +846,7 @@ jobs:
           status=0
           pnpm run build:cli || status=1
 
-          scripts=(build:relay build:electron-vite:parallel)
+          scripts=(build:relay build:terminal-daemon build:electron-vite:parallel)
           pids=()
           for script in "${scripts[@]}"; do
             pnpm run "$script" &
@@ -967,16 +970,16 @@ jobs:
         uses: actions/cache/save@v5
         with:
           path: |
-            node_modules/.pnpm/node-pty@*/node_modules/node-pty/build
             native/windows-registry/build
             node_modules/.pnpm/@vscode+windows-process-tre*/node_modules/@vscode/windows-process-tree/build
-          key: native-modules-${{ runner.os }}-${{ steps.deps.outputs.native-cache-scope }}-${{ runner.arch }}-node-node${{ steps.deps.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch', 'native/windows-registry/src/addon.cc', 'native/windows-registry/binding.gyp', 'native/windows-registry/package.json') }}
+          key: native-modules-${{ runner.os }}-${{ steps.deps.outputs.native-cache-scope }}-${{ runner.arch }}-node-node${{ steps.deps.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/patches/@vscode__windows-process-tree@0.8.0.patch', 'native/windows-registry/src/addon.cc', 'native/windows-registry/binding.gyp', 'native/windows-registry/package.json') }}
 
       # Keep cold PowerShell probes out of concurrent native and renderer tests.
       - name: Test installer PowerShell capability
         run: >-
-          pnpm exec vitest run --config config/vitest.config.ts
+          pnpm exec vitest run --config config/vitest.config.ts --fileParallelism=false
           config/scripts/nsis-process-check.test.mjs
+          config/scripts/nsis-bun-terminal-uninstall.test.mjs
 
       - name: Prepare pinned Bun for CLI boundary tests
         run: |
@@ -985,14 +988,14 @@ jobs:
 
       # vitest runs here directly rather than through `pnpm test`, so the addon
       # assertions only hold once install-node-dependencies has rebuilt natives.
+      - name: Prepare pinned Bun for real terminal tests
+        run: node config/scripts/build-orcad-bun.mjs --runtime-only --out-dir out/orcad
+
       - name: Test Windows-specific boundaries
         run: >-
           pnpm exec vitest run --config config/vitest.config.ts
           config/scripts/rebuild-native-deps.test.mjs
           config/scripts/rebuild-native-deps-windows-process-tree.test.mjs
-          config/scripts/rebuild-native-deps-node-pty.test.mjs
-          config/scripts/ensure-native-runtime-job-ownership.test.mjs
-          config/scripts/verify-packaged-node-pty-job-ownership.test.mjs
           config/scripts/windows-pe-machine.test.mjs
           config/scripts/script-module-dependencies.test.mjs
           src/main/windows-registry-addon.test.ts
@@ -1005,8 +1008,8 @@ jobs:
           src/main/browser/browser-route-webrtc-egress.electron.test.ts
           src/main/browser/browser-route-h3-egress.electron.test.ts
           src/main/browser/browser-route-dns-prefetch.electron.test.ts
-          src/main/providers/windows-conpty-wide-char-duplication.node-pty.test.ts
-          src/main/providers/pty-repaint-wide-char-buffer.node-pty.test.ts
+          src/main/providers/windows-conpty-wide-char-duplication.bun.test.ts
+          src/main/providers/pty-repaint-wide-char-buffer.bun.test.ts
           src/shared/child-process/windows-command-line.win32.test.ts
           src/shared/child-process/windows-cmd-shim-resolution.test.ts
           src/shared/child-process/windows-cmd-shim-resolution.win32.test.ts
@@ -1015,6 +1018,7 @@ jobs:
           src/main/codex/windows-hook-command.test.ts
           src/main/codex/windows-hook-upgrade.test.ts
           src/main/windows/windows-pty-job.win32.test.ts
+          src/main/daemon/bun-pty-windows-io-failure.win32.test.ts
           src/main/windows/windows-msys-job.win32.test.ts
           src/main/providers/agent-foreground-process-git-bash.win32.test.ts
           src/main/windows/windows-host-job.win32.test.ts
@@ -1060,10 +1064,9 @@ jobs:
         uses: actions/cache@v5
         with:
           path: |
-            node_modules/.pnpm/node-pty@*/node_modules/node-pty/build
             native/windows-registry/build
             node_modules/.pnpm/@vscode+windows-process-tre*/node_modules/@vscode/windows-process-tree/build
-          key: native-modules-${{ runner.os }}-${{ steps.deps.outputs.native-cache-scope }}-${{ runner.arch }}-electron-node${{ steps.deps.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch', 'native/windows-registry/src/addon.cc', 'native/windows-registry/binding.gyp', 'native/windows-registry/package.json') }}
+          key: native-modules-${{ runner.os }}-${{ steps.deps.outputs.native-cache-scope }}-${{ runner.arch }}-electron-node${{ steps.deps.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/patches/@vscode__windows-process-tree@0.8.0.patch', 'native/windows-registry/src/addon.cc', 'native/windows-registry/binding.gyp', 'native/windows-registry/package.json') }}
 
       - name: Prepare Electron native runtime
         run: node config/scripts/ensure-native-runtime.mjs --runtime=electron

@@ -1,10 +1,10 @@
-import type { Socket } from 'node:net'
+import type { Duplex } from 'node:stream'
 import { StringDecoder } from 'node:string_decoder'
 import { createNdjsonParser } from './ndjson'
 import type { DaemonEvent, RpcResponse } from './types'
 
 export function attachControlResponseReader(
-  socket: Socket,
+  socket: Duplex,
   onResponse: (response: RpcResponse) => void
 ): () => void {
   // Why: control responses may contain terminal/startup data with multibyte
@@ -17,11 +17,12 @@ export function attachControlResponseReader(
 
   const onData = (chunk: Buffer) => parser.feed(decoder.write(chunk))
   socket.on('data', onData)
+  socket.resume()
   return () => socket.off('data', onData)
 }
 
 export function attachStreamEventReader(
-  socket: Socket,
+  socket: Duplex,
   onEvent: (event: DaemonEvent) => void
 ): () => void {
   // Why: PTY output streams include emoji/box-drawing tables; socket chunks
@@ -39,5 +40,6 @@ export function attachStreamEventReader(
 
   const onData = (chunk: Buffer) => parser.feed(decoder.write(chunk))
   socket.on('data', onData)
+  socket.resume()
   return () => socket.off('data', onData)
 }

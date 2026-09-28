@@ -10,7 +10,7 @@ const { childSpawnMock, readFileMock, ptySpawnMock } = vi.hoisted(() => ({
 
 vi.mock('node:child_process', () => ({ spawn: childSpawnMock }))
 vi.mock('node:fs/promises', () => ({ readFile: readFileMock }))
-vi.mock('node-pty', () => ({ spawn: ptySpawnMock }))
+vi.mock('./hidden-daemon-pty', () => ({ spawnHiddenDaemonPty: ptySpawnMock }))
 vi.mock('./codex-auth-presence', () => ({
   probeCodexAuthPresence: vi.fn(async () => 'present')
 }))

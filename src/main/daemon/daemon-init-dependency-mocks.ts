@@ -122,6 +122,12 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
     readonly onData: Mock
     readonly onExit: Mock
     readonly callOrder: string[]
+    get freshSpawnsUnavailable(): boolean {
+      return this.options.freshSpawnAdmission?.unavailable ?? false
+    }
+    recoverFreshSpawnRouting(force = false): Promise<boolean> {
+      return this.options.freshSpawnAdmission?.recover(force) ?? Promise.resolve(true)
+    }
     constructor(opts: MockAdapter['options']) {
       this.protocolVersion = opts.protocolVersion ?? PROTOCOL_VERSION
       this.options = opts

@@ -146,6 +146,7 @@ export type RuntimeTerminalBufferSnapshot = {
 }
 
 export type HeadlessSeedMetadata = {
+  allowEmpty?: boolean
   cwd?: string | null
   oscLinks?: TerminalOscLinkRange[]
   preferProviderIfExisting?: boolean

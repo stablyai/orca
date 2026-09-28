@@ -1,4 +1,4 @@
-import type { IPty } from 'node-pty'
+import type { TerminalProcess } from '../../../shared/terminal-process'
 import { isShellProcess } from '../../../shared/shell-process-detection'
 import {
   getCommandTokenPathBasename,
@@ -28,12 +28,12 @@ import {
   readWindowsProcessIdentityTableFresh
 } from '../../windows/windows-process-table'
 
-export function ptyProcessNameIsSpawnFile(proc: IPty): boolean {
+export function ptyProcessNameIsSpawnFile(proc: TerminalProcess): boolean {
   return 'processNameIsSpawnFile' in proc && proc.processNameIsSpawnFile === true
 }
 
 export function createPtyForegroundResolver(
-  proc: IPty
+  proc: TerminalProcess
 ): typeof resolveAgentForegroundProcessWithAvailability {
   return ptyProcessNameIsSpawnFile(proc)
     ? (_pid, fallback, options) => resolveSpawnFileForegroundProcess(proc, fallback, options)
@@ -79,7 +79,7 @@ export function resolveSpawnFileForegroundFromRows(
 }
 
 export async function resolveSpawnFileForegroundProcess(
-  proc: IPty,
+  proc: TerminalProcess,
   fallbackProcess: string | null,
   options: AgentForegroundResolutionOptions = {}
 ): Promise<AgentForegroundProcessResolution> {

@@ -38,7 +38,10 @@ export class WslHookRelayManager {
   private deps: WslHookRelayManagerDeps
   private recovery: WslRelayRecovery
   private states = new Map<string, WslRelayDistroState>()
-  private stoppedByHooksOff = new Map<string, string | undefined>()
+  private stoppedByHooksOff = new Map<
+    string,
+    Pick<WslRelayDistroState, 'distro' | 'user' | 'codexHomePath'>
+  >()
   private defaultDistro: string | null = null
   private disposed = false
   private warnedBundleMissing = false
@@ -48,10 +51,12 @@ export class WslHookRelayManager {
       isDistroRunning: (distro) => this.deps.isDistroRunning(distro),
       warn: (message) => this.deps.warn(message),
       isDisposed: () => this.disposed,
-      isCurrent: (state) => this.states.get(wslHookRelayStateKey(state.distro)) === state,
-      restart: (distro) => this.ensureForDistro(distro, this.stateFor(distro)?.codexHomePath),
+      isCurrent: (state) =>
+        this.states.get(wslHookRelayStateKey(state.distro, state.user)) === state,
+      restart: (distro, user) =>
+        this.ensureForDistro(distro, this.stateFor(distro, user)?.codexHomePath, undefined, user),
       dropState: (state) => {
-        const key = wslHookRelayStateKey(state.distro)
+        const key = wslHookRelayStateKey(state.distro, state.user)
         if (this.states.get(key) === state) {
           this.states.delete(key)
         }
@@ -65,36 +70,36 @@ export class WslHookRelayManager {
   async ensureForDistro(
     distro: string | null,
     codexHomePath?: string | null,
-    launchKind?: 'pi' | 'omp'
+    launchKind?: 'pi' | 'omp',
+    user?: string
   ): Promise<void> {
     if (this.disposed || !isWslHookRelayAllowed(this.deps)) {
       return
     }
-    await this.ensureInternal(distro, codexHomePath ?? undefined, launchKind).catch((err) => {
+    await this.ensureInternal(distro, codexHomePath ?? undefined, launchKind, user).catch((err) => {
       const detail = err instanceof Error ? err.message : String(err)
       this.deps.warn(`[agent-hooks] WSL hook relay ensure failed: ${detail}`)
     })
   }
-  private stateFor(distro: string | null): WslRelayDistroState | undefined {
-    return this.states.get(wslHookRelayStateKey(distro ?? this.defaultDistro ?? ''))
+  private stateFor(distro: string | null, user?: string): WslRelayDistroState | undefined {
+    return this.states.get(wslHookRelayStateKey(distro ?? this.defaultDistro ?? '', user))
   }
   /** Guest endpoint path once install completes. */
-  getGuestEndpointFilePath(distro: string | null): string | null {
-    return this.stateFor(distro)?.connectedAt
-      ? (this.stateFor(distro)?.guestEndpointFilePath ?? null)
+  getGuestEndpointFilePath(distro: string | null, user?: string): string | null {
+    return this.stateFor(distro, user)?.connectedAt
+      ? (this.stateFor(distro, user)?.guestEndpointFilePath ?? null)
       : null
   }
   getOpenCodeOverlayDir(
     distro: string | null,
-    agent: 'opencode' | 'opencode2' = 'opencode'
+    agent: 'opencode' | 'opencode2' = 'opencode',
+    user?: string
   ): string | null {
-    const state = this.stateFor(distro)
-    return agent === 'opencode2'
-      ? (state?.opencode2OverlayDir ?? null)
-      : (state?.opencodeOverlayDir ?? null)
+    const state = this.stateFor(distro, user)
+    return state?.[agent === 'opencode2' ? 'opencode2OverlayDir' : 'opencodeOverlayDir'] ?? null
   }
-  getGuestAgentPath(distro: string | null, kind: 'pi' | 'omp'): string | null {
-    const state = this.stateFor(distro)
+  getGuestAgentPath(distro: string | null, kind: 'pi' | 'omp', user?: string): string | null {
+    const state = this.stateFor(distro, user)
     return kind === 'pi' ? (state?.piAgentDir ?? null) : (state?.ompStatusExtension ?? null)
   }
   /** Kills every live relay. Non-permanent (hooks switched off mid-session) leaves the
@@ -106,7 +111,11 @@ export class WslHookRelayManager {
       state.mux?.dispose()
       state.child?.kill()
       if (!permanent) {
-        this.stoppedByHooksOff.set(state.distro, state.codexHomePath)
+        this.stoppedByHooksOff.set(wslHookRelayStateKey(state.distro, state.user), {
+          distro: state.distro,
+          user: state.user,
+          codexHomePath: state.codexHomePath
+        })
       }
     }
     this.states.clear()
@@ -114,22 +123,25 @@ export class WslHookRelayManager {
   /** Restarts what a hooks-off teardown stopped. Skips distros the user has since shut
    *  down: `wsl -d` BOOTS a stopped distro, and nothing in it is waiting on status. */
   resumeStoppedRelays(): void {
-    resumeWslStoppedRelays(this.stoppedByHooksOff, this.deps.isDistroRunning, (distro, home) =>
-      this.ensureForDistro(distro, home)
+    resumeWslStoppedRelays(
+      this.stoppedByHooksOff,
+      this.deps.isDistroRunning,
+      (distro, home, user) => this.ensureForDistro(distro, home, undefined, user)
     )
   }
   private async ensureInternal(
     requestedDistro: string | null,
     requestedCodexHomePath?: string,
-    launchKind?: 'pi' | 'omp'
+    launchKind?: 'pi' | 'omp',
+    user?: string
   ): Promise<void> {
     const distro = requestedDistro ?? (await this.resolveDefaultDistro())
     if (!distro || this.disposed) {
       return
     }
-    const key = wslHookRelayStateKey(distro)
+    const key = wslHookRelayStateKey(distro, user)
     const existing = this.states.get(key)
-    if (requestedCodexHomePath) {
+    if (requestedCodexHomePath && user === undefined) {
       recordManagedWslCodexHome(distro, requestedCodexHomePath)
     }
     if (existing) {
@@ -173,6 +185,7 @@ export class WslHookRelayManager {
     }
     const state: WslRelayDistroState = {
       distro,
+      user,
       phase: 'starting',
       failures: existing?.failures ?? 0,
       opencodeOverlayDir: existing?.opencodeOverlayDir,
@@ -187,6 +200,7 @@ export class WslHookRelayManager {
     const env = buildWslRelaySpawnEnv(coords, bundle.version, instanceKey)
     state.startup = launchWslRelayWithInstall({
       distro: state.distro,
+      user: state.user,
       env,
       bundleJsPath: bundle.jsPath,
       version: bundle.version,

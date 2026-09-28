@@ -82,6 +82,7 @@ function sweepWith(
   server: AgentHookServer,
   overrides: {
     probeLiveLocalPty?: (ptyId: string) => boolean | null | Promise<boolean | null>
+    probeLiveWslPty?: (ptyId: string) => Promise<boolean | null>
     executionHostId?: string | null
     boundPtyIdByPaneKey?: Record<string, string>
     persistedPtyIdByPaneKey?: Record<string, string>
@@ -90,6 +91,7 @@ function sweepWith(
   return sweepRestoredSubagentsWithoutLiveAgent({
     probeLiveLocalPty: async (ptyId) =>
       overrides.probeLiveLocalPty ? await overrides.probeLiveLocalPty(ptyId) : false,
+    probeLiveWslPty: overrides.probeLiveWslPty,
     isLocalExecutionHost: () =>
       isLocalExecutionHost(
         overrides.executionHostId === undefined ? 'local' : overrides.executionHostId
@@ -114,6 +116,32 @@ function paneStatus(
 }
 
 describe('restored subagent liveness sweep', () => {
+  it.each([undefined, true, null, false])(
+    'uses only the owning guest provider to reap WSL panes (%s)',
+    async (guestLive) => {
+      const server = await restartWithInFlightSubagent()
+      const guestId = 'wsl:Ubuntu@@daemon-build@@guest-pty'
+      const nativeProbe = vi.fn(async () => false)
+      const guestProbe = vi.fn(async () => guestLive ?? null)
+      try {
+        expect(
+          await sweepWith(server, {
+            persistedPtyIdByPaneKey: { [PANE]: guestId },
+            probeLiveLocalPty: nativeProbe,
+            ...(guestLive === undefined ? {} : { probeLiveWslPty: guestProbe })
+          })
+        ).toBe(guestLive === false ? 1 : 0)
+        expect(nativeProbe).not.toHaveBeenCalled()
+        if (guestLive !== undefined) {
+          expect(guestProbe).toHaveBeenCalledWith(guestId)
+        }
+        expect(paneStatus(server).state).toBe(guestLive === false ? 'done' : 'working')
+      } finally {
+        server.stop()
+      }
+    }
+  )
+
   it('reaps the phantom seed so a slept-through pane reaches done', async () => {
     const server = await restartWithInFlightSubagent()
     try {

@@ -1,3 +1,4 @@
+import { win32 } from 'node:path'
 import { forkProcess, type ForkSpec } from '../../shared/child-process/fork-process'
 import { spawnProcess, type SpawnedProcess } from '../../shared/child-process/run-process'
 import { bunOwnedRuntimeArgs } from '../../shared/bun-owned-runtime-args'
@@ -9,6 +10,8 @@ export type DaemonChildSpawnOptions = {
   entryPath: string
   forkEntryPath: string
   relocatedExecPath?: string
+  bunRuntime?: boolean
+  conptyLibraryPath?: string
   userDataPath: string
   socketPath: string
   tokenPath: string
@@ -39,19 +42,7 @@ function buildDaemonScriptArgs(options: DaemonChildSpawnOptions): string[] {
   ]
 }
 
-/**
- * The two ways the daemon's OS process comes into being: the long-standing direct `fork()`, and
- * (`useDurableScope`) the identical command line wrapped in `systemd-run --user --scope` so the
- * daemon lands in a sibling cgroup instead of the caller's — see daemon-cgroup-scope.ts. The
- * wrapper needs `spawn()` because it is not a Node script, but it takes the same `'ipc'` stdio
- * contract and the process it execs into inherits the channel, so the readiness handshake is
- * unchanged. Do not read the daemon's PID off the returned child; the daemon reports its own
- * (see daemon-ready-identity.ts).
- *
- * Both arms go through the shared child-process chokepoint (`src/shared/child-process`), which
- * is what every caller outside that directory must use — `forkProcess` for the Node-module arm,
- * `spawnProcess` for the program arm.
- */
+/** Preserve detached lifetime and readiness IPC, including the optional sibling systemd scope. */
 export function spawnDaemonChildProcess(
   options: DaemonChildSpawnOptions,
   useDurableScope: boolean
@@ -59,13 +50,14 @@ export function spawnDaemonChildProcess(
   const { forkEntryPath, relocatedExecPath, userDataPath, launchNonce } = options
   const scriptArgs = buildDaemonScriptArgs(options)
   const usesBun = Boolean(
-    process.versions.bun && (!relocatedExecPath || relocatedExecPath === process.execPath)
+    options.bunRuntime ||
+    (process.versions.bun && (!relocatedExecPath || relocatedExecPath === process.execPath))
   )
-  // Why: run as plain Node so Electron's GPU/display init can't interfere with node-pty's posix_spawn of the spawn-helper.
+  // Desktop launches select Bun explicitly; orcad forks its current Bun runtime.
   const daemonEnv: NodeJS.ProcessEnv = {
     ...process.env,
     ELECTRON_RUN_AS_NODE: '1',
-    // Why: the detached plain-Node daemon has no AppEnvironment, but shell rcfiles must live outside swept tmp.
+    // Detached daemons need shell rcfiles outside swept temporary directories.
     ORCA_USER_DATA_PATH: userDataPath
   }
   if (usesBun) {
@@ -74,12 +66,32 @@ export function spawnDaemonChildProcess(
     delete daemonEnv.NODE_PATH
     delete daemonEnv.BUN_OPTIONS
   }
+  if (options.bunRuntime) {
+    delete daemonEnv.BUN_CONPTY_LIBRARY
+    if (process.platform === 'win32') {
+      if (!options.conptyLibraryPath || !win32.isAbsolute(options.conptyLibraryPath)) {
+        throw new Error('Windows Bun daemon ConPTY library path must be absolute')
+      }
+      daemonEnv.BUN_CONPTY_LIBRARY = options.conptyLibraryPath
+    }
+  }
   // Why cwd: detached daemons outlive dev worktrees; userData keeps process.cwd() valid after a repo/worktree is deleted.
   // Why detached/stdio: detached+unref outlives Electron; stdout 'ignore' (else blocks exit), stderr 'pipe' captures startup crashes lost in v1.4.129-rc.1.
   const childOptions: Pick<ForkSpec, 'cwd' | 'detached' | 'stdio'> = {
     cwd: userDataPath,
     detached: true,
     stdio: ['ignore', 'ignore', 'pipe', 'ipc']
+  }
+  if (options.bunRuntime && !relocatedExecPath) {
+    throw new Error('Bun daemon runtime path is missing')
+  }
+  if (!useDurableScope && options.bunRuntime && relocatedExecPath) {
+    return spawnProcess({
+      ...childOptions,
+      program: relocatedExecPath,
+      args: [...bunOwnedRuntimeArgs(), forkEntryPath, ...scriptArgs],
+      env: daemonEnv
+    })
   }
   if (!useDurableScope) {
     return forkProcess({

@@ -7,7 +7,17 @@ export function normalizeWslColdRestoreCwd(args: {
   wslDistro?: string
   platform?: NodeJS.Platform
   hostname?: string
+  guestExecution?: boolean
 }): string | undefined {
+  if (args.guestExecution) {
+    const path = parseWslUncPath(args.recoveredCwd)
+    if (path) {
+      return path.distro.toLowerCase() === args.wslDistro?.toLowerCase()
+        ? path.linuxPath
+        : args.requestedCwd
+    }
+    return /^\/(?!\/)/.test(args.recoveredCwd) ? args.recoveredCwd : args.requestedCwd
+  }
   if ((args.platform ?? process.platform) !== 'win32' || !args.wslDistro) {
     return args.recoveredCwd
   }

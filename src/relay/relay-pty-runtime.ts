@@ -1,4 +1,4 @@
-import type { IPty } from 'node-pty'
+import type { TerminalProcess } from '../shared/terminal-process'
 import { waitForPromiseWithSignal } from '../shared/abort-signal-reason'
 import { spawnBunPty } from '../main/daemon/pty-subprocess/bun-pty-process'
 
@@ -16,7 +16,7 @@ export type RelayPtyModule = {
     args: string[],
     options: RelayPtySpawnOptions,
     signal?: AbortSignal
-  ): IPty | Promise<IPty>
+  ): TerminalProcess | Promise<TerminalProcess>
 }
 
 export const bunRelayPtyModule: RelayPtyModule = {

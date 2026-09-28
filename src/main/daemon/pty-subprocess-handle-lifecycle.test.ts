@@ -1,6 +1,7 @@
+import type { BunPtySpawnArgs } from './pty-subprocess/bun-pty-process-contract'
 // SubprocessHandle io forwarding plus kill/dispose neutralization contracts.
 import { describe, expect, it, vi } from 'vitest'
-import type * as LocalPtyUtils from '../providers/local-pty-utils'
+import type * as PtySpawnValidation from '../providers/pty-spawn-validation'
 
 const {
   spawnMock,
@@ -22,12 +23,15 @@ const {
   })
 }))
 
-vi.mock('node-pty', () => ({
-  spawn: spawnMock
+vi.mock('./pty-subprocess/bun-pty-process', () => ({
+  canUseBunPty: () => true,
+  spawnBunPty: ({ file, args, ...options }: BunPtySpawnArgs) =>
+    spawnMock(file, args, { ...options, name: options.env.TERM ?? 'xterm-256color' })
 }))
 
 vi.mock('../pwsh', () => ({
-  isPwshAvailable: isPwshAvailableMock
+  isPwshAvailable: isPwshAvailableMock,
+  isPwshAvailableAsync: isPwshAvailableMock
 }))
 
 // Resolve PowerShell family names to deterministic absolute paths so these
@@ -46,8 +50,8 @@ vi.mock('../providers/windows-powershell-executable', () => ({
   getWindowsCmdPath: () => CMD_ABS
 }))
 
-vi.mock('../providers/local-pty-utils', async (importOriginal) => {
-  const actual = await importOriginal<typeof LocalPtyUtils>()
+vi.mock('../providers/pty-spawn-validation', async (importOriginal) => {
+  const actual = await importOriginal<typeof PtySpawnValidation>()
   return {
     ...actual,
     getNodePtySpawnHelperCandidates: () => [import.meta.filename],
@@ -77,7 +81,6 @@ vi.mock('../providers/windows-pty-job-membership', () => ({
 
 import { createPtySubprocess } from './pty-subprocess'
 import { mockPtyProcess, useDaemonPtySubprocessEnv } from './pty-subprocess-test-harness'
-import { __setConptyJobNativeForTests } from '../windows/windows-pty-job'
 
 describe('createPtySubprocess', () => {
   useDaemonPtySubprocessEnv({
@@ -420,14 +423,8 @@ describe('createPtySubprocess', () => {
       // but it made forceKill a permanent no-op, so a wedged ConPTY -- which
       // never fires onExit -- could not be escalated at all (#9854). The job
       // terminates the tree without touching the handle node-pty owns.
-      const terminateJob = vi.fn().mockReturnValue(true)
-      __setConptyJobNativeForTests(() => ({
-        terminateJob,
-        listJobProcessIds: vi.fn(),
-        assignCurrentProcessToJob: vi.fn().mockReturnValue(true)
-      }))
-      const proc = mockPtyProcess(123456) as ReturnType<typeof mockPtyProcess> & { _pty: number }
-      proc._pty = 11
+      const terminateJob = vi.fn(() => 'terminated' as const)
+      const proc = { ...mockPtyProcess(123456), terminateOwnedTree: terminateJob }
       spawnMock.mockReturnValue(proc)
       const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
       Object.defineProperty(process, 'platform', { value: 'win32' })
@@ -436,11 +433,10 @@ describe('createPtySubprocess', () => {
         handle.kill()
         handle.forceKill()
 
-        expect(terminateJob).toHaveBeenCalledWith(11, 123456)
+        expect(terminateJob).toHaveBeenCalledOnce()
         // Still exactly one native kill: the escalation must not double-close.
         expect(proc.kill).toHaveBeenCalledOnce()
       } finally {
-        __setConptyJobNativeForTests()
         restorePlatform(origPlatform)
       }
     })

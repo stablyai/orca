@@ -1,5 +1,6 @@
 import { readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { WSL_MANAGED_CLI_PATH_RESTORE } from '../main/wsl-managed-cli-path-restore'
 import { getPosixOmpShellWrapper } from '../main/pty/omp-shell-wrapper'
 import {
   BASH_FEATURE_CHANNEL_BLOCK,
@@ -32,7 +33,7 @@ function getRelayZshWrapperSpec(): ZshStartupHookSpec {
     overlayRestoreComment:
       '# Why: remote startup files can re-export user defaults after relay spawn.',
     restores: {
-      managedWslCli: false,
+      managedWslCli: true,
       agentTeamsPath: false,
       remoteCliBinDir: true,
       codexHome: false,
@@ -73,6 +74,7 @@ fi
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
 [[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
 [[ -n "\${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"\${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="\${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac
+${WSL_MANAGED_CLI_PATH_RESTORE}
 ${getPosixOmpShellWrapper()}
 ${BASH_HISTFILE_RESTORE_BLOCK}
 # Why: SSH bash sessions need the same command lifecycle markers as local

@@ -1,4 +1,3 @@
-import { bunOwnedRuntimeArgs } from '../../shared/bun-owned-runtime-args'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,7 +7,7 @@ import {
   hasAppEnvironment,
   setAppEnvironment
 } from '../../shared/app-environment'
-import { ORCAD_BUN_VERSION } from '../../shared/orcad-bun-runtime'
+import { ORCAD_BUN_VERSION, orcadBunVersionProbeArgs } from '../../shared/orcad-bun-runtime'
 import { getMainHttpClient, setMainHttpClient } from '../network/http-client'
 import { shellEscape } from '../ssh/ssh-connection-utils'
 import { createRunningWslRuntimeRunner, ensureWslBunRuntime } from './wsl-bun-runtime'
@@ -101,7 +100,7 @@ it.skipIf(process.platform !== 'win32' || !distro)(
       expect(
         await run({
           program: executable,
-          args: [...bunOwnedRuntimeArgs('linux'), '--print', 'process.versions.bun'],
+          args: orcadBunVersionProbeArgs('linux'),
           loginPath: 'none'
         })
       ).toBe(ORCAD_BUN_VERSION)
@@ -118,7 +117,7 @@ it.skipIf(process.platform !== 'win32' || !distro)(
       expect(
         await run({
           program: repaired,
-          args: [...bunOwnedRuntimeArgs('linux'), '--print', 'process.versions.bun'],
+          args: orcadBunVersionProbeArgs('linux'),
           loginPath: 'none'
         })
       ).toBe(ORCAD_BUN_VERSION)

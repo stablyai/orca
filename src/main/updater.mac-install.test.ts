@@ -158,7 +158,12 @@ describe('updater mac install handoff', () => {
       // Flush microtasks so setAvailableVersion runs before update-downloaded fires.
       await new Promise((r) => setTimeout(r, 0))
       downloadUpdate()
+      expect(autoUpdaterMock.autoInstallOnAppQuit).toBe(true)
       autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
+      expect(sendMock).not.toHaveBeenCalledWith(
+        'updater:status',
+        expect.objectContaining({ state: 'downloaded' })
+      )
 
       const preventDefault = vi.fn()
       appMock.emit('before-quit', { preventDefault })

@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { runProcess, runProcessSync } from '../../../shared/child-process/run-process'
 import { orcadBunRuntimeFilename } from '../../../shared/orcad-artifacts'
-import { ORCAD_BUN_VERSION } from '../../../shared/orcad-bun-runtime'
+import { ORCAD_BUN_VERSION, orcadBunVersionProbeArgs } from '../../../shared/orcad-bun-runtime'
 import { removeTreeSync } from '../../../shared/windows-transient-lock-removal'
 
 const runtimePath =
@@ -12,9 +12,9 @@ const runtimePath =
   resolve(__dirname, '../../../../out/orcad', orcadBunRuntimeFilename(process.platform))
 
 async function runTerminalScript(script: string): Promise<unknown> {
-  expect(runProcessSync({ program: runtimePath, args: ['--version'] }).stdout.trim()).toBe(
-    ORCAD_BUN_VERSION
-  )
+  expect(
+    runProcessSync({ program: runtimePath, args: [...orcadBunVersionProbeArgs()] }).stdout.trim()
+  ).toBe(ORCAD_BUN_VERSION)
   const directory = mkdtempSync(join(tmpdir(), 'orca-bun-terminal-'))
   try {
     const entry = join(directory, 'terminal.cjs')

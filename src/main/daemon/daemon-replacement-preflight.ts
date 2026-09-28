@@ -23,7 +23,7 @@ import { PROTOCOL_VERSION } from './types'
 // would spin hot for the whole budget.
 export const WEDGED_DAEMON_GRACE_RETRIES = 11
 
-type PreserveDaemon = (mode?: 'degraded-new-pty-fallback') => Promise<DaemonProcessHandle>
+type PreserveDaemon = (mode?: 'fresh-spawns-unavailable') => Promise<DaemonProcessHandle>
 
 type ReplacementPreflightOptions = {
   runtimeDir: string
@@ -33,6 +33,8 @@ type ReplacementPreflightOptions = {
   /** Absolute deadline for the whole adopt-or-replace decision; see DAEMON_RECOVERY_BUDGET_MS. */
   recoveryDeadlineMs: number
   attributedReason: DaemonReplaceReason | null
+  /** False only when this runtime needs no artifact preparation. */
+  prepareReplacementRuntime: () => Promise<boolean>
   releaseAdoptionClient: () => void
   preserveDaemon: PreserveDaemon
   launchNonce: string
@@ -48,6 +50,7 @@ export async function prepareDaemonReplacement(
     entryPath,
     recoveryDeadlineMs,
     attributedReason,
+    prepareReplacementRuntime,
     releaseAdoptionClient,
     preserveDaemon,
     launchNonce
@@ -59,6 +62,7 @@ export async function prepareDaemonReplacement(
       }
     | undefined
   let confirmedReplacement = false
+  let cleanupProtocol = false
   const health = await checkDaemonHealth(socketPath, tokenPath)
   if (health === 'healthy') {
     const pidRecord = readDaemonPidRecord(getDaemonPidPath(runtimeDir))
@@ -87,7 +91,7 @@ export async function prepareDaemonReplacement(
         reason: 'unhealthy_resolver',
         liveSessionCount
       }
-      confirmedReplacement = (await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)).cleaned
+      cleanupProtocol = true
     } else {
       // Why: a protocol-healthy daemon can outlive its launching app bundle (dev worktree rebuild, or packaged update replacing the app path).
       const identity = await getDaemonLaunchIdentity(runtimeDir, socketPath, tokenPath, entryPath)
@@ -124,8 +128,7 @@ export async function prepareDaemonReplacement(
           reason: stalePackagedBundle ? 'stale_bundle' : 'different_app_path',
           liveSessionCount: 0
         }
-        confirmedReplacement = (await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION))
-          .cleaned
+        cleanupProtocol = true
       } else {
         const attributionHealth = await getMacDaemonTccAttributionHealth(
           runtimeDir,
@@ -145,8 +148,7 @@ export async function prepareDaemonReplacement(
               '[daemon] Replacing daemon whose macOS TCC attribution is severed (spawning app binary no longer exists)'
             )
             pendingReplacement = { reason: 'severed_tcc_attribution', liveSessionCount }
-            confirmedReplacement = (await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION))
-              .cleaned
+            cleanupProtocol = true
           } else {
             return preserveDaemon()
           }
@@ -183,9 +185,9 @@ export async function prepareDaemonReplacement(
     if (liveSessionCount !== null && liveSessionCount > 0) {
       if (health === 'pty-spawn-unhealthy') {
         console.warn(
-          `[daemon] DEGRADED MODE: preserving daemon that failed the PTY spawn health check because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}. Existing sessions keep working; fresh terminals run on the local provider WITHOUT daemon persistence until you restart the daemon (Manage Sessions → Restart).`
+          `[daemon] DEGRADED MODE: preserving daemon that failed the PTY spawn health check because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}. Existing sessions keep their owner; new terminals require a successful terminal-service health check. Retry after the service recovers.`
         )
-        return preserveDaemon('degraded-new-pty-fallback')
+        return preserveDaemon('fresh-spawns-unavailable')
       }
       console.warn(
         `[daemon] Preserving daemon that failed the health check because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
@@ -211,6 +213,27 @@ export async function prepareDaemonReplacement(
     }
   }
 
+  // Adoption needs no new artifacts; replacement must be ready before stopping its owner.
+  const preparedRuntime = await prepareReplacementRuntime()
+  if (preparedRuntime) {
+    // Artifact preparation invalidates the earlier count; an expired budget gives no new proof.
+    const currentSessionCount =
+      Date.now() < recoveryDeadlineMs
+        ? await getAliveDaemonSessionCount(socketPath, tokenPath, recoveryDeadlineMs)
+        : null
+    if (
+      (currentSessionCount !== null && currentSessionCount > 0) ||
+      (cleanupProtocol && currentSessionCount === null)
+    ) {
+      return preserveDaemon(
+        health === 'pty-spawn-unhealthy' ? 'fresh-spawns-unavailable' : undefined
+      )
+    }
+  }
+  if (cleanupProtocol) {
+    confirmedReplacement = (await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)).cleaned
+  }
+
   // Why: a raw socket can outlive a broken daemon; kill by PID before respawn so the new daemon doesn't race the stale one.
   releaseAdoptionClient()
   const killOutcome = await killStaleDaemon(runtimeDir, socketPath, tokenPath)
@@ -220,10 +243,10 @@ export async function prepareDaemonReplacement(
     // no daemon at all, and we have just proved something still answers the endpoint —
     // so adopt it in degraded mode: existing sessions keep working, new PTYs run locally.
     console.warn(
-      '[daemon] DEGRADED MODE: adopting a daemon that could not be confirmed stopped. Existing sessions keep working; fresh terminals run on the local provider WITHOUT daemon persistence until you restart the daemon (Manage Sessions → Restart).'
+      '[daemon] DEGRADED MODE: adopting a daemon that could not be confirmed stopped. Existing sessions keep their owner; new terminals require a successful terminal-service health check. Retry after the service recovers.'
     )
     try {
-      return await preserveDaemon('degraded-new-pty-fallback')
+      return await preserveDaemon('fresh-spawns-unavailable')
     } catch {
       // It died between the probe and the adoption; the endpoint is genuinely free now.
       throw new DaemonEndpointOwnershipError(

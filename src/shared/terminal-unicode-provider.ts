@@ -9,6 +9,7 @@ type XtermTerminalWithUnicodeCore = {
   }
 }
 
+// The headless ASCII source patch relies on this identity and charProperties(ASCII, 2) === 2.
 const ORCA_UNICODE_VERSION = 'orca-11-zwj'
 const UNICODE11_VERSION = '11'
 const ZERO_WIDTH_JOINER = 0x200d
@@ -52,6 +53,16 @@ class OrcaUnicodeProvider implements IUnicodeVersionProvider {
   }
 }
 
+class BunOrcaUnicodeProvider extends OrcaUnicodeProvider {
+  public override charProperties(codepoint: number, preceding: number): number {
+    // Unicode11 printable ASCII after an ordinary width-one cell has unchanged properties.
+    if (preceding === 2 && codepoint >= 0x20 && codepoint < 0x7f) {
+      return 2
+    }
+    return super.charProperties(codepoint, preceding)
+  }
+}
+
 export function activateOrcaTerminalUnicodeProvider(terminal: XtermTerminalWithUnicodeCore): void {
   const { unicode } = terminal
   if (unicode.activeVersion === ORCA_UNICODE_VERSION) {
@@ -65,7 +76,12 @@ export function activateOrcaTerminalUnicodeProvider(terminal: XtermTerminalWithU
   }
 
   if (!unicode.versions.includes(ORCA_UNICODE_VERSION)) {
-    unicode.register(new OrcaUnicodeProvider(baseProvider))
+    // Keep V8's measured fast path unchanged; JSC benefits from bypassing the ASCII call chain.
+    const Provider =
+      typeof process !== 'undefined' && process.versions?.bun
+        ? BunOrcaUnicodeProvider
+        : OrcaUnicodeProvider
+    unicode.register(new Provider(baseProvider))
   }
   unicode.activeVersion = ORCA_UNICODE_VERSION
 }

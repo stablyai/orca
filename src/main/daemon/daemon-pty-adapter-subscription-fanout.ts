@@ -69,6 +69,13 @@ export class DaemonPtyAdapterSubscriptionFanout {
     }
   }
 
+  publishExit(payload: DaemonPtyRouterExitEvent): void {
+    // oxlint-disable-next-line unicorn/no-useless-spread -- listeners may unsubscribe during exit delivery
+    for (const listener of [...this.exitListeners]) {
+      listener(payload)
+    }
+  }
+
   dispose(): void {
     for (const unsubscribe of this.unsubscribers.splice(0)) {
       unsubscribe()

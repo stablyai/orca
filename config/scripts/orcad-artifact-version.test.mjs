@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   ORCAD_BUILD_TARGET_FILENAME,
+  ORCAD_WINDOWS_CONPTY_ARTIFACTS,
   ORCAD_RIPGREP_ARTIFACTS,
   orcadArtifactFilenames
 } from '../../src/shared/orcad-artifacts.ts'
@@ -32,6 +33,24 @@ function createArtifactDirectory(target = '') {
 }
 
 describe('standalone runtime version', () => {
+  it.each(ORCAD_WINDOWS_CONPTY_ARTIFACTS)(
+    'hashes and requires Windows provider artifact %s',
+    async (filename) => {
+      const target = 'win32-x64'
+      const directory = createArtifactDirectory(target)
+      const options = { target }
+      const before = computeOrcadFullVersion(directory, options)
+      writeFileSync(join(directory, filename), 'changed provider artifact')
+      expect(computeOrcadFullVersion(directory, options)).not.toBe(before)
+      expect(computeOrcadFullVersion(directory, options)).toBe(
+        await readOrcadArtifactIdentity(directory)
+      )
+      rmSync(join(directory, filename))
+      expect(() => computeOrcadFullVersion(directory, options)).toThrow(filename)
+      await expect(readOrcadArtifactIdentity(directory)).rejects.toThrow()
+    }
+  )
+
   it('changes when a shipped search binary changes and rejects a missing binary', () => {
     const dir = createArtifactDirectory()
     const before = computeOrcadFullVersion(dir)

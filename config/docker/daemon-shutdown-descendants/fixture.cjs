@@ -1,20 +1,24 @@
 const fs = require('node:fs')
-const { spawn } = require('node:child_process')
-const pty = require('node-pty')
 
 const bundle = process.argv[2]
 const resultPath = process.argv[3]
 
 async function main() {
-  const { TerminalHost, createDaemonPtySubprocessHandle } = require(bundle)
+  const { TerminalHost, createDaemonPtySubprocessHandle, spawnBunPty, spawnProcess } = require(
+    bundle
+  )
   let output = ''
-  const canary = spawn('/bin/sh', ['-c', 'while :; do sleep 1; done'], {
+  const canary = spawnProcess({
+    program: '/bin/sh',
+    args: ['-c', 'while :; do sleep 1; done'],
     stdio: 'ignore'
   })
   canary.unref()
   const childScript =
     'setsid /bin/sh -c \'trap "" TERM; while :; do sleep 1; done\' & echo ORCA_DESCENDANT:$!; while :; do sleep 1; done'
-  const native = pty.spawn('/bin/sh', ['-c', childScript], {
+  const native = spawnBunPty({
+    file: '/bin/sh',
+    args: ['-c', childScript],
     cols: 80,
     rows: 24,
     cwd: '/tmp',

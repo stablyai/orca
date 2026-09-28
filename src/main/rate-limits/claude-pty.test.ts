@@ -9,8 +9,8 @@ vi.mock('../codex-cli/command', () => ({
   resolveClaudeCommand: resolveClaudeCommandMock
 }))
 
-vi.mock('node-pty', () => ({
-  spawn: spawnMock
+vi.mock('./hidden-daemon-pty', () => ({
+  spawnHiddenDaemonPty: spawnMock
 }))
 
 import { fetchViaPty } from './claude-pty'
@@ -22,6 +22,7 @@ function makeDisposable() {
 
 type MockTerm = {
   onData: ReturnType<typeof vi.fn>
+  onError: ReturnType<typeof vi.fn>
   onExit: ReturnType<typeof vi.fn>
   write: ReturnType<typeof vi.fn>
   kill: ReturnType<typeof vi.fn>
@@ -38,6 +39,7 @@ function makeMockTerm(): MockTerm & {
       dataHandler = handler
       return makeDisposable()
     }),
+    onError: vi.fn(() => ({ dispose: vi.fn() })),
     onExit: vi.fn((handler: () => void) => {
       exitHandler = handler
       return makeDisposable()
@@ -56,6 +58,24 @@ describe('fetchViaPty', () => {
     resolveClaudeCommandMock.mockReturnValue('claude')
   })
 
+  it('settles a transport error immediately and releases the hidden probe', async () => {
+    const term = makeMockTerm()
+    spawnMock.mockReturnValue(term)
+    const result = fetchViaPty()
+    await vi.advanceTimersByTimeAsync(0)
+    const callback = term.onError.mock.calls[0][0]
+    callback(new Error('Terminal service connection lost during usage probe'))
+    await expect(result).resolves.toMatchObject({
+      status: 'error',
+      session: null,
+      weekly: null,
+      error: 'Terminal service connection lost during usage probe'
+    })
+    expect(term.kill).toHaveBeenCalledOnce()
+    expect(getActiveHiddenRateLimitPtyCount()).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it('disposes node-pty listeners before killing the hidden PTY on timeout', async () => {
     const onDataDisposable = makeDisposable()
     const onExitDisposable = makeDisposable()
@@ -63,6 +83,7 @@ describe('fetchViaPty', () => {
 
     spawnMock.mockReturnValue({
       onData: vi.fn(() => onDataDisposable),
+      onError: vi.fn(() => ({ dispose: vi.fn() })),
       onExit: vi.fn(() => onExitDisposable),
       write: vi.fn(),
       kill: killMock

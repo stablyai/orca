@@ -1,5 +1,11 @@
 # daemon-relocation-spike
 
+> Historical probe for packaged Electron/node-pty daemon hosts. Current Bun packages
+> do not contain its required files. Use this only with an archived compatible build;
+> current runtime relocation is covered by `daemon-bun-runtime` tests and the
+> Windows packaged Bun capability smoke.
+
+
 A throwaway probe that answers one empirical question for Phase 1 of the
 Windows update-survival work:
 

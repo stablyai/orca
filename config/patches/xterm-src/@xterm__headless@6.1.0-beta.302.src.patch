@@ -1,0 +1,21 @@
+diff --git a/src/common/InputHandler.ts b/src/common/InputHandler.ts
+index 995fe7670a10f11fb9b0b42332484b038ea6c989..133db3d372e91517ca42b9558adba3b97f1b9fb5 100644
+--- a/src/common/InputHandler.ts
++++ b/src/common/InputHandler.ts
+@@ -540,6 +540,16 @@ export class InputHandler extends Disposable implements IInputHandler {
+ 
+     let precedingJoinState = this._parser.precedingJoinState;
+     for (let pos = start; pos < end; ++pos) {
++      // Orca's width-one ASCII invariant excludes ZWJ joins; keep wrapping on the general path.
++      if (precedingJoinState === 2 && !charset && !screenReaderMode && !insertMode
++        && this._unicodeService.activeVersion === 'orca-11-zwj' && !this._getCurrentLinkId()
++        && this._activeBuffer.x < cols && data[pos] >= 0x20 && data[pos] < 0x7f) {
++        do {
++          bufferRow.setCellFromCodepoint(this._activeBuffer.x++, data[pos], 1, curAttr);
++        } while (++pos < end && this._activeBuffer.x < cols && data[pos] >= 0x20 && data[pos] < 0x7f);
++        pos--;
++        continue;
++      }
+       code = data[pos];
+ 
+       // Soft hyphen's (U+00AD) behavior is ambiguous and differs across terminals. We opt to treat

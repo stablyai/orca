@@ -1,12 +1,10 @@
 # OMP owned-PTY close probe (#9530)
 
-This opt-in probe launches an actual installed OMP binary in disposable local PTYs
-and calls Orca's production `shutdownLocalPty` and `killAllLocalPtys` functions,
-or daemon `Session`, native subprocess handle, and `TerminalSessionTeardown`.
-It sets the same agent-session ownership flag that `activateLocalPtySession` sets
-for `launchAgent` / recognized startup commands, then repeats without that flag
-to represent OMP typed into a shell. This isolates termination policy; it does not
-exercise Agent button delivery or terminal-tab/handle routing.
+This opt-in probe launches an actual installed OMP binary through the bundled Bun
+PTY adapter and calls Orca's production daemon `Session`, subprocess handle, and
+`TerminalSessionTeardown`. It repeats recognized-agent and typed-in-shell launches.
+This isolates termination policy; it does not exercise Agent button delivery or
+terminal-tab/handle routing. The retired in-process provider is no longer tested.
 
 ```sh
 ORCA_BACKGROUND_LAUNCH=1 ORCA_OMP_PROBE_BINARY=/absolute/path/to/omp \
@@ -16,11 +14,11 @@ ORCA_BACKGROUND_LAUNCH=1 ORCA_OMP_PROBE_BINARY=/absolute/path/to/omp \
 
 The probe defaults to zsh on macOS and bash on other POSIX hosts. Set
 `ORCA_OMP_PROBE_SHELL` to the absolute path of either shell to override. Windows
-is skipped. It requires the existing node-pty native dependency for the current
-Node runtime. The normal unit suite skips the test unless a binary is supplied.
+is skipped. It requires the pinned bundled Bun runtime in `out/orcad`,
+`out/cli-runtime`, or `BUN_EXECUTABLE`. The normal unit suite skips the test unless a binary is supplied.
 
 Each case waits five seconds for OMP startup, captures the owned process tree,
-requests explicit close or local quit cleanup, and verifies those exact process
+requests explicit daemon close, and verifies those exact process
 IDs are absent using host `ps` after a six-second observation window. It records
 raw terminal output and before/after process rows in `.bench-fixtures/omp-close-*`.
 The fixture contains no prompt or model request. It disables the first-run setup
@@ -47,9 +45,8 @@ No stale foreground OMP was reproduced in these local termination-policy cases.
 ## Detached external tool reproduction and correction
 
 Set `ORCA_OMP_PROBE_EXTERNAL_TOOL=1` to run `! /bin/sleep 120` in OMP before
-explicit immediate close. Add `ORCA_OMP_PROBE_BACKEND=daemon` to exercise the daemon
-backend. Each mode tests both recognized and typed launches; these modes do not
-run the local-quit cases. The probe makes no model requests. Both OMP/PI profiles
+explicit immediate close. Both recognized and typed launches use the daemon
+backend; `ORCA_OMP_PROBE_BACKEND` is no longer needed. The probe makes no model requests. Both OMP/PI profiles
 are cleared, and XDG data/cache/state roots are isolated alongside configuration.
 
 On macOS, installed Orca `1.4.202-hourly.202609132311` and OMP `18.1.18`, an actual

@@ -249,7 +249,7 @@ why only absence does.
 
 ## The relay has no binding, and falls back
 
-Relay deployment installs only `node-pty` and `@parcel/watcher` on the remote
+The older relay deployment installed only `node-pty` and `@parcel/watcher` on the remote
 host (`RELAY_NATIVE_DEPS` in `src/main/ssh/ssh-relay-deploy.ts`), so a Windows
 machine used as an SSH host has no `@vscode/windows-process-tree` at all. It is
 not added there on purpose. Both ways of installing it fail, and both were
@@ -547,7 +547,20 @@ inside one call with a blocking `Sleep(1000)` in the middle, which would hold a
 libuv threadpool slot for a full second out of the Resource Manager's two-second
 poll.
 
-## Owning a PTY's process tree
+## Current terminal ownership
+
+Desktop and headless terminals use Bun's PTY adapter. Per-terminal jobs live in
+`src/main/daemon/pty-subprocess/windows-bun-pty-job.ts`, with native operations in
+`windows-bun-pty-native.ts`. The MSYS no-breakaway and daemon crash-reaping
+contracts below still apply. `@vscode/windows-process-tree` remains a separate
+patched native dependency for process inspection; it is still rebuilt and
+validated by the install/package scripts.
+
+## Historical node-pty ownership implementation
+
+The remainder records the retired backend's behavior and incident analysis.
+Its node-pty patch, source-build commands and addon gates no longer apply to
+current local installations.
 
 `src/main/windows/windows-pty-job.ts` is the counterpart to reading the table:
 it answers "is this tree mine, and how do I kill it?" with a handle instead of

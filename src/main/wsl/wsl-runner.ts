@@ -64,6 +64,8 @@ export type WslCommand =
 export type WslSpec = WslCommand & {
   /** Undefined selects the distro's default. */
   distro?: string
+  /** Preserve an existing execution owner when the distro default changes. */
+  user?: string
   /** Required, with no default: the wrong answer here is the defect this file exists to prevent. */
   loginPath: WslLoginPath
   /** Guest (POSIX) path. */
@@ -210,7 +212,7 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
   const remainingForProbe = deadline - Date.now()
   const probeBudgetMs = Math.max(1, Math.min(4_000, Math.floor(remainingForProbe / 2)))
   const environment = wantsEnvironment
-    ? await getWslGuestEnvironment(spec.distro, probeBudgetMs)
+    ? await getWslGuestEnvironment(spec.distro, probeBudgetMs, spec.user)
     : null
 
   // Probe failure must NOT fall back to the login shell. That lane sources
@@ -224,7 +226,10 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
   const argvForm = buildGuestArgv(environment, spec, 'argv')
   // Measure what is actually spawned: `wsl.exe` and `-d <distro> --exec` are
   // prepended after this point and are part of the same budget.
-  const fullLine = [resolveWslExecutablePath(), ...buildWslExecArgs(spec.distro, argvForm)]
+  const fullLine = [
+    resolveWslExecutablePath(),
+    ...buildWslExecArgs(spec.distro, argvForm, spec.user)
+  ]
   // Argv is the default, but it has a hard ceiling that stdin does not. A user's
   // `orca.yaml` hook is the one unbounded script Orca runs, so past the cap the
   // choice is between failing to spawn at all and accepting the stdin caveat.
@@ -239,7 +244,7 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
   const remainingMs = Math.max(1, deadline - Date.now())
   const result = await runProcess({
     program: resolveWslExecutablePath(),
-    args: buildWslExecArgs(spec.distro, argv),
+    args: buildWslExecArgs(spec.distro, argv, spec.user),
     // Name a Windows directory rather than inheriting one: an inherited cwd that
     // is later deleted (the worktree Orca launched from) fails every later spawn
     // (#16463). Never the guest cwd -- withGuestCwd still cds inside.

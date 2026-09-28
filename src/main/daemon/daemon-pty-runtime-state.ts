@@ -1,4 +1,5 @@
-import { DaemonClient } from './client'
+import { DaemonFreshSpawnAdmission } from './daemon-fresh-spawn-admission'
+import { DaemonClient, type DaemonClientOptions } from './client'
 import { createDaemonAuditEligibilityTracker } from './daemon-audit-eligibility-event'
 import type {
   DaemonAuditContext,
@@ -48,15 +49,26 @@ export type SnapshotCheckpointResult = {
   snapshot: NonNullable<TakePendingOutputResult['snapshot']> | null
 }
 
+export type GuestDaemonExecution = {
+  distro: string
+  transport: NonNullable<DaemonClientOptions['transport']>
+  defaultShell: string
+  defaultCwd: string
+  profiles: readonly { name: string; path: string }[]
+  admitIdentity?: (identity: DaemonEndpointIdentity | null) => Promise<void>
+}
+
 export type DaemonPtyAdapterOptions = {
-  socketPath: string
-  tokenPath: string
+  socketPath?: string
+  tokenPath?: string
   pidPath?: string
+  guest?: GuestDaemonExecution
   profileScope?: string
   protocolVersion?: number
   historyPath?: string
   runtimeDir?: string
   packagedAppVersion?: string | null
+  freshSpawnAdmission?: DaemonFreshSpawnAdmission
   respawn?: (reason: DaemonRespawnReason) => Promise<void | (() => void)>
 }
 
@@ -73,6 +85,7 @@ export type DaemonIdentityChangeEvent = {
 
 export abstract class DaemonPtyRuntimeState {
   readonly protocolVersion: number
+  protected readonly guest: GuestDaemonExecution | null
   protected socketPath: string
   protected tokenPath: string
   protected pidPath: string | null
@@ -87,6 +100,7 @@ export abstract class DaemonPtyRuntimeState {
   protected identityChangeListeners: ((event: DaemonIdentityChangeEvent) => void)[] = []
   protected historyManager: HistoryManager | null
   protected historyReader: HistoryReader | null
+  protected readonly freshSpawnAdmission: DaemonFreshSpawnAdmission
   protected respawnFn: DaemonPtyAdapterOptions['respawn'] | null
   protected runtimeDir: string | null
   protected packagedAppVersion: string | null
@@ -149,6 +163,7 @@ export abstract class DaemonPtyRuntimeState {
     additionalEvidenceSources?: readonly DaemonEvidenceSource[],
     endpointGoneProof?: 'windows_named_pipe_missing'
   ): void
+  protected abstract notifyActiveSessionsWriteUnavailable(): void
   protected abstract clearSessionAwaitingDaemonRecovery(sessionId: string): void
   protected abstract stopCheckpointTimerIfIdle(): void
 
@@ -190,27 +205,43 @@ export abstract class DaemonPtyRuntimeState {
 
   constructor(opts: DaemonPtyAdapterOptions) {
     this.protocolVersion = opts.protocolVersion ?? PROTOCOL_VERSION
-    this.socketPath = opts.socketPath
-    this.tokenPath = opts.tokenPath
-    this.pidPath = opts.pidPath ?? null
+    this.guest = opts.guest ?? null
+    if (
+      this.guest &&
+      (opts.socketPath ||
+        opts.tokenPath ||
+        opts.pidPath ||
+        opts.runtimeDir ||
+        opts.packagedAppVersion)
+    ) {
+      throw new Error('Guest daemon execution cannot use desktop endpoint or runtime paths')
+    }
+    if (!this.guest && (!opts.socketPath || !opts.tokenPath)) {
+      throw new Error('Local daemon execution requires socket and token paths')
+    }
+    this.socketPath = opts.socketPath ?? ''
+    this.tokenPath = opts.tokenPath ?? ''
+    this.pidPath = this.guest ? null : (opts.pidPath ?? null)
     this.pidRecord = readDaemonPidRecord(this.pidPath)
     this.auditContext = {
       protocolGeneration: this.protocolVersion,
       provider: 'local-daemon',
-      endpoint: opts.socketPath,
-      tokenPath: opts.tokenPath,
+      endpoint: this.socketPath,
+      tokenPath: this.tokenPath,
       endpointKind: process.platform === 'win32' ? 'windows-named-pipe' : 'unix-socket',
       profileScope: opts.profileScope ?? ''
     }
     this.client = new DaemonClient({
-      socketPath: opts.socketPath,
-      tokenPath: opts.tokenPath,
+      ...(this.guest
+        ? { transport: this.guest.transport, admitIdentity: this.guest.admitIdentity }
+        : { socketPath: this.socketPath, tokenPath: this.tokenPath }),
       protocolVersion: opts.protocolVersion
     })
     this.historyManager = opts.historyPath ? new HistoryManager(opts.historyPath) : null
     this.historyReader = opts.historyPath ? new HistoryReader(opts.historyPath) : null
+    this.freshSpawnAdmission = opts.freshSpawnAdmission ?? new DaemonFreshSpawnAdmission(null)
     this.respawnFn = opts.respawn ?? null
-    this.runtimeDir = opts.runtimeDir ?? opts.profileScope ?? null
+    this.runtimeDir = this.guest ? null : (opts.runtimeDir ?? opts.profileScope ?? null)
     this.packagedAppVersion = opts.packagedAppVersion ?? null
     this.supportsCheckpoints = this.protocolVersion >= 4
     this.supportsIncrementalCheckpoints = this.protocolVersion >= 13
@@ -230,6 +261,9 @@ export abstract class DaemonPtyRuntimeState {
       }
       this.pausedProducerSessionIds.clear()
       this.observeAuditFailure('transport_closed')
+      if (this.guest && !this.respawnAdoptionClosed) {
+        this.notifyActiveSessionsWriteUnavailable()
+      }
     })
   }
 

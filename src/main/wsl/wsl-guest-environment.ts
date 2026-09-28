@@ -74,7 +74,8 @@ function parseProbePayload(payload: string | null): WslGuestEnvironment | null {
 
 async function probeGuestEnvironment(
   distro: string | undefined,
-  budgetMs: number
+  budgetMs: number,
+  user?: string
 ): Promise<ProbeOutcome> {
   // Resolve `env` rather than assume /usr/bin/env: a distro that moved it would
   // otherwise fail every later call.
@@ -86,7 +87,7 @@ async function probeGuestEnvironment(
   const captured = buildWslCapturedLoginShellCommand(script)
   const result = await runProcess({
     program: resolveWslExecutablePath(),
-    args: buildWslExecArgs(distro, ['sh', '-c', captured.command]),
+    args: buildWslExecArgs(distro, ['sh', '-c', captured.command], user),
     // The runner sets this for every command it launches (#9010); the probe
     // spawns wsl.exe itself, so without it wsl.exe's own errors arrive UTF-16LE
     // and the NUL-separated payload below is read through NUL-riddled text.
@@ -110,8 +111,8 @@ async function probeGuestEnvironment(
   return environment ? { kind: 'resolved', environment } : { kind: 'transient' }
 }
 
-function cacheKey(distro: string | undefined): string {
-  return distro ?? ''
+function cacheKey(distro: string | undefined, user?: string): string {
+  return `${distro ?? ''}${user ? `\0${user}` : ''}`
 }
 
 /** Null means "could not ask", never "has no PATH" -- callers fall back. */
@@ -122,9 +123,10 @@ export function getWslGuestEnvironment(
    * timer, so a 5s caller could reach `runProcess` with 1ms left and report a
    * timeout for a command that would have taken milliseconds.
    */
-  budgetMs = PROBE_TIMEOUT_MS
+  budgetMs = PROBE_TIMEOUT_MS,
+  user?: string
 ): Promise<WslGuestEnvironment | null> {
-  const key = cacheKey(distro)
+  const key = cacheKey(distro, user)
   const cached = resolved.get(key)
   if (cached) {
     return Promise.resolve(cached)
@@ -172,7 +174,7 @@ export function getWslGuestEnvironment(
   // host without System32\wsl.exe, EAGAIN under memory pressure). Uncaught, the
   // rejected promise stays in `inFlight` and every later call re-throws it for
   // the process lifetime -- all WSL features wedged until restart.
-  const probe = probeGuestEnvironment(distro, budgetMs)
+  const probe = probeGuestEnvironment(distro, budgetMs, user)
     .catch((): ProbeOutcome => ({ kind: 'transient' }))
     .then((outcome) => {
       if (inFlight.get(key) !== probe) {
@@ -213,11 +215,14 @@ export function invalidateWslGuestEnvironment(distro?: string, all = false): voi
     probedWithBudget.clear()
     return
   }
-  const key = cacheKey(distro)
-  inFlight.delete(key)
-  resolved.delete(key)
-  retryAfter.delete(key)
-  probedWithBudget.delete(key)
+  const base = cacheKey(distro)
+  for (const cache of [inFlight, resolved, retryAfter, probedWithBudget]) {
+    for (const key of cache.keys()) {
+      if (key === base || key.startsWith(`${base}\0`)) {
+        cache.delete(key)
+      }
+    }
+  }
 }
 
 /** Test-only: the cached value without probing. */

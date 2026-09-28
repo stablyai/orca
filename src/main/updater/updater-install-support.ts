@@ -72,6 +72,11 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
   }
 
   protected resetQuitForUpdateState(): void {
+    this.macNativeStaging = false
+    if (this.macNativeStagingTimer) {
+      clearTimeout(this.macNativeStagingTimer)
+    }
+    this.macNativeStagingTimer = null
     this.quitAndInstallInProgress = false
     this.quittingForUpdate = false
     this.updateInstallCommitted = false
@@ -85,6 +90,9 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
    * it — so keep that advice there. Everywhere else a restart is not known to help.
    */
   protected getPreCommitInstallFailureMessage(): string {
+    if (this.updateInstallMode === 'supervised-headless-serve') {
+      return 'Could not install the server update. Orca remains running; download the update again to retry.'
+    }
     return process.platform === 'darwin'
       ? 'Could not restart to install the update. Quit and reopen Orca, then try again.'
       : 'Could not start the update installer. Orca remains open.'
@@ -129,7 +137,7 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
    * recover it. Must run before `resetQuitForUpdateState()` clears the attempt diagnostic.
    */
   protected isQuitAndInstallHandoffActive(): boolean {
-    return this.quitAndInstallInProgress
+    return this.pendingQuitAndInstallTimer !== null || this.quitAndInstallInProgress
   }
 
   protected async runBeforeUpdateQuitCleanup(): Promise<void> {

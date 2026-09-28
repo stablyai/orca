@@ -14,16 +14,21 @@ describe('orca-dev package bin', () => {
     expect(readFileSync(wrapperPath, 'utf8')).toMatch(/^#!\/usr\/bin\/env node\n/)
   })
 
+  const launcherBuilt = existsSync(path.join(projectDir, 'out', 'cli', 'cli-bun-launcher.js'))
+  const required = process.env.ORCA_TEST_REQUIRE_CLI_ARTIFACTS === '1'
+
   it.skipIf(
-    !existsSync(
-      path.join(
-        projectDir,
-        'out',
-        'cli-runtime',
-        `${process.platform}-${process.arch}`,
-        process.platform === 'win32' ? 'bun-runtime.exe' : 'bun-runtime'
-      )
-    )
+    !required &&
+      (!launcherBuilt ||
+        !existsSync(
+          path.join(
+            projectDir,
+            'out',
+            'cli-runtime',
+            `${process.platform}-${process.arch}`,
+            process.platform === 'win32' ? 'bun-runtime.exe' : 'bun-runtime'
+          )
+        ))
   )('hands the dev CLI to staged Bun without requiring Bash', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'orca-dev-bin-'))
     const cliEntry = path.join(root, 'cli-entry.cjs')

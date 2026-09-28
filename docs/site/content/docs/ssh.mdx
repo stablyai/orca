@@ -82,18 +82,16 @@ You do not flip a separate “Kerberos mode” switch for config-imported hosts 
 
 Hardware-backed OpenSSH identities (`ed25519-sk`, `ecdsa-sk`, including agent-backed security keys) also use **system OpenSSH** rather than the built-in ssh2 client. Orca detects the key type from your identity files and hands the connection to the OS OpenSSH binary so the touch / PIN prompt works as usual. Regular Ed25519, ECDSA, and RSA keys stay on the built-in transport. If OpenSSH is not available on the machine, those FIDO2 targets cannot authenticate until it is installed and on `PATH` (or in the usual Windows/macOS/Linux locations).
 
-## Linux hosts without a C/C++ toolchain
+## Remote terminal runtime
 
-On first connect, Orca installs a small relay on the remote. Remote terminals need a native `node-pty` module. Linux packages often compile on the host; macOS/Windows relays use prebuilds.
+On first connect, Orca installs a relay with a pinned Bun runtime and the native
+artifacts for the remote platform. Current remote terminals do not require a
+C/C++ toolchain or a node-pty build on the host. The remote must support the
+runtime's operating-system and CPU requirements.
 
-If the remote is missing **make**, a **C++ compiler**, and **python3**, Orca still finishes connect for **files, git, and the editor**, but **remote terminals will not work** until build tools are installed. Example install hints Orca may surface:
-
-- Debian/Ubuntu: `sudo apt-get install -y build-essential python3`
-- Fedora/RHEL: `sudo dnf install -y make gcc gcc-c++ python3`
-- Alpine: `sudo apk add build-base python3`
-- Arch: `sudo pacman -S --needed base-devel python`
-
-Install the tools, then reconnect so the relay can install native modules.
+Older Orca clients can still deploy the previous Node-based relay. If that client
+reports a missing native build toolchain, update the client or follow its
+installation guidance before reconnecting.
 
 ## Port forwarding
 

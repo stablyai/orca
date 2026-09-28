@@ -1,4 +1,4 @@
-import type { Socket } from 'node:net'
+import type { Duplex } from 'node:stream'
 import { encodeNdjson } from './ndjson'
 import {
   DAEMON_UNAVAILABLE_RECONNECT_MESSAGE,
@@ -9,7 +9,7 @@ import { isTerminalAttachCanceledMessage } from './daemon-errors'
 import type { DaemonPendingRequests } from './daemon-client-pending-requests'
 
 type DaemonRpcRequestOptions = {
-  socket: Socket
+  socket: Duplex
   pendingRequests: DaemonPendingRequests
   id: string
   type: string

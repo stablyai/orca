@@ -3,16 +3,17 @@ set -eu
 
 bundle=${1:?bundle path is required}
 mode=${2:?mode is required}
-result_dir=/tmp/daemon-shutdown-descendants
-mkdir -p "$result_dir"
+fixture=${3:-/opt/daemon-shutdown-descendants/fixture.cjs}
+result_dir=$(mktemp -d /tmp/daemon-shutdown-descendants.XXXXXX)
+trap 'rm -rf "$result_dir"' EXIT
 
 # The fixture exits like daemon-entry after dispose(). This shell remains as a
 # supervisor so a detached descendant can be inspected after the daemon exits.
-timeout --kill-after=2s 20s node /opt/daemon-shutdown-descendants/fixture.cjs "$bundle" "$result_dir/fixture.json"
+timeout --kill-after=2s 20s bun-runtime --no-env-file "$fixture" "$bundle" "$result_dir/fixture.json"
 
-child_pid=$(node -e "const r=require(process.argv[1]); process.stdout.write(String(r.childPid))" "$result_dir/fixture.json")
-canary_pid=$(node -e "const r=require(process.argv[1]); process.stdout.write(String(r.canaryPid))" "$result_dir/fixture.json")
-shutdown_ms=$(node -e "const r=require(process.argv[1]); process.stdout.write(String(r.shutdownMs))" "$result_dir/fixture.json")
+child_pid=$(bun-runtime --no-env-file -e "const r=require(process.argv[1]); process.stdout.write(String(r.childPid))" "$result_dir/fixture.json")
+canary_pid=$(bun-runtime --no-env-file -e "const r=require(process.argv[1]); process.stdout.write(String(r.canaryPid))" "$result_dir/fixture.json")
+shutdown_ms=$(bun-runtime --no-env-file -e "const r=require(process.argv[1]); process.stdout.write(String(r.shutdownMs))" "$result_dir/fixture.json")
 
 process_state() {
   awk '{ print $3 }' "/proc/$1/stat" 2>/dev/null || true

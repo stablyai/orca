@@ -1,6 +1,10 @@
 import { posix as pathPosix } from 'node:path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
-import { runWslProcess } from '../wsl/wsl-runner'
+import { runCapturedCodexWslProcess } from '../codex-accounts/captured-wsl-account-process'
+import {
+  assertWslAccountExecutionTarget,
+  type WslAccountExecutionContext
+} from '../wsl/wsl-account-execution-context'
 import {
   buildWslCodexSessionBridgeShellCommand,
   WSL_SESSION_BRIDGE_TIMEOUT_MS
@@ -9,6 +13,7 @@ import {
 export { buildWslCodexSessionBridgeShellCommand } from './wsl-codex-session-bridge-script'
 
 export type WslCodexSessionBridgeTarget = {
+  execution?: WslAccountExecutionContext
   distro: string
   systemCodexHomePath: string
   managedCodexHomePath: string
@@ -29,6 +34,7 @@ const backgroundWslSessionBridgeTasks = new Map<string, Promise<void>>()
 export function startWslCodexSessionBridgeInBackground(
   target: WslCodexSessionBridgeTarget
 ): Promise<void> {
+  target = captureTarget(target)
   const taskKey = getWslSessionBridgeTaskKey(target)
   const existingTask = backgroundWslSessionBridgeTasks.get(taskKey)
   if (existingTask) {
@@ -52,19 +58,23 @@ export function startWslCodexSessionBridgeInBackground(
 export async function syncWslCodexSessionsIntoManagedHome(
   target: WslCodexSessionBridgeTarget
 ): Promise<WslCodexSessionBridgeSummary> {
+  target = captureTarget(target)
   const paths = resolveWslCodexSessionBridgeLinuxPaths(target)
   if (!paths) {
     return emptySummary
   }
 
-  const result = await runWslProcess({
-    distro: target.distro,
-    loginPath: 'none',
-    script: buildWslCodexSessionBridgeShellCommand(paths),
-    // Process substitution and `read -d` are bash-only; dash rejects both.
-    shell: 'bash',
-    timeoutMs: WSL_SESSION_BRIDGE_TIMEOUT_MS
-  })
+  const result = await runCapturedCodexWslProcess(
+    {
+      distro: target.distro,
+      loginPath: 'none',
+      script: buildWslCodexSessionBridgeShellCommand(paths),
+      // Process substitution and `read -d` are bash-only; dash rejects both.
+      shell: 'bash',
+      timeoutMs: WSL_SESSION_BRIDGE_TIMEOUT_MS
+    },
+    target.execution
+  )
   if (result.code !== 0 || result.timedOut) {
     throw Object.assign(
       new Error(`WSL codex session bridge failed for ${target.distro} (code ${result.code})`),
@@ -89,8 +99,24 @@ export function resolveWslCodexSessionBridgeLinuxPaths(
   }
 }
 
+function captureTarget(target: WslCodexSessionBridgeTarget): WslCodexSessionBridgeTarget {
+  if (!target.execution) {
+    return target
+  }
+  const execution = Object.freeze({ ...target.execution })
+  assertWslAccountExecutionTarget(execution, { runtime: 'wsl', wslDistro: target.distro })
+  return { ...target, execution }
+}
+
 function getWslSessionBridgeTaskKey(target: WslCodexSessionBridgeTarget): string {
-  return [target.distro, target.systemCodexHomePath, target.managedCodexHomePath].join('\0')
+  return [
+    target.distro,
+    target.systemCodexHomePath,
+    target.managedCodexHomePath,
+    ...(target.execution
+      ? [target.execution.userName, target.execution.userId, target.execution.home]
+      : [])
+  ].join('\0')
 }
 
 function getLinuxPathForWslDistro(path: string, distro: string): string | null {

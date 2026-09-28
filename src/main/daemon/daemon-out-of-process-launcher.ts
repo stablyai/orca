@@ -13,7 +13,7 @@ import {
   terminateLaunchedDaemonChild
 } from './daemon-launched-child'
 import { getDaemonEntryPath, probeDaemonSocket as probeSocket } from './daemon-launch-paths'
-import { materializeRelocatedDaemonHost } from './daemon-host-relocation'
+import { resolveDesktopDaemonBunRuntime, type DaemonBunRuntime } from './daemon-bun-runtime'
 import { DAEMON_RECOVERY_BUDGET_MS, daemonRecoveryProbeTimeoutMs } from './daemon-recovery-budget'
 import { cleanupDaemonForProtocol } from './daemon-protocol-cleanup'
 import {
@@ -38,7 +38,7 @@ export function attributeNextDaemonReplacement(reason: DaemonReplaceReason): voi
 function createPreservedDaemonHandle(
   runtimeDir: string,
   protocolVersion = PROTOCOL_VERSION,
-  mode?: 'degraded-new-pty-fallback'
+  mode?: 'fresh-spawns-unavailable'
 ): DaemonProcessHandle {
   const handle: DaemonProcessHandle = {
     adopted: true,
@@ -87,7 +87,7 @@ export function createOutOfProcessLauncher(
       adoptionClient = null
     }
     const preserveDaemon = async (
-      mode?: 'degraded-new-pty-fallback'
+      mode?: 'fresh-spawns-unavailable'
     ): Promise<DaemonProcessHandle> => {
       const connectedClient = adoptionClient ?? undefined
       adoptionClient = null
@@ -100,6 +100,10 @@ export function createOutOfProcessLauncher(
         pidPath
       )
     }
+    let bunHost: DaemonBunRuntime | null = null
+    let runtimePromise: ReturnType<typeof resolveDesktopDaemonBunRuntime> | undefined
+    const getReplacementRuntime = (): ReturnType<typeof resolveDesktopDaemonBunRuntime> =>
+      (runtimePromise ??= resolveDesktopDaemonBunRuntime())
     try {
       const preservedHandle = await prepareDaemonReplacement({
         runtimeDir,
@@ -108,6 +112,10 @@ export function createOutOfProcessLauncher(
         entryPath,
         recoveryDeadlineMs,
         attributedReason,
+        prepareReplacementRuntime: async () => {
+          bunHost = await getReplacementRuntime()
+          return bunHost !== null
+        },
         releaseAdoptionClient,
         preserveDaemon,
         launchNonce
@@ -117,16 +125,16 @@ export function createOutOfProcessLauncher(
       }
 
       const userDataPath = getAppEnvironment().getPath('userData')
-      // Why: on win32 packaged, stage a daemon-host copy in userData so its image escapes the NSIS updater's kill zone; lazy so it's off first-paint. Fail-open: null → in-dir host.
-      const relocatedHost = materializeRelocatedDaemonHost()
-      // Fork the relocated entry when available; otherwise the install-dir entry.
-      const forkEntryPath = relocatedHost ? relocatedHost.entryPath : entryPath
+      bunHost = await getReplacementRuntime()
+      // Windows Bun artifacts are immutable copies outside the installer kill zone.
+      const forkEntryPath = bunHost?.entryPath ?? entryPath
       let launched
       try {
         launched = await launchDaemonChild({
           entryPath,
           forkEntryPath,
-          relocatedExecPath: relocatedHost?.execPath,
+          relocatedExecPath: bunHost?.execPath,
+          ...(bunHost ? { bunRuntime: true, conptyLibraryPath: bunHost.conptyLibraryPath } : {}),
           userDataPath,
           socketPath,
           tokenPath,
@@ -140,7 +148,7 @@ export function createOutOfProcessLauncher(
         }
         // Why adopt rather than retry: another daemon proved it owns the endpoint and is
         // answering on it. Forking again would lose the same race, and reporting a startup
-        // failure strands this app on local non-persistent PTYs beside a healthy daemon.
+        // failure blocks new terminals beside a healthy daemon.
         console.warn(
           '[daemon] Endpoint was taken by another daemon during startup — adopting it instead'
         )
@@ -196,27 +204,24 @@ export function createOutOfProcessLauncher(
       }
     } catch (error) {
       releaseAdoptionClient()
-      // Why: the launcher may now fork onto an endpoint it could not classify, because the
-      // publisher is the real guard — and that guard works by refusing to overwrite what it
-      // cannot prove dead, so the child exits instead of splitting the brain. Correct, but
-      // giving up here costs the user every persistent session for the whole run. Something
-      // answering the endpoint now is a daemon worth adopting, not a reason to fall back to
-      // local PTYs.
+      // A failed replacement may have lost to another live owner; preserve it before reporting failure.
       // Why unbudgeted: the recovery deadline bounds the adopt-or-replace decision, and this runs
       // after it — past the kill, the fork and the lease. Clamping to the remainder yields a 1ms
       // probe that loses to its own timer against a live socket, turning the rescue into the total
       // daemon loss it exists to prevent.
       if (await probeSocket(socketPath)) {
         console.warn(
-          '[daemon] DEGRADED MODE: adopting the daemon that owns the endpoint after a replacement could not publish onto it. Existing sessions keep working; fresh terminals run on the local provider WITHOUT daemon persistence until you restart the daemon (Manage Sessions → Restart).'
+          '[daemon] DEGRADED MODE: adopting the daemon that owns the endpoint after a replacement could not publish onto it. Existing sessions keep their owner; new terminals require a successful terminal-service health check. Retry after the service recovers.'
         )
         try {
-          return await preserveDaemon('degraded-new-pty-fallback')
+          return await preserveDaemon('fresh-spawns-unavailable')
         } catch {
           // It stopped answering between the probe and the adoption; report the launch failure.
         }
       }
       throw error
+    } finally {
+      bunHost?.releaseLaunchPin?.()
     }
   }
 }

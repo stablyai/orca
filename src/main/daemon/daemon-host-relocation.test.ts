@@ -4,16 +4,12 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
-  readdirSync,
-  realpathSync,
-  renameSync,
   rmSync,
   utimesSync,
   writeFileSync
 } from 'node:fs'
 import os from 'node:os'
-import { createRequire } from 'node:module'
-import { basename, dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { setAppEnvironment, type AppEnvironment } from '../../shared/app-environment'
@@ -39,11 +35,8 @@ function installHostApp(): void {
   } as AppEnvironment)
 }
 
-import { buildDaemonHostManifest } from './daemon-host-manifest'
 import {
   collectPinnedDaemonVersions,
-  getRelocatedDaemonHost,
-  materializeRelocatedDaemonHost,
   pruneOldDaemonHosts,
   reclaimUnownedDaemonHostDir
 } from './daemon-host-relocation'
@@ -62,67 +55,6 @@ function setProcessProp(key: string, value: unknown): void {
   Object.defineProperty(process, key, { value, configurable: true, writable: true })
 }
 
-// Build a win-unpacked fixture: exe + blobs + DLLs at root, daemon bundle and
-// node-pty under resources, mirroring the packaged layout the copy expects.
-function buildInstallFixture(root: string): void {
-  mkdirSync(root, { recursive: true })
-  writeFileSync(join(root, 'Orca.exe'), 'exe-bytes')
-  for (const name of ['icudtl.dat', 'snapshot_blob.bin', 'v8_context_snapshot.bin']) {
-    writeFileSync(join(root, name), name)
-  }
-  writeFileSync(join(root, 'ffmpeg.dll'), 'dll')
-  writeFileSync(join(root, 'libEGL.dll'), 'dll')
-  const mainDir = join(root, 'resources', 'app.asar.unpacked', 'out', 'main')
-  mkdirSync(join(mainDir, 'chunks'), { recursive: true })
-  writeFileSync(join(mainDir, 'daemon-entry.js'), 'entry')
-  writeFileSync(join(mainDir, 'chunks', 'a.js'), 'chunk')
-  writeFileSync(join(root, 'resources', 'app.asar.unpacked', 'out', 'package.json'), '{}')
-  const nativeDir = join(root, 'resources', 'node_modules', 'node-pty', 'build', 'Release')
-  mkdirSync(nativeDir, { recursive: true })
-  writeFileSync(join(nativeDir, 'conpty.node'), 'native')
-  writeFileSync(join(nativeDir, 'conpty.pdb'), 'debug-symbols')
-  mkdirSync(join(nativeDir, 'conpty'), { recursive: true })
-  writeFileSync(join(nativeDir, 'conpty', 'conpty.dll'), 'conpty-dll')
-  // Both win32 prebuilds exist in the packaged tree (build-time prune keeps the
-  // `win32-` prefix); the copy filter keeps the host arch's and drops the other.
-  const prebuildsRoot = join(root, 'resources', 'node_modules', 'node-pty', 'prebuilds')
-  for (const arch of ['win32-x64', 'win32-arm64']) {
-    mkdirSync(join(prebuildsRoot, arch), { recursive: true })
-    writeFileSync(join(prebuildsRoot, arch, 'pty.node'), `${arch}-prebuild`)
-  }
-  const processTreeDir = join(root, 'resources', 'node_modules', '@vscode', 'windows-process-tree')
-  mkdirSync(join(processTreeDir, 'build', 'Release'), { recursive: true })
-  mkdirSync(join(processTreeDir, 'lib'), { recursive: true })
-  mkdirSync(join(processTreeDir, 'src'), { recursive: true })
-  writeFileSync(join(processTreeDir, 'package.json'), '{"main":"lib/index.js"}')
-  writeFileSync(join(processTreeDir, 'lib', 'index.js'), 'module.exports = {}')
-  writeFileSync(
-    join(processTreeDir, 'build', 'Release', 'windows_process_tree.node'),
-    'process-tree-native'
-  )
-  writeFileSync(join(processTreeDir, 'build', 'Release', 'windows_process_tree.pdb'), 'symbols')
-  writeFileSync(join(processTreeDir, 'src', 'process.cc'), 'source')
-  writeFileSync(join(processTreeDir, 'lib', 'promises.js'), 'require("./index")')
-  mkdirSync(join(processTreeDir, 'build', 'Release', 'obj'), { recursive: true })
-  writeFileSync(join(processTreeDir, 'build', 'Release', 'obj', 'addon.obj'), 'intermediate')
-}
-
-const PROCESS_TREE_DIR_REL = join('resources', 'node_modules', '@vscode', 'windows-process-tree')
-
-const PROCESS_TREE_ADDON_REL = join(
-  'resources',
-  'node_modules',
-  '@vscode',
-  'windows-process-tree',
-  'build',
-  'Release',
-  'windows_process_tree.node'
-)
-
-// The win32 prebuild dir the running host arch loads vs. the one that is pruned.
-const HOST_PREBUILD = `win32-${process.arch}`
-const OTHER_PREBUILD = HOST_PREBUILD === 'win32-arm64' ? 'win32-x64' : 'win32-arm64'
-
 beforeEach(() => {
   tempDir = mkdtempSync(join(os.tmpdir(), 'daemon-host-relocation-'))
   installDir = join(tempDir, 'app')
@@ -131,7 +63,6 @@ beforeEach(() => {
   localAppDataDir = join(tempDir, 'localAppData')
   mkdirSync(localAppDataDir, { recursive: true })
   process.env.LOCALAPPDATA = localAppDataDir
-  buildInstallFixture(installDir)
   hostApp.isPackaged = true
   hostApp.userDataPath = userDataDir
   hostApp.appPath = join(installDir, 'resources', 'app.asar')
@@ -160,271 +91,6 @@ afterEach(() => {
   }
 })
 
-describe('buildDaemonHostManifest', () => {
-  it('mirrors the win-unpacked layout: exe + data blobs + resources tree, no GPU DLLs', () => {
-    const appDir = 'C:\\app'
-    const ops = buildDaemonHostManifest({
-      appDir,
-      execPath: 'C:\\app\\Orca.exe',
-      resourcesPath: 'C:\\app\\resources',
-      entrySourcePath: 'C:\\app\\resources\\app.asar.unpacked\\out\\main\\daemon-entry.js',
-      entryRelPath: 'resources/app.asar.unpacked/out/main/daemon-entry.js',
-      windowsProcessTreeDir: 'C:\\app\\resources\\node_modules\\@vscode\\windows-process-tree'
-    })
-    const byDest = new Map(ops.map((op) => [op.destRel, op]))
-    // The host exe keeps the source basename: a verbatim, signature-preserving copy with no
-    // image-name mismatch. What escapes the updater's sweep is the path, not the name.
-    expect(byDest.get('Orca.exe')?.kind).toBe('file')
-    const exeOp = ops.find((op) => op.sourcePath === 'C:\\app\\Orca.exe')
-    expect(exeOp?.destRel).toBe('Orca.exe')
-    // Without this op the relocated daemon cannot resolve the native process
-    // table and falls back to a powershell.exe scan per snapshot (#16905).
-    expect(byDest.get('resources/node_modules/@vscode/windows-process-tree')?.kind).toBe('dir')
-    // V8/ICU data blobs are read by the Electron bootstrap and kept.
-    expect(byDest.has('icudtl.dat')).toBe(true)
-    // GPU/graphics DLLs are never loaded by the windowless host, so not copied.
-    expect(byDest.has('ffmpeg.dll')).toBe(false)
-    expect(byDest.has('libEGL.dll')).toBe(false)
-    // Daemon bundle + node-pty mirrored at their real resources-relative paths.
-    expect(byDest.get('resources/app.asar.unpacked/out/main/daemon-entry.js')?.kind).toBe('file')
-    expect(byDest.get('resources/app.asar.unpacked/out/main/chunks')?.kind).toBe('dir')
-    // node-pty is copied with a filter dropping .pdb + non-host-arch prebuilds.
-    const nodePtyOp = byDest.get('resources/node_modules/node-pty')
-    expect(nodePtyOp?.kind).toBe('dir')
-    expect(nodePtyOp?.filter?.('node-pty/build/Release/conpty.node')).toBe(true)
-    expect(nodePtyOp?.filter?.('node-pty/build/Release/conpty.pdb')).toBe(false)
-    expect(nodePtyOp?.filter?.(`node-pty/prebuilds/${HOST_PREBUILD}/pty.node`)).toBe(true)
-    expect(nodePtyOp?.filter?.(`node-pty/prebuilds/${OTHER_PREBUILD}/pty.node`)).toBe(false)
-  })
-})
-
-describe('materializeRelocatedDaemonHost', () => {
-  it('copies the tree, writes the marker, and returns mirrored fork paths', () => {
-    const result = materializeRelocatedDaemonHost()
-    expect(result).not.toBeNull()
-    const dest = join(localAppDataDir, 'Orca', 'daemon-host', '9.9.9')
-    expect(result?.execPath).toBe(join(dest, 'Orca.exe'))
-    expect(result?.entryPath).toBe(
-      join(dest, 'resources', 'app.asar.unpacked', 'out', 'main', 'daemon-entry.js')
-    )
-    expect(existsSync(result!.execPath)).toBe(true)
-    expect(existsSync(result!.entryPath)).toBe(true)
-    // node-pty native + conpty runtime copied at the require-resolvable path.
-    expect(
-      existsSync(
-        join(dest, 'resources', 'node_modules', 'node-pty', 'build', 'Release', 'conpty.node')
-      )
-    ).toBe(true)
-    expect(
-      existsSync(join(dest, 'resources', 'app.asar.unpacked', 'out', 'main', 'chunks', 'a.js'))
-    ).toBe(true)
-    // Trim: GPU DLLs, .pdb debug symbols, and non-host-arch prebuilds excluded;
-    // the host arch's prebuild is retained so node-pty resolves its native addon.
-    expect(existsSync(join(dest, 'ffmpeg.dll'))).toBe(false)
-    expect(existsSync(join(dest, 'libEGL.dll'))).toBe(false)
-    expect(
-      existsSync(
-        join(dest, 'resources', 'node_modules', 'node-pty', 'build', 'Release', 'conpty.pdb')
-      )
-    ).toBe(false)
-    const prebuildsDest = join(dest, 'resources', 'node_modules', 'node-pty', 'prebuilds')
-    expect(existsSync(join(prebuildsDest, HOST_PREBUILD, 'pty.node'))).toBe(true)
-    expect(existsSync(join(prebuildsDest, OTHER_PREBUILD, 'pty.node'))).toBe(false)
-    // Marker records the version + entry rel path, written into the published dir.
-    const marker = JSON.parse(readFileSync(join(dest, '.materialized.json'), 'utf8'))
-    expect(marker.version).toBe('9.9.9')
-    expect(marker.entryRelPath).toBe('resources/app.asar.unpacked/out/main/daemon-entry.js')
-    // The whole package is mirrored, so require() finds every hop it walks.
-    const processTreeDest = join(
-      dest,
-      'resources',
-      'node_modules',
-      '@vscode',
-      'windows-process-tree'
-    )
-    expect(existsSync(join(processTreeDest, 'build', 'Release', 'windows_process_tree.node'))).toBe(
-      true
-    )
-    expect(existsSync(join(processTreeDest, 'lib', 'index.js'))).toBe(true)
-    expect(existsSync(join(processTreeDest, 'lib', 'promises.js'))).toBe(true)
-    // Build intermediates are ~25MB of the installed package; the loader never reads them.
-    expect(existsSync(join(processTreeDest, 'build', 'Release', 'windows_process_tree.pdb'))).toBe(
-      false
-    )
-    expect(existsSync(join(processTreeDest, 'build', 'Release', 'obj'))).toBe(false)
-    expect(existsSync(join(processTreeDest, 'src'))).toBe(false)
-    // The loader requires the BARE package, so resolution runs through the copied
-    // package.json's `main`. Asserting the .node subpath instead would still pass
-    // with package.json dropped from the filter, while the daemon's own require
-    // failed and it silently went back to the CIM scan.
-    expect(
-      createRequire(
-        join(dest, 'resources', 'app.asar.unpacked', 'out', 'main', 'chunks', 'a.js')
-      ).resolve('@vscode/windows-process-tree')
-    ).toBe(realpathSync(join(processTreeDest, 'lib', 'index.js')))
-  })
-
-  it('copies the exe verbatim: same file name and same bytes as the install-dir exe', () => {
-    const result = materializeRelocatedDaemonHost()
-    const sourceExe = join(installDir, 'Orca.exe')
-    // Byte-for-byte under the same name is what preserves the Authenticode signature and leaves
-    // no renamed-image signal for endpoint detection to read as masquerading.
-    expect(basename(result!.execPath)).toBe(basename(sourceExe))
-    expect(readFileSync(result!.execPath)).toEqual(readFileSync(sourceExe))
-  })
-
-  it('tracks a differently-named app exe rather than pinning an image name of its own', () => {
-    // A dev-channel or rebranded build ships a different executableName; the host copy must follow
-    // it, which is what keeps the copy verbatim instead of reintroducing a name mismatch.
-    renameSync(join(installDir, 'Orca.exe'), join(installDir, 'Orca Nightly.exe'))
-    setProcessProp('execPath', join(installDir, 'Orca Nightly.exe'))
-    const result = materializeRelocatedDaemonHost()
-    const dest = join(localAppDataDir, 'Orca', 'daemon-host', '9.9.9')
-    expect(result?.execPath).toBe(join(dest, 'Orca Nightly.exe'))
-    expect(existsSync(join(dest, 'orca-terminal-daemon.exe'))).toBe(false)
-    // Re-resolution must agree with materialization or the fork would target a missing exe.
-    expect(getRelocatedDaemonHost()?.execPath).toBe(join(dest, 'Orca Nightly.exe'))
-  })
-
-  it.each([
-    ['the binary', PROCESS_TREE_ADDON_REL],
-    ['package.json', join(PROCESS_TREE_DIR_REL, 'package.json')],
-    ['lib/index.js', join(PROCESS_TREE_DIR_REL, 'lib', 'index.js')]
-  ])('refuses a mirror that lost %s', (_label, relativePath) => {
-    // Any one of them missing means require() cannot reach the addon, and a host
-    // that cannot load it runs anyway -- forking a shell per snapshot (#16905).
-    materializeRelocatedDaemonHost()
-    const dest = join(localAppDataDir, 'Orca', 'daemon-host', '9.9.9')
-    expect(getRelocatedDaemonHost()).not.toBeNull()
-
-    rmSync(join(dest, relativePath))
-
-    expect(getRelocatedDaemonHost()).toBeNull()
-  })
-
-  it('rematerializes a host whose copied addon went missing', () => {
-    materializeRelocatedDaemonHost()
-    const dest = join(localAppDataDir, 'Orca', 'daemon-host', '9.9.9')
-    const relocatedAddon = join(dest, PROCESS_TREE_ADDON_REL)
-
-    rmSync(relocatedAddon)
-    // A sentinel proves the host was rebuilt rather than reused.
-    const sentinel = join(dest, 'sentinel.txt')
-    writeFileSync(sentinel, 'remove')
-
-    expect(materializeRelocatedDaemonHost()).not.toBeNull()
-    expect(readFileSync(relocatedAddon, 'utf8')).toBe('process-tree-native')
-    expect(existsSync(sentinel)).toBe(false)
-  })
-
-  it('does not read the install dir to decide an existing host is still good', () => {
-    // Relocation exists to outlive the install dir, so validity cannot depend on
-    // it: an updater mid-copy would otherwise condemn an intact host. A real
-    // upgrade changes the version keying this directory, which already forces a
-    // rebuild, and nothing else in the mirror is source-verified either.
-    materializeRelocatedDaemonHost()
-    const dest = join(localAppDataDir, 'Orca', 'daemon-host', '9.9.9')
-    const sentinel = join(dest, 'sentinel.txt')
-    writeFileSync(sentinel, 'keep')
-
-    rmSync(join(installDir, 'resources', 'node_modules', '@vscode'), {
-      recursive: true,
-      force: true
-    })
-
-    expect(getRelocatedDaemonHost()).not.toBeNull()
-    expect(existsSync(sentinel)).toBe(true)
-  })
-
-  it.each([
-    ['the binary', PROCESS_TREE_ADDON_REL],
-    ['package.json', join(PROCESS_TREE_DIR_REL, 'package.json')],
-    ['lib/index.js', join(PROCESS_TREE_DIR_REL, 'lib', 'index.js')]
-  ])('refuses to copy anything when the install lost %s', (_label, relativePath) => {
-    // Each of these would be accepted by the copy plan and then refused by the
-    // mirror check, which is a ~260MB copy per launch to reach a verdict the
-    // source could have given for free. Sharing one list is what prevents that.
-    rmSync(join(installDir, relativePath))
-
-    expect(materializeRelocatedDaemonHost()).toBeNull()
-    // Not even the host root: the source is checked before any directory is made.
-    expect(existsSync(join(localAppDataDir, 'Orca', 'daemon-host'))).toBe(false)
-  })
-
-  it('is idempotent: a valid marker short-circuits without recopying', () => {
-    materializeRelocatedDaemonHost()
-    const dest = join(localAppDataDir, 'Orca', 'daemon-host', '9.9.9')
-    // A recopy would rm the dest; a sentinel inside it must survive the 2nd call.
-    const sentinel = join(dest, 'sentinel.txt')
-    writeFileSync(sentinel, 'keep')
-    const result = materializeRelocatedDaemonHost()
-    expect(result?.execPath).toBe(join(dest, 'Orca.exe'))
-    expect(existsSync(sentinel)).toBe(true)
-  })
-
-  it('fails open on a missing required input, leaving no dest or staging dir', () => {
-    rmSync(join(installDir, 'resources', 'node_modules', 'node-pty'), {
-      recursive: true,
-      force: true
-    })
-    const result = materializeRelocatedDaemonHost()
-    expect(result).toBeNull()
-    const hostRoot = join(localAppDataDir, 'Orca', 'daemon-host')
-    // Neither the published dest nor any leftover staging dir remains.
-    const remaining = existsSync(hostRoot) ? readdirSync(hostRoot) : []
-    expect(remaining).toEqual([])
-  })
-
-  it('returns null off win32', () => {
-    setProcessProp('platform', 'darwin')
-    expect(materializeRelocatedDaemonHost()).toBeNull()
-    expect(existsSync(join(localAppDataDir, 'Orca', 'daemon-host'))).toBe(false)
-  })
-
-  it('does nothing for a packaged host with no asar root (orcad on win32)', () => {
-    // orcad answers isPackaged() true — it is a shipped build — but it is plain Node: no
-    // asar, no resourcesPath, and no NSIS updater to escape. Relocation staging a copy of
-    // an Electron tree that is not there is the isPackaged-honesty defect, and it would
-    // silently produce a null host on a path whose failures are meant to be visible.
-    hostApp.appPath = join(installDir, 'resources', 'app')
-    installHostApp()
-    expect(materializeRelocatedDaemonHost()).toBeNull()
-    expect(getRelocatedDaemonHost()).toBeNull()
-    expect(existsSync(join(localAppDataDir, 'Orca', 'daemon-host'))).toBe(false)
-  })
-})
-
-describe('getRelocatedDaemonHost', () => {
-  it('returns null when the marker version does not match the current version', () => {
-    const dest = join(localAppDataDir, 'Orca', 'daemon-host', '9.9.9')
-    mkdirSync(dirname(join(dest, 'x')), { recursive: true })
-    writeFileSync(join(dest, 'Orca.exe'), 'exe')
-    mkdirSync(join(dest, 'resources', 'app.asar.unpacked', 'out', 'main'), { recursive: true })
-    writeFileSync(
-      join(dest, 'resources', 'app.asar.unpacked', 'out', 'main', 'daemon-entry.js'),
-      'e'
-    )
-    // The process-table files too, or this passes because the mirror has no addon
-    // and never exercises the version comparison it is named for.
-    mkdirSync(join(dest, PROCESS_TREE_DIR_REL, 'lib'), { recursive: true })
-    mkdirSync(dirname(join(dest, PROCESS_TREE_ADDON_REL)), { recursive: true })
-    writeFileSync(join(dest, PROCESS_TREE_DIR_REL, 'package.json'), '{}')
-    writeFileSync(join(dest, PROCESS_TREE_DIR_REL, 'lib', 'index.js'), 'm')
-    writeFileSync(join(dest, PROCESS_TREE_ADDON_REL), 'n')
-    writeFileSync(
-      join(dest, '.materialized.json'),
-      JSON.stringify({
-        version: '8.8.8',
-        completedAt: '',
-        entryRelPath: 'resources/app.asar.unpacked/out/main/daemon-entry.js'
-      })
-    )
-    expect(getRelocatedDaemonHost()).toBeNull()
-  })
-})
-
-// Why: quarantine refuses records written in the last minute, because an in-flight publish is
-// indistinguishable from a torn one. Age a record so it stands for a settled corrupt record.
 function ageRecordPastQuarantineFloor(recordPath: string): void {
   const aged = new Date(Date.now() - 5 * 60_000)
   utimesSync(recordPath, aged, aged)

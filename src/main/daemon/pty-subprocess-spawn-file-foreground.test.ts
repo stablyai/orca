@@ -1,4 +1,4 @@
-import type { IPty } from 'node-pty'
+import type { TerminalProcess } from '../../shared/terminal-process'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ProcessTableRow } from '../../shared/process-table-snapshot'
 import type * as SnapshotReader from '../../shared/process-table-snapshot-reader'
@@ -68,11 +68,10 @@ function table(command: string | null, loginWrapper = false): ProcessTableRow[] 
 }
 
 function createHandle(loginWrapper = false) {
-  const proc: IPty & { processNameIsSpawnFile: true } = {
+  const proc: TerminalProcess & { processNameIsSpawnFile: true } = {
     pid: 100,
     cols: 80,
     rows: 24,
-    handleFlowControl: false,
     process: loginWrapper ? '/Applications/Orca shell login' : '/bin/zsh',
     processNameIsSpawnFile: true,
     onData: () => ({ dispose() {} }),

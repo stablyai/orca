@@ -2,6 +2,7 @@ import { app } from 'electron'
 import { classifyError } from '../telemetry/classify-error'
 import { track } from '../telemetry/client'
 import { getPtyIdForPaneKey } from '../ipc/pty'
+import { tryGetProviderForPty } from '../ipc/pty/provider/registry'
 import {
   getDaemonProvider,
   initDaemonPtyProvider,
@@ -99,6 +100,8 @@ export async function reapRestoredSubagentsWithoutLiveAgent(): Promise<void> {
   )
   await sweepRestoredSubagentsWithoutLiveAgent({
     probeLiveLocalPty: (ptyId) => provider.probePtyLiveness(ptyId),
+    probeLiveWslPty: async (ptyId) =>
+      (await tryGetProviderForPty(ptyId)?.probePtyLiveness?.(ptyId)) ?? null,
     isLocalExecutionHost: (worktreeId) =>
       isLocalExecutionHost(
         resolveAgentWorkspaceExecutionHostId(worktreeId, {
@@ -182,10 +185,10 @@ export function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServ
       logStartupMilestone('startup-service-done', { service: 'agent-hook-server' })
     },
     onDaemonError: (error) => {
-      // Why: daemon failure silently falls back to non-persistent local PTYs; log + telemetry so a fleet-wide outage is observable (was invisible in v1.4.129-rc.1).
+      // Report service failure without implying terminal ownership moved into Electron.
       const reason = error instanceof Error ? error.message : String(error)
       console.error(
-        `[daemon] STARTUP FAILED — falling back to local PTYs; terminals will not persist across quit. Reason: ${reason}`
+        `[daemon] STARTUP FAILED — new terminals are unavailable until the terminal service recovers. Reason: ${reason}`
       )
       track('daemon_start_failed', classifyError(error))
     },

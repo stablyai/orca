@@ -365,7 +365,7 @@ describe('wsl.exe is spawned through one runner', () => {
     // so it passed even for a scanner that found nothing. This fails the moment
     // detection stops seeing a call that is definitely there.
     expect(offenders).toContain('main/git/command-runner/wsl-command-resolution.ts')
-    expect(offenders).toContain('main/providers/local-pty-spawn.ts')
+    expect(offenders).not.toContain('main/providers/local-pty-spawn.ts')
   })
 
   it('adds no new direct wsl.exe spawn', () => {

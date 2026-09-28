@@ -5,6 +5,7 @@ const RUNNING_PROBE_RETRY_DELAY_MS = 60_000
 
 export type WslRelayRecoveryState = {
   distro: string
+  user?: string
   cooldownUntil: number
   restartTimer?: ReturnType<typeof setTimeout>
   reinstallTimer?: ReturnType<typeof setTimeout>
@@ -16,7 +17,7 @@ export type WslRelayRecoveryIo = {
   isDisposed: () => boolean
   /** True while this state object is still the one in the manager's map. */
   isCurrent: (state: WslRelayRecoveryState) => boolean
-  restart: (distro: string) => void
+  restart: (distro: string, user?: string) => void
   dropState: (state: WslRelayRecoveryState) => void
 }
 
@@ -92,6 +93,6 @@ export class WslRelayRecovery {
       this.io.dropState(state)
       return
     }
-    this.io.restart(state.distro)
+    this.io.restart(state.distro, ...(state.user ? [state.user] : []))
   }
 }

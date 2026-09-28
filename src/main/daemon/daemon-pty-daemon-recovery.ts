@@ -12,7 +12,9 @@ import type { PtyBackgroundStreamEvent } from '../providers/types'
 export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersistence {
   // Why: the token read no longer throws, so audit its absence directly after an authenticated drop.
   protected isRetiredEndpointTokenMissing(): boolean {
-    return this.client.hasObservedAuthenticatedDisconnect() && !existsSync(this.tokenPath)
+    return (
+      !this.guest && this.client.hasObservedAuthenticatedDisconnect() && !existsSync(this.tokenPath)
+    )
   }
 
   protected async withDaemonRetry<T>(fn: () => Promise<T>): Promise<T> {
@@ -118,7 +120,7 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
   }
 
   protected async replaceUnhealthyMacResolverDaemonBeforeNewPty(): Promise<void> {
-    if (!this.respawnFn) {
+    if (this.guest || !this.respawnFn) {
       return
     }
 
@@ -157,7 +159,7 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
 
   /** Replace a stale packaged daemon only after its live sessions drain. */
   protected async replaceStaleBundleDaemonBeforeNewPty(): Promise<void> {
-    if (!this.respawnFn || !this.runtimeDir || !this.packagedAppVersion) {
+    if (this.guest || !this.respawnFn || !this.runtimeDir || !this.packagedAppVersion) {
       return
     }
     if (!this.staleBundleReplacementPromise) {
@@ -212,7 +214,7 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
   /** Replace a TCC-severed daemon only after its live sessions drain. */
   protected async replaceSeveredMacTccDaemonBeforeNewPty(): Promise<void> {
     // Why no platform gate: getMacDaemonTccAttributionHealth returns 'unknown' off macOS.
-    if (!this.respawnFn || !this.runtimeDir) {
+    if (this.guest || !this.respawnFn || !this.runtimeDir) {
       return
     }
 

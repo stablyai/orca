@@ -2,10 +2,17 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProcessResult, ProcessSpec } from '../../shared/child-process/run-process'
 import { ORCAD_BUN_VERSION } from '../../shared/orcad-bun-runtime'
-import { ORCAD_STARTUP_PREFLIGHT_FLAG } from '../../shared/orcad-profile-preflight'
+import {
+  ORCAD_STARTUP_PREFLIGHT_FLAG,
+  ORCAD_NATIVE_PREFLIGHT_CHILD_FLAG
+} from '../../shared/orcad-profile-preflight'
 import { OrcadBundledRuntimeError } from './orcad-bundled-runtime'
 import { resolveOrcadExitCode } from './orcad-exit-code'
-import { preflightBundledOrcadStartup, runOrcadProfilePreflight } from './orcad-profile-preflight'
+import {
+  preflightBundledOrcadStartup,
+  runOrcadProfilePreflight,
+  runBundledWindowsProfilePreflight
+} from './orcad-profile-preflight'
 
 const fixture = vi.hoisted(() => ({
   identity: vi.fn(),
@@ -205,3 +212,39 @@ describe('bundled Orca startup readiness', () => {
     expect(output).toHaveBeenCalledWith(readyResult(nonce).stdout)
   })
 })
+
+it('runs explicit Windows native checks in a child with the selected initial environment', async () => {
+  vi.stubEnv('BUN_CONPTY_LIBRARY', 'C:\\slot\\conpty\\conpty.dll')
+  const output = vi.spyOn(console, 'log').mockImplementation(() => {})
+  try {
+    await runBundledWindowsProfilePreflight(nonce)
+    expect(fixture.run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        program: join('/slot', 'bun-runtime.exe'),
+        args: [
+          '--no-env-file',
+          '--config=NUL',
+          '--no-install',
+          join('/slot', 'orcad.js'),
+          ORCAD_NATIVE_PREFLIGHT_CHILD_FLAG,
+          nonce
+        ],
+        env: expect.objectContaining({ BUN_CONPTY_LIBRARY: 'C:\\slot\\conpty\\conpty.dll' }),
+        terminationBarrier: true
+      })
+    )
+    expect(fixture.native).not.toHaveBeenCalled()
+    expect(fixture.sql).not.toHaveBeenCalled()
+    expect(output).toHaveBeenCalledWith(readyResult(nonce).stdout)
+  } finally {
+    vi.unstubAllEnvs()
+  }
+})
+
+it.each([{ code: 78 }, { timedOut: true }, { outputTruncated: true }])(
+  'rejects a failed Windows native child: %j',
+  async (failure) => {
+    fixture.run.mockResolvedValue({ ...readyResult(nonce), ...failure })
+    await expect(runBundledWindowsProfilePreflight(nonce)).rejects.toThrow('failed readiness')
+  }
+)

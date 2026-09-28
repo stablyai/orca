@@ -96,7 +96,6 @@ vi.mock('./relay-grace-lifecycle', () => ({
 
 import { createMockDispatcher } from './pty-handler-test-harness'
 import { runRelayDaemon } from './relay-daemon'
-import { __setConptyJobNativeForTests } from '../main/windows/windows-pty-job'
 
 describe('relay daemon fatal PTY reap', () => {
   let originalPlatform: PropertyDescriptor | undefined
@@ -137,7 +136,6 @@ describe('relay daemon fatal PTY reap', () => {
     }
     const handler = daemonMocks.runtimePtyHandler as PtyHandler | null
     await handler?.dispose({ waitForPhysicalExit: false }).catch(() => {})
-    __setConptyJobNativeForTests()
     vi.restoreAllMocks()
     if (originalPlatform) {
       Object.defineProperty(process, 'platform', originalPlatform)
@@ -150,15 +148,18 @@ describe('relay daemon fatal PTY reap', () => {
       throw new Error('ConPTY close failed')
     })
     const secondKill = vi.fn()
+    const terminateJob = vi.fn((id: number) =>
+      id === 22 ? ('terminated' as const) : ('unavailable' as const)
+    )
     daemonMocks.mockPtySpawn
-      .mockReturnValueOnce(createMockPty(11, 101, firstKill))
-      .mockReturnValueOnce(createMockPty(22, 202, secondKill))
-    const terminateJob = vi.fn((id: number) => id === 22)
-    __setConptyJobNativeForTests(() => ({
-      terminateJob,
-      listJobProcessIds: vi.fn(),
-      assignCurrentProcessToJob: vi.fn()
-    }))
+      .mockReturnValueOnce({
+        ...createMockPty(11, 101, firstKill),
+        terminateOwnedTree: () => terminateJob(11)
+      })
+      .mockReturnValueOnce({
+        ...createMockPty(22, 202, secondKill),
+        terminateOwnedTree: () => terminateJob(22)
+      })
     const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
 
     await runRelayDaemon({
@@ -178,10 +179,7 @@ describe('relay daemon fatal PTY reap', () => {
     expect(fatalListener).toBeDefined()
     fatalListener!(new Error('relay crashed'), 'uncaughtException')
 
-    expect(terminateJob.mock.calls).toEqual([
-      [11, 101],
-      [22, 202]
-    ])
+    expect(terminateJob.mock.calls).toEqual([[11], [22]])
     expect(firstKill).toHaveBeenCalledOnce()
     expect(firstKill.mock.calls[0]).toEqual([])
     expect(secondKill).not.toHaveBeenCalled()

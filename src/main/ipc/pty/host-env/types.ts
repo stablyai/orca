@@ -1,3 +1,4 @@
+import type { WslAccountExecutionContext } from '../../../wsl/wsl-account-execution-context'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session-resume'
 import type { NetworkProxySettings } from '../../../../shared/network-proxy'
@@ -26,6 +27,8 @@ export type BuildPtyHostEnvOptions = {
   isWsl?: boolean
   /** Distro for WSL spawns (null = Windows default distro); drives the WSL hook relay + endpoint repoint. Only read when isWsl. */
   wslDistro?: string | null
+  /** Persisted guest owner; omitted for legacy Windows-owned WSL panes. */
+  wslUser?: string
   agentStatusHooksEnabled: boolean
   /** Per-agent opt-out; disabled agents must not receive managed extensions. */
   disabledTuiAgents?: Iterable<unknown> | null
@@ -39,6 +42,7 @@ export type BuildPtyHostEnvOptions = {
 
 export type CodexHomeLaunchContext = {
   workspacePath?: string
+  wslExecution?: WslAccountExecutionContext
   launchAgent?: TuiAgent
   unavailableManagedHomePath?: string
 }
@@ -53,6 +57,7 @@ export type GetSelectedCodexHomePath = (
 ) => string | null | Promise<string | null>
 
 export type PrepareCodexSessionResume = (args: {
+  wslExecution?: WslAccountExecutionContext
   providerSession: AgentProviderSessionMetadata
   target: CodexAccountSelectionTarget
   launchEnv?: NodeJS.ProcessEnv
@@ -76,5 +81,6 @@ export function allocatePtyLifecycleSequence(): number {
 }
 
 export type PrepareClaudeAuth = (
-  target?: ClaudeAccountSelectionTarget
+  target?: ClaudeAccountSelectionTarget,
+  execution?: WslAccountExecutionContext
 ) => Promise<ClaudeRuntimeAuthPreparation>

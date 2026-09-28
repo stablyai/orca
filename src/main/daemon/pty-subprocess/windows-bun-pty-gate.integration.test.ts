@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { runProcess, runProcessSync } from '../../../shared/child-process/run-process'
 import { orcadBunRuntimeFilename } from '../../../shared/orcad-artifacts'
-import { ORCAD_BUN_VERSION } from '../../../shared/orcad-bun-runtime'
+import { ORCAD_BUN_VERSION, orcadBunVersionProbeArgs } from '../../../shared/orcad-bun-runtime'
 import { createWindowsBunPtyLaunch } from './windows-bun-pty-launch'
 
 const runtimePath =
@@ -15,9 +15,12 @@ const available = existsSync(runtimePath)
 
 describe.skipIf(!available)('bundled Windows job gate under Bun', () => {
   it('executes the worker with real Bun flags and preserves long executable argv', async () => {
-    expect(runProcessSync({ program: runtimePath, args: ['--version'] }).stdout.trim()).toBe(
-      ORCAD_BUN_VERSION
-    )
+    expect(
+      runProcessSync({
+        program: runtimePath,
+        args: [...orcadBunVersionProbeArgs()]
+      }).stdout.trim()
+    ).toBe(ORCAD_BUN_VERSION)
     const directory = mkdtempSync(join(tmpdir(), 'orca-gate-contract-'))
     const workerPath = join(directory, 'windows-bun-pty-gate-entry.js')
     try {

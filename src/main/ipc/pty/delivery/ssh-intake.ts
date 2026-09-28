@@ -5,7 +5,7 @@ import {
   installSshPtyOutputIntake,
   publishSshPtySourceAck
 } from '../../ssh-pty-output-intake-registry'
-import { sshProvidersByGeneration } from '../provider/registry'
+import { relayProvidersByGeneration } from '../../../providers/relay-pty-generation-registry'
 import { setSshOutputIntakeCleanup, sshOutputIntakeCleanup } from '../provider/listener-lifecycle'
 import type { PtyIpcSession } from '../session'
 
@@ -51,9 +51,7 @@ export function installSessionSshOutputIntake(session: PtyIpcSession): void {
       session.finalizePtyExitForRenderer(event)
     },
     pauseProvider: (generation, id) => {
-      const provider = sshProvidersByGeneration.get(generation) as
-        | (IPtyProvider & { hasPtyDeliveryPauseAdapter?: () => boolean })
-        | undefined
+      const provider = relayProvidersByGeneration.get(generation)
       if (!provider?.hasPtyDeliveryPauseAdapter?.()) {
         return false
       }
@@ -61,9 +59,9 @@ export function installSessionSshOutputIntake(session: PtyIpcSession): void {
       return true
     },
     resumeProvider: (generation, id) =>
-      sshProvidersByGeneration.get(generation)?.resumeProducer?.(id),
+      relayProvidersByGeneration.get(generation)?.resumeProducer?.(id),
     closeProvider: (generation, reason) => {
-      const provider = sshProvidersByGeneration.get(generation)
+      const provider = relayProvidersByGeneration.get(generation)
       ;(
         provider as (IPtyProvider & { closeOutputIntake?: (reason: string) => void }) | undefined
       )?.closeOutputIntake?.(reason)
@@ -85,7 +83,7 @@ export function installSessionSshOutputIntake(session: PtyIpcSession): void {
           session.pendingOverflowMarkedPtys.delete(id)
         }
       }
-      sshProvidersByGeneration.delete(providerGeneration)
+      relayProvidersByGeneration.delete(providerGeneration)
     },
     publishSourceAck: publishSshPtySourceAck,
     cancelSourceDelivery: cancelSshPtySourceDelivery

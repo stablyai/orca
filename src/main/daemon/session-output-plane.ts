@@ -24,6 +24,7 @@ export type SessionOutputPlaneOptions = {
   scrollback?: number | undefined
   wslDistro?: string | undefined
   historySeedChunks?: readonly string[] | undefined
+  requireSynchronousOutput?: boolean
   /** Read from the recovery barrier at snapshot time; the barrier scans bytes
    *  before this plane receives them, so its owner never lags the emulator. */
   getTerminalOwner?: (() => TerminalOwner | undefined) | undefined
@@ -43,6 +44,7 @@ export class SessionOutputPlane {
   private _outputSequence = 0
   private deviceAttributesQueryFilter: StartupDeviceAttributesQueryFilter | null = null
   private disposed = false
+  private exit: { code: number; incarnationId: string; cause?: TerminalExitCause } | undefined
 
   constructor(opts: SessionOutputPlaneOptions) {
     const size = normalizePtySize(opts.cols, opts.rows)
@@ -63,6 +65,10 @@ export class SessionOutputPlane {
       opts.historySeedChunks === undefined
         ? undefined
         : opts.historySeedChunks.every((chunk) => this.emulator.writeSync(chunk))
+    if (opts.requireSynchronousOutput && !this.emulator.writeSync('')) {
+      this.emulator.dispose()
+      throw new Error('Startup terminal output requires synchronous parsing')
+    }
     this.readTerminalOwner = opts.getTerminalOwner
   }
 
@@ -74,9 +80,40 @@ export class SessionOutputPlane {
     return this.attachedClients.length > 0
   }
 
-  attachClient(client: Omit<AttachedClient, 'token'>): symbol {
+  attachClient(client: Omit<AttachedClient, 'token'>, replayStartup = false): symbol {
     const token = Symbol('attach')
     this.attachedClients.push({ token, ...client })
+    try {
+      if (replayStartup && this._outputSequence > 0) {
+        if (this.pendingOutputOverflowed) {
+          const snapshot = this.getSnapshot()
+          if (!snapshot) {
+            throw new Error('Startup terminal snapshot is unavailable')
+          }
+          {
+            client.onData(
+              `\x1b[3J\x1b[2J\x1b[H${snapshot.scrollbackAnsi}${snapshot.rehydrateSequences}${
+                snapshot.snapshotAnsi
+              }${snapshot.pendingEscapeTailAnsi ?? ''}`,
+              this._outputSequence,
+              true,
+              this._outputSequence
+            )
+          }
+        } else {
+          const data = this.pendingOutputRecords
+            .flatMap((record) => (record.kind === 'output' ? [record.data] : []))
+            .join('')
+          client.onData(data, this._outputSequence, true, this._outputSequence)
+        }
+      }
+    } catch (error) {
+      this.detachClient(token)
+      throw error
+    }
+    if (replayStartup && this.exit) {
+      client.onExit(this.exit.code, this.exit.incarnationId, this.exit.cause)
+    }
     return token
   }
 
@@ -100,6 +137,7 @@ export class SessionOutputPlane {
     // Why the fallback here: a handle that predates exit causes still reports a
     // code, and every client deserves the same shape.
     const resolved = cause ?? resolveProcessExitCause({ exitCode: code })
+    this.exit = { code, incarnationId, cause: resolved }
     for (const client of this.attachedClients) {
       client.onExit(code, incarnationId, resolved)
     }

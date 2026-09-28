@@ -49,7 +49,6 @@ main/workspace-space-analysis.ts
 main/wsl-availability.ts
 main/wsl-unc-delete.ts
 main/wsl.ts
-main/zsh-startup-hook-pty-harness.ts
 relay/agent-exec-handler.ts
 relay/external-automations-handler.ts
 relay/fs-handler-git-fallback.ts

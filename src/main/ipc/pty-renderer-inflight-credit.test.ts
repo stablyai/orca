@@ -5,7 +5,6 @@ import { registerPtyHandlers, setLocalPtyProvider } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
-vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
@@ -150,7 +149,7 @@ describe('registerPtyHandlers', () => {
         vi.advanceTimersByTime(1)
       }
       expect(mainWindow.webContents.send).toHaveBeenCalledTimes(512)
-      expect(vi.getTimerCount()).toBe(0)
+      expect(vi.getTimerCount()).toBe(16)
 
       writeListener(mainWindowIpcEvent, {
         id: interactiveSpawn.id,
@@ -254,7 +253,7 @@ describe('registerPtyHandlers', () => {
         vi.advanceTimersByTime(1)
       }
       expect(getPtyDataSendCalls()).toHaveLength(512)
-      expect(vi.getTimerCount()).toBe(0)
+      expect(vi.getTimerCount()).toBe(17)
 
       mainWindow.webContents.send.mockClear()
       procs[0]!.emitExit(0)

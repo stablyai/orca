@@ -20,10 +20,17 @@ on:
       - '.github/actions/load-windows-watcher-artifacts/**'
   workflow_dispatch:
     inputs:
+      linux_package:
+        description: Package and test Linux x64 and ARM64 without publishing a release
+        type: boolean
+        default: false
       signed_mac_package:
         description: Sign, notarize and test macOS packages without publishing a release
         type: boolean
         default: false
+
+env:
+  ORCA_TEST_REQUIRE_ORCAD_ARTIFACTS: '1'
 
 permissions:
   contents: read
@@ -183,7 +190,7 @@ jobs:
       - name: Verify native Alpine artifact and persistence
         run: |
           docker run --rm --init -i \
-            -e ORCA_BACKGROUND_LAUNCH=1 \
+            -e ORCA_BACKGROUND_LAUNCH=1 -e ORCA_TEST_REQUIRE_ORCAD_ARTIFACTS=1 \
             -v "$GITHUB_WORKSPACE:/work" -w /work \
             node:24-alpine3.23 sh -s <<'BUN_QUALIFICATION'
           set -eu
@@ -199,6 +206,73 @@ jobs:
           pnpm test:bun:profile --artifact
           node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts config/scripts/orcad-companion-artifacts.test.mjs
           BUN_QUALIFICATION
+
+  linux_package:
+    needs: windows_watcher
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.linux_package && needs.windows_watcher.result == 'success' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            arch: x64
+            unpacked_dir: dist/linux-unpacked
+          - os: ubuntu-24.04-arm
+            arch: arm64
+            unpacked_dir: dist/linux-arm64-unpacked
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+      NODE_OPTIONS: --max-old-space-size=4096
+      PACKAGE_ARCH: ${{ matrix.arch }}
+      PACKAGE_DIRECTORY: ${{ matrix.unpacked_dir }}
+      ORCA_LINUX_ARM64_RELEASE: ${{ matrix.arch == 'arm64' && '1' || '0' }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/load-windows-watcher-artifacts
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: electron
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            mobile/pnpm-lock.yaml
+      - uses: ./.github/actions/install-mobile-dependencies
+      - name: Install Linux package and computer-use dependencies
+        run: sudo apt-get update && sudo apt-get install -y python3-gi gir1.2-atspi-2.0 at-spi2-core xclip xdotool rpm
+      - run: pnpm build:release
+      - name: Package without release publication
+        run: |
+          node config/scripts/ensure-native-runtime.mjs --runtime=electron
+          pnpm exec electron-builder --config config/electron-builder.config.cjs --linux AppImage deb rpm --"$PACKAGE_ARCH" --publish never
+      - name: Preserve exact package and provenance
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/linux-package-evidence"
+          git rev-parse HEAD > "$RUNNER_TEMP/linux-package-evidence/source-commit.txt"
+          uname -a > "$RUNNER_TEMP/linux-package-evidence/host-kernel.txt"
+          tar -czf "$RUNNER_TEMP/linux-package-evidence/unpacked-$PACKAGE_ARCH.tar.gz" -C "$PACKAGE_DIRECTORY" .
+          (cd "$PACKAGE_DIRECTORY" && find . -type f -print0 | sort -z | xargs -0 sha256sum) > "$RUNNER_TEMP/linux-package-evidence/payload-sha256.txt"
+          sha256sum dist/*.AppImage dist/*.deb dist/*.rpm > "$RUNNER_TEMP/linux-package-evidence/installers-sha256.txt"
+          (cd "$RUNNER_TEMP/linux-package-evidence" && sha256sum "unpacked-$PACKAGE_ARCH.tar.gz") > "$RUNNER_TEMP/linux-package-evidence/archive-sha256.txt"
+      - name: Qualify packaged terminal on Ubuntu 20.04 userspace
+        run: |
+          set -euo pipefail
+          node config/scripts/run-linux-packaged-terminal-floor-smoke.mjs --app-dir "$PACKAGE_DIRECTORY" 2>&1 | tee "$RUNNER_TEMP/linux-package-evidence/floor-smoke.log"
+      - uses: actions/upload-artifact@v7
+        if: ${{ always() }}
+        with:
+          name: bun-linux-package-${{ matrix.arch }}
+          path: |
+            ${{ runner.temp }}/linux-package-evidence/
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.rpm
+          if-no-files-found: error
+          retention-days: 7
 
   signed_mac_package:
     needs: windows_watcher

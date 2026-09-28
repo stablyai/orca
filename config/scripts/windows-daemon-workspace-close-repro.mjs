@@ -5,7 +5,7 @@
  * graceful-then-immediate kill pair emitted when Orca closes a workspace.
  * The daemon PID and witness session must survive every iteration.
  */
-import { fork } from 'node:child_process'
+import { daemonSmokeEntry, spawnDaemonSmoke } from './daemon-smoke-launch.mjs'
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { connect } from 'node:net'
@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 const projectDir = resolve(import.meta.dirname, '../..')
-const entryPath = join(projectDir, 'out', 'main', 'daemon-entry.js')
+const entryPath = daemonSmokeEntry(projectDir)
 const iterations = Number(process.env.ORCA_WINDOWS_DAEMON_CLOSE_ITERATIONS ?? 25)
 const requestTimeoutMs = 15_000
 
@@ -287,22 +287,21 @@ async function main() {
     return
   }
   if (!existsSync(entryPath)) {
-    throw new Error(`Missing ${entryPath}; run pnpm build:electron-vite first`)
+    throw new Error(`Missing ${entryPath}; run pnpm build:terminal-daemon first`)
   }
 
   const scratch = mkdtempSync(join(tmpdir(), 'orca-windows-daemon-close-'))
   const socketPath = `\\\\.\\pipe\\orca-daemon-close-${process.pid}-${randomUUID()}`
   const tokenPath = join(scratch, 'daemon.token')
   const daemonLogPath = join(scratch, 'daemon.log')
-  const child = fork(
-    entryPath,
-    ['--socket', socketPath, '--token', tokenPath, '--log-file', daemonLogPath],
-    {
-      stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
-      windowsHide: true,
-      env: { ...process.env, ORCA_USER_DATA_PATH: scratch }
-    }
-  )
+  const child = spawnDaemonSmoke(projectDir, scratch, [
+    '--socket',
+    socketPath,
+    '--token',
+    tokenPath,
+    '--log-file',
+    daemonLogPath
+  ])
   const daemonPid = child.pid
   let stderr = ''
   child.stderr?.on('data', (chunk) => {

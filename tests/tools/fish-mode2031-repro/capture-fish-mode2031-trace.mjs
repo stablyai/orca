@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 /**
- * Ground-truth repro harness for issue #9993: color-scheme (CSI ?997;1n) replies
+ * Historical node-pty-only repro for issue #9993: color-scheme (CSI ?997;1n) replies
  * leaking into a child process' stdin under fish.
  *
- * Simulates Orca's terminal pipeline around a REAL fish shell:
+ * Requires the pre-Bun checkout and its patched node-pty dependency.
+ * Current Bun coverage lives in fish-query-reply-child-stdin.bun.test.ts.
+ * Simulates the historical terminal pipeline around a REAL fish shell:
  *   node-pty  ->  scanMode2031ReplyDecision() (the real scanner from
  *                 src/shared/terminal-color-scheme-protocol.ts)
  *             ->  reply `CSI ?997;1n` written back to the PTY, optionally after

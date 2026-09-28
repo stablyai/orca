@@ -1,12 +1,11 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { execFileSync } from 'node:child_process'
+import { readdirSync, readFileSync } from 'node:fs'
+import { join, relative } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { LocalPtyProvider } from './local-pty-provider'
 import { SshPtyProvider } from './ssh-pty-provider'
 import { createMockMux } from './ssh-pty-provider-mock-multiplexer'
 import { DaemonPtyRouter } from '../daemon/daemon-pty-router'
-import { DegradedDaemonPtyProvider } from '../daemon/degraded-daemon-pty-provider'
+import { WslDaemonPtyProvider } from '../wsl/wsl-daemon-pty-provider'
+import { createUnavailablePtyProvider } from './unavailable-pty-provider'
 import { DaemonPtyAdapter } from '../daemon/daemon-pty-adapter'
 
 vi.mock('electron', () => ({
@@ -25,33 +24,35 @@ const REPO_ROOT = join(__dirname, '..', '..', '..')
  * fabricated handoff fails here rather than silently clearing a mailbox reservation.
  */
 const SETTLED_PTY_WRITER_FILES = [
-  'src/main/providers/local-pty-provider.ts',
-  'src/main/providers/ssh-pty-provider.ts',
+  'src/main/providers/relay-pty-provider.ts',
   'src/main/daemon/daemon-pty-router.ts',
-  'src/main/daemon/degraded-daemon-pty-provider.ts',
-  'src/main/daemon/daemon-pty-adapter.ts'
+  'src/main/daemon/daemon-pty-adapter.ts',
+  'src/main/wsl/wsl-daemon-pty-provider.ts'
 ]
 
 /** Where the provider-side settlement is actually decided; the adapter inherits its own. */
 const SETTLED_WRITER_DECLARATIONS = [
-  'src/main/providers/local-pty-provider.ts',
-  'src/main/providers/ssh-pty-provider.ts',
+  'src/main/providers/relay-pty-provider.ts',
   'src/main/providers/ssh-pty-provider-rpc-operations.ts',
   'src/main/daemon/daemon-pty-router.ts',
-  'src/main/daemon/degraded-daemon-pty-provider.ts',
-  'src/main/daemon/daemon-pty-session-input.ts'
+  'src/main/daemon/daemon-pty-session-input.ts',
+  'src/main/wsl/wsl-daemon-pty-provider.ts',
+  'src/main/providers/unavailable-pty-provider.ts'
 ]
 
-function declaredProviderFiles(): string[] {
-  const output = execFileSync('git', ['grep', '-l', '--', 'implements IPtyProvider', 'src/main'], {
-    cwd: REPO_ROOT,
-    encoding: 'utf8'
-  })
-  // Tests may name the clause while pinning it; only production declarations count.
-  return output
-    .split('\n')
-    .filter((file) => file && !file.endsWith('.test.ts'))
-    .sort()
+function declaredProviderFiles(directory = join(REPO_ROOT, 'src/main')): string[] {
+  const files: string[] = []
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const path = join(directory, entry.name)
+    if (entry.isDirectory()) {
+      files.push(...declaredProviderFiles(path))
+    } else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) {
+      if (/\bclass\s+\w+[^{}]*\bimplements\s+IPtyProvider\b/.test(readFileSync(path, 'utf8'))) {
+        files.push(relative(REPO_ROOT, path).split('\\').join('/'))
+      }
+    }
+  }
+  return files.sort()
 }
 
 function settledWriterBody(file: string): string {
@@ -68,18 +69,16 @@ describe('settled PTY writer census', () => {
   })
 
   it('exposes a settled writer on every production provider instance', () => {
-    const daemonClient = { isConnected: () => false, onEvent: vi.fn(() => vi.fn()) }
-    const adapter = new DaemonPtyAdapter(daemonClient as never)
+    const adapter = new DaemonPtyAdapter({
+      socketPath: join(__dirname, 'census.sock'),
+      tokenPath: join(__dirname, 'census.token')
+    })
     const instances = [
-      new LocalPtyProvider({} as never),
       new SshPtyProvider('conn-census', createMockMux() as never),
       new DaemonPtyRouter({ current: adapter, legacy: [] }),
-      new DegradedDaemonPtyProvider({
-        current: adapter,
-        legacy: [],
-        fallback: new LocalPtyProvider({} as never)
-      }),
-      adapter
+      adapter,
+      new WslDaemonPtyProvider({ distro: 'Ubuntu', relayBuildId: 'census-build' }, adapter),
+      createUnavailablePtyProvider()
     ]
     for (const provider of instances) {
       expect(typeof provider.writeWithSettlement, provider.constructor.name).toBe('function')

@@ -1,10 +1,10 @@
+import { createGlobalSettingsFixture } from '../../shared/global-settings-test-fixture'
 import { withFreshOmpLaunch } from '../../shared/omp-fresh-launch'
 import { describe, expect, it, vi } from 'vitest'
 import { piBuildPtyEnvMock, spawnMock } from './pty-ipc-mock-registry'
 import { BUNDLED_CLI_PATH, TEST_CODEX_HOME, makeDisposable } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { delimiter } from 'node:path'
-import { LocalPtyProvider } from '../providers/local-pty-provider'
 import { __resetPersistedWindowsPathCacheForTests } from '../pty/windows-environment-path'
 import { __setWindowsPathRegistryLoaderForTests } from '../pty/windows-path-registry-reader'
 import { hasLiveClaudePtys, markClaudePtySpawned } from '../claude-accounts/live-pty-gate'
@@ -13,7 +13,6 @@ import { registerPtyHandlers, buildPtyHostEnv, clearProviderPtyState } from './p
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
-vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
@@ -237,18 +236,11 @@ describe('registerPtyHandlers', () => {
       __resetPersistedWindowsPathCacheForTests()
 
       try {
-        const provider = new LocalPtyProvider({
-          buildSpawnEnv: (id, baseEnv, context) =>
-            buildPtyHostEnv(id, baseEnv, {
-              isPackaged: true,
-              userDataPath: '/tmp/orca-user-data',
-              selectedCodexHomePath: null,
-              agentStatusHooksEnabled: false,
-              isWsl: context?.isWsl,
-              wslDistro: context?.wslDistro
-            })
-        })
-        await provider.spawn({
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This IPC fixture supplies the BrowserWindow methods used during handler registration.
+        registerPtyHandlers(mainWindow as never, undefined, undefined, () =>
+          createGlobalSettingsFixture({ agentStatusHooksEnabled: false })
+        )
+        await handlers.get('pty:spawn')!(null, {
           cols: 80,
           rows: 24,
           cwd: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo',

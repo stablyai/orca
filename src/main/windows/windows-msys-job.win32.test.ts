@@ -1,3 +1,5 @@
+import { createWindowsBunPtyLaunch } from '../daemon/pty-subprocess/windows-bun-pty-launch'
+import { canUseBunPty, spawnBunPty } from '../daemon/pty-subprocess/bun-pty-process'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -7,7 +9,15 @@ import { resolveGitBashPath } from '../git-bash'
 import { quotePosixShell } from '../../shared/wsl-login-shell-command'
 import { listPtyJobProcessIds, terminatePtyJob } from './windows-pty-job'
 
-const describeOnWindows = process.platform === 'win32' ? describe : describe.skip
+const spawnTestPty: typeof spawnBunPty = (args) =>
+  spawnBunPty(args, {
+    createWindowsLaunch: (launch) =>
+      createWindowsBunPtyLaunch(launch, {
+        workerPath: join(__dirname, '../daemon/pty-subprocess/windows-bun-pty-gate-entry.ts')
+      })
+  })
+
+const describeOnWindows = process.platform === 'win32' && canUseBunPty() ? describe : describe.skip
 
 function isAlive(pid: number): boolean {
   try {
@@ -28,12 +38,17 @@ describeOnWindows('MSYS terminal job ownership', () => {
       script,
       "console.log('MSYS_OWNED_CHILD=' + process.pid); setInterval(() => {}, 1000)\n"
     )
-    const pty = await import('node-pty')
-    const proc = pty.spawn(shell!, ['-c', 'exec "$BASH" --noprofile --norc -i'], {
+    const proc = spawnTestPty({
+      file: shell!,
+      args: ['-c', 'exec "$BASH" --noprofile --norc -i'],
+      env: Object.fromEntries(
+        Object.entries(process.env).filter(
+          (entry): entry is [string, string] => entry[1] !== undefined
+        )
+      ),
       cwd: tmpdir(),
       cols: 120,
-      rows: 30,
-      useConptyDll: true
+      rows: 30
     })
     let output = ''
     let childPid: number | undefined
@@ -49,6 +64,7 @@ describeOnWindows('MSYS terminal job ownership', () => {
       }
     })
     try {
+      await proc.waitForSpawn?.()
       proc.write(
         `${quotePosixShell(process.execPath.replace(/\\/g, '/'))} ${quotePosixShell(script.replace(/\\/g, '/'))}\r`
       )

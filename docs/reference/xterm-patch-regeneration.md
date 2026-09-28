@@ -288,6 +288,19 @@ pnpm's diff flags and normalization, hunk splitting, round-trip stability, the
 commit and build-order assertions, and lockfile coupling — with no network and
 no build, so they run in the ordinary test shards.
 
+## Headless ASCII patch
+
+`@xterm/headless` uses the same pinned source and generator, with output under
+`headless/lib-headless/`. Its tarball omits `src/`, so the manifest lists both
+source maps explicitly. The generator checks embedded source against the pinned
+checkout and applies the readable patch to the old mapped source to verify the
+new maps exactly. Unrecognized mapped sources must remain unchanged.
+
+Headless leaves `Version.ts` at its upstream value; do not add a publish-time
+version stamp. Upstream `package-headless` runs `npm publish --dry-run` afterward;
+it publishes nothing, but can print an already-published-version warning. Bundle
+and map reproduction, rather than that warning, determines generator success.
+
 ## Known Gaps
 
 `@xterm/addon-ligatures` is still patched by hand, and can stay that way: the

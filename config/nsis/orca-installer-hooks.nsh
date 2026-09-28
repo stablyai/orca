@@ -4,6 +4,7 @@
 ; customUnInstall hook Orca needs lives here.
 
 !include "${__FILEDIR__}\orca-process-check.nsh"
+!include "${__FILEDIR__}\orca-bun-terminal-uninstall.nsh"
 
 ; ---------------------------------------------------------------------------
 ; Markdown "Open with Orca" (issue #10138)
@@ -90,6 +91,7 @@
     Pop $0
     nsExec::Exec 'taskkill /F /IM "orca-terminal-daemon.exe" $2'
     Pop $0
+    !insertmacro ORCA_UNINSTALL_BUN_TERMINAL_HOST
     Pop $2
     Pop $1
     Pop $0

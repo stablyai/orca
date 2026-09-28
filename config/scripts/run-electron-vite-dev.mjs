@@ -16,6 +16,8 @@ import net from 'node:net'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 
+import { buildTerminalDaemon } from './build-terminal-daemon.mjs'
+import { buildCliRuntime } from './build-cli-runtime.mjs'
 import { prepareDevCliTerminalWrappers } from './dev-cli-terminal-wrapper.mjs'
 import {
   DEV_BUNDLE_MARKER_FILENAME,
@@ -646,6 +648,10 @@ if (!userPassedPort && !isHelpOrVersion) {
   }
 }
 prepareDevWebClient()
+if (!isHelpOrVersion) {
+  await buildCliRuntime(process.platform, process.arch)
+  await buildTerminalDaemon()
+}
 const forwardedArgs = ['dev', ...forwardedRaw, ...forwardedExtras]
 const child = spawn(process.execPath, [electronViteCli, ...forwardedArgs], {
   stdio: 'inherit',

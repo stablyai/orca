@@ -22,6 +22,7 @@ type GuestInstallDeps = {
 /** Structural slice of the manager's DistroState this pass reads and writes. */
 type GuestInstallState = {
   distro: string
+  user?: string
   mux?: SshChannelMultiplexer
   guestHome?: string
   codexHomePath?: string
@@ -72,6 +73,7 @@ async function installGuestHooksAndPlugins(
     guestHome,
     codexHomePath: state.codexHomePath ?? null,
     distro: state.distro,
+    user: state.user,
     installHooks: deps.installHooks,
     installCodex: deps.installCodex,
     settings: deps.managedHookSettings(),

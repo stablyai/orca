@@ -10,6 +10,8 @@ export type DaemonEndpointIdentity = {
   pid: number
   startedAtMs: number
   launchNonce: string
+  linuxStartTicks?: string
+  bootId?: string
   /** Optional launch metadata. Absent from daemons that predate it; readers must fall back. */
   entryPath?: string
   appVersion?: string
@@ -21,4 +23,9 @@ export type HelloResponse = {
   ok: boolean
   error?: string
   daemonIdentity?: DaemonEndpointIdentity
+}
+
+export type PingRequest = {
+  id: string
+  type: 'ping'
 }

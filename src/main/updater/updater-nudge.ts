@@ -7,6 +7,9 @@ import { UpdaterBuildSelection } from './updater-build-selection'
 /** Polls update campaigns and exposes their dismissal actions. */
 export abstract class UpdaterNudge extends UpdaterBuildSelection {
   protected async checkForUpdateNudge(): Promise<void> {
+    if (this.isQuitAndInstallHandoffActive()) {
+      return
+    }
     if (!app.isPackaged || is.dev) {
       return
     }
@@ -21,7 +24,7 @@ export abstract class UpdaterNudge extends UpdaterBuildSelection {
     this.nudgeCheckInFlight = true
     try {
       const nudge = await fetchNudge()
-      if (!nudge) {
+      if (!nudge || this.isQuitAndInstallHandoffActive()) {
         return
       }
       if (this.currentStatus.state === 'checking' || this.currentStatus.state === 'downloading') {
@@ -68,6 +71,9 @@ export abstract class UpdaterNudge extends UpdaterBuildSelection {
 
   /** Abandons an un-acted local or pinned update and restores the release feed. */
   protected dismissAvailableUpdate(): void {
+    if (this.isQuitAndInstallHandoffActive()) {
+      return
+    }
     if (this.activeUpdateSource === 'release' && !this.isPinnedBuildActive) {
       return
     }

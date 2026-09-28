@@ -1,7 +1,8 @@
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { spawn } from 'node:child_process'
+import { spawnProcess } from '../../shared/child-process/run-process'
+import { ORCAD_BUN_VERSION } from '../../shared/orcad-bun-runtime'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 
@@ -55,18 +56,27 @@ describeOnWindows('host job reaps the tree when the host dies', () => {
   })
 
   it('kills a pty and its detached grandchild when the host is force-killed', async () => {
-    const nodePtyDir = join(process.cwd(), 'node_modules', 'node-pty')
+    const runtime = [
+      process.env.BUN_EXECUTABLE,
+      join(process.cwd(), 'out/orcad/bun-runtime.exe'),
+      join(process.cwd(), 'out/cli-runtime', `win32-${process.arch}`, 'bun-runtime.exe')
+    ].find((entry): entry is string => Boolean(entry && existsSync(entry)))
+    if (!runtime) {
+      throw new Error('Pinned bundled Bun runtime is required')
+    }
+    const source = join(process.cwd(), 'src/main/daemon/pty-subprocess')
     const hostScript = join(dir, 'host.js')
     // The host assigns itself, then opens a pty whose shell spawns a DETACHED
     // grandchild — the process a parent-pid walk cannot see.
     writeFileSync(
       hostScript,
       [
-        `const pty = require(${JSON.stringify(nodePtyDir)});`,
-        `const { loadNativeModule } = require(${JSON.stringify(`${nodePtyDir}/lib/utils`)});`,
-        `const native = loadNativeModule('conpty').module;`,
-        `console.log('ASSIGNED=' + native.assignCurrentProcessToJob());`,
-        `const term = pty.spawn('cmd.exe', [], { name: 'xterm', cols: 80, rows: 30, cwd: ${JSON.stringify(dir)}, useConptyDll: true });`,
+        `if (process.versions.bun !== ${JSON.stringify(ORCAD_BUN_VERSION)}) throw new Error('Unexpected Bun runtime');`,
+        `const { spawnBunPty } = require(${JSON.stringify(join(source, 'bun-pty-process.ts'))});`,
+        `const { createWindowsBunPtyLaunch } = require(${JSON.stringify(join(source, 'windows-bun-pty-launch.ts'))});`,
+        `const { assignCurrentProcessToBunPtyHostJob } = require(${JSON.stringify(join(source, 'windows-bun-pty-job.ts'))});`,
+        `console.log('ASSIGNED=' + assignCurrentProcessToBunPtyHostJob());`,
+        `const term = spawnBunPty({file: process.env.ComSpec || 'cmd.exe', args: [], env: process.env, cols: 80, rows: 30, cwd: ${JSON.stringify(dir)}}, {createWindowsLaunch: args => createWindowsBunPtyLaunch(args, {workerPath: ${JSON.stringify(join(source, 'windows-bun-pty-gate-entry.ts'))}})});`,
         `term.onData((d) => { const m = /GC=(\\d+)/.exec(d); if (m) console.log('GRANDCHILD=' + m[1]); });`,
         `term.write('node -e "const{spawn}=require(\\'child_process\\');const c=spawn(process.execPath,[\\'-e\\',\\'setInterval(()=>{},1000)\\'],{detached:true,windowsHide:true,stdio:\\'ignore\\'});c.unref();console.log(\\'GC=\\'+c.pid);"\\r');`,
         `setTimeout(() => console.log('SHELL=' + term.pid), 4000);`,
@@ -74,7 +84,11 @@ describeOnWindows('host job reaps the tree when the host dies', () => {
       ].join('\n')
     )
 
-    const host = spawn(process.execPath, [hostScript], { stdio: ['ignore', 'pipe', 'pipe'] })
+    const host = spawnProcess({
+      program: runtime,
+      args: ['--no-env-file', hostScript],
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
     let output = ''
     host.stdout.on('data', (chunk) => {
       output += String(chunk)
@@ -82,21 +96,23 @@ describeOnWindows('host job reaps the tree when the host dies', () => {
     host.stdout.on('error', () => {})
     host.stderr?.on('error', () => {})
 
-    for (let attempt = 0; attempt < 60 && !/SHELL=/.test(output); attempt += 1) {
-      await sleep(250)
-    }
-
-    expect(output).toContain('ASSIGNED=true')
-    const shellPid = Number(/SHELL=(\d+)/.exec(output)?.[1])
-    const grandchildPid = Number(/GRANDCHILD=(\d+)/.exec(output)?.[1])
-    expect(Number.isInteger(shellPid)).toBe(true)
-    expect(Number.isInteger(grandchildPid)).toBe(true)
-    expect(isAlive(grandchildPid)).toBe(true)
-
-    // Force-kill only the host: no tree kill, nothing given a chance to unwind.
-    // This is the daemon-crash shape.
-    process.kill(host.pid!, 'SIGKILL')
+    let shellPid = 0
+    let grandchildPid = 0
     try {
+      for (let attempt = 0; attempt < 60 && !/SHELL=/.test(output); attempt += 1) {
+        await sleep(250)
+      }
+
+      expect(output).toContain('ASSIGNED=true')
+      shellPid = Number(/SHELL=(\d+)/.exec(output)?.[1])
+      grandchildPid = Number(/GRANDCHILD=(\d+)/.exec(output)?.[1])
+      expect(Number.isInteger(shellPid)).toBe(true)
+      expect(Number.isInteger(grandchildPid)).toBe(true)
+      expect(isAlive(grandchildPid)).toBe(true)
+
+      // Force-kill only the host: no tree kill, nothing given a chance to unwind.
+      // This is the daemon-crash shape.
+      process.kill(host.pid!, 'SIGKILL')
       const [shellExited, grandchildExited] = await Promise.all([
         waitForProcessExit(shellPid, 15_000),
         waitForProcessExit(grandchildPid, 15_000)
@@ -104,7 +120,10 @@ describeOnWindows('host job reaps the tree when the host dies', () => {
       expect(shellExited).toBe(true)
       expect(grandchildExited).toBe(true)
     } finally {
-      for (const pid of [shellPid, grandchildPid]) {
+      for (const pid of [host.pid, shellPid, grandchildPid]) {
+        if (!pid || pid <= 0) {
+          continue
+        }
         try {
           process.kill(pid)
         } catch {

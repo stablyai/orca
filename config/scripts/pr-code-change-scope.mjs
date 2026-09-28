@@ -78,11 +78,18 @@ const XTERM_PREFIXES = [
 ]
 
 const SHELL_PREFIXES = [
+  'src/main/shell-prompt-readiness-probe',
+  'src/main/line-editor-ready-output-scanner',
+  'src/main/daemon/session-shell-ready-barrier',
+  'src/main/daemon/bun-pty-fd-lifecycle',
+  'src/shared/shell-process-readiness',
+  'src/shared/shell-terminal-path',
+  'src/shared/pty-slave-line-discipline-echo',
   'src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec',
   'src/main/daemon/shell-ready',
   'src/main/daemon/daemon-bash-shell-ready',
   'src/main/daemon/daemon-shell-ready-wrapper',
-  'src/main/daemon/node-pty-fd-leak',
+  'src/main/daemon/pty-subprocess/bun-pty',
   'src/main/providers/local-pty-shell-ready',
   'src/main/providers/__tests__/shell-ready-framework-example',
   'src/main/pty/',
@@ -96,9 +103,8 @@ const SHELL_PREFIXES = [
   'src/shared/pty-reply-echo-shapes',
   'src/shared/startup-shell-portability',
   'src/shared/posix-command-path-lookup',
-  'config/patches/node-pty@',
   'config/scripts/ensure-native-runtime',
-  'config/scripts/node-pty-job-ownership'
+  'src/main/daemon/pty-subprocess/windows-bun-pty'
 ]
 
 const ORCAD_BROWSER_PREFIXES = [
@@ -173,14 +179,13 @@ const MANAGED_HOOK_PREFIXES = [
 const NATIVE_RUNTIME_PREFIXES = [
   'config/scripts/ensure-native-runtime',
   'config/scripts/rebuild-native-deps',
-  'config/scripts/node-pty-job-ownership',
+  'src/main/daemon/pty-subprocess/windows-bun-pty',
   'config/scripts/windows-pe-machine',
   'config/scripts/windows-pe-image-fixture',
   'config/scripts/script-module-dependencies',
   'config/scripts/windows-process-tree-creation-time',
   'config/scripts/windows-process-tree-gyp-rebuild',
   'config/scripts/electron-builder-native-rebuild',
-  'config/patches/node-pty@',
   'config/patches/@vscode__windows-process-tree'
 ]
 
@@ -192,15 +197,14 @@ const NATIVE_CACHE_FILES = new Set([
   'config/scripts/rebuild-native-deps.mjs'
 ])
 
-const NATIVE_CACHE_PREFIXES = [
-  'config/patches/node-pty@',
-  'config/patches/@vscode__windows-process-tree'
-]
+const NATIVE_CACHE_PREFIXES = ['config/patches/@vscode__windows-process-tree']
 
 const SHARED_PACKAGE_PREFIXES = [
   'electron.vite.config.ts',
   'config/electron-builder',
   'config/packaged-runtime',
+  'config/bundled-cli-runtime',
+  'config/scripts/bundled-cli-runtime',
   'config/build-plugins/',
   'config/scripts/build-',
   'config/scripts/smoke-packaged',
@@ -226,6 +230,7 @@ const LINUX_PACKAGE_PREFIXES = [
   'config/docker/headless-serve-shutdown/',
   'config/docker/daemon-shutdown-descendants/',
   'config/scripts/run-linux-cli-launch-contract',
+  'config/scripts/run-linux-packaged-terminal-floor-smoke',
   'config/scripts/run-headless-linux-pairing-docker',
   'config/scripts/run-daemon-shutdown-descendants-docker',
   'config/scripts/static-appimage-package-contract',
@@ -240,6 +245,7 @@ const WINDOWS_PACKAGE_PREFIXES = [
   'native/computer-use-windows/',
   'resources/win32/',
   'config/scripts/build-windows-cli-launcher',
+  'config/scripts/finalize-signed-cli-runtime',
   'config/scripts/windows-pty-native-capability',
   'tests/tools/windows-pty-native-capability-smoke/'
 ]
@@ -256,15 +262,13 @@ const WINDOWS_PACKAGE_TESTS = [
   ...LINUX_PACKAGE_TESTS,
   'config/scripts/rebuild-native-deps.test.mjs',
   'config/scripts/rebuild-native-deps-windows-process-tree.test.mjs',
-  'config/scripts/rebuild-native-deps-node-pty.test.mjs',
   'config/scripts/nsis-process-check.test.mjs',
-  'config/scripts/ensure-native-runtime-job-ownership.test.mjs',
-  'config/scripts/verify-packaged-node-pty-job-ownership.test.mjs',
+  'config/scripts/nsis-bun-terminal-uninstall.test.mjs',
   'config/scripts/windows-pe-machine.test.mjs',
   'config/scripts/script-module-dependencies.test.mjs',
   'src/main/windows-registry-addon.test.ts',
-  'src/main/providers/windows-conpty-wide-char-duplication.node-pty.test.ts',
-  'src/main/providers/pty-repaint-wide-char-buffer.node-pty.test.ts',
+  'src/main/providers/windows-conpty-wide-char-duplication.bun.test.ts',
+  'src/main/providers/pty-repaint-wide-char-buffer.bun.test.ts',
   'src/shared/child-process/windows-command-line.win32.test.ts',
   'src/shared/child-process/windows-cmd-shim-resolution.test.ts',
   'src/shared/child-process/windows-cmd-shim-resolution.win32.test.ts',
@@ -273,6 +277,7 @@ const WINDOWS_PACKAGE_TESTS = [
   'src/main/codex/windows-hook-command.test.ts',
   'src/main/codex/windows-hook-upgrade.test.ts',
   'src/main/windows/windows-pty-job.win32.test.ts',
+  'src/main/daemon/bun-pty-windows-io-failure.win32.test.ts',
   'src/main/windows/windows-msys-job.win32.test.ts',
   'src/main/providers/agent-foreground-process-git-bash.win32.test.ts',
   'src/main/windows/windows-host-job.win32.test.ts',

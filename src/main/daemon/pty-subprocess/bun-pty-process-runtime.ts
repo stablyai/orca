@@ -1,4 +1,5 @@
 import { constants } from 'node:os'
+import { createBunPtyTerminalIo } from './bun-pty-terminal-io'
 import {
   assignCurrentProcessToBunPtyHostJob,
   createWindowsBunPtyJob,
@@ -31,17 +32,22 @@ export function spawnBunPty(args: BunPtySpawnArgs, deps: SpawnBunPtyDeps = {}): 
   const exitListeners = new Set<(event: { exitCode: number; signal?: number }) => void>()
   const decoder = new TextDecoder()
   let pendingData = ''
+  let pendingDataError: Error | undefined
   let exited = false
   let exitCode = 0
   let exitSignal: number | undefined
-  // Keep a closed Bun native handle from escaping as a daemon RPC failure.
-  let terminalUnavailable = false
-  let appliedCols = args.cols
-  let appliedRows = args.rows
 
   const emitData = (data: string): void => {
     if (dataListeners.size === 0) {
-      pendingData = (pendingData + data).slice(-512 * 1024)
+      if (pendingDataError) {
+        return
+      }
+      if (pendingData.length + data.length > 512 * 1024) {
+        pendingDataError = new Error('Terminal output arrived before its consumer was installed')
+        pendingData = ''
+        return
+      }
+      pendingData += data
       return
     }
     for (const listener of dataListeners) {
@@ -138,7 +144,11 @@ export function spawnBunPty(args: BunPtySpawnArgs, deps: SpawnBunPtyDeps = {}): 
   }
   if (windowsLaunch) {
     try {
-      windowsJob = (deps.createJob ?? createWindowsBunPtyJob)(processHandle.pid)
+      windowsJob = (deps.createJob ?? createWindowsBunPtyJob)(
+        processHandle.pid,
+        undefined,
+        args.windowsJobKillOnClose === true
+      )
       if (!windowsJob) {
         throw new Error('Windows Bun PTY job ownership is unavailable')
       }
@@ -233,6 +243,13 @@ export function spawnBunPty(args: BunPtySpawnArgs, deps: SpawnBunPtyDeps = {}): 
     }
   }
 
+  const terminalIo = createBunPtyTerminalIo(
+    processHandle.terminal,
+    args,
+    () => exited,
+    () => terminate('SIGKILL')
+  )
+
   return {
     pid: processHandle.pid,
     get shellProcessId() {
@@ -243,12 +260,17 @@ export function spawnBunPty(args: BunPtySpawnArgs, deps: SpawnBunPtyDeps = {}): 
     clear() {},
     process: args.file,
     get cols() {
-      return appliedCols
+      return terminalIo.cols
     },
     get rows() {
-      return appliedRows
+      return terminalIo.rows
     },
+    write: terminalIo.write,
+    resize: terminalIo.resize,
     onData(listener) {
+      if (pendingDataError) {
+        throw pendingDataError
+      }
       if (pendingData) {
         const data = pendingData
         pendingData = ''
@@ -267,28 +289,6 @@ export function spawnBunPty(args: BunPtySpawnArgs, deps: SpawnBunPtyDeps = {}): 
       }
       exitListeners.add(listener)
       return { dispose: () => exitListeners.delete(listener) }
-    },
-    write(data) {
-      if (exited || terminalUnavailable || processHandle.terminal.closed) {
-        return
-      }
-      try {
-        processHandle.terminal.write(data)
-      } catch {
-        terminalUnavailable = true
-      }
-    },
-    resize(cols, rows) {
-      if (exited || terminalUnavailable || processHandle.terminal.closed) {
-        return
-      }
-      try {
-        processHandle.terminal.resize(cols, rows)
-        appliedCols = cols
-        appliedRows = rows
-      } catch {
-        terminalUnavailable = true
-      }
     },
     ...clearCapability,
     ...producerFlowControl,

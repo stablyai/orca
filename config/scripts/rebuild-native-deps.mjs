@@ -19,27 +19,16 @@
  */
 
 import { rebuild } from '@electron/rebuild'
-import { execFileSync, spawnSync } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
 import {
   ensureWindowsProcessTreeCommandLinePatch,
   inspectWindowsProcessTreeAddon,
   stageWindowsProcessTreeNodeAddonApiHeaders,
   windowsProcessTreeAddonPath
 } from './windows-process-tree-gyp-rebuild.mjs'
-import {
-  copyFileSync,
-  existsSync,
-  globSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  writeFileSync
-} from 'node:fs'
-import { createRequire } from 'node:module'
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { platform as osPlatform } from 'node:os'
 import { join, resolve } from 'node:path'
-
-const requireLocal = createRequire(import.meta.url)
 
 const projectDir = process.cwd()
 let cliOptions
@@ -66,7 +55,6 @@ const electronVersion = JSON.parse(
 ).version
 
 const ignoreModules = ['cpu-features']
-const NODE_PTY_CONPTY_RUNTIME_FILES = ['conpty.dll', 'OpenConsole.exe']
 
 if (ignoreModules.length > 0) {
   console.log(`[rebuild] Skipping optional Electron rebuild modules: ${ignoreModules.join(', ')}`)
@@ -77,7 +65,6 @@ if (ignoreModules.length > 0) {
 // rebuild via `onlyModules` ensures they're recompiled against Electron's Node
 // ABI regardless of the package manager's store layout.
 const NATIVE_MODULES = [
-  'node-pty',
   'cpu-features',
   ...(rebuildPlatform === 'win32' ? ['@orca/windows-registry', '@vscode/windows-process-tree'] : [])
 ]
@@ -89,13 +76,14 @@ const forceRebuild =
 let modulesToRebuild = onlyModules
 
 ensureElectronPackageInstalled()
-restoreNodePtyWindowsConptyRuntime()
 
-const patchedNodePtyRebuildReason = forceRebuild ? null : getPatchedNodePtyRebuildReason()
+// An empty allowlist invokes @electron/rebuild's default scanner.
+if (onlyModules.length === 0) {
+  console.log('[rebuild] No native modules selected; Electron package is ready.')
+  process.exit(0)
+}
 
-if (patchedNodePtyRebuildReason) {
-  console.log(`[rebuild] ${patchedNodePtyRebuildReason}`)
-} else if (!forceRebuild) {
+if (!forceRebuild) {
   // Why: independent probes avoid rebuilding healthy Windows DLLs that may already be loaded and locked.
   const probes = onlyModules.map((moduleName) => ({
     moduleName,
@@ -116,42 +104,11 @@ if (patchedNodePtyRebuildReason) {
   console.log(`[rebuild] Forcing native rebuild for ${rebuildPlatform}-${rebuildArch}.`)
 }
 
-// Why: cpu-features ships without `buildcheck.gypi`; its own `install` script
-// generates it by running `node buildcheck.js > buildcheck.gypi` before
-// node-gyp. @electron/rebuild with `force: true` invokes node-gyp directly
-// and bypasses that install hook, so if the file is missing (fresh install,
-// store prune, or a prior failed run) node-gyp aborts with
-// "buildcheck.gypi not found". Regenerate it here before rebuilding.
-if (!ignoreModules.includes('cpu-features')) {
-  const cpuFeatureDirs = globSync('node_modules/.pnpm/cpu-features@*/node_modules/cpu-features', {
-    cwd: projectDir
-  })
-  for (const relDir of cpuFeatureDirs) {
-    const dir = resolve(projectDir, relDir)
-    const gypiPath = resolve(dir, 'buildcheck.gypi')
-    if (existsSync(gypiPath)) {
-      continue
-    }
-    try {
-      const out = execFileSync(process.execPath, ['buildcheck.js'], {
-        cwd: dir,
-        encoding: 'utf8'
-      })
-      writeFileSync(gypiPath, out)
-      console.log(`[rebuild] Generated ${relDir}/buildcheck.gypi`)
-    } catch (/** @type {any} */ err) {
-      console.error(`[rebuild] Failed to generate ${relDir}/buildcheck.gypi:`, err?.message ?? err)
-      process.exit(1)
-    }
-  }
-}
-
 try {
   // Why inside the try: the patch guard deletes a stale addon binary, and that
   // delete fails EPERM when the addon is loaded -- exactly the running-Orca case
   // the catch below is written for. Outside, it aborted `pnpm install` with a
   // raw stack instead of the "close running Orca/Electron processes" message.
-  assertNodePtyConptySourceDeniesMsysBreakaway()
   if (
     rebuildPlatform === 'win32' &&
     modulesToRebuild.includes('@vscode/windows-process-tree') &&
@@ -176,9 +133,7 @@ try {
     // Node before postinstall runs this script.
     force: true
   })
-  restoreNodePtyWindowsConptyRuntime()
   assertWindowsProcessTreeAddonIsPatched()
-  assertNodePtyConptyDeniesMsysBreakaway()
 } catch (/** @type {any} */ err) {
   console.error('[rebuild] Native module rebuild failed:', err?.message ?? err)
   if (isWindowsNativeLockError(err)) {
@@ -230,79 +185,6 @@ function assertWindowsProcessTreeAddonIsPatched() {
           'command-line reader. The packaged app would carry the primitive MDE scores as ' +
           'credential dumping.'
   )
-}
-
-/**
- * The other half of the same problem, for the addon this rebuild just produced.
- *
- * The Electron probe below carries the marker check too, but it is skipped
- * whenever the Electron package binary is unusable -- and "covered by another
- * path" is not "this path checks". Reading the binary needs neither a loadable
- * Electron nor an executable target arch, so it runs here regardless.
- *
- * Absent is fatal on the host that will run this install: loadNativeModule
- * falls through to prebuilds/win32-<arch>, and the published prebuild predates
- * the denial, so the app would load it with nothing said. A cross-host rebuild
- * does not necessarily leave a win32 addon on this disk, and that must not fail
- * an install that was working.
- */
-function assertNodePtyConptyDeniesMsysBreakaway() {
-  if (rebuildPlatform !== 'win32' || !modulesToRebuild.includes('node-pty')) {
-    return
-  }
-  const { assertRebuiltConptyDeniesMsysBreakaway } = requireLocal('./node-pty-job-ownership.cjs')
-  assertRebuiltConptyDeniesMsysBreakaway({
-    nodePtyDir: resolve(projectDir, 'node_modules', 'node-pty'),
-    rebuildArch,
-    crossHost: isCrossHostRebuild
-  })
-}
-
-/**
- * Refuse to compile node-pty source that cannot yield the denial. Why before the
- * rebuild: the gate above would spend the compile and then advise "rebuild from
- * source" -- the step that just ran. Only the source is read; the addon is not
- * touched, so a locked binary cannot turn this into a spurious EPERM.
- */
-function assertNodePtyConptySourceDeniesMsysBreakaway() {
-  if (rebuildPlatform !== 'win32' || !modulesToRebuild.includes('node-pty')) {
-    return
-  }
-  const { assertNodePtySourceDeniesMsysBreakaway } = requireLocal('./node-pty-job-ownership.cjs')
-  assertNodePtySourceDeniesMsysBreakaway({
-    nodePtyDir: resolve(projectDir, 'node_modules', 'node-pty')
-  })
-}
-
-function restoreNodePtyWindowsConptyRuntime() {
-  if (rebuildPlatform !== 'win32' || !onlyModules.includes('node-pty')) {
-    return
-  }
-
-  const nodePtyDir = resolve(projectDir, 'node_modules', 'node-pty')
-  if (!existsSync(join(nodePtyDir, 'build', 'Release', 'conpty.node'))) {
-    return
-  }
-  const conptyRoot = join(nodePtyDir, 'third_party', 'conpty')
-  const sourceDir = readdirSync(conptyRoot, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => join(conptyRoot, entry.name, `win10-${rebuildArch}`))
-    .find((candidate) => existsSync(candidate))
-  if (!sourceDir) {
-    throw new Error(`node-pty has no ConPTY runtime payload for win10-${rebuildArch}`)
-  }
-
-  const runtimeDir = join(nodePtyDir, 'build', 'Release', 'conpty')
-  mkdirSync(runtimeDir, { recursive: true })
-  for (const filename of NODE_PTY_CONPTY_RUNTIME_FILES) {
-    const sourceFile = join(sourceDir, filename)
-    if (!existsSync(sourceFile)) {
-      throw new Error(`node-pty is missing ${sourceFile}`)
-    }
-    copyFileSync(sourceFile, join(runtimeDir, filename))
-  }
-  // Why: @electron/rebuild bypasses node-pty's postinstall step that normally copies these DLLs.
-  console.log(`[rebuild] Restored node-pty ConPTY runtime files for win10-${rebuildArch}.`)
 }
 
 function ensureElectronPackageInstalled() {
@@ -509,53 +391,6 @@ function getElectronExecutablePath() {
     : resolve(electronPackageDir, 'dist', platformPath)
 }
 
-function getPatchedNodePtyRebuildReason() {
-  if (!requiresPatchedNodePtySourceBuild()) {
-    return null
-  }
-
-  // Why: Orca patches node-pty's native Unix spawn path and Windows job-object
-  // exports; upstream prebuilds can load while missing those patches.
-  const nodePtyDir = resolve(projectDir, 'node_modules', 'node-pty')
-  const artifactPaths =
-    rebuildPlatform === 'win32'
-      ? [
-          resolve(nodePtyDir, 'build', 'Release', 'conpty.node'),
-          ...NODE_PTY_CONPTY_RUNTIME_FILES.map((filename) =>
-            resolve(nodePtyDir, 'build', 'Release', 'conpty', filename)
-          )
-        ]
-      : [
-          resolve(nodePtyDir, 'build', 'Release', 'pty.node'),
-          ...(osPlatform() === 'darwin'
-            ? [resolve(nodePtyDir, 'build', 'Release', 'spawn-helper')]
-            : [])
-        ]
-  const missingArtifact = artifactPaths.find((artifactPath) => !existsSync(artifactPath))
-
-  if (!missingArtifact) {
-    return null
-  }
-
-  return 'Patched node-pty build artifacts are missing; rebuilding from source.'
-}
-
-function requiresPatchedNodePtySourceBuild() {
-  if (!onlyModules.includes('node-pty')) {
-    return false
-  }
-  if (rebuildPlatform !== osPlatform() || rebuildArch !== process.arch) {
-    return false
-  }
-
-  const nodePtyPatchPath = resolve(projectDir, 'config', 'patches', 'node-pty@1.1.0.patch')
-  if (!existsSync(nodePtyPatchPath)) {
-    return false
-  }
-
-  return existsSync(resolve(projectDir, 'node_modules', 'node-pty'))
-}
-
 function probeElectronNativeModules(moduleNames) {
   if (!electronPackageIsUsable()) {
     return { ok: false, status: null, stderr: 'Electron package binary is unavailable.' }
@@ -564,12 +399,9 @@ function probeElectronNativeModules(moduleNames) {
 
   const probeSource = `
 const { createRequire } = require('node:module')
-const { existsSync } = require('node:fs')
-const { release } = require('node:os')
 const { resolve } = require('node:path')
 const projectRequire = createRequire(resolve(process.cwd(), 'package.json'))
 const moduleNames = ${JSON.stringify(moduleNames)}
-const requirePatchedNodePtySourceBuild = ${JSON.stringify(requiresPatchedNodePtySourceBuild())}
 const failures = []
 
 for (const moduleName of moduleNames) {
@@ -592,33 +424,6 @@ function loadNativeModule(moduleName) {
     registry.getRegistryKey(registry.HK.CU, 'Environment')
     return
   }
-  if (moduleName === 'node-pty') {
-    projectRequire('node-pty')
-    const { assertNodePtyJobOwnership, nodePtyAddonPath } = projectRequire(
-      './config/scripts/node-pty-job-ownership.cjs'
-    )
-    const { loadNativeModule } = projectRequire('node-pty/lib/utils')
-    const nativeName = getNodePtyNativeModuleName()
-    const native = loadNativeModule(nativeName)
-    assertNodePtyWindowsConptyRuntime(native.dir)
-    assertNodePtyJobOwnership({
-      nativeName,
-      native,
-      addonPath: nodePtyAddonPath(
-        projectRequire.resolve('node-pty/lib/utils'),
-        native,
-        nativeName
-      )
-    })
-    if (requirePatchedNodePtySourceBuild && !isNodePtyReleaseBuildDir(native.dir)) {
-      throw new Error(
-        'node-pty resolved to ' +
-          native.dir +
-          '; expected build/Release so Orca\\'s node-pty patch is active'
-      )
-    }
-    return
-  }
   if (moduleName === '@vscode/windows-process-tree') {
     // The tarball prebuilt loads under Electron too -- the addon is N-API, so
     // a bare require proves nothing about which source it was built from.
@@ -629,39 +434,6 @@ function loadNativeModule(moduleName) {
     return
   }
   projectRequire(moduleName)
-}
-
-function assertNodePtyWindowsConptyRuntime(nativeDir) {
-  if (process.platform !== 'win32' || !isNodePtyReleaseBuildDir(nativeDir)) {
-    return
-  }
-  const runtimeDir = resolve(
-    process.cwd(),
-    'node_modules',
-    'node-pty',
-    'build',
-    'Release',
-    'conpty'
-  )
-  for (const filename of ${JSON.stringify(NODE_PTY_CONPTY_RUNTIME_FILES)}) {
-    const runtimeFile = resolve(runtimeDir, filename)
-    if (!existsSync(runtimeFile)) {
-      throw new Error('node-pty ConPTY runtime file is missing: ' + runtimeFile)
-    }
-  }
-}
-
-function isNodePtyReleaseBuildDir(nativeDir) {
-  return typeof nativeDir === 'string' && nativeDir.replace(/\\\\/g, '/').includes('build/Release/')
-}
-
-function getNodePtyNativeModuleName() {
-  if (process.platform !== 'win32') {
-    return 'pty'
-  }
-  const match = /(\\d+)\\.(\\d+)\\.(\\d+)/g.exec(release())
-  const buildNumber = match && match.length === 4 ? Number.parseInt(match[3], 10) : 0
-  return buildNumber >= 18309 ? 'conpty' : 'pty'
 }
 
 function formatError(error) {
@@ -695,9 +467,7 @@ function isWindowsNativeLockError(error) {
   const text = [error?.message, error?.stack, error?.stdout, error?.stderr]
     .filter(Boolean)
     .join('\n')
-  return /(?:EPERM|operation not permitted)[\s\S]*(?:unlink|\.node|conpty\.node|pty\.node)/i.test(
-    text
-  )
+  return /(?:EPERM|operation not permitted)[\s\S]*(?:unlink|\.node)/i.test(text)
 }
 
 function isPostinstall() {

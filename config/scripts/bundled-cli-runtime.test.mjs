@@ -1,3 +1,4 @@
+import { writeBundledConptyFixture } from './bundled-cli-runtime-fixture.mjs'
 import { ORCAD_BUN_VERSION } from '../../src/shared/orcad-bun-runtime.ts'
 import { createHash } from 'node:crypto'
 import {
@@ -16,6 +17,7 @@ import {
   cliRuntimeTarget,
   cliRuntimeFilename,
   cliRuntimeExtraResource,
+  verifyWindowsConptyDirectory,
   assertBundledCliRuntimeBuilt
 } from '../bundled-cli-runtime.cjs'
 
@@ -24,7 +26,7 @@ afterEach(() => roots.splice(0).forEach((root) => rmSync(root, { recursive: true
 
 it.each(['darwin', 'linux', 'win32'])(
   'verifies the exact %s architecture and executable bytes',
-  (platform) => {
+  async (platform) => {
     const root = mkdtempSync(join(tmpdir(), 'orca-cli-runtime-'))
     roots.push(root)
     const directory = join(root, 'out/cli-runtime', `${platform}-arm64`)
@@ -43,6 +45,9 @@ it.each(['darwin', 'linux', 'win32'])(
         sha256: createHash('sha256').update(bytes).digest('hex')
       })
     )
+    if (platform === 'win32') {
+      await writeBundledConptyFixture(join(directory, 'conpty'), 'arm64')
+    }
     expect(() => assertBundledCliRuntimeBuilt(platform, 3, root)).not.toThrow()
     expect(() => assertBundledCliRuntimeBuilt(platform, 1, root)).toThrow('build-cli-runtime.mjs')
     const manifestPath = join(directory, 'runtime.json')
@@ -64,9 +69,29 @@ it('packages only the selected platform/architecture and rejects unsupported tar
   expect(cliRuntimeExtraResource('win32')).toEqual({
     from: 'out/cli-runtime/win32-${arch}',
     to: 'cli-runtime',
-    filter: ['bun-runtime.exe', 'runtime.json', 'LICENSE.md']
+    filter: ['bun-runtime.exe', 'runtime.json', 'LICENSE.md', 'conpty/**']
   })
   expect(cliRuntimeTarget('linux', 'x64')).toBe('linux-x64-glibc')
   expect(() => cliRuntimeTarget('linux', 'ia32')).toThrow('Unsupported')
   expect(() => cliRuntimeTarget('freebsd', 'x64')).toThrow('Unsupported')
+})
+
+it.each([
+  'conpty.dll',
+  'OpenConsole.exe',
+  'LICENSE.txt',
+  'Microsoft.Windows.Console.ConPTY.nuspec'
+])('rejects missing and corrupted provider %s independently of the manifest', async (filename) => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-conpty-package-'))
+  roots.push(root)
+  await writeBundledConptyFixture(root, 'x64')
+  expect(() => verifyWindowsConptyDirectory(root, 'x64')).not.toThrow()
+  expect(() => verifyWindowsConptyDirectory(root, 'arm64')).toThrow('manifest')
+  unlinkSync(join(root, filename))
+  expect(() => verifyWindowsConptyDirectory(root, 'x64')).toThrow()
+  writeFileSync(join(root, filename), 'corrupt')
+  const manifest = JSON.parse(readFileSync(join(root, 'conpty.json'), 'utf8'))
+  manifest.files[filename] = createHash('sha256').update('corrupt').digest('hex')
+  writeFileSync(join(root, 'conpty.json'), JSON.stringify(manifest))
+  expect(() => verifyWindowsConptyDirectory(root, 'x64')).toThrow()
 })

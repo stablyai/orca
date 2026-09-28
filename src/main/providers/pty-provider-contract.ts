@@ -123,10 +123,6 @@ export type IPtyProvider = {
     params: unknown,
     options?: { signal?: AbortSignal; timeoutMs?: number }
   ) => Promise<unknown>
-  /** Fresh local spawns currently route to an in-process, non-persistent fallback. */
-  readonly routesFreshSpawnsToLocalProvider?: true
-  /** Re-probes a degraded durable host before main commits to fallback spawn semantics. */
-  recoverFreshSpawnRouting?: () => Promise<boolean>
   spawn(opts: PtySpawnOptions): Promise<PtySpawnResult>
   /** Process-owner cleanup for history stored outside the workspace tree. */
   deleteWorktreeHistory?: (worktreeId: string) => Promise<void>
@@ -156,6 +152,7 @@ export type IPtyProvider = {
    * and callers must keep functioning without them (the pending-output cap
    * still bounds memory when pause is unavailable).
    */
+  hasPtyDeliveryPauseAdapter?: () => boolean
   pauseProducer?: (id: string) => void
   resumeProducer?: (id: string) => void
   /**

@@ -34,18 +34,6 @@ vi.mock('fs', () => ({
   constants: { X_OK: 1 }
 }))
 
-vi.mock('node-pty', () => ({
-  spawn: vi.fn().mockReturnValue({
-    onData: vi.fn(),
-    onExit: vi.fn(),
-    write: vi.fn(),
-    resize: vi.fn(),
-    kill: vi.fn(),
-    process: 'zsh',
-    pid: 12345
-  })
-}))
-
 vi.mock('../opencode/hook-service', () => ({
   openCodeHookService: { buildPtyEnv: () => ({}), clearPty: vi.fn() }
 }))

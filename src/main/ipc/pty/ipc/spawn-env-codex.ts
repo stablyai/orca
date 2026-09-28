@@ -1,3 +1,4 @@
+import type { BuildPtyHostEnvOptions } from '../host-env/types'
 import { inheritOmpLaunchEnvironment } from '../host-env/omp-launch-environment'
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
@@ -23,16 +24,20 @@ import type { PtyIpcSpawnState } from './spawn-state'
 export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args
   ctx.effectiveShellOverride = ctx.terminalRuntimeOptions.shellOverride
-  ctx.nativeWindowsConptySpawn = isNativeWindowsLocalPtySpawn({
-    connectionId: args.connectionId,
-    cwd: args.cwd,
-    shellOverride: ctx.effectiveShellOverride
-  })
-  ctx.codexSelectionTarget = getCodexSelectionTargetForPty(
-    ctx.effectiveShellOverride,
-    ctx.cwd,
-    ctx.expectedWslDistro
-  )
+  ctx.nativeWindowsConptySpawn =
+    !ctx.wslGuest &&
+    isNativeWindowsLocalPtySpawn({
+      connectionId: args.connectionId,
+      cwd: args.cwd,
+      shellOverride: ctx.effectiveShellOverride
+    })
+  ctx.codexSelectionTarget = ctx.wslGuest
+    ? { runtime: 'wsl', wslDistro: ctx.wslGuest.execution.distro }
+    : getCodexSelectionTargetForPty(ctx.effectiveShellOverride, ctx.cwd, ctx.expectedWslDistro)
+  if (ctx.wslGuest && !ctx.wslGuest.fresh && !ctx.wslGuest.coldRestore) {
+    ctx.env = ctx.baseEnv
+    return
+  }
   const codexResumePreparation = ctx.preAdoptedStablePane
     ? null
     : ctx.deps.prepareCodexResumeHome({
@@ -41,7 +46,8 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
         providerSession: args.resumeProviderSession,
         target: ctx.codexSelectionTarget,
         launchEnv: ctx.baseEnv,
-        workspacePath: ctx.cwd
+        workspacePath: ctx.cwd,
+        ...(ctx.wslGuest ? { wslExecution: ctx.wslGuest.execution } : {})
       })
   ctx.codexResumeLaunch = codexResumePreparation
     ? await ctx.deps.resolveCodexResumeLaunch(args.command, codexResumePreparation)
@@ -59,6 +65,7 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
   const selectLaunchCodexHome = async (): Promise<string | null> =>
     (await ctx.deps.getSelectedCodexHomePath?.(ctx.codexSelectionTarget, ctx.baseEnv, {
       workspacePath: ctx.cwd,
+      ...(ctx.wslGuest ? { wslExecution: ctx.wslGuest.execution } : {}),
       launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
     })) ?? null
   ctx.selectedCodexHomePath =
@@ -86,6 +93,7 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
           ctx.codexSelectionTarget,
           (await ctx.deps.getSelectedCodexHomePath?.(ctx.codexSelectionTarget, ctx.baseEnv, {
             workspacePath: ctx.cwd,
+            ...(ctx.wslGuest ? { wslExecution: ctx.wslGuest.execution } : {}),
             launchAgent: 'codex'
           })) ?? null
         ),
@@ -94,6 +102,7 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
           ctx.codexSelectionTarget,
           (await ctx.deps.getSelectedCodexHomePath?.(ctx.codexSelectionTarget, ctx.baseEnv, {
             workspacePath: ctx.cwd,
+            ...(ctx.wslGuest ? { wslExecution: ctx.wslGuest.execution } : {}),
             launchAgent: 'codex',
             unavailableManagedHomePath
           })) ?? null
@@ -101,7 +110,7 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
     })
     ctx.selectedCodexHomePath = resolution instanceof Promise ? await resolution : resolution
   }
-  if (args.launchAgent === 'codex' && ctx.selectedCodexHomePath) {
+  if (!ctx.wslGuest && args.launchAgent === 'codex' && ctx.selectedCodexHomePath) {
     await ensureCodexStateDbBackfillRecoveryStarted(ctx.selectedCodexHomePath)
   }
   ctx.spawnTiming.mark('codex_home')
@@ -135,11 +144,13 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
     ctx.env = { ...ctx.baseEnv }
     try {
       await inheritOmpLaunchEnvironment(ctx.env, {
-        isWsl: shouldSkipCodexHomeEnvForWindowsShell(ctx.effectiveShellOverride, ctx.cwd),
+        isWsl:
+          Boolean(ctx.wslGuest) ||
+          shouldSkipCodexHomeEnvForWindowsShell(ctx.effectiveShellOverride, ctx.cwd),
         launchAgent: args.launchAgent,
         launchCommand: ctx.launchCommand
       })
-      buildPtyHostEnv(sessionIdForEnv, ctx.env, {
+      const policy: BuildPtyHostEnvOptions = {
         isPackaged: getAppEnvironment().isPackaged(),
         resourcesPath: process.resourcesPath,
         userDataPath: getAppEnvironment().getPath('userData'),
@@ -148,7 +159,9 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
         stripInheritedOrcaCodexHome: ctx.stripInheritedOrcaCodexHome,
         launchCommand: ctx.launchCommand,
         launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
-        isWsl: shouldSkipCodexHomeEnvForWindowsShell(ctx.effectiveShellOverride, ctx.cwd),
+        isWsl:
+          Boolean(ctx.wslGuest) ||
+          shouldSkipCodexHomeEnvForWindowsShell(ctx.effectiveShellOverride, ctx.cwd),
         wslDistro: ctx.codexSelectionTarget.runtime === 'wsl' ? ctx.expectedWslDistro : null,
         agentStatusHooksEnabled: isAgentStatusHooksEnabled(ptySettings),
         disabledTuiAgents: ptySettings?.disabledTuiAgents,
@@ -157,7 +170,12 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
         routeBrowserOpensToClient: ctx.deps.runtime?.shouldRelayTerminalBrowserOpens?.(),
         deferGitConfigGuardToDaemon:
           ctx.provider.supportsGitCredentialGuardHost?.(ctx.effectiveSessionId) === true
-      })
+      }
+      if (ctx.wslGuest) {
+        ctx.guestHostEnvPolicy = policy
+      } else {
+        buildPtyHostEnv(sessionIdForEnv, ctx.env, policy)
+      }
       stampWslOrchestrationCompatibilityHost(
         ctx.env,
         ctx.deps.runtime?.getOrchestrationCompatibilityHostId?.(),

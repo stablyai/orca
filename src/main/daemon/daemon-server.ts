@@ -1,3 +1,4 @@
+import { DaemonTransientPtys } from './daemon-transient-pty'
 import { randomUUID } from 'node:crypto'
 import type { Socket } from 'node:net'
 import { setImmediate as waitForImmediate } from 'node:timers/promises'
@@ -33,6 +34,20 @@ export class DaemonServer {
   private static readonly INITIAL_ADOPTION_TIMEOUT_MS = 2 * 60 * 1000
 
   private readonly log: DaemonFileLog
+  private readonly transientPtys = new DaemonTransientPtys((owner, event) => {
+    const socket = this.connections.get(owner)?.streamSocket
+    if (!socket || socket.destroyed || socket.writableLength > 256 * 1024) {
+      socket?.destroy()
+      return false
+    }
+    try {
+      socket.write(encodeNdjson(event))
+      return true
+    } catch {
+      socket.destroy()
+      return false
+    }
+  })
   private readonly host: TerminalHost
   private readonly transientFactRelay: BackgroundTransientFactRelay
   private readonly streamDataBatcher: DaemonStreamDataBatcher
@@ -116,6 +131,8 @@ export class DaemonServer {
       identity: {
         launchNonce,
         startedAtMs,
+        linuxStartTicks: options.linuxStartTicks,
+        bootId: options.bootId,
         entryPath: options.entryPath ?? null,
         appVersion: options.appVersion ?? null,
         spawnerExecPath: options.spawnerExecPath ?? null
@@ -134,17 +151,20 @@ export class DaemonServer {
       onControlRequest: (socket, clientId, request) =>
         void this.handleRequest(socket, clientId, request),
       onControlReplaced: (clientId) => {
+        this.transientPtys.disconnect(clientId)
         this.preparations.cancelForClient(clientId)
         this.historySeedTransfers.clearOwner(clientId)
         this.streamDataBatcher.clear(clientId)
       },
       onClientDisconnected: (clientId) => {
+        this.transientPtys.disconnect(clientId)
         this.preparations.cancelForClient(clientId)
         this.historySeedTransfers.clearOwner(clientId)
         this.streamDataBatcher.clear(clientId)
         this.attachments.detachClientSessions(clientId)
       },
       onStreamDisconnected: (clientId) => {
+        this.transientPtys.disconnect(clientId)
         this.preparations.cancelForClient(clientId)
         this.streamDataBatcher.clear(clientId)
         this.attachments.detachClientSessions(clientId)
@@ -197,6 +217,7 @@ export class DaemonServer {
       reevaluateIdleShutdown: () => this.lifecycle.reevaluateIdleShutdown()
     })
     this.requestRouter = new DaemonRequestRouter({
+      transientPtys: this.transientPtys,
       host: this.host,
       connections: this.connections,
       lifecycle: this.lifecycle,
@@ -245,6 +266,7 @@ export class DaemonServer {
   private async disposeResources(): Promise<void> {
     this.endpoint.stopOwnershipWatch()
     this.stopStreamBacklogProbe()
+    this.transientPtys.dispose()
     this.transientFactRelay.dispose()
     this.preparations.cancelAll()
     try {

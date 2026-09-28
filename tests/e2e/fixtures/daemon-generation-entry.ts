@@ -1,4 +1,5 @@
 import process from 'node:process'
+import { ORCAD_BUN_VERSION } from '../../../src/shared/orcad-bun-runtime'
 import { startDaemon, type DaemonHandle } from '../../../src/main/daemon/daemon-main'
 import { createPtySubprocess } from '../../../src/main/daemon/pty-subprocess'
 import { createDaemonFileLog } from '../../../src/main/daemon/daemon-file-log'
@@ -42,6 +43,9 @@ function parseFixtureArgs(argv: string[]): FixtureArgs {
 }
 
 async function main(): Promise<void> {
+  if (process.versions.bun !== ORCAD_BUN_VERSION) {
+    throw new Error('Daemon-generation PTY fixtures require the pinned Bun runtime')
+  }
   const { protocolVersion, socketPath, tokenPath, logPath, refuseDispose } = parseFixtureArgs(
     process.argv.slice(2)
   )

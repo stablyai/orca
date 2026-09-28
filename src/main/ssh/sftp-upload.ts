@@ -222,13 +222,25 @@ export async function uploadDirectory(
   options?: { exclusive?: boolean; signal?: AbortSignal }
 ): Promise<void> {
   options?.signal?.throwIfAborted()
-  await assertLocalUploadPathInsideRoot(rootRealPath, localDir)
+  const canonicalRootRealPath = await realpath(rootRealPath)
+  await uploadDirectoryWithinRoot(sftp, localDir, remoteDir, canonicalRootRealPath, options)
+}
+
+async function uploadDirectoryWithinRoot(
+  sftp: SFTPWrapper,
+  localDir: string,
+  remoteDir: string,
+  canonicalRootRealPath: string,
+  options?: { exclusive?: boolean; signal?: AbortSignal }
+): Promise<void> {
+  options?.signal?.throwIfAborted()
+  await assertLocalUploadPathInsideRoot(canonicalRootRealPath, localDir)
   const entries = await readdir(localDir, { withFileTypes: true })
   for (const entry of entries) {
     options?.signal?.throwIfAborted()
     const localPath = pathJoin(localDir, entry.name)
     const remotePath = `${remoteDir}/${entry.name}`
-    await assertLocalUploadPathInsideRoot(rootRealPath, localPath)
+    await assertLocalUploadPathInsideRoot(canonicalRootRealPath, localPath)
     const statResult = await lstat(localPath)
 
     // Why: skip symlinks and special files (sockets, FIFOs, devices) to
@@ -241,7 +253,7 @@ export async function uploadDirectory(
 
     if (statResult.isDirectory()) {
       await mkdirSftp(sftp, remotePath, { allowExisting: !options?.exclusive })
-      await uploadDirectory(sftp, localPath, remotePath, rootRealPath, options)
+      await uploadDirectoryWithinRoot(sftp, localPath, remotePath, canonicalRootRealPath, options)
     } else {
       await uploadFile(sftp, localPath, remotePath, options)
     }

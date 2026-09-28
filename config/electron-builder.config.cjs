@@ -30,9 +30,6 @@ const {
   bundledRipgrepMacSignIgnore,
   finalizePackagedRipgrep
 } = require('./bundled-ripgrep-resources.cjs')
-const {
-  verifyPackagedWindowsNodePty
-} = require('./scripts/verify-packaged-node-pty-job-ownership.cjs')
 const { verifySkillsCliRuntime } = require('./scripts/verify-skills-cli-runtime.cjs')
 const { verifyStaticAppImagePackage } = require('./scripts/static-appimage-package-contract.cjs')
 const { signWindowsUninstallerViaSignPath } = require('./scripts/windows-uninstaller-signing.cjs')
@@ -116,6 +113,11 @@ const emojiShortcodeDatasetResource = {
 }
 const commonExtraResources = [
   relayExtraResource,
+  {
+    from: 'out/terminal-daemon',
+    to: 'terminal-daemon',
+    filter: ['daemon-entry.js', 'windows-bun-pty-gate-entry.js']
+  },
   ...bundledRipgrepExtraResources,
   bundledPluginResources,
   skillFreshnessResources,
@@ -192,10 +194,12 @@ module.exports = {
     '!**/.vscode/*',
     // Why: these repo-only inputs are either bundled into out/ or copied via
     // extraResources. Shipping them in app.asar bloats the desktop bundle.
+    '!.build{,/**/*}',
     '!src{,/**/*}',
     '!out/orcad{,/**/*}',
     '!out/orcad-template{,/**/*}',
     '!out/cli-runtime{,/**/*}',
+    '!out/terminal-daemon{,/**/*}',
     '!out/.orcad-*{,/**/*}',
     '!config{,/**/*}',
     '!docs{,/**/*}',
@@ -318,10 +322,30 @@ module.exports = {
     assertPackagedNativeVariantsInstalled(context.electronPlatformName, context.arch)
     assertBundledRipgrepInstalled()
     assertMobileWebBundleBuilt(mobileWebBundleDir)
+    assertPackagedDaemonEntryExists(
+      join(context.packager?.projectDir ?? join(__dirname, '..'), 'out'),
+      context.electronPlatformName
+    )
     assertBundledCliRuntimeBuilt(
       context.electronPlatformName,
       context.arch,
       context.packager?.projectDir
+    )
+  },
+  afterSign: (context) => {
+    if (context.electronPlatformName !== 'darwin') {
+      return
+    }
+    verifyCliRuntimeDirectory(
+      join(
+        context.appOutDir,
+        `${context.packager.appInfo.productFilename}.app`,
+        'Contents',
+        'Resources',
+        'cli-runtime'
+      ),
+      'darwin',
+      { 1: 'x64', 3: 'arm64' }[context.arch]
     )
   },
   afterPack: async (context) => {
@@ -381,17 +405,10 @@ module.exports = {
       })
     }
     verifyPackagedMainRuntimeDeps(resourcesDir)
-    // Why: boot the packaged daemon-entry under plain Node, but only for the
-    // slice matching the packaging host's arch — daemon-entry.js is JS, yet it
-    // require()s the native (N-API) node-pty for the TARGET arch, which the host
-    // Node cannot load cross-arch. `Arch` enum: ia32=0, x64=1, armv7l=2,
-    // arm64=3, universal=4 (universal contains the host slice, so run it).
+    // The bundled runtime and native dependencies can only boot on the matching host architecture.
     const archEnumByNodeArch = { ia32: 0, x64: 1, armv7l: 2, arm64: 3 }
     const hostArchEnum = archEnumByNodeArch[process.arch]
     const canExecuteTargetArch = context.arch === hostArchEnum || context.arch === 4
-    if (context.electronPlatformName === 'win32') {
-      verifyPackagedWindowsNodePty(resourcesDir, context.arch, { canExecuteTargetArch })
-    }
     verifySkillsCliRuntime(join(resourcesDir, 'app.asar.unpacked', 'out'), resourcesDir, {
       executeCommands: canExecuteTargetArch
     })
@@ -401,12 +418,10 @@ module.exports = {
       )
     }
     if (canExecuteTargetArch) {
-      verifyPackagedDaemonEntryBoots(resourcesDir)
+      verifyPackagedDaemonEntryBoots(resourcesDir, { platform: context.electronPlatformName })
     } else {
-      // Why: a cross-arch slice can't be booted by the host Node, but the
-      // unpacked entry must still exist — its absence is a layout regression
-      // regardless of arch, so only the boot is skipped, not the check.
-      assertPackagedDaemonEntryExists(resourcesDir)
+      // Cross-architecture packages still require the complete daemon entry layout.
+      assertPackagedDaemonEntryExists(resourcesDir, context.electronPlatformName)
       console.log(
         `[verify-packaged-daemon-entry] skipped boot on cross-arch slice (target ${context.arch}, host ${process.arch})`
       )
@@ -514,7 +529,8 @@ module.exports = {
     icon: 'resources/build/icon.icns',
     entitlements: 'resources/build/entitlements.mac.plist',
     entitlementsInherit: 'resources/build/entitlements.mac.plist',
-    signIgnore: bundledRipgrepMacSignIgnore,
+    // Keep Bun's upstream Developer ID signature and pinned executable bytes.
+    signIgnore: [...bundledRipgrepMacSignIgnore, '/cli-runtime/bun-runtime$'],
     extendInfo: {
       NSAppleEventsUsageDescription:
         'Orca allows terminal-launched developer tools to automate local apps when you request it.',
@@ -686,12 +702,7 @@ module.exports = {
     afterRemove: 'resources/linux/packaging/after-remove.sh'
   },
   beforeBuild: electronBuilderNativeRebuild,
-  // Why: must be true so that electron-builder rebuilds native modules
-  // (node-pty) for each target architecture when producing dual-arch macOS
-  // builds (x64 + arm64). With npmRebuild disabled, CI on an arm64 runner
-  // packages arm64 binaries into the x64 DMG, causing "posix_spawnp failed"
-  // on Intel Macs. The beforeBuild hook performs Orca's targeted rebuild and
-  // returns false so electron-builder does not rebuild optional cpu-features.
+  // beforeBuild performs the target-architecture rebuild and skips optional cpu-features.
   npmRebuild: true,
   publish: {
     provider: 'github',

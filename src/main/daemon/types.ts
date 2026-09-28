@@ -1,3 +1,5 @@
+import type { PingRequest } from './daemon-hello-protocol'
+import type { TransientPtyRequest } from './daemon-transient-pty-protocol'
 import type {
   ConfirmForegroundProcessRequest,
   ConfirmShellForegroundRequest,
@@ -54,7 +56,7 @@ export type { TerminalCheckpointFile } from './daemon-checkpoint-file'
 // ─── NDJSON Protocol Messages ───────────────────────────────────────
 
 // Hello handshake (first message on each socket)
-export type { DaemonEndpointIdentity, HelloMessage, HelloResponse } from './daemon-hello-protocol'
+export type { DaemonEndpointIdentity, HelloMessage, HelloResponse, PingRequest } from './daemon-hello-protocol'
 
 // ─── RPC Requests (Client → Daemon, on control socket) ─────────────
 
@@ -222,11 +224,6 @@ export type ShutdownRequest = {
   }
 }
 
-export type PingRequest = {
-  id: string
-  type: 'ping'
-}
-
 export type SystemResolverHealthRequest = {
   id: string
   type: 'systemResolverHealth'
@@ -303,6 +300,7 @@ export type TakePendingOutputResult = {
 }
 
 export type DaemonRequest =
+  | TransientPtyRequest
   | CreateOrAttachRequest
   | HistorySeedProtocol.TerminalHistorySeedTransferRequest
   | CancelCreateOrAttachRequest

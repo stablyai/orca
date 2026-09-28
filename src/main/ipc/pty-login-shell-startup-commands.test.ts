@@ -12,11 +12,10 @@ import { registerPtyHandlers } from './pty'
 import { join } from 'node:path'
 import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../pty/posix-shell-startup-command'
 // Why resolved rather than hardcoded: the wrapper tree is content-addressed.
-import { getShellReadyWrapperRoot } from '../providers/local-pty-shell-ready-wrapper-root'
+import { getShellReadyWrapperRoot } from '../daemon/shell-ready'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
-vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
@@ -227,10 +226,10 @@ describe('registerPtyHandlers', () => {
         expect(mockProc.proc.write).not.toHaveBeenCalled()
 
         mockProc.emitData('last login: today\r\n')
-        vi.runOnlyPendingTimers()
+        vi.advanceTimersByTime(1)
         expect(mockProc.proc.write).not.toHaveBeenCalled()
 
-        mockProc.emitData('\x1b]133;A\x07% ')
+        mockProc.emitData('\x1b]777;orca-shell-ready\x07% ')
         await Promise.resolve()
         vi.runAllTimers()
         expect(mockProc.proc.write).toHaveBeenCalledWith('claude\n')
@@ -240,7 +239,7 @@ describe('registerPtyHandlers', () => {
     }
   )
   posixOnlyIt(
-    'uses the no-marker wrapper for Codex startup commands without a PTY write',
+    'delivers Codex once after the daemon observes the zsh line-editor marker',
     async () => {
       vi.useFakeTimers()
       const mockProc = createMockProc()
@@ -256,18 +255,18 @@ describe('registerPtyHandlers', () => {
         })
 
         const [, , options] = spawnMock.mock.calls[0]!
-        expect(options.env.ORCA_SHELL_FEATURES).not.toContain('ready')
-        expect(options.env[POSIX_SHELL_STARTUP_COMMAND_ENV]).toBe('codex')
+        expect(options.env.ORCA_SHELL_FEATURES).toContain('ready')
+        expect(options.env[POSIX_SHELL_STARTUP_COMMAND_ENV]).toBeUndefined()
 
         await Promise.resolve()
         vi.advanceTimersByTime(49)
         await Promise.resolve()
         expect(mockProc.proc.write).not.toHaveBeenCalled()
 
-        vi.advanceTimersByTime(1)
-        await Promise.resolve()
+        mockProc.emitData('\x1b]777;orca-shell-ready\x07% ')
+        expect(mockProc.proc.write).toHaveBeenCalledExactlyOnceWith('codex\n')
         vi.runAllTimers()
-        expect(mockProc.proc.write).not.toHaveBeenCalled()
+        expect(mockProc.proc.write).toHaveBeenCalledOnce()
       } finally {
         vi.useRealTimers()
       }
@@ -290,7 +289,7 @@ describe('registerPtyHandlers', () => {
 
       const [, , options] = spawnMock.mock.calls[0]!
       expect(options.env.ORCA_SHELL_FEATURES).toContain('ready')
-      expect(options.env[POSIX_SHELL_STARTUP_COMMAND_ENV]).toBe("codex 'linked issue context'")
+      expect(options.env[POSIX_SHELL_STARTUP_COMMAND_ENV]).toBeUndefined()
       expect(mockProc.proc.write).not.toHaveBeenCalled()
 
       mockProc.emitData('last login: today\r\n')
@@ -302,17 +301,17 @@ describe('registerPtyHandlers', () => {
       await Promise.resolve()
       vi.advanceTimersByTime(50)
       await Promise.resolve()
-      expect(mockProc.proc.write).not.toHaveBeenCalled()
+      expect(mockProc.proc.write).toHaveBeenCalledExactlyOnceWith("codex 'linked issue context'\n")
 
       vi.advanceTimersByTime(150)
       await Promise.resolve()
-      expect(mockProc.proc.write).not.toHaveBeenCalled()
+      expect(mockProc.proc.write).toHaveBeenCalledExactlyOnceWith("codex 'linked issue context'\n")
     } finally {
       vi.useRealTimers()
     }
   })
   posixOnlyIt(
-    'uses the short settle path for delivery-hinted Codex when prompt follows the marker',
+    'delivers delivery-hinted Codex once when the zsh marker and prompt arrive together',
     async () => {
       vi.useFakeTimers()
       const mockProc = createMockProc()
@@ -329,17 +328,21 @@ describe('registerPtyHandlers', () => {
         })
 
         const [, , options] = spawnMock.mock.calls[0]!
-        expect(options.env[POSIX_SHELL_STARTUP_COMMAND_ENV]).toBe("codex 'linked issue context'")
+        expect(options.env[POSIX_SHELL_STARTUP_COMMAND_ENV]).toBeUndefined()
 
         mockProc.emitData('\x1b]777;orca-shell-ready\x07\r\nuser@host % ')
         await Promise.resolve()
         vi.advanceTimersByTime(29)
         await Promise.resolve()
-        expect(mockProc.proc.write).not.toHaveBeenCalled()
+        expect(mockProc.proc.write).toHaveBeenCalledExactlyOnceWith(
+          "codex 'linked issue context'\n"
+        )
 
         vi.advanceTimersByTime(1)
         await Promise.resolve()
-        expect(mockProc.proc.write).not.toHaveBeenCalled()
+        expect(mockProc.proc.write).toHaveBeenCalledExactlyOnceWith(
+          "codex 'linked issue context'\n"
+        )
       } finally {
         vi.useRealTimers()
       }
@@ -361,16 +364,16 @@ describe('registerPtyHandlers', () => {
 
       const [, , options] = spawnMock.mock.calls[0]!
       expect(options.env.ORCA_SHELL_FEATURES).toContain('ready')
-      expect(options.env[POSIX_SHELL_STARTUP_COMMAND_ENV]).toBe(
-        "codex --prefill 'linked issue context'"
-      )
+      expect(options.env[POSIX_SHELL_STARTUP_COMMAND_ENV]).toBeUndefined()
       expect(mockProc.proc.write).not.toHaveBeenCalled()
 
       mockProc.emitData('\x1b]777;orca-shell-ready\x07')
       await Promise.resolve()
       vi.runAllTimers()
       await Promise.resolve()
-      expect(mockProc.proc.write).not.toHaveBeenCalled()
+      expect(mockProc.proc.write).toHaveBeenCalledExactlyOnceWith(
+        "codex --prefill 'linked issue context'\n"
+      )
     } finally {
       vi.useRealTimers()
     }

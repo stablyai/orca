@@ -66,6 +66,26 @@ describe('sftp-upload', () => {
     expect(writeStream.listenerCount('error')).toBe(1)
   })
 
+  it('accepts an aliased upload root while checking canonical containment', async () => {
+    const localDir = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-root-'))
+    const aliasedDir = `${localDir}-alias`
+    await writeFile(join(localDir, 'asset.txt'), 'asset')
+    await symlink(localDir, aliasedDir, process.platform === 'win32' ? 'junction' : 'dir')
+    const sftp = createSftpMock()
+
+    try {
+      await uploadDirectory(sftp, aliasedDir, '/remote/assets', aliasedDir, {
+        exclusive: true
+      })
+      expect(sftp.createWriteStream).toHaveBeenCalledWith('/remote/assets/asset.txt', {
+        flags: 'wx'
+      })
+    } finally {
+      await rm(localDir, { recursive: true, force: true })
+      await rm(aliasedDir, { recursive: true, force: true })
+    }
+  })
+
   it('uploads files from valid dot-dot-prefixed local directories', async () => {
     const localDir = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-'))
     await mkdir(join(localDir, '..fixtures'))

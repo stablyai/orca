@@ -1,3 +1,6 @@
+import { parseAppWslPtyId } from '../../../../shared/wsl-pty-id'
+import { prepareWslDaemonReattachHooks } from '../../../wsl/wsl-daemon-reattach-hooks'
+import { isAgentStatusHooksEnabled } from '../../../agent-hooks/managed-agent-hook-controls'
 import { ensureWslHookRelayForReattach } from '../../../agent-hooks/wsl-hook-relay-reattach'
 import {
   SSH_SESSION_EXPIRED_ERROR,
@@ -30,6 +33,14 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
       args.worktreeId,
       args.connectionId
     )
+    const stableGuest = stablePaneOwnerCandidate && parseAppWslPtyId(stablePaneOwnerCandidate.ptyId)
+    if (stableGuest) {
+      const sessions = ctx.deps.options?.wslDaemonSessions
+      if (!sessions) {
+        throw new Error('WSL terminal owner is unavailable on this host')
+      }
+      await sessions.reconnect(stableGuest)
+    }
     const expectedPtyId =
       stablePaneOwnerCandidate?.ptyId ?? ctx.effectiveSessionAppId ?? ctx.effectiveSessionId
     if (expectedPtyId) {
@@ -101,7 +112,14 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
         ctx.snapshotKittyFlagsCoverReconciledSeq = false
       }
     }
-    ensureWslHookRelayForReattach(ctx.result, args.connectionId)
+    const guestHooks = await prepareWslDaemonReattachHooks({
+      result: ctx.result,
+      sessions: ctx.deps.options?.wslDaemonSessions,
+      hooksEnabled: isAgentStatusHooksEnabled(ctx.deps.getSettings?.())
+    })
+    if (!guestHooks) {
+      ensureWslHookRelayForReattach(ctx.result, args.connectionId)
+    }
     ctx.deps.runtime?.preparePtyExecutionContext?.(
       ctx.result.id,
       args.connectionId

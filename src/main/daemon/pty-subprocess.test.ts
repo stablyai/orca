@@ -1,9 +1,10 @@
-// Spawn setup: node-pty launch options, Unix shell resolution and daemon cwd repair.
+import type { BunPtySpawnArgs } from './pty-subprocess/bun-pty-process-contract'
+// Spawn setup: Bun PTY launch options, Unix shell resolution and daemon cwd repair.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type * as LocalPtyUtils from '../providers/local-pty-utils'
+import type * as PtySpawnValidation from '../providers/pty-spawn-validation'
 
 const {
   spawnMock,
@@ -25,12 +26,15 @@ const {
   })
 }))
 
-vi.mock('node-pty', () => ({
-  spawn: spawnMock
+vi.mock('./pty-subprocess/bun-pty-process', () => ({
+  canUseBunPty: () => true,
+  spawnBunPty: ({ file, args, ...options }: BunPtySpawnArgs) =>
+    spawnMock(file, args, { ...options, name: options.env.TERM ?? 'xterm-256color' })
 }))
 
 vi.mock('../pwsh', () => ({
-  isPwshAvailable: isPwshAvailableMock
+  isPwshAvailable: isPwshAvailableMock,
+  isPwshAvailableAsync: isPwshAvailableMock
 }))
 
 // Resolve PowerShell family names to deterministic absolute paths so these
@@ -49,8 +53,8 @@ vi.mock('../providers/windows-powershell-executable', () => ({
   getWindowsCmdPath: () => CMD_ABS
 }))
 
-vi.mock('../providers/local-pty-utils', async (importOriginal) => {
-  const actual = await importOriginal<typeof LocalPtyUtils>()
+vi.mock('../providers/pty-spawn-validation', async (importOriginal) => {
+  const actual = await importOriginal<typeof PtySpawnValidation>()
   return {
     ...actual,
     resolveUnixShellPath: resolveUnixShellPathMock,
@@ -68,7 +72,7 @@ vi.mock('../providers/agent-foreground-process', () => ({
   }
 }))
 
-// Console-membership reads run a real node-pty fork that never settles under
+// Console-membership reads run a real Bun PTY fork that never settles under
 // fake timers; default to "shell-only" so the degraded-scan guard falls through
 // to its existing retirement logic (the degraded-scan behavior itself is
 // covered in pty-subprocess-foreground-degraded-scan.test.ts).
@@ -98,7 +102,7 @@ describe('createPtySubprocess', () => {
     validateWorkingDirectoryMock
   })
 
-  it('spawns node-pty with correct options', async () => {
+  it('spawns Bun PTY with correct options', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const onMacosTccSpawnStrategy = vi.fn()
@@ -156,7 +160,7 @@ describe('createPtySubprocess', () => {
     expect(spawnMock).not.toHaveBeenCalled()
   })
 
-  it('does not report a spawn strategy when node-pty fails before launch', async () => {
+  it('does not report a spawn strategy when Bun PTY fails before launch', async () => {
     spawnMock.mockImplementationOnce(() => {
       throw new Error('spawn failed')
     })
@@ -193,7 +197,7 @@ describe('createPtySubprocess', () => {
     expect(PREVIOUS_DAEMON_PROTOCOL_VERSIONS).toContain(22)
   })
 
-  it('resolves a missing Unix default before spawning node-pty', async () => {
+  it('resolves a missing Unix default before spawning Bun PTY', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     resolveUnixShellPathMock.mockReturnValue('/bin/sh')
@@ -285,7 +289,7 @@ describe('createPtySubprocess', () => {
     }
   })
 
-  it('surfaces the no-executable-shell error before node-pty forks', async () => {
+  it('surfaces the no-executable-shell error before Bun PTY forks', async () => {
     resolveUnixShellPathMock.mockImplementation(() => {
       throw new Error('No executable Unix shell found (tried: /bin/zsh, /bin/bash, /bin/sh)')
     })
@@ -304,7 +308,7 @@ describe('createPtySubprocess', () => {
     }
   })
 
-  it('uses bundled ConPTY for native Windows daemon terminals', async () => {
+  it('passes Windows dimensions to the Bun terminal backend', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -327,7 +331,7 @@ describe('createPtySubprocess', () => {
     expect(spawnMock).toHaveBeenCalledWith(
       expect.any(String),
       expect.any(Array),
-      expect.objectContaining({ useConptyDll: true })
+      expect.objectContaining({ cols: 80, rows: 24 })
     )
   })
 
@@ -354,7 +358,7 @@ describe('createPtySubprocess', () => {
     expect(spawnCall[2].env[POWERLEVEL10K_WIZARD_DISABLE_ENV]).toBe('true')
   })
 
-  itOnMacHost('repairs a deleted macOS daemon cwd before spawning node-pty', async () => {
+  itOnMacHost('repairs a deleted macOS daemon cwd before spawning Bun PTY', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -388,7 +392,7 @@ describe('createPtySubprocess', () => {
     )
   })
 
-  itOnPosixHost('repairs a deleted POSIX daemon cwd before Linux node-pty spawn', async () => {
+  itOnPosixHost('repairs a deleted POSIX daemon cwd before Linux Bun PTY spawn', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -515,7 +519,7 @@ describe('createPtySubprocess', () => {
     expect(spawnMock).not.toHaveBeenCalled()
   })
 
-  it('rejects a missing explicit POSIX cwd before node-pty spawn', async () => {
+  it('rejects a missing explicit POSIX cwd before Bun PTY spawn', async () => {
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'linux' })
     spawnMock.mockClear()

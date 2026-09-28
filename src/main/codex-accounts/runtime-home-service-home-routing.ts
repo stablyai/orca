@@ -1,3 +1,7 @@
+import {
+  assertWslAccountExecutionTarget,
+  type WslAccountExecutionContext
+} from '../wsl/wsl-account-execution-context'
 import { posix as pathPosix } from 'node:path'
 import { parseWslUncPath, toLinuxPath, toWindowsWslUncPath } from '../../shared/wsl-paths'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
@@ -209,7 +213,14 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     await Promise.all(drains)
   }
 
-  protected getWslSystemCodexHomePath(target: CodexAccountSelectionTarget): string | null {
+  protected getWslSystemCodexHomePath(
+    target: CodexAccountSelectionTarget,
+    execution?: WslAccountExecutionContext
+  ): string | null {
+    if (execution) {
+      assertWslAccountExecutionTarget(execution, target)
+      return toWindowsWslUncPath(pathPosix.join(execution.home, '.codex'), execution.distro)
+    }
     if (process.platform !== 'win32') {
       return null
     }
@@ -229,15 +240,17 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
 
   protected finishWslLaunchPreparation(
     target: CodexAccountSelectionTarget,
-    homePath: string | null
+    homePath: string | null,
+    execution?: WslAccountExecutionContext
   ): void {
-    this.syncWslConfigAndGlobalInstructionsForLaunch(target, homePath)
-    this.startWslSessionBridgeForLaunch(target, homePath)
+    this.syncWslConfigAndGlobalInstructionsForLaunch(target, homePath, execution)
+    this.startWslSessionBridgeForLaunch(target, homePath, execution)
   }
 
   protected syncWslConfigAndGlobalInstructionsForLaunch(
     target: CodexAccountSelectionTarget,
-    runtimeHomePath: string | null
+    runtimeHomePath: string | null,
+    execution?: WslAccountExecutionContext
   ): void {
     if (!runtimeHomePath) {
       return
@@ -247,7 +260,10 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     if (!distro) {
       return
     }
-    const systemHomePath = this.getWslSystemCodexHomePath({ runtime: 'wsl', wslDistro: distro })
+    const systemHomePath = this.getWslSystemCodexHomePath(
+      { runtime: 'wsl', wslDistro: distro },
+      execution
+    )
     if (!systemHomePath || systemHomePath === runtimeHomePath) {
       return
     }

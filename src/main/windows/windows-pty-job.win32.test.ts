@@ -1,8 +1,10 @@
+import { createWindowsBunPtyLaunch } from '../daemon/pty-subprocess/windows-bun-pty-launch'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { IPty } from 'node-pty'
+import { canUseBunPty, spawnBunPty } from '../daemon/pty-subprocess/bun-pty-process'
+import type { BunPtyProcess } from '../daemon/pty-subprocess/bun-pty-process-contract'
 import { runProcess } from '../../shared/child-process/run-process'
 import {
   isPtyJobOwnershipAvailable,
@@ -17,11 +19,19 @@ import {
  * neither `GetConsoleProcessList` nor a parent-pid walk can see it. That is the
  * process that outlived its pane and held the worktree directory open
  * (#9045, #10475, #10897). Job membership is the only mechanism that finds it,
- * so the assertion below is the whole justification for the node-pty patch.
+ * so the assertion below is the reason this runtime must retain exact job ownership.
  *
  * Runs only on win32; skipped elsewhere.
  */
-const describeOnWindows = process.platform === 'win32' ? describe : describe.skip
+const spawnTestPty: typeof spawnBunPty = (args) =>
+  spawnBunPty(args, {
+    createWindowsLaunch: (launch) =>
+      createWindowsBunPtyLaunch(launch, {
+        workerPath: join(__dirname, '../daemon/pty-subprocess/windows-bun-pty-gate-entry.ts')
+      })
+  })
+
+const describeOnWindows = process.platform === 'win32' && canUseBunPty() ? describe : describe.skip
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -44,7 +54,7 @@ async function waitUntilDead(pid: number, timeoutMs = 30_000): Promise<void> {
 }
 
 describeOnWindows('ConPTY job ownership', () => {
-  const spawned: IPty[] = []
+  const spawned: BunPtyProcess[] = []
 
   afterEach(() => {
     for (const proc of spawned.splice(0)) {
@@ -57,18 +67,23 @@ describeOnWindows('ConPTY job ownership', () => {
   })
 
   async function spawnShellWithDetachedGrandchild(): Promise<{
-    proc: IPty
+    proc: BunPtyProcess
     grandchildPid: number
   }> {
-    const nodePty = await import('node-pty')
-    const proc = nodePty.spawn('cmd.exe', [], {
-      name: 'xterm-256color',
+    const proc = spawnTestPty({
+      file: process.env.ComSpec || 'cmd.exe',
+      args: [],
+      env: Object.fromEntries(
+        Object.entries(process.env).filter(
+          (entry): entry is [string, string] => entry[1] !== undefined
+        )
+      ),
       cols: 80,
       rows: 30,
-      cwd: process.cwd(),
-      useConptyDll: true
+      cwd: process.cwd()
     })
     spawned.push(proc)
+    await proc.waitForSpawn?.()
 
     let grandchildPid: number | null = null
     proc.onData((chunk) => {
@@ -84,7 +99,7 @@ describeOnWindows('ConPTY job ownership', () => {
       "{detached:true,windowsHide:true,stdio:'ignore'});",
       "c.unref();console.log('ORCA_GC='+c.pid);"
     ].join('')
-    proc.write(`node -e "${script}"\r`)
+    proc.write(`"${process.execPath}" -e "${script}"\r`)
 
     for (let attempt = 0; attempt < 80 && grandchildPid === null; attempt += 1) {
       await sleep(250)
@@ -98,15 +113,13 @@ describeOnWindows('ConPTY job ownership', () => {
   }
 
   it('reports this build as able to own pty trees', () => {
-    // A node-pty rebuilt from unpatched sources would silently fall back to the
-    // old probe, so every assertion below would pass vacuously.
     expect(isPtyJobOwnershipAvailable()).toBe(true)
   })
 
   it('keeps the native table intact while shell cleanup overlaps new terminals', async () => {
     const result = await runProcess({
       program: process.execPath,
-      args: [join(process.cwd(), 'config', 'scripts', 'windows-pty-table-stress.cjs')],
+      args: [join(process.cwd(), 'config', 'scripts', 'windows-pty-table-stress.mjs')],
       env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' },
       timeoutMs: 90_000
     })
@@ -123,7 +136,7 @@ describeOnWindows('ConPTY job ownership', () => {
 
     const pids = listPtyJobProcessIds(proc)
     expect(pids).not.toBeNull()
-    expect(pids).toContain(proc.pid)
+    expect(pids).toContain(proc.shellProcessId)
     expect(pids).toContain(grandchildPid)
   }, 60_000)
 
@@ -160,23 +173,22 @@ describeOnWindows('ConPTY job ownership', () => {
   }, 60_000)
 
   it('still starts a backgrounded child from inside the job', async () => {
-    // Scope note: `start /b` uses CREATE_NEW_CONSOLE, not
-    // CREATE_BREAKAWAY_FROM_JOB, so this does NOT prove the BREAKAWAY_OK flag
-    // is doing its job -- it proves job membership does not block ordinary
-    // backgrounding. The flag itself rests on the Win32 contract (a job lacking
-    // JOB_OBJECT_LIMIT_BREAKAWAY_OK denies breakaway with ERROR_ACCESS_DENIED
-    // regardless of its other limits) and is not covered by a test here.
-    // Covering it needs a helper that passes the flag to CreateProcess.
-    const nodePty = await import('node-pty')
+    // Denying explicit breakaway must still permit ordinary background commands.
     const marker = join(mkdtempSync(join(tmpdir(), 'orca-breakaway-')), 'marker.txt')
-    const proc = nodePty.spawn('cmd.exe', [], {
-      name: 'xterm-256color',
+    const proc = spawnTestPty({
+      file: process.env.ComSpec || 'cmd.exe',
+      args: [],
+      env: Object.fromEntries(
+        Object.entries(process.env).filter(
+          (entry): entry is [string, string] => entry[1] !== undefined
+        )
+      ),
       cols: 100,
       rows: 30,
-      cwd: tmpdir(),
-      useConptyDll: true
+      cwd: tmpdir()
     })
     spawned.push(proc)
+    await proc.waitForSpawn?.()
 
     let output = ''
     proc.onData((chunk) => {
@@ -190,7 +202,7 @@ describeOnWindows('ConPTY job ownership', () => {
   }, 60_000)
 
   it('stops answering once the tree is gone, rather than claiming it is empty', async () => {
-    // Measured, not assumed: node-pty drops its handle record and closes the
+    // The adapter closes its handle record and the
     // job when the shell exits, so a dead tree is unverifiable here rather than
     // observably empty. Callers must not read null as proof of death -- the
     // verdict vocabulary in docs/reference/ssh-execution-boundary.md applies.

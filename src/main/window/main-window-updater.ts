@@ -4,7 +4,10 @@ import type { ReleaseBuildListResult, UpdateCheckOptions } from '../../shared/up
 import { RELEASE_CHANNELS, type ReleaseChannel } from '../../shared/release-channel'
 import { isTrustedUIRenderer } from '../ipc/ui'
 import type { Store } from '../persistence'
-import { logStartupMilestone } from '../startup/startup-diagnostics'
+import {
+  configureProfileAutoUpdater,
+  type ProfileAutoUpdaterOptions
+} from '../updater/profile-auto-updater'
 import {
   checkForUpdatesFromMenu,
   dismissAvailableUpdate,
@@ -14,10 +17,7 @@ import {
   getUpdateStatus,
   listAvailableReleaseBuilds,
   quitAndInstall,
-  setupAutoUpdater,
-  showLinuxPackage,
-  type PreQuitCleanupFailureMode,
-  type UpdateInstallMode
+  showLinuxPackage
 } from '../updater'
 
 const UPDATER_SETUP_FALLBACK_MS = 15_000
@@ -32,11 +32,7 @@ export function ensureAutoUpdaterConfigured(): void {
 export function scheduleMainWindowAutoUpdaterSetup(
   mainWindow: BrowserWindow,
   store: Store,
-  options?: {
-    onBeforeUpdateQuit?: () => void | Promise<void>
-    onBeforeUpdateQuitFailure?: PreQuitCleanupFailureMode
-    updateInstallMode?: UpdateInstallMode
-  }
+  options?: ProfileAutoUpdaterOptions
 ): void {
   // Why: setupAutoUpdater sync-require()s electron-updater (slow on cold Windows w/ Defender, #7225), so defer past first paint; timer fallback covers crash-looping renderers.
   let updaterSetupDone = false
@@ -45,36 +41,7 @@ export function scheduleMainWindowAutoUpdaterSetup(
       return
     }
     updaterSetupDone = true
-    setupAutoUpdater(mainWindow, {
-      getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,
-      onBeforeQuit: async () => {
-        try {
-          await options?.onBeforeUpdateQuit?.()
-        } finally {
-          await store.flushPendingAsync()
-        }
-      },
-      setLastUpdateCheckAt: (timestamp) => {
-        store.updateUI({ lastUpdateCheckAt: timestamp })
-      },
-      getPendingUpdateNudgeId: () => store.getUI().pendingUpdateNudgeId ?? null,
-      getDismissedUpdateNudgeId: () => store.getUI().dismissedUpdateNudgeId ?? null,
-      setPendingUpdateNudgeId: (id) => {
-        // Why: only the apply branch also nulls dismissedUpdateVersion so relaunch can't resurrect the old hidden card; clearing must not, or it un-dismisses.
-        if (id) {
-          store.updateUI({ pendingUpdateNudgeId: id, dismissedUpdateVersion: null })
-        } else {
-          store.updateUI({ pendingUpdateNudgeId: null })
-        }
-      },
-      setDismissedUpdateNudgeId: (id) => {
-        store.updateUI({ dismissedUpdateNudgeId: id })
-      },
-      getReleaseChannelOverride: () => store.getUI().releaseChannelOverride ?? null,
-      onBeforeQuitFailure: options?.onBeforeUpdateQuitFailure,
-      installMode: options?.updateInstallMode
-    })
-    logStartupMilestone('updater-setup-done')
+    configureProfileAutoUpdater(mainWindow, store, options)
   }
   pendingAutoUpdaterSetup = setupAutoUpdaterDeferred
   mainWindow.once('ready-to-show', () => setImmediate(setupAutoUpdaterDeferred))

@@ -1,13 +1,21 @@
 # Windows daemon-host relocation
 
-On Windows the terminal daemon does not run from the install directory. Before it forks the
-daemon, Orca materializes a trimmed copy of its own runtime under
-`%LOCALAPPDATA%\Orca\daemon-host\<app version>\` and forks the daemon from there
-(`src/main/daemon/daemon-host-relocation.ts`). This is what keeps live terminals alive across an
-auto-update and across a crash of the main process.
+On Windows the terminal daemon runs from an immutable Bun runtime copy outside
+the install directory. `src/main/daemon/daemon-bun-runtime.ts` verifies and
+materializes its entry, runtime, ConPTY provider and process-inspection addon under
+`%LOCALAPPDATA%\Orca\terminal-daemon-host\managed-v1\bun-<content hash>\`.
+Launch pins protect publication through authenticated readiness; runtime retention
+preserves live or unverifiable owners. A packaged Windows launch requires
+LOCALAPPDATA; missing storage fails visibly rather than using an update-unsafe
+install directory or a roaming profile.
 
-Read this before changing the copy plan, the host exe name, the LOCALAPPDATA layout, or
-`config/nsis/orca-installer-hooks.nsh`.
+Existing Electron-hosted daemons keep their original owners and files until their
+sessions drain. `daemon-host-relocation.ts` now only prunes those legacy copies.
+The Electron copy plan and executable-name discussion below record that older
+implementation; do not restore its materialization commands for Bun.
+
+Read this before changing runtime placement or `config/nsis/orca-installer-hooks.nsh`.
+The installer must preserve both live legacy hosts and current Bun hosts.
 
 ## What the relocation actually escapes
 

@@ -1,14 +1,18 @@
-import { LocalPtyProvider } from '../../../providers/local-pty-provider'
+import { parseAppWslPtyId, type WslPtyOwner } from '../../../../shared/wsl-pty-id'
+import { wslPtyOwnerKey } from '../../../../shared/wsl-pty-consumer-recovery'
+import { relayProvidersByGeneration } from '../../../providers/relay-pty-generation-registry'
+import { createUnavailablePtyProvider } from '../../../providers/unavailable-pty-provider'
 import type { IPtyProvider } from '../../../providers/types'
 import { parseAppSshPtyId, toAppSshPtyId, toRelaySshPtyId } from '../../../providers/ssh-pty-id'
 import { ptyOwnership } from './ownership-state'
+import { rebindLocalProviderListeners } from './listener-lifecycle'
 
 // ─── Provider Registry ──────────────────────────────────────────────
 // Routes PTY operations by connectionId (null = local provider).
 
-export let localProvider: IPtyProvider = new LocalPtyProvider()
+export let localProvider: IPtyProvider = createUnavailablePtyProvider()
 export const sshProviders = new Map<string, IPtyProvider>()
-export const sshProvidersByGeneration = new Map<number, IPtyProvider>()
+const wslProviders = new Map<string, IPtyProvider>()
 
 export type RegisteredPtyProvider = {
   provider: IPtyProvider
@@ -18,7 +22,8 @@ export type RegisteredPtyProvider = {
 export function registeredPtyProviders(): RegisteredPtyProvider[] {
   return [
     { provider: localProvider, connectionId: null },
-    ...Array.from(sshProviders, ([connectionId, provider]) => ({ provider, connectionId }))
+    ...Array.from(sshProviders, ([connectionId, provider]) => ({ provider, connectionId })),
+    ...Array.from(wslProviders.values(), (provider) => ({ provider, connectionId: null }))
   ]
 }
 
@@ -38,7 +43,34 @@ export function getProvider(connectionId: string | null | undefined): IPtyProvid
   return provider
 }
 
+export function registerWslPtyProvider(owner: WslPtyOwner, provider: IPtyProvider): () => void {
+  const key = wslPtyOwnerKey(owner)
+  const previous = wslProviders.get(key)
+  if (previous && previous !== provider) {
+    throw new Error('WSL terminal owner already registered')
+  }
+  wslProviders.set(key, provider)
+  rebindLocalProviderListeners()
+  return () => {
+    if (wslProviders.get(key) === provider) {
+      wslProviders.delete(key)
+      rebindLocalProviderListeners()
+    }
+  }
+}
+
 export function getProviderForPty(ptyId: string): IPtyProvider {
+  const wslOwner = parseAppWslPtyId(ptyId)
+  if (wslOwner) {
+    const provider = wslProviders.get(wslPtyOwnerKey(wslOwner))
+    if (!provider) {
+      throw new Error('WSL terminal owner is not connected; reconnect its owning distro')
+    }
+    return provider
+  }
+  if (ptyId.startsWith('wsl:')) {
+    throw new Error('Invalid WSL terminal identity')
+  }
   const connectionId = ptyOwnership.get(ptyId)
   if (connectionId === undefined) {
     const parsedSshId = parseAppSshPtyId(ptyId)
@@ -52,6 +84,13 @@ export function getProviderForPty(ptyId: string): IPtyProvider {
 }
 
 export function hasPtyProviderForInspection(ptyId: string): boolean {
+  const wslOwner = parseAppWslPtyId(ptyId)
+  if (wslOwner) {
+    return wslProviders.has(wslPtyOwnerKey(wslOwner))
+  }
+  if (ptyId.startsWith('wsl:')) {
+    return false
+  }
   // Why: process inspection is background polling; disconnected SSH hosts should read as idle, not raise repeated IPC errors.
   const connectionId = ptyOwnership.get(ptyId)
   if (connectionId === undefined) {
@@ -89,6 +128,9 @@ export function closeStartupQueryAuthorityForPty(ptyId: string): void {
 }
 
 export function tryGetProviderForAgentSessionOwner(ptyId: string): IPtyProvider | undefined {
+  if (ptyId.startsWith('wsl:')) {
+    return tryGetProviderForPty(ptyId)
+  }
   const ownedConnectionId = ptyOwnership.get(ptyId)
   const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(ptyId) : null
   try {
@@ -103,7 +145,7 @@ export function registerSshPtyProvider(connectionId: string, provider: IPtyProvi
   sshProviders.set(connectionId, provider)
   const generation = (provider as { providerGeneration?: number }).providerGeneration
   if (Number.isSafeInteger(generation) && generation! > 0) {
-    sshProvidersByGeneration.set(generation!, provider)
+    relayProvidersByGeneration.set(generation!, provider)
   }
 }
 
@@ -111,8 +153,8 @@ export function registerSshPtyProvider(connectionId: string, provider: IPtyProvi
 export function unregisterSshPtyProvider(connectionId: string): void {
   const provider = sshProviders.get(connectionId)
   const generation = (provider as { providerGeneration?: number } | undefined)?.providerGeneration
-  if (generation !== undefined && sshProvidersByGeneration.get(generation) === provider) {
-    sshProvidersByGeneration.delete(generation)
+  if (generation !== undefined && relayProvidersByGeneration.get(generation) === provider) {
+    relayProvidersByGeneration.delete(generation)
   }
   sshProviders.delete(connectionId)
 }
@@ -122,9 +164,7 @@ export function getSshPtyProvider(connectionId: string): IPtyProvider | undefine
   return sshProviders.get(connectionId)
 }
 
-/** Get the installed PTY provider (for direct access in tests/runtime).
- *  After daemon init this may be a DaemonPtyAdapter/DaemonPtyRouter, not LocalPtyProvider;
- *  callers needing LocalPtyProvider-specific methods must type-narrow or import the class. */
+/** Get the installed daemon provider for runtime operations and tests. */
 export function getLocalPtyProvider(): IPtyProvider {
   return localProvider
 }

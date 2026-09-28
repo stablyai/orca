@@ -11,6 +11,7 @@ export type SessionOptions = {
   launchAgent?: TuiAgent
   subprocess: SubprocessHandle
   shellReadySupported: boolean
+  requireSynchronousOutput?: boolean
   shellReadyTimeoutMs?: number
   /** Reports a readiness outcome worth diagnosing to the daemon's file log.
    *  Why not console: the detached daemon runs with stdio 'ignore'. */

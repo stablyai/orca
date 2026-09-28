@@ -135,7 +135,7 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // Why: opencode enables bracketed paste before its composer mounts; wait for the post-\x1b[?2004h show-cursor so paste lands.
     draftPasteReadySignal: 'render-cursor-after-bracketed-paste',
     // Why 20s: measured on two Windows hosts (ConPTY dll backend, as pinned by
-    // local-pty-utils), opencode does not enable bracketed paste until ~4.8s and its
+    // pty-spawn-validation), opencode does not enable bracketed paste until ~4.8s and its
     // composer is not ready until ~10s — so the 8s default expired first and the draft
     // was pasted blind, mid-startup (#22479). The signal itself fired every time in
     // those runs, so the budget was the problem, not a dropped escape.

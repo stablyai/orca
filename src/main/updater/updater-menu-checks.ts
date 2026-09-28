@@ -7,6 +7,9 @@ import { UpdaterScheduling } from './updater-scheduling'
 /** Handles checks initiated from the desktop menu and modifier-key variants. */
 export abstract class UpdaterMenuChecks extends UpdaterScheduling {
   protected checkForUpdatesFromMenu(options?: UpdateCheckOptions): void {
+    if (this.isQuitAndInstallHandoffActive()) {
+      return
+    }
     if (!app.isPackaged || is.dev) {
       this.sendStatus({ state: 'not-available', userInitiated: true })
       return
@@ -60,7 +63,7 @@ export abstract class UpdaterMenuChecks extends UpdaterScheduling {
     const attemptId = this.beginUpdateCheckAttempt()
     const autoUpdater = this.getAutoUpdater()
     const launch = (): Promise<unknown> | undefined => {
-      if (!this.isActiveUpdateCheckAttempt(attemptId)) {
+      if (this.isQuitAndInstallHandoffActive() || !this.isActiveUpdateCheckAttempt(attemptId)) {
         return undefined
       }
       this.markUpdateCheckLaunched(attemptId)
@@ -68,7 +71,7 @@ export abstract class UpdaterMenuChecks extends UpdaterScheduling {
     }
     const run = this.pinDefaultReleaseFeed(checkVariant).then((preflightResult) => {
       if (preflightResult === 'not-available') {
-        if (!this.isActiveUpdateCheckAttempt(attemptId)) {
+        if (this.isQuitAndInstallHandoffActive() || !this.isActiveUpdateCheckAttempt(attemptId)) {
           return false
         }
         this.userInitiatedCheck = false
@@ -81,13 +84,13 @@ export abstract class UpdaterMenuChecks extends UpdaterScheduling {
     })
     void Promise.resolve(run)
       .then((launchResult) => {
-        if (launchResult === false) {
+        if (this.isQuitAndInstallHandoffActive() || launchResult === false) {
           return
         }
         this.handleSettledUpdateCheckPromise(attemptId)
       })
       .catch((err) => {
-        if (!this.isActiveUpdateCheckAttempt(attemptId)) {
+        if (this.isQuitAndInstallHandoffActive() || !this.isActiveUpdateCheckAttempt(attemptId)) {
           return
         }
         this.userInitiatedCheck = false

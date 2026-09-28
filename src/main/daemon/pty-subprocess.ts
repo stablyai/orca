@@ -1,9 +1,15 @@
+import type { ObserveTerminalSpawnAttempt } from './terminal-spawn-attempt'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { normalizePtySize } from './daemon-pty-size'
 import { TerminalAttachCanceledError } from './daemon-errors'
+import { waitForTerminalAttachOperation } from './terminal-attach-cancellation'
 import { createDaemonPtyEnvironment } from './pty-subprocess/spawn-environment'
 import { createPtyShellLaunchPlan } from './pty-subprocess/shell-launch-plan'
-import { spawnNativeDaemonPty, type SpawnedDaemonPty } from './pty-subprocess/native-pty-spawn'
+import {
+  spawnNativeDaemonPty,
+  PtySpawnCleanupError,
+  type SpawnedDaemonPty
+} from './pty-subprocess/native-pty-spawn'
 import {
   formatPtySpawnError,
   preflightPtySpawn,
@@ -35,6 +41,7 @@ export type PtySubprocessOptions = {
   isCanceled?: () => boolean
   /** Aborts in-progress cwd validation; `isCanceled` is only polled between steps. */
   cancelSignal?: AbortSignal
+  onSpawnAttempt?: ObserveTerminalSpawnAttempt
   onMacosTccSpawnStrategy?: (strategy: 'wrapped' | 'direct') => void
 }
 
@@ -70,7 +77,11 @@ export async function checkPtySpawnHealth(): Promise<void> {
 export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<SubprocessHandle> {
   const size = normalizePtySize(opts.cols, opts.rows)
   const env = createDaemonPtyEnvironment(opts)
-  const launch = createPtyShellLaunchPlan(opts, env)
+  const launch = await waitForTerminalAttachOperation(
+    createPtyShellLaunchPlan(opts, env),
+    opts.cancelSignal,
+    opts.sessionId
+  )
 
   await preflightPtySpawn({
     validationCwd: launch.validationCwd,
@@ -82,6 +93,20 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
     throw new TerminalAttachCanceledError(opts.sessionId)
   }
 
+  const makeHandle = (spawned: SpawnedDaemonPty): SubprocessHandle =>
+    createDaemonPtySubprocessHandle({
+      process: spawned.process,
+      shellPath: spawned.shellPath,
+      spawnCwd: spawned.spawnCwd,
+      env,
+      startupCommandDeliveredInShellArgs:
+        spawned.startupCommandDeliveredInShellArgs ?? launch.startupCommandDeliveredInShellArgs,
+      reportsChildExitStatus: spawned.reportsChildExitStatus,
+      requestedCwd: opts.cwd,
+      sessionId: opts.sessionId,
+      startupAgentRecognition: launch.startupAgentRecognition
+    })
+  let attemptHandle: SubprocessHandle | undefined
   let spawned: SpawnedDaemonPty
   try {
     spawned = await spawnNativeDaemonPty({
@@ -92,25 +117,28 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
       cols: size.cols,
       rows: size.rows,
       windowsFallbackAttempts: launch.windowsFallbackAttempts,
-      onMacosTccSpawnStrategy: opts.onMacosTccSpawnStrategy
+      onMacosTccSpawnStrategy: opts.onMacosTccSpawnStrategy,
+      signal: opts.cancelSignal,
+      ...(opts.onSpawnAttempt
+        ? {
+            onSpawnAttempt: (attempt: SpawnedDaemonPty, discardNative: () => Promise<void>) => {
+              return opts.onSpawnAttempt!(() => {
+                attemptHandle = makeHandle(attempt)
+                return attemptHandle
+              }, discardNative)
+            }
+          }
+        : {})
     })
   } catch (error) {
+    if (opts.cancelSignal?.aborted && !(error instanceof PtySpawnCleanupError)) {
+      throw new TerminalAttachCanceledError(opts.sessionId)
+    }
     if (process.platform === 'win32') {
       throw formatPtySpawnError(error, launch.shellPath, launch.spawnCwd)
     }
     throw error
   }
 
-  return createDaemonPtySubprocessHandle({
-    process: spawned.process,
-    shellPath: spawned.shellPath,
-    spawnCwd: spawned.spawnCwd,
-    env,
-    startupCommandDeliveredInShellArgs:
-      spawned.startupCommandDeliveredInShellArgs ?? launch.startupCommandDeliveredInShellArgs,
-    reportsChildExitStatus: spawned.reportsChildExitStatus,
-    requestedCwd: opts.cwd,
-    sessionId: opts.sessionId,
-    startupAgentRecognition: launch.startupAgentRecognition
-  })
+  return attemptHandle ?? makeHandle(spawned)
 }

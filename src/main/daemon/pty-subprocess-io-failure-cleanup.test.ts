@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as pty from 'node-pty'
 import { createDaemonPtySubprocessHandle } from './pty-subprocess/subprocess-handle'
 import { mockPtyProcess } from './pty-subprocess-test-harness'
 import { TerminalHost } from './terminal-host'
@@ -23,13 +22,15 @@ vi.mock('../pty-descendant-termination', () => ({
 function createFixture() {
   const proc = {
     ...mockPtyProcess(4242),
+    cols: 80,
+    rows: 24,
     destroy: vi.fn(),
     pause: vi.fn(),
     resume: vi.fn(),
     clear: vi.fn()
   }
   const handle = createDaemonPtySubprocessHandle({
-    process: proc as unknown as pty.IPty,
+    process: proc,
     shellPath: 'bash',
     spawnCwd: process.cwd(),
     env: {},

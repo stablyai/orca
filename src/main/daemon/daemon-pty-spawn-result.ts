@@ -82,7 +82,8 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
       result.agentSessionEnsure ? { agentSessionEnsure: result.agentSessionEnsure } : {}
     const incarnationResult = (): Pick<PtySpawnResult, 'incarnationId'> | Record<string, never> =>
       result.incarnationId ? { incarnationId: result.incarnationId } : {}
-    let providerWslDistro = result.wslDistro === undefined ? wslDistro : result.wslDistro
+    let providerWslDistro =
+      this.guest?.distro ?? (result.wslDistro === undefined ? wslDistro : result.wslDistro)
     // Why: explicit null from a current daemon overrides the caller's WSL preference; undefined keeps compatibility with older daemons.
     wslDistro = providerWslDistro ?? undefined
     context.wslDistro = wslDistro
@@ -151,7 +152,8 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
         if (result.incarnationId) {
           this.sessionIncarnations.set(sessionId, result.incarnationId)
         }
-        providerWslDistro = result.wslDistro === undefined ? wslDistro : result.wslDistro
+        providerWslDistro =
+          this.guest?.distro ?? (result.wslDistro === undefined ? wslDistro : result.wslDistro)
         wslDistro = providerWslDistro ?? undefined
         context.wslDistro = wslDistro
         if (wslDistro) {
@@ -288,7 +290,6 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
     const isAltScreen = reattachSnapshot.modes.alternateScreen
     const snapshotPrefix = reattachSnapshot.scrollbackAnsi + reattachSnapshot.rehydrateSequences
     const snapshotFrame = reattachSnapshot.snapshotAnsi
-    const snapshotPayload = snapshotPrefix + snapshotFrame
     // Why kitty flags ride beside the payload, not inside it: the snapshot reaches renderer xterms where POST_REPLAY_REATTACH_RESET's kitty reset must win (terminal-query-authority.md §kitty).
     // Why known `0` is no longer dropped: the pane tracker must be able to tell
     // "the app negotiated nothing" from "this reattach proved nothing".
@@ -302,7 +303,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
       ...claimResult(),
       ...launchIdentity(),
       ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
-      snapshot: snapshotPayload,
+      snapshot: snapshotPrefix + snapshotFrame,
       snapshotCols: reattachSnapshot.cols,
       snapshotRows: reattachSnapshot.rows,
       // Why only for an alt frame: normal history remains safe to replay at its capture grid.

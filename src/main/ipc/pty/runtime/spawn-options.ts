@@ -1,5 +1,5 @@
+import { prepareRuntimeGuestSpawnOptions } from './spawn-guest-environment'
 import type { IPtyProvider, PtySpawnResult } from '../../../providers/types'
-import { LocalPtyProvider } from '../../../providers/local-pty-provider'
 import { makePaneKey, isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { ptySizes } from '../delivery/visibility-state'
@@ -12,10 +12,7 @@ import {
   getInheritedClaudeSessionStampEnvKeysToDelete
 } from '../host-env/pi-agent'
 import { promoteAgentTeamsShimPath, deleteRequestedEnvKeys } from '../host-env/path'
-import {
-  routesFreshSpawnsToLocalProvider,
-  beginPtySpawnForWorktree
-} from '../host-env/fresh-spawn-routing'
+import { beginPtySpawnForWorktree } from '../host-env/fresh-spawn-routing'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { CLAUDE_AUTH_ENV_VARS } from '../../../claude-accounts/environment'
 import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../../../pty/legacy-terminal-shim-dir'
@@ -71,7 +68,7 @@ export async function buildRuntimePtySpawnOptions(
     PI_PROCESS_OWNER_ENV_KEYS,
     // Why: disable old hosts without removing ORCA_REAL_* while their Windows shim remains on PATH.
     ctx.isDaemonHostSpawn || args.connectionId ? LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS : [],
-    ctx.isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(ctx.env) : [],
+    ctx.isDaemonHostSpawn && !ctx.wslGuest ? getInheritedAgentHookEnvKeysToDelete(ctx.env) : [],
     // Why: ungated, unlike the agent-hook keys — the local provider and the relay host also spread their own process.env into every spawn.
     getInheritedClaudeSessionStampEnvKeysToDelete(ctx.env)
   )
@@ -181,13 +178,8 @@ export async function buildRuntimePtySpawnOptions(
   if (args.signal) {
     ctx.spawnOptions.signal = args.signal
   }
-  if (
-    args.onPtySpawnCommitted &&
-    (ctx.provider instanceof LocalPtyProvider || routesFreshSpawnsToLocalProvider(ctx.provider))
-  ) {
-    // Why: local fallback has no lower operation ledger, so commit must be reported at native spawn.
-    ctx.spawnOptions.onPtySpawnCommitted = ctx.reportPtySpawnCommitted
-  }
+
+  await prepareRuntimeGuestSpawnOptions(ctx)
 
   const resolvedPaneSpawnReservationKey = makePaneSpawnReservationKey(
     args.worktreeId,

@@ -1,3 +1,4 @@
+import type { WslAccountExecutionContext } from '../wsl/wsl-account-execution-context'
 import { join } from 'node:path'
 import {
   syncSystemCodexResourcesIntoManagedHome,
@@ -252,7 +253,8 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
 
   protected startWslSessionBridgeForLaunch(
     target: CodexAccountSelectionTarget,
-    runtimeHomePath: string | null
+    runtimeHomePath: string | null,
+    execution?: WslAccountExecutionContext
   ): void {
     if (process.platform !== 'win32' || !runtimeHomePath) {
       return
@@ -265,13 +267,14 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
     // Why: history-only override lets custom-CODEX_HOME users bridge from their real home; falls back to <wslHome>/.codex.
     const systemCodexHomePath =
       resolveWslCodexSessionSourceHome(this.store.getSettings(), distro) ??
-      this.getWslSystemCodexHomePath({ runtime: 'wsl', wslDistro: distro })
+      this.getWslSystemCodexHomePath({ runtime: 'wsl', wslDistro: distro }, execution)
     if (systemCodexHomePath && systemCodexHomePath !== runtimeHomePath) {
       // Why: WSL history must be hardlinked inside the distro; host-side links can't bridge Windows and WSL filesystems in a resume-visible way.
       void startWslCodexSessionBridgeInBackground({
         distro,
         systemCodexHomePath,
-        managedCodexHomePath: runtimeHomePath
+        managedCodexHomePath: runtimeHomePath,
+        ...(execution ? { execution } : {})
       })
     }
   }

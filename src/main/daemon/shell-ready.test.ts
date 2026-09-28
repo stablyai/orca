@@ -1,3 +1,5 @@
+import { z } from 'zod'
+import { runBundledBunFixture } from '../bundled-bun-test-execution'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
@@ -10,11 +12,6 @@ import {
 import { makeUserZdotdir } from '../zsh-user-config-dir-fixture'
 import { getZshShellReadyMarkerRegistrationBlock } from '../shell-templates'
 import { fishRequirementViolation, resolveFishBinary } from '../../shared/fish-binary-requirement'
-import {
-  createShellStartupOutputScanState,
-  drainShellStartupOutputScanState,
-  scanShellStartupOutput
-} from '../shell-startup-output-scanner'
 import { HeadlessEmulator } from './headless-emulator'
 // Why resolved rather than hardcoded: the wrapper tree is content-addressed.
 import { getShellReadyWrapperRoot } from './shell-ready'
@@ -39,97 +36,33 @@ const itWithFish = FISH.available ? it : it.skip
 
 const SHELL_READY_MARKER_OUTPUT = '\x1b]777;orca-shell-ready\x07'
 
-/** Minimal xterm.js-shaped answers to the capability queries fish emits at startup
- *  and again around every prompt. */
-const TERMINAL_QUERY_REPLIES: readonly (readonly [string, string])[] = [
-  ['\x1b[0c', '\x1b[?6c'], // primary device attributes
-  ['\x1b[?u', '\x1b[?0u'], // kitty keyboard flags
-  ['\x1b[6n', '\x1b[1;1R'], // cursor position report
-  ['\x1b]11;?', '\x1b]11;rgb:0000/0000/0000\x1b\\'], // background colour
-  ['\x1bP+q', '\x1bP0+r\x1b\\'] // XTGETTCAP (unsupported)
-]
-
-/** Derived, not hardcoded: a shorter carry than the longest query would silently
- *  stop matching sequences split across two PTY chunks. */
-const QUERY_CARRY_LEN = Math.max(...TERMINAL_QUERY_REPLIES.map(([query]) => query.length))
-
-// Why: the shell-ready marker fires from zle-line-init only on a real TTY, so spawn through node-pty not spawnSync.
 async function runInteractiveZshLogin(args: {
   tempHome: string
   wrapperZdotdir: string
-  isDone: (output: string) => boolean
+  expected: string[]
 }): Promise<string> {
-  const pty = await import('node-pty')
-  // Why: -o noglobalrcs skips /etc/zsh/*, whose insecure fpath dirs make compinit block on a [y/n] prompt before the marker fires.
-  const proc = pty.spawn('zsh', ['-o', 'noglobalrcs', '-l'], {
-    name: 'xterm-256color',
-    cols: 80,
-    rows: 24,
-    cwd: args.tempHome,
-    env: {
-      PATH: process.env.PATH ?? '/usr/bin:/bin',
-      HOME: args.tempHome,
-      TERM: 'xterm-256color',
-      ZDOTDIR: args.wrapperZdotdir,
-      ORCA_ORIG_ZDOTDIR: args.tempHome,
-      ORCA_ZSHENV_SOURCE_DIR: args.tempHome,
-      ORCA_SHELL_FEATURES: 'ready'
-    }
-  })
-  let output = ''
-  let settle = (): void => {}
-  const done = new Promise<void>((resolve) => {
-    settle = resolve
-  })
-  const deadline = setTimeout(settle, 10_000)
-  proc.onData((chunk) => {
-    output += chunk
-    if (args.isDone(output)) {
-      settle()
-    }
-  })
-  await done
-  clearTimeout(deadline)
-  proc.kill()
-  return output
+  return z
+    .string()
+    .parse(
+      await runBundledBunFixture(
+        join(__dirname, 'shell-ready-bun-fixture.ts'),
+        'runInteractiveZshLogin',
+        args,
+        12_000
+      )
+    )
 }
-
-// Why: exercise an arbitrary interactive zsh rc (own ZDOTDIR, no wrapper) so a test can source the marker block directly.
-async function runInteractiveZshRc(args: {
-  zdotdir: string
-  isDone: (output: string) => boolean
-}): Promise<string> {
-  const pty = await import('node-pty')
-  // Why: -o noglobalrcs skips /etc/zsh/* so the CI runner's global compinit can't block on an insecure-directory [y/n] prompt.
-  const proc = pty.spawn('zsh', ['-o', 'noglobalrcs', '-i'], {
-    name: 'xterm-256color',
-    cols: 80,
-    rows: 24,
-    cwd: args.zdotdir,
-    env: {
-      PATH: process.env.PATH ?? '/usr/bin:/bin',
-      HOME: args.zdotdir,
-      TERM: 'xterm-256color',
-      ZDOTDIR: args.zdotdir,
-      ORCA_SHELL_FEATURES: 'ready'
-    }
-  })
-  let output = ''
-  let settle = (): void => {}
-  const done = new Promise<void>((resolve) => {
-    settle = resolve
-  })
-  const deadline = setTimeout(settle, 10_000)
-  proc.onData((chunk) => {
-    output += chunk
-    if (args.isDone(output)) {
-      settle()
-    }
-  })
-  await done
-  clearTimeout(deadline)
-  proc.kill()
-  return output
+async function runInteractiveZshRc(args: { zdotdir: string; expected: string[] }): Promise<string> {
+  return z
+    .string()
+    .parse(
+      await runBundledBunFixture(
+        join(__dirname, 'shell-ready-bun-fixture.ts'),
+        'runInteractiveZshRc',
+        args,
+        12_000
+      )
+    )
 }
 
 describePosix('daemon shell-ready launch config', () => {
@@ -248,78 +181,15 @@ describePosix('daemon shell-ready launch config', () => {
           join(tempHome, '.config', 'fish', 'config.fish'),
           'command sleep 0.2\nfunction fish_prompt\n  printf "> "\nend\n'
         )
-        const pty = await import('node-pty')
-        const proc = pty.spawn('fish', config.args ?? [], {
-          name: 'xterm-256color',
-          cols: 80,
-          rows: 24,
-          cwd: tempHome,
-          env: {
-            PATH: process.env.PATH ?? '/usr/bin:/bin',
-            HOME: tempHome,
-            TERM: 'xterm-256color',
-            ...config.env
-          }
-        })
-        let output = ''
-        let scannedOutput = ''
-        const startupScanState = createShellStartupOutputScanState()
-        let commandWritten = false
-        let erasureProbeWritten = false
-        let queryCarry = ''
-        let settle = (): void => {}
-        const done = new Promise<void>((resolve) => {
-          settle = resolve
-        })
-        const deadline = setTimeout(settle, 10_000)
-        // Why: settling on the first sentinel observes only one post-marker prompt,
-        // so a marker that never erased itself still looks single. Drive a second
-        // command and settle on its result, which also probes the erase directly.
-        const sentinelPoll = setInterval(() => {
-          if (commandWritten && !erasureProbeWritten && existsSync(sentinel)) {
-            erasureProbeWritten = true
-            proc.write(
-              `functions -q __orca_shell_ready_marker; and touch ${stillRegistered}; or touch ${erased}\n`
-            )
-            return
-          }
-          if (erasureProbeWritten && (existsSync(erased) || existsSync(stillRegistered))) {
-            settle()
-          }
-        }, 50)
-        proc.onData((chunk) => {
-          output += chunk
-          scannedOutput += scanShellStartupOutput(startupScanState, chunk).output
-          // Why: fish stalls its first prompt 10s waiting on these and re-queries
-          // each prompt, so answer every occurrence — an unanswered query makes
-          // fish swallow the post-marker command as its reply.
-          const carriedLength = queryCarry.length
-          const scan = queryCarry + chunk
-          queryCarry = scan.slice(-QUERY_CARRY_LEN)
-          for (const [query, reply] of TERMINAL_QUERY_REPLIES) {
-            for (
-              let at = scan.indexOf(query);
-              at !== -1;
-              at = scan.indexOf(query, at + query.length)
-            ) {
-              // Why: a query wholly inside the carry was answered on the previous
-              // chunk; replying again would land in fish's stdin as typed input.
-              if (at + query.length > carriedLength) {
-                proc.write(reply)
-              }
-            }
-          }
-          if (!commandWritten && output.includes(SHELL_READY_MARKER_OUTPUT)) {
-            commandWritten = true
-            // Why: mirror PostReadyFlushGate — flush shortly after the post-marker prompt draw.
-            setTimeout(() => proc.write(`touch ${sentinel}\n`), 50)
-          }
-        })
-        await done
-        clearTimeout(deadline)
-        clearInterval(sentinelPoll)
-        proc.kill()
-        scannedOutput += drainShellStartupOutputScanState(startupScanState)
+        const result = await runBundledBunFixture(
+          join(__dirname, 'shell-ready-bun-fixture.ts'),
+          'runFishShellReadyFixture',
+          { binary: FISH.path, tempHome, config, sentinel, erased, stillRegistered },
+          12_000
+        )
+        const { output, scannedOutput } = z
+          .object({ output: z.string(), scannedOutput: z.string() })
+          .parse(result)
 
         expect(output).toContain(SHELL_READY_MARKER_OUTPUT)
         expect(output.split(SHELL_READY_MARKER_OUTPUT)).toHaveLength(2)
@@ -482,7 +352,7 @@ describePosix('daemon shell-ready launch config', () => {
         const output = await runInteractiveZshLogin({
           tempHome,
           wrapperZdotdir: config.env.ZDOTDIR,
-          isDone: (current) => current.includes(SHELL_READY_MARKER_OUTPUT)
+          expected: [SHELL_READY_MARKER_OUTPUT]
         })
         expect(output).toContain(SHELL_READY_MARKER_OUTPUT)
       } finally {
@@ -513,8 +383,7 @@ describePosix('daemon shell-ready launch config', () => {
         const output = await runInteractiveZshLogin({
           tempHome,
           wrapperZdotdir: config.env.ZDOTDIR,
-          isDone: (current) =>
-            current.includes(SHELL_READY_MARKER_OUTPUT) && current.includes(userHookOutput)
+          expected: [SHELL_READY_MARKER_OUTPUT, userHookOutput]
         })
         // Why: the marker widget chains to the prior widget, so a user-registered azhw dispatcher must keep dispatching.
         expect(output).toContain(SHELL_READY_MARKER_OUTPUT)
@@ -551,8 +420,7 @@ describePosix('daemon shell-ready launch config', () => {
       try {
         const output = await runInteractiveZshRc({
           zdotdir,
-          isDone: (current) =>
-            current.includes(SHELL_READY_MARKER_OUTPUT) && current.includes(userHookOutput)
+          expected: [SHELL_READY_MARKER_OUTPUT, userHookOutput]
         })
         expect(output).toContain(SHELL_READY_MARKER_OUTPUT)
         expect(output).toContain(userHookOutput)

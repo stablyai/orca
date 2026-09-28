@@ -37,21 +37,23 @@ Each capture also writes `<fixture-name>.meta.json` with the timestamp, platform
 PTY size, note and exit code. Commit it with the transcript; the version and account type behind
 a screen are not recoverable from the bytes.
 
-**Prerequisite:** `node-pty` must be built for plain Node:
+**Prerequisite:** prepare the pinned bundled Bun runtime (no native Node PTY rebuild):
 
 ```
-node config/scripts/ensure-native-runtime.mjs --runtime=node
+node config/scripts/build-orcad-bun.mjs --runtime-only --out-dir out/orcad
 ```
 
-Orca itself does not need to be running, and the recorder never touches Orca state.
+The Node entry launches capture under bundled Bun; `--scan` and `--help` stay Node-only.
+The recorder taps native bytes before UTF-8 decoding and reuses the production terminal
+backend, including Windows job ownership and exit draining. Orca itself does not need to
+be running, and the recorder never touches Orca state.
 
 ### Platform notes
 
 - **macOS / Linux:** nothing special. `TERM=xterm-256color` is set for the child.
 - **Windows:** run it from Windows Terminal / PowerShell, not a Git Bash (MSYS) pane — MSYS
-  rewrites arguments that start with `/`, which mangles the `cmd.exe /c` hand-off. A `.cmd` or
-  `.bat` agent shim cannot be spawned by node-pty directly, so the recorder routes those through
-  `cmd.exe` for you.
+  rewrites arguments that start with `/`, which mangles the `cmd.exe /c` hand-off. The production Windows gate resolves recognised npm/pnpm agent shims directly;
+  other `.cmd`/`.bat` scripts use the canonical batch argument encoder.
 - **WSL:** capture _inside_ the distro (run the recorder from the distro's checkout). Recording
   `wsl.exe` from the Windows side adds the login-shell banner to the transcript.
 - **SSH:** record on the execution host. A transcript recorded locally is not evidence about what

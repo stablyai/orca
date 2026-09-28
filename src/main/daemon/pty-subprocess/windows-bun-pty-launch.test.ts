@@ -69,6 +69,7 @@ describe('Windows Bun PTY gated launch', () => {
       expect(child.env).not.toHaveProperty('ORCA_BUN_PTY_JOB_GATE')
       expect(launch.windowsVerbatimArguments).toBe(false)
       expect(launch.command).toContain('--no-env-file')
+      expect(launch.command).toContain('--no-install')
       expect(launch.command).toContain(`--config=${join(directory, 'bunfig.toml')}`)
       expect(launch.command).toContain(`--cwd=${directory}`)
       expect(launch.command.join(' ').length).toBeLessThan(8191)

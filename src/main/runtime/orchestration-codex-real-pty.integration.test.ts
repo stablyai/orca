@@ -2,7 +2,8 @@ import { createServer } from 'node:http'
 import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import * as pty from 'node-pty'
+import { startBundledBunPty } from '../daemon/pty-subprocess/bun-tests/bundled-bun-pty-fixture'
+import { getForegroundProcessName } from '../../relay/pty-shell-utils'
 import { expect, it, vi } from 'vitest'
 import { AgentHookServer } from '../agent-hooks/server'
 import { getManagedScript } from '../codex/codex-hook-script'
@@ -144,7 +145,8 @@ it.skipIf(!binary || process.platform === 'win32').each(trials)(
     writeFileSync(
       join(directory, 'config.toml'),
       [
-        'model="gpt-5.6-terra"',
+        // A synthetic model avoids first-run migration prompts for retired public models.
+        'model="orca-fixture-model"',
         'model_provider="fixture"',
         'check_for_update_on_startup=false',
         '[model_providers.fixture]',
@@ -164,27 +166,27 @@ it.skipIf(!binary || process.platform === 'win32').each(trials)(
           value !== undefined && !key.startsWith('ORCA_') && !key.startsWith('CODEX_')
       )
     ) as Record<string, string>
-    const terminal = pty.spawn(
-      binary!,
-      ['--no-alt-screen', '--dangerously-bypass-hook-trust', 'Reply OK only'],
-      {
-        name: 'xterm-256color',
-        cols: 120,
-        rows: 40,
-        cwd: workspace,
-        env: {
-          ...env,
-          ...hooks.buildPtyEnv(),
-          CODEX_HOME: directory,
-          TERM: 'xterm-256color',
-          ORCA_BACKGROUND_LAUNCH: '1',
-          ORCA_PANE_KEY: PANE_KEY,
-          ORCA_TAB_ID: TAB_ID,
-          ORCA_WORKTREE_ID: WORKTREE_ID,
-          ORCA_AGENT_LAUNCH_TOKEN: LAUNCH_TOKEN
-        }
+    if (!binary) {
+      throw new Error('Missing real Codex binary')
+    }
+    const terminal = await startBundledBunPty({
+      file: binary,
+      args: ['--no-alt-screen', '--dangerously-bypass-hook-trust', 'Reply OK only'],
+      cols: 120,
+      rows: 40,
+      cwd: workspace,
+      env: {
+        ...env,
+        ...hooks.buildPtyEnv(),
+        CODEX_HOME: directory,
+        TERM: 'xterm-256color',
+        ORCA_BACKGROUND_LAUNCH: '1',
+        ORCA_PANE_KEY: PANE_KEY,
+        ORCA_TAB_ID: TAB_ID,
+        ORCA_WORKTREE_ID: WORKTREE_ID,
+        ORCA_AGENT_LAUNCH_TOKEN: LAUNCH_TOKEN
       }
-    )
+    })
     let exited = false
     const exit = new Promise<void>((resolve) =>
       terminal.onExit(() => {
@@ -207,7 +209,7 @@ it.skipIf(!binary || process.platform === 'win32').each(trials)(
         return true
       },
       getForegroundProcess: async () => {
-        const name = terminal.process
+        const name = await getForegroundProcessName(terminal.pid, binary)
         record('foreground', name)
         return name
       }
@@ -252,9 +254,10 @@ it.skipIf(!binary || process.platform === 'win32').each(trials)(
       expect(submittedMail).toBe(true)
     } finally {
       if (!exited) {
-        terminal.kill('SIGKILL')
+        terminal.kill()
       }
       await Promise.race([exit, delay(2000)])
+      await terminal.dispose()
       hooks.stop()
       model.closeAllConnections()
       await new Promise<void>((resolve) => model.close(() => resolve()))

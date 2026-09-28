@@ -15,8 +15,8 @@ vi.mock('../codex-cli/command', () => ({
   resolveCodexCommand: resolveCodexCommandMock
 }))
 
-vi.mock('node-pty', () => ({
-  spawn: ptySpawnMock
+vi.mock('./hidden-daemon-pty', () => ({
+  spawnHiddenDaemonPty: ptySpawnMock
 }))
 
 // Auth gate is covered separately; these tests assume a signed-in Codex.
@@ -166,6 +166,7 @@ describe('fetchCodexRateLimits auth errors', () => {
         ptyHandlers.onData = callback
         return makeDisposable()
       }),
+      onError: vi.fn(() => ({ dispose: vi.fn() })),
       onExit: vi.fn((callback) => {
         ptyHandlers.onExit = callback
         return makeDisposable()
@@ -202,6 +203,7 @@ describe('fetchCodexRateLimits auth errors', () => {
         ptyHandlers.onData = callback
         return makeDisposable()
       }),
+      onError: vi.fn(() => ({ dispose: vi.fn() })),
       onExit: vi.fn(() => makeDisposable()),
       write: ptyWrite,
       kill: ptyKill

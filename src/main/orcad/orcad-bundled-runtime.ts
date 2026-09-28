@@ -6,6 +6,7 @@ import {
   orcadBunRuntimeFilename
 } from '../../shared/orcad-artifacts'
 import { ORCAD_BUN_VERSION } from '../../shared/orcad-bun-runtime'
+import { resolveWindowsConptyProvider } from '../windows/windows-conpty-provider'
 
 export class OrcadBundledRuntimeError extends Error {}
 
@@ -37,6 +38,19 @@ export function assertBundledOrcadRuntime(): void {
       throw new OrcadBundledRuntimeError(
         `The bundled Orca runtime must be Bun ${ORCAD_BUN_VERSION}`
       )
+    }
+    if (process.platform === 'win32') {
+      try {
+        // Only child launches consume this: Bun snapshots native environment before JS starts.
+        process.env.BUN_CONPTY_LIBRARY = resolveWindowsConptyProvider(
+          join(directory, 'conpty'),
+          process.arch
+        )
+      } catch (cause) {
+        throw new OrcadBundledRuntimeError('The bundled Windows terminal provider is invalid', {
+          cause
+        })
+      }
     }
     return
   }

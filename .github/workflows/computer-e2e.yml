@@ -26,13 +26,21 @@ on:
       - 'config/scripts/daemon-endpoint-handover-smoke.mjs'
       - 'config/scripts/windows-daemon-workspace-close-repro.mjs'
       - 'config/scripts/verify-computer-native.mjs'
-      # Why: the native-smoke job boots the built terminal daemon under plain
-      # Node, so any change to the daemon bundle graph or the main build must
-      # re-run it (the v1.4.129-rc.1 daemon outage shipped with green CI).
+      # Runtime and standalone bundle changes must exercise actual daemon startup.
+      - 'config/scripts/daemon-smoke-launch*'
+      - 'config/scripts/build-terminal-daemon.mjs'
+      - 'config/scripts/orcad-entry-build.mjs'
+      - 'config/scripts/build-cli-runtime.mjs'
+      - 'config/scripts/build-orcad-bun.mjs'
+      - 'config/scripts/build-windows-conpty.mjs'
+      - 'config/licenses/windows-conpty-LICENSE.txt'
+      - 'resources/licenses/bun/**'
+      - 'config/bundled-cli-runtime.cjs'
+      - 'src/shared/orcad-bun-runtime.ts'
+      - 'src/shared/windows-conpty-release.ts'
       - 'electron.vite.config.ts'
       - 'config/build-plugins/**'
       - 'src/main/daemon/**'
-      - 'src/main/providers/local-pty-provider.ts'
       - 'src/main/providers/windows-shell-args.ts'
       - 'src/main/providers/windows-shell-preflight-runtime.windows.test.ts'
       - 'native/computer-use-macos/**'
@@ -81,6 +89,11 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: node
+      - name: Prepare pinned Bun for Windows shell fixtures
+        if: runner.os == 'Windows'
+        run: node --input-type=module -e "import { buildCliRuntime } from './config/scripts/build-cli-runtime.mjs'; await buildCliRuntime(process.platform, process.arch)"
+      - name: Build terminal service and Windows gate for shell fixtures
+        run: pnpm run build:terminal-daemon
       # Why: without --config, bare vitest ignores config/vitest.config.ts (there
       # is no root config) and falls back to the 5s default timeout with no
       # Windows worker cap, so the real csc.exe launcher-compile tests time out
@@ -126,10 +139,8 @@ jobs:
       - run: pnpm verify:computer-native
       - run: pnpm build:cli
       - run: pnpm run build:electron-vite:parallel
-      # Why: boot the BUILT daemon-entry under plain Node the way production
-      # forks it. v1.4.129-rc.1 shipped a daemon that exited at module load
-      # (leaked electron require) while every other check passed; this fails
-      # the PR when the built daemon cannot start on ubuntu-22.04 / windows.
+      - run: pnpm exec vitest run --config config/vitest.config.ts config/scripts/daemon-smoke-launch.test.mjs
+      # Exercise the shipped Bun runtime and standalone daemon bundle together.
       - name: Daemon boot smoke
         run: node config/scripts/daemon-boot-smoke.mjs
       # Why: a daemon that lost its endpoint name used to delete the replacement's

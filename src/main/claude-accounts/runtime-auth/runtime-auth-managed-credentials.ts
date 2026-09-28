@@ -1,3 +1,4 @@
+import type { WslAccountExecutionContext } from '../../wsl/wsl-account-execution-context'
 import { existsSync } from 'node:fs'
 import type { ClaudeManagedAccount } from '../../../shared/managed-account-types'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
@@ -22,10 +23,35 @@ function shellQuote(value: string): string {
 }
 
 export class ClaudeRuntimeAuthManagedCredentials extends ClaudeRuntimeAuthCredentialIdentity {
-  protected async readManagedCredentials(account: ClaudeManagedAccount): Promise<string | null> {
-    const managedAuthPath = await this.getOwnedManagedAuthPath(account)
+  protected async readManagedCredentials(
+    account: ClaudeManagedAccount,
+    execution?: WslAccountExecutionContext
+  ): Promise<string | null> {
+    const managedAuthPath = await this.getOwnedManagedAuthPath(account, execution)
     if (!managedAuthPath) {
       return null
+    }
+    if (execution) {
+      const result = await runWslProcess({
+        distro: execution.distro,
+        user: execution.userName,
+        loginPath: 'none',
+        script: [
+          'set -e',
+          `test "$(id -u)" = ${shellQuote(execution.userId)}`,
+          `test "$HOME" = ${shellQuote(execution.home)}`,
+          'exec cat -- "$1"'
+        ].join('\n'),
+        args: [`${account.wslLinuxAuthPath}/.credentials.json`],
+        timeoutMs: 5_000,
+        maxOutputBytes: 256 * 1024
+      })
+      if (result.code !== 0 || result.timedOut) {
+        throw new Error(
+          'Selected Claude credentials are unavailable for the captured execution owner'
+        )
+      }
+      return result.stdout
     }
     if (process.platform === 'darwin') {
       return readManagedClaudeKeychainCredentials(account.id)
@@ -89,8 +115,19 @@ export class ClaudeRuntimeAuthManagedCredentials extends ClaudeRuntimeAuthCreden
     }
   }
 
-  protected async getOwnedManagedAuthPath(account: ClaudeManagedAccount): Promise<string | null> {
+  protected async getOwnedManagedAuthPath(
+    account: ClaudeManagedAccount,
+    execution?: WslAccountExecutionContext
+  ): Promise<string | null> {
     const wslInfo = parseWslUncPath(account.managedAuthPath)
+    if (
+      execution &&
+      (!wslInfo ||
+        wslInfo.distro.toLowerCase() !== execution.distro.toLowerCase() ||
+        account.wslLinuxAuthPath !== wslInfo.linuxPath)
+    ) {
+      throw new Error('Managed Claude account belongs to another execution owner')
+    }
     if (wslInfo) {
       if (
         !wslInfo.linuxPath.includes('/.local/share/orca/claude-accounts/') ||
@@ -102,10 +139,17 @@ export class ClaudeRuntimeAuthManagedCredentials extends ClaudeRuntimeAuthCreden
         try {
           const owned = await runWslProcess({
             distro: wslInfo.distro,
+            ...(execution ? { user: execution.userName } : {}),
             loginPath: 'none',
             shell: 'bash',
             script: [
               'set -euo pipefail',
+              ...(execution
+                ? [
+                    `test "$(id -u)" = ${shellQuote(execution.userId)}`,
+                    `test "$HOME" = ${shellQuote(execution.home)}`
+                  ]
+                : []),
               `candidate=${shellQuote(wslInfo.linuxPath)}`,
               'managed_root="${HOME%/}/.local/share/orca/claude-accounts"',
               'candidate_real=$(readlink -f -- "$candidate")',
@@ -129,7 +173,7 @@ export class ClaudeRuntimeAuthManagedCredentials extends ClaudeRuntimeAuthCreden
           // caller persists that -- clearing the user's account selection. A
           // slow distro must not decide ownership. Swallowing it here is what
           // made the previous guard dead code.
-          if (error instanceof Error && error.message === OWNERSHIP_PROBE_TIMEOUT) {
+          if (execution || (error instanceof Error && error.message === OWNERSHIP_PROBE_TIMEOUT)) {
             throw error
           }
           return null

@@ -12,6 +12,7 @@ import { parseWorkspaceKey } from '../../shared/workspace-scope'
 export type RestoredSubagentLivenessSweepDeps = {
   /** Targeted provider liveness, or null when the provider cannot prove either state. */
   probeLiveLocalPty: (ptyId: string) => Promise<boolean | null>
+  probeLiveWslPty?: (ptyId: string) => Promise<boolean | null>
   isLocalExecutionHost: (worktreeId: string | undefined) => boolean
   /** PTY bound to this pane in the current session, if it has one. */
   getBoundPtyIdForPaneKey: (paneKey: string) => string | undefined
@@ -44,7 +45,10 @@ export async function sweepRestoredSubagentsWithoutLiveAgent(
       try {
         let probe = probesByPtyId.get(ptyId)
         if (!probe) {
-          probe = deps.probeLiveLocalPty(ptyId)
+          // Native inventory cannot prove absence on a guest daemon.
+          probe = ptyId.startsWith('wsl:')
+            ? (deps.probeLiveWslPty?.(ptyId) ?? Promise.resolve(null))
+            : deps.probeLiveLocalPty(ptyId)
           probesByPtyId.set(ptyId, probe)
         }
         const live = await probe

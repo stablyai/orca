@@ -1,3 +1,5 @@
+import { DaemonFreshSpawnAdmission } from './daemon-fresh-spawn-admission'
+import { terminalServiceUnavailable } from '../providers/unavailable-pty-provider'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonPtyAdapterSubscriptionFanout } from './daemon-pty-adapter-subscription-fanout'
 import type {
@@ -21,7 +23,16 @@ export class DaemonPtyRouter implements IPtyProvider {
   private readonly ownerResolver: DaemonSessionOwnerResolver<DaemonPtyAdapter>
   private readonly subscriptions: DaemonPtyAdapterSubscriptionFanout
 
-  constructor(opts: { current: DaemonPtyAdapter; legacy: DaemonPtyAdapter[] }) {
+  private readonly freshSpawns: DaemonFreshSpawnAdmission
+
+  constructor(opts: {
+    current: DaemonPtyAdapter
+    legacy: DaemonPtyAdapter[]
+    freshSpawnAdmission?: DaemonFreshSpawnAdmission
+    probeFreshSpawn?: () => Promise<boolean>
+  }) {
+    this.freshSpawns =
+      opts.freshSpawnAdmission ?? new DaemonFreshSpawnAdmission(opts.probeFreshSpawn ?? null)
     this.current = opts.current
     this.legacy = opts.legacy
     this.ownerResolver = new DaemonSessionOwnerResolver(this.allAdapters(), this.sessionAdapters)
@@ -38,12 +49,21 @@ export class DaemonPtyRouter implements IPtyProvider {
     await this.ownerResolver.discoverRoutes()
   }
 
+  get freshSpawnsUnavailable(): boolean {
+    return this.freshSpawns.unavailable
+  }
+
+  recoverFreshSpawnRouting = (force = false): Promise<boolean> => this.freshSpawns.recover(force)
+
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
     if (opts.attachOnly && opts.sessionId) {
       return await this.ownerResolver.spawnAttachOnly({ ...opts, sessionId: opts.sessionId })
     }
     const adapter = opts.sessionId ? this.sessionAdapters.get(opts.sessionId) : undefined
     const target = adapter ?? this.current
+    if (!adapter && this.freshSpawnsUnavailable && !(await this.recoverFreshSpawnRouting())) {
+      throw terminalServiceUnavailable()
+    }
     const result = await target.spawn(opts)
     // Why: the adapter filters intentional recovery exits and canonical-ID races before publishing proof.
     if (!result.exitedBeforeSpawnReply) {
@@ -309,6 +329,17 @@ export class DaemonPtyRouter implements IPtyProvider {
   // (pre-#1323) the legacy list is set once at construction and never mutated,
   // so returning the internal array by reference is safe for the intended
   // read-only use.
+  getCurrentDaemonSessionIds(): string[] {
+    return [...this.sessionAdapters].filter(([, owner]) => owner === this.current).map(([id]) => id)
+  }
+
+  fanoutCurrentDaemonSyntheticExits(code: number): void {
+    for (const id of this.getCurrentDaemonSessionIds()) {
+      this.ownerResolver.forgetRoute(id)
+      this.subscriptions.publishExit({ id, code })
+    }
+  }
+
   getCurrentAdapter(): DaemonPtyAdapter {
     return this.current
   }

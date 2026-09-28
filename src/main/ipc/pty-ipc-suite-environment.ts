@@ -1,3 +1,4 @@
+import { finishMockNativePtyProcesses } from './pty-ipc-native-runtime-mock'
 import { afterEach, beforeEach, vi } from 'vitest'
 import * as electron from 'electron'
 import { join } from 'node:path'
@@ -47,10 +48,8 @@ import {
 } from './pty-ipc-mock-registry'
 import { makeDisposable } from './pty-ipc-test-constants'
 import { createPtyIpcProcessEnvScope } from './pty-ipc-process-env-scope'
-import {
-  LocalPtyProvider,
-  _resetLocalPtyProviderStateForTest
-} from '../providers/local-pty-provider'
+import { PtyIpcDaemonTestProvider } from './pty-ipc-daemon-test-provider'
+import { createUnavailablePtyProvider } from '../providers/unavailable-pty-provider'
 import { setLocalPtyProvider, unregisterSshPtyProvider } from './pty'
 import { _resetHiddenRendererPtyDeliveryGateForTest } from './pty-hidden-delivery-gate'
 import { __resetShellStartupEnvCache } from '../pty/shell-startup-env'
@@ -108,6 +107,7 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
     }
   }
   const envScope = createPtyIpcProcessEnvScope()
+  let provider: PtyIpcDaemonTestProvider
 
   beforeEach(() => {
     // Why here: pty.ts registers against injected surfaces now, so the mocked ipcMain
@@ -280,12 +280,18 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
       resize: vi.fn(),
       kill: vi.fn(),
       process: 'zsh',
-      pid: 12345
+      pid: 999_999_999,
+      pause: vi.fn(),
+      resume: vi.fn(),
+      destroy: vi.fn()
     })
+    provider = new PtyIpcDaemonTestProvider()
+    setLocalPtyProvider(provider)
   })
 
-  afterEach(() => {
-    _resetLocalPtyProviderStateForTest()
+  afterEach(async () => {
+    finishMockNativePtyProcesses()
+    await provider.disposeHost()
     _resetWslCachesForTests()
     vi.useRealTimers()
     // Why: sshProviders is module-level state; a leftover id leaks into later tests (pty:listSessions sweeps every provider).
@@ -303,7 +309,7 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
     ]) {
       unregisterSshPtyProvider(leakedConnectionId)
     }
-    setLocalPtyProvider(new LocalPtyProvider())
+    setLocalPtyProvider(createUnavailablePtyProvider())
     envScope.restoreProcessEnv()
   })
 

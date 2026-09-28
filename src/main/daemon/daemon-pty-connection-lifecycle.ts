@@ -53,7 +53,9 @@ export abstract class DaemonPtyConnectionLifecycle extends DaemonPtyEventSubscri
       this.getSizeUnsupported = false
     }
     this.lastAuthenticatedIdentity = { ...current }
-    this.exactDaemonIncarnation = exactDaemonIncarnationForPidRecord(current, this.pidRecord)
+    this.exactDaemonIncarnation = this.guest
+      ? null
+      : exactDaemonIncarnationForPidRecord(current, this.pidRecord)
     if (!previous) {
       return
     }
@@ -123,6 +125,10 @@ export abstract class DaemonPtyConnectionLifecycle extends DaemonPtyEventSubscri
     additionalEvidenceSources: readonly DaemonEvidenceSource[] = [],
     endpointGoneProof?: 'windows_named_pipe_missing'
   ): void {
+    // Guest PIDs and endpoints have no meaning in the desktop OS namespace.
+    if (this.guest) {
+      return
+    }
     void this.resolveExactDaemonIncarnation(exactIncarnation)
       .then((resolvedIncarnation) => {
         this.cacheExactDaemonIncarnation(resolvedIncarnation)
@@ -136,6 +142,9 @@ export abstract class DaemonPtyConnectionLifecycle extends DaemonPtyEventSubscri
   }
 
   protected publishAuditObservation(observation: DaemonAuditObservation): void {
+    if (this.guest) {
+      return
+    }
     this.lastAuditObservation = observation
     this.trackAuditEligibility(observation)
     notifyDaemonAuditListeners(this.auditObservationListeners, observation)

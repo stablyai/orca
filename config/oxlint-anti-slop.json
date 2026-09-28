@@ -47,8 +47,8 @@
   "overrides": [
     {
       "files": [
-        "**/*.test.{ts,tsx}",
-        "**/*.spec.{ts,tsx}",
+        "**/*.test.{ts,tsx,mjs}",
+        "**/*.spec.{ts,tsx,mjs}",
         "tests/**/*.{ts,tsx}",
         "**/__mocks__/**"
       ],
@@ -56,11 +56,10 @@
         "anti-slop/no-module-mocking": "off"
       }
     },
-    // mock-descendant-sweep.ts (daemon and relay) is a test-only side-effect shim: its whole body
-    // is one vi.mock that keeps mock PTY PIDs away from the host process table, and it exists so
-    // 60 suites do not each inline the same hoisted factory. It is never imported by product code.
+    // These test-only shims keep fake PTYs away from native runtime calls.
+    // Product code never imports them.
     {
-      "files": ["**/mock-descendant-sweep.ts"],
+      "files": ["**/mock-descendant-sweep.ts", "**/pty-ipc-native-runtime-mock.ts"],
       "rules": {
         "anti-slop/no-module-mocking": "off"
       }

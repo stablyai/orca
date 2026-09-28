@@ -1,3 +1,6 @@
+import { join } from 'node:path'
+import { WslDaemonSessions } from '../wsl/wsl-daemon-sessions'
+import { getDaemonHistoryDir } from '../daemon/daemon-launch-paths'
 import {
   applySessionSearchSettingsChange,
   installChildSessionSearchService
@@ -48,6 +51,13 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   if (!store || !stats) {
     throw new Error('Store and stats must be initialized before runtime')
   }
+  if (process.platform === 'win32' && !state.wslDaemonSessions) {
+    state.wslDaemonSessions = new WslDaemonSessions({
+      store,
+      profileScope: getProfileUserDataPath(),
+      historyRoot: join(getDaemonHistoryDir(), 'wsl')
+    })
+  }
   const orchestrationEnvironmentTransport: OrchestrationEnvironmentTransport = {
     resolve: (selector) => {
       const environment = resolveEnvironment(app.getPath('userData'), selector)
@@ -74,7 +84,8 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   // `orca serve`, which never opens one, and the fleet path runs there too.
   const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
   const runtime = new OrcaRuntimeService(store, stats, {
-    prepareClaudeAuth: (target) => state.claudeRuntimeAuth!.prepareForClaudeLaunch(target),
+    prepareClaudeAuth: (target, execution) =>
+      state.claudeRuntimeAuth!.prepareForClaudeLaunch(target, execution),
     agentSessionClaimSigner: loadAgentSessionClaimSigner(
       getProfileUserDataPath(),
       getProfileUserDataPath()

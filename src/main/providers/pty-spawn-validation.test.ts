@@ -1,0 +1,153 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as fs from 'node:fs'
+import type { Stats } from 'node:fs'
+
+const { existsSyncMock, statSyncMock, accessSyncMock, wslUncDirectoryExistsMock } = vi.hoisted(
+  () => ({
+    existsSyncMock: vi.fn(),
+    statSyncMock: vi.fn(),
+    accessSyncMock: vi.fn(),
+    wslUncDirectoryExistsMock: vi.fn()
+  })
+)
+
+vi.mock('fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof fs>()
+  return {
+    ...actual,
+    existsSync: existsSyncMock,
+    statSync: statSyncMock,
+    accessSync: accessSyncMock
+  }
+})
+
+function dirStats(isDirectory: boolean): Stats {
+  return { isDirectory: () => isDirectory } as Stats
+}
+
+vi.mock('../wsl', () => ({
+  wslUncDirectoryExists: wslUncDirectoryExistsMock
+}))
+
+import { resolveUnixShellPath, validateWorkingDirectory } from './pty-spawn-validation'
+
+const WSL_UNC_DIR = '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'
+const NATIVE_DIR = 'C:\\Users\\jin\\repo'
+
+describe('validateWorkingDirectory', () => {
+  beforeEach(() => {
+    existsSyncMock.mockReset()
+    statSyncMock.mockReset()
+    wslUncDirectoryExistsMock.mockReset()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('accepts a WSL UNC worktree that exists inside the distro even when fs.statSync would fail', () => {
+    // Why: the Win32 9P stat is the exact path that falsely reported ENOENT and
+    // broke opening WSL worktrees. The distro answer must win.
+    wslUncDirectoryExistsMock.mockReturnValue(true)
+    existsSyncMock.mockReturnValue(false)
+
+    expect(() => validateWorkingDirectory(WSL_UNC_DIR)).not.toThrow()
+    expect(wslUncDirectoryExistsMock).toHaveBeenCalledWith(WSL_UNC_DIR)
+    // The fs fallback must not run when the distro confirmed existence.
+    expect(existsSyncMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects a WSL UNC worktree that does not exist inside the distro', () => {
+    wslUncDirectoryExistsMock.mockReturnValue(false)
+
+    expect(() => validateWorkingDirectory(WSL_UNC_DIR)).toThrow(/does not exist/)
+    expect(existsSyncMock).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the fs check when the distro answer is inconclusive', () => {
+    wslUncDirectoryExistsMock.mockReturnValue(null)
+    existsSyncMock.mockReturnValue(true)
+    statSyncMock.mockReturnValue(dirStats(true))
+
+    expect(() => validateWorkingDirectory(WSL_UNC_DIR)).not.toThrow()
+    expect(wslUncDirectoryExistsMock).toHaveBeenCalledWith(WSL_UNC_DIR)
+    expect(existsSyncMock).toHaveBeenCalledWith(WSL_UNC_DIR)
+  })
+
+  it('validates native Windows paths via fs without consulting the distro', () => {
+    existsSyncMock.mockReturnValue(true)
+    statSyncMock.mockReturnValue(dirStats(true))
+
+    expect(() => validateWorkingDirectory(NATIVE_DIR)).not.toThrow()
+    expect(wslUncDirectoryExistsMock).not.toHaveBeenCalled()
+    expect(existsSyncMock).toHaveBeenCalledWith(NATIVE_DIR)
+  })
+
+  it('rejects a missing native Windows path', () => {
+    existsSyncMock.mockReturnValue(false)
+    const previousVersion = process.env.ORCA_APP_VERSION
+    process.env.ORCA_APP_VERSION = '1.4.178-test'
+
+    try {
+      expect(() => validateWorkingDirectory(NATIVE_DIR)).toThrow(
+        /does not exist.*orca: 1\.4\.178-test/
+      )
+      expect(wslUncDirectoryExistsMock).not.toHaveBeenCalled()
+    } finally {
+      if (previousVersion === undefined) {
+        delete process.env.ORCA_APP_VERSION
+      } else {
+        process.env.ORCA_APP_VERSION = previousVersion
+      }
+    }
+  })
+
+  it('rejects a native Windows path that exists but is not a directory', () => {
+    existsSyncMock.mockReturnValue(true)
+    statSyncMock.mockReturnValue(dirStats(false))
+
+    expect(() => validateWorkingDirectory(NATIVE_DIR)).toThrow(/is not a directory/)
+  })
+})
+
+describe('resolveUnixShellPath', () => {
+  beforeEach(() => {
+    existsSyncMock.mockReset()
+    accessSyncMock.mockReset()
+  })
+
+  it('preserves non-absolute shells for execvp PATH and cwd resolution', () => {
+    expect(resolveUnixShellPath('bash')).toBe('bash')
+    expect(resolveUnixShellPath('./bin/custom-shell')).toBe('./bin/custom-shell')
+    expect(existsSyncMock).not.toHaveBeenCalled()
+  })
+
+  it('selects an executable fallback before node-pty can fork a missing shell', () => {
+    existsSyncMock.mockImplementation((path) => path === '/bin/sh')
+    accessSyncMock.mockReturnValue(undefined)
+
+    expect(resolveUnixShellPath('/missing/zsh')).toBe('/bin/sh')
+    expect(existsSyncMock.mock.calls.map(([path]) => path)).toEqual([
+      '/missing/zsh',
+      '/bin/zsh',
+      '/bin/bash',
+      '/bin/sh'
+    ])
+  })
+
+  it('reports every attempted shell when no executable candidate exists', () => {
+    existsSyncMock.mockReturnValue(false)
+
+    expect(() => resolveUnixShellPath('/missing/zsh')).toThrow(
+      'No executable Unix shell found (tried: /missing/zsh, /bin/zsh, /bin/bash, /bin/sh)'
+    )
+  })
+
+  it('dedupes a preferred shell that is already a fallback candidate', () => {
+    existsSyncMock.mockImplementation((path) => path === '/bin/sh')
+    accessSyncMock.mockReturnValue(undefined)
+
+    expect(resolveUnixShellPath('/bin/sh')).toBe('/bin/sh')
+    expect(existsSyncMock.mock.calls.map(([path]) => path)).toEqual(['/bin/sh'])
+  })
+})

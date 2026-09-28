@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { bunOwnedRuntimeArgs } from '../../shared/bun-owned-runtime-args'
 import { spawnDaemonChildProcess } from './daemon-launched-child-spawn'
 
 const { spawn, fork } = vi.hoisted(() => ({ spawn: vi.fn(), fork: vi.fn() }))
@@ -23,8 +22,8 @@ const options = {
 
 afterEach(() => {
   vi.clearAllMocks()
+  vi.unstubAllGlobals()
   vi.unstubAllEnvs()
-  vi.restoreAllMocks()
 })
 
 describe('daemon launch scope ownership', () => {
@@ -55,46 +54,164 @@ describe('daemon launch scope ownership', () => {
   })
 })
 
-describe('headless Bun daemon launch', () => {
-  function useBun(): void {
-    vi.spyOn(process, 'versions', 'get').mockReturnValue({ ...process.versions, bun: '1.4.2' })
-    vi.stubEnv('NODE_OPTIONS', '--require=untrusted.js')
-    vi.stubEnv('NODE_PATH', '/untrusted')
-    vi.stubEnv('BUN_OPTIONS', '--preload=untrusted.js')
-  }
-
-  it('isolates scoped Bun launches before the daemon entry', () => {
-    useBun()
-    spawnDaemonChildProcess(options, true)
+it('launches the Bun payload directly without inherited Electron preload options', () => {
+  vi.stubEnv('NODE_OPTIONS', '--require=/user/preload.js')
+  vi.stubEnv('BUN_OPTIONS', '--preload=/user/preload.js')
+  try {
+    spawnDaemonChildProcess(
+      {
+        ...options,
+        bunRuntime: true,
+        relocatedExecPath: '/runtime/bun',
+        conptyLibraryPath: 'C:\\runtime\\conpty\\conpty.dll'
+      },
+      false
+    )
+    expect(fork).not.toHaveBeenCalled()
     const call = spawn.mock.calls[0][0]
-    const executableIndex = call.args.indexOf(process.execPath)
-    expect(call.args.slice(executableIndex + 1, executableIndex + 5)).toEqual([
-      ...bunOwnedRuntimeArgs(),
+    expect(call.program).toBe('/runtime/bun')
+    expect(call.args.slice(0, 4)).toEqual([
+      '--no-env-file',
+      process.platform === 'win32' ? '--config=NUL' : '--config=/dev/null',
+      '--no-install',
       options.forkEntryPath
     ])
-    for (const key of ['ELECTRON_RUN_AS_NODE', 'NODE_OPTIONS', 'NODE_PATH', 'BUN_OPTIONS']) {
-      expect(call.env[key]).toBeUndefined()
+    expect(call.stdio).toContain('ipc')
+    expect(call.env.NODE_OPTIONS).toBeUndefined()
+    expect(call.env.NODE_PATH).toBeUndefined()
+    expect(call.env.BUN_OPTIONS).toBeUndefined()
+    expect(call.env.ELECTRON_RUN_AS_NODE).toBeUndefined()
+    expect(call.args).toContain('--spawner-exec-path')
+  } finally {
+    vi.unstubAllEnvs()
+  }
+})
+
+it('selects only the verified Windows provider instead of an inherited override', () => {
+  vi.stubGlobal('process', {
+    ...process,
+    platform: 'win32',
+    env: { ...process.env, BUN_CONPTY_LIBRARY: 'C:\\foreign\\conpty.dll' }
+  })
+  const library = 'C:\\Orca Runtime\\conpty\\conpty.dll'
+  spawnDaemonChildProcess(
+    {
+      ...options,
+      bunRuntime: true,
+      relocatedExecPath: 'C:\\Orca Runtime\\bun-runtime.exe',
+      conptyLibraryPath: library
+    },
+    false
+  )
+  expect(spawn.mock.calls[0][0].env.BUN_CONPTY_LIBRARY).toBe(library)
+})
+
+it.each([undefined, 'conpty.dll'])(
+  'refuses a Windows Bun launch without an absolute provider: %s',
+  (conptyLibraryPath) => {
+    vi.stubGlobal('process', { ...process, platform: 'win32' })
+    expect(() =>
+      spawnDaemonChildProcess(
+        {
+          ...options,
+          bunRuntime: true,
+          relocatedExecPath: 'C:\\runtime\\bun-runtime.exe',
+          conptyLibraryPath
+        },
+        false
+      )
+    ).toThrow('ConPTY library path must be absolute')
+    expect(spawn).not.toHaveBeenCalled()
+  }
+)
+
+it('does not pass an inherited ConPTY selector to a POSIX Bun daemon', () => {
+  vi.stubGlobal('process', {
+    ...process,
+    platform: 'linux',
+    env: { ...process.env, BUN_CONPTY_LIBRARY: '/foreign/conpty.dll' }
+  })
+  spawnDaemonChildProcess(
+    { ...options, bunRuntime: true, relocatedExecPath: '/runtime/bun' },
+    false
+  )
+  expect(spawn.mock.calls[0][0].env.BUN_CONPTY_LIBRARY).toBeUndefined()
+})
+
+it('places the Bun dotenv guard before the entry in a durable scope', () => {
+  spawnDaemonChildProcess(
+    {
+      ...options,
+      bunRuntime: true,
+      relocatedExecPath: '/runtime/bun',
+      conptyLibraryPath: 'C:\\runtime\\conpty\\conpty.dll'
+    },
+    true
+  )
+  const args: string[] = spawn.mock.calls[0][0].args
+  const runtimeIndex = args.indexOf('/runtime/bun')
+  expect(runtimeIndex).toBeGreaterThan(-1)
+  expect(args.slice(runtimeIndex + 1, runtimeIndex + 5)).toEqual([
+    '--no-env-file',
+    process.platform === 'win32' ? '--config=NUL' : '--config=/dev/null',
+    '--no-install',
+    options.forkEntryPath
+  ])
+})
+
+it.each([false, true])(
+  'isolates the current headless Bun runtime with durable scope=%s',
+  (scoped) => {
+    vi.stubGlobal('process', {
+      ...process,
+      platform: 'linux',
+      versions: { ...process.versions, electron: undefined, bun: '1.4.2' },
+      env: {
+        ...process.env,
+        BUN_OPTIONS: '--preload=/foreign/preload.js',
+        NODE_OPTIONS: '--require=/foreign/preload.js',
+        NODE_PATH: '/foreign/modules'
+      }
+    })
+    spawnDaemonChildProcess(options, scoped)
+    const call = scoped ? spawn.mock.calls[0][0] : fork.mock.calls[0][0]
+    expect(call.env.BUN_OPTIONS).toBeUndefined()
+    expect(call.env.NODE_OPTIONS).toBeUndefined()
+    expect(call.env.NODE_PATH).toBeUndefined()
+    expect(call.env.ELECTRON_RUN_AS_NODE).toBeUndefined()
+    if (scoped) {
+      const index = call.args.indexOf(process.execPath)
+      expect(index).toBeGreaterThan(-1)
+      expect(call.args.slice(index + 1, index + 5)).toEqual([
+        '--no-env-file',
+        '--config=/dev/null',
+        '--no-install',
+        options.forkEntryPath
+      ])
     }
-  })
+  }
+)
 
-  it('scrubs direct Bun forks while preserving the selected ConPTY library', () => {
-    useBun()
-    vi.stubEnv('BUN_CONPTY_LIBRARY', '/verified/conpty.dll')
-    spawnDaemonChildProcess(options, false)
-    expect(fork.mock.calls[0][0].env).toEqual(
-      expect.objectContaining({
-        BUN_CONPTY_LIBRARY: '/verified/conpty.dll',
-        ORCA_USER_DATA_PATH: options.userDataPath
-      })
-    )
-    expect(fork.mock.calls[0][0].env.NODE_OPTIONS).toBeUndefined()
+it('keeps verified ConPTY selection when headless Bun forks itself on Windows', () => {
+  vi.stubGlobal('process', {
+    ...process,
+    platform: 'win32',
+    versions: { ...process.versions, electron: undefined, bun: '1.4.2' },
+    env: { ...process.env, BUN_CONPTY_LIBRARY: 'C:\\verified\\conpty.dll' }
   })
+  spawnDaemonChildProcess(options, false)
+  expect(fork.mock.calls[0][0].env.BUN_CONPTY_LIBRARY).toBe('C:\\verified\\conpty.dll')
+})
 
-  it('preserves an explicitly selected Node executable', () => {
-    useBun()
-    spawnDaemonChildProcess({ ...options, relocatedExecPath: '/alternate/node' }, true)
-    const call = spawn.mock.calls[0][0]
-    expect(call.args).not.toContain('--no-install')
-    expect(call.env.ELECTRON_RUN_AS_NODE).toBe('1')
-  })
+it('does not add Bun flags when a Bun parent explicitly selects another runtime', () => {
+  vi.stubGlobal('process', { ...process, versions: { ...process.versions, bun: '1.4.2' } })
+  spawnDaemonChildProcess({ ...options, relocatedExecPath: '/other/node' }, true)
+  expect(spawn.mock.calls[0][0].args).not.toContain('--no-env-file')
+  expect(spawn.mock.calls[0][0].env.ELECTRON_RUN_AS_NODE).toBe('1')
+})
+
+it.each([false, true])('requires the selected desktop Bun runtime with scope=%s', (scoped) => {
+  expect(() => spawnDaemonChildProcess({ ...options, bunRuntime: true }, scoped)).toThrow()
+  expect(spawn).not.toHaveBeenCalled()
+  expect(fork).not.toHaveBeenCalled()
 })

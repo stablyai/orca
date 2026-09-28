@@ -94,6 +94,7 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
       killAll: () => Promise.resolve({ killedCount: 0, remainingCount: 0, killedSessionIds: [] }),
       killOne: () => Promise.resolve({ success: false }),
       restart: () => Promise.resolve({ success: false }),
+      retry: () => Promise.resolve({ success: false }),
       // Why: web clients can't inspect the host daemon's pid record; 'unknown' keeps the banner hidden.
       macTccAttribution: () =>
         Promise.resolve({ health: 'unknown' as const, folderAccessMismatch: null }),

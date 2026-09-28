@@ -12,7 +12,6 @@ import {
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
-vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
@@ -70,17 +69,6 @@ describe('registerPtyHandlers', () => {
       getSize(ptyId: string): { cols: number; rows: number } | null
     }
     let controller: RuntimeResizeController | null = null
-    const proc = {
-      onData: vi.fn(),
-      onExit: vi.fn(),
-      write: vi.fn(),
-      resize: vi.fn(() => {
-        throw new Error('resize failed')
-      }),
-      kill: vi.fn(),
-      process: 'zsh',
-      pid: 12345
-    }
     const runtime = {
       setPtyController: vi.fn((value) => {
         controller = value
@@ -94,7 +82,11 @@ describe('registerPtyHandlers', () => {
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
     }
-    spawnMock.mockReturnValue(proc)
+    const provider = createAgentClaimProvider({ spawn: vi.fn(async () => ({ id: 'resize-pty' })) })
+    provider.resize.mockImplementation(() => {
+      throw new Error('resize failed')
+    })
+    setLocalPtyProvider(provider as never)
 
     registerPtyHandlers(mainWindow as never, runtime as never)
     const resizeController = controller as unknown as RuntimeResizeController
@@ -378,7 +370,6 @@ describe('registerPtyHandlers', () => {
       spawn: physicalSpawn,
       authoritativeOwnerListings: false
     })
-    Object.assign(provider, { routesFreshSpawnsToLocalProvider: true })
     setLocalPtyProvider(provider as never)
     registerPtyHandlers(mainWindow as never, runtime)
     const controller = (

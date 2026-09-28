@@ -1,6 +1,12 @@
 /* oxlint-disable max-lines */
 // Why: single authority for all relay lifecycle state per SSH target (previously scattered across module Maps/Sets with duplicated paths).
 
+import {
+  invalidateRelayPtySourceRecovery,
+  migrateRelayPtySourceGeneration,
+  relayPtySourceRecoveryRequest
+} from '../providers/relay-pty-source-recovery'
+import { registerRelayPtySourceCredit } from '../providers/relay-pty-source-credit-registration'
 import { randomUUID } from 'node:crypto'
 import type { BrowserWindow } from 'electron'
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
@@ -56,11 +62,7 @@ import {
   allocateSshPtyProviderGeneration,
   applySshPtySourceCancellationProof,
   applySshPtySourceRecoveryCancellationProof,
-  beginSshPtyOutputGenerationMigration,
-  closeSshPtyOutputGeneration,
-  getSshPtyAcceptedSourceCheckpoints,
-  installSshPtySourceAckPublisher,
-  installSshPtySourceCancellationPublisher
+  closeSshPtyOutputGeneration
 } from '../ipc/ssh-pty-output-intake-registry'
 import {
   registerSshFilesystemProvider,
@@ -1132,42 +1134,11 @@ export class SshRelaySession {
     this.sourceCancellationPublisherCleanup?.()
     this.sourceCancellationPublisherCleanup = null
     if (consumerOwnerState?.outputFlowControl) {
-      this.sourceAckPublisherCleanup = installSshPtySourceAckPublisher(
-        providerGeneration,
-        // ACK delivery is idempotent and re-derived from credit state, so it consumes
-        // the two-valued projection of the write settlement rather than the three arms.
-        (batch, onSettled) =>
-          mux.notifyWithSettlement(
-            'pty.ackData',
-            batch as unknown as Record<string, unknown>,
-            (settlement) =>
-              onSettled(
-                settlement.outcome === 'accepted'
-                  ? { ok: true }
-                  : { ok: false, error: settlement.error }
-              )
-          )
+      const registration = registerRelayPtySourceCredit(mux, providerGeneration, (id) =>
+        toRelaySshPtyId(this.targetId, id)
       )
-      this.sourceCancellationPublisherCleanup = installSshPtySourceCancellationPublisher(
-        providerGeneration,
-        async (request) => {
-          const result = (await mux.request('pty.cancelDelivery', {
-            ...request,
-            id: toRelaySshPtyId(this.targetId, request.id)
-          })) as Record<string, unknown>
-          if (
-            result.canceled !== true ||
-            !Number.isSafeInteger(result.sentEndSu) ||
-            !Number.isSafeInteger(result.creditedEndSu)
-          ) {
-            throw new Error('ssh_source_cancellation_proof_invalid')
-          }
-          return {
-            sentEndSu: result.sentEndSu as number,
-            creditedEndSu: result.creditedEndSu as number
-          }
-        }
-      )
+      this.sourceAckPublisherCleanup = registration.releaseAck
+      this.sourceCancellationPublisherCleanup = registration.releaseCancellation
     }
     this.activePtyProviderGeneration = providerGeneration
     registerSshPtyProvider(this.targetId, ptyProvider)
@@ -1326,18 +1297,7 @@ export class SshRelaySession {
       return
     }
     delete recovery.owner
-    recovery.checkpointsByAppPtyId.clear()
-    for (const [ptyId, migration] of recovery.modelMigrationsByAppPtyId) {
-      recovery.modelMigrationsByAppPtyId.set(
-        ptyId,
-        migration.then(() =>
-          Object.freeze({
-            status: 'checkpoint-unavailable' as const,
-            reason: 'completion-failed' as const
-          })
-        )
-      )
-    }
+    invalidateRelayPtySourceRecovery(recovery)
   }
 
   private async rememberPtyConsumerRecovery(serverBuildId: string | undefined): Promise<void> {
@@ -2958,65 +2918,19 @@ export class SshRelaySession {
     if (!this.activePtyConsumerOwner()?.outputFlowControl) {
       return undefined
     }
-    const recovery = getSshPtyConsumerRecovery(this.targetId)
-    const migration = recovery?.modelMigrationsByAppPtyId.get(appPtyId)
-    if (migration) {
-      const outcome = await migration
-      if (recovery?.modelMigrationsByAppPtyId.get(appPtyId) === migration) {
-        recovery.modelMigrationsByAppPtyId.delete(appPtyId)
-      }
-      if (outcome.status !== 'settled') {
-        return Object.freeze({ status: 'checkpointUnavailable' })
-      }
-    }
-    const checkpoints = recovery?.checkpointsByAppPtyId
-    const relayPtyId = toRelaySshPtyId(this.targetId, appPtyId)
-    // Why: every checkpoint writer records app-id keys now, so the relay-id
-    // lookup (and its paired delete below) is a legacy guard only.
-    const checkpoint = checkpoints?.get(appPtyId) ?? checkpoints?.get(relayPtyId)
-    if (!checkpoint) {
-      return Object.freeze({ status: 'checkpointUnavailable' })
-    }
-    return Object.freeze({
-      status: 'checkpoint',
-      clientGeneration: checkpoint.clientGeneration,
-      ownerGeneration: checkpoint.ownerGeneration,
-      ptyIncarnation: checkpoint.ptyIncarnation,
-      deliveryToken: checkpoint.deliveryToken,
-      acceptedSourceEndSu: checkpoint.acceptedSourceEndSu
-    })
+    return relayPtySourceRecoveryRequest(
+      getSshPtyConsumerRecovery(this.targetId),
+      appPtyId,
+      toRelaySshPtyId(this.targetId, appPtyId)
+    )
   }
 
   private beginPtyModelMigration(providerGeneration: number, closeReason: string): void {
-    const recovery = getSshPtyConsumerRecovery(this.targetId)
-    if (!recovery) {
-      closeSshPtyOutputGeneration(providerGeneration, closeReason)
-      return
-    }
-    for (const checkpoint of getSshPtyAcceptedSourceCheckpoints(providerGeneration)) {
-      recovery.checkpointsByAppPtyId.set(checkpoint.id, checkpoint)
-    }
-    const migration = beginSshPtyOutputGenerationMigration(providerGeneration)
-    for (const [ptyId, result] of migration.byPty) {
-      const previous = recovery.modelMigrationsByAppPtyId.get(ptyId)
-      const fence = previous ? previous.then(() => result) : result
-      recovery.modelMigrationsByAppPtyId.set(ptyId, fence)
-      void fence.then((outcome) => {
-        const current = getSshPtyConsumerRecovery(this.targetId)
-        if (current?.modelMigrationsByAppPtyId.get(ptyId) !== fence) {
-          return
-        }
-        if (outcome.status === 'settled') {
-          current.checkpointsByAppPtyId.set(ptyId, outcome.checkpoint)
-        } else {
-          current.checkpointsByAppPtyId.delete(ptyId)
-          current.checkpointsByAppPtyId.delete(toRelaySshPtyId(this.targetId, ptyId))
-        }
-        current.modelMigrationsByAppPtyId.delete(ptyId)
-      })
-    }
-    void migration.completion.then(() => {
-      closeSshPtyOutputGeneration(providerGeneration, closeReason)
+    migrateRelayPtySourceGeneration({
+      generation: providerGeneration,
+      closeReason,
+      getRecovery: () => getSshPtyConsumerRecovery(this.targetId),
+      toRelayPtyId: (id) => toRelaySshPtyId(this.targetId, id)
     })
   }
 

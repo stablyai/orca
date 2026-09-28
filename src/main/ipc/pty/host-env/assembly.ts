@@ -142,13 +142,25 @@ export function buildPtyHostEnv(
         explicitPiAgentKind === 'pi' || explicitPiAgentKind === 'omp'
           ? explicitPiAgentKind
           : undefined
-      wslHookRelayManager.ensureForDistro(distro, opts.selectedCodexHomePath, wslLaunchKind)
-      const guestEndpoint = wslHookRelayManager.getGuestEndpointFilePath(distro)
+      wslHookRelayManager.ensureForDistro(
+        distro,
+        opts.selectedCodexHomePath,
+        wslLaunchKind,
+        ...(opts.wslUser ? [opts.wslUser] : [])
+      )
+      const guestEndpoint = wslHookRelayManager.getGuestEndpointFilePath(
+        distro,
+        ...(opts.wslUser ? [opts.wslUser] : [])
+      )
       if (guestEndpoint) {
         baseEnv.ORCA_AGENT_HOOK_ENDPOINT = guestEndpoint
       }
       // Why: OpenCode loads its status plugin from a guest config overlay, so point OPENCODE_CONFIG_DIR at the guest dir the relay materialized.
-      const opencodeOverlayDir = wslHookRelayManager.getOpenCodeOverlayDir(distro, openCodeAgent)
+      const opencodeOverlayDir = wslHookRelayManager.getOpenCodeOverlayDir(
+        distro,
+        openCodeAgent,
+        ...(opts.wslUser ? [opts.wslUser] : [])
+      )
       if (opencodeOverlayDir) {
         baseEnv.OPENCODE_CONFIG_DIR = opencodeOverlayDir
         baseEnv.ORCA_OPENCODE_CONFIG_DIR = opencodeOverlayDir
@@ -231,12 +243,20 @@ export function buildPtyHostEnv(
   if (opts.isWsl && opts.agentStatusHooksEnabled) {
     const distro = opts.wslDistro ?? null
     if (explicitPiAgentKind === 'pi') {
-      const guestPiDir = wslHookRelayManager.getGuestAgentPath(distro, 'pi')
+      const guestPiDir = wslHookRelayManager.getGuestAgentPath(
+        distro,
+        'pi',
+        ...(opts.wslUser ? [opts.wslUser] : [])
+      )
       if (guestPiDir) {
         baseEnv.ORCA_PI_SOURCE_AGENT_DIR = guestPiDir
       }
     } else if (explicitPiAgentKind === 'omp') {
-      const guestOmpExtension = wslHookRelayManager.getGuestAgentPath(distro, 'omp')
+      const guestOmpExtension = wslHookRelayManager.getGuestAgentPath(
+        distro,
+        'omp',
+        ...(opts.wslUser ? [opts.wslUser] : [])
+      )
       if (guestOmpExtension) {
         baseEnv.ORCA_OMP_STATUS_EXTENSION = guestOmpExtension
       }

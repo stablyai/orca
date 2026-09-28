@@ -1,7 +1,9 @@
+import type { WslAccountExecutionContext } from '../../wsl/wsl-account-execution-context'
 import type { ClaudeManagedAccount } from '../../../shared/managed-account-types'
 import type { ClaudeEnvPatch } from '../environment'
 
 export type ClaudeRuntimeAuthPreparation = {
+  wslExecution?: WslAccountExecutionContext
   configDir: string
   runtime?: 'host' | 'wsl'
   wslDistro?: string | null

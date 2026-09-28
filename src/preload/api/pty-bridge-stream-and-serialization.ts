@@ -146,6 +146,7 @@ export const ptyStreamAndSerializationApi = {
     killAll: () => ipcRenderer.invoke('pty:management:killAll'),
     killOne: (args: { sessionId: string }) => ipcRenderer.invoke('pty:management:killOne', args),
     restart: () => ipcRenderer.invoke('pty:management:restart'),
+    retry: () => ipcRenderer.invoke('pty:management:retry'),
     macTccAttribution: () => ipcRenderer.invoke('pty:management:macTccAttribution'),
     resetFolderAccess: () => ipcRenderer.invoke('pty:management:resetFolderAccess')
   }

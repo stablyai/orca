@@ -1,3 +1,6 @@
+import { parseAppWslPtyId } from '../../../../shared/wsl-pty-id'
+import { prepareWslDaemonReattachHooks } from '../../../wsl/wsl-daemon-reattach-hooks'
+import { isAgentStatusHooksEnabled } from '../../../agent-hooks/managed-agent-hook-controls'
 import type { PtySpawnResult } from '../../../providers/types'
 import { getAppPtyId } from '../provider/registry'
 import { allocatePtyLifecycleSequence } from '../host-env/types'
@@ -54,7 +57,7 @@ export function adoptMaterializedRuntimePtySpawn(
     }
   }
   ensureWslHookRelayForReattach(
-    { isReattach: true, wslDistro: ctx.preAdoptedStablePane.result.wslDistro },
+    { id: ctx.result.id, isReattach: true, wslDistro: ctx.preAdoptedStablePane.result.wslDistro },
     args.connectionId
   )
   if (!args.connectionId) {
@@ -66,6 +69,13 @@ export function adoptMaterializedRuntimePtySpawn(
       startedSequence: ctx.codexHomeLaunchStartedSequence,
       ...codexReattachedHomeRouteField(ctx.reattachedCodexHomeRoutes, ctx.result.id, true)
     })
+  }
+  if (parseAppWslPtyId(ctx.result.id)) {
+    return prepareWslDaemonReattachHooks({
+      result: { ...ctx.result, isReattach: true },
+      sessions: ctx.deps.options?.wslDaemonSessions,
+      hooksEnabled: isAgentStatusHooksEnabled(ctx.deps.getSettings?.())
+    }).then(() => ctx.result)
   }
   return ctx.result
 }

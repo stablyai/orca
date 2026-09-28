@@ -1,3 +1,4 @@
+import type { WslPtyRecoveryRecord } from './wsl-pty-consumer-recovery'
 import type { ExecutionHostId } from './execution-host'
 import type {
   RemovedSshTargetTombstone,
@@ -103,6 +104,7 @@ export type PersistedState = {
   sshRemotePtyLeases: SshRemotePtyLease[]
   /** Main-owned authenticated relay recovery records; never expose through renderer settings APIs. */
   sshPtyConsumerRecoveries?: SshPtyConsumerRecovery[]
+  wslPtyConsumerRecoveries?: WslPtyRecoveryRecord[]
   /** Live local Claude daemon session ids; seeds the live-PTY gate so early OAuth refresh can't rotate the single-use refresh token out from under a running daemon. */
   claudeLivePtySessionIds?: string[]
   migrationUnsupportedPtyEntries: MigrationUnsupportedPtyEntry[]

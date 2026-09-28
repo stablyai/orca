@@ -19,7 +19,6 @@ on:
       - 'config/tsconfig*.json'
       - 'config/scripts/ensure-native-runtime.mjs'
       - 'config/scripts/rebuild-native-deps.mjs'
-      - 'config/patches/node-pty@1.1.0.patch'
       - 'config/patches/@vscode__windows-process-tree@0.8.0.patch'
       - 'native/windows-registry/**'
   pull_request:

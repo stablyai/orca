@@ -136,6 +136,29 @@
           "args": ["run", "esbuild-package"]
         }
       ]
+    },
+    {
+      "name": "@xterm/headless",
+      "version": "6.1.0-beta.302",
+      "packageDir": ".",
+      "outputDir": "headless",
+      "sourcePatch": "config/patches/xterm-src/@xterm__headless@6.1.0-beta.302.src.patch",
+      "patch": "config/patches/@xterm__headless@6.1.0-beta.302.patch",
+      "generatedPaths": ["lib-headless/"],
+      "build": [
+        {
+          "cwd": ".",
+          "command": "npm",
+          "args": ["run", "build"]
+        },
+        {
+          "cwd": ".",
+          "command": "npm",
+          "args": ["run", "package-headless"]
+        }
+      ],
+      "$note": "Headless publishes source only in maps and leaves Version.ts at the upstream value; pristine reproduction verifies both bundles and maps.",
+      "sourceMaps": ["lib-headless/xterm-headless.js.map", "lib-headless/xterm-headless.mjs.map"]
     }
   ],
   "forbiddenBuildScripts": {

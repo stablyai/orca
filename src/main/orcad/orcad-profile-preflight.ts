@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { preflightProfileStateRuntime } from '../persistence/profile-state/profile-state-runtime-preflight'
 import {
   ORCAD_STARTUP_PREFLIGHT_FLAG,
+  ORCAD_NATIVE_PREFLIGHT_CHILD_FLAG,
   ORCAD_PROFILE_PREFLIGHT_TIMEOUT_MS,
   parseOrcadProfilePreflight,
   orcadProfilePreflightResponseSchema,
@@ -24,18 +25,20 @@ export async function preflightBundledOrcadStartup(): Promise<void> {
   if (!process.versions.bun) {
     return
   }
+  await runBundledPreflightChild(ORCAD_STARTUP_PREFLIGHT_FLAG, randomUUID(), process.platform)
+}
+
+async function runBundledPreflightChild(
+  flag: string,
+  nonce: string,
+  platform: NodeJS.Platform
+): Promise<OrcadProfilePreflightResponse> {
   const directory = resolveOrcadInstallRoot()
   const identity = await readInstalledVersion(directory)
-  const nonce = randomUUID()
   // Keep disposable SQLite ownership and native state out of the serving process.
   const result = await runProcess({
-    program: join(directory, orcadBunRuntimeFilename(process.platform)),
-    args: [
-      ...bunOwnedRuntimeArgs(),
-      join(directory, 'orcad.js'),
-      ORCAD_STARTUP_PREFLIGHT_FLAG,
-      nonce
-    ],
+    program: join(directory, orcadBunRuntimeFilename(platform)),
+    args: [...bunOwnedRuntimeArgs(platform), join(directory, 'orcad.js'), flag, nonce],
     env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' },
     timeoutMs: ORCAD_PROFILE_PREFLIGHT_TIMEOUT_MS,
     maxOutputBytes: 64 * 1024,
@@ -46,7 +49,7 @@ export async function preflightBundledOrcadStartup(): Promise<void> {
     throw new Failure(`The bundled Orca runtime failed readiness: ${result.stderr}`)
   }
   try {
-    parseOrcadProfilePreflight(result.stdout, nonce, ORCAD_BUN_VERSION, identity)
+    return parseOrcadProfilePreflight(result.stdout, nonce, ORCAD_BUN_VERSION, identity)
   } catch (cause) {
     throw new OrcadBundledRuntimeError('The bundled runtime returned invalid readiness identity', {
       cause
@@ -96,4 +99,15 @@ async function readInstalledVersion(directory: string): Promise<string> {
       }
     )
   }
+}
+
+/** Bun reads the native selector from its initial environment, not later JS assignments. */
+export async function runBundledWindowsProfilePreflight(nonce: string | undefined): Promise<void> {
+  const checkedNonce = z.string().uuid().parse(nonce)
+  const response = await runBundledPreflightChild(
+    ORCAD_NATIVE_PREFLIGHT_CHILD_FLAG,
+    checkedNonce,
+    'win32'
+  )
+  console.log(JSON.stringify(response))
 }

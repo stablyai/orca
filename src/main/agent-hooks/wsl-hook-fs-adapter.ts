@@ -21,6 +21,7 @@ export async function installWslGuestHooks(options: {
   guestHome: string
   codexHomePath: string | null
   distro: string
+  user?: string
   installHooks: typeof installRemoteManagedAgentHooks
   settings: ManagedHookDetectionSettings
   warn: (message: string) => void
@@ -50,7 +51,7 @@ export async function installWslGuestHooks(options: {
   if (agents.length === 0) {
     return
   }
-  if (agents.includes('codex') && codexHomePath) {
+  if (agents.includes('codex') && codexHomePath && options.user === undefined) {
     try {
       const status = await installCodex(codexHomePath, distro)
       if (status?.state === 'error') {
@@ -64,11 +65,11 @@ export async function installWslGuestHooks(options: {
       )
     }
   }
-  // Codex is redirected into the runtime home and must use the canonical
-  // runtime-host writer above; the relay adapter owns all other agents.
-  const remoteAgents = agents.filter((agent) => agent !== 'codex')
+  // Explicit users install through their own home-scoped relay, never the default-user writer.
+  const remoteAgents = agents.filter((agent) => agent !== 'codex' || options.user !== undefined)
   const results = await installHooks(createWslHookSftpAdapter(mux), guestHome, {
     agents: remoteAgents,
+    ...(options.user && codexHomePath ? { codexHomeDir: codexHomePath } : {}),
     ...(claudeVersion ? { claudeVersion } : {})
   })
   const failed = results.filter((r) => r.state === 'error').length

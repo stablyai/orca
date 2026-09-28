@@ -143,8 +143,7 @@ describe('startFirstWindowStartupServices', () => {
       await vi.advanceTimersByTimeAsync(FIRST_WINDOW_STARTUP_SERVICE_TIMEOUT_MS)
       await expect(started.firstWindowReady).resolves.toBeUndefined()
 
-      // Why: opening the PTY gate before the daemon attempt finishes would
-      // spawn non-restorable LocalPtyProvider fallback terminals (#5232).
+      // Restored terminals wait for daemon authority while startup is still within its budget.
       expect(ptyGateOpened).toBe(false)
       expect(daemonSignal?.aborted).toBe(false)
       expect(onDaemonError).not.toHaveBeenCalled()
@@ -159,17 +158,25 @@ describe('startFirstWindowStartupServices', () => {
     }
   })
 
-  it('fails open the local PTY gate at the hard cap while aborting hung services', async () => {
+  it('opens the hard-cap gate while allowing a late daemon to become ready', async () => {
     vi.useFakeTimers()
     const onDaemonError = vi.fn()
     const onAgentHookServerError = vi.fn()
     let daemonSignal: AbortSignal | undefined
+    let finishDaemon!: () => void
+    const installed = vi.fn()
 
     try {
       const started = startFirstWindowStartupServices({
         startDaemonPtyProvider: (signal) => {
           daemonSignal = signal
-          return new Promise<void>(() => {})
+          return new Promise<void>((resolve) => {
+            finishDaemon = resolve
+          }).then(() => {
+            if (!signal.aborted) {
+              installed()
+            }
+          })
         },
         startAgentHookServer: () => Promise.resolve(),
         onDaemonError,
@@ -184,7 +191,10 @@ describe('startFirstWindowStartupServices', () => {
 
       expect(onDaemonError).toHaveBeenCalledWith(expect.any(Error))
       expect(onAgentHookServerError).not.toHaveBeenCalled()
-      expect(daemonSignal?.aborted).toBe(true)
+      expect(daemonSignal?.aborted).toBe(false)
+      finishDaemon()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(installed).toHaveBeenCalledOnce()
     } finally {
       vi.useRealTimers()
     }

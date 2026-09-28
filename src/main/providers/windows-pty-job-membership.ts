@@ -1,4 +1,4 @@
-import type { IPty } from 'node-pty'
+import type { TerminalProcess } from '../../shared/terminal-process'
 import {
   isPtyJobOwnershipAvailable,
   listPtyJobProcessIds,
@@ -24,8 +24,8 @@ import {
  * that processes died.
  */
 export function readWindowsPtyJobProcessIds(
-  proc: IPty,
-  listJobProcessIds: (proc: IPty) => readonly number[] | null = listPtyJobProcessIds
+  proc: TerminalProcess,
+  listJobProcessIds: (proc: TerminalProcess) => readonly number[] | null = listPtyJobProcessIds
 ): ReadonlySet<number> | null {
   const pids = listJobProcessIds(proc)
   if (!pids) {

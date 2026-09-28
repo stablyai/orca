@@ -1,10 +1,10 @@
-import type * as pty from 'node-pty'
+import type { TerminalProcess } from '../../../shared/terminal-process'
 import type { RecognizedAgentProcess } from '../../../shared/agent-process-recognition'
 import { readPtySlavePath } from '../../../shared/pty-slave-line-discipline-echo'
 import { forceKillPosixPtyProcessGroups } from '../../pty/posix-pty-process-groups'
 import { signalPosixPtyForegroundGroup } from '../../pty/posix-pty-foreground-group'
-import { readPtsName } from '../../pty/node-pty-pts-name'
-import { terminatePtyJob } from '../../windows/windows-pty-job'
+import { readPtsName } from '../../pty/terminal-slave-device'
+import { ptyShellProcessId, terminatePtyJob } from '../../windows/windows-pty-job'
 import { isValidPtySize } from '../daemon-pty-size'
 import type { SubprocessHandle } from '../session-subprocess-handle'
 import { createPtyForegroundProcessTracker } from './foreground-process-tracker'
@@ -12,13 +12,13 @@ import { PtyPreListenerEvents } from './pre-listener-events'
 import { ptyProcessNameIsSpawnFile } from './spawn-file-foreground-process'
 import { inspectSpawnFileWindowsChildProcesses } from './spawn-file-child-processes'
 
-type DisposableNativePty = pty.IPty & {
+type DisposableNativePty = TerminalProcess & {
   destroy?: () => void
   signalProcess?: (signal: string) => void
 }
 
 export function createDaemonPtySubprocessHandle(args: {
-  process: pty.IPty
+  process: TerminalProcess
   shellPath: string
   spawnCwd: string
   env: Record<string, string>
@@ -38,6 +38,23 @@ export function createDaemonPtySubprocessHandle(args: {
   let ioFailed = false
   let disposed = false
   let nodePtyKillIssued = false
+  let physicalExitObserved = false
+  let dataSubscription: { dispose(): void } | null = null
+  let exitSubscription: { dispose(): void } | null = null
+  const releaseNativeSubscriptions = (): void => {
+    if (!disposed || !physicalExitObserved) {
+      return
+    }
+    const data = dataSubscription
+    const exit = exitSubscription
+    dataSubscription = null
+    exitSubscription = null
+    try {
+      data?.dispose()
+    } finally {
+      exit?.dispose()
+    }
+  }
   const foreground = createPtyForegroundProcessTracker({
     process: proc,
     shellPath: args.shellPath,
@@ -47,11 +64,12 @@ export function createDaemonPtySubprocessHandle(args: {
     isDead: () => dead
   })
 
-  proc.onData((data) => {
+  dataSubscription = proc.onData((data) => {
     foreground.recordOutput(data)
     events.acceptData(data)
   })
-  proc.onExit(({ exitCode, signal }) => {
+  exitSubscription = proc.onExit(({ exitCode, signal }) => {
+    physicalExitObserved = true
     // Exit listeners may re-enter cleanup; retire signal authority before notifying them.
     dead = true
     foreground.markDead()
@@ -59,16 +77,22 @@ export function createDaemonPtySubprocessHandle(args: {
     if (process.platform !== 'win32') {
       nativeProc.kill = () => {}
     }
-    events.acceptExit({
-      exitCode,
-      signal,
-      hostReportsChildExitStatus: reportsChildExitStatus
-    })
+    try {
+      events.acceptExit({
+        exitCode,
+        signal,
+        hostReportsChildExitStatus: reportsChildExitStatus
+      })
+    } finally {
+      releaseNativeSubscriptions()
+    }
   })
+  releaseNativeSubscriptions()
 
   const slavePath = readPtySlavePath(proc)
   return {
     pid: proc.pid,
+    getShellProcessId: () => ptyShellProcessId(proc),
     processNameIsSpawnFile: ptyProcessNameIsSpawnFile(proc),
     ...(process.platform === 'win32'
       ? { inspectChildProcesses: () => inspectSpawnFileWindowsChildProcesses(proc) }
@@ -206,6 +230,7 @@ export function createDaemonPtySubprocessHandle(args: {
       disposed = true
       dead = true
       events.clear()
+      releaseNativeSubscriptions()
       // POSIX destroy() can asynchronously signal a recycled pid; Windows needs kill() to close ConPTY.
       if (process.platform !== 'win32') {
         nativeProc.kill = () => {}

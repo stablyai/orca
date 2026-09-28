@@ -14,8 +14,8 @@ vi.mock('../codex-cli/command', () => ({
   resolveCodexCommand: resolveCodexCommandMock
 }))
 
-vi.mock('node-pty', () => ({
-  spawn: ptySpawnMock
+vi.mock('./hidden-daemon-pty', () => ({
+  spawnHiddenDaemonPty: ptySpawnMock
 }))
 
 // Auth gate is covered separately; these tests assume a signed-in Codex.
@@ -47,6 +47,7 @@ describe('fetchCodexRateLimits PTY settle timers', () => {
         ptyHandlers.onData = callback
         return makeDisposable()
       }),
+      onError: vi.fn(() => ({ dispose: vi.fn() })),
       onExit: vi.fn(() => makeDisposable()),
       write: vi.fn(),
       kill: vi.fn()
@@ -90,6 +91,7 @@ describe('fetchCodexRateLimits PTY settle timers', () => {
         ptyHandlers.onData = callback
         return makeDisposable()
       }),
+      onError: vi.fn(() => ({ dispose: vi.fn() })),
       onExit: vi.fn(() => makeDisposable()),
       write: vi.fn(),
       kill: vi.fn()
@@ -131,6 +133,7 @@ describe('fetchCodexRateLimits PTY settle timers', () => {
         ptyHandlers.onData = callback
         return makeDisposable()
       }),
+      onError: vi.fn(() => ({ dispose: vi.fn() })),
       onExit: vi.fn(() => makeDisposable()),
       write: vi.fn(),
       kill: vi.fn()
@@ -176,6 +179,7 @@ describe('fetchCodexRateLimits PTY settle timers', () => {
         ptyHandlers.onData = callback
         return makeDisposable()
       }),
+      onError: vi.fn(() => ({ dispose: vi.fn() })),
       onExit: vi.fn(() => makeDisposable()),
       write,
       kill: vi.fn()
@@ -229,6 +233,7 @@ describe('fetchCodexRateLimits PTY settle timers', () => {
         ptyHandlers.onData = callback
         return makeDisposable()
       }),
+      onError: vi.fn(() => ({ dispose: vi.fn() })),
       onExit: vi.fn(() => makeDisposable()),
       write: vi.fn(),
       kill: vi.fn()
@@ -268,6 +273,7 @@ describe('fetchCodexRateLimits PTY settle timers', () => {
         ptyHandlers.onData = callback
         return makeDisposable()
       }),
+      onError: vi.fn(() => ({ dispose: vi.fn() })),
       onExit: vi.fn(() => makeDisposable()),
       write,
       kill: vi.fn()

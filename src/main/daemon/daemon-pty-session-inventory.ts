@@ -165,6 +165,9 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
   }
 
   async getDefaultShell(): Promise<string> {
+    if (this.guest) {
+      return this.guest.defaultShell
+    }
     if (process.platform === 'win32') {
       return process.env.COMSPEC || 'powershell.exe'
     }
@@ -172,6 +175,9 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
   }
 
   async getProfiles(): Promise<{ name: string; path: string }[]> {
+    if (this.guest) {
+      return this.guest.profiles.map((profile) => ({ ...profile }))
+    }
     if (process.platform === 'win32') {
       return [
         { name: 'PowerShell', path: 'powershell.exe' },

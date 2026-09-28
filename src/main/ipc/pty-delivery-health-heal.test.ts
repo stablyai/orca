@@ -5,7 +5,6 @@ import { registerPtyHandlers, getPtyRendererDeliveryDebugSnapshot } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
-vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
@@ -86,8 +85,8 @@ describe('registerPtyHandlers', () => {
         vi.advanceTimersByTime(1)
       }
       mockProc.emitData('stuck-output')
-      // Only the probe's hygiene timeout remains; the dispatcher-ready handshake already drained the pending flush.
-      expect(vi.getTimerCount()).toBe(1)
+      // The daemon's pause failsafe and the delivery probe have independent lifetimes.
+      expect(vi.getTimerCount()).toBe(2)
 
       destroyed = true
       mockProc.emitData('post-destroy output')

@@ -12,9 +12,7 @@ import {
   CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE,
   hasClaudeAuthEnvConflict
 } from '../../../claude-accounts/environment'
-import { LocalPtyProvider } from '../../../providers/local-pty-provider'
 import { resolvePathEnvKey } from '../../../pty/windows-environment-path'
-import { routesFreshSpawnsToLocalProvider } from '../host-env/fresh-spawn-routing'
 import { stripRemotePaneEnvWhenHooksDisabled } from '../provider/liveness'
 import { parseValidPaneKey } from '../pane/key-state'
 import { shouldRefreshNativeClaudeAgentTeamsEnv } from '../pane/launch-authority'
@@ -72,6 +70,7 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
   ctx.stablePaneKey = verifiedPaneKey ?? ctx.migrationUnsupportedPaneKey ?? ctx.metadataPaneKey
   ctx.baseEnv = baseEnvWithAuth ? { ...baseEnvWithAuth } : undefined
   const shouldRefreshAgentTeamsEnv =
+    (!ctx.wslGuest || ctx.wslGuest.fresh || ctx.wslGuest.coldRestore) &&
     !ctx.preAdoptedStablePane &&
     !args.connectionId &&
     ctx.deps.runtime !== undefined &&
@@ -81,16 +80,9 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
       launchConfig: args.launchConfig
     })
   ctx.effectiveLaunchConfig = args.launchConfig
-  const shouldPreAllocateTerminalHandle =
-    ctx.deps.runtime !== undefined &&
-    ((!(ctx.provider instanceof LocalPtyProvider) &&
-      !routesFreshSpawnsToLocalProvider(ctx.provider)) ||
-      shouldRefreshAgentTeamsEnv)
   const runtime = ctx.deps.runtime
-  ctx.preAllocatedHandle = shouldPreAllocateTerminalHandle
-    ? (ctx.preAdoptedStablePane?.owner.handle ??
-      runtime?.createPreAllocatedTerminalHandle() ??
-      null)
+  ctx.preAllocatedHandle = runtime
+    ? (ctx.preAdoptedStablePane?.owner.handle ?? runtime.createPreAllocatedTerminalHandle())
     : null
   if (shouldRefreshAgentTeamsEnv && ctx.preAllocatedHandle && runtime) {
     // Why: Agent Teams ids/tokens are process-local, so the team env must be regenerated for the new leader PTY.

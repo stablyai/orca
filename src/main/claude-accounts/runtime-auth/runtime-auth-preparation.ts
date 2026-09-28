@@ -1,7 +1,11 @@
+import {
+  assertWslAccountExecutionTarget,
+  type WslAccountExecutionContext
+} from '../../wsl/wsl-account-execution-context'
+import { parseWslUncPath, toWindowsWslUncPath } from '../../../shared/wsl-paths'
 import { join } from 'node:path'
 import type { ClaudeManagedAccount } from '../../../shared/managed-account-types'
 import { resolveLocalAccountRuntimeTarget } from '../../../shared/local-account-runtime'
-import { parseWslUncPath } from '../../../shared/wsl-paths'
 import { shouldStripClaudeAuthEnvForAccount } from '../environment'
 import { getDefaultWslDistro, getWslHome } from '../../wsl'
 import {
@@ -13,7 +17,13 @@ import { ClaudeRuntimeAuthSnapshotRestore } from './runtime-auth-snapshot-restor
 import type { ClaudeRuntimeAuthPreparation } from './runtime-auth-types'
 
 export class ClaudeRuntimeAuthPreparationService extends ClaudeRuntimeAuthSnapshotRestore {
-  protected getPreparation(target?: ClaudeAccountSelectionTarget): ClaudeRuntimeAuthPreparation {
+  protected getPreparation(
+    target?: ClaudeAccountSelectionTarget,
+    execution?: WslAccountExecutionContext
+  ): ClaudeRuntimeAuthPreparation {
+    if (execution) {
+      assertWslAccountExecutionTarget(execution, target)
+    }
     const settings = this.store.getSettings()
     const paths = this.pathResolver.getRuntimePaths()
     const normalizedTarget = this.resolveWslDefaultTarget(
@@ -39,7 +49,11 @@ export class ClaudeRuntimeAuthPreparationService extends ClaudeRuntimeAuthSnapsh
     if (normalizeClaudeAccountSelectionTarget(normalizedTarget).runtime === 'wsl') {
       const distro =
         normalizeClaudeAccountSelectionTarget(normalizedTarget).wslDistro ?? getDefaultWslDistro()
-      const wslHome = distro ? getWslHome(distro) : null
+      const wslHome = execution
+        ? toWindowsWslUncPath(execution.home, execution.distro)
+        : distro
+          ? getWslHome(distro)
+          : null
       const wslHomeInfo = wslHome ? parseWslUncPath(wslHome) : null
       if (distro && wslHome && wslHomeInfo) {
         const windowsConfigDir = join(wslHome, '.claude')

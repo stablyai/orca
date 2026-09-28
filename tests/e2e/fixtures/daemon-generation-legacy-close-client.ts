@@ -158,7 +158,12 @@ async function main(): Promise<void> {
         return true
       },
       kill: () => false,
-      listProcesses: (options) => router.listProcesses(options),
+      listProcesses: (connectionId, options) => {
+        if (connectionId) {
+          throw new Error('Generation fixture only owns local terminals')
+        }
+        return router.listProcesses(options)
+      },
       hasPty: (ptyId) => router.hasPty(ptyId),
       getForegroundProcess: (ptyId) => router.getForegroundProcess(ptyId)
     })
@@ -183,7 +188,7 @@ async function main(): Promise<void> {
     } as never)
     runtime.attachWindow(1)
 
-    const snapshots: RuntimeMobileSessionTabsSnapshot[] = config.sessions.map((session, index) => {
+    const snapshots = config.sessions.map((session, index) => {
       const leafId = `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`
       return {
         worktree: session.worktreeId,
@@ -203,7 +208,7 @@ async function main(): Promise<void> {
             isActive: true
           }
         ]
-      }
+      } satisfies RuntimeMobileSessionTabsSnapshot
     })
     runtime.syncWindowGraph(1, {
       tabs: snapshots.map((snapshot) => ({

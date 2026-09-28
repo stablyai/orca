@@ -1,5 +1,5 @@
 import { build } from 'esbuild'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 
 const root = join(import.meta.dirname, '..', '..')
 
@@ -22,7 +22,6 @@ export const ORCAD_CHILD_ENTRY_POINTS = {
 
 export const ORCAD_EXTERNAL_MODULES = [
   'electron',
-  'node-pty',
   '@parcel/watcher',
   'fsevents',
   'bun:ffi',
@@ -76,6 +75,24 @@ export function buildOrcadLauncher(outfile) {
     external: ['./orcad-app'],
     metafile: true,
     minify: true,
+    logLevel: 'error'
+  })
+}
+
+export function buildOrcadChildEntry(entryPoint, outfile) {
+  return build({
+    entryPoints: [resolve(root, entryPoint)],
+    bundle: true,
+    platform: 'node',
+    target: ORCAD_BUN_TARGET,
+    format: 'cjs',
+    outfile,
+    external: ORCAD_EXTERNAL_MODULES,
+    plugins: [externalNativeAddons],
+    metafile: true,
+    minify: true,
+    sourcemap: false,
+    define: { 'process.env.NODE_ENV': '"production"' },
     logLevel: 'error'
   })
 }

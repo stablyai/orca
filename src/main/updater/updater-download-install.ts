@@ -39,6 +39,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
 
   protected downloadUpdate(): void {
     if (
+      this.isQuitAndInstallHandoffActive() ||
       this.localBuildSelectionInProgress ||
       this.pinnedBuildSelectionInProgress ||
       this.downloadInFlight

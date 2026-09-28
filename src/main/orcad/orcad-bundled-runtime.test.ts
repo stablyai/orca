@@ -6,7 +6,11 @@ import { ORCAD_VERSION_FILENAME } from '../../shared/orcad-artifacts'
 const fixture = vi.hoisted(() => ({
   exists: vi.fn<(path: string) => boolean>(),
   realpath: vi.fn<(path: string) => string>(),
-  spawn: vi.fn()
+  spawn: vi.fn(),
+  provider: vi.fn()
+}))
+vi.mock('../windows/windows-conpty-provider', () => ({
+  resolveWindowsConptyProvider: fixture.provider
 }))
 vi.mock('node:fs', () => ({ existsSync: fixture.exists, realpathSync: fixture.realpath }))
 vi.mock('../../shared/child-process/run-process', () => ({ spawnProcess: fixture.spawn }))
@@ -16,6 +20,7 @@ beforeEach(() => {
     ...process.versions,
     bun: ORCAD_BUN_VERSION
   })
+  fixture.provider.mockReturnValue('C:\\slot\\conpty\\conpty.dll')
   fixture.exists.mockReturnValue(true)
   fixture.realpath.mockImplementation((path) => path)
   vi.spyOn(process, 'exit').mockImplementation(() => {
@@ -27,6 +32,8 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
   vi.restoreAllMocks()
   vi.clearAllMocks()
 })
@@ -84,4 +91,22 @@ describe('bundled Orca runtime validation', () => {
     expect(() => assertBundledOrcadRuntime()).toThrow('Start orcad with its bundled runtime')
     expect(fixture.spawn).not.toHaveBeenCalled()
   })
+})
+
+it('selects the verified packaged Windows provider before application imports', () => {
+  vi.stubEnv('BUN_CONPTY_LIBRARY', 'C:\\foreign\\provider.dll')
+  vi.stubGlobal('process', { ...process, platform: 'win32', arch: 'arm64' })
+  fixture.realpath.mockReturnValue('/real/runtime')
+  assertBundledOrcadRuntime()
+  expect(fixture.provider).toHaveBeenCalledWith(expect.stringContaining('conpty'), 'arm64')
+  expect(process.env.BUN_CONPTY_LIBRARY).toBe('C:\\slot\\conpty\\conpty.dll')
+})
+
+it('reports a damaged Windows provider as a permanent install fault', () => {
+  vi.stubGlobal('process', { ...process, platform: 'win32' })
+  fixture.realpath.mockReturnValue('/real/runtime')
+  fixture.provider.mockImplementationOnce(() => {
+    throw new Error('bad hash')
+  })
+  expect(() => assertBundledOrcadRuntime()).toThrow('bundled Windows terminal provider is invalid')
 })

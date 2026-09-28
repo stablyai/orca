@@ -2,6 +2,7 @@ import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { materializeRuntime } from './build-orcad-bun.mjs'
+import { materializeWindowsConpty } from './build-windows-conpty.mjs'
 import { ORCAD_BUN_RELEASE_ASSETS, ORCAD_BUN_VERSION } from '../../src/shared/orcad-bun-runtime.ts'
 import { cliRuntimeTarget, cliRuntimeFilename } from '../bundled-cli-runtime.cjs'
 
@@ -12,6 +13,9 @@ export async function buildCliRuntime(platform, arch, projectDir = root) {
   const directory = join(projectDir, 'out', 'cli-runtime', `${platform}-${arch}`)
   mkdirSync(directory, { recursive: true })
   await materializeRuntime(target, join(directory, cliRuntimeFilename(platform)))
+  if (platform === 'win32') {
+    await materializeWindowsConpty(arch, join(directory, 'conpty'))
+  }
   copyFileSync(join(root, 'resources/licenses/bun/LICENSE.md'), join(directory, 'LICENSE.md'))
   writeFileSync(
     join(directory, 'runtime.json'),

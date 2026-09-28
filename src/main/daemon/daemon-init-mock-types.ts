@@ -1,3 +1,4 @@
+import type { DaemonFreshSpawnAdmission } from './daemon-fresh-spawn-admission'
 import type { Mock } from 'vitest'
 
 /** Fake DaemonSpawner instance every mocked `new DaemonSpawner()` records. */
@@ -16,6 +17,7 @@ export type MockAdapter = {
   options: {
     socketPath: string
     tokenPath: string
+    freshSpawnAdmission?: DaemonFreshSpawnAdmission
     historyPath?: string
     packagedAppVersion?: string | null
     respawn?: (
@@ -46,7 +48,7 @@ export type MockAdapterConstructor = new (opts: MockAdapter['options']) => MockA
 
 /** Handle the fake spawner hands back from ensureRunning/getHandle. */
 export type MockSpawnerHandle = {
-  mode?: 'degraded-new-pty-fallback'
+  mode?: 'fresh-spawns-unavailable'
   adopted?: true
   releaseAdoptionLease?: () => void
   shutdown: () => Promise<void>
@@ -66,9 +68,8 @@ export type LaunchedDaemonIdentity = {
   launchNonce: string
 }
 
-/** Local (non-daemon) PTY provider the degraded/fallback paths install. */
+/** Local provider fixture for daemon initialization tests. */
 export type MockLocalPtyProvider = {
-  routesFreshSpawnsToLocalProvider: undefined
   spawn: Mock<(opts: { sessionId?: string }) => Promise<{ id: string }>>
   attach: Mock<() => Promise<void>>
   hasPty: Mock<() => boolean>
@@ -95,7 +96,7 @@ export type MockLocalPtyProvider = {
 export type EnsureRunningOverride = () => Promise<{
   socketPath: string
   tokenPath: string
-  mode?: 'degraded-new-pty-fallback'
+  mode?: 'fresh-spawns-unavailable'
   adopted?: true
 }>
 

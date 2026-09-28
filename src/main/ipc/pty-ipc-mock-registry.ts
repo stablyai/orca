@@ -95,10 +95,6 @@ export const fsModuleMock = () => ({
   }
 })
 
-export const nodePtyModuleMock = () => ({
-  spawn: spawnMock
-})
-
 // Why: these suites force darwin on non-macOS hosts; isolate the PAM probe while preserving other child_process APIs.
 export const childProcessModuleMock = (original: Record<string, unknown>) => ({
   ...original,
@@ -142,6 +138,7 @@ export const piTitlebarExtensionModuleMock = () => ({
 })
 
 export const pwshModuleMock = () => ({
+  isPwshAvailable: isPwshAvailableMock,
   isPwshAvailableAsync: isPwshAvailableMock
 })
 

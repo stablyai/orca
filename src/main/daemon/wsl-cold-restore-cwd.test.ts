@@ -38,3 +38,24 @@ describe('normalizeWslColdRestoreCwd', () => {
     ).toBe('\\\\server\\x')
   })
 })
+
+describe('guest-owned history paths', () => {
+  it.each([
+    ['/home/jin', '/home/jin'],
+    ['\\\\wsl.localhost\\Ubuntu\\home\\jin', '/home/jin'],
+    ['\\\\wsl$\\ubuntu\\home\\jin', '/home/jin'],
+    ['\\\\wsl.localhost\\Debian\\home\\jin', '/home/guest'],
+    ['C:\\Users\\jin', '/home/guest'],
+    ['relative/path', '/home/guest'],
+    ['//foreign/share', '/home/guest']
+  ])('keeps %s inside the selected Linux guest', (recoveredCwd, expected) => {
+    expect(
+      normalizeWslColdRestoreCwd({
+        ...base,
+        guestExecution: true,
+        requestedCwd: '/home/guest',
+        recoveredCwd
+      })
+    ).toBe(expected)
+  })
+})

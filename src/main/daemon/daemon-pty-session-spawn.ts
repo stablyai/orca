@@ -1,3 +1,4 @@
+import { admitDaemonSpawn } from './daemon-fresh-spawn-admission'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
 import { CODEX_SHELL_READY_TIMEOUT_MS } from './session-shell-ready-barrier'
@@ -17,9 +18,10 @@ import { shellReadyMarkerComesFromLineEditor } from '../../shared/shell-ready-ma
 import { getRecoveredHistorySeedSegments } from './terminal-history-seed-segments'
 import { AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION, type CreateOrAttachResult } from './types'
 import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
+import { guestDaemonSpawnOptions } from './daemon-guest-spawn-options'
 import { resolveWslSessionContext } from './wsl-session-context'
 import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
-import { resolveUnixShellPath } from '../providers/local-pty-utils'
+import { resolveUnixShellPath } from '../providers/pty-spawn-validation'
 import type { PtySpawnOptions, PtySpawnResult } from '../providers/types'
 import { injectHistoryEnv, injectWslFishHistoryEnv, logHistoryInjection } from '../terminal-history'
 import { addWslEnvKeys } from '../wsl-env'
@@ -63,6 +65,9 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
   }
 
   protected withHistoryIsolation(opts: PtySpawnOptions): PtySpawnOptions {
+    if (this.guest) {
+      return guestDaemonSpawnOptions(this.guest, opts)
+    }
     const wslContext = resolveWslSessionContext({
       cwd: opts.cwd,
       sessionId: opts.sessionId,
@@ -113,16 +118,18 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     }
     const requestedSessionId = opts.sessionId!
     // Why: v30 daemons survive upgrades; reject their accidental create result before publication.
-    const attachOnly = opts.attachOnly === true
+    let attachOnly = opts.attachOnly === true
     const emulateLegacyAttachOnly =
       attachOnly && this.protocolVersion < STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION
     let sessionId = requestedSessionId
-    let wslDistro = resolveWslSessionContext({
-      cwd: opts.cwd,
-      sessionId,
-      shellOverride: opts.shellOverride,
-      terminalWindowsWslDistro: opts.terminalWindowsWslDistro
-    })?.distro
+    let wslDistro =
+      this.guest?.distro ??
+      resolveWslSessionContext({
+        cwd: opts.cwd,
+        sessionId,
+        shellOverride: opts.shellOverride,
+        terminalWindowsWslDistro: opts.terminalWindowsWslDistro
+      })?.distro
     let activeSpawnContext: DaemonPtySpawnContext | null = null
     const freezeHistory = async (): Promise<void> => {
       if (!this.historyManager) {
@@ -167,8 +174,9 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
         cwd:
           normalizeWslColdRestoreCwd({
             recoveredCwd: restoreInfo.cwd,
-            requestedCwd: opts.cwd ?? resolveSafePtyDefaultCwd(),
-            wslDistro: recoveryWslDistro
+            requestedCwd: opts.cwd ?? this.guest?.defaultCwd ?? resolveSafePtyDefaultCwd(),
+            wslDistro: recoveryWslDistro,
+            guestExecution: this.guest !== null
           }) ?? ''
       }
     }
@@ -184,6 +192,13 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     }
 
     await this.ensureConnected()
+    opts = await admitDaemonSpawn(
+      this.freshSpawnAdmission,
+      opts,
+      this.protocolVersion,
+      async () => (await this.getAppliedSize(sessionId)) !== null
+    )
+    attachOnly = opts.attachOnly === true
     // Why before createOrAttach: a preserved daemon may still think this session is backgrounded — from
     // a v19 that thins without a recoverable seq, or (#9993) from a pre-v29 that a previous desktop
     // handed 2031 scan authority to and can never retract it. Clear it before any bytes are attached.
@@ -213,11 +228,13 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     let effectiveCols = restoreInfo?.cols ?? opts.cols
     let effectiveRows = restoreInfo?.rows ?? opts.rows
 
-    const effectiveShellPath =
-      process.platform !== 'win32' && opts.command
+    const effectiveShellPath = this.guest
+      ? opts.shellOverride || this.guest.defaultShell
+      : process.platform !== 'win32' && opts.command
         ? resolveUnixShellPath(opts.shellOverride || resolvePtyShellPath(opts.env ?? {}))
         : ''
-    const shellReadySupported = shellPathSupportsPtyStartupBarrier(effectiveShellPath)
+    const shellReadySupported =
+      Boolean(opts.command) && shellPathSupportsPtyStartupBarrier(effectiveShellPath)
     const immediateMarker = shellReadyMarkerComesFromLineEditor(effectiveShellPath)
     const shellReadyTimeoutMs =
       shellReadySupported &&
@@ -252,7 +269,7 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     }
     activeSpawnContext = context
     const result = await this.createOrAttachSpawn(context, context.historySeedSegments)
-    if (result.isNew && !attachOnly) {
+    if (result.isNew && !attachOnly && !this.guest) {
       // Not awaited: the app-side read behind it can sit on an unanswered macOS folder prompt.
       void reportDaemonPtyCwdVerdict({
         cwd: effectiveCwd,
@@ -288,17 +305,12 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     }
     this.clearExitedSessionState(sessionId, matchingExit.code, result.incarnationId)
     // Why: stream exit can beat the control reply or post-reply recovery work; return proof without republishing dead state.
-    const exitedResult: PtySpawnResult = {
+    return {
       id: sessionId,
       exitedBeforeSpawnReply: true,
       ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
       ...(result.agentSessionEnsure ? { agentSessionEnsure: result.agentSessionEnsure } : {}),
       ...(!result.isNew ? { isReattach: true } : {})
     }
-    return exitedResult
-  }
-
-  didExitBeforeSpawnReply(result: PtySpawnResult): boolean {
-    return result.exitedBeforeSpawnReply === true
   }
 }

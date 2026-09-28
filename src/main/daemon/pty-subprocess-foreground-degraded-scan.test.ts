@@ -1,3 +1,4 @@
+import type { BunPtySpawnArgs } from './pty-subprocess/bun-pty-process-contract'
 // Guards the daemon foreground identity against Windows scan degradation: a
 // timed-out CIM scan (available:false) or an incomplete snapshot (available:true
 // with the agent row missing) must not retire a still-working agent and make
@@ -22,8 +23,15 @@ const {
   jobReadableMock: vi.fn()
 }))
 
-vi.mock('node-pty', () => ({ spawn: spawnMock }))
-vi.mock('../pwsh', () => ({ isPwshAvailable: isPwshAvailableMock }))
+vi.mock('./pty-subprocess/bun-pty-process', () => ({
+  canUseBunPty: () => true,
+  spawnBunPty: ({ file, args, ...options }: BunPtySpawnArgs) =>
+    spawnMock(file, args, { ...options, name: options.env.TERM ?? 'xterm-256color' })
+}))
+vi.mock('../pwsh', () => ({
+  isPwshAvailable: isPwshAvailableMock,
+  isPwshAvailableAsync: isPwshAvailableMock
+}))
 
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'

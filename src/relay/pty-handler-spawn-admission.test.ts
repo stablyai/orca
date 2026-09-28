@@ -208,7 +208,7 @@ describe('PtyHandler', () => {
     expect(handler.activePtyCount).toBe(1)
   })
 
-  it('retains an operation fence when publication fails after native spawn', async () => {
+  it('retains an operation fence after cleaning up failed native publication', async () => {
     const operationId = 'f'.repeat(43)
     mockPtySpawn.mockReturnValue({
       ...mockPtyInstance,
@@ -229,7 +229,8 @@ describe('PtyHandler', () => {
       'listener publication failed'
     )
     expect(mockPtySpawn).toHaveBeenCalledOnce()
-    expect(handler.activePtyCount).toBe(1)
+    expect(mockPtyInstance.kill).toHaveBeenCalledWith('SIGKILL')
+    expect(handler.activePtyCount).toBe(0)
   })
 
   it('releases a canceled operation before Bun spawn', async () => {

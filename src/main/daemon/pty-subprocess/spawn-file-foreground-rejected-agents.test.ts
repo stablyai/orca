@@ -1,4 +1,4 @@
-import type { IPty } from 'node-pty'
+import type { TerminalProcess } from '../../../shared/terminal-process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProcessTableRow } from '../../../shared/process-table-snapshot'
 import { __setWindowsProcessTreeLoaderForTests } from '../../windows/windows-process-table'
@@ -12,11 +12,10 @@ vi.mock('../../providers/windows-pty-job-membership', () => ({
   readWindowsPtyJobProcessIds: members
 }))
 
-const proc: IPty = {
+const proc: TerminalProcess = {
   pid: 100,
   cols: 80,
   rows: 24,
-  handleFlowControl: false,
   process: 'powershell.exe',
   onData: () => ({ dispose() {} }),
   onExit: () => ({ dispose() {} }),

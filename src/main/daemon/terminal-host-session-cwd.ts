@@ -6,6 +6,10 @@ export async function resolveTerminalHostSessionCwd(session: Session): Promise<s
   if (tracked) {
     return tracked
   }
-  const resolved = await resolveProcessCwd(session.pid)
+  const shellPid = session.shellProcessId
+  if (!shellPid) {
+    return null
+  }
+  const resolved = await resolveProcessCwd(shellPid)
   return resolved || null
 }

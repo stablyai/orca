@@ -5,7 +5,7 @@
  * The reporter's decisive run had the command echo doubled while that same
  * command's output was clean, so the shell never received doubled bytes; and the
  * doubled text pasted doubled into Notepad, so it was really in the buffer. A
- * stream-level assertion (windows-conpty-wide-char-duplication.node-pty.test.ts)
+ * stream-level assertion (windows-conpty-wide-char-duplication.bun.test.ts)
  * cannot see that: every byte of a bad repaint is legitimate — cursor
  * positioning plus text — and only the cells it lands on are wrong.
  *

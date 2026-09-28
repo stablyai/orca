@@ -54,6 +54,25 @@ describe('PtyHandler', () => {
     await endPtyHandlerTest(handler, originalPlatform)
   })
 
+  it('kills and removes a native PTY when buffered output rejects listener admission', async () => {
+    const kill = vi.fn()
+    const destroy = vi.fn()
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      kill,
+      destroy,
+      onData: vi.fn(() => {
+        throw new Error('startup output overflow')
+      })
+    })
+    await expect(dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })).rejects.toThrow(
+      'startup output overflow'
+    )
+    expect(kill).toHaveBeenCalledWith('SIGKILL')
+    expect(destroy).toHaveBeenCalledOnce()
+    expect(await dispatcher.callRequest('pty.listProcesses')).toEqual([])
+  })
+
   it('invokes the exit listener with the spawn-time paneKey', async () => {
     let onExitCb: ((evt: { exitCode: number }) => void) | undefined
     mockPtySpawn.mockReturnValue({

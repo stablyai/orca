@@ -117,7 +117,7 @@ export function createBunPtyProducerFlowControl(
         // Partial signals require a fresh transition even if the requested state changes again.
         state = 'uncertain'
         if (nextPaused) {
-          // Signal delivery is asynchronous; prove the shell stopped before suspending its jobs.
+          // Confirm root signal delivery; a login wrapper may still have a separately running shell.
           if (!isPosixPtyRootStopped(table, options.processHandle.pid)) {
             retryTransition()
             return

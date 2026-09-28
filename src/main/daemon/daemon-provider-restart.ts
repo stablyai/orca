@@ -1,5 +1,5 @@
+import { DaemonFreshSpawnAdmission } from './daemon-fresh-spawn-admission'
 import { rebindLocalProviderListeners, unbindLocalProviderListeners } from '../ipc/pty'
-import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
 import {
   cleanupFailedDaemonAdoption,
   releaseDaemonAdoptionLease,
@@ -13,12 +13,15 @@ import {
 import { trackDaemonRetired } from './daemon-lifecycle-event'
 import { attributeNextDaemonReplacement } from './daemon-out-of-process-launcher'
 import {
+  createDaemonProviderRouting,
+  resetDaemonFreshSpawnAdmission,
   disposeProviderSubscriptionsOnly,
   getCurrentDaemonAdapter,
   getLegacyDaemonAdapters,
   type DaemonProvider
 } from './daemon-provider-routing'
 import { getDaemonProvider, getDaemonSpawner, replaceDaemonProvider } from './daemon-provider-state'
+import { retryDaemonPtyProvider } from './daemon-provider-init'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import type { DaemonRespawnReason } from './daemon-pty-runtime-state'
 import { DaemonPtyRouter } from './daemon-pty-router'
@@ -42,7 +45,8 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
   const currentSpawner = getDaemonSpawner()
   const currentAdapter = getDaemonProvider()
   if (!currentSpawner || !currentAdapter) {
-    throw new Error('restartDaemon called before initDaemonPtyProvider')
+    await retryDaemonPtyProvider()
+    return { killedCount: 0 }
   }
 
   const runtimeDir = getRuntimeDir()
@@ -53,24 +57,16 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
   const legacyAdapters = getLegacyDaemonAdapters(currentAdapter)
 
   // Step 1: synthesize pty:exit for every active session BEFORE teardown — the daemon's shutdown path never fans onExit to clients (session.ts:246-252), so the renderer would otherwise never see exits.
-  const fallbackKilledCount =
-    currentAdapter instanceof DegradedDaemonPtyProvider
-      ? await currentAdapter.shutdownFallbackSessions()
-      : 0
   const currentDaemonSessionIds =
-    currentAdapter instanceof DegradedDaemonPtyProvider
-      ? currentAdapter.getCurrentDaemonSessionIds()
-      : []
-  const killedCount =
-    new Set([...currentOnly.getActiveSessionIds(), ...currentDaemonSessionIds]).size +
-    fallbackKilledCount
+    currentAdapter instanceof DaemonPtyRouter ? currentAdapter.getCurrentDaemonSessionIds() : []
+  const killedCount = new Set([...currentOnly.getActiveSessionIds(), ...currentDaemonSessionIds])
+    .size
   currentOnly.fanoutSyntheticExits(-1)
-  if (currentAdapter instanceof DegradedDaemonPtyProvider) {
+  if (currentAdapter instanceof DaemonPtyRouter) {
     currentAdapter.fanoutCurrentDaemonSyntheticExits(-1)
   }
 
-  // Step 2: detach renderer listeners — after step 1 (so synthesized exits land) and before step 6 (no stale binding).
-  unbindLocalProviderListeners()
+  // Keep unaffected guest streams subscribed while replacement awaits I/O.
 
   // Step 3: kill the current-protocol daemon process; legacy adapters untouched.
   let info: Awaited<ReturnType<DaemonSpawner['ensureRunning']>>
@@ -81,13 +77,20 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
     currentSpawner.resetHandle()
     info = await currentSpawner.ensureRunning()
   } catch (error) {
-    // Why: old provider stays authoritative until the final swap; rebind since relaunch failed after teardown.
+    // The prior provider remains authoritative if replacement fails.
     rebindLocalProviderListeners()
     throw error
   }
 
   // Step 5: build a fresh current adapter against the respawned daemon.
+  const freshSpawnAdmission = new DaemonFreshSpawnAdmission(null)
+  resetDaemonFreshSpawnAdmission(
+    freshSpawnAdmission,
+    info,
+    currentSpawner.getHandle()?.mode === 'fresh-spawns-unavailable'
+  )
   const newCurrent = new DaemonPtyAdapter({
+    freshSpawnAdmission,
     socketPath: info.socketPath,
     tokenPath: info.tokenPath,
     pidPath: getDaemonPidPath(runtimeDir),
@@ -112,7 +115,12 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
         attributeNextDaemonReplacement(reason)
       }
       currentSpawner.resetHandle()
-      await currentSpawner.ensureRunning()
+      const replacement = await currentSpawner.ensureRunning()
+      resetDaemonFreshSpawnAdmission(
+        freshSpawnAdmission,
+        replacement,
+        currentSpawner.getHandle()?.mode === 'fresh-spawns-unavailable'
+      )
       return takeDaemonAdoptionLeaseRelease(currentSpawner.getHandle())
     }
   })
@@ -122,11 +130,7 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
     await newCurrent.establishLifecycleLease()
     releaseDaemonAdoptionLease(currentSpawner.getHandle())
 
-    // Re-wrap in a router only if legacy adapters exist; they're preserved by reference and still route to their pre-upgrade daemons.
-    newProvider =
-      legacyAdapters.length > 0
-        ? new DaemonPtyRouter({ current: newCurrent, legacy: legacyAdapters })
-        : newCurrent
+    newProvider = createDaemonProviderRouting(newCurrent, legacyAdapters, freshSpawnAdmission)
     if (newProvider instanceof DaemonPtyRouter) {
       await newProvider.discoverLegacySessions()
     }
@@ -140,7 +144,7 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
     } catch (caught) {
       cleanupError = caught
     }
-    // Previous provider stays module-authoritative until the swap; restore its renderer bindings when adoption fails.
+    // Reconcile guest registrations against the still-authoritative provider.
     rebindLocalProviderListeners()
     if (cleanupError) {
       throw new AggregateError([error, cleanupError], 'Daemon restart and cleanup both failed')
@@ -149,6 +153,7 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
   }
 
   // Drain the old router's subscriptions via the router-only variant (plain dispose() would tear down the shared legacy adapters), after the new provider exists (no unhandled events) and before the swap (atomic for the renderer).
+  unbindLocalProviderListeners()
   disposeProviderSubscriptionsOnly(currentAdapter)
 
   // Step 6: swap module state (adapter + localProvider) atomically.

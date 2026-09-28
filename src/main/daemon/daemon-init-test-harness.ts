@@ -125,7 +125,6 @@ function createDaemonInitMockState(): DaemonInitMockState {
   } = { current: null }
 
   const localFallbackProvider: MockLocalPtyProvider = {
-    routesFreshSpawnsToLocalProvider: undefined,
     spawn: vi.fn(async (opts: { sessionId?: string }) => ({
       id: opts.sessionId ?? 'local-fallback-pty'
     })),

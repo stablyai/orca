@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
-import type * as pty from 'node-pty'
+import type { TerminalProcess } from '../../shared/terminal-process'
 import { createDaemonPtySubprocessHandle } from './pty-subprocess/subprocess-handle'
 
 vi.mock('../pty/posix-pty-process-groups', () => ({
@@ -22,7 +22,6 @@ function nativePort() {
     cols: 80,
     rows: 24,
     process: 'audit-shell',
-    handleFlowControl: false,
     onData(listener: (value: string) => void) {
       data.on('data', listener)
       return { dispose: () => data.off('data', listener) }
@@ -38,7 +37,7 @@ function nativePort() {
     clear: vi.fn(),
     kill: vi.fn(),
     destroy: vi.fn()
-  } satisfies pty.IPty & { destroy: () => void }
+  } satisfies TerminalProcess & { destroy: () => void }
   return {
     process: process_,
     emitData: (value: string) => data.emit('data', value),

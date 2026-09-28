@@ -129,7 +129,7 @@ describe('skill-sharing release workflow', () => {
 
   it('loads each exact Linux package on the glibc 2.31 floor', () => {
     const build = workflow.jobs.build
-    const smoke = stepNamed(build, 'Load packaged node-pty on the Linux floor')
+    const smoke = stepNamed(build, 'Qualify packaged Bun terminal on the Linux floor')
     const linuxEntries = build.strategy.matrix.include.filter(({ platform }) =>
       platform.startsWith('linux-')
     )
@@ -142,7 +142,7 @@ describe('skill-sharing release workflow', () => {
       })
     ])
     expect(smoke.if).toContain("matrix.platform == 'linux-x64'")
-    expect(smoke.with.command).toContain('run-linux-packaged-node-pty-floor-smoke.mjs')
+    expect(smoke.with.command).toContain('run-linux-packaged-terminal-floor-smoke.mjs')
     expect(smoke.with.command).toContain('${{ matrix.unpacked_dir }}')
   })
 })

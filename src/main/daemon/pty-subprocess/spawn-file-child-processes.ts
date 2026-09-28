@@ -1,4 +1,4 @@
-import type { IPty } from 'node-pty'
+import type { TerminalProcess } from '../../../shared/terminal-process'
 import {
   getCommandTokenPathBasename,
   getFirstCommandToken
@@ -44,7 +44,9 @@ export function inspectSpawnFileChildProcessesFromRows(
     : 'no-children'
 }
 
-export function inspectSpawnFileWindowsChildProcesses(proc: IPty): PtyChildProcessVerdict {
+export function inspectSpawnFileWindowsChildProcesses(
+  proc: TerminalProcess
+): PtyChildProcessVerdict {
   const members = readWindowsPtyJobProcessIds(proc)
   return members === null ? 'unverifiable' : members.size > 1 ? 'children' : 'no-children'
 }

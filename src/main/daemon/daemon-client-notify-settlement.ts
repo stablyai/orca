@@ -1,4 +1,4 @@
-import type { Socket } from 'node:net'
+import type { Duplex } from 'node:stream'
 import { encodeNdjson } from './ndjson'
 import {
   WRITE_ACCEPTED,
@@ -8,7 +8,7 @@ import {
 } from '../../shared/pty-write-settlement'
 
 export type NotifySettlementRequest = {
-  socket: Socket
+  socket: Duplex
   message: unknown
   timeoutMs: number
   // Why: a notify that never drains is the only local evidence a dead endpoint leaves.

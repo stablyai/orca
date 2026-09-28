@@ -14,6 +14,7 @@ export class PtyPreListenerEvents {
   private onExitCb: ExitListener | null = null
   private pendingData: string[] = []
   private pendingDataChars = 0
+  private pendingDataError: Error | undefined
   private pendingExitCode: number | null = null
   private pendingExitCause: TerminalExitCause | null = null
 
@@ -22,16 +23,17 @@ export class PtyPreListenerEvents {
       this.onDataCb(data)
       return
     }
+    if (this.pendingDataError) {
+      return
+    }
+    if (this.pendingDataChars + data.length > PENDING_PRE_LISTENER_DATA_MAX_CHARS) {
+      this.pendingDataError = new Error('Terminal output arrived before its consumer was installed')
+      this.pendingData = []
+      this.pendingDataChars = 0
+      return
+    }
     this.pendingData.push(data)
     this.pendingDataChars += data.length
-    while (this.pendingDataChars > PENDING_PRE_LISTENER_DATA_MAX_CHARS) {
-      const removed = this.pendingData.shift()
-      if (removed === undefined) {
-        this.pendingDataChars = 0
-        return
-      }
-      this.pendingDataChars -= removed.length
-    }
   }
 
   acceptExit(args: {
@@ -50,6 +52,9 @@ export class PtyPreListenerEvents {
   }
 
   onData(cb: DataListener): void {
+    if (this.pendingDataError) {
+      throw this.pendingDataError
+    }
     this.onDataCb = cb
     this.flushData()
   }

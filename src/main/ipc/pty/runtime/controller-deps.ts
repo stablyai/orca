@@ -1,3 +1,5 @@
+import type { WslAccountExecutionContext } from '../../../wsl/wsl-account-execution-context'
+import type { WslDaemonSessions } from '../../../wsl/wsl-daemon-sessions'
 import type { PtyRendererDelivery } from '../session'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { Store } from '../../../persistence'
@@ -26,6 +28,7 @@ export type PtyRuntimeControllerDeps = {
   getLocalPtyStartupPromise: (connectionId?: string | null) => Promise<void> | undefined
   getLocalPtyProviderStartupPromise: (connectionId?: string | null) => Promise<void> | undefined
   prepareCodexResumeHome: (args: {
+    wslExecution?: WslAccountExecutionContext
     connectionId?: string | null
     launchAgent?: TuiAgent
     providerSession?: AgentProviderSessionMetadata
@@ -77,6 +80,7 @@ export type PtyRuntimeControllerDeps = {
   getSelectedCodexHomePath?: GetSelectedCodexHomePath
   prepareClaudeAuth?: PrepareClaudeAuth
   options?: {
+    wslDaemonSessions?: WslDaemonSessions
     onCodexHomePtySpawned?: (args: CodexHomePtySpawnedLifecycleArgs) => void
     prepareCodexSessionResume?: PrepareCodexSessionResume
   }

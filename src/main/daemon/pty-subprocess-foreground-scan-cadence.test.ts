@@ -1,3 +1,4 @@
+import type { BunPtySpawnArgs } from './pty-subprocess/bun-pty-process-contract'
 // Regression guard: bound the volume of whole-process-table scans the daemon
 // schedules for persisted sessions. On Windows each agent-foreground refresh
 // forks a powershell.exe/CIM whole-table scan (the daemon-side analogue of
@@ -10,19 +11,22 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import type * as LocalPtyUtils from '../providers/local-pty-utils'
+import type * as PtySpawnValidation from '../providers/pty-spawn-validation'
 const { spawnMock, isPwshAvailableMock, resolveAgentForegroundProcessMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
   isPwshAvailableMock: vi.fn(),
   resolveAgentForegroundProcessMock: vi.fn()
 }))
 
-vi.mock('node-pty', () => ({
-  spawn: spawnMock
+vi.mock('./pty-subprocess/bun-pty-process', () => ({
+  canUseBunPty: () => true,
+  spawnBunPty: ({ file, args, ...options }: BunPtySpawnArgs) =>
+    spawnMock(file, args, { ...options, name: options.env.TERM ?? 'xterm-256color' })
 }))
 
 vi.mock('../pwsh', () => ({
-  isPwshAvailable: isPwshAvailableMock
+  isPwshAvailable: isPwshAvailableMock,
+  isPwshAvailableAsync: isPwshAvailableMock
 }))
 
 // Resolve PowerShell family names to deterministic absolute paths so these
@@ -40,8 +44,8 @@ vi.mock('../providers/windows-powershell-executable', () => ({
   getWindowsCmdPath: () => CMD_ABS
 }))
 
-vi.mock('../providers/local-pty-utils', async (importOriginal) => {
-  const actual = await importOriginal<typeof LocalPtyUtils>()
+vi.mock('../providers/pty-spawn-validation', async (importOriginal) => {
+  const actual = await importOriginal<typeof PtySpawnValidation>()
   return {
     ...actual,
     getNodePtySpawnHelperCandidates: () => [import.meta.filename]

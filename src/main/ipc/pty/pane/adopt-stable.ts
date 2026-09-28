@@ -1,7 +1,7 @@
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { Store } from '../../../persistence'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import { getProvider } from '../provider/registry'
+import { getProvider, getProviderForPty } from '../provider/registry'
 import { makePaneSpawnReservationKey, paneSpawnReservationsByOwnerKey } from './spawn-reservation'
 import {
   attachStablePaneOwner,
@@ -60,7 +60,9 @@ export async function adoptStablePane(
   const adoption = attachStablePaneOwner({
     runtime,
     store,
-    provider: getProvider(args.connectionId),
+    provider: owner.ptyId.startsWith('wsl:')
+      ? getProviderForPty(owner.ptyId)
+      : getProvider(args.connectionId),
     spawnOptions: {
       cols: args.cols,
       rows: args.rows,

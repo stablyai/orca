@@ -20,8 +20,8 @@ vi.mock('../codex-cli/command', () => ({
   resolveCodexCommand: resolveCodexCommandMock
 }))
 
-vi.mock('node-pty', () => ({
-  spawn: ptySpawnMock
+vi.mock('./hidden-daemon-pty', () => ({
+  spawnHiddenDaemonPty: ptySpawnMock
 }))
 
 vi.mock('./codex-auth-presence', () => ({

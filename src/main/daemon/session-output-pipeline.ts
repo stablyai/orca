@@ -11,12 +11,14 @@ export function createSessionOutputPipeline(opts: {
   scrollback?: number | undefined
   wslDistro?: string | undefined
   historySeedChunks?: readonly string[] | undefined
+  requireSynchronousOutput?: boolean
   subprocess: SubprocessHandle
   isAlive: () => boolean
 }): { output: SessionOutputPlane; recoveryBarrier: TerminalShellRecoveryBarrier } {
   const { subprocess, isAlive } = opts
   let barrier: TerminalShellRecoveryBarrier | null = null
   const output = new SessionOutputPlane({
+    requireSynchronousOutput: opts.requireSynchronousOutput,
     cols: opts.cols,
     rows: opts.rows,
     scrollback: opts.scrollback,

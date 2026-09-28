@@ -1,8 +1,9 @@
+import type { BunPtySpawnArgs } from './pty-subprocess/bun-pty-process-contract'
 // A canceled cwd probe must leave the daemon as the one cancellation identity
 // the wire carries. Clients key recovery off it, and an unrecognized message
 // takes the rollback branch that closes a terminal the user still has (#7718).
 import { describe, expect, it, vi } from 'vitest'
-import type * as LocalPtyUtils from '../providers/local-pty-utils'
+import type * as PtySpawnValidation from '../providers/pty-spawn-validation'
 
 const {
   spawnMock,
@@ -20,11 +21,18 @@ const {
   validateWorkingDirectoryAsyncMock: vi.fn()
 }))
 
-vi.mock('node-pty', () => ({ spawn: spawnMock }))
-vi.mock('../pwsh', () => ({ isPwshAvailable: isPwshAvailableMock }))
+vi.mock('./pty-subprocess/bun-pty-process', () => ({
+  canUseBunPty: () => true,
+  spawnBunPty: ({ file, args, ...options }: BunPtySpawnArgs) =>
+    spawnMock(file, args, { ...options, name: options.env.TERM ?? 'xterm-256color' })
+}))
+vi.mock('../pwsh', () => ({
+  isPwshAvailable: isPwshAvailableMock,
+  isPwshAvailableAsync: isPwshAvailableMock
+}))
 
-vi.mock('../providers/local-pty-utils', async (importOriginal) => {
-  const actual = await importOriginal<typeof LocalPtyUtils>()
+vi.mock('../providers/pty-spawn-validation', async (importOriginal) => {
+  const actual = await importOriginal<typeof PtySpawnValidation>()
   return {
     ...actual,
     resolveUnixShellPath: resolveUnixShellPathMock,

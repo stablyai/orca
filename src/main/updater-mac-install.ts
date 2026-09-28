@@ -11,8 +11,10 @@ export function registerMacUpdaterEvents({
   getKnownReleaseUrl,
   performQuitAndInstall,
   shouldDeferMacQuitForInstall,
-  sendStatus
+  sendStatus,
+  onNativeInstallEvent
 }: {
+  onNativeInstallEvent?: (event: 'ready' | 'error', error?: unknown) => void
   getCurrentStatus: () => UpdateStatus
   hasInstallableDownloadedVersion: () => boolean
   getPendingInstallVersion: () => string
@@ -22,6 +24,10 @@ export function registerMacUpdaterEvents({
   sendStatus: (status: UpdateStatus) => void
 }): void {
   if (process.platform === 'darwin') {
+    nativeUpdater.on('error', (error) => onNativeInstallEvent?.('error', error))
+    nativeUpdater.on('update-not-available', () => {
+      onNativeInstallEvent?.('error', new Error('The native updater found no update to install.'))
+    })
     nativeUpdater.on('update-downloaded', () => {
       const hasInstallableVersion = hasInstallableDownloadedVersion()
       handleMacInstallerReady(hasInstallableVersion, performQuitAndInstall, () => {
@@ -31,6 +37,7 @@ export function registerMacUpdaterEvents({
           releaseUrl: getKnownReleaseUrl()
         })
       })
+      onNativeInstallEvent?.('ready')
     })
   }
 

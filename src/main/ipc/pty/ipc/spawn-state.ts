@@ -1,4 +1,6 @@
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../../../providers/types'
+import type { WslDaemonSpawnRoute } from '../../../wsl/wsl-daemon-spawn-route'
+import type { BuildPtyHostEnvOptions } from '../host-env/types'
 import type { CodexPaneHomeRoute } from '../../../codex/codex-pane-account-registry'
 import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
@@ -36,6 +38,8 @@ export type PtyIpcSpawnState = {
   preparedProvisionalExecutionContext: boolean
   releaseWorktreeSpawn: (() => void) | undefined
   provider: IPtyProvider
+  wslGuest: WslDaemonSpawnRoute | null
+  guestHostEnvPolicy: BuildPtyHostEnvOptions | null
   preAdoptedStablePane: AdoptStablePaneResult | null
   isClaudeLaunch: boolean
   claudeAuth: ClaudeRuntimeAuthPreparation | null
@@ -114,6 +118,8 @@ export function createPtyIpcSpawnState(
     preparedProvisionalExecutionContext: false,
     releaseWorktreeSpawn: undefined,
     provider: localProvider,
+    wslGuest: null,
+    guestHostEnvPolicy: null,
     preAdoptedStablePane: null,
     isClaudeLaunch: false,
     claudeAuth: null,

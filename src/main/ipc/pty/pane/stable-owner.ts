@@ -13,10 +13,14 @@ import {
   TerminalHostGoneError,
   TerminalSessionOwnerUnverifiedError
 } from '../../../daemon/daemon-errors'
+import { stablePaneAttachProvider } from './stable-pane-attach-provider'
 import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
 import { isHostReportedPtyAbsenceError, isObservedPtyExitEvidence } from '../provider/liveness'
 import { clearProviderPtyState } from '../provider/state-cleanup'
-import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/pty-binding-span'
+export {
+  stablePanePersistenceFence,
+  persistAdmittedStablePaneBinding
+} from './stable-pane-binding-persistence'
 
 export type StablePaneOwner = {
   handle?: string
@@ -180,52 +184,11 @@ export type StablePaneSpawnContext = {
   onFreshSpawn?: (result: PtySpawnResult) => void
 }
 
-export function stablePanePersistenceFence(
-  owner: StablePaneOwner | null
-): { ptyId: string; incarnationId?: string } | undefined {
-  return owner?.hasPersistedBinding
-    ? {
-        ptyId: owner.ptyId,
-        ...(owner.persistedIncarnationId ? { incarnationId: owner.persistedIncarnationId } : {})
-      }
-    : undefined
-}
-
-export async function persistAdmittedStablePaneBinding(args: {
-  store: Store | undefined
-  owner: StablePaneOwner | null
-  result: PtySpawnResult
-  worktreeId: string | undefined
-  startupCwd: string | undefined
-  connectionId: string | null | undefined
-}): Promise<boolean> {
-  const expectedBinding = stablePanePersistenceFence(args.owner)
-  if (!args.store || !args.owner || !args.worktreeId || !expectedBinding) {
-    return false
-  }
-  const persisted = await args.store.persistPtyBinding(
-    {
-      worktreeId: args.worktreeId,
-      tabId: args.owner.tabId,
-      leafId: args.owner.leafId,
-      ptyId: args.result.id,
-      ...(args.result.incarnationId ? { incarnationId: args.result.incarnationId } : {}),
-      ...(args.startupCwd ? { startupCwd: args.startupCwd } : {}),
-      expectedBinding,
-      origin: spawnCommitBindingOrigin(args.result)
-    },
-    args.connectionId ? toSshExecutionHostId(args.connectionId) : undefined
-  )
-  if (persisted === false) {
-    throw new Error('terminal_pane_owner_changed')
-  }
-  return true
-}
-
 export async function attachStablePaneOwner(
   args: StablePaneSpawnContext & { owner: StablePaneOwner }
 ): Promise<{ result: PtySpawnResult; owner: StablePaneOwner } | null> {
-  const { owner, provider, runtime, spawnOptions } = args
+  const { owner, runtime, spawnOptions } = args
+  const { provider, assertOwnerConnected } = stablePaneAttachProvider(owner.ptyId, args.provider)
   let result: PtySpawnResult
   try {
     result = await provider.spawn({
@@ -245,6 +208,7 @@ export async function attachStablePaneOwner(
       onPtySpawnCommitted: undefined
     })
   } catch (error) {
+    assertOwnerConnected()
     if (error instanceof TerminalSessionOwnerUnverifiedError) {
       throw new Error('terminal_pane_owner_unverified')
     }
@@ -265,11 +229,7 @@ export async function attachStablePaneOwner(
     ) {
       throw new Error('terminal_pane_owner_changed')
     }
-    // `pty.attach` answers absent both for a pid the relay probed and found gone and for an id its
-    // session map never had — every id minted before a relay restart, checked against nothing. Only
-    // the marked half observed the process, so only it may certify a death; the rest publishes the
-    // stop sentinel its sibling handlePtyReattachFailure publishes, which every reader resolves to
-    // `stop_unverified` (docs/reference/ssh-execution-boundary.md).
+    // Only observed exit evidence certifies death; relay-map absence remains unverifiable.
     runtime?.onPtyExit(
       owner.ptyId,
       UNVERIFIED_PROCESS_EXIT_CODE,
@@ -289,6 +249,7 @@ export async function attachStablePaneOwner(
     }
     return null
   }
+  assertOwnerConnected()
   if (
     result.id !== owner.ptyId ||
     result.isReattach !== true ||

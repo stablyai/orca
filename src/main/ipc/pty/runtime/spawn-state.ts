@@ -1,3 +1,4 @@
+import type { WslDaemonSpawnRoute } from '../../../wsl/wsl-daemon-spawn-route'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../../../providers/types'
 import type { CodexPaneHomeRoute } from '../../../codex/codex-pane-account-registry'
 import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
@@ -24,6 +25,7 @@ export type RuntimePtySpawnState = {
   preAdoptedStablePane: AdoptStablePaneResult | null
   reattachedCodexHomeRoutes: Map<string, CodexPaneHomeRoute | null>
   cwd: string | undefined
+  wslGuest: WslDaemonSpawnRoute | null
   provider: IPtyProvider
   isClaudeLaunch: boolean
   terminalRuntimeOptions: { shellOverride?: string; terminalWindowsWslDistro?: string | null }
@@ -144,6 +146,7 @@ export function createRuntimePtySpawnState(
     reattachedCodexHomeRoutes: new Map(),
     cwd: undefined,
     provider: localProvider,
+    wslGuest: null,
     isClaudeLaunch: false,
     terminalRuntimeOptions: {},
     daemonShellOverride: undefined,

@@ -1,3 +1,7 @@
+import {
+  assertWslAccountExecutionTarget,
+  type WslAccountExecutionContext
+} from '../wsl/wsl-account-execution-context'
 import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
 import { startSystemCodexSessionBridgeInBackground } from '../codex/codex-session-bridge'
 import {
@@ -40,13 +44,17 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
   prepareForCodexLaunch(
     target?: CodexAccountSelectionTarget,
     launchEnv?: NodeJS.ProcessEnv,
-    options?: { unavailableManagedHomePath?: string }
+    options?: { unavailableManagedHomePath?: string; wslExecution?: WslAccountExecutionContext }
   ): string | null {
+    const execution = options?.wslExecution ? Object.freeze({ ...options.wslExecution }) : undefined
+    if (execution) {
+      assertWslAccountExecutionTarget(execution, target)
+    }
     if (target?.runtime === 'wsl') {
       const wslTarget = this.resolveWslDefaultTarget(target)
-      const homePath = this.getWslCodexHomePathForSelection(wslTarget)
-      this.startLegacyWslAuthDrain(wslTarget)
-      this.finishWslLaunchPreparation(wslTarget, homePath)
+      const homePath = this.getWslCodexHomePathForSelection(wslTarget, execution)
+      this.startLegacyWslAuthDrain(wslTarget, { wslExecution: execution })
+      this.finishWslLaunchPreparation(wslTarget, homePath, execution)
       return homePath
     }
     const selfContainedAccount = this.getSelfContainedManagedHostAccount()
@@ -114,17 +122,21 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
   async prepareForCodexLaunchAsync(
     target?: CodexAccountSelectionTarget,
     launchEnv?: NodeJS.ProcessEnv,
-    options?: { unavailableManagedHomePath?: string }
+    options?: { unavailableManagedHomePath?: string; wslExecution?: WslAccountExecutionContext }
   ): Promise<string | null> {
+    const execution = options?.wslExecution ? Object.freeze({ ...options.wslExecution }) : undefined
+    if (execution) {
+      assertWslAccountExecutionTarget(execution, target)
+    }
     if (target?.runtime !== 'wsl') {
       return this.prepareForCodexLaunch(target, launchEnv, options)
     }
     const wslTarget = this.resolveWslDefaultTarget(target)
-    const homePath = this.getWslCodexHomePathForSelection(wslTarget)
+    const homePath = this.getWslCodexHomePathForSelection(wslTarget, execution)
     // Why: the retired home may hold the freshest credential, so the first
     // direct-home Codex spawn must wait for its bounded guest transaction.
-    await this.startLegacyWslAuthDrain(wslTarget, { throwOnFailure: true })
-    this.finishWslLaunchPreparation(wslTarget, homePath)
+    await this.startLegacyWslAuthDrain(wslTarget, { throwOnFailure: true, wslExecution: execution })
+    this.finishWslLaunchPreparation(wslTarget, homePath, execution)
     return homePath
   }
 

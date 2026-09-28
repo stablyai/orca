@@ -124,7 +124,8 @@ export function spawnWslRelayProcess(
   distro: string,
   env: NodeJS.ProcessEnv,
   version: string,
-  executable: string
+  executable: string,
+  user?: string
 ): ChildProcessWithoutNullStreams {
   // Why: --exec bypasses the distro's default login shell — a bare `--`
   // routes through it (a fish/nushell chsh could mangle the command) and
@@ -134,7 +135,7 @@ export function spawnWslRelayProcess(
   const command = `exec sh "${guestRelayDirExpr(version)}/launch.sh" "$1"`
   return spawnProcess({
     program: 'wsl.exe',
-    args: buildWslExecArgs(distro, ['sh', '-c', command, 'orca-hook-relay', executable]),
+    args: buildWslExecArgs(distro, ['sh', '-c', command, 'orca-hook-relay', executable], user),
     env,
     // Why explicit (#16463): the guest path is in `command`, so the Windows cwd
     // only decides whether CreateProcessW succeeds -- and an inherited one is a
@@ -162,10 +163,12 @@ export async function runWslInstallProcess(
   script: string,
   // Unused: the install script embeds its own version/paths and reads
   // nothing from the crossed guest environment.
-  _env: NodeJS.ProcessEnv
+  _env: NodeJS.ProcessEnv,
+  user?: string
 ): Promise<{ code: number | null; stderr: string }> {
   const result = await runWslProcess({
     distro,
+    user,
     loginPath: 'none',
     script,
     // Declared because the payload is opaque here: it is POSIX plus a heredoc.
@@ -186,7 +189,7 @@ const TRANSIENT_RETRY_LIMIT = 2
 
 export type WslRelayLaunchIo = {
   isDistroRunning: typeof isWslDistroRunning
-  prepareRuntime: (distro: string) => Promise<string>
+  prepareRuntime: (distro: string, user?: string) => Promise<string>
   spawnRelay: typeof spawnWslRelayProcess
   waitForSentinel: typeof waitForWslRelaySentinel
   runInstall: typeof runWslInstallProcess
@@ -201,6 +204,7 @@ export type WslRelayLaunchIo = {
  *  through `onFailure`; non-startup errors propagate to the caller. */
 export async function launchWslRelayWithInstall(options: {
   distro: string
+  user?: string
   env: NodeJS.ProcessEnv
   bundleJsPath: string
   version: string
@@ -228,14 +232,20 @@ export async function launchWslRelayWithInstall(options: {
     }
     return running
   }
-  const executable = await io.prepareRuntime(distro)
+  const executable = await io.prepareRuntime(distro, ...(options.user ? [options.user] : []))
   let installTried = false
   let transientRetries = 0
   for (;;) {
     if (!(await requireRunning())) {
       return
     }
-    const child = io.spawnRelay(distro, env, version, executable)
+    const child = io.spawnRelay(
+      distro,
+      env,
+      version,
+      executable,
+      ...(options.user ? [options.user] : [])
+    )
     options.onChild(child)
     try {
       const transport = await io.waitForSentinel(child)
@@ -269,7 +279,12 @@ export async function launchWslRelayWithInstall(options: {
           return
         }
         const script = buildGuestInstallScript(io.readBundle(bundleJsPath), version)
-        const result = await io.runInstall(distro, script, env)
+        const result = await io.runInstall(
+          distro,
+          script,
+          env,
+          ...(options.user ? [options.user] : [])
+        )
         if (result.code === 0) {
           continue
         }

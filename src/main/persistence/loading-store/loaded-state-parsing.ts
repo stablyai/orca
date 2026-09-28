@@ -1,3 +1,4 @@
+import { decryptWslConsumerRecoveries } from './wsl-consumer-recovery-secrets'
 import { homedir } from 'node:os'
 import { normalizeProxyUrl } from '../../../shared/network-proxy'
 import { normalizeKagiSessionLink } from '../../../shared/browser-url'
@@ -150,6 +151,12 @@ export class LoadedStateParsingOperations {
             PROTECTED_SECRET_SLOT.browserKagiSessionLink,
             parsed.ui.browserKagiSessionLink,
             (value) => normalizeKagiSessionLink(value) !== null
+          )
+        }
+        if (parsed.wslPtyConsumerRecoveries !== undefined) {
+          parsed.wslPtyConsumerRecoveries = decryptWslConsumerRecoveries(
+            parsed.wslPtyConsumerRecoveries,
+            this.runtime.protectedSecrets
           )
         }
         parsed.sshPtyConsumerRecoveries = (

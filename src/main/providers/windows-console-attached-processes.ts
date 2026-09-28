@@ -1,7 +1,10 @@
+import { bunOwnedRuntimeArgs } from '../../shared/bun-owned-runtime-args'
 import type { ChildProcess } from 'node:child_process'
-import { forkProcess } from '../../shared/child-process/fork-process'
+import { spawnProcess } from '../../shared/child-process/run-process'
 import { resolveWindowsBunPtyGateEntry } from '../daemon/pty-subprocess/windows-bun-pty-launch'
 import { WINDOWS_BUN_CONSOLE_LIST_ARGUMENT } from './windows-bun-console-process-list'
+
+import { acquireWindowsConsoleRuntime } from './windows-console-runtime'
 
 const CONPTY_PROCESS_LIST_TIMEOUT_MS = 3_000
 
@@ -13,14 +16,18 @@ type WindowsConsoleAttachedProcessDeps = {
   timeoutMs?: number
 }
 
-function resolveConsoleListAgent(): string {
-  return process.versions.bun
-    ? resolveWindowsBunPtyGateEntry()
-    : require.resolve('node-pty/lib/conpty_console_list_agent.js')
-}
-
-function spawnConsoleListAgent(modulePath: string, args: string[]): ChildProcess {
-  return forkProcess({ modulePath, args, stdio: ['ignore', 'ignore', 'ignore', 'ipc'] })
+function spawnConsoleListAgent(execPath: string, modulePath: string, args: string[]): ChildProcess {
+  const env = { ...process.env }
+  delete env.ELECTRON_RUN_AS_NODE
+  delete env.NODE_OPTIONS
+  delete env.NODE_PATH
+  delete env.BUN_OPTIONS
+  return spawnProcess({
+    program: execPath,
+    args: [...bunOwnedRuntimeArgs('win32'), modulePath, ...args],
+    env,
+    stdio: ['ignore', 'ignore', 'ignore', 'ipc']
+  })
 }
 
 /**
@@ -28,8 +35,8 @@ function spawnConsoleListAgent(modulePath: string, args: string[]): ChildProcess
  *
  * Distinct from job membership on purpose. `GetConsoleProcessList` must be
  * called from a process attached to that console, and a process can hold only
- * one console at a time -- which is why node-pty answers it from a separate
- * process, and why this still forks.
+ * one console at a time -- so the Bun gate answers it in a separate
+ * process without changing the caller's console.
  *
  * Only the candidate FILTER may use this. That filter exists to drop a
  * descendant which detached from the console (`Start-Process`, a GUI child), and
@@ -40,23 +47,33 @@ function spawnConsoleListAgent(modulePath: string, args: string[]): ChildProcess
  * candidate already exists, not on every foreground poll. Bounding it to one
  * pooled, supervised helper is the remaining half of that fix.
  */
-export function readWindowsConsoleAttachedProcessIds(
+export async function readWindowsConsoleAttachedProcessIds(
   rootPid: number,
   deps: WindowsConsoleAttachedProcessDeps = {}
 ): Promise<ReadonlySet<number> | null> {
   if (!Number.isSafeInteger(rootPid) || rootPid <= 0 || rootPid >= 0xffff_ffff) {
-    return Promise.resolve(null)
+    return null
   }
+  const deadline = Date.now() + (deps.timeoutMs ?? CONPTY_PROCESS_LIST_TIMEOUT_MS)
   let child: ChildProcess
+  let runtime: Awaited<ReturnType<typeof acquireWindowsConsoleRuntime>> = null
   try {
-    child = (deps.forkProcess ?? spawnConsoleListAgent)(
-      (deps.resolveAgentPath ?? resolveConsoleListAgent)(),
-      process.versions.bun
-        ? [WINDOWS_BUN_CONSOLE_LIST_ARGUMENT, String(rootPid)]
-        : [String(rootPid)]
-    )
+    const args = [WINDOWS_BUN_CONSOLE_LIST_ARGUMENT, String(rootPid)]
+    if (deps.forkProcess) {
+      child = deps.forkProcess((deps.resolveAgentPath ?? resolveWindowsBunPtyGateEntry)(), args)
+    } else {
+      runtime = await acquireWindowsConsoleRuntime(deadline - Date.now())
+      if (!runtime || Date.now() >= deadline) {
+        return null
+      }
+      child = spawnConsoleListAgent(runtime.execPath, runtime.entryPath, args)
+    }
   } catch {
-    return Promise.resolve(null)
+    runtime?.invalidate()
+    return null
+  } finally {
+    // A spawned helper is now protected by the process-table retention check.
+    runtime?.release()
   }
 
   return new Promise((resolve) => {
@@ -66,6 +83,9 @@ export function readWindowsConsoleAttachedProcessIds(
         return
       }
       settled = true
+      if (value === null) {
+        runtime?.invalidate()
+      }
       clearTimeout(timeout)
       child.removeListener('message', onMessage)
       // Why: kill failures can emit asynchronously after timeout settlement;
@@ -96,10 +116,17 @@ export function readWindowsConsoleAttachedProcessIds(
       consoleProcessIds.delete(helperPid)
       finish(consoleProcessIds)
     }
-    const timeout = setTimeout(() => {
-      child.kill()
-      finish(null)
-    }, deps.timeoutMs ?? CONPTY_PROCESS_LIST_TIMEOUT_MS)
+    const timeout = setTimeout(
+      () => {
+        try {
+          child.kill()
+        } catch {
+          // A failed kill leaves console ownership unknown.
+        }
+        finish(null)
+      },
+      Math.max(1, deadline - Date.now())
+    )
     child.once('message', onMessage)
     child.once('error', onFailure)
     child.once('exit', onExit)

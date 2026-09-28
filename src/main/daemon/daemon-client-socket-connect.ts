@@ -1,4 +1,5 @@
 import { connect, type Socket } from 'node:net'
+import type { Duplex } from 'node:stream'
 import { DaemonProtocolError } from './types'
 
 export function connectDaemonSocket(socketPath: string, timeoutMs: number): Promise<Socket> {
@@ -31,8 +32,8 @@ export function connectDaemonSocket(socketPath: string, timeoutMs: number): Prom
 // Why: capture both sockets by value — the fields they came from are nulled on teardown,
 // so a cleanup reading them back would unhook nothing.
 export function armDaemonSocketCloseHandlers(
-  controlSocket: Socket,
-  streamSocket: Socket,
+  controlSocket: Duplex,
+  streamSocket: Duplex,
   handleClose: () => void
 ): () => void {
   controlSocket.on('close', handleClose)

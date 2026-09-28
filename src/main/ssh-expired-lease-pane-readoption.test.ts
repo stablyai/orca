@@ -15,7 +15,6 @@ vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
   safeStorage: { isEncryptionAvailable: () => false }
 }))
-vi.mock('node-pty', () => ({ spawn: vi.fn(), default: { spawn: vi.fn() } }))
 
 const TARGET = 'ssh-1'
 const HOST_ID = 'ssh:ssh-1' as const

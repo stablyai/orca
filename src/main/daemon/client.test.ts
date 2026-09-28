@@ -164,6 +164,8 @@ describe('DaemonClient', () => {
         pid: 123,
         startedAtMs: 456,
         launchNonce: 'launch-a',
+        linuxStartTicks: '12345',
+        bootId: 'guest-boot',
         entryPath: '/Applications/Orca.app/Contents/Resources/daemon-entry.js',
         appVersion: '1.2.3',
         spawnerExecPath: '/Applications/Orca.app/Contents/MacOS/Orca'
@@ -174,6 +176,18 @@ describe('DaemonClient', () => {
       await client.ensureConnected()
 
       expect(client.getDaemonIdentity()).toEqual(identity)
+    })
+
+    it.each([
+      { linuxStartTicks: '123' },
+      { bootId: 'boot' },
+      { linuxStartTicks: 'not-ticks', bootId: 'boot' }
+    ])('rejects incomplete or malformed guest incarnation %#', async (extra) => {
+      await startMockDaemon({
+        helloIdentity: () => ({ pid: 123, startedAtMs: 456, launchNonce: 'launch', ...extra })
+      })
+      client = new DaemonClient({ socketPath, tokenPath })
+      await expect(client.ensureConnected()).rejects.toThrow('Invalid daemon identity')
     })
 
     it('rejects a v24 daemon that omits endpoint identity', async () => {

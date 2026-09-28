@@ -18,6 +18,7 @@ import { orcadBunRuntimeFilename } from '../../src/shared/orcad-artifacts.ts'
 import {
   ORCAD_BUN_RELEASE_ASSETS,
   ORCAD_BUN_VERSION,
+  orcadBunVersionProbeArgs,
   orcadBunReleaseUrl
 } from '../../src/shared/orcad-bun-runtime.ts'
 import { runProcessSync } from './script-child-process.mjs'
@@ -73,7 +74,11 @@ export function findBunExecutable(rootDir, target) {
 }
 
 function verifyRuntime(path) {
-  const result = runProcessSync({ program: path, args: ['--version'] })
+  const result = runProcessSync({
+    program: path,
+    args: [...orcadBunVersionProbeArgs()],
+    timeoutMs: 10_000
+  })
   if (result.code !== 0 || result.stdout.trim() !== ORCAD_BUN_VERSION) {
     throw new Error(
       `Expected Bun ${ORCAD_BUN_VERSION} at ${path}, got ${result.stdout.trim() || result.stderr.trim()}`

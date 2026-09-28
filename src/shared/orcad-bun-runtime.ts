@@ -1,5 +1,16 @@
 export const ORCAD_BUN_VERSION = '1.4.2'
 
+// Custom builds may add a CLI banner suffix without changing their runtime API version.
+export function orcadBunVersionProbeArgs(platform: NodeJS.Platform = process.platform): string[] {
+  return [
+    '--no-env-file',
+    platform === 'win32' ? '--config=NUL' : '--config=/dev/null',
+    '--no-install',
+    '--print',
+    'process.versions.bun'
+  ]
+}
+
 export const ORCAD_BUN_TARGETS = [
   'darwin-arm64',
   'darwin-x64',

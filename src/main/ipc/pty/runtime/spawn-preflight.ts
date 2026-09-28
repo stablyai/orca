@@ -1,26 +1,19 @@
-import { inheritOmpLaunchEnvironment } from '../host-env/omp-launch-environment'
-import { getAppEnvironment } from '../../../../shared/app-environment'
+import { prepareRuntimeHostSpawnEnvironment } from './spawn-host-environment'
+import { prepareWslDaemonSpawnRoute } from '../../../wsl/wsl-daemon-spawn-route'
+import { toAppWslPtyId } from '../../../../shared/wsl-pty-id'
 import type { PtySpawnResult } from '../../../providers/types'
-import { LocalPtyProvider } from '../../../providers/local-pty-provider'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import { getAppPtyId, getProvider, getRelayPtyId } from '../provider/registry'
-import { buildPtyHostEnv } from '../host-env/assembly'
 import {
   getCompatibleSelectedCodexHomePath,
   getCodexSelectionTargetForPty,
   resolveCodexHomeAfterManagedAuthReadiness,
   shouldSkipCodexHomeEnvForWindowsShell,
   shouldStripInheritedOrcaCodexHome,
-  isCodexStatusHooksEnabled,
   codexHomePathsEqual
 } from '../host-env/codex-home'
-import { promoteAgentTeamsShimPath } from '../host-env/path'
-import {
-  isClaudeLaunchCommand,
-  recoverFreshSpawnProviderRouting,
-  routesFreshSpawnsToLocalProvider
-} from '../host-env/fresh-spawn-routing'
+import { isClaudeLaunchCommand } from '../host-env/fresh-spawn-routing'
 import { stripRemotePaneEnvWhenHooksDisabled } from '../provider/liveness'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { isClaudeAuthSwitchInProgress } from '../../../claude-accounts/live-pty-gate'
@@ -30,44 +23,22 @@ import {
   hasClaudeAuthEnvConflict
 } from '../../../claude-accounts/environment'
 import {
-  isSafePtySessionId,
   mintPtySessionId,
   ptySessionIdForAgentCreateOperation
 } from '../../../daemon/pty-session-id'
 import { resolveWslSessionContext } from '../../../daemon/wsl-session-context'
-import { isAgentStatusHooksEnabled } from '../../../agent-hooks/managed-agent-hook-controls'
 import { resolveLocalWindowsTerminalRuntimeOptions } from '../../../../shared/local-windows-terminal-runtime'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../../../local-project-runtime-resolution'
 import { resolvePathEnvKey } from '../../../pty/windows-environment-path'
-import { stampWslOrchestrationCompatibilityHost } from '../../../pty/wsl-orca-env'
 import { ensureCodexStateDbBackfillRecoveryStarted } from '../../../codex/codex-state-db-backfill-recovery'
-import { clearProviderPtyState } from '../provider/state-cleanup'
-import { awaitExplicitPiOmpGuestReadiness } from '../../../agent-hooks/wsl-pi-omp-guest-readiness'
 import type { RuntimePtySpawnState } from './spawn-state'
 
 export async function prepareRuntimePtySpawn(
   ctx: RuntimePtySpawnState
 ): Promise<PtySpawnResult | null> {
   const args = ctx.args
-  if (!ctx.preAdoptedStablePane) {
-    const pathUsable = ctx.deps.assertFolderWorkspacePtyPathUsable(args.worktreeId)
-    if (pathUsable) {
-      await pathUsable
-    }
-  }
   ctx.cwd = ctx.deps.resolvePtySpawnStartupCwd(args.worktreeId, args.cwd)
   ctx.provider = getProvider(args.connectionId)
-  const freshSpawnRecovery = ctx.preAdoptedStablePane
-    ? undefined
-    : recoverFreshSpawnProviderRouting(
-        ctx.provider,
-        args.connectionId,
-        args.sessionId,
-        args.isNewSession
-      )
-  if (freshSpawnRecovery) {
-    await freshSpawnRecovery
-  }
   ctx.isClaudeLaunch =
     !ctx.preAdoptedStablePane && !args.connectionId && isClaudeLaunchCommand(args.command)
   if (ctx.isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
@@ -96,10 +67,7 @@ export async function prepareRuntimePtySpawn(
           terminalWindowsWslDistro: null
         }
   ctx.daemonShellOverride = ctx.terminalRuntimeOptions.shellOverride
-  ctx.isDaemonHostSpawn =
-    !args.connectionId &&
-    !(ctx.provider instanceof LocalPtyProvider) &&
-    !routesFreshSpawnsToLocalProvider(ctx.provider)
+  ctx.isDaemonHostSpawn = !args.connectionId
   ctx.callerRequestedSessionId = args.sessionId?.trim()
   ctx.requestedSessionId =
     ctx.callerRequestedSessionId ??
@@ -125,21 +93,52 @@ export async function prepareRuntimePtySpawn(
         terminalWindowsWslDistro: ctx.terminalRuntimeOptions.terminalWindowsWslDistro
       })?.distro ?? null)
     : null
+  if (!ctx.preAdoptedStablePane) {
+    ctx.wslGuest = await prepareWslDaemonSpawnRoute({
+      sessions: ctx.deps.options?.wslDaemonSessions,
+      connectionId: args.connectionId,
+      sessionId: args.sessionId,
+      isNewSession: args.isNewSession,
+      distro: ctx.expectedWslDistro,
+      signal: args.signal
+    })
+  }
+  if (ctx.wslGuest) {
+    ctx.provider = ctx.wslGuest.connection.provider
+    ctx.expectedWslDistro = ctx.wslGuest.connection.owner.distro
+    ctx.isDaemonHostSpawn = true
+    ctx.isNewDaemonSession = ctx.wslGuest.fresh
+    ctx.isClaudeLaunch &&= ctx.wslGuest.fresh || ctx.wslGuest.coldRestore === true
+    ctx.sessionId ??= args.agentSessionCreateOperationId
+      ? ptySessionIdForAgentCreateOperation(args.worktreeId, args.agentSessionCreateOperationId)
+      : mintPtySessionId(args.worktreeId)
+    ctx.effectiveSessionAppId = toAppWslPtyId(ctx.wslGuest.connection.owner, ctx.sessionId)
+    ctx.effectiveSessionRelayId = ctx.sessionId
+  } else {
+    if (!ctx.preAdoptedStablePane) {
+      const pathUsable = ctx.deps.assertFolderWorkspacePtyPathUsable(args.worktreeId)
+      if (pathUsable) {
+        await pathUsable
+      }
+    }
+  }
   ctx.codexSelectionTarget = getCodexSelectionTargetForPty(
     ctx.daemonShellOverride,
     ctx.cwd,
     ctx.expectedWslDistro
   )
-  const codexResumePreparation = ctx.preAdoptedStablePane
-    ? null
-    : ctx.deps.prepareCodexResumeHome({
-        connectionId: args.connectionId,
-        launchAgent: args.launchAgent,
-        providerSession: args.resumeProviderSession,
-        target: ctx.codexSelectionTarget,
-        launchEnv: args.env,
-        workspacePath: ctx.cwd
-      })
+  const codexResumePreparation =
+    ctx.preAdoptedStablePane || (ctx.wslGuest && !ctx.wslGuest.fresh && !ctx.wslGuest.coldRestore)
+      ? null
+      : ctx.deps.prepareCodexResumeHome({
+          connectionId: args.connectionId,
+          launchAgent: args.launchAgent,
+          providerSession: args.resumeProviderSession,
+          target: ctx.codexSelectionTarget,
+          launchEnv: args.env,
+          workspacePath: ctx.cwd,
+          wslExecution: ctx.wslGuest?.execution
+        })
   const codexResumeLaunch = codexResumePreparation
     ? await ctx.deps.resolveCodexResumeLaunch(args.command, codexResumePreparation)
     : ctx.deps.noCodexResumeLaunch(ctx.preAdoptedStablePane ? undefined : args.command)
@@ -149,7 +148,7 @@ export async function prepareRuntimePtySpawn(
   ctx.launchCommand = codexResumeLaunch.command
   ctx.claudeAuth =
     ctx.isClaudeLaunch && ctx.deps.prepareClaudeAuth
-      ? await ctx.deps.prepareClaudeAuth(ctx.codexSelectionTarget)
+      ? await ctx.deps.prepareClaudeAuth(ctx.codexSelectionTarget, ctx.wslGuest?.execution)
       : null
   if (ctx.isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
     throw new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE)
@@ -190,10 +189,13 @@ export async function prepareRuntimePtySpawn(
   const selectLaunchCodexHome = async (): Promise<string | null> =>
     (await ctx.deps.getSelectedCodexHomePath?.(ctx.codexSelectionTarget, ctx.env, {
       workspacePath: ctx.cwd,
+      wslExecution: ctx.wslGuest?.execution,
       launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
     })) ?? null
   ctx.selectedCodexHomePath =
-    !ctx.preAdoptedStablePane && !args.connectionId
+    !ctx.preAdoptedStablePane &&
+    !args.connectionId &&
+    (!ctx.wslGuest || ctx.wslGuest.fresh || ctx.wslGuest.coldRestore)
       ? getCompatibleSelectedCodexHomePath(
           ctx.codexSelectionTarget,
           codexResumeHome
@@ -221,6 +223,7 @@ export async function prepareRuntimePtySpawn(
           ctx.codexSelectionTarget,
           (await ctx.deps.getSelectedCodexHomePath?.(ctx.codexSelectionTarget, ctx.env, {
             workspacePath: ctx.cwd,
+            wslExecution: ctx.wslGuest?.execution,
             launchAgent: 'codex'
           })) ?? null
         ),
@@ -229,6 +232,7 @@ export async function prepareRuntimePtySpawn(
           ctx.codexSelectionTarget,
           (await ctx.deps.getSelectedCodexHomePath?.(ctx.codexSelectionTarget, ctx.env, {
             workspacePath: ctx.cwd,
+            wslExecution: ctx.wslGuest?.execution,
             launchAgent: 'codex',
             unavailableManagedHomePath
           })) ?? null
@@ -236,7 +240,7 @@ export async function prepareRuntimePtySpawn(
     })
     ctx.selectedCodexHomePath = resolution instanceof Promise ? await resolution : resolution
   }
-  if (args.launchAgent === 'codex' && ctx.selectedCodexHomePath) {
+  if (!ctx.wslGuest && args.launchAgent === 'codex' && ctx.selectedCodexHomePath) {
     await ensureCodexStateDbBackfillRecoveryStarted(ctx.selectedCodexHomePath)
   }
   ctx.codexResumeHomeSelected = Boolean(
@@ -255,57 +259,7 @@ export async function prepareRuntimePtySpawn(
       skipCodexHomeEnv: ctx.skipCodexHomeEnv,
       settings: ptySettings
     })
-  if (ctx.isDaemonHostSpawn && ctx.sessionId && !ctx.preAdoptedStablePane) {
-    if (!isSafePtySessionId(ctx.sessionId, getAppEnvironment().getPath('userData'))) {
-      throw new Error('Invalid PTY session id')
-    }
-    try {
-      ctx.env ??= {}
-      await inheritOmpLaunchEnvironment(ctx.env, {
-        isWsl: shouldSkipCodexHomeEnvForWindowsShell(ctx.daemonShellOverride, ctx.cwd),
-        launchAgent: args.launchAgent,
-        launchCommand: ctx.launchCommand
-      })
-      await awaitExplicitPiOmpGuestReadiness({
-        isWsl: shouldSkipCodexHomeEnvForWindowsShell(ctx.daemonShellOverride, ctx.cwd),
-        distro: ctx.codexSelectionTarget.runtime === 'wsl' ? ctx.expectedWslDistro : null,
-        codexHomePath: ctx.selectedCodexHomePath,
-        launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
-        launchCommand: ctx.launchCommand
-      })
-      ctx.env = buildPtyHostEnv(ctx.sessionId, ctx.env ?? {}, {
-        isPackaged: getAppEnvironment().isPackaged(),
-        resourcesPath: process.resourcesPath,
-        userDataPath: getAppEnvironment().getPath('userData'),
-        selectedCodexHomePath: ctx.selectedCodexHomePath,
-        skipCodexHomeEnv: ctx.skipCodexHomeEnv,
-        stripInheritedOrcaCodexHome: ctx.stripInheritedOrcaCodexHome,
-        launchCommand: ctx.launchCommand,
-        launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
-        isWsl: shouldSkipCodexHomeEnvForWindowsShell(ctx.daemonShellOverride, ctx.cwd),
-        wslDistro: ctx.codexSelectionTarget.runtime === 'wsl' ? ctx.expectedWslDistro : null,
-        agentStatusHooksEnabled: isAgentStatusHooksEnabled(ptySettings),
-        disabledTuiAgents: ptySettings?.disabledTuiAgents,
-        codexStatusHooksEnabled: isCodexStatusHooksEnabled(ptySettings),
-        networkProxySettings: ptySettings,
-        routeBrowserOpensToClient: ctx.deps.runtime?.shouldRelayTerminalBrowserOpens?.(),
-        deferGitConfigGuardToDaemon:
-          ctx.provider.supportsGitCredentialGuardHost?.(ctx.sessionId) === true
-      })
-      stampWslOrchestrationCompatibilityHost(
-        ctx.env,
-        ctx.deps.runtime?.getOrchestrationCompatibilityHostId?.(),
-        ctx.codexSelectionTarget.runtime === 'wsl' ? ctx.expectedWslDistro : null
-      )
-      promoteAgentTeamsShimPath(ctx.env, ctx.requestedAgentTeamsPath)
-    } catch (error) {
-      // Why: host-env setup can materialize agent hooks/extensions before failing.
-      if (ctx.requestedSessionId === undefined) {
-        clearProviderPtyState(ctx.sessionId)
-      }
-      throw error
-    }
-  }
+  await prepareRuntimeHostSpawnEnvironment(ctx)
 
   return null
 }

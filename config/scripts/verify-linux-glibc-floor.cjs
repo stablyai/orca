@@ -139,8 +139,7 @@ function findFloorViolations(needs, filePath = '') {
 // On stock Ubuntu 20.04 (glibc 2.31) these symbols live ONLY in these DSOs —
 // glibc kept openpty/forkpty in libutil until the 2.34 merge. A binary that
 // imports them must keep the DSO in DT_NEEDED or they will not resolve on the
-// floor. This guards config/patches/node-pty@1.1.0.patch's forced
-// `-l:libutil.so.1`: if a toolchain change ever dropped that ldflag, the pinned
+// floor. Keep `-l:libutil.so.1` when pinning these symbols: without it, the pinned
 // openpty@GLIBC_2.2.5 would still resolve from libc's compat alias at build time
 // (so the version-floor check passes) yet fail to load on 20.04. libpthread
 // (pthread_sigmask) is intentionally omitted — the Node/Electron host always
@@ -488,7 +487,7 @@ function verifyLinuxGlibcFloor(rootDir, options = {}) {
       `[verify-linux-glibc-floor] ${offenders.length} bundled native binar${offenders.length === 1 ? 'y' : 'ies'} ` +
         `will not load on ${FLOOR_LABEL}, so the app will crash on startup there:\n${detail}\n` +
         'See docs/reference/linux-glibc-compatibility.md — rebuild the offending module against an older ' +
-        'toolchain or pin the relocated symbols (as config/patches/node-pty@1.1.0.patch does).'
+        'toolchain, or pin relocated symbols and retain their provider libraries in DT_NEEDED.'
     )
   }
 

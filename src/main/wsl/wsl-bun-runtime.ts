@@ -39,7 +39,8 @@ export async function assertWslRuntimeDistroRunning(
 /** Refuse guest commands without a confirmed running verdict; WSL has no atomic check-and-exec. */
 export function createRunningWslRuntimeRunner(
   distro: string,
-  callerSignal?: AbortSignal
+  callerSignal?: AbortSignal,
+  user?: string
 ): {
   run: (spec: WslSpec) => Promise<string>
   signal: AbortSignal
@@ -52,6 +53,7 @@ export function createRunningWslRuntimeRunner(
     const result = await runWslProcess({
       ...spec,
       distro,
+      ...(user ? { user } : {}),
       timeoutMs: Math.max(1, Math.min(15_000, deadline - Date.now())),
       maxOutputBytes: 16 * 1024
     })

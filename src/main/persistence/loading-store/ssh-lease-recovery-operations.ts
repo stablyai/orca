@@ -45,11 +45,11 @@ import type { TerminalBindingRecoveryOperations } from './terminal-binding-recov
 import type { WriteSchedulingOperations } from './write-scheduling'
 import { scheduleSave } from './write-scheduling'
 import {
-  runSshLeaseDurableMutation,
-  type SshLeaseDurableMutationRuntime
-} from './ssh-lease-durable-mutation'
+  runRelayLeaseDurableMutation,
+  type RelayLeaseDurableMutationRuntime
+} from './relay-lease-durable-mutation'
 
-type SshLeaseRecoveryOperationsRuntime = SshLeaseDurableMutationRuntime &
+type SshLeaseRecoveryOperationsRuntime = RelayLeaseDurableMutationRuntime &
   Pick<StoreRuntimeState, 'protectedSecrets' | 'state'>
 
 const sshLeaseRecoveryOperationsContext = Symbol('SshLeaseRecoveryOperations')
@@ -210,7 +210,7 @@ export function getSshPtyConsumerRecoveryOperations(
     state: owner[sshLeaseRecoveryOperationsContext].runtime.state,
     protectedSecrets: owner[sshLeaseRecoveryOperationsContext].runtime.protectedSecrets,
     runDurableMutation: (mutate) =>
-      runSshLeaseDurableMutation(
+      runRelayLeaseDurableMutation(
         owner[sshLeaseRecoveryOperationsContext].runtime,
         owner[sshLeaseRecoveryOperationsContext].flushBarriers,
         'sshPtyConsumerRecoveries',
@@ -264,7 +264,7 @@ export function getSshPtyLeaseOperations(owner: SshLeaseRecoveryOperations): Ssh
       owner[sshLeaseRecoveryOperationsContext].flushBarriers.flush()
     },
     runDurableMutation: (mutate) =>
-      runSshLeaseDurableMutation(
+      runRelayLeaseDurableMutation(
         owner[sshLeaseRecoveryOperationsContext].runtime,
         owner[sshLeaseRecoveryOperationsContext].flushBarriers,
         'sshRemotePtyLeases',

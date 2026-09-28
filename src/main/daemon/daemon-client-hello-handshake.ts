@@ -1,15 +1,15 @@
-import type { Socket } from 'node:net'
-import { StringDecoder } from 'node:string_decoder'
+import type { Duplex } from 'node:stream'
 import { encodeNdjson } from './ndjson'
 import { CLEAN_DISCONNECT_PROTOCOL_VERSION, DaemonProtocolError } from './types'
 import type { DaemonEndpointIdentity, HelloMessage, HelloResponse } from './types'
 import { addNodePtyRecoveryHint } from './node-pty-error-hints'
 
 export type DaemonHelloRequest = {
-  socket: Socket
+  socket: Duplex
   token: string
   role: 'control' | 'stream'
   timeoutMs: number
+  signal?: AbortSignal
   protocolVersion: number
   clientId: string
 }
@@ -17,7 +17,7 @@ export type DaemonHelloRequest = {
 export function sendDaemonHello(
   request: DaemonHelloRequest
 ): Promise<DaemonEndpointIdentity | null> {
-  const { socket, token, role, timeoutMs, protocolVersion, clientId } = request
+  const { socket, token, role, timeoutMs, protocolVersion, clientId, signal } = request
   return new Promise((resolve, reject) => {
     const hello: HelloMessage = {
       type: 'hello',
@@ -27,7 +27,7 @@ export function sendDaemonHello(
       role
     }
 
-    let buffer = ''
+    let buffer = Buffer.alloc(0)
     let settled = false
     let timer: ReturnType<typeof setTimeout> | null = null
     const cleanup = (): void => {
@@ -38,6 +38,7 @@ export function sendDaemonHello(
       socket.removeListener('data', onData)
       socket.removeListener('error', onError)
       socket.removeListener('close', onClose)
+      signal?.removeEventListener('abort', onAbort)
     }
     const finish = (error?: Error, identity: DaemonEndpointIdentity | null = null): void => {
       if (settled) {
@@ -51,17 +52,14 @@ export function sendDaemonHello(
       }
       resolve(identity)
     }
-    // Why: daemon socket chunks can split emoji/box-drawing UTF-8 bytes.
-    // Decoding each Buffer independently would permanently inject U+FFFD.
-    const decoder = new StringDecoder('utf8')
     const onData = (chunk: Buffer): void => {
-      buffer += decoder.write(chunk)
-      const newlineIdx = buffer.indexOf('\n')
+      buffer = Buffer.concat([buffer, chunk])
+      const newlineIdx = buffer.indexOf(10)
       if (newlineIdx === -1) {
         return
       }
 
-      const line = buffer.slice(0, newlineIdx)
+      const line = buffer.subarray(0, newlineIdx).toString('utf8')
       try {
         const response = JSON.parse(line) as HelloResponse
         if (response.ok) {
@@ -72,6 +70,12 @@ export function sendDaemonHello(
           ) {
             finish(new DaemonProtocolError('Invalid daemon identity'))
             return
+          }
+          // Preserve frames coalesced with hello until the role reader is installed.
+          socket.pause()
+          const remainder = buffer.subarray(newlineIdx + 1)
+          if (remainder.length) {
+            socket.unshift(remainder)
           }
           finish(undefined, identity)
         } else {
@@ -87,6 +91,12 @@ export function sendDaemonHello(
     const onClose = (): void =>
       finish(new DaemonProtocolError('Connection closed before hello response'))
 
+    const onAbort = (): void => finish(new DaemonProtocolError('Disconnected'))
+    signal?.addEventListener('abort', onAbort, { once: true })
+    if (signal?.aborted) {
+      onAbort()
+      return
+    }
     timer = setTimeout(() => {
       // Why: a stale daemon can accept the socket but never answer hello;
       // without a handshake timeout, startup waits forever on ensureConnected().
@@ -100,21 +110,18 @@ export function sendDaemonHello(
   })
 }
 
-function parseDaemonEndpointIdentity(value: unknown): DaemonEndpointIdentity | null {
-  if (!value || typeof value !== 'object') {
+function isDaemonIdentityRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object'
+}
+
+function parseDaemonEndpointIdentity(identity: unknown): DaemonEndpointIdentity | null {
+  if (!isDaemonIdentityRecord(identity)) {
     return null
   }
-  const identity = value as {
-    pid?: unknown
-    startedAtMs?: unknown
-    launchNonce?: unknown
-    entryPath?: unknown
-    appVersion?: unknown
-    spawnerExecPath?: unknown
-  }
   if (
+    typeof identity.pid !== 'number' ||
     !Number.isSafeInteger(identity.pid) ||
-    (identity.pid as number) <= 0 ||
+    identity.pid <= 0 ||
     typeof identity.startedAtMs !== 'number' ||
     !Number.isFinite(identity.startedAtMs) ||
     identity.startedAtMs <= 0 ||
@@ -123,8 +130,21 @@ function parseDaemonEndpointIdentity(value: unknown): DaemonEndpointIdentity | n
   ) {
     return null
   }
+  if (
+    (identity.linuxStartTicks !== undefined || identity.bootId !== undefined) &&
+    (typeof identity.linuxStartTicks !== 'string' ||
+      !/^\d+$/.test(identity.linuxStartTicks) ||
+      typeof identity.bootId !== 'string' ||
+      !identity.bootId ||
+      /[\0\r\n]/.test(identity.bootId))
+  ) {
+    return null
+  }
   return {
-    pid: identity.pid as number,
+    ...(typeof identity.linuxStartTicks === 'string' && typeof identity.bootId === 'string'
+      ? { linuxStartTicks: identity.linuxStartTicks, bootId: identity.bootId }
+      : {}),
+    pid: identity.pid,
     startedAtMs: identity.startedAtMs,
     launchNonce: identity.launchNonce,
     ...(typeof identity.entryPath === 'string' && identity.entryPath.length > 0
@@ -149,6 +169,8 @@ export function sameDaemonIdentity(
       right !== null &&
       left.pid === right.pid &&
       left.startedAtMs === right.startedAtMs &&
-      left.launchNonce === right.launchNonce)
+      left.launchNonce === right.launchNonce &&
+      left.linuxStartTicks === right.linuxStartTicks &&
+      left.bootId === right.bootId)
   )
 }

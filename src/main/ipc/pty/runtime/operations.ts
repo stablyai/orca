@@ -1,5 +1,4 @@
 import type { IPtyProvider } from '../../../providers/types'
-import { LocalPtyProvider } from '../../../providers/local-pty-provider'
 import { parseAppSshPtyId } from '../../../providers/ssh-pty-id'
 import { ptyOwnership } from '../provider/ownership-state'
 import { ptySizes } from '../delivery/visibility-state'
@@ -71,11 +70,6 @@ export async function probePtyLivenessFromRuntimeController(
     if (provider.probePtyLiveness) {
       return await provider.probePtyLiveness(ptyId)
     }
-    // Why: the in-process provider is its own sole owner (#12393), so its
-    // refusal is authoritative; every other probe-less provider is doubt.
-    if (provider instanceof LocalPtyProvider) {
-      return provider.hasPty(ptyId)
-    }
     return null
   } catch {
     return null
@@ -95,7 +89,7 @@ export async function attachPtyFromRuntimeController(
   } catch {
     return false
   }
-  if (provider !== localProvider || provider instanceof LocalPtyProvider) {
+  if (provider !== localProvider) {
     return false
   }
   try {

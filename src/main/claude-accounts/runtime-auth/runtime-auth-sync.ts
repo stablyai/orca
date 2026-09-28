@@ -1,3 +1,7 @@
+import {
+  assertWslAccountExecutionTarget,
+  type WslAccountExecutionContext
+} from '../../wsl/wsl-account-execution-context'
 import { existsSync, readFileSync } from 'node:fs'
 import {
   getSelectedClaudeAccountIdForTarget,
@@ -12,12 +16,28 @@ import { writeActiveClaudeKeychainCredentialsForRuntime } from '../keychain'
 import { ClaudeRuntimeAuthPreparationService } from './runtime-auth-preparation'
 
 export class ClaudeRuntimeAuthSync extends ClaudeRuntimeAuthPreparationService {
-  protected async doSyncForCurrentSelection(target?: ClaudeAccountSelectionTarget): Promise<void> {
+  protected async doSyncForCurrentSelection(
+    target?: ClaudeAccountSelectionTarget,
+    execution?: WslAccountExecutionContext
+  ): Promise<void> {
     const settings = this.store.getSettings()
     const effectiveTarget = this.resolveWslDefaultTarget(target)
     const normalizedTarget = normalizeClaudeAccountSelectionTarget(effectiveTarget)
     const activeAccountId = getSelectedClaudeAccountIdForTarget(settings, normalizedTarget)
     const activeAccount = this.getActiveAccount(settings.claudeManagedAccounts, activeAccountId)
+    if (execution) {
+      assertWslAccountExecutionTarget(execution, effectiveTarget)
+      if (activeAccountId && (!activeAccount || activeAccount.managedAuthRuntime !== 'wsl')) {
+        throw new Error('Selected Claude account is unavailable for the captured execution owner')
+      }
+      if (activeAccount) {
+        const credentials = await this.readManagedCredentials(activeAccount, execution)
+        if (!credentials || !this.isValidCredentialsJsonObject(credentials)) {
+          throw new Error('Selected Claude account is unavailable for the captured execution owner')
+        }
+      }
+      return
+    }
     const previousAccount = this.getActiveAccount(
       settings.claudeManagedAccounts,
       this.lastSyncedAccountId

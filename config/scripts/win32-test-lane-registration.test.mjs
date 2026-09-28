@@ -84,7 +84,6 @@ const UNREGISTERED_ON_MAIN = [
   // half of the file still runs on ubuntu, the Windows half runs nowhere.
   'src/main/antigravity/windows-hook-payload-delivery.test.ts',
   // `.win32.test.ts` by name yet in neither list -- the plainest instance of the class.
-  'src/main/daemon/node-pty-windows-input-error.win32.test.ts',
   // Same shape as the antigravity file: a win32-only sibling suite that never runs.
   'src/main/grok/windows-grok-hook-script.test.ts',
   // Whole file is `describe.runIf(platform === 'win32')`; runs on no machine.

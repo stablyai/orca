@@ -9,22 +9,10 @@ import {
 } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { copyScriptWithLocalModules } from './script-module-dependencies.mjs'
-import { peImage } from './windows-pe-image-fixture.mjs'
 
-/**
- * The wide literal `usesCygwinRuntime` holds, as it sits in a real addon. A
- * fixture addon without it is a build that predates the MSYS breakaway denial,
- * which is what these tests need to be able to represent.
- *
- * Taken from the gate itself: a re-typed copy agrees with a stale gate by
- * construction, which is the one thing these fixtures must not do.
- */
-const { CYGWIN_BREAKAWAY_MARKER, CYGWIN_BREAKAWAY_MARKER_TEXT } = createRequire(import.meta.url)(
-  './node-pty-job-ownership.cjs'
-)
 const { CREATION_TIME_FLAG } = createRequire(import.meta.url)(
   './windows-process-tree-creation-time.cjs'
 )
@@ -32,9 +20,6 @@ const { CREATION_TIME_FLAG } = createRequire(import.meta.url)(
 const sourceScriptPath = fileURLToPath(new URL('./rebuild-native-deps.mjs', import.meta.url))
 const sourceInstallScriptPath = fileURLToPath(
   new URL('./install-electron-package-binary.mjs', import.meta.url)
-)
-const sourceNodePtyJobOwnershipPath = fileURLToPath(
-  new URL('./node-pty-job-ownership.cjs', import.meta.url)
 )
 const sourceWindowsProcessTreeGypRebuildPath = fileURLToPath(
   new URL('./windows-process-tree-gyp-rebuild.mjs', import.meta.url)
@@ -112,7 +97,6 @@ export function mkTempProject() {
   mkdirSync(join(projectDir, 'config', 'scripts'), { recursive: true })
   copyFileSync(sourceScriptPath, join(projectDir, 'config', 'scripts', 'rebuild-native-deps.mjs'))
   copyScriptWithLocalModules(sourceInstallScriptPath, join(projectDir, 'config', 'scripts'))
-  copyScriptWithLocalModules(sourceNodePtyJobOwnershipPath, join(projectDir, 'config', 'scripts'))
   copyFileSync(
     sourceWindowsProcessTreeCreationTimePath,
     join(projectDir, 'config', 'scripts', 'windows-process-tree-creation-time.cjs')
@@ -333,93 +317,6 @@ process.exit(result.status ?? 0)
   }
 }
 
-export function writeFakeNodePtyConptyPayload(
-  projectDir,
-  arch,
-  { cygwinBreakawayDenied = true } = {}
-) {
-  const releaseDir = join(projectDir, 'node_modules', 'node-pty', 'build', 'Release')
-  mkdirSync(releaseDir, { recursive: true })
-  writeFileSync(
-    join(releaseDir, 'conpty.node'),
-    Buffer.concat([
-      peImage({ arch }),
-      cygwinBreakawayDenied ? CYGWIN_BREAKAWAY_MARKER : Buffer.alloc(0)
-    ])
-  )
-  const sourceDir = join(
-    projectDir,
-    'node_modules',
-    'node-pty',
-    'third_party',
-    'conpty',
-    '0.1.0',
-    `win10-${arch}`
-  )
-  mkdirSync(sourceDir, { recursive: true })
-  writeFileSync(join(sourceDir, 'conpty.dll'), `conpty.dll ${arch}`)
-  writeFileSync(join(sourceDir, 'OpenConsole.exe'), `OpenConsole.exe ${arch}`)
-}
-
-/** The C++ a Windows rebuild would compile; only the wide literal the source gate reads has to be real. */
-export function writeFakeNodePtyConptySource(projectDir, { cygwinBreakawayDenied = true } = {}) {
-  const sourceDir = join(projectDir, 'node_modules', 'node-pty', 'src', 'win')
-  mkdirSync(sourceDir, { recursive: true })
-  writeFileSync(
-    join(sourceDir, 'conpty.cc'),
-    cygwinBreakawayDenied
-      ? `for (const wchar_t* dll : {L"${CYGWIN_BREAKAWAY_MARKER_TEXT}", L"cygwin1.dll"}) {}\n`
-      : 'JOB_OBJECT_LIMIT_BREAKAWAY_OK\n'
-  )
-}
-
-function writeFakeNodePtyAddon(nodePtyDir, nativeDir, { cygwinBreakawayDenied }) {
-  const addonDir = resolve(join(nodePtyDir, 'lib'), nativeDir)
-  mkdirSync(addonDir, { recursive: true })
-  for (const nativeName of ['conpty', 'pty']) {
-    writeFileSync(
-      join(addonDir, `${nativeName}.node`),
-      Buffer.concat([
-        peImage({ arch: process.arch === 'arm64' ? 'arm64' : 'x64' }),
-        cygwinBreakawayDenied ? CYGWIN_BREAKAWAY_MARKER : Buffer.alloc(0)
-      ])
-    )
-  }
-}
-
-export function writeFakeLoadableNodePty(
-  projectDir,
-  { nativeDir = 'prebuilds/pty', ownsPtyJob = true, cygwinBreakawayDenied = true } = {}
-) {
-  const nodePtyDir = join(projectDir, 'node_modules', 'node-pty')
-  mkdirSync(join(nodePtyDir, 'lib'), { recursive: true })
-  // Why a real file: the job-ownership gate reads the addon it was told about,
-  // because every job export predates the MSYS breakaway denial and so cannot
-  // distinguish a current build from one that leaks Git Bash children.
-  writeFakeNodePtyAddon(nodePtyDir, nativeDir, { cygwinBreakawayDenied })
-  writeFileSync(join(nodePtyDir, 'index.js'), 'module.exports = {}\n')
-  writeFileSync(
-    join(nodePtyDir, 'lib', 'utils.js'),
-    `
-exports.loadNativeModule = function loadNativeModule(nativeName) {
-  return {
-    dir: ${JSON.stringify(nativeDir)},
-    module: {
-      nativeName,
-      ...(${JSON.stringify(ownsPtyJob)}
-        ? {
-            listJobProcessIds() {},
-            terminateJob() {},
-            assignCurrentProcessToJob() {}
-          }
-        : {})
-    }
-  }
-}
-`
-  )
-}
-
 export function writeFakeWindowsRegistry(projectDir) {
   const registryDir = join(projectDir, 'node_modules', '@orca', 'windows-registry')
   mkdirSync(registryDir, { recursive: true })
@@ -508,31 +405,4 @@ export function writeFakeWindowsProcessTreeWithNodeAddonApi(
   writeFileSync(join(nodeAddonApiDir, 'napi.h'), '// napi.h\n')
   writeFileSync(join(nodeAddonApiDir, 'napi-inl.h'), '// napi-inl.h\n')
   writeFileSync(join(nodeAddonApiDir, 'napi-inl.deprecated.h'), '// napi-inl.deprecated.h\n')
-}
-
-export function writeNodePtyPatchFile(projectDir) {
-  mkdirSync(join(projectDir, 'config', 'patches'), { recursive: true })
-  writeFileSync(join(projectDir, 'config', 'patches', 'node-pty@1.1.0.patch'), 'patch marker\n')
-}
-
-export function writePatchedNodePtyBuildArtifacts(
-  projectDir,
-  { cygwinBreakawayDenied = true } = {}
-) {
-  const buildDir = join(projectDir, 'node_modules', 'node-pty', 'build', 'Release')
-  mkdirSync(buildDir, { recursive: true })
-  if (process.platform === 'win32') {
-    writeFileSync(
-      join(buildDir, 'conpty.node'),
-      cygwinBreakawayDenied ? CYGWIN_BREAKAWAY_MARKER : Buffer.alloc(0)
-    )
-    mkdirSync(join(buildDir, 'conpty'), { recursive: true })
-    writeFileSync(join(buildDir, 'conpty', 'conpty.dll'), '')
-    writeFileSync(join(buildDir, 'conpty', 'OpenConsole.exe'), '')
-    return
-  }
-  writeFileSync(join(buildDir, 'pty.node'), '')
-  if (process.platform === 'darwin') {
-    writeFileSync(join(buildDir, 'spawn-helper'), '')
-  }
 }

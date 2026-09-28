@@ -1,3 +1,4 @@
+import type { WslDaemonSessions } from '../../wsl/wsl-daemon-sessions'
 import type { BrowserWindow, WebContents } from 'electron'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { Store } from '../../persistence'
@@ -49,6 +50,7 @@ export type SerializeResult = {
 } | null
 
 export type PtyIpcSessionOptions = {
+  wslDaemonSessions?: WslDaemonSessions
   prepareCodexSessionResume?: PrepareCodexSessionResume
   awaitLocalPtyStartup?: () => Promise<void>
   awaitLocalPtyProviderStartup?: () => Promise<void>

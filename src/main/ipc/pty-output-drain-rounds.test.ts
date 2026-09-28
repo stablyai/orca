@@ -9,7 +9,6 @@ import {
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
-vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
@@ -305,7 +304,8 @@ describe('registerPtyHandlers', () => {
       expect(mainWindow.webContents.send).toHaveBeenCalledTimes(32)
       vi.advanceTimersByTime(1)
       expect(mainWindow.webContents.send).toHaveBeenCalledTimes(32)
-      expect(vi.getTimerCount()).toBe(0)
+      // The daemon retains its producer-pause failsafe.
+      expect(vi.getTimerCount()).toBe(1)
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         pendingPtyCount: 1,
         pendingChars: 88 * 1024,

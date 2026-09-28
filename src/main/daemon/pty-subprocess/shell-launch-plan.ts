@@ -1,7 +1,7 @@
 import { shouldUseShellReadyStartupDelivery } from '../../../shared/codex-startup-delivery'
 import { win32 as pathWin32 } from 'node:path'
 import { isWindowsGitBashShellPath, resolveWindowsGitBashShellPath } from '../../git-bash'
-import { isPwshAvailable } from '../../pwsh'
+import { isPwshAvailableAsync } from '../../pwsh'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../../pty/codex-home-wsl-env'
 import { addOrcaWslInteropEnv } from '../../pty/wsl-orca-env'
 import {
@@ -25,7 +25,7 @@ import {
   ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV,
   resolveWindowsShellLaunchArgs
 } from '../../providers/windows-shell-args'
-import { resolveUnixShellPath } from '../../providers/local-pty-utils'
+import { resolveUnixShellPath } from '../../providers/pty-spawn-validation'
 import { selectShellStartupFeatures } from '../../shell-startup-features'
 import { parseWslPath } from '../../wsl'
 import { addWslEnvKeys } from '../../wsl-env'
@@ -50,10 +50,10 @@ export type PtyShellLaunchPlan = {
   startupAgentRecognition: RecognizedAgentProcess | null
 }
 
-export function createPtyShellLaunchPlan(
+export async function createPtyShellLaunchPlan(
   opts: PtySubprocessOptions,
   env: Record<string, string>
-): PtyShellLaunchPlan {
+): Promise<PtyShellLaunchPlan> {
   const resolvedWslContext = resolveWslSessionContext(opts)
   let shellPath = resolvedWslContext ? 'wsl.exe' : opts.shellOverride || resolvePtyShellPath(env)
   let shellArgs: string[]
@@ -92,7 +92,7 @@ export function createPtyShellLaunchPlan(
         ? (resolveEffectiveWindowsPowerShell({
             shellFamily: resolvedShellFamily,
             implementation: opts.terminalWindowsPowerShellImplementation,
-            pwshAvailable: shouldProbePwsh ? isPwshAvailable() : false
+            pwshAvailable: shouldProbePwsh ? await isPwshAvailableAsync() : false
           }) ?? shellPath)
         : shellPath
     }

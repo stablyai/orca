@@ -9,7 +9,7 @@
  *
  * Usage: node config/scripts/daemon-endpoint-handover-smoke.mjs
  */
-import { fork } from 'node:child_process'
+import { daemonSmokeEntry, spawnDaemonSmoke } from './daemon-smoke-launch.mjs'
 import { connect } from 'node:net'
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
@@ -17,7 +17,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 const repoRoot = resolve(import.meta.dirname, '..', '..')
-const entryPath = join(repoRoot, 'out', 'main', 'daemon-entry.js')
+const entryPath = daemonSmokeEntry(repoRoot)
 
 // Why read it from source: the launcher keys adoption of a live incumbent on this exact code,
 // and hardcoding it here would let the two drift silently — which is the failure the assertion
@@ -45,27 +45,20 @@ function readProtocolVersion() {
 function bootDaemon(tag, dir, socketPath) {
   const tokenPath = join(dir, `${tag}.token`)
   const pidPath = join(dir, `${tag}.pid`)
-  const child = fork(
+  const child = spawnDaemonSmoke(repoRoot, dir, [
+    '--socket',
+    socketPath,
+    '--token',
+    tokenPath,
+    '--pid-record',
+    pidPath,
+    '--launch-nonce',
+    randomUUID(),
+    '--entry-path',
     entryPath,
-    [
-      '--socket',
-      socketPath,
-      '--token',
-      tokenPath,
-      '--pid-record',
-      pidPath,
-      '--launch-nonce',
-      randomUUID(),
-      '--entry-path',
-      entryPath,
-      '--app-version',
-      'endpoint-handover-smoke'
-    ],
-    {
-      stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
-      env: { ...process.env, ORCA_USER_DATA_PATH: dir }
-    }
-  )
+    '--app-version',
+    'endpoint-handover-smoke'
+  ])
   let stderr = ''
   child.stderr?.on('data', (chunk) => {
     stderr += chunk.toString('utf8')

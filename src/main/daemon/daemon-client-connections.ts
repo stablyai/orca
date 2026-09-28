@@ -22,6 +22,8 @@ type DaemonClientConnectionOptions = {
   identity: {
     launchNonce: string | null
     startedAtMs: number | null
+    linuxStartTicks?: string
+    bootId?: string
     entryPath: string | null
     appVersion: string | null
     spawnerExecPath: string | null
@@ -151,6 +153,9 @@ export class DaemonClientConnections {
                 pid: process.pid,
                 startedAtMs: identity.startedAtMs,
                 launchNonce: identity.launchNonce,
+                ...(identity.linuxStartTicks && identity.bootId
+                  ? { linuxStartTicks: identity.linuxStartTicks, bootId: identity.bootId }
+                  : {}),
                 ...(identity.entryPath ? { entryPath: identity.entryPath } : {}),
                 ...(identity.appVersion ? { appVersion: identity.appVersion } : {}),
                 ...(identity.spawnerExecPath ? { spawnerExecPath: identity.spawnerExecPath } : {})

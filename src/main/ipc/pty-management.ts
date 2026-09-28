@@ -1,11 +1,11 @@
 import { ipcMain } from 'electron'
 import { DaemonPtyRouter } from '../daemon/daemon-pty-router'
-import { DegradedDaemonPtyProvider } from '../daemon/degraded-daemon-pty-provider'
 import type { DaemonPtyAdapter } from '../daemon/daemon-pty-adapter'
 import {
   getCurrentDaemonMacTccAttributionHealth,
   getDaemonProvider,
-  restartDaemon
+  restartDaemon,
+  retryDaemonPtyProvider
 } from '../daemon/daemon-init'
 import { getCurrentDaemonAdapter } from '../daemon/daemon-provider-routing'
 import {
@@ -34,7 +34,7 @@ function getDaemonAdapters(): DaemonPtyAdapter[] {
   if (!provider) {
     return []
   }
-  if (provider instanceof DaemonPtyRouter || provider instanceof DegradedDaemonPtyProvider) {
+  if (provider instanceof DaemonPtyRouter) {
     return [...provider.getAllAdapters()]
   }
   return [provider]
@@ -43,10 +43,7 @@ function getDaemonAdapters(): DaemonPtyAdapter[] {
 // Why: surface degraded mode (daemon alive but cannot spawn fresh PTYs) so the UI can warn new terminals lack persistence.
 function isDaemonDegraded(): boolean {
   const provider = getDaemonProvider()
-  return (
-    provider instanceof DegradedDaemonPtyProvider &&
-    provider.routesFreshSpawnsToLocalProvider === true
-  )
+  return provider instanceof DaemonPtyRouter && provider.freshSpawnsUnavailable
 }
 
 // Why the current adapter only: evidence is keyed to the daemon now spawning terminals, so a
@@ -74,6 +71,7 @@ export function registerDaemonManagementHandlers(): void {
   ipcMain.removeHandler('pty:management:killAll')
   ipcMain.removeHandler('pty:management:killOne')
   ipcMain.removeHandler('pty:management:restart')
+  ipcMain.removeHandler('pty:management:retry')
   ipcMain.removeHandler('pty:management:macTccAttribution')
   ipcMain.removeHandler('pty:management:resetFolderAccess')
 
@@ -113,9 +111,13 @@ export function registerDaemonManagementHandlers(): void {
 
   ipcMain.handle(
     'pty:management:listSessions',
-    async (): Promise<{ sessions: DaemonSessionInfo[]; degraded: boolean }> => {
+    async (): Promise<{
+      sessions: DaemonSessionInfo[]
+      degraded: boolean
+      unavailable: boolean
+    }> => {
       const sessions = await collectSessions(getDaemonAdapters())
-      return { sessions, degraded: isDaemonDegraded() }
+      return { sessions, degraded: isDaemonDegraded(), unavailable: getDaemonProvider() === null }
     }
   )
 
@@ -202,6 +204,16 @@ export function registerDaemonManagementHandlers(): void {
       }
     }
   )
+
+  ipcMain.handle('pty:management:retry', async (): Promise<{ success: boolean }> => {
+    try {
+      await retryDaemonPtyProvider()
+      return { success: true }
+    } catch (error) {
+      console.warn('[pty:management] retry failed', error)
+      return { success: false }
+    }
+  })
 
   ipcMain.handle('pty:management:restart', async (): Promise<{ success: boolean }> => {
     try {

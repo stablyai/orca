@@ -25,7 +25,7 @@ Each fails on a **new** offender _and_ on a **stale** entry, so the count can on
 
 ## 3. Real-binary — the assertions nothing else can make
 
-**Windows CI** (`package (windows)` job in `pr.yml`) rebuilds node-pty from patched source and runs the `win32` suites against a real ConPTY: a real detached grandchild, a real job kill, and the inverse — a clean `exit` must leave backgrounded work alone.
+**Windows CI** (`package (windows)` job in `pr.yml`) prepares the pinned Bun runtime and ConPTY provider, then runs the `win32` suites against real terminals: a real detached grandchild, a real job kill, and the inverse — a clean `exit` must leave backgrounded work alone.
 
 **Real WSL distro** — not in CI; WSL isn't available on hosted runners.
 

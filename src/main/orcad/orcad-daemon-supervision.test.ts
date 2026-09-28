@@ -56,20 +56,19 @@ describe('startOrcadDaemon', () => {
     })
   })
 
-  it('reports degraded when fresh terminals would fall back to the local provider', async () => {
+  it('reports degraded when new terminals are unavailable', async () => {
     daemonOwnsFreshPersistentPtysMock.mockReturnValue(false)
     const result = await startOrcadDaemon()
     expect(result.state).toBe('degraded')
   })
 
   it('fails open when the daemon cannot start at all', async () => {
-    initDaemonPtyProviderMock.mockRejectedValue(new Error('node-pty is missing'))
+    initDaemonPtyProviderMock.mockRejectedValue(new Error('Bun runtime is missing'))
     daemonOwnsFreshPersistentPtysMock.mockReturnValue(false)
-    // Fail-open, like the desktop: git, worktrees and non-persistent terminals must still
-    // serve. What must not happen is a thrown startup or a claim of persistence.
+    // Fail-open, like the desktop: git and worktrees must still serve. What must not happen is a thrown startup or a claim of persistence.
     await expect(startOrcadDaemon()).resolves.toEqual({
       state: 'unavailable',
-      reason: 'node-pty is missing'
+      reason: 'Bun runtime is missing'
     })
   })
 })

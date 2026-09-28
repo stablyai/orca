@@ -1,3 +1,4 @@
+import type { WslDaemonSessions } from '../wsl/wsl-daemon-sessions'
 import type { BrowserWindow, Tray } from 'electron'
 import { app } from 'electron'
 import type { Store } from '../persistence'
@@ -63,6 +64,10 @@ function createInitialProfileStateAdmission(): ProfileStateRuntimeAdmission | un
   return undefined
 }
 
+function createInitialWslDaemonSessions(): WslDaemonSessions | undefined {
+  return undefined
+}
+
 /** Mutable composition-root state shared by startup, window, serve, and quit phases. */
 export const mainProcessState = {
   mainWindow: null as BrowserWindow | null,
@@ -70,6 +75,7 @@ export const mainProcessState = {
   isQuitting: false,
   store: null as Store | null,
   profileStateStartup: createInitialProfileStateStartup(),
+  wslDaemonSessions: createInitialWslDaemonSessions(),
   profileStateAdmission: createInitialProfileStateAdmission(),
   stats: null as StatsCollector | null,
   claudeUsage: null as ClaudeUsageStore | null,

@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 const require = createRequire(import.meta.url)
 const {
   assertPackagedDaemonEntryExists,
-  verifyPackagedDaemonEntryBoots
+  verifyPackagedDaemonEntryBoots: verifyBoot
 } = require('./verify-packaged-daemon-entry.cjs')
 
 describe('verify-packaged-daemon-entry', () => {
@@ -21,8 +21,11 @@ describe('verify-packaged-daemon-entry', () => {
     rmSync(resourcesDir, { recursive: true, force: true })
   })
 
+  const verifyPackagedDaemonEntryBoots = (directory) =>
+    verifyBoot(directory, { execPath: process.execPath, platform: 'linux' })
+
   function writePackagedEntry(source) {
-    const entryDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'main')
+    const entryDir = join(resourcesDir, 'terminal-daemon')
     mkdirSync(entryDir, { recursive: true })
     writeFileSync(join(entryDir, 'daemon-entry.js'), source)
   }
@@ -30,12 +33,26 @@ describe('verify-packaged-daemon-entry', () => {
   // Why: a silent skip on a missing entry false-passed exactly the packaged
   // layout regression this gate exists to catch (rc.1 daemon-load incident).
   it('throws when the unpacked daemon entry is missing', () => {
-    expect(() => assertPackagedDaemonEntryExists(resourcesDir)).toThrow(
-      /missing unpacked daemon entry/
+    expect(() => assertPackagedDaemonEntryExists(resourcesDir, 'linux')).toThrow(
+      /missing terminal daemon entry/
     )
     expect(() => verifyPackagedDaemonEntryBoots(resourcesDir)).toThrow(
-      /missing unpacked daemon entry/
+      /missing terminal daemon entry/
     )
+  })
+
+  it('requires the Windows gate even when the daemon entry exists', () => {
+    writePackagedEntry('process.exit(0)')
+    expect(() => assertPackagedDaemonEntryExists(resourcesDir, 'win32')).toThrow(
+      /missing Windows Bun PTY gate/
+    )
+    writeFileSync(join(resourcesDir, 'terminal-daemon', 'windows-bun-pty-gate-entry.js'), '')
+    expect(() => assertPackagedDaemonEntryExists(resourcesDir, 'win32')).not.toThrow()
+  })
+
+  it('fails when the packaged Bun runtime is absent', () => {
+    writePackagedEntry('console.error("Usage: daemon-entry"); process.exit(1)')
+    expect(() => verifyBoot(resourcesDir, { platform: 'linux' })).toThrow(/could not launch/)
   })
 
   it('passes when the packaged entry loads and reaches argv parsing', () => {
@@ -46,7 +63,7 @@ describe('verify-packaged-daemon-entry', () => {
   it('fails when the packaged entry cannot resolve its module graph', () => {
     writePackagedEntry('require("orca-module-that-does-not-exist")\n')
     expect(() => verifyPackagedDaemonEntryBoots(resourcesDir)).toThrow(
-      /failed to load under plain Node/
+      /failed to load under bundled Bun/
     )
   })
 

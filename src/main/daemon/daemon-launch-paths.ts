@@ -1,3 +1,4 @@
+import { desktopDaemonBundleDir } from './daemon-bun-runtime'
 import { existsSync } from 'node:fs'
 import { connect } from 'node:net'
 import { join } from 'node:path'
@@ -27,6 +28,9 @@ export function getDaemonHistoryDir(): string {
 }
 
 export function getDaemonEntryPath(): string {
+  if (process.versions.electron) {
+    return join(desktopDaemonBundleDir(), 'daemon-entry.js')
+  }
   const appPath = getAppEnvironment().getAppPath()
   // Why: packaged getAppPath() points at app.asar, so redirect to app.asar.unpacked where daemon-entry.js is fork-executable.
   // Why asar and not isPackaged: orcad is a packaged non-Electron host whose bundle root holds

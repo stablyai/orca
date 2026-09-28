@@ -1,5 +1,5 @@
 import { settledWriteStub } from './settled-pty-write-stub'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { setPtyHostBindings } from '../ipc/pty-host-bindings'
 
 const { handleMock, onMock, removeHandlerMock, removeAllListenersMock } = vi.hoisted(() => ({
@@ -36,18 +36,6 @@ vi.mock('fs', () => ({
   constants: { X_OK: 1 }
 }))
 
-vi.mock('node-pty', () => ({
-  spawn: vi.fn().mockReturnValue({
-    onData: vi.fn(),
-    onExit: vi.fn(),
-    write: vi.fn(),
-    resize: vi.fn(),
-    kill: vi.fn(),
-    process: 'zsh',
-    pid: 12345
-  })
-}))
-
 vi.mock('../opencode/hook-service', () => ({
   openCodeHookService: { buildPtyEnv: () => ({}), clearPty: vi.fn() }
 }))
@@ -58,6 +46,8 @@ vi.mock('../pi/titlebar-extension-service', () => ({
 
 import {
   deletePtyOwnership,
+  getLocalPtyProvider,
+  setLocalPtyProvider,
   registerPtyHandlers,
   registerSshPtyProvider,
   setPtyOwnership,
@@ -74,7 +64,13 @@ describe('PTY provider dispatch', () => {
   }
   const mainWindowIpcEvent = { sender: mainWindow.webContents }
 
+  const originalLocalProvider = getLocalPtyProvider()
+  let local: IPtyProvider
+  afterEach(() => setLocalPtyProvider(originalLocalProvider))
+
   function setup(): void {
+    local = createMockProvider('local-test-pty')
+    setLocalPtyProvider(local)
     handlers.clear()
     handleMock.mockReset()
     onMock.mockReset()
@@ -130,7 +126,10 @@ describe('PTY provider dispatch', () => {
       rows: 24,
       connectionId: null
     })) as { id: string }
-    expect(result.id).toBeTruthy()
+    expect(result.id).toBe('local-test-pty')
+    expect(local.spawn).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ cols: 80, rows: 24 })
+    )
   })
 
   it('routes to local provider when connectionId is undefined', async () => {
@@ -139,7 +138,10 @@ describe('PTY provider dispatch', () => {
       cols: 80,
       rows: 24
     })) as { id: string }
-    expect(result.id).toBeTruthy()
+    expect(result.id).toBe('local-test-pty')
+    expect(local.spawn).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ cols: 80, rows: 24 })
+    )
   })
 
   it('routes to SSH provider when connectionId is set', async () => {

@@ -184,6 +184,7 @@ describe('WslHookRelayManager', () => {
   function guestTransport(
     options: {
       registerInstallPlugins?: boolean
+      guestHome?: string
       detectedAgents?: string[]
       claudeVersion?: string
     } = {}
@@ -191,7 +192,7 @@ describe('WslHookRelayManager', () => {
     const { registerInstallPlugins = true, detectedAgents = ['codex'], claudeVersion } = options
     const harness = createGuestHarness()
     harnesses.push(harness)
-    registerWslHookFsHandlers(harness.guestDispatcher, home)
+    registerWslHookFsHandlers(harness.guestDispatcher, options.guestHome ?? home)
     harness.guestDispatcher.onRequest(AGENT_HOOK_REQUEST_REPLAY_METHOD, async () => ({
       replayed: 0
     }))
@@ -259,6 +260,70 @@ describe('WslHookRelayManager', () => {
     }
     return { manager: new WslHookRelayManager(deps), deps }
   }
+
+  it('isolates explicit guest users and preserves them across hooks-off restart', async () => {
+    const aliceHome = `${home}/alice`
+    const bobHome = `${home}/bob`
+    const waitForSentinel = vi.fn()
+    for (const guestHome of [aliceHome, bobHome, aliceHome, bobHome]) {
+      waitForSentinel.mockImplementationOnce(async () => guestTransport({ guestHome }))
+    }
+    const { manager, deps } = createManager({ waitForSentinel })
+    try {
+      await manager.ensureForDistro('Ubuntu', `${aliceHome}/.codex`, undefined, 'alice')
+      await manager.ensureForDistro('Ubuntu', `${bobHome}/.codex`, undefined, 'bob')
+      expect(deps.spawnRelay).toHaveBeenCalledTimes(2)
+      expect(deps.prepareRuntime).toHaveBeenCalledWith('Ubuntu', 'alice')
+      expect(deps.prepareRuntime).toHaveBeenCalledWith('Ubuntu', 'bob')
+      expect(manager.getGuestEndpointFilePath('Ubuntu')).toBeNull()
+      expect(manager.getGuestEndpointFilePath('Ubuntu', 'alice')).not.toBeNull()
+      expect(manager.getGuestEndpointFilePath('Ubuntu', 'bob')).not.toBeNull()
+      expect(deps.installCodex).not.toHaveBeenCalled()
+      expect(deps.installHooks).toHaveBeenCalledWith(
+        expect.anything(),
+        aliceHome,
+        expect.objectContaining({ agents: ['codex'], codexHomeDir: `${aliceHome}/.codex` })
+      )
+      expect(deps.installHooks).toHaveBeenCalledWith(
+        expect.anything(),
+        bobHome,
+        expect.objectContaining({ agents: ['codex'], codexHomeDir: `${bobHome}/.codex` })
+      )
+      await manager.ensureForDistro('ubuntu', undefined, undefined, 'alice')
+      expect(deps.spawnRelay).toHaveBeenCalledTimes(2)
+      manager.disposeAll({ permanent: false })
+      manager.resumeStoppedRelays()
+      await vi.waitFor(() => expect(deps.spawnRelay).toHaveBeenCalledTimes(4))
+      const users = vi.mocked(deps.spawnRelay).mock.calls.map((call) => call[4])
+      expect(users).toEqual(['alice', 'bob', 'alice', 'bob'])
+    } finally {
+      manager.disposeAll()
+    }
+  })
+
+  it('keeps the explicit user through stale-install retry', async () => {
+    const { manager, deps } = createManager({
+      waitForSentinel: vi
+        .fn()
+        .mockRejectedValueOnce(startupError(78))
+        .mockImplementation(async () => guestTransport())
+    })
+    try {
+      await manager.ensureForDistro('Ubuntu', undefined, undefined, 'alice')
+      expect(deps.runInstall).toHaveBeenCalledWith(
+        'Ubuntu',
+        expect.any(String),
+        expect.anything(),
+        'alice'
+      )
+      expect(vi.mocked(deps.spawnRelay).mock.calls.map((call) => call[4])).toEqual([
+        'alice',
+        'alice'
+      ])
+    } finally {
+      manager.disposeAll()
+    }
+  })
 
   it('starts one relay per distro, installs hooks, exposes the guest endpoint path, and forwards envelopes', async () => {
     const { manager, deps } = createManager({})

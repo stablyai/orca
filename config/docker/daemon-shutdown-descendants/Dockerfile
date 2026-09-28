@@ -1,13 +1,13 @@
-FROM node:22-bookworm-slim
+FROM debian:bookworm-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
-ENV NODE_PATH=/usr/local/lib/node_modules
+ENV ORCA_BACKGROUND_LAUNCH=1
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends build-essential python3 procps util-linux \
-  && rm -rf /var/lib/apt/lists/* \
-  && npm install --global --no-fund --no-audit node-pty@1.1.0
+  && apt-get install -y --no-install-recommends libstdc++6 procps util-linux \
+  && rm -rf /var/lib/apt/lists/*
 
+COPY --chmod=755 bun-runtime /usr/local/bin/bun-runtime
 COPY run-case.sh /usr/local/bin/run-daemon-shutdown-descendants
 COPY fixture.cjs /opt/daemon-shutdown-descendants/fixture.cjs
 

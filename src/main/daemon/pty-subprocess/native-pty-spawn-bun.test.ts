@@ -1,11 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 
-const { nodePtyFactory, wrapShellSpawnMock } = vi.hoisted(() => ({
-  nodePtyFactory: vi.fn(() => ({ spawn: vi.fn() })),
+const { wrapShellSpawnMock } = vi.hoisted(() => ({
   wrapShellSpawnMock: vi.fn((file: string, args: string[]) => ({ file, args }))
 }))
 
-vi.mock('node-pty', nodePtyFactory)
 vi.mock('../../providers/macos-tcc-login-shell', () => ({
   hostReportsChildExitStatus: (file: string) => file !== '/usr/bin/login',
   wrapShellSpawnForMacosTccAttribution: wrapShellSpawnMock
@@ -14,6 +12,25 @@ vi.mock('../../providers/macos-tcc-login-shell', () => ({
 import { spawnNativeDaemonPty } from './native-pty-spawn'
 
 describe('native PTY runtime selection', () => {
+  it('refuses an unsupported runtime before attempting any shell', async () => {
+    const spawnBunPty = vi.fn()
+    await expect(
+      spawnNativeDaemonPty(
+        {
+          shellPath: '/bin/sh',
+          shellArgs: [],
+          spawnCwd: '/tmp',
+          env: {},
+          cols: 80,
+          rows: 24,
+          windowsFallbackAttempts: []
+        },
+        { canUseBunPty: () => false, spawnBunPty }
+      )
+    ).rejects.toThrow('requires the bundled Bun')
+    expect(spawnBunPty).not.toHaveBeenCalled()
+  })
+
   it('spawns with Bun.Terminal without loading node-pty', async () => {
     const dispose = vi.fn()
     const spawnBunPty = vi.fn(() => ({
@@ -48,7 +65,6 @@ describe('native PTY runtime selection', () => {
 
     expect(result.process.pid).toBe(9876)
     expect(spawnBunPty).toHaveBeenCalledOnce()
-    expect(nodePtyFactory).not.toHaveBeenCalled()
   })
 
   it('applies the macOS login wrapper before selecting the Bun PTY runtime', async () => {

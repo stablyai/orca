@@ -1,3 +1,4 @@
+import { preparePtyIpcWslOptions } from './spawn-wsl-options'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { CLAUDE_AUTH_ENV_VARS } from '../../../claude-accounts/environment'
 import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../../../pty/legacy-terminal-shim-dir'
@@ -42,7 +43,9 @@ export async function buildPtyIpcSpawnOptions(
     ctx.agentTeamsEnvToDelete ?? [],
     // Why: disable old hosts without removing ORCA_REAL_* while their Windows shim remains on PATH.
     ctx.isDaemonHostSpawn || args.connectionId ? LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS : [],
-    ctx.isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(ctx.spawnEnv) : [],
+    ctx.isDaemonHostSpawn && !ctx.wslGuest
+      ? getInheritedAgentHookEnvKeysToDelete(ctx.spawnEnv)
+      : [],
     getInheritedClaudeSessionStampEnvKeysToDelete(ctx.spawnEnv),
     ctx.skipCodexHomeEnv ? CODEX_HOME_ENV_KEYS : [],
     // Why: the persistent daemon compares its own merged CODEX_HOME pair;
@@ -193,5 +196,6 @@ export async function buildPtyIpcSpawnOptions(
   ctx.releaseWorktreeSpawn = acquireWorktreeSpawn
     ? await acquireWorktreeSpawn.call(runtime, args.worktreeId)
     : undefined
+  await preparePtyIpcWslOptions(ctx)
   return null
 }

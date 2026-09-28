@@ -1,4 +1,4 @@
-// Shared node-pty stub, PowerShell path stubs and daemon env lifecycle for the
+// Shared terminal stub, PowerShell path stubs and daemon env lifecycle for the
 // pty-subprocess test files. `vi.mock` calls must stay in each test file.
 import { afterEach, beforeEach, vi } from 'vitest'
 import type { Mock } from 'vitest'

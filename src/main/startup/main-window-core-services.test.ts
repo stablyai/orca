@@ -40,6 +40,7 @@ const {
       pluginMarketplaceInstaller: null,
       desktopRelayService: null,
       isServeMode: false,
+      wslDaemonSessions: { prepareFresh: vi.fn(), reconnect: vi.fn(), dispose: vi.fn() },
       localPtyStartupReady: Promise.resolve(),
       localPtyProviderStartupReady: Promise.resolve()
     },
@@ -79,6 +80,26 @@ const { attachMainWindowCoreServices } = await import('./main-window-core-servic
 describe('main window profile-state update preparation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+  })
+
+  it('forwards captured guest account identity through the terminal auth callback', async () => {
+    const window = { webContents: { id: 17 } }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this mocked composition root only reads webContents.
+    attachMainWindowCoreServices(window as never, {
+      markExpectedRendererReload: vi.fn(),
+      recordRendererReload: vi.fn()
+    })
+    expect(attachMainWindowServicesMock.mock.calls[0]?.[5]).toMatchObject({
+      wslDaemonSessions: state.wslDaemonSessions
+    })
+    const prepare = attachMainWindowServicesMock.mock.calls[0]?.[4]
+    if (typeof prepare !== 'function') {
+      throw new Error('Expected terminal auth preparation callback')
+    }
+    const target = { runtime: 'wsl', wslDistro: 'Ubuntu' }
+    const execution = { distro: 'Ubuntu', userName: 'alice', userId: '1000', home: '/home/alice' }
+    await prepare(target, execution)
+    expect(state.claudeRuntimeAuth.prepareForClaudeLaunch).toHaveBeenCalledWith(target, execution)
   })
 
   it('publishes both recovery forms with one profile checkpoint before an update quit', async () => {

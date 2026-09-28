@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
@@ -78,7 +78,7 @@ it.each([
   '.npmrc',
   'tsconfig.json',
   'config/tsconfig.node.json',
-  'config/patches/node-pty@1.1.0.patch',
+  'config/patches/@vscode__windows-process-tree@0.8.0.patch',
   'native/windows-registry/src/addon.cc',
   '.github/actions/install-node-dependencies/action.yml',
   '.github/workflows/bun-profile-tests.yml',
@@ -124,10 +124,20 @@ describe('the actual Bun build and profile-test dependency graph', () => {
     'config/scripts/bun-cpu-baseline-smoke.mjs',
     'config/scripts/runtime-serve-terminal-smoke.mjs',
     'config/scripts/vitest-host-ports-setup.ts',
-    'tests/e2e/daemon-running-work-probe.unit.test.ts'
+    'tests/e2e/daemon-running-work-probe.unit.test.ts',
+    'src/shared/terminal-unicode-provider.ts',
+    'src/shared/terminal-unicode-provider.test.ts',
+    'src/main/daemon/headless-emulator-fidelity.fuzz.test.ts'
   ])('retains the full matrix for a real runtime, worker or test input: %s', async (file) => {
     expect(inputs.has(file)).toBe(true)
     expect((await classifyBunProfileChanges([file], async () => inputs)).shouldRun).toBe(true)
+  })
+
+  it('keeps every explicit artifact test selector on disk', () => {
+    const missing = bunProfileTestPaths({ artifact: true })
+      .filter((path) => /\.test\.(?:ts|mjs)$/.test(path))
+      .filter((path) => !existsSync(path))
+    expect(missing).toEqual([])
   })
 
   it('retains all selected tests and uses the same selectors as the Bun runner', () => {

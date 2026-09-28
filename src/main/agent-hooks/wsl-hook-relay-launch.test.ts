@@ -12,6 +12,26 @@ import { listRunningWslDistrosAsync } from '../wsl'
 import { isWslDistroRunning, spawnWslRelayProcess } from './wsl-hook-relay-launch'
 
 describe('spawnWslRelayProcess', () => {
+  it('pins the explicit user before --exec', () => {
+    spawnWslRelayProcess('Ubuntu', {}, '1.2.3', '/home/ada/bun', 'ada')
+    expect(spawnMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        args: [
+          '-d',
+          'Ubuntu',
+          '--user',
+          'ada',
+          '--exec',
+          'sh',
+          '-c',
+          expect.any(String),
+          'orca-hook-relay',
+          '/home/ada/bun'
+        ]
+      })
+    )
+  })
+
   it('names an explicit Windows directory rather than inheriting one', () => {
     spawnWslRelayProcess('Ubuntu', {}, '1.2.3', '/home/ada/bun')
 

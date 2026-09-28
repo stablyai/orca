@@ -1,4 +1,4 @@
-import type * as pty from 'node-pty'
+import type { TerminalProcess } from '../../../shared/terminal-process'
 import { ptyShellProcessId } from '../../windows/windows-pty-job'
 import { confirmShellForegroundProcess } from '../../providers/agent-foreground-process'
 import { readWindowsPtyJobProcessIds } from '../../providers/windows-pty-job-membership'
@@ -7,7 +7,7 @@ import { readWindowsPtyJobProcessIds } from '../../providers/windows-pty-job-mem
  *  a post-request process inspection (POSIX `ps`, Windows job membership),
  *  never cached state. */
 export async function confirmPtyShellForeground(args: {
-  process: pty.IPty
+  process: TerminalProcess
   shellPath: string
   isDead: () => boolean
 }): Promise<boolean> {

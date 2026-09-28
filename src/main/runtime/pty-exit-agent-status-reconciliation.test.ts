@@ -47,8 +47,7 @@ describe('onPtyExit agent-status reconciliation', () => {
   })
 
   it('reconciles a physical -1 exit reported by the provider callback', () => {
-    // node-pty forwards real exits as -1 (local-pty-provider-shutdown.test.ts pins this), so the
-    // numeric code alone cannot separate a dead process from a failed stop.
+    // A negative code alone cannot separate an observed process exit from a failed stop.
     const reconcile = vi.fn()
     runtimeWithBoundPane(reconcile).onPtyExit(PTY, -1, undefined, { providerExitObserved: true })
 

@@ -1,15 +1,6 @@
-const {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  realpathSync,
-  rmSync
-} = require('node:fs')
+const { existsSync, readFileSync, readdirSync, realpathSync, rmSync } = require('node:fs')
 const { dirname, join, resolve } = require('node:path')
 const { builtinModules, createRequire } = require('node:module')
-const { PE_MACHINE, readPeMachine } = require('./scripts/windows-pe-machine.cjs')
 
 const projectDir = resolve(__dirname, '..')
 const requireFromProject = createRequire(join(projectDir, 'package.json'))
@@ -22,7 +13,6 @@ const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   'electron-updater',
   'i18next',
   'jsonc-parser',
-  'node-pty',
   'posthog-node',
   'proper-lockfile',
   // serve-sim (for CLI JS entry + closure + state/middleware + to make packaged require('serve-sim') + its internal relatives work; mirrors other runtime JS like ws/yaml/zod. Natives/dylibs still via extraResources + the node_modules/serve-sim copy in resources from builder. Client if added too.
@@ -39,12 +29,6 @@ const WINDOWS_PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   '@orca/windows-registry'
 ]
 
-const NODE_PTY_PREBUILD_PREFIX_BY_PLATFORM = {
-  darwin: 'darwin-',
-  linux: 'linux-',
-  win32: 'win32-'
-}
-const NODE_PTY_CONPTY_RUNTIME_FILES = ['conpty.dll', 'OpenConsole.exe']
 const PARCEL_WATCHER_PLATFORM_PREFIX_BY_PLATFORM = {
   darwin: 'watcher-darwin',
   linux: 'watcher-linux',
@@ -282,14 +266,6 @@ function verifyPackagedMainRuntimeDeps(resourcesDir, asar = require('@electron/a
   }
 }
 
-function normalizeNodePtyWindowsArch(electronArch) {
-  const architecture = normalizeElectronArchitecture(electronArch)
-  if (architecture !== 'x64' && architecture !== 'arm64') {
-    throw new Error(`Unsupported packaged node-pty Windows architecture: ${architecture}`)
-  }
-  return architecture
-}
-
 function normalizeElectronArchitecture(electronArch) {
   const architecture =
     typeof electronArch === 'number'
@@ -301,143 +277,6 @@ function normalizeElectronArchitecture(electronArch) {
     throw new Error(`Unsupported packaged runtime architecture: ${String(electronArch)}`)
   }
   return architecture
-}
-
-function pruneNodePtyNativeDirectories(directory, platformPrefix, electronArch, allowsSuffix) {
-  if (!existsSync(directory)) {
-    return
-  }
-  const architecture = normalizeElectronArchitecture(electronArch)
-  const targetPrefix = `${platformPrefix}${architecture}`
-  const platformPrefixes = Object.values(NODE_PTY_PREBUILD_PREFIX_BY_PLATFORM)
-  for (const entry of readdirSync(directory, { withFileTypes: true })) {
-    if (!entry.isDirectory() || !platformPrefixes.some((prefix) => entry.name.startsWith(prefix))) {
-      continue
-    }
-    const matchesTarget =
-      entry.name.startsWith(platformPrefix) &&
-      (entry.name === targetPrefix || (allowsSuffix && entry.name.startsWith(`${targetPrefix}-`)))
-    if (!matchesTarget) {
-      rmSync(join(directory, entry.name), { recursive: true, force: true })
-    }
-  }
-}
-
-function findNodePtyConptySourceDir(nodePtyDir, windowsArch) {
-  const conptyRoot = join(nodePtyDir, 'third_party', 'conpty')
-  if (!existsSync(conptyRoot)) {
-    throw new Error(`Packaged node-pty is missing ${conptyRoot}`)
-  }
-  for (const entry of readdirSync(conptyRoot, { withFileTypes: true })) {
-    if (!entry.isDirectory()) {
-      continue
-    }
-    const sourceDir = join(conptyRoot, entry.name, `win10-${windowsArch}`)
-    if (existsSync(sourceDir)) {
-      return sourceDir
-    }
-  }
-  throw new Error(`Packaged node-pty has no ConPTY payload for win10-${windowsArch}`)
-}
-
-function ensurePackagedNodePtyConptyRuntime(nodePtyDir, electronArch) {
-  const releaseDir = join(nodePtyDir, 'build', 'Release')
-  if (!existsSync(join(releaseDir, 'conpty.node'))) {
-    return
-  }
-
-  const runtimeDir = join(releaseDir, 'conpty')
-  const missingRuntimeFiles = NODE_PTY_CONPTY_RUNTIME_FILES.filter(
-    (filename) => !existsSync(join(runtimeDir, filename))
-  )
-  if (missingRuntimeFiles.length === 0) {
-    return
-  }
-
-  const windowsArch = normalizeNodePtyWindowsArch(electronArch)
-  const sourceDir = findNodePtyConptySourceDir(nodePtyDir, windowsArch)
-  mkdirSync(runtimeDir, { recursive: true })
-  for (const filename of missingRuntimeFiles) {
-    const sourceFile = join(sourceDir, filename)
-    if (!existsSync(sourceFile)) {
-      throw new Error(`Packaged node-pty is missing ${sourceFile}`)
-    }
-    // Why: node-pty's Windows addon loads conpty.dll relative to conpty.node,
-    // but its install script can run before electron-builder gathers resources.
-    copyFileSync(sourceFile, join(runtimeDir, filename))
-  }
-}
-
-/** Whether node-pty's source build holds a conpty.node the `electronArch` slice could load. */
-function conptyTargetsArch(nodePtyDir, electronArch) {
-  const releaseAddon = join(nodePtyDir, 'build', 'Release', 'conpty.node')
-  if (!existsSync(releaseAddon)) {
-    return false
-  }
-  // Null (not a PE) counts as unloadable, so a truncated or quarantined build keeps the fallback.
-  return readPeMachine(releaseAddon) === PE_MACHINE[normalizeNodePtyWindowsArch(electronArch)]
-}
-
-function prunePackagedNodePty(resourcesDir, electronPlatformName, electronArch) {
-  const nodePtyDir = join(resourcesDir, 'node_modules', 'node-pty')
-  if (!existsSync(nodePtyDir)) {
-    return
-  }
-
-  // Why delete only conpty.node: node-pty's loader tries build/Release, then
-  // build/Debug, then prebuilds/<platform>-<arch>, swallowing every failure in
-  // between. Only the source build carries Orca's job-object exports, so an ABI
-  // mismatch or an AV quarantine of build/Release/conpty.node would silently
-  // fall through to the UNPATCHED prebuild -- teardown back to guessing by PID
-  // ancestry, with no error anywhere.
-  //
-  // Why NOT the whole prebuilds/ tree: Orca's own patch deletes the
-  // `conpty_console_list` and winpty `pty` gyp targets, so a Windows source
-  // build emits conpty.node and nothing else. conpty_console_list.node,
-  // pty.node, winpty.dll and winpty-agent.exe exist ONLY here. Removing them
-  // silently kills console-membership probing (the forked agent throws at
-  // require, and its caller resolves null with silent: true), and removes the
-  // winpty backend that node-pty still selects below Windows build 18309.
-  //
-  // Why the arch check: a cross-HOST package can copy a build/Release that is not a Windows
-  // binary at all, so its mere presence does not mean the target can load it -- deleting the
-  // target-arch prebuild would then remove the only loadable binary. This used to approximate
-  // that with `electronArch === process.arch`, which also skipped the arm64 slice cross-built on
-  // an x64 Windows host -- a rebuild that DOES emit a correct arm64 addon. That slice kept the
-  // unpatched prebuild as a reachable fallback for any later load failure of build/Release.
-  // Read the PE header instead of guessing.
-  if (electronPlatformName === 'win32' && conptyTargetsArch(nodePtyDir, electronArch)) {
-    const prebuildDir = join(nodePtyDir, 'prebuilds', `win32-${electronArch}`)
-    for (const staleFallback of ['conpty.node', 'conpty.pdb']) {
-      rmSync(join(prebuildDir, staleFallback), { force: true })
-    }
-  }
-
-  const allowedPrebuildPrefix = NODE_PTY_PREBUILD_PREFIX_BY_PLATFORM[electronPlatformName]
-  if (allowedPrebuildPrefix) {
-    pruneNodePtyNativeDirectories(
-      join(nodePtyDir, 'prebuilds'),
-      allowedPrebuildPrefix,
-      electronArch,
-      false
-    )
-    // Why: sequential cross-arch rebuilds accumulate ABI-tagged outputs here.
-    pruneNodePtyNativeDirectories(
-      join(nodePtyDir, 'bin'),
-      allowedPrebuildPrefix,
-      electronArch,
-      true
-    )
-  }
-
-  if (electronPlatformName === 'win32') {
-    ensurePackagedNodePtyConptyRuntime(nodePtyDir, electronArch)
-  } else {
-    // Why: conpty is Windows-only and node-pty resolves runtime binaries from
-    // build/Release or prebuilds/<platform>-<arch>, not third_party/conpty.
-    rmSync(join(nodePtyDir, 'third_party', 'conpty'), { recursive: true, force: true })
-    rmSync(join(nodePtyDir, 'deps', 'winpty'), { recursive: true, force: true })
-  }
 }
 
 function prunePackagedParcelWatcher(resourcesDir, electronPlatformName, electronArch) {
@@ -593,7 +432,6 @@ function assertPackagedNativeVariantsInstalled(electronPlatformName, electronArc
 
 function prunePackagedRuntimeNodeModules(resourcesDir, electronPlatformName, electronArch) {
   const architecture = normalizeElectronArchitecture(electronArch)
-  prunePackagedNodePty(resourcesDir, electronPlatformName, architecture)
   prunePackagedParcelWatcher(resourcesDir, electronPlatformName, architecture)
   // Why before the filename walk: zod/src is deleted wholesale, so walking it first is wasted work.
   prunePackagedZodSources(resourcesDir)
@@ -618,9 +456,7 @@ module.exports = {
   createPackagedRuntimeNodeModuleResources,
   findAsarEntry,
   isPackagedExternalSpecifier,
-  normalizeNodePtyWindowsArch,
   packageNameFromSpecifier,
-  prunePackagedNodePty,
   prunePackagedParcelWatcher,
   prunePackagedRuntimeNodeModules,
   prunePackagedRuntimeTypeAndSourceMapArtifacts,

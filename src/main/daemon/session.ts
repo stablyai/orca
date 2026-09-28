@@ -1,3 +1,4 @@
+import { installSessionOutputObservation } from './session-output-observation'
 import { isValidPtySize } from './daemon-pty-size'
 import type { SessionOutputPlane, AttachedClient } from './session-output-plane'
 import { createSessionOutputPipeline } from './session-output-pipeline'
@@ -49,12 +50,7 @@ export class Session {
     this.processNameIsSpawnFile = opts.subprocess.processNameIsSpawnFile === true
     this.onSessionExit = opts.onExit
     const pipeline = createSessionOutputPipeline({
-      cols: opts.cols,
-      rows: opts.rows,
-      scrollback: opts.scrollback,
-      wslDistro: opts.wslDistro,
-      historySeedChunks: opts.historySeedChunks,
-      subprocess: this.subprocess,
+      ...opts,
       isAlive: () => !this._disposed && this._state !== 'exited'
     })
     this.output = pipeline.output
@@ -86,13 +82,18 @@ export class Session {
       write: (data) => this.subprocess.write(data),
       onEmission: (emission) => this.recoveryBarrier.accept(emission)
     })
-    this.shellReady.startPromptReadinessProbe()
-    this.subprocess.onData((data) => {
-      if (!this._disposed) {
-        this.shellReady.ingestSubprocessData(data)
-      }
+    installSessionOutputObservation({
+      subprocess: this.subprocess,
+      shellReady: this.shellReady,
+      ingress: this.startupIngress,
+      recovery: this.recoveryBarrier,
+      output: this.output,
+      isDisposed: () => this._disposed,
+      onFailure: () => {
+        this._disposed = true
+      },
+      onExit: (code, cause) => this.handleSubprocessExit(code, cause)
     })
-    this.subprocess.onExit((code, cause) => this.handleSubprocessExit(code, cause))
   }
 
   get state(): SessionState {
@@ -130,6 +131,12 @@ export class Session {
     return this.termination.beginTermination()
   }
 
+  get shellProcessId(): number | undefined {
+    return this.subprocess.getShellProcessId
+      ? this.subprocess.getShellProcessId()
+      : this.subprocess.pid
+  }
+
   get pid(): number {
     return this.subprocess.pid
   }
@@ -144,15 +151,8 @@ export class Session {
       return
     }
 
-    // Daemon POSIX PTYs need the local provider's cooked-echo containment (#13137).
-    // DA1/CPR stay immediate unless an echo-risk reply is already held (#13892, #15559).
-    if (this.startupIngress.answerLiveQueryReply(data)) {
-      return
-    }
-
-    // Why: keep queuing during the post-ready flush-gate window ('ready' but not yet flushed); a
-    // direct write would race fresh input ahead of the buffered startup command.
-    if (this.shellReady.tryEnqueue(data)) {
+    // Query replies bypass queued startup input so prompt negotiation cannot deadlock.
+    if (this.startupIngress.answerLiveQueryReply(data) || this.shellReady.tryEnqueue(data)) {
       return
     }
 
@@ -203,8 +203,8 @@ export class Session {
     this.termination.signal(sig)
   }
 
-  attachClient(client: Omit<AttachedClient, 'token'>): symbol {
-    return this.output.attachClient(client)
+  attachClient(client: Omit<AttachedClient, 'token'>, replayStartup = false): symbol {
+    return this.output.attachClient(client, replayStartup)
   }
 
   detachClient(token: symbol): void {
@@ -303,13 +303,8 @@ export class Session {
     const wasTerminating = this.termination.isTerminating && this._state !== 'exited'
     const clientsToNotify = wasTerminating ? this.output.snapshotClients() : []
     if (wasTerminating) {
-      try {
-        this.subprocess.forceKill()
-      } catch {
-        /* child may already be gone */
-      }
+      this.termination.forceKillForDisposal()
       this._exitCode = -1
-      this.termination.clearTerminating()
     }
 
     this.#teardownSubprocess()
@@ -382,13 +377,11 @@ export class Session {
     this.shellReady.clearReadyTimer()
     this.shellReady.clearFlushGate()
 
-    // Why: release the ptmx fd here or node-pty's _socket leaks the master fd until GC (docs/fix-pty-fd-leak.md).
-    // Not via #teardownSubprocess: it flips `_disposed`, short-circuiting the later Session.dispose() reaper.
+    // Keep the emulator available until the owner reaps the exited session.
     this.termination.disposeSubprocessHandle()
 
     this.output.broadcastExit(code, this.incarnationId, cause)
 
-    // Why: hand off to the owner's reaper (disposes emulator, drops session from host map); else dead sessions accumulate.
     this.onSessionExit?.(code)
   }
 

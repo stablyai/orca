@@ -1,3 +1,5 @@
+import type { WslAccountExecutionContext } from '../../../wsl/wsl-account-execution-context'
+import type { WslDaemonSessions } from '../../../wsl/wsl-daemon-sessions'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type {
   AgentProviderSessionMetadata,
@@ -86,6 +88,7 @@ export type PtySpawnIpcDeps = {
   getSelectedCodexHomePath?: GetSelectedCodexHomePath
   prepareClaudeAuth?: PrepareClaudeAuth
   options?: {
+    wslDaemonSessions?: WslDaemonSessions
     prepareCodexSessionResume?: PrepareCodexSessionResume
     onCodexHomePtySpawned?: (args: CodexHomePtySpawnedLifecycleArgs) => void
   }
@@ -105,6 +108,7 @@ export type PtySpawnIpcDeps = {
     target: CodexAccountSelectionTarget
     launchEnv?: NodeJS.ProcessEnv
     workspacePath?: string
+    wslExecution?: WslAccountExecutionContext
   }) => PreparedCodexResumeHome | null
   noCodexResumeLaunch: (command: string | undefined) => CodexResumeLaunch
   resolveCodexResumeLaunch: (

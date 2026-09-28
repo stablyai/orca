@@ -41,8 +41,12 @@ export type PtyManagementFolderAccessResetResult =
   | { outcome: 'probed'; mismatch: PtyManagementFolderAccessMismatch | null }
 
 export type PtyManagementApi = {
-  // `degraded`: daemon is alive but can't spawn fresh PTYs, so new terminals run locally without daemon persistence.
-  listSessions: () => Promise<{ sessions: PtyManagementSession[]; degraded: boolean }>
+  // Existing sessions remain available while fresh terminal creation is unavailable.
+  listSessions: () => Promise<{
+    sessions: PtyManagementSession[]
+    degraded: boolean
+    unavailable?: boolean
+  }>
   killAll: () => Promise<{
     killedCount: number
     remainingCount: number
@@ -50,6 +54,7 @@ export type PtyManagementApi = {
   }>
   killOne: (args: { sessionId: string }) => Promise<{ success: boolean }>
   restart: () => Promise<{ success: boolean }>
+  retry: () => Promise<{ success: boolean }>
   macTccAttribution: () => Promise<{
     health: PtyManagementMacTccAttributionHealth
     folderAccessMismatch: PtyManagementFolderAccessMismatch | null

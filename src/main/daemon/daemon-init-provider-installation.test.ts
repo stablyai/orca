@@ -145,7 +145,39 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     }
   })
 
-  it('does not install a late daemon provider after startup fallback aborts the init attempt', async () => {
+  it('installs a healthy daemon that completes after the startup gate deadline', async () => {
+    const mod = await importFresh()
+    const { startFirstWindowStartupServices, LOCAL_PTY_STARTUP_FAIL_OPEN_TIMEOUT_MS } =
+      await import('../startup/first-window-startup-services')
+    let finish!: (value: { socketPath: string; tokenPath: string }) => void
+    ensureRunningOverrides.push(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        })
+    )
+    vi.useFakeTimers()
+    try {
+      const services = startFirstWindowStartupServices({
+        startDaemonPtyProvider: (signal) => mod.initDaemonPtyProvider(signal),
+        startAgentHookServer: async () => {},
+        onDaemonError: vi.fn(),
+        onAgentHookServerError: vi.fn()
+      })
+      await vi.advanceTimersByTimeAsync(LOCAL_PTY_STARTUP_FAIL_OPEN_TIMEOUT_MS)
+      await services.localPtyReady
+      expect(setLocalPtyProviderMock).not.toHaveBeenCalled()
+      finish({ socketPath: '/fake/socket-late', tokenPath: '/fake/token-late' })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(setLocalPtyProviderMock).toHaveBeenCalledOnce()
+      expect(rebindLocalProviderListenersMock).toHaveBeenCalledOnce()
+      expect(mod.getDaemonProvider()).not.toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not install a late daemon provider after explicit cancellation', async () => {
     const mod = await importFresh()
     let resolveEnsureRunning!: (value: { socketPath: string; tokenPath: string }) => void
     ensureRunningOverrides.push(
@@ -273,29 +305,27 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     vi.restoreAllMocks()
   })
 
-  it('routes fresh PTYs to the local fallback when a preserved daemon cannot spawn new PTYs', async () => {
+  it('refuses fresh PTYs when a preserved daemon cannot spawn new PTYs', async () => {
     const mod = await importFresh()
     ensureRunningOverrides.push(async () => ({
       socketPath: '/fake/degraded-socket',
       tokenPath: '/fake/degraded-token',
-      mode: 'degraded-new-pty-fallback'
+      mode: 'fresh-spawns-unavailable'
     }))
 
     await mod.initDaemonPtyProvider()
 
-    const { DegradedDaemonPtyProvider } = await import('./degraded-daemon-pty-provider')
+    const { DaemonPtyRouter } = await import('./daemon-pty-router')
     const provider = mod.getDaemonProvider()
-    expect(provider).toBeInstanceOf(DegradedDaemonPtyProvider)
-    expect(getLocalPtyProviderMock).toHaveBeenCalledOnce()
+    expect(provider).toBeInstanceOf(DaemonPtyRouter)
+    expect(getLocalPtyProviderMock).not.toHaveBeenCalled()
     expect(setLocalPtyProviderMock).toHaveBeenCalledWith(provider)
 
-    const result = await provider!.spawn({ cols: 80, rows: 24 })
-
-    expect(result.id).toBe('local-fallback-pty')
-    expect(localFallbackProvider.spawn).toHaveBeenCalledWith({
-      cols: 80,
-      rows: 24
-    })
+    checkDaemonHealthMock.mockResolvedValue('unhealthy')
+    await expect(provider!.spawn({ cols: 80, rows: 24 })).rejects.toThrow(
+      'Terminal service unavailable'
+    )
+    expect(localFallbackProvider.spawn).not.toHaveBeenCalled()
     expect(adapterInstances[0].listProcesses).toHaveBeenCalled()
   })
 
@@ -313,11 +343,11 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     ensureRunningOverrides.push(async () => ({
       socketPath: '/fake/degraded-socket',
       tokenPath: '/fake/degraded-token',
-      mode: 'degraded-new-pty-fallback'
+      mode: 'fresh-spawns-unavailable'
     }))
     await degraded.initDaemonPtyProvider()
-    const { DegradedDaemonPtyProvider } = await import('./degraded-daemon-pty-provider')
-    expect(degraded.getDaemonProvider()).toBeInstanceOf(DegradedDaemonPtyProvider)
+    const { DaemonPtyRouter } = await import('./daemon-pty-router')
+    expect(degraded.getDaemonProvider()).toBeInstanceOf(DaemonPtyRouter)
     expect(degraded.daemonOwnsFreshPersistentPtys()).toBe(false)
   })
 
@@ -326,22 +356,39 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     ensureRunningOverrides.push(async () => ({
       socketPath: '/fake/degraded-socket',
       tokenPath: '/fake/degraded-token',
-      mode: 'degraded-new-pty-fallback'
+      mode: 'fresh-spawns-unavailable'
     }))
     await mod.initDaemonPtyProvider()
     checkDaemonHealthMock.mockClear()
 
-    const { DegradedDaemonPtyProvider } = await import('./degraded-daemon-pty-provider')
+    const { DaemonPtyRouter } = await import('./daemon-pty-router')
     const provider = mod.getDaemonProvider()
-    expect(provider).toBeInstanceOf(DegradedDaemonPtyProvider)
-    const degradedProvider = provider as InstanceType<typeof DegradedDaemonPtyProvider>
+    expect(provider).toBeInstanceOf(DaemonPtyRouter)
+    if (!(provider instanceof DaemonPtyRouter)) {
+      throw new Error('Expected daemon router')
+    }
+    const degradedProvider = provider
 
     await expect(degradedProvider.recoverFreshSpawnRouting()).resolves.toBe(true)
     expect(checkDaemonHealthMock).toHaveBeenCalledWith(
       '/fake/degraded-socket',
       '/fake/degraded-token'
     )
-    expect(degradedProvider.routesFreshSpawnsToLocalProvider).toBeUndefined()
+    expect(degradedProvider.freshSpawnsUnavailable).toBe(false)
+  })
+
+  it('coalesces initial failure retries without stopping an existing service', async () => {
+    const mod = await importFresh()
+    ensureRunningOverrides.push(async () => {
+      throw new Error('runtime unavailable')
+    })
+    await expect(mod.initDaemonPtyProvider()).rejects.toThrow('runtime unavailable')
+    await Promise.all([mod.retryDaemonPtyProvider(), mod.retryDaemonPtyProvider()])
+    expect(spawnerInstances).toHaveLength(2)
+    expect(setLocalPtyProviderMock).toHaveBeenCalledOnce()
+    expect(mod.daemonOwnsFreshPersistentPtys()).toBe(true)
+    await mod.retryDaemonPtyProvider()
+    expect(spawnerInstances).toHaveLength(2)
   })
 
   it('keeps legacy daemon pid/token files when the probe fails but the pid-file process is alive', async () => {

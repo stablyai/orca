@@ -71,7 +71,7 @@ export async function inspectTerminalHostProcess(args: {
     !expectedIncarnationId || expectedIncarnationId === session.incarnationId
   if (args.steadyState === true && incarnationMatches) {
     const anchored = await readAnchoredForeground(session)
-    if (anchored !== null) {
+    if (anchored !== null && session.isAlive) {
       args.onTier?.('cheap')
       // No evidence member on purpose: a tty-less capture cannot fence anything, and a
       // fabricated fence would be read by remote/restore consumers as an observation.
@@ -122,6 +122,19 @@ export async function inspectTerminalHostProcess(args: {
     } catch {
       evidence = unverifiableEvidence(args, session, 'process_table_unreadable')
       clearSteadyStateAnchor(session)
+    }
+  }
+  if (!session.isAlive) {
+    clearSteadyStateAnchor(session)
+    return {
+      foregroundProcess: null,
+      hasChildProcesses: true,
+      childProcessEvidence: 'unverifiable',
+      foregroundProcessEvidence: unverifiableEvidence(
+        args,
+        session,
+        'session_exited_during_inspection'
+      )
     }
   }
   const nonShellForeground = foregroundProcess !== null && !isShellProcess(foregroundProcess)
