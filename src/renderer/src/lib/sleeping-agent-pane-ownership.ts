@@ -17,9 +17,9 @@ export function getProviderSessionClaimKey(record: SleepingAgentSessionRecord): 
     : base
 }
 
-// Why live+done counts (#16308): the idle anchor a finished turn leaves owes no resume. Quit asks to
-// keep work resumable and a live interrupted turn is unfinished; interrupted sleep notes stay passive.
-export function isFinishedTurnOwingNoResume(record: SleepingAgentSessionRecord): boolean {
+// Why live+done counts (#16308): workspace activation must not resume a finished turn's idle anchor.
+// Quit asks to keep work resumable and a live interrupted turn is unfinished.
+export function activationTreatsNoteAsFinished(record: SleepingAgentSessionRecord): boolean {
   return (
     record.origin !== 'quit' &&
     !(record.origin === 'live' && record.interrupted === true) &&
@@ -144,7 +144,7 @@ export function recordPaneIsOwnedByPreservedPane(
     if (!tab || !hasMatchingStablePaneLayout(tabId, stable.leafId, state.terminalLayoutsByTabId)) {
       return false
     }
-    if (isFinishedTurnOwingNoResume(record)) {
+    if (activationTreatsNoteAsFinished(record)) {
       return true
     }
     // Why: a pane with a live PTY owns its running session regardless of which

@@ -7,7 +7,7 @@ import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import {
   getProviderSessionClaimKey,
-  isFinishedTurnOwingNoResume,
+  activationTreatsNoteAsFinished,
   recordPaneIsOwnedByPreservedPane,
   stablePaneHasLivePty
 } from './sleeping-agent-pane-ownership'
@@ -34,7 +34,7 @@ function clearPassiveCompletedRecordsForClaimKey(
 ): void {
   const state = useAppStore.getState()
   for (const record of records) {
-    if (record.paneKey === keepPaneKey || !isFinishedTurnOwingNoResume(record)) {
+    if (record.paneKey === keepPaneKey || !activationTreatsNoteAsFinished(record)) {
       continue
     }
     if (getProviderSessionClaimKey(record) === claimKey) {
@@ -50,7 +50,7 @@ function getCurrentPaneOwnedClaimKeys(records: readonly SleepingAgentSessionReco
     if (
       state.sleepingAgentSessionsByPaneKey[record.paneKey] !== record ||
       isInvalidWorktreeActivationRecord(record) ||
-      isFinishedTurnOwingNoResume(record)
+      activationTreatsNoteAsFinished(record)
     ) {
       continue
     }
@@ -240,7 +240,7 @@ export function resumeSleepingAgentSessionsForWorktree(
     (record) => !isInvalidWorktreeActivationRecord(record)
   )
   const activeWorktreeRecords = validWorktreeRecords.filter(
-    (record) => !isFinishedTurnOwingNoResume(record)
+    (record) => !activationTreatsNoteAsFinished(record)
   )
   const activeClaimKeys = new Set(activeWorktreeRecords.map(getProviderSessionClaimKey))
   const newestActiveRecordByClaimKey = getNewestActiveRecordsByClaimKey(activeWorktreeRecords)
@@ -280,7 +280,7 @@ export function resumeSleepingAgentSessionsForWorktree(
       continue
     }
     const isPaneOwned = recordPaneIsOwnedByPreservedPane(record, currentState)
-    if (isFinishedTurnOwingNoResume(record)) {
+    if (activationTreatsNoteAsFinished(record)) {
       // Why: completed-agent hibernation is passive history; activation should
       // only keep displayable evidence, never start new work from it.
       if (!isPaneOwned || activeClaimKeys.has(claimKey)) {

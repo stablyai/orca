@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
-import { isFinishedTurnOwingNoResume } from './sleeping-agent-pane-ownership'
+import { activationTreatsNoteAsFinished } from './sleeping-agent-pane-ownership'
 
 function note(overrides: Partial<SleepingAgentSessionRecord> = {}): SleepingAgentSessionRecord {
   return {
@@ -16,7 +16,7 @@ function note(overrides: Partial<SleepingAgentSessionRecord> = {}): SleepingAgen
   }
 }
 
-describe('isFinishedTurnOwingNoResume', () => {
+describe('activationTreatsNoteAsFinished', () => {
   it.each([
     ['a worktree-sleep done note', true, note({ origin: 'worktree-sleep' })],
     ['a legacy originless done note', true, note()],
@@ -30,6 +30,6 @@ describe('isFinishedTurnOwingNoResume', () => {
     ['a quit capture', false, note({ origin: 'quit' })],
     ['a running turn (live working)', false, note({ origin: 'live', state: 'working' })]
   ])('%s -> %s', (_label, expected, record) => {
-    expect(isFinishedTurnOwingNoResume(record)).toBe(expected)
+    expect(activationTreatsNoteAsFinished(record)).toBe(expected)
   })
 })
