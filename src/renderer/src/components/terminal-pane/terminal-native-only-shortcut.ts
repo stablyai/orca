@@ -55,7 +55,11 @@ function consumeCompanion(
   event: TerminalNativeOnlyShortcutCompanionEvent,
   pendingKeys: Map<string, string>
 ): boolean {
-  if (event.type !== 'keypress' && event.type !== 'keyup') {
+  if (
+    event.type !== 'keypress' &&
+    event.type !== 'keyup' &&
+    !(event.type === 'keydown' && event.repeat)
+  ) {
     return false
   }
   // Why: match either normalized identity so keypress without `code` still

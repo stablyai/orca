@@ -56,14 +56,6 @@ class TestWheelEvent extends Event {
   }
 }
 
-function terminalElement(mouseReporting = true): HTMLElement {
-  return {
-    classList: {
-      contains: (className: string) => mouseReporting && className === 'enable-mouse-events'
-    }
-  } as HTMLElement
-}
-
 function wheelEvent(
   init: Partial<WheelEventInit> & { wheelDelta?: number; wheelDeltaY?: number } = {}
 ): WheelEvent {
@@ -322,11 +314,11 @@ describe('terminal mouse wheel multiplier', () => {
   })
 
   it('multiplies discrete wheel events when mouse reporting is active', () => {
-    expect(shouldMultiplyTerminalMouseWheel(wheelEvent(), terminalElement())).toBe(true)
+    expect(shouldMultiplyTerminalMouseWheel(wheelEvent(), 'any')).toBe(true)
   })
 
   it('leaves normal terminal scrollback alone', () => {
-    expect(shouldMultiplyTerminalMouseWheel(wheelEvent(), terminalElement(false))).toBe(false)
+    expect(shouldMultiplyTerminalMouseWheel(wheelEvent(), 'none')).toBe(false)
   })
 
   it('handles trackpad-like TUI pixel scrolling while mouse reporting is active', () => {
@@ -336,7 +328,7 @@ describe('terminal mouse wheel multiplier', () => {
           deltaY: 12,
           deltaMode: DOM_DELTA_PIXEL
         }),
-        terminalElement()
+        'any'
       )
     ).toBe(true)
   })
@@ -349,7 +341,7 @@ describe('terminal mouse wheel multiplier', () => {
           deltaMode: DOM_DELTA_PIXEL,
           wheelDeltaY: -120
         }),
-        terminalElement()
+        'any'
       )
     ).toBe(true)
   })
@@ -361,7 +353,7 @@ describe('terminal mouse wheel multiplier', () => {
           deltaY: 1,
           deltaMode: DOM_DELTA_LINE
         }),
-        terminalElement()
+        'any'
       )
     ).toBe(true)
   })
@@ -372,17 +364,18 @@ describe('terminal mouse wheel multiplier', () => {
         wheelEvent({
           shiftKey: true
         }),
-        terminalElement()
+        'any'
       )
     ).toBe(false)
   })
 
-  it('replays discrete TUI wheel ticks as line-mode reports', async () => {
+  it.each([true, false])('replays TUI wheel ticks with mouse CSS class %s', async (mouseClass) => {
     vi.stubGlobal('WheelEvent', TestWheelEvent)
     const handlers: ((event: WheelEvent) => boolean)[] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the wheel handler only reads classList and dispatches events on this target.
     const target = Object.assign(new EventTarget(), {
       classList: {
-        contains: (className: string) => className === 'enable-mouse-events'
+        contains: (className: string) => mouseClass && className === 'enable-mouse-events'
       }
     }) as unknown as EventTarget & HTMLElement
     const dispatched: WheelEvent[] = []
@@ -416,7 +409,7 @@ describe('terminal mouse wheel multiplier', () => {
     expect(dispatched).toHaveLength(1)
     expect(dispatched.map((entry) => entry.deltaMode)).toEqual([DOM_DELTA_LINE])
     expect(dispatched.map((entry) => entry.deltaY)).toEqual([1])
-    expect(shouldMultiplyTerminalMouseWheel(dispatched[0]!, target)).toBe(false)
+    expect(shouldMultiplyTerminalMouseWheel(dispatched[0]!, 'any')).toBe(false)
   })
 
   it('does not replay with a stale active mouse-reporting class', async () => {

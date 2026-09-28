@@ -17,7 +17,6 @@ export {
 } from './pane-terminal-tui-wheel-reports'
 export type { TerminalTuiMouseWheelDistanceState } from './pane-terminal-tui-wheel-reports'
 
-const XTERM_MOUSE_REPORTING_CLASS = 'enable-mouse-events'
 const REPLAYED_WHEEL_EVENT_PROPERTY = '__orcaReplayedTerminalWheelEvent'
 const DOM_DELTA_LINE = 1
 
@@ -105,11 +104,11 @@ function resolveTerminalWheelCellHeight(terminal: TerminalWheelTarget): number |
 
 export function shouldMultiplyTerminalMouseWheel(
   event: WheelEvent,
-  terminalElement: HTMLElement | null | undefined
+  mouseTrackingMode: Terminal['modes']['mouseTrackingMode']
 ): boolean {
   if (
     isReplayedWheelEvent(event) ||
-    !terminalElement?.classList.contains(XTERM_MOUSE_REPORTING_CLASS) ||
+    mouseTrackingMode === 'none' ||
     event.deltaY === 0 ||
     event.shiftKey
   ) {
@@ -189,10 +188,7 @@ export function attachTerminalMouseWheelMultiplier(
 ): void {
   const replayState = createTerminalTuiMouseWheelReplayState()
   terminal.attachCustomWheelEventHandler((event) => {
-    if (
-      terminal.modes.mouseTrackingMode === 'none' ||
-      !shouldMultiplyTerminalMouseWheel(event, terminal.element)
-    ) {
+    if (!shouldMultiplyTerminalMouseWheel(event, terminal.modes.mouseTrackingMode)) {
       return true
     }
 

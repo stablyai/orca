@@ -19,9 +19,54 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
     ).toBe(true)
   })
 
-  it('bubbles Cmd+C even with no selection (no-op copy is harmless on macOS)', () => {
+  it('bubbles Cmd+C without a selection in legacy keyboard mode', () => {
     expect(
       shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyC', metaKey: true }), noSel)
+    ).toBe(true)
+  })
+
+  it('passes Cmd+C without native selection to a negotiated kitty encoder', () => {
+    expect(
+      shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyC', metaKey: true }), {
+        ...noSel,
+        kittyKeyboardFlags: 1
+      })
+    ).toBe(false)
+  })
+
+  it.each([4, 16])('keeps Cmd+C native when kitty flags %i cannot encode Super', (flags) => {
+    expect(
+      shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyC', metaKey: true }), {
+        ...noSel,
+        kittyKeyboardFlags: flags
+      })
+    ).toBe(true)
+  })
+
+  it.each([2, 5, 8, 18])('passes Cmd+C through when kitty flags %i can encode Super', (flags) => {
+    expect(
+      shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyC', metaKey: true }), {
+        ...noSel,
+        kittyKeyboardFlags: flags
+      })
+    ).toBe(false)
+  })
+
+  it('keeps Cmd+C native when the terminal has a selection in kitty mode', () => {
+    expect(
+      shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyC', metaKey: true }), {
+        ...opts,
+        kittyKeyboardFlags: 1
+      })
+    ).toBe(true)
+  })
+
+  it('keeps a handled Cmd+C out of kitty input', () => {
+    expect(
+      shouldBypassXtermKeyboardEvent(
+        event({ key: 'c', code: 'KeyC', metaKey: true, defaultPrevented: true }),
+        { ...noSel, kittyKeyboardFlags: 1 }
+      )
     ).toBe(true)
   })
 
@@ -37,6 +82,12 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
     ).toBe(true)
     expect(
       shouldBypassXtermKeyboardEvent(event({ key: 'j', code: 'KeyC', metaKey: true }), opts)
+    ).toBe(false)
+    expect(
+      shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyJ', metaKey: true }), {
+        ...noSel,
+        kittyKeyboardFlags: 1
+      })
     ).toBe(false)
   })
 

@@ -30,7 +30,8 @@ describe('terminal keyboard pane ownership', () => {
       createCapturedInputSender: (pane) => (pane.id === focused.id ? sendFocused : vi.fn()),
       nativeOnlyShortcutTracker: {
         prepareKeyDown: vi.fn(),
-        armKeyDown: vi.fn()
+        armKeyDown: vi.fn(),
+        consumeCompanion: () => false
       },
       observedEnterKeydownTimeStamps: new Map(),
       modifiedEnterChordOwner: {

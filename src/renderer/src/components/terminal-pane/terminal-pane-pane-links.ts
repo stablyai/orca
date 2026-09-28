@@ -18,6 +18,7 @@ import { installTerminalLinkPointerGesture } from './terminal-link-pointer-gestu
 import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
 import { handleOscLink } from './terminal-osc-link-routing'
 import { copyTerminalSelection } from './terminal-selection-copy'
+import { installTerminalCodexCopyOnSelect } from './terminal-codex-copy-on-select'
 import { readTerminalClipboardSelection } from './terminal-clipboard-selection-text'
 import { installTerminalNativeCopyGutterTrim } from './terminal-native-copy-gutter'
 import { installMouseHideWhileTyping } from './mouse-hide-while-typing'
@@ -30,6 +31,7 @@ import { seedStartupSessionRestoredBanner } from './session-restored-banner-pane
 
 type PaneLinkContext = {
   pane: ManagedPane
+  paneKey: string
   managerRef: React.RefObject<PaneManager | null>
   settingsRef: React.RefObject<GlobalSettings | null | undefined>
   refs: Pick<
@@ -61,6 +63,7 @@ type PaneLinkContext = {
 export function installTerminalPaneLinkHandling(context: PaneLinkContext): void {
   const {
     pane,
+    paneKey,
     managerRef,
     settingsRef,
     refs,
@@ -120,8 +123,8 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
     pane.id,
     installTerminalNativeCopyGutterTrim(pane.terminal)
   )
-  refs.selectionDisposablesRef.current.set(
-    pane.id,
+  const selectionDisposables = [
+    installTerminalCodexCopyOnSelect(pane.terminal, paneKey),
     pane.terminal.onSelectionChange(() => {
       const shouldWritePrimarySelection = isPrimarySelectionEnabled()
       const shouldWriteClipboard = settingsRef.current?.terminalClipboardOnSelect === true
@@ -166,7 +169,14 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
         writeClipboardText: window.api.ui.writeTerminalClipboardText
       }).catch(() => {})
     })
-  )
+  ]
+  refs.selectionDisposablesRef.current.set(pane.id, {
+    dispose: () => {
+      for (const disposable of selectionDisposables) {
+        disposable.dispose()
+      }
+    }
+  })
   if (settingsRef.current?.terminalMouseHideWhileTyping) {
     refs.mouseHideDisposablesRef.current.set(
       pane.id,

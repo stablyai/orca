@@ -36,6 +36,11 @@ export function TerminalInteractionSection({
   // platform (see use-terminal-pane-context-menu), so macOS wording is
   // "Control-click" while Windows/Linux keep "Ctrl+right-click".
   const isMac = isMacPlatform()
+  const copyOnSelectDescription = translate(
+    'components.settings.TerminalInteraction.copyOnSelectCodexDescription',
+    'Automatically copy terminal selections, including in Codex CLI. Hold {{modifier}} to use Codex’s mouse controls.',
+    { modifier: isMac ? 'Option' : 'Alt' }
+  )
   const rightClickPasteDescription = isMac
     ? translate(
         'auto.components.settings.TerminalInteractionSection.567633ff50',
@@ -241,10 +246,7 @@ export function TerminalInteractionSection({
 
         <SearchableSetting
           title={translate('auto.components.settings.TerminalPane.902f5dee1f', 'Copy on Select')}
-          description={translate(
-            'auto.components.settings.TerminalPane.4729c645fc',
-            'Automatically copy terminal selections to the clipboard.'
-          )}
+          description={copyOnSelectDescription}
           keywords={[
             'clipboard',
             'copy',
@@ -260,10 +262,7 @@ export function TerminalInteractionSection({
         >
           <SettingsSwitchRow
             label={translate('auto.components.settings.TerminalPane.902f5dee1f', 'Copy on Select')}
-            description={translate(
-              'auto.components.settings.TerminalPane.4729c645fc',
-              'Automatically copy terminal selections to the clipboard.'
-            )}
+            description={copyOnSelectDescription}
             checked={settings.terminalClipboardOnSelect}
             onChange={() =>
               updateSettings({

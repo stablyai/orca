@@ -18179,6 +18179,7 @@
     },
     "settings": {
       "TerminalInteraction": {
+        "copyOnSelectCodexDescription": "Automatically copy terminal selections, including in Codex CLI. Hold {{modifier}} to use Codex’s mouse controls.",
         "copyTrimsGutter": "Trim Gutter on Copy",
         "copyTrimsGutterDescription": "Drop the left gutter agent output is painted behind, so copied text is not indented. Only the indent every selected line shares is removed."
       },
