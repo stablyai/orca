@@ -343,8 +343,17 @@ describe('Windows NSIS uninstaller signing', () => {
     const cli = config.win.extraResources.find((resource) => resource.to === 'bin/orca.exe')
     expect(cli).toBeDefined()
     const payloadPath = `resources/${cli.to}`.replaceAll('/', '\\')
-    const gate = stepNamed(releaseSteps(), 'Verify Windows inner binary signatures')
-    expect(gate.run).toContain(`'${payloadPath}'`)
+    const rehearsal = readWorkflow('.github/workflows/windows-signing-rehearsal.yml')
+    for (const gate of [
+      stepNamed(releaseSteps(), 'Verify Windows inner binary signatures'),
+      stepNamed(rehearsal.jobs.rehearse.steps, 'Verify signatures end to end')
+    ]) {
+      expect(gate.run).toContain(`foreach ($requiredTarget in @('Orca.exe', '${payloadPath}'))`)
+      expect(gate.run).toContain(
+        'if ($targets -notcontains $requiredTarget) { $targets += $requiredTarget }'
+      )
+      expect(gate.run).toContain('foreach ($relative in $targets)')
+    }
   })
 
   it('waits for approval even when the notification fails', () => {

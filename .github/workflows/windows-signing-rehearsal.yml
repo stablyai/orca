@@ -498,7 +498,11 @@ jobs:
             Test-Signature "shipped: Uninstall Orca.exe (via $installedVia)" $installedUninstaller.FullName
           }
 
-          foreach ($relative in Get-Content 'inner-signing-list.txt') {
+          $targets = @(Get-Content 'inner-signing-list.txt')
+          foreach ($requiredTarget in @('Orca.exe', 'resources\bin\orca.exe')) {
+            if ($targets -notcontains $requiredTarget) { $targets += $requiredTarget }
+          }
+          foreach ($relative in $targets) {
             $path = Join-Path $root $relative
             if (-not (Test-Path $path)) {
               $failures.Add("missing from installer payload: $relative")
