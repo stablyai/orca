@@ -2,7 +2,6 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalWebViewHandle } from '../terminal/terminal-webview-contract'
-import { sizeTerminalViewportFromCellBox } from './mobile-terminal-first-subscribe-viewport'
 import { MobileTerminalDiagnostics } from './mobile-terminal-diagnostics'
 import { TerminalViewportResubscribeBudget } from './mobile-terminal-viewport-resubscribe'
 import type { MobileSessionTerminalSubscriptionFoundationModel } from './use-mobile-session-terminal-subscription-foundation'
@@ -13,46 +12,6 @@ import { useMobileSessionTerminalWebview } from './use-mobile-session-terminal-w
 const HANDLE = 'term-1'
 const PHONE = { cols: 55, rows: 44 }
 
-describe('sizeTerminalViewportFromCellBox', () => {
-  function sizeArgs(
-    fitDimensions: (frame: { width: number; height: number }) => typeof PHONE | null
-  ) {
-    const viewportRef: { current: typeof PHONE | null } = { current: null }
-    return {
-      handle: HANDLE,
-      ref: { fitDimensions: vi.fn(fitDimensions), holdSubscribedGrid: vi.fn() },
-      viewportRef,
-      viewportMeasuredRef: { current: false },
-      terminalFrameRef: { current: { width: 427.5, height: 751 } },
-      onMeasured: vi.fn()
-    }
-  }
-
-  it('sizes an unmeasured route from the reported cell box against the laid-out frame', () => {
-    const args = sizeArgs(() => PHONE)
-    sizeTerminalViewportFromCellBox(args)
-    expect(args.ref.fitDimensions).toHaveBeenCalledWith({ width: 427.5, height: 751 })
-    expect(args.viewportRef.current).toEqual(PHONE)
-    expect(args.viewportMeasuredRef.current).toBe(true)
-    expect(args.onMeasured).toHaveBeenCalledWith(HANDLE, PHONE, 751)
-    expect(args.ref.holdSubscribedGrid).toHaveBeenCalledWith(PHONE)
-  })
-
-  it('leaves the route unmeasured when the document reported no cell box', () => {
-    const args = sizeArgs(() => null)
-    sizeTerminalViewportFromCellBox(args)
-    expect(args.viewportMeasuredRef.current).toBe(false)
-    expect(args.viewportRef.current).toBeNull()
-  })
-
-  it('keeps a measured viewport', () => {
-    const args = sizeArgs(() => PHONE)
-    args.viewportMeasuredRef.current = true
-    sizeTerminalViewportFromCellBox(args)
-    expect(args.ref.fitDimensions).not.toHaveBeenCalled()
-  })
-})
-
 type StreamHandler = (result: unknown) => void
 
 /** The route's subscribe, driven end to end against a recording client and terminal. */
@@ -60,6 +19,7 @@ function subscriptionHarness(opts: {
   fit: typeof PHONE | null
   webReady: boolean
   frameWidth?: number
+  viewport?: typeof PHONE
 }) {
   let fit = opts.fit
   const order: string[] = []
@@ -103,8 +63,8 @@ function subscriptionHarness(opts: {
     clientId: 'client-1',
     setTerminalModes: vi.fn(),
     terminalCwdRef: { current: new Map() },
-    viewportRef: { current: null },
-    viewportMeasuredRef: { current: false },
+    viewportRef: { current: opts.viewport ?? null },
+    viewportMeasuredRef: { current: opts.viewport !== undefined },
     terminalUnsubsRef,
     subscribingHandlesRef,
     leaseOnlyHandlesRef: { current: new Set<string>() },
@@ -204,6 +164,22 @@ describe('a terminal first subscribe', () => {
       'init 55x44',
       'init 55x44'
     ])
+  })
+
+  it('sizes from the reported box against the laid-out frame, and holds that grid', () => {
+    const harness = subscriptionHarness({ fit: PHONE, webReady: true, frameWidth: 427.5 })
+    harness.subscribe()
+    expect(harness.terminal.fitDimensions).toHaveBeenCalledWith({ width: 427.5, height: 751 })
+    expect(harness.terminal.holdSubscribedGrid).toHaveBeenCalledWith(PHONE)
+    expect(harness.order).toEqual(['subscribe {"cols":55,"rows":44}'])
+  })
+
+  it('keeps a measured viewport rather than fitting again', () => {
+    const measured = { cols: 60, rows: 40 }
+    const harness = subscriptionHarness({ fit: PHONE, webReady: true, viewport: measured })
+    harness.subscribe()
+    expect(harness.terminal.fitDimensions).not.toHaveBeenCalled()
+    expect(harness.order).toEqual(['subscribe {"cols":60,"rows":40}'])
   })
 
   it('holds a ready document without a box until its frame is laid out', () => {

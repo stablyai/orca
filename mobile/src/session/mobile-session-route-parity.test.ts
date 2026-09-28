@@ -129,7 +129,8 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // Again when the subscribe waited for web-ready and `handleTerminalWebReady` lost `documentHasInit`.
 // Again when the subscribe's inits began carrying the laid-out terminal frame, and its resize too.
 // Again when those grids read the one frame ref.
-const HEAD_CALLBACK_BODY_SHA256 = '7bd8282eb873dcf09ee1acab884f25ed42739878a01af01c6d71e90f47aa56de'
+// Again when the subscribe sized its viewport inline instead of through a helper.
+const HEAD_CALLBACK_BODY_SHA256 = 'ad980334b2dd4cf10296097f2a6f23499f0da37c9967d96d9425c76edd4f965e'
 // Refreshed for the startup effect: both `worktree.activate` sends became `worktreeActivate`, and
 // the sleeping-agent check reads that operation's verdict instead of the reply envelope. Refreshed
 // again when the reporter took the reply and interpreted it itself, retiring the hand-built

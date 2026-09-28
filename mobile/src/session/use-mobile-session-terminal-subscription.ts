@@ -1,7 +1,6 @@
 import { useCallback } from 'react'
 import { isTerminalOscLinkRanges } from '../../../src/shared/terminal-osc-link-ranges'
 import * as nativeChatTerminalStream from './mobile-native-chat-terminal-stream'
-import { sizeTerminalViewportFromCellBox } from './mobile-terminal-first-subscribe-viewport'
 import { subscribeMobileTerminalSafely } from './mobile-terminal-stream-subscribe'
 import { mobileTerminalSnapshotByteBudget } from './terminal-snapshot-byte-budget'
 import {
@@ -82,19 +81,21 @@ export function useMobileSessionTerminalSubscription(
           logSkippedGate('webview-not-ready')
           return
         }
-        sizeTerminalViewportFromCellBox({
-          handle,
-          ref,
-          viewportRef,
-          viewportMeasuredRef,
-          terminalFrameRef,
-          onMeasured: (measuredHandle, dims, frameHeight) =>
-            diagnostics.viewportMeasured(measuredHandle, dims, frameHeight)
-        })
-        // Why: the frame's first layout subscribes it; going now would miss the dims (page web-ready precedes it).
-        if (!viewportMeasuredRef.current && terminalFrameRef.current === null) {
-          logSkippedGate('frame-not-laid-out')
-          return
+        const frame = terminalFrameRef.current
+        if (!viewportMeasuredRef.current) {
+          // Why: the frame's first layout subscribes it; going now would miss the dims (page web-ready precedes it).
+          if (!frame) {
+            logSkippedGate('frame-not-laid-out')
+            return
+          }
+          // Why: sized from the box the ready document reported, the host serializes the snapshot at the phone's size.
+          const dims = ref.fitDimensions(frame)
+          diagnostics.viewportMeasured(handle, dims, frame.height)
+          if (dims) {
+            ref.holdSubscribedGrid(dims)
+            viewportRef.current = dims
+            viewportMeasuredRef.current = true
+          }
         }
       }
 
