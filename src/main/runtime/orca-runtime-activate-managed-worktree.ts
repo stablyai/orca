@@ -27,7 +27,8 @@ import type {
 import { recordCreatedWorktreeLineage as recordCreatedWorktreeLineageState } from './runtime-worktree-lineage-recording'
 import {
   pasteWorktreeStartupDraftWhenReady,
-  sendWorktreeStartupFollowupWhenReady
+  sendWorktreeStartupFollowupWhenReady,
+  waitForWorktreeStartupDraft
 } from './runtime-worktree-startup-readiness'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import { provisionWorktreeTerminals } from './runtime-worktree-terminal-provisioning'
@@ -201,6 +202,29 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
 
   protected pasteStartupDraftWhenReady(handle: string, draft: WorktreeStartupDraftPaste): void {
     pasteWorktreeStartupDraftWhenReady(this.getWorktreeStartupReadinessHost(), handle, draft)
+  }
+
+  /** Only for a newly launched worker, before its first dispatch input. */
+  async waitForFreshWorkerComposer(
+    handle: string,
+    agent: TuiAgent,
+    timeoutMs: number
+  ): Promise<void> {
+    const initialPtyId =
+      this.getLivePtyForHandle(handle)?.pty.ptyId ?? this.getLiveLeafForHandle(handle).leaf.ptyId
+    const ptyId = await waitForWorktreeStartupDraft(
+      { ...this.getWorktreeStartupReadinessHost(), getPtyId: () => initialPtyId },
+      handle,
+      agent,
+      { timeoutMs, requireComposerMarker: true }
+    )
+    if (!ptyId) {
+      throw new Error('timeout')
+    }
+    this.assertLiveTerminalHandleTargetsPty(handle, ptyId)
+    if (!this.ptysById.get(ptyId)?.connected) {
+      throw new Error('terminal_handle_stale')
+    }
   }
 
   protected sendStartupFollowupWhenReady(handle: string, followup: WorktreeStartupFollowup): void {

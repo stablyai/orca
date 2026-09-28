@@ -11,6 +11,7 @@ import { POST_REPLAY_MODE_RESET } from '../../../../../shared/terminal-mode-rese
 import { isProvenProcessExit } from '../../../../../shared/terminal-exit-cause'
 import { getProviderSessionClaimKey } from '@/lib/sleeping-agent-pane-ownership'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session-resume'
+import { agentTurnEndedUncleanly } from '../../../../../shared/agent-main-agent-verdict'
 import {
   createGitBashConsoleCapacityDetector,
   type GitBashConsoleCapacityDetector
@@ -25,7 +26,7 @@ export function noteArmsHibernatedPaneWake(record: SleepingAgentSessionRecord): 
   return (
     record.state === 'done' &&
     record.origin !== 'quit' &&
-    !(record.origin === 'live' && record.interrupted === true)
+    !(record.origin === 'live' && agentTurnEndedUncleanly(record))
   )
 }
 

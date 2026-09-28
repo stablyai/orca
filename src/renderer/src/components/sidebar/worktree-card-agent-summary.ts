@@ -2,6 +2,7 @@ import type { AgentDotState } from '@/components/AgentStateDot'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { formatAgentTypeLabel } from '@/lib/agent-status'
 import { agentRowDotState } from '@/lib/agent-row-dot-state'
+import { agentVerdictDisplayMark } from '../../../../shared/agent-main-agent-verdict'
 
 export type SummaryAgentGroup = {
   state: AgentDotState
@@ -11,6 +12,8 @@ export type SummaryAgentGroup = {
 const SUMMARY_STATE_ORDER: AgentDotState[] = [
   'waiting',
   'blocked',
+  // Why: a failed main agent outranks live work; a pending question still comes first.
+  'failed',
   'working',
   'monitoring',
   'interrupted',
@@ -21,10 +24,9 @@ const SUMMARY_STATE_ORDER: AgentDotState[] = [
 ]
 
 export function getAgentDotState(agent: DashboardAgentRowData): AgentDotState {
-  if (agent.entry.interrupted === true) {
-    return 'interrupted'
-  }
-  return agentRowDotState(agent.state, agent.entry.workingMode)
+  return (
+    agentVerdictDisplayMark(agent.entry) ?? agentRowDotState(agent.state, agent.entry.workingMode)
+  )
 }
 
 export function formatSummaryStateLabel(state: AgentDotState): string {

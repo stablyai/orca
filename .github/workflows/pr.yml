@@ -1,5 +1,5 @@
 name: PR Checks
-run-name: 'PR ${{ github.event.pull_request.number }} | source ${{ github.sha }} | workflow ${{ github.workflow_sha }}'
+run-name: "PR ${{ github.event.pull_request.number }} | source ${{ github.sha }} | workflow ${{ github.workflow_sha }} | unit ${{ github.event.pull_request.draft && vars.ORCA_UNIT_SELECTION_MODE == 'selected' && 'selected' || 'full' }}"
 
 on:
   pull_request:
@@ -161,7 +161,17 @@ jobs:
           filter: blob:none
           persist-credentials: false
 
+      # Why two guarded installs: the mixed root+mobile store entry is 537 MB against
+      # 321 MB for root alone, and restoring it costs 8.6s against 4.6s. Most PRs skip the
+      # mobile install below, so they were paying 216 MB for packages they never link. The
+      # root-only key is also the one the hourly warmer reseeds. Only one of these runs.
       - uses: ./.github/actions/install-node-dependencies
+        if: needs.code_paths.outputs.mobile_dependencies != 'true'
+        with:
+          native-runtime: node
+
+      - uses: ./.github/actions/install-node-dependencies
+        if: needs.code_paths.outputs.mobile_dependencies == 'true'
         with:
           native-runtime: node
           cache-dependency-path: |
@@ -620,16 +630,19 @@ jobs:
           node-version: '24'
 
   test:
-    needs: [code_paths, test_native_cache]
+    needs: [code_paths, test_native_cache, static_analysis, typecheck]
     # Honor cancellation while allowing the optional native-cache primer to skip.
     if: >-
       !cancelled() &&
       needs.code_paths.outputs.test == 'true' &&
+      needs.static_analysis.result == 'success' &&
+      needs.typecheck.result == 'success' &&
       (needs.test_native_cache.result == 'success' || needs.test_native_cache.result == 'skipped')
     uses: ./.github/workflows/unit-tests.yml
     with:
       node_versions: '["24"]'
       runner: ubuntu-24.04-arm
+      selection_mode: ${{ vars.ORCA_UNIT_SELECTION_MODE || 'shadow' }}
 
   # Why a separate job: the test needs a real Chrome, and the sharded `test` matrix
   # would pay for it on every shard to run one file in whichever shard it landed in.
@@ -784,6 +797,7 @@ jobs:
           tests/e2e/cross-version-wire/cross-version-worktree-identity-downgrade.unit.test.ts
           tests/e2e/cross-version-wire/cross-version-session-tabs-retirement-proof.unit.test.ts
           tests/e2e/cross-version-wire/agent-session-unproven-release-downgrade.unit.test.ts
+          tests/e2e/cross-version-wire/cross-version-worktree-ps-verdict.unit.test.ts
 
   managed_hook_node18:
     name: managed hooks on Node 18
@@ -812,7 +826,7 @@ jobs:
 
   package:
     name: package
-    needs: [code_paths]
+    needs: [code_paths, static_analysis, typecheck]
     if: needs.code_paths.outputs.package == 'true'
     runs-on: ubuntu-latest
     # Let the serial Docker gates reach their own deadlines and report cleanup failures.
@@ -960,7 +974,7 @@ jobs:
 
   package_windows:
     name: package (windows)
-    needs: [code_paths]
+    needs: [code_paths, static_analysis, typecheck]
     if: needs.code_paths.outputs.package_windows == 'true'
     runs-on: windows-2022
     timeout-minutes: 30

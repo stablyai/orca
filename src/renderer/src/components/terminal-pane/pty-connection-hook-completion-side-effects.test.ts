@@ -463,8 +463,8 @@ describe('connectPanePty', () => {
       sendTerminalInputThroughPane(pane, '\x1b[I')
       sendTerminalInputThroughPane(pane, '\x7f')
       expect(transport.sendInput).toHaveBeenCalledTimes(2)
-      expect(transport.sendInput).toHaveBeenNthCalledWith(1, '\x1b[I')
-      expect(transport.sendInput).toHaveBeenLastCalledWith('\x7f')
+      expect(transport.sendInput).toHaveBeenNthCalledWith(1, '\x1b[I', 'query-reply')
+      expect(transport.sendInput).toHaveBeenLastCalledWith('\x7f', 'query-reply')
     } finally {
       restoreUserAgent()
     }

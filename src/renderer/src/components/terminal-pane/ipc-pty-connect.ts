@@ -1,5 +1,5 @@
 import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
-import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { readIpcErrorDetail } from '@/lib/ipc-error'
 import { ensurePtyDispatcher } from './pty-dispatcher'
 import {
   clearConsumedPreHandlerPtyExit,
@@ -181,10 +181,8 @@ function handleConnectError(
   context: IpcPtyConnectContext
 ): PtyConnectResult | undefined {
   const { connectionId } = context.transportOptions
-  const message = extractIpcErrorMessage(
-    error,
-    error instanceof Error ? error.message : String(error)
-  )
+  const message =
+    readIpcErrorDetail(error) ?? (error instanceof Error ? error.message : String(error))
   if (connectionId && options.sessionId && isSshSessionGoneError(message)) {
     return { id: options.sessionId, sessionExpired: true }
   }

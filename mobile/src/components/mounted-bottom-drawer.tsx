@@ -185,13 +185,18 @@ export function MountedBottomDrawer({
   }, [visible, interactive, insets.bottom, fillAvailable])
 
   const dismiss = useCallback(() => {
+    // Why: restarting the hide animation cancels it, so onHidden never fires and the
+    // invisible Modal stays up swallowing taps (Android Back lands here mid-close).
+    if (!visible) {
+      return
+    }
     Keyboard.dismiss()
     progress.value = withTiming(0, { duration: BOTTOM_DRAWER_HIDE_DURATION_MS }, (finished) => {
       if (finished) {
         runOnJS(onClose)()
       }
     })
-  }, [onClose, progress])
+  }, [onClose, progress, visible])
 
   // One seam, both platforms: natively this is the hardware key, and inside the shell's page it is
   // a claim the shell hands one press over on. Every session sheet renders through this component,

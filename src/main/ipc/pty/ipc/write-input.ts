@@ -9,6 +9,7 @@ import {
 } from '../../../../shared/terminal-input'
 import { ptyOwnership } from '../provider/ownership-state'
 import { tryGetProviderForPty } from '../provider/registry'
+import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 import { interactiveOutputCharsByPty, lastInputAtByPty } from '../delivery/visibility-state'
 
 export function isMainWindowPtyIpcEvent(
@@ -25,7 +26,7 @@ export function isMainWindowPtyIpcEvent(
   )
 }
 
-export type PtyWritePayload = { id: string; data: string }
+export type PtyWritePayload = { id: string; data: string; inputKind: TerminalInputKind }
 export type PtyViewportClaimPayload = { id: string; cols: number; rows: number }
 
 export function createPtyWriteInput(deps: {
@@ -148,6 +149,12 @@ export function createPtyWriteInput(deps: {
   const isPtyWriteEventFromMainWindow = (event: IpcMainEvent | IpcMainInvokeEvent): boolean =>
     isMainWindowPtyIpcEvent(event, mainWindow)
 
+  const noteRendererPtyInput = (args: PtyWritePayload): void => {
+    lastInputAtByPty.set(args.id, performance.now())
+    interactiveOutputCharsByPty.set(args.id, 0)
+    runtime?.terminalRunFacts?.recordInput(args.id, args.inputKind, args.data)
+  }
+
   const writePtyInput = (args: PtyWritePayload): boolean | Promise<boolean> => {
     // Why: mobile-presence-lock defense-in-depth — the renderer's onData guard can let one keystroke slip during the state-flip lag, so catch it server-side. See docs/mobile-presence-lock.md.
     if (runtime?.getDriver(args.id).kind === 'mobile') {
@@ -158,9 +165,7 @@ export function createPtyWriteInput(deps: {
       return false
     }
     try {
-      const now = performance.now()
-      lastInputAtByPty.set(args.id, now)
-      interactiveOutputCharsByPty.set(args.id, 0)
+      noteRendererPtyInput(args)
       return writePtyProviderInput(provider, args.id, args.data)
     } catch {
       return false
@@ -180,9 +185,7 @@ export function createPtyWriteInput(deps: {
       return false
     }
     try {
-      const now = performance.now()
-      lastInputAtByPty.set(args.id, now)
-      interactiveOutputCharsByPty.set(args.id, 0)
+      noteRendererPtyInput(args)
       return writePtyProviderInput(provider, args.id, args.data)
     } catch {
       return false

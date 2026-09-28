@@ -1,5 +1,6 @@
 import type { useAppStore } from '@/store'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import { agentTurnEndedUncleanly } from '../../../shared/agent-main-agent-verdict'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
@@ -18,11 +19,11 @@ export function getProviderSessionClaimKey(record: SleepingAgentSessionRecord): 
 }
 
 // Why live+done counts (#16308): workspace activation must not resume a finished turn's idle anchor.
-// Quit asks to keep work resumable and a live interrupted turn is unfinished.
+// Quit asks to keep work resumable and a live stopped or failed turn is unfinished.
 export function activationTreatsNoteAsFinished(record: SleepingAgentSessionRecord): boolean {
   return (
     record.origin !== 'quit' &&
-    !(record.origin === 'live' && record.interrupted === true) &&
+    !(record.origin === 'live' && agentTurnEndedUncleanly(record)) &&
     record.state === 'done'
   )
 }

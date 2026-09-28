@@ -33,7 +33,7 @@ import { syncTerminalScrollIntentSoon } from '@/lib/pane-manager/terminal-scroll
 import { resetTerminalKeyboardProtocolAfterInterrupt } from './terminal-pane-lifecycle-primitives'
 
 type PaneInputContext = {
-  pane: ManagedPane
+  pane: Pick<ManagedPane, 'id' | 'terminal'>
   managerRef: React.RefObject<PaneManager | null>
   paneKittyKeyboardModesRef: UseTerminalPaneLifecycleDeps['paneKittyKeyboardModesRef']
   settingsRef: React.RefObject<Record<string, unknown> | null | undefined>

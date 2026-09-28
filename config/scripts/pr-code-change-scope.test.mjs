@@ -350,6 +350,9 @@ describe('per-job path classification', () => {
       'src/main/runtime/rpc/methods/structured-agent-session-hold.ts',
       'src/main/runtime/rpc/methods/structured-agent-session-schemas.ts',
       'src/main/runtime/rpc/methods/terminal.ts',
+      'src/main/runtime/runtime-worktree-agent-rows.ts',
+      'src/main/runtime/runtime-worktree-pty-agent-sources.ts',
+      'src/shared/runtime-worktree-contracts.ts',
       'src/renderer/src/runtime/remote-runtime-terminal-multiplexer.ts'
     ]) {
       expectClassification([file], {
@@ -579,12 +582,21 @@ describe('PR Checks skip wiring', () => {
 
   it('gates each expensive job on its classifier and cache prerequisite', () => {
     for (const jobName of expensiveJobs.filter((jobName) => jobName !== 'test')) {
-      expect(prWorkflow.jobs[jobName].needs, jobName).toEqual(['code_paths'])
+      expect(prWorkflow.jobs[jobName].needs, jobName).toEqual(
+        ['package', 'package_windows'].includes(jobName)
+          ? ['code_paths', 'static_analysis', 'typecheck']
+          : ['code_paths']
+      )
       expect(prWorkflow.jobs[jobName].if, jobName).toBe(
         `needs.code_paths.outputs.${jobName} == 'true'`
       )
     }
-    expect(prWorkflow.jobs.test.needs).toEqual(['code_paths', 'test_native_cache'])
+    expect(prWorkflow.jobs.test.needs).toEqual([
+      'code_paths',
+      'test_native_cache',
+      'static_analysis',
+      'typecheck'
+    ])
     expect(prWorkflow.jobs.test.if).toContain("needs.code_paths.outputs.test == 'true'")
     expect(prWorkflow.jobs.test.if).toContain("needs.test_native_cache.result == 'success'")
     expect(prWorkflow.jobs.test.if).toContain("needs.test_native_cache.result == 'skipped'")

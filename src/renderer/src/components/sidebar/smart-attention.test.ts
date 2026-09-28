@@ -102,6 +102,27 @@ describe('mostRecentAttentionInHistory', () => {
     ).toBe(NOW - 4_000)
   })
 
+  it('counts a failed history done as attention and skips a cancelled one', () => {
+    expect(
+      mostRecentAttentionInHistory([
+        makeHistory('done', NOW - 4_000),
+        {
+          ...makeHistory('done', NOW - 1_000),
+          mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: NOW - 1_000 }
+        }
+      ])
+    ).toBe(NOW - 1_000)
+    expect(
+      mostRecentAttentionInHistory([
+        makeHistory('done', NOW - 4_000),
+        {
+          ...makeHistory('done', NOW - 1_000),
+          mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: NOW - 1_000 }
+        }
+      ])
+    ).toBe(NOW - 4_000)
+  })
+
   it('returns null when only interrupted dones exist', () => {
     expect(mostRecentAttentionInHistory([makeHistory('done', NOW - 1_000, true)])).toBeNull()
   })
@@ -175,6 +196,31 @@ describe('resolveAttention', () => {
       paneKey: 't:1',
       state: 'done',
       interrupted: true,
+      stateStartedAt: NOW - 90_000,
+      updatedAt: NOW - 30_000
+    })
+    expect(resolveAttention([hookPane(entry)], NOW)).toEqual(IDLE)
+  })
+
+  it('ranks a failed done in Class 2 at its end time, like a completion', () => {
+    const entry = makeEntry({
+      paneKey: 't:1',
+      state: 'done',
+      mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: NOW - 90_000 },
+      stateStartedAt: NOW - 90_000,
+      updatedAt: NOW - 30_000
+    })
+    expect(resolveAttention([hookPane(entry)], NOW)).toEqual({
+      cls: 2,
+      attentionTimestamp: NOW - 90_000
+    })
+  })
+
+  it('still demotes a done the user stopped, recorded as a cancellation verdict', () => {
+    const entry = makeEntry({
+      paneKey: 't:1',
+      state: 'done',
+      mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: NOW - 90_000 },
       stateStartedAt: NOW - 90_000,
       updatedAt: NOW - 30_000
     })

@@ -15,6 +15,7 @@ import {
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { agentTurnStoppedByUser } from '../../../../shared/agent-main-agent-verdict'
 
 import {
   createWorktreeTabBucketProjection,
@@ -299,13 +300,12 @@ export function collectRetainedAgentsOnDisappear(args: {
     if (args.recentlyClosedAgentStatusTabIds[ownerTabId]) {
       continue
     }
-    // Why: only keep a sticky snapshot when the agent finished cleanly
-    // (state === 'done' and not interrupted). Explicit teardown paths mark
+    // Why: only keep a sticky snapshot when the agent finished and the user did not
+    // stop it; a failure is kept so it stays visible. Explicit teardown paths mark
     // pane keys as suppression candidates, so a close/quit/crash cannot
     // resurrect a stale `done` row on the next sync.
     const lastState = prev.row.state
-    const wasInterrupted = prev.row.entry.interrupted === true
-    if (lastState !== 'done' || wasInterrupted) {
+    if (lastState !== 'done' || agentTurnStoppedByUser(prev.row.entry)) {
       continue
     }
     toRetain.push({

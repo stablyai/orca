@@ -23,6 +23,11 @@ describe('noteArmsHibernatedPaneWake', () => {
     // Why: #16308's incidental widening, kept; pty-connection-hibernation-wake.test.ts pins its effect.
     ['a finished turn idle anchor (live done)', true, note({ origin: 'live' })],
     ['an interrupted live turn', false, note({ origin: 'live', interrupted: true })],
+    [
+      'a failed live turn',
+      false,
+      note({ origin: 'live', mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: 1 } })
+    ],
     ['a quit capture', false, note({ origin: 'quit' })],
     [
       'a manual-sleep note still working',

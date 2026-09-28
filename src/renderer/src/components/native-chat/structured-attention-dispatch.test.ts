@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { AgentSessionTurnCompletion } from '../../../../shared/agent-session-wire'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import {
   createTestStore,
@@ -230,7 +231,7 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
     expect(indicators().paneDot).toBe('agent-completion')
   })
 
-  it('words a successful turn as finished and a stopped one through the shipped interrupted flag', () => {
+  it('hands main the host verdict, which picks finished, failed or stopped', () => {
     dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
     // 'done' is the host's report that the turn settled, not a reading of the status row: main
     // words a 'working' state as "working", which would announce a finished turn as unfinished.
@@ -238,16 +239,39 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
       source: 'agent-task-complete',
       surface: 'agent-session',
       agentState: 'done',
-      agentInterrupted: false
+      agentTurnOutcome: 'success'
     })
+
+    for (const [outcome, turnId] of [
+      ['cancellation', 'turn-2'],
+      ['failure', 'turn-3']
+    ] as const) {
+      dispatched.length = 0
+      seed()
+      dispatchStructuredTurnCompletionAttention(structuredTab(), completion({ outcome, turnId }))
+      expect(onlyDispatch()).toMatchObject({ agentState: 'done', agentTurnOutcome: outcome })
+    }
+  })
+
+  it('calls back a send refused before any turn, named by its journal item key, as failed', () => {
+    dispatchStructuredTurnCompletionAttention(
+      structuredTab(),
+      completion({ outcome: 'failure', turnId: agentJournalSubmissionKey('m1') })
+    )
+    expect(indicators().paneDot).toBe('agent-completion')
+    expect(onlyDispatch()).toMatchObject({ agentState: 'done', agentTurnOutcome: 'failure' })
+  })
+
+  it('asks for input when the host settled a request while a prompt waits on the user', () => {
+    // e.g. a subagent's approval is unanswered.
+    dispatchStructuredTurnCompletionAttention(structuredTab(), completion({ awaitingUser: true }))
+    expect(indicators().paneDot).toBe('agent-completion')
+    expect(onlyDispatch()).toMatchObject({ agentState: 'blocked', agentTurnOutcome: 'success' })
 
     dispatched.length = 0
     seed()
-    dispatchStructuredTurnCompletionAttention(
-      structuredTab(),
-      completion({ outcome: 'cancellation', turnId: 'turn-2' })
-    )
-    expect(onlyDispatch()).toMatchObject({ agentState: 'done', agentInterrupted: true })
+    dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
+    expect(onlyDispatch()).toMatchObject({ agentState: 'done' })
   })
 
   it('says done even while the status row still reads working, because the host settled the turn', () => {
@@ -270,7 +294,7 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
       }
     })
     dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
-    expect(onlyDispatch()).toMatchObject({ agentState: 'done', agentInterrupted: false })
+    expect(onlyDispatch()).toMatchObject({ agentState: 'done', agentTurnOutcome: 'success' })
   })
 
   it('delivers an id the acknowledgement round trip dismisses when the user reads the chat', () => {

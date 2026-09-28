@@ -1,9 +1,10 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ReviewScreenState } from './mobile-diff-review-screen-model'
+import type { ReviewSheetIntents } from './mobile-diff-review-sheets'
 import {
   isMobileNativeChatInputStale,
   markMobileNativeChatInputStale,
@@ -51,14 +52,18 @@ describe('useMobileDiffReviewSendActions', () => {
   let actions: SendActions | null = null
   let mountedClient: RpcClient | null = null
   let setActionError: ReturnType<typeof vi.fn>
-  let setSendSheet: ReturnType<typeof vi.fn>
+  let sheets: {
+    openSheet: Mock<ReviewSheetIntents['openSheet']>
+    closeSheet: Mock<ReviewSheetIntents['closeSheet']>
+    updateSendSheet: Mock<ReviewSheetIntents['updateSendSheet']>
+  }
   let saveCommentsAndReviewState: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
     clipboardMock.setStringAsync.mockReset().mockResolvedValue(true)
     resetMobileNativeChatStaleInputForTests()
     setActionError = vi.fn()
-    setSendSheet = vi.fn()
+    sheets = { openSheet: vi.fn(), closeSheet: vi.fn(), updateSendSheet: vi.fn() }
     saveCommentsAndReviewState = vi.fn().mockResolvedValue(undefined)
   })
 
@@ -76,7 +81,7 @@ describe('useMobileDiffReviewSendActions', () => {
       worktreeId: 'wt-1',
       screenState: READY,
       setActionError,
-      setSendSheet,
+      sheets,
       saveCommentsAndReviewState
     })
     return null
@@ -158,7 +163,7 @@ describe('useMobileDiffReviewSendActions', () => {
     expect(sendRequest.mock.calls[0]?.[1]).toMatchObject({ text: '\x15', enter: false })
     expect(saveCommentsAndReviewState).not.toHaveBeenCalled()
     expect(setActionError).not.toHaveBeenCalled()
-    expect(setSendSheet).not.toHaveBeenCalled()
+    expect(sheets.closeSheet).not.toHaveBeenCalled()
     // Marker survives for the next attempt.
     expect(isMobileNativeChatInputStale('terminal-1')).toBe(true)
   })
@@ -192,7 +197,7 @@ describe('useMobileDiffReviewSendActions', () => {
     expect(sendRequest.mock.calls[0]?.[1]).toMatchObject({ terminal: 'terminal-1', enter: true })
     expect(saveCommentsAndReviewState).toHaveBeenCalledTimes(1)
     expect(setActionError).toHaveBeenCalledWith('Review notes sent')
-    expect(setSendSheet).toHaveBeenCalledWith(null)
+    expect(sheets.closeSheet).toHaveBeenCalledWith('send')
   })
 
   it('only heals the terminal that was marked', async () => {

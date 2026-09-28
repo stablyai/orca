@@ -36,6 +36,7 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
       'codex',
       'copilot',
       'cursor',
+      'dsh',
       'kimi',
       'muse',
       'omp',

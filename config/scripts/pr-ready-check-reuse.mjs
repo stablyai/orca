@@ -1,8 +1,8 @@
 import { appendFileSync, readFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 
-export function prCheckRunTitle({ number, sourceSha, workflowSha }) {
-  return `PR ${number} | source ${sourceSha} | workflow ${workflowSha}`
+export function prCheckRunTitle({ number, sourceSha, workflowSha, unitMode = 'full' }) {
+  return `PR ${number} | source ${sourceSha} | workflow ${workflowSha} | unit ${unitMode}`
 }
 
 export function reusablePrCheckRun(runs, identity) {

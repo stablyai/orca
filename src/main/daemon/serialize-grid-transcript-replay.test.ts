@@ -39,7 +39,13 @@ const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   'codex-0157-effort-override-embedded-warning': 4,
   'codex-0157-no-daemon-effort-override': 16,
   'codex-0157-plain-ready': 18,
-  'claude-dialog-trust-workspace-answered': 13
+  'claude-dialog-trust-workspace-answered': 13,
+  // DSH-TUI's whale intro paints whole rows of 24-bit background, and every one of this
+  // transcript's divergences is the same shape: `visible-grid row=0`, a true-colour
+  // background that the round trip does not restore to default. Verified as upstream, not a
+  // regression, by replaying it against the previous build
+  // (`build-serialize-addon-at-ref.mjs --ref origin/main`): I1 and I3 both hold.
+  'dsh-tui-ready-no-key': 10
 }
 
 type Transcript = { name: string; data: string; cols: number; rows: number }

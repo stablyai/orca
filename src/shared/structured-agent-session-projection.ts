@@ -11,17 +11,17 @@ import {
   type AgentJournalTurnOutcome
 } from './agent-session-journal-types'
 import { isRootAgentJournalItem } from './agent-session-journal-producer'
-import { readAgentJournalTurnOutcome } from './agent-session-turn-record'
 import {
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
   AGENT_STATUS_TOOL_NAME_MAX_LENGTH
 } from './agent-status-types'
 import { describeToolInput } from './native-chat-tool-summary'
+import { statusStructuredAgentSessionToolCall } from './structured-agent-session-live-turn'
 import {
-  activeStructuredAgentSessionTurnId,
-  newestStructuredAgentSessionTurn,
-  statusStructuredAgentSessionToolCall
-} from './structured-agent-session-live-turn'
+  hasStructuredAgentSessionRequest,
+  latestStructuredAgentSessionRequest,
+  type StructuredAgentSessionLatestRequest
+} from './structured-agent-session-latest-request'
 import {
   isStructuredAgentSessionToolAction,
   structuredAgentSessionToolCallBlock
@@ -30,13 +30,15 @@ import {
 import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
 import { sha256 } from './sha256'
 import { structuredAgentSessionStatusStartedAt } from './structured-agent-session-status-started-at'
-import { isUnansweredStructuredAgentSessionDispatch } from './structured-agent-session-unanswered-dispatch'
+import { owesStructuredAgentSessionWork } from './structured-agent-session-owed-work'
 
-// Re-exported so the live-turn readers' existing consumers keep one import site.
+// Re-exported so the live-turn readers' and the unanswered-send rule's existing consumers keep one
+// import site.
 export {
   activeStructuredAgentSessionTurnId,
   newestStructuredAgentSessionTurn
 } from './structured-agent-session-live-turn'
+export { hasUnansweredStructuredAgentSessionDispatch } from './structured-agent-session-unanswered-dispatch'
 
 function boundedText(payload: { head: string; truncated: boolean; byteLength: number }): string {
   return payload.truncated ? `${payload.head}\n… (${payload.byteLength} bytes)` : payload.head
@@ -181,39 +183,6 @@ export function projectStructuredItemToNativeChat(
   return message
 }
 
-/** Deliberately NOT scoped by producer: this is an existence test ("is this
- *  session listable at all"), not an attribution one. A session whose only
- *  content came from a subagent still has content. */
-export function hasPersistedStructuredAgentSessionTurn(
-  items: readonly AgentJournalRenderItem[]
-): boolean {
-  return items.some(
-    (item) =>
-      item.body.kind === 'message' && (item.body.role === 'user' || item.body.role === 'assistant')
-  )
-}
-
-/**
- * A send the host has journaled that the provider has neither opened a turn for nor refused.
- *
- * Codex declares `turn/started` within ~150ms, but Claude's running row can only be written once
- * the SDK echoes the user message back — a 3.4s median and 18s at p90 on real journals. Waiting
- * on that echo to call a session working leaves the whole gap reading idle in the chat and in
- * every session list, so the send itself is the evidence.
- *
- * A live `unknown` still counts because an ambiguous adapter reply does not prove the provider
- * stopped. A recovered `unknown` does not — it outlived the host generation that sent it, so
- * there is nothing still running to report.
- */
-export function hasUnansweredStructuredAgentSessionDispatch(
-  submissions: readonly AgentJournalSubmission[],
-  currentFence?: number | null
-): boolean {
-  return submissions.some((submission) =>
-    isUnansweredStructuredAgentSessionDispatch(submission, currentFence)
-  )
-}
-
 export type StructuredAgentSessionProjectedStatus = 'working' | 'attention' | 'idle'
 
 export function structuredAgentSessionTabId(sessionId: string): string {
@@ -234,10 +203,7 @@ export function projectStructuredAgentSessionStatus(
   ) {
     return 'attention'
   }
-  return activeStructuredAgentSessionTurnId(items) ||
-    hasUnansweredStructuredAgentSessionDispatch(submissions, currentFence)
-    ? 'working'
-    : 'idle'
+  return owesStructuredAgentSessionWork(items, submissions, currentFence) ? 'working' : 'idle'
 }
 
 function messageProse(blocks: readonly NativeChatBlock[]): string {
@@ -307,7 +273,8 @@ export type StructuredAgentSessionStatusProjection = {
   toolName?: string
   toolInput?: string
   lastAssistantMessage?: string
-  /** The newest settled turn's provider verdict; present only while `status` is idle. */
+  /** The latest request's verdict: its turn's, or `failure` for a send the agent or its start
+   *  refused. Present only while `status` is idle. */
   turnOutcome?: AgentJournalTurnOutcome
   statusStartedAt?: number
 }
@@ -323,13 +290,23 @@ export function projectStructuredAgentSessionStatusSummary(
   submissions: readonly AgentJournalSubmission[] = [],
   currentFence?: number | null
 ): StructuredAgentSessionStatusProjection {
-  // A first send has no journalled message until the provider replays it, so the pending
-  // dispatch is also what makes a brand-new session listable at all.
-  if (
-    !hasPersistedStructuredAgentSessionTurn(items) &&
-    !hasUnansweredStructuredAgentSessionDispatch(submissions, currentFence)
-  ) {
-    return { status: null, latestPrompt: '' }
+  return projectStructuredAgentSessionStatusState(items, submissions, currentFence).summary
+}
+
+/** The summary plus the latest request it was read from, whatever the status, so the host's
+ *  completion feed follows the same request the row reports without scanning again. */
+export function projectStructuredAgentSessionStatusState(
+  items: readonly AgentJournalRenderItem[],
+  submissions: readonly AgentJournalSubmission[] = [],
+  currentFence?: number | null
+): {
+  summary: StructuredAgentSessionStatusProjection
+  latestRequest: StructuredAgentSessionLatestRequest | null
+  /** Whether a running turn or an unanswered send is still owed, even beneath a pending prompt. */
+  owesWork: boolean
+} {
+  if (!hasStructuredAgentSessionRequest(items, submissions, currentFence)) {
+    return { summary: { status: null, latestPrompt: '' }, latestRequest: null, owesWork: false }
   }
   const status = projectStructuredAgentSessionStatus(items, submissions, currentFence)
   const statusToolCall = status === 'working' ? statusStructuredAgentSessionToolCall(items) : null
@@ -346,24 +323,29 @@ export function projectStructuredAgentSessionStatusSummary(
     latestStructuredAgentSessionAssistantMessage(items),
     AGENT_STATUS_MAX_FIELD_LENGTH
   )
-  // A verdict is a fact about a finished turn: only an idle session has one to report, and
-  // `readAgentJournalTurnOutcome` already answers null for anything it cannot place.
-  const turnOutcome =
-    status === 'idle' ? readAgentJournalTurnOutcome(newestStructuredAgentSessionTurn(items)) : null
+  const latestRequest = latestStructuredAgentSessionRequest(items, submissions)
+  // A verdict is a fact about a finished request: only an idle session has one to report.
+  const request = status === 'idle' ? latestRequest : null
+  const turnOutcome = request?.outcome
   const statusStartedAt = structuredAgentSessionStatusStartedAt(
     status,
     items,
     submissions,
-    currentFence
+    currentFence,
+    request
   )
   return {
-    status,
-    latestPrompt: normalizePromptField(latestStructuredAgentSessionPrompt(items)),
-    ...(toolName ? { toolName } : {}),
-    ...(toolInput ? { toolInput } : {}),
-    ...(lastAssistantMessage ? { lastAssistantMessage } : {}),
-    ...(turnOutcome ? { turnOutcome } : {}),
-    ...(statusStartedAt !== undefined ? { statusStartedAt } : {})
+    latestRequest,
+    owesWork: status !== 'idle' && owesStructuredAgentSessionWork(items, submissions, currentFence),
+    summary: {
+      status,
+      latestPrompt: normalizePromptField(latestStructuredAgentSessionPrompt(items)),
+      ...(toolName ? { toolName } : {}),
+      ...(toolInput ? { toolInput } : {}),
+      ...(lastAssistantMessage ? { lastAssistantMessage } : {}),
+      ...(turnOutcome ? { turnOutcome } : {}),
+      ...(statusStartedAt !== undefined ? { statusStartedAt } : {})
+    }
   }
 }
 

@@ -78,6 +78,7 @@ it.each([
   '.npmrc',
   'tsconfig.json',
   'config/tsconfig.node.json',
+  'config/scripts/bun-profile-qualification.mjs',
   'config/patches/node-pty@1.1.0.patch',
   'native/windows-registry/src/addon.cc',
   '.github/actions/install-node-dependencies/action.yml',
@@ -140,12 +141,15 @@ it('keeps all ten platform jobs and runs them when detection is skipped or fails
   expect(workflow.jobs.changes.steps[0].with['persist-credentials']).toBe(false)
   const detect = workflow.jobs.changes.steps.find((step) => step.id === 'scope')
   expect(detect.run).toContain('git diff --name-only --no-renames -z HEAD^1 HEAD')
-  let count = 0
-  for (const jobName of ['persistence', 'linux_glibc_floor', 'linux_musl']) {
+  expect(workflow.on.pull_request.types).toContain('ready_for_review')
+  expect(workflow.on.schedule).toHaveLength(1)
+  expect(workflow.jobs.persistence.strategy.matrix.os).toContain('needs.changes.outputs.runners')
+  for (const jobName of ['linux_glibc_floor', 'linux_musl']) {
     const job = workflow.jobs[jobName]
-    expect(job.needs).toBe('changes')
-    expect(job.if).toBe("${{ !cancelled() && needs.changes.outputs.should_run != 'false' }}")
-    count += job.strategy.matrix.os.length
+    expect(job.needs).toEqual(['changes', 'persistence'])
+    expect(job.if).toContain("needs.persistence.result == 'success'")
+    expect(job.if).toContain("needs.changes.outputs.qualification != 'false'")
+    expect(job.if).toContain("needs.changes.outputs.should_run != 'false'")
+    expect(job.strategy.matrix.os).toEqual(['ubuntu-22.04', 'ubuntu-24.04-arm'])
   }
-  expect(count).toBe(10)
 })

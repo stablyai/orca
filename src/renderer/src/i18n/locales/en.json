@@ -609,6 +609,7 @@
           "da41abbdd4": "Ante",
           "060d152fb5": "Trae",
           "muse_label": "Muse",
+          "dsh_label": "DeepSeek Harness",
           "zcode_label": "ZCode",
           "d443a47995": "Prime Agent",
           "mimo_code_label": "MiMo Code",
@@ -3224,7 +3225,9 @@
             "e16012e31e": "The terminal daemon that owned this session exited, so the session and its scrollback could not be recovered. Open a new terminal to continue.",
             "sessionUnavailable": "Orca couldn't reattach to this pane's terminal session on the host. Open a new terminal to continue.",
             "sourceRestoring": "Reconnecting this terminal — its output is being re-established. The session is still running.",
-            "remoteTerminalClosed": "Remote terminal was closed."
+            "remoteTerminalClosed": "Remote terminal was closed.",
+            "ptyAllocationLimit": "Your system cannot allocate any more pty devices. Close some terminals you are not using, in Orca or another program, then try again.",
+            "terminalProcessLimit": "Your system cannot start another terminal process. Close unused terminals or quit unused processes, then try again."
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Git Bash console limit reached",
@@ -18361,6 +18364,7 @@
       "needsInput": "needs input",
       "working": "working",
       "stopped": "stopped",
+      "failed": "failed",
       "finished": "finished"
     }
   },

@@ -1,5 +1,6 @@
 import { resolve } from 'node:path'
 import { defineConfig } from 'vitest/config'
+import { UNIT_INCLUDE, UNIT_EXCLUDE } from './scripts/ci-unit-files.mjs'
 import TimingSequencer from './scripts/ci-unit-sequencer.mjs'
 
 const windowsTestWorkerOptions = process.platform === 'win32' ? { maxWorkers: 4 } : {}
@@ -33,14 +34,8 @@ export default defineConfig({
       resolve('config/scripts/happy-dom-mutation-observer-retention.ts'),
       resolve('config/scripts/vitest-host-ports-setup.ts')
     ],
-    include: [
-      'src/**/*.test.ts',
-      'src/**/*.test.tsx',
-      'config/scripts/**/*.test.ts',
-      'config/scripts/**/*.test.mjs',
-      'tests/tools/**/*.test.mjs',
-      'tests/e2e/**/*.unit.test.ts'
-    ],
+    include: UNIT_INCLUDE,
+    ...(process.env.ORCA_BALANCE_UNIT_SHARDS === '1' ? { exclude: UNIT_EXCLUDE } : {}),
     // Why: the full suite runs heavy TS transforms plus real git/http fixtures;
     // the Vitest 5s defaults are too tight for the slowest integration cases.
     hookTimeout: 60_000,

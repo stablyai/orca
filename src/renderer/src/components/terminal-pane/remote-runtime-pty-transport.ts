@@ -2583,6 +2583,8 @@ export function createRemoteRuntimePtyTransport(
       storedCallbacks = {}
     },
 
+    // Why no kind: terminal.send has no launch kind, and its query-reply kind is for mobile
+    // clients, so the host classifies a desktop's bytes itself.
     sendInput(data: string): boolean {
       if (!connected || !handle || recoveryBlocksIo()) {
         return false

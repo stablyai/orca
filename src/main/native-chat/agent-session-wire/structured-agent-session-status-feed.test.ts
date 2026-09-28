@@ -191,7 +191,8 @@ describe('StructuredAgentSessionStatusFeed', () => {
     expect(events.at(-1)).toMatchObject({ session: { status: 'working' } })
     record.lease.runtimeFence = 2
     feed.publish(SESSION)
-    expect(events.at(-1)).toMatchObject({ session: { status: 'idle' } })
+    // Its only send outlived the host that sent it and became no turn: nothing left to list.
+    expect(events.at(-1)).toMatchObject({ session: { status: null } })
   })
 
   it('publishes working from the pending submission, before the provider replays the turn', async () => {

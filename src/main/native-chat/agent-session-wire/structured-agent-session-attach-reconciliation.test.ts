@@ -8,6 +8,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentSessionRecordFixture } from '../../../shared/agent-session-record.test-fixture'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import { projectStructuredAgentSessionStatusState } from '../../../shared/structured-agent-session-projection'
 import { digestPayload } from '../agent-session-journal/journal-payload-bounds'
 import { journalDirectoryFor } from '../agent-session-journal/journal-paths'
 import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
@@ -115,6 +116,19 @@ describe('attachJournal restart reconciliation', () => {
     expect(submission?.reason).toBe('not_delivered')
     // Deciding is not sending: nothing here puts the message back on the wire.
     expect(dispatch).not.toHaveBeenCalled()
+  })
+
+  it('gives a send the provider never received no verdict and no listing', async () => {
+    await crashedJournal()
+    const { adapter } = adapterWith(async () => window())
+
+    const attached = await attach(adapter)
+
+    // Nobody failed: the crash stranded it, so the chat must not read Failed or be listed by it.
+    const { items, submissions } = attached.journal.snapshot()
+    expect(
+      projectStructuredAgentSessionStatusState(items, submissions, RECORD.lease.runtimeFence)
+    ).toMatchObject({ summary: { status: null }, latestRequest: null })
   })
 
   it('still reports a submission unconfirmed when the window cannot decide it', async () => {

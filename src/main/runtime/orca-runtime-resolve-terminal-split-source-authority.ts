@@ -100,7 +100,7 @@ export class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends OrcaRunt
     return await this.claudeAgentTeams.handleTmuxCompat(request, {
       splitTerminal: (handle, opts) => this.splitTerminal(handle, opts),
       readTerminal: (handle, opts) => this.readTerminal(handle, opts),
-      sendTerminal: (handle, action) => this.sendTerminal(handle, action),
+      sendTerminal: (handle, action, options) => this.sendTerminal(handle, action, options),
       focusTerminal: (handle) => this.focusTerminal(handle),
       closeTerminal: (handle) => this.closeTerminal(handle),
       showTerminal: (handle) => this.showTerminal(handle)

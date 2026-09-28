@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   evaluateTuiIdle,
+  isTuiIdleReadyVerdict,
   hasQuietMuseReadyPrompt,
   nameOnlyIdleNeedsCorroboration,
   type TuiIdleEvaluationInput,
@@ -172,5 +173,43 @@ describe('nameOnlyIdleNeedsCorroboration', () => {
   it("names an adopted pane's agent from a shell auto-title", () => {
     expect(nameOnlyIdleNeedsCorroboration(null, 'claude')).toBe(true)
     expect(nameOnlyIdleNeedsCorroboration(null, 'claude ~/p/repo')).toBe(true)
+  })
+})
+
+describe('a DSH pane settles tui-idle on its own hook', () => {
+  const base = {
+    record: { lastAgentStatus: null, lastOutputAt: null, lastOscTitle: '\u2726 \u{1F40B} repo' },
+    rendererTitle: undefined,
+    readPositiveBodyEvidence: () => false,
+    readMuseReadyBodyEvidence: () => false,
+    readTailBlockedReason: () => null,
+    agent: 'dsh' as const,
+    firstPartyStatus: { state: 'done' as const, updatedAt: Date.now() },
+    quiescenceMs: 1_000
+  } satisfies TuiIdleEvaluationInput
+
+  const ready = (over: Partial<TuiIdleEvaluationInput> = {}) =>
+    isTuiIdleReadyVerdict(evaluateTuiIdle({ ...base, ...over }))
+
+  it('settles on a fresh first-party done', () => {
+    // The regression: DSH's title carries no idle (its rest glyph is Gemini's working one),
+    // so every title-reading tier failed and `terminal wait --for tui-idle` ran to timeout
+    // against an already-ready composer.
+    expect(ready()).toBe(true)
+  })
+
+  it('does not settle while the same pane reports working', () => {
+    expect(ready({ firstPartyStatus: { state: 'working', updatedAt: Date.now() } })).toBe(false)
+  })
+
+  it('does not settle on a stale done', () => {
+    expect(
+      ready({ firstPartyStatus: { state: 'done', updatedAt: Date.now() - 31 * 60 * 1000 } })
+    ).toBe(false)
+  })
+
+  it('leaves other agents on the title lanes', () => {
+    // Scoped on purpose: an agent whose hooks report child turns can emit `done` mid-turn.
+    expect(ready({ agent: 'claude' })).toBe(false)
   })
 })

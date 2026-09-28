@@ -12,9 +12,9 @@ import type {
   ComposerState,
   ReviewDiffLine,
   ReviewDiffState,
-  ReviewScreenState,
-  SendSheetState
+  ReviewScreenState
 } from './mobile-diff-review-screen-model'
+import type { ReviewSheetIntents } from './mobile-diff-review-sheets'
 import { sourceFileDiffOpenRun } from '../source-control/mobile-source-file-open-operations'
 import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
 import { useMobileDiffReviewCommentActions } from './use-mobile-diff-review-comment-actions'
@@ -42,12 +42,10 @@ type InteractionInput = {
   setFilter: Dispatch<SetStateAction<MobileDiffReviewQueueFilter>>
   setCurrentIndex: Dispatch<SetStateAction<number>>
   setActiveHunkIndex: Dispatch<SetStateAction<number | null>>
-  setComposer: Dispatch<SetStateAction<ComposerState | null>>
   setComposerBody: Dispatch<SetStateAction<string>>
   setActionError: Dispatch<SetStateAction<string | null>>
   setBusyAction: Dispatch<SetStateAction<string | null>>
-  setSendSheet: Dispatch<SetStateAction<SendSheetState | null>>
-  setShowCompletion: Dispatch<SetStateAction<boolean>>
+  sheets: ReviewSheetIntents
   loadReviewData: () => Promise<void>
   onOpenSession: () => void
   onReconnect: ((hostId: string) => void | Promise<void>) | null
@@ -74,12 +72,10 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
     setFilter,
     setCurrentIndex,
     setActiveHunkIndex,
-    setComposer,
     setComposerBody,
     setActionError,
     setBusyAction,
-    setSendSheet,
-    setShowCompletion,
+    sheets,
     loadReviewData,
     onOpenSession,
     onReconnect
@@ -108,10 +104,9 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
     composerBody,
     setScreenState,
     setCurrentIndex,
-    setComposer,
     setComposerBody,
     setActionError,
-    setShowCompletion
+    sheets
   })
 
   const { runGitMutation, stageReviewedFiles } = useMobileDiffReviewGitActions({
@@ -131,7 +126,7 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
       worktreeId,
       screenState,
       setActionError,
-      setSendSheet,
+      sheets,
       saveCommentsAndReviewState
     })
 
