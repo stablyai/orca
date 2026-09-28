@@ -50,9 +50,20 @@ export function DashboardAgentChildDisclosure({
         'auto.components.dashboard.DashboardAgentChildDisclosure.1b57ce9fa4',
         '{{value0}} {{value1}} child {{value2}}',
         {
-          value0: childAgentsExpanded ? 'Hide' : 'Show',
+          value0: childAgentsExpanded
+            ? translate('auto.components.dashboard.DashboardAgentChildDisclosure.hideVerb', 'Hide')
+            : translate('auto.components.dashboard.DashboardAgentChildDisclosure.showVerb', 'Show'),
           value1: childAgentCount,
-          value2: childAgentCount === 1 ? 'agent' : 'agents'
+          value2:
+            childAgentCount === 1
+              ? translate(
+                  'auto.components.dashboard.DashboardAgentChildDisclosure.agentSingular',
+                  'agent'
+                )
+              : translate(
+                  'auto.components.dashboard.DashboardAgentChildDisclosure.agentPlural',
+                  'agents'
+                )
         }
       )}
       aria-expanded={childAgentsExpanded}

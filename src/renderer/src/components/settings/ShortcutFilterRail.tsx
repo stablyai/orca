@@ -8,6 +8,7 @@ import { Input } from '../ui/input'
 import type { ShortcutTerminalStatus } from './shortcut-terminal-status'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
 import { translate } from '@/i18n/i18n'
+import { translateKeybindingTitle } from '@/i18n/keybinding-catalog-labels'
 
 export type ShortcutFilter = 'all' | 'modified' | 'unassigned' | 'conflicts'
 
@@ -25,12 +26,20 @@ export type ShortcutRowsByGroup = {
   rows: ShortcutRowModel[]
 }
 
-const SHORTCUT_FILTER_LABELS: Record<ShortcutFilter, string> = {
-  all: 'All',
-  modified: 'Modified',
-  unassigned: 'Unassigned',
-  conflicts: 'Conflicts'
+function getShortcutFilterLabel(filter: ShortcutFilter): string {
+  switch (filter) {
+    case 'all':
+      return translate('auto.components.settings.ShortcutFilterRail.filterAll', 'All')
+    case 'modified':
+      return translate('auto.components.settings.ShortcutFilterRail.filterModified', 'Modified')
+    case 'unassigned':
+      return translate('auto.components.settings.ShortcutFilterRail.filterUnassigned', 'Unassigned')
+    case 'conflicts':
+      return translate('auto.components.settings.ShortcutFilterRail.filterConflicts', 'Conflicts')
+  }
 }
+
+const SHORTCUT_FILTER_IDS: ShortcutFilter[] = ['all', 'modified', 'unassigned', 'conflicts']
 
 export const SHORTCUT_LOCAL_SEARCH_QUERY_MAX_BYTES = 2 * 1024
 
@@ -50,7 +59,7 @@ export function normalizeShortcutLocalSearchQuery(query: string): string | null 
 
 export function getShortcutSearchEntry(row: ShortcutRowModel): SettingsSearchEntry {
   return {
-    title: row.item.title,
+    title: translateKeybindingTitle(row.item),
     description: translate(
       'auto.components.settings.ShortcutFilterRail.1d5634ba31',
       '{{value0}} shortcut',
@@ -96,6 +105,7 @@ export function matchesShortcutLocalSearch(
     return false
   }
   const searchableText = [
+    translateKeybindingTitle(row.item),
     row.item.title,
     row.item.id,
     row.groupTitle,
@@ -122,9 +132,9 @@ export function ShortcutFilterRail({
   visibleCount: number
   totalCount: number
 }): React.JSX.Element {
-  const filters = (Object.keys(SHORTCUT_FILTER_LABELS) as ShortcutFilter[]).map((id) => ({
+  const filters = SHORTCUT_FILTER_IDS.map((id) => ({
     id,
-    label: SHORTCUT_FILTER_LABELS[id],
+    label: getShortcutFilterLabel(id),
     count: filterCounts[id]
   }))
 

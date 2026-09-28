@@ -13,6 +13,8 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { ActivePluginCommand } from '@/store/plugin-panels'
 import { buildPluginCommandKeybindingDefinitions } from '@/lib/plugin-command-keybindings'
 import { disabledAgentTabActionIds, groupDefinitions, type ShortcutGroup } from './shortcut-groups'
+import { getBindingConflictMessage } from './shortcut-error-messages'
+import { translateKeybindingTitle } from '@/i18n/keybinding-catalog-labels'
 
 export type ShortcutDefinitionCatalog = {
   groups: ShortcutGroup[]
@@ -22,6 +24,9 @@ export type ShortcutDefinitionCatalog = {
   conflictByAction: Map<KeybindingActionId, string[]>
 }
 
+/** Builds the grouped keybinding list the Shortcuts settings pane renders,
+ *  including per-action conflict warnings from both static and dynamic
+ *  (plugin, Mission Control) conflict sources. */
 export function buildShortcutDefinitionCatalog(options: {
   disabledTuiAgents: readonly TuiAgent[]
   pluginCommands: readonly ActivePluginCommand[]
@@ -49,12 +54,18 @@ export function buildShortcutDefinitionCatalog(options: {
   )
   for (const conflict of conflicts) {
     const labels = conflict.actionIds
-      .map((id) => definitionsByAction.get(id)?.title ?? id)
+      .map((id) => {
+        const definition = definitionsByAction.get(id)
+        return definition ? translateKeybindingTitle(definition) : id
+      })
       .join(', ')
     for (const actionId of conflict.actionIds) {
       conflictByAction.set(actionId, [
         ...(conflictByAction.get(actionId) ?? []),
-        `${formatKeybindingList([conflict.binding], options.platform)} conflicts with ${labels}.`
+        getBindingConflictMessage(
+          formatKeybindingList([conflict.binding], options.platform),
+          labels
+        )
       ])
     }
   }

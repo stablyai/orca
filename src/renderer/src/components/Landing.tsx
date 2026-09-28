@@ -226,8 +226,10 @@ export default function Landing(): React.JSX.Element {
   const repos = useAppStore((s) => s.repos)
   const openModal = useAppStore((s) => s.openModal)
 
-  const createTargetLabel =
-    repos.length > 0 && repos.every((repo) => isGitRepoKind(repo)) ? 'Worktree' : 'Workspace'
+  const isWorktreeCreateTarget = repos.length > 0 && repos.every((repo) => isGitRepoKind(repo))
+  const createButtonLabel = isWorktreeCreateTarget
+    ? translate('auto.components.Landing.createWorktreeButton', 'Create worktree')
+    : translate('auto.components.Landing.createWorkspaceButton', 'Create workspace')
   const hasProjects = repos.length > 0
   const hasGitHubProject = useMemo(() => hasGitHubBackedProject(repos), [repos])
   const showGitHubSupportFooter = repos.length === 0 || hasGitHubProject
@@ -244,12 +246,20 @@ export default function Landing(): React.JSX.Element {
       {
         id: 'create',
         shortcut: createWorktreeShortcut,
-        action: `Create ${createTargetLabel.toLowerCase()}`
+        action: createButtonLabel
       },
-      { id: 'up', shortcut: previousWorktreeShortcut, action: 'Move up workspace' },
-      { id: 'down', shortcut: nextWorktreeShortcut, action: 'Move down workspace' }
+      {
+        id: 'up',
+        shortcut: previousWorktreeShortcut,
+        action: translate('auto.components.Landing.moveUpWorkspace', 'Move up workspace')
+      },
+      {
+        id: 'down',
+        shortcut: nextWorktreeShortcut,
+        action: translate('auto.components.Landing.moveDownWorkspace', 'Move down workspace')
+      }
     ]
-  }, [createTargetLabel, createWorktreeShortcut, nextWorktreeShortcut, previousWorktreeShortcut])
+  }, [createButtonLabel, createWorktreeShortcut, nextWorktreeShortcut, previousWorktreeShortcut])
 
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-background">
@@ -294,8 +304,7 @@ export default function Landing(): React.JSX.Element {
               onClick={() => openModal('new-workspace-composer', { telemetrySource: 'unknown' })}
             >
               <GitBranchPlus className="size-3.5" />
-              {translate('auto.components.Landing.76a95f7f47', 'Create')}{' '}
-              {createTargetLabel.toLowerCase()}
+              {createButtonLabel}
             </button>
           </div>
 
