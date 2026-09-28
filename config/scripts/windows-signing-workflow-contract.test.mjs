@@ -310,12 +310,20 @@ describe('Windows NSIS uninstaller signing', () => {
   })
 
   it('restores exact artifact paths rather than suffix-matching another executable', () => {
-    const restore = stepNamed(releaseSteps(), 'Restore signed inner binaries into unpacked app')
-    expect(restore.run).toContain("(Join-Path 'signed-inner' $relative)")
-    expect(restore.run).toContain("(Join-Path 'signed-inner/signing-stage' $relative)")
-    expect(restore.run).toContain('if (@($candidates).Count -ne 1)')
-    expect(restore.run).not.toContain('Select-Object -First 1')
-    expect(restore.run).not.toContain('-like "*$relative"')
+    for (const [name, path] of [
+      ['Restore signed inner binaries into unpacked app', '$relative'],
+      [
+        'Restore signed uninstaller for the installer rebuild',
+        "'uninstaller\\orca-uninstaller.exe'"
+      ]
+    ]) {
+      const restore = stepNamed(releaseSteps(), name)
+      expect(restore.run).toContain(`(Join-Path 'signed-inner' ${path})`)
+      expect(restore.run).toContain(`(Join-Path 'signed-inner/signing-stage' ${path})`)
+      expect(restore.run).toContain('if (@($candidates).Count -ne 1)')
+      expect(restore.run).not.toContain('Select-Object -First 1')
+      expect(restore.run).not.toContain('-like "*$relative"')
+    }
   })
 
   it('requires the CLI signature at its electron-builder extraResources destination', () => {

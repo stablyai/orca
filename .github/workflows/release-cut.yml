@@ -1752,11 +1752,14 @@ jobs:
         if: matrix.platform == 'win' && github.run_attempt == 1 && steps.restore-signed-inner.outcome == 'success'
         shell: pwsh
         run: |
-          $signed = Get-ChildItem -Path signed-inner -Recurse -File -Filter 'orca-uninstaller.exe' |
-            Select-Object -First 1
-          if ($null -eq $signed) {
-            throw 'SignPath did not return uninstaller/orca-uninstaller.exe; check the windows-inner-binaries-zip artifact configuration covers it.'
+          $candidates = @(
+            (Join-Path 'signed-inner' 'uninstaller\orca-uninstaller.exe'),
+            (Join-Path 'signed-inner/signing-stage' 'uninstaller\orca-uninstaller.exe')
+          ) | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf }
+          if (@($candidates).Count -ne 1) {
+            throw 'Missing or ambiguous uninstaller/orca-uninstaller.exe in the signed artifact; check the windows-inner-binaries-zip configuration.'
           }
+          $signed = Get-Item -LiteralPath @($candidates)[0]
           $signature = Get-AuthenticodeSignature -FilePath $signed.FullName
           if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notlike '*CN=SignPath Foundation*') {
             throw 'The returned NSIS uninstaller carries no valid SignPath signature.'
