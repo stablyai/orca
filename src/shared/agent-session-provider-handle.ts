@@ -140,18 +140,20 @@ export function isAgentSessionProviderHandleChain(
   if (!Array.isArray(value) || value.length > MAX_AGENT_SESSION_PROVIDER_HANDLE_LINKS) {
     return false
   }
-  let validated: AgentSessionProviderHandleLink[] = []
+  const seenLinkIds = new Set<string>()
+  let head: AgentSessionProviderHandleLink | null = null
   try {
     for (const link of value) {
       if (!isAgentSessionProviderHandleLink(link)) {
         return false
       }
-      const next = appendAgentSessionProviderHandleLink(validated, link)
-      // A persisted chain must name every link exactly once; retry elision belongs at append time.
-      if (next.length !== validated.length + 1) {
+      // A persisted chain must name every link exactly once; retry elision and supersession belong
+      // at append time.
+      if (agentSessionProviderHandleTransition(head, link, seenLinkIds) !== 'append') {
         return false
       }
-      validated = next
+      seenLinkIds.add(link.linkId)
+      head = link
     }
     return true
   } catch {
@@ -170,12 +172,41 @@ export function appendAgentSessionProviderHandleLink(
   if (!isAgentSessionProviderHandleLink(link)) {
     throw new Error('agent_session_provider_handle_invalid')
   }
-  const head = agentSessionProviderHandleChainHead(chain)
+  const seenLinkIds = new Set(chain.map((existing) => existing.linkId))
+  switch (
+    agentSessionProviderHandleTransition(
+      agentSessionProviderHandleChainHead(chain),
+      link,
+      seenLinkIds
+    )
+  ) {
+    case 'retry':
+      return [...chain]
+    case 'supersede':
+      // Why: in place, so a chat reopened unused across many restarts never grows toward the cap.
+      return [link]
+    case 'append':
+      return [...chain, link]
+  }
+}
+
+export type AgentSessionProviderHandleTransition = 'append' | 'retry' | 'supersede'
+
+/**
+ * What `link` does to a chain whose head is `head` and which already names `seenLinkIds`; throws
+ * when it is no legal successor. The one chain rule: appending and validating a persisted chain
+ * both go through it. `link` must already satisfy `isAgentSessionProviderHandleLink`.
+ */
+export function agentSessionProviderHandleTransition(
+  head: AgentSessionProviderHandleLink | null,
+  link: AgentSessionProviderHandleLink,
+  seenLinkIds: ReadonlySet<string>
+): AgentSessionProviderHandleTransition {
   if (!head) {
     if (link.origin !== 'created' && link.origin !== 'adopted') {
       throw new Error('agent_session_provider_handle_invalid')
     }
-    return [link]
+    return 'append'
   }
   if (link.handle.provider !== head.handle.provider) {
     throw new Error('agent_session_provider_handle_provider_mismatch')
@@ -184,7 +215,8 @@ export function appendAgentSessionProviderHandleLink(
     throw new Error('agent_session_provider_handle_stale_fence')
   }
   if (link.origin === 'created' && link.supersedesKey !== undefined) {
-    return supersedeUnsavedCreation(head, link)
+    assertSupersedesUnsavedCreation(head, link)
+    return 'supersede'
   }
   if (link.origin === 'created' || link.origin === 'adopted') {
     throw new Error('agent_session_provider_handle_invalid')
@@ -210,30 +242,30 @@ export function appendAgentSessionProviderHandleLink(
     link.mintedAtFence === head.mintedAtFence
   ) {
     // Why: re-proving the same handle at the same fence is a retry, not a new identity.
-    return [...chain]
+    return 'retry'
   }
-  if (findAgentSessionProviderHandleLink(chain, link.linkId)) {
+  if (seenLinkIds.has(link.linkId)) {
     // Why: the lease names its exact proof by link id; reuse would make that reference ambiguous.
     throw new Error('agent_session_provider_handle_invalid')
   }
-  if (chain.length >= MAX_AGENT_SESSION_PROVIDER_HANDLE_LINKS) {
+  if (seenLinkIds.size >= MAX_AGENT_SESSION_PROVIDER_HANDLE_LINKS) {
     // Why: dropping older links would erase fork provenance, so refuse and let the caller roll
     // the journal epoch instead of silently losing where this conversation came from.
     throw new Error('agent_session_provider_handle_chain_overflow')
   }
-  return [...chain, link]
+  return 'append'
 }
 
 /**
- * Replace the chain's only link, a creation the provider proved it never saved, with the creation
- * that took its place. Every other head names a conversation the provider held (a resume or fork
- * proved it, an adoption imported it), so only a `created` head can be superseded, and only by a
- * new identity root that names it.
+ * Only the chain's only link, a creation the provider proved it never saved, can be replaced by
+ * the creation that took its place. Every other head names a conversation the provider held (a
+ * resume or fork proved it, an adoption imported it), so only a `created` head can be superseded,
+ * and only by a new identity root that names it.
  */
-function supersedeUnsavedCreation(
+function assertSupersedesUnsavedCreation(
   head: AgentSessionProviderHandleLink,
   link: AgentSessionProviderHandleLink
-): AgentSessionProviderHandleLink[] {
+): void {
   if (
     head.origin !== 'created' ||
     link.supersedesKey !== agentSessionProviderHandleKey(head.handle) ||
@@ -242,6 +274,4 @@ function supersedeUnsavedCreation(
   ) {
     throw new Error('agent_session_provider_handle_invalid')
   }
-  // Why: in place, so a chat reopened unused across many restarts never grows toward the cap.
-  return [link]
 }

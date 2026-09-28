@@ -8,13 +8,8 @@
  */
 
 import { createHash } from 'node:crypto'
-import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import {
-  agentSessionOperationKey,
-  isAgentSessionOperationRow,
-  type AgentSessionOperationRow
-} from '../../shared/agent-session-operation-ledger'
+import type { AgentSessionOperationRow } from '../../shared/agent-session-operation-ledger'
 import {
   AGENT_SESSION_RECORD_SCHEMA_VERSION,
   isPersistedAgentSessionRecord,
@@ -25,6 +20,18 @@ import { agentSessionStoreBackupPath as backupPath } from './agent-session-recor
 export { saveAgentSessionStore } from './agent-session-record-store-write'
 import { parseAgentSessionTabTable, type AgentSessionTabTable } from './agent-session-tab-table'
 import { serializeAgentSessionStoreState } from './agent-session-store-serialization'
+import {
+  readAgentSessionStoreBackup,
+  readAgentSessionStorePrimary,
+  type AgentSessionStoreFileBytes,
+  type AgentSessionStoreInputKey
+} from './agent-session-store-input-bytes'
+import {
+  isReadableAgentSessionStoreOperation,
+  isReadableAgentSessionStoreRecord,
+  isReadableAgentSessionStoreUnusableRecord,
+  isReadableRetiredAgentSessionClaimKey
+} from './agent-session-store-row-rules'
 
 export const AGENT_SESSION_STORE_SCHEMA_VERSION = 2 as const
 
@@ -55,6 +62,8 @@ export type LoadedAgentSessionStore = {
   needsRewrite: boolean
   /** True when decode mapped a lease value only the removed terminal handoff wrote. */
   legacyHandoffLeasesNormalized: boolean
+  /** The bytes `state` was derived from; null when no primary was parsed or a backup read failed. */
+  inputKey: AgentSessionStoreInputKey | null
 }
 
 export function agentSessionStorePath(directory: string): string {
@@ -74,10 +83,21 @@ function emptyState(hostId: string): AgentSessionStoreState {
 }
 
 export function agentSessionStoreRevision(state: AgentSessionStoreState): string {
+  return agentSessionStoreSerializedRevision(
+    state.schemaVersion,
+    serializeAgentSessionStoreState(state)
+  )
+}
+
+/** The revision of a state whose serialization is already in hand. */
+export function agentSessionStoreSerializedRevision(
+  schemaVersion: number,
+  serialized: string
+): string {
   return createHash('sha256')
-    .update(String(state.schemaVersion))
+    .update(String(schemaVersion))
     .update('\0')
-    .update(serializeAgentSessionStoreState(state))
+    .update(serialized)
     .digest('hex')
 }
 
@@ -144,20 +164,17 @@ function parseState(
   let legacyHandoffLeasesNormalized = false
   if (typeof file.records === 'object' && file.records !== null) {
     for (const [sessionId, value] of Object.entries(file.records)) {
-      const decoded = isPersistedAgentSessionRecord(value)
-        ? normalizeLegacyHandoffRecord(value)
-        : null
-      const record = decoded?.record ?? null
-      if (record?.sessionId === sessionId) {
-        state.records.set(sessionId, record)
+      if (isReadableAgentSessionStoreRecord(sessionId, value)) {
+        const decoded = normalizeLegacyHandoffRecord(value)
+        state.records.set(sessionId, decoded.record)
         // Why: mapped while parsing, so every revision is taken over the same normalized state.
-        legacyHandoffLeasesNormalized ||= decoded?.normalized === true
+        legacyHandoffLeasesNormalized ||= decoded.normalized
       } else {
         const valueSchemaVersion =
           typeof value === 'object' &&
           value !== null &&
           (value as { schemaVersion?: unknown }).schemaVersion
-        const reason = record
+        const reason = isPersistedAgentSessionRecord(value)
           ? 'record_key_session_id_mismatch'
           : valueSchemaVersion === AGENT_SESSION_RECORD_SCHEMA_VERSION
             ? 'current_shape_invalid'
@@ -169,31 +186,18 @@ function parseState(
   }
   if (typeof file.unusableRecords === 'object' && file.unusableRecords !== null) {
     for (const [sessionId, value] of Object.entries(file.unusableRecords)) {
-      if (typeof value !== 'object' || value === null) {
+      if (!isReadableAgentSessionStoreUnusableRecord(value)) {
         if (schemaVersion === AGENT_SESSION_STORE_SCHEMA_VERSION) {
           return null
         }
         continue
       }
-      const unusable = value as { reason?: unknown; raw?: unknown }
-      if (typeof unusable.reason !== 'string' || unusable.reason.length === 0) {
-        if (schemaVersion === AGENT_SESSION_STORE_SCHEMA_VERSION) {
-          return null
-        }
-        continue
-      }
-      state.unreadableRecords.set(sessionId, { reason: unusable.reason, raw: unusable.raw })
+      state.unreadableRecords.set(sessionId, { reason: value.reason, raw: value.raw })
     }
   }
   if (typeof file.operations === 'object' && file.operations !== null) {
     for (const [key, value] of Object.entries(file.operations)) {
-      if (!isAgentSessionOperationRow(value)) {
-        if (schemaVersion === AGENT_SESSION_STORE_SCHEMA_VERSION) {
-          return null
-        }
-        continue
-      }
-      if (key !== agentSessionOperationKey(value.callerKey, value.operationId)) {
+      if (!isReadableAgentSessionStoreOperation(key, value)) {
         if (schemaVersion === AGENT_SESSION_STORE_SCHEMA_VERSION) {
           return null
         }
@@ -204,20 +208,13 @@ function parseState(
   }
   if (Array.isArray(file.retiredClaimKeys)) {
     for (const entry of file.retiredClaimKeys) {
-      const key = entry as Partial<RetiredAgentSessionClaimKey>
-      if (
-        typeof key?.keyId !== 'string' ||
-        key.keyId.length === 0 ||
-        key.keyId.length > 512 ||
-        !Number.isSafeInteger(key.retiredAt) ||
-        (key.retiredAt as number) < 0
-      ) {
+      if (!isReadableRetiredAgentSessionClaimKey(entry)) {
         if (schemaVersion === AGENT_SESSION_STORE_SCHEMA_VERSION) {
           return null
         }
         continue
       }
-      state.retiredClaimKeys.push({ keyId: key.keyId, retiredAt: key.retiredAt as number })
+      state.retiredClaimKeys.push({ keyId: entry.keyId, retiredAt: entry.retiredAt })
     }
   }
   const sessionTabs = parseAgentSessionTabTable(
@@ -234,75 +231,78 @@ function parseState(
 
 /** A record the primary retained as unreadable may still have a valid copy in the previous
  *  committed state. Adopting it keeps the session reachable — the lease is re-adjudicated
- *  like any other — while the unreadable bytes stay quarantined verbatim. */
+ *  like any other — while the unreadable bytes stay quarantined verbatim. Returns the backup's
+ *  part of the input key, or null when the backup could not be read. */
 async function salvageUnreadableRecordsFromBackup(
   state: AgentSessionStoreState,
   backupFilePath: string,
   hostId: string
-): Promise<void> {
+): Promise<string | null> {
   const missing = [...state.unreadableRecords.keys()].filter(
     (sessionId) => !state.records.has(sessionId)
   )
   if (missing.length === 0) {
-    return
+    return 'unread'
   }
-  let raw: string
-  try {
-    raw = await readFile(backupFilePath, 'utf-8')
-  } catch {
-    return
+  const bytes = await readAgentSessionStoreBackup(backupFilePath)
+  if (bytes === null) {
+    return 'absent'
   }
-  const backup = parseState(raw, hostId)
-  if (!backup) {
-    return
+  if (bytes === 'failed') {
+    // Why: a backup that failed to read may still hold the row, so the next load must look again.
+    return null
   }
+  const backup = parseState(bytes.bytes.toString('utf-8'), hostId)
   for (const sessionId of missing) {
-    const record = backup.state.records.get(sessionId)
+    const record = backup?.state.records.get(sessionId)
     if (record) {
       state.records.set(sessionId, record)
     }
   }
+  return bytes.sha256
 }
 
+/** `primary` is the primary's bytes when the caller already read them; omitted, they are read here. */
 export async function loadAgentSessionStore(
   filePath: string,
-  hostId: string
+  hostId: string,
+  primary?: AgentSessionStoreFileBytes | null
 ): Promise<LoadedAgentSessionStore> {
   let unusableStoreFound = false
-  for (const [candidate, recoveredFromBackup] of [
-    [filePath, false],
-    [backupPath(filePath), true]
-  ] as const) {
-    let raw: string
-    try {
-      raw = await readFile(candidate, 'utf-8')
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-        // Only a missing or unparseable primary means "fall back". A transient read failure
-        // (EACCES, EIO, EMFILE) says nothing about the primary's contents, and treating it as
-        // recovery would replace newer state with a stale backup and latch the recovery path.
-        if (!recoveredFromBackup) {
-          throw new Error('agent_session_store_corrupt')
-        }
-        unusableStoreFound = true
+  const primaryBytes =
+    primary === undefined ? await readAgentSessionStorePrimary(filePath) : primary
+  if (primaryBytes) {
+    const parsed = parseState(primaryBytes.bytes.toString('utf-8'), hostId)
+    if (parsed) {
+      const backup = await salvageUnreadableRecordsFromBackup(
+        parsed.state,
+        backupPath(filePath),
+        hostId
+      )
+      return {
+        ...parsed,
+        storeFound: true,
+        readOnly: parsed.state.schemaVersion > AGENT_SESSION_STORE_SCHEMA_VERSION,
+        recoveredFromBackup: false,
+        inputKey: backup === null ? null : { primarySha256: primaryBytes.sha256, backup }
       }
-      continue
     }
-    const parsed = parseState(raw, hostId)
-    if (!parsed) {
-      unusableStoreFound = true
-      continue
-    }
-    if (!recoveredFromBackup) {
-      await salvageUnreadableRecordsFromBackup(parsed.state, backupPath(filePath), hostId)
-    }
-    return {
-      ...parsed,
-      storeFound: true,
-      readOnly: parsed.state.schemaVersion > AGENT_SESSION_STORE_SCHEMA_VERSION,
-      recoveredFromBackup
+    unusableStoreFound = true
+  }
+  const backup = await readAgentSessionStoreBackup(backupPath(filePath))
+  if (backup !== null && backup !== 'failed') {
+    const parsed = parseState(backup.bytes.toString('utf-8'), hostId)
+    if (parsed) {
+      return {
+        ...parsed,
+        storeFound: true,
+        readOnly: parsed.state.schemaVersion > AGENT_SESSION_STORE_SCHEMA_VERSION,
+        recoveredFromBackup: true,
+        inputKey: null
+      }
     }
   }
+  unusableStoreFound ||= backup !== null
   if (unusableStoreFound) {
     throw new Error('agent_session_store_corrupt')
   }
@@ -312,6 +312,7 @@ export async function loadAgentSessionStore(
     readOnly: false,
     recoveredFromBackup: false,
     needsRewrite: false,
-    legacyHandoffLeasesNormalized: false
+    legacyHandoffLeasesNormalized: false,
+    inputKey: null
   }
 }

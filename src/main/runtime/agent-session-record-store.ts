@@ -141,7 +141,7 @@ export class AgentSessionRecordStore {
    * Showing keeps a tab the session already has; `tabId` puts a hidden one back under its old id.
    */
   setSessionTabVisibility(sessionId: string, visible: boolean, tabId?: string): Promise<void> {
-    return this.transact(() => setAgentSessionTabVisibility(this.state, sessionId, visible, tabId))
+    return this.transact((state) => setAgentSessionTabVisibility(state, sessionId, visible, tabId))
   }
 
   listByScope(location: AgentSessionExecutionLocation): AgentSessionRecord[] {
@@ -154,8 +154,8 @@ export class AgentSessionRecordStore {
     fence: number,
     command: NonNullable<AgentSessionRecord['conversationCommand']>
   ): Promise<void> {
-    return this.transact(() =>
-      commitConversationCommandRecord(this.state, sessionId, fence, command)
+    return this.transact((state) =>
+      commitConversationCommandRecord(state, sessionId, fence, command)
     )
   }
 
@@ -188,8 +188,8 @@ export class AgentSessionRecordStore {
   }
 
   async reserveOwner(request: AgentSessionReserveRequest): Promise<AgentSessionReserveResult> {
-    return this.transact(() =>
-      commitAgentSessionReservation(this.state, request, AGENT_SESSION_LEASE_TTL_MS)
+    return this.transact((state) =>
+      commitAgentSessionReservation(state, request, AGENT_SESSION_LEASE_TTL_MS)
     )
   }
 
@@ -225,11 +225,11 @@ export class AgentSessionRecordStore {
 
   /** Settle the failed attach and its reservation in one durable transaction. */
   settleFailedAcquisition = (args: AgentSessionFailedAcquisitionSettlement) =>
-    this.transact(() => settleFailedAgentSessionAcquisition(this.state, args))
+    this.transact((state) => settleFailedAgentSessionAcquisition(state, args))
 
   settleFailedPostAcquisitionAttachment = (
     args: AgentSessionFailedPostAcquisitionAttachmentSettlement
-  ) => this.transact(() => settleFailedAgentSessionPostAcquisitionAttachment(this.state, args))
+  ) => this.transact((state) => settleFailedAgentSessionPostAcquisitionAttachment(state, args))
 
   async renewLease(args: AgentSessionLeaseRenewal): Promise<AgentSessionRecord> {
     const [renewed] = await this.renewLeases([args])
@@ -237,8 +237,8 @@ export class AgentSessionRecordStore {
   }
 
   async renewLeases(renewals: readonly AgentSessionLeaseRenewal[]): Promise<AgentSessionRecord[]> {
-    return this.transact(() =>
-      renewAgentSessionLeases(this.state, renewals, AGENT_SESSION_LEASE_TTL_MS)
+    return this.transact((state) =>
+      renewAgentSessionLeases(state, renewals, AGENT_SESSION_LEASE_TTL_MS)
     )
   }
 
@@ -275,21 +275,21 @@ export class AgentSessionRecordStore {
   ): Promise<Map<string, AgentSessionRecord>> {
     const pending = this.listRecords().filter((record) => record.lease.unreconciled)
     const probes = await collectAgentSessionRestartProbes(pending, args)
-    return this.transact(() => applyAgentSessionRestartProbes(this.state, probes, args.now))
+    return this.transact((state) => applyAgentSessionRestartProbes(state, probes, args.now))
   }
 
   /** Admits one non-reservation mutation through the durable ledger. */
   admitOperation = (args: AgentSessionOperationAdmission): Promise<AgentSessionOperationDecision> =>
-    this.transact(() => admitAgentSessionOperationInto(this.state, args))
+    this.transact((state) => admitAgentSessionOperationInto(state, args))
 
   /** Send ids stay global after a caller reconnects under a different identity. */
   admitGlobalOperation = (
     args: AgentSessionOperationAdmission
   ): Promise<AgentSessionOperationDecision> =>
-    this.transact(() => admitAgentSessionGlobalOperationInto(this.state, args))
+    this.transact((state) => admitAgentSessionGlobalOperationInto(state, args))
 
   admitMutationOperation = (args: AgentSessionMutationOperationAdmission) =>
-    this.transact(() => admitAgentSessionMutationOperation(this.state, args))
+    this.transact((state) => admitAgentSessionMutationOperation(state, args))
 
   /** The ledger's answer alone, placing nothing; `admitMutationOperation` is the transaction. */
   evaluateMutationOperation = (args: AgentSessionMutationOperationAdmission) =>
@@ -302,42 +302,44 @@ export class AgentSessionRecordStore {
     callerKey: string
     operationId: string
   }): Promise<AgentSessionOperationClaim> =>
-    this.transact(() => claimAgentSessionOperationInto(this.state, args))
+    this.transact((state) => claimAgentSessionOperationInto(state, args))
 
   async recordOperationOutcome(args: {
     callerKey?: string
     operationId: string
     outcome: AgentSessionOperationOutcome
   }): Promise<void> {
-    await this.transact(() => settleAgentSessionOperationInto(this.state, args))
+    await this.transact((state) => settleAgentSessionOperationInto(state, args))
   }
 
   replaceSessionOptions = (args: AgentSessionOptionsReplacement): Promise<AgentSessionRecord> =>
     this.mutate(args.sessionId, (record) => replaceAgentSessionRecordOptions(record, args))
 
   async retireClaimKey(keyId: string, now: number): Promise<void> {
-    await this.transact(() => retireAgentSessionClaimKey(this.state, keyId, now))
+    await this.transact((state) => retireAgentSessionClaimKey(state, keyId, now))
   }
 
   private async mutate(
     sessionId: string,
     apply: (record: AgentSessionRecord) => AgentSessionRecord
   ): Promise<AgentSessionRecord> {
-    return this.transact(() => {
-      const record = this.state.records.get(sessionId)
+    return this.transact((state) => {
+      const record = state.records.get(sessionId)
       if (!record) {
         throw new Error(
-          this.isSessionUnreadable(sessionId)
+          state.unreadableRecords.has(sessionId)
             ? 'execution_owner_reconciling'
             : 'agent_session_identity_required'
         )
       }
       const next = apply(record)
-      this.state.records.set(sessionId, next)
+      state.records.set(sessionId, next)
       return next
     })
   }
 
-  /** Serialize every mutation against the latest committed disk state. */
-  private transact = <T>(apply: () => T): Promise<T> => this.transactions.transact(apply)
+  /** Serialize every mutation against the latest committed disk state. `apply` changes only the
+   *  draft it is given; readers see the change once it is durable. */
+  private transact = <T>(apply: (state: AgentSessionStoreState) => T): Promise<T> =>
+    this.transactions.transact(apply)
 }
