@@ -66,7 +66,7 @@ test('switches the active server from the status bar between two paired hosts an
       window.__store?.getState().setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
     }, privateOffer.pairingUrl)
 
-    const workTrigger = page.getByRole('button', { name: 'Active Server: work', exact: true })
+    const workTrigger = page.getByRole('button', { name: 'Remote Hosts: work', exact: true })
     await expect(workTrigger).toBeVisible()
     await expect(workTrigger).toContainText('work')
     const sidebar = page.locator('[data-worktree-sidebar]')
@@ -77,6 +77,17 @@ test('switches the active server from the status bar between two paired hosts an
       'aria-checked',
       'true'
     )
+    await expect(page.getByRole('menuitemradio', { name: 'work', exact: true })).toContainText(
+      'Connected'
+    )
+    await expect(page.getByRole('menuitemradio', { name: 'priv', exact: true })).toContainText(
+      'Connected'
+    )
+    await page.getByRole('menuitem', { name: 'work: Remote Server', exact: true }).focus()
+    await page.keyboard.press('ArrowRight')
+    await expect(page.getByRole('menuitem', { name: 'Disconnect', exact: true })).toBeVisible()
+    await expect(workTrigger).toContainText('work')
+    await page.keyboard.press('Escape')
     await page.keyboard.press('Escape')
     await expect(workTrigger).toHaveAttribute('aria-expanded', 'false')
     await expect(page.getByRole('menu')).toBeHidden()
@@ -84,7 +95,7 @@ test('switches the active server from the status bar between two paired hosts an
     await workTrigger.press('ArrowDown')
     await page.getByRole('menuitemradio', { name: 'priv', exact: true }).focus()
     await page.keyboard.press('Enter')
-    const privateTrigger = page.getByRole('button', { name: 'Active Server: priv', exact: true })
+    const privateTrigger = page.getByRole('button', { name: 'Remote Hosts: priv', exact: true })
     await expect(privateTrigger).toBeVisible()
     await expect(privateTrigger).toBeEnabled()
     await expect(sidebar.getByText(path.basename(privateRepoPath), { exact: true })).toBeVisible()
@@ -99,7 +110,7 @@ test('switches the active server from the status bar between two paired hosts an
       .getByRole('menuitemradio', { name: 'Local desktop', exact: true })
       .click({ force: true })
     const localTrigger = page.getByRole('button', {
-      name: 'Active Server: Local desktop',
+      name: 'Remote Hosts: Local desktop',
       exact: true
     })
     await expect(localTrigger).toBeVisible()

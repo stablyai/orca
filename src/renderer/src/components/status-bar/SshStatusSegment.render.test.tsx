@@ -5,10 +5,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useStore } from 'zustand'
 import { createStore } from 'zustand/vanilla'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { ActiveServerStatusSegment } from './ActiveServerStatusSegment'
+import { SshStatusSegment } from './SshStatusSegment'
 
 type TestState = {
   settings: { activeRuntimeEnvironmentId: string | null } | null
+  sshConnectionStates: Map<string, never>
+  sshTargetLabels: Map<string, string>
+  runtimeStatusByEnvironmentId: Map<string, { status: { graphStatus: 'ready' } | null }>
+  remoteWorkspaceSyncStatusByTargetId: Record<string, never>
+  readRuntimeHostStatusSnapshots: () => Promise<void>
+  hydrateRuntimeEnvironmentStatuses: () => Promise<void>
+  setActiveView: () => void
+  openSettingsTarget: () => void
+  recordFeatureInteraction: () => void
   runtimeEnvironments: { id: string; name: string; source?: 'manual' | 'ephemeral-vm' }[]
   setActiveRuntimeEnvironmentPreference: (id: string | null) => Promise<boolean>
   setVisibleWorkspaceHostIds: (ids: string[]) => void
@@ -22,6 +31,15 @@ const { switchServer, setVisibleHosts, pairedWebClient } = vi.hoisted(() => ({
 
 const store = createStore<TestState>(() => ({
   settings: null,
+  sshConnectionStates: new Map<string, never>(),
+  sshTargetLabels: new Map(),
+  runtimeStatusByEnvironmentId: new Map(),
+  remoteWorkspaceSyncStatusByTargetId: {},
+  readRuntimeHostStatusSnapshots: vi.fn(async () => {}),
+  hydrateRuntimeEnvironmentStatuses: vi.fn(async () => {}),
+  setActiveView: vi.fn(),
+  openSettingsTarget: vi.fn(),
+  recordFeatureInteraction: vi.fn(),
   runtimeEnvironments: [],
   setActiveRuntimeEnvironmentPreference: switchServer,
   setVisibleWorkspaceHostIds: setVisibleHosts
@@ -42,7 +60,7 @@ vi.mock('@/i18n/i18n', () => ({
 function renderSegment(iconOnly = false): void {
   render(
     <TooltipProvider>
-      <ActiveServerStatusSegment iconOnly={iconOnly} />
+      <SshStatusSegment compact={false} iconOnly={iconOnly} />
     </TooltipProvider>
   )
 }
@@ -61,6 +79,7 @@ beforeEach(() => {
     return true
   })
   store.setState({
+    runtimeStatusByEnvironmentId: new Map(),
     settings: { activeRuntimeEnvironmentId: 'work' },
     runtimeEnvironments: [
       { id: 'priv', name: 'Private server' },
@@ -72,7 +91,7 @@ beforeEach(() => {
 
 afterEach(cleanup)
 
-describe('ActiveServerStatusSegment', () => {
+describe('SshStatusSegment active server selection', () => {
   it('shows the active server and marks it in the real dropdown', async () => {
     renderSegment()
 
@@ -95,7 +114,7 @@ describe('ActiveServerStatusSegment', () => {
       expect(switchServer).toHaveBeenCalledExactlyOnceWith('priv')
       expect(setVisibleHosts).toHaveBeenCalledExactlyOnceWith(['runtime:priv'])
       expect(screen.getByRole('button').getAttribute('aria-label')).toBe(
-        'Active Server: Private server'
+        'Remote Hosts: Private server'
       )
     })
   })
@@ -163,15 +182,60 @@ describe('ActiveServerStatusSegment', () => {
 
   it('retains an accessible active-server name in icon-only mode', async () => {
     renderSegment(true)
-    expect(screen.getByRole('button').getAttribute('aria-label')).toBe('Active Server: Work server')
+    expect(screen.getByRole('button').getAttribute('aria-label')).toBe('Remote Hosts: Work server')
     expect(screen.getByRole('button').textContent).toBe('')
     await openMenu()
     expect(screen.getByRole('menuitemradio', { name: 'Private server' })).toBeDefined()
   })
 
+  it('uses existing host status and offers connection actions in the row submenu', async () => {
+    store.setState({ runtimeStatusByEnvironmentId: new Map([['work', { status: null }]]) })
+    renderSegment()
+    await openMenu()
+    const work = screen.getByRole('menuitemradio', { name: 'Work server' })
+    expect(work.textContent).toContain('Disconnected')
+    const privateHost = screen.getByRole('menuitemradio', { name: 'Private server' })
+    expect(privateHost.textContent).toContain('Checking')
+    fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Work server: Remote Server' }), {
+      key: 'ArrowRight'
+    })
+    await screen.findByRole('menuitem', { name: 'Connect' })
+    expect(switchServer).not.toHaveBeenCalled()
+  })
+
+  it('updates connection health independently of the selected context', async () => {
+    store.setState({
+      runtimeStatusByEnvironmentId: new Map([
+        ['work', { status: null }],
+        ['priv', { status: { graphStatus: 'ready' } }]
+      ])
+    })
+    renderSegment()
+    await openMenu()
+    const work = screen.getByRole('menuitemradio', { name: 'Work server' })
+    const privateHost = screen.getByRole('menuitemradio', { name: 'Private server' })
+    expect(work.textContent).toContain('Disconnected')
+    expect(work.getAttribute('aria-checked')).toBe('true')
+    expect(privateHost.textContent).toContain('Connected')
+    expect(privateHost.getAttribute('aria-checked')).toBe('false')
+    act(() =>
+      store.setState({
+        runtimeStatusByEnvironmentId: new Map([
+          ['work', { status: { graphStatus: 'ready' } }],
+          ['priv', { status: null }]
+        ])
+      })
+    )
+    await waitFor(() => {
+      expect(work.textContent).toContain('Connected')
+      expect(privateHost.textContent).toContain('Disconnected')
+    })
+    expect(switchServer).not.toHaveBeenCalled()
+  })
+
   it.each(['unpaired', 'ephemeral-only', 'paired-web', 'loading'])(
-    'does not show a desktop default-server selector for %s clients',
-    (mode) => {
+    'does not expose active-server selection for %s clients',
+    async (mode) => {
       if (mode === 'unpaired') {
         store.setState({ runtimeEnvironments: [] })
       }
@@ -187,7 +251,10 @@ describe('ActiveServerStatusSegment', () => {
         store.setState({ settings: null })
       }
       renderSegment()
-      expect(screen.queryByRole('button')).toBeNull()
+      if (screen.queryByRole('button')) {
+        await openMenu()
+      }
+      expect(screen.queryByRole('menuitemradio')).toBeNull()
     }
   )
 })

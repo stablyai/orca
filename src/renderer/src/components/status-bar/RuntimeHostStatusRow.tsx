@@ -1,10 +1,11 @@
 import { useCallback, useRef, useState } from 'react'
-import { Loader2 } from 'lucide-react'
+import { Loader2, MoreHorizontal } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   DropdownMenuItem,
+  DropdownMenuRadioItem,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger
@@ -44,7 +45,7 @@ function runtimeStatusLabel(state: RuntimeHostConnectionState): string {
   }
 }
 
-function runtimeDotColor(state: RuntimeHostConnectionState): string {
+export function runtimeDotColor(state: RuntimeHostConnectionState): string {
   switch (state) {
     case 'connected':
       return 'bg-emerald-500'
@@ -141,7 +142,8 @@ export function RuntimeHostStatusRow({
   detail,
   diagnostics,
   onConnect,
-  onDisconnect
+  onDisconnect,
+  selection
 }: {
   label: string
   state: RuntimeHostConnectionState
@@ -149,6 +151,7 @@ export function RuntimeHostStatusRow({
   diagnostics?: RemoteRuntimeSharedConnectionDiagnostics | null
   onConnect?: () => Promise<void>
   onDisconnect?: () => Promise<void>
+  selection?: { value: string; disabled: boolean }
 }): React.JSX.Element {
   const [busy, setBusy] = useState(false)
   const [submenuOpen, setSubmenuOpen] = useState(false)
@@ -270,6 +273,66 @@ export function RuntimeHostStatusRow({
     )
   ) : null
 
+  const submenuContent = (
+    <DropdownMenuSubContent className="w-[min(18rem,calc(100vw-1rem))] p-1.5">
+      <div className="px-1.5 pt-0.5 pb-1.5">
+        <div className="text-[11px] font-semibold">
+          {state === 'connected' && !detail ? label : runtimeFailureSummary(state)}
+        </div>
+        {failureExplanation ? (
+          <div className="mt-1 text-[11px] leading-4 text-muted-foreground">
+            {failureExplanation}
+          </div>
+        ) : null}
+      </div>
+      {rawDetail ? (
+        <div className="mx-1 mb-1.5 max-h-24 overflow-y-auto scrollbar-sleek whitespace-pre-wrap break-words rounded-md bg-muted px-2 py-1.5 font-mono text-[10px] leading-4 text-muted-foreground [overflow-wrap:anywhere]">
+          {rawDetail}
+        </div>
+      ) : null}
+      {diagnosticLabel ? (
+        <div className="px-1.5 pb-1.5 text-[10px] text-muted-foreground">{diagnosticLabel}</div>
+      ) : null}
+      {actionLabel && action ? (
+        <DropdownMenuItem
+          disabled={busy}
+          onSelect={(event) => {
+            event.preventDefault()
+            void handleAction()
+          }}
+        >
+          {busy ? <Loader2 className="size-3 animate-spin" /> : null}
+          {actionLabel}
+        </DropdownMenuItem>
+      ) : null}
+    </DropdownMenuSubContent>
+  )
+
+  if (selection) {
+    return (
+      <div className="flex items-center gap-1">
+        <DropdownMenuRadioItem
+          value={selection.value}
+          disabled={selection.disabled || busy}
+          aria-label={label}
+          className="min-w-0 flex-1"
+        >
+          {rowDetails}
+        </DropdownMenuRadioItem>
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger
+            aria-label={`${label}: ${translate('auto.components.status.bar.SshStatusSegment.remote_server', 'Remote Server')}`}
+            hideChevron
+            disabled={selection.disabled || busy}
+          >
+            <MoreHorizontal className="size-3" />
+          </DropdownMenuSubTrigger>
+          {submenuContent}
+        </DropdownMenuSub>
+      </div>
+    )
+  }
+
   if (!detail) {
     return (
       <div className="flex items-center gap-2.5 px-2 py-1.5">
@@ -292,36 +355,7 @@ export function RuntimeHostStatusRow({
         {rowDetails}
         {actionButton}
       </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent className="w-[min(18rem,calc(100vw-1rem))] p-1.5">
-        <div className="px-1.5 pt-0.5 pb-1.5">
-          <div className="text-[11px] font-semibold">{runtimeFailureSummary(state)}</div>
-          {failureExplanation ? (
-            <div className="mt-1 text-[11px] leading-4 text-muted-foreground">
-              {failureExplanation}
-            </div>
-          ) : null}
-        </div>
-        {rawDetail ? (
-          <div className="mx-1 mb-1.5 max-h-24 overflow-y-auto scrollbar-sleek whitespace-pre-wrap break-words rounded-md bg-muted px-2 py-1.5 font-mono text-[10px] leading-4 text-muted-foreground [overflow-wrap:anywhere]">
-            {rawDetail}
-          </div>
-        ) : null}
-        {diagnosticLabel ? (
-          <div className="px-1.5 pb-1.5 text-[10px] text-muted-foreground">{diagnosticLabel}</div>
-        ) : null}
-        {actionLabel && action ? (
-          <DropdownMenuItem
-            disabled={busy}
-            onSelect={(event) => {
-              event.preventDefault()
-              void handleAction()
-            }}
-          >
-            {busy ? <Loader2 className="size-3 animate-spin" /> : null}
-            {actionLabel}
-          </DropdownMenuItem>
-        ) : null}
-      </DropdownMenuSubContent>
+      {submenuContent}
     </DropdownMenuSub>
   )
 }
