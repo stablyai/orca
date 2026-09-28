@@ -209,6 +209,7 @@ export type TerminalActions = {
       envToDelete?: string[]
       launchConfig?: SleepingAgentLaunchConfig
       resumeProviderSession?: AgentProviderSessionMetadata
+      codexAccountSwitchRestart?: boolean
       launchToken?: string
       launchAgent?: TuiAgent
       agentArgsOverride?: string | null

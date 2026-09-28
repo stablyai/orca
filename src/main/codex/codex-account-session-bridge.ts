@@ -1,9 +1,14 @@
-import { existsSync, mkdirSync } from 'node:fs'
-import { dirname, join, relative } from 'node:path'
+import { existsSync, lstatSync, mkdirSync, unlinkSync } from 'node:fs'
+import { dirname, isAbsolute, join, relative } from 'node:path'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
+import { codexRolloutContentMatches } from './codex-rollout-content-match'
 import { listCodexSessionRolloutFilesIncrementally } from './codex-session-file-listing'
 import type { CodexSessionBridgeIncrementalOptions } from './codex-session-file-listing'
-import { linkCodexSessionFile } from './codex-session-link'
+import {
+  linkCodexSessionFile,
+  tryCopyCodexSessionFile,
+  tryHardlinkCodexSessionFile
+} from './codex-session-link'
 
 /**
  * Bridges Codex history between Orca-managed Codex homes.
@@ -79,6 +84,90 @@ export async function bridgeCodexSessionsIntoAccountHome(args: {
     }
   }
   return summary
+}
+
+function stripWindowsExtendedPathPrefix(filePath: string): string {
+  if (filePath.startsWith('\\\\.\\')) {
+    return filePath
+  }
+  if (filePath.startsWith('\\\\?\\')) {
+    return filePath.match(/^\\\\\?\\([A-Za-z]:[\\/][\s\S]*)$/)?.[1] ?? filePath
+  }
+  return filePath
+}
+
+/**
+ * Links or copies one named rollout into the target home ahead of the whole-tree bridge.
+ *
+ * Why: the background bridge walks every source home and can take seconds on a
+ * large history. An account-switch restart has to resume one specific
+ * conversation immediately, so it places that rollout first and lets the sweep
+ * catch up.
+ *
+ * Tries hardlink first to preserve single-file identity. If hardlink fails
+ * (e.g. cross-volume move or Windows permission limits), it safely falls back
+ * to copyFileSync. Codex resume can directly read copied regular JSONL files.
+ * Returns the target file path, or null when it could not be placed.
+ */
+export function linkCodexRolloutIntoAccountHome(args: {
+  sourceCodexHomePath: string
+  targetCodexHomePath: string
+  rolloutFilePath: string
+}): string | null {
+  const cleanSourceHome = stripWindowsExtendedPathPrefix(args.sourceCodexHomePath)
+  const cleanRolloutPath = stripWindowsExtendedPathPrefix(args.rolloutFilePath)
+  const sourceSessionsRoot = join(cleanSourceHome, 'sessions')
+  const targetSessionsRoot = join(
+    stripWindowsExtendedPathPrefix(args.targetCodexHomePath),
+    'sessions'
+  )
+  const relativePath = relative(sourceSessionsRoot, cleanRolloutPath)
+  // Why: a rollout outside the source home's sessions tree has no place in the
+  // target tree either; refusing beats inventing a path from `..` segments.
+  if (relativePath.startsWith('..') || isAbsolute(relativePath)) {
+    return null
+  }
+  const targetFilePath = join(targetSessionsRoot, relativePath)
+  if (codexRolloutContentMatches(cleanRolloutPath, targetFilePath)) {
+    return targetFilePath
+  }
+  try {
+    mkdirSync(dirname(targetFilePath), { recursive: true })
+    // Why unlink first: the sweep may already have left a symlink at this exact
+    // path, and a hardlink onto an occupied path fails EEXIST — which would make
+    // the conversation permanently unmovable rather than merely unlisted.
+    removeSymlinkAt(targetFilePath)
+  } catch (error) {
+    console.warn('[codex-account-session-bridge] Failed to prepare session path:', error)
+    return null
+  }
+  if (tryHardlinkCodexSessionFile(cleanRolloutPath, targetFilePath)) {
+    return codexRolloutContentMatches(cleanRolloutPath, targetFilePath) ? targetFilePath : null
+  }
+  // Why re-check before copy: the background sweep walks the same tree, so it
+  // can hardlink this rollout in the gap between removeSymlinkAt and tryHardlink.
+  // Returning the freshly-linked rollout preserves the shared inode instead of
+  // overwriting it with a diverging copy.
+  if (codexRolloutContentMatches(cleanRolloutPath, targetFilePath)) {
+    return targetFilePath
+  }
+  // Windows / cross-volume fallback: copy the rollout file so Codex can resume it
+  if (tryCopyCodexSessionFile(cleanRolloutPath, targetFilePath)) {
+    return codexRolloutContentMatches(cleanRolloutPath, targetFilePath) ? targetFilePath : null
+  }
+  return null
+}
+
+/** Clears a symlink standing where a real file has to go; leaves real files alone. */
+function removeSymlinkAt(filePath: string): void {
+  try {
+    if (!lstatSync(filePath).isSymbolicLink()) {
+      return
+    }
+  } catch {
+    return
+  }
+  unlinkSync(filePath)
 }
 
 /**

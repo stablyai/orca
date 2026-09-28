@@ -14,6 +14,8 @@ function isInsideHiddenTree(element: HTMLElement): boolean {
 type RestartNotice = {
   previousAccountLabel: string
   nextAccountLabel: string
+  /** null is the system default. undefined means the notice did not name one. */
+  nextAccountId?: string | null
   homeRouteChanged?: true
 }
 
@@ -140,8 +142,8 @@ function LoudRestartOverlay({
                 'Restart this session to load your current Codex configuration.'
               )
             : translate(
-                'auto.components.CodexRestartChip.9375620cc3',
-                'Restart this session to use {{value0}}. It stays on the previous account until you do.',
+                'auto.components.CodexRestartChip.accountResume',
+                'Restarting this terminal switches it to {{value0}} and resumes this conversation when supported. Check /goal after switching; unavailable goal transfer may require restoring it manually.',
                 { value0: restartNotice.nextAccountLabel }
               )}
         </div>
