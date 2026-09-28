@@ -8,7 +8,7 @@ import {
   launchPairedElectronClient,
   type PairedElectronClient
 } from './helpers/paired-electron-client'
-import { toRuntimeExecutionHostId } from '../../src/shared/execution-host'
+import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../src/shared/execution-host'
 import { runProcess } from '../../src/shared/child-process/run-process'
 
 test('switches the active server from the status bar between two paired hosts and local', async ({
@@ -113,6 +113,28 @@ test('switches the active server from the status bar between two paired hosts an
     await expect(workTrigger).toContainText('work')
     await page.keyboard.press('Escape')
 
+    await page.evaluate((hostId) => {
+      const state = window.__store?.getState()
+      const workspace = Object.values(state?.worktreesByRepo ?? {})
+        .flat()
+        .find((row) => row.hostId === hostId && row.isMainWorktree)
+      if (!state || !workspace) {
+        throw new Error('Work checkout was not hydrated')
+      }
+      state.setActiveRepo(workspace.repoId)
+      state.setActiveWorktree(workspace.id, hostId)
+      state.markWorktreeVisited(workspace.id, undefined, hostId)
+      state.createTab(workspace.id)
+    }, toRuntimeExecutionHostId(client.environmentId))
+    const workTabCandidate = page
+      .locator('[data-tab-id]')
+      .filter({ hasText: path.basename(testRepoPath) })
+      .last()
+    await expect(workTabCandidate).toBeVisible()
+    const workTabId = await workTabCandidate.getAttribute('data-tab-id')
+    const workTab = page.locator(`[data-tab-id="${workTabId}"]`)
+    await workTab.click({ force: true })
+
     await workTrigger.press('ArrowDown')
     await page.getByRole('menuitemradio', { name: 'priv', exact: true }).focus()
     await page.keyboard.press('Enter')
@@ -121,6 +143,33 @@ test('switches the active server from the status bar between two paired hosts an
     await expect(privateTrigger).toBeEnabled()
     await expect(sidebar.getByText(path.basename(privateRepoPath), { exact: true })).toBeVisible()
     await expect(sidebar.getByText(path.basename(testRepoPath), { exact: true })).toBeHidden()
+
+    await expect(workTab).toBeHidden()
+    await page.evaluate(() => {
+      const state = window.__store?.getState()
+      const environmentId = state?.settings?.activeRuntimeEnvironmentId
+      const hostId: ExecutionHostId | null = environmentId
+        ? `runtime:${encodeURIComponent(environmentId)}`
+        : null
+      const workspace = Object.values(state?.worktreesByRepo ?? {})
+        .flat()
+        .find((row) => row.hostId === hostId && row.isMainWorktree)
+      if (!state || !workspace || !hostId) {
+        throw new Error('Private checkout was not hydrated')
+      }
+      state.setActiveRepo(workspace.repoId)
+      state.setActiveWorktree(workspace.id, hostId)
+      state.markWorktreeVisited(workspace.id, undefined, hostId)
+      state.createTab(workspace.id)
+    })
+    const privateTabCandidate = page
+      .locator('[data-tab-id]')
+      .filter({ hasText: path.basename(privateRepoPath) })
+      .last()
+    await expect(privateTabCandidate).toBeVisible()
+    const privateTabId = await privateTabCandidate.getAttribute('data-tab-id')
+    const privateTab = page.locator(`[data-tab-id="${privateTabId}"]`)
+    await privateTab.click({ force: true })
 
     await page.evaluate(async () => {
       const environmentId = window.__store?.getState().settings?.activeRuntimeEnvironmentId
@@ -153,12 +202,17 @@ test('switches the active server from the status bar between two paired hosts an
     })
     await expect(localTrigger).toBeVisible()
     await expect(localTrigger).toBeEnabled()
+    await expect(workTab).toBeHidden()
+    await expect(privateTab).toBeHidden()
     await expect(sidebar.getByText(path.basename(privateRepoPath), { exact: true })).toBeHidden()
     await expect(sidebar.getByText(path.basename(testRepoPath), { exact: true })).toBeHidden()
     await localTrigger.click({ force: true })
     await page.getByRole('menuitemradio', { name: 'work', exact: true }).click({ force: true })
     await expect(workTrigger).toBeVisible()
     await expect(workTrigger).toBeEnabled()
+    await expect(workTab).toBeVisible()
+    await expect(workTab).toHaveAttribute('data-active', 'true')
+    await expect(privateTab).toBeHidden()
     await expect(sidebar.getByText(path.basename(testRepoPath), { exact: true })).toBeVisible()
     await expect(sidebar.getByText(path.basename(privateRepoPath), { exact: true })).toBeHidden()
 
@@ -166,6 +220,9 @@ test('switches the active server from the status bar between two paired hosts an
     await privateRadio.click({ force: true })
     await expect(privateTrigger).toBeEnabled()
     await expect(sidebar.getByText(path.basename(privateRepoPath), { exact: true })).toBeVisible()
+    await expect(privateTab).toBeVisible()
+    await expect(privateTab).toHaveAttribute('data-active', 'true')
+    await expect(workTab).toBeHidden()
     await privateHost.dispose()
     privateHost = null
     await expect(privateNotice).toContainText(/Reconnecting|Disconnected/)

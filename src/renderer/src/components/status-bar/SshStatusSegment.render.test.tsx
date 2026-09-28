@@ -29,6 +29,7 @@ type TestState = {
   setActiveView: () => void
   openSettingsTarget: () => void
   recordFeatureInteraction: () => void
+  seedActiveWorktreeLastVisitedIfMissing: () => void
   runtimeEnvironments: { id: string; name: string; source?: 'manual' | 'ephemeral-vm' }[]
   setActiveRuntimeEnvironmentPreference: (id: string | null) => Promise<boolean>
   setVisibleWorkspaceHostIds: (ids: string[]) => void
@@ -55,6 +56,7 @@ const store = createStore<TestState>(() => ({
   setActiveView: vi.fn(),
   openSettingsTarget: vi.fn(),
   recordFeatureInteraction: vi.fn(),
+  seedActiveWorktreeLastVisitedIfMissing: vi.fn(),
   runtimeEnvironments: [],
   setActiveRuntimeEnvironmentPreference: switchServer,
   setVisibleWorkspaceHostIds: setVisibleHosts
@@ -65,6 +67,10 @@ vi.mock('@/store', () => ({
     (selector: (state: TestState) => unknown) => useStore(store, selector),
     { getState: () => store.getState() }
   )
+}))
+
+vi.mock('@/lib/active-server-workspace-selection', () => ({
+  restoreActiveServerWorkspace: vi.fn()
 }))
 
 vi.mock('@/lib/desktop-window-chrome', () => ({

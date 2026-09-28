@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+import { restoreActiveServerWorkspace } from '@/lib/active-server-workspace-selection'
 import { useAppStore } from '@/store'
 import { isUserManagedRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import {
@@ -33,12 +34,14 @@ export function useActiveServerSelection() {
     switchingRef.current = true
     setSwitching(true)
     try {
+      useAppStore.getState().seedActiveWorktreeLastVisitedIfMissing()
       if (
         await setActiveRuntimeEnvironmentPreference(value === LOCAL_RUNTIME_VALUE ? null : value)
       ) {
-        setVisibleWorkspaceHostIds([
+        const hostId =
           value === LOCAL_RUNTIME_VALUE ? LOCAL_EXECUTION_HOST_ID : toRuntimeExecutionHostId(value)
-        ])
+        setVisibleWorkspaceHostIds([hostId])
+        restoreActiveServerWorkspace(useAppStore.getState(), hostId)
       }
     } finally {
       switchingRef.current = false
