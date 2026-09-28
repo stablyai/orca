@@ -179,7 +179,7 @@ const codexProvider: ProviderRateLimits = {
 } as unknown as ProviderRateLimits
 
 async function renderSwitcherAndOpenAccounts(summaryLabel: string): Promise<void> {
-  const { CodexSwitcherMenu } = await import('./StatusBar')
+  const { CodexSwitcherMenu } = await import('./CodexSwitcherMenu')
   render(
     React.createElement(CodexSwitcherMenu, {
       codex: codexProvider,

@@ -1,13 +1,18 @@
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
+import type {
+  ClaudeManagedAccount,
+  ClaudeManagedAccountSummary,
+  CodexManagedAccount,
+  CodexManagedAccountSummary
+} from '../../../../shared/managed-account-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 export type UsageProviderSettings = Pick<
   GlobalSettings,
-  | 'codexManagedAccounts'
-  | 'claudeManagedAccounts'
-  | 'opencodeSessionCookie'
-  | 'geminiCliOAuthEnabled'
+  'opencodeSessionCookie' | 'geminiCliOAuthEnabled'
 > & {
+  claudeManagedAccounts: (ClaudeManagedAccountSummary | ClaudeManagedAccount)[]
+  codexManagedAccounts: (CodexManagedAccountSummary | CodexManagedAccount)[]
   // Why: Antigravity has no separate persisted usage credential in Orca. The
   // checked status-bar item is the durable user signal; StatusBar only sets
   // this after PATH detection says the agent is available. Durability further
