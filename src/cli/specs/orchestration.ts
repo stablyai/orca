@@ -85,16 +85,18 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'check'],
     summary: 'Check messages for a terminal',
     usage:
-      'orca orchestration check [--terminal <handle>] [--run <run_id>] [--ack <delivery_id>] [--unread | --peek | --all] [--types <type,...>] [--format] [--wait] [--timeout-ms <n>] [--retry-request <id>] [--json]\n' +
+      'orca orchestration check [--terminal <handle>] [--run <run_id>] [--ack <delivery_id>] [--unread | --peek | --all] [--types <type,...>] [--format] [--wait] [--timeout-ms <n>] [--retry-request <id>] [--no-keepalive] [--json]\n' +
       "  default: return the bound Run's oldest unacknowledged FIFO batch.\n" +
       '  --ack: acknowledge the prior whole batch before checking/waiting.\n' +
       '  --peek: return only unread messages without marking them read.\n' +
       '  --all: return every message for the handle; does not mark read.\n' +
       '  --wait: block until a matching message arrives or --timeout-ms expires.\n' +
       '          Emits JSON keepalive lines to stderr every 15s so the caller can\n' +
-      '          tell the process is alive. `_keepalive` is unrelated to heartbeat\n' +
-      '          messages; `_heartbeat` remains as a deprecated compatibility alias.\n' +
-      '          Filter with `jq "select(._keepalive|not)"` when merging streams.',
+      '          tell the process is alive (unless --no-keepalive is passed).\n' +
+      '          `_keepalive` is unrelated to heartbeat messages; `_heartbeat` remains\n' +
+      '          as a deprecated compatibility alias. Filter with `jq "select(._keepalive|not)"`\n' +
+      '          or pass --no-keepalive when merging streams.\n' +
+      '  --no-keepalive: suppress periodic keepalive JSON lines to stderr during --wait.',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'terminal',
@@ -107,7 +109,8 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'format',
       'wait',
       'timeout-ms',
-      'retry-request'
+      'retry-request',
+      'no-keepalive'
     ],
     notes: [
       'On Windows PowerShell, quote comma-separated type filters, e.g. --types "worker_done,escalation".',

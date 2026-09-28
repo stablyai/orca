@@ -1,5 +1,19 @@
 const DEFAULT_KEEPALIVE_INTERVAL_MS = 15_000
 
+export function isKeepaliveSuppressed(): boolean {
+  if (process.env.ORCA_NO_KEEPALIVE === 'true' || process.env.ORCA_NO_KEEPALIVE === '1') {
+    return true
+  }
+  const raw = process.env.ORCA_KEEPALIVE_INTERVAL_MS ?? process.env.ORCA_HEARTBEAT_INTERVAL_MS
+  if (raw !== undefined) {
+    const trimmed = raw.trim().toLowerCase()
+    if (trimmed === '0' || trimmed === 'false' || trimmed === 'off') {
+      return true
+    }
+  }
+  return false
+}
+
 // Why: test-only escape hatch so subprocess tests avoid the full 15 s window; bogus values fall back to the default.
 function resolveKeepaliveIntervalMs(): number {
   const raw = process.env.ORCA_KEEPALIVE_INTERVAL_MS ?? process.env.ORCA_HEARTBEAT_INTERVAL_MS
@@ -13,7 +27,13 @@ function resolveKeepaliveIntervalMs(): number {
   return parsed
 }
 
-export function startCheckKeepalive(deadlineMs: number | undefined): () => void {
+export function startCheckKeepalive(
+  deadlineMs: number | undefined,
+  options?: { enabled?: boolean }
+): () => void {
+  if (options?.enabled === false || isKeepaliveSuppressed()) {
+    return () => {}
+  }
   const startedAt = Date.now()
   const interval = setInterval(() => {
     const payload = {

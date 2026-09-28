@@ -41,7 +41,8 @@ export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
     const timeoutMs = getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms')
     const explicitTerminal = getOptionalStringFlag(flags, 'terminal')
     const terminal = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'terminal')
-    const stopKeepalive = wait ? startCheckKeepalive(timeoutMs) : null
+    const noKeepalive = flags.has('no-keepalive')
+    const stopKeepalive = wait ? startCheckKeepalive(timeoutMs, { enabled: !noKeepalive }) : null
     let result: Awaited<ReturnType<typeof client.call<CheckResult>>>
     try {
       result = await callOrchestrationMutation<CheckResult>(client, flags, 'orchestration.check', {
