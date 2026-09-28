@@ -92,7 +92,6 @@ export function useMobileSessionTerminalSubscription(
           const dims = ref.fitDimensions(frame)
           diagnostics.viewportMeasured(handle, dims, frame.height)
           if (dims) {
-            ref.holdSubscribedGrid(dims)
             viewportRef.current = dims
             viewportMeasuredRef.current = true
           }

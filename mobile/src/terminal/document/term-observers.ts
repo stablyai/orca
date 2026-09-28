@@ -11,7 +11,6 @@ export function attachTermObservers(scope: TerminalDocumentScope) {
     return
   }
   disposeTermObservers(scope)
-  scope.reportedCellBox = null
   try {
     scope.termObserverDisposables.push(
       scope.term.onLineFeed!(function () {

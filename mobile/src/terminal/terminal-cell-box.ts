@@ -6,6 +6,9 @@
  */
 export type TerminalCellBox = { fontScale: number; cellWidth: number; cellHeight: number }
 
+/** A box xterm laid out, with the grid it was laid out at: the document's own record. */
+export type TerminalLaidOutCellBox = { cellBox: TerminalCellBox; cols: number; rows: number }
+
 function positive(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
 }
@@ -26,4 +29,8 @@ export function readTerminalCellBox(msg: Record<string, unknown>): TerminalCellB
   return fontScale !== null && cellWidth !== null && cellHeight !== null
     ? { fontScale, cellWidth, cellHeight }
     : null
+}
+
+export function sameCellBox(a: TerminalCellBox, b: TerminalCellBox): boolean {
+  return a.fontScale === b.fontScale && a.cellWidth === b.cellWidth && a.cellHeight === b.cellHeight
 }

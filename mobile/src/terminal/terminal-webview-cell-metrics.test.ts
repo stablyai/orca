@@ -74,11 +74,10 @@ function postedTypes(): unknown[] {
   return nativeWebViewMethods.postMessage.mock.calls.map(([message]) => JSON.parse(message).type)
 }
 
-const cellMetrics = (cellWidth: number, cols: number, rows = 47) => ({
-  type: 'cell-metrics',
+const cellBoxNotify = (cellWidth: number, refit: boolean) => ({
+  type: 'cell-box',
   cellBox: cellAt(scale, cellWidth),
-  cols,
-  rows
+  refit
 })
 
 describe('the cell box xterm laid out', () => {
@@ -90,68 +89,16 @@ describe('the cell box xterm laid out', () => {
     expect(postedTypes()).not.toContain('measure')
   })
 
-  it('refits when the box changes at the same grid, as after a renderer swap', () => {
+  it('fits each box the document reports, and refits only when the document says so', () => {
+    // The document holds the grid and decides; its tests pin the one-refit bound.
     const { handle, notify, onCellBoxChange } = mount()
     notify({ type: 'web-ready', cellBox: cellAt(scale) })
-    notify(cellMetrics(23 / 3, 55))
+    notify(cellBoxNotify(7.9, false))
     expect(onCellBoxChange).not.toHaveBeenCalled()
-    notify(cellMetrics(7.8, 55))
+    expect(handle().fitDimensions(FRAME)).toEqual({ cols: 54, rows: 47 })
+    notify(cellBoxNotify(7.8, true))
     expect(onCellBoxChange).toHaveBeenCalledTimes(1)
     expect(handle().fitDimensions(FRAME)).toEqual({ cols: 54, rows: 47 })
-  })
-
-  it('does not refit a box that came with a new grid, which the DOM renderer derives from cols', () => {
-    const { notify, onCellBoxChange } = mount()
-    notify({ type: 'web-ready', cellBox: cellAt(scale) })
-    notify(cellMetrics(7.8, 55))
-    notify(cellMetrics(7.9, 54))
-    notify(cellMetrics(7.8, 55))
-    expect(onCellBoxChange).not.toHaveBeenCalled()
-  })
-
-  it("does not refit a width change to a new grid when the DOM renderer reports that grid's box", () => {
-    const { handle, notify, onCellBoxChange } = mount()
-    notify({ type: 'web-ready', cellBox: cellAt(scale) })
-    notify(cellMetrics(23 / 3, 55))
-    // The width refit asks whether the new width keeps the grid; asking is not a new grid.
-    expect(handle().fitDimensions({ width: 390, height: 710 })).toEqual({ cols: 50, rows: 47 })
-    notify(cellMetrics(7.8, 50))
-    expect(onCellBoxChange).not.toHaveBeenCalled()
-  })
-
-  it('refits a renderer swap at a grid applied in place, which the document reported unchanged box and all', () => {
-    const { handle, notify, onCellBoxChange } = mount()
-    notify({ type: 'web-ready', cellBox: cellAt(scale) })
-    notify(cellMetrics(23 / 3, 55))
-    // A width change applied in place: the WebGL box is unchanged, and the new grid is reported.
-    handle().reflow(50, 47)
-    notify(cellMetrics(23 / 3, 50))
-    // WebGL context lost: the DOM fallback reports its box at the same grid.
-    notify(cellMetrics(7.8, 50))
-    expect(onCellBoxChange).toHaveBeenCalledTimes(1)
-  })
-
-  it("does not refit the DOM renderer's box for a grid it was just given, so it cannot loop", () => {
-    const { handle, notify, onCellBoxChange } = mount()
-    notify({ type: 'web-ready', cellBox: cellAt(scale) })
-    notify(cellMetrics(7.8, 55))
-    handle().reflow(50, 47)
-    notify(cellMetrics(7.9, 50))
-    expect(onCellBoxChange).not.toHaveBeenCalled()
-  })
-
-  it("refits a DOM subscribe once on its first report, and not again on the refit's own report", () => {
-    const { handle, notify, onCellBoxChange } = mount()
-    notify({ type: 'web-ready', cellBox: cellAt(scale, 7.8) })
-    expect(handle().fitDimensions(FRAME)).toEqual({ cols: 54, rows: 47 })
-    handle().holdSubscribedGrid({ cols: 54, rows: 47 })
-    // The DOM renderer's box at the subscribed grid: its width follows cols, so it differs.
-    notify(cellMetrics(8, 54))
-    expect(onCellBoxChange).toHaveBeenCalledTimes(1)
-    expect(handle().fitDimensions(FRAME)).toEqual({ cols: 53, rows: 47 })
-    handle().reflow(53, 47)
-    notify(cellMetrics(8.05, 53))
-    expect(onCellBoxChange).toHaveBeenCalledTimes(1)
   })
 
   it('fits from the box the current document reported, not one an earlier document did', () => {
@@ -170,16 +117,6 @@ describe('the cell box xterm laid out', () => {
     act(() => webView().props.onLoadStart())
     notify({ type: 'web-ready', cellBox: cellAt(1.5) })
     expect(handle().fitDimensions(FRAME)).toEqual({ cols: 55, rows: 47 })
-  })
-
-  it("does not refit a reloaded document's first DOM report at the old document's grid", () => {
-    const { notify, onCellBoxChange, webView } = mount()
-    notify({ type: 'web-ready', cellBox: cellAt(scale, 7.8) })
-    notify(cellMetrics(7.8, 54))
-    act(() => webView().props.onLoadStart())
-    notify({ type: 'web-ready', cellBox: cellAt(scale, 7.8) })
-    notify(cellMetrics(7.9, 54))
-    expect(onCellBoxChange).not.toHaveBeenCalled()
   })
 
   it('fits in the app from the reported box, and sends the frame with every grid', () => {

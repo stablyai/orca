@@ -130,7 +130,8 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // Again when the subscribe's inits began carrying the laid-out terminal frame, and its resize too.
 // Again when those grids read the one frame ref.
 // Again when the subscribe sized its viewport inline instead of through a helper.
-const HEAD_CALLBACK_BODY_SHA256 = 'ad980334b2dd4cf10296097f2a6f23499f0da37c9967d96d9425c76edd4f965e'
+// Again when the document took the hold rule and the subscribe stopped holding its grid.
+const HEAD_CALLBACK_BODY_SHA256 = 'd212c2671af9dd225b33f22b92e981b0c0d8a00bd16dfca974d30c898332a6eb'
 // Refreshed for the startup effect: both `worktree.activate` sends became `worktreeActivate`, and
 // the sleeping-agent check reads that operation's verdict instead of the reply envelope. Refreshed
 // again when the reporter took the reply and interpreted it itself, retiring the hand-built

@@ -26,7 +26,6 @@ function refitHarness(cellWidth: number) {
       cols: Math.floor(frame.width / cellWidth),
       rows: 47
     })),
-    holdSubscribedGrid: vi.fn(),
     resetZoom: vi.fn(),
     cancelSelect: vi.fn(),
     doSelectAll: vi.fn(),

@@ -36,7 +36,6 @@ function subscriptionHarness(opts: {
     reflow: vi.fn(),
     clear: vi.fn(),
     fitDimensions: vi.fn(() => fit),
-    holdSubscribedGrid: vi.fn(),
     resetZoom: vi.fn(),
     cancelSelect: vi.fn(),
     doSelectAll: vi.fn(),
@@ -166,11 +165,10 @@ describe('a terminal first subscribe', () => {
     ])
   })
 
-  it('sizes from the reported box against the laid-out frame, and holds that grid', () => {
+  it('sizes from the reported box against the laid-out frame', () => {
     const harness = subscriptionHarness({ fit: PHONE, webReady: true, frameWidth: 427.5 })
     harness.subscribe()
     expect(harness.terminal.fitDimensions).toHaveBeenCalledWith({ width: 427.5, height: 751 })
-    expect(harness.terminal.holdSubscribedGrid).toHaveBeenCalledWith(PHONE)
     expect(harness.order).toEqual(['subscribe {"cols":55,"rows":44}'])
   })
 

@@ -51,7 +51,9 @@ export function startMessageBridge(scope: TerminalDocumentScope) {
     if (scope.start().shown) {
       prepareTerminal(scope)
     }
-    notify(scope, { type: 'web-ready', cellBox: laidOutCellBox(scope) })
+    // Why: the first init's report is checked against the box the terminal built before ready laid out.
+    scope.reportedCellBox = laidOutCellBox(scope)
+    notify(scope, { type: 'web-ready', cellBox: scope.reportedCellBox?.cellBox ?? null })
   } else {
     reportEngineError(scope, 'terminal engine missing', 'xterm failed to load', true)
   }

@@ -116,8 +116,6 @@ export type TerminalWebViewHandle = {
   clear: () => void
   /** The grid this frame holds at the cell box the document reported; null without one at this text size. */
   fitDimensions: (frame: TerminalFrame) => TerminalFitDimensions | null
-  /** The subscribe went out at this grid; the document's first report at it is checked against it. */
-  holdSubscribedGrid: (grid: TerminalFitDimensions) => void
   resetZoom: () => void
   cancelSelect: () => void
   doSelectAll: () => void

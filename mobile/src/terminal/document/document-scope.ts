@@ -1,4 +1,4 @@
-import type { TerminalCellBox } from '../terminal-cell-box'
+import type { TerminalLaidOutCellBox } from '../terminal-cell-box'
 import { DEFAULT_TERMINAL_THEME } from '../terminal-webview-html/theme'
 import {
   createEngineTerminal,
@@ -96,8 +96,8 @@ export type TerminalDocumentState = {
   terminalFontFamily: string
   /** `terminal-init`: whether the first live chunk since init is still pending. */
   firstDataPending: boolean
-  /** `cell-metrics-probe`: the laid-out cell box last reported for the current terminal. */
-  reportedCellBox: { cellBox: TerminalCellBox; cols: number; rows: number } | null
+  /** `laid-out-cell-box`: the box last reported or at ready, with the grid it was laid out at. */
+  reportedCellBox: TerminalLaidOutCellBox | null
   /** `terminal-init`: whether the replayed snapshot was an alternate screen. */
   activeAltScreenSnapshot: boolean
   /** `fit-scale`: the fit scale the document committed. */

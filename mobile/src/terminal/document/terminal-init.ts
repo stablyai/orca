@@ -151,6 +151,11 @@ export function init(
     reused.reset()
     reused.options.fontSize = fontPxForScale(scope.currentTextScale)
     reused.resize(cols || 80, rows || 24)
+    // Why: its box was laid out at 80x24; the first report at this grid must read as the box
+    // changing at a kept grid, which the DOM renderer's cols-dependent box then refits once.
+    if (scope.reportedCellBox) {
+      scope.reportedCellBox = { ...scope.reportedCellBox, cols: reused.cols, rows: reused.rows }
+    }
   } else {
     nextTerm = openTerminal(scope, cols || 80, rows || 24)
     scope.pendingTerm = nextTerm
