@@ -116,4 +116,43 @@ describe('terminal mode reset profiles', () => {
       expect(buildPostReplayLiveAgentReattachReset('x\x1b[?25h')).toContain('\x1b[?25h')
     })
   })
+
+  // #10381: the agent negotiates once at startup, so a reattach reset without a restore
+  // leaves xterm unable to encode chords only its kitty encoder can express (Cmd+Z).
+  describe('live-agent kitty flag restore', () => {
+    async function reattachLiveAgent(kittyKeyboardFlags: number | undefined): Promise<string[]> {
+      const term = new Terminal({ allowProposedApi: true, vtExtensions: { kittyKeyboard: true } })
+      const replies: string[] = []
+      term.onData((data) => replies.push(data))
+      const write = (data: string): Promise<void> =>
+        new Promise((resolve) => term.write(data, resolve))
+      await write('\x1b[?1049h\x1b[>7u')
+      await write(buildPostReplayLiveAgentReattachReset('frame', kittyKeyboardFlags))
+      // Query, then the agent's single exit pop, then query again.
+      await write('\x1b[?u\x1b[<u\x1b[?u')
+      term.dispose()
+      return replies
+    }
+
+    it('re-arms the proven flags, and the exit pop still returns the shell to 0', async () => {
+      expect(await reattachLiveAgent(7)).toEqual(['\x1b[?7u', '\x1b[?0u'])
+    })
+
+    it('keeps the flags cleared when the negotiation is unproven or inactive', async () => {
+      expect(await reattachLiveAgent(undefined)).toEqual(['\x1b[?0u', '\x1b[?0u'])
+      expect(await reattachLiveAgent(0)).toEqual(['\x1b[?0u', '\x1b[?0u'])
+    })
+
+    it('restores with a set after the reset, never a push', () => {
+      expect(buildPostReplayLiveAgentReattachReset('x', 7)).toBe(
+        `${POST_REPLAY_LIVE_AGENT_REATTACH_RESET}\x1b[=7;1u`
+      )
+      expect(buildPostReplayLiveAgentReattachReset('x\x1b[?25l', 5)).toBe(
+        '\x1b[0 q\x1b[<99u\x1b[=0u\x1b[=5;1u'
+      )
+      expect(buildPostReplayLiveAgentReattachReset('x', Number.NaN)).toBe(
+        POST_REPLAY_LIVE_AGENT_REATTACH_RESET
+      )
+    })
+  })
 })

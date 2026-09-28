@@ -149,7 +149,11 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
         : POST_REPLAY_REATTACH_RESET
     }
     if (session.shouldPreserveAgentReattachModes()) {
-      return buildPostReplayLiveAgentReattachReset(payload)
+      // Why snapshotFlags: only a proven negotiation is re-armed; unknown stays cleared.
+      return buildPostReplayLiveAgentReattachReset(
+        payload,
+        session.kittyKeyboardModes.snapshotFlags
+      )
     }
     // Why: an alt-screen pane is a live TUI Orca just does not recognise as an agent, and the
     // replay already re-armed its mouse modes — keep them instead of wiping them (#8291).

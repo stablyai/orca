@@ -22,6 +22,7 @@ import {
   createManager
 } from './pty-connection-test-pane-fixtures'
 import type { ConnectCallbacks, MockTransport } from './pty-connection-test-pane-fixtures'
+import type { PtyReplayDataMeta } from './pty-transport-types'
 import { buildPaneConnectionDeps } from './pty-connection-test-deps'
 import {
   createInitialStoreState,
@@ -152,6 +153,33 @@ function setReattachPaneTitle(title: string): void {
 // Why: activeRuntimeEnvironmentId exercises the remote-runtime path where the renderer still owns OSC 9999 status.
 function enableActiveRuntimeEnvironment(environmentId = 'env-1'): void {
   mockStoreState = buildActiveRuntimeEnvironmentState(mockStoreState, environmentId)
+}
+
+/** Replays a live Cursor Agent screen over a remote runtime and returns every xterm write. */
+async function replayRemoteAgentScreen(meta: PtyReplayDataMeta): Promise<string[]> {
+  const { connectPanePty } = await import('./pty-connection')
+  enableActiveRuntimeEnvironment()
+  const transport = createMockTransport('remote:env-1@@terminal-1')
+  const replay: { current: ((data: string, meta?: PtyReplayDataMeta) => void) | null } = {
+    current: null
+  }
+  transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+    replay.current = callbacks.onReplayData ?? null
+    return { id: 'remote:env-1@@terminal-1', replay: '' }
+  })
+  transportFactoryQueue.push(transport)
+  setReattachPaneTitle('renamed shell')
+  const pane = createPane(1)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
+  const args = [pane, createManager(1), createDeps()] as unknown as Parameters<
+    typeof connectPanePty
+  >
+  const connection = connectPanePty(...args)
+  await flushAsyncTicks(6)
+  replay.current?.(ANSI_POSITIONED_CURSOR_AGENT_REATTACH_SCREEN, meta)
+  await flushAsyncTicks(12)
+  connection.dispose()
+  return pane.terminal.write.mock.calls.map(([data]) => data)
 }
 
 describe('connectPanePty', () => {
@@ -406,6 +434,22 @@ describe('connectPanePty', () => {
     disposable.dispose()
   })
 
+  // #10381: the agent negotiated kitty once at startup, so the reset alone strands it at flags 0.
+  it('re-arms the kitty flags the host proved after a live agent reattach reset', async () => {
+    const writes = await replayRemoteAgentScreen({ kittyKeyboardFlags: 7, snapshotSeq: 5 })
+    expect(writes).toContain(`${POST_REPLAY_LIVE_AGENT_REATTACH_RESET}\x1b[=7;1u`)
+  })
+
+  it('keeps kitty flags cleared when the host proves a shell owns the pane', async () => {
+    const writes = await replayRemoteAgentScreen({
+      kittyKeyboardFlags: 7,
+      snapshotSeq: 5,
+      terminalOwner: 'shell'
+    })
+    expect(writes.some((data) => data.includes(RESET_KITTY_KEYBOARD_PROTOCOL))).toBe(true)
+    expect(writes.some((data) => data.includes('\x1b[=7;1u'))).toBe(false)
+  })
+
   // Why pinned: the classifier strips CSI precisely so a styled header still matches. A future
   // "just lastIndexOf the raw bytes" shortcut would pass every other test and silently break this.
   it('still detects the Cursor Agent screen when CSI styling splits the header and the marker', async () => {
@@ -517,7 +561,11 @@ describe('connectPanePty', () => {
         `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`,
         expect.any(Function)
       )
-      expect(pane.terminal.write).toHaveBeenCalledWith('\x1b[?25h\x1b[?1004l', expect.any(Function))
+      // Why the kitty reset: the live-agent reset may have re-armed flags a plain shell cannot read.
+      expect(pane.terminal.write).toHaveBeenCalledWith(
+        `\x1b[?25h\x1b[?1004l${RESET_KITTY_KEYBOARD_PROTOCOL}`,
+        expect.any(Function)
+      )
       expect(transport.sendInput).not.toHaveBeenCalledWith('\x1b[I')
       return connection
     })

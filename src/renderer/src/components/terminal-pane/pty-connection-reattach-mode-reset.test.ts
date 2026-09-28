@@ -381,6 +381,39 @@ describe('connectPanePty', () => {
     })
   })
 
+  // #10381: without the restore, chords only xterm's kitty encoder can express (Cmd+Z) never reach the agent.
+  it('re-arms the kitty flags the daemon proved after a live agent reattach', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('tab-pty')
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) =>
+      sessionId
+        ? {
+            id: sessionId,
+            snapshot: 'restored agent snapshot',
+            snapshotSeq: 9,
+            snapshotKittyKeyboardFlags: 7
+          }
+        : null
+    )
+    transportFactoryQueue.push(transport)
+    setReattachPaneTitle('Cursor Agent')
+
+    const pane = createPane(1)
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
+    const args = [pane, createManager(1), deps] as unknown as Parameters<typeof connectPanePty>
+    connectPanePty(...args)
+    await flushAsyncTicks(20)
+
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      `${POST_REPLAY_LIVE_AGENT_REATTACH_RESET}\x1b[=7;1u`,
+      expect.any(Function)
+    )
+  })
+
   it('lets fresh host shell proof outrank stale live-agent metadata on reattach', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('tab-pty')

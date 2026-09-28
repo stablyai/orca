@@ -3,6 +3,7 @@ import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
 
 import { resolvePositiveTerminalDimensions } from '../terminal-snapshot-replay-paint'
+import { RESET_KITTY_KEYBOARD_PROTOCOL } from '../../../../../shared/terminal-mode-reset-profiles'
 
 import {
   CURSOR_SHOW_SEQUENCE,
@@ -47,9 +48,11 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
       ) {
         if (parsedViewportShowsParkedCursorAgentScreen(session.pane.terminal) === false) {
           session.reattachReplayPayloadHasCursorAgentSignal = false
-          // Why: the live-agent reset preserved the payload's ?25l; a plain
-          // shell never re-shows the cursor itself.
-          session.writeReplayData(`${CURSOR_SHOW_SEQUENCE}${FOCUS_REPORTING_DISABLE_SEQUENCE}`)
+          // Why: the live-agent reset preserved the payload's ?25l and may have
+          // re-armed kitty flags; a plain shell never clears either itself.
+          session.writeReplayData(
+            `${CURSOR_SHOW_SEQUENCE}${FOCUS_REPORTING_DISABLE_SEQUENCE}${RESET_KITTY_KEYBOARD_PROTOCOL}`
+          )
           return
         }
       }
