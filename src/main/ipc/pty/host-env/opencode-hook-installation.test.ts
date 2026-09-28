@@ -7,7 +7,6 @@ import {
   rescrubDaemonPtyEnvironment
 } from '../../../daemon/pty-subprocess/spawn-environment'
 import { getInheritedAgentHookEnvKeysToDelete } from './pi-agent'
-import { getLegacyOpenCodeEnvKeysToDelete } from '../../../opencode/legacy-shared-config-dir'
 import { buildPtyHostEnv } from './assembly'
 import type { BuildPtyHostEnvOptions } from './types'
 
@@ -428,13 +427,9 @@ it.each([true, false])('strips daemon-inherited retired paths (known to main: %s
     vi.stubEnv('OPENCODE_CONFIG_DIR', legacy)
   }
   const env = buildPtyHostEnv('pane', {}, { ...options, agentStatusHooksEnabled: false })
-  const envToDelete = getLegacyOpenCodeEnvKeysToDelete(env, fixture.userData)
-  if (known) {
-    expect(envToDelete).toContain('OPENCODE_CONFIG_DIR')
-  }
   vi.stubEnv('ORCA_USER_DATA_PATH', fixture.userData)
   vi.stubEnv('OPENCODE_CONFIG_DIR', legacy)
-  const request = { sessionId: 'pane', cols: 80, rows: 24, cwd: root, env, envToDelete }
+  const request = { sessionId: 'pane', cols: 80, rows: 24, cwd: root, env }
   const result = createDaemonPtyEnvironment(request)
   expect(result.OPENCODE_CONFIG_DIR).toBeUndefined()
   result.OPENCODE_CONFIG_DIR = legacy
@@ -451,8 +446,7 @@ it('preserves explicit user config over a retired daemon-inherited path', () => 
     cols: 80,
     rows: 24,
     cwd: root,
-    env,
-    envToDelete: getLegacyOpenCodeEnvKeysToDelete(env, fixture.userData)
+    env
   })
   expect(result.OPENCODE_CONFIG_DIR).toBe(custom)
 })
