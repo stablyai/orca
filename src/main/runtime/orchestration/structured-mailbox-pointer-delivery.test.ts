@@ -109,7 +109,7 @@ function harness(options: {
     resolveStructuredTarget: (mailboxHandle) =>
       mailboxHandle === mailbox ? { sessionId: IDENTITY.sessionId, dispatchId } : null,
     host: {
-      readGateFacts: () => (journal === null ? null : structuredSessionGateFacts(journal)),
+      readGateFacts: async () => (journal === null ? null : structuredSessionGateFacts(journal)),
       currentFence: () => 4,
       send
     }
@@ -329,7 +329,7 @@ describe('forgetting one settled worker', () => {
           : null
       },
       host: {
-        readGateFacts: () => structuredSessionGateFacts(journal),
+        readGateFacts: async () => structuredSessionGateFacts(journal),
         currentFence: () => 4,
         send
       }

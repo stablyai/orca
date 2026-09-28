@@ -317,11 +317,14 @@ describe('a structured codex session over agentSession.*', () => {
       body
     }
 
+    const turnStarts = () => codex.live().calls.filter((entry) => entry.method === 'turn/start')
     await ok('agentSession.send', params)
+    // Accepted first; the delivery loop hands it over once.
+    await vi.waitFor(() => expect(turnStarts()).toHaveLength(1))
     const replay = await call('agentSession.send', params)
 
     expect(replay).toMatchObject({ ok: true, result: { ok: true, replayed: true } })
-    expect(codex.live().calls.filter((entry) => entry.method === 'turn/start')).toHaveLength(1)
+    expect(turnStarts()).toHaveLength(1)
   })
 
   it('joins an acquired attach through journal bind before draining final rows', async () => {

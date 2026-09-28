@@ -3,6 +3,8 @@ import {
   admitStructuredAgentSessionOutboxEntry,
   type StructuredAgentSessionOutboxEntry
 } from '../../../../shared/structured-agent-session-outbox'
+import { structuredAgentSessionAttemptFailureParts } from '../../../../shared/structured-agent-session-send-disposition'
+import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 
@@ -16,9 +18,13 @@ export function NativeChatDeliveryRetry({
   retry: (clientMessageId: string) => void
 }): React.JSX.Element | null {
   // Why: read through the drain's own rule, so Retry can never name an entry other than the one
-  // the queue actually stopped on -- which is no longer always the head.
+  // the queue actually stopped on -- which is no longer always the head. A rejected entry holds
+  // nothing up, so it is offered only when the queue itself is not stopped.
   const admission = admitStructuredAgentSessionOutboxEntry(outbox, blockedClientMessageId)
-  const retryable = admission.state === 'blocked' ? admission.entry : null
+  const retryable =
+    admission.state === 'blocked'
+      ? admission.entry
+      : (outbox.find((entry) => entry.state === 'rejected') ?? null)
   if (!retryable) {
     return null
   }
@@ -30,10 +36,14 @@ export function NativeChatDeliveryRetry({
               'auto.components.native.chat.NativeChatStructuredSession.1f772bb5d0',
               'Message delivery is unconfirmed.'
             )
-          : translate(
-              'auto.components.native.chat.NativeChatStructuredSession.93ef441197',
-              'Message was not sent.'
-            )}
+          : retryable.lastFailure
+            ? agentSessionWriteNoticeText(
+                structuredAgentSessionAttemptFailureParts(retryable.lastFailure)
+              )
+            : translate(
+                'auto.components.native.chat.NativeChatStructuredSession.93ef441197',
+                'Message was not sent.'
+              )}
       </span>
       <Button
         type="button"

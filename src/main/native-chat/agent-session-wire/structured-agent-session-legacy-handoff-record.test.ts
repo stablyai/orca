@@ -25,12 +25,18 @@ import {
 
 const CALLER = { callerKey: 'client-1' }
 
+/** Delivery runs on its own serialized steps; under a loaded runner they take more than a second. */
+function eventually(assertion: () => void | Promise<void>): Promise<void> {
+  return vi.waitFor(assertion, { timeout: 10_000 })
+}
+
 let root: string
 let store: AgentSessionRecordStore
 let host: StructuredAgentSessionHost
 let acquire: Mock<StructuredAgentSessionAdapter['acquire']>
 let probe: Mock<() => Promise<AgentSessionOwnerProbe>>
 let stopOwnerProcess: Mock<(pid: number, signal: 'SIGTERM' | 'SIGKILL') => void>
+let dispatch: Mock<StructuredAgentSessionAdapter['dispatch']>
 
 function openHost(): void {
   host = new StructuredAgentSessionHost({
@@ -39,7 +45,7 @@ function openHost(): void {
       acquire,
       closeSession: vi.fn(async () => true),
       releaseAcquisition: vi.fn(async () => true),
-      dispatch: vi.fn(async () => ({ state: 'admitted' as const })),
+      dispatch,
       cancelTurn: vi.fn(async () => ({ cancelled: false })),
       answerPrompt: vi.fn(async () => undefined),
       setOption: vi.fn(async () => undefined)
@@ -71,6 +77,23 @@ async function persistFromOlderBuild(lease: OlderBuildLease): Promise<void> {
   openHost()
 }
 
+/** A send is accepted at once; what became of it is the submission's state once the host's
+ *  delivery settles it — handed over, or rejected with the reason the chat shows. */
+async function delivered(text: string) {
+  const sent = await send(text)
+  expect(sent).toMatchObject({ ok: true })
+  const clientMessageId = sent.ok ? sent.value.clientMessageId : ''
+  const submission = async () =>
+    (await host.journalSnapshot(SESSION)).submissions.find(
+      (candidate) => candidate.clientMessageId === clientMessageId
+    )
+  await eventually(async () => {
+    const current = await submission()
+    expect(current?.dispatchState !== 'pending' || current?.handedOverAt !== undefined).toBe(true)
+  })
+  return submission()
+}
+
 async function send(text: string) {
   const body = hostTestMessage(text)
   return host.send(CALLER, {
@@ -93,6 +116,7 @@ beforeEach(async () => {
   resetHostTestOperationIds()
   probe = vi.fn(async () => ({ outcome: 'pid-absent' as const }))
   stopOwnerProcess = vi.fn()
+  dispatch = vi.fn(async () => ({ state: 'admitted' as const }))
   acquire = vi.fn(async ({ fence, spawnToken }) => ({
     process: { hostId: 'local', pid: 4242, processStartTimeMs: NOW - 1_000, spawnToken },
     link: {
@@ -143,7 +167,8 @@ describe('a record an older build left mid terminal handoff', () => {
       handoffOperationId: null
     })
     expect(store.getRecord(SESSION)?.lease).not.toHaveProperty('settlementRetryRequired')
-    expect(await send('after the upgrade')).toMatchObject({ ok: true })
+    expect(await delivered('after the upgrade')).toMatchObject({ dispatchState: 'pending' })
+    expect(dispatch).toHaveBeenCalledOnce()
     expect(acquire).toHaveBeenCalledOnce()
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       runtimeKind: 'native',
@@ -175,7 +200,8 @@ describe('a record an older build left mid terminal handoff', () => {
       handoffStage: null,
       handoffOperationId: null
     })
-    expect(await send('after the upgrade')).toMatchObject({ ok: true })
+    expect(await delivered('after the upgrade')).toMatchObject({ dispatchState: 'pending' })
+    expect(dispatch).toHaveBeenCalledOnce()
     expect(store.getRecord(SESSION)?.lease).toMatchObject({ claimStatus: 'live' })
   })
 
@@ -194,7 +220,8 @@ describe('a record an older build left mid terminal handoff', () => {
       handoffStage: null,
       claimStatus: 'released'
     })
-    expect(await send('after the upgrade')).toMatchObject({ ok: true })
+    expect(await delivered('after the upgrade')).toMatchObject({ dispatchState: 'pending' })
+    expect(dispatch).toHaveBeenCalledOnce()
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       runtimeKind: 'native',
       claimStatus: 'live'
@@ -216,27 +243,35 @@ describe('a record an older build left mid terminal handoff', () => {
       claimStatus: 'conflicted',
       handoffStage: 'recovering'
     })
-    // Sending and opening the chat both say what frees it: quitting that terminal agent.
+    // Sending and opening the chat both say what frees it: quitting that terminal agent. A send is
+    // accepted, then rejected by the start that cannot take the lease, and the chat's row says why.
     const quitTerminal =
       'This chat is still open in a terminal agent (process 4242). Quit that agent to continue the chat here.'
-    expect(await send('while the terminal still runs')).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_conflict', message: quitTerminal }
+    expect(await delivered('while the terminal still runs')).toMatchObject({
+      dispatchState: 'rejected'
     })
+    expect(
+      (await host.journalSnapshot(SESSION)).items.flatMap((item) =>
+        item.body.kind === 'status' && item.body.tone === 'error' ? [item.body.text] : []
+      )
+    ).toEqual([expect.stringContaining(quitTerminal)])
     const fence = store.getRecord(SESSION)?.lease.runtimeFence ?? null
     expect(await host.attach(CALLER, hostTestAttachParams(fence))).toMatchObject({
       ok: false,
       refusal: { code: 'agent_session_conflict', message: quitTerminal }
     })
+    expect(dispatch).not.toHaveBeenCalled()
     expect(stopOwnerProcess).not.toHaveBeenCalled()
     expect(acquire).not.toHaveBeenCalled()
 
-    // The user closes the terminal; the next open proves it gone and the chat takes over.
+    // The user closes the terminal; the next send's start proves it gone and the chat takes over.
     probe.mockResolvedValue({ outcome: 'pid-absent' })
-    await host.hold(SESSION, 'surface-1')
 
     expect(stopOwnerProcess).not.toHaveBeenCalled()
-    expect(await send('after the terminal closed')).toMatchObject({ ok: true })
+    expect(await delivered('after the terminal closed')).toMatchObject({
+      dispatchState: 'pending'
+    })
+    expect(dispatch).toHaveBeenCalledOnce()
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       runtimeKind: 'native',
       claimStatus: 'live',

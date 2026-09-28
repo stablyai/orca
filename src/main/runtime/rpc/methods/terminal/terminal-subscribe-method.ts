@@ -16,7 +16,7 @@ export const TERMINAL_SUBSCRIBE_METHODS = [
     params: TerminalSubscribe,
     handler: async (
       params,
-      { runtime, connectionId, sendBinary, registerBinaryStreamHandler, signal },
+      { runtime, connectionId, requestId, sendBinary, registerBinaryStreamHandler, signal },
       emit
     ) => {
       const isMobile = params.client?.type === 'mobile'
@@ -40,6 +40,7 @@ export const TERMINAL_SUBSCRIBE_METHODS = [
         runtime,
         subscriptionId: clientId ? `${params.terminal}:${clientId}` : params.terminal,
         connectionId,
+        requestId,
         requestSignal: signal,
         emit
       })

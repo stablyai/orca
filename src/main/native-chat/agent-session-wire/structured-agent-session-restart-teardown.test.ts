@@ -30,7 +30,7 @@ it.each(['beginTeardown', 'captureBeforeStop', 'recordMarkers'] as const)(
       )
       expect(warning.mock.calls.flat().map(String).join(' ')).not.toContain(failure.message)
       expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
-      expect(() => host.journalSnapshot(SESSION)).toThrow('agent_session_ownership_unknown')
+      await expect(host.journalSnapshot(SESSION)).rejects.toThrow('agent_session_ownership_unknown')
     } finally {
       operation.mockRestore()
       warning.mockRestore()

@@ -28,7 +28,7 @@ import { useMobileNativeChatPinchGesture } from './use-mobile-native-chat-pinch-
 import { useMobileNativeChatTailFollow } from './use-mobile-native-chat-tail-follow'
 import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 import { useSettledMobileNativeChatInputLock } from './use-mobile-native-chat-input-lease'
-import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
+import { MobileNativeChatTurnActivity } from './MobileNativeChatTurnStatus'
 import { MobileAgentWorkingIndicator } from './MobileAgentWorkingIndicator'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import { MobileNativeChatComposer } from './MobileNativeChatComposer'
@@ -338,10 +338,8 @@ export function MobileNativeChatView({
                 agentWorking &&
                 !hasPendingStructuredInteraction &&
                 turns.active ? (
-                  <MobileNativeChatTurnStatus
-                    startedAt={turns.active.startedAt}
+                  <MobileNativeChatTurnActivity
                     thinking={turns.active.thinking}
-                    workedSeconds={turns.active.workedSeconds}
                     activityText={turns.activeActivityText}
                   />
                 ) : null

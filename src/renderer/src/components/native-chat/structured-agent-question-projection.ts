@@ -4,6 +4,7 @@ import type {
 } from '../../../../shared/agent-session-journal-types'
 import { isAskUserQuestionTool } from '../../../../shared/agent-question-answered-intent'
 import { parseAskFromToolInput } from '../../../../shared/native-chat-ask'
+import { agentJournalItemRowOrigin } from '../../../../shared/agent-session-journal-position'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { projectStructuredItemToNativeChat } from '../../../../shared/structured-agent-session-projection'
 import { readAgentJournalTurn } from '../../../../shared/agent-session-turn-record'
@@ -69,10 +70,8 @@ function projectItem(item: AgentJournalRenderItem): Projection {
     if (body.resolution.state === 'pending') {
       // A system row preserves question identity through tool folding; the receipt renders its body.
       message = {
-        id: item.itemId,
+        ...agentJournalItemRowOrigin(item),
         role: 'system',
-        timestamp: item.observedAt,
-        source: 'transcript',
         blocks: [{ type: 'text', text: body.question }]
       }
     }

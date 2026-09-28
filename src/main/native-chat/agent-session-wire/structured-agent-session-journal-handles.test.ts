@@ -15,11 +15,7 @@ import { journalDatabaseFile } from '../agent-session-journal/journal-paths'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
 import { openAgentSessionJournalWithRecovery } from './agent-session-journal-recovery'
-import {
-  evictStructuredAgentSession,
-  STRUCTURED_AGENT_SESSION_EVICTION_STEPS,
-  type StructuredAgentSessionEvictionContext
-} from './structured-agent-session-eviction'
+import { closeStructuredAgentSessionConversationUnderSerialize } from './structured-agent-session-host-lifetime'
 import { tearDownStructuredAgentSessionHost } from './structured-agent-session-host-teardown'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 
@@ -73,29 +69,7 @@ function hostSession(journal: AgentSessionJournal): StructuredAgentSessionHostSe
   return {
     journal,
     params: {} as StructuredAgentSessionHostSession['params'],
-    fence: 1,
-    hasProviderChild: false,
-    providerChildPhase: 'ready',
-    acquisitionGeneration: null
-  }
-}
-
-function evictionContext(
-  overrides: Partial<StructuredAgentSessionEvictionContext>
-): StructuredAgentSessionEvictionContext {
-  return {
-    sessionId: SESSION,
-    hasProviderChild: false,
-    eventSink: {
-      drained: async () => ({ ok: true }) as const,
-      unbind: () => undefined,
-      close: () => undefined
-    } as unknown as StructuredAgentSessionEvictionContext['eventSink'],
-    adapter: {} as StructuredAgentSessionEvictionContext['adapter'],
-    forget: async () => undefined,
-    discardSink: () => undefined,
-    releaseLease: async () => undefined,
-    ...overrides
+    child: null
   }
 }
 
@@ -140,46 +114,44 @@ describe('site 6: recovery rehydration', () => {
   })
 })
 
-describe('sites 9 and 10: the delete and overwrite callbacks', () => {
-  it('awaits the journal close before dropping the map entry', async () => {
+describe('sites 9 and 10: closing a conversation handle', () => {
+  it('drops the map entry before the close, and releases the handle', async () => {
     const journal = await journals.open({ identity: IDENTITY, journalDir })
     const sessions = new Map([[SESSION, hostSession(journal)]])
     const order: string[] = []
+    const close = journal.close.bind(journal)
+    journal.close = async () => {
+      // A lock-free reader arriving now must find no entry, never a closing handle.
+      order.push(sessions.has(SESSION) ? 'close-while-indexed' : 'close-after-delete')
+      await close()
+      order.push('closed')
+    }
 
-    await evictStructuredAgentSession(
-      evictionContext({
-        forget: async () => {
-          order.push('close-started')
-          await sessions.get(SESSION)?.journal.close()
-          order.push('closed')
-          sessions.delete(SESSION)
-          order.push('forgotten')
-        }
-      }),
-      STRUCTURED_AGENT_SESSION_EVICTION_STEPS
-    )
+    await expect(
+      closeStructuredAgentSessionConversationUnderSerialize(
+        { sessions, closeStatus: () => order.push('status') },
+        SESSION
+      )
+    ).resolves.toBe(true)
 
-    expect(order).toEqual(['close-started', 'closed', 'forgotten'])
+    expect(order).toEqual(['status', 'close-after-delete', 'closed'])
     expect(sessions.size).toBe(0)
     await expectNothingHoldsTheDirectory(journalDir)
   })
 
-  it('aborts the eviction with the session still indexed when the close rejects', async () => {
+  it('surfaces a rejected close to its caller', async () => {
     const journal = await journals.open({ identity: IDENTITY, journalDir })
     const sessions = new Map([[SESSION, hostSession(journal)]])
+    const close = journal.close.bind(journal)
+    journal.close = () => Promise.reject(new Error('close rejected'))
 
     await expect(
-      evictStructuredAgentSession(
-        evictionContext({
-          forget: async () => {
-            await Promise.reject(new Error('close rejected'))
-          }
-        }),
-        STRUCTURED_AGENT_SESSION_EVICTION_STEPS
+      closeStructuredAgentSessionConversationUnderSerialize(
+        { sessions, closeStatus: () => undefined },
+        SESSION
       )
-    ).rejects.toMatchObject({ step: 'forget-session' })
-    // Still indexed, so the next close is a real retry.
-    expect(sessions.has(SESSION)).toBe(true)
+    ).rejects.toThrow('close rejected')
+    journal.close = close
   })
 })
 

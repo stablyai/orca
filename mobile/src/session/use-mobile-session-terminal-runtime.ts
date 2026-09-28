@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react'
+import type { TerminalFrame } from '../terminal/terminal-webview-messages'
 import type { Keyboard, TextInput } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import type { RpcClient } from '../transport/rpc-client'
@@ -77,8 +78,6 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   const viewportResubscribeBudgetRef = useRef(new TerminalViewportResubscribeBudget())
   // Why: don't subscribe until the WebView fires web-ready — iOS may defer JS in hidden WebViews and init() messages would queue unrendered.
   const webReadyHandlesRef = useRef<Set<string>>(new Set())
-  // Why: a document's first subscribe waits for the viewport measure (see mobile-terminal-first-subscribe-viewport.ts).
-  const subscribedDocumentsRef = useRef<Set<string>>(new Set())
   const activeHandleRef = useRef<string | null>(null)
   const bufferedTerminalDraftState = useBufferedTerminalDrafts({ activeHandle, activeHandleRef })
   const reconcileBufferedDraftsRef = useRef(bufferedTerminalDraftState.reconcileTerminalTabs)
@@ -104,10 +103,9 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   // Why: highest applyLayout seq seen per handle; drop older scrollback/resized as stale, but a >20 gap resets (fresh subscription/server restart).
   const layoutSeqRef = useRef<Map<string, number>>(new Map())
   const sendingRef = useRef(false)
-  // Why: exact terminal-frame height for measureFitDimensions; window.innerHeight can overstate the visible area.
-  const terminalFrameHeightRef = useRef<number>(0)
-  // Why: sidebar resizes change the terminal frame width without a window-dim change; track it so the refit hook re-fits (see terminal-viewport-refit.ts).
-  const [terminalFrameWidth, setTerminalFrameWidth] = useState(0)
+  // Why: the terminal frame React Native laid out, unrounded, for every fit; window.innerHeight can
+  // overstate the visible area. Null until the frame's first layout.
+  const terminalFrameRef = useRef<TerminalFrame | null>(null)
   const activeSessionTab = sessionTabs.find((tab) => tab.id === activeSessionTabId) ?? null
   const {
     clearPendingLiveInputCommit,
@@ -183,7 +181,6 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     terminalDiagnosticsRef,
     viewportResubscribeBudgetRef,
     webReadyHandlesRef,
-    subscribedDocumentsRef,
     activeHandleRef,
     activeSessionTabTypeRef,
     pendingActiveSessionTabIdRef,
@@ -199,9 +196,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     delayedActionTimersRef,
     layoutSeqRef,
     sendingRef,
-    terminalFrameHeightRef,
-    terminalFrameWidth,
-    setTerminalFrameWidth,
+    terminalFrameRef,
     activeSessionTab,
     clearPendingLiveInputCommit,
     flushPendingLiveInputBeforeExternalSend,

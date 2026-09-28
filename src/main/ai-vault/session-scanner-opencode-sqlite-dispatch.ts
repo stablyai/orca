@@ -30,7 +30,8 @@ export async function handleOpenCodeSqliteRequest(
           : await listOpenCodeSqliteSessions({
               dbPaths: request.dbPaths,
               limit: request.limit ?? Infinity,
-              issues
+              issues,
+              agent: request.agent === 'zcode' ? 'zcode' : 'opencode'
             })
       return { id: request.id, ok: true, value: { candidates, issues } }
     }
@@ -38,7 +39,10 @@ export async function handleOpenCodeSqliteRequest(
       const capture =
         request.agent === 'opencode2'
           ? await captureOpenCode2SqliteSession(request)
-          : await captureOpenCodeSqliteSession(request)
+          : await captureOpenCodeSqliteSession({
+              ...request,
+              agent: request.agent === 'zcode' ? 'zcode' : 'opencode'
+            })
       return { id: request.id, ok: true, value: capture }
     }
     const parse = async () =>
@@ -51,7 +55,8 @@ export async function handleOpenCodeSqliteRequest(
         : await parseOpenCodeSqliteSession({
             dbPath: request.dbPath,
             sessionId: request.sessionId,
-            platform: request.platform
+            platform: request.platform,
+            agent: request.agent === 'zcode' ? 'zcode' : 'opencode'
           })
     const session = request.fullFirstUserPrompt
       ? await withFullFirstUserPromptCapture(parse)

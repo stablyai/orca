@@ -13,6 +13,7 @@ import type {
 import type { AgentSessionMutationResult } from '../../../shared/agent-session-wire'
 import { AGENT_SESSION_HISTORY_MAX_PAGE_BYTES } from './agent-session-history-page-bounds'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
+import { openWithAgent } from './structured-agent-session-send-preparation'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
 import { admitAndRunAgentSessionMutation } from './structured-agent-session-mutation-admission'
@@ -35,6 +36,8 @@ export async function rewindStructuredAgentSession(
       adapter: context.deps.adapter,
       callerKey: caller.callerKey,
       envelope: params.envelope,
+      // Only the provider can do this, so an agent at rest is started first.
+      prepareSession: openWithAgent(context, params.envelope),
       journal: () => context.sessions.get(sessionId)?.journal,
       publish: (journal) => context.publish(sessionId, journal),
       flushStreamedEvents: context.flushStreamedEvents,

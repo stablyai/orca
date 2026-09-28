@@ -131,3 +131,72 @@ describe('structured Stop after an unknown outcome', () => {
     expect(operationIds.size).toBe(1)
   })
 })
+
+describe('what a structured refusal says on the phone', () => {
+  it("replaces the host's diagnostic with words a person can act on", async () => {
+    const result = await requestStructuredAgentSessionMutation({
+      client: fakeClient(async () => ({
+        ok: true,
+        result: {
+          ok: false,
+          refusal: {
+            code: 'agent_session_checkpoint_stale',
+            message: 'Expected runtime fence 1; the session is at 3.'
+          }
+        },
+        _meta: { runtimeId: 'runtime-1' }
+      })),
+      method: 'agentSession.send',
+      fingerprintMethod: 'agentSession.send',
+      sessionId: 'session-1',
+      expectedRuntimeFence: 1,
+      fields: { body: 'hello' },
+      clientOperationId: `1900000000000-${'c'.repeat(32)}`
+    })
+
+    expect(result).toEqual({
+      status: 'refused',
+      code: 'agent_session_checkpoint_stale',
+      message: 'Your message was not sent. Send it again.'
+    })
+  })
+
+  const stop = {
+    method: 'agentSession.cancel',
+    fingerprintMethod: 'agentSession.cancel',
+    sessionId: 'session-1',
+    expectedRuntimeFence: 1,
+    fields: { turnId: 'turn-1' },
+    clientOperationId: `1900000000000-${'d'.repeat(32)}`
+  }
+
+  it("keeps a failed request's transport text off the screen", async () => {
+    const result = await requestStructuredAgentSessionMutation({
+      ...stop,
+      client: fakeClient(async () => {
+        throw new Error('ECONNRESET 10.0.0.2:443')
+      })
+    })
+
+    expect(result).toEqual({
+      status: 'failed',
+      message: "The agent wasn't stopped."
+    })
+  })
+
+  it("keeps the host's text off the screen when it turns the request away unrun", async () => {
+    const result = await requestStructuredAgentSessionMutation({
+      ...stop,
+      client: fakeClient(async () => ({
+        ok: false,
+        error: { code: 'method_not_found', message: 'Unknown method: agentSession.cancel' },
+        _meta: { runtimeId: 'runtime-1' }
+      }))
+    })
+
+    expect(result).toEqual({
+      status: 'failed',
+      message: "The Orca running this chat doesn't support this. Update Orca, then try again."
+    })
+  })
+})

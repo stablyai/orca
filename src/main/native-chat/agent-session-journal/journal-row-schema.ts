@@ -77,6 +77,9 @@ export type JournalSubmissionRow = JournalRowBase & {
   payloadFingerprint: string
   providerHandle: AgentSessionProviderHandle
   body: AgentJournalMessageItem
+  /** Accepted to be handed over by a later `dispatch{pending}` row; absent on rows whose writer
+   *  dispatched in the same step. Older readers keep the key and ignore it. */
+  handoverRecorded?: true
 }
 
 export type JournalDispatchRow = JournalRowBase & {

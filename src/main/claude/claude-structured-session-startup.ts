@@ -26,10 +26,7 @@ import {
   observeClaudeSettingsApplied,
   readClaudeSettingsEffort
 } from './claude-structured-session-options'
-import {
-  failClaudeStartupGate,
-  openClaudeStartupGate
-} from './claude-structured-session-startup-gate'
+import { failClaudeStartup } from './claude-structured-session-startup-state'
 import type { ClaudeSession, ClaudeStructuredSessionEvent } from './claude-structured-session-state'
 
 export type ClaudeInitProof = {
@@ -163,8 +160,8 @@ function claudeStartedReportedOptions(
   return persisted
 }
 
-/** Applies startup facts to the published session, restores saved options, then releases
- *  held prompts. Any failure faults the session so the user sees why it never started. */
+/** Applies startup facts to the published session and restores saved options; only then does the
+ *  session take input. Any failure faults the session so the user sees why it never started. */
 export async function settleClaudeSessionStartup(input: {
   session: ClaudeSession
   facts: Promise<ClaudeStartupFacts>
@@ -179,7 +176,7 @@ export async function settleClaudeSessionStartup(input: {
     if (input.isCurrent()) {
       return false
     }
-    failClaudeStartupGate(session, new Error('claude session closed before startup completed'))
+    failClaudeStartup(session, new Error('claude session closed before startup completed'))
     return true
   }
   try {
@@ -198,13 +195,15 @@ export async function settleClaudeSessionStartup(input: {
         ),
         restoreSkippedOptions: [...session.restoreSkippedOptions]
       })
-      await openClaudeStartupGate(session)
+      if (session.startup.state === 'pending') {
+        session.startup.state = 'proven'
+      }
     }
   } catch (caught) {
     const error = caught instanceof Error ? caught : new Error(String(caught))
     // A close or exit that already ended startup owns how the session ends.
     const endedElsewhere = session.startup.state !== 'pending'
-    failClaudeStartupGate(session, error)
+    failClaudeStartup(session, error)
     if (!endedElsewhere && input.isCurrent()) {
       input.fault(error)
     }

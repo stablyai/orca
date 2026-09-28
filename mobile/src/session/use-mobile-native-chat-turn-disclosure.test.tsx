@@ -144,6 +144,38 @@ describe('useMobileNativeChatTurnDisclosure', () => {
     }
   })
 
+  it('keeps the live bar on every render until it settles in place', () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(1_000)
+      const messages = [userMessage('u1')]
+      const seen: unknown[] = []
+      function Recorder({ isWorking }: { isWorking: boolean }): React.JSX.Element {
+        const disclosure = useMobileNativeChatTurnDisclosure({
+          messages,
+          enabled: true,
+          isWorking,
+          scopeKey: 'host\0worktree\0tab-a'
+        })
+        seen.push(disclosure.resolveRow(0, messages[0]).turnStatus)
+        return createElement('result', { disclosure })
+      }
+      act(() => {
+        renderer = create(createElement(Recorder, { isWorking: true }))
+      })
+      vi.setSystemTime(6_000)
+      seen.length = 0
+      // No host duration for this turn: the settle is stamped locally, one pass later.
+      act(() => {
+        renderer?.update(createElement(Recorder, { isWorking: false }))
+      })
+      expect(seen).not.toContain(null)
+      expect(seen.at(-1)).toEqual({ startedAt: 1_000, thinking: false, workedSeconds: 5 })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('suppresses local duration when the host explicitly cannot verify the end', () => {
     vi.useFakeTimers()
     try {

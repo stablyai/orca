@@ -4,6 +4,7 @@ import type {
 } from '../../../shared/agent-session-wire'
 import {
   requeueStructuredAgentSessionSendRefusal,
+  stageStructuredAgentSessionOutboxEntryForSend,
   structuredAgentSessionSendRequest,
   type StructuredAgentSessionOutboxEntry
 } from '../../../shared/structured-agent-session-outbox'
@@ -92,11 +93,9 @@ async function dispatchStructuredLaunchPrompt(
   receipt: LaunchReceipt
 ): Promise<boolean> {
   if (
-    !mutateEntry(entry, (current) => ({
-      ...current,
-      state: 'dispatching',
-      lastAttemptAt: Date.now()
-    }))
+    !mutateEntry(entry, (current) =>
+      stageStructuredAgentSessionOutboxEntryForSend(current, Date.now())
+    )
   ) {
     return false
   }

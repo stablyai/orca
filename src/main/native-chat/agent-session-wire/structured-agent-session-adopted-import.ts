@@ -1,7 +1,6 @@
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionAttachParams, AttachedJournal } from './structured-agent-session-attach'
-import { agentSessionJournalCloseRetries } from '../agent-session-journal/journal-close-retry'
 import type { JournalReplacementItem } from '../agent-session-journal/journal-epoch-replacement'
 import {
   importLegacyTranscriptIntoJournal,
@@ -62,13 +61,8 @@ export async function importAdoptedTranscript(
   record: AgentSessionRecord,
   prepared: JournalReplacementItem[] | null
 ): Promise<void> {
-  try {
-    await applyAdoptedTranscript(params, attached, record, prepared)
-  } catch (error) {
-    // Publication has not taken ownership of this provisional journal yet.
-    await agentSessionJournalCloseRetries.closeOrRetain(attached.journal)
-    throw error
-  }
+  // The journal is the conversation's, which outlives a failed import; nothing here closes it.
+  await applyAdoptedTranscript(params, attached, record, prepared)
 }
 
 async function applyAdoptedTranscript(

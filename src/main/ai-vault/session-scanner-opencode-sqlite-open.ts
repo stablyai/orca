@@ -82,8 +82,13 @@ export function readOpenCodeDatabase<T>(args: {
  * @param error - The thrown value from the read.
  * @returns A kinded scan issue with actionable copy.
  */
-export function openCodeDatabaseScanIssue(dbPath: string, error: unknown): AiVaultScanIssue {
+export function openCodeDatabaseScanIssue(
+  dbPath: string,
+  error: unknown,
+  agent: 'opencode' | 'zcode' = 'opencode'
+): AiVaultScanIssue {
   const name = basename(dbPath)
+  const label = agent === 'zcode' ? 'ZCode' : 'OpenCode'
   // `fileMustExist` already proved the database file is there before SQLite ran,
   // so this needs no fs probe of its own — an extra sync stat on a 9p share is
   // exactly the hang the WSL transcript gate exists to prevent.
@@ -96,18 +101,18 @@ export function openCodeDatabaseScanIssue(dbPath: string, error: unknown): AiVau
   const overWslShare = isWslUncPath(dbPath)
   const detail =
     kind === 'contended' && !overWslShare
-      ? `OpenCode is writing to ${name} right now, so its history was skipped. It is read again on the next refresh.`
+      ? `${label} is writing to ${name} right now, so its history was skipped. It is read again on the next refresh.`
       : kind === 'unreadable'
-        ? `OpenCode history in ${name} could not be read: ${errorMessage(error)}`
-        : unreadableShareDetail(dbPath, name)
-  return { agent: 'opencode', kind: 'scope', path: dbPath, message: detail }
+        ? `${label} history in ${name} could not be read: ${errorMessage(error)}`
+        : unreadableShareDetail(dbPath, name, label)
+  return { agent, kind: 'scope', path: dbPath, message: detail }
 }
 
-function unreadableShareDetail(dbPath: string, name: string): string {
+function unreadableShareDetail(dbPath: string, name: string, label: string): string {
   // A known limitation, not a failure the user can act on: nothing they do on
   // the Windows side makes the share hand out SQLite's locks. Deliberately not
   // "flush the write-ahead log" either — checkpointing changes nothing here.
   return isWslUncPath(dbPath)
-    ? "OpenCode sessions inside WSL can't be searched from Windows yet."
-    : `OpenCode history in ${name} could not be read. Its write-ahead log cannot be opened read-only on this filesystem. Exit OpenCode cleanly to flush the log.`
+    ? `${label} sessions inside WSL can't be searched from Windows yet.`
+    : `${label} history in ${name} could not be read. Its write-ahead log cannot be opened read-only on this filesystem. Exit ${label} cleanly to flush the log.`
 }

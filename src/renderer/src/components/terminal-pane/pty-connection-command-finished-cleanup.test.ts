@@ -1,6 +1,7 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { POST_REPLAY_REATTACH_RESET } from '../../../../shared/terminal-mode-reset-profiles'
+import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { flushAsyncTicks, createDeferred } from './pty-connection-test-async'
 import {
@@ -532,11 +533,13 @@ describe('connectPanePty', () => {
     const paneKey = makePaneKey('tab-1', LEAF_1)
     const pane = createPane(1)
     const { writes } = captureCallbackTerminalWrites(pane)
+    const deps = createDeps({ isVisibleRef: { current: false } })
 
     connectPanePty(
       pane as never,
       createManager(1) as never,
-      createDeps({ isVisibleRef: { current: false } }) as never
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture types intentionally model the production connection boundary.
+      deps as never
     )
     await vi.advanceTimersByTimeAsync(20)
     await flushAsyncTicks()
@@ -545,11 +548,15 @@ describe('connectPanePty', () => {
       identity: { agentType: 'droid' }
     }
 
+    // The agent negotiates Kitty keys across a chunk split, then dies armed.
+    dataCallbackRef.current?.('\x1b[>')
+    dataCallbackRef.current?.('5u')
     // A SIGKILLed agent emits no mode teardown; only the shell's next prompt
     // mark arrives. The bare 133;D must not disarm yet — the foreground read
     // has not confirmed the agent is gone.
     dataCallbackRef.current?.('\x1b]133;D;0\x07')
     expect(writes.some((w) => w.includes(POST_REPLAY_REATTACH_RESET))).toBe(false)
+    expect(deps.paneKittyKeyboardModesRef.current.get(pane.id)?.flags).toBe(5)
 
     await vi.advanceTimersByTimeAsync(350)
     await flushAsyncTicks()
@@ -559,6 +566,58 @@ describe('connectPanePty', () => {
     // The live shell re-arms bracketed paste at its prompt before the disarm
     // fires; the reset must not strip it.
     expect(disarm).not.toContain('\x1b[?2004l')
+    // Shortcut policy reads the mirror, so it must drop the dead app's flags with xterm.
+    expect(deps.paneKittyKeyboardModesRef.current.get(pane.id)?.flags).toBe(0)
+  })
+
+  it('grounds xterm and the input mirror in stream order when output is still queued', async () => {
+    vi.useFakeTimers()
+    const { connectPanePty } = await import('./pty-connection')
+    const confirmRead = createDeferred<string>()
+    vi.mocked(window.api.pty.confirmForegroundProcess).mockReturnValue(confirmRead.promise)
+    const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
+    const ptyId = 'pty-stale-mode-queued-output'
+    const transport = createMockTransport(ptyId)
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      dataCallbackRef.current = callbacks.onData ?? null
+      return { id: ptyId }
+    })
+    transportFactoryQueue.push(transport)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    const pane = createPane(1)
+    const { writes } = captureCallbackTerminalWrites(pane)
+    const deps = createDeps({ isVisibleRef: { current: false } })
+
+    connectPanePty(
+      pane as never,
+      createManager(1) as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture types intentionally model the production connection boundary.
+      deps as never
+    )
+    await vi.advanceTimersByTimeAsync(20)
+    await flushAsyncTicks()
+    mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
+      launchConfig: { agentArgs: '', agentEnv: {} },
+      identity: { agentType: 'droid' }
+    }
+    dataCallbackRef.current?.('\x1b]133;D;0\x07')
+    await vi.advanceTimersByTimeAsync(350)
+    await flushAsyncTicks()
+    expect(window.api.pty.confirmForegroundProcess).toHaveBeenCalled()
+
+    // Hidden-pane output sits in the background queue when the shell proof lands.
+    dataCallbackRef.current?.('\x1b[>5u')
+    expect(writes.some((w) => w.includes('\x1b[>5u'))).toBe(false)
+    confirmRead.resolve('bash')
+    await flushAsyncTicks()
+    await vi.advanceTimersByTimeAsync(100)
+
+    // Parsing what xterm received, in order, must match the mirror.
+    const xtermView = new TerminalKittyKeyboardModeTracker()
+    writes.forEach((write) => xtermView.scan(write))
+    expect(writes.some((w) => w.includes(POST_REPLAY_REATTACH_RESET))).toBe(true)
+    expect(deps.paneKittyKeyboardModesRef.current.get(pane.id)?.flags).toBe(0)
+    expect(xtermView.flags).toBe(0)
   })
 
   it('keeps armed modes while the agent still owns the foreground after a leaked 133;D', async () => {
@@ -576,11 +635,13 @@ describe('connectPanePty', () => {
     const paneKey = makePaneKey('tab-1', LEAF_1)
     const pane = createPane(1)
     const { writes } = captureCallbackTerminalWrites(pane)
+    const deps = createDeps({ isVisibleRef: { current: false } })
 
     connectPanePty(
       pane as never,
       createManager(1) as never,
-      createDeps({ isVisibleRef: { current: false } }) as never
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture types intentionally model the production connection boundary.
+      deps as never
     )
     await vi.advanceTimersByTimeAsync(20)
     await flushAsyncTicks()
@@ -589,6 +650,7 @@ describe('connectPanePty', () => {
       identity: { agentType: 'droid' }
     }
 
+    dataCallbackRef.current?.('\x1b[>5u')
     // A full-screen agent's nested command shell leaks a 133;D onto the main
     // PTY; the confirming read republishes the live agent, so its armed
     // mouse/kitty modes must survive untouched.
@@ -597,6 +659,7 @@ describe('connectPanePty', () => {
     await flushAsyncTicks()
 
     expect(writes.some((w) => w.includes(POST_REPLAY_REATTACH_RESET))).toBe(false)
+    expect(deps.paneKittyKeyboardModesRef.current.get(pane.id)?.flags).toBe(5)
   })
 
   it('retires stale routing after unavailable command-finish reads without asserting shell', async () => {

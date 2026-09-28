@@ -82,7 +82,6 @@ export type PtyRuntimeControllerDeps = {
   }
   trustedTerminalHandleEnv: Set<string>
   retiredRejectedPtyIds: Map<string, NodeJS.Timeout>
-  reversibleStopOwnersByPtyId: Map<string, number>
   mainWindow?: PtyRendererDelivery
   transitionSpawnHiddenRendererPtyDeliveryState?: (id: string, hidden: boolean) => void
   syncPtyBackgroundedDelivery?: (id: string, caller: string) => void

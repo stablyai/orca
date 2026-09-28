@@ -248,30 +248,34 @@ export async function acquireClaudeSession({
         event()
       }
     })
-    session.startup.settled = settleClaudeSessionStartup({
-      session,
-      facts: readClaudeStartupFacts({
-        connection,
-        initProof,
-        sessionId,
-        providerSessionId: launch.providerSessionId,
-        resumesTranscript: launch.resumesTranscript,
-        inputOptions: input.options,
-        requestTimeoutMs: deps.requestTimeoutMs,
-        emit
-      }),
-      isCurrent: () => sessions.get(sessionId) === session,
-      requestTimeoutMs: deps.requestTimeoutMs,
-      fault: (error) => callbacks.handleExit(sessionId, attempt, error),
-      onStarted: (options) =>
-        emit({
-          type: 'started',
+    // Whichever comes first: the start landing or faulting, or the child being ended.
+    session.startup.settled = Promise.race([
+      session.startup.settled,
+      settleClaudeSessionStartup({
+        session,
+        facts: readClaudeStartupFacts({
+          connection,
+          initProof,
           sessionId,
-          fence: input.fence,
-          acquisitionGeneration: session.acquisitionGeneration,
-          ...options
-        })
-    })
+          providerSessionId: launch.providerSessionId,
+          resumesTranscript: launch.resumesTranscript,
+          inputOptions: input.options,
+          requestTimeoutMs: deps.requestTimeoutMs,
+          emit
+        }),
+        isCurrent: () => sessions.get(sessionId) === session,
+        requestTimeoutMs: deps.requestTimeoutMs,
+        fault: (error) => callbacks.handleExit(sessionId, attempt, error),
+        onStarted: (options) =>
+          emit({
+            type: 'started',
+            sessionId,
+            fence: input.fence,
+            acquisitionGeneration: session.acquisitionGeneration,
+            ...options
+          })
+      })
+    ])
     // A child whose exit already reached `handleExit` is not handed over as live: the create
     // fails with the CLI's own diagnostic, as one that died before publish does.
     if (sessions.get(sessionId) !== session) {

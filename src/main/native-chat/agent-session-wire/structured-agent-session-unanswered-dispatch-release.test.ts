@@ -32,10 +32,12 @@ function contextWith(submissions: AgentJournalSubmission[]) {
       return { epoch: 'e', sequence: 1 }
     })
   }
-  // The mutation reads only `journal.submissions`, `journal.resolveDispatch` and `fence`.
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: all three are supplied here; the rest of the host session is unreachable from this mutation.
-  const session = { journal, fence: FENCE } as unknown as ReleaseSession
-  const context: ReleaseContext = { sessions: new Map([['s-1', session]]) }
+  // The mutation reads only `journal.submissions`, `journal.resolveDispatch` and the record fence.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: all three are supplied here; the rest of the session and the record is unreachable from this mutation.
+  const context = {
+    sessions: new Map([['s-1', { journal }]]),
+    deps: { store: { getRecord: () => ({ lease: { runtimeFence: FENCE } }) } }
+  } as unknown as ReleaseContext
   return { context, resolved, journal }
 }
 

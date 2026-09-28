@@ -8,8 +8,8 @@ import type { AgentLaunchPrompt } from '../../shared/agent-launch-intent'
 import type { TuiAgent } from '../../shared/tui-agent'
 
 /** How a surface is built once the executor has decided which one. Injected because an
- *  orchestration worker's session carries a dispatch hold and a mailbox a plain launch must not
- *  take, while the decision and ordering above it are identical. */
+ *  orchestration worker's session carries a redrive subscription and a mailbox a plain launch
+ *  must not take, while the decision and ordering above it are identical. */
 export type AgentLaunchSurfaceFactory = {
   createStructuredSession(args: {
     worktreeId: string

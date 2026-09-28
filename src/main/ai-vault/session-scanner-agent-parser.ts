@@ -12,8 +12,10 @@ import { splitOpenCodeSqliteCandidate } from './session-scanner-opencode-sqlite-
 import {
   captureOpenCodeSqliteSessionViaWorker,
   captureOpenCode2SqliteSessionViaWorker,
+  captureZcodeSqliteSessionViaWorker,
   parseOpenCode2SqliteSessionViaWorker,
-  parseOpenCodeSqliteSessionViaWorker
+  parseOpenCodeSqliteSessionViaWorker,
+  parseZcodeSqliteSessionViaWorker
 } from './session-scanner-opencode-sqlite-worker-spawn'
 import { parseClaudeSessionFile } from './session-scanner-primary-parsers'
 import { parseGeminiSessionFile } from './session-scanner-gemini-parsers'
@@ -38,7 +40,7 @@ async function readOpenCodeSqliteCandidate(
   platform: NodeJS.Platform,
   messages?: TranscriptMessageSink,
   signal?: AbortSignal,
-  agent?: 'opencode2'
+  agent?: 'opencode2' | 'zcode'
 ): Promise<AiVaultSession | null> {
   throwIfSignalAborted(signal)
   const request = { ...sqliteCandidate, platform, signal }
@@ -46,7 +48,9 @@ async function readOpenCodeSqliteCandidate(
     const parse =
       agent === 'opencode2'
         ? parseOpenCode2SqliteSessionViaWorker
-        : parseOpenCodeSqliteSessionViaWorker
+        : agent === 'zcode'
+          ? parseZcodeSqliteSessionViaWorker
+          : parseOpenCodeSqliteSessionViaWorker
     const session = await parse(request)
     throwIfSignalAborted(signal)
     return session
@@ -54,7 +58,9 @@ async function readOpenCodeSqliteCandidate(
   const capture =
     agent === 'opencode2'
       ? captureOpenCode2SqliteSessionViaWorker
-      : captureOpenCodeSqliteSessionViaWorker
+      : agent === 'zcode'
+        ? captureZcodeSqliteSessionViaWorker
+        : captureOpenCodeSqliteSessionViaWorker
   const result = await capture(request)
   for (const message of result.messages) {
     throwIfSignalAborted(signal)
@@ -118,6 +124,12 @@ export async function parseAgentSessionFile(
         return readOpenCodeSqliteCandidate(sqliteCandidate, platform, messages, signal, 'opencode2')
       }
       return null
+    }
+    case 'zcode': {
+      const sqliteCandidate = splitOpenCodeSqliteCandidate(candidate.file.path, 'zcode')
+      return sqliteCandidate
+        ? readOpenCodeSqliteCandidate(sqliteCandidate, platform, messages, signal, 'zcode')
+        : null
     }
     case 'grok':
       return parseGrokSessionFile(candidate.file, platform, messages)

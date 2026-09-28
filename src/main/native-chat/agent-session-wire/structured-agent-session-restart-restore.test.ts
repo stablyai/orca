@@ -10,10 +10,13 @@ vi.mock('./structured-agent-session-read-restore', () => ({
   restoreStructuredAgentSessionRead: restoreRead
 }))
 
-import {
-  restoreOneStructuredAgentSessionRead,
-  restoreStructuredAgentSessionsOnRestart
-} from './structured-agent-session-restart-restore'
+import { restoreStructuredAgentSessionsOnRestart } from './structured-agent-session-restart-restore'
+
+const NO_OPEN_DEPS = {
+  store: { getRecord: () => null, listRecords: () => [] },
+  journalRoot: '/tmp/journals',
+  adapter: {}
+}
 
 describe('restart journal restoration', () => {
   beforeEach(() => restoreRead.mockReset())
@@ -22,17 +25,19 @@ describe('restart journal restoration', () => {
     const gate = Promise.withResolvers<void>()
     let active = 0
     let peak = 0
-    restoreRead.mockImplementation(async (_store, _root, sessionId: string) => {
+    restoreRead.mockImplementation(async (_deps, sessionId: string) => {
       active += 1
       peak = Math.max(peak, active)
       await gate.promise
       active -= 1
       return {
-        journal: {},
-        params: { location: { workspaceId: 'workspace-1' }, provider: 'codex' },
-        fence: 1,
-        hasProviderChild: false,
-        sessionId
+        session: {
+          journal: {},
+          params: { location: { workspaceId: 'workspace-1' }, provider: 'codex' },
+          child: null,
+          sessionId
+        },
+        reset: null
       }
     })
     const records = Array.from(
@@ -41,15 +46,13 @@ describe('restart journal restoration', () => {
     )
 
     const restoration = restoreStructuredAgentSessionsOnRestart({
-      store: {} as never,
-      journalRoot: '/tmp/journals',
+      openDeps: NO_OPEN_DEPS,
       records,
       reconcile: async () => null,
       resolveRecovery: async () => undefined,
       serialize: async (_sessionId, task) => task(),
       hasSession: () => false,
-      onReadable: () => undefined,
-      settleStaleState: async () => undefined
+      onReadable: () => undefined
     })
 
     await vi.waitFor(() => expect(active).toBe(4))
@@ -82,61 +85,51 @@ describe('restart journal restoration', () => {
       runtimeKind: 'native'
     }
     const restored = {
-      journal: {},
-      params,
-      fence: 4,
-      hasProviderChild: false,
-      acquisitionGeneration: null
+      session: { journal: {}, params, child: null },
+      reset: null
     }
-    restoreRead.mockResolvedValue(restored)
+    // The open is what settles: it runs after recovery resolution and before the publish.
+    restoreRead.mockImplementation(async () => {
+      calls.push('open')
+      return restored
+    })
 
-    await restoreOneStructuredAgentSessionRead(
-      {
-        store: {} as never,
-        journalRoot: '/tmp/journals',
-        reconcile: async () => null,
-        resolveRecovery: async () => {
-          calls.push('resolveRecovery')
-        },
-        serialize: async (_sessionId, task) => task(),
-        hasSession: () => false,
-        onReadable: () => {
-          calls.push('onReadable')
-        },
-        settleStaleState: async (_sessionId, settled) => {
-          calls.push(settled === restored ? 'settleStaleState:restored' : 'settleStaleState')
-        }
+    await restoreStructuredAgentSessionsOnRestart({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the restore reads only the record's session id here.
+      records: [{ sessionId: 'session-1' } as AgentSessionRecord],
+      openDeps: NO_OPEN_DEPS,
+      reconcile: async () => null,
+      resolveRecovery: async () => {
+        calls.push('resolveRecovery')
       },
-      'session-1'
-    )
+      serialize: async (_sessionId, task) => task(),
+      hasSession: () => false,
+      onReadable: (_sessionId, readable) => {
+        calls.push(readable === restored ? 'onReadable:restored' : 'onReadable')
+      }
+    })
 
-    expect(calls).toEqual(['resolveRecovery', 'settleStaleState:restored', 'onReadable'])
+    expect(calls).toEqual(['resolveRecovery', 'open', 'onReadable:restored'])
   })
 
   it('does not settle again when a second restore finds the session already open', async () => {
-    const settleStaleState = vi.fn(async () => undefined)
     restoreRead.mockResolvedValue({
-      journal: {},
-      params: {},
-      fence: 4,
-      hasProviderChild: false,
-      acquisitionGeneration: null
+      session: { journal: {}, params: {}, child: null },
+      reset: null
     })
 
-    await restoreOneStructuredAgentSessionRead(
-      {
-        store: {} as never,
-        journalRoot: '/tmp/journals',
-        reconcile: async () => null,
-        resolveRecovery: async () => undefined,
-        serialize: async (_sessionId, task) => task(),
-        hasSession: () => true,
-        onReadable: () => undefined,
-        settleStaleState
-      },
-      'session-1'
-    )
+    await restoreStructuredAgentSessionsOnRestart({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the restore reads only the record's session id here.
+      records: [{ sessionId: 'session-1' } as AgentSessionRecord],
+      openDeps: NO_OPEN_DEPS,
+      reconcile: async () => null,
+      resolveRecovery: async () => undefined,
+      serialize: async (_sessionId, task) => task(),
+      hasSession: () => true,
+      onReadable: () => undefined
+    })
 
-    expect(settleStaleState).not.toHaveBeenCalled()
+    // The open is where the settlement runs, and a session already open is not opened again.
+    expect(restoreRead).not.toHaveBeenCalled()
   })
 })

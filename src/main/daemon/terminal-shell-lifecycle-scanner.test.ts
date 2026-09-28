@@ -14,6 +14,7 @@ describe('TerminalShellLifecycleScanner', () => {
       const events = scanner.scan(chunk)
 
       expect(events.uncleanDeathTriggerEnd).toBe(chunk.indexOf('shell-marker'))
+      expect(events.uncleanDeathTriggerStart).toBe(chunk.indexOf('\x1b]133;D'))
       expect(chunk.slice(events.uncleanDeathTriggerEnd)).toBe('shell-marker')
       expect(scanner.isAlternateScreenActive).toBe(true)
       expect(scanner.owner).toBeUndefined()
@@ -45,6 +46,7 @@ describe('TerminalShellLifecycleScanner', () => {
       const events = scanner.scan('37\x07tail')
 
       expect(events.uncleanDeathTriggerEnd).toBe('37\x07'.length)
+      expect(events.uncleanDeathTriggerStart).toBe(0)
       expect('37\x07tail'.slice(events.uncleanDeathTriggerEnd)).toBe('tail')
       expect(scanner.owner).toBeUndefined()
     })

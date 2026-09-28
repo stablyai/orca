@@ -4,12 +4,12 @@ import type { AgentJournalRenderItem, AgentJournalSubmission } from './agent-ses
 import { parsePaneKey } from './stable-pane-id'
 import {
   activeStructuredAgentSessionTurnId,
-  hasPersistedStructuredAgentSessionTurn,
   hasUnansweredStructuredAgentSessionDispatch,
   projectStructuredItemToNativeChat,
   projectStructuredItemsToNativeChat,
   latestStructuredAgentSessionAssistantMessage,
   projectStructuredAgentSessionStatus,
+  projectStructuredAgentSessionStatusState,
   projectStructuredAgentSessionStatusSummary,
   structuredAgentSessionPaneKey
 } from './structured-agent-session-projection'
@@ -129,7 +129,7 @@ describe('structured agent session status projection', () => {
     expect(projectStructuredAgentSessionStatus([running, completed])).toBe('idle')
   })
 
-  it('summarizes status with the newest user prompt, and null before any persisted turn', () => {
+  it('summarizes status with the newest user prompt, and null before any request', () => {
     const running = item('running', 3, {
       kind: 'status',
       text: 'Working',
@@ -149,9 +149,15 @@ describe('structured agent session status projection', () => {
       ]
     })
 
-    expect(projectStructuredAgentSessionStatusSummary([running])).toEqual({
+    expect(projectStructuredAgentSessionStatusSummary([])).toEqual({
       status: null,
       latestPrompt: ''
+    })
+    // A turn the provider opened on its own is a request, with no prompt to quote.
+    expect(projectStructuredAgentSessionStatusSummary([running])).toEqual({
+      status: 'working',
+      latestPrompt: '',
+      statusStartedAt: 3
     })
     expect(projectStructuredAgentSessionStatusSummary([first, second, running])).toEqual({
       status: 'working',
@@ -233,6 +239,42 @@ describe('structured agent session status projection', () => {
       status: null,
       latestPrompt: ''
     })
+  })
+
+  it('still reports owed work beneath a pending prompt, which the attention status hides', () => {
+    const asked = item('asked', 1, {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'go' }]
+    })
+    const prompt = item('prompt', 3, {
+      kind: 'approval',
+      title: 'Run command?',
+      detail: null,
+      options: [{ id: 'yes', label: 'Allow' }],
+      resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+    })
+    const running = item('turn', 2, { kind: 'turn', turnId: 't1', state: 'running' })
+    const settled = item('turn', 2, {
+      kind: 'turn',
+      turnId: 't1',
+      state: 'completed',
+      outcome: 'success'
+    })
+    const accepted = [submission('m1', 'accepted')]
+    const owes = (items: AgentJournalRenderItem[], submissions = accepted) => {
+      const state = projectStructuredAgentSessionStatusState(items, submissions)
+      return [state.summary.status, state.owesWork]
+    }
+
+    expect(owes([asked, running, prompt])).toEqual(['attention', true])
+    expect(owes([asked, settled, prompt])).toEqual(['attention', false])
+    expect(owes([asked, settled, prompt], [...accepted, submission('m2', 'pending')])).toEqual([
+      'attention',
+      true
+    ])
+    expect(owes([asked, running])).toEqual(['working', true])
+    expect(owes([asked, settled])).toEqual(['idle', false])
   })
 
   it('carries the running tool and the newest assistant prose the sidebar row shows', () => {
@@ -392,15 +434,6 @@ describe('structured agent session status projection', () => {
 
     expect(structuredAgentSessionPaneKey('structured-agent-session-1', 'session-1')).toBe(paneKey)
     expect(parsePaneKey(paneKey)).toMatchObject({ tabId: 'structured-agent-session-1' })
-  })
-
-  it('requires a persisted provider conversation turn before TUI resume', () => {
-    const status = item('status', 1, { kind: 'status', text: 'Connected' })
-    const user = item('user', 2, { kind: 'message', role: 'user', blocks: [] })
-
-    expect(hasPersistedStructuredAgentSessionTurn([])).toBe(false)
-    expect(hasPersistedStructuredAgentSessionTurn([status])).toBe(false)
-    expect(hasPersistedStructuredAgentSessionTurn([status, user])).toBe(true)
   })
 
   it('preserves provider-frame detail on the backward-compatible status line', () => {

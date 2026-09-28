@@ -142,6 +142,11 @@ export const mobileSessionFrameStyles = StyleSheet.create({
     height: 18,
     backgroundColor: colors.borderSubtle
   },
+  // The content slot every branch renders in, measured as the terminal's frame; clips nothing.
+  contentFrame: {
+    flex: 1,
+    minHeight: 0
+  },
   terminalFrame: {
     flex: 1,
     minHeight: 0,

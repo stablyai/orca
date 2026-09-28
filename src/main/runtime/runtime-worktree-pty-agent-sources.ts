@@ -4,6 +4,7 @@ import {
   type ParsedAgentStatusPayload
 } from '../../shared/agent-status-types'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../shared/stable-pane-id'
+import { agentVerdictFields } from '../../shared/agent-main-agent-verdict'
 import { isWslHookRelayConnectionId } from '../../shared/wsl-hook-relay-contract'
 import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
 
@@ -47,7 +48,8 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
       lastAssistantMessage: entry.lastAssistantMessage ?? null,
       toolName: entry.toolName ?? null,
       toolInput: entry.toolInput ?? null,
-      interrupted: entry.interrupted ?? false,
+      interrupted: false,
+      ...agentVerdictFields(entry),
       stateStartedAt: entry.stateStartedAt,
       // A replay advances delivery order, not the age of the evidence shown by worktree.ps.
       updatedAt: entry.evidenceObservedAt ?? entry.receivedAt,

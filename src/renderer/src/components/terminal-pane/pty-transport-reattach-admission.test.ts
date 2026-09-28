@@ -92,7 +92,7 @@ describe('createIpcPtyTransport', () => {
     await transport.connect({ url: '', callbacks: { onError } })
     expect(onError).toHaveBeenCalled()
     expect(transport.isConnected()).toBe(false)
-    expect(transport.sendInput('echo hello\r')).toBe(false)
+    expect(transport.sendInput('echo hello\r', 'driving')).toBe(false)
     await flushPtySideEffects()
     expect(write).not.toHaveBeenCalled()
 
@@ -102,7 +102,7 @@ describe('createIpcPtyTransport', () => {
     await transport.connect({ url: '', callbacks: { onError: onErrorKilled } })
     expect(onErrorKilled).not.toHaveBeenCalled()
     expect(transport.isConnected()).toBe(false)
-    expect(transport.sendInput('echo hello\r')).toBe(false)
+    expect(transport.sendInput('echo hello\r', 'driving')).toBe(false)
     await flushPtySideEffects()
     expect(write).not.toHaveBeenCalled()
   })

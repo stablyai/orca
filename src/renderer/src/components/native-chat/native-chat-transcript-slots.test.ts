@@ -139,14 +139,15 @@ describe('transcript slots', () => {
     expect(slots[0]?.receipt).toBe(receipt)
   })
 
-  it('leaves the running turn status to the single transcript-tail indicator', () => {
+  it('puts the running turn bar under the prompt it answers', () => {
     const status: NativeChatTurnStatus = { startedAt: 1, thinking: false, workedSeconds: null }
-    const slots = build([text('u', 'ask', 'user')], {
+    const slots = build([text('u', 'ask', 'user'), text('a', 'answer')], {
       latestUserIndex: 0,
       turnStatuses: { active: status, completedByTurn: {} },
       isWorking: true
     })
-    expect(slots[0]?.status).toBeUndefined()
+    expect(slots[0]?.status).toBe(status)
+    expect(slots[1]?.status).toBeUndefined()
   })
 
   it('reserves a height for every slot it keeps', () => {

@@ -2464,6 +2464,10 @@
           "MobileDriverOverlay": {
             "3eed73394f": "Your keyboard is paused"
           },
+          "TerminalErrorToast": {
+            "ptyAllocationLimit": "Your system cannot allocate any more pty devices. Close some terminals you are not using, in Orca or another program, then try again.",
+            "terminalProcessLimit": "Your system cannot start another terminal process. Close unused terminals or quit unused processes, then try again."
+          },
           "TerminalRemoteRuntimeReconnectBanner": {
             "retryingBody": "Orca will retry for up to one minute. This terminal will resume if the connection returns."
           },
@@ -2672,6 +2676,7 @@
           "title": "Start a chat with {{value0}}"
         },
         "error": {
+          "retryingSubtitle": "The transcript could not be read. Orca keeps trying to load it.",
           "subtitle": "The transcript could not be read. Toggle back to the terminal to keep working.",
           "title": "Could not load conversation"
         },
@@ -2708,6 +2713,24 @@
         "runningPreview": "Running {{preview}}",
         "usedManySummary": "Used {{toolCount}} tools",
         "usedOneSummary": "Used 1 tool"
+      },
+      "writeNotice": {
+        "capacity": "Orca has received too many requests in the last day.",
+        "historyUnreadable": "Orca couldn't read this chat's saved history.",
+        "notDoneAnswer": "Your answer was not sent.",
+        "notDoneCommand": "The command didn't run.",
+        "notDoneGoal": "The goal wasn't changed.",
+        "notDoneOption": "The setting wasn't changed.",
+        "notDoneSend": "Your message was not sent.",
+        "notDoneStop": "The agent wasn't stopped.",
+        "notDoneStopTask": "The background task wasn't stopped.",
+        "notDoneStopTasks": "The background tasks weren't stopped.",
+        "outcomeUnknown": "Orca couldn't confirm what happened. Check the chat.",
+        "questionChanged": "This question was already answered or has changed.",
+        "restartFailed": "The agent couldn't restart.",
+        "tryAgainComposerSend": "Send it again.",
+        "unreachable": "Orca couldn't reach the agent.",
+        "unsupported": "The Orca running this chat doesn't support this. Update Orca, then try again."
       }
     },
     "onboarding": {

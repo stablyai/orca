@@ -162,10 +162,9 @@ export function connectPanePty(
   // Why: paneKey crosses PTY env, hook IPC, retained rows, and reload/replay.
   // Use the stable layout leaf UUID, not the renderer-local numeric pane id.
   session.cacheKey = makePaneKey(session.deps.tabId, session.pane.leafId)
-  // Why: mirrors the kitty keyboard flags the pane's application negotiates.
-  // Fed only from application output (live PTY bytes + daemon replay
-  // payloads), never from renderer-generated resets, so it reflects what the
-  // application expects even after defensive renderer-side kitty wipes.
+  // Why: mirrors the kitty keyboard flags the pane's application negotiates,
+  // so it still reflects what a live application expects after the renderer's
+  // defensive kitty wipes; see TerminalKittyKeyboardModeTracker for its feeds.
   session.kittyKeyboardModes = (() => {
     const existing = session.deps.paneKittyKeyboardModesRef.current.get(session.pane.id)
     if (existing) {

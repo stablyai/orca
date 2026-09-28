@@ -168,7 +168,7 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
   }, [])
 
   const handleDuplicateBrowserTab = useCallback(
-    (browserTabId: string) => {
+    (browserTabId: string, sourceUnifiedTabId: string) => {
       if (!activeWorktreeId) {
         return
       }
@@ -195,14 +195,16 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
           worktreeId: activeWorktreeId,
           environmentId: runtimeEnvironmentId,
           url: source.url,
-          profileId: source.sessionProfileId
+          profileId: source.sessionProfileId,
+          clientAfterTabId: sourceUnifiedTabId
         }).catch(showClientCreationActionError)
         return
       }
       try {
         createBrowserTab(activeWorktreeId, source.url, {
           ...buildDuplicatedBrowserTabOptions(source),
-          ...(runtimeEnvironmentId ? { browserRuntimeEnvironmentId: null } : {})
+          ...(runtimeEnvironmentId ? { browserRuntimeEnvironmentId: null } : {}),
+          afterTabId: sourceUnifiedTabId
         })
       } catch (error) {
         showClientCreationActionError(error)

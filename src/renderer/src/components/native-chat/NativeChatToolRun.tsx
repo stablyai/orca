@@ -221,6 +221,8 @@ export function NativeChatToolRun({
           subject={askSubject}
           pending={askIsActive}
           disclosureKey={disclosureId === undefined ? undefined : `ask:${disclosureId}`}
+          // A grouped ask here still names only its count.
+          listsQuestions={false}
         />
       ) : null}
       {!showsHeader ? null : (

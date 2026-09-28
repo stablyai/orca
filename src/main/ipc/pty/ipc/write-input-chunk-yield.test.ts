@@ -68,7 +68,7 @@ describe('chunked pty write yield', () => {
     }) as typeof setImmediate)
 
     const outcome = await Promise.race([
-      createWriteInput()({ id: PTY_ID, data: THREE_CHUNK_INPUT }),
+      createWriteInput()({ inputKind: 'driving', id: PTY_ID, data: THREE_CHUNK_INPUT }),
       afterImmediateTurns(50)
     ])
 
@@ -88,6 +88,7 @@ describe('chunked pty write yield', () => {
     const immediate = vi.spyOn(globalThis, 'setImmediate')
 
     const outcome = createWriteInput()({
+      inputKind: 'driving',
       id: PTY_ID,
       data: 'x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES)
     })

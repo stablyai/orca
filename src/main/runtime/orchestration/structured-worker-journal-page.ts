@@ -16,14 +16,17 @@ export type StructuredJournalPage = {
   hasOlder: boolean
 }
 
-/** The newest page of a session's journal, or null when this runtime cannot read it. */
-export function readStructuredJournalPage(sessionId: string): StructuredJournalPage | null {
+/** The newest page of a session's journal, or null when this runtime cannot read it. A closed
+ *  conversation is opened for the read; that starts no agent. */
+export async function readStructuredJournalPage(
+  sessionId: string
+): Promise<StructuredJournalPage | null> {
   const host = getStructuredAgentSessionHost()
   if (!host) {
     return null
   }
   try {
-    const result = host.history({
+    const result = await host.history({
       sessionId,
       direction: 'tail',
       limit: STRUCTURED_JOURNAL_PAGE_LIMIT

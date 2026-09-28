@@ -1,8 +1,8 @@
-// The wire half of a session's lifetime: who takes a hold, and what happens when they vanish.
+// `agentSession.hold` / `release` are kept answering for clients that still send them, and do
+// nothing else: a view never starts or keeps an agent.
 //
-// Run against the REAL subscription registry rather than a stub, because the backstop being tested
-// IS that registry's connection sweep — a stubbed `registerSubscriptionCleanup` would prove that
-// the handler called a function, which is not the claim.
+// Run against the REAL subscription registry rather than a stub, because the claim includes that a
+// connection closing runs nothing hold-related — a stubbed registry could not show that.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -26,7 +26,6 @@ import { RpcDispatcher } from '../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
 
 const CONNECTION = 'connection-1'
-const GRACE_MS = 5
 const CLIENT = {
   clientId: 'device-1',
   clientKind: 'runtime' as const,
@@ -90,7 +89,6 @@ beforeEach(async () => {
     journalRoot: root,
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
-    releaseGraceMs: GRACE_MS,
     now: () => NOW
   })
   setStructuredAgentSessionHost(host)
@@ -114,186 +112,85 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-describe('a client that holds a session', () => {
-  it('keeps the provider child while the hold stands', async () => {
+describe('the hold surface, for clients that still call it', () => {
+  it('answers a hold without starting an agent or registering a cleanup', async () => {
+    await host.close(SESSION)
+    expect(host.hasSession(SESSION)).toBe(false)
+    const registered = vi.spyOn(runtime, 'registerOwnedSubscriptionCleanup')
+    const acquiresBefore = acquire.mock.calls.length
+
     expect(
       await call('agentSession.hold', { sessionId: SESSION, holderId: 'chat-1' })
-    ).toMatchObject({ ok: true })
+    ).toMatchObject({ ok: true, result: { held: true } })
 
-    await new Promise((resolve) => setTimeout(resolve, GRACE_MS * 20))
+    expect(acquire.mock.calls.length).toBe(acquiresBefore)
+    expect(registered).not.toHaveBeenCalled()
+    expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
+  })
+
+  it('answers a release without stopping anything, and a connection close runs nothing', async () => {
+    await call('agentSession.hold', { sessionId: SESSION, holderId: 'chat-1' })
+
+    expect(
+      await call('agentSession.release', { sessionId: SESSION, holderId: 'chat-1' })
+    ).toMatchObject({ ok: true, result: { released: true } })
+    runtime.cleanupSubscriptionsForConnection(CONNECTION)
+    await new Promise((resolve) => setTimeout(resolve, 20))
 
     expect(closeSession).not.toHaveBeenCalled()
     expect(host.hasSession(SESSION)).toBe(true)
   })
 
-  it('releases it when the client says so', async () => {
-    await call('agentSession.hold', { sessionId: SESSION, holderId: 'chat-1' })
-
-    expect(
-      await call('agentSession.release', { sessionId: SESSION, holderId: 'chat-1' })
-    ).toMatchObject({ ok: true })
-
-    await vi.waitFor(() => expect(host.hasSession(SESSION)).toBe(false))
-    expect(closeSession).toHaveBeenCalledWith(SESSION)
-  })
-
-  it('releases its hold and cleanup after the setting is disabled', async () => {
-    const release = vi.spyOn(host, 'release')
-    await call('agentSession.hold', { sessionId: SESSION, holderId: 'chat-1' })
+  it('refuses a hold once the setting is off, and still answers a release', async () => {
     structuredNativeChatEnabled = false
 
     expect(
+      await call('agentSession.hold', { sessionId: SESSION, holderId: 'chat-1' })
+    ).toMatchObject({ ok: false })
+    expect(
       await call('agentSession.release', { sessionId: SESSION, holderId: 'chat-1' })
-    ).toMatchObject({ ok: true })
-    const releaseCallsAfterRpc = release.mock.calls.length
-    runtime.cleanupSubscriptionsForConnection(CONNECTION)
-
-    expect(releaseCallsAfterRpc).toBe(2)
-    expect(release).toHaveBeenCalledTimes(releaseCallsAfterRpc)
-    await vi.waitFor(() => expect(host.hasSession(SESSION)).toBe(false))
-    expect(closeSession).toHaveBeenCalledWith(SESSION)
+    ).toMatchObject({ ok: true, result: { released: true } })
+    expect(closeSession).not.toHaveBeenCalled()
   })
 
-  it('does not report success when no provider child can be acquired', async () => {
-    const response = await call('agentSession.hold', {
-      sessionId: 'session-missing',
-      holderId: 'chat-missing'
-    })
+  it('answers a hold even when no agent could be started', async () => {
+    await host.close(SESSION)
+    acquire.mockRejectedValue(new Error('provider unavailable'))
+    const acquiresBefore = acquire.mock.calls.length
 
-    expect(response).toMatchObject({
-      ok: false,
-      error: { code: 'agent_session_identity_required' }
-    })
-    expect(host.isHeld('session-missing')).toBe(false)
+    expect(
+      await call('agentSession.hold', { sessionId: SESSION, holderId: 'chat-1' })
+    ).toMatchObject({ ok: true, result: { held: true } })
+    expect(acquire.mock.calls.length).toBe(acquiresBefore)
   })
 })
 
-describe('a client that disappears without cleanup', () => {
-  it('shares one child with a same-ID replacement that arrives while the first hold resumes', async () => {
+describe('a stream', () => {
+  it('reads a closed conversation without starting its agent', async () => {
     await host.close(SESSION)
-    await host.restoreReadableSessions()
-    closeSession.mockClear()
-    acquire.mockClear()
-    const entered = Promise.withResolvers<void>()
-    const gate = Promise.withResolvers<void>()
-    const spawnChild = acquire.getMockImplementation()!
-    acquire.mockImplementationOnce(async (input) => {
-      entered.resolve()
-      await gate.promise
-      return spawnChild(input)
-    })
-    try {
-      const params = { sessionId: SESSION, holderId: 'same-chat' }
-      const first = call('agentSession.hold', params)
-      await entered.promise
-      // Re-registering the cleanup id released the first hold; the replacement waits its turn
-      // behind the first hold's attach and finds the child it made.
-      const replacement = call('agentSession.hold', params)
-      gate.resolve()
+    expect(host.hasSession(SESSION)).toBe(false)
+    const acquiresBefore = acquire.mock.calls.length
+    const frames: unknown[] = []
 
-      expect(await first).toMatchObject({ ok: true })
-      expect(await replacement).toMatchObject({ ok: true })
-      expect(acquire).toHaveBeenCalledOnce()
-      expect(host.isHeld(SESSION)).toBe(true)
-      await new Promise((resolve) => setTimeout(resolve, GRACE_MS * 4))
-      expect(closeSession).not.toHaveBeenCalled()
-
-      runtime.cleanupSubscriptionsForConnection(CONNECTION)
-      await vi.waitFor(() => expect(host.hasSession(SESSION)).toBe(false))
-      expect(closeSession).toHaveBeenCalledExactlyOnceWith(SESSION)
-    } finally {
-      gate.resolve()
-    }
-  })
-
-  it('lets a same-ID replacement make its own attempt when the first hold fails to acquire', async () => {
-    await host.close(SESSION)
-    await host.restoreReadableSessions()
-    closeSession.mockClear()
-    acquire.mockClear()
-    const entered = Promise.withResolvers<void>()
-    const gate = Promise.withResolvers<void>()
-    acquire.mockImplementationOnce(async () => {
-      entered.resolve()
-      await gate.promise
-      throw new Error('acquisition failed')
-    })
-    try {
-      const params = { sessionId: SESSION, holderId: 'same-chat' }
-      const first = call('agentSession.hold', params)
-      await entered.promise
-      const replacement = call('agentSession.hold', params)
-      gate.resolve()
-
-      expect(await first).toMatchObject({ ok: false })
-      // One attempt per hold: the replacement's own succeeds, and the holder it re-took stands.
-      const replaced = await replacement
-      expect(replaced, JSON.stringify(replaced)).toMatchObject({ ok: true })
-      expect(acquire).toHaveBeenCalledTimes(2)
-      expect(host.isHeld(SESSION)).toBe(true)
-      expect(closeSession).not.toHaveBeenCalled()
-
-      runtime.cleanupSubscriptionsForConnection(CONNECTION)
-      await vi.waitFor(() => expect(host.hasSession(SESSION)).toBe(false))
-      expect(closeSession).toHaveBeenCalledExactlyOnceWith(SESSION)
-    } finally {
-      gate.resolve()
-    }
-  })
-
-  it('still releases the session when its transport closes', async () => {
-    await call('agentSession.hold', { sessionId: SESSION, holderId: 'chat-1' })
-
-    runtime.cleanupSubscriptionsForConnection(CONNECTION)
-
-    await vi.waitFor(() => expect(host.hasSession(SESSION)).toBe(false))
-    expect(closeSession).toHaveBeenCalledWith(SESSION)
-  })
-
-  it('does not release a hold another connection is still holding', async () => {
-    await call('agentSession.hold', { sessionId: SESSION, holderId: 'chat-1' })
     await dispatcher.dispatchStreaming(
       {
-        id: 'request-other',
+        id: 'request-subscribe',
         authToken: 'token',
-        method: 'agentSession.hold',
-        params: { sessionId: SESSION, holderId: 'chat-1' }
+        method: 'agentSession.subscribe',
+        params: { sessionId: SESSION }
       },
-      () => {},
-      { ...CLIENT, clientId: 'device-2', connectionId: 'connection-2' }
+      (raw) => frames.push(JSON.parse(raw)),
+      CLIENT
     )
 
-    runtime.cleanupSubscriptionsForConnection(CONNECTION)
-    await new Promise((resolve) => setTimeout(resolve, GRACE_MS * 20))
-
-    expect(closeSession).not.toHaveBeenCalled()
-    expect(host.hasSession(SESSION)).toBe(true)
-  })
-
-  it('does not let an old connection sweep release its same-document replacement', async () => {
-    await call('agentSession.hold', { sessionId: SESSION, holderId: 'chat-1' })
-    await dispatcher.dispatchStreaming(
-      {
-        id: 'request-replacement',
-        authToken: 'token',
-        method: 'agentSession.hold',
-        params: { sessionId: SESSION, holderId: 'chat-1' }
-      },
-      () => {},
-      { ...CLIENT, connectionId: 'connection-2' }
+    expect(frames).toContainEqual(
+      expect.objectContaining({ result: expect.objectContaining({ type: 'snapshot' }) })
     )
-
-    runtime.cleanupSubscriptionsForConnection(CONNECTION)
-    await new Promise((resolve) => setTimeout(resolve, GRACE_MS * 20))
-
-    expect(closeSession).not.toHaveBeenCalled()
-    expect(host.hasSession(SESSION)).toBe(true)
-
-    runtime.cleanupSubscriptionsForConnection('connection-2')
-    await vi.waitFor(() => expect(host.hasSession(SESSION)).toBe(false))
+    expect(acquire.mock.calls.length).toBe(acquiresBefore)
+    expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
   })
 
-  it('releases a desktop subscription when its renderer transport dies', async () => {
+  it('keeps nothing alive when its transport dies', async () => {
     const transport = new AbortController()
     await dispatcher.dispatchStreaming(
       {
@@ -310,56 +207,12 @@ describe('a client that disappears without cleanup', () => {
         clientCapabilities: CLIENT.clientCapabilities
       }
     )
-    expect(host.isHeld(SESSION)).toBe(true)
 
     transport.abort()
+    await new Promise((resolve) => setTimeout(resolve, 20))
 
-    await vi.waitFor(() => expect(host.hasSession(SESSION)).toBe(false))
-    expect(closeSession).toHaveBeenCalledWith(SESSION)
-  })
-
-  it('unsubscribes and releases stream retention after the setting is disabled', async () => {
-    await dispatcher.dispatchStreaming(
-      {
-        id: 'stream-disabled-cleanup',
-        authToken: 'token',
-        method: 'agentSession.subscribe',
-        params: { sessionId: SESSION }
-      },
-      () => {},
-      CLIENT
-    )
-    expect(host.isHeld(SESSION)).toBe(true)
-    structuredNativeChatEnabled = false
-
-    expect(
-      await call('agentSession.unsubscribe', {
-        sessionId: SESSION,
-        subscriptionId: 'stream-disabled-cleanup'
-      })
-    ).toMatchObject({ ok: true })
-
-    await vi.waitFor(() => expect(host.hasSession(SESSION)).toBe(false))
-    expect(closeSession).toHaveBeenCalledWith(SESSION)
-  })
-
-  it('does not let a stream alone resume a released session', async () => {
-    await host.close(SESSION)
-    expect(host.hasSession(SESSION)).toBe(false)
-    await host.restoreReadableSessions()
-    expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
-
-    await dispatcher.dispatchStreaming(
-      {
-        id: 'request-subscribe',
-        authToken: 'token',
-        method: 'agentSession.subscribe',
-        params: { sessionId: SESSION }
-      },
-      () => {},
-      CLIENT
-    )
-
-    expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
+    // The idle sweep, not a departing reader, is what stops an agent.
+    expect(closeSession).not.toHaveBeenCalled()
+    expect(host.hasSession(SESSION)).toBe(true)
   })
 })

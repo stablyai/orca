@@ -12,11 +12,12 @@ const mocks = vi.hoisted(() => {
     publishedStatus: 'connecting',
     connectedEpoch: null
   }
-  return { hostConnection, prepare: vi.fn() }
+  const route: { executionHostId: string | null } = { executionHostId: 'ssh:target-a' }
+  return { hostConnection, ...route, prepare: vi.fn() }
 })
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getExecutionHostIdForWorktree: () => 'ssh:target-a'
+  getExecutionHostIdForWorktree: () => mocks.executionHostId
 }))
 vi.mock('@/lib/worktree-host-connection-phase', () => ({
   selectWorktreeHostConnectionPhase: () => mocks.hostConnection,
@@ -56,6 +57,7 @@ function setHost(
 describe('useSshWorkspaceBrowserRoute under a reconnecting SSH host', () => {
   beforeEach(() => {
     mocks.prepare.mockReset()
+    mocks.executionHostId = 'ssh:target-a'
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { browser: { prepareSshWorkspacePartition: mocks.prepare } }
@@ -93,8 +95,8 @@ describe('useSshWorkspaceBrowserRoute under a reconnecting SSH host', () => {
     setHost('connecting')
     rerender()
     await settle()
-    // Why: the card must say it is connecting, not show the failure, while the host dials.
-    expect(result.current.state).toEqual({ kind: 'preparing' })
+    // Why: a dial is a transient; the classified card stays until the host actually connects.
+    expect(result.current.state.kind).toBe('error')
     expect(mocks.prepare).toHaveBeenCalledOnce()
 
     setHost('connected', 1)
@@ -135,6 +137,77 @@ describe('useSshWorkspaceBrowserRoute under a reconnecting SSH host', () => {
     expect(result.current.state.kind).toBe('ready')
 
     setHost('connected', 2)
+    rerender()
+    await settle()
+    expect(mocks.prepare).toHaveBeenCalledOnce()
+    expect(result.current.state.kind).toBe('ready')
+  })
+
+  it('keeps a failed route on its card while another pane redials the host, then recovers on connect', async () => {
+    // The e2e sequence: the user disconnects, a browser tab classifies the dead host, and the
+    // workspace's terminal redials it. Dial transients must not swap the card for "preparing".
+    setHost('unavailable')
+    mocks.prepare.mockRejectedValueOnce(new Error('browser_local_route_ssh_unavailable'))
+    mocks.prepare.mockResolvedValueOnce({ partition: READY_PARTITION })
+    const { result, rerender } = renderHook(() => useSshWorkspaceBrowserRoute('wt-1', null))
+    await settle()
+    const card = result.current.state
+    expect(card).toMatchObject({ kind: 'error', errorKind: 'ssh-unavailable' })
+
+    for (const phase of ['connecting', 'unavailable', 'connecting', 'unavailable'] as const) {
+      setHost(phase)
+      rerender()
+      await settle()
+      expect(result.current.state).toEqual(card)
+    }
+    expect(mocks.prepare).toHaveBeenCalledOnce()
+
+    setHost('connected', 2)
+    rerender()
+    await settle()
+    expect(mocks.prepare).toHaveBeenCalledTimes(2)
+    expect(result.current.state.kind).toBe('ready')
+  })
+
+  it('waits for the connect when Retry is pressed while the host dials', async () => {
+    setHost('unavailable')
+    mocks.prepare.mockRejectedValueOnce(new Error('browser_local_route_ssh_unavailable'))
+    mocks.prepare.mockResolvedValueOnce({ partition: READY_PARTITION })
+    const { result, rerender } = renderHook(() => useSshWorkspaceBrowserRoute('wt-1', null))
+    await settle()
+    expect(result.current.state.kind).toBe('error')
+
+    setHost('connecting')
+    rerender()
+    await settle()
+    act(() => result.current.retry())
+    await settle()
+    expect(result.current.state).toEqual({ kind: 'preparing' })
+    expect(mocks.prepare).toHaveBeenCalledOnce()
+
+    setHost('connected', 1)
+    rerender()
+    await settle()
+    expect(mocks.prepare).toHaveBeenCalledTimes(2)
+    expect(result.current.state.kind).toBe('ready')
+  })
+
+  it('waits for a dialing host when the route becomes routed mid-dial', async () => {
+    // Why: an unrouted route is not an answer for the target it just gained.
+    mocks.executionHostId = null
+    setHost('connecting')
+    mocks.prepare.mockResolvedValue({ partition: READY_PARTITION })
+    const { result, rerender } = renderHook(() => useSshWorkspaceBrowserRoute('wt-1', null))
+    await settle()
+    expect(result.current.state).toEqual({ kind: 'unrouted' })
+
+    mocks.executionHostId = 'ssh:target-a'
+    rerender()
+    await settle()
+    expect(result.current.state).toEqual({ kind: 'preparing' })
+    expect(mocks.prepare).not.toHaveBeenCalled()
+
+    setHost('connected', 1)
     rerender()
     await settle()
     expect(mocks.prepare).toHaveBeenCalledOnce()

@@ -16,6 +16,7 @@ import {
 } from './structured-agent-session-attach'
 import { admitAndRunAgentSessionMutation } from './structured-agent-session-mutation-admission'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
+import { openWithAgent } from './structured-agent-session-send-preparation'
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { conversationCommandBlocked } from './structured-conversation-command-admission'
@@ -52,6 +53,8 @@ export function runStructuredConversationCommand(
       adapter: context.deps.adapter,
       callerKey: caller.callerKey,
       envelope,
+      // Only the provider can do this, so an agent at rest is started first.
+      prepareSession: openWithAgent(context, params.envelope),
       journal: () => context.sessions.get(sessionId)?.journal,
       publish: (journal) => context.publish(sessionId, journal),
       flushStreamedEvents: context.flushStreamedEvents,

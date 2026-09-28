@@ -182,6 +182,7 @@ export class OrcaRuntimeWithAttachRemoteTerminalSourceRangeConsumer extends Orca
     try {
       await assertTerminalInputWithinLimitWithYield(data)
       await this.writeTerminalInputChunks(ptyId, data, {
+        inputKind: 'driving',
         // Why: a phone can claim the floor while a paste yields between chunks.
         beforeWrite: () => {
           if (this.getDriver(ptyId).kind === 'mobile') {

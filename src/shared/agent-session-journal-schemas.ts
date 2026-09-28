@@ -289,6 +289,7 @@ export const AgentJournalRenderItemSchema = z.object({
   revision: z.number().int(),
   body: AgentJournalItemBodySchema,
   sequence: z.number().int(),
+  sequenceIndex: z.number().int().nonnegative().optional(),
   observedAt: z.number(),
   recovered: z.literal(true).optional(),
   recoveredAt: z.number().optional(),
@@ -304,7 +305,9 @@ export const AgentJournalSubmissionSchema = z.object({
   reason: z.string().nullable(),
   submittedAt: z.number(),
   resolvedAt: z.number().nullable(),
-  recovered: z.literal(true).optional()
+  recovered: z.literal(true).optional(),
+  handoverRecorded: z.literal(true).optional(),
+  handedOverAt: z.number().optional()
 })
 
 export function isAdmissibleAgentJournalItemBody(value: unknown): value is AgentJournalItemBody {

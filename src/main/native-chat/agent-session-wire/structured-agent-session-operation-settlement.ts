@@ -11,8 +11,6 @@ export class AgentSessionPreDispatchError extends Error {
   }
 }
 
-export const AGENT_SESSION_ADMISSION_BARRIER_TIMEOUT_MS = 2_000
-
 export async function runSettledAgentSessionMutation<TValue>(input: {
   store: AgentSessionRecordStore
   operationCallerKey: string
@@ -33,10 +31,7 @@ export async function runSettledAgentSessionMutation<TValue>(input: {
     if (input.plan.markUnknownBeforeRun) {
       await settle({ status: 'unknown' })
     }
-    outcome = await input.plan.run({
-      ...input.context,
-      ...(input.plan.beforeRun ? { beforeDispatch: input.plan.beforeRun } : {})
-    })
+    outcome = await input.plan.run(input.context)
     await settle(
       outcome.ok
         ? (input.plan.settledOutcome?.(outcome.value) ?? {

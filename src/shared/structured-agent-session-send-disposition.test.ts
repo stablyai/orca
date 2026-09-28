@@ -11,7 +11,12 @@ import {
   DISPATCH_REJECTED_CANCELLED,
   DISPATCH_REJECTED_QUEUE_FULL
 } from './structured-agent-session-dispatch-rejection'
-import { disposeStructuredAgentSessionSendResult } from './structured-agent-session-send-disposition'
+import { agentSessionWriteNoticeEnglish } from './agent-session-refusal-notice'
+import {
+  disposeStructuredAgentSessionSendFailure,
+  disposeStructuredAgentSessionSendResult,
+  structuredAgentSessionAttemptFailureParts
+} from './structured-agent-session-send-disposition'
 import {
   createStructuredAgentSessionOutboxEntry,
   reconcileStructuredAgentSessionOutbox,
@@ -46,14 +51,20 @@ function rejectedWith(reason: string | null): AgentSessionMutationResult<AgentSe
   } as AgentSessionMutationResult<AgentSessionSendResult>
 }
 
-function notice(reason: string | null): string | null {
-  return disposeStructuredAgentSessionSendResult({
+function notice(reason: string | null): string | undefined {
+  const disposition = disposeStructuredAgentSessionSendResult({
     entries: [entry],
     entry,
     blockedClientMessageId: null,
     result: rejectedWith(reason),
     createOperationId: () => 'unused'
-  }).error
+  })
+  // The reason travels with the message it explains, never as a separate error.
+  expect(disposition.error).toBeNull()
+  const failure = disposition.entries[0]?.lastFailure
+  return (
+    failure && agentSessionWriteNoticeEnglish(structuredAgentSessionAttemptFailureParts(failure))
+  )
 }
 
 describe('what a rejection shows the user', () => {
@@ -71,10 +82,7 @@ describe('what a rejection shows the user', () => {
     // `provider_write_failed: broken pipe` names nothing a person can act on.
     expect(shown).not.toContain('provider_write_failed')
     expect(shown).not.toContain('broken pipe')
-    // And it says the message is safe to send again, which it is: the frame never left.
-    expect(shown).toBe(
-      "Couldn't reach the agent. Your message was not sent — Retry to send it again."
-    )
+    expect(shown).toBe("Orca couldn't reach the agent. Your message was not sent.")
   })
 
   it('shows a content rejection in the provider own words', () => {
@@ -92,7 +100,7 @@ describe('what a rejection shows the user', () => {
   })
 
   it('claims no cause when the rejection names none', () => {
-    expect(notice(null)).toBe('Message was not sent.')
+    expect(notice(null)).toBe('Your message was not sent.')
   })
 
   it('never puts a local-capacity marker on screen either', () => {
@@ -100,7 +108,75 @@ describe('what a rejection shows the user', () => {
     // ourselves. It has no user-facing meaning, so it gets copy rather than the token.
     const shown = notice(DISPATCH_REJECTED_QUEUE_FULL)
     expect(shown).not.toContain('queue is full')
-    expect(shown).toBe('Orca could not send your message — Retry to send it again.')
+    expect(shown).toBe('Your message was not sent.')
+  })
+})
+
+describe('what a refusal shows the user', () => {
+  it('keeps the refusal as a fact on the message, without the host diagnostic', () => {
+    const disposition = disposeStructuredAgentSessionSendResult({
+      entries: [entry],
+      entry,
+      blockedClientMessageId: null,
+      result: {
+        ok: false,
+        refusal: {
+          code: 'agent_session_checkpoint_stale',
+          message: 'Expected runtime fence 1; the session is at 3.'
+        }
+      },
+      createOperationId: () => 'unused'
+    })
+
+    expect(disposition.error).toBeNull()
+    expect(disposition.blockedClientMessageId).toBe(entry.clientMessageId)
+    expect(disposition.entries).toMatchObject([
+      {
+        clientMessageId: entry.clientMessageId,
+        state: 'queued',
+        lastFailure: { kind: 'refused', code: 'agent_session_checkpoint_stale' }
+      }
+    ])
+    expect(
+      agentSessionWriteNoticeEnglish(
+        structuredAgentSessionAttemptFailureParts(disposition.entries[0]!.lastFailure!)
+      )
+    ).toBe('Your message was not sent.')
+  })
+
+  it('keeps a failed request as a fact, not a transport error string', () => {
+    const disposition = disposeStructuredAgentSessionSendFailure({
+      entries: [entry],
+      entry,
+      blockedClientMessageId: null,
+      cause: new Error('socket hang up: ECONNRESET 10.0.0.2:443'),
+      isDeliveryUnknown: () => false
+    })
+
+    expect(disposition.error).toBeNull()
+    expect(disposition.entries[0]?.lastFailure).toEqual({ kind: 'failed' })
+  })
+
+  it('drops the reason once the same message is accepted', () => {
+    const refused: StructuredAgentSessionOutboxEntry = {
+      ...entry,
+      lastFailure: { kind: 'refused', code: 'agent_session_checkpoint_stale' }
+    }
+    const result = rejectedWith(null)
+    if (!result.ok) {
+      throw new Error('expected a send result')
+    }
+    result.value.submission = { ...result.value.submission, dispatchState: 'accepted' }
+    const disposition = disposeStructuredAgentSessionSendResult({
+      entries: [refused],
+      entry: refused,
+      blockedClientMessageId: null,
+      result,
+      createOperationId: () => 'unused'
+    })
+
+    expect(disposition.entries).toEqual([])
+    expect(disposition.error).toBeNull()
   })
 })
 

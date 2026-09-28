@@ -58,6 +58,20 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     expect(acquisition.acquisitionGeneration).toBe('generation-1')
   })
 
+  // A thread opened on Codex's configured default and then given a turn on the chosen model
+  // reads to Codex as a model switch, and it injects the chosen model's whole prompt again.
+  it('opens the thread on the model the session chose, not on the configured default', async () => {
+    const codex = fakeCodex()
+    const adapter = adapterFor(codex, { model: 'gpt-chosen' })
+
+    await adapter.acquire({ identity: identityFor('session-1'), fence: 7, spawnToken: 'spawn-9' })
+
+    expect(codex.connections[0].calls[0]).toEqual({
+      method: 'thread/start',
+      params: { cwd: '/work/repo', model: 'gpt-chosen' }
+    })
+  })
+
   it('resumes the thread the durable handle chain names, not the client one', async () => {
     const codex = fakeCodex()
     const adapter = adapterFor(codex, {

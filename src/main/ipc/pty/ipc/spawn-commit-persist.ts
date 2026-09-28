@@ -83,6 +83,8 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<P
 
 export function publishPtyIpcSpawnCommit(ctx: PtyIpcSpawnState, committedSize: PtyGrid): void {
   const args = ctx.args
+  // Why here: every IPC spawn that survives its binding save publishes once through this point.
+  ctx.deps.runtime?.noteTerminalSpawnCommit?.(ctx.result)
   ctx.spawnTiming.log(ctx.result.id, {
     daemon: ctx.isDaemonHostSpawn,
     reattach: ctx.result.isReattach ?? false

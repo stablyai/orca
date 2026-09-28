@@ -21,15 +21,18 @@ export const CLEANUP_METHODS = [
     params: { envelope: envelope(), turnId: 'turn-1' },
     hostCall: 'cancel'
   },
+  // A no-op kept for older clients: it answers without reaching the host.
   {
     method: 'agentSession.release',
     params: { sessionId: SESSION, holderId: 'surface-1' },
-    hostCall: 'release'
+    hostCall: null,
+    result: { released: true }
   },
   {
     method: 'agentSession.unsubscribe',
     params: { sessionId: SESSION },
-    hostCall: 'unsubscribe'
+    hostCall: null,
+    result: { unsubscribed: true }
   }
 ] as const
 

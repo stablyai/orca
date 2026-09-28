@@ -277,7 +277,8 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       this.deps.requestTimeoutMs
     )
 
-  supportsThreadGoal = (sessionId: string): boolean => this.sessions.has(sessionId)
+  // Provider-level: a goal change at rest starts the agent first.
+  supportsThreadGoal = (): boolean => true
 
   answerPrompt: StructuredAgentSessionAdapter['answerPrompt'] = (request) =>
     answerCodexStructuredPrompt({ request, sessions: this.sessions })

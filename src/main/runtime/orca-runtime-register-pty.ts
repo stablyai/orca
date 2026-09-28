@@ -141,6 +141,8 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
         currentFence.pendingRegistration = false
       }
     }
+    // Why: a listed surface's pending-handle → ready flip must not wait on a later renderer graph change.
+    this.touchMobileSessionSnapshotsForPty(ptyId)
     // Why: the renderer's own PTY spawn is the reliable signal that the pending
     // mobile create's tab is live; publish its surface main-side (#7587).
     if (binding && paneKey) {

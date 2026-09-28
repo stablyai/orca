@@ -22,11 +22,12 @@ type KittyStackFrame = { flags: number; known: boolean }
  * Why a mirror instead of reading xterm's internal state: Orca defensively
  * wipes the renderer terminal's kitty flags at moments when the TUI may have
  * died (Ctrl+C interrupts, reattach resets) while the TUI is usually still
- * alive and expecting protocol-encoded input. This tracker is fed only by
- * application output, so it reflects what the *application* negotiated,
- * independent of renderer-side defensive writes. The daemon reuses it to
- * carry flags into snapshots (xterm's SerializeAddon does not serialize kitty
- * state).
+ * alive and expecting protocol-encoded input. This tracker is fed by
+ * application output, snapshot restores, and the Orca resets that also reach
+ * xterm (ConPTY agent-idle, confirmed shell), never by the renderer's other
+ * defensive xterm writes, so it reflects what the live application negotiated.
+ * The daemon reuses it to carry flags into snapshots (xterm's SerializeAddon does
+ * not serialize kitty state).
  */
 export class TerminalKittyKeyboardModeTracker {
   private scanTail = ''

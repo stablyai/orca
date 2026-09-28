@@ -209,7 +209,8 @@ export type StructuredAgentSessionAdapter = {
     /** Revalidate after preparation, immediately before writing to the provider. */
     beforeDispatch?: () => Promise<void>
   }): Promise<AgentSessionDispatchOutcome>
-  rewindSupport?(sessionId: string): AgentSessionRewindSupport
+  /** `agent` answers for a session with no child running, from the provider alone. */
+  rewindSupport?(sessionId: string, agent?: string): AgentSessionRewindSupport
   recoverRewind?(input: {
     sessionId: string
     fence: number
@@ -260,10 +261,10 @@ export type StructuredAgentSessionAdapter = {
      *  start a new goal rather than rewrite that one's objective in place. */
     replacesGoal: boolean
   }): Promise<{ ok: true } | { ok: false; rejected: string }>
-  /** Whether this live session can change its goal. */
-  supportsThreadGoal?(sessionId: string): boolean
-  /** Whether this live session writes context facts to its turn rows. */
-  recordsContextUsage?(sessionId: string): boolean
+  /** Whether this session can change its goal; `agent` answers one at rest. */
+  supportsThreadGoal?(sessionId: string, agent?: string): boolean
+  /** Whether this session writes context facts to its turn rows; `agent` answers one at rest. */
+  recordsContextUsage?(sessionId: string, agent?: string): boolean
   stopBackgroundTasks?(input: {
     sessionId: string
     fence: number
@@ -289,6 +290,10 @@ export type StructuredAgentSessionAdapter = {
   ): Promise<void | Readonly<Record<string, string>>>
   /** Resolves once a live session can take an option write, or after a bound; never rejects. */
   awaitOptionWritable?(sessionId: string): Promise<void>
+  /** Resolves once a session published before it proved its start has proven it, failed, or been
+   *  closed; at once for any other. A start that did not land resolves with the chat's words for
+   *  why. Never rejects. */
+  awaitStarted?(sessionId: string): Promise<void | string>
   readOptions?(input: { sessionId: string; fence: number }): Promise<AgentSessionOptionsResult>
   /** Option keys skipped after a provider rejected their persisted restore value. */
   readOptionRestoreFailures?(sessionId: string): readonly string[]

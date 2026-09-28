@@ -19,6 +19,15 @@ export function flog(scope: TerminalDocumentScope, tag: string, payload: Record<
   } catch {}
 }
 
+/** 0 until the renderer has measured a cell. */
+export function getMeasuredCellHeight(scope: TerminalDocumentScope) {
+  const core = scope.term?._core
+  if (core && core._renderService && core._renderService.dimensions) {
+    return core._renderService.dimensions.css.cell.height || 0
+  }
+  return 0
+}
+
 export function getCellWidth(scope: TerminalDocumentScope) {
   if (!scope.term || !scope.term._core) {
     return 0
@@ -51,7 +60,7 @@ export function computeFitScale(scope: TerminalDocumentScope) {
     return 1
   }
   const vpWidth = scope.viewportRect().width
-  // Why: a host hidden with display:none measures 0; a 0 scale would blank it when shown again.
+  // Why: a viewport with no width yet (a page host never laid out) would give scale 0 and blank the grid.
   if (vpWidth <= 0) {
     return 1
   }

@@ -68,10 +68,11 @@ export function useSshWorkspaceBrowserRoute(
   const hostConnection = useWorktreeHostConnection(worktreeId)
   const routeHost =
     targetId !== null && hostConnection.targetId === targetId ? hostConnection : null
-  // Why a ready route is exempt: its mounted page survives a reconnect, and re-preparing
-  // would unmount it. Only a route still waiting on, or failed by, its host follows the host.
+  // Why only an unsettled route waits: a dial is a transient, so it must not unmount a ready
+  // page or swap a failed route's card for "preparing". A connect (below) re-derives a failed one.
+  // Unrouted and another target's page are unsettled too: neither answers for this target.
   const routeReady = state.kind === 'ready' && state.targetId === targetId
-  const awaitingHost = routeHost?.phase === 'connecting' && !routeReady
+  const awaitingHost = routeHost?.phase === 'connecting' && state.kind !== 'error' && !routeReady
   const connectedHostEpoch = routeHost?.connectedEpoch ?? null
   const [seenConnectedHostEpoch, setSeenConnectedHostEpoch] = useState(connectedHostEpoch)
   if (connectedHostEpoch !== seenConnectedHostEpoch) {
@@ -137,10 +138,16 @@ export function useSshWorkspaceBrowserRoute(
         (state.kind === 'ready' && state.targetId !== targetId)
       ? { kind: 'preparing' }
       : state
+  const rederive = (nextSkipProbe: boolean): void => {
+    // Why: landing on preparing with the new attempt lets the effect's first run see a dialing
+    // host and wait, instead of starting a prepare that its own preparing write then cancels.
+    setState({ kind: 'preparing' })
+    setAttempt((current) => ({ count: current.count + 1, skipProbe: nextSkipProbe }))
+  }
   return {
     state: effectiveState,
     targetId: sshTargetId,
-    retry: () => setAttempt((current) => ({ count: current.count + 1, skipProbe: false })),
+    retry: () => rederive(false),
     tryWithoutProbe: () => {
       // Persist the override so this host isn't re-nagged on every launch.
       if (sshTargetId && probeSkippedTargetIds?.includes(sshTargetId) !== true) {
@@ -151,7 +158,7 @@ export function useSshWorkspaceBrowserRoute(
           ]
         })
       }
-      setAttempt((current) => ({ count: current.count + 1, skipProbe: true }))
+      rederive(true)
     },
     browseFromThisDevice: () => {
       if (!sshTargetId) {

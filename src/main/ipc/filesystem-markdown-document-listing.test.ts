@@ -1,14 +1,27 @@
 import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as MarkdownDocumentsModule from './markdown-documents'
 import {
   handlers,
   store,
-  dirEntry,
   WORKTREE_FEATURE_PATH,
   readdirMock,
   getSshFilesystemProviderMock,
   resetFilesystemIpcMocks
 } from './filesystem-test-harness'
+
+const { listMarkdownDocumentsMock, localOptionsMock } = vi.hoisted(() => ({
+  listMarkdownDocumentsMock: vi.fn(),
+  localOptionsMock: vi.fn()
+}))
+
+vi.mock('./markdown-documents', async (importOriginal) => ({
+  ...(await importOriginal<typeof MarkdownDocumentsModule>()),
+  listMarkdownDocuments: listMarkdownDocumentsMock
+}))
+vi.mock('./local-worktree-runtime-options', () => ({
+  getLocalGitOptionsForRegisteredWorktree: localOptionsMock
+}))
 
 vi.mock('electron', async () => (await import('./filesystem-test-harness')).electronMock)
 vi.mock('fs/promises', async () => (await import('./filesystem-test-harness')).fsPromisesMock)
@@ -64,95 +77,39 @@ import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cach
 describe('registerFilesystemHandlers', () => {
   beforeEach(() => {
     resetFilesystemIpcMocks()
+    listMarkdownDocumentsMock.mockReset().mockResolvedValue([])
+    localOptionsMock.mockReset().mockReturnValue({})
     // Reset module-level auth cache so each test starts with a fresh dirty
     // flag — prevents stale worktree data from a prior test's cache rebuild.
     invalidateAuthorizedRootsCache()
   })
 
-  it('lists markdown documents recursively for a registered worktree', async () => {
-    readdirMock.mockImplementation(async (dirPath: string) => {
-      if (dirPath === WORKTREE_FEATURE_PATH) {
-        return [
-          dirEntry({ name: 'README.md', file: true }),
-          dirEntry({ name: 'docs', directory: true }),
-          dirEntry({ name: 'script.ts', file: true })
-        ]
-      }
-      if (dirPath === path.join(WORKTREE_FEATURE_PATH, 'docs')) {
-        return [
-          dirEntry({ name: 'Guide.MDX', file: true }),
-          dirEntry({ name: 'notes.markdown', file: true })
-        ]
-      }
-      return []
-    })
-
+  it('lists local documents through the bundled discovery path after authorization', async () => {
+    const documents = [{ filePath: path.join(WORKTREE_FEATURE_PATH, 'README.md') }]
+    listMarkdownDocumentsMock.mockResolvedValue(documents)
     registerFilesystemHandlers(store as never)
 
     await expect(
-      handlers.get('fs:listMarkdownDocuments')!(null, {
-        rootPath: WORKTREE_FEATURE_PATH
-      })
-    ).resolves.toEqual([
-      {
-        filePath: path.join(WORKTREE_FEATURE_PATH, 'docs', 'Guide.MDX'),
-        relativePath: 'docs/Guide.MDX',
-        basename: 'Guide.MDX',
-        name: 'Guide'
-      },
-      {
-        filePath: path.join(WORKTREE_FEATURE_PATH, 'docs', 'notes.markdown'),
-        relativePath: 'docs/notes.markdown',
-        basename: 'notes.markdown',
-        name: 'notes'
-      },
-      {
-        filePath: path.join(WORKTREE_FEATURE_PATH, 'README.md'),
-        relativePath: 'README.md',
-        basename: 'README.md',
-        name: 'README'
-      }
-    ])
+      handlers.get('fs:listMarkdownDocuments')!(null, { rootPath: WORKTREE_FEATURE_PATH })
+    ).resolves.toBe(documents)
+    expect(localOptionsMock).toHaveBeenCalledWith(
+      store,
+      WORKTREE_FEATURE_PATH,
+      WORKTREE_FEATURE_PATH
+    )
+    expect(listMarkdownDocumentsMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, {})
+    expect(readdirMock).not.toHaveBeenCalled()
   })
 
-  it('skips ignored and symlinked directories when listing markdown documents', async () => {
-    readdirMock.mockImplementation(async (dirPath: string) => {
-      if (dirPath === WORKTREE_FEATURE_PATH) {
-        return [
-          dirEntry({ name: '.git', directory: true }),
-          dirEntry({ name: '.hidden', directory: true }),
-          dirEntry({ name: '.github', directory: true }),
-          dirEntry({ name: 'node_modules', directory: true }),
-          dirEntry({ name: 'linked-docs', directory: true, symlink: true }),
-          dirEntry({ name: 'visible.md', file: true })
-        ]
-      }
-      if (dirPath === path.join(WORKTREE_FEATURE_PATH, '.github')) {
-        return [dirEntry({ name: 'CONTRIBUTING.md', file: true })]
-      }
-      throw new Error(`Unexpected readdir: ${dirPath}`)
-    })
-
+  it('passes the workspace runtime distro into document discovery', async () => {
+    localOptionsMock.mockReturnValue({ wslDistro: 'Ubuntu' })
     registerFilesystemHandlers(store as never)
 
-    await expect(
-      handlers.get('fs:listMarkdownDocuments')!(null, {
-        rootPath: WORKTREE_FEATURE_PATH
-      })
-    ).resolves.toEqual([
-      {
-        filePath: path.join(WORKTREE_FEATURE_PATH, '.github', 'CONTRIBUTING.md'),
-        relativePath: '.github/CONTRIBUTING.md',
-        basename: 'CONTRIBUTING.md',
-        name: 'CONTRIBUTING'
-      },
-      {
-        filePath: path.join(WORKTREE_FEATURE_PATH, 'visible.md'),
-        relativePath: 'visible.md',
-        basename: 'visible.md',
-        name: 'visible'
-      }
-    ])
+    await handlers.get('fs:listMarkdownDocuments')!(null, { rootPath: WORKTREE_FEATURE_PATH })
+
+    expect(listMarkdownDocumentsMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, {
+      wslDistro: 'Ubuntu'
+    })
   })
 
   it('rejects markdown document listing for authorized but unregistered roots', async () => {
@@ -165,6 +122,7 @@ describe('registerFilesystemHandlers', () => {
     ).rejects.toThrow('Access denied: unknown repository or worktree path')
 
     expect(readdirMock).not.toHaveBeenCalled()
+    expect(listMarkdownDocumentsMock).not.toHaveBeenCalled()
   })
 
   it('lists remote markdown documents through the SSH filesystem provider', async () => {
@@ -196,5 +154,7 @@ describe('registerFilesystemHandlers', () => {
         name: 'README'
       }
     ])
+    expect(listMarkdownDocumentsMock).not.toHaveBeenCalled()
+    expect(localOptionsMock).not.toHaveBeenCalled()
   })
 })

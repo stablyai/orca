@@ -41,6 +41,13 @@ export function restoredClaudeStructuredSessionOptions(
   )
 }
 
+/** The keys `setClaudeStructuredOption` writes; a pick made at rest is checked against these. */
+const CLAUDE_STRUCTURED_OPTION_KEYS = new Set(['model', 'permissionMode', 'effort', 'fastMode'])
+
+export function isClaudeStructuredOptionKey(key: string): boolean {
+  return CLAUDE_STRUCTURED_OPTION_KEYS.has(key)
+}
+
 /** A client's write; the startup restore writes through `setClaudeStructuredOption` directly. */
 export function setClaudeStructuredSessionOption(
   session: ClaudeSession,

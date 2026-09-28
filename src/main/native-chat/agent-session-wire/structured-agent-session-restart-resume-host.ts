@@ -1,6 +1,6 @@
 // Restart offers are durable per-session records. Listing reserves nothing and removes only offers
 // the chat has provably moved past; an explicit action reserves records, and only a completed
-// action removes them — or files what went wrong.
+// action removes them — or files what went wrong. Starting the chat's agent again withdraws them.
 
 import { randomUUID } from 'node:crypto'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
@@ -9,13 +9,6 @@ import type {
   AgentSessionResumeMarker,
   AgentSessionResumeTrigger
 } from '../../../shared/agent-session-resume-marker'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
-import type {
-  AgentSessionMutationEnvelope,
-  AgentSessionMutationResult,
-  AgentSessionSendResult
-} from '../../../shared/agent-session-wire'
-import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { createStructuredAgentSessionRestartCandidateReader } from './structured-agent-session-restart-candidates'
 import {
@@ -34,32 +27,21 @@ import {
   type StructuredAgentSessionResumeOutcome
 } from './structured-agent-session-restart-resume-runner'
 import {
-  continueStructuredAgentSessionAfterRestart,
-  noteRestartReattachFailed,
   restartContinuationDeps,
+  startStructuredAgentSessionContinuation,
   type StructuredAgentSessionContinuationHost,
   type StructuredAgentSessionContinuationOutcome
 } from './structured-agent-session-restart-continuation'
+import { restartContinuationId } from './structured-agent-session-restart-continuation-envelope'
+import {
+  createStructuredAgentSessionRestartOfferWithdrawal,
+  type StructuredAgentSessionRestartOfferSession
+} from './structured-agent-session-restart-offer-withdrawal'
+import type { StructuredAgentSessionRestartResumeSurfaces } from './structured-agent-session-restart-resume-wiring'
 import { createStructuredAgentSessionRestartWitnesses } from './structured-agent-session-restart-witnesses'
+import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 
-type LiveSession = { journal: AgentSessionJournal; hasProviderChild: boolean; fence: number }
-
-export type StructuredAgentSessionRestartResumeSurfaces = {
-  revealSession: (sessionId: string) => Promise<{ readable: boolean }>
-  hold: (sessionId: string, holderId: string) => Promise<void>
-  release: (sessionId: string, holderId: string) => void
-  send: (input: {
-    envelope: AgentSessionMutationEnvelope
-    body: AgentJournalMessageItem
-    beforeRun?: () => void
-  }) => Promise<AgentSessionMutationResult<AgentSessionSendResult>>
-  awaitSendSettlement: (
-    sessionId: string,
-    clientMessageId: string
-  ) => Promise<{ value: AgentSessionSendResult } | undefined>
-  onNoteFailed: (sessionId: string, error: unknown) => void
-  now: () => number
-}
+type LiveSession = StructuredAgentSessionRestartOfferSession
 
 export type StructuredAgentSessionRestartResume = {
   /** Teardown: begin, then per session a snapshot right before its child stops and a confirmation
@@ -71,10 +53,6 @@ export type StructuredAgentSessionRestartResume = {
   list: () => Promise<StructuredAgentSessionResumeCandidate[]>
   /** Offers already acted on whose agent did not carry on. Read-only; nothing here is spent. */
   listFailures: () => Promise<StructuredAgentSessionResumeFailure[]>
-  resume: (
-    sessionIds: readonly string[] | undefined,
-    owner: string
-  ) => Promise<StructuredAgentSessionResumeOutcome[]>
   continueAfterRestart: (
     sessionIds: readonly string[] | undefined,
     owner: string
@@ -86,6 +64,8 @@ export type StructuredAgentSessionRestartResume = {
   }>
   /** Named sessions forget their offer or failure; unnamed, every durable record goes. */
   dismiss: (sessionIds?: readonly string[]) => Promise<number>
+  /** The chat's agent proved a start: its offer ends unless the start is a resume's own. */
+  onAgentStarted: (sessionId: string) => void
 }
 
 export function createStructuredAgentSessionRestartResume(
@@ -100,11 +80,6 @@ export function createStructuredAgentSessionRestartResume(
   const admission = new StructuredAgentSessionResumeAdmission()
   const enqueueRecoveryOperation = createStructuredAgentSessionRestartOperationQueue()
 
-  const derive = createStructuredAgentSessionRestartCandidateReader({
-    sessions,
-    getRecord: deps.store.getRecord,
-    adapter: deps.adapter
-  })
   const witnesses = createStructuredAgentSessionRestartWitnesses({
     sessions,
     getRecord: deps.store.getRecord,
@@ -114,15 +89,24 @@ export function createStructuredAgentSessionRestartResume(
     now: surfaces.now,
     enqueue: enqueueRecoveryOperation
   })
+  const withdrawal = createStructuredAgentSessionRestartOfferWithdrawal({
+    sessions,
+    ...(deps.recoveryCapsule ? { capsule: deps.recoveryCapsule } : {}),
+    now: surfaces.now,
+    enqueue: enqueueRecoveryOperation
+  })
+  const derive = createStructuredAgentSessionRestartCandidateReader({
+    sessions,
+    getRecord: deps.store.getRecord,
+    adapter: deps.adapter,
+    movedOn: withdrawal.movedOn
+  })
   const failures = createStructuredAgentSessionRestartFailureLedger({
     ...(deps.recoveryCapsule ? { capsule: deps.recoveryCapsule } : {}),
-    sessions,
-    reveal: async (sessionId) => {
-      await surfaces.revealSession(sessionId).catch(() => null)
-    },
     getRecord: deps.store.getRecord,
     adapter: deps.adapter,
     retryable: (marker) => derive([marker], 'may-be-held').candidates.length === 1,
+    reveal: (markers) => revealMarkers(markers),
     now: surfaces.now,
     enqueue: enqueueRecoveryOperation
   })
@@ -152,19 +136,20 @@ export function createStructuredAgentSessionRestartResume(
   const continuationHost: StructuredAgentSessionContinuationHost = {
     ...surfaces,
     sessions,
-    stillResumable: (marker, options) =>
-      derive([marker], 'may-be-held', options).candidates.length === 1
+    conversationFence: (sessionId) =>
+      deps.store.getRecord(sessionId)
+        ? structuredAgentSessionConversationFence(deps.store, sessionId)
+        : null,
+    stillResumable: (marker) => derive([marker], 'may-be-held').candidates.length === 1
   }
 
+  /** One explicit action: reserve the offers, then continue each through `continueOne`, a few at
+   *  a time. The runner counts a chat as done once `continueOne` returns. */
   const run = async (
     sessionIds: readonly string[] | undefined,
     owner: string,
-    afterAcquire?: (marker: AgentSessionResumeMarker) => Promise<void>,
-    settlement: Omit<Parameters<typeof failures.settle>[2], 'candidates' | 'attempts'> = {
-      failureAfterResume: () => null,
-      failureReason: () => 'agent_session_resume_refused'
-    }
-  ): Promise<StructuredAgentSessionResumeOutcome[]> => {
+    continueOne: (marker: AgentSessionResumeMarker, continuationId: string) => Promise<void>
+  ) => {
     // An explicit action supersedes teardown witnesses captured by this host. The durable mutation
     // lane below also drains a publication already in flight before completion.
     witnesses.clear()
@@ -175,25 +160,26 @@ export function createStructuredAgentSessionRestartResume(
     retireSuperseded(derived.superseded)
     const eligible = derived.candidates.filter((candidate) => requested.has(candidate.sessionId))
     if (eligible.length === 0) {
-      return []
+      return null
     }
     const operationId = randomUUID()
+    const actionAt = surfaces.now()
+    // Tagged with its offer, so a rejected one is told apart for as long as the offer lasts.
+    const continuationFor = (marker: AgentSessionResumeMarker) =>
+      restartContinuationId(marker, operationId, actionAt)
     const reserved =
       (await enqueueRecoveryOperation(
         () =>
           deps.recoveryCapsule?.beginResume(
             eligible.map((candidate) => candidate.sessionId),
             operationId,
-            surfaces.now()
+            actionAt
           ) ?? Promise.resolve([])
       )) ?? []
     const markersBySession = new Map(reserved.map((marker) => [marker.sessionId, marker]))
     const candidates = derive(reserved, 'may-be-held').candidates
-    const attempts = failures.attempts(markersBySession)
-
-    let outcomes: StructuredAgentSessionResumeOutcome[]
     try {
-      outcomes = await resumeStructuredAgentSessionsFromRestart(
+      const outcomes = await resumeStructuredAgentSessionsFromRestart(
         {
           admission,
           consumeMarker: async (sessionId) => {
@@ -201,26 +187,16 @@ export function createStructuredAgentSessionRestartResume(
             return marker !== undefined && derive([marker], 'may-be-held').candidates.length === 1
           },
           resume: async (sessionId) => {
-            const holder = `restart-resume:${sessionId}`
-            try {
-              await surfaces.hold(sessionId, holder).catch(async (error: unknown) => {
-                // The reattach failure is filed like any other, so the chat must say so too.
-                await noteRestartReattachFailed(continuationHost, sessionId)
-                throw error
-              })
-              const marker = markersBySession.get(sessionId)
-              if (marker) {
-                await afterAcquire?.(marker)
-              }
-            } finally {
-              attempts.observe(sessionId)
-              surfaces.release(sessionId, holder)
+            const marker = markersBySession.get(sessionId)
+            if (marker) {
+              await continueOne(marker, continuationFor(marker))
             }
           }
         },
         candidates,
         owner
       )
+      return { operationId, outcomes, candidates, markers: markersBySession }
     } catch (error) {
       if (deps.recoveryCapsule) {
         await enqueueRecoveryOperation(() =>
@@ -231,8 +207,6 @@ export function createStructuredAgentSessionRestartResume(
       }
       throw error
     }
-    await failures.settle(operationId, outcomes, { candidates, attempts, ...settlement })
-    return outcomes
   }
 
   const continueAfterRestart = async (
@@ -245,34 +219,46 @@ export function createStructuredAgentSessionRestartResume(
     failed?: StructuredAgentSessionResumeFailure[]
   }> => {
     const continued: StructuredAgentSessionContinuationOutcome[] = []
-    const continuationFor = (sessionId: string) =>
-      continued.find((outcome) => outcome.sessionId === sessionId)
-    const resumed = await run(
-      sessionIds,
-      owner,
-      async (marker) => {
-        continued.push(
-          await continueStructuredAgentSessionAfterRestart(
-            restartContinuationDeps(continuationHost, marker),
-            marker.sessionId,
-            marker
-          )
-        )
-      },
-      {
+    const verdicts: Promise<void>[] = []
+    // A chat holds its slot until its agent took the continuation or its start failed, so a batch
+    // never starts more agents at once than the runner allows; the provider's answer comes after.
+    const action = await run(sessionIds, owner, async (marker, continuationId) => {
+      const started = await startStructuredAgentSessionContinuation(
+        restartContinuationDeps(continuationHost, marker),
+        marker.sessionId,
+        marker,
+        continuationId
+      )
+      if ('done' in started) {
+        continued.push(started.done)
+        if (started.done.outcome === 'refused') {
+          throw new Error(started.done.reason ?? 'agent_session_continuation_refused')
+        }
+        return
+      }
+      verdicts.push(started.verdict().then((outcome) => void continued.push(outcome)))
+    })
+    await Promise.all(verdicts)
+    const resumed = action?.outcomes ?? []
+    if (action) {
+      await failures.settle(action.operationId, resumed, {
+        candidates: action.candidates,
+        markers: action.markers,
         failureAfterResume: (sessionId) => {
-          const outcome = continuationFor(sessionId)
-          // Reattached but never asked to continue: nothing confirms the agent carried on.
-          return outcome ? continuationFailureOutcome(outcome.outcome) : 'unconfirmed'
+          const outcome = continued.find((entry) => entry.sessionId === sessionId)
+          return outcome ? continuationFailureOutcome(outcome.outcome) : null
         },
         failureReason: (sessionId) => {
-          const outcome = continuationFor(sessionId)
+          const outcome = continued.find((entry) => entry.sessionId === sessionId)
           return outcome?.reason ?? outcome?.outcome ?? 'agent_session_continuation_unknown'
         }
-      }
-    )
+      })
+    }
     for (const outcome of resumed) {
-      if (outcome.outcome !== 'resumed') {
+      if (
+        outcome.outcome !== 'resumed' &&
+        !continued.some((entry) => entry.sessionId === outcome.sessionId)
+      ) {
         continued.push({
           sessionId: outcome.sessionId,
           outcome: 'refused',
@@ -306,7 +292,7 @@ export function createStructuredAgentSessionRestartResume(
     // Do not let a teardown witness already captured in this host republish after explicit
     // dismissal. A later capture is a new interruption and may create a fresh offer normally.
     dismiss: (sessionIds) => failures.dismiss(sessionIds, witnesses.clear),
-    resume: (sessionIds, owner) => run(sessionIds, owner),
-    continueAfterRestart
+    continueAfterRestart,
+    onAgentStarted: withdrawal.onAgentStarted
   }
 }

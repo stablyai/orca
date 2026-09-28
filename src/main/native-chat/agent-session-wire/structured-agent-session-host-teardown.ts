@@ -9,6 +9,7 @@
 import type { AgentSessionResumeTrigger } from '../../../shared/agent-session-resume-marker'
 import type { StructuredAgentSessionRestartResume } from './structured-agent-session-restart-resume-host'
 import {
+  abandonQueuedStructuredAgentSessionMessages,
   evictOwnedStructuredAgentSessions,
   type StructuredAgentSessionLifetimeContext
 } from './structured-agent-session-host-lifetime'
@@ -46,7 +47,7 @@ async function withPhaseTimeout(run: () => Promise<void>, timeoutMs: number): Pr
 
 /** The quit-path phase order, which is load-bearing rather than incidental. */
 export function structuredAgentSessionHostTeardownPhases(collaborators: {
-  holds: { dispose: () => Promise<void> | void }
+  idleSweep: { dispose: () => Promise<void> | void }
   runtimeState: {
     stopLeaseRenewal: () => void
     flushAllEventSinks: () => Promise<void>
@@ -68,7 +69,7 @@ export function structuredAgentSessionHostTeardownPhases(collaborators: {
         }
       }
     },
-    { name: 'dispose-holds', run: () => collaborators.holds.dispose() },
+    { name: 'dispose-idle-sweep', run: () => collaborators.idleSweep.dispose() },
     { name: 'stop-lease-renewal', run: () => collaborators.runtimeState.stopLeaseRenewal() },
     { name: 'drain-attaches', run: () => collaborators.tasks.drainAttaches() },
     {
@@ -93,6 +94,8 @@ export async function tearDownStructuredAgentSessionHost(input: {
   sessions: Map<string, StructuredAgentSessionHostSession>
   retainSessionIds?: ReadonlySet<string>
   acknowledgeSessionRelease?: (sessionId: string) => void
+  /** Quit closes every conversation, so it settles what they still queue as a close does. */
+  abandonQueued?: (sessionId: string, session: StructuredAgentSessionHostSession) => Promise<void>
 }): Promise<void> {
   const failures: unknown[] = []
   for (const phase of input.phases) {
@@ -107,7 +110,12 @@ export async function tearDownStructuredAgentSessionHost(input: {
     ([sessionId]) => !input.retainSessionIds?.has(sessionId)
   )
   // `allSettled`, so one rejected close cannot skip the others.
-  const closed = await Promise.allSettled(entries.map(([, session]) => session.journal.close()))
+  const closed = await Promise.allSettled(
+    entries.map(async ([sessionId, session]) => {
+      await input.abandonQueued?.(sessionId, session)
+      await session.journal.close()
+    })
+  )
   closed.forEach((result, index) => {
     const sessionId = entries[index]?.[0]
     if (result.status === 'fulfilled') {
@@ -133,7 +141,7 @@ export async function tearDownStructuredAgentSessionHost(input: {
 
 export async function flushStructuredAgentSessionHost(
   context: StructuredAgentSessionLifetimeContext &
-    Pick<Parameters<typeof structuredAgentSessionHostTeardownPhases>[0], 'holds' | 'tasks'> & {
+    Pick<Parameters<typeof structuredAgentSessionHostTeardownPhases>[0], 'idleSweep' | 'tasks'> & {
       restartResume: StructuredAgentSessionRestartResume
       serialize: (sessionId: string, task: () => Promise<void>) => Promise<void>
       trigger: AgentSessionResumeTrigger
@@ -160,6 +168,8 @@ export async function flushStructuredAgentSessionHost(
     sessions: context.sessions,
     retainSessionIds,
     acknowledgeSessionRelease: (sessionId) =>
-      context.deps.adapter.acknowledgeSessionRelease?.(sessionId)
+      context.deps.adapter.acknowledgeSessionRelease?.(sessionId),
+    abandonQueued: (sessionId, session) =>
+      abandonQueuedStructuredAgentSessionMessages(context.deps, sessionId, session.journal)
   })
 }

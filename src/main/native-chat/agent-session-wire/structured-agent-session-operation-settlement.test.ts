@@ -2,7 +2,6 @@ import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import {
   AgentSessionPreDispatchError,
-  AGENT_SESSION_ADMISSION_BARRIER_TIMEOUT_MS,
   runSettledAgentSessionMutation
 } from './structured-agent-session-operation-settlement'
 import {
@@ -42,6 +41,9 @@ async function context(): Promise<AgentSessionTurnContext> {
   }
 }
 
+/** Longer than any bookkeeping bound: a refusal must already be answered by then. */
+const SETTLED_WAIT_MS = 2_000
+
 afterEach(() => {
   vi.useRealTimers()
   vi.restoreAllMocks()
@@ -80,7 +82,7 @@ it('returns a pre-dispatch refusal without waiting on redundant uncertainty pers
   })
   try {
     await refusing.promise
-    await vi.advanceTimersByTimeAsync(AGENT_SESSION_ADMISSION_BARRIER_TIMEOUT_MS)
+    await vi.advanceTimersByTimeAsync(SETTLED_WAIT_MS)
     expect(returned).toBe(true)
     expect(writes).toHaveBeenCalledOnce()
     expect(hostTestState().dispatch).not.toHaveBeenCalled()
@@ -129,9 +131,10 @@ it.each([1, 2])(
   }
 )
 
-// The pre-dispatch check judges only what the journal already holds; the send path never waits on
-// the provider's stream barrier, so a sink that stalls or fails cannot delay or double a send.
-it('dispatches without touching the event-stream barrier', async () => {
+// A send's plan only accepts: it records the submission and never waits on the provider's stream
+// barrier, so a sink that stalls or fails cannot delay or double a send. Handing it over is the
+// delivery loop's.
+it('accepts without touching the event-stream barrier or the provider', async () => {
   const ctx = await context()
   const { store } = hostTestState()
   vi.spyOn(store, 'recordOperationOutcome').mockResolvedValue()
@@ -149,42 +152,33 @@ it('dispatches without touching the event-stream barrier', async () => {
   })
   expect(result).toMatchObject({ ok: true })
   expect(beforeRun).toHaveBeenCalledOnce()
-  expect(hostTestState().dispatch).toHaveBeenCalledOnce()
-  expect(ctx.journal.submissions()[0]?.dispatchState).toBe('accepted')
+  expect(hostTestState().dispatch).not.toHaveBeenCalled()
+  expect(ctx.journal.submissions()[0]).toMatchObject({
+    dispatchState: 'pending',
+    handoverRecorded: true
+  })
   expect(barrier).not.toHaveBeenCalled()
 })
 
-it('refuses a superseded send without waiting on a stalled refusal write, and never dispatches late', async () => {
+it('refuses a superseded send at acceptance, recording and dispatching nothing', async () => {
   const ctx = await context()
   const { store } = hostTestState()
   vi.spyOn(store, 'recordOperationOutcome').mockResolvedValue()
-  const pending = Promise.withResolvers<void>()
-  const refusing = Promise.withResolvers<void>()
-  vi.spyOn(ctx.journal, 'resolveDispatch').mockImplementationOnce(() => {
-    refusing.resolve()
-    return pending.promise.then(() => ctx.journal.cursor())
-  })
-  vi.spyOn(console, 'warn').mockImplementation(() => {})
   const beforeRun = vi.fn(() => {
     throw new AgentSessionPreDispatchError('agent_session_restart_work_superseded')
   })
   const body = hostTestMessage('Continue the interrupted work')
   const operation = envelope('agentSession.send', { body })
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-  const result = runSettledAgentSessionMutation({
+  const result = await runSettledAgentSessionMutation({
     store,
     operationCallerKey: 'test',
     envelope: operation,
     context: ctx,
     plan: sendPlan({ envelope: operation, body, beforeRun })
   }).catch((error: unknown) => error)
-  await refusing.promise
-  await vi.advanceTimersByTimeAsync(AGENT_SESSION_ADMISSION_BARRIER_TIMEOUT_MS)
-  expect(await result).toBeInstanceOf(AgentSessionPreDispatchError)
-  expect(hostTestState().dispatch).not.toHaveBeenCalled()
-  expect(ctx.journal.submissions()[0]?.dispatchState).toBe('pending')
-  pending.resolve()
-  await vi.advanceTimersByTimeAsync(0)
+  expect(result).toBeInstanceOf(AgentSessionPreDispatchError)
+  expect(ctx.journal.submissions()).toEqual([])
   expect(hostTestState().dispatch).not.toHaveBeenCalled()
   expect(vi.getTimerCount()).toBe(0)
 })

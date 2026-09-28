@@ -20,7 +20,7 @@ export function NativeChatResolutionReceipt({
     body.kind !== 'question'
       ? null
       : body.questions && body.questions.length > 1
-        ? { kind: 'count', count: body.questions.length }
+        ? { kind: 'questions', questions: body.questions.map((entry) => entry.question) }
         : {
             kind: 'question',
             // Claude keeps a generic grouped label for a single multi-select
@@ -40,6 +40,7 @@ export function NativeChatResolutionReceipt({
   }
   const { resolution } = body
   const title = body.kind === 'approval' ? (body.displayName ?? body.title) : body.question
+  // Non-empty only once resolved, and then each question is listed with its answer.
   const answers = nativeChatReceiptAnswers(body)
   return (
     <div
@@ -51,6 +52,7 @@ export function NativeChatResolutionReceipt({
           pending={false}
           subject={subject}
           disclosureKey={askDisclosureKey}
+          listsQuestions={answers.length === 0}
         />
       ) : (
         <div className="font-medium">{title}</div>

@@ -18,6 +18,7 @@ import {
   agentJournalItemKey,
   agentJournalSubmissionKey
 } from '../../../shared/agent-session-journal-item-key'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import type { AgentSessionJournal } from './journal-store'
 import { reconcileSubmissions, type ProviderHistoryWindow } from './journal-submission-reconciler'
 
@@ -42,7 +43,11 @@ function comparableSubmissions(journal: AgentSessionJournal): AgentJournalSubmis
   const { items, submissions } = journal.snapshot()
   const bodies = new Map(items.map((item) => [item.itemId, item.body]))
   return submissions.filter((submission) => {
-    if (submission.dispatchState !== 'pending' && submission.dispatchState !== 'unknown') {
+    if (
+      (submission.dispatchState !== 'pending' && submission.dispatchState !== 'unknown') ||
+      // Never handed over, so provider history cannot hold it.
+      isQueuedAgentJournalSubmission(submission)
+    ) {
       return false
     }
     const body = bodies.get(agentJournalSubmissionKey(submission.clientMessageId))

@@ -3068,7 +3068,9 @@
             "42b283ecfc": "Orca 无法安全地重新连接此终端，因为主机无法验证其保存的会话。 Orca 保持保存的会话不变。单击“重试”立即尝试重新连接。如果仍然无法重新连接，请打开一个新终端。",
             "e16012e31e": "拥有该会话的终端守护程序已退出，因此该会话及其回滚无法恢复。打开新终端以继续。",
             "sessionUnavailable": "Orca 无法重新连接到主机上此窗格的终端会话。打开新终端以继续。",
-            "sourceRestoring": "重新连接该终端 — 正在重新建立其输出。会话仍在进行。"
+            "sourceRestoring": "重新连接该终端 — 正在重新建立其输出。会话仍在进行。",
+            "ptyAllocationLimit": "系统无法再分配 pty 设备。请在 Orca 或其他程序中关闭一些不用的终端，然后重试。",
+            "terminalProcessLimit": "系统无法再启动终端进程。请关闭不用的终端或退出不用的进程，然后重试。"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "已达到 Git Bash 控制台上限",
@@ -17309,6 +17311,24 @@
   },
   "components": {
     "native-chat": {
+      "writeNotice": {
+        "notDoneSend": "您的消息未发送。",
+        "tryAgainComposerSend": "请重新发送。",
+        "notDoneStop": "智能体未停止。",
+        "notDoneStopTask": "后台任务未停止。",
+        "notDoneStopTasks": "后台任务未停止。",
+        "notDoneAnswer": "您的回答未发送。",
+        "notDoneOption": "设置未更改。",
+        "notDoneCommand": "命令未运行。",
+        "notDoneGoal": "目标未更改。",
+        "restartFailed": "智能体无法重新启动。",
+        "capacity": "Orca 在过去一天内收到的请求过多。",
+        "outcomeUnknown": "Orca 无法确认发生了什么。请查看聊天。",
+        "questionChanged": "此问题已被回答或已更改。",
+        "historyUnreadable": "Orca 无法读取此聊天的已保存历史记录。",
+        "unsupported": "运行此聊天的 Orca 不支持此操作。请更新 Orca 后重试。",
+        "unreachable": "Orca 无法连接到智能体。"
+      },
       "composer": {
         "imageUnsupported": "此智能体不支持粘贴图片。",
         "send": "发送",
@@ -17465,7 +17485,8 @@
         },
         "error": {
           "title": "无法加载对话",
-          "subtitle": "无法读取记录。请切回终端继续工作。"
+          "subtitle": "无法读取记录。请切回终端继续工作。",
+          "retryingSubtitle": "无法读取记录。Orca 会继续尝试加载。"
         },
         "pairHost": "配对主机以查看智能体聊天记录。",
         "notAgent": {
@@ -18239,6 +18260,7 @@
       "needsInput": "需要输入",
       "working": "处理中",
       "stopped": "已停止",
+      "failed": "已失败",
       "finished": "已完成"
     }
   },

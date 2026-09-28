@@ -14,6 +14,7 @@ export type DraftPasteReadySignal =
   | 'codex-composer-prompt'
   | 'render-cursor-after-bracketed-paste'
   | 'grok-composer-prompt'
+  | 'dsh-composer-prompt'
   | 'zcode-composer-prompt'
 
 export type TuiAgentDetectionRuntime = NodeJS.Platform | 'wsl'
@@ -321,6 +322,24 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     launchCmd: 'muse --trust-workspace',
     // Muse 1.3 treats subcommand-shaped prompts as commands even after `--`.
     promptInjectionMode: 'stdin-after-start'
+  },
+  dsh: {
+    // Why: DeepSeek Harness publishes one binary (`dsh`) that boots a profile, and only the
+    // `dsh-tui` profile paints a composer. `dsh-tui` (alias `dst`) is the launcher that
+    // selects it, so detect that and require `dsh` too — the launcher delegates to it and
+    // fails without it.
+    detectCmd: 'dsh-tui',
+    detectCmdAliases: ['dst'],
+    detectRequiredCommands: ['dsh'],
+    // Why: the launcher re-execs `dsh --profile dsh-tui`, so the pane's foreground process
+    // is `dsh`, never `dsh-tui`. Readiness and follow-up delivery key off this name.
+    expectedProcess: 'dsh',
+    // Why: the terminal app parses only `--resume`/`--continue` and a workspace target; it
+    // has no prompt flag, so the first prompt is pasted into the composer after startup.
+    promptInjectionMode: 'stdin-after-start',
+    // Why: DSH-TUI animates a whale intro continuously behind its composer, so the default
+    // quiet window never settles (the grok failure mode). See dsh-tui-ready-no-key.txt.
+    draftPasteReadySignal: 'dsh-composer-prompt'
   },
   zcode: {
     detectCmd: 'zcode',

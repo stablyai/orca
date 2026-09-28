@@ -38,11 +38,11 @@ describe('a reopened Claude chat whose CLI dies before initialize', () => {
     await waitForStructuredAgentSessionRecovery()
     await host.close(SESSION)
 
-    // The user reopens it; this time the CLI never answers, then dies, and its tree is unprovable.
+    // The user reopens it and sends; this time the CLI never answers, then dies, and its tree is
+    // unprovable. Opening starts nothing: the send does.
     claude.behave(SESSION, { initHangs: true, closeUnproven: true })
-    await host.hold(SESSION, 'surface-1')
     const events: AgentSessionSubscribeEvent[] = []
-    host.subscribe({ id: 'sub-1', sessionId: SESSION, emit: (event) => events.push(event) })
+    await host.subscribe({ id: 'sub-1', sessionId: SESSION, emit: (event) => events.push(event) })
     const body = hostTestMessage('hello')
     const fence = host.deps.store.getRecord(SESSION)?.lease.runtimeFence ?? 0
     const sent = await host.send(CALLER, {
@@ -59,6 +59,8 @@ describe('a reopened Claude chat whose CLI dies before initialize', () => {
       body
     })
     expect(sent).toMatchObject({ ok: true, value: { submission: { dispatchState: 'pending' } } })
+    // Accepted first; the delivery loop starts the second child after.
+    await vi.waitFor(() => expect(claude.children(SESSION)).toHaveLength(2))
 
     claude.child(SESSION).exit(new Error(DIAGNOSTIC))
     await waitForStructuredAgentSessionRecovery()
@@ -69,11 +71,9 @@ describe('a reopened Claude chat whose CLI dies before initialize', () => {
       )
     )
     // Never written, so it did not happen: refused, not left in doubt.
-    const submission = host
-      .journalSnapshot(SESSION)
-      .submissions.find(
-        (entry) => entry.clientMessageId === (sent.ok && sent.value.clientMessageId)
-      )
+    const submission = (await host.journalSnapshot(SESSION)).submissions.find(
+      (entry) => entry.clientMessageId === (sent.ok && sent.value.clientMessageId)
+    )
     expect(submission).toMatchObject({ dispatchState: 'rejected' })
   })
 })

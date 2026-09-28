@@ -29,8 +29,9 @@ export type MutationPlan<TValue> = {
   method: string
   fields: Record<string, unknown>
   operationIdScope?: 'global'
+  /** Admitted without the writer lease: see `admitAgentSessionMutation`. */
+  conversationWrite?: true
   markUnknownBeforeRun?: boolean
-  beforeRun?: () => void
   run: (ctx: AgentSessionTurnContext) => Promise<TurnOutcome<TValue>>
   replay: (ctx: AgentSessionTurnContext, outcome: AgentSessionOperationOutcome) => TValue | null
   rerunWhenReplayMissing?: (ctx: AgentSessionTurnContext) => boolean
@@ -50,19 +51,22 @@ export function sendPlan(params: {
   return {
     method: 'agentSession.send',
     operationIdScope: 'global',
+    conversationWrite: true,
     markUnknownBeforeRun: true,
     // A control signal is not payload; it cannot alter durable replay.
     fields: { body: params.body },
-    ...(params.beforeRun ? { beforeRun: params.beforeRun } : {}),
     recoverUnknownFromDurableState: true,
     // `retryUnknown` is a compatibility-only client signal. A recorded send
     // always replays and never reaches the provider twice.
-    run: (ctx) =>
-      performSend(ctx, {
+    run: (ctx) => {
+      // Asked at acceptance: a send accepted after this one is queued behind it.
+      params.beforeRun?.()
+      return performSend(ctx, {
         clientMessageId,
         payloadFingerprint: params.envelope.payloadFingerprint,
         body: params.body
-      }),
+      })
+    },
     replay: (ctx, outcome) => {
       const submission = ctx.journal
         .submissions()
@@ -101,6 +105,8 @@ export function cancelPlan(params: {
 }): MutationPlan<AgentSessionCancelResult> {
   return {
     method: 'agentSession.cancel',
+    // Stop is a conversation write; a prompt or background-task cancel needs the live child.
+    ...(params.scope || params.prompt ? {} : { conversationWrite: true as const }),
     fields: {
       turnId: params.turnId,
       ...(params.scope ? { scope: params.scope } : {}),

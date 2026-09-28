@@ -69,7 +69,6 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
       {status ? (
         <NativeChatWorkingStatus
           startedAt={status.startedAt}
-          thinking={status.thinking}
           workedSeconds={status.workedSeconds}
           expanded={expanded === true}
           onToggleExpanded={

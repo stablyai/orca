@@ -8,6 +8,7 @@ import { stripInheritedBuildModeEnv } from '../pty/build-mode-env'
 import { stripPiProcessOwnerEnv } from '../pty/pi-process-owner-env'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { isWindowsGitBashShellPath } from '../git-bash'
+import { applyScrubSafeAgentEnvAliases } from '../../shared/agent-hook-scrub-safe-env'
 import { removeUnspecifiedPaneIdentityEnv } from './local-pty-launch-helpers'
 import type { LocalPtyLaunchPlan } from './local-pty-launch-plan'
 import type { LocalPtyProviderOptions } from './local-pty-provider-types'
@@ -42,6 +43,8 @@ export function buildLocalPtySpawnEnvironment(args: {
   if (spawn.env?.TERM) {
     spawnEnv.TERM = spawn.env.TERM
   }
+  // Why after the strips and deletes: an alias must never outlive the value it mirrors.
+  applyScrubSafeAgentEnvAliases(spawnEnv)
 
   spawnEnv.LANG ??= 'en_US.UTF-8'
 

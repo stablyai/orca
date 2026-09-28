@@ -338,7 +338,7 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
       spawnToken: 'spawn-9',
       events: journalSink
     })
-    await adapter.drainStartup('session-1')
+    await adapter.awaitStarted('session-1')
     const first = claude.connections[0]
     const oldPrompt = invokeCanUseTool(first, 'Bash', 'permission-retained', 'tool-retained')
     const oldSession = (

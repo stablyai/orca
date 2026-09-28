@@ -31,12 +31,15 @@ export function registerTerminalSubscription({
   runtime,
   subscriptionId,
   connectionId,
+  requestId,
   requestSignal,
   emit
 }: {
   runtime: RegistrationRuntime
   subscriptionId: string
   connectionId: string | undefined
+  /** With `connectionId`, lets `terminal.unsubscribe{requestId}` address this exact request. */
+  requestId: string | undefined
   requestSignal: AbortSignal | undefined
   emit: (result: unknown) => void
 }): TerminalSubscriptionRegistration {
@@ -87,7 +90,8 @@ export function registerTerminalSubscription({
             end()
           }
         },
-        connectionId
+        connectionId,
+        requestId
       )
   // Why: route through the registry so the entry leaves with the release and a teardown error is contained there.
   const release = (): void => registryEntry?.releaseIfCurrent()

@@ -6,9 +6,9 @@
 // conversation — the journal, the provider handle chain, and the recorded evidence all survive.
 //
 // "Usable" means ACQUIRABLE, not acquired. Startup no longer resumes a provider child for a record
-// nobody is looking at; a surface taking a hold is what spawns one. So the migration's job is to
-// leave the lease in a state a hold can claim, and these tests prove that by adjudicating it rather
-// than by reading fields off it.
+// nobody is looking at; work that needs the agent is what spawns one. So the migration's job is to
+// leave the lease in a state an attach can claim, and these tests prove that by adjudicating it
+// rather than by reading fields off it.
 
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -147,6 +147,11 @@ function openHost(overrides: Partial<StructuredAgentSessionHostDeps> = {}): void
     probeOwner: async () => ({ outcome: 'pid-absent' }),
     ...overrides
   })
+}
+
+/** The host starting the agent with no message to deliver, as an operation that needs it does. */
+function startAgent(): Promise<unknown> {
+  return host['serialize'](SESSION, () => host['mutationContext']().ensureAgent(SESSION))
 }
 
 beforeEach(async () => {
@@ -329,14 +334,19 @@ describe('already-wedged profiles become usable on load', () => {
     }
   )
 
-  it('settles restart eviction through attach when a hold arrives before the boot sweep', async () => {
+  it('settles restart eviction through attach when a start arrives before the boot sweep', async () => {
     await seedStore(
       wedgedRecord({ claimStatus: 'live', handoffStage: null, ownerProcess: DEAD_OWNER })
     )
     await seedRunningTurn()
     openHost()
 
-    await host.hold(SESSION, 'desktop-chat:restart')
+    // The attach adjudicates the dead owner first, which moves the fence; like a client's ensure,
+    // it is retried at the fence the refusal names.
+    const stale = await host.attach(CALLER, hostTestAttachParams(13))
+    const fence = stale.ok ? 13 : (stale.refusal.currentFence ?? 13)
+    expect(stale.ok || stale.refusal.code === 'agent_session_checkpoint_stale').toBe(true)
+    expect(stale.ok || (await host.attach(CALLER, hostTestAttachParams(fence))).ok).toBe(true)
 
     expect(acquire).toHaveBeenCalledOnce()
     expect(activeStructuredAgentSessionTurnId(restoredJournal().snapshot().items)).toBe(null)
@@ -398,7 +408,7 @@ describe('already-wedged profiles become usable on load', () => {
     ['a restart eviction', false],
     ['a proven eviction by recovery', true]
   ] as const)(
-    'settles the turn %s left even when the handle it was restored with never writes',
+    'settles the turn %s left at the next acquire when the read restore could not write it',
     async (_origin, ownerOutlivedRestart) => {
       await seedStore(
         wedgedRecord({ claimStatus: 'live', handoffStage: null, ownerProcess: DEAD_OWNER })
@@ -415,15 +425,13 @@ describe('already-wedged profiles become usable on load', () => {
             : { outcome: 'pid-absent' },
         stopOwnerProcess
       })
-      // The read restore's settlement fails, and the handle it restored with never writes again.
+      // The read restore's settlement fails, and nothing retries it.
       const failing = vi
         .spyOn(AgentSessionJournal.prototype, 'appendLifecycleBatch')
         .mockRejectedValue(new Error('journal unavailable'))
       await host.restoreReadableSessions()
       failing.mockRestore()
-      vi.spyOn(restoredJournal(), 'appendLifecycleBatch').mockRejectedValue(
-        new Error('journal unavailable')
-      )
+      expect(activeStructuredAgentSessionTurnId(restoredJournal().snapshot().items)).toBe('turn-1')
       expect(stopOwnerProcess).toHaveBeenCalledTimes(ownerOutlivedRestart ? 1 : 0)
       expect(store.getRecord(SESSION)?.lease).toMatchObject({
         claimStatus: 'released',
@@ -431,7 +439,7 @@ describe('already-wedged profiles become usable on load', () => {
         deathEvidence: { kind: 'pid-absent' }
       })
 
-      await host.hold(SESSION, 'desktop-chat:restart')
+      await startAgent()
 
       expect(acquire).toHaveBeenCalledOnce()
       expect(store.getRecord(SESSION)?.lease).toMatchObject({ claimStatus: 'live' })
@@ -655,7 +663,8 @@ describe('already-wedged profiles become usable on load', () => {
     await host.restoreReadableSessions()
     expect(order).toEqual([])
     expect(scan).not.toHaveBeenCalled()
-    await host.hold(SESSION, 'holder-1')
+    const fence = store.getRecord(SESSION)?.lease.runtimeFence ?? null
+    expect(await host.attach(CALLER, hostTestAttachParams(fence))).toMatchObject({ ok: true })
 
     expect(order).toEqual(['acquire'])
   })
@@ -681,9 +690,9 @@ describe('already-wedged profiles become usable on load', () => {
     })
     expect(acquire).not.toHaveBeenCalled()
 
-    // The user quits that terminal: the next open proves it gone and the chat takes over.
+    // The user quits that terminal: the next start proves it gone and the chat takes over.
     probe = { outcome: 'pid-absent' }
-    await host.hold(SESSION, 'holder-1')
+    await startAgent()
     expect(acquire).toHaveBeenCalledOnce()
     expect(stopOwnerProcess).not.toHaveBeenCalled()
   })

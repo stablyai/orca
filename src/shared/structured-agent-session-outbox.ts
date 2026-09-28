@@ -1,4 +1,8 @@
 import type { AgentJournalMessageItem, AgentJournalSubmission } from './agent-session-journal-types'
+import {
+  parseAgentSessionWriteFailure,
+  type AgentSessionWriteFailure
+} from './agent-session-refusal-notice'
 import { agentSessionRefusalOperationState } from './agent-session-refusal-retry'
 import type {
   AgentSessionMutationEnvelope,
@@ -7,7 +11,13 @@ import type {
 import { structuredAgentSessionPayloadFingerprint } from './structured-agent-session-mutation'
 import { DISPATCH_REJECTED_CANCELLED } from './structured-agent-session-dispatch-rejection'
 
-export type StructuredAgentSessionOutboxState = 'queued' | 'dispatching' | 'unconfirmed'
+/** `rejected`: the host settled the send as not delivered. The drain never sends it again on its
+ *  own and nothing queues behind it; only the user's Retry does. */
+export type StructuredAgentSessionOutboxState =
+  | 'queued'
+  | 'dispatching'
+  | 'unconfirmed'
+  | 'rejected'
 
 export type StructuredAgentSessionOutboxEntry = {
   clientMessageId: string
@@ -19,6 +29,32 @@ export type StructuredAgentSessionOutboxEntry = {
   lastAttemptAt: number | null
   retryAfterUnknownSubmittedAt: number | null
   source?: 'launch'
+  /** Why the last attempt did not go through. Lives on the message so it goes when the message
+   *  is sent again or delivered, instead of outliving it as a separate error. */
+  lastFailure?: StructuredAgentSessionAttemptFailure
+}
+
+/** Kept as the fact, not the words: the Retry row chooses those when it shows the entry. */
+export type StructuredAgentSessionAttemptFailure =
+  | AgentSessionWriteFailure
+  /** The host recorded the message and the provider turned it down, with the provider's reason. */
+  | { kind: 'rejected'; reason: string | null }
+
+function parseStructuredAgentSessionAttemptFailure(
+  value: unknown
+): StructuredAgentSessionAttemptFailure | undefined {
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    'kind' in value &&
+    value.kind === 'rejected' &&
+    'reason' in value
+  ) {
+    return value.reason === null || typeof value.reason === 'string'
+      ? { kind: 'rejected', reason: value.reason }
+      : undefined
+  }
+  return parseAgentSessionWriteFailure(value)
 }
 
 export type StructuredAgentSessionAttachment = {
@@ -73,6 +109,14 @@ export function updateStructuredAgentSessionOutboxEntry(
   })
 }
 
+/** Staged for another attempt; the last attempt's failure no longer describes it. */
+export function stageStructuredAgentSessionOutboxEntryForSend(
+  { lastFailure: _sentAgain, ...entry }: StructuredAgentSessionOutboxEntry,
+  now: number
+): StructuredAgentSessionOutboxEntry {
+  return { ...entry, state: 'dispatching', lastAttemptAt: now }
+}
+
 export function requeueStructuredAgentSessionSendRefusal(
   entry: StructuredAgentSessionOutboxEntry,
   code: AgentSessionWireRefusalCode,
@@ -88,10 +132,12 @@ export function requeueStructuredAgentSessionSendRefusal(
   ) {
     return { ...entry, state: 'queued' }
   }
+  // Only here is the refusal proof the message never landed: an earlier attempt under this id, or
+  // one whose delivery was in doubt, may have, so those stay queued behind the block.
   return {
     ...entry,
     clientMessageId: createOperationId(),
-    state: 'queued',
+    state: 'rejected',
     lastAttemptAt: null,
     retryAfterUnknownSubmittedAt: null
   }
@@ -115,6 +161,21 @@ export function reconcileStructuredAgentSessionOutbox(
     }
     if (submission?.dispatchState === 'pending') {
       return entry.state === 'dispatching' ? [entry] : [{ ...entry, state: 'dispatching' as const }]
+    }
+    // Accepted, then not delivered — the agent never started, or its start was refused. The text
+    // and why stay here for the user's Retry, and nothing queues behind it. `unconfirmed` is how a
+    // remount reads an entry it left dispatching; the journal has since answered it.
+    if (
+      submission?.dispatchState === 'rejected' &&
+      (entry.state === 'dispatching' || entry.state === 'unconfirmed')
+    ) {
+      return [
+        {
+          ...entry,
+          state: 'rejected' as const,
+          lastFailure: { kind: 'rejected' as const, reason: submission.reason }
+        }
+      ]
     }
     if (
       submission?.dispatchState === 'unknown' &&
@@ -147,6 +208,10 @@ export function admitStructuredAgentSessionOutboxEntry(
   blockedClientMessageId: string | null
 ): StructuredAgentSessionOutboxAdmission {
   for (const entry of entries) {
+    // It can no longer land, so nothing it could be reordered around; it waits for Retry.
+    if (entry.state === 'rejected') {
+      continue
+    }
     if (entry.state === 'unconfirmed' || entry.clientMessageId === blockedClientMessageId) {
       return { state: 'blocked', entry }
     }
@@ -176,10 +241,12 @@ export function parseStructuredAgentSessionOutboxEntry(
     !Array.isArray(body.blocks) ||
     !Array.isArray(entry.previewUris) ||
     !entry.previewUris.every((uri) => typeof uri === 'string') ||
-    !['queued', 'dispatching', 'unconfirmed'].includes(entry.state ?? '')
+    !['queued', 'dispatching', 'unconfirmed', 'rejected'].includes(entry.state ?? '')
   ) {
     return null
   }
+  // A malformed failure is dropped: the row then says only that the message was not sent.
+  const lastFailure = parseStructuredAgentSessionAttemptFailure(entry.lastFailure)
   return {
     clientMessageId: entry.clientMessageId,
     sessionId,
@@ -192,7 +259,8 @@ export function parseStructuredAgentSessionOutboxEntry(
       typeof entry.retryAfterUnknownSubmittedAt === 'number'
         ? entry.retryAfterUnknownSubmittedAt
         : null,
-    ...(entry.source === 'launch' ? { source: 'launch' as const } : {})
+    ...(entry.source === 'launch' ? { source: 'launch' as const } : {}),
+    ...(lastFailure ? { lastFailure } : {})
   }
 }
 

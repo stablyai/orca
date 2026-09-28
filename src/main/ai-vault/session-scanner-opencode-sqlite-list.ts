@@ -1,4 +1,4 @@
-import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault-types'
+import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import {
   buildOpenCodeSqliteCandidatePath,
   splitOpenCodeSqliteCandidate
@@ -54,13 +54,17 @@ function readSessionRows(db: SyncDatabase, limit: number): SessionRow[] {
   return (limited ? statement.all(limit) : statement.all()) as SessionRow[]
 }
 
-function rowToCandidate(row: SessionRow, dbPath: string): SessionFileCandidate {
+function rowToCandidate(
+  row: SessionRow,
+  dbPath: string,
+  agent: 'opencode' | 'zcode'
+): SessionFileCandidate {
   const mtimeMs =
     typeof row.time_updated === 'number' && row.time_updated > 0
       ? row.time_updated
       : row.time_created
   return {
-    agent: 'opencode' as AiVaultAgent,
+    agent,
     file: {
       path: buildOpenCodeSqliteCandidatePath(dbPath, row.id),
       mtimeMs,
@@ -70,10 +74,13 @@ function rowToCandidate(row: SessionRow, dbPath: string): SessionFileCandidate {
   }
 }
 
-function dedupeAndSortSqliteCandidates(candidates: SessionFileCandidate[]): SessionFileCandidate[] {
+function dedupeAndSortSqliteCandidates(
+  candidates: SessionFileCandidate[],
+  agent: 'opencode' | 'zcode'
+): SessionFileCandidate[] {
   const candidatesBySessionId = new Map<string, SessionFileCandidate>()
   for (const candidate of candidates) {
-    const parsed = splitOpenCodeSqliteCandidate(candidate.file.path)
+    const parsed = splitOpenCodeSqliteCandidate(candidate.file.path, agent)
     if (!parsed) {
       continue
     }
@@ -102,8 +109,10 @@ export async function listOpenCodeSqliteSessions(args: {
   dbPaths: readonly string[]
   limit: number
   issues: AiVaultScanIssue[]
+  agent?: 'opencode' | 'zcode'
 }): Promise<SessionFileCandidate[]> {
   const candidates: SessionFileCandidate[] = []
+  const agent = args.agent ?? 'opencode'
   for (const dbPath of args.dbPaths) {
     try {
       const rows = readOpenCodeDatabase({
@@ -111,12 +120,12 @@ export async function listOpenCodeSqliteSessions(args: {
         read: (db) => readSessionRows(db, args.limit)
       })
       for (const row of rows) {
-        candidates.push(rowToCandidate(row, dbPath))
+        candidates.push(rowToCandidate(row, dbPath, agent))
       }
     } catch (err) {
       // A whole DB failed, not one transcript: kinded so the panel says so.
-      args.issues.push(openCodeDatabaseScanIssue(dbPath, err))
+      args.issues.push(openCodeDatabaseScanIssue(dbPath, err, agent))
     }
   }
-  return dedupeAndSortSqliteCandidates(candidates)
+  return dedupeAndSortSqliteCandidates(candidates, agent)
 }

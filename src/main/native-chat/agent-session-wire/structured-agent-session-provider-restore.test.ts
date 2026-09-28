@@ -60,7 +60,7 @@ function createHost(
 
 async function abandonHost(host: StructuredAgentSessionHost): Promise<void> {
   host['runtimeState'].stopLeaseRenewal()
-  host['holds'].dispose()
+  host['lifetime'].dispose()
   await Promise.all([...host['sessions'].values()].map((session) => session.journal.close()))
   host['sessions'].clear()
 }

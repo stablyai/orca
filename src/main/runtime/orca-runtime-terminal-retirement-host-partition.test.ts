@@ -413,6 +413,62 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
     expect(targets.get(folderWorktreeId)).toBe(localSession)
   })
 
+  it.each<[string, string, Record<string, unknown>, ExecutionHostId]>([
+    ['local repo', 'repo::/wt', { id: 'repo' }, LOCAL_EXECUTION_HOST_ID],
+    ['SSH repo', 'repo::/wt', { id: 'repo', connectionId: 'c1' }, 'ssh:c1'],
+    ['runtime repo', 'repo::/wt', { id: 'repo', executionHostId: 'runtime:e1' }, 'runtime:e1'],
+    ['local folder', 'folder:f1', { folderId: 'f1' }, LOCAL_EXECUTION_HOST_ID],
+    ['SSH folder', 'folder:f1', { folderId: 'f1', connectionId: 'c1' }, 'ssh:c1'],
+    ['explicit SSH folder', 'folder:f1', { folderId: 'f1', executionHostId: 'ssh:c2' }, 'ssh:c2'],
+    ['runtime folder', 'folder:f1', { folderId: 'f1', executionHostId: 'runtime:e1' }, 'runtime:e1']
+  ])('reads a %s own saved partition', (_label, worktreeId, owner, ownerHostId) => {
+    const listing = (id: string) => ({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [worktreeId]: [
+          {
+            id,
+            ptyId: null,
+            worktreeId,
+            title: id,
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      }
+    })
+    const sessions = new Map<ExecutionHostId, WorkspaceSessionState>([
+      [ownerHostId, listing('own')],
+      ['runtime:e0', listing('rotated')]
+    ])
+    const { folderId, ...repoOrFolder } = owner
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the controller reads only repos, folder workspaces and workspace sessions.
+    const store = {
+      getRepos: () => (folderId ? [] : [repoOrFolder]),
+      getRepo: () => (folderId ? undefined : repoOrFolder),
+      getFolderWorkspaces: () => (folderId ? [{ ...repoOrFolder, id: folderId }] : []),
+      getWorkspaceSessionHostIds: () => [...sessions.keys()],
+      getWorkspaceSession: (hostId: ExecutionHostId) =>
+        sessions.get(hostId) ?? getDefaultWorkspaceSession()
+    } as never
+    const controller = new RuntimeWorkspaceSessionController({
+      getStore: () => store,
+      resolveFolderConnectionId: (workspace) => workspace.connectionId ?? null,
+      hasRuntimeOwnedPtyCandidate: () => false
+    })
+
+    expect(controller.getOwnPartition(worktreeId)).toBe(sessions.get(ownerHostId))
+    expect(controller.get(worktreeId)).toBe(sessions.get(ownerHostId))
+
+    sessions.set(ownerHostId, getDefaultWorkspaceSession())
+    const fellBack = controller.get(worktreeId) === sessions.get('runtime:e0')
+    // Only a runtime owner rotates onto another copy; that copy is never read as its own.
+    expect(fellBack).toBe(ownerHostId.startsWith('runtime:'))
+    expect(controller.getOwnPartition(worktreeId)?.tabsByWorktree[worktreeId]).toBeUndefined()
+  })
+
   it('waits for provider retirement on a direct worktree stop', async () => {
     const harness = partitionedStore()
     const runtime = new OrcaRuntimeService(harness.store)

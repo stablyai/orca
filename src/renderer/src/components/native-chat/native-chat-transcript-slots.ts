@@ -135,8 +135,8 @@ export function buildNativeChatTranscriptSlots(
         : message.role === 'user' && turnKey
           ? turnStatuses.completedByTurn[turnKey]
           : undefined
-    const status =
-      showTurnStatus && candidateStatus?.workedSeconds != null ? candidateStatus : undefined
+    // The live turn's bar carries its running clock; it settles in place.
+    const status = showTurnStatus ? (candidateStatus ?? undefined) : undefined
     const turnDiff = turnKey && turnKeys[index + 1] !== turnKey ? turnDiffs.get(turnKey) : undefined
     const folded = foldedRows.has(index)
     // Skipping a folded row entirely is what keeps windowing honest: a counted

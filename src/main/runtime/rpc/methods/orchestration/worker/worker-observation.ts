@@ -9,6 +9,7 @@ import {
   observeStructuredWorker,
   resolveStructuredWorkerForDispatch
 } from '../../orchestration-structured-worker-lifecycle'
+import { structuredWorkerAddressable } from '../../../../structured-worker-custody'
 import type {
   DispatchContextRow,
   FederatedDispatchRow,
@@ -27,6 +28,9 @@ export async function inspectWorkerTerminal(
   reason?: string
   /** Set only on a proven-exact worker parked on a prompt that needs a human. */
   agentWait?: RuntimeTerminalInteractiveWait | null
+  /** Structured workers only: whether mail still reaches it — at rest included, since the mail
+   *  starts it. Absent when ownership cannot be read. `status` stays the process verdict. */
+  addressable?: boolean
 }> {
   const worker = db.getWorkerDispatch(dispatchId)
   const terminalHandle =
@@ -49,11 +53,17 @@ export async function inspectWorkerTerminal(
       processIncarnation: structured.processIncarnation
     })
     const observation = observeStructuredWorker(structured)
+    const addressable = structuredWorkerAddressable(
+      db,
+      structured.sessionId,
+      db.getWorkerTerminalResourceByHandle?.(structured.handle)
+    )
     return {
       terminal: null,
       exact,
       status: exact ? observation.status : 'identity_changed',
-      ...(exact && observation.reason ? { reason: observation.reason } : {})
+      ...(exact && observation.reason ? { reason: observation.reason } : {}),
+      ...(exact && addressable !== null ? { addressable } : {})
     }
   }
   const terminal = await runtime.showTerminal(terminalHandle).catch(() => null)
@@ -119,7 +129,8 @@ export function exposeObservation(observation: Awaited<ReturnType<typeof inspect
     status: observation.status,
     exactWorker: observation.exact,
     ...(observation.reason ? { reason: observation.reason } : {}),
-    ...(observation.agentWait !== undefined ? { agentWait: observation.agentWait } : {})
+    ...(observation.agentWait !== undefined ? { agentWait: observation.agentWait } : {}),
+    ...(observation.addressable !== undefined ? { addressable: observation.addressable } : {})
   }
 }
 

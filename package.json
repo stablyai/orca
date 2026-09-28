@@ -170,7 +170,7 @@
     "test:e2e:ssh-docker-bulk-open-freeze": "node config/scripts/run-ssh-docker-bulk-open-freeze-e2e.mjs",
     "repro:live-remote-bulk-open-freeze": "node config/scripts/live-remote-bulk-open-freeze-repro.mjs",
     "repro:live-remote-realistic-freeze": "node config/scripts/live-remote-realistic-freeze-repro.mjs",
-    "audit:anti-slop": "node config/scripts/sync-anti-slop-plugin.mjs && oxlint --config config/oxlint-anti-slop.json src config tests mobile --deny-warnings",
+    "audit:anti-slop": "node config/scripts/sync-anti-slop-plugin.mjs && node config/scripts/run-anti-slop-shards.mjs",
     "sync:anti-slop-plugin": "node config/scripts/sync-anti-slop-plugin.mjs"
   },
   "dependencies": {
@@ -266,7 +266,7 @@
     "happy-dom": "^20.11.8",
     "html-to-image": "^1.11.13",
     "husky": "^9.1.7",
-    "i18next-cli": "1.65.0",
+    "i18next-cli": "1.74.1",
     "katex": "^0.16.45",
     "lint-staged": "^16.4.0",
     "lowlight": "^3.3.0",

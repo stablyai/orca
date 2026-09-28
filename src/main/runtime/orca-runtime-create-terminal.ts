@@ -124,6 +124,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
         }
         let result: Awaited<ReturnType<NonNullable<dependencies.RuntimePtyController['spawn']>>>
         try {
+          launchOpts.onPtySpawnDispatched?.()
           result = await this.ptyController.spawn({
             cols: 120,
             rows: 40,
@@ -292,6 +293,8 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
         releaseStablePaneCreate()
       }
     }
+    // The renderer owns this spawn, so this process cannot see when it is requested.
+    opts.onPtySpawnDispatched?.()
     return createDesktopTerminal(this, worktreeSelector, opts, presentation, rendererWindow)
   }
 }

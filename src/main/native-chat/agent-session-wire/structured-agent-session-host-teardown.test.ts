@@ -5,7 +5,7 @@ describe('structured agent-session host teardown', () => {
   it('names every phase, so the quit-path order is pinned rather than incidental', () => {
     const noop = async (): Promise<void> => undefined
     const phases = structuredAgentSessionHostTeardownPhases({
-      holds: { dispose: noop },
+      idleSweep: { dispose: noop },
       runtimeState: { stopLeaseRenewal: () => undefined, flushAllEventSinks: noop },
       tasks: { drainAttaches: noop },
       evictOwnedSessions: noop,
@@ -14,7 +14,7 @@ describe('structured agent-session host teardown', () => {
     })
     expect(phases.map((phase) => phase.name)).toEqual([
       'begin-resume-markers',
-      'dispose-holds',
+      'dispose-idle-sweep',
       'stop-lease-renewal',
       'drain-attaches',
       'evict-owned-sessions',
@@ -30,7 +30,7 @@ describe('structured agent-session host teardown', () => {
     const cleaned = vi.fn(async () => {})
     const flush = vi.fn(async () => cleaned())
     const phases = structuredAgentSessionHostTeardownPhases({
-      holds: { dispose: cleaned },
+      idleSweep: { dispose: cleaned },
       runtimeState: { stopLeaseRenewal: () => {}, flushAllEventSinks: flush },
       tasks: { drainAttaches: cleaned },
       evictOwnedSessions: cleaned,

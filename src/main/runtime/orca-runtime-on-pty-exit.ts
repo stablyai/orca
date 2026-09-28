@@ -117,10 +117,9 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
         exitIncarnationId ?? pendingIncarnation ?? pty?.incarnationId ?? null
       )
     }
-    const intentionalStopIncarnation = this.intentionalHandlelessPtyStops.get(ptyId)
-    const preservesIntentionalHandlelessSurface =
-      this.intentionalHandlelessPtyStops.has(ptyId) &&
-      (intentionalStopIncarnation === null || intentionalStopIncarnation === incarnationId)
+    // Why both kinds: a sleep keeps its wake hint, and a restart's replacement takes the pane.
+    const preservesIntentionallyStoppedSurface =
+      this.intentionalPtyStops.claimExit(ptyId, exitIncarnationId ?? pty?.incarnationId).length > 0
     advertisedUrlWatcher.unbindPty(ptyId)
     // Clean up new mobile state for this PTY
     this.mobileSubscribers.delete(ptyId)
@@ -217,7 +216,7 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
       this.pruneDisconnectedPtyTranscript(pty)
     }
     let retirement: Promise<void> | undefined
-    if (preservesIntentionalHandlelessSurface || preservesAbnormalSshSurface) {
+    if (preservesIntentionallyStoppedSurface || preservesAbnormalSshSurface) {
       // Why: relay loss is recoverable; keep the HUB-owned pane addressable through the bounded reconnect grace.
       this.touchMobileSessionSnapshotsForPty(ptyId, { immediate: true })
     } else {

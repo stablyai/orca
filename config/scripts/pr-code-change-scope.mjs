@@ -152,6 +152,8 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/main/native-chat/agent-session-journal/',
   'src/main/native-chat/agent-session-wire/',
   'src/main/runtime/agent-session-record-store',
+  'src/main/runtime/agent-session-recovery-capsule',
+  'src/shared/agent-session-resume-marker',
   'src/main/runtime/rpc/dispatcher',
   'src/main/runtime/rpc/methods/agent-launch',
   'src/main/runtime/rpc/methods/ai-vault.ts',
@@ -159,6 +161,9 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/main/runtime/rpc/methods/session-tabs.ts',
   'src/main/runtime/rpc/methods/structured-agent-session',
   'src/main/runtime/rpc/methods/terminal',
+  'src/main/runtime/runtime-worktree-agent-',
+  'src/main/runtime/runtime-worktree-pty-agent-sources',
+  'src/shared/runtime-worktree-contracts',
   'src/renderer/src/runtime/remote-runtime-terminal-multiplexer'
 ]
 

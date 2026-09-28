@@ -3,7 +3,7 @@ import {
   claudeRootExitObserved,
   settleClaudeExitedSession
 } from './claude-structured-session-close'
-import { failClaudeStartupGate } from './claude-structured-session-startup-gate'
+import { failClaudeStartup } from './claude-structured-session-startup-state'
 import type {
   ClaudeAcquisitionAttempt,
   ClaudeSession,
@@ -32,7 +32,7 @@ export function observeClaudeSessionExit(
     return
   }
   lifecycle.sessions.delete(sessionId)
-  failClaudeStartupGate(session, error)
+  failClaudeStartup(session, error)
   // Re-enter the provider's close ladder before publishing lifecycle recovery.
   // An exit callback is root evidence only; the retained tree proof must run
   // before the host releases and reacquires this exact child.

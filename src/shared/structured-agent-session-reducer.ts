@@ -12,6 +12,7 @@ import type {
 } from './agent-session-wire'
 import { backgroundTaskStatesEqual } from './agent-session-background-task-state-equality'
 import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
+import { compareAgentJournalItems } from './agent-session-journal-position'
 import { readAgentJournalTurn } from './agent-session-turn-record'
 
 /** The last host clock sample: `hostNow - receivedAt` is the client's skew from the host,
@@ -85,7 +86,7 @@ function replacePage(
     epoch: page.epoch,
     cursor: page.liveCursor ?? page.window.nextCursor,
     fence,
-    items: [...page.items].sort((left, right) => left.sequence - right.sequence),
+    items: [...page.items].sort(compareAgentJournalItems),
     submissions: page.submissions,
     retainedItemLimit: Math.max(MAX_RETAINED_ITEMS, page.items.length),
     hasOlder: page.hasOlder,
@@ -114,7 +115,7 @@ function mergeItems(
       byId.set(item.itemId, item)
     }
   }
-  return [...byId.values()].sort((left, right) => left.sequence - right.sequence)
+  return [...byId.values()].sort(compareAgentJournalItems)
 }
 
 /**

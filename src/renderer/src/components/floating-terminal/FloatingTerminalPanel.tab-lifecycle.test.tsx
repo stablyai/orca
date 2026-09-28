@@ -209,7 +209,11 @@ describe('FloatingTerminalPanel close behavior', () => {
     const element = await renderPanel(true)
     const tabBar = findByTypeName(element, 'TabBar')
     ;(tabBar.props.onNewBrowserTab as () => void)()
-    ;(tabBar.props.onDuplicateBrowserTab as (browserTabId: string) => void)('browser-1')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: TabBarProps types this callback; the test tree erases it.
+    ;(tabBar.props.onDuplicateBrowserTab as (browserTabId: string, unifiedTabId: string) => void)(
+      'browser-1',
+      'browser-unified-1'
+    )
 
     expect(mocks.createWebRuntimeSessionBrowserTab).not.toHaveBeenCalled()
     expect(mocks.createBrowserTab).toHaveBeenNthCalledWith(
@@ -231,7 +235,7 @@ describe('FloatingTerminalPanel close behavior', () => {
         title: 'Example',
         sessionProfileId: 'profile-1',
         sessionPartition: 'persist:orca-browser-session-profile-1',
-        targetGroupId: 'floating-group',
+        afterTabId: 'browser-unified-1',
         browserRuntimeEnvironmentId: null
       }
     )

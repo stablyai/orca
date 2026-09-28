@@ -104,6 +104,8 @@ export type StructuredAgentSessionRuntimeDeps = {
   onSessionStatusChanged?: StructuredAgentSessionHostDeps['onSessionStatusChanged']
   /** The agent-status store; see `StructuredAgentSessionHostDeps.statusSink`. */
   statusSink?: StructuredAgentSessionHostDeps['statusSink']
+  /** See `StructuredAgentSessionHostDeps.hasOpenDispatch`. */
+  hasOpenDispatch?: StructuredAgentSessionHostDeps['hasOpenDispatch']
   reapOrphanChildren?: typeof stopOrphanAgentSessionChildren
   /** The account home a structured launch would pin right now, for catalog
    *  reads with no session record. Absent disables the catalog surface. */
@@ -312,6 +314,7 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
       deps.onError?.({ scope: `structured-agent-session-journal:${sessionId}`, error }),
     ...(deps.onSessionStatusChanged ? { onSessionStatusChanged: deps.onSessionStatusChanged } : {}),
     ...(deps.statusSink ? { statusSink: deps.statusSink } : {}),
+    ...(deps.hasOpenDispatch ? { hasOpenDispatch: deps.hasOpenDispatch } : {}),
     ...(await modelCatalogHostDeps({ store, deps, envResolvers }))
   })
   setStructuredAgentSessionHost(host)

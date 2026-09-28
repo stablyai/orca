@@ -62,8 +62,8 @@ function installHost(options: {
   /**
    * Sessions this host is not holding, so they observe `unverifiable` rather than `live`.
    *
-   * The everyday shape, not an edge case: the provider child belongs to the VISIBLE pane, so any
-   * chat outside the active workspace has already been evicted by the release clock.
+   * The everyday shape, not an edge case: the idle sweep has already put to rest any chat quiet for
+   * its window, on screen or not.
    */
   detached?: Set<string>
   /**

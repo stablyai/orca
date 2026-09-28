@@ -12,7 +12,7 @@ export type OpenCodeSqliteListRequest = {
   dbPaths: readonly string[]
   limit: number | null
   /** When 'opencode2', lists from the v2 channel-scoped DB schema (session_v2). */
-  agent?: 'opencode2'
+  agent?: 'opencode2' | 'zcode'
 }
 
 export type OpenCodeSqliteParseRequest = {
@@ -23,7 +23,7 @@ export type OpenCodeSqliteParseRequest = {
   sessionId: string
   platform: NodeJS.Platform
   /** When 'opencode2', parses from the v2 channel-scoped DB schema (session_v2). */
-  agent?: 'opencode2'
+  agent?: 'opencode2' | 'zcode'
 }
 
 // Same arguments as `parse`, different answer: the session plus every message
@@ -36,7 +36,7 @@ export type OpenCodeSqliteCaptureRequest = {
   sessionId: string
   platform: NodeJS.Platform
   /** When 'opencode2', captures from the v2 channel-scoped schema. */
-  agent?: 'opencode2'
+  agent?: 'opencode2' | 'zcode'
 }
 
 export type OpenCodeSqliteWorkerRequest = (

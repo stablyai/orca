@@ -63,6 +63,7 @@ export type StatusBarItem =
   | 'minimax'
   | 'grok'
   | 'cursor'
+  | 'zcode'
   | 'ssh'
   | 'resource-usage'
   | 'ports'

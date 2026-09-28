@@ -49,8 +49,8 @@ export type StructuredPointerSendOutcome =
   | { kind: 'unattached' }
 
 export type StructuredMailboxPointerHost = {
-  /** The idle gate, read off the session's full reduced timeline; `null` when it is not attached. */
-  readGateFacts: (sessionId: string) => StructuredSessionGateFacts | null
+  /** The idle gate, read off the session's full reduced timeline; `null` when it cannot be read. */
+  readGateFacts: (sessionId: string) => Promise<StructuredSessionGateFacts | null>
   send: (input: {
     sessionId: string
     dispatchId: string | null
@@ -184,7 +184,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     reservedTypes: ReadonlySet<string> | undefined
   ): Promise<void> {
     const sessionId = target.sessionId
-    const session = this.deps.host.readGateFacts(sessionId)
+    const session = await this.deps.host.readGateFacts(sessionId)
     const decision = decideStructuredSessionPointerDelivery({ session })
     if (!decision.deliver) {
       this.retain(mailboxHandle, sessionId, decision.retain, reservedTypes)

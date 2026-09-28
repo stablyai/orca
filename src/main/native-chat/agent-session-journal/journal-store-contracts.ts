@@ -59,6 +59,8 @@ export type JournalSubmissionInput = {
   payloadFingerprint: string
   body: AgentJournalMessageItem
   fence: number
+  /** The send is accepted now and handed over later, by a `dispatch{pending}` row. */
+  handoverRecorded?: true
 }
 
 export type JournalItemAppendInput = {

@@ -3068,7 +3068,9 @@
             "42b283ecfc": "호스트가 저장된 세션을 확인할 수 없기 때문에 Orca가 이 터미널을 안전하게 다시 연결할 수 없습니다. 오르카는 저장된 세션을 변경하지 않고 그대로 두었습니다. 지금 다시 연결을 시도하려면 재시도를 클릭하세요. 그래도 다시 연결할 수 없으면 새 터미널을 엽니다.",
             "e16012e31e": "이 세션을 소유한 터미널 데몬이 종료되었으므로 세션과 해당 스크롤백을 복구할 수 없습니다. 계속하려면 새 터미널을 여세요.",
             "sessionUnavailable": "Orca가 호스트에서 이 창의 터미널 세션에 다시 연결할 수 없습니다. 계속하려면 새 터미널을 여세요.",
-            "sourceRestoring": "이 터미널을 다시 연결하는 중 - 출력이 다시 설정되고 있습니다. 세션이 아직 실행 중입니다."
+            "sourceRestoring": "이 터미널을 다시 연결하는 중 - 출력이 다시 설정되고 있습니다. 세션이 아직 실행 중입니다.",
+            "ptyAllocationLimit": "시스템에서 더 이상 pty 장치를 할당할 수 없습니다. Orca 또는 다른 프로그램에서 사용하지 않는 터미널을 몇 개 닫은 후 다시 시도하세요.",
+            "terminalProcessLimit": "시스템에서 터미널 프로세스를 더 시작할 수 없습니다. 사용하지 않는 터미널을 닫거나 불필요한 프로세스를 종료한 후 다시 시도하세요."
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Git Bash 콘솔 한도에 도달했습니다",
@@ -17344,6 +17346,24 @@
       }
     },
     "native-chat": {
+      "writeNotice": {
+        "notDoneSend": "메시지가 전송되지 않았습니다.",
+        "tryAgainComposerSend": "다시 보내세요.",
+        "notDoneStop": "에이전트가 중지되지 않았습니다.",
+        "notDoneStopTask": "백그라운드 작업이 중지되지 않았습니다.",
+        "notDoneStopTasks": "백그라운드 작업이 중지되지 않았습니다.",
+        "notDoneAnswer": "답변이 전송되지 않았습니다.",
+        "notDoneOption": "설정이 변경되지 않았습니다.",
+        "notDoneCommand": "명령이 실행되지 않았습니다.",
+        "notDoneGoal": "목표가 변경되지 않았습니다.",
+        "restartFailed": "에이전트를 다시 시작하지 못했습니다.",
+        "capacity": "Orca가 지난 하루 동안 너무 많은 요청을 받았습니다.",
+        "outcomeUnknown": "Orca가 무슨 일이 있었는지 확인하지 못했습니다. 채팅을 확인하세요.",
+        "questionChanged": "이 질문은 이미 답변되었거나 변경되었습니다.",
+        "historyUnreadable": "Orca가 이 채팅의 저장된 기록을 읽지 못했습니다.",
+        "unsupported": "이 채팅을 실행 중인 Orca가 이 기능을 지원하지 않습니다. Orca를 업데이트한 후 다시 시도하세요.",
+        "unreachable": "Orca가 에이전트에 연결하지 못했습니다."
+      },
       "composer": {
         "imageUnsupported": "이 에이전트는 이미지 붙여넣기를 지원하지 않습니다.",
         "send": "보내기",
@@ -17500,7 +17520,8 @@
         },
         "error": {
           "title": "대화를 로드할 수 없습니다.",
-          "subtitle": "스크립트를 읽을 수 없습니다. 계속 작업하려면 terminal로 다시 전환하세요."
+          "subtitle": "스크립트를 읽을 수 없습니다. 계속 작업하려면 terminal로 다시 전환하세요.",
+          "retryingSubtitle": "스크립트를 읽을 수 없습니다. Orca가 계속 다시 불러오기를 시도합니다."
         },
         "pairHost": "호스트를 페어링하여 에이전트 채팅 기록을 확인하세요.",
         "notAgent": {
@@ -18239,6 +18260,7 @@
       "needsInput": "입력 필요",
       "working": "작업 중",
       "stopped": "중지됨",
+      "failed": "실패함",
       "finished": "완료됨"
     }
   },

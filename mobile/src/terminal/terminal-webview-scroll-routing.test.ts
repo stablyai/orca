@@ -140,14 +140,10 @@ describe('TerminalWebView scroll routing', () => {
     expect(source).toContain('pendingMessages.clear()')
   })
 
-  it('clears WebView await timers when the real response wins', () => {
-    // C7.5 moved both promises into `terminal-webview-ready-promises.ts`, which both components
-    // reach through the controller; the two blocks are the same code in their new home.
-    const measureBlock = sliceBetween('function measure(', 'function resolveMeasure')
-    expect(measureBlock).toContain('clearTimeout(timeout)')
-    expect(measureBlock).toContain('measureResolve === finish')
-
-    const readyBlock = sliceBetween('async function awaitReady()', 'function measure(')
+  it('clears the ready await timer when the real response wins', () => {
+    // C7.5 moved the promise into `terminal-webview-ready-promises.ts`, which both components
+    // reach through the controller.
+    const readyBlock = sliceBetween('async function awaitReady()', 'return { armReady')
     expect(readyBlock).toContain('clearTimeout(timeout)')
     expect(readyBlock).toContain('void pending.finally')
   })

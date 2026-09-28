@@ -190,6 +190,7 @@ describe('dead structured-session generation settlement', () => {
       | 'submissions'
       | 'markPendingSubmissionsUnknown'
       | 'rejectPendingSubmissions'
+      | 'rejectQueuedSubmissions'
       | 'appendLifecycleBatch'
     > = {
       snapshot: () => ({
@@ -201,6 +202,9 @@ describe('dead structured-session generation settlement', () => {
         throw new Error('journal_closed')
       },
       rejectPendingSubmissions: async () => {
+        throw new Error('journal_closed')
+      },
+      rejectQueuedSubmissions: async () => {
         throw new Error('journal_closed')
       },
       appendLifecycleBatch: async () => {
@@ -273,7 +277,7 @@ describe('dead structured-session generation settlement', () => {
       pendingSubmissionReason: 'provider_closed_before_acknowledgement',
       verdict: { state: 'interrupted', completedAt: 1_000 },
       unexpectedExitReason: 'claude stream-json exited (code 1): not signed in',
-      exitedDuringStartup: true
+      exitedDuringStartup: { generation: 'generation-1' }
     })
 
     const reason =

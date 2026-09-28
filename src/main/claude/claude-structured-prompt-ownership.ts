@@ -15,11 +15,6 @@ import { buildClaudePromptReply } from './claude-structured-prompt-replies'
 import type { ClaudeSession } from './claude-structured-session-state'
 import type { ClaudePendingPrompt } from './claude-prompt-registry'
 import type { PermissionResult } from '@anthropic-ai/claude-agent-sdk'
-import {
-  claudeStartupHoldsWrites,
-  rejectClaudeStartupWrites
-} from './claude-structured-session-startup-gate'
-import { DISPATCH_REJECTED_CANCELLED } from '../../shared/structured-agent-session-dispatch-rejection'
 
 /** Conservative user-facing window: below the 30s control deadline, trading
  * residual slow-pump risk for ensuring delivery bookkeeping cannot block Stop indefinitely. */
@@ -107,14 +102,9 @@ export async function cancelClaudeStructuredTurn(input: {
   const session = requireSession(sessions, request.sessionId)
   const acquisitionGeneration = session.acquisitionGeneration
   const prompt = request.prompt
-  // A held prompt was never written, so Stop withdraws it; the drain only writes what it still
-  // holds. Before startup lands nothing was written, so there is nothing to interrupt either.
-  let withdrewHeld = false
-  if (!prompt && claudeStartupHoldsWrites(session) && session.fence === request.fence) {
-    withdrewHeld = rejectClaudeStartupWrites(session, DISPATCH_REJECTED_CANCELLED)
-    if (session.startup.state === 'pending') {
-      return { cancelled: withdrewHeld }
-    }
+  // Before startup lands nothing was written, so there is nothing to interrupt.
+  if (!prompt && session.startup.state === 'pending') {
+    return { cancelled: false }
   }
   if (prompt && session.fence !== request.fence) {
     return { cancelled: false }
@@ -197,7 +187,7 @@ export async function cancelClaudeStructuredTurn(input: {
     } else if (claim) {
       session.prompts.releaseClaim(claim)
     }
-    return withdrewHeld ? { ...result, cancelled: true } : result
+    return result
   } catch (error) {
     if (claim && !interruptConfirmed) {
       session.prompts.releaseClaim(claim)

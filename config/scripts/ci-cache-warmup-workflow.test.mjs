@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { expect, it } from 'vitest'
 import { parse } from 'yaml'
+import { BUN_PERSISTENCE_RUNNERS } from './bun-profile-qualification.mjs'
 
 const readWorkflow = (name) =>
   parse(readFileSync(new URL(`../../.github/workflows/${name}.yml`, import.meta.url), 'utf8'))
@@ -50,9 +51,8 @@ it('bounds warming to the required platforms and validates changes without grant
 
 it('warms and probes both Windows images with the persistence job runtime', () => {
   const job = workflow.jobs['warm-windows']
-  const persistence = readWorkflow('bun-profile-tests').jobs.persistence
   expect(job.strategy.matrix.os).toEqual(
-    persistence.strategy.matrix.os.filter((os) => os.startsWith('windows-'))
+    BUN_PERSISTENCE_RUNNERS.filter((os) => os.startsWith('windows-'))
   )
   expect(job['runs-on']).toBe('${{ matrix.os }}')
   expect(job.strategy['fail-fast']).toBe(false)

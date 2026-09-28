@@ -48,9 +48,12 @@ export function conversationCommandBlocked(
       : 'Wait for background tasks to finish before using this command.'
   }
   if (
-    ctx.journal
-      .submissions()
-      .some((entry) => entry.dispatchState === 'pending' || entry.dispatchState === 'unknown')
+    ctx.journal.submissions().some(
+      (entry) =>
+        entry.dispatchState === 'pending' ||
+        // Doubt left by an earlier child is not this one's work in flight.
+        (entry.dispatchState === 'unknown' && entry.recovered !== true && entry.fence === ctx.fence)
+    )
   ) {
     return 'Resolve pending or unconfirmed messages before using this command.'
   }

@@ -418,7 +418,11 @@ describe('OrcaRuntimeService', () => {
     await Promise.resolve()
     await Promise.resolve()
 
-    expect(write).toHaveBeenCalledWith('pty-startup-draft', `\x1b[200~${draftUrl}\x1b[201~`)
+    expect(write).toHaveBeenCalledWith(
+      'pty-startup-draft',
+      `\x1b[200~${draftUrl}\x1b[201~`,
+      'launch'
+    )
   })
 
   it('keeps the 8s main-runtime startup readiness budget for agents without an override', async () => {
@@ -554,7 +558,11 @@ describe('OrcaRuntimeService', () => {
     await Promise.resolve()
     await Promise.resolve()
 
-    expect(write).toHaveBeenCalledWith('pty-opencode-draft-budget', `\x1b[200~${draftUrl}\x1b[201~`)
+    expect(write).toHaveBeenCalledWith(
+      'pty-opencode-draft-budget',
+      `\x1b[200~${draftUrl}\x1b[201~`,
+      'launch'
+    )
   })
 
   it('rejects explicit startup commands for disabled selected agents', async () => {

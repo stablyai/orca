@@ -52,6 +52,7 @@ function createWait(options: {
     getPaneAgent: () => options.agent ?? null,
     getFirstPartyAgentStatus: () => options.firstPartyStatus ?? null,
     readScreenLines: () => null,
+    readVisibleScreen: () => null,
     quiescenceMs: QUIESCENCE_MS
   }
   const polls = new RuntimeTerminalIdlePolls({

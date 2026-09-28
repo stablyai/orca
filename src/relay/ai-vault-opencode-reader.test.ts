@@ -223,11 +223,11 @@ describe('relay OpenCode reader', () => {
       list: (args) =>
         args.agent === 'opencode2'
           ? listOpenCode2SqliteSessions(args)
-          : listOpenCodeSqliteSessions(args),
+          : listOpenCodeSqliteSessions({ ...args, agent: 'opencode' }),
       parse: async (args) =>
         args.agent === 'opencode2'
           ? parseOpenCode2SqliteSession(args)
-          : parseOpenCodeSqliteSession(args),
+          : parseOpenCodeSqliteSession({ ...args, agent: 'opencode' }),
       dispose() {}
     })
     const provider = createRelayAiVaultFilesystemProvider({

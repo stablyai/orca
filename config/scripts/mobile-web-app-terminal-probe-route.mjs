@@ -57,6 +57,8 @@ import { TerminalWebView } from ${JSON.stringify(componentPath)}
 
 export default function TerminalProbeRoute() {
   const handleRef = useRef(null)
+  // The terminal frame as React Native laid it out, which is what the session fits.
+  const frameRef = useRef({ width: 0, height: 0 })
   const [mounted, setMounted] = useState(true)
   const onSelectionCopy = useCallback((text) => {
     globalThis.__orcaTerminalCopied = text
@@ -71,10 +73,11 @@ export default function TerminalProbeRoute() {
     globalThis.__orcaTerminalEngineErrors = globalThis.__orcaTerminalEngineErrors ?? []
     globalThis.__orcaTerminalBeforeInput = []
     globalThis.__orcaTerminalProbe = {
-      init: (cols, rows, data) => handleRef.current?.init(cols, rows, data, false, []),
+      init: (cols, rows, initialData) =>
+        handleRef.current?.init({ cols, rows, initialData, oscLinks: [], frame: frameRef.current }),
       write: (data) => handleRef.current?.write(data),
       selectAll: () => handleRef.current?.doSelectAll(),
-      measure: () => handleRef.current?.measureFitDimensions(),
+      fit: () => handleRef.current?.fitDimensions(frameRef.current),
       awaitReady: () => handleRef.current?.awaitReady(),
       setMounted: (next) => setMounted(next)
     }
@@ -90,14 +93,21 @@ export default function TerminalProbeRoute() {
   }, [])
   return (
     <View testID="terminal-probe" style={{ flex: 1 }}>
-      {mounted ? (
-        <TerminalWebView
-          ref={handleRef}
-          onWebReady={onWebReady}
-          onEngineError={onEngineError}
-          onSelectionCopy={onSelectionCopy}
-        />
-      ) : null}
+      <View
+        style={{ flex: 1 }}
+        onLayout={(event) => {
+          frameRef.current = event.nativeEvent.layout
+        }}
+      >
+        {mounted ? (
+          <TerminalWebView
+            ref={handleRef}
+            onWebReady={onWebReady}
+            onEngineError={onEngineError}
+            onSelectionCopy={onSelectionCopy}
+          />
+        ) : null}
+      </View>
       {/* The shape the terminal's live input takes on the page: xterm's own textarea is inert by
           the document's design, so this is where typed text arrives. */}
       <TextInput testID="terminal-live-input" style={{ fontSize: 16 }} />
