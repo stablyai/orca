@@ -628,6 +628,159 @@
       "demotionRule": "Keep experimental until soak; investigate owner and refresh regressions without weakening assertions or adding retries."
     },
     {
+      "id": "agent-session.mimo-overlay-source-preservation",
+      "title": "MiMo plugin overlays preserve source files behind links",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "agent-hooks",
+      "layer": "main-unit",
+      "surfaces": [
+        "MiMo launch environment",
+        "MiMo config/plugins overlay",
+        "OpenCode plugin directory mirror"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime", "mobile-relay"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": [],
+      "coverageNotes": "Actual filesystem/service behavior in disposable macOS directories, with targeted unlink fault injection. No live PTY, agent, SSH, WSL, remote host, mobile or native Linux/Windows execution. Directory fixtures use junction on Windows; file-symlink and dangling-symlink cases are skipped there, so the junction and win32 case-folding branches are declared by code shape and were not executed on this runner. OpenCode source mirroring/manifest/runtime controls pass.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/blob/main/src/main/mimo/hook-service.ts"
+      ],
+      "invariant": "Building a MiMo or OpenCode config/plugins overlay through the Electron main host services (src/main/mimo, src/main/opencode) preserves user source plugin bytes and does not install Orca files through linked config/plugins directories or a retained plugin link, including when the overlay manifest is lost and when an inherited home env var names the overlay as its own mirror source. Both services perform the plugin write through one shared leaf guard, writeManagedConfigFile in src/main/pty/managed-config-file.ts, which removes the existing entry rather than writing through it and treats only a proven absence as a skippable unlink; exclusive create is a caller option on that guard, not a property of it. The real-directory and path-identity guards (ensureOverlayDirectory, isSameOverlayPath) remain in src/main/pty/overlay-mirror.ts. Failure to detach the managed path returns the original environment without falling through to a write. The relay's parallel overlay writer is outside this invariant; see knownGaps.",
+      "oracle": "Compare source sentinels and absent files after actual service installation with linked/ordinary/broken source directories, retained overlay links with and without a source plugins dir, an inherited overlay-as-source home, unlink denial and a hardlink inserted after unlink; require successful overlay plugin and unchanged runtime data for healthy inputs. The shared leaf guard is additionally exercised directly against each state its managed path can be in -- absent, real file, real directory, symlink to file, symlink to directory (junction on Windows), dangling symlink -- asserting the write lands on a real file at the managed path and never on the link target, and that a real directory there is refused rather than removed. isSameOverlayPath is exercised directly for non-normal spellings, a symlinked path resolving to its target, and distinct paths.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/mimo/hook-service-overlay.test.ts src/main/mimo/hook-service.test.ts src/main/opencode/hook-service.test.ts src/main/pty/overlay-mirror.test.ts src/main/pty/managed-config-file.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/mimo/hook-service-overlay.test.ts src/main/mimo/hook-service.test.ts src/main/opencode/hook-service.test.ts src/main/pty/overlay-mirror.test.ts"
+      ],
+      "testFiles": [
+        "src/main/mimo/hook-service-overlay.test.ts",
+        "src/main/mimo/hook-service.test.ts",
+        "src/main/opencode/hook-service.test.ts",
+        "src/main/pty/overlay-mirror.test.ts",
+        "src/main/pty/managed-config-file.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/mimo/hook-service-overlay.test.ts",
+          "assertions": [
+            "preserves a same-named user plugin behind a linked directory",
+            "keeps a linked user directory free of an absent Orca filename",
+            "replaces stale overlay links without removing source files or runtime data",
+            "does not fall through to a write after unlink is denied",
+            "refuses a file link inserted after the old plugin was removed",
+            "keeps the mirrored config when an inherited MIMOCODE_HOME names the overlay"
+          ]
+        },
+        {
+          "file": "src/main/opencode/hook-service.test.ts",
+          "assertions": [
+            "refuses a retained plugins link instead of mirroring the source through it",
+            "refuses a retained plugins link when the source has no plugins directory",
+            "replaces an Orca-named symlink rather than writing through it"
+          ]
+        },
+        {
+          "file": "src/main/pty/managed-config-file.test.ts",
+          "assertions": [
+            "refuses to write when a real directory occupies the path",
+            "replaces a symlink to a file without touching the user bytes",
+            "replaces a dangling symlink instead of creating the file it points at",
+            "does not write into the target of a symlinked directory",
+            "applies exclusive create only when the caller asks for it"
+          ]
+        },
+        {
+          "file": "src/main/pty/overlay-mirror.test.ts",
+          "assertions": [
+            "treats a non-normal spelling of one path as the same overlay",
+            "resolves a symlinked path to the same identity as its target",
+            "keeps case-different spellings distinct off Windows"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-27",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/mimo/hook-service-overlay.test.ts src/main/mimo/hook-service.test.ts src/main/opencode/hook-service.test.ts src/main/pty/overlay-mirror.test.ts src/main/pty/managed-config-file.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.22,
+          "summary": "Behaviour-preserving dedup: the unlink-then-write leaf guard that MiMo held inline and OpenCode held as a private writeOrcaPluginFile is now one writeManagedConfigFile in src/main/pty/managed-config-file.ts, called by MiMo buildPtyEnv with exclusive:true and by both OpenCode writers without it. Measured on this head: 5 files, 68 of 68 cases pass -- 14 hook-service-overlay + 2 mimo hook-service + 37 opencode hook-service (53 pre-existing, unchanged) + 8 overlay-mirror (4 pre-existing plus 4 new isSameOverlayPath cases) + 7 new leaf-guard cases; 0 skipped on macOS. Three teeth re-proved by local reversion on this head: replacing ensureOverlayDirectory with mkdirSync in OpenCode writePluginIntoOverlay reds exactly 1 of 37 ('refuses a retained plugins link when the source has no plugins directory'); dropping the isSameOverlayPath check in MiMo buildPtyEnv reds exactly 1 of 14 ('keeps the mirrored config when an inherited MIMOCODE_HOME names the overlay') with ENOENT on the overlay's mirrored auth.json; removing the unlink guard from writeManagedConfigFile reds 10 of 58 across the three write-path suites (4 leaf-guard cases, 4 OpenCode, 2 MiMo), confirming both services genuinely route through the extracted guard. All three restored and green."
+        },
+        {
+          "date": "2026-09-27",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/mimo/hook-service-overlay.test.ts src/main/mimo/hook-service.test.ts src/main/opencode/hook-service.test.ts src/main/pty/overlay-mirror.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.308,
+          "summary": "Rebased onto origin/main 93d8b1f0 (twelve sibling merges): 4 files, 57 of 57 cases pass. Guard teeth re-proved by local reversion on this head: replacing ensureOverlayDirectory with mkdirSync in OpenCode writePluginIntoOverlay reds only 'refuses a retained plugins link when the source has no plugins directory' (the overlay is returned instead of the fallback and the user's real plugin is rewritten); dropping the isSameOverlayPath check in MiMo buildPtyEnv reds 'keeps the mirrored config when an inherited MIMOCODE_HOME names the overlay' with ENOENT on the overlay's mirrored auth.json, the self-wipe. Both restored and green."
+        },
+        {
+          "date": "2026-09-26",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/mimo/hook-service-overlay.test.ts src/main/mimo/hook-service.test.ts src/main/opencode/hook-service.test.ts src/main/pty/overlay-mirror.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.31,
+          "summary": "Review follow-up: 57 cases pass across the four suites. Four added cases are individually red on the branch head before their fix -- the OpenCode retained-link-without-source-plugins case unlinks the user file and writes Orca's plugin into the user's real directory, and the inherited-MIMOCODE_HOME case empties the shared overlay's mirrored config."
+        },
+        {
+          "date": "2026-09-26",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/mimo/hook-service-overlay.test.ts src/main/mimo/hook-service.test.ts src/main/opencode/hook-service.test.ts src/main/pty/overlay-mirror.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.217,
+          "summary": "53 cases/four suites pass, including13 new preservation/failure cases. Original service fails10 new cases and passes3 controls. All fixtures own their temporary roots; no real profile, provider or app touched."
+        },
+        {
+          "date": "2026-09-26",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/mimo/hook-service-overlay.test.ts src/main/mimo/hook-service.test.ts src/main/opencode/hook-service.test.ts src/main/pty/overlay-mirror.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.473,
+          "summary": "Root reran all53 permanent cases in a fresh-main snapshot at d20cb69c. Six additional independent source-preservation/fallback cases pass; original fails4 and passes2 controls. Node typecheck passes on that snapshot. No app or provider actions."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "Focused temporary-filesystem unit run; p95 not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Local deterministic validation only; CI soak pending."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Origin/main d20cb69c Mimo bytes restored through test-only Vite loader: new10fail/3controls. Same13 pass on candidate; related total53 pass."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Correctness only. Actual100-user-plugin normal-directory fixture keeps mkdir7/readdir3/symlink100/write1, adds3 lstat and1 unlink. Linked100-plugin fixture changes readdir2to3, symlink1to100, lstat2to104, stat/realpath/unlink0to1; source overwrite1to0. Those counts were measured before the leaf-guard dedup and are carried forward without re-measurement: the dedup moved the same unlink-then-write pair behind a call without adding, removing or reordering a syscall at either site, so the sequence is unchanged by inspection only. No polling, subprocess, startup await or speedup claim."
+      },
+      "knownGaps": [
+        "Native Linux/Windows and physical PTY/provider validation not run; file-symlink test skipped on Windows.",
+        "Leaf checks protect config/plugins paths, not arbitrary trusted app-userData ancestors or hostile concurrent directory replacement after lstat.",
+        "Same shared home across different MiMo source homes remains outside scope; an inherited home that resolves to the overlay is now detected and skips teardown rather than re-mirroring.",
+        "Linked plugin directories require one listing plus per-entry mirrors; large/slow catalogs may increase launch time. No latency measurement.",
+        "On guard/unlink/exclusive-create failure, the launch returns original MIMOCODE_HOME or no override; Orca status plugin can be unavailable on that attempt. No retry/polling added.",
+        "OpenCode shares the extracted source resolver/mirror and applies the same real-directory guard and absence-gated unlink at its own plugin write, so a lost manifest cannot leave a retained link to write through. Both services now call one writeManagedConfigFile, and OpenCode deliberately does NOT pass its exclusive option: panes sharing one source config share one overlay, so EEXIST would cost a concurrent pane its status plugin for no gain on a directory already proven real and holding an Orca-owned filename. MiMo passes exclusive:true because its overlay is a single shared home. Verified in code, not assumed: OpenCode has no 'wx' write on any path. Its global config-dir writer (no overlay) shares the replace-not-write-through step but not the real-directory guard, and still overwrites a same-named user plugin by design because that mode installs into the user's own config dir -- resolving that path is intended there, so the shared guard deliberately makes no claim about the containing directory and cannot be misapplied to add one.",
+        "Correction to earlier wording of this gap, re-verified against the code at this head: src/relay/plugin-overlay.ts is NOT an unguarded pre-extraction copy. Its mirror (mirrorOpenCodeConfig, lines 181-191) already tests isSymbolicLink() before isDirectory() and realpathSync-es a symlinked source plugins/, so its mkdirSync at line 193 creates a real overlay directory. What it does not share is the leaf guard: writeOpenCodePlugin (lines 213-223) still uses plain mkdirSync plus a swallowed unlink, leaving a narrow residual where a retained or dangling overlay plugins link that survived the best-effort safeRemoveOverlay could be written through on an SSH host. src/relay/opencode-canonical-config.ts has the same swallowed-unlink shape, but following the link is intended there because it is the user's canonical config dir. No relay caller is added here and no assertion in this gate covers the relay; these files are unchanged.",
+        "The shared guard is leaf-only and intentionally has no delete-through variant: the audit of candidate sites found no caller for one. The skills-installer symlink defect (issue #22897) is in vercel-labs/skills' own createSymlink, which Orca only spawns, and Orca's own placement code (skill-placement-reconciliation.ts) already realpaths its parent and refuses unowned links; no shared filesystem primitive in this repo can fix that, so none is claimed to.",
+        "The guard's Windows branches are unexecuted on this runner: junction handling and the win32 case-folding arm of isSameOverlayPath are asserted by code shape only. The macOS run covers the POSIX arms and asserts case-different spellings stay distinct on a case-sensitive volume.",
+        "writeManagedConfigFile is unlink-only by design, so a real directory at the managed filename stays an error rather than being removed; on Windows a junction at that leaf likewise fails the write instead of being replaced, since removing one needs rmdir. The containing plugins directory is what ensureOverlayDirectory guards, one level up.",
+        "Generated plugin payloads/status ownership and remote wire unchanged. SSH/mobile flows are unaffected by this local host-env preparation; WSL/native-host integration remains unexecuted."
+      ],
+      "promotionCriteria": [
+        "Retain source-preservation and fallback assertions; collect CI soak and native platform coverage before promotion."
+      ],
+      "demotionRule": "Keep experimental without soak; investigate any source mutation, failed healthy overlay or stale runtime cleanup without weakening the sentinel assertions."
+    },
+    {
       "id": "agent-session.journal-streaming-replay",
       "title": "Journal replay bounds obsolete revision memory without changing recovery",
       "maturity": "experimental",

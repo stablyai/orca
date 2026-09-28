@@ -1,17 +1,14 @@
 import { getAppEnvironment } from '../../shared/app-environment'
 import { join } from 'node:path'
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  realpathSync,
-  statSync,
-  unlinkSync,
-  writeFileSync
-} from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
-import { mirrorEntry, safeRemoveTree } from '../pty/overlay-mirror'
+import { writeManagedConfigFile } from '../pty/managed-config-file'
+import {
+  ensureOverlayDirectory,
+  mirrorEntry,
+  mirrorPluginDirectory,
+  safeRemoveTree
+} from '../pty/overlay-mirror'
 import { getStatusPluginEndpointSource } from './status-plugin-endpoint-source'
 import { getStatusPluginRuntimeStateSource } from './status-plugin-runtime-state-source'
 import { getStatusPluginMessagePreviewSource } from './status-plugin-message-preview-source'
@@ -141,7 +138,7 @@ export class OpenCodeHookService {
     }
     const overlayDir = this.getSourceOverlayDir(existingConfigDir)
     try {
-      mkdirSync(overlayDir, { recursive: true })
+      ensureOverlayDirectory(overlayDir)
       this.mirrorUserConfig(existingConfigDir, overlayDir)
       this.writePluginIntoOverlay(overlayDir)
       return { OPENCODE_CONFIG_DIR: overlayDir }
@@ -213,34 +210,14 @@ export class OpenCodeHookService {
       const sourcePath = join(sourceDir, entry.name)
 
       if (entry.name === 'plugins') {
-        // Why: check isSymbolicLink before isDirectory — a Windows junction reports both, and the symlink branch must win.
-        const isSymlink = entry.isSymbolicLink()
-        let isLinkPointingToDir = false
-        if (isSymlink) {
-          try {
-            isLinkPointingToDir = statSync(sourcePath).isDirectory()
-          } catch {
-            // Why: broken/inaccessible symlink — mirror the dangling link verbatim instead of resolving through it.
-            isLinkPointingToDir = false
-          }
-        }
-
-        if ((!isSymlink && entry.isDirectory()) || isLinkPointingToDir) {
-          // Why: resolve a symlinked plugins/ to its real target so <overlay>/plugins stays a real dir and writePluginIntoOverlay can't write through the user's link.
-          const resolvedSource = isLinkPointingToDir ? realpathSync(sourcePath) : sourcePath
-          const overlayPluginsDir = join(overlayDir, 'plugins')
-          mkdirSync(overlayPluginsDir, { recursive: true })
-          for (const pluginEntry of readdirSync(resolvedSource, { withFileTypes: true })) {
-            // Why: skip a user plugin sharing Orca's filename; mirroring it would let writePluginIntoOverlay clobber the user's file.
-            if (pluginEntry.name === this.pluginFileName) {
-              continue
-            }
-            mirrorEntry(
-              join(resolvedSource, pluginEntry.name),
-              join(overlayPluginsDir, pluginEntry.name)
-            )
-            nextManifest.pluginEntries.push(pluginEntry.name)
-          }
+        const pluginEntries = mirrorPluginDirectory(
+          sourcePath,
+          join(overlayDir, 'plugins'),
+          entry,
+          this.pluginFileName
+        )
+        if (pluginEntries !== null) {
+          nextManifest.pluginEntries = pluginEntries
           continue
         }
       }
@@ -252,23 +229,27 @@ export class OpenCodeHookService {
     this.writeOverlayManifest(overlayDir, nextManifest)
   }
 
-  // Why: pre-write unlink guards against POSIX writeFileSync writing through a mirrored symlink and clobbering a same-named user plugin.
+  // Why: overlays persist across terminals and the manifest that tracks them can
+  // be lost, so <overlay>/plugins can still be a link into the user's real plugins
+  // dir on the next launch. Demanding a real directory is what keeps the write off
+  // the user's files; a swallowed unlink error used to let the write proceed
+  // through whatever was actually there. Deliberately not an exclusive create:
+  // panes sharing one source config share this overlay, and an EEXIST there would
+  // silently cost a concurrent pane its status plugin for no safety gain on a
+  // proven-real directory holding an Orca-owned filename.
   private writePluginIntoOverlay(overlayDir: string): void {
     const pluginsDir = join(overlayDir, 'plugins')
-    mkdirSync(pluginsDir, { recursive: true })
-    const pluginPath = join(pluginsDir, this.pluginFileName)
-    try {
-      unlinkSync(pluginPath)
-    } catch {
-      // File may not exist on a fresh overlay; a real failure surfaces on writeFileSync below.
-    }
-    writeFileSync(pluginPath, this.pluginSource())
+    ensureOverlayDirectory(pluginsDir)
+    writeManagedConfigFile(join(pluginsDir, this.pluginFileName), this.pluginSource())
   }
 
+  // Why: this mode installs into the user's own config dir, so that directory is
+  // legitimately theirs and gets no real-directory guard; only the
+  // replace-not-write-through step applies.
   private writePluginToConfigDir(configDir: string): void {
     const pluginsDir = join(configDir, 'plugins')
     mkdirSync(pluginsDir, { recursive: true })
-    writeFileSync(join(pluginsDir, this.pluginFileName), this.pluginSource())
+    writeManagedConfigFile(join(pluginsDir, this.pluginFileName), this.pluginSource())
   }
 }
 

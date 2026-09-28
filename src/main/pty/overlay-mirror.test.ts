@@ -1,10 +1,10 @@
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import type * as NodePath from 'node:path'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { safeRemoveOverlay } from './overlay-mirror'
+import { isSameOverlayPath, safeRemoveOverlay } from './overlay-mirror'
 
 const tempRoots: string[] = []
 
@@ -96,4 +96,52 @@ describe('safeRemoveOverlay', () => {
     expect(lstatSyncMock).not.toHaveBeenCalled()
     expect(unlinkSyncMock).not.toHaveBeenCalled()
   })
+})
+
+describe('isSameOverlayPath', () => {
+  it('treats a non-normal spelling of one path as the same overlay', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-overlay-identity-'))
+    tempRoots.push(root)
+    const overlay = join(root, 'config')
+    mkdirSync(overlay, { recursive: true })
+
+    expect(isSameOverlayPath(overlay, join(overlay, '.', '..', 'config'))).toBe(true)
+  })
+
+  it('distinguishes two different overlays', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-overlay-identity-'))
+    tempRoots.push(root)
+
+    expect(isSameOverlayPath(join(root, 'a'), join(root, 'b'))).toBe(false)
+  })
+
+  // The inherited-MIMOCODE_HOME case: the env var names a symlinked path that
+  // resolves to the overlay itself, which must not be treated as a mirror source.
+  it.skipIf(process.platform === 'win32')(
+    'resolves a symlinked path to the same identity as its target',
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-overlay-identity-'))
+      tempRoots.push(root)
+      const real = join(root, 'real-config')
+      mkdirSync(real, { recursive: true })
+      const linked = join(root, 'linked-config')
+      symlinkSync(real, linked, 'dir')
+
+      expect(isSameOverlayPath(linked, real)).toBe(true)
+    }
+  )
+
+  // Case folding is applied only on win32. macOS temp volumes are
+  // case-insensitive but realpathSync.native does not fold case, so two
+  // spellings of an existing directory stay distinct off Windows. The win32
+  // toLowerCase arm is not executed on this runner.
+  it.skipIf(process.platform === 'win32')(
+    'keeps case-different spellings distinct off Windows',
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-overlay-identity-'))
+      tempRoots.push(root)
+
+      expect(isSameOverlayPath(join(root, 'Config'), join(root, 'config'))).toBe(false)
+    }
+  )
 })

@@ -9,14 +9,78 @@
 
 import {
   cpSync,
+  type Dirent,
   linkSync,
   lstatSync,
+  mkdirSync,
   readdirSync,
+  realpathSync,
   rmdirSync,
+  statSync,
   symlinkSync,
   unlinkSync
 } from 'node:fs'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
+
+export function ensureOverlayDirectory(path: string): void {
+  mkdirSync(path, { recursive: true })
+  if (!isSafeDescendCandidate(lstatSync(path))) {
+    throw new Error(`Overlay directory is not a real directory: ${path}`)
+  }
+}
+
+// Why: an inherited env var can name the overlay itself as the mirror source.
+// Tearing down and re-mirroring a directory from itself empties it, so callers
+// need path identity that survives symlinked homes and Windows case folding.
+export function isSameOverlayPath(left: string, right: string): boolean {
+  return canonicalOverlayPath(left) === canonicalOverlayPath(right)
+}
+
+function canonicalOverlayPath(target: string): string {
+  let canonical = resolve(target)
+  try {
+    canonical = realpathSync.native(canonical)
+  } catch {
+    // Unresolvable path: the lexical form is the best available identity.
+  }
+  return process.platform === 'win32' ? canonical.toLowerCase() : canonical
+}
+
+export function mirrorPluginDirectory(
+  sourcePath: string,
+  targetPath: string,
+  sourceEntry: Pick<Dirent, 'isSymbolicLink' | 'isDirectory'>,
+  managedPluginFile: string
+): string[] | null {
+  let resolvedSource = sourcePath
+  // isSymbolicLink MUST be tested before isDirectory: a Windows junction reports
+  // both, and only the link branch resolves to the real target. Returning null
+  // leaves a dangling/file-target link to mirrorEntry as a verbatim link.
+  if (sourceEntry.isSymbolicLink()) {
+    try {
+      if (!statSync(sourcePath).isDirectory()) {
+        return null
+      }
+    } catch {
+      return null
+    }
+    resolvedSource = realpathSync(sourcePath)
+  } else if (!sourceEntry.isDirectory()) {
+    return null
+  }
+
+  // A plugins link must become a real overlay directory before adding Orca's file.
+  ensureOverlayDirectory(targetPath)
+  const mirrored: string[] = []
+  for (const entry of readdirSync(resolvedSource, { withFileTypes: true })) {
+    if (entry.name === managedPluginFile) {
+      continue
+    }
+    mirrorEntry(join(resolvedSource, entry.name), join(targetPath, entry.name))
+    mirrored.push(entry.name)
+  }
+  return mirrored
+}
 
 export function mirrorEntry(sourcePath: string, targetPath: string): void {
   // Why: lstatSync (not statSync) so that if the user's source dir contains

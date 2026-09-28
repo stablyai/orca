@@ -290,6 +290,29 @@ describe('OpenCodeHookService buildPtyEnv / clearPty round-trip', () => {
     expect(pluginSource).toContain('messageID: part.messageID')
   })
 
+  it('replaces an Orca-named symlink rather than writing through it', () => {
+    // Nothing keeps the user's real plugins dir from holding a link at Orca's
+    // filename; the install must not redirect the plugin bytes to its target.
+    const decoy = mkdtempSync(join(tmpdir(), 'orca-opencode-decoy-'))
+    const decoyFile = join(decoy, 'not-a-plugin.txt')
+    writeFileSync(decoyFile, 'UNRELATED USER FILE')
+    const pluginsDir = join(resolveOpenCodeConfigDirectory(), 'plugins')
+    mkdirSync(pluginsDir, { recursive: true })
+    const pluginPath = join(pluginsDir, 'orca-opencode-status.js')
+    rmSync(pluginPath, { force: true })
+    symlinkSync(decoyFile, pluginPath, 'file')
+
+    try {
+      expect(new OpenCodeHookService().buildPtyEnv(daemonSessionId)).toEqual({})
+
+      expect(readFileSync(decoyFile, 'utf8')).toBe('UNRELATED USER FILE')
+      expect(lstatSync(pluginPath).isSymbolicLink()).toBe(false)
+      expect(readFileSync(pluginPath, 'utf8')).toContain('OrcaOpenCodeStatusPlugin')
+    } finally {
+      rmSync(decoy, { recursive: true, force: true })
+    }
+  })
+
   // Why: #22234 — OpenCode 2 installs under the plain `opencode` name, and its loader
   // rejects a default export that only has server(). Asserting the emitted *source* is
   // not enough; the installed file is what the v2 server validates, so load it.
@@ -383,6 +406,8 @@ describe('OpenCodeHookService buildPtyEnv / clearPty round-trip', () => {
     expect(existsSync(configDir)).toBe(true)
   })
 })
+
+const linkTypeForDirectory = process.platform === 'win32' ? 'junction' : 'dir'
 
 describe('OpenCodeHookService overlay mode (user OPENCODE_CONFIG_DIR set)', () => {
   // Why: with a user-set OPENCODE_CONFIG_DIR, mirror it into an overlay rather than overwrite it (docs/opencode-config-dir-collision.md).
@@ -607,6 +632,55 @@ describe('OpenCodeHookService overlay mode (user OPENCODE_CONFIG_DIR set)', () =
       readFileSync(join(env.OPENCODE_CONFIG_DIR!, 'plugins', 'orca-opencode-status.js'), 'utf8')
     ).toContain('OrcaOpenCodeStatusPlugin')
     expectUserConfigIntact()
+  })
+
+  // Why: overlays outlive a single run and the manifest that tracks them can be
+  // lost, so <overlay>/plugins can still be a link into a real user directory on
+  // the next launch. Both tests re-seat exactly that state.
+  function reseatOverlayWithRetainedPluginsLink(overlayDir: string, target: string): void {
+    rmSync(overlayDir, { recursive: true, force: true })
+    mkdirSync(overlayDir, { recursive: true })
+    symlinkSync(target, join(overlayDir, 'plugins'), linkTypeForDirectory)
+  }
+
+  it('refuses a retained plugins link instead of mirroring the source through it', () => {
+    const service = new OpenCodeHookService()
+    const overlayDir = service.buildPtyEnv(ptyId, userConfigDir).OPENCODE_CONFIG_DIR!
+    writeFileSync(join(userConfigDir, 'plugins', 'orca-opencode-status.js'), 'USER OWNED PLUGIN')
+    reseatOverlayWithRetainedPluginsLink(overlayDir, join(userConfigDir, 'plugins'))
+
+    expect(service.buildPtyEnv(ptyId, userConfigDir)).toEqual({
+      OPENCODE_CONFIG_DIR: userConfigDir
+    })
+
+    expect(readFileSync(join(userConfigDir, 'plugins', 'orca-opencode-status.js'), 'utf8')).toBe(
+      'USER OWNED PLUGIN'
+    )
+    expectUserConfigIntact()
+  })
+
+  it('refuses a retained plugins link when the source has no plugins directory', () => {
+    // With no source plugins/ the mirror never inspects the overlay's plugins
+    // path, so the plugin write itself has to reject a link into user data.
+    const service = new OpenCodeHookService()
+    const overlayDir = service.buildPtyEnv(ptyId, userConfigDir).OPENCODE_CONFIG_DIR!
+    const strayPlugins = mkdtempSync(join(tmpdir(), 'orca-opencode-stray-plugins-'))
+    writeFileSync(join(strayPlugins, 'orca-opencode-status.js'), 'USER OWNED PLUGIN')
+    rmSync(join(userConfigDir, 'plugins'), { recursive: true, force: true })
+    reseatOverlayWithRetainedPluginsLink(overlayDir, strayPlugins)
+
+    try {
+      expect(service.buildPtyEnv(ptyId, userConfigDir)).toEqual({
+        OPENCODE_CONFIG_DIR: userConfigDir
+      })
+
+      expect(readdirSync(strayPlugins)).toEqual(['orca-opencode-status.js'])
+      expect(readFileSync(join(strayPlugins, 'orca-opencode-status.js'), 'utf8')).toBe(
+        'USER OWNED PLUGIN'
+      )
+    } finally {
+      rmSync(strayPlugins, { recursive: true, force: true })
+    }
   })
 
   it('reconciles stale mirrored entries while preserving OpenCode runtime files', () => {
