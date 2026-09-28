@@ -45,7 +45,7 @@ internal static class OrcaRemoteCliLauncher
 
             if (!File.Exists(nodePath))
             {
-                Console.Error.WriteLine("Orca SSH CLI bridge cannot find Node.js at \"{0}\"", nodePath);
+                Console.Error.WriteLine("Orca SSH CLI bridge cannot find its runtime at \"{0}\"", nodePath);
                 return 1;
             }
             if (!File.Exists(relayPath))
@@ -57,7 +57,7 @@ internal static class OrcaRemoteCliLauncher
             ProcessStartInfo startInfo = new ProcessStartInfo
             {
                 FileName = nodePath,
-                Arguments = BuildArguments(relayPath, socketPath, credentialFile, args),
+                Arguments = BuildArguments(nodePath, relayPath, socketPath, credentialFile, args),
                 UseShellExecute = false
             };
 
@@ -84,9 +84,17 @@ internal static class OrcaRemoteCliLauncher
         return value;
     }
 
-    private static string BuildArguments(string relayPath, string socketPath, string credentialFile, string[] args)
+    private static string BuildArguments(string nodePath, string relayPath, string socketPath, string credentialFile, string[] args)
     {
         StringBuilder commandLine = new StringBuilder();
+        string runtimeName = Path.GetFileName(nodePath);
+        if (String.Equals(runtimeName, "bun.exe", StringComparison.OrdinalIgnoreCase) ||
+            String.Equals(runtimeName, "bun-runtime.exe", StringComparison.OrdinalIgnoreCase))
+        {
+            AppendArgument(commandLine, "--no-env-file");
+            AppendArgument(commandLine, "--config=NUL");
+            AppendArgument(commandLine, "--no-install");
+        }
         AppendArgument(commandLine, relayPath);
         AppendArgument(commandLine, "--sock-path");
         AppendArgument(commandLine, socketPath);
@@ -236,7 +244,11 @@ export function createRemoteCliInstallPlan(env: RemoteCliInstallEnv): RemoteCliI
           '  echo "Orca SSH CLI bridge cannot find the relay socket: $ORCA_RELAY_SOCKET_PATH" >&2',
           '  exit 1',
           'fi',
-          'exec "$ORCA_RELAY_NODE_PATH" "$ORCA_RELAY_DIR/relay.js" --sock-path "$ORCA_RELAY_SOCKET_PATH" --credential-file "$ORCA_RELAY_CREDENTIAL_FILE" --orca-cli "$@"',
+          'orca_runtime_flag=',
+          'orca_config_flag=',
+          'orca_install_flag=',
+          'case "$ORCA_RELAY_NODE_PATH" in */bun|*/bun-runtime) orca_runtime_flag=--no-env-file; orca_config_flag=--config=/dev/null; orca_install_flag=--no-install;; esac',
+          'exec "$ORCA_RELAY_NODE_PATH" $orca_runtime_flag $orca_config_flag $orca_install_flag "$ORCA_RELAY_DIR/relay.js" --sock-path "$ORCA_RELAY_SOCKET_PATH" --credential-file "$ORCA_RELAY_CREDENTIAL_FILE" --orca-cli "$@"',
           ''
         ].join('\n')
       }

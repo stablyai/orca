@@ -70,7 +70,7 @@ describe('terminal IME e2e workflow', () => {
 
   it('runs native Wayland independently with CJK fonts and retained evidence', () => {
     const job = workflow.jobs['linux-wayland']
-    expect(job.needs).toBeUndefined()
+    expect(job.needs).toBe('windows_watcher')
     const install = job.steps.find((step) => step.run?.includes('apt-get install')).run
     for (const tool of ['gnome-shell', 'ibus-hangul', 'fonts-noto-cjk', 'xwininfo']) {
       expect(install).toContain(tool === 'xwininfo' ? 'x11-utils' : tool)

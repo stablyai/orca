@@ -28,7 +28,7 @@ export const PR_CHECK_JOBS = [
   'orcad_browser',
   'mobile_web_app',
   'cross-version-wire',
-  'managed_hook_node18',
+  'managed_hook_bun',
   'package',
   'package_windows'
 ]
@@ -160,7 +160,10 @@ const CROSS_VERSION_WIRE_PREFIXES = [
 ]
 
 const MANAGED_HOOK_PREFIXES = [
-  'config/scripts/smoke-managed-hook-runtime-node18',
+  'config/scripts/smoke-managed-hook-runtime-bun',
+  'config/scripts/run-managed-hook-runtime-smoke',
+  'config/scripts/build-orcad-bun',
+  'src/shared/orcad-bun-runtime',
   'config/scripts/build-relay',
   'src/relay/',
   'src/shared/agent-hook',
@@ -423,7 +426,7 @@ function jobDetector(job) {
       return changesMobileWebApp
     case 'cross-version-wire':
       return (files) => files.some((file) => matchesPrefix(file, CROSS_VERSION_WIRE_PREFIXES))
-    case 'managed_hook_node18':
+    case 'managed_hook_bun':
       return (files) => files.some((file) => matchesPrefix(file, MANAGED_HOOK_PREFIXES))
     case 'package':
       return (files) => files.some(isLinuxPackagePath)

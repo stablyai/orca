@@ -49,8 +49,8 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
   execCommand: vi.fn().mockResolvedValue('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
 }))
 
-vi.mock('./ssh-remote-node-resolution', () => ({
-  resolveRemoteNodePath: vi.fn().mockResolvedValue('/usr/bin/node')
+vi.mock('./ssh-relay-bun-runtime', () => ({
+  ensureRemoteRelayBunRuntime: vi.fn().mockResolvedValue('/usr/bin/node')
 }))
 
 // Why: this file mocks fs, so the real content hash cannot read a binary.
@@ -62,9 +62,6 @@ vi.mock('../ripgrep/bundled-ripgrep-path', () => ({
 // Why: the fire-and-forget ripgrep install would drain the queued exec mocks.
 // Why: the post-launch ripgrep cache GC is fire-and-forget and would drain the queued exec mocks.
 vi.mock('./ssh-relay-ripgrep-cache-gc', () => ({ gcRemoteRipgrepCache: vi.fn() }))
-vi.mock('./ssh-relay-opencode-runtime', () => ({
-  ensureRemoteOpenCodeRuntime: vi.fn().mockResolvedValue('ready')
-}))
 vi.mock('./ssh-relay-ripgrep-install', async (importOriginal) => ({
   ...(await importOriginal<typeof RelayRipgrepInstallModule>()),
   ensureRemoteBundledRipgrep: vi.fn().mockResolvedValue('present'),
@@ -100,9 +97,8 @@ vi.mock('./ssh-connection-utils', () => ({
 }))
 
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
-import { ensureRemoteOpenCodeRuntime } from './ssh-relay-opencode-runtime'
 import { execCommand, waitForSentinel } from './ssh-relay-deploy-helpers'
-import { resolveRemoteNodePath } from './ssh-remote-node-resolution'
+import { ensureRemoteRelayBunRuntime } from './ssh-relay-bun-runtime'
 import { isRelayAlreadyInstalled, gcOldRelayVersions } from './ssh-relay-versioned-install'
 import { acquireInstallLock } from './ssh-relay-install-lock'
 import {
@@ -112,7 +108,6 @@ import {
 import { gcRemoteRipgrepCache } from './ssh-relay-ripgrep-cache-gc'
 import * as DeployTiming from './ssh-relay-deploy-timing'
 import type { SshConnection } from './ssh-connection'
-import type * as SshRemoteNodeResolution from './ssh-remote-node-resolution'
 import {
   DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
   MAX_SSH_RELAY_GRACE_PERIOD_SECONDS
@@ -167,14 +162,13 @@ function detachedLaunchCommand(conn: SshConnection): string | undefined {
 describe('deployAndLaunchRelay', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(ensureRemoteOpenCodeRuntime).mockReset().mockResolvedValue('ready')
     vi.mocked(execCommand).mockReset().mockResolvedValue('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
     vi.mocked(waitForSentinel).mockReset().mockResolvedValue({
       write: vi.fn(),
       onData: vi.fn(),
       onClose: vi.fn()
     })
-    vi.mocked(resolveRemoteNodePath).mockReset().mockResolvedValue('/usr/bin/node')
+    vi.mocked(ensureRemoteRelayBunRuntime).mockReset().mockResolvedValue('/usr/bin/node')
     vi.mocked(isRelayAlreadyInstalled).mockReset().mockResolvedValue(true)
     vi.mocked(acquireInstallLock).mockReset().mockResolvedValue(undefined)
   })
@@ -190,6 +184,11 @@ describe('deployAndLaunchRelay', () => {
 
     await deployAndLaunchRelay(conn)
 
+    const runtimeCommands = mockExecCommand.mock.calls
+      .map((call) => call[1])
+      .filter((command) => command.includes('--no-env-file'))
+    expect(runtimeCommands.length).toBeGreaterThan(1)
+    expect(runtimeCommands.every((command) => command.includes('--no-install'))).toBe(true)
     expect(mockExecCommand).toHaveBeenCalledWith(
       conn,
       "printf '\\n%s ' '__ORCA_REMOTE_PLATFORM__'; uname -sm",
@@ -236,292 +235,48 @@ describe('deployAndLaunchRelay', () => {
     ).toHaveLength(0)
   })
 
-  it('resolves the remote node path once per deploy', async () => {
+  it('resolves the bundled Bun runtime once per deploy', async () => {
     const conn = makeMockConnection()
     queueFreshLinuxDeploy()
 
     await deployAndLaunchRelay(conn)
 
-    expect(resolveRemoteNodePath).toHaveBeenCalledTimes(1)
+    expect(ensureRemoteRelayBunRuntime).toHaveBeenCalledTimes(1)
   })
 
-  it('resolves node concurrently with remote home, not after the install-state chain', async () => {
+  it('resolves the remote home before installing the bundled runtime', async () => {
     const conn = makeMockConnection()
-    const mockExecCommand = vi.mocked(execCommand)
-    mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64') // tagged POSIX platform probe
-
-    let markNodeResolutionStarted: () => void = () => {}
-    const nodeResolutionStarted = new Promise<void>((resolve) => {
-      markNodeResolutionStarted = resolve
-    })
-    vi.mocked(resolveRemoteNodePath).mockImplementationOnce(() => {
-      markNodeResolutionStarted()
-      return Promise.resolve('/usr/bin/node')
-    })
-
-    // Hold the first install-state step open. The optimization starts the node
-    // branch before the remote-home -> install-check chain finishes.
-    let releaseRemoteHome: (home: string) => void = () => {}
-    mockExecCommand.mockReturnValueOnce(
-      new Promise<string>((resolve) => {
-        releaseRemoteHome = resolve
-      })
-    )
-
-    const deployPromise = deployAndLaunchRelay(conn)
-    let assertionError: unknown
-    let deployError: unknown
-    try {
-      await nodeResolutionStarted
-
-      expect(isRelayAlreadyInstalled).not.toHaveBeenCalled()
-      expect(resolveRemoteNodePath).toHaveBeenCalledTimes(1)
-    } catch (err) {
-      assertionError = err
-    } finally {
-      // Drain the rest of the happy path so a failed assertion does not leave
-      // the deploy promise pending until the overall deploy timeout.
-      mockExecCommand.mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK') // native deps probe
-      queueLaunchNamespaceAndDeadSocketProbe()
-      mockExecCommand.mockResolvedValueOnce('READY') // socket poll
-      releaseRemoteHome('/home/user')
-      deployError = await deployPromise.then(
-        () => undefined,
-        (err: unknown) => err
-      )
-    }
-    if (assertionError) {
-      throw assertionError
-    }
-    if (deployError) {
-      throw deployError
-    }
-  })
-
-  it('keeps bootstrap sequential when the connection cannot run concurrent exec commands', async () => {
-    const conn = makeMockConnection()
-    vi.mocked(conn.canRunConcurrentExecCommands).mockReturnValue(false)
-    const mockExecCommand = vi.mocked(execCommand)
-    mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64') // tagged POSIX platform probe
-    let releaseRemoteHome: (home: string) => void = () => {}
-    let remoteHomeProbeStarted: () => void = () => {}
-    const remoteHomeProbeStartedPromise = new Promise<void>((resolve) => {
-      remoteHomeProbeStarted = resolve
-    })
-    mockExecCommand.mockReturnValueOnce(
-      new Promise<string>((resolve) => {
-        remoteHomeProbeStarted()
-        releaseRemoteHome = resolve
-      })
-    )
-
-    const deployPromise = deployAndLaunchRelay(conn)
-    await remoteHomeProbeStartedPromise
-    expect(resolveRemoteNodePath).not.toHaveBeenCalled()
-
-    mockExecCommand.mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK') // native deps probe
-    queueLaunchNamespaceAndDeadSocketProbe()
-    mockExecCommand.mockResolvedValueOnce('READY') // socket poll
-    releaseRemoteHome('/home/user')
-    await deployPromise
-    expect(resolveRemoteNodePath).toHaveBeenCalledTimes(1)
-  })
-
-  it('falls back to sequential bootstrap when concurrent SSH sessions are refused', async () => {
-    const conn = makeMockConnection()
-    const mockExecCommand = vi.mocked(execCommand)
-    const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
-      reason: 4
-    })
-    const { resolveRemoteNodePath: resolveRemoteNodePathActual } = await vi.importActual<
-      typeof SshRemoteNodeResolution
-    >('./ssh-remote-node-resolution')
-    let fallbackInstallStateCompleted = false
-    vi.mocked(resolveRemoteNodePath)
-      .mockImplementationOnce(resolveRemoteNodePathActual)
-      .mockImplementationOnce(() => {
-        if (!fallbackInstallStateCompleted) {
-          throw new Error('Sequential fallback resolved node before install state finished')
-        }
-        return Promise.resolve('/usr/bin/node')
-      })
-    vi.mocked(isRelayAlreadyInstalled)
-      .mockImplementationOnce(async (_conn, _dir, _host, options) => {
-        expect(options?.rethrowSessionLimitErrors).toBe(true)
-        return true
-      })
-      .mockImplementationOnce(async (_conn, _dir, _host, options) => {
-        expect(options?.rethrowSessionLimitErrors).toBeUndefined()
-        fallbackInstallStateCompleted = true
-        return true
-      })
-    mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64') // tagged POSIX platform probe
-    mockExecCommand.mockResolvedValueOnce('/home/user') // concurrent install-state $HOME
-    mockExecCommand.mockRejectedValueOnce(sessionLimitError) // concurrent node path probe
-    mockExecCommand.mockResolvedValueOnce('/home/user') // sequential fallback $HOME
-    mockExecCommand.mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK') // native deps probe
-    queueLaunchNamespaceAndDeadSocketProbe()
-    mockExecCommand.mockResolvedValueOnce('READY') // socket poll
-
+    queueFreshLinuxDeploy()
     await deployAndLaunchRelay(conn)
-
-    expect(isRelayAlreadyInstalled).toHaveBeenCalledTimes(3)
-    expect(vi.mocked(isRelayAlreadyInstalled).mock.calls[2]?.[3]).toMatchObject({
-      rethrowSessionLimitErrors: true
-    })
-    expect(resolveRemoteNodePath).toHaveBeenCalledTimes(2)
+    expect(ensureRemoteRelayBunRuntime).toHaveBeenCalledWith(
+      conn,
+      expect.objectContaining({ os: 'linux' }),
+      '/home/user',
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
   })
 
-  it('falls back to sequential bootstrap when the install-state probe hits a session limit', async () => {
+  it('does not start a runtime install when the host home probe fails', async () => {
     const conn = makeMockConnection()
-    const mockExecCommand = vi.mocked(execCommand)
-    const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
-      reason: 4
-    })
-    vi.mocked(isRelayAlreadyInstalled)
-      .mockImplementationOnce(async (_conn, _dir, _host, options) => {
-        if (!options?.rethrowSessionLimitErrors) {
-          return true
-        }
-        throw sessionLimitError
-      })
-      .mockResolvedValueOnce(true)
-    mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64') // tagged POSIX platform probe
-    mockExecCommand.mockResolvedValueOnce('/home/user') // concurrent install-state $HOME
-    mockExecCommand.mockResolvedValueOnce('/home/user') // sequential fallback $HOME
-    mockExecCommand.mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK') // native deps probe
-    queueLaunchNamespaceAndDeadSocketProbe()
-    mockExecCommand.mockResolvedValueOnce('READY') // socket poll
-
-    await deployAndLaunchRelay(conn)
-
-    expect(isRelayAlreadyInstalled).toHaveBeenCalledTimes(3)
-    expect(vi.mocked(isRelayAlreadyInstalled).mock.calls[0]?.[3]).toMatchObject({
-      rethrowSessionLimitErrors: true
-    })
-    expect(vi.mocked(isRelayAlreadyInstalled).mock.calls[1]?.[3]).toMatchObject({
-      rethrowSessionLimitErrors: undefined,
-      signal: expect.any(AbortSignal)
-    })
-    expect(vi.mocked(isRelayAlreadyInstalled).mock.calls[2]?.[3]).toMatchObject({
-      rethrowSessionLimitErrors: true
-    })
-    expect(resolveRemoteNodePath).toHaveBeenCalledTimes(2)
+    const error = new Error('home probe failed')
+    vi.mocked(execCommand)
+      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+      .mockRejectedValueOnce(error)
+    await expect(deployAndLaunchRelay(conn)).rejects.toThrow('home probe failed')
+    expect(ensureRemoteRelayBunRuntime).not.toHaveBeenCalled()
+    expect(conn.exec).not.toHaveBeenCalled()
   })
 
-  it('does not retry bootstrap for non-session failures', async () => {
+  it('does not launch or retry after an unconfirmed Bun installation', async () => {
     const conn = makeMockConnection()
-    const mockExecCommand = vi.mocked(execCommand)
-    const nodeError = new Error('Node.js not found on remote host')
-    vi.mocked(resolveRemoteNodePath).mockRejectedValueOnce(nodeError)
-    mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64') // tagged POSIX platform probe
-    mockExecCommand.mockResolvedValueOnce('/home/user') // concurrent install-state $HOME
-
-    await expect(deployAndLaunchRelay(conn)).rejects.toBe(nodeError)
-    expect(isRelayAlreadyInstalled).toHaveBeenCalledTimes(1)
-    expect(resolveRemoteNodePath).toHaveBeenCalledTimes(1)
-  })
-
-  it('aborts a pending sibling probe and preserves a non-session install-state failure', async () => {
-    const conn = makeMockConnection()
-    const mockExecCommand = vi.mocked(execCommand)
-    let nodeProbeAborted = false
-    vi.mocked(resolveRemoteNodePath).mockImplementationOnce((_conn, _host, options) => {
-      return new Promise<string>((_resolve, reject) => {
-        options?.signal?.addEventListener('abort', () => {
-          nodeProbeAborted = true
-          const abortError = new Error('aborted')
-          abortError.name = 'AbortError'
-          reject(abortError)
-        })
-      })
-    })
-    mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64') // tagged POSIX platform probe
-    mockExecCommand.mockResolvedValueOnce('relative-home') // invalid install-state $HOME
-
-    const timedDeploy = Promise.race([
-      deployAndLaunchRelay(conn),
-      new Promise<never>((_resolve, reject) => {
-        setTimeout(() => reject(new Error('deploy did not fail promptly')), 100)
-      })
-    ])
-
-    await expect(timedDeploy).rejects.toThrow(/Remote home is not a valid path/)
-    expect(nodeProbeAborted).toBe(true)
-    expect(resolveRemoteNodePath).toHaveBeenCalledTimes(1)
-  })
-
-  it.each([false, true])(
-    'does not retry after a sibling failure (unconfirmed abort: %s)',
-    async (unconfirmed) => {
-      const conn = makeMockConnection()
-      const mockExecCommand = vi.mocked(execCommand)
-      const sessionLimitError = Object.assign(
-        new Error('(SSH) Channel open failure: open failed'),
-        {
-          reason: 4
-        }
-      )
-      const installError = unconfirmed
-        ? Object.assign(new Error('probe still running'), {
-            name: 'AbortError',
-            sshChannelCloseConfirmed: false
-          })
-        : new Error('permission denied while checking relay install')
-      vi.mocked(resolveRemoteNodePath).mockRejectedValueOnce(sessionLimitError)
-      vi.mocked(isRelayAlreadyInstalled).mockRejectedValueOnce(installError)
-      mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64') // tagged POSIX platform probe
-      mockExecCommand.mockResolvedValueOnce('/home/user') // concurrent install-state $HOME
-
-      await expect(deployAndLaunchRelay(conn)).rejects.toBe(installError)
-      expect(isRelayAlreadyInstalled).toHaveBeenCalledTimes(1)
-      expect(resolveRemoteNodePath).toHaveBeenCalledTimes(1)
-    }
-  )
-
-  it('lets the surviving probe finish before retrying a refused SSH session', async () => {
-    const conn = makeMockConnection()
-    const mockExecCommand = vi.mocked(execCommand)
-    const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
-      reason: 4
-    })
-    mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64') // tagged POSIX platform probe
-    let releaseRemoteHome: (home: string) => void = () => {}
-    let remoteHomeSettled = false
-    const cancelledProbe = Object.assign(new Error('system SSH probe cancellation unconfirmed'), {
-      name: 'AbortError',
+    queueFreshLinuxDeploy()
+    const error = Object.assign(new Error('runtime install uncertain'), {
       sshChannelCloseConfirmed: false
     })
-    mockExecCommand.mockImplementationOnce(
-      (_conn, _command, options) =>
-        new Promise<string>((resolve, reject) => {
-          options?.signal?.addEventListener('abort', () => reject(cancelledProbe), { once: true })
-          releaseRemoteHome = (home: string) => {
-            remoteHomeSettled = true
-            resolve(home)
-          }
-        })
-    )
-    vi.mocked(resolveRemoteNodePath).mockImplementationOnce(() => Promise.reject(sessionLimitError))
-    vi.mocked(resolveRemoteNodePath).mockImplementationOnce(() => {
-      if (!remoteHomeSettled) {
-        throw new Error('Sequential fallback started before first install-state probe settled')
-      }
-      return Promise.resolve('/usr/bin/node')
-    })
-
-    const deployPromise = deployAndLaunchRelay(conn).catch((error: unknown) => error)
-    await vi.waitFor(() => expect(resolveRemoteNodePath).toHaveBeenCalledTimes(1))
-    await new Promise<void>((resolve) => setImmediate(resolve))
-    expect(resolveRemoteNodePath).toHaveBeenCalledTimes(1)
-
-    mockExecCommand.mockResolvedValueOnce('/home/user') // sequential fallback $HOME
-    mockExecCommand.mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK') // native deps probe
-    queueLaunchNamespaceAndDeadSocketProbe()
-    mockExecCommand.mockResolvedValueOnce('READY') // socket poll
-    releaseRemoteHome('/home/user')
-    await expect(deployPromise).resolves.toHaveProperty('transport')
-    expect(resolveRemoteNodePath).toHaveBeenCalledTimes(2)
+    vi.mocked(ensureRemoteRelayBunRuntime).mockRejectedValueOnce(error)
+    await expect(deployAndLaunchRelay(conn)).rejects.toBe(error)
+    expect(ensureRemoteRelayBunRuntime).toHaveBeenCalledOnce()
+    expect(conn.exec).not.toHaveBeenCalled()
   })
 
   it('defaults fresh relays to keep-alive-until-reset without rollout artifacts', async () => {
@@ -572,35 +327,18 @@ describe('deployAndLaunchRelay', () => {
       await new Promise<void>((resolve) => setImmediate(resolve))
       expect(execCommand).toHaveBeenCalledTimes(execCount)
       expect(gcOldRelayVersions).not.toHaveBeenCalled()
-      expect(ensureRemoteOpenCodeRuntime).toHaveBeenCalledTimes(concurrent ? 1 : 0)
       finishUpload()
       await vi.waitFor(() => expect(gcOldRelayVersions).toHaveBeenCalledOnce())
     }
   )
 
-  it.each([false, true])(
-    'waits for SQLite setup before cleanup (concurrent exec: %s)',
-    async (concurrent) => {
-      const conn = makeMockConnection()
-      vi.mocked(conn.canRunConcurrentExecCommands).mockReturnValue(concurrent)
-      queueFreshLinuxDeploy()
-      let finishSetup!: () => void
-      vi.mocked(ensureRemoteOpenCodeRuntime).mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            finishSetup = () => resolve('failed')
-          })
-      )
-      await deployAndLaunchRelay(conn)
-      await vi.waitFor(() => expect(ensureRemoteOpenCodeRuntime).toHaveBeenCalledOnce())
-      const execCount = vi.mocked(execCommand).mock.calls.length
-      await new Promise<void>((resolve) => setImmediate(resolve))
-      expect(execCommand).toHaveBeenCalledTimes(execCount)
-      expect(gcOldRelayVersions).not.toHaveBeenCalled()
-      finishSetup()
-      await vi.waitFor(() => expect(gcOldRelayVersions).toHaveBeenCalledOnce())
-    }
-  )
+  it('uses the required Bun runtime without installing a second SQLite runtime', async () => {
+    const conn = makeMockConnection()
+    queueFreshLinuxDeploy()
+    await deployAndLaunchRelay(conn)
+    await vi.waitFor(() => expect(gcOldRelayVersions).toHaveBeenCalledOnce())
+    expect(ensureRemoteRelayBunRuntime).toHaveBeenCalledOnce()
+  })
 
   it('does not launch or upload an unprotected binary when recording its reference fails', async () => {
     const conn = makeMockConnection()
@@ -610,23 +348,6 @@ describe('deployAndLaunchRelay', () => {
     expect(detachedLaunchCommand(conn)).not.toContain('--ripgrep-path')
     expect(ensureRemoteBundledRipgrep).not.toHaveBeenCalled()
   })
-
-  it.each([false, true])(
-    'skips cleanup after unconfirmed SQLite teardown (concurrent exec: %s)',
-    async (concurrent) => {
-      const conn = makeMockConnection()
-      vi.mocked(conn.canRunConcurrentExecCommands).mockReturnValue(concurrent)
-      queueFreshLinuxDeploy()
-      vi.mocked(ensureRemoteOpenCodeRuntime).mockResolvedValueOnce('teardown-unconfirmed')
-      await deployAndLaunchRelay(conn)
-      await vi.waitFor(() => expect(ensureRemoteOpenCodeRuntime).toHaveBeenCalledOnce())
-      const execCount = vi.mocked(execCommand).mock.calls.length
-      await new Promise<void>((resolve) => setImmediate(resolve))
-      expect(execCommand).toHaveBeenCalledTimes(execCount)
-      expect(gcOldRelayVersions).not.toHaveBeenCalled()
-      expect(gcRemoteRipgrepCache).not.toHaveBeenCalled()
-    }
-  )
 
   it('does not launch after an unconfirmed ripgrep reference write', async () => {
     const conn = makeMockConnection()
@@ -642,7 +363,7 @@ describe('deployAndLaunchRelay', () => {
   })
 
   it.each([false, true])(
-    'blocks cleanup and runtime retry after uncertain ripgrep teardown (concurrent exec: %s)',
+    'blocks cleanup after uncertain ripgrep teardown (concurrent exec: %s)',
     async (concurrent) => {
       const conn = makeMockConnection()
       vi.mocked(conn.canRunConcurrentExecCommands).mockReturnValue(concurrent)
@@ -650,42 +371,27 @@ describe('deployAndLaunchRelay', () => {
       vi.mocked(ensureRemoteBundledRipgrep).mockRejectedValueOnce(
         Object.assign(new Error('upload still running'), { sshChannelCloseConfirmed: false })
       )
-      vi.mocked(ensureRemoteOpenCodeRuntime).mockResolvedValue('failed')
-      const deployed = await deployAndLaunchRelay(conn)
+      await deployAndLaunchRelay(conn)
       await new Promise<void>((resolve) => setImmediate(resolve))
       expect(gcOldRelayVersions).not.toHaveBeenCalled()
       expect(gcRemoteRipgrepCache).not.toHaveBeenCalled()
       const execCount = vi.mocked(execCommand).mock.calls.length
-      const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 60_001)
-      try {
-        await deployed.prepareOpenCodeRuntime?.(new AbortController().signal)
-        expect(ensureRemoteOpenCodeRuntime).toHaveBeenCalledTimes(concurrent ? 1 : 0)
-        expect(execCommand).toHaveBeenCalledTimes(execCount)
-      } finally {
-        clock.mockRestore()
-      }
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      expect(execCommand).toHaveBeenCalledTimes(execCount)
     }
   )
 
   it.each([false, true])(
-    'gates later cache cleanup and runtime retry on GC termination (confirmed: %s)',
+    'does not continue cache cleanup after failed version GC (confirmed: %s)',
     async (confirmed) => {
       const conn = makeMockConnection()
       queueFreshLinuxDeploy()
-      vi.mocked(ensureRemoteOpenCodeRuntime).mockResolvedValueOnce('failed')
       vi.mocked(gcOldRelayVersions).mockRejectedValueOnce(
         Object.assign(new Error('GC interrupted'), { sshChannelCloseConfirmed: confirmed })
       )
-      const deployed = await deployAndLaunchRelay(conn)
+      await deployAndLaunchRelay(conn)
       await vi.waitFor(() => expect(gcOldRelayVersions).toHaveBeenCalledOnce())
       expect(gcRemoteRipgrepCache).not.toHaveBeenCalled()
-      const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 60_001)
-      try {
-        await deployed.prepareOpenCodeRuntime?.(new AbortController().signal)
-        expect(ensureRemoteOpenCodeRuntime).toHaveBeenCalledTimes(confirmed ? 2 : 1)
-      } finally {
-        clock.mockRestore()
-      }
     }
   )
 

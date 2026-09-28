@@ -45,16 +45,13 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
   execCommand: vi.fn().mockResolvedValue('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
 }))
 
-vi.mock('./ssh-remote-node-resolution', () => ({
-  resolveRemoteNodePath: vi.fn().mockResolvedValue('/usr/bin/node')
+vi.mock('./ssh-relay-bun-runtime', () => ({
+  ensureRemoteRelayBunRuntime: vi.fn().mockResolvedValue('/usr/bin/node')
 }))
 
 // Why: the post-launch ripgrep install is fire-and-forget and would drain the queued exec mocks.
 // Why: the post-launch ripgrep cache GC is fire-and-forget and would drain the queued exec mocks.
 vi.mock('./ssh-relay-ripgrep-cache-gc', () => ({ gcRemoteRipgrepCache: vi.fn() }))
-vi.mock('./ssh-relay-opencode-runtime', () => ({
-  ensureRemoteOpenCodeRuntime: vi.fn().mockResolvedValue('ready')
-}))
 vi.mock('./ssh-relay-ripgrep-install', async (importOriginal) => ({
   ...(await importOriginal<typeof RelayRipgrepInstallModule>()),
   ensureRemoteBundledRipgrep: vi.fn().mockResolvedValue('present'),
@@ -89,7 +86,7 @@ vi.mock('./ssh-connection-utils', () => ({
 
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
 import { execCommand, waitForSentinel } from './ssh-relay-deploy-helpers'
-import { resolveRemoteNodePath } from './ssh-remote-node-resolution'
+import { ensureRemoteRelayBunRuntime } from './ssh-relay-bun-runtime'
 import { isRelayAlreadyInstalled } from './ssh-relay-versioned-install'
 import { acquireInstallLock } from './ssh-relay-install-lock'
 import { ensureRemoteBundledRipgrep } from './ssh-relay-ripgrep-install'
@@ -145,7 +142,7 @@ describe('deployAndLaunchRelay staged uploads', () => {
       onData: vi.fn(),
       onClose: vi.fn()
     })
-    vi.mocked(resolveRemoteNodePath).mockReset().mockResolvedValue('/usr/bin/node')
+    vi.mocked(ensureRemoteRelayBunRuntime).mockReset().mockResolvedValue('/usr/bin/node')
     vi.mocked(isRelayAlreadyInstalled).mockReset().mockResolvedValue(true)
     vi.mocked(acquireInstallLock).mockReset().mockResolvedValue(undefined)
   })

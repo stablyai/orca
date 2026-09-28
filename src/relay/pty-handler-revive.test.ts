@@ -24,9 +24,7 @@ const { mockPtySpawn, mockPtyInstance, mockCreateShellPromptReadinessProbe } = v
   }
 }))
 
-vi.mock('node-pty', () => ({
-  spawn: mockPtySpawn
-}))
+vi.mock('./relay-pty-runtime', () => ({ bunRelayPtyModule: { spawn: mockPtySpawn } }))
 
 vi.mock('../main/pty/posix-pty-process-groups', () => ({
   forceKillPosixPtyProcessGroups: vi.fn((_pid: number, fallback: () => void) => fallback())

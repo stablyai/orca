@@ -73,6 +73,7 @@ export function createLocalPtyShellReadinessSession(args: {
   }
   if (shellStartupOutputScanState) {
     shellPromptReadinessProbe = createShellPromptReadinessProbe({
+      ptyPid: proc.pid,
       slavePath: readPtySlavePath(proc),
       shellPath: plan.shellPath,
       shellCwd: plan.effectiveCwd,

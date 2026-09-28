@@ -47,7 +47,7 @@ jobs:
       test: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.test }}
       orcad_browser: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.orcad_browser }}
       cross-version-wire: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.cross-version-wire }}
-      managed_hook_node18: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.managed_hook_node18 }}
+      managed_hook_bun: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.managed_hook_bun }}
       package: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.package }}
       package_windows: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.package_windows }}
       e2e_should_run: ${{ steps.e2e_filter.outputs.should_run }}
@@ -143,6 +143,17 @@ jobs:
             echo "should_run=false" >> "$GITHUB_OUTPUT"
             echo "No specs requiring the reusable E2E workflow"
           fi
+
+  windows_watcher:
+    permissions:
+      contents: read
+    needs: code_paths
+    if: >-
+      needs.code_paths.outputs.test == 'true' ||
+      needs.code_paths.outputs.package == 'true' ||
+      needs.code_paths.outputs.package_windows == 'true' ||
+      needs.code_paths.outputs.managed_hook_bun == 'true'
+    uses: ./.github/workflows/windows-watcher-artifacts.yml
 
   static_analysis:
     name: static analysis
@@ -551,8 +562,8 @@ jobs:
 
       - name: Test real shell contracts
         run: |
+          node config/scripts/run-bun-profile-tests.mjs --maxWorkers=1 src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts
           pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 \
-            src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts \
             src/main/daemon/shell-ready.test.ts \
             src/main/daemon/node-pty-fd-leak.test.ts \
             src/main/providers/local-pty-shell-ready-zsh-launch-environment.test.ts \
@@ -591,15 +602,17 @@ jobs:
           node-version: '24'
 
   test:
-    needs: [code_paths, test_native_cache]
+    needs: [code_paths, test_native_cache, windows_watcher]
     # Honor cancellation while allowing the optional native-cache primer to skip.
     if: >-
       !cancelled() &&
       needs.code_paths.outputs.test == 'true' &&
+      needs.windows_watcher.result == 'success' &&
       (needs.test_native_cache.result == 'success' || needs.test_native_cache.result == 'skipped')
     uses: ./.github/workflows/unit-tests.yml
     with:
       node_versions: '["24"]'
+      windows_watcher_ready: true
 
   # Why a separate job: the test needs a real Chrome, and the sharded `test` matrix
   # would pay for it on every shard to run one file in whichever shard it landed in.
@@ -749,10 +762,10 @@ jobs:
           tests/e2e/cross-version-wire/cross-version-session-tabs-retirement-proof.unit.test.ts
           tests/e2e/cross-version-wire/agent-session-unproven-release-downgrade.unit.test.ts
 
-  managed_hook_node18:
-    name: managed hooks on Node 18
-    needs: [code_paths]
-    if: needs.code_paths.outputs.managed_hook_node18 == 'true'
+  managed_hook_bun:
+    name: managed hooks on bundled Bun
+    needs: [code_paths, windows_watcher]
+    if: needs.code_paths.outputs.managed_hook_bun == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -761,22 +774,19 @@ jobs:
         with:
           persist-credentials: false
 
+      - uses: ./.github/actions/load-windows-watcher-artifacts
+
       - uses: ./.github/actions/install-node-dependencies
 
       - name: Build relay companions
         run: pnpm run build:relay
 
-      - name: Setup Node 18 runtime
-        uses: actions/setup-node@v6
-        with:
-          node-version: '18'
-
       - name: Smoke managed-hook companions
-        run: node config/scripts/smoke-managed-hook-runtime-node18.mjs
+        run: node config/scripts/run-managed-hook-runtime-smoke.mjs
 
   package:
     name: package
-    needs: [code_paths]
+    needs: [code_paths, windows_watcher]
     if: needs.code_paths.outputs.package == 'true'
     runs-on: ubuntu-latest
     # Let the serial Docker gates reach their own deadlines and report cleanup failures.
@@ -795,6 +805,8 @@ jobs:
           key: electron-builder-linux-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
             electron-builder-linux-
+
+      - uses: ./.github/actions/load-windows-watcher-artifacts
 
       - uses: ./.github/actions/install-node-dependencies
         with:
@@ -911,7 +923,7 @@ jobs:
 
   package_windows:
     name: package (windows)
-    needs: [code_paths]
+    needs: [code_paths, windows_watcher]
     if: needs.code_paths.outputs.package_windows == 'true'
     runs-on: windows-2022
     timeout-minutes: 30
@@ -935,6 +947,8 @@ jobs:
 
       # Why persist-native-cache false: this job later rebuilds the same path for
       # Electron. A post-job save would store the Electron ABI under the Node key.
+      - uses: ./.github/actions/load-windows-watcher-artifacts
+
       - uses: ./.github/actions/install-node-dependencies
         id: deps
         with:
@@ -958,6 +972,12 @@ jobs:
             node_modules/.pnpm/@vscode+windows-process-tre*/node_modules/@vscode/windows-process-tree/build
           key: native-modules-${{ runner.os }}-${{ steps.deps.outputs.native-cache-scope }}-${{ runner.arch }}-node-node${{ steps.deps.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch', 'native/windows-registry/src/addon.cc', 'native/windows-registry/binding.gyp', 'native/windows-registry/package.json') }}
 
+      # Keep cold PowerShell probes out of concurrent native and renderer tests.
+      - name: Test installer PowerShell capability
+        run: >-
+          pnpm exec vitest run --config config/vitest.config.ts
+          config/scripts/nsis-process-check.test.mjs
+
       # vitest runs here directly rather than through `pnpm test`, so the addon
       # assertions only hold once install-node-dependencies has rebuilt natives.
       - name: Test Windows-specific boundaries
@@ -966,7 +986,6 @@ jobs:
           config/scripts/rebuild-native-deps.test.mjs
           config/scripts/rebuild-native-deps-windows-process-tree.test.mjs
           config/scripts/rebuild-native-deps-node-pty.test.mjs
-          config/scripts/nsis-process-check.test.mjs
           config/scripts/ensure-native-runtime-job-ownership.test.mjs
           config/scripts/verify-packaged-node-pty-job-ownership.test.mjs
           config/scripts/windows-pe-machine.test.mjs
@@ -1109,7 +1128,7 @@ jobs:
       - orcad_browser
       - mobile_web_app
       - cross-version-wire
-      - managed_hook_node18
+      - managed_hook_bun
       - package
       - package_windows
     # Evaluating job results only needs the lightweight container runner.
@@ -1149,8 +1168,8 @@ jobs:
           MOBILE_WEB_APP_SHOULD_RUN: ${{ needs.code_paths.outputs.mobile_web_app }}
           CROSS_VERSION_WIRE: ${{ needs.cross-version-wire.result }}
           CROSS_VERSION_WIRE_SHOULD_RUN: ${{ needs.code_paths.outputs.cross-version-wire }}
-          MANAGED_HOOK_NODE18: ${{ needs.managed_hook_node18.result }}
-          MANAGED_HOOK_NODE18_SHOULD_RUN: ${{ needs.code_paths.outputs.managed_hook_node18 }}
+          MANAGED_HOOK_BUN: ${{ needs.managed_hook_bun.result }}
+          MANAGED_HOOK_BUN_SHOULD_RUN: ${{ needs.code_paths.outputs.managed_hook_bun }}
           PACKAGE: ${{ needs.package.result }}
           PACKAGE_SHOULD_RUN: ${{ needs.code_paths.outputs.package }}
           PACKAGE_WINDOWS: ${{ needs.package_windows.result }}
@@ -1188,7 +1207,7 @@ jobs:
           check_job orcad_browser "$ORCAD_BROWSER" "$ORCAD_BROWSER_SHOULD_RUN"
           check_job mobile_web_app "$MOBILE_WEB_APP" "$MOBILE_WEB_APP_SHOULD_RUN"
           check_job cross-version-wire "$CROSS_VERSION_WIRE" "$CROSS_VERSION_WIRE_SHOULD_RUN"
-          check_job managed_hook_node18 "$MANAGED_HOOK_NODE18" "$MANAGED_HOOK_NODE18_SHOULD_RUN"
+          check_job managed_hook_bun "$MANAGED_HOOK_BUN" "$MANAGED_HOOK_BUN_SHOULD_RUN"
           check_job package "$PACKAGE" "$PACKAGE_SHOULD_RUN"
           check_job package_windows "$PACKAGE_WINDOWS" "$PACKAGE_WINDOWS_SHOULD_RUN"
           exit "$failed"

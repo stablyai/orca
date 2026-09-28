@@ -26,9 +26,7 @@ const { mockPtySpawn, mockPtyInstance, mockCreateShellPromptReadinessProbe } = v
   }
 }))
 
-vi.mock('node-pty', () => ({
-  spawn: mockPtySpawn
-}))
+vi.mock('./relay-pty-runtime', () => ({ bunRelayPtyModule: { spawn: mockPtySpawn } }))
 
 vi.mock('../main/pty/posix-pty-process-groups', () => ({
   forceKillPosixPtyProcessGroups: vi.fn((_pid: number, fallback: () => void) => fallback())
@@ -234,31 +232,19 @@ describe('PtyHandler', () => {
     expect(handler.activePtyCount).toBe(1)
   })
 
-  it('releases a canceled operation before native spawn after module preflight', async () => {
-    let finishModuleLoad!: (value: { spawn: typeof mockPtySpawn }) => void
-    const moduleLoad = new Promise<{ spawn: typeof mockPtySpawn }>((resolve) => {
-      finishModuleLoad = resolve
-    })
-    const internals = handler as unknown as {
-      loadPty(): Promise<{ spawn: typeof mockPtySpawn } | null>
-    }
-    const loadPty = vi.spyOn(internals, 'loadPty').mockReturnValueOnce(moduleLoad)
+  it('releases a canceled operation before Bun spawn', async () => {
     const abort = new AbortController()
-    const operationId = 'c'.repeat(43)
-    const request = { cols: 80, rows: 24, agentSessionCreateOperationId: operationId }
-    const spawning = dispatcher.callRequest('pty.spawn', request, {
-      isStale: () => abort.signal.aborted,
-      signal: abort.signal
-    })
-
     abort.abort()
-    finishModuleLoad({ spawn: mockPtySpawn })
-    await expect(spawning).rejects.toThrow('client_disconnected')
+    const request = { cols: 80, rows: 24, agentSessionCreateOperationId: 'c'.repeat(43) }
+    await expect(
+      dispatcher.callRequest('pty.spawn', request, {
+        isStale: () => abort.signal.aborted,
+        signal: abort.signal
+      })
+    ).rejects.toThrow('client_disconnected')
     expect(mockPtySpawn).not.toHaveBeenCalled()
-
-    loadPty.mockResolvedValue({ spawn: mockPtySpawn })
     await expect(dispatcher.callRequest('pty.spawn', request)).resolves.toMatchObject({
-      id: testPtyId(2)
+      id: expect.any(String)
     })
     expect(mockPtySpawn).toHaveBeenCalledOnce()
   })
@@ -312,44 +298,14 @@ describe('PtyHandler', () => {
     expect(mockPtySpawn).toHaveBeenCalledOnce()
   })
 
-  it('normalizes a missing native binding as degraded node-pty availability', async () => {
-    mockPtySpawn.mockImplementationOnce(() => {
-      throw new Error(
-        'Failed to load native module: conpty.node, checked: build/Release, prebuilds/win32-x64'
-      )
-    })
-
-    await expect(dispatcher.callRequest('pty.spawn', {})).rejects.toThrow(
-      'Remote terminals are unavailable'
-    )
+  it('preserves Bun spawn failure evidence without guessing a Node toolchain remedy', async () => {
+    const failure = new Error('Bun terminal spawn failed: access denied')
+    mockPtySpawn.mockRejectedValueOnce(failure)
+    await expect(dispatcher.callRequest('pty.spawn', {})).rejects.toBe(failure)
     expect(handler.activePtyCount).toBe(0)
   })
 
-  it('keeps the load error it was handed instead of replacing it with guesses', async () => {
-    // #17830: the user got three remedies for four possible faults and could verify none.
-    // The relay must carry what it was actually told, and must not prescribe a toolchain
-    // install it never probed for.
-    const thrown =
-      'Failed to load native module: conpty.node, checked: build/Release, prebuilds/win32-x64'
-    mockPtySpawn.mockImplementationOnce(() => {
-      throw new Error(thrown)
-    })
-
-    const message = await dispatcher.callRequest('pty.spawn', {}).then(
-      () => '',
-      (error: Error) => error.message
-    )
-
-    expect(message).toContain(thrown)
-    expect(message).not.toContain('install make, a C++ compiler, and python3')
-    // Nothing here established a cause — the relay's node-pty directory is not on disk in
-    // this harness — so per docs/reference/ssh-execution-boundary.md it must say so rather
-    // than pick a diagnosis. Every message still names the host, for the bug report.
-    expect(message).toContain('could not establish why')
-    expect(message).toMatch(/Host: linux\/\w+, .*Node v[\d.]+ \(ABI \d+\)/)
-  })
-
-  it('preserves unrelated node-pty spawn failures', async () => {
+  it('preserves shell spawn failures', async () => {
     mockPtySpawn.mockImplementationOnce(() => {
       throw new Error('File not found: missing-shell.exe')
     })

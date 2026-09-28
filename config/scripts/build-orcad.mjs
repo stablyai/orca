@@ -22,10 +22,11 @@ import {
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 import { smokeProfileStateWorkers } from './profile-state-worker-smoke.mjs'
 import { materializeWatcherPackage } from './orcad-watcher-package.mjs'
+import { parcelWatcherWrapperSource } from './parcel-watcher-bundle.mjs'
 import { stageOrcadWindowsProcessTree } from './orcad-windows-process-tree.mjs'
 import {
   ORCAD_BUILD_TARGET_FILENAME,
@@ -74,17 +75,11 @@ const AGENT_BROWSER_OUTPUT = join(OUT_DIR, AGENT_BROWSER_NAME)
 const WATCHER_MODULE_DIR = join(OUT_DIR, 'node_modules', '@parcel', 'watcher')
 
 async function stageParcelWatcher(target) {
-  const requireFromWatcher = createRequire(
-    join(ROOT, 'node_modules', '@parcel', 'watcher', 'index.js')
-  )
   const nativeSource = await materializeWatcherPackage(target)
-  const wrapperSource = requireFromWatcher.resolve('@parcel/watcher/wrapper.js')
   mkdirSync(WATCHER_MODULE_DIR, { recursive: true })
   await build({
     stdin: {
-      contents:
-        `const {createWrapper}=require(${JSON.stringify(wrapperSource)});` +
-        `module.exports=createWrapper(require('./watcher.node'));`,
+      contents: parcelWatcherWrapperSource('./watcher.node'),
       resolveDir: ROOT,
       sourcefile: 'orcad-parcel-watcher-entry.js'
     },
@@ -180,12 +175,11 @@ const childResults = await Promise.all([
   buildForkedChild(WATCHER_ENTRY, WATCHER_OUT_FILE),
   buildForkedChild(DAEMON_ENTRY, DAEMON_OUT_FILE),
   buildForkedChild(PTY_GATE_ENTRY, PTY_GATE_OUT_FILE),
-  ...['writer', 'backup'].map((role) =>
-    buildForkedChild(
-      join(ROOT, ORCAD_CHILD_ENTRY_POINTS[role]),
-      join(OUT_DIR, `profile-state-${role}-worker-entry.js`)
+  ...Object.entries(ORCAD_CHILD_ENTRY_POINTS)
+    .filter(([role]) => !['watcher', 'daemon', 'ptyGate'].includes(role))
+    .map(([, entry]) =>
+      buildForkedChild(join(ROOT, entry), join(OUT_DIR, `${basename(entry, '.ts')}.js`))
     )
-  )
 ])
 
 const launcher = await buildOrcadLauncher(OUT_FILE)

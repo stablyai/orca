@@ -12,7 +12,7 @@ import {
   installSessionSearchDataRoot,
   sessionSearchServiceInit
 } from './session-search-service-init'
-import { sessionSearchSqliteAvailable } from './session-search-sqlite-support'
+import { isSqliteAvailable } from '../sqlite/sync-database'
 let installed = false
 
 /**
@@ -29,7 +29,7 @@ export function installChildSessionSearchService(args: {
   /** How a Workspace or Project scope becomes this host's own paths. */
   getScopeCatalog?: SessionSearchScopeCatalogSource
 }): { dispose(): void } | null {
-  if (!sessionSearchSqliteAvailable()) {
+  if (!isSqliteAvailable()) {
     return null
   }
   installed = true

@@ -2,6 +2,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { bunOwnedRuntimeArgs } from '../shared/bun-owned-runtime-args'
 import type { AiVaultScanIssue } from '../shared/ai-vault-types'
 import { getRemoteHostPlatform } from '../main/ssh/ssh-remote-platform'
 import { scanRemoteAiVaultSessions } from '../main/ai-vault/remote-session-scanner'
@@ -26,6 +27,7 @@ afterEach(async () => {
   }
   await Promise.all(directories.splice(0).map((path) => rm(path, { recursive: true, force: true })))
   resetRemoteSessionParseCacheForTests()
+  vi.unstubAllGlobals()
 })
 
 async function temporaryDirectory(): Promise<string> {
@@ -45,6 +47,55 @@ function factory() {
 }
 
 describe('relay OpenCode reader', () => {
+  it.each([
+    ['bun', 'current', true],
+    ['node', 'current', false],
+    ['bun', 'configured-current', true],
+    ['node', 'configured-current', false],
+    ['bun', 'configured-other', false],
+    ['bun', 'override-current', true],
+    ['bun', 'override-other', false]
+  ] as const)(
+    'isolates only a proven Bun executable: %s / %s',
+    async (runtime, selected, isolated) => {
+      const baseDir = await temporaryDirectory()
+      const actualExecutable = process.execPath
+      vi.stubGlobal('process', {
+        ...process,
+        versions: { ...process.versions, bun: runtime === 'bun' ? '1.4.2' : undefined }
+      })
+      const otherExecutable = join(baseDir, 'bun')
+      const executable = selected.endsWith('other') ? otherExecutable : actualExecutable
+      if (selected.startsWith('configured')) {
+        await writeFile(
+          join(baseDir, 'opencode-sqlite-runtime.json'),
+          JSON.stringify({ protocol: 1, executable })
+        )
+      }
+      const { create } = factory()
+      const reader = createRelayOpenCodeReader({
+        baseDir,
+        ...(selected.startsWith('override') ? { currentExecutable: executable } : {}),
+        readerFactory: create,
+        canReadSqlite: () => true
+      })
+      disposables.push(reader)
+      const issues: AiVaultScanIssue[] = []
+      await reader.list({ dbPaths: [join(baseDir, 'opencode.db')], limit: 1, issues })
+      expect(issues).toEqual([])
+      expect(create.mock.calls[0]?.[0].args?.includes('--no-install')).toBe(isolated)
+      expect(create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          executable,
+          args: [
+            ...(isolated ? bunOwnedRuntimeArgs() : []),
+            join(baseDir, 'opencode-sqlite-reader.cjs')
+          ]
+        })
+      )
+    }
+  )
+
   it('coalesces a persistent reader selected by the provisioned runtime reference', async () => {
     const baseDir = await temporaryDirectory()
     const executable = join(baseDir, 'runtime', 'bun')

@@ -60,6 +60,16 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  windows_watcher:
+    permissions:
+      contents: read
+    needs: cut
+    if: needs.cut.outputs.should_release == 'true'
+    uses: ./.github/workflows/windows-watcher-artifacts.yml
+    with:
+      ref: refs/tags/${{ needs.cut.outputs.tag }}
+      artifact_prefix: windows-watcher-release-cut
+
   cut:
     # Why: this job bumps package.json and fast-forwards main. On a fork with
     # Actions enabled, the scheduled cut would run against the fork's main and
@@ -1173,6 +1183,7 @@ jobs:
 
   build:
     needs:
+      - windows_watcher
       - cut
       - create-release
       - release-preflight
@@ -1408,6 +1419,14 @@ jobs:
       # Why ORCA_DIAGNOSTICS_TOKEN_URL here: official builds pin crash
       # diagnostic uploads to Orca's endpoint at compile time, matching the
       # telemetry gate's "official binary only" behavior.
+      - name: Load qualified Windows watchers
+        if: hashFiles('config/scripts/windows-watcher-artifact.mjs') != ''
+        uses: actions/download-artifact@v8
+        with:
+          pattern: windows-watcher-release-cut-*
+          merge-multiple: true
+          path: .build/windows-watcher
+
       - name: Build app
         run: pnpm build:release
         env:

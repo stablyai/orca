@@ -46,7 +46,7 @@ export function stopOrcadCommand(
       ? []
       : [
           `runtime_pid=$(${selectOrcadSlotRuntimeCommand(host, remoteInstallDir, options.nodePath)}; ` +
-            `"$orcad_runtime" -e ${shellEscape(readRuntimePid)} ${readiness} 2>/dev/null) || { echo UNKNOWN; exit 0; };`,
+            `"$orcad_runtime" $orcad_runtime_flags -e ${shellEscape(readRuntimePid)} ${readiness} 2>/dev/null) || { echo UNKNOWN; exit 0; };`,
           '[ "$pid" = "$runtime_pid" ] || { echo UNKNOWN; exit 0; };'
         ]),
     'orcad_alive "$pid" || { echo ALREADY_EXITED; exit 0; };',

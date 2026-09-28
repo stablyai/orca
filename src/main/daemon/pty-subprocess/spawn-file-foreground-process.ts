@@ -90,6 +90,16 @@ export async function resolveSpawnFileForegroundProcess(
         : await getProcessTableSnapshot()
       return resolveSpawnFileForegroundFromRows(rows, proc.pid)
     }
+    // A validated shell-only job needs no process-table or console probe.
+    if (
+      fallbackProcess &&
+      proc.process &&
+      isShellProcess(proc.process) &&
+      isShellProcess(fallbackProcess) &&
+      readWindowsPtyJobProcessIds(proc)?.size === 1
+    ) {
+      return { available: true, processName: fallbackProcess }
+    }
     const resolution = await resolveAgentForegroundProcessWithAvailability(
       proc.pid,
       fallbackProcess,

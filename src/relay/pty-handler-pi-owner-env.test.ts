@@ -25,7 +25,7 @@ const mocks = vi.hoisted(() => ({
     resume: vi.fn()
   }
 }))
-vi.mock('node-pty', () => ({ spawn: mocks.mockPtySpawn }))
+vi.mock('./relay-pty-runtime', () => ({ bunRelayPtyModule: { spawn: mocks.mockPtySpawn } }))
 vi.mock('../main/shell-prompt-readiness-probe', () => ({
   createShellPromptReadinessProbe: mocks.mockCreateShellPromptReadinessProbe
 }))

@@ -2,7 +2,6 @@ import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import type { ClientChannel } from 'ssh2'
 import { execCommand, waitForSentinel } from './ssh-relay-deploy-helpers'
-import { shouldProbeBuildToolchainAfterNativeDepsFailure } from './ssh-relay-build-toolchain'
 import { RELAY_SENTINEL } from './relay-protocol'
 import {
   RelayVersionMismatchError,
@@ -369,7 +368,8 @@ describe('execCommand', () => {
     const conn = {
       exec: vi.fn().mockResolvedValue(channel)
     }
-    const commandPromise = execCommand(conn as never, 'npm install 2>&1')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: execCommand only uses exec, which returns the event-capable channel fixture.
+    const commandPromise = execCommand(conn as never, 'bun install 2>&1')
 
     await Promise.resolve()
     // Why: the system-ssh transport routes the local OpenSSH client's own
@@ -400,17 +400,15 @@ describe('execCommand', () => {
     expect(error.message.length).toBeLessThan(1024 * 1024 + 200)
   })
 
-  it('keeps the merged error message greppable by the build-toolchain probe', async () => {
+  it('preserves install errors alongside the SSH warning', async () => {
     const channel = createMockChannel()
     const conn = {
       exec: vi.fn().mockResolvedValue(channel)
     }
-    const commandPromise = execCommand(conn as never, 'npm install 2>&1')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: execCommand only uses exec, which returns the event-capable channel fixture.
+    const commandPromise = execCommand(conn as never, 'bun install 2>&1')
 
     await Promise.resolve()
-    // Why: the OpenSSH banner alone never matches the probe, so the old
-    // `stderr || stdout` masking suppressed the actionable "install build
-    // tools" hint. The merged message keeps the node-gyp failure visible.
     channel.stderr.emit('data', Buffer.from("Warning: Permanently added 'host' (ED25519)\n"))
     channel.emit(
       'data',
@@ -421,7 +419,8 @@ describe('execCommand', () => {
     channel.emit('close', 1)
 
     const error = await execCommandRejection(commandPromise)
-    expect(shouldProbeBuildToolchainAfterNativeDepsFailure(error.message)).toBe(true)
+    expect(error.message).toContain('not found: make')
+    expect(error.message).toContain('Permanently added')
   })
 
   it('cleans command channel listeners when a command times out', async () => {

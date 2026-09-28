@@ -31,8 +31,8 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
   execCommand: vi.fn()
 }))
 
-vi.mock('./ssh-remote-node-resolution', () => ({
-  resolveRemoteNodePath: vi.fn().mockResolvedValue('/usr/bin/node')
+vi.mock('./ssh-relay-bun-runtime', () => ({
+  ensureRemoteRelayBunRuntime: vi.fn().mockResolvedValue('/usr/bin/node')
 }))
 
 vi.mock('./ssh-relay-install-marker', async (importOriginal) => ({
@@ -79,7 +79,7 @@ import {
 } from './ssh-relay-versioned-install'
 import { acquireInstallLock } from './ssh-relay-install-lock'
 import {
-  makeExecResponses,
+  makeSuccessfulBunInstallResponses,
   makeStagedFirstInstallExecPrefix,
   makeMockConnection,
   type ExecResponse,
@@ -119,107 +119,9 @@ describe('installNativeDeps staged uploads', () => {
     }
   }
 
-  it('writes a hardcoded package.json BEFORE running npm install', async () => {
-    const conn = makeMockConnection(sftpCapture)
-    feed(makeExecResponses({ npmInstall: 'ok', probe: 'ok' }))
-
-    await deployAndLaunchRelay(conn)
-
-    const pkgPath = sftpCapture.paths.find((path) => path.endsWith('/package.json'))
-    expect(pkgPath, 'package.json must be written via SFTP').toBeTruthy()
-
-    const written = sftpCapture.contents[pkgPath as string]
-    expect(written).toBeTruthy()
-    const parsed = JSON.parse(written) as Record<string, unknown>
-    expect(parsed.name).toBe('orca-relay')
-    expect(parsed.version).toBe('1.0.0')
-    expect(parsed.private).toBe(true)
-    expect(parsed.type).toBe('commonjs')
-    expect(parsed.dependencies).toEqual({ '@parcel/watcher': '2.5.6', 'node-pty': '1.1.0' })
-    expect(parsed.allowScripts).toEqual({
-      '@parcel/watcher@2.5.6': true,
-      'node-pty@1.1.0': true
-    })
-
-    const execCalls = vi.mocked(execCommand).mock.calls.map(([, command]) => command)
-    const npmInstallIdx = execCalls.findIndex(
-      (command) =>
-        command.includes('npm install') &&
-        command.includes('node-pty') &&
-        command.includes('@parcel/watcher')
-    )
-    expect(npmInstallIdx).toBeGreaterThanOrEqual(0)
-    expect(execCalls[npmInstallIdx]).toContain('--ignore-scripts=false')
-    const writeObservedAt = sftpCapture.execCallCountAtWrite[pkgPath as string]
-    expect(writeObservedAt).toBeLessThanOrEqual(npmInstallIdx)
-  })
-
-  it('exports the host Node headers dir to node-gyp on every command that can compile node-pty (STA-6674)', async () => {
-    const conn = makeMockConnection(sftpCapture)
-    // Install succeeds, the probe fails, the rebuild repairs it, then the cloexec patch rebuilds again.
-    feed(makeExecResponses({ npmInstall: 'ok', probe: 'missing', repairProbe: 'ok' }))
-
-    await deployAndLaunchRelay(conn)
-
-    const commands = vi.mocked(execCommand).mock.calls.map(([, command]) => command)
-    const compiling = ['npm install', 'npm rebuild', 'node-pty-1.1.0-master-cloexec-patch.cjs']
-    for (const compileStep of compiling) {
-      const command = commands.find((candidate) => candidate.includes(compileStep))
-      expect(command, compileStep).toBeDefined()
-      // Both spellings: node-gyp 10 (Node 20) reads only npm_config_, node-gyp >= 11.4 prefers the other.
-      expect(command).toContain('export npm_config_nodedir=')
-      expect(command).toContain('npm_package_config_node_gyp_nodedir=')
-      // The export precedes the compile on the same command line, and only when the probe found headers.
-      expect(command!.indexOf('npm_config_nodedir')).toBeLessThan(command!.indexOf(compileStep))
-      expect(command).toContain('node_version.h')
-      // The marker lands in the captured output, so a failure after it can say what was exported.
-      expect(command).toContain('echo "ORCA-NODE-HEADERS:${ORCA_NODE_HEADERS_DIR:-none}"')
-    }
-  })
-
-  // What execCommand actually rejects with: the whole command line (marker echo included) quoted
-  // ahead of the host's output. A fixture that omits the command hides the marker-parsing bug.
-  function rejectNpmInstallLikeExecCommand(hostOutput: string): void {
-    vi.mocked(execCommand).mockImplementationOnce(async (_conn, command) => {
-      throw new Error(`Command "${command}" failed (exit 1): ${hostOutput}`)
-    })
-  }
-  const HEADERS_REFUSED =
-    'npm error gyp http fetch GET https://nodejs.org/download/release/v24.12.0/node-v24.12.0-headers.tar.gz attempt 1 failed with ECONNREFUSED\nnpm error gyp ERR! configure error'
-
-  it('names the fix when node-gyp cannot download headers and the host ships none (STA-6674)', async () => {
-    const conn = makeMockConnection(sftpCapture)
-    feed(makeStagedFirstInstallExecPrefix())
-    rejectNpmInstallLikeExecCommand(`ORCA-NODE-HEADERS:none\n${HEADERS_REFUSED}`)
-    feed(['']) // clean stage root
-
-    const error = await deployAndLaunchRelay(conn).catch((e: Error) => e)
-    expect((error as Error).message).toContain('could not download the Node.js headers')
-    expect((error as Error).message).toContain('no local headers matching its own version')
-    expect((error as Error).message).not.toContain('Orca defect')
-    expect((error as Error).message).toContain('ECONNREFUSED')
-    // A full toolchain: the toolchain probe must not run, and this is not a "build tools" error.
-    expect((error as Error).message).not.toContain('build tools')
-    const commands = vi.mocked(execCommand).mock.calls.map(([, command]) => command)
-    expect(commands.some((command) => command.includes('command -v "$t"'))).toBe(false)
-  })
-
-  it('reports an Orca defect when headers were exported but node-gyp downloaded anyway', async () => {
-    // The marker says the export happened; a download after it means node-gyp never read the env.
-    const conn = makeMockConnection(sftpCapture)
-    feed(makeStagedFirstInstallExecPrefix())
-    rejectNpmInstallLikeExecCommand(`ORCA-NODE-HEADERS:/usr/local\n${HEADERS_REFUSED}`)
-    feed(['']) // clean stage root
-
-    const error = await deployAndLaunchRelay(conn).catch((e: Error) => e)
-    expect((error as Error).message).toContain('/usr/local/include/node')
-    expect((error as Error).message).toContain('Orca defect')
-    expect((error as Error).message).not.toContain('no local headers matching its own version')
-  })
-
   it('promotes only after the first-install lock is acquired', async () => {
     const conn = makeMockConnection(sftpCapture)
-    feed(makeExecResponses({ npmInstall: 'ok', probe: 'ok' }))
+    feed(makeSuccessfulBunInstallResponses())
     vi.mocked(acquireInstallLock).mockImplementationOnce(async () => {
       const commands = vi.mocked(execCommand).mock.calls.map(([, command]) => command)
       expect(commands.some((command) => command.includes('cp -a'))).toBe(false)
@@ -229,9 +131,9 @@ describe('installNativeDeps staged uploads', () => {
 
     const commands = vi.mocked(execCommand).mock.calls.map(([, command]) => command)
     const promotionIndex = commands.findIndex((command) => command.includes('cp -a'))
-    const npmIndex = commands.findIndex((command) => command.includes('npm install'))
+    const bunIndex = commands.findIndex((command) => command.includes('install --ignore-scripts'))
     expect(promotionIndex).toBeGreaterThanOrEqual(0)
-    expect(npmIndex).toBeGreaterThan(promotionIndex)
+    expect(bunIndex).toBeGreaterThan(promotionIndex)
   })
 
   it('cleans a staged upload when cancellation wins before lock acquisition', async () => {
@@ -272,7 +174,6 @@ describe('installNativeDeps staged uploads', () => {
       .mockResolvedValueOnce(
         '__ORCA_UPLOAD_STAGE_SLOT__.sftp-namespace-00000000000000000000000000000000:slot-0'
       )
-      .mockResolvedValueOnce('')
       .mockResolvedValueOnce('')
       .mockRejectedValueOnce(
         Object.assign(new Error('promotion termination was not confirmed'), {

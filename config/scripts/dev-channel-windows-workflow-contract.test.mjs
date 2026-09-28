@@ -90,7 +90,9 @@ describe('dev-channel Windows build workflow', () => {
     )
     // workflow_call cannot express `type: choice`, so the channel set has to be
     // enforced in the job itself.
-    expect(stepNamed(winSteps(), 'Vet the requested inputs').run).toContain('hourly|daily|adhoc')
+    expect(stepNamed(winWorkflow().jobs.vet_ref.steps, 'Vet the requested inputs').run).toContain(
+      'hourly|daily|adhoc'
+    )
   })
 
   // Why windows-2022: windows-latest moved to the Windows 2025 / VS 2026 image
@@ -157,13 +159,11 @@ describe('dev-channel Windows build workflow', () => {
   // its inputs as free text, so it re-derives the ref guarantee rather than
   // trusting whoever called it.
   it('vets the requested commit before checking it out', () => {
-    const names = winSteps().map((step) => step.name)
-    const vet = names.indexOf('Vet the requested inputs')
-    const checkout = names.indexOf('Checkout the built commit')
-
-    expect(vet).toBe(0)
-    expect(checkout).toBeGreaterThan(vet)
-    expect(stepNamed(winSteps(), 'Vet the requested inputs').run).toContain('--contains')
+    const jobs = winWorkflow().jobs
+    expect(jobs['build-win'].needs).toEqual(['vet_ref', 'windows_watcher'])
+    expect(jobs.windows_watcher.needs).toBe('vet_ref')
+    expect(jobs.vet_ref.steps[0].name).toBe('Vet the requested inputs')
+    expect(jobs.vet_ref.steps[0].run).toContain('--contains')
   })
 
   // Telemetry's transport gate accepts only 'stable' or 'rc'; leaving the build

@@ -34,6 +34,22 @@ function forkWith(event: 'message' | 'error' | 'none', value?: unknown, pid?: nu
 }
 
 describe('readWindowsConsoleAttachedProcessIds', () => {
+  it('uses the bundled PTY worker console mode under Bun', async () => {
+    vi.stubGlobal('process', { ...process, versions: { ...process.versions, bun: '1.4.2' } })
+    try {
+      const { forkProcess } = forkWith('message', [999, 101], 999)
+      await expect(readWindowsConsoleAttachedProcessIds(101, { forkProcess })).resolves.toEqual(
+        new Set([101])
+      )
+      expect(forkProcess).toHaveBeenCalledWith(
+        expect.stringMatching(/windows-bun-pty-gate-entry\.js$/),
+        ['--console-process-list', '101']
+      )
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('returns exact console membership from the fixed node-pty helper', async () => {
     const { forkProcess } = forkWith('message', [999, 101, 202, 303], 999)
 
@@ -43,11 +59,9 @@ describe('readWindowsConsoleAttachedProcessIds', () => {
         resolveAgentPath: () => '/fixed/node-pty/conpty_console_list_agent.js'
       })
     ).resolves.toEqual(new Set([101, 202, 303]))
-    expect(forkProcess).toHaveBeenCalledWith(
-      '/fixed/node-pty/conpty_console_list_agent.js',
-      ['101'],
-      { silent: true }
-    )
+    expect(forkProcess).toHaveBeenCalledWith('/fixed/node-pty/conpty_console_list_agent.js', [
+      '101'
+    ])
   })
 
   it.each([

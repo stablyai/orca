@@ -1,72 +1,7 @@
 import { existsSync } from 'node:fs'
-import { createRequire } from 'node:module'
+import Database from '../main/sqlite/sync-database'
 import { HERMES_STATE_DB } from './external-automation-storage-paths'
 import type { HermesSessionRunRef } from './hermes-run-correlation'
-
-type SqliteStatement = {
-  get: (...args: unknown[]) => Record<string, unknown> | undefined
-  all: (...args: unknown[]) => Record<string, unknown>[]
-}
-
-type SqliteDatabase = {
-  prepare: (sql: string) => SqliteStatement
-  close: () => void
-}
-
-type DatabaseConstructor = new (
-  path: string,
-  options?: { readonly?: boolean; fileMustExist?: boolean; timeout?: number }
-) => SqliteDatabase
-
-type NodeSqliteDatabaseSync = new (
-  path: string,
-  options?: { readOnly?: boolean; timeout?: number }
-) => SqliteDatabase
-
-const requireOptional = createRequire(__filename)
-let databaseConstructor: DatabaseConstructor | null | undefined
-
-function getDatabaseConstructor(): DatabaseConstructor | null {
-  if (databaseConstructor !== undefined) {
-    return databaseConstructor
-  }
-  try {
-    const loaded = requireOptional('node:sqlite') as { DatabaseSync?: NodeSqliteDatabaseSync }
-    const DatabaseSync = loaded.DatabaseSync
-    if (typeof DatabaseSync !== 'function') {
-      databaseConstructor = null
-      return databaseConstructor
-    }
-    const SqliteDatabaseSync = DatabaseSync
-    databaseConstructor = class RelaySqliteDatabase {
-      private readonly db: SqliteDatabase
-
-      constructor(
-        path: string,
-        options: { readonly?: boolean; fileMustExist?: boolean; timeout?: number } = {}
-      ) {
-        if (options.fileMustExist && !existsSync(path)) {
-          throw new Error(`SQLite database does not exist: ${path}`)
-        }
-        this.db = new SqliteDatabaseSync(path, {
-          readOnly: options.readonly,
-          timeout: options.timeout
-        })
-      }
-
-      prepare(sql: string): SqliteStatement {
-        return this.db.prepare(sql)
-      }
-
-      close(): void {
-        this.db.close()
-      }
-    }
-  } catch {
-    databaseConstructor = null
-  }
-  return databaseConstructor
-}
 
 function escapeSqlLike(value: string): string {
   return value.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_')
@@ -109,10 +44,6 @@ export function readHermesSessionDbRunRefs(jobId: string): HermesSessionRunRef[]
   if (!existsSync(HERMES_STATE_DB)) {
     return []
   }
-  const Database = getDatabaseConstructor()
-  if (!Database) {
-    return []
-  }
   try {
     const db = new Database(HERMES_STATE_DB, { readonly: true, fileMustExist: true })
     try {
@@ -124,7 +55,7 @@ export function readHermesSessionDbRunRefs(jobId: string): HermesSessionRunRef[]
             WHERE id LIKE ? ESCAPE '\\'
             ORDER BY started_at DESC`
         )
-        .all(pattern) as Record<string, unknown>[]
+        .all(pattern)
       return rows.map((row) => {
         const runId = typeof row.id === 'string' ? row.id : `${jobId}:${String(row.started_at)}`
         return {
@@ -147,10 +78,6 @@ export function readHermesSessionDbRunById(jobId: string, runId: string): unknow
   if (!existsSync(HERMES_STATE_DB)) {
     return null
   }
-  const Database = getDatabaseConstructor()
-  if (!Database) {
-    return null
-  }
   try {
     const db = new Database(HERMES_STATE_DB, { readonly: true, fileMustExist: true })
     try {
@@ -161,7 +88,7 @@ export function readHermesSessionDbRunById(jobId: string, runId: string): unknow
              FROM sessions
             WHERE id = ?`
         )
-        .get(runId) as Record<string, unknown> | undefined
+        .get(runId)
       if (!row) {
         return null
       }
@@ -172,7 +99,7 @@ export function readHermesSessionDbRunById(jobId: string, runId: string): unknow
             WHERE session_id = ?
             ORDER BY timestamp, id`
         )
-        .all(runId) as Record<string, unknown>[]
+        .all(runId)
       const title = typeof row.title === 'string' && row.title.trim() ? row.title.trim() : null
       const model = typeof row.model === 'string' && row.model.trim() ? row.model.trim() : null
       const messageCount = typeof row.message_count === 'number' ? row.message_count : null

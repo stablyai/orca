@@ -3,6 +3,11 @@ name: Unit tests
 on:
   workflow_call:
     inputs:
+      windows_watcher_ready:
+        description: The caller has already produced the Windows watcher artifacts.
+        required: false
+        type: boolean
+        default: false
       node_versions:
         description: JSON array of Node.js major versions to test.
         required: true
@@ -12,7 +17,15 @@ permissions:
   contents: read
 
 jobs:
+  windows_watcher:
+    permissions:
+      contents: read
+    if: ${{ !inputs.windows_watcher_ready }}
+    uses: ./.github/workflows/windows-watcher-artifacts.yml
+
   test:
+    needs: windows_watcher
+    if: ${{ !cancelled() && (inputs.windows_watcher_ready || needs.windows_watcher.result == 'success') }}
     name: tests node ${{ matrix.node }} ${{ matrix.shard }}/${{ matrix.shard_total }}
     runs-on: ubuntu-latest
     strategy:
@@ -27,6 +40,8 @@ jobs:
         uses: actions/checkout@v6
         with:
           persist-credentials: false
+
+      - uses: ./.github/actions/load-windows-watcher-artifacts
 
       - uses: ./.github/actions/install-node-dependencies
         with:
@@ -78,6 +93,8 @@ jobs:
           if-no-files-found: warn
 
   relay_integration:
+    needs: windows_watcher
+    if: ${{ !cancelled() && (inputs.windows_watcher_ready || needs.windows_watcher.result == 'success') }}
     name: relay integration node ${{ fromJSON(inputs.node_versions)[0] }}
     runs-on: ubuntu-latest
 
@@ -86,6 +103,8 @@ jobs:
         uses: actions/checkout@v6
         with:
           persist-credentials: false
+
+      - uses: ./.github/actions/load-windows-watcher-artifacts
 
       - uses: ./.github/actions/install-node-dependencies
         with:

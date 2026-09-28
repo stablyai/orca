@@ -37,7 +37,16 @@ on:
     - cron: '0 17,22 * * *'
 
 jobs:
+  windows_watcher:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/windows-watcher-artifacts.yml
+    with:
+      ref: ${{ inputs.ref || github.ref }}
+      artifact_prefix: windows-watcher-e2e
+
   build:
+    needs: windows_watcher
     name: build e2e app
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -55,6 +64,14 @@ jobs:
 
       # Why: building here avoids parallel builds inside Playwright globalSetup;
       # paired-browser specs also need the standalone web bundle.
+      - name: Load qualified Windows watchers
+        if: hashFiles('config/scripts/windows-watcher-artifact.mjs') != ''
+        uses: actions/download-artifact@v8
+        with:
+          pattern: windows-watcher-e2e-*
+          merge-multiple: true
+          path: .build/windows-watcher
+
       - name: Build E2E outputs
         env:
           VITE_EXPOSE_STORE: 'true'

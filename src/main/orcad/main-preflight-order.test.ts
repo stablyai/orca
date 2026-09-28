@@ -4,11 +4,6 @@ import {
   ORCAD_STARTUP_PREFLIGHT_FLAG
 } from '../../shared/orcad-profile-preflight'
 
-/**
- * The precondition is only worth anything if it runs first. A loader failure is not
- * catchable, so a preflight that lands after `main()` has already reached
- * `await import('../ipc/pty')` prevents nothing.
- */
 const { order, profileProbe } = vi.hoisted(() => {
   const order: string[] = []
   return { order, profileProbe: vi.fn(async () => {}) }
@@ -31,13 +26,6 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-vi.mock('./orcad-native-preflight', () => ({
-  runOrcadNativePreflight: () => {
-    order.push('preflight')
-    return true
-  }
-}))
-
 vi.mock('./orcad-entry', () => ({
   main: async () => {
     order.push('main')
@@ -58,10 +46,10 @@ describe('orcad entry', () => {
     }
   )
 
-  it('runs the native preflight before starting the runtime', async () => {
+  it('checks bundled runtime readiness before starting the server', async () => {
     await import('./orcad-app')
     await vi.waitFor(() => expect(order).toContain('main'))
 
-    expect(order).toEqual(['profile-admission', 'preflight', 'main'])
+    expect(order).toEqual(['profile-admission', 'main'])
   })
 })

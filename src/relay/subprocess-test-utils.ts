@@ -25,11 +25,12 @@ export type RelayProcess = {
 export function spawnRelay(
   entryPath: string,
   args: string[] = [],
-  options: Pick<SpawnOptions, 'cwd' | 'env'> = {}
+  options: Pick<SpawnOptions, 'cwd' | 'env'> & { executable?: string } = {}
 ): RelayProcess {
-  const proc = spawn('node', [entryPath, ...args], {
+  const { executable = 'node', ...spawnOptions } = options
+  const proc = spawn(executable, [entryPath, ...args], {
     stdio: ['pipe', 'pipe', 'pipe'],
-    ...options
+    ...spawnOptions
   })
 
   const responses: (JsonRpcResponse | JsonRpcNotification)[] = []

@@ -29,7 +29,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  windows_watcher:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/windows-watcher-artifacts.yml
+    with:
+      ref: ${{ github.ref }}
+      artifact_prefix: windows-watcher-win-crash-survival-e2e
+
   crash-survival:
+    needs: windows_watcher
     name: crash-survival (packaged build)
     runs-on: windows-2022
     timeout-minutes: 50
@@ -118,6 +127,14 @@ jobs:
       # build it feeds, so a cache hit does not pay for an install nothing consumes.
       - uses: ./.github/actions/install-mobile-dependencies
         if: steps.cache-installer.outputs.cache-hit != 'true'
+
+      - name: Load qualified Windows watchers
+        if: hashFiles('config/scripts/windows-watcher-artifact.mjs') != ''
+        uses: actions/download-artifact@v8
+        with:
+          pattern: windows-watcher-win-crash-survival-e2e-*
+          merge-multiple: true
+          path: .build/windows-watcher
 
       - name: Build Windows installer (unsigned)
         if: steps.cache-installer.outputs.cache-hit != 'true'

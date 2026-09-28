@@ -4,7 +4,6 @@
 import { randomUUID } from 'node:crypto'
 import type { BrowserWindow } from 'electron'
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
-import type { RemoteOpenCodeRuntimePreparation } from './ssh-relay-opencode-runtime-retry'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { writeStringsViaSftp } from './sftp-upload'
 import { isRelayVersionMismatchError } from './ssh-relay-version-mismatch-error'
@@ -330,10 +329,6 @@ export class SshRelaySession {
   private lastGraceTimeSeconds: number | undefined = undefined
   private hostPlatform: RemoteHostPlatform | null = null
   private remoteCliBridgeEnv: RemoteCliBridgeEnv | null = null
-  private openCodeRuntimePreparation: {
-    run: RemoteOpenCodeRuntimePreparation
-    controller: AbortController
-  } | null = null
   private aiVaultListMethodSupported: boolean | null = null
   private aiVaultTitleMethodSupported: boolean | null = null
   private pendingPtyReattaches = new Map<string, PendingPtyReattach>()
@@ -465,7 +460,6 @@ export class SshRelaySession {
     if (!mux || mux.isDisposed() || this._state !== 'ready') {
       throw new Error('SSH relay is not ready')
     }
-    this.prepareOpenCodeRuntimeForScan()
     return mux.request(method, params, { timeoutMs: 15_000 })
   }
 
@@ -480,7 +474,6 @@ export class SshRelaySession {
     if (!mux || mux.isDisposed() || this._state !== 'ready') {
       throw new Error('SSH relay is not ready')
     }
-    this.prepareOpenCodeRuntimeForScan()
     try {
       const result = await mux.request(SSH_AI_VAULT_LIST_SESSIONS_METHOD, params, {
         signal: options.signal,
@@ -556,8 +549,7 @@ export class SshRelaySession {
         nodePath,
         sockPath,
         credentialFile,
-        hostPlatform,
-        prepareOpenCodeRuntime
+        hostPlatform
       } = await deployAndLaunchRelay(conn, undefined, graceTimeSeconds, this.targetId)
       this.hostPlatform = hostPlatform ?? null
       this.remoteCliBridgeEnv =
@@ -582,9 +574,6 @@ export class SshRelaySession {
       }
 
       const mux = new SshChannelMultiplexer(transport)
-      this.openCodeRuntimePreparation = prepareOpenCodeRuntime
-        ? { run: prepareOpenCodeRuntime, controller: new AbortController() }
-        : null
       this.mux = mux
       const isAttemptCurrent = (): boolean => this.mux === mux && !this.isDisposed()
       const shouldContinue = (): boolean => isAttemptCurrent() && !mux.isDisposed()
@@ -715,8 +704,7 @@ export class SshRelaySession {
         nodePath,
         sockPath,
         credentialFile,
-        hostPlatform,
-        prepareOpenCodeRuntime
+        hostPlatform
       } = await deployAndLaunchRelay(conn, undefined, graceTimeSeconds, this.targetId)
       this.hostPlatform = hostPlatform ?? null
       this.remoteCliBridgeEnv =
@@ -741,9 +729,6 @@ export class SshRelaySession {
       }
 
       const mux = new SshChannelMultiplexer(transport)
-      this.openCodeRuntimePreparation = prepareOpenCodeRuntime
-        ? { run: prepareOpenCodeRuntime, controller: new AbortController() }
-        : null
       this.mux = mux
 
       const isAttemptCurrent = (): boolean =>
@@ -1661,19 +1646,10 @@ export class SshRelaySession {
     })
   }
 
-  private prepareOpenCodeRuntimeForScan(): void {
-    const preparation = this.openCodeRuntimePreparation
-    if (preparation) {
-      void preparation.run(preparation.controller.signal)
-    }
-  }
-
   private teardownProviders(
     reason: 'shutdown' | 'connection_lost',
     outputGenerationReason: string = reason
   ): void {
-    this.openCodeRuntimePreparation?.controller.abort()
-    this.openCodeRuntimePreparation = null
     this.releaseRelayLossWatcher()
     this.muxNotificationCleanup?.()
     this.muxNotificationCleanup = null

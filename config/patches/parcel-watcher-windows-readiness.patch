@@ -1,0 +1,263 @@
+--- a/src/Backend.hh
++++ b/src/Backend.hh
+@@ -6,7 +6,7 @@
+ #include "Signal.hh"
+ #include <thread>
+ 
+-class Backend {
++class Backend : public std::enable_shared_from_this<Backend> {
+ public:
+   virtual ~Backend();
+   void run();
+--- a/src/Backend.cc
++++ b/src/Backend.cc
+@@ -154,6 +154,17 @@
+       throw;
+     }
+   }
++
++  auto state = watcher->state;
++  lock.unlock();
++  if (state) {
++    try {
++      state->waitUntilReady();
++    } catch (...) {
++      unwatch(watcher);
++      throw;
++    }
++  }
+ }
+ 
+ void Backend::unwatch(WatcherRef watcher) {
+--- a/src/Watcher.hh
++++ b/src/Watcher.hh
+@@ -25,6 +25,7 @@
+ class WatcherState {
+ public:
+     virtual ~WatcherState() = default;
++    virtual void waitUntilReady() {}
+ };
+ 
+ struct Watcher {
+--- a/src/windows/WindowsBackend.hh
++++ b/src/windows/WindowsBackend.hh
+@@ -3,7 +3,13 @@
+ 
+ #include <winsock2.h>
+ #include <windows.h>
++#include <atomic>
+ #include "../shared/BruteForceBackend.hh"
++
++struct WindowsBackendState {
++  std::atomic<bool> running{true};
++  std::atomic<size_t> pending{0};
++};
+ 
+ class WindowsBackend : public BruteForceBackend {
+ public:
+@@ -12,7 +18,7 @@
+   void subscribe(WatcherRef watcher) override;
+   void unsubscribe(WatcherRef watcher) override;
+ private:
+-  bool mRunning;
++  std::shared_ptr<WindowsBackendState> mState = std::make_shared<WindowsBackendState>();
+ };
+ 
+ #endif
+--- a/src/windows/WindowsBackend.cc
++++ b/src/windows/WindowsBackend.cc
+@@ -1,4 +1,5 @@
+ #include <string>
++#include <future>
+ #include <stack>
+ #include "../DirTree.hh"
+ #include "../shared/BruteForceBackend.hh"
+@@ -53,29 +54,29 @@
+ }
+ 
+ void WindowsBackend::start() {
+-  mRunning = true;
++  auto state = mState;
+   notifyStarted();
+ 
+-  while (mRunning) {
++  while (state->running || state->pending != 0) {
+     SleepEx(INFINITE, true);
+   }
+ }
+ 
+ WindowsBackend::~WindowsBackend() {
+   // Mark as stopped, and queue a noop function in the thread to break the loop
+-  mRunning = false;
++  mState->running = false;
+   QueueUserAPC([](__in ULONG_PTR) {}, mThread.native_handle(), (ULONG_PTR)this);
+ }
+ 
+-class Subscription: public WatcherState {
++class Subscription: public WatcherState, public std::enable_shared_from_this<Subscription> {
+ public:
+-  Subscription(WindowsBackend *backend, WatcherRef watcher, std::shared_ptr<DirTree> tree) {
++  Subscription(std::shared_ptr<Backend> backend, std::shared_ptr<WindowsBackendState> state,
++               WatcherRef watcher, std::shared_ptr<DirTree> tree) {
+     mRunning = true;
+     mBackend = backend;
++    mState = state;
+     mWatcher = watcher;
+     mTree = tree;
+-    ZeroMemory(&mOverlapped, sizeof(OVERLAPPED));
+-    mOverlapped.hEvent = this;
+     mReadBuffer.resize(DEFAULT_BUF_SIZE);
+     mWriteBuffer.resize(DEFAULT_BUF_SIZE);
+ 
+@@ -101,10 +102,12 @@
+     );
+ 
+     if (!success) {
++      CloseHandle(mDirectoryHandle);
+       throw WatcherError("Could not get file information", mWatcher);
+     }
+ 
+     if (!(info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
++      CloseHandle(mDirectoryHandle);
+       throw WatcherError("Not a directory", mWatcher);
+     }
+   }
+@@ -116,25 +119,36 @@
+   void run() {
+     try {
+       poll();
+-    } catch (WatcherError &err) {
+-      mBackend->handleWatcherError(err);
+-    }
++      mReady.set_value();
++    } catch (...) {
++      mReady.set_exception(std::current_exception());
++    }
++  }
++
++  void finishQueuedStart() {
++    --mState->pending;
++  }
++
++  void waitUntilReady() override {
++    mReadyResult.get();
+   }
+ 
+   void stop() {
+-    if (mRunning) {
+-      mRunning = false;
+-      CancelIo(mDirectoryHandle);
++    std::lock_guard<std::mutex> lock(mIoMutex);
++    if (mRunning.exchange(false)) {
++      CancelIoEx(mDirectoryHandle, nullptr);
+       CloseHandle(mDirectoryHandle);
+     }
+   }
+ 
+   void poll() {
++    std::lock_guard<std::mutex> lock(mIoMutex);
+     if (!mRunning) {
+       return;
+     }
+ 
+-    // Asynchronously wait for changes.
++    auto request = std::make_unique<PendingRead>(shared_from_this(), mState);
++    // The completion owns this request until Windows releases its OVERLAPPED storage.
+     int success = ReadDirectoryChangesW(
+       mDirectoryHandle,
+       mWriteBuffer.data(),
+@@ -143,13 +157,16 @@
+       FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME | FILE_NOTIFY_CHANGE_ATTRIBUTES
+         | FILE_NOTIFY_CHANGE_SIZE | FILE_NOTIFY_CHANGE_LAST_WRITE,
+       NULL,
+-      &mOverlapped,
++      request.get(),
+       [](DWORD errorCode, DWORD numBytes, LPOVERLAPPED overlapped) {
+-        auto subscription = reinterpret_cast<Subscription *>(overlapped->hEvent);
++        std::unique_ptr<PendingRead> request(static_cast<PendingRead *>(overlapped));
++        auto subscription = request->subscription;
+         try {
+           subscription->processEvents(errorCode);
+         } catch (WatcherError &err) {
+-          subscription->mBackend->handleWatcherError(err);
++          if (auto backend = subscription->mBackend.lock()) {
++            backend->handleWatcherError(err);
++          }
+         }
+       }
+     );
+@@ -157,6 +174,7 @@
+     if (!success) {
+       throw WatcherError("Failed to read changes", mWatcher);
+     }
++    request.release();
+   }
+ 
+   void processEvents(DWORD errorCode) {
+@@ -249,34 +267,60 @@
+   }
+ 
+ private:
+-  WindowsBackend *mBackend;
++  struct PendingRead : OVERLAPPED {
++    std::shared_ptr<Subscription> subscription;
++    std::shared_ptr<WindowsBackendState> state;
++    PendingRead(std::shared_ptr<Subscription> subscription, std::shared_ptr<WindowsBackendState> state)
++      : OVERLAPPED{}, subscription(subscription), state(state) {
++      ++state->pending;
++    }
++    ~PendingRead() {
++      --state->pending;
++    }
++  };
++  std::mutex mIoMutex;
++  std::shared_ptr<WindowsBackendState> mState;
++  std::promise<void> mReady;
++  std::shared_future<void> mReadyResult = mReady.get_future().share();
++  std::weak_ptr<Backend> mBackend;
+   std::shared_ptr<Watcher> mWatcher;
+   std::shared_ptr<DirTree> mTree;
+-  bool mRunning;
++  std::atomic<bool> mRunning;
+   HANDLE mDirectoryHandle;
+   std::vector<BYTE> mReadBuffer;
+   std::vector<BYTE> mWriteBuffer;
+-  OVERLAPPED mOverlapped;
+ };
+ 
+ // This function is called by Backend::watch which takes a lock on mMutex
+ void WindowsBackend::subscribe(WatcherRef watcher) {
+   // Create a subscription for this watcher
+-  auto sub = std::make_shared<Subscription>(this, watcher, getTree(watcher, false));
++  auto sub = std::make_shared<Subscription>(shared_from_this(), mState, watcher, getTree(watcher, false));
+   watcher->state = sub;
+ 
+   // Queue polling for this subscription in the correct thread.
++  auto queued = std::make_unique<std::shared_ptr<Subscription>>(sub);
++  ++mState->pending;
+   bool success = QueueUserAPC([](__in ULONG_PTR ptr) {
+-    Subscription *sub = (Subscription *)ptr;
++    std::unique_ptr<std::shared_ptr<Subscription>> queued(
++      reinterpret_cast<std::shared_ptr<Subscription> *>(ptr));
++    auto sub = *queued;
+     sub->run();
+-  }, mThread.native_handle(), (ULONG_PTR)sub.get());
++    sub->finishQueuedStart();
++  }, mThread.native_handle(), reinterpret_cast<ULONG_PTR>(queued.get()));
+ 
+   if (!success) {
++    --mState->pending;
++    watcher->state = nullptr;
+     throw std::runtime_error("Unable to queue APC");
+   }
++  queued.release();
+ }
+ 
+ // This function is called by Backend::unwatch which takes a lock on mMutex
+ void WindowsBackend::unsubscribe(WatcherRef watcher) {
++  auto sub = std::static_pointer_cast<Subscription>(watcher->state);
++  if (sub) {
++    sub->stop();
++  }
+   watcher->state = nullptr;
+ }

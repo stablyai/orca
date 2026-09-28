@@ -16,7 +16,7 @@ const { mockPtySpawn } = vi.hoisted(() => ({ mockPtySpawn: vi.fn() }))
 
 const PTY_1 = testPtyId(1)
 
-vi.mock('node-pty', () => ({ spawn: mockPtySpawn }))
+vi.mock('./relay-pty-runtime', () => ({ bunRelayPtyModule: { spawn: mockPtySpawn } }))
 
 const endpointIdentity: RelayClientSessionIdentity = {
   principal: 'endpoint-principal',

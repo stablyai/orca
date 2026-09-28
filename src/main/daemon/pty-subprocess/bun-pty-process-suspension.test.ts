@@ -2,7 +2,12 @@ import { constants } from 'node:os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createBunPtyProducerFlowControl } from './bun-pty-process-flow-control'
 
-const TABLE = '4321 4321 pts/test T\n4322 4322 pts/test S\n4323 4323 pts/test T'
+// Keep fake PTY identities distinct from the runner's self-signal guard.
+const ROOT_PID = process.pid + 10_000
+const JOB_PID = ROOT_PID + 1
+const STOPPED_PID = ROOT_PID + 2
+const DENIED_PID = ROOT_PID + 3
+const TABLE = `${ROOT_PID} ${ROOT_PID} pts/test T\n${JOB_PID} ${JOB_PID} pts/test S\n${STOPPED_PID} ${STOPPED_PID} pts/test T`
 const settled = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
 
 function harness(platform: NodeJS.Platform = 'linux') {
@@ -19,7 +24,7 @@ function harness(platform: NodeJS.Platform = 'linux') {
   }
   const flow = createBunPtyProducerFlowControl({
     platform,
-    processHandle: { pid: 4321, kill, terminal: { closed: false, close() {} } },
+    processHandle: { pid: ROOT_PID, kill, terminal: { closed: false, close() {} } },
     windowsJob,
     isExited: () => exited,
     readProcessTable: () => TABLE,
@@ -45,7 +50,9 @@ describe('flow-control suspension ownership', () => {
       const h = harness()
       h.flow.pause()
       await settled()
-      h.readProcessTableAsync.mockResolvedValue(TABLE.replace('4322 pts/test S', '4322 pts/test T'))
+      h.readProcessTableAsync.mockResolvedValue(
+        TABLE.replace(`${JOB_PID} pts/test S`, `${JOB_PID} pts/test T`)
+      )
       if (action === 'resume') {
         h.flow.resume()
       } else {
@@ -53,10 +60,10 @@ describe('flow-control suspension ownership', () => {
       }
       await settled()
       expect(h.signalProcessGroup.mock.calls).toEqual([
-        [4321, 'SIGSTOP'],
-        [4322, 'SIGSTOP'],
-        [4322, 'SIGCONT'],
-        [4321, 'SIGCONT']
+        [ROOT_PID, 'SIGSTOP'],
+        [JOB_PID, 'SIGSTOP'],
+        [JOB_PID, 'SIGCONT'],
+        [ROOT_PID, 'SIGCONT']
       ])
     }
   )
@@ -64,10 +71,12 @@ describe('flow-control suspension ownership', () => {
   it('does not resume a group it already released when another group needs a retry', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const h = harness()
-    h.readProcessTableAsync.mockResolvedValue(TABLE.replace('4323 pts/test T', '4323 pts/test S'))
+    h.readProcessTableAsync.mockResolvedValue(
+      TABLE.replace(`${STOPPED_PID} pts/test T`, `${STOPPED_PID} pts/test S`)
+    )
     let failed = false
     h.signalProcessGroup.mockImplementation((pgid, signal) => {
-      if (pgid === 4323 && signal === 'SIGCONT' && !failed) {
+      if (pgid === STOPPED_PID && signal === 'SIGCONT' && !failed) {
         failed = true
         throw new Error('temporary resume failure')
       }
@@ -77,14 +86,16 @@ describe('flow-control suspension ownership', () => {
     h.flow.resume()
     await settled()
     // The user can suspend a job again after its first successful resume.
-    h.readProcessTableAsync.mockResolvedValue(TABLE.replace('4322 pts/test S', '4322 pts/test T'))
+    h.readProcessTableAsync.mockResolvedValue(
+      TABLE.replace(`${JOB_PID} pts/test S`, `${JOB_PID} pts/test T`)
+    )
     await vi.advanceTimersByTimeAsync(500)
     expect(
       h.signalProcessGroup.mock.calls.filter(
-        ([pid, signal]) => pid === 4322 && signal === 'SIGCONT'
+        ([pid, signal]) => pid === JOB_PID && signal === 'SIGCONT'
       )
     ).toHaveLength(1)
-    expect(h.signalProcessGroup).toHaveBeenLastCalledWith(4321, 'SIGCONT')
+    expect(h.signalProcessGroup).toHaveBeenLastCalledWith(ROOT_PID, 'SIGCONT')
     expect(vi.getTimerCount()).toBe(0)
   })
 
@@ -111,9 +122,9 @@ describe('flow-control suspension ownership', () => {
   it('rolls back acquired stops after a denied job pause without repeatedly scanning or resuming the denied job', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const h = harness()
-    h.readProcessTableAsync.mockResolvedValue(`${TABLE}\n4324 4324 pts/test S`)
+    h.readProcessTableAsync.mockResolvedValue(`${TABLE}\n${DENIED_PID} ${DENIED_PID} pts/test S`)
     h.signalProcessGroup.mockImplementation((pgid, signal) => {
-      if (pgid === 4324 && signal === 'SIGSTOP') {
+      if (pgid === DENIED_PID && signal === 'SIGSTOP') {
         throw Object.assign(new Error('denied'), { code: 'EPERM' })
       }
     })
@@ -121,11 +132,11 @@ describe('flow-control suspension ownership', () => {
     await settled()
     await vi.advanceTimersByTimeAsync(30_000)
     expect(h.signalProcessGroup.mock.calls).toEqual([
-      [4321, 'SIGSTOP'],
-      [4322, 'SIGSTOP'],
-      [4324, 'SIGSTOP'],
-      [4322, 'SIGCONT'],
-      [4321, 'SIGCONT']
+      [ROOT_PID, 'SIGSTOP'],
+      [JOB_PID, 'SIGSTOP'],
+      [DENIED_PID, 'SIGSTOP'],
+      [JOB_PID, 'SIGCONT'],
+      [ROOT_PID, 'SIGCONT']
     ])
     expect(h.readProcessTableAsync).toHaveBeenCalledTimes(2)
     expect(vi.getTimerCount()).toBe(0)
@@ -136,10 +147,10 @@ describe('flow-control suspension ownership', () => {
     const h = harness()
     let failed = false
     h.signalProcessGroup.mockImplementation((pgid, signal) => {
-      if (pgid === 4322 && signal === 'SIGSTOP') {
+      if (pgid === JOB_PID && signal === 'SIGSTOP') {
         throw Object.assign(new Error('denied'), { code: 'EPERM' })
       }
-      if (pgid === 4321 && signal === 'SIGCONT' && !failed) {
+      if (pgid === ROOT_PID && signal === 'SIGCONT' && !failed) {
         failed = true
         throw Object.assign(new Error('resume denied'), { code: 'EPERM' })
       }
@@ -149,10 +160,10 @@ describe('flow-control suspension ownership', () => {
     expect(vi.getTimerCount()).toBe(1)
     await vi.advanceTimersByTimeAsync(500)
     expect(h.signalProcessGroup.mock.calls).toEqual([
-      [4321, 'SIGSTOP'],
-      [4322, 'SIGSTOP'],
-      [4321, 'SIGCONT'],
-      [4321, 'SIGCONT']
+      [ROOT_PID, 'SIGSTOP'],
+      [JOB_PID, 'SIGSTOP'],
+      [ROOT_PID, 'SIGCONT'],
+      [ROOT_PID, 'SIGCONT']
     ])
     expect(vi.getTimerCount()).toBe(0)
   })

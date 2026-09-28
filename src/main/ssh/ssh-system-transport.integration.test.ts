@@ -6,6 +6,11 @@ vi.mock('electron', () => ({
   app: { getAppPath: () => '/mock/app' }
 }))
 
+// This fixture exercises SSH framing; runtime installation has separate integration coverage.
+vi.mock('./ssh-relay-bun-runtime', () => ({
+  ensureRemoteRelayBunRuntime: vi.fn(async () => `${process.env.ORCA_SYSTEM_SSH_PATH}-runtime`)
+}))
+
 import { SshConnection } from './ssh-connection'
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
 import { SshChannelMultiplexer } from './ssh-channel-multiplexer'
@@ -175,6 +180,17 @@ describe('system SSH transport integration', () => {
     process.env.HOME = remoteHome
     process.env.ORCA_RELAY_PATH = relayRoot
     process.env.ORCA_SYSTEM_SSH_PATH = writeFakeSsh(tempDir)
+    // Validate the owned-runtime prefix before handing the framing fixture to Node.
+    const runtime = `${process.env.ORCA_SYSTEM_SSH_PATH}-runtime`
+    writeFileSync(
+      runtime,
+      `#!/bin/sh
+[ "$1" = '--no-env-file' ] && [ "$2" = '--config=/dev/null' ] && [ "$3" = '--no-install' ] || exit 64
+shift 3
+exec '${process.execPath.replaceAll("'", "'\"'\"'")}' "$@"
+`
+    )
+    chmodSync(runtime, 0o755)
     process.env.ORCA_SSH_FORCE_SYSTEM_TRANSPORT = '1'
   })
 

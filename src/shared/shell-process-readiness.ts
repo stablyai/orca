@@ -3,6 +3,7 @@ import { constants } from 'node:fs'
 import { access, readlink, realpath, stat } from 'node:fs/promises'
 import { delimiter, isAbsolute, resolve } from 'node:path'
 import { promisify } from 'node:util'
+import { runProcess } from './child-process/run-process'
 import { PS_MAX_BUFFER_BYTES } from './process-table-snapshot'
 
 const execFile = promisify(execFileCallback)
@@ -54,6 +55,39 @@ export async function readShellProcessReadiness(
   return status && executablePath
     ? { executablePath: await realpath(executablePath), foreground: status.includes('+') }
     : null
+}
+
+async function readProcessTerminalPath(pid: number): Promise<string | null> {
+  const result = await runProcess({
+    program: 'ps',
+    args: ['-p', String(pid), '-o', 'pid=,tty='],
+    timeoutMs: PROCESS_READINESS_TIMEOUT_MS,
+    maxOutputBytes: 4096
+  })
+  if (result.code !== 0 || result.timedOut || result.outputTruncated) {
+    return null
+  }
+  const match = /^\s*(\d+)\s+(?:\/dev\/)?(ttys\d+|pts\/\d+)\s*$/u.exec(result.stdout)
+  return match && Number(match[1]) === pid ? `/dev/${match[2]}` : null
+}
+
+/** Login wrappers may have a different PID, but must own the marker shell's terminal. */
+export async function readShellTerminalPath(pid: number, ptyPid: number): Promise<string | null> {
+  if (
+    ![pid, ptyPid].every((value) => Number.isSafeInteger(value) && value > 0) ||
+    (process.platform !== 'darwin' && process.platform !== 'linux')
+  ) {
+    return null
+  }
+  if (pid === ptyPid) {
+    return readProcessTerminalPath(pid)
+  }
+  // macOS ps scans the whole process table for PID lists; single-PID queries use its fast path.
+  const [shellPath, ptyPath] = await Promise.all([
+    readProcessTerminalPath(pid),
+    readProcessTerminalPath(ptyPid)
+  ])
+  return shellPath && shellPath === ptyPath ? shellPath : null
 }
 
 function shellExecutableCandidates(

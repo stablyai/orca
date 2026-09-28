@@ -1,3 +1,4 @@
+import { SHORT_RELAY_SOCKET_DIR_PREFIX, shortRelayVersionSegment } from './relay-socket-path-limit'
 import {
   RELAY_INSTALL_COMPLETE_FILENAME,
   relayArtifactFilenames
@@ -8,7 +9,12 @@ import {
   type RemoteInstallModel
 } from './remote-install-model'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
-import { isWindowsRemoteHost, joinRemotePath, remoteDirname } from './ssh-remote-platform'
+import {
+  isWindowsRemoteHost,
+  joinRemotePath,
+  remoteDirname,
+  remoteBasename
+} from './ssh-remote-platform'
 import { powerShellCommand, powerShellLiteral, powerShellNativeArg } from './ssh-remote-powershell'
 import { shellEscape } from './ssh-connection-utils'
 
@@ -27,13 +33,6 @@ export function makeRemoteDirectoryCommand(host: RemoteHostPlatform, remotePath:
   return powerShellCommand(
     `$null = New-Item -ItemType Directory -Force -Path ${powerShellLiteral(remotePath)}`
   )
-}
-
-export function makeRemoteExecutableCommand(host: RemoteHostPlatform, remotePath: string): string {
-  if (isWindowsRemoteHost(host)) {
-    return powerShellCommand(`if (Test-Path -LiteralPath ${powerShellLiteral(remotePath)}) { }`)
-  }
-  return `chmod +x ${shellEscape(remotePath)} 2>/dev/null; true`
 }
 
 export function removeRemoteFileCommand(host: RemoteHostPlatform, remotePath: string): string {
@@ -226,7 +225,15 @@ export function relayLivenessProbeCommand(
 ): string {
   if (!isWindowsRemoteHost(host)) {
     return (
-      `state=DEAD; for f in ${shellEscape(dir)}/relay-*.sock ${shellEscape(dir)}/relay.sock; do ` +
+      'uid=$(id -u) || { echo UNVERIFIABLE; exit 0; }; ' +
+      'case "$uid" in ""|*[!0-9]*) echo UNVERIFIABLE; exit 0;; esac; ' +
+      `short="${SHORT_RELAY_SOCKET_DIR_PREFIX}$uid/${shortRelayVersionSegment(remoteBasename(dir, host))}"; ` +
+      // Inaccessible socket directories are not evidence that their daemons exited.
+      `for probe in /tmp "${'$'}{short%/*}" "$short" ${shellEscape(dir)}; do ` +
+      'if [ -L "$probe" ] && [ ! -e "$probe" ]; then echo UNVERIFIABLE; exit 0; fi; ' +
+      'if [ -e "$probe" ] && { [ ! -d "$probe" ] || [ ! -r "$probe" ] || [ ! -x "$probe" ]; }; then echo UNVERIFIABLE; exit 0; fi; ' +
+      'done; ' +
+      `state=DEAD; for f in ${shellEscape(dir)}/relay-*.sock ${shellEscape(dir)}/relay.sock "$short"/relay-*.sock "$short"/relay.sock; do ` +
       `[ -S "$f" ] && state=ALIVE && break; ` +
       'done; echo "$state"'
     )

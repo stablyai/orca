@@ -21,7 +21,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  windows_watcher:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/windows-watcher-artifacts.yml
+    with:
+      ref: ${{ inputs.ref || github.sha }}
+      artifact_prefix: windows-watcher-windows-wsl-e2e
+
   wsl-terminal:
+    needs: windows_watcher
     runs-on: windows-2022
     timeout-minutes: 30
     env:
@@ -35,6 +44,14 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: electron
+      - name: Load qualified Windows watchers
+        if: hashFiles('config/scripts/windows-watcher-artifact.mjs') != ''
+        uses: actions/download-artifact@v8
+        with:
+          pattern: windows-watcher-windows-wsl-e2e-*
+          merge-multiple: true
+          path: .build/windows-watcher
+
       - name: Build relay and Electron
         run: |
           pnpm run build:relay

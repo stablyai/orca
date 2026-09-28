@@ -12,7 +12,7 @@ const daemonMocks = vi.hoisted(() => ({
   forceKillPosixPtyProcessGroups: vi.fn((_pid: number, fallback: () => void) => fallback())
 }))
 
-vi.mock('node-pty', () => ({ spawn: daemonMocks.mockPtySpawn }))
+vi.mock('./relay-pty-runtime', () => ({ bunRelayPtyModule: { spawn: daemonMocks.mockPtySpawn } }))
 
 vi.mock('../main/shell-prompt-readiness-probe', () => ({
   createShellPromptReadinessProbe: daemonMocks.mockCreateShellPromptReadinessProbe

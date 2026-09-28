@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { resetSshConnectionMocks } from './ssh-connection-test-harness'
+import { emitSshEvent, resetSshConnectionMocks } from './ssh-connection-test-harness'
 import { createCallbacks, createResolvedConfig, createTarget } from './ssh-connection-test-fixtures'
 import { SshConnection } from './ssh-connection'
 import { resolveWithSshG } from './ssh-config-parser'
@@ -159,6 +159,34 @@ describe('SshConnection', () => {
     expect(controller.signal.aborted).toBe(false)
     expect(transferSignal?.aborted).toBe(true)
   })
+
+  it.each(['end', 'close', 'error'] as const)(
+    'cancels pending SFTP work immediately on an unexpected %s',
+    async (event) => {
+      const conn = new SshConnection(createTarget(), createCallbacks())
+      let transferSignal: AbortSignal | undefined
+      try {
+        await conn.connect()
+        const generation = conn.getConnectGeneration()
+        vi.spyOn(conn, 'sftp').mockImplementationOnce((options) => {
+          const signal = options instanceof AbortSignal ? options : options?.signal
+          transferSignal = signal
+          return new Promise((_resolve, reject) => {
+            signal?.addEventListener('abort', () => reject(signal.reason), { once: true })
+          })
+        })
+        const write = conn.writeFile('/remote/relay/package.json', '{}')
+        const rejected = expect(write).rejects.toMatchObject({ name: 'AbortError' })
+        await vi.waitFor(() => expect(transferSignal).toBeDefined())
+        emitSshEvent(event, new Error('connection lost'))
+        expect(transferSignal?.aborted).toBe(true)
+        expect(conn.getConnectGeneration()).toBeGreaterThan(generation)
+        await rejected
+      } finally {
+        await conn.disconnect()
+      }
+    }
+  )
 
   it('keeps an upload session cancelled after the connection disconnects', async () => {
     const conn = new SshConnection(

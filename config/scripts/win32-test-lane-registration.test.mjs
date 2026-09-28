@@ -69,7 +69,10 @@ import { classifyPrJobs } from './pr-code-change-scope.mjs'
 
 const projectDir = resolve(import.meta.dirname, '../..')
 const WINDOWS_LANE_JOB = 'package_windows'
-const WINDOWS_LANE_STEP = 'Test Windows-specific boundaries'
+const WINDOWS_LANE_STEPS = [
+  'Test installer PowerShell capability',
+  'Test Windows-specific boundaries'
+]
 const WINDOWS_LANE_RUNNER = 'windows-2022'
 
 /**
@@ -282,29 +285,27 @@ export function couldRunOnWindows(runsOn) {
   return labels.some((label) => /windows/i.test(String(label)) || String(label).includes('${{'))
 }
 
-/** The vitest argv of the one Windows job's one curated-file step. */
+/** The vitest argv of the Windows job's explicitly registered test steps. */
 function readWindowsWorkflow() {
   const workflow = parse(readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
   const jobs = Object.entries(workflow.jobs ?? {})
   const windowsJobs = jobs.filter(([, job]) => couldRunOnWindows(job?.['runs-on']))
   const steps = workflow.jobs?.[WINDOWS_LANE_JOB]?.steps ?? []
-  const step = steps.find((candidate) => candidate?.name === WINDOWS_LANE_STEP)
-  if (!step) {
-    throw new Error(
-      `No "${WINDOWS_LANE_STEP}" step in the ${WINDOWS_LANE_JOB} job of .github/workflows/pr.yml. ` +
-        'If it was renamed, update WINDOWS_LANE_STEP here -- do not delete this guard.'
-    )
-  }
-  const run = String(step.run ?? '')
-  if (!run.includes('vitest run')) {
-    throw new Error(
-      `The "${WINDOWS_LANE_STEP}" step no longer invokes vitest; this guard is stale.`
-    )
-  }
-  return {
-    windowsJobNames: windowsJobs.map(([name]) => name),
-    laneFiles: run.split(/\s+/).filter((token) => TEST_FILE_PATTERN.test(token))
-  }
+  const laneFiles = WINDOWS_LANE_STEPS.flatMap((name) => {
+    const step = steps.find((candidate) => candidate?.name === name)
+    if (!step) {
+      throw new Error(
+        `No "${name}" step in the ${WINDOWS_LANE_JOB} job of .github/workflows/pr.yml. ` +
+          'If it was renamed, update WINDOWS_LANE_STEPS here -- do not delete this guard.'
+      )
+    }
+    const run = String(step.run ?? '')
+    if (!run.includes('vitest run')) {
+      throw new Error(`The "${name}" step no longer invokes vitest; this guard is stale.`)
+    }
+    return run.split(/\s+/).filter((token) => TEST_FILE_PATTERN.test(token))
+  })
+  return { windowsJobNames: windowsJobs.map(([name]) => name), laneFiles }
 }
 
 const { windowsJobNames, laneFiles } = readWindowsWorkflow()
@@ -331,7 +332,7 @@ function registrationFailure(path) {
   const missing = []
   if (!laneFiles.includes(path)) {
     missing.push(
-      `add "${path}" to the "${WINDOWS_LANE_STEP}" vitest argv in .github/workflows/pr.yml ` +
+      `add "${path}" to a registered Windows test step in .github/workflows/pr.yml ` +
         `(job ${WINDOWS_LANE_JOB})`
     )
   }

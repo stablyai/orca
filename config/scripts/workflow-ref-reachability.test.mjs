@@ -7,11 +7,13 @@ import { parse } from 'yaml'
 import { runProcess } from '../../src/shared/child-process/run-process'
 
 const readWorkflow = (name) => parse(readFileSync(`.github/workflows/${name}.yml`, 'utf8'))
-const windowsVet = readWorkflow('dev-channel-win-build').jobs['build-win'].steps.find(
+const windowsVet = readWorkflow('dev-channel-win-build').jobs.vet_ref.steps.find(
   (step) => step.id === 'vetted'
 )
 const macSteps = readWorkflow('adhoc-mac-build').jobs['build-adhoc-mac'].steps
-const macVet = macSteps.find((step) => step.id === 'vetted')
+const macVet = readWorkflow('adhoc-mac-build').jobs.vet_ref.steps.find(
+  (step) => step.id === 'vetted'
+)
 const macCheckout = macSteps.find((step) => step.name === 'Checkout the requested ref')
 const directory = mkdtempSync(join(tmpdir(), 'workflow-ref-reachability-'))
 const repository = join(directory, 'remote.git')

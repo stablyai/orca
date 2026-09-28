@@ -74,6 +74,12 @@ export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
   { filename: 'windows-bun-pty-gate-entry.js' },
   { filename: 'profile-state-writer-worker-entry.js' },
   { filename: 'profile-state-backup-worker-entry.js' },
+  { filename: 'session-scanner-service-entry.js' },
+  { filename: 'session-scanner-worker-entry.js' },
+  { filename: 'session-scanner-opencode-sqlite-worker-entry.js' },
+  { filename: 'session-scanner-opencode-sqlite-process-entry.js' },
+  { filename: 'wsl-transcript-fs-process-entry.js' },
+  { filename: 'port-scan-command-worker-entry.js' },
   // Target-specific even when the JavaScript bundle is shared across packaged slots.
   { filename: ORCAD_BUILD_TARGET_FILENAME },
   // orcad never depends on a host runtime or host-installed native module.

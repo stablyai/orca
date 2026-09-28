@@ -1,14 +1,8 @@
 #!/usr/bin/env node
-/**
- * Bundle the relay daemon and its crash-isolated watcher child per platform.
- *
- * The relay runs on remote hosts via `node relay.js`, so both outputs use
- * self-contained CommonJS bundles with no external dependencies beyond
- * Node.js built-ins. Native addons (node-pty, @parcel/watcher) are
- * marked external and expected to be installed on the remote or
- * gracefully degraded.
- */
+/** Bundle the relay and its owned companions for the pinned Bun runtime. */
 import { build } from 'esbuild'
+import { bundledParcelWatcherPlugin } from './parcel-watcher-bundle.mjs'
+import { readWindowsWatcherArtifact } from './windows-watcher-artifact.mjs'
 import { createHash } from 'node:crypto'
 import {
   copyFileSync,
@@ -24,6 +18,8 @@ import {
   RELAY_BUILD_PLATFORMS,
   RELAY_VERSION_FILENAME,
   RELAY_WINDOWS_PROCESS_TREE_FILENAME,
+  RELAY_WINDOWS_WATCHER_FILENAME,
+  RELAY_WINDOWS_WATCHER_LICENSE,
   RELAY_OPENCODE_SQLITE_READER_FILENAME,
   relayOptionalArtifactFilenames,
   isWindowsRelayPlatform,
@@ -58,27 +54,6 @@ const MANAGED_HOOK_RUNTIME_ENTRY = join(
   'managed-hook-runtime.ts'
 )
 const JSONC_PARSER_ESM_ENTRY = join(ROOT, 'node_modules', 'jsonc-parser', 'lib', 'esm', 'main.js')
-const NODE_PTY_CONSOLE_LIST_PATCH_FILENAME = 'node-pty-1.1.0-console-list-agent-patch.cjs'
-const NODE_PTY_CONSOLE_LIST_PATCH_SOURCE = join(
-  ROOT,
-  'config',
-  'relay-assets',
-  NODE_PTY_CONSOLE_LIST_PATCH_FILENAME
-)
-const NODE_PTY_WINDOWS_TEARDOWN_PATCH_FILENAME = 'node-pty-1.1.0-windows-pty-teardown-patch.cjs'
-const NODE_PTY_WINDOWS_TEARDOWN_PATCH_SOURCE = join(
-  ROOT,
-  'config',
-  'relay-assets',
-  NODE_PTY_WINDOWS_TEARDOWN_PATCH_FILENAME
-)
-const NODE_PTY_MASTER_CLOEXEC_PATCH_FILENAME = 'node-pty-1.1.0-master-cloexec-patch.cjs'
-const NODE_PTY_MASTER_CLOEXEC_PATCH_SOURCE = join(
-  ROOT,
-  'config',
-  'relay-assets',
-  NODE_PTY_MASTER_CLOEXEC_PATCH_FILENAME
-)
 // Written by build-windows-process-tree-relay-addon.mjs, which only runs on a
 // Windows machine.
 const WINDOWS_PROCESS_TREE_BUILD_DIR = join(ROOT, '.build', 'windows-process-tree')
@@ -124,17 +99,27 @@ for (const platform of RELAY_BUILD_PLATFORMS) {
   // manifest check and be hashed into .version, shipping mixed-generation bytes.
   rmSync(outDir, { recursive: true, force: true })
   mkdirSync(outDir, { recursive: true })
+  const windows = isWindowsRelayPlatform(platform)
+  const watcherPlugins = windows
+    ? [bundledParcelWatcherPlugin(`./${RELAY_WINDOWS_WATCHER_FILENAME}`)]
+    : []
+  if (windows) {
+    const watcher = readWindowsWatcherArtifact(platform.slice('win32-'.length))
+    copyFileSync(watcher.binary, join(outDir, RELAY_WINDOWS_WATCHER_FILENAME))
+    copyFileSync(watcher.license, join(outDir, RELAY_WINDOWS_WATCHER_LICENSE))
+  }
 
   await build({
     entryPoints: [RELAY_ENTRY],
     bundle: true,
     platform: 'node',
-    target: 'node18',
+    target: 'es2024',
     format: 'cjs',
     outfile: join(outDir, 'relay.js'),
     // Native addons cannot be bundled — they must exist on the remote host.
     // The relay gracefully degrades when they are absent.
-    external: ['node-pty', '@parcel/watcher', 'electron'],
+    external: [...(windows ? [] : ['@parcel/watcher']), 'electron', 'bun:ffi'],
+    plugins: watcherPlugins,
     sourcemap: false,
     minify: true,
     define: {
@@ -143,29 +128,28 @@ for (const platform of RELAY_BUILD_PLATFORMS) {
   })
 
   if (isWindowsRelayPlatform(platform)) {
-    copyFileSync(
-      NODE_PTY_CONSOLE_LIST_PATCH_SOURCE,
-      join(outDir, NODE_PTY_CONSOLE_LIST_PATCH_FILENAME)
-    )
-    copyFileSync(
-      NODE_PTY_WINDOWS_TEARDOWN_PATCH_SOURCE,
-      join(outDir, NODE_PTY_WINDOWS_TEARDOWN_PATCH_FILENAME)
-    )
+    await build({
+      entryPoints: [join(ROOT, 'src/main/daemon/pty-subprocess/windows-bun-pty-gate-entry.ts')],
+      bundle: true,
+      platform: 'node',
+      target: 'es2024',
+      format: 'cjs',
+      outfile: join(outDir, 'windows-bun-pty-gate-entry.js'),
+      external: ['bun:ffi'],
+      minify: true
+    })
   }
-  copyFileSync(
-    NODE_PTY_MASTER_CLOEXEC_PATCH_SOURCE,
-    join(outDir, NODE_PTY_MASTER_CLOEXEC_PATCH_FILENAME)
-  )
   stageWindowsProcessTreeAddon(platform, outDir)
 
   await build({
     entryPoints: [WATCHER_ENTRY],
     bundle: true,
     platform: 'node',
-    target: 'node18',
+    target: 'es2024',
     format: 'cjs',
     outfile: join(outDir, 'relay-watcher.js'),
-    external: ['@parcel/watcher'],
+    external: windows ? [] : ['@parcel/watcher'],
+    plugins: watcherPlugins,
     sourcemap: false,
     minify: true,
     define: {
@@ -177,7 +161,7 @@ for (const platform of RELAY_BUILD_PLATFORMS) {
     entryPoints: [AI_VAULT_SERVICE_ENTRY],
     bundle: true,
     platform: 'node',
-    target: 'node18',
+    target: 'es2024',
     format: 'cjs',
     outfile: join(outDir, 'relay-ai-vault-service.js'),
     external: ['electron'],
@@ -192,7 +176,7 @@ for (const platform of RELAY_BUILD_PLATFORMS) {
     entryPoints: [OPENCODE_SQLITE_READER_ENTRY],
     bundle: true,
     platform: 'node',
-    target: 'node18',
+    target: 'es2024',
     format: 'cjs',
     outfile: join(outDir, RELAY_OPENCODE_SQLITE_READER_FILENAME),
     external: ['electron', 'bun:sqlite'],
@@ -207,7 +191,7 @@ for (const platform of RELAY_BUILD_PLATFORMS) {
     entryPoints: [WSL_TRANSCRIPT_FS_PROCESS_ENTRY],
     bundle: true,
     platform: 'node',
-    target: 'node18',
+    target: 'es2024',
     format: 'cjs',
     outfile: join(outDir, 'wsl-transcript-fs-process-entry.js'),
     external: ['electron'],
@@ -222,7 +206,7 @@ for (const platform of RELAY_BUILD_PLATFORMS) {
     entryPoints: [MANAGED_HOOK_RUNTIME_ENTRY],
     bundle: true,
     platform: 'node',
-    target: 'node18',
+    target: 'es2024',
     format: 'cjs',
     outfile: join(outDir, 'managed-hook-runtime.js'),
     // Why: jsonc-parser's default UMD build keeps relative dynamic requires

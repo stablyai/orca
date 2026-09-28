@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 import { join, resolve } from 'node:path'
 import { x as extractTar } from 'tar'
 import { parseAllDocuments } from 'yaml'
+import { readWindowsWatcherArtifact, WINDOWS_WATCHER_VERSION } from './windows-watcher-artifact.mjs'
 import { ORCAD_BUN_TARGETS } from '../../src/shared/orcad-bun-runtime.ts'
 
 const root = resolve(import.meta.dirname, '../..')
@@ -48,6 +49,12 @@ export function verifyWatcherArchive(bytes, integrity) {
 // Fetch only these small release assets; ordinary installs remain host-only.
 export async function materializeWatcherPackage(target) {
   const { version } = require('@parcel/watcher/package.json')
+  if (target === 'win32-x64' || target === 'win32-arm64') {
+    if (version !== WINDOWS_WATCHER_VERSION) {
+      throw new Error(`Requalify the Windows watcher wrapper for ${version}`)
+    }
+    return readWindowsWatcherArtifact(target.slice('win32-'.length)).binary
+  }
   const lockfile = parseWatcherLockfile(await readFile(join(root, 'pnpm-lock.yaml'), 'utf8'))
   const { integrity, url } = watcherPackageIdentity(target, version, lockfile)
   const cache = join(root, 'out', '.orcad-watchers', version, target)

@@ -1,4 +1,5 @@
 import { open } from 'node:fs/promises'
+import { bunOwnedRuntimeArgs } from '../shared/bun-owned-runtime-args'
 import { homedir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import type { RemoteOpenCodeSessionReader } from '../main/ai-vault/remote-session-scanner-types'
@@ -55,7 +56,12 @@ export function createRelayOpenCodeReader(
         reader?.dispose()
         reader = (options.readerFactory ?? createOpenCodeSqliteProcessClient)({
           executable: nextExecutable,
-          args: [join(baseDir, 'opencode-sqlite-reader.cjs')],
+          args: [
+            ...(process.versions.bun && nextExecutable === process.execPath
+              ? bunOwnedRuntimeArgs()
+              : []),
+            join(baseDir, 'opencode-sqlite-reader.cjs')
+          ],
           env: buildRelayAiVaultServiceEnv(environment)
         })
         executable = nextExecutable

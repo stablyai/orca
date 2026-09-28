@@ -1,6 +1,7 @@
 import { createPtySlaveLineEditorProbe } from '../shared/pty-slave-line-discipline-echo'
 import {
   readShellProcessReadiness,
+  readShellTerminalPath,
   resolveInstalledShellExecutablePaths,
   resolveShellExecutablePath
 } from '../shared/shell-process-readiness'
@@ -19,6 +20,7 @@ export type ShellPromptReadinessProbe = {
 }
 
 export function createShellPromptReadinessProbe(options: {
+  ptyPid: number
   slavePath: string | undefined
   getShellPid: () => number | null
   shellPath: string | undefined
@@ -27,8 +29,8 @@ export function createShellPromptReadinessProbe(options: {
   onPromptReady: () => void
   settleMs?: number
 }): ShellPromptReadinessProbe | null {
-  const lineEditorProbe = createPtySlaveLineEditorProbe(options.slavePath)
-  if (!lineEditorProbe) {
+  let lineEditorProbe = createPtySlaveLineEditorProbe(options.slavePath)
+  if (!lineEditorProbe && process.platform === 'win32') {
     return null
   }
   const settleMs = options.settleMs ?? SHELL_PROMPT_PROBE_SETTLE_MS
@@ -45,7 +47,17 @@ export function createShellPromptReadinessProbe(options: {
       return
     }
     const shellPid = options.getShellPid()
-    if (!shellPid || (await lineEditorProbe()) !== 'line-editor') {
+    if (!shellPid) {
+      return
+    }
+    if (!options.slavePath) {
+      const slavePath = await readShellTerminalPath(shellPid, options.ptyPid)
+      if (disposed || scheduledGeneration !== generation || options.getShellPid() !== shellPid) {
+        return
+      }
+      lineEditorProbe = createPtySlaveLineEditorProbe(slavePath ?? undefined)
+    }
+    if (!lineEditorProbe || (await lineEditorProbe()) !== 'line-editor') {
       return
     }
     if (disposed || scheduledGeneration !== generation) {
@@ -85,6 +97,9 @@ export function createShellPromptReadinessProbe(options: {
       ) {
         return
       }
+    }
+    if (options.getShellPid() !== shellPid) {
+      return
     }
     disposed = true
     options.onPromptReady()

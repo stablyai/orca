@@ -6,9 +6,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as RelayInstallMarkerModule from './ssh-relay-install-marker'
 
-vi.mock('./ssh-relay-opencode-runtime', () => ({
-  ensureRemoteOpenCodeRuntime: vi.fn().mockResolvedValue('ready')
-}))
 vi.mock('./ssh-relay-ripgrep-install', () => ({
   remoteRipgrepLayout: vi.fn().mockReturnValue(null),
   recordRemoteRipgrepReference: vi.fn().mockResolvedValue(false),
@@ -43,8 +40,8 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
   execCommand: vi.fn()
 }))
 
-vi.mock('./ssh-remote-node-resolution', () => ({
-  resolveRemoteNodePath: vi.fn().mockResolvedValue('/usr/bin/node')
+vi.mock('./ssh-relay-bun-runtime', () => ({
+  ensureRemoteRelayBunRuntime: vi.fn().mockResolvedValue('/usr/bin/node')
 }))
 
 vi.mock('./ssh-relay-install-marker', async (importOriginal) => ({
@@ -81,6 +78,7 @@ vi.mock('./ssh-connection-utils', () => ({
 }))
 
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
+import { ensureRemoteRelayBunRuntime } from './ssh-relay-bun-runtime'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { parseUnameToRelayPlatform } from './relay-protocol'
 import { gcOldRelayVersions, isRelayAlreadyInstalled } from './ssh-relay-versioned-install'
@@ -110,25 +108,15 @@ const ABI_MISMATCH: TerminalUnavailableCause = {
   }
 }
 
-// The relay dir is complete but node-pty will not load, which is exactly what the spawn-time cause
-// describes. @parcel/watcher is healthy, so only node-pty is reset and rebuilt.
-// Stdout of the relay-side pty-master cloexec patch, which runs on Linux hosts once a
-// freshly installed node-pty loads (#17915).
-const NPTY_CLOEXEC_PATCHED = 'ORCA-NPTY-CLOEXEC:patched\n'
+// A reconnect upgrades the legacy failure to a Bun-owned terminal backend.
 const NODE_PTY_BROKEN = 'ORCA-NATIVE-DEPS-MISSING:node-pty\nMISSING'
 
 function repairSucceedsResponses(): ExecResponse[] {
   return [
     '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
     '/home/u',
-    NODE_PTY_BROKEN, // health probe before the lock
-    NODE_PTY_BROKEN, // re-probe under the repair lock
-    '', // SFTP-namespace install-owner marker
-    '', // reset node-pty + npm install
-    '', // chmod prebuilds
-    'ORCA-NPTY-PROBE-OK\n', // node-pty loads again
-    '', // rm -f probe stderr
-    NPTY_CLOEXEC_PATCHED,
+    'ORCA-NATIVE-DEPS-OK',
+    '',
     'DEAD',
     'READY'
   ]
@@ -202,7 +190,7 @@ describe('spawn-time node-pty repair through the locked deploy path', () => {
     return vi.mocked(execCommand).mock.calls.map(([, command]) => String(command))
   }
 
-  it('rebuilds node-pty under the repair lock and returns the post-reconnect provider', async () => {
+  it('reconnects a legacy node-pty failure onto bundled Bun without rebuilding bindings', async () => {
     const conn = makeMockConnection(sftpCapture)
     feed(repairSucceedsResponses())
     const deploys = { count: 0 }
@@ -213,10 +201,9 @@ describe('spawn-time node-pty repair through the locked deploy path', () => {
     expect(result.provider).toEqual({ generation: 1 })
     expect(deploys.count).toBe(1)
     expect(vi.mocked(tryAcquireRelayRepairLock)).toHaveBeenCalledTimes(1)
-    const install = execCalls().find((command) => command.includes('npm install')) ?? ''
-    expect(install).toContain('npm install')
-    // The reset is what makes an ABI-mismatched binding recompile instead of being reported up to date.
-    expect(install).toContain("rm -rf 'node_modules/node-pty'")
+    expect(ensureRemoteRelayBunRuntime).toHaveBeenCalledOnce()
+    expect(execCalls().some((command) => command.includes('npm install'))).toBe(false)
+    expect(execCalls().some((command) => command.includes('node_modules/node-pty'))).toBe(false)
   })
 
   it('does not repair or reconnect a second time for the same cause on the same host', async () => {
@@ -237,7 +224,7 @@ describe('spawn-time node-pty repair through the locked deploy path', () => {
   })
 
   it.each(['busy', 'error'] as const)(
-    'leaves the host untouched and degrades to the relay message when the repair lock is %s',
+    'reconnects without mutating dependencies when the repair lock is %s',
     async (lockResult) => {
       const conn = makeMockConnection(sftpCapture)
       vi.mocked(tryAcquireRelayRepairLock).mockResolvedValue(lockResult)
@@ -246,14 +233,11 @@ describe('spawn-time node-pty repair through the locked deploy path', () => {
 
       const result = await recover(conn, deploys)
 
-      // The reconnect happened; the rebuild did not, so the retried spawn hits the same relay
-      // rejection and the user reads today's message. Nothing wrote to node_modules unlocked.
       expect(deploys.count).toBe(1)
       expect(execCalls().some((command) => command.includes('npm install'))).toBe(false)
       expect(execCalls().some((command) => command.includes('node_modules/node-pty'))).toBe(false)
       expect(result.outcome).toBe('repaired')
-      const warnings = warnSpy.mock.calls.map((args) => String(args[0] ?? ''))
-      expect(warnings.some((line) => line.includes(`repair lock is ${lockResult}`))).toBe(true)
+      expect(ensureRemoteRelayBunRuntime).toHaveBeenCalledOnce()
     }
   )
 

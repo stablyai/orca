@@ -92,28 +92,15 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-win:
+  vet_ref:
     if: github.repository == 'stablyai/orca'
-    # Why the same environment as the mac workflows: this needs the App token
-    # that can write to the dev-channel repos, and it should be reachable from
-    # exactly the same place those secrets already live.
-    environment: adhoc-mac-build
-    # Why windows-2022 and not windows-latest: windows-latest moved to the
-    # Windows 2025 / VS 2026 image before node-gyp could detect VS 18, breaking
-    # native dependency install. release-cut pins the same image.
-    runs-on: windows-2022
-    timeout-minutes: 90
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     env:
-      NODE_OPTIONS: --max-old-space-size=4096
       CHANNEL: ${{ inputs.channel }}
       TAG: ${{ inputs.tag }}
       VERSION: ${{ inputs.version }}
-
     steps:
-      # Why vet before checkout: everything after this runs the checked-out code
-      # with a token that can write to a release repo. The mac leg already vetted
-      # the ref it resolved, but this workflow is dispatchable on its own, so it
-      # re-derives the same guarantee rather than trusting its caller.
       - name: Vet the requested inputs
         id: vetted
         shell: bash
@@ -165,6 +152,40 @@ jobs:
             exit 1
           fi
           echo "Vetted $CHANNEL $TAG at $REQUESTED_SHA"
+
+  windows_watcher:
+    permissions:
+      contents: read
+    needs: vet_ref
+    if: github.repository == 'stablyai/orca'
+    uses: ./.github/workflows/windows-watcher-artifacts.yml
+    with:
+      ref: ${{ inputs.ref }}
+      artifact_prefix: windows-watcher-dev-channel-win-build
+
+  build-win:
+    needs: [vet_ref, windows_watcher]
+    if: github.repository == 'stablyai/orca'
+    # Why the same environment as the mac workflows: this needs the App token
+    # that can write to the dev-channel repos, and it should be reachable from
+    # exactly the same place those secrets already live.
+    environment: adhoc-mac-build
+    # Why windows-2022 and not windows-latest: windows-latest moved to the
+    # Windows 2025 / VS 2026 image before node-gyp could detect VS 18, breaking
+    # native dependency install. release-cut pins the same image.
+    runs-on: windows-2022
+    timeout-minutes: 90
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+      CHANNEL: ${{ inputs.channel }}
+      TAG: ${{ inputs.tag }}
+      VERSION: ${{ inputs.version }}
+
+    steps:
+      # Why vet before checkout: everything after this runs the checked-out code
+      # with a token that can write to a release repo. The mac leg already vetted
+      # the ref it resolved, but this workflow is dispatchable on its own, so it
+      # re-derives the same guarantee rather than trusting its caller.
 
       - name: Checkout the built commit
         uses: actions/checkout@v6
@@ -251,6 +272,14 @@ jobs:
         run: |
           node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=x64
           node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=arm64
+
+      - name: Load qualified Windows watchers
+        if: hashFiles('config/scripts/windows-watcher-artifact.mjs') != ''
+        uses: actions/download-artifact@v8
+        with:
+          pattern: windows-watcher-dev-channel-win-build-*
+          merge-multiple: true
+          path: .build/windows-watcher
 
       - name: Build app
         shell: bash

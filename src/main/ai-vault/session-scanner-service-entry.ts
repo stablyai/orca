@@ -1,3 +1,4 @@
+import { collectBunVaultScanGarbage, startBunVaultMemoryMonitor } from './bun-vault-memory-budget'
 import { requestSessionSearchRoots } from './session-scanner-service-root-request'
 import type { AiVaultSessionTitle } from '../../shared/ai-vault-session-title'
 import { readAiVaultFirstUserPrompt } from './session-first-user-prompt-read'
@@ -24,6 +25,10 @@ import { listLocalAiVaultSubagentSessions } from './session-subagent-reader'
 
 if (!process.send) {
   throw new Error('AI Vault service requires a parent IPC channel.')
+}
+
+if (process.versions.bun) {
+  startBunVaultMemoryMonitor()
 }
 
 const controllers = new Map<number, AbortController>()
@@ -88,6 +93,9 @@ async function executeRequest(request: AiVaultServiceRequest): Promise<AiVaultSe
         operation: 'firstPrompt',
         value: await readAiVaultFirstUserPrompt(request.request)
       }
+    }
+    if (process.versions.bun) {
+      collectBunVaultScanGarbage()
     }
     const startedAt = performance.now()
     const result = await scanAiVaultSessions({ ...request.options, signal: controller.signal })

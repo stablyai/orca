@@ -1,7 +1,6 @@
 /** Bun application entry; the public launcher owns runtime selection. */
 import process from 'node:process'
 import { main, resolveOrcadExitCode } from './orcad-entry'
-import { runOrcadNativePreflight } from './orcad-native-preflight'
 import {
   ORCAD_PROFILE_PREFLIGHT_FLAG,
   ORCAD_STARTUP_PREFLIGHT_FLAG
@@ -34,10 +33,7 @@ try {
     }).catch(failStartup)
   } else {
     void preflightBundledOrcadStartup()
-      .then(() => {
-        runOrcadNativePreflight()
-        return main()
-      })
+      .then(() => main())
       .catch(failStartup)
   }
 } catch (error) {

@@ -51,8 +51,8 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
   execCommand: vi.fn().mockResolvedValue('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
 }))
 
-vi.mock('./ssh-remote-node-resolution', () => ({
-  resolveRemoteNodePath: vi.fn().mockResolvedValue('/usr/bin/node')
+vi.mock('./ssh-relay-bun-runtime', () => ({
+  ensureRemoteRelayBunRuntime: vi.fn().mockResolvedValue('/usr/bin/node')
 }))
 
 // Why: this file mocks fs, so the real content hash cannot read a binary.
@@ -64,9 +64,6 @@ vi.mock('../ripgrep/bundled-ripgrep-path', () => ({
 // Why: the fire-and-forget ripgrep install would drain the queued exec mocks.
 // Why: the post-launch ripgrep cache GC is fire-and-forget and would drain the queued exec mocks.
 vi.mock('./ssh-relay-ripgrep-cache-gc', () => ({ gcRemoteRipgrepCache: vi.fn() }))
-vi.mock('./ssh-relay-opencode-runtime', () => ({
-  ensureRemoteOpenCodeRuntime: vi.fn().mockResolvedValue('ready')
-}))
 vi.mock('./ssh-relay-ripgrep-install', async (importOriginal) => ({
   ...(await importOriginal<typeof RelayRipgrepInstallModule>()),
   ensureRemoteBundledRipgrep: vi.fn().mockResolvedValue('present'),
@@ -103,7 +100,7 @@ vi.mock('./ssh-connection-utils', () => ({
 
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
 import { execCommand, waitForSentinel } from './ssh-relay-deploy-helpers'
-import { resolveRemoteNodePath } from './ssh-remote-node-resolution'
+import { ensureRemoteRelayBunRuntime } from './ssh-relay-bun-runtime'
 import { isRelayAlreadyInstalled } from './ssh-relay-versioned-install'
 import { acquireInstallLock } from './ssh-relay-install-lock'
 import type { SshConnection } from './ssh-connection'
@@ -154,7 +151,7 @@ describe('deployAndLaunchRelay on Windows remotes', () => {
       onData: vi.fn(),
       onClose: vi.fn()
     })
-    vi.mocked(resolveRemoteNodePath).mockReset().mockResolvedValue('/usr/bin/node')
+    vi.mocked(ensureRemoteRelayBunRuntime).mockReset().mockResolvedValue('/usr/bin/node')
     vi.mocked(isRelayAlreadyInstalled).mockReset().mockResolvedValue(true)
     vi.mocked(acquireInstallLock).mockReset().mockResolvedValue(undefined)
   })
@@ -162,7 +159,7 @@ describe('deployAndLaunchRelay on Windows remotes', () => {
   it('launches Windows remotes via a named pipe endpoint', async () => {
     const conn = makeMockConnection()
     const mockExecCommand = vi.mocked(execCommand)
-    vi.mocked(resolveRemoteNodePath).mockResolvedValue('C:/Program Files/nodejs/node.exe')
+    vi.mocked(ensureRemoteRelayBunRuntime).mockResolvedValue('C:/Program Files/nodejs/node.exe')
     mockExecCommand
       .mockRejectedValueOnce(new Error('uname not found')) // tagged POSIX platform probe
       .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Windows X64') // tagged PowerShell platform probe
@@ -185,6 +182,9 @@ describe('deployAndLaunchRelay on Windows remotes', () => {
     const decodedScripts = mockExecCommand.mock.calls
       .map(([, command]) => decodePowerShellCommand(command))
       .filter((script): script is string => script !== null)
+    const nativeProbe = decodedScripts.find((script) => script.includes('ORCA-NATIVE-DEPS-OK'))
+    expect(nativeProbe).toContain('./parcel-watcher.node')
+    expect(nativeProbe).not.toContain('require("@parcel/watcher")')
     const launchScript = decodedScripts.find((script) => script.includes('Invoke-CimMethod')) ?? ''
     expect(launchScript).toContain(
       '"C:/Users/me user/.orca-remote/relay-0.1.0+abcdef012345/relay.js"'
@@ -220,7 +220,7 @@ describe('deployAndLaunchRelay on Windows remotes', () => {
   it('relaunches Windows remotes on a fallback pipe when reconnecting the occupied pipe fails', async () => {
     const conn = makeMockConnection()
     const mockExecCommand = vi.mocked(execCommand)
-    vi.mocked(resolveRemoteNodePath).mockResolvedValue('C:/Program Files/nodejs/node.exe')
+    vi.mocked(ensureRemoteRelayBunRuntime).mockResolvedValue('C:/Program Files/nodejs/node.exe')
     vi.mocked(waitForSentinel)
       .mockRejectedValueOnce(new Error('stale daemon handshake failed'))
       .mockResolvedValueOnce({
@@ -274,7 +274,7 @@ describe('deployAndLaunchRelay on Windows remotes', () => {
     const conn = makeMockConnection()
     const mockExecCommand = vi.mocked(execCommand)
     const persistedPipe = '\\\\.\\pipe\\orca-relay-1234567890abcdef1234'
-    vi.mocked(resolveRemoteNodePath).mockResolvedValue('C:/Program Files/nodejs/node.exe')
+    vi.mocked(ensureRemoteRelayBunRuntime).mockResolvedValue('C:/Program Files/nodejs/node.exe')
     mockExecCommand
       .mockRejectedValueOnce(new Error('uname not found')) // tagged POSIX platform probe
       .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Windows X64') // tagged PowerShell platform probe
@@ -302,7 +302,7 @@ describe('deployAndLaunchRelay on Windows remotes', () => {
     const connA = makeMockConnection()
     const connB = makeMockConnection()
     const mockExecCommand = vi.mocked(execCommand)
-    vi.mocked(resolveRemoteNodePath).mockResolvedValue('C:/Program Files/nodejs/node.exe')
+    vi.mocked(ensureRemoteRelayBunRuntime).mockResolvedValue('C:/Program Files/nodejs/node.exe')
     mockExecCommand
       .mockRejectedValueOnce(new Error('uname not found')) // tagged POSIX platform probe A
       .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Windows X64')

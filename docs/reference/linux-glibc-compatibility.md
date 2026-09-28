@@ -90,31 +90,17 @@ libstdc++ floor — its glibc needs are still checked. Speech-to-text therefore
 needs a host with libstdc++ from GCC 11+ (Ubuntu 21.10 / 22.04 LTS or newer); the
 app itself still launches on stock 20.04.
 
-**3. Check before loading, on hosts that ship without a compiler (`orcad`).**
-The two gates above protect the packaged desktop app, where the binary is built and
-verified by the same pipeline. `orcad` is deployed to hosts Orca never built on, so it
-adds a runtime precondition
-([`src/main/orcad/node-pty-precondition.ts`](../../src/main/orcad/node-pty-precondition.ts)),
-run from `main.ts` before anything requires `node-pty`. It loads the addon in a **child
-process**, so a binary the loader refuses — or one that aborts outright — is data rather
-than this process's death, and the operator gets a sentence naming the host's libc, its
-Node ABI, its prebuild slot and the command to run. A proven-unloadable binary exits 78
-(`EX_CONFIG`) instead of reaching the `require`; a probe that never answered is reported
-as unverifiable and boots anyway, because a silent probe is not evidence. Whatever it
-finds is published in `status.get`'s `degradations[]` under `terminal_unavailable`.
+**3. Qualify the bundled headless runtime and its native dependencies.**
+Orcad and the SSH relay use pinned Bun for terminals. They do not install node-pty
+prebuilds or compile node-pty on the remote host. Desktop Electron still uses the
+patched node-pty dependency and the build gates above.
 
-**4. Ship the binary, built from patched sources.**
-[`config/scripts/build-orcad-prebuilds.mjs`](../../config/scripts/build-orcad-prebuilds.mjs)
-(`pnpm run build:orcad-prebuilds`, after `build:orcad`) compiles node-pty for the current
-host and files it under `out/orcad/prebuilds/<slot>/`, where a slot is
-`linux-{x64,arm64}-{glibc,musl}` or `darwin-{x64,arm64}`. libc is part of the slot name
-because node-pty's own loader falls back to `prebuilds/<platform>-<arch>` and cannot tell
-glibc from musl — a glibc binary parked there is loaded on Alpine and dies at `dlopen`.
-The script refuses to compile a tree where `config/patches/node-pty@1.1.0.patch` is not
-applied: without the patch the prebuilt is a #9902 crash shipped as an artifact rather
-than a first-connect error. CI runs it once per slot inside the matching container
-(`--slot=` forces the label), merges the trees, and `--require-slots` fails a release with
-a hole in the matrix.
+The Bun runtime catalog selects glibc or musl artifacts for each supported CPU.
+The bundled-runtime CI checks the Linux glibc floor and runs native dependency
+and terminal tests. Orcad validates artifact identity and SQLite readiness before
+opening profile state; its disposable native-feature probe also checks PTY and
+watcher operation. An inconclusive optional feature probe must not be treated as
+proof that a host cannot start.
 
 ## Adding or upgrading a native dependency
 

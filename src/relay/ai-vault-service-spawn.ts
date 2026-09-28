@@ -1,3 +1,4 @@
+import { bunOwnedRuntimeArgs } from '../shared/bun-owned-runtime-args'
 import { fork, type ChildProcess } from 'node:child_process'
 import { join } from 'node:path'
 import { buildRelayAiVaultServiceEnv } from '../main/ai-vault/session-scanner-service-env'
@@ -10,7 +11,7 @@ export function relayAiVaultServiceEntryPath(baseDir = __dirname): string {
 export function spawnRelayAiVaultService(): ChildProcess {
   const child = fork(relayAiVaultServiceEntryPath(), [], {
     stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
-    execArgv: ['--max-old-space-size=384'],
+    execArgv: process.versions.bun ? bunOwnedRuntimeArgs() : [],
     env: buildRelayAiVaultServiceEnv(),
     ...(process.platform === 'win32' ? { windowsHide: true } : {})
   })

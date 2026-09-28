@@ -17,24 +17,19 @@ import {
   createRelayUploadStageNamespace,
   makeRelayInstallDirectoryCommand,
   relayHomeRelativeDir,
-  relaySftpNamespaceMapping,
   relayUploadStageSftpNamespaceMapping,
   type RelayInstallNamespace,
   type RelayUploadStageNamespace
 } from './ssh-relay-install-namespace'
 import { createRelayInstallMarkerFileName } from './ssh-relay-install-marker'
-import { resolveRemoteNodePath } from './ssh-remote-node-resolution'
+import { ensureRemoteRelayBunRuntime } from './ssh-relay-bun-runtime'
+import { installRelayBunDependencies, RELAY_BUN_NATIVE_DEPS } from './ssh-relay-bun-dependencies'
 import {
   ensureRemoteBundledRipgrep,
   remoteRipgrepLayout,
   recordRemoteRipgrepReference
 } from './ssh-relay-ripgrep-install'
 import { gcRemoteRipgrepCache } from './ssh-relay-ripgrep-cache-gc'
-import { ensureRemoteOpenCodeRuntime } from './ssh-relay-opencode-runtime'
-import {
-  createRemoteOpenCodeRuntimeRetry,
-  type RemoteOpenCodeRuntimePreparation
-} from './ssh-relay-opencode-runtime-retry'
 import {
   readLocalFullVersion,
   computeRemoteRelayDir,
@@ -43,12 +38,6 @@ import {
   abandonInstall,
   gcOldRelayVersions
 } from './ssh-relay-versioned-install'
-import {
-  attachRelayNativeDepsCache,
-  promoteRelayNativeDepsCache,
-  resolveRelayNativeDepsCacheKey,
-  type RelayNativeDepsCacheContext
-} from './ssh-relay-native-deps-cache-install'
 import { acquireInstallLock } from './ssh-relay-install-lock'
 import { tryAcquireRelayRepairLock } from './ssh-relay-repair-lock'
 import {
@@ -57,27 +46,11 @@ import {
   waitForRelayGcClaimRelease
 } from './ssh-relay-gc-claim'
 import {
-  NATIVE_DEPS_COMMAND_TIMEOUT_MS,
   RELAY_DEPLOY_TEARDOWN_TIMEOUT_MS,
   RELAY_DEPLOY_TIMEOUT_MS
 } from './ssh-relay-deploy-timing'
 import { createSshOperationAbortError, shellEscape } from './ssh-connection-utils'
-import { isWindowsRelayPlatform } from '../../shared/relay-artifacts'
-import { exportLocalNodeHeadersPrefix, localNodeHeadersFromOutput } from './ssh-relay-node-headers'
-import {
-  probeBuildToolchain,
-  formatMissingToolchainError,
-  formatSkippedNodePtyWarning,
-  shouldProbeBuildToolchainAfterNativeDepsFailure,
-  formatNodeHeadersDownloadError,
-  isNodeHeadersDownloadFailure
-} from './ssh-relay-build-toolchain'
-import {
-  commandWithNodePath,
-  makeRemoteExecutableCommand,
-  readRemoteHomeCommand,
-  removeRemoteFileCommand
-} from './ssh-remote-commands'
+import { commandWithNodePath, readRemoteHomeCommand } from './ssh-remote-commands'
 import {
   cleanupOwnedRelayUploadStageCommand,
   parseReservedRelayUploadStage,
@@ -112,7 +85,6 @@ import {
   shortRelayVersionSegment,
   SHORT_RELAY_SOCKET_DIR_PREFIX
 } from './relay-socket-path-limit'
-import { isSshSessionLimitError } from './ssh-session-limit-error'
 import {
   isWindowsRelayPipePath,
   relayEndpointForHost,
@@ -136,7 +108,6 @@ export type RelayDeployResult = {
   nodePath?: string
   sockPath?: string
   credentialFile?: string
-  prepareOpenCodeRuntime?: RemoteOpenCodeRuntimePreparation
 }
 
 class RelayDirectoryGcConflictError extends Error {
@@ -289,80 +260,17 @@ type RelayBootstrapState = {
   nodePath: string
 }
 
-async function resolveRelayBootstrapStateSequentially(
-  conn: SshConnection,
-  hostPlatform: RemoteHostPlatform,
-  fullVersion: string,
-  signal?: AbortSignal
-): Promise<RelayBootstrapState> {
-  const installState = await resolveRemoteInstallState(conn, hostPlatform, fullVersion, { signal })
-  const nodePath = await resolveRemoteNodePath(conn, hostPlatform, { signal })
-  return { ...installState, nodePath }
-}
-
 async function resolveRelayBootstrapState(
   conn: SshConnection,
   hostPlatform: RemoteHostPlatform,
   fullVersion: string,
   signal?: AbortSignal
 ): Promise<RelayBootstrapState> {
-  if (!conn.canRunConcurrentExecCommands()) {
-    return resolveRelayBootstrapStateSequentially(conn, hostPlatform, fullVersion, signal)
-  }
-  const abortController = new AbortController()
-  const abortForDeploy = (): void => abortController.abort()
-  signal?.addEventListener('abort', abortForDeploy, { once: true })
-  if (signal?.aborted) {
-    abortForDeploy()
-  }
-  const installStatePromise = resolveRemoteInstallState(conn, hostPlatform, fullVersion, {
-    rethrowSessionLimitErrors: true,
-    signal: abortController.signal
+  const installState = await resolveRemoteInstallState(conn, hostPlatform, fullVersion, { signal })
+  const nodePath = await ensureRemoteRelayBunRuntime(conn, hostPlatform, installState.remoteHome, {
+    signal
   })
-  const nodePathPromise = resolveRemoteNodePath(conn, hostPlatform, {
-    rethrowSessionLimitErrors: true,
-    signal: abortController.signal
-  })
-  try {
-    const [installState, nodePath] = await Promise.all([installStatePromise, nodePathPromise])
-    signal?.throwIfAborted()
-    return { ...installState, nodePath }
-  } catch (err) {
-    // Let an admitted probe finish before retrying a refused parallel session.
-    if (!isSshSessionLimitError(err)) {
-      abortController.abort()
-    }
-    const settled = await Promise.allSettled([installStatePromise, nodePathPromise])
-    const unconfirmed = settled.find(
-      (result) => result.status === 'rejected' && isUnconfirmedSshCommandTermination(result.reason)
-    )
-    if (unconfirmed?.status === 'rejected') {
-      throw unconfirmed.reason
-    }
-    signal?.throwIfAborted()
-    if (!isSshSessionLimitError(err)) {
-      throw err
-    }
-    const nonSessionFailure = settled.find(
-      (result) =>
-        result.status === 'rejected' &&
-        !isSshSessionLimitError(result.reason) &&
-        !isAbortError(result.reason)
-    )
-    if (nonSessionFailure?.status === 'rejected') {
-      throw nonSessionFailure.reason
-    }
-    console.warn(
-      '[ssh-relay] Concurrent bootstrap probes hit the remote SSH session limit; retrying sequentially.'
-    )
-    return resolveRelayBootstrapStateSequentially(conn, hostPlatform, fullVersion, signal)
-  } finally {
-    signal?.removeEventListener('abort', abortForDeploy)
-  }
-}
-
-function isAbortError(err: unknown): boolean {
-  return err instanceof Error && err.name === 'AbortError'
+  return { ...installState, nodePath }
 }
 
 /**
@@ -425,7 +333,7 @@ async function deployAndLaunchRelayAttempt(
   const fullVersion = readLocalFullVersion(localRelayDir)
 
   onProgress?.('Checking existing relay...')
-  // Why: install-check and node resolution are independent; run concurrently to save a round trip, with sequential fallback for restrictive SSH servers.
+  // Resolve the host home before staging the pinned runtime; no host Node probe is needed.
   const { remoteHome, remoteRelayDir, alreadyInstalled, nodePath } =
     await resolveRelayBootstrapState(conn, hostPlatform, fullVersion, deploySignal)
   console.log(`[ssh-relay] Remote dir: ${remoteRelayDir}`)
@@ -448,7 +356,6 @@ async function deployAndLaunchRelayAttempt(
     const launchFence = await repairInstalledNativeDeps(
       conn,
       remoteRelayDir,
-      platform,
       hostPlatform,
       nodePath,
       homeRelativeRelayDir,
@@ -536,17 +443,14 @@ async function deployAndLaunchRelayAttempt(
 
           onProgress?.('Installing native dependencies...')
           console.log('[ssh-relay] Installing native dependencies...')
-          await installNativeDeps(
+          await installRelayBunDependencies({
             conn,
-            remoteRelayDir,
-            platform,
-            hostPlatform,
-            nodePath,
-            deploySignal,
-            [],
-            launchNamespace,
-            remoteHome
-          )
+            directory: remoteRelayDir,
+            host: hostPlatform,
+            runtime: nodePath,
+            signal: deploySignal,
+            namespace: launchNamespace
+          })
           console.log('[ssh-relay] Native deps installed')
 
           // Why: mark complete but retain the lock until launch makes daemon liveness observable to cross-version GC.
@@ -628,25 +532,7 @@ async function deployAndLaunchRelayAttempt(
     () => launchCleanupSettled,
     (error) => !isUnconfirmedSshCommandTermination(error)
   )
-  const runtimeInstall = (
-    conn.canRunConcurrentExecCommands() ? Promise.resolve(launchCleanupSettled) : ripgrepInstall
-  )
-    .then((ripgrepSettled) =>
-      ripgrepSettled
-        ? ensureRemoteOpenCodeRuntime(conn, hostPlatform, remoteHome, {
-            nodePath: launched.nodePath,
-            relayDir: remoteRelayDir,
-            signal: deploySignal
-          })
-        : ('teardown-unconfirmed' as const)
-    )
-    .catch(() => 'teardown-unconfirmed' as const)
-
-  const cleanupReady = Promise.all([ripgrepInstall, runtimeInstall]).then(
-    ([ripgrepSettled, runtimeOutcome]) =>
-      ripgrepSettled && runtimeOutcome !== 'teardown-unconfirmed'
-  )
-  const backgroundCleanup = cleanupReady.then((ready) => {
+  void ripgrepInstall.then((ready) => {
     if (!ready) {
       return false
     }
@@ -692,16 +578,7 @@ async function deployAndLaunchRelayAttempt(
         .then(() =>
           gcOldRelayVersions(conn, remoteHome, remoteRelayDir, hostPlatform, {
             windowsNodePath: launched.nodePath,
-            windowsSockNames: [relaySocketNameForInstanceId(relayInstanceId)],
-            // Why pin rather than rely on the symlink alone: a deploy that fell back to a
-            // per-directory install has no reference to show, and its key must still survive.
-            nativeDepsCacheKeys: [
-              resolveRelayNativeDepsCacheKey({
-                platform,
-                localRelayDir,
-                deps: RELAY_NATIVE_DEPS
-              })
-            ].filter((key): key is string => key !== null)
+            windowsSockNames: [relaySocketNameForInstanceId(relayInstanceId)]
           })
         )
         // Why after the version GC and not beside it: that pass is what removes the relay directories
@@ -728,17 +605,7 @@ async function deployAndLaunchRelayAttempt(
     remoteRelayDir,
     nodePath: launched.nodePath,
     sockPath: launched.sockPath,
-    credentialFile: launched.credentialFile,
-    prepareOpenCodeRuntime: createRemoteOpenCodeRuntimeRetry(
-      runtimeInstall,
-      backgroundCleanup,
-      (signal) =>
-        ensureRemoteOpenCodeRuntime(conn, hostPlatform, remoteHome, {
-          nodePath: launched.nodePath,
-          relayDir: remoteRelayDir,
-          signal
-        })
-    )
+    credentialFile: launched.credentialFile
   }
 }
 
@@ -774,15 +641,6 @@ async function uploadRelay(
       ? relayUploadStageSftpNamespaceMapping(stage.namespace, hostPlatform, stage.rootDir)
       : undefined
   })
-
-  if (!isWindowsRemoteHost(hostPlatform)) {
-    await execHostCommand(
-      conn,
-      hostPlatform,
-      makeRemoteExecutableCommand(hostPlatform, joinRemotePath(hostPlatform, remoteDir, 'node')),
-      { signal }
-    )
-  }
 
   // Why: write .version via SFTP not shell to avoid quoting content-hashed versions; the daemon reads it to validate the wire handshake.
   await writeRelayFile(
@@ -835,69 +693,18 @@ function uploadStageNamespaceIfSupported(
   return usesSystemSsh ? undefined : namespace
 }
 
-const NODE_PTY_VERSION = '1.1.0'
-const NODE_PTY_CONSOLE_LIST_PATCH_FILENAME = 'node-pty-1.1.0-console-list-agent-patch.cjs'
-const NODE_PTY_WINDOWS_TEARDOWN_PATCH_FILENAME = 'node-pty-1.1.0-windows-pty-teardown-patch.cjs'
-const NODE_PTY_MASTER_CLOEXEC_PATCH_FILENAME = 'node-pty-1.1.0-master-cloexec-patch.cjs'
-const NODE_PTY_CLOEXEC_STATUS_PREFIX = 'ORCA-NPTY-CLOEXEC:'
-/**
- * Whether the tree the patch left behind still leaks a pty fd -- the master into every later child
- * on Linux, a throwaway /dev/ptmx per spawn on macOS. `fixed` is the only outcome a shared cache
- * entry may be published from.
- */
-type NodePtyMasterCloexecOutcome = 'fixed' | 'unfixed'
-/**
- * The statuses that leave a non-leaking tree. Deliberately an allowlist, not a `failed:` denylist:
- * the script's `skipped:` family is mixed. `skipped:unsupported-platform` is a platform that never
- * leaks, but `skipped:earlier-attempt-failed`, `skipped:no-compiled-build`, `skipped:no-prebuild`,
- * `skipped:unexpected-source` and the two `skipped:<errno>` forms all mean the patch was refused
- * and the leaky build is still on disk -- indistinguishable from `failed:` as far as what gets
- * published.
- */
-const NODE_PTY_CLOEXEC_FIXED_STATUSES: ReadonlySet<string> = new Set([
-  'patched',
-  // The rebuild ran from patched source; only the leak check could not observe the result. An
-  // unobservable check is not a failed patch, and treating it as one would disable the shared
-  // cache on every host without `/proc` or `lsof`.
-  'patched-unverified',
-  'already-patched',
-  // Unreachable while the platform gate below short-circuits Windows first, but it is the one
-  // `skipped:` that means "nothing to fix" rather than "would not fix it".
-  'skipped:unsupported-platform'
-])
-// Exported for the relay-native-dependency-coverage test, which asserts every
-// native addon the relay bundle imports is either installed here or explicitly
-// declared as degrading without it.
-export const RELAY_NATIVE_DEPS = {
-  'node-pty': NODE_PTY_VERSION,
-  '@parcel/watcher': '2.5.6'
-} as const
+export const RELAY_NATIVE_DEPS = RELAY_BUN_NATIVE_DEPS
 
 type RelayNativeDepName = keyof typeof RELAY_NATIVE_DEPS
 const RELAY_NATIVE_DEP_NAMES = Object.keys(RELAY_NATIVE_DEPS) as RelayNativeDepName[]
 const NATIVE_DEPS_MISSING_PREFIX = 'ORCA-NATIVE-DEPS-MISSING:'
 
-// Why: npm 12 blocks dependency lifecycle scripts unless each exact package version is approved, even with ignore-scripts disabled.
-const RELAY_NATIVE_DEP_SCRIPT_ALLOWLIST = Object.fromEntries(
-  Object.entries(RELAY_NATIVE_DEPS).map(([name, version]) => [`${name}@${version}`, true])
-)
-
-function nativeDepsProbeJs(successToken: string): string {
-  // Why: node-pty's Windows wrapper defers conpty.node until first spawn, so require("node-pty") alone can't prove the binding is healthy.
-  const loadNodePty =
-    'require("node-pty"); require("node-pty/lib/utils").loadNativeModule(process.platform==="win32"&&Number(require("os").release().split(".")[2])>=18309?"conpty":"pty");' +
-    `if(process.platform==="win32"){require("./${NODE_PTY_CONSOLE_LIST_PATCH_FILENAME}").assertPatchedNodePtyConsoleListAgent(process.cwd());` +
-    `require("./${NODE_PTY_WINDOWS_TEARDOWN_PATCH_FILENAME}").assertPatchedNodePtyWindowsTeardown(process.cwd())}`
-  return `(()=>{const missing=[];try{${loadNodePty}}catch{missing.push("node-pty")}try{require("@parcel/watcher")}catch{missing.push("@parcel/watcher")}if(missing.length){console.log("${NATIVE_DEPS_MISSING_PREFIX}"+missing.join(","));process.exitCode=1}else{console.log(${JSON.stringify(successToken)})}})()`
+function nativeDepsProbeJs(successToken: string, host: RemoteHostPlatform): string {
+  const watcher = isWindowsRemoteHost(host) ? './parcel-watcher.node' : '@parcel/watcher'
+  return `(()=>{if(!process.versions.bun||typeof Bun.Terminal!=="function")throw Error("Bundled Bun terminal support unavailable");try{require(${JSON.stringify(watcher)});console.log(${JSON.stringify(successToken)})}catch{console.log("${NATIVE_DEPS_MISSING_PREFIX}@parcel/watcher");process.exitCode=1}})()`
 }
 
-/**
- * Which deps the probe *named* as unloadable, or `undefined` when the answer names none.
- *
- * Only the probe's own marker line is evidence about the deps. An answer without one (node never
- * ran, was killed, exited before the script) says nothing, so it must not be read as "all of them" —
- * that inference deleted both native modules on every reconnect of an affected host.
- */
+// Only named probe failures authorize repair; silence is not evidence of damage.
 function missingNativeDepsFromProbe(output: string): RelayNativeDepName[] | undefined {
   const marker = output
     .split(/\r?\n/)
@@ -910,18 +717,6 @@ function missingNativeDepsFromProbe(output: string): RelayNativeDepName[] | unde
   return named.length > 0 ? named : undefined
 }
 
-/**
- * `ok` — the probe answered and both deps loaded. `blocked` — the probe answered with a marker
- * naming deps that failed to load. `unverifiable` — the probe never answered, or answered nothing
- * that names a dep; both are evidence about the probe, not about the deps.
- *
- * Why `unverifiable` is not `blocked`: repairing on it does `rm -rf node_modules/node-pty` and a
- * node-gyp source build (no Linux prebuild) against a relay that was never shown to be broken. An
- * unparseable answer is the worse half of that — it is deterministic and per-host, so a node that
- * cannot start (bad NODE_OPTIONS, OOM, exit 127) deleted both modules on every reconnect forever.
- * Same verdict discipline as `src/main/orcad/node-pty-precondition.ts` and
- * docs/reference/ssh-execution-boundary.md — loss of contact is not evidence.
- */
 type RelayNativeDepsProbeStatus = 'ok' | 'blocked' | 'unverifiable'
 
 async function probeRequiredNativeDeps(
@@ -932,7 +727,7 @@ async function probeRequiredNativeDeps(
   signal?: AbortSignal
 ): Promise<{ status: RelayNativeDepsProbeStatus; missing: RelayNativeDepName[] }> {
   const escapedNode = shellEscape(nodePath)
-  const probeJs = nativeDepsProbeJs('ORCA-NATIVE-DEPS-OK')
+  const probeJs = nativeDepsProbeJs('ORCA-NATIVE-DEPS-OK', hostPlatform)
   let probeStderr = ''
   try {
     const command = isWindowsRemoteHost(hostPlatform)
@@ -940,16 +735,14 @@ async function probeRequiredNativeDeps(
           hostPlatform,
           nodePath,
           remoteDir,
-          `try { & ${powerShellLiteral(nodePath)} -e ${powerShellNativeArg(probeJs)}; if ($LASTEXITCODE -ne 0) { 'MISSING' } } catch { 'MISSING' }`
+          `try { & ${powerShellLiteral(nodePath)} --no-env-file --config=NUL --no-install -e ${powerShellNativeArg(probeJs)}; if ($LASTEXITCODE -ne 0) { 'MISSING' } } catch { 'MISSING' }`
         )
-      : // Why: no `2>/dev/null` — it discarded the only line that says why node never reached the
-        // script. stderr stays its own stream so it can't be mistaken for the verdict, mirroring
-        // src/main/orcad/node-pty-precondition.ts.
+      : // Keep runtime startup errors separate from the probe verdict.
         commandWithNodePath(
           hostPlatform,
           nodePath,
           remoteDir,
-          `(${escapedNode} -e ${shellEscape(probeJs)} || echo MISSING)`
+          `(${escapedNode} --no-env-file --config=/dev/null --no-install -e ${shellEscape(probeJs)} || echo MISSING)`
         )
     const probe = await execHostCommand(conn, hostPlatform, command, {
       signal,
@@ -986,7 +779,6 @@ async function probeRequiredNativeDeps(
 async function repairInstalledNativeDeps(
   conn: SshConnection,
   remoteDir: string,
-  platform: RelayPlatform,
   hostPlatform: RemoteHostPlatform,
   nodePath: string,
   homeRelativeRelayDir: string,
@@ -1079,29 +871,29 @@ async function repairInstalledNativeDeps(
         homeRelativeRelayDir,
         signal
       )
-      await installNativeDeps(
+      await installRelayBunDependencies({
         conn,
-        remoteDir,
-        platform,
-        hostPlatform,
-        nodePath,
+        directory: remoteDir,
+        host: hostPlatform,
+        runtime: nodePath,
         signal,
-        resetDeps,
-        repairNamespace
-      )
+        namespace: repairNamespace,
+        repair: resetDeps.includes('@parcel/watcher')
+      })
       await finalizeInstall(conn, remoteDir, hostPlatform, { signal, releaseLock: false })
     }
     return { ownsInstallLock: true, sftpNamespace: repairNamespace }
   } catch (err) {
-    const terminationUnconfirmed = isUnconfirmedSshCommandTermination(err)
+    if (isUnconfirmedSshCommandTermination(err)) {
+      throw err
+    }
     // Why: hold a confirmed-failure lock through degraded launch so GC can't move the relay before liveness is visible.
-    // Why: unconfirmed remote mutation keeps its stale-recoverable lock beyond this connection.
     console.warn(
       `[ssh-relay] Native deps repair failed at ${remoteDir}; launching degraded: ${
         err instanceof Error ? err.message : String(err)
       }`
     )
-    return { ownsInstallLock: !terminationUnconfirmed }
+    return { ownsInstallLock: true }
   }
 }
 
@@ -1168,565 +960,6 @@ async function acquireRelayLaunchGcFence(
       await releaseRelayGcClaimWithRetry(conn, remoteDir, token, hostPlatform)
     }
     throw err
-  }
-}
-
-// Why: node-pty and @parcel/watcher are native addons esbuild can't bundle; install them on the remote against its Node/OS.
-// TODO(#1693): ship per-platform tarballs with node-pty prebuilt from CI to skip remote npm install.
-async function installNativeDeps(
-  conn: SshConnection,
-  remoteDir: string,
-  platform: RelayPlatform,
-  hostPlatform: RemoteHostPlatform,
-  nodePath: string,
-  signal?: AbortSignal,
-  resetDeps: RelayNativeDepName[] = [],
-  namespace?: RelayInstallNamespace,
-  remoteHome?: string
-): Promise<void> {
-  // Why a repair opts out: reset does `rm -rf node_modules/node-pty`, and through a shared
-  // symlink that is every relay on the host losing its addon. Repairs detach and install
-  // privately instead (the install command's own prefix drops the link).
-  const localRelayDir = resetDeps.length === 0 && remoteHome ? getLocalRelayPath(platform) : null
-  const cacheContext: RelayNativeDepsCacheContext | null =
-    remoteHome && localRelayDir
-      ? {
-          hostPlatform,
-          remoteHome,
-          relayDir: remoteDir,
-          platform,
-          localRelayDir,
-          deps: RELAY_NATIVE_DEPS,
-          signal
-        }
-      : null
-  const cache = cacheContext ? await attachRelayNativeDepsCache(conn, cacheContext) : null
-
-  const writeRelayPackageJson = async (deps: Record<string, string>): Promise<void> => {
-    await writeRelayFile(
-      conn,
-      hostPlatform,
-      joinRemotePath(hostPlatform, remoteDir, 'package.json'),
-      `${JSON.stringify({
-        name: 'orca-relay',
-        version: '1.0.0',
-        private: true,
-        type: 'commonjs',
-        dependencies: deps,
-        allowScripts: RELAY_NATIVE_DEP_SCRIPT_ALLOWLIST
-      })}\n`,
-      {
-        signal,
-        sftpNamespace: namespace
-          ? relaySftpNamespaceMapping(namespace, hostPlatform, remoteDir, 'package.json')
-          : undefined
-      }
-    )
-  }
-
-  // Why: node-pty's prebuild spawns `node` as a child, so node must be in PATH (commandWithNodePath) or it fails exit 127.
-  // Why: npm init -y rejects '+' in content-hashed dir names, so write a fixed minimal package.json instead.
-  // Why: type:commonjs pins module resolution against Node default flips or a remote ~/.npmrc type=module.
-  await writeRelayPackageJson(RELAY_NATIVE_DEPS)
-
-  if (cache?.mode === 'linked') {
-    await makeNodePtySpawnHelperExecutable(conn, remoteDir, hostPlatform, signal)
-    const linkedProbe = await probeInstalledNativeDeps(
-      conn,
-      remoteDir,
-      hostPlatform,
-      nodePath,
-      signal
-    )
-    if (linkedProbe.available) {
-      return
-    }
-    // Why fall through rather than repair the entry: it is shared, and something else on this
-    // host may be running out of it right now. This directory installs its own copy instead.
-    console.warn(
-      `[ssh-relay][NATIVE-CACHE-UNUSABLE] shared entry ${cache.key} did not load at ${remoteDir} (${platform}); installing per-directory. stderr=${linkedProbe.stderr.trim().slice(-500)}`
-    )
-  }
-
-  try {
-    const installArgs = Object.entries(RELAY_NATIVE_DEPS)
-      .map(([dep, version]) => shellEscape(`${dep}@${version}`))
-      .join(' ')
-    // Why: npm reports a present package as up to date even if a native file was deleted; reset only deps the probe found broken.
-    const resetCommand = resetNativeDepsCommand(hostPlatform, resetDeps)
-    const resetPrefix = `${detachSharedNativeDepsCommand(hostPlatform)}${resetCommand ? `${resetCommand}; ` : ''}`
-    const command = isWindowsRemoteHost(hostPlatform)
-      ? commandWithNodePath(
-          hostPlatform,
-          nodePath,
-          remoteDir,
-          `${resetPrefix}npm install --ignore-scripts=false --omit=dev --no-audit --no-fund ${Object.entries(
-            RELAY_NATIVE_DEPS
-          )
-            .map(([dep, version]) => powerShellLiteral(`${dep}@${version}`))
-            .join(
-              ' '
-            )}; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; ${windowsNodePtyPatchCommand(nodePath)}`
-        )
-      : commandWithNodePath(
-          hostPlatform,
-          nodePath,
-          remoteDir,
-          `${exportLocalNodeHeadersPrefix(nodePath)}${resetPrefix}npm install --ignore-scripts=false --omit=dev --no-audit --no-fund ${installArgs} 2>&1`
-        )
-    await execHostCommand(conn, hostPlatform, command, {
-      timeoutMs: NATIVE_DEPS_COMMAND_TIMEOUT_MS,
-      signal
-    })
-  } catch (err) {
-    if (isUnconfirmedSshCommandTermination(err)) {
-      throw err
-    }
-    signal?.throwIfAborted()
-    // Don't write .install-complete on hard fail so reconnect retries the partial install; greppable token aids bug reports.
-    const msg = (err as Error).message
-    console.warn(
-      `[ssh-relay][NATIVE-DEPS-INSTALL-FAIL] npm install native deps failed at ${remoteDir} (${platform}): ${msg}`
-    )
-    // Why: on Linux node-pty compiles, so a missing C/C++ toolchain is the dominant first-connect failure (#1693); probe to give an actionable install hint.
-    if (platform.startsWith('linux') && shouldProbeBuildToolchainAfterNativeDepsFailure(msg)) {
-      const toolchain = await probeBuildToolchain(conn, hostPlatform, signal)
-      if (toolchain?.toolchainMissing) {
-        // Why: node-pty is the only dep that needs a compiler, and it only backs terminals. Retry
-        // without it so files/git/editor still connect instead of failing the host outright; a
-        // missing native dep is already non-fatal below. Rethrow the actionable error if even that
-        // fails, so a host broken for some other reason still reports the toolchain gap.
-        console.warn(
-          `[ssh-relay][NPTY-SKIP-NO-TOOLCHAIN] ${remoteDir} (${platform}): ${formatSkippedNodePtyWarning(toolchain)}`
-        )
-        try {
-          await installNativeDepsWithoutNodePty(
-            conn,
-            remoteDir,
-            hostPlatform,
-            nodePath,
-            writeRelayPackageJson,
-            resetDeps,
-            signal
-          )
-        } catch (retryErr) {
-          if (isUnconfirmedSshCommandTermination(retryErr)) {
-            throw retryErr
-          }
-          signal?.throwIfAborted()
-          // The thrown toolchain message is built from the original error, so log the retry's own
-          // cause (registry, ENOSPC, EACCES) rather than losing it.
-          console.warn(
-            `[ssh-relay][NPTY-SKIP-RETRY-FAIL] node-pty-less reinstall failed at ${remoteDir} (${platform}): ${(retryErr as Error).message}`
-          )
-          throw new Error(formatMissingToolchainError(toolchain, msg), { cause: retryErr })
-        }
-        // Why: this early return skips the probe below, so verify the dep that does have a prebuilt —
-        // a @parcel/watcher that installs but can't load would leave file watching silently dead.
-        await warnIfWatcherUnloadableWithoutNodePty(
-          conn,
-          remoteDir,
-          platform,
-          hostPlatform,
-          nodePath,
-          signal
-        )
-        return
-      }
-    }
-    // Why: either the local-headers export found nothing (a host both header-less and offline) or
-    // it did and node-gyp downloaded anyway (the export is broken) -- name which, or the log reads
-    // as a broken relay either way.
-    if (platform.startsWith('linux') && isNodeHeadersDownloadFailure(msg)) {
-      throw new Error(formatNodeHeadersDownloadError(msg, localNodeHeadersFromOutput(msg)), {
-        cause: err
-      })
-    }
-    throw err
-  }
-
-  await makeNodePtySpawnHelperExecutable(conn, remoteDir, hostPlatform, signal)
-
-  let probe = await probeInstalledNativeDeps(conn, remoteDir, hostPlatform, nodePath, signal)
-  if (!probe.available) {
-    // Why: npm treats an already-present package as up to date, so re-enabling lifecycle scripts on install can't repair a skipped binding.
-    console.warn(`[ssh-relay] Rebuilding unloadable native deps at ${remoteDir}`)
-    let rebuilt = false
-    try {
-      await rebuildNativeDeps(conn, remoteDir, hostPlatform, nodePath, signal)
-      rebuilt = true
-    } catch (err) {
-      if (isUnconfirmedSshCommandTermination(err)) {
-        throw err
-      }
-      signal?.throwIfAborted()
-      // Same diagnosis as the install catch: this fallback is non-fatal, so the log is the only
-      // place the offline-headers cause can reach anyone.
-      const rebuildMsg = (err as Error).message
-      console.warn(
-        `[ssh-relay][NATIVE-DEPS-REBUILD-FAIL] npm rebuild native deps failed at ${remoteDir} (${platform}): ${
-          platform.startsWith('linux') && isNodeHeadersDownloadFailure(rebuildMsg)
-            ? formatNodeHeadersDownloadError(rebuildMsg, localNodeHeadersFromOutput(rebuildMsg))
-            : rebuildMsg
-        }`
-      )
-    }
-    signal?.throwIfAborted()
-    if (rebuilt) {
-      await makeNodePtySpawnHelperExecutable(conn, remoteDir, hostPlatform, signal)
-      probe = await probeInstalledNativeDeps(conn, remoteDir, hostPlatform, nodePath, signal)
-    }
-  }
-
-  // Why this precedes promotion: the patch renames `node-pty/build/Release`, runs `npm rebuild`
-  // and rolls back inside `node_modules`, and promotion turns that directory into a symlink to a
-  // published -- and by contract immutable -- shared cache entry. Patching afterwards would write
-  // through the link, and `.deps-complete` would already have published an unpatched tree that
-  // every later host links and skips.
-  const cloexec = probe.available
-    ? await applyNodePtyMasterCloexecPatch(
-        conn,
-        remoteDir,
-        platform,
-        hostPlatform,
-        nodePath,
-        signal
-      )
-    : 'unfixed'
-
-  // Why promotion is gated on the probe and not on npm's exit code: an entry is shared, so the
-  // only evidence worth publishing is this host having loaded both addons out of that tree.
-  // Why it is gated on the patch too: a refused or rolled-back patch leaves the pre-patch leaky
-  // build in place, and the cache key hashes this patch's bytes -- so publishing it would hand
-  // every later host on the machine a tree that links, probes loadable, and skips patching.
-  if (probe.available && cacheContext && cache) {
-    if (cloexec === 'fixed') {
-      await promoteRelayNativeDepsCache(conn, cacheContext, cache.key)
-    } else {
-      console.warn(
-        `[ssh-relay][NPTY-CLOEXEC-UNSHARED] keeping the native deps at ${remoteDir} (${platform}) private; the tree still leaks the pty master, so it is not publishable as ${cache.key}`
-      )
-    }
-  }
-
-  // MISSING is non-fatal by design: the relay still serves fs/git/preflight; only native-backed ops fail on hosts that can't build the addons.
-  if (!probe.available) {
-    console.warn(
-      `[ssh-relay][NPTY-MISSING] native deps installed but require() failed at ${remoteDir} (${platform}). stdout=${probe.output.trim().slice(-200)} stderr=${probe.stderr.trim().slice(-500)}`
-    )
-  }
-}
-
-/**
- * Re-apply the pty fd-leak patch the app gets from pnpm to the host's npm copy (#17915).
- *
- * Why it is safe to rebuild under a live relay: this only runs from installNativeDeps, so only on a
- * freshly created directory or a locked repair, and a relay already serving PTYs has pty.node mapped
- * -- replacing the file on disk does not touch the running process. It keeps the build it started
- * with and picks up the patched one when it restarts.
- *
- * Why it is bounded: the remote script attempts the compile at most once per relay directory, and
- * the directory is content-hashed over the relay manifest -- so at most one compile per bundle.
- *
- * Why a shared cache entry never reaches here: the caller returns as soon as a linked tree probes
- * loadable, so this only ever rewrites a `node_modules` the relay directory still owns privately.
- *
- * Returns whether the tree that is left behind still leaks, which is what decides publishability.
- * The script exits 0 on every outcome by design, so the status line is the only evidence there is.
- */
-async function applyNodePtyMasterCloexecPatch(
-  conn: SshConnection,
-  remoteDir: string,
-  platform: RelayPlatform,
-  hostPlatform: RemoteHostPlatform,
-  nodePath: string,
-  signal?: AbortSignal
-): Promise<NodePtyMasterCloexecOutcome> {
-  // Both Unix relay platforms leak the pty master, by different bugs: Linux inherits it through
-  // forkpty()'s no-O_CLOEXEC path, macOS orphans one throwaway /dev/ptmx fd per spawn in
-  // pty_posix_spawn. Windows is short-circuited because it has no fds for a master to leak into --
-  // and answering 'fixed' from a gate that ran nothing is exactly how a leaking darwin tree got
-  // published to the shared cache.
-  //
-  // What 'fixed' means here is exactly "this tree does not leak the pty MASTER", which is the only
-  // thing the shared native-deps cache keys on. It is NOT a statement that a Windows relay leaks
-  // nothing: it leaked one Windows File handle per terminal until the ConPTY teardown patch above,
-  // by a mechanism that has nothing to do with fds. Read this gate as scoped to its own question.
-  if (isWindowsRemoteHost(hostPlatform) || isWindowsRelayPlatform(platform)) {
-    return 'fixed'
-  }
-  try {
-    const command = commandWithNodePath(
-      hostPlatform,
-      nodePath,
-      remoteDir,
-      `${exportLocalNodeHeadersPrefix(nodePath)}${shellEscape(nodePath)} ${shellEscape(NODE_PTY_MASTER_CLOEXEC_PATCH_FILENAME)} 2>&1`
-    )
-    const output = await execHostCommand(conn, hostPlatform, command, {
-      timeoutMs: NATIVE_DEPS_COMMAND_TIMEOUT_MS,
-      signal
-    })
-    const status =
-      output
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .find((line) => line.startsWith(NODE_PTY_CLOEXEC_STATUS_PREFIX))
-        ?.slice(NODE_PTY_CLOEXEC_STATUS_PREFIX.length) ?? 'no-status'
-    if (!NODE_PTY_CLOEXEC_FIXED_STATUSES.has(status)) {
-      // Warn, not log: the script exits 0 on a refusal too, so this line is the only thing that
-      // says the relay directory will leak a master into every child for its whole life.
-      console.warn(
-        `[ssh-relay][NPTY-CLOEXEC-UNFIXED] pty master still leaks at ${remoteDir} (${platform}): ${status}`
-      )
-      return 'unfixed'
-    }
-    console.log(`[ssh-relay][NPTY-CLOEXEC] ${remoteDir} (${platform}): ${status}`)
-    return 'fixed'
-  } catch (err) {
-    signal?.throwIfAborted()
-    // Never fatal: the script restores the working build itself, and a leaky relay beats none. An
-    // interrupted rebuild leaves node-pty unloadable, which the existing repair path reinstalls.
-    console.warn(
-      `[ssh-relay][NPTY-CLOEXEC-FAIL] pty master cloexec patch failed at ${remoteDir} (${platform}): ${(err as Error).message}`
-    )
-    // An exec that never answered cannot say which build is on disk, and a tree nobody can vouch
-    // for is exactly the one not to share.
-    return 'unfixed'
-  }
-}
-
-/**
- * Drop a shared-cache symlink before anything writes into `node_modules`.
- *
- * Why it prefixes every install rather than living in its own exec: `rm -rf node_modules/node-pty`
- * and `npm install` both follow the link, so a repair on one relay directory would otherwise
- * rewrite the tree every other relay on the host is running out of.
- */
-function detachSharedNativeDepsCommand(hostPlatform: RemoteHostPlatform): string {
-  if (isWindowsRemoteHost(hostPlatform)) {
-    return ''
-  }
-  return 'if [ -L node_modules ]; then rm -f node_modules; fi; '
-}
-
-function resetNativeDepsCommand(
-  hostPlatform: RemoteHostPlatform,
-  resetDeps: RelayNativeDepName[]
-): string {
-  if (resetDeps.length === 0) {
-    return ''
-  }
-  const resetNodePty = resetDeps.includes('node-pty')
-  const resetWatcher = resetDeps.includes('@parcel/watcher')
-  if (isWindowsRemoteHost(hostPlatform)) {
-    const commands: string[] = []
-    if (resetNodePty) {
-      commands.push(
-        `Remove-Item -LiteralPath ${powerShellLiteral('node_modules/node-pty')} -Recurse -Force -ErrorAction SilentlyContinue`
-      )
-    }
-    if (resetWatcher) {
-      commands.push(
-        `Remove-Item -LiteralPath ${powerShellLiteral('node_modules/@parcel/watcher')} -Recurse -Force -ErrorAction SilentlyContinue`,
-        `$parcelScope = ${powerShellLiteral('node_modules/@parcel')}`,
-        `Get-ChildItem -LiteralPath $parcelScope -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name.StartsWith('watcher-', [StringComparison]::Ordinal) } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue`
-      )
-    }
-    return commands.join('; ')
-  }
-  const commands: string[] = []
-  if (resetNodePty) {
-    commands.push(`rm -rf ${shellEscape('node_modules/node-pty')}`)
-  }
-  if (resetWatcher) {
-    commands.push(
-      `rm -rf ${shellEscape('node_modules/@parcel/watcher')}`,
-      `find ${shellEscape('node_modules/@parcel')} -maxdepth 1 -name 'watcher-*' -exec rm -rf {} + 2>/dev/null || true`
-    )
-  }
-  return commands.join('; ')
-}
-
-/**
- * Reinstall the relay's native deps with node-pty dropped, for hosts that cannot compile it.
- *
- * Why: npm reconciles every dependency in package.json, not just the ones named on the command
- * line, so node-pty has to leave the manifest too — naming only @parcel/watcher still rebuilds it.
- */
-async function installNativeDepsWithoutNodePty(
-  conn: SshConnection,
-  remoteDir: string,
-  hostPlatform: RemoteHostPlatform,
-  nodePath: string,
-  writeRelayPackageJson: (deps: Record<string, string>) => Promise<void>,
-  resetDeps: RelayNativeDepName[],
-  signal?: AbortSignal
-): Promise<void> {
-  const deps = Object.fromEntries(
-    Object.entries(RELAY_NATIVE_DEPS).filter(([dep]) => dep !== 'node-pty')
-  )
-  await writeRelayPackageJson(deps)
-  const installArgs = Object.entries(deps)
-    .map(([dep, version]) => shellEscape(`${dep}@${version}`))
-    .join(' ')
-  // Why: the failed attempt leaves an unbuildable node-pty behind; clear it so npm prunes rather
-  // than rebuilds it. Keep the caller's resets too — a repair reconnect still needs them.
-  const resetCommand = resetNativeDepsCommand(hostPlatform, [
-    ...new Set<RelayNativeDepName>([...resetDeps, 'node-pty'])
-  ])
-  // Why: POSIX-only command shape (`;` chaining, `2>&1`) — safe because the only caller is gated on a
-  // linux platform. Widen that gate and this needs the Windows branch installNativeDeps already has.
-  await execHostCommand(
-    conn,
-    hostPlatform,
-    commandWithNodePath(
-      hostPlatform,
-      nodePath,
-      remoteDir,
-      `${detachSharedNativeDepsCommand(hostPlatform)}${resetCommand}; npm install --ignore-scripts=false --omit=dev --no-audit --no-fund ${installArgs} 2>&1`
-    ),
-    { timeoutMs: NATIVE_DEPS_COMMAND_TIMEOUT_MS, signal }
-  )
-}
-
-/**
- * Report an unloadable @parcel/watcher after node-pty was skipped, without failing the connection.
- *
- * Why: node-pty is expected missing here, but a @parcel/watcher prebuilt that installs and still
- * can't require() (glibc below the floor — docs/reference/linux-glibc-compatibility.md) means dead
- * file watching. No rebuild: node-pty provably can't compile on this host, so it would only fail.
- */
-async function warnIfWatcherUnloadableWithoutNodePty(
-  conn: SshConnection,
-  remoteDir: string,
-  platform: RelayPlatform,
-  hostPlatform: RemoteHostPlatform,
-  nodePath: string,
-  signal?: AbortSignal
-): Promise<void> {
-  try {
-    const probe = await probeInstalledNativeDeps(conn, remoteDir, hostPlatform, nodePath, signal)
-    if (probe.missing.includes('@parcel/watcher')) {
-      console.warn(
-        `[ssh-relay][WATCHER-MISSING-NPTY-SKIPPED] @parcel/watcher installed but require() failed at ${remoteDir} (${platform}); remote file watching is unavailable. stdout=${probe.output.trim().slice(-200)} stderr=${probe.stderr.trim().slice(-500)}`
-      )
-    }
-  } catch (err) {
-    if (isUnconfirmedSshCommandTermination(err)) {
-      throw err
-    }
-    signal?.throwIfAborted()
-    // Degraded-mode diagnostics must never cost the connection the retry just salvaged.
-    console.warn(
-      `[ssh-relay][WATCHER-PROBE-FAIL] native deps probe failed after skipping node-pty at ${remoteDir} (${platform}): ${(err as Error).message}`
-    )
-  }
-}
-
-async function rebuildNativeDeps(
-  conn: SshConnection,
-  remoteDir: string,
-  hostPlatform: RemoteHostPlatform,
-  nodePath: string,
-  signal?: AbortSignal
-): Promise<void> {
-  const depNames = Object.keys(RELAY_NATIVE_DEPS)
-  const command = isWindowsRemoteHost(hostPlatform)
-    ? commandWithNodePath(
-        hostPlatform,
-        nodePath,
-        remoteDir,
-        `npm rebuild --ignore-scripts=false ${depNames.map(powerShellLiteral).join(' ')}; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; ${windowsNodePtyPatchCommand(nodePath)}`
-      )
-    : commandWithNodePath(
-        hostPlatform,
-        nodePath,
-        remoteDir,
-        `${exportLocalNodeHeadersPrefix(nodePath)}npm rebuild --ignore-scripts=false ${depNames.map(shellEscape).join(' ')} 2>&1`
-      )
-  await execHostCommand(conn, hostPlatform, command, {
-    timeoutMs: NATIVE_DEPS_COMMAND_TIMEOUT_MS,
-    signal
-  })
-}
-
-function windowsNodePtyPatchCommand(nodePath: string): string {
-  // Why: pnpm patches do not cross the SSH boundary; apply the version-checked fallbacks to the remote npm package.
-  return [
-    `& ${powerShellLiteral(nodePath)} ${powerShellLiteral(NODE_PTY_CONSOLE_LIST_PATCH_FILENAME)}; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }`,
-    `& ${powerShellLiteral(nodePath)} ${powerShellLiteral(NODE_PTY_WINDOWS_TEARDOWN_PATCH_FILENAME)}; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }`
-  ].join('; ')
-}
-
-async function makeNodePtySpawnHelperExecutable(
-  conn: SshConnection,
-  remoteDir: string,
-  hostPlatform: RemoteHostPlatform,
-  signal?: AbortSignal
-): Promise<void> {
-  if (isWindowsRemoteHost(hostPlatform)) {
-    return
-  }
-  // SFTP doesn't preserve execute bits; node-pty's spawn-helper must be +x for posix_spawnp.
-  await execHostCommand(
-    conn,
-    hostPlatform,
-    `find ${shellEscape(joinRemotePath(hostPlatform, remoteDir, 'node_modules/node-pty/prebuilds'))} -name spawn-helper -exec chmod +x {} + 2>/dev/null; true`,
-    { signal }
-  )
-}
-
-async function probeInstalledNativeDeps(
-  conn: SshConnection,
-  remoteDir: string,
-  hostPlatform: RemoteHostPlatform,
-  nodePath: string,
-  signal?: AbortSignal
-): Promise<{
-  available: boolean
-  missing: RelayNativeDepName[]
-  output: string
-  stderr: string
-}> {
-  // require() catches unloadable installs (wrong arch, missing prebuild, skipped lifecycle script) that require.resolve() and test -d miss.
-  const PROBE_OK = 'ORCA-NPTY-PROBE-OK'
-  const stderrFile = joinRemotePath(hostPlatform, remoteDir, '.npty-probe.stderr')
-  const escapedStderr = shellEscape(stderrFile)
-  const probeJs = nativeDepsProbeJs(PROBE_OK)
-  const probeCommand = isWindowsRemoteHost(hostPlatform)
-    ? commandWithNodePath(
-        hostPlatform,
-        nodePath,
-        remoteDir,
-        `try { & ${powerShellLiteral(nodePath)} -e ${powerShellNativeArg(probeJs)} ${powerShellLiteral(PROBE_OK)}; if ($LASTEXITCODE -ne 0) { 'MISSING' } } catch { 'MISSING' }`
-      )
-    : commandWithNodePath(
-        hostPlatform,
-        nodePath,
-        remoteDir,
-        `(${shellEscape(nodePath)} -e ${shellEscape(probeJs)} ${shellEscape(PROBE_OK)} 2>${escapedStderr} || echo MISSING)`
-      )
-  const probeOutput = await execHostCommand(conn, hostPlatform, probeCommand, { signal })
-  const remoteStderr =
-    probeOutput.includes(PROBE_OK) || isWindowsRemoteHost(hostPlatform)
-      ? ''
-      : await execHostCommand(conn, hostPlatform, `cat ${escapedStderr} 2>/dev/null; true`, {
-          signal
-        }).catch(() => '')
-  signal?.throwIfAborted()
-  if (!isWindowsRemoteHost(hostPlatform)) {
-    // The POSIX probe redirects stderr to this file; the Windows probe does not.
-    await execHostCommand(conn, hostPlatform, removeRemoteFileCommand(hostPlatform, stderrFile), {
-      signal
-    }).catch(() => {})
-    signal?.throwIfAborted()
-  }
-  return {
-    available: probeOutput.includes(PROBE_OK),
-    // A markerless answer names no dep, so it reports none; `available` already carries the failure.
-    missing: probeOutput.includes(PROBE_OK) ? [] : (missingNativeDepsFromProbe(probeOutput) ?? []),
-    output: probeOutput,
-    stderr: remoteStderr
   }
 }
 
@@ -1824,7 +1057,7 @@ async function launchRelay(
       console.log('[ssh-relay] Existing relay socket found, attempting reconnect...')
       try {
         const channel = await conn.exec(
-          `cd ${escapedDir} && ${escapedNode} relay.js --connect --sock-path ${shellEscape(sockFile)} --credential-file ${shellEscape(credentialFile)}`,
+          `cd ${escapedDir} && ${escapedNode} --no-env-file --config=/dev/null --no-install relay.js --connect --sock-path ${shellEscape(sockFile)} --credential-file ${shellEscape(credentialFile)}`,
           { signal }
         )
         const transport = await waitForSentinel(channel, signal)
@@ -1872,7 +1105,7 @@ async function launchRelay(
   const endpointDirArg =
     sockFile === defaultSockFile ? '' : ` --endpoint-dir ${shellEscape(endpointDir)}`
   const ripgrepPathArg = ripgrepPath ? ` --ripgrep-path ${shellEscape(ripgrepPath)}` : ''
-  const launchCmd = `cd ${escapedDir} && nohup ${escapedNode} relay.js --detached --grace-time ${graceTime} --sock-path ${shellEscape(sockFile)}${endpointDirArg} --credential-file ${shellEscape(credentialFile)} --log-file ${shellEscape(logFile)}${ripgrepPathArg} > ${shellEscape(logFile)} 2>&1 </dev/null &`
+  const launchCmd = `cd ${escapedDir} && nohup ${escapedNode} --no-env-file --config=/dev/null --no-install relay.js --detached --grace-time ${graceTime} --sock-path ${shellEscape(sockFile)}${endpointDirArg} --credential-file ${shellEscape(credentialFile)} --log-file ${shellEscape(logFile)}${ripgrepPathArg} > ${shellEscape(logFile)} 2>&1 </dev/null &`
   const launchChannel = await conn.exec(launchCmd, { signal })
   launchChannel.on('data', () => {})
   launchChannel.on('error', () => {})
@@ -1893,7 +1126,7 @@ async function launchRelay(
         // Why: probe via node (guaranteed present) not python3/socat/perl; pass the socket path as argv[1] to dodge -e quoting issues.
         const result = await execCommand(
           conn,
-          `${escapedNode} -e 'var s=require("net").connect(process.argv[1]);s.on("connect",function(){s.destroy();process.stdout.write("READY")});s.on("error",function(){process.stdout.write("WAITING")})' ${shellEscape(sockFile)} 2>/dev/null || (test -S ${shellEscape(sockFile)} && echo READY || echo WAITING)`,
+          `${escapedNode} --no-env-file --config=/dev/null --no-install -e 'var s=require("net").connect(process.argv[1]);s.on("connect",function(){s.destroy();process.stdout.write("READY")});s.on("error",function(){process.stdout.write("WAITING")})' ${shellEscape(sockFile)} 2>/dev/null || (test -S ${shellEscape(sockFile)} && echo READY || echo WAITING)`,
           { signal }
         )
         if (result.trim() === 'READY') {
@@ -1922,7 +1155,7 @@ async function launchRelay(
 
   // Why: backgrounded relay's stdout goes to a log file, not the exec channel; --connect bridges this channel to its Unix socket.
   const channel = await conn.exec(
-    `cd ${escapedDir} && ${escapedNode} relay.js --connect --sock-path ${shellEscape(sockFile)} --credential-file ${shellEscape(credentialFile)}`,
+    `cd ${escapedDir} && ${escapedNode} --no-env-file --config=/dev/null --no-install relay.js --connect --sock-path ${shellEscape(sockFile)} --credential-file ${shellEscape(credentialFile)}`,
     { signal }
   )
   return {
@@ -1949,9 +1182,13 @@ async function resolveShortPosixRelaySocketPath(
   signal?: AbortSignal
 ): Promise<string> {
   const versionSegment = shortRelayVersionSegment(remoteDir.slice(remoteDir.lastIndexOf('/') + 1))
-  const output = await execCommand(conn, resolveShortRelaySocketDirCommand(versionSegment), {
-    signal
-  }).catch((err: unknown) => {
+  const output = await execCommand(
+    conn,
+    resolveShortRelaySocketDirCommand(versionSegment, { sockName, originalPath: defaultSockFile }),
+    {
+      signal
+    }
+  ).catch((err: unknown) => {
     if (isUnconfirmedSshCommandTermination(err)) {
       throw err
     }
@@ -2227,7 +1464,7 @@ function windowsRelayConnectCommand(
     hostPlatform,
     nodePath,
     remoteDir,
-    `& ${powerShellLiteral(nodePath)} relay.js --connect --sock-path ${powerShellLiteral(sockPath)} --credential-file ${powerShellLiteral(credentialFile)}`
+    `& ${powerShellLiteral(nodePath)} --no-env-file --config=NUL --no-install relay.js --connect --sock-path ${powerShellLiteral(sockPath)} --credential-file ${powerShellLiteral(credentialFile)}`
   )
 }
 
@@ -2248,6 +1485,9 @@ function windowsRelayLaunchCommand(
   const quoted = (value: string): string => `"${value.replace(/"/g, '\\"')}"`
   const relayCommandLine = [
     quoted(nodePath),
+    '--no-env-file',
+    '--config=NUL',
+    '--no-install',
     quoted(relayScript),
     '--detached',
     '--grace-time',
@@ -2341,7 +1581,7 @@ function windowsRelayProbeCommand(
     hostPlatform,
     nodePath,
     remoteDir,
-    `& ${powerShellLiteral(nodePath)} -e ${powerShellNativeArg(js)} ${powerShellNativeArg(sockPath)}`
+    `& ${powerShellLiteral(nodePath)} --no-env-file --config=NUL --no-install -e ${powerShellNativeArg(js)} ${powerShellNativeArg(sockPath)}`
   )
 }
 
@@ -2377,6 +1617,9 @@ function windowsRelayWaitCommand(
     remoteDir,
     [
       `& ${powerShellLiteral(nodePath)}`,
+      '--no-env-file',
+      '--config=NUL',
+      '--no-install',
       '-e',
       powerShellNativeArg(js),
       powerShellNativeArg(sockPath),

@@ -1,0 +1,108 @@
+name: Windows watcher artifacts
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: false
+        default: ''
+      artifact_prefix:
+        type: string
+        required: false
+        default: windows-watcher
+    outputs:
+      source_sha:
+        description: Immutable source used to build the native artifacts.
+        value: ${{ jobs.source.outputs.sha }}
+
+permissions:
+  contents: read
+
+jobs:
+  source:
+    runs-on: ubuntu-slim
+    outputs:
+      sha: ${{ steps.source.outputs.sha }}
+      supported: ${{ steps.source.outputs.supported }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+      - id: source
+        shell: bash
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          if [ -f config/scripts/build-windows-watcher-addon.mjs ]; then
+            echo 'supported=true' >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: source
+    if: needs.source.outputs.supported == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-11-arm]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          ref: ${{ needs.source.outputs.sha }}
+      - uses: actions/cache/restore@v5
+        id: native_cache
+        with:
+          path: .build/windows-watcher
+          key: windows-watcher-${{ matrix.os }}-${{ hashFiles('package.json', 'pnpm-lock.yaml', 'config/patches/parcel-watcher-windows-readiness.patch', 'config/scripts/build-windows-watcher-addon.mjs', 'config/scripts/windows-watcher-artifact.mjs', 'config/scripts/windows-watcher-readiness-smoke.mjs', 'config/scripts/script-child-process.mjs', 'config/scripts/windows-pe-machine.cjs', 'src/shared/child-process/**', 'src/shared/orcad-bun-runtime.ts', 'src/shared/orcad-artifacts.ts', 'config/scripts/build-orcad-bun.mjs', '.github/actions/install-node-dependencies/action.yml', '.github/workflows/windows-watcher-artifacts.yml') }}
+      - uses: ./.github/actions/install-node-dependencies
+        if: steps.native_cache.outputs.cache-hit != 'true'
+      - name: Compile the Windows watcher readiness fix
+        if: steps.native_cache.outputs.cache-hit != 'true'
+        run: node config/scripts/build-windows-watcher-addon.mjs
+      - name: Verify native registration under Node
+        if: steps.native_cache.outputs.cache-hit != 'true'
+        timeout-minutes: 2
+        run: node config/scripts/windows-watcher-readiness-smoke.mjs
+      - name: Materialize pinned Bun
+        if: steps.native_cache.outputs.cache-hit != 'true'
+        run: node config/scripts/build-orcad-bun.mjs --runtime-only --out-dir .build/windows-watcher-runtime
+      - name: Verify native registration under Bun
+        if: steps.native_cache.outputs.cache-hit != 'true'
+        timeout-minutes: 2
+        shell: pwsh
+        run: |
+          & ./.build/windows-watcher-runtime/bun-runtime.exe config/scripts/windows-watcher-readiness-smoke.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Bun watcher readiness failed' }
+      - name: Verify cancellation memory safety
+        if: runner.arch == 'X64' && steps.native_cache.outputs.cache-hit != 'true'
+        timeout-minutes: 5
+        shell: pwsh
+        run: |
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $installation = (& $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath).Trim()
+          if ($LASTEXITCODE -ne 0 -or !$installation) { throw 'Visual Studio C++ installation is missing' }
+          $version = (Get-Content (Join-Path $installation 'VC/Auxiliary/Build/Microsoft.VCToolsVersion.default.txt') -Raw).Trim()
+          $runtime = Join-Path $installation "VC/Tools/MSVC/$version/bin/Hostx64/x64/clang_rt.asan_dynamic-x86_64.dll"
+          if (!(Test-Path $runtime)) { throw 'MSVC AddressSanitizer runtime is missing' }
+          node config/scripts/build-windows-watcher-addon.mjs --asan-runtime $runtime
+          if ($LASTEXITCODE -ne 0) { throw 'Sanitizer build failed' }
+          foreach ($attempt in 1..8) {
+            node config/scripts/windows-watcher-readiness-smoke.mjs .build/windows-watcher-sanitizer/x64/watcher.node
+            if ($LASTEXITCODE -ne 0) { throw "Sanitizer run $attempt failed" }
+          }
+      - uses: actions/cache/save@v5
+        if: steps.native_cache.outputs.cache-hit != 'true'
+        with:
+          path: .build/windows-watcher
+          key: ${{ steps.native_cache.outputs.cache-primary-key }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.artifact_prefix }}-${{ runner.arch }}
+          path: .build/windows-watcher/*/
+          if-no-files-found: error
+          retention-days: 7

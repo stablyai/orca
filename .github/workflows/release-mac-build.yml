@@ -22,7 +22,17 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  windows_watcher:
+    permissions:
+      contents: read
+    if: github.repository == 'stablyai/orca'
+    uses: ./.github/workflows/windows-watcher-artifacts.yml
+    with:
+      ref: refs/tags/${{ inputs.tag }}
+      artifact_prefix: windows-watcher-release-mac-build
+
   build-mac:
+    needs: windows_watcher
     if: github.repository == 'stablyai/orca'
     # Why: this workflow is outside the SignPath signing run, so Blacksmith
     # cannot enter Windows artifact provenance while mac notarization gets the
@@ -126,6 +136,14 @@ jobs:
           fi
           echo "identity=$identity" >>"$GITHUB_OUTPUT"
           echo "Classified $TAG as $identity"
+
+      - name: Load qualified Windows watchers
+        if: hashFiles('config/scripts/windows-watcher-artifact.mjs') != ''
+        uses: actions/download-artifact@v8
+        with:
+          pattern: windows-watcher-release-mac-build-*
+          merge-multiple: true
+          path: .build/windows-watcher
 
       - name: Build app
         run: pnpm build:release

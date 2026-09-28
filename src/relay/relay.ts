@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 
 // Orca Relay — remote-host daemon and reconnect bridge entry point.
 

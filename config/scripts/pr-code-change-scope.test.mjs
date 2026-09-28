@@ -24,7 +24,7 @@ const expensiveJobs = [
   'test',
   'orcad_browser',
   'cross-version-wire',
-  'managed_hook_node18',
+  'managed_hook_bun',
   'package',
   'package_windows'
 ]
@@ -276,7 +276,7 @@ describe('per-job path classification', () => {
         package_windows: true
       })
     }
-    expectClassification(['src/main/orcad/orcad-native-preflight.ts'], {
+    expectClassification(['src/main/orcad/orcad-bun-native-preflight.ts'], {
       package: true,
       package_windows: true
     })
@@ -310,7 +310,7 @@ describe('per-job path classification', () => {
   })
 
   it('leaves it off for changes that cannot reach the page', () => {
-    for (const file of ['docs/reference/x.md', 'src/main/orcad/orcad-native-preflight.ts']) {
+    for (const file of ['docs/reference/x.md', 'src/main/orcad/orcad-bun-native-preflight.ts']) {
       expect(classifyPrJobs([file]).mobile_web_app, file).toBe(false)
     }
   })
@@ -567,12 +567,20 @@ describe('PR Checks skip wiring', () => {
 
   it('gates each expensive job on its classifier and cache prerequisite', () => {
     for (const jobName of expensiveJobs.filter((jobName) => jobName !== 'test')) {
-      expect(prWorkflow.jobs[jobName].needs, jobName).toEqual(['code_paths'])
+      const needsWatcher = ['managed_hook_bun', 'package', 'package_windows'].includes(jobName)
+      expect(prWorkflow.jobs[jobName].needs, jobName).toEqual(
+        needsWatcher ? ['code_paths', 'windows_watcher'] : ['code_paths']
+      )
       expect(prWorkflow.jobs[jobName].if, jobName).toBe(
         `needs.code_paths.outputs.${jobName} == 'true'`
       )
     }
-    expect(prWorkflow.jobs.test.needs).toEqual(['code_paths', 'test_native_cache'])
+    expect(prWorkflow.jobs.test.needs).toEqual([
+      'code_paths',
+      'test_native_cache',
+      'windows_watcher'
+    ])
+    expect(prWorkflow.jobs.test.if).toContain("needs.windows_watcher.result == 'success'")
     expect(prWorkflow.jobs.test.if).toContain("needs.code_paths.outputs.test == 'true'")
     expect(prWorkflow.jobs.test.if).toContain("needs.test_native_cache.result == 'success'")
     expect(prWorkflow.jobs.test.if).toContain("needs.test_native_cache.result == 'skipped'")

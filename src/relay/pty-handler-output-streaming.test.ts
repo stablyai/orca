@@ -21,9 +21,7 @@ const { mockPtySpawn, mockPtyInstance, mockCreateShellPromptReadinessProbe } = v
   }
 }))
 
-vi.mock('node-pty', () => ({
-  spawn: mockPtySpawn
-}))
+vi.mock('./relay-pty-runtime', () => ({ bunRelayPtyModule: { spawn: mockPtySpawn } }))
 
 vi.mock('../main/pty/posix-pty-process-groups', () => ({
   forceKillPosixPtyProcessGroups: vi.fn((_pid: number, fallback: () => void) => fallback())
@@ -118,7 +116,7 @@ describe('PtyHandler', () => {
       expect(pause).toHaveBeenCalledTimes(1)
       await vi.advanceTimersByTimeAsync(300)
 
-      expect(writeCallbacks.length).toBeGreaterThan(50)
+      expect(writeCallbacks.length).toBeGreaterThan(20)
       expect(resume).not.toHaveBeenCalled()
       for (const settle of writeCallbacks.splice(0)) {
         settle()
@@ -520,7 +518,7 @@ describe('PtyHandler', () => {
     })
     await dispatcher.callRequest('pty.spawn', {})
 
-    const first = '界'.repeat(16_380)
+    const first = '界'.repeat(65_532)
     const second = `${'界'.repeat(10)}tail`
     dataCallback!(first)
     dataCallback!(second)
@@ -528,7 +526,7 @@ describe('PtyHandler', () => {
     const flow = pendingFlowState(handler)
     expect(flow.pendingProducerBytesByPty.get(PTY_1)).toBe(chargedPendingBytes(first + second))
 
-    vi.advanceTimersByTime(8)
+    vi.advanceTimersByTime(1)
     const remaining = `${'界'.repeat(6)}tail`
     expect(flow.pendingOutputByPty.get(PTY_1)?.[0]?.data).toBe(remaining)
     expect(flow.pendingProducerBytesByPty.get(PTY_1)).toBe(chargedPendingBytes(remaining))
@@ -567,7 +565,7 @@ describe('PtyHandler', () => {
     expect(flow.pendingProducerBytesByPty.size).toBe(0)
   })
 
-  it('tracks each negotiated source entry without rescanning the queue', async () => {
+  it('batches unreserved source output without changing a blocked publication', async () => {
     let sourceDataCallback: ((data: string) => void) | undefined
     const pause = vi.fn()
     mockPtySpawn.mockReturnValue({
@@ -601,17 +599,31 @@ describe('PtyHandler', () => {
     }
 
     const flow = pendingFlowState(handler)
-    expect(flow.pendingProducerBytesByPty.get(PTY_1)).toBe(entryCount * chargedPendingBytes('x'))
-    expect(pause).toHaveBeenCalled()
+    expect(flow.pendingProducerBytesByPty.get(PTY_1)).toBe(chargedPendingBytes('x'.repeat(entryCount)))
+    expect(pause).not.toHaveBeenCalled()
 
     await vi.advanceTimersByTimeAsync(8)
     expect(publish).toHaveBeenCalledTimes(1)
-    expect(flow.pendingProducerBytesByPty.get(PTY_1)).toBe(entryCount * chargedPendingBytes('x'))
+    expect(flow.pendingProducerBytesByPty.get(PTY_1)).toBe(chargedPendingBytes('x'.repeat(entryCount)))
 
+    await vi.advanceTimersByTimeAsync(100)
+    expect(publish).toHaveBeenCalledTimes(1)
+
+    sourceDataCallback!('later')
+    expect(flow.pendingOutputByPty.get(PTY_1)?.map((entry) => entry.data)).toEqual([
+      'x'.repeat(entryCount),
+      'later'
+    ])
+    expect(flow.pendingProducerBytesByPty.get(PTY_1)).toBe(
+      chargedPendingBytes('x'.repeat(entryCount)) + chargedPendingBytes('later')
+    )
+    expect(pause).toHaveBeenCalled()
     publish.mockReturnValue(true)
     handler.handleSourcePublicationCapacity(PTY_1)
     await vi.runAllTimersAsync()
 
+    expect(publish.mock.calls[1]).toEqual(publish.mock.calls[0])
+    expect(publish.mock.calls).toHaveLength(3)
     expect(flow.pendingOutputByPty.has(PTY_1)).toBe(false)
     expect(flow.pendingProducerBytesByPty.has(PTY_1)).toBe(false)
   })
@@ -651,10 +663,10 @@ describe('PtyHandler', () => {
     })
 
     await dispatcher.callRequest('pty.spawn', {})
-    const firstChunk = 'x'.repeat(16 * 1024)
+    const firstChunk = 'x'.repeat(64 * 1024)
     dataCallback!(`${firstChunk}tail`)
 
-    vi.advanceTimersByTime(8)
+    vi.advanceTimersByTime(1)
     expect(dispatcher.notify).toHaveBeenCalledTimes(1)
     expect(dispatcher.notify).toHaveBeenNthCalledWith(1, 'pty.data', {
       id: PTY_1,

@@ -1,0 +1,15 @@
+name: Load qualified Windows watchers
+description: Fetches the same-workflow native builds for cross-platform packaging.
+inputs:
+  artifact_prefix:
+    required: false
+    default: windows-watcher
+    description: Prefix selected by the native producer workflow.
+runs:
+  using: composite
+  steps:
+    - uses: actions/download-artifact@v8
+      with:
+        pattern: ${{ inputs.artifact_prefix }}-*
+        merge-multiple: true
+        path: .build/windows-watcher

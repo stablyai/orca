@@ -2,10 +2,7 @@ import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { RemoteScannerContext, RemoteSessionCandidate } from './remote-session-scanner-types'
 import { sidecarUnchanged, type SessionSidecarObservation } from './session-sidecar-stat'
 
-// Matches the local scanner's cap. The relay sidecar is forked with
-// --max-old-space-size=384, and a retained session row is a title, a preview
-// window and counters — orders of magnitude smaller than the transcript it was
-// parsed from, which is what the cache stops us re-reading.
+// Retain compact session summaries, never the transcripts they were parsed from.
 const MAX_CACHE_ENTRIES = 4096
 
 type RemoteSessionParseCacheEntry = {

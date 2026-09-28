@@ -31,9 +31,7 @@ const {
   }
 }))
 
-vi.mock('node-pty', () => ({
-  spawn: mockPtySpawn
-}))
+vi.mock('./relay-pty-runtime', () => ({ bunRelayPtyModule: { spawn: mockPtySpawn } }))
 
 vi.mock('../main/pty/posix-pty-process-groups', () => ({
   forceKillPosixPtyProcessGroups: vi.fn((_pid: number, fallback: () => void) => fallback())
@@ -115,11 +113,16 @@ describe('PtyHandler inventory foreground evidence', () => {
 
   const { spawnPty } = createPtyRequestHelpers(() => dispatcher)
 
-  async function spawnPane(pid: number, processName: string): Promise<string> {
+  async function spawnPane(
+    pid: number,
+    processName: string,
+    staticSpawnName = false
+  ): Promise<string> {
     mockPtySpawn.mockReturnValue({
       ...mockPtyInstance,
       pid,
       process: processName,
+      processNameIsSpawnFile: staticSpawnName,
       onData: vi.fn(),
       onExit: vi.fn(),
       kill: vi.fn()
@@ -148,6 +151,36 @@ describe('PtyHandler inventory foreground evidence', () => {
 
   afterEach(async () => {
     await endPtyHandlerTest(handler, originalPlatform)
+  })
+
+  it('reports an ordinary foreground command when Bun exposes only the spawn file', async () => {
+    const rows = paneRows(1000, ['vim notes.txt']).map((row) => ({ ...row, tty: 'ttys001' }))
+    mockGetStrictProcessTableSnapshot.mockResolvedValue(rows)
+    const id = await spawnPane(1000, '/bin/zsh', true)
+
+    expect(await dispatcher.callRequest('pty.inspectProcess', { id })).toMatchObject({
+      foregroundProcess: 'vim',
+      hasChildProcesses: true,
+      childProcessEvidence: 'children'
+    })
+    expect(await listProcesses()).toEqual([expect.objectContaining({ id, title: 'vim' })])
+  })
+
+  it('does not report a stopped job as Bun terminal foreground', async () => {
+    const rows = paneRows(1000, ['vim notes.txt']).map((row) => ({
+      ...row,
+      tty: 'ttys001',
+      tpgid: 1000,
+      stat: row.pid === 1000 ? 'Ss+' : 'T'
+    }))
+    mockGetStrictProcessTableSnapshot.mockResolvedValue(rows)
+    const id = await spawnPane(1000, '/bin/zsh', true)
+
+    expect(await dispatcher.callRequest('pty.inspectProcess', { id })).toMatchObject({
+      foregroundProcess: 'zsh',
+      hasChildProcesses: true
+    })
+    expect(await listProcesses()).toEqual([expect.objectContaining({ id, title: 'zsh' })])
   })
 
   it('names each pane from the batched capture', async () => {

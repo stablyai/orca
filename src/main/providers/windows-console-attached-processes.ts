@@ -1,17 +1,26 @@
-import { fork, type ChildProcess } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
+import { forkProcess } from '../../shared/child-process/fork-process'
+import { resolveWindowsBunPtyGateEntry } from '../daemon/pty-subprocess/windows-bun-pty-launch'
+import { WINDOWS_BUN_CONSOLE_LIST_ARGUMENT } from './windows-bun-console-process-list'
 
 const CONPTY_PROCESS_LIST_TIMEOUT_MS = 3_000
 
 type ProcessListMessage = { consoleProcessList?: unknown }
 
 type WindowsConsoleAttachedProcessDeps = {
-  forkProcess?: typeof fork
+  forkProcess?: (modulePath: string, args: string[]) => ChildProcess
   resolveAgentPath?: () => string
   timeoutMs?: number
 }
 
-function resolveNodePtyConsoleListAgent(): string {
-  return require.resolve('node-pty/lib/conpty_console_list_agent.js')
+function resolveConsoleListAgent(): string {
+  return process.versions.bun
+    ? resolveWindowsBunPtyGateEntry()
+    : require.resolve('node-pty/lib/conpty_console_list_agent.js')
+}
+
+function spawnConsoleListAgent(modulePath: string, args: string[]): ChildProcess {
+  return forkProcess({ modulePath, args, stdio: ['ignore', 'ignore', 'ignore', 'ipc'] })
 }
 
 /**
@@ -35,15 +44,16 @@ export function readWindowsConsoleAttachedProcessIds(
   rootPid: number,
   deps: WindowsConsoleAttachedProcessDeps = {}
 ): Promise<ReadonlySet<number> | null> {
-  if (!Number.isSafeInteger(rootPid) || rootPid <= 0) {
+  if (!Number.isSafeInteger(rootPid) || rootPid <= 0 || rootPid >= 0xffff_ffff) {
     return Promise.resolve(null)
   }
   let child: ChildProcess
   try {
-    child = (deps.forkProcess ?? fork)(
-      (deps.resolveAgentPath ?? resolveNodePtyConsoleListAgent)(),
-      [String(rootPid)],
-      { silent: true }
+    child = (deps.forkProcess ?? spawnConsoleListAgent)(
+      (deps.resolveAgentPath ?? resolveConsoleListAgent)(),
+      process.versions.bun
+        ? [WINDOWS_BUN_CONSOLE_LIST_ARGUMENT, String(rootPid)]
+        : [String(rootPid)]
     )
   } catch {
     return Promise.resolve(null)

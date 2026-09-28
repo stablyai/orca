@@ -83,18 +83,53 @@ describe('POSIX static-name agent selection', () => {
 })
 
 describe('Windows static-name agent selection', () => {
-  function installRows(names: string[]): void {
+  function installRows(names: string[]) {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     const rows = [
       { pid: process.pid, ppid: 0, name: 'vitest.exe', commandLine: 'vitest' },
       { pid: 100, ppid: 1, name: 'powershell.exe', commandLine: 'powershell.exe' },
       ...names.map((name, index) => ({ pid: 101 + index, ppid: 100, name, commandLine: name }))
     ]
+    const read = vi.fn((callback: (processes: typeof rows) => void) => callback(rows))
     __setWindowsProcessTreeLoaderForTests(() => ({
       ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2, CreationTime: 4 },
-      getAllProcesses: (callback) => callback(rows)
+      getAllProcesses: read
     }))
+    return read
   }
+
+  it('returns the original shell without scanning a proven shell-only job', async () => {
+    const read = installRows([])
+    members.mockReturnValue(new Set([100]))
+    expect(
+      await resolveSpawnFileForegroundProcess(proc, 'powershell.exe', { fresh: true })
+    ).toEqual({
+      available: true,
+      processName: 'powershell.exe'
+    })
+    expect(read).not.toHaveBeenCalled()
+  })
+
+  it('still scans when job membership is unavailable', async () => {
+    const read = installRows([])
+    members.mockReturnValue(null)
+    expect(
+      await resolveSpawnFileForegroundProcess(proc, 'powershell.exe', { fresh: true })
+    ).toEqual({
+      available: false,
+      processName: null
+    })
+    expect(read).toHaveBeenCalled()
+  })
+
+  it('does not infer an idle shell from a directly spawned program', async () => {
+    const read = installRows([])
+    members.mockReturnValue(new Set([100]))
+    await resolveSpawnFileForegroundProcess({ ...proc, process: 'node.exe' }, 'powershell.exe', {
+      fresh: true
+    })
+    expect(read).toHaveBeenCalled()
+  })
 
   it('does not re-admit a detached agent through owned job membership', async () => {
     installRows(['droid.exe'])

@@ -65,7 +65,7 @@ export function orcadLaunchCommand(host: RemoteHostPlatform, spec: OrcadLaunchSp
     `ORCA_VERSION=${shellEscape(spec.fullVersion)}`,
     `ORCA_USER_DATA=${shellEscape(spec.userDataDir)}`,
     // Keep $! equal to the runtime PID rather than a waiting shell's PID.
-    `exec nohup "$orcad_runtime" ${entry}`,
+    `exec nohup "$orcad_runtime" $orcad_runtime_flags ${entry}`,
     `--json --bind ${shellEscape(spec.bindHost)} --port ${String(spec.port)}`,
     `> ${readiness} 2>> ${log} < /dev/null &`,
     `echo $! > ${pidFile} && cat ${pidFile}`

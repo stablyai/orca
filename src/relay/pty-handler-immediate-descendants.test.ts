@@ -25,7 +25,7 @@ const { mockPtySpawn, mockPtyInstance, mockCreateShellPromptReadinessProbe, swee
     }
   })
 )
-vi.mock('node-pty', () => ({ spawn: mockPtySpawn }))
+vi.mock('./relay-pty-runtime', () => ({ bunRelayPtyModule: { spawn: mockPtySpawn } }))
 vi.mock('../main/pty-descendant-termination', () => ({ killWithDescendantSweep: sweep }))
 vi.mock('../main/pty/posix-pty-process-groups', () => ({
   forceKillPosixPtyProcessGroups: (_pid: number, kill: () => void) => kill()

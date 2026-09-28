@@ -1,9 +1,13 @@
 /* oxlint-disable max-lines */
 import type { IPty } from 'node-pty'
 import { killWithDescendantSweep } from '../main/pty-descendant-termination'
-import type * as NodePty from 'node-pty'
-import { existsSync } from 'node:fs'
-import { basename, join } from 'node:path'
+import { bunRelayPtyModule } from './relay-pty-runtime'
+import {
+  ptyProcessNameIsSpawnFile,
+  resolveSpawnFileForegroundFromRows,
+  resolveSpawnFileForegroundProcess
+} from '../main/daemon/pty-subprocess/spawn-file-foreground-process'
+import { basename } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { resolveWindowsGitBashShellPath } from '../main/git-bash'
 import { isSupportedWindowsShellOverride } from '../shared/windows-terminal-shell'
@@ -118,13 +122,6 @@ import {
   injectRelayFishHistoryEnv,
   injectRelayHistoryEnv
 } from './terminal-history'
-import { isFlattenedNodePtyLoaderMessage } from '../main/orcad/node-pty-loader-diagnosis'
-import { collectNodePtyUnavailableDiagnosis } from './node-pty-binding-survey'
-import {
-  formatNodePtyUnavailableMessage,
-  toTerminalUnavailableCause
-} from './node-pty-unavailable-diagnosis'
-import { TERMINAL_UNAVAILABLE_RPC_ERROR_CODE } from '../shared/terminal-unavailable-cause'
 
 /**
  * The shell a spawn will actually launch, resolved the same way `spawnAfterAdmission` resolves it.
@@ -162,10 +159,6 @@ function requireRelaySpawnCwd(
     throw new Error(formatUnresolvedRelaySpawnCwdMessage(resolution.workspaceId))
   }
   return resolution.cwd
-}
-
-function isMissingNodePtyNativeBinding(error: unknown): boolean {
-  return error instanceof Error && isFlattenedNodePtyLoaderMessage(error.message)
 }
 
 function parseSourceRecoveryRequest(value: unknown): PtySourceRecoveryRequest | undefined {
@@ -304,7 +297,6 @@ function killPtyProcess(pty: IPty, signal: string): void {
 }
 
 function finishPtyCreationOperations(operations: readonly (() => void)[]): void {
-  // Why: the relay still targets Node 18, which lacks Array.prototype.toReversed.
   for (let index = operations.length - 1; index >= 0; index--) {
     operations[index]()
   }
@@ -347,13 +339,13 @@ export const MAX_RELAY_PTY_SESSIONS = 50
 export const REPLAY_BUFFER_MAX = 100 * 1024
 const PTY_OUTPUT_BATCH_INTERVAL_MS = 8
 const PTY_OUTPUT_DRAIN_CONTINUE_MS = 1
-const PTY_OUTPUT_FLUSH_CHUNK_CHARS = 16 * 1024
+const PTY_OUTPUT_FLUSH_CHUNK_CHARS = 64 * 1024
 const PTY_OUTPUT_FLUSH_MAX_WRITES = 2
 const PTY_OUTPUT_PRODUCER_HIGH_BYTES = 128 * 1024
 const PTY_OUTPUT_PRODUCER_LOW_BYTES = 64 * 1024
 const INTERACTIVE_OUTPUT_WINDOW_MS = 100
 const INTERACTIVE_OUTPUT_MAX_CHARS = 1024
-const INTERACTIVE_REDRAW_MAX_CHARS = PTY_OUTPUT_FLUSH_CHUNK_CHARS
+const INTERACTIVE_REDRAW_MAX_CHARS = 16 * 1024
 const INTERACTIVE_OUTPUT_BUDGET_CHARS = 32 * 1024
 const STARTUP_COMMAND_WRITE_DELAY_MS = 50
 const STARTUP_COMMAND_SHELL_READY_FALLBACK_MS = 1500
@@ -507,6 +499,7 @@ export class PtyHandler {
   private graceTimeMs: number
   private graceTimer: ReturnType<typeof setTimeout> | null = null
   private outputFlushTimer: ReturnType<typeof setTimeout> | null = null
+  private outputFlushDueAt = 0
   private pendingOutputByPty = new Map<string, PendingPtyOutput[]>()
   private pendingProducerBytesByPty = new Map<string, number>()
   private pendingExitByPty = new Map<string, { id: string; code: number; incarnationId: string }>()
@@ -527,11 +520,6 @@ export class PtyHandler {
   private pendingCreationDrainResolvers = new Set<() => void>()
   private worktreeRemovalCoordinator: RelayPtyWorktreeRemovalCoordinator | null = null
   private disposePromise: Promise<void> | null = null
-  private ptyModule: typeof NodePty | null = null
-  private ptyModuleLoadPromise: Promise<typeof NodePty | null> | null = null
-  private reloadPtyModuleFromDisk = false
-  /** The last thing `require('node-pty')` threw, kept because it is the only cause anyone has. */
-  private lastPtyLoadError: unknown = null
   // Why: single optional slot is intentional — callers compose externally; a throw is swallowed so it can't block cleanup.
   private exitListener: PtyExitListener | null = null
   private surfaceRetiredListener: PtySurfaceRetiredListener | null = null
@@ -589,90 +577,6 @@ export class PtyHandler {
     }
     this.maybeResumePtyOutput(id)
     this.publishPendingExit(id)
-  }
-
-  private async loadPty(): Promise<typeof NodePty | null> {
-    if (this.ptyModule) {
-      return this.ptyModule
-    }
-    if (this.ptyModuleLoadPromise) {
-      return this.ptyModuleLoadPromise
-    }
-    this.ptyModuleLoadPromise = this.loadPtyUncached()
-    try {
-      return await this.ptyModuleLoadPromise
-    } finally {
-      this.ptyModuleLoadPromise = null
-    }
-  }
-
-  private async loadPtyUncached(): Promise<typeof NodePty | null> {
-    if (!this.reloadPtyModuleFromDisk) {
-      try {
-        this.ptyModule = await import('node-pty')
-        return this.ptyModule
-      } catch (error) {
-        // Why keep it: this is the only place the load error exists. Discarding it here is
-        // what left the relay able to say "unavailable" and never why.
-        this.lastPtyLoadError = error
-        this.reloadPtyModuleFromDisk = true
-      }
-    }
-    // Why: tie module resolution to the deployed bundle dir, not cwd.
-    const moduleEntry = join(this.relayNodePtyDir(), 'lib', 'index.js')
-    if (!existsSync(moduleEntry)) {
-      this.lastPtyLoadError = this.lastPtyLoadError ?? new Error(`no node-pty at ${moduleEntry}`)
-      return null
-    }
-    try {
-      this.ptyModule = require(moduleEntry) as typeof NodePty
-      return this.ptyModule
-    } catch (error) {
-      this.lastPtyLoadError = error
-      return null
-    }
-  }
-
-  /** Where the relay's own node-pty lives — the deployed bundle dir, never cwd. */
-  private relayNodePtyDir(): string {
-    // Packaged relays live under Resources/relay while runtime dependencies are
-    // copied to the sibling Resources/node_modules directory. Development
-    // bundles keep node_modules beside the relay output, so retain that path as
-    // the fallback.
-    const packagedRoot = typeof process.resourcesPath === 'string' ? process.resourcesPath : ''
-    const packagedDir = packagedRoot ? join(packagedRoot, 'node_modules', 'node-pty') : ''
-    const localDir = join(__dirname, 'node_modules', 'node-pty')
-    return packagedDir && existsSync(packagedDir) ? packagedDir : localDir
-  }
-
-  /**
-   * The rejection for a spawn that cannot happen: prose for a human, and the structured
-   * cause for a client that can repair the host instead of printing a paragraph.
-   *
-   * Runs the survey and out-of-process load probe only here, on the failure path, so a
-   * healthy relay never pays for them.
-   */
-  private async nodePtyUnavailableError(spawnError?: unknown): Promise<Error> {
-    const nodePtyDir = this.relayNodePtyDir()
-    const diagnosis = await collectNodePtyUnavailableDiagnosis({
-      nodePtyDir: existsSync(nodePtyDir) ? nodePtyDir : null,
-      error: spawnError ?? this.lastPtyLoadError
-    })
-    return Object.assign(new Error(formatNodePtyUnavailableMessage(diagnosis)), {
-      code: TERMINAL_UNAVAILABLE_RPC_ERROR_CODE,
-      data: toTerminalUnavailableCause(diagnosis)
-    })
-  }
-
-  private invalidatePtyModuleAfterBindingFailure(): void {
-    this.ptyModule = null
-    this.reloadPtyModuleFromDisk = true
-    const moduleRoot = this.relayNodePtyDir()
-    for (const cachedPath of Object.keys(require.cache)) {
-      if (isPathInsideOrEqual(moduleRoot, cachedPath)) {
-        delete require.cache[cachedPath]
-      }
-    }
   }
 
   // Why: this value never reaches the grace *timer* — startGraceTimer's only caller always passes an
@@ -969,6 +873,7 @@ export class PtyHandler {
     const startup = managed.startupCommand
     if (startup?.waitForShellReady) {
       startup.promptProbe = createShellPromptReadinessProbe({
+        ptyPid: managed.pty.pid,
         slavePath: readPtySlavePath(managed.pty),
         shellPath: managed.shellPath,
         shellCwd: managed.shellCwd,
@@ -1158,10 +1063,33 @@ export class PtyHandler {
   ): void {
     const queue = this.pendingOutputByPty.get(id) ?? []
     if (this.sourcePublication?.accepts(id)) {
-      const pending = this.initializePendingProducerCharge({ data, ...meta })
-      queue.push(pending)
-      this.pendingOutputByPty.set(id, queue)
-      this.addPendingProducerBytes(id, pending)
+      const previous = queue.at(-1)
+      // Reserved retries and transformed spans must retain their original publication boundaries.
+      if (
+        previous &&
+        !previous.transformed &&
+        !previous.sourceChunk &&
+        !meta.transformed &&
+        (previous.rawLength === undefined || previous.rawLength === previous.data.length) &&
+        (meta.rawLength === undefined || meta.rawLength === data.length) &&
+        (previous.seq === undefined
+          ? meta.seq === undefined
+          : meta.seq === previous.seq + data.length) &&
+        previous.data.length + data.length <= PTY_OUTPUT_FLUSH_CHUNK_CHARS
+      ) {
+        const previousCharge = this.pendingProducerChargeForEntry(previous)
+        previous.data += data
+        if (previous.rawLength !== undefined || meta.rawLength !== undefined) {
+          previous.rawLength = previous.data.length
+        }
+        previous.seq = meta.seq
+        this.refreshPendingProducerCharge(id, previous, previousCharge)
+      } else {
+        const pending = this.initializePendingProducerCharge({ data, ...meta })
+        queue.push(pending)
+        this.pendingOutputByPty.set(id, queue)
+        this.addPendingProducerBytes(id, pending)
+      }
       if (queue.length === 1 && this.shouldSendInteractiveOutputNow(id, data)) {
         queue[0].interactive = true
         if (this.flushPtyOutput(id)) {
@@ -1171,7 +1099,7 @@ export class PtyHandler {
       if (this.pendingProducerBytes(id) >= PTY_OUTPUT_PRODUCER_HIGH_BYTES) {
         this.pausePtyOutput(id)
       }
-      this.scheduleOutputFlush(PTY_OUTPUT_BATCH_INTERVAL_MS)
+      this.scheduleQueuedOutputFlush(id)
       return
     }
     const existing = queue.at(-1)
@@ -1227,13 +1155,26 @@ export class PtyHandler {
     if (this.pendingProducerBytes(id) >= PTY_OUTPUT_PRODUCER_HIGH_BYTES) {
       this.pausePtyOutput(id)
     }
-    this.scheduleOutputFlush(PTY_OUTPUT_BATCH_INTERVAL_MS)
+    this.scheduleQueuedOutputFlush(id)
+  }
+
+  private scheduleQueuedOutputFlush(id: string): void {
+    this.scheduleOutputFlush(
+      this.pendingProducerBytes(id) >= PTY_OUTPUT_PRODUCER_LOW_BYTES
+        ? PTY_OUTPUT_DRAIN_CONTINUE_MS
+        : PTY_OUTPUT_BATCH_INTERVAL_MS
+    )
   }
 
   private scheduleOutputFlush(delayMs: number): void {
+    const dueAt = performance.now() + delayMs
     if (this.outputFlushTimer !== null) {
-      return
+      if (this.outputFlushDueAt <= dueAt) {
+        return
+      }
+      clearTimeout(this.outputFlushTimer)
     }
+    this.outputFlushDueAt = dueAt
     this.outputFlushTimer = setTimeout(() => this.flushPendingOutput(), delayMs)
   }
 
@@ -1838,10 +1779,7 @@ export class PtyHandler {
     sourceActivation?: PtySourceReceivingActivation
     shellReadyArmed?: boolean
   }> {
-    const pty = await this.loadPty()
-    if (!pty) {
-      throw await this.nodePtyUnavailableError()
-    }
+    const pty = bunRelayPtyModule
 
     const cols = (params.cols as number) || 80
     const rows = (params.rows as number) || 24
@@ -1940,9 +1878,10 @@ export class PtyHandler {
     // includes Homebrew, nvm, and user-installed CLIs (claude, codex, gh).
     // When overlays are injected, the launch wrapper keeps those paths after
     // user startup files re-export their defaults.
-    let term: IPty
-    try {
-      term = pty.spawn(shell, shellLaunch.args, {
+    const term = await pty.spawn(
+      shell,
+      shellLaunch.args,
+      {
         // Why: node-pty overwrites env.TERM with `name`; pass caller-selected TERM so it isn't lost.
         name: spawnEnv.TERM ?? 'xterm-256color',
         cols,
@@ -1955,15 +1894,9 @@ export class PtyHandler {
           [SHELL_STARTUP_FEATURE_ENV]: '',
           ...shellLaunch.env
         }
-      })
-    } catch (error) {
-      // Why: Windows loads conpty.node only on first spawn, so handle that late binding failure here.
-      if (isMissingNodePtyNativeBinding(error)) {
-        this.invalidatePtyModuleAfterBindingFailure()
-        throw await this.nodePtyUnavailableError(error)
-      }
-      throw error
-    }
+      },
+      ...(context?.signal ? [context.signal] : [])
+    )
     onPhysicalSpawnCommitted?.()
 
     // Why: capture paneKey so the exit listener can evict per-pane caches without a separate ptyId→paneKey map.
@@ -2666,6 +2599,13 @@ export class PtyHandler {
     if (!managed || managed.disposed) {
       return null
     }
+    if (ptyProcessNameIsSpawnFile(managed.pty)) {
+      const observed = await resolveSpawnFileForegroundProcess(
+        managed.pty,
+        managed.shellPath ?? null
+      )
+      return observed.available ? observed.processName : null
+    }
     return await getForegroundProcessName(managed.pty.pid, managed.pty.process || null)
   }
 
@@ -2724,6 +2664,7 @@ export class PtyHandler {
       }
     }
     let rows: readonly ProcessTableRow[] | null = null
+    let observedForeground = managed.pty.process || null
     // Set only when the budgeted evidence read gave up, so the compatibility fields below do not
     // turn around and ask the same unreadable table again with no budget at all.
     let tableUnavailable = false
@@ -2752,8 +2693,12 @@ export class PtyHandler {
       try {
         const snapshot = await getStrictProcessTableSnapshotWithAge()
         rows = snapshot.rows
+        if (ptyProcessNameIsSpawnFile(managed.pty)) {
+          const observed = resolveSpawnFileForegroundFromRows(rows, managed.pty.pid)
+          observedForeground = observed.available ? observed.processName : null
+        }
         evidence = resolveRemoteForegroundEvidence(
-          { rootPid: managed.pty.pid, fallbackProcess: managed.pty.process || null },
+          { rootPid: managed.pty.pid, fallbackProcess: observedForeground },
           {
             ptyId: id,
             ptyIncarnationId: managed.incarnationId,
@@ -2781,8 +2726,8 @@ export class PtyHandler {
     // consumers ignore it unless the fenced evidence member is also accepted.
     const foregroundProcess =
       evidence?.verdict === 'live'
-        ? (evidence.processName ?? managed.pty.process) || null
-        : managed.pty.process || null
+        ? (evidence.processName ?? observedForeground) || null
+        : observedForeground
     // Derive child liveness from the same capture; do not fork a second process-table probe for
     // each field/pane in an event burst.
     //
@@ -2869,12 +2814,16 @@ export class PtyHandler {
       if (this.reapPtyProvenExited(managed)) {
         continue
       }
-      // Reuse batched correlation; per-PTY tree scans recreate O(PTY × rows) work.
+      const observedForeground =
+        evidenceRows && ptyProcessNameIsSpawnFile(managed.pty)
+          ? resolveSpawnFileForegroundFromRows(evidenceRows, managed.pty.pid).processName
+          : managed.pty.process || null
+      // Reuse the captured table for Bun's static spawn name as well as agent identity.
       const title =
         (evidenceRows
-          ? (evidenceResults[entryIndex]?.processName ?? managed.pty.process ?? null)
+          ? (evidenceResults[entryIndex]?.processName ?? observedForeground)
           : includeForegroundProcessEvidence && !evidenceTableUnavailable
-            ? await getForegroundProcessName(managed.pty.pid, managed.pty.process || null)
+            ? await this.getForegroundProcess({ id })
             : managed.pty.process || null) || 'shell'
       const foregroundProcessEvidence =
         includeForegroundProcessEvidence && process.platform !== 'win32'
@@ -2974,10 +2923,7 @@ export class PtyHandler {
   }
 
   private async reviveEntry(entry: SerializedPtyEntry): Promise<void> {
-    const ptyMod = await this.loadPty()
-    if (!ptyMod) {
-      return
-    }
+    const ptyMod = bunRelayPtyModule
     // Why: pane identity comes from the serialized entry (not env) since hook scripts exit without ORCA_PANE_KEY.
     const revivedEnv: Record<string, string> = {}
     if (entry.paneKey) {
@@ -3055,7 +3001,7 @@ export class PtyHandler {
     })
     let term: IPty
     try {
-      term = ptyMod.spawn(shell, shellLaunch.args, {
+      term = await ptyMod.spawn(shell, shellLaunch.args, {
         name: spawnEnv.TERM ?? 'xterm-256color',
         cols: entry.cols,
         rows: entry.rows,

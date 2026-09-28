@@ -11,7 +11,13 @@ export const ORCAD_CHILD_ENTRY_POINTS = {
   daemon: 'src/main/daemon/daemon-entry.ts',
   ptyGate: 'src/main/daemon/pty-subprocess/windows-bun-pty-gate-entry.ts',
   writer: 'src/main/persistence/profile-state/profile-state-writer-worker-entry.ts',
-  backup: 'src/main/persistence/profile-state/profile-state-backup-worker-entry.ts'
+  backup: 'src/main/persistence/profile-state/profile-state-backup-worker-entry.ts',
+  vaultService: 'src/main/ai-vault/session-scanner-service-entry.ts',
+  vaultScanner: 'src/main/ai-vault/session-scanner-worker-entry.ts',
+  vaultSqlite: 'src/main/ai-vault/session-scanner-opencode-sqlite-worker-entry.ts',
+  wslSqlite: 'src/main/ai-vault/session-scanner-opencode-sqlite-process-entry.ts',
+  transcript: 'src/main/native-chat/wsl-transcript-fs-process-entry.ts',
+  portScan: 'src/main/ports/port-scan-command-worker-entry.ts'
 }
 
 export const ORCAD_EXTERNAL_MODULES = [

@@ -60,6 +60,16 @@ env:
   HOURLY_RETAIN_COUNT: 72
 
 jobs:
+  windows_watcher:
+    permissions:
+      contents: read
+    needs: preflight
+    if: needs.preflight.outputs.should_build == 'true'
+    uses: ./.github/workflows/windows-watcher-artifacts.yml
+    with:
+      ref: ${{ needs.preflight.outputs.head_sha }}
+      artifact_prefix: windows-watcher-hourly-mac-build
+
   # Avoid occupying the limited Mac pool when main has not moved.
   preflight:
     if: github.repository == 'stablyai/orca'
@@ -117,7 +127,7 @@ jobs:
           fi
 
   build-hourly-mac:
-    needs: preflight
+    needs: [preflight, windows_watcher]
     if: needs.preflight.outputs.should_build == 'true'
     outputs:
       tag: ${{ steps.release.outputs.tag }}
@@ -253,6 +263,14 @@ jobs:
             exit 1
           fi
           cat "$RUNNER_TEMP/hourly-identity.txt" >>"$GITHUB_OUTPUT"
+
+      - name: Load qualified Windows watchers
+        if: hashFiles('config/scripts/windows-watcher-artifact.mjs') != ''
+        uses: actions/download-artifact@v8
+        with:
+          pattern: windows-watcher-hourly-mac-build-*
+          merge-multiple: true
+          path: .build/windows-watcher
 
       - name: Build app
         run: pnpm build:release

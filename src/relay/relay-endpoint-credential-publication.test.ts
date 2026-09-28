@@ -22,10 +22,10 @@ beforeAll(async () => {
     entryPoints: [RELAY_TS_ENTRY],
     bundle: true,
     platform: 'node',
-    target: 'node18',
+    target: 'es2024',
     format: 'cjs',
     outfile: relayEntry,
-    external: ['node-pty', '@parcel/watcher', 'electron'],
+    external: ['node-pty', '@parcel/watcher', 'electron', 'bun:ffi'],
     sourcemap: false
   })
 }, 30_000)

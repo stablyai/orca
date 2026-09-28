@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // Guest-resident WSL agent-hook relay (STA-1515). Runs inside a WSL distro,
 // binds a loopback hook receiver on the very port the Windows host issued
 // (free under NAT — that port only exists Windows-side), and forwards every

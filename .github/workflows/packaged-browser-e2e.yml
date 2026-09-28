@@ -16,7 +16,16 @@ on:
 permissions:
   contents: read
 jobs:
+  windows_watcher:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/windows-watcher-artifacts.yml
+    with:
+      ref: ${{ inputs.ref || github.sha }}
+      artifact_prefix: windows-watcher-packaged-browser-e2e
+
   compatibility:
+    needs: windows_watcher
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -51,6 +60,14 @@ jobs:
           with open(os.environ['GITHUB_ENV'],'a') as env: env.write('ORCA_CROSS_VERSION_PACKAGED_EXECUTABLE='+str(executable)+'\n')
           print('Verified old package:',executable)
           PYVERIFY
+      - name: Load qualified Windows watchers
+        if: hashFiles('config/scripts/windows-watcher-artifact.mjs') != ''
+        uses: actions/download-artifact@v8
+        with:
+          pattern: windows-watcher-packaged-browser-e2e-*
+          merge-multiple: true
+          path: .build/windows-watcher
+
       - name: Build current Electron app
         env:
           VITE_EXPOSE_STORE: 'true'

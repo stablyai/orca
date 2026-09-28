@@ -1,3 +1,4 @@
+import { shellEscape } from './ssh-connection-utils'
 /**
  * Keeps the remote relay's Unix socket path inside `sockaddr_un.sun_path`.
  *
@@ -72,7 +73,10 @@ const SHORT_DIR_MARKER = 'ORCA-RELAY-SHORT-SOCKET-DIR'
  * proves — via `ls -ldn`, which reports the entry itself rather than what it points at — that
  * it is a real directory, owned by this uid, already 0700. Nothing else is touched.
  */
-export function resolveShortRelaySocketDirCommand(versionSegment: string): string {
+export function resolveShortRelaySocketDirCommand(
+  versionSegment: string,
+  compatibilitySocket?: { sockName: string; originalPath: string }
+): string {
   return [
     'uid=$(id -u) || exit 1',
     `dir="${SHORT_RELAY_SOCKET_DIR_PREFIX}$uid"`,
@@ -82,6 +86,20 @@ export function resolveShortRelaySocketDirCommand(versionSegment: string): strin
     // 0700 and ours does not prove what an earlier run left inside it still is.
     `ver="$dir/${versionSegment}"`,
     ...adoptOwnedDirectoryCommand('$ver'),
+    // Older clients only look inside the install directory when deciding whether it is live.
+    ...(compatibilitySocket
+      ? [
+          `target="$ver"/${shellEscape(compatibilitySocket.sockName)}`,
+          `alias=${shellEscape(compatibilitySocket.originalPath)}`,
+          'if [ -L "$alias" ]; then',
+          '  [ "$(readlink "$alias")" = "$target" ] || exit 1',
+          'elif [ -e "$alias" ]; then',
+          '  exit 1',
+          'else',
+          '  ln -s "$target" "$alias" || exit 1',
+          'fi'
+        ]
+      : []),
     `printf '%s %s\n' '${SHORT_DIR_MARKER}' "$ver"`
   ].join('\n')
 }

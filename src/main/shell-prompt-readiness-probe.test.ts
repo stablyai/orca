@@ -2,15 +2,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const lineEditorProbe = vi.hoisted(() => vi.fn())
 const processReadinessProbe = vi.hoisted(() => vi.fn())
+const terminalPathProbe = vi.hoisted(() => vi.fn())
 const resolveExecutablePath = vi.hoisted(() => vi.fn((value: string) => Promise.resolve(value)))
 const resolveInstalledExecutablePaths = vi.hoisted(() =>
   vi.fn((): Promise<string[]> => Promise.resolve([]))
 )
 vi.mock('../shared/pty-slave-line-discipline-echo', () => ({
-  createPtySlaveLineEditorProbe: () => lineEditorProbe
+  createPtySlaveLineEditorProbe: (path: string | undefined) => (path ? lineEditorProbe : undefined)
 }))
 vi.mock('../shared/shell-process-readiness', () => ({
   readShellProcessReadiness: processReadinessProbe,
+  readShellTerminalPath: terminalPathProbe,
   resolveShellExecutablePath: resolveExecutablePath,
   resolveInstalledShellExecutablePaths: resolveInstalledExecutablePaths
 }))
@@ -22,6 +24,7 @@ describe('shell prompt readiness probe', () => {
     vi.useFakeTimers()
     lineEditorProbe.mockReset()
     processReadinessProbe.mockReset()
+    terminalPathProbe.mockReset()
     resolveExecutablePath.mockClear()
     resolveInstalledExecutablePaths.mockClear()
     resolveInstalledExecutablePaths.mockResolvedValue([])
@@ -31,11 +34,69 @@ describe('shell prompt readiness probe', () => {
     vi.useRealTimers()
   })
 
+  it.skipIf(process.platform === 'win32')(
+    'discovers the Bun terminal device only after prompt output, retaining line-editor checks',
+    async () => {
+      terminalPathProbe.mockResolvedValue('/dev/ttys048')
+      lineEditorProbe.mockResolvedValue('other')
+      processReadinessProbe.mockResolvedValue({ executablePath: '/bin/zsh', foreground: true })
+      const onPromptReady = vi.fn()
+      const probe = createShellPromptReadinessProbe({
+        ptyPid: 41,
+        slavePath: undefined,
+        shellPath: '/bin/zsh',
+        getShellPid: () => 42,
+        onPromptReady
+      })
+      expect(terminalPathProbe).not.toHaveBeenCalled()
+      probe!.notifyOutput('\x1b[?2004h')
+      await vi.advanceTimersByTimeAsync(50)
+      expect(terminalPathProbe).toHaveBeenCalledExactlyOnceWith(42, 41)
+      expect(onPromptReady).not.toHaveBeenCalled()
+      terminalPathProbe.mockResolvedValueOnce(null)
+      probe!.notifyOutput('\x1b[?2004h')
+      await vi.advanceTimersByTimeAsync(50)
+      expect(lineEditorProbe).toHaveBeenCalledOnce()
+      lineEditorProbe.mockResolvedValue('line-editor')
+      probe!.notifyOutput('\x1b[?2004h')
+      await vi.advanceTimersByTimeAsync(50)
+      expect(onPromptReady).toHaveBeenCalledOnce()
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'does not accept a late device discovery after disposal',
+    async () => {
+      let resolvePath!: (path: string) => void
+      terminalPathProbe.mockReturnValue(
+        new Promise<string>((resolve) => {
+          resolvePath = resolve
+        })
+      )
+      const onPromptReady = vi.fn()
+      const probe = createShellPromptReadinessProbe({
+        ptyPid: 41,
+        slavePath: undefined,
+        shellPath: '/bin/zsh',
+        getShellPid: () => 42,
+        onPromptReady
+      })
+      probe!.notifyOutput('\x1b[?2004h')
+      await vi.advanceTimersByTimeAsync(50)
+      probe!.dispose()
+      resolvePath('/dev/ttys048')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(lineEditorProbe).not.toHaveBeenCalled()
+      expect(onPromptReady).not.toHaveBeenCalled()
+    }
+  )
+
   it('accepts only the identified shell pid in line-editor mode and foreground', async () => {
     lineEditorProbe.mockResolvedValue('line-editor')
     processReadinessProbe.mockResolvedValue({ executablePath: '/bin/zsh', foreground: true })
     const onPromptReady = vi.fn()
     const probe = createShellPromptReadinessProbe({
+      ptyPid: 41,
       slavePath: '/dev/ttys048',
       shellPath: '/bin/zsh',
       getShellPid: () => 42,
@@ -53,6 +114,7 @@ describe('shell prompt readiness probe', () => {
     lineEditorProbe.mockResolvedValue('line-editor')
     processReadinessProbe.mockResolvedValue({ executablePath: '/bin/zsh', foreground: true })
     const probe = createShellPromptReadinessProbe({
+      ptyPid: 41,
       slavePath: '/dev/ttys048',
       shellPath: '/bin/zsh',
       getShellPid: () => 42,
@@ -85,6 +147,7 @@ describe('shell prompt readiness probe', () => {
     processReadinessProbe.mockResolvedValue(rows)
     const onPromptReady = vi.fn()
     const probe = createShellPromptReadinessProbe({
+      ptyPid: 41,
       slavePath: '/dev/ttys048',
       shellPath: '/bin/zsh',
       getShellPid: () => 42,
@@ -110,6 +173,7 @@ describe('shell prompt readiness probe', () => {
     resolveInstalledExecutablePaths.mockResolvedValue(['/bin/bash', '/opt/homebrew/bin/bash'])
     const onPromptReady = vi.fn()
     const probe = createShellPromptReadinessProbe({
+      ptyPid: 41,
       slavePath: '/dev/ttys048',
       shellPath: '/bin/bash',
       shellCwd: '/work',
@@ -136,6 +200,7 @@ describe('shell prompt readiness probe', () => {
     resolveInstalledExecutablePaths.mockResolvedValue(['/bin/bash', '/opt/homebrew/bin/bash'])
     const onPromptReady = vi.fn()
     const probe = createShellPromptReadinessProbe({
+      ptyPid: 41,
       slavePath: '/dev/ttys048',
       shellPath: '/bin/bash',
       getShellPid: () => 42,
@@ -153,6 +218,7 @@ describe('shell prompt readiness probe', () => {
     lineEditorProbe.mockResolvedValue('line-editor')
     processReadinessProbe.mockResolvedValue({ executablePath: '/bin/zsh', foreground: true })
     const probe = createShellPromptReadinessProbe({
+      ptyPid: 41,
       slavePath: '/dev/ttys048',
       shellPath: '/bin/zsh',
       getShellPid: () => 42,
@@ -178,6 +244,7 @@ describe('shell prompt readiness probe', () => {
     )
     const onPromptReady = vi.fn()
     const probe = createShellPromptReadinessProbe({
+      ptyPid: 41,
       slavePath: '/dev/ttys048',
       shellPath: '/bin/bash',
       getShellPid: () => 42,
@@ -196,6 +263,7 @@ describe('shell prompt readiness probe', () => {
 
   it('does no external work when the ready marker cancels the settle window', async () => {
     const probe = createShellPromptReadinessProbe({
+      ptyPid: 41,
       slavePath: '/dev/ttys048',
       shellPath: '/bin/zsh',
       getShellPid: () => 42,
@@ -219,6 +287,7 @@ describe('shell prompt readiness probe', () => {
     processReadinessProbe.mockResolvedValue({ executablePath: '/bin/zsh', foreground: true })
     const onPromptReady = vi.fn()
     const probe = createShellPromptReadinessProbe({
+      ptyPid: 41,
       slavePath: '/dev/ttys048',
       shellPath: '/bin/zsh',
       getShellPid: () => 42,
@@ -242,6 +311,7 @@ describe('shell prompt readiness probe', () => {
       () => new Promise((resolve) => (pending.resolve = resolve as (value: string) => void))
     )
     const probe = createShellPromptReadinessProbe({
+      ptyPid: 41,
       slavePath: '/dev/ttys048',
       shellPath: '/bin/zsh',
       getShellPid: () => 42,
@@ -267,6 +337,7 @@ describe('shell prompt readiness probe', () => {
     )
     const onPromptReady = vi.fn()
     const probe = createShellPromptReadinessProbe({
+      ptyPid: 41,
       slavePath: '/dev/ttys048',
       shellPath: '/bin/zsh',
       getShellPid: () => 42,
@@ -285,6 +356,7 @@ describe('shell prompt readiness probe', () => {
 
   it('ignores slow startup output until the line editor enables its protocol', async () => {
     const probe = createShellPromptReadinessProbe({
+      ptyPid: 41,
       slavePath: '/dev/ttys048',
       shellPath: '/bin/zsh',
       getShellPid: () => 42,
@@ -308,6 +380,7 @@ describe('shell prompt readiness probe', () => {
       foreground: true
     })
     const probe = createShellPromptReadinessProbe({
+      ptyPid: 41,
       slavePath: '/dev/ttys048',
       shellPath: '/bin/zsh',
       getShellPid: () => 42,

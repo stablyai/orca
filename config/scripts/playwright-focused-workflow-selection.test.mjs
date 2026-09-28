@@ -39,7 +39,7 @@ function focusedArguments() {
       assertGoldenPlatformCommands(workflow)
     }
     for (const job of Object.values(workflow.jobs)) {
-      for (const step of job.steps) {
+      for (const step of job.steps ?? []) {
         for (const match of (step.run ?? '').matchAll(/\bpnpm run test:e2e\s+([^\n]+)/g)) {
           commands.push(match[1].trim().split(/\s+/))
         }

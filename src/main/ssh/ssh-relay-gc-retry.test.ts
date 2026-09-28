@@ -25,8 +25,8 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
     error.sshChannelCloseConfirmed === false,
   execCommand: vi.fn()
 }))
-vi.mock('./ssh-remote-node-resolution', () => ({
-  resolveRemoteNodePath: vi.fn().mockResolvedValue('/usr/bin/node')
+vi.mock('./ssh-relay-bun-runtime', () => ({
+  ensureRemoteRelayBunRuntime: vi.fn().mockResolvedValue('/usr/bin/node')
 }))
 vi.mock('./ssh-relay-versioned-install', () => ({
   readLocalFullVersion: vi.fn().mockReturnValue('0.1.0+gc-retry'),
@@ -280,7 +280,6 @@ describe('relay GC deploy retry', () => {
       expect(deployed.transport).toBeDefined()
       expect(release).toHaveBeenCalledOnce()
       const execCount = vi.mocked(execCommand).mock.calls.length
-      await deployed.prepareOpenCodeRuntime?.(new AbortController().signal)
       await new Promise<void>((resolve) => setImmediate(resolve))
       expect(execCommand).toHaveBeenCalledTimes(execCount)
     }

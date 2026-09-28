@@ -90,6 +90,7 @@ export class SessionShellReadyBarrier {
       return
     }
     this.promptReadinessProbe = createShellPromptReadinessProbe({
+      ptyPid: this.deps.subprocess.pid,
       slavePath: this.deps.subprocess.slavePath,
       shellPath: this.deps.subprocess.shellPath,
       shellCwd: this.deps.subprocess.shellCwd,

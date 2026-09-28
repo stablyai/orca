@@ -37,7 +37,22 @@ const EXPECTED_MATRIX = {
   [`${RELEASE_WORKFLOW}#skill-sharing-linux-floor-release-gate`]: { contents: 'read' },
   [`${RELEASE_WORKFLOW}#skill-sharing-release-gate`]: { contents: 'read' },
   [`${RELEASE_WORKFLOW}#terminal-rendering-golden`]: { contents: 'read' },
-  [`${RELEASE_WORKFLOW}#terminal-rendering-release-evidence`]: { contents: 'read' }
+  [`${RELEASE_WORKFLOW}#terminal-rendering-release-evidence`]: { contents: 'read' },
+  '.github/workflows/e2e.yml#windows_watcher': { contents: 'read' },
+  '.github/workflows/e2e.yml#windows_watcher -> .github/workflows/windows-watcher-artifacts.yml#source':
+    { contents: 'read' },
+  '.github/workflows/e2e.yml#windows_watcher -> .github/workflows/windows-watcher-artifacts.yml#build':
+    { contents: 'read' },
+  '.github/workflows/release-cut.yml#windows_watcher': { contents: 'read' },
+  '.github/workflows/release-cut.yml#windows_watcher -> .github/workflows/windows-watcher-artifacts.yml#source':
+    { contents: 'read' },
+  '.github/workflows/release-cut.yml#windows_watcher -> .github/workflows/windows-watcher-artifacts.yml#build':
+    { contents: 'read' },
+  '.github/workflows/release-mac-build.yml#windows_watcher': { contents: 'read' },
+  '.github/workflows/release-mac-build.yml#windows_watcher -> .github/workflows/windows-watcher-artifacts.yml#source':
+    { contents: 'read' },
+  '.github/workflows/release-mac-build.yml#windows_watcher -> .github/workflows/windows-watcher-artifacts.yml#build':
+    { contents: 'read' }
 }
 const PUBLISH_TAG_JOBS = new Set(['build', 'create-release'])
 const RELEASE_TAG_EXECUTION_JOBS = [

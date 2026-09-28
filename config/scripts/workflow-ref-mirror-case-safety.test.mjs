@@ -13,8 +13,8 @@ const readWorkflow = (relativePath) => parse(readFileSync(join(projectDir, relat
 // Every step that mirrors this repo's whole ref namespace onto a runner disk to
 // prove a commit is reachable from a branch or tag before signing it.
 const REF_MIRRORS = [
-  ['.github/workflows/adhoc-mac-build.yml', 'build-adhoc-mac', 'Vet the requested ref'],
-  ['.github/workflows/dev-channel-win-build.yml', 'build-win', 'Vet the requested inputs']
+  ['.github/workflows/adhoc-mac-build.yml', 'vet_ref', 'Vet the requested ref'],
+  ['.github/workflows/dev-channel-win-build.yml', 'vet_ref', 'Vet the requested inputs']
 ]
 
 describe('ref-mirroring vet steps', () => {
@@ -103,7 +103,11 @@ describe('ref-mirroring vet steps', () => {
     const steps = readWorkflow('.github/workflows/adhoc-mac-build.yml').jobs['build-adhoc-mac']
       .steps
     const checkout = steps.find((step) => step.name === 'Checkout the requested ref')
-    expect(checkout.with.ref).toBe('${{ steps.vetted.outputs.sha }}')
+    expect(checkout.with.ref).toBe('${{ needs.vet_ref.outputs.sha }}')
+    const jobs = readWorkflow('.github/workflows/adhoc-mac-build.yml').jobs
+    expect(jobs['build-adhoc-mac'].needs).toContain('vet_ref')
+    expect(jobs.windows_watcher.needs).toBe('vet_ref')
+    expect(jobs.vet_ref.outputs.sha).toBe('${{ steps.vetted.outputs.sha }}')
     expect(checkout.with['fetch-depth']).toBe(1)
     expect(checkout.with['persist-credentials']).toBe(false)
   })

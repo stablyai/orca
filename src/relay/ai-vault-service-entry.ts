@@ -1,3 +1,7 @@
+import {
+  collectBunVaultScanGarbage,
+  startBunVaultMemoryMonitor
+} from '../main/ai-vault/bun-vault-memory-budget'
 import { LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
 import { scanRemoteAiVaultSessions } from '../main/ai-vault/remote-session-scanner'
 import { readAiVaultSessionTitlesFromFiles } from '../main/ai-vault/session-title-file-reader'
@@ -15,6 +19,8 @@ import {
 if (!process.send) {
   throw new Error('Relay AI Vault service requires a parent IPC channel.')
 }
+
+startBunVaultMemoryMonitor()
 
 const controllers = new Map<number, AbortController>()
 const cancelled = new Set<number>()
@@ -46,6 +52,7 @@ async function execute(request: RelayAiVaultServiceRequest): Promise<void> {
       send({ type: 'result', id: request.id, operation: 'titles', value })
       return
     }
+    collectBunVaultScanGarbage()
     const value = await scanRemoteAiVaultSessions({
       provider,
       executionHostId: LOCAL_EXECUTION_HOST_ID,

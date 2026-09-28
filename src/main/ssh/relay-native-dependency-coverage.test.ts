@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { build } from 'esbuild'
+import { build, transformSync } from 'esbuild'
 import { describe, expect, it } from 'vitest'
 import { RELAY_NATIVE_DEPS } from './ssh-relay-deploy'
 
@@ -64,11 +64,11 @@ async function relayReachableSources(): Promise<string[]> {
     entryPoints: [join(REPO_ROOT, 'src', 'relay', 'relay.ts')],
     bundle: true,
     platform: 'node',
-    target: 'node18',
+    target: 'es2024',
     format: 'cjs',
     write: false,
     metafile: true,
-    external: ['node-pty', '@parcel/watcher', 'electron'],
+    external: ['@parcel/watcher', 'electron', 'bun:ffi'],
     define: { 'process.env.NODE_ENV': '"production"' }
   })
   return Object.keys(result.metafile.inputs).filter((input) => !input.includes('node_modules'))
@@ -77,7 +77,16 @@ async function relayReachableSources(): Promise<string[]> {
 describe('relay native dependency coverage', () => {
   it('installs every native addon the relay bundle imports', async () => {
     const sources = await relayReachableSources()
-    const text = sources.map((file) => readFileSync(join(REPO_ROOT, file), 'utf8')).join('\n')
+    // Type-only PTY interfaces do not require installing a native runtime addon.
+    const text = sources
+      .map(
+        (file) =>
+          transformSync(readFileSync(join(REPO_ROOT, file), 'utf8'), {
+            loader: 'ts',
+            legalComments: 'none'
+          }).code
+      )
+      .join('\n')
 
     const imported = nativeDependencyNames().filter(
       (name) => text.includes(`'${name}'`) || text.includes(`"${name}"`)

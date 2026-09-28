@@ -68,7 +68,6 @@ const PROBE_BEGIN = 'ORCA-INCUMBENT-BEGIN'
 const PROBE_END = 'ORCA-INCUMBENT-END'
 const CONNECT_PROBE_TIMEOUT_MS = 1000
 
-// Why ES5 syntax: nodePath may be a host-resolved system node, not the bundled one.
 const CONNECT_PROBE_JS = [
   'var s=require("net").connect(process.argv[1]);',
   'var done=false;',
@@ -97,10 +96,12 @@ export function relayEndpointIncumbentProbeCommand(nodePath: string, sockPath: s
   return [
     `sock=${sock}`,
     `node=${node}`,
+    'runtime_flags=',
+    'case "$node" in */bun|*/bun-runtime) runtime_flags="--no-env-file --config=/dev/null --no-install";; esac',
     `printf '%s\\n' ${shellEscape(PROBE_BEGIN)}`,
     'if [ -S "$sock" ]; then',
     "  printf 'PRESENT=yes\\n'",
-    `  listen=$("$node" -e ${shellEscape(CONNECT_PROBE_JS)} "$sock" 2>/dev/null) || listen=unknown`,
+    `  listen=$("$node" $runtime_flags -e ${shellEscape(CONNECT_PROBE_JS)} "$sock" 2>/dev/null) || listen=unknown`,
     '  [ -n "$listen" ] || listen=unknown',
     'else',
     "  printf 'PRESENT=no\\n'",
@@ -109,7 +110,7 @@ export function relayEndpointIncumbentProbeCommand(nodePath: string, sockPath: s
     'printf \'LISTEN=%s\\n\' "$listen"',
     'if command -v lsof >/dev/null 2>&1; then',
     // Why -a: lsof ORs selectors without it and reports unrelated unix-socket holders (#8762).
-    `  lsof_result=$("$node" -e ${shellEscape(RELAY_LSOF_PROBE_JS)} "$sock" 2>/dev/null) || lsof_result=unavailable`,
+    `  lsof_result=$("$node" $runtime_flags -e ${shellEscape(RELAY_LSOF_PROBE_JS)} "$sock" 2>/dev/null) || lsof_result=unavailable`,
     '  case "$lsof_result" in',
     '    cleanup-unconfirmed*)',
     "      printf 'PROBE_CLEANUP=unconfirmed\\n'",

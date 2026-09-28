@@ -12,6 +12,14 @@ permissions:
   contents: read
 
 jobs:
+  windows_watcher:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/windows-watcher-artifacts.yml
+    with:
+      ref: ${{ github.ref }}
+      artifact_prefix: windows-watcher-terminal-ime-e2e
+
   linux-x11:
     name: Linux X11 terminal IME
     runs-on: ubuntu-22.04
@@ -72,6 +80,7 @@ jobs:
           if-no-files-found: ignore
 
   linux-wayland:
+    needs: windows_watcher
     name: Linux Wayland Hangul terminating digit
     runs-on: ubuntu-22.04
     timeout-minutes: 25
@@ -88,6 +97,14 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: electron
+      - name: Load qualified Windows watchers
+        if: hashFiles('config/scripts/windows-watcher-artifact.mjs') != ''
+        uses: actions/download-artifact@v8
+        with:
+          pattern: windows-watcher-terminal-ime-e2e-*
+          merge-multiple: true
+          path: .build/windows-watcher
+
       - name: Build Electron app for E2E
         env:
           VITE_EXPOSE_STORE: 'true'

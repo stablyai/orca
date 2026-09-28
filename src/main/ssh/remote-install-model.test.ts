@@ -103,7 +103,14 @@ describe('GC ownership — each model collects only its own namespace', () => {
   })
 
   it('claims nothing it did not create', () => {
-    for (const name of ['.orca-remote', 'orcad', 'relayish-0.1.0', 'orcad-notaversion', 'node']) {
+    for (const name of [
+      '.orca-remote',
+      'orcad',
+      'relayish-0.1.0',
+      'orcad-notaversion',
+      'node',
+      'runtimes'
+    ]) {
       expect(remoteInstallDirOwner(name)).toBeNull()
       expect(remoteInstallGcPermits(RELAY_INSTALL_MODEL, name)).toBe(false)
       expect(remoteInstallGcPermits(ORCAD_INSTALL_MODEL, name)).toBe(false)

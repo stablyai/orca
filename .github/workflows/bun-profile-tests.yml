@@ -16,6 +16,8 @@ on:
       - '.pnpmfile.cjs'
       - '.github/actions/install-node-dependencies/**'
       - '.github/workflows/bun-profile-tests.yml'
+      - '.github/workflows/windows-watcher-artifacts.yml'
+      - '.github/actions/load-windows-watcher-artifacts/**'
   workflow_dispatch:
 
 permissions:
@@ -49,10 +51,17 @@ jobs:
             echo 'should_run=true' >> "$GITHUB_OUTPUT"
           fi
 
-  persistence:
+  windows_watcher:
+    permissions:
+      contents: read
     needs: changes
-    # Missing/failed detection runs the full matrix; manual runs remain unconditional.
     if: ${{ !cancelled() && needs.changes.outputs.should_run != 'false' }}
+    uses: ./.github/workflows/windows-watcher-artifacts.yml
+
+  persistence:
+    needs: [changes, windows_watcher]
+    # Missing/failed detection runs the full matrix; manual runs remain unconditional.
+    if: ${{ !cancelled() && needs.changes.outputs.should_run != 'false' && needs.windows_watcher.result == 'success' }}
     strategy:
       fail-fast: false
       matrix:
@@ -65,17 +74,57 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
+      - uses: ./.github/actions/load-windows-watcher-artifacts
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: ${{ runner.os == 'Windows' && 'node' || 'none' }}
       # build:orcad reuses the host addon validated by native-runtime preparation.
       - run: pnpm build:orcad
       - run: pnpm test:bun:profile --artifact
+      - name: Verify packaged headless companion operations
+        run: node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts config/scripts/orcad-companion-artifacts.test.mjs
+
+  owned_companions:
+    needs: [changes, windows_watcher]
+    if: ${{ !cancelled() && needs.changes.outputs.should_run != 'false' && needs.windows_watcher.result == 'success' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04-arm, macos-14, macos-15-intel, windows-2022, windows-11-arm]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/load-windows-watcher-artifacts
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: ${{ runner.os == 'Windows' && 'node' || 'none' }}
+      - name: Verify bundled CLI and companion process boundaries
+        run: node config/scripts/run-bundled-runtime-tests.mjs
+
+  cpu_emulator:
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.should_run != 'false' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      # QEMU 4.2 crashes in Bun's module loader even with JIT disabled and AVX enabled.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-user-static
+      - uses: actions/upload-artifact@v7
+        with:
+          name: bun-cpu-emulator
+          path: /usr/bin/qemu-x86_64-static
+          if-no-files-found: error
+          retention-days: 1
 
   linux_glibc_floor:
-    needs: changes
+    needs: [changes, cpu_emulator]
     # Missing/failed detection runs the full matrix; manual runs remain unconditional.
-    if: ${{ !cancelled() && needs.changes.outputs.should_run != 'false' }}
+    if: ${{ !cancelled() && needs.changes.outputs.should_run != 'false' && needs.cpu_emulator.result == 'success' }}
     strategy:
       fail-fast: false
       matrix:
@@ -91,11 +140,24 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
+      - uses: actions/download-artifact@v8
+        if: runner.arch == 'X64'
+        with:
+          name: bun-cpu-emulator
+          path: .build/cpu-emulator
       - name: Trust the checked-out workspace
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - uses: ./.github/actions/install-node-dependencies
       - run: pnpm build:orcad
+      - name: Verify pinned Bun without AVX or AVX2
+        if: runner.arch == 'X64'
+        run: |
+          chmod +x .build/cpu-emulator/qemu-x86_64-static
+          .build/cpu-emulator/qemu-x86_64-static --version
+          timeout 120 .build/cpu-emulator/qemu-x86_64-static -cpu Nehalem out/orcad/bun-runtime config/scripts/bun-cpu-baseline-smoke.mjs
       - run: pnpm test:bun:profile --artifact
+      - name: Verify packaged headless companion operations
+        run: node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts config/scripts/orcad-companion-artifacts.test.mjs
 
   linux_musl:
     needs: changes
@@ -125,5 +187,10 @@ jobs:
           npm install -g "$(node -p "require('./package.json').packageManager.split('+')[0]")"
           pnpm install --frozen-lockfile --ignore-scripts
           pnpm build:orcad
+          if [ "$(uname -m)" = x86_64 ]; then
+            apk add --no-cache qemu-x86_64
+            timeout 120 qemu-x86_64 -cpu Nehalem out/orcad/bun-runtime config/scripts/bun-cpu-baseline-smoke.mjs
+          fi
           pnpm test:bun:profile --artifact
+          node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts config/scripts/orcad-companion-artifacts.test.mjs
           BUN_QUALIFICATION

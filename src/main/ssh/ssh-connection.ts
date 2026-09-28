@@ -1629,7 +1629,7 @@ export class SshConnection {
       if (this.disposed || this.client !== client) {
         return
       }
-      this.client = null
+      this.closeTransportsForReconnect()
       this.scheduleReconnect()
     }
     client.on('end', onDrop)
@@ -1639,8 +1639,7 @@ export class SshConnection {
         return
       }
       console.warn(`[ssh] Connection error for ${this.target.label}: ${err.message}`)
-      this.client = null
-      this.scheduleReconnect()
+      onDrop()
     })
   }
 

@@ -6,7 +6,7 @@ import {
   sameSessionSearchRoots,
   type SessionSearchScanRoots
 } from '../ai-vault-search/session-search-scan-roots'
-import { sessionSearchSqliteAvailable } from '../ai-vault-search/session-search-sqlite-support'
+import { isSqliteAvailable } from '../sqlite/sync-database'
 import type {
   AiVaultServiceRequest,
   AiVaultServiceResultValue,
@@ -35,7 +35,7 @@ export class SessionScannerServiceSearch {
 
   /** Applied at init and again on every settings change; both are close-and-construct. */
   apply(init: AiVaultSessionSearchInit): void {
-    if (!sessionSearchSqliteAvailable()) {
+    if (!isSqliteAvailable()) {
       return
     }
     if (this.instance && this.databasePath !== init.databasePath) {

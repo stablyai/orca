@@ -81,36 +81,13 @@ env:
   ADHOC_RETAIN_DAYS: 30
 
 jobs:
-  build-adhoc-mac:
+  vet_ref:
     if: github.repository == 'stablyai/orca'
-    # Why an environment: it gives the signing/notary/App secrets somewhere to
-    # live that a stale copy of this workflow on an old branch cannot reach.
-    # Referencing it is a no-op until repo settings give it teeth; the intended
-    # follow-up is to move MAC_CERTS, MAC_CERTS_PASSWORD, APPLE_ID,
-    # APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID, HOURLY_RELEASE_APP_ID, and
-    # HOURLY_RELEASE_APP_PRIVATE_KEY into it, then pin its deployment branch
-    # policy to main so only main's copy of this file can read them.
-    environment: adhoc-mac-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
-      tag: ${{ steps.release.outputs.tag }}
-      version: ${{ steps.adhoc.outputs.version }}
-      head_sha: ${{ steps.adhoc.outputs.head_sha }}
-      published: ${{ steps.publish_live.outcome == 'success' && 'true' || 'false' }}
-    runs-on: blacksmith-6vcpu-macos-15
-    # Why 150: it must exceed the worst case the retry budgets below can produce
-    # (install 3x10 + publish 2x45 = 120, plus ~25 for checkout/build/verify), or
-    # the job is killed mid-retry and no cleanup step runs at all.
-    timeout-minutes: 150
-    env:
-      NODE_OPTIONS: --max-old-space-size=4096
+      sha: ${{ steps.vetted.outputs.sha }}
     steps:
-      # Why vet before checkout: everything after this step runs the checked-out
-      # code with release signing credentials in reach. Branches and tags of this
-      # repo are the intended audience; refs/pull/* would smuggle in fork code,
-      # and a raw SHA is only accepted when some branch or tag of this repo can
-      # actually reach it. Resolving to a pinned SHA here also means the commit
-      # that was vetted is the commit that gets checked out — a push to the
-      # branch between the two steps cannot swap it.
       - name: Vet the requested ref
         id: vetted
         shell: bash
@@ -158,6 +135,48 @@ jobs:
           echo "Vetted $REQUESTED_REF -> $sha"
           echo "sha=$sha" >>"$GITHUB_OUTPUT"
 
+  windows_watcher:
+    permissions:
+      contents: read
+    needs: vet_ref
+    if: github.repository == 'stablyai/orca'
+    uses: ./.github/workflows/windows-watcher-artifacts.yml
+    with:
+      ref: ${{ needs.vet_ref.outputs.sha }}
+      artifact_prefix: windows-watcher-adhoc-mac-build
+
+  build-adhoc-mac:
+    needs: [vet_ref, windows_watcher]
+    if: github.repository == 'stablyai/orca'
+    # Why an environment: it gives the signing/notary/App secrets somewhere to
+    # live that a stale copy of this workflow on an old branch cannot reach.
+    # Referencing it is a no-op until repo settings give it teeth; the intended
+    # follow-up is to move MAC_CERTS, MAC_CERTS_PASSWORD, APPLE_ID,
+    # APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID, HOURLY_RELEASE_APP_ID, and
+    # HOURLY_RELEASE_APP_PRIVATE_KEY into it, then pin its deployment branch
+    # policy to main so only main's copy of this file can read them.
+    environment: adhoc-mac-build
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.adhoc.outputs.version }}
+      head_sha: ${{ steps.adhoc.outputs.head_sha }}
+      published: ${{ steps.publish_live.outcome == 'success' && 'true' || 'false' }}
+    runs-on: blacksmith-6vcpu-macos-15
+    # Why 150: it must exceed the worst case the retry budgets below can produce
+    # (install 3x10 + publish 2x45 = 120, plus ~25 for checkout/build/verify), or
+    # the job is killed mid-retry and no cleanup step runs at all.
+    timeout-minutes: 150
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      # Why vet before checkout: everything after this step runs the checked-out
+      # code with release signing credentials in reach. Branches and tags of this
+      # repo are the intended audience; refs/pull/* would smuggle in fork code,
+      # and a raw SHA is only accepted when some branch or tag of this repo can
+      # actually reach it. Resolving to a pinned SHA here also means the commit
+      # that was vetted is the commit that gets checked out — a push to the
+      # branch between the two steps cannot swap it.
+
       - name: Checkout the requested ref
         uses: actions/checkout@v6
         with:
@@ -165,7 +184,7 @@ jobs:
           # build code that has not landed, and the workflow definition itself
           # always comes from the dispatch ref — naming the branch here instead
           # applies main's current copy of this file to an arbitrary branch.
-          ref: ${{ steps.vetted.outputs.sha }}
+          ref: ${{ needs.vet_ref.outputs.sha }}
           # Version helpers only read HEAD; published versions come from the release API.
           fetch-depth: 1
           # This job only reads stablyai/orca and never pushes; every write goes
@@ -258,6 +277,14 @@ jobs:
             exit 1
           fi
           cat "$RUNNER_TEMP/adhoc-identity.txt" >>"$GITHUB_OUTPUT"
+
+      - name: Load qualified Windows watchers
+        if: hashFiles('config/scripts/windows-watcher-artifact.mjs') != ''
+        uses: actions/download-artifact@v8
+        with:
+          pattern: windows-watcher-adhoc-mac-build-*
+          merge-multiple: true
+          path: .build/windows-watcher
 
       - name: Build app
         run: pnpm build:release

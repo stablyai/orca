@@ -2,9 +2,8 @@
  * Environments for the AI Vault service children.
  *
  * Deliberately allowlists, never `...process.env` (the plugin worker takes the
- * same stance): the children are forked with a heap cap and no loader, and an
- * ambient NODE_OPTIONS would raise the cap or `--require` code straight into
- * them. Shell-exported secrets have no business in a transcript reader either.
+ * same stance): ambient runtime options could override memory policy or
+ * `--require` code straight into a child. Shell-exported secrets have no business in a transcript reader either.
  */
 
 // What Node and libuv need to start and resolve a home, temp dir and locale.

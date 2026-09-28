@@ -15,6 +15,12 @@ describe('resolveAiVaultServiceEntryPath', () => {
     )
   })
 
+  it('uses the adjacent service in a packaged headless installation', () => {
+    const root = join(process.cwd(), 'orcad')
+    const adjacent = join(root, 'session-scanner-service-entry.js')
+    expect(resolveAiVaultServiceEntryPath(root, true, (path) => path === adjacent)).toBe(adjacent)
+  })
+
   it('uses the nested output from a project root', () => {
     expect(resolveAiVaultServiceEntryPath(process.cwd(), false, () => false)).toBe(
       join(process.cwd(), 'out', 'main', 'session-scanner-service-entry.js')

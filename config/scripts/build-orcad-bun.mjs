@@ -81,7 +81,7 @@ function verifyRuntime(path) {
   }
 }
 
-async function materializeRuntime(target, outputPath) {
+export async function materializeRuntime(target, outputPath) {
   const asset = ORCAD_BUN_RELEASE_ASSETS[target]
   if (!asset) {
     throw new Error(`Unsupported Bun target: ${target}`)

@@ -15,12 +15,14 @@ import {
   isReapableRelayHusk
 } from './ssh-relay-endpoint-incumbent'
 
-async function probe(script: string, listening = false) {
+async function probe(script: string, listening = false, runtime = process.execPath) {
   const dir = mkdtempSync(join(tmpdir(), 'orca-incumbent-'))
   const socket = join(dir, 'socket with spaces.sock')
   const server = createServer((s) => s.end())
   const pidFile = join(dir, 'probe.pid')
   try {
+    writeFileSync(join(dir, 'bunfig.toml'), 'preload=["./preload.cjs"]\n')
+    writeFileSync(join(dir, 'preload.cjs'), 'throw new Error("Workspace preload executed")')
     writeFileSync(join(dir, 'lsof'), `#!/bin/sh\n${script}`, { mode: 0o755 })
     if (listening) {
       await new Promise<void>((resolve, reject) => {
@@ -31,7 +33,8 @@ async function probe(script: string, listening = false) {
     const start = performance.now()
     const result = await runProcess({
       program: '/bin/sh',
-      args: ['-c', relayEndpointIncumbentProbeCommand(process.execPath, socket)],
+      cwd: dir,
+      args: ['-c', relayEndpointIncumbentProbeCommand(runtime, socket)],
       env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, FIXTURE_PID: pidFile },
       timeoutMs: 12000,
       detached: true,
@@ -66,6 +69,15 @@ async function probe(script: string, listening = false) {
   }
 }
 describe.skipIf(process.platform === 'win32')('real generated incumbent probe', () => {
+  it.skipIf(!process.env.BUN_EXECUTABLE)(
+    'ignores workspace preload during a Bun socket probe',
+    async () => {
+      const p = await probe('exit 1\n', true, process.env.BUN_EXECUTABLE)
+      expect(p.result.timedOut).toBe(false)
+      expect(p.result.code).toBe(0)
+      expect(p.verdict).toMatchObject({ verdict: 'live', evidence: 'accepted-connection' })
+    }
+  )
   it('bounds hung lsof and preserves live connect evidence', async () => {
     const p = await probe('echo $$ > "$FIXTURE_PID"\nexec sleep 60\n', true)
     expect(p.result.timedOut).toBe(false)

@@ -16,13 +16,13 @@ const { mockPtySpawn, mockPtyInstance } = vi.hoisted(() => ({
   }
 }))
 
-vi.mock('node-pty', () => ({ spawn: mockPtySpawn }))
+vi.mock('./relay-pty-runtime', () => ({ bunRelayPtyModule: { spawn: mockPtySpawn } }))
 
 import { PtyHandler } from './pty-handler'
 import type { RelayDispatcher } from './dispatcher'
 
 // Mirrors the relay drain constants; kept local so a constant change fails this oracle loudly.
-const CHUNK_CHARS = 16 * 1024
+const CHUNK_CHARS = 64 * 1024
 const MAX_WRITES = 2
 const BATCH_INTERVAL_MS = 8
 const DRAIN_CONTINUE_MS = 1
@@ -31,7 +31,7 @@ type PendingOutput = { data: string; rawLength?: number; seq?: number }
 type DataEvent = { id: string; data: string; seq?: number; rawLength?: number }
 
 /**
- * The pre-optimization implementation, verbatim in behavior: snapshot the whole pending map each
+ * The original full-map drain with the current slice limit: snapshot the whole pending map each
  * tick, then consume up to MAX_WRITES from that frozen list. The bounded-prefix capture must match
  * it event-for-event — including which entry leads each tick.
  */
@@ -237,7 +237,7 @@ describe('relay PTY output drain — differential vs the pre-optimization snapsh
     const first = 'x'.repeat(CHUNK_CHARS)
     dataCallbacks.get(id)!(`${first}tail`)
 
-    await vi.advanceTimersByTimeAsync(BATCH_INTERVAL_MS)
+    await vi.advanceTimersByTimeAsync(DRAIN_CONTINUE_MS)
     // Iterating the live map lazily would pick the re-queued remainder up again in this same tick.
     expect(recordedDataEvents()).toEqual([{ id, data: first }])
 
@@ -254,7 +254,7 @@ describe('relay PTY output drain — differential vs the pre-optimization snapsh
       dataCallbacks.get(id)!('a'.repeat(CHUNK_CHARS + 4))
     }
 
-    await vi.advanceTimersByTimeAsync(BATCH_INTERVAL_MS)
+    await vi.advanceTimersByTimeAsync(DRAIN_CONTINUE_MS)
     // First tick writes the two head PTYs only.
     expect(recordedDataEvents().map((event) => event.id)).toEqual([ids[0], ids[1]])
 

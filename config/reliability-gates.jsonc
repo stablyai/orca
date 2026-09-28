@@ -2502,7 +2502,11 @@
       "invariant": "Shell startup scanning preserves every non-Orca output byte in order across arbitrary PTY chunk boundaries. Bash scalar and supported array PROMPT_COMMAND values preserve user bytes, hook order, and foreground exit status while emitting exactly one OSC 133 A/C/D lifecycle without syntax errors. Before user startup files run, the wrapper publishes its shell PID. If a later exec discards the ready marker, proof-based recovery releases queued startup input only after the launched shell's actual executable image with that exact PID owns the PTY foreground, emits its post-hook line-editor enable sequence, and exposes zle/readline termios; startup reads, line-init hooks, child foreground processes, and non-shell readline replacements cannot trigger that proof. The existing bounded compatibility timeout may enqueue input without proof, but must not publish readiness, lose or duplicate that input across reconnect, or execute it before the replacement shell can accept it.",
       "oracle": "Split Fish output immediately after the ready marker and after the following ESC introducer; local and daemon owners must emit the exact ESC [ ? 2004 h bytes and headless xterm must not render literal control text. Run the real generated wrappers under node-pty with disposable zsh, bash, and Fish startup files. Exercise Bash scalar and array PROMPT_COMMAND values with empty, repeated, escaped, whitespace, control-byte, odd-backslash, status-mutating, DEBUG-trap, zoxide, and RHEL-style hooks; require exact A,C,D:0,A,C,D:1,A,C ordering and byte preservation. Plain and exec -a replacement shells must receive one queued command at their first completed line editor without waiting for the 15-second timeout. The identical oracle must time out without the startup identity and prompt fallback. Same-shell reads, child-process reads, a blocking zle-line-init hook, sqlite3, and sqlite3 renamed zsh must not trigger prompt fallback. Relay owner coverage must use the same lossless scanner composition and release through the same prompt contract.",
       "commands": [
+        "node config/scripts/run-bun-profile-tests.mjs src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts src/main/daemon/bash-prompt-command-composition.test.ts src/main/line-editor-ready-output-scanner.test.ts src/main/shell-startup-identity-scanner.test.ts src/main/shell-startup-output-scanner.test.ts src/main/shell-prompt-readiness-probe.test.ts src/shared/pty-slave-line-discipline-echo.test.ts src/shared/shell-process-readiness.test.ts src/main/daemon/session.test.ts src/main/daemon/shell-ready.test.ts src/main/providers/local-pty-shell-ready-marker-scan.test.ts src/main/providers/local-pty-shell-ready-startup-command.test.ts src/main/providers/local-pty-shell-ready-wrapper-generation.test.ts src/main/providers/local-pty-provider-shell-readiness.test.ts src/relay/pty-shell-launch.test.ts src/relay/pty-handler-startup-command-delivery.test.ts",
+        // Historical runner retained for the dated evidence records below.
         "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts src/main/daemon/bash-prompt-command-composition.test.ts src/main/line-editor-ready-output-scanner.test.ts src/main/shell-startup-identity-scanner.test.ts src/main/shell-startup-output-scanner.test.ts src/main/shell-prompt-readiness-probe.test.ts src/shared/pty-slave-line-discipline-echo.test.ts src/shared/shell-process-readiness.test.ts src/main/daemon/session.test.ts src/main/daemon/shell-ready.test.ts src/main/providers/local-pty-shell-ready-marker-scan.test.ts src/main/providers/local-pty-shell-ready-startup-command.test.ts src/main/providers/local-pty-shell-ready-wrapper-generation.test.ts src/main/providers/local-pty-provider-shell-readiness.test.ts src/relay/pty-shell-launch.test.ts src/relay/pty-handler-startup-command-delivery.test.ts",
+        "node config/scripts/run-bun-profile-tests.mjs src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts src/main/line-editor-ready-output-scanner.test.ts src/main/shell-startup-identity-scanner.test.ts src/main/shell-startup-output-scanner.test.ts src/main/shell-prompt-readiness-probe.test.ts src/shared/pty-slave-line-discipline-echo.test.ts src/shared/shell-process-readiness.test.ts src/main/daemon/session.test.ts src/main/daemon/shell-ready.test.ts src/main/providers/local-pty-shell-ready-marker-scan.test.ts src/main/providers/local-pty-shell-ready-startup-command.test.ts src/main/providers/local-pty-shell-ready-wrapper-generation.test.ts src/main/providers/local-pty-provider-shell-readiness.test.ts src/relay/pty-shell-launch.test.ts src/relay/pty-handler-startup-command-delivery.test.ts",
+        // Historical runner retained for the dated evidence records below.
         "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts src/main/line-editor-ready-output-scanner.test.ts src/main/shell-startup-identity-scanner.test.ts src/main/shell-startup-output-scanner.test.ts src/main/shell-prompt-readiness-probe.test.ts src/shared/pty-slave-line-discipline-echo.test.ts src/shared/shell-process-readiness.test.ts src/main/daemon/session.test.ts src/main/daemon/shell-ready.test.ts src/main/providers/local-pty-shell-ready-marker-scan.test.ts src/main/providers/local-pty-shell-ready-startup-command.test.ts src/main/providers/local-pty-shell-ready-wrapper-generation.test.ts src/main/providers/local-pty-provider-shell-readiness.test.ts src/relay/pty-shell-launch.test.ts src/relay/pty-handler-startup-command-delivery.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 src/main/daemon/shell-ready.test.ts src/main/shell-startup-output-scanner.test.ts",
         "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-startup-exec-readiness.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
@@ -19493,8 +19497,8 @@
       "demotionRule": "Keep experimental or demote if any case terminates on a signal, the preconditions stop holding on the CI runner, or an assertion can be satisfied by anything other than the command's own output."
     },
     {
-      "id": "ssh-managed-hooks.node18-runtime-compatibility",
-      "title": "SSH managed-hook companions load and install hooks on Node 18",
+      "id": "ssh-managed-hooks.bundled-runtime-compatibility",
+      "title": "SSH managed-hook companions load and install hooks on pinned Bun",
       "maturity": "experimental",
       "protection": "partial",
       "owner": "agent-hooks",
@@ -19508,43 +19512,42 @@
       "providers": ["ssh"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["ssh"],
-      "coverageNotes": "A real Node 18 process loads every platform's built companion and runs the bundled Codex and Claude installers against an isolated temporary home. The six artifacts share one platform-neutral source bundle; live SSH transport and physical remote hosts remain uncollected.",
+      "coverageNotes": "A real pinned Bun process loads every platform's built companion and runs the bundled Codex and Claude installers against an isolated temporary home. The six artifacts share one platform-neutral source bundle; live SSH transport and physical remote hosts remain uncollected.",
       "motivatingLinks": ["https://github.com/stablyai/orca/pull/12617"],
-      "invariant": "Every managed-hook companion shipped for Node 18 must load before agent installers execute, and importing desktop-only state inspection must not make unrelated remote installers depend on node:sqlite.",
-      "oracle": "Build all relay artifacts, require each managed-hook-runtime.js in a real Node 18 process, assert its installer export, then install only Codex and Claude into a fresh temporary home. Require two successful installer results, executable hook scripts, and both agent configs to reference their managed scripts without touching the user's home.",
+      "invariant": "Every managed-hook companion shipped for pinned Bun must load before agent installers execute, and importing desktop-only state inspection must not make unrelated remote installers depend on node:sqlite.",
+      "oracle": "Build all relay artifacts, require each managed-hook-runtime.js in a real pinned Bun process, assert its installer export, then install only Codex and Claude into a fresh temporary home. Require two successful installer results, executable hook scripts, and both agent configs to reference their managed scripts without touching the user's home.",
       "commands": [
-        "pnpm run build:relay && npx -y node@18 config/scripts/smoke-managed-hook-runtime-node18.mjs",
+        "node config/scripts/build-relay.mjs && node config/scripts/run-managed-hook-runtime-smoke.mjs",
         "pnpm exec vitest run --config config/vitest.config.ts config/scripts/pr-workflow-parallelism.test.mjs"
       ],
       "testFiles": [
-        "config/scripts/smoke-managed-hook-runtime-node18.mjs",
+        "config/scripts/run-managed-hook-runtime-smoke.mjs",
         "config/scripts/pr-workflow-parallelism.test.mjs"
       ],
       "assertionRefs": [
         {
-          "file": "config/scripts/smoke-managed-hook-runtime-node18.mjs",
+          "file": "config/scripts/run-managed-hook-runtime-smoke.mjs",
           "assertions": [
-            "all six built companions load and export installManagedHooks under Node 18",
-            "Codex and Claude installations both succeed in an isolated home",
-            "both generated configs reference executable managed hook scripts"
+            "runs smoke-managed-hook-runtime-bun.mjs under pinned Bun with a temporary home supplied before launch",
+            "fails unless the child smoke passes all six companion loads and both managed hook installations"
           ]
         },
         {
           "file": "config/scripts/pr-workflow-parallelism.test.mjs",
           "assertions": [
-            "PR CI builds the companions before switching to Node 18 and running the smoke oracle"
+            "PR CI builds the companions before acquiring pinned Bun and running the smoke oracle"
           ]
         }
       ],
       "evidenceRuns": [
         {
-          "date": "2026-08-08",
+          "date": "2026-09-26",
           "runner": "local",
           "platform": "macos",
           "result": "passed",
-          "command": "pnpm run build:relay && npx -y node@18 config/scripts/smoke-managed-hook-runtime-node18.mjs",
-          "durationSeconds": 4,
-          "summary": "All six companions loaded under Node 18.20.8; Codex and Claude produced two successful results, executable hook scripts, and managed configs in a temporary home."
+          "command": "node config/scripts/build-relay.mjs && node config/scripts/run-managed-hook-runtime-smoke.mjs",
+          "durationSeconds": 1.61,
+          "summary": "All six companions loaded under pinned Bun 1.4.2 on macOS ARM64; Codex and Claude installers succeeded with executable hook scripts and managed configs in the asserted isolated home."
         }
       ],
       "runtimeBudget": {
@@ -19556,12 +19559,12 @@
         "evidence": "New deterministic artifact smoke with no timing oracle; CI history is not yet available."
       },
       "redGreenEvidence": {
-        "status": "complete",
-        "evidence": "On main de4f272b31, the same Node 18 require exited 1 before exports with ERR_UNKNOWN_BUILTIN_MODULE for node:sqlite. The candidate passes all six loads and both installers; restoring the eager node:sqlite value import reproduces the original exit."
+        "status": "partial",
+        "evidence": "The predecessor gate reproduced an eager node:sqlite import failure under Node 18. The replacement gate verifies Bun loads and isolated installation; fault injection against the new runtime boundary remains uncollected."
       },
       "performanceBudget": {
         "required": false,
-        "evidence": "The product change replaces one eager built-in import with a constructor-time built-in lookup. It adds no polling, IPC, filesystem scan, subprocess, listener, or recurring work."
+        "evidence": "This gate checks artifact loading and installer correctness. Runtime download, deployment size and startup performance are qualified separately before rollout."
       },
       "promotionCriteria": [
         "Collect 100 consecutive focused CI passes or 14 days of soak history.",
@@ -19572,7 +19575,7 @@
         "The artifact journey uses local filesystem calls rather than a live SSH transport.",
         "Platform-named bundles are loaded on macOS locally; physical Linux and Windows evidence is not yet recorded."
       ],
-      "demotionRule": "Demote if any shipped companion stops loading on Node 18, selected installers mutate outside the isolated home, or the CI lane no longer runs the built artifact with Node 18."
+      "demotionRule": "Demote if any shipped companion stops loading on pinned Bun, selected installers mutate outside the isolated home, or the CI lane no longer runs the built artifact with pinned Bun."
     },
     {
       "id": "terminal-history.daemon-checkpoint-session-isolation",

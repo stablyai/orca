@@ -31,11 +31,22 @@ on:
         default: windows-inner-binaries-zip
 
 jobs:
+  windows_watcher:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/windows-watcher-artifacts.yml
+    with:
+      ref: ${{ github.ref }}
+      artifact_prefix: windows-watcher-windows-signing-rehearsal
+
   rehearse:
+    needs: windows_watcher
     # Why: SignPath origin verification requires GitHub-hosted runners, and
     # windows-2022 matches the real release job's build environment.
     runs-on: windows-2022
     timeout-minutes: 360
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
     permissions:
       actions: read
       contents: read
@@ -87,6 +98,14 @@ jobs:
 
       # Why: rehearsal builds are never published, so the official-build
       # secrets (telemetry key, diagnostics URL) are intentionally omitted.
+      - name: Load qualified Windows watchers
+        if: hashFiles('config/scripts/windows-watcher-artifact.mjs') != ''
+        uses: actions/download-artifact@v8
+        with:
+          pattern: windows-watcher-windows-signing-rehearsal-*
+          merge-multiple: true
+          path: .build/windows-watcher
+
       - name: Build app
         run: pnpm build:release
         env:

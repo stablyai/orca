@@ -70,7 +70,17 @@ env:
   DAILY_RETAIN_COUNT: 30
 
 jobs:
+  windows_watcher:
+    permissions:
+      contents: read
+    if: github.repository == 'stablyai/orca'
+    uses: ./.github/workflows/windows-watcher-artifacts.yml
+    with:
+      ref: main
+      artifact_prefix: windows-watcher-daily-mac-build
+
   build-daily-mac:
+    needs: windows_watcher
     if: github.repository == 'stablyai/orca'
     outputs:
       tag: ${{ steps.release.outputs.tag }}
@@ -89,7 +99,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: main
+          ref: ${{ needs.windows_watcher.outputs.source_sha }}
           # Version helpers only read HEAD; published versions come from git tags.
           fetch-depth: 1
           # Why: this job only reads stablyai/orca and never pushes; every write
@@ -246,6 +256,14 @@ jobs:
             exit 1
           fi
           cat "$RUNNER_TEMP/daily-identity.txt" >>"$GITHUB_OUTPUT"
+
+      - name: Load qualified Windows watchers
+        if: hashFiles('config/scripts/windows-watcher-artifact.mjs') != ''
+        uses: actions/download-artifact@v8
+        with:
+          pattern: windows-watcher-daily-mac-build-*
+          merge-multiple: true
+          path: .build/windows-watcher
 
       - name: Build app
         if: steps.freshness.outputs.should_build == 'true'

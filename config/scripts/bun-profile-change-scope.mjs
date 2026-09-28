@@ -12,7 +12,12 @@ import { bunProfileTestPaths } from './bun-profile-test-paths.mjs'
 
 const ROOT = resolve(import.meta.dirname, '../..')
 const BUILD_SCRIPTS = [
+  'config/scripts/bun-cpu-baseline-smoke.mjs',
   'config/scripts/build-orcad-bun.mjs',
+  'config/scripts/build-windows-watcher-addon.mjs',
+  'config/scripts/windows-watcher-readiness-smoke.mjs',
+  'config/scripts/run-bundled-runtime-tests.mjs',
+  'config/scripts/runtime-serve-terminal-smoke.mjs',
   'config/scripts/build-orcad.mjs',
   'config/scripts/build-windows-process-tree-relay-addon.mjs',
   'config/scripts/run-bun-profile-tests.mjs',
@@ -23,16 +28,20 @@ const BUILD_SCRIPTS = [
 ]
 const ALWAYS_FILES = new Set([
   'package.json',
+  'resources/darwin/bin/orca',
+  'resources/linux/bin/orca-ide',
   'pnpm-lock.yaml',
   'pnpm-workspace.yaml',
   '.npmrc',
   '.pnpmfile.cjs',
   'tsconfig.json',
   '.github/workflows/bun-profile-tests.yml',
+  '.github/workflows/windows-watcher-artifacts.yml',
   'config/scripts/bun-profile-change-scope.mjs',
   'config/scripts/bun-profile-change-scope.test.mjs'
 ])
 const ALWAYS_PREFIXES = [
+  '.github/actions/load-windows-watcher-artifacts/',
   '.github/actions/install-node-dependencies/',
   // These areas also contain worker paths and fixtures opened without an import.
   'src/main/persistence/',
@@ -40,6 +49,17 @@ const ALWAYS_PREFIXES = [
   'src/main/orcad/',
   'src/main/daemon/pty-subprocess/',
   'src/main/providers/',
+  'src/cli/',
+  'src/main/cli/',
+  'src/main/wsl/',
+  'src/main/agent-hooks/wsl-',
+  'src/main/ai-vault/opencode-wsl-runtime-preparation',
+  'src/shared/bundled-cli-runtime-path',
+  'config/scripts/build-cli-',
+  'src/main/native-chat/wsl-transcript',
+  'src/main/browser/wsl-browser-network',
+  'src/relay/',
+  'resources/licenses/bun/',
   'config/patches/',
   'config/tsconfig',
   'native/',
