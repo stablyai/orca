@@ -21,6 +21,10 @@ import type {
   CodexManagedAccount,
   CodexManagedAccountRuntimeSelection
 } from './managed-account-types'
+import type {
+  AntigravityManagedAccount,
+  AntigravityManagedAccountRuntimeSelection
+} from './antigravity-managed-account-types'
 import type { NotificationSettings } from './notification-settings-types'
 import type { CtrlTabOrderMode } from './tab-types'
 import type { TerminalColorOverrides } from './terminal-color-overrides'
@@ -318,51 +322,49 @@ export type GlobalSettings = {
   codexManagedAccounts: CodexManagedAccount[]
   activeCodexManagedAccountId: string | null
   activeCodexManagedAccountIdsByRuntime?: CodexManagedAccountRuntimeSelection
-  /** Why: persist only per-account auth (not a CLAUDE_CONFIG_DIR swap) so switching accounts doesn't fork Claude's shared chat/session context. */
+  /** Why: persist only per-account auth so switching doesn't fork shared chat/session context. */
   claudeManagedAccounts: ClaudeManagedAccount[]
   activeClaudeManagedAccountId: string | null
   activeClaudeManagedAccountIdsByRuntime?: ClaudeManagedAccountRuntimeSelection
-  /** Per-worktree shell history so ArrowUp doesn't surface other worktrees' commands (a HISTFILE for
-   *  bash/zsh, a `fish_history` session name for fish). Defaults to true. */
+  antigravityManagedAccounts: AntigravityManagedAccount[]
+  activeAntigravityManagedAccountId: string | null
+  activeAntigravityManagedAccountIdsByRuntime?: AntigravityManagedAccountRuntimeSelection
+  /** Per-worktree shell history so ArrowUp doesn't surface other worktrees' commands. Defaults to true. */
   terminalScopeHistoryByWorktree: boolean
-  /** Kill switch for hidden terminal view parking: unmount long-hidden panes while a pane-less watcher keeps PTY side effects alive. */
+  /** Kill switch for hidden terminal view parking: unmount long-hidden panes while a watcher keeps PTY side effects alive. */
   terminalHiddenViewParking?: boolean
-  /** Kill switch for SSH terminal parking (C1): SSH panes park like local ones; reveal restores from main's headless model, falling back to relay replay. */
+  /** Kill switch for SSH terminal parking: SSH panes park like local ones; reveal restores from main's headless model. */
   terminalSshViewParking?: boolean
-  /** Kill switch for the hidden-worktree retention budget (C1): force-parks the least-recently-hidden un-parkable worktrees beyond a count budget or TTL. */
+  /** Kill switch for hidden-worktree retention budget: force-parks least-recently-hidden un-parkable worktrees. */
   terminalHiddenWorktreeRetentionBudget?: boolean
-  /** Kill switch for the browser-guest worktree retention budget: destroys the least-recently-activated hidden worktrees' webview guests beyond an LRU count budget. */
+  /** Kill switch for browser-guest worktree retention budget: destroys least-recently-activated hidden worktrees' webview guests. */
   browserGuestWorktreeRetentionBudget?: boolean
-  /** Kill switch for main-process PTY side-effect authority; on (default) = title/bell/agent facts via pty:sideEffect channel, not renderer byte parsing. */
+  /** Kill switch for main-process PTY side-effect authority; on (default) = title/bell/agent facts via pty:sideEffect channel. */
   terminalMainSideEffectAuthority?: boolean
-  /** Kill switch for main's hidden-delivery gate (Phase 4): drops PTY bytes to hidden views after model ingestion; requires terminalMainSideEffectAuthority. */
+  /** Kill switch for main's hidden-delivery gate: drops PTY bytes to hidden views after model ingestion. */
   terminalHiddenDeliveryGate?: boolean
-  /** Kill switch for main's model query responder (Phase 5); active only when both Phase-4 gates are also on. */
+  /** Kill switch for main's terminal model query authority. */
   terminalModelQueryAuthority?: boolean
-  /** Which agent to pre-select in the new-workspace composer.
-   *  - null: auto (first detected agent)
-   *  - 'blank': blank terminal (no agent launched)
-   *  - TuiAgent: a specific agent id */
+  /** Kill switch for main's model query responder (Phase 5); active only when both Phase-4 gates are on. */
+  terminalModelQueryResponder?: boolean
+  /** Which agent to pre-select in the new-workspace composer. null=auto, 'blank'=none, TuiAgent=specific. */
   defaultTuiAgent: TuiAgent | 'blank' | null
-  /** Agents hidden from picker/auto-launch; detection stays a raw PATH snapshot. */
+  /** Agents hidden from picker/auto-launch. */
   disabledTuiAgents: TuiAgent[]
-  /** Master switch for the experimental plugin system. Off by default: no
-   *  discovery, no panels, no plugin code paths run at all. */
+  /** Master switch for the experimental plugin system. Off by default. */
   pluginSystemEnabled: boolean
-  /** Qualified plugin keys (`publisher.id`) the user disabled. Discovered
-   *  plugins stay listed but are not activated. */
+  /** Qualified plugin keys the user disabled. Discovered plugins stay listed but are not activated. */
   disabledPlugins: string[]
-  /** Consent records: qualified plugin key → capability/worker-trust fingerprint.
-   *  A plugin whose current fingerprint differs is pending again, so an update
-   *  crossing either trust boundary re-prompts before code runs. Absent key =
-   *  never consented. */
+  /** Consent records: qualified plugin key → capability/worker-trust fingerprint. */
   pluginConsents: Record<string, string>
-  /** Local directories loaded as dev-mode plugins (manifest hot-reload). */
+  /** Local directories loaded as dev-mode plugins. */
   devPluginPaths: string[]
-  /** One-shot guard: start Claude Agent Teams hidden for existing profiles without overriding later opt-ins. */
+  /** One-shot guard: start Claude Agent Teams hidden for existing profiles. */
   claudeAgentTeamsDefaultDisabledMigrated?: boolean
-  /** Why: worktree deletion is destructive (rm -rf of the working dir), so confirm by default. */
+  /** Why: worktree deletion is destructive, so confirm by default. */
   skipDeleteWorktreeConfirm: boolean
+  /** Why: closing a terminal with a running process is destructive, so confirm by default. */
+  skipCloseTerminalWithRunningProcessConfirm: boolean
   /** Why: closing a terminal with child processes kills foreground work; keep this skip separate from other confirmations. */
   skipCloseTerminalWithRunningProcessConfirm: boolean
   /** Why: deleting an automation also deletes its run history; keep this skip separate from worktree deletion. */

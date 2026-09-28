@@ -12,6 +12,7 @@ import {
 import { GROK_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-grok'
 import { MUSE_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-muse'
 import { OMP_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-omp'
+import { OPENCODE_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-opencode'
 import type {
   AgentSessionOptionCatalog,
   AgentSessionOptionCatalogMap,
@@ -39,7 +40,8 @@ const CATALOGS: AgentSessionOptionCatalogMap = {
   cursor: CURSOR_SESSION_OPTION_CATALOG,
   grok: GROK_SESSION_OPTION_CATALOG,
   muse: MUSE_SESSION_OPTION_CATALOG,
-  omp: OMP_SESSION_OPTION_CATALOG
+  omp: OMP_SESSION_OPTION_CATALOG,
+  opencode: OPENCODE_SESSION_OPTION_CATALOG
 }
 
 export function getAgentSessionOptionCatalog(agent: AgentType): AgentSessionOptionCatalog | null {

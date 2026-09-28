@@ -33,6 +33,7 @@ export function attachMainWindowCoreServices(
   const museUsage = state.museUsage
   const codexAccounts = state.codexAccounts
   const claudeAccounts = state.claudeAccounts
+  const antigravityAccounts = state.antigravityAccounts
   const rateLimits = state.rateLimits
   const automations = state.automations
   const keybindings = state.keybindings
@@ -48,6 +49,7 @@ export function attachMainWindowCoreServices(
     !museUsage ||
     !codexAccounts ||
     !claudeAccounts ||
+    !antigravityAccounts ||
     !rateLimits ||
     !automations ||
     !keybindings ||
@@ -66,6 +68,7 @@ export function attachMainWindowCoreServices(
     museUsage,
     codexAccounts,
     claudeAccounts,
+    antigravityAccounts,
     rateLimits,
     window.webContents.id,
     automations,

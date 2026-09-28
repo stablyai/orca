@@ -479,6 +479,7 @@ describe('registerCoreHandlers', () => {
     const museUsage = { marker: 'museUsage' }
     const codexAccounts = { marker: 'codexAccounts', runtimeHomeService: { marker: 'runtimeHome' } }
     const claudeAccounts = { marker: 'claudeAccounts' }
+    const antigravityAccounts = { marker: 'antigravityAccounts' }
     const rateLimits = { marker: 'rateLimits' }
     const agentAwakeService = { marker: 'agentAwakeService' }
     const onBeforeRelaunch = vi.fn()
@@ -495,6 +496,7 @@ describe('registerCoreHandlers', () => {
       museUsage as never,
       codexAccounts as never,
       claudeAccounts as never,
+      antigravityAccounts as never,
       rateLimits as never,
       null,
       undefined,
@@ -671,6 +673,7 @@ describe('registerCoreHandlers', () => {
       museUsage2 as never,
       codexAccounts2 as never,
       claudeAccounts2 as never,
+      {} as never,
       rateLimits2 as never,
       42
     )
