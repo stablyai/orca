@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import { triggerSelection } from '../platform/haptics'
 import { activateMobileSessionTab } from './mobile-session-tab-activation'
+import { rememberRecentTabId } from '../../../src/shared/session-tab-close-successor'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import type { MobileSessionKeyboardStateModel } from './use-mobile-session-keyboard-state'
 
@@ -12,6 +13,7 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
     defaultTerminalHandlesToLiveInput,
     setActiveHandle,
     setActiveSessionTabId,
+    recentSessionTabIdsRef,
     markdownDocs,
     terminalUnsubsRef,
     initializedHandlesRef,
@@ -34,6 +36,12 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
         (tab): tab is Extract<MobileSessionTab, { type: 'terminal' }> =>
           tab.type === 'terminal' && tab.terminal === handle
       )
+      if (matchingTab) {
+        recentSessionTabIdsRef.current = rememberRecentTabId(
+          recentSessionTabIdsRef.current,
+          matchingTab.id
+        )
+      }
       terminalDiagnosticsRef.current.tabSwitch('terminal', matchingTab?.id ?? '', false, handle)
       pendingActiveSessionTabIdRef.current = matchingTab?.id ?? null
       pendingActiveTerminalHandleRef.current = handle
@@ -77,6 +85,7 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
 
   const switchSessionTab = useCallback(
     (tab: MobileSessionTab) => {
+      recentSessionTabIdsRef.current = rememberRecentTabId(recentSessionTabIdsRef.current, tab.id)
       if (tab.type === 'terminal') {
         if (typeof tab.terminal === 'string') {
           switchTab(tab.terminal)

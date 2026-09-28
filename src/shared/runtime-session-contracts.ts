@@ -228,6 +228,8 @@ export type RuntimeMobileSessionTabsSnapshot = {
   activeGroupId: string | null
   activeTabId: string | null
   activeTabType: 'terminal' | 'markdown' | 'file' | 'browser' | 'agent-session' | null
+  /** Global top-level tab MRU, including visits that did not focus the host window. */
+  recentTabIds?: string[]
   tabGroups?: RuntimeMobileSessionTabGroup[]
   tabGroupLayout?: TabGroupLayoutNode | null
   retiredTerminalSurfaces?: RuntimeMobileSessionRetiredTerminalSurface[]
@@ -250,6 +252,7 @@ export type RuntimeMobileSessionTabsResult = {
   activeGroupId: string | null
   activeTabId: string | null
   activeTabType: 'terminal' | 'markdown' | 'file' | 'browser' | 'agent-session' | null
+  recentTabIds?: string[]
   tabGroups?: RuntimeMobileSessionTabGroup[]
   tabGroupLayout?: TabGroupLayoutNode | null
   retiredTerminalSurfaces?: RuntimeMobileSessionRetiredTerminalSurface[]

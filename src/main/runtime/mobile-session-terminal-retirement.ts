@@ -1,10 +1,11 @@
 import type {
   RuntimeMobileSessionRetiredTerminalSurface,
-  RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabsSnapshot,
   RuntimeMobileSessionTerminalTab
 } from '../../shared/runtime-types'
+import { pruneRecentTabIds } from '../../shared/session-tab-close-successor'
+import { chooseActiveSurface, topLevelTabId } from './mobile-session-terminal-retirement-surface'
 import type { TabGroupLayoutNode } from '../../shared/tab-types'
 import type {
   TerminalLayoutSnapshot,
@@ -124,7 +125,17 @@ function chooseGroupActiveTab(
       break
     }
   }
-  return recent ?? group.tabOrder.find((tabId) => retainedTabIds.has(tabId)) ?? null
+  if (recent) {
+    return recent
+  }
+  // Why: no previous visit → most recently added remaining tab, not the leftmost.
+  for (let index = group.tabOrder.length - 1; index >= 0; index -= 1) {
+    const tabId = group.tabOrder[index]!
+    if (retainedTabIds.has(tabId)) {
+      return tabId
+    }
+  }
+  return null
 }
 
 export function repairMobileSessionTabGroupsAfterRetirement(
@@ -140,45 +151,17 @@ export function repairMobileSessionTabGroupsAfterRetirement(
       return []
     }
     const retained = new Set(tabOrder)
-    const recentTabIds = group.recentTabIds?.filter((tabId) => retained.has(tabId))
     return [
       {
         ...group,
         tabOrder,
         activeTabId: chooseGroupActiveTab(group, retained),
-        ...(recentTabIds && recentTabIds.length > 0 ? { recentTabIds } : {})
+        // Why: assigned explicitly so an emptied history drops its stale ids.
+        recentTabIds: pruneRecentTabIds(group.recentTabIds, retained)
       }
     ]
   })
   return repaired.length > 0 ? repaired : undefined
-}
-
-function topLevelTabId(tab: RuntimeMobileSessionSnapshotTab): string {
-  return tab.type === 'terminal' ? tab.parentTabId : tab.id
-}
-
-function chooseActiveSurface(
-  tabs: readonly RuntimeMobileSessionSnapshotTab[],
-  previousActiveId: string | null,
-  groups: readonly RuntimeMobileSessionTabGroup[] | undefined,
-  previousActiveGroupId: string | null
-): RuntimeMobileSessionSnapshotTab | null {
-  const previous = previousActiveId ? tabs.find((tab) => tab.id === previousActiveId) : undefined
-  if (previous) {
-    return previous
-  }
-  const activeGroup =
-    groups?.find((group) => group.id === previousActiveGroupId) ?? groups?.[0] ?? null
-  const activeTopLevelId = activeGroup?.activeTabId
-  return (
-    (activeTopLevelId
-      ? (tabs.find((tab) => topLevelTabId(tab) === activeTopLevelId && tab.isActive) ??
-        tabs.find((tab) => topLevelTabId(tab) === activeTopLevelId))
-      : undefined) ??
-    tabs.find((tab) => tab.isActive) ??
-    tabs[0] ??
-    null
-  )
 }
 
 function terminalMatchesRetirement(
@@ -253,11 +236,13 @@ export function retireTerminalSurfacesFromSnapshot(args: {
     args.snapshot.tabGroups,
     validTopLevelIds
   )
+  const recentTabIds = pruneRecentTabIds(args.snapshot.recentTabIds, validTopLevelIds)
   const active = chooseActiveSurface(
     tabs,
     args.snapshot.activeTabId,
     tabGroups,
-    args.snapshot.activeGroupId
+    args.snapshot.activeGroupId,
+    recentTabIds
   )
   tabs = tabs.map((tab) => ({ ...tab, isActive: tab.id === active?.id }))
   const activeTopLevelId = active ? topLevelTabId(active) : null
@@ -282,6 +267,8 @@ export function retireTerminalSurfacesFromSnapshot(args: {
       activeGroupId,
       activeTabId: active?.id ?? null,
       activeTabType: active?.type ?? null,
+      // Why: assigned explicitly so an emptied history drops its stale ids.
+      recentTabIds,
       ...(tabGroups ? { tabGroups } : { tabGroups: undefined }),
       ...(args.snapshot.tabGroupLayout
         ? {

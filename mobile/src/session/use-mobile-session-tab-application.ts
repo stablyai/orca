@@ -13,6 +13,7 @@ import {
 import type { SessionTabsApplyOutcome } from './mobile-session-tabs-stream-health'
 import { getActiveTabIdForHandle } from './mobile-session-route-helpers'
 import { resolveActiveSessionTab } from './active-session-tab'
+import { rememberRecentTabId } from '../../../src/shared/session-tab-close-successor'
 import type { MobileSessionTab, SessionTabsResult } from './mobile-session-route-types'
 import type { MobileSessionTerminalListModel } from './use-mobile-session-terminal-list'
 
@@ -31,6 +32,7 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
     setActiveHandle,
     setActiveSessionTabId,
     activeSessionTabIdRef,
+    recentSessionTabIdsRef,
     selectedSessionTabIdRef,
     markdownDocsRef,
     initializedHandlesRef,
@@ -58,10 +60,10 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
         closedTabTombstonesRef.current,
         Date.now()
       )
-      const presentTabIds = new Set(nextTabs.map((tab) => tab.id))
       const orphanedDraftTabs: MobileSessionTab[] = []
       const currentMarkdownDocs = markdownDocsRef.current
       const currentSessionTabs = sessionTabsRef.current
+      const presentTabIds = new Set(nextTabs.map((tab) => tab.id))
       for (const [tabId, doc] of currentMarkdownDocs) {
         if (doc.status !== 'ready' || !doc.isDirty || presentTabIds.has(tabId)) {
           continue
@@ -77,6 +79,24 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
       }
       if (orphanedDraftTabs.length > 0) {
         nextTabs = [...orphanedDraftTabs, ...nextTabs]
+      }
+      // Why: a dirty draft is client-owned and is appended after host tabs are projected; prune
+      // history only after that append so closing another tab can still return to the draft.
+      const finalTabIds = new Set(nextTabs.map((tab) => tab.id))
+      recentSessionTabIdsRef.current = recentSessionTabIdsRef.current.filter((id) =>
+        finalTabIds.has(id)
+      )
+      if (recentSessionTabIdsRef.current.length === 0 && result.recentTabIds) {
+        const seededRecentTabIds = result.recentTabIds.flatMap((recentTabId) => {
+          const matchingTabs = nextTabs.filter(
+            (tab) =>
+              tab.id === recentTabId || (tab.type === 'terminal' && tab.parentTabId === recentTabId)
+          )
+          return [matchingTabs.find((tab) => tab.isActive) ?? matchingTabs[0]].flatMap((tab) =>
+            tab ? [tab.id] : []
+          )
+        })
+        recentSessionTabIdsRef.current = seededRecentTabIds
       }
       reconcileBufferedDraftsRef.current(currentSessionTabs, nextTabs, {
         retainMissingSurfaces: result.tabs.length === 0
@@ -118,6 +138,8 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
       }
       const resolved = resolveActiveSessionTab(nextTabs, {
         pendingActiveSessionTabId,
+        previousActiveTabId: activeSessionTabIdRef.current,
+        recentTabIds: recentSessionTabIdsRef.current,
         selectedSessionTabId: selectedSessionTabIdRef.current,
         navigationIntent: result.navigationIntent
       })
@@ -158,6 +180,12 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
           const nextActiveTabId = getActiveTabIdForHandle(nextTabs, pendingActiveTerminalHandle)
           activeSessionTabIdRef.current = nextActiveTabId
           setActiveSessionTabId(nextActiveTabId)
+          if (nextActiveTabId) {
+            recentSessionTabIdsRef.current = rememberRecentTabId(
+              recentSessionTabIdsRef.current,
+              nextActiveTabId
+            )
+          }
           activeSessionTabTypeRef.current = 'terminal'
           // Why: every other active-handle branch assigns the ref alongside the
           // state. Leaving it stale here makes `covered` resolve against the wrong
@@ -177,6 +205,12 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
       activeSessionTabTypeRef.current = active?.type ?? null
       activeSessionTabIdRef.current = active?.id ?? null
       setActiveSessionTabId(active?.id ?? null)
+      if (active?.id) {
+        recentSessionTabIdsRef.current = rememberRecentTabId(
+          recentSessionTabIdsRef.current,
+          active.id
+        )
+      }
       if (active?.type === 'terminal') {
         if (typeof active.terminal !== 'string') {
           const previous = activeHandleRef.current

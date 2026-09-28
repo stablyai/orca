@@ -32,6 +32,9 @@ export function projectWithoutClosedClientSessionTabs(
   const tabs = snapshot.tabs.filter(
     (tab) => !retainedClosedTabIds.has(tab.id) && !retainedClosedTabIds.has(topLevelTabId(tab))
   )
+  const recentTabIds = snapshot.recentTabIds?.filter((tabId) =>
+    tabs.some((tab) => topLevelTabId(tab) === tabId)
+  )
   const tabGroups = snapshot.tabGroups?.map((group) => {
     const tabOrder = group.tabOrder.filter((tabId) => !retainedClosedTabIds.has(tabId))
     return {
@@ -42,7 +45,12 @@ export function projectWithoutClosedClientSessionTabs(
     }
   })
   return {
-    snapshot: { ...snapshot, tabs, ...(tabGroups ? { tabGroups } : {}) },
+    snapshot: {
+      ...snapshot,
+      tabs,
+      ...(recentTabIds ? { recentTabIds } : {}),
+      ...(tabGroups ? { tabGroups } : {})
+    },
     retainedClosedTabIds
   }
 }
