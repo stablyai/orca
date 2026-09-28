@@ -74,7 +74,7 @@ describe('launchAgentInNewTab initial cwd', () => {
     })
   })
 
-  it('queues the original cwd before a local Agent session starts', async () => {
+  it('saves the original cwd on the tab so a StrictMode remount still starts there', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     launchAgentInNewTab({
@@ -83,6 +83,15 @@ describe('launchAgentInNewTab initial cwd', () => {
       initialCwd: '/repo/worktree/packages/app'
     })
 
+    // Why: the one-shot queue is cleared when the first pane is created. React StrictMode
+    // remounts before the shell starts, so only a saved tab.startupCwd survives (same path as
+    // Resume in Worktree).
+    expect(store.createTab).toHaveBeenCalledWith(
+      'wt-1',
+      undefined,
+      undefined,
+      expect.objectContaining({ startupCwd: '/repo/worktree/packages/app' })
+    )
     expect(mockQueueTabInitialCwd).toHaveBeenCalledWith('tab-1', '/repo/worktree/packages/app')
   })
 
