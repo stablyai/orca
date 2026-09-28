@@ -10,6 +10,7 @@ import {
 } from './helpers/paired-electron-client'
 import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../src/shared/execution-host'
 import { runProcess } from '../../src/shared/child-process/run-process'
+import { WEB_TERMINAL_SURFACE_TAB_PREFIX } from '../../src/shared/terminal-surface-id'
 
 test('switches the active server from the status bar between two paired hosts and local', async ({
   orcaPage,
@@ -126,10 +127,18 @@ test('switches the active server from the status bar between two paired hosts an
       state.markWorktreeVisited(workspace.id, undefined, hostId)
       state.createTab(workspace.id)
     }, toRuntimeExecutionHostId(client.environmentId))
-    const workTabCandidate = page
-      .locator('[data-tab-id]')
-      .filter({ hasText: path.basename(testRepoPath) })
-      .last()
+    await page.waitForFunction(
+      (prefix) => {
+        const tabs = [...document.querySelectorAll('[data-tab-id]')]
+        return (
+          tabs.length >= 2 &&
+          tabs.every((tab) => tab.getAttribute('data-tab-id')?.startsWith(prefix))
+        )
+      },
+      WEB_TERMINAL_SURFACE_TAB_PREFIX,
+      { polling: 100 }
+    )
+    const workTabCandidate = page.locator('[data-tab-id]').last()
     await expect(workTabCandidate).toBeVisible()
     const workTabId = await workTabCandidate.getAttribute('data-tab-id')
     const workTab = page.locator(`[data-tab-id="${workTabId}"]`)
@@ -162,10 +171,18 @@ test('switches the active server from the status bar between two paired hosts an
       state.markWorktreeVisited(workspace.id, undefined, hostId)
       state.createTab(workspace.id)
     })
-    const privateTabCandidate = page
-      .locator('[data-tab-id]')
-      .filter({ hasText: path.basename(privateRepoPath) })
-      .last()
+    await page.waitForFunction(
+      (prefix) => {
+        const tabs = [...document.querySelectorAll('[data-tab-id]')]
+        return (
+          tabs.length >= 2 &&
+          tabs.every((tab) => tab.getAttribute('data-tab-id')?.startsWith(prefix))
+        )
+      },
+      WEB_TERMINAL_SURFACE_TAB_PREFIX,
+      { polling: 100 }
+    )
+    const privateTabCandidate = page.locator('[data-tab-id]').last()
     await expect(privateTabCandidate).toBeVisible()
     const privateTabId = await privateTabCandidate.getAttribute('data-tab-id')
     const privateTab = page.locator(`[data-tab-id="${privateTabId}"]`)
