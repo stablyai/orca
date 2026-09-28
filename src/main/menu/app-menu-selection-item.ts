@@ -13,7 +13,7 @@ export function createAppMenuSelectionItem({
 }): Electron.MenuItemConstructorOptions {
   return {
     label,
-    ...(isMac ? { accelerator: action === 'copy' ? 'Command+C' : 'Command+A' } : {}),
+    ...(isMac && action === 'select-all' ? { accelerator: 'Command+A' } : {}),
     click: () => {
       const focusedWindow = BrowserWindow.getFocusedWindow()
       if (focusedWindow) {

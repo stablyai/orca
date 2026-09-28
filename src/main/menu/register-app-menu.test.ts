@@ -327,7 +327,8 @@ describe('registerAppMenu', () => {
 
       expect(copyItem?.role).toBeUndefined()
       expect(selectAllItem?.role).toBeUndefined()
-      expect(copyItem?.accelerator).toBe(platform === 'darwin' ? 'Command+C' : undefined)
+      // Terminal keydown must receive Cmd+C so Codex can copy its own selection.
+      expect(copyItem?.accelerator).toBeUndefined()
       expect(selectAllItem?.accelerator).toBe(platform === 'darwin' ? 'Command+A' : undefined)
 
       copyItem?.click?.({} as never, {} as never, {} as never)
