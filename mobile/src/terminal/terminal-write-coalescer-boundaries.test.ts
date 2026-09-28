@@ -142,7 +142,9 @@ describe('terminal write coalescer boundaries', () => {
 
   it('flushes pending writes before resize and reflow so boundaries observe prior bytes', () => {
     for (const method of ['resize', 'reflow'] as const) {
-      const start = controllerSource.indexOf(`${method}(cols: number, rows: number) {`)
+      const start = controllerSource.indexOf(
+        `${method}(cols: number, rows: number, frame?: TerminalFrame) {`
+      )
       expect(start).toBeGreaterThanOrEqual(0)
       const body = controllerSource.slice(start, start + 300)
       const flushIndex = body.indexOf('writeCoalescer.flushNow()')

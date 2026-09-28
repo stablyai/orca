@@ -142,8 +142,7 @@ describe('a started document', () => {
         rows: 47,
         initialData: '',
         preserveScroll: false,
-        containerWidth: 427.5,
-        containerHeight: 710
+        frame: { width: 427.5, height: 710 }
       })
       expect(scope.hostFrame).toEqual({ width: 427.5, height: 710 })
     } finally {

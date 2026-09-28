@@ -177,10 +177,7 @@ export type MutableRef<T> = { current: T }
 
 type TerminalFitWebView = {
   awaitReady: () => Promise<unknown>
-  measureFitDimensions: (
-    frameHeight: number,
-    frameWidth: number
-  ) => Promise<TerminalViewportDims | null | undefined>
+  fitDimensions: (frame: { width: number; height: number }) => TerminalViewportDims | null
 }
 
 export type TerminalViewportFitPassArgs = {
@@ -239,7 +236,7 @@ export function runTerminalViewportFitPass(args: TerminalViewportFitPassArgs): v
   // Why: a subscribe that carried a viewport already told the host one; a fresh measure that matches it needs no round trip.
   const viewportWasMeasured = args.viewportMeasuredRef.current || args.sentViewport != null
   void (async () => {
-    // Why: wait for init()'s rAF chain before measuring, else the measure races ahead and returns null (log dump 2026-05-06).
+    // Why: wait for init()'s rAF chain, which reports the box the fit reads (log dump 2026-05-06).
     await args.getTerminalRef(handle)?.awaitReady()
     if (
       args.subscribeSeqRef.current.get(handle) !== seq ||
@@ -247,20 +244,11 @@ export function runTerminalViewportFitPass(args: TerminalViewportFitPassArgs): v
     ) {
       return
     }
-    const dims = await args
-      .getTerminalRef(handle)
-      ?.measureFitDimensions(
-        args.terminalFrameHeightRef.current,
-        args.terminalFrameWidthRef.current
-      )
-    // Why: re-check seq — the awaits may have let a newer subscribe cycle arm; tearing it down would resubscribe a stale generation.
-    if (
-      args.subscribeSeqRef.current.get(handle) !== seq ||
-      !budget.isRetryGenerationCurrent(handle, retryGeneration)
-    ) {
-      return
-    }
-    if (!args.getTerminalRef(handle) || !dims) {
+    const dims = args.getTerminalRef(handle)?.fitDimensions({
+      width: args.terminalFrameWidthRef.current,
+      height: args.terminalFrameHeightRef.current
+    })
+    if (!dims) {
       return
     }
     args.viewportRef.current = dims

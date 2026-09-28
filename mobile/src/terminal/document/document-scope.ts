@@ -187,7 +187,7 @@ export type TerminalDocumentState = {
   removeWebglRecovery: (() => void) | null
   /** `fit-scale`: the generation of the retry loop; a bump abandons the one in flight. */
   fitRetryToken: number
-  /** `host-message-router`: the terminal frame React Native last measured with, or null before one. */
+  /** `host-message-router`: the terminal frame the app last sent with a grid, or null before one. */
   hostFrame: { width: number; height: number } | null
   /** `fit-scale`: the reason of a fit held while the host is hidden, or null when none is owed. */
   fitPending: string | null

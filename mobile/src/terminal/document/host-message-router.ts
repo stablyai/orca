@@ -1,7 +1,5 @@
 import type { TerminalDocumentScope } from './document-scope'
-import { scheduleDocumentFrame } from './document-frame-registry'
 import { applyFitScale } from './fit-scale'
-import { fitDimensionsFromCell } from '../terminal-grid-fit'
 import { notify } from './host-notify'
 import { emitKeyboardAvoidanceMetrics } from './keyboard-avoidance-metrics'
 import { emitModesIfChanged } from './mode-mirroring'
@@ -13,7 +11,6 @@ import { resetEvictionCounter } from './selection-state-and-eviction'
 import { applyTerminalTheme } from './terminal-theme'
 import { init, resize, write } from './terminal-init'
 import { applyTextScale } from './text-scaling'
-import { flog } from './viewport-transform'
 import { resetWriteQueue } from './write-queue'
 
 /** One message from the host. Every field is optional because the router reads them by type. */
@@ -28,76 +25,20 @@ export type TerminalHostMessage = {
   preserveScroll?: boolean
   oscLinks?: unknown
   data?: string
-  containerHeight?: number
-  containerWidth?: number
+  frame?: { width: number; height: number }
 }
 
-/** The frame React Native laid out, from an init or a measure; null when it has no size. */
+/** The frame React Native laid out, sent with every grid; null when absent or without a size. */
 function hostFrameOf(msg: TerminalHostMessage) {
-  const width = typeof msg.containerWidth === 'number' ? msg.containerWidth : 0
-  const height = typeof msg.containerHeight === 'number' ? msg.containerHeight : 0
-  return width > 0 && height > 0 ? { width, height } : null
+  const frame = msg.frame
+  return frame && frame.width > 0 && frame.height > 0
+    ? { width: frame.width, height: frame.height }
+    : null
 }
 
-export function measureFitDimensions(
-  scope: TerminalDocumentScope,
-  frame: { width: number; height: number },
-  retriesLeft?: number
-) {
-  if (typeof retriesLeft !== 'number') {
-    retriesLeft = 30
-  }
-  // Why: init and measure are posted back-to-back from React, but
-  // init has an async rAF chain. A measure that runs synchronously
-  // after init can find term null, disposed, lacking element, or
-  // with cells size 0. Retry the whole gate for ~500ms.
-  const notReady = !scope.term || !scope.term.element
-  let cellWidth = 0
-  let cellHeight = 0
-  if (!notReady) {
-    const core = scope.term!._core
-    if (core && core._renderService && core._renderService.dimensions) {
-      cellWidth = core._renderService.dimensions.css.cell.width
-      cellHeight = core._renderService.dimensions.css.cell.height
-    }
-  }
-  if (notReady || cellWidth <= 0 || cellHeight <= 0) {
-    if (retriesLeft > 0) {
-      // Ruling 21: a retry that outlives its mount would answer the next mount's measure.
-      const gen = scope.terminalGeneration
-      scheduleDocumentFrame(scope, function () {
-        if (gen !== scope.terminalGeneration) {
-          return
-        }
-        measureFitDimensions(scope, frame, retriesLeft - 1)
-      })
-      return
-    }
-    flog(scope, 'measure-fail', {
-      notReady: notReady,
-      cellWidth: cellWidth,
-      cellHeight: cellHeight,
-      retriesLeft: retriesLeft
-    })
-    notify(scope, { type: 'measure-result', cols: null, rows: null })
-    return
-  }
-  // Why: the frame box React Native laid out, fitted by the app's own formula, so this measure and
-  // the first subscribe's fit agree to the column.
-  const fit = fitDimensionsFromCell({ cellWidth, cellHeight }, frame.width, frame.height)
-  if (!fit) {
-    flog(scope, 'measure-skip-small-width', {
-      frameWidth: frame.width,
-      cellWidth: cellWidth
-    })
-    notify(scope, { type: 'measure-result', cols: null, rows: null })
-    return
-  }
-  // Why: the rows we report become the PTY's actual row count after the
-  // server fits to viewport, and xterm renders exactly that many lines
-  // anchored top-left of the WebView. Any safety margin between the prompt
-  // and the accessory bar must come from RN layout, not from undersizing the PTY.
-  notify(scope, { type: 'measure-result', cols: fit.cols, rows: fit.rows })
+/** Keeps the frame a grid was fitted to, for a later text-scale change to fit. */
+function holdHostFrame(scope: TerminalDocumentScope, msg: TerminalHostMessage) {
+  scope.hostFrame = hostFrameOf(msg) ?? scope.hostFrame
 }
 
 export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage) {
@@ -114,7 +55,7 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
   if (msg.type === 'ping') {
     notify(scope, { type: 'pong', pingId: msg.id })
   } else if (msg.type === 'init') {
-    scope.hostFrame = hostFrameOf(msg) ?? scope.hostFrame
+    holdHostFrame(scope, msg)
     init(
       scope,
       msg.cols!,
@@ -139,8 +80,10 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
       applyTextScale(scope, msg.fontScale)
     }
   } else if (msg.type === 'resize') {
+    holdHostFrame(scope, msg)
     resize(scope, msg.cols!, msg.rows!)
   } else if (msg.type === 'reflow') {
+    holdHostFrame(scope, msg)
     reflow(scope, msg.cols!, msg.rows!)
   } else if (msg.type === 'write') {
     write(scope, msg.data!)
@@ -168,15 +111,6 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
     if (scope.selMode === 'select') {
       notify(scope, { type: 'selection-evicted' })
       cancelSelect(scope)
-    }
-  } else if (msg.type === 'measure') {
-    const frame = hostFrameOf(msg)
-    // Why: the frame React Native laid out is the only box a fit reads; without it there is none.
-    if (frame) {
-      scope.hostFrame = frame
-      measureFitDimensions(scope, frame)
-    } else {
-      notify(scope, { type: 'measure-result', cols: null, rows: null })
     }
   } else if (msg.type === 'reset-zoom') {
     applyFitScale(scope, 'reset-zoom-msg')

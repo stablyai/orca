@@ -126,13 +126,12 @@ export function useTerminalViewportRefit(
             currentRunSeq: refitRunSeqRef.current
           })
         void (async () => {
-          const dims = await ref.measureFitDimensions(
-            terminalFrameHeightRef.current,
-            frameWidthRef.current
-          )
+          await ref.awaitReady()
           if (!isCurrentTarget()) {
             return
           }
+          const frame = { width: frameWidthRef.current, height: terminalFrameHeightRef.current }
+          const dims = ref.fitDimensions(frame)
           if (!dims) {
             return
           }
@@ -163,7 +162,7 @@ export function useTerminalViewportRefit(
                 rpc.updateTerminalSubscriptionViewport(handle, dims)
                 if (outcome.applied) {
                   // Why: updateViewport re-streams only the visible screen, so local scrollback stays wrapped at the old width — reflow it locally.
-                  ref.reflow(dims.cols, dims.rows)
+                  ref.reflow(dims.cols, dims.rows, frame)
                 }
                 return
               }

@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { fitDimensionsFromCell } from '../terminal-grid-fit'
 import { createTerminalDocumentScope, type TerminalDocumentScope } from './document-scope'
 import { startTerminalDocument, stopTerminalDocument } from './create-terminal-document'
 import { handleMsg } from './host-message-router'
@@ -206,56 +205,22 @@ describe('the document host seams, by default', () => {
 })
 
 describe('the document host seams, once the page sets them', () => {
-  it('answers no fit for a measure without the frame, rather than one read off the host', () => {
-    // The page's host is one element on a page that is taller and wider than it; the window is
-    // happy-dom's 1024x768. Neither is the frame React Native laid out, so a measure that does not
-    // carry both of the frame's dimensions has nothing to fit.
-    const cell = { width: 7.5, height: 15 }
-    const terminal = Object.assign(terminalDouble(), {
-      _core: { _renderService: { dimensions: { css: { cell } } } }
-    })
-    const posted: Record<string, unknown>[] = []
+  it('keeps the frame React Native laid out from each grid, not the viewport CSS rounded', () => {
+    // 1080 device px at a 2.75 pixel ratio: React Native lays the frame out at 392.73 and the
+    // document's viewport reads 393. A grid without a whole frame leaves the last one in place.
+    const frame = { width: 1080 / 2.75, height: 600 }
     const scope = startedScope({
-      createTerminal: () => terminal,
-      postToHost: (message) => posted.push(message),
-      viewportRect: () => ({ left: 0, top: 82, width: 390, height: 600 })
-    })
-    handleMsg(scope, { type: 'init', cols: 80, rows: 24, initialData: '', preserveScroll: false })
-    handleMsg(scope, { type: 'measure', containerWidth: 390 })
-    handleMsg(scope, { type: 'measure', containerHeight: 600 })
-    handleMsg(scope, { type: 'measure', containerWidth: 390, containerHeight: 600 })
-    expect(posted.filter((message) => message.type === 'measure-result')).toEqual([
-      { type: 'measure-result', cols: null, rows: null },
-      { type: 'measure-result', cols: null, rows: null },
-      { type: 'measure-result', cols: 52, rows: 40 }
-    ])
-  })
-
-  it('fits the frame width React Native laid out, not the viewport CSS rounded, as the app does', () => {
-    // 1080 device px at a 2.75 pixel ratio: React Native lays the frame out at 392.73, the
-    // document's viewport reads 393, and a cell of 393/51 sits between the two.
-    const frameWidth = 1080 / 2.75
-    const cell = { width: 393 / 51, height: 15 }
-    const terminal = Object.assign(terminalDouble(), {
-      _core: { _renderService: { dimensions: { css: { cell } } } }
-    })
-    const posted: Record<string, unknown>[] = []
-    const scope = startedScope({
-      createTerminal: () => terminal,
-      postToHost: (message) => posted.push(message),
+      createTerminal: () => terminalDouble(),
       viewportRect: () => ({ left: 0, top: 0, width: 393, height: 600 })
     })
     handleMsg(scope, { type: 'init', cols: 80, rows: 24, initialData: '', preserveScroll: false })
-    handleMsg(scope, { type: 'measure', containerWidth: frameWidth, containerHeight: 600 })
-    const appFit = fitDimensionsFromCell(
-      { cellWidth: cell.width, cellHeight: cell.height },
-      frameWidth,
-      600
-    )
-    expect(appFit).toEqual({ cols: 50, rows: 40 })
-    expect(posted.filter((message) => message.type === 'measure-result')).toEqual([
-      { type: 'measure-result', ...appFit }
-    ])
+    expect(scope.hostFrame).toBeNull()
+    handleMsg(scope, { type: 'resize', cols: 50, rows: 40, frame: { width: 390, height: 0 } })
+    expect(scope.hostFrame).toBeNull()
+    handleMsg(scope, { type: 'resize', cols: 50, rows: 40, frame })
+    expect(scope.hostFrame).toEqual(frame)
+    handleMsg(scope, { type: 'reflow', cols: 50, rows: 40 })
+    expect(scope.hostFrame).toEqual(frame)
   })
 
   it('routes every notify to the field and nothing to the bridge', () => {

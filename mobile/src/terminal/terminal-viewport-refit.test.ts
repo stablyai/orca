@@ -140,10 +140,10 @@ describe('terminal viewport refit', () => {
     // reflow the desktop PTY to phone dims the user never sees.
     const timerStart = hookSource.indexOf('refitTimerRef.current = setTimeout(')
     const coveredCheck = hookSource.indexOf('if (nativeChatCoveredRef.current)', timerStart)
-    const measureIndex = hookSource.indexOf('measureFitDimensions', timerStart)
+    const fitIndex = hookSource.indexOf('ref.fitDimensions(', timerStart)
     expect(timerStart).toBeGreaterThanOrEqual(0)
     expect(coveredCheck).toBeGreaterThan(timerStart)
-    expect(measureIndex).toBeGreaterThan(coveredCheck)
+    expect(fitIndex).toBeGreaterThan(coveredCheck)
     expect(sessionSource).toContain('nativeChatCoveredRef: showNativeChatRef')
   })
 
@@ -253,7 +253,7 @@ describe('terminal viewport refit', () => {
     // desktop mode. Reflow local scrollback only after the server says it
     // actually applied phone-fit to the PTY.
     const appliedIndex = hookSource.indexOf('if (outcome.applied)')
-    const reflowIndex = hookSource.indexOf('ref.reflow(dims.cols, dims.rows)')
+    const reflowIndex = hookSource.indexOf('ref.reflow(dims.cols, dims.rows, frame)')
     const cacheUpdateIndex = hookSource.indexOf('updateTerminalSubscriptionViewport(handle, dims)')
     // Assert each anchor exists before ordering: a missing marker yields -1 and would
     // let the ordering comparisons pass vacuously.

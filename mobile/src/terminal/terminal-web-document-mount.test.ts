@@ -371,8 +371,7 @@ async function mountedOverGrid({ laidOutFirst = true } = {}) {
     rows: 40,
     initialData: '',
     preserveScroll: false,
-    containerWidth: 390,
-    containerHeight: 600
+    frame: { width: 390, height: 600 }
   })
   await framesUntil(() => scales.at(-1) === FIT_390)
   return { mounted, scales, send, layOut, cells, grid: () => grids.at(-1)! }
@@ -489,8 +488,8 @@ describe("the page pushes its terminal frame's box into the document", () => {
   it('fits a text scale too large to resize the grid while visible', async () => {
     const { mounted, scales, send, layOut, grid } = await mountedOverGrid()
     layOut(280, 600)
-    // The app's refit for the new width measures, which gives the document the frame.
-    send({ type: 'measure', containerWidth: 280, containerHeight: 600 })
+    // The app's refit for the new width sends its grid with the frame.
+    send({ type: 'resize', cols: 55, rows: 40, frame: { width: 280, height: 600 } })
     await framesUntil(() => scales.at(-1) === 280 / (7.5 * 55))
     // fontPxForScale(2) = 26 px: 280 / (7.5 x 2) = 18 columns, under MIN_FIT_COLS, so no resize.
     send({ type: 'set-font-scale', fontScale: 2 })
@@ -502,8 +501,8 @@ describe("the page pushes its terminal frame's box into the document", () => {
   it('refits on show after a text scale too large to resize the grid while hidden', async () => {
     const { mounted, scales, send, layOut } = await mountedOverGrid()
     layOut(280, 600)
-    // The app's refit for the new width measures, which gives the document the frame.
-    send({ type: 'measure', containerWidth: 280, containerHeight: 600 })
+    // The app's refit for the new width sends its grid with the frame.
+    send({ type: 'resize', cols: 55, rows: 40, frame: { width: 280, height: 600 } })
     await framesUntil(() => scales.at(-1) === 280 / (7.5 * 55))
     layOut(0, 0)
     // fontPxForScale(2) = 26 px: 280 / (7.5 x 2) = 18 columns, under MIN_FIT_COLS, so no resize.

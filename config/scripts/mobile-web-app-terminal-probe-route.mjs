@@ -57,7 +57,7 @@ import { TerminalWebView } from ${JSON.stringify(componentPath)}
 
 export default function TerminalProbeRoute() {
   const handleRef = useRef(null)
-  // The terminal frame as React Native laid it out, which is what the session measures with.
+  // The terminal frame as React Native laid it out, which is what the session fits.
   const frameRef = useRef({ width: 0, height: 0 })
   const [mounted, setMounted] = useState(true)
   const onSelectionCopy = useCallback((text) => {
@@ -76,8 +76,7 @@ export default function TerminalProbeRoute() {
       init: (cols, rows, data) => handleRef.current?.init(cols, rows, data, false, []),
       write: (data) => handleRef.current?.write(data),
       selectAll: () => handleRef.current?.doSelectAll(),
-      measure: () =>
-        handleRef.current?.measureFitDimensions(frameRef.current.height, frameRef.current.width),
+      fit: () => handleRef.current?.fitDimensions(frameRef.current),
       awaitReady: () => handleRef.current?.awaitReady(),
       setMounted: (next) => setMounted(next)
     }

@@ -125,8 +125,8 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // `reportDictationFailure` instead of each choosing between the setup sheet and a toast.
 // Moved when the metrics handler compared every field, the row pitch included (main).
 // Again when the subscribe waited for web-ready and `handleTerminalWebReady` lost `documentHasInit`.
-// Again when the subscribe's inits began carrying the laid-out terminal frame.
-const HEAD_CALLBACK_BODY_SHA256 = '9149532b4c5947f081a96b1cd4a1728fb316b0b9ed96007f34664beaa4674861'
+// Again when the subscribe's inits began carrying the laid-out terminal frame, and its resize too.
+const HEAD_CALLBACK_BODY_SHA256 = '47b8673445f3a7ff0fc7198a70b2c91b8bbebf675307fecf1c521d031f60c599'
 // Refreshed for the startup effect: both `worktree.activate` sends became `worktreeActivate`, and
 // the sleeping-agent check reads that operation's verdict instead of the reply envelope. Refreshed
 // again when the reporter took the reply and interpreted it itself, retiring the hand-built

@@ -12,9 +12,10 @@ function terminalWebViewHandle(
   dims: { cols: number; rows: number }
 ) {
   return {
-    measureFitDimensions: (frameHeight?: number) => {
-      effect('measure-fit', { frameHeight: frameHeight ?? null })
-      return Promise.resolve(dims)
+    awaitReady: () => Promise.resolve(),
+    fitDimensions: (frame: { height: number }) => {
+      effect('measure-fit', { frameHeight: frame.height })
+      return dims
     },
     reflow: (cols: number, rows: number) => effect('reflow', { cols, rows })
   }

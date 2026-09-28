@@ -143,7 +143,8 @@ describe('the cell box xterm laid out', () => {
   it("refits a DOM subscribe once on its first report, and not again on the refit's own report", () => {
     const { handle, notify, onCellBoxChange } = mount()
     notify({ type: 'web-ready', cellBox: cellAt(scale, 7.8) })
-    expect(handle().subscribeFitDimensions(FRAME)).toEqual({ cols: 54, rows: 47 })
+    expect(handle().fitDimensions(FRAME)).toEqual({ cols: 54, rows: 47 })
+    handle().holdSubscribedGrid({ cols: 54, rows: 47 })
     // The DOM renderer's box at the subscribed grid: its width follows cols, so it differs.
     notify(cellMetrics(8, 54))
     expect(onCellBoxChange).toHaveBeenCalledTimes(1)
@@ -181,24 +182,19 @@ describe('the cell box xterm laid out', () => {
     expect(onCellBoxChange).not.toHaveBeenCalled()
   })
 
-  it('measures the live document for a refit, against the frame the app laid out', async () => {
+  it('fits in the app from the reported box, and sends the frame with every grid', () => {
     const { handle, notify } = mount()
     notify({ type: 'web-ready', cellBox: cellAt(scale) })
-    const pending = handle().measureFitDimensions(710, 427.5)
-    expect(
-      nativeWebViewMethods.postMessage.mock.calls
-        .map(([message]) => JSON.parse(message))
-        .find((message) => message.type === 'measure')
-    ).toMatchObject({ containerHeight: 710, containerWidth: 427.5 })
-    notify({ type: 'measure-result', cols: 55, rows: 47 })
-    await expect(pending).resolves.toEqual({ cols: 55, rows: 47 })
-  })
-
-  it('does not measure before the frame is laid out: the fit waits for layout', async () => {
-    const { handle, notify } = mount()
-    notify({ type: 'web-ready', cellBox: cellAt(scale) })
-    await expect(handle().measureFitDimensions(710, 0)).resolves.toBeNull()
-    await expect(handle().measureFitDimensions(0, 427)).resolves.toBeNull()
+    expect(handle().fitDimensions({ width: 427.5, height: 0 })).toBeNull()
+    expect(handle().fitDimensions({ width: 427.5, height: 710 })).toEqual({ cols: 55, rows: 47 })
+    const frame = { width: 427.5, height: 710 }
+    handle().init(55, 47, '', false, undefined, frame)
+    handle().resize(55, 47, frame)
+    handle().reflow(55, 47, frame)
+    const grids = nativeWebViewMethods.postMessage.mock.calls
+      .map(([message]) => JSON.parse(message))
+      .filter((message) => ['init', 'resize', 'reflow'].includes(message.type))
+    expect(grids.map((message) => message.frame)).toEqual([frame, frame, frame])
     expect(postedTypes()).not.toContain('measure')
   })
 

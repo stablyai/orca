@@ -635,15 +635,14 @@ describeRender(
       await page.close()
     }, 300_000)
 
-    it('measures a fit through the handle and records what beforeinput reports', async () => {
+    it('fits through the handle from the ready box and records what beforeinput reports', async () => {
       const { page } = await openTerminal()
       await openProbeTerminal(page)
 
-      // The handle's own round trip: a measure is a command in and a notify back, and on the page
-      // both halves are direct calls rather than a bridge. It carries the frame React Native laid
-      // out, as the session's does. Null would mean the document answered nothing, or answered a
-      // grid too small to fit.
-      const fit = await page.evaluate(() => globalThis.__orcaTerminalProbe.measure())
+      // The fit is the app's own, from the cell box the document put in web-ready, against the
+      // frame React Native laid out, as the session's is. Null would mean the ready carried no box,
+      // or a grid too small to fit.
+      const fit = await page.evaluate(() => globalThis.__orcaTerminalProbe.fit())
       expect(fit).not.toBeNull()
       expect(fit.cols).toBeGreaterThanOrEqual(20)
       expect(fit.rows).toBeGreaterThanOrEqual(8)

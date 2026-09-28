@@ -273,7 +273,7 @@ export function useMobileSessionTerminalSubscription(
             if (serialized != null) {
               getTerminalRef(handle)?.init(cols, rows, serialized, true, oscLinks, terminalFrame())
             } else {
-              getTerminalRef(handle)?.resize(cols, rows)
+              getTerminalRef(handle)?.resize(cols, rows, terminalFrame())
             }
             if (data.displayMode) {
               const displayMode = data.displayMode as MobileDisplayMode

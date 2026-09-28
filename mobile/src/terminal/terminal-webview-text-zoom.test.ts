@@ -122,7 +122,7 @@ describe('TerminalWebView text zoom', () => {
       'const replayData = normalizeInitialData(initialData)'
     )
     const clearStart = terminalHtmlSource.indexOf("} else if (msg.type === 'clear') {")
-    const clearEnd = terminalHtmlSource.indexOf("} else if (msg.type === 'measure')", clearStart)
+    const clearEnd = terminalHtmlSource.indexOf("} else if (msg.type === 'reset-zoom')", clearStart)
     expect(initStart).toBeGreaterThanOrEqual(0)
     expect(initReplay).toBeGreaterThan(initStart)
     expect(clearStart).toBeGreaterThanOrEqual(0)

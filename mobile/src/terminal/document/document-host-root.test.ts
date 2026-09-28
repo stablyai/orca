@@ -273,8 +273,7 @@ function startMeasuredDocument() {
     rows: 24,
     initialData: '',
     preserveScroll: false,
-    containerWidth: 412,
-    containerHeight: 600
+    frame: { width: 412, height: 600 }
   })
   const write = () => parsedWrites.forEach((listener) => listener())
   return { started, posted, surface: surfaceOf(host), write }

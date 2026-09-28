@@ -1,6 +1,8 @@
 import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
 import type { TerminalOscLinkRange } from '../../../src/shared/terminal-osc-link-ranges'
 import type { StyleProp, ViewStyle } from 'react-native'
+import type { TerminalFitDimensions } from './terminal-grid-fit'
+import type { TerminalFrame } from './terminal-webview-messages'
 
 type TerminalMouseTrackingMode = 'none' | 'x10' | 'vt200' | 'drag' | 'any'
 
@@ -104,33 +106,24 @@ export type TerminalWebViewHandle = {
     initialData?: string,
     preserveScroll?: boolean,
     oscLinks?: TerminalOscLinkRange[],
-    // Why: the frame the app laid out; the document fits a later text-size change to it.
-    frame?: { width: number; height: number }
+    frame?: TerminalFrame
   ) => void
-  resize: (cols: number, rows: number) => void
+  resize: (cols: number, rows: number, frame?: TerminalFrame) => void
   // Why: reflow the local xterm buffer (scrollback included) to a new width
   // after a server-side PTY reflow, so older wrapped lines rewrap to match the
   // latest output. No-op on the alternate screen.
-  reflow: (cols: number, rows: number) => void
+  reflow: (cols: number, rows: number, frame?: TerminalFrame) => void
   clear: () => void
-  /** The fit for this frame from the cell box this view's document reported; null until its ready. */
-  fitDimensions: (frame: { width: number; height: number }) => { cols: number; rows: number } | null
-  /** `fitDimensions` for the subscribe after ready; holds that grid for the document's first report. */
-  subscribeFitDimensions: (frame: {
-    width: number
-    height: number
-  }) => { cols: number; rows: number } | null
-  // Why: the frame box React Native laid out; the document fits it with the app's own formula.
-  measureFitDimensions: (
-    frameHeight: number,
-    frameWidth: number
-  ) => Promise<{ cols: number; rows: number } | null>
+  /** The grid this frame holds at the cell box the document reported; null without one at this text size. */
+  fitDimensions: (frame: TerminalFrame) => TerminalFitDimensions | null
+  /** The subscribe went out at this grid; the document's first report at it is checked against it. */
+  holdSubscribedGrid: (grid: TerminalFitDimensions) => void
   resetZoom: () => void
   cancelSelect: () => void
   doSelectAll: () => void
   // Why: lets callers await the WebView-side `init` rAF chain (term.open
-  // → renderService population → first paint) so a follow-up measure
-  // doesn't race ahead and find term=null or cellWidth=0. Resolves on
-  // the next 'ready' notify after the most recent init.
+  // → renderService population → first paint → the init's cell box) so a
+  // follow-up fit reads that box. Resolves on the next 'ready' notify after
+  // the most recent init.
   awaitReady: () => Promise<void>
 }

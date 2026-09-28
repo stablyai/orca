@@ -252,7 +252,7 @@ describe('runTerminalViewportFitPass', () => {
     const scheduled: { fn: () => void; ms: number }[] = []
     const webView = {
       awaitReady: () => Promise.resolve(),
-      measureFitDimensions: () => Promise.resolve(overrides.measured ?? PHONE)
+      fitDimensions: () => (overrides.measured === undefined ? PHONE : overrides.measured)
     }
     const unsubscribeTerminal = vi.fn((handle: string) => {
       terminalUnsubsRef.current.delete(handle)

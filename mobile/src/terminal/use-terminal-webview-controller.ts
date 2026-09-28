@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { TerminalOscLinkRange } from '../../../src/shared/terminal-osc-link-ranges'
 import { readTerminalCellBox, type TerminalCellBox } from './terminal-cell-box'
-import { fitDimensionsFromCell } from './terminal-grid-fit'
+import { fitDimensionsFromCell, type TerminalFitDimensions } from './terminal-grid-fit'
 import { holdGrid } from './terminal-held-grid'
 import type { TerminalWebViewHandle, TerminalWebViewProps } from './terminal-webview-contract'
 import { useTerminalWebViewEngineErrorState } from './terminal-webview-engine-error-state'
 import { useTerminalWebReadyWatchdog } from './terminal-webview-ready-watchdog'
-import type { TerminalWebViewCommand } from './terminal-webview-messages'
+import type { TerminalFrame, TerminalWebViewCommand } from './terminal-webview-messages'
 import { createTerminalWebViewPendingMessages } from './terminal-webview-pending-messages'
 import { dispatchTerminalWebViewNotification } from './terminal-webview-notification-dispatch'
 import { routeTerminalQueryReply } from './terminal-webview-query-reply-routing'
@@ -18,7 +18,7 @@ import { createTerminalWriteCoalescer } from './terminal-write-coalescer'
  *
  * The document is the same program on both platforms — inside the WebView it is the generated
  * script, on the page it is the modules that script is generated from — so the readiness
- * handshake, the pending queue, the write coalescer, the ready and measure promises and the whole
+ * handshake, the pending queue, the write coalescer, the ready promise and the whole
  * imperative handle are the same too. What differs is only how a command reaches the document and
  * how a notify comes back: a `postMessage` across the WebView bridge, or a direct call.
  *
@@ -74,8 +74,8 @@ export function useTerminalWebViewController(
   const pendingPingIdRef = useRef<number | null>(null)
   const terminalThemeKey = useMemo(() => JSON.stringify(terminalTheme ?? null), [terminalTheme])
   // Why: each init() call posts 'init' to the document and arms a fresh ready promise. The
-  // document's init() rAF chain ends with a 'ready' notify that resolves it. measureFitDimensions
-  // awaits this so it doesn't race ahead of term.open() / renderService population.
+  // document's init() rAF chain ends with a 'ready' notify that resolves it. A fit awaits this so
+  // it reads the box the init reported.
   const promises = useTerminalWebViewReadyPromises()
   // The box the current document last reported; its re-reports cover a text-size change.
   const cellBoxRef = useRef<TerminalCellBox | null>(null)
@@ -169,8 +169,8 @@ export function useTerminalWebViewController(
         confirmWebReady(false)
       } else if (msg.type === 'ready') {
         // Why: the document's init() rAF chain has run — term is open, renderService is
-        // populated, first paint has happened. Resolve any pending awaitReady() so a queued
-        // measure can now safely read cell dims.
+        // populated, first paint has happened, and its box was reported. Resolve any pending
+        // awaitReady() so a queued fit reads that box.
         promises.resolveReady()
       } else if (msg.type === 'cell-metrics') {
         const laidOut = readTerminalCellBox(msg)
@@ -186,8 +186,6 @@ export function useTerminalWebViewController(
         if (changed && sameGrid) {
           onCellBoxChange?.()
         }
-      } else if (msg.type === 'measure-result') {
-        promises.resolveMeasure(msg)
       } else {
         dispatchTerminalWebViewNotification(msg, {
           reportEngineError,
@@ -252,7 +250,7 @@ export function useTerminalWebViewController(
   }, [postMessage, textScale])
 
   const fitDimensions = useCallback(
-    (frame: { width: number; height: number }) => {
+    (frame: TerminalFrame) => {
       const cell = cellBoxRef.current
       // Why: a box at another scale (a reload keeps the mount's) fits nothing; the route stays unmeasured.
       return cell && cell.fontScale === textScale && frame.width > 0 && frame.height > 0
@@ -283,7 +281,7 @@ export function useTerminalWebViewController(
         initialData?: string,
         preserveScroll?: boolean,
         oscLinks?: TerminalOscLinkRange[],
-        frame?: { width: number; height: number }
+        frame?: TerminalFrame
       ) {
         // Why: arm a fresh ready promise BEFORE posting init. The document resolves it via the
         // 'ready' notify at the end of its rAF chain.
@@ -300,38 +298,26 @@ export function useTerminalWebViewController(
           terminalTheme,
           fontScale: textScale,
           preserveScroll,
-          containerWidth: frame?.width,
-          containerHeight: frame?.height
+          frame
         })
       },
-      resize(cols: number, rows: number) {
+      resize(cols: number, rows: number, frame?: TerminalFrame) {
         // Why: resize/reflow must observe all prior writes or bytes reorder.
         writeCoalescer.flushNow()
-        postMessage({ type: 'resize', cols, rows })
+        postMessage({ type: 'resize', cols, rows, frame })
       },
-      reflow(cols: number, rows: number) {
+      reflow(cols: number, rows: number, frame?: TerminalFrame) {
         writeCoalescer.flushNow()
-        postMessage({ type: 'reflow', cols, rows })
+        postMessage({ type: 'reflow', cols, rows, frame })
       },
       clear() {
         writeCoalescer.clear()
         postMessage({ type: 'clear' })
       },
       fitDimensions,
-      subscribeFitDimensions(frame: { width: number; height: number }) {
-        const fit = fitDimensions(frame)
+      holdSubscribedGrid(grid: TerminalFitDimensions) {
         // Why: the DOM renderer's first report at this grid then reads as a new box, refit once.
-        if (fit) {
-          holdGrid(lastGridRef, fit.cols, fit.rows)
-        }
-        return fit
-      },
-      measureFitDimensions(frameHeight: number, frameWidth: number) {
-        // Why: no fit until the frame is laid out; the layout's own refit measures then.
-        if (!isWebReadyRef.current || !(frameHeight > 0 && frameWidth > 0)) {
-          return Promise.resolve(null)
-        }
-        return promises.measure(sendToDocument, frameHeight, frameWidth)
+        holdGrid(lastGridRef, grid.cols, grid.rows)
       },
       resetZoom() {
         postMessage({ type: 'reset-zoom' })

@@ -15,12 +15,12 @@ const PHONE = { cols: 55, rows: 44 }
 
 describe('sizeTerminalViewportFromCellBox', () => {
   function sizeArgs(
-    subscribeFitDimensions: (frame: { width: number; height: number }) => typeof PHONE | null
+    fitDimensions: (frame: { width: number; height: number }) => typeof PHONE | null
   ) {
     const viewportRef: { current: typeof PHONE | null } = { current: null }
     return {
       handle: HANDLE,
-      ref: { subscribeFitDimensions: vi.fn(subscribeFitDimensions) },
+      ref: { fitDimensions: vi.fn(fitDimensions), holdSubscribedGrid: vi.fn() },
       viewportRef,
       viewportMeasuredRef: { current: false },
       terminalFrameWidthRef: { current: 427.5 },
@@ -32,10 +32,11 @@ describe('sizeTerminalViewportFromCellBox', () => {
   it('sizes an unmeasured route from the reported cell box against the laid-out frame', () => {
     const args = sizeArgs(() => PHONE)
     sizeTerminalViewportFromCellBox(args)
-    expect(args.ref.subscribeFitDimensions).toHaveBeenCalledWith({ width: 427.5, height: 751 })
+    expect(args.ref.fitDimensions).toHaveBeenCalledWith({ width: 427.5, height: 751 })
     expect(args.viewportRef.current).toEqual(PHONE)
     expect(args.viewportMeasuredRef.current).toBe(true)
     expect(args.onMeasured).toHaveBeenCalledWith(HANDLE, PHONE, 751)
+    expect(args.ref.holdSubscribedGrid).toHaveBeenCalledWith(PHONE)
   })
 
   it('leaves the route unmeasured when the document reported no cell box', () => {
@@ -49,7 +50,7 @@ describe('sizeTerminalViewportFromCellBox', () => {
     const args = sizeArgs(() => PHONE)
     args.viewportMeasuredRef.current = true
     sizeTerminalViewportFromCellBox(args)
-    expect(args.ref.subscribeFitDimensions).not.toHaveBeenCalled()
+    expect(args.ref.fitDimensions).not.toHaveBeenCalled()
   })
 })
 
@@ -67,13 +68,16 @@ function subscriptionHarness(opts: {
   const terminal: TerminalWebViewHandle = {
     prepareForForegroundRecovery: vi.fn(),
     write: vi.fn(),
-    init: vi.fn((cols: number, rows: number) => order.push(`init ${cols}x${rows}`)),
+    init: vi.fn((cols: number, rows: number) => {
+      order.push(`init ${cols}x${rows}`)
+      // An init's document reports its laid-out box before its ready.
+      fit = fit ?? PHONE
+    }),
     resize: vi.fn(),
     reflow: vi.fn(),
     clear: vi.fn(),
     fitDimensions: vi.fn(() => fit),
-    subscribeFitDimensions: vi.fn(() => fit),
-    measureFitDimensions: vi.fn(async () => fit ?? PHONE),
+    holdSubscribedGrid: vi.fn(),
     resetZoom: vi.fn(),
     cancelSelect: vi.fn(),
     doSelectAll: vi.fn(),
@@ -186,7 +190,6 @@ describe('a terminal first subscribe', () => {
     harness.scrollback(0, PHONE.cols, PHONE.rows)
     await act(async () => {})
     expect(harness.order).toEqual(['subscribe {"cols":55,"rows":44}', 'init 55x44'])
-    expect(harness.terminal.measureFitDimensions).not.toHaveBeenCalled()
   })
 
   it('resubscribes a document reloaded after its first ready, which lost its terminal', async () => {

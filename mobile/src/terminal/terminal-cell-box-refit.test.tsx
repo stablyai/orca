@@ -12,8 +12,8 @@ vi.mock('react-native', () => ({
 
 const HANDLE = 'term-1'
 
-/** The session's refit over one open terminal whose document now fits `measured`. */
-function refitHarness(measured: TerminalViewportDims) {
+/** The session's refit over one open terminal whose document reported a `cellWidth` box. */
+function refitHarness(cellWidth: number) {
   const terminal: TerminalWebViewHandle = {
     prepareForForegroundRecovery: vi.fn(),
     write: vi.fn(),
@@ -21,13 +21,12 @@ function refitHarness(measured: TerminalViewportDims) {
     resize: vi.fn(),
     reflow: vi.fn(),
     clear: vi.fn(),
-    // The reported box: 23/3 px cells, 47 rows.
+    // The reported box, 47 rows high in the 710 px frame.
     fitDimensions: vi.fn((frame: { width: number }) => ({
-      cols: Math.floor(frame.width / (23 / 3)),
+      cols: Math.floor(frame.width / cellWidth),
       rows: 47
     })),
-    subscribeFitDimensions: vi.fn(),
-    measureFitDimensions: vi.fn(async () => measured),
+    holdSubscribedGrid: vi.fn(),
     resetZoom: vi.fn(),
     cancelSelect: vi.fn(),
     doSelectAll: vi.fn(),
@@ -82,41 +81,43 @@ afterEach(() => {
 
 describe('a new cell box for the open terminal', () => {
   it('refits the PTY to the grid the new box fits, as after a renderer swap', async () => {
-    const harness = refitHarness({ cols: 54, rows: 47 })
+    const harness = refitHarness(7.8)
     harness.report(HANDLE)
     await act(async () => {
       await vi.advanceTimersByTimeAsync(150)
     })
-    expect(harness.terminal.measureFitDimensions).toHaveBeenCalledWith(710, 427)
+    expect(harness.terminal.fitDimensions).toHaveBeenLastCalledWith({ width: 427, height: 710 })
     expect(harness.viewportRef.current).toEqual({ cols: 54, rows: 47 })
     expect(harness.subscribeToTerminal).toHaveBeenCalledWith(HANDLE)
   })
 
   it('leaves a terminal that is not on screen alone', async () => {
-    const harness = refitHarness({ cols: 54, rows: 47 })
+    const harness = refitHarness(7.8)
     harness.report('term-2')
     await act(async () => {
       await vi.advanceTimersByTimeAsync(150)
     })
-    expect(harness.terminal.measureFitDimensions).not.toHaveBeenCalled()
+    expect(harness.subscribeToTerminal).not.toHaveBeenCalled()
+    expect(harness.viewportRef.current).toEqual({ cols: 55, rows: 47 })
   })
 
   it('leaves the PTY alone when a new frame width holds the same grid, as sub-pixel jitter does', async () => {
-    const harness = refitHarness({ cols: 55, rows: 47 })
+    const harness = refitHarness(23 / 3)
     harness.layOut(427.3)
     await act(async () => {
       await vi.advanceTimersByTimeAsync(150)
     })
-    expect(harness.terminal.measureFitDimensions).not.toHaveBeenCalled()
+    expect(harness.subscribeToTerminal).not.toHaveBeenCalled()
+    expect(harness.viewportRef.current).toEqual({ cols: 55, rows: 47 })
   })
 
   it('refits when a new frame width holds a different grid', async () => {
-    const harness = refitHarness({ cols: 54, rows: 47 })
+    const harness = refitHarness(23 / 3)
     harness.layOut(420)
     await act(async () => {
       await vi.advanceTimersByTimeAsync(150)
     })
-    expect(harness.terminal.measureFitDimensions).toHaveBeenCalledWith(710, 420)
+    expect(harness.terminal.fitDimensions).toHaveBeenLastCalledWith({ width: 420, height: 710 })
     expect(harness.viewportRef.current).toEqual({ cols: 54, rows: 47 })
   })
 })
