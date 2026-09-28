@@ -330,6 +330,42 @@ describe('registerPtyHandlers', () => {
           spy.mockRestore()
         }
       })
+      // Why: the guest materializes one overlay per OpenCode major, each holding only its
+      // own plugin file. Asking for the wrong one hands the guest the other variant's
+      // plugin, whose agent gate then registers no hooks at all.
+      const guestOverlayCases: {
+        launchAgent?: TuiAgent
+        expectedAgent: 'opencode' | 'opencode2'
+      }[] = [
+        { expectedAgent: 'opencode' },
+        { launchAgent: 'opencode2', expectedAgent: 'opencode2' }
+      ]
+      it.each(guestOverlayCases)(
+        'selects the $expectedAgent guest overlay for a WSL spawn',
+        async ({ launchAgent, expectedAgent }) => {
+          const guestDirs = {
+            opencode: '/home/jin/.orca-relay/opencode-overlays/abc',
+            opencode2: '/home/jin/.orca-relay/opencode2-overlays/def'
+          }
+          const spy = vi
+            .spyOn(wslHookRelayManager, 'getOpenCodeOverlayDir')
+            .mockImplementation((_distro, agent = 'opencode') => guestDirs[agent])
+          try {
+            await withWin32Platform(async () => {
+              const env = await daemonSpawnAndGetEnv({}, undefined, undefined, undefined, {
+                shellOverride: 'wsl.exe',
+                ...(launchAgent ? { launchAgent } : {})
+              })
+              expect(spy.mock.calls.map(([, agent]) => agent)).toEqual([expectedAgent])
+              expect(env.ORCA_OPENCODE_AGENT).toBe(expectedAgent)
+              expect(env.OPENCODE_CONFIG_DIR).toBe(guestDirs[expectedAgent])
+              expect(env.ORCA_OPENCODE_CONFIG_DIR).toBe(guestDirs[expectedAgent])
+            })
+          } finally {
+            spy.mockRestore()
+          }
+        }
+      )
       it('strips the daemon-inherited Orca-owned CODEX_HOME for real-home routing', async () => {
         const spawnOptions = await daemonSpawnAndGetOptions(
           {},

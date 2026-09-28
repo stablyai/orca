@@ -1,11 +1,11 @@
 /**
  * The one refusal a structured-session READ can raise that is not a failure to read.
  *
- * `agentSession.history` and `agentSession.subscribe` both resolve the session through the host's
- * `requireSession`, which raises this code when the host holds no session object by that id. That
- * is never a transcript Orca could not read — it is a session this host has not attached YET (the
- * surface's hold is what attaches one) or one it has just closed. Both windows end on their own:
- * the first when the hold lands, the second when the chat tab retires.
+ * A current host opens a conversation for any read, so a read meets this code only once quit began.
+ * An older host resolves `agentSession.history` and `agentSession.subscribe` against the sessions it
+ * has attached, and raises it when it holds none by that id. Either way it is never a transcript
+ * Orca could not read: an older host's session is not attached YET (the surface's hold attaches
+ * one) or was just closed, and both windows end on their own.
  *
  * The genuinely latched lease — "Orca cannot prove the previous owner exited" — reaches the client
  * through the ACQUISITION path instead, so narrowing on the code costs a read no real diagnosis.

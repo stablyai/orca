@@ -73,8 +73,6 @@
         "f5a6b38a14": "sheet"
       },
       "NativeChatResumeOnRestartModal": {
-        "continueRefused_one": "{{value0}} chat could not be continued. Open it to continue manually.",
-        "continueRefused_other": "{{value0}} chats could not be continued. Open them to continue manually.",
         "continueUnconfirmed_one": "Continuation delivery is unconfirmed for {{value0}} chat. Open it to check before sending another message.",
         "continueUnconfirmed_other": "Continuation delivery is unconfirmed for {{value0}} chats. Open them to check before sending another message."
       },
@@ -383,10 +381,6 @@
         "EditorContent": {
           "d07e4b8553": "branch",
           "d16e037f40": "rich"
-        },
-        "IpynbViewer": {
-          "59b6cd874b": "code",
-          "ba149053d5": "markdown"
         },
         "ReviewNotesSendMenuContent": {
           "50f7e753ea": "Sending notes to active agent...",
@@ -2470,6 +2464,10 @@
           "MobileDriverOverlay": {
             "3eed73394f": "Your keyboard is paused"
           },
+          "TerminalErrorToast": {
+            "ptyAllocationLimit": "Your system cannot allocate any more pty devices. Close some terminals you are not using, in Orca or another program, then try again.",
+            "terminalProcessLimit": "Your system cannot start another terminal process. Close unused terminals or quit unused processes, then try again."
+          },
           "TerminalRemoteRuntimeReconnectBanner": {
             "retryingBody": "Orca will retry for up to one minute. This terminal will resume if the connection returns."
           },
@@ -2678,6 +2676,7 @@
           "title": "Start a chat with {{value0}}"
         },
         "error": {
+          "retryingSubtitle": "The transcript could not be read. Orca keeps trying to load it.",
           "subtitle": "The transcript could not be read. Toggle back to the terminal to keep working.",
           "title": "Could not load conversation"
         },
@@ -2714,6 +2713,56 @@
         "runningPreview": "Running {{preview}}",
         "usedManySummary": "Used {{toolCount}} tools",
         "usedOneSummary": "Used 1 tool"
+      },
+      "writeNotice": {
+        "agentRefused": "The agent turned this down.",
+        "agentStarting": "The agent is still starting.",
+        "answerFirst": "Answer the question or approval first.",
+        "backgroundTasksRunning": "Background tasks are still running.",
+        "capacity": "Orca has received too many requests in the last day.",
+        "chatNotFound": "The Orca running this chat has no record of it.",
+        "clearUnfinished": "The last /clear didn't finish.",
+        "commandRunning": "A /compact or /clear is still running.",
+        "conversationCleared": "This conversation has been cleared.",
+        "goalsUnsupported": "This agent doesn't support goals.",
+        "historyUnavailable": "Orca couldn't open this chat's history right now.",
+        "historyUnreadable": "Orca couldn't read this chat's saved history.",
+        "historyUnusable": "Unable to load this chat.",
+        "hostReconciling": "Orca is still checking on this chat after restarting.",
+        "messagesUnsettled": "A message you sent earlier hasn't been confirmed yet.",
+        "notDoneAnswer": "Your answer was not sent.",
+        "notDoneCommand": "The command didn't run.",
+        "notDoneGoal": "The goal wasn't changed.",
+        "notDoneOption": "The setting wasn't changed.",
+        "notDoneReadHistory": "This chat's history couldn't be loaded.",
+        "notDoneSend": "Your message was not sent.",
+        "notDoneStop": "The agent wasn't stopped.",
+        "notDoneStopTask": "The background task wasn't stopped.",
+        "notDoneStopTasks": "The background tasks weren't stopped.",
+        "openCurrentConversation": "Open the current conversation to continue.",
+        "optionRejected": "The agent didn't accept this setting.",
+        "outcomeUnknown": "Orca couldn't confirm what happened. Check the chat.",
+        "ownerUnproven": "Orca hasn't confirmed that this chat's previous agent stopped.",
+        "promptPending": "The agent is waiting for an answer to a question or approval.",
+        "questionChanged": "This question was already answered or has changed.",
+        "quitTerminalAgent": "Quit that agent to continue the chat here.",
+        "recordFailed": "Orca couldn't record it in this chat's history.",
+        "recordUnreadable": "Orca couldn't read this chat's saved state.",
+        "reopenChat": "Reopen the chat to check again.",
+        "restartFailed": "The agent couldn't restart.",
+        "settleEarlierMessage": "Wait for your earlier message to go through, or retry it.",
+        "startNewChat": "Start a new chat to continue.",
+        "terminalAgentHoldsChat": "This chat is still open in a terminal agent.",
+        "tryAgain": "Try again.",
+        "tryAgainComposerSend": "Send it again.",
+        "turnActive": "The agent is still responding.",
+        "unreachable": "Orca couldn't reach the agent.",
+        "unsupported": "The Orca running this chat doesn't support this. Update Orca, then try again.",
+        "waitForBackgroundTasks": "Wait for the background tasks to finish.",
+        "waitForCommand": "Wait for the /compact or /clear to finish.",
+        "waitForStart": "Wait for the agent to finish starting.",
+        "waitForTurn": "Wait for the agent to finish responding, or stop it.",
+        "waitMoment": "Wait a moment."
       }
     },
     "onboarding": {

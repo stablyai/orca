@@ -215,10 +215,11 @@ function declaredArchFromPath(filePath) {
   return match ? ARCH_BY_TOKEN[match[1].toLowerCase()] : null
 }
 
-function findArchViolation(filePath, targetArch) {
+function findArchViolation(filePath, targetArch, rootDir) {
   // A path that names an architecture is judged against that name, so a per-arch vendored package
   // is fine while `bin/linux-arm64-.../node-pty.node` holding an x86-64 binary is still caught.
-  const declared = declaredArchFromPath(filePath)
+  // Why relative: the arm64 slice's own dir (`linux-arm64-unpacked`) must not declare every file arm64.
+  const declared = declaredArchFromPath(rootDir ? relative(rootDir, filePath) : filePath)
   const expectedArch = declared ?? targetArch
   const expected = ELF_MACHINE_BY_ARCH[expectedArch]
   if (expected === undefined) {
@@ -365,10 +366,33 @@ function parseImportedSymbols(objdumpOutput) {
 /** Version needs + DT_NEEDED from a single `objdump -p` (fail-closed). */
 function readDynamicInfo(filePath, objdumpPath) {
   const output = runObjdump(objdumpPath, '-p', filePath)
+  const versionNeeds = parseVersionNeeds(output)
+  const neededLibraries = parseNeededLibraries(output)
   return {
-    versionNeeds: parseVersionNeeds(output),
-    neededLibraries: parseNeededLibraries(output)
+    versionNeeds,
+    neededLibraries,
+    // LLVM prints an empty Dynamic Section even for static executables.
+    isStatic:
+      /^Program Header:/m.test(output) &&
+      /^\s+LOAD\s+off\s+0x[0-9a-f]+/m.test(output) &&
+      !/^\s+(?:DYNAMIC|INTERP)\s+off\s+/m.test(output) &&
+      versionNeeds.length === 0 &&
+      neededLibraries.size === 0
   }
+}
+
+function isMuslTemplatePayload(filePath, neededLibraries, versionNeeds) {
+  return (
+    /(?:^|[/\\])orcad-template[/\\]targets[/\\]linux-(?:x64|arm64)-musl[/\\]/.test(filePath) &&
+    [...neededLibraries].some(
+      (name) => name === 'libc.so' || /^libc\.musl-[\w-]+\.so\.1$/.test(name)
+    ) &&
+    ![...neededLibraries, ...versionNeeds.map((need) => need.library)].some((name) =>
+      /^(?:libc\.so\.6|libm\.so\.6|libpthread\.so\.0|libdl\.so\.2|librt\.so\.1|ld-linux.*)$/.test(
+        name
+      )
+    )
+  )
 }
 
 /** Imported (undefined) dynamic symbols from `objdump -T` (fail-closed). */
@@ -403,7 +427,7 @@ function verifyLinuxGlibcFloor(rootDir, options = {}) {
   // Why before the glibc pass: a wrong-architecture binary's symbol versions are valid but
   // meaningless, so reporting a floor violation for it would send the reader down the wrong path.
   const archOffenders = binaries
-    .map((filePath) => ({ filePath, violation: findArchViolation(filePath, targetArch) }))
+    .map((filePath) => ({ filePath, violation: findArchViolation(filePath, targetArch, rootDir) }))
     .filter(({ violation }) => violation !== null)
   if (archOffenders.length > 0) {
     const detail = archOffenders
@@ -424,15 +448,20 @@ function verifyLinuxGlibcFloor(rootDir, options = {}) {
 
   const offenders = []
   for (const filePath of binaries) {
-    const { versionNeeds, neededLibraries } = readDynamicInfo(filePath, objdumpPath)
-    const floorViolations = findFloorViolations(versionNeeds, filePath)
+    const { versionNeeds, neededLibraries, isStatic } = readDynamicInfo(filePath, objdumpPath)
+    const isMuslTarget = isMuslTemplatePayload(filePath, neededLibraries, versionNeeds)
+    // Remote musl payloads use their host's C++ runtime, not Ubuntu's libstdc++ or libutil.
+    const floorViolations = findFloorViolations(versionNeeds, filePath).filter(
+      (need) => !isMuslTarget || !isLibstdcxxNode(need.name)
+    )
     // Only pay for `objdump -T` when a relocated-symbol provider is not already
     // in DT_NEEDED (the common, healthy case short-circuits without it).
-    const providerViolations = Object.values(RELOCATED_SYMBOL_PROVIDERS).some(
-      (library) => !neededLibraries.has(library)
-    )
-      ? findMissingProviderDeps(readImportedSymbols(filePath, objdumpPath), neededLibraries)
-      : []
+    const providerViolations =
+      !isStatic &&
+      !isMuslTarget &&
+      Object.values(RELOCATED_SYMBOL_PROVIDERS).some((library) => !neededLibraries.has(library))
+        ? findMissingProviderDeps(readImportedSymbols(filePath, objdumpPath), neededLibraries)
+        : []
     if (floorViolations.length > 0 || providerViolations.length > 0) {
       offenders.push({ filePath, floorViolations, providerViolations })
     }
@@ -464,7 +493,7 @@ function verifyLinuxGlibcFloor(rootDir, options = {}) {
   }
 
   console.log(
-    `[verify-linux-glibc-floor] OK — ${binaries.length} bundled native binaries all load on ${FLOOR_LABEL}`
+    `[verify-linux-glibc-floor] OK — ${binaries.length} bundled native binaries meet applicable ${FLOOR_LABEL} requirements`
   )
 }
 

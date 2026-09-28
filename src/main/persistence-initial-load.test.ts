@@ -1,3 +1,14 @@
+import {
+  closeTestStores,
+  testState,
+  createStore,
+  writeDataFile,
+  readDataFile,
+  makeRepo,
+  makeProject,
+  makeProjectHostSetup,
+  createSqliteTestStore
+} from './persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { writeFileSync, rmSync, mkdtempSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
@@ -6,16 +17,10 @@ import type { PersistedState } from '../shared/persisted-state-types'
 import type { WorkspaceSessionState } from '../shared/workspace-session-state-types'
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../shared/constants'
 import { closeTerminalTabInWorkspaceSession } from '../shared/workspace-session-terminal-tab-close'
-import {
-  testState,
-  createStore,
-  writeDataFile,
-  readDataFile,
-  makeRepo,
-  makeProject,
-  makeProjectHostSetup
-} from './persistence-test-harness'
+
 import { TEST_LEAF_1 } from './persistence-session-fixtures'
+import { ProfileStateSqliteAuthority } from './persistence/profile-state/profile-state-sqlite-authority'
+
 import {
   getLocalWorktreeScanGeneration,
   isLocalWorktreeScanGenerationCurrent
@@ -69,7 +74,8 @@ describe('Store', () => {
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
   // ── 1. Defaults when no file exists ──────────────────────────────────
@@ -79,7 +85,7 @@ describe('Store', () => {
     expect(store.getRepos()).toEqual([])
   }, 15_000)
 
-  it('clone-reads and synchronously persists the main-owned Codex reset ledger', async () => {
+  it('clone-reads and durably persists the main-owned Codex reset ledger', async () => {
     const store = await createStore()
     const ledger = {
       version: 1 as const,
@@ -97,7 +103,7 @@ describe('Store', () => {
       ]
     }
 
-    store.replaceCodexResetCreditAttemptLedgerAndFlush(ledger)
+    await store.replaceCodexResetCreditAttemptLedgerAndFlush(ledger)
     const firstRead = store.getCodexResetCreditAttemptLedger()
     firstRead.attempts.splice(0, 1)
 
@@ -105,32 +111,37 @@ describe('Store', () => {
     expect((readDataFile() as PersistedState).codexResetCreditAttemptLedger).toEqual(ledger)
   })
 
-  it('rolls the in-memory Codex reset ledger back when its sync flush fails', async () => {
+  it('rolls the in-memory Codex reset ledger back when its durable write fails', async () => {
     const store = await createStore()
     const before = store.getCodexResetCreditAttemptLedger()
-    vi.spyOn(store, 'flushOrThrow').mockImplementationOnce(() => {
-      throw new Error('disk full')
-    })
-
-    expect(() =>
-      store.replaceCodexResetCreditAttemptLedgerAndFlush({
-        version: 1,
-        attempts: [
-          {
-            idempotencyKey: '11111111-1111-4111-8111-111111111111',
-            expectedScope: {
-              target: { runtime: 'host', wslDistro: null },
-              accountId: 'account-host',
-              accountRevision: 42,
-              offerRevision: 'v1:offer'
-            },
-            state: 'providerPending'
-          }
-        ]
+    const write = vi
+      .spyOn(ProfileStateSqliteAuthority.prototype, 'writeCompleteSerializedDomains')
+      .mockImplementationOnce(() => {
+        throw new Error('disk full')
       })
-    ).toThrow('disk full')
 
-    expect(store.getCodexResetCreditAttemptLedger()).toEqual(before)
+    try {
+      await expect(
+        store.replaceCodexResetCreditAttemptLedgerAndFlush({
+          version: 1,
+          attempts: [
+            {
+              idempotencyKey: '11111111-1111-4111-8111-111111111111',
+              expectedScope: {
+                target: { runtime: 'host', wslDistro: null },
+                accountId: 'account-host',
+                accountRevision: 42,
+                offerRevision: 'v1:offer'
+              },
+              state: 'providerPending'
+            }
+          ]
+        })
+      ).rejects.toThrow('disk full')
+      expect(store.getCodexResetCreditAttemptLedger()).toEqual(before)
+    } finally {
+      write.mockRestore()
+    }
   })
 
   it('preserves a corrupt Codex reset ledger as a fail-closed read error', async () => {
@@ -222,7 +233,7 @@ describe('Store', () => {
     vi.resetModules()
     const { Store, initDataPath } = await import('./persistence')
     initDataPath()
-    const store = new Store({ dataFile: profileDataFile })
+    const store = createSqliteTestStore(Store, { dataFile: profileDataFile })
 
     expect(store.getRepos().map((repo) => repo.id)).toEqual(['profile-repo'])
   }, 15_000)

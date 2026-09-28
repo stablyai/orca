@@ -16,7 +16,8 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import { hasUnansweredStructuredAgentSessionDispatch } from '../../../shared/structured-agent-session-projection'
-import { dispatchWriteFailureReason } from '../../../shared/structured-agent-session-dispatch-rejection'
+import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { digestPayload } from './journal-payload-bounds'
 import {
   reconcileSubmissions,
@@ -180,7 +181,7 @@ describe('crash between provider accept and journal commit', () => {
     await journal.resolveDispatch({
       clientMessageId: 'cm_write_failed',
       state: 'rejected',
-      reason: dispatchWriteFailureReason(new Error('broken pipe')),
+      ...agentSessionFailureWords(agentSessionFailureFact('writeFailed'), { surface: 'rejection' }),
       fence: 1
     })
 
@@ -191,7 +192,7 @@ describe('crash between provider accept and journal commit', () => {
     // so recovery must not reopen it as doubt.
     expect(restarted.submissions()[0]).toMatchObject({
       dispatchState: 'rejected',
-      reason: 'provider_write_failed: broken pipe'
+      reason: 'provider_write_failed'
     })
     expect(restarted.submissions()[0]?.recovered).toBeUndefined()
     expect(hasUnansweredStructuredAgentSessionDispatch(restarted.submissions())).toBe(false)
@@ -250,7 +251,9 @@ describe('crash between provider accept and journal commit', () => {
     await restarted.resolveDispatch({
       clientMessageId: 'cm_1',
       state: 'rejected',
-      reason: 'not_delivered',
+      ...agentSessionFailureWords(agentSessionFailureFact('notDelivered'), {
+        surface: 'rejection'
+      }),
       fence: 2,
       recovered: true
     })

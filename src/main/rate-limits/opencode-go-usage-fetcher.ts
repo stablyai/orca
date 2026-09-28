@@ -212,7 +212,8 @@ async function fetchOpenCodeGoRateLimitsWithSession(
       weekly: null,
       monthly: null,
       updatedAt: Date.now(),
-      error: 'No workspace ID found — set a Workspace ID override in settings',
+      error:
+        'No workspace found for this cookie — add an OpenCode Go API key (or run /connect in OpenCode), or set a Workspace ID override',
       status: 'error'
     }
   }

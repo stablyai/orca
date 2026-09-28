@@ -24,6 +24,11 @@ vi.mock('./host-app-version-store', () => ({
   recordHostAppVersion: (...args: unknown[]) => recordHostAppVersionMock(...args)
 }))
 
+// Why: the recorder reaches the durable host store, which this hook-level suite never exercises.
+vi.mock('./host-descriptor-recorder', () => ({
+  recordHostDescriptorFromStatus: vi.fn()
+}))
+
 /**
  * What a desktop that ships a mobile web bundle now answers. The new name sits among real ones
  * rather than alone, so a reader that keeps only the head or the tail of the list cannot look

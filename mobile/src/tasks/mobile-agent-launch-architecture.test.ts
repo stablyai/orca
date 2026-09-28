@@ -7,7 +7,7 @@ import { OrcaRuntimeRpcServer } from '../../../src/main/runtime/runtime-rpc'
 import { DeviceRegistry } from '../../../src/main/runtime/device-registry'
 import type { AuthenticatedMobileSocket } from '../../../src/main/runtime/rpc/mobile-socket-wiring'
 import { RpcDispatcher } from '../../../src/main/runtime/rpc/dispatcher'
-import { AgentLaunch } from '../../../src/main/runtime/rpc/methods/agent-launch-schemas'
+import { AgentLaunchFields } from '../../../src/main/runtime/rpc/methods/agent-launch-schemas'
 import { runtimeStub } from '../../../src/main/runtime/rpc/methods/agent-launch.test-fixture'
 import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
 import type { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
@@ -73,7 +73,7 @@ function scenario(
                 (method) => ({
                   ...method,
                   // Older hosts accept the method but strip this optional field before running it.
-                  params: AgentLaunch.omit({ operationId: true })
+                  params: AgentLaunchFields.omit({ operationId: true })
                 })
               )
       })

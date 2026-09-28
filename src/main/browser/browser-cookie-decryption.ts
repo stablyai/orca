@@ -1,4 +1,4 @@
-import { createDecipheriv } from 'node:crypto'
+import { createDecipheriv, createHash } from 'node:crypto'
 import type { BrowserCookieImportSummary } from '../../shared/browser-workspace-types'
 import type { EncryptionKeyResult } from './browser-cookie-sqlite'
 
@@ -18,8 +18,19 @@ function hasHmacPrefix(buf: Buffer): boolean {
   return nonPrintable >= 8
 }
 
-function stripHmac(buf: Buffer): Buffer {
-  return hasHmacPrefix(buf) ? buf.subarray(CHROMIUM_COOKIE_HMAC_LEN) : buf
+// Why: DB schema 24+ prefixes SHA-256(host_key); an exact match also catches empty values, where the
+// plaintext is only the 32-byte hash and the length-gated heuristic below keeps it as the value.
+function hasHostKeyHashPrefix(buf: Buffer, hostKey: string): boolean {
+  return (
+    buf.length >= CHROMIUM_COOKIE_HMAC_LEN &&
+    buf.subarray(0, CHROMIUM_COOKIE_HMAC_LEN).equals(createHash('sha256').update(hostKey).digest())
+  )
+}
+
+function stripHmac(buf: Buffer, hostKey: string): Buffer {
+  return hasHostKeyHashPrefix(buf, hostKey) || hasHmacPrefix(buf)
+    ? buf.subarray(CHROMIUM_COOKIE_HMAC_LEN)
+    : buf
 }
 
 // Why: the version prefix is the only thing that survives a failed decrypt, so read it once and
@@ -71,7 +82,8 @@ export function buildUndecryptableWarning(counts: {
 
 export function decryptCookieValueRaw(
   encryptedBuffer: Buffer,
-  keyResult: EncryptionKeyResult
+  keyResult: EncryptionKeyResult,
+  hostKey: string
 ): Buffer | null {
   if (!encryptedBuffer || encryptedBuffer.length === 0) {
     return null
@@ -82,7 +94,7 @@ export function decryptCookieValueRaw(
   }
 
   if (keyResult.mode === 'aes-256-gcm') {
-    return decryptAes256Gcm(encryptedBuffer.subarray(3), keyResult.key)
+    return decryptAes256Gcm(encryptedBuffer.subarray(3), keyResult.key, hostKey)
   }
 
   // AES-128-CBC (macOS and Linux)
@@ -101,13 +113,13 @@ export function decryptCookieValueRaw(
     const decipher = createDecipheriv('aes-128-cbc', key, iv)
     decipher.setAutoPadding(true)
     const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()])
-    return stripHmac(decrypted)
+    return stripHmac(decrypted, hostKey)
   } catch {
     return null
   }
 }
 
-function decryptAes256Gcm(payload: Buffer, key: Buffer): Buffer | null {
+function decryptAes256Gcm(payload: Buffer, key: Buffer, hostKey: string): Buffer | null {
   // Why: Windows AES-256-GCM layout is: [12-byte nonce][ciphertext][16-byte auth tag]
   if (payload.length < 12 + 16) {
     return null
@@ -119,7 +131,7 @@ function decryptAes256Gcm(payload: Buffer, key: Buffer): Buffer | null {
     const decipher = createDecipheriv('aes-256-gcm', key, nonce)
     decipher.setAuthTag(authTag)
     const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()])
-    return stripHmac(decrypted)
+    return stripHmac(decrypted, hostKey)
   } catch {
     return null
   }

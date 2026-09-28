@@ -50,12 +50,12 @@ describe('terminal write coalescer boundaries', () => {
     view.coalescer.write('stale-pre-snapshot')
     // init() boundary as wired in TerminalWebView: clear the coalescer, then post init.
     view.coalescer.clear()
-    view.postMessage({ type: 'init', cols: 80, rows: 24, initialData: 'snapshot' })
+    view.postMessage({ type: 'init', cols: 80, rows: 24, initialData: 'snapshot', frame: null })
     vi.runOnlyPendingTimers()
 
     expect(view.delivered).toEqual([
       { type: 'write', data: 'a' },
-      { type: 'init', cols: 80, rows: 24, initialData: 'snapshot' }
+      { type: 'init', cols: 80, rows: 24, initialData: 'snapshot', frame: null }
     ])
     const initIndex = view.delivered.findIndex((msg) => msg.type === 'init')
     expect(initIndex).toBeGreaterThanOrEqual(0)
@@ -75,7 +75,7 @@ describe('terminal write coalescer boundaries', () => {
     // Recovery re-init: coalescer.clear() cancels any pending timer synchronously,
     // so nothing can flush after this point; the queued init supersedes the flush.
     view.coalescer.clear()
-    view.postMessage({ type: 'init', cols: 80, rows: 24, initialData: 'snapshot' })
+    view.postMessage({ type: 'init', cols: 80, rows: 24, initialData: 'snapshot', frame: null })
 
     view.readiness.webReady = true
     view.pendingMessages.flush(view.send)
@@ -84,7 +84,7 @@ describe('terminal write coalescer boundaries', () => {
     expect(view.delivered).toEqual([
       { type: 'write', data: 'live' },
       { type: 'write', data: 'buffered-mid-recovery' },
-      { type: 'init', cols: 80, rows: 24, initialData: 'snapshot' }
+      { type: 'init', cols: 80, rows: 24, initialData: 'snapshot', frame: null }
     ])
     // Invariant: no write reaches the document after the recovery init.
     const initIndex = view.delivered.findIndex((msg) => msg.type === 'init')
@@ -124,7 +124,9 @@ describe('terminal write coalescer boundaries', () => {
 
   it('clears the coalescer before posting init and clear (snapshot supersession)', () => {
     // Anchor on the init() signature (unique) — 'init(' alone also matches comments.
-    const initStart = controllerSource.indexOf('initialData?: string,')
+    const initStart = controllerSource.indexOf(
+      'init({ cols, rows, initialData, preserveScroll, oscLinks, frame }'
+    )
     const initClear = controllerSource.indexOf('writeCoalescer.clear()', initStart)
     const initPost = controllerSource.indexOf("type: 'init'", initStart)
     expect(initStart).toBeGreaterThanOrEqual(0)
@@ -142,7 +144,9 @@ describe('terminal write coalescer boundaries', () => {
 
   it('flushes pending writes before resize and reflow so boundaries observe prior bytes', () => {
     for (const method of ['resize', 'reflow'] as const) {
-      const start = controllerSource.indexOf(`${method}(cols: number, rows: number) {`)
+      const start = controllerSource.indexOf(
+        `${method}(cols: number, rows: number, frame: TerminalFrame | null) {`
+      )
       expect(start).toBeGreaterThanOrEqual(0)
       const body = controllerSource.slice(start, start + 300)
       const flushIndex = body.indexOf('writeCoalescer.flushNow()')

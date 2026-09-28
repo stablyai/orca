@@ -15,6 +15,11 @@ import type {
   OpenCodeUsagePersistedDatabase,
   OpenCodeUsageSession
 } from '../opencode-usage/types'
+import type {
+  MuseUsageDailyAggregate,
+  MuseUsagePersistedFile,
+  MuseUsageSession
+} from '../muse-usage/types'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
 import type {
   UsageScanWorkerProviderId,
@@ -172,6 +177,25 @@ export async function scanOpenCodeUsageOnWorker(
   const value = await scan({ providerId: 'opencode', worktrees, previous })
   if (value.providerId !== 'opencode') {
     throw wrongProvider('opencode', value.providerId)
+  }
+  return value
+}
+
+/**
+ * Scan Muse Code session logs on the shared worker.
+ * @param scan - Dispatch function, injected so tests need no real thread.
+ * @param worktrees - Worktree refs used to attribute usage.
+ * @param previous - Last scan's per-file cache.
+ * @returns Processed files plus the session and daily projections.
+ */
+export async function scanMuseUsageOnWorker(
+  scan: (body: UsageScanWorkerRequestBody) => Promise<UsageScanWorkerValue>,
+  worktrees: UsageScanWorktreeRef[],
+  previous: MuseUsagePersistedFile[]
+): Promise<ProviderScanResult<MuseUsagePersistedFile, MuseUsageSession, MuseUsageDailyAggregate>> {
+  const value = await scan({ providerId: 'muse', worktrees, previous })
+  if (value.providerId !== 'muse') {
+    throw wrongProvider('muse', value.providerId)
   }
   return value
 }

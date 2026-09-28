@@ -15,7 +15,8 @@ import {
 const hookSource = readFileSync(new URL('./terminal-viewport-refit.ts', import.meta.url), 'utf8')
 const sessionSource = [
   readMobileSessionRouteSource('../session/use-mobile-session-keyboard-state.ts'),
-  readMobileSessionRouteSource('../session/MobileSessionActiveContent.tsx')
+  readMobileSessionRouteSource('../session/MobileSessionActiveContent.tsx'),
+  readMobileSessionRouteSource('../session/use-mobile-session-terminal-webview.ts')
 ].join('\n')
 
 describe('terminal viewport refit', () => {
@@ -140,10 +141,10 @@ describe('terminal viewport refit', () => {
     // reflow the desktop PTY to phone dims the user never sees.
     const timerStart = hookSource.indexOf('refitTimerRef.current = setTimeout(')
     const coveredCheck = hookSource.indexOf('if (nativeChatCoveredRef.current)', timerStart)
-    const measureIndex = hookSource.indexOf('measureFitDimensions', timerStart)
+    const fitIndex = hookSource.indexOf('ref.fitDimensions(', timerStart)
     expect(timerStart).toBeGreaterThanOrEqual(0)
     expect(coveredCheck).toBeGreaterThan(timerStart)
-    expect(measureIndex).toBeGreaterThan(coveredCheck)
+    expect(fitIndex).toBeGreaterThan(coveredCheck)
     expect(sessionSource).toContain('nativeChatCoveredRef: showNativeChatRef')
   })
 
@@ -152,9 +153,11 @@ describe('terminal viewport refit', () => {
     expect(sessionSource).toContain('tabStripVisible: terminals.length > 1')
     expect(sessionSource).toContain('textScale: terminalTextScale')
     expect(sessionSource).toContain('connState,')
-    expect(sessionSource).toContain('notifyTerminalFrameHeight(nextHeight)')
-    // One seam for both facts: on the page they come apart, because the shell shortens the WebView
-    // and the keyboard covers nothing the screen has to lift for.
+    expect(sessionSource).toContain('notifyTerminalFrame({ width, height })')
+    expect(sessionSource).toContain('notifyTerminalFrameHeight(Math.round(frame.height))')
+    expect(sessionSource).toContain('notifyTerminalFrameWidth()')
+    // One seam for both facts: they come apart for a floating keyboard, which is open yet covers
+    // nothing the screen has to lift for.
     expect(sessionSource).toContain('const softKeyboard = useSoftKeyboard()')
     expect(sessionSource).toContain('notifyKeyboardVisibility(softKeyboard.visible)')
     expect(sessionSource).toContain('setKeyboardHeight(softKeyboard.height)')
@@ -253,7 +256,7 @@ describe('terminal viewport refit', () => {
     // desktop mode. Reflow local scrollback only after the server says it
     // actually applied phone-fit to the PTY.
     const appliedIndex = hookSource.indexOf('if (outcome.applied)')
-    const reflowIndex = hookSource.indexOf('ref.reflow(dims.cols, dims.rows)')
+    const reflowIndex = hookSource.indexOf('ref.reflow(dims.cols, dims.rows, frame)')
     const cacheUpdateIndex = hookSource.indexOf('updateTerminalSubscriptionViewport(handle, dims)')
     // Assert each anchor exists before ordering: a missing marker yields -1 and would
     // let the ordering comparisons pass vacuously.

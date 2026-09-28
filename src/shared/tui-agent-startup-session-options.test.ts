@@ -72,6 +72,23 @@ describe('tui agent startup session options', () => {
     expect(plan?.sessionOptions).toEqual({ model: 'gemini-3.1-pro-high', effort: 'high' })
   })
 
+  it('forwards Muse worker model and effort after its workspace-trust default', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'muse',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'linux',
+      allowEmptyPromptLaunch: true,
+      sessionOptions: { model: 'muse-spark-1.3', effort: 'xhigh' },
+      sessionOptionsOverrideAgentArgs: true,
+      agentArgs: '--model muse-spark-1.2'
+    })
+    expect(plan?.launchCommand).toBe(
+      "muse --trust-workspace '--model' 'muse-spark-1.3' '--reasoning-effort' 'xhigh'"
+    )
+    expect(plan?.sessionOptions).toEqual({ model: 'muse-spark-1.3', effort: 'xhigh' })
+  })
+
   it('inserts worker preferences before an argument terminator', () => {
     const plan = buildAgentStartupPlan({
       agent: 'codex',

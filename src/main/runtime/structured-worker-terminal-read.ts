@@ -48,12 +48,12 @@ import { readTerminalTail } from './terminal-tail-read'
  * IS a structured worker never falls through: an unreadable journal refuses rather than answering
  * an empty tail, which a caller cannot tell from a worker that has said nothing.
  */
-export function readStructuredWorkerTerminal(args: {
+export async function readStructuredWorkerTerminal(args: {
   handle: string
   db: OrchestrationDb | null
   cursor?: number
   limit?: number
-}): RuntimeTerminalRead | null {
+}): Promise<RuntimeTerminalRead | null> {
   const identity = resolveStructuredWorkerAuthority(args.handle, args.db)?.identity
   if (!identity) {
     return null
@@ -76,7 +76,7 @@ export function readStructuredWorkerTerminal(args: {
         'A structured session has no durable line anchor to page from — nothing else does either.'
     )
   }
-  const page = readStructuredJournalPage(identity.sessionId)
+  const page = await readStructuredJournalPage(identity.sessionId)
   if (!page) {
     // Honest refusal, and the same one the send lane reports: an empty tail would read as "this
     // worker has produced no output", which is a different and false claim.

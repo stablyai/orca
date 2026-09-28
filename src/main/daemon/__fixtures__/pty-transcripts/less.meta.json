@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-24T04:11:32.894Z",
+  "platform": "darwin",
+  "command": ["less", "-R", "sample.ts"],
+  "cols": 90,
+  "rows": 25,
+  "note": "file: a copy of src/main/daemon/headless-emulator.ts plus CJK/emoji lines",
+  "exitCode": 0
+}

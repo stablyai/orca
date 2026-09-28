@@ -109,4 +109,26 @@ describe('cell inventory hold samples', () => {
     expect(samples.consumeCounts().cellInventoryLockUnavailable).toBe(4)
     expect(samples.consumeCounts()).toEqual(emptyCellInventoryHoldCounts())
   })
+
+  // Why: the alert reads one max across every lock, so the label is the only
+  // thing that says whether a long hold was the inventory or a rehome target row.
+  it('names the site of the longest hold and reports rehome target rows apart', () => {
+    const samples = new CellInventoryHoldSamples()
+    samples.record(40)
+    samples.record(170, 'rehome-target-row')
+    samples.record(90, 'rehome-target-row')
+
+    expect(samples.readCounts()).toMatchObject({
+      cellInventoryHoldMsMax: 170,
+      cellInventoryHolds: 3,
+      cellInventoryHoldMaxSite: 'rehome-target-row',
+      rehomeTargetRowHoldMsMax: 170,
+      rehomeTargetRowHolds: 2
+    })
+    samples.record(300)
+    expect(samples.readCounts()).toMatchObject({
+      cellInventoryHoldMaxSite: 'inventory',
+      rehomeTargetRowHoldMsMax: 170
+    })
+  })
 })

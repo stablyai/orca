@@ -33,7 +33,7 @@ import { syncTerminalScrollIntentSoon } from '@/lib/pane-manager/terminal-scroll
 import { resetTerminalKeyboardProtocolAfterInterrupt } from './terminal-pane-lifecycle-primitives'
 
 type PaneInputContext = {
-  pane: ManagedPane
+  pane: Pick<ManagedPane, 'id' | 'terminal'>
   managerRef: React.RefObject<PaneManager | null>
   paneKittyKeyboardModesRef: UseTerminalPaneLifecycleDeps['paneKittyKeyboardModesRef']
   settingsRef: React.RefObject<Record<string, unknown> | null | undefined>
@@ -94,7 +94,8 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
 
   pane.terminal.attachCustomKeyEventHandler((event) => {
     const linuxCandidateClassification = linuxImeCandidateState?.classifyKeyboardEvent(event) ?? {
-      candidateDigitGuardActive: false
+      candidateDigitGuardActive: false,
+      imeOwnedPreeditGuardActive: false
     }
     const observeLinuxCandidateEvent = (): void => {
       linuxImeCandidateState?.observeKeyboardEvent(event, linuxCandidateClassification)
@@ -111,6 +112,7 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
         imeCompositionTracker.isCandidateKeyGuardActive() || pendingCandidateReleaseGuardActive,
       pendingCandidateKeyReleaseActive: pendingCandidateReleaseGuardActive,
       linuxOrphanCandidateDigitGuardActive: linuxCandidateClassification.candidateDigitGuardActive,
+      linuxImeOwnedPreeditGuardActive: linuxCandidateClassification.imeOwnedPreeditGuardActive,
       hangulPreedit: imeCompositionTracker.isHangulPreedit(),
       isMac,
       isLinux

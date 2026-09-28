@@ -33,6 +33,7 @@ vi.mock('@/lib/structured-agent-launch-settlement', () => ({
   settleStructuredAgentLaunch: vi.fn()
 }))
 
+import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   buildAgentLaunchRouteInput,
   workspaceKindForWorktreeId,
@@ -74,17 +75,19 @@ function store(settings: Record<string, unknown> = STRUCTURED_SETTINGS): AgentLa
   return { settings } as unknown as AgentLaunchRouteStore
 }
 
+function stageLocalStructuredHost(): void {
+  vi.clearAllMocks()
+  mocks.getExecutionHostIdForWorktree.mockReturnValue('local')
+  mocks.getConnectionIdFromState.mockReturnValue(null)
+  mocks.getLocalProjectExecutionRuntimeContext.mockReturnValue(undefined)
+  mocks.getLocalRepoProjectExecutionRuntimeContext.mockReturnValue(undefined)
+  mocks.readLocalRuntimeCapabilitiesOrUnknown.mockReturnValue([
+    STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+  ])
+}
+
 describe('buildAgentLaunchRouteInput', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mocks.getExecutionHostIdForWorktree.mockReturnValue('local')
-    mocks.getConnectionIdFromState.mockReturnValue(null)
-    mocks.getLocalProjectExecutionRuntimeContext.mockReturnValue(undefined)
-    mocks.getLocalRepoProjectExecutionRuntimeContext.mockReturnValue(undefined)
-    mocks.readLocalRuntimeCapabilitiesOrUnknown.mockReturnValue([
-      STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-    ])
-  })
+  beforeEach(stageLocalStructuredHost)
 
   it('gathers the full input set for an existing local git worktree', () => {
     mocks.getLocalProjectExecutionRuntimeContext.mockReturnValue(WSL_RUNTIME)
@@ -341,5 +344,64 @@ describe('workspaceKindForWorktreeId', () => {
     ['repo-1::/repo/orca', 'git-worktree']
   ])('classifies %s as %s', (worktreeId, kind) => {
     expect(workspaceKindForWorktreeId(worktreeId)).toBe(kind)
+  })
+})
+
+describe('a cwd that names the workspace root', () => {
+  // "Continue in New Session…" always names a cwd; at the root it must not force a terminal.
+  beforeEach(stageLocalStructuredHost)
+
+  const withRoot = (): AgentLaunchRouteStore =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the route store is the app state narrowed to the slices the input reads; only those are staged.
+    ({
+      settings: STRUCTURED_SETTINGS,
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', path: '/repo/app' }] },
+      folderWorkspaces: [{ id: 'folder-1', folderPath: '/srv/notes' }]
+    }) as unknown as AgentLaunchRouteStore
+
+  it.each(['/repo/app', '/repo/app/', '.'])(
+    'routes structured under the chat default for cwd %s',
+    (cwd) => {
+      const args = {
+        agent: 'codex' as const,
+        workspace: { kind: 'git-worktree' as const, worktreeId: 'wt-1' },
+        tuiCustomization: { cwd }
+      }
+      expect(buildAgentLaunchRouteInput(withRoot(), args).requiresTuiLaunchCommand).toBe(false)
+      expect(routeFor(withRoot(), args)).toBe('structured-native-chat')
+    }
+  )
+
+  it('still requires a terminal for a subdirectory, which a structured session cannot start in', () => {
+    const args = {
+      agent: 'codex' as const,
+      workspace: { kind: 'git-worktree' as const, worktreeId: 'wt-1' },
+      tuiCustomization: { cwd: '/repo/app/packages/web' }
+    }
+    expect(buildAgentLaunchRouteInput(withRoot(), args).requiresTuiLaunchCommand).toBe(true)
+    expect(routeFor(withRoot(), args)).not.toBe('structured-native-chat')
+  })
+
+  it('reads a folder workspace root the same way', () => {
+    const workspaceId = folderWorkspaceKey('folder-1')
+    const at = (cwd: string) =>
+      buildAgentLaunchRouteInput(withRoot(), {
+        agent: 'codex',
+        workspace: { kind: 'folder', worktreeId: workspaceId },
+        tuiCustomization: { cwd }
+      }).requiresTuiLaunchCommand
+    expect(at('/srv/notes/')).toBe(false)
+    expect(at('/srv/notes/drafts')).toBe(true)
+  })
+
+  it('keeps a cwd custom when the store holds no root for the workspace', () => {
+    // The existing "requires a terminal for a cwd" case above pins this against an empty store.
+    expect(
+      buildAgentLaunchRouteInput(store(), {
+        agent: 'codex',
+        workspace: { kind: 'git-worktree', worktreeId: 'wt-1' },
+        tuiCustomization: { cwd: '/repo/app' }
+      }).requiresTuiLaunchCommand
+    ).toBe(true)
   })
 })

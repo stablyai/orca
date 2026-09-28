@@ -165,7 +165,8 @@ export function structuredAgentTurnLocalStartedAt(
 /** What a chat surface hands to the shared turn-status selector: every turn the
  *  host recorded, with its duration or null. A null still outranks the local
  *  clock, so a turn whose end the host never observed shows no duration on the
- *  surface that watched it, exactly as it will after a reload. */
+ *  surface that watched it, exactly as it will after a reload. A rejected send
+ *  never reached the provider, so it opened no turn and its message shows none. */
 export function selectStructuredAgentSettledTurns(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[] = []
@@ -179,6 +180,12 @@ export function selectStructuredAgentSettledTurns(
         ? null
         : { startedAt: timing.startedAt, workedSeconds }
     )
+  }
+  for (const submission of submissions) {
+    const userItemId = agentJournalSubmissionKey(submission.clientMessageId)
+    if (submission.dispatchState === 'rejected' && !settled.has(userItemId)) {
+      settled.set(userItemId, null)
+    }
   }
   return settled
 }

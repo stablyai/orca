@@ -96,7 +96,7 @@ export function useAiVaultOriginalPaneActions(): {
         return
       }
       const state = useAppStore.getState()
-      state.setActiveTabType('terminal')
+      state.setActiveTabType('terminal', target.worktreeId)
       activateTabAndFocusPane(target.tabId, target.leafId, {
         flashFocusedPane: true,
         scrollToBottomIfOutputSinceLastView: true

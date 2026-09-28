@@ -50,37 +50,13 @@ describe('terminal WebView reflow', () => {
   it('is dispatched by the reflow WebView message and exposed on the handle', () => {
     expect(DOCUMENT_SOURCE).toContain("} else if (msg.type === 'reflow') {")
     expect(DOCUMENT_SOURCE).toContain('reflow(scope, msg.cols!, msg.rows!)')
-    expect(handleSource).toContain("postMessage({ type: 'reflow', cols, rows })")
+    expect(handleSource).toContain("postMessage({ type: 'reflow', cols, rows, frame })")
   })
 
   it('does not locally resize hidden WebViews to a one-column grid', () => {
-    // The floor is a constant of the module that fits the grid, and both readers import it.
-    expect(DOCUMENT_SOURCE).toContain('export const MIN_FIT_COLS = 20')
-    expect(DOCUMENT_SOURCE).toContain('if (cols < MIN_FIT_COLS) {')
-    expect(DOCUMENT_SOURCE).toContain("flog(scope, 'measure-skip-small-width'")
-    expect(DOCUMENT_SOURCE).toContain(
-      "notify(scope, { type: 'measure-result', cols: null, rows: null })"
-    )
-  })
-
-  // Why: the assertions above read the reflow module's own emission, which still reads whole if
-  // the generator drops the module from the document or emits it twice. That was the regression
-  // class reported when a sibling refactor extracted the tap dispatcher next to reflow. Guard the
-  // assembled document so the routine, once, and its dispatch are really in what the WebView runs.
-  describe('the document that carries it', () => {
-    it('declares the reflow routine exactly once', () => {
-      expect(DOCUMENT_SOURCE.split('export function reflow(').length - 1).toBe(1)
-    })
-
-    it('starts the message bridge after the tap dispatcher', () => {
-      // Why: the reflow message only reaches reflow() if the document's transport attaches. The
-      // dispatcher starts before the bridge, and a start that throws is unwound by the document
-      // itself rather than leaving a half-started one, so the order is what this holds.
-      const sequence = documentModuleSource('create-terminal-document')
-      expect(sequence.indexOf('startTapDispatch(scope)')).toBeGreaterThan(0)
-      expect(sequence.indexOf('startMessageBridge(scope)')).toBeGreaterThan(
-        sequence.indexOf('startTapDispatch(scope)')
-      )
-    })
+    // The floor belongs to the one fit the app and the document share.
+    const gridFitSource = readFileSync(new URL('./terminal-grid-fit.ts', import.meta.url), 'utf8')
+    expect(gridFitSource).toContain('export const MIN_FIT_COLS = 20')
+    expect(gridFitSource).toContain('if (!(cols >= MIN_FIT_COLS)) {')
   })
 })

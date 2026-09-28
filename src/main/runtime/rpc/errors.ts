@@ -2,7 +2,13 @@
 // runtime/browser error allowlists define the contract the CLI relies on to
 // format human-facing messages. Centralizing this mapping keeps the allowlist
 // auditable in one place instead of spread across per-method branches.
+import {
+  agentSessionRefusalReference,
+  isAgentSessionRefusalError,
+  type AgentSessionRefusalError
+} from '../../../shared/agent-session-wire-refusals'
 import type { RpcEnvelopeMeta, RpcFailure, RpcSuccess } from './core'
+import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES } from '../../../shared/orchestration-session-caller-codes'
 import { computerUseErrorRecoveryData } from '../../../shared/computer-use-error-recovery'
 import { COMPUTER_ERROR_CODES } from '../../../shared/runtime-types'
 import { LINEAR_ERROR_CODES } from '../../../shared/linear/agent-access'
@@ -25,6 +31,8 @@ import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../../shared/automation-owne
 import { ARCHIVE_HOOK_FAILED_REMOVAL_CODE } from '../../../shared/worktree/archive-hook-removal-gate'
 import { NESTED_WORKER_DEPTH_EXCEEDED_CODE } from '../../../shared/nested-worker-depth'
 import { WORKTREE_CREATE_COLLISION_CODE } from '../../../shared/new-workspace/worktree-create-collision'
+import { AGENT_LAUNCH_PANE_ALREADY_LIVE_CODE } from '../../../shared/agent-launch-pane-already-live'
+import { AGENT_LAUNCH_SESSION_ALREADY_EXISTS_CODE } from '../../../shared/agent-launch-session-already-exists'
 
 export function successResponse(id: string, meta: RpcEnvelopeMeta, result: unknown): RpcSuccess {
   return {
@@ -56,6 +64,8 @@ export function errorResponse(
 // change user-visible error codes.
 const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   WORKTREE_CREATE_COLLISION_CODE,
+  AGENT_LAUNCH_PANE_ALREADY_LIVE_CODE,
+  AGENT_LAUNCH_SESSION_ALREADY_EXISTS_CODE,
   'agent_launch_replay_unsupported',
   'runtime_unavailable',
   'selector_not_found',
@@ -149,11 +159,15 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   SKILL_INSTALL_RPC_ERROR_CODE,
   // Why: an owner conflict is a distinct client decision (reload the host, re-adopt,
   // stop offering the action) — flattened to runtime_error it can only be guessed at.
-  ...Object.values(AUTOMATION_OWNER_CONFLICT_CODES)
+  ...Object.values(AUTOMATION_OWNER_CONFLICT_CODES),
+  ...Object.values(ORCHESTRATION_SESSION_CALLER_ERROR_CODES)
 ])
 
 export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
   const message = error instanceof Error ? error.message : String(error)
+  if (isAgentSessionRefusalError(error)) {
+    return agentSessionRefusalErrorResponse(id, meta, error)
+  }
   if (
     error instanceof Error &&
     'code' in error &&
@@ -222,6 +236,27 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
     return errorResponse(id, meta, 'invalid_argument', 'Missing terminal send payload')
   }
   return errorResponse(id, meta, 'runtime_error', message)
+}
+
+/**
+ * A thrown agent-session refusal, mapped before any `'code' in error` passthrough so no other
+ * subsystem's code set can claim it. Wire code and message are exactly what the bare `Error(code)`
+ * it replaced produced — released clients classify both — and the refusal's details ride only in
+ * `data`, which they ignore.
+ */
+function agentSessionRefusalErrorResponse(
+  id: string,
+  meta: RpcEnvelopeMeta,
+  error: AgentSessionRefusalError
+): RpcFailure {
+  const { code } = error.refusal
+  return errorResponse(
+    id,
+    meta,
+    RUNTIME_PASSTHROUGH_CODES.has(code) ? code : 'runtime_error',
+    code,
+    { refusal: agentSessionRefusalReference(error.refusal) }
+  )
 }
 
 export const computerErrorData = computerUseErrorRecoveryData

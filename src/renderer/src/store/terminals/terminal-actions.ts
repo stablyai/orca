@@ -1,5 +1,5 @@
 import type { AgentAttentionUnreadReason } from '@/attention/agent-attention-contract'
-import type { TerminalState } from './terminal-state'
+import type { DirectSshLayoutEdit, TerminalState } from './terminal-state'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -189,6 +189,7 @@ export type TerminalActions = {
   setTabPaneExpanded: (tabId: string, expanded: boolean) => void
   setTabCanExpandPane: (tabId: string, canExpand: boolean) => void
   setTabLayout: (tabId: string, layout: TerminalLayoutSnapshot | null) => void
+  acknowledgeDirectSshLayoutEdits: (uploaded: Readonly<Record<string, DirectSshLayoutEdit>>) => void
   /** Client-local park scrollback for a tab. Never uploaded; read via `resolveLeafScrollback`. */
   setTabLocalOnlyScrollback: (tabId: string, buffersByLeafId: Record<string, string> | null) => void
   syncPaneDetachPtyOwnership: (args: {

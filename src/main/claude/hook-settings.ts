@@ -6,13 +6,13 @@ import {
   getSharedManagedScriptPath,
   isPlainObject,
   MANAGED_HOOK_TIMEOUT_SECONDS,
-  quotePowerShellString,
   removeManagedCommands,
   wrapWindowsPowerShellEncodedCommand,
   type HookCommandConfig,
   type HookDefinition,
   type HooksConfig
 } from '../agent-hooks/installer-utils'
+import { quotePowerShellLiteral } from '../../shared/powershell-native-argument'
 import { wrapRuntimeHomeHookCommand } from '../agent-hooks/runtime-home-hook-command'
 import { wrapWindowsDirectCmdHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
 import { isGitBashAvailable } from '../git-bash'
@@ -192,7 +192,7 @@ export function getWindowsManagedLifecycleHook(
   }
   const scriptFileName = win32.basename(scriptPath)
   // Why: runtime profile resolution keeps the managed entry portable across users (STA-3348).
-  const quotedRelativePath = quotePowerShellString(`.orca\\agent-hooks\\${scriptFileName}`)
+  const quotedRelativePath = quotePowerShellLiteral(`.orca\\agent-hooks\\${scriptFileName}`)
   // Why: compat consumers require neutral JSON even when the managed script is missing (#14818).
   const innerCommand =
     `$scriptPath = Join-Path $env:USERPROFILE ${quotedRelativePath}; ` +

@@ -46,5 +46,6 @@ export function shouldIncludeOpenTabInRecentSection({
       unreadAgentCompletionPanes
     })
   })
-  return badge != null && badge !== 'done' && badge !== 'interrupted'
+  // Why: a settled outcome on the tab you are on is not news; a failure ranks like a completion.
+  return badge != null && badge !== 'done' && badge !== 'failed' && badge !== 'interrupted'
 }

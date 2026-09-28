@@ -56,10 +56,10 @@ import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualif
  * Whether the "Hide sleeping" sweep must keep this row (#8873).
  *
  * Why isMainWorktree and not isDefaultBranchWorkspace: the project's primary
- * checkout is the repo's only guaranteed entry point. Folder workspaces and
- * detached-HEAD mains fail the default-branch predicate yet often have no
- * sibling row at all, so sweeping them drops the entire project out of the
- * sidebar, Cmd+J and the board with no way back except changing a filter.
+ * checkout is the repo's only guaranteed entry point. Detached-HEAD and offline
+ * SSH mains fail the default-branch predicate yet often have no sibling row at
+ * all, so sweeping them drops the entire project out of the sidebar, Cmd+J and
+ * the board with no way back except changing a filter.
  *
  * Why shared: the sidebar pipeline and the jump palette both apply this, and a
  * second copy is how the two surfaces drift.
@@ -109,7 +109,7 @@ export function computeVisibleWorktrees(
   }
 
   if (opts.hideDefaultBranchWorkspace) {
-    all = all.filter((w) => !isDefaultBranchWorkspace(w))
+    all = all.filter((w) => !isDefaultBranchWorkspace(w, opts.repoMap.get(w.repoId)))
   }
 
   if (opts.hideAutomationGeneratedWorkspaces) {

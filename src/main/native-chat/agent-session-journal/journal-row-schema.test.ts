@@ -6,7 +6,11 @@ import {
   type JournalRow
 } from './journal-row-schema'
 import { createJournalReducerState } from './journal-reducer'
-import { buildJournalItemRow } from './journal-row-builders'
+import {
+  buildJournalItemRow,
+  journalLifecycleBatchRowBuilder,
+  type JournalLifecycleMutationInput
+} from './journal-row-builders'
 
 const BASE = { v: 1, epoch: 'epoch-1', seq: 1, fence: 1, ts: 1 }
 
@@ -340,6 +344,46 @@ describe('producer linkage on the persisted row', () => {
       agentId: 'task-9',
       attempt: 3
     })
+  })
+
+  it('round-trips a batch mutation that names its own producer, with no version bump', () => {
+    const state = createJournalReducerState('session-1', 'epoch-1')
+    const own = { kind: 'item' as const, identity: { ...identity, uuid: 'u-own' }, body }
+    const build = (child: JournalLifecycleMutationInput) =>
+      journalLifecycleBatchRowBuilder(() => state, 'settle-1', [child, own], { fence: 1 })(1, 1)
+    const row = build({ kind: 'item', identity, body, linkage })
+
+    const parsed = parseJournalRow(JSON.stringify(row))
+    const mutations = parsed.ok && parsed.row.kind === 'lifecycle-batch' ? parsed.row.mutations : []
+    expect(mutations[0]).toMatchObject(linkage)
+    expect(mutations[1] && 'agentId' in mutations[1]).toBe(false)
+    // The same batch without the stamp writes the same version: an older host
+    // ignores the unknown keys rather than latching the journal read-only.
+    expect(row.v).toBe(build({ kind: 'item', identity, body }).v)
+  })
+
+  it('keeps a batch mutation but drops its unusable producer id', () => {
+    // Same policy as the row base: sanitize, never reject — a rejected batch
+    // would take every mutation in it out of the timeline.
+    const parsed = parseJournalRow(
+      JSON.stringify({
+        v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
+        epoch: 'epoch-1',
+        seq: 7,
+        fence: 1,
+        ts: 1_700_000_000_000,
+        kind: 'lifecycle-batch',
+        settlementId: 'settle-2',
+        mutations: [
+          { kind: 'item', itemId: 'i-1', revision: 1, body, agentId: '' },
+          { kind: 'item', itemId: 'i-2', revision: 1, body, agentId: 'thread-child' }
+        ]
+      })
+    )
+    const mutations = parsed.ok && parsed.row.kind === 'lifecycle-batch' ? parsed.row.mutations : []
+    expect(mutations).toHaveLength(2)
+    expect(mutations[0] && 'agentId' in mutations[0]).toBe(false)
+    expect(mutations[1]).toMatchObject({ agentId: 'thread-child' })
   })
 
   it("omits every key on a row the session's own agent produced", () => {

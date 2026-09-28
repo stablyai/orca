@@ -55,6 +55,7 @@ function manifestReply(overrides: Record<string, unknown> = {}) {
     desktopVersion: '1.4.200',
     minCompatibleRuntimeProtocolVersion: 2,
     runtimeProtocolVersion: 2,
+    pageVersion: 1,
     entrypoint: 'index.html',
     totalBytes: 12,
     assets: [asset()],
@@ -232,6 +233,16 @@ describe('mobile web bundle manifest reply reader', () => {
     })
 
     expect(verdict).toEqual({ kind: 'ok', manifestChecked: true })
+  })
+
+  it('reads the page version the floor compares, and one a desktop older than it never wrote', () => {
+    expect(MobileWebBundleManifestReplySchema.parse(manifestReply()).manifest.pageVersion).toBe(1)
+    expect(readManifest(manifestReply({ pageVersion: undefined })).compatible).toBe(true)
+    for (const pageVersion of [-1, 1.5, 'one', null]) {
+      expect(readManifest(manifestReply({ pageVersion })).compatible, String(pageVersion)).toBe(
+        false
+      )
+    }
   })
 
   it('refuses a manifest with no protocol window, which only a host without the capability sends', () => {

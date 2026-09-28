@@ -1,6 +1,7 @@
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { TerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
 import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch,
@@ -236,9 +237,7 @@ export type UiCommandEventApi = {
   ) => () => void
   onMobileMarkdownRequest: (callback: (request: RuntimeMobileMarkdownRequest) => void) => () => void
   respondMobileMarkdownRequest: (response: RuntimeMobileMarkdownResponse) => void
-  onCloseTerminal: (
-    callback: (data: { tabId: string; paneRuntimeId?: number }) => void
-  ) => () => void
+  onCloseTerminal: (callback: (target: TerminalSurfaceCloseTarget) => void) => () => void
   onTerminalTabCloseRequest: (callback: (request: TerminalTabCloseRequest) => void) => () => void
   respondTerminalTabClose: (response: TerminalTabCloseResponse) => void
   onSleepWorktree: (callback: (data: { worktreeId: string }) => void) => () => void

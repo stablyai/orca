@@ -1,4 +1,7 @@
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
+import type {
+  AgentJournalItemBody,
+  AgentJournalItemIdentity
+} from '../../shared/agent-session-journal-types'
 import { unhandledProviderFrameJournalItem } from '../native-chat/agent-session-wire/unhandled-provider-frame'
 import type {
   StructuredAgentSessionEventSink,
@@ -21,10 +24,40 @@ import {
 } from './codex-structured-journal-contracts'
 import { MAX_CODEX_GOAL_THREADS } from './codex-structured-journal-limits'
 import { appendCodexLifecycleTransition } from './codex-structured-journal-sink'
+import type { CodexRowLinkage } from './codex-subagent-linkage'
+
+type GoalAccounting = { key: string; timeUsedSeconds: number; tokenBudget: number | null }
 
 type GoalThreadState = {
   signature: string
   occurrence: string
+  /** Accounting last journaled for this goal; null when the row carries none. */
+  accounting: GoalAccounting | null
+}
+
+// Codex re-sends accounting every few seconds of a running turn, and each revision
+// is a persisted row; readers extrapolate between revisions while a turn runs.
+const GOAL_ACCOUNTING_REVISION_SECONDS = 30
+
+function goalAccounting(body: AgentJournalItemBody | undefined): GoalAccounting | null {
+  if (body?.kind !== 'status' || body.threadGoal?.state !== 'set') {
+    return null
+  }
+  const { tokenBudget, tokensUsed, timeUsedSeconds, updatedAt } = body.threadGoal.goal
+  return {
+    key: JSON.stringify([tokenBudget, tokensUsed, timeUsedSeconds, updatedAt]),
+    timeUsedSeconds,
+    tokenBudget
+  }
+}
+
+/** Whether a live accounting tick is worth a revision of the goal's row. */
+function accountingOutgrew(previous: GoalAccounting | null, next: GoalAccounting): boolean {
+  return (
+    previous === null ||
+    previous.tokenBudget !== next.tokenBudget ||
+    Math.abs(next.timeUsedSeconds - previous.timeUsedSeconds) >= GOAL_ACCOUNTING_REVISION_SECONDS
+  )
 }
 
 /** Persists provider-owned goal lifecycle notifications outside generic-row policy. */
@@ -35,7 +68,10 @@ export class CodexJournalGoals {
   private durableEpoch: string | null = null
   private transientEpoch: string | null = null
 
-  constructor(private readonly sink: StructuredAgentSessionEventSink) {}
+  constructor(
+    private readonly sink: StructuredAgentSessionEventSink,
+    private readonly linkageFor: CodexRowLinkage
+  ) {}
 
   handle(event: {
     threadId: string
@@ -55,15 +91,6 @@ export class CodexJournalGoals {
     const providerGeneration =
       reportedGeneration === null ? null : codexGoalJournalDigest(`provider:${reportedGeneration}`)
     const signatureKey = codexGoalJournalDigest(`${signature}\u0000${providerGeneration ?? ''}`)
-    const previous = this.stateByThread.get(thread)
-    if (previous?.signature === signatureKey) {
-      this.remember(thread, previous)
-      return CODEX_JOURNAL_ADMITTED
-    }
-    const occurrence = previous
-      ? codexGoalJournalDigest(JSON.stringify([previous.occurrence, signatureKey]))
-      : codexGoalJournalDigest(JSON.stringify([thread, signatureKey]))
-    const state = { signature: signatureKey, occurrence }
     const translated = unhandledProviderFrameJournalItem(
       'codex',
       `notification:${event.method}`,
@@ -72,6 +99,26 @@ export class CodexJournalGoals {
     if (!translated) {
       return { accepted: false, reason: 'untranslated' }
     }
+    const accounting = goalAccounting(translated.body)
+    const previous = this.stateByThread.get(thread)
+    const sameGoal = previous?.signature === signatureKey
+    if (
+      previous &&
+      sameGoal &&
+      (accounting === null || !accountingOutgrew(previous.accounting, accounting))
+    ) {
+      this.remember(thread, previous)
+      return CODEX_JOURNAL_ADMITTED
+    }
+    // Counter-only changes revise the goal's existing row: same identity, so the
+    // journal bumps its revision and keeps its sequence.
+    const occurrence =
+      previous && sameGoal
+        ? previous.occurrence
+        : previous
+          ? codexGoalJournalDigest(JSON.stringify([previous.occurrence, signatureKey]))
+          : codexGoalJournalDigest(JSON.stringify([thread, signatureKey]))
+    const state = { signature: signatureKey, occurrence, accounting }
     const admission = appendCodexLifecycleTransition(
       this.sink,
       codexGoalJournalIdentity(thread, signatureKey, occurrence),
@@ -81,8 +128,11 @@ export class CodexJournalGoals {
           journal,
           thread,
           signatureKey,
+          accounting,
           event.method === 'thread/goal/cleared'
-        )
+        ),
+      // A goal belongs to its thread, not to one run of it, so no turn is named.
+      this.linkageFor(event.threadId, null)
     )
     if (!admission.accepted) {
       return admission
@@ -130,12 +180,18 @@ export class CodexJournalGoals {
     journal: StructuredAgentSessionLifecycleJournal,
     thread: string,
     signature: string,
+    accounting: GoalAccounting | null,
     requirePrevious: boolean
   ): AgentJournalItemIdentity | null {
     this.seedDurableState(journal)
     const previous = this.durableStateByThread.get(thread) ?? null
     if (previous?.signature === signature) {
-      return null
+      // Same goal with fresh accounting, e.g. a resume snapshot: revise its row in place.
+      if (accounting === null || previous.accounting?.key === accounting.key) {
+        return null
+      }
+      previous.accounting = accounting
+      return codexGoalJournalIdentity(thread, signature, previous.occurrence)
     }
     // Codex sends a cleared snapshot while resuming threads that never had a goal.
     if (previous === null && requirePrevious) {
@@ -144,7 +200,7 @@ export class CodexJournalGoals {
     const occurrence = previous
       ? codexGoalJournalDigest(JSON.stringify([previous.occurrence, signature]))
       : codexGoalJournalDigest(JSON.stringify([thread, signature]))
-    this.durableStateByThread.set(thread, { signature, occurrence })
+    this.durableStateByThread.set(thread, { signature, occurrence, accounting })
     return codexGoalJournalIdentity(thread, signature, occurrence)
   }
 
@@ -152,19 +208,23 @@ export class CodexJournalGoals {
     if (this.durableJournal === journal && this.durableEpoch === journal.epoch) {
       return
     }
-    const latest = new Map<string, { state: CodexGoalJournalState; sequence: number }>()
-    journal.visitItems((itemId, sequence) => {
+    const latest = new Map<
+      string,
+      { state: CodexGoalJournalState; sequence: number; accounting: GoalAccounting | null }
+    >()
+    journal.visitItems((itemId, sequence, body) => {
       const state = parseCodexGoalJournalItemId(itemId)
       const previous = state ? latest.get(state.thread) : undefined
       if (state && (!previous || sequence > previous.sequence)) {
-        latest.set(state.thread, { state, sequence })
+        latest.set(state.thread, { state, sequence, accounting: goalAccounting(body) })
       }
     })
     this.durableStateByThread.clear()
-    for (const [thread, { state }] of latest) {
+    for (const [thread, { state, accounting }] of latest) {
       this.durableStateByThread.set(thread, {
         signature: state.signature,
-        occurrence: state.occurrence
+        occurrence: state.occurrence,
+        accounting
       })
     }
     this.durableJournal = journal

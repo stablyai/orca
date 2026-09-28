@@ -1,33 +1,39 @@
 // The effects behind send / cancel / respond / setOption.
 //
-// Admission (lease, fence, idempotency) has already passed by the time anything
+// Admission (writer lease, idempotency) has already passed by the time anything
 // here runs; these functions own only the journal writes and the adapter call,
 // in that order. Journal first is deliberate: a crash between the two leaves a
 // row the next attach settles as `unknown`, whereas the reverse would lose a
 // turn the provider already accepted.
 
+import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
+import {
+  agentSessionFailureWords,
+  type AgentSessionFailureWordsContext
+} from '../../../shared/agent-session-failure-words'
 import type {
   AgentJournalMessageItem,
+  AgentJournalStatusItem,
   AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
-import type {
-  AgentSessionCancelResult,
-  AgentSessionSendResult,
-  AgentSessionWireRefusal
+import {
+  refuse,
+  type AgentSessionCancelResult,
+  type AgentSessionRefusalReason,
+  type AgentSessionSendResult,
+  type AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
 import { DISPATCH_DOUBT_PERSISTENCE_FAILED } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { latestJournalDispatchObservation } from '../agent-session-journal/journal-dispatch-observation'
 import type {
   AgentSessionDispatchOutcome,
-  StructuredAgentSessionAdapter
+  StructuredAgentSessionAdapter,
+  StructuredAgentSessionProviderChildPhase
 } from './structured-agent-session-adapter'
+import { structuredAgentSessionStartFailure } from './structured-agent-session-failure-text'
 import { validatePendingPrompt } from './structured-agent-session-prompt-state'
-import { withTimeout } from '../../../shared/promise-timeout-fallback'
-import {
-  AgentSessionPreDispatchError,
-  AGENT_SESSION_ADMISSION_BARRIER_TIMEOUT_MS
-} from './structured-agent-session-operation-settlement'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 export { performSetOption } from './structured-agent-session-turns-options'
 export { performPrompt } from './structured-agent-session-turns-prompt'
 
@@ -40,12 +46,13 @@ export type AgentSessionTurnContext = {
   persistOptions: (options: Readonly<Record<string, string>>) => Promise<void>
   /** Opaque client identity recorded as the resolver of a prompt. */
   resolvedBy: string
+  /** Republishes state kept outside the journal, such as the record's options or rewind phase.
+   *  Journal appends reach readers on their own. */
   publish: () => void
   /** Drains provider lifecycle already accepted by the execution host. */
   flushStreamedEvents: () => Promise<void>
-  hasPendingStreamedEvents?: () => boolean
-  /** Re-derives authorization after submission persistence, immediately before provider dispatch. */
-  beforeDispatch?: () => void
+  /** What the host holds about the child this dispatch is for, read at the moment it is needed. */
+  providerChildPhase?: () => StructuredAgentSessionProviderChildPhase | undefined
   now: () => number
 }
 
@@ -53,17 +60,22 @@ export type TurnOutcome<TValue> =
   | { ok: true; value: TValue }
   | { ok: false; refusal: AgentSessionWireRefusal }
 
-function invalid(message: string): { ok: false; refusal: AgentSessionWireRefusal } {
-  return { ok: false, refusal: { code: 'agent_session_operation_invalid', message } }
+function invalid(
+  reason: AgentSessionRefusalReason<'agent_session_operation_invalid'>,
+  message: string
+): { ok: false; refusal: AgentSessionWireRefusal } {
+  return { ok: false, refusal: refuse('agent_session_operation_invalid', { reason }, message) }
 }
 
-/** A thrown adapter error is indistinguishable from a lost reply, so it settles
- *  as `unknown` rather than as a rejection. */
+/** A thrown adapter error is indistinguishable from a lost reply, so it settles as `unknown`
+ *  rather than as a rejection — unless the child had not proven its start. Such a child has
+ *  accepted nothing (input is written only after it initializes), so a dispatch it could not
+ *  take is provably unwritten and is rejected with the cause the adapter gave. */
 async function dispatchSafely(
-  ctx: AgentSessionTurnContext,
+  ctx: AgentSessionHandoverContext,
   clientMessageId: string,
   body: AgentJournalMessageItem,
-  requestedAt: number | undefined
+  requestedAt: number
 ): Promise<AgentSessionDispatchOutcome> {
   try {
     return await ctx.adapter.dispatch({
@@ -71,29 +83,14 @@ async function dispatchSafely(
       clientMessageId,
       body,
       fence: ctx.fence,
-      ...(ctx.beforeDispatch
-        ? {
-            beforeDispatch: async () => {
-              const ready = await withTimeout(
-                ctx.flushStreamedEvents().then(() => true),
-                AGENT_SESSION_ADMISSION_BARRIER_TIMEOUT_MS,
-                false
-              )
-              // A drained barrier may be followed by newer accepted events.
-              if (!ready || ctx.hasPendingStreamedEvents?.()) {
-                throw new AgentSessionPreDispatchError(
-                  'agent_session_admission_evidence_unavailable'
-                )
-              }
-              ctx.beforeDispatch?.()
-            }
-          }
-        : {}),
-      ...(requestedAt === undefined ? {} : { requestedAt })
+      requestedAt
     })
   } catch (error) {
-    if (error instanceof AgentSessionPreDispatchError) {
-      throw error
+    if (ctx.providerChildPhase?.() === 'starting') {
+      return {
+        state: 'rejected',
+        ...structuredAgentSessionStartFailure({ error }, ctx.failureTextContext)
+      }
     }
     return { state: 'unknown', reason: error instanceof Error ? error.message : String(error) }
   }
@@ -102,14 +99,9 @@ async function dispatchSafely(
 async function appendStatus(
   ctx: AgentSessionTurnContext,
   clientMessageId: string,
-  text: string
+  body: AgentJournalStatusItem
 ): Promise<void> {
-  await ctx.journal.appendItem(
-    { provider: 'orca', clientMessageId },
-    { kind: 'status', text },
-    { fence: ctx.fence }
-  )
-  ctx.publish()
+  await ctx.journal.appendItem({ provider: 'orca', clientMessageId }, body, { fence: ctx.fence })
 }
 
 /**
@@ -119,6 +111,8 @@ async function appendStatus(
  * the whole content of the word — and one message reached the model five times
  * when this was a judgement call instead of an invariant. A distinct send after
  * a terminal rejection uses a fresh id, which is a first delivery.
+ *
+ * Accepting only records the message; the session's delivery loop hands it over.
  */
 export async function performSend(
   ctx: AgentSessionTurnContext,
@@ -132,7 +126,10 @@ export async function performSend(
     .submissions()
     .find((entry) => entry.clientMessageId === input.clientMessageId)
   if (existing && existing.payloadFingerprint !== input.payloadFingerprint) {
-    return invalid(`Message id ${input.clientMessageId} was already used for another send.`)
+    return invalid(
+      'messageIdReused',
+      `Message id ${input.clientMessageId} was already used for another send.`
+    )
   }
   if (existing) {
     return {
@@ -141,90 +138,87 @@ export async function performSend(
     }
   }
   try {
-    await ctx.journal.appendSubmission({ ...input, fence: ctx.fence })
+    await ctx.journal.appendSubmission({ ...input, fence: ctx.fence, handoverRecorded: true })
   } catch {
-    return invalid('The message could not be recorded and was not sent.')
+    return invalid('journalWriteFailed', 'The message could not be recorded and was not sent.')
   }
-  ctx.publish()
-
-  // The row just written is the send's instant on the host clock; the turn this
-  // dispatch opens records it so the live counter never re-anchors at turn-open.
-  const requestedAt = ctx.journal
-    .submissions()
-    .find((entry) => entry.clientMessageId === input.clientMessageId)?.submittedAt
-  const outcome = await dispatchSafely(ctx, input.clientMessageId, input.body, requestedAt).catch(
-    async (error: unknown) => {
-      if (error instanceof AgentSessionPreDispatchError) {
-        const recorded = await withTimeout(
-          ctx.journal
-            .resolveDispatch({
-              clientMessageId: input.clientMessageId,
-              state: 'rejected',
-              reason: error.message,
-              fence: ctx.fence
-            })
-            .then(() => true),
-          AGENT_SESSION_ADMISSION_BARRIER_TIMEOUT_MS,
-          false
-        )
-        if (!recorded) {
-          console.warn('[structured-agent-session] pre-dispatch refusal persistence failed')
-        }
-        ctx.publish()
-      }
-      throw error
-    }
-  )
-  // An admission needs no dispatch row: the submission is already pending.
-  if (outcome.state === 'admitted') {
-    ctx.publish()
-    return {
-      ok: true,
-      value: {
-        clientMessageId: input.clientMessageId,
-        submission: requireSubmission(ctx, input.clientMessageId)
-      }
-    }
-  }
-  try {
-    await ctx.journal.resolveDispatch(
-      outcome.state === 'accepted'
-        ? {
-            clientMessageId: input.clientMessageId,
-            state: 'accepted',
-            providerIdentity: outcome.providerIdentity,
-            fence: ctx.fence
-          }
-        : {
-            clientMessageId: input.clientMessageId,
-            state: outcome.state,
-            reason: outcome.reason,
-            fence: ctx.fence
-          }
-    )
-  } catch (error) {
-    // A failed resolution must not strand a pending row; an unknown result is
-    // explicitly replayable.
-    try {
-      await ctx.journal.resolveDispatch({
-        clientMessageId: input.clientMessageId,
-        state: 'unknown',
-        reason: DISPATCH_DOUBT_PERSISTENCE_FAILED,
-        fence: ctx.fence
-      })
-    } catch {
-      // Nothing further to record; the pending row is settled on the next attach.
-    }
-    ctx.publish()
-    throw error
-  }
-  ctx.publish()
   return {
     ok: true,
     value: {
       clientMessageId: input.clientMessageId,
       submission: requireSubmission(ctx, input.clientMessageId)
     }
+  }
+}
+
+export type AgentSessionHandoverContext = Pick<
+  AgentSessionTurnContext,
+  'sessionId' | 'journal' | 'fence' | 'adapter' | 'providerChildPhase'
+> & {
+  /** Who a start failure met at dispatch names, as the start's own row does. */
+  failureTextContext?: AgentSessionFailureWordsContext
+}
+
+/**
+ * Hands one queued submission to the provider. The `dispatch{pending}` row goes first: a crash
+ * after it leaves a message in doubt, never one that reads as queued and so provably unwritten.
+ */
+export async function handOverSubmission(
+  ctx: AgentSessionHandoverContext,
+  submission: AgentJournalSubmission
+): Promise<void> {
+  const { clientMessageId } = submission
+  const body = ctx.journal.itemBody(agentJournalSubmissionKey(clientMessageId))
+  if (body?.kind !== 'message') {
+    await ctx.journal.resolveDispatch({
+      clientMessageId,
+      state: 'rejected',
+      ...agentSessionFailureWords(agentSessionFailureFact('hostFault'), { surface: 'rejection' }),
+      fence: ctx.fence
+    })
+    return
+  }
+  await ctx.journal.resolveDispatch({ clientMessageId, state: 'pending', fence: ctx.fence })
+  // The row written at acceptance is the send's instant on the host clock; the turn this
+  // dispatch opens records it so the live counter never re-anchors at turn-open.
+  const outcome = await dispatchSafely(ctx, clientMessageId, body, submission.submittedAt)
+  // An admission needs no dispatch row: the submission is already pending.
+  if (outcome.state === 'admitted') {
+    return
+  }
+  try {
+    await ctx.journal.resolveDispatch(
+      outcome.state === 'accepted'
+        ? {
+            clientMessageId,
+            state: 'accepted',
+            providerIdentity: outcome.providerIdentity,
+            fence: ctx.fence
+          }
+        : outcome.state === 'rejected'
+          ? {
+              clientMessageId,
+              state: 'rejected',
+              reason: outcome.reason,
+              rejection: outcome.rejection,
+              fence: ctx.fence
+            }
+          : { clientMessageId, state: 'unknown', reason: outcome.reason, fence: ctx.fence }
+    )
+  } catch (error) {
+    // A failed resolution must not strand a pending row; an unknown result is
+    // explicitly replayable.
+    try {
+      await ctx.journal.resolveDispatch({
+        clientMessageId,
+        state: 'unknown',
+        reason: DISPATCH_DOUBT_PERSISTENCE_FAILED,
+        fence: ctx.fence
+      })
+    } catch {
+      // Nothing further to record; the pending row is settled on the next open.
+    }
+    throw error
   }
 }
 
@@ -258,7 +252,7 @@ export async function performCancel(
     }
   }
   let cancelled = false
-  let note = 'Cancellation requested.'
+  let note: AgentJournalStatusItem = { kind: 'status', text: 'Cancellation requested.' }
   try {
     const dispatchStatus = latestJournalDispatchObservation(ctx.journal, ctx.fence)
     cancelled = input.scope
@@ -281,15 +275,17 @@ export async function performCancel(
           })
         ).cancelled
     if (!cancelled) {
-      note = 'The provider had already finished this turn.'
+      note = { kind: 'status', text: 'The provider had already finished this turn.' }
     }
   } catch (error) {
     if (input.prompt) {
       throw error
     }
-    note = `Cancellation was not confirmed: ${
-      error instanceof Error ? error.message : String(error)
-    }`
+    // The adapter's error is Orca's; the row says only that the stop is unconfirmed.
+    note = {
+      kind: 'status',
+      ...agentSessionFailureWords(agentSessionFailureFact('cancelUnconfirmed'), { surface: 'row' })
+    }
   }
   if (cancelled && input.prompt) {
     await ctx.flushStreamedEvents()

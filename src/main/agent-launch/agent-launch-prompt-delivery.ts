@@ -24,11 +24,8 @@ import type {
 } from '../../shared/agent-launch-intent'
 import { agentPromptRidesLaunchCommand } from '../../shared/tui-agent-startup'
 import type { AgentLaunchModeReceipt } from './agent-launch-mode'
-import type {
-  AgentLaunchExecution,
-  AgentLaunchStructuredSurface,
-  CreatedSurface
-} from './agent-launch-executor'
+import type { AgentLaunchExecution, CreatedSurface } from './agent-launch-executor'
+import type { AgentLaunchStructuredSurface } from './agent-launch-surface-factories'
 
 export const HANDED_TO_TERMINAL: AgentLaunchPromptDisposal = { outcome: 'handed-to-terminal' }
 const NOT_DELIVERED: AgentLaunchPromptDisposal = { outcome: 'not-delivered' }

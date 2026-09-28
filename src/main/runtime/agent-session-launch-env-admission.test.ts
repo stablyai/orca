@@ -20,7 +20,6 @@ function request(overrides: Partial<AgentSessionReserveRequest> = {}): AgentSess
     },
     provider: 'codex',
     accountHome: { variable: 'CODEX_HOME', path: '/home/dev/.codex' },
-    runtimeKind: 'native',
     expectedFence: null,
     spawnToken: 'spawn-a',
     claimKeyId: 'key-1',

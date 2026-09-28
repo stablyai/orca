@@ -23,6 +23,7 @@ vi.mock('lucide-react-native', () => ({
   X: 'Icon'
 }))
 
+import { resolveHostDisplay } from '../../../src/shared/host-display-resolution'
 import { HostScreenHeader } from './host-screen-header'
 
 /** A host the shell's client has failed to reach twenty times, which is the verdict that offers
@@ -39,6 +40,7 @@ function controllerWith(forceReconnectHost: ForceReconnect) {
     floatingWorkspaceEnabled: false,
     forceReconnectHost,
     hostId: 'host-a',
+    hostDisplay: resolveHostDisplay({ name: 'Desk' }),
     lastConnectedAt: null,
     onHideSidebar: undefined,
     reconnectAttempts: 20,

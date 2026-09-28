@@ -1,3 +1,4 @@
+import { paneIdentity } from './runtime-terminal-pane-identity'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import type { Repo } from '../../shared/repo-types'
 import { getSetupRunnerCommandPlatformForPath } from '../../shared/setup-runner-command'
@@ -111,6 +112,7 @@ export async function createRuntimeRemoteManagedWorktree(
       const terminal = await deps.createTerminal(`path:${result.worktree.path}`, {
         command: sequencedStartup.command,
         ...(args.startupCwd ? { cwd: args.startupCwd } : {}),
+        ...paneIdentity(args.startupPaneKey),
         ...(result.setup && args.startup
           ? { claudeAgentTeamsSourceCommand: args.startup.command }
           : {}),

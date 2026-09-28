@@ -107,15 +107,16 @@ const hash = (parts: string[] | string): string =>
 // moves. The render-token stream gains the four tokens that one attribute is, 35,203 -> 35,207.
 // Nothing else in the family moves.
 
-// Adding Jira as a mobile task provider necessarily changes hook count, statements, declarations,
-// render tokens and styles, so the counts and hashes below are re-captured rather than left
-// failing. GitHubPrFileDiff's hash is deliberately unchanged — Jira touched no code outside the
-// Tasks surface.
+// Adding Jira as a mobile task provider necessarily changes hook count, statements,
+// declarations, render tokens and styles, so the counts and hashes below are re-captured
+// rather than left failing. GitHubPrFileDiff's hash is deliberately unchanged — Jira
+// touched no code outside the Tasks surface.
 
 const SCREEN_RPC_SCREEN_HOOKS = '309742a0d2b84106c331277bceac2675112607a6b964e1e76fe16d3522a18ecf'
 const PRE_REFACTOR_DIFF_HOOKS = '93c7189b32bed8456cc51814fffa8ce80cf62011ef968a9d53ddec2b9686f58f'
 const SCREEN_RPC_STATEMENTS = 'f51c2564dcde169a55d7687624ade19be76ab781b053594e8f2a25d0a90e46e2'
-const MAIN_REBASED_DECLARATIONS = '8e7de3454d1121929c7929ea548b0dad428881b7bbb07266ae46467b51bb8cd8'
+// Saved Linear selections now accept unknown persisted values; reconciliation tests cover them.
+const MAIN_REBASED_DECLARATIONS = '55ebbb326f1dcf8143a5894fc5403801e9931f28be4b3384a540d44bb18de50e'
 const SCREEN_RPC_SEMANTICS = 'c2142a20c0d10aaca03bcc8e5e8e4eefffd44ddba3263bbfc34eee0d0d74d673'
 const PRE_REFACTOR_STYLES = '03787649f5e97089b07779886a920f68a0dfc27f7409c81ae9711530c78975e6'
 const SCREEN_RPC_RENDER_TREE = '0692ae65fd0d01d9bb3b675c3008f8e17a4340b0637eb2e00a24ebca2183d5ed'

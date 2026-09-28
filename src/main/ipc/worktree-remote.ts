@@ -157,6 +157,7 @@ import {
   markCopilotFolderTrusted,
   markCursorWorkspaceTrusted
 } from '../agent-trust-presets'
+import { awaitAgentTrustWriteWithinDeadline } from '../agent-trust-write-deadline'
 import {
   getLocalProjectGitExecOptions,
   getLocalProjectWorktreeGitOptions,
@@ -443,7 +444,14 @@ async function spawnLocalStartupAndSetupTerminals(args: {
         } else if (preset === 'copilot') {
           markCopilotFolderTrusted(worktree.path)
         } else if (preset === 'codex') {
-          markCodexProjectTrusted(worktree.path)
+          // Why: the PTY below spawns Codex immediately; a discarded Promise let
+          // it reach the trust menu before the write landed, and its rejection
+          // escaped this synchronous catch. Bounded so a wedged config lane
+          // cannot stall worktree creation.
+          await awaitAgentTrustWriteWithinDeadline(markCodexProjectTrusted(worktree.path), {
+            preset,
+            workspacePath: worktree.path
+          })
         }
       } catch {
         // Best-effort: launch still proceeds and the agent can ask interactively.
@@ -2741,7 +2749,8 @@ async function performLocalWorktreeCreate(
             branch: branchName,
             baseBranch,
             refreshLocalBaseRef: settings.refreshLocalBaseRefOnWorktreeCreate,
-            options: preparedWorktreeOptions
+            options: preparedWorktreeOptions,
+            timing
           })
           timing.recordPreparedCheckout(
             prepared.status === 'hit'
@@ -2753,6 +2762,9 @@ async function performLocalWorktreeCreate(
             // general admission slot for the rest of this create's own git.
             rearm.fire = prepared.rearm
             return prepared.result
+          }
+          if (prepared.rearm) {
+            rearm.fire = prepared.rearm
           }
         } else {
           timing.recordPreparedCheckout({
@@ -2940,14 +2952,14 @@ async function performLocalWorktreeCreate(
   // Why gated: registration replaces the repo's root set, so registering a create recovered without
   // a listing would revoke filesystem access to every worktree that listing would have named.
   if (listingComplete) {
-    registerWorktreeRootsForRepo(store, repo.id, [
+    registerWorktreeRootsForRepo(store, repo, [
       repo.path,
       ...gitWorktrees.map((worktree) => worktree.path)
     ])
   } else {
     // Recovered without a listing: authorize just the new root, or the create the user just made
     // is rejected by filesystem/git-status IPC until a full scan repopulates the cache.
-    registerCreatedWorktreeRoot(store, repo.id, created.path)
+    registerCreatedWorktreeRoot(store, repo, created.path)
   }
 
   // Why: link user-configured shared paths (e.g. `node_modules`, `.env`) before setup runs so setup scripts see them in place.

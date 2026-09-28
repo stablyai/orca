@@ -51,6 +51,8 @@ export type PtySpawnIpcArgs = {
   // Why: closes the SIGKILL race (INVESTIGATION.md) by letting main sync-flush the binding before pty:spawn returns; only the Ctrl+T daemon-host path threads these.
   tabId?: string
   leafId?: string
+  // Why: a pane with a live owner is otherwise reattached, so a restart names the PTY it replaces.
+  replacesPtyId?: string
   // Why: renderer-threaded launch telemetry (telemetry-plan.md§Agent launch semantics); loosely typed because the main-side schema validator is the single enforcement point.
   telemetry?: {
     agent_kind?: unknown
@@ -121,4 +123,5 @@ export type PtySpawnIpcDeps = {
   trustedTerminalHandleEnv: Set<string>
   sendPtySpawnedToRenderer: (id: string) => void
   syncPtyBackgroundedDelivery: (id: string, caller: string) => void
+  stopReplacedPty: (id: string) => Promise<void>
 }

@@ -4,6 +4,12 @@ import { sha256 } from '../sha256'
 /** A reader that sees another value must reject rather than guess at the shape. */
 export const MOBILE_WEB_BUNDLE_SCHEMA_VERSION = 1 as const
 
+/**
+ * The page's build number, written into every manifest. A shell requires a page at least as new as
+ * its own floor and walls an older desktop; bump this when a shell stops handling an older page.
+ */
+export const MOBILE_WEB_PAGE_VERSION = 1
+
 /** The only stable-named asset, and the only one that references the content-addressed names. */
 export const MOBILE_WEB_BUNDLE_ENTRYPOINT = 'index.html'
 
@@ -15,7 +21,7 @@ export const MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES = 10 * 1024 * 1024
 export const MOBILE_WEB_BUNDLE_MAX_ROUTES = 64
 export const MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS = 16
 
-const SHA256_PATTERN = /^[a-f0-9]{64}$/
+export const SHA256_PATTERN = /^[a-f0-9]{64}$/
 const ASSET_PATH_PATTERN = /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/
 const WINDOWS_RESERVED_SEGMENT = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i
 // One spelling only, lowercase with a single space before `charset`: content type feeds the build
@@ -259,6 +265,8 @@ export const MobileWebBundleManifestSchema = z
     desktopVersion: z.string().min(1).max(MAX_DESKTOP_VERSION_LENGTH),
     minCompatibleRuntimeProtocolVersion: z.number().int().nonnegative(),
     runtimeProtocolVersion: z.number().int().nonnegative(),
+    /** `MOBILE_WEB_PAGE_VERSION` at build time; absent from a desktop older than the field. */
+    pageVersion: z.number().int().nonnegative().optional(),
     entrypoint: z.literal(MOBILE_WEB_BUNDLE_ENTRYPOINT),
     totalBytes: z.number().int().nonnegative().max(MOBILE_WEB_BUNDLE_MAX_TOTAL_BYTES),
     assets: z.array(MobileWebBundleAssetSchema).min(1).max(MOBILE_WEB_BUNDLE_MAX_ASSETS),

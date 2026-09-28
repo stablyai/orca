@@ -21,6 +21,7 @@ import {
 import { colors } from '../theme/mobile-theme'
 import { QuickCommandsTabButton } from './QuickCommandsTabButton'
 import { styles } from './mobile-session-styles'
+import { useKeyboardPersistingTaps } from '../platform/keyboard-persisting-taps'
 import type { MobileSessionController } from './use-mobile-session-controller'
 
 export function MobileSessionHeader({ controller }: { controller: MobileSessionController }) {
@@ -58,6 +59,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
     handlePanelTap,
     showHeaderMoreButton
   } = controller
+  const tabBarKeepsKeyboard = useKeyboardPersistingTaps('handled')
   return (
     <SafeAreaView style={styles.sessionChrome} edges={['top']}>
       <View style={styles.sessionTopBar}>
@@ -119,7 +121,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
       </View>
 
       {visibleTabs.length > 0 && (
-        <View style={styles.tabBar}>
+        <View ref={tabBarKeepsKeyboard} style={styles.tabBar}>
           {/* Why: tab taps must register on first press with the keyboard open instead of being eaten by dismissal (#5106). */}
           <ScrollView
             ref={tabStripRef}

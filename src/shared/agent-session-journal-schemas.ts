@@ -14,9 +14,11 @@
 // newer build must not be misread as malformed (see journal-row-schema.ts).
 
 import { z } from 'zod'
+import { AgentSessionContextUsageSchema } from './agent-session-context-usage-schema'
 import type {
   AgentJournalItemBody,
   AgentJournalMessageItem,
+  AgentJournalResolution,
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from './agent-session-journal-types'
@@ -146,6 +148,15 @@ const Question = z
 const Resolution = z.object({
   state: z.string().min(1),
   selectedOptionId: z.string().nullable(),
+  answers: z
+    .array(
+      z.object({
+        questionId: z.string(),
+        optionIds: z.array(z.string()),
+        other: z.string().optional()
+      })
+    )
+    .optional(),
   resolvedBy: z.string().nullable(),
   resolvedAt: z.number().nullable()
 })
@@ -165,7 +176,36 @@ const ApprovalSubject = z.object({
 const MessageBody = z.object({
   kind: z.literal('message'),
   role: z.string().min(1),
-  blocks: z.array(Block)
+  blocks: z.array(Block),
+  // Open like roles: a send mode a newer build writes must not turn the row malformed.
+  sentAs: z.string().min(1).optional()
+})
+
+const ThreadGoal = z.object({
+  objective: z.string(),
+  status: z.string().min(1),
+  tokenBudget: z.number().finite().nullable(),
+  tokensUsed: z.number().finite(),
+  timeUsedSeconds: z.number().finite(),
+  createdAt: z.number().finite(),
+  updatedAt: z.number().finite()
+})
+
+/** Like blocks: an unknown `state` stays admissible, a known one with a broken payload does not. */
+const ThreadGoalState = z.union([
+  z.discriminatedUnion('state', [
+    z.object({ state: z.literal('set'), goal: ThreadGoal }),
+    z.object({ state: z.literal('cleared') })
+  ]),
+  z.object({ state: z.string() }).refine((value) => !['set', 'cleared'].includes(value.state))
+])
+
+/** Open like `state`: a kind, audience or refusal detail a newer host writes must not turn the row
+ *  malformed; the fact reader is where an unplaceable one is dropped. */
+const FailureFact = z.object({
+  kind: z.string().min(1),
+  detail: z.object({ text: z.string(), audience: z.string().min(1) }).optional(),
+  refusal: z.object({ code: z.string().min(1), details: z.looseObject({}).optional() }).optional()
 })
 
 export const AgentJournalItemBodySchema = z.discriminatedUnion('kind', [
@@ -219,7 +259,9 @@ export const AgentJournalItemBodySchema = z.discriminatedUnion('kind', [
         durationMs: z.number().finite().nonnegative().optional()
       })
       .optional(),
-    providerFrame: ProviderFrame.optional()
+    providerFrame: ProviderFrame.optional(),
+    threadGoal: ThreadGoalState.optional(),
+    failure: FailureFact.optional()
   }),
   z.object({
     kind: z.literal('turn'),
@@ -233,7 +275,8 @@ export const AgentJournalItemBodySchema = z.discriminatedUnion('kind', [
     startedAt: z.number().finite().positive().optional(),
     requestedAt: z.number().finite().positive().optional(),
     completedAt: z.number().finite().positive().optional(),
-    durationMs: z.number().finite().nonnegative().optional()
+    durationMs: z.number().finite().nonnegative().optional(),
+    contextUsage: AgentSessionContextUsageSchema.optional()
   })
 ])
 
@@ -256,8 +299,10 @@ export const AgentJournalRenderItemSchema = z.object({
   revision: z.number().int(),
   body: AgentJournalItemBodySchema,
   sequence: z.number().int(),
+  sequenceIndex: z.number().int().nonnegative().optional(),
   observedAt: z.number(),
   recovered: z.literal(true).optional(),
+  recoveredAt: z.number().optional(),
   ...AgentJournalProducerLinkageFields
 })
 
@@ -270,8 +315,15 @@ export const AgentJournalSubmissionSchema = z.object({
   reason: z.string().nullable(),
   submittedAt: z.number(),
   resolvedAt: z.number().nullable(),
-  recovered: z.literal(true).optional()
+  recovered: z.literal(true).optional(),
+  handoverRecorded: z.literal(true).optional(),
+  handedOverAt: z.number().optional(),
+  rejection: FailureFact.optional()
 })
+
+export function isAgentJournalResolution(value: unknown): value is AgentJournalResolution {
+  return Resolution.safeParse(value).success
+}
 
 export function isAdmissibleAgentJournalItemBody(value: unknown): value is AgentJournalItemBody {
   return AgentJournalItemBodySchema.safeParse(value).success

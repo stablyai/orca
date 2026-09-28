@@ -4,6 +4,10 @@ import {
   terminateDescendantSnapshotWithVerdict,
   type DescendantTreeVerdict
 } from '../pty-descendant-exit-verification'
+import {
+  SHUTDOWN_DESCENDANT_TABLE_TIMEOUT_MS,
+  SHUTDOWN_DESCENDANT_VERIFY_MS
+} from './immediate-kill-reply-budget'
 
 // Keep one fresh table for the short burst of verifier polls that follows a shutdown signal.
 // This bounds process-table fanout without reusing a completed capture for a later polling round.
@@ -40,9 +44,8 @@ export function terminateShutdownDescendants(
     return Promise.resolve('exited')
   }
   return terminateDescendantSnapshotWithVerdict(snapshot, {
-    // Leave room for capture and root exit within daemon-entry's 5s shutdown budget.
-    verifyMs: 2500,
-    timeoutMs: 250,
+    verifyMs: SHUTDOWN_DESCENDANT_VERIFY_MS,
+    timeoutMs: SHUTDOWN_DESCENDANT_TABLE_TIMEOUT_MS,
     keepAlive: true,
     requireIdentityBeforeSignal: true,
     readTable: readShutdownProcessTable

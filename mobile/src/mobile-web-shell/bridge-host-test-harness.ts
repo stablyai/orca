@@ -50,7 +50,6 @@ export type Harness = {
   /** Every claim the host reported, in order, including the false it sends when a document ends. */
   backClaims: boolean[]
   /** What each answered `ready` declared it reports, in order. */
-  pageReports: () => readonly (readonly string[])[]
   /** One entry per `ready` answered, saying whether its `init` reached the page. Filled as each
    *  post settles, so a case reads it after awaiting the turn the post resolves on. */
   /** Every clear the page asked for, in order. */
@@ -120,7 +119,6 @@ export function harness(
   let pageReadies = 0
   let pagePaints = 0
   /** What each answered `ready` declared it reports, in order. */
-  const pageReports: (readonly string[])[] = []
   /** One entry per `ready` answered, saying whether an `init` actually went out for it. */
   const routeParamClears: { param: string; value: string }[] = []
   const routeRefusals: string[] = []
@@ -146,9 +144,8 @@ export function harness(
     readStorage:
       options.readStorage ?? (() => ({ storage: options.storage ?? {}, storageOversize: [] })),
     onStorageWrite: (key, value) => storageWrites.push({ key, value }),
-    onPageReady: (reports) => {
+    onPageReady: () => {
       pageReadies += 1
-      pageReports.push(reports)
     },
     onPageBackClaim: (claimed) => backClaims.push(claimed),
     onPagePainted: () => {
@@ -212,7 +209,6 @@ export function harness(
     pageReadyCount: () => pageReadies,
     pagePaintCount: () => pagePaints,
     backClaims,
-    pageReports: () => pageReports,
     routeParamClears: () => routeParamClears,
     routeRefusals,
     pageFaults,

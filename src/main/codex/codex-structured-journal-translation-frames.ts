@@ -27,6 +27,7 @@ export function settleCodexOversizedNotificationFrame(input: {
   sink: OversizedInput['sink']
   streams: OversizedInput['streams']
   activeItems: OversizedInput['activeItems']
+  linkageFor: OversizedInput['linkageFor']
 }): CodexJournalTranslationAdmission | null {
   if (input.kind !== 'frame:oversized-notification') {
     return null
@@ -39,13 +40,14 @@ export function settleCodexOversizedNotificationFrame(input: {
         method,
         sink: input.sink,
         streams: input.streams,
-        activeItems: input.activeItems
+        activeItems: input.activeItems,
+        linkageFor: input.linkageFor
       })
     : null
 }
 
 export function createCodexOversizedNotificationSettler(
-  deps: { sink: OversizedInput['sink'] },
+  deps: { sink: OversizedInput['sink']; linkageFor: OversizedInput['linkageFor'] },
   items: Pick<CodexJournalItems, 'streams' | 'activeItems'>
 ) {
   return settleOversizedNotification
@@ -59,7 +61,8 @@ export function createCodexOversizedNotificationSettler(
       ...event,
       sink: deps.sink,
       streams: items.streams,
-      activeItems: items.activeItems
+      activeItems: items.activeItems,
+      linkageFor: deps.linkageFor
     })
   }
 }

@@ -153,7 +153,6 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
             return guidance ? (
               <QuickOpenInstallRgGuidance
                 reason={guidance.reason}
-                location={guidance.location}
                 command={guidance.command}
                 guidance={guidance.guidance}
               />

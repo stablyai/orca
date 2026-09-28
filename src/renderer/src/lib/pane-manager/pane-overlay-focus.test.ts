@@ -105,6 +105,26 @@ describe.each(['initial', 'active'] as const)('%s pane focus', (operation) => {
     expect(document.activeElement).toBe(f.textarea)
   })
 
+  it('preserves the focused list during arrow navigation', () => {
+    const f = fixture()
+    const sidebar = overlay('listbox')
+    sidebar.setAttribute('data-worktree-sidebar', '')
+    sidebar.setAttribute('data-keyboard-navigation', '')
+    focus(f)
+    expect(document.activeElement).toBe(sidebar)
+    expect(f.pane.terminal.focus).not.toHaveBeenCalled()
+  })
+
+  it('ignores a navigation marker on a list that no longer owns focus', () => {
+    const f = fixture()
+    const sidebar = overlay('listbox')
+    sidebar.setAttribute('data-worktree-sidebar', '')
+    sidebar.setAttribute('data-keyboard-navigation', '')
+    sidebar.blur()
+    focus(f)
+    expect(document.activeElement).toBe(f.textarea)
+  })
+
   it('allows focus after the overlay closes', () => {
     const f = fixture()
     overlay('menu').style.display = 'none'

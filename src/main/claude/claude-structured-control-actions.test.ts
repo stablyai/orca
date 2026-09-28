@@ -6,7 +6,7 @@ import {
 } from './claude-structured-control-actions'
 import { dispatchClaudeTurn } from './claude-structured-dispatch'
 import { ClaudeControlRequestError } from './claude-stream-json-connection'
-import { ClaudePromptRegistry } from './claude-structured-prompt-replies'
+import { buildClaudePromptReply, ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import type { ClaudeDispatchWaiter, ClaudeSession } from './claude-structured-session-state'
 import { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
 import { sessionFor, userMessage } from './claude-structured-dispatch-test-support'
@@ -85,7 +85,8 @@ describe('cancelClaudeTurn', () => {
     expect(settled).toHaveBeenNthCalledWith(1, {
       clientMessageId: 'client-0',
       state: 'rejected',
-      reason: 'provider_cancelled_before_start'
+      reason: 'provider_cancelled_before_start',
+      rejection: { kind: 'cancelled' }
     })
   })
 
@@ -118,7 +119,8 @@ describe('cancelClaudeTurn', () => {
     expect(settled).toHaveBeenCalledWith({
       clientMessageId: 'client-ambiguous',
       state: 'rejected',
-      reason: 'provider_cancelled_before_start'
+      reason: 'provider_cancelled_before_start',
+      rejection: { kind: 'cancelled' }
     })
   })
 
@@ -200,6 +202,12 @@ describe('answerClaudePrompt', () => {
       },
       currentTurnId: null,
       flush: vi.fn(),
+      contextActivity: 0,
+      markContextActivity: vi.fn(),
+      subscribeContextUsageRequests: () => () => {},
+      recordContextReport: () => {},
+      modelMayHaveChanged: () => {},
+      modelWritten: () => {},
       pendingStreamedBlocks: 0,
       dispose: vi.fn()
     }
@@ -208,7 +216,11 @@ describe('answerClaudePrompt', () => {
     if (!claim) {
       throw new Error('expected prompt claim')
     }
-    await answerClaudePrompt(session, claim, 'allow')
+    await answerClaudePrompt(
+      session,
+      claim,
+      buildClaudePromptReply(prompt, { kind: 'option', optionId: 'allow' })
+    )
 
     expect(settle).toHaveBeenCalledWith(
       expect.objectContaining({ behavior: 'allow', toolUseID: 'tool-1' })

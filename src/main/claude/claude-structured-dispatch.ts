@@ -19,20 +19,24 @@ import type {
 import { readClaudeFrameString } from './claude-structured-init-proof'
 import {
   claudeDispatchContentKey,
+  claudeDispatchContentRejection,
   claudeDispatchInvokesSlashCommand,
-  claudeDispatchMessageContent
+  claudeDispatchMessageContent,
+  claudeDispatchRejection
 } from './claude-structured-dispatch-content'
 import { dispatchWriteOutcomeUnknownReason } from '../native-chat/agent-session-journal/journal-dispatch-doubt-reasons'
-import {
-  DISPATCH_REJECTED_CANCELLED,
-  DISPATCH_REJECTED_QUEUE_FULL,
-  dispatchWriteFailureReason
-} from '../../shared/structured-agent-session-dispatch-rejection'
+import { DISPATCH_REJECTED_QUEUE_FULL } from '../../shared/structured-agent-session-dispatch-rejection'
+import { agentSessionFailureFact } from '../../shared/agent-session-failure'
+import type { AgentJournalDispatchRejection } from '../../shared/agent-session-failure-words'
 import {
   claudeUnwrittenUserMessageError,
   claudeUserMessageWasProvablyUnwritten
 } from './claude-agent-sdk-user-message-queue'
 import { AgentSessionPreDispatchError } from '../native-chat/agent-session-wire/structured-agent-session-operation-settlement'
+import {
+  claudeStartupFailureFact,
+  failClaudeStartup
+} from './claude-structured-session-startup-state'
 
 const MAX_ACTIVE_DISPATCH_WAITERS = 64
 
@@ -210,7 +214,7 @@ export function settleCancelledClaudeDispatchWaiters(
       onSettledLate?.({
         clientMessageId: waiter.clientMessageId,
         state: 'rejected',
-        reason: DISPATCH_REJECTED_CANCELLED
+        ...claudeDispatchRejection(agentSessionFailureFact('cancelled'))
       })
     }
   }
@@ -220,10 +224,17 @@ export function settleCancelledClaudeDispatchWaiters(
  *  Retired rather than dropped: their identities stay joinable, bounded by
  *  `MAX_RETIRED_DISPATCH_WAITERS`. */
 export function retireClaudeDispatchWaiters(session: ClaudeSession): void {
+  failClaudeStartup(session, new Error('claude stream-json ended before startup completed'))
   for (const waiter of session.dispatchWaiters.splice(0)) {
     retireWaiter(session, waiter)
     waiter.resolve(null)
   }
+}
+
+/** The row keeps only the marker released clients hide; why the write failed belongs in the log. */
+function claudeWriteFailureRejection(error: unknown): AgentJournalDispatchRejection {
+  console.warn('[claude-dispatch] message could not be handed to Claude:', error)
+  return claudeDispatchRejection(agentSessionFailureFact('writeFailed'))
 }
 
 export async function dispatchClaudeTurn(
@@ -235,10 +246,14 @@ export async function dispatchClaudeTurn(
   try {
     content = await claudeDispatchMessageContent(input.body)
   } catch (error) {
-    return { state: 'rejected', reason: (error as Error).message }
+    return { state: 'rejected', ...claudeDispatchContentRejection(error) }
   }
   if (session.dispatchWaiters.length >= MAX_ACTIVE_DISPATCH_WAITERS) {
-    return { state: 'rejected', reason: DISPATCH_REJECTED_QUEUE_FULL }
+    return { state: 'rejected', ...claudeDispatchRejection(agentSessionFailureFact('queueFull')) }
+  }
+  const startupFailure = claudeStartupFailureFact(session)
+  if (startupFailure) {
+    return { state: 'rejected', ...claudeDispatchRejection(startupFailure) }
   }
   // Read the sent content, not the journal blocks: only the mapped trailing prompt decides
   // whether Claude runs a command, so the two cannot disagree about which frame settles this.
@@ -246,6 +261,8 @@ export async function dispatchClaudeTurn(
   const sentUuid = randomUUID()
   const arm = () => {
     ++session.dispatchSequence
+    // A context report asked for before this send may land after it and misstate the context.
+    session.translator?.markContextActivity()
     return waitForReplay(
       session,
       acceptsResult,
@@ -254,6 +271,13 @@ export async function dispatchClaudeTurn(
       input.clientMessageId ?? null,
       input.requestedAt ?? null
     )
+  }
+  const message = {
+    type: 'user',
+    uuid: sentUuid,
+    message: { role: 'user', content },
+    parent_tool_use_id: null,
+    session_id: session.providerSessionId
   }
   const pending = { replay: beforeDispatch ? undefined : arm() }
   const authorize = beforeDispatch
@@ -266,13 +290,6 @@ export async function dispatchClaudeTurn(
       }
     : undefined
   try {
-    const message = {
-      type: 'user',
-      uuid: sentUuid,
-      message: { role: 'user', content },
-      parent_tool_use_id: null,
-      session_id: session.providerSessionId
-    }
     await (authorize
       ? session.connection.send(message, authorize)
       : session.connection.send(message))
@@ -282,7 +299,7 @@ export async function dispatchClaudeTurn(
       if (error instanceof AgentSessionPreDispatchError) {
         throw error
       }
-      return { state: 'rejected', reason: dispatchWriteFailureReason(error) }
+      return { state: 'rejected', ...claudeWriteFailureRejection(error) }
     }
     const waiter = replay.waiter
     if (waiter.settledUuid) {
@@ -300,7 +317,7 @@ export async function dispatchClaudeTurn(
       waiter.resolve(null)
       // The frame was never handed to the SDK's input pump, so this is not doubt:
       // the message provably did not happen, which is what `rejected` means.
-      return { state: 'rejected', reason: dispatchWriteFailureReason(error) }
+      return { state: 'rejected', ...claudeWriteFailureRejection(error) }
     }
     if (!waiter.retired) {
       retireWaiter(session, waiter)

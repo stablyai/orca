@@ -83,7 +83,7 @@ async function openAgentTab(
         launchAgent
       })
       state.setActiveTab(tab.id)
-      state.setActiveTabType('terminal')
+      state.setActiveTabType('terminal', store.getState().activeWorktreeId)
       return tab.id
     },
     { worktreeId, launchAgent }

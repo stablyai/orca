@@ -37,8 +37,7 @@ export async function runObservedExitSocketScenario(scenario: ObservedExitSocket
       rememberSyntheticKillExit: harness.session.rememberSyntheticKillExit,
       sendPtyExitToRenderer: harness.session.sendPtyExitToRenderer,
       finishPtyShutdown,
-      retiredRejectedPtyIds: new Map<string, NodeJS.Timeout>(),
-      reversibleStopOwnersByPtyId: new Map<string, number>()
+      retiredRejectedPtyIds: new Map<string, NodeJS.Timeout>()
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: stop/kill read only these controller ports and optional store; spawn ports are unused.
     const deps = ports as unknown as PtyRuntimeControllerDeps
@@ -103,8 +102,8 @@ const BINDING = {
 }
 
 class ObservedExitRuntime extends OrcaRuntimeService {
-  closeControl(): Promise<boolean> {
-    return this.stopExplicitlyClosedTabPtys([CONTROL_PTY_ID], CONTROL_PTY_ID)
+  async closeControl(): Promise<boolean> {
+    return (await this.stopExplicitlyClosedTabPtys([CONTROL_PTY_ID], CONTROL_PTY_ID)).stopped
   }
 }
 

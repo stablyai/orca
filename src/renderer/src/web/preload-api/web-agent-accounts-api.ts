@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import type { PreloadApi } from '../../../../preload/api-types'
 
 export function createMiniMaxCredentialsApi(): NonNullable<
@@ -11,6 +12,28 @@ export function createMiniMaxCredentialsApi(): NonNullable<
     clearCookie: () => Promise.resolve(notConfigured),
     saveApiKey: () => Promise.reject(unsupportedError),
     clearApiKey: () => Promise.resolve(notConfigured)
+  }
+}
+
+export function createCursorAccountsApi(): NonNullable<Partial<PreloadApi>['cursorAccounts']> {
+  // Why an explanation and not a bare `signedIn: false`: Cursor's session lives on
+  // the machine running Orca, and this bridge cannot read it. The host may well be
+  // signed in — its usage meter still arrives over the rate-limit snapshot — so
+  // asserting "not signed in" here would contradict the meter beside it.
+  return {
+    getStatus: () =>
+      Promise.resolve({
+        signedIn: false,
+        email: null,
+        displayName: null,
+        credentialSource: null,
+        planType: null,
+        tokenFresh: false,
+        error: translate(
+          'auto.components.web.preloadApi.cursorAccounts.hostOnly',
+          'Cursor sign-in details are only readable on the computer running Orca.'
+        )
+      })
   }
 }
 

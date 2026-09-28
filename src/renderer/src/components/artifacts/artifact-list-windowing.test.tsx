@@ -303,11 +303,11 @@ beforeEach(() => {
   root = createRoot(host)
 
   vi.stubGlobal('ResizeObserver', MockResizeObserver)
-  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(
-    function (this: HTMLElement) {
-      return elementHeight(this)
-    }
-  )
+  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (
+    this: HTMLElement
+  ) {
+    return elementHeight(this)
+  })
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
     const top = topsByElement.get(this) ?? 0
     const height = elementHeight(this)

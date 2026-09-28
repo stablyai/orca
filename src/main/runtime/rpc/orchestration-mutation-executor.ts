@@ -4,6 +4,7 @@ import {
   isTerminalPromptMutation
 } from '../../../shared/orchestration-rpc-contract'
 import type { OrcaRuntimeService } from '../orca-runtime'
+import type { OrcaSessionId } from '../../../shared/orca-session-address'
 import { OrchestrationError } from '../orchestration/orchestration-error'
 import type { RpcRequest } from './core'
 import {
@@ -53,7 +54,9 @@ export class OrchestrationMutationExecutor {
     request: RpcRequest,
     params: unknown,
     invoke: (mutation?: DurableMutationInvocation) => unknown,
-    callerFingerprintOverride?: string
+    callerFingerprintOverride?: string,
+    /** The resolved session's Orca session id; it joins the payload so another caller cannot replay it. */
+    callerOrcaSessionId?: OrcaSessionId
   ): Promise<unknown> {
     const requestId = request.orchestrationRequestId
     if (!requestId || !isDurableMutation(request.method, params)) {
@@ -61,7 +64,7 @@ export class OrchestrationMutationExecutor {
     }
     const callerFingerprint =
       callerFingerprintOverride ?? this.getLocalAuthenticatedCallerFingerprint()
-    const stableParams = replayStableCallerParams(this.runtime, params)
+    const stableParams = replayStableCallerParams(this.runtime, params, callerOrcaSessionId)
     const basePayloadHash = hashCanonical({ method: request.method, params: stableParams })
     const key = `${callerFingerprint}:${requestId}`
     const db = this.runtime.getOrchestrationDb()

@@ -10,6 +10,7 @@ export type ReattachPayloadSession = Pick<
   | 'createReattachGridPush'
   | 'isPaneOnAlternateScreen'
   | 'kittyKeyboardModes'
+  | 'markHiddenOutputRestoreNeeded'
   | 'pane'
   | 'pendingReattachFit'
   | 'reattachReplayResetSequence'

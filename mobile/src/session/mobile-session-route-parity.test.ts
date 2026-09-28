@@ -92,10 +92,23 @@ const HOST_COMPONENT_NAMES = new Set([
 // never pass it. Found by pullfrog on #22300.
 // Moved, count unchanged, when the Markdown actions' Back `useEffect` became `useBackClaim`, the
 // seam that also claims the key on the page while a draft is dirty.
-const HEAD_MAIN_HOOK_SHA256 = '914bf72e0bf0abe2b22850467b5dfdc3ab3fd19111924f1de91d9c1d9d1ce74f'
-const HEAD_HOOK_BINDING_SHA256 = 'd0677b98b909f8a24089ac5d6afe9ad2c238fa6c24969da1e84e01cd6f653a16'
+// Refreshed when the first subscribe began sizing itself from the document's reported cell box:
+// the first-subscribe mark ref and `measureViewportOnce` are gone (hooks 282 → 280, callbacks 79 → 78).
+// Again when xterm became the only cell measurer: `useTerminalCellBoxRefit` is gone, the frame's
+// width ref and `handleTerminalFrameLayout` subscribe a known box on layout (hooks 282, callbacks 79),
+// and the pane's `onCellBoxChange` goes to the viewport refit.
+// Again when one frame ref replaced the height ref, width ref and width state (hooks 280).
+// Again when one `notifyTerminalFrame` took the frame's layout (hooks 281, callbacks 80).
+const HEAD_MAIN_HOOK_SHA256 = '004b011722b17ac82c96f0b3c8e303d39b2431a216424e9b86a1ee6a4896f23e'
+// Moved when the prompt-cancel flag became one structured-session host support object (main).
+// Re-recorded against the merged tree. Again when the frame-layout and cell-box-change callbacks
+// named the refs they read in their dependency lists (react-doctor).
+// Again when the frame's width and height became one `terminalFrameRef`.
+// Again when the frame's layout moved into `notifyTerminalFrame`.
+const HEAD_HOOK_BINDING_SHA256 = 'c1bcb859202aaf8d612d3023cb4d895719da513879c61b01545a249a0bda662b'
+// Moved when `notifyTerminalFrame` joined and `handleTerminalFrameLayout` became `subscribeIntendedActiveTerminal`.
 const HEAD_CALLBACK_IDENTITY_SHA256 =
-  'e396ab759b2401acef45dea428e97c7f8f24fff41aae7fb7858da5a5b145c64c'
+  '9c966301b373c11b27359ef1388c593b638c7f6831186d5c5321553504183e07'
 // Pins that no callback body in the route changed unnoticed. Body text, not behaviour: the sends
 // and repo reads inside them now name their `RpcOperation` instead of the raw `sendRequest` port.
 // Refreshed in step 6 for the gesture flush, whose `terminal.send` became `terminalInputSend` and
@@ -115,7 +128,16 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // the other's body. The hook and string counts are C7.2's and stand.
 // Refreshed once more for the two dictation failure handlers, which now both call
 // `reportDictationFailure` instead of each choosing between the setup sheet and a toast.
-const HEAD_CALLBACK_BODY_SHA256 = '349ad6f766da14b3bce23a13f3a67f2b013efadd8896f63b7b68e724b9726d9b'
+// Moved when the metrics handler compared every field, the row pitch included (main).
+// Again when the subscribe waited for web-ready and `handleTerminalWebReady` lost `documentHasInit`.
+// Again when the subscribe's inits began carrying the laid-out terminal frame, and its resize too.
+// Again when those grids read the one frame ref.
+// Again when the subscribe sized its viewport inline instead of through a helper.
+// Again when the document took the hold rule and the subscribe stopped holding its grid.
+// Again when an init took one options object.
+// Again when the frame's layout became one `notifyTerminalFrame`.
+// Again when the init option took the message's name, `initialData`.
+const HEAD_CALLBACK_BODY_SHA256 = '4848e925f478f1656f26031c1bdebbb9f2da60811c7e91cfd732fc9da9764079'
 // Refreshed for the startup effect: both `worktree.activate` sends became `worktreeActivate`, and
 // the sleeping-agent check reads that operation's verdict instead of the reply envelope. Refreshed
 // again when the reporter took the reply and interpreted it itself, retiring the hand-built
@@ -125,7 +147,8 @@ const HEAD_CALLBACK_BODY_SHA256 = '349ad6f766da14b3bce23a13f3a67f2b013efadd8896f
 // the diff-comments effect, which now catches the loader's rejection. Count unchanged.
 // Moved again by the keyboard seam above, which is the +1 effect.
 // -1 effect for the Markdown actions' Back registration, which is `useBackClaim`'s own now.
-const HEAD_EFFECT_SHA256 = '69096e20a44fa03a2c364e00a617eeabc437a79bb850b9135408d35fbd4d4a71'
+// Moved by the capability probe setting that host support object.
+const HEAD_EFFECT_SHA256 = '9b045a547ed269acf95db16cc87e33a9035a20c6888fd30e0363e58bb6b7d883'
 const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fef5cc45fde6f8189581'
 // Same pin for the 12 bodies that sit in nested functions rather than callbacks, moved by the same
 // rewrite of those send and read expressions. Count unchanged. Refreshed again in step 6 for
@@ -167,17 +190,37 @@ const HEAD_TIMER_CLEANUP_SHA256 = 'c73f1d1c2cc89642f3d727d6f3b6b81860a9d6f342345
 // the page's provider hands out none. Nothing a phone renders or does changed.
 //
 // 530 -> 529: `'hardwareBackPress'` left with the Markdown actions' registration for `useBackClaim`.
+//
+// 529 -> 530, and the host-JSX hash: `key="terminal-frame"`, so the page's frame mounts with its
+// onLayout rather than reusing the loading View. Native measured 47 rows before and after: its
+// frame reported either way, and its window is its frame, so both measure paths agree there.
+//
+// 531 -> 530, and the host-JSX and style hashes: the key left, and one `contentFrame` View wraps
+// every branch and carries the frame's onLayout, so the page's frame mounts with it. The page measured
+// 47 rows before and after; native was measured only on main's bundle (47), and the wrapper is a
+// flex:1 View around the same flex:1 frame, so its box is the frame's.
+// Count unchanged: `'frame-not-laid-out'`, the gate awaiting the frame's first layout, replaced `'measuring-viewport'`.
+// 530 -> 532, and the host-JSX hash: the tab bar and the accessory bar take a ref that gives the
+// page `keyboardShouldPersistTaps` ('handled', 'always'), which react-native-web ignores. Natively
+// the ref is undefined. 532 -> 531: the live input's reopen flag reads the host OS, not an 'android' literal.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '9b76ff573df10cf370d53f82e4c5864379298fdc3b2c1f607c86bf80c20f2a78'
-// Moved by both of the dock's fields: their refs, and the live one's submit handler, are the seam's now.
-const HEAD_HOST_JSX_SHA256 = 'ac7547dd0e25be2339111ac01ce5e1ec20f00b05bf59dde85664039308cf8593'
-const HEAD_LEAF_JSX_SHA256 = 'c7e1a4b90197697f1eaa640c38da63281b4f7b84fb036ae2152f00c2f7d7cb77'
+  'ab8cc43940d3a3e0fdb8df3bdc178b9b61e51c7ccd55a944933862a3c290e8e3'
+// Moved by both of the dock's fields: their refs, and the live one's submit handler, are the seam's now;
+// their keyboard type and remount key read the host OS.
+// Moved again when the terminal frame kept its laid-out width unrounded, for every fit.
+// Again when the frame's onLayout wrote one frame ref and notified a new width imperatively.
+// Again when the frame's first laid-out layout alone subscribes a held-back document.
+// Again when the frame's onLayout made one `notifyTerminalFrame` call.
+const HEAD_HOST_JSX_SHA256 = 'f71b1ee495f67a6e389abf597948ffdff1f9a4a10cde6abefd2611ea4dd94245'
+const HEAD_LEAF_JSX_SHA256 = '62eb05c6e2ac0be6d553a141fc8aa1641fcb0c678777d5d539f490aab8648417'
 const HEAD_STYLE_REFERENCE_SHA256 =
-  '295a3501c2c6d7bea7c8bbf38b3f3534f01344cd7e1b91bb8e07c040821d596a'
+  '56a005a1f65b30c11092e3422caef67810e1ec50f66fdd06471c370138b1eeb6'
 const HEAD_IDENTITY_FIELD_SHA256 =
   '91146853930a34dd1f3d80e5c97fbacd7cf19fb93dd26fe8fc6f29169622f9d6'
 const HEAD_NAVIGATION_SHA256 = '9d96f5dad7de555d6553eac39c0fab00efad507470fd562cb9beaa32db16f512'
-const HEAD_CAPABILITY_SHA256 = '67c3154b71b542bb63a4365d3ea75aef19ef133c02f509318619618221786fab'
+// Moved when structured-session features became one helper call; the capability strings it reads
+// are pinned by that helper's own test.
+const HEAD_CAPABILITY_SHA256 = 'ec1159d6e726383bf7121e9c642657fee5b4ebec049cb44ba132a303bb9a61e2'
 
 type Definition = { declaration: ts.FunctionDeclaration; sourceFile: ts.SourceFile }
 type HookFacts = {
@@ -546,7 +589,11 @@ function readCompatibilityFacts(definitions: ReadonlyMap<string, Definition>): {
         : ''
     const callText = canonical(node, sourceFile)
     if (
-      ['startRuntimeCapabilityProbe', 'supportsMobileQuickCommands'].includes(callName) ||
+      [
+        'startRuntimeCapabilityProbe',
+        'supportsMobileQuickCommands',
+        'structuredAgentSessionHostSupport'
+      ].includes(callName) ||
       (callName === 'includes' && callText.includes('capabilities.includes'))
     ) {
       capabilities.push(callText)
@@ -565,7 +612,7 @@ describe('mobile session route extraction parity', () => {
     expect(main.hooks).toHaveLength(281)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
-    expect(main.callbacks).toHaveLength(79)
+    expect(main.callbacks).toHaveLength(80)
     expect(hash(main.callbacks)).toBe(HEAD_CALLBACK_IDENTITY_SHA256)
     expect(hash(main.callbackBodies)).toBe(HEAD_CALLBACK_BODY_SHA256)
     expect(main.effects).toHaveLength(24)
@@ -607,14 +654,14 @@ describe('mobile session route extraction parity', () => {
 
   it('preserves runtime strings, styles, and the expanded JSX tree', () => {
     const strings = readRuntimeStrings()
-    expect(strings).toHaveLength(529)
+    expect(strings).toHaveLength(531)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
-    expect(jsx.host).toHaveLength(124)
+    expect(jsx.host).toHaveLength(125)
     expect(hash(jsx.host)).toBe(HEAD_HOST_JSX_SHA256)
     expect(jsx.leaf).toHaveLength(61)
     expect(hash(jsx.leaf)).toBe(HEAD_LEAF_JSX_SHA256)
-    expect(jsx.styleReferences).toHaveLength(172)
+    expect(jsx.styleReferences).toHaveLength(173)
     expect(hash(jsx.styleReferences)).toBe(HEAD_STYLE_REFERENCE_SHA256)
   })
 })

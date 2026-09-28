@@ -5,6 +5,7 @@ import {
   type AgentStatus
 } from '../../shared/agent-detection'
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
+import type { TuiAgent } from '../../shared/tui-agent'
 import { findAntigravityReadyPromptIndex } from './antigravity-terminal-readiness'
 import { startOfLastLines, startOfLastNonBlankLines } from './terminal-wait-tail-window'
 
@@ -43,27 +44,51 @@ export const detectExplicitIdleStatusFromTitle: (title: string) => AgentStatus |
 
 export function isKnownReadyPromptPreview(preview: string): boolean {
   const normalized = preview.toLowerCase()
-  const readyIndex = findKnownReadyPromptIndex(normalized)
+  return isReadyPromptUnblocked(normalized, findKnownReadyPromptIndex(normalized))
+}
+
+/**
+ * Tier 1 body evidence for every tui-idle site. `readScreenLines` yields the live emulator's
+ * visible grid, or null when the runtime has no trustworthy one.
+ *
+ * Why the screen: Codex repaints its header by cell diff (`ESC[5;3Hdir ESC[5;7Hctory:`), which
+ * only a grid reassembles — the line-folded wait text reads `dirctory:` forever.
+ * Why it can only add readiness: a grid out of step with the PTY (size mismatch, resize
+ * mid-paint) garbles the header, so the text rules keep every verdict they give today.
+ */
+export function isKnownReadyPromptBody(
+  waitText: string,
+  agent: TuiAgent | null,
+  readScreenLines: () => readonly string[] | null
+): boolean {
+  if (isKnownReadyPromptPreview(waitText)) {
+    return true
+  }
+  // Why the agent gate: another agent's screen can merely mention "OpenAI Codex".
+  if (agent !== null && agent !== 'codex') {
+    return false
+  }
+  const screenLines = readScreenLines()
+  if (screenLines === null) {
+    return false
+  }
+  const screen = screenLines.join('\n').toLowerCase()
+  return isReadyPromptUnblocked(screen, findCodexScreenReadyPromptIndex(screen))
+}
+
+function isReadyPromptUnblocked(normalized: string, readyIndex: number | null): boolean {
   if (readyIndex === null) {
     return false
   }
   const blockedSignal = findTerminalWaitBlockedSignal(normalized)
-  if (blockedSignal !== null && blockedSignal.index > readyIndex) {
-    return false
-  }
-  return true
+  return blockedSignal === null || blockedSignal.index <= readyIndex
 }
 
 // Why separate from isKnownReadyPromptPreview: that one settles tier 1 immediately, while
 // a Muse ready screen only proves the TUI is up — the ranking holds it to quiescence.
 export function isMuseReadyPromptPreview(preview: string): boolean {
   const normalized = preview.toLowerCase()
-  const readyIndex = findMuseReadyPromptIndex(normalized)
-  if (readyIndex === null) {
-    return false
-  }
-  const blockedSignal = findTerminalWaitBlockedSignal(normalized)
-  return blockedSignal === null || blockedSignal.index <= readyIndex
+  return isReadyPromptUnblocked(normalized, findMuseReadyPromptIndex(normalized))
 }
 
 export function detectTerminalWaitBlockedReason(
@@ -148,6 +173,24 @@ function findCodexReadyPromptIndex(normalized: string): number | null {
   const readySegment = normalized.slice(headerIndex)
   // Why: Codex prints permissions only in YOLO mode; the stable ready header is OpenAI Codex + model + directory.
   return readySegment.includes('model:') && readySegment.includes('directory:') ? headerIndex : null
+}
+
+const CODEX_HEADER_LOADING_RE = /(?:model|directory):\s+loading/
+
+// Why the header box only: chat below it can mention "OpenAI Codex" or `model: loading`.
+// Why `loading`: a header still loading is not ready; the screen must not add readiness early.
+function findCodexScreenReadyPromptIndex(screen: string): number | null {
+  const headerIndex = screen.indexOf('openai codex')
+  if (headerIndex === -1) {
+    return null
+  }
+  const boxEnd = screen.indexOf('╰', headerIndex)
+  const header = screen.slice(headerIndex, boxEnd === -1 ? undefined : boxEnd)
+  return header.includes('model:') &&
+    header.includes('directory:') &&
+    !CODEX_HEADER_LOADING_RE.test(header)
+    ? headerIndex
+    : null
 }
 
 export const TERMINAL_WAIT_BLOCKED_SENTINEL_RE =

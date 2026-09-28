@@ -85,7 +85,8 @@ function makeEntry(overrides: Partial<AgentStatusEntry> & { paneKey: string }): 
     tabId: overrides.tabId,
     terminalTitle: overrides.terminalTitle,
     stateHistory: overrides.stateHistory ?? [],
-    interrupted: overrides.interrupted
+    interrupted: overrides.interrupted,
+    mainAgent: overrides.mainAgent
   }
 }
 
@@ -332,6 +333,31 @@ describe('smart sort — interrupted and stale handling', () => {
     }
     const sorted = sortSmart([interrupted, realDone], tabs, entries)
     expect(sorted.map((w) => w.id)).toEqual(['real-done', 'interrupted'])
+  })
+
+  it('ranks a failed turn above an idle worktree and a cancelled one below it', () => {
+    const idle = makeWorktree({ id: 'idle', displayName: 'Idle', lastActivityAt: NOW - 10_000 })
+    const failed = makeWorktree({ id: 'failed', displayName: 'Failed', lastActivityAt: 0 })
+    const stopped = makeWorktree({ id: 'stopped', displayName: 'Stopped', lastActivityAt: 0 })
+    const tabs = {
+      [idle.id]: [makeTab({ id: 'tab-idle', worktreeId: idle.id })],
+      [failed.id]: [makeTab({ id: 'tab-failed', worktreeId: failed.id })],
+      [stopped.id]: [makeTab({ id: 'tab-stopped', worktreeId: stopped.id })]
+    }
+    const doneWith = (tabId: string, outcome: 'failure' | 'cancellation') =>
+      makeEntry({
+        paneKey: paneKey(tabId, '1'),
+        state: 'done',
+        mainAgent: { state: 'done', outcome, stateStartedAt: NOW - 60_000 },
+        stateStartedAt: NOW - 60_000,
+        updatedAt: NOW - 1_000
+      })
+    const entries = {
+      [paneKey('tab-failed', '1')]: doneWith('tab-failed', 'failure'),
+      [paneKey('tab-stopped', '1')]: doneWith('tab-stopped', 'cancellation')
+    }
+    const sorted = sortSmart([stopped, idle, failed], tabs, entries)
+    expect(sorted.map((w) => w.id)).toEqual(['failed', 'idle', 'stopped'])
   })
 
   it('stale entries fall to Class 4', () => {

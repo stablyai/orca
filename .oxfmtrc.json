@@ -6,6 +6,7 @@
   "trailingComma": "none",
   "ignorePatterns": [
     "cloud/**",
+    "resources/licenses/**",
     ".github/actions/cloud-sql-rollout-lease/**",
     ".anti-slop-plugin/**"
   ]

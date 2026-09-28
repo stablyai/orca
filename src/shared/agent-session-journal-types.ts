@@ -7,8 +7,13 @@
 // rewritten in place, so a host that cannot read a row refuses to write the
 // journal rather than skipping or compacting past it.
 
+import type { UnreadAgentSessionFailureFact } from './agent-session-failure'
+import type { AgentSessionFailureRowWords } from './agent-session-failure-words'
 import type { AgentType } from './agent-status-types'
+import type { AgentSessionQuestionAnswer } from './agent-session-question-answer'
+import type { AgentJournalTurnOutcome } from './agent-turn-outcome'
 import type { NativeChatToolMetadata } from './native-chat-tool-identity'
+import type { AgentSessionContextUsage } from './agent-session-context-usage'
 import type { NativeChatBlock, NativeChatRole } from './native-chat-types'
 
 export { type AgentType }
@@ -85,10 +90,19 @@ export type AgentJournalBoundedPayload = {
 
 // ─── Render-model items ─────────────────────────────────────────────────────
 
+/** How a user message reached the provider when it was not an ordinary turn
+ *  input. Persisted and open for growth: a reader that cannot place a value
+ *  renders an ordinary message. */
+export const AGENT_JOURNAL_MESSAGE_SEND_MODES = ['goal'] as const
+export type AgentJournalMessageSendMode = (typeof AGENT_JOURNAL_MESSAGE_SEND_MODES)[number]
+
 export type AgentJournalMessageItem = {
   kind: 'message'
   role: NativeChatRole
   blocks: NativeChatBlock[]
+  /** Absent ⇒ an ordinary turn input. `goal` ⇒ the text was set as the thread
+   *  goal's objective, and the provider pursues it without a turn of its own. */
+  sentAs?: AgentJournalMessageSendMode
 }
 
 export type AgentJournalToolCallState = 'running' | 'completed' | 'failed'
@@ -117,8 +131,11 @@ export type AgentJournalResolutionState = (typeof AGENT_JOURNAL_RESOLUTION_STATE
  *  invoking the provider callback twice. */
 export type AgentJournalResolution = {
   state: AgentJournalResolutionState
-  /** Option id the winner picked; null while pending or cancelled. */
+  /** Option id the winner picked; null while pending or cancelled. For a question, the answer in the
+   *  packed form older clients read; `answers` is the same answer structured. */
   selectedOptionId: string | null
+  /** Question answers. Absent on approvals and on rows written before hosts recorded it. */
+  answers?: AgentSessionQuestionAnswer[]
   /** Opaque client identity of the resolver, for "answered on <device>". */
   resolvedBy: string | null
   resolvedAt: number | null
@@ -184,12 +201,9 @@ export const AGENT_JOURNAL_TURN_LIFECYCLE_STATES = [
 ] as const
 export type AgentJournalTurnLifecycleState = (typeof AGENT_JOURNAL_TURN_LIFECYCLE_STATES)[number]
 
-/** What the PROVIDER said became of a turn, kept separate from the lifecycle
- *  state so the four arms above stay a report on what the HOST observed.
- *  `cancellation` is a stop somebody asked for, `failure` is the provider's own
- *  error, and the two are never interchangeable: only `failure` is a fault. */
-export const AGENT_JOURNAL_TURN_OUTCOMES = ['success', 'failure', 'cancellation'] as const
-export type AgentJournalTurnOutcome = (typeof AGENT_JOURNAL_TURN_OUTCOMES)[number]
+// The turn verdict vocabulary lives in agent-turn-outcome.ts so the agent-status
+// row can share it without importing the journal; re-exported to keep one import site.
+export { AGENT_JOURNAL_TURN_OUTCOMES, type AgentJournalTurnOutcome } from './agent-turn-outcome'
 
 export type AgentJournalTurnLifecycle = {
   turnId: string
@@ -211,11 +225,42 @@ export type AgentJournalTurnLifecycle = {
   completedAt?: number
   /** The provider's own measured turn duration, preferred over the host interval. */
   durationMs?: number
+  /** What the provider said about its context window during or after this turn.
+   *  Usually written by a later revision, since the provider answers after the end. */
+  contextUsage?: AgentSessionContextUsage
 }
 
-export type AgentJournalStatusItem = {
+/** Provider thread-goal lifecycle. Open like other persisted vocabularies: a
+ *  status a newer provider reports must not turn a row malformed. */
+export const AGENT_JOURNAL_THREAD_GOAL_STATUSES = [
+  'active',
+  'paused',
+  'blocked',
+  'usageLimited',
+  'budgetLimited',
+  'complete'
+] as const
+export type AgentJournalThreadGoalStatus = (typeof AGENT_JOURNAL_THREAD_GOAL_STATUSES)[number]
+
+/** The provider's goal as last journaled. Timestamps are epoch ms on the
+ *  provider's clock; counters are as of `updatedAt`. */
+export type AgentJournalThreadGoal = {
+  objective: string
+  status: AgentJournalThreadGoalStatus
+  tokenBudget: number | null
+  tokensUsed: number
+  timeUsedSeconds: number
+  createdAt: number
+  updatedAt: number
+}
+
+/** A goal transition in typed form, so readers never parse a bounded frame head. */
+export type AgentJournalThreadGoalState =
+  | { state: 'set'; goal: AgentJournalThreadGoal }
+  | { state: 'cleared' }
+
+type AgentJournalStatusItemFields = {
   kind: 'status'
-  text: string
   /** Optional display hints; unknown values retain the ordinary text fallback. */
   presentation?: string
   tone?: string
@@ -230,7 +275,22 @@ export type AgentJournalStatusItem = {
     kind: string
     payload: AgentJournalBoundedPayload
   }
+  /** Present on thread-goal transitions; absent on rows from older hosts. */
+  threadGoal?: AgentJournalThreadGoalState
 }
+
+/** A status row that reports no failure; its text is its writer's own. */
+export type AgentJournalPlainStatusItem = AgentJournalStatusItemFields & {
+  text: string
+  failure?: undefined
+}
+
+export type AgentJournalStatusItem =
+  | AgentJournalPlainStatusItem
+  | (AgentJournalStatusItemFields &
+      /** A row that reports a failure: what failed, typed, beside the sentence older clients print,
+       *  both from `agentSessionFailureWords`. Absent on rows from older hosts. */
+      AgentSessionFailureRowWords)
 
 /** The durable record of one root turn. `running` exposes cancellation while
  *  the provider can still accept it; the item is revised to a terminal state,
@@ -281,6 +341,13 @@ export type AgentJournalProducerLinkage = {
   attempt?: number
 }
 
+/** Where the journal placed an item: the sequence of the row that created it,
+ *  then its place among that row's writes. The timeline's only ordering key. */
+export type AgentJournalPosition = {
+  sequence: number
+  index: number
+}
+
 /** One reduced timeline entry. `sequence` orders the list; `observedAt` is the
  *  provider's own clock and may sort earlier than a later sequence when the row
  *  was recovered after a crash. */
@@ -289,9 +356,14 @@ export type AgentJournalRenderItem = AgentJournalProducerLinkage & {
   revision: number
   body: AgentJournalItemBody
   sequence: number
+  /** Place among the writes of the row at `sequence`, which one lifecycle batch
+   *  shares across every item it creates. Absent ⇒ 0, and on a host that predates it. */
+  sequenceIndex?: number
   observedAt: number
   /** Set when the row was appended by crash reconciliation rather than live. */
   recovered?: true
+  /** When crash reconciliation wrote this revision; present exactly when `recovered` is. */
+  recoveredAt?: number
 }
 
 // ─── Submissions ────────────────────────────────────────────────────────────
@@ -309,13 +381,23 @@ export type AgentJournalSubmission = {
   dispatchState: AgentJournalDispatchState
   /** Provider item identity adopted on accept; null otherwise. */
   providerItemId: string | null
-  /** Terminal reason on `rejected`. */
+  /** Terminal reason on `rejected`: a sentence a person can read, or one of the legacy markers
+   *  older clients already recognise. On `unknown`, the doubt marker. */
   reason: string | null
+  /** On `rejected`, why, typed; absent on rows from older hosts. */
+  rejection?: UnreadAgentSessionFailureFact
   submittedAt: number
   resolvedAt: number | null
   /** Set when crash reconciliation resolved the dispatch, not the provider. A live
    *  `unknown` is a send still outstanding; a recovered one outlived its writer. */
   recovered?: true
+  /** The host accepted this send to hand over later; absent on sends dispatched as they were
+   *  recorded (older hosts). With no `handedOverAt` yet, a pending one is still queued. */
+  handoverRecorded?: true
+  /** When the host handed it to the provider (its `dispatch{pending}` row). */
+  handedOverAt?: number
+  /** Host-only: the submission row's sequence, which tells which host process accepted it. */
+  acceptedSequence?: number
 }
 
 /** Durable answer to "did my send land?", keyed by client message id. Only an

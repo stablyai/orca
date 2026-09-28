@@ -22,6 +22,7 @@ const REASON_COPY: Record<MobileWebShellUpdateFailureReason, string> = {
   'build-changed-mid-fetch': "the host's build changed during the download",
   'chunk-misrouted': 'a chunk answered the wrong asset or offset',
   'asset-entry-changed': 'an asset no longer matched the manifest',
+  'range-undecodable': 'a compressed read could not be decoded',
   'fetch-stopped': 'the download was stopped',
   'cache-write-failed': 'saving the download on this phone failed',
   'unrecognised-error': 'an unrecognised error'

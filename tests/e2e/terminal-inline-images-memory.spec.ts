@@ -69,7 +69,7 @@ test('twelve image terminals release decoder and image storage across reset and 
           const state = window.__store!.getState()
           const tab = state.createTab(worktree, undefined, undefined, { activate: true })
           state.setActiveTab(tab.id)
-          state.setActiveTabType('terminal')
+          state.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
           return tab.id
         }, worktreeId)
         outstandingTabs.add(id)

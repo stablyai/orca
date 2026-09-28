@@ -1,8 +1,9 @@
+import { closeTestStores, createStore, testState } from './persistence-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createStore, testState } from './persistence-test-harness'
+
 import { TEST_LEAF_1 } from './persistence-session-fixtures'
 
 vi.mock('electron', () => ({
@@ -18,7 +19,8 @@ describe('operator-closed SSH lease tombstones', () => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
 

@@ -1,5 +1,6 @@
 import { useCallback, useRef, type Dispatch, type SetStateAction } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
+import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { BrowserScreencastFrameMetadata } from '../transport/browser-screencast-protocol'
 import {
   browserDialogAccept,
@@ -117,35 +118,37 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
       if (!client || !base) {
         return
       }
-      const clickResult = await sendBrowserRequest(
-        async (rpc, page, options) =>
-          browserPointerClick.interpret(
-            await browserPointerClick.request(
-              rpc,
-              {
-                ...page,
-                x: point.x,
-                y: point.y,
-                button,
-                modifiers: pointerModifiers,
-                ...(button === 'left'
-                  ? {
-                      radius: computeBrowserTouchClickRadiusCss(
-                        layoutRef.current,
-                        frameMetadataRef.current,
-                        zoomRef.current,
-                        TOUCH_CLICK_RADIUS_DIP
-                      )
-                    }
-                  : {})
-              },
-              options
-            )
-          ),
-        { suppressError: true, timeoutMs: 5_000 }
-      )
-      if (clickResult !== null || pointerModifiers.length > 0) {
+      try {
+        browserPointerClick.interpret(
+          await browserPointerClick.request(
+            client,
+            {
+              ...base,
+              x: point.x,
+              y: point.y,
+              button,
+              modifiers: pointerModifiers,
+              ...(button === 'left'
+                ? {
+                    radius: computeBrowserTouchClickRadiusCss(
+                      layoutRef.current,
+                      frameMetadataRef.current,
+                      zoomRef.current,
+                      TOUCH_CLICK_RADIUS_DIP
+                    )
+                  }
+                : {})
+            },
+            { timeoutMs: 5_000 }
+          )
+        )
+        setError(null)
         return
+      } catch (error) {
+        // Why: a timed-out click may still run on the host, and the move/down/up replay drops modifiers.
+        if (isRpcDeliveryUnknown(error) || pointerModifiers.length > 0) {
+          return
+        }
       }
       try {
         const moveReply = await browserPointerMove.request(client, {
@@ -164,7 +167,7 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
         // actionable failures still surface through navigation/stream errors.
       }
     },
-    [client, pageParams, pointerModifiers, sendBrowserRequest]
+    [client, pageParams, pointerModifiers]
   )
 
   const togglePointerModifier = useCallback((modifier: BrowserPointerModifier) => {

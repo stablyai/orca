@@ -16,9 +16,55 @@ import {
 } from './structured-agent-session-attach'
 import { admitAndRunAgentSessionMutation } from './structured-agent-session-mutation-admission'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
+import {
+  openWithAgent,
+  structuredAgentSessionFailureWordsContext
+} from './structured-agent-session-send-preparation'
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { conversationCommandBlocked } from './structured-conversation-command-admission'
+import {
+  agentSessionFailureFact,
+  type AgentSessionFailureFact
+} from '../../../shared/agent-session-failure'
+import {
+  agentSessionFailureWords,
+  type AgentSessionFailureWordsContext
+} from '../../../shared/agent-session-failure-words'
+import { structuredAgentSessionStartFailureFact } from './structured-agent-session-failure-text'
+import type { StructuredSessionCompactionResult } from './structured-session-compaction'
+
+/** A compaction that did not succeed, keeping only what the provider wrote for a person. */
+function compactionFailure(
+  result: StructuredSessionCompactionResult
+): AgentSessionFailureFact | undefined {
+  switch (result.outcome) {
+    case 'compacted':
+      return undefined
+    case 'unconfirmed':
+      return agentSessionFailureFact('compactionUnconfirmed')
+    case 'failed':
+      return agentSessionFailureFact('compactionFailed', { detail: result.detail })
+  }
+}
+
+function compactionStatusBody(failure: AgentSessionFailureFact | undefined) {
+  return failure
+    ? { kind: 'status' as const, ...agentSessionFailureWords(failure, { surface: 'row' }) }
+    : { kind: 'status' as const, text: 'Conversation compacted.' }
+}
+
+/** A command's `error` is the sentence its row shows. */
+function conversationCommandFailure(
+  failure: AgentSessionFailureFact | undefined,
+  context: AgentSessionFailureWordsContext = {}
+) {
+  if (!failure) {
+    return {}
+  }
+  const words = agentSessionFailureWords(failure, { ...context, surface: 'row' })
+  return { error: words.text, failure: words.failure }
+}
 
 export type ConversationCommandParams = {
   envelope: AgentSessionMutationEnvelope
@@ -52,7 +98,9 @@ export function runStructuredConversationCommand(
       adapter: context.deps.adapter,
       callerKey: caller.callerKey,
       envelope,
-      journal: context.sessions.get(sessionId)?.journal,
+      // Only the provider can do this, so an agent at rest is started first.
+      prepareSession: openWithAgent(context, params.envelope),
+      journal: () => context.sessions.get(sessionId)?.journal,
       publish: (journal) => context.publish(sessionId, journal),
       flushStreamedEvents: context.flushStreamedEvents,
       now: context.now,
@@ -90,10 +138,7 @@ export function runStructuredConversationCommand(
               ? null
               : conversationCommandBlocked(ctx, record)
           if (blocked) {
-            return {
-              ok: false,
-              refusal: { code: 'agent_session_operation_invalid', message: blocked }
-            }
+            return { ok: false, refusal: blocked }
           }
           const replacementSessionId =
             command === 'clear'
@@ -112,35 +157,8 @@ export function runStructuredConversationCommand(
             state: 'unknown' as const,
             ...(replacementSessionId ? { replacementSessionId } : {})
           }
-          let effectiveOptions = record.options
-          if (command === 'clear' && !prior) {
-            try {
-              const options = await ctx.adapter.readOptions?.({ sessionId, fence: ctx.fence })
-              effectiveOptions = {
-                ...record.options,
-                ...(options
-                  ? {
-                      model: options.current.model,
-                      ...(options.current.effort ? { effort: options.current.effort } : {})
-                    }
-                  : {})
-              }
-            } catch {
-              return {
-                ok: false,
-                refusal: {
-                  code: 'agent_session_operation_invalid',
-                  message:
-                    'Could not read the current session configuration. Try again when the provider is connected.'
-                }
-              }
-            }
-          }
-          if (effectiveOptions && command === 'clear') {
-            await ctx.persistOptions(effectiveOptions)
-          }
           await store.setConversationCommand(sessionId, ctx.fence, prepared)
-          let error: string | undefined
+          let failure: AgentSessionFailureFact | undefined
           if (command === 'clear' && replacementSessionId) {
             const attach: AgentSessionAttachParams = {
               envelope: {
@@ -160,7 +178,8 @@ export function runStructuredConversationCommand(
               agent: record.provider,
               runtimeKind: 'native',
               launchArgs: record.launchArgs,
-              options: effectiveOptions
+              // The options the user chose, which any restart of this chat would replay too.
+              options: record.options
             }
             attach.envelope.payloadFingerprint = computeAgentSessionPayloadFingerprint({
               method: 'agentSession.attach',
@@ -175,12 +194,19 @@ export function runStructuredConversationCommand(
               ) {
                 throw new Error(acquired.refusal.message)
               }
+              // The refusal's message is Orca's log text; the result keeps its situation instead.
               const failed = {
                 ...prepared,
                 replacementSessionId: undefined,
                 phase: 'committed' as const,
                 state: 'completed' as const,
-                error: acquired.refusal.message.slice(0, 4096)
+                ...conversationCommandFailure(
+                  structuredAgentSessionStartFailureFact({
+                    refusal: acquired.refusal,
+                    newSession: true
+                  }),
+                  { ...structuredAgentSessionFailureWordsContext(record), command: 'clear' }
+                )
               }
               await store.setConversationCommand(sessionId, ctx.fence, failed)
               return { ok: true, value: failed }
@@ -202,9 +228,8 @@ export function runStructuredConversationCommand(
               },
               { fence: ctx.fence }
             )
-            ctx.publish()
             try {
-              error = (
+              failure = compactionFailure(
                 await ctx.adapter.compact({
                   turnId: `compact:${clientOperationId}`,
                   sessionId,
@@ -218,16 +243,15 @@ export function runStructuredConversationCommand(
                         return
                       }
                       await host.flushStreamedEvents(sessionId)
-                      await ctx.journal.appendItem(
-                        identity,
-                        { kind: 'status', text: result.error ?? 'Conversation compacted.' },
-                        { fence: ctx.fence }
-                      )
+                      const late = compactionFailure(result)
+                      await ctx.journal.appendItem(identity, compactionStatusBody(late), {
+                        fence: ctx.fence
+                      })
                       await store.setConversationCommand(sessionId, ctx.fence, {
                         ...prepared,
                         phase: 'committed',
                         state: 'completed',
-                        ...(result.error ? { error: result.error.slice(0, 4096) } : {})
+                        ...conversationCommandFailure(late)
                       })
                       await store.recordOperationOutcome({
                         callerKey: caller.callerKey,
@@ -238,32 +262,27 @@ export function runStructuredConversationCommand(
                           conversationCommand: matching()!
                         }
                       })
-                      ctx.publish()
                     })
                 })
-              ).error
+              )
               await host.flushStreamedEvents(sessionId)
             } catch (cause) {
               await ctx.journal.appendItem(
                 identity,
-                { kind: 'status', text: 'Compaction completion is unconfirmed.' },
+                compactionStatusBody(agentSessionFailureFact('compactionUnconfirmed')),
                 { fence: ctx.fence }
               )
-              ctx.publish()
               throw cause
             }
-            await ctx.journal.appendItem(
-              identity,
-              { kind: 'status', text: error ?? 'Conversation compacted.' },
-              { fence: ctx.fence }
-            )
-            ctx.publish()
+            await ctx.journal.appendItem(identity, compactionStatusBody(failure), {
+              fence: ctx.fence
+            })
           }
           const completed = {
             ...prepared,
             phase: 'committed' as const,
             state: 'completed' as const,
-            ...(error ? { error: error.slice(0, 4096) } : {})
+            ...conversationCommandFailure(failure)
           }
           await store.setConversationCommand(sessionId, ctx.fence, completed)
           return { ok: true, value: completed }

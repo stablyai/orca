@@ -40,10 +40,9 @@ export type MobileWebShellSessionView = {
   readonly reportDocumentStarted: () => void
   /** The native view finished a document; starts the wait for the page's first word. */
   readonly reportDocumentLoaded: () => void
-  /** The page spoke over the bridge; ends that wait, whichever of the two arrived first. Carries
-   *  what that `ready` declared it reports, which is what says whether a paint is coming. */
-  readonly reportPageReady: (reports: readonly string[]) => void
-  /** The page has a frame on screen. Ignored for a page that never said it would report one. */
+  /** The page spoke over the bridge; ends that wait, whichever of the two arrived first. */
+  readonly reportPageReady: () => void
+  /** The page has a frame on screen. */
   readonly reportPagePainted: () => void
   /** The page took the device Back key, or let it go. */
   readonly reportPageBackClaim: (claimed: boolean) => void
@@ -272,12 +271,9 @@ export function useMobileWebShellSession(args: {
     dispatch(epochRef.current, { type: 'document-loaded' })
   }, [dispatch])
 
-  const reportPageReady = useCallback(
-    (reports: readonly string[]) => {
-      dispatch(epochRef.current, { type: 'page-ready', reports })
-    },
-    [dispatch]
-  )
+  const reportPageReady = useCallback(() => {
+    dispatch(epochRef.current, { type: 'page-ready' })
+  }, [dispatch])
 
   const reportPagePainted = useCallback(() => {
     dispatch(epochRef.current, { type: 'page-painted' })

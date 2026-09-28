@@ -51,8 +51,24 @@ export async function collectMobileWebAppRoutes(appDir, routeRoot = MOBILE_WEB_A
   if (routes.length === 0) {
     throw new Error(`[mobile-web-app] no routes under ${join(appDir, routeRoot)}`)
   }
-  return routes.sort((left, right) => (left.key < right.key ? -1 : 1))
+  const rootLayout = await pageRootLayout(appDir)
+  return (rootLayout ? [...routes, rootLayout] : routes).sort((left, right) =>
+    left.key < right.key ? -1 : 1
+  )
 }
+
+/**
+ * The page's root layout: the web sibling of `app/_layout.tsx`, never the native file, which owns
+ * pairing and push. Without one expo-router mounts `DefaultNavigator`, an all-edges SafeAreaView.
+ */
+async function pageRootLayout(appDir) {
+  const entries = await readdir(appDir, { withFileTypes: true })
+  const files = new Set(entries.filter((entry) => entry.isFile()).map((entry) => entry.name))
+  const override = files.has(ROOT_LAYOUT) ? webSiblingOf(ROOT_LAYOUT, files) : undefined
+  return override ? { key: `./${ROOT_LAYOUT}`, module: join(appDir, override) } : null
+}
+
+const ROOT_LAYOUT = '_layout.tsx'
 
 /**
  * The URL pattern expo-router gives a route key, or null for a file that is not a screen.

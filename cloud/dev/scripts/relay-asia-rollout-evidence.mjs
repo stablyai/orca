@@ -300,7 +300,8 @@ export function buildProductionCanaryEvidence(input) {
   }
   const load = object(input.loadReport, `${canary.label} load report`)
   assertCanaryLoad(load, input.cellId)
-  const metrics = runtimeMetrics(input.logs, start, end, input.cellId)
+  // Directors show a steady relay_cells lock and pool-wait baseline unrelated to the canary cell.
+  const metrics = runtimeMetrics(input.logs, start, end, input.cellId, { gateDirectorDatabase: false })
   assertPassingRuntimeMetrics(metrics, `${canary.label} canary`)
   metrics.cloudSqlBackendsMax = cloudSqlMaximum(input.cloudSql, start, end)
   assertPassingCanary(metrics, input.cellId)
@@ -343,7 +344,7 @@ function assertCanaryLoad(report, cellId) {
   ) throw new Error(`${label} load cleanup is incomplete`)
 }
 
-function runtimeMetrics(logs, start, end, targetCellId) {
+function runtimeMetrics(logs, start, end, targetCellId, { gateDirectorDatabase = true } = {}) {
   const entries = logs.map((entry) => object(entry, 'runtime metric entry'))
   const directorEntries = entries.filter((entry) => entry.jsonPayload?.role === 'director')
   const cellEntries = entries.filter((entry) =>
@@ -362,8 +363,7 @@ function runtimeMetrics(logs, start, end, targetCellId) {
   }
   const directorPayloads = directorEntries.map((entry) => entry.jsonPayload)
   const cellPayloads = cellEntries.map((entry) => entry.jsonPayload)
-  const payloads = [...directorPayloads, ...cellPayloads]
-  return {
+  const placement = {
     asiaSelections: directorPayloads.reduce(
       (total, payload) => total + number(payload.selectedRegionsDelta?.['asia-east2'] ?? 0, 'Asia selections'), 0
     ),
@@ -378,19 +378,43 @@ function runtimeMetrics(logs, start, end, targetCellId) {
     ),
     unavailableRegions: directorPayloads.reduce(
       (total, payload) => total + sumMap(payload.unavailableRegionsDelta, 'unavailable regions'), 0
-    ),
-    relaySqlFailures: payloads.reduce(
-      (total, payload) => total + number(payload.sqlFailuresDelta, 'Relay SQL failures'), 0
-    ),
-    databasePoolWaitingMax: Math.max(...payloads.map(
-      (payload) => number(payload.databasePoolWaiting, 'database pool waiting')
-    )),
-    databasePoolWaitersMax: Math.max(...payloads.map(
-      (payload) => number(payload.databasePoolWaitersMax, 'database pool waiters')
-    )),
-    databasePoolWaitMsMax: Math.max(...payloads.map(
-      (payload) => number(payload.databasePoolWaitMsMax, 'database pool wait time')
-    )),
+    )
+  }
+  // Director before cell per metric keeps the old validation order.
+  const split = (read) => ({ director: read(directorPayloads), cell: read(cellPayloads) })
+  const sqlFailures = split((list) => list.reduce(
+    (total, payload) => total + number(payload.sqlFailuresDelta, 'Relay SQL failures'), 0
+  ))
+  const waitingMax = split((list) => Math.max(...list.map(
+    (payload) => number(payload.databasePoolWaiting, 'database pool waiting')
+  )))
+  const waitersMax = split((list) => Math.max(...list.map(
+    (payload) => number(payload.databasePoolWaitersMax, 'database pool waiters')
+  )))
+  const waitMsMax = split((list) => Math.max(...list.map(
+    (payload) => number(payload.databasePoolWaitMsMax, 'database pool wait time')
+  )))
+  // Ungated director values stay reported so the artifact still shows them.
+  const gated = gateDirectorDatabase
+    ? {
+        relaySqlFailures: sqlFailures.director + sqlFailures.cell,
+        databasePoolWaitingMax: Math.max(waitingMax.director, waitingMax.cell),
+        databasePoolWaitersMax: Math.max(waitersMax.director, waitersMax.cell),
+        databasePoolWaitMsMax: Math.max(waitMsMax.director, waitMsMax.cell)
+      }
+    : {
+        relaySqlFailures: sqlFailures.cell,
+        directorSqlFailures: sqlFailures.director,
+        databasePoolWaitingMax: waitingMax.cell,
+        databasePoolWaitersMax: waitersMax.cell,
+        databasePoolWaitMsMax: waitMsMax.cell,
+        directorDatabasePoolWaitingMax: waitingMax.director,
+        directorDatabasePoolWaitersMax: waitersMax.director,
+        directorDatabasePoolWaitMsMax: waitMsMax.director
+      }
+  return {
+    ...placement,
+    ...gated,
     targetControlsMax: Math.max(...cellPayloads.map(
       (payload) => number(payload.controls, 'target controls')
     )),

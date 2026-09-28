@@ -6,6 +6,7 @@
 // key instead of appearing as a second copy of the user's own message.
 
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { compareAgentJournalItems } from '../../../shared/agent-session-journal-position'
 import type {
   AgentJournalRenderItem,
   AgentJournalSnapshot,
@@ -65,7 +66,7 @@ export function projectJournalBatch(input: {
   const items = [...touchedItemIds]
     .map((itemId) => live.get(itemId))
     .filter((item) => item !== undefined)
-    .sort((a, b) => a.sequence - b.sequence)
+    .sort(compareAgentJournalItems)
   return {
     ok: true,
     batch: {

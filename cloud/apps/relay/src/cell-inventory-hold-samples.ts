@@ -1,10 +1,19 @@
 // Why: the cell inventory lock is held to COMMIT, and the assignment path runs
 // many statements after taking it. Tuning the request-path wait bound needs the
 // hold distribution, and no runtime metric carried it before this change.
+// Which lock a hold sample came from. Every site feeds the same max, so one
+// alert on cellInventoryHoldMsMax covers them all; the label names the holder.
+export type CellLockHoldSite = 'inventory' | 'rehome-target-row'
+
 export type CellInventoryHoldCounts = {
   cellInventoryHoldMsMax: number
   cellInventoryHoldMsP95: number
   cellInventoryHolds: number
+  cellInventoryHoldMaxSite: CellLockHoldSite | 'none'
+  // The rehome commit holds one target row, not the inventory; rollout proof
+  // reads its bound and its presence here.
+  rehomeTargetRowHoldMsMax: number
+  rehomeTargetRowHolds: number
   // Why: a failed acquisition produces no hold sample, so the hold fields alone
   // read healthy while the lock is saturated. Split by wait policy, not by
   // caller: fail-fast covers background sweeps that step aside by design AND
@@ -24,20 +33,23 @@ export function emptyCellInventoryHoldCounts(): CellInventoryHoldCounts {
     cellInventoryHoldMsMax: 0,
     cellInventoryHoldMsP95: 0,
     cellInventoryHolds: 0,
+    cellInventoryHoldMaxSite: 'none',
+    rehomeTargetRowHoldMsMax: 0,
+    rehomeTargetRowHolds: 0,
     cellInventoryLockUnavailable: 0,
     cellInventoryLockTimeouts: 0
   }
 }
 
 export class CellInventoryHoldSamples {
-  private samples: number[] = []
+  private samples: { holdMs: number; site: CellLockHoldSite }[] = []
   private unavailable = 0
   private timeouts = 0
 
-  record(holdMs: number): void {
+  record(holdMs: number, site: CellLockHoldSite = 'inventory'): void {
     if (!Number.isFinite(holdMs) || holdMs < 0) return
     if (this.samples.length === MAX_SAMPLES) this.samples.shift()
-    this.samples.push(holdMs)
+    this.samples.push({ holdMs, site })
   }
 
   // Counted, not sampled: a failed acquisition has no duration to record.
@@ -65,11 +77,16 @@ export class CellInventoryHoldSamples {
       cellInventoryLockTimeouts: this.timeouts
     }
     if (this.samples.length === 0) return { ...emptyCellInventoryHoldCounts(), ...failures }
-    const sorted = [...this.samples].sort((left, right) => left - right)
+    const sorted = [...this.samples].sort((left, right) => left.holdMs - right.holdMs)
+    const max = sorted[sorted.length - 1]!
+    const rehome = sorted.filter((sample) => sample.site === 'rehome-target-row')
     return {
-      cellInventoryHoldMsMax: round(sorted[sorted.length - 1]!),
-      cellInventoryHoldMsP95: round(sorted[Math.ceil(0.95 * sorted.length) - 1] ?? 0),
+      cellInventoryHoldMsMax: round(max.holdMs),
+      cellInventoryHoldMsP95: round(sorted[Math.ceil(0.95 * sorted.length) - 1]?.holdMs ?? 0),
       cellInventoryHolds: sorted.length,
+      cellInventoryHoldMaxSite: max.site,
+      rehomeTargetRowHoldMsMax: round(rehome[rehome.length - 1]?.holdMs ?? 0),
+      rehomeTargetRowHolds: rehome.length,
       ...failures
     }
   }

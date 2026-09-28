@@ -14,7 +14,6 @@ import {
   LINK_LOST,
   withoutRecord
 } from './mobile-web-shell-session-test-fixtures'
-import { BRIDGE_PAGE_PAINTED } from './bridge/bridge-page-painted'
 import { shellPageFrame } from './shell-page-frame'
 
 describe('the gates decide whether a step is taken at all', () => {
@@ -219,6 +218,25 @@ describe('the connected flow', () => {
       kind: 'wall',
       verdict: { reason: 'bundle-shell-too-old' }
     })
+  })
+
+  it('walls a listed route whose page is older than this shell, as a desktop to update', () => {
+    for (const manifest of [
+      { ...MANIFEST, pageVersion: 0 },
+      { ...MANIFEST, pageVersion: undefined }
+    ]) {
+      const step = run(afterCacheRead(null).session, { type: 'manifest-read', manifest })
+      expect(step.session.state).toEqual({
+        kind: 'wall',
+        verdict: {
+          kind: 'blocked',
+          reason: 'bundle-incompatible',
+          side: 'desktop',
+          pageVersion: 0,
+          requiredPageVersion: 1
+        }
+      })
+    }
   })
 
   it('tells the page which routes it may keep, so it hands the rest back', () => {
@@ -690,11 +708,7 @@ describe('the page has to speak for the document that loaded', () => {
   })
 
   it('arms nothing when the page spoke first, because there is nothing left to wait for', () => {
-    const step = run(
-      readySession().session,
-      { type: 'page-ready', reports: [] },
-      { type: 'document-loaded' }
-    )
+    const step = run(readySession().session, { type: 'page-ready' }, { type: 'document-loaded' })
     expect(step.effects).toEqual([])
     expect(step.session.pageReady).toBe(true)
   })
@@ -718,7 +732,7 @@ describe('the page has to speak for the document that loaded', () => {
     const step = run(
       readySession().session,
       { type: 'document-loaded' },
-      { type: 'page-ready', reports: [] },
+      { type: 'page-ready' },
       { type: 'page-ready-deadline' }
     )
     expect(step.effects).toEqual([])
@@ -737,7 +751,7 @@ describe('the page has to speak for the document that loaded', () => {
   })
 
   it('makes the second document prove itself, rather than riding the first one word', () => {
-    const spoken = run(readySession().session, { type: 'page-ready', reports: [] })
+    const spoken = run(readySession().session, { type: 'page-ready' })
     const remounted = run(spoken.session, { type: 'remounted', sessionId: 'session-two' })
     expect(remounted.session.pageReady).toBe(false)
     expect(run(remounted.session, { type: 'document-loaded' }).effects).toEqual([
@@ -746,11 +760,7 @@ describe('the page has to speak for the document that loaded', () => {
   })
 
   it('leaves a remounted document its own wait when the first one expires late', () => {
-    const first = run(
-      readySession().session,
-      { type: 'document-loaded' },
-      { type: 'page-ready', reports: [] }
-    )
+    const first = run(readySession().session, { type: 'document-loaded' }, { type: 'page-ready' })
     const armed = first.session.flow
     const second = run(
       first.session,
@@ -766,7 +776,7 @@ describe('the page has to speak for the document that loaded', () => {
   })
 
   it('makes a freshly activated generation prove itself too', () => {
-    const spoken = run(readySession().session, { type: 'page-ready', reports: [] })
+    const spoken = run(readySession().session, { type: 'page-ready' })
     const reactivated = run(spoken.session, {
       type: 'activated',
       generationDirectory: CACHED.directory,
@@ -784,12 +794,8 @@ describe('the page has to speak for the document that loaded', () => {
  * thing that says the view is worth showing is the page saying so.
  */
 describe('the page reporting a frame on screen', () => {
-  it('records what the ready declared and keeps the frame covered until the report', () => {
-    const spoken = run(readySession().session, {
-      type: 'page-ready',
-      reports: [BRIDGE_PAGE_PAINTED]
-    })
-    expect(spoken.session.pageReportsPaint).toBe(true)
+  it('keeps the frame covered past ready until the report', () => {
+    const spoken = run(readySession().session, { type: 'page-ready' })
     expect(spoken.session.pagePainted).toBe(false)
     expect(shellPageFrame(spoken.session)).toBe('unpainted')
     const painted = run(spoken.session, { type: 'page-painted' })
@@ -797,41 +803,15 @@ describe('the page reporting a frame on screen', () => {
     expect(shellPageFrame(painted.session)).toBe('painted')
   })
 
-  it('new shell, old page: ignores an undeclared report and uncovers on ready', () => {
-    const spoken = run(readySession().session, { type: 'page-ready', reports: [] })
-    const step = run(spoken.session, { type: 'page-painted' })
-    expect(step.session.pagePainted).toBe(false)
-    // Uncovered anyway: `ready` is the newest word a page built before the report can say.
-    expect(shellPageFrame(step.session)).toBe('painted')
-  })
-
-  it('re-reads the declaration on every ask, because a reload asks again', () => {
-    const declared = run(readySession().session, {
-      type: 'page-ready',
-      reports: [BRIDGE_PAGE_PAINTED]
-    })
-    const reloaded = run(declared.session, { type: 'page-ready', reports: [] })
-    expect(reloaded.session.pageReportsPaint).toBe(false)
-  })
-
   it('makes a remounted document report its own frame', () => {
-    const painted = run(
-      readySession().session,
-      { type: 'page-ready', reports: [BRIDGE_PAGE_PAINTED] },
-      { type: 'page-painted' }
-    )
+    const painted = run(readySession().session, { type: 'page-ready' }, { type: 'page-painted' })
     const remounted = run(painted.session, { type: 'remounted', sessionId: 'session-two' })
     expect(remounted.session.pagePainted).toBe(false)
-    expect(remounted.session.pageReportsPaint).toBe(false)
     expect(shellPageFrame(remounted.session)).toBe('unpainted')
   })
 
   it('makes a freshly activated generation report its own frame', () => {
-    const painted = run(
-      readySession().session,
-      { type: 'page-ready', reports: [BRIDGE_PAGE_PAINTED] },
-      { type: 'page-painted' }
-    )
+    const painted = run(readySession().session, { type: 'page-ready' }, { type: 'page-painted' })
     const reactivated = run(painted.session, {
       type: 'activated',
       generationDirectory: CACHED.directory,
@@ -841,23 +821,15 @@ describe('the page reporting a frame on screen', () => {
       elapsedMs: 9
     })
     expect(reactivated.session.pagePainted).toBe(false)
-    expect(reactivated.session.pageReportsPaint).toBe(false)
   })
 
   it('makes the document that replaced a painted one inside this mount report its own frame', () => {
-    const painted = run(
-      readySession().session,
-      { type: 'page-ready', reports: [BRIDGE_PAGE_PAINTED] },
-      { type: 'page-painted' }
-    )
+    const painted = run(readySession().session, { type: 'page-ready' }, { type: 'page-painted' })
     expect(shellPageFrame(painted.session)).toBe('painted')
     // No new session and no new generation: the view reloaded under the one already on screen.
     const restarted = run(painted.session, { type: 'document-started' })
     expect(restarted.session.pagePainted).toBe(false)
-    const reasked = run(restarted.session, {
-      type: 'page-ready',
-      reports: [BRIDGE_PAGE_PAINTED]
-    })
+    const reasked = run(restarted.session, { type: 'page-ready' })
     expect(shellPageFrame(reasked.session)).toBe('unpainted')
     expect(shellPageFrame(run(reasked.session, { type: 'page-painted' }).session)).toBe('painted')
   })
@@ -866,7 +838,7 @@ describe('the page reporting a frame on screen', () => {
     const loaded = run(readySession().session, { type: 'document-loaded' })
     expect(loaded.effects).toEqual([{ kind: 'await-page-ready' }])
     const armed = loaded.session.flow
-    const spoken = run(loaded.session, { type: 'page-ready', reports: [BRIDGE_PAGE_PAINTED] })
+    const spoken = run(loaded.session, { type: 'page-ready' })
     const restarted = run(spoken.session, { type: 'document-started' })
     // The replacement is still loading and has said nothing, which is exactly what the retired
     // document's deadline reads as a document that never loaded.
@@ -881,9 +853,9 @@ describe('the page reporting a frame on screen', () => {
   it('keeps the frame of a document that repeats its own handshake', () => {
     const painted = run(
       readySession().session,
-      { type: 'page-ready', reports: [BRIDGE_PAGE_PAINTED] },
+      { type: 'page-ready' },
       { type: 'page-painted' },
-      { type: 'page-ready', reports: [BRIDGE_PAGE_PAINTED] }
+      { type: 'page-ready' }
     )
     // The document never restarted, so its frame is still the one on screen.
     expect(painted.session.pagePainted).toBe(true)
@@ -893,8 +865,9 @@ describe('the page reporting a frame on screen', () => {
   it('records nothing from a page whose generation is no longer on screen', () => {
     const failed = run(readySession().session, {
       type: 'shell-failed',
-      reason: 'render-process-gone'
+      reason: 'document-load-failed'
     })
+    expect(failed.session.state.kind).not.toBe('ready')
     expect(run(failed.session, { type: 'page-painted' }).session.pagePainted).toBe(false)
   })
 })

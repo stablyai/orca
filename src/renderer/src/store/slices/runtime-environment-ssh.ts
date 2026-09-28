@@ -4,6 +4,7 @@ import type { SshConnectionState, SshTargetSummary } from '../../../../shared/ss
 import { sanitizeSshTargetGeneration } from '../../../../shared/ssh-target-generation'
 import { sshConnectionStatesEqual, sshTargetLabelsEqual } from './ssh-target-cleanup'
 export {
+  selectRuntimeAwareSshConnectionGeneration,
   selectRuntimeAwareSshError,
   selectRuntimeAwareSshStatus,
   selectRuntimeAwareSshTargetLabel,

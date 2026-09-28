@@ -52,17 +52,17 @@ type RigOptions = {
  * overflow. This gives the preedit span a width and the screen its cols*rows box.
  */
 function stubCompositionLayout(preeditWidth: () => number): void {
-  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
-    function (this: HTMLElement) {
-      if (this.classList.contains('xterm-composition-preedit')) {
-        return DOMRect.fromRect({ height: CELL_HEIGHT_PX, width: preeditWidth() })
-      }
-      if (this.classList.contains('xterm-screen')) {
-        return DOMRect.fromRect({ height: 24 * CELL_HEIGHT_PX, width: 80 * CELL_WIDTH_PX })
-      }
-      return DOMRect.fromRect({ height: 0, width: 0 })
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+    this: HTMLElement
+  ) {
+    if (this.classList.contains('xterm-composition-preedit')) {
+      return DOMRect.fromRect({ height: CELL_HEIGHT_PX, width: preeditWidth() })
     }
-  )
+    if (this.classList.contains('xterm-screen')) {
+      return DOMRect.fromRect({ height: 24 * CELL_HEIGHT_PX, width: 80 * CELL_WIDTH_PX })
+    }
+    return DOMRect.fromRect({ height: 0, width: 0 })
+  })
 }
 
 function openTerminal(options: RigOptions = {}): Rig {

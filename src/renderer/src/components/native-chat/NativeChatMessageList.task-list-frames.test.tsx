@@ -63,6 +63,7 @@ function transcript(messages: NativeChatMessage[], sessionId = 'live-codex') {
         agent: 'codex',
         hasMore: false,
         loadingEarlier: false,
+        olderHistoryGeneration: 0,
         loadEarlier: vi.fn(),
         readPhase: 'ready'
       }}
@@ -112,6 +113,8 @@ describe('live Codex checklist frames', () => {
       role: 'assistant',
       timestamp: 1,
       source: 'transcript',
+      // Journalled like the frames it sits between.
+      journalPosition: { sequence: 1, index: 0 },
       blocks: [
         {
           type: 'tool-call',

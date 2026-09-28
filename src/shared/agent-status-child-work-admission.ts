@@ -4,10 +4,12 @@ import type {
   AgentChildWorkInvocationFence,
   AgentChildWorkKind,
   AgentChildWorkMembership,
+  AgentChildWorkOperation,
   AgentChildWorkOutcome,
   AgentChildWorkProviderTiming,
   AgentChildWorkProvenance,
   AgentChildWorkRecord,
+  AgentChildWorkResidency,
   AgentChildWorkState
 } from './agent-status-child-work'
 import {
@@ -26,6 +28,10 @@ export type AgentChildWorkObservationAlias = {
   alias: string
 }
 
+/** An observation may be sparse, and raw provider text is fine: admission folds text to one line.
+ *  An omitted or malformed label, token count or residency keeps its stored value; the owner,
+ *  last message, provider timing and a definite outcome last only for their invocation. Tokens
+ *  never shrink. Omitting `operation` clears it. */
 export type AgentChildWorkObservationFields = {
   kind: AgentChildWorkKind
   state: AgentChildWorkState
@@ -37,6 +43,12 @@ export type AgentChildWorkObservationFields = {
   model?: string
   totalTokens?: number
   providerTiming?: AgentChildWorkProviderTiming
+  parentChildWorkId?: AgentChildWorkId
+  residency?: AgentChildWorkResidency
+  /** Admission clamps `observedAt` into [firstObservedAt, request observedAt], and drops the
+   *  operation when the state cannot carry one (settled, idle, unverifiable). */
+  operation?: AgentChildWorkOperation
+  lastMessage?: string
   observedAt: number
   stoppable: boolean
   provenance: AgentChildWorkProvenance

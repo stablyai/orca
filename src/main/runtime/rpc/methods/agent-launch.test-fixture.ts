@@ -7,6 +7,7 @@
 
 import { vi } from 'vitest'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { AgentLaunchPaneAlreadyLiveError } from '../../../../shared/agent-launch-pane-already-live'
 import type { RpcContext } from '../core'
 
 export const STRUCTURED_PREFERENCE = {
@@ -32,6 +33,8 @@ export type AgentLaunchRuntimeStubOptions = {
   terminalPaneKey?: string
   /** The pane minted with an agent-first worktree's startup terminal. */
   startupTerminalPaneKey?: string
+  /** The reserved pane is already live, so a create that requires a fresh pane is refused. */
+  terminalPaneAlreadyLive?: boolean
 }
 
 export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
@@ -75,11 +78,16 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
       ...(options.createWarning ? { warning: options.createWarning } : {})
     })),
     // Args are declared so a test can assert what the launch asked for, not merely that it asked.
-    createTerminal: vi.fn(async (_selector: string, _options?: Record<string, unknown>) => ({
-      handle: 'term_1',
-      ...(options.terminalPaneKey ? { paneKey: options.terminalPaneKey } : {}),
-      ...(options.terminalWarning ? { warning: options.terminalWarning } : {})
-    })),
+    createTerminal: vi.fn(async (_selector: string, createOptions?: Record<string, unknown>) => {
+      if (options.terminalPaneAlreadyLive && createOptions?.requireFreshPane === true) {
+        throw new AgentLaunchPaneAlreadyLiveError()
+      }
+      return {
+        handle: 'term_1',
+        ...(options.terminalPaneKey ? { paneKey: options.terminalPaneKey } : {}),
+        ...(options.terminalWarning ? { warning: options.terminalWarning } : {})
+      }
+    }),
     showTerminal: vi.fn(async (handle: string) => ({ handle, worktreeId: 'wt-7' })),
     isTerminalRunningAgent: vi.fn(async () => true),
     showManagedTerminalWorkspace: vi.fn(async (selector: string) => ({

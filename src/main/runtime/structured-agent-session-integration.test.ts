@@ -6,7 +6,7 @@
 // that ship. The fake app-server answers the same JSON-RPC calls the real one
 // does and pushes the same notifications and blocking requests back.
 
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -31,12 +31,13 @@ import type {
 import { attachFingerprintFields } from '../native-chat/agent-session-wire/structured-agent-session-attach'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { journalDirectoryFor } from '../native-chat/agent-session-journal/journal-paths'
-import { appendLegacyTranscriptMessages } from '../native-chat/agent-session-journal/journal-legacy-import'
+import { importLegacyTranscriptIntoJournal } from '../native-chat/agent-session-journal/journal-legacy-import'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-store-test-open'
 import type { OrcaRuntimeService } from './orca-runtime'
 import type { RpcRequest, RpcResponse } from './rpc/core'
 import { RpcDispatcher } from './rpc/dispatcher'
+import type { NativeChatShellEnvironmentPolicy } from '../../shared/native-chat-shell-environment'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './rpc/methods/structured-agent-session'
 import {
   ensureStructuredAgentSessionHost,
@@ -217,11 +218,17 @@ function createIntentParams() {
 }
 
 let codex: CodexScript
+/** Accepted first; the delivery loop hands the send over as `turn/start` after the reply. */
+const handedOverAs = (params: Record<string, unknown>) =>
+  vi.waitFor(() =>
+    expect(codex.live().calls.at(-1)).toMatchObject({ method: 'turn/start', params })
+  )
 let root: string
 let dispatcher: RpcDispatcher
 let bootEnvironmentReads: number
 let codexOverrideReads: number
 let configuredCodexProfile: string
+let shellEnvironmentPolicy: NativeChatShellEnvironmentPolicy
 
 /** Runs a one-shot method and returns its decoded reply. */
 async function call(method: string, params: unknown): Promise<RpcResponse> {
@@ -282,10 +289,10 @@ function textOf(item: AgentJournalRenderItem): string {
 }
 
 /** The durable submission row, which settlement rewrites after the send returns. */
-function submissionOf(clientMessageId: string): AgentJournalSubmission | undefined {
-  return getStructuredAgentSessionHost()
-    ?.journalSnapshot(SESSION)
-    .submissions.find((entry) => entry.clientMessageId === clientMessageId)
+async function submissionOf(clientMessageId: string): Promise<AgentJournalSubmission | undefined> {
+  return (await getStructuredAgentSessionHost()?.journalSnapshot(SESSION))?.submissions.find(
+    (entry) => entry.clientMessageId === clientMessageId
+  )
 }
 
 async function historyPage(
@@ -307,6 +314,7 @@ beforeEach(async () => {
   bootEnvironmentReads = 0
   codexOverrideReads = 0
   configuredCodexProfile = 'configured'
+  shellEnvironmentPolicy = { inheritAll: true, names: [] }
   const runtime = {
     getRuntimeId: () => 'runtime-1',
     getClientSettings: () => ({ experimentalStructuredNativeChat: true }),
@@ -336,6 +344,7 @@ beforeEach(async () => {
             CODEX_HOME: '/shell/home'
           }
         },
+        resolveShellEnvironmentPolicy: () => shellEnvironmentPolicy,
         resolveCodexOverrides: () => {
           codexOverrideReads += 1
           return { CODEX_PROFILE: configuredCodexProfile }
@@ -403,20 +412,21 @@ describe('a structured codex session over agentSession.*', () => {
       identity,
       journalDir: journalDirectoryFor(root, identity)
     })
-    await appendLegacyTranscriptMessages({
+    const rollout = join(root, 'legacy-rollout.jsonl')
+    await writeFile(
+      rollout,
+      `${JSON.stringify({
+        type: 'event_msg',
+        timestamp: '2026-08-05T10:00:02.000Z',
+        payload: { type: 'user_message', message: 'legacy question', kind: 'plain' }
+      })}\n`
+    )
+    await importLegacyTranscriptIntoJournal({
       journal,
       agent: 'codex',
       sessionId: THREAD,
       fence: 0,
-      messages: [
-        {
-          id: 'legacy-user-1',
-          role: 'user',
-          source: 'transcript',
-          timestamp: 1_800_000_000_000,
-          blocks: [{ type: 'text', text: 'legacy question' }]
-        }
-      ]
+      options: { filePath: rollout }
     })
 
     const created = await ok<{ page: { items: AgentJournalRenderItem[] } }>(
@@ -461,10 +471,7 @@ describe('a structured codex session over agentSession.*', () => {
     // send coalesced into a running turn is answered with that turn's id, so
     // which message landed where is knowable only from the echo.
     expect(sent.submission).toMatchObject({ dispatchState: 'pending', providerItemId: null })
-    expect(codex.live().calls.at(-1)).toMatchObject({
-      method: 'turn/start',
-      params: { threadId: THREAD, clientUserMessageId: sent.clientMessageId }
-    })
+    await handedOverAs({ threadId: THREAD, clientUserMessageId: sent.clientMessageId })
 
     codex.notify('turn/started', { turn: { id: TURN } })
     // Codex echoes the message back carrying the `clientId` it was sent under,
@@ -488,8 +495,8 @@ describe('a structured codex session over agentSession.*', () => {
     // The echo is the first item of this turn, so the settled key is ordinal 0 —
     // minted by the same `identityFor` a history replay computes with, rather
     // than guessed from the turn/start response.
-    await vi.waitFor(() =>
-      expect(submissionOf(sent.clientMessageId)).toMatchObject({
+    await vi.waitFor(async () =>
+      expect(await submissionOf(sent.clientMessageId)).toMatchObject({
         dispatchState: 'accepted',
         providerItemId: `codex:${THREAD}:${TURN}:0`
       })
@@ -552,14 +559,11 @@ describe('a structured codex session over agentSession.*', () => {
     // "delivery unconfirmed" — it carries no identity yet, because the response
     // to a coalesced send names the running turn rather than this message.
     expect(sent.submission).toMatchObject({ dispatchState: 'pending', providerItemId: null })
-    expect(codex.live().calls.at(-1)).toMatchObject({
-      method: 'turn/start',
-      params: {
-        threadId: THREAD,
-        clientUserMessageId: sent.clientMessageId,
-        model: 'gpt-live',
-        effort: 'high'
-      }
+    await handedOverAs({
+      threadId: THREAD,
+      clientUserMessageId: sent.clientMessageId,
+      model: 'gpt-live',
+      effort: 'high'
     })
 
     // ── stream ──────────────────────────────────────────────────────────────
@@ -580,8 +584,8 @@ describe('a structured codex session over agentSession.*', () => {
     expect(itemsOf(stream).filter((item) => textOf(item) === 'list files')).toHaveLength(1)
     // Settled from the echo's own journal identity, so it is by construction the
     // key a replay recomputes for this row.
-    await vi.waitFor(() =>
-      expect(submissionOf(sent.clientMessageId)).toMatchObject({
+    await vi.waitFor(async () =>
+      expect(await submissionOf(sent.clientMessageId)).toMatchObject({
         dispatchState: 'accepted',
         providerItemId: `codex:${THREAD}:${TURN}:0`
       })
@@ -730,18 +734,24 @@ describe('a structured codex session over agentSession.*', () => {
   })
 
   it('caches shell exports but re-reads configured overrides for a resume', async () => {
+    shellEnvironmentPolicy = { inheritAll: false, names: [] }
     const created = await ok<{ fence: number }>('agentSession.create', createIntentParams())
+    expect(codex.live().launch.env?.EXAMPLE_GATEWAY_TOKEN).toBeUndefined()
     expect({ bootEnvironmentReads, codexOverrideReads }).toEqual({
       bootEnvironmentReads: 1,
       codexOverrideReads: 1
     })
 
     configuredCodexProfile = 'updated'
+    shellEnvironmentPolicy = { inheritAll: false, names: ['EXAMPLE_GATEWAY_TOKEN'] }
     const resumed = await ok<{ fence: number }>('agentSession.ensure', attachParams(created.fence))
 
     expect(resumed.fence).toBe(created.fence + 1)
     expect(codex.live().resumedThreadId).toBe(THREAD)
-    expect(codex.live().launch.env).toMatchObject({ CODEX_PROFILE: 'updated' })
+    expect(codex.live().launch.env).toMatchObject({
+      CODEX_PROFILE: 'updated',
+      EXAMPLE_GATEWAY_TOKEN: 'shell-exported'
+    })
     expect({ bootEnvironmentReads, codexOverrideReads }).toEqual({
       bootEnvironmentReads: 1,
       codexOverrideReads: 2

@@ -1,9 +1,6 @@
 import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
-import type {
-  StructuredAgentSessionEventSink,
-  StructuredAgentSessionSinkAdmission
-} from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
 import {
   claudeStreamingMessageBody,
   type ClaudeToolUse
@@ -31,30 +28,21 @@ import {
 } from './claude-turn-opening'
 import { claudeTurnEndForResult } from './claude-turn-lifecycle-item'
 import { ClaudeOpenTurn } from './claude-open-turn'
+import { ClaudeContextFacts } from './claude-context-facts'
 import { claudeSessionStateEndsTurn } from './claude-session-state-turn-over'
 import { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
+import { claudeChildToolQueries } from './claude-child-tool-queries'
 import { journalClaudeMessage, type ClaudeMessageJournalContext } from './claude-message-journaling'
+
+export type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
 
 export type ClaudeJournalTranslatorDeps = {
   sink: StructuredAgentSessionEventSink
-  bindPromptItemId?: (journalItemId: string, promptKey: string, questionId?: string) => void
+  bindPromptItemId?: (journalItemId: string, promptKey: string) => void
   coalesceMs?: number
   schedule?: AgentSessionDeltaCoalescerDeps['schedule']
   fallbackIdPrefix?: string
   onBackgroundTaskJournalFailure?: (error: Error) => void
-}
-
-export type ClaudeJournalTranslator = {
-  handle: (event: ClaudeStructuredSessionEvent) => void
-  journalPrompts: Pick<ClaudeJournalPrompts, 'cancel' | 'resolve'>
-  /** The open turn's provider id — the same id its journal row carries, and the one
-   *  a client's Stop names. Sole owner: no reader keeps a copy to disagree with. */
-  readonly currentTurnId: string | null
-  flush: () => void
-  retryPendingTaskRows?: () => StructuredAgentSessionSinkAdmission
-  /** Streamed blocks still awaiting a final frame. A settled turn leaves none. */
-  readonly pendingStreamedBlocks: number
-  dispose: () => void
 }
 
 export function createClaudeSessionJournalTranslator(
@@ -68,8 +56,7 @@ export function createClaudeSessionJournalTranslator(
         sink,
         fallbackIdPrefix,
         ...(onBackgroundTaskJournalFailure ? { onBackgroundTaskJournalFailure } : {}),
-        bindPromptItemId: (itemId, promptKey, questionId) =>
-          prompts.bindJournalItemId(itemId, promptKey, questionId)
+        bindPromptItemId: (itemId, promptKey) => prompts.bindJournalItemId(itemId, promptKey)
       })
     : null
 }
@@ -82,8 +69,10 @@ export function createClaudeJournalTranslator(
   const streamedBlocks = createClaudeStreamedBlockRegistry()
   const turn = new ClaudeOpenTurn({
     sink: deps.sink,
-    settleChildren: (groupKey) => subagents.settleTurn(groupKey)
+    settleChildren: (groupKey) => subagents.settleTurn(groupKey),
+    onOpen: () => context.markActivity()
   })
+  const context = new ClaudeContextFacts(turn, deps.sink)
   const providerFallback = createClaudeProviderFrameFallback(
     deps.sink,
     deps.fallbackIdPrefix ?? 'acquisition'
@@ -98,6 +87,7 @@ export function createClaudeJournalTranslator(
     // still owed is never coming; the rows keep the stamp they already have.
     onIdentitiesFinal: () => corrections.abandon()
   })
+  const childQueries = claudeChildToolQueries({ tools, toolOrigins, linkage: subagents.linkage })
   const corrections = new ClaudeProvisionalRowCorrections({
     ...subagents.linkage,
     rewrite: (identity, body, options) => {
@@ -192,6 +182,9 @@ export function createClaudeJournalTranslator(
         turn.suppressReopen()
         return
       }
+      if (event.type === 'message') {
+        context.observe(event.message, event.observedAt ?? Date.now())
+      }
       if (event.type === 'message' && handleStream(event.message, event.observedAt ?? Date.now())) {
         return
       }
@@ -221,7 +214,10 @@ export function createClaudeJournalTranslator(
           // The turn is over however it ended, so a foreground child still
           // reported as working will never be settled by an event.
           subagents.settleTurn(turn.groupKey)
-          turn.settle(claudeTurnEndForResult(event.message, event.observedAt ?? Date.now()))
+          context.settle(
+            event.message,
+            claudeTurnEndForResult(event.message, event.observedAt ?? Date.now())
+          )
           // The turn is over. A block still awaiting its final keeps the text the
           // flush above journaled, but its live state goes: an interrupted turn
           // would otherwise retain that text for the life of the session.
@@ -265,6 +261,7 @@ export function createClaudeJournalTranslator(
             corrections.stampFor(claudeFrameParentRef(event.message))
           )
         }
+        context.observeResponse(event.message, event.observedAt ?? Date.now())
         publishActivity(kind, event.message)
         // The CLI's own turn-over signal, and the only end a turn stopped by a
         // fault with no result frame ever gets. Reopen stays allowed: output
@@ -285,12 +282,23 @@ export function createClaudeJournalTranslator(
       return turn.id
     },
     flush: streamedText.flush,
+    childToolOwner: childQueries.childToolOwner,
+    childActivity: childQueries.childActivity,
     retryPendingTaskRows: () => backgroundTasks.retryPendingWrites(),
     get pendingStreamedBlocks() {
       return streamedText.pending
     },
+    get contextActivity() {
+      return context.activityRevision
+    },
+    markContextActivity: () => context.markActivity(),
+    subscribeContextUsageRequests: (listener) => context.subscribeReportRequests(listener),
+    recordContextReport: (target, report, part) => context.recordReport(target, report, part),
+    modelMayHaveChanged: () => context.modelMayHaveChanged(),
+    modelWritten: (model) => context.modelWritten(model),
     dispose: () => {
       streamedText.flush()
+      context.dispose()
       streamedText.dispose()
       tools.clear()
       prompts.clear()

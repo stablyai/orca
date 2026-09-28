@@ -119,6 +119,9 @@ export type BrowserApi = {
   onActivateView: (
     callback: (data: { worktreeId?: string; browserPageId?: string }) => void
   ) => () => void
+  onCapturePaintHold: (
+    callback: (data: { browserPageId: string; held: boolean }) => void
+  ) => () => void
   onPaneFocus: (
     callback: (data: { worktreeId: string | null; browserPageId: string }) => void
   ) => () => void

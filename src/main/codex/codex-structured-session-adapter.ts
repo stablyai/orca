@@ -36,6 +36,7 @@ import {
 import { CodexStructuredTurnCancellation } from './codex-structured-turn-cancellation'
 import { createCodexStructuredNotificationRetry } from './codex-structured-notification-retry'
 import { acquireCodexStructuredSession } from './codex-structured-session-acquire'
+import { changeCodexThreadGoal } from './codex-structured-thread-goal'
 import {
   answerCodexStructuredPrompt,
   cancelCodexStructuredTurn
@@ -256,17 +257,32 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
             { threadId: session.threadId },
             { timeoutMs: this.deps.requestTimeoutMs }
           )
-          .catch((error) => {
-            if (isCodexAppServerRequestError(error)) {
-              return { error: error.message }
+          .then(
+            () => undefined,
+            (error) => {
+              if (isCodexAppServerRequestError(error)) {
+                const detail = error.providerDiagnostic
+                return { outcome: 'failed' as const, ...(detail ? { detail } : {}) }
+              }
+              throw error
             }
-            throw error
-          })
+          )
       },
       input.onLateResult,
       input.turnId
     )
   }
+
+  changeThreadGoal: NonNullable<StructuredAgentSessionAdapter['changeThreadGoal']> = (input) =>
+    changeCodexThreadGoal(
+      this.session(input.sessionId),
+      input.change,
+      input.replacesGoal,
+      this.deps.requestTimeoutMs
+    )
+
+  // Provider-level: a goal change at rest starts the agent first.
+  supportsThreadGoal = (): boolean => true
 
   answerPrompt: StructuredAgentSessionAdapter['answerPrompt'] = (request) =>
     answerCodexStructuredPrompt({ request, sessions: this.sessions })

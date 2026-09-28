@@ -1,3 +1,4 @@
+import type { TerminalLaidOutCellBox } from '../terminal-cell-box'
 import { DEFAULT_TERMINAL_THEME } from '../terminal-webview-html/theme'
 import {
   createEngineTerminal,
@@ -9,6 +10,9 @@ import {
   postToReactNativeWebView,
   windowCapturedEngineErrors,
   windowHasEngine,
+  windowStart,
+  observeWindowViewport,
+  windowViewportRect,
   type TerminalDocumentHost,
   type TerminalDocumentHostSeams
 } from './document-host-seams'
@@ -92,6 +96,8 @@ export type TerminalDocumentState = {
   terminalFontFamily: string
   /** `terminal-init`: whether the first live chunk since init is still pending. */
   firstDataPending: boolean
+  /** `laid-out-cell-box`: the box last reported or at ready, with the grid it was laid out at. */
+  reportedCellBox: TerminalLaidOutCellBox | null
   /** `terminal-init`: whether the replayed snapshot was an alternate screen. */
   activeAltScreenSnapshot: boolean
   /** `fit-scale`: the fit scale the document committed. */
@@ -154,6 +160,8 @@ export type TerminalDocumentState = {
   pendingTerm: TerminalDocumentTerminal | null
   /** `surface-swap`: the terminal the committed surface is showing. */
   committedTerm: TerminalDocumentTerminal | null
+  /** `terminal-init`: the terminal built before ready, until the first init reuses it. */
+  provisionalTerm: TerminalDocumentTerminal | null
   /** `surface-swap`: the surface the committed terminal is mounted on. */
   committedSurface: HTMLElement | null
   /** `surface-swap`: the hidden replacement surface, until it commits. */
@@ -179,6 +187,10 @@ export type TerminalDocumentState = {
   removeWebglRecovery: (() => void) | null
   /** `fit-scale`: the generation of the retry loop; a bump abandons the one in flight. */
   fitRetryToken: number
+  /** `host-message-router`: the terminal frame the app last sent with a grid, or null before one. */
+  hostFrame: { width: number; height: number } | null
+  /** `fit-scale`: the reason of a fit held while the host is hidden, or null when none is owed. */
+  fitPending: string | null
   /** `mouse-click-drag`: the mouse gesture in progress, or null. */
   mouseGesture: TerminalMouseGesture | null
   /** `tap-dispatch`: what the document-level dispatcher has latched onto. */
@@ -259,6 +271,7 @@ function createTerminalDocumentState(): TerminalDocumentState {
     currentTextScale: 1,
     terminalFontFamily: '',
     firstDataPending: false,
+    reportedCellBox: null,
     activeAltScreenSnapshot: false,
     currentScale: 1,
     userScale: 1,
@@ -291,6 +304,7 @@ function createTerminalDocumentState(): TerminalDocumentState {
     surface: null,
     pendingTerm: null,
     committedTerm: null,
+    provisionalTerm: null,
     committedSurface: null,
     pendingSurface: null,
     scrollIndicator: null,
@@ -304,6 +318,8 @@ function createTerminalDocumentState(): TerminalDocumentState {
     removeTapDispatch: null,
     removeWebglRecovery: null,
     fitRetryToken: 0,
+    hostFrame: null,
+    fitPending: null,
     mouseGesture: null,
     touchDispatch: {
       mode: 'idle',
@@ -341,6 +357,9 @@ function createTerminalDocumentHostSeams(): TerminalDocumentHostSeams {
     paintDocumentBackground: paintWindowDocumentBackground,
     installHostTransport: installWindowHostTransport,
     hasEngine: windowHasEngine,
+    start: windowStart,
+    viewportRect: windowViewportRect,
+    observeViewport: observeWindowViewport,
     root: null
   }
 }

@@ -73,3 +73,20 @@ export function hostSessionTabIdsByLocalTabForWorktree(
   }
   return entries
 }
+
+/** The local tab mirroring a host tab, or null when no mirrored tab claims it. */
+export function resolveLocalTabIdForHostSessionTab(args: {
+  environmentId: string
+  worktreeId: string
+  hostTabId: string
+}): string | null {
+  for (const [tabId, hostTabId] of hostSessionTabIdsByLocalTabForWorktree(
+    args.environmentId,
+    args.worktreeId
+  )) {
+    if (hostTabId === args.hostTabId) {
+      return tabId
+    }
+  }
+  return null
+}

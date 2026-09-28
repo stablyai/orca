@@ -35,6 +35,8 @@ export type TabsSlice = {
         | 'isPinned'
       > & {
         targetGroupId: string
+        /** Client-local unified tab id to insert after; an explicit targetGroupId still wins. */
+        afterTabId: string
         activate: boolean
         recordInteraction: boolean
       }

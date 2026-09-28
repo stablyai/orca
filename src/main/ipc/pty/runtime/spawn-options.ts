@@ -19,6 +19,7 @@ import {
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { CLAUDE_AUTH_ENV_VARS } from '../../../claude-accounts/environment'
 import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../../../pty/legacy-terminal-shim-dir'
+import { PI_PROCESS_OWNER_ENV_KEYS } from '../../../pty/pi-process-owner-env'
 import { resolveConfiguredTerminalShellArgs } from '../configured-terminal-shell-args'
 import { resolveStablePaneOwner } from '../pane/stable-owner'
 import { getStartupTerminalIngressIntent } from '../../terminal-startup-color-query-replies'
@@ -29,6 +30,7 @@ import {
 } from '../pane/spawn-reservation'
 import type { RuntimePtySpawnState } from './spawn-state'
 
+/** Headless spawns need the same host-side environment isolation as desktop spawns. */
 export async function buildRuntimePtySpawnOptions(
   ctx: RuntimePtySpawnState
 ): Promise<
@@ -65,6 +67,8 @@ export async function buildRuntimePtySpawnOptions(
   ctx.spawnOptions.envToDelete = mergePtyEnvDeletions(
     authEnvToDelete,
     args.envToDelete ?? [],
+    // Persistent daemons and older SSH hosts must not resurrect a parent Pi's ownership.
+    PI_PROCESS_OWNER_ENV_KEYS,
     // Why: disable old hosts without removing ORCA_REAL_* while their Windows shim remains on PATH.
     ctx.isDaemonHostSpawn || args.connectionId ? LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS : [],
     ctx.isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(ctx.env) : [],

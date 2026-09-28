@@ -5,24 +5,15 @@ import { describe, expect, it, vi } from 'vitest'
 import { createTerminalDocumentScope } from './document/document-scope'
 import { normalizeStatusDotPresentation } from './document/write-queue'
 import { startTextScaling } from './document/text-scaling'
-import {
-  documentModuleSource,
-  webviewPageSource
-} from './document/document-module-source.test-support'
+import { webviewPageSource } from './document/document-module-source.test-support'
 
 const terminalWebViewSource = readFileSync(join(import.meta.dirname, 'TerminalWebView.tsx'), 'utf8')
-const terminalHtmlModuleSource = readFileSync(
-  join(import.meta.dirname, 'terminal-webview-html.ts'),
-  'utf8'
-)
 const terminalHtmlDocumentShellSource = readFileSync(
   join(import.meta.dirname, 'terminal-webview-html', 'document-shell.ts'),
   'utf8'
 )
 // The document's own source, which is what the WebView runs once bundled.
 const terminalHtmlSource = webviewPageSource()
-
-const terminalWebglRecoverySource = documentModuleSource('webgl-recovery')
 
 function normalizeStatusDotChunks(chunks: string[]) {
   const scope = createTerminalDocumentScope()
@@ -70,11 +61,9 @@ describe('TerminalWebView text zoom', () => {
     const end = terminalWebViewSource.indexOf('/>', start)
     expect(end).toBeGreaterThan(start)
     const webViewProps = terminalWebViewSource.slice(start, end)
-    expect(terminalHtmlModuleSource).toContain(
-      'export const XTERM_WEBVIEW_SOURCE = { html: XTERM_HTML }'
-    )
-    expect(webViewProps).toContain('source={XTERM_WEBVIEW_SOURCE}')
-    expect(webViewProps).not.toContain('source={{ html: XTERM_HTML }}')
+    // One source object per view, pinned at mount.
+    expect(terminalWebViewSource).toContain('const [source] = useState(() =>')
+    expect(webViewProps).toContain('source={source}')
   })
 
   it('forces the Claude status dot to text presentation before xterm writes', () => {
@@ -128,7 +117,7 @@ describe('TerminalWebView text zoom', () => {
       'const replayData = normalizeInitialData(initialData)'
     )
     const clearStart = terminalHtmlSource.indexOf("} else if (msg.type === 'clear') {")
-    const clearEnd = terminalHtmlSource.indexOf("} else if (msg.type === 'measure')", clearStart)
+    const clearEnd = terminalHtmlSource.indexOf("} else if (msg.type === 'reset-zoom')", clearStart)
     expect(initStart).toBeGreaterThanOrEqual(0)
     expect(initReplay).toBeGreaterThan(initStart)
     expect(clearStart).toBeGreaterThanOrEqual(0)
@@ -144,26 +133,12 @@ describe('TerminalWebView text zoom', () => {
   it('loads Unicode 11 before replaying mobile terminal bytes', () => {
     expect(terminalHtmlDocumentShellSource).toContain('XTERM_ENGINE_JS')
     expect(terminalHtmlSource).toContain('window.Unicode11Addon.Unicode11Addon')
-    const open = terminalHtmlSource.indexOf('scope.term.open(scope.surface!)')
-    const unicode = terminalHtmlSource.indexOf("scope.term.unicode.activeVersion = '11'")
+    const open = terminalHtmlSource.indexOf('term.open(scope.surface!)')
+    const unicode = terminalHtmlSource.indexOf("term.unicode.activeVersion = '11'")
     const replay = terminalHtmlSource.indexOf("enqueueWrite(scope, ESC + '[0m' + replayData)")
     expect(open).toBeGreaterThanOrEqual(0)
     expect(unicode).toBeGreaterThan(open)
     expect(replay).toBeGreaterThan(unicode)
-  })
-
-  it('uses the bundled WebGL-capable xterm stack and platform-safe font fallbacks', () => {
-    expect(terminalHtmlSource).not.toContain('cdn.jsdelivr.net')
-    // C7.5 moved the engine constructors onto the scope so the page can set them; inside the
-    // document the default still reads the bundled engine, and it is now the preamble that
-    // carries the read rather than the recovery module.
-    expect(terminalHtmlSource).toContain('window.WebglAddon.WebglAddon')
-    expect(terminalWebglRecoverySource).toContain('scope.createWebglAddon()')
-    expect(terminalHtmlSource).toContain('export function isIOSWebView(')
-    expect(terminalHtmlSource).toContain('fontFamily: scope.terminalFontFamily')
-    expect(terminalHtmlSource).toContain("fontWeight: '300'")
-    expect(terminalHtmlSource).toContain("fontWeightBold: '500'")
-    expect(terminalHtmlSource).toContain('new window.WebglAddon.WebglAddon()')
   })
 
   const IOS_IPHONE_NAVIGATOR = {

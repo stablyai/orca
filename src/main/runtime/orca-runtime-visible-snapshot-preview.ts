@@ -140,6 +140,24 @@ export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptur
     }
   }
 
+  /** Synchronous visible grid of the live emulator, for tui-idle body evidence. Null when the
+   *  model is not the whole screen: a provider-restored partial suffix or a pending hydration. */
+  protected readLiveTerminalScreenLines(ptyId: string | null | undefined): string[] | null {
+    if (!ptyId) {
+      return null
+    }
+    const state = this.headlessTerminals.get(ptyId)
+    if (
+      !state ||
+      this.providerSnapshotPreferredPtys.has(ptyId) ||
+      this.headlessHydrationState.get(ptyId) === 'pending'
+    ) {
+      return null
+    }
+    // Why unawaited writeChain: callers are synchronous; a grid one chunk behind is re-read next poll.
+    return projectTerminalVisibleLines(state.emulator).lines
+  }
+
   protected async parseVisibleSnapshot(snapshot: {
     data: string
     cols: number

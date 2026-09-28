@@ -1,3 +1,4 @@
+import { readPersistedProfileState } from './persisted-profile-state'
 import { execFileSync } from 'node:child_process'
 import {
   chmodSync,
@@ -11,7 +12,6 @@ import {
 import os from 'node:os'
 import path from 'node:path'
 import type { RuntimeClient } from '../../../src/cli/runtime-client'
-import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../../src/shared/orca-profiles'
 import type {
   RuntimeTerminalListResult,
   RuntimeTerminalSummary
@@ -194,16 +194,8 @@ export async function listRuntimeTerminals(
 }
 
 export function readPersistedWorkerRecoveryRecord(userDataDir: string, paneKey: string) {
-  const dataPath = path.join(
-    userDataDir,
-    'profiles',
-    DEFAULT_LOCAL_ORCA_PROFILE_ID,
-    'orca-data.json'
-  )
-  if (!existsSync(dataPath)) {
-    return null
-  }
-  const data = JSON.parse(readFileSync(dataPath, 'utf8')) as {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test owns the persisted fixture; optional fields are checked at use sites.
+  const data = readPersistedProfileState(userDataDir) as {
     workspaceSession?: {
       sleepingAgentSessionsByPaneKey?: Record<
         string,

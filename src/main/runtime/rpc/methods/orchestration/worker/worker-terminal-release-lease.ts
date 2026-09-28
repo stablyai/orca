@@ -9,27 +9,23 @@ export function workerTerminalLeaseIsCurrent(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
   dispatchId: string,
-  resource: WorkerTerminalResourceRow,
-  // Live (possibly reminted) handle for runtime probes. Durable identity still compares
-  // worker.agent_terminal_handle to resource.terminal_handle; after beginGraphReload the durable
-  // string is absent from the handle table, so authority/pane/incarnation must use the live one.
-  liveTerminalHandle: string
+  resource: WorkerTerminalResourceRow
 ): boolean {
   const worker = db.getWorkerDispatch(dispatchId)
   if (isStructuredWorkerHandle(resource.terminal_handle)) {
     return structuredWorkerTerminalLeaseIsCurrent(db, dispatchId, worker, resource)
   }
-  const authority = runtime.getOrchestrationDispatchAuthority(liveTerminalHandle)
+  const authority = runtime.getOrchestrationDispatchAuthority(resource.terminal_handle)
   // Exited PTYs retain identity and host evidence but no longer mint launch authority.
   return Boolean(
     worker?.agent_terminal_handle === resource.terminal_handle &&
     (authority
       ? resource.host_scope === JSON.stringify(authority.hostScope)
-      : runtime.getTerminalLivenessVerdict(liveTerminalHandle)?.status === 'exited') &&
+      : runtime.getTerminalLivenessVerdict(resource.terminal_handle)?.status === 'exited') &&
     db.isDispatchProcessCurrent({
       dispatchId,
-      paneKey: runtime.getTerminalPaneKey(liveTerminalHandle),
-      processIncarnation: runtime.getTerminalProcessIncarnation(liveTerminalHandle)
+      paneKey: runtime.getTerminalPaneKey(resource.terminal_handle),
+      processIncarnation: runtime.getTerminalProcessIncarnation(resource.terminal_handle)
     }) &&
     !db.workerTerminalResourceHasIdentityConflict(resource.id)
   )

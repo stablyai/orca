@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionBackgroundTaskState } from '../../../../shared/agent-session-wire'
 import {
   AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
@@ -63,7 +63,6 @@ describe('background-task stop capability at the RPC boundary', () => {
   it.each(['snapshot', 'batch', 'reset'] as const)(
     'gates the %s stream without changing the provider state',
     async (type) => {
-      hostCalls.hold = vi.fn(async () => undefined)
       hostCalls.subscribe.mockImplementation((input: AgentSessionSubscribeInput) => {
         const base = { sessionId: SESSION, fence: 1, backgroundTasks: TASKS }
         if (type === 'batch') {

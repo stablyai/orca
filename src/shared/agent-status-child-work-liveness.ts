@@ -1,8 +1,9 @@
 import type { AgentChildWorkKind, AgentChildWorkState } from './agent-status-child-work'
 
-/** Two-state vocabulary by design: any live agent work reads as `working`; `monitoring`
- *  only when shells and monitors are the sole live work; null when nothing runs. */
-export type AgentChildWorkLiveness = 'working' | 'monitoring' | null
+/** Three live arms by design, ranked: a child waiting on a human is `waiting`; otherwise any live
+ *  agent work reads as `working`; `monitoring` only when shells and monitors are the sole live
+ *  work; null when nothing runs. */
+export type AgentChildWorkLiveness = 'waiting' | 'working' | 'monitoring' | null
 
 export type AgentChildWorkLivenessCandidate = {
   kind: AgentChildWorkKind
@@ -10,6 +11,8 @@ export type AgentChildWorkLivenessCandidate = {
 }
 
 export type AgentChildWorkLivenessEvidence = {
+  /** A live child of any kind is waiting on a human before it can go on. */
+  hasWaitingChildWork: boolean
   hasLiveAgentWork: boolean
   hasLiveNonAgentWork: boolean
 }
@@ -26,14 +29,24 @@ export function isAgentChildWorkKind(kind: AgentChildWorkKind): boolean {
  *  retire — and a blocked subagent cannot count for less than the shell beside it.
  *  The escape hatch is the roster's own lifetime, not a state: it is per-session host memory that
  *  dies when the session closes (Claude also clears it on provider `ended`), so a producer that
- *  ever reported a failure IN PLACE rather than settling it would pin `working` until then. */
-function isLiveChildWork(child: AgentChildWorkLivenessCandidate): boolean {
+ *  ever reported a failure IN PLACE (as `blocked`) rather than settling it would pin `working`
+ *  until then. */
+export function isLiveChildWork(child: AgentChildWorkLivenessCandidate): boolean {
   return child.state !== 'done' && child.state !== 'idle'
+}
+
+/** Only `waiting` asks for a human. A child's `blocked` means it failed (its sole producer maps a
+ *  failed task to it), unlike the row's `blocked`; lost contact (`unverifiable`) asks for no one. */
+function isWaitingChildWork(child: AgentChildWorkLivenessCandidate): boolean {
+  return child.state === 'waiting'
 }
 
 export function agentChildWorkLivenessFromEvidence(
   evidence: AgentChildWorkLivenessEvidence
 ): AgentChildWorkLiveness {
+  if (evidence.hasWaitingChildWork) {
+    return 'waiting'
+  }
   if (evidence.hasLiveAgentWork) {
     return 'working'
   }
@@ -43,14 +56,20 @@ export function agentChildWorkLivenessFromEvidence(
 export function agentChildWorkLiveness(
   children: readonly AgentChildWorkLivenessCandidate[] | undefined
 ): AgentChildWorkLiveness {
+  let hasWaitingChildWork = false
   let hasLiveAgentWork = false
   let hasLiveNonAgentWork = false
   for (const child of children ?? []) {
     if (!isLiveChildWork(child)) {
       continue
     }
+    hasWaitingChildWork ||= isWaitingChildWork(child)
     hasLiveAgentWork ||= isAgentChildWorkKind(child.kind)
     hasLiveNonAgentWork ||= !isAgentChildWorkKind(child.kind)
   }
-  return agentChildWorkLivenessFromEvidence({ hasLiveAgentWork, hasLiveNonAgentWork })
+  return agentChildWorkLivenessFromEvidence({
+    hasWaitingChildWork,
+    hasLiveAgentWork,
+    hasLiveNonAgentWork
+  })
 }

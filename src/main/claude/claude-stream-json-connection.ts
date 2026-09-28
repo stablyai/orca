@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { providerDiagnostic, withProviderDiagnostic } from '../../shared/agent-session-failure'
 import type * as ClaudeAgentSdk from '@anthropic-ai/claude-agent-sdk'
 import type { CanUseTool, OnUserDialog, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import { spawnProcess } from '../../shared/child-process/run-process'
@@ -7,6 +8,7 @@ import {
   markClaudeStructuredChildSpawned
 } from '../claude-accounts/live-pty-gate'
 import { buildClaudeChildProcessEnv } from './claude-child-process-environment'
+import { withoutInheritedClaudeConfigDir } from './claude-config-dir-pin'
 import {
   ClaudeControlRequestError,
   createClaudeControlSurface,
@@ -102,7 +104,12 @@ function exitError(stderrTail: string, status: ExitStatus | null, cause?: Error)
         ? ` (code ${status.code})`
         : ''
   const message = `claude stream-json exited${how}${detail ? `: ${detail}` : ''}`
-  return cause ? new Error(message, { cause }) : new Error(message)
+  // Written for a log, not a person: the chat keeps it behind Details.
+  const diagnostic = providerDiagnostic([how.trim(), detail].filter(Boolean).join('\n'), 'log')
+  return withProviderDiagnostic(
+    cause ? new Error(message, { cause }) : new Error(message),
+    diagnostic
+  )
 }
 
 export async function openClaudeStreamJsonConnection(
@@ -121,7 +128,12 @@ export async function openClaudeStreamJsonConnection(
       cwd: launch.cwd,
       // Why env is never omitted: the SDK inherits process.env when it is, which is
       // exactly the ambient ANTHROPIC_* auth leak this lane already shipped once.
-      env: buildClaudeChildProcessEnv(launch.env, { scrubConfiguredChildSessionStamps: true }),
+      // Orca's own CLAUDE_CONFIG_DIR is dropped for the same reason the launch drops the
+      // shell's: the record's pin in `launch.env` must be the only home the child sees.
+      env: buildClaudeChildProcessEnv(launch.env, {
+        inheritedEnv: withoutInheritedClaudeConfigDir(process.env),
+        scrubConfiguredChildSessionStamps: true
+      }),
       pathToClaudeCodeExecutable: launch.pathToClaudeCodeExecutable,
       spawnClaudeCodeProcess: spawner.spawn,
       ...(handlers.canUseTool ? { canUseTool: handlers.canUseTool } : {}),
@@ -309,6 +321,11 @@ export async function openClaudeStreamJsonConnection(
       })
       inbox.fail(new Error('claude stream-json connection closed'))
       if (!proven) {
+        if (exited && tree.treeVerdict === 'live') {
+          console.warn('[claude-stream-json] root exited but a descendant survived the close:', {
+            pid: spawner.pid
+          })
+        }
         closePromise = null
         return false
       }

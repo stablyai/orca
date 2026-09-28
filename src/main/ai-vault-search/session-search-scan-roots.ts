@@ -153,10 +153,22 @@ export function sameSessionSearchRoots(
 }
 
 function comparableRootFields(roots: SessionSearchScanRoots): string[] {
-  return Object.entries(roots)
+  const { wslOpenCodeReaders, ...pathRoots } = roots
+  return Object.entries(pathRoots)
     .filter(([, value]) => value !== undefined)
     .map(
       ([key, value]) => `${key}=${JSON.stringify(Array.isArray(value) ? [...value].sort() : value)}`
+    )
+    .concat(
+      (wslOpenCodeReaders ?? []).map(
+        (reader) =>
+          `wslOpenCodeReaders=${JSON.stringify([
+            reader.distro.toLowerCase(),
+            reader.executable,
+            reader.readerPath,
+            reader.error
+          ])}`
+      )
     )
     .sort()
 }

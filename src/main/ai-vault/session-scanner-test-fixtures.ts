@@ -63,6 +63,7 @@ export function isolatedScanRoots(root: string) {
     // Why: prevent the SQLite scanner from picking up the real
     // ~/.local/share/opencode/opencode.db during tests.
     opencodeDbPaths: [] as readonly string[],
+    zcodeDbPath: join(root, 'zcode', 'db.sqlite'),
     grokSessionsDir: join(root, 'grok-sessions'),
     devinTranscriptsDir: join(root, 'devin-transcripts'),
     hermesSessionsDir: join(root, 'hermes-sessions'),

@@ -30,7 +30,7 @@ function present(forceReconnectHost: ForceReconnect): Presentation {
     toastOpacityRef: { current: 1 },
     hostEndpoint: null,
     initialSessionAutoCreateRef: { current: null },
-    terminalFrameHeightRef: { current: 0 },
+    terminalFrameRef: { current: null },
     handleCreateTerminal: () => Promise.resolve(),
     visibleTabs: [],
     forceReconnectHost

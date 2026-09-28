@@ -4,6 +4,7 @@ import { createWebE2EApi } from './preload-api/web-e2e-api'
 import {
   createClaudeAccountsApi,
   createCodexAccountsApi,
+  createCursorAccountsApi,
   createGrokAccountsApi,
   createMiniMaxCredentialsApi
 } from './preload-api/web-agent-accounts-api'
@@ -107,6 +108,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     rateLimits: createRateLimitsApi(),
     minimaxCredentials: createMiniMaxCredentialsApi(),
     grokAccounts: createGrokAccountsApi(),
+    cursorAccounts: createCursorAccountsApi(),
     codexAccounts: createCodexAccountsApi(),
     claudeAccounts: createClaudeAccountsApi(),
     cli: createCliApi(),

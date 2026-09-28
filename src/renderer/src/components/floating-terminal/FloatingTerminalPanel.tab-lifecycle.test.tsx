@@ -164,7 +164,7 @@ describe('FloatingTerminalPanel close behavior', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
   })
-  it('creates new floating terminal tabs without globally activating createTab', async () => {
+  it('creates new floating terminal tabs active in the floating group', async () => {
     setFloatingTabs([makeTab({ id: 'tab-1' })])
 
     const element = await renderPanel(true)
@@ -175,10 +175,10 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(mocks.createTab).toHaveBeenCalledWith(
       FLOATING_TERMINAL_WORKTREE_ID,
       'floating-group',
-      undefined,
-      { activate: false }
+      undefined
     )
-    expect(mocks.activateTab).toHaveBeenCalledWith('created-tab')
+    // Why: createTab itself activates the new tab within the floating group.
+    expect(mocks.activateTab).not.toHaveBeenCalled()
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('created-tab')
   })
 
@@ -209,7 +209,11 @@ describe('FloatingTerminalPanel close behavior', () => {
     const element = await renderPanel(true)
     const tabBar = findByTypeName(element, 'TabBar')
     ;(tabBar.props.onNewBrowserTab as () => void)()
-    ;(tabBar.props.onDuplicateBrowserTab as (browserTabId: string) => void)('browser-1')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: TabBarProps types this callback; the test tree erases it.
+    ;(tabBar.props.onDuplicateBrowserTab as (browserTabId: string, unifiedTabId: string) => void)(
+      'browser-1',
+      'browser-unified-1'
+    )
 
     expect(mocks.createWebRuntimeSessionBrowserTab).not.toHaveBeenCalled()
     expect(mocks.createBrowserTab).toHaveBeenNthCalledWith(
@@ -231,7 +235,7 @@ describe('FloatingTerminalPanel close behavior', () => {
         title: 'Example',
         sessionProfileId: 'profile-1',
         sessionPartition: 'persist:orca-browser-session-profile-1',
-        targetGroupId: 'floating-group',
+        afterTabId: 'browser-unified-1',
         browserRuntimeEnvironmentId: null
       }
     )
@@ -439,10 +443,10 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(mocks.createTab).toHaveBeenCalledWith(
       FLOATING_TERMINAL_WORKTREE_ID,
       'floating-group',
-      undefined,
-      { activate: false }
+      undefined
     )
-    expect(mocks.activateTab).toHaveBeenCalledWith('created-tab')
+    // Why: createTab itself activates the new tab within the floating group.
+    expect(mocks.activateTab).not.toHaveBeenCalled()
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('created-tab')
 
     ;(tabBar.props.onClose as (tabId: string) => void)('tab-1')

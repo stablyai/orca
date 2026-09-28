@@ -22,8 +22,11 @@ import { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session
 import { RuntimeSubscriptionRegistry } from '../../../src/main/runtime/runtime-subscription-registry'
 import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
 import {
+  AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
   AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
   AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../src/shared/protocol-version'
@@ -40,6 +43,8 @@ import {
   paramsFor,
   resetOperationIds,
   REWIND_METHOD,
+  CONVERSATION_OUTLINE_METHOD,
+  envelope,
   STATUS_FEED_METHOD,
   sendParams,
   SESSION,
@@ -275,6 +280,11 @@ describe('cross-version structured agent sessions', () => {
         expect(build.capabilities.includes(AGENT_SESSION_REWIND_RUNTIME_CAPABILITY)).toBe(
           build.methodNames.includes(REWIND_METHOD)
         )
+        // The message rail probes this before asking, so an older host leaves it on loaded
+        // messages instead of answering method_not_found.
+        expect(
+          build.capabilities.includes(AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY)
+        ).toBe(build.methodNames.includes(CONVERSATION_OUTLINE_METHOD))
       }
       // Additive surface: bumping the protocol number would strand every paired
       // device on this release rather than degrade one feature.
@@ -302,6 +312,41 @@ describe('cross-version structured agent sessions', () => {
             ok: false,
             error: { code: 'method_not_found' }
           })
+        }
+      }
+    })
+
+    it('takes structured question answers exactly where the host advertises them', async () => {
+      // A client sends `answers` only on this capability, so the two must never disagree:
+      // a strict older schema refuses the field and the answer is lost rather than degraded.
+      const method = 'agentSession.respondToQuestion'
+      const fields = {
+        itemId: 'item-1',
+        expectedRevision: 1,
+        answers: [{ questionId: 'q1', optionIds: [], other: 'Wait for the capture. '.repeat(80) }]
+      }
+      const params = { envelope: envelope({ method, fields, fence: 1 }), ...fields }
+      expect(current.capabilities).toContain(AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY)
+      for (const build of [current, baseline]) {
+        const advertised = build.capabilities.includes(
+          AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY
+        )
+        if (!build.methodNames.includes(method)) {
+          expect(advertised, `${build.label} advertises answers without the method`).toBe(false)
+          continue
+        }
+        const hostCalls = structuredHostStub(SESSION, WORKSPACE)
+        await build.installStructuredHost(installableHost(hostCalls))
+        try {
+          const replies = await callBuild(build, method, params, {
+            clientKind: 'runtime',
+            clientCapabilities: current.capabilities
+          })
+          expect(replies, `${build.label}: ${method} must answer exactly once`).toHaveLength(1)
+          expect(replies[0]?.ok, `${build.label}: ${JSON.stringify(replies[0])}`).toBe(advertised)
+          expect(hostCalls.respondToPrompt).toHaveBeenCalledTimes(advertised ? 1 : 0)
+        } finally {
+          await build.installStructuredHost(null)
         }
       }
     })
@@ -575,6 +620,10 @@ describe('cross-version structured agent sessions', () => {
     let store: AgentSessionRecordStore
     let runtime: unknown
 
+    /** Holds a provider start open, so a reply's timing can be read against it. */
+    let startGate: Promise<void> = Promise.resolve()
+    let starts = 0
+
     /** Phase 2 owns provider processes; the adapter is the only stub here. */
     function adapter(): StructuredAgentSessionAdapter {
       return {
@@ -582,23 +631,27 @@ describe('cross-version structured agent sessions', () => {
         // `supportsLocation`, which this fake also lacks, so the client-supplied-location gate
         // refused for the fake's silence rather than for the location.
         supportsCreate: () => true,
-        acquire: async ({ fence }) => ({
-          process: {
-            hostId: 'local',
-            pid: 4242,
-            processStartTimeMs: 1_700_000_000_000,
-            spawnToken: store.getRecord(SESSION)?.lease.reservedSpawnToken ?? 'spawn-a'
-          },
-          link: {
-            linkId: `link-${fence}`,
-            handle: { provider: 'codex', threadId: THREAD },
-            // A restarted host re-proves the thread it inherited; only the first
-            // owner of a session may claim to have created it.
-            origin: store.getRecord(SESSION)?.providerHandleChain.length ? 'resumed' : 'created',
-            mintedAtFence: fence,
-            observedAt: NOW
+        acquire: async ({ fence }) => {
+          starts += 1
+          await startGate
+          return {
+            process: {
+              hostId: 'local',
+              pid: 4242,
+              processStartTimeMs: 1_700_000_000_000,
+              spawnToken: store.getRecord(SESSION)?.lease.reservedSpawnToken ?? 'spawn-a'
+            },
+            link: {
+              linkId: `link-${fence}`,
+              handle: { provider: 'codex', threadId: THREAD },
+              // A restarted host re-proves the thread it inherited; only the first
+              // owner of a session may claim to have created it.
+              origin: store.getRecord(SESSION)?.providerHandleChain.length ? 'resumed' : 'created',
+              mintedAtFence: fence,
+              observedAt: NOW
+            }
           }
-        }),
+        },
         dispatch: async () => ({
           state: 'accepted',
           providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 1 }
@@ -653,14 +706,18 @@ describe('cross-version structured agent sessions', () => {
       return reattached
     }
 
-    async function call(method: string, params: unknown): Promise<RpcReply[]> {
+    async function call(
+      method: string,
+      params: unknown,
+      clientCapabilities: readonly string[] = [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+    ): Promise<RpcReply[]> {
       return callBuild(
         current,
         method,
         params,
         {
           clientKind: 'runtime',
-          clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
+          clientCapabilities,
           clientId: 'paired-device-1',
           connectionId: 'connection-1'
         },
@@ -679,6 +736,7 @@ describe('cross-version structured agent sessions', () => {
 
     beforeEach(async () => {
       resetOperationIds()
+      startGate = Promise.resolve()
       root = await mkdtemp(join(tmpdir(), 'orca-cross-version-agent-session-'))
       runtime = runtimeStub()
       await bootHost('a')
@@ -719,16 +777,71 @@ describe('cross-version structured agent sessions', () => {
       expect(batch?.cursor.sequence).toBeGreaterThan(held.sequence)
     })
 
-    it('refuses a write still fenced to the host generation that died', async () => {
+    // Every released client still sends the fence it last saw; this host names a write by its
+    // target and ignores that fence. Only the attach keeps comparing one, which `reattach` pins.
+    it('delivers a write still fenced to the host generation that died', async () => {
       const created = await answer('agentSession.create', createIntentParams())
       await bootHost('b')
       const reattached = await reattach(created.fence)
       expect(reattached.fence).toBeGreaterThan(created.fence)
 
       expect(await answer('agentSession.send', sendParams('stale', created.fence))).toMatchObject({
-        ok: false,
-        refusal: { code: 'agent_session_checkpoint_stale' }
+        ok: true,
+        fence: reattached.fence
       })
+    })
+
+    // A released client answers a send's `pending` as delivered-or-refused; it has no way to show
+    // a rejection that arrives after it. So it is answered once the message is handed over, while
+    // a client that advertises accepted sends is answered at acceptance, start or no start (W9).
+    it('holds the send reply of a released client until the handover, and answers a current one at once', async () => {
+      const released = [
+        STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+        AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY
+      ]
+      expect(baseline.capabilities).not.toContain(AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY)
+      const created = await answer('agentSession.create', createIntentParams())
+      await bootHost('b')
+      let open = (): void => undefined
+      startGate = new Promise((resolve) => (open = resolve))
+
+      let answered = false
+      const releasedReply = call(
+        'agentSession.send',
+        sendParams('released', created.fence),
+        released
+      ).finally(() => (answered = true))
+      // The start that delivers it is under way, and the reply still waits for it.
+      const before = starts
+      await vi.waitFor(() => expect(starts).toBeGreaterThan(before))
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(answered).toBe(false)
+      open()
+      const [reply] = await releasedReply
+      // Handed over, whatever the provider has said since.
+      expect(reply).toMatchObject({
+        ok: true,
+        result: { value: { submission: { handedOverAt: expect.any(Number) } } }
+      })
+
+      const restarted = await bootHost('c')
+      startGate = new Promise((resolve) => (open = resolve))
+      const currentReply = await call('agentSession.send', sendParams('current', created.fence), [
+        ...released,
+        AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY
+      ])
+      expect(currentReply[0]).toMatchObject({
+        ok: true,
+        result: { value: { submission: { dispatchState: 'pending', handoverRecorded: true } } }
+      })
+      open()
+      await vi.waitFor(async () =>
+        expect(
+          (await restarted.journalSnapshot(SESSION)).submissions.every(
+            (row) => row.dispatchState !== 'pending' || row.handedOverAt
+          )
+        ).toBe(true)
+      )
     })
   })
 })

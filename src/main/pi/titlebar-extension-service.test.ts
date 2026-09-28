@@ -156,9 +156,14 @@ describe('PiTitlebarExtensionService', () => {
     homedirOverride.current = fakeHome
     vi.stubEnv('PI_CONFIG_DIR', 'host-profile')
     try {
-      const env = new PiTitlebarExtensionService().buildPtyEnv('pty-ambient-root', undefined, 'omp', {
-        materializeDefaultHome: true
-      })
+      const env = new PiTitlebarExtensionService().buildPtyEnv(
+        'pty-ambient-root',
+        undefined,
+        'omp',
+        {
+          materializeDefaultHome: true
+        }
+      )
       expect(env.ORCA_OMP_SOURCE_AGENT_DIR).toBe(join(fakeHome, '.omp', 'agent'))
       expect(existsSync(join(fakeHome, 'host-profile'))).toBe(false)
     } finally {

@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { ConnectionVerdict } from '../transport/connection-health'
 import { verdictDisplayLabel } from '../transport/connection-health'
 import { mobileConnectionPathLabel } from '../transport/mobile-connection-path-label'
+import { useHostDisplay } from '../transport/use-host-display'
 import type { MobileConnectionPath } from '../transport/stable-logical-rpc-client'
 import type { ConnectionState, HostCatalogEntry, HostProfile } from '../transport/types'
 import { colors, radii, spacing } from '../theme/mobile-theme'
@@ -38,6 +39,8 @@ export function MobileHostCard(props: {
       ? { kind: 'warning', label: statusLabel }
       : props.verdict
   const worktreeSummary = homeHostWorktreeSummary(props.worktreeInfo)
+  const display = useHostDisplay(props.host)
+  const descriptorText = display.descriptorLine
   const connectionPathLabel =
     !credentialMissing && !credentialUnavailable && connected
       ? mobileConnectionPathLabel(props.path)
@@ -55,7 +58,8 @@ export function MobileHostCard(props: {
   const verdictDetail =
     credentialHint === null && 'detail' in props.verdict ? (props.verdict.detail ?? null) : null
   const accessibilityLabel = [
-    `Open ${props.host.name}`,
+    `Open ${display.title}`,
+    descriptorText,
     statusLabel,
     connectionPathLabel?.replace(' · ', ' via '),
     connected ? worktreeSummary?.replace(' · ', ', ') : null,
@@ -83,8 +87,13 @@ export function MobileHostCard(props: {
             style={[styles.name, !connected && { color: colors.textSecondary }]}
             numberOfLines={1}
           >
-            {props.host.name}
+            {display.title}
           </Text>
+          {descriptorText ? (
+            <Text style={styles.platformText} numberOfLines={1}>
+              {descriptorText}
+            </Text>
+          ) : null}
           <View style={styles.meta}>
             <StatusDot state={props.state} verdict={statusVerdict} />
             <Text
@@ -123,7 +132,7 @@ export function MobileHostCard(props: {
       </Pressable>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`Actions for ${props.host.name}`}
+        accessibilityLabel={`Actions for ${display.title}`}
         hitSlop={8}
         style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
         onPress={props.onOpenActions}
@@ -164,6 +173,7 @@ const styles = StyleSheet.create({
   },
   main: { flex: 1, minWidth: 0, marginRight: spacing.sm },
   name: { color: colors.textPrimary, fontSize: 15, fontWeight: '600', lineHeight: 20 },
+  platformText: { color: colors.textSecondary, fontSize: 12, lineHeight: 16 },
   meta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3, minWidth: 0 },
   metaText: { flex: 1, fontSize: 12, color: colors.textSecondary },
   worktreeMetaText: {

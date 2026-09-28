@@ -7,6 +7,7 @@ import { useHostClient } from '../transport/client-context'
 import { createBridgeDiagnosticReporter } from './bridge-diagnostic-log'
 import type { BridgeInitRoute } from './bridge/bridge-envelope'
 import type { BridgeClearableRouteParam } from './bridge/bridge-route-update'
+import type { BridgeSafeAreaInsets } from './bridge/bridge-safe-area-insets'
 import type { BridgeHapticsKind } from './bridge/bridge-haptics-notify'
 import { createBridgeHost, type BridgeHost } from './bridge-host'
 import type { BridgeSessionBack } from './bridge-host-back'
@@ -56,6 +57,10 @@ export type MobileWebShellBridgeView = {
    * there is no host yet; the route the host is built from carries it instead.
    */
   readonly publishRoute: (route: BridgeInitRoute) => void
+  /** Hands the mounted host moved safe-area insets; dropped with no host, as a route is. */
+  readonly publishSafeAreaInsets: (insets: BridgeSafeAreaInsets) => void
+  /** Hands the mounted host a moved keyboard height; dropped with no host, as the insets are. */
+  readonly publishKeyboardInset: (height: number) => void
   /**
    * Hands the mounted host one Back press. False when there is no host, or when the document it
    * serves never said it takes one — the caller then leaves the key to the navigator.
@@ -78,6 +83,10 @@ export type MobileWebShellBridgeArgs = {
   sessionEstablished: boolean
   /** The screen the page is standing in for, which the document's own `/` cannot tell it. */
   route: BridgeInitRoute
+  /** What the first `init` of a new host carries; later moves go through `publishSafeAreaInsets`. */
+  safeAreaInsets: BridgeSafeAreaInsets
+  /** What the first `init` of a new host carries; later moves go through `publishKeyboardInset`. */
+  keyboardInset: number
   /** The route patterns the page keeps for itself; everything else comes back as `navigate`. */
   pageRoutes: readonly string[]
   pageRouteGrants: readonly { pathname: string; grants: readonly string[] }[]
@@ -105,10 +114,9 @@ export type MobileWebShellBridgeArgs = {
   onStorageWrite: (key: string, value: string | null) => void
   /** The page could not render the generation on screen. Reported, never recovered from here. */
   onPageFault: (error: BridgeErrorCapture) => void
-  /** The page asked for a session, and what it declared it reports. Reported so the screen can
-   *  stop waiting for it, and so it knows whether a paint report is coming. */
-  onPageReady: (reports: readonly string[]) => void
-  /** The page has a frame on screen, from a page that said it would report one. */
+  /** The page asked for a session. Reported so the screen can stop waiting for it. */
+  onPageReady: () => void
+  /** The page has a frame on screen. */
   onPagePainted: () => void
   /** The page is holding the device Back key, or has let it go. False arrives on its own for
    *  every way a document ends, so no claim outlives the page that made it. */
@@ -186,6 +194,8 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       buildId,
       sessionId,
       route: latest.route,
+      safeAreaInsets: latest.safeAreaInsets,
+      keyboardInset: latest.keyboardInset,
       pageRoutes: latest.pageRoutes,
       pageRouteGrants: latest.pageRouteGrants,
       routeGrants: latest.routeGrants,
@@ -213,7 +223,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       onRouteParamClear: (param, value) => argsRef.current.onRouteParamClear(param, value),
       onRouteRefused: (issue) => argsRef.current.onRouteRefused(issue),
       onBinaryFramesDropped: (total) => argsRef.current.onBinaryFramesDropped(total),
-      onPageReady: (reports) => argsRef.current.onPageReady(reports),
+      onPageReady: () => argsRef.current.onPageReady(),
       onPagePainted: () => argsRef.current.onPagePainted(),
       onPageBackClaim: (claimed) => argsRef.current.onPageBackClaim(claimed)
     })
@@ -261,6 +271,24 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
         const mounted = hostRef.current
         if (mounted !== null && mounted.sessionId === sessionId) {
           mounted.host.publishRoute(route)
+        }
+      },
+      [buildId, client, sessionId, snapshot]
+    ),
+    publishSafeAreaInsets: useCallback(
+      (insets: BridgeSafeAreaInsets) => {
+        const mounted = hostRef.current
+        if (mounted !== null && mounted.sessionId === sessionId) {
+          mounted.host.publishSafeAreaInsets(insets)
+        }
+      },
+      [buildId, client, sessionId, snapshot]
+    ),
+    publishKeyboardInset: useCallback(
+      (height: number) => {
+        const mounted = hostRef.current
+        if (mounted !== null && mounted.sessionId === sessionId) {
+          mounted.host.publishKeyboardInset(height)
         }
       },
       [buildId, client, sessionId, snapshot]

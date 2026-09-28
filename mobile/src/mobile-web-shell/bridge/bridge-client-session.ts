@@ -4,6 +4,7 @@ import type {
   BridgeInitHost,
   BridgeInitRoute
 } from './bridge-envelope'
+import { ZERO_SAFE_AREA_INSETS, type BridgeSafeAreaInsets } from './bridge-safe-area-insets'
 
 /** What `init` said this page is attached to. `grants` is what a call site checks before it posts. */
 export type BridgeShellSession = {
@@ -23,6 +24,11 @@ export type BridgeShellSession = {
    * coverage verdict out of an absent field.
    */
   pageRouteGrants: readonly { pathname: string; grants: readonly string[] }[] | null
+  /** How much of the WebView sits under a system bar. Zeros for a shell that reserves the bars
+   *  outside the view, which is every shell before the field. */
+  safeAreaInsets: BridgeSafeAreaInsets
+  /** The keyboard height native screens read on the shell's OS; 0 while it is closed. */
+  keyboardInset: number
   /** Null for a shell too old to name it; the page's own `loadHosts()` then answers with nothing. */
   host: BridgeInitHost | null
   /** The allowlisted keys as the app held them when this page opened. */
@@ -30,14 +36,6 @@ export type BridgeShellSession = {
   /** The allowlisted keys `storage` could not carry because the app's value is over the page's cap
    *  (ruling 33.6). Empty for a shell too old to name them, which is what it was before. */
   storageOversize: readonly string[]
-  /**
-   * What this shell takes from the page beyond the frames every shell has taken (ruling 34).
-   *
-   * Empty for a shell that named none, which is every shell before this field: a page that posts
-   * one of these to one of those has the whole frame refused as `unrecognised-message`, so the
-   * check is the page's and it is made from here.
-   */
-  accepts: readonly string[]
 }
 
 /**
@@ -56,9 +54,10 @@ export function readShellSession(
     route: message.route ?? null,
     pageRoutes: message.pageRoutes ?? [],
     pageRouteGrants: message.pageRouteGrants ?? null,
+    safeAreaInsets: message.safeAreaInsets ?? ZERO_SAFE_AREA_INSETS,
+    keyboardInset: message.keyboardInset ?? 0,
     host: message.host ?? null,
     storage: message.storage ?? {},
-    storageOversize: message.storageOversize ?? [],
-    accepts: message.accepts ?? []
+    storageOversize: message.storageOversize ?? []
   }
 }

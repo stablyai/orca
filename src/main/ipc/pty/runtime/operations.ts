@@ -7,38 +7,35 @@ import { rendererSerializerReadiness } from '../pane/serializer-state'
 import { getProviderForPty, localProvider } from '../provider/registry'
 import { inspectPtyProviderProcess } from '../../../providers/pty-process-inspection'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
-import { agentSessionPtyWriteGate } from '../../../runtime/agent-session-pty-write-gate'
-import { reportAgentSessionWriteRefusal } from '../agent-session-write-refusal-report'
 import {
   writeRefused,
   writeUnverifiable,
   type WriteSettlement
 } from '../../../../shared/pty-write-settlement'
+import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
+
+type RuntimeWriteDeps = Pick<PtyRuntimeControllerDeps, 'runtime'>
 
 export function writePtyFromRuntimeController(
-  deps: PtyRuntimeControllerDeps,
-  ptyId: string,
-  data: string
-): boolean
-export function writePtyFromRuntimeController(
-  deps: PtyRuntimeControllerDeps,
+  deps: RuntimeWriteDeps,
   ptyId: string,
   data: string,
+  inputKind: TerminalInputKind
+): boolean
+export function writePtyFromRuntimeController(
+  deps: RuntimeWriteDeps,
+  ptyId: string,
+  data: string,
+  inputKind: TerminalInputKind,
   options: { waitForSettlement: true }
 ): WriteSettlement | Promise<WriteSettlement>
 export function writePtyFromRuntimeController(
-  deps: PtyRuntimeControllerDeps,
+  deps: RuntimeWriteDeps,
   ptyId: string,
   data: string,
+  inputKind: TerminalInputKind,
   options?: { waitForSettlement: true }
 ): boolean | WriteSettlement | Promise<WriteSettlement> {
-  // Why: the backstop for every runtime write path — query replies, followups, deliveries —
-  // so a caller that forgets the typed gate still cannot reach a provider.
-  const admission = agentSessionPtyWriteGate.admit(ptyId)
-  if (!admission.admitted) {
-    reportAgentSessionWriteRefusal(deps.mainWindow, ptyId, admission.refusal)
-    return options?.waitForSettlement ? writeRefused('write_gate_denied') : false
-  }
   let provider: IPtyProvider
   try {
     provider = getProviderForPty(ptyId)
@@ -51,6 +48,7 @@ export function writePtyFromRuntimeController(
     if (!provider.writeWithSettlement) {
       return writeRefused('provider_cannot_settle')
     }
+    deps.runtime?.terminalRunFacts?.recordInput(ptyId, inputKind, data)
     try {
       return provider.writeWithSettlement(ptyId, data)
     } catch {
@@ -58,23 +56,9 @@ export function writePtyFromRuntimeController(
       return writeUnverifiable('provider_threw_after_handoff', true)
     }
   }
+  deps.runtime?.terminalRunFacts?.recordInput(ptyId, inputKind, data)
   try {
     return provider.write(ptyId, data) !== false
-  } catch {
-    return false
-  }
-}
-
-export function writePtyAgentSessionProofFromRuntimeController(
-  ptyId: string,
-  data: string,
-  authority: { sessionId: string; spawnToken: string }
-): boolean {
-  if (!agentSessionPtyWriteGate.admitProof(ptyId, authority)) {
-    return false
-  }
-  try {
-    return getProviderForPty(ptyId).write(ptyId, data) !== false
   } catch {
     return false
   }
@@ -199,7 +183,9 @@ export async function clearBufferFromRuntimeController(
   ptyId: string
 ): Promise<void> {
   // Why: desktop xterm and daemon/SSH providers hold separate buffers; clear both so mobile resubscribe can't resurrect cleared history.
-  deps.mainWindow.webContents.send('pty:clearBuffer:request', { ptyId })
+  if (deps.mainWindow && !deps.mainWindow.isDestroyed()) {
+    deps.mainWindow.webContents.send('pty:clearBuffer:request', { ptyId })
+  }
   try {
     await getProviderForPty(ptyId).clearBuffer(ptyId)
   } catch {

@@ -9,13 +9,13 @@ import {
   observeStructuredWorker,
   resolveStructuredWorkerForDispatch
 } from '../../orchestration-structured-worker-lifecycle'
+import { structuredWorkerAddressable } from '../../../../structured-worker-custody'
 import type {
   DispatchContextRow,
   FederatedDispatchRow,
   WorkerDispatchRow
 } from '../../../../orchestration/types'
 
-/** Observe a worker terminal, re-minting a live handle from the recorded process incarnation when the durable handle went stale, so a still-running worker is never reported missing and leaked. */
 export async function inspectWorkerTerminal(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
@@ -28,15 +28,15 @@ export async function inspectWorkerTerminal(
   reason?: string
   /** Set only on a proven-exact worker parked on a prompt that needs a human. */
   agentWait?: RuntimeTerminalInteractiveWait | null
-  /** The handle that actually resolved: the durable one, or a live handle re-minted from the
-   *  recorded process incarnation after the durable handle went stale. Null when none resolved. */
-  terminalHandle: string | null
+  /** Structured workers only: whether mail still reaches it — at rest included, since the mail
+   *  starts it. Absent when ownership cannot be read. `status` stays the process verdict. */
+  addressable?: boolean
 }> {
   const worker = db.getWorkerDispatch(dispatchId)
   const terminalHandle =
     worker?.agent_terminal_handle ?? db.getDispatchContextById(dispatchId)?.assignee_handle
   if (!terminalHandle) {
-    return { terminal: null, exact: false, status: 'unattached', terminalHandle: null }
+    return { terminal: null, exact: false, status: 'unattached' }
   }
   const structured = resolveStructuredWorkerForDispatch(db, dispatchId)
   if (structured) {
@@ -53,48 +53,30 @@ export async function inspectWorkerTerminal(
       processIncarnation: structured.processIncarnation
     })
     const observation = observeStructuredWorker(structured)
+    const addressable = structuredWorkerAddressable(
+      db,
+      structured.sessionId,
+      db.getWorkerTerminalResourceByHandle?.(structured.handle)
+    )
     return {
       terminal: null,
       exact,
       status: exact ? observation.status : 'identity_changed',
       ...(exact && observation.reason ? { reason: observation.reason } : {}),
-      terminalHandle: null
+      ...(exact && addressable !== null ? { addressable } : {})
     }
   }
-  let effectiveHandle = terminalHandle
-  let terminal = await runtime.showTerminal(effectiveHandle).catch(() => null)
+  const terminal = await runtime.showTerminal(terminalHandle).catch(() => null)
   if (!terminal) {
-    // Why: the durable handle resolves nowhere after a renderer graph epoch bump or handle
-    // invalidation, yet the recorded process incarnation may still name a live PTY. Re-mint a
-    // live handle (incarnation-fenced) so worker-show and release act on the still-running
-    // process instead of reporting it missing — which would leak the agent process tree.
-    // (workerList is a pure DB projection and never calls inspectWorkerTerminal.)
-    const resource = db.getWorkerTerminalResourceByOwner(dispatchId)
-    const reminted = resource?.process_incarnation
-      ? runtime.resolveTerminalHandleByProcessIncarnation(
-          resource.process_incarnation,
-          resource.host_scope
-        )
-      : null
-    if (reminted) {
-      const remintedTerminal = await runtime.showTerminal(reminted).catch(() => null)
-      if (remintedTerminal) {
-        effectiveHandle = reminted
-        terminal = remintedTerminal
-      }
-    }
-  }
-  if (!terminal) {
-    // The re-mint above failed, so no live handle resolved; report the durable handle unresolved.
-    return { terminal: null, exact: false, status: 'missing', terminalHandle: null }
+    return { terminal: null, exact: false, status: 'missing' }
   }
   const exact = db.isDispatchProcessCurrent({
     dispatchId,
-    paneKey: runtime.getTerminalPaneKey(effectiveHandle),
-    processIncarnation: runtime.getTerminalProcessIncarnation(effectiveHandle)
+    paneKey: runtime.getTerminalPaneKey(terminalHandle),
+    processIncarnation: runtime.getTerminalProcessIncarnation(terminalHandle)
   })
   if (!exact) {
-    return { terminal, exact, status: 'identity_changed', terminalHandle: effectiveHandle }
+    return { terminal, exact, status: 'identity_changed' }
   }
   // Why: the aggregate inventory only iterates registered providers, so a dropped
   // relay clears `connected` for every remote PTY at once. Lost contact is not a
@@ -104,48 +86,38 @@ export async function inspectWorkerTerminal(
   // Exact-gated by the early return above: a replaced process's prompt would attribute another
   // lane's blocker to this worker.
   const agentWait = terminal.agentWait
-  const verdict = runtime.getTerminalLivenessVerdict?.(effectiveHandle) ?? null
+  const verdict = runtime.getTerminalLivenessVerdict?.(terminalHandle) ?? null
   if (verdict?.status === 'unverifiable') {
-    return {
-      terminal,
-      exact,
-      status: 'unverifiable',
-      reason: verdict.reason,
-      agentWait,
-      terminalHandle: effectiveHandle
-    }
+    return { terminal, exact, status: 'unverifiable', reason: verdict.reason, agentWait }
   }
   if (verdict?.status === 'live') {
-    return { terminal, exact, status: 'live', agentWait, terminalHandle: effectiveHandle }
+    return { terminal, exact, status: 'live', agentWait }
   }
   if (!verdict) {
     const dispatch = db.getDispatchContextById?.(dispatchId)
     const persistedHostScope = parseWorkerTerminalHostScope(dispatch?.host_scope ?? null)
-    const currentHostScope = runtime.getOrchestrationDispatchAuthority?.(effectiveHandle)?.hostScope
+    const currentHostScope = runtime.getOrchestrationDispatchAuthority?.(terminalHandle)?.hostScope
     if (persistedHostScope?.kind === 'ssh' || currentHostScope?.kind === 'ssh') {
       return {
         terminal,
         exact,
         status: 'unverifiable',
         reason: 'missing_liveness_verdict',
-        agentWait,
-        terminalHandle: effectiveHandle
+        agentWait
       }
     }
     return {
       terminal,
       exact,
       status: terminal.connected === false ? 'exited' : 'live',
-      agentWait,
-      terminalHandle: effectiveHandle
+      agentWait
     }
   }
   return {
     terminal,
     exact,
     status: 'exited',
-    agentWait,
-    terminalHandle: effectiveHandle
+    agentWait
   }
 }
 
@@ -157,7 +129,8 @@ export function exposeObservation(observation: Awaited<ReturnType<typeof inspect
     status: observation.status,
     exactWorker: observation.exact,
     ...(observation.reason ? { reason: observation.reason } : {}),
-    ...(observation.agentWait !== undefined ? { agentWait: observation.agentWait } : {})
+    ...(observation.agentWait !== undefined ? { agentWait: observation.agentWait } : {}),
+    ...(observation.addressable !== undefined ? { addressable: observation.addressable } : {})
   }
 }
 

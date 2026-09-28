@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import { agentSessionRecordFixture } from '../../../shared/agent-session-record.test-fixture'
 import type {
   AgentSessionBackgroundTask,
   AgentSessionStatusEvent,
@@ -33,6 +34,8 @@ const USER_IDENTITY = {
   ordinal: 1
 } as const
 
+type Indexed = Parameters<typeof indexed>[0]
+
 let root: string
 const journals = createTrackedJournalOpener()
 
@@ -60,10 +63,7 @@ async function openJournal(sessionId = SESSION, now?: () => number) {
 }
 
 function feedFor(
-  sessions: Map<
-    string,
-    { journal: Awaited<ReturnType<typeof openJournal>>; hasProviderChild?: boolean; fence?: number }
-  >,
+  sessions: Map<string, Parameters<typeof indexed>[0]>,
   record: Partial<AgentSessionRecord> | null = null,
   onStatusChanged?: StructuredAgentSessionStatusFeedDeps['onStatusChanged'],
   readBackgroundTasks?: StructuredAgentSessionStatusFeedDeps['readBackgroundTasks'],
@@ -85,7 +85,8 @@ function feedFor(
         }
       }
     } as unknown as ReadonlyMap<string, ReturnType<typeof indexed>>,
-    getRecord: () => record as AgentSessionRecord | null,
+    // A partial record still has a lease: the feed reads the conversation's fence off it.
+    getRecord: () => (record ? { ...agentSessionRecordFixture(), ...record } : null),
     now: () => (now += 1)
   })
   const events: AgentSessionStatusEvent[] = []
@@ -94,9 +95,27 @@ function feedFor(
 }
 
 describe('StructuredAgentSessionStatusFeed', () => {
+  it('projects whether the owned child has proven its start, and nothing once it is not owned', async () => {
+    const journal = await openJournal()
+    const session = { journal, child: { phase: 'starting' as const } }
+    const sessions = new Map<string, Parameters<typeof indexed>[0]>([[SESSION, session]])
+    const { feed, events, dispose } = feedFor(sessions)
+    expect(events.at(-1)).toMatchObject({
+      type: 'snapshot',
+      sessions: [{ hostExecutionOwned: true, hostExecutionPhase: 'starting' }]
+    })
+    sessions.set(SESSION, { ...session, child: { phase: 'ready' } })
+    feed.publish(SESSION, journal)
+    expect(events.at(-1)).toMatchObject({ session: { hostExecutionPhase: 'ready' } })
+    sessions.set(SESSION, { ...session, child: null })
+    feed.publish(SESSION, journal)
+    expect(events.at(-1)).not.toMatchObject({ session: { hostExecutionPhase: expect.any(String) } })
+    dispose()
+  })
+
   it('publishes provider ownership transitions without changing journal time', async () => {
     const journal = await openJournal()
-    const sessions = new Map([[SESSION, { journal, hasProviderChild: true }]])
+    const sessions = new Map<string, Indexed>([[SESSION, { journal, child: { phase: 'ready' } }]])
     const { feed, events, dispose } = feedFor(sessions)
     events.length = 0
     await journal.appendItem(
@@ -115,7 +134,7 @@ describe('StructuredAgentSessionStatusFeed', () => {
       throw new Error('status publication missing')
     }
     const journalTime = firstStatus.session.updatedAt
-    sessions.get(SESSION)!.hasProviderChild = false
+    sessions.get(SESSION)!.child = null
     feed.publish(SESSION, journal)
     expect(events.at(-1)).toEqual({
       type: 'status',
@@ -152,8 +171,10 @@ describe('StructuredAgentSessionStatusFeed', () => {
 
   it('stops projecting an old-host unknown submission after the owner fence advances', async () => {
     const journal = await openJournal()
-    const session = { journal, fence: 1 }
-    const { feed, events } = feedFor(new Map([[SESSION, session]]))
+    // The conversation's fence is the record's: a child's end moves it.
+    const lease = agentSessionRecordFixture().lease
+    const record = agentSessionRecordFixture({ ...lease, runtimeFence: 1 })
+    const { feed, events } = feedFor(new Map([[SESSION, { journal }]]), record)
     await journal.appendSubmission({
       clientMessageId: 'old-host',
       payloadFingerprint: 'fp',
@@ -168,9 +189,10 @@ describe('StructuredAgentSessionStatusFeed', () => {
     })
     feed.publish(SESSION)
     expect(events.at(-1)).toMatchObject({ session: { status: 'working' } })
-    session.fence = 2
+    record.lease.runtimeFence = 2
     feed.publish(SESSION)
-    expect(events.at(-1)).toMatchObject({ session: { status: 'idle' } })
+    // Its only send outlived the host that sent it and became no turn: nothing left to list.
+    expect(events.at(-1)).toMatchObject({ session: { status: null } })
   })
 
   it('publishes working from the pending submission, before the provider replays the turn', async () => {
@@ -778,7 +800,7 @@ describe('the status sink sees the roster the broadcast cache deliberately lacks
 
   it('receives every change once, ownership revocation, and the forget edge', async () => {
     const journal = await openJournal()
-    const sessions = new Map([[SESSION, { journal, hasProviderChild: true }]])
+    const sessions = new Map<string, Indexed>([[SESSION, { journal, child: { phase: 'ready' } }]])
     const { sink, published, forgotten } = sinkFor()
     const { feed } = feedFor(sessions, null, undefined, undefined, sink)
     await journal.appendItem(

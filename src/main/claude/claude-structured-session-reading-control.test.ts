@@ -59,6 +59,7 @@ function persistedTarget(
           visit(itemId, 0, body)
         }
       },
+      itemBody: (itemId: string) => persisted.get(itemId) ?? null,
       epoch: 'test'
     } as unknown as AgentSessionJournal
   return { journal, fence: 1, publish: vi.fn() }
@@ -89,8 +90,16 @@ describe('Claude structured reading control', () => {
   })
 
   it('unbinds when acquisition fails after the connection opens', async () => {
-    const claude = fakeClaude({ initProof: 'none' })
-    const adapter = adapterFor(claude, {}, [], [], 1)
+    // The child exits before publish, so only the failed acquisition can release the binding.
+    const claude = fakeClaude()
+    const open = claude.openConnection
+    claude.openConnection = async (launch, handlers = {}) => {
+      const connection = await open(launch, handlers)
+      claude.connections[0].closed = true
+      handlers.onExit?.(new Error('claude stream-json exited (code 1)'))
+      return connection
+    }
+    const adapter = adapterFor(claude)
     const events = controlledSink()
 
     await expect(
@@ -100,7 +109,7 @@ describe('Claude structured reading control', () => {
         spawnToken: 'spawn-9',
         events: events.sink
       })
-    ).rejects.toThrow('did not finish starting')
+    ).rejects.toThrow('exited (code 1)')
     expect(events.unbind).toHaveBeenCalledOnce()
   })
 

@@ -27,6 +27,7 @@ import {
   readCodexTurnId,
   readCodexTurnStatus
 } from './codex-structured-thread-facts'
+import type { CodexRowLinkage } from './codex-subagent-linkage'
 
 type TurnBoundaryEvent = {
   sessionId: string
@@ -50,6 +51,7 @@ export class CodexJournalTurnBoundaries {
       clearPromptTurn?: (threadId: string, turnId: string) => void
       flushSuppression: () => CodexJournalTranslationAdmission
       resetActivity: (threadId: string) => void
+      linkageFor: CodexRowLinkage
       now?: () => number
     }
   ) {}
@@ -167,7 +169,8 @@ export class CodexJournalTurnBoundaries {
       streams: this.deps.items.streams,
       activeItems: this.deps.items.activeItems,
       pendingPrompts: this.deps.pendingPrompts,
-      ...(this.deps.clearPromptTurn ? { clearPromptTurn: this.deps.clearPromptTurn } : {})
+      ...(this.deps.clearPromptTurn ? { clearPromptTurn: this.deps.clearPromptTurn } : {}),
+      linkageFor: this.deps.linkageFor
     })
     if (admission.accepted) {
       if (turnLifecycle) {
@@ -228,7 +231,8 @@ export class CodexJournalTurnBoundaries {
       streams: this.deps.items.streams,
       activeItems: this.deps.items.activeItems,
       pendingPrompts: this.deps.pendingPrompts,
-      ...(this.deps.clearPromptTurn ? { clearPromptTurn: this.deps.clearPromptTurn } : {})
+      ...(this.deps.clearPromptTurn ? { clearPromptTurn: this.deps.clearPromptTurn } : {}),
+      linkageFor: this.deps.linkageFor
     })
     if (admission.accepted) {
       if (turnLifecycle) {

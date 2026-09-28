@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "baseline": "bfcbc6feee10841425495fa2dafd2cbe9c12397a",
+  "baseline": "2077956254c707d904c066ca890dc25f3671fb70",
   "scenarios": [
     {
       "id": "b1",
@@ -15254,7 +15254,7 @@
           }
         },
         {
-          "checkpoint": "clicked-by-fallback"
+          "checkpoint": "tap-settled"
         }
       ]
     },
@@ -23500,17 +23500,8 @@
           }
         },
         {
-          "bind": "app-js",
-          "request": "mobileWeb.bundle.chunk#1",
-          "params": {
-            "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
-            "path": "assets/app.js",
-            "offset": 0
-          }
-        },
-        {
           "bind": "index-head",
-          "request": "mobileWeb.bundle.chunk#2",
+          "request": "mobileWeb.bundle.chunk#1",
           "params": {
             "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
             "path": "index.html",
@@ -23518,23 +23509,21 @@
           }
         },
         {
-          "complete": "app-js",
+          "bind": "index-tail",
+          "request": "mobileWeb.bundle.chunk#2",
+          "params": {
+            "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+            "path": "index.html",
+            "offset": 16
+          }
+        },
+        {
+          "bind": "app-js",
+          "request": "mobileWeb.bundle.chunk#3",
           "params": {
             "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
             "path": "assets/app.js",
             "offset": 0
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
-              "path": "assets/app.js",
-              "offset": 0,
-              "assetByteLength": 11,
-              "sha256": "e99170780c392398db81fbb3dcaebc1a2c8264d4d8a9cd5932887e9c7206dc3d",
-              "dataBase64": "b3JjYS5ib290KCk=",
-              "eof": true
-            }
           }
         },
         {
@@ -23558,15 +23547,6 @@
           }
         },
         {
-          "bind": "index-tail",
-          "request": "mobileWeb.bundle.chunk#3",
-          "params": {
-            "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
-            "path": "index.html",
-            "offset": 16
-          }
-        },
-        {
           "complete": "index-tail",
           "params": {
             "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
@@ -23582,6 +23562,26 @@
               "assetByteLength": 26,
               "sha256": "483f915496f213c851665840f49b69e05b7a6bf70ec9d6939a831b15d298f31e",
               "dataBase64": "cD5vcmNhPC9wPg==",
+              "eof": true
+            }
+          }
+        },
+        {
+          "complete": "app-js",
+          "params": {
+            "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+            "path": "assets/app.js",
+            "offset": 0
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+              "path": "assets/app.js",
+              "offset": 0,
+              "assetByteLength": 11,
+              "sha256": "e99170780c392398db81fbb3dcaebc1a2c8264d4d8a9cd5932887e9c7206dc3d",
+              "dataBase64": "b3JjYS5ib290KCk=",
               "eof": true
             }
           }
@@ -23671,20 +23671,29 @@
           }
         },
         {
-          "bind": "app-js",
+          "bind": "index-head",
           "request": "mobileWeb.bundle.chunk#1",
           "params": {
             "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
-            "path": "assets/app.js",
+            "path": "index.html",
             "offset": 0
           }
         },
         {
-          "bind": "index-head",
+          "bind": "index-tail",
           "request": "mobileWeb.bundle.chunk#2",
           "params": {
             "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
             "path": "index.html",
+            "offset": 16
+          }
+        },
+        {
+          "bind": "app-js",
+          "request": "mobileWeb.bundle.chunk#3",
+          "params": {
+            "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+            "path": "assets/app.js",
             "offset": 0
           }
         },

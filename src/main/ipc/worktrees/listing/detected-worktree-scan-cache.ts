@@ -1,3 +1,4 @@
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { Repo } from '../../../../shared/repo-types'
@@ -31,6 +32,8 @@ export const DETECTED_WORKTREE_SCAN_CACHE_TTL_MS = 5_000
 export type DetectedWorktreeScanCacheEntry = {
   expiresAt: number
   worktrees: GitWorktreeInfo[]
+  /** The generation the cached scan began at: the catalog its rows describe. */
+  generation: number
 }
 
 export type DetectedWorktreeScan = {
@@ -59,6 +62,8 @@ export type DetectedWorktreeScanResult = {
    * authoritative, because a worktree added during the scan reads as absent, i.e. deleted.
    */
   superseded: boolean
+  /** The repo's scan generation when this scan began; the catalog version its rows describe. */
+  generation: number
   sideEffectToken?: DetectedWorktreeSideEffectToken
   /** Whether this scan owns the repo's next store-hygiene pass; absent means "not from a local scan". */
   hygieneDue?: boolean
@@ -115,18 +120,25 @@ export async function listDetectedGitWorktrees(
   repo: Repo
 ): Promise<DetectedWorktreeScanResult> {
   const localWorktreeGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
-  if (repo.connectionId || isFolderRepo(repo)) {
+  if (getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID || isFolderRepo(repo)) {
+    const generation = getLocalWorktreeScanGeneration(repo.id)
     return {
       gitWorktrees: await listRepoWorktreesForDetectedScan(repo, localWorktreeGitOptions),
       fresh: true,
-      superseded: false
+      superseded: false,
+      generation
     }
   }
 
   const cacheKey = getDetectedWorktreeScanCacheKey(repo.id, localWorktreeGitOptions)
   const cached = detectedWorktreeScanCache.get(cacheKey)
   if (cached && cached.expiresAt > Date.now()) {
-    return { gitWorktrees: cached.worktrees, fresh: false, superseded: false }
+    return {
+      gitWorktrees: cached.worktrees,
+      fresh: false,
+      superseded: false,
+      generation: cached.generation
+    }
   }
 
   const inFlight = detectedWorktreeScanInFlight.get(cacheKey)
@@ -138,7 +150,8 @@ export async function listDetectedGitWorktrees(
       fresh: false,
       superseded:
         inFlight.invalidated ||
-        !isLocalWorktreeScanGenerationCurrent(repo.id, inFlight.sideEffectToken.generation)
+        !isLocalWorktreeScanGenerationCurrent(repo.id, inFlight.sideEffectToken.generation),
+      generation: inFlight.sideEffectToken.generation
     }
   }
 
@@ -187,7 +200,8 @@ export async function listDetectedGitWorktrees(
     if (!scan.invalidated && routingUnchanged && generationCurrent) {
       detectedWorktreeScanCache.set(cacheKey, {
         worktrees: gitWorktrees,
-        expiresAt: Date.now() + DETECTED_WORKTREE_SCAN_CACHE_TTL_MS
+        expiresAt: Date.now() + DETECTED_WORKTREE_SCAN_CACHE_TTL_MS,
+        generation
       })
     }
     const fresh = !scan.invalidated && routingUnchanged && generationCurrent
@@ -195,6 +209,7 @@ export async function listDetectedGitWorktrees(
       gitWorktrees,
       fresh,
       superseded: !fresh,
+      generation,
       ...(fresh ? { sideEffectToken: scan.sideEffectToken, hygieneDue: scan.hygieneDue } : {}),
       ...(fresh && scan.metadataPrune ? { metadataPrune: scan.metadataPrune } : {})
     }
@@ -281,11 +296,11 @@ export function rememberLocalWorktreeRoots(
   repo: Repo,
   gitWorktrees: GitWorktreeInfo[]
 ): void {
-  if (repo.connectionId) {
+  if (getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID) {
     return
   }
   // Why: reuse the `git worktree list` result so later git/file IPC validation skips a second scan that can trigger macOS folder-permission prompts.
-  registerWorktreeRootsForRepo(store, repo.id, [
+  registerWorktreeRootsForRepo(store, repo, [
     repo.path,
     ...gitWorktrees.map((worktree) => worktree.path)
   ])

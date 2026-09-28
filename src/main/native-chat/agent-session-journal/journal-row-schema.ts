@@ -5,6 +5,7 @@
 // UNREADABLE, not skippable: the caller must degrade to read-only rather than
 // render a partial timeline or compact past a row it cannot interpret.
 
+import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
 import {
   AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
   type AgentJournalDispatchState,
@@ -17,6 +18,7 @@ import {
   isAdmissibleAgentJournalItemBody,
   isAdmissibleAgentJournalMessageBody
 } from '../../../shared/agent-session-journal-schemas'
+import { isAdmissibleAgentSessionContextUsage } from '../../../shared/agent-session-context-usage-schema'
 
 /** Producer linkage rides the row BASE rather than the body: the two nested
  *  prompt shapes are `.strict()`, so an unknown key on a body would make the
@@ -76,6 +78,9 @@ export type JournalSubmissionRow = JournalRowBase & {
   payloadFingerprint: string
   providerHandle: AgentSessionProviderHandle
   body: AgentJournalMessageItem
+  /** Accepted to be handed over by a later `dispatch{pending}` row; absent on rows whose writer
+   *  dispatched in the same step. Older readers keep the key and ignore it. */
+  handoverRecorded?: true
 }
 
 export type JournalDispatchRow = JournalRowBase & {
@@ -85,15 +90,22 @@ export type JournalDispatchRow = JournalRowBase & {
   /** Provider item identity adopted on accept. */
   providerItemId: string | null
   reason: string | null
+  /** On `rejected`: why, typed. Older readers keep the key and ignore it; a malformed one is
+   *  dropped when read, never the row. */
+  rejection?: AgentSessionFailureFact
 }
 
+/** An item mutation may name its own producer, because one batch can CREATE
+ *  rows several agents produced. Naming none keeps the row's existing producer.
+ *  Inline like the row base, and for the same reason no `v` bump: an older host
+ *  ignores the unknown keys and reads the mutation as root, as it always did. */
 export type JournalLifecycleMutation =
-  | {
+  | (AgentJournalProducerLinkage & {
       kind: 'item'
       itemId: string
       revision: number
       body: AgentJournalItemBody
-    }
+    })
   | { kind: 'tombstone'; itemId: string; revision: number }
 
 /** One durable append whose nested mutations share the outer ordering facts. */
@@ -158,6 +170,14 @@ export function parseJournalRow(line: string): JournalRowParse {
   }
   const upcast = upcastRow(record, version)
   dropUnusableProducerLinkage(upcast)
+  if (upcast.kind === 'lifecycle-batch' && Array.isArray(upcast.mutations)) {
+    for (const mutation of upcast.mutations) {
+      if (isPlainObject(mutation)) {
+        dropUnusableProducerLinkage(mutation)
+      }
+    }
+  }
+  dropUnusableContextUsage(upcast)
   return isJournalRow(upcast) ? { ok: true, row: upcast } : { ok: false, unreadable: false }
 }
 
@@ -179,6 +199,28 @@ function dropUnusableProducerLinkage(record: Record<string, unknown>): void {
   }
   if (record.attempt !== undefined && !Number.isInteger(record.attempt)) {
     delete record.attempt
+  }
+}
+
+/** Context facts this build cannot read, removed from the turn row that carries
+ *  them. Same reasoning as linkage: they are an annotation on the turn, and
+ *  rejecting the row for them would truncate the journal from that row on. */
+function dropUnusableContextUsage(record: Record<string, unknown>): void {
+  const bodies = [
+    record.kind === 'item' ? record.body : undefined,
+    ...(record.kind === 'lifecycle-batch' && Array.isArray(record.mutations)
+      ? record.mutations.map((mutation) => (isPlainObject(mutation) ? mutation.body : undefined))
+      : [])
+  ]
+  for (const body of bodies) {
+    if (
+      isPlainObject(body) &&
+      body.kind === 'turn' &&
+      body.contextUsage !== undefined &&
+      !isAdmissibleAgentSessionContextUsage(body.contextUsage)
+    ) {
+      delete body.contextUsage
+    }
   }
 }
 

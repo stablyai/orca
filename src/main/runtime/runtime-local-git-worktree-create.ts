@@ -152,6 +152,9 @@ export async function createRuntimeLocalGitWorktree(args: {
           })
         : null
     // This path has no create-span recorder, so the miss reason is only observable on the IPC path.
+    if (preparedAttempt?.status === 'miss' && preparedAttempt.rearm) {
+      args.rearm.fire = preparedAttempt.rearm
+    }
     if (preparedAttempt?.status === 'hit') {
       addResult = preparedAttempt.result
       // Deferred, not fired: re-arming is a full `reset --hard`, and the caller still has

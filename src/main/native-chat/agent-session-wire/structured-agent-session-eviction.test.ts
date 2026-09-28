@@ -30,8 +30,8 @@ function context(): StructuredAgentSessionEvictionContext & { order: string[] } 
         return true
       })
     } as unknown as StructuredAgentSessionEvictionContext['adapter'],
-    forget: vi.fn(async () => {
-      order.push('forget')
+    acknowledgeRelease: vi.fn(() => {
+      order.push('acknowledgeRelease')
     }),
     discardSink: vi.fn(() => order.push('discardSink')),
     settleWork: vi.fn(async () => {
@@ -51,7 +51,7 @@ function runtimeState(): StructuredAgentSessionHostRuntimeState {
 }
 
 describe('structured agent session eviction', () => {
-  it('stops the child before it lets the sink go, then forgets the session', async () => {
+  it('stops the child before it lets the sink go, then acknowledges the release', async () => {
     const ctx = context()
     await evictStructuredAgentSession(ctx)
     expect(ctx.order).toEqual([
@@ -62,7 +62,7 @@ describe('structured agent session eviction', () => {
       'close',
       'discardSink',
       'releaseLease',
-      'forget'
+      'acknowledgeRelease'
     ])
   })
 
@@ -82,6 +82,7 @@ describe('structured agent session eviction', () => {
 
   it('names every step, so a half-finished eviction says which one failed', () => {
     expect(STRUCTURED_AGENT_SESSION_EVICTION_STEPS.map((step) => step.name)).toEqual([
+      'snapshot-before-stop',
       'stop-provider-child',
       'drain-published',
       'settle-dead-generation',
@@ -89,11 +90,31 @@ describe('structured agent session eviction', () => {
       'close-sink',
       'discard-sink',
       'release-lease',
-      'forget-session'
+      'acknowledge-release'
     ])
   })
 
-  it('aborts after a failed drain barrier without unbinding or forgetting the session', async () => {
+  it('still stops the child when the pre-stop snapshot cannot drain the sink', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const ctx = context()
+      const snapshot = vi.fn()
+      ctx.beforeProviderChildStop = snapshot
+      // A journal write that never settles, then a healthy sink once the child is stopped.
+      vi.mocked(ctx.eventSink.drained).mockReturnValueOnce(new Promise<never>(() => {}))
+
+      const eviction = evictStructuredAgentSession(ctx)
+      await vi.advanceTimersByTimeAsync(1_000)
+
+      expect(snapshot).toHaveBeenCalledOnce()
+      expect(ctx.adapter.closeSession).toHaveBeenCalledOnce()
+      await eviction
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('aborts after a failed drain barrier without unbinding or acknowledging the release', async () => {
     const ctx = context()
     ctx.eventSink.drained = vi.fn(async () => {
       ctx.order.push('drained')
@@ -107,7 +128,7 @@ describe('structured agent session eviction', () => {
     expect(ctx.eventSink.close).not.toHaveBeenCalled()
     expect(ctx.discardSink).not.toHaveBeenCalled()
     expect(ctx.releaseLease).not.toHaveBeenCalled()
-    expect(ctx.forget).not.toHaveBeenCalled()
+    expect(ctx.acknowledgeRelease).not.toHaveBeenCalled()
     expect(ctx.order).toEqual(['closeSession', 'drained'])
   })
 })
@@ -133,9 +154,9 @@ describe('rows the provider emits while closing', () => {
           return true
         }
       } as never,
-      forget: async () => {},
       discardSink: () => state.discardEventSink(sessionId),
-      releaseLease: async () => {}
+      releaseLease: async () => {},
+      acknowledgeRelease: () => {}
     })
 
     expect(published).toEqual(['final-flush'])
@@ -153,9 +174,13 @@ describe('a child that will not stop', () => {
     ctx.adapter.closeSession = vi.fn(async () => {
       throw error
     })
+    const stopped = vi.fn()
+    ctx.onProviderChildStopped = stopped
 
     await evictStructuredAgentSession(ctx)
 
+    // The host ends its child on the one reading of the verdict, not a second one of its own.
+    expect(stopped).toHaveBeenCalledWith({ rootGone: true })
     expect(ctx.order).toEqual([
       'drained',
       'settleWork',
@@ -163,18 +188,18 @@ describe('a child that will not stop', () => {
       'close',
       'discardSink',
       'releaseLease',
-      'forget'
+      'acknowledgeRelease'
     ])
   })
 
-  it('aborts without forgetting the session, so the next close is a real retry', async () => {
+  it('aborts without acknowledging the release, so the next stop is a real retry', async () => {
     const ctx = context()
     ctx.adapter.closeSession = vi.fn(async () => false)
 
     await expect(evictStructuredAgentSession(ctx)).rejects.toMatchObject({
       step: 'stop-provider-child'
     })
-    expect(ctx.forget).not.toHaveBeenCalled()
+    expect(ctx.acknowledgeRelease).not.toHaveBeenCalled()
     expect(ctx.discardSink).not.toHaveBeenCalled()
     expect(ctx.order).toEqual([])
   })
@@ -189,7 +214,7 @@ describe('a child that will not stop', () => {
       StructuredAgentSessionEvictionError
     )
     expect(ctx.eventSink.close).not.toHaveBeenCalled()
-    expect(ctx.forget).not.toHaveBeenCalled()
+    expect(ctx.acknowledgeRelease).not.toHaveBeenCalled()
   })
 })
 
@@ -204,9 +229,9 @@ describe('eviction against the real sink cache', () => {
       sessionId,
       eventSink: state.eventSinkFor(sessionId),
       adapter: { closeSession: async () => true } as never,
-      forget: async () => {},
       discardSink: () => state.discardEventSink(sessionId),
-      releaseLease: async () => {}
+      releaseLease: async () => {},
+      acknowledgeRelease: () => {}
     })
 
     const published: string[] = []

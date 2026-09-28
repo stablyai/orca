@@ -8,15 +8,19 @@ import {
 } from './native-chat-resolution-receipt'
 
 export function NativeChatResolutionReceipt({
-  body
+  body,
+  disclosureId
 }: {
   body: NativeChatResolvedPrompt
+  /** Message this receipt stands in for; keys the question row's disclosure. */
+  disclosureId?: string
 }): React.JSX.Element | null {
+  const askDisclosureKey = disclosureId === undefined ? undefined : `ask:${disclosureId}`
   const subject: NativeChatAskRowSubject | null =
     body.kind !== 'question'
       ? null
       : body.questions && body.questions.length > 1
-        ? { kind: 'count', count: body.questions.length }
+        ? { kind: 'questions', questions: body.questions.map((entry) => entry.question) }
         : {
             kind: 'question',
             // Claude keeps a generic grouped label for a single multi-select
@@ -31,11 +35,12 @@ export function NativeChatResolutionReceipt({
           }
   if (body.resolution.state === 'pending') {
     return body.kind === 'question' ? (
-      <NativeChatAwaitingInputRow subject={subject} pending />
+      <NativeChatAwaitingInputRow subject={subject} pending disclosureKey={askDisclosureKey} />
     ) : null
   }
   const { resolution } = body
   const title = body.kind === 'approval' ? (body.displayName ?? body.title) : body.question
+  // Non-empty only once resolved, and then each question is listed with its answer.
   const answers = nativeChatReceiptAnswers(body)
   return (
     <div
@@ -43,7 +48,12 @@ export function NativeChatResolutionReceipt({
       data-native-chat-receipt={body.kind}
     >
       {body.kind === 'question' ? (
-        <NativeChatAwaitingInputRow pending={false} subject={subject} />
+        <NativeChatAwaitingInputRow
+          pending={false}
+          subject={subject}
+          disclosureKey={askDisclosureKey}
+          listsQuestions={answers.length === 0}
+        />
       ) : (
         <div className="font-medium">{title}</div>
       )}

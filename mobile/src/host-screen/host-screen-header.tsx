@@ -30,6 +30,7 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
     floatingWorkspaceEnabled,
     forceReconnectHost,
     hostId,
+    hostDisplay,
     lastConnectedAt,
     onHideSidebar,
     reconnectAttempts,
@@ -61,10 +62,17 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
           return (
             <>
               <View style={styles.hostIdentity}>
-                <StatusDot state={connState} verdict={headerVerdict} />
-                <Text style={styles.hostNameText} numberOfLines={1}>
-                  {state.hostName || 'Host'}
-                </Text>
+                <View style={styles.hostIdentityLine}>
+                  <StatusDot state={connState} verdict={headerVerdict} />
+                  <Text style={styles.hostNameText} numberOfLines={1}>
+                    {hostDisplay.title}
+                  </Text>
+                </View>
+                {hostDisplay.descriptorLine ? (
+                  <Text style={styles.hostPlatformText} numberOfLines={1}>
+                    {hostDisplay.descriptorLine}
+                  </Text>
+                ) : null}
               </View>
               {connState !== 'connected' &&
                 (() => {

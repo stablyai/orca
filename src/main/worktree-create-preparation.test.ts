@@ -555,7 +555,7 @@ describe('worktree create preparation registry', () => {
         branch: 'feature/test',
         baseBranch: 'origin/main'
       })
-    ).resolves.toEqual({ status: 'miss', reason: 'finalize_failed' })
+    ).resolves.toMatchObject({ status: 'miss', reason: 'finalize_failed' })
     expect(mocks.mkdir).toHaveBeenCalledWith('/workspace', { recursive: true })
     expect(mocks.discard).toHaveBeenCalledTimes(1)
   })
@@ -637,9 +637,7 @@ describe('worktree create preparation registry', () => {
     expect(mocks.prepareCheckout).toHaveBeenCalledTimes(1)
   })
 
-  // `startPreparation` overwrites the map entry outright, so a thunk that armed over a prefetch
-  // would leave that prefetch's locked checkout on disk with nothing holding a reference to it.
-  it('skips the deferred re-arm when a prefetch armed the same key mid-create', async () => {
+  it('starts one explicit prefetch after the create completes', async () => {
     await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
     await consumeOnce('first')
     await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
@@ -655,6 +653,7 @@ describe('worktree create preparation registry', () => {
 
     // The user reopens the composer while the create is still finishing.
     await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
+    expect(mocks.prepareCheckout).toHaveBeenCalledTimes(2)
     mocks.prepareCheckout.mockClear()
 
     if (attempt.status === 'hit') {
@@ -662,7 +661,7 @@ describe('worktree create preparation registry', () => {
     }
     await flushBackgroundWork()
 
-    expect(mocks.prepareCheckout).not.toHaveBeenCalled()
+    expect(mocks.prepareCheckout).toHaveBeenCalledTimes(1)
   })
 
   it('does not re-arm when finalization failed', async () => {

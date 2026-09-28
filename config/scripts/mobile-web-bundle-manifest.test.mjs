@@ -1,10 +1,16 @@
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   computeMobileWebBundleBuildId,
   contentTypeForExtension,
   hashedAsset,
-  serializeMobileWebBundleAssets
+  serializeMobileWebBundleAssets,
+  sha256Hex,
+  writeMobileWebBundleTree
 } from './mobile-web-bundle-manifest.mjs'
+import { MobileWebBundleManifestSchema } from '../../src/shared/mobile-web-bundle/manifest-contract.js'
 
 describe('computeMobileWebBundleBuildId', () => {
   const assets = [
@@ -53,5 +59,32 @@ describe('hashedAsset', () => {
     // A type the phone has no rule for would otherwise reach the manifest and be served as
     // whatever the shell guessed, which is the one thing a content-addressed tree cannot allow.
     expect(() => hashedAsset(Buffer.from('body'), 'wasm')).toThrow(/no content type registered/)
+  })
+})
+
+describe('writeMobileWebBundleTree', () => {
+  it('stamps the page version the contract names, which the shell floors on', async () => {
+    const outDir = await mkdtemp(join(tmpdir(), 'mobile-web-bundle-manifest-'))
+    try {
+      const bytes = Buffer.from('<!doctype html>\n', 'utf8')
+      const entry = {
+        path: 'index.html',
+        bytes,
+        sha256: sha256Hex(bytes),
+        byteLength: bytes.byteLength,
+        contentType: contentTypeForExtension('html')
+      }
+      await writeMobileWebBundleTree({
+        outDir,
+        written: [entry],
+        desktopVersion: '1.0.0',
+        protocolWindow: { runtimeProtocolVersion: 3, minCompatibleRuntimeProtocolVersion: 3 }
+      })
+      const manifest = JSON.parse(await readFile(join(outDir, 'manifest.json'), 'utf8'))
+      expect(Number.isInteger(manifest.pageVersion)).toBe(true)
+      expect(MobileWebBundleManifestSchema.parse(manifest).pageVersion).toBe(manifest.pageVersion)
+    } finally {
+      await rm(outDir, { recursive: true, force: true })
+    }
   })
 })

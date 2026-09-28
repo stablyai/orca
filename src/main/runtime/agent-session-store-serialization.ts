@@ -1,4 +1,5 @@
 import type { AgentSessionStoreState } from './agent-session-record-store-file'
+import { serializeAgentSessionTabTable } from './agent-session-tab-table'
 
 export function serializeAgentSessionStoreState(state: AgentSessionStoreState): string {
   const records: Record<string, unknown> = Object.create(null)
@@ -13,8 +14,8 @@ export function serializeAgentSessionStoreState(state: AgentSessionStoreState): 
     retiredClaimKeys: state.retiredClaimKeys,
     unusableRecords: Object.fromEntries(state.unreadableRecords)
   }
-  if (state.visibleSessionIdsIndexPresent) {
-    serialized.visibleSessionIds = [...state.visibleSessionIds]
+  if (state.sessionTabs) {
+    Object.assign(serialized, serializeAgentSessionTabTable(state.sessionTabs))
   }
   return JSON.stringify(serialized)
 }

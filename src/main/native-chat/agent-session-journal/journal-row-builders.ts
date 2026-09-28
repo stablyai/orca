@@ -1,5 +1,4 @@
 import type {
-  AgentJournalDispatchState,
   AgentJournalItemBody,
   AgentJournalItemIdentity,
   AgentJournalMessageItem,
@@ -7,7 +6,10 @@ import type {
   AgentSessionProviderHandle
 } from '../../../shared/agent-session-journal-types'
 import { journalRowSchemaVersion } from '../../../shared/agent-session-journal-types'
-import { agentJournalLinkageFields } from '../../../shared/agent-session-journal-producer'
+import {
+  agentJournalLinkageFields,
+  namesAgentJournalProducer
+} from '../../../shared/agent-session-journal-producer'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { JournalReducerState } from './journal-reducer'
 import type {
@@ -62,6 +64,7 @@ export function journalSubmissionRowBuilder(
     payloadFingerprint: string
     body: AgentJournalMessageItem
     fence: number
+    handoverRecorded?: true
   }
 ): RowBuilder<JournalSubmissionRow> {
   return (seq, ts) =>
@@ -74,23 +77,22 @@ export function journalDispatchRowBuilder(
 ): RowBuilder<JournalDispatchRow> {
   const providerItemId =
     input.state === 'accepted' ? agentJournalItemKey(input.providerIdentity) : null
-  return (seq, ts) =>
-    buildJournalDispatchRow({
-      state: state(),
-      clientMessageId: input.clientMessageId,
-      dispatchState: input.state,
-      providerItemId,
-      reason: boundedDispatchReason(input),
-      seq,
-      fence: input.fence,
-      ts,
-      recovered: input.recovered
-    })
+  // The only dispatch-row builder: its input type is what makes a rejected row carry its fact.
+  return (seq, ts) => ({
+    kind: 'dispatch',
+    clientMessageId: input.clientMessageId,
+    state: input.state,
+    providerItemId,
+    reason: boundedDispatchReason(input),
+    ...(input.state === 'rejected' ? { rejection: input.rejection } : {}),
+    ...journalRowBase(state().epoch, seq, input.fence, ts),
+    ...(input.recovered ? { recovered: input.recovered } : {})
+  })
 }
 
 /** `reason` is the only unbounded field written by Orca's own code: a provider error is
  *  arbitrary text, and a multi-megabyte one reached the row verbatim. Bounded head-first,
- *  because `dispatchRejectionWasTransportWriteFailure` prefix-matches the value. Rows
+ *  because `isWriteFailureSubmission` prefix-matches the value. Rows
  *  written before this keep their full text, so readers still meet unbounded ones. */
 function boundedDispatchReason(input: ResolveDispatchInput): string | null {
   if (input.state === 'accepted' || input.state === 'pending' || !input.reason) {
@@ -100,18 +102,57 @@ function boundedDispatchReason(input: ResolveDispatchInput): string | null {
 }
 
 export type JournalLifecycleMutationInput =
-  | { kind: 'item'; identity: AgentJournalItemIdentity; body: AgentJournalItemBody }
+  | {
+      kind: 'item'
+      identity: AgentJournalItemIdentity
+      body: AgentJournalItemBody
+      /** Who wrote the row. Absent ⇒ the session's own agent on a first write,
+       *  and the row's existing producer on a revision. */
+      linkage?: AgentJournalProducerLinkage
+    }
   | { kind: 'tombstone'; identity: AgentJournalItemIdentity }
+
+/** An item mutation from a writer that knows who produced the row. Needed
+ *  because a batch can CREATE a row — a Codex child's prompt, or its item
+ *  settled before any checkpoint landed — and one batch can mix producers.
+ *  The session's own rows carry no key at all: absence is the claim. */
+export function journalLifecycleItemMutation(
+  producer: AgentJournalProducerLinkage,
+  identity: AgentJournalItemIdentity,
+  body: AgentJournalItemBody
+): JournalLifecycleMutationInput {
+  return namesAgentJournalProducer(producer)
+    ? { kind: 'item', identity, body, linkage: agentJournalLinkageFields(producer) }
+    : { kind: 'item', identity, body }
+}
+
+/** The persisted form of one mutation, shared with the partitioner's size probe
+ *  so a chunk is measured with the linkage it will actually carry. */
+export function journalLifecycleMutationRow(
+  mutation: JournalLifecycleMutationInput,
+  itemId: string,
+  revision: number
+): JournalLifecycleMutation {
+  return mutation.kind === 'item'
+    ? {
+        kind: 'item',
+        itemId,
+        revision,
+        body: mutation.body,
+        ...agentJournalLinkageFields(mutation.linkage)
+      }
+    : { kind: 'tombstone', itemId, revision }
+}
 
 export function journalLifecycleBatchRowBuilder(
   state: () => JournalReducerState,
   settlementId: string,
   mutations: readonly JournalLifecycleMutationInput[],
-  /** No producer linkage: one batch row covers N mutations, so a row-level
-   *  producer would stamp whoever opened the batch onto every one of them. The
-   *  reducer still READS linkage off a batch row, because a row may come from a
-   *  host that writes one; a mixed-producer batch would have to stamp per
-   *  mutation, which nothing needs yet. */
+  /** No ROW-level producer: one batch row covers N mutations, so a row-level
+   *  producer would stamp whoever opened the batch onto every one of them.
+   *  An item mutation names its own, or none to keep the row's existing one.
+   *  The reducer still reads row-level linkage as the fallback for a mutation
+   *  that names none, because a row may come from a host that wrote one. */
   options: { fence: number; recovered?: true }
 ): RowBuilder<JournalLifecycleBatchRow> {
   return (seq, ts) => {
@@ -130,9 +171,7 @@ export function journalLifecycleBatchRowBuilder(
             current.tombstones.get(resolved) ?? 0
           )) + 1
       revisions.set(resolved, revision)
-      return mutation.kind === 'item'
-        ? { kind: 'item', itemId, revision, body: mutation.body }
-        : { kind: 'tombstone', itemId, revision }
+      return journalLifecycleMutationRow(mutation, itemId, revision)
     })
     const row: JournalLifecycleBatchRow = {
       kind: 'lifecycle-batch',
@@ -227,6 +266,7 @@ export function buildJournalSubmissionRow(input: {
   seq: number
   fence: number
   ts: number
+  handoverRecorded?: true
 }): JournalSubmissionRow {
   return {
     kind: 'submission',
@@ -234,28 +274,7 @@ export function buildJournalSubmissionRow(input: {
     payloadFingerprint: input.payloadFingerprint,
     providerHandle: input.providerHandle,
     body: input.body,
-    ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts)
-  }
-}
-
-export function buildJournalDispatchRow(input: {
-  state: JournalReducerState
-  clientMessageId: string
-  dispatchState: AgentJournalDispatchState
-  providerItemId: string | null
-  reason: string | null
-  seq: number
-  fence: number
-  ts: number
-  recovered?: true
-}): JournalDispatchRow {
-  return {
-    kind: 'dispatch',
-    clientMessageId: input.clientMessageId,
-    state: input.dispatchState,
-    providerItemId: input.providerItemId,
-    reason: input.reason,
     ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts),
-    ...(input.recovered ? { recovered: input.recovered } : {})
+    ...(input.handoverRecorded ? { handoverRecorded: true } : {})
   }
 }

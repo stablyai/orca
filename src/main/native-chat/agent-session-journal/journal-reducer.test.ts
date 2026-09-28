@@ -17,7 +17,11 @@ import {
   renderJournalState,
   type JournalReducerState
 } from './journal-reducer'
-import { buildJournalItemRow, buildJournalTombstoneRow } from './journal-row-builders'
+import {
+  buildJournalItemRow,
+  buildJournalTombstoneRow,
+  journalLifecycleBatchRowBuilder
+} from './journal-row-builders'
 import type { JournalRow } from './journal-row-schema'
 
 const EPOCH = 'epoch-1'
@@ -112,6 +116,39 @@ describe('ordering', () => {
       { kind: 'item', itemId: 'earlier', revision: 1, body: text('earlier'), ...base(3) }
     ])
     expect(renderJournalState(state).items.map((item) => item.itemId)).toEqual(['earlier', 'later'])
+  })
+
+  it("places a batch's writes by their order in it, and keeps that place on revision", () => {
+    // One Codex ask writes all its questions in one batch; their ids are not their order.
+    const state = fold([
+      {
+        kind: 'lifecycle-batch',
+        settlementId: 'ask',
+        mutations: [
+          { kind: 'item', itemId: 'scope', revision: 1, body: text('first') },
+          { kind: 'item', itemId: 'priority', revision: 1, body: text('second') },
+          { kind: 'item', itemId: 'deadline', revision: 1, body: text('third') }
+        ],
+        ...base(1)
+      },
+      {
+        kind: 'lifecycle-batch',
+        settlementId: 'answer',
+        mutations: [{ kind: 'item', itemId: 'deadline', revision: 2, body: text('answered') }],
+        ...base(2)
+      }
+    ])
+    expect(
+      renderJournalState(state).items.map(({ itemId, sequence, sequenceIndex }) => ({
+        itemId,
+        sequence,
+        sequenceIndex
+      }))
+    ).toEqual([
+      { itemId: 'scope', sequence: 1, sequenceIndex: undefined },
+      { itemId: 'priority', sequence: 1, sequenceIndex: 1 },
+      { itemId: 'deadline', sequence: 1, sequenceIndex: 2 }
+    ])
   })
 
   it('orders by sequence even when the observed timestamp runs backwards', () => {
@@ -700,6 +737,34 @@ describe('producer linkage round-trips through the reducer', () => {
       ...linkage
     })
     expect(renderJournalState(state).items[0]).toMatchObject(linkage)
+  })
+
+  it('reads each mutation of a mixed batch as its own producer', () => {
+    // A batch can CREATE rows several agents produced — a settlement landing
+    // before any checkpoint did. The mutation that names a producer is that
+    // producer's; the one naming none is the session's own, beside it.
+    const state = createJournalReducerState('session-1', EPOCH)
+    applyJournalRow(
+      state,
+      journalLifecycleBatchRowBuilder(
+        () => state,
+        'settle-mixed',
+        [
+          { kind: 'item', identity, body: text('child'), linkage },
+          {
+            kind: 'item',
+            identity: { provider: 'claude', sessionId: 'claude-session', uuid: 'own-1' },
+            body: text('own')
+          }
+        ],
+        { fence: 1 }
+      )(1, 1_001)
+    )
+
+    const [child, own] = renderJournalState(state).items
+    expect(child).toMatchObject({ body: text('child'), ...linkage })
+    expect(own?.body).toEqual(text('own'))
+    expect(own && 'agentId' in own).toBe(false)
   })
 
   it('lets a correction win over the provisional row, without moving the bubble', () => {

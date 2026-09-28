@@ -10,19 +10,26 @@
 // Each scan reads the turn record BEFORE it checks the producer, which is only
 // safe because a turn row can never carry linkage: a turn is the SESSION'S unit
 // of work, and no producer of a turn-bearing body stamps one. Both lanes were
-// checked — Claude's turn rows are built with no linkage at all, Codex has no
-// linkage concept, the compact row passes only a fence, and the stale-turn
-// sweep goes through the lifecycle-batch path, which cannot carry linkage by
-// type. So a child-linked row can never be what terminates one of these scans.
-// Re-check that before giving any of those sites a producer.
+// checked — Claude's turn rows are built with no linkage at all, Codex writes
+// turn rows only for its primary thread (the one thread it never stamps), the
+// compact row passes only a fence, and the stale-turn and dead-generation
+// sweeps name no producer, so their turn revisions keep the turn row's own
+// (none). So a child-linked row can never be what terminates one of these
+// scans. Re-check that before giving any of those sites a producer.
 
 import type {
   AgentJournalRenderItem,
-  AgentJournalToolCallItem,
   AgentJournalTurnLifecycle
 } from './agent-session-journal-types'
 import { isRootAgentJournalItem } from './agent-session-journal-producer'
 import { readAgentJournalTurn } from './agent-session-turn-record'
+import type { NativeChatToolCallBlock } from './native-chat-types'
+import {
+  isRunningStructuredAgentSessionToolAction,
+  isStructuredAgentSessionToolAction,
+  structuredAgentSessionToolCallBlock,
+  type StructuredAgentSessionToolAction
+} from './structured-agent-session-tool-call-block'
 
 export function activeStructuredAgentSessionTurnId(
   items: readonly AgentJournalRenderItem[]
@@ -122,21 +129,30 @@ export function isStructuredAgentSessionThinking(
   return false
 }
 
-/** The tool call the SESSION'S OWN agent is still inside, or null when nothing is
- *  running. An abandoned `running` call from an earlier crashed turn can never be
- *  reported as live work, and neither can a subagent's — while a child runs a
- *  tool, the parent is still inside the call that spawned it. */
-export function activeStructuredAgentSessionToolCall(
+/** The tool the status row names for the SESSION'S OWN agent, as the chat draws it: the running
+ *  turn's newest running call, else its newest tool action whatever it settled to, so the line
+ *  never blanks mid-turn. Nothing is named unless the scan reaches a RUNNING turn record, so an
+ *  ended turn's calls never surface; a mid-turn send's user row is not a boundary. */
+export function statusStructuredAgentSessionToolCall(
   items: readonly AgentJournalRenderItem[]
-): AgentJournalToolCallItem | null {
+): NativeChatToolCallBlock | null {
+  let newest: StructuredAgentSessionToolAction | null = null
+  let running: StructuredAgentSessionToolAction | null = null
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index]
     const body = item?.body
-    if (readAgentJournalTurn(body)) {
-      return null
+    const turn = readAgentJournalTurn(body)
+    if (turn) {
+      const named = turn.state === 'running' ? (running ?? newest) : null
+      // Built only for the winner: the host re-projects this on every journal change.
+      return named ? structuredAgentSessionToolCallBlock(named) : null
     }
-    if (body?.kind === 'tool-call' && body.state === 'running' && isRootAgentJournalItem(item)) {
-      return body
+    if (running || !isStructuredAgentSessionToolAction(body) || !isRootAgentJournalItem(item)) {
+      continue
+    }
+    newest ??= body
+    if (isRunningStructuredAgentSessionToolAction(body)) {
+      running = body
     }
   }
   return null

@@ -61,7 +61,7 @@ describe('structured send settlement compatibility wait', () => {
   it('removes an abandoned wait on transport cancellation', async () => {
     const settlements = new StructuredAgentSessionSendSettlement(() => journal('pending'))
     const controller = new AbortController()
-    const pending = settlements.wait('session-1', 'client-1', controller.signal)
+    const pending = settlements.wait('session-1', 'client-1', { signal: controller.signal })
 
     controller.abort(new Error('transport closed'))
     await expect(pending).rejects.toThrow('transport closed')

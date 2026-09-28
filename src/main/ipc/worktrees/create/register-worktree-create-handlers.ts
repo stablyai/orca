@@ -1,4 +1,5 @@
 import { ipcMain, app } from 'electron'
+import { getLocalWorktreeCatalogVersion } from '../../../local-worktree-scan-generation'
 import type {
   CreateWorktreeArgs,
   CreateWorktreeResult,
@@ -111,7 +112,9 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           branch: result.worktree.branch
         })
 
-        return result
+        // Why stamped last: the create's own change notification bumped the generation, so this
+        // names the catalog that contains the new worktree.
+        return { ...result, catalogVersion: getLocalWorktreeCatalogVersion(repo.id) }
       })
     }
   )
@@ -164,7 +167,7 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           path: result.worktree.path,
           branch: result.worktree.branch
         })
-        return result
+        return { ...result, catalogVersion: getLocalWorktreeCatalogVersion(repo.id) }
       })
     }
   )

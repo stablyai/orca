@@ -13,7 +13,7 @@ import {
   diffViewStateCache,
   pdfViewPositionCache
 } from '@/lib/scroll-cache'
-import * as monaco from 'monaco-editor'
+import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), error: vi.fn(), success: vi.fn() } }))
 afterEach(resetModelLifetimeFixtures)
