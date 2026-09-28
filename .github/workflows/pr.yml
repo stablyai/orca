@@ -161,7 +161,17 @@ jobs:
           filter: blob:none
           persist-credentials: false
 
+      # Why two guarded installs: the mixed root+mobile store entry is 537 MB against
+      # 321 MB for root alone, and restoring it costs 8.6s against 4.6s. Most PRs skip the
+      # mobile install below, so they were paying 216 MB for packages they never link. The
+      # root-only key is also the one the hourly warmer reseeds. Only one of these runs.
       - uses: ./.github/actions/install-node-dependencies
+        if: needs.code_paths.outputs.mobile_dependencies != 'true'
+        with:
+          native-runtime: node
+
+      - uses: ./.github/actions/install-node-dependencies
+        if: needs.code_paths.outputs.mobile_dependencies == 'true'
         with:
           native-runtime: node
           cache-dependency-path: |
