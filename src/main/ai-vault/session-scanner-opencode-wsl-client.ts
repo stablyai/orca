@@ -1,3 +1,4 @@
+import { bunOwnedRuntimeArgs } from '../../shared/bun-owned-runtime-args'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { waitForPromiseWithSignal, throwIfSignalAborted } from '../../shared/abort-signal-reason'
 import { buildWslExecArgs } from '../../shared/wsl-login-shell-command'
@@ -58,7 +59,11 @@ export async function openCodeWslClient(
   if (!client) {
     client = createOpenCodeSqliteProcessClient({
       executable: resolveWslExecutablePath(),
-      args: buildWslExecArgs(distro, [runtime.executable, runtime.readerPath]),
+      args: buildWslExecArgs(distro, [
+        runtime.executable,
+        ...bunOwnedRuntimeArgs('linux'),
+        runtime.readerPath
+      ]),
       cwd: resolveWslInteropSpawnCwd(),
       env: { ...buildRelayAiVaultServiceEnv(), WSL_UTF8: '1' },
       async beforeSpawn(spawnSignal) {

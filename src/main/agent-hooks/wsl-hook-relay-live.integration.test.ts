@@ -1,12 +1,12 @@
 // Live end-to-end oracle for the WSL hook relay HOST side: the real esbuild
-// bundle runs as a real child process (spawned via `node` instead of wsl.exe
+// bundle runs as a real child process (BUN_EXECUTABLE selects Bun instead of wsl.exe
 // — everything else identical), the real manager connects over the child's
 // actual stdio pipes, the real installers write through the fs bridge, and a
 // real HTTP POST in the exact Claude hook shape must land in a real
 // AgentHookServer.ingestRemote. This is the chain the Windows-rig GUI run
 // exercises minus the wsl.exe byte transport (validated separately on-rig).
 import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createServer } from 'node:net'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -16,6 +16,7 @@ import { WslHookRelayManager } from './wsl-hook-relay-manager'
 import { createManagedHookLocalFilesystem } from './managed-hook-local-filesystem'
 import { codexHookService } from '../codex/hook-service'
 
+const RUNTIME = process.env.BUN_EXECUTABLE || process.execPath
 const BUNDLE_DIR = join(process.cwd(), 'out', 'relay', 'wsl')
 const BUNDLE_JS = join(BUNDLE_DIR, 'wsl-agent-hook-relay.js')
 const LEAF = '11111111-1111-4111-8111-111111111111'
@@ -61,6 +62,8 @@ describe.skipIf(process.platform === 'win32')(
 
     it('delivers a Claude hook POST from the live relay into ingestRemote and installs guest hooks', async () => {
       fakeHome = mkdtempSync(join('/tmp', 'wsl-live-home-'))
+      const fakeClaude = join(fakeHome, 'claude')
+      writeFileSync(fakeClaude, "#!/bin/sh\nprintf '2.1.130 (Claude Code)\\n'\n", { mode: 0o700 })
       const preferredPort = await pickFreePort()
       const version = readFileSync(join(BUNDLE_DIR, '.version'), 'utf8').trim()
 
@@ -89,11 +92,13 @@ describe.skipIf(process.platform === 'win32')(
         instanceKey: () => 'liveinstance',
         resolveBundle: () => ({ jsPath: BUNDLE_JS, version }),
         listDistros: async () => ['LiveDistro'],
+        prepareRuntime: async () => RUNTIME,
+        isDistroRunning: async () => true,
         spawnRelay: (_distro, env) => {
-          child = spawn(process.execPath, [BUNDLE_JS], {
+          child = spawn(RUNTIME, [BUNDLE_JS], {
             env: { ...env, HOME: fakeHome },
             stdio: ['pipe', 'pipe', 'pipe']
-          }) as ChildProcessWithoutNullStreams
+          })
           return child
         },
         runInstall: async () => {
@@ -111,7 +116,7 @@ describe.skipIf(process.platform === 'win32')(
           }),
         managedHookSettings: () => ({
           agentCmdOverrides: {
-            claude: process.execPath,
+            claude: fakeClaude,
             codex: process.execPath
           }
         }),
@@ -127,7 +132,10 @@ describe.skipIf(process.platform === 'win32')(
         timeout: 15_000
       })
       await vi.waitFor(
-        () => expect(existsSync(join(fakeHome, '.claude', 'settings.json'))).toBe(true),
+        () =>
+          expect(existsSync(join(fakeHome, '.claude', 'settings.json')), warns.join('\n')).toBe(
+            true
+          ),
         { timeout: 15_000 }
       )
       const claudeScript = readFileSync(

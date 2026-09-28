@@ -27,7 +27,7 @@ import {
 const path = String.raw`\\wsl$\Ubuntu\home\ada\opencode.db`
 const runtime = {
   distro: 'Ubuntu',
-  executable: '/usr/bin/node',
+  executable: '/cache/bun',
   readerPath: '/mnt/c/reader $literal.cjs'
 }
 
@@ -56,7 +56,16 @@ describe('WSL SQLite reader clients', () => {
     expect(mocks.running).not.toHaveBeenCalled()
     expect(mocks.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        args: ['-d', 'Ubuntu', '--exec', '/usr/bin/node', '/mnt/c/reader $literal.cjs'],
+        args: [
+          '-d',
+          'Ubuntu',
+          '--exec',
+          '/cache/bun',
+          '--no-env-file',
+          '--config=/dev/null',
+          '--no-install',
+          '/mnt/c/reader $literal.cjs'
+        ],
         cwd: 'C:\\Windows'
       })
     )
@@ -81,7 +90,7 @@ describe('WSL SQLite reader clients', () => {
     expect(mocks.running).toHaveBeenCalledWith([path], { requireConfirmed: true })
     mocks.running.mockResolvedValueOnce([])
     await expect(admit?.(new AbortController().signal)).rejects.toThrow('not running')
-    configureOpenCodeWslReaders([{ ...runtime, executable: '/new/node' }])
+    configureOpenCodeWslReaders([{ ...runtime, executable: '/new/bun' }])
     expect(first?.dispose).toHaveBeenCalledOnce()
     await openCodeWslClient('Ubuntu', path)
     const second = mocks.create.mock.results[1]?.value

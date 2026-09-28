@@ -1,3 +1,10 @@
+import { bunOwnedRuntimeArgs } from '../../shared/bun-owned-runtime-args'
+import { buildWslExecArgs } from '../../shared/wsl-login-shell-command'
+import {
+  assertWslRuntimeDistroRunning,
+  createRunningWslRuntimeRunner,
+  ensureWslBunRuntime
+} from '../wsl/wsl-bun-runtime'
 import { spawnProcess } from '../../shared/child-process/run-process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -5,7 +12,7 @@ import { getAppEnvironment } from '../../shared/app-environment'
 import {
   WSL_BROWSER_NETWORK_RELAY_BUNDLE_NAME,
   WSL_BROWSER_NETWORK_RELAY_DIR,
-  WSL_BROWSER_NETWORK_RELAY_NO_NODE_EXIT_CODE,
+  WSL_BROWSER_NETWORK_RELAY_RUNTIME_UNAVAILABLE_EXIT_CODE,
   WSL_BROWSER_NETWORK_RELAY_SENTINEL,
   WSL_BROWSER_NETWORK_RELAY_STALE_EXIT_CODE,
   WSL_BROWSER_NETWORK_RELAY_VERSION_FILE
@@ -61,7 +68,7 @@ function guestRelayDir(version: string): string {
   if (!/^[A-Za-z0-9+.-]+$/.test(version)) {
     throw new Error('browser_tunnel_execution_host_unavailable')
   }
-  return `$HOME/${WSL_BROWSER_NETWORK_RELAY_DIR}/${version}`
+  return `$HOME/${WSL_BROWSER_NETWORK_RELAY_DIR}/bun/${version}`
 }
 
 export function buildWslBrowserNetworkGuestLaunchScript(version: string): string {
@@ -71,16 +78,10 @@ export function buildWslBrowserNetworkGuestLaunchScript(version: string): string
     `d="${dir}"`,
     `v="$(cat "$d/${WSL_BROWSER_NETWORK_RELAY_VERSION_FILE}" 2>/dev/null || true)"`,
     `[ "$v" = '${version}' ] || exit ${WSL_BROWSER_NETWORK_RELAY_STALE_EXIT_CODE}`,
-    'n=""',
-    'for c in "$(command -v node 2>/dev/null || true)" "$HOME/.nvm/versions/node"/*/bin/node /usr/local/bin/node /usr/bin/node "$HOME/.local/bin/node"; do',
-    '  [ -n "$c" ] && [ -x "$c" ] || continue',
-    `  if "$c" -e 'process.exit(Number(process.versions.node.split(".")[0])>=18?0:1)' 2>/dev/null; then`,
-    '    n="$c"',
-    '    break',
-    '  fi',
-    'done',
-    `[ -n "$n" ] || exit ${WSL_BROWSER_NETWORK_RELAY_NO_NODE_EXIT_CODE}`,
-    `exec "$n" "$d/${WSL_BROWSER_NETWORK_RELAY_BUNDLE_NAME}"`,
+    'runtime="$1"',
+    `case "$runtime" in /*) ;; *) exit ${WSL_BROWSER_NETWORK_RELAY_RUNTIME_UNAVAILABLE_EXIT_CODE};; esac`,
+    `[ -x "$runtime" ] || exit ${WSL_BROWSER_NETWORK_RELAY_RUNTIME_UNAVAILABLE_EXIT_CODE}`,
+    `exec "$runtime" ${bunOwnedRuntimeArgs('linux').join(' ')} "$d/${WSL_BROWSER_NETWORK_RELAY_BUNDLE_NAME}"`,
     ''
   ].join('\n')
 }
@@ -117,19 +118,26 @@ export async function launchWslBrowserNetworkRelay(
   if (!bundle || signal.aborted) {
     throw new Error('browser_tunnel_execution_host_unavailable')
   }
+  const executable = await ensureWslBunRuntime(createRunningWslRuntimeRunner(distro, signal))
+  signal.throwIfAborted()
   let installTried = false
   for (;;) {
-    const attempt = await startWslBrowserNetworkRelay(distro, bundle.version, signal)
+    await assertWslRuntimeDistroRunning(distro, signal)
+    const attempt = await startWslBrowserNetworkRelay(distro, bundle.version, executable, signal)
     if (attempt.child) {
       return attempt.child
     }
-    if (signal.aborted || attempt.code === WSL_BROWSER_NETWORK_RELAY_NO_NODE_EXIT_CODE) {
+    if (
+      signal.aborted ||
+      attempt.code === WSL_BROWSER_NETWORK_RELAY_RUNTIME_UNAVAILABLE_EXIT_CODE
+    ) {
       throw new Error('browser_tunnel_execution_host_unavailable')
     }
     if (installTried) {
       throw new Error('browser_tunnel_execution_host_unavailable')
     }
     installTried = true
+    await assertWslRuntimeDistroRunning(distro, signal)
     const installed = await installWslBrowserNetworkRelay(distro, bundle, signal)
     if (!installed) {
       throw new Error('browser_tunnel_execution_host_unavailable')
@@ -140,14 +148,16 @@ export async function launchWslBrowserNetworkRelay(
 async function startWslBrowserNetworkRelay(
   distro: string,
   version: string,
+  executable: string,
   signal: AbortSignal
 ): Promise<{ child?: WslBrowserNetworkRelayChild; code?: number | null }> {
-  const command = `exec sh "${guestRelayDir(version)}/launch.sh"`
+  signal.throwIfAborted()
+  const command = `exec sh "${guestRelayDir(version)}/launch.sh" "$1"`
   const child = spawnProcess({
     program: 'wsl.exe',
-    args: ['-d', distro, '--exec', 'sh', '-c', command],
+    args: buildWslExecArgs(distro, ['sh', '-c', command, 'orca-browser-relay', executable]),
     env: { ...process.env, WSL_UTF8: '1' }
-  }) as WslBrowserNetworkRelayChild
+  })
   return new Promise((resolve) => {
     let settled = false
     let stderr = ''
@@ -182,11 +192,12 @@ function installWslBrowserNetworkRelay(
   bundle: WslBrowserNetworkRelayBundle,
   signal: AbortSignal
 ): Promise<boolean> {
+  signal.throwIfAborted()
   const child = spawnProcess({
     program: 'wsl.exe',
-    args: ['-d', distro, '--exec', 'sh', '-s'],
+    args: buildWslExecArgs(distro, ['sh', '-s']),
     env: { ...process.env, WSL_UTF8: '1' }
-  }) as WslBrowserNetworkRelayChild
+  })
   return new Promise((resolve) => {
     let settled = false
     const settle = (installed: boolean): void => {

@@ -42,6 +42,8 @@ const AUDITED_GLOBAL_FETCH_LINES = new Map<string, number>([
   ['main/browser/browser-route-h3-egress-electron-main.ts', 1],
   ['main/browser/browser-route-persisted-worker-fixture.ts', 3],
   ['main/browser/browser-route-tcp-egress-fixture.ts', 1],
+  // Guest Bun fixture consumes the entire response before checking the returned status.
+  ['main/wsl/wsl-bun-hook-fixture.ts', 1],
   // Electron-test rig: the CDP poll cancels its unread body and the version probe consumes
   // the body through response.json(), so neither leaves an unread undici response.
   ['main/browser/browser-session-ua-cdp-collector.ts', 2],

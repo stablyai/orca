@@ -153,3 +153,69 @@ describe('WslRelayRecovery', () => {
     expect(state.reinstallTimer).toBeUndefined()
   })
 })
+
+it('retries an inconclusive running probe without launching the distro', async () => {
+  vi.useFakeTimers()
+  try {
+    const probe = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('discovery unavailable'))
+      .mockResolvedValue(true)
+    const restart = vi.fn()
+    const dropState = vi.fn()
+    const warn = vi.fn()
+    const recovery = new WslRelayRecovery({
+      isDistroRunning: probe,
+      warn,
+      isDisposed: () => false,
+      isCurrent: () => true,
+      restart,
+      dropState
+    })
+    const state = makeState()
+    recovery.scheduleRestart(state)
+    await vi.advanceTimersByTimeAsync(250)
+    expect(restart).not.toHaveBeenCalled()
+    expect(dropState).not.toHaveBeenCalled()
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('running-state probe failed'))
+    expect(state.restartTimer).toBeDefined()
+    await vi.advanceTimersByTimeAsync(60_250)
+    expect(probe).toHaveBeenCalledTimes(2)
+    expect(restart).toHaveBeenCalledWith('Ubuntu')
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it.each(['replaced', 'disposed'])(
+  'does not retry or mutate a %s state after a probe rejection',
+  async (reason) => {
+    vi.useFakeTimers()
+    try {
+      let finished = false
+      const restart = vi.fn()
+      const dropState = vi.fn()
+      const warn = vi.fn()
+      const recovery = new WslRelayRecovery({
+        isDistroRunning: async () => {
+          finished = true
+          throw new Error('discovery unavailable')
+        },
+        warn,
+        isDisposed: () => finished && reason === 'disposed',
+        isCurrent: () => !(finished && reason === 'replaced'),
+        restart,
+        dropState
+      })
+      const state = makeState()
+      recovery.scheduleRestart(state)
+      await vi.advanceTimersByTimeAsync(250)
+      expect(restart).not.toHaveBeenCalled()
+      expect(dropState).not.toHaveBeenCalled()
+      expect(warn).not.toHaveBeenCalled()
+      expect(state.restartTimer).toBeUndefined()
+    } finally {
+      vi.useRealTimers()
+    }
+  }
+)

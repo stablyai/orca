@@ -8,7 +8,7 @@ import {
   defaultWslHookRelayDeps,
   isWslHookRelayAllowed,
   FAILURE_COOLDOWN_BASE_MS,
-  NO_NODE_COOLDOWN_MS,
+  RUNTIME_UNAVAILABLE_COOLDOWN_MS,
   REINSTALL_ONE_SHOT_DELAY_MS,
   RUNNING_TEARDOWN_COOLDOWN_MS,
   STABLE_UPTIME_MS,
@@ -195,11 +195,11 @@ export class WslHookRelayManager {
       onChild: (child) => {
         state.child = child
       },
-      onNoNode: () =>
+      onRuntimeUnavailable: () =>
         this.markFailed(
           state,
-          `no node >= 18 found in distro '${state.distro}'; agent hooks stay degraded there`,
-          { cooldownBaseMs: NO_NODE_COOLDOWN_MS }
+          `bundled runtime unavailable in distro '${state.distro}'; agent hooks stay degraded there`,
+          { cooldownBaseMs: RUNTIME_UNAVAILABLE_COOLDOWN_MS }
         ),
       onFailure: (message) =>
         this.markFailed(state, message, {

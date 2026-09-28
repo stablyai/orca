@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 import { connect } from 'node:net'
 import { BrowserNetworkTunnelSession } from '../main/browser/browser-network-tunnel-session'
 import {
@@ -14,6 +13,7 @@ function main(): void {
       return
     }
     shuttingDown = true
+    process.stdin.destroy()
     decoder.close()
     writer.close()
     session.close()

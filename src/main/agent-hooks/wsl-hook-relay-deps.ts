@@ -1,3 +1,4 @@
+import { createRunningWslRuntimeRunner, ensureWslBunRuntime } from '../wsl/wsl-bun-runtime'
 // DI seam for WslHookRelayManager: the full dependency contract plus the
 // production wiring. Tests construct the manager with fakes for everything
 // that spawns wsl.exe or touches the live agentHookServer.
@@ -32,9 +33,8 @@ export const WSL_RELAY_TRANSIENT_RETRY_DELAY_MS = 2_000
 // Restart/cooldown policy for the manager's state machine.
 export const FAILURE_COOLDOWN_BASE_MS = 60_000
 export const FAILURE_COOLDOWN_MAX_MS = 10 * 60_000
-// Why: a distro without node >= 18 will not grow one mid-session; probe
-// rarely instead of once per PTY spawn.
-export const NO_NODE_COOLDOWN_MS = 10 * 60_000
+// Avoid repeatedly preparing a runtime that failed to launch.
+export const RUNTIME_UNAVAILABLE_COOLDOWN_MS = 10 * 60_000
 // Why: a previously-healthy relay dying mid-session (mux protocol error, WSL
 // restart) must self-recover — a live agent session produces no new PTY
 // spawns, so waiting for the next ensure would leave status dead for good.
@@ -60,6 +60,7 @@ export type WslHookRelayManagerDeps = {
   readBundle: (jsPath: string) => Buffer
   listDistros: () => Promise<string[]>
   isDistroRunning: typeof isWslDistroRunning
+  prepareRuntime: (distro: string) => Promise<string>
   spawnRelay: typeof spawnWslRelayProcess
   runInstall: typeof runWslInstallProcess
   waitForSentinel: typeof waitForWslRelaySentinel
@@ -98,6 +99,7 @@ export const defaultWslHookRelayDeps: WslHookRelayManagerDeps = {
   readBundle: (jsPath) => readFileSync(jsPath),
   listDistros: () => listWslDistrosAsync(),
   isDistroRunning: isWslDistroRunning,
+  prepareRuntime: (distro) => ensureWslBunRuntime(createRunningWslRuntimeRunner(distro)),
   spawnRelay: spawnWslRelayProcess,
   runInstall: runWslInstallProcess,
   waitForSentinel: waitForWslRelaySentinel,

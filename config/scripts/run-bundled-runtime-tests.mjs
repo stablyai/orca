@@ -34,5 +34,7 @@ run([
   'src/relay/ai-vault-memory-monitor.integration.test.ts',
   'src/main/ai-vault-search/session-search-bun.integration.test.ts',
   'src/main/ssh/ssh-relay-bun-runtime-commands.test.ts',
-  'src/main/native-chat/wsl-transcript-bun.integration.test.ts'
+  'src/main/native-chat/wsl-transcript-bun.integration.test.ts',
+  'src/main/browser/wsl-browser-network-bun.integration.test.ts',
+  'src/main/agent-hooks/wsl-hook-relay-live.integration.test.ts'
 ])

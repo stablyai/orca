@@ -17,12 +17,13 @@ afterEach(() => {
 })
 
 describe('WSL browser network relay launch', () => {
-  it('builds a shell-valid exact-version launcher with a Node 18 floor', () => {
+  it('builds a shell-valid exact-version launcher using the verified runtime argument', () => {
     const script = buildWslBrowserNetworkGuestLaunchScript('0.1.0+abc123')
 
     execFileSync('sh', ['-n'], { input: script })
-    expect(script).toContain('.orca-wsl/browser-network/0.1.0+abc123')
-    expect(script).toContain('Number(process.versions.node.split(".")[0])>=18')
+    expect(script).toContain('.orca-wsl/browser-network/bun/0.1.0+abc123')
+    expect(script).toContain('runtime="$1"')
+    expect(script).not.toContain('command -v node')
     expect(script).toContain('wsl-browser-network-relay.js')
     expect(() => buildWslBrowserNetworkGuestLaunchScript("bad'version")).toThrow(
       'browser_tunnel_execution_host_unavailable'
@@ -38,7 +39,7 @@ describe('WSL browser network relay launch', () => {
 
     execFileSync('sh', ['-s'], { input: script, env: { ...process.env, HOME: root } })
 
-    const installDir = join(root, '.orca-wsl', 'browser-network', version)
+    const installDir = join(root, '.orca-wsl', 'browser-network', 'bun', version)
     expect(readFileSync(join(installDir, 'wsl-browser-network-relay.js'))).toEqual(bundle)
     expect(readFileSync(join(installDir, '.browser-network-version'), 'utf8')).toBe(version)
     expect(readFileSync(join(installDir, 'launch.sh'), 'utf8')).toContain(version)

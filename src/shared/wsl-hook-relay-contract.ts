@@ -2,7 +2,7 @@
 // agent-hook relay. Both sides derive paths/methods from here so the guest
 // process and the host manager can never drift on where the relay lives,
 // which JSON-RPC methods the fs bridge speaks, or which exit codes signal
-// "reinstall me" vs "no usable node".
+// "reinstall me" vs "runtime unavailable".
 // See docs/agent-status-over-wsl.md (STA-1515).
 
 /** Guest-side install dir for the relay bundle, relative to `$HOME`. */
@@ -26,7 +26,7 @@ export const WSL_HOOK_RELAY_INSTANCE_ENV = 'ORCA_WSL_HOOK_INSTANCE'
 /** Launch-script exit codes. 42 mirrors the SSH relay's handshake-mismatch
  *  convention: the host reinstalls the bundle and relaunches once. */
 export const WSL_HOOK_RELAY_STALE_EXIT_CODE = 42
-export const WSL_HOOK_RELAY_NO_NODE_EXIT_CODE = 43
+export const WSL_HOOK_RELAY_RUNTIME_UNAVAILABLE_EXIT_CODE = 43
 
 /** JSON-RPC methods for the relay's home-scoped fs bridge. The host runs the
  *  unchanged SSH remote hook installers against these via an SFTP-shaped

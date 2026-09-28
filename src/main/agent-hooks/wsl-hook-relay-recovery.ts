@@ -1,6 +1,8 @@
 // Restart/reinstall timer policy for WSL hook relay states. Owns the two
 // self-recovery timers so the manager's state machine stays declarative:
 // WHEN to retry lives here, WHAT retrying means stays in the manager.
+const RUNNING_PROBE_RETRY_DELAY_MS = 60_000
+
 export type WslRelayRecoveryState = {
   distro: string
   cooldownUntil: number
@@ -62,7 +64,21 @@ export class WslRelayRecovery {
     if (this.io.isDisposed() || !this.io.isCurrent(state)) {
       return
     }
-    const running = await this.io.isDistroRunning(state.distro)
+    let running: boolean
+    try {
+      running = await this.io.isDistroRunning(state.distro)
+    } catch (error) {
+      if (this.io.isDisposed() || !this.io.isCurrent(state)) {
+        return
+      }
+      const detail = error instanceof Error ? error.message : String(error)
+      this.io.warn(
+        `[agent-hooks] WSL hook relay (${state.distro}): running-state probe failed; retrying in 60s: ${detail}`
+      )
+      state.cooldownUntil = Date.now() + RUNNING_PROBE_RETRY_DELAY_MS
+      this.scheduleRestart(state)
+      return
+    }
     // Why: a fresh ensure() may have replaced this state during the probe
     // await — dropping/restarting here would then act on the replacement,
     // orphaning its live relay child outside the manager's map.
@@ -71,7 +87,7 @@ export class WslRelayRecovery {
     }
     if (!running) {
       this.io.warn(
-        `[agent-hooks] WSL hook relay (${state.distro}): distro not running (or probe failed); restart skipped (next WSL terminal re-ensures)`
+        `[agent-hooks] WSL hook relay (${state.distro}): distro not running; restart skipped (next WSL terminal re-ensures)`
       )
       this.io.dropState(state)
       return
