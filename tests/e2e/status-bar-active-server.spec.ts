@@ -51,11 +51,14 @@ test('switches the active server from the status bar between two paired hosts an
       await state?.fetchRepos()
       await state?.fetchAllWorktrees()
     }, privateHost.environmentId)
-    await privateHost.page.evaluate(async (repoPath) => {
+    const privateRepoId = await privateHost.page.evaluate(async (repoPath) => {
       const result = await window.api.repos.add({ path: repoPath })
       if ('error' in result) {
         throw new Error(result.error)
       }
+      await window.__store?.getState().fetchRepos()
+      await window.__store?.getState().fetchWorktrees(result.repo.id)
+      return result.repo.id
     }, privateRepoPath)
     const privateOffer = await createRuntimeDesktopPairingOffer(privateHost.page)
     client = await launchPairedElectronClient(workOffer, testInfo, 'work')
@@ -175,15 +178,15 @@ test('switches the active server from the status bar between two paired hosts an
       state.setActiveWorktree(workspace.id, hostId)
       state.markWorktreeVisited(workspace.id, undefined, hostId)
     })
-    const privateWorkspaceId = await privateHost.page.evaluate((repoPath) => {
-      const workspace = Object.values(window.__store?.getState().worktreesByRepo ?? {})
-        .flat()
-        .find((row) => row.path === repoPath && row.isMainWorktree)
+    const privateWorkspaceId = await privateHost.page.evaluate((repoId) => {
+      const workspace = window.__store
+        ?.getState()
+        .worktreesByRepo[repoId]?.find((row) => row.isMainWorktree)
       if (!workspace) {
         throw new Error('Private host checkout was not hydrated')
       }
       return workspace.id
-    }, privateRepoPath)
+    }, privateRepoId)
     const privateTabId = toWebTerminalSurfaceTabId(
       await createHostRendererTerminalTab(privateHost.page, privateWorkspaceId)
     )
