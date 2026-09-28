@@ -92,6 +92,27 @@ test('switches the active server from the status bar between two paired hosts an
     await expect(workTrigger).toHaveAttribute('aria-expanded', 'false')
     await expect(page.getByRole('menu')).toBeHidden()
 
+    await page.evaluate(async () => {
+      const environmentId = window.__store
+        ?.getState()
+        .runtimeEnvironments.find((environment) => environment.name === 'priv')?.id
+      if (!environmentId) {
+        throw new Error('Private host was not paired')
+      }
+      await window.api.runtimeEnvironments.disconnect({ selector: environmentId })
+      await window.__store?.getState().readRuntimeHostStatusSnapshots()
+    })
+    await workTrigger.click({ force: true })
+    const privateRadio = page.getByRole('menuitemradio', { name: 'priv', exact: true })
+    await expect(privateRadio).toContainText('Disconnected')
+    await expect(privateRadio).toHaveAttribute('aria-disabled', 'true')
+    const privateRow = privateRadio.locator('..')
+    await privateRow.getByRole('menuitem', { name: 'Connect', exact: true }).click({ force: true })
+    await expect(privateRadio).toContainText('Connected')
+    await expect(privateRadio).not.toHaveAttribute('aria-disabled', 'true')
+    await expect(workTrigger).toContainText('work')
+    await page.keyboard.press('Escape')
+
     await workTrigger.press('ArrowDown')
     await page.getByRole('menuitemradio', { name: 'priv', exact: true }).focus()
     await page.keyboard.press('Enter')
@@ -123,6 +144,22 @@ test('switches the active server from the status bar between two paired hosts an
     await expect(workTrigger).toBeEnabled()
     await expect(sidebar.getByText(path.basename(testRepoPath), { exact: true })).toBeVisible()
     await expect(sidebar.getByText(path.basename(privateRepoPath), { exact: true })).toBeHidden()
+
+    await workTrigger.click({ force: true })
+    await privateRadio.click({ force: true })
+    await expect(privateTrigger).toBeEnabled()
+    await expect(sidebar.getByText(path.basename(privateRepoPath), { exact: true })).toBeVisible()
+    await privateHost.dispose()
+    privateHost = null
+    await privateTrigger.click({ force: true })
+    await expect(privateRadio).toContainText(/Reconnecting|Disconnected/)
+    await expect(privateRadio).toHaveAttribute('aria-disabled', 'true')
+    await expect(privateRow.getByRole('menuitem', { name: 'Reconnect', exact: true })).toBeVisible()
+    await expect(privateRadio).toHaveAttribute('aria-checked', 'true')
+    await expect(privateTrigger).toContainText('priv')
+    await page.getByRole('menuitemradio', { name: 'work', exact: true }).click({ force: true })
+    await expect(workTrigger).toBeEnabled()
+    await expect(sidebar.getByText(path.basename(testRepoPath), { exact: true })).toBeVisible()
   } finally {
     await client?.dispose()
     await privateHost?.dispose()

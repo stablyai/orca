@@ -159,20 +159,24 @@ export function RuntimeHostStatusRow({
   const mountedRef = useMountedRef()
   const actionLabel = runtimeActionLabel(state)
 
-  const handleAction = useCallback(async () => {
-    const action = isConnectedRuntimeHostState(state) ? onDisconnect : onConnect
-    if (!action) {
-      return
-    }
-    setBusy(true)
-    try {
-      await action()
-    } finally {
-      if (mountedRef.current) {
-        setBusy(false)
+  const handleAction = useCallback(
+    async (requestedAction?: () => Promise<void>) => {
+      const action =
+        requestedAction ?? (isConnectedRuntimeHostState(state) ? onDisconnect : onConnect)
+      if (!action || busy) {
+        return
       }
-    }
-  }, [mountedRef, onConnect, onDisconnect, state])
+      setBusy(true)
+      try {
+        await action()
+      } finally {
+        if (mountedRef.current) {
+          setBusy(false)
+        }
+      }
+    },
+    [busy, mountedRef, onConnect, onDisconnect, state]
+  )
 
   const action = isConnectedRuntimeHostState(state) ? onDisconnect : onConnect
   const lastConnectedLabel = diagnostics?.lastConnectedAt
@@ -205,13 +209,17 @@ export function RuntimeHostStatusRow({
       <div className="min-w-0 flex-1">
         <div className="truncate text-[12px] font-medium">{label}</div>
         <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground">
-          <span>
-            {translate(
-              'auto.components.status.bar.SshStatusSegment.remote_server',
-              'Remote Server'
-            )}
-          </span>
-          <span aria-hidden="true">·</span>
+          {!selection ? (
+            <>
+              <span>
+                {translate(
+                  'auto.components.status.bar.SshStatusSegment.remote_server',
+                  'Remote Server'
+                )}
+              </span>
+              <span aria-hidden="true">·</span>
+            </>
+          ) : null}
           <span className={`inline-flex min-w-0 items-center gap-1 ${runtimeStatusTone(state)}`}>
             {state === 'checking' || state === 'reconnecting' ? (
               <Loader2 className="size-2.5 shrink-0 animate-spin" />
@@ -308,17 +316,38 @@ export function RuntimeHostStatusRow({
     </DropdownMenuSubContent>
   )
 
+  const reconnectLabel =
+    state === 'reconnecting' || state === 'runtime-unavailable' || diagnostics?.lastConnectedAt
+      ? translate(
+          'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.reconnectButton',
+          'Reconnect'
+        )
+      : translate('auto.components.status.bar.SshStatusSegment.63f36455cc', 'Connect')
+
   if (selection) {
     return (
       <div className="flex items-center gap-1">
         <DropdownMenuRadioItem
           value={selection.value}
-          disabled={selection.disabled || busy}
+          disabled={selection.disabled || busy || state !== 'connected'}
           aria-label={label}
           className="min-w-0 flex-1"
         >
           {rowDetails}
         </DropdownMenuRadioItem>
+        {state !== 'connected' && onConnect ? (
+          <DropdownMenuItem
+            disabled={selection.disabled || busy}
+            aria-busy={busy}
+            onSelect={(event) => {
+              event.preventDefault()
+              void handleAction(onConnect)
+            }}
+          >
+            {busy ? <Loader2 className="size-3 animate-spin" /> : null}
+            {reconnectLabel}
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuSub>
           <DropdownMenuSubTrigger
             aria-label={`${label}: ${translate('auto.components.status.bar.SshStatusSegment.remote_server', 'Remote Server')}`}

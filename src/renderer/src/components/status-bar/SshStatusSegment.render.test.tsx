@@ -1,20 +1,30 @@
 // @vitest-environment happy-dom
 
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useStore } from 'zustand'
 import { createStore } from 'zustand/vanilla'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { SshStatusSegment } from './SshStatusSegment'
+import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime-shared-control-types'
 
 type TestState = {
   settings: { activeRuntimeEnvironmentId: string | null } | null
   sshConnectionStates: Map<string, never>
   sshTargetLabels: Map<string, string>
-  runtimeStatusByEnvironmentId: Map<string, { status: { graphStatus: 'ready' } | null }>
+  runtimeStatusByEnvironmentId: Map<
+    string,
+    {
+      status: { graphStatus: 'ready' } | null
+      remoteControl?: RemoteRuntimeSharedConnectionDiagnostics
+    }
+  >
   remoteWorkspaceSyncStatusByTargetId: Record<string, never>
   readRuntimeHostStatusSnapshots: () => Promise<void>
   hydrateRuntimeEnvironmentStatuses: () => Promise<void>
+  fetchRuntimeEnvironmentRepos: () => Promise<{ id: string }[]>
+  fetchWorktrees: () => Promise<void>
+  fetchWorktreeLineage: () => Promise<void>
   setActiveView: () => void
   openSettingsTarget: () => void
   recordFeatureInteraction: () => void
@@ -23,9 +33,10 @@ type TestState = {
   setVisibleWorkspaceHostIds: (ids: string[]) => void
 }
 
-const { switchServer, setVisibleHosts, pairedWebClient } = vi.hoisted(() => ({
+const { switchServer, setVisibleHosts, connectHost, pairedWebClient } = vi.hoisted(() => ({
   switchServer: vi.fn<(id: string | null) => Promise<boolean>>(),
   setVisibleHosts: vi.fn<(ids: string[]) => void>(),
+  connectHost: vi.fn<(id: string, timeoutMs: number) => Promise<boolean>>(),
   pairedWebClient: { value: false }
 }))
 
@@ -37,6 +48,9 @@ const store = createStore<TestState>(() => ({
   remoteWorkspaceSyncStatusByTargetId: {},
   readRuntimeHostStatusSnapshots: vi.fn(async () => {}),
   hydrateRuntimeEnvironmentStatuses: vi.fn(async () => {}),
+  fetchRuntimeEnvironmentRepos: vi.fn(async () => []),
+  fetchWorktrees: vi.fn(async () => {}),
+  fetchWorktreeLineage: vi.fn(async () => {}),
   setActiveView: vi.fn(),
   openSettingsTarget: vi.fn(),
   recordFeatureInteraction: vi.fn(),
@@ -46,15 +60,23 @@ const store = createStore<TestState>(() => ({
 }))
 
 vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: TestState) => unknown) => useStore(store, selector)
+  useAppStore: Object.assign(
+    (selector: (state: TestState) => unknown) => useStore(store, selector),
+    { getState: () => store.getState() }
+  )
 }))
 
 vi.mock('@/lib/desktop-window-chrome', () => ({
   isPairedWebClientWindow: () => pairedWebClient.value
 }))
 
+vi.mock('./runtime-environment-explicit-connect', () => ({
+  connectRuntimeEnvironmentAndRecordStatus: connectHost
+}))
+
 vi.mock('@/i18n/i18n', () => ({
-  translate: (_key: string, fallback: string) => fallback
+  translate: (_key: string, fallback: string) => fallback,
+  getIntlLocale: () => 'en-US'
 }))
 
 function renderSegment(iconOnly = false): void {
@@ -74,12 +96,25 @@ beforeEach(() => {
   pairedWebClient.value = false
   switchServer.mockReset()
   setVisibleHosts.mockReset()
+  connectHost.mockReset()
+  connectHost.mockImplementation(async (id) => {
+    store.setState({
+      runtimeStatusByEnvironmentId: new Map([
+        ...store.getState().runtimeStatusByEnvironmentId,
+        [id, { status: { graphStatus: 'ready' } }]
+      ])
+    })
+    return true
+  })
   switchServer.mockImplementation(async (id) => {
     store.setState({ settings: { activeRuntimeEnvironmentId: id } })
     return true
   })
   store.setState({
-    runtimeStatusByEnvironmentId: new Map(),
+    runtimeStatusByEnvironmentId: new Map([
+      ['work', { status: { graphStatus: 'ready' } }],
+      ['priv', { status: { graphStatus: 'ready' } }]
+    ]),
     settings: { activeRuntimeEnvironmentId: 'work' },
     runtimeEnvironments: [
       { id: 'priv', name: 'Private server' },
@@ -199,7 +234,9 @@ describe('SshStatusSegment active server selection', () => {
     fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Work server: Remote Server' }), {
       key: 'ArrowRight'
     })
-    await screen.findByRole('menuitem', { name: 'Connect' })
+    await waitFor(() =>
+      expect(screen.getAllByRole('menuitem', { name: 'Connect' }).length).toBeGreaterThan(1)
+    )
     expect(switchServer).not.toHaveBeenCalled()
   })
 
@@ -231,6 +268,61 @@ describe('SshStatusSegment active server selection', () => {
       expect(privateHost.textContent).toContain('Disconnected')
     })
     expect(switchServer).not.toHaveBeenCalled()
+  })
+
+  it('connects a disconnected host before allowing context selection', async () => {
+    store.setState({ runtimeStatusByEnvironmentId: new Map([['priv', { status: null }]]) })
+    renderSegment()
+    await openMenu()
+    const privateHost = screen.getByRole('menuitemradio', { name: 'Private server' })
+    expect(privateHost.getAttribute('aria-disabled')).toBe('true')
+    fireEvent.click(privateHost)
+    expect(switchServer).not.toHaveBeenCalled()
+    const row = within(privateHost.parentElement ?? privateHost)
+    fireEvent.click(row.getByRole('menuitem', { name: 'Connect' }))
+    await waitFor(() => {
+      expect(connectHost).toHaveBeenCalledExactlyOnceWith('priv', 5000)
+      expect(privateHost.getAttribute('aria-disabled')).not.toBe('true')
+    })
+    expect(switchServer).not.toHaveBeenCalled()
+    expect(setVisibleHosts).not.toHaveBeenCalled()
+    fireEvent.click(privateHost)
+    await waitFor(() => expect(switchServer).toHaveBeenCalledExactlyOnceWith('priv'))
+  })
+
+  it('shows a lost connection and keeps the context unchanged when reconnect fails', async () => {
+    store.setState({
+      runtimeStatusByEnvironmentId: new Map([
+        [
+          'work',
+          {
+            status: null,
+            remoteControl: {
+              state: 'reconnecting',
+              pendingRequestCount: 0,
+              subscriptionCount: 0,
+              reconnectAttempt: 2,
+              lastConnectedAt: Date.now() - 1000,
+              lastClose: { code: 1006, reason: 'Connection closed' },
+              lastError: null
+            }
+          }
+        ]
+      ])
+    })
+    connectHost.mockResolvedValue(false)
+    renderSegment()
+    await openMenu()
+    const work = screen.getByRole('menuitemradio', { name: 'Work server' })
+    expect(work.textContent).toContain('Reconnecting')
+    expect(work.getAttribute('aria-checked')).toBe('true')
+    expect(work.getAttribute('aria-disabled')).toBe('true')
+    const row = within(work.parentElement ?? work)
+    fireEvent.click(row.getByRole('menuitem', { name: 'Reconnect' }))
+    await waitFor(() => expect(connectHost).toHaveBeenCalledExactlyOnceWith('work', 5000))
+    expect(switchServer).not.toHaveBeenCalled()
+    expect(setVisibleHosts).not.toHaveBeenCalled()
+    expect(work.textContent).toContain('Reconnecting')
   })
 
   it.each(['unpaired', 'ephemeral-only', 'paired-web', 'loading'])(
