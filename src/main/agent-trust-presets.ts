@@ -1,9 +1,9 @@
-import { existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, type Stats } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { writeFileAtomically } from './codex-accounts/fs-utils'
 import { getOrcaManagedCodexHomePath } from './codex/codex-home-paths'
-import { upsertProjectTrustLevel } from './codex/config-toml-trust'
+import { addProjectTrustLevel, readProjectTrustDecision } from './codex/config-toml-trust'
 import { runExclusivelyForCodexTrustConfig } from './codex/codex-trust-config-mutation-queue'
 
 export type AgentTrustPreset = 'cursor' | 'copilot' | 'codex' | 'antigravity'
@@ -159,11 +159,17 @@ export function markAntigravityWorkspaceTrusted(workspacePath: string): void {
  *   [projects."<realpath>"]
  *   trust_level = "trusted"
  *
+ * Codex shows its trust prompt only for a project with no trust_level, so only
+ * that case is answered here; `untrusted` or any other value is the user's.
+ *
  * Verified against codex-rs/tui/src/onboarding/trust_directory.rs and
  * codex-rs/core/src/config/config_tests.rs in the Codex CLI source.
  */
 export function markCodexProjectTrusted(workspacePath: string): Promise<void> {
-  const absPath = resolveCodexProjectTrustRoot(workspacePath)
+  const cwd = canonicalize(workspacePath)
+  const trustRoot = resolveLinkedWorktreeMainRoot(cwd) ?? cwd
+  // Why: Codex takes the first answer on the cwd, then its checkout and repository roots; an entry Orca adds for the cwd would outrank theirs.
+  const lookupPaths = [...new Set([cwd, ...findCodexProjectRoots(cwd)])]
   const systemTomlPath = join(homedir(), '.codex', 'config.toml')
   // Why: Orca-launched Codex runs with an Orca-owned CODEX_HOME, so the trust
   // preset must also update the runtime config Codex will actually read.
@@ -173,32 +179,66 @@ export function markCodexProjectTrusted(workspacePath: string): Promise<void> {
   // reverted. Same runtime-before-system lock order the installer takes.
   return runExclusivelyForCodexTrustConfig(runtimeTomlPath, () =>
     runExclusivelyForCodexTrustConfig(systemTomlPath, async () => {
-      upsertProjectTrustLevel(systemTomlPath, absPath, 'trusted')
-      upsertProjectTrustLevel(runtimeTomlPath, absPath, 'trusted')
+      // Why compare first: the add only sees trustRoot, but the answer may sit on the cwd or the repository root.
+      if (readProjectTrustDecision(systemTomlPath, lookupPaths) === null) {
+        try {
+          addProjectTrustLevel(systemTomlPath, trustRoot, 'trusted')
+        } catch (error) {
+          // Why: a failed ~/.codex write is bookkeeping; it must not cost the runtime home its trust.
+          console.warn('[codex-project-trust] could not record trust in ~/.codex:', error)
+        }
+      }
+      // Why: the ~/.codex answer is the user's; never give the runtime home trust it withholds.
+      const answer = readProjectTrustDecision(systemTomlPath, lookupPaths)
+      if (answer === null || answer === 'trusted') {
+        addProjectTrustLevel(runtimeTomlPath, trustRoot, 'trusted')
+      }
     })
   )
 }
 
-function resolveCodexProjectTrustRoot(workspacePath: string): string {
-  const absPath = canonicalize(workspacePath)
+// Why: mirrors Codex's walk to the nearest `.git` (passing over a `.git` directory with no HEAD), then the main checkout a linked worktree names.
+function findCodexProjectRoots(cwd: string): string[] {
+  for (let dir = cwd; ; dir = dirname(dir)) {
+    const marker = statGitMarker(dir)
+    if (marker && (!marker.isDirectory() || existsSync(join(dir, '.git', 'HEAD')))) {
+      const repositoryRoot = marker.isDirectory() ? dir : resolveLinkedWorktreeMainRoot(dir)
+      return repositoryRoot === null ? [dir] : [dir, repositoryRoot]
+    }
+    if (dirname(dir) === dir) {
+      return []
+    }
+  }
+}
+
+function statGitMarker(dir: string): Stats | undefined {
+  try {
+    return statSync(join(dir, '.git'), { throwIfNoEntry: false })
+  } catch {
+    // Why: like Codex, an unreadable ancestor is not a repository marker.
+    return undefined
+  }
+}
+
+function resolveLinkedWorktreeMainRoot(absPath: string): string | null {
   try {
     const gitDirReference = readFileSync(join(absPath, '.git'), 'utf-8').trim()
     if (!gitDirReference.startsWith('gitdir:')) {
-      return absPath
+      return null
     }
     const gitDirPath = gitDirReference.slice('gitdir:'.length).trim()
     if (!gitDirPath) {
-      return absPath
+      return null
     }
     const gitDir = resolve(absPath, gitDirPath)
     const worktreesDir = dirname(gitDir)
     if (basename(worktreesDir) !== 'worktrees') {
-      return absPath
+      return null
     }
     // Why: workspace-controlled .git metadata must not broaden trust without Git's reciprocal link.
     const gitDirBacklink = readFileSync(join(gitDir, 'gitdir'), 'utf-8').trim()
     if (!gitDirBacklink) {
-      return absPath
+      return null
     }
     const resolvedBacklink = resolve(gitDir, gitDirBacklink)
     const workspaceGitFile = join(absPath, '.git')
@@ -206,12 +246,12 @@ function resolveCodexProjectTrustRoot(workspacePath: string): string {
       resolvedBacklink !== workspaceGitFile &&
       canonicalize(resolvedBacklink) !== canonicalize(workspaceGitFile)
     ) {
-      return absPath
+      return null
     }
     // Why: mirror Codex's validated .git/worktrees/<name> traversal instead of trusting arbitrary commondir contents.
     return canonicalize(dirname(dirname(worktreesDir)))
   } catch {
-    return absPath
+    return null
   }
 }
 

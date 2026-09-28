@@ -5,8 +5,8 @@ import {
   escapeTomlString,
   normalizeCodexProjectPathForLookup,
   normalizeCodexProjectPathForRevocationLookup,
-  upsertProjectTrustLevel,
-  upsertProjectTrustLevelInContent
+  addProjectTrustLevel,
+  addProjectTrustLevelInContent
 } from './config-toml-trust'
 import {
   createTrustConfigFixture,
@@ -26,9 +26,9 @@ afterEach(() => {
   removeTrustConfigFixture(tmpDir)
 })
 
-describe('upsertProjectTrustLevel', () => {
+describe('addProjectTrustLevel', () => {
   it('creates a projects trust block when the config is empty', () => {
-    expect(upsertProjectTrustLevelInContent('', '/tmp/codex-ws', 'trusted')).toBe(
+    expect(addProjectTrustLevelInContent('', '/tmp/codex-ws', 'trusted')).toBe(
       ['[projects."/tmp/codex-ws"]', 'trust_level = "trusted"', ''].join('\n')
     )
   })
@@ -42,31 +42,42 @@ describe('upsertProjectTrustLevel', () => {
     const trustedPath = realpathSync.native(aliasedProjectPath)
     const trustedTomlPath = escapeTomlString(trustedPath)
 
-    expect(upsertProjectTrustLevelInContent('', aliasedProjectPath, 'trusted')).toBe(
+    expect(addProjectTrustLevelInContent('', aliasedProjectPath, 'trusted')).toBe(
       [`[projects."${trustedTomlPath}"]`, 'trust_level = "trusted"', ''].join('\n')
     )
   })
 
-  it('updates an existing project block without touching unrelated keys', () => {
+  it.each([
+    'trust_level = "untrusted"',
+    "trust_level = 'untrusted' # set by hand",
+    'trust_level = "trusted"',
+    'trust_level = "Trusted"',
+    'trust_level = "maybe"',
+    'trust_level = trusted',
+    'trust_level = 1',
+    '"trust_level" = "untrusted"'
+  ])('leaves a project the user already answered byte-identical: %s', (trustLine) => {
     const original = [
       'model = "gpt-5.5"',
       '',
       '[projects."/tmp/codex-ws"]',
       'notes = "keep"',
-      'trust_level = "untrusted"',
+      trustLine,
       '',
       '[profiles.default]',
       'sandbox_mode = "workspace-write"',
       ''
     ].join('\n')
 
-    const updated = upsertProjectTrustLevelInContent(original, '/tmp/codex-ws', 'trusted')
+    expect(addProjectTrustLevelInContent(original, '/tmp/codex-ws', 'trusted')).toBe(original)
+  })
 
-    expect(updated).toContain('model = "gpt-5.5"')
-    expect(updated).toContain('[projects."/tmp/codex-ws"]\nnotes = "keep"')
-    expect(updated).toContain('trust_level = "trusted"')
-    expect(updated).not.toContain('trust_level = "untrusted"')
-    expect(updated).toContain('[profiles.default]\nsandbox_mode = "workspace-write"')
+  it('answers only the project asked about, beside another project the user answered', () => {
+    const original = ['[projects."/tmp/other"]', 'trust_level = "untrusted"', ''].join('\n')
+
+    expect(addProjectTrustLevelInContent(original, '/tmp/codex-ws', 'trusted')).toBe(
+      `${original}\n[projects."/tmp/codex-ws"]\ntrust_level = "trusted"\n`
+    )
   })
 
   it('adds trust_level to an existing project block that does not have one', () => {
@@ -79,7 +90,7 @@ describe('upsertProjectTrustLevel', () => {
       ''
     ].join('\n')
 
-    const updated = upsertProjectTrustLevelInContent(original, '/tmp/codex-ws', 'trusted')
+    const updated = addProjectTrustLevelInContent(original, '/tmp/codex-ws', 'trusted')
 
     expect(updated).toContain(
       ['[projects."/tmp/codex-ws"]', 'trust_level = "trusted"', 'notes = "keep"'].join('\n')
@@ -91,7 +102,7 @@ describe('upsertProjectTrustLevel', () => {
     // Why: local trust follows Codex's realpath; remote trust preserves the SSH provider's canonical path.
     const original = ['[profiles.default]', 'model = "gpt-5"', ''].join('\r\n')
 
-    const updated = upsertProjectTrustLevelInContent(original, 'C:\\Users\\nw\\repo', 'trusted')
+    const updated = addProjectTrustLevelInContent(original, 'C:\\Users\\nw\\repo', 'trusted')
 
     expect(updated).toContain(
       ['[projects."C:\\\\Users\\\\nw\\\\repo"]', 'trust_level = "trusted"', ''].join('\r\n')
@@ -99,46 +110,34 @@ describe('upsertProjectTrustLevel', () => {
     expect(updated).toContain('[profiles.default]\r\nmodel = "gpt-5"')
   })
 
-  it('updates an existing Windows backslash project block after separator normalization', () => {
+  it('answers an existing Windows backslash project block after separator normalization', () => {
     // Why: hook trust writes paired Windows variants, but project trust still repairs a single table in place.
-    const original = [
-      '[projects."C:\\\\Users\\\\nw\\\\repo"]',
-      'notes = "keep"',
-      'trust_level = "untrusted"',
-      ''
-    ].join('\n')
+    const original = ['[projects."C:\\\\Users\\\\nw\\\\repo"]', 'notes = "keep"', ''].join('\n')
 
-    const updated = upsertProjectTrustLevelInContent(original, 'C:\\Users\\nw\\repo', 'trusted')
+    const updated = addProjectTrustLevelInContent(original, 'C:\\Users\\nw\\repo', 'trusted')
 
     expect(updated.match(/\[projects\./g)).toHaveLength(1)
     expect(updated).toContain('[projects."C:\\\\Users\\\\nw\\\\repo"]')
     expect(updated).toContain('notes = "keep"')
     expect(updated).toContain('trust_level = "trusted"')
-    expect(updated).not.toContain('trust_level = "untrusted"')
   })
 
-  it('updates an existing legacy Windows forward-slash project block', () => {
+  it('answers an existing legacy Windows forward-slash project block', () => {
     // Why: older Orca builds normalized to forward slashes; backslash fixes must not duplicate them.
-    const original = [
-      '[projects."C:/Users/nw/repo"]',
-      'notes = "keep"',
-      'trust_level = "untrusted"',
-      ''
-    ].join('\n')
+    const original = ['[projects."C:/Users/nw/repo"]', 'notes = "keep"', ''].join('\n')
 
-    const updated = upsertProjectTrustLevelInContent(original, 'C:\\Users\\nw\\repo', 'trusted')
+    const updated = addProjectTrustLevelInContent(original, 'C:\\Users\\nw\\repo', 'trusted')
 
     expect(updated.match(/\[projects\./g)).toHaveLength(1)
     expect(updated).toContain('[projects."C:/Users/nw/repo"]')
     expect(updated).toContain('notes = "keep"')
     expect(updated).toContain('trust_level = "trusted"')
-    expect(updated).not.toContain('trust_level = "untrusted"')
   })
 
-  it('updates a Codex literal-string Windows project block without duplicating it', () => {
-    const original = ["[projects.'c:\\gemini_etl']", 'trust_level = "untrusted"', ''].join('\n')
+  it('answers a Codex literal-string Windows project block without duplicating it', () => {
+    const original = ["[projects.'c:\\gemini_etl']", 'notes = "keep"', ''].join('\n')
 
-    const updated = upsertProjectTrustLevelInContent(original, 'c:\\gemini_etl', 'trusted', {
+    const updated = addProjectTrustLevelInContent(original, 'c:\\gemini_etl', 'trusted', {
       alreadyCanonical: true
     })
 
@@ -165,9 +164,9 @@ describe('upsertProjectTrustLevel', () => {
       incomingPath: '//SERVER/share/proj'
     }
   ])('matches $name by decoded Windows path value', ({ existingPath, incomingPath }) => {
-    const original = [`[projects.'${existingPath}']`, 'trust_level = "untrusted"', ''].join('\n')
+    const original = [`[projects.'${existingPath}']`, 'notes = "keep"', ''].join('\n')
 
-    const updated = upsertProjectTrustLevelInContent(original, incomingPath, 'trusted', {
+    const updated = addProjectTrustLevelInContent(original, incomingPath, 'trusted', {
       alreadyCanonical: true
     })
 
@@ -182,7 +181,7 @@ describe('upsertProjectTrustLevel', () => {
     const incomingPath = '\\\\wsl$\\Ubuntu\\home\\u\\repo'
     const original = [`[projects.'${existingPath}']`, 'trust_level = "untrusted"', ''].join('\n')
 
-    const updated = upsertProjectTrustLevelInContent(original, incomingPath, 'trusted', {
+    const updated = addProjectTrustLevelInContent(original, incomingPath, 'trusted', {
       alreadyCanonical: true
     })
 
@@ -194,32 +193,29 @@ describe('upsertProjectTrustLevel', () => {
     expect(updated).toContain('trust_level = "trusted"')
   })
 
-  it('updates the same WSL project block across wsl$ and wsl.localhost spellings', () => {
-    // Why: the two share spellings alias the same distro, so a revoke must not survive under the other.
+  it('keeps a revocation made under the other wsl$ / wsl.localhost spelling', () => {
+    // Why: the two share spellings alias the same distro, so a revoke under one must hold for the other.
     const original = [
       "[projects.'\\\\wsl$\\Ubuntu\\home\\u\\proj']",
       'trust_level = "untrusted"',
       ''
     ].join('\n')
 
-    const updated = upsertProjectTrustLevelInContent(
+    const updated = addProjectTrustLevelInContent(
       original,
       '\\\\wsl.localhost\\Ubuntu\\home\\u\\proj',
       'trusted',
       { alreadyCanonical: true }
     )
 
-    expect(updated.match(/\[projects\./g)).toHaveLength(1)
-    expect(updated).toContain("[projects.'\\\\wsl$\\Ubuntu\\home\\u\\proj']")
-    expect(updated).toContain('trust_level = "trusted"')
-    expect(updated).not.toContain('trust_level = "untrusted"')
+    expect(updated).toBe(original)
   })
 
   it('matches a literal-string POSIX project path containing a quote and backslash', () => {
     const projectPath = '/tmp/with"quote\\and-backslash'
-    const original = [`[projects.'${projectPath}']`, 'trust_level = "untrusted"', ''].join('\n')
+    const original = [`[projects.'${projectPath}']`, 'notes = "keep"', ''].join('\n')
 
-    const updated = upsertProjectTrustLevelInContent(original, projectPath, 'trusted', {
+    const updated = addProjectTrustLevelInContent(original, projectPath, 'trusted', {
       alreadyCanonical: true
     })
 
@@ -230,7 +226,7 @@ describe('upsertProjectTrustLevel', () => {
 
   it('preserves an already-canonical remote Windows project path', () => {
     // Why: SSH paths resolve on the remote; local realpath would canonicalize the wrong machine.
-    const updated = upsertProjectTrustLevelInContent('', 'C:/Users/nw/repo', 'trusted', {
+    const updated = addProjectTrustLevelInContent('', 'C:/Users/nw/repo', 'trusted', {
       alreadyCanonical: true
     })
 
@@ -240,11 +236,11 @@ describe('upsertProjectTrustLevel', () => {
   })
 
   it('writes config.toml and avoids rewriting an already-trusted project', () => {
-    upsertProjectTrustLevel(configPath, '/tmp/codex-ws', 'trusted')
+    addProjectTrustLevel(configPath, '/tmp/codex-ws', 'trusted')
     const firstWrite = readFileSync(configPath, 'utf-8')
 
     rmSync(`${configPath}.bak`, { force: true })
-    upsertProjectTrustLevel(configPath, '/tmp/codex-ws', 'trusted')
+    addProjectTrustLevel(configPath, '/tmp/codex-ws', 'trusted')
 
     expect(readFileSync(configPath, 'utf-8')).toBe(firstWrite)
     expect(existsSync(`${configPath}.bak`)).toBe(false)

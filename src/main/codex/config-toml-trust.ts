@@ -13,7 +13,11 @@ import {
 import { writeTomlConfigAtomically } from './config-toml-atomic-write'
 import { removeHookTrustContent, upsertHookTrustContent } from './config-toml-hook-trust-edit'
 import { CodexHookTrustEntryMap, readHookTrustContent } from './config-toml-hook-trust-read'
-import { upsertProjectTrustContent } from './config-toml-project-trust'
+import {
+  addProjectTrustContent,
+  readProjectTrustDecisionFromContent,
+  type CodexProjectTrustDecision
+} from './config-toml-project-trust'
 import { escapeTomlBasicString, parseProjectTomlHeaderPath } from './config-toml-syntax'
 import { observe } from './codex-path-observation'
 
@@ -60,6 +64,7 @@ export type CodexHookTrustState = {
 }
 
 export type CodexProjectTrustLevel = 'trusted' | 'untrusted'
+export type { CodexProjectTrustDecision }
 
 export function computeTrustedHash(entry: CodexTrustEntry): string {
   return computeCodexTrustedHash(entry)
@@ -117,25 +122,41 @@ export function upsertHookTrustEntriesInContent(
   return upsertHookTrustContent(existingContent, entries)
 }
 
-export function upsertProjectTrustLevel(
+/** Adds trust only for a project Codex has no answer for; an existing answer is the user's. */
+export function addProjectTrustLevel(
   configPath: string,
   projectPath: string,
   trustLevel: CodexProjectTrustLevel
 ): void {
   const existing = readTomlForMutation(configPath)
-  const updated = upsertProjectTrustLevelInContent(existing, projectPath, trustLevel)
+  const updated = addProjectTrustLevelInContent(existing, projectPath, trustLevel)
   if (updated !== existing) {
     writeConfigAtomically(configPath, updated)
   }
 }
 
-export function upsertProjectTrustLevelInContent(
+export function addProjectTrustLevelInContent(
   existingContent: string,
   projectPath: string,
   trustLevel: CodexProjectTrustLevel,
   options?: { alreadyCanonical?: boolean }
 ): string {
-  return upsertProjectTrustContent(existingContent, projectPath, trustLevel, options)
+  return addProjectTrustContent(existingContent, projectPath, trustLevel, options)
+}
+
+/** The first answer among `projectPaths`, in the order Codex consults them. */
+export function readProjectTrustDecision(
+  configPath: string,
+  projectPaths: readonly string[]
+): CodexProjectTrustDecision | null {
+  const content = readTomlForMutation(configPath)
+  for (const projectPath of projectPaths) {
+    const decision = readProjectTrustDecisionFromContent(content, projectPath)
+    if (decision !== null) {
+      return decision
+    }
+  }
+  return null
 }
 
 export function escapeTomlString(value: string): string {

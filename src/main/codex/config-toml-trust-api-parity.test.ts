@@ -24,6 +24,8 @@ describe('config-toml-trust public API', () => {
   it('retains the exact runtime export surface', () => {
     expect(Object.keys(trustApi).sort()).toEqual(
       [
+        'addProjectTrustLevel',
+        'addProjectTrustLevelInContent',
         'codexHookSourcePathsEqual',
         'computeTrustKey',
         'computeTrustedHash',
@@ -35,14 +37,13 @@ describe('config-toml-trust public API', () => {
         'normalizeHookTrustKeyForLookup',
         'parseCodexProjectHeaderPath',
         'parseTrustKey',
+        'readProjectTrustDecision',
         'readHookTrustEntries',
         'readHookTrustEntriesFromContent',
         'removeHookTrustEntries',
         'removeHookTrustEntriesFromContent',
         'upsertHookTrustEntries',
         'upsertHookTrustEntriesInContent',
-        'upsertProjectTrustLevel',
-        'upsertProjectTrustLevelInContent',
         'writeConfigAtomically'
       ].sort()
     )
@@ -61,12 +62,9 @@ describe('config.toml partial and stale writes', () => {
     const partial = ['model = "gpt-5"', '[mcp_servers.partial', 'command = "still-user-data'].join(
       '\n'
     )
-    const updated = trustApi.upsertProjectTrustLevelInContent(
-      partial,
-      'C:/Remote/Repo',
-      'trusted',
-      { alreadyCanonical: true }
-    )
+    const updated = trustApi.addProjectTrustLevelInContent(partial, 'C:/Remote/Repo', 'trusted', {
+      alreadyCanonical: true
+    })
 
     expect(updated.startsWith(partial)).toBe(true)
     expect(updated).toContain('[projects."C:/Remote/Repo"]')
@@ -76,15 +74,12 @@ describe('config.toml partial and stale writes', () => {
     const fixture = createTrustConfigFixture()
     fixtures.push(fixture.tmpDir)
     const original = 'model = "gpt-5"\n'
-    const first = trustApi.upsertProjectTrustLevelInContent(original, '/remote/first', 'trusted', {
+    const first = trustApi.addProjectTrustLevelInContent(original, '/remote/first', 'trusted', {
       alreadyCanonical: true
     })
-    const second = trustApi.upsertProjectTrustLevelInContent(
-      original,
-      '/remote/second',
-      'trusted',
-      { alreadyCanonical: true }
-    )
+    const second = trustApi.addProjectTrustLevelInContent(original, '/remote/second', 'trusted', {
+      alreadyCanonical: true
+    })
 
     trustApi.writeConfigAtomically(fixture.configPath, first)
     trustApi.writeConfigAtomically(fixture.configPath, second)

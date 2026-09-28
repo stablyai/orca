@@ -6,11 +6,14 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  statSync,
+  utimesSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as AtomicWrite from './codex/config-toml-atomic-write'
 
 const testState = {
   fakeHomeDir: '',
@@ -38,6 +41,11 @@ vi.mock('node:os', async () => {
   }
 })
 
+vi.mock('./codex/config-toml-atomic-write', async (importOriginal) => {
+  const actual = await importOriginal<typeof AtomicWrite>()
+  return { ...actual, writeTomlConfigAtomically: vi.fn(actual.writeTomlConfigAtomically) }
+})
+
 const {
   markAntigravityWorkspaceTrusted,
   markCodexProjectTrusted,
@@ -46,6 +54,7 @@ const {
 } = await import('./agent-trust-presets')
 const { runExclusivelyForCodexTrustConfig } =
   await import('./codex/codex-trust-config-mutation-queue')
+const { writeTomlConfigAtomically } = await import('./codex/config-toml-atomic-write')
 
 beforeEach(() => {
   testState.fakeHomeDir = mkdtempSync(join(tmpdir(), 'orca-trust-presets-'))
@@ -326,55 +335,262 @@ describe('markCodexProjectTrusted', () => {
       rmSync(workspace, { recursive: true, force: true })
     }
   })
+})
 
-  it('preserves existing config keys and updates an existing project block', async () => {
-    const workspace = mkdtempSync(join(tmpdir(), 'orca-codex-ws-'))
-    const realpath = realpathSync.native(workspace)
-    try {
-      const codexDir = join(testState.fakeHomeDir, '.codex')
-      const runtimeCodexDir = join(testState.userDataDir, 'codex-runtime-home', 'home')
-      mkdirSync(codexDir, { recursive: true })
-      mkdirSync(runtimeCodexDir, { recursive: true })
-      writeFileSync(
-        join(codexDir, 'config.toml'),
-        [
-          'model = "gpt-5.5"',
-          '',
-          `[projects."${escapeTomlBasicString(realpath)}"]`,
-          'notes = "keep"',
-          'trust_level = "untrusted"',
-          ''
-        ].join('\n'),
-        'utf-8'
-      )
-      writeFileSync(
-        join(runtimeCodexDir, 'config.toml'),
-        [
-          'sandbox_mode = "workspace-write"',
-          '',
-          `[projects."${escapeTomlBasicString(realpath)}"]`,
-          'notes = "keep-runtime"',
-          'trust_level = "untrusted"',
-          ''
-        ].join('\n'),
-        'utf-8'
-      )
+describe('markCodexProjectTrusted keeps the answer the user already gave', () => {
+  const systemConfigPath = (): string => join(testState.fakeHomeDir, '.codex', 'config.toml')
+  const runtimeConfigPath = (): string =>
+    join(testState.userDataDir, 'codex-runtime-home', 'home', 'config.toml')
+  const projectHeader = (path: string): string =>
+    `[projects."${escapeTomlBasicString(realpathSync.native(path))}"]`
+
+  function seedSystemConfig(content: string): void {
+    mkdirSync(join(testState.fakeHomeDir, '.codex'), { recursive: true })
+    writeFileSync(systemConfigPath(), content, 'utf-8')
+  }
+
+  function backdate(path: string): number {
+    const past = new Date(Date.now() - 60_000)
+    utimesSync(path, past, past)
+    return statSync(path).mtimeMs
+  }
+
+  let workspace = ''
+  beforeEach(() => {
+    workspace = mkdtempSync(join(tmpdir(), 'orca-codex-ws-'))
+    vi.mocked(writeTomlConfigAtomically).mockClear()
+  })
+  afterEach(() => {
+    rmSync(workspace, { recursive: true, force: true })
+  })
+
+  it('keeps an explicit untrusted answer, and never trusts the project in the runtime home', async () => {
+    const original = [
+      'model = "gpt-5.5"',
+      '',
+      projectHeader(workspace),
+      'notes = "keep"',
+      'trust_level = "untrusted"',
+      ''
+    ].join('\n')
+    seedSystemConfig(original)
+
+    await markCodexProjectTrusted(workspace)
+
+    expect(readFileSync(systemConfigPath(), 'utf-8')).toBe(original)
+    expect(existsSync(runtimeConfigPath())).toBe(false)
+  })
+
+  it.each(['trust_level = "Trusted"', 'trust_level = "maybe"', 'trust_level = trusted'])(
+    'leaves a value Codex cannot read as trusted or untrusted alone: %s',
+    async (trustLine) => {
+      const original = [projectHeader(workspace), trustLine, ''].join('\n')
+      seedSystemConfig(original)
 
       await markCodexProjectTrusted(workspace)
 
-      const written = readFileSync(join(codexDir, 'config.toml'), 'utf-8')
-      const runtimeWritten = readFileSync(join(runtimeCodexDir, 'config.toml'), 'utf-8')
-      expect(written).toContain('model = "gpt-5.5"')
-      expect(written).toContain('notes = "keep"')
-      expect(written).toContain('trust_level = "trusted"')
-      expect(written).not.toContain('trust_level = "untrusted"')
-      expect(runtimeWritten).toContain('sandbox_mode = "workspace-write"')
-      expect(runtimeWritten).toContain('notes = "keep-runtime"')
-      expect(runtimeWritten).toContain('trust_level = "trusted"')
-      expect(runtimeWritten).not.toContain('trust_level = "untrusted"')
-    } finally {
-      rmSync(workspace, { recursive: true, force: true })
+      expect(readFileSync(systemConfigPath(), 'utf-8')).toBe(original)
+      expect(existsSync(runtimeConfigPath())).toBe(false)
     }
+  )
+
+  it('adds trusted once, leaving the rest of config.toml byte-identical', async () => {
+    const original = [
+      '# my settings',
+      "model = 'gpt-5.5'  # keep this spacing",
+      '',
+      '[projects."/somewhere/else"]',
+      'trust_level = "untrusted"',
+      ''
+    ].join('\n')
+    seedSystemConfig(original)
+
+    await markCodexProjectTrusted(workspace)
+
+    const trustBlock = `${projectHeader(workspace)}\ntrust_level = "trusted"\n`
+    expect(readFileSync(systemConfigPath(), 'utf-8')).toBe(`${original}\n${trustBlock}`)
+    expect(readFileSync(runtimeConfigPath(), 'utf-8')).toBe(trustBlock)
+
+    const systemMtime = backdate(systemConfigPath())
+    const runtimeMtime = backdate(runtimeConfigPath())
+
+    await markCodexProjectTrusted(workspace)
+
+    expect(statSync(systemConfigPath()).mtimeMs).toBe(systemMtime)
+    expect(statSync(runtimeConfigPath()).mtimeMs).toBe(runtimeMtime)
+  })
+
+  it('keeps an explicit untrusted answer on the repository root a linked worktree resolves to', async () => {
+    const repository = join(workspace, 'repo')
+    const worktree = join(workspace, 'worktrees', 'feature')
+    const worktreeGitDir = join(repository, '.git', 'worktrees', 'feature')
+    mkdirSync(worktreeGitDir, { recursive: true })
+    mkdirSync(worktree, { recursive: true })
+    writeFileSync(join(worktree, '.git'), `gitdir: ${worktreeGitDir}\n`, 'utf-8')
+    writeFileSync(join(worktreeGitDir, 'gitdir'), join(worktree, '.git'), 'utf-8')
+    const original = [projectHeader(repository), 'trust_level = "untrusted"', ''].join('\n')
+    seedSystemConfig(original)
+
+    await markCodexProjectTrusted(worktree)
+
+    expect(readFileSync(systemConfigPath(), 'utf-8')).toBe(original)
+    expect(existsSync(runtimeConfigPath())).toBe(false)
+  })
+
+  // Why: Codex reads the cwd first, so a cwd entry Orca adds would outrank the root's answer.
+  it('keeps an untrusted repository root for a folder workspace opened on a subdirectory', async () => {
+    const repository = join(workspace, 'repo')
+    const subdirectory = join(repository, 'packages', 'app')
+    mkdirSync(join(repository, '.git'), { recursive: true })
+    writeFileSync(join(repository, '.git', 'HEAD'), 'ref: refs/heads/main\n', 'utf-8')
+    mkdirSync(subdirectory, { recursive: true })
+    const original = [projectHeader(repository), 'trust_level = "untrusted"', ''].join('\n')
+    seedSystemConfig(original)
+
+    await markCodexProjectTrusted(subdirectory)
+
+    expect(readFileSync(systemConfigPath(), 'utf-8')).toBe(original)
+    expect(existsSync(runtimeConfigPath())).toBe(false)
+  })
+
+  it('follows the subdirectory’s own answer over its repository root’s, as Codex does', async () => {
+    const repository = join(workspace, 'repo')
+    const subdirectory = join(repository, 'packages', 'app')
+    mkdirSync(join(repository, '.git'), { recursive: true })
+    writeFileSync(join(repository, '.git', 'HEAD'), 'ref: refs/heads/main\n', 'utf-8')
+    mkdirSync(subdirectory, { recursive: true })
+    const original = [
+      projectHeader(repository),
+      'trust_level = "untrusted"',
+      '',
+      projectHeader(subdirectory),
+      'trust_level = "trusted"',
+      ''
+    ].join('\n')
+    seedSystemConfig(original)
+
+    await markCodexProjectTrusted(subdirectory)
+
+    expect(readFileSync(systemConfigPath(), 'utf-8')).toBe(original)
+    expect(readFileSync(runtimeConfigPath(), 'utf-8')).toBe(
+      `${projectHeader(subdirectory)}\ntrust_level = "trusted"\n`
+    )
+  })
+
+  it('keeps an explicit untrusted answer on a linked worktree’s own path', async () => {
+    const repository = join(workspace, 'repo')
+    const worktree = join(workspace, 'worktrees', 'feature')
+    const worktreeGitDir = join(repository, '.git', 'worktrees', 'feature')
+    mkdirSync(worktreeGitDir, { recursive: true })
+    mkdirSync(worktree, { recursive: true })
+    writeFileSync(join(worktree, '.git'), `gitdir: ${worktreeGitDir}\n`, 'utf-8')
+    writeFileSync(join(worktreeGitDir, 'gitdir'), join(worktree, '.git'), 'utf-8')
+    const original = [projectHeader(worktree), 'trust_level = "untrusted"', ''].join('\n')
+    seedSystemConfig(original)
+
+    await markCodexProjectTrusted(worktree)
+
+    expect(readFileSync(systemConfigPath(), 'utf-8')).toBe(original)
+    expect(existsSync(runtimeConfigPath())).toBe(false)
+  })
+
+  // Why: Codex reads the checkout holding the `.git` file before the main repository; for a submodule that checkout is where its own prompt records the answer.
+  it.each([
+    ['a linked worktree', 'worktrees'],
+    ['a submodule', 'modules']
+  ])(
+    'keeps an untrusted answer on %s checkout for a folder workspace opened on its subdirectory',
+    async (_label, metadataDir) => {
+      const repository = join(workspace, 'repo')
+      const checkout = join(workspace, 'checkout')
+      const subdirectory = join(checkout, 'packages', 'app')
+      const checkoutGitDir = join(repository, '.git', metadataDir, 'checkout')
+      mkdirSync(checkoutGitDir, { recursive: true })
+      mkdirSync(subdirectory, { recursive: true })
+      writeFileSync(join(checkout, '.git'), `gitdir: ${checkoutGitDir}\n`, 'utf-8')
+      writeFileSync(join(checkoutGitDir, 'gitdir'), join(checkout, '.git'), 'utf-8')
+      const original = [projectHeader(checkout), 'trust_level = "untrusted"', ''].join('\n')
+      seedSystemConfig(original)
+
+      await markCodexProjectTrusted(subdirectory)
+
+      expect(readFileSync(systemConfigPath(), 'utf-8')).toBe(original)
+      expect(existsSync(runtimeConfigPath())).toBe(false)
+    }
+  )
+
+  // Why: Codex passes over a `.git` directory with no HEAD, so the checkout it reads is the one above.
+  it('keeps an untrusted repository root above a nested `.git` directory with no HEAD', async () => {
+    const repository = join(workspace, 'repo')
+    const nested = join(repository, 'vendor', 'lib')
+    const subdirectory = join(nested, 'src')
+    mkdirSync(join(repository, '.git'), { recursive: true })
+    writeFileSync(join(repository, '.git', 'HEAD'), 'ref: refs/heads/main\n', 'utf-8')
+    mkdirSync(join(nested, '.git'), { recursive: true })
+    mkdirSync(subdirectory, { recursive: true })
+    const original = [projectHeader(repository), 'trust_level = "untrusted"', ''].join('\n')
+    seedSystemConfig(original)
+
+    await markCodexProjectTrusted(subdirectory)
+
+    expect(readFileSync(systemConfigPath(), 'utf-8')).toBe(original)
+    expect(existsSync(runtimeConfigPath())).toBe(false)
+  })
+
+  it('trusts only the subdirectory when its repository has no answer', async () => {
+    const repository = join(workspace, 'repo')
+    const subdirectory = join(repository, 'packages', 'app')
+    mkdirSync(join(repository, '.git'), { recursive: true })
+    writeFileSync(join(repository, '.git', 'HEAD'), 'ref: refs/heads/main\n', 'utf-8')
+    mkdirSync(subdirectory, { recursive: true })
+
+    await markCodexProjectTrusted(subdirectory)
+
+    const written = readFileSync(systemConfigPath(), 'utf-8')
+    expect(written).toBe(`${projectHeader(subdirectory)}\ntrust_level = "trusted"\n`)
+    expect(readFileSync(runtimeConfigPath(), 'utf-8')).toBe(written)
+  })
+
+  it('keeps an explicit untrusted answer on a folder workspace', async () => {
+    const folder = join(workspace, 'notes')
+    mkdirSync(folder)
+    const original = [projectHeader(folder), 'trust_level = "untrusted"', ''].join('\n')
+    seedSystemConfig(original)
+
+    await markCodexProjectTrusted(folder)
+
+    expect(readFileSync(systemConfigPath(), 'utf-8')).toBe(original)
+    expect(existsSync(runtimeConfigPath())).toBe(false)
+  })
+
+  it('still trusts an unanswered project in the runtime home when the ~/.codex write fails', async () => {
+    const original = 'model = "gpt-5.5"\n'
+    seedSystemConfig(original)
+    vi.mocked(writeTomlConfigAtomically).mockImplementationOnce(() => {
+      throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' })
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      await markCodexProjectTrusted(workspace)
+      expect(warn).toHaveBeenCalledTimes(1)
+    } finally {
+      warn.mockRestore()
+    }
+
+    expect(readFileSync(systemConfigPath(), 'utf-8')).toBe(original)
+    expect(readFileSync(runtimeConfigPath(), 'utf-8')).toBe(
+      `${projectHeader(workspace)}\ntrust_level = "trusted"\n`
+    )
+  })
+
+  it('keeps an untrusted answer the runtime home already holds', async () => {
+    const runtimeOriginal = [projectHeader(workspace), 'trust_level = "untrusted"', ''].join('\n')
+    mkdirSync(dirname(runtimeConfigPath()), { recursive: true })
+    writeFileSync(runtimeConfigPath(), runtimeOriginal, 'utf-8')
+
+    await markCodexProjectTrusted(workspace)
+
+    expect(readFileSync(runtimeConfigPath(), 'utf-8')).toBe(runtimeOriginal)
   })
 })
 

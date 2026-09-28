@@ -137,7 +137,7 @@ vi.mock('node:os', async () => {
 
 const realFs = await vi.importActual<typeof NodeFs>('node:fs')
 
-const { upsertHookTrustEntries, upsertProjectTrustLevel, readHookTrustEntries } =
+const { upsertHookTrustEntries, addProjectTrustLevel, readHookTrustEntries } =
   await import('./config-toml-trust')
 const {
   writeCodexTrustGrantLedgerHome,
@@ -243,14 +243,14 @@ describe('STA-4823 D29 — an unreadable config.toml must not become a trust-onl
     realFs.writeFileSync(configPath, USER_CONFIG, 'utf-8')
     denials.denyExistence(configPath)
 
-    expect(() => upsertProjectTrustLevel(configPath, '/tmp/project', 'trusted')).toThrow('EPERM')
+    expect(() => addProjectTrustLevel(configPath, '/tmp/project', 'trusted')).toThrow('EPERM')
     expect(realFs.readFileSync(configPath, 'utf-8')).toBe(USER_CONFIG)
   })
 
   it('still seeds project trust when config.toml is genuinely absent', () => {
     const configPath = join(runtimeHomePath, 'config.toml')
 
-    upsertProjectTrustLevel(configPath, '/tmp/project', 'trusted')
+    addProjectTrustLevel(configPath, '/tmp/project', 'trusted')
 
     expect(realFs.readFileSync(configPath, 'utf-8')).toContain('trust_level = "trusted"')
   })

@@ -55,6 +55,62 @@ describe('markRemoteAgentWorkspaceTrusted', () => {
     )
   })
 
+  it('keeps an explicit untrusted Codex answer on the remote host', async () => {
+    const fsProvider = makeFsProvider({
+      readFile: vi.fn(async () => ({
+        content: '[projects."/real/repo/worktree"]\ntrust_level = "untrusted"\n',
+        isBinary: false
+      }))
+    })
+    mocks.getSshFilesystemProvider.mockReturnValue(fsProvider)
+
+    await markRemoteAgentWorkspaceTrusted({
+      preset: 'codex',
+      connectionId: 'ssh-1',
+      workspacePath: '/repo/worktree'
+    })
+
+    expect(fsProvider.writeFile).not.toHaveBeenCalled()
+  })
+
+  it('leaves the remote Codex config alone when it cannot be read', async () => {
+    const fsProvider = makeFsProvider({
+      readFile: vi.fn(async () => {
+        throw new Error('Channel closed')
+      })
+    })
+    mocks.getSshFilesystemProvider.mockReturnValue(fsProvider)
+
+    await expect(
+      markRemoteAgentWorkspaceTrusted({
+        preset: 'codex',
+        connectionId: 'ssh-1',
+        workspacePath: '/repo/worktree'
+      })
+    ).rejects.toThrow('Channel closed')
+    expect(fsProvider.writeFile).not.toHaveBeenCalled()
+  })
+
+  it('creates the remote Codex config when it does not exist yet', async () => {
+    const fsProvider = makeFsProvider({
+      readFile: vi.fn(async () => {
+        throw new Error("ENOENT: no such file or directory, open '/home/u/.codex/config.toml'")
+      })
+    })
+    mocks.getSshFilesystemProvider.mockReturnValue(fsProvider)
+
+    await markRemoteAgentWorkspaceTrusted({
+      preset: 'codex',
+      connectionId: 'ssh-1',
+      workspacePath: '/repo/worktree'
+    })
+
+    expect(fsProvider.writeFile).toHaveBeenCalledWith(
+      '/home/u/.codex/config.toml',
+      '[projects."/real/repo/worktree"]\ntrust_level = "trusted"\n'
+    )
+  })
+
   it('writes Codex trust when the remote home is a Windows absolute path', async () => {
     const fsProvider = makeFsProvider({
       realpath: vi.fn(async () => 'C:/Users/alice/platform')

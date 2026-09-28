@@ -12,35 +12,56 @@ import {
   parseProjectTomlHeaderPath
 } from './config-toml-syntax'
 
-export function upsertProjectTrustContent(
+/** Codex's recorded answer for a project; `unrecognized` is a value Codex itself cannot load. */
+export type CodexProjectTrustDecision = CodexProjectTrustLevel | 'unrecognized'
+
+type ProjectTrustLookupOptions = { alreadyCanonical?: boolean }
+
+export function readProjectTrustDecisionFromContent(
+  content: string,
+  projectPath: string,
+  options?: ProjectTrustLookupOptions
+): CodexProjectTrustDecision | null {
+  const existing = stripLeadingBom(content)
+  const block = findProjectBlock(existing, resolveLookupPath(projectPath, options))
+  return block === null ? null : readBlockTrustDecision(existing.slice(block.start, block.end))
+}
+
+// Why: a project Codex already has an answer for is the user's choice, so only an unanswered one is added.
+export function addProjectTrustContent(
   existingContent: string,
   projectPath: string,
   trustLevel: CodexProjectTrustLevel,
-  options?: { alreadyCanonical?: boolean }
+  options?: ProjectTrustLookupOptions
 ): string {
   const existing = stripLeadingBom(existingContent)
-  const trustedProjectPath = options?.alreadyCanonical
-    ? projectPath
-    : canonicalizeLocalProjectPath(projectPath)
-  const headerLineEnd = findProjectHeaderLineEnd(existing, trustedProjectPath)
+  const trustedProjectPath = resolveLookupPath(projectPath, options)
+  const block = findProjectBlock(existing, trustedProjectPath)
   const eol = existing.includes('\r\n') ? '\r\n' : '\n'
   const trustLine = `trust_level = "${trustLevel}"`
-  if (headerLineEnd === null) {
+  if (block === null) {
     return appendProjectTrustBlock(existing, trustedProjectPath, trustLine, eol)
   }
-  const nextHeaderOffset = findNextTomlTableHeader(existing.slice(headerLineEnd))
-  const blockEnd = nextHeaderOffset === -1 ? existing.length : headerLineEnd + nextHeaderOffset
-  const existingBlock = existing.slice(headerLineEnd, blockEnd)
-  const trustLevelPattern =
-    /^[ \t]*trust_level[ \t]*=[ \t]*(?:"(?:trusted|untrusted)"|'(?:trusted|untrusted)')[ \t\r]*(?:#.*)?$/m
-  if (trustLevelPattern.test(existingBlock)) {
-    return (
-      existing.slice(0, headerLineEnd) +
-      existingBlock.replace(trustLevelPattern, trustLine) +
-      existing.slice(blockEnd)
-    )
+  if (readBlockTrustDecision(existing.slice(block.start, block.end)) !== null) {
+    return existingContent
   }
-  return `${existing.slice(0, headerLineEnd)}${eol}${trustLine}${existing.slice(headerLineEnd)}`
+  return `${existing.slice(0, block.start)}${eol}${trustLine}${existing.slice(block.start)}`
+}
+
+function resolveLookupPath(projectPath: string, options?: ProjectTrustLookupOptions): string {
+  return options?.alreadyCanonical ? projectPath : canonicalizeLocalProjectPath(projectPath)
+}
+
+function readBlockTrustDecision(block: string): CodexProjectTrustDecision | null {
+  const match = /^[ \t]*(["']?)trust_level\1[ \t]*=(.*)$/m.exec(block)
+  if (!match) {
+    return null
+  }
+  const value = /^[ \t]*(?:"(trusted|untrusted)"|'(trusted|untrusted)')[ \t\r]*(?:#.*)?$/.exec(
+    match[2] ?? ''
+  )
+  const level = value?.[1] ?? value?.[2]
+  return level === 'trusted' || level === 'untrusted' ? level : 'unrecognized'
 }
 
 function canonicalizeLocalProjectPath(projectPath: string): string {
@@ -67,6 +88,21 @@ function appendProjectTrustBlock(
       ? eol
       : eol + eol
   return `${existing}${separator}${block}${eol}`
+}
+
+function findProjectBlock(
+  content: string,
+  projectPath: string
+): { start: number; end: number } | null {
+  const headerLineEnd = findProjectHeaderLineEnd(content, projectPath)
+  if (headerLineEnd === null) {
+    return null
+  }
+  const nextHeaderOffset = findNextTomlTableHeader(content.slice(headerLineEnd))
+  return {
+    start: headerLineEnd,
+    end: nextHeaderOffset === -1 ? content.length : headerLineEnd + nextHeaderOffset
+  }
 }
 
 function findProjectHeaderLineEnd(content: string, projectPath: string): number | null {
