@@ -180,7 +180,8 @@ describe('resolveTerminalTabStripDropTarget', () => {
     const child = { closest: () => strip }
     vi.stubGlobal('document', {
       elementsFromPoint: vi.fn(() => [overlay, child]),
-      elementFromPoint: vi.fn()
+      elementFromPoint: vi.fn(),
+      querySelectorAll: vi.fn(() => [])
     })
 
     expect(
@@ -219,7 +220,8 @@ describe('resolveTerminalTabStripDropTarget', () => {
     }
     vi.stubGlobal('document', {
       elementsFromPoint: vi.fn(() => [{ closest: () => firstTab }, { closest: () => strip }]),
-      elementFromPoint: vi.fn()
+      elementFromPoint: vi.fn(),
+      querySelectorAll: vi.fn(() => [])
     })
 
     expect(
@@ -254,7 +256,67 @@ describe('resolveTerminalTabStripDropTarget', () => {
     }
     vi.stubGlobal('document', {
       elementsFromPoint: vi.fn(() => [{ closest: () => strip }]),
-      elementFromPoint: vi.fn()
+      elementFromPoint: vi.fn(),
+      querySelectorAll: vi.fn(() => [])
+    })
+
+    expect(
+      resolveTerminalTabStripDropTarget({
+        clientX: 10,
+        clientY: 10,
+        groupsByWorktree: {
+          [WORKTREE_ID]: [{ id: TARGET_GROUP_ID } as AppState['groupsByWorktree'][string][number]]
+        },
+        worktreeId: WORKTREE_ID
+      })
+    ).toBeNull()
+  })
+
+  it('matches a click-through strip by geometry when hit-testing skips it', () => {
+    // An auto-hidden strip is `pointer-events: none` until its hover reveal commits, so
+    // elementsFromPoint never returns it. A pane drag reads its target on pointermove and reuses it
+    // on pointerup, so a release on the first move into the band would otherwise resolve nothing.
+    const stripRect = rect({ left: 0, top: 0, width: 300, height: 32 })
+    const strip = {
+      dataset: { tabGroupStripId: TARGET_GROUP_ID, worktreeId: WORKTREE_ID },
+      getBoundingClientRect: () => stripRect,
+      querySelectorAll: () => [],
+      closest: () => strip
+    }
+    vi.stubGlobal('document', {
+      elementsFromPoint: vi.fn(() => []),
+      elementFromPoint: vi.fn(),
+      querySelectorAll: vi.fn(() => [strip])
+    })
+
+    expect(
+      resolveTerminalTabStripDropTarget({
+        clientX: 10,
+        clientY: 10,
+        groupsByWorktree: {
+          [WORKTREE_ID]: [{ id: TARGET_GROUP_ID } as AppState['groupsByWorktree'][string][number]]
+        },
+        worktreeId: WORKTREE_ID
+      })
+    ).toEqual({
+      id: TARGET_GROUP_ID,
+      groupId: TARGET_GROUP_ID,
+      worktreeId: WORKTREE_ID,
+      rect: stripRect
+    })
+  })
+
+  it('does not match a geometry candidate outside the pointer', () => {
+    const strip = {
+      dataset: { tabGroupStripId: TARGET_GROUP_ID, worktreeId: WORKTREE_ID },
+      getBoundingClientRect: () => rect({ left: 400, top: 0, width: 300, height: 32 }),
+      querySelectorAll: () => [],
+      closest: () => strip
+    }
+    vi.stubGlobal('document', {
+      elementsFromPoint: vi.fn(() => []),
+      elementFromPoint: vi.fn(),
+      querySelectorAll: vi.fn(() => [strip])
     })
 
     expect(
