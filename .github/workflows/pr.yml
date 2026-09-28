@@ -1106,7 +1106,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: native/windows-cli-launcher/.build
-          key: windows-cli-launcher-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('native/windows-cli-launcher/**', 'config/scripts/build-windows-cli-launcher.mjs') }}
+          key: windows-cli-launcher-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('native/windows-cli-launcher/**', 'config/scripts/build-windows-cli-launcher.mjs', 'resources/build/icon.ico', 'package.json') }}
 
       - name: Build package inputs
         env:

@@ -2,6 +2,15 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
+using System.Reflection;
+using System.Runtime.InteropServices;
+
+[assembly: AssemblyTitle("Orca CLI Launcher")]
+[assembly: AssemblyDescription("Command-line launcher for Orca")]
+[assembly: AssemblyCompany("Stably AI")]
+[assembly: AssemblyProduct("Orca")]
+[assembly: AssemblyCopyright("Copyright © Stably AI")]
+[assembly: ComVisible(false)]
 
 internal static class OrcaCliLauncher
 {
