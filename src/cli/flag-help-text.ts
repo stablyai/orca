@@ -2,6 +2,8 @@
 export const FLAG_HELP_TEXT: Record<string, string> = {
   agent: '--agent <id>          Launch a known TUI agent in the first terminal',
   'base-branch': '--base-branch <ref>    Base branch/ref to create the worktree from',
+  branch:
+    '--branch <name>         Git branch to create (independent of the sanitized directory name)',
   command: '--command <text>       Command to run in the terminal on startup',
   comment: '--comment <text>       Comment stored in Orca metadata',
   cursor: '--cursor <n>           Line cursor from a previous read (returns only new output)',
