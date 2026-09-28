@@ -9,7 +9,7 @@ import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 import {
   getProviderSessionClaimKey,
-  isPassiveCompletedHibernationEvidence,
+  isFinishedTurnOwingNoResume,
   recordPaneIsOwnedByPreservedPane
 } from './sleeping-agent-pane-ownership'
 
@@ -88,13 +88,11 @@ function getCanonicalPassiveWakeRecords(
   alreadyClaimed: ReadonlySet<string>
 ): SleepingAgentSessionRecord[] {
   const activeClaimKeys = new Set(
-    records
-      .filter((record) => !isPassiveCompletedHibernationEvidence(record))
-      .map(getProviderSessionClaimKey)
+    records.filter((record) => !isFinishedTurnOwingNoResume(record)).map(getProviderSessionClaimKey)
   )
   const recordsByClaim = new Map<string, SleepingAgentSessionRecord[]>()
   for (const record of records) {
-    if (!isPassiveCompletedHibernationEvidence(record)) {
+    if (!isFinishedTurnOwingNoResume(record)) {
       continue
     }
     const claimKey = getProviderSessionClaimKey(record)

@@ -2,7 +2,7 @@ import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-ses
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
 import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 
-// Why not isPassiveCompletedHibernationEvidence: #16308 widened it for the wake sweep; a live+done note anchors a running pane.
+// Why not isFinishedTurnOwingNoResume: a live+done note is a finished turn's idle anchor for a running pane, not sleep.
 export function isHibernationDoneRecord(record: SleepingAgentSessionRecord): boolean {
   return (
     (record.origin === undefined || record.origin === 'worktree-sleep') && record.state === 'done'

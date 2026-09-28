@@ -15,7 +15,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { useAppStore } from '@/store'
-import { isPassiveCompletedHibernationEvidence } from './sleeping-agent-pane-ownership'
+import { isFinishedTurnOwingNoResume } from './sleeping-agent-pane-ownership'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 
 const initialAppStoreState = useAppStore.getState()
@@ -80,7 +80,7 @@ function reportTurnFinished(interrupted = false): void {
 describe('a finished local agent', () => {
   it('keeps completed quit records resumable', () => {
     expect(
-      isPassiveCompletedHibernationEvidence({
+      isFinishedTurnOwingNoResume({
         paneKey: 'quit-tab:quit-leaf',
         tabId: 'quit-tab',
         worktreeId: WORKTREE_ID,
@@ -108,7 +108,7 @@ describe('a finished local agent', () => {
     expect(record?.agent).toBe('codex')
     expect(record?.providerSession).toEqual({ key: 'session_id', id: SESSION_ID })
     expect(
-      isPassiveCompletedHibernationEvidence(record!),
+      isFinishedTurnOwingNoResume(record!),
       'a finished agent must read as history, or activation restarts it'
     ).toBe(true)
   })
@@ -120,7 +120,7 @@ describe('a finished local agent', () => {
     const record = useAppStore.getState().sleepingAgentSessionsByPaneKey[PANE_KEY]
     expect(record?.state).toBe('done')
     expect(record?.interrupted).toBe(true)
-    expect(isPassiveCompletedHibernationEvidence(record!)).toBe(false)
+    expect(isFinishedTurnOwingNoResume(record!)).toBe(false)
 
     useAppStore.setState({
       tabsByWorktree: { [WORKTREE_ID]: [] },
