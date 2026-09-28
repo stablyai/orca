@@ -8,10 +8,6 @@ import { startTextScaling } from './document/text-scaling'
 import { webviewPageSource } from './document/document-module-source.test-support'
 
 const terminalWebViewSource = readFileSync(join(import.meta.dirname, 'TerminalWebView.tsx'), 'utf8')
-const terminalHtmlModuleSource = readFileSync(
-  join(import.meta.dirname, 'terminal-webview-html.ts'),
-  'utf8'
-)
 const terminalHtmlDocumentShellSource = readFileSync(
   join(import.meta.dirname, 'terminal-webview-html', 'document-shell.ts'),
   'utf8'
@@ -65,10 +61,9 @@ describe('TerminalWebView text zoom', () => {
     const end = terminalWebViewSource.indexOf('/>', start)
     expect(end).toBeGreaterThan(start)
     const webViewProps = terminalWebViewSource.slice(start, end)
-    // One source object per view, and one per start pair across views.
+    // One source object per view, pinned at mount.
     expect(terminalWebViewSource).toContain('const [source] = useState(() =>')
     expect(webViewProps).toContain('source={source}')
-    expect(terminalHtmlModuleSource).toContain('webViewSources.set(key, source)')
   })
 
   it('forces the Claude status dot to text presentation before xterm writes', () => {

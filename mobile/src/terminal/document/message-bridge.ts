@@ -48,7 +48,7 @@ export function startMessageBridge(scope: TerminalDocumentScope) {
   )
   if (scope.hasEngine()) {
     // Why: ready carries the cell box xterm itself laid out, so the host sizes the first subscribe.
-    if (scope.buildsTerminalBeforeReady()) {
+    if (scope.start().shown) {
       prepareTerminal(scope)
     }
     notify(scope, { type: 'web-ready', cellBox: laidOutCellBox(scope) })

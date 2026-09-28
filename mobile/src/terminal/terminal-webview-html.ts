@@ -21,29 +21,20 @@ export const XTERM_HTML = [
   TERMINAL_HTML_DOCUMENT_CLOSE
 ].join('')
 
-const webViewSources = new Map<string, { html: string }>()
-
 /**
  * The WebView's document, starting as its view mounted: at this text scale, and whether it was
- * shown. Written into the page ahead of the document script, which reads them as it starts; one
- * object per pair, so a parent render never hands the WebView a new source and reloads it.
+ * shown. Written into the page ahead of the document script, which reads them as it starts.
  */
 export function xtermWebViewSource(start: { textScale: number; shown: boolean }) {
-  const key = `${start.textScale}:${start.shown}`
-  let source = webViewSources.get(key)
-  if (!source) {
-    const startValues =
-      `window.__orcaTerminalTextScale = ${JSON.stringify(start.textScale)};\n` +
-      `window.__orcaTerminalShown = ${JSON.stringify(start.shown)};\n`
-    source = {
-      html: [
-        TERMINAL_HTML_DOCUMENT_SHELL,
-        startValues,
-        TERMINAL_DOCUMENT_SCRIPT,
-        TERMINAL_HTML_DOCUMENT_CLOSE
-      ].join('')
-    }
-    webViewSources.set(key, source)
+  const startValues =
+    `window.__orcaTerminalTextScale = ${JSON.stringify(start.textScale)};\n` +
+    `window.__orcaTerminalShown = ${JSON.stringify(start.shown)};\n`
+  return {
+    html: [
+      TERMINAL_HTML_DOCUMENT_SHELL,
+      startValues,
+      TERMINAL_DOCUMENT_SCRIPT,
+      TERMINAL_HTML_DOCUMENT_CLOSE
+    ].join('')
   }
-  return source
 }

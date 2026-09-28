@@ -28,15 +28,17 @@ export function reportLaidOutCellBox(scope: TerminalDocumentScope) {
     return
   }
   const { cols, rows } = scope.term
-  const key = `${laidOut.fontScale}:${laidOut.cellWidth}x${laidOut.cellHeight}@${cols}x${rows}`
-  if (key === scope.reportedCellBox) {
+  const last = scope.reportedCellBox
+  if (
+    last &&
+    last.cols === cols &&
+    last.rows === rows &&
+    last.cellBox.fontScale === laidOut.fontScale &&
+    last.cellBox.cellWidth === laidOut.cellWidth &&
+    last.cellBox.cellHeight === laidOut.cellHeight
+  ) {
     return
   }
-  scope.reportedCellBox = key
-  notify(scope, {
-    type: 'cell-metrics',
-    cellBox: laidOut,
-    cols,
-    rows
-  })
+  scope.reportedCellBox = { cellBox: laidOut, cols, rows }
+  notify(scope, { type: 'cell-metrics', ...scope.reportedCellBox })
 }

@@ -2,7 +2,7 @@ import { Terminal } from '@xterm/xterm'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebglAddon } from '@xterm/addon-webgl'
 import type { TerminalDocumentTerminal } from './document/document-terminal-shape'
-import type { TerminalViewportChange } from './document/document-host-seams'
+import type { TerminalDocumentStart, TerminalViewportChange } from './document/document-host-seams'
 import { TERMINAL_DOCUMENT_ELEMENT_STYLE, TERMINAL_DOCUMENT_MARKUP } from './terminal-webview-html'
 import { scopeStyleToHost } from '../style-scoping/document-style-scoping'
 import { XTERM_ENGINE_CSS } from './terminal-webview-engine-css.generated'
@@ -99,12 +99,10 @@ function createPageWebglAddon(onFallback: (reason: string) => void) {
  * A caller's cleanup can therefore never arrive before there is something to clean up.
  */
 /** What the view fixed when it mounted, for every document it builds. */
-export type TerminalWebDocumentStart = { textScale: number; shown: boolean }
-
 export function mountTerminalWebDocument(
   host: HTMLElement,
   receive: (message: Record<string, unknown>) => void,
-  start: TerminalWebDocumentStart = { textScale: 1, shown: true }
+  start: TerminalDocumentStart = { textScale: 1, shown: true }
 ): TerminalWebDocument {
   ensureDocumentStyle()
   host.classList.add(HOST_CLASS)
@@ -138,7 +136,7 @@ export function mountTerminalWebDocument(
 function startDocumentOrGiveTheHostBack(
   host: HTMLElement,
   receive: (message: Record<string, unknown>) => void,
-  start: TerminalWebDocumentStart,
+  start: TerminalDocumentStart,
   viewport: PageViewport
 ) {
   try {
@@ -194,7 +192,7 @@ function pageViewport(host: HTMLElement) {
 function startPageDocument(
   host: HTMLElement,
   receive: (message: Record<string, unknown>) => void,
-  start: TerminalWebDocumentStart,
+  start: TerminalDocumentStart,
   viewport: PageViewport
 ) {
   // Written by this document's own reporter: `startHostNotify` installs it through the seam below,
@@ -242,8 +240,7 @@ function startPageDocument(
     // fail. Here the engine is the import above, so it is here or this module did not load.
     hasEngine: () => true,
 
-    initialTextScale: () => start.textScale,
-    buildsTerminalBeforeReady: () => start.shown,
+    start: () => start,
 
     // The window here is the whole page, header and dock included; the grid is shown in the host.
     viewportRect: viewport.rect,

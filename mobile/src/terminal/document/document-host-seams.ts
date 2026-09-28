@@ -45,6 +45,9 @@ export type TerminalDocumentErrorReporter = (
 /** A frame from the host, as its transport delivers it: JSON text from a bridge, or the object. */
 export type TerminalDocumentHostFrame = string | Record<string, unknown> | undefined
 
+/** How a document starts, as its view mounted. */
+export type TerminalDocumentStart = { textScale: number; shown: boolean }
+
 /**
  * The ten host seams, kept apart from the state because the host sets them once when it builds
  * the scope, before the start sequence runs, and no module writes them afterwards.
@@ -68,13 +71,12 @@ export type TerminalDocumentHostSeams = {
   installHostTransport: (receive: (frame: TerminalDocumentHostFrame) => void) => () => void
   /** `message-bridge`: whether the engine is here, which is what readiness is reported on. */
   hasEngine: () => boolean
-  /** `text-scaling`: the app's text scale, so the terminal built before ready lays out at it. */
-  initialTextScale: () => number
   /**
-   * `message-bridge`: whether to build the terminal before ready. Only a document shown when its
-   * view mounted does; every terminal is a WebGL context, and a page or app holds about sixteen.
+   * How the document starts, as its view mounted: the app's text scale, which the terminal built
+   * before ready lays out at, and whether it was shown. Only a shown document builds before ready;
+   * every terminal is a WebGL context, and a page or app holds about sixteen.
    */
-  buildsTerminalBeforeReady: () => boolean
+  start: () => TerminalDocumentStart
   /** Every fit, pan, scroll and overlay bound, and every client point mapped into the grid. */
   viewportRect: () => TerminalDocumentViewportRect
   /** `fit-scale`: calls back when that box changes size or is shown again, handing back its removal. */
@@ -231,13 +233,12 @@ export function windowHasEngine() {
   return window.Terminal !== undefined
 }
 
-export function windowInitialTextScale() {
+export function windowStart(): TerminalDocumentStart {
   const scale = window.__orcaTerminalTextScale
-  return typeof scale === 'number' && scale > 0 ? scale : 1
-}
-
-export function windowBuildsTerminalBeforeReady() {
-  return window.__orcaTerminalShown !== false
+  return {
+    textScale: typeof scale === 'number' && scale > 0 ? scale : 1,
+    shown: window.__orcaTerminalShown !== false
+  }
 }
 
 /**

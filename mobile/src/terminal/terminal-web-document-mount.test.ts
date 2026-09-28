@@ -32,8 +32,8 @@ vi.mock('./document/create-terminal-document', async (importOriginal) => {
   return {
     ...actual,
     createTerminalDocument: (host: Parameters<typeof actual.createTerminalDocument>[0]) => {
-      startedScales.push(host?.initialTextScale?.() ?? 1)
-      startedBuilds.push(host?.buildsTerminalBeforeReady?.() ?? true)
+      startedScales.push(host?.start?.().textScale ?? 1)
+      startedBuilds.push(host?.start?.().shown ?? true)
       if (startThrows) {
         throw startThrows
       }

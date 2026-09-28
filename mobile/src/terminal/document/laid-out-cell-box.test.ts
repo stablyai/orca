@@ -146,7 +146,7 @@ describe('a started document', () => {
   })
 
   it('reports ready with the box its own terminal laid out, at the app text scale', () => {
-    const { scope, posted, built } = started({ initialTextScale: () => 1.25 })
+    const { scope, posted, built } = started({ start: () => ({ textScale: 1.25, shown: true }) })
     try {
       expect(built).toHaveLength(1)
       expect(built[0].options.fontSize).toBe(fontPxForScale(1.25))
@@ -175,7 +175,7 @@ describe('a started document', () => {
   })
 
   it('builds nothing before ready for a view hidden when it mounted, and reports no box', () => {
-    const { scope, posted, built } = started({ buildsTerminalBeforeReady: () => false })
+    const { scope, posted, built } = started({ start: () => ({ textScale: 1, shown: false }) })
     try {
       expect(built).toHaveLength(0)
       expect(posted[0]).toEqual({ type: 'web-ready', cellBox: null })

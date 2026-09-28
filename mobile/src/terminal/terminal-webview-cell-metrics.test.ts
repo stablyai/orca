@@ -244,6 +244,13 @@ describe('the cell box xterm laid out', () => {
     expect(start).toBeLessThan(html.indexOf('startTerminalDocument'))
   })
 
+  it('keeps the source it mounted with across renders, so a new text scale does not reload', () => {
+    const { webView } = mount(1)
+    const source = webView().props.source
+    act(() => renderers[0]!.update(createElement(TerminalWebView, { textScale: 1.5 })))
+    expect(webView().props.source).toBe(source)
+  })
+
   it('tells a document whose view was hidden at mount not to build before ready', () => {
     let renderer: ReactTestRenderer | undefined
     act(() => {
