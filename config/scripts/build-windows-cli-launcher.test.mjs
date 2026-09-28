@@ -107,6 +107,8 @@ describe('Windows CLI launcher', () => {
       mkdirSync(join(resourcesPath, 'bin'), { recursive: true })
       mkdirSync(dirname(cliPath), { recursive: true })
       copyFileSync(process.execPath, join(appRoot, 'Orca.exe'))
+      mkdirSync(join(resourcesPath, 'cli-runtime'), { recursive: true })
+      copyFileSync(process.execPath, join(resourcesPath, 'cli-runtime', 'bun-runtime.exe'))
       writeFileSync(
         cliPath,
         `process.stdout.write(JSON.stringify({
@@ -148,7 +150,7 @@ describe('Windows CLI launcher', () => {
       expect(powershell.status, powershell.stderr).toBe(0)
       expect(JSON.parse(powershell.stdout)).toEqual({
         argv: ['orchestration', 'send', '--body', body, '--json'],
-        electronRunAsNode: '1',
+        electronRunAsNode: undefined,
         nodeOptions: null,
         orcaNodeOptions: '--no-warnings'
       })
@@ -175,6 +177,8 @@ describe('Windows CLI launcher', () => {
       mkdirSync(dirname(launcherPath), { recursive: true })
       mkdirSync(dirname(cliPath), { recursive: true })
       copyFileSync(process.execPath, join(appRoot, 'Orca.exe'))
+      mkdirSync(join(resourcesPath, 'cli-runtime'), { recursive: true })
+      copyFileSync(process.execPath, join(resourcesPath, 'cli-runtime', 'bun-runtime.exe'))
       writeFileSync(
         cliPath,
         `require('node:fs').writeFileSync(process.env.ORCA_TEST_OUTPUT, JSON.stringify({
@@ -202,7 +206,7 @@ describe('Windows CLI launcher', () => {
       const launch = spawnSync(harnessPath, [launcherPath, outputPath], { encoding: 'utf8' })
       expect(launch.status, `${launch.stdout}\n${launch.stderr}`).toBe(0)
       expect(JSON.parse(readFileSync(outputPath, 'utf8'))).toEqual({
-        electronRunAsNode: '1',
+        electronRunAsNode: undefined,
         pathKeys: ['PATH', 'Path']
       })
     } finally {

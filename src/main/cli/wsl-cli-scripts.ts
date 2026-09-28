@@ -67,13 +67,14 @@ exec "$ORCA_POWERSHELL" -NoProfile -ExecutionPolicy Bypass -File "$ORCA_BRIDGE_P
 export function buildWslBridgeScript(app?: {
   userDataPath: string
   cliEntryPath?: string
+  appExecutable?: string
 }): string {
   const setAppEnv = app
     ? [
         `$env:ORCA_USER_DATA_PATH = ${quotePowerShellLiteral(app.userDataPath)}`,
         // Why: WSLENV /p maps this guest-only dir back; an app the CLI starts must not inherit it.
         'Remove-Item Env:ORCA_WSL_CLI_DIR -ErrorAction SilentlyContinue',
-        ...(app.cliEntryPath ? buildDevCliEnv(app.cliEntryPath) : [])
+        ...(app.cliEntryPath ? buildDevCliEnv(app.cliEntryPath, app.appExecutable) : [])
       ]
     : []
   // Why the BOM: PowerShell 5.1 reads BOM-less scripts as ANSI, garbling non-ASCII embedded paths.
@@ -178,14 +179,17 @@ exit $exitCode
 }
 
 /** Runs the dev CLI directly (its .cmd launcher adds a cmd.exe quoting boundary) with that launcher's env. */
-function buildDevCliEnv(cliEntryPath: string): string[] {
+function buildDevCliEnv(cliEntryPath: string, appExecutable: string | undefined): string[] {
+  if (!appExecutable) {
+    throw new Error('The development WSL CLI bridge requires an Electron app executable.')
+  }
   return [
-    "$env:ELECTRON_RUN_AS_NODE = '1'",
-    "if (-not $env:ORCA_APP_EXECUTABLE) { $env:ORCA_APP_EXECUTABLE = $OrcaLauncher; $env:ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT = '1' }",
+    'Remove-Item Env:ELECTRON_RUN_AS_NODE, Env:BUN_OPTIONS -ErrorAction SilentlyContinue',
+    `if (-not $env:ORCA_APP_EXECUTABLE) { $env:ORCA_APP_EXECUTABLE = ${quotePowerShellLiteral(appExecutable)}; $env:ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT = '1' }`,
     '$env:ORCA_NODE_OPTIONS = $env:NODE_OPTIONS',
     '$env:ORCA_NODE_REPL_EXTERNAL_MODULE = $env:NODE_REPL_EXTERNAL_MODULE',
     'Remove-Item Env:NODE_OPTIONS, Env:NODE_REPL_EXTERNAL_MODULE -ErrorAction SilentlyContinue',
-    `$ForwardArgs = @(${quotePowerShellLiteral(cliEntryPath)}) + $ForwardArgs`
+    `$ForwardArgs = @('--no-env-file', '--config=NUL', '--no-install', ${quotePowerShellLiteral(cliEntryPath)}) + $ForwardArgs`
   ]
 }
 

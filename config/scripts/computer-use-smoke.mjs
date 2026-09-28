@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process'
 
 const repoRoot = resolve(import.meta.dirname, '..', '..')
 const cliPath =
-  process.env.ORCA_COMPUTER_SMOKE_CLI_PATH ?? resolve(repoRoot, 'out', 'cli', 'index.js')
+  process.env.ORCA_COMPUTER_SMOKE_CLI_PATH ?? resolve(repoRoot, 'out', 'cli', 'cli-bin.js')
 const args = new Set(process.argv.slice(2))
 const requestedApps = valueFlag('--apps')
 const includeScreenshot = args.has('--screenshot')

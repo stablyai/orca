@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Pipes;
 using System.Text;
 
 internal static class OrcaCliLauncher
@@ -13,6 +14,7 @@ internal static class OrcaCliLauncher
             string resourcesDirectory = Directory.GetParent(launcherDirectory).FullName;
             string appDirectory = Directory.GetParent(resourcesDirectory).FullName;
             string electronPath = Path.Combine(appDirectory, "Orca.exe");
+            string runtimePath = Path.Combine(resourcesDirectory, "cli-runtime", "bun-runtime.exe");
             string cliPath = Path.Combine(
                 resourcesDirectory,
                 "app.asar.unpacked",
@@ -33,20 +35,33 @@ internal static class OrcaCliLauncher
                 return 1;
             }
 
+            if (!File.Exists(runtimePath))
+            {
+                Console.Error.WriteLine("Orca CLI runtime is missing. Reinstall Orca to repair it.");
+                return 78;
+            }
+
             ProcessStartInfo startInfo = new ProcessStartInfo
             {
-                FileName = electronPath,
+                FileName = runtimePath,
                 Arguments = BuildArguments(cliPath, args),
                 UseShellExecute = false
             };
 
             // Why: launching without cmd.exe preserves embedded newlines while matching the
-            // packaged batch launcher's Electron-as-Node environment contract.
+            // packaged shell launcher's runtime environment contract.
             // Why: ProcessStartInfo's env copy rejects duplicate PATH/Path keys; mutating this
             // short-lived process preserves the native block for child inheritance (#12046).
             MoveEnvironmentVariable("NODE_OPTIONS", "ORCA_NODE_OPTIONS");
             MoveEnvironmentVariable("NODE_REPL_EXTERNAL_MODULE", "ORCA_NODE_REPL_EXTERNAL_MODULE");
-            Environment.SetEnvironmentVariable("ELECTRON_RUN_AS_NODE", "1");
+            Environment.SetEnvironmentVariable("ELECTRON_RUN_AS_NODE", null);
+            Environment.SetEnvironmentVariable("BUN_OPTIONS", null);
+            if (String.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ORCA_APP_EXECUTABLE")))
+            {
+                Environment.SetEnvironmentVariable("ORCA_APP_EXECUTABLE", electronPath);
+                Environment.SetEnvironmentVariable("ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT", null);
+            }
+            Environment.SetEnvironmentVariable("ORCA_PACKAGED_CLI", "1");
             Environment.SetEnvironmentVariable("ORCA_WINDOWS_PACKAGED_CLI_LAUNCHER", "1");
             string requestedCliCommand = Environment.GetEnvironmentVariable("ORCA_CLI_COMMAND");
             Environment.SetEnvironmentVariable(
@@ -54,10 +69,22 @@ internal static class OrcaCliLauncher
                 requestedCliCommand == "orca-ide" ? "orca-ide" : "orca"
             );
 
-            using (Process child = Process.Start(startInfo))
+            string ownerPipeName = "orca-cli-owner-" + Guid.NewGuid().ToString("N");
+            using (NamedPipeServerStream ownerPipe = new NamedPipeServerStream(
+                ownerPipeName, PipeDirection.Out, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous))
             {
-                child.WaitForExit();
-                return child.ExitCode;
+                Environment.SetEnvironmentVariable("ORCA_CLI_LAUNCHER_PIPE", @"\\.\pipe\" + ownerPipeName);
+                ownerPipe.BeginWaitForConnection(result =>
+                {
+                    try { ownerPipe.EndWaitForConnection(result); }
+                    catch (ObjectDisposedException) { }
+                    catch (IOException) { }
+                }, null);
+                using (Process child = Process.Start(startInfo))
+                {
+                    child.WaitForExit();
+                    return child.ExitCode;
+                }
             }
         }
         catch (Exception error)
@@ -77,7 +104,7 @@ internal static class OrcaCliLauncher
 
     private static string BuildArguments(string cliPath, string[] args)
     {
-        StringBuilder commandLine = new StringBuilder(QuoteArgument(cliPath));
+        StringBuilder commandLine = new StringBuilder("--no-env-file --config=NUL --no-install ").Append(QuoteArgument(cliPath));
         foreach (string arg in args)
         {
             commandLine.Append(' ');

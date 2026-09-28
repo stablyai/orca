@@ -20,14 +20,24 @@ fi
 
 CONTENTS="$APP_PATH/Contents"
 ELECTRON="$CONTENTS/MacOS/Orca"
-# Why: Orca packages the CLI entrypoint outside app.asar so the public shell
-# command can execute it directly with ELECTRON_RUN_AS_NODE, mirroring VS Code's
-# launcher model instead of requiring a separate npm-distributed binary.
 CLI="$CONTENTS/Resources/app.asar.unpacked/out/cli/index.js"
+
+BUN="$CONTENTS/Resources/cli-runtime/bun-runtime"
+if [ ! -f "$BUN" ] || [ ! -x "$BUN" ]; then
+	echo "Orca CLI runtime is missing. Reinstall Orca to repair it." >&2
+	exit 78
+fi
+if [ -z "${ORCA_APP_EXECUTABLE:-}" ]; then
+	export ORCA_APP_EXECUTABLE="$ELECTRON"
+	unset ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT
+fi
+export ORCA_PACKAGED_CLI=1
 
 export ORCA_NODE_OPTIONS="${NODE_OPTIONS-}"
 export ORCA_NODE_REPL_EXTERNAL_MODULE="${NODE_REPL_EXTERNAL_MODULE-}"
 unset NODE_OPTIONS
 unset NODE_REPL_EXTERNAL_MODULE
 
-ELECTRON_RUN_AS_NODE=1 exec "$ELECTRON" "$CLI" "$@"
+unset ELECTRON_RUN_AS_NODE
+unset BUN_OPTIONS
+exec "$BUN" --no-env-file --config=/dev/null --no-install "$CLI" "$@"

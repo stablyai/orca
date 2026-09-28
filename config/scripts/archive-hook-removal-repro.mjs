@@ -18,7 +18,7 @@ import { randomBytes } from 'node:crypto'
 
 const projectDir = resolve(import.meta.dirname, '../..')
 const serveEntry = join(projectDir, 'out', 'main', 'index.js')
-const cliEntry = join(projectDir, 'out', 'cli', 'index.js')
+const cliEntry = join(projectDir, 'out', 'cli', 'cli-bin.js')
 const PORT = 6900 + Math.floor(Math.random() * 400)
 const READY_TIMEOUT_MS = 180_000
 

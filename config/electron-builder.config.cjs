@@ -1,3 +1,8 @@
+const {
+  assertBundledCliRuntimeBuilt,
+  cliRuntimeExtraResource,
+  verifyCliRuntimeDirectory
+} = require('./bundled-cli-runtime.cjs')
 const { chmodSync, existsSync, readdirSync, readFileSync, writeFileSync } = require('node:fs')
 const { execFileSync } = require('node:child_process')
 const { join, resolve } = require('node:path')
@@ -190,6 +195,7 @@ module.exports = {
     '!src{,/**/*}',
     '!out/orcad{,/**/*}',
     '!out/orcad-template{,/**/*}',
+    '!out/cli-runtime{,/**/*}',
     '!out/.orcad-*{,/**/*}',
     '!config{,/**/*}',
     '!docs{,/**/*}',
@@ -312,6 +318,11 @@ module.exports = {
     assertPackagedNativeVariantsInstalled(context.electronPlatformName, context.arch)
     assertBundledRipgrepInstalled()
     assertMobileWebBundleBuilt(mobileWebBundleDir)
+    assertBundledCliRuntimeBuilt(
+      context.electronPlatformName,
+      context.arch,
+      context.packager?.projectDir
+    )
   },
   afterPack: async (context) => {
     const resourcesDir =
@@ -326,6 +337,11 @@ module.exports = {
     if (!existsSync(resourcesDir)) {
       throw new Error(`Missing packaged resources directory: ${resourcesDir}`)
     }
+    verifyCliRuntimeDirectory(
+      join(resourcesDir, 'cli-runtime'),
+      context.electronPlatformName,
+      { 1: 'x64', 3: 'arm64' }[context.arch]
+    )
     // FpmTarget replaces this with deb/rpm while building those artifacts from the shared app tree.
     if (context.electronPlatformName === 'linux') {
       writeFileSync(join(resourcesDir, 'package-type'), 'AppImage')
@@ -451,6 +467,7 @@ module.exports = {
     extraResources: [
       ...commonExtraResources,
       ...windowsRuntimeResources,
+      cliRuntimeExtraResource('win32'),
       winSpeechNativeResource,
       {
         from: 'resources/win32/bin/orca.cmd',
@@ -535,6 +552,7 @@ module.exports = {
     extraResources: [
       ...commonExtraResources,
       ...createPackagedRuntimeNodeModuleResources('darwin'),
+      cliRuntimeExtraResource('darwin'),
       macSpeechNativeResource,
       {
         from: 'resources/darwin/bin/orca',
@@ -603,6 +621,7 @@ module.exports = {
     extraResources: [
       ...commonExtraResources,
       ...createPackagedRuntimeNodeModuleResources('linux'),
+      cliRuntimeExtraResource('linux'),
       linuxSpeechNativeResource,
       {
         from: 'resources/linux/bin/orca-ide',

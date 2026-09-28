@@ -1,3 +1,4 @@
+import { bunOwnedRuntimeArgs } from '../../shared/bun-owned-runtime-args'
 import { existsSync } from 'node:fs'
 import { posix, win32 } from 'node:path'
 import { runProcessSync } from '../../shared/child-process/run-process'
@@ -24,7 +25,7 @@ const DESKTOP_FLAGS = new Set(['--no-sandbox', '--disable-gpu'])
 const DESKTOP_VALUE_FLAGS = new Set(['--disable-features'])
 const CLI_LAUNCH_VALUE_FLAG_NAMES = [...VALUE_TAKING_FLAGS].map((flag) => flag.slice(2))
 
-// Fence recursion if a wrapper drops ELECTRON_RUN_AS_NODE again.
+// Fence accidental recursive CLI redirection.
 const REDIRECT_ATTEMPT_ENV = 'ORCA_CLI_LAUNCH_REDIRECTED'
 
 // Redirect packaged CLI-shaped launches before Chromium initializes.
@@ -50,7 +51,7 @@ export function maybeRedirectCliLaunch(
     return { redirected: false }
   }
   if (env[REDIRECT_ATTEMPT_ENV] === '1') {
-    process.stderr.write('Unable to start the Orca CLI through Electron node mode.\n')
+    process.stderr.write('Unable to start the Orca CLI after runtime redirection.\n')
     return { redirected: true, status: 1 }
   }
   if (!exists(cliEntryPath)) {
@@ -58,11 +59,22 @@ export function maybeRedirectCliLaunch(
     return { redirected: true, status: 1 }
   }
 
-  const childEnv = buildElectronRunAsNodeEnv(env)
+  const runtimePath = getPathApi(platform).join(
+    resourcesPath,
+    'cli-runtime',
+    platform === 'win32' ? 'bun-runtime.exe' : 'bun-runtime'
+  )
+  if (!exists(runtimePath)) {
+    process.stderr.write('Orca CLI runtime is missing. Reinstall Orca to repair it.\n')
+    return { redirected: true, status: 78 }
+  }
+  const childEnv = buildCliRuntimeEnv(env)
+  childEnv.ORCA_APP_EXECUTABLE ||= execPath
+  childEnv.ORCA_PACKAGED_CLI = '1'
   try {
     const result = run({
-      program: execPath,
-      args: [cliEntryPath, ...cliArgs],
+      program: runtimePath,
+      args: [...bunOwnedRuntimeArgs(platform), cliEntryPath, ...cliArgs],
       env: childEnv,
       stdio: 'inherit',
       timeoutMs: null
@@ -232,12 +244,13 @@ function getPathApi(platform: NodeJS.Platform): typeof win32 | typeof posix {
   return platform === 'win32' ? win32 : posix
 }
 
-function buildElectronRunAsNodeEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+function buildCliRuntimeEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const childEnv = { ...env }
   // Preserve user values without exposing them to Electron's bootstrap.
   childEnv.ORCA_NODE_OPTIONS = env.NODE_OPTIONS ?? ''
   childEnv.ORCA_NODE_REPL_EXTERNAL_MODULE = env.NODE_REPL_EXTERNAL_MODULE ?? ''
-  childEnv.ELECTRON_RUN_AS_NODE = '1'
+  delete childEnv.ELECTRON_RUN_AS_NODE
+  delete childEnv.BUN_OPTIONS
   childEnv[REDIRECT_ATTEMPT_ENV] = '1'
   delete childEnv.NODE_OPTIONS
   delete childEnv.NODE_REPL_EXTERNAL_MODULE

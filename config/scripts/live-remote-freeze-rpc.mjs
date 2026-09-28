@@ -40,7 +40,7 @@ export function resolveOrcaCliInvocation({
     )
     return {
       command: nodeExecutable,
-      prefixArgs: [path.win32.join(env.ORCA_DEV_REPO_ROOT, 'out', 'cli', 'index.js')],
+      prefixArgs: [path.win32.join(env.ORCA_DEV_REPO_ROOT, 'out', 'cli', 'cli-bin.js')],
       env: {
         ...env,
         ORCA_USER_DATA_PATH:

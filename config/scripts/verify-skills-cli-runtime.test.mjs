@@ -16,6 +16,7 @@ async function writeSkillsCliFixture(outDir, handlerSource) {
   const cliDir = join(outDir, 'cli')
   const handlerDir = join(cliDir, 'handlers')
   await mkdir(handlerDir, { recursive: true })
+  await writeFile(join(cliDir, 'cli-bin.js'), "require('./index.js')\n", 'utf8')
   await writeFile(join(cliDir, 'index.js'), "require('./handlers/skills')\n", 'utf8')
   await writeFile(join(handlerDir, 'skills.js'), handlerSource, 'utf8')
 }
@@ -95,6 +96,17 @@ describe('skills CLI runtime closure', () => {
         closureFiles: 2,
         commands: 0
       })
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('runs command probes through the public runtime bootstrap', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-cli-bootstrap-'))
+    try {
+      await writeSkillsCliFixture(root, "throw new Error('Application must not run on host Node')")
+      await writeFile(join(root, 'cli', 'cli-bin.js'), "console.log('bootstrap selected')")
+      expect(runCli(root, [])).toBe('bootstrap selected\n')
     } finally {
       await rm(root, { recursive: true, force: true })
     }

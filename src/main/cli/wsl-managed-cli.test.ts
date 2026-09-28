@@ -49,20 +49,35 @@ describe('managed WSL CLI provisioning', () => {
     expect(getManagedWslCliDir(host)).toBeNull()
   })
 
+  it('does not offer a development CLI when its Bun runtime is missing', () => {
+    const host = fixture()
+    const appPath = host.resourcesPath
+    mkdirSync(join(appPath, 'out', 'cli'), { recursive: true })
+    writeFileSync(join(appPath, 'out', 'cli', 'index.js'), 'fixture')
+    installFakeAppEnvironment({ getPath: () => host.userDataPath, getAppPath: () => appPath })
+    expect(getManagedWslCliDir({ ...host, isPackaged: false })).toBeNull()
+  })
+
   it('runs the development CLI directly with the dev launcher env', () => {
     const host = fixture()
     const appPath = host.resourcesPath
     const cliEntryPath = join(appPath, 'out', 'cli', 'index.js')
     mkdirSync(join(appPath, 'out', 'cli'), { recursive: true })
     writeFileSync(cliEntryPath, 'fixture')
+    const runtime = join(appPath, 'out', 'cli-runtime', `win32-${process.arch}`, 'bun-runtime.exe')
+    mkdirSync(join(runtime, '..'), { recursive: true })
+    writeFileSync(runtime, 'fixture')
     installFakeAppEnvironment({ getPath: () => host.userDataPath, getAppPath: () => appPath })
     const directory = getManagedWslCliDir({ ...host, isPackaged: false }) ?? ''
-    expect(readFileSync(join(directory, 'orca-dev'), 'utf8')).toContain(process.execPath)
+    expect(readFileSync(join(directory, 'orca-dev'), 'utf8')).toContain(runtime)
     const bridge = readFileSync(join(directory, 'orca-wsl-bridge.ps1'), 'utf8')
     expect(bridge.startsWith('\uFEFF')).toBe(true)
     expect(bridge).toContain(host.userDataPath)
     expect(bridge).toContain(cliEntryPath)
     expect(bridge).toContain('$env:ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT')
     expect(bridge).toContain('Remove-Item Env:NODE_OPTIONS')
+    expect(bridge).toContain('Remove-Item Env:ELECTRON_RUN_AS_NODE, Env:BUN_OPTIONS')
+    expect(bridge).toContain(process.execPath.replaceAll("'", "''"))
+    expect(bridge).not.toContain('$env:ORCA_APP_EXECUTABLE = $OrcaLauncher')
   })
 })

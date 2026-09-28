@@ -628,7 +628,7 @@ describe('runRemoteOrcaCli', () => {
         env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
       },
       {
-        execPath: '/host/electron',
+        execPath: '/host/bun-runtime',
         cliEntryPath: '/host/app/out/cli/index.js',
         userDataPath: '/host/user-data',
         entryExists: () => true,
@@ -644,6 +644,9 @@ describe('runRemoteOrcaCli', () => {
     expect(result).toEqual({ stdout: '{"ok":true}\n', stderr: '', exitCode: 0 })
     const [, args] = spawn.mock.calls[0] as unknown as [string, string[]]
     expect(args).toEqual([
+      '--no-env-file',
+      process.platform === 'win32' ? '--config=NUL' : '--config=/dev/null',
+      '--no-install',
       '/host/app/out/cli/index.js',
       'worktree',
       'create',

@@ -1,3 +1,4 @@
+import { SERVE_STOP_READY, SERVE_STOP_REQUEST } from '../../shared/serve-supervisor-control'
 import { EventEmitter } from 'node:events'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -17,6 +18,8 @@ import {
 
 class FakeChildProcess extends EventEmitter {
   kill = vi.fn()
+  send = vi.fn()
+  connected = true
   pid = 5150
 }
 
@@ -133,6 +136,70 @@ describe('superviseForegroundServe signal exits', () => {
     await expect(supervised).resolves.toBe(0)
     expect(vi.getTimerCount()).toBe(0)
   })
+
+  it.each([false, true])(
+    'requests graceful Windows stop with readiness first=%s',
+    async (readyFirst) => {
+      setPlatform('win32')
+      vi.useFakeTimers()
+      const child = new FakeChildProcess()
+      const supervised = superviseChild(child)
+      if (readyFirst) {
+        child.emit('message', SERVE_STOP_READY)
+      }
+      process.emit('SIGTERM', 'SIGTERM')
+      if (!readyFirst) {
+        expect(child.send).not.toHaveBeenCalled()
+        child.emit('message', SERVE_STOP_READY)
+      }
+      expect(child.send).toHaveBeenCalledExactlyOnceWith(SERVE_STOP_REQUEST, expect.any(Function))
+      expect(child.kill).not.toHaveBeenCalled()
+      child.emit('exit', 0, null)
+      await expect(supervised).resolves.toBe(0)
+      expect(vi.getTimerCount()).toBe(0)
+      expect(child.listenerCount('message')).toBe(0)
+    }
+  )
+
+  it('keeps the shutdown deadline for a Windows child without stop support', async () => {
+    setPlatform('win32')
+    vi.useFakeTimers()
+    const child = new FakeChildProcess()
+    const supervised = superviseChild(child)
+    process.emit('SIGTERM', 'SIGTERM')
+    child.emit('message', { type: 'unknown' })
+    expect(child.send).not.toHaveBeenCalled()
+    expect(child.kill).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(SERVE_CHILD_FORCE_KILL_GRACE_MS)
+    expect(child.kill).toHaveBeenCalledExactlyOnceWith('SIGKILL')
+    child.emit('exit', 1, null)
+    await expect(supervised).resolves.toBe(1)
+  })
+
+  it.each(['disconnected', 'send-throws', 'send-callback-error'] as const)(
+    'retains the shutdown deadline when Windows IPC is %s',
+    async (failure) => {
+      setPlatform('win32')
+      vi.useFakeTimers()
+      vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+      const child = new FakeChildProcess()
+      child.connected = failure !== 'disconnected'
+      child.send.mockImplementation((_message, callback) => {
+        if (failure === 'send-throws') {
+          throw new Error('closed')
+        }
+        callback(new Error('closed'))
+      })
+      const supervised = superviseChild(child)
+      child.emit('message', SERVE_STOP_READY)
+      process.emit('SIGTERM', 'SIGTERM')
+      expect(child.kill).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(SERVE_CHILD_FORCE_KILL_GRACE_MS)
+      expect(child.kill).toHaveBeenCalledExactlyOnceWith('SIGKILL')
+      child.emit('exit', 1, null)
+      await expect(supervised).resolves.toBe(1)
+    }
+  )
 
   it('forwards Linux terminal hangup and removes the listener after exit', async () => {
     setPlatform('linux')

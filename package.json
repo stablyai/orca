@@ -5,7 +5,7 @@
   "homepage": "https://github.com/stablyai/orca",
   "author": "stablyai",
   "bin": {
-    "orca": "./out/cli/index.js",
+    "orca": "./out/cli/cli-bin.js",
     "orca-dev": "./config/scripts/orca-dev.mjs"
   },
   "main": "./out/main/index.js",
@@ -41,7 +41,6 @@
     "check:readme-local-links": "node config/scripts/check-readme-local-links.mjs",
     "build:orcad": "node config/scripts/build-orcad-bun.mjs",
     "build:orcad-template": "node config/scripts/build-orcad-template.mjs",
-    "build:orcad-prebuilds": "node config/scripts/build-orcad-prebuilds.mjs",
     "smoke:orcad-terminal": "node config/scripts/ensure-native-runtime.mjs --runtime=node && pnpm run build:cli && pnpm run build:orcad && node config/scripts/runtime-serve-terminal-smoke.mjs --target orcad",
     "smoke:serve-terminal": "node config/scripts/runtime-serve-terminal-smoke.mjs",
     "check:feature-wall-assets": "node config/scripts/check-feature-wall-assets.mjs",
@@ -88,7 +87,8 @@
     "verify:localization-extraction": "node config/scripts/verify-localization-extraction.mjs",
     "verify:localization-coverage": "node config/scripts/audit-localization-coverage.mjs --check",
     "audit:localization": "node config/scripts/audit-localization-coverage.mjs",
-    "build:cli": "tsc -p config/tsconfig.cli.json --outDir out --composite false --incremental false && node config/scripts/verify-cli-bin.mjs --fix-executable --fix-package-json && node config/scripts/install-dev-cli.mjs",
+    "build:cli-runtime": "node config/scripts/build-cli-runtime.mjs",
+    "build:cli": "pnpm run build:cli-runtime && tsc -p config/tsconfig.cli.json --outDir out --composite false --incremental false && node config/scripts/build-cli-bin.mjs && node config/scripts/verify-cli-bin.mjs --fix-executable --fix-package-json && node config/scripts/install-dev-cli.mjs",
     "test:linux-cli-contract": "node config/scripts/run-linux-cli-launch-contract-docker.mjs --appimage dist/orca-linux.AppImage",
     "test:repro:skills-cli-runtime": "pnpm run build:cli && pnpm run build:electron-vite && pnpm run verify:built-skills-cli",
     "build:electron-vite": "node config/scripts/run-electron-vite-build.mjs",

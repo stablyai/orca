@@ -1,3 +1,4 @@
+import { createServeStopRequest } from './serve-stop-request'
 import type { ChildProcess, SpawnOptions, spawn } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { readFile, rename, unlink, writeFile } from 'node:fs/promises'
@@ -124,6 +125,7 @@ function waitForForegroundChild(
     let readiness: ServeReadiness = expected ? 'pending' : 'not-expected'
     let stateWrite = Promise.resolve()
     let childSettled = false
+    const stopRequest = createServeStopRequest(child)
     const terminateChild = (): void => {
       if (childSettled) {
         return
@@ -160,10 +162,14 @@ function waitForForegroundChild(
       if (process.platform !== 'win32') {
         forwardedSignals.add(signal)
         child.kill(signal)
+      } else if (signal === 'SIGTERM') {
+        // Launcher loss is synthetic SIGTERM, not a console event delivered to the child.
+        stopRequest.request()
       }
       forceKillTimer ??= setTimeout(() => child.kill('SIGKILL'), SERVE_CHILD_FORCE_KILL_GRACE_MS)
     }
     const handleMessage = (value: unknown): void => {
+      stopRequest.handleMessage(value)
       const message = parseServeSupervisorMessage(value)
       if (!message || !expected || readiness !== 'pending') {
         return

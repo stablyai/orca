@@ -258,7 +258,7 @@ describe('CLI launch redirect: command form', () => {
 })
 
 describe('CLI launch redirect: spawning', () => {
-  it('runs the in-package CLI in Electron node mode with sanitized env', () => {
+  it('runs the in-package CLI under Bun with sanitized env', () => {
     const run = vi.fn((..._args: unknown[]) => ({
       code: 0,
       signal: null,
@@ -282,12 +282,20 @@ describe('CLI launch redirect: spawning', () => {
     expect(result).toEqual({ redirected: true, status: 0 })
     expect(run).toHaveBeenCalledWith(
       expect.objectContaining({
-        program: linux.execPath,
-        args: [linux.cliEntryPath, 'status', '--json'],
+        program: `${linux.resourcesPath}/cli-runtime/bun-runtime`,
+        args: [
+          '--no-env-file',
+          '--config=/dev/null',
+          '--no-install',
+          linux.cliEntryPath,
+          'status',
+          '--json'
+        ],
         stdio: 'inherit',
         timeoutMs: null,
         env: expect.objectContaining({
-          ELECTRON_RUN_AS_NODE: '1',
+          ORCA_APP_EXECUTABLE: linux.execPath,
+          ORCA_PACKAGED_CLI: '1',
           ORCA_CLI_LAUNCH_REDIRECTED: '1',
           ORCA_NODE_OPTIONS: '--inspect',
           ORCA_NODE_REPL_EXTERNAL_MODULE: 'external-loader'
@@ -297,6 +305,21 @@ describe('CLI launch redirect: spawning', () => {
     const spawnedEnv = (run.mock.calls[0][0] as { env: NodeJS.ProcessEnv }).env
     expect(spawnedEnv).not.toHaveProperty('NODE_OPTIONS')
     expect(spawnedEnv).not.toHaveProperty('NODE_REPL_EXTERNAL_MODULE')
+  })
+
+  it('refuses a missing packaged Bun runtime without falling back to Electron', () => {
+    const run = vi.fn()
+    const result = maybeRedirectCliLaunch({
+      ...linuxOptions,
+      argv: [linux.execPath, 'status'],
+      env: {},
+      resourcesPath: linux.resourcesPath,
+      execPath: linux.execPath,
+      exists: (path) => path === linux.cliEntryPath,
+      run
+    })
+    expect(result).toEqual({ redirected: true, status: 78 })
+    expect(run).not.toHaveBeenCalled()
   })
 
   it('refuses to redirect twice so a dropped ELECTRON_RUN_AS_NODE cannot loop', () => {

@@ -33,8 +33,18 @@ export async function ensureDevLauncher(args: {
   // Why: dev builds lack the packaged resources/bin launcher, so generate one in userData to validate the flow.
   const content =
     args.platform === 'win32'
-      ? buildWindowsDevLauncher(args.execPath, args.cliEntryPath, args.userDataPath)
-      : buildUnixDevLauncher(args.execPath, args.cliEntryPath, args.userDataPath)
+      ? buildWindowsDevLauncher(
+          args.execPath,
+          args.cliEntryPath,
+          args.userDataPath,
+          devRuntimePath(args.cliEntryPath, args.platform)
+        )
+      : buildUnixDevLauncher(
+          args.execPath,
+          args.cliEntryPath,
+          args.userDataPath,
+          devRuntimePath(args.cliEntryPath, args.platform)
+        )
   await writeFile(launcherPath, content, {
     encoding: 'utf8',
     mode: args.platform === 'win32' ? undefined : 0o755
@@ -49,15 +59,31 @@ export async function ensureDevLauncher(args: {
   return launcherPath
 }
 
+function devRuntimePath(cliEntryPath: string, platform: NodeJS.Platform): string {
+  return join(
+    dirname(dirname(cliEntryPath)),
+    'cli-runtime',
+    `${platform}-${process.arch}`,
+    platform === 'win32' ? 'bun-runtime.exe' : 'bun-runtime'
+  )
+}
+
 export function buildUnixDevLauncher(
   execPathValue: string,
   cliEntryPath: string,
-  userDataPath: string
+  userDataPath: string,
+  runtimePath = devRuntimePath(cliEntryPath, process.platform)
 ): string {
   return `#!/usr/bin/env bash
 set -euo pipefail
 ELECTRON=${quoteShell(execPathValue)}
 CLI=${quoteShell(cliEntryPath)}
+BUN=${quoteShell(runtimePath)}
+# orca-bundled-bun-cli
+if [ ! -f "$BUN" ] || [ ! -x "$BUN" ]; then
+  echo "Orca CLI runtime missing; run pnpm run build:cli." >&2
+  exit 78
+fi
 export ORCA_USER_DATA_PATH=${quoteShell(userDataPath)}
 if [ -z "\${ORCA_APP_EXECUTABLE:-}" ]; then
   export ORCA_APP_EXECUTABLE="$ELECTRON"
@@ -67,19 +93,27 @@ export ORCA_NODE_OPTIONS="\${NODE_OPTIONS-}"
 export ORCA_NODE_REPL_EXTERNAL_MODULE="\${NODE_REPL_EXTERNAL_MODULE-}"
 unset NODE_OPTIONS
 unset NODE_REPL_EXTERNAL_MODULE
-ELECTRON_RUN_AS_NODE=1 exec "$ELECTRON" "$CLI" "$@"
+unset ELECTRON_RUN_AS_NODE
+unset BUN_OPTIONS
+exec "$BUN" --no-env-file --config=/dev/null --no-install "$CLI" "$@"
 `
 }
 
 export function buildWindowsDevLauncher(
   execPathValue: string,
   cliEntryPath: string,
-  userDataPath: string
+  userDataPath: string,
+  runtimePath = devRuntimePath(cliEntryPath, 'win32')
 ): string {
   return `@echo off
 setlocal
 set "ELECTRON=${escapeWindowsBatchValue(execPathValue)}"
 set "CLI=${escapeWindowsBatchValue(cliEntryPath)}"
+set "BUN=${escapeWindowsBatchValue(runtimePath)}"
+if not exist "%BUN%" (
+  echo Orca CLI runtime missing; run pnpm run build:cli. 1>&2
+  exit /b 78
+)
 set "ORCA_USER_DATA_PATH=${escapeWindowsBatchValue(userDataPath)}"
 if not defined ORCA_APP_EXECUTABLE (
   set "ORCA_APP_EXECUTABLE=%ELECTRON%"
@@ -89,8 +123,9 @@ set "ORCA_NODE_OPTIONS=%NODE_OPTIONS%"
 set "ORCA_NODE_REPL_EXTERNAL_MODULE=%NODE_REPL_EXTERNAL_MODULE%"
 set NODE_OPTIONS=
 set NODE_REPL_EXTERNAL_MODULE=
-set ELECTRON_RUN_AS_NODE=1
-"%ELECTRON%" "%CLI%" %*
+set ELECTRON_RUN_AS_NODE=
+set BUN_OPTIONS=
+"%BUN%" --no-env-file --config=NUL --no-install "%CLI%" %*
 `
 }
 
@@ -104,7 +139,7 @@ set "ORCA_LAUNCHER=${escapeWindowsBatchValue(launcherPath)}"
 
 export function extractManagedUnixLauncherTarget(content: string): string | null {
   if (
-    !content.includes('ELECTRON_RUN_AS_NODE=1') ||
+    (!content.includes('ELECTRON_RUN_AS_NODE=1') && !content.includes('# orca-bundled-bun-cli')) ||
     !content.includes('ORCA_NODE_OPTIONS') ||
     !content.includes('NODE_REPL_EXTERNAL_MODULE')
   ) {

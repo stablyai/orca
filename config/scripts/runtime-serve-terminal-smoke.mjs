@@ -22,21 +22,24 @@
  *   - create, navigate, evaluate, and screenshot through the selected host provider.
  */
 import { spawn, spawnSync } from 'node:child_process'
+import { build } from 'esbuild'
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { randomBytes } from 'node:crypto'
 import process from 'node:process'
-import { orcadBunRuntimeFilename } from '../../src/shared/orcad-artifacts.ts'
-import { createServeStopRequest } from '../../src/shared/serve-supervisor-control.ts'
+import {
+  readRuntimeServeSmokePid,
+  runtimeServeSmokeProcessState,
+  resolveRuntimeServeSmokeLaunch,
+  verifyRuntimeServeSmokeFinalExport
+} from './runtime-serve-smoke-launch.mjs'
+import { prepareServerShutdown, stopServer } from './runtime-serve-smoke-shutdown.mjs'
 
 const projectDir = resolve(import.meta.dirname, '../..')
-const serveEntry = join(projectDir, 'out', 'main', 'index.js')
-const ORCAD_ENTRY = join(projectDir, 'out', 'orcad', 'orcad.js')
 const READY_TIMEOUT_MS = 120_000
 const OUTPUT_TIMEOUT_MS = 30_000
-const SHUTDOWN_TIMEOUT_MS = 15_000
 // Why a random high port: a fixed one collides with a developer's own `orca serve`.
 const PORT = 6800 + Math.floor(Number(process.env.ORCA_SMOKE_PORT_OFFSET ?? '0'))
 
@@ -54,10 +57,11 @@ function fail(message) {
  * version under test, and a CI runner has no installed Orca app to fall back on.
  */
 function resolveCli() {
-  const built = join(projectDir, 'out', 'cli', 'index.js')
-  return existsSync(built)
-    ? { command: process.execPath, prefix: [built] }
-    : { command: 'orca', prefix: [] }
+  const built = join(projectDir, 'out', 'cli', 'cli-bin.js')
+  if (!existsSync(built)) {
+    throw new Error('Build the CLI before running the runtime acceptance test.')
+  }
+  return { command: process.execPath, prefix: [built] }
 }
 
 /** The `orca` CLI, driven with an explicit pairing code so it targets this server only. */
@@ -160,51 +164,6 @@ async function waitForNonce(pairingCode, terminalHandle, nonce) {
   return false
 }
 
-/**
- * The two hosts this acceptance drives.
- *
- * Everything after boot — pairing, worktree list, terminal create, the nonce round trip —
- * is identical for both. That is the point: the Node artifact has to satisfy the same
- * contract as the Electron server, proven by the same code rather than a parallel test
- * that could drift into asserting less.
- */
-function resolveLaunch(userDataDir) {
-  // Why a flag and not just an env var: package scripts have to set this on Windows too,
-  // and `FOO=bar cmd` is not portable there.
-  const flagIndex = process.argv.indexOf('--target')
-  const target =
-    flagIndex !== -1 ? process.argv[flagIndex + 1] : (process.env.ORCA_SMOKE_TARGET ?? 'electron')
-  if (target === 'orcad') {
-    return {
-      label: `orcad (${ORCAD_ENTRY})`,
-      controlIpc: true,
-      command: join(projectDir, 'out', 'orcad', orcadBunRuntimeFilename(process.platform)),
-      args: [ORCAD_ENTRY, '--port', String(PORT), '--json'],
-      env: { ORCA_USER_DATA: userDataDir }
-    }
-  }
-  if (target !== 'electron') {
-    throw new Error(
-      `--target (or ORCA_SMOKE_TARGET) must be 'electron' or 'orcad', got '${target}'`
-    )
-  }
-  const serveArgs = [
-    serveEntry,
-    '--serve',
-    '--serve-port',
-    String(PORT),
-    '--serve-json',
-    `--user-data-dir=${userDataDir}`
-  ]
-  const override = process.env.ORCA_SMOKE_ELECTRON
-  return {
-    label: `electron (${serveEntry})`,
-    command: override ?? 'npx',
-    args: override ? serveArgs : ['electron', ...serveArgs],
-    env: {}
-  }
-}
-
 /** A throwaway git repo with one commit, so `repo add` has something real to register. */
 function seedGitRepo() {
   const dir = mkdtempSync(join(tmpdir(), 'orca-smoke-repo-'))
@@ -225,36 +184,67 @@ function seedGitRepo() {
 
 async function main() {
   const userDataDir = mkdtempSync(join(tmpdir(), 'orca-serve-smoke-'))
-  const launch = resolveLaunch(userDataDir)
+  const launch = resolveRuntimeServeSmokeLaunch(projectDir, userDataDir, PORT)
   log(`booting ${launch.label} on port ${PORT} with userData ${userDataDir}`)
 
   // Why tracked out here: the worktree lands in the real workspaces root, not the temp
   // profile, so the finally block has to remove it explicitly or every run leaks one.
+  const folderWorkspace = process.argv.includes('--folder')
   let seeded = null
   let pairing = null
+  let servingPid = null
 
-  const child = spawn(launch.command, launch.args, {
-    stdio: launch.controlIpc ? ['ignore', 'pipe', 'pipe', 'ipc'] : ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, ...launch.env }
-  })
-
-  const stopControl = createServeStopRequest(child)
-  child.on('message', stopControl.handleMessage)
-  child.once('exit', () => child.off('message', stopControl.handleMessage))
+  const diagnostics = []
+  const startServer = () => {
+    const child = spawn(launch.command, launch.args, {
+      stdio: launch.lockPath ? ['ignore', 'pipe', 'pipe', 'ipc'] : ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+      env: { ...process.env, ...launch.env, ORCA_BACKGROUND_LAUNCH: '1' }
+    })
+    if (launch.lockPath) {
+      prepareServerShutdown(child)
+    }
+    const output = { stdout: '', stderr: '' }
+    diagnostics.push(output)
+    for (const stream of ['stdout', 'stderr']) {
+      child[stream].on('data', (data) => {
+        output[stream] = (output[stream] + data.toString()).slice(-32_768)
+      })
+    }
+    return child
+  }
+  let child = startServer()
 
   try {
     const ready = await waitForReady(child)
+    servingPid = readRuntimeServeSmokePid(userDataDir)
     log(`ready: ${ready.advertisedEndpoint}`)
-    const pairingCode = pairingCodeFrom(ready)
+    let pairingCode = pairingCodeFrom(ready)
     pairing = pairingCode
 
     // Why seed instead of using whatever the profile already holds: a hermetic repo makes
     // this runnable on a clean CI box, keeps the assertion deterministic, and exercises
     // repo.add + worktree.create rather than assuming someone else registered a worktree.
-    const repoPath = seedGitRepo()
+    const repoPath = folderWorkspace
+      ? mkdtempSync(join(tmpdir(), 'orca-smoke-folder-'))
+      : seedGitRepo()
     seeded = { repoPath }
-    log(`seeded repo at ${repoPath}`)
-    const repo = orca(pairingCode, ['repo', 'add', '--path', repoPath])?.repo
+    log(`seeded ${folderWorkspace ? 'folder' : 'git repo'} at ${repoPath}`)
+    let repo
+    if (folderWorkspace) {
+      // The public RPC supports folder registration; the repo-add CLI flag does not.
+      const { RuntimeClient } = await import(
+        pathToFileURL(join(projectDir, 'out/cli/runtime/client.js')).href
+      )
+      const client = new RuntimeClient(userDataDir, 60_000, pairingCode, null)
+      repo = (await client.call('repo.add', { path: repoPath, kind: 'folder' })).result.repo
+      if (repo.kind !== 'folder' || existsSync(join(repoPath, '.git'))) {
+        throw new Error('Folder registration unexpectedly created a git workspace')
+      }
+      writeFileSync(join(repoPath, 'keep.txt'), 'User-owned folder contents')
+    } else {
+      repo = orca(pairingCode, ['repo', 'add', '--path', repoPath])?.repo
+    }
     if (!repo?.id) {
       throw new Error('repo.add returned no repo id')
     }
@@ -284,6 +274,22 @@ async function main() {
       throw new Error('worktree.create succeeded but worktree.show cannot resolve it')
     }
     log(`server resolves ${shown.id}`)
+    if (process.argv.includes('--restart')) {
+      await stopServer(child, launch.lockPath, launch.ownerLoss, servingPid)
+      if (launch.verifyFinalExport && folderWorkspace) {
+        verifyRuntimeServeSmokeFinalExport(userDataDir, created.id)
+        log('final profile export contains the new workspace OK')
+      }
+      child = startServer()
+      pairingCode = pairingCodeFrom(await waitForReady(child))
+      servingPid = readRuntimeServeSmokePid(userDataDir)
+      pairing = pairingCode
+      const restored = orca(pairingCode, ['worktree', 'show', '--worktree', created.id])?.worktree
+      if (restored?.id !== created.id) {
+        throw new Error('Restarted server cannot resolve the persisted worktree')
+      }
+      log('clean restart restored persisted worktree OK')
+    }
     if (process.argv.includes('--browser')) {
       const status = orca(pairingCode, ['status'])
       if (!status?.runtime?.capabilities?.includes('browser.headless.v1')) {
@@ -329,21 +335,28 @@ async function main() {
       log('browser navigate/evaluate/screenshot round trip OK')
     }
 
-    const terminal = orca(pairingCode, ['terminal', 'create', '--worktree', created.id])?.terminal
+    const terminal = orca(pairingCode, [
+      'terminal',
+      'create',
+      '--worktree',
+      created.id,
+      ...(process.platform === 'win32' ? ['--shell', 'powershell.exe'] : [])
+    ])?.terminal
     if (!terminal?.handle) {
       throw new Error('terminal.create returned no handle')
     }
     log(`created ${terminal.handle}`)
 
-    // Why invoke node rather than `echo`: the shell differs per platform, node does not.
-    const nonce = `ORCA_SMOKE_${randomBytes(8).toString('hex')}`
+    // Assemble the nonce inside the process so terminal input echo cannot satisfy the assertion.
+    const suffix = randomBytes(8).toString('hex')
+    const nonce = `ORCA_SMOKE_${suffix}`
     orca(pairingCode, [
       'terminal',
       'send',
       '--terminal',
       terminal.handle,
       '--text',
-      `"${process.execPath}" -e "console.log('${nonce}')"`,
+      `${process.platform === 'win32' ? '& ' : ''}"${process.execPath}" -e "console.log('ORCA_SMOKE_'+'${suffix}')"`,
       '--enter'
     ])
 
@@ -356,6 +369,19 @@ async function main() {
     log('terminal round trip OK')
   } catch (error) {
     fail(error instanceof Error ? error.message : String(error))
+    log(
+      `shutdown state: launcher=${child.exitCode ?? child.signalCode ?? 'running'}, serverPid=${servingPid}, server=${runtimeServeSmokeProcessState(servingPid)}, metadataPresent=${readRuntimeServeSmokePid(userDataDir) !== null}`
+    )
+    if (launch.verifyFinalExport && folderWorkspace && seeded?.worktreeId) {
+      try {
+        verifyRuntimeServeSmokeFinalExport(userDataDir, seeded.worktreeId)
+        log('shutdown diagnostic: final profile export contains the workspace')
+      } catch (error) {
+        log(
+          `shutdown diagnostic: final profile export failed (${error.code ?? error.name}): ${error.message}`
+        )
+      }
+    }
   } finally {
     // Why before SIGTERM: worktree removal is a server operation, so it needs the server.
     if (seeded?.worktreeId && pairing) {
@@ -378,8 +404,16 @@ async function main() {
       // Why the parent too: `worktree rm` removes the worktree directory, leaving the
       // empty `<workspaces>/<repo-name>/` container behind. Every run would leak one.
       const worktreePath = seeded.worktreeId.split('::')[1]
-      if (removed.status === 0 && worktreePath) {
-        rmSync(dirname(worktreePath), { recursive: true, force: true })
+      if (removed.status === 0 && worktreePath && !folderWorkspace) {
+        rmSync(dirname(worktreePath), {
+          recursive: true,
+          force: true,
+          maxRetries: 5,
+          retryDelay: 200
+        })
+      }
+      if (folderWorkspace && !existsSync(join(seeded.repoPath, 'keep.txt'))) {
+        fail('Removing the folder workspace deleted user-owned files')
       }
       if (removed.status !== 0) {
         log(
@@ -388,27 +422,54 @@ async function main() {
         )
       }
     }
-    // Why the exitCode guard: a server that died during boot has already exited, and
-    // waiting for a second 'exit' that will never fire reported a bogus shutdown failure
-    // stacked on top of the real error.
-    if (child.exitCode === null && child.signalCode === null) {
-      if (launch.controlIpc) {
-        stopControl.request()
-      } else {
-        child.kill('SIGTERM')
+    try {
+      await stopServer(child, launch.lockPath, launch.ownerLoss, servingPid)
+    } catch (error) {
+      fail(error instanceof Error ? error.message : String(error))
+    }
+    if (launch.ownerLoss && runtimeServeSmokeProcessState(servingPid) === 'exited') {
+      const cleanupEntry = join(userDataDir, 'smoke-daemon-cleanup.cjs')
+      await build({
+        entryPoints: [join(projectDir, 'config/scripts/runtime-serve-smoke-daemon.ts')],
+        outfile: cleanupEntry,
+        bundle: true,
+        platform: 'node',
+        format: 'cjs',
+        target: 'node24'
+      })
+      const cleaned = spawnSync(process.execPath, [cleanupEntry, userDataDir], {
+        encoding: 'utf8',
+        windowsHide: true,
+        timeout: 15_000,
+        env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' }
+      })
+      if (cleaned.status !== 0) {
+        fail(
+          `Disposable daemon cleanup failed: ${cleaned.stderr || cleaned.error || cleaned.status}`
+        )
       }
-      const exited = await Promise.race([
-        new Promise((r) => child.on('exit', () => r(true))),
-        new Promise((r) => setTimeout(() => r(false), SHUTDOWN_TIMEOUT_MS))
-      ])
-      if (!exited) {
-        child.kill('SIGKILL')
-        fail(`server did not exit within ${SHUTDOWN_TIMEOUT_MS}ms of SIGTERM`)
+      child.stdout.destroy()
+      child.stderr.destroy()
+    }
+    if (process.exitCode) {
+      for (const output of diagnostics) {
+        const stdout = output.stdout
+          .split('\n')
+          .filter((line) => !line.includes('orca_server_ready'))
+          .join('\n')
+        process.stderr.write(
+          `[serve-terminal-smoke] server diagnostics:\n${stdout}\n${output.stderr}\n`
+        )
       }
     }
-    rmSync(userDataDir, { recursive: true, force: true })
+    try {
+      launch.dispose?.()
+    } catch (error) {
+      fail(error.message)
+    }
+    rmSync(userDataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
     if (seeded?.repoPath) {
-      rmSync(seeded.repoPath, { recursive: true, force: true })
+      rmSync(seeded.repoPath, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
     }
   }
 

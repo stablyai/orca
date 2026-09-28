@@ -1,7 +1,7 @@
-import { cp, mkdtemp, rm } from 'node:fs/promises'
+import { cp, mkdtemp, rename, rm } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import { tmpdir } from 'node:os'
-import { basename, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import assert from 'node:assert/strict'
 
@@ -39,11 +39,12 @@ let smokeFailure = null
 try {
   await cp(appDir, copiedAppDir, { recursive: true, verbatimSymlinks: true })
   const cliPath = getPackagedCliPath(copiedAppDir)
-  const env = { ...process.env, NODE_PATH: '' }
+  const env = { ...process.env, NODE_PATH: '', ORCA_BACKGROUND_LAUNCH: '1' }
   delete env.ORCA_CLI_CWD
   const run = (args) =>
     execFileAsync(cliPath, args, {
       env,
+      windowsHide: true,
       killSignal: 'SIGKILL',
       maxBuffer: 16 * 1024 * 1024,
       timeout: 30_000
@@ -73,16 +74,23 @@ try {
   )
   assert.equal(install.executed, false)
   assert.equal(update.executed, false)
-  console.log(`[packaged-cli-smoke] help and skills commands passed via ${cliPath}`)
+  const runtime = join(
+    dirname(dirname(cliPath)),
+    'cli-runtime',
+    process.platform === 'win32' ? 'bun-runtime.exe' : 'bun-runtime'
+  )
+  await rename(runtime, `${runtime}.unavailable`)
+  await assert.rejects(run(['--help']), (error) => {
+    assert.equal(error.code, 78)
+    assert.match(error.stderr, /runtime.*missing|missing.*runtime/i)
+    return true
+  })
+  console.log(`[packaged-cli-smoke] commands and missing-runtime refusal passed via ${cliPath}`)
 } catch (error) {
   smokeFailure = error
 }
 
-// Why: on Windows the launcher above spawns the copied Orca.exe (and its crashpad/utility children)
-// once per command; those handles can outlive execFile's exit by a few ms, so this cleanup hits
-// EBUSY on our own just-exited process after every assertion already passed. Same retry treatment
-// as removeHostTree(); a lock that never clears still throws — unless the smoke run itself failed,
-// in which case surfacing EBUSY instead of the real assertion would hide the actual regression.
+// Windows may retain handles briefly after exit; preserve the original failure if cleanup also fails.
 const cleanupFailure = await rm(tempRoot, {
   recursive: true,
   force: true,

@@ -2,6 +2,11 @@ import { EventEmitter } from 'node:events'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 
+const { resolveRuntime } = vi.hoisted(() => ({ resolveRuntime: vi.fn(() => '/host/bun-runtime') }))
+vi.mock('../../shared/bundled-cli-runtime-path', () => ({
+  resolveBundledCliRuntimePath: resolveRuntime
+}))
+
 vi.mock('electron', () => ({
   app: {
     isPackaged: false,
@@ -52,6 +57,38 @@ const BASE_OPTIONS = {
   userDataPath: '/host/user-data',
   entryExists: () => true
 }
+
+it('selects bundled Bun when no test executable is supplied', async () => {
+  const child = createFakeChild()
+  const spawn = vi.fn(() => child)
+  const result = runHostOrcaCliPassthrough(
+    { argv: ['--help'], cwd: '/remote', env: {} },
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fake implements every stream/event member consumed by the passthrough.
+    { ...BASE_OPTIONS, execPath: undefined, spawn: spawn as never }
+  )
+  expect(resolveRuntime).toHaveBeenCalledWith(BASE_OPTIONS.cliEntryPath)
+  expect(spawn).toHaveBeenCalledWith(
+    '/host/bun-runtime',
+    expect.any(Array),
+    expect.objectContaining({ env: expect.not.objectContaining({ ELECTRON_RUN_AS_NODE: '1' }) })
+  )
+  child.emit('close', 0)
+  expect((await result).exitCode).toBe(0)
+})
+
+it('reports missing Bun as unavailable without launching the application under Node', async () => {
+  resolveRuntime.mockImplementationOnce(() => {
+    throw new Error('runtime missing')
+  })
+  const spawn = vi.fn()
+  await expect(
+    runHostOrcaCliPassthrough(
+      { argv: ['--help'], cwd: '/remote', env: {} },
+      { ...BASE_OPTIONS, execPath: undefined, spawn }
+    )
+  ).rejects.toThrow(HostCliUnavailableError)
+  expect(spawn).not.toHaveBeenCalled()
+})
 
 describe('resolveHostCliEntryPath', () => {
   it('uses the in-repo entry for dev builds and the unpacked asar entry when packaged', () => {
@@ -107,7 +144,7 @@ describe('buildHostCliEnv', () => {
     expect(env.ORCA_USER_DATA_PATH).toBe('/host/user-data')
     expect(env.ORCA_CLI_CWD).toBe('/home/alice/wt/sub')
     expect(env.ORCA_CLI_COMMAND).toBe('orca')
-    expect(env.ELECTRON_RUN_AS_NODE).toBe('1')
+    expect(env.ELECTRON_RUN_AS_NODE).toBeUndefined()
     expect(env.NODE_OPTIONS).toBeUndefined()
     expect(env.ORCA_NODE_OPTIONS).toBe('--inspect')
   })
@@ -290,6 +327,9 @@ describe('runHostOrcaCliPassthrough', () => {
     ]
     expect(execPath).toBe('/host/electron')
     expect(args).toEqual([
+      '--no-env-file',
+      process.platform === 'win32' ? '--config=NUL' : '--config=/dev/null',
+      '--no-install',
       '/host/app/out/cli/index.js',
       'orchestration',
       'task-create',
@@ -297,7 +337,7 @@ describe('runHostOrcaCliPassthrough', () => {
       'do the thing',
       '--json'
     ])
-    expect(options.env.ELECTRON_RUN_AS_NODE).toBe('1')
+    expect(options.env.ELECTRON_RUN_AS_NODE).toBeUndefined()
     expect(options.env.ORCA_CLI_CWD).toBe('/home/alice/wt')
     expect(options.env.ORCA_TERMINAL_HANDLE).toBe('term_remote')
     // Why: stdin must be closed even without a payload so CLI handlers that

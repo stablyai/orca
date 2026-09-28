@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 
-import { spawnSync } from 'node:child_process'
+import { createRequire } from 'node:module'
 import { accessSync, constants, existsSync, realpathSync, statSync } from 'node:fs'
 import path from 'node:path'
+import { cliRuntimeFilename } from '../bundled-cli-runtime.cjs'
 import { prepareDevCliTerminalWrappers } from './dev-cli-terminal-wrapper.mjs'
 
 const scriptPath = realpathSync(import.meta.filename)
@@ -14,6 +15,18 @@ const cliEntry =
 if (!existsSync(cliEntry)) {
   console.error("orca-dev: CLI not built yet. Run 'pnpm run build:cli' first.")
   process.exit(1)
+}
+
+const runtimePath = path.join(
+  repoRoot,
+  'out',
+  'cli-runtime',
+  `${process.platform}-${process.arch}`,
+  cliRuntimeFilename(process.platform)
+)
+if (!isRunnableFile(runtimePath)) {
+  console.error('orca-dev: Bun runtime missing. Run pnpm run build:cli first.')
+  process.exit(78)
 }
 
 process.env.ORCA_USER_DATA_PATH = process.env.ORCA_DEV_USER_DATA_PATH ?? getDefaultDevUserDataPath()
@@ -33,15 +46,13 @@ prepareDevCliTerminalWrappers({
   electronExecutable: process.env.ORCA_APP_EXECUTABLE ?? electronExecutable
 })
 
-const result = spawnSync(process.execPath, [cliEntry, ...process.argv.slice(2)], {
-  stdio: 'inherit',
-  env: process.env
-})
-
-if (result.signal) {
-  process.kill(process.pid, result.signal)
+const launcherPath = path.join(repoRoot, 'out', 'cli', 'cli-bun-launcher.js')
+if (!existsSync(launcherPath)) {
+  console.error('orca-dev: CLI launcher missing. Run pnpm run build:cli first.')
+  process.exit(78)
 }
-process.exit(result.status ?? (result.error ? 1 : 0))
+const { launchBunCli } = createRequire(import.meta.url)(launcherPath)
+launchBunCli(runtimePath, cliEntry, process.argv.slice(2))
 
 function getDefaultDevUserDataPath() {
   if (process.platform === 'darwin') {

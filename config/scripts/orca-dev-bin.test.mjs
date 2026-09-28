@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -14,7 +14,17 @@ describe('orca-dev package bin', () => {
     expect(readFileSync(wrapperPath, 'utf8')).toMatch(/^#!\/usr\/bin\/env node\n/)
   })
 
-  it('runs the dev CLI through Node without requiring Bash', () => {
+  it.skipIf(
+    !existsSync(
+      path.join(
+        projectDir,
+        'out',
+        'cli-runtime',
+        `${process.platform}-${process.arch}`,
+        process.platform === 'win32' ? 'bun-runtime.exe' : 'bun-runtime'
+      )
+    )
+  )('hands the dev CLI to staged Bun without requiring Bash', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'orca-dev-bin-'))
     const cliEntry = path.join(root, 'cli-entry.cjs')
     const outputPath = path.join(root, 'output.json')
@@ -23,6 +33,7 @@ describe('orca-dev package bin', () => {
       [
         'const fs = require("node:fs");',
         `fs.writeFileSync(${JSON.stringify(outputPath)}, JSON.stringify({`,
+        '  bun: process.versions.bun,',
         '  argv: process.argv.slice(2),',
         '  userDataPath: process.env.ORCA_USER_DATA_PATH,',
         '  devCliInvocation: process.env.ORCA_DEV_CLI_INVOCATION,',
@@ -46,6 +57,7 @@ describe('orca-dev package bin', () => {
     })
 
     expect(JSON.parse(readFileSync(outputPath, 'utf8'))).toEqual({
+      bun: expect.any(String),
       argv: ['--help'],
       userDataPath: path.join(root, 'user-data'),
       devCliInvocation: '1',

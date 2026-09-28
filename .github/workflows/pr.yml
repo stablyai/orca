@@ -978,6 +978,11 @@ jobs:
           pnpm exec vitest run --config config/vitest.config.ts
           config/scripts/nsis-process-check.test.mjs
 
+      - name: Prepare pinned Bun for CLI boundary tests
+        run: |
+          node config/scripts/build-orcad-bun.mjs --runtime-only --out-dir out/windows-cli-test-runtime
+          "BUN_EXECUTABLE=$((Resolve-Path out/windows-cli-test-runtime/bun-runtime.exe).Path)" >> $env:GITHUB_ENV
+
       # vitest runs here directly rather than through `pnpm test`, so the addon
       # assertions only hold once install-node-dependencies has rebuilt natives.
       - name: Test Windows-specific boundaries
@@ -1073,6 +1078,11 @@ jobs:
 
       - name: Smoke packaged CLI
         run: node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/win-unpacked
+
+      - name: Smoke packaged CLI profile restart and terminal
+        env:
+          ORCA_BACKGROUND_LAUNCH: '1'
+        run: node config/scripts/runtime-serve-terminal-smoke.mjs --packaged-app-dir=dist/win-unpacked --restart --folder
 
   e2e:
     name: e2e

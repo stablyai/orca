@@ -19,6 +19,11 @@ on:
       - '.github/workflows/windows-watcher-artifacts.yml'
       - '.github/actions/load-windows-watcher-artifacts/**'
   workflow_dispatch:
+    inputs:
+      signed_mac_package:
+        description: Sign, notarize and test macOS packages without publishing a release
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -194,3 +199,67 @@ jobs:
           pnpm test:bun:profile --artifact
           node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts config/scripts/orcad-companion-artifacts.test.mjs
           BUN_QUALIFICATION
+
+  signed_mac_package:
+    needs: windows_watcher
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.signed_mac_package && github.repository == 'stablyai/orca' && startsWith(github.ref, 'refs/heads/') && needs.windows_watcher.result == 'success' }}
+    environment: adhoc-mac-build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            arch: arm64
+          - os: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+      NODE_OPTIONS: --max-old-space-size=4096
+      PACKAGE_ARCH: ${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            mobile/pnpm-lock.yaml
+      - uses: ./.github/actions/load-windows-watcher-artifacts
+      - run: pnpm install:release
+      - uses: ./.github/actions/install-mobile-dependencies
+      - run: pnpm build:release
+      - name: Sign and notarize without release publication
+        env:
+          ORCA_MAC_RELEASE: '1'
+          CSC_LINK: ${{ secrets.MAC_CERTS }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          node config/scripts/verify-macos-release-env.mjs
+          node config/scripts/ensure-native-runtime.mjs --runtime=electron
+          pnpm exec electron-builder --config config/electron-builder.config.cjs --mac zip --"$PACKAGE_ARCH" --publish never
+      - name: Verify and exercise the distributed signed package
+        run: |
+          set -euo pipefail
+          archives=(dist/*.zip)
+          test "${#archives[@]}" -eq 1
+          app="$RUNNER_TEMP/bun-signed-package/Orca.app"
+          ditto -x -k "${archives[0]}" "$RUNNER_TEMP/bun-signed-package"
+          codesign --verify --deep --strict "$app"
+          xcrun stapler validate "$app"
+          spctl --assess --type execute --verbose "$app"
+          "$app/Contents/Resources/bin/orca" --help
+          node config/scripts/runtime-serve-terminal-smoke.mjs --packaged-app-dir="$app" --restart
+          node config/scripts/runtime-serve-terminal-smoke.mjs --packaged-app-dir="$app" --restart --folder
+      - uses: actions/upload-artifact@v7
+        with:
+          name: bun-signed-mac-${{ matrix.arch }}
+          path: dist/*.zip
+          if-no-files-found: error
+          retention-days: 7

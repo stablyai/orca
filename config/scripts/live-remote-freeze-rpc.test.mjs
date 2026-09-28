@@ -26,7 +26,7 @@ describe('live remote freeze RPC', () => {
 
     expect(invocation).toMatchObject({
       command: 'C:\\Program Files\\nodejs\\node.exe',
-      prefixArgs: ['C:\\repo\\out\\cli\\index.js'],
+      prefixArgs: ['C:\\repo\\out\\cli\\cli-bin.js'],
       env: {
         ORCA_USER_DATA_PATH: 'C:\\Users\\dev\\AppData\\Roaming\\orca-dev',
         ORCA_DEV_CLI_INVOCATION: '1',

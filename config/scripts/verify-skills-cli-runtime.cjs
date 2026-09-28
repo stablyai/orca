@@ -136,7 +136,7 @@ function collectRuntimeClosure(outDir, artifactRoot = dirname(outDir)) {
 }
 
 function runCli(outDir, args, timeoutMs = CLI_COMMAND_TIMEOUT_MS) {
-  const entry = resolve(outDir, 'cli', 'index.js')
+  const entry = resolve(outDir, 'cli', 'cli-bin.js')
   const env = { ...process.env, NODE_PATH: '' }
   delete env.ORCA_CLI_CWD
   const result = spawnSync(process.execPath, [entry, ...args], {

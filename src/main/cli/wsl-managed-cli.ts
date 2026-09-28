@@ -1,3 +1,4 @@
+import { resolveBundledCliRuntimePath } from '../../shared/bundled-cli-runtime-path'
 import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
@@ -28,10 +29,19 @@ export function getManagedWslCliDir(opts: {
   const cliEntryPath = opts.isPackaged
     ? undefined
     : join(getAppEnvironment().getAppPath(), 'out', 'cli', 'index.js')
-  const launcherPath = opts.isPackaged
-    ? opts.resourcesPath && getBundledLauncherPath('win32', opts.resourcesPath)
-    : process.execPath
-  if (!launcherPath || !existsSync(cliEntryPath ?? launcherPath)) {
+  let launcherPath: string | null | undefined
+  try {
+    launcherPath = opts.isPackaged
+      ? opts.resourcesPath && getBundledLauncherPath('win32', opts.resourcesPath)
+      : cliEntryPath && resolveBundledCliRuntimePath(cliEntryPath, 'win32')
+  } catch {
+    launcherPath = null
+  }
+  if (
+    !launcherPath ||
+    !existsSync(launcherPath) ||
+    (cliEntryPath !== undefined && !existsSync(cliEntryPath))
+  ) {
     if (!warnedMissingRuntime) {
       warnedMissingRuntime = true
       console.warn('[WSL CLI] Orca CLI runtime is missing; WSL terminals will not provide it.')
@@ -39,7 +49,11 @@ export function getManagedWslCliDir(opts: {
     return null
   }
   const launcher = buildColocatedWslLauncher(launcherPath, windowsPowerShellPath())
-  const bridge = buildWslBridgeScript({ userDataPath: opts.userDataPath, cliEntryPath })
+  const bridge = buildWslBridgeScript({
+    userDataPath: opts.userDataPath,
+    cliEntryPath,
+    appExecutable: process.execPath
+  })
   const digest = createHash('sha256').update(launcher).update(bridge).digest('hex').slice(0, 20)
   const directory = join(opts.userDataPath, 'wsl-managed-cli', digest)
   const files = [

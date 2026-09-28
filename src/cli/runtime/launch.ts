@@ -32,6 +32,14 @@ export function launchOrcaApp(): void {
 
   const overrideExecutable = process.env.ORCA_APP_EXECUTABLE
   if (typeof overrideExecutable === 'string' && overrideExecutable.trim().length > 0) {
+    const bundle =
+      process.platform === 'darwin' && process.env.ORCA_PACKAGED_CLI === '1'
+        ? getMacAppBundlePath(overrideExecutable)
+        : null
+    if (bundle) {
+      spawnDetached('open', [bundle], { env: stripElectronRunAsNode(process.env) })
+      return
+    }
     spawnDetached(overrideExecutable, getExecutableAppArgs(overrideExecutable), {
       ...getExecutableSpawnOptions(overrideExecutable),
       env: stripElectronRunAsNode(process.env)
@@ -130,7 +138,7 @@ export function serveOrcaApp(
     stdio:
       args.recipeJson === true
         ? ['ignore', 'pipe', 'inherit']
-        : handoffPath
+        : handoffPath || process.platform === 'win32'
           ? ['inherit', 'inherit', 'inherit', 'ipc']
           : 'inherit',
     ...getExecutableSpawnOptions(executable),

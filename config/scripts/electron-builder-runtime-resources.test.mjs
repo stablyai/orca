@@ -1,3 +1,4 @@
+import { writeBundledCliRuntimeFixture } from './bundled-cli-runtime-fixture.mjs'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { cp, mkdir, mkdtemp, readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
@@ -430,6 +431,11 @@ describe('packaged runtime resources', () => {
           process.arch === 'x64'
             ? { electronArch: 3, machine: 0xb7, nonTarget: 'x64' }
             : { electronArch: 1, machine: 0x3e, nonTarget: 'arm64' }
+        await writeBundledCliRuntimeFixture(
+          join(resourcesDir, 'cli-runtime'),
+          'linux',
+          target.electronArch === 1 ? 'x64' : 'arm64'
+        )
         const wrongArchPackage = join(
           resourcesDir,
           'node_modules',
@@ -506,6 +512,8 @@ describe('packaged runtime resources', () => {
           ].join('\n'),
           'utf8'
         )
+        await writeFile(join(unpackedCliDir, 'cli-bin.js'), "require('./index.js')\n", 'utf8')
+        await writeBundledCliRuntimeFixture(join(resourcesDir, 'cli-runtime'), 'linux', 'x64')
         await writeFile(launcherPath, '#!/usr/bin/env bash\n', { encoding: 'utf8', mode: 0o644 })
 
         await electronBuilderConfig.afterPack({
