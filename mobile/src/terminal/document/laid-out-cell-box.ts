@@ -1,7 +1,6 @@
 import type { TerminalCellBox } from '../terminal-cell-box'
 import type { TerminalDocumentScope } from './document-scope'
 import { notify } from './host-notify'
-import { fontPxForScale } from './text-scaling'
 
 /** The box xterm actually laid out, for the scale it was opened at; null before one. */
 export function laidOutCellBox(scope: TerminalDocumentScope): TerminalCellBox | null {
@@ -12,10 +11,6 @@ export function laidOutCellBox(scope: TerminalDocumentScope): TerminalCellBox | 
   }
   const { width, height } = dimensions.css.cell
   if (!(width > 0 && height > 0)) {
-    return null
-  }
-  // A text-size change between init and ready leaves a box that belongs to neither scale.
-  if (scope.term.options.fontSize !== fontPxForScale(scope.currentTextScale)) {
     return null
   }
   return { fontScale: scope.currentTextScale, cellWidth: width, cellHeight: height }

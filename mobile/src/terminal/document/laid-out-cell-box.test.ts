@@ -69,11 +69,6 @@ describe('laidOutCellBox', () => {
     reportLaidOutCellBox(scope)
     expect(posted.map((message) => message.cols)).toEqual([55, 50])
   })
-
-  it('reports nothing while a text-size change is between font and scale', () => {
-    const scope = scopeWithCell({ width: 29 / 3, height: 21 }, fontPxForScale(1))
-    expect(laidOutCellBox(scope)).toBeNull()
-  })
 })
 
 describe('a started document', () => {
@@ -233,6 +228,28 @@ describe('a started document', () => {
       expect(types.indexOf('cell-metrics')).toBeGreaterThan(-1)
       expect(types.indexOf('cell-metrics')).toBeLessThan(types.indexOf('ready'))
       expect(boxes(posted)).toEqual([{ fontScale: 1, cellWidth: 23 / 3, cellHeight: 15 }])
+    } finally {
+      stopTerminalDocument(scope)
+    }
+  })
+
+  it('reports a text-size change on the render after it, not when the font is set', async () => {
+    // xterm updates the render service's cell box synchronously when fontSize is set
+    // (CharSizeService.measure → RenderService.handleCharSizeChanged), and onRender fires after the
+    // rows it redrew, so the next render reads the new box at the new scale.
+    const { scope, posted, render, init } = started()
+    try {
+      init()
+      await untilReady(posted)
+      const reported = boxes(posted).length
+      handleMsg(scope, { type: 'set-font-scale', fontScale: 1.25 })
+      expect(boxes(posted)).toHaveLength(reported)
+      render()
+      expect(boxes(posted).at(-1)).toEqual({
+        fontScale: 1.25,
+        cellWidth: (23 / 3) * (16 / 13),
+        cellHeight: 15 * (16 / 13)
+      })
     } finally {
       stopTerminalDocument(scope)
     }
