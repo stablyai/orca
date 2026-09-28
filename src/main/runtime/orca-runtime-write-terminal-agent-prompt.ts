@@ -16,6 +16,7 @@ import {
 } from '../../shared/agent-prompt-injection'
 import type { AgentPromptWaitTextCache } from './agent-prompt-submission-verification'
 import {
+  isAgentPromptStalledError,
   isTerminalSendSettlementAgent,
   resolveAgentPromptEffectTimeoutMs,
   verifyAgentPromptSubmission
@@ -109,12 +110,24 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     }
     const effectTimeoutMs = resolveAgentPromptEffectTimeoutMs(this.getPtyAgent(ptyId))
     if (!options.acceptQueued || !options.requestId) {
-      await verifyAgentPromptSubmission({
-        baseline,
-        readActivity: () => this.getAgentPromptActivity(handle, ptyId, waitTextCache),
-        timeoutMs: effectTimeoutMs,
-        signal: options.signal
-      })
+      try {
+        await verifyAgentPromptSubmission({
+          baseline,
+          readActivity: () => this.getAgentPromptActivity(handle, ptyId, waitTextCache),
+          timeoutMs: effectTimeoutMs,
+          signal: options.signal
+        })
+      } catch (error) {
+        if (error instanceof Error && isAgentPromptStalledError(error)) {
+          Object.assign(error, {
+            data: {
+              bytesWritten: pasteByteLength + Buffer.byteLength(AGENT_PROMPT_SUBMIT),
+              submitted: true
+            }
+          })
+        }
+        throw error
+      }
       return { submits: 1 }
     }
     const binding = this.getTerminalPromptRequestBinding(handle)

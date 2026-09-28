@@ -28,6 +28,7 @@ import { NESTED_WORKER_DEPTH_EXCEEDED_CODE } from '../../../shared/nested-worker
 import { WORKTREE_CREATE_COLLISION_CODE } from '../../../shared/new-workspace/worktree-create-collision'
 import { AGENT_LAUNCH_PANE_ALREADY_LIVE_CODE } from '../../../shared/agent-launch-pane-already-live'
 import { AGENT_LAUNCH_SESSION_ALREADY_EXISTS_CODE } from '../../../shared/agent-launch-session-already-exists'
+import { AGENT_PROMPT_STALLED_ERROR } from '../agent-prompt-submission-verification'
 
 export function successResponse(id: string, meta: RpcEnvelopeMeta, result: unknown): RpcSuccess {
   return {
@@ -73,7 +74,7 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'terminal_tab_not_found',
   'terminal_tab_pinned',
   'agent_prompt_blocked',
-  'agent_prompt_stalled',
+  AGENT_PROMPT_STALLED_ERROR,
   'no_active_terminal',
   'repo_not_found',
   'timeout',
@@ -212,7 +213,14 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
     )
   }
   if (RUNTIME_PASSTHROUGH_CODES.has(message)) {
-    return errorResponse(id, meta, message, message)
+    const data =
+      message === AGENT_PROMPT_STALLED_ERROR &&
+      typeof error === 'object' &&
+      error !== null &&
+      'data' in error
+        ? error.data
+        : undefined
+    return errorResponse(id, meta, message, message, data)
   }
   const skillInstallFailure = classifySkillInstallFailureCode(message)
   if (skillInstallFailure) {
