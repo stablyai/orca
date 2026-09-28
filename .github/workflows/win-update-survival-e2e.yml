@@ -29,6 +29,21 @@ on:
         options:
           - survival
           - cold-restore
+      trace_installer:
+        description: Trace installer process checks in this disposable build
+        type: boolean
+        default: false
+      policy:
+        description: Execution policy inherited by harness child processes
+        type: choice
+        default: inherited
+        options:
+          - inherited
+          - Restricted
+      from_release:
+        description: Optional base release tag; blank uses this branch build
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -39,7 +54,7 @@ concurrency:
 
 jobs:
   survival:
-    name: survival (branch build over itself)
+    name: update ${{ inputs.from_release || 'branch' }} to branch (${{ inputs.expect || 'survival' }}, policy=${{ inputs.policy || 'inherited' }})
     runs-on: windows-2022
     timeout-minutes: 50
     env:
@@ -62,18 +77,23 @@ jobs:
         with:
           install: false
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
       # Why: cache the built installer keyed on the inputs that affect it, so a
       # harness-only edit skips the ~20 min electron-builder build. The daemon
       # relocation code lives under src/, so changing it correctly rebuilds.
+      # Hash before installation creates native build artifacts under native/.
       - name: Cache branch installer
         id: cache-installer
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: dist/orca-windows-setup.exe
-          key: branch-installer-${{ hashFiles('src/**', 'config/**', 'native/**', 'resources/win32/**', 'package.json', 'pnpm-lock.yaml') }}
+          key: branch-installer-${{ inputs.trace_installer && format('trace-{0}-', hashFiles('tests/tools/win-update-e2e/trace-installer-branches.mjs')) || '' }}${{ hashFiles('src/**', 'config/**', 'native/**', 'resources/**', 'mobile/**', 'patches/**', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml') }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Instrument disposable installer and uninstaller
+        if: inputs.trace_installer && steps.cache-installer.outputs.cache-hit != 'true'
+        run: node tests/tools/win-update-e2e/trace-installer-branches.mjs
 
       # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
       # build resolves React Native and Expo from mobile/node_modules. Gated with the
@@ -88,26 +108,46 @@ jobs:
           pnpm run build:desktop
           pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never
 
-      # Why: install the branch build, open a terminal, update the SAME build
-      # over it, and assert the relocated daemon survives. Same build on both
-      # sides isolates the survival mechanism (NSIS kill sweep + userData daemon
-      # + adoption) from cross-version staleness policy. No --install-dir: a CI
-      # runner has no real Orca to protect.
+      - name: Cache successfully built installer before survival verification
+        if: steps.cache-installer.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: dist/orca-windows-setup.exe
+          key: ${{ steps.cache-installer.outputs.cache-primary-key }}
+
+      # A released base also exercises its old uninstaller; default runs isolate this branch.
       - name: Run survival harness
         id: harness
         shell: pwsh
         env:
           ORCA_E2E_DIAG_DIR: artifacts/diag
+          ORCA_BACKGROUND_LAUNCH: '1'
+          DEBUG: 'pw:browser'
+          ORCA_E2E_NSIS_TRACE: ${{ github.workspace }}\artifacts\nsis-process-trace.log
+          ORCA_E2E_PROCESS_POLICY: ${{ inputs.policy || 'inherited' }}
+          FROM_RELEASE: ${{ inputs.from_release }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           New-Item -ItemType Directory -Force artifacts | Out-Null
           $exe = "dist/orca-windows-setup.exe"
           if (-not (Test-Path $exe)) { throw "Installer not found at $exe" }
           $log = "artifacts/survival-output.log"
-          node tests/tools/win-update-e2e/run.mjs `
-            --from "$exe" `
-            --to "$exe" `
-            --expect "$env:EXPECT" `
-            --soak-seconds 60 2>&1 | Tee-Object -FilePath $log
+          $harnessArgs = @('--to', $exe, '--expect', $env:EXPECT, '--soak-seconds', '60')
+          if ($env:FROM_RELEASE) {
+            $harnessArgs += @('--from-release', $env:FROM_RELEASE)
+          } else {
+            $harnessArgs += @('--from', $exe)
+          }
+          # Only the harness and its children inherit the test policy.
+          $launch = @'
+          if (process.env.ORCA_E2E_PROCESS_POLICY === 'Restricted') {
+            process.env.PSExecutionPolicyPreference = 'Restricted'
+          }
+          console.log('Harness child process policy: ' + (process.env.PSExecutionPolicyPreference || 'inherited'))
+          process.argv.splice(1, 0, 'tests/tools/win-update-e2e/run.mjs')
+          await import('./tests/tools/win-update-e2e/run.mjs')
+          '@
+          node --input-type=module -e $launch -- @harnessArgs 2>&1 | Tee-Object -FilePath $log
           exit $LASTEXITCODE
 
       - name: Upload survival output
@@ -117,6 +157,7 @@ jobs:
           name: win-update-survival-output
           path: |
             artifacts/survival-output.log
+            artifacts/nsis-process-trace.log
             artifacts/diag/**
           retention-days: 7
           if-no-files-found: warn

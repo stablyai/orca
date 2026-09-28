@@ -6,7 +6,7 @@ import { getOrcaManagedCodexHomePath } from './codex/codex-home-paths'
 import { upsertProjectTrustLevel } from './codex/config-toml-trust'
 import { runExclusivelyForCodexTrustConfig } from './codex/codex-trust-config-mutation-queue'
 
-export type AgentTrustPreset = 'cursor' | 'copilot' | 'codex' | 'antigravity'
+export type AgentTrustPreset = 'cursor' | 'copilot' | 'codex' | 'antigravity' | 'qoder'
 
 /**
  * Pre-mark a workspace as trusted for cursor-agent, GitHub Copilot CLI, or

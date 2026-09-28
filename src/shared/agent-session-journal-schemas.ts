@@ -18,6 +18,7 @@ import { AgentSessionContextUsageSchema } from './agent-session-context-usage-sc
 import type {
   AgentJournalItemBody,
   AgentJournalMessageItem,
+  AgentJournalResolution,
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from './agent-session-journal-types'
@@ -147,6 +148,15 @@ const Question = z
 const Resolution = z.object({
   state: z.string().min(1),
   selectedOptionId: z.string().nullable(),
+  answers: z
+    .array(
+      z.object({
+        questionId: z.string(),
+        optionIds: z.array(z.string()),
+        other: z.string().optional()
+      })
+    )
+    .optional(),
   resolvedBy: z.string().nullable(),
   resolvedAt: z.number().nullable()
 })
@@ -189,6 +199,14 @@ const ThreadGoalState = z.union([
   ]),
   z.object({ state: z.string() }).refine((value) => !['set', 'cleared'].includes(value.state))
 ])
+
+/** Open like `state`: a kind, audience or refusal detail a newer host writes must not turn the row
+ *  malformed; the fact reader is where an unplaceable one is dropped. */
+const FailureFact = z.object({
+  kind: z.string().min(1),
+  detail: z.object({ text: z.string(), audience: z.string().min(1) }).optional(),
+  refusal: z.object({ code: z.string().min(1), details: z.looseObject({}).optional() }).optional()
+})
 
 export const AgentJournalItemBodySchema = z.discriminatedUnion('kind', [
   MessageBody,
@@ -242,7 +260,8 @@ export const AgentJournalItemBodySchema = z.discriminatedUnion('kind', [
       })
       .optional(),
     providerFrame: ProviderFrame.optional(),
-    threadGoal: ThreadGoalState.optional()
+    threadGoal: ThreadGoalState.optional(),
+    failure: FailureFact.optional()
   }),
   z.object({
     kind: z.literal('turn'),
@@ -280,6 +299,7 @@ export const AgentJournalRenderItemSchema = z.object({
   revision: z.number().int(),
   body: AgentJournalItemBodySchema,
   sequence: z.number().int(),
+  sequenceIndex: z.number().int().nonnegative().optional(),
   observedAt: z.number(),
   recovered: z.literal(true).optional(),
   recoveredAt: z.number().optional(),
@@ -295,8 +315,15 @@ export const AgentJournalSubmissionSchema = z.object({
   reason: z.string().nullable(),
   submittedAt: z.number(),
   resolvedAt: z.number().nullable(),
-  recovered: z.literal(true).optional()
+  recovered: z.literal(true).optional(),
+  handoverRecorded: z.literal(true).optional(),
+  handedOverAt: z.number().optional(),
+  rejection: FailureFact.optional()
 })
+
+export function isAgentJournalResolution(value: unknown): value is AgentJournalResolution {
+  return Resolution.safeParse(value).success
+}
 
 export function isAdmissibleAgentJournalItemBody(value: unknown): value is AgentJournalItemBody {
   return AgentJournalItemBodySchema.safeParse(value).success

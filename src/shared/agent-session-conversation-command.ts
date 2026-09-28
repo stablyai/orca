@@ -1,11 +1,20 @@
+import type { AgentSessionFailureFact } from './agent-session-failure'
+import type { AgentSessionFailureSentence } from './agent-session-failure-words'
+
 export type AgentSessionConversationCommand = 'clear' | 'compact'
 
 export type AgentSessionConversationCommandResult = {
   command: AgentSessionConversationCommand
   state: 'completed' | 'unknown'
   replacementSessionId?: string
-  error?: string
-}
+} &
+  /** `error`: a sentence for a person; released clients print it as it is. */
+  (
+    | { error?: string; failure?: undefined }
+    /** What failed, typed, beside its sentence, both from `agentSessionFailureWords`; `failure` is
+     *  absent from older hosts. */
+    | { error: AgentSessionFailureSentence; failure: AgentSessionFailureFact }
+  )
 
 export type AgentSessionConversationCommandRecord = AgentSessionConversationCommandResult & {
   runtimeFence?: number

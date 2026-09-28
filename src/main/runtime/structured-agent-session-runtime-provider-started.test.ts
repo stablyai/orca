@@ -1,5 +1,5 @@
-// A Claude child proving its start must not wait on another session's exit recovery, and must
-// not make that recovery, or the session's own serialized operations, wait on the CLI: the host
+// A Claude child proving its start must not wait on another session's start, and must not make
+// that start, or the session's own serialized operations, wait on the CLI: the host
 // records what the child proved from what the adapter already holds.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -18,7 +18,7 @@ afterEach(async () => {
 })
 
 describe('a Claude child proving its start', () => {
-  it("never holds another session's exit recovery, or its own close, on a CLI read", async () => {
+  it("never holds another session's start, or its own close, on a CLI read", async () => {
     claude.behave(STALLED, { stallsControlReads: true })
     const host = await claude.install()
 
@@ -56,23 +56,15 @@ describe('a Claude child proving its start', () => {
     await vi.waitFor(() => expect(closed).toBe(true))
   })
 
-  it("flips to ready while another session's exit recovery is still acquiring", async () => {
+  it("flips to ready while another session's start is still acquiring", async () => {
     const host = await claude.install()
-    await expect(host.attach(CALLER, claude.attachParams(HEALTHY, null))).resolves.toMatchObject({
-      ok: true
-    })
-    await host.hold(HEALTHY, 'surface-1')
-    await waitForStructuredAgentSessionRecovery()
-
-    // Its exit recovery reacquires, and that spawn never returns. The exit hands the lease back
-    // and the restart queued behind it reserves it again at once, so `released` is not a state a
-    // poll can count on seeing; `reserved` with the spawn hanging is what "still acquiring" is.
+    // This start never returns from its spawn, so its lease stays reserved with no child.
     claude.behave(HEALTHY, { spawnHangs: true })
-    claude.child(HEALTHY).exit(new Error('claude stream-json exited (code 1): crashed'))
+    void host.attach(CALLER, claude.attachParams(HEALTHY, null)).catch(() => undefined)
     await vi.waitFor(() =>
       expect(host.deps.store.getRecord(HEALTHY)?.lease.claimStatus).toBe('reserved')
     )
-    expect(claude.children(HEALTHY)).toHaveLength(1)
+    const childrenWhileHung = claude.children(HEALTHY).length
 
     await expect(host.attach(CALLER, claude.attachParams(STALLED, null))).resolves.toMatchObject({
       ok: true
@@ -83,9 +75,9 @@ describe('a Claude child proving its start', () => {
         effort: 'high'
       })
     )
-    // The other recovery is still where it was: reserved, with no child yet.
+    // The other start is still where it was: reserved, with no new child.
     expect(host.deps.store.getRecord(HEALTHY)?.lease.claimStatus).toBe('reserved')
-    expect(claude.children(HEALTHY)).toHaveLength(1)
+    expect(claude.children(HEALTHY)).toHaveLength(childrenWhileHung)
   })
 
   it('is drained by the runtime before teardown proceeds', async () => {

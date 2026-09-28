@@ -197,6 +197,7 @@ export async function updateWebRuntimePaneLayout(args: {
   tabId: string
   root: TerminalPaneLayoutNode | null
   expandedLeafId: string | null
+  chatLeafId?: string | null
   titlesByLeafId?: Record<string, string>
 }): Promise<boolean> {
   const environmentId =
@@ -216,6 +217,7 @@ export async function updateWebRuntimePaneLayout(args: {
         tabId: hostTabId,
         root: args.root,
         expandedLeafId: args.expandedLeafId,
+        ...(args.chatLeafId !== undefined ? { chatLeafId: args.chatLeafId } : {}),
         ...(args.titlesByLeafId ? { titlesByLeafId: args.titlesByLeafId } : {})
       },
       timeoutMs: 15_000

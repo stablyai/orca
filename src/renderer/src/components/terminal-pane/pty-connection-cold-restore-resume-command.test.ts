@@ -457,7 +457,7 @@ describe('connectPanePty', () => {
     ).resolves.toBe("codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'")
   })
 
-  it('keeps a contentless reattach when the sleeping record represents a live session', async () => {
+  async function expectLiveNoteKeepsContentlessReattach(state: 'working' | 'done'): Promise<void> {
     const { connectPanePty } = await import('./pty-connection')
     const paneKey = makePaneKey('tab-1', LEAF_2)
     const transport = createMockTransport('restored-session')
@@ -488,6 +488,7 @@ describe('connectPanePty', () => {
         }
       }
     } as StoreState
+    Object.assign(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] ?? {}, { state })
     const pane = createPane(2)
     const manager = createManager(2)
     const deps = createDeps({
@@ -502,7 +503,13 @@ describe('connectPanePty', () => {
     expect(transport.disconnect).not.toHaveBeenCalled()
     expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'restored-session')
     expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
-  })
+  }
+
+  // Why: a live note is the idle anchor of a running pane, done or not, never hibernation evidence.
+  it.each(['working', 'done'] as const)(
+    'keeps a contentless reattach when a live-origin %s note represents a running session',
+    expectLiveNoteKeepsContentlessReattach
+  )
 
   it('keeps a contentless reattach when a live status supersedes passive sleep evidence', async () => {
     const { connectPanePty } = await import('./pty-connection')

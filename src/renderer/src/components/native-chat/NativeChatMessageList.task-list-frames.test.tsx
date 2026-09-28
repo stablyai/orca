@@ -113,6 +113,8 @@ describe('live Codex checklist frames', () => {
       role: 'assistant',
       timestamp: 1,
       source: 'transcript',
+      // Journalled like the frames it sits between.
+      journalPosition: { sequence: 1, index: 0 },
       blocks: [
         {
           type: 'tool-call',

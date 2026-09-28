@@ -1,4 +1,10 @@
 import type { RunRow } from '../../types'
+import {
+  mailboxAddressOf,
+  runBoundToCoordinator,
+  runCoordinatorKey,
+  type OrchestrationCoordinatorKey
+} from '../../orchestration-caller-identity'
 import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../../../../shared/orchestration-run-pagination'
 import {
   isEquivalentPaneKey,
@@ -21,6 +27,13 @@ const RUN_BY_ID_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs WHERE id = ?`
 const RUNS_BOUND_TO_PANE_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs
          WHERE coordinator_pane_key IS NOT NULL AND legacy = 0
            AND ${RUN_PANE_KEY_MATCH_SUFFIX_SQL} = ?
+         ORDER BY rowid`
+// Why: one statement so pane and Orca session id matches keep a single rowid order; the JS predicate decides.
+const RUNS_BOUND_TO_COORDINATOR_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs
+         WHERE legacy = 0 AND (
+           (coordinator_pane_key IS NOT NULL AND ${RUN_PANE_KEY_MATCH_SUFFIX_SQL} = ?)
+           OR coordinator_orca_session_id = ?
+         )
          ORDER BY rowid`
 
 export function getRun(this: OrchestrationDb, id: string): RunRow | undefined {
@@ -122,15 +135,38 @@ export function getRunRaw(this: OrchestrationDb, id: string): RunRow | undefined
   return this.db.prepare(RUN_BY_ID_SQL).get(id) as RunRow | undefined
 }
 
-export function unbindOtherRunsForPane(
+export function getCurrentRunForCoordinator(
   this: OrchestrationDb,
-  paneKey: string,
+  caller: OrchestrationCoordinatorKey
+): RunRow | undefined {
+  const run = this.runsBoundToCoordinator(caller)[0]
+  return run ? exposeRunTimestamps(run) : undefined
+}
+
+/** Runs bound to this caller by pane or by Orca session id; a caller without one matches as before. */
+export function runsBoundToCoordinator(
+  this: OrchestrationDb,
+  caller: OrchestrationCoordinatorKey
+): RunRow[] {
+  if (caller.orcaSessionId === null) {
+    return caller.paneKey === null ? [] : this.runsBoundToPane(caller.paneKey)
+  }
+  const suffix = caller.paneKey === null ? null : paneKeyMatchSuffix(caller.paneKey)
+  const rows = this.db.prepare(RUNS_BOUND_TO_COORDINATOR_SQL).all(suffix, caller.orcaSessionId)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table returns the row shape its schema and row type define, like every row cast in db/.
+  return (rows as RunRow[]).filter((run) => runBoundToCoordinator(run, caller))
+}
+
+export function unbindOtherRunsForCoordinator(
+  this: OrchestrationDb,
+  caller: OrchestrationCoordinatorKey,
   exceptRunId?: string
 ): void {
-  for (const run of this.runsBoundToPane(paneKey)) {
+  for (const run of this.runsBoundToCoordinator(caller)) {
     if (run.id !== exceptRunId) {
-      if (run.coordinator_handle) {
-        this.routeAllUnreadDirectMessagesToRunMailbox(run.id, run.coordinator_handle)
+      const address = mailboxAddressOf(runCoordinatorKey(run))
+      if (address !== null) {
+        this.routeAllUnreadDirectMessagesToRunMailbox(run.id, address)
       }
       this.db
         .prepare(
@@ -160,8 +196,10 @@ export type RunLookupMethods = {
   listRuns: typeof listRuns
   getCurrentRunForPane: typeof getCurrentRunForPane
   runsBoundToPane: typeof runsBoundToPane
+  getCurrentRunForCoordinator: typeof getCurrentRunForCoordinator
+  runsBoundToCoordinator: typeof runsBoundToCoordinator
   getRunRaw: typeof getRunRaw
-  unbindOtherRunsForPane: typeof unbindOtherRunsForPane
+  unbindOtherRunsForCoordinator: typeof unbindOtherRunsForCoordinator
   requireRun: typeof requireRun
 }
 
@@ -173,8 +211,10 @@ export function attachRunLookup(ctor: { prototype: object }): void {
     listRuns,
     getCurrentRunForPane,
     runsBoundToPane,
+    getCurrentRunForCoordinator,
+    runsBoundToCoordinator,
     getRunRaw,
-    unbindOtherRunsForPane,
+    unbindOtherRunsForCoordinator,
     requireRun
   })
 }

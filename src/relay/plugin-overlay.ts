@@ -79,7 +79,7 @@ function isUsableId(id: string): boolean {
   return typeof id === 'string' && id.length > 0 && id.length <= 1024
 }
 export type PluginSources = {
-  /** Source body of `orca-opencode-status.js` to drop into <overlay>/plugins/. */
+  /** Empty string revokes future installs; omission preserves the cached source. */
   opencodePluginSource?: string
   /** Source body of OpenCode 2's status plugin. */
   opencode2PluginSource?: string
@@ -158,7 +158,7 @@ export class PluginOverlayManager {
     }
   }
   hasOpenCodeSource(agent: 'opencode' | 'opencode2' = 'opencode'): boolean {
-    return (agent === 'opencode2' ? this.opencode2PluginSource : this.opencodePluginSource) !== null
+    return Boolean(agent === 'opencode2' ? this.opencode2PluginSource : this.opencodePluginSource)
   }
   hasPiSource(kind?: PiAgentKind): boolean {
     if (kind) {

@@ -70,7 +70,6 @@ export function structuredHostStub(
     respondToPrompt: vi.fn(async () => ({ ok: true, replayed: false })),
     setOption: vi.fn(async () => ({ ok: true, replayed: false })),
     changeThreadGoal: vi.fn(async () => ({ ok: true, replayed: false })),
-    requestHandoff: vi.fn(async () => ({ status: { owner: 'native' } })),
     handoffStatus: vi.fn(async () => ({ owner: 'native' })),
     readOptions: vi.fn(async () => ({ models: [], current: { model: 'gpt-live' } })),
     modelCatalog: vi.fn(() => ({ origin: 'unknown' as const })),

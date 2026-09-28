@@ -7,8 +7,10 @@ const mocks = vi.hoisted(() => ({
   call: vi.fn(),
   enqueue: vi.fn(),
   hold: vi.fn<(sessionId: string, id: string, encoded: string) => Promise<unknown> | null>(),
-  reportWriteError: vi.fn<(message: string) => void>()
+  toastError: vi.fn<(message: string) => void>()
 }))
+
+vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.call
@@ -99,7 +101,6 @@ function renderOptions(initial: RenderProps, mutate: StructuredAgentSessionMutat
         turnId: props.turnId ?? null,
         unloadedTurnRevisions: undefined,
         mutate,
-        reportWriteError: mocks.reportWriteError,
         ...(props.launch
           ? {
               launch: {
@@ -164,7 +165,7 @@ describe('useStructuredAgentSessionOptions', () => {
     mocks.call.mockReset()
     mocks.enqueue.mockReset()
     mocks.hold.mockReset()
-    mocks.reportWriteError.mockReset()
+    mocks.toastError.mockReset()
   })
 
   it('upgrades the seed with the host catalog while the live read is still pending', async () => {
@@ -408,7 +409,7 @@ describe('useStructuredAgentSessionOptions', () => {
           picks: [{ modelId: 'gpt-5.6-luna', optionId: 'model', value: 'gpt-5.6-luna' }]
         })
       )
-      expect(mocks.reportWriteError).not.toHaveBeenCalled()
+      expect(mocks.toastError).not.toHaveBeenCalled()
       unmount()
     })
 
@@ -416,7 +417,7 @@ describe('useStructuredAgentSessionOptions', () => {
       answer({})
       mocks.hold.mockResolvedValue({
         kind: 'refused',
-        message: 'Model gpt-5.6-luna is unavailable'
+        failure: { kind: 'refused', code: 'agent_session_operation_capacity' }
       })
       const { result, unmount } = renderOptions(
         { ...PROVISIONAL, launchSeedOptions: SEED },
@@ -426,7 +427,9 @@ describe('useStructuredAgentSessionOptions', () => {
         await result.current.setStructuredOption('model', 'gpt-5.6-luna')
       })
       await waitFor(() =>
-        expect(mocks.reportWriteError).toHaveBeenCalledWith('Model gpt-5.6-luna is unavailable')
+        expect(mocks.toastError).toHaveBeenCalledWith(
+          "Orca has received too many requests in the last day. The setting wasn't changed."
+        )
       )
       expect(mocks.enqueue).not.toHaveBeenCalled()
       unmount()

@@ -4,9 +4,11 @@ import type { AgentChildWorkInput } from './agent-status-child-work'
 import { serializeAgentStatusRunAliasIndex } from './agent-status-run-alias-index'
 import { createAgentStatusStore } from './agent-status-store'
 import { AGENT_STATUS_STORE_LIMITS } from './agent-status-store-contract'
-import { applyAgentStatusStoreMutation } from './agent-status-store-mutation'
+import { commitAgentStatusStoreMutation } from './agent-status-store-commit'
+import { indexAgentStatusStoreState } from './agent-status-store-indexes'
 import { agentStatusStoreStateFromSnapshot } from './agent-status-store-state'
 import {
+  agentStatusSubjectsEqual,
   makePtyRunAgentStatusSubject,
   makeStructuredAgentStatusSubject,
   type AgentStatusExecutionScope
@@ -111,12 +113,15 @@ describe('AgentStatusStore bounds', () => {
     }
   })
 
-  it('removes aliases for a child batch with one alias-map pass', () => {
+  it("removes a child batch's aliases without reading any other child's aliases", () => {
     const parent = makeStructuredAgentStatusSubject(scope, 'session-1')
+    const bystander = makeStructuredAgentStatusSubject(scope, 'session-2')
     const store = createAgentStatusStore({ epoch: 'epoch-a', mode: 'authority' })
-    const childRecords = Array.from({ length: 4 }, (_, index) => child(parent, index, 'brief'))
-    const aliases: AgentChildWorkAliasInput[] = childRecords.map((record, index) => ({
-      parent,
+    const aliasFor = (
+      record: ReturnType<typeof child>,
+      index: number
+    ): AgentChildWorkAliasInput => ({
+      parent: record.parent,
       provider: record.provider,
       segmentId: `segment-${index}`,
       kind: record.kind,
@@ -124,36 +129,53 @@ describe('AgentStatusStore bounds', () => {
       alias: `task-${index}`,
       childWorkId: record.childWorkId,
       fence: record.invocation
-    }))
+    })
+    const removed = Array.from({ length: 4 }, (_, index) => child(parent, index, 'brief'))
+    const kept = Array.from({ length: 16 }, (_, index) => child(bystander, index + 4, 'brief'))
     expect(
-      store.applyMutation({ parent: { subject: parent }, children: childRecords, aliases })
+      store.applyMutation({
+        parent: { subject: parent },
+        children: removed,
+        aliases: removed.map(aliasFor)
+      })
+    ).not.toBeNull()
+    expect(
+      store.applyMutation({
+        parent: { subject: bystander },
+        children: kept,
+        aliases: kept.map((record, index) => aliasFor(record, index + 4))
+      })
     ).not.toBeNull()
     const state = agentStatusStoreStateFromSnapshot(store.getSnapshot(), 'epoch-a')
-    expect(state).not.toBeNull()
     if (!state) {
       throw new Error('Expected a valid store state')
     }
-    let childWorkIdReads = 0
+    const indexes = indexAgentStatusStoreState(state)
+    let bystanderReads = 0
     for (const [key, record] of state.aliases) {
+      if (!agentStatusSubjectsEqual(record.parent, bystander)) {
+        continue
+      }
       const measured = { ...record }
       Object.defineProperty(measured, 'childWorkId', {
         enumerable: true,
         get: () => {
-          childWorkIdReads += 1
+          bystanderReads += 1
           return record.childWorkId
         }
       })
       state.aliases.set(key, measured)
     }
-    childWorkIdReads = 0
 
-    const next = applyAgentStatusStoreMutation(
-      state,
-      { removeChildren: childRecords.map((record) => record.childWorkId) },
-      state.revision + 1
-    )
-
-    expect(next).not.toBeNull()
-    expect(childWorkIdReads).toBe(aliases.length)
+    expect(
+      commitAgentStatusStoreMutation(
+        state,
+        indexes,
+        { removeChildren: removed.map((record) => record.childWorkId) },
+        state.revision + 1
+      )
+    ).toBe(true)
+    expect(state.aliases.size).toBe(kept.length)
+    expect(bystanderReads).toBe(0)
   })
 })

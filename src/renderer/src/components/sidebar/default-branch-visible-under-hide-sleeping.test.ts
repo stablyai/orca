@@ -68,7 +68,7 @@ function visibleOptions(overrides: Partial<VisibleOptions> = {}): VisibleOptions
 
 describe('#8873 default-branch workspace under "Hide sleeping"', () => {
   it('is genuinely the default-branch row the "Hide default branch" toggle targets', () => {
-    expect(isDefaultBranchWorkspace(makeDefaultBranchWorktree())).toBe(true)
+    expect(isDefaultBranchWorkspace(makeDefaultBranchWorktree(), repoMap.get('repo1'))).toBe(true)
   })
 
   it('stays in the sidebar when it is sleeping and "Hide sleeping" is on', () => {
@@ -154,16 +154,14 @@ describe('the "Hide sleeping" exemption for project entry-point rows', () => {
   })
 
   it('keeps a sleeping folder workspace, which has no sibling row to fall back to', () => {
-    // Folder-mode projects are main worktrees with an empty branch/head, so the
-    // default-branch predicate rejects them; sweeping them drops the whole project.
+    // Folder-mode projects are main worktrees with an empty branch/head; sweeping
+    // them drops the whole project.
     const folder: Worktree = {
       ...makeDefaultBranchWorktree(),
       id: 'wt-folder',
       branch: '',
       head: ''
     }
-    expect(isDefaultBranchWorkspace(folder)).toBe(false)
-
     expect(visible([folder], { alwaysShowDefaultBranchWorkspace: true })).toEqual([folder.id])
   })
 

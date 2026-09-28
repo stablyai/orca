@@ -158,6 +158,7 @@ export const sshApi = {
       targetId: string
       kind: 'passphrase' | 'password' | 'keyboard-interactive'
       detail: string
+      echo?: boolean
     }) => void
   ): (() => void) => {
     const listener = (
@@ -167,6 +168,7 @@ export const sshApi = {
         targetId: string
         kind: 'passphrase' | 'password' | 'keyboard-interactive'
         detail: string
+        echo?: boolean
       }
     ) => callback(data)
     ipcRenderer.on('ssh:credential-request', listener)

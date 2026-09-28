@@ -279,6 +279,60 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
+  it.each(['unproven', 'removal-fails'] as const)(
+    'keeps desktop orphan cleanup retryable when the directory is %s',
+    async (mode) => {
+      const parentDir = await mkdtemp(join(tmpdir(), 'orca-ipc-orphan-retention-'))
+      const repoPath = join(parentDir, 'repo')
+      const orphanPath = join(parentDir, 'orphan')
+      const worktreeId = `repo-1::${orphanPath}`
+      await mkdir(orphanPath, { recursive: true })
+      if (mode === 'removal-fails') {
+        const adminPath = join(repoPath, '.git', 'worktrees', 'orphan')
+        await mkdir(adminPath, { recursive: true })
+        await writeFile(join(orphanPath, '.git'), `gitdir: ${adminPath}\n`)
+        await writeFile(join(adminPath, 'gitdir'), `${join(orphanPath, '.git')}\n`)
+      }
+      const repo = { id: 'repo-1', path: repoPath, displayName: 'repo', badgeColor: '', addedAt: 0 }
+      store.getRepos.mockReturnValue([repo])
+      store.getRepo.mockReturnValue(repo)
+      mockKnownFeatureWorktree(orphanPath, repoPath)
+      getEffectiveHooksMock.mockReturnValue(null)
+      removeWorktreeMock.mockRejectedValue(
+        Object.assign(new Error('Git remove failed'), {
+          stderr: `fatal: '${orphanPath}' is not a working tree`
+        })
+      )
+      const finish = vi.fn().mockResolvedValue(undefined)
+      runtimeStub.acquireFileWatcherRemoval.mockResolvedValue({ finish })
+      const removePath = vi
+        .spyOn(localWorktreeFilesystem, 'removeLocalWorktreePath')
+        .mockRejectedValue(new Error('injected removal failure'))
+      try {
+        await expect(handlers['worktrees:remove'](null, { worktreeId })).rejects.toThrow(
+          'Worktree is no longer registered with Git but its directory remains.'
+        )
+        await expect(lstat(orphanPath)).resolves.toBeTruthy()
+        expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
+        expect(gitExecFileAsyncMock).not.toHaveBeenCalledWith(
+          ['worktree', 'prune'],
+          expect.anything()
+        )
+        expect(finish).toHaveBeenCalledWith(false)
+        expect(removePath).toHaveBeenCalledTimes(mode === 'removal-fails' ? 1 : 0)
+        await rm(orphanPath, { recursive: true, force: true })
+        await expect(handlers['worktrees:remove'](null, { worktreeId })).resolves.toEqual({
+          catalogVersion: anyCatalogVersion
+        })
+        expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'local')
+        expect(finish).toHaveBeenLastCalledWith(true)
+      } finally {
+        removePath.mockRestore()
+        await rm(parentDir, { recursive: true, force: true })
+      }
+    }
+  )
+
   it('recovers forced Windows long-path worktree removal through local deletion and prune', async () => {
     setPlatform('win32')
     const parentDir = await mkdtemp(join(tmpdir(), 'orca-ipc-long-path-'))

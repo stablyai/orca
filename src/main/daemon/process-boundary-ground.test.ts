@@ -142,7 +142,7 @@ describe('process boundary ground at a proven crash', () => {
     barrier.accept({ data, rawStartSeq: 0, rawEndSeq: data.length, transformed: false })
 
     await vi.waitFor(() => expect(released).toHaveLength(3))
-    expect(released[1]).toBe(PROCESS_BOUNDARY_GROUND)
+    expect(released[1]).toBe(`\x1b]133;D;137\x07${PROCESS_BOUNDARY_GROUND}`)
     expect(released[2]).toBe('\x1b[?2004h$ ')
     expect(barrier.getOwner()).toBe('shell')
     const snapshot = live.getSnapshot()
@@ -154,5 +154,20 @@ describe('process boundary ground at a proven crash', () => {
       expect(snapshot.snapshotAnsi).not.toContain(trailer)
     }
     expect(live.getBufferTailLines(24).slice(0, 2)).toEqual(['$ tui', '$ '])
+  })
+
+  it('pauses on an escape boundary so a mid-proof snapshot has no open OSC', () => {
+    const live = emulator(DAEMON_SESSION_SCROLLBACK_ROWS)
+    const barrier = new TerminalShellRecoveryBarrier({
+      confirmShellForeground: () => new Promise(() => {}),
+      release: (emission) => write(live, emission.data),
+      isAlive: () => true
+    })
+
+    const data = `\x1b[?1049h${DEAD_PROCESS_ARMS}TUI\x1b]133;D;137\x07$ `
+    barrier.accept({ data, rawStartSeq: 0, rawEndSeq: data.length, transformed: false })
+
+    expect(live.getSnapshot().pendingEscapeTailAnsi).toBeUndefined()
+    barrier.dispose()
   })
 })

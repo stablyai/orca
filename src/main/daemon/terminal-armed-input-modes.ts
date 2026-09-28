@@ -8,7 +8,7 @@ const HOST_ARMABLE_MODE = 1004
 type ModeKey = number | 'kitty-main' | 'kitty-alt'
 // host: HOST_ARMABLE_MODE armed before any marker or by a prompt a 133;C proved; the ground keeps it.
 // prompt: armed outside a command, unproven until C.
-// command: armed after C; still on at 133;D, it triggers the ground.
+// command: armed after C; still on at any 133;D, it triggers the ground until disarmed.
 // stale: anything else still on; the ground clears it without it ever triggering.
 type ModeOwner = 'host' | 'prompt' | 'command' | 'stale'
 // Matches xterm.js's eviction limit, so the model drops the same entries.
@@ -104,13 +104,14 @@ export class TerminalArmedInputModes {
     this.enableOwner = 'prompt'
   }
 
-  /** OSC 133;D: true when the command left a mode it armed. Demoting makes it one-shot. */
+  /** OSC 133;D: true when a command's mode is still on. Not demoted: a nested shell's
+   *  stray D gets a refuted proof, and the app's real D must still trigger. */
   markCommandEnd(): boolean {
     let left = false
     for (const [key, owner] of this.owners) {
-      if (owner === 'command' || owner === 'prompt') {
-        // The other screen's kitty flags stay parked in xterm and reach no input.
-        left ||= owner === 'command' && (typeof key === 'number' || key === this.kittyKey())
+      // The other screen's kitty flags stay parked in xterm and reach no input.
+      left ||= owner === 'command' && (typeof key === 'number' || key === this.kittyKey())
+      if (owner === 'prompt') {
         this.owners.set(key, 'stale')
       }
     }

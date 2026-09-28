@@ -6,22 +6,23 @@ import {
   getSharedManagedScriptPath,
   isPlainObject,
   MANAGED_HOOK_TIMEOUT_SECONDS,
-  quotePowerShellString,
   removeManagedCommands,
   wrapWindowsPowerShellEncodedCommand,
   type HookCommandConfig,
   type HookDefinition,
   type HooksConfig
 } from '../agent-hooks/installer-utils'
+import { quotePowerShellLiteral } from '../../shared/powershell-native-argument'
 import { wrapRuntimeHomeHookCommand } from '../agent-hooks/runtime-home-hook-command'
 import { wrapWindowsDirectCmdHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
 import { isGitBashAvailable } from '../git-bash'
 import { claudeVersionSupportsSessionEnd } from './claude-session-end-hook-capability'
 
 export type ClaudeCompatibleHookSettings = {
-  configDirName: '.claude' | '.openclaude'
-  scriptBaseName: 'claude-hook' | 'openclaude-hook'
+  configDirName: '.claude' | '.openclaude' | '.qoder'
+  scriptBaseName: 'claude-hook' | 'openclaude-hook' | 'qoder-hook'
   usesWindowsCompatLauncher: boolean
+  windowsHookShell?: 'powershell'
 }
 
 export const CLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
@@ -109,6 +110,7 @@ const CLAUDE_SESSION_END_EVENT = {
 
 export type ApplyManagedClaudeHooksOptions = {
   claudeVersion?: string
+  events?: readonly { eventName: string; definition: Omit<HookDefinition, 'hooks'> }[]
 }
 
 export function getConfigPath(settings = CLAUDE_HOOK_SETTINGS): string {
@@ -171,6 +173,14 @@ export function getManagedLifecycleHook(
   if (process.platform !== 'win32' || !settings.usesWindowsCompatLauncher) {
     return buildManagedCommandHook(getManagedCommand(scriptPath, { neutralJsonWhenMissing: true }))
   }
+  if (settings.windowsHookShell === 'powershell') {
+    return {
+      type: 'command',
+      command: getWindowsPowerShellLifecycleCommand(scriptPath),
+      shell: 'powershell',
+      timeout: MANAGED_HOOK_TIMEOUT_SECONDS
+    }
+  }
   return getWindowsManagedLifecycleHook(scriptPath, options)
 }
 
@@ -190,19 +200,21 @@ export function getWindowsManagedLifecycleHook(
   if (directCommand) {
     return { type: 'command', command: directCommand, timeout: MANAGED_HOOK_TIMEOUT_SECONDS }
   }
+  return {
+    type: 'command',
+    command: wrapWindowsPowerShellEncodedCommand(getWindowsPowerShellLifecycleCommand(scriptPath)),
+    timeout: MANAGED_HOOK_TIMEOUT_SECONDS
+  }
+}
+
+function getWindowsPowerShellLifecycleCommand(scriptPath: string): string {
   const scriptFileName = win32.basename(scriptPath)
-  // Why: runtime profile resolution keeps the managed entry portable across users (STA-3348).
-  const quotedRelativePath = quotePowerShellString(`.orca\\agent-hooks\\${scriptFileName}`)
-  // Why: compat consumers require neutral JSON even when the managed script is missing (#14818).
-  const innerCommand =
+  const quotedRelativePath = quotePowerShellLiteral(`.orca\\agent-hooks\\${scriptFileName}`)
+  return (
     `$scriptPath = Join-Path $env:USERPROFILE ${quotedRelativePath}; ` +
     'if (Test-Path -LiteralPath $scriptPath -PathType Leaf) { & $scriptPath; exit $LASTEXITCODE }; ' +
     "[Console]::In.ReadToEnd() | Out-Null; Write-Output '{}'; exit 0"
-  return {
-    type: 'command',
-    command: wrapWindowsPowerShellEncodedCommand(innerCommand),
-    timeout: MANAGED_HOOK_TIMEOUT_SECONDS
-  }
+  )
 }
 
 export function hasSameManagedHookInvocation(
@@ -211,6 +223,7 @@ export function hasSameManagedHookInvocation(
 ): boolean {
   return (
     actual.command === expected.command &&
+    actual.shell === expected.shell &&
     JSON.stringify(actual.args ?? []) === JSON.stringify(expected.args ?? [])
   )
 }
@@ -228,7 +241,9 @@ export function applyManagedHooks(
   const nextHooks = { ...config.hooks }
   const isManagedCommand = createManagedCommandMatcher(scriptFileName)
   const sessionEndCapable = claudeVersionSupportsSessionEnd(options.claudeVersion)
-  const events = sessionEndCapable ? [...CLAUDE_EVENTS, CLAUDE_SESSION_END_EVENT] : CLAUDE_EVENTS
+  const events =
+    options.events ??
+    (sessionEndCapable ? [...CLAUDE_EVENTS, CLAUDE_SESSION_END_EVENT] : CLAUDE_EVENTS)
 
   for (const event of events) {
     const current = Array.isArray(nextHooks[event.eventName]) ? nextHooks[event.eventName] : []
@@ -240,7 +255,7 @@ export function applyManagedHooks(
     nextHooks[event.eventName] = [...cleaned, definition]
   }
 
-  if (!sessionEndCapable) {
+  if (!sessionEndCapable && !options.events) {
     const current = Array.isArray(nextHooks.SessionEnd) ? nextHooks.SessionEnd : []
     const cleaned = removeManagedCommands(current, isManagedCommand)
     if (cleaned.length === 0) {

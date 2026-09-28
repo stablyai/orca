@@ -20,7 +20,7 @@ import { MobileWebBundleFetchError } from '../transport/mobile-web-bundle-fetch-
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { RpcClient } from '../transport/rpc-client'
 import type { GenerationStore } from './generation-store'
-import { download, readManifest } from './mobile-web-shell-session-effects'
+import { download, openCache, readManifest } from './mobile-web-shell-session-effects'
 
 // The mocked operations never touch the client; they only need one to exist.
 const CLIENT: RpcClient = {
@@ -125,6 +125,27 @@ describe('the manifest read', () => {
     expect(events).toMatchObject([
       { cause: { reason: 'host-refused', hostCode: 'mobile_web_bundle_unavailable' } }
     ])
+  })
+})
+
+describe('the page version the floor reads', () => {
+  it('is carried from the host manifest to the reducer', async () => {
+    doubles.manifest = () => Promise.resolve({ manifest: { ...MANIFEST, pageVersion: 4 } })
+    const { events, send } = collect()
+    await readManifest(CLIENT, 3, send)
+    expect(events).toMatchObject([{ type: 'manifest-read', manifest: { pageVersion: 4 } }])
+  })
+
+  it('is carried from the cached manifest to the generation judged against the host', async () => {
+    const store: GenerationStore = {
+      ...storeThat(null),
+      readActiveGeneration: async () => ({
+        buildId: MANIFEST.buildId,
+        directory: 'd',
+        manifest: { ...MANIFEST, pageVersion: 4, routes: [] }
+      })
+    }
+    expect((await openCache(store, 'k'))?.compat.pageVersion).toBe(4)
   })
 })
 

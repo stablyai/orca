@@ -8,7 +8,14 @@ import type {
 } from '../../../../shared/agent-session-conversation-command'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
-import { supportsStructuredAgentSessionPromptCancel } from '@/runtime/structured-agent-session-client'
+import {
+  supportsStructuredAgentSessionPromptCancel,
+  supportsStructuredAgentSessionQuestionAnswers
+} from '@/runtime/structured-agent-session-client'
+import {
+  legacyAgentSessionSelectedOptionId,
+  type AgentSessionPromptResponse
+} from '../../../../shared/agent-session-question-answer'
 import {
   pendingStructuredSessionPrompts,
   type StructuredPromptItem
@@ -46,21 +53,13 @@ export function useStructuredAgentSession(args: {
     target,
     transportEnabled = true
   } = args
-  const {
-    state,
-    loadingOlder,
-    olderHistoryGeneration,
-    loadOlder,
-    mutate,
-    writeError,
-    reportWriteError,
-    providerVisible
-  } = useStructuredAgentSessionTransport({
-    sessionId,
-    target,
-    isVisible,
-    enabled: transportEnabled
-  })
+  const { state, loadingOlder, olderHistoryGeneration, loadOlder, mutate, write, providerVisible } =
+    useStructuredAgentSessionTransport({
+      sessionId,
+      target,
+      isVisible,
+      enabled: transportEnabled
+    })
   const commandPending = useRef(false)
   const transportState = useStructuredAgentSessionTransportState(state, transportEnabled)
   const {
@@ -82,7 +81,6 @@ export function useStructuredAgentSession(args: {
     turnId: transportState.turnId,
     unloadedTurnRevisions: state.unloadedTurnRevisions,
     mutate,
-    reportWriteError,
     ...(launch ? { launch } : {})
   })
   const outboxController = useStructuredAgentSessionOutbox({
@@ -129,7 +127,7 @@ export function useStructuredAgentSession(args: {
           outbox.length
         ),
         send: (command) =>
-          mutate<AgentSessionConversationCommandResult>(
+          write<AgentSessionConversationCommandResult>(
             'agentSession.conversationCommand',
             'agentSession.conversationCommand',
             { command }
@@ -138,9 +136,7 @@ export function useStructuredAgentSession(args: {
     journalItems: transportState.journalItems,
     messages,
     status: transportEnabled ? state.status : 'ready',
-    error: transportEnabled
-      ? (state.error ?? writeError ?? outboxController.error)
-      : outboxController.error,
+    error: transportEnabled ? (state.error ?? outboxController.error) : outboxController.error,
     hasOlder: transportEnabled && state.hasOlder,
     railOutline: transportEnabled ? railOutline : null,
     loadingOlder: transportEnabled && loadingOlder,
@@ -174,14 +170,32 @@ export function useStructuredAgentSession(args: {
         scope: 'background-tasks',
         ...(taskId ? { taskId } : {})
       }),
-    respond: (item: StructuredPromptItem, optionId: string) =>
-      mutate<AgentSessionPromptResult>(
+    respond: async (item: StructuredPromptItem, response: AgentSessionPromptResponse) => {
+      const promptTarget = { itemId: item.itemId, expectedRevision: item.revision }
+      let fields: Record<string, unknown>
+      if (response.kind === 'option') {
+        fields = { ...promptTarget, optionId: response.optionId }
+      } else if (await supportsStructuredAgentSessionQuestionAnswers(target)) {
+        // Negotiated before mutate fingerprints the call: older hosts reject the strict field.
+        fields = { ...promptTarget, answers: response.answers }
+      } else {
+        const optionId =
+          item.body.kind === 'question'
+            ? legacyAgentSessionSelectedOptionId(item.body, response.answers)
+            : null
+        if (optionId === null) {
+          return null
+        }
+        fields = { ...promptTarget, optionId }
+      }
+      return mutate<AgentSessionPromptResult>(
         item.body.kind === 'approval'
           ? 'agentSession.respondToApproval'
           : 'agentSession.respondToQuestion',
         `agentSession.respondTo:${item.body.kind}`,
-        { itemId: item.itemId, expectedRevision: item.revision, optionId }
-      ),
+        fields
+      )
+    },
     optionSnapshot,
     optionSurface,
     sessionCommands: transportEnabled ? (state.commands ?? undefined) : undefined,

@@ -71,6 +71,7 @@ const terminalLayoutSnapshotSchema = z.object({
   root: terminalPaneLayoutNodeSchema.nullable(),
   activeLeafId: z.string().nullable(),
   expandedLeafId: z.string().nullable(),
+  chatLeafId: z.string().optional(),
   ptyIdsByLeafId: salvagedOptional('ptyIdsByLeafId', leafStringsSchema),
   buffersByLeafId: salvagedOptional('buffersByLeafId', leafStringsSchema),
   scrollbackRefsByLeafId: salvagedOptional('scrollbackRefsByLeafId', leafStringsSchema),

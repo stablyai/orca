@@ -54,7 +54,7 @@ export class ClaudeJournalPrompts {
   constructor(
     private readonly deps: {
       sink: StructuredAgentSessionEventSink
-      bindPromptItemId?: (journalItemId: string, promptKey: string, questionId?: string) => void
+      bindPromptItemId?: (journalItemId: string, promptKey: string) => void
       questionItems?: (input: {
         sessionId: string
         prompt: Extract<ClaudeStructuredSessionEvent, { type: 'prompt' }>['prompt']

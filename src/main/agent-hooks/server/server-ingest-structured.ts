@@ -11,7 +11,8 @@ import {
 } from '../../../shared/structured-agent-session-projection'
 import {
   continueMainAgentStatus,
-  isAgentStatusHeldOpenByChildWork
+  isAgentStatusHeldOpenByChildWork,
+  mainAgentTurnInterrupted
 } from '../../../shared/agent-lead-status-fold'
 import { structuredAgentSessionAgentStatus } from '../../../shared/structured-agent-session-agent-status'
 import {
@@ -61,7 +62,7 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
     if (this.state.lastStatusByPaneKey.has(paneKey)) {
       throw new Error('Structured status address conflicts with legacy evidence')
     }
-    const snapshot = this.canonicalStatusStore.getSnapshot()
+    const snapshot = this.canonicalStatusStore.getRevision()
     const observedAt = Math.max(Date.now(), priorStatus?.receivedAt ?? 0)
     const status: AgentStatusIpcPayload = {
       paneKey,
@@ -73,6 +74,8 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
       state,
       ...(workingMode ? { workingMode } : {}),
       mainAgent,
+      // Readers that predate `mainAgent` read a cancellation off this flag, as the hook lanes publish it.
+      interrupted: mainAgentTurnInterrupted(mainAgent),
       prompt: summary.latestPrompt,
       agentType: summary.agent,
       ...(summary.model ? { model: summary.model } : {}),

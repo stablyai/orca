@@ -8,10 +8,6 @@ import { startTextScaling } from './document/text-scaling'
 import { webviewPageSource } from './document/document-module-source.test-support'
 
 const terminalWebViewSource = readFileSync(join(import.meta.dirname, 'TerminalWebView.tsx'), 'utf8')
-const terminalHtmlModuleSource = readFileSync(
-  join(import.meta.dirname, 'terminal-webview-html.ts'),
-  'utf8'
-)
 const terminalHtmlDocumentShellSource = readFileSync(
   join(import.meta.dirname, 'terminal-webview-html', 'document-shell.ts'),
   'utf8'
@@ -65,11 +61,9 @@ describe('TerminalWebView text zoom', () => {
     const end = terminalWebViewSource.indexOf('/>', start)
     expect(end).toBeGreaterThan(start)
     const webViewProps = terminalWebViewSource.slice(start, end)
-    expect(terminalHtmlModuleSource).toContain(
-      'export const XTERM_WEBVIEW_SOURCE = { html: XTERM_HTML }'
-    )
-    expect(webViewProps).toContain('source={XTERM_WEBVIEW_SOURCE}')
-    expect(webViewProps).not.toContain('source={{ html: XTERM_HTML }}')
+    // One source object per view, pinned at mount.
+    expect(terminalWebViewSource).toContain('const [source] = useState(() =>')
+    expect(webViewProps).toContain('source={source}')
   })
 
   it('forces the Claude status dot to text presentation before xterm writes', () => {
@@ -123,7 +117,7 @@ describe('TerminalWebView text zoom', () => {
       'const replayData = normalizeInitialData(initialData)'
     )
     const clearStart = terminalHtmlSource.indexOf("} else if (msg.type === 'clear') {")
-    const clearEnd = terminalHtmlSource.indexOf("} else if (msg.type === 'measure')", clearStart)
+    const clearEnd = terminalHtmlSource.indexOf("} else if (msg.type === 'reset-zoom')", clearStart)
     expect(initStart).toBeGreaterThanOrEqual(0)
     expect(initReplay).toBeGreaterThan(initStart)
     expect(clearStart).toBeGreaterThanOrEqual(0)
@@ -139,8 +133,8 @@ describe('TerminalWebView text zoom', () => {
   it('loads Unicode 11 before replaying mobile terminal bytes', () => {
     expect(terminalHtmlDocumentShellSource).toContain('XTERM_ENGINE_JS')
     expect(terminalHtmlSource).toContain('window.Unicode11Addon.Unicode11Addon')
-    const open = terminalHtmlSource.indexOf('scope.term.open(scope.surface!)')
-    const unicode = terminalHtmlSource.indexOf("scope.term.unicode.activeVersion = '11'")
+    const open = terminalHtmlSource.indexOf('term.open(scope.surface!)')
+    const unicode = terminalHtmlSource.indexOf("term.unicode.activeVersion = '11'")
     const replay = terminalHtmlSource.indexOf("enqueueWrite(scope, ESC + '[0m' + replayData)")
     expect(open).toBeGreaterThanOrEqual(0)
     expect(unicode).toBeGreaterThan(open)

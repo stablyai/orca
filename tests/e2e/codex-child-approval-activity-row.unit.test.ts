@@ -143,7 +143,9 @@ async function openHost() {
     journalDir: join(root, SESSION)
   })
   const feed = new StructuredAgentSessionStatusFeed({
-    sessions: new Map([[SESSION, indexedStatusFeedSession({ journal, hasProviderChild: true })]]),
+    sessions: new Map([
+      [SESSION, indexedStatusFeedSession({ journal, child: { phase: 'ready' } })]
+    ]),
     getRecord: () => null,
     now: () => 1,
     readBackgroundTasks: () => ({ state: 'monitoring', tasks: [] })

@@ -45,6 +45,9 @@ import { MailPointerRepointScheduler } from './orchestration/mail-pointer-repoin
 import { RuntimeTerminalWaiterRegistry } from './runtime-terminal-waiter-registry'
 import { RuntimeTerminalWriter } from './runtime-terminal-writer'
 import { RuntimeTerminalIdlePolls } from './runtime-terminal-idle-polls'
+import { TerminalIntentionalStops } from './terminal-intentional-stops'
+import { TerminalRunFactsRegister, type TerminalSpawnCommit } from './terminal-run-facts'
+import type { TuiIdleEvidenceSource } from './tui-idle-evidence'
 import {
   TUI_IDLE_DEFAULT_TIMEOUT_MS,
   TUI_IDLE_POLL_INTERVAL_MS,
@@ -232,9 +235,16 @@ export class OrcaRuntimeWithRuntimeId {
 
   protected pendingPtyRegistrationIncarnations = new Map<string, PtyIncarnationId | null>()
 
-  // Why: exact-stop is the current sleep transaction boundary; its exit must
-  // leave the renderer's intentional sleeping surface available for wake.
-  protected intentionalHandlelessPtyStops = new Map<string, string | null>()
+  // Why public: the PTY IPC layer's stop paths write it and its exit delivery reads it.
+  readonly intentionalPtyStops = new TerminalIntentionalStops()
+
+  readonly terminalRunFacts = new TerminalRunFactsRegister()
+
+  /** Both spawn-commit funnels report each committed process here, once. */
+  noteTerminalSpawnCommit(commit: TerminalSpawnCommit, expectedSourceBinding?: unknown): void {
+    this.terminalRunFacts.recordSpawnCommit(commit, expectedSourceBinding)
+    this.intentionalPtyStops.noteSpawnCommit(commit.id)
+  }
 
   // Why: coalesces title/status-driven session.tabs emits so spinner churn
   // doesn't fan out (and per-client JSON.stringify) a snapshot several times a
@@ -321,35 +331,43 @@ export class OrcaRuntimeWithRuntimeId {
   protected readonly terminalWaiters = new RuntimeTerminalWaiterRegistry()
 
   protected readonly terminalWriter = new RuntimeTerminalWriter(
-    (ptyId, data) => this.ptyController?.write(ptyId, data) ?? false,
+    (ptyId, data, inputKind) => this.ptyController?.write(ptyId, data, inputKind) ?? false,
     (ptyId) => this.getPtyWriteHostPlatform(ptyId),
     (ptyId) => this.getPtyAgent(ptyId)
   )
 
-  protected readonly terminalIdlePolls = new RuntimeTerminalIdlePolls({
-    intervalMs: TUI_IDLE_POLL_INTERVAL_MS,
+  // Why one source: every tui-idle site must read the same evidence, or they rank one pane differently.
+  protected readonly tuiIdleEvidenceSource: TuiIdleEvidenceSource = {
     quiescenceMs: TUI_IDLE_QUIESCENCE_MS,
     getTabTitle: (tabId) => this.tabs.get(tabId)?.title ?? null,
-    getForegroundProcess: (ptyId) => this.ptyController?.getForegroundProcess(ptyId) ?? null,
     getAdoptedPtyIdleStatus: (pty) => this.getAdoptedPtyExplicitIdleStatus(pty),
     getPaneAgent: (ptyId) => this.getPaneAgentForTuiIdle(ptyId),
     getFirstPartyAgentStatus: (ptyId) =>
       (ptyId ? this.ptysById.get(ptyId)?.lastExplicitAgentStatus : null) ?? null,
+    readScreenLines: (ptyId) => this.readLiveTerminalScreenLines(ptyId)
+  }
+
+  protected readonly terminalIdlePolls = new RuntimeTerminalIdlePolls({
+    ...this.tuiIdleEvidenceSource,
+    intervalMs: TUI_IDLE_POLL_INTERVAL_MS,
+    getForegroundProcess: (ptyId) => this.ptyController?.getForegroundProcess(ptyId) ?? null,
+    // Why the runtime's own emulator: a provider snapshot would be a host round trip per tick.
+    readVisibleScreen: (ptyId) =>
+      this.headlessTerminals.has(ptyId)
+        ? this.readHeadlessVisibleTerminalState(ptyId).then(
+            (screen) => screen?.lines.join('\n') ?? null
+          )
+        : null,
     getLiveLeaf: (leaf) => this.leaves.get(this.getLeafKey(leaf.tabId, leaf.leafId)) ?? leaf,
     resolve: (waiter, result) => this.terminalWaiters.resolve(waiter, result)
   })
 
   protected readonly terminalWait = new RuntimeTerminalWaitController(
     {
+      ...this.tuiIdleEvidenceSource,
       defaultTimeoutMs: TUI_IDLE_DEFAULT_TIMEOUT_MS,
       getLivePty: (handle) => this.getLivePtyForHandle(handle),
       getLiveLeaf: (handle) => this.getLiveLeafForHandle(handle),
-      getAdoptedPtyIdleStatus: (pty) => this.getAdoptedPtyExplicitIdleStatus(pty),
-      getTabTitle: (tabId) => this.tabs.get(tabId)?.title ?? null,
-      quiescenceMs: TUI_IDLE_QUIESCENCE_MS,
-      getPaneAgent: (ptyId) => this.getPaneAgentForTuiIdle(ptyId),
-      getFirstPartyAgentStatus: (ptyId) =>
-        (ptyId ? this.ptysById.get(ptyId)?.lastExplicitAgentStatus : null) ?? null,
       startVisibleReadProbe: (waiter, waiterTimeoutMs, agent) =>
         this.startTuiIdleVisibleReadProbe(waiter, waiterTimeoutMs, agent)
     },

@@ -1,3 +1,4 @@
+import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 import { describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
@@ -66,7 +67,8 @@ function createRuntimeInternals(
     [WORKSPACE_A]: { hostId: 'local' },
     [WORKSPACE_B]: { hostId: 'local' }
   }
-  const store = {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This runtime fixture supplies the persistence and graph methods exercised by the test.
+  const store = withDurableRuntimeStore({
     getRepos: () => [REPO],
     getRepo: (id: string) => (id === REPO_ID ? REPO : undefined),
     getAllWorktreeMeta: () => meta,
@@ -78,7 +80,7 @@ function createRuntimeInternals(
     getWorkspaceSession: () => options.session ?? getDefaultWorkspaceSession(),
     setWorkspaceSession: () => {},
     flushOrThrow: () => {}
-  } as never
+  }) as never
   const runtime = new OrcaRuntimeService(store)
   runtime.setPtyController({
     write: () => true,

@@ -118,6 +118,39 @@ describe('ordering', () => {
     expect(renderJournalState(state).items.map((item) => item.itemId)).toEqual(['earlier', 'later'])
   })
 
+  it("places a batch's writes by their order in it, and keeps that place on revision", () => {
+    // One Codex ask writes all its questions in one batch; their ids are not their order.
+    const state = fold([
+      {
+        kind: 'lifecycle-batch',
+        settlementId: 'ask',
+        mutations: [
+          { kind: 'item', itemId: 'scope', revision: 1, body: text('first') },
+          { kind: 'item', itemId: 'priority', revision: 1, body: text('second') },
+          { kind: 'item', itemId: 'deadline', revision: 1, body: text('third') }
+        ],
+        ...base(1)
+      },
+      {
+        kind: 'lifecycle-batch',
+        settlementId: 'answer',
+        mutations: [{ kind: 'item', itemId: 'deadline', revision: 2, body: text('answered') }],
+        ...base(2)
+      }
+    ])
+    expect(
+      renderJournalState(state).items.map(({ itemId, sequence, sequenceIndex }) => ({
+        itemId,
+        sequence,
+        sequenceIndex
+      }))
+    ).toEqual([
+      { itemId: 'scope', sequence: 1, sequenceIndex: undefined },
+      { itemId: 'priority', sequence: 1, sequenceIndex: 1 },
+      { itemId: 'deadline', sequence: 1, sequenceIndex: 2 }
+    ])
+  })
+
   it('orders by sequence even when the observed timestamp runs backwards', () => {
     const state = fold([
       { kind: 'item', itemId: 'late', revision: 1, body: text('late'), ...base(1), ts: 9_000 },

@@ -217,7 +217,13 @@ export function NativeChatToolRun({
     <div className="mt-3">
       {standaloneRows}
       {hasAskCall ? (
-        <NativeChatAwaitingInputRow subject={askSubject} pending={askIsActive} />
+        <NativeChatAwaitingInputRow
+          subject={askSubject}
+          pending={askIsActive}
+          disclosureKey={disclosureId === undefined ? undefined : `ask:${disclosureId}`}
+          // A grouped ask here still names only its count.
+          listsQuestions={false}
+        />
       ) : null}
       {!showsHeader ? null : (
         // One element for the run's whole life. Live and settled are states of

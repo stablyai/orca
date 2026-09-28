@@ -129,6 +129,9 @@ describe('per-job path classification', () => {
     expectClassification(['src/shared/git-binary-compatibility.test.ts'], {
       git_compatibility: true
     })
+    expectClassification(['.github/actions/prepare-git-compatibility/action.yml'], {
+      git_compatibility: true
+    })
   })
 
   it('runs the Codex index-heal contract only when the heal or its transport changes', () => {
@@ -195,6 +198,10 @@ describe('per-job path classification', () => {
 
   it('runs Linux packaging when an artifact contract changes', () => {
     for (const file of [
+      'config/scripts/package-linux-formats.mjs',
+      'config/scripts/script-child-process.mjs',
+      'config/scripts/space-sharing-copy.mjs',
+      '.github/actions/prepare-linux-package-fixture/action.yml',
       'config/docker/cli-launch-contract/Dockerfile',
       'config/docker/cli-launch-contract/run-cli-case.sh',
       'config/docker/headless-pairing/Dockerfile',
@@ -204,7 +211,10 @@ describe('per-job path classification', () => {
       'config/scripts/run-headless-linux-pairing-docker.mjs',
       'config/scripts/static-appimage-package-contract.cjs'
     ]) {
-      expectClassification([file], { package: true })
+      expectClassification([file], {
+        package: true,
+        mobile_web_app: file === 'config/scripts/script-child-process.mjs'
+      })
     }
   })
 
@@ -216,7 +226,10 @@ describe('per-job path classification', () => {
       'config/docker/daemon-shutdown-descendants/run-case.sh',
       'config/scripts/run-daemon-shutdown-descendants-docker.mjs'
     ]) {
-      expectClassification([file], { package: true })
+      expectClassification([file], {
+        package: true,
+        mobile_web_app: file === 'config/scripts/script-child-process.mjs'
+      })
     }
     for (const file of [
       'src/main/daemon/terminal-host.ts',
@@ -281,6 +294,9 @@ describe('per-job path classification', () => {
   it('runs the mobile web app job for the builder, the page source and the shell policy', () => {
     for (const file of [
       'config/scripts/build-mobile-web-app-bundle.mjs',
+      'config/scripts/run-mobile-web-app-checks.mjs',
+      'config/scripts/script-child-process.mjs',
+      'src/shared/child-process/run-process.ts',
       'config/scripts/mobile-web-app-route-manifest.mjs',
       'mobile/web-entry/index.tsx',
       'mobile/app/h/[hostId]/index.tsx',
@@ -334,6 +350,9 @@ describe('per-job path classification', () => {
       'src/main/runtime/rpc/methods/structured-agent-session-hold.ts',
       'src/main/runtime/rpc/methods/structured-agent-session-schemas.ts',
       'src/main/runtime/rpc/methods/terminal.ts',
+      'src/main/runtime/runtime-worktree-agent-rows.ts',
+      'src/main/runtime/runtime-worktree-pty-agent-sources.ts',
+      'src/shared/runtime-worktree-contracts.ts',
       'src/renderer/src/runtime/remote-runtime-terminal-multiplexer.ts'
     ]) {
       expectClassification([file], {
@@ -511,12 +530,19 @@ describe('PR Checks skip wiring', () => {
     )
     expect(classify.run).toContain('--diff-filter=ACDMR')
     expect(classify.run).toContain('--no-renames')
-    expect(classify.run).toContain('--merge-base "$BASE_SHA" "$HEAD_SHA"')
+    // HEAD is the merge commit, so HEAD^1 is the base side and no merge base is computed.
+    // That is what lets this job check out shallowly, which every other job waits on.
+    expect(classify.run).toContain('node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA"')
+    expect(classify.run).toContain('"$DIFF_BASE" HEAD')
+    expect(classify.run).not.toContain('--merge-base "$')
     expect(classify.run).toContain('node config/scripts/pr-code-change-scope.mjs')
     expect(classify.run).toContain('tee -a "$GITHUB_OUTPUT"')
-    for (const jobName of ['should_run', 'native_cache_changed', ...expensiveJobs]) {
+    expect(prWorkflow.jobs.code_paths.outputs.should_run).toBe(
+      '${{ steps.filter.outputs.should_run }}'
+    )
+    for (const jobName of ['native_cache_changed', ...expensiveJobs]) {
       expect(prWorkflow.jobs.code_paths.outputs[jobName], jobName).toBe(
-        `\${{ steps.filter.outputs.${jobName} }}`
+        `\${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.${jobName} }}`
       )
     }
   })
@@ -546,19 +572,35 @@ describe('PR Checks skip wiring', () => {
     expect(installStep.run).toContain('--frozen-lockfile')
   })
 
-  it('keeps the cheap root-directory guard on docs-only PRs', () => {
-    expect(prWorkflow.jobs.root_directory_guard.if).toBeUndefined()
-    expect(prWorkflow.jobs.root_directory_guard.needs).toBeUndefined()
+  it('keeps the root and README guards on docs-only PRs without another runner', () => {
+    const detector = prWorkflow.jobs.code_paths
+    expect(detector.if).toBeUndefined()
+    expect(detector.needs).toBeUndefined()
+    for (const name of ['Reject new root-level files and folders', 'Check README local links']) {
+      const step = detector.steps.find((candidate) => candidate.name === name)
+      expect(step).toBeDefined()
+      expect(step.if).toBeUndefined()
+    }
+    expect(prWorkflow.jobs.root_directory_guard).toBeUndefined()
   })
 
   it('gates each expensive job on its classifier and cache prerequisite', () => {
     for (const jobName of expensiveJobs.filter((jobName) => jobName !== 'test')) {
-      expect(prWorkflow.jobs[jobName].needs, jobName).toEqual(['code_paths'])
+      expect(prWorkflow.jobs[jobName].needs, jobName).toEqual(
+        ['package', 'package_windows'].includes(jobName)
+          ? ['code_paths', 'static_analysis', 'typecheck']
+          : ['code_paths']
+      )
       expect(prWorkflow.jobs[jobName].if, jobName).toBe(
         `needs.code_paths.outputs.${jobName} == 'true'`
       )
     }
-    expect(prWorkflow.jobs.test.needs).toEqual(['code_paths', 'test_native_cache'])
+    expect(prWorkflow.jobs.test.needs).toEqual([
+      'code_paths',
+      'test_native_cache',
+      'static_analysis',
+      'typecheck'
+    ])
     expect(prWorkflow.jobs.test.if).toContain("needs.code_paths.outputs.test == 'true'")
     expect(prWorkflow.jobs.test.if).toContain("needs.test_native_cache.result == 'success'")
     expect(prWorkflow.jobs.test.if).toContain("needs.test_native_cache.result == 'skipped'")
@@ -587,12 +629,12 @@ describe('PR Checks skip wiring', () => {
     )
     expect(prWorkflow.jobs.verify.needs[0]).toBe('code_paths')
     expect(verifyStep.env.SHOULD_RUN).toBe('${{ needs.code_paths.outputs.should_run }}')
-    expect(verifyStep.run).toContain('"$ROOT_DIRECTORY_GUARD" != "success"')
+    expect(verifyStep.run).toContain('"$CODE_PATHS" != "success"')
     expect(verifyStep.run).toContain('# Require success when the PR has code-relevant changes')
     expect(verifyStep.run).toContain('expected skipped')
     expect(verifyStep.run).toContain('expected success')
     for (const job of prWorkflow.jobs.verify.needs) {
-      if (job === 'code_paths' || job === 'root_directory_guard') {
+      if (job === 'code_paths') {
         continue
       }
       const envVar = `${job.replaceAll('-', '_').toUpperCase()}_SHOULD_RUN`

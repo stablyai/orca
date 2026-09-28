@@ -28,45 +28,21 @@ import {
   agentSessionScopeKey,
   type AgentSessionExecutionLocation,
   type AgentSessionHandoffStage,
-  type AgentSessionOwnerRuntimeKind,
   type AgentSessionRecord
 } from './agent-session-record'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { StructuredAgentSessionProjectedStatus } from './structured-agent-session-projection'
 
-export type AgentSessionHandoffDirection = 'to-tui' | 'to-native'
-export type AgentSessionHandoffMode = 'now' | 'after-turn' | 'stop-turn'
-export type AgentSessionHandoffAction = 'start' | 'cancel-queued' | 'retry' | 'recover'
-
+/** `agentSession.handoffStatus`. Named for the removed terminal handoff; released desktop clients
+ *  still read `owner`. Clients parse the reply as unknown, since older hosts sent more fields. */
 export type AgentSessionHandoffStatus = {
-  owner: AgentSessionOwnerRuntimeKind | 'none'
-  direction: AgentSessionHandoffDirection | null
-  phase: 'idle' | 'queued' | 'switching' | 'waiting-for-exit' | 'failed'
+  owner: 'native' | 'none'
+  direction: 'to-native' | null
+  phase: 'idle' | 'switching' | 'failed'
   stage: AgentSessionHandoffStage | null
   operationId: string | null
-  hostLabel?: string
-  terminal?: {
-    handle: string
-    tabId: string
-    paneKey: string
-    ptyId?: string
-  }
-  error?: {
-    message: string
-    details?: string
-    recoverableOwner: AgentSessionOwnerRuntimeKind | 'none'
-    canRetryProof?: boolean
-  }
+  error?: { message: string; recoverableOwner: 'none' }
 }
-
-export type AgentSessionHandoffRequest = {
-  envelope: AgentSessionMutationEnvelope
-  direction: AgentSessionHandoffDirection
-  mode: AgentSessionHandoffMode
-  action?: AgentSessionHandoffAction
-}
-
-export type AgentSessionHandoffResult = { status: AgentSessionHandoffStatus }
 
 export type {
   AgentSessionBackgroundTask,
@@ -163,7 +139,6 @@ export type AgentSessionSubscribeEvent =
       sessionId: string
       page: AgentSessionHistoryPage
       fence: number
-      handoff?: AgentSessionHandoffStatus
       backgroundTasks?: AgentSessionBackgroundTaskState | null
       /** Omitted when unchanged; null clears a previous provider catalog. */
       commands?: AgentSessionSlashCommand[] | null
@@ -174,9 +149,8 @@ export type AgentSessionSubscribeEvent =
       type: 'batch'
       sessionId: string
       batch: AgentSessionJournalBatch
-      /** Added with handoff state so mixed-version cursors retain the ownership fence. */
+      /** Optional so mixed-version cursors retain the ownership fence. */
       fence?: number
-      handoff?: AgentSessionHandoffStatus
       backgroundTasks?: AgentSessionBackgroundTaskState | null
       /** Omitted when unchanged; null clears a previous provider catalog. */
       commands?: AgentSessionSlashCommand[] | null
@@ -189,7 +163,6 @@ export type AgentSessionSubscribeEvent =
       reset: AgentJournalResetReason
       page: AgentSessionHistoryPage
       fence: number
-      handoff?: AgentSessionHandoffStatus
       backgroundTasks?: AgentSessionBackgroundTaskState | null
       /** Omitted when unchanged; null clears a previous provider catalog. */
       commands?: AgentSessionSlashCommand[] | null
@@ -250,7 +223,8 @@ export type AgentSessionStatusEvent =
 // ─── Turn completion feed ───────────────────────────────────────────────────
 
 /**
- * One root turn reaching a terminal outcome, derived by the EXECUTION HOST at journal commit.
+ * The session's latest request reaching a terminal outcome — a root turn, or a send the agent or
+ * its start refused — derived by the EXECUTION HOST at journal commit.
  *
  * This is the EDGE, with turn identity; `AgentSessionStatusSummary.turnOutcome` is the STATE.
  * The summary carries the verdict only while the session is idle, as a fact about the main agent's
@@ -266,11 +240,14 @@ export type AgentSessionTurnCompletion = {
   /** Host-and-workspace scope; a bare provider turn id is not globally unique. */
   scope: AgentSessionExecutionLocation
   sessionId: string
-  /** Root turn identity from the journal turn record; no second identity is minted. */
+  /** The request's identity: the root turn's id, or for a send refused before any turn, that
+   *  send's journal item key. Neither is minted here. */
   turnId: string
   outcome: AgentJournalTurnOutcome
   /** Execution host's clock at journal commit. */
   completedAt: number
+  /** The request settled while a prompt waits on the user. Absent otherwise, and from older hosts. */
+  awaitingUser?: true
 }
 
 /**
@@ -322,9 +299,9 @@ export type AgentSessionAttachResult = {
   sessionId: string
   fence: number
   page: AgentSessionHistoryPage
-  /** Submissions the crash boundary settled as `unknown` while attaching. */
+  /** Submissions a crash boundary left `unknown` that provider history could not decide. */
   unconfirmedClientMessageIds: string[]
-  /** The host-owned id of the tab that shows this chat. Absent from hosts that predate it. */
+  /** The host-owned id of the tab showing this chat, when it has one. Absent from older hosts. */
   tabId?: string
 }
 

@@ -90,14 +90,18 @@ export async function openCodexThread(
     resumePath?: string | null
     supersedeIfUnsaved?: boolean
     permissionPolicy?: CodexStructuredPermissionPolicy
+    /** Why: Codex renders a thread's base instructions for its opening model; a first turn on
+     *  another model reads as a mid-conversation switch and injects a second full prompt. */
+    model?: string
   },
   timeoutMs: number | undefined
 ): Promise<CodexOpenedThread> {
   const resumeThreadId = launch.resumeThreadId
+  const threadSettings = { cwd: launch.cwd, ...launch.permissionPolicy }
   const startThread = (): Promise<unknown> =>
     connection.request(
       'thread/start',
-      { cwd: launch.cwd, ...launch.permissionPolicy },
+      { ...threadSettings, ...(launch.model ? { model: launch.model } : {}) },
       { timeoutMs }
     )
   let supersededThreadId: string | undefined
@@ -105,10 +109,10 @@ export async function openCodexThread(
   if (!resumeThreadId) {
     opened = await startThread()
   } else {
+    // No model: naming one makes Codex skip the thread's saved model, provider and effort.
     const resumeParams = {
       threadId: resumeThreadId,
-      cwd: launch.cwd,
-      ...launch.permissionPolicy,
+      ...threadSettings,
       ...(launch.resumePath ? { path: launch.resumePath } : {})
     }
     try {

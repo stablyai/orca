@@ -2,17 +2,11 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 
 export function indexedStatusFeedSession(session: {
   journal: AgentSessionJournal
-  hasProviderChild?: boolean
-  providerChildPhase?: 'starting' | 'ready'
-  fence?: number
+  child?: { phase: 'starting' | 'ready' } | null
 }) {
   return {
     journal: session.journal,
-    fence: session.fence ?? 1,
-    ...(session.hasProviderChild !== undefined
-      ? { hasProviderChild: session.hasProviderChild }
-      : {}),
-    ...(session.providerChildPhase ? { providerChildPhase: session.providerChildPhase } : {}),
+    ...(session.child !== undefined ? { child: session.child } : {}),
     params: {
       location: {
         executionHostId: 'local' as const,

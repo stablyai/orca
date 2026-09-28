@@ -7,11 +7,15 @@ import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-sessio
 import type { AgentSessionSubscribeEvent } from '../../shared/agent-session-wire'
 import { hostTestMessage } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { waitForStructuredAgentSessionRecovery } from './structured-agent-session-runtime'
-import { createScriptedClaudeRuntime } from './structured-claude-scripted-runtime-test-support'
+import {
+  createScriptedClaudeRuntime,
+  scriptedClaudeExitError
+} from './structured-claude-scripted-runtime-test-support'
 
 const SESSION = 'claude-resumed-start'
 const CALLER = { callerKey: 'client-1' }
 const DIAGNOSTIC = 'claude stream-json exited (code 1): claude: not signed in'
+const STARTUP_TEXT = 'Claude stopped before it finished starting. Send your message to try again.'
 
 let claude = createScriptedClaudeRuntime([SESSION])
 
@@ -38,11 +42,11 @@ describe('a reopened Claude chat whose CLI dies before initialize', () => {
     await waitForStructuredAgentSessionRecovery()
     await host.close(SESSION)
 
-    // The user reopens it; this time the CLI never answers, then dies, and its tree is unprovable.
+    // The user reopens it and sends; this time the CLI never answers, then dies, and its tree is
+    // unprovable. Opening starts nothing: the send does.
     claude.behave(SESSION, { initHangs: true, closeUnproven: true })
-    await host.hold(SESSION, 'surface-1')
     const events: AgentSessionSubscribeEvent[] = []
-    host.subscribe({ id: 'sub-1', sessionId: SESSION, emit: (event) => events.push(event) })
+    await host.subscribe({ id: 'sub-1', sessionId: SESSION, emit: (event) => events.push(event) })
     const body = hostTestMessage('hello')
     const fence = host.deps.store.getRecord(SESSION)?.lease.runtimeFence ?? 0
     const sent = await host.send(CALLER, {
@@ -59,21 +63,22 @@ describe('a reopened Claude chat whose CLI dies before initialize', () => {
       body
     })
     expect(sent).toMatchObject({ ok: true, value: { submission: { dispatchState: 'pending' } } })
+    // Accepted first; the delivery loop starts the second child after.
+    await vi.waitFor(() => expect(claude.children(SESSION)).toHaveLength(2))
 
-    claude.child(SESSION).exit(new Error(DIAGNOSTIC))
+    claude.child(SESSION).exit(scriptedClaudeExitError(DIAGNOSTIC))
     await waitForStructuredAgentSessionRecovery()
 
-    await vi.waitFor(() =>
-      expect(statusTexts(events)).toContainEqual(
-        expect.stringMatching(/stopped before it finished starting: .*not signed in/)
-      )
-    )
+    await vi.waitFor(() => expect(statusTexts(events)).toContainEqual(STARTUP_TEXT))
     // Never written, so it did not happen: refused, not left in doubt.
-    const submission = host
-      .journalSnapshot(SESSION)
-      .submissions.find(
-        (entry) => entry.clientMessageId === (sent.ok && sent.value.clientMessageId)
-      )
-    expect(submission).toMatchObject({ dispatchState: 'rejected' })
+    const submission = (await host.journalSnapshot(SESSION)).submissions.find(
+      (entry) => entry.clientMessageId === (sent.ok && sent.value.clientMessageId)
+    )
+    // The stderr the exit carried is beside the sentence, as a log detail, and never in it.
+    expect(submission).toMatchObject({
+      dispatchState: 'rejected',
+      reason: STARTUP_TEXT,
+      rejection: { kind: 'providerStartFailed', detail: { text: DIAGNOSTIC, audience: 'log' } }
+    })
   })
 })

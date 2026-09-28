@@ -4,11 +4,9 @@ import {
   type PairingOffer
 } from '../../../src/shared/mobile-relay-pairing-offer'
 import {
-  MobileAccessEndpointSchema,
-  type MobileAccessEndpoint,
-  type MobileRelayHostOverlay
-} from './mobile-relay-host-overlay'
-import { MobileRelayEndpointSchema } from '../../../src/shared/mobile-relay-credential-contract'
+  MobileRelayEndpointSchema,
+  type MobileRelayEndpoint
+} from '../../../src/shared/mobile-relay-credential-contract'
 import { NODE_PLATFORM_NAMES } from './mobile-runtime-host-platform'
 import { salvagedOptional } from '../../../src/shared/zod-salvage'
 
@@ -116,9 +114,8 @@ export type HostProfile = {
   deviceToken: string
   publicKeyB64: string
   lastConnected: number
-  endpoints?: MobileAccessEndpoint[]
-  relayHostId?: MobileRelayHostOverlay['relayHostId']
-  relay?: MobileRelayHostOverlay['relay']
+  /** Relay routing, joined from the overlay; only `setRelayRouting` and pairing write it. */
+  relay?: MobileRelayEndpoint
 }
 
 export type HostCredentialStatus = 'ready' | 'temporarily-unavailable' | 'missing'
@@ -148,11 +145,6 @@ export const HostProfileSchema = z.object({
   deviceToken: z.string().min(1),
   publicKeyB64: z.string().min(1),
   lastConnected: z.number().finite(),
-  endpoints: z.array(MobileAccessEndpointSchema).min(1).max(16).optional(),
-  relayHostId: z
-    .string()
-    .regex(/^[A-Za-z0-9_-]{16}$/)
-    .optional(),
   relay: MobileRelayEndpointSchema.optional()
 })
 

@@ -13,24 +13,41 @@ import { isAgentSessionId } from './agent-session-record'
  */
 export const ORCA_SESSION_ADDRESS_PREFIX = 'session:'
 
+declare const orcaSessionIdBrand: unique symbol
+declare const orcaSessionAddressBrand: unique symbol
+
+/** A bare Orca session id; only `isOrcaSessionId` and `parseOrcaSessionAddress` produce one. */
+export type OrcaSessionId = string & { readonly [orcaSessionIdBrand]: true }
+/** A `session:<id>` mail address; only `formatOrcaSessionAddress` produces one. */
+export type OrcaSessionAddress = string & { readonly [orcaSessionAddressBrand]: true }
+
 // Terminal handles (`term_` from the PTY runtime, `structworker_` from structured-worker-identity)
 // share the session-id charset. A handle is never a session, so one handed over by mistake must not
 // become a durable Orca session id.
 const TERMINAL_HANDLE_PREFIXES = ['term_', 'structworker_'] as const
 
-export function isOrcaSessionId(id: string): boolean {
+export function isOrcaSessionId(id: string): id is OrcaSessionId {
   return isAgentSessionId(id) && !TERMINAL_HANDLE_PREFIXES.some((prefix) => id.startsWith(prefix))
 }
 
-export function formatOrcaSessionAddress(orcaSessionId: string): string {
-  return `${ORCA_SESSION_ADDRESS_PREFIX}${orcaSessionId}`
+export function formatOrcaSessionAddress(orcaSessionId: OrcaSessionId): OrcaSessionAddress {
+  const address = `${ORCA_SESSION_ADDRESS_PREFIX}${orcaSessionId}`
+  // Always true for a checked id; the check brands the address without a type assertion.
+  if (!isOrcaSessionAddress(address)) {
+    throw new Error(`Not an Orca session id: ${orcaSessionId}`)
+  }
+  return address
 }
 
 /** The bare Orca session id of a `session:<id>` address; anything else reads as null. */
-export function parseOrcaSessionAddress(address: string | null | undefined): string | null {
+export function parseOrcaSessionAddress(address: string | null | undefined): OrcaSessionId | null {
   if (!address?.startsWith(ORCA_SESSION_ADDRESS_PREFIX)) {
     return null
   }
   const id = address.slice(ORCA_SESSION_ADDRESS_PREFIX.length)
   return isOrcaSessionId(id) ? id : null
+}
+
+function isOrcaSessionAddress(address: string): address is OrcaSessionAddress {
+  return parseOrcaSessionAddress(address) !== null
 }

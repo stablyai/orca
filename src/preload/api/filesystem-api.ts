@@ -170,6 +170,8 @@ export type FilesystemApi = {
     listPythonEnvironments: (args: {
       filePath: string
       rootPath: string | null
+      /** False until the notebook is trusted: workspace envs are then listed without running them. */
+      runWorkspaceInterpreters: boolean
     }) => Promise<PythonEnvironments>
     describePython: (args: { path: string }) => Promise<PythonEnvironment | null>
     startKernel: (args: { filePath: string; python: string }) => Promise<KernelStartResult>

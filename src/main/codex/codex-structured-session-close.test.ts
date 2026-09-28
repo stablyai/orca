@@ -125,10 +125,7 @@ describe('Codex structured session close lifecycle', () => {
     expect(clearPrompts).toHaveBeenCalledOnce()
     expect(onEvent).toHaveBeenCalledOnce()
     expect(translator.dispose).toHaveBeenCalledOnce()
-    expect(onEvent.mock.calls[0]?.[0]).toMatchObject({
-      cause: 'unexpected-exit',
-      settlementRetryRequired: true
-    })
+    expect(onEvent.mock.calls[0]?.[0]).toMatchObject({ cause: 'unexpected-exit' })
     expect(translator.handle).toHaveBeenCalledOnce()
   })
 

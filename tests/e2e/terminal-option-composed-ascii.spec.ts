@@ -120,30 +120,32 @@ async function pressOptionComposedKey(
   }, press)
 }
 
-async function armKittyKeyboardFromPty(page: Page, ptyId: string): Promise<void> {
+async function armKittyKeyboardFromPty(page: Page, ptyId: string, flags: number): Promise<void> {
   // Why: this is the byte a real kitty-protocol TUI pushes at startup; routing it
   // through the PTY exercises the same output-scanning mirror the policy reads.
-  await execInTerminal(page, ptyId, `printf '\\033[>1u'`)
+  // `cat` stays in the foreground: flags left armed at exit are grounded by the host.
+  await execInTerminal(page, ptyId, `printf '\\033[>${flags}u'; cat`)
   await expect
     .poll(async () => getPaneKittyKeyboardFlags(page), {
       timeout: 15_000,
       message: 'the pane never mirrored the application kitty keyboard flags'
     })
-    .toBeGreaterThan(0)
+    .toBe(flags)
 }
 
 async function setUpPane(
   page: Page,
-  app: ElectronApplication
-): Promise<{ ptyId: string; joinedWrites: () => Promise<string> }> {
+  app: ElectronApplication,
+  kittyFlags = 1
+): Promise<{ joinedWrites: () => Promise<string> }> {
   await waitForSessionReady(page)
   await waitForActiveWorktree(page)
   await ensureTerminalVisible(page)
   await waitForActiveTerminalManager(page)
   const ptyId = await waitForActivePanePtyId(page)
   await installMainProcessPtyWriteSpy(app)
-  await armKittyKeyboardFromPty(page, ptyId)
-  return { ptyId, joinedWrites: async () => (await getPtyWrites(app)).join('') }
+  await armKittyKeyboardFromPty(page, ptyId, kittyFlags)
+  return { joinedWrites: async () => (await getPtyWrites(app)).join('') }
 }
 
 test.describe('Option-composed text in a kitty-keyboard pane', () => {
@@ -239,9 +241,7 @@ test.describe('Option-composed text in a kitty-keyboard pane', () => {
     orcaPage,
     electronApp
   }) => {
-    const { ptyId, joinedWrites } = await setUpPane(orcaPage, electronApp)
-    await execInTerminal(orcaPage, ptyId, `printf '\\033[<u\\033[>5u'`)
-    await expect.poll(() => getPaneKittyKeyboardFlags(orcaPage)).toBe(5)
+    const { joinedWrites } = await setUpPane(orcaPage, electronApp, 5)
     await setMacOptionAsAlt(orcaPage, 'false')
     await clearPtyWriteLog(electronApp)
     const letters = [
@@ -278,9 +278,7 @@ test.describe('Option-composed text in a kitty-keyboard pane', () => {
     orcaPage,
     electronApp
   }) => {
-    const { ptyId, joinedWrites } = await setUpPane(orcaPage, electronApp)
-    await execInTerminal(orcaPage, ptyId, `printf '\\033[<u\\033[>29u'`)
-    await expect.poll(() => getPaneKittyKeyboardFlags(orcaPage)).toBe(29)
+    const { joinedWrites } = await setUpPane(orcaPage, electronApp, 29)
     await setMacOptionAsAlt(orcaPage, 'false')
     await clearPtyWriteLog(electronApp)
     await pressOptionComposedKey(orcaPage, { key: 'ą', code: 'KeyA' })
@@ -291,9 +289,7 @@ test.describe('Option-composed text in a kitty-keyboard pane', () => {
     orcaPage,
     electronApp
   }, testInfo) => {
-    const { ptyId, joinedWrites } = await setUpPane(orcaPage, electronApp)
-    await execInTerminal(orcaPage, ptyId, `printf '\\033[<u\\033[>5u'; cat`)
-    await expect.poll(() => getPaneKittyKeyboardFlags(orcaPage)).toBe(5)
+    const { joinedWrites } = await setUpPane(orcaPage, electronApp, 5)
     await setMacOptionAsAlt(orcaPage, 'false')
     await clearPtyWriteLog(electronApp)
     const cdp = await orcaPage.context().newCDPSession(orcaPage)

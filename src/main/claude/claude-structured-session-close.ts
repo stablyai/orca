@@ -19,12 +19,12 @@ import { closeProcessRegistry } from '../../shared/child-process/close-process-r
 import { retireClaudeDispatchWaiters } from './claude-structured-dispatch'
 import { settledClaudeTurnEndLeaf } from './claude-structured-resume-point'
 
-/** The root's own exit was seen first-hand; only its descendants went unverified. */
+/** The root's own exit was seen first-hand. The lease follows the root, so a descendant
+ *  left unverified or seen alive does not hold it. */
 export function claudeRootExitObserved(
   connection: ClaudeStreamJsonConnection | null | undefined
 ): boolean {
-  const verdict = connection?.exitVerdict
-  return verdict?.root === 'exited' && verdict.tree === 'unverifiable'
+  return connection?.exitVerdict.root === 'exited'
 }
 
 export function claudeAcquisitionCleanupError(
@@ -102,17 +102,21 @@ async function finalizeClaudePublishedSession(
   }
   const connectionClosed = await session.connection.close()
   session.unbindReadingControl?.()
+  let rootExitVerdict: Error | undefined
   if (connectionClosed !== true) {
     const cleanupError = claudeAcquisitionCleanupError(
       session.connection,
       new Error('provider close unproven')
     )
-    // Why: the owner can release proven root-exit/processless sessions; genuinely unknown exits retry.
-    if (!(cleanupError instanceof AgentSessionAcquisitionExitUnprovenError)) {
-      throw cleanupError
+    // Only a genuinely unknown exit stays indexed for a retry. A proven root exit or processless
+    // close is final — the owner releases the lease on it — so the session finalizes like a proven
+    // close and still reports the verdict; kept indexed, it refused every later start of the chat.
+    if (cleanupError instanceof AgentSessionAcquisitionExitUnprovenError) {
+      return false
     }
-    return false
+    rootExitVerdict = cleanupError
   }
+  session.childWork.clear()
   if (session.backgroundTasks.clear()) {
     input.onBackgroundTasksChanged?.(input.sessionId, null)
   }
@@ -185,6 +189,9 @@ async function finalizeClaudePublishedSession(
   }
   if (callbackThrew) {
     throw callbackError
+  }
+  if (rootExitVerdict) {
+    throw rootExitVerdict
   }
   return true
 }

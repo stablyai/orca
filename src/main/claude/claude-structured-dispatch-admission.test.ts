@@ -139,7 +139,11 @@ describe('Claude structured dispatch admission', () => {
         clientMessageId: 'client-over-capacity',
         body: userMessage([{ type: 'text', text: 'one too many' }])
       })
-    ).resolves.toEqual({ state: 'rejected', reason: 'claude structured dispatch queue is full' })
+    ).resolves.toEqual({
+      state: 'rejected',
+      reason: 'claude structured dispatch queue is full',
+      rejection: { kind: 'queueFull' }
+    })
     expect(session.dispatchWaiters).toHaveLength(64)
     expect(session.connection.send).toHaveBeenCalledTimes(64)
   })

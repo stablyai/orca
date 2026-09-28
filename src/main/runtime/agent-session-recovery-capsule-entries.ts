@@ -4,6 +4,10 @@
 // — can be read on its own. Every value parsed here re-enters from a file this process did not
 // necessarily write, including one written by an older or newer build.
 
+import {
+  readAgentSessionRefusalReference,
+  type AgentSessionAnyRefusalDetails
+} from '../../shared/agent-session-wire-refusals'
 import { z } from 'zod'
 import {
   AGENT_SESSION_RESUME_FAILURE_OUTCOMES,
@@ -28,6 +32,7 @@ const failureSchema = z.object({
   failedAt: z.number().int().nonnegative(),
   outcome: z.enum(AGENT_SESSION_RESUME_FAILURE_OUTCOMES),
   reason: z.string().max(MAX_FAILURE_FIELD_LENGTH),
+  details: z.unknown().optional(),
   latestPrompt: z.string().max(MAX_FAILURE_FIELD_LENGTH),
   latestUserItemId: z.string().max(MAX_FAILURE_FIELD_LENGTH).nullable()
 })
@@ -47,7 +52,11 @@ export type AgentSessionResumeFailureRecord = {
   marker: AgentSessionResumeMarker
   failedAt: number
   outcome: AgentSessionResumeFailureOutcome
+  /** The refusal code, as it always was; the renderer's guidance keys on it. */
   reason: string
+  /** The refusal's details beside the code; absent on older records and non-refusals. A record
+   *  an unreleased build wrote with a `cause` instead reads as having none. */
+  details?: AgentSessionAnyRefusalDetails
   /** The prompt the offer quoted, snapshotted because the session may no longer be readable. */
   latestPrompt: string
   /** The chat's newest user message when this was filed, as the marker records it at teardown. A
@@ -109,7 +118,16 @@ function parseFailures(value: unknown): AgentSessionResumeFailureRecord[] {
   return (Array.isArray(value) ? value : []).flatMap((failure: unknown) => {
     const parsed = failureSchema.safeParse(failure)
     const marker = parsed.success ? parseAgentSessionResumeMarker(parsed.data.marker) : null
-    return parsed.success && marker ? [{ ...parsed.data, marker }] : []
+    if (!parsed.success || !marker) {
+      return []
+    }
+    const { details: stored, ...rest } = parsed.data
+    // `reason` is the refusal code, so the details are read against it.
+    const details = readAgentSessionRefusalReference({
+      code: rest.reason,
+      details: stored
+    })?.details
+    return [{ ...rest, marker, ...(details ? { details } : {}) }]
   })
 }
 

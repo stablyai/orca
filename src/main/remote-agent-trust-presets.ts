@@ -1,3 +1,4 @@
+import { markRemoteQoderWorkspaceTrusted } from './qoder/workspace-trust'
 import type { AgentTrustPreset } from './agent-trust-presets'
 import { upsertProjectTrustLevelInContent } from './codex/config-toml-trust'
 import { getActiveMultiplexer } from './ssh/ssh-target-registry'
@@ -20,7 +21,9 @@ export async function markRemoteAgentWorkspaceTrusted(args: {
   }
 
   const workspacePath = await canonicalizeRemoteWorkspacePath(fsProvider, args.workspacePath)
-  if (args.preset === 'codex') {
+  if (args.preset === 'qoder') {
+    await markRemoteQoderWorkspaceTrusted(fsProvider, home, workspacePath)
+  } else if (args.preset === 'codex') {
     await markRemoteCodexProjectTrusted(fsProvider, home, workspacePath)
   } else if (args.preset === 'cursor') {
     await markRemoteCursorWorkspaceTrusted(fsProvider, home, workspacePath)

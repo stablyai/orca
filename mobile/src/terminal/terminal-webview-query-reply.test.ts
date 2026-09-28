@@ -119,7 +119,7 @@ describe('mobile terminal query replies', () => {
     expect(messages).toEqual([{ type: 'terminal-data', bytes: '\x1b[3;4R' }])
     const router = documentModuleSource('host-message-router')
     const clearStart = router.indexOf("} else if (msg.type === 'clear') {")
-    const clearEnd = router.indexOf("} else if (msg.type === 'measure')", clearStart)
+    const clearEnd = router.indexOf("} else if (msg.type === 'reset-zoom')", clearStart)
     expect(clearStart).toBeGreaterThanOrEqual(0)
     expect(router.slice(clearStart, clearEnd)).toContain('resumeTerminalDataReplyAuthority(scope)')
   })

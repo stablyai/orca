@@ -19,13 +19,16 @@ export function journalRenderItem(
   revision: number,
   body: AgentJournalItemBody,
   row: JournalRow,
-  producer: AgentJournalProducerLinkage = row
+  producer: AgentJournalProducerLinkage = row,
+  /** Which of the row's writes this is; only a lifecycle batch has more than one. */
+  sequenceIndex = 0
 ): AgentJournalRenderItem {
   return {
     itemId,
     revision,
     body,
     sequence: row.seq,
+    ...(sequenceIndex > 0 ? { sequenceIndex } : {}),
     observedAt: row.ts,
     ...(row.recovered ? { recoveredAt: row.ts } : {}),
     ...(row.recovered ? { recovered: row.recovered } : {}),

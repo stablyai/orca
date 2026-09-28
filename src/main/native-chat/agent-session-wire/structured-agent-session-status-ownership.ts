@@ -1,5 +1,9 @@
-import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
+import type {
+  AgentSessionExecutionLocation,
+  AgentSessionRecord
+} from '../../../shared/agent-session-record'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
+import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import {
   parseAgentStatusSubject,
   serializeAgentStatusSubject,
@@ -12,6 +16,12 @@ export type StructuredAgentSessionStatusSink = {
     subject: AgentStatusStructuredSessionSubject
   ) => void
   forget: (subject: AgentStatusStructuredSessionSubject) => void
+  /** The session's child-work evidence, addressed by the subject its parent row landed under. */
+  publishChildWork?: (
+    subject: AgentStatusStructuredSessionSubject,
+    evidence: AgentChildWorkEvidence[],
+    provider: AgentSessionRecord['provider']
+  ) => void
 }
 
 /** Retain the owner address because record removal may precede the final status callback. */
@@ -61,6 +71,19 @@ export class StructuredAgentSessionStatusOwnership {
     this.landed.delete(summary.sessionId)
     sink.publish(summary, subject)
     this.landed.add(summary.sessionId)
+  }
+
+  /** Children ride the address the parent landed under: without that proof the store would
+   *  refuse them anyway, and offering them earlier would race the parent row. */
+  publishChildWork(
+    sessionId: string,
+    evidence: AgentChildWorkEvidence[],
+    provider: AgentSessionRecord['provider']
+  ): void {
+    const subject = this.subjects.get(sessionId)
+    if (subject && this.landed.has(sessionId)) {
+      this.sink()?.publishChildWork?.(subject, evidence, provider)
+    }
   }
 
   forget(sessionId: string): void {

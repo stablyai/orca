@@ -30,6 +30,39 @@ describe('Claude published session close lifecycle', () => {
     )
   })
 
+  it('lets the chat start again after a close that saw the root exit', async () => {
+    const claude = fakeClaude()
+    const adapter = adapterFor(claude)
+    await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
+    const first = claude.connections[0]!
+    first.exitVerdict = { root: 'exited', tree: 'unverifiable' }
+    first.close = vi.fn<() => Promise<boolean>>().mockResolvedValue(false)
+    // The owner releases the lease on this verdict, so the next surface resumes the chat.
+    await expect(adapter.closeSession('session-1')).rejects.toBeInstanceOf(
+      AgentSessionAcquisitionRootExitObservedError
+    )
+
+    await adapter.acquire({ identity: identityFor(), fence: 8, spawnToken: 'spawn-10' })
+
+    expect(claude.connections).toHaveLength(2)
+    expect(first.close).toHaveBeenCalledTimes(1)
+  })
+
+  it('starts the chat over a live session whose close saw the root exit', async () => {
+    const claude = fakeClaude()
+    const events: ClaudeStructuredSessionEvent[] = []
+    const adapter = adapterFor(claude, {}, events)
+    await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
+    const first = claude.connections[0]!
+    first.exitVerdict = { root: 'exited', tree: 'unverifiable' }
+    first.close = vi.fn<() => Promise<boolean>>().mockResolvedValue(false)
+
+    await adapter.acquire({ identity: identityFor(), fence: 8, spawnToken: 'spawn-10' })
+
+    expect(claude.connections).toHaveLength(2)
+    expect(events.filter((event) => event.type === 'ended')).toHaveLength(1)
+  })
+
   it('reports the same root-exit verdict while cancelling acquisition', async () => {
     const claude = fakeClaude({
       unprovenCloseVerdict: { root: 'exited', tree: 'unverifiable' }

@@ -1,5 +1,7 @@
 import { handleMsg, type TerminalHostMessage } from './host-message-router'
 import { notify, reportEngineError, type TerminalEngineError } from './host-notify'
+import { laidOutCellBox } from './laid-out-cell-box'
+import { prepareTerminal } from './terminal-init'
 import type { TerminalDocumentScope } from './document-scope'
 import type { TerminalDocumentHostFrame } from './document-host-seams'
 
@@ -45,7 +47,13 @@ export function startMessageBridge(scope: TerminalDocumentScope) {
     handleIncomingMessage(scope, frame)
   )
   if (scope.hasEngine()) {
-    notify(scope, { type: 'web-ready' })
+    // Why: ready carries the cell box xterm itself laid out, so the host sizes the first subscribe.
+    if (scope.start().shown) {
+      prepareTerminal(scope)
+    }
+    // Why: the first init's report is checked against the box the terminal built before ready laid out.
+    scope.reportedCellBox = laidOutCellBox(scope)
+    notify(scope, { type: 'web-ready', cellBox: scope.reportedCellBox?.cellBox ?? null })
   } else {
     reportEngineError(scope, 'terminal engine missing', 'xterm failed to load', true)
   }

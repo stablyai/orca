@@ -25,6 +25,7 @@ import {
 } from './session-scanner-worker-spawn'
 import type { AiVaultWorkerScanOptions } from './session-scanner-worker-protocol'
 import { listLocalAiVaultSubagentSessions } from './session-subagent-reader'
+import { isWslUncPath } from '../../shared/wsl-paths'
 
 export function shouldUseAiVaultServiceProcess(): boolean {
   const configured = process.env.ORCA_AI_VAULT_SERVICE_PROCESS
@@ -70,9 +71,14 @@ export function listAiVaultSubagentSessionsInBackground(
     : listLocalAiVaultSubagentSessions(request)
 }
 
-export function readAiVaultFirstUserPromptInBackground(
+export async function readAiVaultFirstUserPromptInBackground(
   request: ReadAiVaultFirstUserPromptArgs
 ): Promise<ReadAiVaultFirstUserPromptResult> {
+  if (process.platform === 'win32' && isWslUncPath(request.filePath)) {
+    const { localAiVaultScanRoots } = await import('./cached-session-list')
+    const roots = await localAiVaultScanRoots()
+    request = { ...request, wslOpenCodeReaders: roots.wslOpenCodeReaders ?? [] }
+  }
   return shouldUseAiVaultServiceProcess()
     ? readAiVaultFirstUserPromptInService(request)
     : readAiVaultFirstUserPrompt(request)

@@ -492,16 +492,17 @@ describe('claude structured launch resolution', () => {
 
       gate = WSL_ONLY_NORMALIZED
 
-      // Reacquire after the account state changed: refused before anything spawns.
-      await expect(resolve({ identity: identityAt('leaf-current') })).rejects.toBeInstanceOf(
-        AgentSessionPreSpawnError
-      )
+      // Reacquire after the account state changed: refused before anything spawns, naming the
+      // account shape a person can change.
+      const refused = resolve({ identity: identityAt('leaf-current') })
+      await expect(refused).rejects.toBeInstanceOf(AgentSessionPreSpawnError)
+      await expect(refused).rejects.toMatchObject({ reason: 'managedAccountUnsupported' })
     })
 
-    it('fails closed when the account state cannot be read', async () => {
-      await expect(
-        resolverWithGate(() => null)({ identity: identityAt('leaf-current') })
-      ).rejects.toBeInstanceOf(AgentSessionPreSpawnError)
+    it('fails closed when the account state cannot be read, naming no situation', async () => {
+      const refused = resolverWithGate(() => null)({ identity: identityAt('leaf-current') })
+      await expect(refused).rejects.toBeInstanceOf(AgentSessionPreSpawnError)
+      await expect(refused).rejects.toMatchObject({ reason: undefined })
     })
 
     it('keeps resolving when no gate is wired, so other embedders are unaffected', async () => {

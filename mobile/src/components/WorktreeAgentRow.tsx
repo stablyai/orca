@@ -2,7 +2,12 @@ import { memo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import { colors, spacing } from '../theme/mobile-theme'
-import { agentDisplayLabel, agentDotState, formatTimeAgo } from '../worktree/agent-row-display'
+import {
+  agentDisplayLabel,
+  agentDotState,
+  agentRowTimeAt,
+  formatTimeAgo
+} from '../worktree/agent-row-display'
 import { AgentStateDot } from './AgentStateDot'
 import { MobileAgentIcon } from './MobileAgentIcon'
 
@@ -22,7 +27,7 @@ type Props = {
 function WorktreeAgentRowComponent({ agent, depth, now, unvisited }: Props) {
   const dotState = agentDotState(agent, now)
   const label = agentDisplayLabel(agent, now)
-  const ts = formatTimeAgo(agent.stateStartedAt, now)
+  const ts = formatTimeAgo(agentRowTimeAt(agent), now)
 
   return (
     <View style={[styles.row, { paddingLeft: depth * INDENT_PER_DEPTH }]}>

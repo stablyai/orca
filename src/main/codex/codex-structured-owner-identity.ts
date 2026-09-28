@@ -17,6 +17,32 @@ export const CODEX_SPAWN_TOKEN_ENV = 'ORCA_AGENT_SESSION_SPAWN_TOKEN'
 
 const START_TIME_READ_ATTEMPTS = 3
 
+/**
+ * The child's identity, read once. The real connection reports its spawn before the handshake, and
+ * `onSpawned` makes it durable there, so a crash mid-start leaves an owner recovery can stop; a
+ * connection that reports no spawn is identified once it is open.
+ */
+export function codexSpawnedProcessIdentity(
+  input: {
+    identity: AgentSessionJournalIdentity
+    spawnToken: string
+    onSpawned?: (process: AgentSessionProcessIdentity) => Promise<void>
+  },
+  readStartTime?: (pid: number) => Promise<number | null>
+): {
+  onSpawned: (pid: number) => Promise<void>
+  read: (pid: number | undefined) => Promise<AgentSessionProcessIdentity>
+} {
+  let spawned: Promise<AgentSessionProcessIdentity> | undefined
+  return {
+    onSpawned: async (pid) => {
+      spawned = codexProcessIdentity({ ...input, pid }, readStartTime)
+      await input.onSpawned?.(await spawned)
+    },
+    read: (pid) => spawned ?? codexProcessIdentity({ ...input, pid }, readStartTime)
+  }
+}
+
 export async function codexProcessIdentity(
   input: {
     identity: AgentSessionJournalIdentity

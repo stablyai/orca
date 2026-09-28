@@ -1,6 +1,7 @@
 import {
   AgentSessionAcquisitionExitUnprovenError,
   AgentSessionPreSpawnError,
+  stopAgentSessionProviderRoot,
   type StructuredAgentSessionAcquireInput
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { withAgentSessionCreatePhase } from '../observability/agent-session-instrumentation'
@@ -40,7 +41,10 @@ export async function resolveClaudeAcquisitionLaunch(args: {
     }
     acquisitions.assertCurrent(sessionId, attempt)
     let resumeSession = sessions.get(sessionId)
-    if (!(await closeClaudePublishedSessionForDeps(sessions, sessionId, deps))) {
+    const closed = await stopAgentSessionProviderRoot(() =>
+      closeClaudePublishedSessionForDeps(sessions, sessionId, deps)
+    )
+    if (!closed) {
       throw new AgentSessionAcquisitionExitUnprovenError(
         new Error(`claude session ${sessionId} could not be stopped`)
       )
@@ -50,7 +54,15 @@ export async function resolveClaudeAcquisitionLaunch(args: {
       const firstProof = retainedExit.closePromise ? await retainedExit.closePromise : false
       const proven = firstProof || (await retainedExit.connection.close().catch(() => false))
       if (!proven) {
-        throw claudeAcquisitionCleanupError(retainedExit.connection, retainedExit.error)
+        const cleanupError = claudeAcquisitionCleanupError(
+          retainedExit.connection,
+          retainedExit.error
+        )
+        // A proven root exit is what released the lease, so it cannot also refuse the next root;
+        // only an exit this host cannot vouch for still blocks the start.
+        if (cleanupError instanceof AgentSessionAcquisitionExitUnprovenError) {
+          throw cleanupError
+        }
       }
       // The superseded child must settle before its durable resume identity is reused.
       await callbacks.settleExit(sessionId, retainedExit)

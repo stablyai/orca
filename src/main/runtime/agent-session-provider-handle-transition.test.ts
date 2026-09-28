@@ -4,7 +4,7 @@ import {
   agentSessionRecordFixture
 } from '../../shared/agent-session-record.test-fixture'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
-import { isAgentSessionRecord } from '../../shared/agent-session-record'
+import { isPersistedAgentSessionRecord } from '../../shared/agent-session-record'
 import {
   recordAgentSessionProviderHandle,
   reviseAgentSessionClaudeResumePoint
@@ -71,7 +71,7 @@ describe('reviseAgentSessionClaudeResumePoint', () => {
       handle: { leafUuid: 'leaf-3' }
     })
     expect(second.lease.provenHandleLinkId).toBe('link-1')
-    expect(isAgentSessionRecord(second)).toBe(true)
+    expect(isPersistedAgentSessionRecord(second)).toBe(true)
   })
 
   it('refuses a stale owner, a released lease, and a head minted by another owner', () => {

@@ -243,12 +243,16 @@ describe('picks made while a chat launches', () => {
     await settle()
     setOptionReplies[0]!.resolve({
       ok: false,
-      refusal: { code: 'agent_session_option_invalid', message: 'Model gpt-missing is unavailable' }
+      refusal: {
+        code: 'agent_session_operation_capacity',
+        message: 'Model gpt-missing is unavailable'
+      }
     })
 
+    // The picker gets the refusal as a fact; the host's diagnostic is not kept.
     await expect(pick).resolves.toEqual({
       kind: 'refused',
-      message: 'Model gpt-missing is unavailable'
+      failure: { kind: 'refused', code: 'agent_session_operation_capacity' }
     })
     await expect(launch.promptDeliveryResult).resolves.toEqual({
       delivered: true,

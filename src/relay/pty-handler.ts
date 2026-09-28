@@ -1,3 +1,4 @@
+import { FreebuffStatusProjection } from './freebuff-status-projection'
 /* oxlint-disable max-lines */
 import type { IPty } from 'node-pty'
 import { killWithDescendantSweep } from '../main/pty-descendant-termination'
@@ -18,6 +19,7 @@ import {
 import { inspectPtyChildProcesses, processHasChildren } from './pty-child-process-inspection'
 import { getRelayShellLaunchConfig, isRelayWslShell } from './pty-shell-launch'
 import { RetiredPaneSurfaceRegistry } from './retired-pane-surfaces'
+import { applyScrubSafeAgentEnvAliases } from '../shared/agent-hook-scrub-safe-env'
 import { addWslEnvKeys } from '../shared/wsl-env'
 import {
   ORCA_IMAGE_PROTOCOL_ENV,
@@ -76,6 +78,8 @@ import {
 } from '../shared/pty-startup-ingress'
 import { resolvePtyOwnerBackend, type PtyOwnerBackend } from '../shared/pty-owner-backend'
 import { RecentPtyOutputBuffer } from '../main/runtime/recent-pty-output-buffer'
+import { TerminalShellRecoveryBarrier } from '../main/daemon/terminal-shell-recovery-barrier'
+import { confirmPtyShellForeground } from '../main/daemon/pty-subprocess/pty-shell-foreground-confirmation'
 import {
   resolveAgentForegroundProcessesBatch,
   resolveRemoteForegroundEvidence,
@@ -202,6 +206,7 @@ function parseSourceRecoveryRequest(value: unknown): PtySourceRecoveryRequest | 
 }
 
 type ManagedPty = {
+  freebuffStatus?: FreebuffStatusProjection
   id: string
   incarnationId: string
   pty: IPty
@@ -246,6 +251,7 @@ type ManagedPty = {
   forceKillSent?: boolean
   gracefulKillSent?: boolean
   startupIngress?: PtyStartupIngress
+  recoveryBarrier?: TerminalShellRecoveryBarrier
   startupIngressIntent?: ReturnType<typeof parsePtyStartupIngressIntent>
   ownerBackend: PtyOwnerBackend
   agentSessionOwners?: AgentSessionOwnerBinding[]
@@ -850,6 +856,22 @@ export class PtyHandler {
     if (!result.TERM) {
       result.TERM = 'xterm-256color'
     }
+    // Why: the relay's own process env can carry pane identity (it is itself startable from
+    // an Orca pane), and unlike the local and daemon builders this one never dropped it. A
+    // spawn that specified no identity would then inherit someone else's, and every agent's
+    // hook would report against that pane. Drop it before mirroring, so an alias can only
+    // ever carry identity this spawn actually asked for.
+    for (const key of ['ORCA_PANE_KEY', 'ORCA_AGENT_LAUNCH_TOKEN'] as const) {
+      if (!rendererEnv || !Object.hasOwn(rendererEnv, key)) {
+        delete result[key]
+      }
+    }
+    // Why here and not only in the local/daemon builders: a remote pane's env is built HERE,
+    // and the client forwards only the canonical pane-identity names. An agent whose harness
+    // scrubs those names (DSH drops any env var whose name contains KEY or TOKEN) would find
+    // nothing to attribute its hooks to, so remote status would silently never appear even
+    // with the remote hook installed.
+    applyScrubSafeAgentEnvAliases(result)
     // Why last, not beside the scrubbers above: the relay runs those BEFORE envToDelete,
     // so an envToDelete of CONDA_PREFIX would otherwise re-create the broken pair.
     dropIncoherentCondaActivationEnv(result, process.platform)
@@ -951,20 +973,29 @@ export class PtyHandler {
     this.notifyPoolListener(this.ptyPoolActiveListener, 'pty-pool-active')
     const emitIngressData = (emission: PtyIngressEmission): void => {
       const rawLength = emission.rawEndSeq - emission.rawStartSeq
-      this.appendReplayBuffer(managed, emission.data)
+      const data = managed.freebuffStatus?.project(emission.data) ?? emission.data
+      this.appendReplayBuffer(managed, data)
       this.enqueuePtyOutput(
         managed.id,
-        emission.data,
-        emission.transformed || rawLength !== emission.data.length
+        data,
+        emission.transformed || rawLength !== data.length
           ? { rawLength, seq: emission.rawEndSeq, transformed: true }
           : {}
       )
     }
-    managed.startupIngress ??= new PtyStartupIngress({
+    const isDead = (): boolean => managed.disposed === true
+    const recoveryBarrier = new TerminalShellRecoveryBarrier({
+      confirmShellForeground: () =>
+        confirmPtyShellForeground({ process: managed.pty, shellPath: managed.shellPath, isDead }),
+      release: emitIngressData,
+      isAlive: () => !isDead()
+    })
+    managed.recoveryBarrier = recoveryBarrier
+    managed.startupIngress = new PtyStartupIngress({
       ...(managed.startupIngressIntent ? { intent: managed.startupIngressIntent } : {}),
       ownerBackend: managed.ownerBackend,
       write: (data) => managed.pty.write(data),
-      onEmission: emitIngressData
+      onEmission: (emission) => recoveryBarrier.accept(emission)
     })
     const startup = managed.startupCommand
     if (startup?.waitForShellReady) {
@@ -1054,6 +1085,11 @@ export class PtyHandler {
       managed.startupCommand = undefined
     }
     managed.startupIngress?.drainAndClose()
+    // Why after drainAndClose: drained ingress bytes re-enter the barrier; a
+    // teardown mid-proof must still deliver the held prompt before exit.
+    managed.recoveryBarrier?.flushPending()
+    managed.recoveryBarrier?.dispose()
+    managed.freebuffStatus?.dispose()
   }
 
   private notifyExitListener(managed: ManagedPty): void {
@@ -1979,6 +2015,9 @@ export class PtyHandler {
     const ownerClientInstanceId =
       context === undefined ? null : (this.consumerIdentityResolver?.(context.clientId) ?? null)
     const managed: ManagedPty = {
+      ...(launchAgent === 'freebuff'
+        ? { freebuffStatus: new FreebuffStatusProjection(cols, rows) }
+        : {}),
       id,
       incarnationId: randomUUID(),
       pty: term,
@@ -2225,6 +2264,7 @@ export class PtyHandler {
     // npm, where the patch is not applied. So the catch below stays.
     try {
       managed.pty.resize(cols, rows)
+      managed.freebuffStatus?.resize(cols, rows)
     } catch (err) {
       // A failed ioctl observed the handle, not the host's process table, so on
       // its own it is `unverifiable`. Re-probe: a now-absent pid retires the

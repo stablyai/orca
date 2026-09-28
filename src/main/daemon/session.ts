@@ -4,10 +4,7 @@ import { createSessionOutputPipeline } from './session-output-pipeline'
 import { SessionProducerPause } from './session-producer-pause'
 import { SessionShellReadyBarrier } from './session-shell-ready-barrier'
 import type { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
-import {
-  SessionTerminationController,
-  IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS
-} from './session-termination-controller'
+import { SessionTerminationController } from './session-termination-controller'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import type { JobTerminationOutcome } from '../windows/windows-pty-job'
 import type { SessionOptions } from './session-options'
@@ -21,6 +18,7 @@ import type {
   TakePendingOutputResult,
   TerminalSnapshot
 } from './types'
+import type { PtyChildProcessVerdict } from '../../shared/terminal-process-inspection'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
 export class Session {
@@ -29,6 +27,7 @@ export class Session {
   readonly terminalHandle: string | null
   readonly launchAgent: TuiAgent | null
   readonly wslDistro: string | null
+  readonly processNameIsSpawnFile: boolean
   private _state: SessionState = 'running'
   private _exitCode: number | null = null
   private _disposed = false
@@ -47,6 +46,7 @@ export class Session {
     this.launchAgent = opts.launchAgent ?? null
     this.wslDistro = opts.wslDistro ?? null
     this.subprocess = opts.subprocess
+    this.processNameIsSpawnFile = opts.subprocess.processNameIsSpawnFile === true
     this.onSessionExit = opts.onExit
     const pipeline = createSessionOutputPipeline({
       cols: opts.cols,
@@ -195,9 +195,7 @@ export class Session {
     this.termination.scheduleForceDisposeFallback()
   }
 
-  async forceKillAndWaitForExit(
-    timeoutMs = IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS
-  ): Promise<void> {
+  async forceKillAndWaitForExit(timeoutMs?: number): Promise<void> {
     await this.termination.forceKillAndWaitForExit(timeoutMs)
   }
 
@@ -251,6 +249,10 @@ export class Session {
 
   getCwd(): string | null {
     return this.output.getCwd()
+  }
+
+  inspectChildProcesses(): PtyChildProcessVerdict {
+    return this.subprocess.inspectChildProcesses?.() ?? 'unverifiable'
   }
 
   getForegroundProcess(options?: { rawFallback?: boolean }): string | null {

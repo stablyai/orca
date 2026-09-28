@@ -1,6 +1,7 @@
 import { getPreferredPairingOffer } from '../../shared/runtime-environments'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/protocol-version'
 import { resolveEnvironment, markEnvironmentUsed } from '../../shared/runtime-environment-store'
+import { recordRuntimeEnvironmentUsage } from './runtime-environment-usage-record'
 import { isOrchestrationMutation } from '../../shared/orchestration-rpc-contract'
 import type {
   RuntimeOrchestrationEnvelope,
@@ -195,7 +196,7 @@ export async function subscribeRuntimeEnvironment(
       return
     }
     markedUsed = true
-    markEnvironmentUsed(userDataPath, environment.id, { runtimeId })
+    recordRuntimeEnvironmentUsage(userDataPath, environment.id, { runtimeId })
   }
   const callbacksWithMarkUsed = {
     onResponse: (response: RuntimeRpcResponse<unknown>) => {

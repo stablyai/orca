@@ -227,6 +227,14 @@ export function buildRemovedSshTargetCleanupPatch(
     targetId,
     targetTabIds
   )
+  const nextPendingLayoutEdits = Object.fromEntries(
+    Object.entries(state.pendingDirectSshLayoutEditsByTabId ?? {}).filter(
+      ([, entry]) => entry.targetId !== targetId
+    )
+  )
+  const removedPendingLayoutEdits =
+    Object.keys(nextPendingLayoutEdits).length !==
+    Object.keys(state.pendingDirectSshLayoutEditsByTabId ?? {}).length
 
   const nextDeferredTargets = state.deferredSshReconnectTargets.filter((id) => id !== targetId)
   const nextTransientClearedConnections = {
@@ -273,7 +281,8 @@ export function buildRemovedSshTargetCleanupPatch(
     removedPendingReconnect ||
     removedPaneRetries ||
     removedLiveBindings ||
-    removedRetryHistory
+    removedRetryHistory ||
+    removedPendingLayoutEdits
   if (!changed) {
     return null
   }
@@ -304,6 +313,9 @@ export function buildRemovedSshTargetCleanupPatch(
     ...(removedPendingReconnect ? { pendingReconnectPtyIdByTabId: nextPendingReconnect } : {}),
     ...(removedPaneRetries ? { directSshPaneRetryByTabId: nextPaneRetries } : {}),
     ...(removedLiveBindings ? { directSshLivePtyBindingByTabId: nextLiveBindings } : {}),
-    ...(removedRetryHistory ? { directSshPaneRetryHistoryByTabId: nextRetryHistory } : {})
+    ...(removedRetryHistory ? { directSshPaneRetryHistoryByTabId: nextRetryHistory } : {}),
+    ...(removedPendingLayoutEdits
+      ? { pendingDirectSshLayoutEditsByTabId: nextPendingLayoutEdits }
+      : {})
   }
 }

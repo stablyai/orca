@@ -54,6 +54,37 @@ function hydrationPage(
 }
 
 describe('structured agent session reducer', () => {
+  it("orders one journal write's items by their place in it, whatever order they arrive in", () => {
+    const at = (id: string, sequence: number, sequenceIndex: number): AgentJournalRenderItem => ({
+      ...item(id, sequence),
+      ...(sequenceIndex > 0 ? { sequenceIndex } : {})
+    })
+    const paged = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
+      type: 'history-page',
+      page: hydrationPage([
+        item('before', 4),
+        at('third', 5, 2),
+        at('first', 5, 0),
+        at('second', 5, 1)
+      ])
+    })
+    expect(paged.items.map(({ itemId }) => itemId)).toEqual(['before', 'first', 'second', 'third'])
+    const live = reduceStructuredAgentSession(paged, {
+      type: 'event',
+      event: {
+        type: 'batch',
+        sessionId: 'session-a',
+        batch: {
+          cursor: { epoch: 'epoch-a', sequence: 6 },
+          items: [at('next-b', 6, 1), at('next-a', 6, 0)],
+          removedItemIds: [],
+          submissions: []
+        }
+      }
+    })
+    expect(live.items.map(({ itemId }) => itemId).slice(-2)).toEqual(['next-a', 'next-b'])
+  })
+
   it('applies an additive targeted-stop capability update without journal churn', () => {
     const backgroundTasks = {
       state: 'monitoring' as const,

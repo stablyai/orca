@@ -35,7 +35,7 @@ vi.mock('./host-credential-cleanup', () => ({
 import {
   loadHosts,
   resetHostStoreForTests,
-  saveHost,
+  savePairedHost,
   updateHostDescriptor,
   updateHostNameAndEndpoint
 } from './host-store'
@@ -176,7 +176,7 @@ describe('host name identity', () => {
   describe('re-pair', () => {
     it('preserves the override and descriptor a pairing save knows nothing about', async () => {
       await updateHostDescriptor(TYPED_HOST.id, { machineName: 'm4airs-Air', platform: 'darwin' })
-      await saveHost({
+      await savePairedHost({
         id: TYPED_HOST.id,
         name: 'Windows-Low Spec',
         endpoint: 'ws://10.0.0.9:6768',
@@ -198,7 +198,7 @@ describe('host name identity', () => {
         machineName: 'm4airs-Air',
         platform: 'darwin'
       })
-      await saveHost({
+      await savePairedHost({
         id: GENERATED_HOST.id,
         name: 'Host 1',
         endpoint: GENERATED_HOST.endpoint,
@@ -211,11 +211,11 @@ describe('host name identity', () => {
 
     it('does not roll back identity changed since a connection took its profile snapshot', async () => {
       await updateHostDescriptor(TYPED_HOST.id, { machineName: 'Studio', platform: 'darwin' })
-      // A connection holds this for its lifetime and re-saves it on relay credential rotation.
+      // A connection holds this for its lifetime; a save built from it must not roll identity back.
       const snapshot = (await loadHosts()).find(({ id }) => id === TYPED_HOST.id)!
       await updateHostNameAndEndpoint(TYPED_HOST.id, { personalName: null })
       await updateHostDescriptor(TYPED_HOST.id, { machineName: 'Studio 2', platform: 'darwin' })
-      await saveHost({ ...snapshot, lastConnected: 99 })
+      await savePairedHost({ ...snapshot, lastConnected: 99 })
       const record = stored().find(({ id }) => id === TYPED_HOST.id)
       expect(record?.personalName).toBeUndefined()
       expect(record).toMatchObject({

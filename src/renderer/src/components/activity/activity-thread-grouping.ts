@@ -21,11 +21,11 @@ const ACTIVITY_STATUS_GROUP_RANK: Record<ActivityThreadStatusId, number> = {
   waiting: 0,
   blocked: 1,
   permission: 2,
-  interrupted: 3,
-  working: 4,
-  monitoring: 5,
-  unverifiable: 6,
-  failed: 7,
+  failed: 3,
+  interrupted: 4,
+  working: 5,
+  monitoring: 6,
+  unverifiable: 7,
   done: 8,
   idle: 9
 }

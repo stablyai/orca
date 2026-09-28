@@ -58,42 +58,47 @@ const LAUNCH_READ_RETRY_DELAYS_MS = [100, 250, 500] as const
  *  actually moves the offer. */
 function publish(next: NativeChatRestartOffer): void {
   offer = next
-  syncFailedChatWatch()
+  syncOfferedChatWatch()
   for (const listener of listeners) {
     listener()
   }
 }
 
 /**
- * Re-reads the host once a failed chat shows new activity, so a reply the user sent there retires
- * its entry here too. The host stays the judge; this only asks again.
+ * Re-reads the host once an offered or failed chat shows new activity, so a message the user sent
+ * there, or its agent starting, retires its entry here too. The host stays the judge; this only
+ * asks again.
  *
- * Held only while something failed. Keyed on status and prompt rather than every summary, so an
- * agent streaming in a failed chat costs one re-read, not one per tool call.
+ * Held only while something is offered or failed. Keyed on status and prompt rather than every
+ * summary, so an agent streaming in such a chat costs one re-read, not one per tool call.
  */
-const FAILED_CHAT_REFRESH_DELAY_MS = 500
-let failedChatWatch: {
+const OFFERED_CHAT_REFRESH_DELAY_MS = 500
+let offeredChatWatch: {
   feed: StructuredAgentSessionStatusFeedOwner
   seen: Map<string, string>
   release: () => void
 } | null = null
-let failedChatRefresh: ReturnType<typeof setTimeout> | null = null
+let offeredChatRefresh: ReturnType<typeof setTimeout> | null = null
 
-function failedChatActivityKey(summary: AgentSessionStatusSummary): string {
+function offeredChatIds(): Set<string> {
+  return new Set([...offer.candidates, ...offer.failed].map((entry) => entry.sessionId))
+}
+
+function offeredChatActivityKey(summary: AgentSessionStatusSummary): string {
   return `${summary.status ?? ''}\u0000${summary.latestPrompt}`
 }
 
-function syncFailedChatWatch(): void {
-  const failedIds = new Set(offer.failed.map((failure) => failure.sessionId))
-  if (failedIds.size === 0) {
-    releaseFailedChatWatch()
+function syncOfferedChatWatch(): void {
+  const offeredIds = offeredChatIds()
+  if (offeredIds.size === 0) {
+    releaseOfferedChatWatch()
     return
   }
-  if (!failedChatWatch) {
+  if (!offeredChatWatch) {
     const feed = getStructuredAgentSessionStatusFeed(LOCAL)
-    const unsubscribe = feed.subscribe(noticeFailedChatActivity)
+    const unsubscribe = feed.subscribe(noticeOfferedChatActivity)
     const deactivate = feed.activate()
-    failedChatWatch = {
+    offeredChatWatch = {
       feed,
       seen: new Map(),
       release: () => {
@@ -102,60 +107,60 @@ function syncFailedChatWatch(): void {
       }
     }
   }
-  const { feed, seen } = failedChatWatch
+  const { feed, seen } = offeredChatWatch
   for (const sessionId of seen.keys()) {
-    if (!failedIds.has(sessionId)) {
+    if (!offeredIds.has(sessionId)) {
       seen.delete(sessionId)
     }
   }
   // What the feed already holds is what this listing answered.
-  for (const sessionId of failedIds) {
+  for (const sessionId of offeredIds) {
     const summary = feed.getSnapshot().get(sessionId)
     if (summary && !seen.has(sessionId)) {
-      seen.set(sessionId, failedChatActivityKey(summary))
+      seen.set(sessionId, offeredChatActivityKey(summary))
     }
   }
 }
 
-function noticeFailedChatActivity(): void {
-  if (!failedChatWatch) {
+function noticeOfferedChatActivity(): void {
+  if (!offeredChatWatch) {
     return
   }
-  const { feed, seen } = failedChatWatch
+  const { feed, seen } = offeredChatWatch
   const snapshot = feed.getSnapshot()
   let changed = false
-  for (const failure of offer.failed) {
-    const summary = snapshot.get(failure.sessionId)
+  for (const sessionId of offeredChatIds()) {
+    const summary = snapshot.get(sessionId)
     if (!summary) {
       continue
     }
-    const key = failedChatActivityKey(summary)
-    const previous = seen.get(failure.sessionId)
+    const key = offeredChatActivityKey(summary)
+    const previous = seen.get(sessionId)
     if (previous !== key) {
-      seen.set(failure.sessionId, key)
+      seen.set(sessionId, key)
       // A first sighting is news only if newer than the list; a change to a known chat always is,
       // since the host may have answered the list just before the change was delivered here.
       changed ||= previous !== undefined || summary.updatedAt > offer.listedAt
     }
   }
-  if (changed && failedChatRefresh === null) {
-    failedChatRefresh = setTimeout(() => {
-      failedChatRefresh = null
+  if (changed && offeredChatRefresh === null) {
+    offeredChatRefresh = setTimeout(() => {
+      offeredChatRefresh = null
       if (actionsBegun === actionsSettled) {
         const issued = actionsBegun
         void readNativeChatRestartOffer(() => actionsBegun === issued)
       }
-    }, FAILED_CHAT_REFRESH_DELAY_MS)
+    }, OFFERED_CHAT_REFRESH_DELAY_MS)
   }
 }
 
-function releaseFailedChatWatch(): void {
-  if (failedChatRefresh !== null) {
-    clearTimeout(failedChatRefresh)
-    failedChatRefresh = null
+function releaseOfferedChatWatch(): void {
+  if (offeredChatRefresh !== null) {
+    clearTimeout(offeredChatRefresh)
+    offeredChatRefresh = null
   }
-  failedChatWatch?.release()
-  failedChatWatch = null
+  offeredChatWatch?.release()
+  offeredChatWatch = null
 }
 
 export function getNativeChatRestartOffer(): NativeChatRestartOffer {
@@ -358,7 +363,7 @@ export function useNativeChatRestartOffer(enabled: boolean): NativeChatRestartOf
 
 /** @internal - tests need a clean module between cases. */
 export function _resetNativeChatRestartOffer(): void {
-  releaseFailedChatWatch()
+  releaseOfferedChatWatch()
   offer = EMPTY
   actionsBegun = 0
   actionsSettled = 0

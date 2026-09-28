@@ -200,6 +200,12 @@ export function chooseRemoteTerminalLayout(
       : parentLayout?.expandedLeafId && knownLeafIds.has(parentLayout.expandedLeafId)
         ? parentLayout.expandedLeafId
         : null
+  const chatLeafId =
+    parentLayout?.chatLeafId && knownLeafIds.has(parentLayout.chatLeafId)
+      ? parentLayout.chatLeafId
+      : existingLayout?.chatLeafId && knownLeafIds.has(existingLayout.chatLeafId)
+        ? existingLayout.chatLeafId
+        : undefined
   // Why retained: this rebuilds the layout from the host's picture, and the host publishes no
   // scrollback of its own — a parked remote pane's bytes live only in the client's copy. Without
   // this, ANY inventory frame landing between park and reveal drops the only copy: the rebuild is
@@ -219,6 +225,7 @@ export function chooseRemoteTerminalLayout(
     }),
     activeLeafId,
     expandedLeafId,
+    ...(chatLeafId ? { chatLeafId } : {}),
     ptyIdsByLeafId,
     // Why: surface.title is the tab/PTY label, not a pane title; restoring it as one renders a fake title bar. Only host layout titles are real pane titles.
     ...(parentLayout?.titlesByLeafId ? { titlesByLeafId: parentLayout.titlesByLeafId } : {})

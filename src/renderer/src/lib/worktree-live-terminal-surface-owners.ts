@@ -20,12 +20,11 @@ export type LiveTerminalSurfaceOwner = {
  * client-created tab can leave empty, so they cannot answer "is this PTY
  * unowned?" — only the host can.
  *
- * Three verdicts, never two: an entry is the owner, a `null` entry is
- * `unverifiable` (the host named a surface this renderer cannot address, or
- * named two), and a whole-index `null` is `unverifiable` for every PTY. Absence
- * from a readable index is the only proof of `unowned`.
+ * Only `unowned` proves the host observed a live PTY with no surface. Null and
+ * missing entries are unverifiable; an earlier inventory may name a retired PTY.
  */
-export type LiveTerminalSurfaceOwnerIndex = ReadonlyMap<string, LiveTerminalSurfaceOwner | null>
+type LiveTerminalSurfaceOwnership = LiveTerminalSurfaceOwner | 'unowned' | null
+export type LiveTerminalSurfaceOwnerIndex = ReadonlyMap<string, LiveTerminalSurfaceOwnership>
 
 const OWNER_LISTING_LIMIT = 200
 
@@ -65,25 +64,25 @@ function toSurfaceOwner(terminal: RuntimeTerminalSummary): LiveTerminalSurfaceOw
 export function indexLiveTerminalSurfaceOwners(
   terminals: readonly RuntimeTerminalSummary[],
   worktreeId: string
-): Map<string, LiveTerminalSurfaceOwner | null> {
-  const owners = new Map<string, LiveTerminalSurfaceOwner | null>()
+): Map<string, LiveTerminalSurfaceOwnership> {
+  const owners = new Map<string, LiveTerminalSurfaceOwnership>()
   for (const terminal of terminals) {
-    // `orphaned` is the host's own word for "live PTY, no surface owns it".
-    // Path spelling can differ between the host's row and the renderer's id; dropping a row
-    // over that would read as `unowned` and mint the duplicate this index exists to prevent.
-    if (
-      !worktreeIdsEqual(terminal.worktreeId, worktreeId) ||
-      !terminal.ptyId ||
-      terminal.orphaned === true
-    ) {
+    if (!worktreeIdsEqual(terminal.worktreeId, worktreeId) || !terminal.ptyId) {
       continue
     }
-    const owner = toSurfaceOwner(terminal)
+    const owner =
+      terminal.orphaned === true
+        ? terminal.connected === true
+          ? 'unowned'
+          : null
+        : toSurfaceOwner(terminal)
     const recorded = owners.get(terminal.ptyId)
-    // Two surfaces claiming one PTY is the duplicate this index must not endorse.
+    const recordedPane = recorded && recorded !== 'unowned' ? recorded.paneKey : recorded
+    const ownerPane = owner && owner !== 'unowned' ? owner.paneKey : owner
+    // Conflicting ownership claims cannot authorize adoption.
     owners.set(
       terminal.ptyId,
-      owners.has(terminal.ptyId) && recorded?.paneKey !== owner?.paneKey ? null : owner
+      owners.has(terminal.ptyId) && recordedPane !== ownerPane ? null : owner
     )
   }
   return owners
@@ -104,6 +103,7 @@ export async function readWorktreeLiveTerminalSurfaceOwners(
     params: {
       worktree: toRuntimeWorktreeSelector(worktreeId),
       limit: OWNER_LISTING_LIMIT,
+      requireFreshPtyLiveness: true,
       includeVisualLayouts: false
     }
   })

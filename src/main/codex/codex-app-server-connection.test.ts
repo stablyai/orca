@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events'
 import { realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { PassThrough } from 'node:stream'
+import { providerDiagnosticOf } from '../../shared/agent-session-failure'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { spawnProcess } from '../../shared/child-process/run-process'
 import {
@@ -182,6 +183,45 @@ describe('openCodexAppServerConnection', () => {
     await connection.close()
   })
 
+  it('reports the spawned pid before it sends the handshake', async () => {
+    const { child, spawnImpl, written } = stubChild()
+    answerInitialize(child)
+    const writtenAtSpawn: number[] = []
+
+    const connection = await openCodexAppServerConnection(
+      { command: 'codex', args: ['app-server'] },
+      {
+        onSpawned: async (pid) => {
+          writtenAtSpawn.push(written.length)
+          expect(pid).toBe(child.pid)
+        }
+      },
+      spawnImpl
+    )
+
+    // The owner is durable before initialize, so a crash mid-handshake leaves it stoppable.
+    expect(writtenAtSpawn).toEqual([0])
+    expect(written[0]).toMatchObject({ method: 'initialize' })
+    await connection.close()
+  })
+
+  it('reaps the child and never handshakes when its spawn cannot be recorded', async () => {
+    const { spawnImpl, written } = stubChild()
+
+    await expect(
+      openCodexAppServerConnection(
+        { command: 'codex', args: ['app-server'] },
+        {
+          onSpawned: async () => {
+            throw new Error('agent_session_checkpoint_stale')
+          }
+        },
+        spawnImpl
+      )
+    ).rejects.toThrow('agent_session_checkpoint_stale')
+    expect(written).toEqual([])
+  })
+
   it('completes the handshake and keeps the child alive across calls', async () => {
     const notifications: { method: string; params: unknown }[] = []
     const connection = await openFakeServer({
@@ -254,6 +294,9 @@ describe('openCodexAppServerConnection', () => {
 
     expect(isCodexAppServerRequestError(refusal)).toBe(true)
     expect((refusal as Error).message).toContain('bad params')
+    // Codex's own words, apart from Orca's prefix, for a person to read.
+    expect(providerDiagnosticOf(refusal)).toEqual({ text: 'bad params', audience: 'person' })
+    expect(providerDiagnosticOf(missing)).toBeUndefined()
     expect(isCodexAppServerUnsupportedError(missing)).toBe(true)
     expect(isCodexAppServerRequestError(missing)).toBe(false)
     await connection.close()

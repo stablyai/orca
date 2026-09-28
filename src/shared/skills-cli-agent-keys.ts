@@ -24,6 +24,7 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   pi: 'pi',
   omp: null,
   'prime-agent': null,
+  qoder: 'qoder',
   gemini: 'gemini-cli',
   antigravity: 'antigravity',
   aider: null,
@@ -35,6 +36,7 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   aug: 'augment',
   cline: 'cline',
   codebuff: null,
+  freebuff: null,
   'command-code': 'command-code',
   continue: 'continue',
   cursor: 'cursor',
@@ -52,7 +54,9 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   // Why: Orca detects trae by `traecli`, an alias only TRAE CN ships.
   trae: 'trae-cn',
   muse: null,
-  zcode: 'zcode'
+  zcode: 'zcode',
+  // Why: DSH ships skills as Cordis plugins, not a `skills --agent` target.
+  dsh: null
 } satisfies Record<TuiAgent, string | null>
 
 /**

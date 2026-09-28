@@ -7,7 +7,10 @@
 // rewritten in place, so a host that cannot read a row refuses to write the
 // journal rather than skipping or compacting past it.
 
+import type { UnreadAgentSessionFailureFact } from './agent-session-failure'
+import type { AgentSessionFailureRowWords } from './agent-session-failure-words'
 import type { AgentType } from './agent-status-types'
+import type { AgentSessionQuestionAnswer } from './agent-session-question-answer'
 import type { AgentJournalTurnOutcome } from './agent-turn-outcome'
 import type { NativeChatToolMetadata } from './native-chat-tool-identity'
 import type { AgentSessionContextUsage } from './agent-session-context-usage'
@@ -128,8 +131,11 @@ export type AgentJournalResolutionState = (typeof AGENT_JOURNAL_RESOLUTION_STATE
  *  invoking the provider callback twice. */
 export type AgentJournalResolution = {
   state: AgentJournalResolutionState
-  /** Option id the winner picked; null while pending or cancelled. */
+  /** Option id the winner picked; null while pending or cancelled. For a question, the answer in the
+   *  packed form older clients read; `answers` is the same answer structured. */
   selectedOptionId: string | null
+  /** Question answers. Absent on approvals and on rows written before hosts recorded it. */
+  answers?: AgentSessionQuestionAnswer[]
   /** Opaque client identity of the resolver, for "answered on <device>". */
   resolvedBy: string | null
   resolvedAt: number | null
@@ -253,9 +259,8 @@ export type AgentJournalThreadGoalState =
   | { state: 'set'; goal: AgentJournalThreadGoal }
   | { state: 'cleared' }
 
-export type AgentJournalStatusItem = {
+type AgentJournalStatusItemFields = {
   kind: 'status'
-  text: string
   /** Optional display hints; unknown values retain the ordinary text fallback. */
   presentation?: string
   tone?: string
@@ -273,6 +278,19 @@ export type AgentJournalStatusItem = {
   /** Present on thread-goal transitions; absent on rows from older hosts. */
   threadGoal?: AgentJournalThreadGoalState
 }
+
+/** A status row that reports no failure; its text is its writer's own. */
+export type AgentJournalPlainStatusItem = AgentJournalStatusItemFields & {
+  text: string
+  failure?: undefined
+}
+
+export type AgentJournalStatusItem =
+  | AgentJournalPlainStatusItem
+  | (AgentJournalStatusItemFields &
+      /** A row that reports a failure: what failed, typed, beside the sentence older clients print,
+       *  both from `agentSessionFailureWords`. Absent on rows from older hosts. */
+      AgentSessionFailureRowWords)
 
 /** The durable record of one root turn. `running` exposes cancellation while
  *  the provider can still accept it; the item is revised to a terminal state,
@@ -323,6 +341,13 @@ export type AgentJournalProducerLinkage = {
   attempt?: number
 }
 
+/** Where the journal placed an item: the sequence of the row that created it,
+ *  then its place among that row's writes. The timeline's only ordering key. */
+export type AgentJournalPosition = {
+  sequence: number
+  index: number
+}
+
 /** One reduced timeline entry. `sequence` orders the list; `observedAt` is the
  *  provider's own clock and may sort earlier than a later sequence when the row
  *  was recovered after a crash. */
@@ -331,6 +356,9 @@ export type AgentJournalRenderItem = AgentJournalProducerLinkage & {
   revision: number
   body: AgentJournalItemBody
   sequence: number
+  /** Place among the writes of the row at `sequence`, which one lifecycle batch
+   *  shares across every item it creates. Absent ⇒ 0, and on a host that predates it. */
+  sequenceIndex?: number
   observedAt: number
   /** Set when the row was appended by crash reconciliation rather than live. */
   recovered?: true
@@ -353,13 +381,23 @@ export type AgentJournalSubmission = {
   dispatchState: AgentJournalDispatchState
   /** Provider item identity adopted on accept; null otherwise. */
   providerItemId: string | null
-  /** Terminal reason on `rejected`. */
+  /** Terminal reason on `rejected`: a sentence a person can read, or one of the legacy markers
+   *  older clients already recognise. On `unknown`, the doubt marker. */
   reason: string | null
+  /** On `rejected`, why, typed; absent on rows from older hosts. */
+  rejection?: UnreadAgentSessionFailureFact
   submittedAt: number
   resolvedAt: number | null
   /** Set when crash reconciliation resolved the dispatch, not the provider. A live
    *  `unknown` is a send still outstanding; a recovered one outlived its writer. */
   recovered?: true
+  /** The host accepted this send to hand over later; absent on sends dispatched as they were
+   *  recorded (older hosts). With no `handedOverAt` yet, a pending one is still queued. */
+  handoverRecorded?: true
+  /** When the host handed it to the provider (its `dispatch{pending}` row). */
+  handedOverAt?: number
+  /** Host-only: the submission row's sequence, which tells which host process accepted it. */
+  acceptedSequence?: number
 }
 
 /** Durable answer to "did my send land?", keyed by client message id. Only an

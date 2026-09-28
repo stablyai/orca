@@ -1,4 +1,5 @@
-import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/orca-session-address'
+import { orcaSessionAddressSql } from '../orca-session-address-sql'
+import type { OrcaSessionId } from '../../../../../shared/orca-session-address'
 import type { RunRow } from '../../types'
 
 type RunCoordinatorOrcaSessionFields = Pick<
@@ -13,7 +14,7 @@ type RunCoordinatorOrcaSessionFields = Pick<
  */
 export function currentRunCoordinatorOrcaSessionId(
   run: RunCoordinatorOrcaSessionFields
-): string | null {
+): OrcaSessionId | null {
   return run.coordinator_orca_session_id_generation === run.consumer_generation
     ? run.coordinator_orca_session_id
     : null
@@ -27,5 +28,5 @@ export function currentRunCoordinatorOrcaSessionIdSql(row: string): string {
 
 /** The coordinator's `session:<id>` address in SQL; NULL when it has no current Orca session id. */
 export function currentRunCoordinatorSessionAddressSql(row: string): string {
-  return `('${ORCA_SESSION_ADDRESS_PREFIX}' || ${currentRunCoordinatorOrcaSessionIdSql(row)})`
+  return orcaSessionAddressSql(currentRunCoordinatorOrcaSessionIdSql(row))
 }

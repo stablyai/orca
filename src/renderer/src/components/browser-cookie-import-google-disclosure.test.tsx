@@ -4,7 +4,7 @@
  * STA-3811: imports never touch the Google cookie family, so every import menu must disclose it
  * at the moment of decision.
  */
-import { act, type ReactNode } from 'react'
+import { act, createRef, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import en from '@/i18n/locales/en.json'
@@ -67,6 +67,12 @@ describe('cookie-import Google disclosure footer', () => {
           onImportFromFile={vi.fn()}
           viewportPresetId={null}
           onApplyViewportPreset={vi.fn()}
+          overflow={{
+            triggerRef: createRef<HTMLButtonElement>(),
+            tools: [],
+            deferUntilClose: vi.fn(),
+            onMenuCloseAutoFocus: vi.fn()
+          }}
         />
       )
     ],

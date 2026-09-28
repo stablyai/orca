@@ -220,7 +220,7 @@ export function adapterFor(
   const acquire = adapter.acquire
   adapter.acquire = async (input) => {
     const acquisition = await acquire(input)
-    await adapter.drainStartup(input.identity.sessionId)
+    await adapter.awaitStarted(input.identity.sessionId)
     return acquisition
   }
   return adapter

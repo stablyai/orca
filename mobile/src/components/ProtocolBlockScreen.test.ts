@@ -151,6 +151,19 @@ describe('ProtocolBlockScreen', () => {
     expect(primaryActionUrl()).toBe(RELEASES_URL)
   })
 
+  it('sends a desktop whose page is older than this shell to the desktop update', () => {
+    const output = render({
+      kind: 'blocked',
+      reason: 'bundle-incompatible',
+      side: 'desktop',
+      pageVersion: 0,
+      requiredPageVersion: 1
+    })
+    expect(output).toContain('Update Orca on your computer')
+    expect(output).toContain('This paired desktop app is too old for your current Orca Mobile app')
+    expect(primaryActionUrl()).toBe(RELEASES_URL)
+  })
+
   it('routes an Android bundle wall to GitHub Releases, not a store that has no listing', () => {
     nativeTestState.platform.OS = 'android'
     const output = render({

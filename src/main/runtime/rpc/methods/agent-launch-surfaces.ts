@@ -4,8 +4,8 @@
  * Both halves are deliberately the plain, user-facing forms: a structured session created for the
  * worktree exactly as `agentSession.create` creates one, and a terminal agent created exactly as a
  * new agent tab is. Orchestration's own factories are NOT reusable here — a worker's session
- * carries a dispatch hold, a mailbox and a background tab that a launch the user asked for must
- * not take — which is why the executor injects this rather than branching.
+ * carries a redrive subscription, a mailbox and a background tab that a launch the user asked for
+ * must not take — which is why the executor injects this rather than branching.
  *
  * Delivering the launch text is here for the same reason: it is the wire-shaped half. Each surface
  * takes it differently — a structured session commits it to a transcript, a terminal agent takes it
@@ -36,12 +36,19 @@ import { AgentLaunchSessionAlreadyExistsError } from '../../../../shared/agent-l
 import { createStructuredAgentSessionId } from '../../../../shared/structured-agent-session-create'
 import { toAgentLaunchPreferences } from '../../../../shared/agent-launch-preferences'
 import { paneIdentity } from '../../runtime-terminal-pane-identity'
+import {
+  trackTerminalSpawnDispatch,
+  type TerminalSpawnDispatch
+} from '../../../agent-launch/agent-launch-not-started'
 
 /** Replay-safe launches keep the nested attach in the same stable caller namespace as the launch. */
 export function agentLaunchSurfaceFactory(
   context: RpcContext,
   attachOperationId?: string,
-  operationCallerKey?: string
+  operationCallerKey?: string,
+  // False when the launch selects the chat for its paired caller instead of for everyone.
+  activateChat = true,
+  terminalSpawn: TerminalSpawnDispatch = trackTerminalSpawnDispatch()
 ): AgentLaunchSurfaceFactory {
   return {
     createStructuredSession: async ({
@@ -77,7 +84,7 @@ export function agentLaunchSurfaceFactory(
         ...(seeded ? { options: seeded } : {}),
         ...(tabId ? { tabId } : {}),
         // The user asked for this chat, so it takes the surface — unlike a dispatched worker.
-        activate: true
+        activate: activateChat
       })
       if (!created.ok) {
         // The caller named this session, so a taken id is its answer, not an opaque refusal; and not
@@ -118,7 +125,7 @@ export function agentLaunchSurfaceFactory(
       options
     }) => {
       const launchPreferences = toAgentLaunchPreferences(options)
-      const terminal = await context.runtime.createTerminal(`id:${worktreeId}`, {
+      const created = context.runtime.createTerminal(`id:${worktreeId}`, {
         // The agent id is not a shell command — `cursor` is the desktop app, its CLI is
         // `cursor-agent` — so the runtime builds the configured launcher.
         startupAgent: agent,
@@ -131,8 +138,10 @@ export function agentLaunchSurfaceFactory(
         ...(launchPreferences ? { launchPreferences } : {}),
         // A live reserved pane would be attached, not launched into, so the runtime refuses it.
         ...(paneKey ? { ...paneIdentity(paneKey), requireFreshPane: true } : {}),
-        ...agentLaunchTelemetry(agent, launchSource)
+        ...agentLaunchTelemetry(agent, launchSource),
+        onPtySpawnDispatched: terminalSpawn.onPtySpawnDispatched
       })
+      const terminal = await created.catch(terminalSpawn.rethrow)
       return {
         handle: terminal.handle,
         // The runtime already minted this pane and baked it into the PTY's env and its own reveal;

@@ -1,8 +1,11 @@
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
+import { isFloatingWorkspacePanelVisible } from '@/lib/floating-workspace-terminal-actions'
 import { activateStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { jumpToWorktreeFromSidebar } from '@/lib/worktree-jump-navigation'
 import { useAppStore } from '@/store'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   getSettingsFocusedExecutionHostId,
   getWorktreeExecutionHostId,
@@ -45,6 +48,25 @@ export function hasActivityThreadWorkspace(
   )
 }
 
+function toggleFloatingWorkspacePanelIfHidden(): void {
+  if (!isFloatingWorkspacePanelVisible()) {
+    window.dispatchEvent(new Event(TOGGLE_FLOATING_TERMINAL_EVENT))
+  }
+}
+
+// Why enable first: floating tabs outlive a feature disable, and the panel ignores the toggle
+// while disabled, so a live floating agent row would otherwise be a silent no-op.
+function revealFloatingWorkspacePanel(state: AppState): void {
+  if (state.settings?.floatingTerminalEnabled === true) {
+    toggleFloatingWorkspacePanelIfHidden()
+    return
+  }
+  void state.updateSettings({ floatingTerminalEnabled: true }).then(() => {
+    // Why deferred a frame: the panel only honors the toggle once the enabled flag has reached React.
+    requestAnimationFrame(toggleFloatingWorkspacePanelIfHidden)
+  })
+}
+
 export function createActivityThreadActions({
   getMarkAllReadThreads,
   acknowledgeAgents,
@@ -75,6 +97,7 @@ export function createActivityThreadActions({
   }
 
   const activateThreadTarget = (thread: AgentPaneThread): void => {
+    const isFloatingTerminal = thread.worktree.id === FLOATING_TERMINAL_WORKTREE_ID
     const executionHostId = getActivityThreadExecutionHostId(
       thread,
       getSettingsFocusedExecutionHostId(useAppStore.getState().settings)
@@ -84,6 +107,7 @@ export function createActivityThreadActions({
     // resumeSleepingAgentSessionsForWorktree/ensureWorktreeHasInitialTerminal run inside here.
     // Probing tab residency first is what made a remote row click a silent no-op (#16731).
     if (
+      !isFloatingTerminal &&
       activateAndRevealWorkspace(thread.worktree.id, {
         executionHostId,
         revealInSidebar: false,
@@ -104,6 +128,10 @@ export function createActivityThreadActions({
       // Retained threads outlive their tab; the workspace is still activated, but there is
       // no pane to focus and focusing a sibling would be worse than focusing nothing.
       return
+    }
+    // Floating tabs have no catalog workspace; reveal their panel without changing the main workspace.
+    if (isFloatingTerminal) {
+      revealFloatingWorkspacePanel(activated)
     }
     activated.setActiveTabType('terminal', thread.worktree.id)
     const parsed = parsePaneKey(thread.paneKey)

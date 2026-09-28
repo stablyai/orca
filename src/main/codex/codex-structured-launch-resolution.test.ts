@@ -180,6 +180,16 @@ describe('codex structured launch resolution', () => {
     })
   })
 
+  // A thread opened on the configured default and then given a turn on the saved model reads to
+  // Codex as a model switch, and it injects the saved model's whole prompt a second time.
+  it('opens the thread on the model the record saved', async () => {
+    const launch = await resolverFor(
+      record({ options: { model: 'gpt-chosen', effort: 'high', fastMode: 'false' } })
+    )({ identity: IDENTITY })
+
+    expect(launch.model).toBe('gpt-chosen')
+  })
+
   // The configured CLI arguments are a terminal concern: a durable record written before they
   // stopped being read must not smuggle one back into app-server's argv.
   it("ignores the record's durable launch arguments", async () => {

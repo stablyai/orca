@@ -13,6 +13,7 @@ import { registerJsonlLanguage } from './monaco-languages/register-jsonl'
 import { registerNimLanguage } from './monaco-languages/register-nim'
 import { registerShellMarkdownAliases } from './monaco-languages/register-shell-markdown-aliases'
 import { registerSvelteLanguage } from './monaco-languages/register-svelte'
+import { registerTypstLanguage } from './monaco-languages/register-typst'
 import { registerVueLanguage } from './monaco-languages/register-vue'
 import { installMonacoDelayerCancellationGuard } from './monaco-delayer-cancellation-guard'
 import { installMonacoDiffEditorDisposalGuard } from './monaco-diff-editor-disposal'
@@ -82,6 +83,7 @@ runMonacoSetupSteps([
   ['Svelte language registration', () => registerSvelteLanguage(monaco)],
   ['Astro language registration', () => registerAstroLanguage(monaco)],
   ['Nim language registration', () => registerNimLanguage(monaco)],
+  ['Typst language registration', () => registerTypstLanguage(monaco)],
   ['JSONL language registration', () => registerJsonlLanguage(monaco)],
   ['shell Markdown alias registration', () => registerShellMarkdownAliases(monaco)],
   ['delayer cancellation guard', installMonacoDelayerCancellationGuard],

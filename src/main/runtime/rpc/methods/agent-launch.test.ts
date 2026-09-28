@@ -461,7 +461,10 @@ describe('the terminal factory', () => {
     const runtime = runtimeStub({ createSupport: { supported: false, reason: 'wsl' } })
     const result = await launch(CREATE_LAUNCH, runtime)
 
-    expect(runtime.createTerminal).toHaveBeenCalledWith('id:wt-new', { startupAgent: 'claude' })
+    expect(runtime.createTerminal).toHaveBeenCalledWith('id:wt-new', {
+      startupAgent: 'claude',
+      onPtySpawnDispatched: expect.any(Function)
+    })
     expect(createStructuredSession).not.toHaveBeenCalled()
     expect(result.outcome).toEqual({ kind: 'terminal', handle: 'term_1' })
     // Never a failed launch, and never a silent downgrade.
@@ -481,7 +484,10 @@ describe('the terminal factory', () => {
     expect(runtime.showManagedTerminalWorkspace).not.toHaveBeenCalled()
     // Resolved to an id first: everything below re-prefixes it, so a raw selector reaches the
     // runtime as `id:id:wt-7`.
-    expect(runtime.createTerminal).toHaveBeenCalledWith('id:wt-7', { startupAgent: 'grok' })
+    expect(runtime.createTerminal).toHaveBeenCalledWith('id:wt-7', {
+      startupAgent: 'grok',
+      onPtySpawnDispatched: expect.any(Function)
+    })
     expect(result.worktreeId).toBe('wt-7')
   })
 })

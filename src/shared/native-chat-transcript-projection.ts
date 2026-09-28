@@ -4,6 +4,7 @@
 // of exactly what the renderer's transcript runs, not a second reading of it.
 
 import type { NativeChatMessage } from './native-chat-types'
+import { compareAgentJournalPositions } from './agent-session-journal-position'
 import { stripNoiseMessages } from './native-chat-noise'
 import { foldToolMessages } from './native-chat-tool-fold'
 
@@ -27,11 +28,32 @@ export function compareNativeChatMessagesByTime(
   return 0
 }
 
+/** Rows the journal holds read in the journal's own order, never its clock: a
+ *  batch shares one timestamp, and a row recovered after a crash carries an
+ *  earlier one. A row not in the journal yet — a send still in the outbox — was
+ *  made after everything the journal holds, so it follows them; only such rows,
+ *  and terminal-backed transcripts, which have no journal, order by time. */
+export function compareNativeChatTranscriptMessages(
+  a: NativeChatMessage,
+  b: NativeChatMessage
+): number {
+  if (a.journalPosition && b.journalPosition) {
+    return compareAgentJournalPositions(a.journalPosition, b.journalPosition)
+  }
+  if (a.journalPosition || b.journalPosition) {
+    return a.journalPosition ? -1 : 1
+  }
+  return compareNativeChatMessagesByTime(a, b)
+}
+
 /** `compare` lets the renderer order its own tail rows (streaming, optimistic
  *  sends), which never exist on the host. */
 export function projectNativeChatTranscriptMessages(
   messages: readonly NativeChatMessage[],
-  compare: (a: NativeChatMessage, b: NativeChatMessage) => number = compareNativeChatMessagesByTime
+  compare: (
+    a: NativeChatMessage,
+    b: NativeChatMessage
+  ) => number = compareNativeChatTranscriptMessages
 ): NativeChatMessage[] {
   // Not `toSorted`: mobile's Hermes lacks it, and src/shared must stay loadable there.
   return stripNoiseMessages(foldToolMessages(Array.from(messages).sort(compare)))

@@ -45,7 +45,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   return (
     <div className="flex flex-col gap-5">
       {receipt ? (
-        <NativeChatResolutionReceipt body={receipt} />
+        <NativeChatResolutionReceipt body={receipt} disclosureId={message.id} />
       ) : (
         <MessageRow
           message={message}
@@ -69,7 +69,6 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
       {status ? (
         <NativeChatWorkingStatus
           startedAt={status.startedAt}
-          thinking={status.thinking}
           workedSeconds={status.workedSeconds}
           expanded={expanded === true}
           onToggleExpanded={

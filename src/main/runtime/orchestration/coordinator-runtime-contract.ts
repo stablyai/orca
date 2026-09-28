@@ -11,7 +11,7 @@ export type CoordinatorRuntime = {
   sendTerminalAgentPrompt(
     handle: string,
     prompt: string,
-    options?: DispatchPreambleSendOptions
+    options: DispatchPreambleSendOptions
   ): Promise<unknown>
   listTerminals(
     worktreeSelector?: string,

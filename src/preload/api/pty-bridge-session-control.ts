@@ -1,7 +1,7 @@
 import { ipcRenderer } from 'electron'
-import type { AgentSessionPtyWriteRefusal } from '../../shared/agent-session-pty-write-admission'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
+import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -72,22 +72,14 @@ export const ptySessionControlApi = {
     /** Host verdict on the shell-ready marker; absent when the execution host predates the field. */
     shellReadyArmed?: boolean
   }> => ipcRenderer.invoke('pty:spawn', opts),
-  write: (id: string, data: string): void => {
-    ipcRenderer.send('pty:write', { id, data })
+  write: (id: string, data: string, inputKind: TerminalInputKind): void => {
+    ipcRenderer.send('pty:write', { id, data, inputKind })
   },
-  writeAccepted: (id: string, data: string): Promise<boolean> =>
-    ipcRenderer.invoke('pty:writeAccepted', { id, data }),
-  onWriteUnavailable: (
-    callback: (payload: {
-      id: string
-      /** Set only when a durable agent-session lease refused the write; absent otherwise. */
-      agentSessionRefusal?: AgentSessionPtyWriteRefusal
-    }) => void
-  ): (() => void) => {
-    const handler = (
-      _event: Electron.IpcRendererEvent,
-      payload: { id: string; agentSessionRefusal?: AgentSessionPtyWriteRefusal }
-    ): void => callback(payload)
+  writeAccepted: (id: string, data: string, inputKind: TerminalInputKind): Promise<boolean> =>
+    ipcRenderer.invoke('pty:writeAccepted', { id, data, inputKind }),
+  onWriteUnavailable: (callback: (payload: { id: string }) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: { id: string }): void =>
+      callback(payload)
     ipcRenderer.on('pty:writeUnavailable', handler)
     return () => ipcRenderer.removeListener('pty:writeUnavailable', handler)
   },

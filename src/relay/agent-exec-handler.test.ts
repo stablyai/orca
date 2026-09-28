@@ -36,6 +36,7 @@ describe('AgentExecHandler', () => {
   })
 
   afterEach(() => {
+    vi.unstubAllEnvs()
     for (const [key, value] of Object.entries(ambientGuardEnv)) {
       if (value !== undefined) {
         process.env[key] = value
@@ -84,6 +85,7 @@ describe('AgentExecHandler', () => {
   })
 
   it('merges caller-supplied provider environment into the spawned command environment', async () => {
+    vi.stubEnv('ORCA_EXEC_INHERITED', 'inherited-value')
     const child = createFakeChild()
     spawnMock.mockReturnValue(child as never)
     const handlers = createHandlers()
@@ -112,13 +114,66 @@ describe('AgentExecHandler', () => {
     expect(spawnMock).toHaveBeenCalledWith('codex', ['exec'], {
       cwd: '/repo',
       env: expect.objectContaining({
-        ...process.env,
+        ORCA_EXEC_INHERITED: 'inherited-value',
         CODEX_HOME: '/managed/codex-home',
         PATH: '/managed/bin'
       }),
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true
     })
+  })
+
+  it('honors Windows override casing while replacing indexed Git configuration', async () => {
+    const child = createFakeChild()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies every child event and stream used by the handler.
+    spawnMock.mockReturnValue(child as never)
+    const originalPlatform = process.platform
+    const originalPath = process.env.PATH
+    process.env.PATH = 'inherited-path'
+    process.env.GIT_CONFIG_COUNT = '2'
+    process.env.GIT_CONFIG_KEY_1 = 'stale.key'
+    process.env.GIT_CONFIG_VALUE_1 = 'stale-value'
+    try {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const handlers = createHandlers()
+      const pending = handlers.get('agent.execNonInteractive')!(
+        {
+          binary: 'agent.exe',
+          args: [],
+          env: {
+            Path: 'override-path',
+            token: 'override-token',
+            git_config_count: '1',
+            git_config_key_0: 'http.proxy',
+            git_config_value_0: 'proxy-value'
+          }
+        },
+        requestContext()
+      )
+      child.emit('close', 0)
+      await expect(pending).resolves.toMatchObject({ exitCode: 0 })
+      const env = spawnMock.mock.calls[0][2]?.env
+      expect(env).toMatchObject({
+        PATH: 'override-path',
+        TOKEN: 'override-token',
+        GIT_CONFIG_KEY_0: 'http.proxy',
+        GIT_CONFIG_VALUE_0: 'proxy-value'
+      })
+      expect(env).not.toHaveProperty('Path')
+      expect(env).not.toHaveProperty('git_config_count')
+      expect(Object.values(env ?? {})).not.toContain('stale.key')
+      expect(Object.values(env ?? {})).not.toContain('stale-value')
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+      if (originalPath === undefined) {
+        delete process.env.PATH
+      } else {
+        process.env.PATH = originalPath
+      }
+      delete process.env.GIT_CONFIG_COUNT
+      delete process.env.GIT_CONFIG_KEY_1
+      delete process.env.GIT_CONFIG_VALUE_1
+    }
   })
 
   it('consumes an unattended marker and applies the full Git guard on the relay host', async () => {

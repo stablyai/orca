@@ -21,6 +21,7 @@ import {
   resolveWebSessionVisibleTabId
 } from '@/runtime/web-session-focus-intent'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from '@/runtime/local-structured-session-owner'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 export type StructuredAgentSessionLaunchIntent = {
   sessionId: string
@@ -105,7 +106,7 @@ export function createStructuredAgentSessionLaunchIntent(
   agent: AgentSessionHandleProvider,
   resumeFrom?: StructuredAgentSessionResumeSource
 ): StructuredAgentSessionLaunchIntent {
-  const sessionId = createStructuredAgentSessionId(agent, () => crypto.randomUUID())
+  const sessionId = createStructuredAgentSessionId(agent, createBrowserUuid)
   return buildStructuredAgentSessionLaunchIntent(worktreeId, agent, sessionId, resumeFrom)
 }
 
@@ -132,7 +133,7 @@ function buildStructuredAgentSessionLaunchIntent(
       worktree: toRuntimeWorktreeSelector(worktreeId),
       agent,
       ...(resumeFrom ? { resumeFrom } : {}),
-      randomUuid: () => crypto.randomUUID()
+      randomUuid: createBrowserUuid
     }),
     ...launchSeedOptions(state, agent)
   }

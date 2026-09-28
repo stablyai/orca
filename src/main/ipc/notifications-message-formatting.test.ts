@@ -217,7 +217,7 @@ describe('registerNotificationHandlers', () => {
           worktreeLabel: 'feat/notis',
           agentType: 'claude',
           agentState: 'done',
-          agentInterrupted: true,
+          agentTurnOutcome: 'cancellation',
           agentLastAssistantMessage: 'Stopped by user.'
         }
       )
@@ -316,7 +316,12 @@ describe('registerNotificationHandlers', () => {
     )
   })
 
-  it('reports an interrupted finish as stopped', async () => {
+  it.each([
+    { agentTurnOutcome: 'cancellation', word: 'stopped' },
+    { agentTurnOutcome: 'failure', word: 'failed' },
+    { agentTurnOutcome: 'success', word: 'finished' },
+    { agentTurnOutcome: undefined, word: 'finished' }
+  ] as const)('words a $agentTurnOutcome finish as $word', async ({ agentTurnOutcome, word }) => {
     registerNotificationHandlers({
       getSettings: () => ({
         notifications: {
@@ -336,14 +341,40 @@ describe('registerNotificationHandlers', () => {
         worktreeLabel: 'feat/notis',
         agentType: 'claude',
         agentState: 'done',
-        agentInterrupted: true
+        ...(agentTurnOutcome ? { agentTurnOutcome } : {})
       }
     )
 
     expect(notificationCtorMock).toHaveBeenCalledWith(
       expectedNativeNotificationOptions({
-        title: 'feat/notis - Claude stopped',
-        body: 'Claude stopped.'
+        title: `feat/notis - Claude ${word}`,
+        body: `Claude ${word}.`
+      })
+    )
+  })
+
+  it('counts a success verdict alone as an agent snapshot', async () => {
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: false,
+          suppressWhenFocused: true
+        }
+      })
+    } as never)
+
+    const handler = getDispatchHandler()
+    await handler(
+      {},
+      { source: 'agent-task-complete', worktreeLabel: 'feat/notis', agentTurnOutcome: 'success' }
+    )
+
+    expect(notificationCtorMock).toHaveBeenCalledWith(
+      expectedNativeNotificationOptions({
+        title: 'feat/notis - Agent finished',
+        body: 'Agent finished.'
       })
     )
   })

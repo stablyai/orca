@@ -22,6 +22,7 @@ vi.mock('../preflight/agent-detection', () => ({
   detectInstalledAgentsWithShellPathHydration: mocks.detectInstalledAgentsWithShellPathHydration
 }))
 
+import { AGENT_TRUST_WRITE_DEADLINE_MS } from '../agent-trust-write-deadline'
 import {
   buildWorktreeStartupForAgent,
   buildWorktreeStartupForDraft,
@@ -185,5 +186,42 @@ describe('markLocalWorktreeTrusted', () => {
     })
 
     await expect(markLocalWorktreeTrusted('antigravity', '/workspace/app')).resolves.toBeUndefined()
+  })
+
+  it('bounds a never-settling Codex trust write instead of holding the launch open', async () => {
+    vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    let release!: () => void
+    const write = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    mocks.markCodexProjectTrusted.mockClear()
+    mocks.markCursorWorkspaceTrusted.mockClear()
+    mocks.markCopilotFolderTrusted.mockClear()
+    mocks.markAntigravityWorkspaceTrusted.mockClear()
+    mocks.markCodexProjectTrusted.mockReturnValueOnce(write)
+    let settled = false
+    const marking = markLocalWorktreeTrusted('codex', '/workspace/app').then(() => {
+      settled = true
+    })
+    try {
+      await vi.advanceTimersByTimeAsync(AGENT_TRUST_WRITE_DEADLINE_MS - 1)
+      expect(settled).toBe(false)
+      await vi.advanceTimersByTimeAsync(2)
+      await marking
+      expect(settled).toBe(true)
+      expect(String(warn.mock.calls[0]?.[0])).toContain('did not settle')
+      expect(vi.getTimerCount()).toBe(0)
+      // Fails closed: giving up writes nothing, retries nothing and never
+      // substitutes another preset's artifact, so Codex still prompts.
+      expect(mocks.markCodexProjectTrusted).toHaveBeenCalledTimes(1)
+      expect(mocks.markCursorWorkspaceTrusted).not.toHaveBeenCalled()
+      expect(mocks.markCopilotFolderTrusted).not.toHaveBeenCalled()
+      expect(mocks.markAntigravityWorkspaceTrusted).not.toHaveBeenCalled()
+    } finally {
+      warn.mockRestore()
+      release()
+      vi.useRealTimers()
+    }
   })
 })

@@ -180,8 +180,7 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
         reportPageBackClaim: dependencies.reportPageBackClaim,
         pageReady: dependencies.pageReady,
         pageFrame: dependencies.pageFrame,
-        backClaimed: dependencies.backClaimed,
-        pageOwnsSafeArea: dependencies.pageOwnsSafeArea
+        backClaimed: dependencies.backClaimed
       })
     })
   }

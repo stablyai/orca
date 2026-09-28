@@ -30,7 +30,8 @@ import {
   type ClaudeAcquireCallbacks
 } from './claude-structured-session-state'
 import { resolveClaudeAcquisitionError } from './claude-structured-session-close'
-import { readClaudeTranscriptEntryUuid } from './claude-tui-exit'
+import { withObservedProviderExit } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
+import { readClaudeTranscriptEntryUuid } from './claude-transcript-entry-uuid'
 import { persistClaudeTurnResumePoint } from './claude-structured-resume-point'
 import { withAgentSessionCreatePhase } from '../observability/agent-session-instrumentation'
 import { resolveClaudeAcquisitionLaunch } from './claude-structured-acquisition-launch'
@@ -58,7 +59,9 @@ export async function acquireClaudeSession({
   // A managed-account switch is mid-swap of the pinned credential home; refuse here,
   // before this acquisition cancels the previous attempt and closes the live session.
   if (isClaudeAuthSwitchInProgress()) {
-    throw new AgentSessionPreSpawnError(new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE))
+    throw new AgentSessionPreSpawnError(new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE), {
+      reason: 'accountSwitchInProgress'
+    })
   }
   const sessionId = input.identity.sessionId
   const prompts = new ClaudePromptRegistry()
@@ -178,6 +181,8 @@ export async function acquireClaudeSession({
             initProof.reject(error)
           },
           onExit: (error) => {
+            // The child exited on its own; marked in place, as the fault report may hold this error.
+            withObservedProviderExit(error)
             childEnded ??= error
             initProof.reject(error)
             callbacks.handleExit(sessionId, attempt, error)
@@ -248,30 +253,34 @@ export async function acquireClaudeSession({
         event()
       }
     })
-    session.startup.settled = settleClaudeSessionStartup({
-      session,
-      facts: readClaudeStartupFacts({
-        connection,
-        initProof,
-        sessionId,
-        providerSessionId: launch.providerSessionId,
-        resumesTranscript: launch.resumesTranscript,
-        inputOptions: input.options,
-        requestTimeoutMs: deps.requestTimeoutMs,
-        emit
-      }),
-      isCurrent: () => sessions.get(sessionId) === session,
-      requestTimeoutMs: deps.requestTimeoutMs,
-      fault: (error) => callbacks.handleExit(sessionId, attempt, error),
-      onStarted: (options) =>
-        emit({
-          type: 'started',
+    // Whichever comes first: the start landing or faulting, or the child being ended.
+    session.startup.settled = Promise.race([
+      session.startup.settled,
+      settleClaudeSessionStartup({
+        session,
+        facts: readClaudeStartupFacts({
+          connection,
+          initProof,
           sessionId,
-          fence: input.fence,
-          acquisitionGeneration: session.acquisitionGeneration,
-          ...options
-        })
-    })
+          providerSessionId: launch.providerSessionId,
+          resumesTranscript: launch.resumesTranscript,
+          inputOptions: input.options,
+          requestTimeoutMs: deps.requestTimeoutMs,
+          emit
+        }),
+        isCurrent: () => sessions.get(sessionId) === session,
+        requestTimeoutMs: deps.requestTimeoutMs,
+        fault: (error) => callbacks.handleExit(sessionId, attempt, error),
+        onStarted: (options) =>
+          emit({
+            type: 'started',
+            sessionId,
+            fence: input.fence,
+            acquisitionGeneration: session.acquisitionGeneration,
+            ...options
+          })
+      })
+    ])
     // A child whose exit already reached `handleExit` is not handed over as live: the create
     // fails with the CLI's own diagnostic, as one that died before publish does.
     if (sessions.get(sessionId) !== session) {

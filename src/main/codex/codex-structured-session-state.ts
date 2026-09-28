@@ -34,6 +34,8 @@ export type CodexStructuredLaunch = {
    *  rollout for it, start a new thread in its place. Never set for a thread a resume proved. */
   supersedeIfUnsaved?: boolean
   permissionPolicy?: CodexStructuredPermissionPolicy
+  /** The model the session chose; the thread opens on it so its first turn is not a switch. */
+  model?: string
   env?: Record<string, string>
 }
 

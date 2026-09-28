@@ -14,8 +14,7 @@ const HOST_INTERNAL_IMPORTERS = [
   'shared/agent-status-child-work-resume.ts',
   'shared/agent-status-store-codec.ts',
   'shared/agent-status-store-mutation.ts',
-  'shared/agent-status-store-state.ts',
-  'shared/agent-status-store.ts'
+  'shared/agent-status-store-state.ts'
 ]
 
 describe('child-work record codec boundary', () => {

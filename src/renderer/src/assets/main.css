@@ -412,6 +412,11 @@
   z-index: 40 !important;
 }
 
+/* Keep errors above standard modal backdrops at the existing popover tier. */
+body:has([data-slot='dialog-overlay'], [data-slot='sheet-overlay']) [data-sonner-toaster] {
+  z-index: 60 !important;
+}
+
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] {
   align-items: flex-start;
   flex-wrap: wrap;
@@ -719,7 +724,9 @@
   mask-image: linear-gradient(to right, transparent, #000 1.5rem, #000 100%);
 }
 
-.terminal-tab-strip--fade-end:not(.terminal-tab-strip--fade-start) {
+/* Why: the status bar's usage cluster reuses the end fade so a clipped cluster never cuts a glyph. */
+.terminal-tab-strip--fade-end:not(.terminal-tab-strip--fade-start),
+.status-bar-usage-cluster[data-overflowing='true'] {
   -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.5rem), transparent);
   mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.5rem), transparent);
 }
@@ -2856,6 +2863,39 @@ html.native-shell .app-layout {
 
 .orca-diff-comment-inline > .orca-diff-comment-card {
   max-width: 420px;
+}
+
+/* Why: embedded card in the diff flow, not a floating popup — use the
+   documented "subtle lift" tier (shadow-xs) rather than a hand-rolled shadow.
+   Restated under `.dark` (same value) so this still outranks the base
+   `.orca-diff-comment-popover` dark shadow at equal selector specificity. */
+.orca-diff-comment-inline > .orca-diff-comment-draft-card {
+  position: relative;
+  left: auto;
+  right: auto;
+  width: 100%;
+  max-width: 420px;
+  z-index: 1;
+  @apply shadow-xs;
+}
+
+.dark .orca-diff-comment-inline > .orca-diff-comment-draft-card {
+  @apply shadow-xs;
+}
+
+.orca-diff-comment-draft-margin {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.orca-diff-comment-draft-margin::after {
+  content: '';
+  width: 3px;
+  height: 100%;
+  background: var(--primary);
+  border-radius: 1px;
 }
 
 /* Why: the saved note used to blend into the editor background because it

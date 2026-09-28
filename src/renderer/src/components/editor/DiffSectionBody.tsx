@@ -1,10 +1,8 @@
-import type { RefObject } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { AlertCircle, RefreshCw } from 'lucide-react'
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
 import { combinedDiffSectionScrollbarOptions } from './diff-editor-scrollbar-options'
 import { isCombinedDiffSizeUnknown } from './combined-diff-on-demand-load'
 import type { DiffSection } from './diff-section-types'
@@ -21,18 +19,8 @@ const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 type DiffSectionBodyProps = {
   section: DiffSection
   index: number
-  sectionBodyRef: RefObject<HTMLDivElement | null>
   sectionBodyHeight: number | undefined
   useIntrinsicImageHeight: boolean
-  popover: {
-    lineNumber: number
-    startLine?: number
-    top: number
-    left?: number
-    lineHeight: number
-  } | null
-  addLineCommentPlaceholder?: string
-  addLineCommentLabel?: string
   isBranchMode: boolean
   sideBySide: boolean
   isDark: boolean
@@ -43,8 +31,6 @@ type DiffSectionBodyProps = {
   diffWordWrap?: boolean
   diffShowWhitespace?: boolean
   editorFontFamily?: string
-  onCancelComment: () => void
-  onSubmitComment: (body: string) => Promise<void>
   onRetrySection: (index: number) => void
   onLoadDeferredSection: (index: number) => void
   onSaveLimitedDiff: () => void
@@ -54,12 +40,8 @@ type DiffSectionBodyProps = {
 export function DiffSectionBody({
   section,
   index,
-  sectionBodyRef,
   sectionBodyHeight,
   useIntrinsicImageHeight,
-  popover,
-  addLineCommentPlaceholder,
-  addLineCommentLabel,
   isBranchMode,
   sideBySide,
   isDark,
@@ -70,8 +52,6 @@ export function DiffSectionBody({
   diffWordWrap,
   diffShowWhitespace,
   editorFontFamily,
-  onCancelComment,
-  onSubmitComment,
   onRetrySection,
   onLoadDeferredSection,
   onSaveLimitedDiff,
@@ -86,27 +66,9 @@ export function DiffSectionBody({
 
   return (
     <div
-      ref={sectionBodyRef}
       className={cn('relative', useIntrinsicImageHeight && 'overflow-visible')}
       style={sectionBodyHeight === undefined ? undefined : { height: sectionBodyHeight }}
     >
-      {popover && !renderLimit?.limited ? (
-        // Why: key by lineNumber so the popover remounts when the anchor
-        // line changes instead of leaking draft state across lines.
-        <DiffCommentPopover
-          key={`${popover.startLine ?? popover.lineNumber}:${popover.lineNumber}`}
-          lineNumber={popover.lineNumber}
-          startLine={popover.startLine}
-          top={popover.top}
-          left={popover.left}
-          lineHeight={popover.lineHeight}
-          placeholder={addLineCommentPlaceholder}
-          submitLabel={addLineCommentLabel}
-          submittingLabel="Posting…"
-          onCancel={onCancelComment}
-          onSubmit={onSubmitComment}
-        />
-      ) : null}
       {section.loadOnDemand ? (
         <LargeDiffLoadPrompt
           sizeUnknown={isCombinedDiffSizeUnknown(section)}

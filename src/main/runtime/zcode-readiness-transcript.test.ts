@@ -21,6 +21,18 @@ function readTranscript(): string {
 }
 
 describe('ZCode readiness from captured terminal bytes', () => {
+  it('accepts a fresh composer after the renderer adopts the terminal handle', async () => {
+    const { runtime, handle } = await createTranscriptPane({
+      paneTitle: 'worker-zcode',
+      foregroundProcess: 'zcode',
+      launchAgent: 'zcode',
+      data: '\x1b[?1049h╭'
+    })
+    await expect(
+      runtime.waitForFreshWorkerComposer(handle, 'zcode', 1_000)
+    ).resolves.toBeUndefined()
+  })
+
   it('never emits an OSC title, so no title lane can settle its wait', () => {
     const data = readTranscript()
     expect(data).toContain(String.fromCharCode(27))

@@ -1,5 +1,4 @@
 import type {
-  AgentJournalDispatchState,
   AgentJournalItemBody,
   AgentJournalItemIdentity,
   AgentJournalMessageItem,
@@ -65,6 +64,7 @@ export function journalSubmissionRowBuilder(
     payloadFingerprint: string
     body: AgentJournalMessageItem
     fence: number
+    handoverRecorded?: true
   }
 ): RowBuilder<JournalSubmissionRow> {
   return (seq, ts) =>
@@ -77,23 +77,22 @@ export function journalDispatchRowBuilder(
 ): RowBuilder<JournalDispatchRow> {
   const providerItemId =
     input.state === 'accepted' ? agentJournalItemKey(input.providerIdentity) : null
-  return (seq, ts) =>
-    buildJournalDispatchRow({
-      state: state(),
-      clientMessageId: input.clientMessageId,
-      dispatchState: input.state,
-      providerItemId,
-      reason: boundedDispatchReason(input),
-      seq,
-      fence: input.fence,
-      ts,
-      recovered: input.recovered
-    })
+  // The only dispatch-row builder: its input type is what makes a rejected row carry its fact.
+  return (seq, ts) => ({
+    kind: 'dispatch',
+    clientMessageId: input.clientMessageId,
+    state: input.state,
+    providerItemId,
+    reason: boundedDispatchReason(input),
+    ...(input.state === 'rejected' ? { rejection: input.rejection } : {}),
+    ...journalRowBase(state().epoch, seq, input.fence, ts),
+    ...(input.recovered ? { recovered: input.recovered } : {})
+  })
 }
 
 /** `reason` is the only unbounded field written by Orca's own code: a provider error is
  *  arbitrary text, and a multi-megabyte one reached the row verbatim. Bounded head-first,
- *  because `dispatchRejectionWasTransportWriteFailure` prefix-matches the value. Rows
+ *  because `isWriteFailureSubmission` prefix-matches the value. Rows
  *  written before this keep their full text, so readers still meet unbounded ones. */
 function boundedDispatchReason(input: ResolveDispatchInput): string | null {
   if (input.state === 'accepted' || input.state === 'pending' || !input.reason) {
@@ -267,6 +266,7 @@ export function buildJournalSubmissionRow(input: {
   seq: number
   fence: number
   ts: number
+  handoverRecorded?: true
 }): JournalSubmissionRow {
   return {
     kind: 'submission',
@@ -274,28 +274,7 @@ export function buildJournalSubmissionRow(input: {
     payloadFingerprint: input.payloadFingerprint,
     providerHandle: input.providerHandle,
     body: input.body,
-    ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts)
-  }
-}
-
-export function buildJournalDispatchRow(input: {
-  state: JournalReducerState
-  clientMessageId: string
-  dispatchState: AgentJournalDispatchState
-  providerItemId: string | null
-  reason: string | null
-  seq: number
-  fence: number
-  ts: number
-  recovered?: true
-}): JournalDispatchRow {
-  return {
-    kind: 'dispatch',
-    clientMessageId: input.clientMessageId,
-    state: input.dispatchState,
-    providerItemId: input.providerItemId,
-    reason: input.reason,
     ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts),
-    ...(input.recovered ? { recovered: input.recovered } : {})
+    ...(input.handoverRecorded ? { handoverRecorded: true } : {})
   }
 }

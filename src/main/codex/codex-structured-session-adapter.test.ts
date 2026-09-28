@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { AgentSessionPromptAnswerRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import {
   CodexAppServerRequestError,
   type openCodexAppServerConnection
@@ -6,7 +7,6 @@ import {
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { CODEX_SPAWN_TOKEN_ENV } from './codex-structured-owner-identity'
 import { ORCA_STRUCTURED_SESSION_ENV } from '../../shared/structured-session-marker'
-import { encodeCodexQuestionOptionId } from './codex-structured-prompt-replies'
 import {
   CodexStructuredSessionAdapter,
   type CodexStructuredLaunch,
@@ -56,6 +56,20 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       observedAt: 1_700_000_000_500
     })
     expect(acquisition.acquisitionGeneration).toBe('generation-1')
+  })
+
+  // A thread opened on Codex's configured default and then given a turn on the chosen model
+  // reads to Codex as a model switch, and it injects the chosen model's whole prompt again.
+  it('opens the thread on the model the session chose, not on the configured default', async () => {
+    const codex = fakeCodex()
+    const adapter = adapterFor(codex, { model: 'gpt-chosen' })
+
+    await adapter.acquire({ identity: identityFor('session-1'), fence: 7, spawnToken: 'spawn-9' })
+
+    expect(codex.connections[0].calls[0]).toEqual({
+      method: 'thread/start',
+      params: { cwd: '/work/repo', model: 'gpt-chosen' }
+    })
   })
 
   it('resumes the thread the durable handle chain names, not the client one', async () => {
@@ -174,7 +188,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       sessionId: 'session-1',
       itemId: 'codex-item-early',
       kind: 'approval',
-      optionId: 'accept',
+      response: { kind: 'option', optionId: 'accept' },
       fence: 7,
       commit: async () => undefined
     })
@@ -452,7 +466,12 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
         body: USER_MESSAGE,
         fence: 7
       })
-    ).toEqual({ state: 'rejected', reason: 'turn already running' })
+    ).toEqual({
+      // Built without Codex's own words, so nothing is quoted and no detail is invented.
+      state: 'rejected',
+      reason: 'The provider did not accept this message.',
+      rejection: { kind: 'providerRejected' }
+    })
   })
 
   it('rethrows a dead child so the wire settles the submission unknown', async () => {
@@ -535,7 +554,7 @@ describe('CodexStructuredSessionAdapter prompts', () => {
       sessionId: 'session-1',
       itemId: 'codex:thread-abc:turn-1:3',
       kind: 'approval',
-      optionId: 'accept',
+      response: { kind: 'option', optionId: 'accept' },
       fence: 7,
       commit: async () => undefined
     })
@@ -548,7 +567,7 @@ describe('CodexStructuredSessionAdapter prompts', () => {
         sessionId: 'session-1',
         itemId: 'codex:thread-abc:turn-1:3',
         kind: 'approval',
-        optionId: 'decline',
+        response: { kind: 'option', optionId: 'decline' },
         fence: 7,
         commit: async () => undefined
       })
@@ -589,7 +608,7 @@ describe('CodexStructuredSessionAdapter prompts', () => {
         sessionId: 'session-1',
         itemId: 'codex-item-1',
         kind: 'approval',
-        optionId: 'accept',
+        response: { kind: 'option', optionId: 'accept' },
         fence: 7,
         commit: async () => undefined
       })
@@ -676,7 +695,7 @@ describe('CodexStructuredSessionAdapter prompts', () => {
         sessionId: 'session-1',
         itemId,
         kind: 'approval',
-        optionId,
+        response: { kind: 'option', optionId },
         fence: 7,
         commit: async () => undefined
       })
@@ -697,17 +716,20 @@ describe('CodexStructuredSessionAdapter prompts', () => {
     const adapter = await acquired(codex)
 
     askApproval(codex)
+    const commit = vi.fn(async () => undefined)
 
     await expect(
       adapter.answerPrompt({
         sessionId: 'session-1',
         itemId: 'codex-item-1',
         kind: 'approval',
-        optionId: 'yolo',
+        response: { kind: 'option', optionId: 'yolo' },
         fence: 7,
-        commit: async () => undefined
+        commit
       })
-    ).rejects.toThrow('is not a Codex approval decision')
+    ).rejects.toThrow(AgentSessionPromptAnswerRejectedError)
+    // Refused before the journal records an answer the agent never receives.
+    expect(commit).not.toHaveBeenCalled()
     expect(codex.connections[0].replies).toEqual([])
   })
 
@@ -732,7 +754,7 @@ describe('CodexStructuredSessionAdapter prompts', () => {
       sessionId: 'session-1',
       itemId: 'codex-item-2',
       kind: 'question',
-      optionId: encodeCodexQuestionOptionId('q1', 'yes'),
+      response: { kind: 'answers', answers: [{ questionId: 'q1', optionIds: [], other: 'yes' }] },
       fence: 7,
       commit: async () => undefined
     })
@@ -742,7 +764,7 @@ describe('CodexStructuredSessionAdapter prompts', () => {
       sessionId: 'session-1',
       itemId: 'codex-item-2',
       kind: 'question',
-      optionId: encodeCodexQuestionOptionId('q2', 'no'),
+      response: { kind: 'answers', answers: [{ questionId: 'q2', optionIds: [], other: 'no' }] },
       fence: 7,
       commit: async () => undefined
     })
@@ -778,7 +800,7 @@ describe('CodexStructuredSessionAdapter prompts', () => {
         sessionId: 'session-1',
         itemId: 'codex-item-gone',
         kind: 'approval',
-        optionId: 'accept',
+        response: { kind: 'option', optionId: 'accept' },
         fence: 7,
         commit: async () => undefined
       })

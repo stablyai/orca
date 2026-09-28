@@ -703,14 +703,14 @@ describe('MobileNativeChatView', () => {
       return renderer!.root.findAll((node) => node.type === 'WorkingIndicator')
     }
 
-    it('puts the live status at the turn tail and drops the three-dot indicator', async () => {
+    it('puts the clock bar under the prompt, activity at the tail, and drops the three dots', async () => {
       const folded = [userTurn('u1', 'go'), assistantTurn('a1', 'still working')]
       await render({ messages: folded, folded, structuredActivityUi: true, agentWorking: true })
       const props = rowProps('u1')
       expect(props.structuredActivityUi).toBe(true)
-      expect(props.turnStatus).toBeNull()
-      // Nothing reports reasoning, so the one live footer counts instead of guessing.
-      expect(footerProps()).toMatchObject({ thinking: false, workedSeconds: null })
+      expect(props.turnStatus).toMatchObject({ workedSeconds: null })
+      // Nothing reports reasoning, so the tail line reads plain working instead of guessing.
+      expect(footerProps()).toEqual({ thinking: false, activityText: null })
       expect(listIds().at(-1)).toBe('a1')
       expect(props.activeTurnIsWorking).toBe(true)
       expect(workingIndicators()).toHaveLength(0)
@@ -778,7 +778,7 @@ describe('MobileNativeChatView', () => {
       expect(renderer!.root.findAll((node) => node.type === testCase.cardType)).toHaveLength(1)
 
       await update(working)
-      expect(footerProps()).toMatchObject({ thinking: false, workedSeconds: null })
+      expect(footerProps()).toMatchObject({ thinking: false })
       expect(rowProps('a1').activeTurnIsWorking).toBe(true)
     })
 
@@ -791,8 +791,8 @@ describe('MobileNativeChatView', () => {
         agentWorking: true,
         turnIndicator: { thinking: true, activityText: null }
       })
-      expect(rowProps('u1').turnStatus).toBeNull()
-      expect(footerProps()).toMatchObject({ thinking: true, workedSeconds: null })
+      expect(rowProps('u1').turnStatus).toMatchObject({ workedSeconds: null })
+      expect(footerProps()).toMatchObject({ thinking: true })
     })
 
     it('hands the live row the provider activity copy that outranks its fallbacks', async () => {
@@ -838,8 +838,8 @@ describe('MobileNativeChatView', () => {
     it('settles the finished turn to a tappable duration', async () => {
       const folded = [userTurn('u1', 'go'), assistantTurn('a1', 'done')]
       await render({ messages: folded, folded, structuredActivityUi: true, agentWorking: true })
-      expect(rowProps('u1').turnStatus).toBeNull()
-      expect(footerProps()).toMatchObject({ thinking: false, workedSeconds: null })
+      expect(rowProps('u1').turnStatus).toMatchObject({ workedSeconds: null })
+      expect(footerProps()).toMatchObject({ thinking: false })
       await update({ messages: folded, folded, structuredActivityUi: true, agentWorking: false })
       const settled = rowProps('u1')
       expect(settled.turnStatus).toMatchObject({ thinking: false })
@@ -857,7 +857,7 @@ describe('MobileNativeChatView', () => {
       expect(rowProps('a1').turnStatus).toBeNull()
       // The assistant row still belongs to the live turn, so its tool row stays visible.
       expect(rowProps('a1').activeTurnIsWorking).toBe(true)
-      expect(footerProps()).toMatchObject({ workedSeconds: null })
+      expect(footerProps()).toMatchObject({ thinking: false })
     })
 
     it('does not carry a running turn clock across chat surfaces', async () => {
@@ -872,7 +872,7 @@ describe('MobileNativeChatView', () => {
           agentWorking: true,
           sendSurfaceId: 'host\0worktree\0tab-a'
         })
-        expect(footerProps()).toMatchObject({ startedAt: 1_000 })
+        expect(rowProps('u1').turnStatus).toMatchObject({ startedAt: 1_000 })
 
         vi.setSystemTime(12_000)
         const secondTab = [userTurn('u2', 'second')]
@@ -884,7 +884,7 @@ describe('MobileNativeChatView', () => {
           sendSurfaceId: 'host\0worktree\0tab-b'
         })
 
-        expect(footerProps()).toMatchObject({ startedAt: 12_000 })
+        expect(rowProps('u2').turnStatus).toMatchObject({ startedAt: 12_000 })
       } finally {
         vi.useRealTimers()
       }

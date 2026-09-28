@@ -1,3 +1,5 @@
+import { AgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
+import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 import type {
@@ -27,10 +29,20 @@ export class StructuredAgentSessionClientDelivery {
     private readonly sessions: Map<string, StructuredAgentSessionHostSession>,
     now: () => number,
     deps: () => StructuredAgentSessionHostDeps,
-    private readonly onJournalActivity?: (sessionId: string) => void
+    private readonly onJournalActivity?: (sessionId: string) => void,
+    onAgentStarted?: (sessionId: string) => void
   ) {
-    this.statusFeed = createStructuredAgentSessionHostStatusFeed({ sessions, now, deps })
-    this.turnCompletionFeed = new StructuredAgentSessionTurnCompletionFeed({ sessions, now })
+    this.statusFeed = createStructuredAgentSessionHostStatusFeed({
+      sessions,
+      now,
+      deps,
+      ...(onAgentStarted ? { onAgentStarted } : {})
+    })
+    this.turnCompletionFeed = new StructuredAgentSessionTurnCompletionFeed({
+      sessions,
+      now,
+      readStatusState: (sessionId, journal) => this.statusFeed.statusState(sessionId, journal)
+    })
     this.sendSettlement = new StructuredAgentSessionSendSettlement((sessionId) =>
       this.requireJournal(sessionId)
     )
@@ -42,6 +54,9 @@ export class StructuredAgentSessionClientDelivery {
   }
 
   publishStatus = (sessionId: string): void => this.statusFeed.publish(sessionId)
+
+  publishChildWork = (sessionId: string, evidence: AgentChildWorkEvidence[]): void =>
+    this.statusFeed.publishChildWork(sessionId, evidence)
 
   publishStatusAndSettlement = (sessionId: string): void => {
     this.statusFeed.publish(sessionId)
@@ -62,10 +77,16 @@ export class StructuredAgentSessionClientDelivery {
     subscriber: StructuredAgentSessionTurnCompletionSubscriber
   ): (() => void) => this.turnCompletionFeed.subscribe(subscriber)
 
-  closeSession(sessionId: string): void {
+  /** The conversation's handle closed. Its status row stays in every session list; the
+   *  agent-status store keeps it too while the chat still has a tab to show it in. */
+  closeSession(sessionId: string, options: { listed: boolean }): void {
     this.sendSettlement.closeSession(sessionId)
-    this.statusFeed.close(sessionId)
-    // The next attach re-baselines rather than announcing the turn it was already holding.
+    if (options.listed) {
+      this.statusFeed.revokeLive(sessionId)
+    } else {
+      this.statusFeed.close(sessionId)
+    }
+    // The next open re-baselines rather than announcing the turn it was already holding.
     this.turnCompletionFeed.forget(sessionId)
   }
 
@@ -77,7 +98,8 @@ export class StructuredAgentSessionClientDelivery {
     this.statusFeed.publish(sessionId, journal)
     this.sendSettlement.publish(sessionId, journal)
     // Derived here rather than per-subscriber: this edge runs whether or not anyone is
-    // subscribed, which is the whole reason a backgrounded chat can complete at all.
+    // subscribed, which is the whole reason a backgrounded chat can complete at all. After the
+    // status publish, so it reads the projection that publish cached.
     this.turnCompletionFeed.observe(sessionId, journal)
     this.onJournalActivity?.(sessionId)
   }
@@ -85,7 +107,7 @@ export class StructuredAgentSessionClientDelivery {
   private requireJournal(sessionId: string): AgentSessionJournal {
     const journal = this.sessions.get(sessionId)?.journal
     if (!journal) {
-      throw new Error(AGENT_SESSION_NOT_ATTACHED.code)
+      throw new AgentSessionRefusalError(AGENT_SESSION_NOT_ATTACHED)
     }
     return journal
   }

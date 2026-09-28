@@ -110,13 +110,14 @@ function mountSendSites(client: ReturnType<typeof clientFixture>, handle = 'term
       onSuccess: vi.fn(),
       refreshCanPaste: vi.fn()
     } as never)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: untyped vi.fn() stubs stand in for callbacks whose returns the send path never reads.
     diff = useMobileDiffReviewSendActions({
       client: client as unknown as RpcClient,
       connState: 'connected',
       worktreeId: 'workspace',
       screenState: { kind: 'loading' },
       setActionError: vi.fn(),
-      setSendSheet: vi.fn(),
+      sheets: { openSheet: vi.fn(), closeSheet: vi.fn(), updateSendSheet: vi.fn() },
       saveCommentsAndReviewState: vi.fn()
     } as never)
     return null

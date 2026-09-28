@@ -36,7 +36,7 @@ export function acceptPtyDataForRenderer(
   const preservesSeq = !payload.transformed && rawLength === payload.data.length
   const startSeq = typeof outputSeq === 'number' ? Math.max(0, outputSeq - rawLength) : undefined
   const projectionId = projection?.identity.projectionSemanticsId
-  if (session.mainWindow.isDestroyed()) {
+  if (!session.mainWindow || session.mainWindow.isDestroyed()) {
     if (projectionId) {
       session.sshOutputIntake?.transferProjections([projectionId], 'renderer-destroyed')
     }

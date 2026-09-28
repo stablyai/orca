@@ -1,53 +1,50 @@
-import type { BrowserWindow, IpcMainEvent, IpcMainInvokeEvent, WebContents } from 'electron'
+import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
+import type { PtyRendererDelivery } from '../session'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { IPtyProvider } from '../../../providers/types'
 import { isPtyWriteUnavailableError } from '../../../providers/pty-write-unavailable-error'
 import {
-  agentSessionPtyWriteGate,
-  type AgentSessionPtyWriteAdmittance
-} from '../../../runtime/agent-session-pty-write-gate'
-import {
   isTerminalInputTooLargeWithDeferredMeasurement,
   iterateTerminalInputChunks
 } from '../../../../shared/terminal-input'
-import { reportAgentSessionWriteRefusal } from '../agent-session-write-refusal-report'
 import { ptyOwnership } from '../provider/ownership-state'
 import { tryGetProviderForPty } from '../provider/registry'
+import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 import { interactiveOutputCharsByPty, lastInputAtByPty } from '../delivery/visibility-state'
 
 export function isMainWindowPtyIpcEvent(
   event: IpcMainEvent | IpcMainInvokeEvent,
-  mainWindow: BrowserWindow,
-  mainWebContents: WebContents
+  mainWindow: PtyRendererDelivery | undefined
 ): boolean {
+  const mainWebContents = mainWindow?.webContents
   return (
+    !!mainWindow &&
+    !!mainWebContents &&
     event.sender === mainWebContents &&
     !mainWindow.isDestroyed() &&
     !(typeof mainWebContents.isDestroyed === 'function' && mainWebContents.isDestroyed())
   )
 }
 
-export type PtyWritePayload = { id: string; data: string }
+export type PtyWritePayload = { id: string; data: string; inputKind: TerminalInputKind }
 export type PtyViewportClaimPayload = { id: string; cols: number; rows: number }
 
 export function createPtyWriteInput(deps: {
-  mainWindow: BrowserWindow
+  mainWindow?: PtyRendererDelivery
   runtime?: OrcaRuntimeService
 }): {
   writePtyInput: (args: PtyWritePayload) => boolean | Promise<boolean>
   writePtyInputAccepted: (args: PtyWritePayload) => boolean | Promise<boolean>
   isPtyWritePayload: (value: unknown) => value is PtyWritePayload
   isPtyViewportClaimPayload: (value: unknown) => value is PtyViewportClaimPayload
-  isPtyWriteEventFromMainWindow: (
-    event: IpcMainEvent | IpcMainInvokeEvent,
-    mainWebContents: WebContents
-  ) => boolean
+  isPtyWriteEventFromMainWindow: (event: IpcMainEvent | IpcMainInvokeEvent) => boolean
 } {
   const { mainWindow, runtime } = deps
 
   const reportUnavailablePtyWrite = (id: string, error: unknown): void => {
     if (
       !isPtyWriteUnavailableError(error) ||
+      !mainWindow ||
       mainWindow.isDestroyed() ||
       (typeof mainWindow.webContents.isDestroyed === 'function' &&
         mainWindow.webContents.isDestroyed())
@@ -57,34 +54,10 @@ export function createPtyWriteInput(deps: {
     mainWindow.webContents.send('pty:writeUnavailable', { id })
   }
 
-  /** Single lease check for every byte-entry point this module owns. */
-  const admitAgentSessionPtyWrite = (id: string): AgentSessionPtyWriteAdmittance | null => {
-    const admission = agentSessionPtyWriteGate.admit(id)
-    if (admission.admitted) {
-      return { sessionId: admission.sessionId, runtimeFence: admission.runtimeFence }
-    }
-    reportAgentSessionWriteRefusal(mainWindow, id, admission.refusal)
-    return null
-  }
-
-  /** Re-check after a yield: the lease can move to another owner between chunks. */
-  const readmitAgentSessionPtyWrite = (
-    id: string,
-    admitted: AgentSessionPtyWriteAdmittance
-  ): boolean => {
-    const admission = agentSessionPtyWriteGate.readmit(id, admitted)
-    if (admission.admitted) {
-      return true
-    }
-    reportAgentSessionWriteRefusal(mainWindow, id, admission.refusal)
-    return false
-  }
-
   const writePtyProviderInputWithinLimit = (
     provider: IPtyProvider,
     id: string,
-    data: string,
-    admitted: AgentSessionPtyWriteAdmittance
+    data: string
   ): boolean | Promise<boolean> => {
     const chunks = iterateTerminalInputChunks(data)
     const first = chunks.next()
@@ -97,26 +70,25 @@ export function createPtyWriteInput(deps: {
       provider.write(id, first.value)
       return true
     }
-    return writePtyProviderInputChunks(provider, id, chunks, first.value, second.value, admitted)
+    return writePtyProviderInputChunks(provider, id, chunks, first.value, second.value)
   }
 
   const writePtyProviderInput = (
     provider: IPtyProvider,
     id: string,
-    data: string,
-    admitted: AgentSessionPtyWriteAdmittance
+    data: string
   ): boolean | Promise<boolean> => {
     try {
       const tooLarge = isTerminalInputTooLargeWithDeferredMeasurement(data)
       if (typeof tooLarge === 'boolean') {
-        return tooLarge ? false : writePtyProviderInputWithinLimit(provider, id, data, admitted)
+        return tooLarge ? false : writePtyProviderInputWithinLimit(provider, id, data)
       }
       return tooLarge
         .then((result) => {
-          if (result || !readmitAgentSessionPtyWrite(id, admitted)) {
+          if (result) {
             return false
           }
-          return writePtyProviderInputWithinLimit(provider, id, data, admitted)
+          return writePtyProviderInputWithinLimit(provider, id, data)
         })
         .catch((error) => {
           reportUnavailablePtyWrite(id, error)
@@ -133,18 +105,12 @@ export function createPtyWriteInput(deps: {
     id: string,
     chunks: Iterator<string>,
     firstChunk: string,
-    secondChunk: string,
-    admitted: AgentSessionPtyWriteAdmittance
+    secondChunk: string
   ): Promise<boolean> => {
     try {
       let chunk: IteratorResult<string> = { done: false, value: firstChunk }
       let nextChunk: IteratorResult<string> = { done: false, value: secondChunk }
-      let first = true
       while (!chunk.done) {
-        if (!first && !readmitAgentSessionPtyWrite(id, admitted)) {
-          return false
-        }
-        first = false
         provider.write(id, chunk.value)
         if (!nextChunk.done) {
           // setImmediate, not setTimeout(0): the yield exists to let abort/data callbacks run
@@ -180,18 +146,18 @@ export function createPtyWriteInput(deps: {
     (value as { cols: number }).cols > 0 &&
     (value as { rows: number }).rows > 0
 
-  const isPtyWriteEventFromMainWindow = (
-    event: IpcMainEvent | IpcMainInvokeEvent,
-    mainWebContents: WebContents
-  ): boolean => isMainWindowPtyIpcEvent(event, mainWindow, mainWebContents)
+  const isPtyWriteEventFromMainWindow = (event: IpcMainEvent | IpcMainInvokeEvent): boolean =>
+    isMainWindowPtyIpcEvent(event, mainWindow)
+
+  const noteRendererPtyInput = (args: PtyWritePayload): void => {
+    lastInputAtByPty.set(args.id, performance.now())
+    interactiveOutputCharsByPty.set(args.id, 0)
+    runtime?.terminalRunFacts?.recordInput(args.id, args.inputKind, args.data)
+  }
 
   const writePtyInput = (args: PtyWritePayload): boolean | Promise<boolean> => {
     // Why: mobile-presence-lock defense-in-depth — the renderer's onData guard can let one keystroke slip during the state-flip lag, so catch it server-side. See docs/mobile-presence-lock.md.
     if (runtime?.getDriver(args.id).kind === 'mobile') {
-      return false
-    }
-    const admitted = admitAgentSessionPtyWrite(args.id)
-    if (!admitted) {
       return false
     }
     const provider = ptyOwnership.has(args.id) ? tryGetProviderForPty(args.id) : undefined
@@ -199,10 +165,8 @@ export function createPtyWriteInput(deps: {
       return false
     }
     try {
-      const now = performance.now()
-      lastInputAtByPty.set(args.id, now)
-      interactiveOutputCharsByPty.set(args.id, 0)
-      return writePtyProviderInput(provider, args.id, args.data, admitted)
+      noteRendererPtyInput(args)
+      return writePtyProviderInput(provider, args.id, args.data)
     } catch {
       return false
     }
@@ -210,10 +174,6 @@ export function createPtyWriteInput(deps: {
 
   const writePtyInputAccepted = (args: PtyWritePayload): boolean | Promise<boolean> => {
     if (runtime?.getDriver(args.id).kind === 'mobile') {
-      return false
-    }
-    const admitted = admitAgentSessionPtyWrite(args.id)
-    if (!admitted) {
       return false
     }
     // Why: the ack infers Ctrl+C/Escape reached the local PTY; SSH providers are fire-and-forget relay notifications and can't truthfully acknowledge yet.
@@ -225,10 +185,8 @@ export function createPtyWriteInput(deps: {
       return false
     }
     try {
-      const now = performance.now()
-      lastInputAtByPty.set(args.id, now)
-      interactiveOutputCharsByPty.set(args.id, 0)
-      return writePtyProviderInput(provider, args.id, args.data, admitted)
+      noteRendererPtyInput(args)
+      return writePtyProviderInput(provider, args.id, args.data)
     } catch {
       return false
     }

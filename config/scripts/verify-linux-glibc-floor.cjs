@@ -366,23 +366,38 @@ function parseImportedSymbols(objdumpOutput) {
 /** Version needs + DT_NEEDED from a single `objdump -p` (fail-closed). */
 function readDynamicInfo(filePath, objdumpPath) {
   const output = runObjdump(objdumpPath, '-p', filePath)
+  const versionNeeds = parseVersionNeeds(output)
+  const neededLibraries = parseNeededLibraries(output)
   return {
-    versionNeeds: parseVersionNeeds(output),
-    neededLibraries: parseNeededLibraries(output)
+    versionNeeds,
+    neededLibraries,
+    // LLVM prints an empty Dynamic Section even for static executables.
+    isStatic:
+      /^Program Header:/m.test(output) &&
+      /^\s+LOAD\s+off\s+0x[0-9a-f]+/m.test(output) &&
+      !/^\s+(?:DYNAMIC|INTERP)\s+off\s+/m.test(output) &&
+      versionNeeds.length === 0 &&
+      neededLibraries.size === 0
   }
+}
+
+function isMuslTemplatePayload(filePath, neededLibraries, versionNeeds) {
+  return (
+    /(?:^|[/\\])orcad-template[/\\]targets[/\\]linux-(?:x64|arm64)-musl[/\\]/.test(filePath) &&
+    [...neededLibraries].some(
+      (name) => name === 'libc.so' || /^libc\.musl-[\w-]+\.so\.1$/.test(name)
+    ) &&
+    ![...neededLibraries, ...versionNeeds.map((need) => need.library)].some((name) =>
+      /^(?:libc\.so\.6|libm\.so\.6|libpthread\.so\.0|libdl\.so\.2|librt\.so\.1|ld-linux.*)$/.test(
+        name
+      )
+    )
+  )
 }
 
 /** Imported (undefined) dynamic symbols from `objdump -T` (fail-closed). */
 function readImportedSymbols(filePath, objdumpPath) {
-  try {
-    return parseImportedSymbols(runObjdump(objdumpPath, '-T', filePath))
-  } catch (error) {
-    // Why: a statically linked binary (bundled ripgrep) has no dynamic symbol table to import from.
-    if (error instanceof Error && error.message.includes('not a dynamic object')) {
-      return new Set()
-    }
-    throw error
-  }
+  return parseImportedSymbols(runObjdump(objdumpPath, '-T', filePath))
 }
 
 /**
@@ -433,15 +448,20 @@ function verifyLinuxGlibcFloor(rootDir, options = {}) {
 
   const offenders = []
   for (const filePath of binaries) {
-    const { versionNeeds, neededLibraries } = readDynamicInfo(filePath, objdumpPath)
-    const floorViolations = findFloorViolations(versionNeeds, filePath)
+    const { versionNeeds, neededLibraries, isStatic } = readDynamicInfo(filePath, objdumpPath)
+    const isMuslTarget = isMuslTemplatePayload(filePath, neededLibraries, versionNeeds)
+    // Remote musl payloads use their host's C++ runtime, not Ubuntu's libstdc++ or libutil.
+    const floorViolations = findFloorViolations(versionNeeds, filePath).filter(
+      (need) => !isMuslTarget || !isLibstdcxxNode(need.name)
+    )
     // Only pay for `objdump -T` when a relocated-symbol provider is not already
     // in DT_NEEDED (the common, healthy case short-circuits without it).
-    const providerViolations = Object.values(RELOCATED_SYMBOL_PROVIDERS).some(
-      (library) => !neededLibraries.has(library)
-    )
-      ? findMissingProviderDeps(readImportedSymbols(filePath, objdumpPath), neededLibraries)
-      : []
+    const providerViolations =
+      !isStatic &&
+      !isMuslTarget &&
+      Object.values(RELOCATED_SYMBOL_PROVIDERS).some((library) => !neededLibraries.has(library))
+        ? findMissingProviderDeps(readImportedSymbols(filePath, objdumpPath), neededLibraries)
+        : []
     if (floorViolations.length > 0 || providerViolations.length > 0) {
       offenders.push({ filePath, floorViolations, providerViolations })
     }
@@ -473,7 +493,7 @@ function verifyLinuxGlibcFloor(rootDir, options = {}) {
   }
 
   console.log(
-    `[verify-linux-glibc-floor] OK — ${binaries.length} bundled native binaries all load on ${FLOOR_LABEL}`
+    `[verify-linux-glibc-floor] OK — ${binaries.length} bundled native binaries meet applicable ${FLOOR_LABEL} requirements`
   )
 }
 

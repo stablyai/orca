@@ -18,6 +18,7 @@ import {
   getAccountsClaudeSearchEntries,
   getAccountsCodexSearchEntries,
   getAccountsGeminiSearchEntries,
+  getAccountsCursorSearchEntries,
   getAccountsGrokSearchEntries,
   getAccountsLocationSearchEntries,
   getAccountsMiniMaxSearchEntries,
@@ -26,6 +27,7 @@ import {
 } from './accounts-search'
 import { getRemoteAccountsPaneScope } from './provider-account-scope'
 import { ProviderHostScopeControl } from './ProviderHostScopeControl'
+import { SettingsSectionStack } from './SettingsSectionStack'
 import { matchesSettingsSearch } from './settings-search'
 import { getCodexAccountAuthWarning } from './codex-account-auth-warning'
 import { getCodexConfigSyncWarning } from './codex-config-sync-warning'
@@ -34,8 +36,8 @@ import {
   providerAccountIsActiveInView,
   providerAccountMatchesView
 } from './provider-account-visibility'
-import { Separator } from '../ui/separator'
 import { GrokAccountsSection } from './GrokAccountsSection'
+import { CursorAccountsSection } from './CursorAccountsSection'
 import type {
   AccountsPaneProps,
   AccountsPaneSectionModel,
@@ -379,18 +381,16 @@ export function AccountsPane({
       : null,
     matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
       <GrokAccountsSection key="grok" />
+    ) : null,
+    matchesSettingsSearch(searchQuery, getAccountsCursorSearchEntries()) ? (
+      <CursorAccountsSection key="cursor" />
     ) : null
-  ].filter(Boolean)
+  ]
 
   return (
     <div className="space-y-8">
       {renderAccountsRemovalDialogs(model, removeCodexTarget, removeClaudeTarget)}
-      {visibleSections.map((section, index) => (
-        <div key={index} className="space-y-8">
-          {index > 0 ? <Separator /> : null}
-          {section}
-        </div>
-      ))}
+      <SettingsSectionStack sections={visibleSections} spacing="group" />
     </div>
   )
 }

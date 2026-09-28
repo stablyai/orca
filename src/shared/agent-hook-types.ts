@@ -7,6 +7,7 @@ export const AGENT_HOOK_TARGETS = [
   'claude',
   'openclaude',
   'codex',
+  'qoder',
   'gemini',
   'antigravity',
   'amp',
@@ -19,7 +20,8 @@ export const AGENT_HOOK_TARGETS = [
   'devin',
   'kimi',
   'muse',
-  'zcode'
+  'zcode',
+  'dsh'
 ] as const
 export type AgentHookTarget = (typeof AGENT_HOOK_TARGETS)[number]
 

@@ -15,8 +15,8 @@ const MOBILE_DIR = fileURLToPath(new URL('../../', import.meta.url))
 const SRC_DIR = fileURLToPath(new URL('../', import.meta.url))
 
 const SEAM = 'src/platform/keyboard-occlusion.ts'
-/** A one-shot "open after the keyboard hides" with a timer fallback; it subscribes only while the
- *  seam reports a keyboard, which on the page is never, so there it cannot wait forever. */
+/** A one-shot "open after the keyboard hides" with a timer fallback; on the page, where the event
+ *  never fires, the timer is what opens the sheet, so it cannot wait forever. */
 const TAB_SHEET_AFTER_HIDE = 'src/session/use-mobile-session-terminal-send-actions.ts'
 
 const asksKeyboard = (line: string): boolean =>

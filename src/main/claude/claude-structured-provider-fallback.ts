@@ -16,6 +16,11 @@ import {
 } from './claude-structured-item-translation'
 import { claudeResultOutcome } from './claude-result-outcome'
 import { rootClaudeRowStamp, type ClaudeRowStamp } from './claude-provisional-row-corrections'
+import {
+  CLAUDE_API_RETRY_FRAME_KIND,
+  claudeApiRetryRowBody,
+  createClaudeApiRetryRuns
+} from './claude-api-retry-row'
 
 export function claudeProviderFrameKind(message: Record<string, unknown>): string {
   const type = claudeText(message.type) ?? 'unknown'
@@ -121,9 +126,23 @@ export function createClaudeProviderFrameFallback(
   ) => boolean
 } {
   let sequence = 0
+  const retryRun = createClaudeApiRetryRuns()
   return {
     append: (kind, payload, displayText, beforeAppend, options, stamp) => {
       sequence += 1
+      const retrying = kind === CLAUDE_API_RETRY_FRAME_KIND ? claudeRecord(payload) : null
+      if (retrying) {
+        beforeAppend?.()
+        // One row per retry run, revised by each attempt, never the frame as a row.
+        const identity = {
+          provider: 'orca',
+          clientMessageId: `provider-retry:claude:${acquisitionId}:${retryRun(retrying)}`
+        } as const
+        const body = claudeApiRetryRowBody(retrying)
+        sink.appendItem(identity, body, (stamp ?? rootClaudeRowStamp)(identity, body))
+        sink.publish()
+        return true
+      }
       const translated = unhandledProviderFrameJournalItem(
         'claude',
         kind,

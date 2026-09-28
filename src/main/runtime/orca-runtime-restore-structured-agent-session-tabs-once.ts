@@ -1,6 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { defaultAgentChatLabel } from '../../shared/agent-session-chat-label'
-import { OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript } from './orca-runtime-resolve-recovered-structured-tui-transcript'
+import { OrcaRuntimeWithGetStructuredAgentSessionCreateSupport } from './orca-runtime-get-structured-agent-session-create-support'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { replaceConversationInSnapshot } from './structured-conversation-tab-replacement'
 import type { ConversationReplacement } from '../native-chat/agent-session-wire/structured-conversation-command'
@@ -27,7 +27,7 @@ import { isWslUncPath } from '../../shared/wsl-paths'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 
-export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript {
+export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRuntimeWithGetStructuredAgentSessionCreateSupport {
   async replaceStructuredAgentSessionTab(replacement: ConversationReplacement): Promise<void> {
     const prior = this.mobileSessionTabsByWorktree.get(replacement.workspaceId)
     const next = prior ? replaceConversationInSnapshot(prior, replacement) : null
@@ -95,10 +95,16 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     activate: boolean
     notify?: boolean
     replacesSessionId?: string
+    /** The host tab id a create reserved; a session that already has a tab keeps its own. */
+    tabId?: string
   }): Promise<void> {
     const host = getStructuredAgentSessionHost()
     if (typeof host?.setSessionTabVisibility === 'function') {
-      await host.setSessionTabVisibility(input.sessionId, true)
+      await host.setSessionTabVisibility(
+        input.sessionId,
+        true,
+        ...(input.tabId ? [input.tabId] : [])
+      )
     }
     const existing = this.mobileSessionTabsByWorktree.get(input.workspaceId)
     const id = `agent-session:${input.sessionId}`
