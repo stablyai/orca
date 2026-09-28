@@ -23,6 +23,7 @@ export function StatusBarVisibilityMenu({
     menuPoint,
     recordFeatureInteraction,
     setMenuOpen,
+    settings,
     statusBarItems,
     toggleStatusBarItem
   } = controller
@@ -74,7 +75,7 @@ export function StatusBarVisibilityMenu({
             {translate('auto.components.status.bar.StatusBar.c1df0d67ec', 'Gemini Usage')}
           </DropdownMenuCheckboxItem>
         )}
-        {isStatusBarItemAvailable('antigravity', detectedAgentIds) && (
+        {isStatusBarItemAvailable('antigravity', detectedAgentIds, settings) && (
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('antigravity')}
             onCheckedChange={() => {

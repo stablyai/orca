@@ -1,5 +1,4 @@
 import { RateLimitServiceFullCyclePreparation } from './service-full-cycle-preparation'
-import { deriveAntigravityRateLimits } from '../antigravity-usage-mirror'
 import { settleSiblingProviderResult } from './service-sibling-provider-result'
 import type { ProviderRateLimits } from './service-types'
 
@@ -31,6 +30,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         claudeResult,
         codexResult,
         geminiResult,
+        antigravityResult,
         opencodeGoResult,
         kimiResult,
         miniMaxResult
@@ -81,8 +81,21 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
             status: 'error'
           } satisfies ProviderRateLimits)
 
-    // Why: Antigravity can only borrow a *successful* Gemini read; a Gemini failure is not an Antigravity failure.
-    const antigravity = deriveAntigravityRateLimits(gemini)
+    const antigravity =
+      antigravityResult.status === 'fulfilled'
+        ? antigravityResult.value
+        : ({
+            provider: 'antigravity',
+            session: null,
+            weekly: null,
+            buckets: [],
+            updatedAt: Date.now(),
+            error:
+              antigravityResult.reason instanceof Error
+                ? antigravityResult.reason.message
+                : 'Antigravity usage could not be read.',
+            status: 'error'
+          } satisfies ProviderRateLimits)
 
     const opencodeGo =
       opencodeGoResult.status === 'fulfilled'
@@ -185,7 +198,12 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
           : this.applyStalePolicy(opencodeGo, previousState.opencodeGo)
         : this.state.opencodeGo,
       kimi: this.applyStalePolicy(kimi, previousState.kimi),
-      antigravity: this.applyStalePolicy(antigravity, previousState.antigravity),
+      antigravity:
+        prepared.antigravityCommand !== (this.antigravityCommandResolver?.()?.trim() ?? '')
+          ? null
+          : prepared.antigravityCommandChanged
+            ? antigravity
+            : this.applyStalePolicy(antigravity, previousState.antigravity),
       minimax: shouldApplyMiniMax
         ? miniMaxConfigChanged
           ? miniMax

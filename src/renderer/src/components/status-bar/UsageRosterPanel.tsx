@@ -5,7 +5,7 @@ import { SettingsSegmentedControl } from '@/components/settings/SettingsFormCont
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 import { translate } from '@/i18n/i18n'
 import { formatRateLimitWindowChipLabel, formatWindowLabel } from '@/lib/window-label-formatter'
-import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import {
   clampUsedPercent,
   getDisplayedUsagePercentage,
@@ -14,11 +14,13 @@ import {
 import { barColor, formatResetCountdown, getWindowSections, ProviderIcon } from './tooltip'
 import { getProviderDisplayName } from './usage-error-copy'
 import { formatPlanLabel, usageTextColorClass } from './usage-roster-formatting'
+import { AntigravityCompactMetrics } from './antigravity-compact-metrics'
+import { sortAntigravityBuckets } from './antigravity-usage-format'
 import { getUsageRosterRowState, type UsageRosterRowState } from './usage-roster-row-state'
 import type { StatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
+import { getTightestUsageSectionFromSections, type UsageSection } from './usage-section-selection'
 
 type ProviderId = ProviderRateLimits['provider']
-export type UsageSection = { label: string; window: RateLimitWindow }
 
 // Windows/buckets that actually carry data — absent limits arrive as null, but a
 // partial/rehydrated provider can also carry an undefined window; both must be
@@ -41,6 +43,13 @@ function shortLabel(
   section: UsageSection,
   useRemainingDuration = false
 ): string {
+  if (p.provider === 'antigravity') {
+    return section.window.windowMinutes === 300
+      ? '5h'
+      : section.window.windowMinutes === 10080
+        ? 'wk'
+        : (section.window.windowLabel ?? formatWindowLabel(section.window.windowMinutes))
+  }
   if (p.buckets?.some((b) => b.name === section.label)) {
     return section.label
   }
@@ -56,17 +65,8 @@ function shortLabel(
 
 export function getTightestUsageSection(p: ProviderRateLimits): UsageSection | null {
   const sections = usedSections(p)
-  if (sections.length === 0) {
-    return null
-  }
-  // Why: the footer promises one quiet summary per provider; choose urgency by
-  // consumption even when the user displays the complementary “% left” value.
-  const tightest = sections.reduce((current, candidate) =>
-    clampUsedPercent(candidate.window.usedPercent) > clampUsedPercent(current.window.usedPercent)
-      ? candidate
-      : current
-  )
-  return { ...tightest, label: shortLabel(p, tightest, true) }
+  const tightest = getTightestUsageSectionFromSections(sections)
+  return tightest ? { ...tightest, label: shortLabel(p, tightest, true) } : null
 }
 
 // The soonest-resetting window summarizes the agent's next reset in one line.
@@ -153,6 +153,8 @@ export function UsageRow({
               </span>
             ) : null}
           </>
+        ) : p.provider === 'antigravity' && hasUsage && mode === 'compact' ? (
+          <AntigravityCompactMetrics sections={sections} display={display} now={now} />
         ) : tightest ? (
           <span className="ml-auto">
             <UsageMetric
@@ -167,14 +169,42 @@ export function UsageRow({
         ) : null}
       </div>
       {hasUsage && mode === 'verbose' ? (
-        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 pl-[30px]">
-          {sections.map((section) => (
-            <UsageMetric
-              key={section.label}
-              section={section}
-              label={shortLabel(p, section)}
-              display={display}
-            />
+        <div className="space-y-1 pl-[30px]">
+          {Array.from(
+            sections.reduce((groups, section) => {
+              const key = section.groupName ?? ''
+              const current = groups.get(key) ?? []
+              current.push(section)
+              groups.set(key, current)
+              return groups
+            }, new Map<string, UsageSection[]>())
+          ).map(([groupName, groupSections]) => (
+            <div key={groupName || 'default'} className="space-y-0.5">
+              {groupName ? (
+                <div className="text-[11px] font-medium text-muted-foreground">{groupName}</div>
+              ) : null}
+              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                {(p.provider === 'antigravity'
+                  ? sortAntigravityBuckets(
+                      groupSections.map((section) => ({
+                        name: section.label,
+                        windowMinutes: section.window.windowMinutes,
+                        section
+                      }))
+                    ).map(({ section }) => section)
+                  : groupSections
+                      .slice()
+                      .sort((a, b) => a.window.windowMinutes - b.window.windowMinutes)
+                ).map((section) => (
+                  <UsageMetric
+                    key={`${groupName}:${section.label}`}
+                    section={section}
+                    label={shortLabel(p, section)}
+                    display={display}
+                  />
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       ) : null}

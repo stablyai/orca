@@ -1,5 +1,6 @@
 import { fetchClaudeRateLimits } from '../claude-fetcher'
 import { fetchCodexRateLimits } from '../codex-fetcher'
+import { fetchAntigravityRateLimits } from '../antigravity-usage-fetcher'
 import { fetchGeminiRateLimits } from '../gemini-usage-fetcher'
 import { fetchGrokRateLimits } from '../grok-fetcher'
 import { readGrokAuthSession } from '../grok-auth'
@@ -19,6 +20,8 @@ import type {
 } from './service-types'
 
 export type FetchAllCyclePrepared = {
+  antigravityCommand: string
+  antigravityCommandChanged: boolean
   claudeTarget: NormalizedClaudeAccountSelectionTarget
   claudeGeneration: number
   claudeAuthPreparation: ClaudeRuntimeAuthPreparation | undefined
@@ -35,6 +38,7 @@ export type FetchAllCyclePrepared = {
   miniMaxGeneration: number
   claudeFetchGated: boolean
   results: [
+    PromiseSettledResult<ProviderRateLimits>,
     PromiseSettledResult<ProviderRateLimits>,
     PromiseSettledResult<ProviderRateLimits>,
     PromiseSettledResult<ProviderRateLimits>,
@@ -87,6 +91,9 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const miniMaxEndpoint = miniMaxConfigResult.config.endpoint
     const miniMaxApiKey = miniMaxConfigResult.config.apiKey
     const geminiCliOAuthEnabled = this.geminiCliOAuthEnabledResolver?.() ?? false
+    const antigravityCommand = this.antigravityCommandResolver?.()?.trim() ?? ''
+    const antigravityCommandChanged = antigravityCommand !== this.lastAntigravityCommand
+    this.lastAntigravityCommand = antigravityCommand
     // Why: getState() is hot (renderer pushes + mobile snapshots); keep Grok's sync auth-file probe on fetch cycles instead.
     const grokAuthReadResult = readGrokAuthSession()
     this.grokAuthConfigured = grokAuthReadResult.status === 'ok'
@@ -125,7 +132,10 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         ? this.withFetchingStatus(null, 'opencode-go')
         : this.withFetchingStatus(previousState.opencodeGo, 'opencode-go'),
       kimi: this.withFetchingStatus(previousState.kimi, 'kimi'),
-      antigravity: this.withFetchingStatus(previousState.antigravity, 'antigravity'),
+      antigravity: this.withFetchingStatus(
+        antigravityCommandChanged ? null : previousState.antigravity,
+        'antigravity'
+      ),
       minimax: miniMaxConfigChanged
         ? this.withFetchingStatus(null, 'minimax')
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
@@ -159,54 +169,64 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const claudeFetchGated =
       !options?.force && this.shouldSkipAutomatedClaudeFetch(previousState.claude)
 
-    const [claudeResult, codexResult, geminiResult, opencodeGoResult, kimiResult, miniMaxResult] =
-      await Promise.allSettled([
-        claudeFetchGated
-          ? Promise.resolve(previousState.claude as ProviderRateLimits)
-          : fetchClaudeRateLimits({
-              authPreparation: claudeAuthPreparation,
-              allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
-              allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
-              networkProxySettings: this.networkProxySettingsResolver?.(),
-              signal
-            }),
-        codexFetchGated
-          ? Promise.resolve(previousState.codex as ProviderRateLimits)
-          : (missingWslCodexHome ??
-            fetchCodexRateLimits({
-              codexHomePath,
-              allowPtyFallback: this.shouldAllowCodexPtyFallback(),
-              signal
-            })),
-        fetchGeminiRateLimits(geminiCliOAuthEnabled),
-        fetchOpenCodeGoUsage({
-          settingsApiKey: openCodeGoApiKey,
-          // Why here: the key can also come from the environment or OpenCode's
-          // own store, so presence is only known once the fetch resolves it.
-          onApiKeyResolved: (resolution) => {
-            this.openCodeGoApiKeyConfigured = resolution.status === 'found'
-          },
-          cookie,
-          workspaceIdOverride: workspaceIdOverride || undefined,
-          networkProxySettings: this.networkProxySettingsResolver?.(),
-          signal
-        }),
-        this.fetchKimiWithResolvedHome(),
-        miniMaxConfigResult.error
-          ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
-          : fetchMiniMaxRateLimits({
-              cookie: miniMaxCookie,
-              groupId: miniMaxGroupId,
-              models: miniMaxModels,
-              endpointMode: miniMaxEndpoint,
-              apiKey: miniMaxApiKey
-            })
-      ])
+    const [
+      claudeResult,
+      codexResult,
+      geminiResult,
+      antigravityResult,
+      opencodeGoResult,
+      kimiResult,
+      miniMaxResult
+    ] = await Promise.allSettled([
+      claudeFetchGated
+        ? Promise.resolve(previousState.claude as ProviderRateLimits)
+        : fetchClaudeRateLimits({
+            authPreparation: claudeAuthPreparation,
+            allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
+            allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
+            networkProxySettings: this.networkProxySettingsResolver?.(),
+            signal
+          }),
+      codexFetchGated
+        ? Promise.resolve(previousState.codex as ProviderRateLimits)
+        : (missingWslCodexHome ??
+          fetchCodexRateLimits({
+            codexHomePath,
+            allowPtyFallback: this.shouldAllowCodexPtyFallback(),
+            signal
+          })),
+      fetchGeminiRateLimits(geminiCliOAuthEnabled),
+      fetchAntigravityRateLimits(signal, antigravityCommand),
+      fetchOpenCodeGoUsage({
+        settingsApiKey: openCodeGoApiKey,
+        // Why here: the key can also come from the environment or OpenCode's
+        // own store, so presence is only known once the fetch resolves it.
+        onApiKeyResolved: (resolution) => {
+          this.openCodeGoApiKeyConfigured = resolution.status === 'found'
+        },
+        cookie,
+        workspaceIdOverride: workspaceIdOverride || undefined,
+        networkProxySettings: this.networkProxySettingsResolver?.(),
+        signal
+      }),
+      this.fetchKimiWithResolvedHome(),
+      miniMaxConfigResult.error
+        ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
+        : fetchMiniMaxRateLimits({
+            cookie: miniMaxCookie,
+            groupId: miniMaxGroupId,
+            models: miniMaxModels,
+            endpointMode: miniMaxEndpoint,
+            apiKey: miniMaxApiKey
+          })
+    ])
 
     if (signal.aborted) {
       return null
     }
     return {
+      antigravityCommand,
+      antigravityCommandChanged,
       claudeTarget,
       claudeGeneration,
       claudeAuthPreparation,
@@ -226,6 +246,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         claudeResult,
         codexResult,
         geminiResult,
+        antigravityResult,
         opencodeGoResult,
         kimiResult,
         miniMaxResult
