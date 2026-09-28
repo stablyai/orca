@@ -97,6 +97,9 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
   if (provider === 'grok') {
     return <AgentIcon agent="grok" size={13} />
   }
+  if (provider === 'kiro') {
+    return <AgentIcon agent="kiro" size={13} />
+  }
   if (provider === 'zcode') {
     return <AgentIcon agent="zcode" size={13} />
   }
@@ -346,6 +349,21 @@ export function ProviderPanel({
           {name}
         </div>
         <div className={faintClass}>{updatedAgo}</div>
+        {p.provider === 'kiro' && p.planType ? (
+          <div className={mutedClass}>{p.planType}</div>
+        ) : null}
+        {p.provider === 'kiro' && p.kiroCredits ? (
+          <div className={faintClass}>
+            {translate(
+              'auto.components.status.bar.tooltip.kiroCredits',
+              '{{value0}} / {{value1}} credits',
+              {
+                value0: String(Number(p.kiroCredits.used.toFixed(2))),
+                value1: String(Number(p.kiroCredits.limit.toFixed(2)))
+              }
+            )}
+          </div>
+        ) : null}
         {resetCreditCount !== null && resetCreditCount !== undefined ? (
           <div className={mutedClass}>
             {resetCreditCount === 1

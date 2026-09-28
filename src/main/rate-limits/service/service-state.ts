@@ -115,7 +115,21 @@ export abstract class RateLimitServiceState {
   protected inactiveCodexAccountsGeneration = 0
   protected stateListeners = new Set<(state: RateLimitState) => void>()
 
+  // Why: Kiro usage comes from an on-demand kiro-cli /usage call, not this
+  // poller. The mobile snapshot builder sets it here so getState() can publish
+  // real Kiro limits to paired clients alongside the polled providers.
+  protected kiroUsage: RateLimitState['kiro'] = null
+
   constructor() {}
+
+  setKiroUsage(kiro: RateLimitState['kiro']): void {
+    this.kiroUsage = kiro
+    this.pushToRenderer()
+  }
+
+  getKiroUsage(): RateLimitState['kiro'] {
+    return this.kiroUsage
+  }
 
   onStateChange(listener: (state: RateLimitState) => void): () => void {
     this.stateListeners.add(listener)

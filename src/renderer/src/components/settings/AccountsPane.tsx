@@ -20,6 +20,7 @@ import {
   getAccountsGeminiSearchEntries,
   getAccountsCursorSearchEntries,
   getAccountsGrokSearchEntries,
+  getAccountsKiroSearchEntries,
   getAccountsLocationSearchEntries,
   getAccountsMiniMaxSearchEntries,
   getAccountsOpencodeSearchEntries,
@@ -37,6 +38,7 @@ import {
   providerAccountMatchesView
 } from './provider-account-visibility'
 import { GrokAccountsSection } from './GrokAccountsSection'
+import { KiroAccountsSection } from './KiroAccountsSection'
 import { CursorAccountsSection } from './CursorAccountsSection'
 import type {
   AccountsPaneProps,
@@ -384,6 +386,11 @@ export function AccountsPane({
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsCursorSearchEntries()) ? (
       <CursorAccountsSection key="cursor" />
+    ) : null,
+    // Kiro is CLI/SSO-auth, so nothing gates the section on a stored credential —
+    // but it still answers the search box like every other provider.
+    matchesSettingsSearch(searchQuery, getAccountsKiroSearchEntries()) ? (
+      <KiroAccountsSection key="kiro" />
     ) : null
   ]
 

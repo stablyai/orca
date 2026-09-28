@@ -18,6 +18,8 @@ export function getUsageProviderAccountsSectionId(
       return 'accounts-minimax'
     case 'grok':
       return 'accounts-grok'
+    case 'kiro':
+      return 'accounts-kiro'
     case 'cursor':
       return 'accounts-cursor'
     case 'kimi':

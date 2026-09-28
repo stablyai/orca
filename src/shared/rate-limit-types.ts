@@ -57,6 +57,7 @@ export type ProviderRateLimits = {
     | 'minimax'
     | 'grok'
     | 'antigravity'
+    | 'kiro'
     | 'cursor'
     | 'zcode'
   /** 5-hour session window, null if not available. */
@@ -84,6 +85,8 @@ export type ProviderRateLimits = {
   } | null
   /** Subscription plan tier for the active account (Codex `plan_type`, e.g. "plus"). */
   planType?: string | null
+  /** Kiro plan credit usage (used/limit) for the detail panel; monthly window carries the %. */
+  kiroCredits?: { used: number; limit: number } | null
   /** Unix ms timestamp of the last successful data update. */
   updatedAt: number
   /** Human-readable error message, null when status is 'ok'. */
@@ -139,6 +142,7 @@ export type RateLimitState = {
   antigravity: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
   grok: ProviderRateLimits | null
+  kiro: ProviderRateLimits | null
   cursor: ProviderRateLimits | null
   zcode: ProviderRateLimits | null
   /**

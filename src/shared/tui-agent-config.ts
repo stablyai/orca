@@ -42,6 +42,8 @@ export type TuiAgentConfig = {
   pasteNeedsTypedRequest?: boolean
   /** Pre-write a trust artifact so the agent's first-launch "trust this folder?" menu doesn't consume the bracketed paste (see agent-trust-presets.ts). */
   preflightTrust?: 'cursor' | 'copilot' | 'codex' | 'antigravity' | 'qoder'
+  /** Vendor setting Orca enables before launch so the pane reports its own identity. */
+  preflightIdentitySetting?: 'kiro-terminal-title'
   /** Agent-specific signal that the composer is ready for paste, stronger than the default quiet-render window. */
   draftPasteReadySignal?: DraftPasteReadySignal
   /** Hard deadline for the agent's composer readiness signal. */
@@ -226,7 +228,10 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     detectCmd: 'kiro-cli',
     // Why: trust flags like --trust-all-tools attach to Kiro's `chat` subcommand, not top-level kiro-cli.
     launchCmd: 'kiro-cli chat --tui',
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
+    // Why: `kiro: <session>` is Kiro's only self-identifying output, and it is
+    // off by default — without it a Kiro pane has no sidebar identity at all.
+    preflightIdentitySetting: 'kiro-terminal-title'
   },
   crush: {
     detectCmd: 'crush',

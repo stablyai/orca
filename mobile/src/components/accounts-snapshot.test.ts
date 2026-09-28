@@ -132,3 +132,47 @@ describe('decodeAccountsSnapshot', () => {
     expect(() => decodeAccountsSnapshot(snapshot)).toThrow('Invalid accounts snapshot from host')
   })
 })
+
+describe('kiro provider (additive, Remote Wire Compatible)', () => {
+  it('decodes a snapshot carrying a kiro monthly provider', () => {
+    const base = makeSnapshot()
+    setPath(base, ['rateLimits', 'kiro'], {
+      provider: 'kiro',
+      session: null,
+      weekly: null,
+      monthly: {
+        usedPercent: 16,
+        windowMinutes: 43200,
+        resetsAt: 1000,
+        resetDescription: '2026-10-01'
+      },
+      planType: 'KIRO PRO',
+      kiroCredits: { used: 158.11, limit: 1000 },
+      updatedAt: 10,
+      error: null,
+      status: 'ok'
+    })
+    const decoded = decodeAccountsSnapshot(base)
+    expect(decoded.rateLimits.kiro?.provider).toBe('kiro')
+    expect(decoded.rateLimits.kiro?.monthly?.usedPercent).toBe(16)
+    expect(decoded.rateLimits.kiro?.planType).toBe('KIRO PRO')
+  })
+
+  it('accepts snapshots from older hosts that omit kiro', () => {
+    const decoded = decodeAccountsSnapshot(makeSnapshot())
+    expect(decoded.rateLimits.kiro ?? null).toBeNull()
+  })
+
+  it('rejects a kiro block carrying the wrong provider identity', () => {
+    const base = makeSnapshot()
+    setPath(base, ['rateLimits', 'kiro'], {
+      provider: 'claude',
+      session: null,
+      weekly: null,
+      updatedAt: 1,
+      error: null,
+      status: 'ok'
+    })
+    expect(() => decodeAccountsSnapshot(base)).toThrow()
+  })
+})

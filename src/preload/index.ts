@@ -70,6 +70,7 @@ import { memoryApi } from './api/memory-bridge'
 import { claudeUsageApi } from './api/claude-usage-bridge'
 import { codexUsageApi } from './api/codex-usage-bridge'
 import { openCodeUsageApi } from './api/open-code-usage-bridge'
+import { kiroUsageApi } from './api/kiro-usage-bridge'
 import { museUsageApi } from './api/muse-usage-bridge'
 import { aiVaultApi } from './api/ai-vault-bridge'
 import { nativeChatApi } from './api/native-chat-bridge'
@@ -170,6 +171,7 @@ const api = {
   claudeUsage: claudeUsageApi,
   codexUsage: codexUsageApi,
   openCodeUsage: openCodeUsageApi,
+  kiroUsage: kiroUsageApi,
   museUsage: museUsageApi,
   aiVault: aiVaultApi,
   nativeChat: nativeChatApi,

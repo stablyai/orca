@@ -62,7 +62,9 @@ export type MiniMaxResolvedConfig = {
 }
 
 export type GeminiCliOAuthEnabledResolver = () => boolean
-export type ActiveRateLimitProvider = ProviderRateLimits['provider']
+// Why: Kiro usage is an on-demand kiro-cli /usage call (~8s) handled by its own
+// IPC, not this poller — so it is excluded from the actively-polled provider set.
+export type ActiveRateLimitProvider = Exclude<ProviderRateLimits['provider'], 'kiro'>
 export type ActiveProviderState = {
   provider: ActiveRateLimitProvider
   limits: ProviderRateLimits | null

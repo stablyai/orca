@@ -44,6 +44,7 @@ const TITLE_AGENT_LABEL_TO_TYPE: Record<string, AgentType> = {
   Devin: 'devin',
   Antigravity: 'antigravity',
   OpenCode: 'opencode',
+  Kiro: 'kiro',
   Aider: 'aider',
   Cursor: 'cursor',
   Droid: 'droid',

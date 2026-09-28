@@ -440,6 +440,7 @@ describe('isUsageEmptyState', () => {
           antigravity: undefined,
           minimax: undefined,
           grok: undefined,
+          kiro: undefined,
           cursor: undefined
         },
         usageSettings()
@@ -459,6 +460,7 @@ describe('isUsageEmptyState', () => {
           antigravity: provider('unavailable', { provider: 'antigravity' }),
           minimax: provider('unavailable', { provider: 'minimax' }),
           grok: provider('unavailable', { provider: 'grok' }),
+          kiro: undefined,
           cursor: provider('unavailable', { provider: 'cursor' }),
           zcode: provider('unavailable', { provider: 'zcode' })
         },
@@ -479,6 +481,7 @@ describe('isUsageEmptyState', () => {
           antigravity: provider('unavailable', { provider: 'antigravity' }),
           minimax: provider('unavailable', { provider: 'minimax' }),
           grok: provider('unavailable', { provider: 'grok' }),
+          kiro: undefined,
           cursor: provider('unavailable', { provider: 'cursor' }),
           zcode: provider('unavailable', { provider: 'zcode' })
         },
@@ -512,6 +515,7 @@ describe('isUsageEmptyState', () => {
       antigravity: null,
       minimax: provider('unavailable', { provider: 'minimax' }),
       grok: provider('unavailable', { provider: 'grok' }),
+      kiro: undefined,
       cursor: provider('unavailable', { provider: 'cursor' }),
       zcode: provider('unavailable', { provider: 'zcode' })
     }
@@ -531,6 +535,7 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: null,
           grok: provider('unavailable', { provider: 'grok' }),
+          kiro: null,
           minimax: provider('unavailable', { provider: 'minimax' }),
           cursor: provider('unavailable', { provider: 'cursor' }),
           zcode: provider('unavailable', { provider: 'zcode' })
@@ -553,6 +558,7 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: null,
           grok: provider('unavailable', { provider: 'grok' }),
+          kiro: null,
           minimax: provider('unavailable', { provider: 'minimax' }),
           cursor: provider('unavailable', { provider: 'cursor' }),
           zcode: provider('unavailable', { provider: 'zcode' })

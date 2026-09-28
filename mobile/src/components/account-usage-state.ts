@@ -41,6 +41,12 @@ export function getActiveProviderRateLimits(
   return provider === 'claude' ? snapshot.rateLimits.claude : snapshot.rateLimits.codex
 }
 
+// Why: Kiro is not an account-switchable provider (CLI/SSO login), so it isn't
+// part of ProviderKey. Its usage is read directly from the snapshot.
+export function getKiroProviderRateLimits(snapshot: AccountsSnapshot): ProviderRateLimits | null {
+  return snapshot.rateLimits.kiro ?? null
+}
+
 export function getInactiveProviderUsage(
   snapshot: AccountsSnapshot,
   provider: ProviderKey,
@@ -77,7 +83,7 @@ export function hasActiveProviderUsage(limits: ProviderRateLimits | null): boole
 // is per window rather than per provider status.
 export function getUsageBarState(
   limits: ProviderRateLimits | null,
-  windowKey: 'session' | 'weekly',
+  windowKey: 'session' | 'weekly' | 'monthly',
   isFetchingOverride?: boolean
 ): UsageBarState {
   const window = limits?.[windowKey] ?? null
@@ -101,7 +107,7 @@ export function getUsageBarState(
  */
 export function getWindowResetLabel(
   limits: ProviderRateLimits | null,
-  windowKey: 'session' | 'weekly',
+  windowKey: 'session' | 'weekly' | 'monthly',
   now: number
 ): string | null {
   const resetsAt = limits?.[windowKey]?.resetsAt

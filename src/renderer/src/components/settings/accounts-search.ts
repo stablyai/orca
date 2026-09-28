@@ -249,6 +249,30 @@ export const getAccountsCursorSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const getAccountsKiroSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate('auto.components.settings.accounts.search.kiro.title', 'Kiro Usage'),
+    description: translate(
+      'auto.components.settings.accounts.search.kiro.description',
+      'Monthly plan credits read from the Kiro CLI sign-in already on this computer (kiro-cli login).'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.accounts.search.kiro.kw.kiro', 'kiro'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.kiro.kw.aws', 'aws'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.kiro.kw.sso', 'sso'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.kiro.kw.credits',
+        'credits'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.kiro.kw.usage', 'usage'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.kiro.kw.statusBar',
+        'status bar'
+      )
+    ]
+  }
+])
+
 export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   ...getAccountsLocationSearchEntries(),
   ...getAccountsClaudeSearchEntries(),
@@ -257,5 +281,6 @@ export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsS
   ...getAccountsOpencodeSearchEntries(),
   ...getAccountsMiniMaxSearchEntries(),
   ...getAccountsGrokSearchEntries(),
-  ...getAccountsCursorSearchEntries()
+  ...getAccountsCursorSearchEntries(),
+  ...getAccountsKiroSearchEntries()
 ])

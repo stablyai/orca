@@ -13,6 +13,7 @@ import {
   titleHasAgentName
 } from './agent-title-core'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
+import { isKiroNativeTitle } from './kiro-terminal-title'
 import { getPiCompatibleSyntheticAgentLabel } from './pi-compatible-synthetic-title'
 import { memoizeTitleClassification } from './terminal-title-classification-memo'
 
@@ -21,7 +22,12 @@ import { memoizeTitleClassification } from './terminal-title-classification-memo
  * Used to scope prompt-cache-timer behavior to Claude sessions only.
  */
 function computeIsClaudeAgent(title: string): boolean {
-  if (!title || isClaudeManagementTitle(title) || isOpenCodeNativeTitle(title)) {
+  if (
+    !title ||
+    isClaudeManagementTitle(title) ||
+    isOpenCodeNativeTitle(title) ||
+    isKiroNativeTitle(title)
+  ) {
     return false
   }
   const lower = title.toLowerCase()
@@ -58,6 +64,11 @@ function computeAgentLabel(title: string): string | null {
   // include status glyphs from other agents without changing OpenCode identity.
   if (isOpenCodeNativeTitle(title)) {
     return 'OpenCode'
+  }
+  // Why: same rule as OpenCode — `kiro: ` owns the whole title, so session text
+  // naming another agent does not move ownership.
+  if (isKiroNativeTitle(title)) {
+    return 'Kiro'
   }
   // Why: Claude task titles can mention another CLI; the prefix is the identity
   // signal, not arbitrary task text.

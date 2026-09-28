@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   getInactiveProviderUsage,
+  getKiroProviderRateLimits,
   getUsageBarState,
   getWindowResetLabel,
   hasActiveProviderUsage,
@@ -32,6 +33,7 @@ function makeSnapshot(
     codexAccounts?: AccountsSnapshot['codex']['accounts']
     inactiveClaudeAccounts?: InactiveAccountUsage[]
     inactiveCodexAccounts?: InactiveAccountUsage[]
+    kiroLimits?: ProviderRateLimits | null
   } = {}
 ): AccountsSnapshot {
   return {
@@ -51,7 +53,10 @@ function makeSnapshot(
       claudeTarget: { runtime: 'host', wslDistro: null },
       codexTarget: { runtime: 'host', wslDistro: null },
       inactiveClaudeAccounts: overrides.inactiveClaudeAccounts ?? [],
-      inactiveCodexAccounts: overrides.inactiveCodexAccounts ?? []
+      inactiveCodexAccounts: overrides.inactiveCodexAccounts ?? [],
+      // Why spread rather than `kiro: null`: an old host omits the key entirely,
+      // which is the case `getKiroProviderRateLimits` has to survive.
+      ...(overrides.kiroLimits ? { kiro: overrides.kiroLimits } : {})
     }
   }
 }
@@ -207,5 +212,42 @@ describe('getUsageBarState', () => {
       unavailable: false,
       loading: true
     })
+  })
+})
+
+describe('kiro monthly usage selectors', () => {
+  const kiro = makeLimits({
+    provider: 'kiro',
+    monthly: {
+      usedPercent: 16,
+      windowMinutes: 43200,
+      resetsAt: 1000,
+      resetDescription: '2026-10-01'
+    },
+    planType: 'KIRO PRO',
+    kiroCredits: { used: 158.11, limit: 1000 },
+    status: 'ok'
+  })
+
+  it('reads kiro from the snapshot rateLimits', () => {
+    expect(getKiroProviderRateLimits(makeSnapshot({ kiroLimits: kiro }))).toBe(kiro)
+  })
+
+  it('returns null when the host omits kiro (old hosts)', () => {
+    expect(getKiroProviderRateLimits(makeSnapshot({}))).toBeNull()
+  })
+
+  it('exposes the monthly window percent via getUsageBarState', () => {
+    const bar = getUsageBarState(kiro, 'monthly')
+    expect(bar.usedPercent).toBe(16)
+    expect(bar.unavailable).toBe(false)
+  })
+
+  it('treats a kiro monthly window as renderable usage', () => {
+    expect(hasActiveProviderUsage(kiro)).toBe(true)
+  })
+
+  it('formats the monthly reset countdown', () => {
+    expect(getWindowResetLabel(kiro, 'monthly', 1000)).not.toBeNull()
   })
 })

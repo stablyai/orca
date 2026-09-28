@@ -40,6 +40,7 @@ export const ProviderRateLimitsSchema = z
       'minimax',
       'grok',
       'antigravity',
+      'kiro',
       'cursor'
     ]),
     session: RateLimitWindowSchema.nullable(),
@@ -50,6 +51,13 @@ export const ProviderRateLimitsSchema = z
       .array(RateLimitWindowSchema.extend({ name: z.string().min(1) }).passthrough())
       .optional(),
     rateLimitResetCredits: RateLimitResetCreditsSchema.nullable().optional(),
+    // Why: Kiro publishes a monthly plan quota; carry the plan tier + raw
+    // used/limit credits so mobile can render the same detail as desktop.
+    planType: z.string().nullable().optional(),
+    kiroCredits: z
+      .object({ used: z.number().finite().nonnegative(), limit: z.number().finite().positive() })
+      .nullable()
+      .optional(),
     updatedAt: TimestampSchema,
     error: z.string().nullable(),
     status: z.enum(['idle', 'fetching', 'ok', 'error', 'unavailable'])
@@ -175,6 +183,9 @@ export const AccountsSnapshotSchema = z
       .object({
         claude: ProviderRateLimitsSchema.nullable(),
         codex: ProviderRateLimitsSchema.nullable(),
+        // Why: additive — older hosts omit Kiro entirely, so it is optional and
+        // nullable. Remote Wire Compatible: unknown to old clients, absent from old hosts.
+        kiro: ProviderRateLimitsSchema.nullable().optional(),
         // Why: protocol-compatible hosts from before runtime targeting omit
         // these fields; their account selection semantics were host-only.
         claudeTarget: RateLimitRuntimeTargetSchema.default(HostRateLimitRuntimeTarget),
@@ -198,6 +209,13 @@ export const AccountsSnapshotSchema = z
         code: 'custom',
         message: 'Codex limits use the wrong provider identity',
         path: ['rateLimits', 'codex', 'provider']
+      })
+    }
+    if (snapshot.rateLimits.kiro && snapshot.rateLimits.kiro.provider !== 'kiro') {
+      context.addIssue({
+        code: 'custom',
+        message: 'Kiro limits use the wrong provider identity',
+        path: ['rateLimits', 'kiro', 'provider']
       })
     }
     for (const [index, entry] of snapshot.rateLimits.inactiveClaudeAccounts.entries()) {

@@ -23,6 +23,7 @@ import type {
 } from './slices/usage-provider-slices'
 import type { BrowserSlice } from './slices/browser'
 import type { RateLimitSlice } from './slices/rate-limits'
+import type { KiroUsageSlice } from './slices/kiro-usage'
 import type { SshSlice } from './slices/ssh'
 import type { RuntimeEnvironmentSshSlice } from './slices/runtime-environment-ssh'
 import type { AgentStatusSlice } from './slices/agent-status'
@@ -69,6 +70,7 @@ export type AppState = RepoSlice &
   MuseUsageSlice &
   BrowserSlice &
   RateLimitSlice &
+  KiroUsageSlice &
   SshSlice &
   RuntimeEnvironmentSshSlice &
   AgentStatusSlice &

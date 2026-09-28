@@ -27,6 +27,7 @@ import {
 } from './agent-title-core'
 import type { AgentStatus } from './agent-title-core'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
+import { isKiroNativeTitle } from './kiro-terminal-title'
 import {
   getPiCompatibleTitleSeparatorStatus,
   getPiCompatibleSyntheticAgentStatus
@@ -198,6 +199,12 @@ function computeAgentStatusFromTitle(title: string): AgentStatus | null {
   }
 
   if (isOpenCodeNativeTitle(title)) {
+    return containsAgentSpinnerGlyph(title) ? 'working' : 'idle'
+  }
+
+  // Why idle without a glyph: Kiro's title carries the session name, never a
+  // state. Claiming 'working' from it would pin every Kiro pane to a spinner.
+  if (isKiroNativeTitle(title)) {
     return containsAgentSpinnerGlyph(title) ? 'working' : 'idle'
   }
 
