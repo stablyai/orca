@@ -6,7 +6,10 @@ import {
 } from '../../../../shared/pi-agent-kind'
 import { applyTerminalGitCredentialPromptGuard } from '../../terminal-git-credential-guard'
 import { openCode2HookService, openCodeHookService } from '../../../opencode/hook-service'
-import { isOpenCodeLegacySharedConfigDir } from '../../../opencode/legacy-shared-config-dir'
+import {
+  OPENCODE_CONFIG_DIR_ENV_KEYS,
+  isOpenCodeLegacySharedConfigDir
+} from '../../../opencode/legacy-shared-config-dir'
 import { mimoCodeHookService } from '../../../mimo/hook-service'
 import { agentHookServer } from '../../../agent-hooks/server'
 import { wslHookRelayManager } from '../../../agent-hooks/wsl-hook-relay-manager'
@@ -32,12 +35,6 @@ import {
 } from './pi-agent'
 import { AGENT_HOOK_RUNTIME_ENV_KEYS } from './spawn-env-keys'
 
-const OPENCODE_CONFIG_DIR_ENV_KEYS = [
-  'OPENCODE_CONFIG_DIR',
-  'ORCA_OPENCODE_CONFIG_DIR',
-  'ORCA_OPENCODE_SOURCE_CONFIG_DIR'
-] as const
-
 /**
  * Mutates `baseEnv` in place with all host-local PTY env vars and returns it.
  *
@@ -57,7 +54,7 @@ export function buildPtyHostEnv(
     isOpenCodeLegacySharedConfigDir(dir, opts.userDataPath)
   let sawLegacyOpenCodeHooksDir = false
   for (const key of OPENCODE_CONFIG_DIR_ENV_KEYS) {
-    if (isLegacyOpenCodeHooksDir(baseEnv[key])) {
+    if (isLegacyOpenCodeHooksDir(baseEnv[key] ?? process.env[key])) {
       delete baseEnv[key]
       sawLegacyOpenCodeHooksDir = true
     }
@@ -118,6 +115,10 @@ export function buildPtyHostEnv(
     source: 'ORCA_OPENCODE_SOURCE_CONFIG_DIR',
     preserveExplicitPrimary: true
   })
+  // Overlay restoration also consults process.env; do not restore a retired source.
+  if (isLegacyOpenCodeHooksDir(baseEnv.OPENCODE_CONFIG_DIR)) {
+    delete baseEnv.OPENCODE_CONFIG_DIR
+  }
   delete baseEnv.ORCA_OPENCODE_AGENT
   if (openCodeAgent) {
     // Why: OPENCODE_CONFIG_DIR is a single path, not a colon-list; mirror the user's value into an overlay so their plugins and Orca's status plugin coexist. See docs/opencode-config-dir-collision.md.

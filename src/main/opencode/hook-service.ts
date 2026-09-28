@@ -1,3 +1,4 @@
+import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { join } from 'node:path'
 import {
@@ -98,7 +99,6 @@ export class OpenCodeHookService {
   private readonly pluginFileName: string
   private readonly legacyHooksDir: string
   private readonly overlayDir: string
-  private legacySharedPluginChecked = false
 
   constructor(variant?: OpenCodeHookVariant | (() => string)) {
     const config: OpenCodeHookVariant =
@@ -158,21 +158,14 @@ export class OpenCodeHookService {
   // Why: pre-1.4.209 Orca left a server()-only plugin here that OpenCode 2 rejects. Only helps
   // processes that load it later; a running OpenCode 2 service keeps its cached module until restarted.
   refreshLegacySharedPlugin(): void {
-    if (this.legacySharedPluginChecked) {
-      return
-    }
     const pluginPath = join(this.getSharedConfigDir(), 'plugins', this.pluginFileName)
     try {
       const source = this.pluginSource()
       if (readFileSync(pluginPath, 'utf8') !== source) {
-        writeFileSync(pluginPath, source)
+        writeFileAtomically(pluginPath, source)
       }
-      this.legacySharedPluginChecked = true
-    } catch (error) {
-      // Why: ENOENT means this install never used the shared dir; retry other failures on the next spawn.
-      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-        this.legacySharedPluginChecked = true
-      }
+    } catch {
+      // Missing files stay absent; transient failures are retried on the next spawn.
     }
   }
 

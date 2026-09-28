@@ -7,6 +7,7 @@ import {
   rescrubDaemonPtyEnvironment
 } from '../../../daemon/pty-subprocess/spawn-environment'
 import { getInheritedAgentHookEnvKeysToDelete } from './pi-agent'
+import { getLegacyOpenCodeEnvKeysToDelete } from '../../../opencode/legacy-shared-config-dir'
 import { buildPtyHostEnv } from './assembly'
 import type { BuildPtyHostEnvOptions } from './types'
 
@@ -404,19 +405,60 @@ it('keeps a user config dir that merely sits beside the retired hooks dir', () =
   expect(env.OPENCODE_CONFIG_DIR).not.toBeUndefined()
 })
 
-it('refreshes the stale retired-dir plugin even when agent status hooks are off', async () => {
-  // Why: the hook-service singletons check the retired dir once per process; start from fresh ones.
-  vi.resetModules()
-  const { buildPtyHostEnv: freshBuildPtyHostEnv } = await import('./assembly')
+it.each(['explicit', 'inherited'])('refreshes the %s stale plugin with hooks off', (source) => {
   const legacy = join(fixture.userData, 'opencode-hooks', 'shared')
   const stalePlugin = join(legacy, 'plugins', 'orca-opencode-status.js')
   mkdirSync(join(legacy, 'plugins'), { recursive: true })
   writeFileSync(stalePlugin, 'export default { id: "orca-opencode-status", server() {} }\n')
-  const env = freshBuildPtyHostEnv(
+  if (source === 'inherited') {
+    vi.stubEnv('OPENCODE_CONFIG_DIR', legacy)
+  }
+  const env = buildPtyHostEnv(
     'pane',
-    { OPENCODE_CONFIG_DIR: legacy },
+    source === 'explicit' ? { OPENCODE_CONFIG_DIR: legacy } : {},
     { ...options, agentStatusHooksEnabled: false }
   )
   expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
   expect(readFileSync(stalePlugin, 'utf8')).toContain('setup')
+})
+
+it.each([true, false])('strips daemon-inherited retired paths (known to main: %s)', (known) => {
+  const legacy = join(fixture.userData, 'opencode-hooks', 'shared')
+  if (known) {
+    vi.stubEnv('OPENCODE_CONFIG_DIR', legacy)
+  }
+  const env = buildPtyHostEnv('pane', {}, { ...options, agentStatusHooksEnabled: false })
+  const envToDelete = getLegacyOpenCodeEnvKeysToDelete(env, fixture.userData)
+  if (known) {
+    expect(envToDelete).toContain('OPENCODE_CONFIG_DIR')
+  }
+  vi.stubEnv('ORCA_USER_DATA_PATH', fixture.userData)
+  vi.stubEnv('OPENCODE_CONFIG_DIR', legacy)
+  const request = { sessionId: 'pane', cols: 80, rows: 24, cwd: root, env, envToDelete }
+  const result = createDaemonPtyEnvironment(request)
+  expect(result.OPENCODE_CONFIG_DIR).toBeUndefined()
+  result.OPENCODE_CONFIG_DIR = legacy
+  rescrubDaemonPtyEnvironment(result, request)
+  expect(result.OPENCODE_CONFIG_DIR).toBeUndefined()
+})
+
+it('preserves explicit user config over a retired daemon-inherited path', () => {
+  vi.stubEnv('ORCA_USER_DATA_PATH', fixture.userData)
+  vi.stubEnv('OPENCODE_CONFIG_DIR', join(fixture.userData, 'opencode-hooks', 'shared'))
+  const env = { OPENCODE_CONFIG_DIR: custom }
+  const result = createDaemonPtyEnvironment({
+    sessionId: 'pane',
+    cols: 80,
+    rows: 24,
+    cwd: root,
+    env,
+    envToDelete: getLegacyOpenCodeEnvKeysToDelete(env, fixture.userData)
+  })
+  expect(result.OPENCODE_CONFIG_DIR).toBe(custom)
+})
+
+it('does not restore a retired source from process.env with hooks disabled', () => {
+  vi.stubEnv('ORCA_OPENCODE_SOURCE_CONFIG_DIR', join(fixture.userData, 'opencode-hooks', 'shared'))
+  const env = buildPtyHostEnv('pane', {}, { ...options, agentStatusHooksEnabled: false })
+  expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
 })

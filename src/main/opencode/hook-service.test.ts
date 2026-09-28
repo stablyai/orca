@@ -1,6 +1,8 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   existsSync,
+  openSync,
+  closeSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -343,6 +345,25 @@ describe('OpenCodeHookService buildPtyEnv / clearPty round-trip', () => {
     expect(module.default?.id).toBe('orca-opencode-status')
     expect(module.default?.server).toBeTypeOf('function')
     expect(module.default?.setup).toBeTypeOf('function')
+  })
+
+  it('repairs late and overwritten legacy plugins atomically on the same service', () => {
+    const service = new OpenCodeHookService()
+    service.refreshLegacySharedPlugin()
+    const path = join(userDataDir, 'opencode-hooks', 'shared', 'plugins', 'orca-opencode-status.js')
+    mkdirSync(join(path, '..'), { recursive: true })
+    for (const stale of ['// late old install', '// old process overwrote repair']) {
+      writeFileSync(path, stale)
+      const reader = openSync(path, 'r')
+      try {
+        service.refreshLegacySharedPlugin()
+        expect(readFileSync(path, 'utf8')).toBe(getOpenCodePluginSource())
+        expect(readFileSync(reader, 'utf8')).toBe(stale)
+        expect(readdirSync(join(path, '..'))).toEqual(['orca-opencode-status.js'])
+      } finally {
+        closeSync(reader)
+      }
+    }
   })
 
   it('leaves an up-to-date legacy plugin untouched and never creates the retired dir', () => {
