@@ -41,6 +41,8 @@ export function useSourceControlPanelViewState({
   const [collapsedTreeDirs, setCollapsedTreeDirs] = useState<Set<string>>(new Set())
   const [baseRefDialogOpen, setBaseRefDialogOpen] = useState(false)
   const [filterQuery, setFilterQuery] = useState('')
+  const [excludedExtensions, setExcludedExtensions] = useState<ReadonlySet<string>>(new Set())
+  const [hiddenFileGroups, setHiddenFileGroups] = useState<ReadonlySet<string>>(new Set())
   const isGitHistoryExpanded = !collapsedSections.has('history')
 
   const handleToggleSourceControlViewMode = useCallback(() => {
@@ -62,6 +64,8 @@ export function useSourceControlPanelViewState({
     setBaseRefDialogOpen(false)
     // Why: don't reset defaultBaseRef here — it's repo-scoped (resolved on activeRepo change); resetting would clobber non-main defaults.
     setFilterQuery('')
+    setExcludedExtensions(new Set())
+    setHiddenFileGroups(new Set())
     // Why: don't reset commit-in-flight state — it's per-worktree; resetting would re-enable Commit for an incoming worktree mid-commit.
   }
 
@@ -96,6 +100,10 @@ export function useSourceControlPanelViewState({
     fileListScrollElement,
     filterExpanded,
     filterQuery,
+    excludedExtensions,
+    hiddenFileGroups,
+    setExcludedExtensions,
+    setHiddenFileGroups,
     handleToggleSourceControlViewMode,
     isGitHistoryExpanded,
     isMac,

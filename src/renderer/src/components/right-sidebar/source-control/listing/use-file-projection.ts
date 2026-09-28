@@ -1,4 +1,10 @@
 import { useMemo } from 'react'
+import type { SourceControlFileGroup } from '../../../../../../shared/source-control-file-groups'
+import {
+  createSourceControlFileVisibilityFilter,
+  getSourceControlExtensionCounts,
+  type SourceControlExtensionCount
+} from './file-visibility'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
@@ -43,6 +49,9 @@ export type SourceControlFileProjection = {
   grouped: SourceControlEntryGroups
   fileFilterState: SourceControlFileFilterState
   normalizedFilter: string
+  hasFileVisibilityFilter: boolean
+  hiddenFileCount: number
+  extensionCounts: SourceControlExtensionCount[]
   isGitHistoryVisible: boolean
   filteredGrouped: SourceControlEntryGroups
   displaySections: SourceControlDisplaySection[]
@@ -78,11 +87,17 @@ const EMPTY_LIST_ROWS_BY_SECTION: Readonly<
 > = Object.freeze({})
 const EMPTY_BRANCH_TREE_NODES: readonly SourceControlTreeNode<GitBranchChangeEntry, 'branch'>[] =
   Object.freeze([])
+const EMPTY_FILTER_SELECTION: ReadonlySet<string> = new Set()
+const EMPTY_FILE_GROUPS: readonly SourceControlFileGroup[] = []
 
+/** Filters only rendered rows; the original grouped entries remain the source for bulk actions. */
 export function useSourceControlFileProjection({
   entries,
   branchEntries,
   filterQuery,
+  excludedExtensions = EMPTY_FILTER_SELECTION,
+  hiddenFileGroups = EMPTY_FILTER_SELECTION,
+  fileGroups = EMPTY_FILE_GROUPS,
   sourceControlGroupOrder,
   activeWorktreeId,
   worktreePath,
@@ -96,6 +111,9 @@ export function useSourceControlFileProjection({
   entries: GitStatusEntry[]
   branchEntries: GitBranchChangeEntry[]
   filterQuery: string
+  excludedExtensions?: ReadonlySet<string>
+  hiddenFileGroups?: ReadonlySet<string>
+  fileGroups?: readonly SourceControlFileGroup[]
   sourceControlGroupOrder: readonly SourceControlSectionArea[]
   activeWorktreeId: string | null
   worktreePath: string | null
@@ -121,7 +139,27 @@ export function useSourceControlFileProjection({
     return groups
   }, [entries])
 
-  const fileFilterState = useMemo(() => getSourceControlFileFilterState(filterQuery), [filterQuery])
+  const includesEntry = useMemo(
+    () =>
+      createSourceControlFileVisibilityFilter(
+        excludedExtensions,
+        fileGroups.filter((group) => hiddenFileGroups.has(group.name))
+      ),
+    [excludedExtensions, fileGroups, hiddenFileGroups]
+  )
+  const fileFilterState = useMemo(
+    () => getSourceControlFileFilterState(filterQuery, includesEntry),
+    [filterQuery, includesEntry]
+  )
+  const changedPaths = useMemo(
+    () => [...new Set([...entries, ...branchEntries].map((entry) => entry.path))],
+    [entries, branchEntries]
+  )
+  const extensionCounts = useMemo(
+    () => getSourceControlExtensionCounts(changedPaths),
+    [changedPaths]
+  )
+  const hasFileVisibilityFilter = Boolean(includesEntry)
   const normalizedFilter = fileFilterState.normalizedFilter
   const isGitHistoryVisible =
     !normalizedFilter &&
@@ -158,6 +196,19 @@ export function useSourceControlFileProjection({
   const filteredBranchEntries = useMemo(
     () => filterSourceControlPathEntries(sortedBranchEntries, fileFilterState),
     [fileFilterState, sortedBranchEntries]
+  )
+  const hiddenFileCount = useMemo(
+    () =>
+      changedPaths.length -
+      new Set(
+        [
+          ...filteredGrouped.staged,
+          ...filteredGrouped.unstaged,
+          ...filteredGrouped.untracked,
+          ...filteredBranchEntries
+        ].map((entry) => entry.path)
+      ).size,
+    [changedPaths, filteredBranchEntries, filteredGrouped]
   )
 
   const treeRootsBySection = useMemo(() => {
@@ -273,6 +324,9 @@ export function useSourceControlFileProjection({
     grouped,
     fileFilterState,
     normalizedFilter,
+    hasFileVisibilityFilter,
+    hiddenFileCount,
+    extensionCounts,
     isGitHistoryVisible,
     filteredGrouped,
     displaySections,

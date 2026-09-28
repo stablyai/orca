@@ -45,6 +45,7 @@ const CONFLICTS_SECTION_LABEL = {
   fallback: 'Conflicts'
 }
 
+/** Keeps complete section action targets separate from the filtered rows. */
 export function SourceControlUncommittedSections(props: {
   displaySections: SourceControlDisplaySection[]
   unfilteredDisplaySectionsById: ReadonlyMap<
@@ -52,6 +53,7 @@ export function SourceControlUncommittedSections(props: {
     SourceControlDisplaySection
   >
   normalizedFilter: string
+  hasFileVisibilityFilter?: boolean
   collapsedSections: Set<string>
   toggleSection: (id: string) => void
   onViewSection: (action: SourceControlSectionViewAction) => void
@@ -98,9 +100,10 @@ export function SourceControlUncommittedSections(props: {
         const stageAllPaths = actionItems.filter(isStageableStatusEntry).map((entry) => entry.path)
         const unstageAllPaths = getUnstageAllPaths(actionItems)
         const discardAllPaths = getDiscardAllPaths(actionItems, area)
-        const canStageAll = !props.normalizedFilter && stageAllPaths.length > 0
-        const canUnstageAll = !props.normalizedFilter && unstageAllPaths.length > 0
-        const canRevertAll = !props.normalizedFilter && discardAllPaths.length > 0
+        const isFiltering = Boolean(props.normalizedFilter) || props.hasFileVisibilityFilter
+        const canStageAll = !isFiltering && stageAllPaths.length > 0
+        const canUnstageAll = !isFiltering && unstageAllPaths.length > 0
+        const canRevertAll = !isFiltering && discardAllPaths.length > 0
         const sectionLabel = id === 'conflicts' ? CONFLICTS_SECTION_LABEL : SECTION_LABELS[area]
         const sectionViewAction = getSourceControlSectionViewAction(actionSection)
         return (
@@ -189,6 +192,7 @@ export function SourceControlUncommittedSections(props: {
                 sourceControlViewMode={props.sourceControlViewMode}
                 fileListScrollElement={props.fileListScrollElement}
                 normalizedFilter={props.normalizedFilter}
+                hasFileVisibilityFilter={props.hasFileVisibilityFilter}
                 isExecutingBulk={props.isExecutingBulk}
                 collapsedTreeDirs={props.collapsedTreeDirs}
                 toggleTreeDir={props.toggleTreeDir}

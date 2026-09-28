@@ -38,6 +38,31 @@ Settings are grouped into panes. Everything here is searchable with `Cmd-,` then
 - Auto-Rename Branch From Work — rename Orca-generated creature branches after an agent starts work.
 - **GitHub API Budget** — remaining REST (core), Search, and GraphQL quota from the local `gh` CLI. Useful when PR checks or Tasks stop refreshing; see [Troubleshooting GitHub errors](/docs/github-errors) if the numbers look fine but GitHub still rate-limits live calls.
 
+### Source Control file filters
+
+Open the file-filter menu in the Source Control header to show or hide extensions. Counts include each changed path once across staged, unstaged, untracked, and committed branch changes. Files without an extension have their own entry. These filters combine with the existing file-name search.
+
+To share named groups with your team, add `sourceControl.fileGroups` to the active checkout's `orca.yaml`:
+
+```yaml
+sourceControl:
+  fileGroups:
+    - name: Snapshots
+      patterns:
+        - '**/*.snap'
+        - '!tests/important.snap'
+    - name: Generated files
+      patterns:
+        - '/generated/'
+        - '*.generated.ts'
+```
+
+Under **Hide file groups**, select one group or **All groups**. Patterns use `.gitignore` rules, including `!` negation within each group, relative to the checkout root. Matching is case-sensitive on every client. The example hides snapshots except `tests/important.snap`; another selected group can still hide that file. As with `.gitignore`, a file cannot be re-included while its parent directory is excluded.
+
+Groups load from the workspace's owning host, including SSH and remote servers, when you switch workspaces or open the menu. Filter selections are local to the open panel and reset when you switch workspaces. Nothing is hidden by default. A hidden-file count and **Reset filters** keep filtered changes discoverable.
+
+Filtering only changes the displayed list. Repository-wide stage, commit, and discard actions still use the full change set; section and directory bulk buttons are hidden while filtering. Groups do not modify `.gitignore`, staging, or commits.
+
 ## Terminal
 
 - Font, theme, cursor style, padding.

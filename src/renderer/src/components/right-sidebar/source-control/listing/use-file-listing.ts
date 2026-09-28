@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo } from 'react'
+import type { SourceControlFileGroup } from '../../../../../../shared/source-control-file-groups'
 import { deriveSourceControlPushRecovery } from '../sync/push-recovery'
 import { isSourceControlSplitOpenModifier, type SourceControlRowOpenEvent } from './split-open'
 import { useSourceControlSelection } from './use-selection'
@@ -29,6 +30,9 @@ export function useSourceControlFileListing({
   compareBaseRef,
   entries,
   filterQuery,
+  excludedExtensions,
+  hiddenFileGroups,
+  fileGroups,
   isBranchVisible,
   isFolder,
   isGitHistoryExpanded,
@@ -53,6 +57,9 @@ export function useSourceControlFileListing({
   compareBaseRef: string | null
   entries: SourceControlWorktreeContext['entries']
   filterQuery: string
+  excludedExtensions: ReadonlySet<string>
+  hiddenFileGroups: ReadonlySet<string>
+  fileGroups: readonly SourceControlFileGroup[]
   isBranchVisible: boolean
   isFolder: boolean
   isGitHistoryExpanded: boolean
@@ -77,6 +84,9 @@ export function useSourceControlFileListing({
     grouped,
     fileFilterState,
     normalizedFilter,
+    hasFileVisibilityFilter,
+    hiddenFileCount,
+    extensionCounts,
     isGitHistoryVisible,
     filteredGrouped,
     displaySections,
@@ -90,6 +100,9 @@ export function useSourceControlFileListing({
     entries,
     branchEntries,
     filterQuery,
+    excludedExtensions,
+    hiddenFileGroups,
+    fileGroups,
     sourceControlGroupOrder,
     activeWorktreeId,
     worktreePath,
@@ -215,6 +228,9 @@ export function useSourceControlFileListing({
     isExecutingBulk,
     isGitHistoryVisible,
     normalizedFilter,
+    hasFileVisibilityFilter,
+    hiddenFileCount,
+    extensionCounts,
     openCommittedDiff,
     pushRecovery,
     refreshGitHistory,

@@ -45,6 +45,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     isGitHistoryVisible,
     loadCommitFiles,
     normalizedFilter,
+    hasFileVisibilityFilter,
     openAllDiffs,
     openBranchAllDiffs,
     openCommitFile,
@@ -104,6 +105,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
         onRetryStatus={refreshActiveGitStatus}
         showGenericEmptyState={showGenericEmptyState}
         normalizedFilter={normalizedFilter}
+        hasFileVisibilityFilter={hasFileVisibilityFilter}
         branchBaseRef={branchSummary?.baseRef ?? null}
         filterTooLarge={fileFilterState.tooLarge}
         hasFilteredUncommittedEntries={hasFilteredUncommittedEntries}
@@ -123,6 +125,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
           displaySections={displaySections}
           unfilteredDisplaySectionsById={unfilteredDisplaySectionsById}
           normalizedFilter={normalizedFilter}
+          hasFileVisibilityFilter={hasFileVisibilityFilter}
           collapsedSections={collapsedSections}
           toggleSection={toggleSection}
           onViewSection={(sectionViewAction) => {

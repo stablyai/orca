@@ -60,7 +60,7 @@ function renderBranchSection(): void {
 
 // An unstaged section with one plain entry surfaces Discard all + Stage all
 // next to View all — the crowded case the single-line layout has to survive.
-function renderUncommittedSections(): void {
+function renderUncommittedSections(hasFileVisibilityFilter = false): void {
   const section: SourceControlDisplaySection = {
     id: 'unstaged',
     area: 'unstaged',
@@ -75,6 +75,7 @@ function renderUncommittedSections(): void {
         displaySections={[section]}
         unfilteredDisplaySectionsById={unfilteredById}
         normalizedFilter=""
+        hasFileVisibilityFilter={hasFileVisibilityFilter}
         collapsedSections={new Set(['unstaged'])}
         toggleSection={vi.fn()}
         onViewSection={vi.fn()}
@@ -139,6 +140,13 @@ describe('source control section header actions', () => {
     const actionsSlot = screen.getByRole('button', { name: 'View all' }).parentElement
     expect(actionsSlot).toHaveClass('shrink-0')
     expect(actionsSlot?.className).not.toContain('flex-wrap')
+  })
+
+  it('hides section-wide action buttons while file visibility filters are active', () => {
+    renderUncommittedSections(true)
+    expect(screen.queryByRole('button', { name: 'Stage all' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Discard all' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'View all' })).toBeInTheDocument()
   })
 
   it('keeps the View all label on a single line', () => {

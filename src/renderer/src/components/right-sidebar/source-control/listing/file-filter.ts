@@ -5,6 +5,7 @@ export const SOURCE_CONTROL_FILE_FILTER_QUERY_MAX_BYTES = 2 * 1024
 export type SourceControlFileFilterState = {
   normalizedFilter: string
   tooLarge: boolean
+  includesEntry?: (entry: SourceControlPathEntry) => boolean
 }
 
 export type SourceControlPathEntry = {
@@ -24,17 +25,22 @@ export function isSourceControlFileFilterQueryTooLarge(
   return isClipboardTextByteLengthOverLimit(query, maxBytes)
 }
 
-export function getSourceControlFileFilterState(query: string): SourceControlFileFilterState {
+/** Combines the bounded text query with optional presentation-only extension and group filters. */
+export function getSourceControlFileFilterState(
+  query: string,
+  includesEntry?: SourceControlFileFilterState['includesEntry']
+): SourceControlFileFilterState {
   if (isSourceControlFileFilterQueryTooLarge(query)) {
     return { normalizedFilter: '', tooLarge: true }
   }
-  const trimmed = query.trim()
-  if (!trimmed) {
-    return { normalizedFilter: '', tooLarge: false }
+  return {
+    normalizedFilter: query.trim().toLowerCase(),
+    tooLarge: false,
+    ...(includesEntry ? { includesEntry } : {})
   }
-  return { normalizedFilter: trimmed.toLowerCase(), tooLarge: false }
 }
 
+/** Filters the display projection without mutating the entries used by stage, commit, or discard. */
 export function filterSourceControlPathEntries<T extends SourceControlPathEntry>(
   entries: T[],
   filter: SourceControlFileFilterState
@@ -42,12 +48,17 @@ export function filterSourceControlPathEntries<T extends SourceControlPathEntry>
   if (filter.tooLarge) {
     return []
   }
-  if (!filter.normalizedFilter) {
+  if (!filter.normalizedFilter && !filter.includesEntry) {
     return entries
   }
-  return entries.filter((entry) => entry.path.toLowerCase().includes(filter.normalizedFilter))
+  return entries.filter(
+    (entry) =>
+      entry.path.toLowerCase().includes(filter.normalizedFilter) &&
+      (!filter.includesEntry || filter.includesEntry(entry))
+  )
 }
 
+/** Preserves the original groups when no filter is active, keeping bulk actions independent. */
 export function filterSourceControlGroupedPathEntries<T extends SourceControlPathEntry>(
   grouped: SourceControlGroupedPathEntries<T>,
   filter: SourceControlFileFilterState
@@ -55,7 +66,7 @@ export function filterSourceControlGroupedPathEntries<T extends SourceControlPat
   if (filter.tooLarge) {
     return { staged: [], unstaged: [], untracked: [] }
   }
-  if (!filter.normalizedFilter) {
+  if (!filter.normalizedFilter && !filter.includesEntry) {
     return grouped
   }
   return {
