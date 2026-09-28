@@ -181,6 +181,7 @@ export function useCombinedDiffSectionLoader({
       commitCompare?.commitOid,
       commitCompare?.parentOid,
       commitEntries,
+      file.compareWorkingTree,
       file.filePath,
       file.runtimeEnvironmentId,
       isAllMode,

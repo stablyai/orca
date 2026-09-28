@@ -51,6 +51,7 @@ export function useCombinedDiffViewRestore({
   const {
     entries,
     entrySignature,
+    workingTreeCompareLineCounts,
     hasUncommittedEntriesSnapshot,
     shouldAutoReloadFromGitStatus,
     treeMode
@@ -148,9 +149,10 @@ export function useCombinedDiffViewRestore({
     const countedPasses = collectCountedCombinedDiffPasses(entries)
     setSections(
       entries.map((entry) => {
+        const sizeHint = workingTreeCompareLineCounts?.[entry.path]
         const loadOnDemand = shouldLoadCombinedDiffOnDemand({
-          added: 'added' in entry ? entry.added : undefined,
-          removed: 'removed' in entry ? entry.removed : undefined,
+          added: sizeHint?.added ?? ('added' in entry ? entry.added : undefined),
+          removed: sizeHint?.removed ?? ('removed' in entry ? entry.removed : undefined),
           path: entry.path,
           area: 'area' in entry ? entry.area : undefined,
           submodule: 'submodule' in entry ? entry.submodule : undefined,
@@ -187,6 +189,7 @@ export function useCombinedDiffViewRestore({
   }, [
     entries,
     entrySignature,
+    workingTreeCompareLineCounts,
     generationRef,
     deferredLoadRequestsRef,
     gitStatusEntries,

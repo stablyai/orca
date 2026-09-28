@@ -18376,7 +18376,8 @@
   "sourceControl": {
     "unlinkedPr": {
       "status": "PR #{{number}} unlinked"
-    }
+    },
+    "compareAllAgainstBase": "Compare all against {{ref}}"
   },
   "agentsSidebarIntro": {
     "migrated": {
@@ -18498,5 +18499,9 @@
   },
   "common": {
     "retry": "Retry"
+  },
+  "combinedDiff": {
+    "fileCompared": "file compared",
+    "filesCompared": "files compared"
   }
 }

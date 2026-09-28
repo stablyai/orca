@@ -107,6 +107,8 @@ export type OpenFile = {
   branchCompare?: BranchCompareSnapshot
   commitCompare?: CommitCompareSnapshot
   branchOldPath?: string
+  compareWorkingTree?: boolean
+  workingTreeCompareLineCounts?: Record<string, { added: number; removed: number }>
   combinedAlternate?: CombinedDiffAlternate
   combinedAreaFilter?: string // filter combined diff to a specific area (e.g. 'staged', 'unstaged', 'untracked')
   branchEntriesSnapshot?: GitBranchChangeEntry[]

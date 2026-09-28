@@ -49,7 +49,7 @@ export function getEditorDisplayLabel(
     return file.combinedAreaFilter ? getBaseLabel(file, variant) : 'Uncommitted Changes'
   }
   if (source === 'combined-branch') {
-    return `Branch Changes (${file.branchCompare?.baseRef ?? 'base'})`
+    return `${file.compareWorkingTree ? 'All Changes' : 'Branch Changes'} (${file.branchCompare?.baseRef ?? 'base'})`
   }
   if (source === 'combined-commit') {
     return file.commitCompare?.subject

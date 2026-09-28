@@ -88,7 +88,11 @@ export function CombinedDiffToolbar({
         )}
         <span className="truncate text-xs text-muted-foreground">
           {sectionCount}{' '}
-          {translate('auto.components.editor.CombinedDiffViewer.7e7ca60816', 'changed files')}
+          {file.compareWorkingTree
+            ? sectionCount === 1
+              ? translate('combinedDiff.fileCompared', 'file compared')
+              : translate('combinedDiff.filesCompared', 'files compared')
+            : translate('auto.components.editor.CombinedDiffViewer.7e7ca60816', 'changed files')}
           {(isAllMode || isBranchMode) && branchCompare
             ? translate('auto.components.editor.CombinedDiffViewer.6094135eec', ' vs {{value0}}', {
                 value0: branchCompare.baseRef

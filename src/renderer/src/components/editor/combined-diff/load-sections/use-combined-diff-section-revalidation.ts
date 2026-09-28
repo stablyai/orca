@@ -68,7 +68,7 @@ export function useCombinedDiffSectionRevalidation({
   ])
 
   useEffect(() => {
-    if (treeMode !== 'all' && treeMode !== 'uncommitted') {
+    if (!file.compareWorkingTree && treeMode !== 'all' && treeMode !== 'uncommitted') {
       return
     }
     const handler = (event: Event): void => {
@@ -80,6 +80,17 @@ export function useCombinedDiffSectionRevalidation({
       const targetRuntimeOwner = detail.runtimeEnvironmentId?.trim() || null
       const fileRuntimeOwner = file.runtimeEnvironmentId?.trim() || null
       if (hasRuntimeOwnerFilter && targetRuntimeOwner !== fileRuntimeOwner) {
+        return
+      }
+      if (file.compareWorkingTree) {
+        const key = getCombinedDiffFileTreeSectionKey('branch', {
+          path: detail.relativePath,
+          status: 'modified'
+        })
+        const index = sectionIndexByKeyRef.current.get(key)
+        if (index !== undefined) {
+          requestSectionReload(index)
+        }
         return
       }
       for (const area of ['unstaged', 'staged', 'untracked'] as const) {
@@ -98,6 +109,7 @@ export function useCombinedDiffSectionRevalidation({
     return () =>
       window.removeEventListener(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, handler as EventListener)
   }, [
+    file.compareWorkingTree,
     file.runtimeEnvironmentId,
     file.worktreeId,
     requestSectionReload,

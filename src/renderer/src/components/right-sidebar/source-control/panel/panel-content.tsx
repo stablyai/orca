@@ -1,3 +1,5 @@
+import { Button } from '@/components/ui/button'
+import { translate } from '@/i18n/i18n'
 import { GitHistoryPanel } from '../sync/git-history-panel'
 import { shouldShowSourceControlCompareUnavailableCard } from './header-toolbar'
 import { shouldRenderCommitArea } from '../commit/component-gates'
@@ -116,6 +118,22 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
 
       {shouldRenderCommitArea(unresolvedConflicts.length, conflictOperation) && (
         <SourceControlCommitSurface {...props} showGenericEmptyState={showGenericEmptyState} />
+      )}
+
+      {branchSummary?.status === 'ready' && (hasUncommittedEntries || branchEntries.length > 0) && (
+        <div className="px-3 py-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              openBranchAllDiffs(currentWorktreeId, worktreePath, branchSummary, undefined, true)
+            }
+          >
+            {translate('sourceControl.compareAllAgainstBase', 'Compare all against {{ref}}', {
+              ref: branchSummary.baseRef
+            })}
+          </Button>
+        </div>
       )}
 
       {hasFilteredUncommittedEntries && (

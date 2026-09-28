@@ -74,7 +74,11 @@ export function useCombinedDiffSectionActions({
 
       const isBranchEntry = section.area === undefined
 
-      if ((isBranchMode || (isAllMode && isBranchEntry)) && branchCompare) {
+      if (
+        !file.compareWorkingTree &&
+        (isBranchMode || (isAllMode && isBranchEntry)) &&
+        branchCompare
+      ) {
         openBranchDiff(file.worktreeId, file.filePath, entry, branchCompare, language)
         return
       }
@@ -96,6 +100,7 @@ export function useCombinedDiffSectionActions({
     [
       branchCompare,
       commitCompare,
+      file.compareWorkingTree,
       file.filePath,
       file.runtimeEnvironmentId,
       file.worktreeId,

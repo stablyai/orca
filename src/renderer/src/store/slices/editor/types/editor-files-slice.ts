@@ -163,7 +163,8 @@ export type EditorFilesSlice = {
     worktreeId: string,
     worktreePath: string,
     compare: GitBranchCompareSummary,
-    alternate?: CombinedDiffAlternate
+    alternate?: CombinedDiffAlternate,
+    compareWorkingTree?: boolean
   ) => void
   openCommitAllDiffs: (
     worktreeId: string,

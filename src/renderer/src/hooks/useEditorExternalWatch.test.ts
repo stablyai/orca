@@ -722,6 +722,31 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
     expect(notifyEditorExternalFileChange).not.toHaveBeenCalled()
     dispose()
   })
+  it('reloads a working-tree comparison when a saved file changes', () => {
+    const branchDiffTab = {
+      id: 'wt-1::all-diffs::branch',
+      worktreeId: 'wt-1',
+      worktreePath: '/repo',
+      filePath: '/repo',
+      relativePath: 'Branch Changes',
+      mode: 'diff' as const,
+      diffSource: 'combined-branch' as const,
+      compareWorkingTree: true,
+      isDirty: false
+    }
+    vi.mocked(useAppStore.getState).mockReturnValue({
+      openFiles: [branchDiffTab],
+      setExternalMutation
+    } as never)
+    vi.mocked(getOpenFilesForExternalFileChange).mockReturnValue([])
+    const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
+
+    handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/src/foo.ts' }]))
+    vi.advanceTimersByTime(100)
+
+    expect(notifyEditorExternalFileChange).toHaveBeenCalled()
+    dispose()
+  })
 
   it('tombstones only the matching owner for same-path delete events', () => {
     const localFile = fileNotes

@@ -120,7 +120,9 @@ export function CombinedDiffSectionList({
                   toggleSection={toggleSection}
                   openSection={openSection}
                   openSectionTitle={
-                    isAllMode || isBranchMode || isCommitMode ? 'Open diff' : 'Open in editor'
+                    !file.compareWorkingTree && (isAllMode || isBranchMode || isCommitMode)
+                      ? 'Open diff'
+                      : 'Open in editor'
                   }
                   onOpenPreview={
                     canOpenDiffSectionPreviewToSide({

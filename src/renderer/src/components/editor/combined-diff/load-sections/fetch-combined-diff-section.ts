@@ -1,3 +1,4 @@
+import { combineWorkingTreeDiffResult } from './working-tree-diff-result'
 import { useAppStore } from '@/store'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import {
@@ -39,26 +40,44 @@ export function fetchCombinedDiffSection({
   const state = useAppStore.getState()
   const fileSettings = settingsForRuntimeOwner(state.settings, file.runtimeEnvironmentId)
   if ((isBranchMode || (isAllMode && !('area' in entry))) && branchCompare) {
-    return withDiffSectionLoadTimeout(
-      getRuntimeGitBranchDiff(
-        {
-          settings: fileSettings,
-          worktreeId: file.worktreeId,
-          worktreePath: file.filePath,
-          connectionId
+    const branchResult = getRuntimeGitBranchDiff(
+      {
+        settings: fileSettings,
+        worktreeId: file.worktreeId,
+        worktreePath: file.filePath,
+        connectionId
+      },
+      {
+        compare: {
+          baseRef: branchCompare.baseRef,
+          baseOid: branchCompare.baseOid!,
+          headOid: branchCompare.headOid!,
+          mergeBase: branchCompare.mergeBase!
         },
-        {
-          compare: {
-            baseRef: branchCompare.baseRef,
-            baseOid: branchCompare.baseOid!,
-            headOid: branchCompare.headOid!,
-            mergeBase: branchCompare.mergeBase!
-          },
-          filePath: entry.path,
-          oldPath: entry.oldPath
-        }
-      )
+        filePath:
+          file.compareWorkingTree && 'branchPath' in entry && typeof entry.branchPath === 'string'
+            ? entry.branchPath
+            : entry.path,
+        oldPath: entry.oldPath
+      }
     )
+    if (file.compareWorkingTree) {
+      return withDiffSectionLoadTimeout(
+        Promise.all([
+          branchResult,
+          getRuntimeGitDiff(
+            {
+              settings: fileSettings,
+              worktreeId: file.worktreeId,
+              worktreePath: file.filePath,
+              connectionId
+            },
+            { filePath: entry.path, staged: false, compareAgainstHead: true }
+          )
+        ]).then(([base, working]) => combineWorkingTreeDiffResult(base, working))
+      )
+    }
+    return withDiffSectionLoadTimeout(branchResult)
   }
   if (isCommitMode && commitCompare) {
     return withDiffSectionLoadTimeout(

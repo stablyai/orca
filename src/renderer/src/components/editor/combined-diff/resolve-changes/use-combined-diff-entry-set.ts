@@ -17,6 +17,7 @@ export const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntry[] = []
 export const EMPTY_GIT_BRANCH_ENTRIES: GitBranchChangeEntry[] = []
 
 export type CombinedDiffEntrySet = {
+  workingTreeCompareLineCounts?: OpenFile['workingTreeCompareLineCounts']
   allEntries: (GitStatusEntry | GitBranchChangeEntry)[]
   branchCompare: NonNullable<OpenFile['branchCompare']> | null
   commitCompare: NonNullable<OpenFile['commitCompare']> | null
@@ -99,14 +100,17 @@ export function useCombinedDiffEntrySet({
         ? 'commit'
         : 'uncommitted'
   const hasUncommittedEntriesSnapshot = file.uncommittedEntriesSnapshot !== undefined
-  const shouldAutoReloadFromGitStatus = shouldAutoReloadCombinedDiffFromGitStatus({
-    mode: treeMode,
-    hasUncommittedEntriesSnapshot
-  })
+  const shouldAutoReloadFromGitStatus =
+    file.compareWorkingTree === true ||
+    shouldAutoReloadCombinedDiffFromGitStatus({
+      mode: treeMode,
+      hasUncommittedEntriesSnapshot
+    })
   const entrySignature = React.useMemo(
     () =>
       JSON.stringify({
         mode: file.diffSource,
+        workingTreeCompareLineCounts: file.workingTreeCompareLineCounts,
         areaFilter: file.combinedAreaFilter ?? null,
         compareVersion: file.branchCompare?.compareVersion ?? null,
         commitVersion: file.commitCompare?.compareVersion ?? null,
@@ -142,12 +146,14 @@ export function useCombinedDiffEntrySet({
       file.combinedAreaFilter,
       file.commitCompare?.compareVersion,
       file.diffSource,
+      file.workingTreeCompareLineCounts,
       isBranchMode,
       isCommitMode
     ]
   )
 
   return {
+    workingTreeCompareLineCounts: file.workingTreeCompareLineCounts,
     allEntries,
     branchCompare,
     commitCompare,

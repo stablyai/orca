@@ -127,7 +127,9 @@ class IndexedOpenFileLookup {
       }
       if (
         file.mode === 'diff' &&
-        (file.diffSource === 'combined-uncommitted' || file.diffSource === 'combined-all')
+        (file.diffSource === 'combined-uncommitted' ||
+          file.diffSource === 'combined-all' ||
+          file.compareWorkingTree === true)
       ) {
         hasCombinedDiffConsumer = true
         continue

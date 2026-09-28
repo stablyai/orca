@@ -200,3 +200,36 @@ describe('createEditorSlice openBranchDiff', () => {
     )
   })
 })
+
+it('opens net working-tree comparisons separately from committed branch tabs', () => {
+  const store = createEditorStore()
+  const compare: GitBranchCompareSummary = {
+    status: 'ready',
+    baseRef: 'main',
+    baseOid: 'base',
+    headOid: 'head',
+    mergeBase: 'base',
+    compareRef: 'feature',
+    changedFiles: 1
+  }
+  store.setState({
+    gitBranchChangesByWorktree: {
+      'wt-1': [{ path: 'file.ts', status: 'modified', added: 1, removed: 1 }]
+    }
+  })
+  store.getState().setGitStatus('wt-1', {
+    conflictOperation: 'unknown',
+    entries: [{ path: 'file.ts', status: 'modified', area: 'staged', added: 1, removed: 1 }]
+  })
+  store.getState().openBranchAllDiffs('wt-1', '/repo', compare)
+  store.getState().openBranchAllDiffs('wt-1', '/repo', compare, undefined, true)
+  const files = store.getState().openFiles
+  expect(files).toHaveLength(2)
+  expect(files[1]).toMatchObject({
+    compareWorkingTree: true,
+    relativePath: 'All Changes (main)',
+    workingTreeCompareLineCounts: { 'file.ts': { added: 2, removed: 2 } }
+  })
+  expect(files[1].branchEntriesSnapshot).toHaveLength(1)
+  expect(files[0].compareWorkingTree).toBeUndefined()
+})

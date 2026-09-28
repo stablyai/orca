@@ -3,6 +3,10 @@ import type { EditorSlice } from '../types/editor-slice'
 import type { OpenFile } from '../types/open-file'
 import { resolveDiffRuntimeEnvironmentId } from '../git/diff-runtime-owner'
 import { toBranchCompareSnapshot, toCommitCompareSnapshot } from '../git/git-status-reconciliation'
+import {
+  getWorkingTreeCompareEntries,
+  getWorkingTreeCompareLineCounts
+} from '../git/working-tree-compare-entries'
 import { openWorkspaceEditorItem } from '../tabs/workspace-editor-item'
 
 export function createOpenCombinedDiff(
@@ -106,12 +110,25 @@ export function createOpenCombinedDiff(
       })
       void openWorkspaceEditorItem(get(), id, worktreeId, label, 'diff')
     },
-    openBranchAllDiffs: (worktreeId, worktreePath, compare, alternate) => {
+    openBranchAllDiffs: (worktreeId, worktreePath, compare, alternate, compareWorkingTree) => {
       const branchCompare = toBranchCompareSnapshot(compare)
-      const id = `${worktreeId}::all-diffs::branch::${compare.baseRef}::${branchCompare.compareVersion}`
+      const id = `${worktreeId}::all-diffs::${compareWorkingTree ? 'working-tree' : 'branch'}::${compare.baseRef}::${branchCompare.compareVersion}`
+      const label = `${compareWorkingTree ? 'All Changes' : 'Branch Changes'} (${compare.baseRef})`
       set((s) => {
         const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(s, worktreeId, undefined)
-        const branchEntriesSnapshot = s.gitBranchChangesByWorktree[worktreeId] ?? []
+        const branchEntries = s.gitBranchChangesByWorktree[worktreeId] ?? []
+        const statusEntries = s.gitStatusByWorktree[worktreeId] ?? []
+        const branchEntriesSnapshot = compareWorkingTree
+          ? getWorkingTreeCompareEntries(branchEntries, statusEntries)
+          : branchEntries
+        const workingTreeCompareLineCounts = compareWorkingTree
+          ? getWorkingTreeCompareLineCounts(branchEntries, statusEntries)
+          : undefined
+        const skippedConflicts = compareWorkingTree
+          ? statusEntries
+              .filter((entry) => entry.conflictStatus === 'unresolved' && entry.conflictKind)
+              .map((entry) => ({ path: entry.path, conflictKind: entry.conflictKind! }))
+          : undefined
         const existing = s.openFiles.find((f) => f.id === id)
         if (existing) {
           return {
@@ -121,9 +138,11 @@ export function createOpenCombinedDiff(
                     ...f,
                     branchCompare,
                     branchEntriesSnapshot,
+                    compareWorkingTree,
+                    workingTreeCompareLineCounts,
                     combinedAlternate: alternate,
                     conflict: undefined,
-                    skippedConflicts: undefined,
+                    skippedConflicts,
                     conflictReview: undefined,
                     runtimeEnvironmentId
                   }
@@ -138,7 +157,7 @@ export function createOpenCombinedDiff(
         const newFile: OpenFile = {
           id,
           filePath: worktreePath,
-          relativePath: `Branch Changes (${compare.baseRef})`,
+          relativePath: label,
           worktreeId,
           language: 'plaintext',
           isDirty: false,
@@ -146,9 +165,11 @@ export function createOpenCombinedDiff(
           diffSource: 'combined-branch',
           branchCompare,
           branchEntriesSnapshot,
+          compareWorkingTree,
+          workingTreeCompareLineCounts,
           combinedAlternate: alternate,
           conflict: undefined,
-          skippedConflicts: undefined,
+          skippedConflicts,
           conflictReview: undefined,
           runtimeEnvironmentId
         }
@@ -160,13 +181,7 @@ export function createOpenCombinedDiff(
           activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
         }
       })
-      void openWorkspaceEditorItem(
-        get(),
-        id,
-        worktreeId,
-        `Branch Changes (${compare.baseRef})`,
-        'diff'
-      )
+      void openWorkspaceEditorItem(get(), id, worktreeId, label, 'diff')
     },
 
     openCommitAllDiffs: (worktreeId, worktreePath, compare, entries, subject, message) => {
