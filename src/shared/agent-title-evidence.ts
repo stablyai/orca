@@ -275,14 +275,19 @@ function collectAnchoredNames(segments: readonly string[]): TuiAgent[] {
   for (const segment of segments) {
     // Why anchored and not a bare marker: the native envelope owns the whole wrapped pane title.
     // Its session text may name other agents without changing the OpenCode owner.
-    if (isOpenCodeNativeTitle(segment)) {
-      anchored.add('opencode')
-    }
-    if (isKiroNativeTitle(segment)) {
-      anchored.add('kiro')
+    const nativeEnvelopeOwner: TuiAgent | null = isOpenCodeNativeTitle(segment)
+      ? 'opencode'
+      : isKiroNativeTitle(segment)
+        ? 'kiro'
+        : null
+    if (nativeEnvelopeOwner) {
+      anchored.add(nativeEnvelopeOwner)
     }
 
-    const suffix = OWNER_SUFFIX_RE.exec(segment)
+    // Why skipped under an envelope: `kiro: fix the pager - codex` is Kiro's own
+    // session text, and reading its trailing name as a second owner claim turns
+    // an unambiguous pane into `conflicting-anchored-names`.
+    const suffix = nativeEnvelopeOwner ? null : OWNER_SUFFIX_RE.exec(segment)
     if (suffix) {
       const agent = agentForOwnerSuffix(suffix[1])
       if (agent) {

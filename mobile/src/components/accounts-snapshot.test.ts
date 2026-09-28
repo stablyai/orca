@@ -135,10 +135,8 @@ describe('decodeAccountsSnapshot', () => {
 
 describe('kiro provider (additive, Remote Wire Compatible)', () => {
   it('decodes a snapshot carrying a kiro monthly provider', () => {
-    const base = makeSnapshot() as {
-      rateLimits: Record<string, unknown>
-    }
-    base.rateLimits.kiro = {
+    const base = makeSnapshot()
+    setPath(base, ['rateLimits', 'kiro'], {
       provider: 'kiro',
       session: null,
       weekly: null,
@@ -153,7 +151,7 @@ describe('kiro provider (additive, Remote Wire Compatible)', () => {
       updatedAt: 10,
       error: null,
       status: 'ok'
-    }
+    })
     const decoded = decodeAccountsSnapshot(base)
     expect(decoded.rateLimits.kiro?.provider).toBe('kiro')
     expect(decoded.rateLimits.kiro?.monthly?.usedPercent).toBe(16)
@@ -166,15 +164,15 @@ describe('kiro provider (additive, Remote Wire Compatible)', () => {
   })
 
   it('rejects a kiro block carrying the wrong provider identity', () => {
-    const base = makeSnapshot() as { rateLimits: Record<string, unknown> }
-    base.rateLimits.kiro = {
+    const base = makeSnapshot()
+    setPath(base, ['rateLimits', 'kiro'], {
       provider: 'claude',
       session: null,
       weekly: null,
       updatedAt: 1,
       error: null,
       status: 'ok'
-    }
+    })
     expect(() => decodeAccountsSnapshot(base)).toThrow()
   })
 })

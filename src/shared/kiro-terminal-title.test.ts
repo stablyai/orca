@@ -16,6 +16,9 @@ describe('isKiroNativeTitle', () => {
   it('does not claim a title that merely mentions kiro', () => {
     expect(isKiroNativeTitle('fix kiro: usage parser')).toBe(false)
     expect(isKiroNativeTitle('✳ investigate kiro: regressions')).toBe(false)
+    // A decorated wrapper segment is another agent's own title, not an ssh/tmux label.
+    expect(isKiroNativeTitle('✳ Review | kiro: usage')).toBe(false)
+    expect(isKiroNativeTitle('. Review | kiro: usage')).toBe(false)
     expect(isKiroNativeTitle('kiro:')).toBe(false)
     expect(isKiroNativeTitle('')).toBe(false)
   })
@@ -35,5 +38,11 @@ describe('Kiro title identity', () => {
     const evidence = collectAgentTitleEvidence('kiro: ~/code/orca-mods')
     expect(evidence.agent).toBe('kiro')
     expect(evidence.anchoredNames).toContain('kiro')
+  })
+
+  it('does not read its own session text as a second owner claim', () => {
+    const evidence = collectAgentTitleEvidence('kiro: fix the pager - codex')
+    expect(evidence.agent).toBe('kiro')
+    expect(evidence.anchoredNames).toEqual(['kiro'])
   })
 })

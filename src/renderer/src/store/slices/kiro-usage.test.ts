@@ -1,13 +1,12 @@
-import { createStore, type StoreApi } from 'zustand/vanilla'
+import { createStore } from 'zustand/vanilla'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createKiroUsageSlice } from './kiro-usage'
-import type { AppState } from '../types'
+import { createKiroUsageSlice, type KiroUsageSlice } from './kiro-usage'
 
-function createKiroStore(): StoreApi<AppState> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return createStore<any>()((...args: any[]) =>
-    createKiroUsageSlice(...(args as Parameters<typeof createKiroUsageSlice>))
-  ) as unknown as StoreApi<AppState>
+function createKiroStore() {
+  return createStore<KiroUsageSlice>()((...a) => ({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the slice creator is declared against the whole AppState; this store holds only its own slice, which is all the code under test reads.
+    ...createKiroUsageSlice(...(a as unknown as Parameters<typeof createKiroUsageSlice>))
+  }))
 }
 
 afterEach(() => {

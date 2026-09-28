@@ -23,6 +23,9 @@ import {
   detectRemoteAgents
 } from '../preflight/agent-detection'
 import { enableKiroTerminalTitle } from '../kiro/kiro-terminal-title-setting'
+import { enableRemoteKiroTerminalTitle } from '../kiro/kiro-remote-terminal-title-setting'
+import { resolveRemoteAgentHome } from '../ssh/remote-agent-home'
+import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { markRemoteAgentWorkspaceTrusted } from '../remote-agent-trust-presets'
 import type { RuntimeStore } from './runtime-store-contract'
 
@@ -179,9 +182,38 @@ export function buildWorktreeStartupForAgent(
  * identified once it starts. Separate from trust: it is global to the CLI, not
  * scoped to a workspace, and a failure only costs the sidebar its icon.
  */
-export function applyLocalAgentLaunchPreflight(agent: TuiAgent): void {
-  if (TUI_AGENT_CONFIG[agent].preflightIdentitySetting === 'kiro-terminal-title') {
-    enableKiroTerminalTitle()
+export async function applyLocalAgentLaunchPreflight(agent: TuiAgent): Promise<void> {
+  if (TUI_AGENT_CONFIG[agent].preflightIdentitySetting !== 'kiro-terminal-title') {
+    return
+  }
+  try {
+    await enableKiroTerminalTitle()
+  } catch {
+    // Best-effort: the pane still runs, it just has no identity in the sidebar.
+  }
+}
+
+/**
+ * The SSH-host half of the same preflight. The agent runs on the execution
+ * host, so the setting that makes its pane identifiable has to be written
+ * there — a local write would only decorate the client's own machine.
+ */
+export async function applyRemoteAgentLaunchPreflight(
+  agent: TuiAgent,
+  connectionId: string
+): Promise<void> {
+  if (TUI_AGENT_CONFIG[agent].preflightIdentitySetting !== 'kiro-terminal-title') {
+    return
+  }
+  try {
+    const home = await resolveRemoteAgentHome(connectionId)
+    const fsProvider = getSshFilesystemProvider(connectionId)
+    if (!home || !fsProvider) {
+      return
+    }
+    await enableRemoteKiroTerminalTitle(fsProvider, home)
+  } catch {
+    // Best-effort, same as the local path.
   }
 }
 

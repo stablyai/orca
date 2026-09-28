@@ -7,6 +7,7 @@ export type KiroUsageSlice = {
   refreshKiroUsage: (force?: boolean) => Promise<void>
 }
 
+/** Renderer-side trigger only; the refreshed value arrives over the rate-limit push. */
 export const createKiroUsageSlice: StateCreator<AppState, [], [], KiroUsageSlice> = () => ({
   refreshKiroUsage: async (force) => {
     try {

@@ -26,9 +26,7 @@ describe('getInlineResetCreditCount', () => {
   })
 
   it('ignores non-finite counts from partial data', () => {
-    expect(
-      getInlineResetCreditCount(codexWith({ availableCount: Number.NaN as unknown as number }))
-    ).toBeNull()
+    expect(getInlineResetCreditCount(codexWith({ availableCount: Number.NaN }))).toBeNull()
   })
 
   it('returns null for non-Codex providers and null input', () => {

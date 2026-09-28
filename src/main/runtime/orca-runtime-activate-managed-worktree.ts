@@ -14,6 +14,7 @@ import {
   buildWorktreeStartupForAgent,
   buildWorktreeStartupForDraft,
   applyLocalAgentLaunchPreflight,
+  applyRemoteAgentLaunchPreflight,
   markLocalWorktreeTrusted,
   markRemoteWorktreeTrusted
 } from './runtime-worktree-agent-startup'
@@ -168,7 +169,7 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
     workspacePath: string
   ): Promise<void> {
     // Rides the same pre-launch hook: a vendor setting, not workspace trust.
-    applyLocalAgentLaunchPreflight(agent)
+    await applyLocalAgentLaunchPreflight(agent)
     await markLocalWorktreeTrusted(agent, workspacePath)
   }
 
@@ -189,6 +190,8 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
     connectionId: string,
     workspacePath: string
   ): Promise<void> {
+    // The execution host owns the setting, so the remote pane gets its own write.
+    await applyRemoteAgentLaunchPreflight(agent, connectionId)
     await markRemoteWorktreeTrusted(agent, connectionId, workspacePath)
   }
 

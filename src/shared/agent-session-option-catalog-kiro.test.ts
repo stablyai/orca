@@ -54,26 +54,17 @@ describe('parseKiroModelList', () => {
 describe('Kiro engine selection', () => {
   it('emits no engine flag by default so the installed CLI owns the v2/v3 migration', () => {
     const resolved = resolveAgentSessionOptionLaunch('kiro', { model: 'auto' })
-    expect(resolved.args).toEqual(['--model', 'auto', '--effort', 'medium'])
+    expect(resolved.args).toEqual(['--model', 'auto'])
   })
 
   it('pins an explicitly chosen engine', () => {
     const resolved = resolveAgentSessionOptionLaunch('kiro', { model: 'auto', mode: 'v3' })
-    expect(resolved.args).toEqual(['--model', 'auto', '--agent-engine', 'v3', '--effort', 'medium'])
+    expect(resolved.args).toEqual(['--model', 'auto', '--agent-engine', 'v3'])
   })
 
   it('expands spec mode, which only exists under v3', () => {
     const resolved = resolveAgentSessionOptionLaunch('kiro', { model: 'auto', mode: 'v3-spec' })
-    expect(resolved.args).toEqual([
-      '--model',
-      'auto',
-      '--agent-engine',
-      'v3',
-      '--mode',
-      'spec',
-      '--effort',
-      'medium'
-    ])
+    expect(resolved.args).toEqual(['--model', 'auto', '--agent-engine', 'v3', '--mode', 'spec'])
   })
 
   it('yields to an engine the user already wrote in their own CLI args', () => {
@@ -85,5 +76,17 @@ describe('Kiro engine selection', () => {
 
   it('does not offer a mid-session engine switch, which the CLI cannot do', () => {
     expect(engineOption()?.apply.midSession).toEqual({ kind: 'unsupported' })
+  })
+})
+
+describe('Kiro reasoning effort', () => {
+  it('emits no --effort until the user picks one, so cli.json keeps its saved level', () => {
+    const untouched = resolveAgentSessionOptionLaunch('kiro', { model: 'auto' })
+    expect(untouched.args).not.toContain('--effort')
+  })
+
+  it('emits the level the user picked', () => {
+    const resolved = resolveAgentSessionOptionLaunch('kiro', { model: 'auto', effort: 'high' })
+    expect(resolved.args).toEqual(['--model', 'auto', '--effort', 'high'])
   })
 })

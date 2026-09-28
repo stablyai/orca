@@ -20,6 +20,7 @@ import {
   getAccountsGeminiSearchEntries,
   getAccountsCursorSearchEntries,
   getAccountsGrokSearchEntries,
+  getAccountsKiroSearchEntries,
   getAccountsLocationSearchEntries,
   getAccountsMiniMaxSearchEntries,
   getAccountsOpencodeSearchEntries,
@@ -386,8 +387,11 @@ export function AccountsPane({
     matchesSettingsSearch(searchQuery, getAccountsCursorSearchEntries()) ? (
       <CursorAccountsSection key="cursor" />
     ) : null,
-    // Kiro is CLI/SSO-auth; the section is always available (no credential to gate on).
-    <KiroAccountsSection key="kiro" />
+    // Kiro is CLI/SSO-auth, so nothing gates the section on a stored credential —
+    // but it still answers the search box like every other provider.
+    matchesSettingsSearch(searchQuery, getAccountsKiroSearchEntries()) ? (
+      <KiroAccountsSection key="kiro" />
+    ) : null
   ]
 
   return (

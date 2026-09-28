@@ -1,49 +1,75 @@
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { dirname, join } from 'node:path'
+import { describe, expect, it, vi } from 'vitest'
+import type { ProcessResult } from '../../shared/child-process/run-process'
 import { enableKiroTerminalTitle } from './kiro-terminal-title-setting'
 
-function settingsPathIn(dir = mkdtempSync(join(tmpdir(), 'kiro-settings-'))): string {
-  return join(dir, 'nested', 'cli.json')
+function settingsPathIn(): string {
+  return join(mkdtempSync(join(tmpdir(), 'kiro-settings-')), 'nested', 'cli.json')
+}
+
+function writeSettings(path: string, content: string): void {
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, content, 'utf-8')
+}
+
+function runner(result: Partial<ProcessResult> = {}) {
+  return vi.fn(
+    async () =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the function under test reads only `code` and `timedOut` off the result.
+      ({ code: 0, stdout: '', stderr: '', timedOut: false, ...result }) as unknown as ProcessResult
+  )
 }
 
 describe('enableKiroTerminalTitle', () => {
-  it('creates the settings file when Kiro has never written one', () => {
-    const path = settingsPathIn()
-    expect(enableKiroTerminalTitle(path)).toBe('enabled')
-    expect(JSON.parse(readFileSync(path, 'utf-8'))).toEqual({ 'chat.terminalTitle': true })
-  })
-
-  it('preserves every other key the user has set', () => {
-    const path = settingsPathIn()
-    enableKiroTerminalTitle(path)
-    writeFileSync(
-      path,
-      JSON.stringify({ 'autocomplete.theme': 'dark', 'mcp.loadedBefore': true }),
-      'utf-8'
+  it('sets the key through the CLI when Kiro has never written a settings file', async () => {
+    const run = runner()
+    expect(
+      await enableKiroTerminalTitle({ settingsPath: settingsPathIn(), program: 'kiro-cli', run })
+    ).toBe('enabled')
+    expect(run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        program: 'kiro-cli',
+        args: ['settings', 'chat.terminalTitle', 'true']
+      })
     )
-    expect(enableKiroTerminalTitle(path)).toBe('enabled')
-    expect(JSON.parse(readFileSync(path, 'utf-8'))).toEqual({
-      'autocomplete.theme': 'dark',
-      'mcp.loadedBefore': true,
-      'chat.terminalTitle': true
-    })
   })
 
-  it('does not re-enable a value the user turned off', () => {
+  it('leaves the rest of the file to the CLI rather than rewriting it', async () => {
     const path = settingsPathIn()
-    enableKiroTerminalTitle(path)
-    writeFileSync(path, JSON.stringify({ 'chat.terminalTitle': false }), 'utf-8')
-    expect(enableKiroTerminalTitle(path)).toBe('already-set')
-    expect(JSON.parse(readFileSync(path, 'utf-8'))['chat.terminalTitle']).toBe(false)
+    writeSettings(path, JSON.stringify({ 'autocomplete.theme': 'dark' }))
+    const run = runner()
+    expect(await enableKiroTerminalTitle({ settingsPath: path, program: 'kiro-cli', run })).toBe(
+      'enabled'
+    )
+    expect(run).toHaveBeenCalledTimes(1)
   })
 
-  it('leaves a file it cannot parse alone', () => {
+  it('does not re-enable a value the user turned off', async () => {
     const path = settingsPathIn()
-    enableKiroTerminalTitle(path)
-    writeFileSync(path, '{ not json', 'utf-8')
-    expect(enableKiroTerminalTitle(path)).toBe('failed')
-    expect(readFileSync(path, 'utf-8')).toBe('{ not json')
+    writeSettings(path, JSON.stringify({ 'chat.terminalTitle': false }))
+    const run = runner()
+    expect(await enableKiroTerminalTitle({ settingsPath: path, program: 'kiro-cli', run })).toBe(
+      'already-set'
+    )
+    expect(run).not.toHaveBeenCalled()
+  })
+
+  it('leaves a file it cannot parse alone', async () => {
+    const path = settingsPathIn()
+    writeSettings(path, '{ not json')
+    const run = runner()
+    expect(await enableKiroTerminalTitle({ settingsPath: path, program: 'kiro-cli', run })).toBe(
+      'failed'
+    )
+    expect(run).not.toHaveBeenCalled()
+  })
+
+  it('reports failure when the CLI call does not succeed', async () => {
+    const run = runner({ code: 1, stderr: 'no such setting' })
+    expect(
+      await enableKiroTerminalTitle({ settingsPath: settingsPathIn(), program: 'kiro-cli', run })
+    ).toBe('failed')
   })
 })

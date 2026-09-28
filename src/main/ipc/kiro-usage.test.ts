@@ -18,6 +18,7 @@ vi.mock('../kiro-usage/kiro-usage-refresh-registry', () => ({
 import { registerKiroUsageHandlers } from './kiro-usage'
 import type { RateLimitService } from '../rate-limits/service'
 
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handlers pass the service straight through to the mocked refresh registry; nothing on it is read here.
 const service = {} as RateLimitService
 
 describe('registerKiroUsageHandlers', () => {

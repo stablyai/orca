@@ -6,6 +6,7 @@ import { KiroUsageBackgroundRefresh } from './kiro-usage-background-refresh'
 // spawning its own ~10s kiro-cli call against the same account.
 const refreshersByService = new WeakMap<RateLimitService, KiroUsageBackgroundRefresh>()
 
+/** The one refresher for this service, created on first ask. */
 export function getKiroUsageRefresh(rateLimits: RateLimitService): KiroUsageBackgroundRefresh {
   const existing = refreshersByService.get(rateLimits)
   if (existing) {

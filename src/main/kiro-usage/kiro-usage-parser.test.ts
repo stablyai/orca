@@ -43,4 +43,24 @@ describe('parseKiroUsageOutput', () => {
   it('rejects a zero or invalid limit', () => {
     expect(parseKiroUsageOutput('Credits (5 of 0 covered in plan)')).toBeNull()
   })
+
+  it('clamps an over-plan percentage, which the mobile snapshot would reject outright', () => {
+    const quota = parseKiroUsageOutput('Credits (1400 of 1000 covered in plan)\n\u2588 140.0%')
+    expect(quota?.used).toBe(1400)
+    expect(quota?.usedPercent).toBe(100)
+  })
+
+  it('ignores a stray percentage that is not the plan meter', () => {
+    const quota = parseKiroUsageOutput(
+      'downloading index 87%\nCredits (250 of 1000 covered in plan)\n\u2588 25.0%'
+    )
+    expect(quota?.usedPercent).toBe(25)
+  })
+
+  it('prefers used/limit when the percentage after the meter disagrees with it', () => {
+    const quota = parseKiroUsageOutput(
+      'Credits (250 of 1000 covered in plan)\nmcp server retry 3%\n'
+    )
+    expect(quota?.usedPercent).toBe(25)
+  })
 })

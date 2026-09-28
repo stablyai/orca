@@ -57,18 +57,21 @@ const KIRO_EFFORT: CatalogOption = {
   kind: {
     type: 'select',
     choices: [
+      { value: 'default', label: 'CLI default' },
       { value: 'low', label: 'Low' },
       { value: 'medium', label: 'Medium' },
       { value: 'high', label: 'High' },
       { value: 'xhigh', label: 'Extra high' },
       { value: 'max', label: 'Max' }
     ],
-    // Why: `--effort` seeds the initial level and the CLI documents no default
-    // of its own, so an untouched picker must not escalate past the middle.
-    defaultValue: 'medium'
+    // Why the default emits nothing: `--effort` is a session override that beats
+    // the `chat.modelDefaults` effort saved in cli.json. Sending a level the user
+    // never picked would silently discard their own saved preference.
+    defaultValue: 'default',
+    defaultIsCliDefault: true
   },
   apply: {
-    launchArgs: (value) => ['--effort', String(value)],
+    launchArgs: (value) => (value === 'default' ? [] : ['--effort', String(value)]),
     agentArgsOverride: (tokens) => hasFlag(tokens, ['--effort']),
     removeAgentArgs: (tokens) => removeAgentArgOption(tokens, ['--effort']),
     midSession: { kind: 'unsupported' }
@@ -117,6 +120,7 @@ export function parseKiroModelList(stdout: string): CatalogModel[] {
   if (typeof payload !== 'object' || payload === null) {
     return []
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the two keys are read back as `unknown`, so this only names them, it does not claim their types.
   const { models, default_model: defaultModel } = payload as {
     models?: unknown
     default_model?: unknown
@@ -130,6 +134,7 @@ export function parseKiroModelList(stdout: string): CatalogModel[] {
     if (typeof raw !== 'object' || raw === null) {
       continue
     }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every field of KiroModelListEntry is `unknown` and re-checked below; the cast only names them.
     const entry = raw as KiroModelListEntry
     const id = typeof entry.model_id === 'string' ? entry.model_id.trim() : ''
     if (id.length === 0 || seen.has(id)) {
