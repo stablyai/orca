@@ -1540,6 +1540,7 @@ jobs:
           }
 
       - name: Install SignPath PowerShell module
+        id: install-signpath
         if: matrix.platform == 'win' && github.run_attempt == 1
         uses: ./.github/actions/install-signpath-module
 
@@ -2157,6 +2158,38 @@ jobs:
 
           # Outside the catch so the FAILED evidence report survives intact.
           if ($policyFailure) { throw $policyFailure }
+
+      - name: Notify Slack when Windows signing fails
+        if: failure() && matrix.platform == 'win' && github.run_attempt == 1 && steps.install-signpath.outcome != '' && steps.install-signpath.outcome != 'skipped'
+        continue-on-error: true
+        shell: pwsh
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          TAG: ${{ needs.cut.outputs.tag }}
+          GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          INNER_REQUEST_ID: ${{ steps.submit-inner-signing.outputs.signing-request-id }}
+          INSTALLER_REQUEST_ID: ${{ steps.submit-signing-request.outputs.signing-request-id }}
+          INSTALLER_SUBMISSION_OUTCOME: ${{ steps.submit-signing-request.outcome }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:SLACK_WEBHOOK_URL)) {
+            throw 'SLACK_WEBHOOK_URL is missing; cannot notify release approvers of the signing failure.'
+          }
+          $stage = 'inner-binary signing or installer rebuild'
+          if ($env:INSTALLER_SUBMISSION_OUTCOME -in @('success', 'failure')) {
+            $stage = 'installer signing or final signature verification'
+          }
+          $message = "Orca Windows release ``$($env:TAG)`` failed during $stage (including approval timeouts). Publication is blocked.`n<$($env:GITHUB_RUN_URL)|Open failed GitHub Actions run>"
+          foreach ($request in @(
+            @{ Id = $env:INNER_REQUEST_ID; Label = 'Inner-binary signing request' },
+            @{ Id = $env:INSTALLER_REQUEST_ID; Label = 'Installer signing request' }
+          )) {
+            if (-not [string]::IsNullOrWhiteSpace($request.Id)) {
+              $message += "`n<https://app.signpath.io/Web/c37aa192-a27a-4377-9c90-5d6c95912dc0/SigningRequests/$($request.Id)|$($request.Label)>"
+            }
+          }
+          $message += "`nCheck the failed step before retrying. Late SignPath approval does not resume this run; missing Windows assets require a fresh release dispatch, not Re-run failed jobs."
+          $payload = @{ text = $message } | ConvertTo-Json
+          Invoke-RestMethod -Method Post -Uri $env:SLACK_WEBHOOK_URL -ContentType 'application/json' -Body $payload
 
       - name: Upload Windows inner signing evidence
         if: always() && matrix.platform == 'win' && github.run_attempt == 1

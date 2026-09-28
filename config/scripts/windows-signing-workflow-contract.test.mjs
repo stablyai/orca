@@ -195,7 +195,8 @@ describe('Windows signing workflow contract', () => {
 
     expect(outerVerifyIndex).toBeGreaterThan(-1)
     expect(innerVerifyIndex).toBe(outerVerifyIndex + 1)
-    expect(evidenceIndex).toBe(innerVerifyIndex + 1)
+    expect(stepNames[innerVerifyIndex + 1]).toBe('Notify Slack when Windows signing fails')
+    expect(evidenceIndex).toBe(innerVerifyIndex + 2)
     expect(publishIndex).toBe(evidenceIndex + 1)
 
     expect(steps[innerVerifyIndex].env.ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED).toBe('true')
