@@ -73,8 +73,8 @@ export default function TerminalProbeRoute() {
     globalThis.__orcaTerminalEngineErrors = globalThis.__orcaTerminalEngineErrors ?? []
     globalThis.__orcaTerminalBeforeInput = []
     globalThis.__orcaTerminalProbe = {
-      init: (cols, rows, data) =>
-        handleRef.current?.init({ cols, rows, data, oscLinks: [], frame: frameRef.current }),
+      init: (cols, rows, initialData) =>
+        handleRef.current?.init({ cols, rows, initialData, oscLinks: [], frame: frameRef.current }),
       write: (data) => handleRef.current?.write(data),
       selectAll: () => handleRef.current?.doSelectAll(),
       fit: () => handleRef.current?.fitDimensions(frameRef.current),

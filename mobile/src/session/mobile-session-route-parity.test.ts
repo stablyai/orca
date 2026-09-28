@@ -136,7 +136,8 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // Again when the document took the hold rule and the subscribe stopped holding its grid.
 // Again when an init took one options object.
 // Again when the frame's layout became one `notifyTerminalFrame`.
-const HEAD_CALLBACK_BODY_SHA256 = '8f2ecfc86d6b50dfcf2248135c12a1a97c0b63a50176fc330781e805f388bbd3'
+// Again when the init option took the message's name, `initialData`.
+const HEAD_CALLBACK_BODY_SHA256 = '4848e925f478f1656f26031c1bdebbb9f2da60811c7e91cfd732fc9da9764079'
 // Refreshed for the startup effect: both `worktree.activate` sends became `worktreeActivate`, and
 // the sleeping-agent check reads that operation's verdict instead of the reply envelope. Refreshed
 // again when the reporter took the reply and interpreted it itself, retiring the hand-built

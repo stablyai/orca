@@ -195,7 +195,7 @@ export function useMobileSessionTerminalSubscription(
               })
               return
             }
-            ref.init({ cols, rows, data: initialData, oscLinks, frame: terminalFrameRef.current })
+            ref.init({ cols, rows, initialData, oscLinks, frame: terminalFrameRef.current })
             initializedHandlesRef.current.add(handle)
             if (data.displayMode) {
               const displayMode = data.displayMode as MobileDisplayMode
@@ -266,7 +266,7 @@ export function useMobileSessionTerminalSubscription(
               getTerminalRef(handle)?.init({
                 cols,
                 rows,
-                data: serialized,
+                initialData: serialized,
                 preserveScroll: true,
                 oscLinks,
                 frame: terminalFrameRef.current

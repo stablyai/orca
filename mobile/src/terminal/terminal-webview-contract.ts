@@ -99,8 +99,7 @@ export type TerminalWebViewProps = {
 export type TerminalInit = {
   cols: number
   rows: number
-  data?: string
-  // Why: a width reflow re-streams the same content rewrapped; keep the reader's place.
+  initialData?: string
   preserveScroll?: boolean
   oscLinks?: TerminalOscLinkRange[]
   frame: TerminalFrame | null

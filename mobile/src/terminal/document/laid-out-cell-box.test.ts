@@ -128,7 +128,7 @@ describe('a started document', () => {
   const reflowTo = (scope: TerminalDocumentScope, cols: number) =>
     handleMsg(scope, { type: 'reflow', cols, rows: 47 })
 
-  it('takes the frame the app laid out from init, as from a measure', () => {
+  it('takes the frame the app laid out from init, resize and reflow', () => {
     const { scope } = started()
     try {
       handleMsg(scope, {

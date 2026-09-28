@@ -125,7 +125,7 @@ describe('terminal write coalescer boundaries', () => {
   it('clears the coalescer before posting init and clear (snapshot supersession)', () => {
     // Anchor on the init() signature (unique) — 'init(' alone also matches comments.
     const initStart = controllerSource.indexOf(
-      'init({ cols, rows, data, preserveScroll, oscLinks, frame }'
+      'init({ cols, rows, initialData, preserveScroll, oscLinks, frame }'
     )
     const initClear = controllerSource.indexOf('writeCoalescer.clear()', initStart)
     const initPost = controllerSource.indexOf("type: 'init'", initStart)

@@ -263,7 +263,7 @@ export function useTerminalWebViewController(
       write(data: string) {
         writeCoalescer.write(data)
       },
-      init({ cols, rows, data, preserveScroll, oscLinks, frame }: TerminalInit) {
+      init({ cols, rows, initialData, preserveScroll, oscLinks, frame }: TerminalInit) {
         // Why: arm a fresh ready promise BEFORE posting init. The document resolves it via the
         // 'ready' notify at the end of its rAF chain.
         promises.armReady()
@@ -274,7 +274,7 @@ export function useTerminalWebViewController(
           type: 'init',
           cols,
           rows,
-          initialData: data,
+          initialData,
           oscLinks,
           terminalTheme,
           fontScale: textScale,
