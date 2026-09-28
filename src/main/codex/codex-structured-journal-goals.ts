@@ -10,14 +10,11 @@ import type {
 import {
   codexGoalJournalDigest,
   codexGoalJournalIdentity,
+  codexGoalJournalSignature,
   parseCodexGoalJournalItemId,
   type CodexGoalJournalState
 } from './codex-goal-journal-identity'
-import {
-  codexGoalGeneration,
-  codexGoalRowSignature,
-  isCodexGoalFrameMethod
-} from './codex-goal-journal-rows'
+import { isCodexGoalFrameMethod } from './codex-goal-journal-rows'
 import {
   CODEX_JOURNAL_ADMITTED,
   type CodexJournalTranslationAdmission
@@ -81,16 +78,12 @@ export class CodexJournalGoals {
     if (!isCodexGoalFrameMethod(event.method)) {
       return null
     }
-    const signature = codexGoalRowSignature(event.method, event.params)
-    if (signature === null) {
+    const signatureKey = codexGoalJournalSignature(event.method, event.params)
+    if (signatureKey === null) {
       return null
     }
     this.synchronizeTransientEpoch()
     const thread = codexGoalJournalDigest(event.threadId)
-    const reportedGeneration = codexGoalGeneration(event.params)
-    const providerGeneration =
-      reportedGeneration === null ? null : codexGoalJournalDigest(`provider:${reportedGeneration}`)
-    const signatureKey = codexGoalJournalDigest(`${signature}\u0000${providerGeneration ?? ''}`)
     const translated = unhandledProviderFrameJournalItem(
       'codex',
       `notification:${event.method}`,
