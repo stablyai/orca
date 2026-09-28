@@ -266,7 +266,7 @@
     "happy-dom": "^20.11.8",
     "html-to-image": "^1.11.13",
     "husky": "^9.1.7",
-    "i18next-cli": "1.65.0",
+    "i18next-cli": "1.74.1",
     "katex": "^0.16.45",
     "lint-staged": "^16.4.0",
     "lowlight": "^3.3.0",
