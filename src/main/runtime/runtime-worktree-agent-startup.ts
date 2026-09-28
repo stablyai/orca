@@ -21,6 +21,7 @@ import {
   detectInstalledAgentsWithShellPathHydration,
   detectRemoteAgents
 } from '../preflight/agent-detection'
+import { enableKiroTerminalTitle } from '../kiro/kiro-terminal-title-setting'
 import { markRemoteAgentWorkspaceTrusted } from '../remote-agent-trust-presets'
 import type { RuntimeStore } from './runtime-store-contract'
 
@@ -180,6 +181,17 @@ export function buildWorktreeStartupForAgent(
           }
         }
       : {})
+  }
+}
+
+/**
+ * Vendor settings Orca writes before a local launch so the pane can be
+ * identified once it starts. Separate from trust: it is global to the CLI, not
+ * scoped to a workspace, and a failure only costs the sidebar its icon.
+ */
+export function applyLocalAgentLaunchPreflight(agent: TuiAgent): void {
+  if (TUI_AGENT_CONFIG[agent].preflightIdentitySetting === 'kiro-terminal-title') {
+    enableKiroTerminalTitle()
   }
 }
 

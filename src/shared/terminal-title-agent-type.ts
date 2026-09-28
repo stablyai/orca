@@ -6,6 +6,7 @@ import {
 } from './agent-name-token-match'
 import { containsAgentSpinnerGlyph, isCursorAgentTitle } from './agent-title-core'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
+import { isKiroNativeTitle } from './kiro-terminal-title'
 import {
   getPiCompatibleSyntheticAgentLabel,
   isLegacyPiCompatibleTitle
@@ -87,7 +88,12 @@ export function isPiAgentTitle(title: string): boolean {
  * agents have different (or no) caching semantics.
  */
 function computeIsClaudeAgent(title: string): boolean {
-  if (!title || isClaudeManagementTitle(title) || isOpenCodeNativeTitle(title)) {
+  if (
+    !title ||
+    isClaudeManagementTitle(title) ||
+    isOpenCodeNativeTitle(title) ||
+    isKiroNativeTitle(title)
+  ) {
     return false
   }
   const lower = title.toLowerCase()
@@ -139,6 +145,11 @@ function computeAgentLabel(title: string): string | null {
   // include status glyphs from other agents without changing OpenCode identity.
   if (isOpenCodeNativeTitle(title)) {
     return 'OpenCode'
+  }
+  // Why: same rule as OpenCode — `kiro: ` owns the whole title, and the session
+  // text after it may name another agent without changing the pane's owner.
+  if (isKiroNativeTitle(title)) {
+    return 'Kiro'
   }
   // Why: Claude Code title text is often the task title. If that task mentions
   // another CLI, the Claude-specific prefix is the identity signal, not the words.
@@ -232,6 +243,7 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TuiAgent>> = {
   Devin: 'devin',
   Antigravity: 'antigravity',
   OpenCode: 'opencode',
+  Kiro: 'kiro',
   'MiMo Code': 'mimo-code',
   Aider: 'aider',
   Cursor: 'cursor',

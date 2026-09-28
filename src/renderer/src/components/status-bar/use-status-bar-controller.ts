@@ -16,6 +16,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const rateLimits = useAppStore((s) => s.rateLimits)
   const settings = useAppStore((s) => s.settings)
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
+  const refreshKiroUsage = useAppStore((s) => s.refreshKiroUsage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const usagePercentageDisplay = normalizeUsagePercentageDisplay(
@@ -67,6 +68,13 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     void ensureDetectedAgents()
   }, [ensureDetectedAgents])
 
+  // Why: Kiro usage is an on-demand ~10s CLI call, not part of the rate-limit
+  // poll; ask for it once on mount so its roster meter populates like other
+  // providers. The value arrives over the rate-limit push, not this call.
+  useEffect(() => {
+    void refreshKiroUsage()
+  }, [refreshKiroUsage])
+
   const containerRefCallback = useCallback((node: HTMLDivElement | null) => {
     if (resizeObserverRef.current) {
       resizeObserverRef.current.disconnect()
@@ -87,19 +95,19 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     setIsRefreshing(true)
     try {
       // Why: re-run PATH detection so a freshly-installed/removed CLI's bar appears/hides without restarting Orca.
-      await Promise.all([refreshRateLimits(), refreshDetectedAgents()])
+      await Promise.all([refreshRateLimits(), refreshDetectedAgents(), refreshKiroUsage(true)])
     } finally {
       if (mountedRef.current) {
         setIsRefreshing(false)
       }
     }
-  }, [isRefreshing, refreshRateLimits, refreshDetectedAgents])
+  }, [isRefreshing, refreshRateLimits, refreshDetectedAgents, refreshKiroUsage])
 
   if (!statusBarVisible) {
     return null
   }
 
-  const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok } = rateLimits
+  const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, kiro } = rateLimits
 
   // Why: a bar is earned by a live snapshot or durable Settings setup; detection-gating hides per-CLI bars when the agent isn't on PATH.
   // Why: Antigravity has no persisted credential, so a checked status item + detected CLI is the durable "show its slot" signal.
@@ -122,6 +130,9 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const visibleAntigravity = getVisibleUsageProvider('antigravity', antigravity, usageSettings)
   const visibleMiniMax = getVisibleUsageProvider('minimax', minimax, usageSettings)
   const visibleGrok = getVisibleUsageProvider('grok', grok, usageSettings)
+  // Why: Kiro is CLI/SSO-auth (no persisted credential), so — like Grok — its
+  // durable signal is the kiro CLI being on PATH plus the status-bar item on.
+  const visibleKiro = getVisibleUsageProvider('kiro', kiro, usageSettings)
   const showClaude =
     visibleClaude !== null &&
     statusBarItems.includes('claude') &&
@@ -148,6 +159,10 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     visibleGrok !== null &&
     statusBarItems.includes('grok') &&
     isStatusBarItemAvailable('grok', detectedAgentIds)
+  // Why: Kiro's durable signal is the kiro CLI on PATH (like Grok). detectedAgentIds
+  // is null pre-detection — keep the bar eligible then so it doesn't flicker on cold start.
+  const kiroCliAvailable = detectedAgentIds === null || detectedAgentIds.includes('kiro')
+  const showKiro = visibleKiro !== null && statusBarItems.includes('kiro-usage') && kiroCliAvailable
   // Why: OpenCode Go is web/cookie-auth, not a CLI on PATH, so detection-gating doesn't apply.
   const visibleOpencodeGo = getVisibleUsageProvider('opencode-go', opencodeGo, usageSettings)
   const showOpencodeGo = visibleOpencodeGo !== null && statusBarItems.includes('opencode-go')
@@ -165,11 +180,12 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showKimi ||
     showAntigravity ||
     showMiniMax ||
-    showGrok
+    showGrok ||
+    showKiro
   const anyVisible = hasVisibleUsageMeters || showResourceUsage
   // Why: include Settings so durable managed accounts count — a configured user isn't shown the empty state while snapshots hydrate.
   const isEmptyUsageState = isUsageEmptyState(
-    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok },
+    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, kiro },
     usageSettings
   )
   // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later.
@@ -182,7 +198,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     kimi?.status === 'fetching' ||
     antigravity?.status === 'fetching' ||
     minimax?.status === 'fetching' ||
-    grok?.status === 'fetching'
+    grok?.status === 'fetching' ||
+    kiro?.status === 'fetching'
 
   const compact = containerWidth < 900
   const iconOnly = containerWidth < 500
@@ -195,6 +212,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   // otherwise an empty trigger would bypass those visibility controls.
   const rosterProviders = [
     showClaude ? visibleClaude : null,
+    showKiro ? visibleKiro : null,
     showCodex ? visibleCodex : null,
     showGemini ? visibleGemini : null,
     showAntigravity ? visibleAntigravity : null,

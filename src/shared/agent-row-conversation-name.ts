@@ -9,6 +9,7 @@ import type { AgentType } from './agent-status-types'
 import { isClaudeManagementTitle } from './agent-title-core'
 import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
 import { formatAgentTypeLabel } from './agent-type-label'
+import { getKiroNativeTitleSessionText } from './kiro-terminal-title'
 import { isMeaningfulOpenCodeTerminalTitle } from './opencode-terminal-title'
 import { SYNTHETIC_AGENT_TITLE_PROFILES } from './synthetic-agent-title'
 import type { TerminalTab } from './terminal-tab-types'
@@ -134,6 +135,13 @@ export function getAgentRowConversationName(
   if (isMeaningfulOpenCodeTerminalTitle(liveTitle)) {
     return liveTitle
   }
+  // Why: `kiro: ` is vendor identity, not a name — the session title is what
+  // follows it. Kiro falls back to the cwd when a session is still unnamed, so
+  // that form defers to the generated title below rather than naming the row.
+  const kiroSessionText = getKiroNativeTitleSessionText(liveTitle)
+  if (kiroSessionText && !isCwdLikeTitle(kiroSessionText)) {
+    return kiroSessionText
+  }
   const generatedTitle = generatedTitlesEnabled ? tab.generatedTitle?.trim() : ''
   if (generatedTitle) {
     return generatedTitle
@@ -142,7 +150,7 @@ export function getAgentRowConversationName(
     return null
   }
   return conversationNameFromLiveTitle(
-    liveTitle,
+    kiroSessionText ?? liveTitle,
     agentType,
     formatAgentTypeLabel(agentType).toLowerCase(),
     tab.defaultTitle

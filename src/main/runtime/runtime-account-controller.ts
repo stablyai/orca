@@ -5,6 +5,7 @@ import type {
 } from '../codex-accounts/service'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import type { RateLimitService } from '../rate-limits/service'
+import { getKiroUsageRefresh } from '../kiro-usage/kiro-usage-refresh-registry'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
@@ -69,6 +70,7 @@ export class RuntimeAccountController {
 
   async refreshForMobile(): Promise<void> {
     const { rateLimits } = this.requireServices()
+    this.startKiroUsageRefresh({ force: true })
     await Promise.allSettled([
       rateLimits.refresh(),
       rateLimits.fetchInactiveClaudeAccountsOnOpen(),
@@ -78,11 +80,20 @@ export class RuntimeAccountController {
 
   async refreshForMobileSubscriber(): Promise<void> {
     const { rateLimits } = this.requireServices()
+    this.startKiroUsageRefresh()
     await Promise.allSettled([
       rateLimits.refreshIfStale(),
       rateLimits.fetchInactiveClaudeAccountsOnOpen(),
       rateLimits.fetchInactiveCodexAccountsOnOpen()
     ])
+  }
+
+  // Why not awaited: the kiro-cli /usage read costs ~10s and retries, while the
+  // phone's RPC deadline is 30s — awaiting it here spent the client's whole
+  // budget on one provider and failed the refresh outright. The result reaches
+  // the phone over accounts.subscribe when it lands, like any polled provider.
+  private startKiroUsageRefresh(options: { force?: boolean } = {}): void {
+    void getKiroUsageRefresh(this.requireServices().rateLimits).requestRefresh(options)
   }
 
   selectClaude(accountId: string | null): Promise<ClaudeRateLimitAccountsState> {

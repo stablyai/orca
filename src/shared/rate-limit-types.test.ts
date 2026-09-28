@@ -16,6 +16,7 @@ describe('RateLimitState', () => {
       antigravity: null,
       minimax: null,
       grok: null,
+      kiro: null,
       minimaxCookieConfigured: false,
       minimaxApiKeyConfigured: false,
       grokAuthConfigured: false,

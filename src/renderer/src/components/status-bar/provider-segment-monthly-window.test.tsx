@@ -184,6 +184,52 @@ describe('ProviderSegment monthly window', () => {
   })
 })
 
+describe('ProviderSegment reset credits', () => {
+  function codexWithCredits(availableCount: number): ProviderRateLimits {
+    return {
+      provider: 'codex',
+      session: windowOf(42, 300),
+      weekly: windowOf(10, 10080),
+      rateLimitResetCredits: { availableCount },
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    }
+  }
+
+  it('shows the available reset-credit count inline when Codex reports credits', async () => {
+    const { ProviderSegment } = await import('./StatusBar')
+    const markup = renderToStaticMarkup(
+      <ProviderSegment p={codexWithCredits(2)} compact={false} display="used" mode="compact" />
+    )
+    expect(markup).toContain('2 rate-limit resets available')
+  })
+
+  it('uses singular copy for a single reset credit', async () => {
+    const { ProviderSegment } = await import('./StatusBar')
+    const markup = renderToStaticMarkup(
+      <ProviderSegment p={codexWithCredits(1)} compact={false} display="used" mode="compact" />
+    )
+    expect(markup).toContain('1 rate-limit reset available')
+  })
+
+  it('hides the reset-credit badge in the icon-only compact bar', async () => {
+    const { ProviderSegment } = await import('./StatusBar')
+    const markup = renderToStaticMarkup(
+      <ProviderSegment p={codexWithCredits(3)} compact={true} display="used" mode="compact" />
+    )
+    expect(markup).not.toContain('rate-limit reset')
+  })
+
+  it('omits the badge when no reset credits are available', async () => {
+    const { ProviderSegment } = await import('./StatusBar')
+    const markup = renderToStaticMarkup(
+      <ProviderSegment p={codexWithCredits(0)} compact={false} display="used" mode="compact" />
+    )
+    expect(markup).not.toContain('rate-limit reset')
+  })
+})
+
 describe('undefined provider window safety (crash d2c1da69 / bb74236c)', () => {
   // A partial/rehydrated provider can carry an undefined (not null) window even
   // though the type declares `session`/`weekly` as `RateLimitWindow | null`. The

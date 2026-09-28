@@ -293,6 +293,10 @@ vi.mock('../rate-limits', () => ({
   registerRateLimitHandlers: registerRateLimitHandlersMock
 }))
 
+vi.mock('../kiro-usage', () => ({
+  registerKiroUsageHandlers: vi.fn()
+}))
+
 vi.mock('../runtime', () => ({
   registerRuntimeHandlers: registerRuntimeHandlersMock
 }))

@@ -28,6 +28,7 @@ import {
 } from './usage-provider-slices'
 import { createBrowserSlice } from './browser'
 import { createRateLimitSlice } from './rate-limits'
+import { createKiroUsageSlice } from './kiro-usage'
 import { createSshSlice } from './ssh'
 import { createRuntimeEnvironmentSshSlice } from './runtime-environment-ssh'
 import { createAgentStatusSlice } from './agent-status'
@@ -83,6 +84,7 @@ export function createTestStore() {
     ...createOpenCodeUsageSlice(...a),
     ...createBrowserSlice(...a),
     ...createRateLimitSlice(...a),
+    ...createKiroUsageSlice(...a),
     ...createSshSlice(...a),
     ...createRuntimeEnvironmentSshSlice(...a),
     ...createAgentStatusSlice(...a),

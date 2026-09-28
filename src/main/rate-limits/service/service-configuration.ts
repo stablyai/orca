@@ -122,6 +122,9 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
     this.pruneInactiveCodexState()
     return {
       ...this.state,
+      // Why: Kiro usage is fetched on-demand (kiro-cli /usage) and stored via
+      // setKiroUsage during mobile refresh; publish it so paired clients see it.
+      kiro: this.kiroUsage,
       // Why: the cookie lives on the filesystem, not GlobalSettings; surface its presence so the renderer keeps the MiniMax bar across reloads.
       minimaxCookieConfigured: hasMiniMaxSessionCookie(),
       minimaxApiKeyConfigured: hasMiniMaxApiKey(),

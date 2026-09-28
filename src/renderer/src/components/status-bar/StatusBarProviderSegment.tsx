@@ -1,6 +1,7 @@
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, RotateCcw } from 'lucide-react'
 import React from 'react'
 import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
+import { getInlineResetCreditCount } from './reset-credit-indicator'
 import {
   getDisplayedUsagePercentage,
   type UsagePercentageDisplay
@@ -84,6 +85,8 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
       return 'R'
     case 'codex':
       return 'X'
+    case 'kiro':
+      return 'Ki'
   }
 }
 
@@ -170,6 +173,29 @@ function VerboseProviderUsage({
   )
 }
 
+// Compact, always-visible indicator for available Codex reset credits. The full
+// expiry detail stays in ProviderPanel; here we only show the spendable count.
+function ResetCreditBadge({ count }: { count: number }): React.JSX.Element {
+  const label =
+    count === 1
+      ? translate('auto.components.status.bar.StatusBar.45198c7d95', '1 rate-limit reset available')
+      : translate(
+          'auto.components.status.bar.StatusBar.bce421cba3',
+          '{{value0}} rate-limit resets available',
+          { value0: String(count) }
+        )
+  return (
+    <span
+      className="inline-flex items-center gap-0.5 text-muted-foreground tabular-nums"
+      title={label}
+      aria-label={label}
+    >
+      <RotateCcw size={11} className="text-muted-foreground/80" />
+      {count}
+    </span>
+  )
+}
+
 export function ProviderSegment({
   p,
   compact,
@@ -228,6 +254,7 @@ export function ProviderSegment({
 
   // Has data (ok, fetching with stale data, or error with stale data)
   const isStale = p.status === 'error'
+  const resetCreditCount = getInlineResetCreditCount(p)
 
   return (
     <span className="inline-flex items-center gap-1.5">
@@ -247,6 +274,7 @@ export function ProviderSegment({
           showLabel={!compact}
         />
       ) : null}
+      {resetCreditCount !== null && !compact ? <ResetCreditBadge count={resetCreditCount} /> : null}
       {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
     </span>
   )

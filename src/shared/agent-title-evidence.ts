@@ -14,6 +14,7 @@ import {
   titleHasAgentName
 } from './agent-title-core'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
+import { isKiroNativeTitle } from './kiro-terminal-title'
 import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
 import { getPiCompatibleSyntheticAgentLabel } from './pi-compatible-synthetic-title'
 import {
@@ -275,6 +276,9 @@ function collectAnchoredNames(segments: readonly string[]): TuiAgent[] {
     // Its session text may name other agents without changing the OpenCode owner.
     if (isOpenCodeNativeTitle(segment)) {
       anchored.add('opencode')
+    }
+    if (isKiroNativeTitle(segment)) {
+      anchored.add('kiro')
     }
 
     const suffix = OWNER_SUFFIX_RE.exec(segment)

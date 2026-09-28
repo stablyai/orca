@@ -17,6 +17,7 @@ export {
   decodeAccountsSnapshot,
   getActiveProviderRateLimits,
   getInactiveProviderUsage,
+  getKiroProviderRateLimits,
   getUsageBarState,
   getWindowResetLabel,
   hasActiveProviderUsage,

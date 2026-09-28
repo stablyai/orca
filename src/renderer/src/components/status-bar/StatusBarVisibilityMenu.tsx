@@ -163,6 +163,16 @@ export function StatusBarVisibilityMenu({
           <Plug className="size-3.5" />
           {translate('auto.components.status.bar.StatusBar.9659e38343', 'Ports')}
         </DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem
+          checked={statusBarItems.includes('kiro-usage')}
+          onCheckedChange={() => {
+            recordFeatureInteraction('usage-tracking')
+            toggleStatusBarItem('kiro-usage')
+          }}
+        >
+          <AgentIcon agent="kiro" size={14} />
+          {translate('auto.components.status.bar.StatusBar.kiroUsageMenu', 'Kiro Usage')}
+        </DropdownMenuCheckboxItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )

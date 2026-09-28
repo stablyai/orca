@@ -29,6 +29,7 @@ type UsageProviderSnapshots = {
   antigravity: ProviderRateLimits | null | undefined
   minimax: ProviderRateLimits | null | undefined
   grok: ProviderRateLimits | null | undefined
+  kiro: ProviderRateLimits | null | undefined
 }
 
 type UsageProviderId = ProviderRateLimits['provider']
@@ -114,6 +115,12 @@ export function hasUsageProviderSettingsForProvider(
   if (providerId === 'grok') {
     return settings.grokAuthConfigured === true
   }
+  // Kiro has no persisted credential (CLI/SSO auth). Its durable signal is the
+  // kiro CLI on PATH, gated in the controller; once /usage is fetched the
+  // non-null snapshot makes isProviderConfigured carry visibility.
+  if (providerId === 'kiro') {
+    return false
+  }
   return false
 }
 
@@ -180,6 +187,7 @@ export function isUsageEmptyState(
     !isProviderConfigured(providers.kimi) &&
     !isProviderConfigured(providers.antigravity) &&
     !isProviderConfigured(providers.minimax) &&
-    !isProviderConfigured(providers.grok)
+    !isProviderConfigured(providers.grok) &&
+    !isProviderConfigured(providers.kiro)
   )
 }

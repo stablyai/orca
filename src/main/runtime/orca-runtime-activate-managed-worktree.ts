@@ -13,6 +13,7 @@ import type {
 import {
   buildWorktreeStartupForAgent,
   buildWorktreeStartupForDraft,
+  applyLocalAgentLaunchPreflight,
   markLocalWorktreeTrusted,
   markRemoteWorktreeTrusted
 } from './runtime-worktree-agent-startup'
@@ -159,6 +160,8 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
     agent: TuiAgent,
     workspacePath: string
   ): Promise<void> {
+    // Rides the same pre-launch hook: a vendor setting, not workspace trust.
+    applyLocalAgentLaunchPreflight(agent)
     await markLocalWorktreeTrusted(agent, workspacePath)
   }
 

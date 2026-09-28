@@ -36,6 +36,7 @@ import {
 } from './provider-account-visibility'
 import { Separator } from '../ui/separator'
 import { GrokAccountsSection } from './GrokAccountsSection'
+import { KiroAccountsSection } from './KiroAccountsSection'
 import type {
   AccountsPaneProps,
   AccountsPaneSectionModel,
@@ -377,7 +378,9 @@ export function AccountsPane({
       : null,
     matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
       <GrokAccountsSection key="grok" />
-    ) : null
+    ) : null,
+    // Kiro is CLI/SSO-auth; the section is always available (no credential to gate on).
+    <KiroAccountsSection key="kiro" />
   ].filter(Boolean)
 
   return (

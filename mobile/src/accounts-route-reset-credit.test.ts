@@ -54,6 +54,13 @@ vi.mock('expo-router', async () => {
 
 vi.mock('expo-crypto', () => ({ randomUUID: dependencies.randomUUID }))
 
+// Why: MobileKiroUsageSection pulls in bundled PNG requires (agent icon assets)
+// that the test transform can't parse; the reset-credit route test doesn't
+// exercise the Kiro card, so a placeholder is sufficient.
+vi.mock('./components/MobileKiroUsageSection', () => ({
+  MobileKiroUsageSection: () => null
+}))
+
 vi.mock('lucide-react-native', () => ({
   Check: 'Check',
   ChevronLeft: 'ChevronLeft',
