@@ -8,6 +8,7 @@ import type { RuntimeTerminalCreate, RuntimeTerminalPresentation } from './runti
 import { isTerminalLeafId } from './stable-pane-id'
 import { isValidTerminalTabId } from './terminal-tab-id'
 import type { TuiAgent } from './tui-agent'
+import type { TerminalOscColorQueryReplyColors } from './terminal-osc-color-reply'
 
 export { AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY as AGENT_SESSION_HOST_AUTHORITY_CAPABILITY } from './protocol-version'
 
@@ -112,6 +113,7 @@ export type RuntimeEnsureAgentSessionRequest =
       providerSession: AgentProviderSessionMetadata
       ompResumeFilePath?: string
       terminalKittyKeyboardProtocol?: boolean
+      terminalColorQueryReplies?: TerminalOscColorQueryReplyColors
       /** Explicit client override. Omission keeps launch defaults host-owned. */
       agentArgs?: string | null
       launchPreferences?: AgentLaunchPreferences
@@ -127,6 +129,7 @@ export type RuntimeEnsureAgentSessionResult = {
 export type RuntimeCreateAgentSessionRequest = {
   clientOperationId: string
   terminalKittyKeyboardProtocol?: boolean
+  terminalColorQueryReplies?: TerminalOscColorQueryReplyColors
   worktree: string
   agent: TuiAgent
   prompt?: string
