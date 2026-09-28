@@ -4,7 +4,7 @@ import { TerminalKittyKeyboardModeTracker } from '../../../../../shared/terminal
 import type { PtyConnectionDeps } from '../pty-connection-types'
 import { registerTerminalPaneRecoveryInstance } from '../terminal-pane-recovery'
 import { captureTabRecoveryGeneration } from '@/store/terminals/terminal-tab-recovery-ledger'
-import { RESET_TERMINAL_CURSOR_STYLE } from '../../../../../shared/terminal-mode-reset-profiles'
+import { TerminalIdleCursorReset } from '../terminal-idle-cursor-reset'
 import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { createTerminalStructuralReplayCoordinator } from '@/lib/pane-manager/terminal-structural-replay-coordinator'
 import { makePaneKey } from '../../../../../shared/stable-pane-id'
@@ -126,11 +126,16 @@ export function connectPanePty(
   // Why: idle callbacks are registered before the deferred PTY output plumbing
   // exists. Start with the shared scheduler, then switch to the PTY writer
   // so hidden-tab resets keep backlog-recovery callbacks and byte order.
+  const idleCursorReset = (session.idleCursorReset = new TerminalIdleCursorReset())
   session.queueAgentIdleTerminalModeReset = (): void => {
     if (session.disposed) {
       return
     }
-    writeTerminalOutput(session.pane.terminal, RESET_TERMINAL_CURSOR_STYLE, {
+    const reset = idleCursorReset.request()
+    if (!reset) {
+      return
+    }
+    writeTerminalOutput(session.pane.terminal, reset, {
       foreground: shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)
     })
   }
