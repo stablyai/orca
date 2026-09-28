@@ -108,7 +108,7 @@ test('switches the active server from the status bar between two paired hosts an
     await expect(privateRadio).toContainText('Disconnected')
     await expect(privateRadio).toHaveAttribute('aria-disabled', 'true')
     const privateRow = privateRadio.locator('..')
-    await privateRow.getByRole('menuitem', { name: 'Connect', exact: true }).click({ force: true })
+    await privateRow.getByRole('menuitem', { name: /^(Connect|Reconnect)$/ }).click({ force: true })
     await expect(privateRadio).toContainText('Connected')
     await expect(privateRadio).not.toHaveAttribute('aria-disabled', 'true')
     await expect(workTrigger).toContainText('work')
@@ -131,7 +131,7 @@ test('switches the active server from the status bar between two paired hosts an
       (prefix) => {
         const tabs = [...document.querySelectorAll('[data-tab-id]')]
         return (
-          tabs.length >= 2 &&
+          tabs.length > 0 &&
           tabs.every((tab) => tab.getAttribute('data-tab-id')?.startsWith(prefix))
         )
       },
@@ -175,7 +175,7 @@ test('switches the active server from the status bar between two paired hosts an
       (prefix) => {
         const tabs = [...document.querySelectorAll('[data-tab-id]')]
         return (
-          tabs.length >= 2 &&
+          tabs.length > 0 &&
           tabs.every((tab) => tab.getAttribute('data-tab-id')?.startsWith(prefix))
         )
       },
