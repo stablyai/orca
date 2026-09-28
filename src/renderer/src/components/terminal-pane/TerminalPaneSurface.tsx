@@ -63,6 +63,7 @@ export function TerminalPaneSurface({
     handleToggleNativeChat,
     hiddenStartupStyle,
     isActive,
+    isTabPinned,
     keybindings,
     managedPanes,
     managerRef,
@@ -89,6 +90,7 @@ export function TerminalPaneSurface({
     saveQuickCommand,
     searchOpen,
     searchStateRef,
+    searchInputRef,
     sessionRestoredBannerPaneIds,
     sessionStateSaveFailureOpen,
     setAgentSessionContinuation,
@@ -211,6 +213,7 @@ export function TerminalPaneSurface({
             onClose={() => setSearchOpen(false)}
             searchAddon={activePane.searchAddon ?? null}
             searchStateRef={searchStateRef}
+            inputRef={searchInputRef}
           />,
           activePane.container
         )}
@@ -300,6 +303,7 @@ export function TerminalPaneSurface({
         cwd={cwd ?? ''}
         showAlwaysOnHeaders={isActive && terminalContentVisible}
         showSplitButton={showSplitButton}
+        isTabPinned={isTabPinned}
         paneCount={paneCount}
         activePaneId={activePane?.id}
         panes={managedPanes}

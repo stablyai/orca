@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildPosixCommandPathLookupScript } from '../shared/posix-command-path-lookup'
 
-const { execFileAsyncMock } = vi.hoisted(() => ({
-  execFileAsyncMock: vi.fn()
+const { execFileAsyncMock, runProcessMock } = vi.hoisted(() => ({
+  execFileAsyncMock: vi.fn(),
+  runProcessMock: vi.fn()
 }))
 
 const {
@@ -30,6 +31,7 @@ vi.mock('../main/wsl', () => ({
   listWslDistrosAsync: listWslDistrosAsyncMock
 }))
 vi.mock('../main/git-bash', () => ({ isGitBashAvailable: isGitBashAvailableMock }))
+vi.mock('../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
 
 import {
   buildCommandLookupSpec,
@@ -65,6 +67,7 @@ function fishLookupArgs(command: string): string[] {
 
 beforeEach(() => {
   execFileAsyncMock.mockReset()
+  runProcessMock.mockReset()
   isPwshAvailableAsyncMock.mockReset()
   isWslAvailableAsyncMock.mockReset()
   listWslDistrosAsyncMock.mockReset()
@@ -237,6 +240,43 @@ describe('hasAbsoluteCommandPath', () => {
 })
 
 describe('PreflightHandler', () => {
+  it('reports a requested version from the resolved execution-host binary', async () => {
+    execFileAsyncMock.mockResolvedValue({
+      stdout: '__ORCA_AGENT_PATH__/home/dev/.local/bin/claude\n'
+    })
+    runProcessMock.mockResolvedValue({
+      code: 0,
+      signal: null,
+      stdout: '2.1.261 (Claude Code)\n',
+      stderr: '',
+      timedOut: false
+    })
+    const requestHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>()
+    const dispatcher = {
+      onRequest: vi.fn(
+        (method: string, handler: (params: Record<string, unknown>) => Promise<unknown>) => {
+          requestHandlers.set(method, handler)
+        }
+      )
+    }
+    new PreflightHandler(dispatcher as never)
+
+    await expect(
+      requestHandlers.get('preflight.detectAgents')!({
+        commands: [{ id: 'claude', cmd: 'claude', reportVersion: true }]
+      })
+    ).resolves.toEqual({
+      agents: ['claude'],
+      versions: { claude: '2.1.261 (Claude Code)' }
+    })
+    expect(runProcessMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        program: '/home/dev/.local/bin/claude',
+        args: ['--version']
+      })
+    )
+  })
+
   it('honors required commands when reporting detected agents', async () => {
     execFileAsyncMock.mockImplementation(async (_file, args) => {
       const script = String(args[1])

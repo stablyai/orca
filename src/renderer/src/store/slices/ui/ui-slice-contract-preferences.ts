@@ -175,7 +175,7 @@ export type UISlicePersistence = {
   dismissedUpdateVersion: string | null
   dismissUpdate: (versionOverride?: string) => void
   clearDismissedUpdateVersion: () => void
-  /** App version that dismissed the unexpected-sign-out card; null = never dismissed. */
+  /** Version when the sign-out notice was seen or dismissed; null = unseen. */
   dismissedUnexpectedSignoutVersion: string | null
   unexpectedSignoutDismissedVersions: string[]
   dismissUnexpectedSignoutCard: (version: string) => void

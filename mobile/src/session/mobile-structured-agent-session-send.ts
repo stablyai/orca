@@ -11,9 +11,9 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import {
   requestStructuredAgentSessionMutation,
-  structuredSessionOperationId,
   timeoutForDeadline
 } from './mobile-structured-agent-session-rpc'
+import { structuredSessionOperationId } from './structured-session-operation-id'
 import { mobileStructuredSendDelivery } from './mobile-structured-send-delivery'
 import {
   clearMobileStructuredSendOperation,

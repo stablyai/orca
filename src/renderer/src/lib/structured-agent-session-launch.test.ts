@@ -4,11 +4,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
 import type * as RecoveryModule from '@/lib/structured-agent-session-launch-recovery'
+import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'
 
 const mocks = vi.hoisted(() => ({
   abandonIntent: vi.fn(),
   callStructuredAgentSession: vi.fn(),
   createIntent: vi.fn(),
+  retryIntent: vi.fn(),
+  restoreIntent: vi.fn(),
   launch: vi.fn(),
   seedDraft: vi.fn(),
   clearDraft: vi.fn(),
@@ -27,6 +30,8 @@ vi.mock('@/lib/launch-structured-agent-session', () => {
   class StructuredAgentSessionCreateRefusalError extends Error {}
   return {
     createStructuredAgentSessionLaunchIntent: mocks.createIntent,
+    retryStructuredAgentSessionLaunchIntent: mocks.retryIntent,
+    restoreStructuredAgentSessionLaunchIntent: mocks.restoreIntent,
     abandonStructuredAgentSessionLaunchIntent: mocks.abandonIntent,
     launchStructuredAgentSession: mocks.launch,
     StructuredAgentSessionCreateRefusalError
@@ -77,17 +82,19 @@ vi.mock('@/lib/agent-catalog', () => ({
   ]
 }))
 
-import {
-  StructuredAgentSessionCreateRefusalError,
-  type StructuredAgentSessionLaunchIntent
-} from '@/lib/launch-structured-agent-session'
+import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
 import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync'
 import { launchAndReconcile } from '@/lib/structured-agent-session-launch-recovery'
 import {
   cancelStructuredAgentLaunch,
+  getStructuredAgentSessionLaunchLifecycle,
+  hasStructuredAgentSessionLaunchCancellationTombstone,
+  retryStructuredAgentSessionLaunch,
   startStructuredAgentLaunch
 } from './structured-agent-session-launch'
 import { readOutbox } from '@/components/native-chat/structured-agent-session-outbox-storage'
+import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
+import { resetStructuredAgentLaunchRegistryForTests } from './structured-agent-session-launch-registry'
 
 function launchIntent(
   worktreeId: string,
@@ -141,12 +148,24 @@ describe('startStructuredAgentLaunch', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
+    resetStructuredAgentLaunchPersistenceForTests()
+    resetStructuredAgentLaunchRegistryForTests()
     mocks.rendererTabs = {}
     mocks.listeners.clear()
     mocks.createIntent.mockImplementation((worktreeId: string, agent: 'claude' | 'codex') => {
       const intent = launchIntent(worktreeId, `${agent}-session-${worktreeId}`)
       return { ...intent, agent, params: { ...intent.params, agent } }
     })
+    mocks.retryIntent.mockImplementation((intent: StructuredAgentSessionLaunchIntent) => ({
+      ...intent,
+      params: {
+        ...intent.params,
+        envelope: {
+          ...intent.params.envelope,
+          clientOperationId: `${intent.params.envelope.clientOperationId}-retry`
+        }
+      }
+    }))
     mocks.callStructuredAgentSession.mockResolvedValue({
       ok: true,
       page: { fence: 1 }
@@ -206,7 +225,7 @@ describe('startStructuredAgentLaunch', () => {
     expect(readOutbox(intent.sessionId)).toEqual([])
   })
 
-  it('clears the draft seed when the launch is definitively refused', async () => {
+  it('preserves the draft seed when the launch is definitively refused', async () => {
     const worktreeId = 'wt-draft-refused'
     const intent = launchIntent(worktreeId, 'refused-draft-session')
     mocks.createIntent.mockReturnValueOnce(intent)
@@ -222,10 +241,11 @@ describe('startStructuredAgentLaunch', () => {
     await flushLaunchSettlement()
 
     expect(mocks.seedDraft).toHaveBeenCalledOnce()
-    expect(mocks.clearDraft).toHaveBeenCalledWith('structured-agent-session-refused-draft-session')
+    expect(mocks.clearDraft).not.toHaveBeenCalled()
+    expect(getStructuredAgentSessionLaunchLifecycle(worktreeId, intent.sessionId)).toBe('failed')
   })
 
-  it('clears the draft seed when the launch fails with a known outcome', async () => {
+  it('preserves the draft seed when the launch fails with a known outcome', async () => {
     const worktreeId = 'wt-draft-failed'
     const intent = launchIntent(worktreeId, 'failed-draft-session')
     mocks.createIntent.mockReturnValueOnce(intent)
@@ -241,7 +261,8 @@ describe('startStructuredAgentLaunch', () => {
     await flushLaunchSettlement()
 
     expect(mocks.seedDraft).toHaveBeenCalledOnce()
-    expect(mocks.clearDraft).toHaveBeenCalledWith('structured-agent-session-failed-draft-session')
+    expect(mocks.clearDraft).not.toHaveBeenCalled()
+    expect(getStructuredAgentSessionLaunchLifecycle(worktreeId, intent.sessionId)).toBe('failed')
   })
 
   it('clears the draft seed when the launch is cancelled', async () => {
@@ -292,13 +313,14 @@ describe('startStructuredAgentLaunch', () => {
 
   it('keeps a Claude and a Codex launch in the same worktree apart', async () => {
     const worktreeId = 'wt-two-agents'
-    mocks.launch.mockImplementation(async (intent: StructuredAgentSessionLaunchIntent) => {
-      mocks.rendererTabs[worktreeId] = [
-        ...(mocks.rendererTabs[worktreeId] ?? []),
-        { contentType: 'agent-session', entityId: intent.sessionId, worktreeId }
-      ]
-      return { sessionId: intent.sessionId, fence: 1 }
-    })
+    mocks.launch.mockImplementation(async (intent: StructuredAgentSessionLaunchIntent) => ({
+      sessionId: intent.sessionId,
+      fence: 1
+    }))
+    vi.mocked(refreshLocalStructuredSessionTabs).mockResolvedValue([
+      publishedSnapshot(worktreeId, `claude-session-${worktreeId}`),
+      publishedSnapshot(worktreeId, `codex-session-${worktreeId}`)
+    ])
 
     const claude = startStructuredAgentLaunch(worktreeId, 'claude')
     const codex = startStructuredAgentLaunch(worktreeId, 'codex')
@@ -317,16 +339,16 @@ describe('startStructuredAgentLaunch', () => {
 
   it('names the refused agent in the launch failure toast', async () => {
     const worktreeId = 'wt-claude-toast'
-    mocks.launch.mockRejectedValue(new Error('boom'))
-    vi.mocked(refreshLocalStructuredSessionTabs).mockResolvedValue([])
+    mocks.launch.mockRejectedValue(new StructuredAgentSessionCreateRefusalError('unsupported'))
 
     startStructuredAgentLaunch(worktreeId, 'claude')
     await flushLaunchSettlement()
 
     expect(toast.error).toHaveBeenCalledWith('Could not open Claude chat', expect.anything())
+    expect(toast.message).not.toHaveBeenCalled()
   })
 
-  it('completes from the host-emitted projection without listing inventory', async () => {
+  it('requires authoritative inventory even when a matching local tab exists', async () => {
     const worktreeId = 'wt-host-frame'
     const intent = launchIntent(worktreeId, 'session-host-frame')
     mocks.createIntent.mockReturnValueOnce(intent)
@@ -339,12 +361,17 @@ describe('startStructuredAgentLaunch', () => {
       }
       return { sessionId: intent.sessionId, fence: 1 }
     })
+    vi.mocked(refreshLocalStructuredSessionTabs).mockResolvedValue([
+      publishedSnapshot(worktreeId, intent.sessionId)
+    ])
 
     startStructuredAgentLaunch(worktreeId, 'codex')
     await flushLaunchSettlement()
 
     expect(mocks.launch).toHaveBeenCalledOnce()
-    expect(refreshLocalStructuredSessionTabs).not.toHaveBeenCalled()
+    expect(refreshLocalStructuredSessionTabs).toHaveBeenCalledWith(undefined, {
+      authoritative: true
+    })
     expect(toast.error).not.toHaveBeenCalled()
   })
 
@@ -478,29 +505,6 @@ describe('startStructuredAgentLaunch', () => {
     expect(toast.error).not.toHaveBeenCalled()
   })
 
-  it('does not claim a terminal opened when a definitive refusal fallback only settled', async () => {
-    const worktreeId = 'wt-refused-fallback-toast'
-    const intent = launchIntent(worktreeId)
-    const fallback = vi.fn().mockResolvedValue({ delivered: false, failureNotified: true })
-    mocks.createIntent.mockReturnValueOnce(intent)
-    mocks.launch.mockRejectedValue(new StructuredAgentSessionCreateRefusalError('refused'))
-
-    const launch = startStructuredAgentLaunch(worktreeId, 'codex')
-    void launch.claimDefinitiveRefusalFallback(fallback)
-    await expect(launch.launchResult).rejects.toBeInstanceOf(
-      StructuredAgentSessionCreateRefusalError
-    )
-    await flushLaunchSettlement()
-
-    expect(toast.error).not.toHaveBeenCalled()
-    expect(toast.message).toHaveBeenCalledWith(
-      "Structured chat isn't available",
-      expect.objectContaining({
-        description: 'Orca tried to open a Codex terminal instead.'
-      })
-    )
-  })
-
   it('keeps the raw error out of the failure toast', async () => {
     const worktreeId = 'wt-no-raw-error-in-toast'
     const intent = launchIntent(worktreeId)
@@ -566,16 +570,12 @@ describe('startStructuredAgentLaunch', () => {
     const worktreeId = 'wt-replay-unknown'
     const intent = launchIntent(worktreeId)
     mocks.createIntent.mockReturnValueOnce(intent)
-    mocks.launch.mockRejectedValueOnce(new Error('offline')).mockImplementationOnce(async () => {
-      mocks.rendererTabs[worktreeId] = [
-        { contentType: 'agent-session', entityId: intent.sessionId, worktreeId }
-      ]
-      for (const listener of mocks.listeners) {
-        listener({ unifiedTabsByWorktree: mocks.rendererTabs })
-      }
-      return { sessionId: intent.sessionId, fence: 1 }
-    })
-    vi.mocked(refreshLocalStructuredSessionTabs).mockResolvedValueOnce([]).mockResolvedValueOnce([])
+    mocks.launch
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({ sessionId: intent.sessionId, fence: 1 })
+    vi.mocked(refreshLocalStructuredSessionTabs)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([publishedSnapshot(worktreeId, intent.sessionId)])
 
     startStructuredAgentLaunch(worktreeId, 'codex')
     await flushLaunchSettlement()
@@ -589,13 +589,11 @@ describe('startStructuredAgentLaunch', () => {
   it('reuses the queued prompt without a second delivery after unknown recovery', async () => {
     const worktreeId = 'wt-unknown-prompt-retry'
     const intent = launchIntent(worktreeId)
-    const firstFallback = vi.fn()
     mocks.createIntent.mockReturnValueOnce(intent)
     mocks.launch.mockRejectedValue(new Error('offline'))
     vi.mocked(refreshLocalStructuredSessionTabs).mockResolvedValue([])
 
     const first = startStructuredAgentLaunch(worktreeId, 'codex', { prompt: 'only once' })
-    const firstFallbackResult = first.claimDefinitiveRefusalFallback(firstFallback)
     await expect(first.launchResult).rejects.toThrow('offline')
     expect(first.releaseCallerAfterUnknownOutcome()).toBe(true)
 
@@ -605,8 +603,6 @@ describe('startStructuredAgentLaunch', () => {
     const retry = startStructuredAgentLaunch(worktreeId, 'codex')
     await expect(retry.launchResult).resolves.toEqual({ sessionId: intent.sessionId, fence: 1 })
 
-    await expect(firstFallbackResult).resolves.toBe(false)
-    expect(firstFallback).not.toHaveBeenCalled()
     expect(readOutbox(intent.sessionId)).toEqual([
       expect.objectContaining({
         body: expect.objectContaining({ blocks: [{ type: 'text', text: 'only once' }] })
@@ -619,39 +615,9 @@ describe('startStructuredAgentLaunch', () => {
     )
   })
 
-  it('runs only the retry fallback when unknown recovery is refused', async () => {
-    const worktreeId = 'wt-unknown-refusal-retry'
-    const intent = launchIntent(worktreeId)
-    const firstFallback = vi.fn()
-    const retryFallback = vi.fn()
-    mocks.createIntent.mockReturnValueOnce(intent)
-    mocks.launch.mockRejectedValue(new Error('offline'))
-    vi.mocked(refreshLocalStructuredSessionTabs).mockResolvedValue([])
-
-    const first = startStructuredAgentLaunch(worktreeId, 'codex')
-    const firstFallbackResult = first.claimDefinitiveRefusalFallback(firstFallback)
-    await expect(first.launchResult).rejects.toThrow('offline')
-    expect(first.releaseCallerAfterUnknownOutcome()).toBe(true)
-
-    mocks.launch.mockRejectedValueOnce(
-      new StructuredAgentSessionCreateRefusalError('structured launch disabled')
-    )
-    const retry = startStructuredAgentLaunch(worktreeId, 'codex')
-    const retryFallbackResult = retry.claimDefinitiveRefusalFallback(retryFallback)
-
-    await expect(retry.launchResult).rejects.toBeInstanceOf(
-      StructuredAgentSessionCreateRefusalError
-    )
-    await expect(firstFallbackResult).resolves.toBe(false)
-    await expect(retryFallbackResult).resolves.toBe(true)
-    expect(firstFallback).not.toHaveBeenCalled()
-    expect(retryFallback).toHaveBeenCalledOnce()
-  })
-
-  it('never starts a sibling fallback for a post-attach unknown refusal', async () => {
+  it('keeps a post-attach unknown outcome reserved for reconciliation', async () => {
     const worktreeId = 'wt-post-attach-unknown'
     const intent = launchIntent(worktreeId)
-    const fallback = vi.fn()
     mocks.createIntent.mockReturnValueOnce(intent)
     mocks.launch.mockRejectedValue(
       Object.assign(new Error('The chat may already exist.'), {
@@ -661,29 +627,25 @@ describe('startStructuredAgentLaunch', () => {
     vi.mocked(refreshLocalStructuredSessionTabs).mockResolvedValue([])
 
     const launch = startStructuredAgentLaunch(worktreeId, 'codex')
-    const fallbackResult = launch.claimDefinitiveRefusalFallback(fallback)
 
     await expect(launch.launchResult).rejects.toMatchObject({
       code: 'agent_session_operation_unknown'
     })
     expect(launch.isVisibilityUnknown()).toBe(true)
     expect(launch.releaseCallerAfterUnknownOutcome()).toBe(true)
-    await expect(fallbackResult).resolves.toBe(false)
-    expect(fallback).not.toHaveBeenCalled()
     expect(mocks.createIntent).toHaveBeenCalledOnce()
     expect(mocks.launch).toHaveBeenCalledTimes(2)
   })
 
-  it('releases a definitively refused intent so a new click can create a new identity', async () => {
+  it('retries a definitively refused launch with the same session and a new operation', async () => {
     const worktreeId = 'wt-refused'
     const first = launchIntent(worktreeId, 'session-first')
-    const second = launchIntent(worktreeId, 'session-second')
-    mocks.createIntent.mockReturnValueOnce(first).mockReturnValueOnce(second)
+    mocks.createIntent.mockReturnValueOnce(first)
     mocks.launch
       .mockRejectedValueOnce(new StructuredAgentSessionCreateRefusalError('unsupported'))
-      .mockResolvedValueOnce({ sessionId: second.sessionId, fence: 1 })
+      .mockResolvedValueOnce({ sessionId: first.sessionId, fence: 1 })
     vi.mocked(refreshLocalStructuredSessionTabs).mockResolvedValue([
-      publishedSnapshot(worktreeId, second.sessionId)
+      publishedSnapshot(worktreeId, first.sessionId)
     ])
 
     startStructuredAgentLaunch(worktreeId, 'codex')
@@ -691,34 +653,96 @@ describe('startStructuredAgentLaunch', () => {
     startStructuredAgentLaunch(worktreeId, 'codex')
     await flushLaunchSettlement()
 
-    expect(mocks.createIntent).toHaveBeenCalledTimes(2)
+    expect(mocks.createIntent).toHaveBeenCalledOnce()
+    expect(mocks.retryIntent).toHaveBeenCalledWith(first)
     expect(mocks.launch.mock.calls[0]?.[0]).toBe(first)
-    expect(mocks.launch.mock.calls[1]?.[0]).toBe(second)
+    expect(mocks.launch.mock.calls[1]?.[0]).toMatchObject({ sessionId: first.sessionId })
+    expect(mocks.launch.mock.calls[1]?.[0].params.envelope.clientOperationId).not.toBe(
+      first.params.envelope.clientOperationId
+    )
     expect(toast.error).toHaveBeenCalledOnce()
   })
 
-  it('abandons the focus intent when durable prompt staging refuses the launch', async () => {
+  it('does not stage the preserved launch prompt again on retry', async () => {
+    const worktreeId = 'wt-refused-prompt-retry'
+    const intent = launchIntent(worktreeId, 'session-refused-prompt-retry')
+    mocks.createIntent.mockReturnValueOnce(intent)
+    mocks.launch
+      .mockRejectedValueOnce(new StructuredAgentSessionCreateRefusalError('unsupported'))
+      .mockResolvedValueOnce({ sessionId: intent.sessionId, fence: 1 })
+    vi.mocked(refreshLocalStructuredSessionTabs).mockResolvedValue([
+      publishedSnapshot(worktreeId, intent.sessionId)
+    ])
+
+    startStructuredAgentLaunch(worktreeId, 'codex', {
+      prompt: 'only once',
+      promptDelivery: 'draft'
+    })
+    await flushLaunchSettlement()
+    expect(readOutbox(intent.sessionId)).toEqual([])
+
+    const retry = startStructuredAgentLaunch(worktreeId, 'codex', {
+      prompt: 'only once',
+      promptDelivery: 'draft'
+    })
+    await expect(retry.launchResult).resolves.toEqual({ sessionId: intent.sessionId, fence: 1 })
+
+    expect(readOutbox(intent.sessionId)).toEqual([])
+    expect(mocks.seedDraft).toHaveBeenCalledOnce()
+  })
+
+  it('retries a resumed launch by session id without reconstructing its identity', async () => {
+    const worktreeId = 'wt-resume-inline-retry'
+    const intent = {
+      ...launchIntent(worktreeId, 'session-resume-inline-retry'),
+      params: {
+        ...launchIntent(worktreeId, 'session-resume-inline-retry').params,
+        resumeFrom: { providerSessionId: 'provider-session-1' }
+      }
+    }
+    mocks.createIntent.mockReturnValueOnce(intent)
+    mocks.launch
+      .mockRejectedValueOnce(new StructuredAgentSessionCreateRefusalError('unsupported'))
+      .mockResolvedValueOnce({ sessionId: intent.sessionId, fence: 1 })
+    vi.mocked(refreshLocalStructuredSessionTabs).mockResolvedValue([
+      publishedSnapshot(worktreeId, intent.sessionId)
+    ])
+
+    startStructuredAgentLaunch(worktreeId, 'codex', {
+      resumeFrom: { providerSessionId: 'provider-session-1' }
+    })
+    await flushLaunchSettlement()
+
+    expect(retryStructuredAgentSessionLaunch(worktreeId, intent.sessionId)).toBe(true)
+    await flushLaunchSettlement()
+    expect(mocks.createIntent).toHaveBeenCalledOnce()
+    expect(mocks.retryIntent).toHaveBeenCalledWith(intent)
+  })
+
+  it('preserves the launch identity when durable prompt staging refuses', async () => {
     const worktreeId = 'wt-stage-refused'
     const intent = launchIntent(worktreeId)
-    const fallback = vi.fn()
     mocks.createIntent.mockReturnValueOnce(intent)
     const storageFailure = vi.spyOn(localStorage, 'setItem').mockImplementationOnce(() => {
       throw new Error('storage unavailable')
     })
 
     const result = startStructuredAgentLaunch(worktreeId, 'codex', { prompt: 'start this task' })
-    const fallbackResult = result.claimDefinitiveRefusalFallback(fallback)
 
     await expect(result.launchResult).rejects.toBeInstanceOf(
       StructuredAgentSessionCreateRefusalError
     )
-    await expect(fallbackResult).resolves.toBe(true)
+    await expect(result.promptDeliveryResult).resolves.toEqual({
+      delivered: false,
+      failureNotified: true
+    })
     expect(mocks.launch).not.toHaveBeenCalled()
-    expect(mocks.abandonIntent).toHaveBeenCalledWith(intent)
+    expect(mocks.abandonIntent).not.toHaveBeenCalled()
+    expect(getStructuredAgentSessionLaunchLifecycle(worktreeId, intent.sessionId)).toBe('failed')
     storageFailure.mockRestore()
   })
 
-  it('runs each caller fallback and preserves its delivery result after refusal', async () => {
+  it('reports every coalesced prompt as undelivered after refusal', async () => {
     const worktreeId = 'wt-refused-coalesced-prompts'
     const intent = launchIntent(worktreeId)
     let rejectLaunch!: (error: unknown) => void
@@ -729,36 +753,21 @@ describe('startStructuredAgentLaunch', () => {
 
     const first = startStructuredAgentLaunch(worktreeId, 'codex', { prompt: 'first prompt' })
     const second = startStructuredAgentLaunch(worktreeId, 'codex', { prompt: 'second prompt' })
-    const firstFallback = vi.fn().mockResolvedValue({
-      delivered: true,
-      failureNotified: false
-    })
-    const secondFallback = vi.fn().mockResolvedValue({
-      delivered: false,
-      failureNotified: true
-    })
-    const firstFallbackResult = first.claimDefinitiveRefusalFallback(firstFallback)
-    const secondFallbackResult = second.claimDefinitiveRefusalFallback(secondFallback)
     expect(readOutbox(intent.sessionId)).toHaveLength(2)
 
     rejectLaunch(new StructuredAgentSessionCreateRefusalError('unsupported'))
     await expect(first.launchResult).rejects.toBeInstanceOf(
       StructuredAgentSessionCreateRefusalError
     )
-    await expect(firstFallbackResult).resolves.toBe(true)
-    await expect(secondFallbackResult).resolves.toBe(true)
     await expect(first.promptDeliveryResult).resolves.toEqual({
-      delivered: true,
-      failureNotified: false
+      delivered: false,
+      failureNotified: true
     })
     await expect(second.promptDeliveryResult).resolves.toEqual({
       delivered: false,
       failureNotified: true
     })
-
-    expect(firstFallback).toHaveBeenCalledOnce()
-    expect(secondFallback).toHaveBeenCalledOnce()
-    expect(readOutbox(intent.sessionId)).toEqual([])
+    expect(readOutbox(intent.sessionId)).toHaveLength(2)
   })
 
   it('delivers a coalesced caller the way the launch it joined already decided', async () => {
@@ -800,40 +809,6 @@ describe('startStructuredAgentLaunch', () => {
     )
   })
 
-  it('never seeds a draft onto a launch that was already refused', async () => {
-    const worktreeId = 'wt-refused-coalesced-draft'
-    const intent = launchIntent(worktreeId, 'refused-coalesced-session')
-    let rejectLaunch!: (error: unknown) => void
-    mocks.createIntent.mockReturnValueOnce(intent)
-    mocks.launch.mockImplementationOnce(
-      () => new Promise((_resolve, reject) => (rejectLaunch = reject))
-    )
-
-    const first = startStructuredAgentLaunch(worktreeId, 'codex', {
-      prompt: 'first prompt',
-      promptDelivery: 'draft'
-    })
-    // An unfinished fallback keeps the refused launch reserved, so the next caller coalesces onto it.
-    void first.claimDefinitiveRefusalFallback(() => new Promise<void>(() => {}))
-    rejectLaunch(new StructuredAgentSessionCreateRefusalError('unsupported'))
-    await expect(first.launchResult).rejects.toBeInstanceOf(
-      StructuredAgentSessionCreateRefusalError
-    )
-    await flushLaunchSettlement()
-    mocks.seedDraft.mockClear()
-    expect(mocks.createIntent).toHaveBeenCalledOnce()
-
-    startStructuredAgentLaunch(worktreeId, 'codex', {
-      prompt: 'PR #1 context',
-      promptDelivery: 'draft'
-    })
-
-    // Why: nothing clears a seed written onto a refused launch, so it would outlive every tab.
-    expect(mocks.createIntent).toHaveBeenCalledOnce()
-    expect(mocks.seedDraft).not.toHaveBeenCalled()
-    expect(readOutbox(intent.sessionId)).toEqual([])
-  })
-
   it('cancels a close-racing launch without retrying or toasting', async () => {
     const worktreeId = 'wt-close-race'
     const intent = launchIntent(worktreeId, 'session-close-race')
@@ -847,6 +822,13 @@ describe('startStructuredAgentLaunch', () => {
     startStructuredAgentLaunch(worktreeId, 'codex')
     await vi.waitFor(() => expect(refreshLocalStructuredSessionTabs).toHaveBeenCalledOnce())
     expect(cancelStructuredAgentLaunch(worktreeId, intent.sessionId)).toBe(true)
+    expect(hasStructuredAgentSessionLaunchCancellationTombstone(worktreeId, intent.sessionId)).toBe(
+      true
+    )
+    const persistedTombstones =
+      localStorage.getItem('orca:structuredAgentLaunchCancelledSessions:v1') ?? ''
+    expect(persistedTombstones).toContain(JSON.stringify(intent.sessionId))
+    expect(persistedTombstones).not.toContain(worktreeId)
     resolveRefresh([])
     await flushLaunchSettlement()
 

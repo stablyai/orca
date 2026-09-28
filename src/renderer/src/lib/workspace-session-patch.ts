@@ -31,19 +31,25 @@ function hasAnyChangedField(
   return fields.some((field) => changedFields.has(field))
 }
 
-function buildPrunedTerminalLayoutsByTabId(
+function buildPrunedTerminalScrollback(
   snapshot: WorkspaceSessionSnapshot
-): WorkspaceSessionState['terminalLayoutsByTabId'] {
-  return pruneLocalTerminalScrollbackBuffers(
+): Pick<WorkspaceSessionState, 'terminalLayoutsByTabId' | 'localOnlyScrollbackByTabId'> {
+  const pruned = pruneLocalTerminalScrollbackBuffers(
     {
       activeRepoId: snapshot.activeRepoId,
       activeWorktreeId: snapshot.activeWorktreeId,
       activeTabId: snapshot.activeTabId,
       tabsByWorktree: snapshot.tabsByWorktree,
-      terminalLayoutsByTabId: snapshot.terminalLayoutsByTabId
+      terminalLayoutsByTabId: snapshot.terminalLayoutsByTabId,
+      localOnlyScrollbackByTabId: snapshot.localOnlyScrollbackByTabId
     },
     snapshot.repos
-  ).terminalLayoutsByTabId
+  )
+  return {
+    terminalLayoutsByTabId: pruned.terminalLayoutsByTabId,
+    // Why `{}` and not undefined: a patch assigns the key, so an emptied map must be written as empty.
+    localOnlyScrollbackByTabId: pruned.localOnlyScrollbackByTabId ?? {}
+  }
 }
 
 export function buildWorkspaceSessionPatch(
@@ -66,8 +72,28 @@ export function buildWorkspaceSessionPatch(
   if (changed.has('tabsByWorktree')) {
     patch.tabsByWorktree = buildSanitizedTabsByWorktree(snapshot.tabsByWorktree)
   }
-  if (hasAnyChangedField(changed, ['terminalLayoutsByTabId', 'tabsByWorktree', 'repos'] as const)) {
-    patch.terminalLayoutsByTabId = buildPrunedTerminalLayoutsByTabId(snapshot)
+  const scrollbackHomesChanged = hasAnyChangedField(changed, [
+    'terminalLayoutsByTabId',
+    'localOnlyScrollbackByTabId',
+    'tabsByWorktree',
+    'repos'
+  ] as const)
+  if (scrollbackHomesChanged) {
+    const pruned = buildPrunedTerminalScrollback(snapshot)
+    if (
+      hasAnyChangedField(changed, ['terminalLayoutsByTabId', 'tabsByWorktree', 'repos'] as const)
+    ) {
+      patch.terminalLayoutsByTabId = pruned.terminalLayoutsByTabId
+    }
+    if (
+      hasAnyChangedField(changed, [
+        'localOnlyScrollbackByTabId',
+        'tabsByWorktree',
+        'repos'
+      ] as const)
+    ) {
+      patch.localOnlyScrollbackByTabId = pruned.localOnlyScrollbackByTabId
+    }
   }
   if (changed.has('activeTabIdByWorktree')) {
     patch.activeTabIdByWorktree = snapshot.activeTabIdByWorktree

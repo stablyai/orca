@@ -1,3 +1,4 @@
+import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
 import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
@@ -21,6 +22,15 @@ vi.mock('../telemetry/cohort-classifier', () => ({
  */
 const WORKTREE_ID = 'repo-1::/workspace/app'
 const SESSION = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
+const SUBJECT = makeStructuredAgentStatusSubject(
+  {
+    executionHostId: 'local',
+    wslDistro: null,
+    workspaceId: WORKTREE_ID,
+    workspaceKind: 'git-worktree'
+  },
+  SESSION
+)
 
 function summary(over: Partial<AgentSessionStatusSummary> = {}): AgentSessionStatusSummary {
   return {
@@ -38,7 +48,7 @@ function summary(over: Partial<AgentSessionStatusSummary> = {}): AgentSessionSta
 function attach(summaries: AgentSessionStatusSummary[]): RuntimeWorktreePsSummary {
   const store = new AgentHookServer()
   for (const entry of summaries) {
-    store.ingestStructuredStatus(entry)
+    store.ingestStructuredStatus(entry, SUBJECT)
   }
   const row = {
     worktreeId: WORKTREE_ID,

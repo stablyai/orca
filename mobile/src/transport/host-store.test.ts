@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { MobileRelayHostOverlay } from './mobile-relay-host-overlay'
+import {
+  toStoredMobileRelayHostOverlay,
+  type MobileRelayHostOverlay
+} from './mobile-relay-host-overlay'
 
 const asyncStorageMock = vi.hoisted(() => ({
   getItem: vi.fn(),
@@ -41,12 +44,12 @@ vi.mock('./host-credential-cleanup', () => ({
 import {
   loadHostCatalog,
   loadHosts,
-  MobileRelayUpgradeHostRemovedError,
+  RelayRoutingHostRemovedError,
   removeHost,
   resolvePairingHostIdentity,
   resetHostStoreForTests,
-  saveHost,
-  saveExistingHostRelayUpgrade,
+  savePairedHost,
+  setRelayRouting,
   updateHostNameAndEndpoint,
   updateLastConnected
 } from './host-store'
@@ -68,6 +71,14 @@ const HOST_TWO = {
   endpoint: 'ws://127.0.0.1:2',
   publicKeyB64: 'key-2',
   lastConnected: 0
+}
+const HOST_ONE_RELAY = {
+  v: 1 as const,
+  directorUrl: 'https://relay.onorca.dev',
+  cellUrl: 'https://relay-c1.onorca.dev',
+  assignmentEpoch: 7,
+  relayHostId: 'AbCdEf0123_-xyZ9',
+  e2eeFraming: 2 as const
 }
 const HOST_ONE_RELAY_BUNDLE = {
   v: 1 as const,
@@ -175,7 +186,7 @@ describe('host-store list mutations', () => {
   })
 
   it('keeps existing metadata when pairing a distinct host', async () => {
-    await saveHost({
+    await savePairedHost({
       id: 'host-new',
       name: 'Host 3',
       endpoint: 'ws://127.0.0.1:3',
@@ -204,7 +215,7 @@ describe('host-store list mutations', () => {
       { ...HOST_TWO, id: 'host-duplicate', publicKeyB64: HOST_ONE.publicKeyB64 }
     ])
 
-    await saveHost({
+    await savePairedHost({
       ...HOST_ONE,
       endpoint: 'ws://127.0.0.1:3',
       deviceToken: 'replacement-token'
@@ -227,7 +238,11 @@ describe('host-store list mutations', () => {
     secureStoreMock.setItemAsync.mockRejectedValue(new Error('keychain write failed'))
 
     await expect(
-      saveHost({ ...HOST_ONE, endpoint: 'ws://127.0.0.1:3', deviceToken: 'replacement-token' })
+      savePairedHost({
+        ...HOST_ONE,
+        endpoint: 'ws://127.0.0.1:3',
+        deviceToken: 'replacement-token'
+      })
     ).rejects.toThrow('keychain write failed')
 
     expect(JSON.parse(storedHostsRaw)).toEqual([HOST_ONE, duplicate])
@@ -246,7 +261,11 @@ describe('host-store list mutations', () => {
     asyncStorageMock.setItem.mockRejectedValueOnce(new Error('metadata write failed'))
 
     await expect(
-      saveHost({ ...HOST_ONE, endpoint: 'ws://127.0.0.1:3', deviceToken: 'replacement-token' })
+      savePairedHost({
+        ...HOST_ONE,
+        endpoint: 'ws://127.0.0.1:3',
+        deviceToken: 'replacement-token'
+      })
     ).rejects.toThrow('metadata write failed')
 
     expect(JSON.parse(storedHostsRaw)).toEqual([HOST_ONE, duplicate])
@@ -264,7 +283,7 @@ describe('host-store list mutations', () => {
     }
     asyncStorageMock.setItem.mockRejectedValueOnce(new Error('metadata write failed'))
 
-    await expect(saveHost(replacement)).rejects.toThrow('metadata write failed')
+    await expect(savePairedHost(replacement)).rejects.toThrow('metadata write failed')
 
     expect(JSON.parse(storedHostsRaw)).toEqual([HOST_ONE, HOST_TWO])
     expect(recordCleanupIntentMock).toHaveBeenCalledWith(replacement.id)
@@ -281,10 +300,10 @@ describe('host-store list mutations', () => {
       publicKeyB64: HOST_ONE.publicKeyB64
     }
     storedHostsRaw = JSON.stringify([HOST_ONE, duplicate])
-    await saveHost({ ...HOST_ONE, deviceToken: 'token-a' })
+    await savePairedHost({ ...HOST_ONE, deviceToken: 'token-a' })
     const staleCleanup = scheduledCleanup(duplicate.id)
 
-    await saveHost({ ...duplicate, deviceToken: 'token-b' })
+    await savePairedHost({ ...duplicate, deviceToken: 'token-b' })
     await staleCleanup(duplicate.id)
 
     expect(JSON.parse(storedHostsRaw)).toEqual([duplicate])
@@ -390,26 +409,19 @@ describe('host-store list mutations', () => {
           url: 'wss://relay-c1.onorca.dev/v1/connect/AbCdEf0123_-xyZ9'
         }
       ],
-      relayHostId: 'AbCdEf0123_-xyZ9',
-      relay: {
-        v: 1,
-        directorUrl: 'https://relay.onorca.dev',
-        cellUrl: 'https://relay-c1.onorca.dev',
-        assignmentEpoch: 7,
-        relayHostId: 'AbCdEf0123_-xyZ9',
-        e2eeFraming: 2
-      }
+      relayHostId: HOST_ONE_RELAY.relayHostId,
+      relay: HOST_ONE_RELAY
     }
     storedOverlayRaw = JSON.stringify([overlay])
 
-    await saveHost({ ...HOST_ONE, deviceToken: 'replacement-token' })
+    await savePairedHost({ ...HOST_ONE, deviceToken: 'replacement-token' })
 
     expect(JSON.parse(storedOverlayRaw!)).toEqual([])
     expect(secureStoreMock.deleteItemAsync).not.toHaveBeenCalled()
   })
 
   it('does not touch relay storage when saving a new direct-only host', async () => {
-    await saveHost({
+    await savePairedHost({
       id: 'host-new',
       name: 'New Host',
       endpoint: 'ws://127.0.0.1:3',
@@ -423,7 +435,7 @@ describe('host-store list mutations', () => {
   })
 
   it('keeps the normal iOS save on the existing default keychain service', async () => {
-    await saveHost({
+    await savePairedHost({
       id: 'host-new',
       name: 'New Host',
       endpoint: 'ws://127.0.0.1:3',
@@ -467,7 +479,7 @@ describe('host-store list mutations', () => {
       })
     )
 
-    const save = saveHost({ ...HOST_ONE, deviceToken: 'replacement-token' })
+    const save = savePairedHost({ ...HOST_ONE, deviceToken: 'replacement-token' })
     await vi.waitFor(() => expect(secureStoreMock.setItemAsync).toHaveBeenCalledOnce())
     await removeHost(HOST_ONE.id)
     releaseTokenWrite()
@@ -488,7 +500,7 @@ describe('host-store list mutations', () => {
     }
     recordCleanupIntentMock.mockRejectedValueOnce(new Error('intent storage unavailable'))
 
-    await expect(saveHost(replacement)).rejects.toThrow('intent storage unavailable')
+    await expect(savePairedHost(replacement)).rejects.toThrow('intent storage unavailable')
 
     expect(JSON.parse(storedHostsRaw)).toEqual([HOST_ONE, HOST_TWO])
     expect(secureStoreMock.setItemAsync).not.toHaveBeenCalled()
@@ -518,15 +530,8 @@ describe('host-store list mutations', () => {
           url: 'wss://relay-c1.onorca.dev/v1/connect/AbCdEf0123_-xyZ9'
         }
       ],
-      relayHostId: 'AbCdEf0123_-xyZ9',
-      relay: {
-        v: 1,
-        directorUrl: 'https://relay.onorca.dev',
-        cellUrl: 'https://relay-c1.onorca.dev',
-        assignmentEpoch: 7,
-        relayHostId: 'AbCdEf0123_-xyZ9',
-        e2eeFraming: 2
-      }
+      relayHostId: HOST_ONE_RELAY.relayHostId,
+      relay: HOST_ONE_RELAY
     }
     storedOverlayRaw = JSON.stringify([overlay, { ...overlay, hostId: 'removed-by-old-build' }])
     let releaseCleanup: () => void = () => {}
@@ -538,38 +543,32 @@ describe('host-store list mutations', () => {
 
     const hostsLoad = loadHosts()
     await vi.waitFor(() => expect(scheduleCleanupMock).toHaveBeenCalled())
-    await saveHost({
+    await savePairedHost({
       ...HOST_ONE,
       id: 'removed-by-old-build',
       publicKeyB64: 'restored-key',
       deviceToken: 'restored-token',
-      endpoints: overlay.endpoints,
-      relayHostId: overlay.relayHostId,
       relay: overlay.relay
     })
     releaseCleanup()
     const hosts = await hostsLoad
 
-    expect(hosts.find(({ id }) => id === HOST_ONE.id)).toMatchObject({
-      endpoints: overlay.endpoints,
-      relayHostId: overlay.relayHostId,
-      relay: overlay.relay
-    })
+    expect(hosts.find(({ id }) => id === HOST_ONE.id)).toMatchObject({ relay: overlay.relay })
     expect(hosts.some(({ id }) => id === 'removed-by-old-build')).toBe(false)
-    expect(JSON.parse(storedOverlayRaw!)).toContainEqual({
-      ...overlay,
-      hostId: 'removed-by-old-build'
-    })
+    expect(JSON.parse(storedOverlayRaw!)).toContainEqual(
+      toStoredMobileRelayHostOverlay('removed-by-old-build', HOST_ONE_RELAY)
+    )
   })
 
   it('refuses to resurrect a removed host during relay upgrade publication', async () => {
     storedHostsRaw = JSON.stringify([HOST_TWO])
 
-    await expect(
-      saveExistingHostRelayUpgrade({ ...HOST_ONE, deviceToken: 'token-1' })
-    ).rejects.toBeInstanceOf(MobileRelayUpgradeHostRemovedError)
+    await expect(setRelayRouting(HOST_ONE.id, HOST_ONE_RELAY)).rejects.toBeInstanceOf(
+      RelayRoutingHostRemovedError
+    )
 
     expect(JSON.parse(storedHostsRaw)).toEqual([HOST_TWO])
+    expect(storedOverlayRaw).toBeNull()
     expect(secureStoreMock.setItemAsync).not.toHaveBeenCalled()
   })
 
@@ -615,7 +614,7 @@ describe('host-store list mutations', () => {
       return storedHostsRaw
     })
 
-    const rename = updateHostNameAndEndpoint(HOST_ONE.id, { name: 'Renamed Host' })
+    const rename = updateHostNameAndEndpoint(HOST_ONE.id, { personalName: 'Renamed Host' })
     const remove = removeHost(HOST_TWO.id)
     // Both writers have started their RMW and are blocked on the shared read
     // gate; without a mutation queue the second would clobber the first.
@@ -626,19 +625,16 @@ describe('host-store list mutations', () => {
     await Promise.all([rename, remove])
 
     expect(JSON.parse(storedHostsRaw)).toEqual([
-      {
-        ...HOST_ONE,
-        name: 'Renamed Host'
-      }
+      { ...HOST_ONE, name: 'Renamed Host', personalName: 'Renamed Host' }
     ])
   })
 
   it('preserves a rename when lastConnected updates race it', async () => {
     const before = Date.now()
     await Promise.all([
-      updateHostNameAndEndpoint(HOST_ONE.id, { name: 'Alpha' }),
+      updateHostNameAndEndpoint(HOST_ONE.id, { personalName: 'Alpha' }),
       updateLastConnected(HOST_ONE.id),
-      updateHostNameAndEndpoint(HOST_TWO.id, { name: 'Beta' })
+      updateHostNameAndEndpoint(HOST_TWO.id, { personalName: 'Beta' })
     ])
 
     const stored = JSON.parse(storedHostsRaw) as Array<typeof HOST_ONE>
@@ -654,7 +650,7 @@ describe('host-store list mutations', () => {
 
   it('does not wipe the host list when storage is unreadable during mutation', async () => {
     storedHostsRaw = '{'
-    await expect(updateHostNameAndEndpoint(HOST_ONE.id, { name: 'Nope' })).rejects.toThrow(
+    await expect(updateHostNameAndEndpoint(HOST_ONE.id, { personalName: 'Nope' })).rejects.toThrow(
       /unreadable/
     )
     expect(asyncStorageMock.setItem).not.toHaveBeenCalled()
@@ -699,7 +695,7 @@ describe('host-store list mutations', () => {
       expect(secureStoreMock.getItemAsync).toHaveBeenCalled()
     })
 
-    await updateHostNameAndEndpoint(HOST_ONE.id, { name: 'Living Room Mac' })
+    await updateHostNameAndEndpoint(HOST_ONE.id, { personalName: 'Living Room Mac' })
     const afterRename = loadHosts()
     releaseKeychain()
 
@@ -708,7 +704,7 @@ describe('host-store list mutations', () => {
     expect(hosts.find((host) => host.id === HOST_ONE.id)?.name).toBe('Living Room Mac')
   })
 
-  it('does not share a host-list pass started before saveHost commits its token', async () => {
+  it('does not share a host-list pass started before savePairedHost commits its token', async () => {
     const newHost = {
       id: 'host-new',
       name: 'New Host',
@@ -739,7 +735,7 @@ describe('host-store list mutations', () => {
       return key.endsWith(HOST_ONE.id) || key.endsWith(HOST_TWO.id) ? `token-${key.at(-1)}` : null
     })
 
-    const save = saveHost(newHost)
+    const save = savePairedHost(newHost)
     await vi.waitFor(() => {
       expect(secureStoreMock.setItemAsync).toHaveBeenCalled()
     })
@@ -787,7 +783,7 @@ describe('host-store list mutations', () => {
     await vi.waitFor(() => {
       expect(secureStoreMock.getItemAsync).toHaveBeenCalled()
     })
-    await saveHost(newHost)
+    await savePairedHost(newHost)
     resolvePrewriteTokenRead('token-old')
     await parkedLoad
 
@@ -879,7 +875,7 @@ describe('host-store pairing save after an Android encryption rejection', () => 
       }
     )
 
-    await expect(saveHost(NEW_HOST)).resolves.toBeUndefined()
+    await expect(savePairedHost(NEW_HOST)).resolves.toBeUndefined()
 
     expect(written.get('orca.pairing.v1')).toBe('device-token')
     expect(JSON.parse(storedHostsRaw)).toEqual([
@@ -896,7 +892,7 @@ describe('host-store pairing save after an Android encryption rejection', () => 
   it('still surfaces the failure when no keystore alias can accept the token', async () => {
     secureStoreMock.setItemAsync.mockRejectedValue(ENCRYPT_REJECTION)
 
-    await expect(saveHost(NEW_HOST)).rejects.toBe(ENCRYPT_REJECTION)
+    await expect(savePairedHost(NEW_HOST)).rejects.toBe(ENCRYPT_REJECTION)
   })
 
   it('serves the rotated token to loadHosts so the saved host survives a relaunch', async () => {
@@ -909,7 +905,7 @@ describe('host-store pairing save after an Android encryption rejection', () => 
         written.set(options.keychainService, value)
       }
     )
-    await saveHost(NEW_HOST)
+    await savePairedHost(NEW_HOST)
     // Why: a fresh process has no token cache, so the host list has to come back off the rotated alias.
     resetHostStoreForTests()
     secureStoreMock.getItemAsync.mockImplementation(

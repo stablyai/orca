@@ -1,5 +1,6 @@
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
+import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 
@@ -15,6 +16,7 @@ export function useMobileNativeChatSessionLane({
   sessionId,
   sourceIdentity,
   callerIdentity,
+  hostSupport,
   enabled,
   connState,
   onSendError
@@ -29,6 +31,7 @@ export function useMobileNativeChatSessionLane({
   sessionId: string | null
   sourceIdentity: Parameters<typeof useMobileNativeChatSession>[0]['sourceIdentity']
   callerIdentity: string
+  hostSupport: StructuredAgentSessionHostSupport | null
   enabled: boolean
   connState: ConnectionState
   onSendError: (message: string) => void
@@ -48,6 +51,7 @@ export function useMobileNativeChatSessionLane({
     sessionId: structured ? sessionId : null,
     sourceIdentity,
     callerIdentity,
+    hostSupport,
     enabled,
     // Holds are connection-scoped; dropping this on transport loss lets the hook
     // reacquire the provider without clearing the cached transcript.

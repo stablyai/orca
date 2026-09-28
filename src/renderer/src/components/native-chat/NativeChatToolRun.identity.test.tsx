@@ -58,7 +58,9 @@ describe('inline tool annotations', () => {
     expect(screen.queryByRole('button')).toBeNull()
 
     rerender(<ToolRunDisclosureHarness expandOverride />)
-    expect(screen.getByRole('button', { name: /1×/ }).getAttribute('aria-expanded')).toBe('false')
+    expect(
+      screen.getByRole('button', { name: /missing-command/ }).getAttribute('aria-expanded')
+    ).toBe('false')
   })
 
   it('resynchronizes a standalone run when the toolbar signal flips', () => {
@@ -69,7 +71,9 @@ describe('inline tool annotations', () => {
 
     rerender(<NativeChatToolRun blocks={[shell]} expandSignal activeTurnIsWorking={false} />)
 
-    expect(screen.getByRole('button', { name: /1×/ }).getAttribute('aria-expanded')).toBe('true')
+    expect(
+      screen.getAllByRole('button', { name: /missing-command/ })[0].getAttribute('aria-expanded')
+    ).toBe('true')
   })
 
   it('uses provider call identities for byte-identical line disclosure keys', () => {
@@ -219,10 +223,10 @@ it.each(['running', 'completed'] as const)(
     expect(screen.getByText('My server')).toBeTruthy()
     expect(screen.getByText('ns.tool')).toBeTruthy()
     expect(screen.getByTitle(name)).toBeTruthy()
-    // Header glyph plus the row's. A settled header also names each member in a
-    // pill, which carries that member's own glyph — so three, all plug: the
-    // identity holds wherever it is drawn.
-    expect(document.querySelectorAll('.lucide-plug')).toHaveLength(state === 'completed' ? 3 : 2)
+    // The run header's glyph plus the row's, both plug: the identity holds
+    // wherever it is drawn. The header names no individual call, so it carries
+    // one glyph for the run rather than one per member.
+    expect(document.querySelectorAll('.lucide-plug')).toHaveLength(2)
   }
 )
 

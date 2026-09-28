@@ -1,7 +1,8 @@
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
-import { BellRing, MessageSquare } from 'lucide-react-native'
+import { MessageSquare } from 'lucide-react-native'
 import type { MobileOnboardingStep } from './mobile-onboarding-plan'
 import { mobileOnboardingStyles as styles } from './mobile-onboarding-styles'
+import { NotificationOnboardingPreview } from './NotificationOnboardingPreview'
 import type { MobileSessionView } from '../storage/session-view-preferences'
 import { colors } from '../theme/mobile-theme'
 
@@ -38,33 +39,29 @@ export function MobileOnboardingPage({
       accessibilityElementsHidden={!active}
       importantForAccessibility={active ? 'auto' : 'no-hide-descendants'}
     >
-      <View style={styles.content}>
-        <View style={styles.iconSurface}>
-          {isSessionView ? (
+      <View style={[styles.content, !isSessionView && styles.notificationContent]}>
+        {isSessionView ? (
+          <View style={styles.iconSurface}>
             <MessageSquare size={30} color={colors.textPrimary} />
-          ) : (
-            <BellRing size={30} color={colors.textPrimary} />
-          )}
-        </View>
+          </View>
+        ) : (
+          <NotificationOnboardingPreview active={active} />
+        )}
         <Text style={styles.title}>
-          {isSessionView ? 'How should sessions open?' : 'Enable notifications'}
+          {isSessionView ? 'How should sessions open?' : 'Don’t miss when an agent needs you'}
         </Text>
         <Text style={styles.body}>
           {isSessionView
             ? 'Choose whether supported agent sessions open in the terminal or Chat UI on this device. Press and hold a session tab to switch its view, or change the default later in Settings.'
-            : 'Get notified when an agent finishes a task or needs your input.'}
+            : 'Get a notification on this phone when an agent finishes or is waiting — even if you aren’t using the app.'}
         </Text>
-        {!isSessionView ? (
-          <Text style={styles.body}>
-            By default, notifications arrive after your desktop has been idle for 3 minutes.
-          </Text>
-        ) : null}
       </View>
 
       <View style={styles.footer}>
         {!isSessionView ? (
           <Text style={styles.disclosure}>
-            Delivered through Orca’s push service. Change this anytime in Settings.
+            Delivered through Orca’s push service after your desktop has been idle for 3 minutes.
+            Change this anytime in Settings.
           </Text>
         ) : null}
         {error ? (

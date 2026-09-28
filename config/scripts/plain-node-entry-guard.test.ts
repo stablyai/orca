@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import type { Plugin, Rollup } from 'vite'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  CLI_MAIN_ENTRY_NAMES,
   createPlainNodeEntryGuardPlugin,
   GUARDED_ENTRY_NAMES
 } from '../build-plugins/plain-node-entry-guard'
@@ -158,8 +159,8 @@ describe('guarded entry names', () => {
 // main-process worker and kills it at startup. The worker entries carried only
 // hand-written "must stay electron-free" comments, and the port-scan worker sits
 // one import away from a client that deliberately does require electron.
-describe('worker thread entry guard', () => {
-  function runWorkerWriteBundle(plugin: Plugin, bundle: Rollup.OutputBundle): void {
+describe('CLI and worker thread entry guard', () => {
+  function runEntryWriteBundle(plugin: Plugin, bundle: Rollup.OutputBundle): void {
     const hook = plugin.writeBundle
     if (typeof hook !== 'function') {
       throw new Error('Expected writeBundle hook')
@@ -171,7 +172,7 @@ describe('worker thread entry guard', () => {
     )
   }
 
-  function workerChunk(name: string, code: string, imports: string[] = []): Rollup.OutputChunk {
+  function entryChunk(name: string, code: string, imports: string[] = []): Rollup.OutputChunk {
     return {
       type: 'chunk',
       code,
@@ -183,33 +184,54 @@ describe('worker thread entry guard', () => {
     } as Rollup.OutputChunk
   }
 
+  it.each(CLI_MAIN_ENTRY_NAMES)('rejects direct and transitive Electron imports in %s', (name) => {
+    const plugin = createPlainNodeEntryGuardPlugin()
+    const entry = entryChunk(name, 'require("electron")')
+    const bundle: Rollup.OutputBundle = { [entry.fileName]: entry }
+    expect(() => runEntryWriteBundle(plugin, bundle)).toThrow('requires electron')
+
+    entry.code = ''
+    const shared = entryChunk('shared', 'require("electron/main")')
+    shared.isEntry = false
+    bundle[shared.fileName] = shared
+    for (const edge of ['imports', 'dynamicImports'] as const) {
+      entry[edge] = [shared.fileName]
+      expect(() => runEntryWriteBundle(plugin, bundle)).toThrow('requires electron')
+      entry[edge] = []
+    }
+
+    shared.code = 'require("node:fs")'
+    entry.imports = [shared.fileName]
+    expect(() => runEntryWriteBundle(plugin, bundle)).not.toThrow()
+  })
+
   it('rejects an Electron require reachable from a worker entry', () => {
     const plugin = createPlainNodeEntryGuardPlugin()
-    const bundle = {
-      'port-scan-command-worker-entry.js': workerChunk(
+    const bundle: Rollup.OutputBundle = {
+      'port-scan-command-worker-entry.js': entryChunk(
         'port-scan-command-worker-entry',
         'require("electron")'
       )
-    } as Rollup.OutputBundle
+    }
 
-    expect(() => runWorkerWriteBundle(plugin, bundle)).toThrow('requires electron')
+    expect(() => runEntryWriteBundle(plugin, bundle)).toThrow('requires electron')
   })
 
   it('names the worker-thread runtime so the failure is actionable', () => {
     const plugin = createPlainNodeEntryGuardPlugin()
-    const bundle = {
-      'stt-worker.js': workerChunk('stt-worker', 'require("electron")')
-    } as Rollup.OutputBundle
+    const bundle: Rollup.OutputBundle = {
+      'stt-worker.js': entryChunk('stt-worker', 'require("electron")')
+    }
 
-    expect(() => runWorkerWriteBundle(plugin, bundle)).toThrow('runs as a worker thread')
+    expect(() => runEntryWriteBundle(plugin, bundle)).toThrow('runs as a worker thread')
   })
 
   // The real risk is transitive: a worker entry importing a shared chunk that
   // reaches the electron-requiring client, not a direct import anyone would spot.
   it('follows shared chunks out of a worker entry', () => {
     const plugin = createPlainNodeEntryGuardPlugin()
-    const bundle = {
-      'session-scanner-opencode-sqlite-worker-entry.js': workerChunk(
+    const bundle: Rollup.OutputBundle = {
+      'session-scanner-opencode-sqlite-worker-entry.js': entryChunk(
         'session-scanner-opencode-sqlite-worker-entry',
         'require("./chunks/shared.js")',
         ['chunks/shared.js']
@@ -223,20 +245,20 @@ describe('worker thread entry guard', () => {
         isEntry: false,
         name: 'shared'
       } as Rollup.OutputChunk
-    } as Rollup.OutputBundle
+    }
 
-    expect(() => runWorkerWriteBundle(plugin, bundle)).toThrow('chunks/shared.js')
+    expect(() => runEntryWriteBundle(plugin, bundle)).toThrow('chunks/shared.js')
   })
 
   it('passes a clean worker entry', () => {
     const plugin = createPlainNodeEntryGuardPlugin()
-    const bundle = {
-      'warp-theme-parser-worker.js': workerChunk(
+    const bundle: Rollup.OutputBundle = {
+      'warp-theme-parser-worker.js': entryChunk(
         'warp-theme-parser-worker',
         'require("node:worker_threads")'
       )
-    } as Rollup.OutputBundle
+    }
 
-    expect(() => runWorkerWriteBundle(plugin, bundle)).not.toThrow()
+    expect(() => runEntryWriteBundle(plugin, bundle)).not.toThrow()
   })
 })

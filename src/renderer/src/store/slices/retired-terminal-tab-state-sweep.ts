@@ -1,3 +1,4 @@
+import { removePaneKeys } from './agent-status-pane-keyed-records'
 import type { AppState } from '../types'
 import { forgetAgentHibernationTabOutput } from '@/lib/agent-hibernation-output-activity'
 import { forgetForegroundTerminalTabs } from '@/lib/foreground-terminal-tabs'
@@ -59,7 +60,7 @@ export function buildRetiredTerminalTabStateSweepPatch(
   state: RetiredTerminalTabSweepState,
   tabIds: readonly string[],
   worktreeId?: string | null,
-  opts?: { preserveActivityClearedState?: boolean }
+  opts?: { preserveActivityClearedState?: boolean; paneKeys?: ReadonlySet<string> }
 ): Partial<RetiredTerminalTabSweepState> | null {
   if (tabIds.length === 0) {
     return null
@@ -69,25 +70,38 @@ export function buildRetiredTerminalTabStateSweepPatch(
   // that discards the patch still mutates the registries.
   let swept: RetiredTerminalTabSweepState = state
   for (const tabId of tabIds) {
-    retireParkedTerminalTab(tabId)
+    if (!opts?.paneKeys) {
+      retireParkedTerminalTab(tabId)
+    }
     const { patch } = buildAgentStatusTabPrefixDropPatch(
       swept,
       tabId,
-      retireAgentPaneAuthorityAliasesByOwnerTab(tabId),
+      opts?.paneKeys ? [] : retireAgentPaneAuthorityAliasesByOwnerTab(tabId),
       {
         ...(worktreeId ? { worktreeId } : {}),
+        ...(opts?.paneKeys ? { paneKeys: opts.paneKeys } : {}),
         ...(opts?.preserveActivityClearedState ? { preserveActivityClearedState: true } : {})
       }
     )
-    const foreground = buildPaneForegroundAgentTabPrefixClearPatch(
-      swept.paneForegroundAgentByPaneKey,
-      [`${tabId}:`]
-    )
+    const foreground = opts?.paneKeys
+      ? {
+          paneForegroundAgentByPaneKey: removePaneKeys(
+            swept.paneForegroundAgentByPaneKey,
+            opts.paneKeys
+          )
+        }
+      : buildPaneForegroundAgentTabPrefixClearPatch(swept.paneForegroundAgentByPaneKey, [
+          `${tabId}:`
+        ])
     swept = { ...swept, ...patch, ...foreground }
-    forgetAgentHibernationTabOutput(tabId)
+    if (!opts?.paneKeys) {
+      forgetAgentHibernationTabOutput(tabId)
+    }
   }
-  forgetForegroundTerminalTabs(tabIds)
-  forgetAgentStartupDeliveriesForTabs(tabIds)
+  if (!opts?.paneKeys) {
+    forgetForegroundTerminalTabs(tabIds)
+    forgetAgentStartupDeliveriesForTabs(tabIds)
+  }
   const changed: Record<string, unknown> = {}
   for (const key of Object.keys(swept) as (keyof RetiredTerminalTabSweepState)[]) {
     if (!Object.is(swept[key], state[key])) {

@@ -5,6 +5,7 @@ import {
   AGENT_TYPE_MAX_LENGTH
 } from './agent-status-types'
 import {
+  codexRosterChildWorkLiveness,
   codexRosterToSnapshots,
   finishCodexSubagent,
   setCodexSubagentModel,
@@ -61,6 +62,20 @@ describe('Codex subagent roster', () => {
 
     expect(roster.size).toBe(AGENT_STATUS_MAX_SUBAGENTS)
     expect(roster.has('replacement')).toBe(true)
+  })
+
+  describe('codexRosterChildWorkLiveness', () => {
+    it('reads every child as agent work, a waiting one above the rest, and nothing as a watch loop', () => {
+      const roster: CodexSubagentRoster = new Map()
+      expect(codexRosterChildWorkLiveness(undefined)).toBeNull()
+      expect(codexRosterChildWorkLiveness(roster)).toBeNull()
+      upsertCodexSubagent(roster, 'a', { state: 'working' }, 1)
+      expect(codexRosterChildWorkLiveness(roster)).toBe('working')
+      upsertCodexSubagent(roster, 'b', { state: 'waiting' }, 2)
+      expect(codexRosterChildWorkLiveness(roster)).toBe('waiting')
+      finishCodexSubagent(roster, 'b')
+      expect(codexRosterChildWorkLiveness(roster)).toBe('working')
+    })
   })
 
   describe('setCodexSubagentModel', () => {

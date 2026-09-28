@@ -1,12 +1,15 @@
+import { markQoderWorkspaceTrusted } from '../qoder/workspace-trust'
 /* eslint-disable max-lines */
 // Why: worktree create helpers (local + remote) split out of worktrees.ts; the cohesive create flow runs this file just over the per-file line limit.
 
+import { worktreeCreateGit } from '../git/worktree-create-git-executor'
 import { getRepoHostedReviewExecutionHostId } from '../source-control/hosted-review-execution-host'
 import type { BrowserWindow } from 'electron'
 import { posix, win32 } from 'node:path'
 import { existsSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import type { Store } from '../persistence'
+import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { Repo } from '../../shared/repo-types'
 import type { SetupAgentStartupPolicy } from '../../shared/orca-yaml-hook-types'
@@ -30,13 +33,17 @@ import type {
 import { getPRForBranch } from '../github/client'
 import { listWorktrees, addWorktree, addSparseWorktree } from '../git/worktree'
 import type { AddWorktreeOptions, AddWorktreeResult } from '../git/worktree'
-import { consumePreparedWorktreeCreate } from '../worktree-create-preparation'
+import {
+  consumePreparedWorktreeCreate,
+  type PreparationRearmHolder
+} from '../worktree-create-preparation'
 import {
   getBranchConflictKind,
   resolveDefaultBaseRefViaExec,
   resolveDefaultBaseRefWithLocalGit
 } from '../git/repo'
 import { getBranchConflictKindViaExec } from '../git/repo-branch-conflict'
+import { WorktreeCreateCollisionError } from '../../shared/new-workspace/worktree-create-collision'
 import { resolveLocalGitUsername, getSshGitUsername } from '../git/git-username'
 import { hasCommitObjectViaGitExec } from '../git/commit-object-ref'
 import {
@@ -48,7 +55,7 @@ import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
 import type { ForgeProviderId } from '../source-control/forge-provider'
 import { validateGitPushTarget } from '../git/push-target-validation'
-import { assertGitPushTargetShape } from '../../shared/git-push-target-validation'
+import { assertValidGitPushTarget } from '../../shared/git-push-target-validation'
 import { gitExecFileAsync } from '../git/runner'
 import type {
   OrcaRuntimeService,
@@ -151,6 +158,7 @@ import {
   markCopilotFolderTrusted,
   markCursorWorkspaceTrusted
 } from '../agent-trust-presets'
+import { awaitAgentTrustWriteWithinDeadline } from '../agent-trust-write-deadline'
 import {
   getLocalProjectGitExecOptions,
   getLocalProjectWorktreeGitOptions,
@@ -432,12 +440,21 @@ async function spawnLocalStartupAndSetupTerminals(args: {
     if (isTuiAgent(createdWithAgent)) {
       const preset = TUI_AGENT_CONFIG[createdWithAgent].preflightTrust
       try {
-        if (preset === 'cursor') {
+        if (preset === 'qoder') {
+          markQoderWorkspaceTrusted(worktree.path)
+        } else if (preset === 'cursor') {
           markCursorWorkspaceTrusted(worktree.path)
         } else if (preset === 'copilot') {
           markCopilotFolderTrusted(worktree.path)
         } else if (preset === 'codex') {
-          markCodexProjectTrusted(worktree.path)
+          // Why: the PTY below spawns Codex immediately; a discarded Promise let
+          // it reach the trust menu before the write landed, and its rejection
+          // escaped this synchronous catch. Bounded so a wedged config lane
+          // cannot stall worktree creation.
+          await awaitAgentTrustWriteWithinDeadline(markCodexProjectTrusted(worktree.path), {
+            preset,
+            workspacePath: worktree.path
+          })
         }
       } catch {
         // Best-effort: launch still proceeds and the agent can ask interactively.
@@ -1260,7 +1277,7 @@ export async function configureCreatedWorktreePushTarget(
   worktreePath: string,
   branchName: string,
   target: GitPushTarget,
-  gitOptions: { wslDistro?: string } = {}
+  gitOptions: { wslDistro?: string; admissionTier?: GitAdmissionTier } = {}
 ): Promise<GitPushTarget> {
   return configureCreatedWorktreePushTargetWithExec(
     (args, cwd) => gitExecFileAsync(args, { cwd, ...gitOptions }),
@@ -1277,7 +1294,7 @@ export async function prepareWorktreePushTargetSsh(
   store?: WorktreePushTargetStore,
   repoId?: string
 ): Promise<GitPushTarget> {
-  assertGitPushTargetShape(target)
+  assertValidGitPushTarget(target)
   const execGit: GitRemoteExec = (args, cwd) => provider.exec(args, cwd)
   const { remoteCreated: _ignoredRemoteCreated, ...sanitizedTarget } = target
   await provider.exec(['check-ref-format', '--branch', target.branchName], repoPath)
@@ -1985,7 +2002,7 @@ export async function createRemoteWorktree(
   }
   if (!remotePathResolved) {
     if (lastBranchConflictKind) {
-      throw new Error(
+      throw new WorktreeCreateCollisionError(
         `Branch "${branchName}" already exists ${lastBranchConflictKind === 'local' ? 'locally' : 'on a remote'}. Pick a different ${branchConflictSubject}.`
       )
     }
@@ -2099,6 +2116,8 @@ export async function createRemoteWorktree(
     }
     throw err
   }
+  // Why: the worktree is listable from here on; a scan that began before it appeared is overtaken.
+  runWorktreeChangeInvalidators(repo.id)
   if (sparseDirectories.length > 0) {
     try {
       // Why: SSH providers expose generic git exec, so remote sparse mirrors local addSparseWorktree without a new relay method.
@@ -2298,11 +2317,30 @@ export async function createRemoteWorktree(
   }
 }
 
-export async function createLocalWorktree(
+export function createLocalWorktree(
   args: CreateWorktreeArgsWithSystemProvenance,
   repo: Repo,
   store: Store,
   mainWindow: BrowserWindow,
+  runtime?: OrcaRuntimeService
+): Promise<CreateWorktreeResult> {
+  // Why a holder fired in `finally`: consuming a prepared checkout leaves the pool one short, so a
+  // create that fails after that point — include copy, push target, terminal startup — must still
+  // arm the replacement. Fires exactly once, after startup on the success path.
+  const rearm: PreparationRearmHolder = { fire: () => {} }
+  return worktreeCreateGit
+    .run(() => performLocalWorktreeCreate(args, repo, store, mainWindow, rearm, runtime))
+    .finally(() => {
+      rearm.fire()
+    })
+}
+
+async function performLocalWorktreeCreate(
+  args: CreateWorktreeArgsWithSystemProvenance,
+  repo: Repo,
+  store: Store,
+  mainWindow: BrowserWindow,
+  rearm: PreparationRearmHolder,
   runtime?: OrcaRuntimeService
 ): Promise<CreateWorktreeResult> {
   const timing = createWorktreeCreateTimingRecorder()
@@ -2318,12 +2356,10 @@ export async function createLocalWorktree(
   const localWorktreeGitOptionArgs: [] | [{ wslDistro?: string }] = hasLocalWorktreeGitOptions
     ? [localWorktreeGitOptions]
     : []
-  const addProjectGitOptions = (options?: AddWorktreeOptions): AddWorktreeOptions | undefined => {
-    if (!hasLocalWorktreeGitOptions) {
-      return options
-    }
-    return { ...options, ...localWorktreeGitOptions }
-  }
+  const addProjectGitOptions = (options?: AddWorktreeOptions): AddWorktreeOptions => ({
+    ...options,
+    ...localWorktreeGitOptions
+  })
 
   const requestedName = args.name
   const sanitizedName = sanitizeWorktreeName(args.name)
@@ -2425,7 +2461,7 @@ export async function createLocalWorktree(
           )
         }
       }
-    } else if (!(await hasLocalWorktreeBaseRef(repo.path, baseBranch, localWorktreeGitOptions))) {
+    } else if (!(await hasLocalWorktreeBaseRef(repo.path, baseBranch, localGitExecOptions))) {
       // Why: non-remote-prefix bases (plain main/master/local) keep the legacy best-effort fetch; verified PR SHA bases already have the object.
       legacyFetchPromise = runtime
         .fetchRemoteWithCache(repo.path, 'origin', ...localWorktreeGitOptionArgs)
@@ -2434,7 +2470,7 @@ export async function createLocalWorktree(
       emitCreateWorktreeProgress(mainWindow, 'fetching', args.creationId)
     }
   } else {
-    if (!(await hasLocalWorktreeBaseRef(repo.path, baseBranch, localWorktreeGitOptions))) {
+    if (!(await hasLocalWorktreeBaseRef(repo.path, baseBranch, localGitExecOptions))) {
       legacyFetchPromise = gitExecFileAsync(['fetch', 'origin'], {
         ...localGitExecOptions,
         timeout: CREATE_BASE_FALLBACK_FETCH_TIMEOUT_MS
@@ -2636,12 +2672,12 @@ export async function createLocalWorktree(
     // narrowing does not reach the message.
     const existingReviewNumber = lastExistingReviewNumber
     if (existingReviewNumber !== null) {
-      throw new Error(
+      throw new WorktreeCreateCollisionError(
         `Branch "${branchName}" already has PR #${String(existingReviewNumber)}. Pick a different ${branchConflictSubject}.`
       )
     }
     if (lastBranchConflictKind) {
-      throw new Error(
+      throw new WorktreeCreateCollisionError(
         `Branch "${branchName}" already exists ${lastBranchConflictKind === 'local' ? 'locally' : 'on a remote'}. Pick a different ${branchConflictSubject}.`
       )
     }
@@ -2699,9 +2735,11 @@ export async function createLocalWorktree(
     ...remoteTrackingBaseOption,
     ...(suggestLocalBaseRefUpdate ? { suggestLocalBaseRefUpdate } : {})
   }
-  const preparedWorktreeOptions = suggestLocalBaseRefUpdate
-    ? addProjectGitOptions({ ...remoteTrackingBaseOption, suggestLocalBaseRefUpdate })
-    : addProjectGitOptions(remoteTrackingBaseOption)
+  const preparedWorktreeOptions = addProjectGitOptions(
+    suggestLocalBaseRefUpdate
+      ? { ...remoteTrackingBaseOption, suggestLocalBaseRefUpdate }
+      : remoteTrackingBaseOption
+  )
   let addResult: AddWorktreeResult
   try {
     addResult =
@@ -2714,7 +2752,8 @@ export async function createLocalWorktree(
             branch: branchName,
             baseBranch,
             refreshLocalBaseRef: settings.refreshLocalBaseRefOnWorktreeCreate,
-            ...(preparedWorktreeOptions ? { options: preparedWorktreeOptions } : {})
+            options: preparedWorktreeOptions,
+            timing
           })
           timing.recordPreparedCheckout(
             prepared.status === 'hit'
@@ -2722,7 +2761,13 @@ export async function createLocalWorktree(
               : { status: 'miss', reason: prepared.reason }
           )
           if (prepared.status === 'hit') {
+            // Why deferred: re-arming is a full `reset --hard`; started here it would hold a
+            // general admission slot for the rest of this create's own git.
+            rearm.fire = prepared.rearm
             return prepared.result
+          }
+          if (prepared.rearm) {
+            rearm.fire = prepared.rearm
           }
         } else {
           timing.recordPreparedCheckout({
@@ -2753,25 +2798,15 @@ export async function createLocalWorktree(
               addProjectGitOptions({ ...remoteTrackingBaseOption, suggestLocalBaseRefUpdate })
             )
           }
-          const sparseOptions = addProjectGitOptions(remoteTrackingBaseOption)
-          return sparseOptions
-            ? addSparseWorktree(
-                repo.path,
-                worktreePath,
-                branchName,
-                sparseDirectories,
-                baseBranch,
-                settings.refreshLocalBaseRefOnWorktreeCreate,
-                sparseOptions
-              )
-            : addSparseWorktree(
-                repo.path,
-                worktreePath,
-                branchName,
-                sparseDirectories,
-                baseBranch,
-                settings.refreshLocalBaseRefOnWorktreeCreate
-              )
+          return addSparseWorktree(
+            repo.path,
+            worktreePath,
+            branchName,
+            sparseDirectories,
+            baseBranch,
+            settings.refreshLocalBaseRefOnWorktreeCreate,
+            addProjectGitOptions(remoteTrackingBaseOption)
+          )
         }
 
         if (checkoutExistingBranch) {
@@ -2796,24 +2831,15 @@ export async function createLocalWorktree(
             addProjectGitOptions({ ...remoteTrackingBaseOption, suggestLocalBaseRefUpdate })
           )
         }
-        const worktreeOptions = addProjectGitOptions(remoteTrackingBaseOption)
-        return worktreeOptions
-          ? addWorktree(
-              repo.path,
-              worktreePath,
-              branchName,
-              baseBranch,
-              settings.refreshLocalBaseRefOnWorktreeCreate,
-              false,
-              worktreeOptions
-            )
-          : addWorktree(
-              repo.path,
-              worktreePath,
-              branchName,
-              baseBranch,
-              settings.refreshLocalBaseRefOnWorktreeCreate
-            )
+        return addWorktree(
+          repo.path,
+          worktreePath,
+          branchName,
+          baseBranch,
+          settings.refreshLocalBaseRefOnWorktreeCreate,
+          false,
+          addProjectGitOptions(remoteTrackingBaseOption)
+        )
       })) ?? {}
   } catch (error) {
     if (shouldRetireGeneratedName && failedWorktreeCreationNeedsRetirement(error)) {
@@ -2821,6 +2847,10 @@ export async function createLocalWorktree(
     }
     throw error
   }
+  // Why: the worktree is listable from here on. Every scan that started earlier -- including a
+  // prepared checkout's, which listings hide while it is still locked -- now describes a catalog
+  // without it, and must not be served or cached as the current one.
+  runWorktreeChangeInvalidators(repo.id)
 
   // Why: fallible metadata work after creation must not leave a real workspace name reusable.
   if (shouldRetireGeneratedName) {
@@ -2845,12 +2875,7 @@ export async function createLocalWorktree(
     worktrees: gitWorktrees,
     listingComplete
   } = await timing.time('list_created_worktree', async () =>
-    resolveCreatedWorktree(
-      repo.path,
-      worktreePath,
-      branchName,
-      hasLocalWorktreeGitOptions ? localWorktreeGitOptions : undefined
-    )
+    resolveCreatedWorktree(repo.path, worktreePath, branchName, localWorktreeGitOptions)
   )
 
   const worktreeId = `${repo.id}::${created.path}`
@@ -2930,14 +2955,14 @@ export async function createLocalWorktree(
   // Why gated: registration replaces the repo's root set, so registering a create recovered without
   // a listing would revoke filesystem access to every worktree that listing would have named.
   if (listingComplete) {
-    registerWorktreeRootsForRepo(store, repo.id, [
+    registerWorktreeRootsForRepo(store, repo, [
       repo.path,
       ...gitWorktrees.map((worktree) => worktree.path)
     ])
   } else {
     // Recovered without a listing: authorize just the new root, or the create the user just made
     // is rejected by filesystem/git-status IPC until a full scan repopulates the cache.
-    registerCreatedWorktreeRoot(store, repo.id, created.path)
+    registerCreatedWorktreeRoot(store, repo, created.path)
   }
 
   // Why: link user-configured shared paths (e.g. `node_modules`, `.env`) before setup runs so setup scripts see them in place.

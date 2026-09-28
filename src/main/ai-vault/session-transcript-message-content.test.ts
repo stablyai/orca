@@ -32,6 +32,12 @@ it('joins text blocks and appends tool blocks as their own messages', () => {
   ])
 })
 
+it('accepts the capitalised Text block Codex writes for a completed agent message', () => {
+  expect(
+    transcriptMessagesFromContent('assistant', [{ type: 'Text', text: 'the reply' }], AT)
+  ).toEqual([{ role: 'assistant', text: 'the reply', timestamp: AT }])
+})
+
 it('reads a tool result carried on a user record as a tool message', () => {
   expect(
     transcriptMessagesFromContent(

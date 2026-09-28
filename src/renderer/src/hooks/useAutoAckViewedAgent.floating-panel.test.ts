@@ -65,7 +65,7 @@ describe('useAutoAckViewedAgent — floating workspace panel visibility', () => 
     )
 
     // The dot is the only signal a closed panel has, so a store write while hidden must not ack it.
-    useAppStore.getState().markAgentCompletionPaneUnread(FLOATING_PANE_KEY)
+    useAppStore.getState().markAgentCompletionPaneUnread(FLOATING_PANE_KEY, 'agent-completion')
     expect(selectFloatingWorkspaceHasUnread(useAppStore.getState())).toBe(true)
 
     hook.rerender({ floatingPanelVisible: true })
@@ -98,8 +98,8 @@ describe('useAutoAckViewedAgent — floating workspace panel visibility', () => 
       { initialProps: { floatingPanelVisible: false } }
     )
 
-    useAppStore.getState().markAgentCompletionPaneUnread(MAIN_PANE_KEY)
-    useAppStore.getState().markAgentCompletionPaneUnread(FLOATING_PANE_KEY)
+    useAppStore.getState().markAgentCompletionPaneUnread(MAIN_PANE_KEY, 'agent-completion')
+    useAppStore.getState().markAgentCompletionPaneUnread(FLOATING_PANE_KEY, 'agent-completion')
     expect(selectFloatingWorkspaceHasUnread(useAppStore.getState())).toBe(true)
 
     hook.rerender({ floatingPanelVisible: true })

@@ -27,7 +27,9 @@ export const ORCAD_SNAPSHOT_MEMBERS = [
   'orca-profile-index.json',
   // Pre-profiles layout; still read as a migration source.
   'orca-data.json',
-  'profiles'
+  'profiles',
+  // Cross-profile SQLite moves must survive an orcad rollback too.
+  'profile-move-intents'
 ] as const
 
 /** Never captured and never restored — see the module comment. */
@@ -43,6 +45,10 @@ function assertPlainMemberName(member: string): string {
     throw new Error(`Unsafe orcad snapshot member name: ${JSON.stringify(member)}`)
   }
   return member
+}
+
+function noSymlinkedStateCommand(path: string): string {
+  return `links=$(find ${path} -type l -print) && [ -z "$links" ]`
 }
 
 export function orcadSnapshotDirName(fullVersion: string, takenAtMs: number): string {
@@ -72,8 +78,14 @@ export function captureOrcadStateSnapshotCommand(
     // Why the accumulated name is NOT quoted: `$members` is re-split by the shell before it
     // reaches tar, so a quoted name arrives as a literal `'profiles'` that tar cannot stat.
     // `assertPlainMemberName` is what makes leaving them bare safe.
-    (member) =>
-      `[ -e ${root}/${shellEscape(member)} ] && members="$members ${assertPlainMemberName(member)}";`
+    (member) => {
+      const path = `${root}/${shellEscape(member)}`
+      return (
+        `if [ -e ${path} ] || [ -L ${path} ]; then ` +
+        `${noSymlinkedStateCommand(path)} || { echo FAILED; exit 0; }; ` +
+        `members="$members ${assertPlainMemberName(member)}"; fi;`
+      )
+    }
   ).join(' ')
   return [
     `members=;`,
@@ -143,6 +155,42 @@ export function parseOrcadSnapshotRestore(output: string): OrcadSnapshotRestore 
     return 'restored'
   }
   return value === 'MISSING' ? 'missing' : 'failed'
+}
+
+/** Compare after stopping the candidate; a changed root cannot be handed to an older build. */
+export function compareOrcadStateSnapshotCommand(
+  host: RemoteHostPlatform,
+  userDataDir: string,
+  snapshotDir: string
+): string {
+  assertPosixHost(host)
+  const root = shellEscape(userDataDir)
+  const dir = shellEscape(snapshotDir)
+  const archive = shellEscape(joinRemotePath(host, snapshotDir, 'state.tar'))
+  const comparisons = ORCAD_SNAPSHOT_MEMBERS.map((member) => {
+    const name = shellEscape(member)
+    return [
+      `if [ -e ${root}/${name} ] || [ -L ${root}/${name} ]; then`,
+      `${noSymlinkedStateCommand(`${root}/${name}`)} || { echo UNKNOWN; exit 0; };`,
+      `diff -r ${root}/${name} "$comparison"/${name} >/dev/null 2>&1 || verdict=CHANGED;`,
+      `elif [ -e "$comparison"/${name} ] || [ -L "$comparison"/${name} ]; then verdict=CHANGED; fi;`
+    ].join(' ')
+  }).join(' ')
+  return [
+    `test -d ${root} && test -r ${root} && test -x ${root} || { echo UNKNOWN; exit 0; };`,
+    `test -f ${archive} || { echo UNKNOWN; exit 0; };`,
+    `comparison=$(mktemp -d ${dir}/compare.XXXXXX) || { echo UNKNOWN; exit 0; };`,
+    `trap 'rm -rf "$comparison"' EXIT HUP INT TERM;`,
+    `tar -C "$comparison" -xf ${archive} || { echo UNKNOWN; exit 0; };`,
+    `${noSymlinkedStateCommand('"$comparison"')} || { echo UNKNOWN; exit 0; };`,
+    'verdict=UNCHANGED;',
+    comparisons,
+    'echo "$verdict"'
+  ].join(' ')
+}
+
+export function orcadSnapshotIsUnchanged(output: string): boolean {
+  return output.trim().split('\n').pop()?.trim() === 'UNCHANGED'
 }
 
 /**

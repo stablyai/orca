@@ -73,7 +73,7 @@ describe('createGitHubSlice.fetchProjectViewTable coordination', () => {
     expect(mockApi.gh.getProjectViewTable).toHaveBeenCalledTimes(1)
   })
 
-  it('lets each forced waiter start after a weaker request settles', async () => {
+  it('shares one fresh request across twenty forced waiters after a weaker request', async () => {
     const store = createTestStore()
     const weak = Promise.withResolvers<GetProjectViewTableResult>()
     mockApi.gh.getProjectViewTable
@@ -81,12 +81,16 @@ describe('createGitHubSlice.fetchProjectViewTable coordination', () => {
       .mockResolvedValue({ ok: true, data: makeTable('forced') })
 
     const first = store.getState().fetchProjectViewTable(request)
-    const forcedOne = store.getState().fetchProjectViewTable(request, { force: true })
-    const forcedTwo = store.getState().fetchProjectViewTable(request, { force: true })
+    const forced = Array.from({ length: 20 }, () =>
+      store.getState().fetchProjectViewTable(request, { force: true })
+    )
     weak.resolve({ ok: true, data: makeTable('weak') })
 
-    await expect(Promise.all([first, forcedOne, forcedTwo])).resolves.toHaveLength(3)
-    expect(mockApi.gh.getProjectViewTable).toHaveBeenCalledTimes(3)
+    await expect(first).resolves.toEqual({ ok: true, data: makeTable('weak') })
+    await expect(Promise.all(forced)).resolves.toEqual(
+      Array.from({ length: 20 }, () => ({ ok: true, data: makeTable('forced') }))
+    )
+    expect(mockApi.gh.getProjectViewTable).toHaveBeenCalledTimes(2)
   })
 
   it('stamps a classified failure onto stale data only when the view key is known', async () => {

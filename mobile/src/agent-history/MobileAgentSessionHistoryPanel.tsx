@@ -1,14 +1,23 @@
 import { optionalSettingsRead } from '../transport/settings-read-operations'
+import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
+import { rpcPayloadMember } from '../transport/rpc-reader-payload'
+import { readAcceptedResumeList } from './resume-metadata-lists'
+import {
+  resumeFolderWorkspaceListRead,
+  resumeProjectGroupListRead,
+  resumeRepoListRead,
+  resumeWorktreeListRead
+} from './mobile-agent-history-operations'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useRouter } from 'expo-router'
+import { useRouteHandoff } from '../navigation/route-handoff'
 import { ChevronLeft, RefreshCw } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import { useHostClient } from '../transport/client-context'
-import type { RpcSuccess } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { readMobileRuntimeHostPlatform } from '../transport/mobile-runtime-host-platform'
+import { worktreeCatalogRead } from '../worktree/worktree-catalog-operations'
 import { getWorktreeLabel } from '../session/worktree-label'
 import {
   buildMobileAiVaultResumeLaunch,
@@ -56,7 +65,9 @@ export function MobileAgentSessionHistoryPanel({
   worktreeId,
   name = ''
 }: MobileAgentSessionHistoryPanelProps) {
-  const router = useRouter()
+  // Not `useRouter`: inside the shell's page this screen is one document standing in for one
+  // screen, and the session it resumes into is a native route the shell has to push.
+  const router = useRouteHandoff()
   const { client, state: connState } = useHostClient(hostId)
   const [worktrees, setWorktrees] = useState<Worktree[]>([])
   const [worktreesLoaded, setWorktreesLoaded] = useState(false)
@@ -79,13 +90,16 @@ export function MobileAgentSessionHistoryPanel({
     let cancelled = false
     void (async () => {
       try {
-        const worktreeResponse = await client.sendRequest('worktree.ps', { limit: 10000 })
+        const worktreeReply = await worktreeCatalogRead.request(client, { limit: 10000 })
         if (cancelled) {
           return
         }
-        if (worktreeResponse.ok) {
-          const result = (worktreeResponse as RpcSuccess).result as { worktrees: Worktree[] }
-          setWorktrees(result.worktrees)
+        const catalog = worktreeCatalogRead.interpret(worktreeReply)
+        if (catalog.accepted) {
+          // Why `?? []`: the member is salvaged, so an envelope the host answers without rows leaves it
+          // absent, and `use-mobile-agent-history-state.ts:61` calls `.find` on it unguarded.
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the rows stay opaque in the reader because three screens project them differently; this panel reads only `path` off a row to seed `scopePaths`, and `matrix-aivault.history-screen-worktree.ps-1` records every partition of its own family rendering a list rather than a crash.
+          setWorktrees((catalog.value.worktrees ?? []) as Worktree[])
         }
       } catch {
         // Why: worktree list is best-effort context; the session scan still runs
@@ -250,6 +264,7 @@ export function MobileAgentSessionHistoryPanel({
             style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
             onPress={() => router.back()}
             hitSlop={8}
+            accessibilityRole="button"
             accessibilityLabel="Back"
           >
             <ChevronLeft size={22} color={colors.textSecondary} strokeWidth={2.2} />
@@ -288,9 +303,11 @@ export function MobileAgentSessionHistoryPanel({
         <View style={styles.state}>
           <Text style={styles.stateTitle}>Unable to Load</Text>
           <Text style={styles.stateText}>{screenState.message}</Text>
-          <Pressable style={styles.retryButton} onPress={retry}>
-            <Text style={styles.retryText}>Retry</Text>
-          </Pressable>
+          {retry ? (
+            <Pressable style={styles.retryButton} onPress={retry}>
+              <Text style={styles.retryText}>Retry</Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : (
         <>
@@ -360,7 +377,7 @@ export function MobileAgentSessionHistoryPanel({
 const EMPTY_SESSIONS: AiVaultSession[] = []
 const EMPTY_ISSUES: { agent: AiVaultSession['agent']; path: string; message: string }[] = []
 
-async function loadMobileResumeMetadata(client: Pick<RpcClient, 'sendRequest'>): Promise<{
+async function loadMobileResumeMetadata(client: RpcClient): Promise<{
   repos: MobileAiVaultResumeRepo[]
   folderWorkspaces: MobileAiVaultResumeFolderWorkspace[]
   projectGroups: MobileAiVaultResumeProjectGroup[]
@@ -371,54 +388,43 @@ async function loadMobileResumeMetadata(client: Pick<RpcClient, 'sendRequest'>):
   // metadata after explicit user intent instead of delaying history browsing.
   // timeoutMs: without it a socket drop parks these on the reconnect waiter
   // for minutes, pinning the resume spinner (see RESUME_RPC_TIMEOUT_MS).
-  const [
-    repoResponse,
-    folderWorkspaceResponse,
-    projectGroupResponse,
-    settingsResponse,
-    worktreeResponse
-  ] = await Promise.all([
-    client.sendRequest('repo.list', undefined, { timeoutMs: RESUME_RPC_TIMEOUT_MS }),
-    client
-      .sendRequest('folderWorkspace.list', undefined, { timeoutMs: RESUME_RPC_TIMEOUT_MS })
-      .catch(() => null),
-    client
-      .sendRequest('projectGroup.list', undefined, { timeoutMs: RESUME_RPC_TIMEOUT_MS })
-      .catch(() => null),
-    optionalSettingsRead
-      .request(client, undefined, { timeoutMs: RESUME_RPC_TIMEOUT_MS })
-      .catch(() => null),
-    client
-      .sendRequest('worktree.ps', { limit: 10000 }, { timeoutMs: RESUME_RPC_TIMEOUT_MS })
-      .catch(() => null)
-  ])
-  if (!repoResponse.ok) {
-    throw new Error(repoResponse.error?.message || 'Unable to load workspace metadata.')
-  }
-  const repoResult = repoResponse.result as { repos?: MobileAiVaultResumeRepo[] }
+  const [repoReply, folderWorkspaceReply, projectGroupReply, settingsReply, worktreeReply] =
+    await Promise.all([
+      resumeRepoListRead.request(client, undefined, { timeoutMs: RESUME_RPC_TIMEOUT_MS }),
+      resumeFolderWorkspaceListRead
+        .request(client, undefined, { timeoutMs: RESUME_RPC_TIMEOUT_MS })
+        .catch(() => null),
+      resumeProjectGroupListRead
+        .request(client, undefined, { timeoutMs: RESUME_RPC_TIMEOUT_MS })
+        .catch(() => null),
+      optionalSettingsRead
+        .request(client, undefined, { timeoutMs: RESUME_RPC_TIMEOUT_MS })
+        .catch(() => null),
+      resumeWorktreeListRead
+        .request(client, { limit: 10000 }, { timeoutMs: RESUME_RPC_TIMEOUT_MS })
+        .catch(() => null)
+    ])
+  const repoResult = interpretOrThrowRefusalMessage(
+    () => resumeRepoListRead.interpret(repoReply),
+    'Unable to load workspace metadata.'
+  )
   const folderWorkspaceResult =
-    folderWorkspaceResponse?.ok === true
-      ? (folderWorkspaceResponse.result as {
-          folderWorkspaces?: MobileAiVaultResumeFolderWorkspace[]
-        })
-      : null
+    folderWorkspaceReply && resumeFolderWorkspaceListRead.interpret(folderWorkspaceReply)
   const projectGroupResult =
-    projectGroupResponse?.ok === true
-      ? (projectGroupResponse.result as { groups?: MobileAiVaultResumeProjectGroup[] })
-      : null
-  const settingsResult = settingsResponse ? optionalSettingsRead.interpret(settingsResponse) : null
+    projectGroupReply && resumeProjectGroupListRead.interpret(projectGroupReply)
+  const settingsResult = settingsReply ? optionalSettingsRead.interpret(settingsReply) : null
   const settings = settingsResult?.accepted
     ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
       (settingsResult.value as MobileAiVaultResumeSettings | null | undefined)
     : null
-  const worktreeResult =
-    worktreeResponse?.ok === true ? (worktreeResponse.result as { worktrees?: Worktree[] }) : null
+  const worktreeResult = worktreeReply && resumeWorktreeListRead.interpret(worktreeReply)
   return {
-    repos: repoResult.repos ?? [],
-    folderWorkspaces: folderWorkspaceResult?.folderWorkspaces ?? [],
-    projectGroups: projectGroupResult?.groups ?? [],
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+    repos: (rpcPayloadMember(repoResult, 'repos') as MobileAiVaultResumeRepo[] | undefined) ?? [],
+    folderWorkspaces: readAcceptedResumeList(folderWorkspaceResult, 'folderWorkspaces') ?? [],
+    projectGroups: readAcceptedResumeList(projectGroupResult, 'groups') ?? [],
     settings: settings ?? null,
-    worktrees: worktreeResult?.worktrees ?? null
+    worktrees: readAcceptedResumeList(worktreeResult, 'worktrees') ?? null
   }
 }
 

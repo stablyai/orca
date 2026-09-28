@@ -1,4 +1,7 @@
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
+import type {
+  AgentJournalItemIdentity,
+  AgentSessionJournalIdentity
+} from '../../shared/agent-session-journal-types'
 import { randomUUID } from 'node:crypto'
 import { cancelProcessAcquisition } from '../../shared/child-process/cancel-process-acquisition'
 import type {
@@ -6,11 +9,19 @@ import type {
   openCodexAppServerConnection
 } from './codex-app-server-connection'
 import { CodexAcquisitionWindow } from './codex-structured-acquisition-window'
+import type { CodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
 import type { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import type { CodexJournalTranslator } from './codex-structured-journal-translation'
 import type { CodexTurnProcessSnapshot } from './codex-structured-turn-processes'
-import type { StructuredAgentSessionLifecycleEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionEndedEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { CodexStructuredPermissionPolicy } from './codex-structured-permission-policy'
+import type {
+  AgentModelCatalogSessionAccess,
+  AgentModelCatalogStore
+} from '../native-chat/agent-model-catalog/agent-model-catalog-store'
+
+export type CodexSessionCatalogAccess = AgentModelCatalogSessionAccess
 
 export type CodexStructuredLaunch = {
   command: string
@@ -19,6 +30,12 @@ export type CodexStructuredLaunch = {
   codexHome: string | null
   resumeThreadId: string | null
   resumePath?: string | null
+  /** The resumed thread is this session's own creation: when Codex answers that it holds no
+   *  rollout for it, start a new thread in its place. Never set for a thread a resume proved. */
+  supersedeIfUnsaved?: boolean
+  permissionPolicy?: CodexStructuredPermissionPolicy
+  /** The model the session chose; the thread opens on it so its first turn is not a switch. */
+  model?: string
   env?: Record<string, string>
 }
 
@@ -31,6 +48,8 @@ export type CodexStructuredSessionEvent =
       params: unknown
       /** Host receipt time of a turn boundary; survives retry and deferral so a replay is not re-stamped. */
       observedAt?: number
+      /** Highest dispatch sequence armed when this turn-start was first received. */
+      dispatchSequenceAtReceipt?: number
     }
   | { type: 'server-request'; sessionId: string; threadId: string; method: string; params: unknown }
   | { type: 'provider-frame'; sessionId: string; threadId: string; kind: string; payload: unknown }
@@ -43,7 +62,7 @@ export type CodexStructuredSessionEvent =
       codexItemId: string
       promptKey: string
     }
-  | StructuredAgentSessionLifecycleEvent
+  | StructuredAgentSessionEndedEvent
   /** Translator-only compatibility for callers that do not participate in host recovery. */
   | { type: 'ended'; sessionId: string; reason: string; observedAt?: number }
 
@@ -58,6 +77,15 @@ export type CodexStructuredSessionAdapterDeps = {
     sessionId: string,
     state: AgentSessionBackgroundTaskState | null
   ) => void
+  /** Identity for a send admitted earlier, once Codex echoes the user message. */
+  onDispatchSettledLate?: (input: {
+    sessionId: string
+    clientMessageId: string
+    providerIdentity: AgentJournalItemIdentity
+  }) => void
+  /** Codex reported its thread not running with no turn open: a send whose
+   *  dispatch was never answered is owed nothing after this. */
+  onPrimaryThreadStoppedRunning?: (input: { sessionId: string }) => void
   openConnection?: typeof openCodexAppServerConnection
   readProcessStartTime?: (pid: number) => Promise<number | null>
   mintLinkId?: () => string
@@ -69,6 +97,8 @@ export type CodexStructuredSessionAdapterDeps = {
     rootPid: number,
     baseline: CodexTurnProcessSnapshot | null
   ) => Promise<boolean>
+  /** Host model catalog; sessions write their listings through and read back. */
+  modelCatalog?: AgentModelCatalogStore
 }
 
 export type CodexSession = {
@@ -86,8 +116,18 @@ export type CodexSession = {
   dispatchPending?: boolean
   prompts: CodexAcquisitionWindow['prompts']
   options: Map<string, string>
-  reportedOptions: { model?: string; effort?: string }
-  turnIdWaiters: ((turnId: string) => void)[]
+  reportedOptions: {
+    model?: string
+    effort?: string
+    serviceTier?: string | null
+    serviceTierKnown?: true
+  }
+  /** Exact provider-advertised Fast request value for each discovered model. */
+  fastModeTierByModel: Map<string, string>
+  /** Absent when the adapter runs without a host catalog store (tests). */
+  catalogAccess?: CodexSessionCatalogAccess
+  /** Sends whose identity is still to be settled by the provider echo. */
+  dispatchEchoes: CodexDispatchEchoes
   translator: CodexJournalTranslator | null
   /** Ephemeral roster behind the background-tasks strip; never durable state. */
   backgroundTasks: CodexBackgroundTaskTracker

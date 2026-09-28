@@ -54,7 +54,7 @@ export type AgentActivityDisplayMode = 'compact' | 'full'
 export type { ActivityGroupBy, ThreadReadFilter } from './agents-view-thread-filters'
 
 // Why the array is the source and the type derives from it: the client wire schema
-// builds its accepted value domain from this same array (client-ui-schemas.ts), so
+// builds its accepted value domain from this same array (client-ui-params.ts), so
 // an item cannot reach the type without also reaching the schema. A separately
 // declared union let the two drift — `satisfies` proves each entry is valid but
 // cannot prove coverage, so a missing entry silently narrowed the schema.
@@ -67,6 +67,8 @@ export const STATUS_BAR_ITEMS = [
   'kimi',
   'minimax',
   'grok',
+  'cursor',
+  'zcode',
   'ssh',
   'resource-usage',
   'ports',

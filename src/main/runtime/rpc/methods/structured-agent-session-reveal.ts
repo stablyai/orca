@@ -9,7 +9,11 @@
 // reads its own record and answers with that record's workspace and provider, so a client knowing
 // only a session id cannot aim the publication somewhere else.
 
-import { isAgentSessionWireRefusalCode } from '../../../../shared/agent-session-wire'
+import {
+  agentSessionRefusalFromReference,
+  isAgentSessionRefusalError,
+  isAgentSessionWireRefusalCode
+} from '../../../../shared/agent-session-wire'
 import type { StructuredAgentSessionReveal } from '../../../native-chat/agent-session-wire/structured-agent-session-host-types'
 import { refuseAgentSessionMutation } from '../../../native-chat/agent-session-wire/structured-agent-session-mutation-admission'
 import { defineMethod } from '../core'
@@ -37,13 +41,14 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
         if (!isAgentSessionWireRefusalCode(code)) {
           throw error
         }
-        return refuseAgentSessionMutation({
-          code,
-          message:
+        return refuseAgentSessionMutation(
+          agentSessionRefusalFromReference(
+            isAgentSessionRefusalError(error) ? error.refusal : { code },
             code === 'structured_agent_session_unsupported'
               ? 'This host cannot open that chat.'
               : 'This chat is no longer on this host.'
-        })
+          )
+        )
       }
       await ctx.runtime.publishStructuredAgentSessionTab({
         workspaceId: revealed.workspaceId,

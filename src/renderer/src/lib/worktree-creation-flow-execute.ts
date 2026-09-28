@@ -24,7 +24,6 @@ import {
   type WorktreeCreationStructuredSessionResult
 } from '@/lib/worktree-creation-structured-session'
 import { completeWorktreeCreation } from '@/lib/worktree-creation-completion'
-import { markStructuredWorktreeLaunchUnconfirmed } from '@/lib/worktree-creation-structured-recovery'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
 
 // Why: activePendingCreationId can outlive the terminal route when the user
@@ -143,8 +142,9 @@ export async function executeWorktreeCreation(
     // startup, so both halves of the handoff share one renderer-session token.
     preparedRequest.startupPlan.launchToken = createBrowserUuid()
   }
-  const fallbackStartupOpt = buildWorktreeCreationStartupOpt(preparedRequest, backendSpawned)
-  const startupOpt = structuredLaunch ? undefined : fallbackStartupOpt
+  const startupOpt = structuredLaunch
+    ? undefined
+    : buildWorktreeCreationStartupOpt(preparedRequest, backendSpawned)
 
   if (worktree.path && !structuredLaunch) {
     const repoConnectionId =
@@ -208,10 +208,8 @@ export async function executeWorktreeCreation(
             result.setup,
             preparedRequest.issueCommand,
             result.defaultTabs,
-            {
-              ...(preparedRequest.agent !== null ? { callerProvidesSurface: true } : {}),
-              ...(backendSpawned ? { backendStartupTerminalSpawned: true } : {})
-            }
+            // Activation failed before providing its promised surface, so recovery must seed one.
+            backendSpawned ? { backendStartupTerminalSpawned: true } : undefined
           )
         } catch (recoveryError) {
           console.error(
@@ -237,7 +235,7 @@ export async function executeWorktreeCreation(
       }
     }
   } else {
-    // Keep chat creation on its pending surface until the session is ready.
+    // Why: backgrounded creates still need explicit setup/issue terminals, but must not activate them.
     const hasExplicitTerminalWork = Boolean(
       startupOpt || result.setup || preparedRequest.issueCommand || result.defaultTabs
     )
@@ -275,9 +273,10 @@ export async function executeWorktreeCreation(
 
   let structuredLaunchAccepted = structuredLaunch
   const { agentLaunchRoute } = preparedRequest
+  const structuredAgent = preparedRequest.agent
   if (
     agentLaunchRoute === 'structured-native-chat' &&
-    isAgentSessionHandleProvider(preparedRequest.agent)
+    isAgentSessionHandleProvider(structuredAgent)
   ) {
     let structuredSession: WorktreeCreationStructuredSessionResult | null = null
     try {
@@ -287,7 +286,6 @@ export async function executeWorktreeCreation(
         agentLaunchRoute,
         worktreeId: worktree.id,
         shouldActivateOnCompletion,
-        fallbackStartupOpt,
         activation,
         primaryTabId
       })
@@ -301,10 +299,6 @@ export async function executeWorktreeCreation(
       activation = structuredSession.activation
       primaryTabId = structuredSession.primaryTabId
       if (structuredSession.cancelled) {
-        return
-      }
-      if (structuredSession.visibilityUnknown) {
-        markStructuredWorktreeLaunchUnconfirmed(creationId, worktree.id)
         return
       }
     }

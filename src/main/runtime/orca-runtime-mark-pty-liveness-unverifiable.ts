@@ -137,6 +137,10 @@ export class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRuntimeWithO
 
   protected forgetPtyLivenessVerdict(ptyId: string, observedNoLaterThan?: number): void {
     const tracked = this.ptyLivenessVerdictByPtyId.get(ptyId)
+    // An inventory's weak absence cannot revoke an earlier host-certified exit.
+    if (tracked?.verdict.status === 'exited') {
+      return
+    }
     if (observedNoLaterThan !== undefined && tracked && tracked.observedAt > observedNoLaterThan) {
       return
     }

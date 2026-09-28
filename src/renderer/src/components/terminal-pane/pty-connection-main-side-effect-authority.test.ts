@@ -235,7 +235,7 @@ describe('connectPanePty', () => {
 
       expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'Codex working')
       expect(deps.markWorktreeUnread).toHaveBeenCalledTimes(1)
-      expect(deps.markTerminalTabUnread).toHaveBeenCalledWith('tab-1')
+      expect(deps.markTerminalTabUnread).toHaveBeenCalledWith('tab-1', 'terminal-bell')
       expect(deps.dispatchNotification).not.toHaveBeenCalled()
       vi.advanceTimersByTime(250)
       expect(deps.dispatchNotification).toHaveBeenCalledWith(

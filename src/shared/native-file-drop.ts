@@ -41,9 +41,16 @@ export type NativeFileDropPayload =
 export type NativeFileDropRejectedPayload = {
   byteLength: number
   pathCount: number
-  reason: 'paths-too-large' | 'too-many-paths'
+  reason: NativeFileDropRejectionReason
   target: 'rejected'
 }
+
+/** What path validation alone can reject a drop for. */
+export type NativeFileDropSizeRejectionReason = 'paths-too-large' | 'too-many-paths'
+
+/** `unresolved-paths`: the OS handed us file items no path could be read from
+ *  (promised/virtual files), which used to be swallowed with no feedback. */
+export type NativeFileDropRejectionReason = NativeFileDropSizeRejectionReason | 'unresolved-paths'
 
 export type NativeFileDropPathEntry = {
   nativeFileDropTarget?: string
@@ -58,14 +65,16 @@ export type NativeFileDropPathValidation =
   | {
       byteLength: number
       pathCount: number
-      reason: NativeFileDropRejectedPayload['reason']
+      reason: NativeFileDropSizeRejectionReason
       status: 'rejected'
     }
 
 function isNativeFileDropRejectedReason(
   reason: unknown
 ): reason is NativeFileDropRejectedPayload['reason'] {
-  return reason === 'paths-too-large' || reason === 'too-many-paths'
+  return (
+    reason === 'paths-too-large' || reason === 'too-many-paths' || reason === 'unresolved-paths'
+  )
 }
 
 function isNativeFileDropTarget(target: unknown): target is NativeFileDropPayload['target'] {

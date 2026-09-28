@@ -57,6 +57,10 @@ export type MobileNativeChatController = {
     selections: AskAnswerSelection[]
   ) => Promise<boolean>
   handleNativeChatCancelAsk: () => Promise<boolean>
+  handleNativeChatCancelPrompt?: (prompt?: {
+    itemId: string
+    expectedRevision: number
+  }) => Promise<boolean>
   handleNativeChatRespondPermission: (text: string) => Promise<boolean>
   handleNativeChatStop: () => void
   nativeChatFilePaths: string[]

@@ -6,9 +6,11 @@ import type { GitFileStatus } from '../../../../shared/git-status-types'
 import { FileExplorerRow } from './FileExplorerRow'
 import { InlineInputRow, type InlineInput } from './file-explorer-inline-input-row'
 import { shouldShowIgnoredDecoration, STATUS_COLORS } from './status-display'
-import type { TreeNode } from './file-explorer-types'
+import type { DirCache, FileExplorerOperationOwner, TreeNode } from './file-explorer-types'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import { getFileExplorerOperationExecutionHostId } from './file-explorer-operation-owner'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 type FileExplorerVirtualRowsProps = {
   virtualizer: Virtualizer<HTMLDivElement, Element>
@@ -28,6 +30,10 @@ type FileExplorerVirtualRowsProps = {
   flashingPath: string | null
   deleteShortcutLabel: string
   connectionId?: string | null
+  sourceWorkspaceId?: string | null
+  /** Listings behind the projection, so a drag can name the owner of a selected
+   *  path whose row is currently hidden. */
+  dirCache?: Record<string, DirCache>
   runtimeDownloadContext?: RuntimeFileOperationArgs | null
   supportsFolderDownload?: boolean
   canOpenInOrcaBrowser?: (filePath: string) => boolean
@@ -56,6 +62,44 @@ type FileExplorerVirtualRowsProps = {
   nativeDropTargetDir: string | null
 }
 
+/** The owner of a dragged path, from the visible row when there is one and from
+ *  the cached listing when there is not. A selection survives collapsing a
+ *  directory, a name filter and the dotfile toggle, and the drag still carries
+ *  those paths — the projection only stopped indexing them, the cache still
+ *  records which host listed them. */
+function getDraggedPathOperationOwner(
+  rowProjection: FileExplorerRowProjection,
+  dirCache: Record<string, DirCache> | undefined,
+  path: string
+): FileExplorerOperationOwner | undefined {
+  const visibleOwner = rowProjection.getRowByPath(path)?.operationOwner
+  if (visibleOwner || !dirCache) {
+    return visibleOwner
+  }
+  const parent = dirCache[dirname(path)]
+  return parent?.children.find((child) => child.path === path)?.operationOwner
+}
+
+/** Null unless every dragged row came from one host: a mixed-owner drag has no
+ *  single source to stamp, so it must fail closed at the drop target. */
+function resolveDragSourceExecutionHostId(
+  rowProjection: FileExplorerRowProjection,
+  dirCache: Record<string, DirCache> | undefined,
+  paths: readonly string[]
+): ExecutionHostId | null {
+  let sourceExecutionHostId: ExecutionHostId | null = null
+  for (const path of paths) {
+    const executionHostId = getFileExplorerOperationExecutionHostId(
+      getDraggedPathOperationOwner(rowProjection, dirCache, path)
+    )
+    if (!executionHostId || (sourceExecutionHostId && executionHostId !== sourceExecutionHostId)) {
+      return null
+    }
+    sourceExecutionHostId = executionHostId
+  }
+  return sourceExecutionHostId
+}
+
 export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): React.JSX.Element {
   const {
     virtualizer,
@@ -75,6 +119,8 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
     flashingPath,
     deleteShortcutLabel,
     connectionId,
+    sourceWorkspaceId,
+    dirCache,
     runtimeDownloadContext,
     supportsFolderDownload = false,
     canOpenInOrcaBrowser = () => false,
@@ -104,6 +150,10 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
   } = props
 
   const visibleSelectionCount = rowProjection.countVisiblePaths(selectedPaths)
+  // Resolved at dragstart, not per render: the virtualizer re-renders on every
+  // scroll frame and only a drag ever reads this.
+  const resolveDragSourceHostId = (paths: readonly string[]): ExecutionHostId | null =>
+    resolveDragSourceExecutionHostId(rowProjection, dirCache, paths)
 
   return (
     <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
@@ -181,6 +231,8 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
               isIgnored={isIgnored}
               deleteShortcutLabel={deleteShortcutLabel}
               connectionId={connectionId}
+              sourceWorkspaceId={sourceWorkspaceId}
+              resolveDragSourceHostId={resolveDragSourceHostId}
               runtimeDownloadContext={runtimeDownloadContext}
               supportsFolderDownload={supportsFolderDownload}
               canOpenInOrcaBrowser={canOpenInOrcaBrowser(n.path)}

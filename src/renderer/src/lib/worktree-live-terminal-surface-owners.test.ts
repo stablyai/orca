@@ -27,10 +27,12 @@ function summary(overrides: Partial<RuntimeTerminalSummary>): RuntimeTerminalSum
   }
 }
 
-function stubTerminalList(result: unknown): void {
+function stubTerminalList(result: unknown) {
+  const call = vi.fn(async () => ({ ok: true, result }))
   vi.stubGlobal('window', {
-    api: { runtime: { call: vi.fn(async () => ({ ok: true, result })) } }
+    api: { runtime: { call } }
   })
+  return call
 }
 
 afterEach(() => {
@@ -48,7 +50,7 @@ describe('live terminal surface owners', () => {
     })
   })
 
-  it('leaves an orphaned PTY absent so it stays eligible for a recovery tab', () => {
+  it('records explicit live orphan evidence for a recovery tab', () => {
     const ptyId = `${WORKTREE_ID}@@orphan`
     const owners = indexLiveTerminalSurfaceOwners(
       [
@@ -62,8 +64,42 @@ describe('live terminal surface owners', () => {
       WORKTREE_ID
     )
 
-    expect(owners.has(ptyId)).toBe(false)
+    expect(owners.get(ptyId)).toBe('unowned')
   })
+
+  it('does not authorize adoption of a disconnected orphan', () => {
+    const ptyId = `${WORKTREE_ID}@@orphan`
+    const owners = indexLiveTerminalSurfaceOwners(
+      [summary({ ptyId, orphaned: true, connected: false })],
+      WORKTREE_ID
+    )
+
+    expect(owners.get(ptyId)).toBeNull()
+  })
+
+  it('does not infer orphan ownership from a legacy synthetic surface', () => {
+    const ptyId = `${WORKTREE_ID}@@orphan`
+    const owners = indexLiveTerminalSurfaceOwners(
+      [summary({ ptyId, tabId: `pty:${ptyId}`, leafId: `pty:${ptyId}` })],
+      WORKTREE_ID
+    )
+
+    expect(owners.get(ptyId)).toBeNull()
+  })
+
+  it.each([false, true])(
+    'rejects conflicting owned and orphan rows (orphan first: %s)',
+    (orphanFirst) => {
+      const orphan = summary({ orphaned: true })
+      const owned = summary({})
+      const owners = indexLiveTerminalSurfaceOwners(
+        orphanFirst ? [orphan, owned, orphan] : [owned, orphan, owned],
+        WORKTREE_ID
+      )
+
+      expect(owners.get(owned.ptyId!)).toBeNull()
+    }
+  )
 
   it('ignores rows belonging to another workspace', () => {
     const owners = indexLiveTerminalSurfaceOwners(
@@ -74,14 +110,13 @@ describe('live terminal surface owners', () => {
     expect(owners.size).toBe(0)
   })
 
-  // Dropping the host's row over path spelling would read as `unowned` and mint a duplicate.
   it('indexes a row the host spelled with an equivalent workspace path', () => {
     const owners = indexLiveTerminalSurfaceOwners(
       [summary({ worktreeId: `${WORKTREE_ID}/` })],
       WORKTREE_ID
     )
 
-    expect(owners.get(`${WORKTREE_ID}@@live-agent`)?.tabId).toBe('tab-live')
+    expect(owners.get(`${WORKTREE_ID}@@live-agent`)).toMatchObject({ tabId: 'tab-live' })
   })
 
   it('reports a PTY claimed by two panes as unverifiable rather than unowned', () => {
@@ -122,7 +157,7 @@ describe('live terminal surface owners', () => {
 
     const owners = await readWorktreeLiveTerminalSurfaceOwners(WORKTREE_ID)
 
-    expect(owners?.get(`${WORKTREE_ID}@@live-agent`)?.tabId).toBe('tab-live')
+    expect(owners?.get(`${WORKTREE_ID}@@live-agent`)).toMatchObject({ tabId: 'tab-live' })
   })
 
   it('refuses a census from a host that cannot name the scope it answered for', async () => {
@@ -142,7 +177,7 @@ describe('live terminal surface owners', () => {
   })
 
   it('indexes a complete census', async () => {
-    stubTerminalList({
+    const call = stubTerminalList({
       terminals: [summary({})],
       truncated: false,
       hostScope: { hostIds: ['local'], omittedHostIds: [] }
@@ -150,7 +185,16 @@ describe('live terminal surface owners', () => {
 
     const owners = await readWorktreeLiveTerminalSurfaceOwners(WORKTREE_ID)
 
-    expect(owners?.get(`${WORKTREE_ID}@@live-agent`)?.tabId).toBe('tab-live')
+    expect(owners?.get(`${WORKTREE_ID}@@live-agent`)).toMatchObject({ tabId: 'tab-live' })
+    expect(call).toHaveBeenCalledWith({
+      method: 'terminal.list',
+      params: {
+        worktree: `id:${WORKTREE_ID}`,
+        limit: 200,
+        requireFreshPtyLiveness: true,
+        includeVisualLayouts: false
+      }
+    })
   })
 
   it('refuses a census the host could not answer', async () => {

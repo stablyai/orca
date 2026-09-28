@@ -15,4 +15,6 @@ export type ReattachPayloadContext = {
   shouldApplyStructuralPayload: boolean
   coldRestoreStartup: ColdRestoreAgentResumeStartup | null | undefined
   reattachPayloadApplied: boolean
+  /** Capture width of an alt frame the replay omitted as too wide; null when the frame painted. */
+  skippedAltFrameCaptureCols: number | null
 }

@@ -1,8 +1,9 @@
+import { closeTestStores, testState, createStore } from './persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { testState, createStore } from './persistence-test-harness'
+
 import { TEST_LEAF_1, TEST_LEAF_2 } from './persistence-session-fixtures'
 import type { WorkspaceSessionState } from '../shared/workspace-session-state-types'
 
@@ -54,7 +55,8 @@ describe('Store', () => {
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
   it('retains an SSH host binding when a stale renderer clears its pty map', async () => {

@@ -67,7 +67,7 @@ describe('defineMethod preserves the declared contract', () => {
     type StatusGet = ByName<(typeof STATUS_METHODS)[number], 'status.get'>
     type ListDistros = ByName<(typeof HOST_CAPABILITY_METHODS)[number], 'host.wsl.listDistros'>
     expectTypeOf<StatusGet>().not.toBeNever()
-    expectTypeOf<StatusGet['handler']>().returns.toExtend<{ runtimeId: string }>()
+    expectTypeOf<StatusGet['handler']>().returns.resolves.toExtend<{ runtimeId: string }>()
     expectTypeOf<ListDistros['handler']>().returns.toEqualTypeOf<Promise<string[]>>()
     // The manifest is the erasure boundary's input, so the literal names have to survive it too.
     expectTypeOf<ByName<(typeof ALL_RPC_METHODS)[number], 'status.get'>>().not.toBeNever()

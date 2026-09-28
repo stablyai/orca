@@ -45,7 +45,9 @@ function useNarrowStrip(ref: React.RefObject<HTMLDivElement | null>): boolean {
   return narrow
 }
 
-const KIND_ICONS = {
+/** Shared with the transcript row so a task reads as the same thing in the
+ *  strip above the composer and in the row that outlives it. */
+export const KIND_ICONS = {
   agent: Bot,
   command: SquareTerminal,
   monitor: Activity,
@@ -173,117 +175,120 @@ export function NativeChatBackgroundTasksStatus(props: {
   return (
     <div
       data-native-chat-background-tasks="true"
-      className="shrink-0 bg-background px-3 pt-2 sm:px-4"
+      className="group/tasks shrink-0 bg-background px-3 pt-2 sm:px-4"
     >
-      <div
-        ref={stripRef}
-        className="mx-auto w-full max-w-4xl overflow-hidden rounded-lg border border-border bg-muted/50 text-xs text-muted-foreground shadow-xs"
-      >
-        <div className="flex h-8 items-center px-1.5">
-          <button
-            type="button"
-            className="flex h-6 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-1.5 text-left outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            aria-expanded={expanded}
-            aria-controls={taskListId}
-            aria-label={headerText}
-            onClick={() => props.onExpandedChange(!expanded)}
-          >
-            <span className="min-w-0 truncate">
-              {header.segments.map((segment, index) => {
-                // A collapsed total spans kinds, so no single icon can stand for it.
-                const kind = segment.kind
-                const Icon = kind ? KIND_ICONS[kind] : null
-                return (
-                  <span key={segment.kind ?? 'total'}>
-                    {/* A text token, not `--border`: that one is a divider line
+      {/* When the goal tab is the next sibling, take its width and share its top edge. */}
+      <div className="mx-auto w-full max-w-4xl group-has-[+[data-native-chat-thread-goal]]/tasks:px-2">
+        <div
+          ref={stripRef}
+          className="overflow-hidden rounded-lg border border-border bg-muted/50 text-xs text-muted-foreground shadow-xs group-has-[+[data-native-chat-thread-goal]]/tasks:rounded-b-none group-has-[+[data-native-chat-thread-goal]]/tasks:shadow-none"
+        >
+          <div className="flex h-8 items-center px-1.5">
+            <button
+              type="button"
+              className="flex h-6 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-1.5 text-left outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              aria-expanded={expanded}
+              aria-controls={taskListId}
+              aria-label={headerText}
+              onClick={() => props.onExpandedChange(!expanded)}
+            >
+              <span className="min-w-0 truncate">
+                {header.segments.map((segment, index) => {
+                  // A collapsed total spans kinds, so no single icon can stand for it.
+                  const kind = segment.kind
+                  const Icon = kind ? KIND_ICONS[kind] : null
+                  return (
+                    <span key={segment.kind ?? 'total'}>
+                      {/* A text token, not `--border`: that one is a divider line
                         (7% white in dark) and reads as invisible at this size. */}
-                    {index > 0 ? <span className="text-muted-foreground"> · </span> : null}
-                    {Icon && kind ? (
-                      <Icon
-                        aria-hidden="true"
-                        // The turn owns the voice: same icons, dimmed until it ends.
-                        className={`mr-1 inline size-3 align-[-0.125em] ${kindIconTone(
-                          kind,
-                          !props.indicatorActive
-                        )}`}
-                      />
-                    ) : null}
-                    <span className="font-medium text-foreground">{segment.text}</span>
+                      {index > 0 ? <span className="text-muted-foreground"> · </span> : null}
+                      {Icon && kind ? (
+                        <Icon
+                          aria-hidden="true"
+                          // The turn owns the voice: same icons, dimmed until it ends.
+                          className={`mr-1 inline size-3 align-[-0.125em] ${kindIconTone(
+                            kind,
+                            !props.indicatorActive
+                          )}`}
+                        />
+                      ) : null}
+                      <span className="font-medium text-foreground">{segment.text}</span>
+                    </span>
+                  )
+                })}
+                {header.detail ? (
+                  <span>
+                    {header.segments.length > 0 ? ' — ' : null}
+                    {header.detail}
                   </span>
-                )
-              })}
-              {header.detail ? (
-                <span>
-                  {header.segments.length > 0 ? ' — ' : null}
-                  {header.detail}
-                </span>
-              ) : null}
-            </span>
-            <ChevronDown
-              aria-hidden="true"
-              className={`size-3 transition-transform ${expanded ? 'rotate-180' : ''}`}
-            />
-          </button>
-        </div>
-        {expanded ? (
-          <div
-            id={taskListId}
-            className="scrollbar-sleek max-h-40 overflow-y-auto border-t border-border px-3 py-2"
-          >
-            {groups.length > 0 ? (
-              groups.map((group, index) => (
-                <div
-                  key={group.kind}
-                  className={index > 0 ? 'mt-1.5 border-t border-border/60 pt-1.5' : ''}
-                >
-                  <p className="px-0.5 pb-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                    {backgroundTaskGroupLabel(group.kind)}
-                  </p>
-                  <ul
-                    role="list"
-                    aria-label={backgroundTaskGroupLabel(group.kind)}
-                    className="space-y-0.5"
-                  >
-                    {group.tasks.map((entry) => (
-                      <BackgroundTaskRow
-                        key={entry.task.id}
-                        entry={entry}
-                        now={now}
-                        supportsTaskStop={props.supportsTaskStop}
-                        stopping={props.stoppingTaskIds.has(entry.task.id)}
-                        onStop={props.onStop}
-                      />
-                    ))}
-                  </ul>
-                </div>
-              ))
-            ) : (
-              <p>
-                {translate(
-                  'components.native-chat.backgroundTasks.detailsUnavailable',
-                  'Task details are unavailable for this session.'
-                )}
-              </p>
-            )}
-            {!props.supportsTaskStop && props.supportsStopAll ? (
-              <div className={groups.length > 0 ? 'mt-2 border-t border-border pt-2' : 'mt-2'}>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="xs"
-                  aria-label={translate(
-                    'components.native-chat.backgroundTasks.stopAll',
-                    'Stop background tasks'
-                  )}
-                  disabled={props.stoppingAll}
-                  onClick={() => props.onStop()}
-                >
-                  {translate('components.native-chat.backgroundTasks.stop', 'Stop')}
-                </Button>
-              </div>
-            ) : null}
+                ) : null}
+              </span>
+              <ChevronDown
+                aria-hidden="true"
+                className={`size-3 transition-transform ${expanded ? 'rotate-180' : ''}`}
+              />
+            </button>
           </div>
-        ) : null}
+          {expanded ? (
+            <div
+              id={taskListId}
+              className="scrollbar-sleek max-h-40 overflow-y-auto border-t border-border px-3 py-2"
+            >
+              {groups.length > 0 ? (
+                groups.map((group, index) => (
+                  <div
+                    key={group.kind}
+                    className={index > 0 ? 'mt-1.5 border-t border-border/60 pt-1.5' : ''}
+                  >
+                    <p className="px-0.5 pb-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                      {backgroundTaskGroupLabel(group.kind)}
+                    </p>
+                    <ul
+                      role="list"
+                      aria-label={backgroundTaskGroupLabel(group.kind)}
+                      className="space-y-0.5"
+                    >
+                      {group.tasks.map((entry) => (
+                        <BackgroundTaskRow
+                          key={entry.task.id}
+                          entry={entry}
+                          now={now}
+                          supportsTaskStop={props.supportsTaskStop}
+                          stopping={props.stoppingTaskIds.has(entry.task.id)}
+                          onStop={props.onStop}
+                        />
+                      ))}
+                    </ul>
+                  </div>
+                ))
+              ) : (
+                <p>
+                  {translate(
+                    'components.native-chat.backgroundTasks.detailsUnavailable',
+                    'Task details are unavailable for this session.'
+                  )}
+                </p>
+              )}
+              {!props.supportsTaskStop && props.supportsStopAll ? (
+                <div className={groups.length > 0 ? 'mt-2 border-t border-border pt-2' : 'mt-2'}>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    aria-label={translate(
+                      'components.native-chat.backgroundTasks.stopAll',
+                      'Stop background tasks'
+                    )}
+                    disabled={props.stoppingAll}
+                    onClick={() => props.onStop()}
+                  >
+                    {translate('components.native-chat.backgroundTasks.stop', 'Stop')}
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   )

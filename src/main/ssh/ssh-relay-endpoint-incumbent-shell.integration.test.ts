@@ -10,6 +10,7 @@ import { join } from 'node:path'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import {
   isReapableRelayHusk,
+  mayLaunchOverRelayEndpoint,
   parseRelayEndpointIncumbentProbe,
   relayEndpointIncumbentProbeCommand,
   type RelayEndpointIncumbent
@@ -211,10 +212,14 @@ posixOnly('relay endpoint probe against a real socket', () => {
     expect(incumbent.verdict).toBe(hasLsof ? 'exited' : 'unverifiable')
   })
 
-  it('reports no listener for a path that was never bound', async () => {
+  it('permits guarded launch when lsof cannot stat a never-bound path', async () => {
     const incumbent = await probe(join(workDir, 'never-existed.sock'))
     expect(incumbent.socketPresent).toBe(false)
-    expect(incumbent.verdict).toBe(hasLsof ? 'exited' : 'unverifiable')
+    expect(incumbent.verdict).toBe('unverifiable')
+    expect(incumbent.holdersEnumerable).toBe(false)
+    expect(incumbent.holders).toEqual([])
+    expect(mayLaunchOverRelayEndpoint(incumbent)).toBe(true)
+    expect(isReapableRelayHusk(incumbent)).toBe(false)
   })
 })
 

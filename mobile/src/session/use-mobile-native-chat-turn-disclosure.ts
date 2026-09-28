@@ -104,12 +104,13 @@ export function useMobileNativeChatTurnDisclosure({
   const resolveRow = useCallback(
     (index: number, message: NativeChatMessage): MobileNativeChatTurnRow => {
       const turnKey = turnKeys[index]
+      // The live turn's bar carries its running clock; it settles in place.
       const turnStatus =
-        !enabled || message.role !== 'user'
+        !enabled || message.role !== 'user' || !turnKey
           ? null
-          : turnKey
-            ? (completedByTurn[turnKey] ?? null)
-            : null
+          : turnKey === activeTurnKey
+            ? active
+            : (completedByTurn[turnKey] ?? null)
       return {
         turnStatus,
         turnExpanded: turnKey ? expandedTurnIds.has(turnKey) : false,
@@ -126,7 +127,7 @@ export function useMobileNativeChatTurnDisclosure({
             (turnKey === undefined && activeTurnKey === MOBILE_UNANCHORED_TURN_KEY))
       }
     },
-    [turnKeys, enabled, activeTurnKey, completedByTurn, expandedTurnIds, isWorking]
+    [turnKeys, enabled, activeTurnKey, active, completedByTurn, expandedTurnIds, isWorking]
   )
 
   return {

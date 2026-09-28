@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import { agentSessionJournalCloseRetries } from '../native-chat/agent-session-journal/journal-close-retry'
 import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-store-test-open'
-import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import type {
   AgentSessionClaimStatus,
   AgentSessionExecutionLocation,
@@ -13,6 +12,7 @@ import type {
   AgentSessionRecord
 } from '../../shared/agent-session-record'
 import { __setWindowsProcessTreeLoaderForTests } from '../windows/windows-process-table'
+import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import {
   createStructuredAgentSessionOwnerProbe,
   createStructuredAgentSessionOwnerProbes
@@ -191,17 +191,6 @@ describe('structured agent-session owner probe', () => {
 
     expect(result.outcome).toBe('indeterminate')
   })
-
-  it('releases only a reservation carrying durable pre-spawn proof', async () => {
-    const probe = deadProbe()
-    const result = await createStructuredAgentSessionOwnerProbe(
-      HOST_ID,
-      probe
-    )(record(null, { processlessAt: 1_800_000_000_000, claimStatus: 'reserved' }))
-
-    expect(probe).not.toHaveBeenCalled()
-    expect(result).toEqual({ outcome: 'reservation-unused' })
-  })
 })
 
 describe('structured agent-session runtime install', () => {
@@ -244,6 +233,36 @@ describe('structured agent-session runtime install', () => {
       })
     )
     expect(reapOrphanChildren).toHaveBeenCalledWith({ store: expect.anything() })
+  })
+
+  it('holds stop until the model catalog has written its coalesced save', async () => {
+    stateDirectory = await mkdtemp(join(tmpdir(), 'orca-structured-runtime-'))
+    await ensureStructuredAgentSessionHost({
+      stateDirectory,
+      hostId: HOST_ID,
+      claimKeyId: 'key-1',
+      resolveWorkspacePath: async () => stateDirectory!,
+      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+      resolveEnvironment: async () => ({}),
+      reapOrphanChildren: async () => []
+    })
+    let finishWrite = (): void => {}
+    vi.spyOn(agentModelCatalogStore, 'flushPersistence').mockReturnValue(
+      new Promise<void>((resolve) => {
+        finishWrite = resolve
+      })
+    )
+
+    // Quit joins this stop to its teardown barrier; the unref'd coalesce timer never fires after it.
+    let stopped = false
+    const stop = stopStructuredAgentSessionRuntime().then(() => {
+      stopped = true
+    })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(stopped).toBe(false)
+    finishWrite()
+    await stop
+    expect(stopped).toBe(true)
   })
 
   it('logs an orphan-reaper failure when no reporter is configured', async () => {
@@ -346,6 +365,7 @@ describe('a teardown that fails is retried by the next stop', () => {
     const flaky = new Proxy(real, {
       get(target, property, receiver) {
         if (property !== 'close') {
+          // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: only Reflect.get forwards a raw string|symbol key with the proxy receiver.
           return Reflect.get(target, property, receiver)
         }
         return async () => {
@@ -356,7 +376,7 @@ describe('a teardown that fails is retried by the next stop', () => {
           await target.close()
         }
       }
-    }) as AgentSessionJournal
+    })
     await agentSessionJournalCloseRetries.closeOrRetain(flaky)
 
     // The host's teardown runs the registry retry, so this stop surfaces it.

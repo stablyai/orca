@@ -555,6 +555,13 @@ vi.mock('../../git/repo', async (importOriginal) => {
       .mockImplementation((path: string, options?: { wslDistro?: string }) =>
         options?.wslDistro ? actualGetBaseRefDefault(path, options) : Promise.resolve('origin/main')
       ),
+    resolveDefaultBaseRefWithLocalGit: vi
+      .fn()
+      .mockImplementation((options: { cwd: string; wslDistro?: string }) =>
+        options.wslDistro
+          ? actualGetBaseRefDefault(options.cwd, options)
+          : Promise.resolve('origin/main')
+      ),
     getBranchConflictKind: vi.fn().mockResolvedValue(null)
   }
 })

@@ -176,6 +176,33 @@ describe('local structured session tab projection', () => {
     expect(disabled.activeTabTypeByWorktree[WORKTREE_ID]).toBe('terminal')
   })
 
+  it('reports publication from every accepted host snapshot', () => {
+    const accepted: string[] = []
+    applyLocalStructuredSessionTabSnapshots(
+      createSnapshot(),
+      [structuredInventory('epoch-1', 2, 'codex-1')],
+      undefined,
+      undefined,
+      {
+        onAcceptedAgentSession: (_worktreeId, sessionId) => accepted.push(sessionId)
+      }
+    )
+    expect(accepted).toEqual(['codex-1'])
+
+    applyLocalStructuredSessionTabSnapshots(
+      createSnapshot(),
+      [structuredInventory('epoch-1', 3, 'codex-1')],
+      undefined,
+      undefined,
+      {
+        authoritative: true,
+        onAcceptedAgentSession: (_worktreeId, sessionId) => accepted.push(sessionId)
+      }
+    )
+
+    expect(accepted).toEqual(['codex-1', 'codex-1'])
+  })
+
   it('reconnects after a streaming subscription reports an error', async () => {
     vi.useFakeTimers()
     const priorApi = window.api

@@ -1,4 +1,5 @@
 import { existsSync, rmSync, writeFileSync } from 'node:fs'
+import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
@@ -38,6 +39,7 @@ import {
   hasSameManagedHookInvocation,
   removeManagedHooks,
   removeManagedStatusLine,
+  type ApplyManagedClaudeHooksOptions,
   type ClaudeCompatibleHookSettings
 } from './hook-settings'
 
@@ -45,6 +47,12 @@ type ClaudeHookServiceOptions = {
   agent: AgentHookInstallStatus['agent']
   displayName: string
   settings: ClaudeCompatibleHookSettings
+  source?: AgentHookSource
+  events?: ApplyManagedClaudeHooksOptions['events']
+}
+
+type ClaudeHookInstallOptions = {
+  claudeVersion?: string
 }
 
 const DEFAULT_CLAUDE_HOOK_SERVICE_OPTIONS: ClaudeHookServiceOptions = {
@@ -78,7 +86,7 @@ export class ClaudeHookService {
     const expectedHook = getManagedLifecycleHook(scriptPath, this.options.settings)
     const missing: string[] = []
     let presentCount = 0
-    for (const event of CLAUDE_EVENTS) {
+    for (const event of this.options.events ?? CLAUDE_EVENTS) {
       const definitions = Array.isArray(config.hooks?.[event.eventName])
         ? config.hooks![event.eventName]!
         : []
@@ -111,6 +119,7 @@ export class ClaudeHookService {
     await refreshManagedScriptIfPresent(
       getManagedScriptPath(this.options.settings),
       getManagedScript('local', {
+        source: this.options.source,
         skipWhenDevinImportsClaude: this.options.agent === 'claude',
         skipWhenGrokImportsClaude: this.options.agent === 'claude'
       })
@@ -122,7 +131,7 @@ export class ClaudeHookService {
     )
   }
 
-  install(): AgentHookInstallStatus {
+  install(options: ClaudeHookInstallOptions = {}): AgentHookInstallStatus {
     const configPath = getConfigPath(this.options.settings)
     const scriptPath = getManagedScriptPath(this.options.settings)
     const config = readHooksJson(configPath)
@@ -140,11 +149,13 @@ export class ClaudeHookService {
     let nextConfig = applyManagedHooks(
       config,
       hook,
-      getManagedScriptFileName(this.options.settings)
+      getManagedScriptFileName(this.options.settings),
+      { ...(this.options.agent === 'claude' ? options : {}), events: this.options.events }
     )
     writeManagedScript(
       scriptPath,
       getManagedScript('local', {
+        source: this.options.source,
         skipWhenDevinImportsClaude: this.options.agent === 'claude',
         skipWhenGrokImportsClaude: this.options.agent === 'claude'
       })
@@ -182,7 +193,11 @@ export class ClaudeHookService {
   }
 
   // Why: install the Claude hook on the remote box (via SFTP); POSIX-only by design (Windows-remote deferred).
-  async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
+  async installRemote(
+    sftp: SFTPWrapper,
+    remoteHome: string,
+    options: ClaudeHookInstallOptions = {}
+  ): Promise<AgentHookInstallStatus> {
     // Why: remote Windows is unsupported; local process.platform cannot identify the remote OS.
     const remoteConfigPath = getRemoteConfigPath(remoteHome, this.options.settings)
     const remoteScriptFileName = getPosixManagedScriptFileName(this.options.settings)
@@ -202,7 +217,10 @@ export class ClaudeHookService {
 
       // Why: settings resolve HOME at runtime while SFTP still targets the discovered remote home.
       const hook = buildManagedCommandHook(getRemoteManagedCommand(remoteScriptPath))
-      const nextConfig = applyManagedHooks(config, hook, remoteScriptFileName)
+      const nextConfig = applyManagedHooks(config, hook, remoteScriptFileName, {
+        ...(this.options.agent === 'claude' ? options : {}),
+        events: this.options.events
+      })
 
       // Why: write scripts before settings to avoid settings pointing to missing scripts.
       // Why: SSH scripts always use POSIX .sh paths, regardless of the local OS.
@@ -210,6 +228,7 @@ export class ClaudeHookService {
         sftp,
         remoteScriptPath,
         getManagedScript('posix', {
+          source: this.options.source,
           skipWhenDevinImportsClaude: this.options.agent === 'claude',
           skipWhenGrokImportsClaude: this.options.agent === 'claude'
         })

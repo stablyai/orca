@@ -3,6 +3,7 @@ import { is } from '@electron-toolkit/utils'
 import os from 'node:os'
 import { join } from 'node:path'
 import { maybeRedirectCliLaunch } from './cli-launch-redirect'
+import { runProfileStateRecoveryPreflight } from './profile-state-recovery-preflight'
 import { argvRequestsServeMode, normalizeServeModeArgv } from './serve-mode-argv'
 import {
   configureDevUserDataPath,
@@ -67,10 +68,13 @@ import { initDataPath, getCanonicalUserDataPath } from '../persistence'
 import { applyMacPressAndHoldDefaultAtStartup } from '../macos-press-and-hold-default'
 import { initSessionParseCachePersistence } from '../ai-vault/session-parse-cache-persistence'
 import { initOrcaProfilePaths } from '../orca-profiles/profile-index-store'
+import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
+import { recoverPendingProfileProjectMoves } from '../orca-profiles/profile-project-move-intent'
 import { initStatsPath } from '../stats/collector'
 import { initClaudeUsagePath } from '../claude-usage/store'
 import { initCodexUsagePath } from '../codex-usage/store'
 import { initOpenCodeUsagePath } from '../opencode-usage/store'
+import { initMuseUsagePath } from '../muse-usage/store'
 import { registerDocPreviewSchemePrivileges } from '../browser/doc-preview-protocol'
 import { startCrashpadCapture } from '../crash-reporting/crashpad-capture'
 import { CrashReportStore } from '../crash-reporting/crash-report-store'
@@ -86,6 +90,11 @@ import {
 import { maybeApplyGpuFallbackForThisLaunch, registerGpuLifecycleHandlers } from './gpu-lifecycle'
 import { mainProcessState as state } from './main-process-state'
 import { initializeSyntheticTitleRuntime } from './synthetic-title-runtime'
+import { initializeBrowserProcessUserAgent } from '../browser/browser-process-user-agent'
+import { initializeBrowserIdentityModeStore } from '../browser/browser-identity-mode-store'
+import { acquireProfileStateRuntimeAdmission } from '../persistence/profile-state/profile-state-access'
+import { getActiveProfileStateLocation } from '../persistence/profile-state/profile-state-active-location'
+import { handleMainProcessPreflightFailure } from './main-process-preflight-failure'
 
 export type MainProcessPreflightOptions = {
   focusExistingWindow: () => void
@@ -94,6 +103,19 @@ export type MainProcessPreflightOptions = {
 
 /** Performs all module-scope work that must happen before Electron's ready event. */
 export function runMainProcessPreflight(options: MainProcessPreflightOptions): boolean {
+  try {
+    return initializeMainProcessPreflight(options)
+  } catch (error) {
+    console.error('[startup] Preflight failed:', error)
+    handleMainProcessPreflightFailure(error)
+    return false
+  }
+}
+
+function initializeMainProcessPreflight(options: MainProcessPreflightOptions): boolean {
+  if (runProfileStateRecoveryPreflight()) {
+    return false
+  }
   // Why: on Windows a CLI launch that lost ELECTRON_RUN_AS_NODE would boot the GUI and exit silently; redirect to node mode before the lock gate below.
   // The redirect runs before the serve-argv rewrite so it still matches on the launch argv verbatim.
   // Direct serve stays in-process so its signal handlers own all children.
@@ -125,7 +147,9 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
     ? state.devInstanceIdentity.appUserModelId
     : undefined
   state.desktopActivationGate = createServeDesktopActivationGate({
-    initialState: state.isServeMode ? 'initializing' : 'ready',
+    // Why held for desktop too: an activation before the startup window exists would open a
+    // second main window and abort launch; runtime launch releases it once that window exists.
+    initialState: 'initializing',
     activateWindow: () => {
       // Why: an updater replacement must not resurrect the old app bundle.
       if (!isQuittingForUpdate()) {
@@ -178,6 +202,11 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
   // Why captured now: after the dev/E2E override above, and before app.setName('Orca') (whenReady)
   // changes how userData resolves on a case-sensitive filesystem. See persistence.ts:20-28.
   initDataPath()
+  // Why: Electron resolves the macOS safeStorage Keychain service name from the app name before
+  // ready. Dev pins userData above, so applying its name here cannot shift the captured path.
+  if (state.devInstanceIdentity && shouldApplyPreReadyAppName(state.devInstanceIdentity)) {
+    app.setName(state.devInstanceIdentity.appName)
+  }
   state.startupDiagnosticsEnabled = isStartupDiagnosticsEnabled()
   if (state.startupDiagnosticsEnabled) {
     logStartupDiagnostic('before-single-instance-lock', {
@@ -217,6 +246,11 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
     app.exit(SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE)
     return false
   }
+  state.profileStateAdmission = acquireProfileStateRuntimeAdmission(getCanonicalUserDataPath())
+  // Renderer and worker defaults must be fixed before any session exists.
+  initializeBrowserProcessUserAgent(
+    initializeBrowserIdentityModeStore(getCanonicalUserDataPath()).appliedMode
+  )
   // Why first in this block: the accessor throws until installed and everything below may read a
   // credential. The constructor does not touch `safeStorage` — it resolves lazily per call — so
   // installing here changes no timing, in particular not the pre-ready Keychain service-name
@@ -270,20 +304,19 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
     appVersion: app.getVersion()
   })
   initOrcaProfilePaths()
+  // A crash can leave a cross-profile SQLite move between its two commits. Resolve
+  // that journal before any Store opens a profile, so no reader observes a half-move.
+  const profileUserDataPath = getProfileUserDataPath()
+  recoverPendingProfileProjectMoves(
+    profileUserDataPath,
+    getActiveProfileStateLocation(profileUserDataPath)?.profileId
+  )
   // Why: same timing as initDataPath — capture userData before app.setName changes it. See persistence.ts:20-28.
   initStatsPath()
   initClaudeUsagePath()
   initCodexUsagePath()
   initOpenCodeUsagePath()
-  // Why: Electron resolves the macOS safeStorage Keychain service name
-  // ("<app name> Safe Storage") before `ready`, so the setName in whenReady is
-  // too late to move it — dev otherwise lands on the package.json name. Dev-only
-  // so a packaged build keeps deriving the key from its own CFBundleName.
-  // Safe here: dev always pins userData via app.setPath (configure-process.ts),
-  // so setName cannot shift the paths captured just above.
-  if (state.devInstanceIdentity && shouldApplyPreReadyAppName(state.devInstanceIdentity)) {
-    app.setName(state.devInstanceIdentity.appName)
-  }
+  initMuseUsagePath()
   // Why: Electron freezes the privileged scheme table at ready, so the doc-preview
   // scheme must be declared here or its webview loses fetch/secure-origin privileges.
   registerDocPreviewSchemePrivileges()

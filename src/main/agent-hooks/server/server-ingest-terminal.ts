@@ -4,6 +4,7 @@ import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-
 import { terminalStatusPayloadMatchesHook } from '../../../shared/agent-terminal-status-equivalence'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
 import type { EnrichedAgentHookEventPayload } from './server-types'
+import { isAgentStatusHeldOpenByChildWork } from '../../../shared/agent-lead-status-fold'
 import { AgentHookServerIngestNormalization } from './server-ingest-normalization'
 
 export abstract class AgentHookServerIngestTerminal extends AgentHookServerIngestNormalization {
@@ -82,11 +83,13 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       | EnrichedAgentHookEventPayload
       | undefined
     if (
-      previous?.claudeLeadBoundaryChildOnly === true &&
-      previous.payload.agentType === 'claude' &&
-      event.payload.agentType === 'claude'
+      previous?.payload.agentType === 'claude' &&
+      event.payload.agentType === 'claude' &&
+      isAgentStatusHeldOpenByChildWork(previous.payload) &&
+      previous.payload.subagents?.some((subagent) => subagent.state === 'working') === true
     ) {
-      // Why: OSC has no child identity or lead boundary, so it cannot replace a persisted child-only proof before the lifecycle hook arrives.
+      // Why: OSC carries no child identity, so it cannot settle or repaint a row child agents hold open
+      // (working, or waiting on a child's prompt); their lifecycle hooks will.
       if (mutationBefore !== undefined) {
         this.commitStatusRowMutation(mutationBefore, previous)
         this.emitEnrichedStatus(previous)
@@ -130,6 +133,14 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       (previous.payload.state !== 'done' || event.payload.state === 'done')
         ? previous.providerSession
         : undefined
+    // Why: OSC carries no main agent fact. While it repaints the state the hook row already holds, the
+    // main agent behind that state is unchanged too; a different state is a turn edge OSC cannot date.
+    const preservedMainAgent =
+      previous?.payload.mainAgent &&
+      previous.payload.state === event.payload.state &&
+      (claimedAgentType === undefined || claimedAgentType === previous.payload.agentType)
+        ? previous.payload.mainAgent
+        : undefined
     // Why: OSC status is a runtime observation, not a prompt boundary; keep prompt-sent telemetry tied to native hooks.
     this.applyNormalizedStatus(
       {
@@ -139,7 +150,9 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
         connectionId,
         ...(preservedProviderSession ? { providerSession: preservedProviderSession } : {}),
         ...(terminalHandle ? { terminalHandle } : {}),
-        payload: event.payload
+        payload: preservedMainAgent
+          ? { ...event.payload, mainAgent: preservedMainAgent }
+          : event.payload
       },
       undefined,
       'osc',

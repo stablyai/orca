@@ -110,7 +110,7 @@ export function applyRetiredWorktreeNames(
 }
 
 export function installRetiredWorktreeNamePersistenceContext(
-  target: object,
+  target: RetiredWorktreeNamePersistence,
   source: RetiredWorktreeNamePersistence
 ): void {
   Object.defineProperty(target, retiredWorktreeNamePersistenceContext, {

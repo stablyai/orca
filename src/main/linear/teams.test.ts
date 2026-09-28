@@ -72,16 +72,15 @@ function makeConnection<TNode>(pages: TNode[][]) {
   return {
     nodes,
     pageInfo: { hasNextPage: pages.length > 1 },
-    fetchNext: vi
-      .fn()
-      .mockImplementation(
-        async function fetchNext(this: { nodes: TNode[]; pageInfo: { hasNextPage: boolean } }) {
-          pageIndex += 1
-          this.nodes.push(...(pages[pageIndex] ?? []))
-          this.pageInfo.hasNextPage = pageIndex < pages.length - 1
-          return this
-        }
-      )
+    fetchNext: vi.fn().mockImplementation(async function fetchNext(this: {
+      nodes: TNode[]
+      pageInfo: { hasNextPage: boolean }
+    }) {
+      pageIndex += 1
+      this.nodes.push(...(pages[pageIndex] ?? []))
+      this.pageInfo.hasNextPage = pageIndex < pages.length - 1
+      return this
+    })
   }
 }
 

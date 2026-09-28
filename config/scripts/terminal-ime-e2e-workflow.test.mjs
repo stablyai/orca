@@ -61,7 +61,7 @@ describe('terminal IME e2e workflow', () => {
     expect(runner).toContain("process.kill(-processGroupId, 'SIGKILL')")
     expect(runner).toContain('const killDeadline = Date.now() + processKillTimeoutMs')
     expect(runner).toMatch(
-      /'test:e2e:headful',\s*'--workers=1',\s*'--',\s*'tests\/e2e\/terminal-ibus-hangul-native\.spec\.ts'/
+      /'test:e2e:headful',\s*'--workers=1',\s*'tests\/e2e\/terminal-ibus-hangul-native\.spec\.ts'/
     )
     expect(runner).not.toContain("'--replace'")
     expect(runner).not.toContain('killall')

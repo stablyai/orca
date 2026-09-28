@@ -23,7 +23,10 @@ vi.mock('react-native', () => ({
 }))
 
 vi.mock('expo-router', () => ({
-  router: { replace: vi.fn() }
+  router: { replace: vi.fn() },
+  // `ProtocolBlockScreen` reaches the router through the navigation handoff now, and the handoff's
+  // native form is this hook. Its web form is what posts the target to the shell.
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn(), back: vi.fn(), dismissTo: vi.fn() })
 }))
 
 // Why: mock only client acquisition; the gate must exercise the real
@@ -33,6 +36,10 @@ const hostClient = vi.hoisted(() => ({
 }))
 vi.mock('../transport/client-context', () => ({
   useHostClient: () => hostClient.current
+}))
+// Descriptor bookkeeping only; the real recorder reaches the native keychain through host-store.
+vi.mock('../transport/host-descriptor-recorder', () => ({
+  recordHostDescriptorFromStatus: vi.fn()
 }))
 
 function clientWithStatus(result: Record<string, unknown>): RpcClient {

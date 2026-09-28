@@ -1,5 +1,5 @@
-import type { RpcClient } from '../transport/rpc-client'
 import { saveMobileClipboardImageAsTempFile } from './mobile-clipboard-image'
+import type { MobileClipboardImageRpcSender } from './mobile-clipboard-image-operations'
 import { structuredAgentSessionDomainFingerprint } from '../../../src/shared/structured-agent-session-mutation'
 // Type-only import so this module (and its unit test) stays free of the expo/
 // react-native picker chain; the concrete `pickImage` is injected by the hook.
@@ -39,7 +39,7 @@ export function appendPendingNativeChatImages(
 }
 
 export type UploadNativeChatImagesDeps = {
-  readonly client: Pick<RpcClient, 'sendRequest'>
+  readonly client: MobileClipboardImageRpcSender
   readonly getConnectionId: () => Promise<string | null>
   // Injected so this module stays free of expo/react-native imports (unit-testable).
   readonly pickImages: (

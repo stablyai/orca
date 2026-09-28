@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../db'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../shared/protocol-version'
-import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../shared/orchestration-rpc-contract'
 import { createRootDispatch } from './root-dispatch-test-fixture'
 import type { DeliveryRow } from '../types'
 
@@ -35,11 +34,17 @@ describe('dispatch mailbox consumer fencing', () => {
     return { id: dispatch.id, runId: dispatch.run_id }
   }
 
-  function openDelivery(dispatchId: string, runId: string, generation: number) {
+  function openDelivery(
+    dispatchId: string,
+    runId: string,
+    generation: number,
+    consumerSource: 'dispatch' | 'attachment' = 'dispatch'
+  ) {
     return db.getOrCreateMailboxDelivery({
       runId,
       mailboxHandle: `dispatch:${dispatchId}`,
-      consumerGeneration: generation
+      consumerGeneration: generation,
+      consumerSource
     })
   }
 
@@ -169,9 +174,9 @@ describe('dispatch mailbox consumer fencing', () => {
       from: 'home-peer',
       to: `dispatch:${dispatchId}`,
       subject: 'relayed before attach',
-      runId: ORCHESTRATION_LEGACY_RUN_ID
+      runId: 'run-home'
     })
-    const stale = openDelivery(dispatchId, ORCHESTRATION_LEGACY_RUN_ID, 0)
+    const stale = openDelivery(dispatchId, 'run-home', 0, 'attachment')
 
     // The worker host holds no dispatch_contexts row for a federated Dispatch.
     expect(db.getDispatchContextById(dispatchId)).toBeUndefined()

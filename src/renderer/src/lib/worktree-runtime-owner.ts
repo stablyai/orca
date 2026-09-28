@@ -14,6 +14,7 @@ import {
 } from './worktree-runtime-owner-index'
 import { getSingleFocusedRuntimeEnvironmentId } from './single-runtime-legacy-owner'
 import {
+  findFolderWorkspaceOwner,
   getExecutionHostIdForFolderWorkspace,
   getExplicitRuntimeEnvironmentIdForFolderWorkspace,
   getRuntimeEnvironmentIdForFolderWorkspace
@@ -157,10 +158,26 @@ export function getExplicitRuntimeEnvironmentIdForWorktree(
   return getExplicitRuntimeEnvironmentIdFromHost(getRepoExecutionHostId(repo))
 }
 
-export function getExecutionHostIdForWorktree(
+function getFocusedRuntimeOrLocalExecutionHostId(
+  state: WorktreeRuntimeOwnerState
+): ExecutionHostId {
+  const environmentId = getSingleFocusedRuntimeEnvironmentId(state)
+  return environmentId ? `runtime:${encodeURIComponent(environmentId)}` : 'local'
+}
+
+/**
+ * The catalog's answer, or `null` when it has none: no row names an owner for this worktree (a git
+ * worktree without a repo row, a folder workspace without a folder-workspace row) and nothing more
+ * specific — active-workspace host, detected owner, per-worktree host — applies either. A row that
+ * exists and names no owner is a positive `'local'`; a row that has not landed is silence.
+ * {@link getExecutionHostIdForWorktree} papers over that silence with the focused-runtime-or-local
+ * default, which is the right answer for routing an operation and the wrong one for a caller that
+ * reads the host as evidence.
+ */
+export function getKnownExecutionHostIdForWorktree(
   state: WorktreeRuntimeOwnerState,
   worktreeId: string | null | undefined
-): ExecutionHostId {
+): ExecutionHostId | null {
   if (!worktreeId) {
     return 'local'
   }
@@ -173,7 +190,11 @@ export function getExecutionHostIdForWorktree(
   }
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
-    return getExecutionHostIdForFolderWorkspace(state, workspaceScope.folderWorkspaceId)
+    const hostId = getExecutionHostIdForFolderWorkspace(state, workspaceScope.folderWorkspaceId)
+    // Why: the folder resolver substitutes `'local'` for a missing row the same way this one does.
+    return hostId === 'local' && !findFolderWorkspaceOwner(state, workspaceScope.folderWorkspaceId)
+      ? null
+      : hostId
   }
   const hasDetectedOwner = hasIndexedDetectedWorktree(state.detectedWorktreesByRepo, worktreeId)
   if (hasDetectedOwner) {
@@ -196,12 +217,24 @@ export function getExecutionHostIdForWorktree(
   }
   const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
   const repo = findRepoRecord(state.repos, repoId)
-  const hasExplicitOwner = Boolean(repo?.executionHostId?.trim() || repo?.connectionId?.trim())
-  if (repo && hasExplicitOwner) {
+  if (!repo) {
+    return null
+  }
+  const hasExplicitOwner = Boolean(repo.executionHostId?.trim() || repo.connectionId?.trim())
+  if (hasExplicitOwner) {
     return getRepoExecutionHostId(repo)
   }
-  const environmentId = getSingleFocusedRuntimeEnvironmentId(state)
-  return environmentId ? `runtime:${encodeURIComponent(environmentId)}` : 'local'
+  return getFocusedRuntimeOrLocalExecutionHostId(state)
+}
+
+export function getExecutionHostIdForWorktree(
+  state: WorktreeRuntimeOwnerState,
+  worktreeId: string | null | undefined
+): ExecutionHostId {
+  return (
+    getKnownExecutionHostIdForWorktree(state, worktreeId) ??
+    getFocusedRuntimeOrLocalExecutionHostId(state)
+  )
 }
 
 export function getSettingsForWorktreeRuntimeOwner(

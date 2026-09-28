@@ -152,8 +152,9 @@ describe('CodexStructuredSessionAdapter lifecycle', () => {
         sessionId: 'session-2',
         itemId: 'codex-item-1',
         kind: 'approval',
-        optionId: 'accept',
-        fence: 1
+        response: { kind: 'option', optionId: 'accept' },
+        fence: 1,
+        commit: async () => undefined
       })
     ).rejects.toThrow('no longer waiting on')
 
@@ -180,6 +181,7 @@ describe('CodexStructuredSessionAdapter lifecycle', () => {
       type: 'ended',
       sessionId: 'session-1',
       reason: 'codex app-server connection ended',
+      failure: { kind: 'providerExited' },
       cause: 'unexpected-exit',
       fence: 7,
       acquisitionGeneration: 'generation-1',

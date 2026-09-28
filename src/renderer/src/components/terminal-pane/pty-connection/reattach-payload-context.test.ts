@@ -38,7 +38,8 @@ function createContext(replay: string, attemptGeneration: number): ReattachPaylo
     fetchSshMainModelReattachSnapshot: async () => null,
     shouldApplyStructuralPayload: true,
     coldRestoreStartup: undefined,
-    reattachPayloadApplied: false
+    reattachPayloadApplied: false,
+    skippedAltFrameCaptureCols: null
   }
 }
 

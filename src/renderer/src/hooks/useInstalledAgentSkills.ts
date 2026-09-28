@@ -8,7 +8,6 @@ import type {
 } from '../../../shared/skills'
 import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
 import { markOrchestrationSetupComplete } from '@/lib/orchestration-setup-state'
-import { translate } from '@/i18n/i18n'
 import {
   discoverInstalledAgentSkills,
   getCachedSkillDiscovery,
@@ -16,6 +15,10 @@ import {
   getSkillDiscoveryTargetKey,
   resetSkillDiscoveryCacheForTests
 } from './installed-agent-skill-discovery'
+import {
+  getInstalledAgentSkillVerdict,
+  type InstalledAgentSkillScan
+} from './installed-agent-skill-verdict'
 import {
   INSTALLED_AGENT_SKILLS_CHANGED_EVENT,
   INSTALLED_AGENT_SKILLS_REFRESHED_EVENT
@@ -48,6 +51,8 @@ export type InstalledAgentSkillState = {
   // Why: a forced rescan keeps the previous result, so only the first scan per
   // runtime-scoped target is genuinely unknown.
   settled: boolean
+  // A negative this scan cannot vouch for: render it as unknown, not as undone.
+  installedUnverifiable: boolean
   error: string | null
   skills: readonly DiscoveredSkill[]
   sources: readonly SkillDiscoverySource[]
@@ -94,23 +99,6 @@ export function hasInstalledAgentSkillNamed(
   })
 }
 
-/**
- * True when a root this query cares about did not answer, so its skills are
- * unknown rather than absent. The host serves such a root's last answer, but a
- * root that has never answered has none to serve, and a bare "Not installed"
- * there offers Install for a skill that may already be present.
- */
-export function hasUnreadableAgentSkillSource(
-  sources: readonly SkillDiscoverySource[],
-  sourceKinds?: readonly SkillSourceKind[]
-): boolean {
-  return sources.some(
-    (source) =>
-      source.skippedReason === 'unavailable' &&
-      (!sourceKinds || sourceKinds.includes(source.sourceKind))
-  )
-}
-
 export function notifyInstalledAgentSkillsRefreshed(): void {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent(INSTALLED_AGENT_SKILLS_REFRESHED_EVENT))
@@ -140,7 +128,12 @@ export function useInstalledAgentSkillNames(
   const candidateSkillNames = useMemo(() => skillNamesKey.split('\n'), [skillNamesKey])
   const runtimeTarget = useActiveSkillDiscoveryRuntimeTarget()
   const discoveryTargetKey = runtimeTarget
-    ? getRuntimeScopedSkillDiscoveryKey(runtimeTarget, discoveryTarget)
+    ? getRuntimeScopedSkillDiscoveryKey(
+        runtimeTarget,
+        discoveryTarget,
+        candidateSkillNames,
+        sourceKinds
+      )
     : UNRESOLVED_RUNTIME_DISCOVERY_KEY
   // Why: callers derive the target inside a store-backed useMemo, so unrelated
   // store writes hand us a new object with the same key. Two targets with the
@@ -229,7 +222,13 @@ export function useInstalledAgentSkillNames(
       }
       let installedAfterRefresh = false
       try {
-        const next = await discoverInstalledAgentSkills(force, stableDiscoveryTarget, runtimeTarget)
+        const next = await discoverInstalledAgentSkills(
+          force,
+          stableDiscoveryTarget,
+          runtimeTarget,
+          candidateSkillNames,
+          sourceKinds
+        )
         installedAfterRefresh = hasInstalledAgentSkillNamed(next.skills, candidateSkillNames, {
           sourceKinds
         })
@@ -312,10 +311,15 @@ export function useInstalledAgentSkillNames(
     [candidateSkillNames, enabled, skills, sourceKinds]
   )
 
-  const incompleteScan = useMemo(
-    () => enabled && !installed && hasUnreadableAgentSkillSource(sources, sourceKinds),
-    [enabled, installed, sources, sourceKinds]
-  )
+  const settled = enabled && resultForRender !== null
+  const scan: InstalledAgentSkillScan = {
+    enabled,
+    installed,
+    settled,
+    error: errorForRender,
+    sources,
+    sourceKinds
+  }
 
   useEffect(() => {
     if (installed && candidateSkillNames.some(isOrchestrationSkillName)) {
@@ -330,15 +334,8 @@ export function useInstalledAgentSkillNames(
   return {
     installed,
     loading: loadingForRender,
-    settled: enabled && resultForRender !== null,
-    error:
-      errorForRender ??
-      (incompleteScan
-        ? translate(
-            'auto.hooks.useInstalledAgentSkills.unreadableSkillSource',
-            'A skill folder did not respond, so this status may be incomplete.'
-          )
-        : null),
+    settled,
+    ...getInstalledAgentSkillVerdict(scan),
     skills,
     sources,
     refresh: forceRefresh

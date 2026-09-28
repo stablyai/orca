@@ -127,9 +127,9 @@ export function startParkedTerminalByteWatcher(
     onBell: (): void => {
       const state = useAppStore.getState()
       state.markWorktreeUnread(worktreeId)
-      state.markTerminalTabUnread(tabId)
+      state.markTerminalTabUnread(tabId, 'terminal-bell')
       if (state.settings?.experimentalTerminalAttention === true) {
-        state.markTerminalPaneUnread(paneKey)
+        state.markTerminalPaneUnread(paneKey, 'terminal-bell')
       }
       // Why: agents emit BEL in the same burst as working→idle, so delay only the OS notification to let the richer completion notification win.
       pendingBellNotification = true

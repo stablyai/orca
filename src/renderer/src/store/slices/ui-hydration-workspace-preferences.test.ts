@@ -140,6 +140,8 @@ describe('createUISlice hydratePersistedUI', () => {
       'minimax',
       'antigravity',
       'grok',
+      'cursor',
+      'zcode',
       'line-blame'
     ])
     expect(setUI).toHaveBeenCalledWith({
@@ -151,6 +153,8 @@ describe('createUISlice hydratePersistedUI', () => {
         'minimax',
         'antigravity',
         'grok',
+        'cursor',
+        'zcode',
         'line-blame'
       ],
       _portsStatusBarDefaultAdded: true,
@@ -158,6 +162,8 @@ describe('createUISlice hydratePersistedUI', () => {
       _minimaxStatusBarDefaultAdded: true,
       _antigravityStatusBarDefaultAdded: true,
       _grokStatusBarDefaultAdded: true,
+      _cursorStatusBarDefaultAdded: true,
+      _zcodeStatusBarDefaultAdded: true,
       _lineBlameStatusBarDefaultAdded: true
     })
   })
@@ -175,6 +181,8 @@ describe('createUISlice hydratePersistedUI', () => {
         _minimaxStatusBarDefaultAdded: true,
         _antigravityStatusBarDefaultAdded: true,
         _grokStatusBarDefaultAdded: true,
+        _cursorStatusBarDefaultAdded: true,
+        _zcodeStatusBarDefaultAdded: true,
         _lineBlameStatusBarDefaultAdded: true
       })
     )

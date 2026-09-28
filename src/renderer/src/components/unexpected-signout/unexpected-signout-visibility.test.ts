@@ -110,7 +110,7 @@ describe('shouldShowUnexpectedSignoutCard', () => {
     ).toBe(false)
   })
 
-  it('shows only once per app version', () => {
+  it('never re-arms after an update', () => {
     expect(
       shouldShowUnexpectedSignoutCard({
         authStatus: reconnectRequired(),
@@ -126,7 +126,7 @@ describe('shouldShowUnexpectedSignoutCard', () => {
         appVersion: '1.4.198',
         dismissedVersion: '1.4.197'
       })
-    ).toBe(true)
+    ).toBe(false)
   })
 
   it('waits for hydration and version', () => {

@@ -221,6 +221,44 @@ describe('connectPanePty', () => {
     expect(deps.onPtyErrorRef.current).not.toHaveBeenCalled()
   })
 
+  // The disposed-spawn kill in ipc-pty-connect asks this callback before retiring a PTY; it must
+  // answer from the live store, or a remounted pane's shell dies under it.
+  it('lets a disposed spawn survive while the pane surface still exists in the store', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    const deps = createDeps({ tabId: 'tab-retain-disposed-spawn' })
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-retain-disposed-spawn', ptyId: null }] }
+    }
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks()
+
+    const retain = createdTransportOptions[0]?.retainDisposedSpawn
+    if (typeof retain !== 'function') {
+      throw new Error('pane transport was built without retainDisposedSpawn')
+    }
+    expect(retain()).toBe(true)
+    mockStoreState = {
+      ...mockStoreState,
+      deleteStateByWorktreeId: { 'wt-1': { isDeleting: true, phase: 'deleting' } }
+    }
+    expect(retain()).toBe(false)
+    mockStoreState = {
+      ...mockStoreState,
+      deleteStateByWorktreeId: { 'local|wt-1': { isDeleting: true, phase: 'deleting' } }
+    }
+    expect(retain()).toBe(false)
+    mockStoreState = {
+      ...mockStoreState,
+      deleteStateByWorktreeId: {},
+      tabsByWorktree: { 'wt-1': [] }
+    }
+    expect(retain()).toBe(false)
+  })
+
   it('fresh-spawns normally when the pane worktree is not being deleted', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
@@ -452,7 +490,7 @@ describe('connectPanePty', () => {
     // Released (via the guard's fallback or parse completion): input flows again.
     deps.replayingPanesRef.current.delete(pane.id)
     sendTerminalInputThroughPane(pane, 'echo hi\r')
-    expect(transport.sendInput).toHaveBeenCalledWith('echo hi\r')
+    expect(transport.sendInput).toHaveBeenCalledWith('echo hi\r', 'query-reply')
   })
 
   it('preserves classified user input during replay while suppressing synthetic replies', async () => {
@@ -495,7 +533,7 @@ describe('connectPanePty', () => {
     for (const forward of deferred.splice(0)) {
       forward()
     }
-    expect(transport.sendInput).toHaveBeenCalledExactlyOnceWith('input_under_flood\r')
+    expect(transport.sendInput).toHaveBeenCalledExactlyOnceWith('input_under_flood\r', 'driving')
 
     // A wheel over a replayed alt-screen frame becomes cursor keys; the fresh shell must not recall history from them.
     pane.terminal.buffer.active.type = 'alternate'
@@ -506,7 +544,7 @@ describe('connectPanePty', () => {
     for (const forward of deferred.splice(0)) {
       forward()
     }
-    expect(transport.sendInput).toHaveBeenCalledExactlyOnceWith('input_under_flood\r')
+    expect(transport.sendInput).toHaveBeenCalledExactlyOnceWith('input_under_flood\r', 'driving')
 
     // The same bytes on the normal buffer can only be a keyboard arrow, which survives replay.
     pane.terminal.buffer.active.type = 'normal'
@@ -518,7 +556,7 @@ describe('connectPanePty', () => {
       forward()
     }
     expect(transport.sendInput).toHaveBeenCalledTimes(2)
-    expect(transport.sendInput).toHaveBeenLastCalledWith('\x1b[B')
+    expect(transport.sendInput).toHaveBeenLastCalledWith('\x1b[B', 'driving')
 
     // Once the guard releases, the same mouse report is ordinary input again.
     deps.replayingPanesRef.current.delete(pane.id)
@@ -529,7 +567,7 @@ describe('connectPanePty', () => {
     for (const forward of deferred.splice(0)) {
       forward()
     }
-    expect(transport.sendInput).toHaveBeenLastCalledWith('\x1b[<0;12;4M')
+    expect(transport.sendInput).toHaveBeenLastCalledWith('\x1b[<0;12;4M', 'driving')
   })
 
   it('settles a queued startup only after the pane binds its spawned PTY', async () => {

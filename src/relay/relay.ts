@@ -7,6 +7,7 @@ import { runRelayConnectChannel } from './relay-connect-channel'
 import { runRelayOrcaCliChannel } from './relay-orca-cli-channel'
 import { runRelayDaemon } from './relay-daemon'
 import { relayLogLine } from './relay-diagnostic-log'
+import { configureRelayBundledRipgrep } from './relay-bundled-ripgrep'
 
 async function main(): Promise<void> {
   const options = parseRelayLaunchOptions(process.argv)
@@ -23,6 +24,7 @@ async function main(): Promise<void> {
     )
     return
   }
+  configureRelayBundledRipgrep(options.ripgrepPath)
   // Why no read here: the daemon publishes its credential itself, after it owns the socket.
   await runRelayDaemon(options)
 }

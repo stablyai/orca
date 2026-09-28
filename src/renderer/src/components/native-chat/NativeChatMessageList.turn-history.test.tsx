@@ -6,7 +6,7 @@ import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
 } from '../../../../shared/agent-session-journal-types'
-import { projectStructuredItemsToNativeChat } from '../../../../shared/structured-agent-session-projection'
+import { projectStructuredQuestionMessages } from './structured-agent-question-projection'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
@@ -51,12 +51,13 @@ function diff(patch = '@@ -1 +1 @@\n-before\n+after'): AgentJournalRenderItem {
 }
 function session(items: AgentJournalRenderItem[]): NativeChatLiveSession {
   return {
-    messages: projectStructuredItemsToNativeChat(items),
+    messages: projectStructuredQuestionMessages(items),
     status: 'ready',
     sessionId: 'session',
     agent: 'codex',
     hasMore: false,
     loadingEarlier: false,
+    olderHistoryGeneration: 0,
     loadEarlier: vi.fn(),
     readPhase: 'ready'
   }
@@ -74,6 +75,123 @@ function view(items: AgentJournalRenderItem[], structured = true) {
 }
 
 describe('turn history presentation', () => {
+  it('renders canonical pending questions while idle and keeps resolved answers at their row', () => {
+    const question = item(
+      'question',
+      {
+        kind: 'question',
+        question: 'Which branch?',
+        options: [{ id: 'main', label: 'main' }],
+        resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+      },
+      3
+    )
+    const { rerender } = render(view([user, prose, question]))
+    expect(screen.getByText('Awaiting user input:')).toBeInTheDocument()
+    expect(screen.getByText('Which branch?')).toBeInTheDocument()
+    expect(screen.queryByText(/request_user_input/)).toBeNull()
+    const settled = item(
+      'question',
+      {
+        ...question.body,
+        kind: 'question',
+        question: 'Which branch?',
+        options: [{ id: 'main', label: 'main' }],
+        resolution: {
+          state: 'resolved',
+          selectedOptionId: 'main',
+          resolvedBy: 'desktop',
+          resolvedAt: 4000
+        }
+      },
+      3
+    )
+    rerender(view([user, prose, settled]))
+    expect(screen.queryByText('Awaiting user input:')).toBeNull()
+    expect(screen.getByText('Asked:')).toBeInTheDocument()
+    expect(screen.getByText('main')).toBeInTheDocument()
+  })
+
+  it('renders one resolved row when Claude journals both the call and receipt', () => {
+    const call = item(
+      'ask-call',
+      {
+        kind: 'tool-call',
+        name: 'AskUserQuestion',
+        input: { questions: [{ question: 'Which branch?' }] },
+        state: 'completed',
+        output: { head: 'main', byteLength: 4, truncated: false, digest: 'answer' }
+      },
+      3
+    )
+    const question = item(
+      'question-receipt',
+      {
+        kind: 'question',
+        question: 'Which branch?',
+        options: [{ id: 'main', label: 'main' }],
+        resolution: {
+          state: 'resolved',
+          selectedOptionId: 'main',
+          resolvedBy: 'desktop',
+          resolvedAt: 4000
+        }
+      },
+      4
+    )
+
+    render(view([user, call, question]))
+
+    expect(screen.getAllByText('Asked:')).toHaveLength(1)
+    expect(screen.queryByText(/AskUserQuestion/)).toBeNull()
+  })
+
+  it('groups pending Codex questions then narrows the awaiting count after one answer', () => {
+    const first = item(
+      'q1',
+      {
+        kind: 'question',
+        question: 'Which branch?',
+        options: [{ id: 'main', label: 'main' }],
+        resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+      },
+      3
+    )
+    const second = item(
+      'q2',
+      {
+        kind: 'question',
+        question: 'Proceed?',
+        options: [],
+        resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+      },
+      4
+    )
+    const { rerender } = render(view([user, first, second]))
+    expect(screen.getByText('2 questions')).toBeInTheDocument()
+    expect(screen.getAllByText('Awaiting user input:')).toHaveLength(1)
+    const answered = item(
+      'q1',
+      {
+        kind: 'question',
+        question: 'Which branch?',
+        options: [{ id: 'main', label: 'main' }],
+        resolution: {
+          state: 'resolved',
+          selectedOptionId: 'main',
+          resolvedBy: 'phone',
+          resolvedAt: 5000
+        }
+      },
+      3
+    )
+    rerender(view([user, answered, second]))
+    expect(screen.queryByText('2 questions')).toBeNull()
+    expect(screen.getByText('Proceed?')).toBeInTheDocument()
+    expect(screen.getByText('main')).toBeInTheDocument()
+    expect(screen.getAllByText('Awaiting user input:')).toHaveLength(1)
+  })
+
   it('reveals and scrolls to a folded diff card from a collapsed completed turn', () => {
     vi.spyOn(HTMLElement.prototype, 'scrollTo').mockImplementation(scrollTo)
     render(view([user, prose, diff()]))
@@ -86,7 +204,7 @@ describe('turn history presentation', () => {
     expect(screen.getByText('after')).toBeInTheDocument()
     expect(screen.getByText('before')).toBeInTheDocument()
     expect(scrollTo).toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: /1× Diff/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Edited 1 file/ }))
     expect(screen.queryByText('Edited file')).toBeNull()
     fireEvent.click(header)
     expect(header).toHaveAttribute('aria-expanded', 'false')

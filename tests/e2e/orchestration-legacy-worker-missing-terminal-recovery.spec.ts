@@ -1,3 +1,4 @@
+import { readPersistedProfileState } from './helpers/persisted-profile-state'
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -17,7 +18,6 @@ import { DaemonClient } from '../../src/main/daemon/client'
 import { getDaemonSocketPath, getDaemonTokenPath } from '../../src/main/daemon/daemon-spawner'
 import Database from '../../src/main/sqlite/sync-database'
 import { LEGACY_CONTRACT_VERSION } from '../../src/main/runtime/orchestration/db'
-import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 import type { RuntimeTerminalListResult, RuntimeTerminalRead } from '../../src/shared/runtime-types'
 import {
   buildFakeAgentCommandOverride,
@@ -144,12 +144,9 @@ async function detachedDaemonSessionExists(userDataDir: string, ptyId: string): 
   }
 }
 
-function persistedDataPath(userDataDir: string): string {
-  return path.join(userDataDir, 'profiles', DEFAULT_LOCAL_ORCA_PROFILE_ID, 'orca-data.json')
-}
-
 function hasPersistedResumeRecord(userDataDir: string, paneKey: string): boolean {
-  const data = JSON.parse(readFileSync(persistedDataPath(userDataDir), 'utf8')) as {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test owns the persisted fixture; optional fields are checked at use sites.
+  const data = readPersistedProfileState(userDataDir) as {
     workspaceSession?: {
       sleepingAgentSessionsByPaneKey?: Record<string, { providerSession?: { id?: unknown } }>
     }

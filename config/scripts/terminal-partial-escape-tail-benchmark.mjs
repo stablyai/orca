@@ -3,15 +3,16 @@
 // baseline with the pre-change shape (unconditional concat + per-code-unit walk). Equivalence is
 // proven over a corpus first, so the reported speedup cannot come from the gate changing the answer.
 import { performance } from 'node:perf_hooks'
-import {
-  advancePartialEscapeTail,
-  extractPartialEscapeTail,
-  MAX_PARTIAL_ESCAPE_TAIL_LENGTH
-} from '../../src/shared/terminal-partial-escape-tail.ts'
+import { createJiti } from 'jiti'
 
 const CHUNK_BYTES = 16 * 1024
 const CHUNKS = 640
 const ROUNDS = 7
+// jiti, not a bare `node` import: type-stripping cannot resolve the extensionless
+// relative imports inside the module graph under test.
+const jiti = createJiti(import.meta.url)
+const { advancePartialEscapeTail, extractPartialEscapeTail, MAX_PARTIAL_ESCAPE_TAIL_LENGTH } =
+  await jiti.import('../../src/shared/terminal-partial-escape-tail.ts')
 
 function baselineAdvance(pendingTail, chunk) {
   const tail = extractPartialEscapeTail(pendingTail + chunk)

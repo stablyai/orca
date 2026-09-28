@@ -9,6 +9,7 @@ import { agentHookServer } from '../agent-hooks/server'
 import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
 import { removeManagedAgentHooksAsync } from '../agent-hooks/managed-agent-hook-controls'
 import { stopStructuredAgentSessionRuntime } from '../runtime/structured-agent-session-runtime'
+import { setStructuredAgentSessionTeardownTrigger } from '../runtime/structured-agent-session-runtime-teardown'
 import { awaitRuntimeFileWatcherUnsubscribes } from '../runtime/orca-runtime-files'
 import { clearRuntimeMetadataIfOwned } from '../runtime/runtime-metadata'
 import { shutdownPairedRuntimeBrowserClientHosts } from '../browser/paired-runtime-browser-client-host-runtime'
@@ -133,6 +134,9 @@ function installWillQuitHandler(): void {
     state.pluginMarketplaceInstaller = null
     const pluginHostShutdown = state.pluginService?.dispose() ?? Promise.resolve()
     const codexBackfillRecoveryShutdown = stopCodexStateDbBackfillRecoveries()
+    // Why before the stop: teardown stamps each working session's resume marker with why the app
+    // went away, and an update install is a restart the user never chose.
+    setStructuredAgentSessionTeardownTrigger(updateQuitInProgress ? 'update' : 'quit')
     const structuredAgentSessionShutdown = stopStructuredAgentSessionRuntime()
     state.pluginService = null
     setUnreadDockBadgeCount(0)
@@ -191,18 +195,32 @@ function installWillQuitHandler(): void {
     browserManager.setBrowserGuestStateChangedListener(null)
     const emulatorShutdown =
       state.runtime?.getEmulatorBridge()?.destroyAllSessions() ?? Promise.resolve()
-    // Why immediately before store.flushAsync() with no await in between: beginSshShutdown() marks every
+    // Why immediately before the final store flush with no await in between: beginSshShutdown() marks every
     // active SSH lease detached in memory synchronously, and that flush is what persists it.
     const sshShutdown = beginSshShutdown()
     killAllPty()
     const watcherShutdown = shutdownWatchersOnce()
-    const storeFlush = state.store?.flushAsync() ?? Promise.resolve()
+    const finalStore = state.store
+    const storeFlush = (async () => {
+      if (!finalStore) {
+        return
+      }
+      try {
+        await finalStore.flushFinalOrThrowAsync({ exportJsonCompatibility: true })
+        await finalStore.freezeWritesAsync()
+        state.profileStateAdmission?.release()
+        state.profileStateAdmission = undefined
+      } catch (error) {
+        console.error('[persistence] Failed to finalize profile state:', error)
+      }
+    })()
     // Why: usage-cache writes are queued off the main thread, so a quit right after setEnabled or a
     // scan completion would drop the final snapshot. Captured before any await; joins the barrier below.
     const usageCacheFlush = Promise.all([
       state.claudeUsage?.flush(),
       state.codexUsage?.flush(),
-      state.openCodeUsage?.flush()
+      state.openCodeUsage?.flush(),
+      state.museUsage?.flush()
     ]).then(() => {})
     const browserClientHostShutdown = shutdownPairedRuntimeBrowserClientHosts()
     const skillUploadShutdown = state.runtime?.disposeSkillUploadSessions() ?? Promise.resolve()

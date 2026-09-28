@@ -1,3 +1,4 @@
+import { ownRetainedString } from './own-retained-string'
 import { parseTerminalKittyKeyboardFlags } from './terminal-kitty-keyboard-flags'
 
 // Why: PTY/SSH chunks can split an escape sequence before its final byte.
@@ -21,11 +22,12 @@ type KittyStackFrame = { flags: number; known: boolean }
  * Why a mirror instead of reading xterm's internal state: Orca defensively
  * wipes the renderer terminal's kitty flags at moments when the TUI may have
  * died (Ctrl+C interrupts, reattach resets) while the TUI is usually still
- * alive and expecting protocol-encoded input. This tracker is fed only by
- * application output, so it reflects what the *application* negotiated,
- * independent of renderer-side defensive writes. The daemon reuses it to
- * carry flags into snapshots (xterm's SerializeAddon does not serialize kitty
- * state).
+ * alive and expecting protocol-encoded input. This tracker is fed by
+ * application output, snapshot restores, and the Orca resets that also reach
+ * xterm (ConPTY agent-idle, confirmed shell), never by the renderer's other
+ * defensive xterm writes, so it reflects what the live application negotiated.
+ * The daemon reuses it to carry flags into snapshots (xterm's SerializeAddon does
+ * not serialize kitty state).
  */
 export class TerminalKittyKeyboardModeTracker {
   private scanTail = ''
@@ -155,7 +157,12 @@ export class TerminalKittyKeyboardModeTracker {
   }
 
   private scanInternal(data: string, replay: boolean): void {
-    const input = this.scanTail + data
+    // Why: unchecked main-process callers can pass a snapshot field that is absent.
+    const chunk = typeof data === 'string' ? data : ''
+    if (this.scanTail.length === 0 && !chunk.includes('\x1b') && !chunk.includes('\x9b')) {
+      return
+    }
+    const input = this.scanTail + chunk
     this.scanTail = this.extractScanTail(input)
     // oxlint-disable-next-line no-control-regex -- terminal escape sequences require control chars
     const kittyModeRe = /\x1bc|(?:\x1b\[|\x9b)(?:!p|\?([0-9;]+)([hl])|([<>=])([0-9;]*)u)/g
@@ -308,7 +315,7 @@ export class TerminalKittyKeyboardModeTracker {
     if (body === null) {
       return ''
     }
-    return this.isIncompleteSequenceBody(body) ? tail : ''
+    return this.isIncompleteSequenceBody(body) ? ownRetainedString(tail) : ''
   }
 
   private isIncompleteSequenceBody(body: string): boolean {

@@ -139,7 +139,11 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
             leaf.lastAgentStatus = restoredStatus
             if (restoredStatus === 'idle') {
               this.resolveTuiIdleWaiters(leaf)
-              this.deliverPendingMessagesForLeaf(leaf)
+              // Why gated like every other delivery edge: a neutral-title restoration can
+              // reinstate `idle` from a name-only title, which is not evidence a turn ended.
+              if (this.checkDeliverySettledAndArmRecheck(leaf)) {
+                this.deliverPendingMessagesForLeaf(leaf)
+              }
             }
           }
         }

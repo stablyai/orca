@@ -2,13 +2,16 @@ import { useEffect, type MutableRefObject } from 'react'
 import { getShortcutPlatform } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings'
+import { browserChromeShortcutOwnsEvent } from '../describe-page/browser-overlay-shortcut-target'
+import type { BrowserChromeShortcutScope, GrabIntent } from '../describe-page/browser-page-types'
 import { isEditableKeyboardTarget } from './browser-keyboard'
 import { useBrowserPageWebviewShortcuts } from './use-browser-page-webview-shortcuts'
-import type { GrabIntent } from '../describe-page/browser-page-types'
 
 export function useBrowserPageKeyboardShortcuts({
   browserTabId,
+  workspaceId,
   isActive,
+  chromeShortcutScope,
   isActiveRef,
   markupIsActive,
   webviewRef,
@@ -21,7 +24,9 @@ export function useBrowserPageKeyboardShortcuts({
   grabIsInteractive
 }: {
   browserTabId: string
+  workspaceId: string
   isActive: boolean
+  chromeShortcutScope: BrowserChromeShortcutScope
   isActiveRef: MutableRefObject<boolean>
   markupIsActive: boolean
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
@@ -37,7 +42,9 @@ export function useBrowserPageKeyboardShortcuts({
 
   useBrowserPageWebviewShortcuts({
     browserTabId,
+    workspaceId,
     isActive,
+    chromeShortcutScope,
     isActiveRef,
     webviewRef,
     paneZoomLevelRef,
@@ -48,8 +55,7 @@ export function useBrowserPageKeyboardShortcuts({
 
   // Why: Cmd+C is repurposed as the grab-mode gesture; native text copy in the guest is handled by Chromium and never reaches here.
   useEffect(() => {
-    // Why: gate on isActive so only the active pane's global keydown listener toggles grab mode.
-    if (!isActive) {
+    if (chromeShortcutScope === 'inactive') {
       return
     }
     const shortcutPlatform = getShortcutPlatform()
@@ -58,18 +64,22 @@ export function useBrowserPageKeyboardShortcuts({
       if (isEditableKeyboardTarget(e.target)) {
         return
       }
-      // Why: don't start the in-guest picker behind an open markup overlay (matches the disabled toolbar buttons).
       if (
-        !markupIsActive &&
-        keybindingMatchesAction('browser.grabElement', e, shortcutPlatform, keybindings)
+        // Why: don't start the in-guest picker behind an open markup overlay (matches the disabled toolbar buttons).
+        markupIsActive ||
+        !keybindingMatchesAction('browser.grabElement', e, shortcutPlatform, keybindings) ||
+        !browserChromeShortcutOwnsEvent(chromeShortcutScope, e, workspaceId) ||
+        // Why: a live selection means copy; selecting in the floating panel or a sidebar keeps scope.
+        window.getSelection()?.isCollapsed === false
       ) {
-        e.preventDefault()
-        startGrabIntent('copy')
+        return
       }
+      e.preventDefault()
+      startGrabIntent('copy')
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isActive, keybindings, markupIsActive, startGrabIntent])
+  }, [chromeShortcutScope, keybindings, markupIsActive, startGrabIntent, workspaceId])
 
   // Why: a focused guest gets Cmd/Ctrl+C inside Chromium; main forwards it back only when the page wouldn't use it for native copy.
   useEffect(() => {

@@ -4,7 +4,6 @@
  * clamp shared by the batcher's bulk write slicing and keep-tail dropping.
  */
 import { encodeNdjson } from './ndjson'
-import type { Socket } from 'node:net'
 
 export function encodeStreamDataEvent(
   sessionId: string,
@@ -113,7 +112,7 @@ function splitOversizedStreamDataForNdjson(
 }
 
 export function writeStreamDataEvents(
-  streamSocket: Pick<Socket, 'write'>,
+  streamSocket: { write(data: string): void },
   sessionId: string,
   data: string,
   maxLineBytes: number,

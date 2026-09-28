@@ -32,9 +32,6 @@ import {
 import {
   ALL_PACKAGES_ACE,
   fakeIcaclsSpawn,
-  FRENCH_BASELINE_ACES,
-  FRENCH_RESTRICTED_PACKAGES_ACE,
-  icaclsDacl,
   ORPHAN_PACKAGE_ACE,
   RESTRICTED_PACKAGES_ACE
 } from './windows-install-dir-acl.test-fixture'
@@ -49,7 +46,7 @@ type Runner = (spec: ProcessSpec) => Promise<ProcessResult>
  * which decides whether icacls ever runs. Only the two process seams are faked.
  */
 function probeThenRecover(
-  dacl: (target: string) => string,
+  savedAces: (target: string) => string[],
   options: { failRepair?: boolean } = {}
 ): Promise<ProcessSpec[]> {
   const specs: ProcessSpec[] = []
@@ -68,7 +65,7 @@ function probeThenRecover(
       platform: 'win32',
       installDir: INSTALL_DIR,
       fileExists: (path) => path.endsWith('ffmpeg.dll'),
-      spawnFn: fakeIcaclsSpawn(dacl).spawnFn,
+      spawnFn: fakeIcaclsSpawn(savedAces).spawnFn,
       recordBreadcrumb: () => undefined,
       onDone: (data) => {
         startWindowsInstallDirAclRepairIfPoisoned(data, {
@@ -95,7 +92,7 @@ describe('startWindowsInstallDirAclRepairIfPoisoned', () => {
   })
 
   it('repairs when the probe sees an orphan package ACE and no well-known grant', async () => {
-    const specs = await probeThenRecover((target) => icaclsDacl(target, [ORPHAN_PACKAGE_ACE]))
+    const specs = await probeThenRecover(() => [ORPHAN_PACKAGE_ACE])
     expect(specs.map((spec) => spec.args?.[2])).toEqual([
       '*S-1-15-2-2:(OI)(CI)(RX)',
       '*S-1-15-2-2:(RX)'
@@ -106,27 +103,13 @@ describe('startWindowsInstallDirAclRepairIfPoisoned', () => {
   // win32 10.0.26200 / Electron 43.4.1, so it earns neither an ACL write nor the
   // accusing dialog copy.
   it('leaves an install whose package grant is ALL APPLICATION PACKAGES alone', async () => {
-    const specs = await probeThenRecover((target) =>
-      icaclsDacl(target, [ORPHAN_PACKAGE_ACE, ALL_PACKAGES_ACE])
-    )
+    const specs = await probeThenRecover(() => [ORPHAN_PACKAGE_ACE, ALL_PACKAGES_ACE])
     expect(specs).toHaveLength(0)
     expect(describeInstallDirAclPoison()).toBeNull()
   })
 
   it('does not touch an install that already carries the restricted grant', async () => {
-    const specs = await probeThenRecover((target) =>
-      icaclsDacl(target, [ORPHAN_PACKAGE_ACE, RESTRICTED_PACKAGES_ACE])
-    )
-    expect(specs).toHaveLength(0)
-    expect(describeInstallDirAclPoison()).toBeNull()
-  })
-
-  // A localized icacls prints the grant under a name the probe cannot match, so
-  // the signature is unproven: neither icacls nor the accusing dialog copy.
-  it('does not act on a signature from a non-English icacls', async () => {
-    const specs = await probeThenRecover((target) =>
-      icaclsDacl(target, [ORPHAN_PACKAGE_ACE, FRENCH_RESTRICTED_PACKAGES_ACE], FRENCH_BASELINE_ACES)
-    )
+    const specs = await probeThenRecover(() => [ORPHAN_PACKAGE_ACE, RESTRICTED_PACKAGES_ACE])
     expect(specs).toHaveLength(0)
     expect(describeInstallDirAclPoison()).toBeNull()
   })
@@ -169,7 +152,7 @@ describe('describeInstallDirAclPoison', () => {
   })
 
   it('offers the copyable commands, and drops them once the repair lands', async () => {
-    await probeThenRecover((target) => icaclsDacl(target, [ORPHAN_PACKAGE_ACE]))
+    await probeThenRecover(() => [ORPHAN_PACKAGE_ACE])
     const repaired = describeInstallDirAclPoison()
     expect(repaired?.detail).toContain('Orca repaired the permissions')
     expect(repaired?.detail).not.toContain('Administrator Command Prompt')
@@ -180,7 +163,7 @@ describe('describeInstallDirAclPoison', () => {
   })
 
   it('walks a standard user through icacls when the repair could not write', async () => {
-    await probeThenRecover((target) => icaclsDacl(target, [ORPHAN_PACKAGE_ACE]), {
+    await probeThenRecover(() => [ORPHAN_PACKAGE_ACE], {
       failRepair: true
     })
     const failed = describeInstallDirAclPoison()
@@ -190,7 +173,7 @@ describe('describeInstallDirAclPoison', () => {
 
   it('reports the repair as in flight before icacls has answered', () => {
     startWindowsInstallDirAclRepairIfPoisoned(
-      { status: 'ok', matchesPoisonSignature: true, wellKnownNameCheckReliable: true },
+      { status: 'ok', matchesPoisonSignature: true },
       {
         platform: 'win32',
         installDir: INSTALL_DIR,
@@ -206,8 +189,7 @@ describe('describeInstallDirAclPoison', () => {
 
 const POISON_VERDICT: CrashReportBreadcrumbData = {
   status: 'ok',
-  matchesPoisonSignature: true,
-  wellKnownNameCheckReliable: true
+  matchesPoisonSignature: true
 }
 const GPU_ENV = { appVersion: APP_VERSION, electronVersion: '43.4.1', platform: 'win32' } as const
 
@@ -897,7 +879,7 @@ describe('the probe-pending grace window', () => {
       platform: 'win32' as const,
       installDir: INSTALL_DIR,
       fileExists: () => false,
-      spawnFn: fakeIcaclsSpawn((target) => icaclsDacl(target, [RESTRICTED_PACKAGES_ACE])).spawnFn,
+      spawnFn: fakeIcaclsSpawn(() => [RESTRICTED_PACKAGES_ACE]).spawnFn,
       recordBreadcrumb: () => undefined
     }
     let settleVerdict: () => void = () => undefined

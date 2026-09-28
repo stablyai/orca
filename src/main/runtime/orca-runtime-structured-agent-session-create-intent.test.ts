@@ -59,7 +59,33 @@ describe('structured agent-session create intent', () => {
       variable: 'CODEX_HOME',
       path: '/accounts/selected/home'
     })
-    expect(intent.options).toEqual({ model: 'gpt-5.6-sol', effort: 'medium' })
+    expect(intent.options).toEqual({ model: 'gpt-5.6-sol', effort: 'medium', fastMode: 'true' })
+  })
+
+  it('resolves the record-less catalog account home read-only, never through launch preparation', async () => {
+    const prepareCodexStructuredLaunch = vi.fn(() => '/accounts/selected/home')
+    const resolveCodexStructuredLaunchHome = vi.fn(() => '/accounts/selected/home')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the account-home read only consumes getSettings from the store.
+    const store = {
+      getSettings: () => ({
+        agentDefaultEnv: { codex: { CODEX_HOME: '/configured/home' } }
+      })
+    } as never
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      prepareCodexStructuredLaunch,
+      resolveCodexStructuredLaunchHome
+    })
+
+    const accountHome = await runtime.resolveStructuredAgentAccountHome('codex')
+
+    // A read must not run launch preparation: no home sync, no session bridge,
+    // no cleared account selection — the read-only sibling answers instead.
+    expect(prepareCodexStructuredLaunch).not.toHaveBeenCalled()
+    expect(resolveCodexStructuredLaunchHome).toHaveBeenCalledWith({
+      workspacePath: '',
+      launchEnv: expect.objectContaining({ CODEX_HOME: '/configured/home' })
+    })
+    expect(accountHome).toEqual({ variable: 'CODEX_HOME', path: '/accounts/selected/home' })
   })
 
   it('pins the configured Claude launch home without Codex launch preparation', async () => {
@@ -116,7 +142,7 @@ describe('structured agent-session create intent', () => {
       variable: 'CLAUDE_CONFIG_DIR',
       path: '/configured/claude-home'
     })
-    expect(intent.options).toEqual({ model: 'opus', effort: 'high' })
+    expect(intent.options).toEqual({ model: 'opus', effort: 'high', fastMode: 'true' })
   })
 
   it('uses the managed Claude launch home before falling back to ~/.claude', async () => {

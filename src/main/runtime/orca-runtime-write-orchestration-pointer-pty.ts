@@ -28,7 +28,6 @@ export class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWith
     return writeOrchestrationPointerWithSettlement({
       ptyId,
       data,
-      admissionByPtyId: this.orchestrationPointerAdmissionByPtyId,
       controller: this.ptyController
     })
   }

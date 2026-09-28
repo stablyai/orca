@@ -264,51 +264,59 @@ describe('registerWorktreeHandlers', () => {
     expect(store.removeWorktreeLineage).not.toHaveBeenCalled()
   })
 
-  it('cancels an SSH provider request by sender-scoped provider request ID', async () => {
-    let providerSignal: AbortSignal | undefined
-    const provider = {
-      listWorktrees: vi.fn(
-        (_repoPath: string, options?: { signal?: AbortSignal }) =>
-          new Promise<GitWorktreeInfo[]>((_resolve, reject) => {
-            providerSignal = options?.signal
-            providerSignal?.addEventListener(
-              'abort',
-              () => reject(new DOMException('Canceled', 'AbortError')),
-              { once: true }
-            )
-          })
-      )
-    }
-    const sshRepo = {
-      id: 'repo-1',
-      path: '/remote/repo',
-      displayName: 'repo',
-      badgeColor: '#000',
-      addedAt: 0,
-      connectionId: 'target-a'
-    }
-    store.getRepos.mockReturnValue([sshRepo])
-    getSshGitProviderMock.mockReturnValue(provider)
+  it.each(['cancel', 'did-navigate', 'render-process-gone', 'destroyed'])(
+    'cancels an SSH provider request on %s',
+    async (eventName) => {
+      let providerSignal: AbortSignal | undefined
+      const provider = {
+        listWorktrees: vi.fn(
+          (_repoPath: string, options?: { signal?: AbortSignal }) =>
+            new Promise<GitWorktreeInfo[]>((_resolve, reject) => {
+              providerSignal = options?.signal
+              providerSignal?.addEventListener(
+                'abort',
+                () => reject(new DOMException('Canceled', 'AbortError')),
+                { once: true }
+              )
+            })
+        )
+      }
+      const sshRepo = {
+        id: 'repo-1',
+        path: '/remote/repo',
+        displayName: 'repo',
+        badgeColor: '#000',
+        addedAt: 0,
+        connectionId: 'target-a'
+      }
+      store.getRepos.mockReturnValue([sshRepo])
+      getSshGitProviderMock.mockReturnValue(provider)
 
-    const pending = handlers['worktrees:listDetected'](ipcEvent, {
-      providerRequestId: 'request-1' as ProviderRequestId,
-      repoId: sshRepo.id,
-      executionHostId: toSshExecutionHostId('target-a'),
-      expectedAuthority: getSshProviderAuthority('target-a')
-    })
-    await Promise.resolve()
-    handlers['worktrees:cancelListDetected'](ipcEvent, {
-      providerRequestId: 'request-1' as ProviderRequestId
-    })
+      const pending = handlers['worktrees:listDetected'](ipcEvent, {
+        providerRequestId: 'request-1' as ProviderRequestId,
+        repoId: sshRepo.id,
+        executionHostId: toSshExecutionHostId('target-a'),
+        expectedAuthority: getSshProviderAuthority('target-a')
+      })
+      await Promise.resolve()
+      if (eventName === 'cancel') {
+        handlers['worktrees:cancelListDetected'](ipcEvent, {
+          providerRequestId: 'request-1' as ProviderRequestId
+        })
+      } else {
+        ipcEvent.sender.emit(eventName)
+      }
 
-    expect(providerSignal?.aborted).toBe(true)
-    await expect(pending).resolves.toMatchObject({
-      status: 'canceled',
-      providerRequestId: 'request-1'
-    })
-    expect(store.setWorktreeMeta).not.toHaveBeenCalled()
-    expect(store.removeWorktreeLineage).not.toHaveBeenCalled()
-  })
+      expect(providerSignal?.aborted).toBe(true)
+      await expect(pending).resolves.toMatchObject({
+        status: 'canceled',
+        providerRequestId: 'request-1'
+      })
+      expect(store.setWorktreeMeta).not.toHaveBeenCalled()
+      expect(store.removeWorktreeLineage).not.toHaveBeenCalled()
+      expect(ipcEvent.sender.eventNames()).toEqual([])
+    }
+  )
 
   it('settles a noncooperative SSH provider at the main-owned deadline and cleans up', async () => {
     vi.useFakeTimers()

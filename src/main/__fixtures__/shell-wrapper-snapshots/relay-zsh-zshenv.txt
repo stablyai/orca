@@ -51,8 +51,8 @@ __orca_deferred_init() {
     # their normal argv shape.
     __orca_omp_should_skip_extension() {
       case "${1:-}" in
-        help|--help|-h|--version|-v) return 0 ;;
-        __complete|acp|agents|auth-broker|auth-gateway|bench|commit|completions|config|dry-balance|gallery|grep|grievances|install|join|models|plugin|read|say|search|setup|shell|ssh|stats|tiny-models|token|ttsr|update|usage|worktree|q|wt) return 0 ;;
+        'help'|'--help'|'-h'|'--version'|'-v') return 0 ;;
+        '__complete'|'acp'|'agents'|'auth-broker'|'auth-gateway'|'bench'|'commit'|'completions'|'config'|'dry-balance'|'gallery'|'grep'|'grievances'|'install'|'join'|'models'|'plugin'|'read'|'say'|'search'|'setup'|'shell'|'ssh'|'stats'|'tiny-models'|'token'|'ttsr'|'update'|'usage'|'worktree'|'q'|'wt') return 0 ;;
       esac
       return 1
     }

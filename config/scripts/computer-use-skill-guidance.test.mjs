@@ -12,14 +12,23 @@ const stubPath = join(projectDir, 'skills', 'computer-use', 'SKILL.md')
 const bundledGuide = BUNDLED_SKILL_GUIDES.find((guide) => guide.name === 'computer-use')?.markdown
 
 describe('computer-use skill guidance', () => {
-  it('keeps discovery scoped to desktop control and out of the embedded browser', () => {
+  it('keeps discovery scoped to last-resort GUI and out of the embedded browser', () => {
     const frontmatter = /^---\n([\s\S]*?)\n---\n/u.exec(readFileSync(guidePath, 'utf8'))?.[1] ?? ''
     const description = frontmatter.replace(/\s+/gu, ' ')
 
-    expect(description).toContain('OS/window-level inspection and input')
-    expect(description).toContain('external browser window')
-    expect(description).toContain("Not for Orca's embedded browser (use `orca-cli`)")
-    expect(description).toContain('page-only automation (use Playwright or CDP)')
+    expect(description).toContain('Drives the GUI of a visible local app window')
+    expect(description).toContain(
+      'Prefer a programmatic path (shell, filesystem, git, HTTP, existing CLIs) whenever it can complete the task.'
+    )
+    expect(description).toContain(
+      'Use only when a visible window needs GUI control those cannot reach.'
+    )
+    expect(description).toContain('external browser windows')
+    expect(description).toContain("Do not use for Orca's embedded browser (`orca-cli`)")
+    expect(description).not.toMatch(/Playwright/iu)
+    expect(description).not.toContain('page-only')
+    expect(description).not.toContain('OS/window-level')
+    expect(description).not.toContain('Desktop or Documents')
     expect(description).not.toContain('read Slack')
     expect(description).not.toContain('get app state')
   })
@@ -27,8 +36,15 @@ describe('computer-use skill guidance', () => {
   it('keeps web-app targeting on the computer-use surface', () => {
     const skill = readFileSync(guidePath, 'utf8')
 
-    expect(skill).toContain('Use this skill for desktop UI through `orca computer`')
-    expect(skill).toContain('external desktop browser window that needs desktop-level control')
+    expect(skill).toContain('Use this skill to drive a visible app window through `orca computer`')
+    expect(skill).toContain(
+      'Prefer a programmatic path (shell, filesystem, git, HTTP, existing CLIs) whenever it can complete the task'
+    )
+    expect(skill).toContain(
+      'use this skill only when a visible window needs GUI control those cannot reach'
+    )
+    expect(skill).toContain('browser windows (Chrome, Edge, Safari)')
+    expect(skill).not.toMatch(/Playwright/iu)
     expect(skill).not.toMatch(/\borca goto\b/iu)
     expect(skill).not.toMatch(/\borca snapshot\b/iu)
     expect(skill).not.toMatch(/\borca click\b/iu)

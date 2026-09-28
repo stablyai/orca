@@ -10,6 +10,7 @@ import type {
   TranscriptSessionIdentity
 } from './session-transcript-consumers'
 import type { SessionSidecarObservation } from './session-sidecar-stat'
+import type { OpenCodeWslRuntime } from './session-scanner-opencode-wsl-runtime'
 
 export type AiVaultScanOptions = {
   claudeProjectsDir?: string
@@ -19,6 +20,7 @@ export type AiVaultScanOptions = {
   // (codexHome null → unprefixed resume) is testable without the user's home.
   defaultCodexHomeDir?: string
   wslHomeDirs?: readonly string[]
+  wslOpenCodeReaders?: readonly OpenCodeWslRuntime[]
   geminiSessionsDir?: string
   antigravityBrainDir?: string
   copilotSessionsDir?: string
@@ -27,6 +29,8 @@ export type AiVaultScanOptions = {
   // Why: OpenCode 1.17.x stores sessions in SQLite; tests inject a temp DB
   // here so they don't depend on the real ~/.local/share/opencode.
   opencodeDbPaths?: readonly string[]
+  /** Test override for the ZCode CLI's OpenCode-shaped SQLite database. */
+  zcodeDbPath?: string
   grokSessionsDir?: string
   devinTranscriptsDir?: string
   hermesSessionsDir?: string
@@ -40,11 +44,12 @@ export type AiVaultScanOptions = {
   droidProjectsDir?: string
   clineSessionsDir?: string
   kimiSessionsDir?: string
+  museSessionsDir?: string
   limit?: number
   unlimited?: boolean
   limitPerAgent?: number
   // Active workspace/project paths whose sessions must be included regardless of
-  // the recency cap (see discoverInScopeClaudeFiles).
+  // the recency cap (see discoverInScopeCwdBucketFiles).
   scopePaths?: readonly string[]
   platform?: NodeJS.Platform
   executionHostId?: ExecutionHostId

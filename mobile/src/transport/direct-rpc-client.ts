@@ -72,7 +72,7 @@ export class DirectRpcClient implements RpcClient {
     })
     this.liveness = new RpcSessionLivenessWatchdog({
       transport: 'direct',
-      sendProbe: (identity) => this.sendLivenessProbe(identity),
+      sendProbe: (identity) => identity === this.livenessSession && this.sendLivenessProbe(),
       terminate: (identity) => {
         if (identity === this.livenessSession && this.socketSession === this.livenessSession) {
           this.socketClose.forceClose(this.livenessSession)
@@ -297,8 +297,8 @@ export class DirectRpcClient implements RpcClient {
     return false
   }
 
-  private sendLivenessProbe(identity: object): boolean {
-    if (identity !== this.livenessSession || this.getState() !== 'connected') {
+  private sendLivenessProbe(): boolean {
+    if (this.getState() !== 'connected') {
       return false
     }
     return this.sendEncrypted({

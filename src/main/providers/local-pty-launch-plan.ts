@@ -1,4 +1,5 @@
 import { win32 as pathWin32 } from 'node:path'
+import { canUseBunPty } from '../daemon/pty-subprocess/bun-pty-process-capabilities'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
 import { resolveWindowsGitBashShellPath } from '../git-bash'
@@ -76,7 +77,9 @@ function finalizeLocalPtyLaunchPlan(
     windowsFallbackAttempts?: ReturnType<typeof buildWindowsPowerShellSpawnAttempts>
   }
 ): LocalPtyLaunchPlan {
-  ensureNodePtySpawnHelperExecutable()
+  if (!canUseBunPty()) {
+    ensureNodePtySpawnHelperExecutable()
+  }
   if (seed.args.prevalidatedCwd !== shell.validationCwd) {
     validateWorkingDirectory(shell.validationCwd)
   }
@@ -237,10 +240,20 @@ export function createLocalPtyLaunchPlan(
   if (process.platform === 'win32') {
     return createWindowsLocalPtyLaunchPlan(seed, getOptions)
   }
-  const shellPath = args.env?.SHELL || process.env.SHELL || '/bin/zsh'
+  const shellPath =
+    args.shellOverride ||
+    getOptions().getDefaultShell?.()?.trim() ||
+    args.env?.SHELL ||
+    process.env.SHELL ||
+    '/bin/zsh'
   return finalizeLocalPtyLaunchPlan(seed, {
     shellPath,
-    shellArgs: ['-l'],
+    // Why: shellOverride here is already resolved from the setting, so it cannot
+    // distinguish a one-off shell pick; the spawn path only sends args for the profile.
+    shellArgs:
+      !args.command && !args.launchAgent && args.terminalShellArgs !== undefined
+        ? args.terminalShellArgs
+        : ['-l'],
     effectiveCwd: cwd,
     validationCwd: cwd
   })

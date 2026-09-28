@@ -1,13 +1,16 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { test } from 'node:test'
-import { operateRelayAsiaAdmission } from './operate-relay-asia-admission.mjs'
+import {
+  operateRelayAsiaAdmission,
+  parseRelayAsiaAdmissionArguments
+} from './operate-relay-asia-admission.mjs'
 
 const digest = `sha256:${'a'.repeat(64)}`
 const membershipDigest = (membership) =>
   createHash('sha256').update(JSON.stringify(membership)).digest('hex')
 
-function harness(initialSelector) {
+function harness(initialSelector, runtimeDigests = {}) {
   const initialMembership = structuredClone(initialSelector.membership)
   let selector = structuredClone(initialSelector)
   const intents = new Map()
@@ -23,7 +26,7 @@ function harness(initialSelector) {
         cellId: `production-gce-${cell}`,
         cellUrl: parsed.origin,
         region: 'asia-east2',
-        imageDigest: digest,
+        imageDigest: runtimeDigests[`production-gce-${cell}`] ?? digest,
         draining: false,
         connectionCapacity: { hardCap: 3_000, unobservedBound: 60 }
       }
@@ -509,4 +512,137 @@ test('requires the C27 canary before promoting C28 and C29', async () => {
     cells: ['production-gce-c28', 'production-gce-c29'], expectedGeneration: 8,
     imageDigest: digest, attemptId: 'asia_wave_before_canary', token: 'not-logged'
   }, subject), /C27 canary/)
+})
+
+const launchCells = ['production-gce-c27', 'production-gce-c28', 'production-gce-c29']
+
+function admissionArguments(environment, mode, cellIds) {
+  return [
+    '--environment', environment, '--mode', mode, '--cell-ids', cellIds,
+    '--image-digest', digest, '--expected-generation', '9', '--attempt-id', 'asia_wave_9'
+  ]
+}
+
+test('accepts only reviewed Asia admission waves', () => {
+  const accepted = [
+    ['inspect', 'production-gce-c27,production-gce-c28,production-gce-c29'],
+    ['inspect', 'production-gce-c27,production-gce-c28,production-gce-c29,production-gce-c30'],
+    ['inspect', 'production-gce-c30'],
+    ['verify', 'production-gce-c27,production-gce-c28,production-gce-c29'],
+    ['verify', 'production-gce-c30'],
+    ['initialize', 'production-gce-c27,production-gce-c28,production-gce-c29'],
+    ['register', 'production-gce-c27,production-gce-c28,production-gce-c29'],
+    ['register', 'production-gce-c30'],
+    ['registered', 'production-gce-c30'],
+    ['promote', 'production-gce-c27'],
+    ['promote', 'production-gce-c28,production-gce-c29'],
+    ['promote', 'production-gce-c30'],
+    ['recover-promotion', 'production-gce-c30'],
+    ['rollback', 'production-gce-c27'],
+    ['rollback', 'production-gce-c28,production-gce-c29'],
+    ['rollback', 'production-gce-c30'],
+    ['rollback', 'production-gce-c27,production-gce-c28,production-gce-c29'],
+    ['rollback', 'production-gce-c27,production-gce-c28,production-gce-c29,production-gce-c30']
+  ]
+  for (const [mode, cellIds] of accepted) {
+    assert.deepEqual(
+      parseRelayAsiaAdmissionArguments(admissionArguments('production', mode, cellIds)).cells,
+      cellIds.split(','),
+      `${mode} ${cellIds}`
+    )
+  }
+  const rejected = [
+    ['initialize', 'production-gce-c30'],
+    ['initialize', 'production-gce-c27,production-gce-c28,production-gce-c29,production-gce-c30'],
+    ['register', 'production-gce-c27,production-gce-c28,production-gce-c29,production-gce-c30'],
+    ['register', 'production-gce-c29,production-gce-c30'],
+    ['registered', 'production-gce-c27,production-gce-c28,production-gce-c29,production-gce-c30'],
+    ['verify', 'production-gce-c27,production-gce-c30'],
+    ['promote', 'production-gce-c27,production-gce-c30'],
+    ['promote', 'production-gce-c28,production-gce-c29,production-gce-c30'],
+    ['promote', 'production-gce-c31'],
+    ['rollback', 'production-gce-c27,production-gce-c30'],
+    ['rollback', 'production-gce-c28,production-gce-c29,production-gce-c30'],
+    ['rollback', 'production-gce-c29'],
+    ['register', 'staging-gce-c4']
+  ]
+  for (const [mode, cellIds] of rejected) {
+    assert.throws(
+      () => parseRelayAsiaAdmissionArguments(admissionArguments('production', mode, cellIds)),
+      /--cell-ids/,
+      `${mode} ${cellIds}`
+    )
+  }
+  assert.deepEqual(
+    parseRelayAsiaAdmissionArguments(admissionArguments('staging', 'promote', 'staging-gce-c4')).cells,
+    ['staging-gce-c4']
+  )
+  assert.throws(
+    () => parseRelayAsiaAdmissionArguments(admissionArguments('staging', 'promote', 'production-gce-c30')),
+    /--cell-ids are invalid/
+  )
+})
+
+test('registers C30 alone beside the general launch cells', async () => {
+  const subject = harness({
+    generation: 9,
+    membership: { existingOnly: [], migrationOnly: [], general: [...launchCells] }
+  })
+  const result = await operateRelayAsiaAdmission({
+    environment: 'production', mode: 'register', cells: ['production-gce-c30'],
+    expectedGeneration: 9, imageDigest: digest, attemptId: 'asia_register_c30', token: 'not-logged'
+  }, subject)
+  const request = subject.requests.find(({ path }) => path.endsWith('/add-migration-cells'))
+  assert.deepEqual(request.body.cells, [{
+    cellId: 'production-gce-c30', cellUrl: 'https://c30.relay.onorca.dev', region: 'asia-east2',
+    capacityRequests: 6_000, connectionHardCap: 3_000, connectionUnobservedBound: 60
+  }])
+  assert.deepEqual(result.states, { 'production-gce-c30': 'migration-only' })
+  assert.deepEqual(subject.selector().membership.general, launchCells)
+})
+
+test('requires the C27 canary to be general before promoting C30', async () => {
+  const selector = (general) => ({
+    generation: 10,
+    membership: {
+      existingOnly: [],
+      migrationOnly: ['production-gce-c30', ...launchCells.filter((cell) => !general.includes(cell))].sort(),
+      general
+    }
+  })
+  const config = {
+    environment: 'production', mode: 'promote', cells: ['production-gce-c30'],
+    expectedGeneration: 10, imageDigest: digest, attemptId: 'asia_promote_c30', token: 'not-logged'
+  }
+  await assert.rejects(
+    operateRelayAsiaAdmission(config, harness(selector(['production-gce-c28', 'production-gce-c29']))),
+    /C27 canary/
+  )
+  await assert.rejects(
+    operateRelayAsiaAdmission(config, harness(selector(['production-gce-c27', 'production-gce-c29']))),
+    /every launch cell to be general/
+  )
+  const subject = harness(selector([...launchCells]))
+  const result = await operateRelayAsiaAdmission(config, subject)
+  assert.deepEqual(result.states, { 'production-gce-c30': 'general' })
+  assert.equal(subject.requests.filter(({ path }) => path === '/v1/admin/cell-status').length, 1)
+})
+
+test('promotes C30 on its own digest while the launch cells serve another', async () => {
+  const c30Digest = `sha256:${'b'.repeat(64)}`
+  const selector = {
+    generation: 10,
+    membership: { existingOnly: [], migrationOnly: ['production-gce-c30'], general: [...launchCells] }
+  }
+  const config = {
+    environment: 'production', mode: 'promote', cells: ['production-gce-c30'],
+    expectedGeneration: 10, imageDigest: c30Digest, attemptId: 'asia_promote_c30', token: 'not-logged'
+  }
+  const digests = { 'production-gce-c30': c30Digest }
+  const result = await operateRelayAsiaAdmission(config, harness(selector, digests))
+  assert.deepEqual(result.states, { 'production-gce-c30': 'general' })
+  await assert.rejects(
+    operateRelayAsiaAdmission({ ...config, imageDigest: digest }, harness(selector, digests)),
+    /production-gce-c30 runtime does not match/
+  )
 })

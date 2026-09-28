@@ -270,7 +270,6 @@ describe('codex journal translation', () => {
         kind: 'approval',
         resolution: expect.objectContaining({ state: 'cancelled' })
       }),
-      { kind: 'status', text: 'Provider exited: lost child' },
       expect.objectContaining({ kind: 'turn', turnId: TURN_ID, state: 'interrupted' })
     ])
     expect(publishes).toHaveLength(2)
@@ -343,9 +342,6 @@ describe('codex journal translation', () => {
           })
         }),
         expect.objectContaining({
-          body: { kind: 'status', text: 'Provider exited: lost child' }
-        }),
-        expect.objectContaining({
           kind: 'item',
           body: expect.objectContaining({ kind: 'turn', turnId: TURN_ID, state: 'interrupted' })
         })
@@ -416,11 +412,7 @@ describe('codex journal translation', () => {
           `provider-exit:${SESSION_ID}:7:generation-1:${index + 1}/${batches.length}`
       )
     )
-    expect(flattened).toHaveLength(122)
-    expect(flattened.at(-2)).toMatchObject({
-      kind: 'item',
-      body: { kind: 'status', text: 'Provider exited: lost child' }
-    })
+    expect(flattened).toHaveLength(121)
     expect(flattened.at(-1)).toMatchObject({
       kind: 'item',
       body: { kind: 'turn', state: 'interrupted' }

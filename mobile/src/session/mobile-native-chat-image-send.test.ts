@@ -26,6 +26,42 @@ function clientWithResponses(responses: RpcResponse[]): Pick<RpcClient, 'sendReq
 }
 
 describe('pasteMobileNativeChatImagePaths', () => {
+  it.each([false, true])(
+    'separates OMP references with following text: %s',
+    async (followedByText) => {
+      const client = clientWithResponses([sendResult(true), sendResult(true), sendResult(true)])
+      await pasteMobileNativeChatImagePaths({
+        client,
+        terminal: 'term-1',
+        agent: 'omp',
+        deviceToken: null,
+        imagePaths: ['/tmp/a.png', '/tmp/b.png'],
+        followedByText
+      })
+      expect(client.calls.map((call) => call.params.text)).toEqual([
+        '\x15',
+        '\x1b[200~@/tmp/a.png\x1b[201~ ',
+        `\x1b[200~@/tmp/b.png\x1b[201~${followedByText ? ' ' : ''}`
+      ])
+    }
+  )
+
+  it.each(['omp', null, undefined])('sends portable references for %s', async (agent) => {
+    const client = clientWithResponses([sendResult(true), sendResult(true)])
+    await pasteMobileNativeChatImagePaths({
+      client,
+      terminal: 'term-1',
+      agent,
+      deviceToken: null,
+      imagePaths: ['/tmp/my image.png'],
+      followedByText: true
+    })
+    expect(client.calls[1]?.params).toMatchObject({
+      text: '\x1b[200~@"/tmp/my image.png"\x1b[201~ ',
+      enter: false
+    })
+  })
+
   it('clears the input line, then pastes each path as a bracketed, non-submitting terminal.send with the mobile client tag', async () => {
     const client = clientWithResponses([
       sendResult(true),
@@ -36,6 +72,7 @@ describe('pasteMobileNativeChatImagePaths', () => {
 
     const ok = await pasteMobileNativeChatImagePaths({
       client,
+      agent: 'claude',
       terminal: 'term-1',
       deviceToken: 'device-9',
       imagePaths: ['/tmp/a.png', '/tmp/b.png', '/tmp/c.png'],
@@ -65,6 +102,7 @@ describe('pasteMobileNativeChatImagePaths', () => {
 
     const ok = await pasteMobileNativeChatImagePaths({
       client,
+      agent: 'claude',
       terminal: 'term-1',
       deviceToken: null,
       imagePaths: ['/tmp/a.png', '/tmp/b.png'],
@@ -94,6 +132,7 @@ describe('pasteMobileNativeChatImagePaths', () => {
 
       const ok = await pasteMobileNativeChatImagePaths({
         client,
+        agent: 'claude',
         terminal: 'term-1',
         deviceToken: null,
         imagePaths: ['/tmp/a.png', '/tmp/b.png'],
@@ -121,6 +160,7 @@ describe('clearing a parked multi-line launch draft before the image paste', () 
 
     await pasteMobileNativeChatImagePaths({
       client,
+      agent: 'claude',
       terminal: 'term-1',
       deviceToken: null,
       imagePaths: ['/tmp/a.png'],
@@ -138,6 +178,7 @@ describe('clearing a parked multi-line launch draft before the image paste', () 
 
     await pasteMobileNativeChatImagePaths({
       client,
+      agent: 'claude',
       terminal: 'term-1',
       deviceToken: null,
       imagePaths: ['/tmp/a.png', '/tmp/b.png'],
@@ -154,6 +195,7 @@ describe('clearing a parked multi-line launch draft before the image paste', () 
 
     await pasteMobileNativeChatImagePaths({
       client,
+      agent: 'claude',
       terminal: 'term-1',
       deviceToken: null,
       imagePaths: ['/tmp/a.png'],
@@ -168,6 +210,7 @@ describe('clearing a parked multi-line launch draft before the image paste', () 
 
     await pasteMobileNativeChatImagePaths({
       client,
+      agent: 'claude',
       terminal: 'term-1',
       deviceToken: null,
       imagePaths: ['/tmp/a.png', '/tmp/b.png'],

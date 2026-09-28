@@ -32,7 +32,9 @@ const CENSUS: CensusEntry[] = [
   // only the one or two cell rows they touch, in cell_id order (lockCellRows),
   // so they cannot cycle with placement's ordered inventory lock, and the
   // 23-row lock there had serialised every reconnect in the fleet behind every
-  // other one.
+  // other one. The control accept path went one step further and takes no cell
+  // read lock at all: its single conditional write is the last statement before
+  // COMMIT.
   { method: 'startEvacuation', mode: 'request', reach: 'request' },
   { method: 'completeEvacuationFromDeadSourceOnce', mode: 'request', reach: 'request' },
   { method: 'completeEvacuationFromDeadSourceOnce', mode: 'nowait', reach: 'request' },
@@ -43,9 +45,13 @@ const CENSUS: CensusEntry[] = [
   { method: 'completeEvacuation', mode: 'nowait', reach: 'both' },
   { method: 'completeEvacuation', mode: 'pool-default', reach: 'both' },
   { method: 'rebalanceDormant', mode: 'request', reach: 'request' },
-  { method: 'startRegionalRehomeCandidate', mode: 'nowait', reach: 'request' },
+  // startRegionalRehomeCandidate is gone: the rehome commit reads the inventory
+  // unlocked and locks only its target row, NOWAIT, as the statement before
+  // COMMIT (reserveRegionalRehomeTargetRow below).
   { method: 'completeRegionalRehomeCandidate', mode: 'nowait', reach: 'sweep' },
-  { method: 'abortExpiredRegionalRehomes', mode: 'nowait', reach: 'sweep' },
+  // Both regional-rehome abort sweeps share this rollback; only the 24-hour
+  // one also disables the durable switch.
+  { method: 'rollBackStalledRegionalRehomes', mode: 'nowait', reach: 'sweep' },
   { method: 'abortExpiredEvacuations', mode: 'nowait', reach: 'sweep' },
   { method: 'abortExpiredEvacuations', mode: 'nowait', reach: 'sweep' },
   { method: 'releaseExpiredActivityLeases', mode: 'nowait', reach: 'sweep' },
@@ -75,6 +81,7 @@ const INLINE_CELL_LOCK_SITES = [
   'attestCellFenceAttempt',
   'attestCellFenceAttempt',
   'configureCell',
+  'reserveRegionalRehomeTargetRow',
   'assertDrainCellGeneration',
   'adjustCellReservation'
 ]
@@ -172,6 +179,63 @@ function readCallSites(): { method: string; mode: CensusMode }[] {
   return sites
 }
 
+
+// Tier 3 and tier 4 of the row lock order documented in assignment-store.ts. A
+// transaction that takes relay_cells before this host's reservation rows can
+// cycle with one that takes them the other way round, and PostgreSQL resolves
+// that as a 40P01 during exactly the drain and rehome waves these paths exist
+// to run. The cell row is the one every host on a cell shares, so it is the
+// lock that must be taken last, which fixes the direction for everyone else.
+const CELL_LOCK_CALL =
+  /this\.(?:lockCellInventory|lockGeneralCellInventory|lockCellRows|adjustCellReservationAtomically|adjustCellReservation)\(|UPDATE relay_cells/
+const RESERVATION_LOCK_CALL =
+  /this\.(?:lockControlConnectionReservations|insertControlConnectionReservation|claimControlConnectionReservation|releaseSupersededControlConnectionReservations)\(|(?:UPDATE|INTO|DELETE FROM)\s+relay_control_connection_reservations/
+
+// The lock helpers themselves, plus the one reporting query that reads both
+// tables without locking either.
+const ROW_LOCK_ORDER_EXEMPT = [
+  'lockCellInventory',
+  'lockGeneralCellInventory',
+  'lockCellRows',
+  'lockControlConnectionReservations',
+  'adjustCellReservation',
+  'adjustCellReservationAtomically',
+  'insertControlConnectionReservation',
+  'claimControlConnectionReservation',
+  'releaseSupersededControlConnectionReservations',
+  'cellDeploymentStatus'
+]
+
+function methodSpans(lines: string[]): { name: string; start: number; end: number }[] {
+  const starts: { name: string; start: number }[] = []
+  lines.forEach((line, index) => {
+    const declaration = DECLARATION.exec(line)
+    if (declaration) starts.push({ name: declaration[1]!, start: index })
+  })
+  return starts.map((entry, index) => ({
+    ...entry,
+    end: starts[index + 1]?.start ?? lines.length
+  }))
+}
+
+function pathsTakingCellsBeforeReservations(lines: string[]): string[] {
+  const offending: string[] = []
+  for (const span of methodSpans(lines)) {
+    if (ROW_LOCK_ORDER_EXEMPT.includes(span.name)) continue
+    let cell = Number.POSITIVE_INFINITY
+    let reservation = Number.POSITIVE_INFINITY
+    for (let index = span.start; index < span.end; index++) {
+      const line = lines[index]!
+      if (CELL_LOCK_CALL.test(line)) cell = Math.min(cell, index)
+      if (RESERVATION_LOCK_CALL.test(line)) reservation = Math.min(reservation, index)
+    }
+    if (cell < reservation && reservation !== Number.POSITIVE_INFINITY) {
+      offending.push(span.name)
+    }
+  }
+  return offending
+}
+
 describe('cell inventory lock call-site census', () => {
   it('classifies every call site exactly as recorded', () => {
     expect(readCallSites()).toEqual(CENSUS.map(({ method, mode }) => ({ method, mode })))
@@ -211,6 +275,10 @@ describe('cell inventory lock call-site census', () => {
       rawSites.push(method)
     }
     expect(rawSites).toEqual(INLINE_CELL_LOCK_SITES)
+  })
+
+  it('takes the host reservation rows before the shared cell row everywhere', () => {
+    expect(pathsTakingCellsBeforeReservations(storeSource())).toEqual([])
   })
 
   it('leaves no call site taking the inventory without naming a mode', () => {

@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import './mock-descendant-sweep'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { PTY_STARTUP_INGRESS_VERSION } from '../shared/pty-startup-ingress'
 
@@ -147,6 +150,34 @@ describe('PtyHandler', () => {
     expect(dispatcher.notify).not.toHaveBeenCalledWith('pty.data', expect.anything())
     vi.advanceTimersByTime(8)
     expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', { id: PTY_1, data: 'hello world' })
+  })
+
+  it('publishes Freebuff host status without charging synthetic OSC bytes to the PTY', async () => {
+    let onData: ((data: string) => void) | undefined
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      onData: vi.fn((callback: (data: string) => void) => {
+        onData = callback
+      })
+    })
+    await dispatcher.callRequest('pty.spawn', { launchAgent: 'freebuff', cols: 120, rows: 40 })
+    const raw = readFileSync(
+      join(import.meta.dirname, '../main/runtime/__fixtures__/freebuff-trust.txt'),
+      'utf8'
+    )
+    onData!(raw)
+    vi.advanceTimersByTime(8)
+    expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
+      id: PTY_1,
+      data: expect.stringContaining('"state":"blocked"'),
+      rawLength: raw.length,
+      seq: raw.length,
+      transformed: true
+    })
+    dispatcher.notify.mockClear()
+    onData!('more output')
+    vi.advanceTimersByTime(8)
+    expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', { id: PTY_1, data: 'more output' })
   })
 
   it('consumes capable startup queries before relay replay and fanout', async () => {

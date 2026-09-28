@@ -1,3 +1,4 @@
+import { qoderHookService } from '../qoder/hook-service'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallStatus, AgentHookTarget } from '../../shared/agent-hook-types'
 import { ampHookService } from '../amp/hook-service'
@@ -13,6 +14,9 @@ import { droidHookService } from '../droid/hook-service'
 import { grokHookService } from '../grok/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
+import { dshHookService } from '../dsh/hook-service'
+import { museHookService } from '../muse/hook-service'
+import { zcodeHookService } from '../zcode/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 
 export type RemoteManagedHookInstallOptions = {
@@ -22,6 +26,8 @@ export type RemoteManagedHookInstallOptions = {
   deferTrustUntilConfigToml?: boolean
   /** Explicit GROK_HOME for remote runtimes that redirect Grok's config. */
   grokHomeDir?: string
+  /** Version reported by Claude on this execution host. */
+  claudeVersion?: string
   /** Stops before starting the next installer when the owning relay request
    *  is cancelled. Individual filesystem mutations remain atomic. */
   signal?: AbortSignal
@@ -40,7 +46,13 @@ type RemoteManagedHookInstaller = readonly [
 ]
 
 const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
-  ['claude', (sftp, remoteHome) => claudeHookService.installRemote(sftp, remoteHome)],
+  [
+    'claude',
+    (sftp, remoteHome, options) =>
+      claudeHookService.installRemote(sftp, remoteHome, {
+        claudeVersion: options?.claudeVersion
+      })
+  ],
   ['openclaude', (sftp, remoteHome) => openClaudeHookService.installRemote(sftp, remoteHome)],
   [
     'codex',
@@ -51,6 +63,7 @@ const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
       })
   ],
   ['gemini', (sftp, remoteHome) => geminiHookService.installRemote(sftp, remoteHome)],
+  ['qoder', (sftp, remoteHome) => qoderHookService.installRemote(sftp, remoteHome)],
   ['antigravity', (sftp, remoteHome) => antigravityHookService.installRemote(sftp, remoteHome)],
   ['amp', (sftp, remoteHome) => ampHookService.installRemote(sftp, remoteHome)],
   ['cursor', (sftp, remoteHome) => cursorHookService.installRemote(sftp, remoteHome)],
@@ -64,7 +77,10 @@ const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
   ['droid', (sftp, remoteHome) => droidHookService.installRemote(sftp, remoteHome)],
   ['hermes', (sftp, remoteHome) => hermesHookService.installRemote(sftp, remoteHome)],
   ['devin', (sftp, remoteHome) => devinHookService.installRemote(sftp, remoteHome)],
-  ['kimi', (sftp, remoteHome) => kimiHookService.installRemote(sftp, remoteHome)]
+  ['kimi', (sftp, remoteHome) => kimiHookService.installRemote(sftp, remoteHome)],
+  ['muse', (sftp, remoteHome) => museHookService.installRemote(sftp, remoteHome)],
+  ['zcode', (sftp, remoteHome) => zcodeHookService.installRemote(sftp, remoteHome)],
+  ['dsh', (sftp, remoteHome) => dshHookService.installRemote(sftp, remoteHome)]
 ]
 
 /** Agents wired into the remote (SSH) hook installer. Exported so an invariant

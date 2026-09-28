@@ -5,6 +5,7 @@
  * testable apart from the detection (what the verdict is).
  */
 import process from 'node:process'
+import { canUseBunPty } from '../daemon/pty-subprocess/bun-pty-process-capabilities'
 import { setRuntimeTerminalUnavailableCause } from '../runtime/native-terminal-availability'
 import { terminalUnavailableMessage } from '../../shared/runtime-types'
 import {
@@ -37,6 +38,10 @@ export type NativePreflightHooks = {
  * sentence printed here.
  */
 export function runOrcadNativePreflight(hooks: NativePreflightHooks = {}): boolean {
+  if (!hooks.check && canUseBunPty()) {
+    setRuntimeTerminalUnavailableCause(null)
+    return true
+  }
   const check = hooks.check ?? checkNodePtyPrecondition
   const warn = hooks.warn ?? ((message: string) => console.warn(message))
   const fail = hooks.fail ?? ((message: string) => console.error(message))

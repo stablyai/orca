@@ -95,7 +95,10 @@ export async function gcOldRemoteInstallVersions(
       host,
       listRemoteInstallBaseDirsCommand(host, baseDir, model)
     )
-  } catch {
+  } catch (err) {
+    if (isUnconfirmedSshCommandTermination(err)) {
+      throw err
+    }
     return
   }
   const entries = listing
@@ -169,6 +172,9 @@ export async function gcOldRemoteInstallVersions(
       }
       removed.push(name)
     } catch (err) {
+      if (isUnconfirmedSshCommandTermination(err)) {
+        throw err
+      }
       console.warn(
         `[${model.id}] GC failed for ${dir}: ${err instanceof Error ? err.message : String(err)}`
       )
@@ -198,7 +204,10 @@ async function isCandidateSafeToRemove(
   let lockProbe: string
   try {
     lockProbe = await execHostCommand(conn, host, probeInstallLockExistsCommand(host, lockDir))
-  } catch {
+  } catch (err) {
+    if (isUnconfirmedSshCommandTermination(err)) {
+      throw err
+    }
     return false
   }
   const lockState = lockProbe.trim()
@@ -224,7 +233,12 @@ async function isCandidateSafeToRemove(
       conn,
       host,
       probeFileExistsCommand(host, completePath)
-    ).catch(() => 'PARTIAL')
+    ).catch((err) => {
+      if (isUnconfirmedSshCommandTermination(err)) {
+        throw err
+      }
+      return 'PARTIAL'
+    })
     if (completeProbe.trim() !== 'COMPLETE') {
       // Crashed-install partial; leave for the next deploy to recover.
       return false
@@ -263,7 +277,11 @@ export async function gcOldRelayVersions(
   if (options?.nativeDepsCacheKeys?.length) {
     await gcRelayNativeDepsCache(conn, host, remoteHome, {
       pinnedKeys: options.nativeDepsCacheKeys
-    }).catch(() => {})
+    }).catch((err) => {
+      if (isUnconfirmedSshCommandTermination(err)) {
+        throw err
+      }
+    })
   }
 }
 
@@ -294,7 +312,10 @@ async function hasLiveRelaySocket(
     )
     const state = out.trim()
     return state !== 'DEAD' && state !== 'WAITING'
-  } catch {
+  } catch (err) {
+    if (isUnconfirmedSshCommandTermination(err)) {
+      throw err
+    }
     // Why: an inconclusive liveness probe must never authorize deletion.
     return true
   }

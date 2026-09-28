@@ -2,6 +2,7 @@ import { agentTypeToIconAgent } from '@/lib/agent-status'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import { replayIntoTerminal } from '../replay-guard'
+import { flushTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { POST_REPLAY_REATTACH_RESET } from '../../../../../shared/terminal-mode-reset-profiles'
 import {
   isLocalNativeWindowsConpty,
@@ -170,10 +171,21 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     publish: (entry) => useAppStore.getState().setPaneForegroundAgent(session.cacheKey, entry),
     hasKnownAgentIdentity: session.paneHasKnownAgentIdentity,
     onConfirmedShellForeground: (reason) => {
+      // Why: a confirmed local shell proves any hibernation record for this pane is stale;
+      // otherwise the tab resolver can repaint the exited agent from sleeping occupancy.
+      const state = useAppStore.getState()
+      const sleepingRecord = session.getSleepingRecordForPane(state)
+      if (sleepingRecord) {
+        session.clearSleepingRecordProviderDuplicates(state, sleepingRecord)
+      }
       session.clearStaleAgentTabTitleOnConfirmedShell()
       // Why: a hard-killed agent leaves mouse/focus/kitty modes armed, and the
       // surviving shell then receives pointer moves as typed SGR reports; the
       // replay guard keeps xterm's auto-replies from leaking to the shell.
+      // The input mirror scans the same bytes so shortcuts stop encoding for the dead app;
+      // draining queued output first keeps both in stream order.
+      flushTerminalOutput(session.pane.terminal)
+      session.kittyKeyboardModes.scan(POST_REPLAY_REATTACH_RESET)
       replayIntoTerminal(session.pane, session.deps.replayingPanesRef, POST_REPLAY_REATTACH_RESET, {
         breadcrumbIdentity: {
           tabId: session.deps.tabId,
@@ -183,7 +195,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
         shouldRefreshViewportSynchronously: session.shouldRefreshForegroundSynchronously
       })
       if (reason === 'visible-pty') {
-        useAppStore.getState().clearAgentLaunchConfig(session.cacheKey)
+        state.clearAgentLaunchConfig(session.cacheKey)
         return
       }
       session.settleDeferredCommandFinishedStatusDrop({ confirmedShell: true })

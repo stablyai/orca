@@ -28,7 +28,7 @@ import { useMobileNativeChatPinchGesture } from './use-mobile-native-chat-pinch-
 import { useMobileNativeChatTailFollow } from './use-mobile-native-chat-tail-follow'
 import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 import { useSettledMobileNativeChatInputLock } from './use-mobile-native-chat-input-lease'
-import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
+import { MobileNativeChatTurnActivity } from './MobileNativeChatTurnStatus'
 import { MobileAgentWorkingIndicator } from './MobileAgentWorkingIndicator'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import { MobileNativeChatComposer } from './MobileNativeChatComposer'
@@ -93,7 +93,7 @@ type Props = {
   isAttaching?: boolean
   onMicPress?: () => void
   micActive?: boolean
-  dictationMode?: 'toggle' | 'hold'
+  dictationMode?: string
   onMicPressIn?: () => void
   onMicPressOut?: () => void
   inputLockReason?: MobileNativeChatInputLockReason | null
@@ -122,6 +122,8 @@ type Props = {
    *  into selector keystrokes (Claude) or pasted label text (other agents). */
   onAnswerAsk?: (prompt: AskPrompt, selections: AskAnswerSelection[]) => Promise<boolean>
   onCancelAsk?: () => Promise<boolean>
+  /** Cancel a structured approval/question with exact item identity when supported. */
+  onCancelPrompt?: (prompt?: { itemId: string; expectedRevision: number }) => Promise<boolean>
   question?: MobileChatQuestion | null
   onAnswerQuestion?: (text: string) => Promise<boolean>
   permission?: MobileChatPermission | null
@@ -178,6 +180,7 @@ export function MobileNativeChatView({
   onDismissAsk,
   onAnswerAsk,
   onCancelAsk,
+  onCancelPrompt,
   question,
   onAnswerQuestion,
   permission,
@@ -266,6 +269,8 @@ export function MobileNativeChatView({
     activityText: turnIndicator?.activityText ?? null,
     scopeKey: sendSurfaceId
   })
+  const hasPendingStructuredInteraction =
+    structuredActivityUi && (ask != null || permission != null || question != null)
 
   const renderItem = useCallback(
     ({ item, index }: { item: NativeChatMessage; index: number }) => (
@@ -329,11 +334,12 @@ export function MobileNativeChatView({
                 ) : null
               }
               ListFooterComponent={
-                structuredActivityUi && agentWorking && turns.active ? (
-                  <MobileNativeChatTurnStatus
-                    startedAt={turns.active.startedAt}
+                structuredActivityUi &&
+                agentWorking &&
+                !hasPendingStructuredInteraction &&
+                turns.active ? (
+                  <MobileNativeChatTurnActivity
                     thinking={turns.active.thinking}
-                    workedSeconds={turns.active.workedSeconds}
                     activityText={turns.activeActivityText}
                   />
                 ) : null
@@ -366,6 +372,7 @@ export function MobileNativeChatView({
         onDismissAsk={onDismissAsk}
         onAnswerAsk={onAnswerAsk}
         onCancelAsk={onCancelAsk}
+        onCancelPrompt={onCancelPrompt}
         permission={permission}
         onRespondPermission={onRespondPermission}
         question={question}

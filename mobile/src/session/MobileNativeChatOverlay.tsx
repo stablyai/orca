@@ -16,7 +16,7 @@ type Props = {
   images: MobileNativeChatImageAttachments
   onMicPress: () => void
   micActive: boolean
-  dictationMode: 'toggle' | 'hold'
+  dictationMode: string | undefined
   onMicPressIn: () => void
   onMicPressOut: () => void
   inputLockReason: MobileNativeChatInputLockReason | null
@@ -83,6 +83,7 @@ export function MobileNativeChatOverlay({
         onDismissAsk={controller.dismissNativeChatAsk}
         onAnswerAsk={controller.handleNativeChatAnswerAsk}
         onCancelAsk={controller.handleNativeChatCancelAsk}
+        onCancelPrompt={controller.handleNativeChatCancelPrompt}
         question={controller.nativeChatQuestion}
         onAnswerQuestion={controller.handleNativeChatQuestionAnswer}
         permission={controller.nativeChatPermission}

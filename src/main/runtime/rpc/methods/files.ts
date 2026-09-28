@@ -7,6 +7,7 @@ import { limitQuickOpenSearchReplyBySerializedBytes } from '../../../../shared/q
 import { FileOpen, WorktreeSelector } from './files-target-schemas'
 import { FILE_TERMINAL_ARTIFACT_METHODS } from './files-terminal-artifact-methods'
 import {
+  FilePathsExist,
   DocPreviewFileRead,
   FileListAll,
   FileOpenDiff,
@@ -163,6 +164,12 @@ export const FILE_METHODS = [
     name: 'files.listMarkdownDocuments',
     params: WorktreeSelector,
     handler: async (params, { runtime }) => runtime.listRuntimeMarkdownDocuments(params.worktree)
+  }),
+  defineMethod({
+    name: 'files.pathsExist',
+    params: FilePathsExist,
+    handler: async (params, { runtime }) =>
+      runtime.pathsExistRuntimeFiles(params.worktree, params.relativePaths)
   }),
   defineMethod({
     name: 'files.stat',

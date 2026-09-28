@@ -1,6 +1,7 @@
 import { splitTranscriptStreamLines } from '../native-chat/transcript-stream-lines'
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
+import { MAX_SESSION_TRANSCRIPT_RECORD_BYTES } from './session-transcript-record-budget'
 
 export type RemoteSessionContent = string | AsyncIterable<string>
 
@@ -80,7 +81,10 @@ export async function* streamedSessionContentLines(
 ): AsyncGenerator<string> {
   let count = 0
   let chars = 0
-  for await (const record of splitTranscriptStreamLines(bytes)) {
+  for await (const record of splitTranscriptStreamLines(
+    bytes,
+    MAX_SESSION_TRANSCRIPT_RECORD_BYTES
+  )) {
     throwIfAiVaultScanCancelled(signal)
     const line =
       record.line.endsWith('\r') && (record.terminated || signal)

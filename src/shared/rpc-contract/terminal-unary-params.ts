@@ -1,6 +1,11 @@
 import { z } from 'zod'
 import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
 import { isTuiAgent } from '../tui-agent-config'
+import {
+  canonicalizeWindowsShellOverride,
+  isSupportedWindowsShellOverride,
+  listSupportedWindowsShellOverrides
+} from '../windows-terminal-shell'
 import { TERMINAL_PANE_SPLIT_SOURCES } from '../feature-education-telemetry'
 
 export const TerminalHandle = z.object({
@@ -168,6 +173,7 @@ export const TerminalCreateParams = z.object({
     .optional(),
   launchToken: OptionalString,
   launchAgent: z.string().refine(isTuiAgent).optional(),
+  terminalKittyKeyboardProtocol: z.boolean().optional(),
   terminalColorQueryReplies: z
     .object({
       foreground: z.string().max(128).optional(),
@@ -180,7 +186,18 @@ export const TerminalCreateParams = z.object({
   activate: z.unknown().optional(),
   presentation: z.enum(['background', 'focused']).optional(),
   tabId: OptionalString,
-  leafId: OptionalString
+  leafId: OptionalString,
+  // Why refused at the boundary rather than at spawn: only the host knows the allowlist, and a
+  // relay-side throw reaches the caller as an opaque spawn failure after the round trip.
+  shell: z
+    .string()
+    .refine(isSupportedWindowsShellOverride, {
+      message: `shell must be one of: ${listSupportedWindowsShellOverrides().join(', ')}`
+    })
+    // Why here: the host is authoritative, so it canonicalizes even when a client did not; the
+    // spawn path exact-matches `.exe` spellings and must never see `cmd` or `Git-Bash`.
+    .transform((shell) => canonicalizeWindowsShellOverride(shell) ?? shell)
+    .optional()
 })
 
 export const TerminalSplit = TerminalHandle.extend({
@@ -218,5 +235,6 @@ export const AgentTeamsTmuxCompat = z.object({
 
 export const AgentTeamsPrepareLaunch = z.object({
   paneKey: requiredString('Missing pane key'),
-  env: z.record(z.string(), z.string()).optional()
+  env: z.record(z.string(), z.string()).optional(),
+  prepareAuth: z.boolean().optional()
 })

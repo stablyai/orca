@@ -7,6 +7,7 @@ import {
   setRuntimeBrowserCommandsFactory,
   setRuntimeBrowserUnavailableCause
 } from '../runtime-browser-commands-factory'
+import { __cancelLegacyWorkerTerminalRecoveryRetriesForTests } from '../runtime-legacy-worker-terminal-recovery-controller'
 import { setRuntimeTerminalUnavailableCause } from '../native-terminal-availability'
 import { setRuntimeDesktopSurface } from '../runtime-desktop-surface'
 import { installFakeAppEnvironment } from '../../../../config/scripts/vitest-host-ports-setup'
@@ -48,7 +49,11 @@ import {
   getDefaultTabsLaunch,
   shouldRunSetupForCreate
 } from '../../effective-hook-config'
-import { getBaseRefDefault, getBranchConflictKind } from '../../git/repo'
+import {
+  getBaseRefDefault,
+  getBranchConflictKind,
+  resolveDefaultBaseRefWithLocalGit
+} from '../../git/repo'
 import { OrchestrationDb as RuntimeOrchestrationDb } from '../orchestration/db'
 import {
   AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
@@ -174,6 +179,8 @@ export const exportedBeforeEach = beforeEach
 export const exportedBeginWatcherInstall = beginWatcherInstall
 export const exportedBuildAgentPromptPasteBytes = buildAgentPromptPasteBytes
 export const exportedBuildPreview = buildPreview
+export const exportedCancelLegacyWorkerTerminalRecoveryRetriesForTests =
+  __cancelLegacyWorkerTerminalRecoveryRetriesForTests
 export const exportedClearConfiguredWorktreeSharedDirectoriesCacheForTests =
   clearConfiguredWorktreeSharedDirectoriesCacheForTests
 export const exportedClearSubmodulePathsCacheForTests = clearSubmodulePathsCacheForTests
@@ -248,3 +255,5 @@ export const exportedVi = vi
 export const exportedWin32 = win32
 export const exportedWorktreePathComparison = worktreePathComparison
 export const exportedWriteFile = writeFile
+
+export const exportedResolveDefaultBaseRefWithLocalGit = resolveDefaultBaseRefWithLocalGit

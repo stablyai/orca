@@ -70,21 +70,21 @@ describe('AutomationPromptDisclosure', () => {
   beforeEach(async () => {
     await i18n.changeLanguage('en')
     vi.stubGlobal('ResizeObserver', PromptResizeObserver)
-    vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(
-      function (this: HTMLElement) {
-        if (this.tagName !== 'P') {
-          return 0
-        }
-        return this.classList.contains('line-clamp-4')
-          ? Math.min(promptNaturalHeight, 80)
-          : promptNaturalHeight
+    vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function (
+      this: HTMLElement
+    ) {
+      if (this.tagName !== 'P') {
+        return 0
       }
-    )
-    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(
-      function (this: HTMLElement) {
-        return this.tagName === 'P' ? promptNaturalHeight : 0
-      }
-    )
+      return this.classList.contains('line-clamp-4')
+        ? Math.min(promptNaturalHeight, 80)
+        : promptNaturalHeight
+    })
+    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function (
+      this: HTMLElement
+    ) {
+      return this.tagName === 'P' ? promptNaturalHeight : 0
+    })
   })
 
   afterEach(async () => {

@@ -16,9 +16,12 @@ export type StructuredAgentTurnTiming = {
   state: AgentJournalTurnLifecycleState
   /** Host clock at provider turn-start receipt. */
   startedAt: number
+  /** Host clock at the send that opened the turn; absent when the host could not
+   *  name one (provider-resumed turns, replayed history, older hosts). */
+  requestedAt?: number
   /** Host clock at the terminal provider event; absent while running or unverifiable. */
   completedAt?: number
-  /** The provider's own measured duration; outranks the host interval. */
+  /** The provider's own measurement; used when exact host endpoints are unavailable. */
   durationMs?: number
   /** Host clock when the lifecycle row was appended; with `startedAt` it gives
    *  the host-side lag a client must subtract to anchor a live counter. */
@@ -30,10 +33,14 @@ function readTiming(item: AgentJournalRenderItem): StructuredAgentTurnTiming | n
   if (!turn) {
     return null
   }
-  const { state, startedAt, completedAt, durationMs } = turn
+  const { state, startedAt, requestedAt, completedAt, durationMs } = turn
   if (startedAt === undefined || !Number.isFinite(startedAt) || startedAt <= 0) {
     return null
   }
+  const requested =
+    requestedAt !== undefined && Number.isFinite(requestedAt) && requestedAt > 0
+      ? requestedAt
+      : undefined
   const end =
     completedAt !== undefined && Number.isFinite(completedAt) && completedAt >= startedAt
       ? completedAt
@@ -45,15 +52,16 @@ function readTiming(item: AgentJournalRenderItem): StructuredAgentTurnTiming | n
   return {
     state,
     startedAt,
+    ...(requested !== undefined ? { requestedAt: requested } : {}),
     ...(end !== undefined ? { completedAt: end } : {}),
     ...(measured !== undefined ? { durationMs: measured } : {}),
     observedAt: item.observedAt
   }
 }
 
-/** Timing keyed by the user message that opened each turn. A row names its
- *  user item by provider key; a submission the provider later acknowledged is
- *  reached through its alias. Rows from older hosts carry no key and fall back
+/** Timing keyed by the user message that opened each turn. A row can name the
+ *  submission directly or by a provider key that resolves through its alias.
+ *  Rows from older hosts carry no key and fall back
  *  to the nearest user message before them in journal order — the submission
  *  row is written ahead of dispatch, so it always precedes the provider's
  *  turn-start. Untimed rows are skipped unless explicitly unverifiable (null). */
@@ -107,6 +115,13 @@ export function selectStructuredAgentRunningTurnTiming(
   return null
 }
 
+/** The single instant every reading of a turn's elapsed time counts from: the
+ *  send that opened it when the host named one, the provider turn-open otherwise.
+ *  One origin is what keeps the live counter and the settled duration agreeing. */
+export function structuredAgentTurnOrigin(timing: StructuredAgentTurnTiming): number {
+  return timing.requestedAt ?? timing.startedAt
+}
+
 /** Whole seconds a settled turn ran, or null when the host never observed its end. */
 export function completedStructuredAgentTurnSeconds(
   timing: StructuredAgentTurnTiming | null | undefined
@@ -114,11 +129,15 @@ export function completedStructuredAgentTurnSeconds(
   if (!timing || (timing.state !== 'completed' && timing.state !== 'interrupted')) {
     return null
   }
+  // Provider durations may begin at turn-open, so exact host endpoints preserve the live origin.
+  if (timing.requestedAt !== undefined && timing.completedAt !== undefined) {
+    return Math.max(0, Math.floor((timing.completedAt - timing.requestedAt) / 1000))
+  }
   if (timing.durationMs !== undefined) {
     return Math.floor(timing.durationMs / 1000)
   }
   return timing.completedAt !== undefined
-    ? Math.floor((timing.completedAt - timing.startedAt) / 1000)
+    ? Math.max(0, Math.floor((timing.completedAt - structuredAgentTurnOrigin(timing)) / 1000))
     : null
 }
 
@@ -133,17 +152,21 @@ export function structuredAgentTurnLocalStartedAt(
   firstSeenAt: number,
   hostNow?: number
 ): number {
+  const origin = structuredAgentTurnOrigin(timing)
   const hostElapsed =
     hostNow !== undefined && Number.isFinite(hostNow)
-      ? hostNow - timing.startedAt
-      : timing.observedAt - timing.startedAt
+      ? hostNow - origin
+      : timing.observedAt - origin
+  // Wall-clock, not monotonic: an NTP step can put the origin after the host's
+  // own reading, and a negative elapsed would run the counter backwards.
   return firstSeenAt - Math.max(0, hostElapsed)
 }
 
 /** What a chat surface hands to the shared turn-status selector: every turn the
  *  host recorded, with its duration or null. A null still outranks the local
  *  clock, so a turn whose end the host never observed shows no duration on the
- *  surface that watched it, exactly as it will after a reload. */
+ *  surface that watched it, exactly as it will after a reload. A rejected send
+ *  never reached the provider, so it opened no turn and its message shows none. */
 export function selectStructuredAgentSettledTurns(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[] = []
@@ -157,6 +180,12 @@ export function selectStructuredAgentSettledTurns(
         ? null
         : { startedAt: timing.startedAt, workedSeconds }
     )
+  }
+  for (const submission of submissions) {
+    const userItemId = agentJournalSubmissionKey(submission.clientMessageId)
+    if (submission.dispatchState === 'rejected' && !settled.has(userItemId)) {
+      settled.set(userItemId, null)
+    }
   }
   return settled
 }

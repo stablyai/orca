@@ -6,8 +6,8 @@
  * Antigravity prints: the transcripts do. Six are recorded from a live `agy`; the rest name
  * themselves as skipped until someone can reach them.
  *
- * Four cases are pinned as KNOWN DEFECT: on real output the shipped detector refuses the ready
- * screen and accepts the live model picker. Those assert what it does, not what it should.
+ * One case is pinned as a KNOWN DEFECT: the shipped detector refuses a ready screen whose retained
+ * tail ends on the error block. That asserts what it does, not what it should.
  *
  * Capture protocol: docs/reference/agent-pty-transcript-capture.md
  * What each transcript decides: docs/reference/antigravity-readiness-evidence.md
@@ -66,15 +66,13 @@ const TRANSCRIPTS: readonly TranscriptCase[] = [
     name: 'antigravity-ready-api-key-gemini-model',
     capture: 'B',
     what: 'ready screen, API-key identity — the account row reads "Gemini API key", not an email',
-    expectReady: true,
-    knownDefect: 'refused: the model row never starts a line, the logo shares it'
+    expectReady: true
   },
   {
     name: 'antigravity-ready-account-info-hidden',
     capture: 'B',
     what: 'ready screen with AGY_CLI_HIDE_ACCOUNT_INFO=1 — no account row at all',
-    expectReady: true,
-    knownDefect: 'refused: same line-start defect, and no account row exists to require'
+    expectReady: true
   },
   {
     name: 'antigravity-dialog-trust-workspace',
@@ -86,8 +84,7 @@ const TRANSCRIPTS: readonly TranscriptCase[] = [
     name: 'antigravity-dialog-model-picker',
     capture: 'C',
     what: 'model picker owning the screen',
-    expectReady: false,
-    knownDefect: "accepted: the picker's own `Gemini 3.x Flash` rows satisfy the model rule"
+    expectReady: false
   },
   {
     name: 'antigravity-dialog-command-palette',
@@ -114,8 +111,7 @@ const TRANSCRIPTS: readonly TranscriptCase[] = [
     name: 'antigravity-dialog-dismissed',
     capture: 'D',
     what: 'the screen immediately after the model picker is dismissed',
-    expectReady: true,
-    knownDefect: 'refused: the banner is not reprinted and no model row starts a line'
+    expectReady: true
   },
   // Not captured: this machine's agy has no OAuth session and offers only Gemini models, and
   // reaching the rest would mean signing the operator out or deleting their config. See
