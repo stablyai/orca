@@ -21,7 +21,10 @@ import {
 import { structuredAgentSessionOwnerStatus } from './structured-agent-session-owner-status'
 import { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import { attachStructuredAgentSession } from './structured-agent-session-attach-orchestration'
-import type { StructuredAgentSessionLifetimeContext } from './structured-agent-session-host-lifetime'
+import {
+  stopStructuredAgentSessionAgentUnderSerialize,
+  type StructuredAgentSessionLifetimeContext
+} from './structured-agent-session-host-lifetime'
 import {
   ensureStructuredAgentSessionAgent,
   ensureStructuredAgentSessionAgentForOperation
@@ -42,6 +45,7 @@ import { flushStructuredAgentSessionHost } from './structured-agent-session-host
 import type {
   StructuredAgentSessionCaller,
   StructuredAgentSessionHostDeps,
+  StructuredAgentSessionHostSession,
   StructuredAgentSessionReveal
 } from './structured-agent-session-host-types'
 import { StructuredAgentSessionEventRecovery } from './structured-agent-session-event-recovery'
@@ -116,6 +120,8 @@ export class StructuredAgentSessionHost {
       trackStart: (start) => this.tasks.trackAttach(start),
       ensureProviderChild: (sessionId, startedFor) =>
         ensureStructuredAgentSessionAgent(this.attachContext(), sessionId, startedFor),
+      stopAgent: (sessionId, ending) =>
+        stopStructuredAgentSessionAgentUnderSerialize(this.lifetimeContext(), sessionId, ending),
       reset: (sessionId, journal, reset) =>
         this.subscribers.reset(
           sessionId,
@@ -139,15 +145,11 @@ export class StructuredAgentSessionHost {
       store: deps.store,
       sessions: this.sessions,
       flushLifecycle: (sessionId) => this.runtimeState.lifecycleBarrier(sessionId),
-      publishFence: (sessionId, session) =>
-        this.subscribers.snapshot(
-          sessionId,
-          session.journal,
-          structuredAgentSessionConversationFence(deps.store, sessionId)
-        ),
+      publishFence: this.publishFence,
       publishStatus: this.clientDelivery.publishStatusAndSettlement,
       serialize: (sessionId, task) => this.tasks.trackAttach(this.serialize(sessionId, task)),
       now: () => this.now(),
+      lifetime: () => this.lifetimeContext(),
       onBarrierError: (sessionId, error) => deps.onEventSinkError?.({ sessionId, error })
     })
     this.restartResume = createStructuredAgentSessionRestartResume(
@@ -174,13 +176,21 @@ export class StructuredAgentSessionHost {
   handleAdapterEvent = (event: Parameters<StructuredAgentSessionEventRecovery['handle']>[0]) =>
     this.eventRecovery.handle(event)
 
+  private publishFence = (sessionId: string, session: StructuredAgentSessionHostSession): void =>
+    this.subscribers.snapshot(
+      sessionId,
+      session.journal,
+      structuredAgentSessionConversationFence(this.deps.store, sessionId)
+    )
+
   private lifetimeContext(): StructuredAgentSessionLifetimeContext {
     return {
       deps: this.deps,
       runtimeState: this.runtimeState,
       sessions: this.sessions,
       now: () => this.now(),
-      publishStatus: this.clientDelivery.publishStatus
+      publishStatus: this.clientDelivery.publishStatus,
+      publishFence: this.publishFence
     }
   }
 

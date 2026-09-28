@@ -12,10 +12,15 @@
 // this teardown exists to fix. So: stop the child, drain what it emitted on its way out, then let
 // the sink go. The one step ahead of the stop only reads, for quit's resume offer.
 //
-// FAILURE. A step that fails ABORTS the rest. `closeSession` returning false means the child's
-// exit was not proven and the adapter has deliberately kept the session indexed so a retry can
-// reach it; forgetting it anyway stranded the process forever and reported success. Leaving the
-// session in place is what makes the next close a real retry instead of a no-op.
+// FAILURE. A failed stop ABORTS the rest, leaving the session in place so the next close is a real
+// retry instead of a no-op. A stop that could not prove the exit is not a failure: the child is
+// closing and cannot take writes, so the host ends it all the same, and only the lease hears the
+// verdict — handed to recovery, which the wind-down's last step then runs, stopping the recorded
+// owner by identity. Past the stop, draining, settling and that recovery are bookkeeping, which
+// never keeps the lease from moving or the stop from finishing: a failure there is reported and the
+// wind-down goes on, since the next child's attach, or the idle sweep and the reopen after it,
+// re-derives what they would have written. The rest still abort, and a failed release leaves the
+// wind-down owed for the next close to repeat.
 
 import {
   stopAgentSessionProviderRoot,
@@ -38,17 +43,22 @@ export type StructuredAgentSessionEvictionContext = {
   /** Fires right before the stop, while the child's turn and background roster are still live. A
    *  throw is logged, never allowed to abort the stop. */
   beforeProviderChildStop?: () => void
-  /** Fires with the stop's verdict once `stopAgentSessionProviderRoot` read the root gone, so host
-   *  bookkeeping stops claiming a child. */
+  /** Fires with the stop's verdict from `stopAgentSessionProviderRoot`, gone or not, so host
+   *  bookkeeping stops claiming a child that can no longer take writes. */
   onProviderChildStopped?: (verdict: StructuredAgentSessionStopVerdict) => void
   /** Whether this host still owes the child's wind-down. Distinct from `hasProviderChild`, which a
    *  proven exit retires mid-run: the two disagree for exactly the steps a retry has to repeat. */
   owesProviderChildWindDown?: boolean
   /** Settles work owned by the child after its final callbacks have drained. */
   settleWork?: () => Promise<void>
-  /** Hands the lease back now that this host's child is proven gone. No-ops when the record is
-   *  not this host's to release. */
+  /** Hears a best-effort step's failure; the wind-down continues past it. */
+  onBestEffortStepFailure?: (error: StructuredAgentSessionEvictionError) => void
+  /** Hands the lease back now that this host's child is stopped: released on proof, otherwise to
+   *  recovery. No-ops when the record is not this host's to release. */
   releaseLease: () => Promise<void>
+  /** Concludes the `recovering` lease an unproven stop left, instead of leaving it latched until
+   *  the chat's next start. */
+  resolveRecovery?: () => Promise<void>
 }
 
 /** The resume offer is advisory; a stalled sink must not hold the child's stop behind it. */
@@ -57,6 +67,8 @@ const SNAPSHOT_DRAIN_TIMEOUT_MS = 1_000
 export type StructuredAgentSessionEvictionStep = {
   name: string
   run: (context: StructuredAgentSessionEvictionContext) => Promise<void> | void
+  /** A failure is reported, not fatal: see FAILURE above. */
+  bestEffort?: true
 }
 
 export const STRUCTURED_AGENT_SESSION_EVICTION_STEPS: readonly StructuredAgentSessionEvictionStep[] =
@@ -88,14 +100,12 @@ export const STRUCTURED_AGENT_SESSION_EVICTION_STEPS: readonly StructuredAgentSe
         const rootGone = stop
           ? await stopAgentSessionProviderRoot(() => stop.call(context.adapter, context.sessionId))
           : true
-        if (!rootGone) {
-          throw new Error('provider child exit was not proven')
-        }
         context.onProviderChildStopped?.({ rootGone })
       }
     },
     {
       name: 'drain-published',
+      bestEffort: true,
       run: async (context) => {
         const barrier = await context.eventSink.drained()
         if (!barrier.ok) {
@@ -105,6 +115,7 @@ export const STRUCTURED_AGENT_SESSION_EVICTION_STEPS: readonly StructuredAgentSe
     },
     {
       name: 'settle-dead-generation',
+      bestEffort: true,
       run: (context) =>
         context.owesProviderChildWindDown === false ? undefined : context.settleWork?.()
     },
@@ -120,7 +131,15 @@ export const STRUCTURED_AGENT_SESSION_EVICTION_STEPS: readonly StructuredAgentSe
     // session it may not acquire. Placed BEFORE the acknowledgement so a release that cannot be
     // written aborts while the adapter still routes the session, which is what makes the retry real.
     { name: 'release-lease', run: (context) => context.releaseLease() },
-    { name: 'acknowledge-release', run: (context) => context.acknowledgeRelease() }
+    { name: 'acknowledge-release', run: (context) => context.acknowledgeRelease() },
+    // Last, once the adapter no longer routes the session, so the owner it may stop has no route
+    // left that could report its exit against the lease.
+    {
+      name: 'resolve-recovery',
+      bestEffort: true,
+      run: (context) =>
+        context.owesProviderChildWindDown === false ? undefined : context.resolveRecovery?.()
+    }
   ]
 
 export class StructuredAgentSessionEvictionError extends Error {
@@ -135,9 +154,10 @@ export class StructuredAgentSessionEvictionError extends Error {
 }
 
 /**
- * Runs the eviction steps in order, stopping at the first failure. The step name travels with the
- * error because the caller's only useful response is to retry, and a retry is only safe when the
- * session is still indexed — which is exactly what aborting preserves.
+ * Runs the eviction steps in order, stopping at the first failure of a step that is not best
+ * effort. The step name travels with the error because the caller's only useful response is to
+ * retry, and a retry is only safe when the session is still indexed — which is exactly what
+ * aborting preserves.
  */
 export async function evictStructuredAgentSession(
   context: StructuredAgentSessionEvictionContext,
@@ -147,7 +167,11 @@ export async function evictStructuredAgentSession(
     try {
       await step.run(context)
     } catch (error) {
-      throw new StructuredAgentSessionEvictionError(step.name, context.sessionId, error)
+      const failure = new StructuredAgentSessionEvictionError(step.name, context.sessionId, error)
+      if (!step.bestEffort) {
+        throw failure
+      }
+      context.onBestEffortStepFailure?.(failure)
     }
   }
 }

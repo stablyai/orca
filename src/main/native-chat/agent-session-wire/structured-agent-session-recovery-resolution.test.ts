@@ -242,6 +242,71 @@ describe('structured session recovery resolution', () => {
     })
   })
 
+  it('reads a probe that throws as an identity it cannot verify: released, unsignalled, reported', async () => {
+    const store = await openStore()
+    await liveOwner(store)
+    await latch(store)
+    const stopOwnerProcess = vi.fn()
+    const onProbeError = vi.fn()
+    const crash = new Error('process table unreadable')
+
+    const result = await resolveStructuredSessionRecovery(
+      {
+        ...deps(store, () => MATCHED, { stopOwnerProcess, onProbeError }),
+        probeRecord: async () => {
+          throw crash
+        }
+      },
+      SESSION
+    )
+
+    expect(result).toBe('resolved')
+    expect(stopOwnerProcess).not.toHaveBeenCalled()
+    expect(onProbeError).toHaveBeenCalledExactlyOnceWith(crash)
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({
+      claimStatus: 'released',
+      handoffStage: null,
+      runtimeFence: 2,
+      ownerProcess: null,
+      deathEvidence: null
+    })
+  })
+
+  it('finishes the stop ladder when the probe starts throwing after a signal, and reports once', async () => {
+    const store = await openStore()
+    await liveOwner(store)
+    await latch(store)
+    const stopOwnerProcess = vi.fn()
+    const onProbeError = vi.fn()
+    let calls = 0
+
+    const result = await resolveStructuredSessionRecovery(
+      {
+        ...deps(store, () => MATCHED, { stopOwnerProcess, onProbeError }),
+        probeRecord: async () => {
+          calls += 1
+          if (calls > 1) {
+            throw new Error('process table unreadable')
+          }
+          return MATCHED
+        }
+      },
+      SESSION
+    )
+
+    expect(result).toBe('resolved')
+    expect(stopOwnerProcess.mock.calls).toEqual([
+      [4242, 'SIGTERM'],
+      [4242, 'SIGKILL']
+    ])
+    expect(onProbeError).toHaveBeenCalledOnce()
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({
+      claimStatus: 'released',
+      ownerProcess: null,
+      deathEvidence: null
+    })
+  })
+
   it('waits out a terminal owner an older build recorded, and never stops it', async () => {
     const directory = await newStoreDirectory()
     await liveOwner(await openStore(directory))

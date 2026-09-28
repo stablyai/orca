@@ -12,6 +12,7 @@ import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-ses
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { providerStartupFailureOutcome } from './structured-agent-session-dead-generation-settlement'
+import type { StructuredAgentSessionStartupFailure } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
   HOST_TEST_NOW as NOW,
@@ -25,7 +26,8 @@ import {
 
 const CALLER = { callerKey: 'client-1' }
 const EXIT_REASON = 'Claude Code is not signed in. Sign in with the Claude CLI'
-const ADAPTER_FAILURE = 'Claude Code exited before it finished starting: not signed in'
+const ADAPTER_REASON = 'not signed in'
+const ADAPTER_FAILURE = providerStartupFailureOutcome(ADAPTER_REASON)
 // The first child (generation-1) is lost at setup; the send starts generation-2.
 const START_ROW = agentJournalItemKey({
   provider: 'orca',
@@ -40,8 +42,8 @@ let root: string
 let store: AgentSessionRecordStore
 let host: StructuredAgentSessionHost
 let generation = 0
-let settleStart: (failure: string | undefined) => void = () => {}
-let awaitStarted = vi.fn<() => Promise<string | undefined>>()
+let settleStart: (failure: StructuredAgentSessionStartupFailure | undefined) => void = () => {}
+let awaitStarted = vi.fn<() => Promise<StructuredAgentSessionStartupFailure | undefined>>()
 let frames: AgentSessionSubscribeEvent[] = []
 
 function exitBeforeProof(): Promise<void> {
@@ -106,7 +108,12 @@ beforeEach(async () => {
   resetHostTestOperationIds()
   generation = 0
   frames = []
-  awaitStarted = vi.fn(() => new Promise<string | undefined>((resolve) => (settleStart = resolve)))
+  awaitStarted = vi.fn(
+    () =>
+      new Promise<StructuredAgentSessionStartupFailure | undefined>(
+        (resolve) => (settleStart = resolve)
+      )
+  )
   store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
   host = new StructuredAgentSessionHost({
     store,
@@ -152,7 +159,7 @@ describe('a queued message whose start fails and whose child then exits', () => 
   it("keeps the loop's row when the loop saw the failure first", async () => {
     const queued = await sendQueued('hello')
 
-    settleStart(ADAPTER_FAILURE)
+    settleStart({ reason: ADAPTER_REASON })
     await eventually(async () =>
       expect(await submission(queued)).toMatchObject({
         dispatchState: 'rejected',

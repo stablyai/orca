@@ -11,7 +11,10 @@
 
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
 import { DISPATCH_REJECTED_HOST_RESTARTED } from '../../../shared/structured-agent-session-dispatch-rejection'
-import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
+import type {
+  StructuredAgentSessionAdapter,
+  StructuredAgentSessionStartupFailure
+} from './structured-agent-session-adapter'
 import {
   providerExitBeforeDeliveryRejection,
   providerStartupFailureOutcome
@@ -43,6 +46,8 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
   ) => Promise<StructuredAgentSessionResumeOutcome>
   /** The fence the conversation's own writes carry; see `structuredAgentSessionConversationFence`. */
   conversationFence: (sessionId: string) => number
+  /** Stops the conversation's child; for a caller inside `serialize`. */
+  stopAgent: (sessionId: string, ending: { cause: 'exit'; reason?: string }) => Promise<void>
   /** What the chat says when the session could not be made ready. */
   startFailureText: (sessionId: string, cause: AgentSessionWireRefusal) => string
   onError: (sessionId: string, error: unknown) => void
@@ -100,7 +105,7 @@ export class StructuredAgentSessionDeliveryLoop {
         // the queue so a Stop can reach it meanwhile.
         const failure = await this.deps.adapter.awaitStarted?.(sessionId)
         const handed = await this.deps.serialize(sessionId, () =>
-          this.handOver(sessionId, prepared.awaited, failure || null)
+          this.handOver(sessionId, prepared.awaited, failure ?? null)
         )
         if (handed === 'stop') {
           return
@@ -157,7 +162,7 @@ export class StructuredAgentSessionDeliveryLoop {
   private async handOver(
     sessionId: string,
     awaited: StructuredAgentSessionProviderChildIdentity | null,
-    startFailure: string | null
+    startFailure: StructuredAgentSessionStartupFailure | null
   ): Promise<Step> {
     const session = this.deps.sessions.get(sessionId)
     if (!session || this.disposed) {
@@ -180,10 +185,19 @@ export class StructuredAgentSessionDeliveryLoop {
       if (ended?.cause === 'user-stop') {
         return 'continue'
       }
-      return this.fail(sessionId, {
+      const step = await this.fail(sessionId, {
         startKey: awaited?.generation ?? null,
-        text: ended ? endedChildRejection(ended) : (startFailure ?? providerStartupFailureOutcome())
+        text: ended
+          ? endedChildRejection(ended)
+          : providerStartupFailureOutcome(startFailure?.reason ?? undefined)
       })
+      if (awaitedChild) {
+        // Seen to die starting: it takes no writes, so it ends now, not when its exit is published.
+        await this.deps
+          .stopAgent(sessionId, { cause: 'exit', reason: startFailure?.reason ?? undefined })
+          .catch((error: unknown) => this.deps.onError(sessionId, error))
+      }
+      return step
     }
     const next = oldestQueuedSubmission(session)
     if (!next) {

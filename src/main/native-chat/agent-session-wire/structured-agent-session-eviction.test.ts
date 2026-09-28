@@ -5,7 +5,9 @@ import {
   STRUCTURED_AGENT_SESSION_EVICTION_STEPS,
   type StructuredAgentSessionEvictionContext
 } from './structured-agent-session-eviction'
+import { withStructuredAgentSessionEvictionDeadline } from './structured-agent-session-eviction-deadline'
 import {
+  AgentSessionAcquisitionExitUnprovenError,
   AgentSessionAcquisitionRootExitObservedError,
   AgentSessionPreSpawnError
 } from './structured-agent-session-adapter'
@@ -90,8 +92,19 @@ describe('structured agent session eviction', () => {
       'close-sink',
       'discard-sink',
       'release-lease',
-      'acknowledge-release'
+      'acknowledge-release',
+      'resolve-recovery'
     ])
+  })
+
+  it('keeps which steps only report their failure under the teardown deadline', () => {
+    const bestEffort = withStructuredAgentSessionEvictionDeadline(
+      STRUCTURED_AGENT_SESSION_EVICTION_STEPS
+    )
+      .filter((step) => step.bestEffort)
+      .map((step) => step.name)
+
+    expect(bestEffort).toEqual(['drain-published', 'settle-dead-generation', 'resolve-recovery'])
   })
 
   it('still stops the child when the pre-stop snapshot cannot drain the sink', async () => {
@@ -114,22 +127,80 @@ describe('structured agent session eviction', () => {
     }
   })
 
-  it('aborts after a failed drain barrier without unbinding or acknowledging the release', async () => {
+  it('reports a failed drain barrier and still winds the child down', async () => {
     const ctx = context()
+    const reported = vi.fn()
+    ctx.onBestEffortStepFailure = reported
     ctx.eventSink.drained = vi.fn(async () => {
       ctx.order.push('drained')
       return { ok: false, error: new Error('append failed') }
     }) as unknown as StructuredAgentSessionEvictionContext['eventSink']['drained']
 
-    await expect(evictStructuredAgentSession(ctx)).rejects.toMatchObject({
-      step: 'drain-published'
+    await evictStructuredAgentSession(ctx)
+
+    expect(reported).toHaveBeenCalledWith(
+      expect.objectContaining({ step: 'drain-published', sessionId: 'session-1' })
+    )
+    expect(ctx.order).toEqual([
+      'closeSession',
+      'drained',
+      'settleWork',
+      'unbind',
+      'close',
+      'discardSink',
+      'releaseLease',
+      'acknowledgeRelease'
+    ])
+  })
+
+  it('reports a failed settlement and still hands the lease back', async () => {
+    const ctx = context()
+    const reported = vi.fn()
+    ctx.onBestEffortStepFailure = reported
+    ctx.settleWork = vi.fn(async () => {
+      throw new Error('journal write failed')
     })
-    expect(ctx.eventSink.unbind).not.toHaveBeenCalled()
-    expect(ctx.eventSink.close).not.toHaveBeenCalled()
-    expect(ctx.discardSink).not.toHaveBeenCalled()
-    expect(ctx.releaseLease).not.toHaveBeenCalled()
+
+    await evictStructuredAgentSession(ctx)
+
+    expect(reported).toHaveBeenCalledWith(
+      expect.objectContaining({ step: 'settle-dead-generation' })
+    )
+    expect(ctx.releaseLease).toHaveBeenCalledOnce()
+    expect(ctx.acknowledgeRelease).toHaveBeenCalledOnce()
+  })
+
+  it('aborts at a release that cannot be written, before the adapter drops the route', async () => {
+    const ctx = context()
+    ctx.releaseLease = vi.fn(async () => {
+      throw new Error('store write failed')
+    })
+
+    await expect(evictStructuredAgentSession(ctx)).rejects.toMatchObject({
+      step: 'release-lease'
+    })
     expect(ctx.acknowledgeRelease).not.toHaveBeenCalled()
-    expect(ctx.order).toEqual(['closeSession', 'drained'])
+  })
+
+  it('runs recovery last, only for a wind-down it owes, and only reports its failure', async () => {
+    const ctx = context()
+    const reported = vi.fn()
+    ctx.onBestEffortStepFailure = reported
+    ctx.resolveRecovery = vi.fn(async () => {
+      ctx.order.push('resolveRecovery')
+      throw new Error('owner probe crashed')
+    })
+
+    await evictStructuredAgentSession(ctx)
+
+    expect(ctx.order.slice(-2)).toEqual(['acknowledgeRelease', 'resolveRecovery'])
+    expect(reported).toHaveBeenCalledWith(expect.objectContaining({ step: 'resolve-recovery' }))
+
+    const unowed = context()
+    unowed.owesProviderChildWindDown = false
+    unowed.resolveRecovery = vi.fn(async () => {})
+    await evictStructuredAgentSession(unowed)
+    expect(unowed.resolveRecovery).not.toHaveBeenCalled()
   })
 })
 
@@ -163,8 +234,8 @@ describe('rows the provider emits while closing', () => {
   })
 })
 
-// `closeSession` returning false means the adapter could not prove the child exited and has kept
-// the session indexed on purpose so a retry can reach it.
+// `closeSession` returning false means the adapter could not prove the child exited. The child is
+// closing either way, so the host stops claiming it and only the lease hears the verdict.
 describe('a child that will not stop', () => {
   it.each([
     new AgentSessionAcquisitionRootExitObservedError(new Error('root exited')),
@@ -192,16 +263,32 @@ describe('a child that will not stop', () => {
     ])
   })
 
-  it('aborts without acknowledging the release, so the next stop is a real retry', async () => {
+  it.each([
+    ['answers false', async () => false],
+    [
+      'throws an unproven exit',
+      async () => {
+        throw new AgentSessionAcquisitionExitUnprovenError(new Error('tree still running'))
+      }
+    ]
+  ])('winds the child down with an unproven verdict when its close %s', async (_how, close) => {
     const ctx = context()
-    ctx.adapter.closeSession = vi.fn(async () => false)
+    ctx.adapter.closeSession = vi.fn(close)
+    const stopped = vi.fn()
+    ctx.onProviderChildStopped = stopped
 
-    await expect(evictStructuredAgentSession(ctx)).rejects.toMatchObject({
-      step: 'stop-provider-child'
-    })
-    expect(ctx.acknowledgeRelease).not.toHaveBeenCalled()
-    expect(ctx.discardSink).not.toHaveBeenCalled()
-    expect(ctx.order).toEqual([])
+    await evictStructuredAgentSession(ctx)
+
+    expect(stopped).toHaveBeenCalledWith({ rootGone: false })
+    expect(ctx.order).toEqual([
+      'drained',
+      'settleWork',
+      'unbind',
+      'close',
+      'discardSink',
+      'releaseLease',
+      'acknowledgeRelease'
+    ])
   })
 
   it('reports the failing step and leaves the sink usable for the retry', async () => {

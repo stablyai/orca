@@ -91,6 +91,10 @@ export class AgentSessionAcquisitionExitUnprovenError extends Error {
   }
 }
 
+/** A start that did not land: why, in the provider's own words, or null when it gave none. The
+ *  host words it for the chat and records it raw. */
+export type StructuredAgentSessionStartupFailure = { reason: string | null }
+
 /** What a reservation turns into once something is actually running under it:
  *  the process the host can probe, and the provider handle it was minted with. */
 export type AgentSessionAcquisition = {
@@ -291,9 +295,9 @@ export type StructuredAgentSessionAdapter = {
   /** Resolves once a live session can take an option write, or after a bound; never rejects. */
   awaitOptionWritable?(sessionId: string): Promise<void>
   /** Resolves once a session published before it proved its start has proven it, failed, or been
-   *  closed; at once for any other. A start that did not land resolves with the chat's words for
-   *  why. Never rejects. */
-  awaitStarted?(sessionId: string): Promise<void | string>
+   *  closed; at once for any other. A start that did not land resolves with its failure. Never
+   *  rejects. */
+  awaitStarted?(sessionId: string): Promise<void | StructuredAgentSessionStartupFailure>
   readOptions?(input: { sessionId: string; fence: number }): Promise<AgentSessionOptionsResult>
   /** Option keys skipped after a provider rejected their persisted restore value. */
   readOptionRestoreFailures?(sessionId: string): readonly string[]
@@ -317,7 +321,8 @@ export type StructuredAgentSessionAdapter = {
   forceCloseSession?(sessionId: string): Promise<boolean>
   /** Stops a provider child for teardown without requiring a future-resume cursor. */
   disposeSession?(sessionId: string): Promise<boolean>
-  /** Host acknowledgement that the proven-dead child, lease and journal owner are released. */
+  /** Host acknowledgement that it no longer drives this child: its lease is released, or handed to
+   *  recovery when the stop could not prove the exit. */
   acknowledgeSessionRelease?(sessionId: string): void
 }
 
@@ -359,8 +364,8 @@ function provenExitAcquisitionFailure(cause: unknown): unknown {
 }
 
 /** Whether a stop left the provider root gone. The lease follows the root, so a first-hand root
- *  exit or a processless child ends the session whatever its descendants did; any other
- *  failure still throws. */
+ *  exit or a processless child ends the session whatever its descendants did, and an exit the
+ *  stop could not prove reads `false` however the adapter reported it; any other failure throws. */
 export async function stopAgentSessionProviderRoot(stop: () => Promise<boolean>): Promise<boolean> {
   try {
     return (await stop()) === true
@@ -370,6 +375,9 @@ export async function stopAgentSessionProviderRoot(stop: () => Promise<boolean>)
       isAgentSessionPreSpawnError(error)
     ) {
       return true
+    }
+    if (error instanceof AgentSessionAcquisitionExitUnprovenError) {
+      return false
     }
     throw error
   }

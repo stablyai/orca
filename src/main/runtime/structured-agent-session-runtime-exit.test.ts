@@ -336,9 +336,9 @@ describe('structured session runtime provider-exit wiring', () => {
     await stopping
     expect(stopped).toBe(true)
   })
-  it('drains a final exit callback delivered by the adapter backstop and keeps the retry real', async () => {
-    // The first stop refuses, so host eviction cannot prove the child gone and aborts with the
-    // session still indexed. What finally stops it is `closeAll`, which delivers the exit
+  it('concludes an unproven quit stop and drains the exit callback the adapter backstop delivers', async () => {
+    // The first stop refuses, so host eviction cannot prove the child gone: it ends the child and
+    // runs recovery on the lease. What finally stops it is `closeAll`, which delivers the exit
     // callback AFTER host teardown has already run.
     root = await mkdtemp(join(tmpdir(), 'orca-runtime-backstop-exit-'))
     operations = 0
@@ -410,18 +410,14 @@ describe('structured session runtime provider-exit wiring', () => {
       ok: true
     })
 
-    await expect(stopStructuredAgentSessionRuntime()).rejects.toThrow()
+    await stopStructuredAgentSessionRuntime()
     await new Promise<void>((resolve) => setImmediate(resolve))
 
     // The backstop, not host eviction, is what stopped the child.
     expect(closeAttempts).toBeGreaterThanOrEqual(2)
-    // The callback it delivered neither reacquired nor wrote a technical row.
+    // The callback it delivered did not reacquire.
     expect(connections).toHaveLength(1)
-    const history = await host.history({ sessionId: SESSION, direction: 'tail' })
-    expect(history.ok && history.page.items.some((item) => item.body.kind === 'status')).toBe(false)
-
-    // The aborted eviction left the session reachable, so the next teardown is a real retry.
-    await stopStructuredAgentSessionRuntime()
+    // Quit's own recovery concluded about the owner: no process here carries its recorded identity.
     expect(host.deps.store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'released',
       ownerProcess: null,

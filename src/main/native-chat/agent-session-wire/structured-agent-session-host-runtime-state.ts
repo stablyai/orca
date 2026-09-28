@@ -123,7 +123,8 @@ export class StructuredAgentSessionHostRuntimeState {
         store: this.deps.store,
         probeRecord: (record) => this.probeRecord(record),
         now: () => this.deps.now?.() ?? Date.now(),
-        ...(this.deps.stopOwnerProcess ? { stopOwnerProcess: this.deps.stopOwnerProcess } : {})
+        ...(this.deps.stopOwnerProcess ? { stopOwnerProcess: this.deps.stopOwnerProcess } : {}),
+        onProbeError: (error) => this.deps.onEventSinkError?.({ sessionId, error })
       },
       sessionId
     )

@@ -21,7 +21,10 @@ import {
   pinnedAgentSessionLaunchEnv
 } from './structured-agent-session-launch-env'
 import { refuseAgentSessionMutation } from './structured-agent-session-mutation-admission'
-import { settleStaleStructuredAgentSessionState } from './structured-agent-session-dead-generation-settlement'
+import {
+  settleEndedStructuredAgentSessionChildWork,
+  settleStaleStructuredAgentSessionState
+} from './structured-agent-session-dead-generation-settlement'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import type {
   StructuredAgentSessionProviderChild,
@@ -114,6 +117,9 @@ async function runAttach(
   await withAgentSessionCreatePhase('resolve_recovery', recordPhase, () =>
     context.runtimeState.resolveRecovery(sessionId)
   )
+  // Read after resolution: a lease still `recovering` here is not one this attempt wrote.
+  const recoveringBefore =
+    context.deps.store.getRecord(sessionId)?.lease.handoffStage === 'recovering'
   const probe = await withAgentSessionCreatePhase('probe_owner', recordPhase, () =>
     context.runtimeState.probeOwner(sessionId)
   )
@@ -128,6 +134,7 @@ async function runAttach(
     candidate: null,
     committed: false
   }
+  let succeeded = false
   try {
     const attached = await performAttach({
       store: context.deps.store,
@@ -212,6 +219,7 @@ async function runAttach(
         }
       }
     })
+    succeeded = attached.ok
     const { candidate } = attempt
     const conversation = context.sessions.get(sessionId)
     if (attached.ok && candidate && conversation) {
@@ -225,6 +233,23 @@ async function runAttach(
     if (!attempt.committed) {
       attemptSink.close()
     }
+    if (!succeeded && !recoveringBefore) {
+      await resolveRecoveryAfterFailedAttach(context, sessionId)
+    }
+  }
+}
+
+/** A failed attempt that could not prove its child gone left the lease `recovering`; this concludes
+ *  it in the same step rather than at the chat's next start. Bookkeeping: the attach's own outcome
+ *  stands whatever this does, and its failure is only reported. */
+async function resolveRecoveryAfterFailedAttach(
+  context: StructuredAgentSessionAttachContext,
+  sessionId: string
+): Promise<void> {
+  try {
+    await context.runtimeState.resolveRecovery(sessionId)
+  } catch (error) {
+    context.deps.onEventSinkError?.({ sessionId, error })
   }
 }
 
@@ -233,12 +258,12 @@ type AttachCandidate = {
   sink: DeferredStructuredAgentSessionEventSink
 }
 
-function endReleasedChild(
+async function endReleasedChild(
   context: StructuredAgentSessionAttachContext,
   sessionId: string,
   cause: unknown,
   verdict: StructuredAgentSessionStopVerdict
-): void {
+): Promise<void> {
   const session = context.sessions.get(sessionId)
   const child = session?.child
   if (
@@ -257,6 +282,14 @@ function endReleasedChild(
   }
   context.runtimeState.currentEventSink(sessionId)?.close()
   context.runtimeState.discardEventSink(sessionId)
+  // Closed first, so nothing the released child still emits revises what this settles.
+  await settleEndedStructuredAgentSessionChildWork({
+    journal: session.journal,
+    sessionId,
+    child,
+    now: context.now(),
+    onError: (id, error) => context.deps.onEventSinkError?.({ sessionId: id, error })
+  })
   context.publishStatus?.(sessionId)
 }
 

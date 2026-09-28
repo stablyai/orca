@@ -33,6 +33,8 @@ export type StructuredAgentSessionIdleSweepDeps = {
   /** Each of these runs inside the session's serialize and never takes it again. */
   stopAgent: (sessionId: string) => Promise<void>
   stopStartingAgent: (sessionId: string) => Promise<void>
+  /** Marks sends no child is left to answer in doubt; false when it could not be written. */
+  markLeftoverSendsUnknown: (sessionId: string) => Promise<boolean>
   closeConversation: (sessionId: string) => Promise<boolean>
   onError: (sessionId: string, error: unknown) => void
   intervalMs?: number
@@ -106,6 +108,15 @@ export class StructuredAgentSessionIdleSweep {
       !this.queuedOrDelivering(sessionId, session)
     ) {
       await this.deps.stopAgent(sessionId)
+      return
+    }
+    // Re-derived from the journal, for an ended child whose settlement could not be written: its
+    // unanswered send would otherwise pin the handle open until the next send.
+    if (
+      !session.child &&
+      !this.queuedOrDelivering(sessionId, session) &&
+      !(await this.deps.markLeftoverSendsUnknown(sessionId))
+    ) {
       return
     }
     // Owed work is activity, read every tick, so the agent gets a full window once it ends: a child

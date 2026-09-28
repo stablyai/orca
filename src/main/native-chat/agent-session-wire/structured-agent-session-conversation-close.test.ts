@@ -54,7 +54,7 @@ function statusRows(): AgentSessionStatusSummary[] {
 describe('a stop that fails', () => {
   it('is retried on the next tick (P2-11 a)', async () => {
     await foundRestTestChat(rig)
-    rig.adapter.closeSession.mockResolvedValueOnce(false)
+    rig.adapter.closeSession.mockRejectedValueOnce(new Error('provider stop failed'))
     rig.clock.now += IDLE_MS + 1
 
     await sweepOnce(rig.host)
@@ -64,6 +64,20 @@ describe('a stop that fails', () => {
     await sweepOnce(rig.host)
 
     expect(rig.adapter.closeSession).toHaveBeenCalledTimes(2)
+    expect(rig.store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
+    expect(statusRows().at(-1)?.hostExecutionOwned).toBeUndefined()
+  })
+
+  it('does not count a stop that could not prove the exit: the lease concludes on the same tick', async () => {
+    await foundRestTestChat(rig)
+    rig.adapter.closeSession.mockResolvedValueOnce(false)
+    rig.clock.now += IDLE_MS + 1
+
+    await sweepOnce(rig.host)
+
+    expect(rig.adapter.closeSession).toHaveBeenCalledOnce()
+    expect(openSession()?.child ?? null).toBeNull()
+    expect(openSession()?.owesProviderChildWindDown).toBeUndefined()
     expect(rig.store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
     expect(statusRows().at(-1)?.hostExecutionOwned).toBeUndefined()
   })
@@ -316,6 +330,7 @@ describe('the wind-down retry with a message queued (P2-31)', () => {
       hasOpenDispatch: () => false,
       stopAgent,
       stopStartingAgent: stopAgent,
+      markLeftoverSendsUnknown: async () => true,
       closeConversation: vi.fn(async () => false),
       onError: (_id, error) => {
         throw error

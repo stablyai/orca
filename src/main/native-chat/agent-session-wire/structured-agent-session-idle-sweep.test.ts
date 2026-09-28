@@ -302,6 +302,7 @@ describe('the idle sweep with no child running (P2-22 ii)', () => {
       hasOpenDispatch: () => false,
       stopAgent,
       stopStartingAgent: stopAgent,
+      markLeftoverSendsUnknown: async () => true,
       closeConversation,
       onError: (_id, error) => {
         throw error

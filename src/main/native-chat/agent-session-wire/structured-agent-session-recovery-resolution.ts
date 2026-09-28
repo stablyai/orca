@@ -1,12 +1,12 @@
 /**
  * Exits from the `recovering` stage. A session lands there when evidence about its owner was
  * unavailable; this re-asks with present-time evidence and always concludes. A dead owner is
- * evicted on proof. A live one is stopped by identity and evicted once
- * proven gone. One that outlives the stop, or whose identity cannot be verified, is released
- * anyway: its transport died with the runtime that held it, so nothing can drive it, and no signal
- * is sent to a pid that cannot be verified as the one recorded. Only a conflicted claim, which is
- * how a terminal owner an older build recorded now loads, is waited out and never stopped: it is
- * the user's own agent, and its exit is its way out.
+ * evicted on proof. A live one is stopped by identity and evicted once proven gone. One that
+ * outlives the stop, or whose identity cannot be verified — a probe that throws included — is
+ * released anyway: its transport died with the runtime that held it, so nothing can drive it, and
+ * no signal is sent to a pid that cannot be verified as the one recorded. Only a conflicted claim,
+ * which is how a terminal owner an older build recorded now loads, is waited out and never
+ * stopped: it is the user's own agent, and its exit is its way out.
  */
 
 import {
@@ -26,6 +26,8 @@ export type StructuredSessionRecoveryResolutionDeps = {
   now: () => number
   stopOwnerProcess?: (pid: number, signal: StructuredSessionRecoveryStopSignal) => void
   delay?: (ms: number) => Promise<void>
+  /** Hears a probe that threw, which resolution reads as an identity it could not verify. */
+  onProbeError?: (error: unknown) => void
 }
 
 const STOP_PROBES_PER_SIGNAL = 4
@@ -46,7 +48,8 @@ export async function resolveStructuredSessionRecovery(
   if (record?.lease.handoffStage !== 'recovering') {
     return 'not-applicable'
   }
-  let probe = await deps.probeRecord(record)
+  const probeRecord = probeRecordOrIndeterminate(deps)
+  let probe = await probeRecord(record)
   const owner = record.lease.ownerProcess
   if (owner && record.lease.claimStatus === 'conflicted' && !isProvenDeadProbe(probe)) {
     // A terminal agent keeps its transport across a restart, so only proof of its exit is a way in.
@@ -56,7 +59,7 @@ export async function resolveStructuredSessionRecovery(
     if (owner.hostId !== deps.store.hostId) {
       return 'unresolved'
     }
-    probe = await stopOwnerAndReprobe(deps, record, owner.pid)
+    probe = await stopOwnerAndReprobe(deps, probeRecord, record, owner.pid)
   }
   try {
     await (owner && !isProvenDeadProbe(probe)
@@ -84,8 +87,27 @@ export async function resolveStructuredSessionRecovery(
   }
 }
 
+/** A throw is no answer about the owner, so it must not keep the lease latched; reported once. */
+function probeRecordOrIndeterminate(
+  deps: StructuredSessionRecoveryResolutionDeps
+): (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe> {
+  let reported = false
+  return async (record) => {
+    try {
+      return await deps.probeRecord(record)
+    } catch (error) {
+      if (!reported) {
+        reported = true
+        deps.onProbeError?.(error)
+      }
+      return { outcome: 'indeterminate', reason: 'owner probe failed' }
+    }
+  }
+}
+
 async function stopOwnerAndReprobe(
   deps: StructuredSessionRecoveryResolutionDeps,
+  probeRecord: (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>,
   record: AgentSessionRecord,
   pid: number
 ): Promise<AgentSessionOwnerProbe> {
@@ -95,7 +117,7 @@ async function stopOwnerAndReprobe(
   for (const signal of ['SIGTERM', 'SIGKILL'] as const) {
     stop(pid, signal)
     for (let attempt = 0; attempt < STOP_PROBES_PER_SIGNAL; attempt += 1) {
-      probe = await deps.probeRecord(record)
+      probe = await probeRecord(record)
       if (isProvenDeadProbe(probe)) {
         return probe
       }

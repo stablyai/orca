@@ -10,6 +10,7 @@ import type { StructuredAgentSessionConversations } from './structured-agent-ses
 import {
   abandonQueuedStructuredAgentSessionMessages,
   closeStructuredAgentSessionConversationUnderSerialize,
+  markLeftoverStructuredAgentSessionSendsUnknown,
   stopStructuredAgentSessionAgentUnderSerialize,
   type StructuredAgentSessionLifetimeContext
 } from './structured-agent-session-host-lifetime'
@@ -72,6 +73,8 @@ export function createStructuredAgentSessionConversationLifetime(host: {
         cause: 'host-stop',
         reason: `${TUI_AGENT_DISPLAY_NAMES[sessions.get(sessionId)?.params.provider ?? 'claude']} never finished starting, so Orca stopped it.`
       }),
+    markLeftoverSendsUnknown: (sessionId) =>
+      markLeftoverStructuredAgentSessionSendsUnknown(host.context(), sessionId),
     closeConversation,
     onError: (sessionId, error) => deps().onEventSinkError?.({ sessionId, error }),
     ...deps().idleSweep

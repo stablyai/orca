@@ -363,7 +363,7 @@ describe('a published child that dies while it proves its start', () => {
   it.each([['the loop sees the start fail first'], ['the exit is processed first']])(
     'leaves one error row keyed by the start, and every queued message rejected with it: %s (R2)',
     async (order) => {
-      const settled = deferred<string>()
+      const settled = deferred<{ reason: string }>()
       adapterExtras = { awaitStarted: vi.fn(() => settled.promise) }
       await restartHost()
       acquire.mockImplementation(spawnStartingChild)
@@ -375,9 +375,9 @@ describe('a published child that dies while it proves its start', () => {
 
       if (order === 'the exit is processed first') {
         await exit(child, EXIT, true)
-        settled.resolve(TEXT)
+        settled.resolve({ reason: EXIT })
       } else {
-        settled.resolve(TEXT)
+        settled.resolve({ reason: EXIT })
         await eventually(async () =>
           expect((await submission(second))?.dispatchState).toBe('rejected')
         )
@@ -415,7 +415,7 @@ describe('a start another operation made that dies while a sent message waits on
   const TEXT = providerStartupFailureOutcome(EXIT)
 
   it("is the message's own failed start: one error row, the message rejected, no second start (R2)", async () => {
-    adapterExtras = { awaitStarted: vi.fn(async () => TEXT) }
+    adapterExtras = { awaitStarted: vi.fn(async () => ({ reason: EXIT })) }
     await restartHost()
     acquire.mockImplementation(spawnStartingChild)
     // An operation that needs the agent starts a child that has not proven its start.
