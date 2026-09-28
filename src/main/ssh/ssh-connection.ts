@@ -87,6 +87,7 @@ import {
   type SftpNamespacePathMapping
 } from './sftp-namespace-resolution'
 import type { FileUploadSession } from '../providers/types'
+import type { RemoteDownloadTransferObserver } from '../../shared/remote-download-progress'
 import { isSshSessionLimitError } from './ssh-session-limit-error'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
 import {
@@ -554,23 +555,31 @@ export class SshConnection {
   async downloadFile(
     remotePath: string,
     localPath: string,
-    options?: SshRemoteFileOptions
+    options?: SshRemoteFileOptions & RemoteDownloadTransferObserver
   ): Promise<void> {
     if (!this.useSystemSshTransport) {
-      const sftp = await this.sftp()
-      try {
-        const { fastGetViaSftp } = await import('../providers/ssh-filesystem-provider-sftp')
-        await fastGetViaSftp(sftp, remotePath, localPath)
-      } finally {
-        sftp.end()
-      }
+      const { downloadFileViaSftp } = await import('../providers/ssh-filesystem-download')
+      await downloadFileViaSftp((sftpOptions) => this.sftp(sftpOptions), remotePath, localPath, {
+        signal: options?.signal,
+        onBytesTransferred: options?.onBytesTransferred
+      })
       return
     }
-    await downloadFileViaSystemSsh(this.target, remotePath, localPath, {
-      signal: this.systemOperationAbortController.signal,
-      hostPlatform: options?.hostPlatform,
-      ...this.getSystemSshBuildArgsOptions()
-    })
+    const linkedSignal = createLinkedSshFileTransferSignal(
+      [this.systemOperationAbortController.signal, options?.signal].filter(
+        (signal): signal is AbortSignal => signal !== undefined
+      )
+    )
+    try {
+      await downloadFileViaSystemSsh(this.target, remotePath, localPath, {
+        signal: linkedSignal.signal,
+        onBytesTransferred: options?.onBytesTransferred,
+        hostPlatform: options?.hostPlatform,
+        ...this.getSystemSshBuildArgsOptions()
+      })
+    } finally {
+      linkedSignal.dispose()
+    }
   }
 
   async openFileUploadSession(options?: SshRemoteFileOptions): Promise<FileUploadSession> {

@@ -6,7 +6,7 @@ import { uploadBuffer } from '../ssh/sftp-upload'
 import { requestGitStreamable } from '../ssh/ssh-git-response-stream-reader'
 import { lstatViaSftp } from './ssh-filesystem-provider-sftp'
 import {
-  downloadFileViaSftp,
+  downloadFileViaSshTransport,
   downloadFolderViaSftp,
   type SftpFactory
 } from './ssh-filesystem-download'
@@ -158,14 +158,8 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     return writeSshTerminalArtifact(this.mux, filePath, content, options)
   }
 
-  async downloadFile(sourcePath: string, destinationPath: string): Promise<void> {
-    // Why: system SSH targets cannot open an ssh2-owned SFTP channel.
-    if (this.rawTransfer?.downloadFile) {
-      await this.rawTransfer.downloadFile(sourcePath, destinationPath)
-      return
-    }
-    await downloadFileViaSftp(this.createSftp, sourcePath, destinationPath)
-  }
+  readonly downloadFile: NonNullable<IFilesystemProvider['downloadFile']> = (src, dest, options) =>
+    downloadFileViaSshTransport(this.rawTransfer, this.createSftp, src, dest, options)
 
   async openFileUploadSession(): Promise<FileUploadSession> {
     return openSshFileUploadSession(this.createSftp, this.rawTransfer)

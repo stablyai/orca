@@ -18496,5 +18496,16 @@
   },
   "common": {
     "retry": "Retry"
+  },
+  "remoteDownload": {
+    "progress": {
+      "folderDetail_one": "{{count}} file · {{bytes}}",
+      "folderDetail_other": "{{count}} files · {{bytes}}",
+      "folderTitle": "Downloading folder '{{name}}'",
+      "fileTitle": "Downloading '{{name}}'",
+      "canceling": "Canceling download…",
+      "cancel": "Cancel",
+      "canceled": "Download canceled"
+    }
   }
 }

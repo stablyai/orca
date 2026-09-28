@@ -1,11 +1,16 @@
 import type { SFTPWrapper } from 'ssh2'
 import { uploadFile as uploadFileViaSftp } from '../ssh/sftp-upload'
 import type { FileUploadSession } from './types'
+import type { RemoteDownloadTransferObserver } from '../../shared/remote-download-progress'
 
 export type SftpFactory = () => Promise<SFTPWrapper>
 
 export type SshRawTransferOptions = {
-  downloadFile?: (sourcePath: string, destinationPath: string) => Promise<void>
+  downloadFile?: (
+    sourcePath: string,
+    destinationPath: string,
+    options?: RemoteDownloadTransferObserver
+  ) => Promise<void>
   openFileUploadSession?: () => Promise<FileUploadSession>
   writeBuffer?: (
     remotePath: string,

@@ -65,6 +65,8 @@ export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
     cancelDownloadedFile: async () => {
       throw new Error('Remote file download is unavailable in paired web clients.')
     },
+    cancelDownload: async () => ({ ok: true, canceled: false }),
+    onDownloadProgress: () => noopUnsubscribe,
     listMarkdownDocuments: async ({ rootPath }) => {
       const file = await resolveRuntimeFilePath(rootPath)
       return callRuntimeResult('files.listMarkdownDocuments', {

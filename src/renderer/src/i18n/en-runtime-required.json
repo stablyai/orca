@@ -2691,7 +2691,6 @@
       },
       "status": {
         "responding": "Agent is responding",
-        "thinking": "Thinking",
         "toggleDetails": "Toggle turn details",
         "workedFor": "Worked for {{value0}}",
         "workingFor": "Working for {{value0}}"
@@ -2820,6 +2819,12 @@
     "placeholder": {
       "description": "This is where all your agents will show up at a glance. The board is coming soon.",
       "title": "Agent dashboard"
+    }
+  },
+  "remoteDownload": {
+    "progress": {
+      "folderDetail_one": "{{count}} file · {{bytes}}",
+      "folderDetail_other": "{{count}} files · {{bytes}}"
     }
   },
   "runtimeRpc": {

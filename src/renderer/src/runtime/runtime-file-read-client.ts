@@ -6,6 +6,7 @@ import type {
 import { callRuntimeRpc, getActiveRuntimeTarget, RuntimeRpcCallError } from './runtime-rpc-client'
 import type {
   RuntimeFileDownloadResult,
+  RuntimeFileDownloadTransfer,
   RuntimeFileOperationArgs,
   RuntimeFileReadArgs,
   RuntimeReadableFileContent
@@ -103,7 +104,8 @@ export async function readRuntimeFilePreview(
 export async function downloadRuntimeFile(
   context: RuntimeFileOperationArgs,
   filePath: string,
-  suggestedName: string
+  suggestedName: string,
+  transfer?: RuntimeFileDownloadTransfer
 ): Promise<RuntimeFileDownloadResult> {
   assertExternalSshReadOwnership(
     context.settings,
@@ -116,7 +118,11 @@ export async function downloadRuntimeFile(
       throw new Error('Remote file is outside the owning runtime worktree')
     }
     if (context.connectionId) {
-      return window.api.fs.downloadFile({ filePath, connectionId: context.connectionId })
+      return window.api.fs.downloadFile({
+        filePath,
+        connectionId: context.connectionId,
+        downloadId: transfer?.downloadId
+      })
     }
     const result = await readRuntimeFilePreview(context, filePath)
     return window.api.fs.saveDownloadedFile({
@@ -136,15 +142,21 @@ export async function downloadRuntimeFile(
   }
 
   let finished = false
+  // Why: the size only feeds the progress bar, so an old or failing stat must not block the download.
+  const progress = transfer
+    ? transfer.trackLocalProgress(await readRemoteDownloadSize(remoteArgs).catch(() => null))
+    : undefined
   try {
     let offset = 0
     for (;;) {
+      transfer?.signal.throwIfAborted()
       const chunk = await readRemoteDownloadChunk(remoteArgs, offset)
       if (chunk.bytesRead > 0) {
         await window.api.fs.appendDownloadedFileChunk({
           transferId: download.transferId,
           contentBase64: chunk.contentBase64
         })
+        progress?.addBytes(chunk.bytesRead)
       }
       offset += chunk.bytesRead
       if (chunk.eof) {
@@ -158,6 +170,7 @@ export async function downloadRuntimeFile(
     finished = true
     return result
   } finally {
+    progress?.flush()
     if (!finished) {
       await window.api.fs.cancelDownloadedFile({ transferId: download.transferId }).catch(() => {})
     }
@@ -205,6 +218,16 @@ async function readRemoteDownloadChunk(
     },
     { timeoutMs: 60_000 }
   )
+}
+
+async function readRemoteDownloadSize(remoteArgs: RemoteFileDownloadArgs): Promise<number> {
+  const stat = await callRuntimeRpc<{ size: number }>(
+    remoteArgs.target,
+    'files.stat',
+    { worktree: remoteArgs.worktreeSelector, relativePath: remoteArgs.relativePath },
+    { timeoutMs: 15_000 }
+  )
+  return stat.size
 }
 
 async function downloadRemoteFileViaPreview(

@@ -47,7 +47,7 @@ export async function downloadFileViaSystemSsh(
   target: SshTarget,
   remotePath: string,
   localPath: string,
-  options?: SystemSshOperationOptions
+  options?: SystemSshOperationOptions & { onBytesTransferred?: (bytes: number) => void }
 ): Promise<void> {
   throwIfAborted(options?.signal)
   const isWindows = options?.hostPlatform && isWindowsRemoteHost(options.hostPlatform)
@@ -59,6 +59,10 @@ export async function downloadFileViaSystemSsh(
     ...getSystemSshBuildArgsFromOperationOptions(options)
   })
   const output = createWriteStream(localPath, { flags: 'wx' })
+  const onBytesTransferred = options?.onBytesTransferred
+  if (onBytesTransferred) {
+    channel.on('data', (chunk: Buffer) => onBytesTransferred(chunk.length))
+  }
   try {
     await awaitWithSystemSshAbort(
       options?.signal,

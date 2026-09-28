@@ -2,6 +2,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { downloadRuntimeFile, type RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import { runRemoteDownloadWithProgress } from '@/components/remote-download/remote-download-progress-toast'
 import type { TreeNode } from './file-explorer-types'
 
 function getLocalDownloadName(destinationPath: string, platform: NodeJS.Platform): string {
@@ -17,18 +18,23 @@ export async function downloadRemoteFile(
   connectionIdOrRuntimeContext: string | RuntimeFileOperationArgs
 ): Promise<void> {
   try {
-    const result =
-      typeof connectionIdOrRuntimeContext === 'string'
-        ? node.isDirectory
-          ? await window.api.fs.downloadFolder({
-              dirPath: node.path,
-              connectionId: connectionIdOrRuntimeContext
-            })
-          : await window.api.fs.downloadFile({
-              filePath: node.path,
-              connectionId: connectionIdOrRuntimeContext
-            })
-        : await downloadRuntimeFile(connectionIdOrRuntimeContext, node.path, node.name)
+    const result = await runRemoteDownloadWithProgress(
+      { name: node.name, isDirectory: node.isDirectory },
+      (transfer) =>
+        typeof connectionIdOrRuntimeContext === 'string'
+          ? node.isDirectory
+            ? window.api.fs.downloadFolder({
+                dirPath: node.path,
+                connectionId: connectionIdOrRuntimeContext,
+                downloadId: transfer.downloadId
+              })
+            : window.api.fs.downloadFile({
+                filePath: node.path,
+                connectionId: connectionIdOrRuntimeContext,
+                downloadId: transfer.downloadId
+              })
+          : downloadRuntimeFile(connectionIdOrRuntimeContext, node.path, node.name, transfer)
+    )
     // Why: Suppress toasts when the user cancels the native save dialog per design.
     if (result.canceled) {
       return

@@ -17,6 +17,7 @@ import type {
   LocalLogTailWatchArgs
 } from '../../shared/local-log-tail-types'
 import type { SshMutationExpectation } from '../../shared/ssh-types'
+import type { RemoteDownloadProgress } from '../../shared/remote-download-progress'
 import type {
   CreateVenvResult,
   KernelFrameEvent,
@@ -56,10 +57,12 @@ export type FilesystemApi = {
     downloadFile: (args: {
       filePath: string
       connectionId: string
+      downloadId?: string
     }) => Promise<{ canceled: true } | { canceled: false; destinationPath: string }>
     downloadFolder: (args: {
       dirPath: string
       connectionId: string
+      downloadId?: string
     }) => Promise<{ canceled: true } | { canceled: false; destinationPath: string }>
     saveDownloadedFile: (args: {
       suggestedName: string
@@ -79,6 +82,8 @@ export type FilesystemApi = {
       transferId: string
     }) => Promise<{ canceled: false; destinationPath: string }>
     cancelDownloadedFile: (args: { transferId: string }) => Promise<{ ok: true }>
+    cancelDownload: (args: { downloadId: string }) => Promise<{ ok: true; canceled: boolean }>
+    onDownloadProgress: (callback: (progress: RemoteDownloadProgress) => void) => () => void
     listMarkdownDocuments: (args: {
       rootPath: string
       connectionId?: string
