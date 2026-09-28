@@ -324,7 +324,16 @@ describe('Windows NSIS uninstaller signing', () => {
       expect(restore.run).not.toContain('Select-Object -First 1')
       expect(restore.run).not.toContain('-like "*$relative"')
       const rehearsal = readWorkflow('.github/workflows/windows-signing-rehearsal.yml')
-      expect(stepNamed(rehearsal.jobs.rehearse.steps, name).run).toBe(restore.run)
+      const rehearseRestore = stepNamed(rehearsal.jobs.rehearse.steps, name)
+      expect(rehearseRestore.run).toBe(restore.run)
+      expect(restore.env.SIGNING_POLICY).toBe('release-signing')
+      expect(rehearseRestore.env.SIGNING_POLICY).toBe(
+        "${{ inputs.signing-policy-slug || 'test-signing' }}"
+      )
+      expect(restore.run).toContain("$requireValid = $env:SIGNING_POLICY -ne 'test-signing'")
+      expect(restore.run).toContain(
+        "if ($null -eq $signature.SignerCertificate -or ($requireValid -and ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notlike '*CN=SignPath Foundation*')))"
+      )
     }
   })
 

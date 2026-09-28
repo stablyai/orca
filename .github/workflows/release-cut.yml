@@ -1720,7 +1720,10 @@ jobs:
         id: restore-signed-inner
         if: matrix.platform == 'win' && github.run_attempt == 1 && steps.download-signed-inner.outcome == 'success'
         shell: pwsh
+        env:
+          SIGNING_POLICY: release-signing
         run: |
+          $requireValid = $env:SIGNING_POLICY -ne 'test-signing'
           $root = Resolve-Path 'dist/win-unpacked'
           $failures = New-Object System.Collections.Generic.List[string]
           foreach ($relative in Get-Content 'inner-signing-list.txt') {
@@ -1734,7 +1737,7 @@ jobs:
             }
             $signed = Get-Item -LiteralPath @($candidates)[0]
             $signature = Get-AuthenticodeSignature -FilePath $signed.FullName
-            if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notlike '*CN=SignPath Foundation*') {
+            if ($null -eq $signature.SignerCertificate -or ($requireValid -and ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notlike '*CN=SignPath Foundation*'))) {
               $failures.Add("returned without a valid SignPath signature: $relative")
               continue
             }
@@ -1751,7 +1754,10 @@ jobs:
         id: restore-signed-uninstaller
         if: matrix.platform == 'win' && github.run_attempt == 1 && steps.restore-signed-inner.outcome == 'success'
         shell: pwsh
+        env:
+          SIGNING_POLICY: release-signing
         run: |
+          $requireValid = $env:SIGNING_POLICY -ne 'test-signing'
           $candidates = @(
             (Join-Path 'signed-inner' 'uninstaller\orca-uninstaller.exe'),
             (Join-Path 'signed-inner/signing-stage' 'uninstaller\orca-uninstaller.exe')
@@ -1761,7 +1767,7 @@ jobs:
           }
           $signed = Get-Item -LiteralPath @($candidates)[0]
           $signature = Get-AuthenticodeSignature -FilePath $signed.FullName
-          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notlike '*CN=SignPath Foundation*') {
+          if ($null -eq $signature.SignerCertificate -or ($requireValid -and ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notlike '*CN=SignPath Foundation*'))) {
             throw 'The returned NSIS uninstaller carries no valid SignPath signature.'
           }
           $signedDir = Join-Path $env:RUNNER_TEMP 'uninstaller-signing\signed'
