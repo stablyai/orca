@@ -1,6 +1,6 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY } from '../../../../shared/constants'
-import { NumberField, SettingsSubsectionHeader } from './SettingsFormControls'
+import { NumberField, SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
 import { clampNumber, resolvePaneStyleOptions } from '@/lib/terminal-theme'
 import { translate } from '@/i18n/i18n'
@@ -86,6 +86,34 @@ export function TerminalPaneAppearanceSection({
             onChange={(value) =>
               updateSettings({
                 terminalDividerThicknessPx: clampNumber(value, 1, 32)
+              })
+            }
+          />
+        </SearchableSetting>
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.TerminalAppearanceSection.equalizePanesOnSplit.title',
+            'Equalize Panes After Split'
+          )}
+          description={translate(
+            'auto.components.settings.TerminalAppearanceSection.equalizePanesOnSplit.description',
+            'Give every pane in the tab an equal share after a split, instead of halving only the active pane. Sizes you drag afterwards are kept.'
+          )}
+          keywords={['pane', 'split', 'equalize', 'even', 'balance', 'resize', 'layout']}
+        >
+          <SettingsSwitchRow
+            label={translate(
+              'auto.components.settings.TerminalAppearanceSection.equalizePanesOnSplit.title',
+              'Equalize Panes After Split'
+            )}
+            description={translate(
+              'auto.components.settings.TerminalAppearanceSection.equalizePanesOnSplit.description',
+              'Give every pane in the tab an equal share after a split, instead of halving only the active pane. Sizes you drag afterwards are kept.'
+            )}
+            checked={settings.terminalEqualizePanesOnSplit}
+            onChange={() =>
+              updateSettings({
+                terminalEqualizePanesOnSplit: !settings.terminalEqualizePanesOnSplit
               })
             }
           />
