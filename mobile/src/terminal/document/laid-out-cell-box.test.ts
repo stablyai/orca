@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { laidOutCellMetrics, reportLaidOutCellBox } from './laid-out-cell-box'
+import { laidOutCellBox, reportLaidOutCellBox } from './laid-out-cell-box'
 import { createTerminalDocumentScope } from './document-scope'
 import { startTerminalDocument, stopTerminalDocument } from './create-terminal-document'
 import type { TerminalDocumentHost } from './document-host-seams'
@@ -14,7 +14,7 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 
-describe('laidOutCellMetrics', () => {
+describe('laidOutCellBox', () => {
   function scopeWithCell(
     cell: { width: number; height: number },
     fontSize: number,
@@ -34,9 +34,7 @@ describe('laidOutCellMetrics', () => {
 
   it('reports the box xterm laid out, keyed by the scale it was opened at', () => {
     const scope = scopeWithCell({ width: 29 / 3, height: 21 }, fontPxForScale(1.25))
-    expect(laidOutCellMetrics(scope)).toEqual([
-      { fontScale: 1.25, cellWidth: 29 / 3, cellHeight: 21 }
-    ])
+    expect(laidOutCellBox(scope)).toEqual({ fontScale: 1.25, cellWidth: 29 / 3, cellHeight: 21 })
   })
 
   it('tells the host each new laid-out box once, with the grid it belongs to', () => {
@@ -50,13 +48,13 @@ describe('laidOutCellMetrics', () => {
     expect(posted).toEqual([
       {
         type: 'cell-metrics',
-        cellMetrics: [{ fontScale: 1.25, cellWidth: 29 / 3, cellHeight: 21 }],
+        cellBox: { fontScale: 1.25, cellWidth: 29 / 3, cellHeight: 21 },
         cols: 55,
         rows: 47
       },
       {
         type: 'cell-metrics',
-        cellMetrics: [{ fontScale: 1.25, cellWidth: 9.75, cellHeight: 21 }],
+        cellBox: { fontScale: 1.25, cellWidth: 9.75, cellHeight: 21 },
         cols: 55,
         rows: 47
       }
@@ -74,7 +72,7 @@ describe('laidOutCellMetrics', () => {
 
   it('reports nothing while a text-size change is between font and scale', () => {
     const scope = scopeWithCell({ width: 29 / 3, height: 21 }, fontPxForScale(1))
-    expect(laidOutCellMetrics(scope)).toEqual([])
+    expect(laidOutCellBox(scope)).toBeNull()
   })
 })
 
@@ -133,7 +131,7 @@ describe('a started document', () => {
     }
   }
   const boxes = (posted: Record<string, unknown>[]) =>
-    posted.filter((m) => m.type === 'cell-metrics').map((m) => m.cellMetrics)
+    posted.filter((m) => m.type === 'cell-metrics').map((m) => m.cellBox)
 
   it('takes the frame the app laid out from init, as from a measure', () => {
     const { scope } = started()
@@ -160,9 +158,7 @@ describe('a started document', () => {
       expect(built[0].options.fontSize).toBe(fontPxForScale(1.25))
       expect(posted[0]).toEqual({
         type: 'web-ready',
-        cellMetrics: [
-          { fontScale: 1.25, cellWidth: (23 / 3) * (16 / 13), cellHeight: 15 * (16 / 13) }
-        ]
+        cellBox: { fontScale: 1.25, cellWidth: (23 / 3) * (16 / 13), cellHeight: 15 * (16 / 13) }
       })
     } finally {
       stopTerminalDocument(scope)
@@ -178,7 +174,7 @@ describe('a started document', () => {
     try {
       expect(scope.term).toBeNull()
       expect(double.disposals()).toBe(1)
-      expect(posted[0]).toEqual({ type: 'web-ready', cellMetrics: [] })
+      expect(posted[0]).toEqual({ type: 'web-ready', cellBox: null })
     } finally {
       stopTerminalDocument(scope)
     }
@@ -188,7 +184,7 @@ describe('a started document', () => {
     const { scope, posted, built } = started({ buildsTerminalBeforeReady: () => false })
     try {
       expect(built).toHaveLength(0)
-      expect(posted[0]).toEqual({ type: 'web-ready', cellMetrics: [] })
+      expect(posted[0]).toEqual({ type: 'web-ready', cellBox: null })
     } finally {
       stopTerminalDocument(scope)
     }
@@ -217,7 +213,7 @@ describe('a started document', () => {
       expect(scope.surface?.style.display).toBe('')
       expect(posted[0]).toEqual({
         type: 'web-ready',
-        cellMetrics: [{ fontScale: 1, cellWidth: 23 / 3, cellHeight: 15 }]
+        cellBox: { fontScale: 1, cellWidth: 23 / 3, cellHeight: 15 }
       })
       init()
       expect(scope.surface?.style.visibility).toBe('hidden')
@@ -237,7 +233,7 @@ describe('a started document', () => {
       const types = posted.map((m) => m.type)
       expect(types.indexOf('cell-metrics')).toBeGreaterThan(-1)
       expect(types.indexOf('cell-metrics')).toBeLessThan(types.indexOf('ready'))
-      expect(boxes(posted)).toEqual([[{ fontScale: 1, cellWidth: 23 / 3, cellHeight: 15 }]])
+      expect(boxes(posted)).toEqual([{ fontScale: 1, cellWidth: 23 / 3, cellHeight: 15 }])
     } finally {
       stopTerminalDocument(scope)
     }
@@ -250,7 +246,7 @@ describe('a started document', () => {
       await untilReady(posted)
       cell.width = 7.8
       render()
-      expect(boxes(posted).at(-1)).toEqual([{ fontScale: 1, cellWidth: 7.8, cellHeight: 15 }])
+      expect(boxes(posted).at(-1)).toEqual({ fontScale: 1, cellWidth: 7.8, cellHeight: 15 })
     } finally {
       stopTerminalDocument(scope)
     }

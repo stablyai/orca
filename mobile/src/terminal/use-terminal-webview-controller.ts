@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { TerminalOscLinkRange } from '../../../src/shared/terminal-osc-link-ranges'
-import { readTerminalCellMetrics, type TerminalCellMetrics } from './terminal-cell-metrics'
+import { readTerminalCellBox, type TerminalCellBox } from './terminal-cell-box'
 import { fitDimensionsFromCell } from './terminal-grid-fit'
 import { holdGrid } from './terminal-held-grid'
 import type { TerminalWebViewHandle, TerminalWebViewProps } from './terminal-webview-contract'
@@ -78,7 +78,7 @@ export function useTerminalWebViewController(
   // awaits this so it doesn't race ahead of term.open() / renderService population.
   const promises = useTerminalWebViewReadyPromises()
   // The box the current document last reported; its re-reports cover a text-size change.
-  const cellBoxRef = useRef<TerminalCellMetrics | null>(null)
+  const cellBoxRef = useRef<TerminalCellBox | null>(null)
   // Why: a box that changes while the grid does not is a renderer or pixel-ratio change and needs a
   // refit; one that arrives with a new grid is that grid's own (the DOM renderer's width follows cols).
   // The document reports every grid change, so an in-place reflow is held before a later renderer swap.
@@ -159,9 +159,7 @@ export function useTerminalWebViewController(
 
       if (msg.type === 'web-ready') {
         // Why: nothing subscribes before ready, so a ready's box only sizes the subscribe after it.
-        // A box at another scale (a reload keeps the mount's) leaves the route unmeasured.
-        cellBoxRef.current =
-          readTerminalCellMetrics(msg).find((entry) => entry.fontScale === textScale) ?? null
+        cellBoxRef.current = readTerminalCellBox(msg)
         confirmWebReady(true)
       } else if (
         msg.type === 'pong' &&
@@ -175,7 +173,7 @@ export function useTerminalWebViewController(
         // measure can now safely read cell dims.
         promises.resolveReady()
       } else if (msg.type === 'cell-metrics') {
-        const [laidOut] = readTerminalCellMetrics(msg)
+        const laidOut = readTerminalCellBox(msg)
         const sameGrid = holdGrid(lastGridRef, msg.cols, msg.rows)
         const previous = cellBoxRef.current
         if (!laidOut) {
@@ -223,8 +221,7 @@ export function useTerminalWebViewController(
       onFileTap,
       onOpenUrl,
       onTextScaleChange,
-      onCellBoxChange,
-      textScale
+      onCellBoxChange
     ]
   )
 
@@ -254,12 +251,16 @@ export function useTerminalWebViewController(
     postMessage({ type: 'set-font-scale', fontScale: textScale })
   }, [postMessage, textScale])
 
-  const fitDimensions = useCallback((frame: { width: number; height: number }) => {
-    const cell = cellBoxRef.current
-    return cell && frame.width > 0 && frame.height > 0
-      ? fitDimensionsFromCell(cell, frame.width, frame.height)
-      : null
-  }, [])
+  const fitDimensions = useCallback(
+    (frame: { width: number; height: number }) => {
+      const cell = cellBoxRef.current
+      // Why: a box at another scale (a reload keeps the mount's) fits nothing; the route stays unmeasured.
+      return cell && cell.fontScale === textScale && frame.width > 0 && frame.height > 0
+        ? fitDimensionsFromCell(cell, frame.width, frame.height)
+        : null
+    },
+    [textScale]
+  )
 
   const handle = useMemo<TerminalWebViewHandle>(
     () => ({

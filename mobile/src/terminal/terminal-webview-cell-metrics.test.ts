@@ -76,7 +76,7 @@ function postedTypes(): unknown[] {
 
 const cellMetrics = (cellWidth: number, cols: number, rows = 47) => ({
   type: 'cell-metrics',
-  cellMetrics: [cellAt(scale, cellWidth)],
+  cellBox: cellAt(scale, cellWidth),
   cols,
   rows
 })
@@ -85,14 +85,14 @@ describe('the cell box xterm laid out', () => {
   it('sizes a fit from web-ready, which the document sends once its terminal is built', () => {
     const { handle, notify } = mount()
     expect(handle().fitDimensions(FRAME)).toBeNull()
-    notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
+    notify({ type: 'web-ready', cellBox: cellAt(scale) })
     expect(handle().fitDimensions(FRAME)).toEqual({ cols: 55, rows: 47 })
     expect(postedTypes()).not.toContain('measure')
   })
 
   it('refits when the box changes at the same grid, as after a renderer swap', () => {
     const { handle, notify, onCellBoxChange } = mount()
-    notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
+    notify({ type: 'web-ready', cellBox: cellAt(scale) })
     notify(cellMetrics(23 / 3, 55))
     expect(onCellBoxChange).not.toHaveBeenCalled()
     notify(cellMetrics(7.8, 55))
@@ -102,7 +102,7 @@ describe('the cell box xterm laid out', () => {
 
   it('does not refit a box that came with a new grid, which the DOM renderer derives from cols', () => {
     const { notify, onCellBoxChange } = mount()
-    notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
+    notify({ type: 'web-ready', cellBox: cellAt(scale) })
     notify(cellMetrics(7.8, 55))
     notify(cellMetrics(7.9, 54))
     notify(cellMetrics(7.8, 55))
@@ -111,7 +111,7 @@ describe('the cell box xterm laid out', () => {
 
   it("does not refit a width change to a new grid when the DOM renderer reports that grid's box", () => {
     const { handle, notify, onCellBoxChange } = mount()
-    notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
+    notify({ type: 'web-ready', cellBox: cellAt(scale) })
     notify(cellMetrics(23 / 3, 55))
     // The width refit asks whether the new width keeps the grid; asking is not a new grid.
     expect(handle().fitDimensions({ width: 390, height: 710 })).toEqual({ cols: 50, rows: 47 })
@@ -121,7 +121,7 @@ describe('the cell box xterm laid out', () => {
 
   it('refits a renderer swap at a grid applied in place, which the document reported unchanged box and all', () => {
     const { handle, notify, onCellBoxChange } = mount()
-    notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
+    notify({ type: 'web-ready', cellBox: cellAt(scale) })
     notify(cellMetrics(23 / 3, 55))
     // A width change applied in place: the WebGL box is unchanged, and the new grid is reported.
     handle().reflow(50, 47)
@@ -133,7 +133,7 @@ describe('the cell box xterm laid out', () => {
 
   it("does not refit the DOM renderer's box for a grid it was just given, so it cannot loop", () => {
     const { handle, notify, onCellBoxChange } = mount()
-    notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
+    notify({ type: 'web-ready', cellBox: cellAt(scale) })
     notify(cellMetrics(7.8, 55))
     handle().reflow(50, 47)
     notify(cellMetrics(7.9, 50))
@@ -142,7 +142,7 @@ describe('the cell box xterm laid out', () => {
 
   it("refits a DOM subscribe once on its first report, and not again on the refit's own report", () => {
     const { handle, notify, onCellBoxChange } = mount()
-    notify({ type: 'web-ready', cellMetrics: [cellAt(scale, 7.8)] })
+    notify({ type: 'web-ready', cellBox: cellAt(scale, 7.8) })
     expect(handle().subscribeFitDimensions(FRAME)).toEqual({ cols: 54, rows: 47 })
     // The DOM renderer's box at the subscribed grid: its width follows cols, so it differs.
     notify(cellMetrics(8, 54))
@@ -155,35 +155,35 @@ describe('the cell box xterm laid out', () => {
 
   it('fits from the box the current document reported, not one an earlier document did', () => {
     const { handle, notify, webView } = mount()
-    notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
+    notify({ type: 'web-ready', cellBox: cellAt(scale) })
     act(() => webView().props.onLoadStart())
-    notify({ type: 'web-ready', cellMetrics: [] })
+    notify({ type: 'web-ready', cellBox: null })
     expect(handle().fitDimensions(FRAME)).toBeNull()
   })
 
   it("fits only from a ready box at the app's text scale", () => {
     const { handle, notify, webView } = mount(1.5)
     // A document built at mount keeps that scale; a reload after a text-size change reports it.
-    notify({ type: 'web-ready', cellMetrics: [cellAt(1)] })
+    notify({ type: 'web-ready', cellBox: cellAt(1) })
     expect(handle().fitDimensions(FRAME)).toBeNull()
     act(() => webView().props.onLoadStart())
-    notify({ type: 'web-ready', cellMetrics: [cellAt(1.5)] })
+    notify({ type: 'web-ready', cellBox: cellAt(1.5) })
     expect(handle().fitDimensions(FRAME)).toEqual({ cols: 55, rows: 47 })
   })
 
   it("does not refit a reloaded document's first DOM report at the old document's grid", () => {
     const { notify, onCellBoxChange, webView } = mount()
-    notify({ type: 'web-ready', cellMetrics: [cellAt(scale, 7.8)] })
+    notify({ type: 'web-ready', cellBox: cellAt(scale, 7.8) })
     notify(cellMetrics(7.8, 54))
     act(() => webView().props.onLoadStart())
-    notify({ type: 'web-ready', cellMetrics: [cellAt(scale, 7.8)] })
+    notify({ type: 'web-ready', cellBox: cellAt(scale, 7.8) })
     notify(cellMetrics(7.9, 54))
     expect(onCellBoxChange).not.toHaveBeenCalled()
   })
 
   it('measures the live document for a refit, against the frame the app laid out', async () => {
     const { handle, notify } = mount()
-    notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
+    notify({ type: 'web-ready', cellBox: cellAt(scale) })
     const pending = handle().measureFitDimensions(710, 427.5)
     expect(
       nativeWebViewMethods.postMessage.mock.calls
@@ -196,7 +196,7 @@ describe('the cell box xterm laid out', () => {
 
   it('does not measure before the frame is laid out: the fit waits for layout', async () => {
     const { handle, notify } = mount()
-    notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
+    notify({ type: 'web-ready', cellBox: cellAt(scale) })
     await expect(handle().measureFitDimensions(710, 0)).resolves.toBeNull()
     await expect(handle().measureFitDimensions(0, 427)).resolves.toBeNull()
     expect(postedTypes()).not.toContain('measure')
@@ -207,7 +207,7 @@ describe('the cell box xterm laid out', () => {
     handle().init(55, 47, 'snapshot')
     expect(postedTypes()).toEqual([])
     act(() => webView().props.onLoadStart())
-    notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
+    notify({ type: 'web-ready', cellBox: cellAt(scale) })
     expect(postedTypes()).not.toContain('init')
   })
 
@@ -227,7 +227,7 @@ describe('the cell box xterm laid out', () => {
     act(() => webView().props.onLoadStart())
     handle().write('for the lost content process')
     act(() => webView().props.onContentProcessDidTerminate({ nativeEvent: {} }))
-    notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
+    notify({ type: 'web-ready', cellBox: cellAt(scale) })
     act(() => {
       vi.runAllTimers()
     })

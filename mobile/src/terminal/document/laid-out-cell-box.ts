@@ -1,24 +1,24 @@
-import type { TerminalCellMetrics } from '../terminal-cell-metrics'
+import type { TerminalCellBox } from '../terminal-cell-box'
 import type { TerminalDocumentScope } from './document-scope'
 import { notify } from './host-notify'
 import { fontPxForScale } from './text-scaling'
 
-/** The box xterm actually laid out, for the scale it was opened at. */
-export function laidOutCellMetrics(scope: TerminalDocumentScope): TerminalCellMetrics[] {
+/** The box xterm actually laid out, for the scale it was opened at; null before one. */
+export function laidOutCellBox(scope: TerminalDocumentScope): TerminalCellBox | null {
   const core = scope.term && scope.term._core
   const dimensions = core && core._renderService && core._renderService.dimensions
   if (!dimensions || !scope.term) {
-    return []
+    return null
   }
   const { width, height } = dimensions.css.cell
   if (!(width > 0 && height > 0)) {
-    return []
+    return null
   }
   // A text-size change between init and ready leaves a box that belongs to neither scale.
   if (scope.term.options.fontSize !== fontPxForScale(scope.currentTextScale)) {
-    return []
+    return null
   }
-  return [{ fontScale: scope.currentTextScale, cellWidth: width, cellHeight: height }]
+  return { fontScale: scope.currentTextScale, cellWidth: width, cellHeight: height }
 }
 
 /**
@@ -28,7 +28,7 @@ export function laidOutCellMetrics(scope: TerminalDocumentScope): TerminalCellMe
  * when a later renderer swap arrives at it.
  */
 export function reportLaidOutCellBox(scope: TerminalDocumentScope) {
-  const [laidOut] = laidOutCellMetrics(scope)
+  const laidOut = laidOutCellBox(scope)
   if (!laidOut || !scope.term) {
     return
   }
@@ -40,7 +40,7 @@ export function reportLaidOutCellBox(scope: TerminalDocumentScope) {
   scope.reportedCellBox = key
   notify(scope, {
     type: 'cell-metrics',
-    cellMetrics: [laidOut],
+    cellBox: laidOut,
     cols,
     rows
   })

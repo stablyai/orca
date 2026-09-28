@@ -1,6 +1,6 @@
 import { handleMsg, type TerminalHostMessage } from './host-message-router'
 import { notify, reportEngineError, type TerminalEngineError } from './host-notify'
-import { laidOutCellMetrics } from './laid-out-cell-box'
+import { laidOutCellBox } from './laid-out-cell-box'
 import { prepareTerminal } from './terminal-init'
 import type { TerminalDocumentScope } from './document-scope'
 import type { TerminalDocumentHostFrame } from './document-host-seams'
@@ -51,7 +51,7 @@ export function startMessageBridge(scope: TerminalDocumentScope) {
     if (scope.buildsTerminalBeforeReady()) {
       prepareTerminal(scope)
     }
-    notify(scope, { type: 'web-ready', cellMetrics: laidOutCellMetrics(scope) })
+    notify(scope, { type: 'web-ready', cellBox: laidOutCellBox(scope) })
   } else {
     reportEngineError(scope, 'terminal engine missing', 'xterm failed to load', true)
   }
