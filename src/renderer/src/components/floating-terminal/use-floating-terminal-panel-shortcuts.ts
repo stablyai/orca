@@ -6,6 +6,7 @@ import {
   matchFloatingWorkspacePanelShortcut
 } from '@/lib/floating-workspace-shortcut-policy'
 import { isFloatingWorkspaceTerminalInputTarget } from '@/lib/floating-workspace-terminal-actions'
+import { getLayoutBaseCharacterForCode } from '@/lib/keyboard-layout/layout-base-character'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { requestTerminalTabRename } from '@/components/tab-bar/terminal-tab-rename-request'
 import { useAppStore } from '@/store'
@@ -75,10 +76,18 @@ export function useFloatingTerminalPanelShortcuts({
         : isFloatingTerminalInput
           ? 'terminal'
           : 'app'
-      const matchOptions: KeybindingMatchOptions = { context, terminalShortcutPolicy }
+      const matchOptions: KeybindingMatchOptions = {
+        context,
+        terminalShortcutPolicy,
+        layoutCharacterForCode: getLayoutBaseCharacterForCode
+      }
       const floatingChromeMatchOptions: KeybindingMatchOptions =
         isFloatingTerminalInput && terminalShortcutPolicy === 'terminal-first'
-          ? { context: 'app', terminalShortcutPolicy }
+          ? {
+              context: 'app',
+              terminalShortcutPolicy,
+              layoutCharacterForCode: getLayoutBaseCharacterForCode
+            }
           : matchOptions
       const ownedAction = matchFloatingWorkspacePanelOwnedAction(
         input,

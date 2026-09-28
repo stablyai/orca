@@ -34,6 +34,7 @@ import type { RichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-htm
 import { handleRichMarkdownLinkShortcut } from './rich-markdown-link-shortcut'
 import { handleRichMarkdownSaveShortcut } from './rich-markdown-save-shortcut'
 import { flushPendingProseMirrorSelection } from './rich-markdown-selection-flush'
+import { getLayoutBaseCharacterForCode } from '@/lib/keyboard-layout/layout-base-character'
 
 export type KeyHandlerContext = {
   isMac: boolean
@@ -96,7 +97,8 @@ export function createRichMarkdownKeyHandler(
       isMarkdownPreviewFindShortcut(
         event,
         getShortcutPlatform(),
-        useAppStore.getState().keybindings
+        useAppStore.getState().keybindings,
+        getLayoutBaseCharacterForCode
       )
     ) {
       event.preventDefault()

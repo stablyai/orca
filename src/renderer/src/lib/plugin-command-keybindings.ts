@@ -8,6 +8,7 @@ import {
   type PluginKeybindingActionId
 } from '../../../shared/keybindings'
 import { translate } from '@/i18n/i18n'
+import { getLayoutBaseCharacterForCode } from '@/lib/keyboard-layout/layout-base-character'
 import { pluginCommandKeybindingActionId as sharedPluginCommandKeybindingActionId } from '../../../shared/plugins/plugin-command-actions'
 
 export function pluginCommandKeybindingActionId(
@@ -65,7 +66,7 @@ export function findPluginCommandForKeybinding(
       continue
     }
     const matches = getEffectivePluginCommandKeybindings(command, platform, overrides).some(
-      (binding) => keybindingMatchesInput(binding, input, platform)
+      (binding) => keybindingMatchesInput(binding, input, platform, getLayoutBaseCharacterForCode)
     )
     if (matches) {
       return command

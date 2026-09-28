@@ -4,6 +4,7 @@ import type { KeybindingActionId } from '../../../shared/keybindings'
 import { keybindingMatchesAction } from '../../../shared/keybindings'
 import { matchesRecentTabSwitcherChord } from '../../../shared/window-shortcut-policy'
 import { useAppStore } from '../store'
+import { getLayoutBaseCharacterForCode } from '@/lib/keyboard-layout/layout-base-character'
 import {
   createFloatingWorkspaceBrowserTab,
   createFloatingWorkspaceMarkdownTab,
@@ -49,7 +50,8 @@ export function handleTerminalWorkspaceKeyDown(
   const matchShortcut = (actionId: KeybindingActionId): boolean =>
     keybindingMatchesAction(actionId, event, shortcutPlatform, keybindings, {
       context,
-      terminalShortcutPolicy
+      terminalShortcutPolicy,
+      layoutCharacterForCode: getLayoutBaseCharacterForCode
     })
   const notifyTerminalCapture = (actionId: KeybindingActionId): void => {
     if (context !== 'terminal' || terminalShortcutPolicy !== 'orca-first') {

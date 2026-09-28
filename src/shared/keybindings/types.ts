@@ -16,9 +16,13 @@ export type KeybindingPlatform = 'darwin' | 'linux' | 'win32'
 
 export type TerminalShortcutPolicy = 'orca-first' | 'terminal-first'
 
+/** Active layout's unmodified character for a physical code, or undefined when unknown. */
+export type LayoutCharacterLookup = (code: string) => string | undefined
+
 export type KeybindingMatchOptions = {
   context?: KeybindingContext
   terminalShortcutPolicy?: TerminalShortcutPolicy
+  layoutCharacterForCode?: LayoutCharacterLookup
 }
 
 export type AgentTabActionId = `tab.newAgent.${TuiAgent}`
