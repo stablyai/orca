@@ -1,4 +1,5 @@
-import { join } from 'node:path'
+import { homedir } from 'node:os'
+import { join, resolve } from 'node:path'
 import {
   clearAiVaultBackgroundRestartCircuit,
   resetAiVaultScannerBackgroundForTests,
@@ -11,6 +12,8 @@ import type { AiVaultScanOptions } from './session-scanner-types'
 import { prepareOpenCodeWslReaders } from './opencode-wsl-runtime-preparation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { AiVaultScanCoordinator } from './ai-vault-scan-coordinator'
+import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
+import { DEFAULT_CLAUDE_PROJECTS_DIR } from './session-scanner-roots'
 import {
   aiVaultSessionDepthCovers,
   requestedAiVaultSessionDepth,
@@ -27,8 +30,11 @@ const AI_VAULT_CACHE_TTL_MS = 60_000
 // seam (the OrcaRuntimeService deps), NOT the window-only registerCoreHandlers
 // path — `orca serve` never runs that path, so sourcing it there would silently
 // drop managed-Codex sessions from remote/SSH results.
+// `getAdditionalClaudeConfigDirs` mirrors it for multi-profile Claude setups:
+// each account lives in its own `$CLAUDE_CONFIG_DIR`, none uses the default.
 export type AiVaultSessionSources = {
   getAdditionalCodexHomePaths?: () => readonly string[]
+  getAdditionalClaudeConfigDirs?: () => readonly string[]
 }
 
 type CachedAiVaultList = {
@@ -57,7 +63,12 @@ export function configureAiVaultSessionSources(next: AiVaultSessionSources): voi
  * exactly what the session list walks.
  */
 export async function localAiVaultScanRoots(): Promise<
-  Required<Pick<AiVaultScanOptions, 'additionalCodexSessionsDirs' | 'wslHomeDirs'>> &
+  Required<
+    Pick<
+      AiVaultScanOptions,
+      'additionalCodexSessionsDirs' | 'additionalClaudeProjectsDirs' | 'wslHomeDirs'
+    >
+  > &
     Pick<AiVaultScanOptions, 'executionHostId' | 'wslOpenCodeReaders'>
 > {
   const [additionalCodexHomes, wslHomeDirs] = await Promise.all([
@@ -66,6 +77,7 @@ export async function localAiVaultScanRoots(): Promise<
   ])
   return {
     additionalCodexSessionsDirs: additionalCodexHomes.map((homePath) => join(homePath, 'sessions')),
+    additionalClaudeProjectsDirs: additionalClaudeProjectsDirs(),
     wslHomeDirs,
     wslOpenCodeReaders: await prepareOpenCodeWslReaders(wslHomeDirs),
     // Why: this scan is always host-local; callers addressing this host by a
@@ -78,6 +90,25 @@ export async function localAiVaultScanRoots(): Promise<
  *  resumed from must read the same set, or a row can be listed and then refuse to resume. */
 export function configuredAdditionalCodexHomePaths(): readonly string[] {
   return sources.getAdditionalCodexHomePaths?.() ?? []
+}
+
+export function configuredAdditionalClaudeConfigDirs(): readonly string[] {
+  return sources.getAdditionalClaudeConfigDirs?.() ?? []
+}
+
+// `$CLAUDE_CONFIG_DIR/projects` plus any extra account config dirs, as
+// `.../projects` scan roots. The default `~/.claude` is excluded — it is
+// already the primary root, and downstream dedupe would drop it anyway.
+// Sync so the subagent-transcript allowlist reads the same set as discovery.
+export function additionalClaudeProjectsDirs(env: NodeJS.ProcessEnv = process.env): string[] {
+  const defaultProjectsDir = DEFAULT_CLAUDE_PROJECTS_DIR
+  const candidates = [
+    join(resolveAbsoluteDirOverride(env.CLAUDE_CONFIG_DIR, join(homedir(), '.claude')), 'projects'),
+    ...configuredAdditionalClaudeConfigDirs().map((dir) => join(dir, 'projects'))
+  ]
+  return candidates.filter(
+    (dir) => dir.trim().length > 0 && resolve(dir) !== resolve(defaultProjectsDir)
+  )
 }
 
 export async function listAiVaultSessions(

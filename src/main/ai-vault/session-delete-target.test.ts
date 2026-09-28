@@ -367,6 +367,30 @@ describe('directory-shaped agents', () => {
     ).toBe(false)
   })
 
+  it('allows a claude session under an additional $CLAUDE_CONFIG_DIR root, and rejects it without the option', () => {
+    const extraRoot = join(HOME, '.claude-work', 'projects')
+    const filePath = join(extraRoot, '-proj', 'sess-9.jsonl')
+    const allowed = validateAiVaultSessionDeleteTarget({
+      agent: 'claude',
+      filePath,
+      executionHostId: 'local',
+      rootOptions: { claudeProjectsDir: CLAUDE_ROOT, additionalClaudeProjectsDirs: [extraRoot] }
+    })
+    expect(allowed.allowed).toBe(true)
+
+    const rejected = validateAiVaultSessionDeleteTarget({
+      agent: 'claude',
+      filePath,
+      executionHostId: 'local',
+      rootOptions: { claudeProjectsDir: CLAUDE_ROOT }
+    })
+    expect(rejected).toEqual({
+      allowed: false,
+      agent: 'claude',
+      reason: 'path-outside-known-roots'
+    })
+  })
+
   it("pairs a WSL-home claude session with that distro's session-env, not the local one", () => {
     const wslHome = join('/tmp', 'orca-wsl-home')
     const filePath = join(wslHome, '.claude', 'projects', '-proj', 'sess-2.jsonl')

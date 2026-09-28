@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultListResult } from '../../shared/ai-vault-types'
 
@@ -27,6 +28,8 @@ vi.mock('../wsl', () => ({
 vi.mock('../wsl-running-path-filter', () => ({ filterPathsToRunningWslDistrosAsync }))
 
 import {
+  additionalClaudeProjectsDirs,
+  configureAiVaultSessionSources,
   getAiVaultWslHomeDirs,
   invalidateAiVaultSessionListCache,
   listAiVaultSessions,
@@ -128,5 +131,35 @@ describe('invalidateAiVaultSessionListCache generation guard', () => {
 
     await expect(getAiVaultWslHomeDirs()).resolves.toEqual([])
     expect(listRunningWslHomeDirsAsync).not.toHaveBeenCalled()
+  })
+})
+
+describe('additionalClaudeProjectsDirs', () => {
+  beforeEach(() => {
+    resetAiVaultSessionListCacheForTests()
+  })
+  afterEach(() => {
+    resetAiVaultSessionListCacheForTests()
+  })
+
+  it('resolves $CLAUDE_CONFIG_DIR plus configured account dirs, excluding the default', () => {
+    const workConfigDir = join('/tmp', 'orca-test-claude-work')
+    const personalConfigDir = join('/tmp', 'orca-test-claude-personal')
+    configureAiVaultSessionSources({
+      getAdditionalClaudeConfigDirs: () => [personalConfigDir]
+    })
+    expect(
+      additionalClaudeProjectsDirs({ CLAUDE_CONFIG_DIR: workConfigDir } as NodeJS.ProcessEnv)
+    ).toEqual([join(workConfigDir, 'projects'), join(personalConfigDir, 'projects')])
+  })
+
+  it('returns no extra roots when env is unset and no account dirs are configured', () => {
+    expect(additionalClaudeProjectsDirs({} as NodeJS.ProcessEnv)).toEqual([])
+  })
+
+  it('ignores a relative CLAUDE_CONFIG_DIR override', () => {
+    expect(
+      additionalClaudeProjectsDirs({ CLAUDE_CONFIG_DIR: 'relative/dir' } as NodeJS.ProcessEnv)
+    ).toEqual([])
   })
 })

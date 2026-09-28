@@ -105,6 +105,7 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     rootDirs: (options, wslHomeDirs) =>
       claudeProjectsRootDirs({
         claudeProjectsDir: options.claudeProjectsDir,
+        additionalClaudeProjectsDirs: options.additionalClaudeProjectsDirs,
         wslHomeDirs
       }),
     extensions: ['.jsonl'],

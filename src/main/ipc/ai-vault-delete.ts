@@ -1,8 +1,12 @@
+import { join } from 'node:path'
 import { ipcMain } from 'electron'
 import {
+  additionalClaudeProjectsDirs,
+  configuredAdditionalCodexHomePaths,
   getAiVaultWslHomeDirs,
   invalidateAiVaultSessionListCache
 } from '../ai-vault/cached-session-list'
+import { filterPathsToRunningWslDistrosAsync } from '../wsl-running-path-filter'
 import { deleteAiVaultSessionFile } from '../ai-vault/session-delete'
 import { invalidateSessionParseCacheEntry } from '../ai-vault/session-scanner-parse-cache'
 import { invalidateAiVaultBackgroundCache } from '../ai-vault/session-scanner-background'
@@ -35,13 +39,27 @@ export async function deleteAiVaultSession(
 ): Promise<AiVaultDeleteSessionResult> {
   // The validator tolerates a malformed agent/filePath but destructures `args`,
   // so an absent payload is defaulted here to keep the never-throws boundary.
-  const wslHomeDirs = await getAiVaultWslHomeDirs()
+  // Why: discovery lists sessions under these extra roots
+  // (localAiVaultScanRoots), so the validator must allowlist the same set —
+  // otherwise a listed row offers delete and fails with
+  // `path-outside-known-roots`. Codex extras ride along for the same
+  // pre-existing gap.
+  const [wslHomeDirs, additionalCodexHomes] = await Promise.all([
+    getAiVaultWslHomeDirs(),
+    filterPathsToRunningWslDistrosAsync(configuredAdditionalCodexHomePaths())
+  ])
   const result = await deleteAiVaultSessionFile({
     agent: args?.agent as AiVaultAgent,
     sessionId: args?.sessionId,
     filePath: args?.filePath ?? '',
     executionHostId: args?.executionHostId,
-    wslHomeDirs
+    wslHomeDirs,
+    rootOptions: {
+      additionalClaudeProjectsDirs: additionalClaudeProjectsDirs(),
+      additionalCodexSessionsDirs: additionalCodexHomes.map((homePath) =>
+        join(homePath, 'sessions')
+      )
+    }
   })
 
   if (result.outcome === 'deleted') {
