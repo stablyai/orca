@@ -122,6 +122,23 @@ test('switches the active server from the status bar between two paired hosts an
     await expect(sidebar.getByText(path.basename(privateRepoPath), { exact: true })).toBeVisible()
     await expect(sidebar.getByText(path.basename(testRepoPath), { exact: true })).toBeHidden()
 
+    await page.evaluate(async () => {
+      const environmentId = window.__store?.getState().settings?.activeRuntimeEnvironmentId
+      if (!environmentId) {
+        throw new Error('Private host was not selected')
+      }
+      await window.api.runtimeEnvironments.disconnect({ selector: environmentId })
+      await window.__store?.getState().readRuntimeHostStatusSnapshots()
+    })
+    const privateNotice = page.getByRole('status', { name: 'priv', exact: true })
+    await expect(privateNotice).toContainText('Disconnected')
+    await expect(privateTrigger.getByText('· Disconnected')).toHaveClass(/text-destructive/)
+    await privateNotice
+      .getByRole('button', { name: 'Reconnect', exact: true })
+      .click({ force: true })
+    await expect(privateNotice).toBeHidden()
+    await expect(privateTrigger).toHaveText('priv')
+
     await privateTrigger.click({ force: true })
     await expect(page.getByRole('menuitemradio', { name: 'priv', exact: true })).toHaveAttribute(
       'aria-checked',
@@ -151,6 +168,7 @@ test('switches the active server from the status bar between two paired hosts an
     await expect(sidebar.getByText(path.basename(privateRepoPath), { exact: true })).toBeVisible()
     await privateHost.dispose()
     privateHost = null
+    await expect(privateNotice).toContainText(/Reconnecting|Disconnected/)
     await privateTrigger.click({ force: true })
     await expect(privateRadio).toContainText(/Reconnecting|Disconnected/)
     await expect(privateRadio).toHaveAttribute('aria-disabled', 'true')
@@ -160,6 +178,7 @@ test('switches the active server from the status bar between two paired hosts an
     await expect(privateTrigger).toContainText(/· (Reconnecting|Disconnected)/)
     await page.getByRole('menuitemradio', { name: 'work', exact: true }).click({ force: true })
     await expect(workTrigger).toBeEnabled()
+    await expect(privateNotice).toBeHidden()
     await expect(sidebar.getByText(path.basename(testRepoPath), { exact: true })).toBeVisible()
   } finally {
     await client?.dispose()

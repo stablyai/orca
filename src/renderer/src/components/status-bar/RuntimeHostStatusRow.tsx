@@ -55,11 +55,11 @@ export function runtimeDotColor(state: RuntimeHostConnectionState): string {
     case 'runtime-unavailable':
       return 'bg-yellow-500'
     case 'disconnected':
-      return 'bg-muted-foreground/40'
+      return 'bg-destructive'
   }
 }
 
-function runtimeStatusTone(state: RuntimeHostConnectionState): string {
+export function runtimeStatusTone(state: RuntimeHostConnectionState): string {
   if (
     state === 'checking' ||
     state === 'reconnecting' ||
@@ -68,7 +68,7 @@ function runtimeStatusTone(state: RuntimeHostConnectionState): string {
   ) {
     return 'text-yellow-500'
   }
-  return 'text-muted-foreground'
+  return state === 'disconnected' ? 'text-destructive' : 'text-muted-foreground'
 }
 
 function runtimeActionLabel(state: RuntimeHostConnectionState): string | null {

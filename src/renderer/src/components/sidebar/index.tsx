@@ -18,6 +18,7 @@ import { useWorkspaceRevealBodyRedirect } from './use-workspace-reveal-body-redi
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
+import { ActiveServerConnectionNotice } from './ActiveServerConnectionNotice'
 import { LocalGitToolchainScanBanner } from './LocalGitToolchainScanBanner'
 
 // Why lazy: the Agents list pulls the whole activity pipeline (virtualizer, markdown
@@ -183,6 +184,7 @@ function Sidebar({
               </React.Suspense>
             ) : (
               <>
+                <ActiveServerConnectionNotice />
                 <LocalGitToolchainScanBanner />
                 <WorktreeList
                   scrollOffsetRef={worktreeScrollOffsetRef}

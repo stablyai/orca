@@ -1,3 +1,4 @@
+import type * as RuntimeConnectModule from './runtime-environment-explicit-connect'
 // @vitest-environment happy-dom
 
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -70,7 +71,8 @@ vi.mock('@/lib/desktop-window-chrome', () => ({
   isPairedWebClientWindow: () => pairedWebClient.value
 }))
 
-vi.mock('./runtime-environment-explicit-connect', () => ({
+vi.mock('./runtime-environment-explicit-connect', async (importOriginal) => ({
+  ...(await importOriginal<typeof RuntimeConnectModule>()),
   connectRuntimeEnvironmentAndRecordStatus: connectHost
 }))
 
@@ -230,7 +232,7 @@ describe('SshStatusSegment active server selection', () => {
     const statusId = trigger.getAttribute('aria-describedby')
     expect(statusId).toBeTruthy()
     expect(document.getElementById(statusId ?? '')?.textContent).toBe('Disconnected')
-    expect(screen.getByText('Disconnected').className).toBe('sr-only')
+    expect(screen.getByText('Disconnected').className).toContain('sr-only')
   })
 
   it('uses existing host status and offers connection actions in the row submenu', async () => {
@@ -260,6 +262,7 @@ describe('SshStatusSegment active server selection', () => {
     renderSegment()
     const trigger = screen.getByRole('button')
     expect(trigger.textContent).toContain('· Disconnected')
+    expect(screen.getByText('· Disconnected').className).toContain('text-destructive')
     await openMenu()
     const work = screen.getByRole('menuitemradio', { name: 'Work server' })
     const privateHost = screen.getByRole('menuitemradio', { name: 'Private server' })

@@ -1,6 +1,7 @@
 import React, { useCallback, useId, useMemo } from 'react'
 import { AlertTriangle, Loader2, MonitorSmartphone, Server, ServerOff } from 'lucide-react'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,14 +21,22 @@ import {
   toRuntimeExecutionHostId
 } from '../../../../shared/execution-host'
 import { isUserManagedRuntimeEnvironment } from '../../../../shared/runtime-environments'
-import { RuntimeHostStatusRow, runtimeDotColor, runtimeStatusLabel } from './RuntimeHostStatusRow'
+import {
+  RuntimeHostStatusRow,
+  runtimeDotColor,
+  runtimeStatusLabel,
+  runtimeStatusTone
+} from './RuntimeHostStatusRow'
 import {
   connectedHostCountLabel,
   connectingHostsLabel,
   workspaceSyncProblemLabel
 } from './ssh-status-segment-copy'
 import { SshTargetStatusRow } from './SshTargetStatusRow'
-import { connectRuntimeEnvironmentAndRecordStatus } from './runtime-environment-explicit-connect'
+import {
+  connectRuntimeEnvironmentAndRecordStatus,
+  connectRuntimeHostForNavigation
+} from './runtime-environment-explicit-connect'
 import {
   overallDotColor,
   overallStatus,
@@ -39,35 +48,10 @@ import {
   runtimeHostConnectionStateForEntry,
   runtimeStatusForOverall
 } from '@/runtime/runtime-host-connection-state'
-import { refreshRuntimeProjectWorktreesAndLineage } from '@/hooks/runtime-project-refresh-scheduler'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { useActiveServerSelection } from './use-active-server-selection'
 import { LOCAL_RUNTIME_VALUE } from '../settings/runtime-environment-selection'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-policy'
-
-export async function connectRuntimeHostForNavigation(args: {
-  environmentId: string
-  refreshStatus: (environmentId: string, timeoutMs: number) => Promise<boolean>
-  fetchRepos: (environmentId: string) => Promise<{ id: string }[]>
-  fetchWorktrees: (
-    repoId: string,
-    options: { executionHostId: ExecutionHostId; suppressRemoteLineageRefresh: true }
-  ) => Promise<unknown>
-  fetchLineage: (options: { executionHostId: ExecutionHostId }) => Promise<unknown>
-}): Promise<boolean> {
-  if (!(await args.refreshStatus(args.environmentId, 5_000))) {
-    return false
-  }
-  const repos = await args.fetchRepos(args.environmentId)
-  await refreshRuntimeProjectWorktreesAndLineage(
-    args.environmentId,
-    repos,
-    args.fetchWorktrees,
-    args.fetchLineage
-  )
-  return true
-}
 
 export function SshStatusSegment({
   compact,
@@ -259,6 +243,8 @@ export function SshStatusSegment({
                     <AlertTriangle className="size-3 text-destructive" />
                   ) : showConnecting ? (
                     <Loader2 className="size-3 animate-spin text-yellow-500" />
+                  ) : selection.enabled && activeState === 'disconnected' ? (
+                    <ServerOff className="size-3 text-destructive" />
                   ) : selection.enabled ? (
                     <Server className="size-3 text-muted-foreground" />
                   ) : overall === 'connected' ? (
@@ -290,7 +276,10 @@ export function SshStatusSegment({
               {activeStatus && (
                 <span
                   id={statusId}
-                  className={iconOnly ? 'sr-only' : 'shrink-0 text-[11px] text-foreground'}
+                  className={cn(
+                    'shrink-0 text-[11px]',
+                    iconOnly ? 'sr-only' : runtimeStatusTone(activeState)
+                  )}
                 >
                   {iconOnly ? activeStatus : `· ${activeStatus}`}
                 </span>
