@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   OrcaRuntimeService,
+  SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV,
   computeWorktreePathMock,
@@ -323,8 +324,11 @@ describe('OrcaRuntimeService', () => {
       2,
       expect.objectContaining({
         cwd: '/tmp/workspaces/runtime-startup-setup-split',
-        command: expect.stringContaining('bash /tmp/repo/.git/orca/setup-runner.sh'),
+        // Why env: the sequenced setup script rides env so nothing pairable is typed (#18059).
         env: expect.objectContaining({
+          [SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]: expect.stringContaining(
+            'bash /tmp/repo/.git/orca/setup-runner.sh'
+          ),
           ORCA_ROOT_PATH: '/tmp/repo',
           ORCA_WORKTREE_PATH: '/tmp/workspaces/runtime-startup-setup-split',
           ORCA_WORKTREE_ID: result.worktree.id
@@ -338,16 +342,18 @@ describe('OrcaRuntimeService', () => {
     }
     const startupCommand = startup.command
     const startupScript = startup.env[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]!
-    const setupCommand = (spawn.mock.calls[1]![0] as { command: string }).command
+    const setup = spawn.mock.calls[1]![0]
+    const setupScript = setup.env[SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]!
     const nonceMatch = startupScript.match(/if \[ "\$seen" = ([0-9a-f-]+) \]/)
     expect(nonceMatch?.[1]).toBeTruthy()
     const markerPath = `/tmp/repo/.git/orca/setup-runner.sh.${nonceMatch![1]}.done`
     expect(startupCommand.length).toBeLessThan(256)
+    expect(setup.command.length).toBeLessThan(256)
     expect(startupScript).toContain('--dangerously-bypass-approvals-and-sandbox')
-    expect(setupCommand).toContain('printf')
-    expect(setupCommand).toContain(`${nonceMatch![1]} "$status"`)
+    expect(setupScript).toContain('printf')
+    expect(setupScript).toContain(`${nonceMatch![1]} "$status"`)
     expect(startupScript).toContain(markerPath)
-    expect(setupCommand).toContain(markerPath)
+    expect(setupScript).toContain(markerPath)
     const mainEnv = (spawn.mock.calls[0]![0] as { env?: Record<string, string> }).env ?? {}
     const setupEnv = (spawn.mock.calls[1]![0] as { env?: Record<string, string> }).env ?? {}
     expect(result.setup).toBeUndefined()
@@ -441,13 +447,19 @@ describe('OrcaRuntimeService', () => {
       expect.any(String),
       expect.objectContaining({
         runnerScriptPath: 'C:\\tmp\\repo\\.git\\orca\\setup-runner.sh',
-        command: expect.stringContaining('bash /mnt/c/tmp/repo/.git/orca/setup-runner.sh')
+        // Why envVars: the renderer retry has to spawn with the script the runtime would have.
+        envVars: expect.objectContaining({
+          [SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]: expect.stringContaining(
+            'bash /mnt/c/tmp/repo/.git/orca/setup-runner.sh'
+          )
+        })
       }),
       undefined,
       undefined
     )
-    const activationSetup = activateWorktree.mock.calls[0]?.[2] as { command?: string } | undefined
-    expect(activationSetup?.command).toContain('printf')
+    const activationSetup = activateWorktree.mock.calls[0]?.[2]
+    expect(activationSetup?.command).toContain('eval')
+    expect(activationSetup?.envVars?.[SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]).toContain('printf')
   })
 
   it('lets explicit startup draft agents override the desktop default', async () => {

@@ -1,18 +1,119 @@
-import { describe, expect, it, vi } from 'vitest'
+import { spawnSync } from 'node:child_process'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { typeThroughZshAutopair } from '../../../shared/__fixtures__/zsh-autopair-keystroke-model'
+import { POSIX_SETUP_OBSERVED_SCRIPT_ENV } from '../../../shared/setup-agent-sequencing'
+import { buildStartupCommandSubmission } from '../../../shared/startup-command-submission'
 import { buildObservedSetupCommand, createSetupCompletionScanner } from './setup-completion-signal'
 
+const POSIX_SHELLS = ['bash', 'zsh'].filter(
+  (shell) => process.platform !== 'win32' && spawnSync(shell, ['-c', 'exit 0']).status === 0
+)
+
+function observedScript(observed: { env?: Record<string, string> }): string {
+  return observed.env?.[POSIX_SETUP_OBSERVED_SCRIPT_ENV] ?? ''
+}
+
+// Why not process.env: the payload is `bash -lc`, so the test would otherwise source the
+// developer's and the CI runner's login profile and assert against whatever it prints.
+function hermeticShellEnv(
+  home: string | undefined,
+  scriptEnv?: Record<string, string>
+): Record<string, string> {
+  return {
+    PATH: process.env.PATH ?? '',
+    HOME: home ?? tmpdir(),
+    ...scriptEnv
+  }
+}
+
 describe('orchestration setup completion signal', () => {
+  let scratchDir: string | undefined
+
+  afterEach(() => {
+    if (scratchDir) {
+      rmSync(scratchDir, { recursive: true, force: true })
+      scratchDir = undefined
+    }
+  })
+
   it('preserves a POSIX setup exit code in a visible completion signal', () => {
-    const { command } = buildObservedSetupCommand(
+    const observed = buildObservedSetupCommand(
       '/repo/.git/orca/setup-runner.sh',
       'posix',
       'token-posix'
     )
+    const script = observedScript(observed)
 
-    expect(command).toContain('bash /repo/.git/orca/setup-runner.sh')
-    expect(command).toContain('__ORCA_SETUP_COMPLETE__:token-posix:%s\\n')
-    expect(command).toContain('"$status"')
-    expect(command).toContain('exit "$status"')
+    expect(observed.command).toBe(
+      `bash -lc 'if test -z "$ORCA_SETUP_OBSERVED_SCRIPT"; ` +
+        `then printf "\\n__ORCA_SETUP_COMPLETE__:token-posix:127\\n"; exit 127; fi; ` +
+        `eval "$ORCA_SETUP_OBSERVED_SCRIPT"'`
+    )
+    expect(script).toContain('bash /repo/.git/orca/setup-runner.sh')
+    expect(script).toContain('__ORCA_SETUP_COMPLETE__:token-posix:%s\\n')
+    expect(script).toContain('"$status"')
+    expect(script).toContain('exit "$status"')
+  })
+
+  it('types a POSIX command that a pair-inserting line editor leaves intact', () => {
+    // Regression (#18059): zsh-autopair turned `( ` into `(  )`, handing bash `...; exit "$status" )`.
+    // Every other generated typed command is held to the same rule in
+    // typed-setup-command-line-editor-safety.test.ts.
+    const { command } = buildObservedSetupCommand(
+      '/repo/.git/orca/setup-runner.sh',
+      'posix',
+      'token-autopair'
+    )
+
+    expect(typeThroughZshAutopair(command)).toBe(command)
+  })
+
+  describe.each(POSIX_SHELLS)('delivered to %s through a pair-inserting line editor', (shell) => {
+    it.each([0, 3])('runs the runner once and reports its exit code %i', (exitCode) => {
+      scratchDir = mkdtempSync(join(tmpdir(), 'orca-observed-setup-'))
+      const runnerPath = join(scratchDir, 'setup-runner.sh')
+      writeFileSync(runnerPath, `printf 'SETUP_OK\\n'\nexit ${exitCode}\n`)
+      const observed = buildObservedSetupCommand(runnerPath, 'posix', 'token-exec')
+      const submitted = buildStartupCommandSubmission(observed.command, {
+        submit: '\n',
+        bracketedPasteSafe: true
+      })
+
+      const result = spawnSync(shell, ['-c', typeThroughZshAutopair(submitted)], {
+        env: hermeticShellEnv(scratchDir, observed.env),
+        encoding: 'utf8'
+      })
+
+      expect(result.stderr).not.toContain('syntax error')
+      expect(result.stdout.match(/SETUP_OK/g)).toHaveLength(1)
+      expect(result.stdout).toContain(`\n__ORCA_SETUP_COMPLETE__:token-exec:${exitCode}\n`)
+      expect(result.status).toBe(exitCode)
+    })
+
+    // Why: `eval "$UNSET"` is a silent no-op (exit 0, no output), which the observer cannot tell
+    // from a setup still running. A carrier that drops the variable has to settle as failed.
+    it('reports a missing script instead of exiting silently', () => {
+      scratchDir = mkdtempSync(join(tmpdir(), 'orca-observed-setup-'))
+      const runnerPath = join(scratchDir, 'setup-runner.sh')
+      writeFileSync(runnerPath, `printf 'SETUP_OK\\n'\n`)
+      const observed = buildObservedSetupCommand(runnerPath, 'posix', 'token-missing')
+      const submitted = buildStartupCommandSubmission(observed.command, {
+        submit: '\n',
+        bracketedPasteSafe: true
+      })
+
+      const result = spawnSync(shell, ['-c', typeThroughZshAutopair(submitted)], {
+        env: hermeticShellEnv(scratchDir),
+        encoding: 'utf8'
+      })
+
+      expect(result.stdout).not.toContain('SETUP_OK')
+      expect(result.stdout).toContain(`\n__ORCA_SETUP_COMPLETE__:token-missing:127\n`)
+      expect(result.status).toBe(127)
+    })
   })
 
   it('preserves a native Windows setup path and exit code without shell interpolation', () => {
@@ -30,38 +131,44 @@ describe('orchestration setup completion signal', () => {
   })
 
   it('keeps a WSL runner on the POSIX completion path', () => {
-    const { command } = buildObservedSetupCommand(
-      '\\\\wsl.localhost\\Ubuntu\\repo\\.git\\orca\\setup-runner.sh',
-      'windows',
-      'token-wsl'
+    const script = observedScript(
+      buildObservedSetupCommand(
+        '\\\\wsl.localhost\\Ubuntu\\repo\\.git\\orca\\setup-runner.sh',
+        'windows',
+        'token-wsl'
+      )
     )
 
-    expect(command).toContain('bash /repo/.git/orca/setup-runner.sh')
-    expect(command).toContain('__ORCA_SETUP_COMPLETE__:token-wsl:%s\\n')
-    expect(command).toContain('exit "$status"')
+    expect(script).toContain('bash /repo/.git/orca/setup-runner.sh')
+    expect(script).toContain('__ORCA_SETUP_COMPLETE__:token-wsl:%s\\n')
+    expect(script).toContain('exit "$status"')
   })
 
   it('routes a WSL-launched Windows-drive runner through its /mnt mount', () => {
-    const { command } = buildObservedSetupCommand(
-      'C:\\repo\\.git\\orca\\setup-runner.sh',
-      'windows',
-      'token-mnt',
-      { family: 'posix', executable: 'wsl.exe' }
+    const script = observedScript(
+      buildObservedSetupCommand('C:\\repo\\.git\\orca\\setup-runner.sh', 'windows', 'token-mnt', {
+        family: 'posix',
+        executable: 'wsl.exe'
+      })
     )
 
-    expect(command).toContain('bash /mnt/c/repo/.git/orca/setup-runner.sh')
-    expect(command).not.toContain('bash /c/repo')
+    expect(script).toContain('bash /mnt/c/repo/.git/orca/setup-runner.sh')
+    expect(script).not.toContain('bash /c/repo')
   })
 
   it('keeps a Git Bash runner on the MSYS drive form', () => {
-    const { command } = buildObservedSetupCommand(
-      'C:\\repo\\.git\\orca\\setup-runner.sh',
-      'windows',
-      'token-git-bash',
-      { family: 'posix' }
+    const script = observedScript(
+      buildObservedSetupCommand(
+        'C:\\repo\\.git\\orca\\setup-runner.sh',
+        'windows',
+        'token-git-bash',
+        {
+          family: 'posix'
+        }
+      )
     )
 
-    expect(command).toContain('bash /c/repo/.git/orca/setup-runner.sh')
+    expect(script).toContain('bash /c/repo/.git/orca/setup-runner.sh')
   })
 
   it('keeps a batch runner on the Windows completion path from a Git Bash pane', () => {

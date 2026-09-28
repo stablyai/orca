@@ -52,6 +52,8 @@ export type SplitTerminalPaneDetail = {
   paneRuntimeId: number
   direction: 'horizontal' | 'vertical'
   command?: string
+  /** Why: a runtime-requested Setup split runs a command whose script only exists in this env. */
+  env?: Record<string, string>
   sourceLeafId?: string
   sourcePtyId?: string
   telemetrySource?: TerminalPaneSplitSource

@@ -97,6 +97,7 @@ export const uiTerminalAndSessionTabsApi = {
       paneRuntimeId: number
       direction: 'horizontal' | 'vertical'
       command?: string
+      env?: Record<string, string>
       worktreeId?: string
       sourceLeafId?: string
       telemetrySource?: TerminalPaneSplitSource
@@ -110,6 +111,7 @@ export const uiTerminalAndSessionTabsApi = {
         paneRuntimeId: number
         direction: 'horizontal' | 'vertical'
         command?: string
+        env?: Record<string, string>
         worktreeId?: string
         sourceLeafId?: string
         telemetrySource?: TerminalPaneSplitSource

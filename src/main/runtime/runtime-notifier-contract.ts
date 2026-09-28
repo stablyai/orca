@@ -86,6 +86,8 @@ export type RuntimeNotifier = {
     opts: {
       direction: 'horizontal' | 'vertical'
       command?: string
+      /** Why: a setup pane's command evaluates a script that only exists in this env (#18059). */
+      env?: Record<string, string>
       worktreeId?: string
       sourceLeafId?: string
       telemetrySource?: TerminalPaneSplitSource

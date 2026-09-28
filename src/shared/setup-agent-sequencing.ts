@@ -1,5 +1,11 @@
 import { encodePowerShellCommand } from './powershell-command-encoding'
 import {
+  buildTypedSetupScriptCommand,
+  SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV,
+  SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
+  SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
+} from './typed-setup-shell-command'
+import {
   nativeWindowsPathToPosixShellPath,
   resolveSetupRunnerCommand,
   type SetupRunnerCommandPlatform,
@@ -12,13 +18,30 @@ import { quotePowerShellLiteral } from './powershell-native-argument'
 const DEFAULT_WAIT_TIMEOUT_SECONDS = 2 * 60 * 60
 // Exported so the gate and its tests share one definition.
 export const SETUP_COMPLETE_MESSAGE = 'Setup finished; starting agent.'
-export const SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV = 'ORCA_SEQUENCED_STARTUP_COMMAND'
-export const SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV = 'ORCA_SEQUENCED_STARTUP_SCRIPT'
+// Re-exported: the carrier names live with the typed command that reads them, but this module is
+// where the sequenced setup/startup pair is built, so its callers keep importing them from here.
+export {
+  POSIX_SETUP_OBSERVED_SCRIPT_ENV,
+  SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV,
+  SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
+  SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV,
+  SETUP_SCRIPT_CARRIER_ENV_NAMES
+} from './typed-setup-shell-command'
 
 export type SequencedSetupAgentCommands = {
   setupCommand: string
+  setupEnv?: Record<string, string>
   startupCommand: string
   startupEnv?: Record<string, string>
+}
+
+/** Why: the sequenced setup pane evaluates its script out of env, so every handoff of the setup
+ *  launch — runtime provisioning, renderer activation, the RPC result — has to carry it. */
+export function withSequencedSetupEnv<T extends { envVars: Record<string, string> }>(
+  setup: T,
+  setupEnv: Record<string, string> | undefined
+): T {
+  return setupEnv ? { ...setup, envVars: { ...setup.envVars, ...setupEnv } } : setup
 }
 
 export function resolveSetupAgentSequenceLaunchCommand(
@@ -77,9 +100,24 @@ export function createSequencedSetupAgentCommands(args: {
     waitTimeoutSeconds
   )
   return {
-    setupCommand: buildPosixSetupCommand(resolution.command, markerPath, nonce),
+    // Why not the script itself: it is typed into the user's line editor, where pair-inserting
+    // widgets rewrite its `( … )` and hand the shell a stray `)` (#18059).
+    setupCommand: buildTypedSetupScriptCommand(
+      SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV,
+      missingSetupScriptReport('setup')
+    ),
+    setupEnv: {
+      [SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]: buildPosixSetupScript(
+        resolution.command,
+        markerPath,
+        nonce
+      )
+    },
     // Why: long worktree paths can push the gate past a PTY's canonical input cap and drop its submit byte.
-    startupCommand: `bash -lc 'eval "$${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV}"'`,
+    startupCommand: buildTypedSetupScriptCommand(
+      SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV,
+      missingSetupScriptReport('agent startup')
+    ),
     startupEnv: {
       [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: args.startupCommand,
       [SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]: startupScript
@@ -87,7 +125,13 @@ export function createSequencedSetupAgentCommands(args: {
   }
 }
 
-function buildPosixSetupCommand(setupCommand: string, markerPath: string, nonce: string): string {
+// Why stderr and not silence: an undelivered script would otherwise exit 0 with no output, which
+// reads as a setup that ran and a gate that passed.
+function missingSetupScriptReport(stage: string): string {
+  return `echo "Orca: the ${stage} script did not reach this shell; skipping it." >&2`
+}
+
+function buildPosixSetupScript(setupCommand: string, markerPath: string, nonce: string): string {
   const marker = quotePosixArg(markerPath)
   const tmp = quotePosixArg(`${markerPath}.tmp`)
   const nonceValue = quotePosixArg(nonce)
@@ -101,7 +145,7 @@ function buildPosixSetupCommand(setupCommand: string, markerPath: string, nonce:
     'exit "$status"'
   ].join('; ')
 
-  return `bash -lc ${quotePosixArg(script)}`
+  return script
 }
 
 function buildPosixStartupScript(
