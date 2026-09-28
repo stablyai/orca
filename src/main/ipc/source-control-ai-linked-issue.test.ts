@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
+import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import { resolveSourceControlAiLinkedIssue } from './source-control-ai-linked-issue'
 
 const LOCAL_PATH = path.resolve('/workspace/repo-feature')
@@ -8,7 +9,7 @@ const LOCAL_ID = `repo-1::${LOCAL_PATH}`
 const REMOTE_PATH = '/home/tester/wt'
 const REMOTE_ID = `repo-1::${REMOTE_PATH}`
 
-function makeStore(meta: Record<string, { linkedIssue?: number | null }>): Store {
+function makeStore(meta: Record<string, Partial<WorktreeMeta>>): Store {
   return {
     getWorktreeMeta: vi.fn((worktreeId: string) => meta[worktreeId])
   } as unknown as Store
@@ -158,13 +159,42 @@ describe('resolveSourceControlAiLinkedIssue', () => {
     }
   })
 
-  it('does not fall back to a GitLab-linked issue', () => {
-    const store = {
-      getWorktreeMeta: vi.fn(() => ({ linkedIssue: null, linkedGitLabIssue: 456 }))
-    } as unknown as Store
-
+  it('resolves a GitLab-linked workspace to its GitLab issue number', () => {
+    const store = makeStore({ [LOCAL_ID]: { linkedIssue: null, linkedGitLabIssue: 7 } })
     expect(
-      resolveSourceControlAiLinkedIssue(store, {
+      resolveSourceControlAiLinkedIssue(store, { worktreeId: LOCAL_ID, worktreePath: LOCAL_PATH })
+    ).toBe(7)
+  })
+
+  it('lets the linked work item pick the slot when both forges are filled', () => {
+    const store = makeStore({
+      [LOCAL_ID]: {
+        linkedIssue: 3,
+        linkedGitLabIssue: 7,
+        linkedWorkItem: {
+          provider: 'gitlab',
+          type: 'issue',
+          number: 7,
+          title: 't',
+          url: 'https://gitlab.com/a/b/-/issues/7'
+        }
+      }
+    })
+    expect(
+      resolveSourceControlAiLinkedIssue(store, { worktreeId: LOCAL_ID, worktreePath: LOCAL_PATH })
+    ).toBe(7)
+  })
+
+  it('returns null when both forges are filled and no work item decides', () => {
+    const store = makeStore({ [LOCAL_ID]: { linkedIssue: 3, linkedGitLabIssue: 7 } })
+    expect(
+      resolveSourceControlAiLinkedIssue(store, { worktreeId: LOCAL_ID, worktreePath: LOCAL_PATH })
+    ).toBeNull()
+  })
+
+  it('returns null for a workspace with no metadata at all', () => {
+    expect(
+      resolveSourceControlAiLinkedIssue(makeStore({}), {
         worktreeId: LOCAL_ID,
         worktreePath: LOCAL_PATH
       })

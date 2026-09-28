@@ -1,3 +1,4 @@
+import { resolveWorkspaceIssueReferenceTarget } from './workspace-issue-reference-target'
 import React from 'react'
 
 import {
@@ -153,6 +154,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
             jiraIssue={metaJiraIssue}
             review={metaReview}
             comment={metaComment}
+            issueReferenceTarget={issueReferenceTarget}
             automationProvenance={metaAutomationProvenance}
             cliProvenance={metaCliProvenance}
             branchName={showBranchIdentityHover ? branch : undefined}
@@ -220,6 +222,12 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
         )}
       </div>
     ) : null
+  const issueReferenceTarget = resolveWorkspaceIssueReferenceTarget({
+    linkedWorkItem: worktree.linkedWorkItem ?? null,
+    reviewProvider: metaReview?.provider ?? null,
+    reviewUrl: metaReview?.url ?? null
+  })
+
   const detailsAndPorts =
     detailsAndPortsContent && !newCardStyle ? (
       <WorktreeCardDetailsHover
@@ -228,6 +236,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
         jiraIssue={metaJiraIssue}
         review={metaReview}
         comment={metaComment}
+        issueReferenceTarget={issueReferenceTarget}
         automationProvenance={metaAutomationProvenance}
         cliProvenance={metaCliProvenance}
         detailsAfter={hasPorts ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null}
@@ -262,6 +271,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
   const titleOnlyCard = !hasSecondaryCardContent
 
   return {
+    issueReferenceTarget,
     showPinnedRepoIcon,
     showInlineRepoBadge,
     showRepoBadgeInMetaRow,

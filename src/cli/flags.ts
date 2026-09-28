@@ -144,6 +144,15 @@ export function getRequiredFiniteNumber(
   return value
 }
 
+export function getOptionalNullablePositiveIntegerFlag(
+  flags: Map<string, string | boolean>,
+  name: string
+): number | null | undefined {
+  const value = flags.get(name)
+  rejectValuelessFlag(value, name)
+  return value === 'null' ? null : getOptionalPositiveIntegerFlag(flags, name)
+}
+
 export function getOptionalNullableNumberFlag(
   flags: Map<string, string | boolean>,
   name: string

@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 import type { Store } from '../persistence'
-import { isLinkedIssueNumber } from '../../shared/source-control-ai-action-variables'
+import { linkedIssueNumberForTemplate } from '../../shared/linked-issue-provider'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 
@@ -37,7 +37,7 @@ function matchesRequestPath(
 }
 
 /**
- * Resolve the workspace's linked GitHub issue for Source Control AI generation.
+ * Resolve the workspace's linked forge issue (GitHub or GitLab) for Source Control AI generation.
  *
  * The renderer-supplied `worktreeId` is advisory — the same trust model as
  * `getRepoForSourceControlAi` — so it is validated against the request's path
@@ -86,11 +86,9 @@ export function resolveSourceControlAiLinkedIssue(
   args: LinkedIssueLookupArgs,
   resolvedWorktreePath?: string
 ): number | null {
-  const linkedIssue = resolveSourceControlAiLinkedIssueMeta(
-    store,
-    args,
-    resolvedWorktreePath
-  )?.linkedIssue
-  // Why: GitHub only in v1 — no `linkedGitLabIssue` dual-read.
-  return isLinkedIssueNumber(linkedIssue) ? linkedIssue : null
+  const meta = resolveSourceControlAiLinkedIssueMeta(store, args, resolvedWorktreePath)
+  // Why: the same slot choice the PR-description path makes, so {linkedIssue} in a
+  // commit template, the linked issue in a generated PR body, and the meta dialog's
+  // provider chip all agree — one rule, in shared.
+  return linkedIssueNumberForTemplate(meta)
 }

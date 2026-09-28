@@ -135,7 +135,7 @@ export function getRepositoryGitHooksSearchEntries(repo: Repo): SettingsSearchEn
     {
       title: translate(
         'auto.components.settings.repository.search.d86ea12d16',
-        'Custom GitHub Issue Command'
+        'Custom Issue Command'
       ),
       description: translate(
         'auto.components.settings.repository.search.d42d1e49c0',
@@ -145,7 +145,7 @@ export function getRepositoryGitHooksSearchEntries(repo: Repo): SettingsSearchEn
         repo.displayName,
         ...translateSearchKeyword(
           'auto.components.settings.repository.search.2011a6a4f2',
-          'github issue command'
+          'issue command'
         ),
         ...translateSearchKeyword(
           'auto.components.settings.repository.search.66b584bd6c',

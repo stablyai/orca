@@ -8,7 +8,10 @@ import {
 import type { SourceControlAiOperation } from '../../shared/source-control-ai-types'
 import type { CommitMessageAgentRuntimeTarget } from '../text-generation/commit-message-agent-environment'
 import type { CommitMessageGenerationTarget } from '../text-generation/commit-message-text-generation'
-import type { PullRequestLinkedIssueMeta } from '../source-control/pull-request-linked-issue'
+import {
+  linkedIssueNumberForTemplate,
+  type PullRequestLinkedIssueMeta
+} from '../../shared/linked-issue-provider'
 import {
   localGitOptionsForTarget,
   type RuntimeGitCommandHost,
@@ -100,9 +103,11 @@ export function linkedIssueForTarget(
   host: RuntimeGitCommandHost,
   target: RuntimeGitTarget
 ): number | null | undefined {
-  const live = host.getWorktreeLinkedIssue?.(target.worktree.id)
-  // Why: `undefined` means the host could not answer, not "unlinked".
-  return live === undefined ? target.worktree.linkedIssue : live
+  // Why: one rule with the desktop path. linkedIssueMetaForTarget already applies
+  // the host-live-then-projection precedence for the GitHub slot ("undefined means
+  // the host could not answer, not unlinked"), and carries the GitLab slot and the
+  // work item that breaks a two-forge tie.
+  return linkedIssueNumberForTemplate(linkedIssueMetaForTarget(host, target))
 }
 
 export function linkedIssueMetaForTarget(

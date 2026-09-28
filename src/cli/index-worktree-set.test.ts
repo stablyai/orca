@@ -319,6 +319,7 @@ describe('orca cli worktree awareness', () => {
       worktree: 'id:repo::/tmp/repo/child',
       displayName: undefined,
       linkedIssue: undefined,
+      linkedGitLabIssue: undefined,
       linkedLinearIssue: null,
       linkedLinearIssueWorkspaceId: null,
       linkedLinearIssueOrganizationUrlKey: null,
@@ -390,5 +391,110 @@ describe('orca cli worktree awareness', () => {
       parentWorktree: undefined,
       noParent: false
     })
+  })
+
+  it('sets a GitLab issue through worktree.set', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_set_gitlab', {
+        worktree: {
+          ...buildWorktree('/tmp/repo/child', 'feature/child'),
+          linkedGitLabIssue: 7
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'set',
+        '--worktree',
+        'id:repo::/tmp/repo/child',
+        '--gitlab-issue',
+        '7',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'worktree.set',
+      expect.objectContaining({ linkedGitLabIssue: 7 })
+    )
+  })
+
+  it('clears a GitLab issue through worktree.set with null', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_clear_gitlab', {
+        worktree: {
+          ...buildWorktree('/tmp/repo/child', 'feature/child'),
+          linkedGitLabIssue: null
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'set',
+        '--worktree',
+        'id:repo::/tmp/repo/child',
+        '--gitlab-issue',
+        'null',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'worktree.set',
+      expect.objectContaining({ linkedGitLabIssue: null })
+    )
+  })
+
+  // Two different messages from one flag — assert the one matching each input.
+  it('rejects a non-numeric --gitlab-issue before RPC', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      ['worktree', 'set', '--worktree', 'id:repo::/tmp/repo/child', '--gitlab-issue', '!7'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Invalid numeric value for --gitlab-issue'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects zero, negative and fractional --gitlab-issue before RPC', async () => {
+    for (const value of ['0', '-1', '1.5']) {
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+      const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const priorExitCode = process.exitCode
+
+      await main(
+        ['worktree', 'set', '--worktree', 'id:repo::/tmp/repo/child', '--gitlab-issue', value],
+        '/tmp/repo'
+      )
+
+      expect(callMock).not.toHaveBeenCalled()
+      expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+        'Invalid positive integer for --gitlab-issue'
+      )
+      expect(process.exitCode).toBe(1)
+
+      process.exitCode = priorExitCode
+      logSpy.mockRestore()
+      errSpy.mockRestore()
+    }
   })
 })

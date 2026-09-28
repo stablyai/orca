@@ -146,7 +146,9 @@ export function renderCommentCard(
         <CommentMarkdown
           content={comment.body}
           variant="document"
-          githubRepo={ctx.markdownGitHubRepo}
+          issueReferences={
+            ctx.markdownGitHubRepo ? { provider: 'github', slug: ctx.markdownGitHubRepo } : null
+          }
           className="min-w-0 max-w-full overflow-hidden break-words text-[13px] leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
         />
         <CommentReactions reactions={comment.reactions} />

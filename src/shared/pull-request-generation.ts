@@ -17,7 +17,7 @@ export type PullRequestDraftContext = {
   commitSummary: string
   changeSummary: string
   patch: string
-  /** Workspace-linked GitHub issue number. Omitted entirely when none resolves. */
+  /** Workspace-linked GitHub or GitLab issue number. Omitted entirely when none resolves. */
   linkedIssue?: number | null
   provider?: HostedReviewProvider | null
   linkedIssueDetails?: PullRequestLinkedIssue | null
