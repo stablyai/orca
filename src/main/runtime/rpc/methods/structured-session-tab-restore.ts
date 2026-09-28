@@ -11,14 +11,16 @@ import {
  *  project after a desktop restart — no chat and no prompt. The setting still gates it, because
  *  with structured chat off there is nothing for any mobile client to reach. Restoring spawns no
  *  provider child for a cleanly closed session. */
-export async function restoreStructuredTabsIfSupported(
+export function restoreStructuredTabsIfSupported(
   context: Pick<RpcContext, 'runtime' | 'clientKind' | 'clientCapabilities'>
-): Promise<void> {
+): Promise<void> | undefined {
   const shouldRestore =
     context.clientKind === 'mobile'
       ? isStructuredNativeChatEnabled(context.runtime)
       : supportsStructuredAgentSessions(context)
   if (shouldRestore && typeof context.runtime.restoreStructuredAgentSessionTabs === 'function') {
-    await context.runtime.restoreStructuredAgentSessionTabs()
+    return context.runtime.restoreStructuredAgentSessionTabs()
   }
+  // Nothing to restore: callers skip the await, so a stream's setup keeps its timing.
+  return undefined
 }

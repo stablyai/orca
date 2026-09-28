@@ -19,6 +19,7 @@ function createRegistration(
     runtime,
     subscriptionId: SUBSCRIPTION_ID,
     connectionId: 'conn-a',
+    requestId: 'req-1',
     requestSignal,
     emit
   })

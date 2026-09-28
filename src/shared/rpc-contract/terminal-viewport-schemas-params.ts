@@ -29,7 +29,9 @@ export const TerminalUnsubscribe = z.object({
     .object({
       id: requiredString('Missing client ID')
     })
-    .optional()
+    .optional(),
+  // Why: the `terminal.subscribe` frame id; addresses that exact request, so a stale unsubscribe can't end a newer stream on the same slot.
+  requestId: z.string().min(1).optional()
 })
 
 // Why: in-place update avoids an unsubscribe→resubscribe that flashed the lock banner and stranded the PTY at phone dims (docs/mobile-presence-lock.md).
