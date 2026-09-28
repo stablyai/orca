@@ -197,7 +197,8 @@ const HEAD_RUNTIME_STRING_SHA256 =
 // Moved by both of the dock's fields: their refs, and the live one's submit handler, are the seam's now.
 // Moved again when the terminal frame kept its laid-out width unrounded, for every fit.
 // Again when the frame's onLayout wrote one frame ref and notified a new width imperatively.
-const HEAD_HOST_JSX_SHA256 = 'f88672deda2170f42dac492166d4920ac3469d73a7db0c7ad1f80f10f468b1a7'
+// Again when the frame's first laid-out layout alone subscribes a held-back document.
+const HEAD_HOST_JSX_SHA256 = '5e2d0ec5bdb838560d06d4b79c8b59d72d1f553394d1580e2250b352cda18401'
 const HEAD_LEAF_JSX_SHA256 = '62eb05c6e2ac0be6d553a141fc8aa1641fcb0c678777d5d539f490aab8648417'
 const HEAD_STYLE_REFERENCE_SHA256 =
   '56a005a1f65b30c11092e3422caef67810e1ec50f66fdd06471c370138b1eeb6'

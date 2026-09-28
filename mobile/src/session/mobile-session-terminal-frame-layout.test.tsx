@@ -148,4 +148,28 @@ describe('the terminal frame on the page', () => {
     expect(terminalFrameRef.current).toEqual({ width: 360.5, height: 560 })
     expect(notifyTerminalFrameWidth).toHaveBeenCalledTimes(1)
   })
+
+  it('subscribes on the first laid-out frame only, not on every layout after it', () => {
+    const terminalFrameRef: { current: { width: number; height: number } | null } = {
+      current: null
+    }
+    const handleTerminalFrameLayout = vi.fn()
+    let renderer: ReturnType<typeof create> | undefined
+    act(() => {
+      renderer = create(
+        createElement(MobileSessionActiveContent, {
+          controller: controller(false, () => {}, { terminalFrameRef, handleTerminalFrameLayout })
+        })
+      )
+    })
+    const layOut = (width: number, height: number) =>
+      act(() => {
+        renderer!.root
+          .findAll((node) => typeof node.props.onLayout === 'function')[0]!
+          .props.onLayout({ nativeEvent: { layout: { width, height } } })
+      })
+    layOut(FRAME.width, 560)
+    layOut(360, 560)
+    expect(handleTerminalFrameLayout).toHaveBeenCalledTimes(1)
+  })
 })

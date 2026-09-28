@@ -253,17 +253,20 @@ export function MobileSessionActiveContent({
       style={styles.contentFrame}
       onLayout={(e) => {
         const { width, height } = e.nativeEvent.layout
-        const previous = terminalFrameRef.current
-        // Why: the page reports a hidden frame as 0x0; it keeps the box it was laid out at.
-        if (width > 0) {
-          terminalFrameRef.current = { width, height }
-        }
         // Why: notify imperatively so dock settling re-fits the PTY without rerendering SessionScreen.
         notifyTerminalFrameHeight(Math.round(height))
-        if (previous && width > 0 && width !== previous.width) {
+        // Why: the page reports a hidden frame as 0x0; it keeps the box it was laid out at.
+        if (width <= 0) {
+          return
+        }
+        const previous = terminalFrameRef.current
+        terminalFrameRef.current = { width, height }
+        if (!previous) {
+          // Why: a ready document held back for its frame subscribes on the first layout.
+          handleTerminalFrameLayout()
+        } else if (width !== previous.width) {
           notifyTerminalFrameWidth()
         }
-        handleTerminalFrameLayout()
       }}
     >
       {content}
