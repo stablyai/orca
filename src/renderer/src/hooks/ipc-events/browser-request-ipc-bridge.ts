@@ -7,6 +7,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
 import { acquireBrowserAutomationBootstrapLease } from './browser-automation-bootstrap-lease'
+import { showRemoteOpenUrlApproval } from './remote-open-url-approval'
 
 export function registerBrowserRequestIpcBridge(
   unsubs: (() => void)[],
@@ -125,6 +126,8 @@ export function registerBrowserRequestIpcBridge(
       }
     })
   )
+
+  unsubs.push(window.api.ui.onRemoteOpenUrlRequest((data) => showRemoteOpenUrlApproval(data)))
 
   unsubs.push(
     window.api.ui.onRequestTabClose((data) => {

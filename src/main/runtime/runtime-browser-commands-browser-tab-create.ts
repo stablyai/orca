@@ -17,6 +17,7 @@ import { browserNetworkExecutionHostKey } from '../browser/browser-network-execu
 import { waitForTabRegistration } from '../ipc/browser-tab-registration-wait'
 import { BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY } from '../../shared/browser-client-automation-protocol'
 import { BROWSER_HOST_WEBVIEW_CAPABILITY } from './browser-host-capability-selection'
+import { issueRemoteOpenUrlTicket } from '../ssh/remote-open-url-requests'
 
 export class RuntimeBrowserCommandsWithBrowserTabCreate extends RuntimeBrowserCommandsWithBrowserSetHeaders {
   async browserTabCreate(
@@ -211,4 +212,64 @@ export class RuntimeBrowserCommandsWithBrowserTabCreate extends RuntimeBrowserCo
       { pairedDeviceId: lease.pairedDeviceId, clientKind: 'runtime' }
     )
   }
+
+  /**
+   * Asks the desktop that owns an SSH connection to open a URL, after its owner approves.
+   * Why the target id and nothing else: it comes from the desktop-side relay session, not from
+   * the remote host, so a compromised host cannot make the prompt name a different machine.
+   */
+  requestDesktopOpenUrlForSshTarget(params: {
+    url: string
+    sshTargetId: string
+  }): 'sent' | 'no_desktop' | 'rate_limited' {
+    const protocol = new URL(params.url).protocol
+    if (protocol !== 'http:' && protocol !== 'https:') {
+      throw new BrowserError('invalid_argument', 'Only http(s) URLs can be opened on the client.')
+    }
+    const win = this.host.getAvailableAuthoritativeWindow()
+    if (!win) {
+      return 'no_desktop'
+    }
+    if (!admitRemoteOpenUrl(params.sshTargetId)) {
+      return 'rate_limited'
+    }
+    const { requestId, ticket } = issueRemoteOpenUrlTicket(params)
+    win.webContents.send('browser:remoteOpenUrlRequest', {
+      requestId,
+      url: params.url,
+      sshTargetId: params.sshTargetId,
+      callbackPort: ticket.callback?.port ?? null
+    })
+    return 'sent'
+  }
+}
+
+// A remote host may ask the desktop to open at most this many URLs per window.
+const REMOTE_OPEN_URL_LIMIT = 3
+const REMOTE_OPEN_URL_WINDOW_MS = 10_000
+const remoteOpenUrlTimes = new Map<string, number[]>()
+
+/** Rate-limits remote-initiated opens per SSH target so a host cannot flood the desktop. */
+export function admitRemoteOpenUrl(key: string, now: number = Date.now()): boolean {
+  for (const [otherKey, times] of remoteOpenUrlTimes) {
+    // Why: evict idle keys so the map stays bounded by hosts active in the last window.
+    if (times.every((at) => now - at >= REMOTE_OPEN_URL_WINDOW_MS)) {
+      remoteOpenUrlTimes.delete(otherKey)
+    }
+  }
+  const recent = (remoteOpenUrlTimes.get(key) ?? []).filter(
+    (at) => now - at < REMOTE_OPEN_URL_WINDOW_MS
+  )
+  if (recent.length >= REMOTE_OPEN_URL_LIMIT) {
+    remoteOpenUrlTimes.set(key, recent)
+    return false
+  }
+  recent.push(now)
+  remoteOpenUrlTimes.set(key, recent)
+  return true
+}
+
+/** Test hook: how many hosts are currently tracked by the rate limiter. */
+export function remoteOpenUrlTrackedHostCount(): number {
+  return remoteOpenUrlTimes.size
 }

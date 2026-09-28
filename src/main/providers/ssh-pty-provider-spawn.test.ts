@@ -461,6 +461,7 @@ describe('spawn', () => {
         ORCA_TERMINAL_HANDLE: 'term_ssh',
         [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true',
         ORCA_REMOTE_CLI_BIN_DIR: '/home/user/.orca-relay/bin',
+        BROWSER: "'/home/user/.orca-relay/bin/orca' open-url --url %s",
         ORCA_RELAY_DIR: '/home/user/.orca-relay/relay-v1',
         ORCA_RELAY_NODE_PATH: '/usr/bin/node',
         ORCA_RELAY_SOCKET_PATH: '/home/user/.orca-relay/relay.sock'
@@ -491,6 +492,7 @@ describe('spawn', () => {
         ORCA_TERMINAL_HANDLE: 'term_ssh',
         [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true',
         ORCA_REMOTE_CLI_BIN_DIR: '/home/user/.orca-relay/bin',
+        BROWSER: "'/home/user/.orca-relay/bin/orca' open-url --url %s",
         ORCA_RELAY_DIR: '/home/user/.orca-relay/relay-v1',
         ORCA_RELAY_NODE_PATH: '/usr/bin/node',
         ORCA_RELAY_SOCKET_PATH: '/home/user/.orca-relay/relay.sock'

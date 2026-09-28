@@ -70,6 +70,10 @@ import {
   setPortForwardManager
 } from './ssh-ipc-context'
 import { registerSshPortForwardHandlers } from './ssh-port-forward-handlers'
+import {
+  oauthCallbackForwarder,
+  registerRemoteOpenUrlApprovalHandler
+} from './ssh-remote-open-url-approval'
 import { persistPortForwardsWithUnrestored } from './ssh-port-forward-persistence'
 import { clearRelayLostBackoff, relayLostBackoff } from './ssh-relay-lost-backoff'
 import { refreshActiveRelaySessions } from './ssh-relay-session-callbacks'
@@ -98,7 +102,8 @@ const SSH_IPC_CHANNELS = [
   'ssh:updatePortForward',
   'ssh:removePortForward',
   'ssh:listPortForwards',
-  'ssh:listDetectedPorts'
+  'ssh:listDetectedPorts',
+  'browser:approveRemoteOpenUrl'
 ] as const
 
 export function getActiveSshAiVaultHostInfo(targetId: string): SshRelayAiVaultHostInfo | null {
@@ -216,6 +221,7 @@ export function registerSshHandlers(
   registerSshTargetCrudHandlers()
   registerSshConnectionHandlers()
   registerSshPortForwardHandlers()
+  registerRemoteOpenUrlApprovalHandler()
 
   return {
     connectionManager: connectionManager!,
@@ -254,6 +260,7 @@ export async function resetSshHandlerStateForTests(): Promise<void> {
 
   await connectionManager?.disconnectAll()
   portForwardManager?.dispose()
+  oauthCallbackForwarder.stopAll()
   setConnectionManager(null)
   setSshConnectionManagerResolver(null)
   setPortForwardManager(null)

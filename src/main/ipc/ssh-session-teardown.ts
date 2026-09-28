@@ -6,6 +6,7 @@ import { invalidateConnectAttempt } from './ssh-connect-attempt-registry'
 import { connectionManager, persistedStore, portForwardManager } from './ssh-ipc-context'
 import { clearRelayLostBackoff } from './ssh-relay-lost-backoff'
 import { clearRelayStateOverride } from './ssh-renderer-broadcast'
+import { oauthCallbackForwarder } from './ssh-remote-open-url-approval'
 import { runTargetLifecycle } from './ssh-target-lifecycle-queue'
 
 export async function disconnectRegisteredSshTarget(targetId: string): Promise<void> {
@@ -60,6 +61,8 @@ export async function teardownSshTargetTransport(
   targetId: string,
   teardown: (session: SshRelaySession) => void | Promise<void>
 ): Promise<void> {
+  // Why: a sign-in pending on this host can no longer return; release its callback port now.
+  oauthCallbackForwarder.stopForTarget(targetId)
   let transportDisconnect: Promise<{ ok: true } | { ok: false; error: unknown }>
   try {
     transportDisconnect = Promise.resolve(connectionManager?.disconnect(targetId)).then(

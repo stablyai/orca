@@ -18498,5 +18498,15 @@
   },
   "common": {
     "retry": "Retry"
+  },
+  "remoteOpenUrl": {
+    "title": "{{value0}} wants to open {{value1}}",
+    "open": "Open",
+    "dismiss": "Dismiss",
+    "forwardNotice": "Sign-in returns to {{value0}} through a temporary forward of 127.0.0.1:{{value1}} (up to 5 min).",
+    "forwarding": "Forwarding 127.0.0.1:{{value0}} to {{value1}} until sign-in returns (up to {{value2}} min).",
+    "expired": "This request expired. Run the command on the host again.",
+    "portInUse": "Port {{value0}} is already in use on this computer, so the sign-in cannot return to {{value1}}. Close what uses it and try again.",
+    "forwardUnavailable": "Could not forward the sign-in back to {{value0}}. Check the SSH connection and try again."
   }
 }
