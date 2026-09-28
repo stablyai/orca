@@ -432,20 +432,31 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(setUI).not.toHaveBeenCalled()
   })
 
-  it('persists workspace host scope changes', () => {
-    const setUI = vi.fn(() => Promise.resolve())
-    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
-    const store = createUIStore()
+  it.each<{ visibleWorkspaceHostIds: PersistedUIState['visibleWorkspaceHostIds'] }>([
+    { visibleWorkspaceHostIds: null },
+    { visibleWorkspaceHostIds: ['local', 'ssh:my-target'] }
+  ])(
+    'replaces the previous host filter $visibleWorkspaceHostIds when explicitly switching workspace scope',
+    ({ visibleWorkspaceHostIds }) => {
+      const setUI = vi.fn(() => Promise.resolve())
+      vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+      const store = createUIStore()
 
-    store.getState().setWorkspaceHostScope('runtime:env-1')
+      store
+        .getState()
+        .hydratePersistedUI(makePersistedUI({ workspaceHostScope: 'all', visibleWorkspaceHostIds }))
+      expect(store.getState().visibleWorkspaceHostIds).toEqual(visibleWorkspaceHostIds)
+      setUI.mockClear()
+      store.getState().setWorkspaceHostScope('runtime:env-1')
 
-    expect(store.getState().workspaceHostScope).toBe('runtime:env-1')
-    expect(store.getState().visibleWorkspaceHostIds).toEqual(['runtime:env-1'])
-    expect(setUI).toHaveBeenCalledWith({
-      workspaceHostScope: 'runtime:env-1',
-      visibleWorkspaceHostIds: ['runtime:env-1']
-    })
-  })
+      expect(store.getState().workspaceHostScope).toBe('runtime:env-1')
+      expect(store.getState().visibleWorkspaceHostIds).toEqual(['runtime:env-1'])
+      expect(setUI).toHaveBeenCalledWith({
+        workspaceHostScope: 'runtime:env-1',
+        visibleWorkspaceHostIds: ['runtime:env-1']
+      })
+    }
+  )
 
   it('persists visible workspace host changes independently of focused host', () => {
     const setUI = vi.fn(() => Promise.resolve())

@@ -17,7 +17,7 @@ export function useActiveServerSelection() {
   const setActiveRuntimeEnvironmentPreference = useAppStore(
     (state) => state.setActiveRuntimeEnvironmentPreference
   )
-  const setVisibleWorkspaceHostIds = useAppStore((state) => state.setVisibleWorkspaceHostIds)
+  const setWorkspaceHostScope = useAppStore((state) => state.setWorkspaceHostScope)
   const [switching, setSwitching] = useState(false)
   const switchingRef = useRef(false)
   const mountedRef = useMountedRef()
@@ -40,7 +40,8 @@ export function useActiveServerSelection() {
       ) {
         const hostId =
           value === LOCAL_RUNTIME_VALUE ? LOCAL_EXECUTION_HOST_ID : toRuntimeExecutionHostId(value)
-        setVisibleWorkspaceHostIds([hostId])
+        // Why: a context switch intentionally moves both the sidebar filter and workspace creation default.
+        setWorkspaceHostScope(hostId)
         restoreActiveServerWorkspace(useAppStore.getState(), hostId)
       }
     } finally {

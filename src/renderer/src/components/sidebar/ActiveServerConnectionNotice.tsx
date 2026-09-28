@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Loader2, ServerOff } from 'lucide-react'
+import { Loader2, Server, ServerOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -10,7 +10,7 @@ import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-ov
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import { isUserManagedRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/runtime-host-connection-state'
-import { runtimeStatusLabel } from '../status-bar/RuntimeHostStatusRow'
+import { runtimeStatusLabel, runtimeStatusTone } from '../status-bar/RuntimeHostStatusRow'
 import {
   connectRuntimeEnvironmentAndRecordStatus,
   connectRuntimeHostForNavigation
@@ -73,6 +73,9 @@ export function ActiveServerConnectionNotice(): React.JSX.Element | null {
     }
   }
 
+  const StatusIcon =
+    state === 'reconnecting' ? Loader2 : state === 'disconnected' ? ServerOff : Server
+
   return (
     <section
       role="status"
@@ -85,14 +88,14 @@ export function ActiveServerConnectionNotice(): React.JSX.Element | null {
       )}
     >
       <div className="flex items-start gap-2">
-        {state === 'reconnecting' ? (
-          <Loader2
-            className="mt-px size-3.5 shrink-0 animate-spin text-muted-foreground"
-            aria-hidden="true"
-          />
-        ) : (
-          <ServerOff className="mt-px size-3.5 shrink-0 text-destructive" aria-hidden="true" />
-        )}
+        <StatusIcon
+          className={cn(
+            'mt-px size-3.5 shrink-0',
+            state === 'reconnecting' ? 'text-muted-foreground' : runtimeStatusTone(state),
+            state === 'reconnecting' && 'animate-spin'
+          )}
+          aria-hidden="true"
+        />
         <div className="min-w-0 flex-1 space-y-1.5">
           <p className="break-words text-xs font-semibold leading-snug">
             {label} · {runtimeStatusLabel(state)}

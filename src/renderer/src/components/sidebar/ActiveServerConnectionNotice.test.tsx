@@ -62,6 +62,48 @@ describe('ActiveServerConnectionNotice', () => {
     expect(screen.getByRole('button', { name: 'Reconnect' })).toBeDefined()
   })
 
+  it.each(['disconnected', 'runtime-unavailable', 'reconnecting'] as const)(
+    'reserves the destructive glyph for disconnection and warns when Orca is unavailable (%s)',
+    (state) => {
+      if (state !== 'disconnected') {
+        store.setState({
+          runtimeStatusByEnvironmentId: new Map([
+            [
+              'work',
+              {
+                status: null,
+                remoteControl: {
+                  state: state === 'reconnecting' ? 'reconnecting' : 'ready',
+                  pendingRequestCount: 0,
+                  subscriptionCount: 0,
+                  reconnectAttempt: 0,
+                  lastConnectedAt: null,
+                  lastClose: null,
+                  lastError: null
+                }
+              }
+            ]
+          ])
+        })
+      }
+      render(<ActiveServerConnectionNotice />)
+      const notice = screen.getByRole('status', { name: 'Work server' })
+      const icon = notice.querySelector('svg')
+      expect(icon?.classList.contains('text-destructive')).toBe(state === 'disconnected')
+      expect(icon?.classList.contains('text-yellow-500')).toBe(state === 'runtime-unavailable')
+      expect(icon?.classList.contains('lucide-server-off')).toBe(state === 'disconnected')
+      expect(icon?.classList.contains('animate-spin')).toBe(state === 'reconnecting')
+      expect(notice.classList.contains('border-destructive/50')).toBe(state === 'disconnected')
+      expect(notice.textContent).toContain(
+        state === 'runtime-unavailable'
+          ? 'Orca unavailable'
+          : state === 'reconnecting'
+            ? 'Reconnecting'
+            : 'Disconnected'
+      )
+    }
+  )
+
   it.each(['local', 'checking', 'paired-web'])('stays hidden for %s contexts', (mode) => {
     if (mode === 'local') {
       store.setState({

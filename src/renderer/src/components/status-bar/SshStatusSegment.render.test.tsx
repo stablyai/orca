@@ -32,12 +32,12 @@ type TestState = {
   seedActiveWorktreeLastVisitedIfMissing: () => void
   runtimeEnvironments: { id: string; name: string; source?: 'manual' | 'ephemeral-vm' }[]
   setActiveRuntimeEnvironmentPreference: (id: string | null) => Promise<boolean>
-  setVisibleWorkspaceHostIds: (ids: string[]) => void
+  setWorkspaceHostScope: (hostId: string) => void
 }
 
-const { switchServer, setVisibleHosts, connectHost, pairedWebClient } = vi.hoisted(() => ({
+const { switchServer, setHostScope, connectHost, pairedWebClient } = vi.hoisted(() => ({
   switchServer: vi.fn<(id: string | null) => Promise<boolean>>(),
-  setVisibleHosts: vi.fn<(ids: string[]) => void>(),
+  setHostScope: vi.fn<(hostId: string) => void>(),
   connectHost: vi.fn<(id: string, timeoutMs: number) => Promise<boolean>>(),
   pairedWebClient: { value: false }
 }))
@@ -59,7 +59,7 @@ const store = createStore<TestState>(() => ({
   seedActiveWorktreeLastVisitedIfMissing: vi.fn(),
   runtimeEnvironments: [],
   setActiveRuntimeEnvironmentPreference: switchServer,
-  setVisibleWorkspaceHostIds: setVisibleHosts
+  setWorkspaceHostScope: setHostScope
 }))
 
 vi.mock('@/store', () => ({
@@ -103,7 +103,7 @@ async function openMenu(): Promise<void> {
 beforeEach(() => {
   pairedWebClient.value = false
   switchServer.mockReset()
-  setVisibleHosts.mockReset()
+  setHostScope.mockReset()
   connectHost.mockReset()
   connectHost.mockImplementation(async (id) => {
     store.setState({
@@ -155,7 +155,7 @@ describe('SshStatusSegment active server selection', () => {
 
     await waitFor(() => {
       expect(switchServer).toHaveBeenCalledExactlyOnceWith('priv')
-      expect(setVisibleHosts).toHaveBeenCalledExactlyOnceWith(['runtime:priv'])
+      expect(setHostScope).toHaveBeenCalledExactlyOnceWith('runtime:priv')
       expect(screen.getByRole('button').getAttribute('aria-label')).toBe(
         'Remote Hosts: Private server'
       )
@@ -169,7 +169,7 @@ describe('SshStatusSegment active server selection', () => {
 
     await waitFor(() => {
       expect(switchServer).toHaveBeenCalledExactlyOnceWith(null)
-      expect(setVisibleHosts).toHaveBeenCalledExactlyOnceWith(['local'])
+      expect(setHostScope).toHaveBeenCalledExactlyOnceWith('local')
       expect(screen.getByRole('button').textContent).toContain('Local desktop')
     })
   })
@@ -180,7 +180,7 @@ describe('SshStatusSegment active server selection', () => {
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'Work server' }))
 
     expect(switchServer).not.toHaveBeenCalled()
-    expect(setVisibleHosts).not.toHaveBeenCalled()
+    expect(setHostScope).not.toHaveBeenCalled()
   })
 
   it('keeps the old label until a slow switch finishes and prevents another request', async () => {
@@ -199,7 +199,7 @@ describe('SshStatusSegment active server selection', () => {
     expect(trigger.hasAttribute('disabled')).toBe(true)
     expect(trigger.getAttribute('aria-busy')).toBe('true')
     expect(trigger.textContent).toContain('Work server')
-    expect(setVisibleHosts).not.toHaveBeenCalled()
+    expect(setHostScope).not.toHaveBeenCalled()
     fireEvent.keyDown(trigger, { key: 'ArrowDown' })
     expect(switchServer).toHaveBeenCalledTimes(1)
 
@@ -217,7 +217,7 @@ describe('SshStatusSegment active server selection', () => {
 
     await waitFor(() => expect(screen.getByRole('button').hasAttribute('disabled')).toBe(false))
     expect(screen.getByRole('button').textContent).toContain('Work server')
-    expect(setVisibleHosts).not.toHaveBeenCalled()
+    expect(setHostScope).not.toHaveBeenCalled()
     await openMenu()
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'Private server' }))
     await waitFor(() => expect(switchServer).toHaveBeenCalledTimes(2))
@@ -308,7 +308,7 @@ describe('SshStatusSegment active server selection', () => {
       expect(privateHost.getAttribute('aria-disabled')).not.toBe('true')
     })
     expect(switchServer).not.toHaveBeenCalled()
-    expect(setVisibleHosts).not.toHaveBeenCalled()
+    expect(setHostScope).not.toHaveBeenCalled()
     fireEvent.click(privateHost)
     await waitFor(() => expect(switchServer).toHaveBeenCalledExactlyOnceWith('priv'))
   })
@@ -345,7 +345,7 @@ describe('SshStatusSegment active server selection', () => {
     fireEvent.click(row.getByRole('menuitem', { name: 'Reconnect' }))
     await waitFor(() => expect(connectHost).toHaveBeenCalledExactlyOnceWith('work', 5000))
     expect(switchServer).not.toHaveBeenCalled()
-    expect(setVisibleHosts).not.toHaveBeenCalled()
+    expect(setHostScope).not.toHaveBeenCalled()
     expect(work.textContent).toContain('Reconnecting')
   })
 
