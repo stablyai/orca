@@ -107,7 +107,7 @@ export function terminalMountAdapters(
         notifications = useRefit({
           activeHandleRef: { current: HANDLE },
           terminalRefs,
-          terminalFrameHeightRef: { current: 600 },
+          terminalFrameRef: { current: { width: 390, height: 600 } },
           viewportRef,
           viewportMeasuredRef,
           nativeChatCoveredRef: { current: false },
@@ -117,7 +117,6 @@ export function terminalMountAdapters(
           connState,
           tabStripVisible: true,
           textScale: 1,
-          terminalFrameWidth: 390,
           unsubscribeTerminal: (handle: string) => effect('unsubscribe-terminal', { handle }),
           subscribeToTerminal: (handle: string) => effect('subscribe-terminal', { handle })
         } as unknown as Parameters<typeof useRefit>[0])

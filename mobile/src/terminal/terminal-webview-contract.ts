@@ -106,13 +106,13 @@ export type TerminalWebViewHandle = {
     initialData?: string,
     preserveScroll?: boolean,
     oscLinks?: TerminalOscLinkRange[],
-    frame?: TerminalFrame
+    frame?: TerminalFrame | null
   ) => void
-  resize: (cols: number, rows: number, frame?: TerminalFrame) => void
+  resize: (cols: number, rows: number, frame?: TerminalFrame | null) => void
   // Why: reflow the local xterm buffer (scrollback included) to a new width
   // after a server-side PTY reflow, so older wrapped lines rewrap to match the
   // latest output. No-op on the alternate screen.
-  reflow: (cols: number, rows: number, frame?: TerminalFrame) => void
+  reflow: (cols: number, rows: number, frame?: TerminalFrame | null) => void
   clear: () => void
   /** The grid this frame holds at the cell box the document reported; null without one at this text size. */
   fitDimensions: (frame: TerminalFrame) => TerminalFitDimensions | null

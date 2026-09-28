@@ -23,8 +23,7 @@ describe('sizeTerminalViewportFromCellBox', () => {
       ref: { fitDimensions: vi.fn(fitDimensions), holdSubscribedGrid: vi.fn() },
       viewportRef,
       viewportMeasuredRef: { current: false },
-      terminalFrameWidthRef: { current: 427.5 },
-      terminalFrameHeightRef: { current: 751 },
+      terminalFrameRef: { current: { width: 427.5, height: 751 } },
       onMeasured: vi.fn()
     }
   }
@@ -88,7 +87,9 @@ function subscriptionHarness(opts: {
   const subscribingHandlesRef = { current: new Set<string>() }
   const initializedHandlesRef = { current: new Set<string>() }
   const webReadyHandlesRef = { current: new Set<string>(opts.webReady ? [HANDLE] : []) }
-  const terminalFrameWidthRef = { current: opts.frameWidth ?? 427 }
+  const terminalFrameRef: { current: { width: number; height: number } | null } = {
+    current: opts.frameWidth === 0 ? null : { width: opts.frameWidth ?? 427, height: 751 }
+  }
   const fields = {
     client: {
       subscribe: vi.fn(
@@ -114,8 +115,7 @@ function subscriptionHarness(opts: {
     activeHandleRef: { current: HANDLE },
     subscribeSeqRef,
     layoutSeqRef: { current: new Map() },
-    terminalFrameWidthRef,
-    terminalFrameHeightRef: { current: 751 },
+    terminalFrameRef,
     scheduleDelayedAction: vi.fn(),
     showToast: vi.fn(),
     markNativeChatInputLeaseReady: vi.fn(),
@@ -169,7 +169,7 @@ function subscriptionHarness(opts: {
       act(() => webReady!(HANDLE))
     },
     layOutFrame: (width: number) => {
-      terminalFrameWidthRef.current = width
+      terminalFrameRef.current = { width, height: 751 }
     }
   }
 }

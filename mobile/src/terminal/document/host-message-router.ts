@@ -25,7 +25,7 @@ export type TerminalHostMessage = {
   preserveScroll?: boolean
   oscLinks?: unknown
   data?: string
-  frame?: { width: number; height: number }
+  frame?: { width: number; height: number } | null
 }
 
 /** The frame React Native laid out, sent with every grid; null when absent or without a size. */

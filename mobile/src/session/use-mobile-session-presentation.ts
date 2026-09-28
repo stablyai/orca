@@ -25,7 +25,7 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     toastOpacityRef,
     hostEndpoint,
     initialSessionAutoCreateRef,
-    terminalFrameHeightRef,
+    terminalFrameRef,
     handleCreateTerminal,
     visibleTabs,
     forceReconnectHost
@@ -84,7 +84,7 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
   const activeTerminalKeyboardLift = computeActiveTerminalKeyboardLift({
     keyboardLift,
     metrics: activeHandle ? terminalKeyboardMetrics.get(activeHandle) : undefined,
-    terminalFrameHeight: terminalFrameHeightRef.current
+    terminalFrameHeight: terminalFrameRef.current?.height ?? 0
   })
   const toastAnimatedStyle = {
     opacity: toastOpacityRef.current,

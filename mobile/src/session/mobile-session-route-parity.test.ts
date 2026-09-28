@@ -97,11 +97,13 @@ const HOST_COMPONENT_NAMES = new Set([
 // Again when xterm became the only cell measurer: `useTerminalCellBoxRefit` is gone, the frame's
 // width ref and `handleTerminalFrameLayout` subscribe a known box on layout (hooks 282, callbacks 79),
 // and the pane's `onCellBoxChange` goes to the viewport refit.
-const HEAD_MAIN_HOOK_SHA256 = '0a38ec291c341ffb5d26e745540e027da2a4b9ad4c77f8c00590d87df5a4842f'
+// Again when one frame ref replaced the height ref, width ref and width state (hooks 280).
+const HEAD_MAIN_HOOK_SHA256 = '17366146730f1d910344ea4aad2e74738baea45797380c2b075e63effa1e7fcc'
 // Moved when the prompt-cancel flag became one structured-session host support object (main).
 // Re-recorded against the merged tree. Again when the frame-layout and cell-box-change callbacks
 // named the refs they read in their dependency lists (react-doctor).
-const HEAD_HOOK_BINDING_SHA256 = 'a634008a09e4e7130fac14f683e8c6410690286a2e7ba4e27b86ef800b272bd9'
+// Again when the frame's width and height became one `terminalFrameRef`.
+const HEAD_HOOK_BINDING_SHA256 = 'b23d3fb3f8219d1959645f8d4f22cf9414102e9e47abcd68eacec30f4656e7f3'
 const HEAD_CALLBACK_IDENTITY_SHA256 =
   '19201fe156b3fd9d1bd55418c2c54e2d2319c652bfe55732b26f331c458f56c9'
 // Pins that no callback body in the route changed unnoticed. Body text, not behaviour: the sends
@@ -126,7 +128,8 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // Moved when the metrics handler compared every field, the row pitch included (main).
 // Again when the subscribe waited for web-ready and `handleTerminalWebReady` lost `documentHasInit`.
 // Again when the subscribe's inits began carrying the laid-out terminal frame, and its resize too.
-const HEAD_CALLBACK_BODY_SHA256 = '47b8673445f3a7ff0fc7198a70b2c91b8bbebf675307fecf1c521d031f60c599'
+// Again when those grids read the one frame ref.
+const HEAD_CALLBACK_BODY_SHA256 = '7bd8282eb873dcf09ee1acab884f25ed42739878a01af01c6d71e90f47aa56de'
 // Refreshed for the startup effect: both `worktree.activate` sends became `worktreeActivate`, and
 // the sleeping-agent check reads that operation's verdict instead of the reply envelope. Refreshed
 // again when the reporter took the reply and interpreted it itself, retiring the hand-built
@@ -193,7 +196,8 @@ const HEAD_RUNTIME_STRING_SHA256 =
   '83ae65d5c5ae056504f4d08bb4aa524b42d82f70d8e44035ccdd6a2d9021a387'
 // Moved by both of the dock's fields: their refs, and the live one's submit handler, are the seam's now.
 // Moved again when the terminal frame kept its laid-out width unrounded, for every fit.
-const HEAD_HOST_JSX_SHA256 = 'f9474c6da241ce3313b2c84cfdeb6134e3c223502b91bf6819faaf14be896d66'
+// Again when the frame's onLayout wrote one frame ref and notified a new width imperatively.
+const HEAD_HOST_JSX_SHA256 = 'f88672deda2170f42dac492166d4920ac3469d73a7db0c7ad1f80f10f468b1a7'
 const HEAD_LEAF_JSX_SHA256 = '62eb05c6e2ac0be6d553a141fc8aa1641fcb0c678777d5d539f490aab8648417'
 const HEAD_STYLE_REFERENCE_SHA256 =
   '56a005a1f65b30c11092e3422caef67810e1ec50f66fdd06471c370138b1eeb6'
@@ -591,7 +595,7 @@ describe('mobile session route extraction parity', () => {
     const contentBindings = CONTENT_COMPONENT_NAMES.flatMap(
       (name) => readHookFacts(name, definitions).bindings
     )
-    expect(main.hooks).toHaveLength(282)
+    expect(main.hooks).toHaveLength(280)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     expect(main.callbacks).toHaveLength(79)

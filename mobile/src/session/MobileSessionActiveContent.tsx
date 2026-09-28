@@ -32,9 +32,7 @@ export function MobileSessionActiveContent({
     setShowCreateTabDrawer,
     dictationMode,
     toastMessage,
-    terminalFrameHeightRef,
-    terminalFrameWidthRef,
-    setTerminalFrameWidth,
+    terminalFrameRef,
     handleTerminalTap,
     browserScreencastSupported,
     showToast,
@@ -55,6 +53,7 @@ export function MobileSessionActiveContent({
     discardMarkdownLocalContent,
     saveMarkdownTab,
     notifyTerminalFrameHeight,
+    notifyTerminalFrameWidth,
     setTerminalWebViewRef,
     handleTerminalWebReady,
     handleTerminalFrameLayout,
@@ -253,14 +252,17 @@ export function MobileSessionActiveContent({
       // Why: one frame under every branch; react-native-web observes onLayout only on a View that mounts with it.
       style={styles.contentFrame}
       onLayout={(e) => {
-        // Why: one unrounded width for every fit — the first subscribe's and each refit's.
         const { width, height } = e.nativeEvent.layout
-        terminalFrameHeightRef.current = height
-        terminalFrameWidthRef.current = width
-        // Why: notify height imperatively so dock settling re-fits the PTY without rerendering SessionScreen.
-        const nextHeight = Math.round(height)
-        setTerminalFrameWidth((prev) => (prev === width ? prev : width))
-        notifyTerminalFrameHeight(nextHeight)
+        const previous = terminalFrameRef.current
+        // Why: the page reports a hidden frame as 0x0; it keeps the box it was laid out at.
+        if (width > 0) {
+          terminalFrameRef.current = { width, height }
+        }
+        // Why: notify imperatively so dock settling re-fits the PTY without rerendering SessionScreen.
+        notifyTerminalFrameHeight(Math.round(height))
+        if (previous && width > 0 && width !== previous.width) {
+          notifyTerminalFrameWidth()
+        }
         handleTerminalFrameLayout()
       }}
     >

@@ -281,7 +281,7 @@ export function useTerminalWebViewController(
         initialData?: string,
         preserveScroll?: boolean,
         oscLinks?: TerminalOscLinkRange[],
-        frame?: TerminalFrame
+        frame?: TerminalFrame | null
       ) {
         // Why: arm a fresh ready promise BEFORE posting init. The document resolves it via the
         // 'ready' notify at the end of its rAF chain.
@@ -301,12 +301,12 @@ export function useTerminalWebViewController(
           frame
         })
       },
-      resize(cols: number, rows: number, frame?: TerminalFrame) {
+      resize(cols: number, rows: number, frame?: TerminalFrame | null) {
         // Why: resize/reflow must observe all prior writes or bytes reorder.
         writeCoalescer.flushNow()
         postMessage({ type: 'resize', cols, rows, frame })
       },
-      reflow(cols: number, rows: number, frame?: TerminalFrame) {
+      reflow(cols: number, rows: number, frame?: TerminalFrame | null) {
         writeCoalescer.flushNow()
         postMessage({ type: 'reflow', cols, rows, frame })
       },

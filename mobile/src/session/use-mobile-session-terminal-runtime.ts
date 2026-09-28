@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react'
+import type { TerminalFrame } from '../terminal/terminal-webview-messages'
 import { Platform, type Keyboard, type TextInput } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import type { RpcClient } from '../transport/rpc-client'
@@ -101,12 +102,9 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   // Why: highest applyLayout seq seen per handle; drop older scrollback/resized as stale, but a >20 gap resets (fresh subscription/server restart).
   const layoutSeqRef = useRef<Map<string, number>>(new Map())
   const sendingRef = useRef(false)
-  // Why: exact terminal-frame height for measureFitDimensions; window.innerHeight can overstate the visible area.
-  const terminalFrameHeightRef = useRef<number>(0)
-  // Why: unrounded frame width, which with the height sizes a first subscribe from a known cell box.
-  const terminalFrameWidthRef = useRef<number>(0)
-  // Why: sidebar resizes change the terminal frame width without a window-dim change; track it so the refit hook re-fits (see terminal-viewport-refit.ts).
-  const [terminalFrameWidth, setTerminalFrameWidth] = useState(0)
+  // Why: the terminal frame React Native laid out, unrounded, for every fit; window.innerHeight can
+  // overstate the visible area. Null until the frame's first layout.
+  const terminalFrameRef = useRef<TerminalFrame | null>(null)
   const activeSessionTab = sessionTabs.find((tab) => tab.id === activeSessionTabId) ?? null
   const {
     clearPendingLiveInputCommit,
@@ -197,10 +195,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     delayedActionTimersRef,
     layoutSeqRef,
     sendingRef,
-    terminalFrameHeightRef,
-    terminalFrameWidthRef,
-    terminalFrameWidth,
-    setTerminalFrameWidth,
+    terminalFrameRef,
     activeSessionTab,
     clearPendingLiveInputCommit,
     flushPendingLiveInputBeforeExternalSend,

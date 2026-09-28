@@ -35,12 +35,15 @@ function refitHarness(cellWidth: number) {
   const viewportRef: { current: TerminalViewportDims | null } = { current: { cols: 55, rows: 47 } }
   const subscribeToTerminal = vi.fn()
   const unsubscribeTerminal = vi.fn()
-  let notify: ((handle: string) => void) | undefined
-  function Probe({ frameWidth }: { frameWidth: number }) {
-    notify = useTerminalViewportRefit({
+  const terminalFrameRef: { current: { width: number; height: number } | null } = {
+    current: { width: 427, height: 710 }
+  }
+  let refit: ReturnType<typeof useTerminalViewportRefit> | undefined
+  function Probe() {
+    refit = useTerminalViewportRefit({
       activeHandleRef: { current: HANDLE },
       terminalRefs: { current: new Map([[HANDLE, terminal]]) },
-      terminalFrameHeightRef: { current: 710 },
+      terminalFrameRef,
       viewportRef,
       viewportMeasuredRef: { current: true },
       nativeChatCoveredRef: { current: false },
@@ -50,22 +53,25 @@ function refitHarness(cellWidth: number) {
       connState: 'connected',
       tabStripVisible: false,
       textScale: 1,
-      terminalFrameWidth: frameWidth,
       unsubscribeTerminal,
       subscribeToTerminal
-    }).notifyTerminalCellBoxChange
+    })
     return null
   }
   act(() => {
-    renderer = create(createElement(Probe, { frameWidth: 427 }))
+    renderer = create(createElement(Probe))
   })
   return {
     terminal,
     viewportRef,
     subscribeToTerminal,
-    report: (handle: string) => act(() => notify!(handle)),
-    layOut: (frameWidth: number) =>
-      act(() => renderer!.update(createElement(Probe, { frameWidth })))
+    report: (handle: string) => act(() => refit!.notifyTerminalCellBoxChange(handle)),
+    // The session's onLayout: the one frame store, then the width notify.
+    layOut: (width: number) =>
+      act(() => {
+        terminalFrameRef.current = { width, height: 710 }
+        refit!.notifyTerminalFrameWidth()
+      })
   }
 }
 

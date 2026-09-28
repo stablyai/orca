@@ -1,4 +1,5 @@
 import type { TerminalWebViewHandle } from '../terminal/terminal-webview-contract'
+import type { TerminalFrame } from '../terminal/terminal-webview-messages'
 import type { MutableRef, TerminalViewportDims } from './mobile-terminal-viewport-resubscribe'
 
 export type TerminalViewportFromCellBoxArgs = {
@@ -6,8 +7,7 @@ export type TerminalViewportFromCellBoxArgs = {
   ref: Pick<TerminalWebViewHandle, 'fitDimensions' | 'holdSubscribedGrid'> | undefined
   viewportRef: MutableRef<TerminalViewportDims | null>
   viewportMeasuredRef: MutableRef<boolean>
-  terminalFrameWidthRef: MutableRef<number>
-  terminalFrameHeightRef: MutableRef<number>
+  terminalFrameRef: MutableRef<TerminalFrame | null>
   onMeasured: (
     handle: string,
     dims: TerminalViewportDims | null | undefined,
@@ -24,12 +24,9 @@ export function sizeTerminalViewportFromCellBox(args: TerminalViewportFromCellBo
   if (args.viewportMeasuredRef.current || !args.ref) {
     return
   }
-  const frameHeight = args.terminalFrameHeightRef.current
-  const dims = args.ref.fitDimensions({
-    width: args.terminalFrameWidthRef.current,
-    height: frameHeight
-  })
-  args.onMeasured(args.handle, dims, frameHeight)
+  const frame = args.terminalFrameRef.current
+  const dims = frame ? args.ref.fitDimensions(frame) : null
+  args.onMeasured(args.handle, dims, frame?.height ?? 0)
   if (dims) {
     args.ref.holdSubscribedGrid(dims)
     args.viewportRef.current = dims

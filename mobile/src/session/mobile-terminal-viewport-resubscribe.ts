@@ -2,6 +2,7 @@
  *  frame dims can never equal the phone viewport must not re-arm the stream
  *  forever — it broke gesture recognition and drained battery at ~25 cycles/s. */
 
+import type { TerminalFrame } from '../terminal/terminal-webview-messages'
 import type { MobileTerminalDiagnostics } from './mobile-terminal-diagnostics'
 
 export const MAX_TERMINAL_VIEWPORT_RESUBSCRIBE_ATTEMPTS = 3
@@ -197,8 +198,7 @@ export type TerminalViewportFitPassArgs = {
   subscribeSeqRef: MutableRef<Map<string, number>>
   initializedHandlesRef: MutableRef<Set<string>>
   terminalUnsubsRef: MutableRef<Map<string, () => void>>
-  terminalFrameHeightRef: MutableRef<number>
-  terminalFrameWidthRef: MutableRef<number>
+  terminalFrameRef: MutableRef<TerminalFrame | null>
   getTerminalRef: (handle: string | null) => TerminalFitWebView | undefined
   unsubscribeTerminal: (handle: string) => void
   subscribeToTerminal: (handle: string) => void
@@ -244,10 +244,8 @@ export function runTerminalViewportFitPass(args: TerminalViewportFitPassArgs): v
     ) {
       return
     }
-    const dims = args.getTerminalRef(handle)?.fitDimensions({
-      width: args.terminalFrameWidthRef.current,
-      height: args.terminalFrameHeightRef.current
-    })
+    const frame = args.terminalFrameRef.current
+    const dims = frame ? args.getTerminalRef(handle)?.fitDimensions(frame) : null
     if (!dims) {
       return
     }

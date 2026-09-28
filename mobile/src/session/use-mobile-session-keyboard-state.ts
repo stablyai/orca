@@ -31,8 +31,7 @@ export type MobileSessionKeyboardScope = Pick<
   | 'tabStripOffsetRef'
   | 'tabStripRef'
   | 'tabStripViewportWidthRef'
-  | 'terminalFrameHeightRef'
-  | 'terminalFrameWidth'
+  | 'terminalFrameRef'
   | 'terminalRefs'
   | 'terminals'
   | 'terminalTextScale'
@@ -67,31 +66,33 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
     terminalRefs,
     initializedHandlesRef,
     activeHandleRef,
-    terminalFrameHeightRef,
-    terminalFrameWidth,
+    terminalFrameRef,
     showNativeChatRef,
     unsubscribeTerminal,
     subscribeToTerminal
   } = scope
   // Why: non-subscribe layout refits (tab strip, fold, rotation) live in a dedicated hook — see terminal-viewport-refit.ts.
-  const { notifyTerminalFrameHeight, notifyKeyboardVisibility, notifyTerminalCellBoxChange } =
-    useTerminalViewportRefit({
-      activeHandleRef,
-      terminalRefs,
-      terminalFrameHeightRef,
-      viewportRef,
-      viewportMeasuredRef,
-      nativeChatCoveredRef: showNativeChatRef,
-      clientRef,
-      deviceTokenRef,
-      initializedHandlesRef,
-      connState,
-      tabStripVisible: terminals.length > 1,
-      textScale: terminalTextScale,
-      terminalFrameWidth,
-      unsubscribeTerminal,
-      subscribeToTerminal
-    })
+  const {
+    notifyTerminalFrameHeight,
+    notifyTerminalFrameWidth,
+    notifyKeyboardVisibility,
+    notifyTerminalCellBoxChange
+  } = useTerminalViewportRefit({
+    activeHandleRef,
+    terminalRefs,
+    terminalFrameRef,
+    viewportRef,
+    viewportMeasuredRef,
+    nativeChatCoveredRef: showNativeChatRef,
+    clientRef,
+    deviceTokenRef,
+    initializedHandlesRef,
+    connState,
+    tabStripVisible: terminals.length > 1,
+    textScale: terminalTextScale,
+    unsubscribeTerminal,
+    subscribeToTerminal
+  })
 
   // Why: react-native-web's `Keyboard` never fires, so inside the shell's page this screen heard no
   // keyboard at all — the platform seam answers on both hosts. Visibility before height, as the
@@ -152,6 +153,7 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
   }, [router])
   return {
     notifyTerminalFrameHeight,
+    notifyTerminalFrameWidth,
     notifyKeyboardVisibility,
     notifyTerminalCellBoxChange,
     scrollActiveTabIntoView,
