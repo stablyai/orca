@@ -5,7 +5,7 @@
 // repair marker the superseded epoch was carrying. Superseded rows are DELETED
 // rather than retained — nothing would ever shed them.
 
-import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
+import { journalRowSchemaVersion } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionProviderHandle } from '../../../shared/agent-session-journal-types'
 import type Database from '../../sqlite/sync-database'
 import type { JournalLoad } from './journal-open'
@@ -33,7 +33,8 @@ export function publishNewEpoch(input: {
     kind: 'epoch',
     reason: input.reason,
     providerHandle: input.providerHandle,
-    v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
+    // Carries no body: an older host must keep reading a turn-free session past row 1.
+    v: journalRowSchemaVersion([]),
     epoch: input.epoch,
     seq: 1,
     fence: input.fence,

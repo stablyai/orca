@@ -1,23 +1,19 @@
 import type {
-  AgentSessionModelOption,
-  AgentSessionOptionChoice,
+  AgentSessionFastModeState,
+  AgentSessionFastModeSupport,
   AgentSessionOptionsResult
 } from '../../shared/agent-session-wire'
-import { CLAUDE_SESSION_OPTION_CATALOG } from '../../shared/agent-session-option-catalog-claude-codex'
-import type { CatalogModel } from '../../shared/agent-session-option-catalog-types'
+import {
+  currentModelId,
+  listedModels,
+  matchListedModel,
+  record,
+  seedModels,
+  text,
+  type ListedModel
+} from './claude-structured-model-catalog'
 import type { ClaudeSession } from './claude-structured-session-state'
-
-type ListedModel = AgentSessionModelOption & { resolvedModel: string | null }
-
-function record(value: unknown): Record<string, unknown> | null {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null
-}
-
-function text(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value : null
-}
+import { decodeStructuredAgentSessionOptionValue } from '../../shared/structured-agent-session-option-codec'
 
 /**
  * The session's current effort, which only `get_settings` reports: the
@@ -29,78 +25,80 @@ export function readClaudeSettingsEffort(settings: unknown): string | null {
   return text(record(record(settings)?.effective)?.effortLevel)
 }
 
-function effortLabel(value: string): string {
-  return value === 'xhigh' ? 'Extra high' : `${value.charAt(0).toUpperCase()}${value.slice(1)}`
+/** `applied` is the CLI's own resolution of env over settings over its listed default; a null
+ *  effort means none is sent. Null when the CLI predates the block. */
+export function readClaudeSettingsApplied(
+  settings: unknown
+): NonNullable<ClaudeSession['appliedOptions']> | null {
+  const applied = record(record(settings)?.applied)
+  if (!applied) {
+    return null
+  }
+  const model = text(applied.model)
+  const effort = text(applied.effort)
+  return { ...(model ? { model } : {}), ...(effort ? { effort } : {}) }
 }
 
-function listedEfforts(row: Record<string, unknown>): AgentSessionOptionChoice[] {
-  return row.supportsEffort === true && Array.isArray(row.supportedEffortLevels)
-    ? row.supportedEffortLevels.flatMap((value) => {
-        const effort = text(value)
-        return effort ? [{ value: effort, label: effortLabel(effort) }] : []
-      })
-    : []
+export function observeClaudeSettingsApplied(session: ClaudeSession, settings: unknown): void {
+  const applied = readClaudeSettingsApplied(settings)
+  if (applied) {
+    session.appliedOptions = applied
+  } else {
+    delete session.appliedOptions
+  }
 }
 
-function listedModels(value: unknown): ListedModel[] {
-  const response = record(value)
-  const rows = Array.isArray(response?.models)
-    ? response.models.map(record).filter((row): row is Record<string, unknown> => row !== null)
-    : []
-  const defaultRow = rows.find((row) => text(row.value) === 'default')
-  const defaultResolvedModel = text(defaultRow?.resolvedModel)
-  const seen = new Set<string>()
-  return rows.flatMap((row) => {
-    const id = text(row.value)
-    if (!id || id === 'default' || seen.has(id)) {
-      return []
-    }
-    seen.add(id)
-    const resolvedModel = text(row.resolvedModel)
-    const description = text(row.description)
-    return [
-      {
-        id,
-        label: text(row.displayName) ?? id,
-        ...(description ? { description } : {}),
-        isDefault: resolvedModel !== null && resolvedModel === defaultResolvedModel,
-        efforts: listedEfforts(row),
-        resolvedModel
-      }
-    ]
-  })
+export function readClaudeSettingsFastMode(settings: unknown): boolean | null {
+  const value = record(record(settings)?.effective)?.fastMode
+  return typeof value === 'boolean' ? value : null
 }
 
-function seedEfforts(model: CatalogModel): AgentSessionOptionChoice[] {
-  const effort = model.options.find((option) => option.id === 'effort')
-  return effort?.kind.type === 'select' ? effort.kind.choices : []
+export function readClaudeSettingsFastModePerSessionOptIn(settings: unknown): boolean | null {
+  const value = record(record(settings)?.effective)?.fastModePerSessionOptIn
+  return typeof value === 'boolean' ? value : null
 }
 
-function seedModels(): ListedModel[] {
-  return CLAUDE_SESSION_OPTION_CATALOG.models.map((model) => ({
-    id: model.id,
-    label: model.label,
-    ...(model.description ? { description: model.description } : {}),
-    isDefault: model.isDefault === true,
-    efforts: seedEfforts(model),
-    resolvedModel: null
-  }))
+const FAST_MODE_STATES: readonly AgentSessionFastModeState[] = ['off', 'cooldown', 'on']
+
+export function readClaudeFastModeFacts(value: unknown): {
+  state?: AgentSessionFastModeState
+  disabledReason?: string
+  disabledReasonReported: boolean
+} {
+  const row = record(value)
+  const state = text(row?.fast_mode_state)
+  // Narrowed by lookup, so the wire string reaches the session only as a known state.
+  const matched = FAST_MODE_STATES.find((entry) => entry === state)
+  const reportedDisabledReason = text(row?.fast_mode_disabled_reason)
+  return {
+    ...(matched ? { state: matched } : {}),
+    ...(reportedDisabledReason ? { disabledReason: reportedDisabledReason } : {}),
+    disabledReasonReported: Object.hasOwn(row ?? {}, 'fast_mode_disabled_reason')
+  }
 }
 
-function currentModelId(models: ListedModel[], reportedModel: string | undefined): string {
-  const matched = reportedModel
-    ? models.find((model) => model.id === reportedModel || model.resolvedModel === reportedModel)
-    : undefined
-  return (
-    matched?.id ?? reportedModel ?? models.find((model) => model.isDefault)?.id ?? models[0]!.id
-  )
+export function observeClaudeFastModeFacts(session: ClaudeSession, value: unknown): void {
+  const facts = readClaudeFastModeFacts(value)
+  if (facts.state) {
+    session.fastModeState = facts.state
+  }
+  if (facts.disabledReason) {
+    session.fastModeDisabledReason = facts.disabledReason
+  } else if (facts.state || facts.disabledReasonReported) {
+    // The child omits the reason entirely when nothing blocks Fast — it never sends a
+    // null — so a frame that reports state without one is the only all-clear there is.
+    // Requiring the key back would latch the first reason for the session's life and
+    // retire the control for good: a model switch away and back never restores it.
+    delete session.fastModeDisabledReason
+  }
 }
 
 /**
  * The model the session is running. A report the CLI made after the last write
  * outranks the write: it names the model the session ran. An older one does not
  * — a model set between turns has no report yet, and deferring to the previous
- * turn's would flip the pill back.
+ * turn's would flip the pill back. With neither, it is the model Claude says it
+ * will apply, never the listing's default, which env or settings may override.
  *
  * Sole resolver of that question: every surface that acts on "the current model"
  * — the pill, the effort guard, the rejection it names — reads it here, so two
@@ -116,7 +114,9 @@ export function readClaudeCurrentModel(session: ClaudeSession): {
   return {
     id: confirmed
       ? session.reportedOptions.model
-      : (session.options.get('model') ?? session.reportedOptions.model),
+      : (session.options.get('model') ??
+        session.reportedOptions.model ??
+        session.appliedOptions?.model),
     confirmed
   }
 }
@@ -129,19 +129,26 @@ export function readClaudeCurrentModel(session: ClaudeSession): {
  * of a refusal — and an absent or unlisted one is not evidence, or a live CLI
  * that predates `list_models` would have every effort refused under it.
  */
-export async function readClaudeModelEffortLevels(
+/** One catalog read serves a whole option write. The admit check, the effort guard
+ *  and the Fast guard all ask about the same list; each taking its own read made a
+ *  single model write pay for two `list_models` round trips and let two guards answer
+ *  from two different catalogs. An unreadable catalog is an empty list, which
+ *  identifies no model and so refuses nothing. */
+export async function readClaudeListedModels(
   session: ClaudeSession,
   timeoutMs: number | undefined
-): Promise<{ modelId: string | undefined; levels: ReadonlySet<string> | null }> {
-  const modelId = readClaudeCurrentModel(session).id
-  if (!modelId) {
-    return { modelId, levels: null }
-  }
+): Promise<ListedModel[]> {
   const catalog = await session.connection.supportedModels({ timeoutMs }).catch(() => null)
-  const matched = catalog
-    ? listedModels({ models: catalog }).find(
-        (model) => model.id === modelId || model.resolvedModel === modelId
-      )
+  return catalog ? listedModels({ models: catalog }) : []
+}
+
+export function claudeModelEffortLevels(
+  session: ClaudeSession,
+  models: readonly ListedModel[]
+): { modelId: string | undefined; levels: ReadonlySet<string> | null } {
+  const modelId = readClaudeCurrentModel(session).id
+  const matched = modelId
+    ? models.find((model) => model.id === modelId || model.resolvedModel === modelId)
     : undefined
   return {
     modelId: matched?.id ?? modelId,
@@ -149,34 +156,201 @@ export async function readClaudeModelEffortLevels(
   }
 }
 
+export function claudeModelFastModeSupport(
+  session: ClaudeSession,
+  models: readonly ListedModel[],
+  requestedModel?: string
+): { modelId: string | undefined; supported: boolean | null } {
+  const reportedModelId = requestedModel ?? readClaudeCurrentModel(session).id
+  const modelId = reportedModelId ?? models.find((model) => model.isDefault)?.id
+  const matched = modelId ? matchListedModel(models, modelId) : undefined
+  return {
+    modelId: matched?.id ?? modelId,
+    supported: matched?.supportsFastMode ?? null
+  }
+}
+
+const TRANSIENT_FAST_MODE_REASONS = new Set(['network_error', 'unknown', 'pending'])
+const NON_BLOCKING_FAST_MODE_REASONS = new Set(['preference', 'sdk_opt_in_required'])
+
+function claudeFastModeSupport(
+  models: readonly ListedModel[],
+  disabledReason: string | undefined
+): AgentSessionFastModeSupport | undefined {
+  if (disabledReason && TRANSIENT_FAST_MODE_REASONS.has(disabledReason)) {
+    return undefined
+  }
+  if (disabledReason && !NON_BLOCKING_FAST_MODE_REASONS.has(disabledReason)) {
+    return { supported: false, reason: disabledReason }
+  }
+  if (!models.some((model) => model.supportsFastMode === true)) {
+    return models.length > 0 && models.every((model) => model.supportsFastMode === false)
+      ? { supported: false, reason: 'model-not-supported' }
+      : undefined
+  }
+  return { supported: true }
+}
+
+function listedModelFastModeSupport(
+  models: readonly ListedModel[],
+  modelId: string
+): boolean | undefined {
+  return matchListedModel(models, modelId)?.supportsFastMode
+}
+
+function decodedFastMode(session: ClaudeSession): boolean | undefined {
+  const encoded = session.options.get('fastMode')
+  if (encoded === undefined) {
+    return undefined
+  }
+  const decoded = decodeStructuredAgentSessionOptionValue('fastMode', encoded)
+  return typeof decoded === 'boolean' ? decoded : undefined
+}
+
+/**
+ * Whether the catalog admits the model, matched by alias or resolved id so a pick
+ * stored as either one is found. The permissive case lives here rather than at the
+ * call site: every caller must treat an unidentified catalog the same way, and one
+ * that forgot would refuse every model on a CLI that cannot answer.
+ */
+export function claudeCatalogAdmitsModel(models: readonly ListedModel[], modelId: string): boolean {
+  // An empty list identifies no model, so it is not evidence against one — a live
+  // CLI predating `list_models` would otherwise have every model refused under it.
+  // Do not turn this into a refusal.
+  return (
+    models.length === 0 ||
+    models.some((model) => model.id === modelId || model.resolvedModel === modelId)
+  )
+}
+
+function wireClaudeModels(models: readonly ListedModel[]): AgentSessionOptionsResult['models'] {
+  return models.map((entry) => ({
+    id: entry.id,
+    label: entry.label,
+    ...(entry.description ? { description: entry.description } : {}),
+    isDefault: entry.isDefault,
+    efforts: entry.efforts,
+    ...(entry.supportsFastMode !== undefined ? { supportsFastMode: entry.supportsFastMode } : {})
+  }))
+}
+
+/** Write a provider-listed catalog through to the host store. Account-level
+ *  facts only: this session's disabled reason and its unlisted current model
+ *  stay out, so another surface never inherits session state as a catalog. */
+function writeClaudeCatalogThrough(session: ClaudeSession, discovered: ListedModel[]): void {
+  if (discovered.length === 0 || !session.catalogAccess) {
+    return
+  }
+  const support = claudeFastModeSupport(discovered, undefined)
+  session.catalogAccess.store.recordSuccess(session.catalogAccess.fingerprint, 'claude', {
+    models: wireClaudeModels(discovered),
+    ...(support ? { fastModeSupport: support } : {}),
+    fastModeTierByModel: new Map(),
+    origin: 'live-session'
+  })
+}
+
 export async function readClaudeStructuredSessionOptions(
   session: ClaudeSession,
   timeoutMs: number | undefined
 ): Promise<AgentSessionOptionsResult> {
-  const catalog = await session.connection.supportedModels({ timeoutMs }).catch(() => null)
+  const readMutationSequence = session.optionMutationSequence
+  // Before startup both requests would wait on initialize; answer from the saved options.
+  const [catalog, settings] =
+    session.startup.state === 'proven'
+      ? await Promise.all([
+          session.connection.supportedModels({ timeoutMs }).catch(() => null),
+          session.connection.getSettings({ timeoutMs }).catch(() => null)
+        ])
+      : [null, null]
+  observeClaudeSettingsReadback(session, settings, readMutationSequence)
+  return claudeStructuredSessionOptionsFrom(session, catalog, readMutationSequence)
+}
+
+function observeClaudeSettingsReadback(
+  session: ClaudeSession,
+  settings: unknown,
+  readMutationSequence: number
+): void {
+  if (settings !== null && readMutationSequence === session.optionMutationSequence) {
+    const effort = readClaudeSettingsEffort(settings)
+    const fastMode = readClaudeSettingsFastMode(settings)
+    const perSessionOptIn = readClaudeSettingsFastModePerSessionOptIn(settings)
+    observeClaudeSettingsApplied(session, settings)
+    if (effort) {
+      session.reportedOptions.effort = effort
+    }
+    if (fastMode !== null) {
+      session.reportedOptions.fastMode = fastMode
+      if (decodedFastMode(session) !== undefined) {
+        session.options.set('fastMode', String(fastMode))
+      }
+      session.confirmedOptions.add('fastMode')
+    }
+    if (perSessionOptIn !== null) {
+      session.fastModePerSessionOptIn = perSessionOptIn
+    }
+  }
+}
+
+/** The options as main already holds them, over `catalog`; asks the CLI nothing. Startup's
+ *  settings readback and restore's confirmations are applied by the time a start proves, and
+ *  the SDK answers `list_models` from its initialize result, so a started session's snapshot
+ *  passes that result here rather than paying two round trips for what it already read. */
+export function claudeStructuredSessionOptionsFrom(
+  session: ClaudeSession,
+  catalog: unknown[] | null,
+  readMutationSequence = session.optionMutationSequence
+): AgentSessionOptionsResult {
   const discovered = listedModels(catalog ? { models: catalog } : null)
+  writeClaudeCatalogThrough(session, discovered)
   const models = discovered.length > 0 ? discovered : seedModels()
   const current = readClaudeCurrentModel(session)
   const model = currentModelId(models, current.id)
   if (!models.some((entry) => entry.id === model)) {
     models.push({ id: model, label: model, isDefault: false, efforts: [], resolvedModel: null })
   }
-  const effort = session.options.get('effort') ?? session.reportedOptions.effort
+  const effort =
+    session.options.get('effort') ??
+    session.reportedOptions.effort ??
+    session.appliedOptions?.effort
+  let desiredFastMode = decodedFastMode(session)
+  if (
+    desiredFastMode === true &&
+    listedModelFastModeSupport(discovered, model) === false &&
+    readMutationSequence === session.optionMutationSequence
+  ) {
+    session.options.set('fastMode', 'false')
+    session.confirmedOptions.delete('fastMode')
+    desiredFastMode = false
+  }
+  // The child answers Fast two ways and need not answer both: the settings readback
+  // carries the boolean, and the session frames carry a routing state. A fresh
+  // session reports the state while the boolean is still absent, so without this
+  // fallback the picker asks the user to re-answer what the provider just reported.
+  // `cooldown` throttles routing, it does not clear the pick, so it reads as on —
+  // reading it as off would flip a control nobody touched.
+  const fastMode =
+    desiredFastMode ??
+    session.reportedOptions.fastMode ??
+    (session.fastModeState === undefined ? undefined : session.fastModeState !== 'off')
+  const support = claudeFastModeSupport(discovered, session.fastModeDisabledReason)
   const confirmed = [
     ...(current.confirmed ? ['model'] : []),
-    ...(effort && session.confirmedOptions.has('effort') ? ['effort'] : [])
+    ...(effort && session.confirmedOptions.has('effort') ? ['effort'] : []),
+    ...(fastMode !== undefined &&
+    (session.confirmedOptions.has('fastMode') || !session.options.has('fastMode'))
+      ? ['fastMode']
+      : [])
   ]
   return {
-    models: models.map((entry) => ({
-      id: entry.id,
-      label: entry.label,
-      ...(entry.description ? { description: entry.description } : {}),
-      isDefault: entry.isDefault,
-      efforts: entry.efforts
-    })),
+    models: wireClaudeModels(models),
+    ...(support ? { fastModeSupport: support } : {}),
     current: {
       model,
       ...(effort ? { effort } : {}),
+      ...(fastMode !== undefined ? { fastMode } : {}),
+      ...(session.fastModeState ? { fastModeState: session.fastModeState } : {}),
       ...(confirmed.length > 0 ? { confirmed } : {})
     }
   }

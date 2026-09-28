@@ -8,6 +8,7 @@ import { join } from 'node:path'
 import { existsSync, readFileSync } from 'node:fs'
 import type { SshConnection } from './ssh-connection'
 import { execCommand } from './ssh-relay-deploy-helpers'
+import { isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
 import { RELAY_INSTALL_LOCK_NAME } from './ssh-relay-install-lock'
 import { remoteInstallDirSegments } from './ssh-relay-install-namespace'
 import { RELAY_INSTALL_MODEL, type RemoteInstallModel } from './remote-install-model'
@@ -133,6 +134,9 @@ export async function isRemoteInstallComplete(
     )
     return probe.trim() === 'OK'
   } catch (err) {
+    if (isUnconfirmedSshCommandTermination(err)) {
+      throw err
+    }
     options?.signal?.throwIfAborted()
     if (options?.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {
       throw err
@@ -160,7 +164,11 @@ export async function finalizeInstall(
   if (options?.releaseLock !== false) {
     await execHostCommand(conn, host, removeRemoteTreeCommand(host, lock), {
       signal: options?.signal
-    }).catch(() => {})
+    }).catch((error) => {
+      if (isUnconfirmedSshCommandTermination(error)) {
+        throw error
+      }
+    })
   }
   options?.signal?.throwIfAborted()
 }
@@ -175,13 +183,17 @@ export async function abandonInstall(
   host: RemoteHostPlatform = DEFAULT_REMOTE_HOST
 ): Promise<void> {
   const lock = joinRemotePath(host, remoteRelayDir, RELAY_INSTALL_LOCK_NAME)
-  await execHostCommand(conn, host, removeRemoteTreeCommand(host, lock)).catch(() => {})
+  await execHostCommand(conn, host, removeRemoteTreeCommand(host, lock)).catch((error) => {
+    if (isUnconfirmedSshCommandTermination(error)) {
+      throw error
+    }
+  })
 }
 
 /**
  * Garbage-collect old version directories: remove an idle, fully-installed,
- * unlocked sibling version dir (never the current one). Best-effort — errors
- * are swallowed so GC never blocks the user from connecting.
+ * unlocked sibling version dir (never the current one). Confirmed failures are
+ * best-effort; unconfirmed command termination stops later deployment commands.
  */
 // Why re-exported rather than moved outright: deploy and the relay tests import the whole
 // versioned-install surface from here, and the split exists for file size, not to redraw an API.

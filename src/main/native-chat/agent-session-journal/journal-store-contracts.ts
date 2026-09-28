@@ -1,8 +1,10 @@
+import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
 import type {
   AgentJournalCursor,
   AgentJournalItemBody,
   AgentJournalItemIdentity,
   AgentJournalMessageItem,
+  AgentJournalProducerLinkage,
   AgentJournalResetReason,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
@@ -29,7 +31,11 @@ export type ResolveDispatchInput = {
   recovered?: true
 } & (
   | { state: 'accepted'; providerIdentity: AgentJournalItemIdentity }
-  | { state: 'rejected' | 'unknown'; reason?: string | null }
+  | { state: 'pending' }
+  /** `reason` is what released clients print, `rejection` what newer ones read: both from
+   *  `agentSessionFailureWords`, never written by hand. */
+  | ({ state: 'rejected' } & AgentJournalDispatchRejection)
+  | { state: 'unknown'; reason?: string | null }
 )
 
 export type JournalAppendResult = {
@@ -38,7 +44,11 @@ export type JournalAppendResult = {
   revision: number
 }
 
-export type JournalItemAppendOptions = { fence: number; observedAt?: number; recovered?: true }
+export type JournalItemAppendOptions = AgentJournalProducerLinkage & {
+  fence: number
+  observedAt?: number
+  recovered?: true
+}
 export type JournalTombstoneInput = { fence: number }
 
 export type JournalLifecycleBatchInput = {
@@ -53,6 +63,8 @@ export type JournalSubmissionInput = {
   payloadFingerprint: string
   body: AgentJournalMessageItem
   fence: number
+  /** The send is accepted now and handed over later, by a `dispatch{pending}` row. */
+  handoverRecorded?: true
 }
 
 export type JournalItemAppendInput = {

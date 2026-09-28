@@ -32,15 +32,15 @@ export function computeTerminalTailWaitState(
   partialLine: string,
   preview: string
 ): TerminalTailWaitState {
-  const tailShape = inspectTerminalWaitTail(lines, partialLine)
-  if (!tailShape.fromTail) {
+  const tailInspection = inspectTerminalWaitTail(lines, partialLine)
+  if (!tailInspection.fromTail) {
     return {
       waitText: preview,
       signal: findActionableTerminalWaitBlockedSignal(preview.toLowerCase()),
       fromTail: false
     }
   }
-  if (!tailShape.mayContainBlockedSignal) {
+  if (!tailInspection.mayContainBlockedSignal) {
     // Why: reads waitText only when a signal exists; avoid retaining a rebuilt 256 KiB string in the common case.
     return { waitText: '', signal: null, fromTail: true }
   }

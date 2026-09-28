@@ -2,6 +2,7 @@ import { getSecretStore } from '../shared/secret-store'
 
 export const PROTECTED_SECRET_SLOT = {
   opencodeSessionCookie: 'settings.opencodeSessionCookie',
+  opencodeGoApiKey: 'settings.opencodeGoApiKey',
   httpProxyUrl: 'settings.httpProxyUrl',
   browserKagiSessionLink: 'ui.browserKagiSessionLink'
 } as const
@@ -18,6 +19,7 @@ export type ProtectedSecretDecryption = {
 export type ProtectedSecretRetentionUpdate = {
   slot: string
   blob: string | null
+  epoch: symbol
 }
 
 export type LegacyPlaintextValidator = (value: string) => boolean
@@ -33,10 +35,18 @@ type ProtectedSecretEncryption = {
 export class ProtectedSecretPersistence {
   private readonly retainedBlobs = new Map<string, string>()
   private readonly sealedSlots = new Set<string>()
+  private readonly pendingEncryption = new Set<string>()
+  private readonly retentionEpochs = new Map<string, symbol>()
+
+  hasPendingEncryption(): boolean {
+    return this.pendingEncryption.size > 0
+  }
 
   removeRetainedBlob(slot: string): void {
+    this.retentionEpochs.delete(slot)
     this.retainedBlobs.delete(slot)
     this.sealedSlots.delete(slot)
+    this.pendingEncryption.delete(slot)
   }
 
   isSealed(slot: string, value: string): boolean {
@@ -45,6 +55,12 @@ export class ProtectedSecretPersistence {
 
   commitRetentionUpdates(updates: readonly ProtectedSecretRetentionUpdate[]): void {
     for (const update of updates) {
+      // A delayed save must not overwrite a newer secret decision.
+      if (this.retentionEpochs.get(update.slot) !== update.epoch) {
+        continue
+      }
+      this.retentionEpochs.delete(update.slot)
+      this.pendingEncryption.delete(update.slot)
       if (update.blob === null) {
         this.removeRetainedBlob(update.slot)
       } else {
@@ -55,11 +71,21 @@ export class ProtectedSecretPersistence {
   }
 
   encrypt(slot: string, plaintext: string): ProtectedSecretEncryption {
+    this.retentionEpochs.delete(slot)
     const retained = this.retainedBlobs.get(slot) ?? ''
     if (!plaintext && !retained) {
-      return { blob: '', degraded: false }
+      return {
+        blob: '',
+        degraded: false,
+        ...(this.pendingEncryption.has(slot)
+          ? { retentionUpdate: this.prepareRetentionUpdate(slot, null) }
+          : {})
+      }
     }
     if (!this.encryptionAvailable()) {
+      if (!this.isSealed(slot, plaintext) && (plaintext || !this.sealedSlots.has(slot))) {
+        this.pendingEncryption.add(slot)
+      }
       return {
         blob: retained,
         degraded: true,
@@ -73,7 +99,7 @@ export class ProtectedSecretPersistence {
       return {
         blob: '',
         degraded: false,
-        retentionUpdate: { slot, blob: null }
+        retentionUpdate: this.prepareRetentionUpdate(slot, null)
       }
     }
     try {
@@ -81,9 +107,10 @@ export class ProtectedSecretPersistence {
       return {
         blob,
         degraded: false,
-        retentionUpdate: { slot, blob }
+        retentionUpdate: this.prepareRetentionUpdate(slot, blob)
       }
     } catch (err) {
+      this.pendingEncryption.add(slot)
       console.error('[persistence] Encryption failed; retaining the prior protected value:', err)
       return { blob: retained, degraded: true }
     }
@@ -98,6 +125,7 @@ export class ProtectedSecretPersistence {
     ciphertext: string,
     isLegacyPlaintext?: LegacyPlaintextValidator
   ): ProtectedSecretDecryption {
+    this.retentionEpochs.delete(slot)
     if (!ciphertext) {
       this.removeRetainedBlob(slot)
       return { plaintext: '', status: 'decrypted' }
@@ -126,6 +154,15 @@ export class ProtectedSecretPersistence {
       )
       return { plaintext: '', status: 'failed' }
     }
+  }
+
+  private prepareRetentionUpdate(
+    slot: string,
+    blob: string | null
+  ): ProtectedSecretRetentionUpdate {
+    const epoch = Symbol()
+    this.retentionEpochs.set(slot, epoch)
+    return { slot, blob, epoch }
   }
 
   private encryptionAvailable(): boolean {

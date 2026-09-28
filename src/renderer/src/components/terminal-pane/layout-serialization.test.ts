@@ -42,7 +42,6 @@ import {
   RESET_TERMINAL_CURSOR_STYLE
 } from '../../../../shared/terminal-mode-reset-profiles'
 import {
-  buildFontFamily,
   restoreScrollbackBuffers,
   serializePaneTree,
   serializeTerminalLayout,
@@ -69,64 +68,6 @@ const LEAF_1 = '11111111-1111-4111-8111-111111111111'
 const LEAF_2 = '22222222-2222-4222-8222-222222222222'
 const LEAF_3 = '33333333-3333-4333-8333-333333333333'
 const LEAF_4 = '44444444-4444-4444-8444-444444444444'
-
-// ---------------------------------------------------------------------------
-// buildFontFamily
-// ---------------------------------------------------------------------------
-const FULL_FALLBACK =
-  '"SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", monospace'
-
-describe('buildFontFamily', () => {
-  it('puts custom font first with full cross-platform fallback chain', () => {
-    const result = buildFontFamily('JetBrains Mono')
-    expect(result).toBe(`"JetBrains Mono", ${FULL_FALLBACK}`)
-  })
-
-  it('does not duplicate SF Mono when it is the input', () => {
-    const result = buildFontFamily('SF Mono')
-    expect(result).toBe(
-      '"SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", monospace'
-    )
-  })
-
-  it('returns full fallback chain for empty string', () => {
-    const result = buildFontFamily('')
-    expect(result).toBe(FULL_FALLBACK)
-  })
-
-  it('treats whitespace-only string same as empty', () => {
-    const result = buildFontFamily('   ')
-    expect(result).toBe(FULL_FALLBACK)
-  })
-
-  it('does not duplicate when font name contains "sf mono" (case-insensitive)', () => {
-    const result = buildFontFamily('My SF Mono Custom')
-    expect(result).toBe(
-      '"My SF Mono Custom", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", monospace'
-    )
-  })
-
-  it('does not duplicate Consolas when it is the input', () => {
-    const result = buildFontFamily('Consolas')
-    expect(result).toBe(
-      '"Consolas", "SF Mono", "Menlo", "Monaco", "Cascadia Mono", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", monospace'
-    )
-  })
-
-  it('does not duplicate MesloLGS Nerd Font when it is the input', () => {
-    const result = buildFontFamily('MesloLGS Nerd Font')
-    expect(result).toBe(
-      '"MesloLGS Nerd Font", "SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "JetBrainsMono Nerd Font", "Hack Nerd Font", monospace'
-    )
-  })
-
-  it('does not duplicate the bundled Nerd Font symbol fallback', () => {
-    const result = buildFontFamily('Orca Nerd Font Symbols')
-    expect(result).toBe(
-      '"Orca Nerd Font Symbols", "SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", monospace'
-    )
-  })
-})
 
 // ---------------------------------------------------------------------------
 // serializePaneTree

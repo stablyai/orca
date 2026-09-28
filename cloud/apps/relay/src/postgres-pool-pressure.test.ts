@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import { PostgresPoolPressure } from './postgres-pool-pressure.js'
 
@@ -32,7 +33,8 @@ describe('PostgreSQL pool pressure', () => {
 
     now = 2_250
     pool.waitingCount--
-    resolveConnection({ query: vi.fn(), release: vi.fn() })
+    // An EventEmitter because the acquire path now attaches an `error` listener.
+    resolveConnection(Object.assign(new EventEmitter(), { query: vi.fn(), release: vi.fn() }))
     await pending
     expect(pressure.consumeCounts()).toMatchObject({
       databasePoolWaiting: 0,

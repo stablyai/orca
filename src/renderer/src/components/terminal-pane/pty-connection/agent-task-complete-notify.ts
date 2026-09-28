@@ -12,10 +12,7 @@ import {
   canDispatchAgentNotificationAfterGrace
 } from '../agent-task-complete-policy'
 
-import {
-  isAgentTaskCompleteNotificationEnabled,
-  subscribeAgentTaskCompleteTrackingEnabled
-} from './agent-task-complete-settings'
+import { subscribeAgentTaskCompleteTrackingEnabled } from './agent-task-complete-settings'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
@@ -79,7 +76,6 @@ export function installAgentTaskCompleteNotify(session: ConnectPanePtySession): 
       // Why: terminal attention is a visual pane affordance, not an OS
       // notification. Route through dispatch so stale pane completions are
       // rejected before unread attention is marked.
-      const shouldDispatchOsNotification = isAgentTaskCompleteNotificationEnabled()
       session.pendingTerminalBellNotification = false
       session.clearTerminalBellNotificationTimer()
       session.deps.dispatchNotification({
@@ -89,7 +85,6 @@ export function installAgentTaskCompleteNotify(session: ConnectPanePtySession): 
         ...(options.agentCompletionSource
           ? { agentCompletionSource: options.agentCompletionSource }
           : {}),
-        ...(shouldDispatchOsNotification ? {} : { suppressOsNotification: true }),
         ...(options.agentStatusSnapshot ? { agentStatusSnapshot: options.agentStatusSnapshot } : {})
       })
     }

@@ -2,6 +2,7 @@ import { app } from 'electron'
 import type { CodexHomeLaunchContext } from '../ipc/pty'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import { markCodexProjectTrusted } from '../agent-trust-presets'
+import { awaitAgentTrustWriteWithinDeadline } from '../agent-trust-write-deadline'
 import { codexHookService } from '../codex/hook-service'
 import { getDefaultWslDistro } from '../wsl'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
@@ -23,8 +24,14 @@ export async function prepareCodexRuntimeHomeForLaunch(
     launchContext.workspacePath
   ) {
     try {
-      // Why: renderer quick-launch cannot await trust IPC before its PTY mounts; launch prep runs before every recognized Codex spawn.
-      await markCodexProjectTrusted(launchContext.workspacePath)
+      // Why: renderer quick-launch cannot await trust IPC before its PTY mounts; launch prep runs before every recognized Codex spawn. Bounded so a wedged config lane cannot hang the spawn that waits on this prep.
+      await awaitAgentTrustWriteWithinDeadline(
+        markCodexProjectTrusted(launchContext.workspacePath),
+        {
+          preset: 'codex',
+          workspacePath: launchContext.workspacePath
+        }
+      )
     } catch (error) {
       console.warn('[codex-project-trust] failed to pre-mark launch workspace:', error)
     }

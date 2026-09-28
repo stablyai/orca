@@ -10,6 +10,7 @@ import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectat
 import { translate } from '@/i18n/i18n'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { extractIpcErrorMessage } from './rich-markdown-ipc-error-message'
+import { buildRichMarkdownImageInsertContent } from './rich-markdown-image-insert-content'
 
 export type RichMarkdownImageInsertArgs = {
   editor: Editor
@@ -88,7 +89,10 @@ export async function insertRichMarkdownImageFromPath({
     const inserted = editor
       .chain()
       .focus()
-      .insertContentAt(insertPos, { type: 'image', attrs: { src: imageSrc } })
+      .insertContentAt(
+        insertPos,
+        buildRichMarkdownImageInsertContent(editor, insertPos, { src: imageSrc })
+      )
       .run()
     if (!inserted) {
       toast.error(

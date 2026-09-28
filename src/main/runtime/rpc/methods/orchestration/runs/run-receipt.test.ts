@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { exposeRun } from './run-receipt'
 import type { RunRow } from '../../../../orchestration/types'
+import { testOrcaSessionId } from '../../../../../../shared/orca-session-address-test-fixture'
 
 // Why: typecheck cannot see the strip because the RPC return types are loose.
 const RUN_ROW: RunRow = {
@@ -9,6 +10,8 @@ const RUN_ROW: RunRow = {
   home_database: '/tmp/orca/orchestration.db',
   coordinator_handle: 'term_coord',
   coordinator_pane_key: 'tab_coord:11111111-1111-4111-8111-111111111111',
+  coordinator_orca_session_id: testOrcaSessionId('22222222-2222-4222-8222-222222222222'),
+  coordinator_orca_session_id_generation: 3,
   consumer_generation: 3,
   legacy: 0,
   created_at: '2026-09-04T18:53:07Z',
@@ -30,6 +33,8 @@ describe('exposeRun', () => {
     ])
     expect(exposed).not.toHaveProperty('home_database')
     expect(exposed).not.toHaveProperty('coordinator_pane_key')
+    expect(exposed).not.toHaveProperty('coordinator_orca_session_id')
+    expect(exposed).not.toHaveProperty('coordinator_orca_session_id_generation')
   })
 
   it('preserves every published column by value', () => {
@@ -54,8 +59,15 @@ describe('exposeRun', () => {
   })
 
   it('strips the columns even when they are null', () => {
-    const exposed = exposeRun({ ...RUN_ROW, coordinator_pane_key: null })
+    const exposed = exposeRun({
+      ...RUN_ROW,
+      coordinator_pane_key: null,
+      coordinator_orca_session_id: null,
+      coordinator_orca_session_id_generation: null
+    })
 
     expect(exposed).not.toHaveProperty('coordinator_pane_key')
+    expect(exposed).not.toHaveProperty('coordinator_orca_session_id')
+    expect(exposed).not.toHaveProperty('coordinator_orca_session_id_generation')
   })
 })

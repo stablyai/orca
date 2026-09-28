@@ -1,6 +1,7 @@
 import type { RpcClient } from '../transport/rpc-client'
+import { workerTerminalTakeoverReport } from './mobile-terminal-operations'
 
-type ReportClient = Pick<RpcClient, 'sendRequest'>
+type ReportClient = RpcClient
 const REPORT_INTERVAL_MS = 30_000
 const REPORT_RETRY_DELAY_MS = 250
 let reportsByClient = new WeakMap<ReportClient, Map<string, number>>()
@@ -37,12 +38,12 @@ export function reportWorkerTerminalUserInput(client: ReportClient, terminal: st
 
 async function sendTakeoverReport(client: ReportClient, terminal: string): Promise<void> {
   const report = async (): Promise<void> => {
-    const response = await client.sendRequest(
-      'orchestration.workerTerminalUserInput',
+    const reply = await workerTerminalTakeoverReport.request(
+      client,
       { terminal },
       { timeoutMs: 5_000, budgetSpansConnect: true, failWhenDisconnected: true }
     )
-    if (!response.ok) {
+    if (!workerTerminalTakeoverReport.interpret(reply).accepted) {
       throw new Error('Worker takeover report rejected')
     }
   }

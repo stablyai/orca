@@ -1,15 +1,17 @@
-import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { chmod, lstat, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { dirname, join } from 'node:path'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { writeMobileWebBundleFixtureTree } from './mobile-web-bundle-fixture-tree.mjs'
 
 const REPO_ROOT = join(import.meta.dirname, '..', '..')
 const SRC_MAIN_DIR = join(REPO_ROOT, 'src', 'main')
 
 const require = createRequire(import.meta.url)
 const electronBuilderConfig = require('../electron-builder.config.cjs')
-const { FileMatcher } = require('app-builder-lib/out/fileMatcher')
+const { copyFiles, FileMatcher } = require('app-builder-lib/out/fileMatcher')
 const FpmTarget = require('app-builder-lib/out/targets/FpmTarget').default
 const electronBuilderNativeRebuild = require('./electron-builder-native-rebuild.cjs')
 
@@ -35,6 +37,7 @@ describe('electron-builder config', () => {
         '!tests{,/**/*}',
         '!examples{,/**/*}',
         '!pr-evidence{,/**/*}',
+        '!notes{,/**/*}',
         '!{.claude,.grok,.agents,.codex}{,/**/*}',
         '!Casks{,/**/*}',
         '!{AGENTS.md,CLAUDE.md,DEVELOPING.md,bundle-size-progress.md,ORCHESTRATION_IMPLEMENTATION_CHECKLIST.md,ORCHESTRATION_STRUCTURED_OUTPUT_DESIGN.md}',
@@ -59,6 +62,62 @@ describe('electron-builder config', () => {
       expect(packs(toolingPath)).toBe(false)
     }
     expect(packs('out/main/index.js')).toBe(true)
+  })
+
+  it.each(['file', 'directory'])('keeps a root notes %s out of app.asar', async (kind) => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-packaging-notes-'))
+    const source = join(root, 'app')
+    const destination = join(root, 'selected')
+    const runtimePaths = [
+      'package.json',
+      'out/main/index.js',
+      'out/renderer/index.html',
+      'out/cli/index.js',
+      'out/shared/index.js',
+      'out/main/notes/index.js',
+      'out/renderer/assets/notes/help.md',
+      'resources/notes/help.md',
+      'notes.txt'
+    ]
+    const notesPaths =
+      kind === 'file'
+        ? ['notes']
+        : [
+            'notes/build.log',
+            'notes/installed-orca-backup/Orca.exe',
+            'notes/installed-orca-backup/resources/app.asar',
+            'notes/orca-windows-setup.exe',
+            'notes/.recovery/state.json'
+          ]
+    try {
+      for (const fixturePath of [...runtimePaths, ...notesPaths]) {
+        const file = join(source, fixturePath)
+        await mkdir(dirname(file), { recursive: true })
+        await writeFile(file, 'synthetic fixture\n')
+      }
+      if (kind === 'directory') {
+        await mkdir(join(source, 'notes', 'empty'))
+      }
+      const matcher = new FileMatcher(
+        source,
+        destination,
+        (value) => value,
+        electronBuilderConfig.files
+      )
+      // copyFiles adds the default include and prunes excluded directories during traversal.
+      await copyFiles([matcher])
+      for (const runtimePath of runtimePaths) {
+        expect(await readFile(join(destination, runtimePath), 'utf8')).toBe('synthetic fixture\n')
+      }
+      const isPacked = matcher.createFilter()
+      for (const notesPath of new Set(['notes', ...notesPaths])) {
+        const file = join(source, notesPath)
+        expect(isPacked(file, await lstat(file)), notesPath).toBe(false)
+      }
+      expect(existsSync(join(destination, 'notes'))).toBe(false)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
   })
 
   // Why: `files` is an all-negation list, so electron-builder's default `**/*` packs
@@ -431,5 +490,66 @@ describe('electron-builder config', () => {
         expect(electronBuilderConfig[target]).toBeDefined()
       }
     })
+  })
+})
+
+describe('arch-aware packaging guard', () => {
+  // electron-builder Arch enum: ia32=0, x64=1, armv7l=2, arm64=3.
+  const HOST_ARCH = process.arch === 'arm64' ? 3 : 1
+  const OTHER_ARCH = process.arch === 'arm64' ? 1 : 3
+  const OTHER_ARCH_NAME = process.arch === 'arm64' ? 'x64' : 'arm64'
+  const SHERPA_PLATFORM = process.platform === 'win32' ? 'win' : process.platform
+  const otherSherpa = `sherpa-onnx-${SHERPA_PLATFORM}-${OTHER_ARCH_NAME}`
+
+  // beforePack also hash-verifies the mobile web bundle, which the unit-test job never builds.
+  // Point it at a real bundle built into a temp dir: these tests are about the native-variant
+  // guard, and the bundle guard has its own suite.
+  let scratch
+  let bundleDir
+  beforeAll(async () => {
+    scratch = await mkdtemp(join(tmpdir(), 'orca-electron-builder-guard-'))
+    bundleDir = join(scratch, 'mobile-web')
+    await writeMobileWebBundleFixtureTree({ outDir: bundleDir })
+  })
+  afterAll(async () => {
+    await rm(scratch, { recursive: true, force: true })
+  })
+
+  const packHost = (arch) =>
+    electronBuilderConfig.beforePack({ electronPlatformName: process.platform, arch }, bundleDir)
+
+  it('allows packaging the host platform and architecture', () => {
+    expect(() => packHost(HOST_ARCH)).not.toThrow()
+  })
+
+  it('requires the other architecture natives to be installed', () => {
+    const otherSherpaInstalled = existsSync(
+      join(REPO_ROOT, 'node_modules', otherSherpa, 'package.json')
+    )
+    const otherSherpaExpected = Object.hasOwn(
+      require('../../package.json').optionalDependencies,
+      otherSherpa
+    )
+    if (otherSherpaExpected && !otherSherpaInstalled) {
+      expect(() => packHost(OTHER_ARCH)).toThrow(otherSherpa)
+      expect(() => packHost(OTHER_ARCH)).toThrow('pnpm install:release')
+      expect(() => packHost(HOST_ARCH)).not.toThrow()
+    } else {
+      expect(() => packHost(OTHER_ARCH)).not.toThrow()
+    }
+  })
+
+  it('requires installed Windows addons for Windows packaging', () => {
+    const windowsAddon = electronBuilderConfig.win.extraResources.some(
+      (resource) => resource.to === join('node_modules', '@vscode', 'windows-process-tree')
+    )
+    const packWindows = () =>
+      electronBuilderConfig.beforePack({ electronPlatformName: 'win32', arch: 1 }, bundleDir)
+    if (process.platform === 'win32' || windowsAddon) {
+      expect(packWindows).not.toThrow()
+    } else {
+      expect(packWindows).toThrow('@vscode/windows-process-tree')
+      expect(packWindows).toThrow('Windows packaging requires a Windows host')
+    }
   })
 })

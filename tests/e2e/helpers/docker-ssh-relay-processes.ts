@@ -52,7 +52,7 @@ function parseRelayProcessRows(output: string): RelayProcessRow[] {
   return output.split('\n').map((line) => {
     const [type, rawPid, rawParentPid, cwd] = line.split('\t')
     // Why: Number('') is 0, so empty pid/ppid (e.g. vanished /proc status) must
-    // throw and let expect.poll retry instead of accepting parentPid: 0.
+    // throw so callers retry the observation instead of accepting parentPid: 0.
     const pid = Number(rawPid)
     const parentPid = Number(rawParentPid)
     if (

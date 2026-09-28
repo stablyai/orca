@@ -18,7 +18,9 @@ function createRuntime() {
   return { runtime, removed }
 }
 
-async function stageTransfer(runtime: object, browserPageId: string): Promise<void> {
+type FakeRuntime = ReturnType<typeof createRuntime>['runtime']
+
+async function stageTransfer(runtime: FakeRuntime, browserPageId: string): Promise<void> {
   await getBrowserClientDownloadTransferStore(runtime as never).accept({
     transferId: `transfer-${browserPageId}`,
     browserPageId,

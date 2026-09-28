@@ -23,6 +23,7 @@ import {
   type OpenInAppPreset
 } from '@/lib/open-in-app-catalog'
 import { translate } from '@/i18n/i18n'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 type OpenInMenuSettingProps = {
   applications: OpenInApplication[] | undefined
@@ -36,9 +37,7 @@ type OpenInApplicationsDraftState = {
 
 function createOpenInApplication(): OpenInApplication {
   return {
-    id:
-      globalThis.crypto?.randomUUID?.() ??
-      `open-in-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`,
+    id: createBrowserUuid(),
     label: '',
     command: ''
   }

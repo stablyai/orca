@@ -18,6 +18,34 @@ afterEach(() => {
 })
 
 describe('relay database', () => {
+  it('upgrades an existing SQLite relay without treating legacy controls as idle-capable', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'orca-idle-schema-'))
+    temporaryDirectories.push(dataDir)
+    const legacy = await openRelayDatabase({ dataDir })
+    await legacy.query('ALTER TABLE relay_control_capabilities DROP COLUMN idle_regional_rehome')
+    await legacy.query('ALTER TABLE relay_region_rehome_attempts DROP COLUMN source_generation')
+    await legacy.query(
+      `INSERT INTO relay_control_capabilities
+       (user_id, relay_host_id, activity_id, cell_id, cell_incarnation, assignment_epoch, generation, finish_existing)
+       VALUES ('legacy-user', 'abcdefghijklmnop', 'control:source:1', 'source', 'legacy-incarnation', 1, 1, 1)`
+    )
+    await legacy.close()
+    const upgraded = await openRelayDatabase({ dataDir })
+    try {
+      expect(
+        await upgraded.query('SELECT idle_regional_rehome FROM relay_control_capabilities')
+      ).toEqual([{ idle_regional_rehome: 0 }])
+      const columns = await upgraded.query(
+        "SELECT * FROM pragma_table_info('relay_region_rehome_attempts')"
+      )
+      expect(columns.find((column) => column.name === 'source_generation')).toMatchObject({
+        dflt_value: '0'
+      })
+    } finally {
+      await upgraded.close()
+    }
+  })
+
   it('creates every durable relay state table', async () => {
     const database = await openInMemoryRelayDatabase()
     const rows = await database.query(
@@ -54,6 +82,7 @@ describe('relay database', () => {
       'relay_confirm_results',
       'relay_confirmable_splices',
       'relay_connection_bases',
+      'relay_control_capabilities',
       'relay_control_connection_reservations',
       'relay_devices',
       'relay_direct_authorizations',
@@ -62,6 +91,7 @@ describe('relay database', () => {
       'relay_migration_leases',
       'relay_post_drain_migration_pins',
       'relay_rate_windows',
+      'relay_region_decisions',
       'relay_region_rehome_attempts',
       'relay_region_rehome_control',
       'relay_region_rehome_worker_state'
@@ -140,9 +170,7 @@ describe('relay database', () => {
 
     const second = await openRelayDatabase({ dataDir })
     expect(
-      await second.query(`SELECT region FROM relay_cell_regions WHERE cell_id = ?`, [
-        'legacy-cell'
-      ])
+      await second.query(`SELECT region FROM relay_cell_regions WHERE cell_id = ?`, ['legacy-cell'])
     ).toEqual([{ region: 'us-central1' }])
     await second.close()
   })
@@ -165,9 +193,7 @@ describe('relay database', () => {
       'relay_region_rehome_attempts'
     ])
     expect(checked.every((row) => String(row.sql).includes(list))).toBe(true)
-    expect(
-      POSTGRES_SCHEMA_MIGRATIONS.some((statement) => statement.includes(list))
-    ).toBe(true)
+    expect(POSTGRES_SCHEMA_MIGRATIONS.some((statement) => statement.includes(list))).toBe(true)
     await database.close()
   })
 

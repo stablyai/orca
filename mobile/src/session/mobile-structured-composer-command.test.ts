@@ -66,6 +66,16 @@ describe('mobile structured conversation commands', () => {
     expect(await dispatchMobileStructuredCommand(input)).toBe('accepted')
     expect(sendRequest.mock.calls[0]?.[1]).toEqual(sendRequest.mock.calls[1]?.[1])
   })
+  it('retains operation identity when the host fails after starting the command', async () => {
+    const { input, sendRequest } = setup()
+    sendRequest.mockResolvedValueOnce({
+      ok: false,
+      error: { code: 'runtime_error', message: 'settlement failed' }
+    } as never)
+    expect(await dispatchMobileStructuredCommand(input)).toBe('unknown')
+    expect(await dispatchMobileStructuredCommand(input)).toBe('accepted')
+    expect(sendRequest.mock.calls[0]?.[1]).toEqual(sendRequest.mock.calls[1]?.[1])
+  })
   it.each(['attachments', 'old host', 'arguments', 'pending work'])(
     'guards %s without provider dispatch',
     async (reason) => {

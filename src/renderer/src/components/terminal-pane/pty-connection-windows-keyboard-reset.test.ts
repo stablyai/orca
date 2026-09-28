@@ -254,7 +254,7 @@ describe('connectPanePty', () => {
       )
       transport.sendInput.mockClear()
       sendTerminalInputThroughPane(pane, '\x1b[I')
-      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I')
+      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I', 'query-reply')
     } finally {
       restoreUserAgent()
     }
@@ -311,7 +311,7 @@ describe('connectPanePty', () => {
         )
         transport.sendInput.mockClear()
         sendTerminalInputThroughPane(pane, '\x1b[I')
-        expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I')
+        expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I', 'query-reply')
       } finally {
         restoreUserAgent()
       }
@@ -568,7 +568,7 @@ describe('connectPanePty', () => {
       notifyStoreSubscribers()
 
       sendTerminalInputThroughPane(pane, '\x1b[I')
-      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I')
+      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I', 'query-reply')
     } finally {
       restoreUserAgent()
     }
@@ -621,8 +621,8 @@ describe('connectPanePty', () => {
         sendTerminalInputThroughPane(pane, '\x1b[O')
         sendTerminalInputThroughPane(pane, '\x1b[I')
 
-        expect(transport.sendInput).toHaveBeenNthCalledWith(1, '\x1b[O')
-        expect(transport.sendInput).toHaveBeenNthCalledWith(2, '\x1b[I')
+        expect(transport.sendInput).toHaveBeenNthCalledWith(1, '\x1b[O', 'query-reply')
+        expect(transport.sendInput).toHaveBeenNthCalledWith(2, '\x1b[I', 'query-reply')
       } finally {
         restoreUserAgent()
       }
@@ -667,8 +667,8 @@ describe('connectPanePty', () => {
 
       sendTerminalInputThroughPane(pane, '\x7f')
       sendTerminalInputThroughPane(pane, 'x')
-      expect(transport.sendInput).toHaveBeenNthCalledWith(1, '\x7f')
-      expect(transport.sendInput).toHaveBeenNthCalledWith(2, 'x')
+      expect(transport.sendInput).toHaveBeenNthCalledWith(1, '\x7f', 'query-reply')
+      expect(transport.sendInput).toHaveBeenNthCalledWith(2, 'x', 'query-reply')
       expect(pane.terminal.modes.sendFocusMode).toBe(true)
 
       mockStoreState.agentStatusByPaneKey[paneKey] = {
@@ -679,7 +679,7 @@ describe('connectPanePty', () => {
       transport.sendInput.mockClear()
 
       sendTerminalInputThroughPane(pane, '\x1b[I')
-      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I')
+      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I', 'query-reply')
       expect(pane.terminal.modes.sendFocusMode).toBe(true)
 
       mockStoreState.agentStatusByPaneKey[paneKey] = {
@@ -689,7 +689,7 @@ describe('connectPanePty', () => {
       notifyStoreSubscribers()
       transport.sendInput.mockClear()
       sendTerminalInputThroughPane(pane, '\x1b[O')
-      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[O')
+      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[O', 'query-reply')
     } finally {
       restoreUserAgent()
     }
@@ -725,8 +725,8 @@ describe('connectPanePty', () => {
       sendTerminalInputThroughPane(pane, '\x1b[O')
       sendTerminalInputThroughPane(pane, '\x1b[I')
 
-      expect(transport.sendInput).toHaveBeenNthCalledWith(1, '\x1b[O')
-      expect(transport.sendInput).toHaveBeenNthCalledWith(2, '\x1b[I')
+      expect(transport.sendInput).toHaveBeenNthCalledWith(1, '\x1b[O', 'query-reply')
+      expect(transport.sendInput).toHaveBeenNthCalledWith(2, '\x1b[I', 'query-reply')
       expect(pane.terminal.modes.sendFocusMode).toBe(true)
     } finally {
       restoreUserAgent()

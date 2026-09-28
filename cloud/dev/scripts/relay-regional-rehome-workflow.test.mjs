@@ -20,7 +20,7 @@ test('same-cap wrapper is reusable, canary-bound, and sequential', () => {
   assert.match(wrapper, /needs: \[gate, cell_2\]/)
   assert.match(wrapper, /needs: \[gate, cell_3\]/)
   assert.match(job, /on:\n  workflow_call:/)
-  assert.match(job, /c27\|c28\|c29/)
+  assert.match(job, /c27\|c28\|c29\|c30\)/)
   assert.match(job, /EXPECTED_HARD_CAP=3000/)
   assert.match(job, /EXPECTED_REGION=asia-east2/)
   assert.match(job, /--hard-cap "\$\{EXPECTED_HARD_CAP\}"/)
@@ -67,16 +67,23 @@ test('same-cap wrapper is reusable, canary-bound, and sequential', () => {
   )
   assert.match(
     job,
-    /Require converged Terraform state and a stable MIG on resume[\s\S]{0,200}DIRECTOR_RUNTIME_SERVICE_ACCOUNT: \$\{\{ vars\.PRODUCTION_GCP_RELAY_DIRECTOR_RUNTIME_SERVICE_ACCOUNT \}\}/
+    /Require converged Terraform state and a stable MIG on resume[\s\S]{0,300}CAPACITY_SERVICE_ACCOUNT: \$\{\{ vars\.PRODUCTION_GCP_RELAY_CAPACITY_SERVICE_ACCOUNT \}\}\n {10}DIRECTOR_RUNTIME_SERVICE_ACCOUNT: \$\{\{ vars\.PRODUCTION_GCP_RELAY_DIRECTOR_RUNTIME_SERVICE_ACCOUNT \}\}/
   )
   assert.match(
     job,
-    /--rollback-image "\$\{DESIRED_IMAGE\}" \\\n {16}--rehome-director-service-account "\$\{DIRECTOR_RUNTIME_SERVICE_ACCOUNT\}"/
+    /--rollback-image "\$\{DESIRED_IMAGE\}" \\\n {16}--capacity-service-account "\$\{CAPACITY_SERVICE_ACCOUNT\}" \\\n {16}--rehome-director-service-account "\$\{DIRECTOR_RUNTIME_SERVICE_ACCOUNT\}"/
   )
   assert.match(
     job,
-    /host-drain \\\n {16}--regional-rehome-protocol "\$\{DESIRED_REHOME_PROTOCOL\}" \\\n {14}\| jq -e '\.changes == 2' >\/dev\/null/
+    /host-drain \\\n {16}--regional-rehome-protocol "\$\{DESIRED_REHOME_PROTOCOL\}" \\\n {16}"\$\{POOL_ARGUMENTS\[@\]\}"\)"\n {12}echo "\$\{RESUME_REVIEW\}"\n {12}jq -e '\.changes == 2' <<< "\$\{RESUME_REVIEW\}" >\/dev\/null/
   )
+  // A resume applies nothing at all, which is what a resume means: the only accepted
+  // unconverged plan is the template-and-MIG rollback-image drift, and it is left pending.
+  const resumeStep = job.slice(
+    job.indexOf('- name: Require converged Terraform state and a stable MIG on resume'),
+    job.indexOf('- name: Apply only the selected same-cap template and MIG')
+  )
+  assert.equal(resumeStep.split('terraform -chdir=infra/terraform apply').length, 1)
   assert.match(job, /resume requires the isolated migration-only cell/)
   assert.match(job, /test "\$\{TARGET_INCARNATION\}" = "\$\{SOURCE_INCARNATION\}"/)
   assert.match(job, /\(.regionalRehomeProtocol \/\/ 0\) == \$protocol/)
@@ -87,7 +94,7 @@ test('same-cap wrapper is reusable, canary-bound, and sequential', () => {
   assert.match(job, /SELECTOR_GENERATION_AFTER_ISOLATE=\$\{EFFECTIVE_SELECTOR_GENERATION\}/)
   assert.match(job, /SELECTOR_GENERATION_AFTER_ISOLATE=\$\{ISOLATE_GENERATION\}/)
   assert.match(job, /--expected-selector-generation "\$\{SELECTOR_GENERATION_AFTER_ISOLATE\}"/)
-  assert.match(job, /--expected-selector-generation "\$\{SELECTOR_GENERATION_AFTER_ACTIVATE\}"/)
+  assert.match(job, /--expected-selector-generation "\$\{SELECTOR_GENERATION_AFTER_RESTORE\}"/)
   assert.match(job, /--expected-migration-only-cells "\$\{RESTORED_MIGRATION_CELLS\}"/)
   assert.match(job, /--expected-general-cells "\$\{RESTORED_GENERAL_CELLS\}"/)
   assert.match(job, /FAILSAFE_GENERATION/)
@@ -98,8 +105,63 @@ test('same-cap wrapper is reusable, canary-bound, and sequential', () => {
   // Wave 0 must retry freshness-only failures too: one Cloud Monitoring publish
   // lag at the sample instant is not health evidence, and single-shot wave 0
   // failed a whole batch on a series that was fresh again a minute later.
-  assert.match(job, /dry-run\.state\.json" \\\n            --wave-index "\$\{WAVE_INDEX\}" --retry-freshness/)
+  assert.match(
+    job,
+    /dry-run\.state\.json" \\\n {14}--wave-index "\$\{WAVE_INDEX\}" \\\n {14}--selector-wave-delta "\$\{SELECTOR_WAVE_DELTA\}" --retry-freshness/
+  )
   assert.doesNotMatch(job, /RETRY_ARGS/)
+  // Break-glass: the override skips the aggregate 15-minute monitor evidence and
+  // nothing else. The live per-wave recheck still runs on the override path, off
+  // the dispatch inputs the rehome inspect below verifies against the director.
+  assert.match(
+    job,
+    /if test -n "\$\{GATE_OVERRIDE_CONFIRMATION\}"; then[\s\S]{0,700}?--no-monitor-state \\\n {14}--expected-selector-generation "\$\{EXPECTED_SELECTOR_GENERATION\}" \\\n {14}--selector-membership-file[\s\S]{0,160}?--wave-index "\$\{WAVE_INDEX\}" \\\n {14}--selector-wave-delta "\$\{SELECTOR_WAVE_DELTA\}" --retry-freshness/
+  )
+  // The override is re-validated here, not trusted from the caller, and it is
+  // bound to the digest this wave installs.
+  assert.match(
+    job,
+    /test "\$\{GATE_OVERRIDE_CONFIRMATION\}" = \\\n {14}"SKIP_RELAY_MONITOR_GATE \$\{TARGET_IMAGE_DIGEST\}"/
+  )
+  assert.match(job, /\[\[ "\$\{GATE_OVERRIDE_REASON\}" =~ \^\[\[:print:\]\]\{12,500\}\$ \]\]/)
+  // Exactly the aggregate-evidence steps are skipped, and only them: every step
+  // that reads or spends the sealed monitor artifact carries the override guard.
+  const overrideSkipped = [
+    'Require fresh aggregate monitor evidence reference',
+    'Download private aggregate monitor evidence',
+    'Verify monitor evidence provenance',
+    "Download this wave's single-use safety authority",
+    'Require safety evidence consumed by this workflow'
+  ]
+  for (const name of overrideSkipped) {
+    assert.match(
+      job,
+      new RegExp(`- name: ${name}\\n {8}if: \\$\\{\\{ inputs\\.mode != 'verify' && inputs\\.gate-override-confirmation == '' \\}\\}`)
+    )
+  }
+  assert.equal(
+    job.match(/inputs\.gate-override-confirmation == ''/g).length,
+    overrideSkipped.length
+  )
+  // The wrapper validates the override before anything runs, passes it to every
+  // cell, seals it into the canary artifact, and prints it in the run summary.
+  assert.match(wrapper, /--gate-override-reason "\$\{GATE_OVERRIDE_REASON\}" \\\n {12}--gate-override-confirmation "\$\{GATE_OVERRIDE_CONFIRMATION\}"\)/)
+  // One per cell job in the serial cell_1..cell_10 chain.
+  assert.equal(
+    wrapper.match(/gate-override-confirmation: \$\{\{ inputs\.gate-override-confirmation \}\}/g).length,
+    10
+  )
+  assert.match(wrapper, /Aggregate monitor gate overridden \(break-glass\)/)
+  assert.match(wrapper, /ACTOR: \$\{\{ github\.actor \}\}/)
+  for (const name of [
+    'Reject previously consumed aggregate safety evidence',
+    'Consume aggregate safety evidence for this exact wave'
+  ]) {
+    assert.match(
+      wrapper,
+      new RegExp(`- name: ${name}\\n {8}if: \\$\\{\\{ inputs\\.mode != 'verify' && inputs\\.gate-override-confirmation == '' \\}\\}`)
+    )
+  }
   assert.match(job, /timeout-minutes: 75/)
   // Both age gates step by the cell job timeout above; the constant is
   // duplicated across the two languages, so pin each copy to it.
@@ -109,12 +171,12 @@ test('same-cap wrapper is reusable, canary-bound, and sequential', () => {
   ]) {
     const body = readFileSync(fileURLToPath(new URL(source, import.meta.url)), 'utf8')
     assert.match(body, /WAVE_PREDECESSOR_TIMEOUT_MS = 75 \* 60_000/)
-    assert.match(body, /\^\[0-3\]\$/)
+    assert.match(body, /\^\[0-9\]\$/)
   }
   // Aged-evidence replay via job re-runs is fenced: mutations are
   // single-dispatch, so a failed cell needs a fresh gate and monitor run.
   assert.match(job, /test "\$\{GITHUB_RUN_ATTEMPT\}" = 1/)
-  for (const index of [0, 1, 2, 3]) {
+  for (const index of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]) {
     assert.match(wrapper, new RegExp(`wave-index: '${index}'`))
   }
   assert.doesNotMatch(job, /EFFECTIVE_SELECTOR_GENERATION \+ 1\)/)

@@ -3,8 +3,7 @@ import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-opti
 import {
   getAmbiguousProjectOptionIds,
   rankProjectOptions,
-  sectionProjectOptions,
-  splitDetailForElision
+  sectionProjectOptions
 } from './project-combobox-matching'
 
 function project(id: string, displayName: string, detail: string): NewWorkspaceProjectOption {
@@ -74,17 +73,5 @@ describe('getAmbiguousProjectOptionIds', () => {
     const b = project('b', 'scratch', '~/src/scratch')
     const ids = getAmbiguousProjectOptionIds([a, b, orca])
     expect(ids).toEqual(new Set(['a', 'b']))
-  })
-})
-
-describe('splitDetailForElision', () => {
-  it('keeps the last two segments so sibling paths stay distinguishable', () => {
-    const split = splitDetailForElision('~/Developer/work/acme/monorepo/services/checkout-api')
-    expect(split?.tail).toBe('services/checkout-api')
-  })
-
-  it('leaves short or shallow details alone', () => {
-    expect(splitDetailForElision('stablyai/orca')).toBeNull()
-    expect(splitDetailForElision('3 hosts configured')).toBeNull()
   })
 })

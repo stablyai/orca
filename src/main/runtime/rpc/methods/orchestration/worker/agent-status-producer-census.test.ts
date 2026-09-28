@@ -95,6 +95,11 @@ const CENSUS: readonly CensusRow[] = [
     role: 'binds the hook server snapshot into the runtime deps'
   },
   {
+    path: 'main/orcad/orcad-entry.ts',
+    kind: 'wiring',
+    role: 'binds the same snapshot, OSC producer and structured sink into the headless orcad runtime deps'
+  },
+  {
     path: 'main/runtime/orca-runtime-state-fields.ts',
     kind: 'wiring',
     role: 'stores the snapshot deps on the runtime'
@@ -145,14 +150,9 @@ const CENSUS: readonly CensusRow[] = [
     role: 'prompt-submission serialization, matched on pane key'
   },
   {
-    path: 'main/runtime/orca-runtime-resolve-recovered-structured-tui-transcript.ts',
-    kind: 'consumes',
-    role: 'recovered transcript resolution from provider-session rows, matched on pane key'
-  },
-  {
     path: 'main/runtime/orca-runtime-prune-mobile-session-tab-group-layout.ts',
     kind: 'consumes',
-    role: 'mobile tab-group pruning from provider-session rows, and the pane identity accessors'
+    role: 'mobile tab-group pruning and its live agent row, plus the pane identity accessors'
   }
 ]
 

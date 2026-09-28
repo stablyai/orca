@@ -222,6 +222,31 @@ describe('bulk git helpers', () => {
     expect(rmMock).not.toHaveBeenCalled()
   })
 
+  it('preserves bulk discard action selection and original path order for path edges', async () => {
+    const filePaths = ['new', 'docs\\', '[ab].txt', 'docs///', 'new', 'src/file', 'docs\\']
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'docs/readme\0src/file-extra\0[ab].txt\0' })
+      .mockResolvedValue({ stdout: '' })
+
+    await bulkDiscardChanges('/repo', filePaths)
+
+    expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).toEqual([
+      ['ls-files', '-z', '--', ...filePaths.map((filePath) => `:(literal)${filePath}`)],
+      [
+        'restore',
+        '--worktree',
+        '--source=HEAD',
+        '--',
+        ':(literal)docs\\',
+        ':(literal)[ab].txt',
+        ':(literal)docs///',
+        ':(literal)docs\\'
+      ],
+      ['clean', '-ffdx', '--', ':(literal)new', ':(literal)new', ':(literal)src/file']
+    ])
+    expect(rmMock).not.toHaveBeenCalled()
+  })
+
   it('handles large tracked path lists during bulk discard classification', async () => {
     const trackedStdout = Array.from({ length: 150_000 }, (_, index) => `docs/file-${index}.ts`)
       .join('\0')

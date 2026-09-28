@@ -6,6 +6,7 @@ import {
   clearPaneCacheState,
   createHookListenerState,
   movePaneCacheState,
+  seedLegacyAgentStatusForTests,
   type HookListenerState
 } from '../../shared/agent-hook-listener/listener-state'
 import { seedClaudeSubagentRosterFromSnapshots } from '../../shared/agent-hook-listener/providers/claude-roster-state'
@@ -31,7 +32,7 @@ function deliverIfRegistered(
   }
   const event = normalizeHookPayload(state, 'claude', { paneKey: PANE_KEY, payload }, 'production')
   if (event) {
-    state.lastStatusByPaneKey.set(PANE_KEY, event)
+    seedLegacyAgentStatusForTests(state, event)
   }
   return event
 }
@@ -89,7 +90,7 @@ function hydrateStuckRow(
       ...(subagents ? { subagents } : {})
     }
   } as unknown as AgentHookEventPayload
-  state.lastStatusByPaneKey.set(PANE_KEY, hydrated)
+  seedLegacyAgentStatusForTests(state, hydrated)
   if (subagents) {
     seedClaudeSubagentRosterFromSnapshots(state, PANE_KEY, subagents)
   }

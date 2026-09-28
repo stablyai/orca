@@ -1,3 +1,5 @@
+import { warnIfZCodeCannotOpenSession } from '@/components/terminal-pane/zcode-missing-tui-notice'
+import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { isValidHostTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { emptyLayoutSnapshot, singlePaneLayoutSnapshot } from '../slices/terminal-helpers'
@@ -132,6 +134,11 @@ export function createTerminalTabCreationActions(
           // Why: mark click-caused (not work-caused) spawns so updateTabPtyId skips the activity/sortEpoch bump that would reorder Recent/Smart on click.
           ...(options?.pendingActivationSpawn ? { pendingActivationSpawn: true } : {})
         }
+        if (options?.launchAgent === 'zcode') {
+          // Why here: this is where a ZCode launch is first known, and it runs before the
+          // pane connects, so the explanation can beat the stack trace to the screen.
+          void warnIfZCodeCannotOpenSession()
+        }
         const validTargetGroupId =
           targetGroupId &&
           s.groupsByWorktree[worktreeId]?.some((group) => group.id === targetGroupId)
@@ -242,7 +249,11 @@ export function createTerminalTabCreationActions(
             ...s.layoutByWorktree,
             [worktreeId]: s.layoutByWorktree[worktreeId] ?? { type: 'leaf', groupId: group.id }
           },
-          activeTabId: shouldActivate ? tab.id : orphanCleanupPatch.activeTabId,
+          // Why: the global selection is the main window's; a tab in another worktree (or the floating workspace) activates only within its own group.
+          activeTabId:
+            shouldActivate && s.activeWorktreeId === worktreeId
+              ? tab.id
+              : orphanCleanupPatch.activeTabId,
           activeTabIdByWorktree: {
             ...orphanCleanupPatch.activeTabIdByWorktree,
             [worktreeId]: nextActiveTabIdForWorktree
@@ -271,6 +282,10 @@ export function createTerminalTabCreationActions(
           }
         }
       })
+      if (options?.initialPtyId) {
+        // Why: a tab born with a live PTY (CLI/runtime create) wakes the workspace like any other bind.
+        clearWorktreeSleepIntent(worktreeId)
+      }
       const shouldRecordInteraction =
         options?.recordInteraction ?? (!options?.pendingActivationSpawn && !options?.initialPtyId)
       if (shouldRecordInteraction) {

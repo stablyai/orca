@@ -83,7 +83,9 @@ describe.each(searchCases)('relay $name line fragments', ({ search, encode }) =>
     for (let offset = 0; offset < wire.length; offset += 4096) {
       chunks.push(wire.slice(offset, offset + 4096))
     }
-    const originalSplit = String.prototype.split
+    // Method-shaped type: a call-signature capture would reject `split`'s splitter-object overload.
+    const originalSplit: { split(separator: unknown, limit?: number): string[] }['split'] =
+      String.prototype.split
     let scannedCharacters = 0
     const spy = vi.spyOn(String.prototype, 'split').mockImplementation(function (
       this: string,
@@ -93,7 +95,7 @@ describe.each(searchCases)('relay $name line fragments', ({ search, encode }) =>
       if (separator === '\n') {
         scannedCharacters += this.length
       }
-      return Reflect.apply(originalSplit, this, [separator, limit])
+      return originalSplit.call(this, separator, limit)
     })
     let fragmented
     try {

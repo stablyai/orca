@@ -35,6 +35,7 @@ describe('appendOwnedTabIdsToGroups', () => {
         if (typeof property === 'string' && /^\d+$/.test(property)) {
           reads++
         }
+        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy get trap default forward.
         return Reflect.get(target, property, receiver)
       }
     })

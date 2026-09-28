@@ -88,4 +88,23 @@ describe('rich markdown local images', () => {
       editor.destroy()
     }
   })
+
+  it('renders a mid-sentence image inside its paragraph without a block box', () => {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const editor = new Editor({
+      element: host,
+      extensions: createRichMarkdownExtensions({ codec: createRichMarkdownEditorCodec() }),
+      content: 'before ![](diagram.png) after',
+      contentType: 'markdown'
+    })
+
+    try {
+      const img = host.querySelector('p img')
+      expect(img).not.toBeNull()
+      expect((img!.parentElement as HTMLElement).style.display).toBe('inline-block')
+    } finally {
+      editor.destroy()
+    }
+  })
 })

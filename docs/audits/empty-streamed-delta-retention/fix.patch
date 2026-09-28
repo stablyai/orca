@@ -1,0 +1,7 @@
+--- a/src/main/native-chat/agent-session-wire/agent-session-delta-coalescer.ts
++++ b/src/main/native-chat/agent-session-wire/agent-session-delta-coalescer.ts
+@@ -233 +233,3 @@
+-    current.push(delta)
++    if (delta.length > 0) {
++      current.push(delta)
++    }

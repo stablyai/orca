@@ -139,14 +139,29 @@ describe('resolveCreatedWorktree', () => {
     )
   })
 
+  it('does not mistake a falsy rejection for a successful listing', async () => {
+    vi.mocked(listWorktreesSharedStrict).mockRejectedValue(undefined)
+
+    await expect(resolveCreatedWorktree('/repo', '/workspaces/feature', 'feature')).rejects.toThrow(
+      'undefined'
+    )
+  })
+
   it('keeps the listing failure when the direct read itself throws', async () => {
     const failure = new Error('fatal: not a git repository')
+    const recoveryFailure = new Error('repo common dir unverifiable: deadline exceeded')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     vi.mocked(listWorktreesSharedStrict).mockRejectedValue(failure)
-    vi.mocked(describeCreatedWorktree).mockRejectedValue(new Error('rev-parse exploded'))
+    vi.mocked(describeCreatedWorktree).mockRejectedValue(recoveryFailure)
 
     await expect(resolveCreatedWorktree('/repo', '/workspaces/feature', 'feature')).rejects.toBe(
       failure
     )
+    expect(warn).toHaveBeenCalledWith('[worktrees:create] created-worktree recovery also failed', {
+      err: recoveryFailure,
+      worktreePath: '/workspaces/feature'
+    })
+    warn.mockRestore()
   })
 
   it('names the path and branch when the listing succeeded without the row', async () => {
@@ -159,11 +174,16 @@ describe('resolveCreatedWorktree', () => {
 
   it("adds the direct read's failure when the listing merely omitted the row", async () => {
     vi.mocked(listWorktreesSharedStrict).mockResolvedValue([MAIN])
-    vi.mocked(describeCreatedWorktree).mockRejectedValue(new Error('rev-parse exploded'))
+    const recoveryFailure = new Error('rev-parse exploded')
+    vi.mocked(describeCreatedWorktree).mockRejectedValue(recoveryFailure)
 
-    await expect(resolveCreatedWorktree('/repo', '/workspaces/feature', 'feature')).rejects.toThrow(
-      'Worktree created but not found in listing: /workspaces/feature (branch feature): rev-parse exploded'
-    )
+    await expect(
+      resolveCreatedWorktree('/repo', '/workspaces/feature', 'feature')
+    ).rejects.toMatchObject({
+      message:
+        'Worktree created but not found in listing: /workspaces/feature (branch feature): rev-parse exploded',
+      cause: recoveryFailure
+    })
   })
 
   it('charges the recovery what the listing left of the budget, not a fresh one', async () => {

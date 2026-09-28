@@ -1,5 +1,6 @@
+import { botOverridesRead } from '../transport/settings-read-operations'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { ConnectionState, RpcSuccess } from '../transport/types'
+import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { createBotAuthorOverrideSet } from '../../../src/shared/pr-bot-author-overrides'
 
@@ -32,21 +33,16 @@ export function usePRBotAuthorOverrides(
       return
     }
     let stale = false
-    void client
-      .sendRequest('settings.get')
+    void botOverridesRead
+      .request(client)
       .then((response) => {
-        if (stale || !response.ok) {
+        if (stale) {
           return
         }
-        const result = (response as RpcSuccess).result as {
-          settings?: { prBotAuthorOverrides?: unknown }
-        } | null
-        const overrides = result?.settings?.prBotAuthorOverrides
-        setLogins(
-          Array.isArray(overrides)
-            ? overrides.filter((login): login is string => typeof login === 'string')
-            : []
-        )
+        const overrides = botOverridesRead.interpret(response)
+        if (overrides.accepted) {
+          setLogins(overrides.value)
+        }
       })
       .catch(() => {
         // Best-effort: without the setting the heuristics still classify most bots.

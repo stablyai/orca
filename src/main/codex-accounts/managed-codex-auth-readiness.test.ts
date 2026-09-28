@@ -263,6 +263,6 @@ function createFixture(): {
   }
 }
 
-function writeAuth(home: string, auth: object): void {
+function writeAuth(home: string, auth: Record<string, unknown>): void {
   writeFileSync(join(home, 'auth.json'), JSON.stringify(auth), { mode: 0o600 })
 }

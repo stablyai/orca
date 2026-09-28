@@ -1,6 +1,5 @@
-import { isAgentSessionPtyWriteRefusedError } from '../../../../../shared/agent-session-pty-write-admission'
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../../../ai-vault/structured-session-ownership'
-import { InvalidArgumentError, defineMethod, type RpcAnyMethod } from '../../core'
+import { InvalidArgumentError, defineMethod } from '../../core'
 import { isTerminalQueryReply } from '../../../../../shared/terminal-query-reply'
 import { assertTerminalAgentSendable } from '../../terminal-agent-send-guard'
 import { TerminalSend } from './unary-schemas'
@@ -20,7 +19,7 @@ import {
   observeReplayedTerminalPrompt
 } from './terminal-prompt-receipt'
 
-export const TERMINAL_SEND_METHODS: RpcAnyMethod[] = [
+export const TERMINAL_SEND_METHODS = [
   defineMethod({
     name: 'terminal.send',
     params: TerminalSend,
@@ -211,6 +210,7 @@ export const TERMINAL_SEND_METHODS: RpcAnyMethod[] = [
       try {
         result = useSettledAgentPrompt
           ? await runtime.sendTerminalAgentPrompt(params.terminal, params.text!, {
+              inputKind: 'driving',
               beforeWrite,
               signal,
               ...(orchestrationMutation
@@ -235,6 +235,8 @@ export const TERMINAL_SEND_METHODS: RpcAnyMethod[] = [
               {
                 beforeWrite,
                 signal,
+                // Why: a wire write carries no provenance beyond a client's own query reply.
+                inputKind: params.inputKind === 'query-reply' ? 'query-reply' : 'driving',
                 ...(reserveWrite ? { reserveWrite } : {}),
                 ...(params.inputKind !== 'query-reply' && mobileFloorClientId
                   ? { afterWrite: () => commitMobileInputFloorClaim(mobileFloorClaim) }
@@ -243,18 +245,6 @@ export const TERMINAL_SEND_METHODS: RpcAnyMethod[] = [
             )
       } catch (error) {
         mobileFloorClaim.current?.rollback()
-        if (isAgentSessionPtyWriteRefusedError(error)) {
-          // Why: name the owner and the stage instead of a bare not-writable, so a client can say
-          // who holds the session rather than retrying into a lease it will never win.
-          return {
-            send: {
-              handle: params.terminal,
-              accepted: false,
-              bytesWritten: 0,
-              agentSessionRefusal: error.refusal
-            }
-          }
-        }
         if (acceptedPromptCheckpoint) {
           return acceptedPromptCheckpoint
         }

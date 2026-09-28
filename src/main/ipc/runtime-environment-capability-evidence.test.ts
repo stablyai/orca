@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import type { PairingOffer } from '../../shared/pairing'
 import {
   advanceRuntimeEnvironmentCapabilityIncarnation,
@@ -17,7 +17,6 @@ describe('runtime environment capability evidence', () => {
   it('accepts evidence by dispatch order instead of completion order', () => {
     const older = captureRuntimeEnvironmentCapabilityEvidence('env', pairing())
     const newer = captureRuntimeEnvironmentCapabilityEvidence('env', pairing())
-    const pause = vi.fn()
 
     expect(
       applyRuntimeEnvironmentCapabilityVerdict({
@@ -30,12 +29,10 @@ describe('runtime environment capability evidence', () => {
       applyRuntimeEnvironmentCapabilityVerdict({
         evidence: older,
         verdict: 'absent',
-        runtimeId: 'runtime-old',
-        onAbsent: pause
+        runtimeId: 'runtime-old'
       })
     ).toBe(false)
 
-    expect(pause).not.toHaveBeenCalled()
     expect(isRuntimeEnvironmentCapabilityPaused('env')).toBe(false)
   })
 

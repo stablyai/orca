@@ -1,0 +1,96 @@
+{
+  "permanentTests": {
+    "cases": 27,
+    "files": 5,
+    "exitCode": 0
+  },
+  "permanentAndExistingCompatibilityTests": {
+    "cases": 47,
+    "files": 8,
+    "exitCode": 0
+  },
+  "selectedTestsIncludingStartupRouting": {
+    "cases": 75,
+    "files": 9,
+    "exitCode": 0
+  },
+  "actualFullWebTypecheck": {
+    "command": "ORCA_BACKGROUND_LAUNCH=1 node node_modules/typescript/bin/tsc --noEmit -p config/tsconfig.tc.web.json",
+    "exitCode": 1,
+    "diagnostics": [
+      "src/renderer/src/components/native-chat/NativeChatMessageList.windowing.test.tsx(12,15): error TS6196: 'NativeChatMessage' is declared but never used."
+    ],
+    "scope": "The single diagnostic is in an unchanged file. No changed-file diagnostics."
+  },
+  "comparativeProof": {
+    "graphs": ["worktree", "main"],
+    "variants": ["before", "fixed"],
+    "runtimes": {
+      "node": "24.20.0",
+      "electron": "43.7.0 / Node 24.21.0"
+    },
+    "casesPerRun": 4,
+    "runs": 8,
+    "cases": 32,
+    "exitCodes": [0, 0, 0, 0, 0, 0, 0, 0]
+  },
+  "sourceFence": {
+    "repositoryPaths": 1021,
+    "contextDifferences": 22,
+    "dependencyHashes": 12,
+    "allNamedWorktreeBaselineHashesVerified": true,
+    "historicalComparison": "Four static v1.4.170 paths only",
+    "mainMarkdownAliasRegistrationPreserved": true
+  },
+  "loaderControls": {
+    "graphVariantCombinations": 4,
+    "canonicalLfAndSyntheticCrlfEquivalent": true,
+    "simulatedPublicationCheckoutEquivalent": true,
+    "driftRejected": true
+  },
+  "quality": {
+    "scope": "Three changed source/test files",
+    "ordinary": {
+      "exitCode": 0
+    },
+    "casting": {
+      "exitCode": 0
+    },
+    "typeAware": {
+      "exitCode": 0
+    },
+    "react": {
+      "exitCode": 0
+    },
+    "design": {
+      "exitCode": 0
+    },
+    "antiSlop": {
+      "exitCode": 0
+    }
+  },
+  "remainingTradeoffs": {
+    "undo": "Existing Monaco bounded closed-file undo policy; oversized models and raw Windows drive-path URIs can lose closed-file undo.",
+    "controllerTeardown": "Cancels ownership and listeners; no claim to reconcile every preexisting model after app-shell HMR remount.",
+    "viewCaches": "Preserved within existing 20-entry LRU."
+  },
+  "artifactHashes": {
+    "README.md": "c279ab97bf4fe580becc63e337207caf558a0f176dbbc280ee0cd4d4fa8ce673",
+    "fix.patch": "30027498dfbb6dbea9397be08a79711884f24f3b11268fdc0a641c174da6be6a",
+    "lifecycle.test.mjs": "afc0b7e45e056d1f730ac58f266094471b58187646c91b4436b909544a3a4e29",
+    "loader-controls.cjs": "4cdcf0309ff0acce00cff5f5b17ce91236f5eaa27245de65c651dd4c6535a352",
+    "loader-results.json": "6434cd0a1da483a1ea48fe7ce15d3e64a25bb97d998c34ba95983282276edc85",
+    "main-before-electron-results.json": "459135cb152bf4431de7df071417de0305722b562906f7fb36784911dc58d515",
+    "main-before-node-results.json": "8ab5239a631772cad4480e9b3cd5a192fe4cc8317498357cfa727693872e1436",
+    "main-context.patch": "faab10d72b52b184fdb212da1b5af53550d4937208b04266afa3d0b3d3c446dc",
+    "main-fixed-electron-results.json": "c048e499841cf0a7dbebc0078e641f19edee936c8338d588e91315dd5e604d61",
+    "main-fixed-node-results.json": "652b21071405779c2ce7583c1481eb47f4b8ab48b71b144434262f735194e390",
+    "source-versions.json": "c3f9b3b2e3c669a5565df1c73adb4a0b6468835f7ef5674e822032d08bf6459b",
+    "sources.cjs": "d5914770eb9db3c75b153b55d7f2f94415d3ab1850bc5b021be1165d104828be",
+    "vitest.config.mjs": "bfe98cdc66445e31801a9b64f698f158110dc7a8b1ec8f92ef7f99a5fb296444",
+    "worktree-before-electron-results.json": "e6ac502f2089535f010e728ee412d0e6b3e82121c908253e37f83577092e6254",
+    "worktree-before-node-results.json": "922b64c2fb6b8c0fc5c87d859762a0eddc0cc1cbebfd83eaabbc751c99b4d382",
+    "worktree-fixed-electron-results.json": "4cb43d9e8289672ab5523b30c92742c9af41b8f21b842c62515f916500e2bbbe",
+    "worktree-fixed-node-results.json": "9f857aec5fbb3bd98e6015d1be8a1a72d648134d5b47319fd398120761f9b68f"
+  }
+}

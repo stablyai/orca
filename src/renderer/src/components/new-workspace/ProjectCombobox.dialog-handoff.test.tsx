@@ -68,7 +68,8 @@ beforeEach(() => {
             ? element.getAttribute('data-state') === 'closed'
               ? 'exit'
               : 'enter'
-            : Reflect.get(target, property)
+            : // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: raw string|symbol pass-through; the receiver stays the target on purpose.
+              Reflect.get(target, property)
       })
     }
     return style

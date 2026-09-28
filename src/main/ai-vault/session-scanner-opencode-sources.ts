@@ -1,4 +1,4 @@
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { wslGatedReaddir } from '../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
@@ -6,6 +6,8 @@ import { resolveOpenCodeStorageDirectory } from '../opencode/opencode-data-direc
 import { listOpenCodeDatabases } from '../opencode-usage/opencode-database-discovery'
 import { recordSessionScanIssue } from './session-scan-issues'
 import { discoverOpenCodeSessions } from './session-scanner-opencode-sqlite-discovery'
+import { listOpenCode2SqliteSessionsViaWorker } from './session-scanner-opencode-sqlite-worker-spawn'
+import { isOpenCodeV2DatabaseName } from '../../shared/opencode-database-name'
 import type { AiVaultScanOptions, SessionFileDiscovery } from './session-scanner-types'
 
 export function opencodeDiscoveries(
@@ -14,15 +16,24 @@ export function opencodeDiscoveries(
   limit: number,
   issues: AiVaultScanIssue[]
 ): Promise<SessionFileDiscovery>[] {
-  const storageDirs = opencodeStorageDirs(options, wslHomeDirs)
-  return storageDirs.map(async (storageDir, index) =>
-    discoverOpenCodeSessions({
-      storageDir,
-      dbPaths: await opencodeDbPathsForSource(options, wslHomeDirs, storageDir, index, issues),
-      limitPerAgent: limit,
-      issues
-    })
-  )
+  return opencodeStorageDirs(options, wslHomeDirs).flatMap((storageDir, index) => {
+    const paths = opencodeDbPathsForSource(options, wslHomeDirs, storageDir, index, issues)
+    return [
+      paths.then((dbPaths) =>
+        discoverOpenCodeSessions({
+          storageDir,
+          dbPaths: dbPaths.filter((path) => !isOpenCodeV2DatabaseName(basename(path))),
+          limitPerAgent: limit,
+          issues,
+          signal: options.signal
+        })
+      ),
+      // Current releases share opencode.db with v1; the worker checks for v2 tables.
+      paths.then((dbPaths) =>
+        discoverOpenCode2Sessions(storageDir, dbPaths, limit, issues, options.signal)
+      )
+    ]
+  })
 }
 
 function opencodeStorageDirs(
@@ -81,5 +92,20 @@ async function listOpenCodeDatabasesInDirectory(
       })
     }
     return []
+  }
+}
+
+async function discoverOpenCode2Sessions(
+  storageDir: string,
+  dbPaths: readonly string[],
+  limit: number,
+  issues: AiVaultScanIssue[],
+  signal?: AbortSignal
+): Promise<SessionFileDiscovery> {
+  const files = await listOpenCode2SqliteSessionsViaWorker({ dbPaths, limit, issues, signal })
+  return {
+    agent: 'opencode2' as const,
+    rootDir: storageDir,
+    files: files.map((candidate) => candidate.file)
   }
 }

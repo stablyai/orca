@@ -63,7 +63,8 @@ export function cloneTerminalLayoutSnapshot(
   const cloned: TerminalLayoutSnapshot = {
     root: layout.root,
     activeLeafId: layout.activeLeafId,
-    expandedLeafId: layout.expandedLeafId
+    expandedLeafId: layout.expandedLeafId,
+    ...(layout.chatLeafId ? { chatLeafId: layout.chatLeafId } : {})
   }
   if (layout.ptyIdsByLeafId) {
     cloned.ptyIdsByLeafId = { ...layout.ptyIdsByLeafId }

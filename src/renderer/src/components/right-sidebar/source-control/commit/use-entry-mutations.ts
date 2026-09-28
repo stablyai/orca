@@ -4,6 +4,7 @@ import {
   requestEditorSaveQuiesce
 } from '@/components/editor/editor-autosave'
 import { getConnectionId } from '@/lib/connection-context'
+import { basename } from '@/lib/path'
 import {
   bulkDiscardRuntimeGitPaths,
   discardRuntimeGitPath,
@@ -12,6 +13,10 @@ import {
   type RuntimeGitContext
 } from '@/runtime/runtime-git-client'
 import { useAppStore } from '@/store'
+import {
+  dismissSourceControlEntryFailureToast,
+  showSourceControlEntryFailureToast
+} from './source-control-entry-failure-toast'
 
 export function useSourceControlEntryMutations({
   activeRepoSettings,
@@ -24,16 +29,21 @@ export function useSourceControlEntryMutations({
   worktreePath: string | null
   refreshActiveGitStatusAfterMutation: () => Promise<void>
 }) {
-  const handleStage = useCallback(
-    async (filePath: string) => {
+  // Why: named function expression so the failure toast's Retry can re-enter the same attempt.
+  const runEntryMutation = useCallback(
+    async function runEntryMutation(
+      operation: 'stage' | 'unstage',
+      filePath: string,
+      mutate: (context: RuntimeGitContext, filePath: string) => Promise<void>
+    ): Promise<void> {
       if (!worktreePath) {
         return
       }
       try {
         const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-        await stageRuntimeGitPath(
+        await mutate(
           {
-            // Why: route staging by the repo OWNER host, not the focused runtime.
+            // Why: route the mutation by the repo OWNER host, not the focused runtime.
             settings: activeRepoSettings,
             worktreeId: activeWorktreeId,
             worktreePath,
@@ -41,40 +51,41 @@ export function useSourceControlEntryMutations({
           },
           filePath
         )
-        await refreshActiveGitStatusAfterMutation()
       } catch (error) {
-        console.error('[SourceControl] stage failed', error)
+        console.error(`[SourceControl] ${operation} failed`, error)
+        showSourceControlEntryFailureToast({
+          operation,
+          filePath,
+          error,
+          worktreeId: activeWorktreeId,
+          worktreeName: worktreePath ? basename(worktreePath) : null,
+          onRetry: () => {
+            void runEntryMutation(operation, filePath, mutate)
+          }
+        })
+        return
       }
+      // Why: the mutation landed, so clear any failure this worktree's attempts left in the slot —
+      // a failure another worktree raised meanwhile is not ours to dismiss.
+      dismissSourceControlEntryFailureToast(activeWorktreeId)
+      // Why: refreshing outside the try keeps a refresh failure from being reported as "Failed to stage"; the refresher reports its own.
+      await refreshActiveGitStatusAfterMutation()
     },
     [activeRepoSettings, worktreePath, activeWorktreeId, refreshActiveGitStatusAfterMutation]
+  )
+
+  const handleStage = useCallback(
+    (filePath: string): Promise<void> => runEntryMutation('stage', filePath, stageRuntimeGitPath),
+    [runEntryMutation]
   )
 
   const handleUnstage = useCallback(
-    async (filePath: string) => {
-      if (!worktreePath) {
-        return
-      }
-      try {
-        const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-        await unstageRuntimeGitPath(
-          {
-            // Why: route unstaging by the repo OWNER host, not the focused runtime.
-            settings: activeRepoSettings,
-            worktreeId: activeWorktreeId,
-            worktreePath,
-            connectionId
-          },
-          filePath
-        )
-        await refreshActiveGitStatusAfterMutation()
-      } catch (error) {
-        console.error('[SourceControl] unstage failed', error)
-      }
-    },
-    [activeRepoSettings, worktreePath, activeWorktreeId, refreshActiveGitStatusAfterMutation]
+    (filePath: string): Promise<void> =>
+      runEntryMutation('unstage', filePath, unstageRuntimeGitPath),
+    [runEntryMutation]
   )
 
-  // Why: discardSingle throws so bulk callers can aggregate failures into one toast; handleDiscard swallows for per-row fire-and-forget.
+  // Why: discardSingle throws so bulk callers can aggregate failures into one toast; the per-row caller reports its own.
   const discardSingle = useCallback(
     async (filePath: string) => {
       if (!worktreePath || !activeWorktreeId) {

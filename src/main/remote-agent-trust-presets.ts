@@ -1,3 +1,4 @@
+import { markRemoteQoderWorkspaceTrusted } from './qoder/workspace-trust'
 import type { AgentTrustPreset } from './agent-trust-presets'
 import { upsertProjectTrustLevelInContent } from './codex/config-toml-trust'
 import { getActiveMultiplexer } from './ssh/ssh-target-registry'
@@ -20,13 +21,21 @@ export async function markRemoteAgentWorkspaceTrusted(args: {
   }
 
   const workspacePath = await canonicalizeRemoteWorkspacePath(fsProvider, args.workspacePath)
-  if (args.preset === 'codex') {
+  if (args.preset === 'qoder') {
+    await markRemoteQoderWorkspaceTrusted(fsProvider, home, workspacePath)
+  } else if (args.preset === 'codex') {
     await markRemoteCodexProjectTrusted(fsProvider, home, workspacePath)
   } else if (args.preset === 'cursor') {
     await markRemoteCursorWorkspaceTrusted(fsProvider, home, workspacePath)
   } else if (args.preset === 'copilot') {
     await markRemoteCopilotFolderTrusted(fsProvider, home, workspacePath)
   }
+  // KNOWN GAP: 'antigravity' is deliberately absent. The local preset writes
+  // ~/.gemini/antigravity-cli/settings.json, and the remote equivalent has not been verified
+  // against an SSH execution host, so an agy worker launched over SSH still raises its
+  // first-launch trust prompt and will stall at agent_readiness. Falling through silently
+  // matches the pre-existing behaviour for agy; it is recorded here rather than left as an
+  // unexplained omission. Mirror markRemoteCopilotFolderTrusted once it can be tested.
 }
 
 async function resolveRemoteHome(connectionId: string): Promise<string | null> {

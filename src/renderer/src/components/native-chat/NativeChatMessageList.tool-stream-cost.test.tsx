@@ -1,10 +1,11 @@
 // @vitest-environment happy-dom
 import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import type * as EditNormalization from '../../../../shared/native-chat-edit-normalize'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { useStructuredAgentSessionMessages } from './use-structured-agent-session-messages'
+import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
 
 const cost = vi.hoisted(() => ({ edits: 0, milliseconds: 0 }))
 vi.mock('../../../../shared/native-chat-edit-normalize', async (importOriginal) => {
@@ -21,10 +22,15 @@ vi.mock('../../../../shared/native-chat-edit-normalize', async (importOriginal) 
   }
 })
 const { NativeChatMessageList } = await import('./NativeChatMessageList')
+let restoreViewport = (): void => {}
+beforeAll(() => {
+  restoreViewport = installNativeChatMessageListTestViewport()
+})
+afterAll(() => restoreViewport())
 afterEach(cleanup)
 
 const EMPTY: never[] = []
-const loadEarlier = () => {}
+const loadEarlier = () => Promise.resolve('exhausted' as const)
 function Transcript({ items }: { items: AgentJournalRenderItem[] }) {
   const messages = useStructuredAgentSessionMessages(items, EMPTY, EMPTY)
   const session: NativeChatLiveSession = {
@@ -34,6 +40,7 @@ function Transcript({ items }: { items: AgentJournalRenderItem[] }) {
     agent: 'claude',
     hasMore: false,
     loadingEarlier: false,
+    olderHistoryGeneration: 0,
     loadEarlier,
     readPhase: 'ready'
   }

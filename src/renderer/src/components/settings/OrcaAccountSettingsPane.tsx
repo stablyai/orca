@@ -60,7 +60,6 @@ function AccountBenefit({
 
 export function OrcaAccountSettingsPane(): React.JSX.Element {
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
-  const connecting = useAppStore((state) => state.orcaProfileConnecting)
   const connect = useAppStore((state) => state.connectCurrentOrcaProfile)
   const signOut = useAppStore((state) => state.signOutCurrentOrcaProfile)
   const [signOutOpen, setSignOutOpen] = useState(false)
@@ -117,17 +116,10 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
               {translate('auto.components.settings.orcaAccount.signOut', 'Sign out')}
             </Button>
           ) : (
-            <Button
-              type="button"
-              size="sm"
-              disabled={!canConnect || connecting}
-              onClick={() => void connect()}
-            >
-              {connecting
-                ? translate('auto.components.settings.orcaAccount.signingIn', 'Signing in…')
-                : authStatus?.state === 'reconnect-required'
-                  ? translate('auto.components.settings.orcaAccount.signInAgain', 'Sign in again')
-                  : translate('auto.components.settings.orcaAccount.signIn', 'Sign in to Orca')}
+            <Button type="button" size="sm" disabled={!canConnect} onClick={() => void connect()}>
+              {authStatus?.state === 'reconnect-required'
+                ? translate('auto.components.settings.orcaAccount.signInAgain', 'Sign in again')
+                : translate('auto.components.settings.orcaAccount.signIn', 'Sign in to Orca')}
             </Button>
           )}
         </div>

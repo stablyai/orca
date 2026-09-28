@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useNativeChatComposerRevealFocus } from './use-native-chat-composer-reveal-focus'
 import { useAppStore } from '../../store'
 import { useNativeChatLaunchDraftSignal } from './use-native-chat-launch-draft-adoption'
 import { useNativeChatRetainedSession } from './use-native-chat-retained-session'
-import { isNativeChatTranscriptUnsettled } from './use-native-chat-live-session'
+import { isNativeChatTranscriptUnsettled } from './native-chat-live-session-contract'
 import { selectNativeChatViewState } from './native-chat-view-state'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatComposer'
@@ -63,6 +64,7 @@ export function NativeChatResolvedView({
   sessionId,
   transcriptPath,
   isVisible,
+  isFocusedGroup,
   targetPtyId,
   terminalTabId,
   ownsTabWideLaunchDraft,
@@ -130,6 +132,13 @@ export function NativeChatResolvedView({
     rootRef,
     composerRef,
     questionAnswerInputRef
+  })
+  useNativeChatComposerRevealFocus({
+    rootRef,
+    composerRef,
+    isVisible,
+    isFocusedGroup,
+    composerReady: !questionActive && targetPtyId !== null && canSend
   })
   const contextMenu = useNativeChatContextMenu({
     rootRef,
@@ -391,6 +400,7 @@ export function NativeChatResolvedView({
         ) : (
           <NativeChatMessageList
             session={sessionWithPending}
+            isVisible={isVisible}
             isWorking={isWorking}
             expandSignal={false}
             fontScale={fontScale.scale}

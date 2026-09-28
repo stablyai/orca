@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -11,47 +11,44 @@ const { createPackagedRuntimeNodeModuleResources } = require('../packaged-runtim
 const readProject = (file) => readFileSync(join(projectDir, file), 'utf8')
 const packageJson = JSON.parse(readProject('package.json'))
 const pnpmWorkspace = parse(readProject('pnpm-workspace.yaml'))
+// Why not process.platform: the win32 plan resolves wherever its os-gated npm addon is
+// installed; @orca/windows-registry is a workspace link and present everywhere.
+const windowsAddonsInstalled = existsSync(
+  join(projectDir, 'node_modules', '@vscode', 'windows-process-tree', 'package.json')
+)
 
 describe('Electron runtime package contract', () => {
-  it('keeps root postinstall as the single Electron binary install owner', () => {
-    expect(packageJson.scripts.postinstall).toBe('node config/scripts/rebuild-native-deps.mjs')
-    expect(pnpmWorkspace.allowBuilds).not.toHaveProperty('electron')
-  })
+  const packageTargets = {
+    win32: windowsAddonsInstalled ? createPackagedRuntimeNodeModuleResources('win32') : [],
+    darwin: createPackagedRuntimeNodeModuleResources('darwin'),
+    linux: createPackagedRuntimeNodeModuleResources('linux')
+  }
 
   it('keeps the native Windows registry addon optional and platform-gated', () => {
-    const rebuildScript = readFileSync(
-      join(projectDir, 'config/scripts/rebuild-native-deps.mjs'),
-      'utf8'
-    )
-    const ensureScript = readFileSync(
-      join(projectDir, 'config/scripts/ensure-native-runtime.mjs'),
-      'utf8'
-    )
-    expect(packageJson.optionalDependencies['windows-native-registry']).toBe('3.2.2')
-    // Why: pnpm installs optional target architectures on every host; the root
-    // Windows-only rebuild owns this addon so macOS/Linux never run node-gyp for it.
-    expect(pnpmWorkspace.allowBuilds['windows-native-registry']).toBe(false)
+    const rebuildScript = readProject('config/scripts/rebuild-native-deps.mjs')
+    const ensureScript = readProject('config/scripts/ensure-native-runtime.mjs')
+    expect(packageJson.optionalDependencies['@orca/windows-registry']).toBe('workspace:*')
+    // Why: allowBuilds stops pnpm running node-gyp at install time -- the root
+    // Windows-only rebuild owns this addon so it is built against the right runtime ABI.
+    expect(pnpmWorkspace.allowBuilds['@orca/windows-registry']).toBe(false)
     // Why assert the guard and the member separately: the list now carries more
     // than one addon, so pinning the whole literal only tested its formatting.
     expect(rebuildScript).toContain("rebuildPlatform === 'win32'")
-    expect(rebuildScript).toContain("'windows-native-registry'")
+    expect(rebuildScript).toContain("'@orca/windows-registry'")
     expect(ensureScript).toContain("process.platform === 'win32'")
-    expect(ensureScript).toContain("'windows-native-registry'")
-    const packageTargets = {
-      win32: createPackagedRuntimeNodeModuleResources('win32'),
-      darwin: createPackagedRuntimeNodeModuleResources('darwin'),
-      linux: createPackagedRuntimeNodeModuleResources('linux')
+    expect(ensureScript).toContain("'@orca/windows-registry'")
+    if (windowsAddonsInstalled) {
+      expect(packageTargets.win32).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ to: join('node_modules', '@orca', 'windows-registry') }),
+          expect.objectContaining({ to: join('node_modules', 'node-addon-api') })
+        ])
+      )
     }
-    expect(packageTargets.win32).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ to: join('node_modules', 'windows-native-registry') }),
-        expect.objectContaining({ to: join('node_modules', 'node-addon-api') })
-      ])
-    )
     for (const platform of ['darwin', 'linux']) {
       expect(packageTargets[platform]).not.toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ to: join('node_modules', 'windows-native-registry') })
+          expect.objectContaining({ to: join('node_modules', '@orca', 'windows-registry') })
         ])
       )
     }
@@ -67,8 +64,8 @@ describe('Electron runtime package contract', () => {
       'utf8'
     )
     expect(packageJson.optionalDependencies['@vscode/windows-process-tree']).toBe('0.8.0')
-    // Why: same rule as the registry addon -- pnpm installs optional deps on
-    // every host, so macOS/Linux must never run node-gyp for a Windows addon.
+    // Why: same rule as the registry addon -- allowBuilds stops pnpm running node-gyp at
+    // install time so the Windows-only rebuild owns it with the right runtime ABI.
     expect(pnpmWorkspace.allowBuilds['@vscode/windows-process-tree']).toBe(false)
     expect(rebuildScript).toContain("'@vscode/windows-process-tree'")
     expect(ensureScript).toContain("'@vscode/windows-process-tree'")
@@ -79,16 +76,13 @@ describe('Electron runtime package contract', () => {
     expect(pnpmWorkspace.patchedDependencies['@vscode/windows-process-tree@0.8.0']).toBe(
       'config/patches/@vscode__windows-process-tree@0.8.0.patch'
     )
-    const packageTargets = {
-      win32: createPackagedRuntimeNodeModuleResources('win32'),
-      darwin: createPackagedRuntimeNodeModuleResources('darwin'),
-      linux: createPackagedRuntimeNodeModuleResources('linux')
+    if (windowsAddonsInstalled) {
+      expect(packageTargets.win32).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ to: join('node_modules', '@vscode', 'windows-process-tree') })
+        ])
+      )
     }
-    expect(packageTargets.win32).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ to: join('node_modules', '@vscode', 'windows-process-tree') })
-      ])
-    )
     for (const platform of ['darwin', 'linux']) {
       expect(packageTargets[platform]).not.toEqual(
         expect.arrayContaining([

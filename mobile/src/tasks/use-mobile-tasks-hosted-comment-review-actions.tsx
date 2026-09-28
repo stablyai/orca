@@ -1,6 +1,6 @@
+import { useClipboardWriter } from '../platform/clipboard'
 import type { HostedMetadataActionsModel } from './use-mobile-tasks-hosted-metadata-actions'
 import {
-  Clipboard,
   buildGitHubCheckSummary,
   scheduleMobileTaskCopyFeedbackReset,
   useCallback
@@ -8,13 +8,24 @@ import {
 import {
   type DetailComment,
   type GitHubAssignableUser,
-  type GitHubDetailCheck,
   type TaskItem,
-  isSuccess,
   splitReviewerList
 } from './mobile-tasks-legacy-foundation'
+import {
+  githubIssueCommentWrite,
+  gitlabIssueCommentWrite,
+  gitlabMergeRequestCommentWrite
+} from './mobile-task-item-comment-operations'
+import {
+  githubPullRequestChecksRead,
+  githubReviewerRequest
+} from './mobile-task-item-state-operations'
 
 export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataActionsModel) {
+  // The seam, not `expo-clipboard`: inside the shell the page's own clipboard needs a secure
+  // context, which the iOS custom scheme is not and Android's https is, so that path would work on
+  // one platform and silently not on the other.
+  const clipboard = useClipboardWriter()
   const {
     client,
     copiedLinkResetTimerRef,
@@ -45,47 +56,51 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
       setMutatingStatus(true)
       setError('')
       try {
-        const response =
+        // Three methods, one per provider and item type. Each arm sends its own operation rather
+        // than one call picking a method string and a matching params shape.
+        const written =
           item.provider === 'github'
-            ? await client.sendRequest(
-                'github.addIssueComment',
-                {
-                  repo: `id:${item.source.repoId}`,
-                  number: item.source.number,
-                  body,
-                  type: item.source.type
-                },
-                { timeoutMs: 30_000 }
+            ? githubIssueCommentWrite.interpret(
+                await githubIssueCommentWrite.request(
+                  client,
+                  {
+                    repo: `id:${item.source.repoId}`,
+                    number: item.source.number,
+                    body,
+                    type: item.source.type
+                  },
+                  { timeoutMs: 30_000 }
+                )
               )
-            : await client.sendRequest(
-                item.source.type === 'mr' ? 'gitlab.addMRComment' : 'gitlab.addIssueComment',
-                item.source.type === 'mr'
-                  ? {
+            : item.source.type === 'mr'
+              ? gitlabMergeRequestCommentWrite.interpret(
+                  await gitlabMergeRequestCommentWrite.request(
+                    client,
+                    {
                       repo: `id:${item.source.repoId}`,
                       iid: item.source.number,
                       body,
                       projectRef: item.source.projectRef
-                    }
-                  : {
+                    },
+                    { timeoutMs: 30_000 }
+                  )
+                )
+              : gitlabIssueCommentWrite.interpret(
+                  await gitlabIssueCommentWrite.request(
+                    client,
+                    {
                       repo: `id:${item.source.repoId}`,
                       number: item.source.number,
                       body,
                       projectRef: item.source.projectRef
                     },
-                { timeoutMs: 30_000 }
-              )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
+                    { timeoutMs: 30_000 }
+                  )
+                )
+        if (written.ok === false) {
+          throw new Error(written.error ?? 'Failed to add comment')
         }
-        const result = response.result as {
-          ok?: boolean
-          error?: string
-          comment?: DetailComment
-        }
-        if (result.ok === false) {
-          throw new Error(result.error ?? 'Failed to add comment')
-        }
-        const comment: DetailComment = result.comment ?? {
+        const comment: DetailComment = written.comment ?? {
           id: `local-${Date.now()}`,
           body,
           createdAt: new Date().toISOString(),
@@ -108,25 +123,31 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
     [client, itemCommentDraft, mutatingStatus]
   )
 
-  const copyTaskLink = useCallback(async (key: string, url: string): Promise<void> => {
-    try {
-      await Clipboard.setStringAsync(url)
-      setCopiedLinkKey(key)
-      scheduleMobileTaskCopyFeedbackReset(copiedLinkResetTimerRef, key, setCopiedLinkKey)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to copy link')
-    }
-  }, [])
+  const copyTaskLink = useCallback(
+    async (key: string, url: string): Promise<void> => {
+      try {
+        await clipboard.writeText(url)
+        setCopiedLinkKey(key)
+        scheduleMobileTaskCopyFeedbackReset(copiedLinkResetTimerRef, key, setCopiedLinkKey)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to copy link')
+      }
+    },
+    [clipboard]
+  )
 
-  const copyTextToClipboard = useCallback(async (key: string, value: string): Promise<void> => {
-    try {
-      await Clipboard.setStringAsync(value)
-      setCopiedLinkKey(key)
-      scheduleMobileTaskCopyFeedbackReset(copiedLinkResetTimerRef, key, setCopiedLinkKey)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to copy text')
-    }
-  }, [])
+  const copyTextToClipboard = useCallback(
+    async (key: string, value: string): Promise<void> => {
+      try {
+        await clipboard.writeText(value)
+        setCopiedLinkKey(key)
+        scheduleMobileTaskCopyFeedbackReset(copiedLinkResetTimerRef, key, setCopiedLinkKey)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to copy text')
+      }
+    },
+    [clipboard]
+  )
 
   const requestGitHubReviewers = useCallback(
     async (item: Extract<TaskItem, { provider: 'github' }>, logins?: string[]): Promise<void> => {
@@ -140,8 +161,8 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
       setMutatingStatus(true)
       setError('')
       try {
-        const response = await client.sendRequest(
-          'github.requestPRReviewers',
+        const reply = await githubReviewerRequest.request(
+          client,
           {
             repo: `id:${item.source.repoId}`,
             prNumber: item.source.number,
@@ -149,10 +170,7 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
           },
           { timeoutMs: 30_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as { ok?: boolean; error?: string }
+        const result = githubReviewerRequest.interpret(reply)
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to request reviewers')
         }
@@ -221,8 +239,8 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
       setMutatingStatus(true)
       setError('')
       try {
-        const response = await client.sendRequest(
-          'github.prChecks',
+        const reply = await githubPullRequestChecksRead.request(
+          client,
           {
             repo: `id:${item.source.repoId}`,
             prNumber: item.source.number,
@@ -231,13 +249,9 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
           },
           { timeoutMs: 30_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        if (!Array.isArray(response.result)) {
-          throw new Error('Invalid checks response')
-        }
-        const checks = response.result as GitHubDetailCheck[]
+        // The reader answers an array of readable rows, so the hand-rolled shape test this call
+        // site kept is gone: a reply that is not one now names the method it came from.
+        const checks = githubPullRequestChecksRead.interpret(reply)
         const checksSummary = buildGitHubCheckSummary(checks)
         setDetailPayload((current) =>
           current?.provider === 'github' ? { ...current, checks } : current

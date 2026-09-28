@@ -61,7 +61,7 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
         unsentCount={controller.unsentComments.length}
         worktreeLabel={controller.worktreeLabel}
         onBack={onBack}
-        onOpenActions={() => controller.setShowOverflow(true)}
+        onOpenActions={() => controller.openSheet({ kind: 'actions' })}
         onOpenPRSidebar={controller.openPRSidebar}
         onSelectFilter={controller.selectFilter}
       />
@@ -97,14 +97,14 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
             staleCommentIds={controller.staleCommentIds}
             onAddNote={controller.openComposer}
             onEditNote={controller.openEditComposer}
-            onRetry={controller.retryAction}
+            onRetry={controller.retryAction ?? undefined}
           />
           {controller.currentItem ? (
             <MobileDiffReviewFooter
               busyAction={controller.busyAction}
               item={controller.currentItem}
               onAddFileNote={() => controller.openComposer(0)}
-              onDiscard={controller.setDiscardTarget}
+              onDiscard={(target) => controller.openSheet({ kind: 'discard', target })}
               onGitMutation={(method, item) => void controller.runGitMutation(method, item)}
               onMarkReviewed={() => void controller.markReviewed()}
               onMoveFile={controller.moveFile}

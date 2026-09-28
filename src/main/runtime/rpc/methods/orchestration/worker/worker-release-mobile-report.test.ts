@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-support'
 import { TERMINAL_SEND_METHODS } from '../../terminal/terminal-send-method'
 import { sendTerminalStreamInput } from '../../terminal/terminal-input-delivery'
-import { isStreamingMethod, type RpcMethod } from '../../../core'
+import { eraseRpcMethods, isStreamingMethod, type RpcMethod } from '../../../core'
 
 const h = createOrchestrationWorkerReleaseHarness()
 beforeEach(() => h.setup())
@@ -93,14 +93,14 @@ it.each(['unary', 'stream'])('mobile %s bytes do no orchestration database work'
       'delivered'
     )
   } else {
-    const method = TERMINAL_SEND_METHODS.find(
+    const method = eraseRpcMethods(TERMINAL_SEND_METHODS).find(
       (m): m is RpcMethod => m.name === 'terminal.send' && !isStreamingMethod(m)
     )!
     await expect(
       method.handler(method.params!.parse(params) as never, { runtime } as never)
     ).resolves.toMatchObject({ send: { accepted: true } })
   }
-  expect(write).toHaveBeenCalledWith('pty-worker', 'x')
+  expect(write).toHaveBeenCalledWith('pty-worker', 'x', 'driving')
   expect(commit).toHaveBeenCalledTimes(1)
   expect(dbAccess).not.toHaveBeenCalled()
   expect(takeover).not.toHaveBeenCalled()

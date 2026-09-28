@@ -1,27 +1,27 @@
 import type { ClaudeSession, ClaudeStructuredSessionEvent } from './claude-structured-session-state'
-import type { StructuredSessionCompaction } from '../native-chat/agent-session-wire/structured-session-compaction'
+import type {
+  StructuredSessionCompaction,
+  StructuredSessionCompactionResult
+} from '../native-chat/agent-session-wire/structured-session-compaction'
 import { dispatchClaudeTurn } from './claude-structured-dispatch'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+/** Compaction needs no ack deadline of its own: `compactions.run` keeps its own
+ *  180s completion window and settles on Claude's terminal `result` frame, so
+ *  the dispatch here only has to report a refusal to send. */
 export function compactClaudeSession(
   session: ClaudeSession,
   compactions: StructuredSessionCompaction,
-  input: Parameters<NonNullable<StructuredAgentSessionAdapter['compact']>>[0],
-  timeoutMs: number
-): Promise<{ error?: string }> {
+  input: Parameters<NonNullable<StructuredAgentSessionAdapter['compact']>>[0]
+): Promise<StructuredSessionCompactionResult> {
   return compactions.run(
     input.sessionId,
     session.providerSessionId,
     async () => {
-      const result = await dispatchClaudeTurn(
-        session,
-        {
-          clientMessageId: `compact-${input.fence}`,
-          body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: '/compact' }] }
-        },
-        timeoutMs
-      )
+      const result = await dispatchClaudeTurn(session, {
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: '/compact' }] }
+      })
       if (result.state === 'rejected') {
-        return { error: result.reason }
+        return { outcome: 'failed' as const }
       }
       return undefined
     },

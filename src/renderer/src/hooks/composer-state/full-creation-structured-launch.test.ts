@@ -1,79 +1,72 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+type BeginArgs = {
+  plan: unknown
+  target: { worktreeId: string }
+  beforeOpen?: (sessionId: string) => boolean | void
+}
+
 const mocks = vi.hoisted(() => ({
-  startStructuredAgentLaunch: vi.fn(),
-  activateStructuredAgentSessionById: vi.fn()
+  beginStructuredAgentSessionProvisionalLaunch:
+    vi.fn<(args: BeginArgs) => { sessionId: string; tab: { id: string } } | null>()
 }))
 
-vi.mock('@/lib/structured-agent-session-launch', () => ({
-  startStructuredAgentLaunch: mocks.startStructuredAgentLaunch
+vi.mock('@/lib/structured-agent-session-provisional-tab', () => ({
+  beginStructuredAgentSessionProvisionalLaunch: mocks.beginStructuredAgentSessionProvisionalLaunch
 }))
 
-vi.mock('@/lib/structured-agent-session-tab-activation', () => ({
-  activateStructuredAgentSessionById: mocks.activateStructuredAgentSessionById
-}))
+import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
+import { beginFullCreationStructuredLaunch } from './full-creation-structured-launch'
 
-vi.mock('@/lib/launch-structured-agent-session', () => ({
-  StructuredAgentSessionCreateRefusalError: class extends Error {}
-}))
+const plan = adoptAgentSessionLaunchVerdict({
+  route: 'structured-native-chat',
+  agent: 'codex',
+  prompt: 'Fix the route',
+  promptDelivery: 'auto-submit'
+})
 
-import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
-import { settleFullCreationStructuredLaunch } from './full-creation-structured-launch'
-
-describe('settleFullCreationStructuredLaunch', () => {
-  beforeEach(() => vi.clearAllMocks())
-
-  it('runs the legacy terminal fallback after a definitive refusal', async () => {
-    const fallbackActivation = { primaryTabId: 'fallback-tab' }
-    const onDefinitiveRefusal = vi.fn().mockResolvedValue(fallbackActivation)
-    mocks.startStructuredAgentLaunch.mockReturnValue({
-      launchResult: Promise.reject(new StructuredAgentSessionCreateRefusalError('unsupported')),
-      isVisibilityUnknown: () => false,
-      claimDefinitiveRefusalFallback: (fallback: () => Promise<unknown>) =>
-        Promise.resolve()
-          .then(fallback)
-          .then(() => true)
+describe('beginFullCreationStructuredLaunch', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
+      args.beforeOpen?.('session-1')
+      return { sessionId: 'session-1', tab: { id: 'agent-session:session-1' } }
     })
-
-    await expect(
-      settleFullCreationStructuredLaunch({
-        structuredLaunch: true,
-        agent: 'codex',
-        worktreeId: 'worktree-1',
-        prompt: 'Fix the route',
-        initialActivation: false,
-        onDefinitiveRefusal
-      })
-    ).resolves.toEqual({
-      structuredLaunchAccepted: false,
-      visibilityUnknown: false,
-      activation: fallbackActivation
-    })
-    expect(onDefinitiveRefusal).toHaveBeenCalledOnce()
   })
 
-  it('reports an unknown outcome without starting a fallback terminal', async () => {
-    const onDefinitiveRefusal = vi.fn()
-    mocks.startStructuredAgentLaunch.mockReturnValue({
-      launchResult: Promise.reject(new Error('connection lost')),
-      isVisibilityUnknown: () => true,
-      claimDefinitiveRefusalFallback: vi.fn(() => Promise.resolve(false))
+  it('allocates the final identity before revealing and opening the chat surface', () => {
+    const order: string[] = []
+    mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
+      order.push('begin')
+      args.beforeOpen?.('session-1')
+      order.push('open')
+      return { sessionId: 'session-1', tab: { id: 'agent-session:session-1' } }
     })
 
-    await expect(
-      settleFullCreationStructuredLaunch({
-        structuredLaunch: true,
-        agent: 'codex',
-        worktreeId: 'worktree-1',
-        prompt: 'Fix the route',
-        initialActivation: false,
-        onDefinitiveRefusal
-      })
-    ).resolves.toEqual({
-      structuredLaunchAccepted: true,
-      visibilityUnknown: true,
-      activation: false
+    const launch = beginFullCreationStructuredLaunch({
+      plan,
+      worktreeId: 'worktree-1',
+      beforeOpen: (sessionId) => {
+        order.push(`reveal:${sessionId}`)
+        return true
+      }
     })
-    expect(onDefinitiveRefusal).not.toHaveBeenCalled()
+
+    expect(launch).toMatchObject({ sessionId: 'session-1', tab: { id: 'agent-session:session-1' } })
+    expect(order).toEqual(['begin', 'reveal:session-1', 'open'])
+    expect(mocks.beginStructuredAgentSessionProvisionalLaunch).toHaveBeenCalledWith({
+      plan,
+      hooks: {},
+      target: { worktreeId: 'worktree-1' },
+      beforeOpen: expect.any(Function)
+    })
+  })
+
+  it('returns no surface when reveal or ownership is refused', () => {
+    mocks.beginStructuredAgentSessionProvisionalLaunch.mockReturnValue(null)
+
+    expect(
+      beginFullCreationStructuredLaunch({ plan, worktreeId: 'worktree-1', beforeOpen: vi.fn() })
+    ).toBeNull()
   })
 })

@@ -14,6 +14,7 @@ import { useAgentRowConversationName } from '@/components/dashboard/use-agent-ro
 import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
 import CacheTimer, { usePromptCacheCountdownForPane } from './CacheTimer'
 import { formatShortTimeAgo } from '@/lib/short-time-ago'
+import { agentVerdictDisplayMark } from '../../../../shared/agent-main-agent-verdict'
 
 function getCompactAgentPrimary(
   agent: DashboardAgentRowData,
@@ -28,8 +29,12 @@ export function getCompactAgentSecondary(
   now: number,
   lastAssistantMessageOverride?: string
 ): string {
-  if (agent.entry.interrupted === true) {
+  const verdictMark = agentVerdictDisplayMark(agent.entry)
+  if (verdictMark === 'interrupted') {
     return 'Interrupted by user'
+  }
+  if (verdictMark === 'failed') {
+    return 'Failed'
   }
   // Why: the only honest thing to say about a pane Orca still holds but no longer hears
   // from is how long the silence has run; the user supplies the meaning.
@@ -85,10 +90,11 @@ type CompactAgentRowProps = {
   childAgentCount?: number
   childAgentsExpanded?: boolean
   onToggleChildAgents?: () => void
-  reserveDisclosureGutter?: boolean
+  disclosureInGutter?: boolean
   isFocusedPane?: boolean
   hideIdentityIcon?: boolean
   cacheTimerActive?: boolean
+  isUnvisited?: boolean
 }
 
 export const CompactAgentRow = React.memo(function CompactAgentRow({
@@ -101,10 +107,11 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   childAgentCount,
   childAgentsExpanded = false,
   onToggleChildAgents,
-  reserveDisclosureGutter = false,
+  disclosureInGutter = false,
   isFocusedPane = false,
   hideIdentityIcon = false,
-  cacheTimerActive = true
+  cacheTimerActive = true,
+  isUnvisited = false
 }: CompactAgentRowProps) {
   const hasChildDisclosure =
     typeof childAgentCount === 'number' &&
@@ -212,8 +219,6 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
             aria-hidden
           />
         </button>
-      ) : reserveDisclosureGutter ? (
-        <span className="size-4 shrink-0" aria-hidden />
       ) : null}
       {/* Why: the row's actionable disabled reason must win on every hit area. */}
       <AgentStateDot
@@ -233,7 +238,12 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       >
         {/* Why: the selected-row fill is strong enough to wash out the dimmed
             prompt/secondary text, so lift both toward full foreground when focused. */}
-        <span className={isFocusedPane ? 'text-foreground' : 'text-muted-foreground/90'}>
+        <span
+          className={cn(
+            isUnvisited ? 'font-semibold text-foreground' : 'font-normal text-muted-foreground/90',
+            isFocusedPane && !isUnvisited && 'text-foreground'
+          )}
+        >
           {leadingText}
         </span>
         {trailingText && (
@@ -286,6 +296,8 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
         'compact-agent-row group/compact-agent-row min-w-0 overflow-hidden cursor-pointer rounded-sm px-1 text-[11px] leading-none',
         'text-muted-foreground worktree-agent-row-hover',
         hasChildDisclosure && 'worktree-agent-lineage-parent-row',
+        // Why: hang the chevron in the card gutter so the state dot keeps the column of chevron-less rows.
+        hasChildDisclosure && disclosureInGutter && '-ml-5',
         isLineageChild && 'worktree-agent-lineage-child-row',
         'flex h-6 items-center gap-1',
         isFocusedPane && 'bg-worktree-sidebar-accent',

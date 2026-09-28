@@ -1,12 +1,17 @@
-import { defineMethod, type RpcMethod } from '../../../core'
+import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { clampOrchestrationAskTimeoutMs } from '../../../../../../shared/orchestration-ask-timeout'
 import { isGroupAddress } from '../../../../orchestration/groups'
 import { AskParams } from '../schemas'
 import { rejectFederatedExplicitTarget } from '../routing'
 import { askRemoteRunHome } from './ask-remote'
+import {
+  mailboxAddressOf,
+  runCoordinatorKey
+} from '../../../../orchestration/orchestration-caller-identity'
+import { resolveOrchestrationParty } from '../../../../orchestration/orchestration-party'
 
-export const ORCHESTRATION_ASK_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_ASK_METHODS = [
   defineMethod({
     name: 'orchestration.ask',
     params: AskParams,
@@ -16,8 +21,9 @@ export const ORCHESTRATION_ASK_METHODS: RpcMethod[] = [
     ) => {
       // Why: group addresses have no unambiguous first-answer authority.
       if (params.to && isGroupAddress(params.to)) {
-        throw new Error(
-          'ask does not support group addresses; use send for non-blocking fan-out questions'
+        throw new OrchestrationError(
+          'invalid_argument',
+          'ask does not support group addresses; ask your owning run:<id>, or use send for a non-blocking fan-out within your Run.'
         )
       }
 
@@ -86,7 +92,12 @@ export const ORCHESTRATION_ASK_METHODS: RpcMethod[] = [
             `Dispatch ${activeDispatch.id} belongs to Run ${run.id}, not ${params.run}.`
           )
         }
-        if (params.to && params.to !== `run:${run.id}` && params.to !== run.coordinator_handle) {
+        if (
+          params.to &&
+          params.to !== `run:${run.id}` &&
+          resolveOrchestrationParty(params.to, db).address !==
+            mailboxAddressOf(runCoordinatorKey(run))
+        ) {
           throw new OrchestrationError(
             'dispatch_run_mismatch',
             `ask from Dispatch ${activeDispatch.id} must target its owning Run ${run.id}.`

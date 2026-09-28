@@ -27,6 +27,12 @@ vi.mock('./WindowsFirewallNotice', () => ({
   WindowsFirewallNotice: () => null
 }))
 
+vi.mock('../settings/MachineNameField', () => ({
+  MachineNameField: ({ id, className }: { id?: string; className?: string }) => (
+    <div data-testid="machine-name-field" data-id={id} className={className} />
+  )
+}))
+
 import { HeroFlow, type StepIndex } from './MobileHero'
 import { MobileHeroPairingStep } from './MobileHeroPairingStep'
 
@@ -338,6 +344,44 @@ describe('HeroFlow height', () => {
     )
 
     expect(refresh).toHaveFocus()
+  })
+
+  it('lets the user name this computer in the pairing step, ahead of the code', () => {
+    const props: React.ComponentProps<typeof MobileHeroPairingStep> = {
+      pairQrDataUrl: 'data:image/png;base64,AAAA',
+      pairingUrl: 'orca://pair?code=abc',
+      pairingQrError: false,
+      relayMintFailure: null,
+      onUseLan: vi.fn(),
+      onRetryRelay: vi.fn(),
+      onCopyRelayDiagnostics: vi.fn(),
+      pairLoading: false,
+      connectionMode: 'automatic',
+      onConnectionModeChange: vi.fn(),
+      onRegeneratePairing: vi.fn(),
+      canGeneratePairing: true,
+      onCopyPairingCode: vi.fn(),
+      networkInterfaces: [],
+      customAddresses: [],
+      selectedAddress: undefined,
+      selectedAddressIsCustom: false,
+      onSelectedAddressChange: vi.fn(),
+      onCustomAddressSelect: vi.fn(),
+      onCustomAddressRemove: vi.fn(),
+      beforeCustomAddressChange: vi.fn().mockResolvedValue(true),
+      onRefreshNetworkInterfaces: vi.fn(),
+      refreshingNetworkInterfaces: false
+    }
+    render(<MobileHeroPairingStep {...props} />)
+
+    const field = screen.getByTestId('machine-name-field')
+    expect(field).toHaveAttribute('data-id', 'mobile-hero-machine-name')
+    const qr = screen.getByRole('img', { name: 'Pairing QR' })
+    expect(field.compareDocumentPosition(qr) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // Why: the field lives inside the copy cell, so the web client, where it renders nothing,
+    // leaves no empty grid track behind.
+    expect(field.parentElement).toHaveClass('mp-pairing-copy')
+    expect(field).toHaveClass('mp-pairing-machine')
   })
 
   it('demotes the network address picker to a disclosure on Orca Relay', async () => {

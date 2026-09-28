@@ -40,6 +40,11 @@ export async function moveWorktreeDirectoryToTrash(
   const trashRoot = getWorktreeTrashRoot(worktreePath)
   const trashPath = join(trashRoot, `wt-${Date.now()}-${randomBytes(4).toString('hex')}`)
   try {
+    // A malformed Git registration can name the checkout's .git file.
+    const worktreeStat = await lstat(worktreePath)
+    if (!worktreeStat.isDirectory() || worktreeStat.isSymbolicLink()) {
+      return undefined
+    }
     await mkdir(trashRoot, { recursive: true })
     const trashRootStat = await lstat(trashRoot)
     if (!trashRootStat.isDirectory() || trashRootStat.isSymbolicLink()) {

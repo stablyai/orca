@@ -182,7 +182,7 @@ describe('connectPanePty', () => {
       agentType: 'pi'
     })
 
-    expect(transport.sendInput).toHaveBeenCalledWith('omp\r')
+    expect(transport.sendInput).toHaveBeenCalledWith('omp\r', 'query-reply')
     expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'OMP ready')
     expect(deps.updateTabTitle).toHaveBeenCalledWith('tab-1', 'OMP ready')
     expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
@@ -436,7 +436,7 @@ describe('connectPanePty', () => {
       agentType: 'pi'
     })
 
-    expect(transport.sendInput).toHaveBeenCalledWith('pi \x17omp\r')
+    expect(transport.sendInput).toHaveBeenCalledWith('pi \x17omp\r', 'query-reply')
     expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'OMP ready')
     expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
       state: 'done',
@@ -474,7 +474,7 @@ describe('connectPanePty', () => {
       agentType: 'pi'
     })
 
-    expect(transport.sendInput).toHaveBeenCalledWith('pi\r')
+    expect(transport.sendInput).toHaveBeenCalledWith('pi\r', 'query-reply')
     expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'Pi ready')
     expect(deps.updateTabTitle).toHaveBeenCalledWith('tab-1', 'Pi ready')
     expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
@@ -525,7 +525,7 @@ describe('connectPanePty', () => {
       agentType: 'pi'
     })
 
-    expect(transport.sendInput).toHaveBeenCalledWith('omp\r')
+    expect(transport.sendInput).toHaveBeenCalledWith('omp\r', 'query-reply')
     expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'Pi ready')
     expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
       state: 'done',
@@ -564,7 +564,7 @@ describe('connectPanePty', () => {
       agentType: 'pi'
     })
 
-    expect(transport.sendInput).toHaveBeenCalledWith('omp\r')
+    expect(transport.sendInput).toHaveBeenCalledWith('omp\r', 'query-reply')
     expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'Pi ready')
     expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
       state: 'done',
@@ -650,7 +650,7 @@ describe('connectPanePty', () => {
       agentType: 'pi'
     })
 
-    expect(transport.sendInput).toHaveBeenCalledWith('op\x1b[Dm\r')
+    expect(transport.sendInput).toHaveBeenCalledWith('op\x1b[Dm\r', 'query-reply')
     expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
       state: 'done',
       agentType: 'omp',

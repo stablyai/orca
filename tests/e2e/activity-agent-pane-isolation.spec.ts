@@ -207,7 +207,7 @@ async function createTerminalInNewSplitGroup(page: Page): Promise<SplitGroupTerm
     const tab = state.createTab(worktreeId, groupId, undefined, { activate: true })
     state.focusGroup(worktreeId, groupId)
     state.setActiveTab(tab.id)
-    state.setActiveTabType('terminal')
+    state.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
     return { sourceGroupId, groupId, tabId: tab.id }
   })
 }

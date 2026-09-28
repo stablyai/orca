@@ -8,6 +8,7 @@ import {
   updateTerminalSubscriptionViewport
 } from './rpc-client-terminal-subscription'
 import { buildReadyStreamUnsubscribe } from './rpc-client-server-subscription'
+import { isStreamingOpenerReply } from './rpc-acceptance-policies'
 import {
   isStreamingSubscriptionReadyResult,
   isTerminalSubscribedResult
@@ -107,12 +108,14 @@ export class RpcClientStreamRegistry {
     this.pendingBrowserRequestId = null
     for (const [id, stream] of this.streams) {
       stream.sent = false
+      // The id named a registration on the closed socket; the replay's ready brings the new one.
+      stream.subscriptionId = undefined
       this.resetTerminalRouting(id)
     }
   }
 
   handleResponse(response: RpcResponse): boolean {
-    if (response.ok && response.streaming === true) {
+    if (isStreamingOpenerReply(response)) {
       this.handleStreamingResponse(response)
       return true
     }
@@ -209,10 +212,11 @@ export class RpcClientStreamRegistry {
     if (stream?.method === 'terminal.subscribe') {
       const params = buildTerminalUnsubscribeParams(stream.params)
       if (params) {
-        this.sendRpc('terminal.unsubscribe', params)
+        // Why: `requestId` names this exact request; hosts that predate it strip it and use the slot.
+        this.sendRpc('terminal.unsubscribe', { ...params, requestId: id })
       }
     } else {
-      const unsubscribe = buildStreamUnsubscribe(stream?.method, stream?.params)
+      const unsubscribe = buildStreamUnsubscribe(stream?.method, stream?.params, id)
       if (unsubscribe) {
         this.sendRpc(unsubscribe.method, unsubscribe.params)
       }

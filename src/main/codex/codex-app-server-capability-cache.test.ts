@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  CODEX_APP_SERVER_CAPABILITY_MAX_ENTRIES,
   CODEX_APP_SERVER_CAPABILITY_RETRY_INTERVAL_MS,
   CodexAppServerCapabilityCache,
   getCodexAppServerHostKey
@@ -72,6 +73,16 @@ describe('CodexAppServerCapabilityCache', () => {
       )
     ).resolves.toBe('native-result')
     expect(nativePreferred).toHaveBeenCalledTimes(1)
+  })
+
+  it('bounds host capability state during WSL distro churn', () => {
+    const cache = new CodexAppServerCapabilityCache()
+    cache.rememberUnsupported('native', 1_000)
+    for (let index = 0; index < CODEX_APP_SERVER_CAPABILITY_MAX_ENTRIES + 4; index += 1) {
+      cache.rememberUnsupported(`wsl:distro-${index}`, 1_000)
+    }
+
+    expect(cache.shouldTry('native', 1_001)).toBe(true)
   })
 
   it('drops known support when a later call reports the capability unsupported', async () => {

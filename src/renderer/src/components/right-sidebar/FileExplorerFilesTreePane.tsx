@@ -183,6 +183,8 @@ export function FileExplorerFilesTreePane({
           flashingPath={flashingPath}
           deleteShortcutLabel={deletion.deleteShortcutLabel}
           connectionId={activeRepo?.connectionId ?? null}
+          sourceWorkspaceId={tree.sourceWorkspaceId}
+          dirCache={tree.dirCache}
           runtimeDownloadContext={runtimeDownloadContext}
           supportsFolderDownload={supportsFolderDownload}
           canOpenInOrcaBrowser={canOpenWorkspaceFileBrowserForPath}

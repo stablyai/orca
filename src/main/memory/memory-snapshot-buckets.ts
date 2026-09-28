@@ -1,7 +1,14 @@
 import { basename } from 'node:path'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import type { SessionMemory } from '../../shared/process-stats-types'
-import type { MemorySnapshotStore } from './collector'
+import type { Store } from '../persistence'
+import { parseWorkspaceKey } from '../../shared/workspace-scope'
+import { folderWorkspaceToWorktree } from '../../shared/folder-workspace-worktree'
+
+export type MemorySnapshotStore = Pick<
+  Store,
+  'getRepo' | 'getWorktreeMeta' | 'getFolderWorkspace' | 'getProjectGroups'
+>
 
 const APP_HISTORY_KEY = '__app__'
 const HISTORY_CAPACITY = 60
@@ -67,6 +74,17 @@ export function resolveWorktreeMemoryNames(
   repoId: string
   repoName: string
 } {
+  const scope = parseWorkspaceKey(worktreeId)
+  const folder = scope?.type === 'folder' ? store.getFolderWorkspace(scope.folderWorkspaceId) : null
+  if (folder) {
+    const worktree = folderWorkspaceToWorktree(folder)
+    const group = store.getProjectGroups().find((item) => item.id === folder.projectGroupId)
+    return {
+      worktreeName: worktree.displayName,
+      repoId: worktree.repoId,
+      repoName: group?.name?.trim() || worktree.displayName
+    }
+  }
   // Orca worktree ids look like `${repoId}::${absolutePath}`.
   const parsed = splitWorktreeIdForFilesystem(worktreeId)
   const repoId = parsed?.repoId ?? worktreeId

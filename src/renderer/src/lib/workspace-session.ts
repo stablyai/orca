@@ -34,6 +34,7 @@ export type WorkspaceSessionSnapshot = Pick<
   | 'tabsByWorktree'
   | 'ptyIdsByTabId'
   | 'terminalLayoutsByTabId'
+  | 'localOnlyScrollbackByTabId'
   | 'activeTabIdByWorktree'
   | 'openFiles'
   | 'editorDrafts'
@@ -76,6 +77,7 @@ export const SESSION_RELEVANT_FIELDS = [
   'tabsByWorktree',
   'ptyIdsByTabId',
   'terminalLayoutsByTabId',
+  'localOnlyScrollbackByTabId',
   'activeTabIdByWorktree',
   'openFiles',
   'editorDrafts',
@@ -204,12 +206,14 @@ export function buildSanitizedTabsByWorktree(
   tabsByWorktree: WorkspaceSessionSnapshot['tabsByWorktree']
 ): WorkspaceSessionState['tabsByWorktree'] {
   // Why: strip transient pendingActivationSpawn — session:set persists without Zod re-parse, so a stale flag would drop the first PTY spawn on restart.
+  // Same for the recovery ledger: it describes a mounted pane's in-flight heal, so a persisted one would refuse the first recovery after restart.
   return Object.fromEntries(
     Object.entries(tabsByWorktree).map(([worktreeId, tabs]) => [
       worktreeId,
       tabs.map((tab) => {
-        const { pendingActivationSpawn: _unused, ...rest } = tab
+        const { pendingActivationSpawn: _unused, recovery: _recovery, ...rest } = tab
         void _unused
+        void _recovery
         return rest
       })
     ])
@@ -292,6 +296,7 @@ export function buildWorkspaceSessionPayload(
     activeTabId: snapshot.activeTabId,
     tabsByWorktree: buildSanitizedTabsByWorktree(snapshot.tabsByWorktree),
     terminalLayoutsByTabId: snapshot.terminalLayoutsByTabId,
+    localOnlyScrollbackByTabId: snapshot.localOnlyScrollbackByTabId,
     // Why: session:set fully replaces the persisted object, so dropping this silently disables eager terminal reconnect on restart.
     activeWorktreeIdsOnShutdown: terminalSessionData.activeWorktreeIdsOnShutdown,
     activeTabIdByWorktree: snapshot.activeTabIdByWorktree,

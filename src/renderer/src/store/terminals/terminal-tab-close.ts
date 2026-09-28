@@ -15,6 +15,7 @@ import {
 } from '../slices/terminal-tab-retirement'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { startTerminalTabProviderRetirement } from './terminal-tab-close-providers'
+import { commitTerminalSurfaceClose } from './terminal-surface-close-intent'
 import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
 import { removePaneKeysByTabPrefix } from '../slices/agent-status-pane-keyed-records'
 import { omitRecordKeys } from '../slices/worktrees/teardown/record-key-omission'
@@ -106,6 +107,7 @@ export function createTerminalTabCloseActions(
         const nextExpanded = omitByTabId(s.expandedPaneByTabId)
         const nextCanExpand = omitByTabId(s.canExpandPaneByTabId)
         const nextLayouts = omitByTabId(s.terminalLayoutsByTabId)
+        const nextLocalOnlyScrollback = omitByTabId(s.localOnlyScrollbackByTabId)
         const nextPtyIdsByTabId = omitByTabId(s.ptyIdsByTabId)
         const nextLastKnownRelay = omitByTabId(s.lastKnownRelayPtyIdByTabId)
         const nextDeferredSshSessionIdsByTabId = omitByTabId(s.deferredSshSessionIdsByTabId)
@@ -219,6 +221,8 @@ export function createTerminalTabCloseActions(
           expandedPaneByTabId: nextExpanded,
           canExpandPaneByTabId: nextCanExpand,
           terminalLayoutsByTabId: nextLayouts,
+          pendingDirectSshLayoutEditsByTabId: omitByTabId(s.pendingDirectSshLayoutEditsByTabId),
+          localOnlyScrollbackByTabId: nextLocalOnlyScrollback,
           pendingStartupByTabId: nextPendingStartupByTabId,
           automaticAgentResumeClaimsByTabId: nextAutomaticAgentResumeClaimsByTabId,
           nativeChatLaunchPromptByTabId: nextNativeChatLaunchPromptByTabId,
@@ -246,6 +250,9 @@ export function createTerminalTabCloseActions(
             : {})
         }
       })
+      if (retiresSession && closingWorktreeId && opts?.remoteCloseOwnedByHost !== true) {
+        commitTerminalSurfaceClose(closingWorktreeId, { kind: 'tab', tabId })
+      }
       // Why shared with the paired snapshot apply: every path that removes a tab owes it the same sweep, and a second copy of the list is how one path silently misses a new entry.
       sweepRetiredTerminalTabState(get(), tabId, closingWorktreeId)
       for (const tabs of Object.values(get().unifiedTabsByWorktree)) {

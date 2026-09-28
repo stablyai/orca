@@ -592,9 +592,9 @@ describe('GitHub GraphQL rate-limit guard', () => {
   })
 
   it.each([
-    { stackShape: 'omits stack', stackField: {} },
-    { stackShape: 'sets stack to null', stackField: { stack: null } }
-  ])('keeps legacy merge when an ordinary GitHub response $stackShape', async (scenario) => {
+    { stackVariant: 'omits stack', stackField: {} },
+    { stackVariant: 'sets stack to null', stackField: { stack: null } }
+  ])('keeps legacy merge when an ordinary GitHub response $stackVariant', async (scenario) => {
     ghExecFileAsyncMock
       .mockResolvedValueOnce({
         stdout: JSON.stringify({

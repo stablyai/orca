@@ -6,6 +6,9 @@ on:
       - '.github/workflows/computer-e2e.yml'
       - 'config/electron-builder.config.cjs'
       - 'config/scripts/build-computer-macos.mjs'
+      - 'config/scripts/build-native-for-platform.mjs'
+      - 'config/scripts/build-native-for-platform.test.mjs'
+      - 'config/scripts/pnpm-cli-invocation.mjs'
       - 'config/scripts/build-windows-cli-launcher.mjs'
       - 'config/scripts/build-windows-cli-launcher.test.mjs'
       - 'config/scripts/computer-e2e-workflow.test.mjs'
@@ -157,6 +160,12 @@ jobs:
           pnpm vitest run
           config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs
           config/scripts/macos-computer-helper-owner-loss-processes.test.mjs
+      # Why: the parallel launcher's cancellation tests are darwin-only and no
+      # other PR job runs on macOS.
+      - name: Parallel native build launcher cancellation
+        run: >-
+          pnpm vitest run --config config/vitest.config.ts
+          config/scripts/build-native-for-platform.test.mjs
       - name: Authenticated helper owner-loss smoke
         run: pnpm bench:macos-computer-helper-owner-loss --expect reaped --trials 1
       - name: Swift tests and signed universal helper verification

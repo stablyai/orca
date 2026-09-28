@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { spawn } from 'node:child_process'
@@ -206,7 +207,8 @@ describe('parseDaemonPidFile', () => {
       launchNonce: null,
       linuxStartTicks: null,
       bootId: null,
-      spawnerExecPath: null
+      spawnerExecPath: null,
+      cgroupUnit: null
     })
   })
 
@@ -225,7 +227,8 @@ describe('parseDaemonPidFile', () => {
       launchNonce: null,
       linuxStartTicks: null,
       bootId: null,
-      spawnerExecPath: null
+      spawnerExecPath: null,
+      cgroupUnit: null
     })
   })
 
@@ -255,7 +258,8 @@ describe('parseDaemonPidFile', () => {
       launchNonce: null,
       linuxStartTicks: null,
       bootId: null,
-      spawnerExecPath: null
+      spawnerExecPath: null,
+      cgroupUnit: null
     })
   })
 
@@ -271,7 +275,8 @@ describe('parseDaemonPidFile', () => {
       launchNonce: null,
       linuxStartTicks: null,
       bootId: null,
-      spawnerExecPath: null
+      spawnerExecPath: null,
+      cgroupUnit: null
     })
     expect(parseDaemonPidFile('  12345\n')).toEqual({
       pid: 12345,
@@ -281,7 +286,8 @@ describe('parseDaemonPidFile', () => {
       launchNonce: null,
       linuxStartTicks: null,
       bootId: null,
-      spawnerExecPath: null
+      spawnerExecPath: null,
+      cgroupUnit: null
     })
   })
 

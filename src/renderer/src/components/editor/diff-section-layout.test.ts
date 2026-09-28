@@ -110,8 +110,10 @@ describe('diff section layout', () => {
   })
 
   it('estimates line-count height without allocating split arrays', () => {
-    const originalSplit = String.prototype.split
-    const patchedSplit = function patchedSplit(
+    // Method-shaped type: a call-signature capture would reject `split`'s splitter-object overload.
+    const originalSplit: { split(separator: unknown, limit?: number): string[] }['split'] =
+      String.prototype.split
+    const patchedSplit: typeof String.prototype.split = function patchedSplit(
       this: string,
       separator?: unknown,
       limit?: number
@@ -119,9 +121,8 @@ describe('diff section layout', () => {
       if (String(this).startsWith('line 0')) {
         throw new Error('layout should not split full diff content')
       }
-      const args = limit === undefined ? [separator] : [separator, limit]
-      return Reflect.apply(originalSplit, this, args) as string[]
-    } as typeof String.prototype.split
+      return originalSplit.call(this, separator, limit)
+    }
     String.prototype.split = patchedSplit
 
     try {

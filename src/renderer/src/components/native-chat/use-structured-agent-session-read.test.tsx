@@ -8,8 +8,7 @@ import type {
 } from '../../../../shared/agent-session-journal-types'
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
-  type AgentSessionHistoryPage,
-  type AgentSessionSubscribeEvent
+  type AgentSessionHistoryPage
 } from '../../../../shared/agent-session-wire'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn() }))
@@ -124,6 +123,17 @@ describe('useStructuredAgentSessionRead history window', () => {
     })
   })
 
+  it('does not invent a writable fence for a mixed-version history page', async () => {
+    mocks.call.mockResolvedValueOnce({ ok: true, page: page('tail', [], false) })
+
+    const { result } = renderHook(() =>
+      useStructuredAgentSessionRead({ sessionId: 'session-a', target: LOCAL_TARGET })
+    )
+
+    await waitFor(() => expect(result.current.state.status).toBe('ready'))
+    expect(result.current.state.fence).toBeNull()
+  })
+
   it('loads each earlier page at the wire maximum', async () => {
     const tailItems = Array.from({ length: 200 }, (_, index) =>
       message(`tail-${index}`, 301 + index, 'assistant')
@@ -162,7 +172,72 @@ describe('useStructuredAgentSessionRead history window', () => {
     expect(result.current.state.items[0]?.itemId).toBe('oldest')
   })
 
-  it('refreshes only visible structured sessions when the app regains focus', async () => {
+  it('shares one in-flight older page, and its result, with every caller', async () => {
+    const tailItems = Array.from({ length: 300 }, (_, index) =>
+      message(`tail-${index}`, 301 + index, 'assistant')
+    )
+    let deliver = (): void => {}
+    mocks.call
+      .mockResolvedValueOnce({ ok: true, page: page('tail', tailItems, true) })
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            deliver = () =>
+              resolve({ ok: true, page: page('before', [message('older', 1, 'user')], false) })
+          })
+      )
+    const { result } = renderHook(() =>
+      useStructuredAgentSessionRead({ sessionId: 'session-a', target: LOCAL_TARGET })
+    )
+    await waitFor(() => expect(result.current.state.hasOlder).toBe(true))
+
+    let first!: Promise<string>
+    let second!: Promise<string>
+    act(() => {
+      first = result.current.loadOlder()
+    })
+    expect(result.current.loadingOlder).toBe(true)
+    // A rail jump asking while scroll-to-top's page is in flight joins it.
+    act(() => {
+      second = result.current.loadOlder()
+    })
+    expect(second).toBe(first)
+    await act(async () => {
+      deliver()
+      await first
+    })
+
+    await expect(first).resolves.toBe('applied')
+    await expect(second).resolves.toBe('applied')
+    expect(mocks.call).toHaveBeenCalledTimes(2)
+    expect(result.current.loadingOlder).toBe(false)
+    expect(result.current.state.items[0]?.itemId).toBe('older')
+    await expect(result.current.loadOlder()).resolves.toBe('exhausted')
+    expect(mocks.call).toHaveBeenCalledTimes(2)
+  })
+
+  it('reports an older page the host refused as failed, not applied', async () => {
+    const tailItems = Array.from({ length: 300 }, (_, index) =>
+      message(`tail-${index}`, 301 + index, 'assistant')
+    )
+    mocks.call
+      .mockResolvedValueOnce({ ok: true, page: page('tail', tailItems, true) })
+      .mockResolvedValueOnce({ ok: false, reset: 'expired', page: page('tail', [], true) })
+    const { result } = renderHook(() =>
+      useStructuredAgentSessionRead({ sessionId: 'session-a', target: LOCAL_TARGET })
+    )
+    await waitFor(() => expect(result.current.state.hasOlder).toBe(true))
+
+    let outcome: Promise<string> = Promise.resolve('')
+    await act(async () => {
+      outcome = result.current.loadOlder()
+      await outcome
+    })
+    await expect(outcome).resolves.toBe('failed')
+    expect(result.current.loadingOlder).toBe(false)
+  })
+
+  it('does no host work when the app regains focus', async () => {
     const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
     mocks.call.mockResolvedValue({ ok: true, page: page('tail', [], false) })
     const visible = renderHook(() =>
@@ -182,153 +257,14 @@ describe('useStructuredAgentSessionRead history window', () => {
     await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(1))
     expect(mocks.subscribe).toHaveBeenCalledTimes(1)
 
-    act(() => window.dispatchEvent(new Event('focus')))
+    await act(async () => window.dispatchEvent(new Event('focus')))
 
-    await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
-    expect(mocks.call).toHaveBeenLastCalledWith(LOCAL_TARGET, 'agentSession.history', {
-      sessionId: 'session-visible',
-      direction: 'tail',
-      limit: AGENT_SESSION_HISTORY_MAX_LIMIT
-    })
+    expect(mocks.call).toHaveBeenCalledTimes(1)
+    expect(mocks.subscribe).toHaveBeenCalledTimes(1)
     visible.unmount()
     hidden.unmount()
     hasFocus.mockRestore()
   })
-
-  it('drops a delayed refresh after reconnect without mutating state or provider session', async () => {
-    const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
-    const delayedRefresh = Promise.withResolvers<{
-      ok: true
-      page: AgentSessionHistoryPage
-      providerSession: { key: 'session_id'; id: string }
-    }>()
-    const closes: (() => void)[] = []
-    const initialProviderSession = { key: 'session_id', id: 'provider-initial' } as const
-    mocks.call
-      .mockResolvedValueOnce({
-        ok: true,
-        page: page('tail', [message('initial', 1, 'assistant')], false),
-        providerSession: initialProviderSession
-      })
-      .mockReturnValueOnce(delayedRefresh.promise)
-    mocks.subscribe.mockImplementation((_target, _params, _onEvent, _onError, onClose) => {
-      closes.push(onClose)
-      return Promise.resolve({ unsubscribe: vi.fn() })
-    })
-
-    const view = renderHook(() =>
-      useStructuredAgentSessionRead({ sessionId: 'session-a', target: LOCAL_TARGET })
-    )
-
-    try {
-      await waitFor(() => expect(mocks.subscribe).toHaveBeenCalledOnce())
-      expect(view.result.current.state.items[0]?.itemId).toBe('initial')
-      expect(view.result.current.providerSession).toBe(initialProviderSession)
-      const stateBeforeRefresh = view.result.current.state
-
-      act(() => window.dispatchEvent(new Event('focus')))
-      await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
-
-      vi.useFakeTimers()
-      act(() => closes[0]?.())
-      await act(async () => vi.advanceTimersByTimeAsync(750))
-      expect(mocks.subscribe).toHaveBeenCalledTimes(2)
-
-      await act(async () => {
-        delayedRefresh.resolve({
-          ok: true,
-          page: page('tail', [message('stale', 2, 'assistant')], false),
-          providerSession: { key: 'session_id', id: 'provider-stale' }
-        })
-        await delayedRefresh.promise
-        await Promise.resolve()
-      })
-
-      expect(view.result.current.state).toBe(stateBeforeRefresh)
-      expect(view.result.current.state.items[0]?.itemId).toBe('initial')
-      expect(view.result.current.providerSession).toBe(initialProviderSession)
-    } finally {
-      vi.useRealTimers()
-      view.unmount()
-      hasFocus.mockRestore()
-    }
-  })
-
-  it.each(['snapshot', 'reset'] as const)(
-    'drops a delayed refresh after a same-stream %s advances the epoch',
-    async (eventType) => {
-      const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
-      const delayedRefresh = Promise.withResolvers<{
-        ok: true
-        page: AgentSessionHistoryPage
-        providerSession: { key: 'session_id'; id: string }
-      }>()
-      const onEvents: ((event: AgentSessionSubscribeEvent) => void)[] = []
-      const initialProviderSession = { key: 'session_id', id: 'provider-initial' } as const
-      mocks.call
-        .mockResolvedValueOnce({
-          ok: true,
-          page: page('tail', [message('initial', 1, 'assistant')], false),
-          providerSession: initialProviderSession
-        })
-        .mockReturnValueOnce(delayedRefresh.promise)
-      mocks.subscribe.mockImplementation((_target, _params, onEvent) => {
-        onEvents.push(onEvent)
-        return Promise.resolve({ unsubscribe: vi.fn() })
-      })
-
-      const view = renderHook(() =>
-        useStructuredAgentSessionRead({ sessionId: 'session-a', target: LOCAL_TARGET })
-      )
-
-      try {
-        await waitFor(() => expect(onEvents).toHaveLength(1))
-        act(() => window.dispatchEvent(new Event('focus')))
-        await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
-
-        const replacementPage = page(
-          'tail',
-          [message('new-epoch', 2, 'assistant')],
-          false,
-          'epoch-b'
-        )
-        const replacementEvent: AgentSessionSubscribeEvent =
-          eventType === 'reset'
-            ? {
-                type: 'reset',
-                sessionId: 'session-a',
-                reset: 'epoch_changed',
-                page: replacementPage,
-                fence: 2
-              }
-            : { type: 'snapshot', sessionId: 'session-a', page: replacementPage, fence: 2 }
-        act(() => onEvents[0]?.(replacementEvent))
-
-        expect(view.result.current.state.epoch).toBe('epoch-b')
-        expect(view.result.current.state.items[0]?.itemId).toBe('new-epoch')
-        expect(view.result.current.providerSession).toBe(initialProviderSession)
-        const stateAfterReplacement = view.result.current.state
-
-        await act(async () => {
-          delayedRefresh.resolve({
-            ok: true,
-            page: page('tail', [message('stale-refresh', 3, 'assistant')], false),
-            providerSession: { key: 'session_id', id: 'provider-stale' }
-          })
-          await delayedRefresh.promise
-          await Promise.resolve()
-        })
-
-        expect(view.result.current.state).toBe(stateAfterReplacement)
-        expect(view.result.current.state.epoch).toBe('epoch-b')
-        expect(view.result.current.state.items[0]?.itemId).toBe('new-epoch')
-        expect(view.result.current.providerSession).toBe(initialProviderSession)
-      } finally {
-        view.unmount()
-        hasFocus.mockRestore()
-      }
-    }
-  )
 
   it('does no host work for retained inactive sessions', async () => {
     const first = renderHook(() =>
@@ -354,7 +290,7 @@ describe('useStructuredAgentSessionRead history window', () => {
     second.unmount()
   })
 
-  it('preserves cached state while switching away and refreshes once on re-entry', async () => {
+  it('preserves cached state and resumes at the applied cursor on re-entry', async () => {
     const unsubscribe = vi.fn()
     mocks.call.mockImplementation((_target, _method, params) => {
       const sessionId = (params as { sessionId: string }).sessionId
@@ -395,7 +331,81 @@ describe('useStructuredAgentSessionRead history window', () => {
     view.rerender({ active: 'first' })
     expect(view.result.current.first.state.items[0]?.itemId).toBe('session-switch-a-message')
     await waitFor(() => expect(mocks.subscribe).toHaveBeenCalledTimes(3))
-    expect(mocks.call).toHaveBeenCalledTimes(3)
+    expect(mocks.call).toHaveBeenCalledTimes(2)
+    expect(mocks.subscribe.mock.calls[2]?.[1]).toEqual({
+      sessionId: 'session-switch-a',
+      cursor: view.result.current.first.state.cursor
+    })
     expect(unsubscribe).toHaveBeenCalledTimes(2)
+  })
+})
+
+// A workspace delete closes its structured chats while the pane is still mounted, so every read
+// against that session refuses `agent_session_ownership_unknown` until the tab retires. A page that
+// lost that race must not leave the pane holding an error the live transport is about to clear.
+describe('useStructuredAgentSessionRead older page failures', () => {
+  afterEach(cleanup)
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetStructuredAgentSessionReadOwnersForTests()
+    mocks.subscribe.mockResolvedValue({ unsubscribe: vi.fn() })
+  })
+
+  function refusal(code: string): Error & { code: string } {
+    const error = new Error(code) as Error & { code: string }
+    error.name = 'RuntimeRpcCallError'
+    error.code = code
+    return error
+  }
+
+  const tailItems = Array.from({ length: 300 }, (_, index) =>
+    message(`tail-${index}`, 301 + index, 'assistant')
+  )
+
+  async function loadedTailThatRefusesOlder(error: Error) {
+    let outcome = ''
+    mocks.call
+      .mockResolvedValueOnce({ ok: true, page: page('tail', tailItems, true) })
+      .mockRejectedValueOnce(error)
+    const { result } = renderHook(() =>
+      useStructuredAgentSessionRead({ sessionId: 'session-a', target: LOCAL_TARGET })
+    )
+    await waitFor(() => expect(result.current.state.hasOlder).toBe(true))
+    await act(async () => {
+      outcome = await result.current.loadOlder()
+    })
+    return { result, outcome }
+  }
+
+  // A failed older page is the list's to retry; it must never replace the loaded conversation.
+  it.each([
+    ['a closed session', refusal('agent_session_ownership_unknown')],
+    ['any other reason', new Error('journal read failed')]
+  ])(
+    'keeps the conversation and reports failed when an older page fails for %s',
+    async (_case, error) => {
+      const { result, outcome } = await loadedTailThatRefusesOlder(error)
+      expect(outcome).toBe('failed')
+      expect(result.current.state.status).not.toBe('error')
+      expect(result.current.state.error).toBeUndefined()
+      expect(result.current.state.items).toHaveLength(300)
+      expect(result.current.loadingOlder).toBe(false)
+    }
+  )
+
+  it('starts a new paging generation when the host re-sends its snapshot', async () => {
+    const { result } = await loadedTailThatRefusesOlder(new Error('journal read failed'))
+    const before = result.current.olderHistoryGeneration
+    const onEvent = mocks.subscribe.mock.calls.at(-1)?.[2]
+    act(() => {
+      onEvent?.({
+        type: 'snapshot',
+        sessionId: 'session-a',
+        page: page('tail', tailItems, true),
+        fence: 0
+      })
+    })
+    expect(result.current.olderHistoryGeneration).toBeGreaterThan(before)
   })
 })

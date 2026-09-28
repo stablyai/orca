@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import {
-  hasExplicitTuiAgentArgs,
-  hasExplicitTuiLaunchCustomization,
-  hasSemanticallyNonEmptyAgentArgs,
+  hasExplicitTuiLaunchCommand,
   resolveAgentLaunchRoute,
   structuredAgentLaunchSupported
 } from './agent-launch-routing'
@@ -58,10 +56,26 @@ describe('resolveAgentLaunchRoute', () => {
     )
   })
 
-  it('keeps editable drafts on the terminal-backed native chat path', () => {
+  it('routes editable drafts to the structured chat composer', () => {
     expect(route({ launchText: 'reviewable context', promptDelivery: 'draft' })).toBe(
-      'legacy-native-chat'
+      'structured-native-chat'
     )
+  })
+
+  // Why: the terminal mirror gate caps a draft at forty lines because a TUI cannot clear more;
+  // the structured composer has no such limit and must be chosen before that gate runs.
+  it('routes a draft longer than the terminal mirror cap to structured chat', () => {
+    const sixtyLineDraft = Array.from({ length: 60 }, (_, i) => `line ${i + 1}`).join('\n')
+    expect(route({ launchText: sixtyLineDraft, promptDelivery: 'draft' })).toBe(
+      'structured-native-chat'
+    )
+    expect(
+      route({
+        launchText: sixtyLineDraft,
+        promptDelivery: 'draft',
+        settings: { ...settings, experimentalStructuredNativeChat: false }
+      })
+    ).toBe('terminal-tui')
   })
 
   it('preserves toggle-off and terminal-default behavior', () => {
@@ -80,7 +94,7 @@ describe('resolveAgentLaunchRoute', () => {
     // openclaude and grok render native chat but have no structured adapter.
     expect(route({ agent: 'openclaude' })).toBe('legacy-native-chat')
     expect(route({ agent: 'grok' })).toBe('legacy-native-chat')
-    expect(route({ requiresTuiLaunchCustomization: true })).toBe('legacy-native-chat')
+    expect(route({ requiresTuiLaunchCommand: true })).toBe('legacy-native-chat')
   })
 
   it.each([
@@ -97,6 +111,9 @@ describe('resolveAgentLaunchRoute', () => {
     }
   )
 
+  // Why floating is here and not with the structured kinds: it has no workspace a session can
+  // be filed under, but the chat view is a pane-level rendering the panel already hosts, so the
+  // chat default still applies — terminal-backed, not structured.
   it('keeps floating, WSL, and repair-required launches terminal-backed', () => {
     expect(route({ workspaceKind: 'floating' })).toBe('legacy-native-chat')
     expect(route({ agent: 'claude', workspaceKind: 'floating' })).toBe('legacy-native-chat')
@@ -131,21 +148,13 @@ describe('resolveAgentLaunchRoute', () => {
     ).toBe('legacy-native-chat')
   })
 
-  it('normalizes semantically empty argument and settings customization', () => {
-    expect(hasSemanticallyNonEmptyAgentArgs('  \n\t')).toBe(false)
-    expect(
-      hasExplicitTuiLaunchCustomization(
-        { agentCmdOverrides: {}, agentDefaultArgs: { codex: '   ' }, agentDefaultEnv: {} },
-        'codex'
-      )
-    ).toBe(false)
-  })
-
-  it('does not classify the resolved default TUI args as customization', () => {
-    expect(hasExplicitTuiAgentArgs('codex', '--dangerously-bypass-approvals-and-sandbox')).toBe(
+  it('treats a whitespace-only command override as no override', () => {
+    expect(hasExplicitTuiLaunchCommand({ agentCmdOverrides: { codex: '   ' } }, 'codex')).toBe(
       false
     )
-    expect(hasExplicitTuiAgentArgs('codex', '--model gpt-5.6-sol')).toBe(true)
+    expect(
+      hasExplicitTuiLaunchCommand({ agentCmdOverrides: { codex: 'codex-nightly' } }, 'codex')
+    ).toBe(true)
   })
 })
 

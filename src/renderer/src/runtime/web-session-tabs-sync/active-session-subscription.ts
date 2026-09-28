@@ -6,7 +6,6 @@ import { getRuntimeEnvironmentRevision } from '../runtime-environment-revision'
 import { recoverWebSessionTerminalOrphansBeforeApply } from '../web-session-terminal-orphan-recovery'
 import { installWindowVisibilitySubscriptionParking } from '../window-visibility-subscription-parking'
 import {
-  beginWebSessionTabsSnapshotRecovery,
   recordReceivedWebSessionTabsSnapshot,
   shouldApplyRecoveredWebSessionTabsSnapshot
 } from './tracking'
@@ -36,6 +35,11 @@ import {
   shouldSkipWebRuntimeWakeTerminalRespawn
 } from '../web-runtime-wake-terminal-respawn'
 import { createWebRuntimeSessionTerminal } from '../web-runtime-session'
+import {
+  isWebRuntimeInitialTerminalBootstrapInFlight,
+  releaseWebRuntimeInitialTerminalBootstrapOnMirrorFrame
+} from '../web-runtime-initial-terminal-bootstrap'
+import { dispatchWebRuntimeInitialTerminalBootstrap } from '../web-runtime-initial-terminal-bootstrap-dispatch'
 import { toRuntimeWorktreeSelector } from '../runtime-worktree-selector'
 import type { SessionTabsStreamEvent } from './state'
 
@@ -113,7 +117,6 @@ export function installActiveSessionTabsSubscription({
       environmentId,
       {
         expectedEnvironmentPairingRevision: activeWorktreeRuntimePairingRevision,
-        expectedRuntimeId: runtimeId,
         getCurrentState: () => useAppStore.getState()
       }
     )
@@ -144,9 +147,17 @@ export function installActiveSessionTabsSubscription({
     const bootstrap = shouldBootstrapInitialWebRuntimeTerminal({
       event: recoveredEvent,
       activeWorktreeId,
-      requestedInitialTerminal,
+      // Why both: the closure flag records that this subscription already owned a create, so the
+      // same closure never seeds twice even once the shared latch is released; a create that threw
+      // never set it, so a later frame may retry. The shared latch is what survives the effect
+      // re-runs a workspace switch triggers — without it a second closure seeds a second terminal
+      // while the first create is still in flight (STA-6173).
+      requestedInitialTerminal:
+        requestedInitialTerminal ||
+        isWebRuntimeInitialTerminalBootstrapInFlight(environmentId, activeWorktreeId),
       snapshotIsFresh: decision.apply,
-      localTerminalCount
+      localTerminalCount,
+      hasPersistedTerminalState: Object.hasOwn(syncState.tabsByWorktree, activeWorktreeId)
     })
     const respawn = shouldRespawnWebRuntimeTerminalAfterWake({
       event: recoveredEvent,
@@ -184,15 +195,18 @@ export function installActiveSessionTabsSubscription({
         event.type === 'updated' && !replayed
       )
       visibilitySnapshotAccepted.current(environmentId, recovered, receivedFrame, runtimeId)
+      // Why here and only on an applied frame: this is the mirror's answer about the worktree. A
+      // bootstrap whose create resolved without a row was parked until that answer arrived; a
+      // pending create keeps its claim (see the latch module). The predicate above already ran with
+      // the latch held, so this frame never seeds — the next one decides on real state.
+      releaseWebRuntimeInitialTerminalBootstrapOnMirrorFrame(environmentId, recovered.worktree)
     }
     try {
       if (isCurrent() && bootstrap) {
-        requestedInitialTerminal = true
-        await createWebRuntimeSessionTerminal({
-          worktreeId: activeWorktreeId,
-          environmentId,
-          activate: true
-        })
+        // Latch claim, create, and row-conditional release live in the dispatch helper.
+        if (await dispatchWebRuntimeInitialTerminalBootstrap(environmentId, activeWorktreeId)) {
+          requestedInitialTerminal = true
+        }
       } else if (isCurrent() && respawn && beginWebRuntimeWakeTerminalRespawn(activeWorktreeId)) {
         requestedRespawnAfterWake = true
         await createWebRuntimeSessionTerminal({
@@ -249,11 +263,6 @@ export function installActiveSessionTabsSubscription({
                 runtimeId
               )
               visibilitySnapshotReceipt.current(environmentId, event, frame, runtimeId)
-              const finish = beginWebSessionTabsSnapshotRecovery(
-                environmentId,
-                event.worktree,
-                frame
-              )
               void applyActiveSnapshot(event, response, isCurrent, frame, runtimeId)
                 .catch((error) => {
                   if (isCurrent()) {
@@ -262,7 +271,6 @@ export function installActiveSessionTabsSubscription({
                   return null
                 })
                 .then((settle) => {
-                  finish()
                   if (isCurrent()) {
                     settle?.()
                   }

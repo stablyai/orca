@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LinuxPackageInstallRecovery, UpdateStatus } from '../../../shared/update-status-types'
 import { useAppStore } from '../store'
 import { UpdateCard } from './UpdateCard'
+import { NotificationCardStack } from './NotificationCardStack'
 
 const openUrl = vi.fn()
 const download = vi.fn()
@@ -31,7 +32,11 @@ function renderWithInitialStatus(updateStatus: UpdateStatus): RenderResult {
     updateCardCollapsed: false,
     updateReassuranceSeen: true
   })
-  return render(<UpdateCard />)
+  return render(
+    <NotificationCardStack>
+      <UpdateCard />
+    </NotificationCardStack>
+  )
 }
 
 function renderAfterAvailableStatus(): RenderResult {

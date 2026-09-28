@@ -155,7 +155,7 @@ export async function adoptLiveWorkspacePtySurfaces(
       continue
     }
     const owner = surfaceOwners?.get(ptyId)
-    if (owner) {
+    if (owner && owner !== 'unowned') {
       if (adoptHostOwnedSurface(getState, worktreeId, owner, materializedTabIds)) {
         surfaced = true
       } else {
@@ -165,7 +165,7 @@ export async function adoptLiveWorkspacePtySurfaces(
     }
     // Why: only the execution host can prove a live PTY is unowned, and minting
     // on anything weaker forks a running agent onto a second empty surface.
-    if (!surfaceOwners || surfaceOwners.has(ptyId)) {
+    if (owner !== 'unowned') {
       declinedPtyIds.push(ptyId)
       continue
     }

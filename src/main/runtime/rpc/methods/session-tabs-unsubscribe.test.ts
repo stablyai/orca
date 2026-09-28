@@ -67,6 +67,7 @@ function runtimeWithCleanup(
   cleanupSubscription: ReturnType<typeof vi.fn>,
   cleanupSubscriptionsByPrefix = vi.fn()
 ): OrcaRuntimeService {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the unsubscribe methods reach only these members; a missing one throws and fails the test.
   return {
     getRuntimeId: () => 'test-runtime',
     listMobileSessionTabs: vi.fn().mockResolvedValue({
@@ -79,7 +80,8 @@ function runtimeWithCleanup(
       tabs: []
     }),
     cleanupSubscription,
-    cleanupSubscriptionsByPrefix
+    cleanupSubscriptionsByPrefix,
+    getSubscriptionRegistrationVersion: () => 0
   } as unknown as OrcaRuntimeService
 }
 

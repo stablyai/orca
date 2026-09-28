@@ -312,9 +312,7 @@ describe('RuntimeBrowserCommands client-hosted routing', () => {
       .spyOn(registry, 'publishClientPage')
       .mockImplementation((input) => {
         order.push('publish')
-        return Reflect.apply(RuntimeBrowserPageRegistry.prototype.publishClientPage, registry, [
-          input
-        ])
+        return RuntimeBrowserPageRegistry.prototype.publishClientPage.call(registry, input)
       })
     const notifyHeadlessBrowserSessionTabsChanged = vi.fn(() => order.push('notify'))
     const issueClientPageCommand = vi.fn(() => {

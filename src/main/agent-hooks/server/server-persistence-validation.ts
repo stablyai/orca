@@ -3,10 +3,14 @@ import { createHash } from 'node:crypto'
 import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
 import {
   normalizeAgentStatusPayload,
+  type AgentMainAgentStatus,
   type ParsedAgentStatusPayload
 } from '../../../shared/agent-status-types'
 import { isAgentHookSource } from '../../../shared/agent-hook-relay'
-import { normalizeClaudePromptId } from '../../../shared/agent-hook-listener/listener-limits'
+import {
+  normalizeClaudePromptId,
+  normalizeGrokPromptId
+} from '../../../shared/agent-hook-listener/listener-limits'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { AgentHookAuthorityEvidence, EnrichedAgentHookEventPayload } from './server-types'
 import { isValidPaneKey, isValidPiProviderSessionOnly } from './server-status-identity'
@@ -28,6 +32,27 @@ export function dropHydratedIdleClaudeSubagents(
   }
 }
 
+/** Rows written before `mainAgent` existed persisted `claudeLeadBoundaryChildOnly: true` instead: the
+ *  main agent had settled and child agents alone held the row `working`. That is `mainAgent.state === 'done'`
+ *  stored as a boolean, so it only fills an absent `mainAgent`; a row carrying both keeps `mainAgent`. The
+ *  flag stays readable until every user's file has been rewritten without it. */
+function legacyChildOnlyBoundaryMainAgent(
+  payload: ParsedAgentStatusPayload,
+  record: Record<string, unknown>,
+  stateStartedAt: number
+): AgentMainAgentStatus | undefined {
+  if (
+    payload.mainAgent !== undefined ||
+    record.claudeLeadBoundaryChildOnly !== true ||
+    payload.agentType !== 'claude'
+  ) {
+    return undefined
+  }
+  // Why: the gated working row stamps the main agent's end as `turnCompletedAt`; the row clock is the
+  // nearest fact an older row that lacks it can offer.
+  return { state: 'done', stateStartedAt: payload.turnCompletedAt ?? stateStartedAt }
+}
+
 export function sanitizeHydratedEntry(
   paneKey: string,
   rawEntry: unknown
@@ -41,6 +66,10 @@ export function sanitizeHydratedEntry(
   }
   const record = rawEntry as Record<string, unknown>
   if (record.paneKey !== paneKey) {
+    return null
+  }
+  // Why: structured rows are never written; the host republishes the live projection on restore.
+  if (record.structuredHost !== undefined) {
     return null
   }
   const tabId = record.tabId
@@ -77,10 +106,25 @@ export function sanitizeHydratedEntry(
   } else {
     return null
   }
-  const payload = normalizeAgentStatusPayload(record.payload)
-  if (!payload) {
+  const normalizedPayload = normalizeAgentStatusPayload(record.payload)
+  if (!normalizedPayload) {
     return null
   }
+  const legacyBoundaryMainAgent = legacyChildOnlyBoundaryMainAgent(
+    normalizedPayload,
+    record,
+    stateStartedAt
+  )
+  const payload = legacyBoundaryMainAgent
+    ? { ...normalizedPayload, mainAgent: legacyBoundaryMainAgent }
+    : normalizedPayload
+  const claudeRunningNonAgentTask =
+    typeof record.claudeRunningNonAgentTask === 'boolean'
+      ? record.claudeRunningNonAgentTask
+      : // Why: the legacy flag was only ever written while no shell ran beside the children.
+        legacyBoundaryMainAgent
+        ? false
+        : undefined
   const providerSession = normalizeAgentProviderSession(record.providerSession) ?? undefined
   const providerSessionOnly = record.providerSessionOnly === true
   const retainedForLiveness = record.retainedForLiveness === true
@@ -96,7 +140,11 @@ export function sanitizeHydratedEntry(
   }
   const source = isAgentHookSource(record.source) ? record.source : undefined
   const providerPromptId =
-    source === 'claude' ? normalizeClaudePromptId(record.providerPromptId) : undefined
+    source === 'claude'
+      ? normalizeClaudePromptId(record.providerPromptId)
+      : source === 'grok'
+        ? normalizeGrokPromptId(record.providerPromptId)
+        : undefined
   const compactTrigger =
     source === 'claude' && (record.compactTrigger === 'manual' || record.compactTrigger === 'auto')
       ? record.compactTrigger
@@ -110,12 +158,13 @@ export function sanitizeHydratedEntry(
     hasExplicitPrompt: record.hasExplicitPrompt === true ? true : undefined,
     hookEventName: typeof record.hookEventName === 'string' ? record.hookEventName : undefined,
     providerPromptId,
+    grokPromptBoundary: source === 'grok' && record.grokPromptBoundary === true ? true : undefined,
     compactTrigger,
     toolUseId: typeof record.toolUseId === 'string' ? record.toolUseId : undefined,
     toolAgentId: typeof record.toolAgentId === 'string' ? record.toolAgentId : undefined,
     teammateName: typeof record.teammateName === 'string' ? record.teammateName : undefined,
     toolAgentType: typeof record.toolAgentType === 'string' ? record.toolAgentType : undefined,
-    claudeLeadBoundaryChildOnly: record.claudeLeadBoundaryChildOnly === true ? true : undefined,
+    ...(claudeRunningNonAgentTask !== undefined ? { claudeRunningNonAgentTask } : {}),
     providerSession,
     providerSessionOnly: providerSessionOnly ? true : undefined,
     retainedForLiveness: retainedForLiveness ? true : undefined,

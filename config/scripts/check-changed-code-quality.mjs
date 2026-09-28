@@ -8,6 +8,11 @@ import { resolveOxlintInvocation } from './oxlint-cli-invocation.mjs'
 
 const SOURCE_FILE_PATTERN = /\.(?:[cm]?[jt]sx?)$/
 const ROOT_CODE_QUALITY_IGNORED_PREFIXES = ['cloud/']
+const CASTING_RULE = 'typescript/consistent-type-assertions'
+const CASTING_DISABLE_PATTERN =
+  /\/[/*]\s*(?:oxlint|eslint)-disable(?:-next-line|-line)?\s[^\n]*typescript\/consistent-type-assertions/
+const ANTI_SLOP_DISABLE_PATTERN =
+  /\/[/*]\s*(?:oxlint|eslint)-disable(?:-next-line|-line)?\s[^\n]*\banti-slop\//
 export const OXLINT_SCANS = [
   {
     // Why: no --config, so Oxlint keeps discovering nested configs. Pinning the root
@@ -16,12 +21,33 @@ export const OXLINT_SCANS = [
     args: ['--report-unused-disable-directives-severity', 'warn']
   },
   {
+    label: 'casting code quality',
+    args: ['--config', 'config/oxlint-code-quality-casting.json']
+  },
+  {
+    // Why the allow: CI's `audit:code-quality:native` runs before the mobile install, so it can
+    // never see a cycle inside mobile/ — locally, where mobile/node_modules exists, it would.
+    label: 'focused plugins',
+    args: [
+      '--config',
+      'config/oxlint-code-quality-native-plugins.json',
+      '--allow',
+      'import/no-cycle'
+    ]
+  },
+  {
     label: 'type-aware code quality',
     args: ['--type-aware', '--config', 'config/oxlint-code-quality-type-aware.json']
   },
   {
     label: 'React Doctor',
     args: ['--config', 'config/oxlint-react-doctor.json']
+  },
+  {
+    // Why changed-lines only: the renderer carries ~4.7k pre-existing restyle/raw-color
+    // findings. Gating added lines holds the line without a repo-wide migration.
+    label: 'design system',
+    args: ['--config', 'config/oxlint-design-system.json']
   }
 ]
 
@@ -110,9 +136,14 @@ function resolveBase(root, requestedBase) {
 }
 
 export function collectAddedLineRanges(root, requestedBase) {
-  const base = resolveBase(root, requestedBase)
-  const mergeBase = runGit(root, ['merge-base', base, 'HEAD']).trim()
-  const comparisonBase = resolvePullRequestDiffBase(root, mergeBase)
+  // On a pull_request checkout HEAD is the merge commit, so its first parent is the base side and
+  // no merge base has to be computed. Resolving it first is what lets CI checkout shallowly: the
+  // payload base SHA can lag HEAD^1 by any number of commits and need not be in the graph at all.
+  // Off that ref (local runs) the requested base is an arbitrary branch tip, so the merge base is
+  // still what isolates this branch's own lines.
+  const comparisonBase =
+    resolvePullRequestDiffBase(root, null) ??
+    runGit(root, ['merge-base', resolveBase(root, requestedBase), 'HEAD']).trim()
   const changedFiles = splitNullDelimited(
     runGit(root, ['diff', '--name-only', '-z', '--diff-filter=ACMRTUB', comparisonBase, '--'])
   )
@@ -148,7 +179,7 @@ export function collectAddedLineRanges(root, requestedBase) {
     const lineCount = readFileSync(absolutePath, 'utf8').split(/\r?\n/).length
     rangesByFile.set(file, [{ start: 1, end: lineCount }])
   }
-  return { base, comparisonBase, rangesByFile }
+  return { comparisonBase, rangesByFile }
 }
 
 function parseOxlintOutput(stdout, label) {
@@ -303,6 +334,64 @@ function printDiagnostic(diagnostic, root) {
   console.error(`${file}:${line} ${code}: ${diagnostic.message}`)
 }
 
+// Why: only the casting scan enforces `assertionStyle: never`, so under the root config an
+// `as` cast is legal and the SAFETY: directive AGENTS.md mandates reads as unused. The untyped
+// scan reports that as a warning, which the gate counts, so exempt exactly those directives.
+export function isCastingDirectiveUnusedWarning(diagnostic, root) {
+  if (!/^Unused (?:oxlint|eslint)-disable/.test(diagnostic.message ?? '')) {
+    return false
+  }
+  return (diagnostic.labels ?? []).some((label) =>
+    diagnosticHighlightedLines(root, diagnostic.filename, label.span).some((line) =>
+      CASTING_DISABLE_PATTERN.test(line)
+    )
+  )
+}
+
+// Why: the anti-slop rules live in a JS plugin that only config/oxlint-anti-slop.json loads, so
+// the root scan never sees those rule names and reports every anti-slop suppression as unused.
+// `audit:anti-slop` is the scan that enforces them.
+export function isAntiSlopDirectiveUnusedWarning(diagnostic, root) {
+  if (!/^Unused (?:oxlint|eslint)-disable/.test(diagnostic.message ?? '')) {
+    return false
+  }
+  return (diagnostic.labels ?? []).some((label) =>
+    diagnosticHighlightedLines(root, diagnostic.filename, label.span).some((line) =>
+      ANTI_SLOP_DISABLE_PATTERN.test(line)
+    )
+  )
+}
+
+// Why: oxlint cannot see the AGENTS.md requirement that every casting suppression carry a
+// line-specific SAFETY: rationale, so the directive text itself is checked over added lines.
+export function findCastingDirectivesMissingSafety(root, rangesByFile) {
+  const findings = []
+  for (const [file, ranges] of rangesByFile) {
+    const absolutePath = path.join(root, file)
+    if (!existsSync(absolutePath)) {
+      continue
+    }
+    readFileSync(absolutePath, 'utf8')
+      .split(/\r?\n/)
+      .forEach((text, index) => {
+        const line = index + 1
+        if (
+          CASTING_DISABLE_PATTERN.test(text) &&
+          !text.includes('SAFETY:') &&
+          overlapsAddedLines(line, line, ranges)
+        ) {
+          findings.push({
+            filename: file,
+            code: `${CASTING_RULE} (missing SAFETY:)`,
+            message: `Suppressing ${CASTING_RULE} requires a line-specific "SAFETY:" explanation.`,
+            labels: [{ span: { line } }]
+          })
+        }
+      })
+  }
+  return findings
+}
+
 function isSuppressedDiagnostic(diagnostic, root) {
   const files = SUPPRESSED_REACT_DOCTOR_DIAGNOSTICS.get(diagnostic.code)
   return files?.has(normalizedDiagnosticPath(root, diagnostic.filename)) ?? false
@@ -330,10 +419,12 @@ export function main(
   root = process.cwd(),
   requestedBase = process.argv.slice(2).find((argument) => argument !== '--')
 ) {
-  const { base, comparisonBase, rangesByFile } = collectAddedLineRanges(root, requestedBase)
+  const { comparisonBase, rangesByFile } = collectAddedLineRanges(root, requestedBase)
   const files = [...rangesByFile.keys()]
   if (files.length === 0) {
-    console.log(`Changed-code quality gate: no changed JavaScript or TypeScript since ${base}.`)
+    console.log(
+      `Changed-code quality gate: no changed JavaScript or TypeScript since ${comparisonBase.slice(0, 12)}.`
+    )
     return 0
   }
 
@@ -344,6 +435,8 @@ export function main(
     const diagnostics = runOxlintScan(root, scan, files).filter(
       (diagnostic) =>
         !isSuppressedDiagnostic(diagnostic, root) &&
+        !isCastingDirectiveUnusedWarning(diagnostic, root) &&
+        !isAntiSlopDirectiveUnusedWarning(diagnostic, root) &&
         diagnosticTouchesAddedLines(diagnostic, rangesByFile, root, baseBlocks)
     )
     for (const diagnostic of diagnostics) {
@@ -354,6 +447,15 @@ export function main(
       `${scan.label}: ${diagnostics.length} new finding(s) across ${files.length} changed file(s).`
     )
   }
+
+  const missingSafety = findCastingDirectivesMissingSafety(root, rangesByFile)
+  for (const diagnostic of missingSafety) {
+    printDiagnostic(diagnostic, root)
+  }
+  failures += missingSafety.length
+  console.log(
+    `casting SAFETY: rationale: ${missingSafety.length} new finding(s) across ${files.length} changed file(s).`
+  )
 
   if (failures > 0) {
     console.error(

@@ -100,7 +100,10 @@ describe('liveness', () => {
 
 describe('stopping a running orcad', () => {
   it('sends SIGTERM and never SIGKILL', () => {
-    const command = stopOrcadCommand(posix, SPEC.remoteInstallDir, { waitSeconds: 20 })
+    const command = stopOrcadCommand(posix, SPEC.remoteInstallDir, {
+      waitSeconds: 20,
+      nodePath: SPEC.nodePath
+    })
     expect(command).toContain('kill -TERM')
     for (const kill of ['kill -9', 'kill -KILL', 'kill -SIGKILL', 'pkill']) {
       expect(command).not.toContain(kill)
@@ -110,9 +113,10 @@ describe('stopping a running orcad', () => {
   it.each([
     ['STOPPED', 'stopped', true],
     ['ALREADY_EXITED', 'already-exited', true],
-    ['NO_PID', 'no-pid', true],
+    ['NO_PID', 'no-pid', false],
     ['STILL_RUNNING', 'still-running', false],
     ['SIGNAL_FAILED', 'signal-failed', false],
+    ['UNKNOWN', 'unknown', false],
     ['', 'unknown', false]
   ])('parses %s and frees the host = %s', (output, expected, frees) => {
     expect(parseOrcadStopOutcome(output)).toBe(expected)

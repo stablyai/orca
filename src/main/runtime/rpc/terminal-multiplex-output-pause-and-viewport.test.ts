@@ -309,7 +309,11 @@ describe('terminal multiplex RPC', () => {
       expect(runtime.sendTerminal).toHaveBeenCalledWith(
         'terminal-1',
         { text: 'x', enter: false, interrupt: false },
-        { reserveWrite: expect.any(Function), afterWrite: expect.any(Function) }
+        {
+          inputKind: 'driving',
+          reserveWrite: expect.any(Function),
+          afterWrite: expect.any(Function)
+        }
       )
     )
     expect(beginMobileInputFloor.mock.invocationCallOrder[0]).toBeLessThan(

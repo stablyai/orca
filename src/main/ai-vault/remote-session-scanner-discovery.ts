@@ -22,6 +22,11 @@ export async function discoverRemoteSourceCandidates(args: {
   context: RemoteScannerContext
   issues: AiVaultScanIssue[]
 }): Promise<RemoteSessionCandidate[]> {
+  if (args.source.discover) {
+    const files = await args.source.discover(args.context, args.issues)
+    throwIfAiVaultScanCancelled(args.context.signal)
+    return files.map((file) => ({ source: args.source, file }))
+  }
   const walked = args.source.fixedChildFileSegments
     ? await listRemoteFixedChildFiles(args.source, args.context, args.issues)
     : await walkRemoteSessionFiles(args.source, args.context, args.issues)

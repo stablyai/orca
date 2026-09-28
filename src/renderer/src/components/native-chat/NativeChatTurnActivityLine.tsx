@@ -1,13 +1,25 @@
 import { Loader2 } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
-import type { NativeChatTurnActivity } from './native-chat-turn-activity'
+import type { NativeChatTurnActivity } from '../../../../shared/native-chat-turn-activity'
+import { describeNativeChatActiveTurnLabel } from '../../../../shared/native-chat-turn-status'
 
+/** The live turn's tail line: a spinner plus what the turn is doing right now —
+ *  the provider's activity text, else that it is reasoning, else plain "Working…".
+ *  The clock lives in the turn bar under the user's message, not here. */
 export function NativeChatTurnActivityLine({
-  activity
+  activity,
+  thinking
 }: {
   activity?: NativeChatTurnActivity | null
+  thinking: boolean
 }): React.JSX.Element {
-  const label = activity?.text ?? translate('components.native-chat.status.working', 'Working…')
+  const resolved = describeNativeChatActiveTurnLabel({ activityText: activity?.text, thinking })
+  const label =
+    resolved.source === 'activity'
+      ? resolved.text
+      : resolved.key === 'thinking'
+        ? translate('components.native-chat.status.thinking', 'Thinking')
+        : translate('components.native-chat.status.working', 'Working…')
 
   return (
     <div

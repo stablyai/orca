@@ -20,8 +20,12 @@ export function getUsageProviderAccountsSectionId(
       return 'accounts-grok'
     case 'kiro':
       return 'accounts-kiro'
+    case 'cursor':
+      return 'accounts-cursor'
     case 'kimi':
+    case 'zcode':
       // Why: Orca must not mutate Kimi's CLI-owned credential lifecycle.
+      // ZCode likewise owns its Coding Plan credential in ~/.zcode/cli/config.json.
       return null
   }
 }

@@ -1,0 +1,52 @@
+diff --git a/mobile/scripts/mock-server-rpc-handlers.ts b/mobile/scripts/mock-server-rpc-handlers.ts
+index f67db5bc2f2..5049bd9d143 100644
+--- a/mobile/scripts/mock-server-rpc-handlers.ts
++++ b/mobile/scripts/mock-server-rpc-handlers.ts
+@@ -165,17 +165,37 @@ export function handleRequest(
+       respond(success(request.id, { repos: FAKE_REPOS }))
+       break
+ 
+-    case 'settings.get':
+-      respond(
+-        success(request.id, {
+-          settings: {
+-            defaultTuiAgent: 'codex',
+-            disabledTuiAgents: [],
+-            agentCmdOverrides: {}
+-          }
+-        })
+-      )
++    case 'settings.get': {
++      // MOCK_SETTINGS_GET_MODE drives runtime validation of the refusal/null/absent branches.
++      const mode = process.env.MOCK_SETTINGS_GET_MODE ?? 'ok'
++      if (mode === 'refused') {
++        respond(error(request.id, 'refused', 'settings refused'))
++      } else if (mode === 'method-not-found') {
++        respond(error(request.id, 'method_not_found', 'Unknown method'))
++      } else if (mode === 'null-result') {
++        respond(success(request.id, null))
++      } else if (mode === 'absent-result') {
++        const resp = success(request.id, undefined)
++        delete (resp as { result?: unknown }).result
++        respond(resp)
++      } else if (mode === 'absent-settings') {
++        respond(success(request.id, {}))
++      } else if (mode === 'drop') {
++        // Mid-request disconnect: never answer, then close the socket.
++        setTimeout(() => ws.close(), 50)
++      } else {
++        respond(
++          success(request.id, {
++            settings: {
++              defaultTuiAgent: 'codex',
++              disabledTuiAgents: [],
++              agentCmdOverrides: {}
++            }
++          })
++        )
++      }
+       break
++    }
+ 
+     case 'settings.getTerminalQuickCommands':
+       respond(success(request.id, { terminalQuickCommands: fakeQuickCommands }))

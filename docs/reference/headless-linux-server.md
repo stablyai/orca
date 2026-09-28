@@ -231,12 +231,42 @@ Replace `100.64.1.20` with the LAN, Tailscale, tunnel, or public hostname that
 clients should use.
 
 `KillMode=mixed` sends the graceful stop signal only to Orca's main process,
-then retains systemd's cgroup-wide `SIGKILL` fallback if shutdown times out.
-This lets Orca keep its owned Xvfb alive until Electron disconnects cleanly.
-It does **not** preserve the detached terminal daemon: the daemon and its PTYs
-remain in `orca-serve.service`'s cgroup and are killed when the stop completes.
-Every `systemctl stop` or `restart` therefore ends live terminals and agent
-processes, even though their persisted layout and terminal history remain.
+then `SIGKILL`s whatever is still in the cgroup the instant that main process
+exits — `TimeoutStopSec` only governs how long systemd waits for the main
+process itself, never a grace window for the cgroup's remains. This lets Orca
+keep its owned Xvfb alive until Electron disconnects cleanly.
+
+The detached terminal daemon is preserved by a different mechanism: it is
+launched through `systemd-run --user --scope`, so it and its PTYs live in their
+own transient `orca-daemon-<launch-nonce>.scope` unit rather than in
+`orca-serve.service`'s cgroup. A `systemctl stop` or `restart` of this unit
+leaves that scope running, so live terminals and agent processes survive the
+restart and the successor adopts them.
+
+That requires a reachable systemd **user** manager for the service account.
+With `User=orca` and no interactive login there is none by default, so enable
+lingering once:
+
+```bash
+sudo loginctl enable-linger orca
+```
+
+Without it — or on a host without systemd as PID 1, or without `systemd-run`
+on `PATH` — the daemon falls back to launching directly inside
+`orca-serve.service`'s cgroup, and is then killed when the stop completes:
+every `systemctl stop` or `restart` ends live terminals and agent processes,
+even though their persisted layout and terminal history remain. Check which
+case a running host is in with the `cgroupUnit` field of the daemon health
+payload: a `orca-daemon-*.scope` value means isolated, `null` means the
+unscoped fallback.
+
+None of this applies inside a Docker container. There the capability probe
+fails closed (no `/run/systemd/system`), but that is the least of it: a
+`docker restart` tears down the container's PID namespace, so no in-container
+setting — lingering, kill mode, or scope — preserves the daemon or its PTYs
+across it. Run the container with `--init` so a real PID 1 reaps exited PTY
+subprocesses; without it, Orca is PID 1 and those children accumulate as
+zombies because nothing reaps them.
 
 Exit status `3` means another process already owns this userData profile, so
 `RestartPreventExitStatus=3` stops the unit instead of retrying a launch that
@@ -315,6 +345,7 @@ WorkingDirectory=/home/orca
 Environment=DISPLAY=:99
 Environment=LIBGL_ALWAYS_SOFTWARE=1
 ExecStart=/opt/orca/orca-linux.AppImage serve --port 6768 --pairing-address 100.64.1.20
+KillMode=mixed
 Restart=on-failure
 RestartPreventExitStatus=3
 RestartSec=5
@@ -322,6 +353,11 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 ```
+
+`KillMode=mixed` matters as much here as in the single-service unit: without it
+the unit silently defaults to `KillMode=control-group`, which `SIGTERM`s the
+whole cgroup at once and then stalls the full `TimeoutStopSec` before the
+`SIGKILL`.
 
 Enable both units:
 
@@ -390,6 +426,10 @@ its own `orca`.
   `ws://` through an HTTPS-only endpoint.
 - Hostnames, IPv4, bracketed IPv6, and raw IPv6 literals are supported. IPv6
   still requires an IPv6-reachable listener/network path.
+- Background push notifications to a paired phone do not fire from a headless
+  server: agent-completion detection runs in the desktop renderer, which is not started in serve
+  mode, so nothing reaches the push gateway even though the phone
+  registers successfully.
 - `xvfb-run` and `dbus-run-session -- xvfb-run` remain valid diagnostic launch
   shapes, but neither should be needed when `Xvfb` is installed and no display
   is configured. Repeated D-Bus messages without a ready block indicate startup
@@ -419,11 +459,16 @@ Two facts make the persisted-state transition predictable:
   state into the current schema and writes it back in the current shape, so a
   forward upgrade needs no manual data step.
 
-These guarantees do not preserve live processes. The service restart kills
-every terminal and agent in its cgroup; an agent conversation may be resumable,
-but its current process and any in-flight command are gone.
+These guarantees preserve live processes only when the daemon is in its own
+`orca-daemon-*.scope`, as reported by `health.terminalDaemon.cgroupUnit`. The
+unscoped fallback remains destructive: a service restart kills every terminal
+and agent in the service cgroup; an agent conversation may be resumable, but
+its current process and any in-flight command are gone. Treat a stop as
+destructive unless `health.terminalDaemon.cgroupUnit` names an
+`orca-daemon-*.scope` on that host.
 
-Immediately before stopping the service, obtain a fresh census as the service's
+When `cgroupUnit` is `null` or unverifiable, immediately before stopping the
+service, obtain a fresh census as the service's
 OS account and home. Use the installer's absolute launcher path so `sudo`'s
 `secure_path` cannot hide a per-user registration:
 `sudo -Hu orca /home/orca/.local/bin/orca-ide terminal list --json`.

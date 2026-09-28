@@ -188,9 +188,9 @@ export function sortWorktreesSmart(
   // Why: `tabHasLivePty` (over `ptyIdsByTabId`) is the source of truth for
   // liveness — slept terminals retain `tab.ptyId` as a wake hint, so reading
   // it directly would falsely keep cold-start ordering off after restart.
-  const hasAnyLivePty = Object.values(tabsByWorktree)
-    .flat()
-    .some((tab) => tabHasLivePty(ptyIdsByTabId, tab.id))
+  const hasAnyLivePty = Object.values(tabsByWorktree).some((tabs) =>
+    tabs.some((tab) => tabHasLivePty(ptyIdsByTabId, tab.id))
+  )
 
   const now = Date.now()
   const labels = buildWorktreeSortLabels(worktrees)

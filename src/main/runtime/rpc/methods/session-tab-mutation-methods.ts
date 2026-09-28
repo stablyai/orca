@@ -1,6 +1,6 @@
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { defineMethod, type RpcAnyMethod } from '../core'
+import { defineMethod } from '../core'
 import {
   assertProjectedSessionTabVisible,
   translateProjectedSessionTabMove
@@ -9,7 +9,7 @@ import { projectSessionTabsForClient } from './session-tabs-inventory'
 import { isStructuredNativeChatEnabled } from './structured-agent-session-policy'
 import { ActivateTab, MoveTab, SetTabProps, UpdatePaneLayout } from './session-tabs-schemas'
 
-export const SESSION_TAB_MUTATION_METHODS: RpcAnyMethod[] = [
+export const SESSION_TAB_MUTATION_METHODS = [
   defineMethod({
     name: 'session.tabs.activate',
     params: ActivateTab,
@@ -99,6 +99,7 @@ export const SESSION_TAB_MUTATION_METHODS: RpcAnyMethod[] = [
         tabId: params.tabId,
         root: params.root,
         expandedLeafId: params.expandedLeafId ?? null,
+        chatLeafId: params.chatLeafId,
         titlesByLeafId: params.titlesByLeafId
       })
     }

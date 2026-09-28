@@ -319,5 +319,28 @@ export type ReleaseBuild = {
 
 /** Newest first, so the picker's first row is always the channel's current tip. */
 export function sortReleaseBuildsNewestFirst(builds: ReleaseBuild[]): ReleaseBuild[] {
-  return [...builds].sort((left, right) => compareAppVersions(right.version, left.version))
+  return [...builds].sort((left, right) => {
+    // Dev build base versions can move backwards when a branch was cut before
+    // the latest main build. Their stamped build time, not semver, is the
+    // meaningful "newest" signal for the picker.
+    const leftStamp = parseDevBuildStamp(left.version)?.getTime() ?? null
+    const rightStamp = parseDevBuildStamp(right.version)?.getTime() ?? null
+    if (leftStamp !== null && rightStamp !== null && leftStamp !== rightStamp) {
+      return rightStamp - leftStamp
+    }
+
+    if (hasDedicatedReleaseRepo(left.channel) && hasDedicatedReleaseRepo(right.channel)) {
+      const leftPublished = left.publishedAt ? Date.parse(left.publishedAt) : Number.NaN
+      const rightPublished = right.publishedAt ? Date.parse(right.publishedAt) : Number.NaN
+      if (
+        Number.isFinite(leftPublished) &&
+        Number.isFinite(rightPublished) &&
+        leftPublished !== rightPublished
+      ) {
+        return rightPublished - leftPublished
+      }
+    }
+
+    return compareAppVersions(right.version, left.version)
+  })
 }

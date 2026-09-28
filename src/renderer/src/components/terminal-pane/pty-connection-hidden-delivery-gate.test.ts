@@ -17,6 +17,11 @@ import {
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
 
+/** What remountTerminalTabForRecovery answers now that it reports admission. */
+const REMOUNTED = { remounted: true as const, generation: 1 }
+const TAB_MISSING = { remounted: false as const, declinedBy: 'tab-missing' as const }
+const AUTOMATIC_REQUEST = expect.objectContaining({ trigger: 'automatic' })
+
 const {
   resetAndRefreshAllTerminalWebglAtlases,
   scheduleTerminalWebglAtlasRecovery,
@@ -300,7 +305,7 @@ describe('connectPanePty', () => {
     it('kicks pane recovery when reveal finds the write pipeline certified dead', async () => {
       // 2026-07-13 fossil-pane incident: bytes drop while hidden, pipeline certified dead, cert recovery empty — reveal must re-kick it.
       enableMainAuthority()
-      const remountTerminalTabForRecovery = vi.fn<(tabId: string) => boolean>(() => true)
+      const remountTerminalTabForRecovery = vi.fn(() => REMOUNTED)
       mockStoreState = { ...mockStoreState, remountTerminalTabForRecovery } as StoreState
       const { _resetTerminalPaneRecoveryForTests } = await import('./terminal-pane-recovery')
       _resetTerminalPaneRecoveryForTests()
@@ -319,7 +324,7 @@ describe('connectPanePty', () => {
       dataCallback('hidden output\r\n', { seq: 16, rawLength: 16 })
 
       // Pipeline dies while hidden; certification-time recovery finds no remountable tab (budget unconsumed, no retry timer).
-      remountTerminalTabForRecovery.mockReturnValueOnce(false)
+      remountTerminalTabForRecovery.mockReturnValueOnce(TAB_MISSING as never)
       const ackCredit = vi.fn()
       const { writeTerminalOutput } =
         await import('@/lib/pane-manager/pane-terminal-output-scheduler')
@@ -345,7 +350,7 @@ describe('connectPanePty', () => {
       // Restore stays skipped (a dead pipeline can't parse the snapshot), but recovery got exactly one re-kick.
       expect(getMainBufferSnapshot).not.toHaveBeenCalled()
       expect(remountTerminalTabForRecovery).toHaveBeenCalledTimes(2)
-      expect(remountTerminalTabForRecovery).toHaveBeenLastCalledWith('tab-1')
+      expect(remountTerminalTabForRecovery).toHaveBeenLastCalledWith('tab-1', AUTOMATIC_REQUEST)
 
       // Latched per xterm instance: repeat restore attempts do not spam.
       _dispatchPtyModelRestoreNeededForTest({ id: 'pty-id', reason: 'hidden-drop', markerSeq: 96 })

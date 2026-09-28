@@ -1,0 +1,597 @@
+{
+  "sourceHashes": {
+    "src/main/rate-limits/auth-filesystem-operation.ts": {
+      "before": "581d7045220e92602ca83ec335576889dcba5ada4a699e866ea1dba10afbecac",
+      "after": "bfac9dc25c3f3c36ab590bc6e01be39ec19dea5a872f5c409ed149e65258f9e2"
+    },
+    "src/shared/promise-settlement-waiters.ts": {
+      "before": "b0b60bae6dcca4bb4f335ef7dda250f4350aa5b0306d3595b887cc4af4493060",
+      "after": "92618db591cf1fc1ad52f257cc9f3314310bf902fbd24e5d18abcf93afb8e722"
+    }
+  },
+  "runtime": {
+    "node": "26.6.0",
+    "acorn": "8.17.0",
+    "ada": "4.0.0",
+    "amaro": "1.1.11",
+    "ares": "1.34.8",
+    "brotli": "1.2.0",
+    "cldr": "48.0",
+    "icu": "78.3",
+    "libffi": "3.7.1",
+    "llhttp": "9.4.3",
+    "merve": "1.2.2",
+    "modules": "147",
+    "napi": "10",
+    "nbytes": "0.1.4",
+    "ncrypto": "0.0.1",
+    "nghttp2": "1.70.0",
+    "nghttp3": "",
+    "ngtcp2": "",
+    "openssl": "3.6.3",
+    "simdjson": "4.6.6",
+    "simdutf": "7.7.0",
+    "sqlite": "3.53.4",
+    "tz": "2026a",
+    "undici": "8.9.0",
+    "unicode": "17.0",
+    "uv": "1.52.1",
+    "uvwasi": "0.0.23",
+    "v8": "14.6.202.34-node.26",
+    "zlib": "1.2.12",
+    "zstd": "1.5.7"
+  },
+  "scenario": "128 aborted waits on one already-started unresolved operation; amplified arm has 64 KiB synthetic payload per abort Error; real native filesystem stall not reproduced",
+  "before": {
+    "cases": [
+      {
+        "amplify": false,
+        "abortedWaits": 128,
+        "unresolved": {
+          "reasons": 1,
+          "controllers": 0,
+          "payloads": 0,
+          "rawCalls": 1
+        },
+        "settled": {
+          "reasons": 1,
+          "controllers": 0,
+          "payloads": 0
+        },
+        "dropped": {
+          "reasons": 0,
+          "controllers": 0,
+          "payloads": 0
+        }
+      },
+      {
+        "amplify": true,
+        "abortedWaits": 128,
+        "unresolved": {
+          "reasons": 1,
+          "controllers": 0,
+          "payloads": 1,
+          "rawCalls": 1
+        },
+        "settled": {
+          "reasons": 1,
+          "controllers": 0,
+          "payloads": 1
+        },
+        "dropped": {
+          "reasons": 0,
+          "controllers": 0,
+          "payloads": 0
+        }
+      }
+    ],
+    "controls": {
+      "lateResultDelivered": true,
+      "settledResultDelivered": true,
+      "oneRawCall": 1,
+      "rawRejectionPreserved": true,
+      "preAbortedRawCalls": 0,
+      "allAbortListenersRemoved": true,
+      "arbitraryAbortReasonsPreserved": 4,
+      "liveSiblingSurvivesAbort": true
+    },
+    "settlementOrder": [
+      {
+        "startedBefore": true,
+        "rejectRaw": false,
+        "ticks": 0,
+        "outcome": {
+          "status": "rejected",
+          "reason": "caller aborted"
+        }
+      },
+      {
+        "startedBefore": true,
+        "rejectRaw": false,
+        "ticks": 1,
+        "outcome": {
+          "status": "fulfilled",
+          "value": "raw success"
+        }
+      },
+      {
+        "startedBefore": true,
+        "rejectRaw": false,
+        "ticks": 2,
+        "outcome": {
+          "status": "fulfilled",
+          "value": "raw success"
+        }
+      },
+      {
+        "startedBefore": true,
+        "rejectRaw": false,
+        "ticks": 3,
+        "outcome": {
+          "status": "fulfilled",
+          "value": "raw success"
+        }
+      },
+      {
+        "startedBefore": true,
+        "rejectRaw": false,
+        "ticks": 4,
+        "outcome": {
+          "status": "fulfilled",
+          "value": "raw success"
+        }
+      },
+      {
+        "startedBefore": true,
+        "rejectRaw": false,
+        "ticks": 5,
+        "outcome": {
+          "status": "fulfilled",
+          "value": "raw success"
+        }
+      },
+      {
+        "startedBefore": true,
+        "rejectRaw": true,
+        "ticks": 0,
+        "outcome": {
+          "status": "rejected",
+          "reason": "caller aborted"
+        }
+      },
+      {
+        "startedBefore": true,
+        "rejectRaw": true,
+        "ticks": 1,
+        "outcome": {
+          "status": "rejected",
+          "reason": "raw failure"
+        }
+      },
+      {
+        "startedBefore": true,
+        "rejectRaw": true,
+        "ticks": 2,
+        "outcome": {
+          "status": "rejected",
+          "reason": "raw failure"
+        }
+      },
+      {
+        "startedBefore": true,
+        "rejectRaw": true,
+        "ticks": 3,
+        "outcome": {
+          "status": "rejected",
+          "reason": "raw failure"
+        }
+      },
+      {
+        "startedBefore": true,
+        "rejectRaw": true,
+        "ticks": 4,
+        "outcome": {
+          "status": "rejected",
+          "reason": "raw failure"
+        }
+      },
+      {
+        "startedBefore": true,
+        "rejectRaw": true,
+        "ticks": 5,
+        "outcome": {
+          "status": "rejected",
+          "reason": "raw failure"
+        }
+      },
+      {
+        "startedBefore": false,
+        "rejectRaw": false,
+        "ticks": 0,
+        "outcome": {
+          "status": "rejected",
+          "reason": "caller aborted"
+        }
+      },
+      {
+        "startedBefore": false,
+        "rejectRaw": false,
+        "ticks": 1,
+        "outcome": {
+          "status": "fulfilled",
+          "value": "raw success"
+        }
+      },
+      {
+        "startedBefore": false,
+        "rejectRaw": false,
+        "ticks": 2,
+        "outcome": {
+          "status": "fulfilled",
+          "value": "raw success"
+        }
+      },
+      {
+        "startedBefore": false,
+        "rejectRaw": false,
+        "ticks": 3,
+        "outcome": {
+          "status": "fulfilled",
+          "value": "raw success"
+        }
+      },
+      {
+        "startedBefore": false,
+        "rejectRaw": false,
+        "ticks": 4,
+        "outcome": {
+          "status": "fulfilled",
+          "value": "raw success"
+        }
+      },
+      {
+        "startedBefore": false,
+        "rejectRaw": false,
+        "ticks": 5,
+        "outcome": {
+          "status": "fulfilled",
+          "value": "raw success"
+        }
+      },
+      {
+        "startedBefore": false,
+        "rejectRaw": true,
+        "ticks": 0,
+        "outcome": {
+          "status": "rejected",
+          "reason": "caller aborted"
+        }
+      },
+      {
+        "startedBefore": false,
+        "rejectRaw": true,
+        "ticks": 1,
+        "outcome": {
+          "status": "rejected",
+          "reason": "raw failure"
+        }
+      },
+      {
+        "startedBefore": false,
+        "rejectRaw": true,
+        "ticks": 2,
+        "outcome": {
+          "status": "rejected",
+          "reason": "raw failure"
+        }
+      },
+      {
+        "startedBefore": false,
+        "rejectRaw": true,
+        "ticks": 3,
+        "outcome": {
+          "status": "rejected",
+          "reason": "raw failure"
+        }
+      },
+      {
+        "startedBefore": false,
+        "rejectRaw": true,
+        "ticks": 4,
+        "outcome": {
+          "status": "rejected",
+          "reason": "raw failure"
+        }
+      },
+      {
+        "startedBefore": false,
+        "rejectRaw": true,
+        "ticks": 5,
+        "outcome": {
+          "status": "rejected",
+          "reason": "raw failure"
+        }
+      }
+    ],
+    "importedHashes": {
+      "src/shared/wsl-paths.ts": "1d9dcf5a1ff6693c02ff60a6b074eb2ebb7e83bda12aceba7e0b208d410b6d1a"
+    },
+    "bundleSha256": "f895e71ca0f2102e7ff36fa133ae2065fa9810769d7ee6059c826f1a72bcc122"
+  },
+  "after": {
+    "cases": [
+      {
+        "amplify": false,
+        "abortedWaits": 128,
+        "unresolved": {
+          "reasons": 1,
+          "controllers": 0,
+          "payloads": 0,
+          "rawCalls": 1
+        },
+        "settled": {
+          "reasons": 1,
+          "controllers": 0,
+          "payloads": 0
+        },
+        "dropped": {
+          "reasons": 0,
+          "controllers": 0,
+          "payloads": 0
+        }
+      },
+      {
+        "amplify": true,
+        "abortedWaits": 128,
+        "unresolved": {
+          "reasons": 1,
+          "controllers": 0,
+          "payloads": 1,
+          "rawCalls": 1
+        },
+        "settled": {
+          "reasons": 1,
+          "controllers": 0,
+          "payloads": 1
+        },
+        "dropped": {
+          "reasons": 0,
+          "controllers": 0,
+          "payloads": 0
+        }
+      }
+    ],
+    "controls": {
+      "lateResultDelivered": true,
+      "settledResultDelivered": true,
+      "oneRawCall": 1,
+      "rawRejectionPreserved": true,
+      "preAbortedRawCalls": 0,
+      "allAbortListenersRemoved": true,
+      "arbitraryAbortReasonsPreserved": 4,
+      "liveSiblingSurvivesAbort": true
+    },
+    "settlementOrder": [
+      {
+        "startedBefore": true,
+        "rejectRaw": false,
+        "ticks": 0,
+        "outcome": {
+          "status": "rejected",
+          "reason": "caller aborted"
+        }
+      },
+      {
+        "startedBefore": true,
+        "rejectRaw": false,
+        "ticks": 1,
+        "outcome": {
+          "status": "fulfilled",
+          "value": "raw success"
+        }
+      },
+      {
+        "startedBefore": true,
+        "rejectRaw": false,
+        "ticks": 2,
+        "outcome": {
+          "status": "fulfilled",
+          "value": "raw success"
+        }
+      },
+      {
+        "startedBefore": true,
+        "rejectRaw": false,
+        "ticks": 3,
+        "outcome": {
+          "status": "fulfilled",
+          "value": "raw success"
+        }
+      },
+      {
+        "startedBefore": true,
+        "rejectRaw": false,
+        "ticks": 4,
+        "outcome": {
+          "status": "fulfilled",
+          "value": "raw success"
+        }
+      },
+      {
+        "startedBefore": true,
+        "rejectRaw": false,
+        "ticks": 5,
+        "outcome": {
+          "status": "fulfilled",
+          "value": "raw success"
+        }
+      },
+      {
+        "startedBefore": true,
+        "rejectRaw": true,
+        "ticks": 0,
+        "outcome": {
+          "status": "rejected",
+          "reason": "caller aborted"
+        }
+      },
+      {
+        "startedBefore": true,
+        "rejectRaw": true,
+        "ticks": 1,
+        "outcome": {
+          "status": "rejected",
+          "reason": "raw failure"
+        }
+      },
+      {
+        "startedBefore": true,
+        "rejectRaw": true,
+        "ticks": 2,
+        "outcome": {
+          "status": "rejected",
+          "reason": "raw failure"
+        }
+      },
+      {
+        "startedBefore": true,
+        "rejectRaw": true,
+        "ticks": 3,
+        "outcome": {
+          "status": "rejected",
+          "reason": "raw failure"
+        }
+      },
+      {
+        "startedBefore": true,
+        "rejectRaw": true,
+        "ticks": 4,
+        "outcome": {
+          "status": "rejected",
+          "reason": "raw failure"
+        }
+      },
+      {
+        "startedBefore": true,
+        "rejectRaw": true,
+        "ticks": 5,
+        "outcome": {
+          "status": "rejected",
+          "reason": "raw failure"
+        }
+      },
+      {
+        "startedBefore": false,
+        "rejectRaw": false,
+        "ticks": 0,
+        "outcome": {
+          "status": "rejected",
+          "reason": "caller aborted"
+        }
+      },
+      {
+        "startedBefore": false,
+        "rejectRaw": false,
+        "ticks": 1,
+        "outcome": {
+          "status": "fulfilled",
+          "value": "raw success"
+        }
+      },
+      {
+        "startedBefore": false,
+        "rejectRaw": false,
+        "ticks": 2,
+        "outcome": {
+          "status": "fulfilled",
+          "value": "raw success"
+        }
+      },
+      {
+        "startedBefore": false,
+        "rejectRaw": false,
+        "ticks": 3,
+        "outcome": {
+          "status": "fulfilled",
+          "value": "raw success"
+        }
+      },
+      {
+        "startedBefore": false,
+        "rejectRaw": false,
+        "ticks": 4,
+        "outcome": {
+          "status": "fulfilled",
+          "value": "raw success"
+        }
+      },
+      {
+        "startedBefore": false,
+        "rejectRaw": false,
+        "ticks": 5,
+        "outcome": {
+          "status": "fulfilled",
+          "value": "raw success"
+        }
+      },
+      {
+        "startedBefore": false,
+        "rejectRaw": true,
+        "ticks": 0,
+        "outcome": {
+          "status": "rejected",
+          "reason": "caller aborted"
+        }
+      },
+      {
+        "startedBefore": false,
+        "rejectRaw": true,
+        "ticks": 1,
+        "outcome": {
+          "status": "rejected",
+          "reason": "raw failure"
+        }
+      },
+      {
+        "startedBefore": false,
+        "rejectRaw": true,
+        "ticks": 2,
+        "outcome": {
+          "status": "rejected",
+          "reason": "raw failure"
+        }
+      },
+      {
+        "startedBefore": false,
+        "rejectRaw": true,
+        "ticks": 3,
+        "outcome": {
+          "status": "rejected",
+          "reason": "raw failure"
+        }
+      },
+      {
+        "startedBefore": false,
+        "rejectRaw": true,
+        "ticks": 4,
+        "outcome": {
+          "status": "rejected",
+          "reason": "raw failure"
+        }
+      },
+      {
+        "startedBefore": false,
+        "rejectRaw": true,
+        "ticks": 5,
+        "outcome": {
+          "status": "rejected",
+          "reason": "raw failure"
+        }
+      }
+    ],
+    "importedHashes": {
+      "src/shared/wsl-paths.ts": "1d9dcf5a1ff6693c02ff60a6b074eb2ebb7e83bda12aceba7e0b208d410b6d1a"
+    },
+    "bundleSha256": "04324b281a776aa1018995a36d11ff7cf56b4dd737761c3d5b0fb1ebc0047652"
+  }
+}

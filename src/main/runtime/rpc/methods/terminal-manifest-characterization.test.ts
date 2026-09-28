@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { TERMINAL_METHODS } from './terminal'
+import { eraseRpcMethods } from '../core'
 import {
   TerminalMultiplexLegacyAckFrame,
   TerminalMultiplexSourceRangeAckFrame,
@@ -50,14 +51,14 @@ const METHOD_CASES: readonly (readonly [string, unknown, boolean])[] = [
 ]
 
 function schemaFor(name: string) {
-  const method = TERMINAL_METHODS.find((candidate) => candidate.name === name)
+  const method = eraseRpcMethods(TERMINAL_METHODS).find((candidate) => candidate.name === name)
   if (!method?.params) {
     throw new Error(`Missing terminal schema: ${name}`)
   }
   return method.params
 }
 async function invoke(name: string, params: unknown, runtime: Partial<OrcaRuntimeService>) {
-  const method = TERMINAL_METHODS.find((candidate) => candidate.name === name)
+  const method = eraseRpcMethods(TERMINAL_METHODS).find((candidate) => candidate.name === name)
   if (!method?.params || 'stream' in method) {
     throw new Error(`Missing unary terminal method: ${name}`)
   }

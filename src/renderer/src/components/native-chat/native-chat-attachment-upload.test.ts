@@ -140,6 +140,18 @@ describe('resolveNativeChatAttachmentOwner', () => {
     })
   })
 
+  it('reports not-ready instead of throwing when the SSH generation is gone', () => {
+    expect(
+      resolveNativeChatAttachmentOwner(
+        state({
+          repos: [{ id: 'repo', connectionId: 'conn-1' }] as never,
+          sshConnectionStates: new Map()
+        }),
+        'tab-1'
+      )
+    ).toEqual({ kind: 'not-ready' })
+  })
+
   it('reports not-ready when an SSH worktree has no known path yet', () => {
     expect(
       resolveNativeChatAttachmentOwner(

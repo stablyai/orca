@@ -89,4 +89,39 @@ describe('a session that reports its own command surface', () => {
   it('splits skills out for the picker to group on its own', () => {
     expect(sessionReportedSkillNames(reported)).toEqual(['ref-oss'])
   })
+
+  it('prefers the description the session reported over the curated one', () => {
+    expect(
+      sessionSlashCommandSuggestions('claude', [
+        { name: 'clear', kind: 'command', description: 'Wipe the transcript' },
+        { name: 'goal', kind: 'command', description: 'Set or view the goal' },
+        { name: 'compact', kind: 'command' }
+      ])
+    ).toEqual([
+      { name: 'clear', description: 'Wipe the transcript' },
+      { name: 'goal', description: 'Set or view the goal' },
+      { name: 'compact', description: 'Summarize and compact the conversation' }
+    ])
+  })
+
+  it('keeps a reported description and argument hint the curated catalog never claims', () => {
+    expect(
+      sessionSlashCommandSuggestions('codex', [
+        {
+          name: 'opsx:apply',
+          kind: 'command',
+          description: 'Apply the plan',
+          argumentHint: '<plan-id>',
+          kindUnspecified: true
+        }
+      ])
+    ).toEqual([
+      {
+        name: 'opsx:apply',
+        description: 'Apply the plan',
+        argumentHint: '<plan-id>',
+        kindUnspecified: true
+      }
+    ])
+  })
 })
