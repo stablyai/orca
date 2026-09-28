@@ -98,7 +98,8 @@ export function getUndeliveredUnreadMessages(
     'read = 0',
     'delivered_at IS NULL',
     'pointer_enter_pending = 0',
-    "delivery_contract = 'current_delivery'"
+    "delivery_contract = 'current_delivery'",
+    'notify = 1'
   ]
   const params: (string | number)[] = [toHandle]
   if (types?.length) {

@@ -28,6 +28,12 @@ export async function sendRemoteMessage(args: {
   signal?: AbortSignal
 }): Promise<unknown> {
   const { params, runtime, db, from, senderPaneKey, remoteAttachment } = args
+  if (params.notify === false) {
+    throw new OrchestrationError(
+      'capability_unsupported',
+      'notify=false is not supported across federated runtimes.'
+    )
+  }
   rejectFederatedExplicitTarget(params)
   if (
     !db.verifyRemoteAttachmentAuthority({

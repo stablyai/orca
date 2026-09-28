@@ -7,6 +7,22 @@ A successful `send` proves durable enqueue. Wake and nudge are best-effort
 attention only: neither proves the recipient read the message, began a turn, or
 accepted steering.
 
+## External notification transport
+
+`orchestration send --no-notify` stores ordinary point-to-point `status` or
+`handoff` mail without automatic terminal or structured-session mailbox pointers.
+Use it when another transport already presents the message to the recipient.
+The policy survives runtime restarts and send retries. It does not mark the
+message read or delivered: explicit `inbox` and `check` reads (including waiting
+checks) still return it normally. A later native notification for other mail can
+lead the recipient to read this stored message too; external transports must
+still deduplicate processing by message identity.
+
+The default remains automatic notification. The flag requires a runtime that
+advertises `orchestration.message-notify.v1`; the CLI refuses older runtimes
+before sending. This option supports mailboxes hosted by the connected runtime,
+not federated cross-runtime mail, groups, or lifecycle signals.
+
 ## Coordinator delivery loop
 
 `check` names its caller with `--terminal <handle>` and is the only verb that

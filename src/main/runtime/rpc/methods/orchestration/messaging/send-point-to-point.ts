@@ -60,6 +60,7 @@ export function sendPointToPointMessage(args: {
       to,
       subject: params.subject,
       body: params.body,
+      notify: params.notify,
       type: messageType,
       priority: params.priority as MessagePriority,
       threadId: params.threadId,

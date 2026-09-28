@@ -113,6 +113,16 @@ orca orchestration dispatch --task <taskId> --to <workerHandle> --inject --json
 
 ## Messaging notes
 
+`orca orchestration send --no-notify` persists a point-to-point `status` or
+`handoff` message without an automatic mailbox notification. Use it with an
+external notification transport. Explicit `inbox` / `check` reads and waiting
+checks still see the message; it is not marked read or delivered. The policy
+survives restarts and retries. The CLI requires runtime capability
+`orchestration.message-notify.v1` and refuses older servers before sending.
+Groups, lifecycle messages, and federated cross-runtime mail are unsupported.
+Deduplicate message processing in the external transport: a later explicit inbox
+read can return a message already presented through that transport.
+
 - Default `check` is the bound Run's oldest unacked Delivery (FIFO). Replay until `--ack`.
 - `--peek` / `--all` do not consume mail.
 - Group addresses: `@all`, `@idle`, `@claude`, `@codex`, `@opencode`, `@gemini`, `@droid`, `@grok`, `@cursor`, `@worktree:<id>` — never for `worker_done` / heartbeat.

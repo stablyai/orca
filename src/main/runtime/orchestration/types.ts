@@ -239,6 +239,7 @@ export type MessageRow = {
   id: string
   run_id: string
   delivery_contract?: MessageDeliveryContract
+  notify?: number
   from_handle: string
   to_handle: string
   subject: string

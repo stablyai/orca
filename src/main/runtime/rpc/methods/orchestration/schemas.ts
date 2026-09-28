@@ -106,10 +106,22 @@ export const SendParams = z
     // Why: pane key is the remint-stable identity used to verify worker_done/heartbeat ownership; the from handle stays routing metadata.
     senderPaneKey: OptionalString,
     run: OptionalString,
+    notify: OptionalBoolean,
     waitForLifecycleSettlement: OptionalBoolean,
     devMode: OptionalBoolean
   })
   .superRefine((params, ctx) => {
+    if (
+      params.notify === false &&
+      ((params.type !== undefined && params.type !== 'status' && params.type !== 'handoff') ||
+        (params.to !== undefined && isGroupAddress(params.to)))
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'notify=false supports only point-to-point status or handoff messages.',
+        path: ['notify']
+      })
+    }
     if (!isDispatchMutationMessageType(params.type) || !params.to || !isGroupAddress(params.to)) {
       return
     }
