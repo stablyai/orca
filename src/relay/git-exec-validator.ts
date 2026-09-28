@@ -143,13 +143,13 @@ function validateInitArgs(args: string[]): void {
 // shape is allowed: the two are separate grants. `-L 1,999999` would deliver
 // whole-file authorship through a path whose callers, argument budget, and
 // timeout are all sized for one line.
-const BLAME_SHAPE_ERROR =
+const BLAME_ARGS_REJECTED_ERROR =
   'git blame via exec is restricted to blame --porcelain [-L <n>,<n>] -- <path>'
 
 function validateBlameArgs(args: string[]): void {
   if (args.length === 4) {
     if (args[1] !== '--porcelain' || args[2] !== '--' || !args[3] || args[3].includes('\0')) {
-      throw new Error(BLAME_SHAPE_ERROR)
+      throw new Error(BLAME_ARGS_REJECTED_ERROR)
     }
     return
   }
@@ -164,7 +164,7 @@ function validateBlameArgs(args: string[]): void {
     !args[5] ||
     args[5].includes('\0')
   ) {
-    throw new Error(BLAME_SHAPE_ERROR)
+    throw new Error(BLAME_ARGS_REJECTED_ERROR)
   }
 }
 
