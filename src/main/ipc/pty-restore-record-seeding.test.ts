@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   clearAgentHookPaneStateMock,
+  drainCommittedHooksMock,
   registerPaneKeyAliasMock,
   registerPtyMock,
   setMigrationUnsupportedPtyMock,
@@ -580,9 +581,15 @@ describe('registerPtyHandlers', () => {
     expect(getPtyIdForPaneKey(stablePaneKey)).toBe(second.id)
     expect(clearAgentHookPaneStateMock).not.toHaveBeenCalledWith(stablePaneKey)
 
+    drainCommittedHooksMock.mockClear()
     clearProviderPtyState(second.id)
     expect(getPtyIdForPaneKey(stablePaneKey)).toBeUndefined()
     expect(clearAgentHookPaneStateMock).toHaveBeenCalledWith(stablePaneKey)
+    // Teardown runs before the runtime's exit intake: a hook the agent committed before it died
+    // is applied first, or a later drain would recreate the row this clears.
+    expect(drainCommittedHooksMock.mock.invocationCallOrder[0]).toBeLessThan(
+      clearAgentHookPaneStateMock.mock.invocationCallOrder.at(-1)!
+    )
   })
   it('does not let restart-era alias cleanup clear a newer pane-key owner', async () => {
     registerPtyHandlers(mainWindow as never)

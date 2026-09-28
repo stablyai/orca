@@ -251,7 +251,8 @@ describe('pane agent identity surface inventory (rows 6, 32–65)', () => {
  * proof is how a legitimate reclaim and a stale-hook bug get conflated (see
  * `PaneReplacementProof` in pane-agent-identity-adapter.ts). Every existing sequencer `rebind`
  * call is pinned here by file and count: today they are the retired-pane `restart` disposition
- * (three ingress paths) and the renderer pane-key transfer. Adding a rebind call, or changing
+ * (local hook ingest — shared by HTTP, the hook inbox and the legacy spool — and remote ingest) and
+ * the renderer pane-key transfer. Adding a rebind call, or changing
  * these, requires updating this audit — and per the migration plan, a `replacementProof`.
  */
 const IDENTITY_SEQUENCER_REBIND_RE = /\b(?:observations|rendererAgentStatusObservations)\.rebind\(/g
@@ -259,7 +260,6 @@ const IDENTITY_SEQUENCER_REBIND_RE = /\b(?:observations|rendererAgentStatusObser
 const EXPECTED_REBIND_SITES: readonly (readonly [path: string, occurrences: number])[] = [
   ['src/main/agent-hooks/server/server-ingest-normalization.ts', 1],
   ['src/main/agent-hooks/server/server-ingest-remote.ts', 1],
-  ['src/main/agent-hooks/server/server-lifecycle.ts', 1],
   ['src/renderer/src/store/slices/agent-status-authority-actions.ts', 1]
 ]
 

@@ -37,6 +37,9 @@ export function clearProviderPtyState(
   id: string,
   opts: { preserveAgentSessionOwners?: boolean } = {}
 ): void {
+  // Why: teardown runs before the runtime's exit intake, so apply what the agent committed before
+  // it died first, or a later drain recreates the row this clears.
+  agentHookServer.drainCommittedHooks()
   if (!opts.preserveAgentSessionOwners) {
     agentSessionOwners.release(id)
     // Why: the launch-account record outlives the app, so only a real teardown

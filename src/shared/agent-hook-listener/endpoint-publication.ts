@@ -3,6 +3,10 @@ import { chmodSync, mkdirSync, renameSync, unlinkSync, writeFileSync } from 'nod
 import { join } from 'node:path'
 
 import { sweepStaleAgentHookEndpointTemps } from '../agent-hook-endpoint-temp-cleanup'
+import {
+  AGENT_HOOK_INBOX_ENDPOINT_KEY,
+  AGENT_HOOK_INBOX_ENDPOINT_VALUE
+} from '../agent-hook-inbox-record'
 
 // ─── Endpoint-file writing ──────────────────────────────────────────
 
@@ -22,6 +26,8 @@ export type EndpointFileFields = {
   env: string
   version: string
   transport?: string
+  /** Set only while this server drains its hook inbox; hook scripts commit there instead of POSTing. */
+  inbox?: boolean
 }
 
 /** Atomically write the endpoint file at `endpointDir/<getEndpointFileName()>`.
@@ -42,6 +48,9 @@ export function writeEndpointFile(
   ]
   if (fields.transport) {
     valuesToWrite.push(['ORCA_AGENT_HOOK_TRANSPORT', fields.transport])
+  }
+  if (fields.inbox) {
+    valuesToWrite.push([AGENT_HOOK_INBOX_ENDPOINT_KEY, AGENT_HOOK_INBOX_ENDPOINT_VALUE])
   }
   for (const [key, value] of valuesToWrite) {
     if (!isShellSafeEndpointValue(value)) {

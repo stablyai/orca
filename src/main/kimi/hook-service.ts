@@ -31,6 +31,7 @@ import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines
 } from '../agent-hooks/hook-stdin-contract'
+import { buildPosixHookInboxCommitLines } from '../agent-hooks/hook-inbox-commit'
 import {
   applyManagedKimiHooks,
   KIMI_HOOK_EVENTS,
@@ -98,6 +99,10 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       : [
           ...buildPosixHookPayloadCapture(),
           ...buildPosixHookSpoolLines('kimi'),
+          // Why no commit on Windows: Git Bash sources endpoint.cmd, which never advertises it.
+          ...buildPosixHookInboxCommitLines('kimi'),
+          // Why before the endpoint/POST: a committed event survives the agent killing this hook.
+          'orca_hook_commit && exit 0',
           ...endpointRefreshAndGuard
         ]),
     // Why: worktreeId embeds a filesystem path, so hand-building JSON in POSIX
@@ -296,3 +301,6 @@ export class KimiHookService {
 }
 
 export const kimiHookService = new KimiHookService()
+
+// Test seam: the generated POSIX script, run end to end by hook-inbox-scripts.test.ts.
+export const _internals = { getManagedScript }

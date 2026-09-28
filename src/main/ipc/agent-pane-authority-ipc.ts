@@ -38,6 +38,8 @@ export function registerAgentPaneAuthorityIpcHandlers(
         ) {
           return
         }
+        // Why: a hook the agent committed before the user retired its pane lands first.
+        agentHookServer.drainCommittedHooks()
         agentHookServer.retirePaneAuthority(paneKey, retirementId)
         clearMigrationUnsupportedPtysForPaneKey(paneKey)
       } catch (err) {

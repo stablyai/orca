@@ -61,6 +61,8 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
 
   protected readonly onTerminalSideEffects: ((batch: TerminalSideEffectBatch) => void) | null
 
+  protected readonly drainCommittedAgentHooks: (() => void) | null
+
   protected terminalSideEffectLocalConsumerAvailable = false
 
   protected terminalSideEffectConsumerAvailable = false

@@ -1,4 +1,3 @@
-import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { randomUUID } from 'node:crypto'
 
@@ -11,13 +10,13 @@ import { readRequestBody } from '../../../shared/agent-hook-listener/request-bod
 import { resolveHookSource } from '../../../shared/agent-hook-listener/source-routing'
 import { HOOK_REQUEST_SLOWLORIS_MS } from '../../../shared/agent-hook-listener/listener-limits'
 import { isHookRequestTruncatedError } from '../../../shared/agent-hook-transport-interference'
-import { drainAgentHookSpool, type SpoolRecord } from '../../../shared/agent-hook-spool'
+import { openAgentHookInbox } from '../../../shared/agent-hook-inbox'
 import { clearAllListenerCaches } from '../../../shared/agent-hook-listener/listener-state'
 import { trackEmptyPaneKeyHook } from './server-transport-rules'
 import { AgentHookServerRuntimeEnv } from './server-runtime-env'
 
 export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv {
-  /** Start the loopback listener after hydration and spool replay have settled. */
+  /** Start the loopback listener after hydration and replay of committed hook events have settled. */
   async start(options?: {
     env?: string
     userDataPath?: string
@@ -43,16 +42,18 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
         this.hydrateLastStatusFromDisk()
       }
       this.captureHydratedAuthorityCommitments()
-      // Drain before binding the listener so replay cannot race a live hook during startup.
-      if (this.endpointDir) {
-        drainAgentHookSpool({
-          endpointDir: this.endpointDir,
-          getPersistedLaunchTokenHash: (paneKey) =>
-            this.hydratedLaunchTokenHashByPaneKey.get(this.resolvePaneKeyAlias(paneKey)),
-          ingest: (record: SpoolRecord) => this.ingestSpoolRecord(record)
-        })
-      }
       this.ownerStateInitialized = true
+    }
+    // Why after hydration: replays are fenced against the hydrated launch tokens. The backlog then
+    // drains in background slices; anything that must see it first (a POST, a pane decision)
+    // forces a full drain, so a replay never lands after a later live event.
+    if (!this.hookInbox && this.endpointDir) {
+      this.hookInbox = openAgentHookInbox({
+        endpointDir: this.endpointDir,
+        ingest: (source, body, { isReplay }) => this.ingestHookBody(source, body, { isReplay }),
+        persistedLaunchTokenHash: (paneKey) =>
+          this.hydratedLaunchTokenHashByPaneKey.get(this.resolvePaneKeyAlias(paneKey))
+      })
     }
     const handleRequest = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
       if (req.method !== 'POST') {
@@ -94,47 +95,10 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
         // Why: merge transport headers before normalization so relay-compatible fields have one canonical path.
         const hookBody = mergeAgentHookRequestHeaders(body, req.headers)
         trackEmptyPaneKeyHook(hookBody)
-        const aliasedBody = this.normalizeHookBodyPaneKeyAlias(hookBody)
-        const normalized = this.normalizeLocalHookPayload(source, aliasedBody)
-        const statusDisposition = normalized.event
-          ? this.getAgentStatusDisposition(normalized.event.paneKey, {
-              source,
-              hookEventName: normalized.event.hookEventName,
-              isReplay: normalized.event.isReplay,
-              hasExplicitPrompt: normalized.event.hasExplicitPrompt,
-              launchToken: normalized.event.launchToken
-            })
-          : 'suppress'
-        if (normalized.event && statusDisposition !== 'suppress') {
-          const restartedAuthority =
-            statusDisposition === 'restart' && source === 'omp'
-              ? this.restoreRetiredStatusRestart(normalized.event.paneKey)
-              : undefined
-          const event =
-            statusDisposition === 'restart'
-              ? {
-                  ...normalized.event,
-                  launchToken: undefined,
-                  ...(restartedAuthority
-                    ? {
-                        ...restartedAuthority,
-                        tabId: parsePaneKey(restartedAuthority.paneKey)?.tabId
-                      }
-                    : {})
-                }
-              : normalized.event
-          if (statusDisposition === 'restart') {
-            // Why: a retired pane accepting a new turn is a different agent session behind the
-            // same key — later observations must not be ordered against the retired one.
-            this.observations.rebind(event.paneKey)
-          }
-          this.recordCurrentAuthorityObservation(event)
-          const enriched = this.applyNormalizedStatus(event, normalized.onAccepted)
-          if (enriched) {
-            this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
-            this.scheduleTranscriptPoll(source, aliasedBody, enriched)
-          }
-        }
+        // Why: a POST is a hook that could not commit (or an older script); anything committed
+        // before it was published earlier and must not be ordered after it.
+        this.drainCommittedHooks()
+        this.ingestHookBody(source, hookBody)
         res.writeHead(204)
         res.end()
       } catch (error) {
@@ -190,6 +154,10 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
   }
 
   stop(): void {
+    // Why: apply what agents committed right up to quit, then stop draining before the maps clear.
+    this.drainCommittedHooks()
+    this.hookInbox?.close()
+    this.hookInbox = null
     // Why: flush the pending debounced write before clearing the map, else a hook <250ms before quit is lost on relaunch.
     this.flushStatusPersistSync()
     this.stopOpenCodeBinderLoop()

@@ -21,6 +21,7 @@ import { foldMainAgentWithRowChildWork } from './server-row-child-work-fold'
 
 export abstract class AgentHookServerStatusInference extends AgentHookServerRowOwnership {
   inferInterrupt(request: AgentInterruptInferenceRequest): boolean {
+    this.drainCommittedHooks()
     if (!isValidPaneKey(request.paneKey)) {
       return false
     }
@@ -148,6 +149,7 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
 
   /** Guarded fallback for the hook Claude omits after answering or dismissing AskUserQuestion. */
   inferQuestionAnswered(request: AgentQuestionAnsweredInferenceRequest): boolean {
+    this.drainCommittedHooks()
     if (!isValidPaneKey(request.paneKey)) {
       return false
     }

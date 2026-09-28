@@ -66,8 +66,14 @@ export class RelayAgentHookRuntime {
   private registerPtyEnvironment(): void {
     this.ptyHandler.addEnvAugmenter(() => this.hookServer.buildPtyEnv())
     this.ptyHandler.addEnvAugmenter((context) => this.buildPluginEnvironment(context))
+    // Why: the blocking POST used to put a hook on the wire before the agent could print or exit;
+    // committed hook events keep that order by draining before any PTY output or exit is sent.
+    this.ptyHandler.setOutputPublishBarrier(() => this.hookServer.drainCommittedHooks())
     this.ptyHandler.setExitListener(({ paneKey, id }) => {
       if (paneKey) {
+        // Why: a full send queue (or a reap) can reach teardown before any publish ran the
+        // barrier; apply what the agent committed first, or a later drain recreates the row.
+        this.hookServer.drainCommittedHooks()
         this.hookServer.clearPaneState(paneKey)
       }
       this.pluginOverlay.clearOverlay(paneKey ?? id)

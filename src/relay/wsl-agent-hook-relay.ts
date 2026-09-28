@@ -90,7 +90,9 @@ async function main(): Promise<void> {
   }))
 
   try {
-    await hookServer.start()
+    // Why no inbox: the panes' output reaches Windows without passing this relay, so nothing here
+    // can drain a committed hook before Windows sees the agent exit; guest hooks keep the POST.
+    await hookServer.start({ hookInbox: false })
   } catch (err) {
     process.stderr.write(
       `[wsl-hook-relay] hook server bind failed: ${err instanceof Error ? err.message : String(err)}\n`

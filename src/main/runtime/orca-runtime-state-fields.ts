@@ -58,6 +58,10 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
       prepareClaudeAuth?: PrepareClaudeAuth
       onPtyStopped?: (ptyId: string) => void
       onTerminalAgentStatus?: (event: RuntimeTerminalAgentStatusEvent) => void
+      /** Applies agent hook events committed to disk. Runs before a pane's output, daemon fact or
+       *  exit is processed: an agent commits a hook before it prints or exits, so everything
+       *  derived from that output (status, titles, finished commands, reconcile) sees it first. */
+      drainCommittedAgentHooks?: () => void
       onTerminalSideEffects?: (batch: TerminalSideEffectBatch) => void
       // Why: agent status mostly arrives via hooks (agent-hooks/server), not OSC
       // terminal output. worktree.ps reads this at query time so mobile shows the
@@ -256,6 +260,7 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
     this.getSshProviderFn = deps?.getSshProvider ?? null
     this.onPtyStopped = deps?.onPtyStopped ?? null
     this.onTerminalAgentStatus = deps?.onTerminalAgentStatus ?? null
+    this.drainCommittedAgentHooks = deps?.drainCommittedAgentHooks ?? null
     this.buildAgentHookPtyEnv = deps?.buildAgentHookPtyEnv ?? null
     this.getDesktopWindowStatusFn = deps?.getDesktopWindowStatus ?? (() => 'openable')
     this.prepareAiVaultSessionResumeFn = deps?.prepareAiVaultSessionResume ?? null

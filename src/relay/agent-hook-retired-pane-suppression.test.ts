@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { RelayAgentHookServer } from './agent-hook-server'
@@ -162,8 +162,10 @@ describe('RelayAgentHookRuntime wiring', () => {
   it('routes hook admission through the PTY handler and drops the cache on retirement', async () => {
     const retired = new RetiredPaneSurfaceRegistry()
     const surfaceRetiredListeners: PtySurfaceRetiredListener[] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime calls only the PtyHandler members this fixture implements.
     const ptyHandler = {
       addEnvAugmenter: vi.fn(),
+      setOutputPublishBarrier: vi.fn(),
       setExitListener: vi.fn(),
       setSurfaceRetiredListener: vi.fn((listener: PtySurfaceRetiredListener | null) => {
         if (listener) {
@@ -198,6 +200,100 @@ describe('RelayAgentHookRuntime wiring', () => {
       expect(cachedPaneKeys(server)).toEqual([])
 
       expect(await postHook(server, PANE_KEY, 'orphan')).toBe(204)
+      expect(cachedPaneKeys(server)).toEqual([])
+    } finally {
+      runtime.stop()
+    }
+  })
+
+  it('applies committed hook events before the PTY handler publishes output or an exit', async () => {
+    let barrier: (() => void) | null = null
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime calls only the PtyHandler members this fixture implements.
+    const ptyHandler = {
+      addEnvAugmenter: vi.fn(),
+      setOutputPublishBarrier: vi.fn((next: (() => void) | null) => {
+        barrier = next
+      }),
+      setExitListener: vi.fn(),
+      setSurfaceRetiredListener: vi.fn(),
+      isPaneSurfaceRetired: () => false
+    } as unknown as PtyHandler
+    const dispatcher = {
+      onRequest: vi.fn(),
+      activeClientIds: () => [] as number[]
+    } as unknown as RelayDispatcher
+    const runtime = new RelayAgentHookRuntime(
+      dispatcher,
+      ptyHandler,
+      join(dir, 'relay.sock'),
+      join(dir, 'hooks')
+    )
+    await runtime.start()
+    try {
+      const server = (runtime as unknown as { hookServer: RelayAgentHookServer }).hookServer
+      const inbox = join(server.getCoordinates().endpointFilePath, '..', 'hook-inbox')
+      writeFileSync(
+        join(inbox, '1.0.rec'),
+        [
+          JSON.stringify({ hook_event_name: 'UserPromptSubmit', prompt: 'hi' }),
+          'orca-hook-record v1',
+          'source=claude',
+          `paneKey=${PANE_KEY}`,
+          'orca-hook-end',
+          ''
+        ].join('\n')
+      )
+      // The agent committed its last event and exited; the exit is about to be published.
+      expect(barrier).not.toBeNull()
+      barrier!()
+      expect(cachedPaneKeys(server)).toEqual([PANE_KEY])
+    } finally {
+      runtime.stop()
+    }
+  })
+
+  it('applies committed hook events before an exited pane is torn down', async () => {
+    let onExit: ((event: { id: string; paneKey?: string }) => void) | null = null
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime calls only the PtyHandler members this fixture implements.
+    const ptyHandler = {
+      addEnvAugmenter: vi.fn(),
+      setOutputPublishBarrier: vi.fn(),
+      setExitListener: vi.fn((listener: (event: { id: string; paneKey?: string }) => void) => {
+        onExit = listener
+      }),
+      setSurfaceRetiredListener: vi.fn(),
+      isPaneSurfaceRetired: () => false
+    } as unknown as PtyHandler
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: zero attached clients, so hook publication returns before touching any other dispatcher member.
+    const dispatcher = {
+      onRequest: vi.fn(),
+      activeClientIds: () => [] as number[]
+    } as unknown as RelayDispatcher
+    const runtime = new RelayAgentHookRuntime(
+      dispatcher,
+      ptyHandler,
+      join(dir, 'relay.sock'),
+      join(dir, 'hooks')
+    )
+    await runtime.start()
+    try {
+      const server = (runtime as unknown as { hookServer: RelayAgentHookServer }).hookServer
+      const inbox = join(server.getCoordinates().endpointFilePath, '..', 'hook-inbox')
+      writeFileSync(
+        join(inbox, '1.0.rec'),
+        [
+          JSON.stringify({ hook_event_name: 'UserPromptSubmit', prompt: 'hi' }),
+          'orca-hook-record v1',
+          'source=claude',
+          `paneKey=${PANE_KEY}`,
+          'orca-hook-end',
+          ''
+        ].join('\n')
+      )
+      // The shell exits while the relay's send queue is full: teardown runs before any publish.
+      onExit!({ id: 'pty-1', paneKey: PANE_KEY })
+      server.drainCommittedHooks()
+      // Nothing is left for a reconnecting client to be handed as a replay of a dead pane.
       expect(cachedPaneKeys(server)).toEqual([])
     } finally {
       runtime.stop()

@@ -26,6 +26,8 @@ export abstract class AgentHookServerReaping extends AgentHookServerTabCleanup {
     isLocalPaneAgentLive: (paneKey: string) => Promise<boolean>,
     isLocalPaneLivenessEvidenceCurrent: (paneKey: string) => boolean
   ): Promise<number> {
+    // Why: judge the backlog the pane committed before it died, not a row still mid-replay.
+    this.drainCommittedHooks()
     const candidates: { paneKey: string; entry: EnrichedAgentHookEventPayload }[] = []
     for (const [paneKey, entry] of this.state.lastStatusByPaneKey) {
       const enriched = entry as EnrichedAgentHookEventPayload

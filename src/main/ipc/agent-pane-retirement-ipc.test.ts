@@ -13,7 +13,7 @@ vi.mock('electron', () => ({
   }
 }))
 vi.mock('../agent-hooks/server', () => ({
-  agentHookServer: { retirePaneAuthority: mocks.retire },
+  agentHookServer: { retirePaneAuthority: mocks.retire, drainCommittedHooks: vi.fn() },
   isValidPaneKey: (key: string) => key.includes(':')
 }))
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () => ({

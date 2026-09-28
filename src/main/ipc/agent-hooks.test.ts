@@ -12,6 +12,7 @@ const dropPersistedStatusEntry = vi.fn()
 const dropPersistedStatusEntries = vi.fn(() => [] as string[])
 const dropStatusEntriesByTabPrefix = vi.fn()
 const retirePaneAuthority = vi.fn()
+const drainCommittedHooks = vi.fn()
 const transferPaneAuthority = vi.fn()
 const canTransferPaneAuthority = vi.fn(() => true)
 const getStatusSnapshot = vi.fn()
@@ -50,6 +51,7 @@ vi.mock('../agent-hooks/server', async () => {
       dropPersistedStatusEntries,
       dropStatusEntriesByTabPrefix,
       retirePaneAuthority,
+      drainCommittedHooks,
       transferPaneAuthority,
       canTransferPaneAuthority,
       getStatusSnapshot,
@@ -114,6 +116,7 @@ beforeEach(() => {
   dropPersistedStatusEntries.mockReturnValue([])
   dropStatusEntriesByTabPrefix.mockReset()
   retirePaneAuthority.mockReset()
+  drainCommittedHooks.mockReset()
   transferPaneAuthority.mockReset()
   canTransferPaneAuthority.mockReset()
   canTransferPaneAuthority.mockReturnValue(true)
@@ -445,6 +448,10 @@ describe('agent pane authority IPC', () => {
     onHandlers.get('agentStatus:retirePaneAuthority')!({}, PANE_KEY)
 
     expect(retirePaneAuthority).toHaveBeenCalledWith(PANE_KEY, undefined)
+    // A hook the agent committed before the user retired its pane is applied first.
+    expect(drainCommittedHooks.mock.invocationCallOrder[0]).toBeLessThan(
+      retirePaneAuthority.mock.invocationCallOrder[0]
+    )
     expect(clearMigrationUnsupportedPtysForPaneKey).toHaveBeenCalledWith(PANE_KEY)
   })
 

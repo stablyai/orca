@@ -21,6 +21,7 @@ import {
   buildWindowsHookEnvironmentGuardLines,
   buildWindowsHookStdinDrainEpilogue
 } from '../agent-hooks/hook-stdin-contract'
+import { buildPosixHookInboxCommitLines } from '../agent-hooks/hook-inbox-commit'
 import { buildPosixAgentHookPostCommand } from '../agent-hooks/hook-post-command'
 import {
   applyManagedDshPatch,
@@ -71,6 +72,9 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     'export ORCA_PANE_KEY ORCA_AGENT_LAUNCH_TOKEN',
     ...buildPosixHookPayloadCapture(),
     ...buildPosixHookSpoolLines('dsh'),
+    ...buildPosixHookInboxCommitLines('dsh'),
+    // Why before the endpoint/POST: a committed event survives the agent killing this hook.
+    'orca_hook_commit && exit 0',
     // Why: the endpoint file holds the live port/token; a PTY that outlived an Orca
     // restart carries stale env, so source it to reach the new server.
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
@@ -251,3 +255,6 @@ export class DshHookService {
 }
 
 export const dshHookService = new DshHookService()
+
+// Test seam: the generated POSIX script, run end to end by hook-inbox-scripts.test.ts.
+export const _internals = { getManagedScript }

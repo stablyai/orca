@@ -29,16 +29,11 @@ import {
   isHookRequestTruncatedError
 } from '../shared/agent-hook-transport-interference'
 import {
-  isAgentHookSource,
   REMOTE_AGENT_HOOK_ENV,
   type AgentHookRelayEnvelope,
   type AgentHookSource
 } from '../shared/agent-hook-relay'
-import {
-  buildSpoolHookBody,
-  drainAgentHookSpool,
-  type SpoolRecord
-} from '../shared/agent-hook-spool'
+import { openAgentHookInbox, type AgentHookInbox } from '../shared/agent-hook-inbox'
 import { buildRelayHookPtyEnv, defaultEndpointDir } from './agent-hook-endpoint-coordinates'
 import { buildRelayHookEnvelope, hookBodyEnv, hookBodyVersion } from './agent-hook-envelope-build'
 import { AgentHookResultRetryScheduler } from './agent-hook-result-retry-scheduler'
@@ -67,6 +62,11 @@ export type RelayHookServerOptions = {
 
 export type RelayHookServerStartOptions = {
   publishEndpoint?: boolean
+  /**
+   * Whether hook scripts may commit to this relay's inbox instead of POSTing. Only safe when the
+   * panes' output flows through this relay, which drains before publishing it; defaults to true.
+   */
+  hookInbox?: boolean
 }
 
 export class RelayAgentHookServer {
@@ -93,6 +93,7 @@ export class RelayAgentHookServer {
   private preferredPort: number
   private portFallbackApplied = false
   private retryScheduler: AgentHookResultRetryScheduler
+  private hookInbox: AgentHookInbox | null = null
 
   constructor(options: RelayHookServerOptions) {
     this.env = options.env ?? REMOTE_AGENT_HOOK_ENV
@@ -119,19 +120,11 @@ export class RelayAgentHookServer {
     this.token = this.fixedToken ?? randomUUID()
     this.endpointFileWritten = false
     this.portFallbackApplied = false
-    try {
-      drainAgentHookSpool({
-        endpointDir: this.endpointDir,
-        getPersistedLaunchTokenHash: () => undefined,
-        ingest: (record) => this.ingestSpoolRecord(record)
-      })
-    } catch (err) {
-      // Why: a downstream relay failure must not prevent the loopback listener from starting;
-      // the untruncated spool file remains available for retry on the next restart.
-      process.stderr.write(
-        `[relay-hook-server] spool replay failed: ${err instanceof Error ? err.message : String(err)}\n`
-      )
-    }
+    this.hookInbox ??= openAgentHookInbox({
+      endpointDir: this.endpointDir,
+      ingest: (source, body, { isReplay }) => this.ingestHookBody(source, body, { isReplay }),
+      inbox: options.hookInbox
+    })
     try {
       await this.listenOn(this.preferredPort)
     } catch (err) {
@@ -188,12 +181,17 @@ export class RelayAgentHookServer {
       token: this.token,
       env: this.env,
       version: ORCA_HOOK_PROTOCOL_VERSION,
-      transport: ORCA_HOOK_RAW_JSON_TRANSPORT
+      transport: ORCA_HOOK_RAW_JSON_TRANSPORT,
+      inbox: this.hookInbox !== null
     })
     return this.endpointFileWritten
   }
 
   stop(): void {
+    // Why first: a record claimed after forwarding is torn down would be lost, not left for the
+    // next relay.
+    this.hookInbox?.close()
+    this.hookInbox = null
     this.server?.close()
     this.server = null
     this.port = 0
@@ -204,9 +202,15 @@ export class RelayAgentHookServer {
     this.lastEnvelopeMetaByPaneKey.clear()
   }
 
+  /** Applies and forwards every hook event already committed to the inbox. */
+  drainCommittedHooks(): void {
+    this.hookInbox?.drain()
+  }
+
   /** Request-driven replay: re-forwards each cached paneKey payload as a fresh notification. Forwards are
    *  issued before the request handler returns, so the response trails all replayed notifications. */
   replayCachedPayloadsForPanes(): number {
+    this.drainCommittedHooks()
     const cachedSnapshot = new Map(this.state.lastStatusByPaneKey)
     const replayable = selectReplayableCachedPanes({
       cachedByPaneKey: cachedSnapshot,
@@ -274,18 +278,9 @@ export class RelayAgentHookServer {
         return
       }
       const body = await readRequestBody(req)
-      const hookBody = mergeAgentHookRequestHeaders(body, req.headers)
-      const event = normalizeHookPayload(this.state, source, hookBody, this.env, {
-        deferCompactOwnershipToClient: true
-      })
-      if (event) {
-        // TODO: once normalizeHookPayload returns validated env/version, drop bodyEnv/bodyVersion and source them from the listener result.
-        const env = hookBodyEnv(hookBody)
-        const version = hookBodyVersion(hookBody)
-        this.applyEvent(event, source, env, version)
-        this.retryScheduler.scheduleAssistantMessageRetry(source, hookBody, event, env, version)
-        this.retryScheduler.scheduleTranscriptPoll(source, hookBody, event, env, version)
-      }
+      // Why: anything committed to the inbox before this POST was published earlier.
+      this.drainCommittedHooks()
+      this.ingestHookBody(source, mergeAgentHookRequestHeaders(body, req.headers))
       res.writeHead(204)
       res.end()
     } catch (err) {
@@ -303,12 +298,38 @@ export class RelayAgentHookServer {
     }
   }
 
+  /** The one ingest path for a hook body, whichever transport carried it. A replay was committed
+   *  while no relay was running: it only refreshes the per-pane cache, which the client pulls with
+   *  its replay request once it is actually listening. */
+  private ingestHookBody(
+    source: AgentHookSource,
+    hookBody: unknown,
+    options: { isReplay?: boolean } = {}
+  ): void {
+    const event = normalizeHookPayload(this.state, source, hookBody, this.env, {
+      deferCompactOwnershipToClient: true
+    })
+    if (!event) {
+      return
+    }
+    // TODO: once normalizeHookPayload returns validated env/version, drop bodyEnv/bodyVersion and source them from the listener result.
+    const env = hookBodyEnv(hookBody)
+    const version = hookBodyVersion(hookBody)
+    if (options.isReplay) {
+      this.applyEvent(event, source, env, version, { isReplay: true, forward: false })
+      return
+    }
+    this.applyEvent(event, source, env, version)
+    this.retryScheduler.scheduleAssistantMessageRetry(source, hookBody, event, env, version)
+    this.retryScheduler.scheduleTranscriptPoll(source, hookBody, event, env, version)
+  }
+
   private applyEvent(
     event: AgentHookEventPayload,
     source: AgentHookSource,
     env?: string,
     version?: string,
-    options: { isReplay?: boolean } = {}
+    options: { isReplay?: boolean; forward?: boolean } = {}
   ): void {
     // Why: this post came from a process still running inside a pane whose tab the user closed.
     // Caching or forwarding it makes every connected client advertise a live, resumable agent pane
@@ -333,22 +354,10 @@ export class RelayAgentHookServer {
     }
     this.lastEnvelopeMetaByPaneKey.delete(event.paneKey)
     this.lastEnvelopeMetaByPaneKey.set(event.paneKey, { source, env, version })
-    this.forward(buildRelayHookEnvelope(event, source, env, version, options))
-  }
-
-  private ingestSpoolRecord(record: SpoolRecord): void {
-    if (!isAgentHookSource(record.source)) {
-      return
+    if (options.forward !== false) {
+      this.forward(
+        buildRelayHookEnvelope(event, source, env, version, { isReplay: options.isReplay })
+      )
     }
-    const body = buildSpoolHookBody(record)
-    const event = normalizeHookPayload(this.state, record.source, body, this.env, {
-      deferCompactOwnershipToClient: true
-    })
-    if (!event) {
-      return
-    }
-    this.applyEvent(event, record.source, hookBodyEnv(body), hookBodyVersion(body), {
-      isReplay: true
-    })
   }
 }

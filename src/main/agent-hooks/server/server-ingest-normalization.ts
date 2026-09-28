@@ -1,6 +1,6 @@
-import { buildSpoolHookBody, type SpoolRecord } from '../../../shared/agent-hook-spool'
+import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
-import { isAgentHookSource, type AgentHookSource } from '../../../shared/agent-hook-relay'
+import type { AgentHookSource } from '../../../shared/agent-hook-relay'
 import type { NormalizedLocalHook } from './server-types'
 import { AgentHookServerOpenCodeBinder } from './server-opencode-binder'
 
@@ -56,35 +56,62 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     }
   }
 
-  // Spool records are durable replay evidence, not a live observation.
-  protected ingestSpoolRecord(record: SpoolRecord): void {
-    if (!isAgentHookSource(record.source)) {
-      return
-    }
-    const body = this.normalizeHookBodyPaneKeyAlias(buildSpoolHookBody(record))
-    const normalized = this.normalizeLocalHookPayload(record.source, body)
+  /** The one ingest path for a hook body, whichever transport carried it: an HTTP POST, a record
+   *  committed to the hook inbox, or a legacy spool line. A replay is durable evidence committed
+   *  while nothing was draining, not a live observation. */
+  protected ingestHookBody(
+    source: AgentHookSource,
+    rawBody: unknown,
+    options: { isReplay?: boolean } = {}
+  ): void {
+    const body = this.normalizeHookBodyPaneKeyAlias(rawBody)
+    const normalized = this.normalizeLocalHookPayload(source, body)
     if (!normalized.event) {
       return
     }
-    const replay = { ...normalized.event, isReplay: true as const }
-    const statusDisposition = this.getAgentStatusDisposition(replay.paneKey, {
-      source: record.source,
-      hookEventName: replay.hookEventName,
-      isReplay: true,
-      hasExplicitPrompt: replay.hasExplicitPrompt,
-      launchToken: replay.launchToken
+    const observed = options.isReplay
+      ? { ...normalized.event, isReplay: true as const }
+      : normalized.event
+    const statusDisposition = this.getAgentStatusDisposition(observed.paneKey, {
+      source,
+      hookEventName: observed.hookEventName,
+      isReplay: observed.isReplay,
+      hasExplicitPrompt: observed.hasExplicitPrompt,
+      launchToken: observed.launchToken
     })
     if (statusDisposition === 'suppress') {
       return
     }
-    const event = statusDisposition === 'restart' ? { ...replay, launchToken: undefined } : replay
+    const restartedAuthority =
+      statusDisposition === 'restart' && source === 'omp'
+        ? this.restoreRetiredStatusRestart(observed.paneKey)
+        : undefined
+    const event =
+      statusDisposition === 'restart'
+        ? {
+            ...observed,
+            launchToken: undefined,
+            ...(restartedAuthority
+              ? { ...restartedAuthority, tabId: parsePaneKey(restartedAuthority.paneKey)?.tabId }
+              : {})
+          }
+        : observed
     if (statusDisposition === 'restart') {
+      // Why: a retired pane accepting a new turn is a different agent session behind the
+      // same key — later observations must not be ordered against the retired one.
       this.observations.rebind(event.paneKey)
     }
     this.recordCurrentAuthorityObservation(event)
-    this.applyNormalizedStatus(event, normalized.onAccepted)
-    if (event.payload.state !== 'done') {
-      this.withdrawReplayObservation(this.resolvePaneKeyAlias(event.paneKey))
+    const enriched = this.applyNormalizedStatus(event, normalized.onAccepted)
+    if (options.isReplay) {
+      if (event.payload.state !== 'done') {
+        this.withdrawReplayObservation(this.resolvePaneKeyAlias(event.paneKey))
+      }
+      return
+    }
+    if (enriched) {
+      this.scheduleAssistantMessageRetry(source, body, enriched)
+      this.scheduleTranscriptPoll(source, body, enriched)
     }
   }
 }

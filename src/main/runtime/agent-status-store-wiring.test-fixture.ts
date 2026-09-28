@@ -20,6 +20,7 @@ export function makeAgentStatusStoreWiring(): {
   statusStore: AgentHookServer
   deps: {
     onTerminalAgentStatus: (event: Parameters<AgentHookServer['ingestTerminalStatus']>[0]) => void
+    drainCommittedAgentHooks: () => void
     getAgentStatusSnapshot: () => ReturnType<AgentHookServer['getStatusSnapshot']>
     getAgentProviderSessionSnapshot: () => ReturnType<AgentHookServer['getStatusSnapshot']>
     getAgentProviderSessionRowsForPane: (
@@ -37,6 +38,7 @@ export function makeAgentStatusStoreWiring(): {
     statusStore,
     deps: {
       onTerminalAgentStatus: (event) => statusStore.ingestTerminalStatus(event),
+      drainCommittedAgentHooks: () => statusStore.drainCommittedHooks(),
       getAgentStatusSnapshot: () =>
         statusStore.getStatusSnapshot().filter((entry) => entry.providerSessionOnly !== true),
       getAgentProviderSessionSnapshot: () => statusStore.getStatusSnapshot(),

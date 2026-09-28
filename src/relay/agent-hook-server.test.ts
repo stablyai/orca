@@ -13,6 +13,21 @@ import { HOOK_REQUEST_MAX_BYTES } from '../shared/agent-hook-listener/request-bo
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const PANE_KEY = makePaneKey('tab-1', LEAF_ID)
 
+function commitInboxRecord(path: string, hookEventName: string): void {
+  writeFileSync(
+    path,
+    [
+      JSON.stringify({ hook_event_name: hookEventName, prompt: 'hi' }),
+      'orca-hook-record v1',
+      'source=claude',
+      `paneKey=${PANE_KEY}`,
+      'tabId=tab-1',
+      'orca-hook-end',
+      ''
+    ].join('\n')
+  )
+}
+
 type RelayServerInternals = {
   state: { lastStatusByPaneKey: Map<string, unknown> }
   retryScheduler: AgentHookResultRetryScheduler
@@ -80,7 +95,7 @@ describe('RelayAgentHookServer', () => {
     }
   })
 
-  it('normalizes and forwards raw spooled hooks on startup', async () => {
+  it('caches spooled hooks at startup and hands them to the client on its replay request', async () => {
     const spoolDir = join(dir, 'spool')
     const spoolFile = join(spoolDir, 'pane-codex.jsonl')
     mkdirSync(spoolDir)
@@ -99,12 +114,21 @@ describe('RelayAgentHookServer', () => {
         receivedAt: Date.now()
       })}\n`
     )
-    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>(() => {
+      throw new Error('no client is listening yet')
+    })
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })
 
-    await server.start()
+    // Why: at startup no client is listening (the WSL host even treats early bytes as noise), so a
+    // replay only refreshes the cache and a failing forward cannot block the listener.
+    await expect(server.start()).resolves.toBeUndefined()
     try {
-      expect(forward).toHaveBeenCalledTimes(1)
+      expect(server.getCoordinates().port).toBeGreaterThan(0)
+      expect(forward).not.toHaveBeenCalled()
+      expect(readFileSync(spoolFile)).toHaveLength(0)
+
+      forward.mockImplementation(() => {})
+      expect(server.replayCachedPayloadsForPanes()).toBe(1)
       expect(forward.mock.calls[0][0]).toMatchObject({
         source: 'codex',
         paneKey: PANE_KEY,
@@ -117,37 +141,49 @@ describe('RelayAgentHookServer', () => {
         version: '1',
         payload: { state: 'working', agentType: 'codex' }
       })
-      expect(readFileSync(spoolFile)).toHaveLength(0)
     } finally {
       server.stop()
     }
   })
 
-  it('keeps the relay listening when spool replay forwarding fails', async () => {
-    const spoolDir = join(dir, 'spool')
-    const spoolFile = join(spoolDir, 'pane-codex.jsonl')
-    mkdirSync(spoolDir)
-    writeFileSync(
-      spoolFile,
-      `${JSON.stringify({
-        paneKey: PANE_KEY,
-        source: 'codex',
-        hookEventName: 'SubagentStop',
-        payload: { hook_event_name: 'SubagentStop', agent_id: 'child-spooled' },
-        receivedAt: Date.now()
-      })}\n`
-    )
-    const server = new RelayAgentHookServer({
-      endpointDir: dir,
-      forward: () => {
-        throw new Error('receiver unavailable')
-      }
-    })
-
+  it('forwards a record committed to the hook inbox while it runs', async () => {
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    await server.start()
     try {
-      await expect(server.start()).resolves.toBeUndefined()
-      expect(server.getCoordinates().port).toBeGreaterThan(0)
-      expect(readFileSync(spoolFile, 'utf8')).not.toBe('')
+      expect(readFileSync(join(dir, 'endpoint.env'), 'utf8')).toContain('ORCA_AGENT_HOOK_INBOX=1')
+      commitInboxRecord(join(dir, 'hook-inbox', '1.0.rec'), 'UserPromptSubmit')
+      await vi.waitFor(() => expect(forward).toHaveBeenCalledTimes(1), { timeout: 3_000 })
+      expect(forward.mock.calls[0][0]).toMatchObject({
+        source: 'claude',
+        paneKey: PANE_KEY,
+        payload: { state: 'working', prompt: 'hi' }
+      })
+      expect(forward.mock.calls[0][0].isReplay).toBeUndefined()
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('forwards committed hook events synchronously when asked to drain', async () => {
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    await server.start()
+    try {
+      commitInboxRecord(join(dir, 'hook-inbox', '1.0.rec'), 'UserPromptSubmit')
+      server.drainCommittedHooks()
+      expect(forward).toHaveBeenCalledTimes(1)
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('keeps hook scripts on the POST when started without an inbox', async () => {
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    await server.start({ hookInbox: false })
+    try {
+      expect(readFileSync(join(dir, 'endpoint.env'), 'utf8')).not.toContain('ORCA_AGENT_HOOK_INBOX')
     } finally {
       server.stop()
     }

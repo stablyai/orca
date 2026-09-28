@@ -30,6 +30,7 @@ export const wslUncDirectoryExistsAsyncMock: Mock = vi.fn()
 export const openCodeClearPtyMock: Mock = vi.fn()
 export const buildAgentHookEnvMock: Mock = vi.fn()
 export const clearAgentHookPaneStateMock: Mock = vi.fn()
+export const drainCommittedHooksMock: Mock = vi.fn()
 export const registerPaneKeyAliasMock: Mock = vi.fn()
 export const piBuildPtyEnvMock: Mock = vi.fn()
 export const piClearPtyMock: Mock = vi.fn()
@@ -128,6 +129,7 @@ export const agentHookServerModuleMock = () => ({
   agentHookServer: {
     buildPtyEnv: buildAgentHookEnvMock,
     clearPaneState: clearAgentHookPaneStateMock,
+    drainCommittedHooks: drainCommittedHooksMock,
     registerPaneKeyAlias: registerPaneKeyAliasMock,
     clearPaneKeyAliasesForPty: clearPaneKeyAliasesForPtyMock
   }

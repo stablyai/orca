@@ -13,6 +13,7 @@ export class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithSc
    *  emitted through the same fact channel as byte-scanned facts. Arrives
    *  between chunks, so recordTerminalSideEffectFact emits it immediately. */
   emitDaemonPtyTransientFact(ptyId: string, fact: PtyTransientFact): void {
+    this.drainCommittedAgentHooks?.()
     switch (fact.kind) {
       case 'bell':
         this.recordTerminalSideEffectFact(ptyId, { kind: 'bell' })

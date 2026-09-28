@@ -4,6 +4,7 @@ import {
   buildPosixHookSpoolLines,
   WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD
 } from '../agent-hooks/hook-stdin-contract'
+import { buildPosixHookInboxCommitLines } from '../agent-hooks/hook-inbox-commit'
 
 export function getManagedScriptFileName(): string {
   return process.platform === 'win32' ? 'copilot-hook.ps1' : 'copilot-hook.sh'
@@ -58,6 +59,12 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     "printf '{}\\n'",
     ...buildPosixHookPayloadCapture(),
     ...buildPosixHookSpoolLines('copilot'),
+    ...buildPosixHookInboxCommitLines('copilot', {
+      extraFields: [{ key: 'hookEventName', value: '${ORCA_COPILOT_HOOK_EVENT:-}' }],
+      eventNameVar: 'ORCA_COPILOT_HOOK_EVENT'
+    }),
+    // Why before the endpoint/POST: a committed event survives the agent killing this hook.
+    'orca_hook_commit && exit 0',
     // Why: Copilot consumes stdout for some hooks, so stdout is emitted before
     // endpoint refresh, stdin parsing, or the network POST can fail.
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
