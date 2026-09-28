@@ -76,10 +76,11 @@ type TerminalContextMenuProps = {
   onCopyPaneId: () => void
   canCopyAgentSessionId: boolean
   onCopyAgentSessionId: () => void
+  onMenuClosed?: () => void
 }
 
 export default function TerminalContextMenu(props: TerminalContextMenuProps): React.JSX.Element {
-  const { open, onOpenChange, menuPoint, menuOpenedAtRef } = props
+  const { open, onOpenChange, menuPoint, menuOpenedAtRef, onMenuClosed } = props
   return (
     <DropdownMenu
       open={open}
@@ -106,6 +107,7 @@ export default function TerminalContextMenu(props: TerminalContextMenuProps): Re
         onCloseAutoFocus={(e) => {
           // Keep xterm focused instead of Radix's hidden trigger.
           e.preventDefault()
+          onMenuClosed?.()
         }}
         onFocusOutside={(e) => {
           // xterm reclaiming focus after contextmenu is not an outside dismissal.

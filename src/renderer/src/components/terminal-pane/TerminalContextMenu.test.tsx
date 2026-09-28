@@ -9,6 +9,14 @@ type ItemProps = { onSelect?: () => void; children?: React.ReactNode }
 
 const items = vi.hoisted(() => ({ list: [] as ItemProps[] }))
 const shortcuts = vi.hoisted(() => ({ list: [] as string[] }))
+type DropdownMenuContentMockProps = {
+  children?: React.ReactNode
+  onCloseAutoFocus?: (e: { preventDefault: () => void }) => void
+}
+
+const menuContentProps: { last: DropdownMenuContentMockProps | null } = vi.hoisted(() => ({
+  last: null
+}))
 
 vi.mock('@/components/ui/dropdown-menu', async () => {
   const React_ = await import('react')
@@ -18,8 +26,13 @@ vi.mock('@/components/ui/dropdown-menu', async () => {
   return {
     DropdownMenu: ({ open, children }: { open: boolean; children?: React.ReactNode }) =>
       React_.createElement(OpenContext.Provider, { value: open }, children),
-    DropdownMenuContent: ({ children }: { children?: React.ReactNode }) =>
-      React_.useContext(OpenContext) ? passthrough({ children }) : null,
+    DropdownMenuContent: (props: {
+      children?: React.ReactNode
+      onCloseAutoFocus?: (e: { preventDefault: () => void }) => void
+    }) => {
+      menuContentProps.last = props
+      return React_.useContext(OpenContext) ? passthrough({ children: props.children }) : null
+    },
     DropdownMenuLabel: passthrough,
     DropdownMenuSeparator: () => null,
     DropdownMenuShortcut: ({ children }: { children?: React.ReactNode }) => {
@@ -312,5 +325,16 @@ describe('TerminalContextMenu', () => {
 
     expect(rendered).toContain('Loading host…')
     expect(rendered).not.toContain('Add Quick Command…')
+  })
+
+  it('calls onMenuClosed and prevents default on close autofocus', () => {
+    const onMenuClosed = vi.fn()
+    renderMenu({ onMenuClosed })
+
+    const preventDefault = vi.fn()
+    menuContentProps.last?.onCloseAutoFocus?.({ preventDefault })
+
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(onMenuClosed).toHaveBeenCalledTimes(1)
   })
 })
