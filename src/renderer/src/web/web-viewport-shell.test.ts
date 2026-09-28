@@ -22,6 +22,13 @@ describe('web viewport shell', () => {
     }
   })
 
+  it('keeps app chrome out of system bars when drawn edge to edge', () => {
+    const block = cssBlock(readSource('src/renderer/src/assets/main.css'), '.app-layout')
+    for (const side of ['top', 'right', 'bottom', 'left']) {
+      expect(block).toContain(`var(--app-safe-${side}, env(safe-area-inset-${side}, 0px))`)
+    }
+  })
+
   it('uses a percentage height chain only for native Electron shells', () => {
     const css = readSource('src/renderer/src/assets/main.css')
     const nativeIndex = readSource('src/renderer/index.html')

@@ -7,6 +7,7 @@
  * beside, or resolves resources against. The failure surfaces far from here, as a missing
  * file rather than a missing implementation.
  */
+import { existsSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
@@ -55,6 +56,14 @@ export function resolveOrcadInstallRoot(scriptPath = process.argv[1]): string {
     )
   }
   return dirname(resolve(scriptPath))
+}
+
+/** The desktop web client, when the bundle was built with ORCAD_INCLUDE_WEB_CLIENT=1. */
+export function resolveOrcadWebClientRoot(
+  installRoot = resolveOrcadInstallRoot()
+): string | undefined {
+  const root = join(installRoot, 'web')
+  return existsSync(join(root, 'web-index.html')) ? root : undefined
 }
 
 export function resolveOrcadPath(name: AppPathName): string {

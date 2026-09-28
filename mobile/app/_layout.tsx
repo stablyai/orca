@@ -217,6 +217,8 @@ export default function RootLayout() {
           <Stack.Screen name="pair-scan" options={{ headerShown: false }} />
           <Stack.Screen name="pair" options={{ headerShown: false }} />
           <Stack.Screen name="pair-confirm" options={{ headerShown: false }} />
+          <Stack.Screen name="local-host" options={{ headerShown: false }} />
+          <Stack.Screen name="desktop" options={{ headerShown: false }} />
           <Stack.Screen
             name="mobile-onboarding"
             options={{ headerShown: false, presentation: 'modal', gestureEnabled: false }}

@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { isCompactViewport } from '@/lib/compact-viewport'
 import { useAppStore } from '../store'
 import {
   capturePersistedUIWriteBaseline,
@@ -50,7 +51,9 @@ function createPersistedUIWriteController(): PersistedUIWriteController {
       if (!baseline) {
         return
       }
-      const trailing = diffPersistedUIWriteFields(capturePersistedUIWriteBaseline(state), baseline)
+      const trailing = withoutCompactDrawerFields(
+        diffPersistedUIWriteFields(capturePersistedUIWriteBaseline(state), baseline)
+      )
       if (Object.keys(trailing).length > 0) {
         controller.send(trailing)
       }
@@ -138,6 +141,20 @@ function createPersistedUIWriteController(): PersistedUIWriteController {
  * Why (#9002): activeView is deliberately kept off this debounced writer. It used to ride the
  * same 150ms save (#8265), so every top-level view switch scheduled a full durable-state write.
  */
+/**
+ * A phone-width viewport opens and closes the right sidebar as a drawer; that is not a layout
+ * preference, and writing it would flip the shared desktop profile's sidebar on every tap.
+ */
+function withoutCompactDrawerFields(
+  changed: Partial<PersistedUIWriteBaseline>
+): Partial<PersistedUIWriteBaseline> {
+  if (!isCompactViewport() || !('rightSidebarOpen' in changed)) {
+    return changed
+  }
+  const { rightSidebarOpen: _drawerState, ...rest } = changed
+  return rest
+}
+
 export function usePersistedUIWriter(): void {
   const controller = useMemo(() => createPersistedUIWriteController(), [])
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
@@ -189,7 +206,10 @@ export function usePersistedUIWriter(): void {
     if (!persistedUIReady || !armBaseline) {
       return
     }
-    if (Object.keys(diffPersistedUIWriteFields(ui, armBaseline)).length === 0) {
+    if (
+      Object.keys(withoutCompactDrawerFields(diffPersistedUIWriteFields(ui, armBaseline)))
+        .length === 0
+    ) {
       return
     }
     const timer = window.setTimeout(() => {
@@ -201,7 +221,7 @@ export function usePersistedUIWriter(): void {
       if (!baseline) {
         return
       }
-      const changed = diffPersistedUIWriteFields(ui, baseline)
+      const changed = withoutCompactDrawerFields(diffPersistedUIWriteFields(ui, baseline))
       if (Object.keys(changed).length === 0) {
         return
       }

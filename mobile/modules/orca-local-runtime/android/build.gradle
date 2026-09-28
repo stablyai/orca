@@ -1,0 +1,22 @@
+apply plugin: 'com.android.library'
+
+group = 'expo.modules.orcalocalruntime'
+version = '0.0.1'
+
+def expoModulesCorePlugin = new File(project(':expo-modules-core').projectDir.absolutePath, 'ExpoModulesCorePlugin.gradle')
+apply from: expoModulesCorePlugin
+applyKotlinExpoModulesCorePlugin()
+useCoreDependencies()
+useExpoPublishing()
+useDefaultAndroidSdkVersions()
+
+android {
+  namespace 'expo.modules.orcalocalruntime'
+}
+
+dependencies {
+  // The Ubuntu rootfs tarball carries symlinks, hard links and modes that java.util.zip cannot read.
+  implementation 'org.apache.commons:commons-compress:1.27.1'
+  testImplementation 'junit:junit:4.13.2'
+  testImplementation 'org.json:json:20240303'
+}

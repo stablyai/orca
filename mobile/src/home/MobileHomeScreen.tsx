@@ -1,4 +1,6 @@
 import { useCallback, useState } from 'react'
+import { canRunLocalHost } from '../local-runtime/local-runtime-availability'
+import { LocalDeviceHomeCard } from '../local-runtime/LocalDeviceHomeCard'
 import { Alert, StyleSheet } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useOpenMobileAccounts } from '../accounts/use-open-mobile-accounts'
@@ -120,6 +122,7 @@ export function MobileHomeScreen() {
           contentMaxWidth={contentMaxWidth}
           isWideLayout={isWideLayout}
           onPairDesktop={() => data.router.push('/pair-scan')}
+          onRunOnDevice={canRunLocalHost() ? () => data.router.push('/local-host') : undefined}
         />
       ) : (
         <MobileHomeHostList
@@ -147,6 +150,14 @@ export function MobileHomeScreen() {
           hostStates={data.hostStates}
           isWideLayout={isWideLayout}
           stats={data.stats}
+          localDevice={
+            canRunLocalHost() ? (
+              <LocalDeviceHomeCard
+                onOpenDesktop={() => data.router.push('/desktop')}
+                onManage={() => data.router.push('/local-host')}
+              />
+            ) : undefined
+          }
           worktreeInfo={data.worktreeInfo}
           onOpen={openHost}
           onLongPress={(host) => {

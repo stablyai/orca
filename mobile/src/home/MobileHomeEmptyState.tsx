@@ -1,4 +1,4 @@
-import { QrCode } from 'lucide-react-native'
+import { QrCode, Smartphone } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { colors, radii, spacing } from '../theme/mobile-theme'
 
@@ -22,6 +22,8 @@ export function MobileHomeEmptyState(props: {
   contentMaxWidth: number
   isWideLayout: boolean
   onPairDesktop: () => void
+  /** Present only in the standalone flavor, which can host Orca itself. */
+  onRunOnDevice?: () => void
 }) {
   return (
     <View
@@ -45,6 +47,12 @@ export function MobileHomeEmptyState(props: {
           <QrCode size={17} color={colors.bgBase} />
           <Text style={styles.primaryButtonText}>Pair Desktop</Text>
         </Pressable>
+        {props.onRunOnDevice ? (
+          <Pressable style={styles.secondaryButton} onPress={props.onRunOnDevice}>
+            <Smartphone size={17} color={colors.textPrimary} />
+            <Text style={styles.secondaryButtonText}>Run Orca on this phone</Text>
+          </Pressable>
+        ) : null}
       </View>
       <View style={styles.stepsSection}>
         <Text style={styles.sectionHeading}>How it works</Text>
@@ -97,6 +105,18 @@ const styles = StyleSheet.create({
     borderRadius: radii.card
   },
   primaryButtonText: { color: colors.bgBase, fontSize: 15, fontWeight: '700' },
+  secondaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: spacing.md,
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    borderRadius: radii.card,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle
+  },
+  secondaryButtonText: { color: colors.textPrimary, fontSize: 15, fontWeight: '600' },
   stepsSection: { paddingHorizontal: spacing.xl },
   sectionHeading: {
     fontSize: 11,

@@ -151,6 +151,16 @@ cpSync(join(ROOT, 'resources', 'licenses', 'ripgrep'), join(OUT_DIR, 'ripgrep', 
   recursive: true
 })
 
+// Opt-in: the desktop web client (`pnpm build:web` → out/web), served by orcad at /web-index.html.
+// An on-device host with no desktop needs it; a server paired to real desktops does not.
+if (process.env.ORCAD_INCLUDE_WEB_CLIENT === '1') {
+  const webRoot = join(ROOT, 'out', 'web')
+  if (!existsSync(join(webRoot, 'web-index.html'))) {
+    throw new Error('ORCAD_INCLUDE_WEB_CLIENT=1 but out/web is missing; run `pnpm build:web` first')
+  }
+  cpSync(webRoot, join(OUT_DIR, 'web'), { recursive: true })
+}
+
 /** Why one call per child and not one `outdir` build: esbuild mirrors each entry's source
  *  directory under `outdir`, and both children must land flat beside orcad.js — that is where
  *  their runtime resolvers look for them. */

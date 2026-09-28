@@ -14,7 +14,13 @@ import process from 'node:process'
 import { setAppEnvironment, type AppEnvironment } from '../../shared/app-environment'
 import { setSecretStore, type SecretStore } from '../../shared/secret-store'
 import type { ServeReadiness } from '../server/serve-readiness'
-import { resolveOrcadInstallRoot, resolveOrcadPath, resolveUserDataPath } from './orcad-app-paths'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-types'
+import {
+  resolveOrcadInstallRoot,
+  resolveOrcadPath,
+  resolveOrcadWebClientRoot,
+  resolveUserDataPath
+} from './orcad-app-paths'
 import { describeOrcadBindExposure, resolveOrcadBindHost } from './orcad-bind-address'
 import {
   flushOrcadProfileStoreForShutdown,
@@ -89,6 +95,8 @@ export type OrcadOptions = {
   port?: number
   json?: boolean
   noPairing?: boolean
+  /** Mint a mobile-scoped offer, as `orca serve --mobile-pairing` does. */
+  mobilePairing?: boolean
   pairingAddress?: string
   /** Literal IP to bind. Defaults to loopback; see orcad-bind-address.ts. */
   bind?: string
@@ -285,15 +293,20 @@ async function startOrcadRuntime(
 
   await runtime.refreshRestoredOrchestrationAuthority()
   await runtime.reconcileLegacyWorkerTerminals()
+  // Why: no renderer ever publishes a graph here, so without this the graph stays 'unavailable' and
+  // every paired-client terminal create fails `runtime_unavailable` (as `orca serve` does at startup).
+  runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
 
   // Recovery binds terminal and dispatch identities; only now can startup observations be fenced.
   observedStatusCapture.attach(runtime)
 
   const bindHost = resolveOrcadBindHost(options.bind)
+  const webClientRoot = resolveOrcadWebClientRoot()
   rpc = new OrcaRuntimeRpcServer({
     runtime,
     userDataPath: runtimeUserDataPath,
     enableWebSocket: true,
+    webClientRoot,
     // Why pinned and not `exposeNetworkByDefault`: an unattended host's exposure must be
     // exactly what the operator asked for, on every launch. The default path widens itself
     // once a device has connected, so a loopback deployment would silently go wide one
@@ -323,10 +336,20 @@ async function startOrcadRuntime(
       } as const)
     : rpc.createPairingOffer({
         address: options.pairingAddress,
-        name: `CLI ${new Date().toLocaleDateString()}`,
-        scope: 'runtime'
+        name: `${options.mobilePairing ? 'Mobile' : 'CLI'} ${new Date().toLocaleDateString()}`,
+        scope: options.mobilePairing ? 'mobile' : 'runtime'
       })
 
+  // Why a second offer: the web client only pairs with runtime scope, and an on-device host's own
+  // app also wants the full desktop UI next to its mobile screens.
+  const webClientOffer =
+    options.mobilePairing && !options.noPairing && webClientRoot
+      ? rpc.createPairingOffer({
+          address: options.pairingAddress,
+          name: `Web ${new Date().toLocaleDateString()}`,
+          scope: 'runtime'
+        })
+      : offer
   const readiness: ServeReadiness = {
     runtimeId: runtime.getRuntimeId(),
     boundEndpoint,
@@ -341,14 +364,15 @@ async function startOrcadRuntime(
           endpoint: offer.endpoint,
           deviceId: offer.deviceId,
           webClientUrl: offer.webClientUrl,
-          scope: 'runtime',
+          scope: options.mobilePairing ? 'mobile' : 'runtime',
           qr: null
         }
       : offer,
     // Why in the readiness payload: this is the one message a supervisor and a deploy
     // transaction both read, and a green orcad with a dead daemon is exactly the
     // looks-healthy-but-useless state they must not activate.
-    health: await collectOrcadHealth(getAppEnvironment().getVersion(), profileStateAuthority)
+    health: await collectOrcadHealth(getAppEnvironment().getVersion(), profileStateAuthority),
+    webClientUrl: webClientOffer.available ? webClientOffer.webClientUrl : null
   }
 
   await new ServeReadinessPublisher().publish(readiness, {

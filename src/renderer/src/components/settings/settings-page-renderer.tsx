@@ -1,4 +1,5 @@
 import { ActiveSettingsSectionProvider } from './SettingsSection'
+import { SettingsCompactFrame } from './SettingsCompactFrame'
 import { SettingsSidebar } from './SettingsSidebar'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -76,85 +77,94 @@ export function renderSettingsPage(context: SettingsRenderContext): React.JSX.El
       ref={interactions.setSettingsRootNode}
       className="settings-view-shell flex min-h-0 flex-1 overflow-hidden bg-background"
     >
-      <SettingsSidebar
-        settings={model.settings}
-        activeSectionId={model.activeSectionId}
-        generalGroups={view.generalNavGroups}
-        repoSections={view.repoNavSections}
-        hasRepos={model.repos.length > 0}
-        searchInputRef={interactions.searchInputRef}
-        // Why: deep-links open panes/modals that own focus; plain entry lands in search.
-        searchAutoFocus={model.settingsNavigationTarget == null}
-        onBack={interactions.closeSettingsPageWithPromptGuard}
-        onSelectSection={actions.scrollToSection}
-      />
-
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div
-          ref={interactions.setContentScrollNode}
-          className={cn(
-            'min-h-0 flex-1',
-            view.isFocusedShortcutsPane ? 'overflow-hidden' : 'overflow-y-auto scrollbar-sleek'
-          )}
-        >
+      <SettingsCompactFrame
+        renderSidebar={({ className, onPicked }) => (
+          <SettingsSidebar
+            className={className}
+            settings={model.settings}
+            activeSectionId={model.activeSectionId}
+            generalGroups={view.generalNavGroups}
+            repoSections={view.repoNavSections}
+            hasRepos={model.repos.length > 0}
+            searchInputRef={interactions.searchInputRef}
+            // Why: deep-links open panes/modals that own focus; plain entry lands in search.
+            searchAutoFocus={model.settingsNavigationTarget == null}
+            onBack={interactions.closeSettingsPageWithPromptGuard}
+            onSelectSection={(sectionId) => {
+              onPicked()
+              // Next frame: on a phone the content column was hidden until onPicked revealed it.
+              requestAnimationFrame(() => actions.scrollToSection(sectionId))
+            }}
+          />
+        )}
+      >
+        <div className="flex min-h-0 flex-1 flex-col">
           <div
+            ref={interactions.setContentScrollNode}
             className={cn(
-              'mx-auto flex w-full flex-col gap-10 px-8 pt-10',
-              view.isFocusedShortcutsPane ? 'h-full pb-6' : 'pb-24',
-              view.isFocusedSetupGuidePane ? 'max-w-6xl' : 'max-w-4xl'
+              'min-h-0 flex-1',
+              view.isFocusedShortcutsPane ? 'overflow-hidden' : 'overflow-y-auto scrollbar-sleek'
             )}
           >
-            {navigation.visibleNavSections.length === 0 ? (
-              <div className="flex min-h-[24rem] items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card/30 text-sm text-muted-foreground">
-                {translate(
-                  'auto.components.settings.Settings.3c88ec55d6',
-                  'No settings found for "'
-                )}
-                {model.settingsSearchQuery.trim()}
-                {translate('auto.components.settings.Settings.add3b97ee6', '"')}
-              </div>
-            ) : (
-              <ActiveSettingsSectionProvider value={model.activeSectionId}>
-                {renderAgentsSettingsSection(context)}
-                {renderAccountsSettingsSection(context)}
-                {renderOrchestrationSettingsSection(context)}
-                {renderLinearSettingsSection(context)}
-                {renderDesktopCapabilitySettingsSections(context)}
-                {renderOrcaAccountSettingsSection(context)}
-                {renderSetupGuideSettingsSection(context)}
-                {renderGeneralSettingsSection(context)}
-                {renderIntegrationsSettingsSection(context)}
-                {renderMobileSettingsSection(context)}
-                {renderAutomationsSettingsSection(context)}
-                {renderArtifactsSettingsSection(context)}
-                {renderShareSkillsSettingsSection(context)}
-                {renderSessionHistorySettingsSection(context)}
-                {renderGitSettingsSection(context)}
-                {renderTasksSettingsSection(context)}
-                {renderTerminalSettingsSection(context)}
-                {renderQuickCommandsSettingsSection(context)}
-                {renderBrowserSettingsSection(context)}
-                {renderMobileEmulatorSettingsSection(context)}
-                {renderFloatingWorkspaceSettingsSection(context)}
-                {renderAppearanceSettingsSection(context)}
-                {renderInputSettingsSection(context)}
-                {renderNotificationsSettingsSection(context)}
-                {renderShortcutsSettingsSection(context)}
-                {renderStatsSettingsSection(context)}
-                {renderServersSettingsSection(context)}
-                {renderSshSettingsSection(context)}
-                {renderDeveloperPermissionsSettingsSection(context)}
-                {renderPrivacySettingsSection(context)}
-                {renderAdvancedSettingsSection(context)}
-                {renderDevSettingsSection(context)}
-                {renderExperimentalSettingsSection(context)}
-                {renderPluginsSettingsSection(context)}
-                {renderProjectSettingsSections(context)}
-              </ActiveSettingsSectionProvider>
-            )}
+            <div
+              className={cn(
+                'mx-auto flex w-full flex-col gap-10 px-8 pt-10 max-md:gap-6 max-md:px-4 max-md:pt-4',
+                view.isFocusedShortcutsPane ? 'h-full pb-6' : 'pb-24',
+                view.isFocusedSetupGuidePane ? 'max-w-6xl' : 'max-w-4xl'
+              )}
+            >
+              {navigation.visibleNavSections.length === 0 ? (
+                <div className="flex min-h-[24rem] items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card/30 text-sm text-muted-foreground">
+                  {translate(
+                    'auto.components.settings.Settings.3c88ec55d6',
+                    'No settings found for "'
+                  )}
+                  {model.settingsSearchQuery.trim()}
+                  {translate('auto.components.settings.Settings.add3b97ee6', '"')}
+                </div>
+              ) : (
+                <ActiveSettingsSectionProvider value={model.activeSectionId}>
+                  {renderAgentsSettingsSection(context)}
+                  {renderAccountsSettingsSection(context)}
+                  {renderOrchestrationSettingsSection(context)}
+                  {renderLinearSettingsSection(context)}
+                  {renderDesktopCapabilitySettingsSections(context)}
+                  {renderOrcaAccountSettingsSection(context)}
+                  {renderSetupGuideSettingsSection(context)}
+                  {renderGeneralSettingsSection(context)}
+                  {renderIntegrationsSettingsSection(context)}
+                  {renderMobileSettingsSection(context)}
+                  {renderAutomationsSettingsSection(context)}
+                  {renderArtifactsSettingsSection(context)}
+                  {renderShareSkillsSettingsSection(context)}
+                  {renderSessionHistorySettingsSection(context)}
+                  {renderGitSettingsSection(context)}
+                  {renderTasksSettingsSection(context)}
+                  {renderTerminalSettingsSection(context)}
+                  {renderQuickCommandsSettingsSection(context)}
+                  {renderBrowserSettingsSection(context)}
+                  {renderMobileEmulatorSettingsSection(context)}
+                  {renderFloatingWorkspaceSettingsSection(context)}
+                  {renderAppearanceSettingsSection(context)}
+                  {renderInputSettingsSection(context)}
+                  {renderNotificationsSettingsSection(context)}
+                  {renderShortcutsSettingsSection(context)}
+                  {renderStatsSettingsSection(context)}
+                  {renderServersSettingsSection(context)}
+                  {renderSshSettingsSection(context)}
+                  {renderDeveloperPermissionsSettingsSection(context)}
+                  {renderPrivacySettingsSection(context)}
+                  {renderAdvancedSettingsSection(context)}
+                  {renderDevSettingsSection(context)}
+                  {renderExperimentalSettingsSection(context)}
+                  {renderPluginsSettingsSection(context)}
+                  {renderProjectSettingsSections(context)}
+                </ActiveSettingsSectionProvider>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      </SettingsCompactFrame>
     </div>
   )
 }

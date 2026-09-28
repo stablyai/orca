@@ -30,6 +30,10 @@ describe('parseArgs', () => {
     expect(() => parseArgs(['--bind'])).toThrow('--bind expects a value')
     expect(() => parseArgs(['--bind', '--json'])).not.toThrow()
   })
+
+  it('accepts --mobile-pairing for an on-device host that pairs its own app', () => {
+    expect(parseArgs(['--json', '--mobile-pairing'])).toEqual({ json: true, mobilePairing: true })
+  })
 })
 
 describe('resolveOrcadExitCode', () => {

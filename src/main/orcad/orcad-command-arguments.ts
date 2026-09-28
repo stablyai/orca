@@ -21,6 +21,8 @@ export function parseArgs(argv: string[]): OrcadOptions {
       options.json = true
     } else if (arg === '--no-pairing') {
       options.noPairing = true
+    } else if (arg === '--mobile-pairing') {
+      options.mobilePairing = true
     } else if (arg === '--bind') {
       const value = argv[i + 1]
       if (value === undefined) {

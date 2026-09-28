@@ -1,0 +1,6 @@
+{
+  "platforms": ["android"],
+  "android": {
+    "modules": ["expo.modules.orcalocalruntime.OrcaLocalRuntimeModule"]
+  }
+}

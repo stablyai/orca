@@ -1,0 +1,3 @@
+build/
+# Built by scripts/build-android-proot.sh; never committed.
+src/main/assets/orca-local-runtime/

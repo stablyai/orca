@@ -750,6 +750,13 @@ body:has([data-slot='dialog-overlay'], [data-slot='sheet-overlay']) [data-sonner
   height: 100dvh;
   width: 100vw;
   overflow: hidden;
+  /* Why: edge-to-edge hosts (a notched browser, the Android app's WebView) draw under system bars;
+     the page background fills them while chrome stays clear. A host sets --app-safe-* when its
+     WebView reports no env() insets. Both are 0 in desktop windows. */
+  padding: var(--app-safe-top, env(safe-area-inset-top, 0px))
+    var(--app-safe-right, env(safe-area-inset-right, 0px))
+    var(--app-safe-bottom, env(safe-area-inset-bottom, 0px))
+    var(--app-safe-left, env(safe-area-inset-left, 0px));
 }
 
 /* Why: native windows have a stable content box and need no wake-time viewport reflow. */

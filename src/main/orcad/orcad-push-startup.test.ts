@@ -14,6 +14,7 @@ const state = vi.hoisted(() => ({
   controller: null as RuntimeMobileNotificationController | null,
   registry: null as DeviceRegistry | null,
   rpcStarted: false,
+  graphSyncedBeforeRpc: false,
   browserProvider: vi.fn(async () => null),
   register: vi.fn(async () => ({ ok: true, registrationId: 'headless-registration' })),
   send: vi.fn(async () => ({ ok: true, results: [] }))
@@ -21,6 +22,7 @@ const state = vi.hoisted(() => ({
 vi.mock('./orcad-app-paths', () => ({
   resolveOrcadInstallRoot: () => state.root,
   resolveOrcadPath: () => state.root,
+  resolveOrcadWebClientRoot: () => undefined,
   resolveUserDataPath: () => state.root
 }))
 vi.mock('./orcad-browser-provider', () => ({ resolveOrcadBrowserProvider: state.browserProvider }))
@@ -74,6 +76,9 @@ vi.mock('../runtime/orca-runtime', () => ({
     rehydrateClientHostedBrowserPages() {}
     async refreshRestoredOrchestrationAuthority() {}
     async reconcileLegacyWorkerTerminals() {}
+    syncWindowGraph() {
+      state.graphSyncedBeforeRpc = !state.rpcStarted
+    }
     setMobilePushRegistrar(
       registrar: Parameters<RuntimeMobileNotificationController['setPushRegistrar']>[0]
     ) {
@@ -146,6 +151,8 @@ it('starts push after RPC identity is available and stops dispatch on shutdown',
   const { startOrcad } = await import('./orcad-entry')
   const host = await startOrcad({ noPairing: true, json: true })
   try {
+    // A paired phone's first terminal create must not find the graph still 'unavailable'.
+    expect(state.graphSyncedBeforeRpc).toBe(true)
     const result = await state.controller.registerPushDevice({
       deviceId: phone.deviceId,
       platform: 'android',

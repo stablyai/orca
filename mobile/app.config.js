@@ -11,22 +11,65 @@
 const APS_ENVIRONMENT =
   process.env.ORCA_IOS_APS_ENVIRONMENT === 'production' ? 'production' : 'development'
 
-module.exports = ({ config }) => ({
-  ...config,
-  ios: {
-    ...config.ios,
-    entitlements: { ...config.ios?.entitlements, 'aps-environment': APS_ENVIRONMENT }
-  },
-  plugins: (config.plugins ?? []).map((plugin) =>
-    plugin === 'expo-notifications'
-      ? [
-          'expo-notifications',
-          {
-            enableBackgroundRemoteNotifications: true,
-            mode: APS_ENVIRONMENT,
-            icon: './assets/notification-icon.png'
-          }
-        ]
-      : plugin
-  )
-})
+// The standalone flavor runs its own Orca host (Ubuntu under proot) on the phone. It is a separate
+// sideloaded app: targetSdk 28 is what lets it exec the rootfs binaries it unpacks into app data,
+// which Play will not accept, so it must never share the store build's applicationId.
+const ANDROID_STANDALONE = process.env.ORCA_ANDROID_STANDALONE === '1'
+
+function withStandaloneBuildProperties(plugin) {
+  if (!ANDROID_STANDALONE || !Array.isArray(plugin) || plugin[0] !== 'expo-build-properties') {
+    return plugin
+  }
+  const [name, options] = plugin
+  return [
+    name,
+    {
+      ...options,
+      android: { ...options.android, buildArchs: ['arm64-v8a'] }
+    }
+  ]
+}
+
+module.exports = ({ config }) => {
+  const android = ANDROID_STANDALONE
+    ? {
+        ...config.android,
+        package: 'com.stably.orca.standalone',
+        // google-services.json has no client for this applicationId; push is desktop-relayed only.
+        googleServicesFile: undefined
+      }
+    : config.android
+  return {
+    ...config,
+    ...(ANDROID_STANDALONE ? { name: 'Orca Standalone' } : {}),
+    android,
+    extra: {
+      ...config.extra,
+      orcaAndroidStandalone: ANDROID_STANDALONE,
+      // Dev builds only: lets chrome://inspect attach to the desktop-UI WebView.
+      orcaWebViewDebugging: process.env.ORCA_ANDROID_DEBUGGABLE === '1'
+    },
+    ios: {
+      ...config.ios,
+      entitlements: { ...config.ios?.entitlements, 'aps-environment': APS_ENVIRONMENT }
+    },
+    plugins: [
+      ...(config.plugins ?? []).map((plugin) =>
+        plugin === 'expo-notifications'
+          ? [
+              'expo-notifications',
+              {
+                enableBackgroundRemoteNotifications: true,
+                mode: APS_ENVIRONMENT,
+                icon: './assets/notification-icon.png'
+              }
+            ]
+          : withStandaloneBuildProperties(plugin)
+      ),
+      [
+        './plugins/android-local-runtime.js',
+        { standalone: ANDROID_STANDALONE, debuggable: process.env.ORCA_ANDROID_DEBUGGABLE === '1' }
+      ]
+    ]
+  }
+}

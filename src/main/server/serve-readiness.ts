@@ -33,6 +33,8 @@ export type ServeReadiness = {
    * parsing this payload is unaffected.
    */
   health?: OrcadHealth
+  /** Desktop web client with runtime pairing in its fragment; absent means not served. Additive. */
+  webClientUrl?: string | null
 }
 
 export type ServeReadinessOutput =
@@ -87,7 +89,8 @@ export function renderServeReadiness(
       advertisedEndpoint: readiness.advertisedEndpoint,
       managedWslCliReconciliation: readiness.managedWslCliReconciliation,
       pairing: readiness.pairing,
-      ...(readiness.health ? { health: readiness.health } : {})
+      ...(readiness.health ? { health: readiness.health } : {}),
+      ...(readiness.webClientUrl ? { webClientUrl: readiness.webClientUrl } : {})
     })
   }
   return renderHumanReadiness(readiness)

@@ -23,6 +23,7 @@ type MobileHomeHostListProps = {
   hostStates: Record<string, ConnectionState>
   isWideLayout: boolean
   stats: HomeStatsSummary | null
+  localDevice?: React.ReactNode
   worktreeInfo: Record<string, HostWorktreeInfo>
   onOpen: (host: HostCatalogEntry) => void
   onLongPress: (host: HostCatalogEntry) => void
@@ -71,7 +72,9 @@ export function MobileHomeHostList(props: MobileHomeHostListProps) {
           alignSelf: 'center'
         }
       ]}
-      ListHeaderComponent={<MobileHomeListHeader stats={props.stats} />}
+      ListHeaderComponent={
+        <MobileHomeListHeader stats={props.stats} localDevice={props.localDevice} />
+      }
       ItemSeparatorComponent={CardGap}
       renderItem={renderHost}
       ListFooterComponent={props.footer}

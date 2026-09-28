@@ -51,6 +51,7 @@ type SettingsSidebarProps = {
   searchAutoFocus?: boolean
   onBack: () => void
   onSelectSection: (sectionId: string) => void
+  className?: string
 }
 
 function SettingsSearchField({
@@ -157,7 +158,8 @@ export function SettingsSidebar({
   searchInputRef,
   searchAutoFocus = false,
   onBack,
-  onSelectSection
+  onSelectSection,
+  className
 }: SettingsSidebarProps): React.JSX.Element {
   const setupGuideProgress = useSettingsSetupGuideProgress(true)
   const systemPrefersDark = useSystemPrefersDark()
@@ -196,7 +198,10 @@ export function SettingsSidebar({
 
   return (
     <aside
-      className="flex w-[280px] shrink-0 flex-col border-r border-worktree-sidebar-border bg-worktree-sidebar"
+      className={cn(
+        'flex w-[280px] shrink-0 flex-col border-r border-worktree-sidebar-border bg-worktree-sidebar',
+        className
+      )}
       style={leftSidebarStyle}
     >
       <div className="border-b border-worktree-sidebar-border px-3 py-3">
