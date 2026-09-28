@@ -10,7 +10,8 @@ import {
 } from './helpers/paired-electron-client'
 import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../src/shared/execution-host'
 import { runProcess } from '../../src/shared/child-process/run-process'
-import { WEB_TERMINAL_SURFACE_TAB_PREFIX } from '../../src/shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
+import { createHostRendererTerminalTab } from './helpers/host-created-terminal-retention-oracle'
 
 test('switches the active server from the status bar between two paired hosts and local', async ({
   orcaPage,
@@ -43,6 +44,13 @@ test('switches the active server from the status bar between two paired hosts an
         throw new Error('Could not prepare the second runtime host')
       }
     })
+    await privateHost.page.evaluate(async (selector) => {
+      await window.api.runtimeEnvironments.remove({ selector })
+      const state = window.__store?.getState()
+      state?.setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
+      await state?.fetchRepos()
+      await state?.fetchAllWorktrees()
+    }, privateHost.environmentId)
     await privateHost.page.evaluate(async (repoPath) => {
       const result = await window.api.repos.add({ path: repoPath })
       if ('error' in result) {
@@ -125,24 +133,21 @@ test('switches the active server from the status bar between two paired hosts an
       state.setActiveRepo(workspace.repoId)
       state.setActiveWorktree(workspace.id, hostId)
       state.markWorktreeVisited(workspace.id, undefined, hostId)
-      state.createTab(workspace.id)
     }, toRuntimeExecutionHostId(client.environmentId))
-    await page.waitForFunction(
-      (prefix) => {
-        const tabs = [...document.querySelectorAll('[data-tab-id]')]
-        return (
-          tabs.length > 0 &&
-          tabs.every((tab) => tab.getAttribute('data-tab-id')?.startsWith(prefix))
-        )
-      },
-      WEB_TERMINAL_SURFACE_TAB_PREFIX,
-      { polling: 100 }
+    const workWorkspaceId = await orcaPage.evaluate(() => {
+      const id = window.__store?.getState().activeWorktreeId
+      if (!id) {
+        throw new Error('Work host has no active checkout')
+      }
+      return id
+    })
+    const workTabId = toWebTerminalSurfaceTabId(
+      await createHostRendererTerminalTab(orcaPage, workWorkspaceId)
     )
-    const workTabCandidate = page.locator('[data-tab-id]').last()
-    await expect(workTabCandidate).toBeVisible()
-    const workTabId = await workTabCandidate.getAttribute('data-tab-id')
     const workTab = page.locator(`[data-tab-id="${workTabId}"]`)
+    await expect(workTab).toBeVisible({ timeout: 60_000 })
     await workTab.click({ force: true })
+    await expect(workTab).toHaveAttribute('data-active', 'true')
 
     await workTrigger.press('ArrowDown')
     await page.getByRole('menuitemradio', { name: 'priv', exact: true }).focus()
@@ -169,24 +174,23 @@ test('switches the active server from the status bar between two paired hosts an
       state.setActiveRepo(workspace.repoId)
       state.setActiveWorktree(workspace.id, hostId)
       state.markWorktreeVisited(workspace.id, undefined, hostId)
-      state.createTab(workspace.id)
     })
-    await page.waitForFunction(
-      (prefix) => {
-        const tabs = [...document.querySelectorAll('[data-tab-id]')]
-        return (
-          tabs.length > 0 &&
-          tabs.every((tab) => tab.getAttribute('data-tab-id')?.startsWith(prefix))
-        )
-      },
-      WEB_TERMINAL_SURFACE_TAB_PREFIX,
-      { polling: 100 }
+    const privateWorkspaceId = await privateHost.page.evaluate((repoPath) => {
+      const workspace = Object.values(window.__store?.getState().worktreesByRepo ?? {})
+        .flat()
+        .find((row) => row.path === repoPath && row.isMainWorktree)
+      if (!workspace) {
+        throw new Error('Private host checkout was not hydrated')
+      }
+      return workspace.id
+    }, privateRepoPath)
+    const privateTabId = toWebTerminalSurfaceTabId(
+      await createHostRendererTerminalTab(privateHost.page, privateWorkspaceId)
     )
-    const privateTabCandidate = page.locator('[data-tab-id]').last()
-    await expect(privateTabCandidate).toBeVisible()
-    const privateTabId = await privateTabCandidate.getAttribute('data-tab-id')
     const privateTab = page.locator(`[data-tab-id="${privateTabId}"]`)
+    await expect(privateTab).toBeVisible({ timeout: 60_000 })
     await privateTab.click({ force: true })
+    await expect(privateTab).toHaveAttribute('data-active', 'true')
 
     await page.evaluate(async () => {
       const environmentId = window.__store?.getState().settings?.activeRuntimeEnvironmentId
