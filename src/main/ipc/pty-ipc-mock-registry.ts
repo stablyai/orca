@@ -108,12 +108,14 @@ export const childProcessModuleMock = (original: Record<string, unknown>) => ({
 export const openCodeHookServiceModuleMock = () => ({
   openCodeHookService: {
     buildPtyEnv: openCodeBuildPtyEnvMock,
+    refreshLegacySharedPlugin: vi.fn(),
     clearPty: openCodeClearPtyMock
   },
   // Separate mock per variant: assembly.ts picks the service by variant, and a shared
   // mock would hide a regression that hands an OpenCode 2 pane the v1 plugin.
   openCode2HookService: {
     buildPtyEnv: openCode2BuildPtyEnvMock,
+    refreshLegacySharedPlugin: vi.fn(),
     clearPty: openCodeClearPtyMock
   }
 })
