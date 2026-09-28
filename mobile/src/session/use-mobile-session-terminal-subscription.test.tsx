@@ -27,7 +27,7 @@ function subscriptionHarness(opts: {
   const terminal: TerminalWebViewHandle = {
     prepareForForegroundRecovery: vi.fn(),
     write: vi.fn(),
-    init: vi.fn((cols: number, rows: number) => {
+    init: vi.fn(({ cols, rows }: { cols: number; rows: number }) => {
       order.push(`init ${cols}x${rows}`)
       // An init's document reports its laid-out box before its ready.
       fit = fit ?? PHONE

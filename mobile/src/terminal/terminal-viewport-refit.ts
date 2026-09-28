@@ -119,7 +119,7 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions) 
           }
           const frame = terminalFrameRef.current
           const dims = frame ? ref.fitDimensions(frame) : null
-          if (!frame || !dims) {
+          if (!dims) {
             return
           }
           const forceRefit = forceNextRefitRef.current

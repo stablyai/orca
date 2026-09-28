@@ -95,24 +95,28 @@ export type TerminalWebViewProps = {
   onEngineError?: (message: string) => void
 } & TerminalSelectionEvents
 
+/** One init: the grid, the snapshot it replays, and the frame the grid was fitted to. */
+export type TerminalInit = {
+  cols: number
+  rows: number
+  data?: string
+  // Why: a width reflow re-streams the same content rewrapped; keep the reader's place.
+  preserveScroll?: boolean
+  oscLinks?: TerminalOscLinkRange[]
+  frame: TerminalFrame | null
+}
+
 export type TerminalWebViewHandle = {
   // Why: iOS can preserve the native view while discarding its JS/backing-store
   // state; foreground recovery must wait for the document to answer before replay.
   prepareForForegroundRecovery: () => void
   write: (data: string) => void
-  init: (
-    cols: number,
-    rows: number,
-    initialData?: string,
-    preserveScroll?: boolean,
-    oscLinks?: TerminalOscLinkRange[],
-    frame?: TerminalFrame | null
-  ) => void
-  resize: (cols: number, rows: number, frame?: TerminalFrame | null) => void
+  init: (init: TerminalInit) => void
+  resize: (cols: number, rows: number, frame: TerminalFrame | null) => void
   // Why: reflow the local xterm buffer (scrollback included) to a new width
   // after a server-side PTY reflow, so older wrapped lines rewrap to match the
   // latest output. No-op on the alternate screen.
-  reflow: (cols: number, rows: number, frame?: TerminalFrame | null) => void
+  reflow: (cols: number, rows: number, frame: TerminalFrame | null) => void
   clear: () => void
   /** The grid this frame holds at the cell box the document reported; null without one at this text size. */
   fitDimensions: (frame: TerminalFrame) => TerminalFitDimensions | null

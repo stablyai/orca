@@ -131,7 +131,8 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // Again when those grids read the one frame ref.
 // Again when the subscribe sized its viewport inline instead of through a helper.
 // Again when the document took the hold rule and the subscribe stopped holding its grid.
-const HEAD_CALLBACK_BODY_SHA256 = 'd212c2671af9dd225b33f22b92e981b0c0d8a00bd16dfca974d30c898332a6eb'
+// Again when an init took one options object.
+const HEAD_CALLBACK_BODY_SHA256 = 'aae361e46d8bf59a4957dfcf9a1167c86af9314a998676235f73b44a3557d52e'
 // Refreshed for the startup effect: both `worktree.activate` sends became `worktreeActivate`, and
 // the sleeping-agent check reads that operation's verdict instead of the reply envelope. Refreshed
 // again when the reporter took the reply and interpreted it itself, retiring the hand-built

@@ -195,7 +195,7 @@ export function useMobileSessionTerminalSubscription(
               })
               return
             }
-            ref.init(cols, rows, initialData, false, oscLinks, terminalFrameRef.current)
+            ref.init({ cols, rows, data: initialData, oscLinks, frame: terminalFrameRef.current })
             initializedHandlesRef.current.add(handle)
             if (data.displayMode) {
               const displayMode = data.displayMode as MobileDisplayMode
@@ -263,14 +263,14 @@ export function useMobileSessionTerminalSubscription(
             diagnostics.streamResized(handle, seq, eventSeq, data, getTerminalRef(handle) != null)
             const oscLinks = isTerminalOscLinkRanges(data.oscLinks) ? data.oscLinks : undefined
             if (serialized != null) {
-              getTerminalRef(handle)?.init(
+              getTerminalRef(handle)?.init({
                 cols,
                 rows,
-                serialized,
-                true,
+                data: serialized,
+                preserveScroll: true,
                 oscLinks,
-                terminalFrameRef.current
-              )
+                frame: terminalFrameRef.current
+              })
             } else {
               getTerminalRef(handle)?.resize(cols, rows, terminalFrameRef.current)
             }

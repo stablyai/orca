@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
-import type { TerminalOscLinkRange } from '../../../src/shared/terminal-osc-link-ranges'
 import { readTerminalCellBox, type TerminalCellBox } from './terminal-cell-box'
 import { fitDimensionsFromCell } from './terminal-grid-fit'
-import type { TerminalWebViewHandle, TerminalWebViewProps } from './terminal-webview-contract'
+import type {
+  TerminalInit,
+  TerminalWebViewHandle,
+  TerminalWebViewProps
+} from './terminal-webview-contract'
 import { useTerminalWebViewEngineErrorState } from './terminal-webview-engine-error-state'
 import { useTerminalWebReadyWatchdog } from './terminal-webview-ready-watchdog'
 import type { TerminalFrame, TerminalWebViewCommand } from './terminal-webview-messages'
@@ -260,14 +263,7 @@ export function useTerminalWebViewController(
       write(data: string) {
         writeCoalescer.write(data)
       },
-      init(
-        cols: number,
-        rows: number,
-        initialData?: string,
-        preserveScroll?: boolean,
-        oscLinks?: TerminalOscLinkRange[],
-        frame?: TerminalFrame | null
-      ) {
+      init({ cols, rows, data, preserveScroll, oscLinks, frame }: TerminalInit) {
         // Why: arm a fresh ready promise BEFORE posting init. The document resolves it via the
         // 'ready' notify at the end of its rAF chain.
         promises.armReady()
@@ -278,7 +274,7 @@ export function useTerminalWebViewController(
           type: 'init',
           cols,
           rows,
-          initialData,
+          initialData: data,
           oscLinks,
           terminalTheme,
           fontScale: textScale,
@@ -286,12 +282,12 @@ export function useTerminalWebViewController(
           frame
         })
       },
-      resize(cols: number, rows: number, frame?: TerminalFrame | null) {
+      resize(cols: number, rows: number, frame: TerminalFrame | null) {
         // Why: resize/reflow must observe all prior writes or bytes reorder.
         writeCoalescer.flushNow()
         postMessage({ type: 'resize', cols, rows, frame })
       },
-      reflow(cols: number, rows: number, frame?: TerminalFrame | null) {
+      reflow(cols: number, rows: number, frame: TerminalFrame | null) {
         writeCoalescer.flushNow()
         postMessage({ type: 'reflow', cols, rows, frame })
       },

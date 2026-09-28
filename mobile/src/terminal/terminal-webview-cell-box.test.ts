@@ -125,7 +125,7 @@ describe('the cell box xterm laid out', () => {
     expect(handle().fitDimensions({ width: 427.5, height: 0 })).toBeNull()
     expect(handle().fitDimensions({ width: 427.5, height: 710 })).toEqual({ cols: 55, rows: 47 })
     const frame = { width: 427.5, height: 710 }
-    handle().init(55, 47, '', false, undefined, frame)
+    handle().init({ cols: 55, rows: 47, data: '', frame })
     handle().resize(55, 47, frame)
     handle().reflow(55, 47, frame)
     const grids = nativeWebViewMethods.postMessage.mock.calls
@@ -137,7 +137,7 @@ describe('the cell box xterm laid out', () => {
 
   it('sends nothing before a ready: a load start drops what was queued', () => {
     const { handle, notify, webView } = mount()
-    handle().init(55, 47, 'snapshot')
+    handle().init({ cols: 55, rows: 47, data: 'snapshot', frame: null })
     expect(postedTypes()).toEqual([])
     act(() => webView().props.onLoadStart())
     notify({ type: 'web-ready', cellBox: cellAt(scale) })

@@ -451,7 +451,7 @@ describe("the page pushes its terminal frame's box into the document", () => {
   it('holds a fit asked for while hidden and lands it on show', async () => {
     const { mounted, scales, send, layOut } = await mountedOverGrid()
     layOut(0, 0)
-    send({ type: 'resize', cols: 80, rows: 40 })
+    send({ type: 'resize', cols: 80, rows: 40, frame: null })
     await nextFrame()
     await nextFrame()
     expect(scales.at(-1)).toBe(FIT_390)
@@ -473,7 +473,7 @@ describe("the page pushes its terminal frame's box into the document", () => {
     layOut(0, 0)
     const shown = scales.length
     cells.measurable = false
-    send({ type: 'init', cols: 55, rows: 40, initialData: '', preserveScroll: false })
+    send({ type: 'init', cols: 55, rows: 40, initialData: '', preserveScroll: false, frame: null })
     // Past the retry loop's 60-frame cap, where a fit that did not wait commits scale 1.
     for (let frame = 0; frame < 75; frame++) {
       await nextFrame()

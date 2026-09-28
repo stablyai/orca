@@ -19,11 +19,11 @@ export type TerminalWebViewCommand =
       // Why: width-reflow re-streams replay the same content rewrapped at new
       // cols; preserve the reader's scroll position instead of jumping to bottom.
       preserveScroll?: boolean
-      frame?: TerminalFrame | null
+      frame: TerminalFrame | null
     }
   | { type: 'set-font-scale'; id?: number; fontScale: number }
-  | { type: 'resize'; id?: number; cols: number; rows: number; frame?: TerminalFrame | null }
-  | { type: 'reflow'; id?: number; cols: number; rows: number; frame?: TerminalFrame | null }
+  | { type: 'resize'; id?: number; cols: number; rows: number; frame: TerminalFrame | null }
+  | { type: 'reflow'; id?: number; cols: number; rows: number; frame: TerminalFrame | null }
   | { type: 'clear'; id?: number }
   | { type: 'reset-zoom'; id?: number }
   | { type: 'cancel-select'; id?: number }
