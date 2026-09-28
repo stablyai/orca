@@ -4,6 +4,21 @@ import type { SshProviderEpoch } from '../../../../shared/ssh-types'
 import { createTestStore, makeTab, makeWorktree, TEST_REPO } from './store-test-helpers'
 
 describe('createSshSlice', () => {
+  it('publishes a state that differs only in who disconnected the host', () => {
+    const store = createTestStore()
+    const disconnected = {
+      targetId: 'ssh-1',
+      status: 'disconnected' as const,
+      error: null,
+      reconnectAttempt: 0
+    }
+    store.getState().setSshConnectionState('ssh-1', disconnected)
+
+    store.getState().setSshConnectionState('ssh-1', { ...disconnected, disconnectedBy: 'user' })
+
+    expect(store.getState().sshConnectionStates.get('ssh-1')?.disconnectedBy).toBe('user')
+  })
+
   it('clears renderer state and deferred reconnect metadata for a removed SSH target', () => {
     const store = createTestStore()
     const targetId = 'ssh-1'

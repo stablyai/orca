@@ -133,17 +133,29 @@ export async function prepareAutomationDispatchWorkspace(args: {
     const sshState = await window.api.ssh.getState({ targetId: sshTargetId })
     if (sshState?.status !== 'connected') {
       try {
-        const connected = await window.api.ssh.connect({ targetId: sshTargetId })
+        const connected = await window.api.ssh.ensureConnected({ targetId: sshTargetId })
         if (connected?.status !== 'connected') {
           throw new Error('SSH target is unavailable.')
         }
       } catch (error) {
+        // Why re-read: the host decides whether the user holds it down, and a refused connect
+        // arrives as the same thrown error as a failed one once it crosses IPC.
+        const latest = await window.api.ssh.getState({ targetId: sshTargetId }).catch(() => null)
         await markDispatchResult({
           runId: run.id,
           status: 'skipped_unavailable',
           workspaceId: context.workspaceId,
           workspaceDisplayName: context.workspaceDisplayName,
-          error: error instanceof Error ? error.message : String(error)
+          error:
+            latest?.disconnectedBy === 'user'
+              ? translate(
+                  'auto.hooks.useAutomationDispatchEvents.sshDisconnectedByUser',
+                  'Skipped: you disconnected {{host}}. Connect it again to resume.',
+                  { host: state.sshTargetLabels.get(sshTargetId) ?? sshTargetId }
+                )
+              : error instanceof Error
+                ? error.message
+                : String(error)
         })
         return null
       }

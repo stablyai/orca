@@ -62,7 +62,8 @@ describe('selectWorktreeHostConnectionPhase', () => {
       targetId: null,
       environmentId: null,
       publishedStatus: null,
-      connectedEpoch: null
+      connectedEpoch: null,
+      unavailableReason: null
     }
     expect(selectWorktreeHostConnectionPhase(state, 'wt-local')).toEqual(local)
     expect(selectWorktreeHostConnectionPhase(state, null)).toEqual(local)
@@ -97,7 +98,8 @@ describe('selectWorktreeHostConnectionPhase', () => {
       targetId: 'ssh-a',
       environmentId: null,
       publishedStatus: 'connecting',
-      connectedEpoch: null
+      connectedEpoch: null,
+      unavailableReason: null
     })
     expect(selectWorktreeHostConnectionPhase(makeSshState('reconnecting'), 'wt-ssh').phase).toBe(
       'connecting'
@@ -110,7 +112,78 @@ describe('selectWorktreeHostConnectionPhase', () => {
       targetId: 'ssh-a',
       environmentId: null,
       publishedStatus: 'connected',
-      connectedEpoch: 'ssh-a:7'
+      connectedEpoch: 'ssh-a:7',
+      unavailableReason: null
+    })
+  })
+
+  it("names the user's own Disconnect as the reason, and only while the host is unavailable", () => {
+    const heldDown = (status: SshConnectionStatus): AppState =>
+      makeSshState(status, {
+        sshConnectionStates: new Map([
+          [
+            'ssh-a',
+            { targetId: 'ssh-a', status, error: null, reconnectAttempt: 0, disconnectedBy: 'user' }
+          ]
+        ])
+      })
+
+    expect(selectWorktreeHostConnectionPhase(heldDown('disconnected'), 'wt-ssh')).toMatchObject({
+      phase: 'unavailable',
+      unavailableReason: 'user-disconnected'
+    })
+    expect(
+      selectWorktreeHostConnectionPhase(makeSshState('disconnected'), 'wt-ssh').unavailableReason
+    ).toBeNull()
+    expect(
+      selectWorktreeHostConnectionPhase(heldDown('connected'), 'wt-ssh').unavailableReason
+    ).toBeNull()
+  })
+
+  it('reads the Disconnect from the owning environment for a nested target', () => {
+    const state = makeState({
+      repos: [{ id: 'repo-runtime', connectionId: 'ssh-nested', executionHostId: 'runtime:env-a' }],
+      runtimeStatusByEnvironmentId: new Map([
+        ['env-a', { status: { runtimeId: 'runtime-a' }, checkedAt: 1 }]
+      ]),
+      sshStateByEnvironment: new Map([
+        [
+          'env-a',
+          {
+            connectionStates: new Map([
+              [
+                'ssh-nested',
+                {
+                  targetId: 'ssh-nested',
+                  status: 'disconnected',
+                  error: null,
+                  reconnectAttempt: 0,
+                  disconnectedBy: 'user'
+                }
+              ]
+            ]),
+            targetLabels: new Map([['ssh-nested', 'Nested']]),
+            removedTargetLabels: new Map(),
+            targetsHydrated: true
+          }
+        ]
+      ]),
+      worktreesByRepo: {
+        'repo-runtime': [
+          {
+            id: 'wt-runtime',
+            repoId: 'repo-runtime',
+            hostId: 'runtime:env-a',
+            runtimeOwnerEnvironmentId: 'env-a'
+          }
+        ]
+      }
+    })
+
+    expect(selectWorktreeHostConnectionPhase(state, 'wt-runtime')).toMatchObject({
+      environmentId: 'env-a',
+      phase: 'unavailable',
+      unavailableReason: 'user-disconnected'
     })
   })
 
@@ -177,7 +250,8 @@ describe('selectWorktreeHostConnectionPhase', () => {
       targetId: 'ssh-nested',
       environmentId: 'env-a',
       publishedStatus: 'connected',
-      connectedEpoch: 'ssh-nested:3'
+      connectedEpoch: 'ssh-nested:3',
+      unavailableReason: null
     })
   })
 

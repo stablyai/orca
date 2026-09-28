@@ -27,7 +27,7 @@ export async function connectRuntimeOwnedSshTarget(args: {
   }
   const target = store.upsertRuntimeOwnedTarget(args.runtimeId, args.connection.target)
   try {
-    const state = await connectRegisteredSshTarget(target.id)
+    const state = await connectRegisteredSshTarget(target.id, 'background')
     if (state.status !== 'connected') {
       throw new Error(state.error || `SSH target did not connect: ${state.status}`)
     }

@@ -12,7 +12,7 @@ const SSH_RECONNECT_TIMEOUT_MS = 15_000
  * Only `blockingConnectionIds` are awaited. Every other target connects in the background and
  * is registered as deferred up front, so an unreachable host cannot hold local terminal
  * restoration for the reconnect timeout. Background connects keep running in main; the pane's
- * deferred flow joins the same in-flight `ssh.connect` on tab focus.
+ * deferred flow joins the same in-flight `ssh.ensureConnected` on tab focus.
  */
 export async function restoreSshConnectionsForStartup(args: {
   connectionIds: string[]
@@ -60,7 +60,7 @@ export async function restoreSshConnectionsForStartup(args: {
   for (const { targetId } of backgroundTargets) {
     void reconnectSshTargetForRendererStartup({
       targetId,
-      connect: (id) => window.api.ssh.connect({ targetId: id }),
+      connect: (id) => window.api.ssh.ensureConnected({ targetId: id }),
       publishState: (id, state) => {
         publishSshConnectionState(id, state)
         if (state.status === 'connected') {
@@ -86,7 +86,7 @@ export async function restoreSshConnectionsForStartup(args: {
           const result = await reconnectSshTargetForRendererStartup({
             targetId,
             timeoutMs: SSH_RECONNECT_TIMEOUT_MS,
-            connect: (id) => window.api.ssh.connect({ targetId: id }),
+            connect: (id) => window.api.ssh.ensureConnected({ targetId: id }),
             publishState: publishSshConnectionState,
             onFailure: (id, error) => {
               console.warn(`SSH auto-reconnect failed for ${id}:`, error)

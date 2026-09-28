@@ -48,7 +48,7 @@ function installWindowApi(targets: SshTarget[]): void {
       app: { startupDiagnostic: undefined },
       ssh: {
         listTargets: vi.fn().mockResolvedValue(targets),
-        connect: (args: { targetId: string }) => harness.connect(args.targetId),
+        ensureConnected: (args: { targetId: string }) => harness.connect(args.targetId),
         getState: (args: { targetId: string }) => harness.getState(args.targetId)
       }
     }

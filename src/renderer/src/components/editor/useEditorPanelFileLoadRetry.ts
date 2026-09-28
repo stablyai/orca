@@ -65,6 +65,18 @@ export function shouldRetryFileLoadError(message: string, code?: string): boolea
   )
 }
 
+/** A failure the retry gate reloads once the file's host connects: the connection, not the file. */
+export function isReloadedWhenHostConnects(
+  failure: Pick<FileContent, 'loadError' | 'loadErrorCode'>
+): boolean {
+  const { loadError, loadErrorCode } = failure
+  return (
+    loadError !== undefined &&
+    (loadError === WORKTREE_OWNER_UNREACHABLE_ERROR ||
+      shouldRetryFileLoadError(loadError, loadErrorCode))
+  )
+}
+
 export function useEditorPanelFileLoadRetry({
   activeFile,
   fileContents,
@@ -128,8 +140,10 @@ export function useEditorPanelFileLoadRetry({
     // failed — including one whose budget already ran out — so reload once on a fresh budget.
     if (
       hostJustConnected &&
-      (activeFileLoadError === WORKTREE_OWNER_UNREACHABLE_ERROR ||
-        shouldRetryFileLoadError(activeFileLoadError, activeFileLoadErrorCode))
+      isReloadedWhenHostConnects({
+        loadError: activeFileLoadError,
+        loadErrorCode: activeFileLoadErrorCode
+      })
     ) {
       reload(0)
       return

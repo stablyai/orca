@@ -34,8 +34,12 @@ function takeRepoReadoptions(): SshRepoReadoption[] {
   return repoReadoptions
 }
 
-function omitRendererSshTargetGeneration<T extends object>(value: T): Omit<T, 'generation'> {
-  const { generation: _generation, ...rest } = value as T & { generation?: unknown }
+// Why desiredConnection too: only the user's Connect/Disconnect writes it, and a settings save
+// carrying a stale copy of the row must not undo a Disconnect made since it was read.
+function omitMainOwnedSshTargetFields<T extends object>(
+  value: T & { generation?: unknown; desiredConnection?: unknown }
+): Omit<T, 'generation' | 'desiredConnection'> {
+  const { generation: _generation, desiredConnection: _desiredConnection, ...rest } = value
   return rest
 }
 
@@ -49,9 +53,7 @@ export function registerSshTargetCrudHandlers(): void {
   })
 
   ipcMain.handle('ssh:addTarget', (_event, args: { target: SshTargetCreateInput }) => {
-    const target = getSshTargetRegistryStore()!.addTarget(
-      omitRendererSshTargetGeneration(args.target)
-    )
+    const target = getSshTargetRegistryStore()!.addTarget(omitMainOwnedSshTargetFields(args.target))
     // Why: re-adding a removed host can re-adopt orphaned workspaces; refresh the renderer's repo list so they move back onto the live host.
     const repoReadoptions = takeRepoReadoptions()
     return { target, repoReadoptions }
@@ -62,7 +64,7 @@ export function registerSshTargetCrudHandlers(): void {
     (_event, args: { id: string; updates: SshTargetUpdateInput }) => {
       return getSshTargetRegistryStore()!.updateTarget(
         args.id,
-        omitRendererSshTargetGeneration(args.updates)
+        omitMainOwnedSshTargetFields(args.updates)
       )
     }
   )

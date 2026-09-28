@@ -901,7 +901,8 @@
         "16a21d6413": "SSH 재연결에는 대화형 자격 증명이 필요합니다.",
         "386db94f3e": "대상 프로젝트를 더 이상 사용할 수 없습니다.",
         "3ad7d77f57": "대상 워크스페이스가 이 자동화 실행 대상과 다른 호스트에 있습니다.",
-        "workspaceHostUnresolved": "대상 워크스페이스는 두 개 이상의 호스트에 걸쳐 있으므로 이 실행에는 사용할 단일 호스트가 없습니다."
+        "workspaceHostUnresolved": "대상 워크스페이스는 두 개 이상의 호스트에 걸쳐 있으므로 이 실행에는 사용할 단일 호스트가 없습니다.",
+        "sshDisconnectedByUser": "건너뜀: {{host}} 연결을 끊었습니다. 다시 시작하려면 다시 연결하세요."
       },
       "useComposerState": {
         "7eb3f44ff7": "선택한 agent가 비활성화되었습니다. 생성하기 전에 활성화된 agent를 선택하세요.",
@@ -2199,7 +2200,9 @@
         "e57db40c11": "{{value0}} 실행 명령을 만들 수 없습니다.",
         "5b2c1a9e44": "agent CLI를 찾지 못했습니다. 하나를 설치하거나 설정에서 기본 agent를 선택하세요.",
         "b7c1f0a934": "원격 호스트에 연결할 수 없으므로 Orca는 해당 호스트에서 작업이 아직 실행 중인지 알 수 없습니다. 그래도 창을 닫으시겠어요?",
-        "quitSnapshotSaveFailed": "종료 취소됨: 세션 스냅샷을 저장할 수 없습니다({{value0}})."
+        "quitSnapshotSaveFailed": "종료 취소됨: 세션 스냅샷을 저장할 수 없습니다({{value0}}).",
+        "userDisconnectedHosts": "{{hosts}} 연결을 끊었습니다. 창을 닫아도 해당 호스트의 터미널은 종료되지 않습니다. 그래도 창을 닫으시겠어요?",
+        "userDisconnectedAndUnreachableHosts": "{{hosts}} 연결을 끊었습니다. 창을 닫아도 해당 호스트의 터미널은 종료되지 않습니다. 다른 원격 호스트에 연결할 수 없으므로 Orca는 해당 호스트에서 작업이 아직 실행 중인지 알 수 없습니다. 그래도 창을 닫으시겠어요?"
       },
       "TerminalSearch": {
         "db234b7519": "닫기",
@@ -3212,7 +3215,8 @@
             "connectButton": "연결",
             "removedTitle": "SSH 호스트가 제거됨",
             "removedBody": "이 워크트리의 SSH 호스트가 제거되어 더 이상 연결할 수 없습니다. 워크트리를 제거하여 정리하세요 — 원격 파일은 그대로 남아 있습니다.",
-            "removeWorkspaceButton": "워크트리 제거"
+            "removeWorkspaceButton": "워크트리 제거",
+            "disconnectedByUser": "{{value0}} 연결을 끊었습니다. 이 터미널 세션을 계속하려면 연결하세요."
           },
           "TerminalRemoteRuntimeReconnectBanner": {
             "retryingTitle": "원격 런타임에 다시 연결 중",
@@ -12208,7 +12212,10 @@
           },
           "FileExplorerTreeStatus": {
             "ce03835e1f": "이 워크스페이스에는 파일이 없습니다.",
-            "c76693e456": "이 워크스페이스에 대한 파일을 로드할 수 없습니다:"
+            "c76693e456": "이 워크스페이스에 대한 파일을 로드할 수 없습니다:",
+            "userDisconnectedTitle": "{{host}} 연결을 끊었습니다",
+            "userDisconnectedDescription": "이 워크스페이스의 파일을 표시하려면 연결하세요.",
+            "connect": "연결"
           },
           "GitHistoryPanel": {
             "cf7cad58d2": "아직 commits이 없습니다",
@@ -18198,7 +18205,10 @@
       "sshUnavailableTitle": "SSH 연결을 사용할 수 없습니다.",
       "forwardingBlockedDescription": "이 서버는 탐색에 필요한 TCP 전달(종종 sshd 구성에서 \"AllowTcpForwarding no\")을 거부합니다. 관리자에게 전달을 허용해 달라고 요청하거나 대신 이 기기에서 탐색하세요.",
       "sshUnavailableDescription": "이 워크스페이스의 페이지는 SSH 호스트를 탐색하지만 현재는 해당 연결을 사용할 수 없습니다. 호스트를 다시 연결한 후 다시 시도하세요.",
-      "showDetails": "세부정보 표시"
+      "showDetails": "세부정보 표시",
+      "userDisconnectedTitle": "{{host}} 연결을 끊었습니다",
+      "userDisconnectedDescription": "이 워크스페이스의 페이지는 이 호스트를 통해 탐색합니다. 불러오려면 연결하세요.",
+      "connect": "연결"
     },
     "sshEgress": {
       "routedTooltip": "{{value0}}을(를) 탐색하는 중",
@@ -18278,7 +18288,10 @@
       "openAnyway": "무시하고 엽니다"
     },
     "fileLoad": {
-      "hostUnresolved": "호스트가 이 파일의 워크스페이스를 찾을 수 없습니다. 삭제되었거나 호스트가 아직 이에 대해 알지 못할 수도 있습니다. 다시 시도하거나 탭 표시줄에서 이 탭을 닫으세요."
+      "hostUnresolved": "호스트가 이 파일의 워크스페이스를 찾을 수 없습니다. 삭제되었거나 호스트가 아직 이에 대해 알지 못할 수도 있습니다. 다시 시도하거나 탭 표시줄에서 이 탭을 닫으세요.",
+      "userDisconnectedTitle": "{{host}} 연결을 끊었습니다",
+      "userDisconnectedDescription": "이 파일을 불러오려면 연결하세요.",
+      "connect": "연결"
     }
   },
   "featureTips": {

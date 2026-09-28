@@ -299,6 +299,7 @@ jobs:
             . != "tests/e2e/ssh-skill-installation.spec.ts" and
             . != "tests/e2e/ssh-stale-resume-execution-host-scope.spec.ts" and
             . != "tests/e2e/ssh-terminal-window-wake-stale-grid-repro.spec.ts" and
+            . != "tests/e2e/ssh-user-disconnect-sticks.spec.ts" and
             . != "tests/e2e/terminal-inline-images-ssh.spec.ts" and
             . != "tests/e2e/ssh-docker-watcher-isolation.spec.ts" and
             . != "tests/e2e/ssh-terminal-parking.spec.ts" and
@@ -368,6 +369,7 @@ jobs:
       contains(inputs.test_files, 'tests/e2e/ssh-skill-installation.spec.ts') ||
       contains(inputs.test_files, 'tests/e2e/ssh-stale-resume-execution-host-scope.spec.ts') ||
       contains(inputs.test_files, 'tests/e2e/ssh-terminal-window-wake-stale-grid-repro.spec.ts') ||
+      contains(inputs.test_files, 'tests/e2e/ssh-user-disconnect-sticks.spec.ts') ||
       contains(inputs.test_files, 'tests/e2e/terminal-inline-images-ssh.spec.ts') ||
       contains(inputs.test_files, 'tests/e2e/ssh-docker-watcher-isolation.spec.ts') ||
       contains(inputs.test_files, 'tests/e2e/ssh-terminal-parking.spec.ts') ||

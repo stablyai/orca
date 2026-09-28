@@ -85,6 +85,7 @@ export function TerminalPaneSshReconnectPortals({
   const {
     managedPanes,
     showSshReconnectOverlay,
+    sshReconnectDisconnectedByUser,
     sshReconnectEnvironmentId,
     sshReconnectError,
     sshReconnectStatus,
@@ -106,6 +107,7 @@ export function TerminalPaneSshReconnectPortals({
             status={sshReconnectStatus}
             error={sshReconnectError}
             targetRemoved={sshReconnectTargetRemoved}
+            disconnectedByUser={sshReconnectDisconnectedByUser}
             worktreeId={worktreeId}
             sshOwnerEnvironmentId={sshReconnectEnvironmentId}
           />,

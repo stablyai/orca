@@ -13,6 +13,8 @@ import {
 
 export type TerminalPaneHostState = {
   nativeChatTranscriptIsLocalReadable: boolean
+  /** The user's own Disconnect holds the host down; the overlay says so instead of a failure. */
+  sshReconnectDisconnectedByUser: boolean
   sshReconnectEnvironmentId: string | null
   /** The failure detail behind the status; the overlay shows only a canned sentence without it. */
   sshReconnectError: string | null
@@ -30,6 +32,7 @@ function computeTerminalPaneHostState(state: AppState, worktreeId: string): Term
   if (!host.targetId) {
     return {
       nativeChatTranscriptIsLocalReadable: nativeChatTranscriptIsLocalReadableResult,
+      sshReconnectDisconnectedByUser: false,
       sshReconnectEnvironmentId: null,
       sshReconnectError: null,
       sshReconnectStatus: null,
@@ -41,6 +44,7 @@ function computeTerminalPaneHostState(state: AppState, worktreeId: string): Term
   const { targetId: sshReconnectTargetId, environmentId: sshReconnectEnvironmentId } = host
   return {
     nativeChatTranscriptIsLocalReadable: nativeChatTranscriptIsLocalReadableResult,
+    sshReconnectDisconnectedByUser: host.unavailableReason === 'user-disconnected',
     sshReconnectEnvironmentId,
     sshReconnectError: selectRuntimeAwareSshError(
       state,
@@ -65,6 +69,7 @@ function computeTerminalPaneHostState(state: AppState, worktreeId: string): Term
 function isSameHostState(a: TerminalPaneHostState, b: TerminalPaneHostState): boolean {
   return (
     a.nativeChatTranscriptIsLocalReadable === b.nativeChatTranscriptIsLocalReadable &&
+    a.sshReconnectDisconnectedByUser === b.sshReconnectDisconnectedByUser &&
     a.sshReconnectEnvironmentId === b.sshReconnectEnvironmentId &&
     a.sshReconnectError === b.sshReconnectError &&
     a.sshReconnectStatus === b.sshReconnectStatus &&

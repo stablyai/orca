@@ -26,7 +26,9 @@ const GATE_PREPARING_TITLE = 'Connecting through the SSH host'
 const GATE_ERROR_TITLES = [
   'SSH browser routing unavailable',
   'The SSH server blocks browser traffic',
-  'SSH connection unavailable'
+  'SSH connection unavailable',
+  // A prefix: the rest of this title is the host's label.
+  'You disconnected '
 ]
 const CENSUS_KEY = '__orcaBrowserPaneMountCensus'
 

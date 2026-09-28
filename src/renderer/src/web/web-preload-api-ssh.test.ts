@@ -68,4 +68,36 @@ describe('web SSH preload API', () => {
       { method: 'ssh.getState', params: { targetId: 'ssh-1' } }
     ])
   })
+
+  it("marks a background connect so the host does not read it as the user's Connect", async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: { state: null },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await globals.window.api.ssh.ensureConnected({ targetId: 'ssh-1' })
+    await globals.window.api.ssh.connect({ targetId: 'ssh-1' })
+
+    expect(runtimeCalls).toEqual([
+      { method: 'ssh.connect', params: { targetId: 'ssh-1', background: true } },
+      { method: 'ssh.connect', params: { targetId: 'ssh-1' } }
+    ])
+  })
 })

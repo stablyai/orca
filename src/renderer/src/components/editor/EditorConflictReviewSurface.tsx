@@ -132,6 +132,7 @@ export function EditorConflictReviewSurface({
           <EditorFileLoadErrorView
             message={fileContent.loadError}
             code={fileContent.loadErrorCode}
+            worktreeId={contentFile.worktreeId}
             onRetry={() => reloadContent(contentFile)}
           />
         </div>

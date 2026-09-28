@@ -33,6 +33,15 @@ export type SshConnectionManagerMock = {
   callbacksRef: MockCallbacksRef
 }
 
+/** The unregistered connection a maintenance operation opens; one shared instance per test. */
+export type SshMaintenanceConnectionMock = {
+  connect: Mock
+  disconnect: Mock
+  getState: Mock
+  constructed: Mock
+  callbacksRef: MockCallbacksRef
+}
+
 export type SshChannelMultiplexerMock = {
   dispose: Mock
   isDisposed: Mock
@@ -73,6 +82,7 @@ export type SshIpcMockState = {
   powerMonitorOnMock: Mock
   mockSshStore: SshStoreMock
   mockConnectionManager: SshConnectionManagerMock
+  mockMaintenanceConnection: SshMaintenanceConnectionMock
   mockDeployAndLaunchRelay: Mock
   mockForceStopRelayForTarget: Mock
   mockAcceptSshPtyOutputData: Mock
@@ -99,6 +109,7 @@ export type SshIpcMockModules = {
   sshPtyOutputIntakeRegistry: SshIpcMockModule
   sshConnectionStore: SshIpcMockModule
   sshConnectionManager: SshIpcMockModule
+  sshConnection: SshIpcMockModule
   sshRelayDeploy: SshIpcMockModule
   sshRelayReset: SshIpcMockModule
   sshChannelMultiplexer: SshIpcMockModule

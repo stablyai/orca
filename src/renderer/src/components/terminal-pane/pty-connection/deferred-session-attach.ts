@@ -2,7 +2,7 @@ import { useAppStore } from '@/store'
 import { isRuntimeOwnedSshTargetId } from '../../../../../shared/execution-host'
 import { resolveSshPaneConnectGate } from '../ssh-pane-connect-gate'
 
-import { waitForUserInitiatedSshConnect, waitForSshConnection } from './ssh-session-connect'
+import { connectPaneSshHost, waitForUserInitiatedSshConnect } from './ssh-session-connect'
 import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { isSshSessionGoneError } from './pty-connect-limits'
 import { toProcessExitStartup } from './process-exit-startup'
@@ -100,8 +100,12 @@ export function runDeferredSessionAttach(session: ConnectPanePtySession): void {
         }
 
         // Why: wait for the shared SSH connection (multiple panes/tabs may need it) before PTY reattach, rather than returning early when it's in-flight.
-        const connectResult = await waitForSshConnection(session.connectionId)
-        if (!isCurrentPaneTransport() || !session.capturedDirectSshRetryLeaseMatches()) {
+        const connectResult = await connectPaneSshHost(session)
+        if (
+          !isCurrentPaneTransport() ||
+          !session.capturedDirectSshRetryLeaseMatches() ||
+          connectResult === 'cancelled'
+        ) {
           return
         }
         if (!connectResult.connected) {

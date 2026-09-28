@@ -189,17 +189,7 @@ describe('connectPanePty', () => {
     }
     expect(settlePaneSerializer).toHaveBeenCalledWith(expect.any(String), 1)
 
-    const api = (
-      globalThis as unknown as {
-        window: {
-          api: {
-            ssh: { connect: ReturnType<typeof vi.fn> }
-            pty: { signal: ReturnType<typeof vi.fn> }
-          }
-        }
-      }
-    ).window.api
-    expect(api.ssh.connect).toHaveBeenCalledWith({ targetId: 'conn-1' })
+    expect(window.api.ssh.ensureConnected).toHaveBeenCalledWith({ targetId: 'conn-1' })
     expect(transport.connect).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: 'leaf-session' })
     )
@@ -210,7 +200,7 @@ describe('connectPanePty', () => {
     expect(writes).toContain(`${RESET_GRAPHIC_RENDITION}\x1b[2J\x1b[3J\x1b[H`)
     expect(writes).toContain('restored-ssh-output')
     expect(writes).toContain(POST_REPLAY_REATTACH_RESET)
-    expect(api.pty.signal).toHaveBeenCalledWith('leaf-session', 'SIGWINCH')
+    expect(window.api.pty.signal).toHaveBeenCalledWith('leaf-session', 'SIGWINCH')
   })
 
   it('keeps a too-wide parked SSH alt frame while no live process can repaint it', async () => {
@@ -219,7 +209,7 @@ describe('connectPanePty', () => {
     const sshConnect = createDeferred<SshConnectionState | null>()
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
-    vi.mocked(window.api.ssh.connect).mockReturnValue(sshConnect.promise)
+    vi.mocked(window.api.ssh.ensureConnected).mockReturnValue(sshConnect.promise)
     vi.mocked(window.api.pty.getMainBufferSnapshot).mockResolvedValue({
       data: 'PARKED-SSH-PAINTED-WITHOUT-NETWORK\r\n',
       cols: 140,
@@ -253,7 +243,7 @@ describe('connectPanePty', () => {
     )
     await flushAsyncTicks(20)
 
-    expect(window.api.ssh.connect).toHaveBeenCalledWith({ targetId: 'conn-1' })
+    expect(window.api.ssh.ensureConnected).toHaveBeenCalledWith({ targetId: 'conn-1' })
     expect(window.api.pty.getMainBufferSnapshot).toHaveBeenCalledOnce()
     // No live SSH process can repaint this preconnect frame after a SIGWINCH.
     expect(writes.join('')).toContain('PARKED-SSH-PAINTED-WITHOUT-NETWORK')
@@ -291,7 +281,7 @@ describe('connectPanePty', () => {
     }
     transportFactoryQueue.push(createMockTransport())
     vi.mocked(window.api.pty.getMainBufferSnapshot).mockReturnValue(snapshot.promise)
-    vi.mocked(window.api.ssh.connect).mockReturnValue(sshConnect.promise)
+    vi.mocked(window.api.ssh.ensureConnected).mockReturnValue(sshConnect.promise)
     mockStoreState = {
       ...mockStoreState,
       tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: sshPtyId, generation: 7 }] },
@@ -363,7 +353,7 @@ describe('connectPanePty', () => {
     const foreignPtyId = toAppSshPtyId('conn-2', 'relay-pty-1')
     const sshConnect = createDeferred<SshConnectionState | null>()
     transportFactoryQueue.push(createMockTransport())
-    vi.mocked(window.api.ssh.connect).mockReturnValue(sshConnect.promise)
+    vi.mocked(window.api.ssh.ensureConnected).mockReturnValue(sshConnect.promise)
     vi.mocked(window.api.pty.getMainBufferSnapshot).mockResolvedValue({
       data: 'FOREIGN-CONNECTION-SNAPSHOT\r\n',
       cols: 101,

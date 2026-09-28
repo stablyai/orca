@@ -59,10 +59,14 @@ export type SshTarget = {
    *  re-adopt only, so automations fenced on an old registration cannot run on a
    *  later target that happens to reuse the id. Never advanced by connect state. */
   generation?: number
+  /** Whether the user wants this host connected. Only a user's Connect or Disconnect writes it;
+   *  a connect nobody clicked is refused while it is 'disconnected'. Absent reads as 'connected'.
+   *  A network drop never writes it. Runtime-owned targets never carry it. */
+  desiredConnection?: 'connected' | 'disconnected'
 }
 
-/** Renderer-authored target fields; registration generations are allocated and owned by main. */
-export type SshTargetCreateInput = Omit<SshTarget, 'id' | 'generation'>
+/** Renderer-authored target fields; generations and connection intent are owned by main. */
+export type SshTargetCreateInput = Omit<SshTarget, 'id' | 'generation' | 'desiredConnection'>
 export type SshTargetUpdateInput = Partial<SshTargetCreateInput>
 
 /** Public target identity and observed host metadata safe to mirror to a paired client. */
@@ -198,6 +202,10 @@ export type SshConnectionState = {
   supportsFolderDownload?: boolean
   /** Remote OS detected by the SSH relay once available. */
   remotePlatform?: SshRemotePlatform
+  /** Present while the user's own Disconnect holds this host down; nothing reconnects it until
+   *  the user connects again, and `status` is then always 'disconnected'. Absent on older hosts,
+   *  which never hold a host down. */
+  disconnectedBy?: 'user'
 }
 
 /** Non-secret mutation provenance. Both fields are required when an SSH provider is selected. */

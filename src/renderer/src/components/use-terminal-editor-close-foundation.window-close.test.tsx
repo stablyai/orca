@@ -70,12 +70,15 @@ describe('proceedToNativeWindowClose', () => {
     })
 
     expect(result.current.windowCloseDialogOpen).toBe(true)
-    expect(result.current.windowCloseDialogKind).toBe('running')
+    expect(result.current.windowCloseDialogWork).toEqual({ kind: 'running' })
     expect(confirmWindowCloseMock).not.toHaveBeenCalled()
   })
 
   it('raises the unverifiable copy when a remote host could not be reached', async () => {
-    assessWindowCloseRunningWorkMock.mockResolvedValue({ kind: 'unverifiable' })
+    assessWindowCloseRunningWorkMock.mockResolvedValue({
+      kind: 'unverifiable',
+      userDisconnectedHostLabels: []
+    })
     const { result } = mountFoundation()
 
     await act(async () => {
@@ -83,7 +86,10 @@ describe('proceedToNativeWindowClose', () => {
     })
 
     expect(result.current.windowCloseDialogOpen).toBe(true)
-    expect(result.current.windowCloseDialogKind).toBe('unverifiable')
+    expect(result.current.windowCloseDialogWork).toEqual({
+      kind: 'unverifiable',
+      userDisconnectedHostLabels: []
+    })
     expect(confirmWindowCloseMock).not.toHaveBeenCalled()
   })
 

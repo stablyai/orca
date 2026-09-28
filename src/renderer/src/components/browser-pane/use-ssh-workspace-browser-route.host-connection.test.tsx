@@ -10,7 +10,8 @@ const mocks = vi.hoisted(() => {
     targetId: 'target-a',
     environmentId: null,
     publishedStatus: 'connecting',
-    connectedEpoch: null
+    connectedEpoch: null,
+    unavailableReason: null
   }
   const route: { executionHostId: string | null } = { executionHostId: 'ssh:target-a' }
   return { hostConnection, ...route, prepare: vi.fn() }
@@ -50,7 +51,8 @@ function setHost(
     targetId: 'target-a',
     environmentId: null,
     publishedStatus: STATUS_BY_PHASE[phase],
-    connectedEpoch: phase === 'connected' ? `target-a:${connectionGeneration}` : null
+    connectedEpoch: phase === 'connected' ? `target-a:${connectionGeneration}` : null,
+    unavailableReason: null
   }
 }
 

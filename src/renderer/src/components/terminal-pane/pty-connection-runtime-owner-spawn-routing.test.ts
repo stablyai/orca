@@ -185,7 +185,7 @@ describe('connectPanePty', () => {
 
     expect(createRemoteRuntimePtyTransport).not.toHaveBeenCalled()
     expect(createIpcPtyTransport).not.toHaveBeenCalled()
-    expect(window.api.ssh.connect).not.toHaveBeenCalled()
+    expect(window.api.ssh.ensureConnected).not.toHaveBeenCalled()
     expect(window.api.ssh.needsPassphrasePrompt).not.toHaveBeenCalled()
   })
 
@@ -213,7 +213,7 @@ describe('connectPanePty', () => {
 
     expect(createRemoteRuntimePtyTransport).not.toHaveBeenCalled()
     expect(createIpcPtyTransport).not.toHaveBeenCalled()
-    expect(window.api.ssh.connect).not.toHaveBeenCalled()
+    expect(window.api.ssh.ensureConnected).not.toHaveBeenCalled()
   })
 
   it('spawns fresh PTYs through the worktree owner runtime when focus differs', async () => {

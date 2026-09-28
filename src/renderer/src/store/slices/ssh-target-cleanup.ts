@@ -16,7 +16,8 @@ export function sshConnectionStatesEqual(
     a?.providerEpoch === b.providerEpoch &&
     a?.connectionGeneration === b.connectionGeneration &&
     a?.supportsFolderDownload === b.supportsFolderDownload &&
-    a?.remotePlatform === b.remotePlatform
+    a?.remotePlatform === b.remotePlatform &&
+    a?.disconnectedBy === b.disconnectedBy
   )
 }
 

@@ -80,7 +80,10 @@
       "sshUnavailableTitle": "Connexion SSH indisponible",
       "forwardingBlockedDescription": "Ce serveur refuse le transfert TCP (souvent « AllowTcpForwarding no » dans sa configuration sshd), nécessaire à sa navigation. Demandez à son administrateur d'autoriser le transfert ou naviguez plutôt à partir de cet appareil.",
       "sshUnavailableDescription": "Les pages de cet espace de travail parcourent son hôte SSH et cette connexion n'est pas disponible pour le moment. Reconnectez l'hôte, puis réessayez.",
-      "showDetails": "Afficher les détails"
+      "showDetails": "Afficher les détails",
+      "userDisconnectedTitle": "Vous avez déconnecté {{host}}",
+      "userDisconnectedDescription": "Les pages de cet espace de travail passent par cet hôte. Connectez-le pour les charger.",
+      "connect": "Se connecter"
     },
     "sshEgress": {
       "routedTooltip": "Parcourir {{value0}}",
@@ -1000,7 +1003,8 @@
         "16a21d6413": "La reconnexion SSH nécessite des identifiants interactifs.",
         "386db94f3e": "Le projet cible n'est plus disponible.",
         "3ad7d77f57": "L'espace de travail cible se trouve sur un hôte différent de la cible de cette exécution d'automatisation.",
-        "workspaceHostUnresolved": "L'espace de travail cible s'étend sur plusieurs hôtes, cette exécution n'a donc aucun hôte unique à utiliser."
+        "workspaceHostUnresolved": "L'espace de travail cible s'étend sur plusieurs hôtes, cette exécution n'a donc aucun hôte unique à utiliser.",
+        "sshDisconnectedByUser": "Ignoré : vous avez déconnecté {{host}}. Reconnectez-le pour reprendre."
       },
       "useComposerState": {
         "7eb3f44ff7": "L'agent sélectionné est désactivé. Choisissez un agent activé avant de créer.",
@@ -2302,7 +2306,9 @@
         "e57db40c11": "Impossible de construire la commande de lancement pour {{value0}}.",
         "5b2c1a9e44": "Aucun CLI d'agent détecté — installez-en un ou choisissez un agent par défaut dans les paramètres.",
         "b7c1f0a934": "Un hôte distant n'a pas pu être atteint, Orca ne peut donc pas savoir si le travail est toujours en cours là-bas. Fermer la fenêtre quand même ?",
-        "quitSnapshotSaveFailed": "Quitter annulé : l'instantané de session n'a pas pu être enregistré ({{value0}})."
+        "quitSnapshotSaveFailed": "Quitter annulé : l'instantané de session n'a pas pu être enregistré ({{value0}}).",
+        "userDisconnectedHosts": "Vous avez déconnecté {{hosts}}. Fermer la fenêtre ne met pas fin aux terminaux qui s'y trouvent. Fermer la fenêtre quand même ?",
+        "userDisconnectedAndUnreachableHosts": "Vous avez déconnecté {{hosts}}. Fermer la fenêtre ne met pas fin aux terminaux qui s'y trouvent. Un autre hôte distant n'a pas pu être atteint, Orca ne peut donc pas savoir si le travail y est toujours en cours. Fermer la fenêtre quand même ?"
       },
       "TerminalSearch": {
         "db234b7519": "Fermer",
@@ -3334,7 +3340,8 @@
             "connectButton": "Se connecter",
             "removedTitle": "Hôte SSH supprimé",
             "removedBody": "L'hôte SSH de cet espace de travail a été supprimé ; il ne peut plus se connecter. Supprimez l'espace de travail pour l'effacer — les fichiers distants restent intacts.",
-            "removeWorkspaceButton": "Supprimer l'espace de travail"
+            "removeWorkspaceButton": "Supprimer l'espace de travail",
+            "disconnectedByUser": "Vous avez déconnecté {{value0}}. Connectez-vous pour poursuivre cette session de terminal."
           },
           "TerminalRemoteRuntimeReconnectBanner": {
             "retryingTitle": "Reconnexion au runtime distant",
@@ -12311,7 +12318,10 @@
           },
           "FileExplorerTreeStatus": {
             "ce03835e1f": "Aucun fichier dans cet espace de travail",
-            "c76693e456": "Impossible de charger les fichiers de cet espace de travail :"
+            "c76693e456": "Impossible de charger les fichiers de cet espace de travail :",
+            "userDisconnectedTitle": "Vous avez déconnecté {{host}}",
+            "userDisconnectedDescription": "Connectez-le pour afficher les fichiers de cet espace de travail.",
+            "connect": "Se connecter"
           },
           "GitHistoryPanel": {
             "cf7cad58d2": "Aucun commit pour le moment",
@@ -18326,7 +18336,10 @@
       "openAnyway": "Ouvert quand même"
     },
     "fileLoad": {
-      "hostUnresolved": "L'hôte n'a pas pu trouver l'espace de travail de ce fichier. Il a peut-être été supprimé ou l'hôte n'en est peut-être pas encore au courant. Réessayez ou fermez cet onglet à partir de la bande d'onglets."
+      "hostUnresolved": "L'hôte n'a pas pu trouver l'espace de travail de ce fichier. Il a peut-être été supprimé ou l'hôte n'en est peut-être pas encore au courant. Réessayez ou fermez cet onglet à partir de la bande d'onglets.",
+      "userDisconnectedTitle": "Vous avez déconnecté {{host}}",
+      "userDisconnectedDescription": "Connectez-le pour charger ce fichier.",
+      "connect": "Se connecter"
     }
   },
   "checksPanel": {

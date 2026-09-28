@@ -3,6 +3,11 @@ import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { SSH_METHODS } from './ssh'
+import {
+  SSH_DISCONNECTED_BY_USER_CODE,
+  createSshDisconnectedByUserError,
+  describeSshDisconnectedByUser
+} from '../../../../shared/ssh-disconnected-by-user'
 
 const {
   connectRegisteredSshTargetMock,
@@ -58,8 +63,43 @@ describe('ssh RPC methods', () => {
 
     const response = await dispatcher.dispatch(makeRequest('ssh.connect', { targetId: 'ssh-1' }))
 
-    expect(connectRegisteredSshTargetMock).toHaveBeenCalledWith('ssh-1')
+    expect(connectRegisteredSshTargetMock).toHaveBeenCalledWith('ssh-1', 'user')
     expect(response).toMatchObject({ ok: true, result: { state } })
+  })
+
+  it('connects in the background only when the client says so', async () => {
+    connectRegisteredSshTargetMock.mockResolvedValueOnce({
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+    const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SSH_METHODS })
+
+    await dispatcher.dispatch(makeRequest('ssh.connect', { targetId: 'ssh-1', background: true }))
+
+    expect(connectRegisteredSshTargetMock).toHaveBeenCalledWith('ssh-1', 'background')
+  })
+
+  it("passes a refusal for the user's Disconnect through with its code and plain message", async () => {
+    connectRegisteredSshTargetMock.mockRejectedValueOnce(
+      createSshDisconnectedByUserError('Dev box')
+    )
+    const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SSH_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('ssh.connect', { targetId: 'ssh-1', background: true })
+    )
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: {
+        code: SSH_DISCONNECTED_BY_USER_CODE,
+        message: describeSshDisconnectedByUser('Dev box')
+      }
+    })
   })
 
   it('returns null when the target has no registered state yet', async () => {

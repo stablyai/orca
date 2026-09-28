@@ -78,6 +78,24 @@ export function selectRuntimeAwareSshConnectionGeneration(
   return bucket.connectionStates.get(targetId)?.connectionGeneration ?? null
 }
 
+/** Whether the owning host published that the user's own Disconnect holds this target down. */
+export function selectRuntimeAwareSshDisconnectedByUser(
+  state: RuntimeAwareSshReadState,
+  environmentId: string | null,
+  targetId: string
+): boolean {
+  if (environmentId === null) {
+    return state.sshConnectionStates.get(targetId)?.disconnectedBy === 'user'
+  }
+  if (!isEnvironmentReachable(state, environmentId)) {
+    return false
+  }
+  const bucket = state.sshStateByEnvironment.get(environmentId)
+  return bucket?.targetsHydrated === true
+    ? bucket.connectionStates.get(targetId)?.disconnectedBy === 'user'
+    : false
+}
+
 export function selectRuntimeAwareSshTargetLabel(
   state: RuntimeAwareSshReadState,
   environmentId: string | null,

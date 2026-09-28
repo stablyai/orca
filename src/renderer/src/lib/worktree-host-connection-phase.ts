@@ -5,6 +5,7 @@ import { getConnectionIdFromState } from '@/lib/connection-context'
 import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import {
   selectRuntimeAwareSshConnectionGeneration,
+  selectRuntimeAwareSshDisconnectedByUser,
   selectRuntimeAwareSshStatus
 } from '@/store/slices/runtime-environment-ssh'
 import { isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
@@ -37,6 +38,12 @@ export type WorktreeHostConnection = {
   publishedStatus: SshConnectionStatus | null
   /** Names the live connection: null unless connected, and new on every reconnect. */
   connectedEpoch: string | null
+  /**
+   * Why an unavailable host is down, when the host says so. `user-disconnected`: the user's own
+   * Disconnect holds it down and nothing reconnects it until they connect again. Derived from
+   * the published state; null unless `phase` is unavailable.
+   */
+  unavailableReason: 'user-disconnected' | null
 }
 
 const LOCAL_HOST_CONNECTION: WorktreeHostConnection = {
@@ -44,7 +51,8 @@ const LOCAL_HOST_CONNECTION: WorktreeHostConnection = {
   targetId: null,
   environmentId: null,
   publishedStatus: null,
-  connectedEpoch: null
+  connectedEpoch: null,
+  unavailableReason: null
 }
 
 function derivePhase(
@@ -87,12 +95,18 @@ export function resolveWorktreeHostConnection(
   const environmentId = getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId)
   const publishedStatus = selectRuntimeAwareSshStatus(state, environmentId, targetId)
   const generation = selectRuntimeAwareSshConnectionGeneration(state, environmentId, targetId)
+  const phase = derivePhase(state, targetId, environmentId, publishedStatus)
   return {
-    phase: derivePhase(state, targetId, environmentId, publishedStatus),
+    phase,
     targetId,
     environmentId,
     publishedStatus,
-    connectedEpoch: publishedStatus === 'connected' ? `${targetId}:${generation ?? ''}` : null
+    connectedEpoch: publishedStatus === 'connected' ? `${targetId}:${generation ?? ''}` : null,
+    unavailableReason:
+      phase === 'unavailable' &&
+      selectRuntimeAwareSshDisconnectedByUser(state, environmentId, targetId)
+        ? 'user-disconnected'
+        : null
   }
 }
 

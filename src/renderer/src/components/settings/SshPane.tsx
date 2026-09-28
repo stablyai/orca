@@ -6,10 +6,7 @@ import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '../ui/button'
 import { removeSshTargetWithBestEffortCleanup } from './ssh-target-remove'
-import {
-  describeSshTerminateOutcome,
-  terminateSshSessionsWithReconnect
-} from './ssh-session-termination'
+import { describeSshTerminateOutcome } from './ssh-session-termination'
 import { SshTargetCard } from './SshTargetCard'
 import { SshTargetDestructiveActions } from './SshTargetDestructiveActions'
 import { SshTargetForm, EMPTY_FORM, type EditingTarget } from './SshTargetForm'
@@ -221,7 +218,10 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
 
   const handleTerminateSessions = async (targetId: string): Promise<void> => {
     try {
-      const report = describeSshTerminateOutcome(await terminateSshSessionsWithReconnect(targetId))
+      // Why no reconnect here: the host dials the relay itself when the sessions need it.
+      const report = describeSshTerminateOutcome(
+        await window.api.ssh.terminateSessions({ targetId })
+      )
       toast[report.level](report.message)
     } catch (err) {
       toast.error(

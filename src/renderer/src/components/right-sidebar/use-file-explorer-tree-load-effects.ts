@@ -1,6 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
+import { useWorktreeHostConnection } from '@/lib/worktree-host-connection-phase'
 import { shouldResetFileExplorerForVisibleWorktree } from './file-explorer-reset'
 import { decideExpandedDirLoad } from './file-explorer-stale-dir-cache'
 import { clearFileExplorerUndoHistory } from './fileExplorerUndoRedo'
@@ -8,6 +9,7 @@ import type { DirCache } from './file-explorer-types'
 import { splitPathSegments } from './path-tree'
 
 type UseFileExplorerTreeLoadEffectsParams = {
+  worktreeId: string | null
   visibleFilesWorktreePath: string | null
   expanded: Set<string>
   dirCache: Record<string, DirCache>
@@ -22,6 +24,7 @@ type UseFileExplorerTreeLoadEffectsParams = {
 
 /** Reset/retry/stale-dir loads for the currently visible worktree tree. */
 export function useFileExplorerTreeLoadEffects({
+  worktreeId,
   visibleFilesWorktreePath,
   expanded,
   dirCache,
@@ -61,16 +64,24 @@ export function useFileExplorerTreeLoadEffects({
   // registered, so readDir fails for remote worktrees. When the SSH
   // connection is later established, sshConnectedGeneration bumps and this
   // effect retries the load. Only retries when there was a prior error to
-  // avoid redundant reloads for local worktrees.
-  const sshGenRef = useRef(sshConnectedGeneration)
+  // avoid redundant reloads for local worktrees. The generation only counts
+  // this client's own targets, so the worktree's host epoch also covers a
+  // target a remote runtime owns.
+  const hostConnectedEpoch = useWorktreeHostConnection(worktreeId).connectedEpoch
+  const seenConnectionRef = useRef({ worktreeId, sshConnectedGeneration, hostConnectedEpoch })
   useEffect(() => {
-    if (sshConnectedGeneration > sshGenRef.current) {
-      sshGenRef.current = sshConnectedGeneration
-      if (visibleFilesWorktreePath && rootError) {
-        resetAndLoad()
-      }
+    const seen = seenConnectionRef.current
+    // Why the same worktree: switching to another workspace's host is not that host connecting.
+    const connected =
+      sshConnectedGeneration > seen.sshConnectedGeneration ||
+      (hostConnectedEpoch !== null &&
+        seen.worktreeId === worktreeId &&
+        hostConnectedEpoch !== seen.hostConnectedEpoch)
+    seenConnectionRef.current = { worktreeId, sshConnectedGeneration, hostConnectedEpoch }
+    if (connected && visibleFilesWorktreePath && rootError) {
+      resetAndLoad()
     }
-  }, [sshConnectedGeneration, visibleFilesWorktreePath]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sshConnectedGeneration, hostConnectedEpoch, worktreeId, visibleFilesWorktreePath]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!visibleFilesWorktreePath) {

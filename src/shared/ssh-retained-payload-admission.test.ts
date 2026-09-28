@@ -14,6 +14,23 @@ import {
 } from './ssh-retained-payload-admission'
 
 describe('SSH retained payload admission', () => {
+  it("keeps the host's word that the user's Disconnect holds it down, and nothing else there", () => {
+    const base = { targetId: 'ssh-a', status: 'disconnected', error: null, reconnectAttempt: 0 }
+
+    expect(admitSshConnectionState({ ...base, disconnectedBy: 'user' }, 'ssh-a')).toMatchObject({
+      disconnectedBy: 'user'
+    })
+    expect(
+      admitSshConnectionStateForAuthorityReconciliation(
+        { ...base, providerEpoch: 'provider-a', disconnectedBy: 'user' },
+        'ssh-a'
+      )
+    ).toMatchObject({ disconnectedBy: 'user' })
+    expect(
+      admitSshConnectionState({ ...base, disconnectedBy: 'network' }, 'ssh-a')
+    ).not.toHaveProperty('disconnectedBy')
+  })
+
   it('keeps ordinary connection state while stripping unknown payload fields', () => {
     const admitted = admitSshConnectionState(
       {

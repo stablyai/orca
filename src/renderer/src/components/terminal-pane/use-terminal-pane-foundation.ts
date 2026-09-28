@@ -68,6 +68,7 @@ export function useTerminalPaneFoundation(
   isVisibleRef.current = isRendererVisible
   const {
     nativeChatTranscriptIsLocalReadable,
+    sshReconnectDisconnectedByUser,
     sshReconnectEnvironmentId,
     sshReconnectError,
     sshReconnectStatus,
@@ -187,6 +188,7 @@ export function useTerminalPaneFoundation(
     isVisibleRef,
     sshReconnectTargetId,
     nativeChatTranscriptIsLocalReadable,
+    sshReconnectDisconnectedByUser,
     sshReconnectEnvironmentId,
     sshReconnectError,
     sshReconnectStatus,

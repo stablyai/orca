@@ -3,13 +3,14 @@ import type { SshConnection } from '../ssh/ssh-connection'
 import { SshRelaySession } from '../ssh/ssh-relay-session'
 import type { SshConnectionState, SshConnectionStatus } from '../../shared/ssh-types'
 import { createCancelledConnectAttemptError } from '../ssh/ssh-connect-attempt-cancellation'
+import { createSshDisconnectedByUserError } from '../../shared/ssh-disconnected-by-user'
 import { isAuthError } from '../ssh/ssh-connection-utils'
 import {
   getSshProviderAuthority,
   isCurrentSshProviderAuthority,
   rotateSshProviderAuthority
 } from '../ssh/ssh-provider-authority'
-import { getSshTargetRegistryStore } from '../ssh/ssh-target-registry'
+import { getSshTargetRegistryStore, type SshConnectAdmission } from '../ssh/ssh-target-registry'
 import { activeSessions } from './ssh-active-relay-sessions'
 import {
   assertSshConnectsNotFenced,
@@ -30,6 +31,11 @@ import {
   persistedStore,
   portForwardManager
 } from './ssh-ipc-context'
+import {
+  isSshTargetDisconnectedByUser,
+  recordSshConnectionIntent,
+  sshTargetDisplayLabel
+} from './ssh-connection-intent'
 import { clearRelayLostBackoff, relayLostBackoff } from './ssh-relay-lost-backoff'
 import { configureRelaySessionCallbacks } from './ssh-relay-session-callbacks'
 import {
@@ -42,12 +48,20 @@ import {
 import { abandonCancelledConnectAttempt, abandonFailedSshSession } from './ssh-session-teardown'
 import { awaitTargetLifecycle } from './ssh-target-lifecycle-queue'
 
-export async function connectTarget(targetId: string): Promise<SshConnectionState> {
+export async function connectTarget(
+  targetId: string,
+  admission: SshConnectAdmission
+): Promise<SshConnectionState> {
   const e2eProbePath = process.env.ORCA_E2E_FORBID_LOCAL_SSH_CONNECT_PROBE
   if (e2eProbePath) {
     appendFileSync(e2eProbePath, `${JSON.stringify(targetId)}\n`)
     throw new Error('e2e_forbidden_local_ssh_connect')
   }
+  if (admission === 'user') {
+    // Why at admission: a Disconnect that arrives after this click must win, and it writes later.
+    recordSshConnectionIntent(targetId, 'connected')
+  }
+  assertConnectAdmitted(targetId, admission)
   // Why: fence callers that entered before a same-turn disconnect/reset but resume after its cleanup.
   const admissionAuthority = getSshProviderAuthority(targetId)
   await awaitTargetLifecycle(targetId)
@@ -55,6 +69,8 @@ export async function connectTarget(targetId: string): Promise<SshConnectionStat
   if (reset) {
     await reset
   }
+  // Why again: a Disconnect may have landed while this connect waited on the lifecycle queue.
+  assertConnectAdmitted(targetId, admission)
 
   // Why: serialize concurrent ssh:connect for the same target; interleaved connects otherwise leak the first session.
   const existing = connectInFlight.get(targetId)
@@ -91,6 +107,14 @@ export async function connectTarget(targetId: string): Promise<SshConnectionStat
     if (connectInFlight.get(targetId) === attempt) {
       connectInFlight.delete(targetId)
     }
+  }
+}
+
+// Why before any rotation, registration or broadcast: a refused connect must leave no trace.
+function assertConnectAdmitted(targetId: string, admission: SshConnectAdmission): void {
+  if (admission === 'background' && isSshTargetDisconnectedByUser(targetId)) {
+    console.warn(`[ssh] Refused a background connect to ${targetId}: the user disconnected it`)
+    throw createSshDisconnectedByUserError(sshTargetDisplayLabel(targetId))
   }
 }
 

@@ -92,7 +92,8 @@ export function admitSshConnectionState(
     input.remotePlatform === 'darwin' ||
     input.remotePlatform === 'win32'
       ? { remotePlatform: input.remotePlatform }
-      : {})
+      : {}),
+    ...(input.disconnectedBy === 'user' ? { disconnectedBy: 'user' as const } : {})
   }
 }
 
@@ -117,7 +118,8 @@ export function admitSshConnectionStateForAuthorityReconciliation(
       error: input.error,
       reconnectAttempt: input.reconnectAttempt,
       supportsFolderDownload: input.supportsFolderDownload,
-      remotePlatform: input.remotePlatform
+      remotePlatform: input.remotePlatform,
+      disconnectedBy: input.disconnectedBy
     },
     expectedTargetId
   )

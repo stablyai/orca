@@ -6,7 +6,8 @@ const LOCAL_HOST_CONNECTION: WorktreeHostConnection = {
   targetId: null,
   environmentId: null,
   publishedStatus: null,
-  connectedEpoch: null
+  connectedEpoch: null,
+  unavailableReason: null
 }
 
 export function selectWorktreeHostConnectionPhase(): WorktreeHostConnection {

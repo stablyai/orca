@@ -163,6 +163,7 @@ describe('file explorer directory refresh churn', () => {
   it('does not stack a second read on an expanded dir the loading set already owns', () => {
     const loadDir = vi.fn().mockResolvedValue(true)
     const params = {
+      worktreeId: null,
       visibleFilesWorktreePath: WORKTREE_PATH,
       expanded: new Set([SRC_DIR]),
       dirCache: {},

@@ -6,6 +6,7 @@ import {
   testConnectionProbes
 } from './ssh-connect-attempt-registry'
 import { connectionManager } from './ssh-ipc-context'
+import { sshMaintenanceOperations } from './ssh-maintenance-channel'
 import { teardownActiveSshSession } from './ssh-session-teardown'
 
 // Why one budget for the whole sequence rather than one per phase: an invalidated connect only
@@ -133,7 +134,13 @@ export function beginSshShutdown(): Promise<SshShutdownResult> {
       promise: attempt.promise
     })),
     ...[...resetRelayInFlight.entries()].map(([targetId, promise]) => ({ targetId, promise })),
-    ...[...testConnectionProbes].map((promise) => ({ targetId: '*probe', promise }))
+    ...[...testConnectionProbes].map((promise) => ({ targetId: '*probe', promise })),
+    ...[...sshMaintenanceOperations].map((operation) => {
+      // Why abort rather than wait: a relay deploy can outlast the whole budget, and closing the
+      // transport is what leaves no process behind; the operation's own cleanup still runs.
+      operation.abort()
+      return { targetId: operation.targetId, promise: operation.settled }
+    })
   ]
   for (const targetId of Array.from(connectInFlight.keys())) {
     invalidateConnectAttempt(targetId)

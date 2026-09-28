@@ -1,40 +1,27 @@
 import { ipcMain } from 'electron'
-import {
-  sshRemotePtyLeaseAllowsReattach,
-  type SshTarget,
-  type SshTerminateSessionsResult
-} from '../../shared/ssh-types'
-import { SSH_TERMINATE_RECONNECT_REQUIRED } from '../../shared/constants'
-import { isSshPtyNotFoundError } from '../providers/ssh-pty-errors'
-import { toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
+import type { SshTarget } from '../../shared/ssh-types'
+import { toAppSshPtyId } from '../providers/ssh-pty-id'
 import { rotateSshProviderAuthority } from '../ssh/ssh-provider-authority'
 import { forceStopRelayForTarget } from '../ssh/ssh-relay-reset'
 import { setSshTargetRegistryHandlers, getSshTargetRegistryStore } from '../ssh/ssh-target-registry'
-import {
-  clearProviderPtyState,
-  deletePtyOwnership,
-  getPtyIdsForConnection,
-  getSshPtyProvider
-} from './pty'
+import { clearProviderPtyState, deletePtyOwnership, getPtyIdsForConnection } from './pty'
 import { activeSessions } from './ssh-active-relay-sessions'
 import {
   assertSshConnectsNotFenced,
   connectInFlight,
   credentialRequestedForTarget,
-  invalidateConnectAttempt,
   resetRelayInFlight,
   testConnectionProbes,
   testingTargets
 } from './ssh-connect-attempt-registry'
 import { connectTarget } from './ssh-connect-flow'
-import { connectionManager, persistedStore } from './ssh-ipc-context'
-import { getPublicSshState } from './ssh-renderer-broadcast'
-import {
-  disconnectRegisteredSshTarget,
-  teardownActiveSshSession,
-  teardownSshTargetTransport
-} from './ssh-session-teardown'
+import { withSshMaintenanceTransport } from './ssh-maintenance-channel'
+import { recordSshConnectionIntent } from './ssh-connection-intent'
+import { connectionManager, getCurrentMainWindow, persistedStore } from './ssh-ipc-context'
+import { broadcastSshState, getPublicSshState } from './ssh-renderer-broadcast'
+import { disconnectRegisteredSshTarget, teardownActiveSshSession } from './ssh-session-teardown'
 import { runTargetLifecycle } from './ssh-target-lifecycle-queue'
+import { terminateSshTargetSessions } from './ssh-terminate-sessions'
 
 async function doResetRelay(targetId: string, target: SshTarget): Promise<void> {
   const inFlightConnect = connectInFlight.get(targetId)
@@ -57,16 +44,13 @@ async function doResetRelay(targetId: string, target: SshTarget): Promise<void> 
   }
 
   const existingConn = connectionManager!.getConnection(targetId)
-  let conn = existingConn
-  if (!conn) {
-    // Why re-check: admission fenced this reset before it parked on the in-flight connect, so shutdown
-    // may have started (and drained) while we waited — opening a transport now would outlive the drain.
-    assertSshConnectsNotFenced()
-    conn = await connectionManager!.connect(target)
-  }
   let relayStopAcknowledged = false
   try {
-    await forceStopRelayForTarget(conn, targetId)
+    // Why a maintenance transport when none is registered: registering one would publish the
+    // host as up, and a Disconnect the user made must hold through their Reset.
+    await (existingConn
+      ? forceStopRelayForTarget(existingConn, targetId)
+      : withSshMaintenanceTransport(target, (conn) => forceStopRelayForTarget(conn, targetId)))
     relayStopAcknowledged = true
   } finally {
     const ptyIds = new Set(getPtyIdsForConnection(targetId))
@@ -96,9 +80,9 @@ async function doResetRelay(targetId: string, target: SshTarget): Promise<void> 
       clearProviderPtyState(appPtyId)
       deletePtyOwnership(appPtyId)
     }
-    // Why: reset's connect() may trip onCredentialRequest; clear so a later non-prompting doConnect doesn't persist lastRequiredPassphrase=true.
-    credentialRequestedForTarget.delete(targetId)
-    await connectionManager!.disconnect(targetId)
+    if (existingConn) {
+      await connectionManager!.disconnect(targetId)
+    }
   }
 }
 
@@ -109,92 +93,33 @@ export function registerSshConnectionHandlers(): void {
   })
 
   ipcMain.handle('ssh:connect', async (_event, args: { targetId: string }) => {
-    return connectTarget(args.targetId)
+    return connectTarget(args.targetId, 'user')
+  })
+
+  ipcMain.handle('ssh:ensureConnected', async (_event, args: { targetId: string }) => {
+    return connectTarget(args.targetId, 'background')
   })
 
   ipcMain.handle('ssh:disconnect', async (_event, args: { targetId: string }) => {
+    // Why only here and not in disconnectRegisteredSshTarget: VM teardown shares that path, and
+    // only this handler is a user's Disconnect. Written first so every state published during
+    // the teardown already says the user holds the host down.
+    recordSshConnectionIntent(args.targetId, 'disconnected')
+    const hadConnection = connectionManager!.getConnection(args.targetId) !== undefined
     await disconnectRegisteredSshTarget(args.targetId)
+    if (!hadConnection) {
+      // Why: with no connection object nothing emits 'disconnected', so a failed connect's
+      // 'error' would otherwise stay published over the user's Disconnect.
+      const state = getPublicSshState(args.targetId)
+      if (state) {
+        broadcastSshState(getCurrentMainWindow, args.targetId, state)
+      }
+    }
   })
 
-  ipcMain.handle('ssh:terminateSessions', async (_event, args: { targetId: string }) => {
-    invalidateConnectAttempt(args.targetId)
-    // Why (#12661): an offline sweep tears down local transport only. The caller must be able to tell
-    // "the host stopped these" from "nobody asked the host", so carry the verdict out of the lifecycle queue.
-    let outcome: SshTerminateSessionsResult = { terminated: 0, unverifiable: 0 }
-    await runTargetLifecycle(args.targetId, async () => {
-      const provider = getSshPtyProvider(args.targetId)
-      const leases = persistedStore!.getSshRemotePtyLeases(args.targetId)
-      const ptyIdsByRelayId = new Map<string, string>()
-      // Why: only leases the app still believes it owns may force a reconnect; a lease whose route
-      // died for good is swept opportunistically instead, so a target that can no longer answer
-      // never blocks its own removal (issue #2626, and the renderer tolerates the refusal there).
-      const ownedRelayIds = new Set<string>()
-      const trackPtyId = (ptyId: string, owned: boolean): void => {
-        const relayPtyId = toRelaySshPtyId(args.targetId, ptyId)
-        if (!ptyIdsByRelayId.has(relayPtyId)) {
-          ptyIdsByRelayId.set(relayPtyId, toAppSshPtyId(args.targetId, ptyId))
-        }
-        if (owned) {
-          ownedRelayIds.add(relayPtyId)
-        }
-      }
-      for (const ptyId of getPtyIdsForConnection(args.targetId)) {
-        trackPtyId(ptyId, true)
-      }
-      for (const lease of leases) {
-        if (lease.state === 'terminated') {
-          continue
-        }
-        // Why the predicate and not `state !== 'expired'`: an `expired` lease carrying no
-        // retirement mark records only that reattach gave up, never that the remote shell died, so
-        // it is exactly the orphan the user's terminate must reach — and reaching it needs the
-        // relay, which is what the fence below demands. Only `supersededBy` / `relayIdRecycled`
-        // prove the route is dead for good, and those stay unowned.
-        trackPtyId(lease.ptyId, sshRemotePtyLeaseAllowsReattach(lease))
-      }
-      const ptyIds = Array.from(ptyIdsByRelayId, ([relayPtyId, appPtyId]) => ({
-        relayPtyId,
-        appPtyId
-      }))
-
-      if (ownedRelayIds.size > 0 && !provider) {
-        throw new Error(
-          `${SSH_TERMINATE_RECONNECT_REQUIRED}: SSH relay is not connected; reconnect before terminating remote sessions.`
-        )
-      }
-      const shutdownResults = provider
-        ? await Promise.allSettled(
-            ptyIds.map(({ appPtyId }) =>
-              provider.shutdown(appPtyId, { immediate: true, keepHistory: false })
-            )
-          )
-        : []
-      if (!provider) {
-        // Nothing observed these remote shells, so their state is unknown — not "nothing to do".
-        outcome = { terminated: 0, unverifiable: ptyIds.length }
-      }
-      const shutdownFailures: string[] = []
-      for (const [index, result] of shutdownResults.entries()) {
-        const { appPtyId, relayPtyId } = ptyIds[index]
-        if (result.status !== 'fulfilled' && !isSshPtyNotFoundError(result.reason)) {
-          shutdownFailures.push(
-            `${relayPtyId}: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`
-          )
-          continue
-        }
-        clearProviderPtyState(appPtyId)
-        deletePtyOwnership(appPtyId)
-        persistedStore!.markSshRemotePtyLease(args.targetId, relayPtyId, 'terminated')
-        outcome = { ...outcome, terminated: outcome.terminated + 1 }
-      }
-      if (shutdownFailures.length > 0) {
-        // Why: a failed relay shutdown can leave the remote process alive in the grace window; keep the lease/session so the user can retry.
-        throw new Error(`Failed to terminate SSH host sessions: ${shutdownFailures.join('; ')}`)
-      }
-      await teardownSshTargetTransport(args.targetId, (session) => session.disposeAndPersist())
-    })
-    return outcome
-  })
+  ipcMain.handle('ssh:terminateSessions', (_event, args: { targetId: string }) =>
+    terminateSshTargetSessions(args.targetId)
+  )
 
   ipcMain.handle('ssh:resetRelay', (_event, args: { targetId: string }) => {
     const existingReset = resetRelayInFlight.get(args.targetId)

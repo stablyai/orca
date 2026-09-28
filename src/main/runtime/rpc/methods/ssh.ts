@@ -7,7 +7,8 @@ import {
 import { defineMethod } from '../core'
 import { getPublicSshError, getPublicSshState } from '../../public-ssh-state'
 import type { SshTargetSummary } from '../../../../shared/ssh-types'
-import { SshTarget } from '../../../../shared/rpc-contract/ssh-params'
+import { SshConnect, SshTarget } from '../../../../shared/rpc-contract/ssh-params'
+import { isSshDisconnectedByUserError } from '../../../../shared/ssh-disconnected-by-user'
 
 // Why: `generation` stays optional on the wire — an old server simply omits it and its rows key on target id alone.
 function listRegisteredSshTargetSummaries(): SshTargetSummary[] {
@@ -35,11 +36,18 @@ export const SSH_METHODS = [
   }),
   defineMethod({
     name: 'ssh.connect',
-    params: SshTarget,
+    params: SshConnect,
     handler: async (params) => {
       try {
-        return { state: getPublicSshState(await connectRegisteredSshTarget(params.targetId)) }
-      } catch {
+        const admission = params.background === true ? 'background' : 'user'
+        return {
+          state: getPublicSshState(await connectRegisteredSshTarget(params.targetId, admission))
+        }
+      } catch (error) {
+        // Why passed through: its message is written for the person reading it, not a raw error.
+        if (isSshDisconnectedByUserError(error)) {
+          throw error
+        }
         const state = getRegisteredSshState(params.targetId)
         throw new Error(getPublicSshError(state?.status ?? 'error'))
       }

@@ -739,7 +739,8 @@
         "59718b120b": "El espacio de trabajo de destino ya no está disponible.",
         "16a21d6413": "La reconexión SSH requiere credenciales interactivas.",
         "386db94f3e": "El proyecto de destino ya no está disponible.",
-        "3ad7d77f57": "El espacio de trabajo de destino está en un host distinto al destino de ejecución de esta automatización."
+        "3ad7d77f57": "El espacio de trabajo de destino está en un host distinto al destino de ejecución de esta automatización.",
+        "sshDisconnectedByUser": "Omitido: desconectaste {{host}}. Vuelve a conectarlo para reanudar."
       },
       "useComposerState": {
         "7eb3f44ff7": "El agente seleccionado está deshabilitado. Elige un agente habilitado antes de crear.",
@@ -1966,7 +1967,9 @@
         "61ed600d29": "\"{{value0}}\" tiene cambios no guardados. ¿Quieres guardar antes de cerrar?",
         "cdc9ac4b2d": "editor",
         "e57db40c11": "No se pudo generar el comando de inicio para {{value0}}.",
-        "5b2c1a9e44": "No se detectó ninguna CLI de agente; instala una o elige un agente predeterminado en Ajustes."
+        "5b2c1a9e44": "No se detectó ninguna CLI de agente; instala una o elige un agente predeterminado en Ajustes.",
+        "userDisconnectedHosts": "Desconectaste {{hosts}}. Cerrar la ventana no finaliza las terminales que hay allí. ¿Cerrar la ventana de todos modos?",
+        "userDisconnectedAndUnreachableHosts": "Desconectaste {{hosts}}. Cerrar la ventana no finaliza las terminales que hay allí. No se pudo contactar con otro host remoto, así que Orca no puede saber si el trabajo sigue ejecutándose allí. ¿Cerrar la ventana de todos modos?"
       },
       "TerminalSearch": {
         "db234b7519": "Cerrar",
@@ -2921,7 +2924,8 @@
             "connectButton": "Conectar",
             "removedTitle": "Host SSH eliminado",
             "removedBody": "El host SSH de este espacio de trabajo fue eliminado, por lo que ya no puede conectarse. Elimina el espacio de trabajo para limpiarlo — los archivos remotos permanecen intactos.",
-            "removeWorkspaceButton": "Eliminar espacio de trabajo"
+            "removeWorkspaceButton": "Eliminar espacio de trabajo",
+            "disconnectedByUser": "Desconectaste {{value0}}. Conéctate para continuar esta sesión de terminal."
           },
           "TerminalRemoteRuntimeReconnectBanner": {
             "retryingTitle": "Reconnecting to remote runtime",
@@ -10639,7 +10643,10 @@
           },
           "FileExplorerTreeStatus": {
             "ce03835e1f": "No hay archivos en este espacio de trabajo",
-            "c76693e456": "No se pudieron cargar archivos para este espacio de trabajo:"
+            "c76693e456": "No se pudieron cargar archivos para este espacio de trabajo:",
+            "userDisconnectedTitle": "Desconectaste {{host}}",
+            "userDisconnectedDescription": "Conéctalo para mostrar los archivos de este espacio de trabajo.",
+            "connect": "Conectar"
           },
           "GitHistoryPanel": {
             "cf7cad58d2": "Aún no hay commits",

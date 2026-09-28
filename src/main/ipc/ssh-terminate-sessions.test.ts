@@ -10,6 +10,10 @@ vi.mock('electron', () => mocks.electron)
 vi.mock('./ssh-pty-output-intake-registry', () => mocks.sshPtyOutputIntakeRegistry)
 vi.mock('../ssh/ssh-connection-store', () => mocks.sshConnectionStore)
 vi.mock('../ssh/ssh-connection-manager', () => mocks.sshConnectionManager)
+vi.mock('../ssh/ssh-connection', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  ...mocks.sshConnection
+}))
 vi.mock('../ssh/ssh-relay-deploy', () => mocks.sshRelayDeploy)
 vi.mock('../ssh/ssh-relay-reset', () => mocks.sshRelayReset)
 vi.mock('../ssh/ssh-channel-multiplexer', () => mocks.sshChannelMultiplexer)
@@ -32,7 +36,22 @@ import {
 } from './pty'
 import { createSshIpcHarness } from './ssh-ipc-test-harness'
 
-const { mockSshStore, mockConnectionManager, mockPtyProvider, mockPortForwardManager } = mocks
+const {
+  mockSshStore,
+  mockConnectionManager,
+  mockMaintenanceConnection,
+  mockMux,
+  mockPtyProvider,
+  mockPortForwardManager
+} = mocks
+
+const TARGET: SshTarget = {
+  id: 'ssh-1',
+  label: 'Server',
+  host: 'example.com',
+  port: 22,
+  username: 'deploy'
+}
 
 describe('SSH IPC handlers', () => {
   const harness = createSshIpcHarness(mocks)
@@ -213,7 +232,8 @@ describe('SSH IPC handlers', () => {
   // An `expired` lease carrying neither retirement mark is an orphan, not a corpse: it records only
   // that this client lost its route. Answering `unverifiable` there strands a remote shell the user
   // just ordered stopped, when a reconnect is exactly what would reach it.
-  it('ssh:terminateSessions demands a reconnect for an unmarked expired lease', async () => {
+  it('ssh:terminateSessions reaches the relay for an unmarked expired lease', async () => {
+    mockSshStore.getTarget.mockReturnValue(TARGET)
     mockStore.getSshRemotePtyLeases.mockReturnValue([
       { targetId: 'ssh-1', ptyId: 'pty-orphan', state: 'expired' }
     ])
@@ -222,8 +242,36 @@ describe('SSH IPC handlers', () => {
 
     await expect(
       handlers.get('ssh:terminateSessions')!(null, { targetId: 'ssh-1' })
-    ).rejects.toThrow(SSH_TERMINATE_RECONNECT_REQUIRED)
+    ).resolves.toEqual({ terminated: 1, unverifiable: 0 })
 
+    expect(mockConnectionManager.connect).not.toHaveBeenCalled()
+    expect(mockMux.request).toHaveBeenCalledWith('pty.shutdown', {
+      id: 'pty-orphan',
+      immediate: true,
+      keepHistory: false
+    })
+    expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledWith(
+      'ssh-1',
+      'pty-orphan',
+      'terminated'
+    )
+  })
+
+  it('ssh:terminateSessions demands a reconnect when the host cannot be reached', async () => {
+    mockSshStore.getTarget.mockReturnValue(TARGET)
+    mockMaintenanceConnection.connect.mockRejectedValue(new Error('connect ECONNREFUSED'))
+    mockStore.getSshRemotePtyLeases.mockReturnValue([
+      { targetId: 'ssh-1', ptyId: 'pty-orphan', state: 'expired' }
+    ])
+    vi.mocked(getSshPtyProvider).mockReturnValue(undefined)
+    vi.mocked(getPtyIdsForConnection).mockReturnValue([])
+
+    const terminate = handlers.get('ssh:terminateSessions')!(null, { targetId: 'ssh-1' })
+
+    await expect(terminate).rejects.toThrow(SSH_TERMINATE_RECONNECT_REQUIRED)
+    await expect(terminate).rejects.toThrow('ECONNREFUSED')
+    expect(mockConnectionManager.connect).not.toHaveBeenCalled()
+    expect(mockMaintenanceConnection.disconnect).toHaveBeenCalled()
     expect(mockPtyProvider.shutdown).not.toHaveBeenCalled()
     expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalledWith(
       'ssh-1',

@@ -166,19 +166,7 @@ describe('connectPanePty', () => {
       deferredSshSessionIdsByTabId: { 'tab-1': 'saved-session' }
     }
 
-    const api = (
-      globalThis as unknown as {
-        window: {
-          api: {
-            ssh: {
-              connect: ReturnType<typeof vi.fn>
-              needsPassphrasePrompt: ReturnType<typeof vi.fn>
-            }
-          }
-        }
-      }
-    ).window.api
-    api.ssh.needsPassphrasePrompt.mockResolvedValue(true)
+    vi.mocked(window.api.ssh.needsPassphrasePrompt).mockResolvedValue(true)
 
     const pane = createPane(1)
     const manager = createManager(1)
@@ -193,7 +181,7 @@ describe('connectPanePty', () => {
     notifyStoreSubscribers()
     await flushAsyncTicks(10)
 
-    expect(api.ssh.connect).not.toHaveBeenCalled()
+    expect(window.api.ssh.ensureConnected).not.toHaveBeenCalled()
     expect(transport.connect).not.toHaveBeenCalled()
     expect(deps.onPtyErrorRef.current).not.toHaveBeenCalled()
     expect(mockStoreState.removeDeferredSshSessionId).not.toHaveBeenCalled()
@@ -248,7 +236,7 @@ describe('connectPanePty', () => {
     passphraseProbe.resolve(false)
     await flushAsyncTicks(12)
 
-    expect(window.api.ssh.connect).not.toHaveBeenCalled()
+    expect(window.api.ssh.ensureConnected).not.toHaveBeenCalled()
     expect(transport.connect).not.toHaveBeenCalled()
     expect(deps.onPtyErrorRef.current).not.toHaveBeenCalled()
     expect(mockStoreState.removeDeferredSshSessionId).not.toHaveBeenCalled()
@@ -312,7 +300,7 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(12)
 
     expect(deps.onPtyErrorRef.current).not.toHaveBeenCalled()
-    expect(window.api.ssh.connect).not.toHaveBeenCalled()
+    expect(window.api.ssh.ensureConnected).not.toHaveBeenCalled()
     expect(transport.connect).not.toHaveBeenCalled()
     expect(mockStoreState.removeDeferredSshSessionId).not.toHaveBeenCalled()
     expect(mockStoreState.removeDeferredSshReconnectTarget).not.toHaveBeenCalled()
@@ -354,7 +342,7 @@ describe('connectPanePty', () => {
       deferredSshSessionIdsByTabId: { 'tab-1': restoredPtyId },
       directSshPaneRetryByTabId: { 'tab-1': pendingRetry }
     }
-    vi.mocked(window.api.ssh.connect).mockReturnValue(sshConnect.promise)
+    vi.mocked(window.api.ssh.ensureConnected).mockReturnValue(sshConnect.promise)
     const paneMode2031Ref = { current: new Map([[1, true]]) }
     const paneLastThemeModeRef = { current: new Map([[1, true]]) }
     const deps = createDeps({ paneMode2031Ref, paneLastThemeModeRef })

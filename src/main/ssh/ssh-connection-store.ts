@@ -1,6 +1,9 @@
 import type { Store } from '../persistence'
 import type { SshRepoReadoption, SshTarget } from '../../shared/ssh-types'
-import { RUNTIME_OWNED_SSH_TARGET_ID_PREFIX } from '../../shared/execution-host'
+import {
+  RUNTIME_OWNED_SSH_TARGET_ID_PREFIX,
+  isRuntimeOwnedSshTarget
+} from '../../shared/execution-host'
 import { normalizeSshConfigAlias } from '../../shared/ssh-config-alias'
 import { loadUserSshConfig, sshConfigHostsToTargets } from './ssh-config-parser'
 import {
@@ -243,9 +246,7 @@ export function getRuntimeOwnedSshTargetId(runtimeId: string): string {
   return `${RUNTIME_OWNED_SSH_TARGET_ID_PREFIX}${runtimeId}`
 }
 
-export function isRuntimeOwnedSshTarget(target: SshTarget): boolean {
-  return target.owner?.type === 'on-demand-runtime'
-}
+export { isRuntimeOwnedSshTarget }
 
 function isLegacyConfigImportTarget(target: SshTarget): boolean {
   const alias = target.configHost ?? target.label

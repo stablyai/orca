@@ -6,7 +6,6 @@ import { waitForSessionReady } from './helpers/store'
 import {
   blockDockerSshRelayTargetTcpForwarding,
   cleanupDockerSshRelayTarget,
-  refuseDockerSshRelayTargetConnections,
   startDockerSshRelayTarget,
   type DockerSshRelayTarget
 } from './helpers/docker-ssh-relay-target'
@@ -48,7 +47,8 @@ const OPT_OUT_URL = `${SSH_REMOTE_ONLY_ORIGIN}/echo/opt-out`
 const ROUTE_PARTITION_RE = /^persist:orca-browser-v1-[a-f0-9]{64}$/
 
 const FORWARDING_BLOCKED_TITLE = 'The SSH server blocks browser traffic'
-const SSH_UNAVAILABLE_TITLE = 'SSH connection unavailable'
+// Why a prefix: the title names the host, whose label carries a per-run timestamp.
+const USER_DISCONNECTED_TITLE_PREFIX = 'You disconnected '
 const BROWSE_LOCALLY_LABEL = 'Browse from this device instead'
 const LOCAL_DEVICE_MARKER = 'local-device-marker'
 
@@ -87,17 +87,6 @@ async function readSshState(page: Page, targetId: string): Promise<SshState> {
       providerEpoch: state?.providerEpoch ?? null
     }
   }, targetId)
-}
-
-/**
- * The status the panes read. Main's `ssh:getState` drops a target's entry on disconnect and on a
- * failed connect, so only the renderer store still holds a settled failure verdict.
- */
-async function readRendererSshStatus(page: Page, targetId: string): Promise<string | null> {
-  return page.evaluate(
-    (targetId) => window.__store?.getState().sshConnectionStates.get(targetId)?.status ?? null,
-    targetId
-  )
 }
 
 /**
@@ -556,7 +545,9 @@ async function startHostPublishedOrigin(): Promise<{ url: string; close: () => P
  * The prepare-time probe's fail-closed path, driven end to end against a real sshd.
  *
  * With the SSH host unavailable the probe cannot resolve a route, so `prepare` rejects and the
- * gate must hold the mount rather than fall back to local egress. What makes this worth an e2e is
+ * gate must hold the mount rather than fall back to local egress. The host is taken down by the
+ * user's own Disconnect, which nothing redials, so the card names that and offers Connect in
+ * place of Retry. What makes this worth an e2e is
  * the escape hatch: "Browse from this device instead" is the ONLY sanctioned unrouted path, and
  * proving it works needs an origin that only this device can reach — otherwise "it loaded" says
  * nothing about which machine opened the socket.
@@ -582,9 +573,6 @@ test('holds the mount and offers a working local escape hatch when the SSH host 
     const worktreeId = remote.worktreeId
 
     await installBrowserPaneMountCensus(orcaPage)
-    // Why: the workspace's terminal redials a disconnected host, and a redial that connects
-    // rightly recovers the route; only a host that stays unreachable can hold the card.
-    refuseDockerSshRelayTargetConnections(target)
     await orcaPage.evaluate(
       async (targetId) => window.api.ssh.disconnect({ targetId }),
       remote.targetId
@@ -592,9 +580,10 @@ test('holds the mount and offers a working local escape hatch when the SSH host 
     await expect
       .poll(async () => (await readSshState(orcaPage, remote.targetId)).status, {
         timeout: 60_000,
-        message: 'the SSH target never left the connected state'
+        message: "the host never published the user's Disconnect"
       })
-      .not.toBe('connected')
+      .toBe('disconnected')
+    const heldDown = await readSshState(orcaPage, remote.targetId)
 
     // (a) The gate holds the mount: no guest may exist while routing is unavailable.
     const strandedTab = await createBrowserTab(
@@ -605,8 +594,8 @@ test('holds the mount and offers a working local escape hatch when the SSH host 
     )
     const strandedPane = orcaPage.locator(`[data-browser-overlay-tab-id="${strandedTab.id}"]`)
     await expect(
-      strandedPane.getByText(SSH_UNAVAILABLE_TITLE),
-      'an unreachable SSH host must be classified, not reported as a generic failure'
+      strandedPane.getByText(USER_DISCONNECTED_TITLE_PREFIX, { exact: false }),
+      'a host the user disconnected must say so, not report a generic failure'
     ).toBeVisible({ timeout: 180_000 })
 
     const strandedCensus = await readBrowserPaneMountCensus(orcaPage)
@@ -620,14 +609,16 @@ test('holds the mount and offers a working local escape hatch when the SSH host 
     ).toEqual([])
     expect(
       censusFor(strandedCensus, strandedTab.id).some(
-        (entry) => entry.kind === 'gate-error' && entry.title === SSH_UNAVAILABLE_TITLE
+        (entry) => entry.kind === 'gate-error' && entry.title === USER_DISCONNECTED_TITLE_PREFIX
       ),
       'the classified card must be what replaced the preparing card'
     ).toBe(true)
 
-    // (b) The card's affordances. "Try anyway" is deliberately absent: skipping the probe cannot
-    // help a host that is not reachable at all, and offering it would invite a pointless retry.
-    await expect(strandedPane.getByRole('button', { name: 'Retry' })).toBeVisible()
+    // (b) The card's affordances. Connect replaces Retry: nothing routes until the user connects
+    // the host again. "Try anyway" is deliberately absent: skipping the probe cannot help a host
+    // with no connection, and offering it would invite a pointless retry.
+    await expect(strandedPane.getByRole('button', { name: 'Connect' })).toBeVisible()
+    await expect(strandedPane.getByRole('button', { name: 'Retry' })).toHaveCount(0)
     await expect(strandedPane.getByRole('button', { name: BROWSE_LOCALLY_LABEL })).toBeVisible()
     await expect(
       strandedPane.getByRole('button', { name: 'Try anyway' }),
@@ -635,17 +626,15 @@ test('holds the mount and offers a working local escape hatch when the SSH host 
     ).toHaveCount(0)
 
     // (d) The escape hatch, proven by an origin only this device can reach.
-    await expect
-      .poll(() => readRendererSshStatus(orcaPage, remote.targetId), {
-        timeout: 180_000,
-        message: 'the redial of an unreachable host must settle as a failure, not an auth prompt'
-      })
-      .toMatch(/^(disconnected|error|reconnection-failed)$/)
-    await expect(strandedPane.getByText(SSH_UNAVAILABLE_TITLE)).toBeVisible()
+    // Why the generation: the host stays reachable and a held Disconnect always publishes
+    // 'disconnected', so only an unmoved generation proves nothing redialed behind the card.
+    await expect(
+      strandedPane.getByText(USER_DISCONNECTED_TITLE_PREFIX, { exact: false })
+    ).toBeVisible()
     expect(
-      (await readSshState(orcaPage, remote.targetId)).status,
+      await readSshState(orcaPage, remote.targetId),
       'a host that reconnected would make this escape hatch vacuous'
-    ).not.toBe('connected')
+    ).toEqual(heldDown)
     await strandedPane.getByRole('button', { name: BROWSE_LOCALLY_LABEL }).click()
     await expect
       .poll(

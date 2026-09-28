@@ -10,6 +10,10 @@ vi.mock('electron', () => mocks.electron)
 vi.mock('./ssh-pty-output-intake-registry', () => mocks.sshPtyOutputIntakeRegistry)
 vi.mock('../ssh/ssh-connection-store', () => mocks.sshConnectionStore)
 vi.mock('../ssh/ssh-connection-manager', () => mocks.sshConnectionManager)
+vi.mock('../ssh/ssh-connection', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  ...mocks.sshConnection
+}))
 vi.mock('../ssh/ssh-relay-deploy', () => mocks.sshRelayDeploy)
 vi.mock('../ssh/ssh-relay-reset', () => mocks.sshRelayReset)
 vi.mock('../ssh/ssh-channel-multiplexer', () => mocks.sshChannelMultiplexer)
@@ -35,6 +39,7 @@ const {
   powerMonitorOnMock,
   mockSshStore,
   mockConnectionManager,
+  mockMaintenanceConnection,
   mockForceStopRelayForTarget,
   mockMux,
   mockPortForwardManager
@@ -68,8 +73,10 @@ describe('SSH IPC handlers', () => {
 
     await handlers.get('ssh:resetRelay')!(null, { targetId: 'ssh-1' })
 
-    expect(mockConnectionManager.connect).toHaveBeenCalledWith(target)
-    expect(mockForceStopRelayForTarget).toHaveBeenCalledWith(conn, 'ssh-1')
+    // With no registered connection the force-stop rides an unregistered maintenance transport.
+    expect(mockConnectionManager.connect).not.toHaveBeenCalled()
+    expect(mockMaintenanceConnection.constructed).toHaveBeenCalledWith(target)
+    expect(mockForceStopRelayForTarget).toHaveBeenCalledWith(mockMaintenanceConnection, 'ssh-1')
     expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledWith('ssh-1', 'pty-1', 'expired')
     // Every already-`expired` lease is skipped on its raw state, marked or not: reset retires the
     // routes this force-stop invalidated, and an expired lease has none left to retire. It is also
@@ -78,7 +85,8 @@ describe('SSH IPC handlers', () => {
       expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalledWith('ssh-1', ptyId, 'expired')
       expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalledWith('ssh-1', ptyId, 'terminated')
     }
-    expect(mockConnectionManager.disconnect).toHaveBeenCalledWith('ssh-1')
+    expect(mockMaintenanceConnection.disconnect).toHaveBeenCalled()
+    expect(mockConnectionManager.disconnect).not.toHaveBeenCalled()
   })
 
   // A force-stop that threw observed nothing about the remote shells, so expiring their leases
@@ -110,7 +118,7 @@ describe('SSH IPC handlers', () => {
     // The local handles are still stale — only the host-side verdict is withheld.
     expect(clearProviderPtyState).toHaveBeenCalledWith('ssh:ssh-1@@pty-1')
     expect(deletePtyOwnership).toHaveBeenCalledWith('ssh:ssh-1@@pty-2')
-    expect(mockConnectionManager.disconnect).toHaveBeenCalledWith('ssh-1')
+    expect(mockMaintenanceConnection.disconnect).toHaveBeenCalled()
   })
 
   it('ssh:resetRelay clears scoped live PTYs while expiring raw leases', async () => {
@@ -137,7 +145,7 @@ describe('SSH IPC handlers', () => {
     expect(clearProviderPtyState).toHaveBeenCalledWith('ssh:ssh-1@@pty-lease')
     expect(deletePtyOwnership).toHaveBeenCalledWith('ssh:ssh-1@@pty-live')
     expect(deletePtyOwnership).toHaveBeenCalledWith('ssh:ssh-1@@pty-lease')
-    expect(mockConnectionManager.disconnect).toHaveBeenCalledWith('ssh-1')
+    expect(mockMaintenanceConnection.disconnect).toHaveBeenCalled()
   })
 
   it('retires the captured session when reset forward teardown fails', async () => {

@@ -1,4 +1,7 @@
 import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
+import { selectWorktreeHostConnectionPhase } from '@/lib/worktree-host-connection-phase'
+import { selectRuntimeAwareSshTargetLabel } from '@/store/slices/runtime-environment-ssh'
 import { isRemoteExecutionHostPtyId } from '../../../../shared/remote-execution-host-pty-id'
 import { collectTabPtyIds } from './running-terminal-close-guard'
 import { probePtyRunningWork } from './pty-running-work-probe'
@@ -24,8 +27,13 @@ export type WindowCloseRunningWork =
   | { kind: 'none' }
   /** An owning host reported a live child process. */
   | { kind: 'running' }
-  /** A remote execution host could not be observed, so its work may still be live. */
-  | { kind: 'unverifiable' }
+  /**
+   * A remote execution host could not be observed, so its work may still be live. Also names
+   * any unobserved host the user disconnected themselves.
+   */
+  | { kind: 'unverifiable'; userDisconnectedHostLabels: string[] }
+  /** Every unobserved host is one the user's own Disconnect holds down. */
+  | { kind: 'user-disconnected'; hostLabels: string[] }
 
 /**
  * Decides whether a window close or quit should stop and ask.
@@ -45,14 +53,16 @@ export async function assessWindowCloseRunningWork(params: {
   isQuitting: boolean
 }): Promise<WindowCloseRunningWork> {
   const state = useAppStore.getState()
-  const ptyIds = new Set(
-    Object.values(state.tabsByWorktree)
-      .flatMap((worktreeTabs) => worktreeTabs ?? [])
-      .flatMap((tab) => collectTabPtyIds(state, tab.id))
-  )
-  const candidatePtyIds = params.isQuitting
-    ? [...ptyIds].filter(isRemoteExecutionHostPtyId)
-    : [...ptyIds]
+  const worktreeIdByPtyId = new Map<string, string>()
+  for (const [worktreeId, worktreeTabs] of Object.entries(state.tabsByWorktree)) {
+    for (const tab of worktreeTabs ?? []) {
+      for (const ptyId of collectTabPtyIds(state, tab.id)) {
+        worktreeIdByPtyId.set(ptyId, worktreeId)
+      }
+    }
+  }
+  const ptyIds = [...worktreeIdByPtyId.keys()]
+  const candidatePtyIds = params.isQuitting ? ptyIds.filter(isRemoteExecutionHostPtyId) : ptyIds
   if (candidatePtyIds.length === 0) {
     return { kind: 'none' }
   }
@@ -63,8 +73,37 @@ export async function assessWindowCloseRunningWork(params: {
   if (probes.some((probe) => probe.verdict === 'live')) {
     return { kind: 'running' }
   }
-  if (probes.some((probe) => probe.remote && probe.verdict === 'unverifiable')) {
-    return { kind: 'unverifiable' }
+  const unobservedWorktreeIds = new Set(
+    probes
+      .filter((probe) => probe.remote && probe.verdict === 'unverifiable')
+      .flatMap((probe) => worktreeIdByPtyId.get(probe.ptyId) ?? [])
+  )
+  if (unobservedWorktreeIds.size === 0) {
+    return { kind: 'none' }
   }
-  return { kind: 'none' }
+  return classifyUnobservedHosts(useAppStore.getState(), unobservedWorktreeIds)
+}
+
+// Why: a host the user disconnected went quiet because they asked it to, not because it was lost,
+// so the prompt names it instead of calling it unreachable.
+function classifyUnobservedHosts(
+  state: AppState,
+  worktreeIds: ReadonlySet<string>
+): WindowCloseRunningWork {
+  const userDisconnectedHostLabels = new Set<string>()
+  let hasUnreachableHost = false
+  for (const worktreeId of worktreeIds) {
+    const host = selectWorktreeHostConnectionPhase(state, worktreeId)
+    if (host.unavailableReason === 'user-disconnected' && host.targetId) {
+      userDisconnectedHostLabels.add(
+        selectRuntimeAwareSshTargetLabel(state, host.environmentId, host.targetId)
+      )
+    } else {
+      hasUnreachableHost = true
+    }
+  }
+  const labels = [...userDisconnectedHostLabels]
+  return hasUnreachableHost
+    ? { kind: 'unverifiable', userDisconnectedHostLabels: labels }
+    : { kind: 'user-disconnected', hostLabels: labels }
 }

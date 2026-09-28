@@ -31,8 +31,9 @@ export function useTerminalEditorCloseFoundation(
   // Why: "running" and "could not reach the host" are different claims, and telling the user
   // processes are running when the truth is that a host went quiet is the fabricated certainty
   // docs/reference/ssh-execution-boundary.md forbids.
-  const [windowCloseDialogKind, setWindowCloseDialogKind] =
-    useState<Exclude<WindowCloseRunningWork['kind'], 'none'>>('running')
+  const [windowCloseDialogWork, setWindowCloseDialogWork] = useState<
+    Exclude<WindowCloseRunningWork, { kind: 'none' }>
+  >({ kind: 'running' })
   const windowCloseAfterDirtyRef = useRef<{ isQuitting: boolean } | null>(null)
 
   const confirmNativeWindowClose = useCallback(() => {
@@ -58,7 +59,7 @@ export function useTerminalEditorCloseFoundation(
             confirmNativeWindowClose()
             return
           }
-          setWindowCloseDialogKind(runningWork.kind)
+          setWindowCloseDialogWork(runningWork)
           setWindowCloseDialogOpen(true)
         })
         // Why: the assessment must never be able to trap the window. A thrown store read is
@@ -82,7 +83,7 @@ export function useTerminalEditorCloseFoundation(
     releaseCloseDialogGuardAfterDebounce,
     windowCloseDialogOpen,
     setWindowCloseDialogOpen,
-    windowCloseDialogKind,
+    windowCloseDialogWork,
     windowCloseAfterDirtyRef,
     confirmNativeWindowClose,
     proceedToNativeWindowClose

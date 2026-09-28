@@ -14,6 +14,7 @@ import {
 } from '../ports/ssh-advertised-url-enrichment'
 import { getSshProviderAuthority } from '../ssh/ssh-provider-authority'
 import { activeSessions } from './ssh-active-relay-sessions'
+import { isSshTargetDisconnectedByUser } from './ssh-connection-intent'
 import {
   connectionManager,
   currentRuntime,
@@ -34,7 +35,7 @@ export function broadcastSshState(
     currentRuntime?.invalidateSshWorktreeScanCache?.(targetId)
     return
   }
-  const enrichedState = withSshRemotePlatform(targetId, state)
+  const enrichedState = withUserConnectionIntent(targetId, withSshRemotePlatform(targetId, state))
   const win = getMainWindow()
   if (win && !win.isDestroyed()) {
     win.webContents.send('ssh:state-changed', { targetId, state: enrichedState })
@@ -52,6 +53,25 @@ function withSshRemotePlatform(targetId: string, state: SshConnectionState): Ssh
     providerEpoch: authority.providerEpoch,
     connectionGeneration: authority.connectionGeneration,
     ...(remotePlatform ? { remotePlatform } : {})
+  }
+}
+
+// Why derived at each publication, never stored: the renderer broadcast, getPublicSshState and the
+// paired-client relay all read the intent current at that moment. While the user's Disconnect holds,
+// no registered transport may exist, so 'disconnected' is the only true status; anything else can
+// only be a late state from the connection that Disconnect is still tearing down, such as a drop
+// while it waits its turn in the lifecycle queue.
+function withUserConnectionIntent(targetId: string, state: SshConnectionState): SshConnectionState {
+  const { disconnectedBy: _staleDisconnectedBy, ...current } = state
+  if (!isSshTargetDisconnectedByUser(targetId)) {
+    return current
+  }
+  return {
+    ...current,
+    status: 'disconnected',
+    error: null,
+    reconnectAttempt: 0,
+    disconnectedBy: 'user'
   }
 }
 
@@ -77,8 +97,16 @@ export function connectionSupportsFolderDownload(targetId: string): boolean {
 }
 
 export function getPublicSshState(targetId: string): SshConnectionState | undefined {
-  const state = relayStateOverrides.get(targetId) ?? connectionManager!.getState(targetId)
-  return state ? withSshRemotePlatform(targetId, state) : undefined
+  const state =
+    relayStateOverrides.get(targetId) ??
+    connectionManager!.getState(targetId) ??
+    // Why: after a restart no connection object exists, yet the user's Disconnect still holds.
+    (isSshTargetDisconnectedByUser(targetId)
+      ? { targetId, status: 'disconnected' as const, error: null, reconnectAttempt: 0 }
+      : null)
+  return state
+    ? withUserConnectionIntent(targetId, withSshRemotePlatform(targetId, state))
+    : undefined
 }
 
 export function broadcastPortForwards(

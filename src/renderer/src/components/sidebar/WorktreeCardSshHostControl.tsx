@@ -1,23 +1,13 @@
 import { useCallback } from 'react'
 import { Loader2, Server, ServerOff } from 'lucide-react'
-import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
-import {
-  connectRuntimeEnvironmentSshTarget,
-  resyncRuntimeEnvironmentSshTargets
-} from '@/runtime/runtime-environment-ssh-state'
 import { canConnectSshStatus, isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
 import { sshConnectingLabel, sshConnectVerb } from '@/ssh/ssh-connect-verb'
-import { SSH_RECONNECT_UI_TIMEOUT_MS, withUiConnectTimeout } from '@/ssh/ssh-connect-ui-timeout'
-import {
-  isSshConnectInFlight,
-  trackSshConnect,
-  useSshConnectInFlight
-} from '@/ssh/ssh-connect-in-flight'
+import { useSshConnectInFlight } from '@/ssh/ssh-connect-in-flight'
+import { connectSshTargetForUser } from '@/ssh/ssh-user-connect'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 
 type WorktreeCardSshHostControlProps = {
@@ -78,61 +68,23 @@ export function WorktreeCardSshHostControl({
   iconOnly,
   onPointerDown
 }: WorktreeCardSshHostControlProps): React.JSX.Element | null {
-  const setSshConnectionState = useAppStore((store) => store.setSshConnectionState)
   // Why: shared registry, not local state — the terminal overlay and every other card on
   // this host dial the same connection, and the store status lags a click by one IPC hop.
   const inFlight = useSshConnectInFlight(targetId)
 
-  const handleConnect = useCallback(async () => {
-    if (isSshConnectInFlight(targetId) || isConnectingSshStatus(status)) {
-      return
-    }
-    try {
-      if (sshOwnerEnvironmentId) {
-        // Bucket state is written inside the helper, mirroring the local path.
-        await trackSshConnect(
-          targetId,
-          connectRuntimeEnvironmentSshTarget(sshOwnerEnvironmentId, targetId)
+  const handleConnect = useCallback(
+    () =>
+      connectSshTargetForUser({
+        targetId,
+        status,
+        environmentId: sshOwnerEnvironmentId,
+        connectFailedMessage: translate(
+          'auto.components.sidebar.WorktreeCardSshHostControl.connectFailed',
+          'SSH connection failed'
         )
-      } else {
-        // Why: track the connect request, not this bounded wait — the backend is still
-        // dialing after the UI timeout fires, so releasing here would let the next click
-        // raise a second credential prompt.
-        const connectState = await withUiConnectTimeout(
-          trackSshConnect(targetId, window.api.ssh.connect({ targetId })),
-          SSH_RECONNECT_UI_TIMEOUT_MS
-        )
-        if (connectState) {
-          // Why: ssh.connect can resolve before the global state-change IPC lands;
-          // the waiting deferred PTY reattach path keys off this renderer store.
-          setSshConnectionState(targetId, connectState)
-        }
-      }
-    } catch (err) {
-      toast.error(
-        err instanceof Error
-          ? err.message
-          : translate(
-              'auto.components.sidebar.WorktreeCardSshHostControl.connectFailed',
-              'SSH connection failed'
-            )
-      )
-      // Why: a failed connect usually means the renderer's target metadata is stale
-      // (target removed, or re-added under a new id). Resync so the control converges to
-      // the removed state instead of offering the same failing Connect forever (STA-1468).
-      // Apply the target list first — a removed-labels failure must not discard it.
-      if (sshOwnerEnvironmentId) {
-        void resyncRuntimeEnvironmentSshTargets(sshOwnerEnvironmentId).catch(() => {})
-      } else {
-        void (async () => {
-          const targets = await window.api.ssh.listTargets()
-          useAppStore.getState().setSshTargetsMetadata(targets)
-          const removedLabels = await window.api.ssh.listRemovedTargetLabels()
-          useAppStore.getState().setRemovedSshTargetLabels(removedLabels)
-        })().catch(() => {})
-      }
-    }
-  }, [setSshConnectionState, sshOwnerEnvironmentId, status, targetId])
+      }),
+    [sshOwnerEnvironmentId, status, targetId]
+  )
 
   // A live connection outranks a stale removal tombstone. A null status is a runtime-owned
   // target: no renderer-reachable connect, and the card has always shown the plain host glyph

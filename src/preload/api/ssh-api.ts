@@ -24,7 +24,11 @@ export type SshApi = {
   importConfig: (args?: { reAdopt?: boolean }) => Promise<SshConfigImportResult>
   listConfigHosts: (args?: SshConfigHostListArgs) => Promise<SshConfigHostListResult>
   resolveConfigHost: (args: { alias: string }) => Promise<SshConfigHostResolution | null>
+  /** A Connect the user clicked: records that they want the host connected. Background callers
+   *  must use ensureConnected instead (a ratchet test pins the callers of this one). */
   connect: (args: { targetId: string }) => Promise<SshConnectionState | null>
+  /** A connect nobody clicked. Refused while the user's Disconnect holds the host down. */
+  ensureConnected: (args: { targetId: string }) => Promise<SshConnectionState | null>
   disconnect: (args: { targetId: string }) => Promise<void>
   terminateSessions: (args: { targetId: string }) => Promise<SshTerminateSessionsResult>
   resetRelay: (args: { targetId: string }) => Promise<void>

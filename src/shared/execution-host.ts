@@ -1,5 +1,6 @@
 import type { GlobalSettings } from './global-settings-types'
 import type { Repo } from './repo-types'
+import type { SshTarget } from './ssh-types'
 import type { Worktree } from './worktree/types'
 
 export const LOCAL_EXECUTION_HOST_ID = 'local'
@@ -66,6 +67,10 @@ export const RUNTIME_OWNED_SSH_TARGET_ID_PREFIX = 'runtime-ssh-'
 
 export function isRuntimeOwnedSshTargetId(targetId: string | null | undefined): boolean {
   return typeof targetId === 'string' && targetId.startsWith(RUNTIME_OWNED_SSH_TARGET_ID_PREFIX)
+}
+
+export function isRuntimeOwnedSshTarget(target: Pick<SshTarget, 'owner'>): boolean {
+  return target.owner?.type === 'on-demand-runtime'
 }
 
 export function parseExecutionHostId(value: string | null | undefined): ParsedExecutionHost | null {

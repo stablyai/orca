@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import type { TerminalController } from './use-terminal-controller'
+import { describeWindowCloseRunningWork } from './terminal/window-close-dialog-copy'
 
 export function TerminalWorkspaceDialogs({
   controller
@@ -24,7 +25,7 @@ export function TerminalWorkspaceDialogs({
     saveDialogFile,
     saveDialogFileId,
     setWindowCloseDialogOpen,
-    windowCloseDialogKind,
+    windowCloseDialogWork,
     windowCloseDialogOpen
   } = controller
   return (
@@ -83,15 +84,7 @@ export function TerminalWorkspaceDialogs({
               {translate('auto.components.Terminal.2fa9c69ff3', 'Close Window?')}
             </DialogTitle>
             <DialogDescription className="text-xs">
-              {windowCloseDialogKind === 'unverifiable'
-                ? translate(
-                    'auto.components.Terminal.b7c1f0a934',
-                    'A remote host could not be reached, so Orca cannot tell whether work is still running there. Close the window anyway?'
-                  )
-                : translate(
-                    'auto.components.Terminal.7958465754',
-                    'There are terminals with running processes. Close the window anyway?'
-                  )}
+              {describeWindowCloseRunningWork(windowCloseDialogWork)}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">

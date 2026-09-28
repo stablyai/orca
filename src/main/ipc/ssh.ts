@@ -55,6 +55,7 @@ import {
 } from './ssh-connect-attempt-registry'
 import { createSshConnectionCallbacks } from './ssh-connection-state-callbacks'
 import { registerSshConnectionHandlers } from './ssh-connection-handlers'
+import { sshMaintenanceOperations } from './ssh-maintenance-channel'
 import {
   registerPowerMonitorReconnect,
   unregisterPowerMonitorReconnect
@@ -88,6 +89,7 @@ const SSH_IPC_CHANNELS = [
   'ssh:listConfigHosts',
   'ssh:resolveConfigHost',
   'ssh:connect',
+  'ssh:ensureConnected',
   'ssh:disconnect',
   'ssh:terminateSessions',
   'ssh:resetRelay',
@@ -248,6 +250,7 @@ export async function resetSshHandlerStateForTests(): Promise<void> {
   resetRelayInFlight.clear()
   testingTargets.clear()
   testConnectionProbes.clear()
+  sshMaintenanceOperations.clear()
   credentialRequestedForTarget.clear()
   quitTeardownStartGate.resetForTests()
   resetSshShutdownDrain()

@@ -259,6 +259,7 @@ function FileExplorerFiles(): React.JSX.Element {
         <div className="relative min-h-0 flex-1 overflow-hidden">
           <FileExplorerFilesTreePane
             activeRepo={activeRepo}
+            activeWorktreeId={activeWorktreeId}
             worktreePath={worktreePath}
             visibleFilesWorktreePath={visibleFilesWorktreePath}
             explorerView={explorerView}

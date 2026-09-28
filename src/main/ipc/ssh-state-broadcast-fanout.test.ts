@@ -10,6 +10,10 @@ vi.mock('electron', () => mocks.electron)
 vi.mock('./ssh-pty-output-intake-registry', () => mocks.sshPtyOutputIntakeRegistry)
 vi.mock('../ssh/ssh-connection-store', () => mocks.sshConnectionStore)
 vi.mock('../ssh/ssh-connection-manager', () => mocks.sshConnectionManager)
+vi.mock('../ssh/ssh-connection', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  ...mocks.sshConnection
+}))
 vi.mock('../ssh/ssh-relay-deploy', () => mocks.sshRelayDeploy)
 vi.mock('../ssh/ssh-relay-reset', () => mocks.sshRelayReset)
 vi.mock('../ssh/ssh-channel-multiplexer', () => mocks.sshChannelMultiplexer)

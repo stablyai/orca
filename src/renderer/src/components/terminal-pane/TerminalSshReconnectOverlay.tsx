@@ -1,24 +1,14 @@
 import { useCallback } from 'react'
 import { Loader2, Server, ServerOff } from 'lucide-react'
-import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { useAppStore } from '@/store'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
-import {
-  connectRuntimeEnvironmentSshTarget,
-  resyncRuntimeEnvironmentSshTargets
-} from '@/runtime/runtime-environment-ssh-state'
 import { canConnectSshStatus, isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
 import { sshConnectingLabel, sshConnectVerb } from '@/ssh/ssh-connect-verb'
-import { SSH_RECONNECT_UI_TIMEOUT_MS, withUiConnectTimeout } from '@/ssh/ssh-connect-ui-timeout'
-import {
-  isSshConnectInFlight,
-  trackSshConnect,
-  useSshConnectInFlight
-} from '@/ssh/ssh-connect-in-flight'
+import { useSshConnectInFlight } from '@/ssh/ssh-connect-in-flight'
+import { connectSshTargetForUser } from '@/ssh/ssh-user-connect'
 
 type TerminalSshReconnectOverlayProps = {
   targetId: string
@@ -31,6 +21,8 @@ type TerminalSshReconnectOverlayProps = {
   // The SSH target was removed entirely — reconnect is impossible, so offer to
   // remove the workspace instead of a Connect button that can only fail.
   targetRemoved?: boolean
+  // The user's own Disconnect holds the host down, so nothing reconnects it until they click.
+  disconnectedByUser?: boolean
   worktreeId?: string
   // Set when the SSH target belongs to a remote Orca server (runtime
   // environment): Connect and the failed-connect resync then route to that
@@ -38,7 +30,18 @@ type TerminalSshReconnectOverlayProps = {
   sshOwnerEnvironmentId?: string | null
 }
 
-function messageForStatus(status: SshConnectionStatus, targetLabel: string): string {
+function messageForStatus(
+  status: SshConnectionStatus,
+  targetLabel: string,
+  disconnectedByUser: boolean
+): string {
+  if (disconnectedByUser && status === 'disconnected') {
+    return translate(
+      'auto.components.terminal.pane.TerminalSshReconnectOverlay.disconnectedByUser',
+      'You disconnected {{value0}}. Connect to continue this terminal session.',
+      { value0: targetLabel }
+    )
+  }
   switch (status) {
     case 'auth-failed':
       return translate(
@@ -81,10 +84,10 @@ export function TerminalSshReconnectOverlay({
   status,
   error = null,
   targetRemoved = false,
+  disconnectedByUser = false,
   worktreeId,
   sshOwnerEnvironmentId = null
 }: TerminalSshReconnectOverlayProps): React.JSX.Element {
-  const setSshConnectionState = useAppStore((store) => store.setSshConnectionState)
   // Why: shared registry, not local state — the sidebar card control can dial the same
   // target, and the store status lags a click by one IPC hop.
   const connecting = useSshConnectInFlight(targetId)
@@ -95,63 +98,26 @@ export function TerminalSshReconnectOverlay({
     ? toRuntimeExecutionHostId(sshOwnerEnvironmentId)
     : toSshExecutionHostId(targetId)
 
-  const handleConnect = useCallback(async () => {
-    if (isSshConnectInFlight(targetId) || isConnectingSshStatus(status)) {
-      return
-    }
-    try {
-      if (sshOwnerEnvironmentId) {
-        // Bucket state is written inside the helper, mirroring the local path.
-        await trackSshConnect(
-          targetId,
-          connectRuntimeEnvironmentSshTarget(sshOwnerEnvironmentId, targetId)
+  const handleConnect = useCallback(
+    () =>
+      connectSshTargetForUser({
+        targetId,
+        status,
+        environmentId: sshOwnerEnvironmentId,
+        connectFailedMessage: translate(
+          'auto.components.terminal.pane.TerminalSshReconnectOverlay.connectFailed',
+          'SSH connection failed'
         )
-      } else {
-        // Why: track the connect request, not this bounded wait — the backend is still
-        // dialing after the UI timeout fires, so releasing here would let the next click
-        // raise a second credential prompt.
-        const connectState = await withUiConnectTimeout(
-          trackSshConnect(targetId, window.api.ssh.connect({ targetId })),
-          SSH_RECONNECT_UI_TIMEOUT_MS
-        )
-        if (connectState) {
-          // Why: ssh.connect can resolve before the global state-change IPC lands;
-          // the waiting deferred PTY reattach path keys off this renderer store.
-          setSshConnectionState(targetId, connectState)
-        }
-      }
-    } catch (err) {
-      toast.error(
-        err instanceof Error
-          ? err.message
-          : translate(
-              'auto.components.terminal.pane.TerminalSshReconnectOverlay.connectFailed',
-              'SSH connection failed'
-            )
-      )
-      // Why: a failed connect usually means the renderer's target metadata is
-      // stale (target removed, or re-added under a new id). Resync it so the
-      // overlay converges to the ghost/re-adopted state instead of offering
-      // the same failing Connect forever (STA-1468). Apply the target list
-      // first — a removed-labels failure must not discard it.
-      if (sshOwnerEnvironmentId) {
-        void resyncRuntimeEnvironmentSshTargets(sshOwnerEnvironmentId).catch(() => {})
-      } else {
-        void (async () => {
-          const targets = await window.api.ssh.listTargets()
-          useAppStore.getState().setSshTargetsMetadata(targets)
-          const removedLabels = await window.api.ssh.listRemovedTargetLabels()
-          useAppStore.getState().setRemovedSshTargetLabels(removedLabels)
-        })().catch(() => {})
-      }
-    }
-  }, [setSshConnectionState, sshOwnerEnvironmentId, status, targetId])
+      }),
+    [sshOwnerEnvironmentId, status, targetId]
+  )
 
   // Why: z-40 clears pane-local chrome (focus rim z-30); bg-card is fully opaque so terminal text cannot paint through.
   return (
     <div
       className="pointer-events-none absolute inset-x-3 bottom-3 z-40 flex justify-center"
       data-terminal-ssh-reconnect-banner={status}
+      data-ssh-disconnected-by-user={disconnectedByUser ? 'true' : undefined}
     >
       <div
         className="pointer-events-auto flex w-full max-w-xl items-center gap-3 rounded-md border border-border bg-card px-3 py-3 text-card-foreground shadow-xs"
@@ -189,7 +155,7 @@ export function TerminalSshReconnectOverlay({
                   'auto.components.terminal.pane.TerminalSshReconnectOverlay.removedBody',
                   'The SSH host for this workspace was removed, so it can no longer connect. Remove the workspace to clear it — remote files are left untouched.'
                 )
-              : messageForStatus(status, targetLabel)}
+              : messageForStatus(status, targetLabel, disconnectedByUser)}
           </div>
           {/* Why not truncated: a host key failure ends in `ssh-keygen -R <host>`, and a removed
               target already explains itself above. */}

@@ -13,6 +13,7 @@ import type { SshIpcMocks } from './ssh-ipc-module-mocks'
 import type {
   SshConnectionManagerMock,
   SshIpcTestSource,
+  SshMaintenanceConnectionMock,
   SshPortForwardManagerMock
 } from './ssh-ipc-mock-shapes'
 
@@ -65,6 +66,33 @@ export type SshIpcHarness = {
   reset: () => Promise<void>
 }
 
+// A maintenance connection opens, stays connected, and reports 'disconnected' once closed, as the real one does.
+function resetMaintenanceConnection(connection: SshMaintenanceConnectionMock): void {
+  let status = 'disconnected'
+  const report = (): void => {
+    const callbacks = connection.callbacksRef.current
+    if (
+      callbacks &&
+      typeof callbacks === 'object' &&
+      'onStateChange' in callbacks &&
+      typeof callbacks.onStateChange === 'function'
+    ) {
+      callbacks.onStateChange('maintenance', { status })
+    }
+  }
+  connection.callbacksRef.current = null
+  connection.constructed.mockReset()
+  connection.getState.mockReset().mockImplementation(() => ({ status }))
+  connection.connect.mockReset().mockImplementation(async () => {
+    status = 'connected'
+    report()
+  })
+  connection.disconnect.mockReset().mockImplementation(async () => {
+    status = 'disconnected'
+    report()
+  })
+}
+
 // Shared fixtures + per-test reset for the SSH IPC handler suites. `reset` is the
 // suite `beforeEach`: it rewinds every mocked module and re-registers the handlers.
 export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
@@ -74,6 +102,7 @@ export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
     powerMonitorOnMock,
     mockSshStore,
     mockConnectionManager,
+    mockMaintenanceConnection,
     mockDeployAndLaunchRelay,
     mockForceStopRelayForTarget,
     mockAcceptSshPtyOutputData,
@@ -203,6 +232,7 @@ export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
     mockConnectionManager.disconnectAll.mockReset()
     mockConnectionManager.setCallbacks.mockReset()
     mockConnectionManager.callbacksRef.current = null
+    resetMaintenanceConnection(mockMaintenanceConnection)
     mockForceStopRelayForTarget.mockReset().mockResolvedValue(undefined)
     mockAcceptSshPtyOutputData.mockReset().mockResolvedValue({})
     mockAcceptSshPtyOutputExit.mockReset().mockResolvedValue(undefined)

@@ -95,6 +95,28 @@ describe('TerminalSshReconnectOverlay', () => {
     expect(connect).toHaveBeenCalledWith({ targetId: 'ssh-target-1' })
   })
 
+  it("says the user disconnected the host, and its Connect is the user's own connect", async () => {
+    const connect = vi.fn().mockResolvedValue(undefined)
+    const ensureConnected = vi.fn()
+    installSshConnect(connect, { ensureConnected })
+    const user = userEvent.setup()
+
+    render(
+      <TerminalSshReconnectOverlay
+        targetId="ssh-target-1"
+        targetLabel="devbox"
+        status="disconnected"
+        disconnectedByUser
+      />
+    )
+
+    expect(screen.getByText(/You disconnected devbox\./)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Connect' }))
+
+    expect(connect).toHaveBeenCalledWith({ targetId: 'ssh-target-1' })
+    expect(ensureConnected).not.toHaveBeenCalled()
+  })
+
   // The canned "Connect again to continue" sentence is the same for a timeout and for a refused
   // host key. Only the detail says which, and for a host key it carries the only remedy the user
   // will see anywhere in the terminal.

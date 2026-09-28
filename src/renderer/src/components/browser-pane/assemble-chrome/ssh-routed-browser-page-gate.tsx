@@ -2,6 +2,8 @@ import { useEffect } from 'react'
 import { Globe } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
+import { useWorktreeHostConnection } from '@/lib/worktree-host-connection-phase'
+import { useUserDisconnectedHostConnect } from '@/ssh/use-user-disconnected-host-connect'
 import { destroyPersistentWebview } from '../host-guest/webview-registry'
 import {
   useSshWorkspaceBrowserRoute,
@@ -32,6 +34,7 @@ export function SshRoutedBrowserPageGate({
     worktreeId,
     sessionProfileId
   )
+  const userDisconnectedHost = useUserDisconnectedHostConnect(useWorktreeHostConnection(worktreeId))
   const mountable = state.kind === 'unrouted' || state.kind === 'ready'
   useEffect(() => {
     if (mountable) {
@@ -59,6 +62,34 @@ export function SshRoutedBrowserPageGate({
           <div className="text-sm font-medium text-foreground">
             {translate('browser.sshRoute.preparingTitle', 'Connecting through the SSH host')}
           </div>
+        ) : userDisconnectedHost ? (
+          // Why its own card: Retry cannot help while the user's Disconnect holds the host down.
+          <>
+            <div className="text-sm font-medium text-foreground">
+              {translate('browser.sshRoute.userDisconnectedTitle', 'You disconnected {{host}}', {
+                host: userDisconnectedHost.hostLabel
+              })}
+            </div>
+            <div className="text-xs leading-5 text-muted-foreground">
+              {translate(
+                'browser.sshRoute.userDisconnectedDescription',
+                'Pages in this workspace browse through this host. Connect it to load them.'
+              )}
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+              <Button
+                type="button"
+                size="sm"
+                disabled={userDisconnectedHost.connecting}
+                onClick={userDisconnectedHost.connect}
+              >
+                {translate('browser.sshRoute.connect', 'Connect')}
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={browseFromThisDevice}>
+                {translate('browser.sshRoute.browseLocally', 'Browse from this device instead')}
+              </Button>
+            </div>
+          </>
         ) : (
           <>
             <div className="text-sm font-medium text-foreground">{errorTitle(state.errorKind)}</div>

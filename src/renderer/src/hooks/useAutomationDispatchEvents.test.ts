@@ -18,7 +18,7 @@ const mockFinalizeTerminalOwnership = vi.fn()
 const mockReleaseTerminalOwnership = vi.fn()
 const mockSshNeedsPassphrasePrompt = vi.fn()
 const mockSshGetState = vi.fn()
-const mockSshConnect = vi.fn()
+const mockSshEnsureConnected = vi.fn()
 let latestStoreSubscriber: (() => void) | null = null
 const mockStoreSubscribe = vi.fn((listener: () => void) => {
   latestStoreSubscriber = listener
@@ -217,7 +217,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     mockOnDispatchRequested.mockReturnValue(() => {})
     mockSshNeedsPassphrasePrompt.mockResolvedValue(false)
     mockSshGetState.mockResolvedValue({ status: 'connected' })
-    mockSshConnect.mockResolvedValue({ status: 'connected' })
+    mockSshEnsureConnected.mockResolvedValue({ status: 'connected' })
     mockSubmitPromptToAgentPty.mockResolvedValue(true)
     vi.stubGlobal('window', {
       api: {
@@ -230,7 +230,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
         ssh: {
           needsPassphrasePrompt: mockSshNeedsPassphrasePrompt,
           getState: mockSshGetState,
-          connect: mockSshConnect
+          ensureConnected: mockSshEnsureConnected
         }
       },
       dispatchEvent: mockDispatchEvent
@@ -436,7 +436,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     )
 
     expect(state.allWorktrees).not.toHaveBeenCalled()
-    expect(mockSshConnect).toHaveBeenCalledWith({ targetId: 'ssh-folder' })
+    expect(mockSshEnsureConnected).toHaveBeenCalledWith({ targetId: 'ssh-folder' })
     expect(mockLaunchAgentBackgroundSession).toHaveBeenCalledWith(
       expect.objectContaining({
         worktreeId: folderWorkspace.id,

@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { WorktreeHostConnection } from '@/lib/worktree-host-connection-phase'
 
-const { getStateMock, inspectRuntimeTerminalProcessMock } = vi.hoisted(() => ({
+const { getStateMock, inspectRuntimeTerminalProcessMock, hostByWorktreeId } = vi.hoisted(() => ({
   getStateMock: vi.fn(),
-  inspectRuntimeTerminalProcessMock: vi.fn()
+  inspectRuntimeTerminalProcessMock: vi.fn(),
+  hostByWorktreeId: new Map<string, Partial<WorktreeHostConnection>>()
 }))
 
 vi.mock('@/store', () => ({
@@ -13,6 +15,16 @@ vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   inspectRuntimeTerminalProcess: inspectRuntimeTerminalProcessMock
 }))
 
+vi.mock('@/lib/worktree-host-connection-phase', () => ({
+  selectWorktreeHostConnectionPhase: (_state: unknown, worktreeId: string) => ({
+    phase: 'unavailable',
+    targetId: null,
+    environmentId: null,
+    unavailableReason: null,
+    ...hostByWorktreeId.get(worktreeId)
+  })
+}))
+
 import {
   assessWindowCloseRunningWork,
   WINDOW_CLOSE_PROBE_TIMEOUT_MS
@@ -20,6 +32,7 @@ import {
 
 const LOCAL_PTY = 'pty-local'
 const SSH_PTY = 'ssh:openclaw@@pty-7'
+const OTHER_SSH_PTY = 'ssh:buildbox@@pty-3'
 const RUNTIME_PTY = 'remote:env-1@@handle-1'
 /** A runtime pty minted without an owner id. Still someone else's machine. */
 const OWNERLESS_RUNTIME_PTY = 'remote:handle-2'
@@ -47,6 +60,21 @@ function setState(ptyIds: string[]): void {
   })
 }
 
+/** Two SSH worktrees, one pty each, with `worktree-a` on a host the user disconnected. */
+function setTwoHostState(): void {
+  getStateMock.mockReturnValue({
+    settings: { activeRuntimeEnvironmentId: null },
+    tabsByWorktree: { 'worktree-a': [{ id: 'tab-a' }], 'worktree-b': [{ id: 'tab-b' }] },
+    ptyIdsByTabId: { 'tab-a': [SSH_PTY], 'tab-b': [OTHER_SSH_PTY] },
+    terminalLayoutsByTabId: {},
+    sshTargetLabels: new Map([['ssh-a', 'devbox']])
+  })
+  hostByWorktreeId.set('worktree-a', {
+    targetId: 'ssh-a',
+    unavailableReason: 'user-disconnected'
+  })
+}
+
 /** Answers each pty id from `byPtyId`; anything unlisted never settles. */
 function answerWith(byPtyId: Record<string, unknown>): void {
   inspectRuntimeTerminalProcessMock.mockImplementation((_settings: unknown, ptyId: string) =>
@@ -56,6 +84,7 @@ function answerWith(byPtyId: Record<string, unknown>): void {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  hostByWorktreeId.clear()
 })
 
 afterEach(() => {
@@ -106,7 +135,28 @@ describe('assessWindowCloseRunningWork', () => {
     answerWith({ [SSH_PTY]: UNVERIFIABLE })
 
     await expect(assessWindowCloseRunningWork({ isQuitting: true })).resolves.toEqual({
-      kind: 'unverifiable'
+      kind: 'unverifiable',
+      userDisconnectedHostLabels: []
+    })
+  })
+
+  it('names a host the user disconnected instead of calling it unreachable', async () => {
+    setTwoHostState()
+    answerWith({ [SSH_PTY]: UNVERIFIABLE, [OTHER_SSH_PTY]: IDLE })
+
+    await expect(assessWindowCloseRunningWork({ isQuitting: true })).resolves.toEqual({
+      kind: 'user-disconnected',
+      hostLabels: ['devbox']
+    })
+  })
+
+  it('still reports an unreachable host beside one the user disconnected', async () => {
+    setTwoHostState()
+    answerWith({ [SSH_PTY]: UNVERIFIABLE, [OTHER_SSH_PTY]: UNVERIFIABLE })
+
+    await expect(assessWindowCloseRunningWork({ isQuitting: true })).resolves.toEqual({
+      kind: 'unverifiable',
+      userDisconnectedHostLabels: ['devbox']
     })
   })
 
@@ -115,7 +165,8 @@ describe('assessWindowCloseRunningWork', () => {
     inspectRuntimeTerminalProcessMock.mockRejectedValue(new Error('relay wedged'))
 
     await expect(assessWindowCloseRunningWork({ isQuitting: true })).resolves.toEqual({
-      kind: 'unverifiable'
+      kind: 'unverifiable',
+      userDisconnectedHostLabels: []
     })
   })
 
@@ -127,7 +178,7 @@ describe('assessWindowCloseRunningWork', () => {
     const pending = assessWindowCloseRunningWork({ isQuitting: true })
     await vi.advanceTimersByTimeAsync(WINDOW_CLOSE_PROBE_TIMEOUT_MS)
 
-    await expect(pending).resolves.toEqual({ kind: 'unverifiable' })
+    await expect(pending).resolves.toEqual({ kind: 'unverifiable', userDisconnectedHostLabels: [] })
   })
 
   it('does not resolve before the budget expires', async () => {

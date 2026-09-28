@@ -17,6 +17,7 @@ import type { useFileExplorerTreePaneState } from './use-file-explorer-tree-pane
 
 type FileExplorerFilesTreePaneProps = {
   activeRepo: Repo | null
+  activeWorktreeId: string | null
   worktreePath: string | null
   visibleFilesWorktreePath: string | null
   explorerView: RightSidebarExplorerView
@@ -40,6 +41,7 @@ type FileExplorerFilesTreePaneProps = {
 /** Presentational tree pane: every effect it renders from lives in useFileExplorerTreePaneState. */
 export function FileExplorerFilesTreePane({
   activeRepo,
+  activeWorktreeId,
   worktreePath,
   visibleFilesWorktreePath,
   explorerView,
@@ -158,6 +160,7 @@ export function FileExplorerFilesTreePane({
     >
       {!showTree && (
         <FileExplorerTreeStatus
+          worktreeId={activeWorktreeId}
           isLoading={isLoading}
           error={hasError ? treeError : null}
           isEmpty={isEmptyState && !isLoading && !hasError}

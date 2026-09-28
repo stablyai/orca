@@ -35,6 +35,13 @@ export function createSshIpcMocks(): SshIpcMocks {
       setCallbacks: vi.fn(),
       callbacksRef: { current: null as unknown }
     },
+    mockMaintenanceConnection: {
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+      getState: vi.fn(),
+      constructed: vi.fn(),
+      callbacksRef: { current: null as unknown }
+    },
     mockDeployAndLaunchRelay: vi.fn(),
     mockForceStopRelayForTarget: vi.fn(),
     mockAcceptSshPtyOutputData: vi.fn().mockResolvedValue({}),
@@ -91,6 +98,7 @@ export function createSshIpcMocks(): SshIpcMocks {
     powerMonitorOnMock,
     mockSshStore,
     mockConnectionManager,
+    mockMaintenanceConnection,
     mockDeployAndLaunchRelay,
     mockForceStopRelayForTarget,
     mockAcceptSshPtyOutputData,
@@ -160,6 +168,15 @@ export function createSshIpcMocks(): SshIpcMocks {
             manager.callbacksRef.current = nextCallbacks
           })
           return manager
+        }
+      }
+    },
+    sshConnection: {
+      SshConnection: class MockSshConnection {
+        constructor(target: unknown, callbacks: unknown) {
+          mockMaintenanceConnection.constructed(target)
+          mockMaintenanceConnection.callbacksRef.current = callbacks
+          return mockMaintenanceConnection
         }
       }
     },

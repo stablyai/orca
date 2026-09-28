@@ -146,6 +146,14 @@ export function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
       )
       return state
     },
+    ensureConnected: async (args) => {
+      // Why the flag: without it the host reads this as a user's Connect and undoes a Disconnect.
+      const { state } = await callRuntimeResult<{ state: SshConnectionState | null }>(
+        'ssh.connect',
+        { targetId: args.targetId, background: true }
+      )
+      return state
+    },
     disconnect: () => Promise.resolve(),
     terminateSessions: () => Promise.resolve({ terminated: 0, unverifiable: 0 }),
     resetRelay: () => Promise.resolve(),

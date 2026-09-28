@@ -10,6 +10,10 @@ vi.mock('electron', () => mocks.electron)
 vi.mock('./ssh-pty-output-intake-registry', () => mocks.sshPtyOutputIntakeRegistry)
 vi.mock('../ssh/ssh-connection-store', () => mocks.sshConnectionStore)
 vi.mock('../ssh/ssh-connection-manager', () => mocks.sshConnectionManager)
+vi.mock('../ssh/ssh-connection', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  ...mocks.sshConnection
+}))
 vi.mock('../ssh/ssh-relay-deploy', () => mocks.sshRelayDeploy)
 vi.mock('../ssh/ssh-relay-reset', () => mocks.sshRelayReset)
 vi.mock('../ssh/ssh-channel-multiplexer', () => mocks.sshChannelMultiplexer)
@@ -106,6 +110,15 @@ describe('SSH IPC handlers', () => {
     await handlers.get('ssh:updateTarget')!(null, {
       id: 'ssh-1',
       updates: { label: 'Renamed', generation: 999 }
+    })
+
+    expect(mockSshStore.updateTarget).toHaveBeenCalledWith('ssh-1', { label: 'Renamed' })
+  })
+
+  it("ssh:updateTarget never lets a settings save rewrite the user's connect intent", async () => {
+    await handlers.get('ssh:updateTarget')!(null, {
+      id: 'ssh-1',
+      updates: { label: 'Renamed', desiredConnection: 'connected' }
     })
 
     expect(mockSshStore.updateTarget).toHaveBeenCalledWith('ssh-1', { label: 'Renamed' })

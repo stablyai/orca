@@ -18,8 +18,21 @@ import type { SshConnectionState, SshTarget } from '../../shared/ssh-types'
  * resolve the current generation rather than freeze one.
  */
 
+/**
+ * Who asked for a connect, which decides how it treats the user's Disconnect:
+ * - `user`: a Connect the user clicked. Records that they want the host connected, then dials.
+ * - `background`: anything the user did not click (a pane attach, startup restore, an
+ *   automation, a VM). Refused while the user's Disconnect holds the host down.
+ */
+export type SshConnectAdmission = 'user' | 'background'
+
+type ConnectSshTarget = (
+  targetId: string,
+  admission: SshConnectAdmission
+) => Promise<SshConnectionState>
+
 let sshStore: SshConnectionStore | null = null
-let registeredConnectSshTarget: ((targetId: string) => Promise<SshConnectionState>) | null = null
+let registeredConnectSshTarget: ConnectSshTarget | null = null
 let registeredGetSshState: ((targetId: string) => SshConnectionState | undefined) | null = null
 
 export function setSshTargetRegistryStore(store: SshConnectionStore | null): void {
@@ -31,20 +44,23 @@ export function getSshTargetRegistryStore(): SshConnectionStore | null {
 }
 
 export function setSshTargetRegistryHandlers(handlers: {
-  connect: ((targetId: string) => Promise<SshConnectionState>) | null
+  connect: ConnectSshTarget | null
   getState: ((targetId: string) => SshConnectionState | undefined) | null
 }): void {
   registeredConnectSshTarget = handlers.connect
   registeredGetSshState = handlers.getState
 }
 
-export async function connectRegisteredSshTarget(targetId: string): Promise<SshConnectionState> {
+export async function connectRegisteredSshTarget(
+  targetId: string,
+  admission: SshConnectAdmission
+): Promise<SshConnectionState> {
   if (!registeredConnectSshTarget) {
     // Why this still throws: a headless host that never registered handlers must fail
     // loudly rather than report a target as unreachable, which would read as `exited`.
     throw new Error('ssh_handlers_not_registered')
   }
-  return registeredConnectSshTarget(targetId)
+  return registeredConnectSshTarget(targetId, admission)
 }
 
 export function getRegisteredSshState(targetId: string): SshConnectionState | undefined {

@@ -901,7 +901,8 @@
         "16a21d6413": "SSH 重新连接需要交互式凭据。",
         "386db94f3e": "目标项目不再可用。",
         "3ad7d77f57": "目标工作区所在的主机与此自动化运行目标不同。",
-        "workspaceHostUnresolved": "目标工作区跨越多个主机，因此此运行没有可供使用的单个主机。"
+        "workspaceHostUnresolved": "目标工作区跨越多个主机，因此此运行没有可供使用的单个主机。",
+        "sshDisconnectedByUser": "已跳过：你已断开 {{host}}。重新连接即可恢复。"
       },
       "useComposerState": {
         "7eb3f44ff7": "所选智能体已禁用。创建之前选择启用的智能体。",
@@ -2199,7 +2200,9 @@
         "e57db40c11": "无法为 {{value0}} 构建启动命令。",
         "5b2c1a9e44": "未检测到智能体 CLI，请安装一个，或在设置中选择默认智能体。",
         "b7c1f0a934": "无法访问远程主机，因此 Orca 无法判断工作是否仍在运行。还是关窗吧？",
-        "quitSnapshotSaveFailed": "退出已取消：无法保存会话快照 ({{value0}})。"
+        "quitSnapshotSaveFailed": "退出已取消：无法保存会话快照 ({{value0}})。",
+        "userDisconnectedHosts": "你已断开 {{hosts}}。关闭窗口不会结束其上的终端。仍要关闭窗口吗？",
+        "userDisconnectedAndUnreachableHosts": "你已断开 {{hosts}}。关闭窗口不会结束其上的终端。另一台远程主机无法访问，因此 Orca 无法判断该主机上的工作是否仍在运行。仍要关闭窗口吗？"
       },
       "TerminalSearch": {
         "db234b7519": "关闭",
@@ -3212,7 +3215,8 @@
             "connectButton": "连接",
             "removedTitle": "SSH 主机已移除",
             "removedBody": "此工作区的 SSH 主机已被移除，无法再连接。请移除工作区以清理 — 远程文件不会受影响。",
-            "removeWorkspaceButton": "移除工作区"
+            "removeWorkspaceButton": "移除工作区",
+            "disconnectedByUser": "你已断开 {{value0}}。请连接以继续此终端会话。"
           },
           "TerminalRemoteRuntimeReconnectBanner": {
             "retryingTitle": "正在重新连接到远程运行时",
@@ -12208,7 +12212,10 @@
           },
           "FileExplorerTreeStatus": {
             "ce03835e1f": "此工作区中没有文件",
-            "c76693e456": "无法加载此工作区的文件："
+            "c76693e456": "无法加载此工作区的文件：",
+            "userDisconnectedTitle": "你已断开 {{host}}",
+            "userDisconnectedDescription": "连接后即可显示此工作区的文件。",
+            "connect": "连接"
           },
           "GitHistoryPanel": {
             "cf7cad58d2": "尚无提交",
@@ -18198,7 +18205,10 @@
       "sshUnavailableTitle": "SSH 连接不可用",
       "forwardingBlockedDescription": "该服务器拒绝浏览它所需要的 TCP 转发（通常在其 sshd 配置中为“AllowTcpForwarding no”）。请其管理员允许转发，或改为从此设备浏览。",
       "sshUnavailableDescription": "此工作区中的页面浏览其 SSH 主机，但该连接目前不可用。重新连接主机，然后重试。",
-      "showDetails": "显示详情"
+      "showDetails": "显示详情",
+      "userDisconnectedTitle": "你已断开 {{host}}",
+      "userDisconnectedDescription": "此工作区中的页面通过该主机浏览。连接后即可加载。",
+      "connect": "连接"
     },
     "sshEgress": {
       "routedTooltip": "浏览 {{value0}}",
@@ -18278,7 +18288,10 @@
       "openAnyway": "无论如何打开"
     },
     "fileLoad": {
-      "hostUnresolved": "主机找不到该文件的工作区。它可能已被删除，或者主机可能还不知道。重试，或从选项卡栏中关闭此选项卡。"
+      "hostUnresolved": "主机找不到该文件的工作区。它可能已被删除，或者主机可能还不知道。重试，或从选项卡栏中关闭此选项卡。",
+      "userDisconnectedTitle": "你已断开 {{host}}",
+      "userDisconnectedDescription": "连接后即可加载此文件。",
+      "connect": "连接"
     }
   },
   "featureTips": {
