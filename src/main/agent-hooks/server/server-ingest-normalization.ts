@@ -83,6 +83,9 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     }
     this.recordCurrentAuthorityObservation(event)
     this.applyNormalizedStatus(event, normalized.onAccepted)
+    if (record.source === 'codex') {
+      this.syncCodexRolloutWatch(event.paneKey)
+    }
     if (event.payload.state !== 'done') {
       this.withdrawReplayObservation(this.resolvePaneKeyAlias(event.paneKey))
     }

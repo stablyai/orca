@@ -12,7 +12,7 @@ import {
   timestampMs
 } from '../ai-vault/session-scanner-values'
 import { claudeContentBlocks, toolResultOutput } from './transcript-record-blocks'
-import { CODEX_EVENT_TURN_ABORTED } from './transcript-turn-markers'
+import { CODEX_EVENT_TURN_ABORTED } from '../../shared/codex-rollout-turn-lifecycle'
 
 export function decodeCodexTranscriptLine(
   line: string,

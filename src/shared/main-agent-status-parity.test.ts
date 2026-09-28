@@ -5,7 +5,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { normalizeHookPayload } from './agent-hook-listener'
 import { markClaudeLeadTurnInterrupted } from './agent-hook-listener/providers/claude-roster-state'
-import { markCodexLeadTurnInterrupted } from './agent-hook-listener/providers/codex-state'
 import {
   createHookListenerState,
   type HookListenerState
@@ -124,13 +123,10 @@ const STORIES: Story[] = [
       expect: { state: 'working', mainAgent: { state: 'done' } }
     },
     codex: {
-      // A root Stop with no transcript-tracked children clears the roster (Codex 0.144 could omit
-      // child Stop hooks), so the child proves it is still alive with its next tool event.
       events: [
         { hook_event_name: 'UserPromptSubmit', prompt: 'go' },
         { hook_event_name: 'SubagentStart', agent_id: 'agent-1' },
-        { hook_event_name: 'Stop' },
-        { hook_event_name: 'PreToolUse', agent_id: 'agent-1', tool_name: 'shell' }
+        { hook_event_name: 'Stop' }
       ],
       expect: { state: 'working', mainAgent: { state: 'done' } }
     }
@@ -311,8 +307,8 @@ const STORIES: Story[] = [
     }
   },
   {
-    // Neither CLI reports a cancel on its own Stop, so the late turn boundary must keep the
-    // verdict Orca inferred rather than downgrade it to "unknown".
+    // Neither CLI reports a cancel on its Stop, so a late Stop for the cancelled turn must keep
+    // the verdict (Orca's inferred one for Claude, Codex's own Interrupt) rather than drop it.
     name: 'interrupted, then the late turn boundary',
     claude: {
       events: [
@@ -324,9 +320,9 @@ const STORIES: Story[] = [
     },
     codex: {
       events: [
-        { hook_event_name: 'UserPromptSubmit', prompt: 'go' },
-        ORCA_INFERRED_INTERRUPT,
-        { hook_event_name: 'Stop' }
+        { hook_event_name: 'UserPromptSubmit', prompt: 'go', turn_id: 'turn-1' },
+        { hook_event_name: 'Interrupt', turn_id: 'turn-1' },
+        { hook_event_name: 'Stop', turn_id: 'turn-1' }
       ],
       expect: { state: 'done', mainAgent: { state: 'done', outcome: 'cancellation' } }
     }
@@ -380,6 +376,16 @@ const STORIES: Story[] = [
       turnOutcome: 'cancellation',
       backgroundTasks: [AGENT_TASK],
       expect: { state: 'working', mainAgent: { state: 'done', outcome: 'cancellation' } }
+    },
+    // Captured (codex-interrupt-hooks.jsonl): Codex fires Interrupt for the main agent only; the
+    // subagent keeps running and later fires its own SubagentStop.
+    codex: {
+      events: [
+        { hook_event_name: 'UserPromptSubmit', prompt: 'go', turn_id: 'turn-1' },
+        { hook_event_name: 'SubagentStart', agent_id: 'agent-1' },
+        { hook_event_name: 'Interrupt', turn_id: 'turn-1' }
+      ],
+      expect: { state: 'working', mainAgent: { state: 'done', outcome: 'cancellation' } }
     }
   }
 ]
@@ -412,10 +418,6 @@ describe('mainAgent status parity across lanes', () => {
     let last: ParsedAgentStatusPayload | null = null
     for (const payload of events) {
       if (payload === ORCA_INFERRED_INTERRUPT) {
-        if (source === 'codex') {
-          markCodexLeadTurnInterrupted(state, PANE_KEY)
-          continue
-        }
         // What the server publishes for the cancel, shaped like the row the lane would build.
         const folded = markClaudeLeadTurnInterrupted(state, PANE_KEY)
         last = { ...(last ?? { prompt: '' }), ...folded, interrupted: folded.state === 'done' }

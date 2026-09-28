@@ -78,7 +78,7 @@ export function isToolProgressWorkingAfterInterrupt(next: AgentHookEventPayload)
   if (next.payload.state !== 'working') {
     return false
   }
-  if (next.payload.agentType !== 'claude' && next.payload.agentType !== 'codex') {
+  if (next.payload.agentType !== 'claude') {
     return false
   }
   // Why: a same-prompt retry is another UserPromptSubmit, while late post-Ctrl+C progress arrives as tool lifecycle work.

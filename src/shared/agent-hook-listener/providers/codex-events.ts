@@ -14,7 +14,6 @@ import {
   finishCodexSubagent,
   upsertCodexSubagent
 } from '../../codex-subagent-roster'
-import { reconcileCodexSubagentTranscript } from '../../codex-subagent-transcript'
 import {
   codexTurnApprovalsAreAutoReviewed,
   reconcileCodexSubagentReviewer
@@ -24,12 +23,14 @@ import type { HookListenerState } from '../listener-state'
 import { resolvePrompt, resolveToolState } from '../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
 import { readString } from '../tool-input-preview'
+import { recordCodexChildRollout } from '../../codex-subagent-transcript'
+import { catchUpOnCodexParentRollout } from './codex-rollout-reader'
 import {
   codexMainAgentStatusForPayload,
-  codexOutcomeRestatedByStop,
+  codexRolloutOpenTurnId,
+  codexRolloutTurnEnd,
   getOrCreateCodexSubagentRoster,
   getOrCreateCodexSubagentTranscriptState,
-  hasCodexTranscriptSubagents,
   resolveCodexPaneStatus,
   setCodexMainAgentTurnState
 } from './codex-state'
@@ -74,12 +75,27 @@ export function buildCodexChildDrivenStatusPayload(
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
-  // Why: a child event before any root event means the root is mid-turn; nothing else spawns.
-  const lead = state.codexLeadStateByPaneKey.get(paneKey) ?? { state: 'working' as const }
+  // Why: with no record of the main agent (its records were cleared, or it predates this host),
+  // the children alone drive the row; nothing would end an assumed-working main agent.
+  const lead = state.codexLeadStateByPaneKey.get(paneKey) ?? { state: 'done' as const }
   return buildCodexStatusPayload(state, eventName, '', paneKey, hookPayload, {
     ...resolveCodexPaneStatus(state, paneKey, lead),
     updateLead: false
   })
+}
+
+/** A child's own hooks name its rollout (`transcript_path`), which the parent's reads then use. */
+function recordChildRolloutFromHook(
+  state: HookListenerState,
+  paneKey: string,
+  agentId: string,
+  transcriptPath: string | undefined
+): void {
+  const transcriptState = state.codexSubagentTranscriptByPaneKey.get(paneKey)
+  const child = state.codexSubagentRosterByPaneKey.get(paneKey)?.get(agentId)
+  if (transcriptState && child) {
+    recordCodexChildRollout(transcriptState, agentId, transcriptPath, child.startedAt)
+  }
 }
 
 export function normalizeCodexSubagentLifecycleEvent(
@@ -103,6 +119,12 @@ export function normalizeCodexSubagentLifecycleEvent(
         state: 'working'
       },
       Date.now()
+    )
+    recordChildRolloutFromHook(
+      state,
+      paneKey,
+      agentId,
+      readFirstString(hookPayload, ['transcript_path', 'transcriptPath'])
     )
   } else {
     finishCodexSubagent(roster, agentId)
@@ -147,6 +169,7 @@ export function normalizeCodexEvent(
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
   if (eventName === 'SubagentStart' || eventName === 'SubagentStop') {
+    catchUpOnCodexParentRollout(state, paneKey, undefined)
     return normalizeCodexSubagentLifecycleEvent(state, eventName, paneKey, hookPayload)
   }
 
@@ -162,7 +185,7 @@ export function normalizeCodexEvent(
       ? 'working'
       : eventName === 'PermissionRequest' || isUserInputPreTool
         ? 'waiting'
-        : eventName === 'Stop'
+        : eventName === 'Stop' || eventName === 'Interrupt'
           ? 'done'
           : null
   if (!stateName) {
@@ -171,29 +194,20 @@ export function normalizeCodexEvent(
 
   const agentId = readString(hookPayload, 'agent_id')
   const transcriptPath = readFirstString(hookPayload, ['transcript_path', 'transcriptPath'])
-  if (eventName === 'SessionStart' && !agentId) {
+  // Why: compaction fires SessionStart mid-turn in the same session and rollout; only a real
+  // session start (startup, resume, clear, fork) may drop what the pane's rollout established.
+  const compaction = eventName === 'SessionStart' && readString(hookPayload, 'source') === 'compact'
+  if (eventName === 'SessionStart' && !agentId && !compaction) {
     // Why: a pane can host a new Codex process after the old one exited without child Stop hooks.
     state.codexSubagentRosterByPaneKey.delete(paneKey)
     state.codexSubagentTranscriptByPaneKey.delete(paneKey)
   }
+  catchUpOnCodexParentRollout(state, paneKey, agentId ? undefined : transcriptPath)
   if (agentId && transcriptPath && eventName === 'PermissionRequest') {
     const transcriptState = getOrCreateCodexSubagentTranscriptState(state, paneKey)
-    if (transcriptState.parent.filePath === transcriptPath) {
-      reconcileCodexSubagentTranscript(
-        transcriptState,
-        getOrCreateCodexSubagentRoster(state, paneKey),
-        transcriptPath
-      )
-    } else {
+    if (transcriptState.parent.filePath !== transcriptPath) {
       reconcileCodexSubagentReviewer(transcriptState, transcriptPath)
     }
-  }
-  if (transcriptPath && !agentId) {
-    reconcileCodexSubagentTranscript(
-      getOrCreateCodexSubagentTranscriptState(state, paneKey),
-      getOrCreateCodexSubagentRoster(state, paneKey),
-      transcriptPath
-    )
   }
   if (agentId) {
     // Why: reconcile the child rollout reviewer before classifying its approval, including after relay restart.
@@ -214,13 +228,10 @@ export function normalizeCodexEvent(
       },
       Date.now()
     )
+    recordChildRolloutFromHook(state, paneKey, agentId, transcriptPath)
     return buildCodexChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
   }
 
-  if (eventName === 'Stop' && !hasCodexTranscriptSubagents(state, paneKey)) {
-    // Why: Codex CLI 0.144 can omit child Stop hooks; later child activity safely recreates any agent still running.
-    state.codexSubagentRosterByPaneKey.delete(paneKey)
-  }
   // Why: resolved after the transcript reconcile above, so this turn's reviewer is read from the
   // rollout during the very PermissionRequest being classified, not from a prior event.
   const ownedState = resolveCodexApprovalOwnedState(
@@ -231,9 +242,19 @@ export function normalizeCodexEvent(
     stateName
   )
   const previousLead = state.codexLeadStateByPaneKey.get(paneKey)
+  const previousTurnId = previousLead?.turnId
+  // Why: SessionStart carries no turn_id. It belongs to the turn Codex has open, and a compaction
+  // continues the root's own turn while Codex has not ended it.
+  const turnId =
+    readString(hookPayload, 'turn_id') ??
+    codexRolloutOpenTurnId(state, paneKey) ??
+    (compaction && previousTurnId && !codexRolloutTurnEnd(state, paneKey, previousTurnId)
+      ? previousTurnId
+      : undefined)
   const record = setCodexMainAgentTurnState(state, paneKey, {
     state: ownedState,
-    ...codexOutcomeRestatedByStop(previousLead, ownedState),
+    ...(eventName === 'Interrupt' ? { outcome: 'cancellation' as const } : {}),
+    turnId,
     model:
       normalizeOptionalField(hookPayload['model'], AGENT_MODEL_MAX_LENGTH) ??
       (eventName === 'SessionStart' ? undefined : previousLead?.model)

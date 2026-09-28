@@ -1,7 +1,8 @@
 // Deferred re-normalization timers for late-arriving agent results: the transcript hadn't caught up
-// when the hook fired, so re-read the same body on a timer and re-apply only if it changed. Both
-// timer families live in one owner so pane teardown and server stop tear both down in one ordered
-// place before the listener caches are cleared.
+// when the hook fired, so re-read the same body on a timer and re-apply only if it changed. Codex
+// instead has its rollout read by the shared rollout watch. Every timer family lives in one owner
+// so pane teardown and server stop tear them down in one ordered place before the listener caches
+// are cleared.
 import {
   hasPendingAgentResultText,
   preparePendingGrokResultDiscovery
@@ -15,10 +16,11 @@ import {
   transcriptPollUpdate
 } from '../shared/agent-hook-listener/transcript-poll-policy'
 import { CodexSubagentPollScheduler } from '../shared/codex-subagent-poll-scheduler'
+import { CodexRolloutWatch } from '../shared/agent-hook-listener/codex-rollout-watch'
 
 const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
 const ASSISTANT_MESSAGE_RETRY_MS = 50
-const CODEX_SUBAGENT_POLL_MS = 1_000
+const TRANSCRIPT_POLL_MS = 1_000
 
 type TranscriptPoll = {
   source: AgentHookSource
@@ -41,17 +43,26 @@ export type AgentHookResultRetryHost = {
   ) => void
 }
 
+type HookEnvelopeMeta = { env?: string; version?: string }
+
 export class AgentHookResultRetryScheduler {
   private assistantMessageRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private transcriptPollScheduler: CodexSubagentPollScheduler<TranscriptPoll>
+  private codexRolloutWatch: CodexRolloutWatch<HookEnvelopeMeta>
   private host: AgentHookResultRetryHost
 
   constructor(host: AgentHookResultRetryHost) {
     this.host = host
     this.transcriptPollScheduler = new CodexSubagentPollScheduler(
-      CODEX_SUBAGENT_POLL_MS,
+      TRANSCRIPT_POLL_MS,
       (paneKey, poll) => this.runTranscriptPoll(paneKey, poll)
     )
+    this.codexRolloutWatch = new CodexRolloutWatch<HookEnvelopeMeta>({
+      state: host.state,
+      isListening: host.isListening,
+      publish: (observation, meta) =>
+        host.applyEvent(observation, 'codex', meta?.env, meta?.version)
+    })
   }
 
   clearAll(): void {
@@ -60,6 +71,7 @@ export class AgentHookResultRetryScheduler {
     }
     this.assistantMessageRetryTimers.clear()
     this.transcriptPollScheduler.clearAll()
+    this.codexRolloutWatch.clearAll()
   }
 
   clearAssistantMessageRetry(paneKey: string): void {
@@ -73,6 +85,19 @@ export class AgentHookResultRetryScheduler {
 
   clearTranscriptPoll(paneKey: string): void {
     this.transcriptPollScheduler.clear(paneKey)
+    this.codexRolloutWatch.clear(paneKey)
+  }
+
+  /** Called for every event the relay applies, so the watch follows whichever path fed it. */
+  syncCodexRolloutWatch(
+    source: AgentHookSource,
+    paneKey: string,
+    env: string | undefined,
+    version: string | undefined
+  ): void {
+    if (source === 'codex') {
+      this.codexRolloutWatch.sync(paneKey, { env, version })
+    }
   }
 
   scheduleTranscriptPoll(
@@ -83,7 +108,7 @@ export class AgentHookResultRetryScheduler {
     version?: string
   ): void {
     // Why: a nested CLI of another kind inherits ORCA_PANE_KEY, so clearing here would silently end a live poll.
-    if (source !== 'codex' && source !== 'muse') {
+    if (source !== 'muse') {
       return
     }
     this.transcriptPollScheduler.clear(original.paneKey)
@@ -114,7 +139,7 @@ export class AgentHookResultRetryScheduler {
     if (!event) {
       return
     }
-    const update = transcriptPollUpdate(source, original, event)
+    const update = transcriptPollUpdate(original, event)
     const next = update ?? original
     if (update) {
       this.host.applyEvent(update, source, env, version)

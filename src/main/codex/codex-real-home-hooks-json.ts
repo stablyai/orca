@@ -77,7 +77,8 @@ export function restoreRealHomeHooksJson(
 export function reconcileManagedHookDefinition(
   current: HookDefinition[],
   isManagedCommand: (command: string | undefined) => boolean,
-  command: string
+  command: string,
+  timeoutSec: number
 ): { definitions: HookDefinition[]; groupIndex: number; handlerIndex: number } {
   const directCommandKeys = ['command', 'bash', 'powershell'] as const
   const hasManagedDirectCommand = current.some((definition) =>
@@ -99,7 +100,7 @@ export function reconcileManagedHookDefinition(
       // Why: users can append groups or handlers after Orca's first install.
       // Reusing the exact slot preserves all later positional trust keys.
       const hooks = [...definition.hooks!]
-      hooks[handlerIndex] = buildManagedCommandHook(command)
+      hooks[handlerIndex] = buildManagedCommandHook(command, timeoutSec)
       definitions[groupIndex] = { ...definition, hooks }
       return { definitions, groupIndex, handlerIndex }
     }
@@ -108,7 +109,7 @@ export function reconcileManagedHookDefinition(
   const cleaned = removeManagedCommands(current, isManagedCommand)
   // Why: first install appends LAST so no existing user trust position shifts.
   return {
-    definitions: [...cleaned, { hooks: [buildManagedCommandHook(command)] }],
+    definitions: [...cleaned, { hooks: [buildManagedCommandHook(command, timeoutSec)] }],
     groupIndex: cleaned.length,
     handlerIndex: 0
   }

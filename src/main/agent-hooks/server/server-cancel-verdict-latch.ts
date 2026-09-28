@@ -88,6 +88,7 @@ function restatesAnotherPrompt(
  * on the provider's own verdict (any settled `mainAgent`) or a new turn (another prompt, an
  * explicit prompt, a prompt submission, a session start). Child-attributed and replayed events keep the latched main
  * agent and are re-folded with their own child evidence; late main agent work is held.
+ * Codex is exempt: Codex reports its own cancel, and its listener decides restatements by turn id.
  */
 export function resolveCancelVerdictLatch(
   previous: EnrichedAgentHookEventPayload | undefined,
@@ -97,6 +98,7 @@ export function resolveCancelVerdictLatch(
   const apply: CancelVerdictLatchDecision = { hold: false, event: incoming }
   if (
     !previous ||
+    incoming.payload.agentType === 'codex' ||
     !isCancelVerdictLatched(previous) ||
     previous.payload.agentType !== incoming.payload.agentType ||
     restatesAnotherPrompt(previous, incoming) ||
@@ -106,10 +108,8 @@ export function resolveCancelVerdictLatch(
     return apply
   }
   const latched = previous.payload.mainAgent
-  // Why: Codex's combine is not this fold; its child events already come reconciled against main's marked record.
   if (
     latched &&
-    incoming.payload.agentType !== 'codex' &&
     incoming.payload.state !== 'done' &&
     (isChildAttributed(incoming) || incoming.isReplay === true) &&
     carriesChildWork(incoming)

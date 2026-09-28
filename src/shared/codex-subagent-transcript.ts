@@ -8,6 +8,12 @@ import {
   type JsonRecord
 } from './codex-rollout-jsonl-cursor'
 
+import {
+  createCodexRolloutTurns,
+  decodeCodexRolloutTurnLifecycle,
+  recordCodexRolloutTurn,
+  type CodexRolloutTurns
+} from './codex-rollout-turn-lifecycle'
 import { readApprovalsReviewer } from './codex-subagent-reviewer'
 import type { CodexApprovalsReviewer } from './codex-subagent-reviewer'
 
@@ -41,6 +47,8 @@ export type CodexSubagentTranscriptState = {
   reviewersByPath: Map<string, CodexApprovalsReviewer>
   /** Who resolves this turn's approvals in the parent rollout. */
   approvalsReviewer?: CodexApprovalsReviewer
+  /** The main agent's turns as its parent rollout recorded them. */
+  mainTurns: CodexRolloutTurns
 }
 
 // Why: Codex files each rollout under its OWN local start date, so a session running past midnight spawns children into a sibling day directory.
@@ -156,20 +164,36 @@ function normalizedTranscriptPath(transcriptPath: string | undefined): string | 
     : undefined
 }
 
+/** Whether the child's latest turn in its own rollout has ended, completed or aborted. */
 function childIsComplete(records: JsonRecord[]): boolean {
   let complete = false
   for (const recordValue of records) {
-    if (recordValue.type !== 'event_msg') {
-      continue
-    }
-    const payload = record(recordValue.payload)
-    if (payload?.type === 'task_started') {
-      complete = false
-    } else if (payload?.type === 'task_complete') {
-      complete = true
+    const lifecycle = decodeCodexRolloutTurnLifecycle(recordValue)
+    if (lifecycle) {
+      complete = lifecycle.state !== 'working'
     }
   }
   return complete
+}
+
+/** Records the child rollout a child's own hook names, so the child is read there rather than
+ *  looked up by date folder, which misses a child whose later turn comes on another day. */
+export function recordCodexChildRollout(
+  state: CodexSubagentTranscriptState,
+  childId: string,
+  transcriptPath: string | undefined,
+  startedAt: number
+): void {
+  const path = normalizedTranscriptPath(transcriptPath)
+  if (!path || !SAFE_THREAD_ID.test(childId) || !basename(path).endsWith(`-${childId}.jsonl`)) {
+    return
+  }
+  const tracked = state.subagents.get(childId)
+  if (!tracked) {
+    state.subagents.set(childId, { offset: 0, carry: '', startedAt, filePath: path })
+  } else if (!tracked.filePath) {
+    tracked.filePath = path
+  }
 }
 
 export function createCodexSubagentTranscriptState(): CodexSubagentTranscriptState {
@@ -177,14 +201,9 @@ export function createCodexSubagentTranscriptState(): CodexSubagentTranscriptSta
     parent: { offset: 0, carry: '' },
     subagents: new Map(),
     reviewerCursorsByPath: new Map(),
-    reviewersByPath: new Map()
+    reviewersByPath: new Map(),
+    mainTurns: createCodexRolloutTurns()
   }
-}
-
-export function hasTrackedCodexTranscriptSubagents(
-  state: CodexSubagentTranscriptState | undefined
-): boolean {
-  return Boolean(state && state.subagents.size > 0)
 }
 
 export function reconcileCodexSubagentTranscript(
@@ -206,6 +225,7 @@ export function reconcileCodexSubagentTranscript(
     state.reviewersByPath.clear()
     // Why: a different rollout is a different session, so its predecessor's reviewer is void.
     state.approvalsReviewer = undefined
+    state.mainTurns = createCodexRolloutTurns()
   }
   const parentRecords = readJsonlCursor(state.parent)
   // A stale reviewer must never turn an unreadable rollout into a hidden prompt.
@@ -214,6 +234,10 @@ export function reconcileCodexSubagentTranscript(
       ? undefined
       : (readApprovalsReviewer(parentRecords) ?? state.approvalsReviewer)
   for (const recordValue of parentRecords ?? []) {
+    const lifecycle = decodeCodexRolloutTurnLifecycle(recordValue)
+    if (lifecycle) {
+      recordCodexRolloutTurn(state.mainTurns, lifecycle)
+    }
     const activity = readActivity(recordValue)
     if (!activity) {
       continue
@@ -236,6 +260,20 @@ export function reconcileCodexSubagentTranscript(
       { description: tracked.description, state: 'working' },
       tracked.startedAt
     )
+  }
+  // Why: every child the roster holds, a hook-announced one included, is read from its own rollout
+  // (named by its thread id), so it leaves when that rollout records its turn's end even if its
+  // SubagentStop never arrives (an aborted child fires none), and never because its parent's turn
+  // ended.
+  for (const [id, child] of roster) {
+    if (!state.subagents.has(id)) {
+      state.subagents.set(id, { offset: 0, carry: '', startedAt: child.startedAt })
+    }
+  }
+  for (const id of state.subagents.keys()) {
+    if (!roster.has(id)) {
+      state.subagents.delete(id)
+    }
   }
   const entriesByDirectory = new Map<string, string[]>()
   const now = Date.now()

@@ -3,7 +3,6 @@ import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
   buildManagedCommandHook,
   createManagedCommandMatcher,
-  MANAGED_HOOK_TIMEOUT_SECONDS,
   readHooksJson,
   removeManagedCommands,
   writeManagedScript,
@@ -17,6 +16,7 @@ import {
 import {
   CODEX_EVENTS,
   CODEX_EVENT_LABEL,
+  getCodexManagedHookTimeoutSec,
   wrapReadablePosixHookCommand,
   writeCodexHooksJson
 } from './codex-hook-definition'
@@ -78,17 +78,19 @@ async function installManagedHooksIntoWslRuntimeExclusively(
   for (const eventName of CODEX_EVENTS) {
     const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
     const cleaned = removeManagedCommands(current, isManagedCommand)
+    const eventLabel = CODEX_EVENT_LABEL[eventName]
+    const timeoutSec = getCodexManagedHookTimeoutSec(eventLabel)
     const definition: HookDefinition = {
-      hooks: [buildManagedCommandHook(command)]
+      hooks: [buildManagedCommandHook(command, timeoutSec)]
     }
     nextHooks[eventName] = [definition, ...cleaned]
     trustEntries.push({
       sourcePath: plan.trustConfigPath,
-      eventLabel: CODEX_EVENT_LABEL[eventName],
+      eventLabel,
       groupIndex: 0,
       handlerIndex: 0,
       command,
-      timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+      timeoutSec
     })
   }
 

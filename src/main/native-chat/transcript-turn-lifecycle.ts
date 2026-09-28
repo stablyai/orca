@@ -8,12 +8,8 @@ import {
   timestampMs
 } from '../ai-vault/session-scanner-values'
 import { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
-import {
-  claudeInterruptedMessageId,
-  CODEX_EVENT_TURN_ABORTED,
-  CODEX_EVENT_TURN_COMPLETE,
-  CODEX_EVENT_TURN_STARTED
-} from './transcript-turn-markers'
+import { claudeInterruptedMessageId } from './transcript-turn-markers'
+import { decodeCodexRolloutTurnLifecycle } from '../../shared/codex-rollout-turn-lifecycle'
 
 export type NativeChatTurnLifecycleDecoder = (
   line: string,
@@ -38,26 +34,13 @@ export function decodeCodexTurnLifecycle(
   fallbackId: string
 ): NativeChatTurnLifecycle | null {
   const record = parseJsonObject(line)
-  const payload = asRecord(record?.payload)
-  if (record?.type !== 'event_msg' || !payload) {
+  const lifecycle = record ? decodeCodexRolloutTurnLifecycle(record) : undefined
+  if (!record || !lifecycle) {
     return null
   }
-  if (
-    payload.type !== CODEX_EVENT_TURN_STARTED &&
-    payload.type !== CODEX_EVENT_TURN_COMPLETE &&
-    payload.type !== CODEX_EVENT_TURN_ABORTED
-  ) {
-    return null
-  }
-  const state =
-    payload.type === CODEX_EVENT_TURN_STARTED
-      ? 'working'
-      : payload.type === CODEX_EVENT_TURN_ABORTED
-        ? 'interrupted'
-        : 'completed'
   return {
-    state,
-    turnId: extractString(payload.turn_id) ?? fallbackId,
+    state: lifecycle.state,
+    turnId: lifecycle.turnId ?? fallbackId,
     timestamp: lifecycleTimestamp(record.timestamp)
   }
 }

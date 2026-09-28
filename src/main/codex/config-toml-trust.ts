@@ -28,6 +28,7 @@ export type CodexEventLabel =
   | 'subagent_start'
   | 'subagent_stop'
   | 'stop'
+  | 'interrupt'
 
 export type CodexTrustEntry = {
   /** Path on disk to the hooks.json that declares the hook (the "key_source"). */
@@ -40,7 +41,7 @@ export type CodexTrustEntry = {
   handlerIndex: number
   /** The exact `command` string written to hooks.json. */
   command: string
-  /** Effective timeout in seconds; defaults to 600 when undefined, explicit values clamped to a minimum of 1. */
+  /** Declared timeout in seconds; hashed as Codex runs it (codexHookEffectiveTimeoutSec). */
   timeoutSec?: number
   /** Whether the handler is async. Defaults to false. */
   async?: boolean

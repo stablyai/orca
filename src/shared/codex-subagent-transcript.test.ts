@@ -20,7 +20,6 @@ vi.mock('node:fs', async (importOriginal) => {
 
 import {
   createCodexSubagentTranscriptState,
-  hasTrackedCodexTranscriptSubagents,
   reconcileCodexSubagentTranscript
 } from './codex-subagent-transcript'
 import { codexRosterToSnapshots, type CodexSubagentRoster } from './codex-subagent-roster'
@@ -73,7 +72,7 @@ describe('Codex subagent transcript reconciliation', () => {
 
     reconcileCodexSubagentTranscript(state, roster, parentPath)
 
-    expect(hasTrackedCodexTranscriptSubagents(state)).toBe(true)
+    expect(state.subagents.size).toBeGreaterThan(0)
     expect(codexRosterToSnapshots(roster)).toEqual([
       {
         id: CHILD_ID,
@@ -94,7 +93,7 @@ describe('Codex subagent transcript reconciliation', () => {
     )
     reconcileCodexSubagentTranscript(state, roster, parentPath)
 
-    expect(hasTrackedCodexTranscriptSubagents(state)).toBe(false)
+    expect(state.subagents.size).toBe(0)
     expect(codexRosterToSnapshots(roster)).toBeUndefined()
   })
 
@@ -125,7 +124,7 @@ describe('Codex subagent transcript reconciliation', () => {
 
     // Why: only a cross-day lookup can observe the completion; the parent-directory scan never finds this file.
     expect(roster.size).toBe(0)
-    expect(hasTrackedCodexTranscriptSubagents(state)).toBe(false)
+    expect(state.subagents.size).toBe(0)
   })
 
   it('retires a child whose rollout never becomes readable', () => {
@@ -149,7 +148,7 @@ describe('Codex subagent transcript reconciliation', () => {
       vi.advanceTimersByTime(31_000)
       reconcileCodexSubagentTranscript(state, roster, parentPath)
       expect(roster.size).toBe(0)
-      expect(hasTrackedCodexTranscriptSubagents(state)).toBe(false)
+      expect(state.subagents.size).toBe(0)
     } finally {
       vi.useRealTimers()
     }
@@ -167,7 +166,7 @@ describe('Codex subagent transcript reconciliation', () => {
     writeFileSync(parentPath, jsonl([activity('started'), activity('interrupted')]))
     reconcileCodexSubagentTranscript(state, roster, parentPath)
 
-    expect(hasTrackedCodexTranscriptSubagents(state)).toBe(false)
+    expect(state.subagents.size).toBe(0)
     expect(roster.size).toBe(0)
   })
 
@@ -271,7 +270,7 @@ describe('Codex subagent transcript reconciliation', () => {
       reconcileCodexSubagentTranscript(state, roster, parentPath)
 
       expect(roster.size).toBe(0)
-      expect(hasTrackedCodexTranscriptSubagents(state)).toBe(false)
+      expect(state.subagents.size).toBe(0)
     })
 
     it('reads the model without opening any file beyond the parent and child rollouts', () => {

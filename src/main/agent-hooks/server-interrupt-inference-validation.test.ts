@@ -37,7 +37,7 @@ describe('AgentHookServer listener replay', () => {
           paneKey: PANE,
           tabId: 'tab-1',
           worktreeId: 'wt-1',
-          payload: { state: 'working', prompt: 'long task', agentType: 'codex' }
+          payload: { state: 'working', prompt: 'long task', agentType: 'custom-agent' }
         },
         'conn-1'
       )
@@ -88,7 +88,7 @@ describe('AgentHookServer listener replay', () => {
         expect.objectContaining({
           state: 'working',
           prompt: 'long task',
-          agentType: 'codex'
+          agentType: 'custom-agent'
         })
       ])
     } finally {
@@ -278,7 +278,7 @@ describe('AgentHookServer listener replay', () => {
           paneKey: PANE,
           tabId: 'tab-1',
           worktreeId: 'wt-1',
-          payload: { state: 'waiting', prompt: 'permission', agentType: 'codex' }
+          payload: { state: 'waiting', prompt: 'permission', agentType: 'custom-agent' }
         },
         'conn-1'
       )
@@ -299,7 +299,7 @@ describe('AgentHookServer listener replay', () => {
           paneKey: FRESH_PANE,
           tabId: 'tab-fresh',
           worktreeId: 'wt-1',
-          payload: { state: 'working', prompt: 'old task', agentType: 'codex' }
+          payload: { state: 'working', prompt: 'old task', agentType: 'custom-agent' }
         },
         'conn-1'
       )
@@ -400,7 +400,7 @@ describe('the main agent fact on an inferred interrupt', () => {
     }
   })
 
-  it('refuses a cancel of a working Codex main agent beside a live child', () => {
+  it('refuses a keypress cancel of a Codex main agent beside a live child: Codex reports its own', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
     try {
@@ -422,7 +422,6 @@ describe('the main agent fact on an inferred interrupt', () => {
       )
       const baseline = server.getStatusSnapshot()[0]
       vi.setSystemTime(1_500)
-      // Why: the synthesized Codex row is a plain done; it would retire the child its combine keeps working.
       expect(
         server.inferInterrupt({
           paneKey: PANE,

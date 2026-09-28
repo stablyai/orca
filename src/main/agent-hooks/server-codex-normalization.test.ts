@@ -100,8 +100,12 @@ describe('Codex hook normalization', () => {
       buildBody({ hook_event_name: 'Stop', model: 'gpt-5.4' }),
       'production'
     )
-    expect(rootStop?.payload.state).toBe('done')
-    expect(rootStop?.payload.subagents).toBeUndefined()
+    // The root's own turn ending says nothing about its child, which still holds the row.
+    expect(rootStop?.payload).toMatchObject({
+      state: 'working',
+      mainAgent: { state: 'done' },
+      subagents: [{ id: 'child-session', state: 'working' }]
+    })
 
     const resumedChild = _internals.normalizeHookPayload(
       'codex',

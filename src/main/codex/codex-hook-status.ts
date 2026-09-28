@@ -1,5 +1,5 @@
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
-import { MANAGED_HOOK_TIMEOUT_SECONDS, readHooksJson } from '../agent-hooks/installer-utils'
+import { readHooksJson } from '../agent-hooks/installer-utils'
 import {
   computeTrustKey,
   computeTrustedHash,
@@ -12,6 +12,7 @@ import {
 import {
   CODEX_EVENTS,
   CODEX_EVENT_LABEL,
+  getCodexManagedHookTimeoutSec,
   getCodexConfigTomlPath,
   getConfigPath,
   getManagedCommand,
@@ -104,7 +105,7 @@ export function getCodexHookStatusAfterInstall(
       groupIndex: foundGroupIndex,
       handlerIndex: foundHandlerIndex,
       command,
-      timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+      timeoutSec: getCodexManagedHookTimeoutSec(CODEX_EVENT_LABEL[eventName])
     }
     const trustKey = computeTrustKey(trustInput)
     const validHashes = new Set([computeTrustedHash(trustInput)])

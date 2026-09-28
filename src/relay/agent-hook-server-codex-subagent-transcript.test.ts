@@ -82,4 +82,66 @@ describe('RelayAgentHookServer Codex subagent transcript polling', () => {
       server.stop()
     }
   })
+
+  // Why: the relay is the execution host, so it reads the remote rollout; Codex writes the turn's
+  // end there even when it kills the Interrupt hook at 3s under load.
+  it('forwards the cancel it reads from turn_aborted when the Interrupt hook is lost', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'relay-hook-codex-interrupt-'))
+    dirs.push(dir)
+    const parentPath = join(dir, 'rollout-parent.jsonl')
+    const turnMarker = (type: string): string =>
+      line({
+        type: 'event_msg',
+        payload:
+          type === 'turn_aborted'
+            ? { type, turn_id: 'turn-1', reason: 'interrupted' }
+            : { type, turn_id: 'turn-1' }
+      })
+    writeFileSync(parentPath, turnMarker('task_started'))
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      const response = await fetch(`http://127.0.0.1:${port}/hook/codex`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': token
+        },
+        body: JSON.stringify({
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: {
+            hook_event_name: 'PreToolUse',
+            session_id: 'root-session',
+            turn_id: 'turn-1',
+            transcript_path: parentPath,
+            tool_name: 'Bash'
+          }
+        })
+      })
+      expect(response.status).toBe(204)
+      expect(forward.mock.calls[0]?.[0].payload.mainAgent).toMatchObject({ state: 'working' })
+
+      appendFileSync(parentPath, turnMarker('turn_aborted'))
+      await vi.waitFor(
+        () => {
+          expect(forward.mock.calls.at(-1)?.[0].payload).toMatchObject({
+            state: 'done',
+            interrupted: true,
+            mainAgent: { state: 'done', outcome: 'cancellation' }
+          })
+        },
+        { timeout: 3_000, interval: 50 }
+      )
+      // A read of the rollout, not a replay of the last hook: no hook name, no prompt boundary.
+      expect(forward.mock.calls.at(-1)?.[0]).toMatchObject({ source: 'codex', paneKey: PANE_KEY })
+      expect(forward.mock.calls.at(-1)?.[0].hookEventName).toBeUndefined()
+      expect(forward.mock.calls.at(-1)?.[0].hasExplicitPrompt).toBeUndefined()
+    } finally {
+      server.stop()
+    }
+  })
 })

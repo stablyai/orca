@@ -1,7 +1,4 @@
-import {
-  reconcileRemoteCodexState,
-  markCodexLeadTurnInterrupted
-} from '../../../shared/agent-hook-listener/providers/codex-state'
+import { reconcileRemoteCodexState } from '../../../shared/agent-hook-listener/providers/codex-state'
 import {
   resolveAgentStatusIdentity,
   shouldSuppressInheritedTerminalStatus
@@ -83,10 +80,11 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       this.emitEnrichedStatus(enriched)
       return enriched
     }
+    // Why `source`: a relay's Codex rollout observation carries no hook name, unlike an OSC row.
     const stateReconciledPayload =
       terminalOwnedPayload.connectionId &&
       terminalOwnedPayload.payload.agentType === 'codex' &&
-      terminalOwnedPayload.hookEventName
+      (terminalOwnedPayload.hookEventName || terminalOwnedPayload.source === 'codex')
         ? {
             ...terminalOwnedPayload,
             payload: reconcileRemoteCodexState(
@@ -156,12 +154,6 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     // restatement of a main agent the desktop cancelled must not replace the cancel.
     const latch = resolveCancelVerdictLatch(previous, attachedPayload, Date.now())
     if (latch.hold) {
-      if (
-        attachedPayload.payload.agentType === 'codex' &&
-        attachedPayload.payload.state === 'working'
-      ) {
-        markCodexLeadTurnInterrupted(this.state, attachedPayload.paneKey)
-      }
       this.commitStatusRowMutation(rowBefore, previous)
       return previous
     }

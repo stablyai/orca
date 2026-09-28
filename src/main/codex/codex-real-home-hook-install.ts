@@ -19,6 +19,7 @@ import {
   restoreRealHomeHooksJson
 } from './codex-real-home-hooks-json'
 import { getCodexManagedScriptFileName } from './codex-hook-identity'
+import { getCodexManagedHookTimeoutSec } from './codex-hook-definition'
 import {
   CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS,
   grantManagedCodexHookTrust,
@@ -144,15 +145,22 @@ async function installRealHomeCodexHook(userDataPath: string): Promise<RealHomeC
   const managedEntries: CodexTrustEntry[] = []
   for (const eventName of material.events) {
     const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
-    const reconciled = reconcileManagedHookDefinition(current, isManagedCommand, material.command)
+    const eventLabel = material.eventLabel[eventName]
+    const timeoutSec = getCodexManagedHookTimeoutSec(eventLabel)
+    const reconciled = reconcileManagedHookDefinition(
+      current,
+      isManagedCommand,
+      material.command,
+      timeoutSec
+    )
     nextHooks[eventName] = reconciled.definitions
     managedEntries.push({
       sourcePath: hooksJsonPath,
-      eventLabel: material.eventLabel[eventName],
+      eventLabel,
       groupIndex: reconciled.groupIndex,
       handlerIndex: reconciled.handlerIndex,
       command: material.command,
-      timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+      timeoutSec
     })
   }
   // Why: sweep stale Orca entries out of events the managed lane no longer

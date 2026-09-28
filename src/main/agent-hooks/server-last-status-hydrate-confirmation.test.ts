@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  appendFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AgentHookServer, _internals } from './server'
@@ -245,7 +252,7 @@ describe('Last-status persistence', () => {
         paneKey: PANE,
         tabId: 'tab-1',
         worktreeId: 'wt-1',
-        payload: { state: 'working', prompt: 'long task', agentType: 'codex' }
+        payload: { state: 'working', prompt: 'long task', agentType: 'custom-agent' }
       },
       'conn-1'
     )
@@ -391,9 +398,19 @@ describe('Last-status persistence', () => {
     }
   })
 
-  it('restores Codex child hierarchy and reaps unconfirmed children on the next root Stop', async () => {
+  it('restores Codex child hierarchy and reaps a restored child once its own rollout ends', async () => {
     mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
     const receivedAt = recentTs()
+    const CHILD = '11111111-2222-4333-8444-555555555555'
+    // Codex files a child's rollout beside its parent's, named by the child's thread id.
+    const sessions = join(userDataPath, 'sessions')
+    mkdirSync(sessions)
+    const parentRollout = join(sessions, 'rollout-parent.jsonl')
+    const childRollout = join(sessions, `rollout-2026-09-27T10-00-00-${CHILD}.jsonl`)
+    const marker = (type: string, turnId: string): string =>
+      `${JSON.stringify({ type: 'event_msg', payload: { type, turn_id: turnId } })}\n`
+    writeFileSync(parentRollout, marker('task_started', 'root-turn'))
+    writeFileSync(childRollout, marker('task_started', 'child-turn'))
     writeFileSync(
       lastStatusPath(),
       JSON.stringify({
@@ -405,6 +422,11 @@ describe('Last-status persistence', () => {
             worktreeId: 'wt-1',
             receivedAt,
             stateStartedAt: recentTs(-1000),
+            providerSession: {
+              key: 'session_id',
+              id: 'root-session',
+              transcriptPath: parentRollout
+            },
             payload: {
               state: 'working',
               prompt: 'coordinate reviews',
@@ -412,7 +434,7 @@ describe('Last-status persistence', () => {
               model: 'gpt-5.4',
               subagents: [
                 {
-                  id: '11111111-2222-4333-8444-555555555555',
+                  id: CHILD,
                   state: 'working',
                   startedAt: receivedAt - 5000,
                   agentType: 'reviewer',
@@ -435,7 +457,7 @@ describe('Last-status persistence', () => {
           model: 'gpt-5.4',
           subagents: [
             expect.objectContaining({
-              id: '11111111-2222-4333-8444-555555555555',
+              id: CHILD,
               model: 'gpt-5.4-mini'
             })
           ]
@@ -446,7 +468,7 @@ describe('Last-status persistence', () => {
         server,
         buildBody({
           hook_event_name: 'PreToolUse',
-          agent_id: '11111111-2222-4333-8444-555555555555',
+          agent_id: CHILD,
           agent_type: 'reviewer',
           model: 'gpt-5.4-mini',
           tool_name: 'exec_command',
@@ -462,14 +484,30 @@ describe('Last-status persistence', () => {
         })
       ])
 
+      // The root's own Stop ends its turn, not its child's.
       await postHookEvent(
         server,
-        buildBody({ hook_event_name: 'Stop', model: 'gpt-5.4' }),
+        buildBody({ hook_event_name: 'Stop', model: 'gpt-5.4', turn_id: 'root-turn' }),
         '/hook/codex'
       )
       expect(server.getStatusSnapshot()).toEqual([
-        expect.objectContaining({ state: 'done', model: 'gpt-5.4', subagents: undefined })
+        expect.objectContaining({
+          state: 'working',
+          mainAgent: expect.objectContaining({ state: 'done' }),
+          subagents: [expect.objectContaining({ id: CHILD })]
+        })
       ])
+
+      // The child's SubagentStop never arrives; its rollout recording its turn's end retires it.
+      appendFileSync(childRollout, marker('turn_aborted', 'child-turn'))
+      await vi.waitFor(
+        () => {
+          expect(server.getStatusSnapshot()).toEqual([
+            expect.objectContaining({ state: 'done', model: 'gpt-5.4', subagents: undefined })
+          ])
+        },
+        { timeout: 3_000, interval: 50 }
+      )
     } finally {
       server.stop()
     }

@@ -115,7 +115,8 @@ describe('RelayAgentHookServer', () => {
         isReplay: true,
         env: 'remote',
         version: '1',
-        payload: { state: 'working', agentType: 'codex' }
+        // No record of the main agent and no child left: nothing says this pane still works.
+        payload: { state: 'done', agentType: 'codex' }
       })
       expect(readFileSync(spoolFile)).toHaveLength(0)
     } finally {

@@ -29,15 +29,24 @@ const ESCAPE_ALSO_NAVIGATES_AGENT_TYPES: ReadonlySet<AgentType> = new Set([
   'prime-agent'
 ])
 
-/** True when this keypress is one of those TUIs' navigation Escape, and so proves nothing. */
-export function isNavigationEscapeIntent(
+// Why: Codex reports its own cancel (its Interrupt hook, backed by the `turn_aborted` it writes to
+// its rollout), and no key it receives proves one: Ctrl+C with a draft only clears the draft,
+// Esc with a popup open only closes it, and in shared-server mode Ctrl+C opens a chooser whose
+// "Run in background" cancels nothing.
+const PROVIDER_REPORTS_CANCEL_AGENT_TYPES: ReadonlySet<AgentType> = new Set(['codex'])
+
+/** True when this keypress proves nothing about whether the turn ended, so only the provider's
+ *  own report may end it: a navigation Escape in the TUIs above, or any key for Codex. */
+export function isInconclusiveInterruptIntent(
   agentType: AgentType | undefined,
   intent: AgentInterruptInputIntent
 ): boolean {
+  if (agentType === undefined) {
+    return false
+  }
   return (
-    intent === 'plain-escape' &&
-    agentType !== undefined &&
-    ESCAPE_ALSO_NAVIGATES_AGENT_TYPES.has(agentType)
+    PROVIDER_REPORTS_CANCEL_AGENT_TYPES.has(agentType) ||
+    (intent === 'plain-escape' && ESCAPE_ALSO_NAVIGATES_AGENT_TYPES.has(agentType))
   )
 }
 

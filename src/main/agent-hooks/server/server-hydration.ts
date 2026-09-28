@@ -9,6 +9,7 @@ import {
   seedClaudeSubagentRosterFromSnapshots
 } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
 import { seedCodexStateFromSnapshot } from '../../../shared/agent-hook-listener/providers/codex-state'
+import { catchUpOnCodexParentRollout } from '../../../shared/agent-hook-listener/providers/codex-rollout-reader'
 import { AGENT_STATUS_PERSISTED_HYDRATION_MODE } from '../../../shared/agent-status-legacy-adapter'
 import { HYDRATE_MAX_AGE_MS, LAST_STATUS_FILE_VERSION } from './server-constants'
 import type { LastStatusFile } from './server-types'
@@ -122,6 +123,12 @@ export abstract class AgentHookServerHydration extends AgentHookServerReaping {
         // Why: restore live child hierarchy immediately; provider-specific reconciliation reaps stale seeds.
         if (entry.payload.agentType === 'codex') {
           seedCodexStateFromSnapshot(this.state, resolvedPaneKey, entry.payload)
+          const rolloutPath = entry.providerSession?.transcriptPath
+          // Why: a turn can end while Orca is down; the rollout this host reads still records it.
+          if (!entry.connectionId && entry.payload.state !== 'done' && rolloutPath) {
+            catchUpOnCodexParentRollout(this.state, resolvedPaneKey, rolloutPath)
+            this.armCodexRolloutWatch(resolvedPaneKey)
+          }
         } else if (entry.payload.agentType === 'claude') {
           seedClaudeLeadTurnFromPersistedStatus(this.state, resolvedPaneKey, entry)
           if (entry.payload.subagents) {

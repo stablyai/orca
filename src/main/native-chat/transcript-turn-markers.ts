@@ -4,7 +4,8 @@
 // two consumers can never disagree about which JSONL line is an interrupt/abort
 // or a turn boundary — updating a provider's format touches one place, so a
 // rename can't leave a visible "interrupted" row that never settles (or vice
-// versa).
+// versa). Codex's markers live in src/shared/codex-rollout-turn-lifecycle.ts,
+// because the hook lane reads them from the rollout too.
 
 import { extractString } from '../ai-vault/session-scanner-values'
 
@@ -19,8 +20,3 @@ export function claudeInterruptedMessageId(record: Record<string, unknown>): str
   }
   return extractString(record.interruptedMessageId) ?? undefined
 }
-
-/** Codex `event_msg` payload types that bound a turn's lifecycle. */
-export const CODEX_EVENT_TURN_STARTED = 'task_started'
-export const CODEX_EVENT_TURN_COMPLETE = 'task_complete'
-export const CODEX_EVENT_TURN_ABORTED = 'turn_aborted'

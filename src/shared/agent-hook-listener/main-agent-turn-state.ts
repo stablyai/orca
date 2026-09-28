@@ -27,9 +27,15 @@ export type ClaudeLeadTurnState = {
  *  lives on the roster entry, never here, so this record is always the root's own truth. */
 export type CodexLeadTurnState = {
   state: 'working' | 'waiting' | 'done'
-  /** The turn verdict the server inferred; Codex's own Stop hook carries none. */
+  /** `cancellation` when Codex reported the turn aborted (its Interrupt hook, or `turn_aborted` in
+   *  its rollout); absent when the turn completed, since Stop carries no verdict. */
   outcome?: AgentJournalTurnOutcome
   /** When `state` first appeared; the root's own clock, published as `mainAgent.stateStartedAt`. */
   stateStartedAt: number
   model?: string
+  /** Codex's id for the turn this record describes: `turn_id` on every root hook but SessionStart,
+   *  and on the rollout's turn markers. It decides whether a later fact restates this turn or
+   *  starts another. Held only by the execution host's listener, never persisted: after a restart
+   *  it is re-read from the rollout the saved row names. */
+  turnId?: string
 }

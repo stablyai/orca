@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { homedir, tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
+import { createHash } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
@@ -35,6 +36,7 @@ const homes = setupCodexHookHomes(homedirMock, getPathMock)
 
 function localManagedCodexEvents(): string[] {
   return [
+    'Interrupt',
     'PermissionRequest',
     'PostToolUse',
     'PreToolUse',
@@ -125,6 +127,33 @@ describe('CodexHookService', () => {
     expect(trustConfig).toContain('model = "gpt-5.2-codex"')
     expect(trustConfig).toContain('approval_policy = "on-request"')
     expect(trustConfig).toContain(':permission_request:0:0')
+  })
+
+  it('installs Interrupt with the 3s timeout Codex runs it with, trusted by the hash Codex computes', async () => {
+    mkdirSync(join(homes.tmpHome, '.codex'), { recursive: true })
+
+    const status = await new CodexHookService().install()
+
+    expect(status.state).toBe('installed')
+    const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
+    // JSON.parse returns any; the assertions below are what prove the shape.
+    const hooksConfig: {
+      hooks: Record<string, { hooks?: { command?: string; timeout?: number }[] }[]>
+    } = JSON.parse(readFileSync(join(managedCodexHome, 'hooks.json'), 'utf-8'))
+    const interrupt = hooksConfig.hooks.Interrupt?.[0]?.hooks?.[0]
+    expect(isCodexManagedCommand(interrupt?.command)).toBe(true)
+    expect(interrupt?.timeout).toBe(3)
+    // What Codex hashes for this handler: no matcher for Interrupt, the timeout it will run.
+    const identity = JSON.stringify({
+      event_name: 'interrupt',
+      hooks: [{ async: false, command: interrupt!.command, timeout: 3, type: 'command' }]
+    })
+    const expectedHash = `sha256:${createHash('sha256').update(identity).digest('hex')}`
+    const trustConfig = readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')
+    const interruptBlock = trustConfig
+      .split('[hooks.state.')
+      .find((block) => block.includes(':interrupt:0:0"]'))
+    expect(interruptBlock).toContain(`trusted_hash = "${expectedHash}"`)
   })
 
   it('installs managed hooks + trust into a per-account self-contained home, not the shared mirror', async () => {

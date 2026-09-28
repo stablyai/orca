@@ -106,9 +106,7 @@ export class RelayAgentHookServer {
       state: this.state,
       env: this.env,
       isListening: () => this.server !== null,
-      applyEvent: (event, source, env, version) => {
-        this.applyEvent(event, source, env, version)
-      }
+      applyEvent: (event, source, env, version) => this.applyEvent(event, source, env, version)
     })
   }
 
@@ -334,6 +332,7 @@ export class RelayAgentHookServer {
     this.lastEnvelopeMetaByPaneKey.delete(event.paneKey)
     this.lastEnvelopeMetaByPaneKey.set(event.paneKey, { source, env, version })
     this.forward(buildRelayHookEnvelope(event, source, env, version, options))
+    this.retryScheduler.syncCodexRolloutWatch(source, event.paneKey, env, version)
   }
 
   private ingestSpoolRecord(record: SpoolRecord): void {

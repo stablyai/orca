@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import {
   getSharedManagedScriptPath,
   buildWindowsHookPowerShellCommand,
+  MANAGED_HOOK_TIMEOUT_SECONDS,
   wrapPosixHookCommand,
   WINDOWS_CMD_SAFE_PATH,
   writeHooksJson,
@@ -12,8 +13,10 @@ import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-hom
 import { CODEX_HOOK_EVENT_LABEL, getCodexManagedScriptFileName } from './codex-hook-identity'
 import { getManagedScript } from './codex-hook-script'
 import type { CodexEventLabel } from './config-toml-trust'
+import { CODEX_INTERRUPT_HOOK_MAX_TIMEOUT_SEC } from './codex-trust-identity'
 
 // Why: Pre/PostToolUse feed the live in-flight-tool readout; PermissionRequest exits with no decision so Codex still shows its approval UI while Orca flips the pane to waiting.
+// Interrupt is Codex's own report that the user cancelled the main agent's turn.
 export const CODEX_EVENTS = [
   'SessionStart',
   'UserPromptSubmit',
@@ -22,7 +25,8 @@ export const CODEX_EVENTS = [
   'PostToolUse',
   'SubagentStart',
   'SubagentStop',
-  'Stop'
+  'Stop',
+  'Interrupt'
 ] as const
 
 export function getConfigPath(runtimeHomePath: string = getOrcaManagedCodexHomePath()): string {
@@ -52,7 +56,15 @@ export const CODEX_EVENT_LABEL: Record<(typeof CODEX_EVENTS)[number], CodexEvent
   PostToolUse: CODEX_HOOK_EVENT_LABEL.PostToolUse!,
   SubagentStart: CODEX_HOOK_EVENT_LABEL.SubagentStart!,
   SubagentStop: CODEX_HOOK_EVENT_LABEL.SubagentStop!,
-  Stop: CODEX_HOOK_EVENT_LABEL.Stop!
+  Stop: CODEX_HOOK_EVENT_LABEL.Stop!,
+  Interrupt: CODEX_HOOK_EVENT_LABEL.Interrupt!
+}
+
+/** The `timeout` Orca's managed hook declares: Codex caps Interrupt at 3s and warns about more. */
+export function getCodexManagedHookTimeoutSec(eventLabel: CodexEventLabel): number {
+  return eventLabel === 'interrupt'
+    ? CODEX_INTERRUPT_HOOK_MAX_TIMEOUT_SEC
+    : MANAGED_HOOK_TIMEOUT_SECONDS
 }
 
 export const CODEX_MANAGED_EVENT_LABELS = new Set<CodexEventLabel>(

@@ -4,7 +4,7 @@ import {
 } from '../../../../shared/agent-status-types'
 import {
   AGENT_INTERRUPT_SETTLE_MS,
-  isNavigationEscapeIntent,
+  isInconclusiveInterruptIntent,
   requiresDoubleEscapeInterrupt,
   type AgentInterruptInferenceRequest,
   type AgentInterruptInputIntent
@@ -45,8 +45,7 @@ function shouldFlushInterruptImmediately(
 ): boolean {
   return (
     requiresDoubleEscapeInterrupt(baseline.agentType, baseline.intent) ||
-    baseline.agentType === 'gemini' ||
-    (baseline.agentType === 'codex' && baseline.intent === 'plain-escape')
+    baseline.agentType === 'gemini'
   )
 }
 
@@ -59,12 +58,12 @@ function shouldIgnoreInterruptIntent(
 
 /** Why: skip a round-trip main will refuse anyway. Scoped to 'working' so Claude's
  *  AskUserQuestion dismissal — a 'waiting' row — still reaches inferQuestionAnswered. */
-function isIgnorableNavigationEscape(
+function isIgnorableInconclusiveIntent(
   agentType: AgentStatusEntry['agentType'],
   intent: AgentInterruptInputIntent,
   state: AgentStatusEntry['state']
 ): boolean {
-  return state === 'working' && isNavigationEscapeIntent(agentType, intent)
+  return state === 'working' && isInconclusiveInterruptIntent(agentType, intent)
 }
 
 function canInferInterrupt(entry: AgentStatusEntry, intent: AgentInterruptInputIntent): boolean {
@@ -245,7 +244,7 @@ export function createAgentInterruptInference({
       }
       // Why: this keypress proves nothing, but it must not revoke a Ctrl+C already waiting to
       // settle — the user really did ask to interrupt, and Escape does not take that back.
-      if (isIgnorableNavigationEscape(baseline.agentType, intent, entry.state)) {
+      if (isIgnorableInconclusiveIntent(baseline.agentType, intent, entry.state)) {
         return
       }
       if (requiresDoubleEscapeInterrupt(baseline.agentType, intent)) {

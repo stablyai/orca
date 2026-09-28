@@ -39,7 +39,7 @@ export function installInterruptInputIntent(session: ConnectPanePtySession): voi
     getStatusEntry: () => useAppStore.getState().agentStatusByPaneKey[session.cacheKey],
     inferInterrupt: (request) => {
       // Why: the explicit hook row is the authority for an in-flight agent turn.
-      // Codex can reset its terminal title while handling Ctrl+C/Escape, so title
+      // A TUI can reset its terminal title while handling Ctrl+C/Escape, so title
       // state must not veto clearing the row's working state.
       return window.api.agentStatus
         .inferInterrupt(request)

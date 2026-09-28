@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer, _internals } from './server'
 import { buildBody, postHookEvent, PANE } from './server.test-fixtures'
+import { normalizeHookPayload } from '../../shared/agent-hook-listener'
+import { createHookListenerState } from '../../shared/agent-hook-listener/listener-state'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
   getCohortAtEmitMock: vi.fn(),
@@ -44,20 +46,6 @@ describe('main agent turn verdicts and clocks', () => {
     expect(response.status).toBe(204)
   }
 
-  function inferCtrlC(agentType: 'codex'): void {
-    const baseline = server.getStatusSnapshot()[0]
-    expect(
-      server.inferInterrupt({
-        paneKey: PANE,
-        baselineUpdatedAt: baseline.receivedAt,
-        baselineStateStartedAt: baseline.stateStartedAt,
-        baselinePrompt: baseline.prompt,
-        baselineAgentType: agentType,
-        intent: 'ctrl-c'
-      })
-    ).toBe(true)
-  }
-
   it('starts a new Claude session with its own main agent clock', async () => {
     await post('/hook/claude', { hook_event_name: 'UserPromptSubmit', prompt: 'first' })
     await post('/hook/claude', { hook_event_name: 'Stop' })
@@ -97,60 +85,100 @@ describe('main agent turn verdicts and clocks', () => {
     }
   )
 
-  it('keeps an inferred Codex cancellation across a late root Stop', async () => {
-    await post('/hook/codex', { hook_event_name: 'UserPromptSubmit', prompt: 'long task' })
+  it("keeps Codex's own cancellation across a late root Stop for the same turn", async () => {
+    await post('/hook/codex', {
+      hook_event_name: 'UserPromptSubmit',
+      prompt: 'long task',
+      turn_id: 'turn-1'
+    })
     vi.setSystemTime(1_001_000)
-    inferCtrlC('codex')
+    await post('/hook/codex', { hook_event_name: 'Interrupt', turn_id: 'turn-1' })
     const cancelled = server.getStatusSnapshot()[0]?.mainAgent
     expect(cancelled).toMatchObject({ state: 'done', outcome: 'cancellation' })
 
     vi.setSystemTime(1_002_000)
-    await post('/hook/codex', { hook_event_name: 'Stop' })
+    await post('/hook/codex', { hook_event_name: 'Stop', turn_id: 'turn-1' })
     // Readers that predate `mainAgent` must still read the restated turn as stopped, not finished.
-    expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'done', interrupted: true })
-    // Past the late-event suppression window, a child's activity republishes the main agent.
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      state: 'done',
+      interrupted: true,
+      mainAgent: cancelled
+    })
     vi.setSystemTime(1_060_000)
     await post('/hook/codex', { hook_event_name: 'SubagentStart', agent_id: 'child-1' })
 
     expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'working', mainAgent: cancelled })
   })
 
-  it('keeps an inferred Codex cancellation across a late relayed root Stop', () => {
-    const relayed = (
-      hookEventName: string,
-      payload: Record<string, unknown>,
-      extra: Record<string, unknown> = {}
-    ) =>
+  it('reads a Codex hook for another turn as working again right after a cancel', async () => {
+    await post('/hook/codex', {
+      hook_event_name: 'UserPromptSubmit',
+      prompt: 'long task',
+      turn_id: 'turn-1'
+    })
+    await post('/hook/codex', { hook_event_name: 'Interrupt', turn_id: 'turn-1' })
+    expect(server.getStatusSnapshot()[0]?.mainAgent).toMatchObject({ outcome: 'cancellation' })
+
+    // Codex starts this turn itself: no prompt, and within any late-event window.
+    vi.setSystemTime(1_001_000)
+    await post('/hook/codex', {
+      hook_event_name: 'PreToolUse',
+      turn_id: 'turn-2',
+      tool_name: 'Bash'
+    })
+
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      state: 'working',
+      mainAgent: { state: 'working', stateStartedAt: 1_001_000 }
+    })
+  })
+
+  it("keeps a relayed Codex cancellation the relay's own listener decided", () => {
+    // The relay runs the same listener on the raw hooks and forwards what it publishes.
+    const relayState = createHookListenerState()
+    const relayed = (hook: Record<string, unknown>): void => {
+      const event = normalizeHookPayload(
+        relayState,
+        'codex',
+        { paneKey: PANE, payload: { prompt: 'long task', ...hook } },
+        'production'
+      )
+      if (!event) {
+        throw new Error('the relay published nothing')
+      }
       server.ingestRemote(
         {
           paneKey: PANE,
           tabId: 'tab-1',
           worktreeId: 'wt-1',
-          hookEventName,
-          ...extra,
-          payload: { prompt: 'long task', agentType: 'codex', ...payload }
+          hookEventName: event.hookEventName,
+          ...(event.toolAgentId ? { toolAgentId: event.toolAgentId } : {}),
+          payload: event.payload
         },
         'conn-1'
       )
-    relayed('UserPromptSubmit', { state: 'working' }, { hasExplicitPrompt: true })
+    }
+    relayed({ hook_event_name: 'UserPromptSubmit', turn_id: 'turn-1' })
+    relayed({ hook_event_name: 'SubagentStart', agent_id: 'child-1' })
     vi.setSystemTime(1_001_000)
-    inferCtrlC('codex')
+    relayed({ hook_event_name: 'Interrupt', turn_id: 'turn-1' })
     const cancelled = server.getStatusSnapshot()[0]?.mainAgent
-    expect(cancelled).toMatchObject({ state: 'done', outcome: 'cancellation' })
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      state: 'working',
+      mainAgent: { state: 'done', outcome: 'cancellation' }
+    })
 
     vi.setSystemTime(1_002_000)
-    relayed('Stop', { state: 'done' })
-    expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'done', interrupted: true })
-    vi.setSystemTime(1_060_000)
-    relayed(
-      'SubagentStart',
-      {
-        state: 'working',
-        subagents: [{ id: 'child-1', state: 'working', startedAt: 1_060_000 }]
-      },
-      { toolAgentId: 'child-1' }
-    )
-
+    // A root hook the cancel overtook restates the cancelled turn; it must not revive it.
+    relayed({ hook_event_name: 'PostToolUse', turn_id: 'turn-1', tool_name: 'Bash' })
+    relayed({ hook_event_name: 'PreToolUse', agent_id: 'child-1', tool_name: 'Bash' })
     expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'working', mainAgent: cancelled })
+
+    relayed({ hook_event_name: 'SubagentStop', agent_id: 'child-1' })
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      state: 'done',
+      interrupted: true,
+      mainAgent: cancelled
+    })
   })
 })

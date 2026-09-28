@@ -27,13 +27,11 @@ afterEach(() => {
 })
 
 describe('AgentHookServer listener replay', () => {
-  it('keeps Codex lead state terminal after an inferred interrupt', () => {
+  it('never infers a Codex cancel from a keypress, and keeps the one Codex reports terminal', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
     try {
       const server = new AgentHookServer()
-      const listener = vi.fn()
-      server.setListener(listener)
       server.ingestRemote(
         {
           paneKey: PANE,
@@ -53,35 +51,42 @@ describe('AgentHookServer listener replay', () => {
       const baseline = server.getStatusSnapshot()[0]
 
       vi.setSystemTime(1_500)
-      const applied = server.inferInterrupt({
-        paneKey: PANE,
-        baselineUpdatedAt: baseline.receivedAt,
-        baselineStateStartedAt: baseline.stateStartedAt,
-        baselinePrompt: 'long task',
-        baselineAgentType: 'codex',
-        intent: 'plain-escape'
-      })
+      // Why: re-checked on the server, so a stale renderer or direct request cannot synthesize one.
+      for (const intent of ['ctrl-c', 'plain-escape'] as const) {
+        expect(
+          server.inferInterrupt({
+            paneKey: PANE,
+            baselineUpdatedAt: baseline.receivedAt,
+            baselineStateStartedAt: baseline.stateStartedAt,
+            baselinePrompt: 'long task',
+            baselineAgentType: 'codex',
+            intent
+          })
+        ).toBe(false)
+      }
+      expect(server.getStatusSnapshot()[0]).toEqual(baseline)
 
-      expect(applied).toBe(true)
-      expect(server.getStatusSnapshot()).toEqual([
-        expect.objectContaining({
+      server.ingestRemote(
+        {
           paneKey: PANE,
-          state: 'done',
-          prompt: 'long task',
-          agentType: 'codex',
-          providerSession: { key: 'session_id', id: 'codex-interrupt-session-1' },
-          interrupted: true,
-          receivedAt: 1_500,
-          stateStartedAt: 1_500
-        })
-      ])
-      expect(listener).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          paneKey: PANE,
-          providerSession: { key: 'session_id', id: 'codex-interrupt-session-1' },
-          payload: expect.objectContaining({ state: 'done', interrupted: true })
-        })
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          hookEventName: 'Interrupt',
+          payload: {
+            state: 'done',
+            prompt: 'long task',
+            agentType: 'codex',
+            interrupted: true,
+            mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: 1_500 }
+          }
+        },
+        'conn-1'
       )
+      expect(server.getStatusSnapshot()[0]).toMatchObject({
+        state: 'done',
+        interrupted: true,
+        mainAgent: { state: 'done', outcome: 'cancellation' }
+      })
 
       vi.setSystemTime(17_000)
       server.ingestRemote(
@@ -98,8 +103,10 @@ describe('AgentHookServer listener replay', () => {
 
       expect(server.getStatusSnapshot()[0]).toMatchObject({
         state: 'done',
+        interrupted: true,
         model: 'gpt-5.6-sol',
-        prompt: 'long task'
+        prompt: 'long task',
+        mainAgent: { state: 'done', outcome: 'cancellation' }
       })
     } finally {
       vi.useRealTimers()
@@ -680,7 +687,7 @@ describe('AgentHookServer listener replay', () => {
           paneKey: PANE,
           tabId: 'tab-1',
           worktreeId: 'wt-1',
-          payload: { state: 'working', prompt: 'first task', agentType: 'codex' }
+          payload: { state: 'working', prompt: 'first task', agentType: 'custom-agent' }
         },
         'conn-1'
       )
@@ -690,7 +697,7 @@ describe('AgentHookServer listener replay', () => {
           paneKey: PANE,
           tabId: 'tab-1',
           worktreeId: 'wt-1',
-          payload: { state: 'working', prompt: 'second task', agentType: 'codex' }
+          payload: { state: 'working', prompt: 'second task', agentType: 'custom-agent' }
         },
         'conn-1'
       )
@@ -709,7 +716,7 @@ describe('AgentHookServer listener replay', () => {
         expect.objectContaining({
           state: 'working',
           prompt: 'second task',
-          agentType: 'codex'
+          agentType: 'custom-agent'
         })
       ])
     } finally {

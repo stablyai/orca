@@ -215,6 +215,8 @@ export abstract class AgentHookServerState {
   protected abstract clearAssistantMessageRetry(paneKey: string): void
   protected abstract clearTranscriptPoll(paneKey: string): void
   protected abstract clearAllTranscriptPolls(): void
+  protected abstract syncCodexRolloutWatch(paneKey: string): void
+  protected abstract armCodexRolloutWatch(paneKey: string): void
   protected abstract scheduleTranscriptPoll(
     source: AgentHookSource,
     body: unknown,

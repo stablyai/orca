@@ -37,7 +37,8 @@ const managedEvents = [
   'PostToolUse',
   'SubagentStart',
   'SubagentStop',
-  'Stop'
+  'Stop',
+  'Interrupt'
 ] as const
 
 let tempRoots: string[] = []

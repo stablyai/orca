@@ -156,7 +156,7 @@ describe('connectPanePty', () => {
       prompt: 'stop this task',
       updatedAt: 1_000,
       stateStartedAt: 900,
-      agentType: 'codex',
+      agentType: 'gemini',
       paneKey,
       terminalTitle: 'Codex',
       stateHistory: []
@@ -207,7 +207,7 @@ describe('connectPanePty', () => {
       baselineUpdatedAt: 1_000,
       baselineStateStartedAt: 900,
       baselinePrompt: 'stop this task',
-      baselineAgentType: 'codex',
+      baselineAgentType: 'gemini',
       intent: 'ctrl-c'
     })
   })
@@ -231,7 +231,7 @@ describe('connectPanePty', () => {
       prompt: 'stop visible spinner',
       updatedAt: 1_000,
       stateStartedAt: 900,
-      agentType: 'codex',
+      agentType: 'gemini',
       paneKey,
       terminalTitle: 'Codex working',
       stateHistory: []
@@ -382,7 +382,7 @@ describe('connectPanePty', () => {
       prompt: 'stop from real terminal byte',
       updatedAt: 1_000,
       stateStartedAt: 900,
-      agentType: 'codex',
+      agentType: 'gemini',
       paneKey,
       terminalTitle: 'Codex working',
       stateHistory: []
@@ -408,7 +408,7 @@ describe('connectPanePty', () => {
       baselineUpdatedAt: 1_000,
       baselineStateStartedAt: 900,
       baselinePrompt: 'stop from real terminal byte',
-      baselineAgentType: 'codex',
+      baselineAgentType: 'gemini',
       intent: 'ctrl-c'
     })
   })
@@ -454,7 +454,7 @@ describe('connectPanePty', () => {
       prompt: 'stop enhanced keyboard input',
       updatedAt: 1_000,
       stateStartedAt: 900,
-      agentType: 'codex',
+      agentType: 'gemini',
       paneKey,
       terminalTitle: 'Codex working',
       stateHistory: []
@@ -484,7 +484,7 @@ describe('connectPanePty', () => {
       baselineUpdatedAt: 1_000,
       baselineStateStartedAt: 900,
       baselinePrompt: 'stop enhanced keyboard input',
-      baselineAgentType: 'codex',
+      baselineAgentType: 'gemini',
       intent: 'ctrl-c'
     })
   })
@@ -506,7 +506,7 @@ describe('connectPanePty', () => {
       prompt: 'stop after process exit',
       updatedAt: 1_000,
       stateStartedAt: 900,
-      agentType: 'codex',
+      agentType: 'gemini',
       paneKey,
       terminalTitle: 'Codex working',
       stateHistory: []
@@ -540,7 +540,7 @@ describe('connectPanePty', () => {
       baselineUpdatedAt: 1_000,
       baselineStateStartedAt: 900,
       baselinePrompt: 'stop after process exit',
-      baselineAgentType: 'codex',
+      baselineAgentType: 'gemini',
       intent: 'ctrl-c'
     })
     expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
@@ -563,7 +563,7 @@ describe('connectPanePty', () => {
       prompt: 'stop and leave shell',
       updatedAt: 1_000,
       stateStartedAt: 900,
-      agentType: 'codex',
+      agentType: 'gemini',
       paneKey,
       terminalTitle: 'Codex working',
       stateHistory: []
@@ -575,7 +575,7 @@ describe('connectPanePty', () => {
         interrupted: true,
         updatedAt: 1_100,
         stateStartedAt: 1_100,
-        agentType: 'codex',
+        agentType: 'gemini',
         paneKey,
         terminalTitle: 'Terminal 1'
       }
@@ -632,7 +632,7 @@ describe('connectPanePty', () => {
       prompt: 'ssh style write',
       updatedAt: 1_000,
       stateStartedAt: 900,
-      agentType: 'codex',
+      agentType: 'gemini',
       paneKey,
       terminalTitle: 'Codex working',
       stateHistory: []
@@ -674,7 +674,7 @@ describe('connectPanePty', () => {
       prompt: 'stop then exit',
       updatedAt: 1_000,
       stateStartedAt: 900,
-      agentType: 'codex',
+      agentType: 'gemini',
       paneKey,
       terminalTitle: 'Codex working',
       stateHistory: []
@@ -723,7 +723,7 @@ describe('connectPanePty', () => {
       prompt: 'keep running',
       updatedAt: 1_000,
       stateStartedAt: 900,
-      agentType: 'codex',
+      agentType: 'gemini',
       paneKey,
       terminalTitle: 'Codex',
       stateHistory: []
@@ -778,7 +778,7 @@ describe('connectPanePty', () => {
       prompt: 'copy selection',
       updatedAt: 1_000,
       stateStartedAt: 900,
-      agentType: 'codex',
+      agentType: 'gemini',
       paneKey,
       terminalTitle: 'Codex',
       stateHistory: []

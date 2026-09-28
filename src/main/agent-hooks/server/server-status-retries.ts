@@ -9,11 +9,12 @@ import {
   transcriptPollUpdate
 } from '../../../shared/agent-hook-listener/transcript-poll-policy'
 import { CodexSubagentPollScheduler } from '../../../shared/codex-subagent-poll-scheduler'
+import { CodexRolloutWatch } from '../../../shared/agent-hook-listener/codex-rollout-watch'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import {
   ASSISTANT_MESSAGE_RETRY_ATTEMPTS,
   ASSISTANT_MESSAGE_RETRY_MS,
-  CODEX_SUBAGENT_POLL_MS
+  TRANSCRIPT_POLL_MS
 } from './server-constants'
 import { AgentHookServerStatusUpdate } from './server-status-update'
 
@@ -25,12 +26,20 @@ type TranscriptPoll = {
 
 export abstract class AgentHookServerStatusRetries extends AgentHookServerStatusUpdate {
   private readonly transcriptPollScheduler = new CodexSubagentPollScheduler<TranscriptPoll>(
-    CODEX_SUBAGENT_POLL_MS,
+    TRANSCRIPT_POLL_MS,
     (paneKey, poll) => this.runTranscriptPoll(paneKey, poll)
   )
+  private readonly codexRolloutWatch = new CodexRolloutWatch({
+    state: this.state,
+    isListening: () => this.server !== null,
+    publish: (observation) => {
+      this.applyNormalizedStatus(observation)
+    }
+  })
 
   protected clearAllTranscriptPolls(): void {
     this.transcriptPollScheduler.clearAll()
+    this.codexRolloutWatch.clearAll()
   }
 
   protected clearAssistantMessageRetry(paneKey: string): void {
@@ -44,6 +53,15 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
 
   protected clearTranscriptPoll(paneKey: string): void {
     this.transcriptPollScheduler.clear(paneKey)
+    this.codexRolloutWatch.clear(paneKey)
+  }
+
+  protected syncCodexRolloutWatch(paneKey: string): void {
+    this.codexRolloutWatch.sync(paneKey)
+  }
+
+  protected armCodexRolloutWatch(paneKey: string): void {
+    this.codexRolloutWatch.arm(paneKey)
   }
 
   protected scheduleTranscriptPoll(
@@ -51,8 +69,12 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     body: unknown,
     original: EnrichedAgentHookEventPayload
   ): void {
+    if (source === 'codex') {
+      this.codexRolloutWatch.sync(original.paneKey)
+      return
+    }
     // Why: a nested CLI of another kind inherits ORCA_PANE_KEY, so clearing here would silently end a live poll.
-    if (source !== 'codex' && source !== 'muse') {
+    if (source !== 'muse') {
       return
     }
     this.transcriptPollScheduler.clear(original.paneKey)
@@ -77,7 +99,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     if (!normalized) {
       return
     }
-    const update = transcriptPollUpdate(source, original, normalized)
+    const update = transcriptPollUpdate(original, normalized)
     const next = update ? this.applyNormalizedStatus(update) : original
     if (next) {
       this.scheduleTranscriptPoll(source, body, next)

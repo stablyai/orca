@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { computeTrustedHash, type CodexTrustEntry } from './config-toml-trust'
 
@@ -205,5 +206,32 @@ describe('computeTrustedHash', () => {
     })
     expect(zero).toBe(one)
     expect(zero).not.toBe(unset)
+  })
+
+  // Why: Codex runs Interrupt with a 1s default capped at 3s and hashes the timeout it will run,
+  // so a declared 10 must hash like 3 or the hook reads as modified and never fires.
+  it('hashes an Interrupt hook with the timeout Codex clamps it to', () => {
+    const interrupt = (overrides: Partial<CodexTrustEntry>): string =>
+      computeTrustedHash({
+        sourcePath: '/x/hooks.json',
+        eventLabel: 'interrupt',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: 'foo',
+        ...overrides
+      })
+    const canonical = (timeout: number): string =>
+      `sha256:${createHash('sha256')
+        .update(
+          JSON.stringify({
+            event_name: 'interrupt',
+            hooks: [{ async: false, command: 'foo', timeout, type: 'command' }]
+          })
+        )
+        .digest('hex')}`
+    expect(interrupt({ timeoutSec: 3 })).toBe(canonical(3))
+    expect(interrupt({ timeoutSec: 10 })).toBe(canonical(3))
+    expect(interrupt({})).toBe(canonical(1))
+    expect(interrupt({ timeoutSec: 3, matcher: 'anything' })).toBe(canonical(3))
   })
 })

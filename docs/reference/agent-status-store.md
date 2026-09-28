@@ -215,8 +215,8 @@ works (including a child's permission wait) refuses OSC, which carries no child
 identity; the children's own lifecycle hooks settle it. `outcome` is the recorded verdict on
 the main agent's most recent finished turn, present only while `mainAgent.state` is
 `done`. It is reported by the provider, or is a `cancellation` Orca inferred
-from the user's own interrupt keystroke (the journal's turn outcome, by
-contrast, is never inferred). A plain end of turn carries none, because absent
+from the user's own interrupt keystroke for a provider that reports none (the
+journal's turn outcome, by contrast, is never inferred). A plain end of turn carries none, because absent
 means unknown and a provider that omits its interrupt flag must not turn a
 cancel into a success.
 In the Claude hook lane the cancellation comes primarily from Orca's own
@@ -224,6 +224,41 @@ inferred interrupt (`markClaudeLeadTurnInterrupted`), because current Claude
 sends no hook at all on a cancel and no `is_interrupt` on Stop; that flag on a
 turn boundary remains a secondary source for builds that send it, and
 `StopFailure` maps to `failure`.
+In the Codex hook lane the cancellation is Codex's own report, never a
+keystroke: its `Interrupt` hook, which fires for the main agent on every real
+cancel (Ctrl+C, Esc, the shared-server chooser's "Cancel task" and "Exit", a
+cancelled approval prompt) and on nothing else. A Codex key proves nothing on
+its own: Ctrl+C with a draft only clears the draft, Esc with a popup open only
+closes it, and in shared-server mode Ctrl+C opens a chooser whose "Run in
+background" cancels nothing (captured in
+`src/shared/__fixtures__/codex-interrupt-hooks.jsonl`), so the renderer and the
+server's re-check both refuse a Codex keypress inference
+(`isInconclusiveInterruptIntent`). Codex writes `turn_aborted` (or
+`task_complete`) to its rollout right after it runs the Interrupt (or Stop)
+hook, whether or not the hook was delivered, and it kills a slow Interrupt hook
+at 3 seconds, so the execution host (main for a local pane, the relay for an SSH
+one) also reads the pane's parent rollout. Every Codex event catches up on it
+first, and the Codex rollout watch (`codex-rollout-watch.ts`) reads it once a
+second while the main agent's turn is open (by its own record or the rollout's)
+or any child runs. The watch reads; it never replays a hook body.
+It rebuilds the row from the current records and publishes it with no hook name
+or explicit prompt, so it restates the row rather than starting a turn, and its
+life follows the pane's records, not the identity of the row it last published.
+The rollout's turns are tracked by id: the open turn, plus a bounded window of
+ended turns with how each ended. Every `turn_aborted` is a cancellation,
+whatever its reason (`interrupted`, `replaced`, `review_ended`, `budget_limited`,
+or none), because Codex's own app-server reports every aborted turn as
+interrupted. This settles the turn when its hook was lost or never registered
+(Codex before 0.150). The same reads cover the children: every child in the
+roster, whether a hook or the parent rollout announced it, is also read from its
+own rollout (the path its own hooks name, else the file named by its thread id
+in its start date's folder), and it leaves the row on its own `SubagentStop`,
+once that rollout records its turn's end (Codex aborts a child without a
+`SubagentStop`), once that rollout stays unreadable for a minute, or when a new
+session starts in the pane. The main agent's `Stop` or `Interrupt` never drops a
+child. A child's event on a pane with no record of the main agent (its records
+were cleared, or a relay restarted) invents none: the children alone drive the
+row.
 
 Readers decode the verdict through one accessor, `agentMainAgentVerdict`, which
 reads the main agent's own state, not the combined row's: `mainAgent.outcome`
@@ -284,9 +319,6 @@ reader does not mistake them for drift:
   first.
 - The structured lane has no per-child wait: a child's pending prompt makes
   the session `attention`, which reads as the main agent's own `blocked`.
-- The Codex hook lane drops its roster on a root `Stop` when it tracks no
-  child transcripts, so a still-running or still-asking child stops holding
-  the row.
 
 How the main agent's turn ended is not a fold input. A cancel is a verdict on
 the main agent, carried as `mainAgent.outcome: 'cancellation'` (and, for
@@ -299,12 +331,12 @@ session ends, so a cancelled turn with a still-running shell reads
 them. The same rule governs the cancel Orca infers from Ctrl+C: for any row
 that publishes `mainAgent`, the inference is admitted only when
 `mainAgent.state` is `working`, so Orca does not treat a Ctrl+C at the idle
-prompt of a row held open by child work as a turn cancel (Codex also keeps the
-child-evidence guard, and a row without `mainAgent` keeps only that guard).
+prompt of a row held open by child work as a turn cancel (a row without
+`mainAgent` keeps only the child-evidence guard).
 The keypress itself is not inert, though: measured live, Claude 2.1.280 stops
-its background subagents on a single idle-prompt Ctrl+C (shells survive) and
-Codex 0.156.1 quits outright, so refusing the inference can leave the row
-showing a subagent its CLI already stopped. The synthesized row is the fold
+its background subagents on a single idle-prompt Ctrl+C (shells survive), so
+refusing the inference can leave the row showing a subagent its CLI already
+stopped. The synthesized row is the fold
 of the cancelled main agent with the child work the pane's owner can see: the
 local listener's roster for a local pane, the row's own subagents and shell fact
 for a relayed one, whose provider records live on the relay.
@@ -317,6 +349,32 @@ dies on a new turn (a main agent prompt submission, a changed or explicit
 prompt, a session start) or the provider's own settled `mainAgent`. Child and
 replayed events under the hold keep the cancelled main agent and are re-folded
 with their own child evidence.
+
+Codex rows bypass that hold, because Codex names the turn every fact belongs
+to. The Codex main agent record carries Codex's `turn_id` (on every root hook
+but `SessionStart`, and on the rollout's turn markers), and a turn ends once:
+after Interrupt for turn X, or once the rollout records X ended, a later
+fact for X (a hook the cancel overtook, a Stop racing the Interrupt) restates
+it and changes nothing, and so does a late hook for any turn the rollout already
+ended, while a root hook for any other turn is Codex working again, including a
+turn Codex starts without a prompt. Stop alone does not end X for good: a Stop
+hook that blocks makes Codex continue the same turn, so a later root hook for X
+reads working again. A root hook with no turn id (`SessionStart`, or a Codex
+build that omits it) belongs to the turn the rollout shows open, and a running
+record with no id adopts the rollout's latest turn once the rollout shows it
+open or started since the last read. `SessionStart` with
+source `compact` fires mid-turn in the same session and rollout, so it keeps
+the roster, the rollout state and the turn; only a real session start
+(startup, resume, clear, fork) drops them, and a changed rollout path resets
+the rollout state on its own. The record lives only on the execution host's
+listener and is not persisted: hydration seeds it from the row's `mainAgent`
+without a turn id, then reads the row's saved rollout (`providerSession.transcriptPath`)
+once (its last 1 MiB, like any fresh read); that read adopts the rollout's latest turn whatever became
+of it, so a turn that ended while Orca was down settles on the watch's first tick. For a
+relayed pane the relay applies that rule to the raw hooks and its own rollout;
+main mirrors the relay's `mainAgent` and, for the relay's rollout observations
+(source `codex`, no hook name), its whole roster, and keeps its copy only to
+fill a child event a restarted relay publishes without one.
 
 ## PR 1b: the runtime's retained row store is deleted
 

@@ -1,0 +1,74 @@
+{
+  "source_scenario": "codex-interrupt-hook",
+  "runs": [
+    {
+      "run": "run-a-0.156.1",
+      "codex_version": "codex-cli 0.156.1",
+      "app_server": "embedded",
+      "argv": ["codex", "-m", "gpt-5.5", "--dangerously-bypass-approvals-and-sandbox"]
+    },
+    {
+      "run": "run-b-0.156.1",
+      "codex_version": "codex-cli 0.156.1",
+      "app_server": "embedded",
+      "argv": ["codex", "-m", "gpt-5.5", "--dangerously-bypass-approvals-and-sandbox"]
+    },
+    {
+      "run": "run-c-0.156.1",
+      "codex_version": "codex-cli 0.156.1",
+      "app_server": "embedded",
+      "argv": ["codex", "-m", "gpt-5.5", "--dangerously-bypass-approvals-and-sandbox"]
+    },
+    {
+      "run": "run-d-0.156.1",
+      "codex_version": "codex-cli 0.156.1",
+      "app_server": "embedded",
+      "argv": ["codex", "-m", "gpt-5.5", "--dangerously-bypass-approvals-and-sandbox"]
+    },
+    {
+      "run": "run-s9-0.156.1",
+      "codex_version": "codex-cli 0.156.1",
+      "app_server": "embedded",
+      "argv": ["codex", "-m", "gpt-5.5", "-p", "approvals", "-s", "read-only"]
+    },
+    {
+      "run": "run-s1-0.157.0",
+      "codex_version": "codex-cli 0.157.0",
+      "app_server": "shared background server",
+      "argv": ["codex", "-m", "gpt-5.5", "--dangerously-bypass-approvals-and-sandbox"]
+    },
+    {
+      "run": "run-esc-0.157.0",
+      "codex_version": "codex-cli 0.157.0",
+      "app_server": "shared background server",
+      "argv": ["codex", "-m", "gpt-5.5", "--dangerously-bypass-approvals-and-sandbox"]
+    },
+    {
+      "run": "run-d-0.157.0",
+      "codex_version": "codex-cli 0.157.0",
+      "app_server": "shared background server",
+      "argv": ["codex", "-m", "gpt-5.5", "--dangerously-bypass-approvals-and-sandbox"]
+    },
+    {
+      "run": "run-d3bg-0.157.0",
+      "codex_version": "codex-cli 0.157.0",
+      "app_server": "shared background server",
+      "argv": ["codex", "-m", "gpt-5.5", "--dangerously-bypass-approvals-and-sandbox"],
+      "note": "The driver labelled this key 'D4 Enter on Exit', but one Down highlights '2. Run in background': this is the Run in background capture (run-exit-0.157.0 is Exit)."
+    },
+    {
+      "run": "run-exit-0.157.0",
+      "codex_version": "codex-cli 0.157.0",
+      "app_server": "shared background server",
+      "argv": ["codex", "-m", "gpt-5.5", "--dangerously-bypass-approvals-and-sandbox"]
+    }
+  ],
+  "model": "gpt-5.5",
+  "platform": "darwin",
+  "cols": 120,
+  "rows": 40,
+  "recorded_at": "2026-09-25",
+  "clock": "t is seconds since that run's driver started",
+  "hook_registration": "Interrupt registered in hooks.json with the same managed command as the other Codex events, timeout 3, trusted via [hooks.state] trusted_hash",
+  "note": "Real Codex TUI in a PTY; real keystrokes; the managed codex-hook.sh posted every hook to a local stand-in for Orca's hook ingress. Interrupt registered like Orca's other Codex events (timeout 3) and trusted. 0.156.1 runs are embedded: Ctrl+C/Esc mid-turn interrupt directly and fire Interrupt for the main session only; the subagent keeps running and fires its SubagentStop later; no main hook follows Interrupt; Ctrl+C that clears a draft, Esc that closes the slash popup, idle Ctrl+C and natural completion fire no Interrupt. 0.157.0 runs use the shared background server: Ctrl+C mid-turn opens a 'Task is still running' chooser (screen records) and Interrupt fires only after Enter on 'Cancel task' or 'Exit'; 'Run in background' fires none; Esc interrupts directly. In run-d-0.157.0 the Esc cancel's Interrupt hook timed out (3s cap) and was never delivered although the turn was aborted. Scrubbed: username, session/turn/agent ids, tool call ids replaced by same-length placeholders."
+}
