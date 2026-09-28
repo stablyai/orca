@@ -183,12 +183,12 @@ export function useChecksPanelAiQueue(model: ChecksPanelAiQueueInput) {
         description:
           githubTarget && activeReview.provider === 'github'
             ? translate(
-                'auto.components.right.sidebar.ChecksPanel.5eb2163b6b',
-                'Review the prompt before starting an agent. After the prompt is delivered, Orca resolves the selected host threads and replies to comments it cannot resolve.'
+                'auto.components.right.sidebar.ChecksPanel.4fb38a23bd',
+                'Review the prompt before sending it to an agent. After the prompt is delivered, Orca resolves the selected host threads and replies to comments it cannot resolve.'
               )
             : translate(
-                'auto.components.right.sidebar.ChecksPanel.abf59262fb',
-                'Review and edit the full command input before starting an agent.'
+                'auto.components.right.sidebar.ChecksPanel.564203239a',
+                'Review the prompt before sending it to an agent.'
               ),
         prompt: buildPRCommentsResolutionPrompt({
           reviewKind: activeReview.provider === 'gitlab' ? 'MR' : 'PR',

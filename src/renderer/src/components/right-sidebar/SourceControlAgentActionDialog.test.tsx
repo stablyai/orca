@@ -296,6 +296,82 @@ describe('SourceControlAgentActionDialog', () => {
     expect(container.textContent).toContain('Launch agent')
     expect(container.textContent).toContain('Save & start agent')
   })
+  it('offers a running agent only when the caller opts in', async () => {
+    resetStore(
+      settingsWithGlobalRecipe({ agentId: 'claude', commandInputTemplate: '{basePrompt}' })
+    )
+    renderControlledDialog({ worktreeId: 'wt-1', connectionId: null })
+    await vi.waitFor(() => expect(mocks.ensureDetectedAgents).toHaveBeenCalledTimes(1))
+    await flushEffects()
+    expect(container.textContent).not.toContain('Send to running agent')
+
+    renderControlledDialog({
+      worktreeId: 'wt-1',
+      connectionId: null,
+      allowExistingAgentSession: true
+    })
+    await flushEffects()
+    expect(container.textContent).toContain('Send to running agent')
+    expect(container.textContent).toContain('Save & start agent')
+    expect(mocks.onStart).not.toHaveBeenCalled()
+  })
+  it('disables the running-agent option while the workspace connection is unresolved', async () => {
+    resetStore(
+      settingsWithGlobalRecipe({ agentId: 'claude', commandInputTemplate: '{basePrompt}' })
+    )
+    renderControlledDialog({
+      worktreeId: 'wt-1',
+      connectionId: undefined,
+      allowExistingAgentSession: true
+    })
+    await flushEffects()
+
+    const trigger = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Send to running agent')
+    )
+    expect(trigger?.disabled).toBe(true)
+    expect(mocks.ensureDetectedAgents).not.toHaveBeenCalled()
+  })
+  it('keeps the matching saved recipe prefilled instead of auto-starting when a running agent is offered', async () => {
+    renderControlledDialog({
+      worktreeId: 'wt-1',
+      connectionId: null,
+      allowExistingAgentSession: true
+    })
+    await vi.waitFor(() => expect(mocks.ensureDetectedAgents).toHaveBeenCalledTimes(1))
+    await flushEffects()
+
+    expect(container.textContent).toContain('Launch agent')
+    expect(container.textContent).toContain('Send to running agent')
+    expect(container.querySelector('[data-agent-value]')?.getAttribute('data-agent-value')).toBe(
+      'codex'
+    )
+    expect(mocks.onStart).not.toHaveBeenCalled()
+    expect(mocks.onOpenChange).not.toHaveBeenCalledWith(false)
+
+    const startButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Start agent'
+    )
+    expect(startButton?.disabled).toBe(false)
+    act(() => {
+      startButton?.click()
+    })
+    await vi.waitFor(() => expect(mocks.onStart).toHaveBeenCalledTimes(1))
+    expect(mocks.onStart).toHaveBeenCalledWith({
+      agent: 'codex',
+      commandInput: 'Resolve conflicts.',
+      agentArgs: ''
+    })
+    await vi.waitFor(() => expect(mocks.onLaunched).toHaveBeenCalledTimes(1))
+    expect(mocks.onSaveAgentDefault).not.toHaveBeenCalled()
+  })
+  it('still auto-starts a matching saved recipe when no running agent is offered', async () => {
+    renderControlledDialog({ worktreeId: 'wt-1', connectionId: null })
+    expect(container.textContent).not.toContain('Launch agent')
+    await vi.waitFor(() => expect(mocks.onStart).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(mocks.onOpenChange).toHaveBeenCalledWith(false))
+    expect(container.textContent).not.toContain('Send to running agent')
+  })
   it('reveals the form with status copy when the saved agent is unavailable', async () => {
     mocks.ensureDetectedAgents.mockResolvedValue([])
     resetStore(settingsWithGlobalRecipe())

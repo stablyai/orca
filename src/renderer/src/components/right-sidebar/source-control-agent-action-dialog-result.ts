@@ -22,6 +22,9 @@ export type UseSourceControlAgentActionDialogResult = {
   /** False when this launch would be a structured native chat session, which reads no CLI arguments. */
   agentArgsApply: boolean
   commandTemplate: string
+  /** The rendered prompt, trimmed; what either a new or an existing session receives. */
+  trimmedCommandInput: string
+  connectionUnavailable: boolean
   saveLaunchRecipe: boolean
   saveTargetValue: string
   saveTargets: { value: string; label: string }[]

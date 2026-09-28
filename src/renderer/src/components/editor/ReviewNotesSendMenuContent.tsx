@@ -55,6 +55,60 @@ export function ReviewNotesSendMenuContent({
   launchSource?: LaunchSource
   onPromptDelivered?: () => void
 }): React.JSX.Element {
+  return (
+    <>
+      <DropdownMenuLabel>
+        {translate('auto.components.editor.ReviewNotesSendMenuContent.03378aea75', 'Send notes to')}
+      </DropdownMenuLabel>
+      <ExistingAgentSendMenuItems
+        worktreeId={worktreeId}
+        prompt={prompt}
+        launchSource={launchSource}
+        onPromptDelivered={onPromptDelivered}
+      />
+      <DropdownMenuSeparator />
+      <DropdownMenuLabel>
+        {translate('auto.components.editor.ReviewNotesSendMenuContent.a49800405b', 'New agent')}
+      </DropdownMenuLabel>
+      <QuickLaunchAgentMenuItems
+        worktreeId={worktreeId}
+        groupId={groupId}
+        onFocusTerminal={focusTerminalTabSurface}
+        prompt={prompt}
+        promptDelivery={promptDelivery}
+        launchSource={launchSource}
+        onPromptDelivered={onPromptDelivered}
+      />
+    </>
+  )
+}
+
+export type ExistingAgentSendMenuItemsProps = {
+  worktreeId: string
+  prompt: string
+  launchSource?: LaunchSource
+  /** Toast copy for callers whose prompt is not review notes. */
+  toastCopy?: { sending: string; sent: string }
+  /** Shown as a disabled row when the worktree has no running agent. */
+  emptyLabel?: string
+  /** Fires once the revalidated target is about to receive the prompt. */
+  onSendStarted?: () => void
+  onPromptDelivered?: () => void
+  /** Fires when a started send did not deliver; callers keep their queued work for retry. */
+  onSendFailed?: () => void
+}
+
+/** Running agents of a worktree as menu rows that deliver a prompt into the chosen session. */
+export function ExistingAgentSendMenuItems({
+  worktreeId,
+  prompt,
+  launchSource = 'notes_send',
+  toastCopy,
+  emptyLabel,
+  onSendStarted,
+  onPromptDelivered,
+  onSendFailed
+}: ExistingAgentSendMenuItemsProps): React.JSX.Element {
   const hasPrompt = prompt.trim().length > 0
 
   // Why: enumerate every running agent of the worktree so the user can target
@@ -103,10 +157,11 @@ export function ReviewNotesSendMenuContent({
       options: { explicitTarget?: boolean } = {}
     ) => {
       const pending = toast.loading(
-        translate(
-          'auto.components.editor.ReviewNotesSendMenuContent.50f7e753ea',
-          'Sending notes...'
-        )
+        toastCopy?.sending ??
+          translate(
+            'auto.components.editor.ReviewNotesSendMenuContent.50f7e753ea',
+            'Sending notes...'
+          )
       )
 
       void send()
@@ -114,14 +169,16 @@ export function ReviewNotesSendMenuContent({
           if (result.status === 'sent') {
             onSent()
             toast.success(
-              translate(
-                'auto.components.editor.ReviewNotesSendMenuContent.bb9c69a0c9',
-                'Notes sent.'
-              )
+              toastCopy?.sent ??
+                translate(
+                  'auto.components.editor.ReviewNotesSendMenuContent.bb9c69a0c9',
+                  'Notes sent.'
+                )
             )
             return
           }
 
+          onSendFailed?.()
           toast.message(
             activeAgentNotesSendFailureMessage(result.status, {
               explicitTarget: options.explicitTarget,
@@ -130,6 +187,7 @@ export function ReviewNotesSendMenuContent({
           )
         })
         .catch(() => {
+          onSendFailed?.()
           console.error('Failed to send notes:', { code: 'runtime-unverifiable' })
           toast.error(
             activeAgentNotesSendFailureMessage('status-unavailable', {
@@ -142,7 +200,7 @@ export function ReviewNotesSendMenuContent({
           toast.dismiss(pending)
         })
     },
-    []
+    [onSendFailed, toastCopy]
   )
 
   const sendToAgentTarget = useCallback(
@@ -157,6 +215,7 @@ export function ReviewNotesSendMenuContent({
         return
       }
 
+      onSendStarted?.()
       runNotesSend(
         () =>
           sendNotesToActiveAgentSession({
@@ -177,14 +236,15 @@ export function ReviewNotesSendMenuContent({
         { explicitTarget: true }
       )
     },
-    [hasPrompt, runNotesSend, worktreeId, prompt, onPromptDelivered, launchSource]
+    [hasPrompt, runNotesSend, worktreeId, prompt, onSendStarted, onPromptDelivered, launchSource]
   )
+
+  if (orderedSendTargets.length === 0 && emptyLabel) {
+    return <DropdownMenuItem disabled>{emptyLabel}</DropdownMenuItem>
+  }
 
   return (
     <>
-      <DropdownMenuLabel>
-        {translate('auto.components.editor.ReviewNotesSendMenuContent.03378aea75', 'Send notes to')}
-      </DropdownMenuLabel>
       {orderedSendTargets.map(({ target, agent }) => (
         <AgentTargetMenuItem
           key={target.paneKey}
@@ -195,19 +255,6 @@ export function ReviewNotesSendMenuContent({
           onSend={sendToAgentTarget}
         />
       ))}
-      <DropdownMenuSeparator />
-      <DropdownMenuLabel>
-        {translate('auto.components.editor.ReviewNotesSendMenuContent.a49800405b', 'New agent')}
-      </DropdownMenuLabel>
-      <QuickLaunchAgentMenuItems
-        worktreeId={worktreeId}
-        groupId={groupId}
-        onFocusTerminal={focusTerminalTabSurface}
-        prompt={prompt}
-        promptDelivery={promptDelivery}
-        launchSource={launchSource}
-        onPromptDelivered={onPromptDelivered}
-      />
     </>
   )
 }

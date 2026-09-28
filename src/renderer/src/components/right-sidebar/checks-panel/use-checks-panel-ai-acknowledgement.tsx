@@ -225,8 +225,8 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
       if (counts.failed > 0 || repliedNoneDespiteHostSupport || lastHostError) {
         toast.error(
           translate(
-            'auto.components.right.sidebar.ChecksPanel.f273f2271c',
-            'Started the agent. Marked {{value0}} resolved, replied to {{value1}}, skipped {{value2}}, failed {{value3}}.{{value4}}',
+            'auto.components.right.sidebar.ChecksPanel.933fef4e81',
+            'Delivered the prompt. Marked {{value0}} resolved, replied to {{value1}}, skipped {{value2}}, failed {{value3}}.{{value4}}',
             {
               value0: counts.resolved,
               value1: counts.replied,
@@ -240,8 +240,8 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
       }
       toast.success(
         translate(
-          'auto.components.right.sidebar.ChecksPanel.aa95b81a3a',
-          'Started the agent. Marked {{value0}} resolved, replied to {{value1}}, skipped {{value2}}, failed {{value3}}.',
+          'auto.components.right.sidebar.ChecksPanel.459623e327',
+          'Delivered the prompt. Marked {{value0}} resolved, replied to {{value1}}, skipped {{value2}}, failed {{value3}}.',
           {
             value0: counts.resolved,
             value1: counts.replied,
@@ -320,8 +320,8 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
         console.warn('Failed to resolve/reply on selected review comments after AI launch:', err)
         toast.error(
           translate(
-            'auto.components.right.sidebar.ChecksPanel.495b2f8c4b',
-            'Started the agent, but could not resolve or reply on the selected comments.'
+            'auto.components.right.sidebar.ChecksPanel.4fb2bc97a5',
+            'Delivered the prompt, but could not resolve or reply on the selected comments.'
           )
         )
       })
