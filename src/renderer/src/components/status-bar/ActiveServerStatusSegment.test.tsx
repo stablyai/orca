@@ -11,17 +11,20 @@ type TestState = {
   settings: { activeRuntimeEnvironmentId: string | null } | null
   runtimeEnvironments: { id: string; name: string; source?: 'manual' | 'ephemeral-vm' }[]
   setActiveRuntimeEnvironmentPreference: (id: string | null) => Promise<boolean>
+  setVisibleWorkspaceHostIds: (ids: string[]) => void
 }
 
-const { switchServer, pairedWebClient } = vi.hoisted(() => ({
+const { switchServer, setVisibleHosts, pairedWebClient } = vi.hoisted(() => ({
   switchServer: vi.fn<(id: string | null) => Promise<boolean>>(),
+  setVisibleHosts: vi.fn<(ids: string[]) => void>(),
   pairedWebClient: { value: false }
 }))
 
 const store = createStore<TestState>(() => ({
   settings: null,
   runtimeEnvironments: [],
-  setActiveRuntimeEnvironmentPreference: switchServer
+  setActiveRuntimeEnvironmentPreference: switchServer,
+  setVisibleWorkspaceHostIds: setVisibleHosts
 }))
 
 vi.mock('@/store', () => ({
@@ -52,6 +55,7 @@ async function openMenu(): Promise<void> {
 beforeEach(() => {
   pairedWebClient.value = false
   switchServer.mockReset()
+  setVisibleHosts.mockReset()
   switchServer.mockImplementation(async (id) => {
     store.setState({ settings: { activeRuntimeEnvironmentId: id } })
     return true
@@ -89,6 +93,7 @@ describe('ActiveServerStatusSegment', () => {
 
     await waitFor(() => {
       expect(switchServer).toHaveBeenCalledExactlyOnceWith('priv')
+      expect(setVisibleHosts).toHaveBeenCalledExactlyOnceWith(['runtime:priv'])
       expect(screen.getByRole('button').getAttribute('aria-label')).toBe(
         'Active Server: Private server'
       )
@@ -102,6 +107,7 @@ describe('ActiveServerStatusSegment', () => {
 
     await waitFor(() => {
       expect(switchServer).toHaveBeenCalledExactlyOnceWith(null)
+      expect(setVisibleHosts).toHaveBeenCalledExactlyOnceWith(['local'])
       expect(screen.getByRole('button').textContent).toContain('Local desktop')
     })
   })
@@ -112,6 +118,7 @@ describe('ActiveServerStatusSegment', () => {
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'Work server' }))
 
     expect(switchServer).not.toHaveBeenCalled()
+    expect(setVisibleHosts).not.toHaveBeenCalled()
   })
 
   it('keeps the old label until a slow switch finishes and prevents another request', async () => {
@@ -130,6 +137,7 @@ describe('ActiveServerStatusSegment', () => {
     expect(trigger.hasAttribute('disabled')).toBe(true)
     expect(trigger.getAttribute('aria-busy')).toBe('true')
     expect(trigger.textContent).toContain('Work server')
+    expect(setVisibleHosts).not.toHaveBeenCalled()
     fireEvent.keyDown(trigger, { key: 'ArrowDown' })
     expect(switchServer).toHaveBeenCalledTimes(1)
 
@@ -147,6 +155,7 @@ describe('ActiveServerStatusSegment', () => {
 
     await waitFor(() => expect(screen.getByRole('button').hasAttribute('disabled')).toBe(false))
     expect(screen.getByRole('button').textContent).toContain('Work server')
+    expect(setVisibleHosts).not.toHaveBeenCalled()
     await openMenu()
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'Private server' }))
     await waitFor(() => expect(switchServer).toHaveBeenCalledTimes(2))

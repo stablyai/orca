@@ -1,3 +1,6 @@
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 import {
@@ -5,26 +8,52 @@ import {
   launchPairedElectronClient,
   type PairedElectronClient
 } from './helpers/paired-electron-client'
+import { toRuntimeExecutionHostId } from '../../src/shared/execution-host'
+import { runProcess } from '../../src/shared/child-process/run-process'
 
 test('switches the active server from the status bar between two paired hosts and local', async ({
-  orcaPage
+  orcaPage,
+  testRepoPath
 }, testInfo) => {
   test.setTimeout(240_000)
   await waitForSessionReady(orcaPage)
   const workOffer = await createRuntimeDesktopPairingOffer(orcaPage)
   let privateHost: PairedElectronClient | null = null
   let client: PairedElectronClient | null = null
+  const privateRepoPath = realpathSync(
+    mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-private-project-'))
+  )
 
   try {
+    writeFileSync(path.join(privateRepoPath, 'README.md'), 'Private test project\n')
+    for (const args of [
+      ['init'],
+      ['add', 'README.md'],
+      ['-c', 'user.name=E2E', '-c', 'user.email=e2e@example.test', 'commit', '-m', 'Initial commit']
+    ]) {
+      const result = await runProcess({ program: 'git', args, cwd: privateRepoPath })
+      if (result.code !== 0) {
+        throw new Error(`Could not prepare the private test project: ${result.stderr}`)
+      }
+    }
     privateHost = await launchPairedElectronClient(workOffer, testInfo, 'work')
     await privateHost.page.evaluate(async () => {
       if (!(await window.__store?.getState().setActiveRuntimeEnvironmentPreference(null))) {
         throw new Error('Could not prepare the second runtime host')
       }
     })
+    await privateHost.page.evaluate(async (repoPath) => {
+      const result = await window.api.repos.add({ path: repoPath })
+      if ('error' in result) {
+        throw new Error(result.error)
+      }
+    }, privateRepoPath)
     const privateOffer = await createRuntimeDesktopPairingOffer(privateHost.page)
     client = await launchPairedElectronClient(workOffer, testInfo, 'work')
     const page = client.page
+    await page.evaluate((hostId) => {
+      window.__store?.getState().setVisibleWorkspaceHostIds([hostId])
+    }, toRuntimeExecutionHostId(client.environmentId))
     // Hidden windows do not advance CSS animations; keep Radix's close transition deterministic.
     await page.addStyleTag({
       content: '* { animation: none !important; transition: none !important; }'
@@ -40,6 +69,9 @@ test('switches the active server from the status bar between two paired hosts an
     const workTrigger = page.getByRole('button', { name: 'Active Server: work', exact: true })
     await expect(workTrigger).toBeVisible()
     await expect(workTrigger).toContainText('work')
+    const sidebar = page.locator('[data-worktree-sidebar]')
+    await expect(sidebar.getByText(path.basename(testRepoPath), { exact: true })).toBeVisible()
+    await expect(sidebar.getByText(path.basename(privateRepoPath), { exact: true })).toBeHidden()
     await workTrigger.click({ force: true })
     await expect(page.getByRole('menuitemradio', { name: 'work', exact: true })).toHaveAttribute(
       'aria-checked',
@@ -55,6 +87,8 @@ test('switches the active server from the status bar between two paired hosts an
     const privateTrigger = page.getByRole('button', { name: 'Active Server: priv', exact: true })
     await expect(privateTrigger).toBeVisible()
     await expect(privateTrigger).toBeEnabled()
+    await expect(sidebar.getByText(path.basename(privateRepoPath), { exact: true })).toBeVisible()
+    await expect(sidebar.getByText(path.basename(testRepoPath), { exact: true })).toBeHidden()
 
     await privateTrigger.click({ force: true })
     await expect(page.getByRole('menuitemradio', { name: 'priv', exact: true })).toHaveAttribute(
@@ -70,12 +104,17 @@ test('switches the active server from the status bar between two paired hosts an
     })
     await expect(localTrigger).toBeVisible()
     await expect(localTrigger).toBeEnabled()
+    await expect(sidebar.getByText(path.basename(privateRepoPath), { exact: true })).toBeHidden()
+    await expect(sidebar.getByText(path.basename(testRepoPath), { exact: true })).toBeHidden()
     await localTrigger.click({ force: true })
     await page.getByRole('menuitemradio', { name: 'work', exact: true }).click({ force: true })
     await expect(workTrigger).toBeVisible()
     await expect(workTrigger).toBeEnabled()
+    await expect(sidebar.getByText(path.basename(testRepoPath), { exact: true })).toBeVisible()
+    await expect(sidebar.getByText(path.basename(privateRepoPath), { exact: true })).toBeHidden()
   } finally {
     await client?.dispose()
     await privateHost?.dispose()
+    rmSync(privateRepoPath, { recursive: true, force: true })
   }
 })

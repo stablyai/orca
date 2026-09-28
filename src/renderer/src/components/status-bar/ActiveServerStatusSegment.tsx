@@ -14,6 +14,10 @@ import { translate } from '@/i18n/i18n'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 import { useAppStore } from '@/store'
 import { isUserManagedRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId
+} from '../../../../shared/execution-host'
 import { LOCAL_RUNTIME_VALUE } from '../settings/runtime-environment-selection'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-policy'
 
@@ -27,6 +31,7 @@ export function ActiveServerStatusSegment({
   const setActiveRuntimeEnvironmentPreference = useAppStore(
     (state) => state.setActiveRuntimeEnvironmentPreference
   )
+  const setVisibleWorkspaceHostIds = useAppStore((state) => state.setVisibleWorkspaceHostIds)
   const [switching, setSwitching] = useState(false)
   const switchingRef = useRef(false)
   const mountedRef = useMountedRef()
@@ -53,7 +58,13 @@ export function ActiveServerStatusSegment({
     switchingRef.current = true
     setSwitching(true)
     try {
-      await setActiveRuntimeEnvironmentPreference(value === LOCAL_RUNTIME_VALUE ? null : value)
+      if (
+        await setActiveRuntimeEnvironmentPreference(value === LOCAL_RUNTIME_VALUE ? null : value)
+      ) {
+        setVisibleWorkspaceHostIds([
+          value === LOCAL_RUNTIME_VALUE ? LOCAL_EXECUTION_HOST_ID : toRuntimeExecutionHostId(value)
+        ])
+      }
     } finally {
       switchingRef.current = false
       if (mountedRef.current) {
