@@ -170,7 +170,9 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
     // Why: a cold restore can respawn under the same session id within the
     // delayed-Enter window; the armed Enter would inject \r into the
     // replacement and stamp rows it never received.
-    this.orchestrationMailboxNotifications.retirePty(ptyId)
+    if (processDeathCertified) {
+      this.orchestrationMailboxNotifications.retirePty(ptyId)
+    }
     // Why: the dead pty's terminal handle and any run bound to its panes still carry mailbox
     // pointers; schedule a debounced repoint so they do not stay aimed at a retired session.
     for (const leaf of this.getLeavesForPty(ptyId)) {

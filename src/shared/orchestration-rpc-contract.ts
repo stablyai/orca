@@ -23,6 +23,8 @@ const ORCHESTRATION_MUTATION_METHODS = new Set([
   'orchestration.runUse',
   'orchestration.send',
   'orchestration.reply',
+  'orchestration.subscribe',
+  'orchestration.unsubscribe',
   'orchestration.taskCreate',
   'orchestration.taskUpdate',
   'orchestration.dispatch',
@@ -78,6 +80,10 @@ export function isTerminalPromptMutation(method: string, params: unknown): boole
     value.interrupt !== true &&
     client?.type === 'desktop'
   )
+}
+
+export function isTerminalMailboxSubscriptionMutation(method: string): boolean {
+  return method === 'orchestration.subscribe' || method === 'orchestration.unsubscribe'
 }
 
 export function isDurableMutation(method: string, params: unknown): boolean {
