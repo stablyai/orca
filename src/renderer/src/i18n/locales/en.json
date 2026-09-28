@@ -5108,6 +5108,9 @@
             }
           }
         },
+        "ActiveServerConnectionNotice": {
+          "body": "Connect to open or create workspaces on this server."
+        },
         "AddProjectFromFolderDialog": {
           "7d1f51678c": "Add Project",
           "7726a16374": "Cancel",
