@@ -42,6 +42,9 @@ export function truncateAiVaultListResult(
     return result
   }
   const selectedIds = new Set(result.sessions.slice(0, depth).map((session) => session.id))
+  // Stopping the scope pass early is the one way this function can drop an
+  // in-scope row, which is exactly what `scopeFullyScanned` vouches against.
+  let scopePassStoppedEarly = false
   if (scopePaths.length > 0) {
     const scopeMatchers = scopePaths.map(createNormalizedPathInsideOrEqualMatcher)
     let scopedCount = 0
@@ -51,10 +54,15 @@ export function truncateAiVaultListResult(
       if (normalizedCwd !== null && scopeMatchers.some((matches) => matches(normalizedCwd))) {
         selectedIds.add(session.id)
         if (++scopedCount >= depth) {
+          scopePassStoppedEarly = true
           break
         }
       }
     }
   }
-  return { ...result, sessions: result.sessions.filter((session) => selectedIds.has(session.id)) }
+  return {
+    ...result,
+    sessions: result.sessions.filter((session) => selectedIds.has(session.id)),
+    ...(scopePassStoppedEarly ? { scopeFullyScanned: false } : {})
+  }
 }

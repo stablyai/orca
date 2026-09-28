@@ -1,6 +1,11 @@
 import { useMemo } from 'react'
-import type { AiVaultGroup, AiVaultSession } from '../../../../shared/ai-vault-types'
 import {
+  AI_VAULT_AGENTS,
+  type AiVaultGroup,
+  type AiVaultSession
+} from '../../../../shared/ai-vault-types'
+import {
+  countAiVaultSessions,
   filterAiVaultSessions,
   groupAiVaultSessions,
   type AiVaultSessionFilterState
@@ -18,6 +23,7 @@ export type {
 export {
   AI_VAULT_SESSION_FILTER_QUERY_MAX_BYTES,
   agentLabel,
+  countAiVaultSessions,
   filterAiVaultSessions,
   folderLabel,
   groupAiVaultSessions,
@@ -77,6 +83,34 @@ export function useAiVaultPanelSessions(
       hideEmptySessions
     ]
   )
+  // Why: the count's denominator is what this scope holds before the user's own
+  // filters, not every session the scan loaded for every workspace.
+  const scopedSessionCount = useMemo(
+    () =>
+      searching
+        ? sessions.length
+        : // Counted, not filtered: order cannot change a count, so this must not
+          // redo a full sort every time the user flips the sort menu.
+          countAiVaultSessions(sessions, {
+            query: '',
+            agents: AI_VAULT_AGENTS,
+            scope,
+            activeWorktreePaths,
+            activeProjectKey,
+            sessionProjectById,
+            projectLabelByKey,
+            hideEmptySessions: false
+          }),
+    [
+      searching,
+      sessions,
+      scope,
+      activeWorktreePaths,
+      activeProjectKey,
+      sessionProjectById,
+      projectLabelByKey
+    ]
+  )
   const groups = useMemo<AiVaultSessionListGroup[]>(
     () =>
       searching
@@ -87,5 +121,5 @@ export function useAiVaultPanelSessions(
         : groupAiVaultSessions(filteredSessions, group, { sessionProjectById, projectLabelByKey }),
     [searching, filteredSessions, group, projectLabelByKey, sessionProjectById]
   )
-  return { filteredSessions, groups }
+  return { filteredSessions, scopedSessionCount, groups }
 }

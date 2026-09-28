@@ -13,6 +13,7 @@ import {
   type AiVaultSession
 } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
+import { SessionReadNoticeIndicator } from './AiVaultSessionReadNotice'
 import { SessionTime } from './ai-vault-session-time'
 import { sessionModelLabel } from './ai-vault-session-display'
 import { agentLabel } from './ai-vault-session-filters'
@@ -89,6 +90,7 @@ export function SessionMetadata({
             </span>
           </>
         ) : null}
+        <SessionReadNoticeIndicator session={session} />
         <span className="shrink-0 text-muted-foreground/55">·</span>
         <SessionTime value={updatedAt} />
         {modelLabel ? (

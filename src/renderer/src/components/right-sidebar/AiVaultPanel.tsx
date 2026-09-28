@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import {
   useActiveRepo,
@@ -34,7 +33,6 @@ import {
 import { openAiVaultSessionLogInOrca } from './ai-vault-session-log-open'
 import { useAiVaultOriginalPaneActions } from './ai-vault-original-pane-actions'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import { translate } from '@/i18n/i18n'
 import { AiVaultPanelHeader } from './AiVaultPanelHeader'
 import {
   aiVaultResultCountLabel,
@@ -43,6 +41,9 @@ import {
 } from './AiVaultSessionListBar'
 import { aiVaultBrowseSortMenu, aiVaultSearchSortMenu } from './ai-vault-sort-options'
 import { AiVaultShowMoreSessionsRow } from './AiVaultShowMoreSessionsRow'
+import { aiVaultViewMayHoldMoreSessions } from './ai-vault-session-limit'
+import { aiVaultSessionReadNotices } from './ai-vault-scan-issue-state'
+import { AiVaultSessionReadNoticeProvider } from './AiVaultSessionReadNotice'
 import { AiVaultSessionVirtualList } from './AiVaultSessionVirtualList'
 import { useAiVaultSessionRefresh } from './ai-vault-session-refresh'
 import {
@@ -55,6 +56,7 @@ import { useAiVaultSearchFocusRequest } from './use-ai-vault-search-focus-reques
 import { usePersistedAiVaultViewOptions } from './use-persisted-ai-vault-view-options'
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
 import { AiVaultScanIssueBanners } from './AiVaultScanIssueBanners'
+import { copyAiVaultSessionId, copyAiVaultSessionLogPath } from './ai-vault-session-copy'
 import { useAiVaultSessionDeleteAction } from './ai-vault-session-delete-action'
 import { useAiVaultPanelSearch } from './use-ai-vault-search'
 import { aiVaultSearchScopeIdentity } from './ai-vault-search-scope-identity'
@@ -210,7 +212,7 @@ export default function AiVaultPanel(): React.JSX.Element {
     sessionLimit
   })
 
-  const { filteredSessions, groups } = useAiVaultPanelSessions(sessions, searching, group, {
+  const listed = useAiVaultPanelSessions(sessions, searching, group, {
     query,
     agents,
     scope,
@@ -221,15 +223,18 @@ export default function AiVaultPanel(): React.JSX.Element {
     projectLabelByKey,
     hideEmptySessions
   })
-
-  const copyText = useCallback(async (text: string, label: string): Promise<void> => {
-    await window.api.ui.writeClipboardText(text)
-    toast.success(
-      translate('auto.components.right.sidebar.AiVaultPanel.valueCopied', '{{value0}} copied', {
-        value0: label
-      })
-    )
-  }, [])
+  const { filteredSessions, groups } = listed
+  // One answer for both the count's "+" and the Show more row: a heuristic in
+  // either place would eventually disagree with the other.
+  const mayHoldMoreSessions = aiVaultViewMayHoldMoreSessions({
+    scope,
+    loaded: sessions.length,
+    loadedSessionLimit,
+    scopeFullyScanned: scanResult?.scopeFullyScanned === true
+  })
+  // Built once here rather than inside the list: the banners need the same map
+  // to know which notices they must not repeat panel-wide.
+  const sessionReadNotices = useMemo(() => aiVaultSessionReadNotices(scanResult), [scanResult])
 
   const getSessionResumeState = useCallback(
     (session: AiVaultSession) =>
@@ -329,7 +334,9 @@ export default function AiVaultPanel(): React.JSX.Element {
         </div>
       ) : null}
 
-      {!searching && <AiVaultScanIssueBanners scanResult={scanResult} />}
+      {!searching && (
+        <AiVaultScanIssueBanners scanResult={scanResult} sessionReadNotices={sessionReadNotices} />
+      )}
       <AiVaultPanelSearch search={search} noAgents={agents.length === 0}>
         {searching
           ? filteredSessions.length > 0 && (
@@ -342,67 +349,63 @@ export default function AiVaultPanel(): React.JSX.Element {
             )
           : sessions.length > 0 && (
               <AiVaultSessionListBar
-                label={aiVaultSessionCountLabel(filteredSessions.length, sessions.length)}
+                label={aiVaultSessionCountLabel(
+                  filteredSessions.length,
+                  listed.scopedSessionCount,
+                  mayHoldMoreSessions
+                )}
                 value={sort}
                 menu={aiVaultBrowseSortMenu()}
                 onChange={setSort}
               />
             )}
         {(!searching || sessions.length > 0 || search.loading) && (
-          <AiVaultSessionVirtualList
-            key={searching ? search.resetKey : 'history'}
-            searchHits={searching ? searchHits : undefined}
-            groups={groups}
-            collapsedGroups={collapsedGroups}
-            loading={searching ? search.loading : loading}
-            sessionsCount={sessions.length}
-            filteredSessionsCount={filteredSessions.length}
-            noAgentsSelected={agents.length === 0}
-            error={error}
-            vaultScope={scope}
-            buildResumeStartup={launchActions.buildResumeStartup}
-            getSessionResumeState={getSessionResumeState}
-            getSessionResumeActions={getSessionResumeActions}
-            getOriginalPaneTarget={paneActions.getOriginalPaneTarget}
-            isStructuredSessionOpen={paneActions.isStructuredSessionOpen}
-            getSessionLiveState={paneActions.getSessionLiveState}
-            getWorktreeInfo={getSessionWorktreeInfo}
-            onToggleGroup={toggleGroup}
-            onJumpToOriginalPane={paneActions.jumpToOriginalPane}
-            onJumpToWorktree={paneActions.jumpToWorktree}
-            onResume={launchActions.handleResume}
-            getSessionResumeInChat={getSessionResumeInChat}
-            onContinueInNewSession={launchActions.handleContinueInNewSession}
-            onResumeInNewChat={launchActions.handleResumeInNewChat}
-            onCopyResume={(session, worktreeId) =>
-              void launchActions.copyResumeCommand(session, worktreeId)
-            }
-            onCopyId={(session) =>
-              void copyText(
-                session.sessionId,
-                translate('auto.components.right.sidebar.AiVaultPanel.sessionId', 'Session ID')
-              )
-            }
-            onCopyPath={(session) =>
-              void copyText(
-                session.filePath,
-                translate('auto.components.right.sidebar.AiVaultPanel.logPath', 'Log path')
-              )
-            }
-            onOpenLog={(session) => void openAiVaultSessionLogInOrca(session)}
-            onRevealLog={(session) => void window.api.shell.openPath(session.filePath)}
-            onOpenCwd={(session) => {
-              if (session.cwd) {
-                void window.api.shell.openPath(session.cwd)
+          <AiVaultSessionReadNoticeProvider notices={sessionReadNotices}>
+            <AiVaultSessionVirtualList
+              key={searching ? search.resetKey : 'history'}
+              searchHits={searching ? searchHits : undefined}
+              groups={groups}
+              collapsedGroups={collapsedGroups}
+              loading={searching ? search.loading : loading}
+              sessionsCount={sessions.length}
+              filteredSessionsCount={filteredSessions.length}
+              scopedSessionsCount={listed.scopedSessionCount}
+              noAgentsSelected={agents.length === 0}
+              error={error}
+              vaultScope={scope}
+              buildResumeStartup={launchActions.buildResumeStartup}
+              getSessionResumeState={getSessionResumeState}
+              getSessionResumeActions={getSessionResumeActions}
+              getOriginalPaneTarget={paneActions.getOriginalPaneTarget}
+              isStructuredSessionOpen={paneActions.isStructuredSessionOpen}
+              getSessionLiveState={paneActions.getSessionLiveState}
+              getWorktreeInfo={getSessionWorktreeInfo}
+              onToggleGroup={toggleGroup}
+              onJumpToOriginalPane={paneActions.jumpToOriginalPane}
+              onJumpToWorktree={paneActions.jumpToWorktree}
+              onResume={launchActions.handleResume}
+              getSessionResumeInChat={getSessionResumeInChat}
+              onContinueInNewSession={launchActions.handleContinueInNewSession}
+              onResumeInNewChat={launchActions.handleResumeInNewChat}
+              onCopyResume={(session, worktreeId) =>
+                void launchActions.copyResumeCommand(session, worktreeId)
               }
-            }}
-            onRequestDelete={(session) => void requestDelete(session)}
-          />
+              onCopyId={(session) => void copyAiVaultSessionId(session)}
+              onCopyPath={(session) => void copyAiVaultSessionLogPath(session)}
+              onOpenLog={(session) => void openAiVaultSessionLogInOrca(session)}
+              onRevealLog={(session) => void window.api.shell.openPath(session.filePath)}
+              onOpenCwd={(session) => {
+                if (session.cwd) {
+                  void window.api.shell.openPath(session.cwd)
+                }
+              }}
+              onRequestDelete={(session) => void requestDelete(session)}
+            />
+          </AiVaultSessionReadNoticeProvider>
         )}
         {!searching && (
           <AiVaultShowMoreSessionsRow
-            loaded={sessions.length}
-            loadedSessionLimit={loadedSessionLimit}
+            mayHoldMoreSessions={mayHoldMoreSessions}
             loading={loading}
             sessionLimit={sessionLimit}
             onSessionLimitChange={setSessionLimit}

@@ -27,7 +27,7 @@ import { getSessionParseCacheEntry } from './session-parse-cache-store'
 import { describeSkippedTranscriptRecords } from './session-transcript-record-budget'
 import { canStopParsingSessions } from './session-scan-cutoff'
 import { discoverInScopeCwdBucketFiles } from './session-scanner-scope-discovery'
-import { CLAUDE_CWD_BUCKET_LAYOUT, PI_CWD_BUCKET_LAYOUT } from './session-cwd-bucket-layouts'
+import { CWD_BUCKET_LAYOUTS, isAiVaultScopeFullyScanned } from './session-scope-coverage'
 import { discoverAiVaultSessionSources } from './session-scanner-source-discovery'
 import { cursorChatMetaRefusals, withCursorChatMetaScan } from './session-scanner-cursor-chat-meta'
 import type {
@@ -101,7 +101,7 @@ export async function scanAiVaultSessions(
           .sort((left, right) => sessionSortTime(right) - sessionSortTime(left))
           .slice(0, limit)
 
-        const scopeSessions = await scanInScopeSessions({
+        const scopeScan = await scanInScopeSessions({
           discoveries,
           scopePaths: options.scopePaths ?? [],
           limit,
@@ -135,8 +135,13 @@ export async function scanAiVaultSessions(
         scheduleSessionParseCachePersist(parseStats)
 
         return {
-          sessions: mergeSessions(cappedSessions, scopeSessions),
+          sessions: mergeSessions(cappedSessions, scopeScan.sessions),
           issues: issues.map((issue) => ({ executionHostId, ...issue })),
+          scopeFullyScanned: isAiVaultScopeFullyScanned({
+            scopePaths: options.scopePaths ?? [],
+            discoveries,
+            scopePassBounded: scopeScan.bounded
+          }),
           scannedAt: new Date().toISOString()
         }
       })
@@ -164,9 +169,8 @@ function mergeSessions(
   return [...byId.values()].sort((left, right) => sessionSortTime(right) - sessionSortTime(left))
 }
 
-// Agents whose on-disk layout names a directory per cwd, so a scope's older
-// sessions can be found without reading every transcript's header.
-const CWD_BUCKET_LAYOUTS = [CLAUDE_CWD_BUCKET_LAYOUT, PI_CWD_BUCKET_LAYOUT]
+/** The scoped pass, plus whether any layout's discovery hit its own bound and so may have dropped in-scope files. */
+type InScopeScan = { sessions: AiVaultSession[]; bounded: boolean }
 
 async function scanInScopeSessions(args: {
   discoveries: SessionFileDiscovery[]
@@ -178,11 +182,12 @@ async function scanInScopeSessions(args: {
   issues: AiVaultScanIssue[]
   parseStats: SessionParseStats
   signal?: AbortSignal
-}): Promise<AiVaultSession[]> {
+}): Promise<InScopeScan> {
   if (args.scopePaths.length === 0) {
-    return []
+    return { sessions: [], bounded: false }
   }
   const candidates: SessionFileCandidate[] = []
+  let bounded = false
   for (const layout of CWD_BUCKET_LAYOUTS) {
     const files = await discoverInScopeCwdBucketFiles(layout, {
       rootDirs: args.discoveries
@@ -193,13 +198,16 @@ async function scanInScopeSessions(args: {
       excludedFilePaths: args.alreadyParsedFilePaths,
       issues: args.issues
     })
+    // Discovery evicts its oldest entry past `limit`, so a full return is the
+    // only evidence available that in-scope files were dropped.
+    bounded ||= files.length >= args.limit
     candidates.push(...files.map((file) => ({ agent: layout.agent, file, codexHome: null })))
   }
   if (candidates.length === 0) {
-    return []
+    return { sessions: [], bounded }
   }
   // Parse every in-scope candidate (limit === candidate count never early-stops).
-  return parseSessionCandidates({
+  const sessions = await parseSessionCandidates({
     candidates,
     limit: candidates.length,
     platform: args.platform,
@@ -208,6 +216,7 @@ async function scanInScopeSessions(args: {
     parseStats: args.parseStats,
     signal: args.signal
   })
+  return { sessions, bounded }
 }
 
 async function parseSessionCandidates(args: {

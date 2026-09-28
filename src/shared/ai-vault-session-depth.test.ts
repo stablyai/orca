@@ -83,6 +83,24 @@ describe('Agent Session History depth', () => {
     ])
     expect(truncateAiVaultListResult(loaded, 'unlimited')).toBe(loaded)
   })
+
+  // Why: a cache hit serves a shallower request from a deeper scan. Carrying the
+  // deeper scan's "every in-scope session is here" vouch past a cut that dropped
+  // in-scope rows would hide the Show more row that gets them back.
+  it('withdraws the scope vouch when truncation cuts in-scope sessions', () => {
+    const vouched = {
+      ...result([
+        session('scoped-1', '/repo/app', 3),
+        session('scoped-2', '/repo/lib', 2),
+        session('scoped-3', '/repo/old', 1)
+      ]),
+      scopeFullyScanned: true
+    }
+
+    expect(truncateAiVaultListResult(vouched, 2, ['/repo']).scopeFullyScanned).toBe(false)
+    expect(truncateAiVaultListResult(vouched, 10, ['/repo']).scopeFullyScanned).toBe(true)
+    expect(truncateAiVaultListResult(vouched, 'unlimited').scopeFullyScanned).toBe(true)
+  })
 })
 
 describe('Agent Session History scope truncation', () => {

@@ -10,6 +10,12 @@ import { searchHit } from '../../../../shared/ai-vault-search-test-fixture'
 import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
 import type { AiVaultSubagentResumeActions } from './AiVaultSessionSubagents'
 import { VaultSessionRow } from './AiVaultSessionRow'
+import { AiVaultSessionReadNoticeProvider } from './AiVaultSessionReadNotice'
+import {
+  aiVaultSessionFileKey,
+  NO_AI_VAULT_SESSION_READ_NOTICES,
+  type AiVaultSessionReadNotices
+} from './ai-vault-scan-issue-state'
 
 const session = {
   id: 'local:gemini:sess-1:/home/a/.gemini/s.json',
@@ -71,37 +77,42 @@ function renderRow(
     onResume?: () => void
     resumeHidden?: boolean
     onRequestDelete?: () => void
+    readNotices?: AiVaultSessionReadNotices
   } = {}
 ) {
   return render(
     <TooltipProvider>
-      <VaultSessionRow
-        session={overrides.session ?? session}
-        searchHit={overrides.searchHit}
-        subagentResume={overrides.subagentResume}
-        liveState={null}
-        resumeStartup={{ command: 'gemini --resume sess-1' }}
-        realHomeResumeStartup={{ command: 'gemini --resume sess-1' }}
-        worktreeInfo={overrides.worktreeInfo ?? null}
-        vaultScope="all"
-        detailsExpanded={overrides.detailsExpanded ?? false}
-        resumeDisabled={false}
-        resumeHidden={overrides.resumeHidden}
-        onToggleDetails={overrides.onToggleDetails ?? vi.fn()}
-        onJumpToOriginalPane={overrides.onJumpToOriginalPane}
-        showJumpToWorktree={false}
-        onResume={overrides.onResume ?? vi.fn()}
-        resumeLabel="Resume in New Tab"
-        resumeActions={{
-          worktree: { worktreeId: null, disabled: true },
-          newTab: { worktreeId: null, disabled: true }
-        }}
-        onResumeInWorktree={vi.fn()}
-        onResumeInNewTab={vi.fn()}
-        onCopyId={vi.fn()}
-        onCopyPath={vi.fn()}
-        onRequestDelete={overrides.onRequestDelete ?? vi.fn()}
-      />
+      <AiVaultSessionReadNoticeProvider
+        notices={overrides.readNotices ?? NO_AI_VAULT_SESSION_READ_NOTICES}
+      >
+        <VaultSessionRow
+          session={overrides.session ?? session}
+          searchHit={overrides.searchHit}
+          subagentResume={overrides.subagentResume}
+          liveState={null}
+          resumeStartup={{ command: 'gemini --resume sess-1' }}
+          realHomeResumeStartup={{ command: 'gemini --resume sess-1' }}
+          worktreeInfo={overrides.worktreeInfo ?? null}
+          vaultScope="all"
+          detailsExpanded={overrides.detailsExpanded ?? false}
+          resumeDisabled={false}
+          resumeHidden={overrides.resumeHidden}
+          onToggleDetails={overrides.onToggleDetails ?? vi.fn()}
+          onJumpToOriginalPane={overrides.onJumpToOriginalPane}
+          showJumpToWorktree={false}
+          onResume={overrides.onResume ?? vi.fn()}
+          resumeLabel="Resume in New Tab"
+          resumeActions={{
+            worktree: { worktreeId: null, disabled: true },
+            newTab: { worktreeId: null, disabled: true }
+          }}
+          onResumeInWorktree={vi.fn()}
+          onResumeInNewTab={vi.fn()}
+          onCopyId={vi.fn()}
+          onCopyPath={vi.fn()}
+          onRequestDelete={overrides.onRequestDelete ?? vi.fn()}
+        />
+      </AiVaultSessionReadNoticeProvider>
     </TooltipProvider>
   )
 }
@@ -194,6 +205,44 @@ describe('VaultSessionRow agent metadata line', () => {
     // The details panel replaces the one-line preview with the full turns.
     expect(screen.getByText('Latest turns')).toBeTruthy()
     expect(screen.queryByText(': Ready when you are')).toBeNull()
+  })
+
+  // Why: the panel-wide "Skipped 1 oversized transcript record" banner is gone,
+  // so the collapsed row is the only thing that can name which session it was.
+  it('marks a partly read transcript on the collapsed metadata line', () => {
+    renderRow({
+      readNotices: new Map([
+        [aiVaultSessionFileKey(session), ['Skipped 1 oversized transcript record.']]
+      ])
+    })
+
+    const metadata = screen.getByTestId('ai-vault-session-metadata')
+    expect(within(metadata).getByLabelText('Partially read')).toBeTruthy()
+  })
+
+  // Why: the collapsed marker is only a pointer; the sentence the scanner wrote
+  // has to be waiting where following it lands, which is the expanded row.
+  it('spells the scanner note out once the row is expanded', () => {
+    const readNotices = new Map([
+      [
+        aiVaultSessionFileKey(session),
+        ['Skipped 1 oversized transcript record over the 10.0 MiB limit.']
+      ]
+    ])
+    const sentence = 'Skipped 1 oversized transcript record over the 10.0 MiB limit.'
+
+    renderRow({ readNotices })
+    expect(screen.queryByText(sentence)).toBeNull()
+
+    cleanup()
+    renderRow({ detailsExpanded: true, readNotices })
+    expect(screen.getByText(sentence)).toBeTruthy()
+  })
+
+  it('leaves the metadata line alone for a session the scan read in full', () => {
+    renderRow()
+
+    expect(screen.queryByLabelText('Partially read')).toBeNull()
   })
 
   it('renders the worktree badge once when expanded', () => {
