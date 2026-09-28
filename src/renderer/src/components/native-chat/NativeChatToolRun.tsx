@@ -119,7 +119,7 @@ export function NativeChatToolRun({
     work: headerBlocks
   } = useMemo(() => nativeChatAskRunBlocks(blocks), [blocks])
   const hasAskCall = asks.length > 0
-  const askSubject = hasAskCall ? nativeChatAskRunSubject(asks) : null
+  const askSubject = useMemo(() => (asks.length > 0 ? nativeChatAskRunSubject(asks) : null), [asks])
   const showsHeader = !hasAskCall || countToolCalls(headerBlocks) > 0
   const callCount = countToolCalls(headerBlocks) || headerBlocks.length
   const askIsActive = selectActiveToolCall(unansweredAsks, { activeTurnIsWorking }) !== null
@@ -221,8 +221,6 @@ export function NativeChatToolRun({
           subject={askSubject}
           pending={askIsActive}
           disclosureKey={disclosureId === undefined ? undefined : `ask:${disclosureId}`}
-          // A grouped ask here still names only its count.
-          listsQuestions={false}
         />
       ) : null}
       {!showsHeader ? null : (

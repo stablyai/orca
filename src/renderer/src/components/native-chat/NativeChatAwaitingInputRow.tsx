@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import {
   NATIVE_CHAT_ASK_ROW_COPY,
+  type NativeChatAskRowQuestion,
   type NativeChatAskRowSubject
 } from '../../../../shared/native-chat-ask-row'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
@@ -20,10 +21,11 @@ const ROW_CLASS_NAME =
  * Only the label breathes: the question is the part worth reading, and animating
  * it would make the one line the reader has to act on the hardest one to read.
  *
- * A question too long for the line becomes a disclosure, and so does a grouped
- * prompt, whose line names only a count. Once answered, this row may be the only
- * place the questions are still shown, so the full text opens below the toggle,
- * outside it, where it can be selected and copied like any other prose.
+ * The row becomes a disclosure whenever it hides something: a question too long
+ * for the line, the questions of a grouped prompt, whose line names only a count,
+ * or a recorded answer. Once answered, this row may be the only place the
+ * questions are still shown, so the full text opens below the toggle, outside
+ * it, where it can be selected and copied like any other prose.
  */
 export function NativeChatAwaitingInputRow({
   subject,
@@ -68,10 +70,12 @@ export function NativeChatAwaitingInputRow({
     observerRef.current.observe(line)
   }, [])
 
-  const question = subject?.kind === 'question' ? subject.text : null
+  const question = subject?.kind === 'question' ? subject : null
   const questions = subject?.kind === 'questions' && listsQuestions ? subject.questions : null
-  // A count always hides its questions, so the list needs no clipping measurement.
-  const toggles = questions !== null || (question !== null && (open || clipped))
+  // A count always hides its questions and an answer is never on the line; a lone
+  // question with neither toggles only while its line clips it.
+  const toggles =
+    questions !== null || (question !== null && (open || clipped || question.answer !== undefined))
   const label = pending
     ? translate('components.native-chat.ask.awaiting', NATIVE_CHAT_ASK_ROW_COPY.awaiting)
     : translate('components.native-chat.ask.asked', NATIVE_CHAT_ASK_ROW_COPY.asked)
@@ -135,20 +139,46 @@ export function NativeChatAwaitingInputRow({
       )}
       {toggles && open && question !== null ? (
         // Indented to the label, past the icon slot and its gap.
-        <p className="whitespace-pre-wrap break-words pl-5.5 text-sm leading-relaxed text-foreground/85">
-          {question}
-        </p>
+        <div className="pl-5.5 text-sm leading-relaxed text-foreground/85">
+          <AskRowQuestion question={question} />
+        </div>
       ) : null}
       {open && questions !== null ? (
         // Numbers hang in the icon slot so each question starts under the label.
         <ol className="list-decimal space-y-1 pl-5.5 text-sm leading-relaxed text-foreground/85 marker:text-muted-foreground">
-          {questions.map((entry) => (
-            <li key={entry} className="whitespace-pre-wrap break-words">
-              {entry}
+          {questionKeys(questions).map(({ key, question: entry }) => (
+            <li key={key}>
+              <AskRowQuestion question={entry} />
             </li>
           ))}
         </ol>
       ) : null}
     </div>
   )
+}
+
+/** A question in full, then the reader's answer beneath it where one is known. */
+function AskRowQuestion({ question }: { question: NativeChatAskRowQuestion }): React.JSX.Element {
+  return (
+    <>
+      <p className="whitespace-pre-wrap break-words">{question.text}</p>
+      {question.answer === undefined ? null : (
+        <p className="whitespace-pre-wrap break-words text-muted-foreground">{question.answer}</p>
+      )}
+    </>
+  )
+}
+
+/** Keys each question by the agent's id where it gives one, else by its text;
+ *  a repeat is numbered, since separate calls can reuse either. */
+function questionKeys(
+  questions: readonly NativeChatAskRowQuestion[]
+): { key: string; question: NativeChatAskRowQuestion }[] {
+  const seen = new Map<string, number>()
+  return questions.map((question) => {
+    const base = question.id === undefined ? `text:${question.text}` : `id:${question.id}`
+    const count = seen.get(base) ?? 0
+    seen.set(base, count + 1)
+    return { key: count === 0 ? base : `${base}#${count}`, question }
+  })
 }

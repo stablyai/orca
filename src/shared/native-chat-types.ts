@@ -90,6 +90,14 @@ export type NativeChatEditPatch = {
   hunks: NativeChatEditPatchHunk[]
 }
 
+/** The reader's reply to one question of an ask, as the agent recorded it. */
+export type NativeChatAskAnswer = {
+  /** The question exactly as asked: the only key Claude records its answers under. */
+  question: string
+  /** Each part of the reply in order: a chosen option's label, or text the reader typed. */
+  answer: string[]
+}
+
 /** The result returned to the agent for a prior tool call. */
 export type NativeChatToolResultBlock = {
   type: 'tool-result'
@@ -97,6 +105,9 @@ export type NativeChatToolResultBlock = {
   isError?: boolean
   /** Present only for edit tools whose result reported resolved hunks. */
   editPatch?: NativeChatEditPatch
+  /** Present only for question tools whose result recorded answers as data, not prose.
+   *  Hosts that predate it omit it, so readers must treat it as optional. */
+  askAnswers?: NativeChatAskAnswer[]
 }
 
 /** A reference to an image, by local path or remote URL. Exactly the field

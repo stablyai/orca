@@ -288,6 +288,29 @@ describe('worker transcript wire bounds', () => {
     )
   })
 
+  it('drops recorded question answers, which would skip clipping and redaction', () => {
+    const capability = `dcap_${'A'.repeat(43)}`
+    const result = boundWorkerTranscriptMessages([
+      {
+        id: 'message-answer',
+        role: 'tool',
+        timestamp: null,
+        source: 'transcript',
+        blocks: [
+          {
+            type: 'tool-result',
+            output: 'User has answered your questions.',
+            askAnswers: [{ question: 'Which token?', answer: [capability, 'x'.repeat(5_000)] }]
+          }
+        ]
+      }
+    ])
+
+    expect(result.messages[0]?.blocks).toEqual([
+      { type: 'tool-result', output: 'User has answered your questions.' }
+    ])
+  })
+
   it('redacts dispatch capabilities from terminal fallback lines', () => {
     const capability = `dcap_${'A'.repeat(43)}`
 

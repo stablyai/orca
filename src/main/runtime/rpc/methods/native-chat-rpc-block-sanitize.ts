@@ -50,9 +50,11 @@ export function sanitizeNativeChatRpcBlock(
       : block
   }
   if (block.type === 'tool-result') {
-    return block.output.length > MOBILE_BLOCK_CHAR_CAP
-      ? { ...block, output: clip(block.output, MOBILE_BLOCK_CHAR_CAP) }
-      : block
+    // The phone never reads a question's recorded answers; `output` already carries them, clipped.
+    const { askAnswers: _askAnswers, ...result } = block
+    return result.output.length > MOBILE_BLOCK_CHAR_CAP
+      ? { ...result, output: clip(result.output, MOBILE_BLOCK_CHAR_CAP) }
+      : result
   }
   if (block.type === 'tool-call') {
     const budget = { remaining: MOBILE_BLOCK_CHAR_CAP, nodes: MOBILE_TOOL_INPUT_NODE_CAP }

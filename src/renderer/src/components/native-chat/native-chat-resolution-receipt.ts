@@ -6,6 +6,7 @@ import {
   agentSessionPromptQuestions,
   legacyAgentSessionQuestionAnswers
 } from '../../../../shared/agent-session-question-answer'
+import { NATIVE_CHAT_ANSWER_PART_SEPARATOR } from '../../../../shared/native-chat-ask-answers'
 
 export type NativeChatResolvedPrompt = AgentJournalApprovalItem | AgentJournalQuestionItem
 export type NativeChatReceiptAnswer = { question: string | null; answer: string | null }
@@ -31,7 +32,9 @@ export function nativeChatReceiptAnswers(
       return {
         question: body.questions ? question.question : null,
         answer: valid
-          ? [...(labels ?? []), ...(answer?.other ? [answer.other] : [])].join(' · ') || null
+          ? [...(labels ?? []), ...(answer?.other ? [answer.other] : [])].join(
+              NATIVE_CHAT_ANSWER_PART_SEPARATOR
+            ) || null
           : null
       }
     })

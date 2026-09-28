@@ -189,22 +189,115 @@ describe('NativeChatToolRun awaiting-input row', () => {
     }
   })
 
-  it('offers no expansion when the row names only a question count', () => {
-    const restore = clipEveryLine()
-    try {
-      const input = { questions: [{ question: 'First?' }, { question: 'Second?' }] }
-      render(
-        <NativeChatToolRun
-          blocks={[{ type: 'tool-call', name: 'AskUserQuestion', input, state: 'completed' }]}
-          expandSignal
-          activeTurnIsWorking={false}
-        />
-      )
-      expect(screen.getByText('2 questions')).toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: /Asked:/ })).toBeNull()
-    } finally {
-      restore()
+  describe('a settled ask', () => {
+    const FIRST = 'Which storage should the cache use?'
+    const SECOND = 'Which checks should run?'
+    const settled = (blocks: NativeChatBlock[]): void => {
+      render(<NativeChatToolRun blocks={blocks} expandSignal activeTurnIsWorking={false} />)
     }
+    const openRow = (): HTMLElement => {
+      const toggle = screen.getByRole('button', { name: /Asked:/ })
+      fireEvent.click(toggle)
+      expect(toggle).toHaveAttribute('aria-expanded', 'true')
+      return toggle
+    }
+    const listed = (): (string | null)[] =>
+      screen.getAllByRole('listitem').map((item) => item.textContent)
+
+    it('lists each Codex question with the answer recorded for it', () => {
+      const call = (id: string, question: string): NativeChatBlock => ({
+        type: 'tool-call',
+        name: 'request_user_input',
+        input: JSON.stringify({ questions: [{ id, question, header: 'H' }] }),
+        state: 'completed'
+      })
+      settled([
+        call('storage', FIRST),
+        call('checks', SECOND),
+        {
+          type: 'tool-result',
+          output: JSON.stringify({ answers: { storage: { answers: ['Disk'] } } })
+        },
+        {
+          type: 'tool-result',
+          output: JSON.stringify({ answers: { checks: { answers: ['user_note: only lint'] } } })
+        }
+      ])
+      expect(screen.getByText('2 questions')).toBeInTheDocument()
+      expect(screen.queryByText('Disk')).toBeNull()
+      openRow()
+      expect(listed()).toEqual([`${FIRST}Disk`, `${SECOND}only lint`])
+      // Opened outside the button, so it selects like prose.
+      expect(screen.getByText('Disk').closest('button')).toBeNull()
+    })
+
+    it('lists each Claude question with the answer its result recorded', () => {
+      settled([
+        {
+          type: 'tool-call',
+          name: 'AskUserQuestion',
+          input: { questions: [{ question: FIRST }, { question: SECOND, multiSelect: true }] },
+          state: 'completed'
+        },
+        {
+          type: 'tool-result',
+          output: 'User has answered your questions.',
+          askAnswers: [
+            { question: FIRST, answer: ['Memory'] },
+            { question: SECOND, answer: ['Lint', 'Tests'] }
+          ]
+        }
+      ])
+      openRow()
+      expect(listed()).toEqual([`${FIRST}Memory`, `${SECOND}Lint · Tests`])
+    })
+
+    it('lists only the questions when the host recorded no answers', () => {
+      // A host that predates recorded answers sends the prose result alone.
+      settled([
+        {
+          type: 'tool-call',
+          name: 'AskUserQuestion',
+          input: { questions: [{ question: FIRST }, { question: SECOND }] },
+          state: 'completed'
+        },
+        { type: 'tool-result', output: `User has answered your questions: "${FIRST}"="Disk".` }
+      ])
+      openRow()
+      expect(listed()).toEqual([FIRST, SECOND])
+    })
+
+    it('lists only the questions an agent answered in prose', () => {
+      settled([
+        {
+          type: 'tool-call',
+          name: 'ask_user_question',
+          input: { questions: [{ question: FIRST }, { question: SECOND }] },
+          state: 'completed'
+        },
+        { type: 'tool-result', output: 'User answered: Disk; Lint' }
+      ])
+      openRow()
+      expect(listed()).toEqual([FIRST, SECOND])
+    })
+
+    it('opens a lone question that fits its line to show its answer', () => {
+      settled([
+        ...askBlocks('completed'),
+        {
+          type: 'tool-result',
+          output: 'User has answered your questions.',
+          askAnswers: [{ question: QUESTION, answer: ['Run the tests'] }]
+        }
+      ])
+      expect(screen.getByText(QUESTION)).toHaveClass('truncate')
+      expect(screen.queryByText('Run the tests')).toBeNull()
+      const toggle = openRow()
+      expect(screen.getByText(QUESTION)).not.toHaveClass('truncate')
+      expect(screen.getByText('Run the tests').closest('button')).toBeNull()
+      fireEvent.click(toggle)
+      expect(screen.queryByText('Run the tests')).toBeNull()
+    })
   })
 
   it('counts only the work that ran in the header beside the ask', () => {

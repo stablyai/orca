@@ -5,7 +5,8 @@ import {
   type NativeChatBlock,
   type NativeChatEditPatch,
   type NativeChatEditPatchHunk,
-  type NativeChatMessage
+  type NativeChatMessage,
+  type NativeChatToolResultBlock
 } from '../../shared/native-chat-types'
 import {
   asRecord,
@@ -13,6 +14,7 @@ import {
   parseJsonObject,
   timestampMs
 } from '../ai-vault/session-scanner-values'
+import { claudeAskAnswers } from '../../shared/native-chat-ask-answers'
 import { imageSourcePathFromText } from '../../shared/native-chat-image-transcript-markers'
 import { claudeContentBlocks } from './transcript-record-blocks'
 import { claudeInterruptedMessageId } from './transcript-turn-markers'
@@ -57,16 +59,19 @@ function claudeEditPatch(record: Record<string, unknown>): NativeChatEditPatch |
   return { ...(filePath ? { filePath } : {}), hunks }
 }
 
-/** Attaches the resolved hunks to the record's tool result, which is the only
+/** Attaches data from the result record to its tool result, which is the only
  *  block in a Claude result turn. */
-function withEditPatch(blocks: NativeChatBlock[], patch: NativeChatEditPatch): NativeChatBlock[] {
+function withResultData(
+  blocks: NativeChatBlock[],
+  data: Pick<NativeChatToolResultBlock, 'editPatch' | 'askAnswers'>
+): NativeChatBlock[] {
   let attached = false
   return blocks.map((block) => {
     if (attached || block.type !== 'tool-result') {
       return block
     }
     attached = true
-    return { ...block, editPatch: patch }
+    return { ...block, ...data }
   })
 }
 
@@ -97,8 +102,15 @@ export function decodeClaudeTranscriptLine(
   }
   const message = asRecord(record.message)
   const editPatch = claudeEditPatch(record)
+  const askAnswers = claudeAskAnswers(record.toolUseResult)
   const contentBlocks = claudeContentBlocks(message?.content)
-  const decodedBlocks = editPatch ? withEditPatch(contentBlocks, editPatch) : contentBlocks
+  const decodedBlocks =
+    editPatch || askAnswers
+      ? withResultData(contentBlocks, {
+          ...(editPatch ? { editPatch } : {}),
+          ...(askAnswers ? { askAnswers } : {})
+        })
+      : contentBlocks
   if (decodedBlocks.length === 0) {
     return null
   }

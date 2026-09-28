@@ -33,3 +33,23 @@ describe('mobile subagent roster bounds', () => {
     expect(block.type === 'subagent-group' && block.agents[0]?.id).toBe('task-1')
   })
 })
+
+describe('question answers on the mobile wire', () => {
+  const answered: NativeChatBlock = {
+    type: 'tool-result',
+    output: 'User has answered your questions.',
+    askAnswers: [{ question: 'Which notes?', answer: ['n'.repeat(50_000)] }]
+  }
+
+  it('drops answers the phone never reads, which would bypass the output cap', () => {
+    expect(sanitizeNativeChatRpcBlock(answered, 'mobile')).toEqual({
+      type: 'tool-result',
+      output: 'User has answered your questions.'
+    })
+  })
+
+  it('keeps them for a paired desktop or web client, which draws them', () => {
+    expect(sanitizeNativeChatRpcBlock(answered, 'runtime')).toBe(answered)
+    expect(sanitizeNativeChatRpcBlock(answered, undefined)).toBe(answered)
+  })
+})

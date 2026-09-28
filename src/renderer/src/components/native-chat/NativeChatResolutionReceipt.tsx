@@ -20,7 +20,11 @@ export function NativeChatResolutionReceipt({
     body.kind !== 'question'
       ? null
       : body.questions && body.questions.length > 1
-        ? { kind: 'questions', questions: body.questions.map((entry) => entry.question) }
+        ? {
+            kind: 'questions',
+            // No answers here: a resolved receipt lists each one below the row itself.
+            questions: body.questions.map((entry) => ({ id: entry.id, text: entry.question }))
+          }
         : {
             kind: 'question',
             // Claude keeps a generic grouped label for a single multi-select

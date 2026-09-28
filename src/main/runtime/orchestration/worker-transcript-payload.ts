@@ -123,7 +123,9 @@ function boundBlock(block: NativeChatBlock, state: TranscriptBoundState): Native
     return { ...block, text: clipText(block.text, state) }
   }
   if (block.type === 'tool-result') {
-    return { ...block, output: clipText(block.output, state) }
+    // Recorded answers repeat what `output` says, and would skip its clipping and redaction.
+    const { askAnswers: _askAnswers, ...result } = block
+    return { ...result, output: clipText(result.output, state) }
   }
   if (block.type === 'tool-call') {
     const budget = {
