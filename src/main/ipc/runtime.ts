@@ -79,6 +79,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
         {
           clientId: 'desktop-renderer',
           clientKind: 'runtime',
+          trustedDesktopIpc: true,
           connectionId: desktopSenders.connectionIdFor(event.sender),
           clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
         }

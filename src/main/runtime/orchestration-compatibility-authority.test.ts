@@ -9,6 +9,7 @@ const TOKEN_HASH = createHash('sha256').update(TOKEN).digest('hex')
 
 type TerminalAuthorityResolver = {
   getOrchestrationDispatchAuthority: (terminalHandle: string) => unknown
+  getTerminalHandleForPaneKey: (paneKey: string) => string | null
   restoredOrchestrationAuthorityByPtyId: Map<string, Record<string, unknown>>
 }
 
@@ -131,6 +132,44 @@ describe('orchestration compatibility runtime authority', () => {
         paneKey: PANE_KEY,
         launchToken: TOKEN
       })
+    ).toBeNull()
+  })
+
+  it('can re-attest a reminted handle only through the same stable pane and launch token', () => {
+    const runtime = createRuntime({ kind: 'local', hostId: 'local' })
+    const internals = runtime as unknown as TerminalAuthorityResolver
+    internals.getOrchestrationDispatchAuthority = (handle) =>
+      handle === 'term-live'
+        ? {
+            runtimeId: 'runtime-1',
+            terminalHandle: 'term-live',
+            ptyId: 'pty-1',
+            worktreeId: 'repo-1::/worktree',
+            processIncarnation: 'incarnation-1',
+            paneKey: PANE_KEY,
+            launchTokenHash: TOKEN_HASH,
+            hostScope: { kind: 'local', hostId: 'local' }
+          }
+        : null
+    internals.getTerminalHandleForPaneKey = (paneKey) => (paneKey === PANE_KEY ? 'term-live' : null)
+    const staleEvidence = {
+      terminalHandle: 'term-stale',
+      paneKey: PANE_KEY,
+      launchToken: TOKEN
+    }
+
+    expect(runtime.verifyOrchestrationCompatibilityCaller(staleEvidence)).toBeNull()
+    expect(
+      runtime.verifyOrchestrationCompatibilityCaller(staleEvidence, {
+        currentRuntimeLaunchSufficient: true,
+        allowTerminalHandleRemint: true
+      })
+    ).toMatchObject({ terminalHandle: 'term-live', paneKey: PANE_KEY })
+    expect(
+      runtime.verifyOrchestrationCompatibilityCaller(
+        { ...staleEvidence, launchToken: 'wrong' },
+        { currentRuntimeLaunchSufficient: true, allowTerminalHandleRemint: true }
+      )
     ).toBeNull()
   })
 

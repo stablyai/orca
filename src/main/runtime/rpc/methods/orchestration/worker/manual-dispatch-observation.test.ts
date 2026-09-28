@@ -131,7 +131,7 @@ describe('manual Dispatch observation', () => {
       paneKey: 'tab_worker:leaf_worker',
       processIncarnation: 'runtime_test:term_worker:1'
     })
-    const context = { runtime }
+    const context = { runtime, trustedDesktopIpc: true }
     const call = async (name: string, params: Record<string, unknown>) => {
       const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
         (candidate) => candidate.name === name

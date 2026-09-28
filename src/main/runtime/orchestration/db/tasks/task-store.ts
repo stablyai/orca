@@ -129,6 +129,17 @@ export function getTask(
     | undefined
 }
 
+export function getTaskForRun(
+  this: OrchestrationDb,
+  id: string,
+  runId: string
+): TaskRow | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SQLite query returns row matching TaskRow schema or undefined
+  return this.db.prepare('SELECT * FROM tasks WHERE id = ? AND run_id = ?').get(id, runId) as
+    | TaskRow
+    | undefined
+}
+
 export function listTasks(
   this: OrchestrationDb,
   filter?: { status?: TaskStatus; ready?: boolean; runId?: string }
@@ -237,6 +248,7 @@ export function promoteReadyTasks(this: OrchestrationDb, completedTaskId: string
 export type TaskStoreMethods = {
   createTask: typeof createTask
   getTask: typeof getTask
+  getTaskForRun: typeof getTaskForRun
   listTasks: typeof listTasks
   listTasksWithDispatch: typeof listTasksWithDispatch
   promoteReadyTasks: typeof promoteReadyTasks
@@ -246,6 +258,7 @@ export function attachTaskStore(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     createTask,
     getTask,
+    getTaskForRun,
     listTasks,
     listTasksWithDispatch,
     promoteReadyTasks

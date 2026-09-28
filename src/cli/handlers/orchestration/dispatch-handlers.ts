@@ -42,10 +42,9 @@ export const ORCHESTRATION_DISPATCH_HANDLER: Record<string, CommandHandler> = {
 export const ORCHESTRATION_DISPATCH_INSPECTION_HANDLERS: Record<string, CommandHandler> = {
   'orchestration dispatch-show': async ({ flags, client, cwd, json }) => {
     const showPreamble = flags.has('preamble') ? true : undefined
-    // Why: a preview must embed the same real coordinator handle as an actual dispatch.
-    const from = showPreamble
-      ? await resolveCoordinatorTerminalHandle(flags, cwd, client)
-      : undefined
+    const callerTerminalHandle = await resolveCoordinatorTerminalHandle(flags, cwd, client)
+    // Why: resolve --from so the previewed preamble embeds a real coordinator handle like an actual dispatch.
+    const from = showPreamble ? callerTerminalHandle : undefined
     const result = await client.call<{
       dispatch: { id: string; task_id: string; status: string } | null
       preamble?: string
@@ -53,6 +52,7 @@ export const ORCHESTRATION_DISPATCH_INSPECTION_HANDLERS: Record<string, CommandH
       task: getRequiredStringFlag(flags, 'task'),
       preamble: showPreamble,
       from,
+      callerTerminalHandle,
       devMode: isDevCliInvocation()
     })
     printResult(result, json, (value) => {

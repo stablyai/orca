@@ -19,6 +19,7 @@ import { getDaemonSocketPath, getDaemonTokenPath } from '../../src/main/daemon/d
 import Database from '../../src/main/sqlite/sync-database'
 import { LEGACY_CONTRACT_VERSION } from '../../src/main/runtime/orchestration/db'
 import type { RuntimeTerminalListResult, RuntimeTerminalRead } from '../../src/shared/runtime-types'
+import { callDispatchShowFromTrustedRenderer } from './orchestration-dispatch-presentation'
 import {
   buildFakeAgentCommandOverride,
   FAKE_AGENT_WINDOWS_SHELL
@@ -281,9 +282,10 @@ test('a missing legacy worker cannot spawn a replacement during restart recovery
         return read.result.terminal.tail.join('\n')
       })
       .toContain('ACK')
-    const dispatch = await firstClient.call<{
-      dispatch: { id: string } | null
-    }>('orchestration.dispatchShow', { task: task.result.task.id })
+    const dispatch = await callDispatchShowFromTrustedRenderer<{ id: string }>(
+      first.page,
+      task.result.task.id
+    )
     expect(dispatch.result.dispatch?.id).toBeTruthy()
     await expect.poll(() => readLedger(spawnLedgerPath)).toHaveLength(1)
     const [initialSpawn] = readLedger(spawnLedgerPath)

@@ -17,6 +17,7 @@ import {
 import { waitForActivePaneHookDescriptor, waitForActivePanePtyId } from './helpers/terminal'
 import { RuntimeClient } from '../../src/cli/runtime-client'
 import type { RuntimeTerminalListResult, RuntimeTerminalRead } from '../../src/shared/runtime-types'
+import { callDispatchShowFromTrustedRenderer } from './orchestration-dispatch-presentation'
 
 const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-orchestration-worker-'))
 const spawnLedgerPath = path.join(fakeCliDir, 'spawn.jsonl')
@@ -195,9 +196,11 @@ test('worker-start preserves one live inactive worker across workspace re-entry'
     tabId: workerTerminal!.tabId,
     leafId: workerTerminal!.leafId
   }
-  const initialDispatch = await client.call<{
-    dispatch: { id: string; task_id: string; assignee_handle: string } | null
-  }>('orchestration.dispatchShow', { task: task.result.task.id })
+  const initialDispatch = await callDispatchShowFromTrustedRenderer<{
+    id: string
+    task_id: string
+    assignee_handle: string
+  }>(orcaPage, task.result.task.id)
   expect(initialDispatch.result.dispatch).toEqual(
     expect.objectContaining({
       task_id: task.result.task.id,
@@ -252,9 +255,11 @@ test('worker-start preserves one live inactive worker across workspace re-entry'
     (terminal) => terminal.ptyId === initialWorkerIdentity.ptyId
   )
   expect(workerAfterReturn).toEqual(expect.objectContaining(initialWorkerIdentity))
-  const dispatchAfterReturn = await client.call<{
-    dispatch: { id: string; task_id: string; assignee_handle: string } | null
-  }>('orchestration.dispatchShow', { task: task.result.task.id })
+  const dispatchAfterReturn = await callDispatchShowFromTrustedRenderer<{
+    id: string
+    task_id: string
+    assignee_handle: string
+  }>(orcaPage, task.result.task.id)
   expect(dispatchAfterReturn.result.dispatch).toEqual(initialDispatch.result.dispatch)
   expect(readLedger(spawnLedgerPath)).toEqual([spawn])
   expect(readLedger(interruptionLedgerPath)).toEqual([])

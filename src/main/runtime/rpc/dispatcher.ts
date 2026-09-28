@@ -109,6 +109,7 @@ export class RpcDispatcher {
         context: {
           runtime: this.runtime,
           signal: options?.signal,
+          trustedDesktopIpc: options?.trustedDesktopIpc,
           connectionId: options?.connectionId,
           // Session tabs always need this fence. COMPAT(terminal request-addressed unsubscribe): terminal only for phones without `requestId`.
           subscriptionRegistrationVersion: isRegistrationFencedUnsubscribe(request.method)

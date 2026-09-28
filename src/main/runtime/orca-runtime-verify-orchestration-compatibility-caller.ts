@@ -15,9 +15,12 @@ import { parsePaneKey } from '../../shared/stable-pane-id'
 export class OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller extends OrcaRuntimeWithSerializeHeadlessTerminalBuffer {
   verifyOrchestrationCompatibilityCaller(
     evidence: OrchestrationCompatibilityEvidence | null | undefined,
-    options?: { currentRuntimeLaunchSufficient?: boolean }
+    options?: {
+      currentRuntimeLaunchSufficient?: boolean
+      allowTerminalHandleRemint?: boolean
+    }
   ): OrchestrationCompatibilityCallerAuthority | null {
-    const terminalHandle =
+    let terminalHandle =
       typeof evidence?.terminalHandle === 'string' ? evidence.terminalHandle.trim() : ''
     const claimedPaneKey = typeof evidence?.paneKey === 'string' ? evidence.paneKey.trim() : ''
     const launchToken = typeof evidence?.launchToken === 'string' ? evidence.launchToken.trim() : ''
@@ -25,7 +28,22 @@ export class OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller extends OrcaR
     if (!terminalHandle || !claimedPaneKey || !launchToken) {
       return null
     }
-    const terminal = this.getOrchestrationDispatchAuthority(terminalHandle)
+    let terminal = this.getOrchestrationDispatchAuthority(terminalHandle)
+    // Why: reminting keeps the claimed pane identity, while launch-token attestation below binds the resolved terminal.
+    if (
+      options?.allowTerminalHandleRemint &&
+      claimedPaneKey &&
+      (!terminal?.paneKey || terminal.paneKey !== claimedPaneKey)
+    ) {
+      const remintedHandle = this.getTerminalHandleForPaneKey(claimedPaneKey)
+      const reminted = remintedHandle
+        ? this.getOrchestrationDispatchAuthority(remintedHandle)
+        : null
+      if (remintedHandle && reminted?.paneKey === claimedPaneKey) {
+        terminalHandle = remintedHandle
+        terminal = reminted
+      }
+    }
     if (
       !terminal?.processIncarnation ||
       !terminal.paneKey ||

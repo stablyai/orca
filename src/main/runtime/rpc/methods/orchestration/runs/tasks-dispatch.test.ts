@@ -493,6 +493,7 @@ describe('orchestration RPC methods', () => {
   describe('orchestration.dispatchShow', () => {
     it('shows dispatch context for a task', async () => {
       setup()
+      ctx = { ...ctx, trustedDesktopIpc: true }
       const task = db.createTask({ spec: 'work' })
       createRootDispatch(db, task.id, 'term_a')
 
@@ -505,6 +506,7 @@ describe('orchestration RPC methods', () => {
 
     it('returns null for unknown task', async () => {
       setup()
+      ctx = { ...ctx, trustedDesktopIpc: true }
       const result = (await call('orchestration.dispatchShow', {
         task: 'task_fake'
       })) as { dispatch: null }
@@ -514,6 +516,7 @@ describe('orchestration RPC methods', () => {
 
     it('--preamble returns the preamble text', async () => {
       setup()
+      ctx = { ...ctx, trustedDesktopIpc: true }
       const task = db.createTask({ spec: 'refactor auth' })
       createRootDispatch(db, task.id, 'term_a')
 
@@ -531,6 +534,7 @@ describe('orchestration RPC methods', () => {
 
     it('--preamble works when no dispatch exists yet', async () => {
       setup()
+      ctx = { ...ctx, trustedDesktopIpc: true }
       const task = db.createTask({ spec: 'build feature' })
 
       const result = (await call('orchestration.dispatchShow', {
@@ -545,6 +549,7 @@ describe('orchestration RPC methods', () => {
 
     it('--preamble throws for unknown task', async () => {
       setup()
+      ctx = { ...ctx, trustedDesktopIpc: true }
       await expect(
         call('orchestration.dispatchShow', { task: 'task_fake', preamble: true })
       ).rejects.toThrow('Task not found')
