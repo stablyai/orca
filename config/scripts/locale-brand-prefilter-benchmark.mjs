@@ -151,7 +151,7 @@ console.log(
 const localesDir = path.resolve('src/renderer/src/i18n/locales')
 const en = JSON.parse(readFileSync(path.join(localesDir, 'en.json'), 'utf8'))
 const enEntries = new Map(modules[0].collectStringLeaves(en).map(({ key, value }) => [key, value]))
-for (const locale of ['zh', 'ja', 'ko', 'es', 'fr']) {
+for (const locale of ['zh', 'zh-TW', 'ja', 'ko', 'es', 'fr']) {
   const catalog = JSON.parse(readFileSync(path.join(localesDir, `${locale}.json`), 'utf8'))
   const localeEntries = new Map(
     modules[0].collectStringLeaves(catalog).map(({ key, value }) => [key, value])

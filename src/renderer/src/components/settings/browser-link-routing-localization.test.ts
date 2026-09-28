@@ -6,7 +6,7 @@ import { getBrowserLinkRoutingDescription } from './browser-link-routing-copy'
 // The Link Routing description was a bare template literal, so it stayed English in every
 // locale while its own title and the rest of the pane translated. It carries the platform
 // shortcut label, so each locale must interpolate it rather than embed a hardcoded modifier.
-const NON_ENGLISH_LOCALES = ['es', 'ja', 'ko', 'zh'] as const
+const NON_ENGLISH_LOCALES = ['es', 'ja', 'ko', 'zh', 'zh-TW'] as const
 
 const SHORTCUT_BY_PLATFORM = {
   mac: '⇧⌘-click',

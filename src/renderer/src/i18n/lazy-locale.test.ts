@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import {
   UI_LANGUAGE_CHINESE,
   UI_LANGUAGE_ENGLISH,
-  UI_LANGUAGE_SPANISH
+  UI_LANGUAGE_SPANISH,
+  UI_LANGUAGE_TRADITIONAL_CHINESE
 } from '../../../shared/ui-language'
 import { i18n, setRendererPluginLanguagePacks, setRendererUiLanguage } from './i18n'
 import { pluginLanguageResourceId } from '../../../shared/plugins/plugin-language-pack-artifact'
@@ -35,6 +36,14 @@ describe('renderer i18n lazy locale loading', () => {
   it('lazy-loads a catalog through a direct changeLanguage call', async () => {
     await i18n.changeLanguage(UI_LANGUAGE_CHINESE)
     expect(i18n.t('menu.file', { defaultValue: 'File' })).not.toBe('File')
+  })
+
+  // Why: zh-TW is the only region-tagged locale, so an i18next code-formatting or
+  // fallback-hierarchy regression would silently serve Simplified 文件 instead.
+  it('lazy-loads zh-TW without falling back to the Simplified catalog', async () => {
+    await setRendererUiLanguage(UI_LANGUAGE_TRADITIONAL_CHINESE)
+    expect(i18n.language).toBe('zh-TW')
+    expect(i18n.t('menu.file', { defaultValue: 'File' })).toBe('檔案')
   })
 
   it('uses the inline English default when a target catalog omits a key', async () => {

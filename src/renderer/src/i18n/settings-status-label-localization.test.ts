@@ -14,8 +14,9 @@ import es from './locales/es.json'
 import ja from './locales/ja.json'
 import ko from './locales/ko.json'
 import zh from './locales/zh.json'
+import zhTW from './locales/zh-TW.json'
 
-const LOCALE_CATALOGS = { es, ja, ko, zh }
+const LOCALE_CATALOGS = { es, ja, ko, zh, 'zh-TW': zhTW }
 
 function lookupIn(catalog: unknown, key: string): string | undefined {
   const value = key

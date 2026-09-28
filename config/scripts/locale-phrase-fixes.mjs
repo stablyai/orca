@@ -379,6 +379,41 @@ export const LOCALE_PHRASE_FIXES = {
     { pattern: /注解/g, replacement: '批注', whenEnIncludes: 'Annotation' },
     ...ZH_PHRASE_FIXES_ROUND5
   ],
+  // Why: repair imported zh-TW strings to Taiwan UI wording on future catalog updates.
+  // 倉庫/儲存庫 need an English repo token so unrelated text is left alone.
+  'zh-TW': [
+    { pattern: /反饋/g, replacement: '回饋' },
+    { pattern: /鏈接/g, replacement: '連結' },
+    { pattern: /信息/g, replacement: '資訊' },
+    { pattern: /內存/g, replacement: '記憶體' },
+    { pattern: /主頁/g, replacement: '首頁' },
+    { pattern: /特工/g, replacement: 'Agent' },
+    { pattern: /存儲庫/g, replacement: '存放庫' },
+    { pattern: /隊列/g, replacement: '佇列' },
+    { pattern: /文件夾/g, replacement: '資料夾' },
+    { pattern: /緩存/g, replacement: '快取' },
+    { pattern: /插件/g, replacement: '外掛' },
+    { pattern: /創建/g, replacement: '建立' },
+    { pattern: /嵌套/g, replacement: '巢狀' },
+    { pattern: /線程/g, replacement: '執行緒', whenEnMatches: /\bCPU threads?\b/i },
+    {
+      pattern: /文物|神器|工件| ?Artifacts/g,
+      replacement: '成品',
+      whenEnMatches: /\bartifacts?\b/i
+    },
+    { pattern: /兒童/g, replacement: '子', whenEnMatches: /\bchild\b/i },
+    { pattern: /派遣工|工人/g, replacement: '工作者', whenEnMatches: /\bworkers?\b/i },
+    {
+      pattern: /倉庫/g,
+      replacement: '存放庫',
+      whenEnMatches: /\b(?:repo|repos|repository|repositories)\b/i
+    },
+    {
+      pattern: /儲存庫/g,
+      replacement: '存放庫',
+      whenEnMatches: /\b(?:repo|repos|repository|repositories)\b/i
+    }
+  ],
   ja: JA_PHRASE_FIXES,
   es: [
     // Why: machine translation renders the abbreviation "PR" (pull request) as

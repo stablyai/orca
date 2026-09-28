@@ -14,6 +14,8 @@ const GENERIC_TERM_FAMILIES = [
       ko: ['에이전트'],
       ja: ['エージェント'],
       zh: ['代理', '智能体'],
+      // No zh-TW entry on purpose: Taiwan developers say "Agent", so the brand revert in
+      // BRAND_MISTRANSLATIONS is what keeps 代理/智慧體 out of the catalog.
       es: ['Agente', 'agente', 'Agentes', 'agentes']
     }
   },
@@ -23,6 +25,7 @@ const GENERIC_TERM_FAMILIES = [
       ko: ['커밋'],
       ja: ['コミット'],
       zh: ['提交'],
+      'zh-TW': ['提交'],
       es: [
         'Confirmación',
         'confirmación',
@@ -39,6 +42,7 @@ const GENERIC_TERM_FAMILIES = [
       ko: ['계속하다', '계속'],
       ja: ['続ける', '続行'],
       zh: ['继续'],
+      'zh-TW': ['繼續'],
       es: ['Continuar', 'continuar']
     }
   },
@@ -48,6 +52,7 @@ const GENERIC_TERM_FAMILIES = [
       ko: ['저장소', '레포'],
       ja: ['リポジトリ', 'リポ'],
       zh: ['存储库', '仓库'],
+      'zh-TW': ['存放庫', '儲存庫', '倉庫'],
       es: ['Repositorio', 'repositorio', 'Repositorios', 'repositorios']
     }
   },
@@ -57,6 +62,7 @@ const GENERIC_TERM_FAMILIES = [
       ko: ['터미널'],
       ja: ['ターミナル'],
       zh: ['终端'],
+      'zh-TW': ['終端'],
       es: ['Terminales', 'terminales']
     }
   }

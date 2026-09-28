@@ -15,7 +15,7 @@ describe('repairCatalog with un-bootstrapped keys', () => {
   const translatedOnly = () => ({ auto: { lib: { agent: { catalog: { '760bc6883d': '사본' } } } } })
 
   it('skips leaves the locale catalog is missing instead of throwing', () => {
-    for (const locale of ['ko', 'ja', 'zh', 'es']) {
+    for (const locale of ['ko', 'ja', 'zh', 'zh-TW', 'es']) {
       const localeCatalog = translatedOnly()
       expect(() => repairCatalog(enCatalog, localeCatalog, locale), locale).not.toThrow()
       expect(localeCatalog.auto.components, locale).toBeUndefined()
