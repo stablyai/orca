@@ -16,7 +16,7 @@ import {
 } from '@/runtime/runtime-host-connection-state'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime-shared-control-types'
 
-function runtimeStatusLabel(state: RuntimeHostConnectionState): string {
+export function runtimeStatusLabel(state: RuntimeHostConnectionState): string {
   switch (state) {
     case 'connected':
       return translate('auto.components.status.bar.SshStatusSegment.runtime_online', 'Connected')

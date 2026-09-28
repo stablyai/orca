@@ -223,6 +223,16 @@ describe('SshStatusSegment active server selection', () => {
     expect(screen.getByRole('menuitemradio', { name: 'Private server' })).toBeDefined()
   })
 
+  it('describes a disconnected active server in icon-only mode', () => {
+    store.setState({ runtimeStatusByEnvironmentId: new Map([['work', { status: null }]]) })
+    renderSegment(true)
+    const trigger = screen.getByRole('button', { name: 'Remote Hosts: Work server' })
+    const statusId = trigger.getAttribute('aria-describedby')
+    expect(statusId).toBeTruthy()
+    expect(document.getElementById(statusId ?? '')?.textContent).toBe('Disconnected')
+    expect(screen.getByText('Disconnected').className).toBe('sr-only')
+  })
+
   it('uses existing host status and offers connection actions in the row submenu', async () => {
     store.setState({ runtimeStatusByEnvironmentId: new Map([['work', { status: null }]]) })
     renderSegment()
@@ -248,6 +258,8 @@ describe('SshStatusSegment active server selection', () => {
       ])
     })
     renderSegment()
+    const trigger = screen.getByRole('button')
+    expect(trigger.textContent).toContain('· Disconnected')
     await openMenu()
     const work = screen.getByRole('menuitemradio', { name: 'Work server' })
     const privateHost = screen.getByRole('menuitemradio', { name: 'Private server' })
@@ -266,6 +278,8 @@ describe('SshStatusSegment active server selection', () => {
     await waitFor(() => {
       expect(work.textContent).toContain('Connected')
       expect(privateHost.textContent).toContain('Disconnected')
+      expect(trigger.textContent).toBe('Work server')
+      expect(trigger.hasAttribute('aria-describedby')).toBe(false)
     })
     expect(switchServer).not.toHaveBeenCalled()
   })
@@ -312,6 +326,7 @@ describe('SshStatusSegment active server selection', () => {
     })
     connectHost.mockResolvedValue(false)
     renderSegment()
+    expect(screen.getByRole('button').textContent).toContain('· Reconnecting')
     await openMenu()
     const work = screen.getByRole('menuitemradio', { name: 'Work server' })
     expect(work.textContent).toContain('Reconnecting')

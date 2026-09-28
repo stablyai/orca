@@ -157,6 +157,7 @@ test('switches the active server from the status bar between two paired hosts an
     await expect(privateRow.getByRole('menuitem', { name: 'Reconnect', exact: true })).toBeVisible()
     await expect(privateRadio).toHaveAttribute('aria-checked', 'true')
     await expect(privateTrigger).toContainText('priv')
+    await expect(privateTrigger).toContainText(/· (Reconnecting|Disconnected)/)
     await page.getByRole('menuitemradio', { name: 'work', exact: true }).click({ force: true })
     await expect(workTrigger).toBeEnabled()
     await expect(sidebar.getByText(path.basename(testRepoPath), { exact: true })).toBeVisible()

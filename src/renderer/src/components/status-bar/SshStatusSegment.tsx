@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react'
+import React, { useCallback, useId, useMemo } from 'react'
 import { AlertTriangle, Loader2, MonitorSmartphone, Server, ServerOff } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -20,7 +20,7 @@ import {
   toRuntimeExecutionHostId
 } from '../../../../shared/execution-host'
 import { isUserManagedRuntimeEnvironment } from '../../../../shared/runtime-environments'
-import { RuntimeHostStatusRow, runtimeDotColor } from './RuntimeHostStatusRow'
+import { RuntimeHostStatusRow, runtimeDotColor, runtimeStatusLabel } from './RuntimeHostStatusRow'
 import {
   connectedHostCountLabel,
   connectingHostsLabel,
@@ -77,6 +77,7 @@ export function SshStatusSegment({
   iconOnly: boolean
 }): React.JSX.Element | null {
   const selection = useActiveServerSelection()
+  const statusId = useId()
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const settings = useAppStore((s) => s.settings)
@@ -197,6 +198,10 @@ export function SshStatusSegment({
   const activeLabel = settings?.activeRuntimeEnvironmentId
     ? (activeHost?.label ?? settings.activeRuntimeEnvironmentId)
     : selection.localLabel
+  const activeState =
+    activeHost?.state ?? (settings?.activeRuntimeEnvironmentId ? 'disconnected' : 'connected')
+  const activeStatus =
+    selection.enabled && activeState !== 'connected' ? runtimeStatusLabel(activeState) : null
   const triggerLabel = selection.enabled
     ? `${translate('auto.components.status.bar.SshStatusSegment.6e8a9a4242', 'Remote Hosts')}: ${activeLabel}`
     : translate(
@@ -204,9 +209,7 @@ export function SshStatusSegment({
         'Remote host connection status'
       )
   const dotColor = selection.enabled
-    ? runtimeDotColor(
-        activeHost?.state ?? (settings?.activeRuntimeEnvironmentId ? 'disconnected' : 'connected')
-      )
+    ? runtimeDotColor(activeState)
     : overallDotColor(overall, connectedHostCount)
   const showConnecting =
     selection.switching ||
@@ -231,6 +234,7 @@ export function SshStatusSegment({
               className="inline-flex items-center gap-1.5 cursor-pointer rounded px-1 py-0.5 hover:bg-accent/70"
               {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
               aria-label={triggerLabel}
+              aria-describedby={activeStatus ? statusId : undefined}
               aria-busy={selection.switching}
               disabled={selection.switching}
             >
@@ -283,12 +287,20 @@ export function SshStatusSegment({
                   />
                 </span>
               )}
+              {activeStatus && (
+                <span
+                  id={statusId}
+                  className={iconOnly ? 'sr-only' : 'shrink-0 text-[11px] text-foreground'}
+                >
+                  {iconOnly ? activeStatus : `· ${activeStatus}`}
+                </span>
+              )}
             </button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
         {iconOnly ? (
           <TooltipContent side="top" sideOffset={6}>
-            {triggerLabel}
+            {activeStatus ? `${triggerLabel} · ${activeStatus}` : triggerLabel}
           </TooltipContent>
         ) : null}
       </Tooltip>
