@@ -334,9 +334,9 @@ describe('a start the chat needed and did not get', () => {
     acquire.mockRejectedValueOnce(new Error('spawn codex ENOENT'))
     const first = await accept('first')
     const second = await accept('second')
-    await eventually(() => expect(submission(second)?.dispatchState).toBe('rejected'))
+    await eventually(async () => expect((await submission(second))?.dispatchState).toBe('rejected'))
 
-    const snapshot = host.journalSnapshot(SESSION)
+    const snapshot = await host.journalSnapshot(SESSION)
     const errorRow = snapshot.items.find(
       (item) => item.body.kind === 'status' && item.body.tone === 'error'
     )?.itemId

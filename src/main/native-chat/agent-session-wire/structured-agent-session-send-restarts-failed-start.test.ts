@@ -211,7 +211,7 @@ describe('a send into a published session whose child ended before startup', () 
       expect.stringMatching(/stopped before it finished starting: .*not signed in/)
     ])
     // Accepted before the restart it needed, so the chat draws it above the row naming the cause.
-    const snapshot = host.journalSnapshot(SESSION)
+    const snapshot = await host.journalSnapshot(SESSION)
     const causeRow = snapshot.items.findLast((item) => item.body.kind === 'status')?.itemId
     const shown = [agentJournalSubmissionKey(held), causeRow]
     expect(

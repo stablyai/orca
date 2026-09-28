@@ -97,7 +97,7 @@ beforeEach(async () => {
     now: () => (clock += 1)
   })
   expect((await host.attach(CALLER, hostTestAttachParams(null))).ok).toBe(true)
-  const page = host.history({ sessionId: SESSION, direction: 'tail' })
+  const page = await host.history({ sessionId: SESSION, direction: 'tail' })
   if (!page.ok) {
     throw new Error('no history page')
   }
