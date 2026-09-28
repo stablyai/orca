@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { TerminalOscLinkRange } from '../../../src/shared/terminal-osc-link-ranges'
 import { readTerminalCellBox, type TerminalCellBox } from './terminal-cell-box'
 import { fitDimensionsFromCell, type TerminalFitDimensions } from './terminal-grid-fit'
-import { holdGrid } from './terminal-held-grid'
 import type { TerminalWebViewHandle, TerminalWebViewProps } from './terminal-webview-contract'
 import { useTerminalWebViewEngineErrorState } from './terminal-webview-engine-error-state'
 import { useTerminalWebReadyWatchdog } from './terminal-webview-ready-watchdog'
@@ -44,6 +43,9 @@ export type TerminalWebViewTransport = {
   pingsOnForegroundRecovery: () => boolean
 }
 
+type HeldCellBox = { cellBox: TerminalCellBox | null; grid: TerminalFitDimensions | null }
+const NOTHING_HELD: HeldCellBox = { cellBox: null, grid: null }
+
 export function useTerminalWebViewController(
   props: TerminalWebViewProps,
   transport: TerminalWebViewTransport
@@ -77,12 +79,11 @@ export function useTerminalWebViewController(
   // document's init() rAF chain ends with a 'ready' notify that resolves it. A fit awaits this so
   // it reads the box the init reported.
   const promises = useTerminalWebViewReadyPromises()
-  // The box the current document last reported; its re-reports cover a text-size change.
-  const cellBoxRef = useRef<TerminalCellBox | null>(null)
+  // The box the current document last reported (its re-reports cover a text-size change), and the
+  // grid it was last reported or subscribed at, as the document's own `reportedCellBox`.
   // Why: a box that changes while the grid does not is a renderer or pixel-ratio change and needs a
   // refit; one that arrives with a new grid is that grid's own (the DOM renderer's width follows cols).
-  // The document reports every grid change, so an in-place reflow is held before a later renderer swap.
-  const lastGridRef = useRef<string | null>(null)
+  const heldRef = useRef<HeldCellBox>(NOTHING_HELD)
   const { clearEngineError, engineError, reportEngineError, reportNativeEngineError } =
     useTerminalWebViewEngineErrorState(onEngineError)
   const { armWebReadyWatchdog, clearWebReadyWatchdog } = useTerminalWebReadyWatchdog(
@@ -159,7 +160,7 @@ export function useTerminalWebViewController(
 
       if (msg.type === 'web-ready') {
         // Why: nothing subscribes before ready, so a ready's box only sizes the subscribe after it.
-        cellBoxRef.current = readTerminalCellBox(msg)
+        heldRef.current = { ...heldRef.current, cellBox: readTerminalCellBox(msg) }
         confirmWebReady(true)
       } else if (
         msg.type === 'pong' &&
@@ -174,15 +175,19 @@ export function useTerminalWebViewController(
         promises.resolveReady()
       } else if (msg.type === 'cell-metrics') {
         const laidOut = readTerminalCellBox(msg)
-        const sameGrid = holdGrid(lastGridRef, msg.cols, msg.rows)
-        const previous = cellBoxRef.current
-        if (!laidOut) {
-          return
-        }
-        cellBoxRef.current = laidOut
+        const previous = heldRef.current
+        const grid =
+          typeof msg.cols === 'number' && typeof msg.rows === 'number'
+            ? { cols: msg.cols, rows: msg.rows }
+            : null
+        const sameGrid =
+          grid !== null && previous.grid?.cols === grid.cols && previous.grid.rows === grid.rows
+        heldRef.current = { cellBox: laidOut ?? previous.cellBox, grid }
         const changed =
-          previous !== null &&
-          (previous.cellWidth !== laidOut.cellWidth || previous.cellHeight !== laidOut.cellHeight)
+          laidOut !== null &&
+          previous.cellBox !== null &&
+          (previous.cellBox.cellWidth !== laidOut.cellWidth ||
+            previous.cellBox.cellHeight !== laidOut.cellHeight)
         if (changed && sameGrid) {
           onCellBoxChange?.()
         }
@@ -234,8 +239,7 @@ export function useTerminalWebViewController(
     pendingPingIdRef.current = null
     pendingMessages.clear()
     writeCoalescer.clear()
-    cellBoxRef.current = null
-    lastGridRef.current = null
+    heldRef.current = NOTHING_HELD
     armWebReadyWatchdog()
   }, [armWebReadyWatchdog, pendingMessages, writeCoalescer])
 
@@ -251,7 +255,7 @@ export function useTerminalWebViewController(
 
   const fitDimensions = useCallback(
     (frame: TerminalFrame) => {
-      const cell = cellBoxRef.current
+      const cell = heldRef.current.cellBox
       // Why: a box at another scale (a reload keeps the mount's) fits nothing; the route stays unmeasured.
       return cell && cell.fontScale === textScale && frame.width > 0 && frame.height > 0
         ? fitDimensionsFromCell(cell, frame.width, frame.height)
@@ -317,7 +321,7 @@ export function useTerminalWebViewController(
       fitDimensions,
       holdSubscribedGrid(grid: TerminalFitDimensions) {
         // Why: the DOM renderer's first report at this grid then reads as a new box, refit once.
-        holdGrid(lastGridRef, grid.cols, grid.rows)
+        heldRef.current = { ...heldRef.current, grid }
       },
       resetZoom() {
         postMessage({ type: 'reset-zoom' })
