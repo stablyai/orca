@@ -1,4 +1,7 @@
-import { isKnownHarnessInjectedUserTurnText } from './harness-injected-user-turns'
+import {
+  isKnownHarnessDeliveryTurnText,
+  isKnownHarnessInjectedUserTurnText
+} from './harness-injected-user-turns'
 import { isTextBlock, type NativeChatMessage } from './native-chat-types'
 
 function messageText(message: NativeChatMessage): string {
@@ -18,6 +21,12 @@ export function isNoiseMessage(message: NativeChatMessage): boolean {
     return false
   }
   return isKnownHarnessInjectedUserTurnText(messageText(message))
+}
+
+/** A noise turn that delivers a message the agent answers: hidden, yet whatever
+ *  the agent says next is a new reply, not more work on the one before it. */
+export function isDeliveryNoiseMessage(message: NativeChatMessage): boolean {
+  return isNoiseMessage(message) && isKnownHarnessDeliveryTurnText(messageText(message))
 }
 
 export function stripNoiseMessages(messages: readonly NativeChatMessage[]): NativeChatMessage[] {

@@ -6,6 +6,10 @@
 // than read — last prose row wins. A provider that starts publishing one can
 // override this derivation without moving the fold.
 //
+// A hidden delivery (another session's message, a task notification) splits a
+// turn into replies, and each reply keeps its own answer, so a later reply never
+// folds an earlier one away.
+//
 // Shared because desktop and mobile both draw this disclosure, and a fold that
 // hides a different row on each surface is the same bug twice.
 
@@ -24,6 +28,8 @@ export type NativeChatTurnFoldRow = {
    *  spawn roster or a background task. That row is the durable report of how
    *  the work ended — often the only one — so it never folds. */
   outlivesTurn: boolean
+  /** The row follows a hidden delivery, so it opens a new reply in its turn. */
+  startsReply?: boolean
 }
 
 export type NativeChatTurnFold = {
@@ -39,16 +45,28 @@ export const NATIVE_CHAT_EMPTY_TURN_FOLD: NativeChatTurnFold = {
   foldableTurnKeys: new Set()
 }
 
-/** The index of each turn's answer: its last assistant row that renders prose.
+/** The index of each reply's answer: its last assistant row that renders prose.
  *  A turn with no such row has no answer, and folds whole. */
 export function nativeChatTurnAnswerRows(
   rows: readonly NativeChatTurnFoldRow[]
-): ReadonlyMap<string, number> {
-  const answers = new Map<string, number>()
+): ReadonlySet<number> {
+  const answers = new Set<number>()
+  let replyTurnKey: string | undefined
+  let replyAnswer: number | undefined
   for (const [index, row] of rows.entries()) {
-    if (row.turnKey !== undefined && row.role === 'assistant' && row.rendersProse) {
-      answers.set(row.turnKey, index)
+    if (row.turnKey !== replyTurnKey || row.startsReply) {
+      if (replyAnswer !== undefined) {
+        answers.add(replyAnswer)
+      }
+      replyTurnKey = row.turnKey
+      replyAnswer = undefined
     }
+    if (row.turnKey !== undefined && row.role === 'assistant' && row.rendersProse) {
+      replyAnswer = index
+    }
+  }
+  if (replyAnswer !== undefined) {
+    answers.add(replyAnswer)
   }
   return answers
 }
@@ -89,7 +107,7 @@ export function nativeChatTurnFold({
     // A turn that produced no prose folds whole: its status row is the anchor,
     // so there is still something on screen to open. Keeping such a turn
     // unfolded instead would put every command it ran back in the transcript.
-    if (index === answers.get(turnKey)) {
+    if (answers.has(index)) {
       continue
     }
     foldableTurnKeys.add(turnKey)

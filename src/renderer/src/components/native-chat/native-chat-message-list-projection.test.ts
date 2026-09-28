@@ -15,7 +15,8 @@ function message(
 }
 
 it('retains settled folded runs while exposing changed tools, metadata, and attribution boundaries', () => {
-  const project = createNativeChatMessageListProjection()
+  const projectList = createNativeChatMessageListProjection()
+  const project = (messages: NativeChatMessage[]) => projectList(messages).messages
   const prose = message('prose', 1, [{ type: 'text', text: 'Inspecting the workspace' }])
   const call = message('call', 2, [{ type: 'tool-call', name: 'shell', input: { command: 'pwd' } }])
   const result = message('result', 3, [{ type: 'tool-result', output: '/workspace' }], 'tool')
@@ -63,7 +64,8 @@ it('retains settled folded runs while exposing changed tools, metadata, and attr
 // A reused row aliases producer-owned block objects (a journal item's `body.blocks`),
 // so an in-place rewrite here would freeze what the transcript renders.
 it('leaves producer-owned messages and blocks untouched', () => {
-  const project = createNativeChatMessageListProjection()
+  const projectList = createNativeChatMessageListProjection()
+  const project = (messages: NativeChatMessage[]) => projectList(messages).messages
   const prose = message('prose', 1, [{ type: 'text', text: 'Working' }])
   const call = message('call', 2, [{ type: 'tool-call', name: 'shell', input: { command: 'pwd' } }])
   const result = message('result', 3, [{ type: 'tool-result', output: '/workspace' }], 'tool')

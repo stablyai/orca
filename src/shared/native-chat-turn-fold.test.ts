@@ -29,22 +29,22 @@ const NONE = new Set<string>()
 
 describe('nativeChatTurnAnswerRows', () => {
   it('names the last assistant row that renders prose, not the first', () => {
-    expect(nativeChatTurnAnswerRows(TURN).get('turn-1')).toBe(4)
+    expect([...nativeChatTurnAnswerRows(TURN)]).toEqual([4])
   })
 
   it('ignores rows that render no prose, so a trailing tool run is not the answer', () => {
     const rows = [row({ role: 'user' }), row(), row({ rendersProse: false })]
-    expect(nativeChatTurnAnswerRows(rows).get('turn-1')).toBe(1)
+    expect([...nativeChatTurnAnswerRows(rows)]).toEqual([1])
   })
 
   it('ignores reasoning and system rows, which are never the agent answering', () => {
     const rows = [row({ role: 'user' }), row(), row({ role: 'reasoning' }), row({ role: 'system' })]
-    expect(nativeChatTurnAnswerRows(rows).get('turn-1')).toBe(1)
+    expect([...nativeChatTurnAnswerRows(rows)]).toEqual([1])
   })
 
   it('reports no answer for a turn that only ran tools', () => {
     const rows = [row({ role: 'user' }), row({ rendersProse: false })]
-    expect(nativeChatTurnAnswerRows(rows).has('turn-1')).toBe(false)
+    expect(nativeChatTurnAnswerRows(rows).size).toBe(0)
   })
 })
 
@@ -135,6 +135,26 @@ describe('nativeChatTurnFold', () => {
       expandedTurnKeys: NONE
     })
     expect([...foldedRows]).toEqual([1])
+  })
+
+  it('keeps the answer before a hidden delivery when the agent replies to it', () => {
+    // Prompt → answer, then a cross-session message (dropped from the transcript)
+    // the agent replies to inside the same turn.
+    const rows = [
+      row({ role: 'user' }),
+      row({ rendersProse: false }),
+      row(),
+      row({ role: 'reasoning', rendersProse: false, startsReply: true }),
+      row({ rendersProse: false }),
+      row()
+    ]
+    expect([...nativeChatTurnAnswerRows(rows)]).toEqual([2, 5])
+    const { foldedRows } = nativeChatTurnFold({
+      rows,
+      settledTurnKeys: SETTLED,
+      expandedTurnKeys: NONE
+    })
+    expect([...foldedRows].sort()).toEqual([1, 3, 4])
   })
 
   it('leaves rows before the first prompt alone', () => {

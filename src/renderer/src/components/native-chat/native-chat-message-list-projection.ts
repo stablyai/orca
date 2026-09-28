@@ -1,5 +1,8 @@
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { projectNativeChatTranscriptMessages } from '../../../../shared/native-chat-transcript-projection'
+import {
+  projectNativeChatTranscript,
+  type NativeChatTranscriptProjection
+} from '../../../../shared/native-chat-transcript-projection'
 import { compareMessages } from './native-chat-session-assembler'
 
 function sameMessage(left: NativeChatMessage, right: NativeChatMessage): boolean {
@@ -19,26 +22,34 @@ function sameMessage(left: NativeChatMessage, right: NativeChatMessage): boolean
   )
 }
 
+function sameIds(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
+  return left.size === right.size && [...left].every((id) => right.has(id))
+}
+
 export function createNativeChatMessageListProjection(): (
   messages: NativeChatMessage[]
-) => NativeChatMessage[] {
-  let previous: NativeChatMessage[] = []
+) => NativeChatTranscriptProjection {
+  let previous: NativeChatTranscriptProjection = { messages: [], replyStartIds: new Set() }
   let byId = new Map<string, NativeChatMessage>()
   return (messages) => {
-    const folded = projectNativeChatTranscriptMessages(messages, compareMessages)
-    const next = folded.map((message) => {
+    const projection = projectNativeChatTranscript(messages, compareMessages)
+    const replyStartIds = sameIds(previous.replyStartIds, projection.replyStartIds)
+      ? previous.replyStartIds
+      : projection.replyStartIds
+    const next = projection.messages.map((message) => {
       const prior = byId.get(message.id)
       // Folding clones historical tool runs even when every contributing block is unchanged.
       return prior && sameMessage(prior, message) ? prior : message
     })
     if (
-      next.length === previous.length &&
-      next.every((message, index) => message === previous[index])
+      replyStartIds === previous.replyStartIds &&
+      next.length === previous.messages.length &&
+      next.every((message, index) => message === previous.messages[index])
     ) {
       return previous
     }
-    previous = next
+    previous = { messages: next, replyStartIds }
     byId = new Map(next.map((message) => [message.id, message]))
-    return next
+    return previous
   }
 }

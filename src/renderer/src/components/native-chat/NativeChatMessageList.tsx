@@ -141,11 +141,16 @@ export function NativeChatMessageList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [session.agent, session.sessionId]
   )
+  const projection = useMemo(
+    () => projectMessages(session.messages),
+    [projectMessages, session.messages]
+  )
+  const replyStartIds = projection.replyStartIds
   const messages = useMemo(() => {
-    const projected = projectNativeChatTaskListFrames(projectMessages(session.messages))
+    const projected = projectNativeChatTaskListFrames(projection.messages)
     // Structured sessions show goal state in the banner above the composer.
     return journalItems ? omitNativeChatThreadGoalRows(projected) : projected
-  }, [journalItems, projectMessages, session.messages])
+  }, [journalItems, projection.messages])
   const taskListPredecessors = useMemo(() => nativeChatTaskListPredecessors(messages), [messages])
   const taskListState = useMemo(() => nativeChatTaskListState(messages), [messages])
   const showTypingIndicator = showTurnStatus
@@ -199,6 +204,7 @@ export function NativeChatMessageList({
         turnDiffs,
         showTurnStatus,
         expandedTurnKeys: expandedTurnIds,
+        replyStartIds,
         isWorking,
         lifecycleWorking
       }),
@@ -210,6 +216,7 @@ export function NativeChatMessageList({
       lifecycleWorking,
       messages,
       receipts,
+      replyStartIds,
       showTurnStatus,
       turnDiffs,
       turnKeys,

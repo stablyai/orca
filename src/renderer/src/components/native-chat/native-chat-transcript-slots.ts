@@ -66,6 +66,8 @@ export type NativeChatTranscriptSlotsInput = {
   showTurnStatus: boolean
   /** Turns the reader opened. Everything else with a duration stays folded. */
   expandedTurnKeys: ReadonlySet<string>
+  /** Rows that open a new reply after a hidden delivery; see the projection. */
+  replyStartIds?: ReadonlySet<string>
   isWorking: boolean
   /** Session-level lifecycle, which outlives a transcript that never said "done". */
   lifecycleWorking: boolean
@@ -84,6 +86,7 @@ export function buildNativeChatTranscriptSlots(
     turnDiffs,
     showTurnStatus,
     expandedTurnKeys,
+    replyStartIds,
     isWorking,
     lifecycleWorking
   } = input
@@ -99,7 +102,8 @@ export function buildNativeChatTranscriptSlots(
       // and its plain-text twin is then the only record the spawn happened.
       outlivesTurn: message.blocks.some(
         (block) => isSubagentGroupBlock(block) || isBackgroundTaskBlock(block)
-      )
+      ),
+      startsReply: replyStartIds?.has(message.id) ?? false
     }
   })
   // Liveness is the turn's, not any one call's: the run at the frontier stays

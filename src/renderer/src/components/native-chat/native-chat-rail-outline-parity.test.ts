@@ -68,7 +68,7 @@ const JOURNAL: AgentJournalRenderItem[] = [
 function loadedRailItems(items: AgentJournalRenderItem[], submissions: AgentJournalSubmission[]) {
   const projected = createNativeChatMessageListProjection()(
     projectStructuredAgentSessionMessages(items, [], submissions)
-  )
+  ).messages
   const messages = omitNativeChatThreadGoalRows(projectNativeChatTaskListFrames(projected))
   let turn: string | undefined
   const turnKeys = messages.map((message) => {

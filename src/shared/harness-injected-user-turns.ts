@@ -50,6 +50,20 @@ const HARNESS_INJECTED_TURN_PREFIXES = [
   COMPACT_CONTINUATION_PREFIX
 ]
 
+// Messages from another sender (a session, teammate, channel, finished background
+// task) that the agent answers with a reply of its own, unlike reminders and notices.
+const HARNESS_DELIVERY_TAG_NAMES = new Set([
+  'agent-message',
+  'cross-session-message',
+  'task-notification',
+  'teammate-message'
+])
+const HARNESS_DELIVERY_PREFIXES = [
+  '<channel source=',
+  'a message arrived from ',
+  'another claude session sent a message'
+]
+
 // Why: classification only inspects leading tags/prefixes. Cap the toLowerCase
 // copy so vault-scan / prompt-seed paths stay O(1) on multi-KB pastes.
 const HARNESS_CLASSIFY_HEAD_LIMIT = 256
@@ -67,6 +81,19 @@ export function isKnownHarnessInjectedUserTurnText(text: string): boolean {
     return true
   }
   return HARNESS_INJECTED_TURN_PREFIXES.some((prefix) => normalized.startsWith(prefix))
+}
+
+/** True for an injected turn that delivers a message the agent replies to. */
+export function isKnownHarnessDeliveryTurnText(text: string): boolean {
+  const normalized = normalizedHarnessTurnHead(text)
+  if (!normalized) {
+    return false
+  }
+  const tagName = LEADING_TAG_NAME.exec(normalized)?.[1]
+  if (tagName && HARNESS_DELIVERY_TAG_NAMES.has(tagName)) {
+    return true
+  }
+  return HARNESS_DELIVERY_PREFIXES.some((prefix) => normalized.startsWith(prefix))
 }
 
 /** True only for the observed post-compaction continuation prompt. */
