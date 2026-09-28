@@ -323,6 +323,8 @@ describe('Windows NSIS uninstaller signing', () => {
       expect(restore.run).toContain('if (@($candidates).Count -ne 1)')
       expect(restore.run).not.toContain('Select-Object -First 1')
       expect(restore.run).not.toContain('-like "*$relative"')
+      const rehearsal = readWorkflow('.github/workflows/windows-signing-rehearsal.yml')
+      expect(stepNamed(rehearsal.jobs.rehearse.steps, name).run).toBe(restore.run)
     }
   })
 

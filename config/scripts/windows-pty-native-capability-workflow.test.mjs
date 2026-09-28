@@ -58,7 +58,6 @@ describe('packaged Windows PTY native capability routing', () => {
     expect(ensureNativeRuntime).toContain("runPnpm(['exec', 'node-gyp', 'rebuild']")
     expect(ensureNativeRuntime).toContain("resolve(moduleDir, 'scripts', 'post-install.js')")
     expect(build.run).toBe('pnpm run build:release:parallel')
-    expect(build.env.ORCA_REUSE_WINDOWS_CLI_LAUNCHER).toBe('1')
     expect(prepare.run).toBe('node config/scripts/ensure-native-runtime.mjs --runtime=electron')
     expect(packageStep.env.ORCA_REUSE_PREPARED_NATIVE_RUNTIME).toBe('1')
     expect(workflow.jobs.verify.needs).toContain('package_windows')

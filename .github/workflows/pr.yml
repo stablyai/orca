@@ -1109,8 +1109,6 @@ jobs:
           key: windows-cli-launcher-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('native/windows-cli-launcher/**', 'config/scripts/build-windows-cli-launcher.mjs', 'resources/build/icon.ico', 'package.json') }}
 
       - name: Build package inputs
-        env:
-          ORCA_REUSE_WINDOWS_CLI_LAUNCHER: '1'
         run: pnpm run build:release:parallel
 
       - name: Restore compiled Electron native modules
