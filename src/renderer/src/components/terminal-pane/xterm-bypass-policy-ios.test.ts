@@ -105,7 +105,10 @@ describe('shouldBypassXtermKeyboardEvent — iOS web', () => {
 
   it('keeps Cmd+C bubbling on iOS web', () => {
     expect(
-      shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyC', metaKey: true }), iosOptions)
+      shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyC', metaKey: true }), {
+        ...iosOptions,
+        hasSelection: true
+      })
     ).toBe(true)
   })
 

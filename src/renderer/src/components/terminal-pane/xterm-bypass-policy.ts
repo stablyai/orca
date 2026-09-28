@@ -360,8 +360,11 @@ export function shouldBypassXtermKeyboardEvent(
     // Why: window-level handlers already consume other Cmd chords before xterm
     // sees them in Electron. Web clients still need paste to bubble to
     // Chromium's native paste event instead of xterm's Kitty encoder.
+    // Cmd+C only bubbles with an xterm selection: otherwise a mouse-owning TUI
+    // may hold its own selection, so let a negotiated Kitty encoder report
+    // Super+C (Ghostty's performable copy). Legacy mode encodes nothing.
     return (
-      matchesClipboardBinding('Mod+C', event, 'darwin') ||
+      (matchesClipboardBinding('Mod+C', event, 'darwin') && hasSelection) ||
       matchesClipboardBinding('Mod+V', event, 'darwin')
     )
   }
