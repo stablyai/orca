@@ -84,13 +84,16 @@ const PER_PAGE_RETENTION_HOOKS = [
   'useBrowserRemotelyViewedPageIds'
 ]
 
-// One production read of a term is not a retention decision: the pane reads *who* drives the active
-// page to label the overlay and lock input. Naming the exception per file rather than dropping the
-// symbol keeps every other file that reads it a census failure.
+// Input ownership reads are not retention decisions; exceptions stay scoped to a file and symbol.
 const NON_RETENTION_TERM_READERS = new Map<string, readonly string[]>([
   [
     'components/browser-pane/assemble-chrome/browser-workspace-pane.tsx',
     ['useBrowserDriverForPage']
+  ],
+  // Guest interactions must not steal desktop focus from automation or mobile; viewers can coexist.
+  [
+    'components/browser-pane/assemble-chrome/BrowserPaneOverlayLayer.tsx',
+    ['isBrowserAutomationVisible', 'isBrowserPageMobileDriven']
   ]
 ])
 

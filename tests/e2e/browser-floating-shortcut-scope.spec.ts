@@ -88,6 +88,7 @@ test.describe('floating browser shortcut scope', () => {
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
+    await orcaPage.evaluate(() => window.__store!.getState().updateSettings({ uiLanguage: 'en' }))
     await ensureTerminalVisible(orcaPage)
   })
 

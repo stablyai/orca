@@ -401,7 +401,7 @@ describe('guest mouse wheel browser zoom', () => {
 
 describe('setupGuestShortcutForwarding', () => {
   const browserTabId = 'tab-1'
-  let rendererSendMock: ReturnType<typeof vi.fn>
+  let rendererSendMock: ReturnType<typeof vi.fn<(...args: unknown[]) => void>>
   let guestOnMock: ReturnType<typeof vi.fn>
   let guestOffMock: ReturnType<typeof vi.fn>
 
@@ -412,10 +412,16 @@ describe('setupGuestShortcutForwarding', () => {
     } as unknown as Electron.WebContents
   }
 
+  /** Isolates shortcut assertions; interaction messages have separate ordering tests. */
   function makeRenderer() {
-    return { send: rendererSendMock } as unknown as Electron.WebContents
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the forwarding binding only calls this renderer stub through send.
+    return {
+      send: (channel: string, ...args: unknown[]) =>
+        channel === 'ui:browserGuestInteraction' ? undefined : rendererSendMock(channel, ...args)
+    } as unknown as Electron.WebContents
   }
 
+  /** Exercises the registered key handler with platform defaults and exposes cancellation. */
   function triggerBeforeInput(input: Partial<Electron.Input>): ReturnType<typeof vi.fn> {
     const handler = guestOnMock.mock.calls.find((call) => call[0] === 'before-input-event')?.[1] as
       | ((event: Electron.Event, input: Electron.Input) => void)
@@ -436,6 +442,7 @@ describe('setupGuestShortcutForwarding', () => {
     return preventDefault
   }
 
+  /** Exercises Electron's native zoom path separately from keyboard shortcut dispatch. */
   function triggerZoomChanged(direction: 'in' | 'out' | 'reset'): ReturnType<typeof vi.fn> {
     const handler = guestOnMock.mock.calls.find((call) => call[0] === 'zoom-changed')?.[1] as
       | ((event: Electron.Event, direction: 'in' | 'out' | 'reset') => void)

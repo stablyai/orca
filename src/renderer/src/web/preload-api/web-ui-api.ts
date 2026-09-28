@@ -23,6 +23,7 @@ import { callRuntimeResult } from './web-runtime-calls'
 import { requireActiveEnvironmentOrNull } from './web-runtime-session'
 import { UI_STORAGE_KEY, noopUnsubscribe, writeJson } from './web-storage'
 
+/** Adapts the desktop UI contract for web clients, with inert Electron-only subscriptions. */
 export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
   let zoomLevel = readLocalWebUIState().uiZoomLevel
   return {
@@ -193,6 +194,8 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     replyTabClose: () => {},
     onNewTerminalTab: () => noopUnsubscribe,
     onFocusBrowserAddressBar: () => noopUnsubscribe,
+    /** Web clients have no local Electron guests to report split ownership. */
+    onBrowserGuestInteraction: () => noopUnsubscribe,
     onFindInBrowserPage: () => noopUnsubscribe,
     onReloadBrowserPage: () => noopUnsubscribe,
     onBrowserHistoryNavigate: () => noopUnsubscribe,

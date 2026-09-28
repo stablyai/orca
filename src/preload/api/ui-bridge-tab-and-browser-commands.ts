@@ -14,6 +14,17 @@ import { browserFindSubscriptions } from '../preload-runtime-support'
 import type { PreloadApi } from '../api-types'
 
 export const uiTabAndBrowserCommandsApi = {
+  /** Subscribes to guest page IDs and returns cleanup for this subscriber alone. */
+  onBrowserGuestInteraction: (callback: (browserPageId: string) => void): (() => void) => {
+    /** Keeps malformed IPC payloads out of split ownership resolution. */
+    const listener = (_event: Electron.IpcRendererEvent, browserPageId: unknown): void => {
+      if (typeof browserPageId === 'string' && browserPageId.length > 0) {
+        callback(browserPageId)
+      }
+    }
+    ipcRenderer.on('ui:browserGuestInteraction', listener)
+    return () => ipcRenderer.removeListener('ui:browserGuestInteraction', listener)
+  },
   onRequestTabSetProfile: (
     callback: (data: {
       requestId: string

@@ -106,6 +106,7 @@ test.describe('browser split navigation shortcuts', () => {
     server = await startBrowserSplitPageServer()
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
+    await orcaPage.evaluate(() => window.__store!.getState().updateSettings({ uiLanguage: 'en' }))
     await ensureTerminalVisible(orcaPage)
   })
 

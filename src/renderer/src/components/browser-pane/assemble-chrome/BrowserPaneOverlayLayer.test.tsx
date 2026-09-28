@@ -7,6 +7,7 @@ import type { BrowserTab as BrowserTabState } from '../../../../../shared/browse
 import type { Tab, TabGroup } from '../../../../../shared/tab-types'
 
 type MockAppState = {
+  activeWorktreeId: string | null
   browserTabsByWorktree: Record<string, readonly BrowserTabState[]>
   unifiedTabsByWorktree: Record<string, readonly Tab[]>
   groupsByWorktree: Record<string, readonly TabGroup[]>
@@ -19,24 +20,30 @@ const mocks = vi.hoisted(() => ({
   automationVisiblePageIds: new Set<string>(),
   mobileDrivenPageIds: new Set<string>(),
   remotelyViewedPageIds: new Set<string>(),
+  interactions: new Set<(pageId: string) => void>(),
   focusGroup: vi.fn()
 }))
 
 vi.mock('../../../store', () => ({
-  useAppStore: (selector: (state: MockAppState) => unknown) => {
-    if (!mocks.state) {
-      throw new Error('mock app state not initialized')
-    }
-    return selector(mocks.state)
-  }
+  useAppStore: Object.assign(
+    (selector: (state: MockAppState) => unknown) => {
+      if (!mocks.state) {
+        throw new Error('mock app state not initialized')
+      }
+      return selector(mocks.state)
+    },
+    { getState: () => mocks.state! }
+  )
 }))
 
 vi.mock('../host-guest/browser-automation-visibility', () => ({
+  isBrowserAutomationVisible: (pageId: string) => mocks.automationVisiblePageIds.has(pageId),
   useBrowserAutomationVisibilityForAny: (pageIds: readonly string[]) =>
     pageIds.some((pageId) => mocks.automationVisiblePageIds.has(pageId))
 }))
 
 vi.mock('@/lib/pane-manager/browser-mobile-driver-state', () => ({
+  isBrowserPageMobileDriven: (pageId: string) => mocks.mobileDrivenPageIds.has(pageId),
   useBrowserMobileDriverForAny: (pageIds: readonly string[]) =>
     pageIds.some((pageId) => mocks.mobileDrivenPageIds.has(pageId))
 }))
@@ -89,10 +96,23 @@ describe('BrowserPaneOverlayLayer', () => {
     mocks.remotelyViewedPageIds.clear()
     mocks.focusGroup.mockClear()
     mocks.state = createState()
+    mocks.focusGroup.mockImplementation((worktreeId: string, groupId: string) => {
+      mocks.state!.activeGroupIdByWorktree[worktreeId] = groupId
+    })
+    vi.stubGlobal('api', {
+      ui: {
+        onBrowserGuestInteraction: (callback: (pageId: string) => void) => {
+          mocks.interactions.add(callback)
+          return () => mocks.interactions.delete(callback)
+        }
+      }
+    })
   })
 
   afterEach(() => {
     cleanup()
+    vi.unstubAllGlobals()
+    mocks.interactions.clear()
     // The row store is module-level, so a leftover row would render an extra pane in every
     // sibling test.
     clearClientHostedBrowserRowSelection()
@@ -193,6 +213,92 @@ describe('BrowserPaneOverlayLayer', () => {
     expect(markup).toContain(
       'data-browser-pane-id="browser-a" data-browser-pane-active="true" data-browser-find-shortcut-scope="focused"'
     )
+  })
+
+  it('follows consecutive guest clicks without a window blur or React rerender', () => {
+    const state = mocks.state!
+    state.groupsByWorktree['wt-1'] = [
+      ...state.groupsByWorktree['wt-1'],
+      {
+        id: 'group-2',
+        worktreeId: 'wt-1',
+        activeTabId: 'tab-b',
+        tabOrder: ['tab-b']
+      }
+    ]
+    state.unifiedTabsByWorktree['wt-1'] = state.unifiedTabsByWorktree['wt-1'].map((tab) =>
+      tab.id === 'tab-b' ? { ...tab, groupId: 'group-2' } : tab
+    )
+    render(<BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive />)
+    for (const pageId of ['page-b', 'page-a', 'page-b']) {
+      mocks.interactions.forEach((callback) => callback(pageId))
+    }
+    expect(mocks.focusGroup.mock.calls).toEqual([
+      ['wt-1', 'group-2'],
+      ['wt-1', 'group-1'],
+      ['wt-1', 'group-2']
+    ])
+  })
+
+  it.each([
+    { name: 'already focused page', pageId: 'page-a', active: true },
+    { name: 'inactive tab', pageId: 'page-b', active: true },
+    { name: 'unknown or removed page', pageId: 'removed', active: true },
+    { name: 'inactive worktree', pageId: 'page-a', active: false }
+  ])('ignores interaction from $name', ({ pageId, active }) => {
+    render(<BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive={active} />)
+    mocks.interactions.forEach((callback) => callback(pageId))
+    expect(mocks.focusGroup).not.toHaveBeenCalled()
+  })
+
+  it('ignores a stale subscription immediately after switching worktrees', () => {
+    mocks.state!.activeGroupIdByWorktree['wt-1'] = 'other'
+    render(<BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive />)
+    mocks.state!.activeWorktreeId = 'wt-2'
+    mocks.interactions.forEach((callback) => callback('page-a'))
+    expect(mocks.focusGroup).not.toHaveBeenCalled()
+  })
+
+  it.each(['automation', 'mobile'])('does not focus the desktop split for %s input', (driver) => {
+    mocks.state!.activeGroupIdByWorktree['wt-1'] = 'other'
+    const drivenPages =
+      driver === 'automation' ? mocks.automationVisiblePageIds : mocks.mobileDrivenPageIds
+    drivenPages.add('page-a')
+    render(<BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive />)
+    mocks.interactions.forEach((callback) => callback('page-a'))
+    expect(mocks.focusGroup).not.toHaveBeenCalled()
+    drivenPages.clear()
+    mocks.interactions.forEach((callback) => callback('page-a'))
+    expect(mocks.focusGroup).toHaveBeenCalledWith('wt-1', 'group-1')
+  })
+
+  it('allows local focus while a remote viewer retains the page for painting', () => {
+    mocks.state!.activeGroupIdByWorktree['wt-1'] = 'other'
+    mocks.remotelyViewedPageIds.add('page-a')
+    render(<BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive />)
+    mocks.interactions.forEach((callback) => callback('page-a'))
+    expect(mocks.focusGroup).toHaveBeenCalledWith('wt-1', 'group-1')
+  })
+
+  it('ignores retained background pages within a browser workspace', () => {
+    mocks.state!.activeGroupIdByWorktree['wt-1'] = 'other'
+    mocks.state!.browserTabsByWorktree['wt-1'] = [
+      createBrowserTab('browser-a', ['page-a', 'hidden-page'])
+    ]
+    render(<BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive />)
+    mocks.interactions.forEach((callback) => callback('hidden-page'))
+    expect(mocks.focusGroup).not.toHaveBeenCalled()
+  })
+
+  it('removes the interaction subscription when parked and unmounted', () => {
+    const view = render(<BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive />)
+    expect(mocks.interactions.size).toBe(1)
+    view.rerender(<BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive={false} />)
+    expect(mocks.interactions.size).toBe(0)
+    view.rerender(<BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive />)
+    expect(mocks.interactions.size).toBe(1)
+    view.unmount()
+    expect(mocks.interactions.size).toBe(0)
   })
 
   it('restores 200 tabs on demand and preserves viewport roots across parking and selection', () => {
@@ -431,12 +537,14 @@ describe('BrowserPaneOverlayLayer', () => {
   })
 })
 
+/** Uses static markup for mount-policy assertions that do not depend on interaction effects. */
 function renderOverlay({ isWorktreeActive }: { isWorktreeActive: boolean }): string {
   return renderToStaticMarkup(
     <BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive={isWorktreeActive} />
   )
 }
 
+/** Reads the rendered slot's display policy so retained hidden guests remain distinguishable. */
 function slotDisplay(browserTabId: string): string {
   const view = render(<BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive={true} />)
   const slot = view.container.querySelector<HTMLElement>(
@@ -448,6 +556,7 @@ function slotDisplay(browserTabId: string): string {
   return slot.style.display
 }
 
+/** Seeds one focused group with active and background browser tabs to exercise ownership guards. */
 function createState(): MockAppState {
   const browserA = createBrowserTab('browser-a', ['page-a'])
   const browserB = createBrowserTab('browser-b', ['page-b'])
@@ -455,6 +564,7 @@ function createState(): MockAppState {
   const tabB = createUnifiedBrowserTab('tab-b', browserB.id, 1)
 
   return {
+    activeWorktreeId: 'wt-1',
     browserTabsByWorktree: { 'wt-1': [browserA, browserB] },
     unifiedTabsByWorktree: { 'wt-1': [tabA, tabB] },
     groupsByWorktree: {

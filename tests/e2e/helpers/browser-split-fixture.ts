@@ -27,6 +27,7 @@ export type BrowserSplitFixture = {
   secondBrowserTabId: string
 }
 
+/** Preserves the active terminal beside a browser to test shortcuts across content types. */
 export async function createTerminalBrowserSplit(
   page: Page,
   url = 'about:blank'
@@ -71,6 +72,7 @@ export async function createTerminalBrowserSplit(
   }, url)
 }
 
+/** Seeds two browser splits; served URLs avoid the about:blank overlay during guest click tests. */
 export async function createBrowserSplit(
   page: Page,
   urls: { first: string; second: string } = { first: 'about:blank', second: 'about:blank' }
@@ -128,10 +130,12 @@ export function browserOverlay(page: Page, browserTabId: string) {
   return page.locator(`[data-browser-overlay-tab-id="${browserTabId}"]`)
 }
 
+/** Scopes address-bar lookup to one overlay because both browser splits can be visible. */
 export function browserAddressBar(page: Page, browserTabId: string) {
   return browserOverlay(page, browserTabId).locator('[data-orca-browser-address-bar="true"]')
 }
 
+/** Establishes host-renderer focus before testing a transition into a separate browser guest. */
 export async function focusBrowserAddressBar(page: Page, browserTabId: string): Promise<void> {
   const addressBar = browserAddressBar(page, browserTabId)
   const addressBarForm = browserOverlay(page, browserTabId).locator(
