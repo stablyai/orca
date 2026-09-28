@@ -370,6 +370,15 @@ describe('orchestration timeout flag validation', () => {
       json: true
     } as never)
 
+  const invokeInbox = (flags: Map<string, string | boolean>) =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this handler test provides every context field it reads.
+    ORCHESTRATION_HANDLERS['orchestration inbox']({
+      flags,
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: true
+    } as never)
+
   const invokeAsk = (flags: Map<string, string | boolean>) =>
     ORCHESTRATION_HANDLERS['orchestration ask']({
       flags,
@@ -416,6 +425,27 @@ describe('orchestration timeout flag validation', () => {
       wait: true,
       timeoutMs: 250
     })
+  })
+
+  it('rejects a Run-scoped inbox response from a runtime that only read terminal mail', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+    callMock.mockResolvedValue({
+      result: {
+        messages: [],
+        count: 0,
+        scope: 'messages addressed to terminal term_worker'
+      }
+    })
+    vi.mocked(printResult).mockClear()
+
+    await expect(
+      invokeInbox(new Map<string, string | boolean>([['run', 'run_1']]))
+    ).rejects.toMatchObject({
+      code: 'incompatible_runtime',
+      message:
+        'The running Orca runtime does not support Run-scoped inbox reads. Update or restart Orca and try again.'
+    })
+    expect(printResult).not.toHaveBeenCalled()
   })
 
   it('filters already-read rows from a peek response for pre-peek runtimes', async () => {
