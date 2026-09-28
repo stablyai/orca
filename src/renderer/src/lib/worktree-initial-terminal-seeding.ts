@@ -40,7 +40,8 @@ function getSetupRunnerCommandPlatformForLaunch(setup: WorktreeSetupLaunch): 'wi
 export function reseedGatedEmptyWorkspace(
   workspaceKey: string,
   callerProvidesSurface: boolean,
-  executionHostId?: ExecutionHostId
+  executionHostId?: ExecutionHostId,
+  seedStartupIfEmpty?: WorktreeStartupPayload
 ): void {
   const state = useAppStore.getState()
   if (
@@ -58,7 +59,8 @@ export function reseedGatedEmptyWorkspace(
     undefined,
     undefined,
     {
-      reseedEmptiedWorkspace: true
+      reseedEmptiedWorkspace: true,
+      ...(seedStartupIfEmpty ? { seedStartupIfEmpty } : {})
     }
   )
 }
@@ -200,6 +202,11 @@ export function ensureWorktreeHasInitialTerminal(
       return existingTerminalTabId
     }
     return null
+  }
+
+  // Why: seed-if-empty is not explicit launch work; only apply it when auto-create already won.
+  if (!sequencedStartup && shouldAutoCreate) {
+    sequencedStartup = opts?.seedStartupIfEmpty
   }
 
   const templatedTabId = applyDefaultTerminalTabs(

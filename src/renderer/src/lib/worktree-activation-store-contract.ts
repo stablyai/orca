@@ -7,7 +7,7 @@ import type {
   SleepingAgentLaunchConfig
 } from '../../../shared/agent-session-resume'
 import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner'
-import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
+import type { AgentStartedTelemetry, WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
 
 export type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
   tabsByWorktree: Record<string, { id: string }[]>
@@ -75,4 +75,6 @@ export type InitialTerminalOptions = {
    *  Setup/issue work still runs, but work that needs no host terminal must not seed a shell
    *  beside the chat the caller is about to create. */
   callerProvidesSurface?: boolean
+  /** Applied only when auto-create already won; never treated as explicit launch work. */
+  seedStartupIfEmpty?: WorktreeStartupPayload
 }
