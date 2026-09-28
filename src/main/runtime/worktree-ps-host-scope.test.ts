@@ -128,4 +128,39 @@ describe('worktree.ps host coverage', () => {
     )
     expect(result.hostScope?.hostIds).toEqual(['local', `ssh:${SSH_CONNECTION_ID}`])
   })
+
+  it('attributes an SSH folder workspace to its execution host in hostScope', async () => {
+    const folderWorkspace = {
+      id: 'folder-ssh',
+      projectGroupId: 'group-1',
+      name: 'SSH folder',
+      folderPath: '/remote/folder',
+      connectionId: 'box-2',
+      linkedTask: null,
+      comment: '',
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      createdAt: 0,
+      updatedAt: 0
+    }
+    const runtime = new OrcaRuntimeService({
+      ...makeStore(),
+      getFolderWorkspaces: () => [folderWorkspace],
+      getProjectGroups: () => [{ id: 'group-1', name: 'Group', parentPath: '/remote' }]
+    } as never)
+
+    const result = await runtime.getWorktreePs(10_000)
+
+    const folderRow = result.worktrees.find(
+      (worktree) => worktree.workspaceKind === 'folder-workspace'
+    )
+    expect(folderRow?.hostId).toBe('ssh:box-2')
+    expect(result.hostScope?.hostIds).toEqual(
+      expect.arrayContaining(['local', 'ssh:box-1', 'ssh:box-2'])
+    )
+    expect(result.hostScope?.omittedHostIds).not.toContain('ssh:box-2')
+  })
 })
