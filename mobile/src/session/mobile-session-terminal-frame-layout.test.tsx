@@ -49,12 +49,7 @@ type Branch = 'loading' | 'pending' | 'terminal'
 
 function controller(
   branch: Branch | boolean,
-  notifyTerminalFrameHeight: (height: number) => void,
-  frame: {
-    terminalFrameRef?: { current: { width: number; height: number } | null }
-    notifyTerminalFrameWidth?: () => void
-    handleTerminalFrameLayout?: () => void
-  } = {}
+  notifyTerminalFrame: (frame: { width: number; height: number }) => void
 ): Controller {
   const shown = branch === true ? 'loading' : branch === false ? 'terminal' : branch
   const scope = {
@@ -63,10 +58,7 @@ function controller(
     isPendingTerminalRecoveryParked: false,
     showEmptyState: false,
     terminals: [],
-    terminalFrameRef: frame.terminalFrameRef ?? { current: null },
-    handleTerminalFrameLayout: frame.handleTerminalFrameLayout ?? (() => {}),
-    notifyTerminalFrameHeight,
-    notifyTerminalFrameWidth: frame.notifyTerminalFrameWidth ?? (() => {}),
+    notifyTerminalFrame,
     dictation: { isRecording: false },
     nativeChatSendError: { message: null, clear: () => {} }
   }
@@ -77,8 +69,8 @@ function controller(
 describe('the terminal frame on the page', () => {
   it('reports its height when the session opens from the loading state', () => {
     const heights: number[] = []
-    const notify = (height: number): void => {
-      heights.push(height)
+    const notify = (frame: { height: number }): void => {
+      heights.push(frame.height)
     }
     let renderer: ReturnType<typeof create> | undefined
     act(() => {
@@ -97,8 +89,8 @@ describe('the terminal frame on the page', () => {
   it('stays one mounted frame across loading, a pending terminal and the terminal', () => {
     // A frame that remounts per branch reports again on every return; one that stays reports once.
     const heights: number[] = []
-    const notify = (height: number): void => {
-      heights.push(height)
+    const notify = (frame: { height: number }): void => {
+      heights.push(frame.height)
     }
     let renderer: ReturnType<typeof create> | undefined
     const show = (branch: Branch) => {
@@ -118,58 +110,5 @@ describe('the terminal frame on the page', () => {
     show('pending')
     show('terminal')
     expect(heights).toEqual([FRAME.height])
-  })
-
-  it('keeps one frame, notifies a new width, and keeps the box through a hidden 0x0 layout', () => {
-    const terminalFrameRef: { current: { width: number; height: number } | null } = {
-      current: null
-    }
-    const notifyTerminalFrameWidth = vi.fn()
-    let renderer: ReturnType<typeof create> | undefined
-    act(() => {
-      renderer = create(
-        createElement(MobileSessionActiveContent, {
-          controller: controller(false, () => {}, { terminalFrameRef, notifyTerminalFrameWidth })
-        })
-      )
-    })
-    expect(terminalFrameRef.current).toEqual(FRAME)
-    const layOut = (width: number, height: number) =>
-      act(() => {
-        renderer!.root
-          .findAll((node) => typeof node.props.onLayout === 'function')[0]!
-          .props.onLayout({ nativeEvent: { layout: { width, height } } })
-      })
-    layOut(FRAME.width, 560)
-    expect(notifyTerminalFrameWidth).not.toHaveBeenCalled()
-    layOut(0, 0)
-    expect(terminalFrameRef.current).toEqual({ width: FRAME.width, height: 560 })
-    layOut(360.5, 560)
-    expect(terminalFrameRef.current).toEqual({ width: 360.5, height: 560 })
-    expect(notifyTerminalFrameWidth).toHaveBeenCalledTimes(1)
-  })
-
-  it('subscribes on the first laid-out frame only, not on every layout after it', () => {
-    const terminalFrameRef: { current: { width: number; height: number } | null } = {
-      current: null
-    }
-    const handleTerminalFrameLayout = vi.fn()
-    let renderer: ReturnType<typeof create> | undefined
-    act(() => {
-      renderer = create(
-        createElement(MobileSessionActiveContent, {
-          controller: controller(false, () => {}, { terminalFrameRef, handleTerminalFrameLayout })
-        })
-      )
-    })
-    const layOut = (width: number, height: number) =>
-      act(() => {
-        renderer!.root
-          .findAll((node) => typeof node.props.onLayout === 'function')[0]!
-          .props.onLayout({ nativeEvent: { layout: { width, height } } })
-      })
-    layOut(FRAME.width, 560)
-    layOut(360, 560)
-    expect(handleTerminalFrameLayout).toHaveBeenCalledTimes(1)
   })
 })

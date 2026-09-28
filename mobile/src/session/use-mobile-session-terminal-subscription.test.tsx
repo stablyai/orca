@@ -97,10 +97,13 @@ function subscriptionHarness(opts: {
     markdownDocs: new Map(),
     fileDocs: new Map(),
     readMarkdownTab: vi.fn(),
-    readFileTab: vi.fn()
+    readFileTab: vi.fn(),
+    notifyTerminalFrameHeight: vi.fn(),
+    notifyTerminalFrameWidth: vi.fn()
   }
   let subscribe: ((handle: string) => void) | undefined
   let webReady: ((handle: string) => void) | undefined
+  let notifyFrame: ((frame: { width: number; height: number }) => void) | undefined
   function Probe() {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook destructures only the fields built above.
     const scope = fields as unknown as MobileSessionTerminalSubscriptionFoundationModel
@@ -108,7 +111,9 @@ function subscriptionHarness(opts: {
     const withSubscribe = { ...fields, subscribeToTerminal: subscribe }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the web-ready handler reads only the fields built above.
     const webviewScope = withSubscribe as unknown as MobileSessionTabSwitchingModel
-    webReady = useMobileSessionTerminalWebview(webviewScope).handleTerminalWebReady
+    const webview = useMobileSessionTerminalWebview(webviewScope)
+    webReady = webview.handleTerminalWebReady
+    notifyFrame = webview.notifyTerminalFrame
     return null
   }
   act(() => {
@@ -127,9 +132,10 @@ function subscriptionHarness(opts: {
     documentReady: () => {
       act(() => webReady!(HANDLE))
     },
-    layOutFrame: (width: number) => {
-      terminalFrameRef.current = { width, height: 751 }
-    }
+    fields,
+    terminalFrameRef,
+    // The frame's onLayout.
+    layOutFrame: (width: number, height = 751) => act(() => notifyFrame!({ width, height }))
   }
 }
 
@@ -184,9 +190,29 @@ describe('a terminal first subscribe', () => {
     const harness = subscriptionHarness({ fit: null, webReady: true, frameWidth: 0 })
     harness.subscribe()
     expect(harness.order).toEqual([])
+    // The frame's first layout subscribes the document held back for it.
     harness.layOutFrame(427)
-    harness.subscribe()
     expect(harness.order).toEqual(['subscribe null'])
+  })
+
+  it('keeps one frame, notifies a new width, and subscribes on the first layout only', () => {
+    const harness = subscriptionHarness({ fit: null, webReady: true, frameWidth: 0 })
+    const { notifyTerminalFrameHeight, notifyTerminalFrameWidth } = harness.fields
+    harness.layOutFrame(0, 0)
+    expect(harness.terminalFrameRef.current).toBeNull()
+    harness.layOutFrame(427, 751)
+    harness.layOutFrame(427, 700)
+    expect(harness.order).toEqual(['subscribe null'])
+    expect(notifyTerminalFrameWidth).not.toHaveBeenCalled()
+    // A hidden 0x0 layout keeps the box it was laid out at.
+    harness.layOutFrame(0, 0)
+    expect(harness.terminalFrameRef.current).toEqual({ width: 427, height: 700 })
+    harness.layOutFrame(360.5, 700)
+    expect(harness.terminalFrameRef.current).toEqual({ width: 360.5, height: 700 })
+    expect(notifyTerminalFrameWidth).toHaveBeenCalledTimes(1)
+    expect(notifyTerminalFrameHeight.mock.calls.map(([height]) => height)).toEqual([
+      0, 751, 700, 0, 700
+    ])
   })
 
   it('goes without dims when no cell box was reported, and the fit pass resubscribes once', async () => {

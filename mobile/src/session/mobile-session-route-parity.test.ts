@@ -98,14 +98,17 @@ const HOST_COMPONENT_NAMES = new Set([
 // width ref and `handleTerminalFrameLayout` subscribe a known box on layout (hooks 282, callbacks 79),
 // and the pane's `onCellBoxChange` goes to the viewport refit.
 // Again when one frame ref replaced the height ref, width ref and width state (hooks 280).
-const HEAD_MAIN_HOOK_SHA256 = '17366146730f1d910344ea4aad2e74738baea45797380c2b075e63effa1e7fcc'
+// Again when one `notifyTerminalFrame` took the frame's layout (hooks 281, callbacks 80).
+const HEAD_MAIN_HOOK_SHA256 = '004b011722b17ac82c96f0b3c8e303d39b2431a216424e9b86a1ee6a4896f23e'
 // Moved when the prompt-cancel flag became one structured-session host support object (main).
 // Re-recorded against the merged tree. Again when the frame-layout and cell-box-change callbacks
 // named the refs they read in their dependency lists (react-doctor).
 // Again when the frame's width and height became one `terminalFrameRef`.
-const HEAD_HOOK_BINDING_SHA256 = 'b23d3fb3f8219d1959645f8d4f22cf9414102e9e47abcd68eacec30f4656e7f3'
+// Again when the frame's layout moved into `notifyTerminalFrame`.
+const HEAD_HOOK_BINDING_SHA256 = 'c1bcb859202aaf8d612d3023cb4d895719da513879c61b01545a249a0bda662b'
+// Moved when `notifyTerminalFrame` joined and `handleTerminalFrameLayout` became `subscribeIntendedActiveTerminal`.
 const HEAD_CALLBACK_IDENTITY_SHA256 =
-  '19201fe156b3fd9d1bd55418c2c54e2d2319c652bfe55732b26f331c458f56c9'
+  '9c966301b373c11b27359ef1388c593b638c7f6831186d5c5321553504183e07'
 // Pins that no callback body in the route changed unnoticed. Body text, not behaviour: the sends
 // and repo reads inside them now name their `RpcOperation` instead of the raw `sendRequest` port.
 // Refreshed in step 6 for the gesture flush, whose `terminal.send` became `terminalInputSend` and
@@ -132,7 +135,8 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // Again when the subscribe sized its viewport inline instead of through a helper.
 // Again when the document took the hold rule and the subscribe stopped holding its grid.
 // Again when an init took one options object.
-const HEAD_CALLBACK_BODY_SHA256 = 'aae361e46d8bf59a4957dfcf9a1167c86af9314a998676235f73b44a3557d52e'
+// Again when the frame's layout became one `notifyTerminalFrame`.
+const HEAD_CALLBACK_BODY_SHA256 = '8f2ecfc86d6b50dfcf2248135c12a1a97c0b63a50176fc330781e805f388bbd3'
 // Refreshed for the startup effect: both `worktree.activate` sends became `worktreeActivate`, and
 // the sleeping-agent check reads that operation's verdict instead of the reply envelope. Refreshed
 // again when the reporter took the reply and interpreted it itself, retiring the hand-built
@@ -201,7 +205,8 @@ const HEAD_RUNTIME_STRING_SHA256 =
 // Moved again when the terminal frame kept its laid-out width unrounded, for every fit.
 // Again when the frame's onLayout wrote one frame ref and notified a new width imperatively.
 // Again when the frame's first laid-out layout alone subscribes a held-back document.
-const HEAD_HOST_JSX_SHA256 = '5e2d0ec5bdb838560d06d4b79c8b59d72d1f553394d1580e2250b352cda18401'
+// Again when the frame's onLayout made one `notifyTerminalFrame` call.
+const HEAD_HOST_JSX_SHA256 = '8ab32926fff2e610ab92bde8437283a11ad2328c6343cd862a1c00b2ed8ed5a6'
 const HEAD_LEAF_JSX_SHA256 = '62eb05c6e2ac0be6d553a141fc8aa1641fcb0c678777d5d539f490aab8648417'
 const HEAD_STYLE_REFERENCE_SHA256 =
   '56a005a1f65b30c11092e3422caef67810e1ec50f66fdd06471c370138b1eeb6'
@@ -599,10 +604,10 @@ describe('mobile session route extraction parity', () => {
     const contentBindings = CONTENT_COMPONENT_NAMES.flatMap(
       (name) => readHookFacts(name, definitions).bindings
     )
-    expect(main.hooks).toHaveLength(280)
+    expect(main.hooks).toHaveLength(281)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
-    expect(main.callbacks).toHaveLength(79)
+    expect(main.callbacks).toHaveLength(80)
     expect(hash(main.callbacks)).toBe(HEAD_CALLBACK_IDENTITY_SHA256)
     expect(hash(main.callbackBodies)).toBe(HEAD_CALLBACK_BODY_SHA256)
     expect(main.effects).toHaveLength(24)

@@ -32,7 +32,6 @@ export function MobileSessionActiveContent({
     setShowCreateTabDrawer,
     dictationMode,
     toastMessage,
-    terminalFrameRef,
     handleTerminalTap,
     browserScreencastSupported,
     showToast,
@@ -52,11 +51,9 @@ export function MobileSessionActiveContent({
     copyMarkdownLocalContent,
     discardMarkdownLocalContent,
     saveMarkdownTab,
-    notifyTerminalFrameHeight,
-    notifyTerminalFrameWidth,
     setTerminalWebViewRef,
     handleTerminalWebReady,
-    handleTerminalFrameLayout,
+    notifyTerminalFrame,
     notifyTerminalCellBoxChange,
     handleFileTap,
     handleNativeChatFileTap,
@@ -253,20 +250,7 @@ export function MobileSessionActiveContent({
       style={styles.contentFrame}
       onLayout={(e) => {
         const { width, height } = e.nativeEvent.layout
-        // Why: notify imperatively so dock settling re-fits the PTY without rerendering SessionScreen.
-        notifyTerminalFrameHeight(Math.round(height))
-        // Why: the page reports a hidden frame as 0x0; it keeps the box it was laid out at.
-        if (width <= 0) {
-          return
-        }
-        const previous = terminalFrameRef.current
-        terminalFrameRef.current = { width, height }
-        if (!previous) {
-          // Why: a ready document held back for its frame subscribes on the first layout.
-          handleTerminalFrameLayout()
-        } else if (width !== previous.width) {
-          notifyTerminalFrameWidth()
-        }
+        notifyTerminalFrame({ width, height })
       }}
     >
       {content}

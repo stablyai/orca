@@ -15,7 +15,8 @@ import {
 const hookSource = readFileSync(new URL('./terminal-viewport-refit.ts', import.meta.url), 'utf8')
 const sessionSource = [
   readMobileSessionRouteSource('../session/use-mobile-session-keyboard-state.ts'),
-  readMobileSessionRouteSource('../session/MobileSessionActiveContent.tsx')
+  readMobileSessionRouteSource('../session/MobileSessionActiveContent.tsx'),
+  readMobileSessionRouteSource('../session/use-mobile-session-terminal-webview.ts')
 ].join('\n')
 
 describe('terminal viewport refit', () => {
@@ -152,7 +153,8 @@ describe('terminal viewport refit', () => {
     expect(sessionSource).toContain('tabStripVisible: terminals.length > 1')
     expect(sessionSource).toContain('textScale: terminalTextScale')
     expect(sessionSource).toContain('connState,')
-    expect(sessionSource).toContain('notifyTerminalFrameHeight(Math.round(height))')
+    expect(sessionSource).toContain('notifyTerminalFrame({ width, height })')
+    expect(sessionSource).toContain('notifyTerminalFrameHeight(Math.round(frame.height))')
     expect(sessionSource).toContain('notifyTerminalFrameWidth()')
     // One seam for both facts: on the page they come apart, because the shell shortens the WebView
     // and the keyboard covers nothing the screen has to lift for.
