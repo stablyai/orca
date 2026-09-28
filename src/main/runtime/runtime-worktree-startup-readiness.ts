@@ -89,7 +89,8 @@ export async function waitForWorktreeStartupFollowup(
 export function waitForWorktreeStartupDraft(
   host: WorktreeStartupReadinessHost,
   handle: string,
-  agent: TuiAgent
+  agent: TuiAgent,
+  timeoutOverrideMs?: number
 ): Promise<string | null> {
   const ptyId = host.getPtyId(handle)
   if (!ptyId) {
@@ -134,6 +135,9 @@ export function waitForWorktreeStartupDraft(
     if (replay) {
       observe(replay)
     }
-    hardTimer = setTimeout(() => finish(null), resolveDraftPasteReadyTimeoutMs(agent))
+    hardTimer = setTimeout(
+      () => finish(null),
+      resolveDraftPasteReadyTimeoutMs(agent, timeoutOverrideMs)
+    )
   })
 }
