@@ -9,6 +9,10 @@ import type { BrowserPageDocLocation } from '../../../../../shared/browser-works
 import { buildBrowserAddressBarSuggestions } from './browser-address-bar-suggestions'
 import { shouldOverlayBrowserAddressBar } from './browser-address-bar-expansion'
 import { saveBrowserAddressBarEditSession } from './browser-address-bar-edit-session'
+import {
+  selectAddressBarCollapsedInitialClick,
+  trackAddressBarInitialMouseDown
+} from './browser-address-bar-initial-click'
 import { useBrowserAddressBarDismissal } from './use-browser-address-bar-dismissal'
 import type { BrowserAddressBarEditSessionBinding } from './use-browser-address-bar-edit-session'
 import BrowserAddressBarSuggestionList from './BrowserAddressBarSuggestionList'
@@ -109,7 +113,8 @@ export default function BrowserAddressBar({
     return () => {
       // Why only a focused bar: an idle one has no edit to hand on, and resuming it would seize
       // focus and reopen a dropdown for a user who was reading the page.
-      if (document.activeElement !== input) {
+      const doc = input.ownerDocument ?? document
+      if (doc.activeElement !== input) {
         return
       }
       const typedQuery = prePreviewValueRef.current
@@ -267,7 +272,8 @@ export default function BrowserAddressBar({
     }
     blurCloseTimerRef.current = window.setTimeout(() => {
       blurCloseTimerRef.current = null
-      if (grace && inputRef.current && document.activeElement === inputRef.current) {
+      const doc = inputRef.current?.ownerDocument ?? document
+      if (grace && inputRef.current && doc.activeElement === inputRef.current) {
         return
       }
       restoreTypedQuery()
@@ -364,7 +370,7 @@ export default function BrowserAddressBar({
     ]
   )
 
-  useBrowserAddressBarDismissal(open, dismissSuggestions)
+  useBrowserAddressBarDismissal(open, dismissSuggestions, inputRef)
 
   useEffect(() => {
     if (!dismissSuggestionsRef) {
@@ -391,7 +397,8 @@ export default function BrowserAddressBar({
           // interaction, but during the focus-retry loop the input may still
           // hold focus. Only allow programmatic closes (setOpen(false) from
           // our handlers) or genuine outside dismissals.
-          if (!next && inputRef.current && document.activeElement === inputRef.current) {
+          const doc = inputRef.current?.ownerDocument ?? document
+          if (!next && inputRef.current && doc.activeElement === inputRef.current) {
             return
           }
           if (!next) {
@@ -428,18 +435,8 @@ export default function BrowserAddressBar({
               ref={inputRef}
               value={value}
               onFocus={handleFocus}
-              onMouseDown={(event) => {
-                initialMouseDownRef.current =
-                  event.button === 0 && document.activeElement !== event.currentTarget
-              }}
-              onClick={(event) => {
-                const input = event.currentTarget
-                // Preserve native drag selection; only expand a collapsed initial click.
-                if (initialMouseDownRef.current && input.selectionStart === input.selectionEnd) {
-                  input.select()
-                }
-                initialMouseDownRef.current = false
-              }}
+              onMouseDown={(event) => trackAddressBarInitialMouseDown(initialMouseDownRef, event)}
+              onClick={(event) => selectAddressBarCollapsedInitialClick(initialMouseDownRef, event)}
               onBlur={handleBlur}
               onKeyDown={handleKeyDown}
               data-orca-browser-address-bar="true"

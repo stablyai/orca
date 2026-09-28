@@ -15,6 +15,19 @@ export function setDocPreviewFailureSink(sink: DocPreviewFailureSink | null): vo
 }
 
 /**
+ * A closing secondary host must not strand the channel on its torn-down contents,
+ * yet it also must not clobber a sink a live window registered after it.
+ */
+export function restoreDocPreviewFailureSink(
+  from: DocPreviewFailureSink | null,
+  fallback: DocPreviewFailureSink | null
+): void {
+  if (failureSink === from) {
+    failureSink = fallback
+  }
+}
+
+/**
  * The preview shell cannot read the guest's HTTP status, and a 4xx body renders as
  * if it were the document. Pushing the reason lets the shell replace that with a
  * localized notice for the failure the user actually hit.

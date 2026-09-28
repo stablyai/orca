@@ -202,4 +202,22 @@ describe('terminal paste target state', () => {
       })
     ).toBe(true)
   })
+
+  it('reads activeElement from paneContainer ownerDocument when activeElement is omitted', () => {
+    const terminalInput = makeElement('textarea', ['xterm-helper-textarea'])
+    const paneContainer = {
+      contains: vi.fn((el: Element | null) => el === terminalInput),
+      ownerDocument: {
+        activeElement: terminalInput
+      }
+    } as unknown as Element
+
+    expect(
+      isTerminalPanePasteFocusCurrent({
+        requireSameFocusedElement: true,
+        activeElementAtDispatch: terminalInput,
+        paneContainer
+      })
+    ).toBe(true)
+  })
 })

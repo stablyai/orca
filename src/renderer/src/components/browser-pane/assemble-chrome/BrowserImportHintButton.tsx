@@ -9,7 +9,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuPortal,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
@@ -234,20 +233,18 @@ export function BrowserImportHintButton({
                           { value0: browser.label }
                         )}
                       </DropdownMenuSubTrigger>
-                      <DropdownMenuPortal>
-                        <DropdownMenuSubContent>
-                          {browser.profiles.map((profile) => (
-                            <DropdownMenuItem
-                              key={profile.directory}
-                              onSelect={() =>
-                                void handleImportFromBrowser(browser.family, profile.directory)
-                              }
-                            >
-                              {profile.name}
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuSubContent>
-                      </DropdownMenuPortal>
+                      <DropdownMenuSubContent>
+                        {browser.profiles.map((profile) => (
+                          <DropdownMenuItem
+                            key={profile.directory}
+                            onSelect={() =>
+                              void handleImportFromBrowser(browser.family, profile.directory)
+                            }
+                          >
+                            {profile.name}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuSubContent>
                     </DropdownMenuSub>
                   ) : (
                     <DropdownMenuItem

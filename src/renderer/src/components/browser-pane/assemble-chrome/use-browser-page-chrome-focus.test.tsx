@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, render } from '@testing-library/react'
 import { useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { BrowserPageCommandTarget } from '../../../../../shared/browser-page-command-target'
@@ -482,5 +483,67 @@ describe('useBrowserPageChromeFocus', () => {
     pressFocusAddressBarChord(true)
 
     expect(document.activeElement).toBe(guest())
+  })
+
+  it('reaches the address bar of a pane portaled into the popout window', () => {
+    const frame = document.createElement('iframe')
+    document.body.appendChild(frame)
+    const popoutWindow = frame.contentWindow as Window
+    const popoutDocument = frame.contentDocument as Document
+    expect(popoutWindow).toBeTruthy()
+    expect(popoutDocument).toBeTruthy()
+
+    function PopoutHarness(): React.JSX.Element {
+      const addressBarInputRef = useRef<HTMLInputElement | null>(null)
+      const guestRef = useRef<HTMLDivElement | null>(null)
+      const guestFocus = useElementGuestFocus(guestRef)
+      chromeFocus = useBrowserPageChromeFocus({
+        browserTabId: PAGE_ID,
+        workspaceId: WORKSPACE_ID,
+        isActive: true,
+        chromeShortcutScope: 'focused',
+        addressBarInputRef,
+        guestFocus
+      })
+      return createPortal(
+        <div data-browser-overlay-tab-id={WORKSPACE_ID}>
+          <input
+            ref={addressBarInputRef}
+            data-testid="address-popout"
+            defaultValue={ADDRESS_VALUE}
+          />
+          <div ref={guestRef} tabIndex={-1} data-testid="guest-popout" />
+        </div>,
+        popoutDocument.body
+      )
+    }
+
+    try {
+      render(<PopoutHarness />)
+      act(() => flushFrames())
+
+      act(() => {
+        popoutWindow.dispatchEvent(
+          new KeyboardEvent('keydown', {
+            key: 'l',
+            metaKey: true,
+            ctrlKey: false,
+            bubbles: true,
+            cancelable: true
+          })
+        )
+      })
+
+      const input = popoutDocument.querySelector(
+        '[data-testid="address-popout"]'
+      ) as HTMLInputElement
+      expect(popoutDocument.activeElement).toBe(input)
+      expect(input.selectionStart).toBe(0)
+      expect(input.selectionEnd).toBe(ADDRESS_VALUE.length)
+    } finally {
+      // Why: unmount the portal before dropping its container, or React's
+      // deletion pass removes the pane from a detached document.
+      cleanup()
+    }
   })
 })

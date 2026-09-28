@@ -55,7 +55,8 @@ export function ensureBrowserPageWebview({
     return { container: activeContainer, created, webview }
   }
 
-  webview = document.createElement('webview') as Electron.WebviewTag
+  const targetDoc = activeContainer.ownerDocument ?? document
+  webview = targetDoc.createElement('webview') as Electron.WebviewTag
   webview.setAttribute('partition', webviewPartition)
   webview.setAttribute('allowpopups', '')
   // Why: Electron spreads the webpreferences keys verbatim, so the shared

@@ -10,6 +10,7 @@ import {
 import { assertClipboardTextWithinLimitWithYield } from '../../../../shared/clipboard-text'
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
 import { APP_MENU_PASTE_EVENT } from '@/lib/app-menu-paste'
+import { getDomRealm } from '@/lib/dom-realm'
 import {
   APP_MENU_SELECTION_ACTION_EVENT,
   type AppMenuSelectionAction
@@ -24,8 +25,8 @@ import {
 
 const NATIVE_CHAT_ROOT_SELECTOR = '[data-native-chat-root="true"]'
 
-function isInsideNativeChatRoot(target: EventTarget | null): boolean {
-  return target instanceof Element && target.closest(NATIVE_CHAT_ROOT_SELECTOR) !== null
+function isInsideNativeChatRoot(target: EventTarget | null, RealmElement: typeof Element): boolean {
+  return target instanceof RealmElement && target.closest(NATIVE_CHAT_ROOT_SELECTOR) !== null
 }
 
 export function registerTerminalPanePasteListeners({
@@ -51,6 +52,9 @@ export function registerTerminalPanePasteListeners({
   const { executePanePasteText, pasteFromClipboard } = execution
   let suppressNextNativePaste = false
   let pasteSuppressionTimerId: number | null = null
+  // Why: detached panes live in the popout document — main-realm instanceof
+  // misses their nodes and paste falls back to the wrong pane (or returns early).
+  const { Element: RealmElement } = getDomRealm(container.ownerDocument?.defaultView)
   const shouldSuppressNativePaste = (event: KeyboardEvent): boolean => {
     const key = event.key.toLowerCase()
     return (
@@ -72,8 +76,8 @@ export function registerTerminalPanePasteListeners({
   const onKeyPaste = (event: KeyboardEvent): void => {
     const target = event.target
     if (
-      (target instanceof Element && target.closest('[data-terminal-search-root]')) ||
-      isInsideNativeChatRoot(target)
+      (target instanceof RealmElement && target.closest('[data-terminal-search-root]')) ||
+      isInsideNativeChatRoot(target, RealmElement)
     ) {
       return
     }
@@ -106,7 +110,12 @@ export function registerTerminalPanePasteListeners({
     if (!manager) {
       return
     }
-    const pane = manager.getActivePane() ?? manager.getPanes()[0]
+    // Why: the manager spans every pane — dispatch to the event target's pane.
+    const targetPane =
+      target instanceof RealmElement
+        ? manager.getPanes().find((pane) => pane.container?.contains(target))
+        : undefined
+    const pane = targetPane ?? manager.getActivePane() ?? manager.getPanes()[0]
     if (!pane) {
       return
     }
@@ -124,8 +133,8 @@ export function registerTerminalPanePasteListeners({
   const onPaste = (event: ClipboardEvent): void => {
     const target = event.target
     if (
-      (target instanceof Element && target.closest('[data-terminal-search-root]')) ||
-      isInsideNativeChatRoot(target)
+      (target instanceof RealmElement && target.closest('[data-terminal-search-root]')) ||
+      isInsideNativeChatRoot(target, RealmElement)
     ) {
       return
     }
@@ -145,7 +154,12 @@ export function registerTerminalPanePasteListeners({
     if (!manager) {
       return
     }
-    const pane = manager.getActivePane() ?? manager.getPanes()[0]
+    // Why: the manager spans every pane — dispatch to the event target's pane.
+    const targetPane =
+      target instanceof RealmElement
+        ? manager.getPanes().find((pane) => pane.container?.contains(target))
+        : undefined
+    const pane = targetPane ?? manager.getActivePane() ?? manager.getPanes()[0]
     if (!pane) {
       return
     }
@@ -160,12 +174,13 @@ export function registerTerminalPanePasteListeners({
   }
 
   const onAppMenuPaste = (event: Event): void => {
-    const activeElementAtDispatch = document.activeElement
+    const targetDoc = container.ownerDocument ?? document
+    const activeElementAtDispatch = targetDoc.activeElement
     if (
-      !(activeElementAtDispatch instanceof Element) ||
+      !(activeElementAtDispatch instanceof RealmElement) ||
       !container.contains(activeElementAtDispatch) ||
       activeElementAtDispatch.closest('[data-terminal-search-root]') ||
-      isInsideNativeChatRoot(activeElementAtDispatch)
+      isInsideNativeChatRoot(activeElementAtDispatch, RealmElement)
     ) {
       return
     }
@@ -199,13 +214,14 @@ export function registerTerminalPanePasteListeners({
   }
 
   const onAppMenuSelectionAction = (event: Event): void => {
-    const activeElement = document.activeElement
+    const targetDoc = container.ownerDocument ?? document
+    const activeElement = targetDoc.activeElement
     if (
-      !(activeElement instanceof Element) ||
+      !(activeElement instanceof RealmElement) ||
       !container.contains(activeElement) ||
       isEditableTarget(activeElement) ||
       activeElement.closest('[data-terminal-search-root]') ||
-      isInsideNativeChatRoot(activeElement)
+      isInsideNativeChatRoot(activeElement, RealmElement)
     ) {
       return
     }
@@ -232,17 +248,19 @@ export function registerTerminalPanePasteListeners({
     }
   }
 
+  // Why: APP_MENU events fire per-window — global window misses the popout.
+  const eventWindow = container.ownerDocument?.defaultView ?? window
   container.addEventListener('keydown', onKeyPaste, { capture: true })
   container.addEventListener('paste', onPaste, { capture: true })
-  window.addEventListener(APP_MENU_PASTE_EVENT, onAppMenuPaste)
-  window.addEventListener(APP_MENU_SELECTION_ACTION_EVENT, onAppMenuSelectionAction)
+  eventWindow.addEventListener(APP_MENU_PASTE_EVENT, onAppMenuPaste)
+  eventWindow.addEventListener(APP_MENU_SELECTION_ACTION_EVENT, onAppMenuSelectionAction)
   return () => {
     if (pasteSuppressionTimerId !== null) {
       window.clearTimeout(pasteSuppressionTimerId)
     }
     container.removeEventListener('keydown', onKeyPaste, { capture: true })
     container.removeEventListener('paste', onPaste, { capture: true })
-    window.removeEventListener(APP_MENU_PASTE_EVENT, onAppMenuPaste)
-    window.removeEventListener(APP_MENU_SELECTION_ACTION_EVENT, onAppMenuSelectionAction)
+    eventWindow.removeEventListener(APP_MENU_PASTE_EVENT, onAppMenuPaste)
+    eventWindow.removeEventListener(APP_MENU_SELECTION_ACTION_EVENT, onAppMenuSelectionAction)
   }
 }

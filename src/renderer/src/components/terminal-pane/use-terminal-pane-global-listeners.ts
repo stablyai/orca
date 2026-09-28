@@ -198,10 +198,13 @@ export function useTerminalPaneGlobalListeners(controller: TerminalPaneCloseCont
       }
       syncFocused(false)
     }
+    const targetDoc = container.ownerDocument ?? document
+    const targetWin = targetDoc.defaultView ?? window
+
     const onPointerDown = (event: PointerEvent): void => {
       releaseTerminalFocusForOutsidePointerDown({
         container,
-        activeElement: document.activeElement,
+        activeElement: targetDoc.activeElement,
         pointerTarget: event.target,
         syncFocused
       })
@@ -209,7 +212,7 @@ export function useTerminalPaneGlobalListeners(controller: TerminalPaneCloseCont
     const onWindowBlur = (): void => {
       releasedHelperOnWindowBlur = releaseTerminalFocusForWindowBlur({
         container,
-        activeElement: document.activeElement,
+        activeElement: targetDoc.activeElement,
         syncFocused
       })
     }
@@ -217,7 +220,7 @@ export function useTerminalPaneGlobalListeners(controller: TerminalPaneCloseCont
       if (
         resyncTerminalFocusForWindowFocus({
           container,
-          activeElement: document.activeElement,
+          activeElement: targetDoc.activeElement,
           syncFocused,
           releasedHelper: releasedHelperOnWindowBlur
         })
@@ -226,22 +229,22 @@ export function useTerminalPaneGlobalListeners(controller: TerminalPaneCloseCont
       }
     }
     if (
-      isXtermHelperTextarea(document.activeElement) &&
-      container.contains(document.activeElement)
+      isXtermHelperTextarea(targetDoc.activeElement) &&
+      container.contains(targetDoc.activeElement)
     ) {
       syncFocused(true)
     }
     container.addEventListener('focusin', onFocusIn)
     container.addEventListener('focusout', onFocusOut)
-    document.addEventListener('pointerdown', onPointerDown, true)
-    window.addEventListener('blur', onWindowBlur)
-    window.addEventListener('focus', onWindowFocus)
+    targetDoc.addEventListener('pointerdown', onPointerDown, true)
+    targetWin.addEventListener('blur', onWindowBlur)
+    targetWin.addEventListener('focus', onWindowFocus)
     return () => {
       container.removeEventListener('focusin', onFocusIn)
       container.removeEventListener('focusout', onFocusOut)
-      document.removeEventListener('pointerdown', onPointerDown, true)
-      window.removeEventListener('blur', onWindowBlur)
-      window.removeEventListener('focus', onWindowFocus)
+      targetDoc.removeEventListener('pointerdown', onPointerDown, true)
+      targetWin.removeEventListener('blur', onWindowBlur)
+      targetWin.removeEventListener('focus', onWindowFocus)
       if (ownsRegularTerminalFocus) {
         syncFocused(false)
       }

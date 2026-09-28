@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, type RefObject } from 'react'
 
 /**
  * Why: Electron <webview> guests run in a separate process, so clicking the page never dispatches
@@ -6,11 +6,18 @@ import { useEffect } from 'react'
  * focus moves into the guest (the host <webview> tag) close the dropdown the same way
  * BrowserImportHintButton does for its popover; Escape closes it at window capture.
  */
-export function useBrowserAddressBarDismissal(open: boolean, dismissSuggestions: () => void): void {
+export function useBrowserAddressBarDismissal(
+  open: boolean,
+  dismissSuggestions: () => void,
+  inputRef?: RefObject<HTMLInputElement | null>
+): void {
   useEffect(() => {
     if (!open) {
       return
     }
+
+    const targetDoc = inputRef?.current?.ownerDocument ?? document
+    const targetWindow = targetDoc.defaultView ?? window
 
     const handleWindowBlur = (): void => {
       dismissSuggestions()
@@ -33,13 +40,13 @@ export function useBrowserAddressBarDismissal(open: boolean, dismissSuggestions:
       event.stopImmediatePropagation()
     }
 
-    window.addEventListener('blur', handleWindowBlur)
-    document.addEventListener('focusin', handleFocusIn, true)
-    window.addEventListener('keydown', handleEscape, true)
+    targetWindow.addEventListener('blur', handleWindowBlur)
+    targetDoc.addEventListener('focusin', handleFocusIn, true)
+    targetWindow.addEventListener('keydown', handleEscape, true)
     return () => {
-      window.removeEventListener('blur', handleWindowBlur)
-      document.removeEventListener('focusin', handleFocusIn, true)
-      window.removeEventListener('keydown', handleEscape, true)
+      targetWindow.removeEventListener('blur', handleWindowBlur)
+      targetDoc.removeEventListener('focusin', handleFocusIn, true)
+      targetWindow.removeEventListener('keydown', handleEscape, true)
     }
-  }, [dismissSuggestions, open])
+  }, [dismissSuggestions, inputRef, open])
 }
