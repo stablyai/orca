@@ -164,8 +164,11 @@ export class OpenCodeHookService {
       if (readFileSync(pluginPath, 'utf8') !== source) {
         writeFileAtomically(pluginPath, source)
       }
-    } catch {
-      // Missing files stay absent; transient failures are retried on the next spawn.
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+        return
+      }
+      console.warn('[OpenCode] Failed to repair legacy status plugin:', pluginPath, error)
     }
   }
 

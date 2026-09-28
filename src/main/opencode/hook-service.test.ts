@@ -366,6 +366,29 @@ describe('OpenCodeHookService buildPtyEnv / clearPty round-trip', () => {
     }
   })
 
+  it('reports repair failures and retries after the obstruction is removed', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const path = join(userDataDir, 'opencode-hooks', 'shared', 'plugins', 'orca-opencode-status.js')
+    const service = new OpenCodeHookService()
+    try {
+      service.refreshLegacySharedPlugin()
+      expect(warn).not.toHaveBeenCalled()
+      mkdirSync(path, { recursive: true })
+      service.refreshLegacySharedPlugin()
+      expect(warn).toHaveBeenCalledWith(
+        '[OpenCode] Failed to repair legacy status plugin:',
+        path,
+        expect.any(Error)
+      )
+      rmSync(path, { recursive: true })
+      writeFileSync(path, '// stale')
+      service.refreshLegacySharedPlugin()
+      expect(readFileSync(path, 'utf8')).toBe(getOpenCodePluginSource())
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
   it('leaves an up-to-date legacy plugin untouched and never creates the retired dir', () => {
     const legacyDir = join(userDataDir, 'opencode-hooks')
     new OpenCodeHookService().buildPtyEnv(daemonSessionId)

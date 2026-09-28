@@ -456,3 +456,40 @@ it('does not restore a retired source from process.env with hooks disabled', () 
   const env = buildPtyHostEnv('pane', {}, { ...options, agentStatusHooksEnabled: false })
   expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
 })
+
+it.each([true, false])(
+  'preserves explicit config with a retired parent source (hooks: %s)',
+  (enabled) => {
+    vi.stubEnv(
+      'ORCA_OPENCODE_SOURCE_CONFIG_DIR',
+      join(fixture.userData, 'opencode-hooks', 'shared')
+    )
+    const env = buildPtyHostEnv(
+      'pane',
+      { OPENCODE_CONFIG_DIR: custom },
+      { ...options, agentStatusHooksEnabled: enabled }
+    )
+    if (enabled) {
+      expect(env.ORCA_OPENCODE_SOURCE_CONFIG_DIR).toBe(custom)
+      expect(readFileSync(join(env.OPENCODE_CONFIG_DIR, 'opencode.json'), 'utf8')).toBe(
+        '{"model":"fixture"}'
+      )
+    } else {
+      expect(env.OPENCODE_CONFIG_DIR).toBe(custom)
+    }
+  }
+)
+
+it('repairs both legacy variants without main inheriting any retired path or enabling hooks', () => {
+  for (const agent of ['opencode', 'opencode2']) {
+    const path = plugin(join(fixture.userData, `${agent}-hooks`, 'shared'), agent)
+    mkdirSync(join(path, '..'), { recursive: true })
+    writeFileSync(path, '// old plugin')
+  }
+  buildPtyHostEnv('pane', {}, { ...options, agentStatusHooksEnabled: false })
+  for (const agent of ['opencode', 'opencode2']) {
+    expect(
+      readFileSync(plugin(join(fixture.userData, `${agent}-hooks`, 'shared'), agent), 'utf8')
+    ).toContain('setup')
+  }
+})

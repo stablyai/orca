@@ -52,20 +52,19 @@ export function buildPtyHostEnv(
   // Why: pre-1.4.209 panes exported Orca's retired shared hooks dir; inheriting it hides the user's global OpenCode config.
   const isLegacyOpenCodeHooksDir = (dir: string | undefined): boolean =>
     isOpenCodeLegacySharedConfigDir(dir, opts.userDataPath)
-  let sawLegacyOpenCodeHooksDir = false
+  const inheritedOpenCodeEnv: NodeJS.ProcessEnv = {}
   for (const key of OPENCODE_CONFIG_DIR_ENV_KEYS) {
-    if (isLegacyOpenCodeHooksDir(baseEnv[key] ?? process.env[key])) {
+    if (isLegacyOpenCodeHooksDir(baseEnv[key])) {
       delete baseEnv[key]
-      sawLegacyOpenCodeHooksDir = true
+    }
+    if (!isLegacyOpenCodeHooksDir(process.env[key])) {
+      inheritedOpenCodeEnv[key] = process.env[key]
     }
   }
-  if (sawLegacyOpenCodeHooksDir) {
-    // Why: sibling shells of this pane still export the retired dir, even when status hooks are off.
-    openCodeHookService.refreshLegacySharedPlugin()
-    openCode2HookService.refreshLegacySharedPlugin()
-  }
-  // Why: local path's baseEnv includes process.env but the daemon path doesn't (fork inheritance, not IPC); check both sources so guards stay in lock-step across spawn paths.
-  const resolvedOpenCodeConfigDir = resolveOpenCodeSourceConfigDir(baseEnv)
+  // A daemon or sibling shell can retain a retired path that main no longer sees.
+  openCodeHookService.refreshLegacySharedPlugin()
+  openCode2HookService.refreshLegacySharedPlugin()
+  const resolvedOpenCodeConfigDir = resolveOpenCodeSourceConfigDir(baseEnv, inheritedOpenCodeEnv)
   const preexistingOpenCodeConfigDir = isLegacyOpenCodeHooksDir(resolvedOpenCodeConfigDir)
     ? undefined
     : resolvedOpenCodeConfigDir
@@ -109,16 +108,16 @@ export function buildPtyHostEnv(
       ? resolvePiAgentSourceDir(baseEnv, 'prime-agent')
       : resolveScopedPiAgentSourceDir(baseEnv, 'prime-agent')
 
-  restoreOrStripOverlayEnv(baseEnv, {
-    primary: 'OPENCODE_CONFIG_DIR',
-    overlay: 'ORCA_OPENCODE_CONFIG_DIR',
-    source: 'ORCA_OPENCODE_SOURCE_CONFIG_DIR',
-    preserveExplicitPrimary: true
-  })
-  // Overlay restoration also consults process.env; do not restore a retired source.
-  if (isLegacyOpenCodeHooksDir(baseEnv.OPENCODE_CONFIG_DIR)) {
-    delete baseEnv.OPENCODE_CONFIG_DIR
-  }
+  restoreOrStripOverlayEnv(
+    baseEnv,
+    {
+      primary: 'OPENCODE_CONFIG_DIR',
+      overlay: 'ORCA_OPENCODE_CONFIG_DIR',
+      source: 'ORCA_OPENCODE_SOURCE_CONFIG_DIR',
+      preserveExplicitPrimary: true
+    },
+    inheritedOpenCodeEnv
+  )
   delete baseEnv.ORCA_OPENCODE_AGENT
   if (openCodeAgent) {
     // Why: OPENCODE_CONFIG_DIR is a single path, not a colon-list; mirror the user's value into an overlay so their plugins and Orca's status plugin coexist. See docs/opencode-config-dir-collision.md.
