@@ -1,7 +1,11 @@
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
+import { isFloatingWorkspacePanelVisible } from '@/lib/floating-workspace-terminal-actions'
 import { activateStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
+import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { jumpToWorktreeFromSidebar } from '@/lib/worktree-jump-navigation'
 import { useAppStore } from '@/store'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   getSettingsFocusedExecutionHostId,
   getWorktreeExecutionHostId,
@@ -44,6 +48,25 @@ export function hasActivityThreadWorkspace(
   )
 }
 
+function toggleFloatingWorkspacePanelIfHidden(): void {
+  if (!isFloatingWorkspacePanelVisible()) {
+    window.dispatchEvent(new Event(TOGGLE_FLOATING_TERMINAL_EVENT))
+  }
+}
+
+// Why enable first: floating tabs outlive a feature disable, and the panel ignores the toggle
+// while disabled, so a live floating agent row would otherwise be a silent no-op.
+function revealFloatingWorkspacePanel(state: AppState): void {
+  if (state.settings?.floatingTerminalEnabled === true) {
+    toggleFloatingWorkspacePanelIfHidden()
+    return
+  }
+  void state.updateSettings({ floatingTerminalEnabled: true }).then(() => {
+    // Why deferred a frame: the panel only honors the toggle once the enabled flag has reached React.
+    requestAnimationFrame(toggleFloatingWorkspacePanelIfHidden)
+  })
+}
+
 export function createActivityThreadActions({
   getMarkAllReadThreads,
   acknowledgeAgents,
@@ -74,38 +97,43 @@ export function createActivityThreadActions({
   }
 
   const activateThreadTarget = (thread: AgentPaneThread): void => {
-    const state = useAppStore.getState()
+    const isFloatingTerminal = thread.worktree.id === FLOATING_TERMINAL_WORKTREE_ID
     const executionHostId = getActivityThreadExecutionHostId(
       thread,
-      getSettingsFocusedExecutionHostId(state.settings)
+      getSettingsFocusedExecutionHostId(useAppStore.getState().settings)
     )
-    const worktree = state.getKnownWorktreeById(thread.worktree.id, executionHostId)
-    if (!worktree) {
+    // Why the full sequence (not bare setActiveWorktree): a cold-parked thread — the normal
+    // state of an SSH session that was never revived — has no resident tab until
+    // resumeSleepingAgentSessionsForWorktree/ensureWorktreeHasInitialTerminal run inside here.
+    // Probing tab residency first is what made a remote row click a silent no-op (#16731).
+    if (
+      !isFloatingTerminal &&
+      activateAndRevealWorkspace(thread.worktree.id, {
+        executionHostId,
+        revealInSidebar: false,
+        clearSidebarFilters: false
+      }) === false
+    ) {
       return
-    }
-    const liveTabs = state.tabsByWorktree[worktree.id] ?? []
-    const hasLiveTerminal = liveTabs.some((tab) => tab.id === thread.tab.id)
-    const hasLiveAgentSession = (state.unifiedTabsByWorktree?.[worktree.id] ?? []).some(
-      (tab) => tab.id === thread.tab.id && tab.contentType === 'agent-session'
-    )
-    // Why: retained threads can outlive their target; reorienting the workspace for a
-    // dead terminal or structured session would just confuse the user.
-    if (!hasLiveTerminal && !hasLiveAgentSession) {
-      return
-    }
-    if (state.activeRepoId !== worktree.repoId) {
-      state.setActiveRepo(worktree.repoId)
     }
     if (
-      state.activeWorktreeId !== worktree.id ||
-      state.activeWorkspaceExecutionHostId !== executionHostId
+      activateStructuredAgentSessionTab({ worktreeId: thread.worktree.id, tabId: thread.tab.id })
     ) {
-      state.setActiveWorktree(worktree.id, executionHostId)
-    }
-    if (activateStructuredAgentSessionTab({ worktreeId: worktree.id, tabId: thread.tab.id })) {
       return
     }
-    state.setActiveTabType('terminal')
+    // Read post-activation: the tab this thread points at may have only just been revived.
+    const activated = useAppStore.getState()
+    const liveTabs = activated.tabsByWorktree[thread.worktree.id] ?? []
+    if (!liveTabs.some((tab) => tab.id === thread.tab.id)) {
+      // Retained threads outlive their tab; the workspace is still activated, but there is
+      // no pane to focus and focusing a sibling would be worse than focusing nothing.
+      return
+    }
+    // Floating tabs have no catalog workspace; reveal their panel without changing the main workspace.
+    if (isFloatingTerminal) {
+      revealFloatingWorkspacePanel(activated)
+    }
+    activated.setActiveTabType('terminal', thread.worktree.id)
     const parsed = parsePaneKey(thread.paneKey)
     activateTabAndFocusPane(
       thread.tab.id,

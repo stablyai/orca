@@ -15,22 +15,37 @@ import { formatWorkerRead, type LegacyWorkerReadResult } from './worker-output'
 export const ORCHESTRATION_WORKER_OBSERVATION_HANDLERS: Record<string, CommandHandler> = {
   'orchestration worker-show': async ({ flags, client, json }) => {
     const result = await client.call<{
-      dispatch: { id: string; task_id: string; status: string }
-      worker: { state: string; stage: string; agent_terminal_handle: string | null }
+      dispatch: { id: string; taskId: string; status: string } | null
+      worker: { state: string; stage: string; agentTerminalHandle: string | null }
+      projection?: { liveness: { verdict: string }; nextAction: { argv: string[] } } | null
       observation?: { agentWait?: { source: string; reason?: string } | null }
     }>('orchestration.workerShow', {
       dispatch: getRequiredStringFlag(flags, 'dispatch')
     })
     printResult(result, json, (value) => {
-      const base = `${value.dispatch.id} task=${value.dispatch.task_id} [${value.worker.state}] stage=${value.worker.stage}`
+      const lines = [
+        `${value.dispatch?.id ?? 'unknown'} task=${value.dispatch?.taskId ?? 'unknown'} [${value.worker.state}] stage=${value.worker.stage}`
+      ]
+      // Why: PTY status alone read `live` for an agent that died at a trust prompt, so the
+      // fleet verdict and its next action print beside it rather than in another command.
+      if (value.projection) {
+        lines.push(
+          `Agent liveness: ${value.projection.liveness.verdict}`,
+          `Next action: ${value.projection.nextAction.argv.join(' ') || 'none'}`
+        )
+      }
       // Why: absent means unknown on older runtimes, distinct from an evaluated null wait.
       if (value.observation === undefined || !('agentWait' in value.observation)) {
-        return `${base}\nInteractive wait: unknown (not evaluated)`
+        lines.push('Interactive wait: unknown (not evaluated)')
+      } else if (value.observation.agentWait) {
+        const wait = value.observation.agentWait
+        lines.push(
+          `Waiting on a human: ${wait.reason ?? 'interactive prompt'} (via ${wait.source})`
+        )
+      } else {
+        lines.push('Interactive wait: none')
       }
-      const wait = value.observation.agentWait
-      return wait
-        ? `${base}\nWaiting on a human: ${wait.reason ?? 'interactive prompt'} (via ${wait.source})`
-        : `${base}\nInteractive wait: none`
+      return lines.join('\n')
     })
   },
 

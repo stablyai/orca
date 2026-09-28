@@ -90,7 +90,10 @@ export function requestGitStreamable(
     // killed, but a wedged stream (no frames arriving) rejects instead of
     // hanging the caller forever.
     const armInactivity = (): void => {
-      clearInactivity()
+      if (inactivityTimer) {
+        inactivityTimer.refresh()
+        return
+      }
       inactivityTimer = setTimeout(() => {
         fail(
           new GitResponseStreamError(

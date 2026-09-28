@@ -1,3 +1,4 @@
+import type { StoredAgentAttentionUnread } from '@/attention/agent-attention-contract'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import {
   collectAcknowledgedAgentNotificationId,
@@ -29,7 +30,7 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
         const now = Date.now()
         const migrationUnsupported = Object.values(s.migrationUnsupportedByPtyId ?? {})
         let next: Record<string, number> | null = null
-        let nextUnreadCompletions: Record<string, true> | null = null
+        let nextUnreadCompletions: Record<string, StoredAgentAttentionUnread> | null = null
         for (const key of paneKeys) {
           if (s.unreadAgentCompletionPanes[key]) {
             nextUnreadCompletions ??= { ...s.unreadAgentCompletionPanes }
@@ -85,9 +86,10 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
           ...(nextManual ? { manuallyUnreadTurnsByPaneKey: nextManual } : {})
         }
       })
-      const ids = [...notificationIdsToDismiss]
-      if (ids.length > 0 && typeof window !== 'undefined') {
-        void window.api?.notifications?.dismiss?.(ids)
+      // Why: main retires what it announced for these subjects; the ids rebuilt above from the row
+      // as it stands now are the fallback after a restart emptied that record.
+      if (paneKeys.length > 0 && typeof window !== 'undefined') {
+        void window.api?.notifications?.dismiss?.([...notificationIdsToDismiss], paneKeys)
       }
     },
     unacknowledgeAgents: (paneKeys) =>

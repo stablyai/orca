@@ -4,10 +4,7 @@ import { createSessionOutputPipeline } from './session-output-pipeline'
 import { SessionProducerPause } from './session-producer-pause'
 import { SessionShellReadyBarrier } from './session-shell-ready-barrier'
 import type { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
-import {
-  SessionTerminationController,
-  IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS
-} from './session-termination-controller'
+import { SessionTerminationController } from './session-termination-controller'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import type { JobTerminationOutcome } from '../windows/windows-pty-job'
 import type { SessionOptions } from './session-options'
@@ -21,6 +18,7 @@ import type {
   TakePendingOutputResult,
   TerminalSnapshot
 } from './types'
+import type { PtyChildProcessVerdict } from '../../shared/terminal-process-inspection'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
 export class Session {
@@ -29,6 +27,7 @@ export class Session {
   readonly terminalHandle: string | null
   readonly launchAgent: TuiAgent | null
   readonly wslDistro: string | null
+  readonly processNameIsSpawnFile: boolean
   private _state: SessionState = 'running'
   private _exitCode: number | null = null
   private _disposed = false
@@ -47,6 +46,7 @@ export class Session {
     this.launchAgent = opts.launchAgent ?? null
     this.wslDistro = opts.wslDistro ?? null
     this.subprocess = opts.subprocess
+    this.processNameIsSpawnFile = opts.subprocess.processNameIsSpawnFile === true
     this.onSessionExit = opts.onExit
     const pipeline = createSessionOutputPipeline({
       cols: opts.cols,
@@ -168,16 +168,17 @@ export class Session {
   }
 
   /** Producer-side flow control: stop reading the PTY fd so a flooding child blocks on write.
-   *  Arms the lost-resume failsafe; re-pausing re-arms it. */
-  pauseProducer(): void {
+   *  Arms the lost-resume failsafe; re-pausing re-arms it. onStreamStall bounds a stream pause whose
+   *  consumer never drains and never closes. */
+  pauseProducer(source?: 'stream', onStreamStall?: () => void): void {
     if (this._state === 'exited' || this._disposed) {
       return
     }
-    this.producerPause.pause()
+    this.producerPause.pause(source, this.hasAttachedClients && !this.isTerminating, onStreamStall)
   }
 
-  resumeProducer(): void {
-    this.producerPause.release({ resume: true })
+  resumeProducer(source?: 'stream'): void {
+    this.producerPause.resumeClient(source)
   }
 
   kill(): void {
@@ -194,9 +195,7 @@ export class Session {
     this.termination.scheduleForceDisposeFallback()
   }
 
-  async forceKillAndWaitForExit(
-    timeoutMs = IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS
-  ): Promise<void> {
+  async forceKillAndWaitForExit(timeoutMs?: number): Promise<void> {
     await this.termination.forceKillAndWaitForExit(timeoutMs)
   }
 
@@ -252,8 +251,12 @@ export class Session {
     return this.output.getCwd()
   }
 
-  getForegroundProcess(): string | null {
-    return this.subprocess.getForegroundProcess()
+  inspectChildProcesses(): PtyChildProcessVerdict {
+    return this.subprocess.inspectChildProcesses?.() ?? 'unverifiable'
+  }
+
+  getForegroundProcess(options?: { rawFallback?: boolean }): string | null {
+    return this.subprocess.getForegroundProcess(options)
   }
 
   async confirmForegroundProcess(): Promise<string | null> {

@@ -137,6 +137,7 @@ describe('getDefaultSettings', () => {
       codex: '--dangerously-bypass-approvals-and-sandbox',
       gemini: '--yolo',
       cursor: '--yolo',
+      muse: '--yolo',
       copilot: '--yolo',
       grok: '--permission-mode bypassPermissions'
     })
@@ -180,5 +181,10 @@ describe('MiniMax defaults', () => {
     // MiniMax usage endpoint exposes by default.
     expect(settings.minimaxGroupId).toBe('')
     expect(settings.minimaxUsageModels).toBe('general')
+  })
+
+  it('defaults the MiniMax endpoint to overseas', () => {
+    const settings = getDefaultSettings('/tmp')
+    expect(settings.minimaxEndpoint).toBe('overseas')
   })
 })

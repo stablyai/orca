@@ -52,6 +52,8 @@ type GuestFake = {
     isAttached: () => boolean
     attach: ReturnType<typeof vi.fn>
     sendCommand: ReturnType<typeof vi.fn>
+    on: ReturnType<typeof vi.fn>
+    off: ReturnType<typeof vi.fn>
   }
   on: (event: string, listener: (...args: never[]) => void) => void
   once: (event: string, listener: (...args: never[]) => void) => void
@@ -81,7 +83,9 @@ function createGuest(id: number, url: string): GuestFake {
     debugger: {
       isAttached: () => true,
       attach: vi.fn(),
-      sendCommand: vi.fn(async () => undefined)
+      sendCommand: vi.fn(async () => undefined),
+      on: vi.fn(),
+      off: vi.fn()
     },
     on: (event, listener) => {
       listeners.set(event, [...(listeners.get(event) ?? []), listener])
@@ -143,7 +147,7 @@ describe('guest policy profiles', () => {
   // The presence half of every absence below: a browsing guest observably takes all of it through
   // the same method, so a profile that fenced nothing — or an attach path that stopped installing
   // anything at all — cannot pass these by being uniformly empty.
-  it('gives a browsing guest link routing, popups and anti-detection', () => {
+  it('gives a browsing guest link routing, popups and auth-identity detach tracking', () => {
     const guest = createGuest(300, 'https://example.com/')
 
     browserManager.attachGuestPolicies(guest as never)
@@ -151,7 +155,10 @@ describe('guest policy profiles', () => {
     expect(listenerCount(guest, 'dom-ready')).toBe(1)
     expect(listenerCount(guest, 'frame-created')).toBe(1)
     expect(listenerCount(guest, 'did-create-window')).toBe(1)
-    expect(guest.debugger.sendCommand).toHaveBeenCalled()
+    expect(guest.debugger.on).toHaveBeenCalledWith('detach', expect.any(Function))
+    // Why: a plain browsing tab must never attach a debugger; Cloudflare treats CDP as a bot signal.
+    expect(guest.debugger.attach).not.toHaveBeenCalled()
+    expect(guest.debugger.sendCommand).not.toHaveBeenCalled()
     expect(navigateTo(guest, 'https://elsewhere.example/')).toBe(false)
   })
 
@@ -161,6 +168,7 @@ describe('guest policy profiles', () => {
     expect(listenerCount(guest, 'dom-ready')).toBe(0)
     expect(listenerCount(guest, 'frame-created')).toBe(0)
     expect(listenerCount(guest, 'did-create-window')).toBe(0)
+    expect(guest.debugger.on).not.toHaveBeenCalled()
     expect(guest.debugger.sendCommand).not.toHaveBeenCalled()
     expect(guest.executeJavaScriptInIsolatedWorld).not.toHaveBeenCalled()
   })

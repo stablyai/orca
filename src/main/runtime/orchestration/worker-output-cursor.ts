@@ -10,6 +10,7 @@ type WorkerOutputCursorPayload = {
   s: 'terminal' | 'transcript'
   i: string
   p: number
+  c?: string
 }
 
 export type DecodedWorkerOutputCursor =
@@ -23,6 +24,7 @@ export type DecodedWorkerOutputCursor =
       source: 'transcript'
       sourceIdentity: string
       position: number
+      boundaryCheckpoint: string | null
       legacy: false
     }
 
@@ -34,14 +36,16 @@ export function encodeWorkerOutputCursor(
   dispatchId: string,
   source: WorkerOutputCursorPayload['s'],
   sourceIdentity: string,
-  position: number
+  position: number,
+  boundaryCheckpoint?: string
 ): string {
   const payload: WorkerOutputCursorPayload = {
     v: 1,
     d: dispatchId,
     s: source,
     i: sourceIdentity,
-    p: position
+    p: position,
+    ...(source === 'transcript' && boundaryCheckpoint ? { c: boundaryCheckpoint } : {})
   }
   return `${WORKER_OUTPUT_CURSOR_PREFIX}${Buffer.from(JSON.stringify(payload)).toString('base64url')}`
 }
@@ -82,12 +86,20 @@ export function decodeWorkerOutputCursor(
       'The worker-read cursor belongs to a different Dispatch.'
     )
   }
-  return {
-    source: parsed.s,
-    sourceIdentity: parsed.i,
-    position: parsed.p,
-    legacy: false
-  }
+  return parsed.s === 'transcript'
+    ? {
+        source: 'transcript',
+        sourceIdentity: parsed.i,
+        position: parsed.p,
+        boundaryCheckpoint: parsed.c ?? null,
+        legacy: false
+      }
+    : {
+        source: 'terminal',
+        sourceIdentity: parsed.i,
+        position: parsed.p,
+        legacy: false
+      }
 }
 
 function decodeLegacyTerminalCursor(position: number): DecodedWorkerOutputCursor {
@@ -113,7 +125,12 @@ function isWorkerOutputCursorPayload(value: unknown): value is WorkerOutputCurso
     payload.i.length <= 128 &&
     typeof payload.p === 'number' &&
     Number.isSafeInteger(payload.p) &&
-    payload.p >= 0
+    payload.p >= 0 &&
+    (payload.c === undefined ||
+      (payload.s === 'transcript' &&
+        typeof payload.c === 'string' &&
+        payload.c.length > 0 &&
+        payload.c.length <= 128))
   )
 }
 

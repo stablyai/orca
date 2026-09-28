@@ -17,6 +17,7 @@ export const PAIRING_LOCAL_UI_FIELDS = [
   'agentsFilterRepoIds',
   'agentsShowChildAgents',
   'agentsCompactMode',
+  'agentsShowSearch',
   'agentsReadFilter',
   'agentsGroupBy',
   'activityClearedAtByPaneKey',

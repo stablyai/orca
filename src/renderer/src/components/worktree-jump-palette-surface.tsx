@@ -40,7 +40,7 @@ export function WorktreeJumpPaletteSurface({
         loop: true,
         value: controller.commandSelectedItemId,
         onValueChange: controller.handleCommandSelectionChange,
-        className: 'bg-transparent',
+        className: 'jump-palette-command bg-transparent',
         onKeyDownCapture: (event: React.KeyboardEvent) => {
           if (
             controller.selectionMovedByUserRef &&
@@ -70,7 +70,7 @@ export function WorktreeJumpPaletteSurface({
             <PaletteFilterMenu
               model={controller.filterModel}
               filter={controller.filter}
-              onFilterChange={controller.setRawFilter}
+              onFilterChange={controller.setFilter}
               onRequestInputFocus={controller.focusPaletteInput}
               portalContainer={controller.dialogElement}
             />
@@ -93,7 +93,7 @@ export function WorktreeJumpPaletteSurface({
       <PaletteFilterChips
         model={controller.filterModel}
         filter={controller.filter}
-        onFilterChange={controller.setRawFilter}
+        onFilterChange={controller.setFilter}
       />
       <CommandList
         ref={controller.listRef}

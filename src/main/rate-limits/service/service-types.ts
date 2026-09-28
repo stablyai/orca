@@ -44,12 +44,16 @@ export type ClaudeAuthPreparationResolver = (
 export type OpenCodeGoRateLimitConfig = {
   sessionCookie: string
   workspaceIdOverride: string
+  /** Explicit Orca override; empty means fall back to env and OpenCode's own store. */
+  apiKey: string
 }
 
 export type MiniMaxRateLimitConfig = {
   sessionCookie: string
   groupId: string
   models: string
+  endpoint: 'overseas' | 'cn'
+  apiKey: string
 }
 
 export type MiniMaxResolvedConfig = {
@@ -105,6 +109,8 @@ export type InternalRateLimitState = {
   antigravity: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
   grok: ProviderRateLimits | null
+  cursor: ProviderRateLimits | null
+  zcode: ProviderRateLimits | null
 }
 
 export function normalizePollingInterval(ms: number): number {

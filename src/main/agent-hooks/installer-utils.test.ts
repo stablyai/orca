@@ -31,8 +31,12 @@ import {
   type HooksConfig
 } from './installer-utils'
 import { buildPosixAgentHookPostCommand } from './hook-post-command'
-import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from './hook-stdin-contract'
+import {
+  POSIX_HOOK_STDIN_DRAIN_COMMAND,
+  WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD
+} from './hook-stdin-contract'
 import { wrapRuntimeHomeHookCommand } from './runtime-home-hook-command'
+import { findBareHookCommandVariables } from './managed-hook-command-env.test-fixture'
 
 let tmpDir: string
 let configPath: string
@@ -618,7 +622,10 @@ function expectedDecodedWindowsHookCommand(scriptPath: string): string {
   // Why: the execution-policy bypass rides in the payload, not on the command
   // line, so the launcher cannot spell the AV-blocked flag triple (#16003).
   // Why: PowerShell progress CLIXML corrupts consumers that merge stderr into JSON stdout.
-  return `$ProgressPreference='SilentlyContinue'; try { Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -ErrorAction SilentlyContinue } catch {}; if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; [Console]::In.ReadToEnd() | Out-Null; exit 0`
+  // Why the guard is spelled by import: the launcher owns stdin on the missing-script path,
+  // so it obeys the shared Windows rule (#11549), and re-typing it here would let the two
+  // drift back apart.
+  return `$ProgressPreference='SilentlyContinue'; try { Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -ErrorAction SilentlyContinue } catch {}; if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; ${WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD}; [Console]::In.ReadToEnd() | Out-Null; exit 0`
 }
 
 describe('wrapWindowsHookCommand', () => {
@@ -631,6 +638,15 @@ describe('wrapWindowsHookCommand', () => {
     )
   })
 
+  it('doubles typographic single quotes in the script path literal', () => {
+    const decoded = decodeWindowsHookCommand(
+      wrapWindowsHookCommand('C:\\Users\\O\u2019Brien\\.orca\\agent-hooks\\codex-hook.cmd')
+    )
+    expect(decoded).toContain(
+      "Test-Path -LiteralPath 'C:\\Users\\O\u2019\u2019Brien\\.orca\\agent-hooks\\codex-hook.cmd'"
+    )
+  })
+
   it('scopes environment variables inside the encoded launcher', () => {
     const command = wrapWindowsHookCommand('C:\\hooks\\copilot-hook.ps1', {
       ORCA_COPILOT_HOOK_EVENT: 'UserPromptSubmit'
@@ -640,15 +656,23 @@ describe('wrapWindowsHookCommand', () => {
     )
   })
 
-  it('emits fallback stdout when the managed script is missing', () => {
-    const command = wrapWindowsHookCommand(
-      'C:\\hooks\\cursor-hook.cmd',
-      {},
-      { fallbackStdout: '{"permission":"allow"}' }
+  // Why the ordering matters: a gate event reads silence as deny (#2426), and outside an
+  // Orca pane the guard exits before the read — so an answer placed after the drain never
+  // reaches the agent at all when the caller abandons the pipe (#11549).
+  it('answers before it guards, and guards before it owns stdin', () => {
+    const decoded = decodeWindowsHookCommand(
+      wrapWindowsHookCommand(
+        'C:\\hooks\\cursor-hook.cmd',
+        {},
+        { fallbackStdout: '{"permission":"allow"}' }
+      )
     )
-    expect(decodeWindowsHookCommand(command)).toContain(
-      'Write-Output \'{"permission":"allow"}\'; exit 0'
-    )
+    const answer = decoded.indexOf('Write-Output \'{"permission":"allow"}\'')
+    const guard = decoded.indexOf(WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD)
+    const ownsStdin = decoded.indexOf('[Console]::In.ReadToEnd()')
+    expect(answer).toBeGreaterThan(-1)
+    expect(guard).toBeGreaterThan(answer)
+    expect(ownsStdin).toBeGreaterThan(guard)
   })
 
   // Why: a user profile path like `C:\Users\Jane Doe` is the regression from
@@ -692,10 +716,7 @@ describe('wrapWindowsHookCommand', () => {
 
 describe('wrapWindowsCmdHookCommand', () => {
   it('returns the bare, directly-spawnable path for a cmd-safe managed script', () => {
-    // Why: Codex/Antigravity/Devin launch the command as a program (argv[0]),
-    // not via cmd.exe, so the launcher must be a single spawnable token — a bare
-    // .cmd path. A cmd-builtin `if …` launcher has argv[0] = `if`, which is
-    // unspawnable and fails every hook with exit 1 (#8430 regression).
+    // Direct-spawn consumers need a launchable argv[0], not a cmd builtin such as `if`.
     const scriptPath = 'C:\\Users\\alice\\.orca\\agent-hooks\\codex-hook.cmd'
     const command = wrapWindowsCmdHookCommand(scriptPath)
     expect(command).toBe(scriptPath)
@@ -706,12 +727,7 @@ describe('wrapWindowsCmdHookCommand', () => {
   it.skipIf(process.platform !== 'win32')(
     'resolves the launcher to a real executable file, not a shell fragment',
     () => {
-      // Regression guard for #8430: Codex/Antigravity/Devin spawn the launcher as
-      // a program (argv[0]), so it must be an existing, launchable file. The broken
-      // `if exist … (call …)` form had argv[0] = `if` — a cmd builtin, not a file —
-      // which is unspawnable and failed every hook. The bare path is the file.
-      // win32-only: the real temp path is cmd-safe only with backslashes; a POSIX
-      // tmpDir has `/`, which routes to the encoded fallback by design.
+      // POSIX temp paths contain `/`, which selects the encoded fallback instead.
       const scriptPath = join(tmpDir, 'codex-hook.cmd')
       writeFileSync(scriptPath, '@echo off\r\nexit /b 0\r\n', 'utf-8')
       const command = wrapWindowsCmdHookCommand(scriptPath)
@@ -751,8 +767,7 @@ describe('wrapRuntimeHomeHookCommand', () => {
       const command = wrapRuntimeHomeHookCommand('claude-hook', options)
 
       expect(command).toContain('"${SYSTEMROOT-}/System32/WindowsPowerShell/v1.0/powershell.exe"')
-      expect(command).not.toMatch(/\$(?!\{)[A-Za-z_]/)
-      expect(command).not.toMatch(/\$\{[A-Za-z_][A-Za-z0-9_]*\}/)
+      expect(findBareHookCommandVariables(command)).toEqual([])
     }
   )
 

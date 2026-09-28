@@ -238,11 +238,10 @@ public enum SnapshotRenderHeuristics {
         if roleText == "heading", Int(value) != nil {
             return nil
         }
-        let clean = sanitize(value)
         if roleText == "text" || roleText == "text entry area" || roleText == "scroll bar" || roleText == "value indicator" {
-            return " \(clean)"
+            return " \(value)"
         }
-        return ", Value: \(clean)"
+        return ", Value: \(value)"
     }
 
     private static func markdownEscaped(_ value: String) -> String {

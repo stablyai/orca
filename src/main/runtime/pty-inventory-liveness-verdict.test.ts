@@ -131,7 +131,7 @@ describe('inventory sweep liveness verdicts', () => {
     expect(runtime.getPtyLivenessVerdict(REMOTE_PTY_ID)).toBeNull()
   })
 
-  it('clears lost-contact doubt when reconnect inventory observes the PTY live', async () => {
+  it('records positive host evidence when reconnect inventory observes the PTY live', async () => {
     let reconnected = false
     const runtime = makeRuntimeMissingFromInventory(
       () => null,
@@ -144,7 +144,12 @@ describe('inventory sweep liveness verdicts', () => {
     reconnected = true
     await runtime.listTerminals(`id:${WORKTREE_ID}`)
 
-    expect(runtime.getPtyLivenessVerdict(REMOTE_PTY_ID)).toBeNull()
+    // The owning host named the id in its own listing. That is evidence of life, and it must be
+    // recorded as such rather than collapsed into the same null a never-asked host produces.
+    expect(runtime.getPtyLivenessVerdict(REMOTE_PTY_ID)).toEqual({
+      status: 'live',
+      ptyIds: [REMOTE_PTY_ID]
+    })
   })
 
   it('does not let a pre-drop inventory clear a newer lost-contact verdict', async () => {
@@ -209,5 +214,24 @@ describe('inventory sweep liveness verdicts', () => {
       status: 'unverifiable',
       reason: 'provider disconnected'
     })
+  })
+
+  it('bounds detached verdicts while preserving every still-addressable one', () => {
+    // Eviction classifies by CURRENT addressability, so churn cannot push an active PTY's verdict
+    // out: only ids that no record, handle, or leaf still names are candidates.
+    const runtime = new OrcaRuntimeService(makeStore() as never)
+    for (let index = 0; index < 400; index += 1) {
+      const ptyId = `ssh:conn-1@@churn-${index}`
+      runtime.registerPty(ptyId, WORKTREE_ID, 'conn-1')
+      runtime.markPtyLivenessUnverifiable(ptyId, 'provider disconnected')
+      runtime.onPtyExit(ptyId, index % 2 === 0 ? -1 : 0)
+    }
+
+    expect(runtime.getPtyLivenessVerdict('ssh:conn-1@@churn-0')).toBeNull()
+    expect(runtime.getPtyLivenessVerdict('ssh:conn-1@@churn-399')).toEqual({ status: 'exited' })
+    expect(
+      (runtime as unknown as { ptyLivenessVerdictByPtyId: Map<string, unknown> })
+        .ptyLivenessVerdictByPtyId.size
+    ).toBe(256)
   })
 })

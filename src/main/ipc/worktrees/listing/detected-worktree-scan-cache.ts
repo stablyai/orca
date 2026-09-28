@@ -1,9 +1,10 @@
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { Repo } from '../../../../shared/repo-types'
 import { getLocalProjectWorktreeGitOptions } from '../../../project-runtime-git-options'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { listRepoWorktrees } from '../../../repo-worktrees'
+import { listRepoWorktreesForDetectedScan } from '../../../repo-worktrees'
 import {
   getRegisteredWorktreeRootsRevision,
   registerWorktreeRootsForRepo
@@ -31,6 +32,8 @@ export const DETECTED_WORKTREE_SCAN_CACHE_TTL_MS = 5_000
 export type DetectedWorktreeScanCacheEntry = {
   expiresAt: number
   worktrees: GitWorktreeInfo[]
+  /** The generation the cached scan began at: the catalog its rows describe. */
+  generation: number
 }
 
 export type DetectedWorktreeScan = {
@@ -53,6 +56,14 @@ export type DetectedWorktreeMetadataPrune = Readonly<{
 export type DetectedWorktreeScanResult = {
   gitWorktrees: GitWorktreeInfo[]
   fresh: boolean
+  /**
+   * The scan ran, but a worktree mutation invalidated it before it settled (or it joined such a
+   * scan). Its rows describe a catalog that no longer exists: they must not be published as
+   * authoritative, because a worktree added during the scan reads as absent, i.e. deleted.
+   */
+  superseded: boolean
+  /** The repo's scan generation when this scan began; the catalog version its rows describe. */
+  generation: number
   sideEffectToken?: DetectedWorktreeSideEffectToken
   /** Whether this scan owns the repo's next store-hygiene pass; absent means "not from a local scan". */
   hygieneDue?: boolean
@@ -109,22 +120,39 @@ export async function listDetectedGitWorktrees(
   repo: Repo
 ): Promise<DetectedWorktreeScanResult> {
   const localWorktreeGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
-  if (repo.connectionId || isFolderRepo(repo)) {
+  if (getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID || isFolderRepo(repo)) {
+    const generation = getLocalWorktreeScanGeneration(repo.id)
     return {
-      gitWorktrees: await listRepoWorktrees(repo, localWorktreeGitOptions),
-      fresh: true
+      gitWorktrees: await listRepoWorktreesForDetectedScan(repo, localWorktreeGitOptions),
+      fresh: true,
+      superseded: false,
+      generation
     }
   }
 
   const cacheKey = getDetectedWorktreeScanCacheKey(repo.id, localWorktreeGitOptions)
   const cached = detectedWorktreeScanCache.get(cacheKey)
   if (cached && cached.expiresAt > Date.now()) {
-    return { gitWorktrees: cached.worktrees, fresh: false }
+    return {
+      gitWorktrees: cached.worktrees,
+      fresh: false,
+      superseded: false,
+      generation: cached.generation
+    }
   }
 
   const inFlight = detectedWorktreeScanInFlight.get(cacheKey)
   if (inFlight) {
-    return { gitWorktrees: await inFlight.promise, fresh: false }
+    const gitWorktrees = await inFlight.promise
+    // Why: a joiner inherits the scan's staleness, not just its rows.
+    return {
+      gitWorktrees,
+      fresh: false,
+      superseded:
+        inFlight.invalidated ||
+        !isLocalWorktreeScanGenerationCurrent(repo.id, inFlight.sideEffectToken.generation),
+      generation: inFlight.sideEffectToken.generation
+    }
   }
 
   // Why: capture before invoking Git because listing can mutate synchronously before its first await.
@@ -144,7 +172,7 @@ export async function listDetectedGitWorktrees(
       : undefined
   const scan: DetectedWorktreeScan = {
     invalidated: false,
-    promise: listRepoWorktrees(repo, localWorktreeGitOptions),
+    promise: listRepoWorktreesForDetectedScan(repo, localWorktreeGitOptions),
     sideEffectToken: { generation, authorizedRootsRevision },
     hygieneDue,
     ...(metadataPruneExpectation
@@ -172,13 +200,16 @@ export async function listDetectedGitWorktrees(
     if (!scan.invalidated && routingUnchanged && generationCurrent) {
       detectedWorktreeScanCache.set(cacheKey, {
         worktrees: gitWorktrees,
-        expiresAt: Date.now() + DETECTED_WORKTREE_SCAN_CACHE_TTL_MS
+        expiresAt: Date.now() + DETECTED_WORKTREE_SCAN_CACHE_TTL_MS,
+        generation
       })
     }
     const fresh = !scan.invalidated && routingUnchanged && generationCurrent
     return {
       gitWorktrees,
       fresh,
+      superseded: !fresh,
+      generation,
       ...(fresh ? { sideEffectToken: scan.sideEffectToken, hygieneDue: scan.hygieneDue } : {}),
       ...(fresh && scan.metadataPrune ? { metadataPrune: scan.metadataPrune } : {})
     }
@@ -265,11 +296,11 @@ export function rememberLocalWorktreeRoots(
   repo: Repo,
   gitWorktrees: GitWorktreeInfo[]
 ): void {
-  if (repo.connectionId) {
+  if (getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID) {
     return
   }
   // Why: reuse the `git worktree list` result so later git/file IPC validation skips a second scan that can trigger macOS folder-permission prompts.
-  registerWorktreeRootsForRepo(store, repo.id, [
+  registerWorktreeRootsForRepo(store, repo, [
     repo.path,
     ...gitWorktrees.map((worktree) => worktree.path)
   ])

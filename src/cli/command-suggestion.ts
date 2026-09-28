@@ -37,7 +37,10 @@ function destructiveVerbs(specs: CommandSpec[]): Set<string> {
 // input token is itself a near-miss of a destructive verb. #6303
 function intendsDestruction(inputToken: string, verbs: Set<string>): boolean {
   for (const verb of verbs) {
-    if (levenshtein(inputToken, verb) <= DESTRUCTIVE_INTENT_THRESHOLD) {
+    if (
+      Math.abs(inputToken.length - verb.length) <= DESTRUCTIVE_INTENT_THRESHOLD &&
+      levenshtein(inputToken, verb) <= DESTRUCTIVE_INTENT_THRESHOLD
+    ) {
       return true
     }
   }
@@ -85,7 +88,9 @@ export function suggestCommands(specs: CommandSpec[], commandPath: string[]): st
         continue
       }
       seen.add(joined)
-      scored.push({ label: joined, distance: levenshtein(input, joined) })
+      if (Math.abs(input.length - joined.length) <= SUGGESTION_THRESHOLD) {
+        scored.push({ label: joined, distance: levenshtein(input, joined) })
+      }
     }
   }
   return rankByDistance(scored)
@@ -105,10 +110,24 @@ export type FlagErrorData = {
   nextSteps: string[]
 }
 
+// Why: edit distance cannot recover a rename. `orchestration check` is the one verb
+// that identifies its caller with `--terminal` while every sibling uses `--from`, so
+// the near-miss ranking answered `--json`/`--run` and left the caller stuck (#16904).
+// A synonym only fires where the typed flag is rejected and its partner is accepted.
+const FLAG_SYNONYMS: Readonly<Record<string, string>> = { from: 'terminal' }
+
 function suggestFlags(flag: string, validFlags: string[]): string[] {
-  return rankByDistance(
-    validFlags.map((candidate) => ({ label: candidate, distance: levenshtein(flag, candidate) }))
-  )
+  const synonym = FLAG_SYNONYMS[flag]
+  const scored: { label: string; distance: number }[] = []
+  for (const candidate of validFlags) {
+    if (Math.abs(flag.length - candidate.length) <= SUGGESTION_THRESHOLD) {
+      scored.push({ label: candidate, distance: levenshtein(flag, candidate) })
+    }
+  }
+  const ranked = rankByDistance(scored)
+  return synonym && validFlags.includes(synonym)
+    ? [synonym, ...ranked.filter((name) => name !== synonym)].slice(0, MAX_SUGGESTIONS)
+    : ranked
 }
 
 // Why: include the accepted set so agents can recover without another help call.

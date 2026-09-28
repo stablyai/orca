@@ -50,13 +50,17 @@ export function clearDispatcherReadyWatchdog(session: PtyIpcSession): void {
 
 export function armDispatcherReadyWatchdog(session: PtyIpcSession): void {
   clearDispatcherReadyWatchdog(session)
-  if (session.mainWindow.isDestroyed()) {
+  if (!session.mainWindow || session.mainWindow.isDestroyed()) {
     return
   }
   // Why: one-shot self-heal — force the gate open if the reloaded page never signals ready, so a dropped handshake can't hold it forever. Unref'd so it can't keep the process alive.
   session.dispatcherReadyWatchdogTimer = setTimeout(() => {
     session.dispatcherReadyWatchdogTimer = null
-    if (session.rendererPtyDispatcherReady || session.mainWindow.isDestroyed()) {
+    if (
+      session.rendererPtyDispatcherReady ||
+      !session.mainWindow ||
+      session.mainWindow.isDestroyed()
+    ) {
       return
     }
     session.rendererPtyDispatcherReady = true
@@ -77,7 +81,7 @@ export function clearFlushTimerIfIdle(session: PtyIpcSession): void {
 
 export function flushPendingData(session: PtyIpcSession): void {
   session.flushTimer = null
-  if (session.mainWindow.isDestroyed()) {
+  if (!session.mainWindow || session.mainWindow.isDestroyed()) {
     // Why release now: bookkeeping is being wiped, so no future drain can resume these producers — local shells would wedge.
     session.producerFlowControl.releaseAll()
     session.clearDeliveryResyncProbe()

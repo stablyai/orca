@@ -183,4 +183,90 @@ describe('metadata-request-cache', () => {
     expect(store.cache.has('repo-0:labels')).toBe(false)
     expect(store.cache.get('repo-500:labels')?.data).toEqual(['label-500'])
   })
+
+  it('gates the next sweep on the oldest survivor of a capacity eviction', async () => {
+    const store = createMetadataRequestStore<string[]>()
+
+    for (let i = 0; i <= 500; i++) {
+      await loadMetadata(
+        store,
+        `repo-${i}:labels`,
+        () => Promise.resolve([`label-${i}`]),
+        () => i
+      )
+    }
+
+    // repo-0 was evicted for capacity, so the gate must point at repo-1's expiry.
+    expect(store.nextCacheExpiryAt).toBe(1 + 300_000)
+    let reads = 0
+    for (const entry of store.cache.values()) {
+      const { fetchedAt } = entry
+      Object.defineProperty(entry, 'fetchedAt', {
+        get: () => {
+          reads++
+          return fetchedAt
+        }
+      })
+    }
+    expect(getFreshMetadata(store, 'repo-500:labels', 300_000)?.data).toEqual(['label-500'])
+    expect(reads).toBe(1)
+    expect(store.cache.size).toBe(500)
+  })
+
+  it('avoids full-cache sweeps on fresh reads but releases all expired payloads when due', async () => {
+    const store = createMetadataRequestStore<number>()
+    for (let i = 0; i < 500; i++) {
+      await loadMetadata(
+        store,
+        String(i),
+        async () => i,
+        () => i
+      )
+    }
+    let reads = 0
+    for (const entry of store.cache.values()) {
+      const fetchedAt = entry.fetchedAt
+      Object.defineProperty(entry, 'fetchedAt', {
+        get: () => {
+          reads++
+          return fetchedAt
+        }
+      })
+    }
+    for (let i = 0; i < 10_000; i++) {
+      expect(getFreshMetadata(store, '499', 1000)?.data).toBe(499)
+    }
+    expect(reads).toBeLessThanOrEqual(10_000)
+    expect(getFreshMetadata(store, '499', 300_498)?.data).toBe(499)
+    expect([...store.cache.keys()]).toEqual(['499'])
+    expect(getFreshMetadata(store, 'missing', 300_499)).toBeNull()
+    expect(store.cache.size).toBe(0)
+  })
+
+  it('reschedules expiry after clear and a fetch whose clock moved backwards', async () => {
+    const store = createMetadataRequestStore<number>()
+    await loadMetadata(
+      store,
+      'later',
+      async () => 1,
+      () => 20_000
+    )
+    await loadMetadata(
+      store,
+      'earlier',
+      async () => 2,
+      () => 10_000
+    )
+    expect(getFreshMetadata(store, 'later', 310_000)?.data).toBe(1)
+    expect(store.cache.has('earlier')).toBe(false)
+    clearMetadataRequestStore(store)
+    await loadMetadata(
+      store,
+      'new',
+      async () => 3,
+      () => 0
+    )
+    expect(getFreshMetadata(store, 'missing', 300_000)).toBeNull()
+    expect(store.cache.size).toBe(0)
+  })
 })

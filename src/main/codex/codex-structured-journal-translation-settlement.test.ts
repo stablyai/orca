@@ -212,20 +212,18 @@ describe('codex journal translation', () => {
     expect(translator.handle(notification('turn/completed', { turn: { id: TURN_ID } }))).toEqual({
       accepted: true
     })
-    expect(deferred.state()).toMatchObject({ queuedOperations: 4, backpressured: true })
+    expect(deferred.state()).toMatchObject({ queuedOperations: 5, backpressured: true })
 
     deferred.bind(deferredTarget(bodies, publishes))
     await expect(deferred.lifecycleBarrier()).resolves.toEqual({ ok: true })
 
     expect(bodies).toEqual([
-      expect.objectContaining({
-        kind: 'status',
-        turnLifecycle: { turnId: TURN_ID, state: 'running' }
-      }),
+      expect.objectContaining({ kind: 'turn', turnId: TURN_ID, state: 'running' }),
       expect.objectContaining({ kind: 'tool-call', state: 'running' }),
-      expect.objectContaining({ kind: 'tool-call', state: 'failed' })
+      expect.objectContaining({ kind: 'tool-call', state: 'failed' }),
+      expect.objectContaining({ kind: 'turn', turnId: TURN_ID, state: 'completed' })
     ])
-    expect(publishes).toHaveLength(1)
+    expect(publishes).toHaveLength(2)
   })
 
   it('admits terminal session settlement publication across the hard watermark', async () => {
@@ -257,16 +255,13 @@ describe('codex journal translation', () => {
         acquisitionGeneration: 'generation-1'
       })
     ).toEqual({ accepted: true })
-    expect(deferred.state()).toMatchObject({ queuedOperations: 4, backpressured: true })
+    expect(deferred.state()).toMatchObject({ queuedOperations: 5, backpressured: true })
 
     deferred.bind(deferredTarget(bodies, publishes))
     await expect(deferred.lifecycleBarrier()).resolves.toEqual({ ok: true })
 
     expect(bodies).toEqual([
-      expect.objectContaining({
-        kind: 'status',
-        turnLifecycle: { turnId: TURN_ID, state: 'running' }
-      }),
+      expect.objectContaining({ kind: 'turn', turnId: TURN_ID, state: 'running' }),
       expect.objectContaining({
         kind: 'approval',
         resolution: expect.objectContaining({ state: 'pending' })
@@ -275,9 +270,9 @@ describe('codex journal translation', () => {
         kind: 'approval',
         resolution: expect.objectContaining({ state: 'cancelled' })
       }),
-      { kind: 'status', text: 'Provider exited: lost child' }
+      expect.objectContaining({ kind: 'turn', turnId: TURN_ID, state: 'interrupted' })
     ])
-    expect(publishes).toHaveLength(1)
+    expect(publishes).toHaveLength(2)
   })
 
   it('retries a rejected terminal admission without losing tool, prompt, turn, or session truth', () => {
@@ -347,9 +342,9 @@ describe('codex journal translation', () => {
           })
         }),
         expect.objectContaining({
-          body: { kind: 'status', text: 'Provider exited: lost child' }
-        }),
-        expect.objectContaining({ kind: 'tombstone' })
+          kind: 'item',
+          body: expect.objectContaining({ kind: 'turn', turnId: TURN_ID, state: 'interrupted' })
+        })
       ])
     )
   })
@@ -417,12 +412,11 @@ describe('codex journal translation', () => {
           `provider-exit:${SESSION_ID}:7:generation-1:${index + 1}/${batches.length}`
       )
     )
-    expect(flattened).toHaveLength(122)
-    expect(flattened.at(-2)).toMatchObject({
+    expect(flattened).toHaveLength(121)
+    expect(flattened.at(-1)).toMatchObject({
       kind: 'item',
-      body: { kind: 'status', text: 'Provider exited: lost child' }
+      body: { kind: 'turn', state: 'interrupted' }
     })
-    expect(flattened.at(-1)).toMatchObject({ kind: 'tombstone' })
     expectLifecycleBatchBounds(batches)
   })
 
@@ -542,15 +536,23 @@ describe('codex journal translation', () => {
               output: expect.objectContaining({ head: 'partial' })
             })
           }),
-          expect.objectContaining({
-            kind: 'tombstone',
+          {
+            kind: 'item',
             identity: {
               provider: 'legacy',
               agent: 'codex',
               sessionId: SESSION_ID,
               recordId: `turn-lifecycle:${TURN_ID}`
+            },
+            body: {
+              kind: 'turn',
+              turnId: TURN_ID,
+              state: 'completed',
+              userItemId: `codex:${THREAD_ID}:${TURN_ID}:0`,
+              startedAt: expect.any(Number),
+              completedAt: expect.any(Number)
             }
-          })
+          }
         ]
       }
     ])
@@ -652,7 +654,7 @@ describe('codex journal translation', () => {
 
     translator.handle(TURN_STARTED)
     translator.handle(
-      notification('item/completed', { item: { type: 'userMessage', id: 'item-0', text: 'one' } })
+      notification('item/completed', { item: { type: 'agentMessage', id: 'item-0', text: 'one' } })
     )
     translator.handle(notification('turn/completed', { turn: { id: TURN_ID } }))
     translator.handle(
@@ -662,7 +664,7 @@ describe('codex journal translation', () => {
     )
     translator.handle(notification('turn/started', { turn: { id: 'turn-2' } }))
     translator.handle(
-      notification('item/completed', { item: { type: 'userMessage', id: 'item-2', text: 'two' } })
+      notification('item/completed', { item: { type: 'agentMessage', id: 'item-2', text: 'two' } })
     )
 
     expect(tap.rows.map((row) => row.key)).toEqual([
@@ -679,7 +681,7 @@ describe('codex journal translation', () => {
     translator.handle(
       notification('item/completed', {
         turnId: 'turn-9',
-        item: { type: 'userMessage', id: 'item-0', text: 'late' }
+        item: { type: 'agentMessage', id: 'item-0', text: 'late' }
       })
     )
 
@@ -789,8 +791,9 @@ describe('codex journal translation', () => {
 
     const reduced = new Map(tap.rows.map((row) => [row.key, row.body]))
     expect(reduced.get('orca:codex-item%3Athread-abc%3Ar-1')).toEqual({
-      kind: 'status',
-      text: 'thinking'
+      kind: 'message',
+      role: 'reasoning',
+      blocks: [{ type: 'text', text: 'thinking' }]
     })
     expect(reduced.get('orca:codex-item%3Athread-abc%3Apatch-1')).toMatchObject({
       kind: 'diff',

@@ -1,18 +1,20 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
-import * as Clipboard from 'expo-clipboard'
 import type { DiffComment, MobileDiffReviewState } from '../../../src/shared/diff-comment-types'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
+import { useClipboardWriter } from '../platform/clipboard'
 import { triggerSuccess } from '../platform/haptics'
 import { formatDiffComments, formatMobileDiffReviewPrompt } from './mobile-diff-comments'
 import { clearSentMobileDiffComments, markMobileDiffCommentsSent } from './mobile-diff-comment-edit'
 import {
-  readMobileReviewCreatedTerminal,
-  readMobileReviewTerminalSendAccepted,
-  readMobileReviewTerminalTabs
-} from './mobile-diff-review-rpc'
+  reviewTerminalCreateRun,
+  reviewTerminalListRead,
+  reviewTerminalSendRun
+} from './mobile-review-terminal-operations'
+import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
 import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
-import type { ReviewScreenState, SendSheetState } from './mobile-diff-review-screen-model'
+import type { ReviewScreenState } from './mobile-diff-review-screen-model'
+import type { ReviewSheetIntents } from './mobile-diff-review-sheets'
 
 type SendActionsInput = {
   client: RpcClient | null
@@ -20,7 +22,7 @@ type SendActionsInput = {
   worktreeId: string
   screenState: ReviewScreenState
   setActionError: Dispatch<SetStateAction<string | null>>
-  setSendSheet: Dispatch<SetStateAction<SendSheetState | null>>
+  sheets: Pick<ReviewSheetIntents, 'openSheet' | 'closeSheet' | 'updateSendSheet'>
   saveCommentsAndReviewState: (
     comments: DiffComment[],
     reviewState: MobileDiffReviewState
@@ -28,24 +30,35 @@ type SendActionsInput = {
 }
 
 export function useMobileDiffReviewSendActions(input: SendActionsInput) {
+  // The seam, not `expo-clipboard`: inside the shell the page's own clipboard needs a secure
+  // context, which the iOS custom scheme is not and Android's https is.
+  const clipboard = useClipboardWriter()
   const {
     client,
     connState,
     worktreeId,
     screenState,
     setActionError,
-    setSendSheet,
+    sheets,
     saveCommentsAndReviewState
   } = input
+  const { openSheet, closeSheet, updateSendSheet } = sheets
 
   const copyNotes = useCallback(async () => {
     if (screenState.kind !== 'ready' || screenState.comments.length === 0) {
       return
     }
-    await Clipboard.setStringAsync(formatDiffComments(screenState.comments))
+    // Caught here because the only caller is `void controller.copyNotes()`: the seam rejects when
+    // the pasteboard refused, and an uncaught rejection would leave "copied" as the last word.
+    try {
+      await clipboard.writeText(formatDiffComments(screenState.comments))
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Unable to copy the review notes')
+      return
+    }
     triggerSuccess()
     setActionError('Review notes copied')
-  }, [screenState, setActionError])
+  }, [clipboard, screenState, setActionError])
 
   const clearSentNotes = useCallback(async () => {
     if (screenState.kind !== 'ready') {
@@ -80,23 +93,25 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
       if (!(await healMobileNativeChatStaleInput({ client, terminal, deviceToken: null }))) {
         throw new Error('Failed to send notes')
       }
-      const response = await client.sendRequest('terminal.send', {
+      const response = await reviewTerminalSendRun.request(client, {
         terminal,
         text: formatMobileDiffReviewPrompt(comments),
         enter: true
       })
-      if (!response.ok) {
-        throw new Error(response.error?.message || 'Failed to send notes')
-      }
-      if (!readMobileReviewTerminalSendAccepted(response.result)) {
+      let accepted
+      accepted = interpretOrThrowRefusalMessage(
+        () => reviewTerminalSendRun.interpret(response),
+        'Failed to send notes'
+      )
+      if (!accepted) {
         throw new Error('Terminal input is locked')
       }
       await markNotesSent(comments)
       triggerSuccess()
       setActionError('Review notes sent')
-      setSendSheet(null)
+      closeSheet('send')
     },
-    [client, connState, markNotesSent, setActionError, setSendSheet]
+    [client, connState, closeSheet, markNotesSent, setActionError]
   )
 
   const createTerminalAndSend = useCallback(
@@ -104,19 +119,17 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
       if (!client || connState !== 'connected') {
         throw new Error('Waiting for desktop...')
       }
-      const response = await client.sendRequest('session.tabs.createTerminal', {
+      const response = await reviewTerminalCreateRun.request(client, {
         worktree: `id:${worktreeId}`,
         activate: false,
         select: true,
         navigation: 'caller'
       })
-      if (!response.ok) {
-        throw new Error(response.error?.message || 'Failed to create terminal')
-      }
-      const created = readMobileReviewCreatedTerminal(response.result)
-      if (!created) {
-        throw new Error('Created terminal response was invalid')
-      }
+      let created
+      created = interpretOrThrowRefusalMessage(
+        () => reviewTerminalCreateRun.interpret(response),
+        'Failed to create terminal'
+      )
       await sendPromptToTerminal(created.terminal, comments)
     },
     [client, connState, sendPromptToTerminal, worktreeId]
@@ -127,23 +140,25 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
       setActionError('Waiting for desktop...')
       return
     }
-    setSendSheet({ kind: 'loading' })
+    openSheet({ kind: 'send', load: { kind: 'loading' } })
     try {
-      const response = await client.sendRequest('session.tabs.list', {
+      const response = await reviewTerminalListRead.request(client, {
         worktree: `id:${worktreeId}`
       })
-      if (!response.ok) {
-        throw new Error(response.error?.message || 'Unable to load agent sessions')
-      }
-      setSendSheet({ kind: 'ready', terminals: readMobileReviewTerminalTabs(response.result) })
+      let terminals
+      terminals = interpretOrThrowRefusalMessage(
+        () => reviewTerminalListRead.interpret(response),
+        'Unable to load agent sessions'
+      )
+      updateSendSheet({ kind: 'ready', terminals })
     } catch (err) {
-      setSendSheet({
+      updateSendSheet({
         kind: 'error',
         message: err instanceof Error ? err.message : 'Unable to load agent sessions',
         terminals: []
       })
     }
-  }, [client, connState, setActionError, setSendSheet, worktreeId])
+  }, [client, connState, openSheet, setActionError, updateSendSheet, worktreeId])
 
   return {
     clearSentNotes,

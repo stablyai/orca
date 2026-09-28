@@ -34,6 +34,7 @@ import {
   syncSinglePty
 } from '../orca-runtime-test-fixtures.spec'
 import { createWorktreeRemovalRuntime } from '../orca-runtime-test-scenario-builders.spec'
+import { getLocalWorktreeScanGeneration } from '../../local-worktree-scan-generation'
 
 describe('OrcaRuntimeService', () => {
   it('creates the first terminal by id when duplicate repo entries expose the same path', async () => {
@@ -376,7 +377,18 @@ describe('OrcaRuntimeService', () => {
         TEST_REPO_PATH,
         'runtime-wsl',
         'origin/main',
-        { wslDistro: 'Ubuntu' }
+        { wslDistro: 'Ubuntu' },
+        expect.any(Function)
+      )
+      // Why: the lazy adoption callback is only invoked when the conflict probe
+      // sees a local ref, so drive it here to prove adoption also routes via WSL.
+      const adoptLocalBranch = vi
+        .mocked(getBranchConflictKind)
+        .mock.calls.findLast((call) => call[1] === 'runtime-wsl')?.[4]
+      await expect(adoptLocalBranch?.()).resolves.toBe(false)
+      expect(gitSpy).toHaveBeenCalledWith(
+        ['rev-parse', '--verify', '--quiet', 'refs/heads/runtime-wsl^{commit}'],
+        { cwd: TEST_REPO_PATH, wslDistro: 'Ubuntu' }
       )
       expect(getPRForBranchMock).toHaveBeenCalledWith(
         TEST_REPO_PATH,
@@ -601,7 +613,12 @@ describe('OrcaRuntimeService', () => {
     })
 
     await expect(
-      runtime.removeManagedWorktree(TEST_WORKTREE_ID, false, false, false, 'runtime:env-b')
+      runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
+        force: false,
+        runHooks: false,
+        allowUnverifiedPtyStop: false,
+        hostId: 'runtime:env-b'
+      })
     ).rejects.toThrow('no longer belongs to runtime:env-b')
 
     expect(localProvider.listProcesses).not.toHaveBeenCalled()
@@ -663,5 +680,37 @@ describe('OrcaRuntimeService', () => {
     expect(restoreLocalWatcherAfterFailedRemovalMock).toHaveBeenCalledWith(TEST_WORKTREE_PATH)
     expect(forgetLocalWatcherRemovalSnapshotMock).not.toHaveBeenCalled()
     expect(removeWorktree).not.toHaveBeenCalled()
+  })
+
+  // A headless host has no window notifier, so the removal itself must move the generation the
+  // runtime listing witnesses; otherwise a listing the delete overtook publishes the removed row.
+  it('moves the scan generation the runtime listing witnesses once the worktree is removed', async () => {
+    const runtime = createWorktreeRemovalRuntime()
+    vi.mocked(removeWorktree).mockResolvedValue({})
+    const before = getLocalWorktreeScanGeneration(TEST_REPO_ID)
+
+    await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
+
+    expect(removeWorktree).toHaveBeenCalled()
+    expect(getLocalWorktreeScanGeneration(TEST_REPO_ID)).not.toBe(before)
+  })
+
+  it('moves the scan generation before the first step after git worktree remove', async () => {
+    const runtime = createWorktreeRemovalRuntime()
+    const witness: { during?: number; after?: number } = {}
+    vi.mocked(removeWorktree).mockImplementationOnce(async () => {
+      witness.during = getLocalWorktreeScanGeneration(TEST_REPO_ID)
+      return {}
+    })
+    // Why the watcher gate: releasing it is the first awaited step after the git removal.
+    vi.spyOn(runtime, 'acquireFileWatcherRemoval').mockResolvedValue({
+      finish: vi.fn(async () => {
+        witness.after ??= getLocalWorktreeScanGeneration(TEST_REPO_ID)
+      })
+    })
+
+    await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
+
+    expect(witness.after).toBeGreaterThan(witness.during ?? Infinity)
   })
 })

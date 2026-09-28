@@ -1,3 +1,6 @@
+import { isAgentTaskCompleteTrackingEnabledFromState as isAgentHookCompletionTrackingEnabled } from '@/components/terminal-pane/agent-task-complete-policy'
+export { isAgentHookCompletionTrackingEnabled }
+
 type CompletionNotificationSettings = {
   readonly enabled?: boolean
   readonly agentTaskComplete?: boolean
@@ -24,15 +27,6 @@ export type AgentHookCompletionStoreSnapshot = {
 
 type TabVisit = () => void
 
-export function isAgentHookCompletionTrackingEnabled(
-  state: AgentHookCompletionStoreSnapshot
-): boolean {
-  const notifications = state.settings?.notifications
-  const notificationEnabled =
-    notifications?.enabled !== false && notifications?.agentTaskComplete !== false
-  return notificationEnabled || state.settings?.experimentalTerminalAttention === true
-}
-
 function terminalTabLivenessMatches(
   current: AgentHookCompletionStoreSnapshot['tabsByWorktree'],
   previous: AgentHookCompletionStoreSnapshot['tabsByWorktree'],
@@ -48,7 +42,10 @@ function terminalTabLivenessMatches(
     return false
   }
 
-  for (const [worktreeIndex, worktreeId] of currentWorktreeIds.entries()) {
+  // Indexed loops, not .entries(): this runs on every tab write including title frames, and the
+  // iterator allocated a [index, value] tuple per worktree and per tab in each changed bucket.
+  for (let worktreeIndex = 0; worktreeIndex < currentWorktreeIds.length; worktreeIndex += 1) {
+    const worktreeId = currentWorktreeIds[worktreeIndex]
     // Why: duplicate tab ids use first-worktree-wins lookup semantics, so a
     // worktree-key reorder is a liveness change even when every array is reused.
     if (previousWorktreeIds[worktreeIndex] !== worktreeId) {
@@ -62,7 +59,8 @@ function terminalTabLivenessMatches(
     if (!currentTabs || !previousTabs || currentTabs.length !== previousTabs.length) {
       return false
     }
-    for (const [tabIndex, currentTab] of currentTabs.entries()) {
+    for (let tabIndex = 0; tabIndex < currentTabs.length; tabIndex += 1) {
+      const currentTab = currentTabs[tabIndex]
       visitTab?.()
       const previousTab = previousTabs[tabIndex]
       if (

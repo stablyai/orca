@@ -19,6 +19,8 @@ export type UseSourceControlAgentActionDialogResult = {
   detecting: boolean
   statusCopy: string | null
   agentArgs: string
+  /** False when this launch would be a structured native chat session, which reads no CLI arguments. */
+  agentArgsApply: boolean
   commandTemplate: string
   saveLaunchRecipe: boolean
   saveTargetValue: string

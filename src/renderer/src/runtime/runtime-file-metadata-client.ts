@@ -43,6 +43,13 @@ export async function statRuntimePath(
   )
 }
 
+export function isMissingRuntimePathError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+  return (
+    message.includes('enoent') || message.includes('not found') || message.includes('no such file')
+  )
+}
+
 export async function runtimePathExists(
   context: RuntimeFileOperationArgs,
   absolutePath: string,
@@ -66,12 +73,7 @@ export async function runtimePathExists(
     )
     return true
   } catch (err) {
-    const message = err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase()
-    if (
-      message.includes('enoent') ||
-      message.includes('not found') ||
-      message.includes('no such file')
-    ) {
+    if (isMissingRuntimePathError(err)) {
       return false
     }
     throw err

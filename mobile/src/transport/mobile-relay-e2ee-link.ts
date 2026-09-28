@@ -2,9 +2,14 @@ import {
   RelayPhoneHelloSchema,
   type RelayPhoneHello
 } from '../../../src/shared/mobile-relay-phone-protocol'
+import {
+  relayHostCloseReasonFrom,
+  type RelayHostCloseReason
+} from '../../../src/shared/relay-host-close-reason'
 import { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
 import { MobileE2EEV2PhysicalChannel } from './mobile-e2ee-v2-physical-channel'
 import { websocketPayloadToUint8 } from './websocket-payload-bytes'
+import { relayConnectWebSocketUrl } from './mobile-relay-connect-url'
 
 // Native WebSockets normally emit close immediately after error; bound the
 // missing-close case so a dead socket cannot leave recovery pending forever.
@@ -26,6 +31,14 @@ type MobileRelayE2eeLinkOptions = {
   onText: (plaintext: string) => void
   onBinary: (plaintext: Uint8Array) => void
   onHello?: (hello: Extract<RelayPhoneHello, { ok: true }>) => void
+  // The cell's account of why the desktop is absent, read off the close frame.
+  // Reported separately from onError because a rejection is delivered as both a
+  // relay-hello and a close, and which one the runtime dispatches first is not
+  // ordered — only the close carries the reason, and it must not be lost to
+  // that race.
+  onHostCloseReason?: (reason: RelayHostCloseReason) => void
+  // Fired once relay-auth is on the wire: from here the cell owns the wait.
+  onOpen?: () => void
   onError: (error: Error) => void
   createSocket?: (url: string) => WebSocket
 }
@@ -42,7 +55,7 @@ export class MobileRelayE2eeLink {
   constructor(options: MobileRelayE2eeLinkOptions) {
     this.options = options
     this.socket = (options.createSocket ?? ((url) => new WebSocket(url)))(
-      relaySocketUrl(options.endpoint)
+      relayConnectWebSocketUrl(options.endpoint.cellUrl, options.endpoint.relayHostId)
     )
     const session = MobileE2EEV2ClientSession.create({
       desktopPublicKeyB64: options.desktopPublicKeyB64,
@@ -96,7 +109,9 @@ export class MobileRelayE2eeLink {
         )
       } catch (error) {
         this.fail(asError(error))
+        return
       }
+      this.options.onOpen?.()
     }
     this.socket.onmessage = (event) => {
       this.inboundChain = this.inboundChain
@@ -124,6 +139,11 @@ export class MobileRelayE2eeLink {
       if (this.transportErrorTimer) {
         clearTimeout(this.transportErrorTimer)
         this.transportErrorTimer = null
+      }
+      // Ahead of fail(), which no-ops once the hello already reported this close.
+      const hostCloseReason = relayHostCloseReasonFrom(event.reason)
+      if (hostCloseReason) {
+        this.options.onHostCloseReason?.(hostCloseReason)
       }
       this.fail(new RelayOuterError(event.code || 1006))
     }
@@ -167,13 +187,6 @@ export class MobileRelayE2eeLink {
     this.options.onError(error)
     this.socket.close()
   }
-}
-
-function relaySocketUrl(endpoint: { cellUrl: string; relayHostId: string }): string {
-  const url = new URL(endpoint.cellUrl)
-  url.protocol = 'wss:'
-  url.pathname = `/v1/connect/${encodeURIComponent(endpoint.relayHostId)}`
-  return url.toString()
 }
 
 function asError(error: unknown): Error {

@@ -70,6 +70,22 @@ describe('listSystemFontFamilies', () => {
     })
   })
 
+  it('spawns the Windows font script without an -ExecutionPolicy switch', async () => {
+    // Why: execution policy gates script *files*, never -Command, so the switch
+    // was a no-op -- and it is the highest-weighted token on the command lines
+    // Defender flags (#17858).
+    await withPlatform('win32', async () => {
+      runProcessMock.mockResolvedValue(ok('Consolas\n'))
+      const { listSystemFontFamilies } = await import('./system-fonts')
+      await listSystemFontFamilies()
+
+      const args = runProcessMock.mock.calls[0]?.[0].args ?? []
+      expect(args).toContain('-Command')
+      expect(args).not.toContain('-ExecutionPolicy')
+      expect(args).not.toContain('Bypass')
+    })
+  })
+
   it('runs PowerShell by absolute path on Windows', async () => {
     // Why: a bare `powershell.exe` resolves against the child's PATH, which is
     // not the user's under Electron. Where policy has pruned the System32 entry

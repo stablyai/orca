@@ -108,13 +108,6 @@ export function shellPathSupportsPtyStartupBarrier(shellPath: string): boolean {
   return shellName === 'zsh' || shellName === 'bash' || shellName === 'fish'
 }
 
-export function supportsPtyStartupBarrier(env: Record<string, string>): boolean {
-  if (process.platform === 'win32') {
-    return false
-  }
-  return shellPathSupportsPtyStartupBarrier(resolvePtyShellPath(env))
-}
-
 export type ShellLaunchConfig = {
   args: string[] | null
   env: Record<string, string>

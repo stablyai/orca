@@ -5,6 +5,7 @@ import { createPtyInputWriteQueue } from './pty-input-write-queue'
 import { createPtyOutputProcessor } from './pty-output-processor'
 import { createPtyPreconnectInputBuffer } from './pty-preconnect-input-buffer'
 import type { IpcPtyTransportOptions, PtyTransport } from './pty-transport-types'
+import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 
 export {
   ensurePtyDispatcher,
@@ -44,6 +45,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   } = opts
   let connected = false
   let destroyed = false
+  let onAbandonedConnect: ((ptyId: string) => boolean) | undefined
   let ptyId: string | null = null
   let lifecycleGeneration = 0
   let lastExitGeneration: number | null = null
@@ -56,8 +58,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
 
   const inputWriteQueue = createPtyInputWriteQueue({
     isWritable: (id) => !destroyed && connected && ptyId === id,
-    write: (id, data) => window.api.pty.write(id, data),
-    writeAccepted: (id, data) => window.api.pty.writeAccepted(id, data),
+    write: (id, data, inputKind) => window.api.pty.write(id, data, inputKind),
+    writeAccepted: (id, data, inputKind) => window.api.pty.writeAccepted(id, data, inputKind),
     onDrainFailure: (id) => {
       if (ptyId === id) {
         storedCallbacks.onWriteUnavailable?.()
@@ -114,17 +116,19 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     }
     await preconnectInputBuffer.flush({
       isCurrent: () => !destroyed && connected && ptyId === id,
-      sendInput: (data) => inputWriteQueue.enqueue(id, data),
+      sendInput: (data, inputKind) => inputWriteQueue.enqueue(id, data, inputKind),
       sendInputImmediate: (data) => inputWriteQueue.enqueueQueryReply(id, data),
       ...(connectionId
         ? {}
         : {
-            sendInputAccepted: (data: string) => inputWriteQueue.enqueueAccepted(id, data)
+            sendInputAccepted: (data: string, inputKind: TerminalInputKind) =>
+              inputWriteQueue.enqueueAccepted(id, data, inputKind)
           })
     })
   }
 
   return {
+    getPendingEscapeTailAnsi: outputProcessor.getPendingEscapeTailAnsi,
     connect: async (options) => {
       const connectGeneration = advancePtyLifecycle()
       try {
@@ -137,6 +141,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
             lastExitGeneration === lifecycleGeneration &&
             lifecycleGeneration === connectGeneration + 1,
           ownsPtyId: (id) => !destroyed && connected && ptyId === id,
+          handleExplicitlyClosedConnect: (id) => destroyed && (onAbandonedConnect?.(id) ?? false),
           bind,
           isCurrent: (id) => lifecycleGeneration === connectGeneration && connected && ptyId === id,
           setCallbacks,
@@ -210,16 +215,23 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       storedCallbacks = {}
     },
 
-    sendInput(data) {
+    sendInput(data, inputKind) {
       if (!destroyed && preconnectInputBuffer?.isBuffering()) {
-        return preconnectInputBuffer.enqueue(data, 'ordinary', opts.onPreconnectInput)
+        return preconnectInputBuffer.enqueue(data, 'ordinary', inputKind, opts.onPreconnectInput)
       }
-      return !destroyed && connected && ptyId ? inputWriteQueue.enqueue(ptyId, data) : false
+      return !destroyed && connected && ptyId
+        ? inputWriteQueue.enqueue(ptyId, data, inputKind)
+        : false
     },
 
     sendInputImmediate(data) {
       if (!destroyed && preconnectInputBuffer?.isBuffering()) {
-        return preconnectInputBuffer.enqueue(data, 'immediate', opts.onPreconnectInput)
+        return preconnectInputBuffer.enqueue(
+          data,
+          'immediate',
+          'query-reply',
+          opts.onPreconnectInput
+        )
       }
       return !destroyed && connected && ptyId
         ? inputWriteQueue.enqueueQueryReply(ptyId, data)
@@ -229,14 +241,14 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     ...(connectionId
       ? {}
       : {
-          async sendInputAccepted(data: string): Promise<boolean> {
+          async sendInputAccepted(data: string, inputKind: TerminalInputKind): Promise<boolean> {
             if (!destroyed && preconnectInputBuffer?.isBuffering()) {
-              return preconnectInputBuffer.enqueueAccepted(data, opts.onPreconnectInput)
+              return preconnectInputBuffer.enqueueAccepted(data, inputKind, opts.onPreconnectInput)
             }
             if (destroyed || !connected || !ptyId) {
               return false
             }
-            return inputWriteQueue.enqueueAccepted(ptyId, data)
+            return inputWriteQueue.enqueueAccepted(ptyId, data, inputKind)
           }
         }),
 
@@ -268,7 +280,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         : { ...(opts.cwd ? { cwd: opts.cwd } : {}), ...(shellOverride ? { shellOverride } : {}) },
     resetCrossChunkParserState: outputProcessor.resetAgentStatusCarry,
 
-    destroy() {
+    destroy(options) {
+      onAbandonedConnect ??= options?.onAbandonedConnect
       destroyed = true
       try {
         this.disconnect()

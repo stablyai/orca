@@ -183,6 +183,52 @@ describe('browser.clientHost.attach adoption', () => {
     await rig.dispatch
   })
 
+  it('does not recover a page created after the attach inventory was captured', async () => {
+    let releaseAdoption!: (value: BrowserExecutionHostKeyResolution) => void
+    const route = new Promise<BrowserExecutionHostKeyResolution>((resolve) => {
+      releaseAdoption = resolve
+    })
+    const resolveExecutionHostKey = vi.fn(() => route)
+    const rig = attachHost([orphanedPage()], { resolveExecutionHostKey })
+    const settleAttach = async (): Promise<void> => {
+      rig.cleanups.get(`browser-client-host:${HOST_CLIENT_ID}`)?.()
+      await rig.dispatch
+    }
+    try {
+      await vi.waitFor(() => expect(resolveExecutionHostKey).toHaveBeenCalled())
+      const authority = getBrowserHostLeaseRegistry(rig.hostRuntime)
+      const pages = getRuntimeBrowserPageRegistry(rig.hostRuntime)
+      const placement = authority.placeClientPage('page-created-after-attach', HOST_CLIENT_ID)
+      if (placement.kind !== 'client') {
+        throw new Error('expected client placement')
+      }
+      pages.publishClientPage({
+        browserPageId: 'page-created-after-attach',
+        workspaceId: WORKSPACE_ID,
+        browserProfileId: 'default',
+        executionHostKey: EXECUTION_HOST_KEY,
+        placement,
+        pairedDeviceId: 'device-a',
+        url: 'https://remote.internal/new',
+        loading: false,
+        active: true
+      })
+      releaseAdoption({ status: 'resolved', executionHostKey: EXECUTION_HOST_KEY })
+      await vi.waitFor(() => expect(rig.markClientHostedPagesReconciled).toHaveBeenCalled())
+      // Attach only settles once recovery has returned, so this is the barrier the assertions need:
+      // draining microtasks would let a regression slip through as a not-yet-issued command.
+      await settleAttach()
+
+      expect(authority.getPlacement('page-created-after-attach')).toEqual(placement)
+      expect(pages.getPage('page-created-after-attach')).toMatchObject({ placement, active: true })
+      expect(
+        rig.commands().filter((event) => event.browserPageId === 'page-created-after-attach')
+      ).toEqual([])
+    } finally {
+      await settleAttach()
+    }
+  })
+
   it('does not re-enter recovery for a page it just adopted', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const rig = attachHost([orphanedPage({ browserPageId: 'page-d' })], {

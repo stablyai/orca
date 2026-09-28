@@ -1,6 +1,10 @@
-import { useCallback } from 'react'
+import { useCallback, useLayoutEffect, useRef } from 'react'
 import { emitNativeChatMessageSent } from '@/lib/native-chat-telemetry'
-import { isStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
+import { reportStructuredSessionUserInput } from '@/lib/worker-terminal-takeover-report'
+import {
+  isStructuredAgentSessionComposerCommand,
+  isStructuredAgentSessionGoalCommand
+} from '../../../../shared/structured-agent-session-composer'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { dispatchNativeChatStructuredComposerText } from './native-chat-structured-composer-dispatch'
 import { pushHistory, type HistoryState } from './native-chat-composer-state'
@@ -9,6 +13,7 @@ import type { NativeChatComposerImageAttachment } from './NativeChatComposerFiel
 
 export type UseNativeChatStructuredComposerSendArgs = {
   agent: AgentType
+  draft?: string
   imageAttachments: readonly NativeChatComposerImageAttachment[]
   structuredTransport?: NativeChatStructuredComposerTransport
   clearImageAttachments: () => void
@@ -22,6 +27,7 @@ export type UseNativeChatStructuredComposerSendArgs = {
  *  once the transport accepts (the PTY path has its own sibling hook). */
 export function useNativeChatStructuredComposerSend({
   agent,
+  draft,
   imageAttachments,
   structuredTransport,
   clearImageAttachments,
@@ -33,15 +39,23 @@ export function useNativeChatStructuredComposerSend({
   text: string,
   attachments?: readonly NativeChatComposerImageAttachment[]
 ) => void {
+  const composition = useRef({ draft, imageAttachments })
+  useLayoutEffect(() => {
+    composition.current = { draft, imageAttachments }
+  }, [draft, imageAttachments])
   return useCallback(
     (text: string, attachments = imageAttachments): void => {
       if (!structuredTransport) {
         return
       }
-      if (attachments.length > 0 && isStructuredAgentSessionComposerCommand(text, agent)) {
+      const hostCommand =
+        isStructuredAgentSessionComposerCommand(text, agent) ||
+        (structuredTransport.threadGoal !== undefined && isStructuredAgentSessionGoalCommand(text))
+      if (attachments.length > 0 && hostCommand) {
         structuredTransport.onError('Remove attachments before using a chat-session command.')
         return
       }
+      const submitted = composition.current
       void dispatchNativeChatStructuredComposerText(structuredTransport, text, attachments)
         .then(({ accepted, error }) => {
           structuredTransport.onError(error)
@@ -49,7 +63,21 @@ export function useNativeChatStructuredComposerSend({
             return
           }
           emitNativeChatMessageSent({ agent, runtime: structuredTransport.runtime })
+          // A real user send is a takeover, exactly as typing into a worker's pane is. Only past
+          // `accepted`, and only from this hook: the outbox dispatcher retries and would re-fire,
+          // and orchestration's own pointer nudges never reach the composer at all.
+          reportStructuredSessionUserInput(
+            structuredTransport.sessionId,
+            structuredTransport.runtimeEnvironmentId
+          )
           setHistory((previous) => pushHistory(previous, text))
+          if (
+            hostCommand &&
+            (composition.current.draft !== submitted.draft ||
+              composition.current.imageAttachments !== submitted.imageAttachments)
+          ) {
+            return
+          }
           setDraft('')
           setCaret(0)
           clearSkillOrigin()

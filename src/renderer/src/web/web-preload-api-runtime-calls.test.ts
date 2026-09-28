@@ -102,7 +102,7 @@ describe('web preload runtime calls', () => {
     if (!(rejection instanceof Error)) {
       throw new Error('Expected a domain Error rejection')
     }
-    expect(Reflect.get(rejection, 'code')).toBe('repo_unavailable')
+    expect('code' in rejection ? rejection.code : undefined).toBe('repo_unavailable')
     expect(
       JSON.parse(globals.storage.getItem('orca.web.runtimeEnvironment.v1') ?? '{}')
     ).toMatchObject({ runtimeId: 'runtime-domain-failure' })

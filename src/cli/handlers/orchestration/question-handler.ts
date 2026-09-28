@@ -1,6 +1,9 @@
 import type { CommandHandler } from '../../dispatch'
 import { getOptionalStringFlag } from '../../flags'
+import { printResult } from '../../format'
+import { renderCommand } from '../../orchestration-mutation-recovery'
 import { RuntimeClientError } from '../../runtime-client'
+import { resolveOrchestrationCliExecutable } from '../../runtime/orchestration-recovery-command'
 import {
   clampOrchestrationAskTimeoutMs,
   resolveOrchestrationAskClientTimeoutMs
@@ -65,9 +68,9 @@ export const ORCHESTRATION_QUESTION_HANDLER: Record<string, CommandHandler> = {
         orchestrationCapability: getOptionalStringFlag(flags, 'dispatch-capability')
       }
     )
-    // Why: ask JSON is intentionally a bare object for `jq -r .answer`, unlike other verbs.
+    // Why: same {ok, result} envelope as every sibling verb; ask used to print a bare object.
     if (json) {
-      console.log(JSON.stringify(result.result))
+      printResult(result, true, () => '')
     } else if (result.result.legacyCompatibility?.resumeRequired) {
       console.log(`Question ${result.result.messageId} committed.`)
       console.log(`Resume with: ${result.result.legacyCompatibility.resumeCommand}`)
@@ -91,7 +94,28 @@ export const ORCHESTRATION_QUESTION_HANDLER: Record<string, CommandHandler> = {
       if (!json) {
         // Why: report the server's clamped effective budget rather than overstating the wait.
         const waitedMs = result.result.timeoutMs ?? timeoutMs
-        console.error(`ask timeout after ${waitedMs}ms (thread ${result.result.threadId})`)
+        const messageId = result.result.messageId
+        const dispatchCapability = getOptionalStringFlag(flags, 'dispatch-capability')
+        const resumeCommand =
+          messageId === null
+            ? undefined
+            : renderCommand([
+                resolveOrchestrationCliExecutable(),
+                'orchestration',
+                'ask',
+                '--from',
+                from,
+                ...(dispatchCapability ? ['--dispatch-capability', dispatchCapability] : []),
+                '--resume',
+                messageId,
+                '--timeout-ms',
+                String(waitedMs)
+              ])
+        console.error(
+          resumeCommand
+            ? `ask timeout after ${waitedMs}ms; question is still pending (messageId: ${messageId}). Resume waiting; do not ask again:\n${resumeCommand}`
+            : `ask timeout after ${waitedMs}ms; question identity was not returned, so it cannot be resumed safely.`
+        )
       }
       process.exitCode = 1
     }

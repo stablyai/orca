@@ -45,6 +45,34 @@ describe('createRemoteWorkspaceTargetSync', () => {
     )
   })
 
+  it('acknowledges the captured blank-host edit when a newer null-root edit arrives', async () => {
+    const firstEdit = { targetId: 'target-a', root: null }
+    const newerEdit = { targetId: 'target-a', root: null }
+    const acknowledgeDirectSshLayoutEdits = vi.fn()
+    const state = appState({
+      tabsByWorktree: {
+        'repo-a::/remote/work': [{ id: 'tab-a', worktreeId: 'repo-a::/remote/work', ptyId: null }]
+      },
+      pendingDirectSshLayoutEditsByTabId: { 'tab-a': firstEdit },
+      acknowledgeDirectSshLayoutEdits
+    })
+    const harness = createHarness(state, async () => snapshot(0))
+    const uploaded = snapshot(1)
+    uploaded.session.terminalLayoutsByTabId = {
+      'tab-a': { root: null, activeLeafId: null, expandedLeafId: null }
+    }
+    harness.setForConnectedTargets.mockImplementationOnce(async () => {
+      state.pendingDirectSshLayoutEditsByTabId = { 'tab-a': newerEdit }
+      return [{ targetId: owner.targetId, result: { ok: true, snapshot: uploaded } }]
+    })
+
+    await harness.sync.syncAfterConnect(token())
+
+    const acknowledged = acknowledgeDirectSshLayoutEdits.mock.calls[0]?.[0]?.['tab-a']
+    expect(acknowledged).toBe(firstEdit)
+    expect(state.pendingDirectSshLayoutEditsByTabId['tab-a']).toBe(newerEdit)
+  })
+
   it.each([
     ['stale-revision', 'Workspace changed on another device'],
     ['unavailable', 'Remote workspace sync unavailable']
@@ -680,7 +708,15 @@ describe('createRemoteWorkspaceTargetSync', () => {
       ]
     })
 
-    await harness.sync.applyUnsolicitedSnapshot('target-a', incoming)
+    vi.useFakeTimers()
+    try {
+      const pending = harness.sync.applyUnsolicitedSnapshot('target-a', incoming)
+      await vi.advanceTimersByTimeAsync(10_000)
+      await pending
+    } finally {
+      harness.sync.stop()
+      vi.useRealTimers()
+    }
 
     const merged = hydrateTabsSession.mock.calls[0][0]
     expect(merged.tabsByWorktree).toEqual({

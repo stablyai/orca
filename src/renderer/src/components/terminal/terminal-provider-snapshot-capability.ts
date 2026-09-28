@@ -1,7 +1,7 @@
 type SnapshotCapability = { id: string; authoritative: boolean | null }
 type SnapshotCapabilityResolver = (ids: string[]) => Promise<SnapshotCapability[]>
-type SnapshotCapabilityTab = { id: string; ptyId?: string | null }
-type SnapshotCapabilityBindingState = {
+export type SnapshotCapabilityTab = { id: string; ptyId?: string | null }
+export type SnapshotCapabilityBindingState = {
   tabsByWorktree: Readonly<Record<string, readonly SnapshotCapabilityTab[]>>
   ptyIdsByTabId: Readonly<Record<string, readonly string[]>>
   pendingReconnectPtyIdByTabId?: Readonly<Record<string, string>>

@@ -62,6 +62,9 @@ export function getMobileSessionTabTitle(tab: MobileSessionTab): string {
   if (tab.type === 'file') {
     return tab.title || 'File'
   }
+  if (tab.type === 'agent-session') {
+    return tab.title || 'Chat'
+  }
   // Why: strip the leading agent status glyph (✳ etc.) once the tab shows the
   // provider icon. Mobile falls back for glyph-only titles because iOS can
   // render the bare status glyph as a stray colored box beside the icon.

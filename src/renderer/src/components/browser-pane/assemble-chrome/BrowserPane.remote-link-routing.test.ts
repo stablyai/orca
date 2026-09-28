@@ -16,5 +16,10 @@ describe('remote browser link routing', () => {
     expect(openRequest).toContain('workspaceId: worktreeId')
     expect(openRequest).toContain('expectedRuntimeEnvironmentId: runtimeEnvironmentId')
     expect(openRequest).toContain("placementPreference: 'server'")
+    // A background link follows its source wrapper and never selects the workspace again.
+    expect(openRequest).toContain(
+      '...(sourceUnifiedTab ? { afterTabId: sourceUnifiedTab.id } : {})'
+    )
+    expect(openRequest).toContain('selectWorktree: false')
   })
 })

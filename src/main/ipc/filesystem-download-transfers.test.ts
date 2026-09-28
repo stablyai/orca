@@ -261,10 +261,9 @@ describe('registerFilesystemHandlers', () => {
     statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
     registerFilesystemHandlers(store as never)
 
-    const started = await handlers.get('fs:startDownloadedFile')!(
-      { sender: {} },
-      { suggestedName: 'report.pdf' }
-    )
+    const started = await handlers.get('fs:startDownloadedFile')!(folderDownloadEvent, {
+      suggestedName: 'report.pdf'
+    })
     expect(started).toMatchObject({
       canceled: false,
       destinationPath: '/downloads/report.pdf'
@@ -300,10 +299,9 @@ describe('registerFilesystemHandlers', () => {
     statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
     registerFilesystemHandlers(store as never)
 
-    const started = await handlers.get('fs:startDownloadedFile')!(
-      { sender: {} },
-      { suggestedName: 'report.pdf' }
-    )
+    const started = await handlers.get('fs:startDownloadedFile')!(folderDownloadEvent, {
+      suggestedName: 'report.pdf'
+    })
     if (!started || typeof started !== 'object' || !('transferId' in started)) {
       throw new Error('download did not start')
     }

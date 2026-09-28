@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { SshConnection } from './ssh-connection'
 import { shellEscape } from './ssh-connection-utils'
 import { execCommand } from './ssh-relay-deploy-helpers'
+import { isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
 import {
   probeInstallLockExistsCommand,
   tryCreateInstallLockCommand,
@@ -91,7 +92,10 @@ export async function tryAcquireRelayGcClaim(
       return null
     }
     return writeRelayGcClaimOwner(conn, remoteRelayDir, host, signal)
-  } catch {
+  } catch (error) {
+    if (isUnconfirmedSshCommandTermination(error)) {
+      throw error
+    }
     signal?.throwIfAborted()
     return null
   }
@@ -114,7 +118,10 @@ async function writeRelayGcClaimOwner(
   try {
     await execHostCommand(conn, host, command, signal)
     return token
-  } catch {
+  } catch (error) {
+    if (isUnconfirmedSshCommandTermination(error)) {
+      throw error
+    }
     // Why: the write may have succeeded remotely before SSH lost its reply.
     // A conditional release removes only the claim generation with our token.
     await releaseRelayGcClaim(conn, remoteRelayDir, token, host)
@@ -134,7 +141,12 @@ export async function isRelayGcClaimOwned(
         `if ((Get-Content -LiteralPath ${powerShellLiteral(ownerPath)} -Raw -ErrorAction SilentlyContinue) -ceq ${powerShellLiteral(token)}) { 'OWNED' } else { 'LOST' }`
       )
     : `test "$(cat ${shellEscape(ownerPath)} 2>/dev/null)" = ${shellEscape(token)} && echo OWNED || echo LOST`
-  const output = await execHostCommand(conn, host, command).catch(() => 'LOST')
+  const output = await execHostCommand(conn, host, command).catch((error) => {
+    if (isUnconfirmedSshCommandTermination(error)) {
+      throw error
+    }
+    return 'LOST'
+  })
   return output.trim() === 'OWNED'
 }
 
@@ -162,7 +174,12 @@ export async function releaseRelayGcClaim(
         `else ${removeRemoteTreeCommand(host, claimPath)} 2>/dev/null;`,
         `if test -e ${shellEscape(claimPath)}; then echo UNKNOWN; else echo RELEASED; fi; fi`
       ].join(' ')
-  const output = await execHostCommand(conn, host, command).catch(() => 'UNKNOWN')
+  const output = await execHostCommand(conn, host, command).catch((error) => {
+    if (isUnconfirmedSshCommandTermination(error)) {
+      throw error
+    }
+    return 'UNKNOWN'
+  })
   switch (output.trim()) {
     case 'RELEASED':
       return 'released'
@@ -193,7 +210,12 @@ export async function waitForRelayGcClaimRelease(
   signal?: AbortSignal
 ): Promise<void> {
   while (true) {
-    const claimed = await isRelayGcClaimed(conn, remoteRelayDir, host, signal).catch(() => true)
+    const claimed = await isRelayGcClaimed(conn, remoteRelayDir, host, signal).catch((error) => {
+      if (isUnconfirmedSshCommandTermination(error)) {
+        throw error
+      }
+      return true
+    })
     signal?.throwIfAborted()
     if (!claimed) {
       return
@@ -204,7 +226,12 @@ export async function waitForRelayGcClaimRelease(
       host,
       tryStealInstallLockCommand(host, claimPath, RELAY_GC_CLAIM_STALE_SECONDS),
       signal
-    ).catch(() => 'BUSY')
+    ).catch((error) => {
+      if (isUnconfirmedSshCommandTermination(error)) {
+        throw error
+      }
+      return 'BUSY'
+    })
     signal?.throwIfAborted()
     if (recovered.trim().endsWith('OK')) {
       const token = await writeRelayGcClaimOwner(conn, remoteRelayDir, host, signal)

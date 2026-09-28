@@ -29,6 +29,14 @@ const tabReconciliationOwnerSource = readMobileSessionRouteSource(
 const autoCreateHookSource = readMobileSessionRouteSource(
   './use-initial-session-terminal-autocreate.ts'
 )
+const foundationSource = readMobileSessionRouteSource('./use-mobile-session-foundation.ts')
+const terminalRuntimeSource = readMobileSessionRouteSource(
+  './use-mobile-session-terminal-runtime.ts'
+)
+const terminalSubscriptionSourceForIdentity = readMobileSessionRouteSource(
+  './use-mobile-session-terminal-subscription.ts'
+)
+const lifecycleSource = readMobileSessionRouteSource('./use-mobile-session-lifecycle.ts')
 
 function sliceBetween(startPattern: string, endPattern: string, targetSource = source): string {
   const start = targetSource.indexOf(startPattern)
@@ -106,6 +114,19 @@ describe('mobile session startup', () => {
     expect(reconciliationHookSource).toContain('appStateSubscription.remove()')
   })
 
+  it('binds terminal identity to the shared client before subscription effects run', () => {
+    expect(foundationSource).toContain('const { client, clientId, state: connState }')
+    expect(foundationSource).toContain('    clientId,')
+    expect(terminalRuntimeSource).toContain('useRef<string | null>(clientId)')
+    expect(terminalRuntimeSource).toContain('deviceTokenRef.current = clientId')
+    expect(terminalRuntimeSource).toContain('inputGate.canSend && clientId !== null')
+    expect(terminalSubscriptionSourceForIdentity).toContain('if (clientId === null)')
+    expect(terminalSubscriptionSourceForIdentity).toContain(
+      "client: { id: clientId, type: 'mobile' as const }"
+    )
+    expect(lifecycleSource).not.toContain('deviceTokenRef.current = host.deviceToken')
+  })
+
   it('confirms terminal stream teardown with a committed inventory-recovery bridge', () => {
     expect(terminalSubscriptionSource).toContain(
       "if (data.type === 'end' || data.type === 'error')"
@@ -117,7 +138,7 @@ describe('mobile session startup', () => {
       'committedScope !== null && committedScope !== scopeKey'
     )
     expect(terminalListSource).toContain('return terminalInventoryRequest.activate()')
-    expect(terminalListSource).toContain('if (!isCurrent() || !response.ok)')
+    expect(terminalListSource).toContain('if (!isCurrent() || !response.accepted)')
     expect(terminalInventoryRecoverySource).toContain(
       'TERMINAL_INVENTORY_CONFIRMATION_DELAY_MS = 750'
     )
@@ -133,16 +154,18 @@ describe('mobile session startup', () => {
       startupSource
     )
 
-    expect(startupEffect).toContain("void client\n          .sendRequest('worktree.activate'")
+    // Both sends migrated to the typed `worktreeActivate` operation in step 6; what these pin is
+    // unchanged — the plain activation is fired and not awaited, and it goes out before the tab load.
+    expect(startupEffect).toContain('void worktreeActivate\n          .request(client, {')
     expect(startupEffect).toContain("if (client && created !== '1' && !isFloatingWorkspaceRoute)")
     expect(startupEffect).toContain("if (client && created === '1' && !isFloatingWorkspaceRoute)")
     expect(startupEffect).toContain('notifyClients: false')
     expect(startupEffect).toContain("navigation: 'caller'")
-    expect(startupEffect).not.toContain("await client\n          .sendRequest('worktree.activate'")
-    expect(startupEffect.indexOf("sendRequest('worktree.activate'")).toBeLessThan(
+    expect(startupEffect).not.toContain('await worktreeActivate\n          .request(client, {')
+    expect(startupEffect.indexOf('worktreeActivate\n          .request(client, {')).toBeLessThan(
       startupEffect.indexOf('await ensureSessionTabs()')
     )
-    expect(startupEffect).toContain('headlessActivationNeedsHostRenderer(response.result)')
+    expect(startupEffect).toContain('headlessActivationNeedsHostRenderer(activation.value)')
     expect(startupEffect).toContain("showToast('Open Orca on the host to wake sleeping agents.'")
   })
 

@@ -126,19 +126,23 @@ function ProjectViewPickerRow({
   view: GitHubProjectViewSummary
   onPick: (view: GitHubProjectViewSummary) => void | Promise<void>
 }): React.JSX.Element {
-  const supported = view.layout === 'TABLE_LAYOUT'
+  const supported = view.layout === 'TABLE_LAYOUT' || view.layout === 'ROADMAP_LAYOUT'
   const layoutLabel =
     view.layout === 'TABLE_LAYOUT'
       ? translate('auto.components.github.project.ProjectPicker.1a2b8e512e', 'Table')
-      : view.layout === 'BOARD_LAYOUT'
-        ? translate(
-            'auto.components.github.project.ProjectPicker.d34ef9b554',
-            'Board (unsupported)'
-          )
-        : translate(
-            'auto.components.github.project.ProjectPicker.ab1a2c357d',
-            'Roadmap (unsupported)'
-          )
+      : view.layout === 'ROADMAP_LAYOUT'
+        ? translate('auto.components.github.project.ProjectPickerPanels.04ec212ccb', 'Roadmap')
+        : view.layout === 'BOARD_LAYOUT'
+          ? translate(
+              'auto.components.github.project.ProjectPicker.d34ef9b554',
+              'Board (unsupported)'
+            )
+          : // Why: raw.layout is cast unchecked, so a future GitHub layout value
+            // lands here — keep it disabled instead of mislabeling it.
+            translate(
+              'auto.components.github.project.ProjectPickerPanels.9fe1ac868c',
+              'Unsupported'
+            )
   return (
     <button
       type="button"

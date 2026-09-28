@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { isDotfileRelativePath } from './file-explorer-entries'
 import type { DirCache, TreeNode } from './file-explorer-types'
@@ -109,6 +109,18 @@ export function createVisibleFileExplorerRowProjection(
   return createFileExplorerRowProjectionFromParts(visibleFlatRows, rowsByPath)
 }
 
+function relativePathListsEqual(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) {
+    return false
+  }
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) {
+      return false
+    }
+  }
+  return true
+}
+
 /**
  * Holds the array identity while its contents are unchanged.
  *
@@ -119,16 +131,19 @@ export function createVisibleFileExplorerRowProjection(
  */
 function useContentStableRelativePaths(relativePaths: string[], enabled: boolean): string[] {
   // Why: filters need fresh identities per keystroke and must not evict the tree signature.
-  // Why: NUL cannot occur in paths, so the signature can reconstruct the list losslessly.
-  const signature = useMemo(
-    () => (enabled ? relativePaths.join('\u0000') : null),
-    [enabled, relativePaths]
-  )
-  const stableTreePaths = useMemo(
-    () => (signature ? signature.split('\u0000') : EMPTY_RELATIVE_PATHS),
-    [signature]
-  )
-  return enabled ? stableTreePaths : relativePaths
+  const prevRef = useRef<string[] | null>(null)
+  const prev = prevRef.current
+  // Why publish `stable`, not `relativePaths`: the ref must hold what this hook actually
+  // returned. Publishing the input instead leaves the ref one commit behind, so a wave of
+  // content-equal arrays flips identity on every render — the churn this hook exists to stop.
+  const stable =
+    enabled && prev && relativePathListsEqual(prev, relativePaths) ? prev : relativePaths
+  // Why write-in-effect: render must stay pure (react-doctor); the first commit of a new
+  // list loses stability, never staleness.
+  useEffect(() => {
+    prevRef.current = stable
+  }, [stable])
+  return stable
 }
 
 export function useFileExplorerVisibleRowProjection(

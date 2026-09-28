@@ -1,6 +1,5 @@
 import type { WorkspaceSparseActionsModel } from './use-mobile-tasks-workspace-sparse-actions'
 import {
-  type SshConnectionState,
   normalizeSetupHookTrust,
   pickWorkspaceAgent,
   resolveWorkspaceAgentSelection,
@@ -8,12 +7,18 @@ import {
   useEffect,
   useMemo
 } from './mobile-tasks-dependencies'
-import {
-  type RepoHooksResponse,
-  type RepoSummary,
-  type SetupDecision,
-  isSuccess
+import type {
+  RepoHooksResponse,
+  RepoSummary,
+  SetupDecision
 } from './mobile-tasks-legacy-foundation'
+import {
+  localAgentDetectionRead,
+  remoteAgentDetectionRead,
+  repoSetupHooksRead,
+  sshRepoConnectRun,
+  sshRepoStateRead
+} from './mobile-workspace-source-operations'
 
 export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsModel) {
   const {
@@ -47,15 +52,12 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
       reconnectAttempt: 0
     })
     try {
-      const response = await client.sendRequest(
-        'ssh.connect',
+      const reply = await sshRepoConnectRun.request(
+        client,
         { targetId: workspaceCreateTargetConnectionId },
         { timeoutMs: 120_000 }
       )
-      if (!isSuccess(response)) {
-        throw new Error(response.error.message)
-      }
-      const state = (response.result as { state?: SshConnectionState | null }).state
+      const state = sshRepoConnectRun.interpret(reply)
       setWorkspaceSshState(
         state ?? {
           targetId: workspaceCreateTargetConnectionId,
@@ -87,11 +89,8 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
       ) {
         return
       }
-      const response = await client.sendRequest('ssh.getState', { targetId: repo.connectionId })
-      if (!isSuccess(response)) {
-        throw new Error(response.error.message)
-      }
-      const state = (response.result as { state?: SshConnectionState | null }).state ?? null
+      const reply = await sshRepoStateRead.request(client, { targetId: repo.connectionId })
+      const state = sshRepoStateRead.interpret(reply) ?? null
       if (state) {
         setWorkspaceSshState(state)
       }
@@ -115,19 +114,21 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
     }
     let stale = false
     setWorkspaceDetectedAgentIds(null)
-    const request = workspaceCreateTargetRepo.connectionId
-      ? client.sendRequest('preflight.detectRemoteAgents', {
-          connectionId: workspaceCreateTargetRepo.connectionId
-        })
-      : client.sendRequest('preflight.detectAgents')
-    void request
-      .then((response) => {
+    const detection = workspaceCreateTargetRepo.connectionId
+      ? {
+          operation: remoteAgentDetectionRead,
+          reply: remoteAgentDetectionRead.request(client, {
+            connectionId: workspaceCreateTargetRepo.connectionId
+          })
+        }
+      : { operation: localAgentDetectionRead, reply: localAgentDetectionRead.request(client) }
+    void detection.reply
+      .then((reply) => {
         if (stale) {
           return
         }
-        setWorkspaceDetectedAgentIds(
-          isSuccess(response) ? new Set(response.result as string[]) : new Set()
-        )
+        const detected = detection.operation.interpret(reply)
+        setWorkspaceDetectedAgentIds(detected.accepted ? new Set(detected.value) : new Set())
       })
       .catch(() => {
         if (!stale) {
@@ -183,18 +184,15 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
       | {
           kind: 'prompt'
           command: string
-          source: string | null
+          source: string | null | undefined
           setupTrust?: RepoHooksResponse['setupTrust']
         }
     > => {
       if (!client || !tasksSupported) {
         return { kind: 'decision', decision: override ?? 'inherit' }
       }
-      const response = await client.sendRequest('repo.hooks', { repo: `id:${repo.id}` })
-      if (!isSuccess(response)) {
-        throw new Error(response.error.message)
-      }
-      const result = response.result as RepoHooksResponse
+      const reply = await repoSetupHooksRead.request(client, { repo: `id:${repo.id}` })
+      const result = repoSetupHooksRead.interpret(reply)
       const setupCommand = result.hooks?.scripts?.setup?.trim()
       const setupTrust = normalizeSetupHookTrust(result.setupTrust) ?? undefined
       if (!setupCommand) {

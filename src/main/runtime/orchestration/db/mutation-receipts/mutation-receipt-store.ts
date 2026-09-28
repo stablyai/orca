@@ -110,6 +110,40 @@ export function completeMutationReceipt(
   return row
 }
 
+export function checkpointPendingMutationReceipt(
+  this: OrchestrationDb,
+  params: {
+    callerFingerprint: string
+    requestId: string
+    method: string
+    payloadHash: string
+    receipt: string
+  }
+): MutationReceiptRow {
+  const result = this.db
+    .prepare(
+      `UPDATE mutation_receipts
+       SET receipt = ?, updated_at = datetime('now')
+       WHERE caller_fingerprint = ? AND request_id = ? AND method = ?
+         AND payload_hash = ? AND state = 'pending'`
+    )
+    .run(
+      params.receipt,
+      params.callerFingerprint,
+      params.requestId,
+      params.method,
+      params.payloadHash
+    )
+  const row = this.getMutationReceipt(params.callerFingerprint, params.requestId)
+  if (result.changes !== 1 || !row) {
+    throw new OrchestrationError(
+      'request_mismatch',
+      `Mutation request ${params.requestId} no longer matches its pending operation.`
+    )
+  }
+  return row
+}
+
 export function discardPendingMutationReceipt(
   this: OrchestrationDb,
   callerFingerprint: string,
@@ -140,6 +174,7 @@ export type MutationReceiptStoreMethods = {
   getOrCreateLocalMutationCallerFingerprint: typeof getOrCreateLocalMutationCallerFingerprint
   beginMutationReceipt: typeof beginMutationReceipt
   completeMutationReceipt: typeof completeMutationReceipt
+  checkpointPendingMutationReceipt: typeof checkpointPendingMutationReceipt
   discardPendingMutationReceipt: typeof discardPendingMutationReceipt
   getMutationReceipt: typeof getMutationReceipt
 }
@@ -149,6 +184,7 @@ export function attachMutationReceiptStore(ctor: { prototype: object }): void {
     getOrCreateLocalMutationCallerFingerprint,
     beginMutationReceipt,
     completeMutationReceipt,
+    checkpointPendingMutationReceipt,
     discardPendingMutationReceipt,
     getMutationReceipt
   })

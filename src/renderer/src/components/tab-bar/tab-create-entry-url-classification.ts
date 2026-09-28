@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import { isValid as isListedDomain } from 'psl'
+import { parse as parseDomain } from 'tldts'
 import { classifySchemeLessLocalDevAddress } from '../../../../shared/browser-url'
 
 const HOST_FILE_EXTENSIONS = new Set([
@@ -52,6 +52,13 @@ function parseHttpUrl(query: string): ExplicitUrlClassification {
   } catch {
     return invalidUrl()
   }
+}
+
+// Why: a bare public suffix (`api.br`) is not a navigable host, so the typed string stays a search.
+// tldts' PRIVATE section is included so `foo.github.io` still reads as a domain.
+function isListedDomain(host: string): boolean {
+  const parsed = parseDomain(host, { allowPrivateDomains: true })
+  return parsed.domain !== null && (parsed.isIcann === true || parsed.isPrivate === true)
 }
 
 function splitHostCandidate(query: string): { host: string; port: string | null } | null {

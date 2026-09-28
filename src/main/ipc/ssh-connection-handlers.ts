@@ -1,5 +1,9 @@
 import { ipcMain } from 'electron'
-import type { SshTarget, SshTerminateSessionsResult } from '../../shared/ssh-types'
+import {
+  sshRemotePtyLeaseAllowsReattach,
+  type SshTarget,
+  type SshTerminateSessionsResult
+} from '../../shared/ssh-types'
 import { SSH_TERMINATE_RECONNECT_REQUIRED } from '../../shared/constants'
 import { isSshPtyNotFoundError } from '../providers/ssh-pty-errors'
 import { toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
@@ -67,6 +71,15 @@ async function doResetRelay(targetId: string, target: SshTarget): Promise<void> 
   } finally {
     const ptyIds = new Set(getPtyIdsForConnection(targetId))
     for (const lease of persistedStore!.getSshRemotePtyLeases(targetId)) {
+      // Deliberately the raw state, not `sshRemotePtyLeaseAllowsReattach`: this asks which routes
+      // the force-stop just invalidated, not which leases may be reattached. An already-`expired`
+      // lease has no route left for reset to retire — re-marking it `expired` is a no-op write, and
+      // any local handle this connection really holds arrives through `getPtyIdsForConnection`
+      // above, whatever the lease says. Reset also may not upgrade it to `terminated`: killing the
+      // relay daemon makes its PTYs permanently unreachable, which is not evidence they exited
+      // (docs/reference/ssh-execution-boundary.md). Nothing here can adopt a stranger either — the
+      // replacement relay namespaces every id under a fresh mint epoch, so an old orphan lease can
+      // only fail its next reattach.
       if (lease.state !== 'terminated' && lease.state !== 'expired') {
         ptyIds.add(lease.ptyId)
         // Why: only a host-acknowledged force-stop may retire a lease. When it threw we never
@@ -112,8 +125,9 @@ export function registerSshConnectionHandlers(): void {
       const provider = getSshPtyProvider(args.targetId)
       const leases = persistedStore!.getSshRemotePtyLeases(args.targetId)
       const ptyIdsByRelayId = new Map<string, string>()
-      // Why: only leases the app still believes it owns may force a reconnect; 'expired' ones are
-      // swept opportunistically because they can name a host that is gone for good (issue #2626).
+      // Why: only leases the app still believes it owns may force a reconnect; a lease whose route
+      // died for good is swept opportunistically instead, so a target that can no longer answer
+      // never blocks its own removal (issue #2626, and the renderer tolerates the refusal there).
       const ownedRelayIds = new Set<string>()
       const trackPtyId = (ptyId: string, owned: boolean): void => {
         const relayPtyId = toRelaySshPtyId(args.targetId, ptyId)
@@ -131,9 +145,12 @@ export function registerSshConnectionHandlers(): void {
         if (lease.state === 'terminated') {
           continue
         }
-        // Why: 'expired' records that reattach gave up, never that the remote shell died — those are
-        // precisely the orphans, so the user's terminate action has to be able to reach them.
-        trackPtyId(lease.ptyId, lease.state !== 'expired')
+        // Why the predicate and not `state !== 'expired'`: an `expired` lease carrying no
+        // retirement mark records only that reattach gave up, never that the remote shell died, so
+        // it is exactly the orphan the user's terminate must reach — and reaching it needs the
+        // relay, which is what the fence below demands. Only `supersededBy` / `relayIdRecycled`
+        // prove the route is dead for good, and those stay unowned.
+        trackPtyId(lease.ptyId, sshRemotePtyLeaseAllowsReattach(lease))
       }
       const ptyIds = Array.from(ptyIdsByRelayId, ([relayPtyId, appPtyId]) => ({
         relayPtyId,

@@ -15,6 +15,7 @@ import {
 import { prepareCodexRuntimeHomeForLaunch } from './codex-launch-preparation'
 import { prepareCodexSessionResumeForLaunch } from './codex-session-resume-launch'
 import { isRecoveryReloadInFlight } from './main-window-lifecycle-flags'
+import { RELAY_HOST_CLOSE_REASON } from '../../shared/relay-host-close-reason'
 
 export function attachMainWindowCoreServices(
   window: BrowserWindow,
@@ -29,6 +30,7 @@ export function attachMainWindowCoreServices(
   const claudeUsage = state.claudeUsage
   const codexUsage = state.codexUsage
   const openCodeUsage = state.openCodeUsage
+  const museUsage = state.museUsage
   const codexAccounts = state.codexAccounts
   const claudeAccounts = state.claudeAccounts
   const rateLimits = state.rateLimits
@@ -43,6 +45,7 @@ export function attachMainWindowCoreServices(
     !claudeUsage ||
     !codexUsage ||
     !openCodeUsage ||
+    !museUsage ||
     !codexAccounts ||
     !claudeAccounts ||
     !rateLimits ||
@@ -60,6 +63,7 @@ export function attachMainWindowCoreServices(
     claudeUsage,
     codexUsage,
     openCodeUsage,
+    museUsage,
     codexAccounts,
     claudeAccounts,
     rateLimits,
@@ -90,7 +94,10 @@ export function attachMainWindowCoreServices(
         })
       },
       onOrcaProfileAuthMutation: () => state.desktopRelayService?.authMutated(),
-      onBeforeOrcaProfileSignOut: () => state.desktopRelayService?.fenceAndCloseNow()
+      // Sign-out is the one fence a paired phone can be told about; quit and
+      // relaunch above stay reasonless so a restart never reads as signed out.
+      onBeforeOrcaProfileSignOut: () =>
+        state.desktopRelayService?.fenceAndCloseNow(RELAY_HOST_CLOSE_REASON.SIGNED_OUT)
     },
     state.pluginService ?? undefined,
     state.pluginMarketplaceService && state.pluginMarketplaceInstaller
@@ -119,8 +126,11 @@ export function attachMainWindowCoreServices(
       isRecoveryReloadInFlight,
       onCodexHomePtySpawned: handleCodexHomePtySpawned,
       onPtyExit: handlePtyExit,
-      onBeforeUpdateQuit: () =>
-        preserveAgentAuthBeforeRestart({ codexRuntimeHome, claudeRuntimeAuth, store }),
+      onBeforeUpdateQuit: async () => {
+        await preserveAgentAuthBeforeRestart({ codexRuntimeHome, claudeRuntimeAuth, store })
+        await store.writeLatestProfileStateJsonCompatibilityExportAsync()
+      },
+      onBeforeUpdateQuitFailure: 'abort',
       updateInstallMode: resolveUpdateInstallMode(state.isServeMode),
       onWorktreeLifecycle: emitPluginWorktreeLifecycle
     }

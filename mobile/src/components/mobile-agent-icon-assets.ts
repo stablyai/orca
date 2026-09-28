@@ -39,5 +39,8 @@ export const MOBILE_AGENT_ICON_ASSETS: Partial<Record<TuiAgent, ImageSourcePropT
   rovo: require('../../../src/shared/agent-icons/rovo.png'),
   hermes: require('../../../src/shared/agent-icons/hermes.png'),
   devin: require('../../../src/shared/agent-icons/devin.png'),
+  muse: require('../../../src/shared/agent-icons/muse.png'),
+  dsh: require('../../../src/shared/agent-icons/dsh.png'),
+  zcode: require('../../../src/shared/agent-icons/zcode.png'),
   openclaw: require('../../../src/shared/agent-icons/openclaw.png')
 }

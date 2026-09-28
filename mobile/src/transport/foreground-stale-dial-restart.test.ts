@@ -25,6 +25,10 @@ vi.mock('./e2ee', () => ({
   decryptBytes: (bytes: Uint8Array) => bytes
 }))
 
+vi.mock('./mobile-runtime-capability-negotiation', () => ({
+  negotiateMobileRuntimeCapabilities: (args: { onReady: () => void }) => args.onReady()
+}))
+
 // Mirrors React Native's WebSocket: readyState lives in JS and only advances on
 // a delivered event, so a socket the OS killed while the app was suspended stays
 // CONNECTING forever from the client's point of view.

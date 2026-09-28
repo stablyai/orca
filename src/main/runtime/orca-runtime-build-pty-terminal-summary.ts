@@ -1,15 +1,24 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithGetPtyRecordForPaneKey } from './orca-runtime-get-pty-record-for-pane-key'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
-import type { ResolvedWorktree } from './runtime-worktree-path-identity'
+import { runtimeWorktreeIdentityKey, type ResolvedWorktree } from './runtime-worktree-path-identity'
 import type { RuntimeTerminalRead, RuntimeTerminalSummary } from '../../shared/runtime-types'
 import { getLatestPtyTitle } from './runtime-worktree-status-projection'
 import { parsePaneKey } from '../../shared/stable-pane-id'
+import { ptyHoldsRecordedSurface, type PtySurfaceTopology } from './pty-recorded-surface-topology'
 import type { TerminalHandleRecord } from './runtime-terminal-contracts'
 import { readTerminalTail } from './terminal-tail-read'
+import { structuredWorkerTerminalRefusal } from './structured-worker-terminal-refusal'
 import { randomUUID } from 'node:crypto'
 
 export class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithGetPtyRecordForPaneKey {
+  protected ptySurfaceTopology(): PtySurfaceTopology {
+    return {
+      graphSequence: this.graphSequence,
+      ptyIdHoldingPane: (tabId, leafId) => this.leaves.get(this.getLeafKey(tabId, leafId))?.ptyId
+    }
+  }
+
   protected buildPtyTerminalSummary(
     pty: RuntimePtyWorktreeRecord,
     worktreesById: Map<string, ResolvedWorktree>
@@ -18,7 +27,15 @@ export class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithGetPt
 
     const title = getLatestPtyTitle(pty)
     const pane = parsePaneKey(pty.paneKey ?? '')
-    const orphaned = !pty.tabId || !pane || pane.tabId !== pty.tabId
+    const orphaned = !ptyHoldsRecordedSurface(pty, this.ptySurfaceTopology())
+    // A live process awaiting its pane binding is not evidence of an orphan.
+    if (
+      orphaned &&
+      (this.pendingPtyRegistrationIncarnations.has(pty.ptyId) ||
+        this.terminalMutationLock.hasActiveSpawns(runtimeWorktreeIdentityKey(pty.worktreeId)))
+    ) {
+      throw new Error('terminal_surface_ownership_unavailable')
+    }
     return {
       handle: this.issuePtyHandle(pty),
       ptyId: pty.ptyId,
@@ -52,7 +69,11 @@ export class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithGetPt
     this.assertGraphReady()
     const record = this.handles.get(handle)
     if (!record || record.runtimeId !== this.runtimeId) {
-      throw new Error('terminal_handle_stale')
+      // A structured worker's handle is not stale — nothing went dead. It names a live agent
+      // session that simply has no terminal, and saying `terminal_handle_stale` sent callers
+      // hunting for a remint that will never exist. Read paths (`terminal read`,
+      // `isTerminalRunningAgent`, the identity probe) answer for it BEFORE reaching here.
+      throw structuredWorkerTerminalRefusal(handle, this._orchestrationDb)
     }
     if (record.rendererGraphEpoch !== this.rendererGraphEpoch) {
       throw new Error('terminal_handle_stale')
@@ -168,7 +189,7 @@ export class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithGetPt
       ptyGeneration: leaf.ptyGeneration
     })
     this.handleByLeafKey.set(leafKey, handle)
-    if (leaf.ptyId && incarnationId) {
+    if (leaf.ptyId) {
       this.handleByPtyIncarnation.set(leaf.ptyId, { handle, incarnationId, leafKey })
     }
     return handle

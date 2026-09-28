@@ -42,9 +42,28 @@ export class RpcClientRequestTracker {
       })
     }
 
+    return this.sendConnectedRequest(
+      method,
+      params,
+      resolvePostConnectRequestTimeout(budget, REQUEST_TIMEOUT_MS)
+    )
+  }
+
+  sendAuthenticatedRequest(
+    method: string,
+    params: unknown,
+    timeoutMs = REQUEST_TIMEOUT_MS
+  ): Promise<RpcResponse> {
+    return this.sendConnectedRequest(method, params, timeoutMs)
+  }
+
+  private sendConnectedRequest(
+    method: string,
+    params: unknown,
+    timeoutMs: number
+  ): Promise<RpcResponse> {
     return new Promise((resolve, reject) => {
       const id = this.options.nextId()
-      const timeoutMs = resolvePostConnectRequestTimeout(budget, REQUEST_TIMEOUT_MS)
       const timeout = setTimeout(() => {
         this.pending.delete(id)
         console.log('[net] sendRequest TIMEOUT', {

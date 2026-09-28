@@ -1,0 +1,81 @@
+{
+  "baselineHashes": {
+    "src/main/providers/working-directory-validation.ts": "197bcb7ab254d2bca8cdcc7d7f0214dedca825bbb0dc4f0d2dcbb41df4cec043"
+  },
+  "fixedHashes": {
+    "src/main/providers/working-directory-validation.ts": "0ef75b5d5242ad7e5423bde2cb7fe633a8f437fc545f22ca04612782fc2de212"
+  },
+  "namedRefs": [
+    {
+      "ref": "HEAD",
+      "revision": "96970f9b6efe915f9578b765c93f3d06880ccc2d",
+      "sha256": "197bcb7ab254d2bca8cdcc7d7f0214dedca825bbb0dc4f0d2dcbb41df4cec043",
+      "matchesAuditBaseline": true,
+      "patchAppliesWithIdenticalFixedHash": true
+    },
+    {
+      "ref": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+      "revision": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+      "sha256": "197bcb7ab254d2bca8cdcc7d7f0214dedca825bbb0dc4f0d2dcbb41df4cec043",
+      "matchesAuditBaseline": true,
+      "patchAppliesWithIdenticalFixedHash": true
+    },
+    {
+      "ref": "v1.4.198",
+      "revision": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+      "sha256": "197bcb7ab254d2bca8cdcc7d7f0214dedca825bbb0dc4f0d2dcbb41df4cec043",
+      "matchesAuditBaseline": true,
+      "patchAppliesWithIdenticalFixedHash": true
+    }
+  ],
+  "sourceHashLineEndings": "canonical LF",
+  "historicalRuntimeReproduced": false,
+  "sharedWaiterDependency": false,
+  "callerProvenance": [
+    {
+      "path": "src/main/daemon/pty-subprocess/spawn-preflight.ts",
+      "sha256": "54b19c44a2f7beabb7a1dcb817efc26be1c9b13462a410e82c2da88f5550ceb2",
+      "main291bSha256": "54b19c44a2f7beabb7a1dcb817efc26be1c9b13462a410e82c2da88f5550ceb2"
+    },
+    {
+      "path": "src/main/providers/local-pty-utils.ts",
+      "sha256": "d655643b42503ccfdab6436273557581b447f4b9f452dfa7649a959705744f25",
+      "main291bSha256": "d655643b42503ccfdab6436273557581b447f4b9f452dfa7649a959705744f25"
+    },
+    {
+      "path": "src/main/daemon/pty-subprocess.ts",
+      "sha256": "9f32c99c79fd3a23fd61d572146f81c3680fb5cbc13337e4fb3179856a0d7dc1",
+      "main291bSha256": "9f32c99c79fd3a23fd61d572146f81c3680fb5cbc13337e4fb3179856a0d7dc1"
+    },
+    {
+      "path": "src/main/daemon/daemon-terminal-admission.ts",
+      "sha256": "14d1d8bbf4b662c98db123719741daffc3d0fe911d3a6a08d3516be666068251",
+      "main291bSha256": "14d1d8bbf4b662c98db123719741daffc3d0fe911d3a6a08d3516be666068251"
+    },
+    {
+      "path": "src/main/daemon/daemon-pty-spawn-preparations.ts",
+      "sha256": "77c94466578a5066af069e45eb5e87a64b73b88580a13b2172b2ea846b434f4e",
+      "main291bSha256": "77c94466578a5066af069e45eb5e87a64b73b88580a13b2172b2ea846b434f4e"
+    },
+    {
+      "path": "src/main/daemon/daemon-client-rpc-request.ts",
+      "sha256": "c846c4e7cb1a5eaa3266e3f3779dbd62c7f60a0c783c55d2af80c42d8468db7b",
+      "main291bSha256": "c846c4e7cb1a5eaa3266e3f3779dbd62c7f60a0c783c55d2af80c42d8468db7b"
+    },
+    {
+      "path": "src/main/daemon/client.ts",
+      "sha256": "e7698849f62c51bd36bf6789423dcd3f9194d979fc143dd267f0c1b1de1ddf14",
+      "main291bSha256": "e7698849f62c51bd36bf6789423dcd3f9194d979fc143dd267f0c1b1de1ddf14"
+    },
+    {
+      "path": "src/shared/priority-semaphore.ts",
+      "sha256": "509693d0132f2365bf1702bcbae7efc4bb0eceeb6ea235456f56a5f784da85a5",
+      "main291bSha256": "509693d0132f2365bf1702bcbae7efc4bb0eceeb6ea235456f56a5f784da85a5"
+    },
+    {
+      "path": "src/shared/wsl-paths.ts",
+      "sha256": "1d9dcf5a1ff6693c02ff60a6b074eb2ebb7e83bda12aceba7e0b208d410b6d1a",
+      "main291bSha256": "1d9dcf5a1ff6693c02ff60a6b074eb2ebb7e83bda12aceba7e0b208d410b6d1a"
+    }
+  ]
+}

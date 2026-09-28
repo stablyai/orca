@@ -2,6 +2,8 @@ import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushAsyncTicks, createDeferred } from './pty-connection-test-async'
 import {
+  LEAF_1,
+  captureCallbackTerminalWrites,
   createMockTransport,
   createPane,
   createManager,
@@ -299,14 +301,19 @@ describe('connectPanePty', () => {
     disposable.dispose()
   })
 
-  it('skips a background-origin alternate-screen frame and pulses a PTY repaint', async () => {
+  it('writes a background-origin alternate-screen repaint that arrives after the reveal restore', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: {
       current:
         | ((
             data: string,
-            meta?: { seq?: number; rawLength?: number; background?: boolean }
+            meta?: {
+              seq?: number
+              rawLength?: number
+              background?: boolean
+              droppedOutput?: boolean
+            }
           ) => void)
         | null
     } = { current: null }
@@ -319,7 +326,15 @@ describe('connectPanePty', () => {
       typeof vi.fn
     >
     const signalPty = window.api.pty.signal as unknown as ReturnType<typeof vi.fn>
-    const staleHiddenTuiFrame = '\x1b[2Khidden-width codex composer\r\n'
+    getMainBufferSnapshot.mockResolvedValue({
+      data: 'restored-frame',
+      cols: 133,
+      rows: 40,
+      seq: 100,
+      alternateScreen: true
+    })
+    // OpenCode's full repaint after reveal; a differential renderer never repaints these cells again.
+    const fullRepaint = '\x1b[H\x1b[2Kfull opencode repaint'
 
     const pane = createPane(1)
     pane.terminal.cols = 133
@@ -329,24 +344,154 @@ describe('connectPanePty', () => {
     const deps = createDeps({
       isVisibleRef: { current: true }
     })
+    const { writes, parseCallbacks } = captureCallbackTerminalWrites(pane)
+    const settleWrites = async (): Promise<void> => {
+      for (let round = 0; round < 8; round += 1) {
+        await flushAsyncTicks(2)
+        await new Promise((resolve) => setTimeout(resolve, 60))
+        while (parseCallbacks.length > 0) {
+          parseCallbacks.shift()?.()
+        }
+      }
+    }
     const disposable = connectPanePty(pane as never, manager as never, deps as never)
     await flushAsyncTicks(6)
-    getMainBufferSnapshot.mockClear()
+
+    capturedDataCallback.current?.('', { seq: 100, rawLength: 0, droppedOutput: true })
+    await settleWrites()
+    expect(getMainBufferSnapshot).toHaveBeenCalledTimes(1)
+    expect(writes).toContain('restored-frame')
     transport.resize.mockClear()
     signalPty.mockClear()
 
-    capturedDataCallback.current?.(staleHiddenTuiFrame, {
-      seq: staleHiddenTuiFrame.length,
-      rawLength: staleHiddenTuiFrame.length,
+    capturedDataCallback.current?.(fullRepaint, {
+      seq: 100 + fullRepaint.length,
+      rawLength: fullRepaint.length,
       background: true
     })
-    await flushAsyncTicks(20)
+    await settleWrites()
 
-    expect(getMainBufferSnapshot).not.toHaveBeenCalled()
-    expect(pane.terminal.write).not.toHaveBeenCalledWith(staleHiddenTuiFrame, expect.any(Function))
-    expect(transport.resize).toHaveBeenCalledWith(132, 40)
-    expect(transport.resize).toHaveBeenCalledWith(133, 40)
-    expect(signalPty).not.toHaveBeenCalledWith('pty-id', 'SIGWINCH')
+    expect(writes.join('')).toContain(fullRepaint)
+    expect(transport.resize).not.toHaveBeenCalled()
+    expect(signalPty).not.toHaveBeenCalled()
+    disposable.dispose()
+  })
+
+  it('re-restores a skipped alt frame from the model when the fit lands back on the capture grid', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: {
+      current: ((data: string, meta?: { seq?: number; droppedOutput?: boolean }) => void) | null
+    } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+    const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+      typeof vi.fn
+    >
+    // The first replay measures a transient narrower grid; the fit then lands back on the capture grid.
+    let narrowUntilWriteCount: number | null = null
+    getMainBufferSnapshot.mockImplementation(async () => {
+      narrowUntilWriteCount = getMainBufferSnapshot.mock.calls.length === 1 ? writes.length : null
+      return {
+        data: '\x1b[?1049hcomposed-frame',
+        scrollbackAnsi: '',
+        frameRestoreAnsi: 'model-frame',
+        cols: 133,
+        rows: 40,
+        seq: 100,
+        alternateScreen: true
+      }
+    })
+
+    const pane = createPane(1)
+    pane.terminal.cols = 133
+    pane.terminal.rows = 40
+    ;(pane.terminal.buffer.active as { type: 'normal' | 'alternate' }).type = 'alternate'
+    const { writes, parseCallbacks } = captureCallbackTerminalWrites(pane)
+    const manager = createManager(1)
+    const deps = createDeps({ isVisibleRef: { current: true } })
+    const disposable = connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(6)
+    transport.resize.mockClear()
+    pane.fitAddon.proposeDimensions.mockImplementation(() =>
+      narrowUntilWriteCount === writes.length
+        ? { cols: 120, rows: 40 }
+        : { cols: pane.terminal.cols, rows: pane.terminal.rows }
+    )
+
+    capturedDataCallback.current?.('', { seq: 100, droppedOutput: true })
+    for (let round = 0; round < 8; round += 1) {
+      await flushAsyncTicks(2)
+      await new Promise((resolve) => setTimeout(resolve, 60))
+      while (parseCallbacks.length > 0) {
+        parseCallbacks.shift()?.()
+      }
+    }
+
+    expect(getMainBufferSnapshot).toHaveBeenCalledTimes(2)
+    expect(writes.join('')).toContain('model-frame')
+    expect(transport.resize).not.toHaveBeenCalledWith(132, 40)
+    disposable.dispose()
+  })
+
+  it('restores a dropped daemon alt frame from the model when the fit lands back on the capture grid', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('tab-pty')
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) =>
+      sessionId
+        ? {
+            id: sessionId,
+            snapshot: 'PREFIX-SCROLLBACK' + 'ALT-FRAME-BODY',
+            snapshotPrefixAnsi: 'PREFIX-SCROLLBACK',
+            snapshotFrameAnsi: 'ALT-FRAME-BODY',
+            snapshotFrameRestoreAnsi: 'RESTORE-LIVE-STATE',
+            snapshotCols: 200,
+            snapshotRows: 50,
+            isAlternateScreen: true
+          }
+        : null
+    )
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }] }
+    }
+    const getMainBufferSnapshot = vi.mocked(window.api.pty.getMainBufferSnapshot)
+    getMainBufferSnapshot.mockResolvedValue({
+      data: '\x1b[?1049hMODEL-FRAME',
+      scrollbackAnsi: '',
+      frameRestoreAnsi: 'MODEL-RESTORE',
+      cols: 200,
+      rows: 50,
+      seq: 10,
+      alternateScreen: true
+    })
+
+    const pane = createPane(1)
+    pane.terminal.cols = 200
+    pane.terminal.rows = 50
+    const writtenText = (): string => pane.terminal.write.mock.calls.map((c) => c[0]).join('')
+    // The replay measures a transient narrower grid; the fit then lands back on the capture grid.
+    pane.fitAddon.proposeDimensions = vi.fn(() =>
+      writtenText().includes('RESTORE-LIVE-STATE')
+        ? { cols: 200, rows: 50 }
+        : { cols: 120, rows: 40 }
+    )
+    const manager = createManager(1)
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+    })
+
+    const disposable = connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(40)
+
+    expect(writtenText()).not.toContain('ALT-FRAME-BODY')
+    expect(getMainBufferSnapshot).toHaveBeenCalledWith('tab-pty', expect.anything())
+    await vi.waitFor(() => expect(writtenText()).toContain('MODEL-FRAME'))
     disposable.dispose()
   })
 

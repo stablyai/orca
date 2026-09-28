@@ -206,7 +206,7 @@ test('a cold-parked host pane keeps serving its paired remote viewer', async ({
         state?.setActiveView('terminal')
         state?.setActiveWorktree(worktreeId)
         state?.setActiveTab(tabId)
-        state?.setActiveTabType('terminal')
+        state?.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
       },
       { worktreeId, tabId: hostTabId }
     )
@@ -234,7 +234,7 @@ test('a cold-parked host pane keeps serving its paired remote viewer', async ({
         state?.setActiveView('terminal')
         state?.setActiveWorktree(worktreeId)
         state?.setActiveTab(webTabId)
-        state?.setActiveTabType('terminal')
+        state?.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
       },
       { webTabId, worktreeId }
     )
@@ -278,7 +278,7 @@ test('a cold-parked host pane keeps serving its paired remote viewer', async ({
         const tab = state?.createTab(id, undefined, undefined, { activate: true })
         if (tab) {
           state?.setActiveTab(tab.id)
-          state?.setActiveTabType('terminal')
+          state?.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
         }
       }, worktreeId)
     }

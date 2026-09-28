@@ -1,9 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { rmSync, mkdtempSync } from 'node:fs'
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
-import { getDefaultPersistedState } from '../shared/constants'
 import {
+  closeTestStores,
   testState,
   createStore,
   writeDataFile,
@@ -11,6 +7,12 @@ import {
   makeProject,
   makeProjectHostSetup
 } from './persistence-test-harness'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { rmSync, mkdtempSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { getDefaultPersistedState } from '../shared/constants'
+
 import {
   getLocalWorktreeScanGeneration,
   isLocalWorktreeScanGenerationCurrent
@@ -64,7 +66,8 @@ describe('Store', () => {
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
   // ── 7. updateRepo ──────────────────────────────────────────────────
@@ -542,6 +545,23 @@ describe('Store', () => {
     store.flush()
     const reloaded = await createStore()
     expect(reloaded.getRepo('r1')!.issueSourcePreference).toBe('upstream')
+  })
+
+  it('updateRepo persists and clears ghAccount bindings', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+
+    const updated = store.updateRepo('r1', {
+      ghAccount: { host: ' GitHub.COM ', user: ' Alice ' }
+    })
+    expect(updated!.ghAccount).toEqual({ host: 'github.com', user: 'Alice' })
+
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getRepo('r1')!.ghAccount).toEqual({ host: 'github.com', user: 'Alice' })
+
+    const cleared = reloaded.updateRepo('r1', { ghAccount: null })
+    expect(cleared!.ghAccount).toBeUndefined()
   })
 
   it('updateRepo persists fork sync mode across reloads', async () => {

@@ -45,23 +45,47 @@ describe('remote agent-session launch routing', () => {
     expect(legacy).not.toHaveBeenCalled()
   })
 
-  it('falls back to legacy when an older host lacks the Kimi resume capability', async () => {
-    const hostAuthority = vi.fn().mockResolvedValue('structured')
-    const legacy = vi.fn().mockResolvedValue('legacy')
-    mocks.supportsCapability.mockResolvedValue(false)
+  it.each(['kimi', 'muse'] as const)(
+    'falls back to legacy when an older host lacks the %s resume capability',
+    async (agent) => {
+      const hostAuthority = vi.fn().mockResolvedValue('structured')
+      const legacy = vi.fn().mockResolvedValue('legacy')
+      mocks.supportsCapability.mockResolvedValue(false)
 
-    // Why: an old host rejects the widened agent enum with invalid_argument, which is not a
-    // fallback code — so the probe, not the error handler, has to keep the pane alive.
+      // Why: an old host rejects the widened agent enum with invalid_argument, which is not a
+      // fallback code — so the probe, not the error handler, has to keep the pane alive.
+      await expect(
+        runRemoteAgentSessionLaunch({
+          environmentId: 'env-1',
+          hostAuthority,
+          hostAuthorityCapability: agentResumeHostAuthorityCapability(agent),
+          legacy
+        })
+      ).resolves.toBe('legacy')
+      expect(mocks.supportsCapability).toHaveBeenCalledWith(
+        'env-1',
+        `agent-session.${agent}-resume.v1`
+      )
+      expect(hostAuthority).not.toHaveBeenCalled()
+    }
+  )
+
+  it('uses host authority when the host supports Muse resume', async () => {
+    const hostAuthority = vi.fn().mockResolvedValue('host')
+    const legacy = vi.fn()
+    mocks.supportsCapability.mockResolvedValue(true)
+
     await expect(
       runRemoteAgentSessionLaunch({
         environmentId: 'env-1',
         hostAuthority,
-        hostAuthorityCapability: agentResumeHostAuthorityCapability('kimi'),
+        hostAuthorityCapability: agentResumeHostAuthorityCapability('muse'),
         legacy
       })
-    ).resolves.toBe('legacy')
-    expect(mocks.supportsCapability).toHaveBeenCalledWith('env-1', 'agent-session.kimi-resume.v1')
-    expect(hostAuthority).not.toHaveBeenCalled()
+    ).resolves.toBe('host')
+    expect(mocks.supportsCapability).toHaveBeenCalledWith('env-1', 'agent-session.muse-resume.v1')
+    expect(hostAuthority).toHaveBeenCalledOnce()
+    expect(legacy).not.toHaveBeenCalled()
   })
 
   it('preserves the exact legacy path when the capability is absent', async () => {

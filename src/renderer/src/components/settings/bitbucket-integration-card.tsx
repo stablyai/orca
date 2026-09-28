@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ExternalLink, GitPullRequestArrow, LoaderCircle, Unlink } from 'lucide-react'
 import type { BitbucketConnectionStatus } from '../../../../shared/bitbucket-credentials'
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import { readIpcErrorMessage } from '@/lib/ipc-error'
 import { IntegrationCardDetails, IntegrationCardShell } from './integration-card-shell'
 import { useIntegrationSubordinateRowClass } from './integration-card-presentation'
 import type { BitbucketStatus } from './integrations-pane-status'
@@ -24,17 +25,24 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
   const [disconnectError, setDisconnectError] = useState<string | null>(null)
+  const [connectionLoadFailed, setConnectionLoadFailed] = useState(false)
+  const connectionLoadGenerationRef = useRef(0)
 
   // Reads plaintext metadata only — never the encrypted secret — so mounting the
   // pane cannot trigger a keychain prompt.
   const loadConnection = useCallback(async () => {
+    const generation = ++connectionLoadGenerationRef.current
     try {
       const next = await window.api.bitbucket.status()
-      if (mountedRef.current) {
+      if (mountedRef.current && generation === connectionLoadGenerationRef.current) {
         setConnection(next)
+        setConnectionLoadFailed(false)
       }
     } catch {
-      // Best-effort: the preflight-driven parts of the card still render.
+      // Why: without this the card renders exactly like "no credential stored" — say it is unknown.
+      if (mountedRef.current && generation === connectionLoadGenerationRef.current) {
+        setConnectionLoadFailed(true)
+      }
     }
   }, [mountedRef])
 
@@ -42,14 +50,18 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
     void loadConnection()
   }, [loadConnection])
 
-  const envManaged = connection?.source === 'environment'
-  const storedCredential = connection?.source === 'stored'
-  const account = connection?.account ?? statuses.bitbucketAccount
+  const currentConnection = connectionLoadFailed ? null : connection
+  const credentialStatusKnown = currentConnection !== null
+  const envManaged = currentConnection?.source === 'environment'
+  const storedCredential = currentConnection?.source === 'stored'
+  const account = currentConnection?.account ?? statuses.bitbucketAccount
   // Only surface a base URL the user actually overrode; the default is noise.
   const baseUrlOverride =
-    connection?.baseUrl && connection.baseUrl !== DEFAULT_API_BASE_URL ? connection.baseUrl : null
-  const authModeLabel = connection?.authMode
-    ? connection.authMode === 'token'
+    currentConnection?.baseUrl && currentConnection.baseUrl !== DEFAULT_API_BASE_URL
+      ? currentConnection.baseUrl
+      : null
+  const authModeLabel = currentConnection?.authMode
+    ? currentConnection.authMode === 'token'
       ? translate(
           'auto.components.settings.bitbucket.integration.card.authModeToken',
           'Access token'
@@ -61,7 +73,8 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
     : null
   const credentialSummary = [authModeLabel, baseUrlOverride].filter(Boolean).join(' · ')
 
-  const handleConnected = (): void => {
+  // A fresh connection and Re-check both refresh preflight and credential state.
+  const reloadCardState = (): void => {
     void loadConnection()
     refresh()
   }
@@ -76,20 +89,18 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
       // Unhandled, the card silently re-renders as still connected.
       if (mountedRef.current) {
         setDisconnectError(
-          error instanceof Error
-            ? error.message
-            : translate(
-                'auto.components.settings.bitbucket.integration.card.disconnectFailed',
-                'Could not remove the saved Bitbucket credential.'
-              )
+          readIpcErrorMessage(error) ??
+            translate(
+              'auto.components.settings.bitbucket.integration.card.disconnectFailed',
+              'Could not remove the saved Bitbucket credential.'
+            )
         )
       }
     } finally {
       if (mountedRef.current) {
         setDisconnecting(false)
       }
-      void loadConnection()
-      refresh()
+      reloadCardState()
     }
   }
 
@@ -118,18 +129,26 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
       statusTone={connected ? 'connected' : 'attention'}
       statusLabel={tokenProviderStatusLabel({ configured: connected, status })}
       actions={
-        status !== 'checking' && !envManaged ? (
+        status !== 'checking' && !envManaged && (credentialStatusKnown || connectionLoadFailed) ? (
           <Button
             variant={storedCredential ? 'outline' : 'default'}
             size="sm"
             onClick={() => setDialogOpen(true)}
           >
-            {storedCredential
+            {connectionLoadFailed
               ? translate(
-                  'auto.components.settings.bitbucket.integration.card.edit',
-                  'Edit credentials'
+                  'auto.components.settings.bitbucket.integration.card.replaceCredentials',
+                  'Add or replace credentials'
                 )
-              : translate('auto.components.settings.bitbucket.integration.card.connect', 'Connect')}
+              : storedCredential
+                ? translate(
+                    'auto.components.settings.bitbucket.integration.card.edit',
+                    'Edit credentials'
+                  )
+                : translate(
+                    'auto.components.settings.bitbucket.integration.card.connect',
+                    'Connect'
+                  )}
           </Button>
         ) : null
       }
@@ -170,11 +189,21 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
             </div>
           ) : null}
           {disconnectError ? <p className="text-xs text-destructive">{disconnectError}</p> : null}
-          <BitbucketCardNote
-            envManaged={envManaged}
-            status={status}
-            storedCredential={storedCredential}
-          />
+          {connectionLoadFailed ? (
+            <p role="alert" className="text-xs text-destructive">
+              {translate(
+                'auto.components.settings.bitbucket.integration.card.statusLoadFailed',
+                'Could not check for a saved Bitbucket credential.'
+              )}
+            </p>
+          ) : null}
+          {credentialStatusKnown ? (
+            <BitbucketCardNote
+              envManaged={envManaged}
+              status={status}
+              storedCredential={storedCredential}
+            />
+          ) : null}
           <div className="flex items-center gap-2">
             {!connected ? (
               <Button
@@ -189,7 +218,7 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
                 )}
               </Button>
             ) : null}
-            <Button variant="ghost" size="sm" onClick={refresh}>
+            <Button variant="ghost" size="sm" onClick={reloadCardState}>
               {translate(
                 'auto.components.settings.token.source.control.integration.cards.793a06e899',
                 'Re-check'
@@ -202,11 +231,11 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
       <BitbucketCredentialsDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        initialAuthMode={connection?.authMode}
-        initialEmail={connection?.email}
-        initialBaseUrl={connection?.baseUrl}
+        initialAuthMode={currentConnection?.authMode}
+        initialEmail={currentConnection?.email}
+        initialBaseUrl={currentConnection?.baseUrl}
         environmentManaged={envManaged}
-        onConnected={handleConnected}
+        onConnected={reloadCardState}
       />
     </IntegrationCardShell>
   )

@@ -16,7 +16,7 @@ describe('resource session classification parity', () => {
     const source = readFileSync(DERIVED_MODEL_PATH, 'utf8')
     const mergeCall = source.slice(
       source.indexOf('mergeSnapshotAndSessions(resourceSnapshot'),
-      source.indexOf('worktreeById\n          })')
+      source.indexOf('ambiguousWorktreeIds\n          })')
     )
 
     expect(mergeCall).toContain('...resourceSessionBindings')

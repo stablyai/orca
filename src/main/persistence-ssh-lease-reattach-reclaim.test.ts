@@ -1,8 +1,9 @@
+import { closeTestStores, createStore, testState } from './persistence-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createStore, testState } from './persistence-test-harness'
+
 import { sshRemotePtyLeaseAllowsReattach } from '../shared/ssh-types'
 
 vi.mock('electron', () => ({
@@ -24,7 +25,8 @@ describe('ssh remote pty lease reclaim after a proven reattach', () => {
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
   })
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
@@ -49,14 +51,16 @@ describe('ssh remote pty lease reclaim after a proven reattach', () => {
     expect(sshRemotePtyLeaseAllowsReattach(lease)).toBe(true)
   })
 
-  it('leaves a terminated lease absorbing even when the id appears in a reattach batch', async () => {
+  it('never lets a reattach batch revive an operator-closed id', async () => {
     const store = await createStore()
     store.upsertSshRemotePtyLease({ targetId: 'ssh-1', ptyId: 'pty-1', state: 'attached' })
     store.markSshRemotePtyLease('ssh-1', 'pty-1', 'terminated')
 
     await store.markSshRemotePtyLeasesAttachedAsync('ssh-1', ['pty-1'])
 
-    expect(store.getSshRemotePtyLeases('ssh-1')[0]).toMatchObject({ state: 'terminated' })
+    // The unbound tombstone is retired at close, and the batch only ever updates existing rows —
+    // so the id stays out of the reattach set either way.
+    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([])
   })
 
   it('does not revive an expired lease from an unqualified bulk attach', async () => {

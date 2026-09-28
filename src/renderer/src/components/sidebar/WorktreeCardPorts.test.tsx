@@ -8,7 +8,7 @@ vi.mock('@/store', () => ({
     selector({
       createBrowserTab: vi.fn(),
       setRemoteBrowserPageHandle: vi.fn(),
-      setWorkspacePortScan: vi.fn(),
+      replaceWorkspacePortScans: vi.fn(),
       setWorkspacePortScanRefreshing: vi.fn(),
       settings: null
     })

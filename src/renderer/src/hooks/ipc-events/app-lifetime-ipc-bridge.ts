@@ -1,3 +1,4 @@
+import type { RuntimeHostStatusSnapshot } from '../../../../shared/runtime-host-status'
 import { getTabIdsAwaitingHostHydrationRemount } from '@/lib/parked-terminal-host-hydration'
 import { emitAutomationsChangedWindowEvent } from '@/lib/automations-changed-window-event'
 import { createBackgroundSleepingAgentWakeDispatcher } from '@/lib/wake-sleeping-agents-in-background'
@@ -12,6 +13,7 @@ import { createDirectSshBridgeRuntime } from './direct-ssh-bridge-runtime'
 import { registerDirectSshStateIpcBridge } from './direct-ssh-state-ipc-bridge'
 import { registerMobileAndTerminalCloseIpcBridge } from './mobile-terminal-close-ipc-bridge'
 import { registerMobileDriverIpcBridge } from './mobile-driver-ipc-bridge'
+import { registerOrcaProfileAuthIpcBridge } from './orca-profile-auth-ipc-bridge'
 import { registerOsMarkdownFileOpenBridge } from './os-markdown-file-open-bridge'
 import { registerProjectCatalogIpcBridge } from './project-catalog-ipc-bridge'
 import { registerRateLimitIpcBridge } from './rate-limit-ipc-bridge'
@@ -62,13 +64,23 @@ export function installAppLifetimeIpcEvents(
   )
 
   const worktreeRuntime = createWorktreeEventRuntime(unsubs, isRuntimeEnvironmentActive)
-  const onSharedControlDiagnostics = window.api.runtimeEnvironments?.onSharedControlDiagnostics
-  if (onSharedControlDiagnostics) {
-    unsubs.push(
-      onSharedControlDiagnostics((event) => {
-        useAppStore.getState().publishRuntimeEnvironmentDiagnostics(event)
+  const statusApi = window.api.runtimeEnvironments
+  if (statusApi?.onStatusChanged) {
+    const apply = (snapshot: RuntimeHostStatusSnapshot): void => {
+      useAppStore.getState().applyRuntimeHostStatusSnapshot(snapshot)
+    }
+    let stopped = false
+    unsubs.push(statusApi.onStatusChanged(apply), () => {
+      stopped = true
+    })
+    void statusApi
+      .getStatusSnapshots()
+      .then((snapshots) => {
+        if (!stopped) {
+          snapshots.forEach(apply)
+        }
       })
-    )
+      .catch((error) => console.error('Failed to read runtime status snapshots:', error))
   }
   const unsubscribeRuntimeEnvironmentStore = registerRuntimeClientIpcBridge(unsubs, worktreeRuntime)
   registerProjectCatalogIpcBridge(
@@ -78,6 +90,7 @@ export function installAppLifetimeIpcEvents(
     remountTerminalTabsAwaitingHostHydration
   )
   registerSettingsAndSidebarIpcBridge(unsubs)
+  registerOrcaProfileAuthIpcBridge(unsubs)
   registerWorkspaceShortcutIpcBridge(unsubs)
   registerOsMarkdownFileOpenBridge(unsubs)
   unsubs.push(

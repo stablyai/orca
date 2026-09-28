@@ -2,11 +2,19 @@ import {
   RelayVersionMismatchError,
   RELAY_EXIT_CODE_VERSION_MISMATCH
 } from './ssh-relay-version-mismatch-error'
+import {
+  RelayCredentialMismatchError,
+  RELAY_EXIT_CODE_CREDENTIAL_MISMATCH
+} from './ssh-relay-credential-mismatch-error'
 
-export function buildRelayVersionMismatchError(
+/** Translate a pre-sentinel --connect exit into the typed refusal it encodes, if any. */
+export function buildRelayHandshakeRefusalError(
   exitCode: number | null,
   stderr: string
-): RelayVersionMismatchError | null {
+): RelayVersionMismatchError | RelayCredentialMismatchError | null {
+  if (exitCode === RELAY_EXIT_CODE_CREDENTIAL_MISMATCH) {
+    return new RelayCredentialMismatchError(stderr.trim())
+  }
   if (exitCode !== RELAY_EXIT_CODE_VERSION_MISMATCH) {
     return null
   }

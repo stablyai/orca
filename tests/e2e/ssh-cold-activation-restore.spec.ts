@@ -2,6 +2,7 @@ import type { ElectronApplication } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
+  expectTerminalAccessibilityText,
   focusActiveTerminalInput,
   waitForActivePanePtyId,
   waitForActiveTerminalManager
@@ -85,12 +86,22 @@ test.describe('SSH cold activation restore', () => {
           () =>
             orcaPage.evaluate(
               async ({ targetId, worktreeId, expectedTabIds }) => {
-                const session = await window.api.session.get()
+                // Why both partitions: an SSH worktree's session lives in `ssh:<targetId>`, and
+                // only globals like `activeConnectionIdsAtShutdown` stay in `local`. Reading
+                // `session.get()` alone asserts the partition layout rather than the invariant,
+                // which is that the state is persisted where the boot read will find it.
+                const [local, host] = await Promise.all([
+                  window.api.session.get(),
+                  window.api.session.get(`ssh:${targetId}`)
+                ])
                 const persistedTabIds = new Set(
-                  (session.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)
+                  [
+                    ...(local.tabsByWorktree[worktreeId] ?? []),
+                    ...(host.tabsByWorktree[worktreeId] ?? [])
+                  ].map((tab) => tab.id)
                 )
                 return (
-                  session.activeConnectionIdsAtShutdown?.includes(targetId) === true &&
+                  local.activeConnectionIdsAtShutdown?.includes(targetId) === true &&
                   expectedTabIds.every((tabId) => persistedTabIds.has(tabId))
                 )
               },
@@ -183,26 +194,12 @@ test.describe('SSH cold activation restore', () => {
           }
         )
         .toBe(firstTabId)
-      await orcaPage.evaluate((tabId) => {
-        const manager = window.__paneManagers?.get(tabId)
-        const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0]
-        if (!pane) {
-          throw new Error('Restored SSH pane unavailable')
-        }
-        pane.terminal.options.screenReaderMode = true
-        pane.terminal.refresh(0, pane.terminal.rows - 1)
-      }, firstTabId)
-
       const marker = `SSH_RESTORE_OK_${Date.now()}`
       const proofFile = '/tmp/orca-ssh-restore-proof'
       await focusActiveTerminalInput(orcaPage)
       await orcaPage.keyboard.type(`printf '${marker}' > ${proofFile} && printf '${marker}\\n'`)
       await orcaPage.keyboard.press('Enter')
-      await expect(
-        orcaPage.locator(
-          `[data-terminal-tab-id=${JSON.stringify(firstTabId)}] .xterm-accessibility-tree`
-        )
-      ).toContainText(marker, { timeout: 30_000 })
+      await expectTerminalAccessibilityText(orcaPage, firstTabId, marker)
       expect(execDockerSshRelayTargetCommand(target, `cat ${proofFile}`)).toBe(marker)
     } finally {
       cleanupDockerSshRelayTarget(target)
@@ -251,10 +248,18 @@ test.describe('SSH cold activation restore', () => {
           () =>
             firstLaunch.page.evaluate(
               async ({ targetId, worktreeId, tabId }) => {
-                const persisted = await window.api.session.get()
+                // See the note above: the worktree's rows are in `ssh:<targetId>`, the globals in
+                // `local`.
+                const [local, host] = await Promise.all([
+                  window.api.session.get(),
+                  window.api.session.get(`ssh:${targetId}`)
+                ])
                 return (
-                  persisted.activeConnectionIdsAtShutdown?.includes(targetId) === true &&
-                  persisted.tabsByWorktree[worktreeId]?.some((tab) => tab.id === tabId) === true
+                  local.activeConnectionIdsAtShutdown?.includes(targetId) === true &&
+                  [
+                    ...(local.tabsByWorktree[worktreeId] ?? []),
+                    ...(host.tabsByWorktree[worktreeId] ?? [])
+                  ].some((tab) => tab.id === tabId)
                 )
               },
               { targetId: remote.targetId, worktreeId: remote.worktreeId, tabId: restoredTabId }
@@ -274,27 +279,13 @@ test.describe('SSH cold activation restore', () => {
         .toBe(remote.worktreeId)
       await waitForActiveTerminalManager(secondLaunch.page, 60_000)
       expect(await waitForActivePanePtyId(secondLaunch.page, 60_000)).toBe(firstPtyId)
-      await secondLaunch.page.evaluate((tabId) => {
-        const manager = window.__paneManagers?.get(tabId)
-        const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0]
-        if (!pane) {
-          throw new Error('Restored SSH pane unavailable')
-        }
-        pane.terminal.options.screenReaderMode = true
-        pane.terminal.refresh(0, pane.terminal.rows - 1)
-      }, restoredTabId)
-
       const restoredMarker = `SSH_OWNER_RESTORED_${Date.now()}`
       await focusActiveTerminalInput(secondLaunch.page)
       await secondLaunch.page.keyboard.type(
         `printf '%s|%s|%s|%s\\n' "$$" "$ORCA_BG_PID" "$ORCA_RESTART_TOKEN" "$PWD" > ${afterProofPath}; printf '${restoredMarker}\\n'`
       )
       await secondLaunch.page.keyboard.press('Enter')
-      await expect(
-        secondLaunch.page.locator(
-          `[data-terminal-tab-id=${JSON.stringify(restoredTabId)}] .xterm-accessibility-tree`
-        )
-      ).toContainText(restoredMarker, { timeout: 30_000 })
+      await expectTerminalAccessibilityText(secondLaunch.page, restoredTabId, restoredMarker)
       await expect.poll(() => readRemoteProof(target!, afterProofPath)).toBe(beforeProof)
     } finally {
       if (secondApp) {

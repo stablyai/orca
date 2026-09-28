@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { useLocalSearchParams, usePathname, useRouter } from 'expo-router'
+import { useLocalSearchParams, usePathname } from 'expo-router'
+import { useRouteHandoff } from '../navigation/route-handoff'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useHostProtocolGates } from '../components/HostProtocolGate'
 import { visibleHostRouteNotice } from '../host-route-notice'
@@ -22,6 +23,7 @@ import { useHostScreenState } from './use-host-screen-state'
 import { useHostViewSettings } from './use-host-view-settings'
 import { useHostWorktreeActions } from './use-host-worktree-actions'
 import { useHostWorktreeCatalog } from './use-host-worktree-catalog'
+import { useHostDisplay } from '../transport/use-host-display'
 
 export type HostScreenProps = {
   // When true, rendered as the persistent tablet sidebar by the host layout, not as its own routed screen.
@@ -44,7 +46,10 @@ export function useHostScreenController({
   const [dismissedNotice, setDismissedNotice] = useState<string | null>(null)
   const noticeParam = params.notice?.trim()
   const routeNotice = visibleHostRouteNotice(embedded, noticeParam, dismissedNotice)
-  const router = useRouter()
+  // Not `useRouter` directly: the list is the one screen that also runs inside the shell's page,
+  // where a route it does not render is handed back to the app rather than pushed into this
+  // document. On a phone this is the router and nothing else.
+  const router = useRouteHandoff()
   const pathname = usePathname()
   const insets = useSafeAreaInsets()
   // Why: cap and center the list on wide/tablet canvases; on phones isWideLayout is false so it stays edge-to-edge.
@@ -61,6 +66,11 @@ export function useHostScreenController({
   const { hostCapabilities, floatingWorkspaceEnabled } = useHostProtocolGates()
   const state = useHostScreenState(hostId, action)
   const settings = useHostViewSettings({ client, connState, hostId, state })
+  const hostDisplay = useHostDisplay(
+    hostId && state.hostName
+      ? { id: hostId, name: state.hostName, ...state.hostStoredDescriptor }
+      : null
+  )
 
   useHostScreenIdentity({ client, hostId, state })
   const fetchRepoMetadata = useHostRepoMetadata({ client, connState, hostId, state })
@@ -142,6 +152,7 @@ export function useHostScreenController({
     floatingWorkspaceEnabled,
     forceReconnectHost,
     hostCapabilities,
+    hostDisplay,
     hostId,
     insets,
     isReadOnly: connState === 'auth-failed',

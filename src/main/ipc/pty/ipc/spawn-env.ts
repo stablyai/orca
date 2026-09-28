@@ -7,7 +7,11 @@ import { isRemoteAgentHooksEnabled } from '../../../../shared/agent-hook-relay'
 import { isOpaqueRemintedPaneKey } from '../../../../shared/pane-key-alias'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { isClaudeAuthSwitchInProgress } from '../../../claude-accounts/live-pty-gate'
-import { hasClaudeAuthEnvConflict } from '../../../claude-accounts/environment'
+import {
+  CLAUDE_AUTH_ENV_CONFLICT_MESSAGE,
+  CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE,
+  hasClaudeAuthEnvConflict
+} from '../../../claude-accounts/environment'
 import { LocalPtyProvider } from '../../../providers/local-pty-provider'
 import { resolvePathEnvKey } from '../../../pty/windows-environment-path'
 import { routesFreshSpawnsToLocalProvider } from '../host-env/fresh-spawn-routing'
@@ -20,12 +24,10 @@ import { assemblePtyIpcSpawnCodexEnv } from './spawn-env-codex'
 export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args
   if (ctx.isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
-    throw new Error('A Claude account switch is in progress. Try again after it finishes.')
+    throw new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE)
   }
   if (ctx.claudeAuth?.stripAuthEnv && hasClaudeAuthEnvConflict(args.env)) {
-    throw new Error(
-      'This Claude launch defines explicit Anthropic auth environment variables. Remove those overrides before using a managed Claude account.'
-    )
+    throw new Error(CLAUDE_AUTH_ENV_CONFLICT_MESSAGE)
   }
   // Why: the daemon-backed provider skips LocalPtyProvider's buildSpawnEnv, so assemble the same host-local env here for parity.
   // Safety: skip entirely for SSH — every injection is a loopback secret or a local path that leaks or misleads on the remote host.

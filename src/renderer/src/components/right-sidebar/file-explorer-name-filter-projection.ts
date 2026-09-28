@@ -1,6 +1,11 @@
 import { joinPath, normalizeRelativePath } from '@/lib/path'
-import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import { compareFileNames } from '../../../../shared/file-name-sort'
+import {
+  FILE_NAME_FILTER_QUERY_MAX_BYTES,
+  isFileNameFilterQueryTooLarge,
+  pathMatchesFileNameFilterTokens,
+  splitFileNameFilterTokens
+} from '../../../../shared/file-name-filter-tokens'
 import type { FileExplorerOperationOwner, TreeNode } from './file-explorer-types'
 import {
   createFileExplorerRowProjectionFromParts,
@@ -16,7 +21,7 @@ export type FileExplorerNameFilterProjectionSource = {
   operationOwner?: FileExplorerOperationOwner
 }
 
-export const FILE_EXPLORER_NAME_FILTER_QUERY_MAX_BYTES = 2 * 1024
+export const FILE_EXPLORER_NAME_FILTER_QUERY_MAX_BYTES = FILE_NAME_FILTER_QUERY_MAX_BYTES
 
 export function getNextNameFilterCollapsedPaths(
   collapsedPaths: ReadonlySet<string>,
@@ -48,60 +53,14 @@ export function isFileExplorerNameFilterQueryTooLarge(
   query: string | undefined,
   maxBytes = FILE_EXPLORER_NAME_FILTER_QUERY_MAX_BYTES
 ): boolean {
-  const value = query ?? ''
-  return isClipboardTextByteLengthOverLimit(value, maxBytes)
+  return isFileNameFilterQueryTooLarge(query ?? '', maxBytes)
 }
 
 export function getFileExplorerNameFilterTokens(query: string | undefined): string[] {
   if (isFileExplorerNameFilterQueryTooLarge(query)) {
     return []
   }
-  return splitFileExplorerNameFilterTokens(query ?? '')
-}
-
-// Why: accepted pasted file-filter queries are still on a renderer hot path;
-// tokenize whitespace directly instead of allocating a regex split array.
-function splitFileExplorerNameFilterTokens(query: string): string[] {
-  const tokens: string[] = []
-  let tokenStart = -1
-  for (let index = 0; index <= query.length; index += 1) {
-    const isEnd = index === query.length
-    if (!isEnd && !isFileExplorerNameFilterWhitespace(query.charCodeAt(index))) {
-      if (tokenStart === -1) {
-        tokenStart = index
-      }
-      continue
-    }
-    if (tokenStart !== -1) {
-      tokens.push(query.slice(tokenStart, index).toLocaleLowerCase())
-      tokenStart = -1
-    }
-  }
-  return tokens
-}
-
-function isFileExplorerNameFilterWhitespace(code: number): boolean {
-  return (
-    code === 32 ||
-    (code >= 9 && code <= 13) ||
-    code === 160 ||
-    code === 5760 ||
-    (code >= 8192 && code <= 8202) ||
-    code === 8232 ||
-    code === 8233 ||
-    code === 8239 ||
-    code === 8287 ||
-    code === 12288 ||
-    code === 65279
-  )
-}
-
-function relativePathMatchesNameFilter(relativePath: string, tokens: readonly string[]): boolean {
-  if (tokens.length === 0) {
-    return true
-  }
-  const haystack = normalizeRelativePath(relativePath).toLocaleLowerCase()
-  return tokens.every((token) => haystack.includes(token))
+  return splitFileNameFilterTokens(query ?? '')
 }
 
 export function getFileExplorerNameFilterIgnoredQueryRelativePaths(
@@ -121,7 +80,7 @@ export function getFileExplorerNameFilterIgnoredQueryRelativePaths(
       (relativePath) =>
         Boolean(relativePath) &&
         (showDotfiles || !isDotfileRelativePath(relativePath)) &&
-        relativePathMatchesNameFilter(relativePath, tokens)
+        pathMatchesFileNameFilterTokens(relativePath, tokens)
     )
 }
 
@@ -187,7 +146,7 @@ export function createNameFilteredFileExplorerProjection({
     if (!showGitIgnoredFiles && isPathIgnored(ignoredSet, relativePath)) {
       continue
     }
-    if (!relativePathMatchesNameFilter(relativePath, nameFilterTokens)) {
+    if (!pathMatchesFileNameFilterTokens(relativePath, nameFilterTokens)) {
       continue
     }
 

@@ -1,20 +1,42 @@
 import type { Tab } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
+import type { OpenFile } from '@/store/slices/editor'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 import { isExecutionHostAliasForWorktree } from './worktree-execution-host-alias'
+import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import type { AppState } from '@/store/types'
+import { dedupePaletteWorktrees } from './palette-repo-resolution'
+
+export function getPaletteOwnershipWorktreeIds(
+  state: Pick<AppState, 'folderWorkspaces' | 'worktreesByRepo'>
+): Pick<Worktree, 'id'>[] {
+  return [
+    ...dedupePaletteWorktrees(Object.values(state.worktreesByRepo).flat()),
+    ...(state.folderWorkspaces ?? []).map((workspace) => ({ id: folderWorkspaceKey(workspace.id) }))
+  ]
+}
+
+export function findDuplicateIds(items: readonly { id: string }[]): ReadonlySet<string> {
+  const seen = new Set<string>()
+  const duplicates = new Set<string>()
+  for (const item of items) {
+    if (seen.has(item.id)) {
+      duplicates.add(item.id)
+    }
+    seen.add(item.id)
+  }
+  return duplicates
+}
 
 export function findAmbiguousWorktreeIds(
   worktrees: readonly Pick<Worktree, 'id'>[]
 ): ReadonlySet<string> {
-  const seen = new Set<string>()
-  const ambiguous = new Set<string>()
-  for (const worktree of worktrees) {
-    if (seen.has(worktree.id)) {
-      ambiguous.add(worktree.id)
-    }
-    seen.add(worktree.id)
-  }
-  return ambiguous
+  return findDuplicateIds(worktrees)
 }
 
 export function getActiveExecutionHostIdForWorktree(
@@ -41,6 +63,38 @@ export function isUnifiedTabOwnedByWorktree(
     return isExecutionHostAliasForWorktree(tab.executionHostId, worktree)
   }
   return !ambiguousWorktreeIds.has(worktree.id)
+}
+
+export function isOpenFileOwnedByWorktree(
+  file: Pick<
+    OpenFile,
+    'externalSshTargetId' | 'operationProvenance' | 'runtimeEnvironmentId' | 'worktreeId'
+  >,
+  worktree: Pick<Worktree, 'hostId' | 'id' | 'runtimeOwnerEnvironmentId'>
+): boolean {
+  if (file.worktreeId !== worktree.id) {
+    return false
+  }
+  const operationHost = file.operationProvenance?.generation.route.executionHostId
+  if (operationHost) {
+    return isExecutionHostAliasForWorktree(operationHost, worktree)
+  }
+  if (file.externalSshTargetId) {
+    return isExecutionHostAliasForWorktree(toSshExecutionHostId(file.externalSshTargetId), worktree)
+  }
+  if (file.runtimeEnvironmentId) {
+    return isExecutionHostAliasForWorktree(
+      toRuntimeExecutionHostId(file.runtimeEnvironmentId),
+      worktree
+    )
+  }
+  return isExecutionHostAliasForWorktree(LOCAL_EXECUTION_HOST_ID, worktree)
+}
+
+export function hasOpenFileExecutionHostEvidence(
+  file: Pick<OpenFile, 'externalSshTargetId' | 'operationProvenance' | 'runtimeEnvironmentId'>
+): boolean {
+  return Boolean(file.operationProvenance || file.externalSshTargetId || file.runtimeEnvironmentId)
 }
 
 export function getUnifiedTabPaletteExecutionHostId(

@@ -1,3 +1,9 @@
+/** Carries the sign-in link of an in-flight `codex login` from main to every window. */
+export const CODEX_PENDING_LOGIN_URL_CHANGED_CHANNEL = 'codexAccounts:pendingLoginUrlChanged'
+
+/** The rejection a cancelled `codex login` produces; the Accounts pane reads it to keep a cancellation out of the error toast. */
+export const CODEX_LOGIN_CANCELLED_MESSAGE = 'Codex sign-in was cancelled.'
+
 const CODEX_AUTH_ERROR_PATTERNS = [
   /access token could not be refreshed/i,
   /authentication session could not be refreshed/i,

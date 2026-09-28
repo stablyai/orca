@@ -4,14 +4,14 @@
  * current callers also receive owner metadata.
  */
 import { describe, expect, it, vi } from 'vitest'
-import type { RpcContext, RpcRequest } from '../core'
+import { eraseRpcMethods, type RpcContext, type RpcRequest } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { AUTOMATION_METHODS } from './automations'
 import { AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 
 function method(name: string) {
-  const found = AUTOMATION_METHODS.find((entry) => entry.name === name)
+  const found = eraseRpcMethods(AUTOMATION_METHODS).find((entry) => entry.name === name)
   if (!found?.params) {
     throw new Error(`missing method ${name}`)
   }

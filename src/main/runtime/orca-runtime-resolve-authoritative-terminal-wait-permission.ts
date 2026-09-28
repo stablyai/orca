@@ -1,5 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
-import { OrcaRuntimeWithSerializeAgentPromptSubmission } from './orca-runtime-serialize-agent-prompt-submission'
+import { OrcaRuntimeWithAgentPromptRequestCorrelation } from './orca-runtime-agent-prompt-request-correlation'
 import type { RuntimeTerminalAgentStatusSnapshot } from './runtime-terminal-agent-status-query'
 import type { AgentStatus } from '../../shared/agent-detection'
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
@@ -9,14 +9,13 @@ import type { AgentStatusEntry } from '../../shared/agent-status-types'
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import { renewRuntimeMobileAgentStatusFromPtyTitle } from './runtime-mobile-agent-status-projection'
 import type { RuntimeTerminalWriteOptions } from './runtime-terminal-writer'
-import type { AgentSessionPtyWriteAdmittance } from './agent-session-pty-write-gate'
 import { getRegisteredSshState } from '../ssh/ssh-target-registry'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { AgentPromptActivity } from './agent-prompt-submission-verification'
 
-export class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission extends OrcaRuntimeWithSerializeAgentPromptSubmission {
+export class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission extends OrcaRuntimeWithAgentPromptRequestCorrelation {
   protected resolveAuthoritativeTerminalWaitPermission(
     terminal: RuntimeTerminalAgentStatusSnapshot,
     explicitStatus: { status: AgentStatus; updatedAt: number } | null,
@@ -62,7 +61,7 @@ export class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission extends O
     ptyId: string,
     action: { text?: string; enter?: boolean; interrupt?: boolean },
     payload: string,
-    options: RuntimeTerminalWriteOptions = {}
+    options: RuntimeTerminalWriteOptions
   ): Promise<void> {
     return this.terminalWriter.writeAction(ptyId, action, payload, options)
   }
@@ -70,10 +69,9 @@ export class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission extends O
   protected writeTerminalInputChunks(
     ptyId: string,
     text: string,
-    options: RuntimeTerminalWriteOptions = {},
-    admitted?: AgentSessionPtyWriteAdmittance
+    options: RuntimeTerminalWriteOptions
   ): Promise<void> {
-    return this.terminalWriter.writeChunks(ptyId, text, options, admitted)
+    return this.terminalWriter.writeChunks(ptyId, text, options)
   }
 
   /** Platform of the host whose pty transport ingests our writes -- deliberately NOT the OS

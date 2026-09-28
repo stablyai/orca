@@ -44,7 +44,8 @@ export class SshGitReadProvider {
     }
   }
 
-  private invalidateGitReads(): void {
+  /** Overridden by subclasses that own additional read caches (worktree listings). */
+  protected invalidateGitReads(): void {
     this.gitDiffReadDedupe.clear()
     this.statusReadLeaseOwner.invalidate()
     this.upstreamStatusReadOwner.invalidate()

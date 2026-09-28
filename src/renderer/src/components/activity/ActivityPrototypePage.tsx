@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
-import { ActivityScopeFilterChips } from './activity-scope-filter-controls'
 import {
   setActivityTerminalPortals,
   type ActivityTerminalPortalTarget
@@ -341,7 +340,6 @@ export default function ActivityPrototypePage(): React.JSX.Element {
           canJumpToWorkspace={canJumpToWorkspace}
           isThreadListResizing={isThreadListResizing}
           onResizeStart={onResizeStart}
-          scopeFilterRow={<ActivityScopeFilterChips />}
         />
         <ActivityThreadDetailPane
           selectedThread={selectedThread}

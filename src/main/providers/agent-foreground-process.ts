@@ -3,6 +3,7 @@ import { resolveOuterWrapperForegroundProcess } from '../../shared/foreground-wr
 import type { ProcessTableRow } from '../../shared/process-table-snapshot'
 import {
   getFreshProcessTableSnapshot,
+  getFreshShellForegroundSnapshot,
   getProcessTableSnapshot
 } from '../../shared/process-table-snapshot-reader'
 import { collectDescendantsFromIndex, getProcessTableIndex } from '../../shared/process-table-index'
@@ -13,6 +14,11 @@ import {
 } from './windows-agent-foreground-process'
 import { isShellProcess } from '../../shared/shell-process-detection'
 import { selectForegroundProcessCandidate } from '../../shared/foreground-process-selection'
+import { isWindowsShellAloneInJob } from './windows-shell-alone-in-job'
+import {
+  readWindowsProcessIdentityTableFresh,
+  type WindowsProcessIdentityRow
+} from '../windows/windows-process-table'
 
 export type { AgentForegroundResolutionOptions } from './windows-agent-foreground-process'
 export {
@@ -43,6 +49,7 @@ type ShellForegroundConfirmationOptions = {
     | ReadonlySet<number>
     | null
     | Promise<ReadonlySet<number> | null>
+  readWindowsProcessIdentityTable?: () => Promise<WindowsProcessIdentityRow[]>
 }
 
 function commandExecutable(command: string): string {
@@ -68,21 +75,26 @@ export async function confirmShellForegroundProcess(
   }
   if (process.platform === 'win32') {
     try {
-      const processIds = await options.readWindowsPtyJobProcessIds?.()
-      return processIds?.size === 1 && processIds.has(shellPid)
+      return await isWindowsShellAloneInJob(
+        shellPid,
+        spawnedShellProcess,
+        await options.readWindowsPtyJobProcessIds?.(),
+        options.readWindowsProcessIdentityTable ?? readWindowsProcessIdentityTableFresh
+      )
     } catch {
-      // Unavailable job inspection is missing proof, never a thrown confirmation.
+      // Unavailable job or process-table inspection is missing proof, never a thrown confirmation.
       return false
     }
   }
   try {
-    const index = getProcessTableIndex(await getFreshProcessTableSnapshot())
+    const index = getProcessTableIndex(await getFreshShellForegroundSnapshot())
     const root = index.byPid.get(shellPid)
     if (!root) {
       return false
     }
     const tree = [{ ...root, depth: 0 }, ...collectDescendantsFromIndex(index, shellPid)]
-    const spawnedShellBasename = executableBasename(spawnedShellProcess)
+    // A path, not a command line: splitting on whitespace would cut `/Users/John Doe/bin/zsh` to `john`.
+    const spawnedShellBasename = spawnedShellProcess.split(/[\\/]/).pop()?.toLowerCase() ?? ''
     const foregroundShell = tree
       .filter(
         (row) =>

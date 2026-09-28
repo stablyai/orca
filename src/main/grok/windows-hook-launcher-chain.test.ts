@@ -28,6 +28,7 @@ const GROK_EVENT_NAMES = [
   'SessionStart',
   'UserPromptSubmit',
   'Stop',
+  'StopCancelled',
   'StopFailure',
   'SessionEnd',
   'PreToolUse',

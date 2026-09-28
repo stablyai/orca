@@ -1,6 +1,7 @@
 import type { WorkerDispatchRow, WorkerDispatchState } from '../../types'
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
+import { transitionLifecycleWithDb } from '../lifecycle-transition'
 
 export function recordWorkerStage(
   this: OrchestrationDb,
@@ -23,27 +24,32 @@ export function recordWorkerStage(
       `Dispatch ${params.dispatchId} was not found.`
     )
   }
-  this.db
-    .prepare(
-      `UPDATE worker_dispatches
-       SET stage = ?, state = ?, worktree_id = ?, agent_terminal_handle = ?,
-           setup_state = ?, effects = ?, residual_resources = ?, last_error = ?,
-           updated_at = datetime('now')
-       WHERE dispatch_id = ?`
-    )
-    .run(
-      params.stage,
-      params.state ?? current.state,
-      params.worktreeId ?? current.worktree_id,
-      params.terminalHandle ?? current.agent_terminal_handle,
-      params.setupState ?? current.setup_state,
-      params.effects ? JSON.stringify(params.effects) : current.effects,
-      params.residualResources
-        ? JSON.stringify(params.residualResources)
-        : current.residual_resources,
-      params.lastError ?? current.last_error,
-      params.dispatchId
-    )
+  this.db.exec('SAVEPOINT worker_stage_transition')
+  try {
+    transitionLifecycleWithDb(this.db, {
+      entity: 'worker',
+      id: params.dispatchId,
+      from: current.state,
+      to: params.state ?? current.state,
+      projection: {
+        stage: params.stage,
+        worktree_id: params.worktreeId ?? current.worktree_id,
+        agent_terminal_handle: params.terminalHandle ?? current.agent_terminal_handle,
+        setup_state: params.setupState ?? current.setup_state,
+        effects: params.effects ? JSON.stringify(params.effects) : current.effects,
+        residual_resources: params.residualResources
+          ? JSON.stringify(params.residualResources)
+          : current.residual_resources,
+        last_error: params.lastError ?? current.last_error,
+        updated_at: new Date().toISOString()
+      }
+    })
+    this.db.exec('RELEASE worker_stage_transition')
+  } catch (error) {
+    this.db.exec('ROLLBACK TO worker_stage_transition')
+    this.db.exec('RELEASE worker_stage_transition')
+    throw error
+  }
   return this.getWorkerDispatch(params.dispatchId) as WorkerDispatchRow
 }
 
@@ -66,13 +72,25 @@ export function updateWorkerSetupEvidence(
   if (current.setup_state === params.setupState && current.effects === effects) {
     return { worker: current, changed: false }
   }
-  this.db
-    .prepare(
-      `UPDATE worker_dispatches
-       SET setup_state = ?, effects = ?, updated_at = datetime('now')
-       WHERE dispatch_id = ?`
-    )
-    .run(params.setupState, effects, params.dispatchId)
+  this.db.exec('SAVEPOINT worker_setup_transition')
+  try {
+    transitionLifecycleWithDb(this.db, {
+      entity: 'worker',
+      id: params.dispatchId,
+      from: current.state,
+      to: current.state,
+      projection: {
+        setup_state: params.setupState,
+        effects,
+        updated_at: new Date().toISOString()
+      }
+    })
+    this.db.exec('RELEASE worker_setup_transition')
+  } catch (error) {
+    this.db.exec('ROLLBACK TO worker_setup_transition')
+    this.db.exec('RELEASE worker_setup_transition')
+    throw error
+  }
   return {
     worker: this.getWorkerDispatch(params.dispatchId) as WorkerDispatchRow,
     changed: true

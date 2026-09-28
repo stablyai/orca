@@ -99,4 +99,25 @@ describe('pty buffer serializer registry', () => {
       expect.objectContaining({ seq: 42 })
     )
   })
+
+  it('preserves a pending escape tail for snapshot replay', async () => {
+    const { registerPtySerializer } = await import('./pty-buffer-serializer')
+    registerPtySerializer('pty-escape-tail', () => ({
+      data: 'prompt$ ',
+      cols: 80,
+      rows: 24,
+      pendingEscapeTailAnsi: '\x1b[38;5;'
+    }))
+    const serializeRequestHandler = vi.mocked(window.api.pty.onSerializeBufferRequest).mock
+      .calls[0]?.[0]
+
+    serializeRequestHandler?.({ requestId: 'request-escape-tail', ptyId: 'pty-escape-tail' })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(window.api.pty.sendSerializedBuffer).toHaveBeenCalledWith(
+      'request-escape-tail',
+      expect.objectContaining({ pendingEscapeTailAnsi: '\x1b[38;5;' })
+    )
+  })
 })

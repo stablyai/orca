@@ -1,15 +1,3 @@
-import { isTextBlock, type NativeChatBlock } from '../../../src/shared/native-chat-types'
-
-/** Concatenate a message's text blocks into a single copyable string. Tool
- *  calls/results and image refs are skipped — Copy is for the agent's prose. */
-export function nativeChatMessageText(blocks: readonly NativeChatBlock[]): string {
-  return blocks
-    .filter(isTextBlock)
-    .map((b) => b.text)
-    .join('\n\n')
-    .trim()
-}
-
 /** Pinch-to-zoom font bounds. Default 1 means no visible change until pinched. */
 export const FONT_SCALE_MIN = 0.8
 export const FONT_SCALE_MAX = 1.8

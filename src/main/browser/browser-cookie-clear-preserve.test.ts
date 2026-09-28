@@ -171,8 +171,9 @@ describe('removeTransplantableCookies — preserved families on a POPULATED jar'
   })
 
   it('preserves a family named by an IPv4 literal', async () => {
-    // Why: psl reads 127.0.0.1 as the dotted DNS name '0.1'. If registrableFamily returned that,
-    // the live 127.0.0.1 session would not match the preserve set and would be erased.
+    // Why: an IPv4 literal has no registrable domain, so the family must come from the IP branch.
+    // If registrableFamily fell through to the suffix parser, the live 127.0.0.1 session would not
+    // match the preserve set and would be erased.
     const target = jar([cookie('127.0.0.1', 'loopback-session'), cookie('.other.example', 'stale')])
 
     await removeTransplantableCookies(

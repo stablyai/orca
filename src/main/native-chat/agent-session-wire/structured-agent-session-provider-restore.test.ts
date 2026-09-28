@@ -5,12 +5,15 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import { abandonStructuredAgentSessionHost } from './structured-agent-session-host-test-abandon'
 import {
   HOST_TEST_NOW,
   HOST_TEST_SESSION,
   hostTestAttachParams,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
+import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 
 const CLAUDE_SESSION = 'claude-session'
 const hosts: StructuredAgentSessionHost[] = []
@@ -34,7 +37,12 @@ function claudeAdapter(): StructuredAgentSessionAdapter {
         observedAt: HOST_TEST_NOW
       }
     }),
-    dispatch: async () => ({ state: 'rejected', reason: 'unused' }),
+    dispatch: async () => ({
+      state: 'rejected',
+      ...agentSessionFailureWords(agentSessionFailureFact('providerRejected'), {
+        surface: 'rejection'
+      })
+    }),
     cancelTurn: async () => ({ cancelled: false }),
     answerPrompt: async () => undefined,
     setOption: async () => undefined
@@ -59,7 +67,7 @@ function createHost(
 }
 
 afterEach(async () => {
-  await Promise.all(hosts.splice(0).map((host) => host.flushAllStreamedEvents()))
+  await Promise.all(hosts.splice(0).map(abandonStructuredAgentSessionHost))
   await rm(root, { recursive: true, force: true })
   root = ''
 })

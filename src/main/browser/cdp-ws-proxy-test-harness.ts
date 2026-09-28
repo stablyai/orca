@@ -51,7 +51,8 @@ export function createMockWebContents(): MockWebContents {
       debuggerAttached = false
     }),
     sendCommand: vi.fn(
-      async (_method?: string, _params?: Record<string, unknown>, _sessionId?: string) => ({})
+      async (method?: string, _params?: Record<string, unknown>, _sessionId?: string) =>
+        method === 'Page.captureScreenshot' ? { data: 'png' } : {}
     ),
     on: vi.fn((event: string, handler: DebuggerListener) => {
       const arr = listeners.get(event) ?? []

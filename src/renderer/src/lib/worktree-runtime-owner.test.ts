@@ -3,6 +3,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import {
   getExplicitRuntimeEnvironmentIdForWorktree,
   getExecutionHostIdForWorktree,
+  getKnownExecutionHostIdForWorktree,
   getRuntimeEnvironmentIdForWorktree,
   getRuntimeSessionMirrorEnvironmentIds,
   getSettingsForWorktreeRuntimeOwner,
@@ -608,5 +609,41 @@ describe('active workspace host selection', () => {
     expect(getExecutionHostIdForWorktree(pairedHubState, PAIRED_HUB_WORKTREE_ID)).toBe(
       'ssh:hub-private-target'
     )
+  })
+})
+
+describe('getKnownExecutionHostIdForWorktree', () => {
+  const emptyCatalog: WorktreeRuntimeOwnerState = { repos: [], worktreesByRepo: {} }
+
+  it('reports silence, not local, for a git worktree with no repo row', () => {
+    expect(getKnownExecutionHostIdForWorktree(emptyCatalog, 'missing-repo::wt')).toBeNull()
+    // The routing form keeps substituting the default in the same state.
+    expect(getExecutionHostIdForWorktree(emptyCatalog, 'missing-repo::wt')).toBe('local')
+  })
+
+  it('reports silence for a folder workspace with no folder-workspace row', () => {
+    expect(getKnownExecutionHostIdForWorktree(emptyCatalog, 'folder:missing')).toBeNull()
+    expect(getExecutionHostIdForWorktree(emptyCatalog, 'folder:missing')).toBe('local')
+  })
+
+  it.each([
+    ['an ownerless repo row', { repos: [{ id: 'r' }] }, 'r::wt', 'local'],
+    ['an SSH repo row', { repos: [{ id: 'r', connectionId: 'box' }] }, 'r::wt', 'ssh:box'],
+    [
+      'a per-worktree host',
+      { worktreesByRepo: { r: [{ id: 'r::wt', repoId: 'r', hostId: 'ssh:box' }] } },
+      'r::wt',
+      'ssh:box'
+    ],
+    [
+      'a folder-workspace row',
+      { folderWorkspaces: [{ id: 'f', projectGroupId: 'g' }] },
+      'folder:f',
+      'local'
+    ],
+    ['the floating workspace', {}, FLOATING_TERMINAL_WORKTREE_ID, 'local']
+  ] as const)('answers positively for %s', (_label, catalog, worktreeId, expected) => {
+    expect(getKnownExecutionHostIdForWorktree(catalog, worktreeId)).toBe(expected)
+    expect(getExecutionHostIdForWorktree(catalog, worktreeId)).toBe(expected)
   })
 })

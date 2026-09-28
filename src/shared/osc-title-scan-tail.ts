@@ -1,3 +1,5 @@
+import { ownRetainedString } from './own-retained-string'
+
 const OSC_TITLE_SCAN_TAIL_LIMIT = 4096
 const OSC_TITLE_PREFIX_LENGTH = 4
 const OSC_TITLE_CODES = new Set(['0', '1', '2'])
@@ -7,7 +9,8 @@ export function extractOscTitleScanTail(input: string): string {
   if (lastOsc !== -1) {
     const suffix = input.slice(lastOsc)
     if (!suffix.includes('\x07') && !suffix.includes('\x1b\\')) {
-      return extractIncompleteTitleOscTail(suffix)
+      // Own the tail so it stops pinning the consumed chunk it was sliced from.
+      return ownRetainedString(extractIncompleteTitleOscTail(suffix))
     }
     return input.endsWith('\x1b') ? '\x1b' : ''
   }

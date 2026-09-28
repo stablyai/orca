@@ -5,7 +5,7 @@ import { parseBranchDiff } from './git-handler-utils'
 import { parseNumstat } from '../shared/git-uncommitted-line-stats'
 import { isNoUpstreamError, normalizeGitErrorMessage } from '../shared/git-remote-error'
 import { upstreamOnlyCommitsArePatchEquivalent } from '../shared/git-upstream-status'
-import { assertGitPushTargetShape } from '../shared/git-push-target-validation'
+import { assertValidGitPushTarget } from '../shared/git-push-target-validation'
 import { getPublishTargetStatus, type GitCommandRunner } from '../shared/git-publish-target-status'
 import type { GitPushTarget } from '../shared/worktree/types'
 import { getEffectiveGitUpstreamStatus } from '../shared/git-effective-upstream'
@@ -46,7 +46,7 @@ export class GitHandlerComparisonOperations extends GitHandlerOperationContext {
 
     try {
       if (params.pushTarget !== undefined) {
-        assertGitPushTargetShape(params.pushTarget)
+        assertValidGitPushTarget(params.pushTarget)
         const pushTarget = params.pushTarget as GitPushTarget
         await this.git(['check-ref-format', '--branch', pushTarget.branchName], worktreePath)
         return await getPublishTargetStatus(

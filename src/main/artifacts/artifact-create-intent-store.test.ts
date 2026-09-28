@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process'
 import { mkdtemp, readFile, readdir, rm, stat, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -16,9 +15,14 @@ import {
   getOrCreateArtifactCreateIntent,
   removeArtifactCreateIntent
 } from './artifact-create-intent-store'
+import { runProcessSync } from '../../shared/child-process/run-process'
+import { __resetSecureFileWindowsUserSidForTests } from '../../shared/secure-file'
 import type { ArtifactShareScope } from './artifact-share-record-store'
 
-vi.mock('node:child_process', () => ({ execFile: vi.fn(), execFileSync: vi.fn() }))
+vi.mock('../../shared/child-process/run-process', () => ({
+  runProcess: vi.fn(),
+  runProcessSync: vi.fn()
+}))
 
 const createdPaths: string[] = []
 const scope: ArtifactShareScope = {
@@ -168,12 +172,26 @@ describe('artifact create intent store', () => {
     expect((await readdir(directory)).some((name) => name.endsWith('.tmp'))).toBe(false)
   })
 
-  it('hardens one Windows journal directory without per-file PowerShell launches', async () => {
+  it('hardens one Windows journal directory without per-file ACL launches', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    vi.mocked(execFileSync).mockImplementation((file) =>
-      String(file).endsWith('whoami.exe') ? '"USER","S-1-5-21-1000"' : ''
-    )
+    const ok = { code: 0, signal: null, stdout: '', stderr: '', timedOut: false }
+    // Earlier cases in this file already resolved (and cached) the SID against an unstubbed mock.
+    __resetSecureFileWindowsUserSidForTests()
+    vi.mocked(runProcessSync).mockImplementation((spec) => {
+      if (spec.program.endsWith('whoami.exe')) {
+        return { ...ok, stdout: '"USER","S-1-5-21-1000"' }
+      }
+      const args = spec.args ?? []
+      if (args.length > 1) {
+        return ok // /reset and the /grant:r pass
+      }
+      // The verify pass re-reads the DACL; answer with the three protected inheritable rules.
+      const rules = ['host\\me', 'NT AUTHORITY\\SYSTEM', 'BUILTIN\\Administrators'].map(
+        (name, index) => (index === 0 ? `${args[0]} ${name}:(OI)(CI)(F)` : `   ${name}:(OI)(CI)(F)`)
+      )
+      return { ...ok, stdout: `${rules.join('\r\n')}\r\n\r\nSuccessfully processed 1 files\r\n` }
+    })
     try {
       const userDataPath = await createUserDataPath()
       getOrCreateArtifactCreateIntent(
@@ -193,16 +211,20 @@ describe('artifact create intent store', () => {
         body
       )
 
-      const powershellCalls = vi
-        .mocked(execFileSync)
-        .mock.calls.filter(([file]) => String(file).endsWith('powershell.exe'))
-      expect(powershellCalls).toHaveLength(1)
-      expect((powershellCalls[0]![1] as string[]).at(-1)).toBe('1')
+      // One harden across both intents: counted by its /reset pass, which opens each harden.
+      const aclCalls = vi
+        .mocked(runProcessSync)
+        .mock.calls.map(([spec]) => spec)
+        .filter((spec) => spec.program.endsWith('icacls.exe'))
+      expect(aclCalls.filter((spec) => spec.args?.includes('/reset'))).toHaveLength(1)
+      // The child intent files rely on inheritance, so the directory rules must carry (OI)(CI).
+      const grant = aclCalls.find((spec) => spec.args?.includes('/grant:r'))
+      expect(grant?.args?.filter((arg) => arg.endsWith(':(OI)(CI)(F)'))).toHaveLength(3)
     } finally {
       if (originalPlatform) {
         Object.defineProperty(process, 'platform', originalPlatform)
       }
-      vi.mocked(execFileSync).mockReset()
+      vi.mocked(runProcessSync).mockReset()
     }
   })
 

@@ -188,10 +188,10 @@ function expectTabContainerWidth(markup: string, root: string): void {
   const container = firstOpeningTag(markup)
   // Why: pinned literally — a definite `w-*` is what stops live title updates from resizing
   // every tab, so asserting against the constant would let that guarantee be edited away.
-  const widthClasses = 'w-[180px] min-w-[88px] min-[1280px]:w-[220px]'
+  const widthClasses = 'w-[180px] min-w-[72px] min-[1280px]:w-[220px]'
   expect(container).toContain(widthClasses)
   expect(root).not.toContain('w-[180px]')
-  expect(root).not.toContain('min-w-[88px]')
+  expect(root).not.toContain('min-w-[72px]')
   expect(root).not.toContain('min-[1280px]:w-[220px]')
 }
 

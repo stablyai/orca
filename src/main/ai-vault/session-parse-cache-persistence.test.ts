@@ -29,9 +29,12 @@ import {
   parseAgentSessionFileCached,
   resetSessionParseCacheForTests,
   seedSessionParseCache,
+  snapshotSessionParseCacheForPersistence,
   type PersistedSessionParseCacheEntry,
   type SessionParseStats
 } from './session-scanner-parse-cache'
+import { getSessionParseCacheEntry } from './session-parse-cache-store'
+import type { SessionSidecarObservation } from './session-sidecar-stat'
 import { isolatedScanRoots } from './session-scanner-test-fixtures'
 import { parseClaudeSessionFile } from './session-scanner-primary-parsers'
 import type { FileWithMtime, SessionFileCandidate } from './session-scanner-types'
@@ -524,5 +527,40 @@ describe('session parse cache persistence', () => {
     expect(await readdir(root)).toEqual(expect.arrayContaining(['blocker']))
     expect((await readdir(root)).filter((name) => name.endsWith('.tmp'))).toEqual([])
     debugSpy.mockRestore()
+  })
+})
+
+describe('sidecar observations survive the round trip', () => {
+  const OBSERVATIONS: [string, SessionSidecarObservation | undefined][] = [
+    ['an object', { path: '/chats/a/meta.json', mtimeMs: 42, sizeBytes: 7 }],
+    ['none', 'none'],
+    ['unknown', 'unknown'],
+    ['absent', undefined]
+  ]
+
+  it.each(OBSERVATIONS)('restores %s exactly', async (_label, sidecar) => {
+    const root = await makeTempDir()
+    const cacheFile = join(root, 'session-parse-cache.json')
+    const path = await writeTranscript(root)
+    initSessionParseCachePersistence({ filePath: cacheFile, appVersion: APP_VERSION })
+    await ensureSessionParseCacheLoaded()
+
+    const stats = createSessionParseStats()
+    await parseAgentSessionFileCached(await claudeCandidate(path), process.platform, stats)
+    const seeded = snapshotSessionParseCacheForPersistence().map(
+      ([entryPath, entry]): [string, PersistedSessionParseCacheEntry] => [
+        entryPath,
+        sidecar === undefined ? entry : { ...entry, sidecar }
+      ]
+    )
+    resetSessionParseCacheForTests()
+    seedSessionParseCache(seeded)
+    scheduleSessionParseCachePersist(stats)
+    await flushSessionParseCachePersistForTests()
+
+    simulateRestart(cacheFile)
+    await ensureSessionParseCacheLoaded()
+
+    expect(getSessionParseCacheEntry(path)?.sidecar).toEqual(sidecar)
   })
 })

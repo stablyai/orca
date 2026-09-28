@@ -75,6 +75,8 @@ export function parseWindowsCimProcessRows(stdout: string): WindowsProcessRow[] 
       return []
     }
     const name = fieldAsString(row.Name)
+    // No working set: Win32_Process reports one, but nothing reads memory off
+    // this table and asking widens an already costly scan.
     return [{ pid, ppid, name, command: fieldAsString(row.CommandLine) || name }]
   })
 }

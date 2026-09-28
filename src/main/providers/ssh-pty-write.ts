@@ -1,6 +1,14 @@
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { encodeJsonRpcFrame, TIMEOUT_MS } from '../ssh/relay-protocol'
-import { MULTIPLEXER_ORDINARY_QUEUE_MAX_BYTES } from '../ssh/ssh-multiplexer-transport-writer'
+import {
+  MULTIPLEXER_ORDINARY_QUEUE_MAX_BYTES,
+  toWriteSettlement
+} from '../ssh/ssh-multiplexer-transport-writer'
+import {
+  writeRefused,
+  writeUnverifiable,
+  type WriteSettlement
+} from '../../shared/pty-write-settlement'
 
 // Allow ordinary-lane backpressure to clear well beyond the mux health window.
 export const SSH_PTY_WRITE_SETTLEMENT_TIMEOUT_MS = TIMEOUT_MS * 3
@@ -35,34 +43,40 @@ export function writeToSshPty(
   return !mux.isDisposed()
 }
 
+/**
+ * Three-valued: a pre-write refusal is proven, a lost or timed-out settlement is
+ * `unverifiable` with the handoff fact attached. Neither is ever flattened to a boolean.
+ */
 export function writeToSshPtyWithSettlement(
   mux: SshChannelMultiplexer,
   relayPtyId: string,
   data: string
-): Promise<boolean> {
+): Promise<WriteSettlement> {
   if (mux.isDisposed()) {
-    return Promise.resolve(false)
+    return Promise.resolve(writeRefused('transport_disposed'))
   }
   try {
     assertSshPtyWriteFitsTransport(relayPtyId, data)
   } catch {
-    return Promise.resolve(false)
+    return Promise.resolve(writeRefused('payload_exceeds_transport_limit'))
   }
   return new Promise((resolve) => {
     let settled = false
-    const finish = (accepted: boolean): void => {
+    const finish = (settlement: WriteSettlement): void => {
       if (settled) {
         return
       }
       settled = true
       clearTimeout(timer)
-      resolve(accepted)
+      resolve(settlement)
     }
     const timer = setTimeout(() => {
       mux.dispose('connection_lost')
-      finish(false)
+      finish(writeUnverifiable('settlement_timeout', true))
     }, SSH_PTY_WRITE_SETTLEMENT_TIMEOUT_MS)
     timer.unref?.()
-    mux.notifyWithSettlement('pty.data', { id: relayPtyId, data }, (result) => finish(result.ok))
+    mux.notifyWithSettlement('pty.data', { id: relayPtyId, data }, (result) =>
+      finish(toWriteSettlement(result))
+    )
   })
 }

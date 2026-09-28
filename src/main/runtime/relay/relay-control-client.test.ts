@@ -1,12 +1,17 @@
 import { createHash, createHmac, randomBytes } from 'node:crypto'
 import { EventEmitter } from 'node:events'
+import { createServer, type Server, type Socket } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import nacl from 'tweetnacl'
 import { WebSocketServer, type WebSocket } from 'ws'
 import type { E2EEKeypair } from '../e2ee-keypair'
+import { MOBILE_RELAY_CLOSE_CODE } from '../../../shared/mobile-relay-close-codes'
 import { RelayControlClient } from './relay-control-client'
 
 const encoder = new TextEncoder()
+
+/** A JSON control frame, including the forward-compat frames the client must ignore. */
+type ControlFrame = { type: string } & Record<string, unknown>
 const HOST_PROOF_DOMAIN = 'orca-relay-host-proof/v1'
 const CHALLENGE_DOMAIN = 'orca-relay-host-challenge/v1'
 
@@ -80,11 +85,25 @@ function nextJson(ws: WebSocket): Promise<Record<string, unknown>> {
 describe('RelayControlClient', () => {
   const servers: WebSocketServer[] = []
   const clients: RelayControlClient[] = []
+  /** Raw TCP listeners that accept but never upgrade; they have no WebSocketServer to close. */
+  const silentServers: Server[] = []
+  const silentSockets: Socket[] = []
 
   afterEach(async () => {
     for (const client of clients.splice(0)) {
       client.closeNow()
     }
+    for (const socket of silentSockets.splice(0)) {
+      socket.destroy()
+    }
+    await Promise.all(
+      silentServers.splice(0).map(
+        (server) =>
+          new Promise<void>((resolve) => {
+            server.close(() => resolve())
+          })
+      )
+    )
     await Promise.all(
       servers.splice(0).map(
         (server) =>
@@ -123,6 +142,38 @@ describe('RelayControlClient', () => {
       onDrain: vi.fn(),
       onClose: vi.fn(),
       connectDeadlineMs: 20
+    })
+    clients.push(client)
+
+    await expect(client.connect()).rejects.toThrow('relay_control_connect_timeout')
+  })
+
+  // Why: the connect deadline is armed in the same tick as the socket and expires from
+  // 'opening' too, so it already bounds a connect that never opens. Without this a reader
+  // concludes the phase is uncovered and adds a second, transport-level bound for it.
+  it('expires a connect whose upgrade is never answered', async () => {
+    const server = createServer((socket) => {
+      silentSockets.push(socket)
+    })
+    silentServers.push(server)
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const address = server.address()
+    if (!address || typeof address === 'string') {
+      throw new Error('expected TCP relay test server')
+    }
+    const keypair = nacl.box.keyPair()
+    const client = new RelayControlClient({
+      cellUrl: `http://127.0.0.1:${address.port}`,
+      relayJwt: 'scoped-token',
+      relayHostId: createHash('sha256').update(keypair.publicKey).digest('base64url').slice(0, 16),
+      assignmentEpoch: 1,
+      identity: { userId: 'user-1', profileId: 'profile-1', organizationId: 'org-1' },
+      keypair: { ...keypair, publicKeyB64: Buffer.from(keypair.publicKey).toString('base64') },
+      appVersion: '1.2.3',
+      onConnectionOpen: vi.fn(),
+      onDrain: vi.fn(),
+      onClose: vi.fn(),
+      connectDeadlineMs: 150
     })
     clients.push(client)
 
@@ -184,17 +235,21 @@ describe('RelayControlClient', () => {
       .update(hostKeys.publicKey)
       .digest('base64url')
       .slice(0, 16)
-    const accepted = new Promise<{ socket: WebSocket; authorization: string; path: string }>(
-      (resolve) => {
-        server.once('connection', (socket, request) =>
-          resolve({
-            socket,
-            authorization: String(request.headers.authorization),
-            path: request.url ?? ''
-          })
-        )
-      }
-    )
+    const accepted = new Promise<{
+      socket: WebSocket
+      authorization: string
+      capabilities: string
+      path: string
+    }>((resolve) => {
+      server.once('connection', (socket, request) =>
+        resolve({
+          socket,
+          authorization: String(request.headers.authorization),
+          capabilities: String(request.headers['x-orca-host-capabilities']),
+          path: request.url ?? ''
+        })
+      )
+    })
     const onConnectionOpen = vi.fn()
     const onDrain = vi.fn()
     const onClose = vi.fn()
@@ -212,8 +267,11 @@ describe('RelayControlClient', () => {
     })
     clients.push(client)
     const connecting = client.connect()
-    const { socket, authorization, path } = await accepted
+    const { socket, authorization, capabilities, path } = await accepted
     expect(authorization).toBe('Bearer scoped-token')
+    // Advertised on the upgrade, never in host-hello: a cell that predates the
+    // capability parses host-hello strictly and would refuse the handshake.
+    expect(capabilities).toBe('pending-conn-details,idle-regional-rehome-v1')
     expect(path).toBe('/v1/host/control')
     const hello = await nextJson(socket)
     expect(hello).toMatchObject({
@@ -402,14 +460,35 @@ class FakeControlSocket extends EventEmitter {
     this.close(1006)
   }
 
-  deliver(message: object): void {
+  pings = 0
+
+  ping(): void {
+    if (this.readyState !== 1) {
+      throw new Error('socket_not_open')
+    }
+    this.pings += 1
+  }
+
+  /** The RFC 6455 reply a live peer owes any ping, delivered out of band. */
+  pong(): void {
+    this.emit('pong')
+  }
+
+  deliver(message: ControlFrame): void {
     this.emit('message', JSON.stringify(message), false)
   }
 }
 
-function scriptedControl(options: { closeWithAck?: boolean; issuedAtOffsetMs?: number } = {}): {
+function scriptedControl(
+  options: {
+    closeWithAck?: boolean
+    issuedAtOffsetMs?: number
+    livenessRandom?: () => number
+  } = {}
+): {
   client: RelayControlClient
   socket: FakeControlSocket
+  onConnectionOpen: ReturnType<typeof vi.fn>
   onClose: ReturnType<typeof vi.fn>
 } {
   const hostKeys = nacl.box.keyPair()
@@ -477,21 +556,24 @@ function scriptedControl(options: { closeWithAck?: boolean; issuedAtOffsetMs?: n
     }
   }
   const onClose = vi.fn()
+  const onConnectionOpen = vi.fn()
   const client = new RelayControlClient({
     cellUrl: origin,
+    // Midpoint random => no jitter, so probe boundaries are exact in tests.
+    livenessRandom: options.livenessRandom ?? (() => 0.5),
     relayJwt: 'scoped-token',
     relayHostId,
     assignmentEpoch: 3,
     identity: { userId: 'user-1', profileId: 'profile-1', organizationId: 'org-1' },
     keypair,
     appVersion: '1.2.3',
-    onConnectionOpen: vi.fn(),
+    onConnectionOpen,
     onDrain: vi.fn(),
     onClose,
     createSocket: () => socket as unknown as WebSocket
   })
   queueMicrotask(() => socket.emit('open'))
-  return { client, socket, onClose }
+  return { client, socket, onConnectionOpen, onClose }
 }
 
 describe('RelayControlClient scripted-socket lifecycle', () => {
@@ -549,5 +631,210 @@ describe('RelayControlClient scripted-socket lifecycle', () => {
 
     vi.advanceTimersByTime(91_000)
     expect(client.isLive()).toBe(false)
+  })
+
+  it('ignores an unrecognized control message without closing the active control', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { client, socket, onClose } = scriptedControl()
+    await client.connect()
+    expect(client.isLive()).toBe(true)
+
+    // A newer relay opcode the desktop schema does not know. Rule 2 of
+    // remote-wire-compatibility: an unknown-but-well-formed frame is dropped,
+    // never fatal to a live control.
+    socket.deliver({ type: 'relay-hint', v: 2, hint: 'future-feature' })
+
+    expect(client.isLive()).toBe(true)
+    expect(socket.readyState).toBe(1)
+    expect(onClose).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('ignores a reply whose request already timed out instead of self-closing', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { client, socket, onClose } = scriptedControl()
+    await client.connect()
+
+    // A relay control-error carrying a reqId with no live waiter — e.g. a late
+    // reply that arrived after the desktop's request deadline deleted it, or the
+    // relay's no-op error for a command it could not route. Must not be fatal.
+    socket.deliver({ type: 'control-error', reqId: 'expired-req', code: 'unknown_control_message' })
+
+    expect(client.isLive()).toBe(true)
+    expect(socket.readyState).toBe(1)
+    expect(onClose).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('still opens a connection the relay handed over before it asked us to drain', async () => {
+    const { client, socket, onConnectionOpen } = scriptedControl()
+    await client.connect()
+    socket.deliver({ type: 'drain', graceMs: 5_000, recovery: 'resolve-director' })
+
+    // A drain-only cell refuses new phones, so this conn-open was issued before
+    // the drain and only this cell holds the phone waiting on it.
+    socket.deliver({
+      type: 'conn-open',
+      connId: 'conn-1',
+      connTicket: 'T'.repeat(43),
+      kind: 'resume',
+      relayDeviceId: 'device-1',
+      attachDeadlineMs: 10_000
+    })
+
+    expect(onConnectionOpen).toHaveBeenCalledOnce()
+    expect(onConnectionOpen).toHaveBeenCalledWith(
+      expect.objectContaining({ connId: 'conn-1', connTicket: 'T'.repeat(43) })
+    )
+    expect(client.isLive()).toBe(true)
+  })
+
+  it('still tears down a malformed (non-JSON) control frame', async () => {
+    const { client, socket, onClose } = scriptedControl()
+    await client.connect()
+
+    socket.emit('message', 'not-json{', false)
+
+    expect(client.isLive()).toBe(false)
+    expect(socket.readyState).toBe(3)
+    expect(onClose).toHaveBeenCalledWith(MOBILE_RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL)
+  })
+})
+
+// STA-7672: a Windows desktop behind NAT/VPN (or resuming from sleep) can hold a
+// half-open control socket that send() writes into happily while nothing comes
+// back. Every pairing request then failed at its 10s deadline against a socket
+// the 75s silence watchdog would not reap for another minute-plus.
+describe('RelayControlClient half-open recovery', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('tears down only after a run of unanswered probes, not the first one', async () => {
+    vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { client, socket, onClose } = scriptedControl()
+    await client.connect()
+    const invite = client.createInvite('device-1').catch((error: Error) => error.message)
+
+    await vi.advanceTimersByTimeAsync(10_000)
+
+    // The request deadline alone must not close the control — a close would have
+    // rejected as relay_control_closed_<code> instead.
+    expect(await invite).toBe('relay_control_request_timeout')
+    expect(socket.pings).toBe(1)
+    expect(socket.readyState).toBe(1)
+
+    // One unanswered probe is UNKNOWN, not death (STA-3320): a lone swallowed
+    // pong is routine on exactly the VPN/cellular paths this detection targets.
+    await vi.advanceTimersByTimeAsync(8_000)
+    expect(socket.pings).toBe(2)
+    expect(socket.readyState).toBe(1)
+    await vi.advanceTimersByTimeAsync(8_000)
+    expect(socket.pings).toBe(3)
+    expect(socket.readyState).toBe(1)
+
+    // Third consecutive miss is evidence.
+    await vi.advanceTimersByTimeAsync(8_000)
+    expect(socket.readyState).toBe(3)
+    expect(onClose).toHaveBeenCalledWith(1006)
+    expect(client.isLive()).toBe(false)
+    // Named in the log so a fleet-wide false positive would be visible.
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('reason=probe-unanswered'))
+    warn.mockRestore()
+  })
+
+  it('retires the whole probe run on a single pong', async () => {
+    vi.useFakeTimers()
+    const { client, socket, onClose } = scriptedControl()
+    await client.connect()
+    const invite = client.createInvite('device-1').catch((error: Error) => error.message)
+
+    await vi.advanceTimersByTimeAsync(10_000)
+    await invite
+    await vi.advanceTimersByTimeAsync(8_000)
+    expect(socket.pings).toBe(2)
+    socket.pong()
+
+    // A later probe run must start from zero, not inherit the earlier miss.
+    await vi.advanceTimersByTimeAsync(40_000)
+    expect(socket.readyState).toBe(1)
+    expect(onClose).not.toHaveBeenCalled()
+    expect(client.isLive()).toBe(true)
+  })
+
+  it("clears an armed probe on the relay's next ping, with no pong involved", async () => {
+    vi.useFakeTimers()
+    const { client, socket, onClose } = scriptedControl()
+    await client.connect()
+    const invite = client.createInvite('device-1').catch((error: Error) => error.message)
+
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(socket.pings).toBe(1)
+    await invite
+
+    // The probe run (3 x 8s) outlasts the relay's 15s ping cadence on purpose:
+    // relay liveness runs at the application layer, so a middlebox that swallows
+    // RFC 6455 control frames must not be able to make this a reconnect loop.
+    await vi.advanceTimersByTimeAsync(15_000)
+    socket.deliver({ type: 'ping', t: Date.now() })
+    await vi.advanceTimersByTimeAsync(40_000)
+
+    expect(socket.readyState).toBe(1)
+    expect(onClose).not.toHaveBeenCalled()
+    expect(client.isLive()).toBe(true)
+  })
+
+  it('does not probe a control that kept talking while a request went unanswered', async () => {
+    vi.useFakeTimers()
+    const { client, socket } = scriptedControl()
+    await client.connect()
+    const invite = client.createInvite('device-1').catch((error: Error) => error.message)
+
+    await vi.advanceTimersByTimeAsync(5_000)
+    socket.deliver({ type: 'ping', t: Date.now() })
+    await vi.advanceTimersByTimeAsync(5_000)
+
+    // A reply running past its deadline under relay DB load is not a dead
+    // socket; tearing this control down would strand every phone on the cell.
+    expect(await invite).toBe('relay_control_request_timeout')
+    expect(socket.pings).toBe(0)
+    expect(client.isLive()).toBe(true)
+  })
+
+  it('spreads probe deadlines so one slow cell cannot synchronize a cohort', async () => {
+    vi.useFakeTimers()
+    // Earliest jitter (-10%) fires at 7.2s; the unjittered boundary is 8s.
+    const { client, socket } = scriptedControl({ livenessRandom: () => 0 })
+    await client.connect()
+    void client.createInvite('device-1').catch(() => undefined)
+
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(socket.pings).toBe(1)
+    await vi.advanceTimersByTimeAsync(7_300)
+    expect(socket.pings).toBe(2)
+  })
+
+  it('logs the cell and the silence without altering the rejection', async () => {
+    vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { client } = scriptedControl()
+    await client.connect()
+    const invite = client.createInvite('device-1').catch((error: Error) => error.message)
+
+    await vi.advanceTimersByTimeAsync(10_000)
+
+    // The message is a classification key: mobile-relay-mint-failure.ts matches
+    // it against an anchored /^relay_[a-z0-9_]{1,74}$/, so a diagnostic suffix
+    // silently downgrades this to the generic relay_mint_failed fallback.
+    expect(await invite).toBe('relay_control_request_timeout')
+
+    const logged = warn.mock.calls.map((call) => String(call[0])).join('\n')
+    expect(logged).toContain('reqKind=invite')
+    expect(logged).toContain('cell=http://relay.test')
+    expect(logged).toContain('socketAgeMs=10000')
+    expect(logged).toContain('sinceInboundMs=10000')
+    expect(logged).toContain('probe=armed')
+    warn.mockRestore()
   })
 })

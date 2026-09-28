@@ -48,9 +48,10 @@ const PANE_OWNER_RANK: readonly {
 ]
 
 /**
- * The single authoritative resolver for "which agent owns this pane", shared by
- * the tab-icon resolver, the terminal-pane display/renderer owner, and the
- * mirrored-tab title owner so they cannot drift apart.
+ * Compatibility owner lookup shared by the existing consumer surfaces.
+ *
+ * Tranche 0 intentionally preserves this pre-migration precedence byte-for-byte; switching
+ * these consumers to canonical evidence belongs to tranche 1.
  *
  * Why this precedence: launch intent is the authoritative bootstrap before any
  * process signal exists, so it leads. Once launch metadata is gone — a mirrored

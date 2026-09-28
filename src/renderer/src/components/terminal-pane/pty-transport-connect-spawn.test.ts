@@ -26,6 +26,24 @@ describe('createIpcPtyTransport', () => {
     restorePtySpecWindow(originalWindow)
   })
 
+  it.each([0, 1, 420])(
+    'preserves snapshot sequence and keyboard proof %s across IPC reattach',
+    async (seq) => {
+      const { createIpcPtyTransport } = await import('./pty-transport')
+      vi.mocked(window.api.pty.spawn).mockResolvedValue({
+        id: 'existing',
+        isReattach: true,
+        snapshot: 'ready',
+        snapshotSeq: seq,
+        snapshotKittyKeyboardFlags: 0
+      })
+      const transport = createIpcPtyTransport({})
+      const result = await transport.connect({ url: '', sessionId: 'existing', callbacks: {} })
+      expect(result).toMatchObject({ snapshotSeq: seq, snapshotKittyKeyboardFlags: 0 })
+      transport.detach?.()
+    }
+  )
+
   it('leaves title tracking to the PTY data stream (no OpenCode IPC channel)', async () => {
     // Why: the OpenCode status IPC channel is gone (now the agent-hooks server), so the transport has no per-agent status callback.
     const { createIpcPtyTransport } = await import('./pty-transport')
@@ -48,6 +66,22 @@ describe('createIpcPtyTransport', () => {
     ).resolves.toBeUndefined()
 
     expect(spawn).not.toHaveBeenCalled()
+  })
+
+  it('keeps the recovery hint and raw diagnostic from a wrapped spawn error', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    vi.mocked(window.api.pty.spawn).mockRejectedValueOnce(
+      new Error(
+        "Error invoking remote method 'pty:spawn': Error: Close unused terminals, then try again.\nnode-pty: open_slave failed: EMFILE (errno 24)"
+      )
+    )
+    const onError = vi.fn()
+
+    await createIpcPtyTransport({}).connect({ url: '', callbacks: { onError } })
+
+    expect(onError).toHaveBeenCalledWith(
+      'Close unused terminals, then try again.\nnode-pty: open_slave failed: EMFILE (errno 24)'
+    )
   })
 
   it('threads provider command ownership through the spawn IPC', async () => {

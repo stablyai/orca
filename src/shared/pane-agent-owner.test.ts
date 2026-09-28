@@ -37,6 +37,42 @@ describe('resolvePaneAgentOwner', () => {
     ).toBe('omp')
   })
 
+  it('preserves the pre-tranche precedence for every conflicting owner tier', () => {
+    expect(
+      resolvePaneAgentOwnerRecord({
+        launchAgent: 'claude',
+        hookAgent: 'codex',
+        siblingHookAgent: 'gemini',
+        completedHookAgent: 'pi',
+        sleepingSessionAgent: 'omp'
+      })
+    ).toEqual({ agent: 'claude', ownerIsLaunch: true })
+    expect(
+      resolvePaneAgentOwnerRecord({
+        hookAgent: 'claude',
+        siblingHookAgent: 'codex',
+        completedHookAgent: 'gemini',
+        siblingCompletedHookAgent: 'pi',
+        sleepingSessionAgent: 'omp'
+      })
+    ).toEqual({ agent: 'claude', ownerIsLaunch: false })
+    expect(
+      resolvePaneAgentOwnerRecord({
+        siblingHookAgent: 'codex',
+        completedHookAgent: 'claude',
+        siblingCompletedHookAgent: 'gemini',
+        sleepingSessionAgent: 'omp'
+      })
+    ).toEqual({ agent: 'codex', ownerIsLaunch: false })
+    expect(
+      resolvePaneAgentOwnerRecord({
+        completedHookAgent: 'claude',
+        siblingCompletedHookAgent: 'codex',
+        sleepingSessionAgent: 'gemini'
+      })
+    ).toEqual({ agent: 'claude', ownerIsLaunch: false })
+  })
+
   it('returns null when no owner evidence exists', () => {
     expect(resolvePaneAgentOwner({})).toBeNull()
     expect(resolvePaneAgentOwner({ launchAgent: null, hookAgent: undefined })).toBeNull()

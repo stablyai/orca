@@ -2,10 +2,12 @@ import { isRemoteAgentHooksEnabled } from '../../../../shared/agent-hook-relay'
 import type { AgentSessionOwnerBinding } from '../../../../shared/agent-session-host-authority'
 import { agentSessionOwnerBindingsEqual } from '../../../../shared/claimed-agent-pty-owner'
 import { addNodePtyRecoveryHint } from '../../../daemon/node-pty-error-hints'
+import { SessionNotFoundError } from '../../../daemon/daemon-errors'
 import type { Store } from '../../../persistence'
 import {
   isSshPtyAbsentFromRelayError,
-  isSshPtyNotFoundError
+  isSshPtyNotFoundError,
+  isSshPtyProvenExitedOnRelayError
 } from '../../../providers/ssh-pty-errors'
 import type { IPtyProvider } from '../../../providers/types'
 import { markClaudePtyExited } from '../../../claude-accounts/live-pty-gate'
@@ -64,6 +66,33 @@ export function isPtyAlreadyGoneError(err: unknown): boolean {
     isSshPtyAbsentFromRelayError(err) ||
     /Session not found/i.test(message)
   )
+}
+
+/**
+ * Narrower than {@link isPtyAlreadyGoneError}, for the one caller that retires a durable pane
+ * binding rather than just releasing in-memory state: only a typed answer from the host that owns
+ * the process may authorise that. The bare `PTY ".+" not found` text is the relay's raw wire
+ * wording, which the SSH reattach path always types before it reaches a pane; matching the text
+ * instead would let any untyped string carrying that phrase unbind a live pane
+ * (docs/reference/ssh-execution-boundary.md).
+ */
+export function isHostReportedPtyAbsenceError(err: unknown): boolean {
+  return isSshPtyAbsentFromRelayError(err) || err instanceof SessionNotFoundError
+}
+
+/**
+ * The half of {@link isHostReportedPtyAbsenceError} that actually observed the process, and so the
+ * only half that may certify an exit.
+ *
+ * The relay's plain absence answer is excluded because `pty.attach` gives it for an id its session
+ * map never had as readily as for a pid it probed — after a relay restart, every id the previous
+ * one minted. `SessionNotFoundError` is included because the process answering is the one that owns
+ * the PTY: the in-process registry itself, or a daemon whose endpoint is live (a gone endpoint
+ * raises `isDaemonEndpointGoneError` instead), so its absence is an observation rather than a lost
+ * route (docs/reference/ssh-execution-boundary.md).
+ */
+export function isObservedPtyExitEvidence(err: unknown): boolean {
+  return isSshPtyProvenExitedOnRelayError(err) || err instanceof SessionNotFoundError
 }
 
 export function delay(ms: number): Promise<void> {

@@ -65,8 +65,15 @@ export type SshTarget = {
 export type SshTargetCreateInput = Omit<SshTarget, 'id' | 'generation'>
 export type SshTargetUpdateInput = Partial<SshTargetCreateInput>
 
-/** Public target identity safe to mirror to a paired client. */
-export type SshTargetSummary = Pick<SshTarget, 'id' | 'label' | 'generation'>
+/** Public target identity and observed host metadata safe to mirror to a paired client. */
+export type SshTargetSummary = Pick<SshTarget, 'id' | 'label' | 'generation'> & {
+  /** The SSH host's OS, when it has connected and the relay has detected it. */
+  remotePlatform?: SshRemotePlatform
+  /** Whether the target currently has a host-owned connected SSH lifecycle. */
+  connected?: boolean
+  /** Current SSH lifecycle state, when the desktop has one for this target. */
+  connectionStatus?: SshConnectionStatus
+}
 
 /** Identity of a removed SSH target, recorded so that re-adding the same host
  *  can re-point orphaned repos/worktrees from the old (deleted) target id to

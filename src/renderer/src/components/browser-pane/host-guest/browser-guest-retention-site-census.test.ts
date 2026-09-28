@@ -94,12 +94,11 @@ const NON_RETENTION_TERM_READERS = new Map<string, readonly string[]>([
   ]
 ])
 
-// Writers, hydrators, the bridge installer and the idle sentinel: they set or seed a term rather
+// Writers, hydrators and the idle sentinel: they set or seed a term rather
 // than read it, so naming one is not a retention decision.
 const NON_READER_TERM_EXPORTS = [
   'acquireBrowserAutomationVisibility',
   'releaseBrowserAutomationVisibility',
-  'installBrowserAutomationVisibilityBridge',
   'setDriverForBrowserPage',
   'hydrateBrowserDrivers',
   'IDLE_BROWSER_DRIVER',

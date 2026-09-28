@@ -1,28 +1,98 @@
 import { execFile } from 'node:child_process'
+import { windowsPowerShellPath } from '../../shared/child-process/windows-system-binary'
+import { reportComputerDiagnostic } from './computer-sidecar-diagnostics'
 import { RuntimeClientError } from './runtime-client-error'
 import type { DesktopScriptPlatform } from './desktop-script-provider-paths'
+import {
+  FALLBACK_WINDOWS_EXECUTION_POLICY,
+  PREFERRED_WINDOWS_EXECUTION_POLICY,
+  isExecutionPolicyBlocked,
+  windowsPowerShellRuntimeArgs
+} from './windows-powershell-execution-policy'
 
 const REQUEST_TIMEOUT_MS = 30_000
 const FORCE_KILL_GRACE_MS = 1_000
 
-export function execBridge(
+export async function execBridge(
   platform: DesktopScriptPlatform,
   scriptPath: string,
   operationPath: string
 ): Promise<{ stdout: string; stderr: string }> {
-  const command = platform === 'windows' ? 'powershell.exe' : 'python3'
-  const args =
-    platform === 'windows'
-      ? [
-          '-NoProfile',
-          '-NonInteractive',
-          '-ExecutionPolicy',
-          'Bypass',
-          '-File',
-          scriptPath,
-          operationPath
-        ]
-      : [scriptPath, operationPath]
+  if (platform !== 'windows') {
+    return await mapped(runBridgeProcess('python3', [scriptPath, operationPath]))
+  }
+  const command = windowsPowerShellPath()
+  try {
+    return await runBridgeProcess(
+      command,
+      windowsPowerShellRuntimeArgs(scriptPath, PREFERRED_WINDOWS_EXECUTION_POLICY, [operationPath])
+    )
+  } catch (error) {
+    if (!isPolicyBlockedStart(error)) {
+      throw error instanceof BridgeProcessFailure ? error.mapped : error
+    }
+    reportComputerDiagnostic(
+      `bridge start blocked at ${PREFERRED_WINDOWS_EXECUTION_POLICY}; retrying once with ${FALLBACK_WINDOWS_EXECUTION_POLICY}`
+    )
+    return await mapped(
+      runBridgeProcess(
+        command,
+        windowsPowerShellRuntimeArgs(scriptPath, FALLBACK_WINDOWS_EXECUTION_POLICY, [operationPath])
+      )
+    )
+  }
+}
+
+/** Unwrap the raw-stream carrier back into the error callers expect. */
+async function mapped(
+  run: Promise<{ stdout: string; stderr: string }>
+): Promise<{ stdout: string; stderr: string }> {
+  try {
+    return await run
+  } catch (error) {
+    throw error instanceof BridgeProcessFailure ? error.mapped : error
+  }
+}
+
+/**
+ * Only a run that produced no stdout at all may be replayed.
+ *
+ * What the stdout guard covers: operations are not idempotent, and the response
+ * embeds window titles and element names, so a snapshot that merely contains
+ * the word "SecurityError" must not be read as a policy block and replayed as a
+ * second click, keystroke or paste. It closes that injection route only.
+ *
+ * What it does not cover: one-shot mode runs the operation to completion and
+ * writes stdout only afterwards, so stdout is empty for the whole action, not
+ * just before it starts. A crash after the click but before the write looks
+ * identical to a helper that never started. Nothing here can tell those apart —
+ * only a policy pattern that cannot match a non-policy failure keeps the replay
+ * off, which is why its `\b` is load-bearing rather than cosmetic.
+ */
+function isPolicyBlockedStart(error: unknown): error is BridgeProcessFailure {
+  return (
+    error instanceof BridgeProcessFailure &&
+    !error.stdout.trim() &&
+    isExecutionPolicyBlocked(error.stderr)
+  )
+}
+
+/** Carries the raw streams so the retry decision does not read a mapped message. */
+class BridgeProcessFailure extends Error {
+  constructor(
+    readonly stdout: string,
+    readonly stderr: string,
+    readonly mapped: RuntimeClientError
+  ) {
+    super(mapped.message)
+    this.name = 'BridgeProcessFailure'
+  }
+}
+
+function runBridgeProcess(
+  command: string,
+  args: readonly string[]
+): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     let child: ReturnType<typeof execFile> | null = null
     let settled = false
@@ -76,7 +146,7 @@ export function execBridge(
     try {
       child = execFile(
         command,
-        args,
+        [...args],
         {
           env: process.env,
           maxBuffer: 20 * 1024 * 1024,
@@ -86,11 +156,10 @@ export function execBridge(
         (error, stdout, stderr) => {
           if (error) {
             const message = stderr.trim() || stdout.trim() || error.message
-            finish(
-              error.killed
-                ? new RuntimeClientError('action_timeout', message)
-                : mapBridgeError(message)
-            )
+            const mapped = error.killed
+              ? new RuntimeClientError('action_timeout', message)
+              : mapBridgeError(message)
+            finish(new BridgeProcessFailure(stdout, stderr, mapped))
             return
           }
           finish(null, { stdout, stderr })

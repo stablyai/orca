@@ -1,0 +1,917 @@
+name: Prove Relay Staging Capacity
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Verify or change C3 capacity, restore admission, or refresh empty Asia C4
+        required: true
+        default: verify
+        type: choice
+        options:
+          - verify
+          - apply
+          - restore-admission
+          - refresh-asia-c4-image
+      expected-hard-cap:
+        description: Exact cap declared for staging-gce-c3 in the reviewed staging tfvars
+        required: true
+        default: '600'
+        type: choice
+        options:
+          - '1000'
+          - '600'
+      expected-unobserved-bound:
+        description: Exact bound declared for staging-gce-c3 in the reviewed staging tfvars
+        required: true
+        default: '60'
+        type: choice
+        options:
+          - '60'
+          - '0'
+      confirmation:
+        description: Exact confirmation required for a mutation
+        required: false
+        type: string
+      expected-selector-generation:
+        description: Exact staging selector generation for a C4 image refresh
+        required: false
+        type: string
+      predecessor-image-digest:
+        description: Exact current C4 sha256 digest
+        required: false
+        type: string
+      target-image-digest:
+        description: Exact desired C4 sha256 digest
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: relay-staging-mutation
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: cloud
+
+jobs:
+  capacity:
+    if: ${{ vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true' && inputs.mode != 'refresh-asia-c4-image' }}
+    runs-on: blacksmith-2vcpu-ubuntu-2204
+    environment: staging
+    env:
+      GCP_PROJECT_ID: onorca-cloud-staging
+      GCP_REGION: ${{ vars.STAGING_GCP_REGION }}
+      DIRECTOR_SERVICE_NAME: orca-cloud-relay-staging
+      DIRECTOR_ORIGIN: https://relay-staging.onorca.dev
+      CELL_ORIGIN: https://c3.relay-staging.onorca.dev
+      TARGET_CELL_ID: staging-gce-c3
+      FALLBACK_CELL_ORIGIN: https://c2.relay-staging.onorca.dev
+      FALLBACK_CELL_ID: staging-gce-c2
+      CAPACITY_SERVICE_ACCOUNT: ${{ vars.STAGING_GCP_RELAY_CAPACITY_SERVICE_ACCOUNT }}
+      EXPECTED_HARD_CAP: ${{ inputs.expected-hard-cap }}
+      EXPECTED_UNOBSERVED_BOUND: ${{ inputs.expected-unobserved-bound }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: google-auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.STAGING_GCP_RELAY_CAPACITY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.STAGING_GCP_RELAY_CAPACITY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay-staging.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: ./.github/actions/cloud-sql-rollout-lease
+        with:
+          bucket: onorca-cloud-staging-terraform-state
+          object: terraform/state/cloud-sql-rollout/staging.lock
+
+      - uses: hashicorp/setup-terraform@v3
+        if: ${{ inputs.mode != 'restore-admission' }}
+        with:
+          terraform_wrapper: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Initialize the exact staging backend
+        if: ${{ inputs.mode != 'restore-admission' }}
+        run: node dev/scripts/infra.mjs init --env staging
+
+      - name: Require reviewed desired capacity and image
+        if: ${{ inputs.mode != 'restore-admission' }}
+        shell: bash
+        run: |
+          CAP_EXPRESSION="var.relay_gce_cells[\"${TARGET_CELL_ID}\"].connection_hard_cap"
+          BOUND_EXPRESSION="var.relay_gce_cells[\"${TARGET_CELL_ID}\"].connection_unobserved_bound"
+          IMAGE_EXPRESSION="var.relay_gce_cells[\"${TARGET_CELL_ID}\"].image"
+          ZONE_EXPRESSION="var.relay_gce_cells[\"${TARGET_CELL_ID}\"].zone"
+          DESIRED_CAP="$(terraform -chdir=infra/terraform console \
+            -var-file=environments/staging.tfvars <<< "${CAP_EXPRESSION}")"
+          DESIRED_BOUND="$(terraform -chdir=infra/terraform console \
+            -var-file=environments/staging.tfvars <<< "${BOUND_EXPRESSION}")"
+          DESIRED_IMAGE="$(terraform -chdir=infra/terraform console \
+            -var-file=environments/staging.tfvars <<< "${IMAGE_EXPRESSION}" | jq -r '.')"
+          TARGET_ZONE="$(terraform -chdir=infra/terraform console \
+            -var-file=environments/staging.tfvars <<< "${ZONE_EXPRESSION}" | jq -r '.')"
+          MIG_NAME="$(terraform -chdir=infra/terraform output -json relay_gce_cell_deployments \
+            | jq -r --arg cell "${TARGET_CELL_ID}" '.[$cell].mig_name')"
+          DESIRED_CELLS_JSON="$(terraform -chdir=infra/terraform console \
+            -var-file=environments/staging.tfvars \
+            <<< 'local.relay_director_cells_json' | jq -r '.')"
+          CELL_ORIGIN="$(jq -r --arg cell "${TARGET_CELL_ID}" \
+            '.[] | select(.id == $cell) | .url' <<< "${DESIRED_CELLS_JSON}")"
+          test "${DESIRED_CAP}" = "${EXPECTED_HARD_CAP}"
+          test "${DESIRED_BOUND}" = "${EXPECTED_UNOBSERVED_BOUND}"
+          [[ "${DESIRED_IMAGE}" =~ @sha256:[0-9a-f]{64}$ ]]
+          [[ "${TARGET_ZONE}" =~ ^[a-z0-9-]+$ ]]
+          [[ "${MIG_NAME}" =~ ^[a-z0-9-]+$ ]]
+          test "${CELL_ORIGIN}" = "https://c3.relay-staging.onorca.dev"
+          jq -e \
+            --arg cell "${TARGET_CELL_ID}" \
+            --arg fallback "${FALLBACK_CELL_ID}" \
+            --argjson cap "${EXPECTED_HARD_CAP}" \
+            --argjson bound "${EXPECTED_UNOBSERVED_BOUND}" \
+            '(any(.[]; .id == $cell and .connectionHardCap == $cap and .connectionUnobservedBound == $bound)) and
+             (any(.[]; .id == $fallback and .connectionHardCap == 600 and .connectionUnobservedBound == 60))' \
+            <<< "${DESIRED_CELLS_JSON}" >/dev/null
+          echo "DESIRED_IMAGE=${DESIRED_IMAGE}" >> "${GITHUB_ENV}"
+          echo "TARGET_ZONE=${TARGET_ZONE}" >> "${GITHUB_ENV}"
+          echo "MIG_NAME=${MIG_NAME}" >> "${GITHUB_ENV}"
+          echo "CELL_ORIGIN=${CELL_ORIGIN}" >> "${GITHUB_ENV}"
+          echo "DESIRED_CELLS_JSON=${DESIRED_CELLS_JSON}" >> "${GITHUB_ENV}"
+
+      - name: Verify exact compatible director image
+        if: ${{ inputs.mode != 'restore-admission' }}
+        shell: bash
+        run: |
+          SERVICE_JSON="$(gcloud run services describe "${DIRECTOR_SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --format=json)"
+          ACTIVE_REVISION="$(jq -r \
+            '[.status.traffic[] | select((.percent // 0) > 0)]
+             | if length == 1 and .[0].percent == 100 then .[0].revisionName else empty end' \
+            <<< "${SERVICE_JSON}")"
+          test -n "${ACTIVE_REVISION}"
+          ACTIVE_IMAGE="$(gcloud run revisions describe "${ACTIVE_REVISION}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" \
+            --format='value(spec.containers[0].image)')"
+          test "${ACTIVE_IMAGE}" = "${DESIRED_IMAGE}"
+          echo "ACTIVE_IMAGE=${ACTIVE_IMAGE}" >> "${GITHUB_ENV}"
+
+      - name: Require explicit transition confirmation
+        if: ${{ inputs.mode == 'apply' }}
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: test "${CONFIRMATION}" = "FENCE_AND_TRANSITION_STAGING_C3"
+
+      - name: Require explicit admission restore confirmation
+        if: ${{ inputs.mode == 'restore-admission' }}
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: test "${CONFIRMATION}" = "RESTORE_STAGING_C2_C3_GENERAL"
+
+      - name: Require capacity identity and exact predecessor state
+        if: ${{ inputs.mode == 'apply' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth.outputs.id_token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${EXPECTED_HARD_CAP}/${EXPECTED_UNOBSERVED_BOUND}" in
+            1000/0)
+              PREDECESSOR_C3_CAP=600
+              PREDECESSOR_C3_BOUND=60
+              ;;
+            1000/60)
+              PREDECESSOR_C3_CAP=1000
+              PREDECESSOR_C3_BOUND=0
+              ;;
+            600/60)
+              PREDECESSOR_C3_CAP=1000
+              PREDECESSOR_C3_BOUND=60
+              ;;
+            *)
+              echo "Unsupported staging capacity transition" >&2
+              exit 1
+              ;;
+          esac
+          ACTIVE_REVISION="$(gcloud run services describe "${DIRECTOR_SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --format=json \
+            | jq -r '
+                [.status.traffic[] | select((.percent // 0) > 0)] |
+                if length == 1 and .[0].percent == 100 then .[0].revisionName else empty end')"
+          test -n "${ACTIVE_REVISION}"
+          CURRENT_CELLS_JSON="$(gcloud run revisions describe "${ACTIVE_REVISION}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --format=json \
+            | jq -cer '
+                [.spec.containers[0].env[]? |
+                  select(.name == "ORCA_RELAY_CELLS_JSON") | .value] |
+                if length == 1 then .[0] | fromjson else error("missing director topology") end')"
+          PREDECESSOR_CELLS_JSON="$(jq -ce \
+            --arg cell "${TARGET_CELL_ID}" \
+            --argjson cap "${PREDECESSOR_C3_CAP}" \
+            --argjson bound "${PREDECESSOR_C3_BOUND}" \
+            'map(if .id == $cell then . + {
+              connectionHardCap: $cap,
+              connectionUnobservedBound: $bound
+            } else . end)' <<< "${DESIRED_CELLS_JSON}")"
+          node dev/scripts/verify-relay-capacity-transition.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" \
+            --cell-origin "${FALLBACK_CELL_ORIGIN}" \
+            --cell-id "${FALLBACK_CELL_ID}" \
+            --hard-cap 600 \
+            --unobserved-bound 60 \
+            --heartbeat fresh \
+            --admission either \
+            --draining forbidden \
+            --activity allowed
+          if jq -ne \
+            --argjson current "${CURRENT_CELLS_JSON}" \
+            --argjson expected "${DESIRED_CELLS_JSON}" \
+            '$current == $expected'; then
+            if node dev/scripts/verify-relay-capacity-transition.mjs \
+              --director-origin "${DIRECTOR_ORIGIN}" \
+              --cell-origin "${CELL_ORIGIN}" \
+              --cell-id "${TARGET_CELL_ID}" \
+              --hard-cap "${EXPECTED_HARD_CAP}" \
+              --unobserved-bound "${EXPECTED_UNOBSERVED_BOUND}" \
+              --heartbeat fresh \
+              --admission general \
+              --draining forbidden \
+              --activity allowed; then
+              TRANSITION_PHASE=cell-active
+            elif node dev/scripts/verify-relay-capacity-transition.mjs \
+              --director-origin "${DIRECTOR_ORIGIN}" \
+              --cell-origin "${CELL_ORIGIN}" \
+              --cell-id "${TARGET_CELL_ID}" \
+              --hard-cap "${EXPECTED_HARD_CAP}" \
+              --unobserved-bound "${EXPECTED_UNOBSERVED_BOUND}" \
+              --heartbeat fresh \
+              --admission migration-only \
+              --draining forbidden \
+              --activity allowed; then
+              TRANSITION_PHASE=cell-ready
+            else
+              node dev/scripts/verify-relay-capacity-transition.mjs \
+                --director-origin "${DIRECTOR_ORIGIN}" \
+                --cell-origin "${CELL_ORIGIN}" \
+                --cell-id "${TARGET_CELL_ID}" \
+                --heartbeat either \
+                --admission migration-only \
+                --draining required \
+                --activity restart-safe
+              TRANSITION_PHASE=director-ready
+            fi
+          else
+            jq -ne \
+              --argjson current "${CURRENT_CELLS_JSON}" \
+              --argjson expected "${PREDECESSOR_CELLS_JSON}" \
+              '$current == $expected'
+            node dev/scripts/verify-relay-capacity-transition.mjs \
+              --director-origin "${DIRECTOR_ORIGIN}" \
+              --cell-origin "${CELL_ORIGIN}" \
+              --cell-id "${TARGET_CELL_ID}" \
+              --hard-cap "${PREDECESSOR_C3_CAP}" \
+              --unobserved-bound "${PREDECESSOR_C3_BOUND}" \
+              --heartbeat fresh \
+              --admission either \
+              --draining either \
+              --activity allowed
+            TRANSITION_PHASE=predecessor
+          fi
+          echo "TRANSITION_PHASE=${TRANSITION_PHASE}" >> "${GITHUB_ENV}"
+
+      - name: Restore C2 as the safe placement fallback
+        if: ${{ inputs.mode == 'restore-admission' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth.outputs.id_token }}
+        run: |
+          node dev/scripts/verify-relay-capacity-transition.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" \
+            --cell-origin "${FALLBACK_CELL_ORIGIN}" \
+            --cell-id "${FALLBACK_CELL_ID}" \
+            --heartbeat fresh \
+            --admission either \
+            --draining forbidden \
+            --activity allowed
+          node dev/scripts/prepare-relay-capacity-canary.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" \
+            --mode restore-fallback \
+            --general-cell-ids "${FALLBACK_CELL_ID}"
+
+      - name: Require a healthy non-draining C3 before restoring it
+        if: ${{ inputs.mode == 'restore-admission' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth.outputs.id_token }}
+        run: |
+          node dev/scripts/verify-relay-capacity-transition.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" \
+            --cell-origin "${CELL_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" \
+            --hard-cap "${EXPECTED_HARD_CAP}" \
+            --unobserved-bound "${EXPECTED_UNOBSERVED_BOUND}" \
+            --heartbeat fresh \
+            --admission either \
+            --draining forbidden \
+            --activity allowed
+
+      - name: Require a healthy general C2 before isolating C3
+        if: ${{ inputs.mode == 'apply' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth.outputs.id_token }}
+        run: |
+          if test "${TRANSITION_PHASE}" = cell-active; then
+            node dev/scripts/prepare-relay-capacity-canary.mjs \
+              --director-origin "${DIRECTOR_ORIGIN}" \
+              --cell-id "${TARGET_CELL_ID}" \
+              --mode restore-fallback \
+              --general-cell-ids "${FALLBACK_CELL_ID}"
+          fi
+          node dev/scripts/verify-relay-capacity-transition.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" \
+            --cell-origin "${FALLBACK_CELL_ORIGIN}" \
+            --cell-id "${FALLBACK_CELL_ID}" \
+            --hard-cap 600 \
+            --unobserved-bound 60 \
+            --heartbeat fresh \
+            --admission general \
+            --draining forbidden \
+            --activity allowed
+
+      - name: Reversibly isolate and drain C3
+        if: ${{ inputs.mode == 'apply' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth.outputs.id_token }}
+        run: |
+          if test "${TRANSITION_PHASE}" = cell-ready; then
+            exit 0
+          fi
+          node dev/scripts/prepare-relay-capacity-canary.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" \
+            --cell-origin "${CELL_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" \
+            --mode isolate
+
+      - name: Verify restart-safe migration-only target
+        if: ${{ inputs.mode == 'apply' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth.outputs.id_token }}
+        run: |
+          if test "${TRANSITION_PHASE}" = cell-ready; then
+            exit 0
+          fi
+          node dev/scripts/verify-relay-capacity-transition.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" \
+            --cell-origin "${CELL_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" \
+            --heartbeat either \
+            --admission migration-only \
+            --draining required \
+            --activity restart-safe
+
+      - name: Verify current capacity
+        if: ${{ inputs.mode == 'verify' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth.outputs.id_token }}
+        run: |
+          node dev/scripts/verify-relay-capacity-transition.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" \
+            --cell-origin "${CELL_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" \
+            --hard-cap "${EXPECTED_HARD_CAP}" \
+            --unobserved-bound "${EXPECTED_UNOBSERVED_BOUND}" \
+            --heartbeat fresh \
+            --admission general \
+            --draining forbidden \
+            --activity allowed
+
+      - name: Deploy reviewed director topology and remove pre-protocol revisions
+        if: ${{ inputs.mode == 'apply' }}
+        run: |
+          if test "${TRANSITION_PHASE}" != predecessor; then
+            echo "DIRECTOR_CONFIG_CHANGED=false" >> "${GITHUB_ENV}"
+            exit 0
+          fi
+          RELEASE_ID="capacity-compat-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_SHA:0:8}"
+          DEPLOY_RESULT="$(node dev/scripts/deploy-relay-blue-green.mjs \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --service "${DIRECTOR_SERVICE_NAME}" \
+            --image "${ACTIVE_IMAGE}" \
+            --role director \
+            --capacity-service-account "${CAPACITY_SERVICE_ACCOUNT}" \
+            --capacity-cell-id "${TARGET_CELL_ID}" \
+            --director-cells-json "${DESIRED_CELLS_JSON}" \
+            --min-instances 0 \
+            --prune-revisions true \
+            --release-id "${RELEASE_ID}")"
+          echo "${DEPLOY_RESULT}"
+          DIRECTOR_CONFIG_CHANGED="$(jq -r '.topologyChanged' <<< "${DEPLOY_RESULT}")"
+          [[ "${DIRECTOR_CONFIG_CHANGED}" =~ ^(true|false)$ ]]
+          echo "DIRECTOR_CONFIG_CHANGED=${DIRECTOR_CONFIG_CHANGED}" >> "${GITHUB_ENV}"
+
+      - name: Require fail-closed director transition
+        if: ${{ inputs.mode == 'apply' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth.outputs.id_token }}
+        run: |
+          if test "${TRANSITION_PHASE}" = cell-ready; then
+            node dev/scripts/verify-relay-capacity-transition.mjs \
+              --director-origin "${DIRECTOR_ORIGIN}" \
+              --cell-origin "${CELL_ORIGIN}" \
+              --cell-id "${TARGET_CELL_ID}" \
+              --hard-cap "${EXPECTED_HARD_CAP}" \
+              --unobserved-bound "${EXPECTED_UNOBSERVED_BOUND}" \
+              --heartbeat fresh \
+              --admission migration-only \
+              --draining forbidden \
+              --activity allowed
+            exit 0
+          fi
+          HEARTBEAT_EXPECTATION=either
+          if test "${DIRECTOR_CONFIG_CHANGED}" = true; then
+            HEARTBEAT_EXPECTATION=stale
+          fi
+          node dev/scripts/verify-relay-capacity-transition.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" \
+            --cell-origin "${CELL_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" \
+            --hard-cap "${EXPECTED_HARD_CAP}" \
+            --unobserved-bound "${EXPECTED_UNOBSERVED_BOUND}" \
+            --heartbeat "${HEARTBEAT_EXPECTATION}" \
+            --admission migration-only \
+            --draining required \
+            --activity restart-safe
+
+      - name: Plan and apply only the exact empty cell
+        if: ${{ inputs.mode == 'apply' }}
+        shell: bash
+        run: |
+          recreate_fixed_one_instance() {
+            local instance
+            instance="$(gcloud compute instance-groups managed list-instances \
+              "${MIG_NAME}" \
+              --project "${GCP_PROJECT_ID}" \
+              --zone "${TARGET_ZONE}" \
+              --format=json \
+              | jq -er '
+                  if length == 1 and .[0].instanceStatus == "RUNNING" and
+                    .[0].currentAction == "NONE"
+                  then .[0].instance | split("/") | last
+                  else error("capacity cell does not have one stable running instance") end')"
+            gcloud compute instance-groups managed recreate-instances \
+              "${MIG_NAME}" \
+              --instances "${instance}" \
+              --project "${GCP_PROJECT_ID}" \
+              --zone "${TARGET_ZONE}" \
+              --quiet
+          }
+
+          terraform -chdir=infra/terraform plan \
+            -var-file=environments/staging.tfvars \
+            '-target=google_compute_instance_template.relay_gce_cell["staging-gce-c3"]' \
+            '-target=google_compute_instance_group_manager.relay_gce_cell["staging-gce-c3"]' \
+            -out="${RUNNER_TEMP}/relay-capacity-cell.tfplan"
+          PLAN_RESULT="$(terraform -chdir=infra/terraform show -json \
+            "${RUNNER_TEMP}/relay-capacity-cell.tfplan" \
+            | node dev/scripts/validate-relay-capacity-plan.mjs \
+                --mode cell \
+                --cell-id "${TARGET_CELL_ID}" \
+                --hard-cap "${EXPECTED_HARD_CAP}" \
+                --unobserved-bound "${EXPECTED_UNOBSERVED_BOUND}" \
+                --image "${DESIRED_IMAGE}")"
+          echo "${PLAN_RESULT}"
+          CELL_PLAN_CHANGES="$(jq -r '.changes' <<< "${PLAN_RESULT}")"
+          [[ "${CELL_PLAN_CHANGES}" =~ ^(0|2)$ ]]
+          if test "${TRANSITION_PHASE}" = cell-ready; then
+            test "${CELL_PLAN_CHANGES}" = 0
+          elif test "${TRANSITION_PHASE}" = cell-active; then
+            test "${CELL_PLAN_CHANGES}" = 0
+            recreate_fixed_one_instance
+          elif test "${CELL_PLAN_CHANGES}" = 0; then
+            recreate_fixed_one_instance
+          else
+            terraform -chdir=infra/terraform apply \
+              -auto-approve "${RUNNER_TEMP}/relay-capacity-cell.tfplan"
+          fi
+          gcloud compute instance-groups managed wait-until \
+            "${MIG_NAME}" \
+            --stable \
+            --project "${GCP_PROJECT_ID}" \
+            --zone "${TARGET_ZONE}" \
+            --timeout 900
+
+      - name: Verify exact live cap and fresh matching heartbeat
+        if: ${{ inputs.mode == 'apply' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth.outputs.id_token }}
+        run: |
+          node dev/scripts/verify-relay-capacity-transition.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" \
+            --cell-origin "${CELL_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" \
+            --hard-cap "${EXPECTED_HARD_CAP}" \
+            --unobserved-bound "${EXPECTED_UNOBSERVED_BOUND}" \
+            --heartbeat fresh \
+            --admission migration-only \
+            --draining forbidden \
+            --activity allowed
+
+      - name: Make C3 the only staging placement cell
+        if: ${{ inputs.mode == 'apply' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth.outputs.id_token }}
+        run: |
+          node dev/scripts/prepare-relay-capacity-canary.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" \
+            --mode activate
+
+      - name: Verify the sole general canary after transition
+        if: ${{ inputs.mode == 'apply' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth.outputs.id_token }}
+        run: |
+          node dev/scripts/verify-relay-capacity-transition.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" \
+            --cell-origin "${CELL_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" \
+            --hard-cap "${EXPECTED_HARD_CAP}" \
+            --unobserved-bound "${EXPECTED_UNOBSERVED_BOUND}" \
+            --heartbeat fresh \
+            --admission general \
+            --draining forbidden \
+            --activity allowed
+
+      - name: Restore the reviewed C2 and C3 placement set
+        if: ${{ inputs.mode == 'restore-admission' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth.outputs.id_token }}
+        run: |
+          node dev/scripts/prepare-relay-capacity-canary.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" \
+            --mode restore \
+            --general-cell-ids staging-gce-c2,staging-gce-c3
+
+      - name: Verify restored C3 admission and capacity
+        if: ${{ inputs.mode == 'restore-admission' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth.outputs.id_token }}
+        run: |
+          node dev/scripts/verify-relay-capacity-transition.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" \
+            --cell-origin "${CELL_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" \
+            --hard-cap "${EXPECTED_HARD_CAP}" \
+            --unobserved-bound "${EXPECTED_UNOBSERVED_BOUND}" \
+            --heartbeat fresh \
+            --admission general \
+            --draining forbidden \
+            --activity allowed
+
+      - name: Preserve C2 as the safe fallback after a failed transition
+        if: ${{ failure() && inputs.mode == 'apply' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth.outputs.id_token }}
+        run: |
+          node dev/scripts/prepare-relay-capacity-canary.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" \
+            --mode restore-fallback \
+            --general-cell-ids "${FALLBACK_CELL_ID}"
+
+  refresh-asia-c4-image:
+    if: ${{ vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true' && github.ref == 'refs/heads/main' && inputs.mode == 'refresh-asia-c4-image' }}
+    runs-on: blacksmith-2vcpu-ubuntu-2204
+    timeout-minutes: 90
+    environment: staging
+    env:
+      GCP_PROJECT_ID: onorca-cloud-staging
+      GCP_REGION: ${{ vars.STAGING_GCP_REGION }}
+      DIRECTOR_ORIGIN: https://relay-staging.onorca.dev
+      CELL_ORIGIN: https://c4.relay-staging.onorca.dev
+      TARGET_CELL_ID: staging-gce-c4
+      EXPECTED_SELECTOR_GENERATION: ${{ inputs.expected-selector-generation }}
+      PREDECESSOR_IMAGE_DIGEST: ${{ inputs.predecessor-image-digest }}
+      TARGET_IMAGE_DIGEST: ${{ inputs.target-image-digest }}
+      APPROVED_PREDECESSOR_IMAGE_DIGEST: sha256:ce16d13ce6b633c6fbb1a2afdd6cdb8369645a329d42a8355efa7ad1e60a44f7
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require the exact bounded C4 refresh
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${CONFIRMATION}" = REFRESH_STAGING_ASIA_C4_IMAGE
+          [[ "${EXPECTED_SELECTOR_GENERATION}" =~ ^(0|[1-9][0-9]*)$ ]]
+          [[ "${PREDECESSOR_IMAGE_DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]
+          [[ "${TARGET_IMAGE_DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]
+          test "${PREDECESSOR_IMAGE_DIGEST}" != "${TARGET_IMAGE_DIGEST}"
+          test "${PREDECESSOR_IMAGE_DIGEST}" = "${APPROVED_PREDECESSOR_IMAGE_DIGEST}"
+
+      - id: google-auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.STAGING_GCP_RELAY_CAPACITY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.STAGING_GCP_RELAY_CAPACITY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay-staging.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: ./.github/actions/cloud-sql-rollout-lease
+        with:
+          bucket: onorca-cloud-staging-terraform-state
+          object: terraform/state/cloud-sql-rollout/staging.lock
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.8
+          terraform_wrapper: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Initialize the exact staging backend
+        run: node dev/scripts/infra.mjs init --env staging
+
+      - name: Resolve the reviewed C4 image and shape
+        shell: bash
+        run: |
+          set -euo pipefail
+          cells="$(terraform -chdir=infra/terraform console \
+            -var-file=environments/staging.tfvars \
+            <<< 'jsonencode(var.relay_gce_cells)' | jq -er '.')"
+          shape="$(jq -cer --arg cell "${TARGET_CELL_ID}" '.[$cell]' <<< "${cells}")"
+          test "$(jq -r '.hostname' <<< "${shape}")" = c4
+          test "$(jq -r '.region' <<< "${shape}")" = asia-east2
+          test "$(jq -r '.zone' <<< "${shape}")" = asia-east2-a
+          test "$(jq -r '.machine_type' <<< "${shape}")" = e2-standard-4
+          test "$(jq -r '.capacity_requests' <<< "${shape}")" = 6000
+          test "$(jq -r '.database_pool_max' <<< "${shape}")" = 10
+          test "$(jq -r '.connection_hard_cap' <<< "${shape}")" = 3000
+          test "$(jq -r '.connection_unobserved_bound' <<< "${shape}")" = 60
+          test "$(jq -r '.initially_enabled' <<< "${shape}")" = false
+          desired_image="$(jq -r '.image' <<< "${shape}")"
+          test "${desired_image}" = \
+            "us-central1-docker.pkg.dev/${GCP_PROJECT_ID}/orca-cloud/relay@${TARGET_IMAGE_DIGEST}"
+          served_digest="$(gcloud artifacts docker images describe "${desired_image}" \
+            --project "${GCP_PROJECT_ID}" --format='value(image_summary.digest)')"
+          test "${served_digest}" = "${TARGET_IMAGE_DIGEST}"
+          mig_name="$(terraform -chdir=infra/terraform output -json relay_gce_cell_deployments \
+            | jq -r --arg cell "${TARGET_CELL_ID}" '.[$cell].mig_name')"
+          test "${mig_name}" = orca-cloud-staging-relay-gce-c4
+          {
+            echo "DESIRED_IMAGE=${desired_image}"
+            echo "ROLLBACK_IMAGE=us-central1-docker.pkg.dev/${GCP_PROJECT_ID}/orca-cloud/relay@${PREDECESSOR_IMAGE_DIGEST}"
+            echo "TARGET_ZONE=asia-east2-a"
+            echo "MIG_NAME=${mig_name}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Save, validate, and classify the exact C4 plan
+        id: plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          plan="${RUNNER_TEMP}/relay-c4-image-refresh.tfplan"
+          terraform -chdir=infra/terraform plan \
+            -var-file=environments/staging.tfvars \
+            '-target=google_compute_instance_template.relay_gce_cell["staging-gce-c4"]' \
+            '-target=google_compute_instance_group_manager.relay_gce_cell["staging-gce-c4"]' \
+            -out="${plan}"
+          result="$(terraform -chdir=infra/terraform show -json "${plan}" \
+            | node dev/scripts/validate-relay-capacity-plan.mjs \
+              --mode same-cap-image --cell-id "${TARGET_CELL_ID}" --hard-cap 3000 \
+              --unobserved-bound 60 --image "${DESIRED_IMAGE}" \
+              --rollback-image "${ROLLBACK_IMAGE}")"
+          case "$(jq -r '[.changes,.changeKind] | join(":")' <<< "${result}")" in
+            2:replacement) refresh_phase=predecessor ;;
+            0:none|*:obsolete-template-delete) refresh_phase=applied ;;
+            *:manager-convergence|*:replacement-with-obsolete-template) refresh_phase=converging ;;
+            *) exit 1 ;;
+          esac
+          {
+            echo "PLAN_CHANGES=$(jq -r '.changes' <<< "${result}")"
+            echo "REFRESH_PHASE=${refresh_phase}"
+          } >> "${GITHUB_ENV}"
+
+      - id: state-auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.STAGING_GCP_RELAY_CAPACITY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.STAGING_GCP_RELAY_CAPACITY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay-staging.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - name: Verify the exact selector and current C4 state
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.state-auth.outputs.id_token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          inspect="$(node dev/scripts/operate-relay-asia-admission.mjs \
+            --environment staging --mode inspect --cell-ids "${TARGET_CELL_ID}" \
+            --expected-generation '' --expected-membership-sha256 '' --attempt-id '' \
+            --image-digest "${TARGET_IMAGE_DIGEST}")"
+          test "$(jq -r '.generation' <<< "${inspect}")" = "${EXPECTED_SELECTOR_GENERATION}"
+          test "$(jq -r --arg cell "${TARGET_CELL_ID}" '.states[$cell]' <<< "${inspect}")" = \
+            migration-only
+          expected_digests="${TARGET_IMAGE_DIGEST}"
+          if test "${REFRESH_PHASE}" = predecessor; then
+            expected_digests="${PREDECESSOR_IMAGE_DIGEST}"
+          elif test "${REFRESH_PHASE}" = converging; then
+            expected_digests="${PREDECESSOR_IMAGE_DIGEST},${TARGET_IMAGE_DIGEST}"
+          fi
+          if runtime="$(curl --silent --show-error --fail-with-body --max-time 30 --request POST \
+              "${CELL_ORIGIN}/v1/admin/runtime-status" \
+              --header "Authorization: Bearer ${ORCA_RELAY_ADMIN_ID_TOKEN}" \
+              --header 'Content-Type: application/json' --data '{"v":1}')"; then
+            current_digest="$(jq -er '.imageDigest' <<< "${runtime}")"
+            case ",${expected_digests}," in
+              *,"${current_digest}",*) ;;
+              *) exit 1 ;;
+            esac
+            source_incarnation=''
+            draining=forbidden
+            if test "${REFRESH_PHASE}" != applied; then
+              status="$(curl --fail-with-body --max-time 30 --request POST \
+                "${DIRECTOR_ORIGIN}/v1/admin/cell-status" \
+                --header "Authorization: Bearer ${ORCA_RELAY_ADMIN_ID_TOKEN}" \
+                --header 'Content-Type: application/json' \
+                --data "$(jq -cn --arg cell "${TARGET_CELL_ID}" '{v:1,cellId:$cell}')")"
+              source_incarnation="$(jq -er '.status.runtime.cellIncarnation' <<< "${status}")"
+              [[ "${source_incarnation}" =~ ^[0-9a-f-]{36}$ ]]
+              if test "$(jq -r '.draining' <<< "${runtime}")" = true; then
+                draining=required
+              fi
+            fi
+            node dev/scripts/verify-relay-capacity-transition.mjs \
+              --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
+              --cell-id "${TARGET_CELL_ID}" --hard-cap 3000 --unobserved-bound 60 \
+              --heartbeat fresh --admission migration-only --draining "${draining}" \
+              --activity quiescent --expected-image-digests "${expected_digests}"
+            runtime_available=true
+          else
+            node dev/scripts/verify-relay-capacity-transition.mjs \
+              --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
+              --cell-id "${TARGET_CELL_ID}" --runtime unavailable --heartbeat stale \
+              --admission migration-only --draining either --activity restart-safe \
+              --timeout-ms 300000
+            source_incarnation=''
+            runtime_available=false
+          fi
+          {
+            echo "MIG_STABLE_AT_MS=0"
+            echo "MUTATION_STARTED=false"
+            echo "REPLACEMENT_STARTED_AT_MS=0"
+            echo "RUNTIME_AVAILABLE=${runtime_available}"
+            echo "SOURCE_INCARNATION=${source_incarnation}"
+          } >> "${GITHUB_ENV}"
+
+      - id: fence-auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.STAGING_GCP_RELAY_CAPACITY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.STAGING_GCP_RELAY_CAPACITY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay-staging.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - name: Fence C4 and prove it stayed empty before replacement
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.fence-auth.outputs.id_token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test "${REFRESH_PHASE}" = applied; then exit 0; fi
+          echo "MUTATION_STARTED=true" >> "${GITHUB_ENV}"
+          if test "${RUNTIME_AVAILABLE}" = false; then exit 0; fi
+          node dev/scripts/prepare-relay-capacity-canary.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" --mode isolate
+          fence_digests="${PREDECESSOR_IMAGE_DIGEST}"
+          if test "${REFRESH_PHASE}" = converging; then
+            fence_digests="${PREDECESSOR_IMAGE_DIGEST},${TARGET_IMAGE_DIGEST}"
+          fi
+          node dev/scripts/verify-relay-capacity-transition.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" --hard-cap 3000 --unobserved-bound 60 \
+            --heartbeat fresh --admission migration-only --draining required \
+            --activity quiescent --expected-image-digests "${fence_digests}"
+
+      - name: Apply the exact saved C4 plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test "${PLAN_CHANGES}" = 0 && test "${RUNTIME_AVAILABLE}" = true; then exit 0; fi
+          if test "${REFRESH_PHASE}" = applied && test "${RUNTIME_AVAILABLE}" = false; then
+            echo "MUTATION_STARTED=true" >> "${GITHUB_ENV}"
+          fi
+          if test "${REFRESH_PHASE}" != applied; then
+            replacement_started_at_ms="$(date -u +%s%3N)"
+            echo "REPLACEMENT_STARTED_AT_MS=${replacement_started_at_ms}" >> "${GITHUB_ENV}"
+          fi
+          if test "${PLAN_CHANGES}" != 0; then
+            terraform -chdir=infra/terraform apply -auto-approve \
+              "${RUNNER_TEMP}/relay-c4-image-refresh.tfplan"
+          fi
+          gcloud compute instance-groups managed wait-until "${MIG_NAME}" --stable \
+            --project "${GCP_PROJECT_ID}" --zone "${TARGET_ZONE}" --timeout 900
+          if test "${RUNTIME_AVAILABLE}" = false && test "${REFRESH_PHASE}" = applied; then
+            instance="$(gcloud compute instance-groups managed list-instances "${MIG_NAME}" \
+              --project "${GCP_PROJECT_ID}" --zone "${TARGET_ZONE}" --format=json \
+              | jq -er 'if length == 1 and .[0].instanceStatus == "RUNNING" and
+                .[0].currentAction == "NONE" then .[0].instance | split("/") | last
+                else error("C4 is not one stable running instance") end')"
+            gcloud compute instance-groups managed recreate-instances "${MIG_NAME}" \
+              --instances "${instance}" --project "${GCP_PROJECT_ID}" \
+              --zone "${TARGET_ZONE}" --quiet
+            gcloud compute instance-groups managed wait-until "${MIG_NAME}" --stable \
+              --project "${GCP_PROJECT_ID}" --zone "${TARGET_ZONE}" --timeout 900
+          fi
+          echo "MIG_STABLE_AT_MS=$(date -u +%s%3N)" >> "${GITHUB_ENV}"
+
+      - id: post-auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.STAGING_GCP_RELAY_CAPACITY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.STAGING_GCP_RELAY_CAPACITY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay-staging.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - name: Verify new C4 incarnation, image, and unchanged isolation
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.post-auth.outputs.id_token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node dev/scripts/verify-relay-capacity-transition.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" --hard-cap 3000 --unobserved-bound 60 \
+            --heartbeat fresh --admission migration-only --draining forbidden \
+            --activity quiescent --expected-image-digests "${TARGET_IMAGE_DIGEST}" \
+            --timeout-ms 240000
+          result="$(node dev/scripts/operate-relay-asia-admission.mjs \
+            --environment staging --mode verify --cell-ids "${TARGET_CELL_ID}" \
+            --expected-generation "${EXPECTED_SELECTOR_GENERATION}" \
+            --expected-membership-sha256 '' --attempt-id '' \
+            --image-digest "${TARGET_IMAGE_DIGEST}")"
+          test "$(jq -r '.generation' <<< "${result}")" = "${EXPECTED_SELECTOR_GENERATION}"
+          test "$(jq -r --arg cell "${TARGET_CELL_ID}" '.states[$cell]' <<< "${result}")" = \
+            migration-only
+          for _ in $(seq 1 36); do
+            status="$(curl --fail-with-body --max-time 30 --request POST \
+              "${DIRECTOR_ORIGIN}/v1/admin/cell-status" \
+              --header "Authorization: Bearer ${ORCA_RELAY_ADMIN_ID_TOKEN}" \
+              --header 'Content-Type: application/json' \
+              --data "$(jq -cn --arg cell "${TARGET_CELL_ID}" '{v:1,cellId:$cell}')")"
+            if test "$(jq -r '.status.runtime.ready' <<< "${status}")" = true && \
+              test "$(jq -r '.status.runtime.lastHeartbeatAt' <<< "${status}")" \
+                -ge "${MIG_STABLE_AT_MS}"; then break; fi
+            sleep 5
+          done
+          target_incarnation="$(jq -er '.status.runtime.cellIncarnation' <<< "${status}")"
+          test "$(jq -r '.status.runtime.ready' <<< "${status}")" = true
+          test "$(jq -r '.status.runtime.lastHeartbeatAt' <<< "${status}")" \
+            -ge "${MIG_STABLE_AT_MS}"
+          if test "${REFRESH_PHASE}" != applied; then
+            if test -n "${SOURCE_INCARNATION}"; then
+              test "${target_incarnation}" != "${SOURCE_INCARNATION}"
+            fi
+            test "$(jq -r '.status.runtime.startedAt' <<< "${status}")" \
+              -ge "${REPLACEMENT_STARTED_AT_MS}"
+          fi
+
+      - name: Require an empty targeted Terraform readback
+        shell: bash
+        run: |
+          set -euo pipefail
+          plan="${RUNNER_TEMP}/relay-c4-image-readback.tfplan"
+          terraform -chdir=infra/terraform plan \
+            -var-file=environments/staging.tfvars \
+            '-target=google_compute_instance_template.relay_gce_cell["staging-gce-c4"]' \
+            '-target=google_compute_instance_group_manager.relay_gce_cell["staging-gce-c4"]' \
+            -out="${plan}"
+          result="$(terraform -chdir=infra/terraform show -json "${plan}" \
+            | node dev/scripts/validate-relay-capacity-plan.mjs \
+              --mode same-cap-image --cell-id "${TARGET_CELL_ID}" --hard-cap 3000 \
+              --unobserved-bound 60 --image "${DESIRED_IMAGE}" \
+              --rollback-image "${ROLLBACK_IMAGE}")"
+          test "$(jq -r '.changes' <<< "${result}")" = 0

@@ -1,4 +1,6 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { resetWorktreeTestSshHostHome } from '../../worktree-removal-test-ssh-host-home'
+
 import {
   OrcaRuntimeService,
   assertWorktreeCleanForRemoval,
@@ -35,6 +37,10 @@ import {
   store
 } from '../orca-runtime-test-fixtures.spec'
 import { createWorktreeRemovalRuntime } from '../orca-runtime-test-scenario-builders.spec'
+
+// Why: these fixtures register an SSH provider, which models a connected relay session — and a
+// connected session has always read the host's `$HOME`. The removal guards refuse without it.
+beforeEach(resetWorktreeTestSshHostHome)
 
 describe('OrcaRuntimeService', () => {
   it('force-deletes a preserved branch on the qualified host when repo ids collide', async () => {
@@ -94,7 +100,12 @@ describe('OrcaRuntimeService', () => {
     const runtime = createWorktreeRemovalRuntime(runtimeStore)
 
     try {
-      await runtime.removeManagedWorktree(TEST_WORKTREE_ID, false, false, false, 'ssh:ssh-1')
+      await runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
+        force: false,
+        runHooks: false,
+        allowUnverifiedPtyStop: false,
+        hostId: 'ssh:ssh-1'
+      })
       expect(provider.removeWorktree).toHaveBeenCalledWith(TEST_WORKTREE_PATH, false)
       expect(metaById[TEST_WORKTREE_ID]?.hostId).toBe('local')
       const result = await runtime.forceDeletePreservedBranch(
@@ -181,8 +192,8 @@ describe('OrcaRuntimeService', () => {
       return {}
     })
 
-    const first = runtime.removeManagedWorktree(TEST_WORKTREE_ID, true)
-    const second = runtime.removeManagedWorktree(TEST_WORKTREE_ID, true)
+    const first = runtime.removeManagedWorktree(TEST_WORKTREE_ID, { force: true })
+    const second = runtime.removeManagedWorktree(TEST_WORKTREE_ID, { force: true })
 
     await removeStarted.promise
     await Promise.resolve()
@@ -193,41 +204,73 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('does not coalesce concurrent same-id removals on different hosts', async () => {
+    const baseRepo = store.getRepos()[0]!
+    // The second owner names its host only in the migrated spelling, so its removal must reach the
+    // SSH host rather than joining the local one and running `git worktree remove` here.
+    const remoteRepo = { ...baseRepo, path: '/remote/repo', executionHostId: 'ssh:host-b' }
     const runtimeStore = {
       ...store,
-      getRepos: () => [
-        { ...store.getRepos()[0], executionHostId: 'local' },
-        { ...store.getRepos()[0], executionHostId: 'runtime:env-1' }
-      ]
+      getRepos: () => [{ ...baseRepo, executionHostId: 'local' }, remoteRepo]
     }
     const runtime = createWorktreeRemovalRuntime(runtimeStore)
     vi.spyOn(runtime, 'acquireFileWatcherRemoval').mockResolvedValue({ finish: vi.fn() })
     const bothStarted = deferred<void>()
     const finishRemovals = deferred<void>()
     let startedCount = 0
-    vi.mocked(removeWorktree).mockImplementation(async () => {
+    const startRemoval = async (): Promise<Record<string, never>> => {
       startedCount += 1
       if (startedCount === 2) {
         bothStarted.resolve()
       }
       await finishRemovals.promise
       return {}
-    })
+    }
+    vi.mocked(removeWorktree).mockImplementation(startRemoval)
+    const provider = {
+      exec: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: remoteRepo.path,
+          head: 'main',
+          branch: 'main',
+          isBare: false,
+          isMainWorktree: true
+        },
+        {
+          path: TEST_WORKTREE_PATH,
+          head: 'def456',
+          branch: 'feature/test',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ]),
+      removeWorktree: vi.fn().mockImplementation(startRemoval)
+    }
+    registerSshGitProvider('host-b', provider as never)
 
-    const local = runtime.removeManagedWorktree(TEST_WORKTREE_ID, true, false, false, 'local')
-    const paired = runtime.removeManagedWorktree(
-      TEST_WORKTREE_ID,
-      true,
-      false,
-      false,
-      'runtime:env-1'
-    )
+    try {
+      const local = runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
+        force: true,
+        runHooks: false,
+        allowUnverifiedPtyStop: false,
+        hostId: 'local'
+      })
+      const remote = runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
+        force: true,
+        runHooks: false,
+        allowUnverifiedPtyStop: false,
+        hostId: 'ssh:host-b'
+      })
 
-    await bothStarted.promise
-    expect(removeWorktree).toHaveBeenCalledTimes(2)
+      await bothStarted.promise
+      expect(removeWorktree).toHaveBeenCalledTimes(1)
+      expect(provider.removeWorktree).toHaveBeenCalledTimes(1)
 
-    finishRemovals.resolve()
-    await expect(Promise.all([local, paired])).resolves.toEqual([{}, {}])
+      finishRemovals.resolve()
+      await expect(Promise.all([local, remote])).resolves.toEqual([{}, {}])
+    } finally {
+      unregisterSshGitProvider('host-b')
+    }
   })
 
   it('rejects concurrent runtime worktree removals for the same id with different options', async () => {
@@ -243,7 +286,7 @@ describe('OrcaRuntimeService', () => {
     const first = runtime.removeManagedWorktree(TEST_WORKTREE_ID)
 
     await removeStarted.promise
-    await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID, true)).rejects.toThrow(
+    await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID, { force: true })).rejects.toThrow(
       'Worktree deletion already in progress'
     )
 
@@ -264,7 +307,7 @@ describe('OrcaRuntimeService', () => {
     try {
       vi.mocked(listWorktrees).mockResolvedValue([])
 
-      await expect(runtime.removeManagedWorktree(worktreeId, true)).resolves.toEqual({})
+      await expect(runtime.removeManagedWorktree(worktreeId, { force: true })).resolves.toEqual({})
 
       expect(removeWorktree).not.toHaveBeenCalled()
       // The repo resolved to the local host, so the metadata purge names it —
@@ -430,7 +473,9 @@ describe('OrcaRuntimeService', () => {
     })
 
     try {
-      await expect(runtime.removeManagedWorktree(`id:${worktreeId}`, true)).resolves.toEqual({})
+      await expect(
+        runtime.removeManagedWorktree(`id:${worktreeId}`, { force: true })
+      ).resolves.toEqual({})
     } finally {
       unregisterSshGitProvider(repo.connectionId)
       unregisterSshFilesystemProvider(repo.connectionId)
@@ -485,7 +530,7 @@ describe('OrcaRuntimeService', () => {
     try {
       vi.mocked(listWorktrees).mockResolvedValue([])
 
-      await expect(runtime.removeManagedWorktree(worktreeId, true)).resolves.toEqual({})
+      await expect(runtime.removeManagedWorktree(worktreeId, { force: true })).resolves.toEqual({})
 
       await expect(lstat(orphanPath)).rejects.toMatchObject({ code: 'ENOENT' })
       expect(closeLocalWatcherForWorktreePathMock).toHaveBeenCalledWith(
@@ -558,7 +603,7 @@ describe('OrcaRuntimeService', () => {
       expect(removeWorktree).not.toHaveBeenCalled()
       expect(removeWorktreeMeta).not.toHaveBeenCalled()
 
-      await expect(runtime.removeManagedWorktree(worktreeId, true)).resolves.toEqual({})
+      await expect(runtime.removeManagedWorktree(worktreeId, { force: true })).resolves.toEqual({})
 
       await expect(lstat(leftoverPath)).rejects.toMatchObject({ code: 'ENOENT' })
       expect(assertWorktreeCleanForRemoval).not.toHaveBeenCalled()
@@ -614,7 +659,7 @@ describe('OrcaRuntimeService', () => {
     try {
       vi.mocked(listWorktrees).mockResolvedValue([])
 
-      await expect(runtime.removeManagedWorktree(worktreeId, true)).rejects.toThrow(
+      await expect(runtime.removeManagedWorktree(worktreeId, { force: true })).rejects.toThrow(
         `Refusing to delete unregistered worktree path: ${standalonePath}`
       )
 

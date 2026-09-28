@@ -1,8 +1,9 @@
+import { closeTestStores, testState, createStore, writeDataFile } from './persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { testState, createStore, writeDataFile } from './persistence-test-harness'
+
 import { getDefaultPersistedState } from '../shared/constants'
 import { sshRemotePtyLeaseAllowsReattach } from '../shared/ssh-types'
 import { TEST_LEAF_1, TEST_LEAF_2 } from './persistence-session-fixtures'
@@ -96,7 +97,8 @@ describe('Store', () => {
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
   it('merges missing prior layout bindings into partial renderer snapshots', async () => {
@@ -526,12 +528,9 @@ describe('Store', () => {
     store.markSshRemotePtyLeases('ssh-1', 'terminated')
 
     const session = store.getWorkspaceSession()
-    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([
-      expect.objectContaining({
-        ptyId: 'remote-pty',
-        state: 'terminated'
-      })
-    ])
+    // The scrub is what retires the row: with no binding left naming the id, the tombstone routes
+    // nothing and is dropped in the same write.
+    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([])
     expect(session.tabsByWorktree.wt1[0].ptyId).toBeNull()
     expect(session.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({})
   })
@@ -622,12 +621,8 @@ describe('Store', () => {
 
     store.markSshRemotePtyLease('ssh-1', 'ssh:ssh-1@@remote-pty', 'terminated')
 
-    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([
-      expect.objectContaining({
-        ptyId: 'remote-pty',
-        state: 'terminated'
-      })
-    ])
+    // An unresolved id would have left the lease `attached`; this unbound row is retired instead.
+    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([])
   })
 
   // `expired` never means the shell exited — every writer records that the CLIENT lost its route
@@ -658,12 +653,7 @@ describe('Store', () => {
     store.markSshRemotePtyLease('ssh-1', 'ssh:ssh-1@@remote-pty', 'terminated')
 
     const session = store.getWorkspaceSession()
-    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([
-      expect.objectContaining({
-        ptyId: 'remote-pty',
-        state: 'terminated'
-      })
-    ])
+    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([])
     expect(session.tabsByWorktree.wt1[0].ptyId).toBeNull()
     expect(session.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({})
   })
@@ -806,7 +796,8 @@ describe('ssh remote pty lease route-retirement marks survive the disk round tri
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
   })
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
 

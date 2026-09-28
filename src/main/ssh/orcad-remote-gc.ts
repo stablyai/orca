@@ -15,6 +15,7 @@
  */
 import type { SshConnection } from './ssh-connection'
 import { execCommand } from './ssh-relay-deploy-helpers'
+import { isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
 import { ORCAD_INSTALL_MODEL } from './remote-install-model'
 import { gcOldRemoteInstallVersions } from './ssh-relay-versioned-install'
 import { orcadGcPinnedDirNames, type OrcadActivationRecord } from './orcad-activation-record'
@@ -63,7 +64,10 @@ export async function gcOldOrcadVersions(options: OrcadGcOptions): Promise<void>
             }
           )
           return orcadLivenessBlocksGc(parseOrcadLiveness(probe))
-        } catch {
+        } catch (error) {
+          if (isUnconfirmedSshCommandTermination(error)) {
+            throw error
+          }
           // Why true: an unanswered probe is not evidence a tree is idle. Same rule the
           // relay's socket probe applies, for the same reason.
           return true

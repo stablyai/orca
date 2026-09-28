@@ -1,3 +1,4 @@
+import { getPiStateTitleBrand } from './pi-state-title-marker'
 import {
   AGY_AGENT_NAME_RE,
   CLAUDE_IDLE,
@@ -66,6 +67,10 @@ function computeAgentLabel(title: string): string | null {
     title.startsWith('* ')
   ) {
     return 'Claude Code'
+  }
+  const piStateBrand = getPiStateTitleBrand(title)
+  if (piStateBrand) {
+    return piStateBrand
   }
   if (isGeminiTerminalTitle(title)) {
     return 'Gemini CLI'

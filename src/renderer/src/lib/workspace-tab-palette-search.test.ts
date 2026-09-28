@@ -143,9 +143,7 @@ describe('workspace-tab-palette-search', () => {
     expect(result.executionHostId).toBe('ssh:box')
   })
 
-  it('keeps the resolvable twin when the first record under an id has no open file', () => {
-    // Why: dropping the id on sight would lose the row entirely — the leading
-    // record dies at the open-file lookup and the survivor never gets its turn.
+  it('omits colliding tab ids even when only one record has an open file', () => {
     const orphaned = makeUnifiedTab({
       id: 'unified-editor-dup',
       contentType: 'editor',
@@ -161,12 +159,26 @@ describe('workspace-tab-palette-search', () => {
       openFiles: [makeOpenFile()]
     })
 
-    expect(entries.map((entry) => entry.tab.id)).toEqual(['unified-editor-dup'])
-    expect(entries[0]?.secondaryText).toBe(SRC_APP_RELATIVE_PATH)
+    expect(entries).toEqual([])
   })
-  it('emits one entry per tab id when a session persisted the same id twice', () => {
-    // Why: the palette keys rows by tab id, and duplicated persisted records used
-    // to render the row twice under one React key, stranding a ghost row.
+
+  it('omits an editor row whose explicit file host disagrees with its unique worktree', () => {
+    const remote = makeWorktree({ hostId: 'ssh:remote' })
+    const editor = makeUnifiedTab({
+      id: 'remote-editor',
+      entityId: SRC_APP_PATH,
+      contentType: 'editor',
+      executionHostId: 'ssh:remote'
+    })
+    const entries = buildEntries({
+      worktrees: [remote],
+      unifiedTabsByWorktree: { 'wt-1': [editor] },
+      openFiles: [makeOpenFile({ externalSshTargetId: 'other-host' })]
+    })
+
+    expect(entries).toEqual([])
+  })
+  it('omits a tab id when a session persisted it twice', () => {
     const duplicate = makeUnifiedTab({ id: 'unified-terminal-dup' })
     const entries = buildEntries({
       unifiedTabsByWorktree: {
@@ -175,7 +187,7 @@ describe('workspace-tab-palette-search', () => {
     })
 
     const tabIds = entries.map((entry) => entry.tab.id)
-    expect(tabIds).toEqual(['unified-terminal-1', 'unified-terminal-dup'])
+    expect(tabIds).toEqual(['unified-terminal-1'])
 
     const results = searchWorkspaceTabs(entries, 'unified')
     expect(results.map((result) => result.tabId)).toEqual(tabIds)
@@ -560,9 +572,8 @@ describe('workspace-tab-palette-search', () => {
       title: 'Fix login race',
       secondaryText: '',
       secondaryRanges: [],
-      // The bare alias matches exactly, so it outranks "terminal tab"; its range
-      // indexes the alias string, not the row.
-      typeAliasMatch: { text: 'terminal', ranges: [{ start: 0, end: 8 }] }
+      // Equal-strength aliases use the builder's stable display order.
+      typeAliasMatch: { text: 'terminal tab', ranges: [{ start: 0, end: 8 }] }
     })
   })
 

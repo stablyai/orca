@@ -42,13 +42,17 @@ function ProjectViewTab({
   active: boolean
   onPick: (viewId: string) => void
 }): React.JSX.Element {
-  const supported = view.layout === 'TABLE_LAYOUT'
+  // Why: allowlist, not denylist — raw.layout is cast unchecked, so a future
+  // GitHub layout value must stay disabled instead of masquerading as a table.
+  const supported = view.layout === 'TABLE_LAYOUT' || view.layout === 'ROADMAP_LAYOUT'
   const layoutLabel =
     view.layout === 'BOARD_LAYOUT'
       ? 'Board'
       : view.layout === 'ROADMAP_LAYOUT'
         ? 'Roadmap'
-        : 'Table'
+        : view.layout === 'TABLE_LAYOUT'
+          ? 'Table'
+          : formatUnknownLayout(view.layout)
   const Icon =
     view.layout === 'BOARD_LAYOUT'
       ? KanbanSquare
@@ -106,8 +110,8 @@ function ProjectViewTab({
           <p className="text-xs leading-5 text-muted-foreground">
             {message}{' '}
             {translate(
-              'auto.components.github.project.ProjectViewWrapper.1bf8c01c8b',
-              'Switch to a Table view to work with this project in Orca.'
+              'auto.components.github.project.ProjectViewStates.ac83c45672',
+              'Switch to a Table or Roadmap view to work with this project in Orca.'
             )}
           </p>
           <Button
@@ -154,7 +158,12 @@ export function ProjectViewErrorState({
     error.type === 'too_large'
       ? `This view has ${totalCount ?? 'many'} items — too large to render in Orca. Narrow the view's filter on GitHub.`
       : error.type === 'unsupported_layout'
-        ? 'Orca only renders table views yet. This is a Board or Roadmap view.'
+        ? // Why: an older paired host still reports roadmaps as unsupported, so this
+          // copy must not name the layout — the tab strip already does that.
+          translate(
+            'auto.components.github.project.ProjectViewStates.e4cc8b14f2',
+            'Orca renders table and roadmap project views. This view uses a layout it cannot render yet.'
+          )
         : error.type === 'not_found'
           ? 'Could not find this project or view.'
           : error.type === 'schema_drift'
@@ -166,6 +175,14 @@ export function ProjectViewErrorState({
       <OpenInGitHubButton onClick={onOpenInGitHub} />
     </div>
   )
+}
+
+function formatUnknownLayout(layout: string): string {
+  const base = layout
+    .replace(/_LAYOUT$/, '')
+    .replaceAll('_', ' ')
+    .toLowerCase()
+  return base ? base.charAt(0).toUpperCase() + base.slice(1) : layout
 }
 
 function OpenInGitHubButton({ onClick }: { onClick: () => void }): React.JSX.Element {
@@ -205,6 +222,44 @@ export function ProjectTableSkeleton(): React.JSX.Element {
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+/**
+ * Empty result for a project view, worded from the view's own filter.
+ *
+ * Why: an unfiltered view has no filter to blame, so "no items match this
+ * view's filter" reads as data loss when a freshly populated board momentarily
+ * comes back empty (#12648). `ProjectV2.items(query:)` defaults to `""`, so
+ * there is no non-search request shape to fall back to — the honest remedy is
+ * to name the state correctly and say the emptiness may be transient.
+ */
+export function ProjectItemsEmptyState({ filter }: { filter: string }): React.JSX.Element {
+  if (filter.trim().length > 0) {
+    return (
+      <div className="flex min-h-[120px] items-center justify-center p-6 text-sm text-muted-foreground">
+        {translate(
+          'auto.components.github.project.ProjectViewList.4f57d2e0b1',
+          "No items match this view's filter."
+        )}
+      </div>
+    )
+  }
+  return (
+    <div className="flex min-h-[120px] flex-col items-center justify-center gap-1 p-6 text-center text-sm text-muted-foreground">
+      <span>
+        {translate(
+          'auto.components.github.project.ProjectViewStates.3b9c1d5e47',
+          'This view has no items yet.'
+        )}
+      </span>
+      <span className="text-xs">
+        {translate(
+          'auto.components.github.project.ProjectViewStates.7e4a2f80c6',
+          'Recently added items can take a while to appear.'
+        )}
+      </span>
     </div>
   )
 }

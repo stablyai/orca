@@ -10,7 +10,9 @@ const { listRepoWorktreesMock, pruneLineageMock, pruneMetadataMock, registerWork
     registerWorktreeRootsMock: vi.fn()
   }))
 
-vi.mock('../../../repo-worktrees', () => ({ listRepoWorktrees: listRepoWorktreesMock }))
+vi.mock('../../../repo-worktrees', () => ({
+  listRepoWorktreesForDetectedScan: listRepoWorktreesMock
+}))
 vi.mock('../../../project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: () => ({})
 }))

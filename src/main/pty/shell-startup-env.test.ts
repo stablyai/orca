@@ -16,7 +16,8 @@ import {
   __resetShellStartupEnvCache,
   isShellStartupEnvProbeSupported,
   readSessionShellStartupEnvVar,
-  readShellStartupEnvVar
+  readShellStartupEnvVar,
+  SHELL_STARTUP_ENV_CACHE_MAX_ENTRIES
 } from './shell-startup-env'
 
 describe('readShellStartupEnvVar', () => {
@@ -307,6 +308,18 @@ describe('readShellStartupEnvVar', () => {
     const callsAfterFirst = readFileSyncMock.mock.calls.length
     expect(readShellStartupEnvVar('OPENCODE_CONFIG_DIR', '/home/alice')).toBe('/cached')
     expect(readFileSyncMock.mock.calls.length).toBe(callsAfterFirst)
+  })
+
+  it('bounds cache keys from long-lived home and host churn', () => {
+    mockStartupFiles({ '.zshrc': 'export OPENCODE_CONFIG_DIR=/cached\n' })
+    for (let index = 0; index < SHELL_STARTUP_ENV_CACHE_MAX_ENTRIES + 40; index += 1) {
+      expect(readShellStartupEnvVar('OPENCODE_CONFIG_DIR', `/home/user-${index}`)).toBe('/cached')
+    }
+
+    expect(readShellStartupEnvVar('OPENCODE_CONFIG_DIR', '/home/user-0')).toBe('/cached')
+    expect(readFileSyncMock.mock.calls.length).toBeGreaterThan(
+      SHELL_STARTUP_ENV_CACHE_MAX_ENTRIES + 40
+    )
   })
 
   it('rejects names with regex metacharacters', () => {

@@ -14,14 +14,19 @@ import {
 import type {
   BrowserCookieImportResult,
   BrowserSessionProfile,
-  BrowserSessionProfileCreateOptions,
   BrowserSessionProfileScope
 } from '../../shared/browser-workspace-types'
+import {
+  getBrowserIdentityModeStatus,
+  setBrowserIdentityMode
+} from '../browser/browser-identity-mode-store'
 
 export function registerBrowserSessionProfileHandlers(): void {
   ipcMain.removeHandler('browser:session:listProfiles')
   ipcMain.removeHandler('browser:session:createProfile')
   ipcMain.removeHandler('browser:session:deleteProfile')
+  ipcMain.removeHandler('browser:identity:get')
+  ipcMain.removeHandler('browser:identity:set')
   ipcMain.removeHandler('browser:session:importCookies')
   ipcMain.removeHandler('browser:session:resolvePartition')
 
@@ -36,19 +41,35 @@ export function registerBrowserSessionProfileHandlers(): void {
     'browser:session:createProfile',
     async (
       event,
-      args: {
-        scope: BrowserSessionProfileScope
-        label: string
-      } & BrowserSessionProfileCreateOptions
+      args: { scope: BrowserSessionProfileScope; label: string }
     ): Promise<BrowserSessionProfile | null> => {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return null
       }
-      return await browserSessionRegistry.createProfile(args.scope, args.label, {
-        userAgentMode: args.userAgentMode
-      })
+      return await browserSessionRegistry.createProfile(args.scope, args.label)
     }
   )
+
+  ipcMain.handle('browser:identity:get', (event) => {
+    if (!isTrustedBrowserRenderer(event.sender)) {
+      return null
+    }
+    return getBrowserIdentityModeStatus()
+  })
+
+  ipcMain.handle('browser:identity:set', async (event, mode: unknown) => {
+    if (!isTrustedBrowserRenderer(event.sender)) {
+      return null
+    }
+    // Why reject rather than coerce: the RPC door validates against z.enum(['clean', 'native'])
+    // and rejects. Coercing an unrecognized value to 'clean' made one concept answer an unknown
+    // value two different ways, and reported success for a mode that was quietly replaced —
+    // silently downgrading a future mode name the caller believed was honoured.
+    if (mode !== 'clean' && mode !== 'native') {
+      throw new Error(`Unsupported browser identity mode: ${String(mode)}`)
+    }
+    return setBrowserIdentityMode(mode)
+  })
 
   ipcMain.handle(
     'browser:session:deleteProfile',

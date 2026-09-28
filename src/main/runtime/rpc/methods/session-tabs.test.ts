@@ -2,8 +2,12 @@ import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import {
+  SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+  SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY
+} from '../../../../shared/protocol-version'
 import { SESSION_TAB_METHODS } from './session-tabs'
+import { visibleSnapshot } from './session-tabs-snapshot.test-fixture'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
@@ -496,6 +500,48 @@ describe('session tab RPC methods', () => {
     )
   })
 
+  it.each([
+    {
+      label: 'present',
+      clientCapabilities: [SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY],
+      expectedSupport: true
+    },
+    { label: 'absent', clientCapabilities: [], expectedSupport: false }
+  ])('passes split-group placement support when the capability is $label', async (testCase) => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      createMobileSessionTerminal: vi.fn().mockResolvedValue({
+        tab: { type: 'terminal', id: 'tab-1::leaf-1' },
+        publicationEpoch: 'epoch-1',
+        snapshotVersion: 1
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+
+    await dispatcher.dispatchStreaming(
+      makeRequest('session.tabs.createTerminal', {
+        worktree: 'id:wt-1',
+        afterTabId: 'tab-1',
+        clientMutationId: 'create-1'
+      }),
+      () => {},
+      {
+        clientKind: 'runtime',
+        pairedDeviceId: 'device-a',
+        clientCapabilities: testCase.clientCapabilities
+      }
+    )
+
+    expect(runtime.createMobileSessionTerminal).toHaveBeenCalledWith(
+      'id:wt-1',
+      expect.objectContaining({
+        afterTabId: 'tab-1',
+        clientNavigationId: 'device-a',
+        supportsSplitGroupPlacement: testCase.expectedSupport
+      })
+    )
+  })
+
   it('preserves legacy agent creation for mixed-version clients', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -816,27 +862,3 @@ describe('session tab RPC methods', () => {
     )
   })
 })
-
-function visibleSnapshot() {
-  return {
-    worktree: 'wt-1',
-    publicationEpoch: 'epoch-1',
-    snapshotVersion: 1,
-    activeGroupId: 'group-1',
-    activeTabId: 'tab-1::leaf-1',
-    activeTabType: 'terminal' as const,
-    tabGroups: [{ id: 'group-1', activeTabId: 'tab-1', tabOrder: ['tab-1'] }],
-    tabs: [
-      {
-        type: 'terminal' as const,
-        id: 'tab-1::leaf-1',
-        parentTabId: 'tab-1',
-        leafId: 'leaf-1',
-        title: 'Terminal',
-        status: 'ready' as const,
-        terminal: 'pty-1',
-        isActive: true
-      }
-    ]
-  }
-}

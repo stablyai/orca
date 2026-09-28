@@ -11,6 +11,7 @@ import {
 } from './command-code-prompt-text'
 import { stripTerminalControl } from './terminal-control-stripping'
 import { escapeRegex } from './string-utils'
+import { ownRetainedString } from './own-retained-string'
 
 export { stripTerminalControl } from './terminal-control-stripping'
 
@@ -142,9 +143,24 @@ function rawTextMayContainCommandCodeBanner(rawText: string): boolean {
   return rawText.includes('C') && rawText.includes('o') && rawText.includes('d')
 }
 
+// COMMAND_CODE_BANNER_RE requires a literal '#', and stripTerminalControl only ever removes
+// characters, so raw bytes without one cannot produce a banner match.
+const BANNER_REQUIRED_RAW_CHAR = '#'
+
+/**
+ * Prefilter run against the raw chunk before the scan windows are built. Testing the whole carry
+ * plus chunk over-admits relative to the window test (the windows drop middle content), so it can
+ * never turn a match into a miss.
+ */
+function rawChunkMayContainCommandCodeBanner(previousRawText: string, data: string): boolean {
+  return (
+    data.includes(BANNER_REQUIRED_RAW_CHAR) || previousRawText.includes(BANNER_REQUIRED_RAW_CHAR)
+  )
+}
+
 function appendRecentRawText(previousRawText: string, data: string): string {
   if (data.length >= RECENT_TEXT_LIMIT) {
-    return data.slice(-RECENT_TEXT_LIMIT)
+    return ownRetainedString(data.slice(-RECENT_TEXT_LIMIT))
   }
   return (previousRawText + data).slice(-RECENT_TEXT_LIMIT)
 }
@@ -233,6 +249,11 @@ export function createCommandCodeOutputStatusDetector(args: {
     observe(data: string): boolean {
       const previousRawText = recentRawText
       recentRawText = appendRecentRawText(previousRawText, data)
+      // Why before the windows: a non-Command-Code pane pays two ~4KB string builds per chunk
+      // otherwise, only to fail the same prefilter a few lines later.
+      if (!hasSeenCommandCodeUi && !rawChunkMayContainCommandCodeBanner(previousRawText, data)) {
+        return false
+      }
       const scanRawText = buildStatusScanRawText(previousRawText, data)
       const scanRawTextWithChunkBoundary = previousRawText
         ? buildStatusScanRawText(`${previousRawText}\n`, data)

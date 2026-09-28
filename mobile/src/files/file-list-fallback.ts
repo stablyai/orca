@@ -29,7 +29,11 @@ export function isMobileMethodUnavailableError(
   )
 }
 
-export function directoryCacheFromFileList(files: LegacyMobileFileEntry[]): DirectoryCache {
+// Takes only the member it reads: the explorer's reply reader checks `relativePath` and passes the
+// rest of each row through, so naming the whole row here would re-declare what it deliberately did not.
+export function directoryCacheFromFileList(
+  files: readonly { relativePath: string; [member: string]: unknown }[]
+): DirectoryCache {
   const childrenByDir = new Map<string, Map<string, boolean>>()
   const ensureDir = (path: string): Map<string, boolean> => {
     let children = childrenByDir.get(path)

@@ -2,9 +2,9 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
-import { useAllWorktrees } from '@/store/selectors'
 import { usePluginCommands } from '@/store/plugin-panels'
 import { useSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
+import { dedupePaletteWorktrees } from '@/lib/palette-repo-resolution'
 import {
   selectPaletteIndexStatusSnapshot,
   selectPaletteStatusInputs
@@ -29,7 +29,10 @@ export function useWorktreeJumpPaletteStoreState({
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
   const revealSidebarRow = useAppStore((state) => state.revealSidebarRow)
   const worktreesByRepo = useAppStore((state) => state.worktreesByRepo)
-  const allWorktrees = useAllWorktrees()
+  const allWorktrees = useMemo(
+    () => dedupePaletteWorktrees(Object.values(worktreesByRepo).flat()),
+    [worktreesByRepo]
+  )
   const repos = useAppStore((state) => state.repos)
   const projectGroups = useAppStore((state) => state.projectGroups)
   const projects = useAppStore((state) => state.projects)

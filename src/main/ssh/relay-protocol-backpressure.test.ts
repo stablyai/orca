@@ -200,6 +200,40 @@ describe('FrameDecoder bounded turns', () => {
     expect(seen).toEqual([1, 4])
   })
 
+  // feed() runs straight from a transport data handler. A frame owner that threw on the first
+  // turn used to escape feed() and reach uncaughtException. The continuation path was already
+  // contained; the synchronous path must match it.
+  it('contains a frame owner that throws on the synchronous turn and reports one typed error', () => {
+    const seen: number[] = []
+    const onError = vi.fn()
+    const pause = vi.fn()
+    const resume = vi.fn()
+    const decoder = new FrameDecoder(
+      (decoded) => {
+        if (decoded.id === 2) {
+          throw new Error('frame owner failed')
+        }
+        seen.push(decoded.id)
+      },
+      onError,
+      { pause, resume }
+    )
+
+    expect(() => decoder.feed(Buffer.concat([frame(1), frame(2), frame(3)]))).not.toThrow()
+
+    expect(seen).toEqual([1])
+    expect(onError).toHaveBeenCalledExactlyOnceWith(expect.any(FrameDecoderContinuationError))
+    expect(onError.mock.calls[0]?.[0]).toMatchObject({
+      cause: expect.objectContaining({ message: 'frame owner failed' })
+    })
+    expect(decoder.drain()).toHaveLength(0)
+    expect(pause).not.toHaveBeenCalled()
+    expect(resume).not.toHaveBeenCalled()
+
+    decoder.feed(frame(4))
+    expect(seen).toEqual([1, 4])
+  })
+
   it('keeps reads active for partial frames and incrementally discards oversized payloads', () => {
     const errors: Error[] = []
     const seen: DecodedFrame[] = []

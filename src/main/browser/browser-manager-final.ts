@@ -3,7 +3,7 @@ import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import { BrowserManagerEventForwarding } from './browser-manager-event-forwarding'
 
 export abstract class BrowserManagerFinal extends BrowserManagerEventForwarding {
-  protected openLinkInOrcaTab(browserTabId: string, rawUrl: string): boolean {
+  protected openLinkInOrcaTab(browserTabId: string, rawUrl: string, activate?: boolean): boolean {
     const renderer = this.resolveRendererForBrowserTab(browserTabId)
     if (!renderer) {
       return false
@@ -15,7 +15,8 @@ export abstract class BrowserManagerFinal extends BrowserManagerEventForwarding 
     // Why: only the renderer owns Orca's worktree/tab model; main forwards a validated URL, never letting guest content mutate it.
     renderer.send('browser:open-link-in-orca-tab', {
       browserPageId: browserTabId,
-      url: normalizedUrl
+      url: normalizedUrl,
+      ...(activate === false ? { activate: false } : {})
     })
     return true
   }

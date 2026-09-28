@@ -1,23 +1,13 @@
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import type { RestoredStructuredAgentSessionRead } from './structured-agent-session-read-restore'
+import type { StructuredAgentSessionReadRestoreDeps } from './structured-agent-session-restart-restore'
 import { restoreStructuredAgentSessionsOnRestart } from './structured-agent-session-restart-restore'
 
 export class StructuredAgentSessionReadableRestorer {
   private restorePromise: Promise<void> | null = null
 
   constructor(
-    private readonly input: {
-      store: AgentSessionRecordStore
-      journalRoot: string
+    private readonly input: StructuredAgentSessionReadRestoreDeps & {
       supportsRecord: (record: AgentSessionRecord) => boolean
-      reconcile: (sessionId: string) => Promise<AgentSessionWireRefusal | null>
-      resolveRecovery: (sessionId: string) => Promise<unknown>
-      serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
-      hasSession: (sessionId: string) => boolean
-      onReadable: (sessionId: string, restored: RestoredStructuredAgentSessionRead) => void
-      restoreHandoff: (sessionId: string) => Promise<void>
     }
   ) {}
 
@@ -33,7 +23,7 @@ export class StructuredAgentSessionReadableRestorer {
     const targetOrder = sessionIds
       ? new Map(sessionIds.map((sessionId, index) => [sessionId, index]))
       : null
-    const records = this.input.store
+    const records = this.input.openDeps.store
       .listRecords()
       .filter(
         (record) =>

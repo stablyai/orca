@@ -140,6 +140,7 @@ export function detachTerminalPaneToTab(args: {
   )?.shellOverride
   const tab = latestStore.createTab(args.worktreeId, args.targetGroupId, sourceShellOverride, {
     activate: true,
+    ...(detachedLayout.chatLeafId ? { viewMode: 'chat' as const } : {}),
     initialPtyId: ptyId ?? undefined,
     ...(!ptyId
       ? {
@@ -167,7 +168,7 @@ export function detachTerminalPaneToTab(args: {
     targetTabId: tab.id
   })
   afterCreateStore.setActiveTab(tab.id)
-  afterCreateStore.setActiveTabType('terminal')
+  afterCreateStore.setActiveTabType('terminal', args.worktreeId)
 
   return { tab, leafId: sourceLeafId, ptyId }
 }

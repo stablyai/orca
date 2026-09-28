@@ -40,11 +40,11 @@ orca orchestration task-create --spec "Audit billing settings for mobile layout"
 orca orchestration worker-start --task <taskId> --worktree current --agent codex --json
 # or new worktree:
 orca orchestration worker-start --task <taskId> --worktree new-child --name billing-audit --agent codex --setup run --json
-# optional per-worker model / effort (Claude, Codex, Cursor only; not with --terminal):
+# optional per-worker model / effort (Claude, Codex, Cursor, Antigravity, Muse; not with --terminal):
 orca orchestration worker-start --task <taskId> --worktree current --agent claude --model <opaque-model-id> --effort high --json
 ```
 
-`--model` accepts opaque provider model IDs for Claude, Codex, and Cursor. `--effort` requires `--model` and only applies when that agent/model supports the level. Neither flag can combine with `--terminal` (reuse an existing pane). Overrides apply to that launch only and show under `launch.requested` / `launch.effective` in the start receipt. Federated starts need a worker host that advertises launch-preference support.
+`--agent` takes any Orca agent ID enabled on the worker server, for example `claude`, `codex`, `cursor`, `antigravity`, `muse`, `opencode`, or `opencode2`. `--model` accepts opaque provider model IDs for Claude, Codex, Cursor, Antigravity, and Muse (for example `--agent muse --model muse-spark-1.3`); other agents, including opencode, run the model from their own config. `--effort` requires `--model` and only applies when that agent/model supports the level. Neither flag can combine with `--terminal` (reuse an existing pane). Overrides apply to that launch only and show under `launch.requested` / `launch.effective` in the start receipt. Federated starts need a worker host that advertises launch-preference support.
 
 Wait for completions (process every message in a Delivery, then ack):
 
@@ -116,12 +116,14 @@ orca orchestration dispatch --task <taskId> --to <workerHandle> --inject --json
 - Default `check` is the bound Run's oldest unacked Delivery (FIFO). Replay until `--ack`.
 - `--peek` / `--all` do not consume mail.
 - Group addresses: `@all`, `@idle`, `@claude`, `@codex`, `@opencode`, `@gemini`, `@droid`, `@grok`, `@cursor`, `@worktree:<id>` — never for `worker_done` / heartbeat.
+- Every group except `@worktree:<id>` means the live Dispatches of the sender's own Run, delivered to their Dispatch mailboxes (or child Run mailboxes for nested coordinators). A sender in no Run is refused; `--run` must match the audience and never grants membership.
+- Run groups exclude their owning coordinator. A worker raising a blocker sends to `run:<id>`. `@worktree:<id>` includes coordinators in that workspace.
 - Quote PowerShell group addresses: `--to "@all"`.
 
 ```bash
 orca orchestration send --to @all --subject "Heads up" --body "Pausing dispatches for a review." --json
 orca orchestration send --to @idle --subject "Anyone free?" --json
-orca orchestration send --to @codex --subject "Codex agents only" --json
+orca orchestration send --to @codex --subject "Codex workers in this Run only" --json
 ```
 
 While a wait is active, the CLI emits small JSON heartbeat lines to stderr every 15 seconds. Stdout remains the final command result.
@@ -145,7 +147,7 @@ orca orchestration ask \
   --json
 ```
 
-With `--json`, `ask` prints a single JSON object so workers can pipe it to `jq -r .answer`.
+With `--json`, `ask` prints the standard `{id, ok, result, _meta}` envelope, so workers read the answer with `jq -r .result.answer`.
 
 ## Decision gates
 

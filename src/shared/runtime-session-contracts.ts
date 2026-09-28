@@ -78,6 +78,8 @@ export type RuntimeStatus = {
   worktreeCreateIdempotency?: {
     dedupeTtlMs: number
   }
+  /** True only when this Windows host can prove process creation times for PID ownership. */
+  windowsProcessStartTimeAvailable?: boolean
   /**
    * Optional for mixed-version peers. Absence means the host predates structured
    * degradation reporting, not that the host proved every optional feature available.
@@ -87,6 +89,8 @@ export type RuntimeStatus = {
   remoteUpdateSupport?: RemoteServerUpdateSupport
   remoteControl?: RemoteRuntimeSharedConnectionDiagnostics | null
   hostPlatform?: NodeJS.Platform
+  /** Optional display name reported by the answering runtime. */
+  machineName?: string
   terminalWindowsShell?: string | null
   deviceScope?: DeviceScope
   floatingWorkspaceEnabled?: boolean
@@ -141,6 +145,8 @@ export type RuntimeSyncedLeaf = {
   ptyId: string | null
   paneTitle?: string | null
   title?: string | null
+  /** True when this leaf is retained by a parked PTY watcher, not mounted in the renderer. */
+  parked?: boolean
 }
 
 export type RuntimeSyncWindowGraph = {

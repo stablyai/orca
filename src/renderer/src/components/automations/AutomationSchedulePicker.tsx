@@ -11,6 +11,7 @@ import { buildAutomationCronSchedule } from '../../../../shared/automation-sched
 import { isValidAutomationSchedule } from '../../../../shared/automation-schedule-parsing'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import { AutomationCustomCronPanel } from './AutomationCustomCronPanel'
+import { acceptsAutomationDraftSchedule } from './automation-schedule-input-gate'
 import { AutomationTimeField, parseAutomationTime } from './AutomationTimeField'
 import { Field } from './automation-page-parts'
 import { translate } from '@/i18n/i18n'
@@ -74,10 +75,16 @@ export function AutomationSchedulePicker({
 }): React.JSX.Element {
   const customSchedule = draft.customSchedule.trim()
   const weekdayNames = getUiWeekdayNames()
+  // Same gate the save path uses, so an untouched legacy cadence is not flagged red for a
+  // rule it only has to satisfy as new input.
+  const acceptsSchedule = (schedule: string): boolean =>
+    acceptsAutomationDraftSchedule({
+      customSchedule: schedule,
+      savedRrule: draft.savedSchedule,
+      validate: validateAdvancedSchedule
+    })
   const customScheduleInvalid =
-    draft.preset === 'custom' &&
-    customSchedule.length > 0 &&
-    !validateAdvancedSchedule(customSchedule)
+    draft.preset === 'custom' && customSchedule.length > 0 && !acceptsSchedule(customSchedule)
 
   const setTime = (time: string): void => {
     onDraftChange((current) => ({
@@ -119,7 +126,7 @@ export function AutomationSchedulePicker({
         <AutomationCustomCronPanel
           draft={draft}
           customScheduleInvalid={customScheduleInvalid}
-          validateAdvancedSchedule={validateAdvancedSchedule}
+          validateAdvancedSchedule={acceptsSchedule}
           onDraftChange={onDraftChange}
         />
       ) : (

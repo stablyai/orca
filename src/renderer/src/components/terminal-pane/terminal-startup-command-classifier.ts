@@ -60,7 +60,8 @@ export function isKnownTuiAgentTerminalStartupCommand(command: string): boolean 
   return (
     KNOWN_TUI_AGENT_EXECUTABLES.has(executable) ||
     executable.startsWith('codex-') ||
-    executable.startsWith('grok-')
+    executable.startsWith('grok-') ||
+    executable.startsWith('muse-bin-')
   )
 }
 

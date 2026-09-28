@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 // Regression guard for the SHIPPED inventory path. `pty.listProcesses` resolves
 // every managed pane's title from one batched host capture; a per-pane tree walk
 // would restore the O(panes x rows) scan on the relay's single event-loop thread,
@@ -100,6 +101,7 @@ function countingRows(rows: ProcessTableRow[]): {
       if (typeof key === 'string' && /^\d+$/.test(key)) {
         reads += 1
       }
+      // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: only Reflect.get forwards a raw string|symbol key with the proxy receiver.
       return Reflect.get(target, key, receiver)
     }
   })

@@ -1,3 +1,4 @@
+import type { LocalGitExecOptions } from '../git/repo-default-base-ref'
 import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../../shared/git-fetch-auto-maintenance'
 import { getCanonicalRepoKey } from '../git/canonical-repo-key'
 import {
@@ -16,7 +17,7 @@ export type RemoteTrackingBase = {
   base: string
 }
 
-type GitOptions = { wslDistro?: string }
+type GitOptions = LocalGitExecOptions
 
 // Why: reuse recent fetches across create and drift probes without hiding remote changes for long.
 const FETCH_FRESHNESS_MS = 30_000
@@ -226,6 +227,14 @@ export class RuntimeRemoteFetchController {
     baseBranch: string,
     gitOptions: GitOptions = {}
   ): Promise<RemoteTrackingBase | null> {
+    const remoteRefPrefix = 'refs/remotes/'
+    const shortBaseBranch = baseBranch.startsWith(remoteRefPrefix)
+      ? baseBranch.slice(remoteRefPrefix.length)
+      : baseBranch
+    // A remote-tracking base needs both a configured remote and a branch component.
+    if (shortBaseBranch.indexOf('/') <= 0 || shortBaseBranch.endsWith('/')) {
+      return null
+    }
     let remotes: string[]
     try {
       const { stdout } = await gitExecFileAsync(['remote'], { cwd: repoPath, ...gitOptions })
@@ -236,10 +245,6 @@ export class RuntimeRemoteFetchController {
     } catch {
       return null
     }
-    const remoteRefPrefix = 'refs/remotes/'
-    const shortBaseBranch = baseBranch.startsWith(remoteRefPrefix)
-      ? baseBranch.slice(remoteRefPrefix.length)
-      : baseBranch
     const remote = remotes
       .filter((candidate) => shortBaseBranch.startsWith(`${candidate}/`))
       .sort((a, b) => b.length - a.length)[0]

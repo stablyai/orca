@@ -20,6 +20,7 @@ export type {
   ClientOnlyUnverifiableInspection,
   ClientOnlyUnverifiableReason
 } from '../../../shared/terminal-process-inspection'
+import type { TerminalInputKind } from '../../../shared/terminal-input-kind'
 
 export type RuntimeTerminalProcessInspection = TerminalProcessInspection
 
@@ -138,7 +139,7 @@ export function recordRuntimeTerminalInputForPtyId(ptyId: string, timestamp = Da
 export async function inspectRuntimeTerminalProcess(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   ptyId: string,
-  options?: { expectedIncarnationId?: string }
+  options?: { expectedIncarnationId?: string; scanChildProcesses?: boolean; steadyState?: boolean }
 ): Promise<RuntimeTerminalProcessInspection> {
   const ownerEnvironmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
   const target = ownerEnvironmentId
@@ -148,7 +149,7 @@ export async function inspectRuntimeTerminalProcess(
   const remote = isRemoteInspectionPtyId(ptyId)
   if (target.kind !== 'environment' || !terminal) {
     try {
-      const result = await (options?.expectedIncarnationId
+      const result = await (options
         ? window.api.pty.inspectProcess(ptyId, options)
         : window.api.pty.inspectProcess(ptyId))
       return normalizeInspectionResult(result, remote)
@@ -169,7 +170,11 @@ export async function inspectRuntimeTerminalProcess(
         terminal,
         ...(options?.expectedIncarnationId
           ? { expectedIncarnationId: options.expectedIncarnationId }
-          : {})
+          : {}),
+        // Why forwarded: the close guards pass this so the host pays for a real child-process read.
+        // Dropped here, the host declines to scan and answers `unverifiable`, which the guard reads
+        // as running work -- a confirmation dialog on every idle close of a remote Windows pane.
+        ...(options?.scanChildProcesses === true ? { scanChildProcesses: true } : {})
       },
       { timeoutMs: 15_000 }
     )
@@ -212,7 +217,8 @@ export async function confirmRuntimeTerminalForegroundProcess(
 export function sendRuntimePtyInput(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   ptyId: string,
-  data: string
+  data: string,
+  inputKind: TerminalInputKind
 ): boolean {
   const tooLarge = isRuntimePtyInputTooLarge(data)
   if (tooLarge === true) {
@@ -224,19 +230,22 @@ export function sendRuntimePtyInput(
     void tooLarge
       .then((resolvedTooLarge) => {
         if (!resolvedTooLarge) {
-          sendRuntimePtyInputWithinLimit(settings, ptyId, data)
+          sendRuntimePtyInputWithinLimit(settings, ptyId, data, inputKind)
         }
       })
       .catch(() => {})
     return true
   }
-  return sendRuntimePtyInputWithinLimit(settings, ptyId, data)
+  return sendRuntimePtyInputWithinLimit(settings, ptyId, data, inputKind)
 }
 
+// Why the kind reaches only the local write: terminal.send has no launch kind, and its query-reply
+// kind is for mobile clients, so the host classifies a desktop's environment write by its bytes.
 function sendRuntimePtyInputWithinLimit(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   ptyId: string,
-  data: string
+  data: string,
+  inputKind: TerminalInputKind
 ): boolean {
   const ownerEnvironmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
   const target = ownerEnvironmentId
@@ -244,7 +253,7 @@ function sendRuntimePtyInputWithinLimit(
     : getActiveRuntimeTarget(settings)
   const terminal = getRemoteRuntimeTerminalHandle(ptyId)
   if (target.kind !== 'environment' || !terminal) {
-    window.api.pty.write(ptyId, data)
+    window.api.pty.write(ptyId, data, inputKind)
     recordRuntimeTerminalInputForPtyId(ptyId)
     return true
   }
@@ -270,7 +279,8 @@ function sendRuntimePtyInputWithinLimit(
 export async function sendRuntimePtyInputVerified(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   ptyId: string,
-  data: string
+  data: string,
+  inputKind: TerminalInputKind
 ): Promise<boolean> {
   const tooLarge = isRuntimePtyInputTooLarge(data)
   if (typeof tooLarge === 'boolean' ? tooLarge : await tooLarge) {
@@ -282,9 +292,9 @@ export async function sendRuntimePtyInputVerified(
     : getActiveRuntimeTarget(settings)
   const terminal = getRemoteRuntimeTerminalHandle(ptyId)
   if (target.kind !== 'environment' || !terminal) {
-    const accepted = await window.api.pty.writeAccepted(ptyId, data)
+    const accepted = await window.api.pty.writeAccepted(ptyId, data, inputKind)
     if (!accepted) {
-      window.api.pty.write(ptyId, data)
+      window.api.pty.write(ptyId, data, inputKind)
       // Why: SSH/local fallback writes are fire-and-forget. Callers use this
       // boolean to continue UX flow, while hook telemetry confirms real turns.
       recordRuntimeTerminalInputForPtyId(ptyId)

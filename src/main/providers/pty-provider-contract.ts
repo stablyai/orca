@@ -12,6 +12,7 @@ import type {
 import type { PtyProcessInfo } from './pty-process-info'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 import type { TerminalOwner } from '../../shared/terminal-owner'
+import type { WriteSettlement } from '../../shared/pty-write-settlement'
 
 export type {
   PtyBackgroundStreamEvent,
@@ -87,6 +88,8 @@ export type PtySpawnOptions = {
    *  changing the user's persistent default shell setting. Only consulted on
    *  Windows; ignored on macOS/Linux where shell selection is not exposed. */
   shellOverride?: string
+  /** Optional Unix interactive profile args; ignored for command and agent launches. */
+  terminalShellArgs?: string[]
   /** Preferred WSL distro for generic `wsl.exe` launches. Worktree/session
    *  distro still wins when the cwd already identifies a WSL distro. */
   terminalWindowsWslDistro?: string | null
@@ -140,7 +143,10 @@ export type IPtyProvider = {
   /** Exact provider readback: false only when the provider answered that the PTY is absent. */
   probePtyLiveness?: (id: string) => Promise<boolean | null>
   write(id: string, data: string): boolean | void
-  writeWithSettlement?: (id: string, data: string) => Promise<boolean>
+  /** Three-valued settlement for writes whose delivery a durable claim depends on.
+   *  Required: a provider that answers this from its own fire-and-forget `write` is
+   *  fabricating a handoff, so every provider must settle or say it cannot. */
+  writeWithSettlement: (id: string, data: string) => WriteSettlement | Promise<WriteSettlement>
   resize(id: string, cols: number, rows: number): void
   /**
    * Producer-side flow control: stop/restart reading the underlying PTY so a

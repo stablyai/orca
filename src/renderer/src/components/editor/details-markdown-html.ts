@@ -94,7 +94,7 @@ export function renderDetailsAttributes(attrs: Record<string, unknown> | undefin
 function markdownFenceRanges(content: string): MarkdownFenceRanges {
   const ranges: [number, number][] = []
   let offset = 0
-  let openFence: { marker: '`' | '~'; length: number; start: number } | null = null
+  let openFence: { closingPattern: RegExp; start: number } | null = null
 
   for (const lineMatch of content.matchAll(/[^\r\n]*(?:\r\n|\n|\r|$)/g)) {
     const line = lineMatch[0]
@@ -104,11 +104,8 @@ function markdownFenceRanges(content: string): MarkdownFenceRanges {
 
     const lineText = line.replace(/(?:\r\n|\n|\r)$/u, '')
     if (openFence) {
-      const closingFencePattern =
-        openFence.marker === '`'
-          ? new RegExp(`^ {0,3}\`{${openFence.length},}\\s*$`)
-          : new RegExp(`^ {0,3}~{${openFence.length},}\\s*$`)
-      if (closingFencePattern.test(lineText)) {
+      // Built once per fence: rebuilding it per line recompiled the same regex for every fenced line.
+      if (openFence.closingPattern.test(lineText)) {
         ranges.push([openFence.start, offset + line.length])
         openFence = null
       }
@@ -116,8 +113,9 @@ function markdownFenceRanges(content: string): MarkdownFenceRanges {
       const openingFenceMatch = lineText.match(/^ {0,3}(`{3,}|~{3,})/u)
       if (openingFenceMatch?.[1]) {
         openFence = {
-          marker: openingFenceMatch[1][0] as '`' | '~',
-          length: openingFenceMatch[1].length,
+          closingPattern: new RegExp(
+            `^ {0,3}${openingFenceMatch[1][0]}{${openingFenceMatch[1].length},}\\s*$`
+          ),
           start: offset
         }
       }
@@ -186,13 +184,26 @@ function hasOnlySupportedDetailsAttributes(rawAttributes: string): boolean {
   return (
     rawAttributes
       .replace(/\s+open(?:\s*=\s*(?:""|"open"|''|'open'|open))?(?=\s|$)/giu, '')
-      .replace(/\s+class\s*=\s*(?:"orca-details"|'orca-details'|orca-details)(?=\s|$)/giu, '')
+      // HTML attribute names ignore case; class tokens do not.
+      .replace(
+        /\s+[cC][lL][aA][sS][sS]\s*=\s*(?:"orca-details"|'orca-details'|orca-details)(?=\s|$)/gu,
+        ''
+      )
       .replace(
         /\s+data-orca-toggle\s*=\s*(?:"heading-[1-5]"|'heading-[1-5]'|heading-[1-5])(?=\s|$)/giu,
         ''
       )
       .trim() === ''
   )
+}
+
+export function normalizeDetailsOpeningTag(fragment: string): string {
+  const match = fragment.match(/^<details(\s[^<>]*)?>$/i)
+  const attributes = match?.[1] ?? ''
+  if (!match || !hasOnlySupportedDetailsAttributes(attributes)) {
+    return fragment
+  }
+  return `<details ${renderDetailsAttributes(parseDetailsAttributes(attributes))}>`
 }
 
 function hasOnlyPlainParagraphAndBreakTags(content: string): boolean {

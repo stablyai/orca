@@ -25,7 +25,10 @@ export function createOutputSink(maxBytes: number): {
       chunks.push(chunk.length > remaining ? chunk.subarray(0, remaining) : chunk)
       bytes += chunk.length
     },
-    text: () => Buffer.concat(chunks).toString('utf8'),
+    text: () =>
+      chunks.length === 0
+        ? ''
+        : (chunks.length === 1 ? chunks[0] : Buffer.concat(chunks)).toString('utf8'),
     // Why: callers that parse the output need to tell a short answer from a
     // clipped one -- truncated JSON or JSONL parses as a smaller valid result.
     truncated: () => bytes > maxBytes

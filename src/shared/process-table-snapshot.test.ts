@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { execFileMock } = vi.hoisted(() => ({ execFileMock: vi.fn() }))
 
@@ -10,7 +10,10 @@ import {
   createProcessTableSnapshotReader,
   getProcessTableSnapshot,
   getStrictProcessTableSnapshot,
+  getStrictProcessTableSnapshotWithAge,
+  PROCESS_TABLE_EVIDENCE_BUDGET_MS,
   PS_MAX_BUFFER_BYTES,
+  PS_TIMEOUT_MS,
   resetProcessTableSnapshotForTests
 } from './process-table-snapshot-reader'
 import {
@@ -122,6 +125,26 @@ describe('process-table-snapshot reader', () => {
     clock = 900
     expect(await reader.getSnapshot()).toBe('scan-1')
     expect(scans).toBe(1)
+  })
+
+  it('reports the age of the capture instant, not of the moment ps finished', async () => {
+    let clock = 0
+    const gate = deferred<string>()
+    const reader = createProcessTableSnapshotReader({
+      runPs: () => gate.promise,
+      now: () => clock,
+      ttlMs: 500
+    })
+
+    const first = reader.getSnapshot()
+    // A capture that took 4s of wall clock describes the machine as it was 4s ago.
+    clock = 4_000
+    gate.resolve('scan-1')
+    await first
+
+    // Age used to start at the callback, so a capture older than the destructive
+    // consumer's ceiling was admitted as if it had just been taken.
+    expect((await reader.getSnapshotWithAge()).capturedAgeMs).toBe(4_000)
   })
 
   it('does not cache failures and retries on the next call', async () => {
@@ -598,5 +621,119 @@ describe('process-table capture completeness', () => {
 
     await expect(getProcessTableSnapshot()).rejects.toThrow(ProcessTableCaptureError)
     await expect(getProcessTableSnapshot()).rejects.toThrow('empty_capture')
+  })
+
+  /**
+   * Emulate Node's own execFile deadline: past `timeout` it SIGTERMs the child and calls
+   * back with `Command failed: <argv>` and no stderr -- indistinguishable from a broken
+   * `ps` unless the budget itself is under test.
+   */
+  function mockPsTakingMs(durationMs: number, stdout: string): void {
+    execFileMock.mockImplementation(
+      (command: string, args: string[], options: unknown, callback: unknown) => {
+        const done = callback as (err: unknown, result: { stdout: string; stderr: string }) => void
+        const timeout = (options as { timeout?: number })?.timeout
+        if (timeout !== undefined && durationMs > timeout) {
+          const error = Object.assign(
+            new Error(`Command failed: ${[command, ...args].join(' ')}\n`),
+            { code: null, killed: true, signal: 'SIGTERM' }
+          )
+          done(error, { stdout: '', stderr: '' })
+          return
+        }
+        done(null, { stdout, stderr: '' })
+      }
+    )
+  }
+
+  it('reads a loaded host whose whole-machine ps runs for seconds', async () => {
+    // Measured on a 1,948-process host at load 27: the `command=` argv read alone costs
+    // 1.15s, and contention stretched the same capture to 6.0s. The old 3s budget killed
+    // 6 of 20 consecutive captures, so a readable table answered "unverifiable".
+    mockPsTakingMs(6_000, busyHostTable(200))
+
+    expect(PS_TIMEOUT_MS).toBeGreaterThan(6_000)
+    await expect(getProcessTableSnapshot()).resolves.toHaveLength(200)
+  })
+
+  it('still bounds a ps that never returns', async () => {
+    mockPsTakingMs(PS_TIMEOUT_MS + 1, busyHostTable(200))
+
+    await expect(getProcessTableSnapshot()).rejects.toThrow('Command failed: ps')
+  })
+})
+
+/**
+ * The evidence-publishing read has a far shorter budget than identity proof, and the two are not
+ * interchangeable. Identity proof asks whether a process exists and must not read a slow capture
+ * as an absent one, so it waits out `PS_TIMEOUT_MS`. These consumers ask whether an observation
+ * describes NOW: past this budget it cannot, so the answer they need is a prompt `unverifiable`,
+ * which both relay call sites already produce from a rejection.
+ */
+describe('evidence-publishing capture budget', () => {
+  beforeEach(() => {
+    execFileMock.mockReset()
+    resetProcessTableSnapshotForTests()
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  /** A `ps` that answers after `durationMs` of wall clock, the way a loaded host does. */
+  function mockPsTaking(durationMs: number, stdout = '1 0 1 1 S+ ?? Jan 1 00:00:00 2026 bash\n') {
+    execFileMock.mockImplementation(
+      (_command: string, _args: string[], _options: unknown, callback: unknown) => {
+        const done = callback as (err: unknown, result: { stdout: string; stderr: string }) => void
+        setTimeout(() => done(null, { stdout, stderr: '' }), durationMs)
+      }
+    )
+  }
+
+  it('answers from a capture that lands one tick inside the budget', async () => {
+    mockPsTaking(PROCESS_TABLE_EVIDENCE_BUDGET_MS - 1)
+    const pending = getStrictProcessTableSnapshotWithAge()
+
+    await vi.advanceTimersByTimeAsync(PROCESS_TABLE_EVIDENCE_BUDGET_MS)
+
+    // The age carries the capture's own duration, which is the whole reason the budget is this
+    // far under the 2,000ms admission ceiling rather than under PS_TIMEOUT_MS.
+    expect((await pending).capturedAgeMs).toBe(PROCESS_TABLE_EVIDENCE_BUDGET_MS - 1)
+  })
+
+  it('gives up on a capture one tick past the budget instead of waiting out PS_TIMEOUT_MS', async () => {
+    mockPsTaking(PROCESS_TABLE_EVIDENCE_BUDGET_MS + 1)
+    const pending = getStrictProcessTableSnapshotWithAge()
+    const settled = pending.then(
+      () => 'resolved',
+      (error: Error) => error.message
+    )
+
+    await vi.advanceTimersByTimeAsync(PROCESS_TABLE_EVIDENCE_BUDGET_MS)
+
+    expect(await settled).toContain('process table unreadable')
+  })
+
+  it('leaves the abandoned capture running to fill the cache for the next reader', async () => {
+    // Why this matters: a whole-machine `ps` is the most expensive thing the host does, and the
+    // host that blows the budget is by definition the one that can least afford a second one.
+    mockPsTaking(PROCESS_TABLE_EVIDENCE_BUDGET_MS + 100)
+    const abandoned = getStrictProcessTableSnapshotWithAge().catch(() => null)
+
+    await vi.advanceTimersByTimeAsync(PROCESS_TABLE_EVIDENCE_BUDGET_MS)
+    expect(await abandoned).toBeNull()
+
+    await vi.advanceTimersByTimeAsync(100)
+    expect(await getStrictProcessTableSnapshotWithAge()).toMatchObject({
+      capturedAgeMs: PROCESS_TABLE_EVIDENCE_BUDGET_MS + 100
+    })
+    expect(execFileMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the identity budget far above its own', () => {
+    // A slow capture must still not read as an absent process; only the consumers that need the
+    // observation to describe NOW gave up waiting for it.
+    expect(PROCESS_TABLE_EVIDENCE_BUDGET_MS).toBeLessThan(PS_TIMEOUT_MS)
   })
 })

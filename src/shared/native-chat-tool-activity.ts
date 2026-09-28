@@ -1,0 +1,114 @@
+// Live tool-activity derivation and copy for native chat's tool runs. Mobile's
+// "Running …" row renders this copy directly (it ships English only); desktop
+// uses the count and failure strings as i18n fallbacks, so the two never drift.
+
+import { createToolInputDisplay } from './native-chat-tool-summary'
+import { isToolCallBlock, type NativeChatBlock } from './native-chat-types'
+
+type NativeChatToolCallBlock = Extract<NativeChatBlock, { type: 'tool-call' }>
+
+export const NATIVE_CHAT_TOOL_ACTIVITY_COPY = {
+  runningPreview: 'Running {{preview}}',
+  runningCommand: 'Running command',
+  runningNamedPreview: 'Running {{toolName}} {{preview}}',
+  runningNamed: 'Running {{toolName}}',
+  countOne: '1 tool call',
+  countN: '{{value0}} tool calls',
+  moreCalls: '+{{value0}} more',
+  /** Quiet decoration on a settled collapsed header; the run's lines carry the
+   *  detail. Count-agnostic wording so one entry serves any number. */
+  failedCount: '{{value0}} failed',
+  /** Spoken form of the same mark — `1 failed` alone does not say failed what. */
+  failedCallsLabel: 'Failed tool calls: {{value0}}'
+} as const
+
+/** Tools whose call is a shell command, so the row reads as terminal activity
+ *  (and takes the terminal glyph) rather than a named tool invocation. */
+export const COMMAND_TOOL_NAMES: ReadonlySet<string> = new Set([
+  'bash',
+  'shell',
+  'powershell',
+  'terminal',
+  'execute',
+  'run_command',
+  'run_shell_command',
+  'shell_command',
+  'exec_command',
+  'run_terminal_cmd',
+  'run_terminal_command'
+])
+
+export function isCommandToolName(name: string): boolean {
+  return COMMAND_TOOL_NAMES.has(name.trim().toLowerCase())
+}
+
+export type NativeChatActiveToolDescriptor = {
+  key: 'runningPreview' | 'runningCommand' | 'runningNamedPreview' | 'runningNamed'
+  toolName: string
+  preview: string
+  isCommand: boolean
+}
+
+/** Which copy key and arguments the active-tool row renders for a running call. */
+export function describeActiveToolCall(
+  call: NativeChatToolCallBlock
+): NativeChatActiveToolDescriptor {
+  const preview = createToolInputDisplay(call.input).label
+  const isCommand = isCommandToolName(call.name)
+  const key = isCommand
+    ? preview
+      ? 'runningPreview'
+      : 'runningCommand'
+    : preview
+      ? 'runningNamedPreview'
+      : 'runningNamed'
+  return { key, toolName: call.name, preview, isCommand }
+}
+
+/** Resolve the active-tool label in English. For platforms without i18n (mobile). */
+export function formatActiveToolLabel(descriptor: NativeChatActiveToolDescriptor): string {
+  return NATIVE_CHAT_TOOL_ACTIVITY_COPY[descriptor.key]
+    .replaceAll('{{preview}}', descriptor.preview)
+    .replaceAll('{{toolName}}', descriptor.toolName)
+}
+
+/** What a live run names beside its sentence: the command itself, or the tool's
+ *  word and argument. Tense-free on purpose — the sentence carries the state, so
+ *  this never claims a call that just finished is still running. */
+export function describeLatestToolCall(call: NativeChatToolCallBlock): string {
+  const { toolName, preview, isCommand } = describeActiveToolCall(call)
+  if (isCommand) {
+    return preview || toolName
+  }
+  return preview ? `${toolName} ${preview}` : toolName
+}
+
+/** The most recent still-running call in a run, or null once the run is settled.
+ *  A block without lifecycle `state` only counts while the turn is known to be
+ *  working, so a restored transcript never spins on an orphaned call. */
+export function selectActiveToolCall(
+  blocks: readonly NativeChatBlock[],
+  { activeTurnIsWorking }: { activeTurnIsWorking?: boolean }
+): NativeChatToolCallBlock | null {
+  if (activeTurnIsWorking === false) {
+    return null
+  }
+  const calls = blocks.filter(isToolCallBlock)
+  for (let index = calls.length - 1; index >= 0; index--) {
+    const call = calls[index]
+    if (
+      call &&
+      (call.state === 'running' || (call.state == null && activeTurnIsWorking === true))
+    ) {
+      return call
+    }
+  }
+  return null
+}
+
+/** Fallback summary when no per-tool summary is available. */
+export function formatToolCallCount(callCount: number): string {
+  return callCount === 1
+    ? NATIVE_CHAT_TOOL_ACTIVITY_COPY.countOne
+    : NATIVE_CHAT_TOOL_ACTIVITY_COPY.countN.replaceAll('{{value0}}', String(callCount))
+}

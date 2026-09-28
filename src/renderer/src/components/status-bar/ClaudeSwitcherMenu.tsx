@@ -34,6 +34,7 @@ import {
 import { AccountRuntimeToggle } from './StatusBarAccountControls'
 import { InlineUsageBars, InlineUsageSkeleton } from './InlineProviderUsage'
 import { ProviderDetailsMenu } from './ProviderDetailsMenu'
+import { getClaudeAccountSyncKey } from './provider-account-sync-key'
 
 // Exported so its account-switch/reset logic is preserved for row drill-in even
 // though the footer now opens the consolidated UsageRosterPanel first.
@@ -83,13 +84,7 @@ export function ClaudeSwitcherMenu({
     getWindowsTerminalCapabilityOwnerKey(settings?.activeRuntimeEnvironmentId),
     runtimeTarget
   )
-  const claudeAccountSyncKey = useAppStore((s) => {
-    const settings = s.settings
-    if (!settings) {
-      return 'no-settings'
-    }
-    return `${settings.activeRuntimeEnvironmentId?.trim() || 'local'}:${settings.activeClaudeManagedAccountId ?? 'system'}:${JSON.stringify(settings.activeClaudeManagedAccountIdsByRuntime ?? null)}:${settings.claudeManagedAccounts.map((account) => `${account.id}:${account.updatedAt}`).join('|')}`
-  })
+  const claudeAccountSyncKey = useAppStore((s) => getClaudeAccountSyncKey(s.settings))
   const accountState = resolveClaudeStatusAccountState(settings, accounts)
 
   useEffect(() => {

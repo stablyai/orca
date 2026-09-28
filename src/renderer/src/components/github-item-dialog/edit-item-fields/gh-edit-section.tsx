@@ -27,6 +27,7 @@ import {
 } from './gh-edit-section-mutations'
 import { GHEditSectionTopColumns } from './gh-edit-section-top-columns'
 import { GHEditSectionHorizontal } from './gh-edit-section-horizontal'
+import { useGitHubDuplicateIssueCandidates } from '@/components/github/github-duplicate-issue-candidates'
 
 export function GHEditSection({
   item,
@@ -74,27 +75,7 @@ export function GHEditSection({
   const assigneesItemKey = `${item.repoId}\0${item.id}`
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
-  const duplicateIssueCandidates = useAppStore(
-    useShallow((s) => {
-      if (!duplicatePickerOpen) {
-        return []
-      }
-      const deduped = new Map<number, GitHubWorkItem>()
-      for (const entry of Object.values(s.workItemsCache)) {
-        for (const candidate of entry.data ?? []) {
-          if (
-            candidate.type === 'issue' &&
-            candidate.repoId === item.repoId &&
-            candidate.number !== item.number &&
-            !deduped.has(candidate.number)
-          ) {
-            deduped.set(candidate.number, candidate)
-          }
-        }
-      }
-      return Array.from(deduped.values()).sort((a, b) => b.number - a.number)
-    })
-  )
+  const duplicateIssueCandidates = useGitHubDuplicateIssueCandidates(item, duplicatePickerOpen)
   const repoOwnerSettings = useAppStore(
     useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? null))
   )

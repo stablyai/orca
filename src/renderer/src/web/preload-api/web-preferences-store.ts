@@ -139,6 +139,12 @@ export async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> 
     if (typeof result.settings.minimaxUsageModels === 'string') {
       runtimeSettings.minimaxUsageModels = result.settings.minimaxUsageModels
     }
+    if (
+      result.settings.minimaxEndpoint === 'overseas' ||
+      result.settings.minimaxEndpoint === 'cn'
+    ) {
+      runtimeSettings.minimaxEndpoint = result.settings.minimaxEndpoint
+    }
     if (Array.isArray(result.settings.prBotAuthorOverrides)) {
       runtimeSettings.prBotAuthorOverrides = normalizePRBotAuthorOverrides(
         result.settings.prBotAuthorOverrides
@@ -203,6 +209,9 @@ export async function syncRuntimeBackedSettings(
   }
   if (typeof updates.minimaxUsageModels === 'string') {
     runtimeUpdates.minimaxUsageModels = updates.minimaxUsageModels
+  }
+  if (updates.minimaxEndpoint === 'overseas' || updates.minimaxEndpoint === 'cn') {
+    runtimeUpdates.minimaxEndpoint = updates.minimaxEndpoint
   }
   if (Array.isArray(updates.prBotAuthorOverrides)) {
     runtimeUpdates.prBotAuthorOverrides = normalizePRBotAuthorOverrides(

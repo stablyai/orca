@@ -101,7 +101,7 @@ describe('generateCommitMessageFromContext', () => {
 
     cancelGenerateCommitMessageLocal('/repo')
 
-    expectChildTerminated(children[0]!)
+    await expectChildTerminated(children[0]!)
     expect(children[1]?.kill).not.toHaveBeenCalled()
 
     children[0]?.listeners.get('close')?.(null)
@@ -192,7 +192,7 @@ describe('generateCommitMessageFromContext', () => {
     cancelGeneratePullRequestFieldsLocal('/repo')
 
     expect(children[0]?.kill).not.toHaveBeenCalled()
-    expectChildTerminated(children[1]!)
+    await expectChildTerminated(children[1]!)
 
     const commitStdout = children[0]?.listeners.get('stdout:data')
     commitStdout?.(Buffer.from('Update README\n'))
@@ -250,7 +250,7 @@ describe('generateCommitMessageFromContext', () => {
     cancelGeneratePullRequestFieldsLocal('/repo')
     listeners.get('close')?.(null)
 
-    expectChildTerminated(child)
+    await expectChildTerminated(child)
     await expect(pullRequest).resolves.toEqual({
       success: false,
       error: 'Generation canceled.',
@@ -306,7 +306,7 @@ describe('generateCommitMessageFromContext', () => {
       )
 
       cancelGenerateCommitMessageLocal('/repo')
-      expectChildTerminated(child)
+      await expectChildTerminated(child)
       await Promise.resolve()
       await Promise.resolve()
       await Promise.resolve()
@@ -344,7 +344,7 @@ describe('generateCommitMessageFromContext', () => {
       error: 'Generation canceled.',
       canceled: true
     })
-    expectChildTerminated(firstChild)
+    await expectChildTerminated(firstChild)
 
     const second = generateCommitMessageFromContext(context, params, {
       kind: 'local',
@@ -377,7 +377,7 @@ describe('generateCommitMessageFromContext', () => {
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
     cancelGenerateCommitMessageLocal('/descendant-repo')
     await expect(first).resolves.toMatchObject({ canceled: true })
-    expectChildTerminated(firstChild)
+    await expectChildTerminated(firstChild)
 
     // SIGKILL reaches the codex process but not a grandchild that inherited its
     // stdout, so 'exit' arrives and 'close' never does.

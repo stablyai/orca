@@ -1,6 +1,7 @@
 import React from 'react'
 import type { AutomationsPageController } from './use-automations-page-controller'
 import { AutomationsListPanel } from './AutomationsListPanel'
+import { nextAutomationListSort } from './automation-list-view'
 
 export function AutomationsPageListPanel({
   controller,
@@ -45,8 +46,6 @@ export function AutomationsPageListPanel({
     hasListItems,
     hasFilteredListItems,
     isListSearchQueryTooLarge,
-    filteredRows,
-    filteredExternalAutomationEntries,
     selectedRow,
     selectedExternal,
     searchCounts
@@ -79,8 +78,9 @@ export function AutomationsPageListPanel({
           void pageRefresh.refresh()
         }
       }}
-      filteredRows={filteredRows}
-      filteredExternalAutomationEntries={filteredExternalAutomationEntries}
+      sortedListItems={list.sortedListItems}
+      listSort={local.listSort}
+      onListSortChange={(field) => local.setListSort(nextAutomationListSort(local.listSort, field))}
       selectedRowKey={selectedRow?.key ?? null}
       selectedExternalKey={local.selectedExternalKey}
       selectedExternal={selectedExternal}

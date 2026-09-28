@@ -29,19 +29,23 @@ type BrowserTabPageIdSource = {
   pageIds?: readonly string[] | null
 }
 
+// Why: a stable identity keeps the disabled branch from re-running downstream shallow compares.
+const NO_BROWSER_PAGE_IDS: readonly string[] = []
+
 export function collectBrowserPageIds(
   tabs: readonly BrowserTabPageIdSource[] | null | undefined
-): string[] {
-  return (tabs ?? []).flatMap((tab) =>
+): readonly string[] {
+  // Why the early return: no browser tabs is the common case, and this runs on every store write.
+  if (!tabs || tabs.length === 0) {
+    return NO_BROWSER_PAGE_IDS
+  }
+  return tabs.flatMap((tab) =>
     tab.pageIds && tab.pageIds.length > 0 ? tab.pageIds : [tab.activePageId ?? tab.id]
   )
 }
-
-// Why: a stable identity keeps the disabled branch from re-running downstream shallow compares.
-const NO_BROWSER_PAGE_IDS: string[] = []
 const NO_BROWSER_TABS_BY_WORKTREE: Record<string, BrowserTabPageIdSource[]> = {}
 
-export function useWorktreeBrowserPageIds(worktreeId: string): string[] {
+export function useWorktreeBrowserPageIds(worktreeId: string): readonly string[] {
   return useAppStore(
     useShallow((state) => collectBrowserPageIds(state.browserTabsByWorktree[worktreeId]))
   )

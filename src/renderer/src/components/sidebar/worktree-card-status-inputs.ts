@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
 import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
-import { createWorktreeRecordSelector } from './worktree-record-selector-cache'
+import { createWorktreeRecordSelector } from '@/store/worktree-record-selector-cache'
 
 // Why: these selectors return fresh maps whose top-level values preserve
 // underlying per-tab references, so callers must compare them shallowly.

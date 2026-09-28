@@ -1,24 +1,25 @@
 import type { Session } from 'electron'
 import { randomUUID } from 'node:crypto'
 import type { NetworkProxySettings } from '../../shared/network-proxy'
-import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import {
   clearOpenCodeSessionCookies,
   createOpenCodeRequestSession,
   OPENCODE_BASE_URL
 } from './opencode-go-request-session'
-import { parseSubscriptionFromPageText } from './opencode-go-page-scraper'
+import { parseOpenCodeGoStatusPayload } from './opencode-go-status-parsing'
 
 const OPENCODE_SERVER_URL = 'https://opencode.ai/_server'
+const OPENCODE_GO_STATUS_URL = `${OPENCODE_BASE_URL}/console/api/go/status`
 const API_TIMEOUT_MS = 15_000
 
 // Server-function hash for the workspaces endpoint — stable identifier used by
 // the opencode.ai SST/TanStack router server-fn protocol.
 const WORKSPACES_SERVER_ID = 'def39973159c7f0483d8793a822b8dbb10d067e12c65455fcb4608459ba0234f'
 
-// Only these cookie names carry session auth on opencode.ai. Sending unrelated
-// cookies pollutes the header and can expose sensitive data from other sites.
-const AUTH_COOKIE_NAMES = new Set(['auth', '__Host-auth'])
+// Closed allowlist: only known opencode.ai auth cookies. Console Go usage is
+// authed by __Host-console_session; /_server workspace discovery still uses auth.
+const AUTH_COOKIE_NAMES = new Set(['auth', '__Host-auth', '__Host-console_session'])
 
 // Why: users may paste just the token value (e.g. "Fe26.2**...") instead of
 // the full cookie header ("auth=Fe26.2**..."). Auto-wrapping avoids a confusing
@@ -29,7 +30,7 @@ export function normalizeCookieInput(raw: string): string {
     return trimmed
   }
   // Already a valid cookie header: has multiple pairs or starts with known name.
-  if (trimmed.includes(';') || /^(?:auth|__Host-auth)=/i.test(trimmed)) {
+  if (trimmed.includes(';') || /^(?:auth|__Host-auth|__Host-console_session)=/i.test(trimmed)) {
     return trimmed
   }
   // Only wrap if it looks like an Iron Session seal (starts with Fe26.2**)
@@ -71,19 +72,6 @@ function parseWorkspaceIds(text: string): string[] {
     }
   }
   return ids
-}
-
-function makeWindow(
-  usedPercent: number,
-  resetInSec: number,
-  windowMinutes: number
-): RateLimitWindow {
-  return {
-    usedPercent,
-    windowMinutes,
-    resetsAt: Date.now() + resetInSec * 1000,
-    resetDescription: null
-  }
 }
 
 export async function fetchOpenCodeGoRateLimits(
@@ -224,52 +212,49 @@ async function fetchOpenCodeGoRateLimitsWithSession(
       weekly: null,
       monthly: null,
       updatedAt: Date.now(),
-      error: 'No workspace ID found — set a Workspace ID override in settings',
+      error:
+        'No workspace found for this cookie — add an OpenCode Go API key (or run /connect in OpenCode), or set a Workspace ID override',
       status: 'error'
     }
   }
 
-  // Step 2: Robust workspace resolution. Try each candidate ID until one returns 200 OK
-  // and valid usage data. Each candidate gets its own timeout so a slow or
-  // hung candidate cannot starve the rest.
+  // Why: /workspace/<id>/go now 302s to console login. Usage is JSON at
+  // /console/api/go/status, scoped by x-org-id and authed by the console session.
   let lastError = ''
   for (const candidateId of ids) {
     try {
-      const usagePageUrl = `${OPENCODE_BASE_URL}/workspace/${candidateId}/go`
-      const pageRes = await openCodeSession.fetch(usagePageUrl, {
+      const statusRes = await openCodeSession.fetch(OPENCODE_GO_STATUS_URL, {
         method: 'GET',
         headers: {
-          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          Accept: 'application/json',
           Origin: OPENCODE_BASE_URL,
-          Referer: OPENCODE_BASE_URL
+          Referer: `${OPENCODE_BASE_URL}/console/${candidateId}/go`,
+          'x-org-id': candidateId
         },
         signal: AbortSignal.timeout(API_TIMEOUT_MS)
       })
 
-      if (!pageRes.ok) {
-        lastError = `Usage page fetch failed (${pageRes.status})`
+      if (!statusRes.ok) {
+        lastError =
+          statusRes.status === 401
+            ? 'Usage fetch failed (401) — paste the full Cookie header including __Host-console_session (auth alone is not enough)'
+            : `Usage fetch failed (${statusRes.status})`
         continue
       }
 
-      const pageText = await pageRes.text()
-      const parsed = parseSubscriptionFromPageText(pageText)
+      const parsed = parseOpenCodeGoStatusPayload(await statusRes.text())
       if (parsed) {
-        const monthly =
-          parsed.monthlyUsagePercent !== null && parsed.monthlyResetInSec !== null
-            ? makeWindow(parsed.monthlyUsagePercent, parsed.monthlyResetInSec, 43200) // 30d
-            : null
-
         return {
           provider: 'opencode-go',
-          session: makeWindow(parsed.rollingUsagePercent, parsed.rollingResetInSec, 300),
-          weekly: makeWindow(parsed.weeklyUsagePercent, parsed.weeklyResetInSec, 10080),
-          monthly,
+          session: parsed.session,
+          weekly: parsed.weekly,
+          monthly: parsed.monthly,
           updatedAt: Date.now(),
           error: null,
           status: 'ok'
         }
       }
-      lastError = 'Could not parse usage data from page'
+      lastError = 'Could not parse usage data'
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
       lastError = message

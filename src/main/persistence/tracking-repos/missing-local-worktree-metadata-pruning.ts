@@ -2,6 +2,7 @@ import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { getRepoKind } from '../../../shared/repo-kind'
+import { sshRemotePtyLeaseAllowsReattach } from '../../../shared/ssh-types'
 import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR, splitWorktreeId } from '../../../shared/worktree/id'
 import { isWslUncPath } from '../../../shared/wsl-paths'
@@ -40,6 +41,13 @@ function collectPersistedWorkspaceOwners(
     }
   }
   for (const lease of state.sshRemotePtyLeases) {
+    // A lease that can never be reattached is a routing tombstone, not a claim on a workspace:
+    // `terminated` is the operator close, and an `expired` row marked `supersededBy` /
+    // `relayIdRecycled` already lost its pane to a newer lease. Counting them as owners pinned
+    // their worktree's metadata row permanently, so the prune could never make progress (#17775).
+    if (!sshRemotePtyLeaseAllowsReattach(lease)) {
+      continue
+    }
     add(lease.worktreeId)
   }
   for (const entry of state.migrationUnsupportedPtyEntries) {

@@ -3,16 +3,41 @@ import { OrchestrationError } from '../../orchestration-error'
 import { DISPATCH_CIRCUIT_BREAK_FAILURES } from './dispatch-circuit-breaker'
 import type { OrchestrationDb } from '../orchestration-db'
 import { getActiveDispatchForTask } from './task-dispatch-reconciliation'
+import {
+  beginLifecycleWriteTransaction,
+  commitLifecycleWriteTransaction,
+  rollbackLifecycleWriteTransaction,
+  transitionLifecycleWithDb
+} from '../lifecycle-transition'
 
 const FAIL_DISPATCH_SAVEPOINT = 'fail_dispatch'
 
 export function completeDispatch(this: OrchestrationDb, ctxId: string): void {
-  this.db
-    .prepare(
-      // Why: the status guard keeps a late completion from reviving a dispatch already failed or circuit-broken.
-      "UPDATE dispatch_contexts SET status = 'completed', completed_at = datetime('now'), capability_revoked_at = COALESCE(capability_revoked_at, datetime('now')) WHERE id = ? AND status IN ('pending', 'dispatched')"
-    )
-    .run(ctxId)
+  const dispatch = this.getDispatchContextById(ctxId)
+  if (!dispatch || !['pending', 'dispatched'].includes(dispatch.status)) {
+    return
+  }
+  this.db.exec('SAVEPOINT complete_dispatch_transition')
+  try {
+    transitionLifecycleWithDb(this.db, {
+      entity: 'dispatch',
+      id: ctxId,
+      from: ['pending', 'dispatched'],
+      to: 'completed',
+      projection: {
+        completed_at: new Date().toISOString(),
+        capability_revoked_at: dispatch.capability_revoked_at ?? new Date().toISOString()
+      }
+    })
+    // Why: a settled Dispatch can never be answered, and a pending thread on it kept the fleet row
+    // demanding input after the work was done.
+    this.closeQuestionsForDispatch(ctxId)
+    this.db.exec('RELEASE complete_dispatch_transition')
+  } catch (error) {
+    this.db.exec('ROLLBACK TO complete_dispatch_transition')
+    this.db.exec('RELEASE complete_dispatch_transition')
+    throw error
+  }
 }
 
 export function settleActiveDispatchesForTask(
@@ -21,18 +46,28 @@ export function settleActiveDispatchesForTask(
   status: 'completed' | 'failed',
   failure?: string
 ): void {
-  db.db
+  const rows = db.db
     .prepare(
-      `UPDATE dispatch_contexts
-       SET status = ?, completed_at = COALESCE(completed_at, datetime('now')),
-           last_failure = CASE
-             WHEN ? = 'failed' THEN COALESCE(?, last_failure, 'Task marked failed')
-             ELSE last_failure
-           END,
-           capability_revoked_at = COALESCE(capability_revoked_at, datetime('now'))
-       WHERE task_id = ? AND status IN ('pending', 'dispatched')`
+      "SELECT * FROM dispatch_contexts WHERE task_id = ? AND status IN ('pending', 'dispatched')"
     )
-    .run(status, status, failure ?? null, taskId)
+    .all(taskId) as DispatchContextRow[]
+  for (const row of rows) {
+    transitionLifecycleWithDb(db.db, {
+      entity: 'dispatch',
+      id: row.id,
+      from: row.status,
+      to: status,
+      projection: {
+        completed_at: row.completed_at ?? new Date().toISOString(),
+        last_failure:
+          status === 'failed'
+            ? (failure ?? row.last_failure ?? 'Task marked failed')
+            : row.last_failure,
+        capability_revoked_at: row.capability_revoked_at ?? new Date().toISOString()
+      }
+    })
+    db.closeQuestionsForDispatch(row.id)
+  }
 }
 
 export function completeActiveDispatchesForTask(this: OrchestrationDb, taskId: string): void {
@@ -79,37 +114,17 @@ export function failDispatch(
   error: string,
   options: { workerProcessExited?: boolean; terminationReason?: string } = {}
 ): DispatchContextRow | undefined {
-  this.db.exec(`SAVEPOINT ${FAIL_DISPATCH_SAVEPOINT}`)
+  // Why: reserve the WAL writer before lifecycle reads so a concurrent commit cannot cause SQLITE_BUSY_SNAPSHOT.
+  const transaction = beginLifecycleWriteTransaction(this.db, FAIL_DISPATCH_SAVEPOINT)
   try {
-    const result = this.db
-      .prepare(
-        `UPDATE dispatch_contexts
-         SET status = CASE WHEN failure_count + 1 >= ? THEN 'circuit_broken' ELSE 'failed' END,
-             failure_count = failure_count + 1, last_failure = ?,
-             termination_reason = COALESCE(?, termination_reason),
-             completed_at = COALESCE(completed_at, datetime('now')),
-             capability_revoked_at = COALESCE(capability_revoked_at, datetime('now'))
-         WHERE id = ? AND status IN ('pending', 'dispatched')
-           AND (? = 1 OR NOT EXISTS (
-             SELECT 1 FROM worker_dispatches worker
-             WHERE worker.dispatch_id = dispatch_contexts.id
-               AND worker.state NOT IN ('failed', 'succeeded', 'stopped', 'abandoned')
-           ))`
-      )
-      .run(
-        DISPATCH_CIRCUIT_BREAK_FAILURES,
-        error,
-        options.terminationReason ?? null,
-        ctxId,
-        options.workerProcessExited ? 1 : 0
-      )
-    const ctx = this.db.prepare('SELECT * FROM dispatch_contexts WHERE id = ?').get(ctxId) as
+    const before = this.db.prepare('SELECT * FROM dispatch_contexts WHERE id = ?').get(ctxId) as
       | DispatchContextRow
       | undefined
-    const worker = this.getWorkerDispatch(ctxId)
-    if (result.changes !== 1 || !ctx) {
+    const workerBefore = this.getWorkerDispatch(ctxId)
+    if (!before || !['pending', 'dispatched'].includes(before.status)) {
+      const worker = workerBefore
       if (
-        ctx &&
+        before &&
         worker &&
         !['failed', 'succeeded', 'stopped', 'abandoned'].includes(worker.state) &&
         !options.workerProcessExited
@@ -120,39 +135,85 @@ export function failDispatch(
           { dispatchId: ctxId }
         )
       }
-      this.db.exec(`RELEASE ${FAIL_DISPATCH_SAVEPOINT}`)
-      return ctx
+      commitLifecycleWriteTransaction(this.db, transaction)
+      return before
     }
+    if (
+      !options.workerProcessExited &&
+      workerBefore &&
+      !['failed', 'succeeded', 'stopped', 'abandoned'].includes(workerBefore.state)
+    ) {
+      throw new OrchestrationError(
+        'task_not_startable',
+        `Dispatch ${ctxId} has an active supervised worker; stop it or settle its report first.`,
+        { dispatchId: ctxId }
+      )
+    }
+    const nextStatus =
+      before.failure_count + 1 >= DISPATCH_CIRCUIT_BREAK_FAILURES ? 'circuit_broken' : 'failed'
+    transitionLifecycleWithDb(this.db, {
+      entity: 'dispatch',
+      id: ctxId,
+      from: before.status,
+      to: nextStatus,
+      projection: {
+        failure_count: before.failure_count + 1,
+        last_failure: error,
+        termination_reason: options.terminationReason ?? before.termination_reason,
+        completed_at: before.completed_at ?? new Date().toISOString(),
+        capability_revoked_at: before.capability_revoked_at ?? new Date().toISOString()
+      }
+    })
+    const ctx = this.db.prepare('SELECT * FROM dispatch_contexts WHERE id = ?').get(ctxId) as
+      | DispatchContextRow
+      | undefined
+    if (!ctx) {
+      commitLifecycleWriteTransaction(this.db, transaction)
+      return undefined
+    }
+    const worker = this.getWorkerDispatch(ctxId)
     if (worker && options.workerProcessExited) {
-      this.db
-        .prepare(
-          `UPDATE worker_dispatches
-           SET state = 'failed', stage = 'process_exited', last_error = ?, updated_at = datetime('now')
-           WHERE dispatch_id = ?
-             AND state NOT IN ('failed', 'succeeded', 'stopped', 'abandoned')`
-        )
-        .run(error, ctxId)
+      transitionLifecycleWithDb(this.db, {
+        entity: 'worker',
+        id: ctxId,
+        from: worker.state,
+        to: 'failed',
+        projection: {
+          stage: 'process_exited',
+          last_error: error,
+          updated_at: new Date().toISOString()
+        }
+      })
     }
 
     // Why: back to 'ready' not 'pending' — 'pending' would strand it since promoteReadyTasks only runs when a dep completes.
     const taskStatus: TaskStatus = ctx.status === 'circuit_broken' ? 'failed' : 'ready'
     // Why: the status guard keeps a late failure from reopening a task that already completed or was retried elsewhere.
-    this.db
-      .prepare(
-        `UPDATE tasks SET status = ?
-         WHERE id = ? AND status = 'dispatched' AND NOT EXISTS (
-           SELECT 1 FROM dispatch_contexts
-           WHERE task_id = tasks.id AND status IN ('pending', 'dispatched')
-         )`
-      )
-      .run(taskStatus, ctx.task_id)
-    this.db.exec(`RELEASE ${FAIL_DISPATCH_SAVEPOINT}`)
-    return this.db.prepare('SELECT * FROM dispatch_contexts WHERE id = ?').get(ctxId) as
+    const task = this.getTask(ctx.task_id)
+    if (
+      task?.status === 'dispatched' &&
+      !this.db
+        .prepare(
+          "SELECT 1 FROM dispatch_contexts WHERE task_id = ? AND status IN ('pending', 'dispatched')"
+        )
+        .get(ctx.task_id)
+    ) {
+      transitionLifecycleWithDb(this.db, {
+        entity: 'task',
+        id: ctx.task_id,
+        from: 'dispatched',
+        to: taskStatus,
+        projection: { completed_at: taskStatus === 'failed' ? new Date().toISOString() : null }
+      })
+    }
+    this.closeQuestionsForDispatch(ctxId)
+    const updated = this.db.prepare('SELECT * FROM dispatch_contexts WHERE id = ?').get(ctxId) as
       | DispatchContextRow
       | undefined
+    commitLifecycleWriteTransaction(this.db, transaction)
+    return updated
   } catch (cause) {
-    this.db.exec(`ROLLBACK TO ${FAIL_DISPATCH_SAVEPOINT}`)
-    this.db.exec(`RELEASE ${FAIL_DISPATCH_SAVEPOINT}`)
+    rollbackLifecycleWriteTransaction(this.db, transaction)
     throw cause
   }
 }

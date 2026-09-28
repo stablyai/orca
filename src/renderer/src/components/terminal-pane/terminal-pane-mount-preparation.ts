@@ -1,6 +1,7 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
+import { httpLinkActionDestinationsFor } from '@/lib/http-link-destinations'
 import {
   canOpenWorkspaceBrowserTabOnRuntime,
   canOpenWorkspaceBrowserTabOnSsh
@@ -8,7 +9,6 @@ import {
 import { resolvePaneWslDistro } from './terminal-pane-wsl-distro'
 import { resolveTerminalHttpLinkSourceOwner } from './terminal-http-link-source-owner'
 import {
-  terminalHttpLinkActionDestinationsFor,
   getTerminalFileOpenHint,
   getTerminalUrlOpenHint,
   terminalUrlOpenHintOptionsFor
@@ -23,6 +23,7 @@ import { fitAndFocusPanes, fitPanes } from './pane-helpers'
 import { registerRuntimeTerminalTab } from '@/runtime/sync-runtime-graph'
 import { normalizeTerminalLayoutSnapshot } from './layout-serialization'
 import { applyTerminalAppearance } from './terminal-appearance'
+import { terminalLinkClickBehaviorFor } from './terminal-link-click-behavior'
 import { createTerminalPanePtyDeps } from './terminal-pane-pty-deps'
 import type { DeferredSplitPaneHandoffHandle } from './deferred-split-pane-handoff'
 import {
@@ -124,13 +125,15 @@ export function prepareTerminalPaneMount(
     )
   }
   const getHttpLinkActionDestinations = (paneId: number): TerminalHttpLinkActionDestinations =>
-    terminalHttpLinkActionDestinationsFor(
+    httpLinkActionDestinationsFor(
       deps.settingsRef.current,
       getHttpLinkSourceOwnerForPane(paneId),
       canOpenOwnedBrowserForPane(paneId)
     )
   const getLinkActionContext = (paneId: number): TerminalLinkActionContext | null => {
-    if (deps.settingsRef.current?.terminalLinkActionPopoverEnabled === false) {
+    const plainClickBehavior = terminalLinkClickBehaviorFor(deps.settingsRef.current)
+    const middleClickBehavior = deps.settingsRef.current?.terminalUrlMiddleClickBehavior ?? 'open'
+    if (plainClickBehavior === 'none' && middleClickBehavior === 'none') {
       return null
     }
     const pane = deps.managerRef.current?.getPanes().find((candidate) => candidate.id === paneId)
@@ -145,7 +148,9 @@ export function prepareTerminalPaneMount(
       pointerGesture,
       claimPtyMouse: suppression.claimAction,
       request: deps.requestTerminalLinkAction,
-      focusTerminal: () => pane.terminal.focus()
+      focusTerminal: () => pane.terminal.focus(),
+      plainClickBehavior,
+      middleClickBehavior
     }
   }
   const pathExistsCache = new Map<string, boolean>()
@@ -243,7 +248,7 @@ export function prepareTerminalPaneMount(
         getHttpLinkSourceOwnerForPane(paneId),
         canOpenOwnedBrowserForPane(paneId)
       ),
-      showActions: deps.settingsRef.current?.terminalLinkActionPopoverEnabled !== false
+      showActions: terminalLinkClickBehaviorFor(deps.settingsRef.current) === 'actions'
     })
   return {
     container,

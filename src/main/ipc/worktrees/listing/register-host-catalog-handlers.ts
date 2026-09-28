@@ -1,3 +1,8 @@
+import {
+  getRepoExecutionHostId,
+  getSshTargetIdForExecutionHost,
+  parseExecutionHostId
+} from '../../../../shared/execution-host'
 import { ipcMain } from 'electron'
 import type {
   ListKnownWorktreesForExecutionHostArgs,
@@ -5,7 +10,6 @@ import type {
   ForgetRemovedWorktreesForExecutionHostArgs,
   ForgetRemovedWorktreesForExecutionHostResult
 } from '../../../../shared/detected-worktree-provider-contract'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
 import type { DetectedWorktree } from '../../../../shared/worktree/types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { projectResolvedWorktreeLineage } from '../../../../shared/resolved-worktree-lineage'
@@ -47,7 +51,10 @@ export function registerHostCatalogHandlers(context: WorktreeIpcContext): void {
       // Why: findExactRepoOwner repeats this same all-candidates-owned check, and getRepos() re-hydrates the
       // whole catalog, so a separate pass here is pure cost.
       const repo = findExactRepoOwner(store, requestedRepoId, requestedExecutionHostId)
-      if (!repo || repo.connectionId !== parsedHost.targetId) {
+      if (
+        !repo ||
+        getSshTargetIdForExecutionHost(getRepoExecutionHostId(repo)) !== parsedHost.targetId
+      ) {
         return rejected()
       }
       const complete = (worktrees: DetectedWorktree[]): HostQualifiedKnownWorktreeResult => ({

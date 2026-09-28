@@ -1,4 +1,7 @@
-import { join } from 'node:path'
+// Why win32 and not the host `join`: these are Windows paths and are only ever spawned on Windows,
+// but they are also built off-platform (tests, and any code that plans a Windows command from a
+// POSIX host), where the host separator produces the mixed `C:\Windows/System32/whoami.exe`.
+import { win32 as pathWin32 } from 'node:path'
 
 /**
  * Absolute paths for the Windows system binaries Orca shells out to.
@@ -17,12 +20,12 @@ function systemRoot(env: NodeJS.ProcessEnv = process.env): string {
 }
 
 export function windowsPowerShellPath(env: NodeJS.ProcessEnv = process.env): string {
-  return join(systemRoot(env), 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+  return pathWin32.join(systemRoot(env), 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
 }
 
 export function windowsSystem32Binary(
   fileName: string,
   env: NodeJS.ProcessEnv = process.env
 ): string {
-  return join(systemRoot(env), 'System32', fileName)
+  return pathWin32.join(systemRoot(env), 'System32', fileName)
 }

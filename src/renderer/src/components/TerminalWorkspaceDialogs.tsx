@@ -24,6 +24,7 @@ export function TerminalWorkspaceDialogs({
     saveDialogFile,
     saveDialogFileId,
     setWindowCloseDialogOpen,
+    windowCloseDialogKind,
     windowCloseDialogOpen
   } = controller
   return (
@@ -82,10 +83,15 @@ export function TerminalWorkspaceDialogs({
               {translate('auto.components.Terminal.2fa9c69ff3', 'Close Window?')}
             </DialogTitle>
             <DialogDescription className="text-xs">
-              {translate(
-                'auto.components.Terminal.7958465754',
-                'There are local terminals with running processes. Close the window anyway?'
-              )}
+              {windowCloseDialogKind === 'unverifiable'
+                ? translate(
+                    'auto.components.Terminal.b7c1f0a934',
+                    'A remote host could not be reached, so Orca cannot tell whether work is still running there. Close the window anyway?'
+                  )
+                : translate(
+                    'auto.components.Terminal.7958465754',
+                    'There are terminals with running processes. Close the window anyway?'
+                  )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">

@@ -1,10 +1,9 @@
 import { useAppStore } from '@/store'
-import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
 import { useRunningTerminalCloseConfirmStore } from '@/store/running-terminal-close-confirm'
 import type { TerminalTabCloseReason } from '@/store/slices/terminal-tab-retirement'
 import type { AppState } from '@/store/types'
 import { resolveBusyPtyCloseCopyKind } from './terminal-close-copy-kind'
-import { isClientOnlyUnverifiableInspection } from '../../../../shared/terminal-process-inspection'
+import { probePtyRunningWork } from './pty-running-work-probe'
 
 export type RunningTerminalCloseGuardOptions = {
   force?: boolean
@@ -44,7 +43,7 @@ export function shouldConfirmRunningTerminalClose(
  *  the store's own teardown collector unions both for exactly that reason — reading only
  *  the map would let a close slip through the window with no prompt. A stale id costs
  *  nothing: its probe fails and the guard falls open. */
-function collectTabPtyIds(
+export function collectTabPtyIds(
   state: Pick<AppState, 'ptyIdsByTabId' | 'terminalLayoutsByTabId'>,
   terminalTabId: string
 ): string[] {
@@ -112,44 +111,33 @@ export function guardRunningTerminalClose(params: {
     decided = true
   }
 
-  const probeTimeout = setTimeout(() => {
-    try {
+  void probePtyRunningWork(settings, ptyIds, { timeoutMs: RUNNING_CLOSE_PROBE_TIMEOUT_MS })
+    .then((probes) => {
+      if (decided) {
+        return
+      }
       // Why: a probe that has not answered yet is unknown, not idle. Ask, treating every pty
       // as a candidate, so a degraded relay costs a click instead of a killed remote command.
-      confirmClose(ptyIds)
-    } catch {
-      closeNow()
-    }
-  }, RUNNING_CLOSE_PROBE_TIMEOUT_MS)
-
-  void Promise.allSettled(ptyIds.map((ptyId) => inspectRuntimeTerminalProcess(settings, ptyId)))
-    .then((results) => {
-      clearTimeout(probeTimeout)
-      if (decided) {
+      if (probes.some((probe) => probe.timedOut)) {
+        confirmClose(ptyIds)
         return
       }
       // Why: fail open on an *answered* probe, matching the Cmd+W pane path — a rejection
       // (wedged relay, legacy provider) or a stale remote handle is not evidence of a live
       // child, and a close button that silently does nothing is worse than closing a busy tab.
-      const busyPtyIds = ptyIds.filter((_, index) => {
-        const result = results[index]
-        return (
-          result?.status === 'fulfilled' &&
-          !isClientOnlyUnverifiableInspection(result.value) &&
-          result.value.hasChildProcesses
-        )
-      })
+      const busyPtyIds = probes
+        .filter((probe) => probe.verdict === 'live')
+        .map((probe) => probe.ptyId)
       if (busyPtyIds.length === 0) {
         closeNow()
         return
       }
       confirmClose(busyPtyIds)
     })
-    // Why: allSettled never rejects, so this only fires when the decision above throws (a
+    // Why: the probe never rejects, so this only fires when the decision above throws (a
     // copy-kind lookup, a store subscriber). Without it the tab would silently never close
     // and the user would get no feedback at all; the pane path it replaced had this catch.
     .catch(() => {
-      clearTimeout(probeTimeout)
       closeNow()
     })
 }

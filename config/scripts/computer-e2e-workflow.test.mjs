@@ -178,10 +178,15 @@ describe('computer-use e2e workflow', () => {
       'config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs'
     )
     expect(runs).toContain('pnpm verify:computer-native')
+    expect(
+      runs.find((run) => run.includes('config/scripts/build-native-for-platform.test.mjs'))
+    ).toContain('--config config/vitest.config.ts')
     expect(runs.join('\n')).not.toContain('test:e2e:computer')
     expect(workflow.jobs.mac).toBeUndefined()
     expect(workflow.on.pull_request.paths).toEqual(
       expect.arrayContaining([
+        'config/scripts/build-native-for-platform.mjs',
+        'config/scripts/build-native-for-platform.test.mjs',
         'config/scripts/macos-computer-helper-owner-loss-benchmark.mjs',
         'config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs',
         'config/scripts/macos-computer-helper-owner-loss-metrics.mjs',

@@ -115,9 +115,9 @@ export function useSidebarWorktreeSortOrder(args: {
     // Why cold-start detection: agent-status hydrates async, so the warm comparator would collapse all to Class 4; keep the persisted order until a live signal appears.
     if (sortBy === 'smart' && !sessionHasHadLiveSmartSignal.current) {
       // Why tabHasLivePty over tab.ptyId: slept terminals keep tab.ptyId as a wake hint, so it'd falsely keep cold-start ordering off.
-      const hasAnyLivePty = Object.values(state.tabsByWorktree)
-        .flat()
-        .some((tab) => tabHasLivePty(state.ptyIdsByTabId, tab.id))
+      const hasAnyLivePty = Object.values(state.tabsByWorktree).some((tabs) =>
+        tabs.some((tab) => tabHasLivePty(state.ptyIdsByTabId, tab.id))
+      )
       if (
         hasAnyLivePty ||
         hasFreshAttributedAgentStatus(state.agentStatusByPaneKey, now, state.tabsByWorktree)

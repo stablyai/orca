@@ -77,7 +77,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
         on(event: string, cb: (arg?: unknown) => void) {
           handlers[event]?.push(cb)
           if (event === 'message') {
-            queueMicrotask(() => cb({ type: 'ready', startedAtMs: 1_000_000 }))
+            queueMicrotask(() => cb({ type: 'ready', pid: 12345, startedAtMs: 1_000_000 }))
           }
           return this
         },
@@ -189,7 +189,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
         on(event: string, cb: (arg?: unknown) => void) {
           handlers[event]?.push(cb)
           if (event === 'message') {
-            queueMicrotask(() => cb({ type: 'ready', startedAtMs: 1_000_000 }))
+            queueMicrotask(() => cb({ type: 'ready', pid: 12345, startedAtMs: 1_000_000 }))
           }
           return this
         },
@@ -512,7 +512,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
           exitHandlers.push(callback)
         }
         if (event === 'message') {
-          queueMicrotask(() => callback({ type: 'ready', startedAtMs: 1_000_000 }))
+          queueMicrotask(() => callback({ type: 'ready', pid: 12345, startedAtMs: 1_000_000 }))
         }
         return this
       },

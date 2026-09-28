@@ -1,0 +1,352 @@
+import assert from 'node:assert/strict'
+import { describe, it } from 'node:test'
+import {
+  parseProductionCapacityCellArguments,
+  prepareProductionCapacityCell,
+  PRODUCTION_CAPACITY_CELL_IDS
+} from './prepare-relay-production-capacity-canary.mjs'
+
+const config = {
+  directorOrigin: 'https://relay.onorca.dev',
+  cellOrigin: 'https://c26.relay.onorca.dev',
+  cellId: 'production-gce-c26'
+}
+
+const membership = {
+  existingOnly: ['production-gce-c1'],
+  migrationOnly: ['production-gce-c17'],
+  general: ['production-gce-c25', 'production-gce-c26']
+}
+
+function response(body, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' }
+  })
+}
+
+function canaryFetch() {
+  let selector = { generation: 20, attemptId: null, membership }
+  const calls = []
+  const fetch = async (url, init) => {
+    const path = new URL(url).pathname
+    const body = JSON.parse(init.body)
+    calls.push({ path, body })
+    if (path === '/v1/admin/admission-selector/status') {
+      return response({
+        v: 1,
+        selector,
+        intent: body.attemptId
+          ? {
+              attemptId: body.attemptId,
+              state: 'committed',
+              expectedGeneration: selector.generation - 1,
+              intendedGeneration: selector.generation,
+              membership: selector.membership
+            }
+          : null
+      })
+    }
+    if (path === '/v1/admin/admission-selector/apply') {
+      selector = {
+        generation: selector.generation + 1,
+        attemptId: body.attemptId,
+        membership: body.membership
+      }
+      return response({ v: 1, changed: true, selector })
+    }
+    if (path === '/v1/admin/drain') return response({ v: 1, draining: true })
+    throw new Error(`unexpected ${path}`)
+  }
+  return { calls, fetch, selector: () => selector }
+}
+
+describe('production Relay capacity cell admission', () => {
+  it('allows only the serving rollout cells', () => {
+    assert.deepEqual(PRODUCTION_CAPACITY_CELL_IDS, [
+      'production-gce-c7',
+      'production-gce-c8',
+      'production-gce-c9',
+      'production-gce-c10',
+      'production-gce-c13',
+      'production-gce-c14',
+      'production-gce-c15',
+      'production-gce-c16',
+      'production-gce-c19',
+      'production-gce-c20',
+      'production-gce-c21',
+      'production-gce-c22',
+      'production-gce-c23',
+      'production-gce-c24',
+      'production-gce-c25',
+      'production-gce-c26'
+    ])
+    assert.deepEqual(parseProductionCapacityCellArguments([
+      '--director-origin', 'https://relay.onorca.dev',
+      '--cell-origin', 'https://c7.relay.onorca.dev',
+      '--cell-id', 'production-gce-c7',
+      '--mode', 'isolate'
+    ]), {
+      directorOrigin: 'https://relay.onorca.dev',
+      cellOrigin: 'https://c7.relay.onorca.dev',
+      cellId: 'production-gce-c7',
+      mode: 'isolate',
+      paceWindowMs: 0
+    })
+    assert.throws(() => parseProductionCapacityCellArguments([
+      '--director-origin', 'https://relay.onorca.dev',
+      '--cell-origin', 'https://c17.relay.onorca.dev',
+      '--cell-id', 'production-gce-c17',
+      '--mode', 'isolate'
+    ]), /not approved/)
+    assert.throws(() => parseProductionCapacityCellArguments([
+      '--director-origin', 'https://relay.onorca.dev',
+      '--cell-origin', 'https://c8.relay.onorca.dev',
+      '--cell-id', 'production-gce-c7',
+      '--mode', 'isolate'
+    ]), /origin is not exact/)
+    assert.throws(() => parseProductionCapacityCellArguments([
+      '--director-origin', 'https://relay.onorca.dev',
+      '--cell-origin', 'https://c27.relay.onorca.dev',
+      '--cell-id', 'production-gce-c27',
+      '--mode', 'isolate'
+    ]), /not approved/)
+  })
+
+  it('admits the same-cap Asia and migration-only cells only under the same-cap allowlist', () => {
+    for (const cellId of [
+      'production-gce-c27', 'production-gce-c28', 'production-gce-c29', 'production-gce-c30',
+      // Migration-only canaries: the US-only capacity rollout never touches them either.
+      'production-gce-c17', 'production-gce-c18'
+    ]) {
+      const hostname = cellId.slice('production-gce-'.length)
+      assert.deepEqual(parseProductionCapacityCellArguments([
+        '--director-origin', 'https://relay.onorca.dev',
+        '--cell-origin', `https://${hostname}.relay.onorca.dev`,
+        '--cell-id', cellId,
+        '--approved-cells', 'same-cap',
+        '--mode', 'isolate'
+      ]), {
+        directorOrigin: 'https://relay.onorca.dev',
+        cellOrigin: `https://${hostname}.relay.onorca.dev`,
+        cellId,
+        mode: 'isolate',
+        paceWindowMs: 0
+      })
+    }
+    for (const cellId of ['production-gce-c12', 'production-gce-c31']) {
+      const hostname = cellId.slice('production-gce-'.length)
+      assert.throws(() => parseProductionCapacityCellArguments([
+        '--director-origin', 'https://relay.onorca.dev',
+        '--cell-origin', `https://${hostname}.relay.onorca.dev`,
+        '--cell-id', cellId,
+        '--approved-cells', 'same-cap',
+        '--mode', 'isolate'
+      ]), /not approved/)
+    }
+    assert.throws(() => parseProductionCapacityCellArguments([
+      '--director-origin', 'https://relay.onorca.dev',
+      '--cell-origin', 'https://c27.relay.onorca.dev',
+      '--cell-id', 'production-gce-c27',
+      '--approved-cells', 'every-cell',
+      '--mode', 'isolate'
+    ]), /not a known allowlist/)
+  })
+
+  it('isolates only the selected cell without depending on its runtime', async () => {
+    const fake = canaryFetch()
+    const result = await prepareProductionCapacityCell(
+      { ...config, mode: 'isolate' },
+      { fetch: fake.fetch, token: 'token' }
+    )
+    assert.equal(result.admissionState, 'migration-only')
+    assert.deepEqual(fake.selector().membership, {
+      existingOnly: ['production-gce-c1'],
+      migrationOnly: ['production-gce-c17', 'production-gce-c26'],
+      general: ['production-gce-c25']
+    })
+    assert.doesNotMatch(fake.calls.map(({ path }) => path).join(','), /\/v1\/admin\/drain/)
+  })
+
+  it('stamps the roll isolation on isolate and never on activate', async () => {
+    // The stamp is what lets the director tell a cell parked for a restart from
+    // an evacuation target or an Asia rollback, both of which must keep their
+    // hosts. Only this call site may send it.
+    const isolate = canaryFetch()
+    await prepareProductionCapacityCell(
+      { ...config, mode: 'isolate' },
+      { fetch: isolate.fetch, token: 'token' }
+    )
+    const isolateApply = isolate.calls.find(
+      ({ path }) => path === '/v1/admin/admission-selector/apply'
+    )
+    assert.deepEqual(isolateApply.body.rollIsolatedCells, [config.cellId])
+
+    // Restore has to be a real apply, not the no-op an already-general cell
+    // takes, or the assertion below proves nothing.
+    isolate.calls.length = 0
+    const restored = await prepareProductionCapacityCell(
+      { ...config, mode: 'activate' },
+      { fetch: isolate.fetch, token: 'token' }
+    )
+    assert.equal(restored.admissionState, 'general')
+    const restoreApply = isolate.calls.find(
+      ({ path }) => path === '/v1/admin/admission-selector/apply'
+    )
+    assert.ok(restoreApply, 'restore must issue an apply')
+    assert.equal(restoreApply.body.rollIsolatedCells, undefined)
+    assert.ok(restoreApply.body.membership.general.includes(config.cellId))
+  })
+
+  it('drains the selected cell independently after durable isolation', async () => {
+    const fake = canaryFetch()
+    const result = await prepareProductionCapacityCell(
+      { ...config, mode: 'drain' },
+      { fetch: fake.fetch, token: 'token' }
+    )
+    assert.deepEqual(result, { changed: false, drained: true, paceWindowMs: 0 })
+    assert.deepEqual(fake.calls, [{
+      path: '/v1/admin/drain',
+      body: { v: 1, graceMs: 0 }
+    }])
+  })
+
+  it('paces the drain send when the roll asks for a window', async () => {
+    const fake = canaryFetch()
+    const result = await prepareProductionCapacityCell(
+      { ...config, mode: 'drain', paceWindowMs: 120_000 },
+      { fetch: fake.fetch, token: 'token' }
+    )
+    assert.deepEqual(result, { changed: false, drained: true, paceWindowMs: 120_000 })
+    assert.deepEqual(fake.calls, [{
+      path: '/v1/admin/drain',
+      body: { v: 1, graceMs: 0, paceWindowMs: 120_000 }
+    }])
+  })
+
+  it('drains unpaced when the cell image rejects the pacing field', async () => {
+    const bodies = []
+    const result = await prepareProductionCapacityCell(
+      { ...config, mode: 'drain', paceWindowMs: 120_000 },
+      {
+        token: 'token',
+        wait: async () => {},
+        fetch: async (url, init) => {
+          assert.equal(new URL(url).pathname, '/v1/admin/drain')
+          const body = JSON.parse(init.body)
+          bodies.push(body)
+          if (body.paceWindowMs !== undefined) return response({ error: 'invalid_request' }, 400)
+          return response({ v: 1, draining: true })
+        }
+      }
+    )
+    assert.deepEqual(result, { changed: false, drained: true, paceWindowMs: 0 })
+    assert.deepEqual(bodies, [
+      { v: 1, graceMs: 0, paceWindowMs: 120_000 },
+      { v: 1, graceMs: 0 }
+    ])
+  })
+
+  it('fails a paced drain that the cell rejects for any other reason', async () => {
+    await assert.rejects(
+      prepareProductionCapacityCell(
+        { ...config, mode: 'drain', paceWindowMs: 120_000 },
+        {
+          token: 'token',
+          wait: async () => {},
+          fetch: async () => response({ error: 'invalid_token' }, 401)
+        }
+      ),
+      /returned 401/
+    )
+  })
+
+  it('refuses a pacing window that is not a bounded integer', () => {
+    const argv = (value) => [
+      '--director-origin', 'https://relay.onorca.dev',
+      '--cell-origin', 'https://c26.relay.onorca.dev',
+      '--cell-id', 'production-gce-c26',
+      '--mode', 'drain',
+      '--pace-window-ms', value
+    ]
+    for (const value of ['-1', '300001', '1.5', 'soon']) {
+      assert.throws(() => parseProductionCapacityCellArguments(argv(value)), /pace-window-ms/)
+    }
+    assert.equal(parseProductionCapacityCellArguments(argv('300000')).paceWindowMs, 300_000)
+  })
+
+  it('restores only the selected cell to general admission', async () => {
+    const fake = canaryFetch()
+    await prepareProductionCapacityCell(
+      { ...config, mode: 'isolate' },
+      { fetch: fake.fetch, token: 'token' }
+    )
+    const result = await prepareProductionCapacityCell(
+      { ...config, mode: 'activate' },
+      { fetch: fake.fetch, token: 'token' }
+    )
+    assert.equal(result.admissionState, 'general')
+    assert.deepEqual(fake.selector().membership, membership)
+  })
+
+  it('refuses an irreversible existing-only target', async () => {
+    const fetch = async () => response({
+      v: 1,
+      selector: {
+        generation: 20,
+        attemptId: null,
+        membership: {
+          existingOnly: ['production-gce-c26'],
+          migrationOnly: ['production-gce-c17'],
+          general: ['production-gce-c25']
+        }
+      },
+      intent: null
+    })
+    await assert.rejects(
+      prepareProductionCapacityCell(
+        { ...config, mode: 'isolate' },
+        { fetch, token: 'token' }
+      ),
+      /irreversible/
+    )
+  })
+
+  it('retries a transient 503 on the cell drain endpoint', async () => {
+    let calls = 0
+    const result = await prepareProductionCapacityCell(
+      { ...config, mode: 'drain' },
+      {
+        token: 'token',
+        wait: async () => {},
+        fetch: async (url) => {
+          assert.equal(new URL(url).pathname, '/v1/admin/drain')
+          calls += 1
+          if (calls === 1) return response({ error: 'warming up' }, 503)
+          return response({ v: 1, draining: true })
+        }
+      }
+    )
+    assert.equal(calls, 2)
+    assert.deepEqual(result, { changed: false, drained: true, paceWindowMs: 0 })
+  })
+
+  it('fails when both drain attempts return a transient 503', async () => {
+    let calls = 0
+    await assert.rejects(
+      prepareProductionCapacityCell(
+        { ...config, mode: 'drain' },
+        {
+          token: 'token',
+          wait: async () => {},
+          fetch: async () => {
+            calls += 1
+            return response({ error: 'warming up' }, 503)
+          }
+        }
+      ),
+      /returned 503/
+    )
+    assert.equal(calls, 2)
+  })
+})

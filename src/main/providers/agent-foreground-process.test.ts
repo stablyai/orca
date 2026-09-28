@@ -221,13 +221,13 @@ describe('resolveAgentForegroundProcess', () => {
   })
 
   it('confirms a quoted login shell only when its fresh PTY tree contains shells', async () => {
-    mockPs(['100 99 Ss+  "/bin/zsh" -l', '101 100 S+   /bin/bash'].join('\n'))
+    mockPs(['100 99 100 100 Ss+ "/bin/zsh" -l', '101 100 101 100 S+ /bin/bash'].join('\n'))
 
     await expect(confirmShellForegroundProcess(100, 'zsh')).resolves.toBe(true)
   })
 
   it('uses spawned-shell identity instead of a lagging foreground child label', async () => {
-    mockPs(['100 99 Ss+  /bin/zsh -l'].join('\n'))
+    mockPs(['100 99 100 100 Ss+ /bin/zsh -l'].join('\n'))
 
     await expect(confirmShellForegroundProcess(100, '/bin/zsh')).resolves.toBe(true)
   })
@@ -235,11 +235,11 @@ describe('resolveAgentForegroundProcess', () => {
   it('confirms the spawned shell behind a login wrapper while prompt hooks run', async () => {
     mockPs(
       [
-        '100 99 Ss   /usr/bin/login -pfl developer /bin/zsh',
-        '101 100 S+   -zsh',
-        '102 101 S+   (zsh)',
-        '103 102 S+   (sed)',
-        '104 102 R+   (git)'
+        '100 99 100 101 Ss /usr/bin/login -pfl developer /bin/zsh',
+        '101 100 101 101 S+ -zsh',
+        '102 101 101 101 S+ (zsh)',
+        '103 102 101 101 S+ (sed)',
+        '104 102 101 101 R+ (git)'
       ].join('\n')
     )
 
@@ -249,10 +249,10 @@ describe('resolveAgentForegroundProcess', () => {
   it('rejects a foreground nested shell while the spawned shell remains suspended', async () => {
     mockPs(
       [
-        '100 99 Ss   /usr/bin/login -pfl developer /bin/zsh',
-        '101 100 S    -zsh',
-        '102 101 S+   agent-tui',
-        '103 102 S+   /bin/zsh -i'
+        '100 99 100 102 Ss /usr/bin/login -pfl developer /bin/zsh',
+        '101 100 101 102 S -zsh',
+        '102 101 102 102 S+ agent-tui',
+        '103 102 102 102 S+ /bin/zsh -i'
       ].join('\n')
     )
 
@@ -262,9 +262,9 @@ describe('resolveAgentForegroundProcess', () => {
   it('rejects shell ownership while a TUI and its nested shell remain in the PTY tree', async () => {
     mockPs(
       [
-        '100 99 Ss   /bin/zsh -l',
-        '101 100 S+   /usr/local/bin/agent-tui',
-        '102 101 S+   /bin/bash -i'
+        '100 99 100 101 Ss /bin/zsh -l',
+        '101 100 101 101 S+ /usr/local/bin/agent-tui',
+        '102 101 101 101 S+ /bin/bash -i'
       ].join('\n')
     )
 
@@ -272,7 +272,7 @@ describe('resolveAgentForegroundProcess', () => {
   })
 
   it('rejects shell ownership while a stopped TUI remains resumable', async () => {
-    mockPs(['100 99 Ss+  /bin/zsh -l', '101 100 T    /usr/local/bin/agent-tui'].join('\n'))
+    mockPs(['100 99 100 100 Ss+ /bin/zsh -l', '101 100 101 100 T agent-tui'].join('\n'))
 
     await expect(confirmShellForegroundProcess(100, 'zsh')).resolves.toBe(false)
   })

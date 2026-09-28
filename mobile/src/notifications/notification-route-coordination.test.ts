@@ -115,3 +115,78 @@ describe('notification route coordination', () => {
     expect(notificationEffect).not.toContain('router.push(')
   })
 })
+
+it('reuses the current workspace screen and targets the notification pane without pushing', () => {
+  const target = getNotificationNavigationTarget({
+    hostId: 'host',
+    worktreeId: 'folder::/workspace',
+    paneKey: 'agent-tab:leaf'
+  })!
+  const harness = navigationHarness(
+    rootLayoutScopedState({
+      index: 1,
+      routes: [
+        { name: 'index' },
+        {
+          name: 'h',
+          state: {
+            key: 'host-stack',
+            index: 0,
+            routes: [
+              {
+                key: 'existing-workspace',
+                name: target.sessionTarget!.name,
+                params: { hostId: 'host', worktreeId: 'folder::/workspace' }
+              }
+            ]
+          }
+        }
+      ]
+    })
+  )
+  const router = { push: vi.fn(), replace: vi.fn() }
+  const controller = navigateToHostStackRoute(
+    harness.navigation,
+    router,
+    target.hostId,
+    target.sessionTarget!
+  )
+  expect(router.push).not.toHaveBeenCalled()
+  expect(router.replace).not.toHaveBeenCalled()
+  expect(harness.navigation.dispatch).toHaveBeenCalledExactlyOnceWith({
+    type: 'SET_PARAMS',
+    target: 'host-stack',
+    source: 'existing-workspace',
+    payload: { params: target.sessionTarget!.params }
+  })
+  expect(controller.isActive()).toBe(false)
+})
+
+it('does not reuse a different workspace on the same host', () => {
+  const target = getNotificationNavigationTarget({ hostId: 'host', worktreeId: 'workspace-b' })!
+  const harness = navigationHarness(
+    rootLayoutScopedState({
+      index: 0,
+      routes: [
+        {
+          name: 'h',
+          state: {
+            key: 'host-stack',
+            index: 0,
+            routes: [
+              {
+                key: 'workspace-a',
+                name: target.sessionTarget!.name,
+                params: { hostId: 'host', worktreeId: 'workspace-a' }
+              }
+            ]
+          }
+        }
+      ]
+    })
+  )
+  const router = { push: vi.fn(), replace: vi.fn() }
+  navigateToHostStackRoute(harness.navigation, router, target.hostId, target.sessionTarget!)
+  expect(router.push).toHaveBeenCalledOnce()
+  expect(harness.navigation.dispatch).not.toHaveBeenCalled()
+})

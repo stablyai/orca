@@ -87,13 +87,25 @@ bundled prototype, the fixture without seeded agents fell from 8,518 listeners
 to 1,218; with 100 visible agent rows the candidate mounted 1,618. Compare
 against the census in "Baseline on `main`", which the harness reports directly.
 
-### Share working-spinner phase without per-element animation queries
+### Share working-spinner phase without synchronous mount queries
 
 Working rows keep the existing compositor-driven CSS animation and shared
-visual phase. Each mount derives one negative animation delay from the document
-timeline instead of querying `getAnimations()` and mutating the animation start
-time. This removes per-row Web Animations setup from dense status transitions
-without adding a JavaScript animation clock.
+visual phase. `animationstart` anchors each animation to document time zero.
+Deferring the animation query until that event avoids a synchronous style flush
+at each mount and restores the shared phase after `display:none` or a motion
+preference change. A negative mount-time delay cannot preserve that phase after
+an animation restarts.
+
+### Bound spinner animation overhead
+
+Working rings keep compositor-driven CSS animation, but repeat the animation
+once per day rather than once per second. The same 12 steps per second now
+avoid recurring React animation-iteration dispatch. The existing stationary
+wrapper and ring rendering stay unchanged. Offscreen containment was evaluated
+and rejected after a pixel regression at low zoom on 1x displays.
+
+The history, isolated measurements, full-app workspace/agent/subagent benchmark,
+and limitations are documented in [Spinner rendering performance](./spinner-rendering-performance.md).
 
 ### Fold a burst in event order
 

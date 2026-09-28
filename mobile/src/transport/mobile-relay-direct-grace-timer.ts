@@ -1,4 +1,5 @@
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
+import type { ScheduleTimer } from './timer-scheduler'
 
 // Why: on a black-holed LAN endpoint the direct dial sits in 'connecting' for the
 // whole 12s connect timeout (rpc-client CONNECT_TIMEOUT_MS), and relay recovery
@@ -8,7 +9,7 @@ import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 const DIRECT_DIAL_GRACE_MS = 2500
 
 type DirectGraceTimerDependencies = {
-  setTimer: typeof setTimeout
+  setTimer: ScheduleTimer
   clearTimer: typeof clearTimeout
 }
 

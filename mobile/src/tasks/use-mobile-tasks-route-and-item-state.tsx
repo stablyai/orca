@@ -16,6 +16,7 @@ import {
   useSafeAreaInsets,
   useState
 } from './mobile-tasks-dependencies'
+import { newTabRepoListRead } from '../session/mobile-session-read-operations'
 import {
   type ActionableTaskItem,
   DEFAULT_LINEAR_DISPLAY_PROPERTIES,
@@ -40,8 +41,7 @@ import {
   type TaskResumeState,
   type TaskSort,
   type TasksSupportState,
-  getTaskPresetQuery,
-  isSuccess
+  getTaskPresetQuery
 } from './mobile-tasks-legacy-foundation'
 import { useMobileTasksItemState } from './use-mobile-tasks-item-state'
 
@@ -60,11 +60,9 @@ export function useMobileTasksRouteAndItemState() {
     client,
     client && connState === 'connected'
       ? async () => {
-          const response = await client.sendRequest('repo.list')
-          if (!isSuccess(response)) {
-            throw new Error(response.error.message)
-          }
-          return (response.result as { repos: RepoSummary[] }).repos
+          const reply = await newTabRepoListRead.request(client)
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+          return newTabRepoListRead.interpret(reply) as RepoSummary[]
         }
       : null
   )

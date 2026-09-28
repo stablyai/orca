@@ -1,3 +1,4 @@
+import { readMcpServerTomlOwnership } from './config-toml-mcp-servers'
 import { dirname, join } from 'node:path'
 import { observeAgentStateFile } from './codex-path-observation'
 import {
@@ -18,8 +19,10 @@ import {
 import { readCodexSettingsBaseline } from './config-settings-baseline'
 import { getCodexConfigSyncStatus, reportCodexConfigSyncOutcome } from './config-sync-stall'
 import { preserveRuntimeConflictValues } from './codex-config-settings-preservation'
+import { applyCodexDaemonSocketGuard } from './codex-daemon-socket-path-guard'
 import {
   deduplicateProjectTomlSections,
+  getMcpServerTomlSectionName,
   getProjectTrustLevel,
   getRevocationTomlSectionHeaderKey,
   getTomlSectionHeaderKey,
@@ -36,6 +39,15 @@ export function syncSystemConfigIntoManagedCodexHome(
     systemHomePath: getSystemCodexHomePath()
   }
 ): void {
+  if (!mirrorSystemConfigIntoManagedCodexHome(homes)) {
+    // Why: a stalled settings mirror must not also withhold the daemon guard,
+    // or Codex cannot start at all in a long home.
+    ensureCodexDaemonSocketGuard(homes.runtimeHomePath)
+  }
+}
+
+/** Returns false when no mirror pass ran, so the caller still owes the daemon guard. */
+function mirrorSystemConfigIntoManagedCodexHome(homes: CodexSettingsPromotionHomes): boolean {
   // Why: the mirror overwrites runtime settings from ~/.codex, so changes the
   // user made inside Orca-launched Codex (/model, /approvals) must be written
   // back to ~/.codex first or this very pass silently reverts them.
@@ -53,7 +65,7 @@ export function syncSystemConfigIntoManagedCodexHome(
     if (stalledStatus.state === 'stalled') {
       reportCodexConfigSyncOutcome(homes.runtimeHomePath, stalledStatus)
     }
-    return
+    return false
   }
   let mirrorResult: CodexConfigMirrorResult
   try {
@@ -64,7 +76,7 @@ export function syncSystemConfigIntoManagedCodexHome(
     // failure on every launch and quota poll while the surfaced reason never
     // reaches the user.
     reportCodexConfigSyncOutcome(homes.runtimeHomePath, getCodexConfigSyncStatus(homes), error)
-    return
+    return false
   }
   if (mirrorResult.status === 'refused-indeterminate') {
     // Why: no mirror ran, so this must behave exactly like the throwing path
@@ -75,7 +87,7 @@ export function syncSystemConfigIntoManagedCodexHome(
       getCodexConfigSyncStatus(homes),
       mirrorResult.error
     )
-    return
+    return false
   }
   // Why: report from the same pass that decided, so the surfaced status can
   // never disagree with what the mirror actually did.
@@ -89,16 +101,43 @@ export function syncSystemConfigIntoManagedCodexHome(
     if (!readCodexSettingsBaseline(homes.runtimeHomePath)) {
       snapshotCodexRuntimeSettingsBaseline(homes.runtimeHomePath)
     }
-    return
+    return true
   }
   // Why: the baseline advances only after a successful mirror; recording an
   // unpromoted runtime change as Orca-written would strand it forever.
-  snapshotCodexRuntimeSettingsBaseline(
-    homes.runtimeHomePath,
-    new Map(
+  snapshotCodexRuntimeSettingsBaseline(homes.runtimeHomePath, {
+    conflicts: new Map(
       [...promotionPlan.conflicts].filter(([key]) => mirrorResult.preservedConflictKeys.has(key))
-    )
-  )
+    ),
+    // Why: this pass made the runtime's marketplace and plugin tables canonical,
+    // so a later source config that lacks one is a removal, not an addition.
+    mirroredRegistrations: true,
+    mirroredMcpServers: mirrorResult.mirroredMcpServerNames,
+    mirroredMcpServerRoot: mirrorResult.mirroredMcpServerRoot
+  })
+  return true
+}
+
+/** Applies only the daemon guard, for passes that have no source config to mirror. */
+export function ensureCodexDaemonSocketGuard(runtimeHomePath: string): void {
+  try {
+    const observation = observeAgentStateFile(join(runtimeHomePath, 'config.toml'))
+    if (observation.kind !== 'indeterminate') {
+      writeCodexDaemonSocketGuard(
+        runtimeHomePath,
+        observation.kind === 'present' ? observation.value : null
+      )
+    }
+  } catch (error) {
+    console.warn('[codex-config] Failed to apply the Codex daemon socket guard:', error)
+  }
+}
+
+function writeCodexDaemonSocketGuard(runtimeHomePath: string, runtimeConfig: string | null): void {
+  const guarded = applyCodexDaemonSocketGuard(runtimeConfig ?? '', runtimeHomePath)
+  if (guarded !== (runtimeConfig ?? '')) {
+    writeFileAtomicallyIfUnchanged(join(runtimeHomePath, 'config.toml'), runtimeConfig, guarded)
+  }
 }
 
 /**
@@ -122,26 +161,33 @@ export function syncSystemConfigIntoLegacySharedCodexHome(
   }
   const rawSystemConfig =
     systemConfigObservation.kind === 'present' ? systemConfigObservation.value : ''
-  // Why: a missing cloud-synced source is not proof the user cleared config.
-  if (rawSystemConfig.trim() === '') {
-    return
-  }
-
-  const sourceConfigDir = resolveCodexConfigMirrorSourceDirectory(homes.systemHomePath)
   const runtimeConfigObservation = observeAgentStateFile(runtimeConfigPath)
   if (runtimeConfigObservation.kind === 'indeterminate') {
     throw runtimeConfigObservation.error
   }
   const runtimeConfigBeforeMirror =
     runtimeConfigObservation.kind === 'present' ? runtimeConfigObservation.value : null
-  const nextRuntimeConfig =
-    runtimeConfigBeforeMirror !== null
-      ? mergeSystemCodexConfigIntoRuntime(
-          runtimeConfigBeforeMirror,
-          prepareSystemConfigForRuntimeMirror(rawSystemConfig, sourceConfigDir)
-        )
-      : prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir)
-  if (runtimeConfigBeforeMirror === nextRuntimeConfig) {
+  // Why: a missing cloud-synced source is not proof the user cleared config.
+  let mirroredRuntimeConfig = runtimeConfigBeforeMirror ?? ''
+  if (rawSystemConfig.trim() !== '') {
+    const sourceConfigDir = resolveCodexConfigMirrorSourceDirectory(homes.systemHomePath)
+    // The retired home has no ownership baseline; its entire MCP root stays canonical.
+    mirroredRuntimeConfig =
+      runtimeConfigBeforeMirror !== null
+        ? mergeSystemCodexConfigIntoRuntime(
+            runtimeConfigBeforeMirror,
+            prepareSystemConfigForRuntimeMirror(rawSystemConfig, sourceConfigDir),
+            new Set(),
+            true
+          )
+        : prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir)
+  }
+  // Why: retained pre-rollout panes still use this home, so a refresh must keep the daemon guard.
+  const nextRuntimeConfig = applyCodexDaemonSocketGuard(
+    mirroredRuntimeConfig,
+    homes.runtimeHomePath
+  )
+  if ((runtimeConfigBeforeMirror ?? '') === nextRuntimeConfig) {
     return
   }
   // Why: stage first, then compare immediately before replace so a retained
@@ -152,7 +198,12 @@ export function syncSystemConfigIntoLegacySharedCodexHome(
 type CodexConfigMirrorResult =
   | { status: 'skipped-missing-source' }
   | { status: 'refused-indeterminate'; error: unknown }
-  | { status: 'mirrored'; preservedConflictKeys: ReadonlySet<string> }
+  | {
+      status: 'mirrored'
+      preservedConflictKeys: ReadonlySet<string>
+      mirroredMcpServerNames: ReadonlySet<string>
+      mirroredMcpServerRoot: boolean
+    }
 
 function syncSystemConfigIntoManagedCodexHomeUnsafe(
   { runtimeHomePath, systemHomePath, systemConfigDir }: CodexSettingsPromotionHomes,
@@ -179,32 +230,62 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
   // it would erase every ordinary setting from an existing managed runtime, and
   // a 0-byte file is what a half-written or unhydrated cloud-synced home shows.
   if (rawSystemConfig.trim() === '') {
+    // Why: no mirror write happens here, but the daemon guard must still land.
+    writeCodexDaemonSocketGuard(
+      runtimeHomePath,
+      runtimeConfigExists ? runtimeConfigObservation.value : null
+    )
     return runtimeConfigExists
       ? { status: 'skipped-missing-source' }
-      : { status: 'mirrored', preservedConflictKeys: new Set() }
+      : {
+          status: 'mirrored',
+          preservedConflictKeys: new Set(),
+          mirroredMcpServerNames: new Set(),
+          mirroredMcpServerRoot: false
+        }
   }
 
   const sourceConfigDir = resolveCodexConfigMirrorSourceDirectory(systemHomePath, systemConfigDir)
   if (!runtimeConfigExists) {
-    writeFileAtomically(
-      runtimeConfigPath,
-      prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir)
+    const freshRuntimeConfig = applyCodexDaemonSocketGuard(
+      prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir),
+      runtimeHomePath
     )
-    return { status: 'mirrored', preservedConflictKeys: new Set() }
+    const ownership = readMcpServerTomlOwnership(freshRuntimeConfig)
+    writeFileAtomically(runtimeConfigPath, freshRuntimeConfig)
+    return {
+      status: 'mirrored',
+      preservedConflictKeys: new Set(),
+      mirroredMcpServerNames: ownership.names,
+      mirroredMcpServerRoot: ownership.ownsRoot
+    }
   }
 
   const systemConfig = prepareSystemConfigForRuntimeMirror(rawSystemConfig, sourceConfigDir)
+  const { names: mirroredMcpServerNames, ownsRoot: mirroredMcpServerRoot } =
+    readMcpServerTomlOwnership(systemConfig)
   // Why: reuse the bytes already observed above rather than re-reading. A second
   // read could succeed where the first failed and re-open the gap this closes.
   const runtimeConfig = runtimeConfigObservation.value
   const preserved = preserveRuntimeConflictValues(
-    mergeSystemCodexConfigIntoRuntime(runtimeConfig, systemConfig),
+    mergeSystemCodexConfigIntoRuntime(
+      runtimeConfig,
+      systemConfig,
+      promotionPlan.mirroredMcpServers,
+      promotionPlan.mirroredMcpServerRoot
+    ),
     promotionPlan.runtimeValuesToPreserve
   )
-  if (preserved.content !== runtimeConfig) {
-    writeFileAtomically(runtimeConfigPath, preserved.content)
+  const nextRuntimeConfig = applyCodexDaemonSocketGuard(preserved.content, runtimeHomePath)
+  if (nextRuntimeConfig !== runtimeConfig) {
+    writeFileAtomically(runtimeConfigPath, nextRuntimeConfig)
   }
-  return { status: 'mirrored', preservedConflictKeys: preserved.keys }
+  return {
+    status: 'mirrored',
+    preservedConflictKeys: preserved.keys,
+    mirroredMcpServerNames,
+    mirroredMcpServerRoot
+  }
 }
 
 export function resolveCodexConfigMirrorSourceDirectory(
@@ -236,7 +317,12 @@ export function prepareSystemConfigForFreshRuntimeMirror(
   return stripRuntimeOwnedTomlSections(prepareSystemConfigForRuntimeMirror(config, systemConfigDir))
 }
 
-function mergeSystemCodexConfigIntoRuntime(runtimeConfig: string, systemConfig: string): string {
+function mergeSystemCodexConfigIntoRuntime(
+  runtimeConfig: string,
+  systemConfig: string,
+  mirroredMcpServerNames: ReadonlySet<string> = new Set(),
+  mirroredMcpServerRoot = false
+): string {
   const runtimeSections = deduplicateProjectTomlSections(getTomlSections(runtimeConfig))
   const runtimeProjectHeaders = new Set(
     runtimeSections
@@ -259,6 +345,7 @@ function mergeSystemCodexConfigIntoRuntime(runtimeConfig: string, systemConfig: 
       .filter((section) => getProjectTrustLevel(section.block) === 'trusted')
       .map((section) => getTomlSectionHeaderKey(section.header))
   )
+  const systemMcpServers = readMcpServerTomlOwnership(systemConfig)
   // Why: ordinary Codex settings should mirror ~/.codex exactly; runtime hook
   // trust and project trust are written under Orca's managed CODEX_HOME and
   // must survive the copy unless the user explicitly revoked project trust in
@@ -266,7 +353,19 @@ function mergeSystemCodexConfigIntoRuntime(runtimeConfig: string, systemConfig: 
   return joinTomlBlocks([
     stripRuntimeOwnedTomlSections(systemConfig, runtimeProjectHeaders),
     ...runtimeSections
-      .filter((section) => isRuntimePreservedTomlSection(section.header))
+      .filter((section) => {
+        if (isRuntimePreservedTomlSection(section.header)) {
+          return true
+        }
+        const mcpServerName = getMcpServerTomlSectionName(section.header)
+        return (
+          mcpServerName !== null &&
+          !systemMcpServers.ownsRoot &&
+          !mirroredMcpServerRoot &&
+          !systemMcpServers.names.has(mcpServerName) &&
+          !mirroredMcpServerNames.has(mcpServerName)
+        )
+      })
       .filter(
         (section) =>
           !isRuntimeProjectTomlSection(section.header) ||

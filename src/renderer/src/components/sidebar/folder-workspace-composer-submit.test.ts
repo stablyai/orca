@@ -116,6 +116,7 @@ describe('submitFolderWorkspaceCreate', () => {
     })
     expect(onOpenChange).toHaveBeenCalledWith(false)
     expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith('folder-workspace-1', {
+      agent: null,
       runtimeEnvironmentId: null
     })
     expect(consoleError).toHaveBeenCalledWith(
@@ -532,6 +533,7 @@ describe('submitFolderWorkspaceCreate', () => {
       linkedTask: linkedWorkItem
     })
     expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith('folder-workspace-1', {
+      agent: null,
       runtimeEnvironmentId: null
     })
     expect(mocks.ensureAgentStartupInTerminal).not.toHaveBeenCalled()
@@ -659,6 +661,7 @@ describe('submitFolderWorkspaceCreate', () => {
     })
     expect(onOpenChange).toHaveBeenCalledWith(false)
     expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith('folder-workspace-1', {
+      agent: null,
       runtimeEnvironmentId: null
     })
   })

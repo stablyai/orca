@@ -8,13 +8,12 @@ import {
 } from '../../../src/main/skills/skill-package-creation'
 import { SKILL_PACKAGE_CONTENT_TYPE } from '../../../src/shared/skill-package-manifest'
 
-export const REMOTE_SKILL_CLOUD_PORT = Number(process.env.ORCA_E2E_SKILL_CLOUD_PORT ?? '43961')
-export const REMOTE_SKILL_CLOUD_ORIGIN = `http://127.0.0.1:${REMOTE_SKILL_CLOUD_PORT}`
 export const REMOTE_SKILL_PACKAGE_ID = 'package_remote_e2e'
 export const REMOTE_SKILL_VERSION_ID = 'version_remote_e2e'
 export const REMOTE_SKILL_NAME = 'remote-e2e-skill'
 
 export type RemoteSkillCloudFixture = {
+  origin: string
   archive: CreatedSkillPackage
   bytes: Buffer
   requests: { method: string; path: string; body: unknown }[]
@@ -39,19 +38,30 @@ export async function startRemoteSkillCloudFixture(): Promise<RemoteSkillCloudFi
   })
   const bytes = await readFile(archive.archivePath)
   const requests: RemoteSkillCloudFixture['requests'] = []
+  let origin = ''
   const server = createServer((request, response) => {
-    void handleRemoteSkillCloudRequest({ request, response, archive, bytes, requests }).catch(
-      (error) => {
-        response.writeHead(500, { 'content-type': 'application/json' })
-        response.end(JSON.stringify({ code: 'fixture_failed', message: String(error) }))
-      }
-    )
+    void handleRemoteSkillCloudRequest({
+      request,
+      response,
+      archive,
+      bytes,
+      requests,
+      origin
+    }).catch((error) => {
+      response.writeHead(500, { 'content-type': 'application/json' })
+      response.end(JSON.stringify({ code: 'fixture_failed', message: String(error) }))
+    })
   })
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject)
-    server.listen(REMOTE_SKILL_CLOUD_PORT, '127.0.0.1', resolve)
+    server.listen(Number(process.env.ORCA_E2E_SKILL_CLOUD_PORT ?? 0), '127.0.0.1', resolve)
   })
-  return { archive, bytes, requests, root, server }
+  const address = server.address()
+  if (!address || typeof address === 'string') {
+    throw new Error('Skill fixture has no TCP address')
+  }
+  origin = `http://127.0.0.1:${address.port}`
+  return { archive, bytes, requests, root, server, origin }
 }
 
 export async function stopRemoteSkillCloudFixture(fixture: RemoteSkillCloudFixture): Promise<void> {
@@ -60,13 +70,14 @@ export async function stopRemoteSkillCloudFixture(fixture: RemoteSkillCloudFixtu
 }
 
 async function handleRemoteSkillCloudRequest(input: {
+  origin: string
   request: IncomingMessage
   response: ServerResponse
   archive: CreatedSkillPackage
   bytes: Buffer
   requests: RemoteSkillCloudFixture['requests']
 }): Promise<void> {
-  const path = new URL(input.request.url ?? '/', REMOTE_SKILL_CLOUD_ORIGIN).pathname
+  const path = new URL(input.request.url ?? '/', input.origin).pathname
   if (input.request.method === 'GET' && path === '/package.tar.gz') {
     input.requests.push({ method: 'GET', path, body: null })
     input.response.writeHead(200, {
@@ -84,17 +95,19 @@ async function handleRemoteSkillCloudRequest(input: {
     const body = JSON.parse(await readRequestBody(input.request)) as unknown
     input.requests.push({ method: 'POST', path, body })
     input.response.writeHead(200, { 'content-type': 'application/json' })
-    input.response.end(JSON.stringify(downloadGrant(input.archive, input.bytes.length)))
+    input.response.end(
+      JSON.stringify(downloadGrant(input.archive, input.bytes.length, input.origin))
+    )
     return
   }
   input.response.writeHead(404, { 'content-type': 'application/json' })
   input.response.end(JSON.stringify({ code: 'not_found', message: 'Not found' }))
 }
 
-function downloadGrant(archive: CreatedSkillPackage, compressedBytes: number) {
+function downloadGrant(archive: CreatedSkillPackage, compressedBytes: number, origin: string) {
   return {
     grant: {
-      url: `${REMOTE_SKILL_CLOUD_ORIGIN}/package.tar.gz`,
+      url: `${origin}/package.tar.gz`,
       expiresAt: '2099-01-01T00:00:00.000Z'
     },
     version: {

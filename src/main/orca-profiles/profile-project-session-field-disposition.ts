@@ -55,6 +55,11 @@ export const WORKSPACE_SESSION_FIELD_DISPOSITION = {
     onRepoRemoval: 'prunedByBespokeRule',
     onTransfer: 'copiedByBespokeRule'
   },
+  // Same tab-id keying as the layouts it shadows, so park scrollback follows the same tab ids.
+  localOnlyScrollbackByTabId: {
+    onRepoRemoval: 'prunedByBespokeRule',
+    onTransfer: 'copiedByBespokeRule'
+  },
   activeWorktreeIdsOnShutdown: {
     onRepoRemoval: 'prunedByBespokeRule',
     onTransfer: 'copiedByBespokeRule'

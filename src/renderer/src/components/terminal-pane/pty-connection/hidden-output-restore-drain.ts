@@ -129,7 +129,20 @@ export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): vo
       ) {
         return
       }
-      session.abandonHiddenOutputRestoreAndDrainPendingForeground(ptyId)
+      // A fetched snapshot plus live overflow is backpressure, not unavailable recovery. The
+      // replay paints synchronously before it awaits its fit, so this deadline never lands
+      // mid-paint: adopt that painted image as the baseline — the overflow abandon below
+      // returns before arming one, and without it main's ACK backlog repaints as duplicates.
+      const replayed = session.hiddenOutputRestorePendingOverflow
+        ? session.hiddenOutputRestoreReplayingSnapshot
+        : null
+      if (replayed) {
+        session.setRestoredSnapshotBaseline(ptyId, replayed, replayed.paintsContent === true)
+        session.noteHiddenOutputRestoreFloodBackpressure()
+      }
+      session.abandonHiddenOutputRestoreAndDrainPendingForeground(ptyId, {
+        quiet: replayed !== null
+      })
     }, HIDDEN_OUTPUT_RESTORE_FOREGROUND_TIMEOUT_MS)
   }
 

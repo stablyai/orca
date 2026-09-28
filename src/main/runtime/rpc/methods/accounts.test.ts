@@ -2,11 +2,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { isStreamingMethod } from '../core'
+import { eraseRpcMethods, isStreamingMethod } from '../core'
 import { ACCOUNT_METHODS } from './accounts'
 
 function method(name: string) {
-  const found = ACCOUNT_METHODS.find((candidate) => candidate.name === name)
+  const found = eraseRpcMethods(ACCOUNT_METHODS).find((candidate) => candidate.name === name)
   if (!found) {
     throw new Error(`Missing method ${name}`)
   }

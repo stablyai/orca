@@ -19,15 +19,17 @@ describe('StructuredAgentSessionReadableRestorer', () => {
       (sessionId) => ({ sessionId }) as AgentSessionRecord
     )
     const restorer = new StructuredAgentSessionReadableRestorer({
-      store: { listRecords: () => records } as never,
-      journalRoot: '/tmp/journals',
+      openDeps: {
+        store: { getRecord: () => null, listRecords: () => records },
+        journalRoot: '/tmp/journals',
+        adapter: {}
+      },
       supportsRecord: () => true,
       reconcile: async () => null,
       resolveRecovery: async () => undefined,
       serialize: async (_sessionId, task) => task(),
       hasSession: () => false,
-      onReadable: () => undefined,
-      restoreHandoff: async () => undefined
+      onReadable: () => undefined
     })
 
     await restorer.restore(['visible-a', 'visible-b', 'background-a', 'background-b'])

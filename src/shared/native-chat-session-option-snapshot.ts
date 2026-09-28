@@ -5,6 +5,7 @@ import type {
   CatalogOption
 } from './agent-session-option-catalog'
 import type {
+  NativeChatLiveOptionTransport,
   SessionOptionDescriptor,
   SessionOptionSelectChoice
 } from './native-chat-session-options'
@@ -15,7 +16,7 @@ import {
 } from './native-chat-session-option-state'
 
 export type NativeChatSessionOptionMode = 'draft' | 'live'
-export type NativeChatLiveOptionTransport = 'catalog' | 'agent-session'
+export type { NativeChatLiveOptionTransport }
 
 function choiceWithCurrent(
   choices: readonly SessionOptionSelectChoice[],
@@ -82,8 +83,10 @@ function optionDescriptor(args: {
   const settable = settableState({ mode, liveTransport, apply: option.apply, composedModelApply })
   // Why: the launch only emits `values[id] ?? defaultValue` alongside a model flag, so
   // a draft names this option's value exactly when a model was picked. Under the CLI's
-  // own default no flag is sent at all, and the CLI's unstated choice is not ours to name.
-  const showDefault = mode === 'draft' && !tracked && !modelIsCliDefault
+  // own default no flag is sent at all, so its choice is nameable only where its listing states it.
+  const cliStatesDefault =
+    modelIsCliDefault && option.kind.type === 'select' && option.kind.defaultIsCliDefault === true
+  const showDefault = !tracked && (cliStatesDefault || (mode === 'draft' && !modelIsCliDefault))
   const valueSource = tracked?.source ?? (showDefault ? 'default' : 'unknown')
   if (option.kind.type === 'select') {
     const choices = choiceWithCurrent(option.kind.choices, tracked)
@@ -107,16 +110,20 @@ function optionDescriptor(args: {
         choices
       },
       valueSource,
+      transport: liveTransport,
       ...settable,
       ...(action ? { action } : {})
     }
   }
+  // Why display resolves here but `valueSource` above does not: a switch has no
+  // third position, so a descriptor that leaves the value unset renders as `false`
+  // and silently contradicts the catalog. Resolving to `defaultValue` is the same
+  // `values[id] ?? defaultValue` the composed dispatch already assumes
+  // (buildNativeChatSessionOptionCommand), so the row shows what a flip acts on.
+  // Provenance stays on its own track: an unpicked row keeps `unknown`/`default`,
+  // which is what every pill still reads before naming a value.
   const currentValue =
-    typeof tracked?.value === 'boolean'
-      ? tracked.value
-      : showDefault
-        ? option.kind.defaultValue
-        : undefined
+    typeof tracked?.value === 'boolean' ? tracked.value : option.kind.defaultValue
   return {
     id: option.id,
     label: option.label,
@@ -124,9 +131,10 @@ function optionDescriptor(args: {
     ...(option.category ? { category: option.category } : {}),
     kind: {
       type: 'boolean',
-      ...(currentValue === undefined ? {} : { currentValue })
+      currentValue
     },
     valueSource,
+    transport: liveTransport,
     ...settable,
     ...(action ? { action } : {})
   }
@@ -202,9 +210,11 @@ export function buildNativeChatSessionOptionSnapshot(args: {
   record: NativeChatSessionOptionRecord
   mode: NativeChatSessionOptionMode
   modelLabel: string
-  liveTransport?: NativeChatLiveOptionTransport
+  /** Required, not defaulted: this is the only place a descriptor is built, so a
+   *  producer that must state its lane here cannot silently inherit the other's. */
+  liveTransport: NativeChatLiveOptionTransport
 }): SessionOptionDescriptor[] {
-  const { catalog, models, record, mode, modelLabel, liveTransport = 'catalog' } = args
+  const { catalog, models, record, mode, modelLabel, liveTransport } = args
   if (models.length === 0) {
     return []
   }
@@ -232,6 +242,7 @@ export function buildNativeChatSessionOptionSnapshot(args: {
         choices: modelChoices
       },
       valueSource: modelTracked?.source ?? (defaultModelId ? 'default' : 'unknown'),
+      transport: liveTransport,
       ...settableState({ mode, liveTransport, apply: catalog.modelApply }),
       ...(modelAction ? { action: modelAction } : {})
     }

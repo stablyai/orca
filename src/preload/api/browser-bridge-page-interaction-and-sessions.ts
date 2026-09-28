@@ -1,5 +1,6 @@
 import { ipcRenderer } from 'electron'
 import type { PreloadApi } from '../api-types'
+import type { BrowserUserAgentMode } from '../../shared/browser-user-agent-mode'
 
 export const browserPageInteractionAndSessionsApi = {
   onContextMenuRequested: (
@@ -60,6 +61,16 @@ export const browserPageInteractionAndSessionsApi = {
     ipcRenderer.on('browser:activateView', listener)
     return () => ipcRenderer.removeListener('browser:activateView', listener)
   },
+  onCapturePaintHold: (
+    callback: (data: { browserPageId: string; held: boolean }) => void
+  ): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      data: { browserPageId: string; held: boolean }
+    ) => callback(data)
+    ipcRenderer.on('browser:capturePaintHold', listener)
+    return () => ipcRenderer.removeListener('browser:capturePaintHold', listener)
+  },
   onPaneFocus: (
     callback: (data: { worktreeId: string | null; browserPageId: string }) => void
   ): (() => void) => {
@@ -71,11 +82,11 @@ export const browserPageInteractionAndSessionsApi = {
     return () => ipcRenderer.removeListener('browser:pane-focus', listener)
   },
   onOpenLinkInOrcaTab: (
-    callback: (event: { browserPageId: string; url: string }) => void
+    callback: (event: { browserPageId: string; url: string; activate?: boolean }) => void
   ): (() => void) => {
     const listener = (
       _event: Electron.IpcRendererEvent,
-      data: { browserPageId: string; url: string }
+      data: { browserPageId: string; url: string; activate?: boolean }
     ) => callback(data)
     ipcRenderer.on('browser:open-link-in-orca-tab', listener)
     return () => ipcRenderer.removeListener('browser:open-link-in-orca-tab', listener)
@@ -117,11 +128,10 @@ export const browserPageInteractionAndSessionsApi = {
     skipProbe?: boolean
   }): Promise<{ partition: string }> =>
     ipcRenderer.invoke('browser:prepareSshWorkspacePartition', args),
-  sessionCreateProfile: (args: {
-    scope: 'default' | 'isolated' | 'imported'
-    label: string
-    userAgentMode?: 'clean' | 'native'
-  }) => ipcRenderer.invoke('browser:session:createProfile', args),
+  sessionCreateProfile: (args: { scope: 'default' | 'isolated' | 'imported'; label: string }) =>
+    ipcRenderer.invoke('browser:session:createProfile', args),
+  identityGet: () => ipcRenderer.invoke('browser:identity:get'),
+  identitySet: (mode: BrowserUserAgentMode) => ipcRenderer.invoke('browser:identity:set', mode),
   sessionDeleteProfile: (args: { profileId: string }): Promise<boolean> =>
     ipcRenderer.invoke('browser:session:deleteProfile', args),
   sessionImportCookies: (args: { profileId: string }) =>

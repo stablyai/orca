@@ -253,12 +253,21 @@ export function createCodexSessionMigrationScheduler(args: {
   }
 }
 
+type MigrationFailureCountKey = 'failedDirectories' | 'failedFiles' | 'failedHealAuditRecords'
+
+/** The run-result fields the scheduler consults; each runner returns its own summary shape. */
+type MigrationResultFields = Partial<Record<MigrationFailureCountKey, unknown>>
+
+function isMigrationResultFields(result: unknown): result is MigrationResultFields {
+  return typeof result === 'object' && result !== null
+}
+
 function isStoppedMigrationResult(result: unknown): boolean {
   return Boolean(result && typeof result === 'object' && 'stopped' in result && result.stopped)
 }
 
 function isIncompleteBackfillResult(result: unknown): boolean {
-  if (!result || typeof result !== 'object') {
+  if (!isMigrationResultFields(result)) {
     return true
   }
   return (
@@ -269,7 +278,10 @@ function isIncompleteBackfillResult(result: unknown): boolean {
   )
 }
 
-function readPositiveResultCount(result: object, key: string): boolean {
-  const value = key in result ? (result as Record<string, unknown>)[key] : undefined
+function readPositiveResultCount(
+  result: MigrationResultFields,
+  key: MigrationFailureCountKey
+): boolean {
+  const value = result[key]
   return typeof value === 'number' && value > 0
 }

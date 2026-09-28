@@ -47,9 +47,9 @@ describe('runtime environment shared-control connection cache', () => {
     applyRuntimeEnvironmentCapabilityVerdict({
       evidence: absent,
       verdict: 'absent',
-      runtimeId: 'runtime-test',
-      onAbsent: () => pauseRemoteRuntimeSharedControlRetry(ENVIRONMENT_ID)
+      runtimeId: 'runtime-test'
     })
+    pauseRemoteRuntimeSharedControlRetry(ENVIRONMENT_ID)
     expect(getRemoteRuntimeSharedControlDiagnostics(ENVIRONMENT_ID)?.state).toBe('closed')
     await delay(400)
     expect(server.connectionCount()).toBe(1)
@@ -58,12 +58,10 @@ describe('runtime environment shared-control connection cache', () => {
     applyRuntimeEnvironmentCapabilityVerdict({
       evidence: capable,
       verdict: 'capable',
-      runtimeId: 'runtime-test',
-      onCapable: () => {
-        ensureRemoteRuntimeSharedControlConnection(ENVIRONMENT_ID, server.pairing)
-        reconnectRemoteRuntimeSharedControlConnection(ENVIRONMENT_ID)
-      }
+      runtimeId: 'runtime-test'
     })
+    ensureRemoteRuntimeSharedControlConnection(ENVIRONMENT_ID, server.pairing)
+    reconnectRemoteRuntimeSharedControlConnection(ENVIRONMENT_ID)
     await waitFor(() => server.connectionCount() === 2)
   })
 
@@ -119,9 +117,9 @@ describe('runtime environment shared-control connection cache', () => {
     applyRuntimeEnvironmentCapabilityVerdict({
       evidence,
       verdict: 'absent',
-      runtimeId: 'runtime-test',
-      onAbsent: () => pauseRemoteRuntimeSharedControlRetry(ENVIRONMENT_ID)
+      runtimeId: 'runtime-test'
     })
+    pauseRemoteRuntimeSharedControlRetry(ENVIRONMENT_ID)
 
     expect(getRemoteRuntimeSharedControlDiagnostics(ENVIRONMENT_ID)?.state).toBe('reconnecting')
     await waitFor(() => server.connectionCount() === 2)

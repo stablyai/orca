@@ -80,7 +80,7 @@ describe('ensureSimulatorTab', () => {
     expect(mockStoreState.activateTab).toHaveBeenCalledWith('sim-1')
     expect(mockStoreState.setActiveTab).not.toHaveBeenCalled()
     expect(mockStoreState.focusGroup).toHaveBeenCalledWith('wt-1', 'group-1')
-    expect(mockStoreState.setActiveTabType).toHaveBeenCalledWith('simulator')
+    expect(mockStoreState.setActiveTabType).toHaveBeenCalledWith('simulator', 'wt-1')
   })
 
   it('does not reuse a simulator owned by a same-id sibling host', async () => {
@@ -266,7 +266,7 @@ describe('ensureSimulatorTab', () => {
     })
     expect(mockStoreState.activateTab).toHaveBeenCalledWith('sim-2')
     expect(mockStoreState.focusGroup).toHaveBeenCalledWith('wt-1', 'group-2')
-    expect(mockStoreState.setActiveTabType).toHaveBeenCalledWith('simulator')
+    expect(mockStoreState.setActiveTabType).toHaveBeenCalledWith('simulator', 'wt-1')
   })
 
   it('falls back to the source group when atomic right split creation fails', async () => {

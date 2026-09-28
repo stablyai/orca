@@ -27,7 +27,7 @@ describe('orchestration task-create CLI mapping', () => {
 
   it('passes PowerShell-stripped deps through to the runtime', async () => {
     callMock
-      .mockResolvedValueOnce({ result: { terminal: { handle: 'term_creator' } } })
+      .mockResolvedValueOnce({ result: { identity: { handle: 'term_creator', live: true } } })
       .mockResolvedValueOnce({ result: { task: { id: 'task_2', status: 'pending' } } })
 
     await ORCHESTRATION_HANDLERS['orchestration task-create']({

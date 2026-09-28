@@ -2,11 +2,10 @@ import { EventEmitter } from 'node:events'
 import { realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { PassThrough } from 'node:stream'
+import { providerDiagnosticOf } from '../../shared/agent-session-failure'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { spawnProcess } from '../../shared/child-process/run-process'
 import {
-  CODEX_APP_SERVER_MAX_RECORD_BYTES,
-  CodexAppServerFrameSizeError,
   isCodexAppServerRequestError,
   openCodexAppServerConnection,
   type CodexAppServerConnection,
@@ -166,31 +165,6 @@ function responseLine(targetBytes: number, id: number): string {
   return `${line}\n`
 }
 
-function resultFirstResponseLine(targetBytes: number, id: number, resultKey: 'result' | 'error') {
-  const response =
-    resultKey === 'result'
-      ? `{"result":{"turn":{"id":"turn-large"}},"id":${id},"padding":"`
-      : `{"error":{"code":-32000,"message":"too large"},"id":${id},"padding":"`
-  const suffix = '"}'
-  const padding = targetBytes - Buffer.byteLength(response + suffix, 'utf8')
-  if (padding < 0) {
-    throw new Error(`target ${targetBytes} is smaller than fixture envelope`)
-  }
-  const line = `${response}${'x'.repeat(padding)}${suffix}`
-  expect(Buffer.byteLength(line, 'utf8')).toBe(targetBytes)
-  return `${line}\n`
-}
-
-function giantContainerBeforeIdResponseLine(targetBytes: number, id: number): string {
-  const giantResult = `{"result":{"payload":"${'x'.repeat(62_000)}"},"id":${id},"padding":"`
-  const suffix = '"}'
-  const padding = targetBytes - Buffer.byteLength(giantResult + suffix, 'utf8')
-  if (padding < 0) {
-    throw new Error(`target ${targetBytes} is smaller than giant response envelope`)
-  }
-  return `${giantResult}${'x'.repeat(padding)}${suffix}\n`
-}
-
 describe('openCodexAppServerConnection', () => {
   it('advertises the experimental API required for rollout-path resume', async () => {
     const { child, spawnImpl, written } = stubChild()
@@ -207,6 +181,45 @@ describe('openCodexAppServerConnection', () => {
       params: { capabilities: { experimentalApi: true } }
     })
     await connection.close()
+  })
+
+  it('reports the spawned pid before it sends the handshake', async () => {
+    const { child, spawnImpl, written } = stubChild()
+    answerInitialize(child)
+    const writtenAtSpawn: number[] = []
+
+    const connection = await openCodexAppServerConnection(
+      { command: 'codex', args: ['app-server'] },
+      {
+        onSpawned: async (pid) => {
+          writtenAtSpawn.push(written.length)
+          expect(pid).toBe(child.pid)
+        }
+      },
+      spawnImpl
+    )
+
+    // The owner is durable before initialize, so a crash mid-handshake leaves it stoppable.
+    expect(writtenAtSpawn).toEqual([0])
+    expect(written[0]).toMatchObject({ method: 'initialize' })
+    await connection.close()
+  })
+
+  it('reaps the child and never handshakes when its spawn cannot be recorded', async () => {
+    const { spawnImpl, written } = stubChild()
+
+    await expect(
+      openCodexAppServerConnection(
+        { command: 'codex', args: ['app-server'] },
+        {
+          onSpawned: async () => {
+            throw new Error('agent_session_checkpoint_stale')
+          }
+        },
+        spawnImpl
+      )
+    ).rejects.toThrow('agent_session_checkpoint_stale')
+    expect(written).toEqual([])
   })
 
   it('completes the handshake and keeps the child alive across calls', async () => {
@@ -281,6 +294,9 @@ describe('openCodexAppServerConnection', () => {
 
     expect(isCodexAppServerRequestError(refusal)).toBe(true)
     expect((refusal as Error).message).toContain('bad params')
+    // Codex's own words, apart from Orca's prefix, for a person to read.
+    expect(providerDiagnosticOf(refusal)).toEqual({ text: 'bad params', audience: 'person' })
+    expect(providerDiagnosticOf(missing)).toBeUndefined()
     expect(isCodexAppServerUnsupportedError(missing)).toBe(true)
     expect(isCodexAppServerRequestError(missing)).toBe(false)
     await connection.close()
@@ -542,136 +558,24 @@ describe('openCodexAppServerConnection', () => {
     await connection.close()
   })
 
-  it('accepts the 16 MiB boundary and settles one byte above without killing the provider', async () => {
-    const { child, spawnImpl } = stubChild({ exitOnStdinEnd: false })
+  it('accepts a response beyond the daemon wire limit and keeps the provider alive', async () => {
+    const { child, spawnImpl } = stubChild()
     answerInitialize(child)
-    const exits: string[] = []
-    const frames: { kind: string; payload: unknown }[] = []
     const connection = await openCodexAppServerConnection(
       { command: 'codex', args: ['app-server'] },
-      {
-        onExit: (error) => exits.push(error.message),
-        onUnhandledFrame: (kind, payload) => frames.push({ kind, payload })
-      },
+      {},
       spawnImpl
     )
 
-    const below = connection.request('thread/resume')
-    child.stdout.write(responseLine(CODEX_APP_SERVER_MAX_RECORD_BYTES - 1, 2))
-    expect(((await below) as { data: string }).data.length).toBeGreaterThan(
-      CODEX_APP_SERVER_MAX_RECORD_BYTES - 40
-    )
-
-    const at = connection.request('thread/resume')
-    child.stdout.write(responseLine(CODEX_APP_SERVER_MAX_RECORD_BYTES, 3))
-    expect(((await at) as { data: string }).data.length).toBeGreaterThan(
-      CODEX_APP_SERVER_MAX_RECORD_BYTES - 40
-    )
-
-    const inFlight = rejection(connection.request('turn/start'))
-    child.stdout.write(responseLine(CODEX_APP_SERVER_MAX_RECORD_BYTES + 1, 4))
-
-    expect(await inFlight).toBeInstanceOf(CodexAppServerFrameSizeError)
-    expect(frames).toEqual([
-      {
-        kind: 'frame:oversized-response',
-        payload: expect.objectContaining({ classification: 'response', id: 4 })
-      }
-    ])
-    expect(exits).toEqual([])
+    const large = connection.request('thread/resume')
+    child.stdout.write(responseLine(16 * 1024 * 1024 + 1, 2))
+    await expect(large).resolves.toMatchObject({ data: expect.any(String) })
+    expect(child.kill).not.toHaveBeenCalled()
     expect(connection.closed).toBe(false)
 
-    const later = connection.request('turn/start')
-    child.stdout.write('{"id":5,"result":{"turn":{"id":"turn-next"}}}\n')
-    await expect(later).resolves.toEqual({ turn: { id: 'turn-next' } })
-    child.emit('exit', 0, null)
-    await connection.close()
-  })
-
-  it.each(['result', 'error'] as const)(
-    'classifies oversized responses with %s before id',
-    async (resultKey) => {
-      const { child, spawnImpl } = stubChild({ exitOnStdinEnd: false })
-      answerInitialize(child)
-      const frames: { kind: string; payload: unknown }[] = []
-      const connection = await openCodexAppServerConnection(
-        { command: 'codex', args: ['app-server'] },
-        { onUnhandledFrame: (kind, payload) => frames.push({ kind, payload }) },
-        spawnImpl
-      )
-
-      const inFlight = rejection(connection.request('thread/resume'))
-      child.stdout.write(
-        resultFirstResponseLine(CODEX_APP_SERVER_MAX_RECORD_BYTES + 1, 2, resultKey)
-      )
-
-      expect(await inFlight).toBeInstanceOf(CodexAppServerFrameSizeError)
-      expect(frames).toEqual([
-        {
-          kind: 'frame:oversized-response',
-          payload: expect.objectContaining({ classification: 'response', id: 2 })
-        }
-      ])
-      expect(connection.closed).toBe(false)
-      child.emit('exit', 0, null)
-      await connection.close()
-    }
-  )
-
-  it('classifies an oversized response when a giant result container precedes id', async () => {
-    const { child, spawnImpl } = stubChild({ exitOnStdinEnd: false })
-    answerInitialize(child)
-    const frames: { kind: string; payload: unknown }[] = []
-    const connection = await openCodexAppServerConnection(
-      { command: 'codex', args: ['app-server'] },
-      { onUnhandledFrame: (kind, payload) => frames.push({ kind, payload }) },
-      spawnImpl
-    )
-
-    const inFlight = rejection(connection.request('thread/resume'))
-    child.stdout.write(giantContainerBeforeIdResponseLine(CODEX_APP_SERVER_MAX_RECORD_BYTES + 1, 2))
-
-    await expect(inFlight).resolves.toBeInstanceOf(CodexAppServerFrameSizeError)
-    expect(frames).toEqual([
-      {
-        kind: 'frame:oversized-response',
-        payload: expect.objectContaining({ classification: 'response', id: 2 })
-      }
-    ])
-    child.emit('exit', 0, null)
-    await connection.close()
-  })
-
-  it('answers an oversized provider request once and resumes after its newline', async () => {
-    const { child, spawnImpl, written } = stubChild()
-    answerInitialize(child)
-    const frames: string[] = []
-    const notifications: string[] = []
-    const connection = await openCodexAppServerConnection(
-      { command: 'codex', args: ['app-server'] },
-      {
-        onUnhandledFrame: (kind) => frames.push(kind),
-        onNotification: (method) => notifications.push(method)
-      },
-      spawnImpl
-    )
-
-    child.stdout.write(
-      `{"id":"approval-1","method":"item/requestApproval","params":{"data":"${'x'.repeat(
-        CODEX_APP_SERVER_MAX_RECORD_BYTES
-      )}"}}\n{"method":"turn/completed","params":{}}\n`
-    )
-    await vi.waitFor(() => expect(notifications).toEqual(['turn/completed']))
-
-    expect(frames).toEqual(['frame:oversized-request'])
-    expect(written.at(-1)).toEqual({
-      id: 'approval-1',
-      error: {
-        code: -32001,
-        message: `request exceeds ${CODEX_APP_SERVER_MAX_RECORD_BYTES} byte limit`
-      }
-    })
-    expect(connection.closed).toBe(false)
+    const followup = connection.request('turn/start')
+    child.stdout.write('{"id":3,"result":{"turn":{"id":"turn-next"}}}\n')
+    await expect(followup).resolves.toEqual({ turn: { id: 'turn-next' } })
     await connection.close()
   })
 
@@ -778,35 +682,39 @@ describe('openCodexAppServerConnection', () => {
       spawnImpl
     )
 
-    // An unclassifiable oversized line initiates recovery, then child exit lands afterwards.
-    child.stdout.write('x'.repeat(CODEX_APP_SERVER_MAX_RECORD_BYTES + 1))
-    child.stderr.write('killed\n')
+    child.emit('error', new Error('provider transport failed'))
+    child.stderr.write('provider died\n')
     await flushStreams()
     child.emit('exit', null, 'SIGKILL')
     child.emit('close', null, 'SIGKILL')
 
     expect(exits).toHaveLength(1)
     // The first cause survives; the generic exit that follows does not overwrite it.
-    expect(exits[0]).toContain('oversized')
+    expect(exits[0]).toContain('provider transport failed')
     await connection.close()
   })
 
-  it('does not report recovery for a protocol failure until child exit is observed', async () => {
+  it('does not report recovery for a handler failure until child exit is observed', async () => {
     const { child, spawnImpl } = stubChild({ exitOnStdinEnd: false })
     answerInitialize(child)
     const exits: string[] = []
     const connection = await openCodexAppServerConnection(
       { command: 'codex', args: ['app-server'] },
-      { onExit: (error) => exits.push(error.message) },
+      {
+        onNotification: () => {
+          throw new Error('structured sink failed')
+        },
+        onExit: (error) => exits.push(error.message)
+      },
       spawnImpl
     )
 
     const inFlight = rejection(connection.request('turn/start'))
-    child.stdout.write('x'.repeat(CODEX_APP_SERVER_MAX_RECORD_BYTES + 1))
+    child.stdout.write('{"method":"turn/started","params":{}}\n')
     await flushStreams()
 
     expect(exits).toHaveLength(0)
-    expect((await inFlight).message).toContain('oversized')
+    expect((await inFlight).message).toContain('structured sink failed')
 
     child.emit('exit', null, 'SIGKILL')
     expect(exits).toHaveLength(1)

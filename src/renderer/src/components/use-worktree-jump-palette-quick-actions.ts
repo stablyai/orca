@@ -56,6 +56,7 @@ export function useWorktreeJumpPaletteQuickActions({
   sshConnectionStates,
   activeGroupIdByWorktree,
   groupsByWorktree,
+  unifiedTabsByWorktree,
   isLoading,
   settings,
   runtimeStatusByEnvironmentId,
@@ -129,6 +130,7 @@ export function useWorktreeJumpPaletteQuickActions({
     void sshConnectionStates
     void activeGroupIdByWorktree
     void groupsByWorktree
+    void unifiedTabsByWorktree
     void isLoading
     void settings?.activeRuntimeEnvironmentId
     void runtimeStatusByEnvironmentId
@@ -144,6 +146,7 @@ export function useWorktreeJumpPaletteQuickActions({
     sshConnectionStates,
     activeGroupIdByWorktree,
     groupsByWorktree,
+    unifiedTabsByWorktree,
     isLoading,
     settings?.activeRuntimeEnvironmentId,
     runtimeStatusByEnvironmentId

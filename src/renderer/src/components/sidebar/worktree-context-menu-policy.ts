@@ -171,9 +171,10 @@ export function preserveDeleteSiblingPosition(scope: HTMLElement | null): () => 
   if (!(sidebar instanceof HTMLElement) || !(row instanceof HTMLElement)) {
     return () => {}
   }
-  const rows = Array.from(
-    sidebar.querySelectorAll<HTMLElement>('[data-worktree-virtual-row]')
-  ).sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)
+  const rows = Array.from(sidebar.querySelectorAll<HTMLElement>('[data-worktree-virtual-row]'))
+    .map((element) => ({ element, top: element.getBoundingClientRect().top }))
+    .sort((a, b) => a.top - b.top)
+    .map(({ element }) => element)
   const rowIndex = rows.indexOf(row)
   const anchorRow = rows[rowIndex + 1] ?? rows[rowIndex - 1] ?? null
   const anchorKey = anchorRow?.getAttribute('data-worktree-virtual-row-key')

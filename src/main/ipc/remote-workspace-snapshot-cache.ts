@@ -17,15 +17,19 @@ type RemoteWorkspaceSnapshotCacheEntry = {
 
 const latestSnapshotByTargetId = new Map<string, RemoteWorkspaceSnapshotCacheEntry>()
 
-function snapshotsAreIdentical(
-  previous: RemoteWorkspaceObservedSnapshot,
+export function remoteWorkspaceSnapshotsAreIdentical(
+  previous: RemoteWorkspaceSnapshot | undefined,
   next: RemoteWorkspaceSnapshot
 ): boolean {
   return (
+    previous !== undefined &&
     previous.namespace === next.namespace &&
     previous.revision === next.revision &&
     previous.updatedAt === next.updatedAt &&
     previous.schemaVersion === next.schemaVersion &&
+    // Why no scalar-only fast path: same revision with different session content is a
+    // genuinely new host observation (new token, reset auth window) — the patch-queue
+    // and cache tests pin this. Skipping the walk here mis-authorizes local patches.
     isDeepStrictEqual(previous.session, next.session)
   )
 }
@@ -56,7 +60,7 @@ export function rememberRemoteWorkspaceSnapshot(
   // observations do not revoke an in-flight upload authority.
   const normalizedSnapshot = normalizeSnapshot(snapshot, snapshot.namespace)
   const current = latestSnapshotByTargetId.get(targetId)
-  if (current && snapshotsAreIdentical(current.snapshot, normalizedSnapshot)) {
+  if (current && remoteWorkspaceSnapshotsAreIdentical(current.snapshot, normalizedSnapshot)) {
     // Re-reading an unchanged revision is not a new host observation. Keep the
     // token (and the contiguous local-patch authorization window) stable so a
     // polling read cannot invalidate an upload that is already in flight.

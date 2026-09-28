@@ -709,9 +709,13 @@ describe('spawnSystemSsh', () => {
     expect(args[standaloneControlIdx + 1]).toBe('none')
   })
 
-  it('writes files to Windows system SSH targets with PowerShell stdin bytes', async () => {
-    const proc = createEventedProcess()
-    spawnMock.mockImplementation(() => closeOnceSpawned(proc))
+  it('sends Windows file writes over sftp, not through a remote PowerShell stdin', async () => {
+    const spawned: EventedProcess[] = []
+    spawnMock.mockImplementation(() => {
+      const proc = createEventedProcess()
+      spawned.push(proc)
+      return closeOnceSpawned(proc)
+    })
     const hostPlatform = getRemoteHostPlatform('win32-x64')
 
     const promise = writeFileViaSystemSsh(
@@ -722,16 +726,24 @@ describe('spawnSystemSsh', () => {
     )
 
     await expect(promise).resolves.toBeUndefined()
-    const args = spawnMock.mock.calls[0][1] as string[]
-    const remoteCommand = args.at(-1) ?? ''
-    expect(remoteCommand).toContain('powershell.exe')
-    expect(remoteCommand).not.toContain('/bin/sh')
-    expect(proc.stdin.end).toHaveBeenCalledWith(Buffer.from('0.1.0', 'utf-8'))
+    // #16432, re-measured: Windows PowerShell 5.1 can lose a redirected stdin for good when a read
+    // finds it momentarily empty, so the bytes must not travel that way at all.
+    const batch = String(spawned[0]!.stdin.end.mock.calls[0]?.[0] ?? '')
+    expect(batch).toContain('put ')
+    expect(batch).toContain('/C:/Users/me/.orca-remote/relay/.version.orca-partial-')
+    const sftpArgs = spawnMock.mock.calls[0][1] as string[]
+    expect(sftpArgs).toContain('-b')
+    // The rename that publishes it reads the staged file, never a pipe.
+    const publish = (spawnMock.mock.calls[1][1] as string[]).at(-1) ?? ''
+    expect(publish).toContain('powershell.exe')
+    expect(decodePowerShellCommand(publish)).toContain(
+      '[System.IO.File]::Replace($staging, $path, [NullString]::Value)'
+    )
+    expect(publish).not.toContain('/bin/sh')
   })
 
-  it('writes binary buffers to Windows system SSH targets with CreateNew mode', async () => {
-    const proc = createEventedProcess()
-    spawnMock.mockImplementation(() => closeOnceSpawned(proc))
+  it('enforces an exclusive Windows buffer write at the rename, where it is atomic', async () => {
+    spawnMock.mockImplementation(() => closeOnceSpawned(createEventedProcess()))
     const hostPlatform = getRemoteHostPlatform('win32-x64')
 
     const promise = writeBufferViaSystemSsh(
@@ -742,12 +754,11 @@ describe('spawnSystemSsh', () => {
     )
 
     await expect(promise).resolves.toBeUndefined()
-    const args = spawnMock.mock.calls[0][1] as string[]
-    const remoteCommand = args.at(-1) ?? ''
-    expect(remoteCommand).toContain('powershell.exe')
-    expect(decodePowerShellCommand(remoteCommand)).toContain('CreateNew')
-    expect(remoteCommand).not.toContain('/bin/sh')
-    expect(proc.stdin.end).toHaveBeenCalledWith(Buffer.from('png'))
+    const publish = decodePowerShellCommand((spawnMock.mock.calls[1][1] as string[]).at(-1) ?? '')
+    // `File::Move` raising on an existing destination is what carries the exclusive contract now;
+    // a `CreateNew` on the staged file would only refuse a leftover of our own.
+    expect(publish).toContain('[System.IO.File]::Move($staging, $path)')
+    expect(publish).not.toContain('[System.IO.File]::Delete($path)')
   })
 
   it('downloads files from Windows system SSH targets with PowerShell stdout bytes', async () => {
@@ -779,8 +790,7 @@ describe('spawnSystemSsh', () => {
   })
 
   it('forces standalone SSH for Windows file writes when requested', async () => {
-    const proc = createEventedProcess()
-    spawnMock.mockImplementation(() => closeOnceSpawned(proc))
+    spawnMock.mockImplementation(() => closeOnceSpawned(createEventedProcess()))
     const hostPlatform = getRemoteHostPlatform('win32-x64')
 
     const promise = writeFileViaSystemSsh(
@@ -791,10 +801,14 @@ describe('spawnSystemSsh', () => {
     )
 
     await expect(promise).resolves.toBeUndefined()
-    const args = spawnMock.mock.calls[0][1] as string[]
-    const standaloneControlIdx = args.indexOf('-S')
+    const sftpArgs = spawnMock.mock.calls[0][1] as string[]
+    // sftp's own `-S` names a program to run, so the same request has to be spelled as an option.
+    expect(sftpArgs).not.toContain('-S')
+    expect(sftpArgs).toContain('ControlPath=none')
+    const publishArgs = spawnMock.mock.calls[1][1] as string[]
+    const standaloneControlIdx = publishArgs.indexOf('-S')
     expect(standaloneControlIdx).toBeGreaterThan(-1)
-    expect(args[standaloneControlIdx + 1]).toBe('none')
+    expect(publishArgs[standaloneControlIdx + 1]).toBe('none')
   })
 
   it('uploads a Windows directory as a mkdir batch plus per-file writes, never one blob', async () => {
@@ -819,19 +833,20 @@ describe('spawnSystemSsh', () => {
       rmSync(localDir, { recursive: true, force: true })
     }
 
+    // #16432: directories first, then the file — but both over sftp now, so the only PowerShell
+    // left is the rename that publishes the staged file, which reads a file rather than a pipe.
+    const mkdirBatch = String(spawned[0]!.stdin.end.mock.calls[0]?.[0] ?? '')
+    expect(mkdirBatch).toBe('-mkdir "/C:/Users/me/.orca-remote/relay"\n')
+    const putBatch = String(spawned[1]!.stdin.end.mock.calls[0]?.[0] ?? '')
+    expect(putBatch).toContain('put ')
+    expect(putBatch).toContain('/C:/Users/me/.orca-remote/relay/relay.js.orca-partial-')
     const commands = spawnMock.mock.calls.map((call) => (call[1] as string[]).at(-1) ?? '')
-    // #16432: directories first (metadata only), then the file bytes on their own stdin. One batch
-    // meant base64-ing the whole bundle into a single PowerShell string, which the remote never read.
-    expect(commands).toHaveLength(2)
-    expect(commands.every((command) => command.includes('powershell.exe'))).toBe(true)
     expect(commands.every((command) => !command.includes('/bin/sh'))).toBe(true)
     expect(commands.join('\n')).not.toContain('tar -xzf')
-    expect(JSON.parse(spawned[0].stdin.end.mock.calls[0]?.[0] as string)).toEqual([
-      'C:/Users/me/.orca-remote/relay'
-    ])
-    expect(Buffer.from(spawned[1].stdin.end.mock.calls[0]?.[0] as Buffer).toString('utf-8')).toBe(
-      'console.log("relay")'
-    )
+    // Nothing base64s the bundle into one PowerShell string any more, and nothing reads one.
+    expect(
+      commands.some((command) => decodePowerShellCommand(command).includes('OpenStandardInput'))
+    ).toBe(false)
   })
 
   it('forces standalone SSH for Windows upload packages when requested', async () => {
@@ -855,9 +870,9 @@ describe('spawnSystemSsh', () => {
     }
 
     const args = spawnMock.mock.calls[0][1] as string[]
-    const standaloneControlIdx = args.indexOf('-S')
-    expect(standaloneControlIdx).toBeGreaterThan(-1)
-    expect(args[standaloneControlIdx + 1]).toBe('none')
+    // The first spawn is the sftp client, whose own `-S` names a program to run.
+    expect(args).not.toContain('-S')
+    expect(args).toContain('ControlPath=none')
   })
 
   it('throws when no system ssh is found', () => {

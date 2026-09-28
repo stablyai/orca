@@ -44,6 +44,37 @@ function renderDialog(options: ConfirmationDialogOptions): { onSettled: ReturnTy
 describe('ConfirmationDialogProvider', () => {
   afterEach(cleanup)
 
+  it('focuses the primary action when requested and confirms with Enter', async () => {
+    const { onSettled } = renderDialog({
+      title: 'Reveal hidden workspace?',
+      confirmLabel: 'Clear filters and reveal',
+      initialFocus: 'confirm'
+    })
+    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Clear filters and reveal' })).toHaveFocus()
+    )
+    await userEvent.keyboard('{Enter}')
+    await waitFor(() => expect(onSettled).toHaveBeenCalledWith(true))
+  })
+
+  it('still cancels with Escape when the primary action has focus', async () => {
+    const { onSettled } = renderDialog({
+      title: 'Reveal hidden workspace?',
+      initialFocus: 'confirm'
+    })
+    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm' })).toHaveFocus())
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(onSettled).toHaveBeenCalledWith(false))
+  })
+
+  it('keeps the default cancel focus for callers that do not opt in', async () => {
+    renderDialog({ title: 'Delete artifact?', confirmVariant: 'destructive' })
+    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus())
+  })
+
   it('omits the checkbox unless the caller opts in', async () => {
     renderDialog({ title: 'Delete artifact?' })
 
@@ -81,22 +112,6 @@ describe('ConfirmationDialogProvider', () => {
 
     expect(onConfirmed).not.toHaveBeenCalled()
     await waitFor(() => expect(onSettled).toHaveBeenCalledWith(false))
-  })
-
-  it('focuses the confirm action so Enter runs it instead of dismissing the prompt', async () => {
-    const { onSettled } = renderDialog({
-      title: 'Delete artifact?',
-      confirmLabel: 'Delete',
-      confirmVariant: 'destructive'
-    })
-
-    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
-    const confirmButton = await screen.findByRole('button', { name: 'Delete' })
-    await waitFor(() => expect(confirmButton).toHaveFocus())
-
-    await userEvent.keyboard('{Enter}')
-
-    await waitFor(() => expect(onSettled).toHaveBeenCalledWith(true))
   })
 
   it('does not carry a checked box into the next prompt', async () => {

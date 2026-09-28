@@ -7,7 +7,7 @@ import {
   isUnsupportedWorktreeListZError
 } from '../../shared/git-worktree-command-capabilities'
 import { withLocalGitCapabilityCacheForExecution } from './git-capability-state'
-import { parseWorktreeList } from './worktree-list-parser'
+import { parseWorktreeList } from '../../shared/git-worktree-porcelain-parser'
 import type { GitWorktreeExecOptions } from './worktree-operation-options'
 import {
   WORKTREE_LIST_TIMEOUT_MS,

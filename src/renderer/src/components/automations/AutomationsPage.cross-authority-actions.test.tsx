@@ -22,6 +22,7 @@ import {
   SELF_PRECONDITION,
   settleHostQueries
 } from './automations-page-test-harness'
+import { listedRows } from './automations-page-listed-items'
 import { makeAutomation } from './automations-page-fixtures'
 
 installAutomationsPageHarness()
@@ -36,9 +37,7 @@ async function collidingHosts(): Promise<void> {
 }
 
 function selectDesktopRow(): string {
-  const row = mocks.listPanel?.filteredRows.find(
-    (candidate) => candidate.automation.name === 'Desktop nightly'
-  )
+  const row = listedRows().find((candidate) => candidate.automation.name === 'Desktop nightly')
   expect(row).toBeDefined()
   return row?.key ?? ''
 }
@@ -58,9 +57,7 @@ describe('AutomationsPage row actions under a colliding automation id', () => {
     await renderPage()
     await settleHostQueries()
 
-    const remote = mocks.listPanel?.filteredRows.find(
-      (candidate) => candidate.automation.name === 'Remote nightly'
-    )
+    const remote = listedRows().find((candidate) => candidate.automation.name === 'Remote nightly')
     await act(async () => {
       mocks.listPanel?.selectAutomationRow(remote?.key ?? '')
     })

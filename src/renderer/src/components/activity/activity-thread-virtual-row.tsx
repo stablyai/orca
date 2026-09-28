@@ -1,5 +1,6 @@
 import type React from 'react'
 import { translate } from '@/i18n/i18n'
+import { clearActivityThread, isClearableActivityThread } from './activity-clear-completed'
 import { ActivityStatusGroupHeader } from './activity-thread-controls'
 import { ActivityThreadRow } from './activity-thread-row'
 import type { ActivityVirtualItemDescriptor } from './activity-thread-virtual-items'
@@ -53,7 +54,7 @@ export function ActivityThreadVirtualRow({
     )
   }
   return (
-    <div className="pb-1">
+    <div className="pb-0.5">
       <ActivityThreadRow
         thread={item.thread}
         selected={item.thread.paneKey === selectedPaneKey}
@@ -61,6 +62,7 @@ export function ActivityThreadVirtualRow({
         onJump={onJumpToWorkspace}
         onMarkRead={onMarkThreadRead}
         onMarkUnread={onMarkThreadUnread}
+        onClear={isClearableActivityThread(item.thread) ? clearActivityThread : undefined}
         canJump={canJumpToWorkspace(item.thread)}
         compactMode={compactMode}
         disableMarkUnread={item.thread.paneKey === selectedPaneKey && !allowMarkUnreadWhenSelected}

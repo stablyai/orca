@@ -55,11 +55,13 @@ vi.mock('sonner', () => ({ toast: toastSpy }))
 
 import {
   CLEAR_COMPLETED_EVICTION_FALLBACK_MS,
+  clearActivityThread,
   clearCompletedActivity,
   flushPendingClearCompletedEvictions,
   isClearableActivityThread,
   planClearCompletedActivity
 } from './activity-clear-completed'
+import { activityThreadStatusId } from './activity-thread-presentation'
 
 function makeThread(paneKey: string, overrides: Partial<AgentPaneThread> = {}): AgentPaneThread {
   return {
@@ -80,14 +82,24 @@ function makeThread(paneKey: string, overrides: Partial<AgentPaneThread> = {}): 
   }
 }
 
-function doneEvent(interrupted: boolean): ActivityEvent {
+function doneEvent(interrupted: boolean, outcome?: 'failure'): ActivityEvent {
   return {
     id: 'evt',
     state: 'done',
     timestamp: 5_000,
+    observedAt: 5_000,
     worktree: makeWorktree(),
     repo: null,
-    entry: { interrupted } as ActivityEvent['entry'],
+    entry: {
+      paneKey: 'evt-pane',
+      state: 'done',
+      prompt: '',
+      updatedAt: 5_000,
+      stateStartedAt: 5_000,
+      stateHistory: [],
+      interrupted,
+      ...(outcome ? { mainAgent: { state: 'done', outcome, stateStartedAt: 5_000 } } : {})
+    },
     tab: makeTab(),
     agentType: 'claude',
     agentAlive: false,
@@ -100,6 +112,7 @@ const blockedThread = makeThread('t-blocked:1', { currentAgentState: 'blocked' }
 const waitingThread = makeThread('t-waiting:1', { currentAgentState: 'waiting' })
 const doneThread = makeThread('t-done:1', { latestEvent: doneEvent(false) })
 const interruptedThread = makeThread('t-interrupted:1', { latestEvent: doneEvent(true) })
+const failedThread = makeThread('t-failed:1', { latestEvent: doneEvent(false, 'failure') })
 
 function makeRetained(paneKey: string): RetainedAgentEntry {
   return {
@@ -123,9 +136,33 @@ describe('isClearableActivityThread', () => {
   it('clears only completed and interrupted threads', () => {
     expect(isClearableActivityThread(doneThread)).toBe(true)
     expect(isClearableActivityThread(interruptedThread)).toBe(true)
+    expect(activityThreadStatusId(failedThread)).toBe('failed')
+    expect(isClearableActivityThread(failedThread)).toBe(true)
     expect(isClearableActivityThread(workingThread)).toBe(false)
     expect(isClearableActivityThread(blockedThread)).toBe(false)
     expect(isClearableActivityThread(waitingThread)).toBe(false)
+  })
+
+  it('reads a live thread whose main agent failed as failed, but keeps it while subagents run', () => {
+    const heldEntry = {
+      ...doneEvent(false).entry,
+      state: 'working' as const,
+      mainAgent: { state: 'done' as const, outcome: 'failure' as const, stateStartedAt: 5_000 }
+    }
+    const held = makeThread('t-held:1', {
+      currentAgentState: 'working',
+      currentAgentEntry: heldEntry
+    })
+    expect(activityThreadStatusId(held)).toBe('failed')
+    expect(isClearableActivityThread(held)).toBe(false)
+    const succeeded = makeThread('t-ok:1', {
+      currentAgentState: 'working',
+      currentAgentEntry: {
+        ...heldEntry,
+        mainAgent: { state: 'done', outcome: 'success', stateStartedAt: 5_000 }
+      }
+    })
+    expect(activityThreadStatusId(succeeded)).toBe('working')
   })
 })
 
@@ -189,6 +226,28 @@ describe('clearCompletedActivity', () => {
     // A later dismiss must not double-drop.
     lastToastOptions().onDismiss()
     expect(drop).toHaveBeenCalledTimes(1)
+  })
+
+  it('clears one thread immediately without bulk-clear feedback', () => {
+    expect(clearActivityThread(doneThread)).toBe(true)
+    expect(mockStore.activityClearedAtByPaneKey).toEqual({ 't-done:1': 5_000 })
+    expect(mockStore.dismissRetainedAgents).toHaveBeenCalledWith(['t-done:1'])
+    expect(
+      (
+        window as unknown as {
+          api: { agentStatus: { dropPersistedBatch: ReturnType<typeof vi.fn> } }
+        }
+      ).api.agentStatus.dropPersistedBatch
+    ).toHaveBeenCalledWith([
+      expect.objectContaining({ paneKey: 't-done:1', receivedAt: 5_000, stateStartedAt: 5_000 })
+    ])
+    expect(toastSpy).not.toHaveBeenCalled()
+  })
+
+  it('does not clear one active thread', () => {
+    expect(clearActivityThread(workingThread)).toBe(false)
+    expect(mockStore.applyActivityClearedAt).not.toHaveBeenCalled()
+    expect(mockStore.dismissRetainedAgents).not.toHaveBeenCalled()
   })
 
   it('undo restores prior cutoffs and re-retains snapshots, and skips the disk drop', () => {

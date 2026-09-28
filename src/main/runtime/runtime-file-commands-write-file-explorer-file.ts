@@ -64,12 +64,12 @@ export class RuntimeFileCommandsWithWriteFileExplorerFile extends RuntimeFileCom
       expectedSshConnectionGeneration
     )
     const provider = requireRuntimeFileProvider(target)
-    const content = Buffer.from(contentBase64, 'base64')
     if (provider) {
       await provider.writeFileBase64(target.path, contentBase64)
       return { ok: true }
     }
 
+    const content = Buffer.from(contentBase64, 'base64')
     const filePath = await resolveAuthorizedPath(target.path, this.host.requireStore())
     await mkdir(dirname(filePath), { recursive: true })
     await writeFile(filePath, content, { flag: 'wx' })
@@ -93,12 +93,12 @@ export class RuntimeFileCommandsWithWriteFileExplorerFile extends RuntimeFileCom
       expectedSshConnectionGeneration
     )
     const provider = requireRuntimeFileProvider(target)
-    const content = Buffer.from(contentBase64, 'base64')
     if (provider) {
       await provider.writeFileBase64Chunk(target.path, contentBase64, append)
       return { ok: true }
     }
 
+    const content = Buffer.from(contentBase64, 'base64')
     const filePath = await resolveAuthorizedPath(target.path, this.host.requireStore())
     await mkdir(dirname(filePath), { recursive: true })
     await writeFile(filePath, content, { flag: append ? 'a' : 'wx' })

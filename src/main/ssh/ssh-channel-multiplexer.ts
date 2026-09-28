@@ -315,10 +315,14 @@ export class SshChannelMultiplexer {
   notifyWithSettlement(
     method: string,
     params: Record<string, unknown> | undefined,
-    onSettled: (result: { ok: true } | { ok: false; error: Error }) => void
+    onSettled: (result: MultiplexerWriteSettlement) => void
   ): void {
     if (this.disposed) {
-      onSettled({ ok: false, error: this.disposedError() })
+      onSettled({
+        outcome: 'refused',
+        reason: 'transport_disposed',
+        error: this.disposedError()
+      })
       return
     }
     this.sendMessage(

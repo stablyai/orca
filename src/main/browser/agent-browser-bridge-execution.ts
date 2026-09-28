@@ -12,6 +12,7 @@ import {
 import { translateResult } from './agent-browser-bridge-result'
 import { AgentBrowserBridgeTabs } from './agent-browser-bridge-tabs'
 import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
+import { canSkipAgentBrowserSessionReset } from './agent-browser-session-reset'
 import {
   STALE_SESSION_CLOSE_TIMEOUT_MS,
   type AgentBrowserExecOptions,
@@ -173,6 +174,15 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
   }
 
   protected closeStaleAgentBrowserSession(sessionName: string): Promise<void> {
+    if (
+      canSkipAgentBrowserSessionReset({
+        ownsSocketDirectory: this.ownsAgentBrowserSocketDirectory,
+        socketDirectory: this.agentBrowserEnv.AGENT_BROWSER_SOCKET_DIR,
+        sessionName
+      })
+    ) {
+      return Promise.resolve()
+    }
     return new Promise((resolve, reject) => {
       let child: ReturnType<typeof execFile> | null = null
       let settled = false

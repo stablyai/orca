@@ -3,20 +3,27 @@ import { NativeChatStructuredSession } from './NativeChatStructuredSession'
 import { NativeChatResolvedView } from './NativeChatResolvedView'
 import { useNativeChatStatusEntry } from './use-native-chat-status-entry'
 import type { NativeChatViewProps } from './native-chat-view-types'
+import { NativeChatPaneFileDropSurface } from './NativeChatPaneFileDropSurface'
 
 export type { NativeChatViewProps } from './native-chat-view-types'
 
 /** Resolves an agent terminal into its native conversation and composer UI. */
 export default function NativeChatView(props: NativeChatViewProps): React.JSX.Element {
-  if (props.mode === 'structured') {
-    return <NativeChatStructuredSession {...props} />
-  }
-  return <NativeChatBridgeView {...props} />
+  return (
+    <NativeChatPaneFileDropSurface className="relative flex h-full min-h-0 min-w-0 w-full">
+      {props.mode === 'structured' ? (
+        <NativeChatStructuredSession key={props.sessionId} {...props} />
+      ) : (
+        <NativeChatBridgeView {...props} />
+      )}
+    </NativeChatPaneFileDropSurface>
+  )
 }
 
 function NativeChatBridgeView({
   terminalTabId,
   isVisible,
+  isFocusedGroup,
   paneKey: preferredPaneKey,
   targetPtyId = null,
   launchAgent,
@@ -24,8 +31,7 @@ function NativeChatBridgeView({
   ownsTabWideLaunchDraft,
   onSwitchToTerminal,
   readTerminalScreen,
-  contextMenuActions,
-  orchestrationDispatchStatus
+  contextMenuActions
 }: Exclude<NativeChatViewProps, { mode: 'structured' }>): React.JSX.Element {
   const { entry: agentStatusEntry, paneKey } = useNativeChatStatusEntry(
     terminalTabId,
@@ -46,13 +52,13 @@ function NativeChatBridgeView({
           sessionId={resolution.sessionId}
           transcriptPath={resolution.transcriptPath}
           isVisible={isVisible}
+          isFocusedGroup={isFocusedGroup}
           targetPtyId={targetPtyId}
           terminalTabId={terminalTabId}
           ownsTabWideLaunchDraft={ownsTabWideLaunchDraft}
           onSwitchToTerminal={onSwitchToTerminal}
           readTerminalScreen={readTerminalScreen}
           contextMenuActions={contextMenuActions}
-          orchestrationDispatchStatus={orchestrationDispatchStatus}
         />
       )}
     </NativeChatSessionGate>

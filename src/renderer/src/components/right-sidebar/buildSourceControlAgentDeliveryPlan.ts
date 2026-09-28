@@ -8,7 +8,7 @@ import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat
 type BuildSourceControlAgentDeliveryPlanArgs = {
   selectedAgent: TuiAgent | null
   commandInput: string
-  agentArgs: string
+  agentArgs?: string | undefined
   promptDelivery: 'auto-submit' | 'draft' | 'submit-after-ready'
   detectedAgents: TuiAgent[]
   connectionUnavailable: boolean

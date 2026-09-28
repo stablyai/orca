@@ -3,20 +3,20 @@ import { FileText, SquareTerminal } from 'lucide-react'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { CommandItem } from '@/components/ui/command'
 import { PaletteRecentTabStatusDot } from '@/components/cmd-j/palette-live-status'
-import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { getPaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { WorkspaceTabPaletteItem } from './worktree-jump-palette-model'
 import type { WorktreeJumpPaletteController } from './use-worktree-jump-palette-controller'
 import {
-  HighlightedText,
   PaletteHostBadgeChip,
+  PaletteLocationChip,
   PaletteOpenTabPrimaryLine,
   PaletteRowShortcutBadge
 } from './worktree-jump-palette-primitives'
 import { formatPaletteSessionAge } from '@/components/cmd-j/palette-session-age'
 import { resolvePaletteRepoForWorktree } from '@/lib/palette-repo-resolution'
+import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 
 export function WorktreeJumpPaletteWorkspaceTabRow({
   entry,
@@ -75,8 +75,8 @@ export function WorktreeJumpPaletteWorkspaceTabRow({
               titleRanges={result.titleRanges}
               secondaryText={result.secondaryText}
               secondaryRanges={result.secondaryRanges}
-              worktreeName={result.worktreeName}
-              worktreeRanges={result.worktreeRanges}
+              secondaryMatches={result.secondaryMatches}
+              elideSecondaryPathHead={isEditorTabContentType(result.contentType)}
               sessionAge={sessionAge}
               leadingBadges={
                 <>
@@ -96,17 +96,21 @@ export function WorktreeJumpPaletteWorkspaceTabRow({
                 </>
               }
             />
-          </div>
-          <div className="flex shrink-0 items-center gap-1.5">
-            <PaletteHostBadgeChip badge={workspaceTabHostBadge} />
-            {workspaceTabRepoName && (
-              <span className="inline-flex max-w-[180px] items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-[11px] font-semibold leading-none text-foreground">
-                <RepoBadgeMark color={workspaceTabRepo?.badgeColor} />
-                <span className="truncate">
-                  <HighlightedText text={workspaceTabRepoName} matchRanges={result.repoRanges} />
-                </span>
+            {result.typeAliasMatches.length ? (
+              <span className="sr-only">
+                {result.typeAliasMatches.map((match) => match.text).join(', ')}
               </span>
-            )}
+            ) : null}
+          </div>
+          <div className="flex min-w-0 max-w-[40%] items-center justify-end gap-1.5">
+            <PaletteHostBadgeChip badge={workspaceTabHostBadge} />
+            <PaletteLocationChip
+              repoName={workspaceTabRepoName}
+              repoRanges={result.repoRanges}
+              repoColor={workspaceTabRepo?.badgeColor}
+              worktreeName={result.worktreeName}
+              worktreeRanges={result.worktreeRanges}
+            />
             <PaletteRowShortcutBadge
               index={controller.recentTabShortcutIndexByItem.get(entry)}
               modifierKeys={controller.digitShortcutModifiers}

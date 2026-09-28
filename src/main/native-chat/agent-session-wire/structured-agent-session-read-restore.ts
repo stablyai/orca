@@ -1,93 +1,32 @@
-import type {
-  AgentSessionOwnerRuntimeKind,
-  AgentSessionRecord
-} from '../../../shared/agent-session-record'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { loadJournal } from '../agent-session-journal/journal-open'
-import { journalDirectoryFor } from '../agent-session-journal/journal-paths'
-import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
+import { findJournalFileFormatRemnant } from '../agent-session-journal/journal-file-format-remnant'
+import { existsSync } from 'node:fs'
+import { journalDatabaseFile, journalDirectoryFor } from '../agent-session-journal/journal-paths'
 import {
-  attachFingerprintFields,
-  journalIdentityFor,
-  type AgentSessionAttachParams
-} from './structured-agent-session-attach'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+  openStructuredAgentSessionConversationJournal,
+  type OpenedStructuredAgentSessionConversation,
+  type StructuredAgentSessionConversationOpenDeps
+} from './structured-agent-session-conversation-open'
 
-export type RestoredStructuredAgentSessionRead = {
-  journal: AgentSessionJournal
-  params: AgentSessionAttachParams
-  fence: number
-  hasProviderChild: false
-  acquisitionGeneration: null
-}
-
+/**
+ * A reader's open: the conversation's own open, for a session that has a journal to read. One
+ * with none — never written, or gone — stays unpublished rather than founding an empty one.
+ * Opening can still write: the crash boundary, and the row explaining an old-format history.
+ */
 export async function restoreStructuredAgentSessionRead(
-  store: AgentSessionRecordStore,
-  journalRoot: string,
+  deps: StructuredAgentSessionConversationOpenDeps,
   sessionId: string
-): Promise<RestoredStructuredAgentSessionRead | null> {
-  const record = store.getRecord(sessionId)
+): Promise<OpenedStructuredAgentSessionConversation | null> {
+  const record = deps.store.getRecord(sessionId)
   if (!record) {
     return null
   }
-  const params = attachParamsForRecord(record, {
-    clientOperationId: `read-restore:${record.sessionId}`,
-    expectedRuntimeFence: record.lease.runtimeFence
-  })
-  const journalDir = journalDirectoryFor(journalRoot, {
+  const journalDir = journalDirectoryFor(deps.journalRoot, {
     workspaceId: record.location.workspaceId,
     sessionId
   })
-  const loaded = await loadJournal(journalDir, sessionId)
-  if (!loaded || loaded.corrupt) {
+  // A session still in the pre-SQLite format has no `journal.db`; the open imports it.
+  if (!existsSync(journalDatabaseFile(journalDir)) && !findJournalFileFormatRemnant(journalDir)) {
     return null
   }
-  const journal = await openAgentSessionJournal({
-    identity: journalIdentityFor(record, params),
-    journalDir,
-    loaded
-  })
-  // Read restore opens the journal and nothing else: no adapter call, so no provider child.
-  return {
-    journal,
-    params,
-    fence: record.lease.runtimeFence,
-    hasProviderChild: false,
-    acquisitionGeneration: null
-  }
-}
-
-export function attachParamsForRecord(
-  record: AgentSessionRecord,
-  input: {
-    clientOperationId: string
-    expectedRuntimeFence: number
-    runtimeKind?: AgentSessionOwnerRuntimeKind
-  }
-): AgentSessionAttachParams {
-  const params: AgentSessionAttachParams = {
-    envelope: {
-      sessionId: record.sessionId,
-      clientOperationId: input.clientOperationId,
-      expectedRuntimeFence: input.expectedRuntimeFence,
-      payloadFingerprint: ''
-    },
-    location: record.location,
-    provider: record.provider,
-    agent: record.provider,
-    accountHome: record.accountHome,
-    runtimeKind: input.runtimeKind ?? record.lease.runtimeKind
-  }
-  return {
-    ...params,
-    envelope: {
-      ...params.envelope,
-      payloadFingerprint: computeAgentSessionPayloadFingerprint({
-        method: 'agentSession.attach',
-        sessionId: record.sessionId,
-        fields: attachFingerprintFields(params)
-      })
-    }
-  }
+  return openStructuredAgentSessionConversationJournal(deps, record)
 }

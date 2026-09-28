@@ -1,10 +1,11 @@
+import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { useCallback, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import type { HistoryState } from './native-chat-composer-state'
 
 /** Imperative text insertion and focus for the composer textarea, used by the
  *  paste pipeline and the composer's imperative handle. */
 export function useNativeChatTypedInsertion(args: {
-  textareaRef: RefObject<HTMLTextAreaElement | null>
+  textareaRef: RefObject<NativeChatComposerInput | null>
   caret: number
   draft: string
   setDraft: (value: string) => void

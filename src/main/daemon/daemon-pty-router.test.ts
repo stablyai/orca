@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { DaemonPtyRouter } from './daemon-pty-router'
 import { SessionNotFoundError, TerminalSessionOwnerUnverifiedError } from './daemon-errors'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
+import { settledWriteStub, stubWriteSettlement } from '../providers/settled-pty-write-stub'
 import type { PtyBackgroundStreamEvent, PtySpawnOptions, PtySpawnResult } from '../providers/types'
 import {
   AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
@@ -76,7 +77,7 @@ function createAdapter(
     write: vi.fn((id: string, data: string) => {
       writes.push({ id, data })
     }),
-    writeWithSettlement: vi.fn(async () => true),
+    writeWithSettlement: vi.fn(settledWriteStub()),
     resize: vi.fn(),
     setPtyBackgrounded: vi.fn(),
     getBufferSnapshot: vi.fn(async () => null),
@@ -465,11 +466,13 @@ describe('DaemonPtyRouter', () => {
   it('routes settlement-aware writes to the owning daemon generation', async () => {
     const current = createAdapter('current')
     const legacy = createAdapter('legacy', ['legacy-session'])
-    vi.mocked(legacy.writeWithSettlement).mockResolvedValue(false)
+    vi.mocked(legacy.writeWithSettlement).mockResolvedValue(stubWriteSettlement(false))
     const router = new DaemonPtyRouter({ current, legacy: [legacy] })
     await router.discoverLegacySessions()
 
-    await expect(router.writeWithSettlement('legacy-session', 'pointer')).resolves.toBe(false)
+    await expect(router.writeWithSettlement('legacy-session', 'pointer')).resolves.toEqual(
+      stubWriteSettlement(false)
+    )
     expect(legacy.writeWithSettlement).toHaveBeenCalledWith('legacy-session', 'pointer')
     expect(current.writeWithSettlement).not.toHaveBeenCalled()
   })

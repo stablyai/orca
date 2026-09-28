@@ -22,7 +22,7 @@ function createHarness() {
   const runtime = new OrcaRuntimeService()
   runtime.setOrchestrationDb(db)
   const effect = vi.fn((subject: string) =>
-    db.insertMessage({ from: 'caller', to: 'recipient', subject })
+    db.insertMessage({ runId: 'run_legacy_local', from: 'caller', to: 'recipient', subject })
   )
   const dispatcher = new RpcDispatcher({
     runtime,

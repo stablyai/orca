@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
 import { DEGRADED_DAEMON_RECOVERY_RETRY_MS } from './degraded-daemon-fresh-spawn-routing'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
+import { settledWriteStub, stubWriteSettlement } from '../providers/settled-pty-write-stub'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 import { SessionNotFoundError, TerminalSessionOwnerUnverifiedError } from './daemon-errors'
@@ -37,7 +38,7 @@ function createProvider(
     probePtyLiveness: vi.fn(async (id: string) => sessions.includes(id)),
     providesAgentSessionOwnerListings: vi.fn(() => authoritativeOwnerListings),
     write: vi.fn(),
-    writeWithSettlement: vi.fn(async () => true),
+    writeWithSettlement: vi.fn(settledWriteStub()),
     resize: vi.fn(),
     shutdown: vi.fn(async (id: string) => {
       const idx = sessions.indexOf(id)
@@ -378,13 +379,17 @@ describe('DegradedDaemonPtyProvider', () => {
   it('preserves settlement through daemon and fallback routes', async () => {
     const current = createDaemonAdapter('daemon', ['daemon-session'])
     const fallback = createProvider('fallback')
-    vi.mocked(current.writeWithSettlement).mockResolvedValue(false)
+    vi.mocked(current.writeWithSettlement).mockResolvedValue(stubWriteSettlement(false))
     const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
     await provider.discoverDaemonSessions()
     const fresh = await provider.spawn({ cols: 80, rows: 24 })
 
-    await expect(provider.writeWithSettlement('daemon-session', 'old')).resolves.toBe(false)
-    await expect(provider.writeWithSettlement(fresh.id, 'new')).resolves.toBe(true)
+    await expect(provider.writeWithSettlement('daemon-session', 'old')).resolves.toEqual(
+      stubWriteSettlement(false)
+    )
+    await expect(provider.writeWithSettlement(fresh.id, 'new')).resolves.toEqual(
+      stubWriteSettlement(true)
+    )
     expect(current.writeWithSettlement).toHaveBeenCalledWith('daemon-session', 'old')
     expect(fallback.writeWithSettlement).toHaveBeenCalledWith(fresh.id, 'new')
   })

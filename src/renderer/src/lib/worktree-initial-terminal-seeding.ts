@@ -2,6 +2,7 @@ import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
 } from '../../../shared/worktree/launch-types'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 import { createSequencedSetupAgentCommands } from '../../../shared/setup-agent-sequencing'
 import { getSetupRunnerCommandPlatformForPath } from '../../../shared/setup-runner-command'
@@ -32,6 +33,33 @@ function getSetupRunnerCommandPlatformForLaunch(setup: WorktreeSetupLaunch): 'wi
   return getSetupRunnerCommandPlatformForPath(
     setup.runnerScriptPath,
     navigator.userAgent.includes('Windows') ? 'windows' : 'posix'
+  )
+}
+
+/** Re-seed after an empty gate unless its activation owns the surface or no longer owns the host. */
+export function reseedGatedEmptyWorkspace(
+  workspaceKey: string,
+  callerProvidesSurface: boolean,
+  executionHostId?: ExecutionHostId
+): void {
+  const state = useAppStore.getState()
+  if (
+    callerProvidesSurface === true ||
+    state.activeWorktreeId !== workspaceKey ||
+    (executionHostId !== undefined && state.activeWorkspaceExecutionHostId !== executionHostId)
+  ) {
+    return
+  }
+  ensureWorktreeHasInitialTerminal(
+    state,
+    workspaceKey,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    {
+      reseedEmptiedWorkspace: true
+    }
   )
 }
 
@@ -109,6 +137,32 @@ export function ensureWorktreeHasInitialTerminal(
   }
 
   const hasExplicitLaunchWork = Boolean(sequencedStartup || setup || issueCommand)
+  // Why: a caller opening its own primary surface (a structured native chat) asked for that surface
+  // alone. Setup launched in its own tab needs no shell to attach to, so seeding one leaves a stray
+  // "Terminal 1" beside the chat. Splits and issue automation still need a pane to split from.
+  const setupNeedsHostTerminal =
+    setup !== undefined &&
+    (useAppStore.getState().settings?.setupScriptLaunchMode ?? 'new-tab') !== 'new-tab'
+  if (
+    opts?.callerProvidesSurface === true &&
+    renderableTabCount === 0 &&
+    !sequencedStartup &&
+    !issueCommand &&
+    !setupNeedsHostTerminal &&
+    !defaultTabs?.tabs.length &&
+    opts?.createNewTerminalForStartup !== true
+  ) {
+    queueSetupAndIssueCommands(
+      store,
+      worktreeId,
+      null,
+      setup,
+      undefined,
+      wrappedSetupCommandStr,
+      opts
+    )
+    return null
+  }
   // Why: only startup hydration honours the closed-last-tab tombstone. Every explicit
   // activation (sidebar, palette, automation resume, wake) re-seeds a surface instead,
   // because closing the last terminal normally deactivates the workspace too

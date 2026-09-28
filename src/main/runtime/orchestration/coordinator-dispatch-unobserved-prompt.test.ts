@@ -66,7 +66,7 @@ describe('coordinator dispatch with an unobserved prompt', () => {
 
   it('never re-pastes a preamble whose turn start was not observed', async () => {
     db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ spec: 'do the work' })
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'do the work' })
     const runtime = createRuntime(new Error('agent_prompt_stalled'))
     const logs: string[] = []
 
@@ -88,7 +88,7 @@ describe('coordinator dispatch with an unobserved prompt', () => {
 
   it('lets a late worker report settle a dispatch whose prompt was unobserved', async () => {
     db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ spec: 'do the work' })
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'do the work' })
     await dispatch(createRuntime(new Error('agent_prompt_stalled')), task.id, [])
     const dispatchId = db.getDispatchContext(task.id)!.id
     const minted = db.mintDispatchCapability({
@@ -119,7 +119,7 @@ describe('coordinator dispatch with an unobserved prompt', () => {
 
   it('still fails the dispatch when the prompt was never delivered', async () => {
     db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ spec: 'do the work' })
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'do the work' })
     const runtime = createRuntime(new Error('terminal_not_writable'))
 
     await expect(dispatch(runtime, task.id, [])).rejects.toThrow('terminal_not_writable')
