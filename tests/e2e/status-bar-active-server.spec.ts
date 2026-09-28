@@ -81,7 +81,7 @@ test('switches the active server from the status bar between two paired hosts an
     const sidebar = page.locator('[data-worktree-sidebar]')
     await expect(sidebar.getByText(path.basename(testRepoPath), { exact: true })).toBeVisible()
     await expect(sidebar.getByText(path.basename(privateRepoPath), { exact: true })).toBeHidden()
-    await workTrigger.click({ force: true })
+    await workTrigger.press('ArrowDown')
     await expect(page.getByRole('menuitemradio', { name: 'work', exact: true })).toHaveAttribute(
       'aria-checked',
       'true'
@@ -111,7 +111,7 @@ test('switches the active server from the status bar between two paired hosts an
       await window.api.runtimeEnvironments.disconnect({ selector: environmentId })
       await window.__store?.getState().readRuntimeHostStatusSnapshots()
     })
-    await workTrigger.click({ force: true })
+    await workTrigger.press('ArrowDown')
     const privateRadio = page.getByRole('menuitemradio', { name: 'priv', exact: true })
     await expect(privateRadio).toContainText('Disconnected')
     await expect(privateRadio).toHaveAttribute('aria-disabled', 'true')
@@ -209,7 +209,7 @@ test('switches the active server from the status bar between two paired hosts an
     await expect(privateNotice).toBeHidden()
     await expect(privateTrigger).toHaveText('priv')
 
-    await privateTrigger.click({ force: true })
+    await privateTrigger.press('ArrowDown')
     await expect(page.getByRole('menuitemradio', { name: 'priv', exact: true })).toHaveAttribute(
       'aria-checked',
       'true'
@@ -227,7 +227,7 @@ test('switches the active server from the status bar between two paired hosts an
     await expect(privateTab).toBeHidden()
     await expect(sidebar.getByText(path.basename(privateRepoPath), { exact: true })).toBeHidden()
     await expect(sidebar.getByText(path.basename(testRepoPath), { exact: true })).toBeHidden()
-    await localTrigger.click({ force: true })
+    await localTrigger.press('ArrowDown')
     await page.getByRole('menuitemradio', { name: 'work', exact: true }).click({ force: true })
     await expect(workTrigger).toBeVisible()
     await expect(workTrigger).toBeEnabled()
@@ -237,7 +237,7 @@ test('switches the active server from the status bar between two paired hosts an
     await expect(sidebar.getByText(path.basename(testRepoPath), { exact: true })).toBeVisible()
     await expect(sidebar.getByText(path.basename(privateRepoPath), { exact: true })).toBeHidden()
 
-    await workTrigger.click({ force: true })
+    await workTrigger.press('ArrowDown')
     await privateRadio.click({ force: true })
     await expect(privateTrigger).toBeEnabled()
     await expect(sidebar.getByText(path.basename(privateRepoPath), { exact: true })).toBeVisible()
@@ -247,7 +247,7 @@ test('switches the active server from the status bar between two paired hosts an
     await privateHost.dispose()
     privateHost = null
     await expect(privateNotice).toContainText(/Reconnecting|Disconnected/)
-    await privateTrigger.click({ force: true })
+    await privateTrigger.press('ArrowDown')
     await expect(privateRadio).toContainText(/Reconnecting|Disconnected/)
     await expect(privateRadio).toHaveAttribute('aria-disabled', 'true')
     await expect(privateRow.getByRole('menuitem', { name: 'Reconnect', exact: true })).toBeVisible()
