@@ -6,8 +6,13 @@ const hasRemovalsInFlightMock = vi.hoisted(() => vi.fn(() => false))
 const setProbeMock = vi.hoisted(() => vi.fn())
 const disposeMock = vi.hoisted(() => vi.fn(async () => {}))
 const postponeMock = vi.hoisted(() => vi.fn())
-const powerListeners = vi.hoisted(() => new Map<string, () => void>())
+const loadavgMock = vi.hoisted(() => vi.fn(() => [0, 0, 0]))
 const appListeners = vi.hoisted(() => new Map<string, () => void>())
+
+vi.mock('node:os', () => ({
+  loadavg: loadavgMock,
+  availableParallelism: () => 4
+}))
 
 vi.mock('electron', () => ({
   app: {
@@ -15,9 +20,7 @@ vi.mock('electron', () => ({
     off: (event: string) => appListeners.delete(event)
   },
   powerMonitor: {
-    isOnBatteryPower: isOnBatteryPowerMock,
-    on: (event: string, listener: () => void) => powerListeners.set(event, listener),
-    off: (event: string) => powerListeners.delete(event)
+    isOnBatteryPower: isOnBatteryPowerMock
   }
 }))
 
@@ -29,23 +32,32 @@ vi.mock('./ipc/worktrees/worktree-ipc-context', () => ({
   hasWorktreeRemovalsInFlight: hasRemovalsInFlightMock
 }))
 
-vi.mock('./git/local-repo-ref-maintenance', () => ({
+vi.mock('./git/local-repo-maintenance', () => ({
   setRepoMaintenanceActivityProbe: setProbeMock,
-  disposeLocalRepoRefMaintenance: disposeMock,
-  postponeRepoRefMaintenance: postponeMock
+  disposeLocalRepoMaintenance: disposeMock,
+  postponeRepoMaintenance: postponeMock
 }))
 
+import type { RepoMaintenanceActivity } from '../shared/repo-maintenance-policy'
 import { installRepoMaintenanceIdleGate } from './repo-maintenance-idle-gate'
+
+const IDLE: RepoMaintenanceActivity = { interactive: false, constrained: false }
+const INTERACTIVE: RepoMaintenanceActivity = { interactive: true, constrained: false }
+const CONSTRAINED: RepoMaintenanceActivity = { interactive: false, constrained: true }
 
 function installProbe(
   overrides: Partial<{ isQuitting: () => boolean; getWorkingAgentCount: () => number }> = {}
-): { probe: () => boolean; uninstall: () => Promise<void> } {
+): { probe: () => RepoMaintenanceActivity; uninstall: () => Promise<void> } {
   const uninstall = installRepoMaintenanceIdleGate({
     isQuitting: () => false,
     getWorkingAgentCount: () => 0,
     ...overrides
   })
-  return { probe: setProbeMock.mock.calls.at(-1)?.[0] as () => boolean, uninstall }
+  const probe: unknown = setProbeMock.mock.calls.at(-1)?.[0]
+  if (typeof probe !== 'function') {
+    throw new Error('the gate installed no probe')
+  }
+  return { probe: () => probe(), uninstall }
 }
 
 beforeEach(() => {
@@ -53,7 +65,7 @@ beforeEach(() => {
   hasPendingPreparationsMock.mockReturnValue(false)
   hasRemovalsInFlightMock.mockReturnValue(false)
   postponeMock.mockClear()
-  powerListeners.clear()
+  loadavgMock.mockReturnValue([0, 0, 0])
   appListeners.clear()
   setProbeMock.mockClear()
   disposeMock.mockClear()
@@ -65,34 +77,44 @@ afterEach(() => {
 
 describe('repo maintenance idle gate', () => {
   it('reports idle when nothing is happening', () => {
-    expect(installProbe().probe()).toBe(false)
+    expect(installProbe().probe()).toEqual(IDLE)
   })
 
-  it('vetoes while an agent is working', () => {
-    expect(installProbe({ getWorkingAgentCount: () => 1 }).probe()).toBe(true)
+  it('counts a working agent as interactive, not as a constrained machine', () => {
+    // Ref maintenance waits for it; object packing, which takes no lock, does not.
+    expect(installProbe({ getWorkingAgentCount: () => 3 }).probe()).toEqual(INTERACTIVE)
   })
 
-  it('vetoes while a worktree create is prepared or in flight', () => {
+  it('counts a worktree create in flight as interactive', () => {
     hasPendingPreparationsMock.mockReturnValue(true)
 
-    expect(installProbe().probe()).toBe(true)
+    expect(installProbe().probe()).toEqual(INTERACTIVE)
   })
 
-  it('vetoes while a worktree removal is deleting refs', () => {
+  it('counts a worktree removal deleting refs as interactive', () => {
     // Removal deletes branches, and a ref deletion needs the same packed-refs lock.
     hasRemovalsInFlightMock.mockReturnValue(true)
 
-    expect(installProbe().probe()).toBe(true)
+    expect(installProbe().probe()).toEqual(INTERACTIVE)
   })
 
-  it('vetoes on battery power', () => {
+  it('counts battery power as constrained', () => {
     isOnBatteryPowerMock.mockReturnValue(true)
 
-    expect(installProbe().probe()).toBe(true)
+    expect(installProbe().probe()).toEqual(CONSTRAINED)
   })
 
-  it('vetoes during shutdown', () => {
-    expect(installProbe({ isQuitting: () => true }).probe()).toBe(true)
+  it('counts shutdown as constrained', () => {
+    expect(installProbe({ isQuitting: () => true }).probe()).toEqual(CONSTRAINED)
+  })
+
+  it('counts a saturated CPU as constrained, and a merely busy one as not', () => {
+    const { probe } = installProbe()
+
+    loadavgMock.mockReturnValue([4, 4, 4])
+    expect(probe()).toEqual(CONSTRAINED)
+    loadavgMock.mockReturnValue([3.9, 8, 8])
+    expect(probe()).toEqual(IDLE)
   })
 
   it('treats an unavailable power API as not-on-battery', () => {
@@ -100,20 +122,10 @@ describe('repo maintenance idle gate', () => {
       throw new Error('unsupported')
     })
 
-    expect(installProbe().probe()).toBe(false)
+    expect(installProbe().probe()).toEqual(IDLE)
   })
 
-  it('pushes the next attempt out when the machine drops onto battery', () => {
-    // Do-not-start, never stop-what-is-running: killing a pack to honour a
-    // battery change would strand a ref lock to save a little unlinking.
-    installProbe()
-
-    powerListeners.get('on-battery')?.()
-
-    expect(postponeMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('pushes the next attempt out when the user comes back to the window', () => {
+  it('records user activity when the user comes back to the window', () => {
     // A focus transition, not focus itself: a window left focused while the user
     // walks away fires no event and blocks nothing.
     installProbe()
@@ -123,11 +135,10 @@ describe('repo maintenance idle gate', () => {
     expect(postponeMock).toHaveBeenCalledTimes(1)
   })
 
-  it('cancels armed timers, unsubscribes both sources, and clears the probe when uninstalled', async () => {
+  it('cancels armed timers, unsubscribes, and clears the probe when uninstalled', async () => {
     await installProbe().uninstall()
 
     expect(disposeMock).toHaveBeenCalledTimes(1)
-    expect(powerListeners.has('on-battery')).toBe(false)
     expect(appListeners.has('browser-window-focus')).toBe(false)
     expect(setProbeMock).toHaveBeenLastCalledWith(null)
   })

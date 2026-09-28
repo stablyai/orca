@@ -4,7 +4,7 @@ import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import {
   PACK_REFS_TIMEOUT_MS,
   PACKED_REFS_LOCK_POLL_MS
-} from '../../shared/repo-ref-maintenance-policy'
+} from '../../shared/repo-maintenance-policy'
 
 /** No legitimate `pack-refs` outlives its own deadline, so an older lock is abandoned. */
 const ABANDONED_LOCK_AGE_MS = PACK_REFS_TIMEOUT_MS

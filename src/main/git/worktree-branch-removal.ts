@@ -4,7 +4,7 @@ import {
 } from '../../shared/git-branch-cleanup'
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import { withLocalGitCapabilityCacheForExecution } from './git-capability-state'
-import { withRepoRefMaintenancePaused } from './local-repo-ref-maintenance'
+import { withRepoMaintenancePaused } from './local-repo-maintenance'
 import { gitExecFileAsync } from './runner'
 import { parseWorktreeList } from '../../shared/git-worktree-porcelain-parser'
 import { isBranchCheckedOutInWorktreeError } from '../../shared/git-branch-delete-refusal'
@@ -152,7 +152,7 @@ export async function forceDeleteLocalBranch(
   try {
     // `update-ref -d` needs the packed-refs lock a running idle pack holds while
     // it rewrites; waits it out rather than cancelling the pack.
-    await withRepoRefMaintenancePaused('branch-delete', () =>
+    await withRepoMaintenancePaused('branch-delete', () =>
       runGit(['update-ref', '-d', `refs/heads/${branchName}`, expectedHead], repoPath)
     )
   } catch {

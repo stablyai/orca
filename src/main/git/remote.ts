@@ -7,10 +7,7 @@ import { resolveConfiguredGitPushTarget } from '../../shared/git-push-target-res
 import type { GitPushTarget } from '../../shared/worktree/types'
 import type { GitRuntimeOptions } from './git-runtime-options'
 import { gitOptionsForWorktree } from './git-runtime-options'
-import {
-  postponeRepoRefMaintenance,
-  withRepoRefMaintenancePaused
-} from './local-repo-ref-maintenance'
+import { postponeRepoMaintenance, withRepoMaintenancePaused } from './local-repo-maintenance'
 import { validateGitPushTarget } from './push-target-validation'
 import { gitExecFileAsync } from './runner'
 import { fetchForkRemoteWithStaleRefspecRepair } from './fork-remote-stale-branch-refspec'
@@ -106,8 +103,8 @@ export async function gitPull(
   // Why: plain `git pull` uses the user's configured pull strategy (merge by
   // default) so diverged branches reconcile instead of erroring out. Conflicts
   // surface through the existing conflict-resolution flow.
-  postponeRepoRefMaintenance()
-  await withRepoRefMaintenancePaused('git-pull', () =>
+  postponeRepoMaintenance()
+  await withRepoMaintenancePaused('git-pull', () =>
     runWithGitWorktreeOperationLock(worktreePath, options.signal, () =>
       runWithGitReadCacheInvalidation(() => gitPullWithArgs(worktreePath, [], pushTarget, options))
     )
@@ -119,8 +116,8 @@ export async function gitFastForward(
   pushTarget?: GitPushTarget,
   options: GitRuntimeOptions = {}
 ): Promise<void> {
-  postponeRepoRefMaintenance()
-  await withRepoRefMaintenancePaused('git-fast-forward', () =>
+  postponeRepoMaintenance()
+  await withRepoMaintenancePaused('git-fast-forward', () =>
     runWithGitWorktreeOperationLock(worktreePath, options.signal, () =>
       runWithGitReadCacheInvalidation(() =>
         gitPullWithArgs(worktreePath, ['--ff-only'], pushTarget, options)
@@ -137,9 +134,9 @@ export async function gitFetch(
   // `--prune` deletes remote-tracking refs, which needs the `packed-refs` lock a
   // running idle pack holds while it rewrites -- ~1.4s at most. This is the user
   // clicking Fetch, so wait that window out rather than letting it fail on the lock.
-  postponeRepoRefMaintenance()
+  postponeRepoMaintenance()
   try {
-    await withRepoRefMaintenancePaused('git-fetch', async () => {
+    await withRepoMaintenancePaused('git-fetch', async () => {
       if (pushTarget) {
         const target = await validateGitPushTarget(worktreePath, pushTarget, options)
         const runtimeOptions = gitOptionsForWorktree(worktreePath, options)
