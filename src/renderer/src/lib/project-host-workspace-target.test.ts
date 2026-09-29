@@ -147,7 +147,7 @@ describe('project-host workspace target resolution', () => {
     })
   })
 
-  it('resolves duplicate repo ids to a ready setup when no host is focused', () => {
+  it('reports both hosts when a duplicate repo id has no focused host to break the tie', () => {
     const localRepo = makeRepo('orca', { path: '/local/orca' })
     const sshRepo = makeRepo('orca', { path: '/remote/orca', connectionId: 'builder' })
     const projects = [makeProject('github:stablyai/orca', ['orca'])]
@@ -166,13 +166,12 @@ describe('project-host workspace target resolution', () => {
         actionableHostIds: new Set(['local', 'ssh:builder'])
       })
     ).toMatchObject({
-      status: 'ready',
-      target: {
-        hostId: 'local',
-        projectHostSetupId: 'local-setup',
-        repoId: 'orca',
-        repo: { path: '/local/orca' }
-      }
+      status: 'ambiguous',
+      projectId: 'github:stablyai/orca',
+      candidates: [
+        { projectHostSetupId: 'local-setup', repo: { path: '/local/orca' } },
+        { projectHostSetupId: 'ssh-setup', repo: { path: '/remote/orca' } }
+      ]
     })
   })
 
@@ -206,10 +205,9 @@ describe('project-host workspace target resolution', () => {
     })
   })
 
-  it('canonicalizes a stale same-host setup id to the setup the picker shows', () => {
-    // Why: the run-target picker renders one row per host. A draft persisted before that collapse
-    // can still name a duplicate local setup; creation must land in the displayed path, not a
-    // transient worktree path the user never sees.
+  it('creates in the named setup rather than a same-host sibling', () => {
+    // Why: the picker offers every ready setup, so a named duplicate is a peer the user can have
+    // chosen. Redirecting to a sibling created the workspace in a path the caller never asked for.
     const repos = [makeRepo('orca-main'), makeRepo('orca-worktree')]
     const projects = [makeProject('github:stablyai/orca', ['orca-main', 'orca-worktree'])]
     const projectHostSetups = [
@@ -226,7 +224,7 @@ describe('project-host workspace target resolution', () => {
 
     expect(resolution).toMatchObject({
       status: 'ready',
-      target: { projectHostSetupId: 'orca-main', repoId: 'orca-main', hostId: 'local' }
+      target: { projectHostSetupId: 'orca-worktree', repoId: 'orca-worktree', hostId: 'local' }
     })
   })
 
@@ -472,5 +470,182 @@ describe('project-host workspace target resolution', () => {
         reason: 'project-not-set-up-on-host'
       })
     })
+  })
+})
+
+describe('STA-6080: the renderer never silently picks a checkout', () => {
+  const project = makeProject('github:stablyai/orca', ['orca-main', 'orca-side'])
+  const repos = [
+    makeRepo('orca-main', { path: '/checkouts/main' }),
+    makeRepo('orca-side', { path: '/checkouts/side' })
+  ]
+  const sameHostSetups = [
+    makeSetup('setup-main', 'github:stablyai/orca', 'local', 'orca-main', {
+      path: '/checkouts/main'
+    }),
+    makeSetup('setup-side', 'github:stablyai/orca', 'local', 'orca-side', {
+      path: '/checkouts/side'
+    })
+  ]
+
+  it('reports both candidates when one host holds two ready setups', () => {
+    const resolution = resolveWorkspaceCreationTarget({
+      eligibleRepos: repos,
+      projects: [project],
+      projectHostSetups: sameHostSetups,
+      projectId: 'github:stablyai/orca'
+    })
+
+    expect(resolution).toMatchObject({
+      status: 'ambiguous',
+      projectId: 'github:stablyai/orca',
+      candidates: [
+        { projectHostSetupId: 'setup-main', repo: { path: '/checkouts/main' } },
+        { projectHostSetupId: 'setup-side', repo: { path: '/checkouts/side' } }
+      ]
+    })
+  })
+
+  it('reports both candidates when the project is ready on two hosts', () => {
+    const resolution = resolveWorkspaceCreationTarget({
+      eligibleRepos: [repos[0], makeRepo('orca-side', { connectionId: 'builder' })],
+      projects: [project],
+      projectHostSetups: [
+        sameHostSetups[0],
+        makeSetup('setup-side', 'github:stablyai/orca', 'ssh:builder', 'orca-side', {
+          path: '/checkouts/side'
+        })
+      ],
+      projectId: 'github:stablyai/orca'
+    })
+
+    expect(resolution).toMatchObject({
+      status: 'ambiguous',
+      candidates: [{ projectHostSetupId: 'setup-main' }, { projectHostSetupId: 'setup-side' }]
+    })
+  })
+
+  it('still resolves silently when a single ready setup matches', () => {
+    const resolution = resolveWorkspaceCreationTarget({
+      eligibleRepos: repos,
+      projects: [project],
+      projectHostSetups: [sameHostSetups[0]],
+      projectId: 'github:stablyai/orca'
+    })
+
+    expect(resolution).toMatchObject({
+      status: 'ready',
+      target: { projectHostSetupId: 'setup-main', repo: { path: '/checkouts/main' } }
+    })
+  })
+
+  it('lets a focused host break the tie instead of asking', () => {
+    const resolution = resolveWorkspaceCreationTarget({
+      eligibleRepos: [repos[0], makeRepo('orca-side', { connectionId: 'builder' })],
+      projects: [project],
+      projectHostSetups: [
+        sameHostSetups[0],
+        makeSetup('setup-side', 'github:stablyai/orca', 'ssh:builder', 'orca-side')
+      ],
+      projectId: 'github:stablyai/orca',
+      focusedHostScope: 'ssh:builder'
+    })
+
+    expect(resolution).toMatchObject({
+      status: 'ready',
+      target: { projectHostSetupId: 'setup-side' }
+    })
+  })
+
+  it('reports the candidates when an explicit host still holds two ready setups', () => {
+    const resolution = resolveWorkspaceCreationTarget({
+      eligibleRepos: repos,
+      projects: [project],
+      projectHostSetups: sameHostSetups,
+      projectId: 'github:stablyai/orca',
+      hostId: 'local'
+    })
+
+    expect(resolution).toMatchObject({
+      status: 'ambiguous',
+      candidates: [{ projectHostSetupId: 'setup-main' }, { projectHostSetupId: 'setup-side' }]
+    })
+  })
+
+  it('ignores a pending duplicate when a ready setup exists on the explicit host', () => {
+    const resolution = resolveWorkspaceCreationTarget({
+      eligibleRepos: repos,
+      projects: [project],
+      projectHostSetups: [
+        makeSetup('setup-pending', 'github:stablyai/orca', 'local', 'orca-main', {
+          setupState: 'setting-up'
+        }),
+        sameHostSetups[0]
+      ],
+      projectId: 'github:stablyai/orca',
+      hostId: 'local'
+    })
+
+    expect(resolution).toMatchObject({
+      status: 'ready',
+      target: { projectHostSetupId: 'setup-main' }
+    })
+  })
+
+  it('resolves to the setup the caller named even with a same-host sibling present', () => {
+    const resolution = resolveWorkspaceCreationTarget({
+      eligibleRepos: repos,
+      projects: [project],
+      projectHostSetups: sameHostSetups,
+      projectHostSetupId: 'setup-side'
+    })
+
+    expect(resolution).toMatchObject({
+      status: 'ready',
+      target: { projectHostSetupId: 'setup-side', repo: { path: '/checkouts/side' } }
+    })
+  })
+
+  it('reports a null project when the candidates span projects', () => {
+    const resolution = resolveWorkspaceCreationTarget({
+      eligibleRepos: [
+        makeRepo('orca', { path: '/local/orca' }),
+        makeRepo('orca', { path: '/remote/orca', connectionId: 'builder' })
+      ],
+      projects: [makeProject('project-a', ['orca']), makeProject('project-b', ['orca'])],
+      projectHostSetups: [
+        makeSetup('setup-main', 'project-a', 'local', 'orca'),
+        makeSetup('setup-side', 'project-b', 'ssh:builder', 'orca')
+      ],
+      draftRepoId: 'orca',
+      focusedHostScope: 'all'
+    })
+
+    expect(resolution).toMatchObject({ status: 'ambiguous', projectId: null })
+  })
+
+  it('reports the candidates when the named host holds two ready setups', () => {
+    const resolution = resolveWorkspaceCreationTarget({
+      eligibleRepos: repos,
+      projects: [project],
+      projectHostSetups: sameHostSetups,
+      hostId: 'local'
+    })
+
+    expect(resolution).toMatchObject({
+      status: 'ambiguous',
+      candidates: [{ projectHostSetupId: 'setup-main' }, { projectHostSetupId: 'setup-side' }]
+    })
+  })
+
+  it('resolves the repo id to nothing while the choice is open', () => {
+    expect(
+      resolveWorkspaceCreationRepoId({
+        eligibleRepos: repos,
+        projects: [project],
+        projectHostSetups: sameHostSetups,
+        projectId: 'github:stablyai/orca'
+      })
+    ).toBe('')
   })
 })

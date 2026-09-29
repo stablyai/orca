@@ -34,6 +34,21 @@ describe('new workspace create gates', () => {
     ).toBe(true)
   })
 
+  it('disables create while the run target choice is unresolved', () => {
+    expect(
+      getFullComposerCreateDisabled({
+        ...readyInput,
+        hasUnresolvedRunTargetChoice: true
+      })
+    ).toBe(true)
+    expect(
+      getQuickComposerCreateDisabled({
+        ...readyInput,
+        hasUnresolvedRunTargetChoice: true
+      })
+    ).toBe(true)
+  })
+
   it('lets quick create submit while background setup and issue probes are pending', () => {
     expect(
       getQuickComposerCreateDisabled({

@@ -112,6 +112,8 @@ function getPendingSetupByHost(
   return setups
 }
 
+// Why (STA-6080): every ready setup gets its own row, keyed by path. Collapsing same-host duplicates
+// hid the sibling checkouts a legacy profile can hold, so creation landed in one of them unnamed.
 function buildReadySetupOptions({
   projectId,
   projectHostSetups,
@@ -142,23 +144,6 @@ function buildReadySetupOptions({
       detail: setup.displayName,
       path: setup.path
     }))
-    .filter(dedupeByHost())
-}
-
-// Why: a project resolves to at most one setup per host — resolveWorkspaceCreationTarget takes the
-// first project+host match and ignores the rest, so extra same-host setups are unreachable. Legacy
-// profiles can still hold them (a linked worktree added as its own project projects a second local
-// setup), which rendered as repeated identical "Local Mac" rows. Keep the first in input order so
-// the row shown is the one workspace creation actually uses.
-function dedupeByHost(): (option: ReadyProjectHostSetupOption) => boolean {
-  const seenHosts = new Set<ExecutionHostId>()
-  return (option) => {
-    if (seenHosts.has(option.hostId)) {
-      return false
-    }
-    seenHosts.add(option.hostId)
-    return true
-  }
 }
 
 function buildNeedsSetupOptions({

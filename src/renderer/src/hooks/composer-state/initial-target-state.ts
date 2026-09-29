@@ -95,6 +95,15 @@ export function useComposerInitialTargetState(input: ComposerInitialTargetStateI
 
   const [internalRepoId, setInternalRepoId] = useState<string>(resolvedInitialRepoId)
 
+  // Why (STA-6080): several ready setups can match the seeded project. Keep the project selected
+  // while no checkout is chosen so the run-target picker can ask which one, instead of creating the
+  // workspace in whichever setup was stored first.
+  const [selectedProjectIdOverride, setSelectedProjectIdOverride] = useState<string | null>(
+    resolvedInitialWorkspaceTarget.status === 'ambiguous'
+      ? resolvedInitialWorkspaceTarget.projectId
+      : null
+  )
+
   const [selectedProjectHostSetupOverrideId, setSelectedProjectHostSetupOverrideId] = useState<
     string | null
   >(
@@ -168,6 +177,8 @@ export function useComposerInitialTargetState(input: ComposerInitialTargetStateI
     resolvedInitialRepoId,
     internalRepoId,
     setInternalRepoId,
+    selectedProjectIdOverride,
+    setSelectedProjectIdOverride,
     selectedProjectHostSetupOverrideId,
     setSelectedProjectHostSetupOverrideId,
     initialFolderProjectGroupId,

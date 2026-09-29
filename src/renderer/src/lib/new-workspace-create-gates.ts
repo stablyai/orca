@@ -7,6 +7,7 @@ export type ComposerCreateGateInput = {
   sourceIntentBlocksCreate?: boolean
   requiresExplicitSetupChoice: boolean
   hasSetupDecision: boolean
+  hasUnresolvedRunTargetChoice?: boolean
   selectedRepoRequiresConnection: boolean
   sparseError: string | null
 }
@@ -18,7 +19,8 @@ function hasBlockingCreateState(input: ComposerCreateGateInput): boolean {
     input.creating ||
     input.selectedRepoRequiresConnection ||
     (input.requiresExplicitSetupChoice && !input.hasSetupDecision) ||
-    input.sparseError !== null
+    input.sparseError !== null ||
+    input.hasUnresolvedRunTargetChoice === true
   )
 }
 
