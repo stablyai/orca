@@ -45,23 +45,20 @@ export function buildManagedHookIdentityProbe(): IdentityProbe {
 export async function agentsFailingHookInstallIdentityProbe(
   targets: readonly ManagedAgentHookTarget[],
   probe: IdentityProbe,
-  settings: ManagedHookDetectionSettings = null
+  settings: ManagedHookDetectionSettings = null,
+  isOnPath: (command: string) => Promise<boolean> = async (command) =>
+    (await resolveCommandOnLocalPath(command)) !== null
 ): Promise<Set<AgentHookTarget>> {
   const ids = new Set<string>(targets.map((target) => target.tuiAgent))
   const commands = buildManagedHookDetectionCommands(settings, process.platform).filter(
     (command) => ids.has(command.id) && command.identityExclusion
   )
   const probed = [...new Set(commands.map((command) => command.id))]
-  // Why every command counts as found: presence already passed, and a candidate that is not on
-  // PATH throws from the probe, which fails open exactly as detection does.
-  const kept = new Set(
-    await excludeMisidentifiedAgents(
-      commands,
-      probed,
-      new Set(commands.map((command) => command.cmd)),
-      probe
-    )
-  )
+  // Why resolve each candidate: presence passing on bare `bob` says nothing about a stale override,
+  // whose probe would throw and fail open past an unrelated `bob`.
+  const onPath = await Promise.all(commands.map((command) => isOnPath(command.cmd)))
+  const found = new Set(commands.filter((_, i) => onPath[i]).map((command) => command.cmd))
+  const kept = new Set(await excludeMisidentifiedAgents(commands, probed, found, probe))
   return new Set(
     targets
       .filter((target) => probed.includes(target.tuiAgent) && !kept.has(target.tuiAgent))
