@@ -55,6 +55,18 @@ describe('agent process recognition', () => {
     }
   })
 
+  it('recognizes the Ori Code runtime and TUI processes', () => {
+    // Why: `ori code` hosts the runtime and spawns an `ori tui` child; both report as `ori`.
+    expect(recognizeAgentProcess('/home/user/.local/bin/ori')).toEqual({
+      agent: 'ori',
+      processName: 'ori'
+    })
+    expect(recognizeAgentProcessFromCommandLine('ori code --interactive')).toEqual({
+      agent: 'ori',
+      processName: 'ori'
+    })
+  })
+
   it('recognizes the OpenClaude foreground process', () => {
     expect(recognizeAgentProcess('/usr/local/bin/openclaude')).toEqual({
       agent: 'openclaude',

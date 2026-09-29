@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-29T16:06:04.762Z",
+  "platform": "linux",
+  "command": ["ori", "code", "--interactive", "--prompt", "Reply with just the word pong"],
+  "cols": 120,
+  "rows": 40,
+  "note": "ori 0.15.5 first run (fresh HOME): early-access, sign-in and region prompts answered by hand, then the argv --prompt turn",
+  "exitCode": 0
+}

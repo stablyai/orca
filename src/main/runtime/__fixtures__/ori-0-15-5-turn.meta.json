@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-29T16:01:31.949Z",
+  "platform": "linux",
+  "command": ["ori", "code", "--interactive", "--prompt", "Reply with just the word pong"],
+  "cols": 120,
+  "rows": 40,
+  "note": "ori 0.15.5: ori code --interactive --prompt, one short turn then idle",
+  "exitCode": 0
+}

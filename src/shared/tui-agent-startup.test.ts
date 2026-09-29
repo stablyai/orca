@@ -601,6 +601,19 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).toBe("opencode --prompt 'fix it'")
   })
 
+  it('keeps Ori Code interactive when passing the first prompt as a flag', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'ori',
+      prompt: 'fix it',
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe("ori code --interactive --prompt 'fix it'")
+    expect(plan?.expectedProcess).toBe('ori')
+    expect(plan?.followupPrompt).toBeNull()
+  })
+
   it('keeps opencode and mimo-code on the cursor-gated paste draft route', () => {
     expect(TUI_AGENT_CONFIG.opencode.draftPasteReadySignal).toBe(
       'render-cursor-after-bracketed-paste'

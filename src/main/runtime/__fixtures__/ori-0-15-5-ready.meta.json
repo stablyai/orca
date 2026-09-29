@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-29T16:01:06.884Z",
+  "platform": "linux",
+  "command": ["ori", "code", "--interactive"],
+  "cols": 120,
+  "rows": 40,
+  "note": "ori 0.15.5: ori code --interactive, idle composer",
+  "exitCode": 0
+}

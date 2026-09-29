@@ -122,6 +122,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://deepseek-harness.github.io/deepseek-harness/'
   },
   {
+    id: 'ori',
+    label: translate('auto.lib.agent.catalog.ori_label', 'Ori Code'),
+    cmd: 'ori',
+    faviconDomain: 'openrouter.ai',
+    homepageUrl: 'https://openrouter.ai/docs/guides/ori/harness'
+  },
+  {
     id: 'qoder',
     label: translate('auto.lib.agent.catalog.qoder_label', 'Qoder CLI'),
     cmd: 'qodercli',
@@ -391,10 +398,7 @@ export function AgentIcon({
   if (agent === 'copilot') {
     return <CopilotIcon size={size} />
   }
-  if (agent === 'opencode') {
-    return <OpenCodeIcon size={size} />
-  }
-  if (agent === 'opencode2') {
+  if (agent === 'opencode' || agent === 'opencode2') {
     return <OpenCodeIcon size={size} />
   }
   const catalogEntry = getAgentCatalog().find((a) => a.id === agent)

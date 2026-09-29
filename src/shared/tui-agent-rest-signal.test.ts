@@ -32,6 +32,7 @@ const EXPECTED_REST_SIGNALS: Record<TuiAgent, TuiAgentRestSignal> = {
   codebuddy: 'none',
   autohand: 'none',
   ante: 'none',
+  ori: 'none',
   trae: 'none',
   'prime-agent': 'none',
   goose: 'none',
