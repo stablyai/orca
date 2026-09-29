@@ -12,6 +12,7 @@ export function bunProfileTestPaths({ artifact = false } = {}) {
     'src/main/daemon/headless-emulator-fidelity.fuzz.test.ts',
     ...(artifact
       ? [
+          'src/relay/windows-detached-launch.integration.test.ts',
           'src/main/daemon/pty-subprocess/bun-pty-process.integration.test.ts',
           'src/main/pty/posix-pty-process-groups.integration.test.ts',
           'src/main/daemon/pty-subprocess/bun-pty-job-control.integration.test.ts',

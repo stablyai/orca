@@ -50,7 +50,11 @@ import {
   RELAY_DEPLOY_TIMEOUT_MS
 } from './ssh-relay-deploy-timing'
 import { createSshOperationAbortError, shellEscape } from './ssh-connection-utils'
-import { commandWithNodePath, readRemoteHomeCommand } from './ssh-remote-commands'
+import {
+  commandInRemoteDirectory,
+  commandWithNodePath,
+  readRemoteHomeCommand
+} from './ssh-remote-commands'
 import {
   cleanupOwnedRelayUploadStageCommand,
   parseReservedRelayUploadStage,
@@ -1481,39 +1485,30 @@ function windowsRelayLaunchCommand(
   ripgrepPath?: string
 ): string {
   const relayScript = joinRemotePath(hostPlatform, remoteDir, 'relay.js')
-  // Why: Windows sshd kills the exec channel's process tree on close; WMI re-parents the detached relay to survive.
-  const quoted = (value: string): string => `"${value.replace(/"/g, '\\"')}"`
-  const relayCommandLine = [
-    quoted(nodePath),
+  const args = [
     '--no-env-file',
     '--config=NUL',
     '--no-install',
-    quoted(relayScript),
-    '--detached',
+    relayScript,
+    '--spawn-detached',
     '--grace-time',
     String(graceTime),
     '--sock-path',
-    quoted(sockPath),
+    sockPath,
     '--credential-file',
-    quoted(credentialFile),
+    credentialFile,
     '--endpoint-dir',
-    quoted(endpointDir),
-    // Why: --log-file owns rotation; shell redirects still capture pre-JS boot/crash output.
+    endpointDir,
     '--log-file',
-    quoted(logFile),
-    ...(ripgrepPath ? ['--ripgrep-path', quoted(ripgrepPath)] : []),
-    `1>${quoted(logFile)}`,
-    `2>${quoted(errFile)}`
-  ].join(' ')
-  const wmiCommandLine = `cmd.exe /d /s /c "${relayCommandLine}"`
-  return commandWithNodePath(
+    logFile,
+    '--launch-error-file',
+    errFile,
+    ...(ripgrepPath ? ['--ripgrep-path', ripgrepPath] : [])
+  ]
+  return commandInRemoteDirectory(
     hostPlatform,
-    nodePath,
     remoteDir,
-    [
-      `$result = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = ${powerShellLiteral(wmiCommandLine)}; CurrentDirectory = ${powerShellLiteral(remoteDir)} }`,
-      `if ($result.ReturnValue -ne 0) { throw "Win32_Process.Create failed with $($result.ReturnValue)" }`
-    ].join('; ')
+    `& ${powerShellLiteral(nodePath)} ${args.map(powerShellLiteral).join(' ')}; if ($LASTEXITCODE -ne 0) { throw "Bun detached launch failed with exit $LASTEXITCODE" }`
   )
 }
 

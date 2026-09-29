@@ -159,7 +159,7 @@ describe('deployAndLaunchRelay on Windows remotes', () => {
   it('launches Windows remotes via a named pipe endpoint', async () => {
     const conn = makeMockConnection()
     const mockExecCommand = vi.mocked(execCommand)
-    vi.mocked(ensureRemoteRelayBunRuntime).mockResolvedValue('C:/Program Files/nodejs/node.exe')
+    vi.mocked(ensureRemoteRelayBunRuntime).mockResolvedValue('C:/Program Files/Orca/bun.exe')
     mockExecCommand
       .mockRejectedValueOnce(new Error('uname not found')) // tagged POSIX platform probe
       .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Windows X64') // tagged PowerShell platform probe
@@ -167,7 +167,7 @@ describe('deployAndLaunchRelay on Windows remotes', () => {
       .mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK') // native deps probe
       .mockResolvedValueOnce('') // no persisted active pipe
       .mockResolvedValueOnce('WAITING') // named pipe probe
-      .mockResolvedValueOnce('') // WMI relay launch
+      .mockResolvedValueOnce('') // detached relay launch
       .mockResolvedValueOnce('READY') // named pipe poll
       .mockResolvedValueOnce('') // persist active pipe marker
 
@@ -185,16 +185,20 @@ describe('deployAndLaunchRelay on Windows remotes', () => {
     const nativeProbe = decodedScripts.find((script) => script.includes('ORCA-NATIVE-DEPS-OK'))
     expect(nativeProbe).toContain('./parcel-watcher.node')
     expect(nativeProbe).not.toContain('require("@parcel/watcher")')
-    const launchScript = decodedScripts.find((script) => script.includes('Invoke-CimMethod')) ?? ''
+    const launchScript = decodedScripts.find((script) => script.includes('--spawn-detached')) ?? ''
     expect(launchScript).toContain(
-      '"C:/Users/me user/.orca-remote/relay-0.1.0+abcdef012345/relay.js"'
+      "'C:/Users/me user/.orca-remote/relay-0.1.0+abcdef012345/relay.js'"
     )
     expect(launchScript).toContain(
-      '"C:/Users/me user/.orca-remote/relay-0.1.0+abcdef012345/agent-hooks/orca-relay-'
+      "'C:/Users/me user/.orca-remote/relay-0.1.0+abcdef012345/agent-hooks/orca-relay-"
     )
     expect(launchScript).toContain('--endpoint-dir')
+    expect(launchScript).toContain("& 'C:/Program Files/Orca/bun.exe'")
+    expect(launchScript).toContain('--launch-error-file')
+    expect(launchScript).not.toMatch(/Invoke-CimMethod|cmd\.exe|\$env:PATH/)
+    expect(launchScript).toContain('Set-Location')
     expect(launchScript).toContain(
-      '--ripgrep-path "C:/Users/me user/.orca-remote/ripgrep/c0ffee0123456789-win32-x64/rg.exe"'
+      "'--ripgrep-path' 'C:/Users/me user/.orca-remote/ripgrep/c0ffee0123456789-win32-x64/rg.exe'"
     )
     expect(launchScript).not.toContain('--pty-source-credit-v1')
     expect(launchScript).not.toContain('.pty-source-credit-policy')
@@ -205,7 +209,7 @@ describe('deployAndLaunchRelay on Windows remotes', () => {
       const script = decodePowerShellCommand(command)
       return (
         script?.includes('.windows-active-pipe') ||
-        script?.includes('Invoke-CimMethod') ||
+        script?.includes('--spawn-detached') ||
         script?.includes('deadline=Date.now()')
       )
     })
@@ -220,7 +224,7 @@ describe('deployAndLaunchRelay on Windows remotes', () => {
   it('relaunches Windows remotes on a fallback pipe when reconnecting the occupied pipe fails', async () => {
     const conn = makeMockConnection()
     const mockExecCommand = vi.mocked(execCommand)
-    vi.mocked(ensureRemoteRelayBunRuntime).mockResolvedValue('C:/Program Files/nodejs/node.exe')
+    vi.mocked(ensureRemoteRelayBunRuntime).mockResolvedValue('C:/Program Files/Orca/bun.exe')
     vi.mocked(waitForSentinel)
       .mockRejectedValueOnce(new Error('stale daemon handshake failed'))
       .mockResolvedValueOnce({
@@ -236,7 +240,7 @@ describe('deployAndLaunchRelay on Windows remotes', () => {
       .mockResolvedValueOnce('') // no persisted active pipe yet
       .mockResolvedValueOnce('READY') // existing named pipe probe
       .mockResolvedValueOnce('WAITING') // deterministic fallback pipe is not already running
-      .mockResolvedValueOnce('') // WMI relay launch on fallback pipe
+      .mockResolvedValueOnce('') // detached relay launch on fallback pipe
       .mockResolvedValueOnce('READY') // fallback pipe poll
       .mockResolvedValueOnce('') // persist fallback active pipe marker
 
@@ -256,7 +260,7 @@ describe('deployAndLaunchRelay on Windows remotes', () => {
     const launchScript =
       mockExecCommand.mock.calls
         .map(([, command]) => decodePowerShellCommand(command))
-        .find((script) => script?.includes('Invoke-CimMethod')) ?? ''
+        .find((script) => script?.includes('--spawn-detached')) ?? ''
     expect(launchScript).toContain(fallbackPipe)
     expect(launchScript).not.toContain(primaryPipe)
 
@@ -274,7 +278,7 @@ describe('deployAndLaunchRelay on Windows remotes', () => {
     const conn = makeMockConnection()
     const mockExecCommand = vi.mocked(execCommand)
     const persistedPipe = '\\\\.\\pipe\\orca-relay-1234567890abcdef1234'
-    vi.mocked(ensureRemoteRelayBunRuntime).mockResolvedValue('C:/Program Files/nodejs/node.exe')
+    vi.mocked(ensureRemoteRelayBunRuntime).mockResolvedValue('C:/Program Files/Orca/bun.exe')
     mockExecCommand
       .mockRejectedValueOnce(new Error('uname not found')) // tagged POSIX platform probe
       .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Windows X64') // tagged PowerShell platform probe
@@ -295,14 +299,14 @@ describe('deployAndLaunchRelay on Windows remotes', () => {
     const decodedExecScripts = mockExecCommand.mock.calls
       .map(([, command]) => decodePowerShellCommand(command))
       .filter((script): script is string => script !== null)
-    expect(decodedExecScripts.some((script) => script.includes('Invoke-CimMethod'))).toBe(false)
+    expect(decodedExecScripts.some((script) => script.includes('--spawn-detached'))).toBe(false)
   })
 
   it('scopes persisted Windows active pipe markers by relay target', async () => {
     const connA = makeMockConnection()
     const connB = makeMockConnection()
     const mockExecCommand = vi.mocked(execCommand)
-    vi.mocked(ensureRemoteRelayBunRuntime).mockResolvedValue('C:/Program Files/nodejs/node.exe')
+    vi.mocked(ensureRemoteRelayBunRuntime).mockResolvedValue('C:/Program Files/Orca/bun.exe')
     mockExecCommand
       .mockRejectedValueOnce(new Error('uname not found')) // tagged POSIX platform probe A
       .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Windows X64')
