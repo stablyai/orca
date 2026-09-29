@@ -1,7 +1,7 @@
 import { normalizeAgentStatusPayload } from './agent-status-types'
 import type { AgentHookSource } from './agent-hook-relay'
 import { extractAgentProviderSession } from './agent-session-resume'
-import { isPathInsideOrEqual } from './cross-platform-path'
+import { isPathInsideOrEqual, resolveRuntimePath } from './cross-platform-path'
 import {
   canAcceptClaudeCompactCompletion,
   isClaudeCompactCompletionConsumed,
@@ -25,6 +25,7 @@ import {
 } from './agent-hook-listener/opencode-session-registry'
 import { readString } from './agent-hook-listener/tool-input-preview'
 import { splitWorktreeIdForFilesystem } from './worktree/id'
+import { parseWslUncPath } from './wsl-paths'
 /** Canonical transport-agnostic normalization entry shared by main and relay listeners. */
 export function normalizeHookPayload(
   state: HookListenerState,
@@ -49,9 +50,21 @@ export function normalizeHookPayload(
   const stampedWorktreePath = stampedWorktreeId
     ? splitWorktreeIdForFilesystem(stampedWorktreeId)?.worktreePath
     : undefined
-  // Codex's shared app-server can inherit another pane's Orca env; reject a mismatched session.
-  if (codexCwd && stampedWorktreePath && !isPathInsideOrEqual(stampedWorktreePath, codexCwd)) {
-    return null
+  if (codexCwd && stampedWorktreePath) {
+    const wslRoot = parseWslUncPath(stampedWorktreePath)
+    const comparisonRoot =
+      wslRoot && codexCwd.startsWith('/') && !codexCwd.startsWith('//')
+        ? wslRoot.linuxPath
+        : stampedWorktreePath
+    // The shared app-server can inherit another pane's env; resolve traversal before rejection.
+    if (
+      !isPathInsideOrEqual(
+        resolveRuntimePath(comparisonRoot, '.'),
+        resolveRuntimePath(codexCwd, '.')
+      )
+    ) {
+      return null
+    }
   }
   if (source === 'claude') {
     state.claudeUnconfirmedRestoredStatusPaneKeys.delete(stampedPaneKey)
