@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { GiteaConnectDialog } from '@/components/gitea-connect-dialog'
 import { JiraConnectDialog } from '@/components/jira-connect-dialog'
 import { Button } from '@/components/ui/button'
 import { TaskSourceShowInTasksStep } from './TaskSourceShowInTasksStep'
@@ -75,6 +76,52 @@ export function CodeHostSetupSteps(
         onToggleVisible={props.onToggleVisible}
       />
     </ol>
+  )
+}
+
+export function GiteaSetupSteps(
+  props: ConnectStepProps & { onConnected: () => void; onOpenIntegrations: () => void }
+): React.JSX.Element {
+  const [dialogOpen, setDialogOpen] = useState(false)
+
+  return (
+    <>
+      <ol className="divide-y divide-border/50">
+        <TaskSourceStepRow
+          index={1}
+          state={getConnectStepState(props)}
+          title={translate('auto.components.settings.TasksPane.connectGiteaTitle', 'Connect Gitea')}
+          description={translate(
+            'auto.components.settings.TasksPane.connectGiteaDescription',
+            'Add a Gitea or Forgejo server with a personal access token.'
+          )}
+          action={
+            <Button
+              type="button"
+              size="sm"
+              variant={props.connected ? 'outline' : 'default'}
+              onClick={props.connected ? props.onOpenIntegrations : () => setDialogOpen(true)}
+            >
+              {props.connected
+                ? translate('auto.components.settings.TasksPane.manageGitea', 'Manage servers')
+                : translate('auto.components.settings.TasksPane.addGitea', 'Add Gitea server')}
+            </Button>
+          }
+        />
+        <TaskSourceShowInTasksStep
+          index={2}
+          providerLabel={translate('auto.components.settings.TasksPane.giteaLabel', 'Gitea')}
+          visible={props.visible}
+          canHide={props.canHide}
+          onToggleVisible={props.onToggleVisible}
+        />
+      </ol>
+      <GiteaConnectDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onConnected={props.onConnected}
+      />
+    </>
   )
 }
 

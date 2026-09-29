@@ -2179,7 +2179,8 @@
         "jiraLinkSourceUnavailable": "无法关联此 Jira 议题。请重新连接 Jira 或选择匹配的站点，然后重试。",
         "loadPageUnreachable": "第 {{value0}} 页超出了 GitHub 搜索可返回的范围。",
         "loadPageFailed": "无法从 GitHub 加载第 {{value0}} 页。",
-        "loadPageNoMoreResults": "第 {{value0}} 页没有更多结果。"
+        "loadPageNoMoreResults": "第 {{value0}} 页没有更多结果。",
+        "giteaSourceLabel": "Gitea"
       },
       "Terminal": {
         "73768427cf": "关闭",
@@ -8495,7 +8496,13 @@
           "integrationsHint": "所有提供商的凭据也可在此管理：",
           "integrationsLink": "集成",
           "skillHint": "。连接 Linear 后，可在设置 → Linear 中查看使用示例。",
-          "incompleteBannerBodyWithLinear": "隐藏不使用的提供商，或展开卡片并完成其中的步骤。Linear 需要 API 访问权限、智能体技能以及在任务中显示。"
+          "incompleteBannerBodyWithLinear": "隐藏不使用的提供商，或展开卡片并完成其中的步骤。Linear 需要 API 访问权限、智能体技能以及在任务中显示。",
+          "giteaLabel": "Gitea",
+          "giteaDescription": "连接 Gitea 或 Forgejo 服务器，在任务中显示其议题和拉取请求。",
+          "connectGiteaTitle": "连接 Gitea",
+          "connectGiteaDescription": "使用个人访问令牌添加 Gitea 或 Forgejo 服务器。",
+          "manageGitea": "管理服务器",
+          "addGitea": "添加 Gitea 服务器"
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "窗格分隔线的厚度。",
@@ -10334,7 +10341,8 @@
             "setup": "设置",
             "apiKey": "API 密钥",
             "skill": "技能",
-            "connect": "连接"
+            "connect": "连接",
+            "gitea": "Gitea"
           }
         },
         "terminal": {
@@ -12055,6 +12063,25 @@
           "usageDescription": "Cursor 按两个随账单周期重置的额度池计费，用完后按需计费。",
           "usageLabel": "用量",
           "usageTitle": "每月套餐用量"
+        },
+        "gitea": {
+          "integration": {
+            "card": {
+              "3852b1fd6f": "已验证",
+              "09bde44485": "测试...",
+              "2bf28d5929": "测试",
+              "d0b31b4845": "断开 {{value0}}",
+              "9a555db81e": "重新检查",
+              "d4e5f6a7b8": "连接失败。",
+              "069f07af1c": "已连接服务器：{{value0}}",
+              "31b7f980fb": "正在检查 Gitea 访问权限，随后显示设置操作。",
+              "5a8cd33300": "浏览 Gitea 议题和拉取请求，创建议题并开始工作。",
+              "bdcb1e773f": "添加服务器",
+              "9ce5f12a0d": "连接 Gitea",
+              "f47924e554": "每个服务器在本地保存一个令牌，并在运行时存储支持的情况下加密。",
+              "c043731756": "使用 URL 和个人访问令牌连接自托管 Gitea 服务器。凭据保存在本地，并在运行时存储支持的情况下加密。"
+            }
+          }
         }
       },
       "right": {
@@ -17245,6 +17272,145 @@
             "hostOnly": "Cursor 登录详情仅可在运行 Orca 的电脑上读取。"
           }
         }
+      },
+      "gitea": {
+        "connect": {
+          "dialog": {
+            "83b75fa9b7": "https://gitea.example.com",
+            "062ae1ea05": "访问令牌",
+            "7acfed1da5": "取消",
+            "f5d526570f": "正在验证...",
+            "f68c3d011f": "连接",
+            "d2823a1de0": "连接 Gitea 服务器",
+            "d076a10ae3": "使用 Gitea 服务器 URL 和个人访问令牌浏览议题并审查拉取请求。",
+            "690c1da1bb": "Gitea 服务器 URL",
+            "79c04f358b": "Gitea 个人访问令牌",
+            "3ecb3e1153": "在 Gitea 设置 → 应用中创建具有 read:user、write:issue 和 write:repository 权限的令牌。将访问范围限制为所需仓库。",
+            "4d1f2d9f21": "令牌保存在本地，并在运行时存储支持的情况下加密。"
+          }
+        },
+        "issue": {
+          "comments": {
+            "8608602d16": "评论",
+            "ea3f6f14a1": "还没有评论。",
+            "6a519bdb1c": "未知"
+          },
+          "meta": {
+            "controls": {
+              "63f46a8d86": "标题",
+              "8cc407607b": "标签",
+              "11fac85e07": "此仓库中没有标签。",
+              "401f7dc7a2": "负责人",
+              "3cd6f5acbd": "没有可分配的用户。",
+              "ba343731c0": "无法更新议题。"
+            }
+          }
+        },
+        "new": {
+          "issue": {
+            "dialog": {
+              "becfadf1df": "标题",
+              "6c8b731fb2": "描述",
+              "032fd2ed27": "取消",
+              "5e1d23a112": "创建议题",
+              "db951c3a29": "在 {{value0}} 中新建议题",
+              "b42f72cfc5": "在选定的 Gitea 项目中创建议题。"
+            }
+          }
+        },
+        "pr": {
+          "checks": {
+            "448c6113a4": "打开检查详细信息",
+            "bed82a55cd": "此 PR 没有状态检查报告。"
+          },
+          "file": {
+            "diff": {
+              "e6f7a8b9c0": "重试",
+              "f1a2b3c4d5": "无法加载文件差异。",
+              "81e07de6a5": "不显示二进制文件。"
+            }
+          },
+          "line": {
+            "comments": {
+              "489b36633a": "行 {{value0}}",
+              "c01a062b92": "未知",
+              "317313f8af": "评论",
+              "4e59b0c4f8": "行号",
+              "a43b5cc38b": "差异中新文件的行号",
+              "02339776da": "审查评论…",
+              "6cbd906d88": "评论某一行"
+            }
+          },
+          "merge": {
+            "button": {
+              "2378ab4908": "冲突",
+              "8e662b9b6b": "合并"
+            }
+          },
+          "tab": {
+            "body": {
+              "1fe3a05742": "没有提供描述。",
+              "413feaa83a": "内联",
+              "53ab0c5a49": "没有更改的文件。",
+              "5372c28376": "并排"
+            }
+          }
+        }
+      },
+      "GiteaIssueWorkspace": {
+        "47b064c003": "{{value0}} 已复制",
+        "927222e135": "复制失败。",
+        "565680a39b": "添加评论失败。",
+        "ce513e3ca2": "关闭",
+        "e849a4c80f": "启动工作区",
+        "c0d4f97901": "已关闭",
+        "ab08895bb5": "开放",
+        "1ab551635b": "重新打开",
+        "6b3c5a3144": "关闭议题",
+        "c29b657be3": "复制网址",
+        "ca242eaf5d": "没有提供描述。",
+        "d3e0033e0f": "评论",
+        "b7c8d9e0f1": "无法加载议题。",
+        "2d2e69fe70": "无法更新议题。",
+        "a792c22414": "Gitea 项目",
+        "01b6ea43ca": "预览选定的 Gitea 项目并开始工作。",
+        "63cbb99973": "在 Gitea 中打开",
+        "0fee3f06ff": "添加评论…"
+      },
+      "GiteaPullRequestWorkspace": {
+        "f5cf34ed40": "添加评论失败。",
+        "c7c84081fc": "无法添加评论。",
+        "f51240a59a": "讨论",
+        "4f4abe43ab": "文件",
+        "95a6c97ba6": "检查",
+        "5fa5ec9fff": "关闭",
+        "f88c7cf08c": "启动工作区",
+        "d646ddef48": "评论",
+        "c2d3e4f5a6": "无法加载 PR 检查。",
+        "22f9c29c9b": "拉取请求已合并。",
+        "d93415a77d": "合并失败。",
+        "8e44409da0": "Gitea 拉取请求",
+        "0a432f2c1a": "审查文件、检查和讨论，然后合并或开始工作。",
+        "9813b44d73": "在 Gitea 中打开",
+        "ddc99ed766": "添加评论…"
+      },
+      "GiteaTaskList": {
+        "ab2a229e50": "分配给我",
+        "74f30cd767": "已创建",
+        "031c70d963": "已关闭",
+        "bf66fad935": "全部",
+        "65a3bffe7a": "议题",
+        "9b21aab4c9": "PR",
+        "9986e0e679": "合并",
+        "747423c0f8": "草稿",
+        "980519b0c8": "开放",
+        "c07dd13940": "所有开放项",
+        "0285721e62": "无法加载 Gitea 任务。",
+        "5997067bee": "新建议题",
+        "e3db16e7c7": "刷新 Gitea 任务",
+        "34cd2d1024": "选择托管在 Gitea 上的项目以查看其议题和拉取请求。",
+        "6e1e6691d7": "正在加载 Gitea 任务…",
+        "00f67933b5": "没有匹配的议题或拉取请求。"
       }
     },
     "i18n": {
@@ -18489,5 +18655,30 @@
   },
   "common": {
     "retry": "重试"
+  },
+  "gitea": {
+    "status": {
+      "added": "额外",
+      "modified": "已修改",
+      "deleted": "已删除",
+      "copied": "已复制",
+      "open": "开放",
+      "closed": "已关闭",
+      "merged": "合并",
+      "draft": "草稿",
+      "pending": "待办的",
+      "error": "错误",
+      "merge": "合并",
+      "squash": "压缩合并",
+      "renamed": "已重命名",
+      "changed": "已更改",
+      "success": "成功",
+      "failure": "失败",
+      "warning": "警告",
+      "rebase": "变基并合并"
+    },
+    "errors": {
+      "loadPullRequest": "无法加载部分拉取请求数据。"
+    }
   }
 }

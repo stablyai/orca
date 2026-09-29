@@ -57,6 +57,10 @@ export function useTaskSourceProviderReadiness(
     reviewReadyForConnection &&
     preflightStatus?.glab?.installed === true &&
     preflightStatus.glab.authenticated === true
+  const giteaStatus = useAppStore((s) => s.giteaStatus)
+  const giteaStatusLoaded = useAppStore((s) => s.giteaStatusLoaded)
+  const giteaChecking = !giteaStatusLoaded
+  const giteaConnected = !giteaChecking && giteaStatus?.connected === true
   const jiraChecking = jiraStatusContextKey !== providerRuntimeContextKey || !jiraStatusChecked
   const jiraConnected = !jiraChecking && jiraStatus.connected === true
   const linearChecking =
@@ -91,9 +95,16 @@ export function useTaskSourceProviderReadiness(
         connected: jiraConnected,
         checking: jiraChecking,
         visible: visible.has('jira')
+      },
+      gitea: {
+        connected: giteaConnected,
+        checking: giteaChecking,
+        visible: visible.has('gitea')
       }
     }
   }, [
+    giteaChecking,
+    giteaConnected,
     githubConnected,
     gitlabConnected,
     jiraChecking,

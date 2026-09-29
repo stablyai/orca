@@ -29,6 +29,7 @@ import { hostedReviewApi } from './api/hosted-review-bridge'
 import { glApiBridge } from './api/gl-bridge'
 import { bitbucketApi } from './api/bitbucket-bridge'
 import { linearApi } from './api/linear-bridge'
+import { giteaApi } from './api/gitea-bridge'
 import { jiraApi } from './api/jira-bridge'
 import { starNagApi } from './api/star-nag-bridge'
 import { diagnosticsApi } from './api/diagnostics-bridge'
@@ -125,6 +126,7 @@ const api = {
   gl: glApiBridge,
   bitbucket: bitbucketApi,
   linear: linearApi,
+  gitea: giteaApi,
   jira: jiraApi,
   starNag: starNagApi,
   telemetryTrack: telemetryTrackApi,

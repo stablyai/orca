@@ -122,7 +122,11 @@ export function parseGiteaRepoRef(remoteUrl: string): GiteaRepoRef | null {
       protocol === 'http:' || protocol === 'https:'
         ? `${protocol}//${url.host}`
         : `https://${url.hostname.toLowerCase()}`
-    return makeRepoRef(url.hostname, url.pathname, webOrigin)
+    return makeRepoRef(
+      protocol === 'http:' || protocol === 'https:' ? url.host : url.hostname,
+      url.pathname,
+      webOrigin
+    )
   } catch {
     return null
   }

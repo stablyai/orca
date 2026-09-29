@@ -2282,7 +2282,8 @@
         "linearModeHasWorktreeTooltip": "Tickets Linear liés à un espace de travail Orca",
         "linearEmptyHasWorktree": "Aucun ticket Linear n'est encore lié à un espace de travail Orca. Démarrez le travail depuis une issue Linear pour le voir ici.",
         "linearOpenAttachedWorkspace": "Ouvrir l'espace de travail attaché à {{value0}}",
-        "linearWorktreesColumn": "Espaces de travail"
+        "linearWorktreesColumn": "Espaces de travail",
+        "giteaSourceLabel": "Gitea"
       },
       "Terminal": {
         "73768427cf": "Fermer",
@@ -8651,7 +8652,13 @@
           "integrationsHint": "Les identifiants de tous les fournisseurs se trouvent aussi sous",
           "integrationsLink": "Intégrations",
           "skillHint": ". Une fois Linear connecté, des exemples d'utilisation restent disponibles sous Paramètres → Linear.",
-          "incompleteBannerBodyWithLinear": "Masquez les fournisseurs que vous n'utilisez pas, ou dépliez une carte et terminez ses étapes. Pour Linear : accès API, skill d'agent et Afficher dans Tâches."
+          "incompleteBannerBodyWithLinear": "Masquez les fournisseurs que vous n'utilisez pas, ou dépliez une carte et terminez ses étapes. Pour Linear : accès API, skill d'agent et Afficher dans Tâches.",
+          "giteaLabel": "Gitea",
+          "giteaDescription": "Connectez un serveur Gitea ou Forgejo pour afficher ses tickets et pull requests dans Tâches.",
+          "connectGiteaTitle": "Connecter Gitea",
+          "connectGiteaDescription": "Ajoutez un serveur Gitea ou Forgejo avec un jeton d’accès personnel.",
+          "manageGitea": "Gérer les serveurs",
+          "addGitea": "Ajouter un serveur Gitea"
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "Épaisseur de la ligne de séparation des volets.",
@@ -10491,7 +10498,8 @@
             "setup": "configuration",
             "apiKey": "clé API",
             "skill": "skill",
-            "connect": "connect"
+            "connect": "connect",
+            "gitea": "gitea"
           }
         },
         "terminal": {
@@ -12158,6 +12166,25 @@
           "usageDescription": "Cursor facture deux enveloppes qui se réinitialisent avec votre cycle de facturation, plus des dépenses à la demande une fois épuisées.",
           "usageLabel": "Utilisation",
           "usageTitle": "Utilisation mensuelle du forfait"
+        },
+        "gitea": {
+          "integration": {
+            "card": {
+              "3852b1fd6f": "Vérifié",
+              "09bde44485": "Test en cours...",
+              "2bf28d5929": "Tester",
+              "d0b31b4845": "Déconnecter {{value0}}",
+              "9a555db81e": "Revérifier",
+              "d4e5f6a7b8": "Échec de la connexion.",
+              "069f07af1c": "Serveurs connectés : {{value0}}",
+              "31b7f980fb": "Vérification de l’accès à Gitea avant d’afficher les options de configuration.",
+              "5a8cd33300": "Parcourez les tickets et pull requests Gitea, créez des tickets et commencez à travailler.",
+              "bdcb1e773f": "Ajouter un serveur",
+              "9ce5f12a0d": "Connecter Gitea",
+              "f47924e554": "Chaque serveur conserve un jeton localement, chiffré si le stockage le permet.",
+              "c043731756": "Connectez un serveur Gitea autohébergé avec son URL et un jeton d’accès personnel. Les identifiants sont stockés localement et chiffrés si le stockage le permet."
+            }
+          }
         }
       },
       "right": {
@@ -17344,6 +17371,145 @@
             "hostOnly": "Les détails de connexion Cursor ne sont lisibles que sur l'ordinateur qui exécute Orca."
           }
         }
+      },
+      "gitea": {
+        "connect": {
+          "dialog": {
+            "83b75fa9b7": "https://gitea.example.com",
+            "062ae1ea05": "Jeton d’accès",
+            "7acfed1da5": "Annuler",
+            "f5d526570f": "Vérification…",
+            "f68c3d011f": "Se connecter",
+            "d2823a1de0": "Connecter un serveur Gitea",
+            "d076a10ae3": "Utilisez l’URL d’un serveur Gitea et un jeton d’accès personnel pour parcourir les tickets et examiner les pull requests.",
+            "690c1da1bb": "URL du serveur Gitea",
+            "79c04f358b": "Jeton d’accès personnel Gitea",
+            "3ecb3e1153": "Créez un jeton dans Paramètres Gitea → Applications avec les droits read:user, write:issue et write:repository. Limitez l’accès aux dépôts nécessaires.",
+            "4d1f2d9f21": "Votre jeton est stocké localement et chiffré si le stockage le permet."
+          }
+        },
+        "issue": {
+          "comments": {
+            "8608602d16": "Commentaires",
+            "ea3f6f14a1": "Aucun commentaire pour le moment.",
+            "6a519bdb1c": "Inconnu"
+          },
+          "meta": {
+            "controls": {
+              "63f46a8d86": "Titre",
+              "8cc407607b": "Étiquettes",
+              "11fac85e07": "Aucun label dans ce dépôt.",
+              "401f7dc7a2": "Assignés",
+              "3cd6f5acbd": "Aucun utilisateur assignable.",
+              "ba343731c0": "Impossible de mettre à jour le ticket."
+            }
+          }
+        },
+        "new": {
+          "issue": {
+            "dialog": {
+              "becfadf1df": "Titre",
+              "032fd2ed27": "Annuler",
+              "5e1d23a112": "Créer un ticket",
+              "db951c3a29": "Nouveau ticket dans {{value0}}",
+              "b42f72cfc5": "Créez un ticket dans le projet Gitea sélectionné.",
+              "6c8b731fb2": "Description"
+            }
+          }
+        },
+        "pr": {
+          "checks": {
+            "448c6113a4": "Ouvrir les détails de la vérification",
+            "bed82a55cd": "Aucune vérification d’état signalée pour cette PR."
+          },
+          "file": {
+            "diff": {
+              "e6f7a8b9c0": "Réessayer",
+              "f1a2b3c4d5": "Impossible de charger les différences du fichier.",
+              "81e07de6a5": "Le fichier binaire n’est pas affiché."
+            }
+          },
+          "line": {
+            "comments": {
+              "489b36633a": "Ligne {{value0}}",
+              "c01a062b92": "Inconnu",
+              "317313f8af": "Commentaire",
+              "4e59b0c4f8": "N° de ligne",
+              "a43b5cc38b": "Numéro de ligne du nouveau fichier dans les différences",
+              "02339776da": "Commentaire de revue…",
+              "6cbd906d88": "Commenter une ligne"
+            }
+          },
+          "merge": {
+            "button": {
+              "2378ab4908": "Conflits",
+              "8e662b9b6b": "Fusionner"
+            }
+          },
+          "tab": {
+            "body": {
+              "1fe3a05742": "Aucune description fournie.",
+              "413feaa83a": "En ligne",
+              "53ab0c5a49": "Aucun fichier modifié.",
+              "5372c28376": "Côte à côte"
+            }
+          }
+        }
+      },
+      "GiteaIssueWorkspace": {
+        "47b064c003": "{{value0}} copié",
+        "927222e135": "Échec de la copie.",
+        "565680a39b": "Échec de l'ajout du commentaire.",
+        "ce513e3ca2": "Fermer",
+        "e849a4c80f": "Démarrer l'espace de travail",
+        "c0d4f97901": "Fermé",
+        "ab08895bb5": "Ouvert",
+        "1ab551635b": "Rouvrir",
+        "6b3c5a3144": "Fermer l'issue",
+        "c29b657be3": "Copier l'URL",
+        "ca242eaf5d": "Aucune description fournie.",
+        "d3e0033e0f": "Commentaire",
+        "b7c8d9e0f1": "Impossible de charger le ticket.",
+        "2d2e69fe70": "Impossible de mettre à jour le ticket.",
+        "a792c22414": "Élément Gitea",
+        "01b6ea43ca": "Consultez l’élément Gitea sélectionné et commencez à travailler.",
+        "63cbb99973": "Ouvrir dans Gitea",
+        "0fee3f06ff": "Ajouter un commentaire…"
+      },
+      "GiteaPullRequestWorkspace": {
+        "f5cf34ed40": "Échec de l'ajout du commentaire.",
+        "c7c84081fc": "Échec de l'ajout du commentaire de review.",
+        "4f4abe43ab": "Fichiers",
+        "95a6c97ba6": "Vérifications",
+        "5fa5ec9fff": "Fermer",
+        "f88c7cf08c": "Démarrer l'espace de travail",
+        "d646ddef48": "Commentaire",
+        "c2d3e4f5a6": "Impossible de charger les vérifications de la PR.",
+        "22f9c29c9b": "Pull request fusionnée.",
+        "d93415a77d": "Échec de la fusion.",
+        "f51240a59a": "Discussion",
+        "8e44409da0": "Pull request Gitea",
+        "0a432f2c1a": "Examinez les fichiers, les vérifications et la discussion, puis fusionnez ou commencez à travailler.",
+        "9813b44d73": "Ouvrir dans Gitea",
+        "ddc99ed766": "Ajouter un commentaire…"
+      },
+      "GiteaTaskList": {
+        "ab2a229e50": "Assignés à moi",
+        "74f30cd767": "Créé",
+        "031c70d963": "Fermé",
+        "bf66fad935": "Tous",
+        "65a3bffe7a": "Tickets",
+        "9b21aab4c9": "PRs",
+        "9986e0e679": "Fusionnés",
+        "747423c0f8": "Brouillon",
+        "980519b0c8": "Ouvert",
+        "c07dd13940": "Tous les éléments ouverts",
+        "0285721e62": "Impossible de charger les tâches Gitea.",
+        "5997067bee": "Nouveau ticket",
+        "e3db16e7c7": "Actualiser les tâches Gitea",
+        "34cd2d1024": "Sélectionnez un projet hébergé sur Gitea pour voir ses tickets et pull requests.",
+        "6e1e6691d7": "Chargement des tâches Gitea…",
+        "00f67933b5": "Aucun ticket ni pull request correspondant."
       }
     },
     "i18n": {
@@ -18489,5 +18655,30 @@
   },
   "common": {
     "retry": "Réessayer"
+  },
+  "gitea": {
+    "status": {
+      "added": "Ajoutée",
+      "modified": "Modifié",
+      "deleted": "Supprimé",
+      "copied": "Copié",
+      "open": "Ouvert",
+      "closed": "Fermé",
+      "merged": "Fusionnés",
+      "draft": "Brouillon",
+      "pending": "En attente",
+      "error": "Erreur",
+      "squash": "Squasher et merger",
+      "renamed": "Renommé",
+      "changed": "Modifié",
+      "success": "Réussite",
+      "failure": "Échec",
+      "warning": "Avertissement",
+      "merge": "Fusionner",
+      "rebase": "Rebaser et fusionner"
+    },
+    "errors": {
+      "loadPullRequest": "Certaines données de la pull request n’ont pas pu être chargées."
+    }
   }
 }

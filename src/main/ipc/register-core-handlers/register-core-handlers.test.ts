@@ -49,6 +49,7 @@ const {
   registerFilesystemWatcherHandlersMock,
   registerAppHandlersMock,
   registerLinearHandlersMock,
+  registerGiteaHandlersMock,
   registerJiraHandlersMock,
   registerBitbucketHandlersMock,
   registerGitLabHandlersMock,
@@ -117,6 +118,7 @@ const {
   registerFilesystemWatcherHandlersMock: vi.fn(),
   registerAppHandlersMock: vi.fn(),
   registerLinearHandlersMock: vi.fn(),
+  registerGiteaHandlersMock: vi.fn(),
   registerJiraHandlersMock: vi.fn(),
   registerBitbucketHandlersMock: vi.fn(),
   registerGitLabHandlersMock: vi.fn(),
@@ -384,6 +386,10 @@ vi.mock('../jira', () => ({
   registerJiraHandlers: registerJiraHandlersMock
 }))
 
+vi.mock('../gitea', () => ({
+  registerGiteaHandlers: registerGiteaHandlersMock
+}))
+
 vi.mock('../bitbucket', () => ({
   registerBitbucketHandlers: registerBitbucketHandlersMock
 }))
@@ -452,6 +458,7 @@ describe('registerCoreHandlers', () => {
     registerAppHandlersMock.mockReset()
     registerLinearHandlersMock.mockReset()
     registerJiraHandlersMock.mockReset()
+    registerGiteaHandlersMock.mockReset()
     registerBitbucketHandlersMock.mockReset()
     registerGitLabHandlersMock.mockReset()
     registerHostedReviewHandlersMock.mockReset()
@@ -539,6 +546,7 @@ describe('registerCoreHandlers', () => {
     expect(registerGitHubHandlersMock).toHaveBeenCalledWith(store, stats)
     expect(registerLinearHandlersMock).toHaveBeenCalled()
     expect(registerJiraHandlersMock).toHaveBeenCalled()
+    expect(registerGiteaHandlersMock).toHaveBeenCalledWith(store)
     expect(registerBitbucketHandlersMock).toHaveBeenCalled()
     expect(registerGitLabHandlersMock).toHaveBeenCalledWith(store)
     expect(registerHostedReviewHandlersMock).toHaveBeenCalledWith(store, stats)
