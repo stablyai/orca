@@ -259,6 +259,9 @@ function isDashboardCard(value: unknown): boolean {
     DASHBOARD_DOT_STATES.has(card.dotState) &&
     (card.workingMode === undefined ||
       (card.dotState === 'working' && card.workingMode === 'monitoring')) &&
+    (card.verdictMark === undefined ||
+      card.verdictMark === 'failed' ||
+      card.verdictMark === 'interrupted') &&
     isBoundedString(card.task, AGENT_STATUS_MAX_FIELD_LENGTH, true) &&
     isOptionalBoundedString(card.lastUserMessage, AGENT_STATUS_MAX_FIELD_LENGTH) &&
     isOptionalBoundedString(card.lastAgentMessage, AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH) &&

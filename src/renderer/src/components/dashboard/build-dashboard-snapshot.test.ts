@@ -500,6 +500,16 @@ describe('buildDashboardSnapshot', () => {
     expect(snapshot.cards[0].bucket).toBe('idle')
   })
 
+  it('publishes the main agent verdict beside the live dot state', () => {
+    const mainAgent = { state: 'done' as const, outcome: 'failure' as const, stateStartedAt: NOW }
+    const snapshot = buildDashboardSnapshot(
+      baseState({ agentStatusByPaneKey: { [PANE_KEY]: entry({ state: 'working', mainAgent }) } }),
+      NOW
+    )
+    expect(snapshot.cards[0]).toMatchObject({ bucket: 'done', dotState: 'working' })
+    expect(snapshot.cards[0].verdictMark).toBe('failed')
+  })
+
   it('does not mark title-derived rows unseen from synthetic timestamps', () => {
     const snapshot = buildDashboardSnapshot(
       baseState({

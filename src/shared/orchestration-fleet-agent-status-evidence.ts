@@ -16,6 +16,7 @@
 
 import type { AgentStatusIpcPayload } from './agent-status-ipc-payload'
 import type { AgentStatusState, AgentType } from './agent-status-types'
+import type { AgentMainAgentStatus } from './main-agent-status'
 
 /** Why a row could not be tied to a terminal. No catch-all member: a new gap needs a name. */
 export type FleetEvidenceBindingGap =
@@ -56,6 +57,8 @@ export type FleetAgentActivity = {
   worktreeId: string | null
   restoredUnconfirmed: boolean
   providerSessionOnly: boolean
+  /** The main agent's own state and last-turn verdict; absent when the row carries none. */
+  mainAgent?: AgentMainAgentStatus
 }
 
 export type FleetAgentStatusEvidence = {
@@ -113,7 +116,18 @@ export function mintFleetAgentStatusEvidence(
       model: status.model ?? null,
       worktreeId: status.worktreeId ?? null,
       restoredUnconfirmed: status.restoredUnconfirmed === true,
-      providerSessionOnly: status.providerSessionOnly === true
+      providerSessionOnly: status.providerSessionOnly === true,
+      ...(status.mainAgent ? { mainAgent: status.mainAgent } : {})
     }
   }
+}
+
+/** The main agent's record only when the row's status fields are observations: a restored row may
+ *  describe a turn that ended unseen, and an identity-only row's status fields are placeholders. */
+export function fleetEvidenceMainAgent(
+  activity: FleetAgentActivity
+): AgentMainAgentStatus | undefined {
+  return activity.restoredUnconfirmed || activity.providerSessionOnly
+    ? undefined
+    : activity.mainAgent
 }

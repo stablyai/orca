@@ -126,8 +126,14 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const doneAt = lastEnteredDoneAt(agent)
   const conversationName = useAgentRowConversationName(agent)
   const prompt = conversationName ?? getAgentRowPrimaryText(agent.entry)
+  const verdictDotState = agentVerdictDisplayMark(agent.entry)
+  const isInterrupted = verdictDotState === 'interrupted'
+  // Why: a stop or a failure is a terminal outcome, so surface it in the leading state dot; a
+  // failure does so even while subagents still run.
+  const dotState: AgentDotState =
+    verdictDotState ?? asDotState(agent.state, agent.entry.workingMode)
   // Why: prompt is '' when unknown, so fall back to the state label to keep the row labeled.
-  const displayLabel = prompt || agentStateLabel(asDotState(agent.state, agent.entry.workingMode))
+  const displayLabel = prompt || agentStateLabel(dotState)
   const model = agent.entry.model?.trim() ?? ''
   const isMonitoring = agent.state === 'working' && agent.entry.workingMode === 'monitoring'
   const isWorking = agent.state === 'working' && !isMonitoring
@@ -138,8 +144,6 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const toolName = showsTool ? (agent.entry.toolName?.trim() ?? '') : ''
   const toolInput = showsTool ? (agent.entry.toolInput?.trim() ?? '') : ''
   const lastAssistantMessage = agent.entry.lastAssistantMessage?.trim() ?? ''
-  const verdictDotState = agentVerdictDisplayMark(agent.entry)
-  const isInterrupted = verdictDotState === 'interrupted'
   const lineage = agent.lineage
   const isLineageChild = lineage?.depth === 1
   const lineageChildCount = lineage?.childCount ?? 0
@@ -150,10 +154,6 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
           lineageChildCount === 1 ? 'agent' : 'agents'
         }`
       : [formatAgentTypeLabel(agent.agentType), model].filter(Boolean).join(' · ')
-  // Why: a stop or a failure is a terminal outcome, so surface it in the leading state dot; a
-  // failure does so even while subagents still run.
-  const dotState: AgentDotState =
-    verdictDotState ?? asDotState(agent.state, agent.entry.workingMode)
   const dotTooltipLabel = stateDotTooltipLabel(agent, dotState, now)
   // Why: the elapsed gap is the whole content of an `unverifiable` row, so it rides the
   // row's own timestamp slot rather than hiding in a hover tooltip.

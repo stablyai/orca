@@ -1,6 +1,12 @@
 import { AGENT_STATUS_STALE_AFTER_MS } from './agent-status-types'
-import type { FleetAgentStatusEvidence } from './orchestration-fleet-agent-status-evidence'
-import { projectOrchestrationFleetAttention } from './orchestration-fleet-attention'
+import {
+  fleetEvidenceMainAgent,
+  type FleetAgentStatusEvidence
+} from './orchestration-fleet-agent-status-evidence'
+import {
+  isFleetMainTurnFailed,
+  projectOrchestrationFleetAttention
+} from './orchestration-fleet-attention'
 import {
   isUnsupervisedSettledDispatch,
   resolveFleetWorkerOutcome
@@ -217,6 +223,7 @@ export function projectOrchestrationFleetWorker(
   const liveness = projectLiveness(worker, evidence, now)
   const fresh = liveness.verdict === 'live'
   const activity = evidence?.activity
+  const mainAgent = activity ? fleetEvidenceMainAgent(activity) : undefined
   const workspaceId =
     activity?.worktreeId ?? worker.worktreeId ?? worker.resource?.worktreeId ?? null
   const outcome = resolveFleetWorkerOutcome({
@@ -238,7 +245,8 @@ export function projectOrchestrationFleetWorker(
       worker: worker.workerState,
       dispatch: worker.dispatchStatus,
       detail: worker.workerStage,
-      activity: fresh && activity ? activity.state : 'unknown'
+      activity: fresh && activity ? activity.state : 'unknown',
+      ...(mainAgent ? { mainAgent } : {})
     },
     outcome,
     liveness,
@@ -264,6 +272,7 @@ export function projectOrchestrationFleetWorker(
         worker.workerState === 'abandoned' ||
         worker.terminationReason === 'operator_close' ||
         worker.terminationReason === 'signaled',
+      mainTurnFailed: isFleetMainTurnFailed(mainAgent),
       liveness
     })
   }

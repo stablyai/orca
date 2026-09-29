@@ -33,6 +33,7 @@ import { selectLivePtyIdsForWorktree } from '@/components/sidebar/worktree-card-
 import { useWorktreeAgentRows } from '@/components/sidebar/useWorktreeAgentRows'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import { agentRowDotState } from '@/lib/agent-row-dot-state'
+import { agentVerdictDisplayMark } from '../../../../shared/agent-main-agent-verdict'
 import { translate } from '@/i18n/i18n'
 
 type OrderedSendTarget = {
@@ -246,7 +247,10 @@ function AgentTargetMenuItem({
   onSend: (target: NotesSendAgentTarget) => void
 }): React.JSX.Element {
   const tabTitle = target.tabTitle.trim()
-  const state = agentRowDotState(agent?.state ?? 'idle', agent?.entry.workingMode)
+  const state = agent
+    ? (agentVerdictDisplayMark(agent.entry) ??
+      agentRowDotState(agent.state, agent.entry.workingMode))
+    : 'idle'
   const timeAgo = agent ? formatAgentRelativeTime(agent, now) : null
   const disabledReason = target.status === 'disabled' ? target.disabledReason : undefined
   const secondaryParts = [

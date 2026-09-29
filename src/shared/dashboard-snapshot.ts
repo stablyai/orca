@@ -35,12 +35,22 @@ export const DASHBOARD_MAX_MAP_WORKSPACES = 2_000
 
 /** Kept distinct from `bucket` so attention cards retain their precise dot state. */
 export type DashboardCardDotState = 'working' | 'blocked' | 'waiting' | 'done' | 'idle'
-export type DashboardCardDisplayState = DashboardCardDotState | 'monitoring'
+export type DashboardCardDisplayState =
+  | DashboardCardDotState
+  | 'monitoring'
+  | DashboardCardVerdictMark
 
-/** Completed agents stay green until acknowledged, then settle into gray idle. */
+/** The main agent's turn verdict as `agentVerdictDisplayMark` draws it on the agent's own row. */
+export type DashboardCardVerdictMark = 'failed' | 'interrupted'
+
+/** Completed agents stay green until acknowledged, then settle into gray idle. A verdict outranks
+ *  the live state and is never muted by being seen. */
 export function dashboardCardDisplayState(
-  card: Pick<DashboardCard, 'dotState' | 'workingMode' | 'unseen'>
+  card: Pick<DashboardCard, 'dotState' | 'workingMode' | 'unseen' | 'verdictMark'>
 ): DashboardCardDisplayState {
+  if (card.verdictMark) {
+    return card.verdictMark
+  }
   if (card.dotState === 'working' && card.workingMode === 'monitoring') {
     return 'monitoring'
   }
@@ -90,6 +100,8 @@ export type DashboardCard = {
   dotState: DashboardCardDotState
   /** Additive discriminator; older pop-outs render this as ordinary working. */
   workingMode?: AgentWorkingMode
+  /** Additive: older pop-outs keep rendering `dotState`. */
+  verdictMark?: DashboardCardVerdictMark
   /** One-line task/prompt text shown on the card. */
   task: string
   /** The most recent message the user sent this agent (its current prompt). */

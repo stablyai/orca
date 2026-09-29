@@ -306,6 +306,25 @@ describe('AgentKanbanCard', () => {
     expect(agentStateDotRender).toHaveBeenLastCalledWith('monitoring')
   })
 
+  it('rerenders when only the main agent verdict changes', () => {
+    const initial = card()
+    const onOpenTerminal = vi.fn()
+    const { rerender } = renderCard({ card: initial, now: 2_000, onOpenTerminal })
+    expect(agentStateDotRender).toHaveBeenLastCalledWith('working')
+
+    rerender(
+      <TooltipProvider>
+        <AgentKanbanCard
+          card={{ ...initial, verdictMark: 'failed' }}
+          now={2_000}
+          onOpenTerminal={onOpenTerminal}
+        />
+      </TooltipProvider>
+    )
+
+    expect(agentStateDotRender).toHaveBeenLastCalledWith('failed')
+  })
+
   it('rerenders when the repo icon changes', () => {
     const onOpenTerminal = vi.fn()
     const initial = card({ startedAt: 1_000 })

@@ -150,7 +150,9 @@ describe('OpenCode plugin lifecycle delivery', () => {
       }
     })
 
-    expect(posts).toEqual([{ hook_event_name: 'SessionStart', sessionID: 'root' }])
+    expect(posts).toEqual([
+      { hook_event_name: 'SessionStart', sessionID: 'root', root_state: 'done' }
+    ])
   })
 
   it('falls back per coordinate when the endpoint file is partial or malformed', async () => {

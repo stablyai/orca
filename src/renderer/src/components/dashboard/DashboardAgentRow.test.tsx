@@ -369,6 +369,22 @@ describe('DashboardAgentRow', () => {
     expect(markup).not.toContain('data-agent-row-tool-slot')
   })
 
+  it('labels a prompt-less row with its failed verdict, not the working subagents', () => {
+    const markup = renderRow(
+      makeAgent(
+        {},
+        {
+          state: 'working',
+          prompt: '',
+          mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: 60_000 }
+        }
+      )
+    )
+
+    expect(markup).toContain('>Failed<')
+    expect(markup).not.toContain('>Working<')
+  })
+
   it('names what a blocked approval is waiting on', () => {
     const markup = renderRow(
       makeAgent(

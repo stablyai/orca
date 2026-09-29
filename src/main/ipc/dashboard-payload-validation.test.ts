@@ -312,6 +312,18 @@ describe('dashboard payload validation', () => {
     ).toBe(false)
   })
 
+  it('accepts a known verdict mark and rejects an unknown one', () => {
+    expect(
+      isDashboardSnapshot({ ...SNAPSHOT, cards: [{ ...SNAPSHOT.cards[0], verdictMark: 'failed' }] })
+    ).toBe(true)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        cards: [{ ...SNAPSHOT.cards[0], verdictMark: 'exploded' }]
+      })
+    ).toBe(false)
+  })
+
   it('validates the preview terminal input profile', () => {
     const terminalInput = {
       hostPlatform: 'win32',

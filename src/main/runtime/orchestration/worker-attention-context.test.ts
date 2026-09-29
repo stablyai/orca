@@ -120,3 +120,45 @@ describe('worker attention liveness', () => {
     expect(attention).toEqual({ categories: [], requiresAction: false })
   })
 })
+
+describe('worker attention for a failed main-agent turn', () => {
+  const failedMainAgent = {
+    state: 'done' as const,
+    outcome: 'failure' as const,
+    stateStartedAt: NOW - 1
+  }
+  const local = { hostScope: '{"kind":"local","hostId":"local"}' }
+
+  it('asks for action when the main turn failed while child work holds the row open', () => {
+    const attention = projectWorkerAttentionContext({
+      facts: facts(local),
+      isRoot: false,
+      evidence: status({ state: 'working', mainAgent: failedMainAgent }),
+      now: NOW
+    })
+
+    expect(attention).toEqual({ categories: ['failure'], requiresAction: true })
+  })
+
+  it('ignores a failure carried by a restored, unconfirmed row', () => {
+    const attention = projectWorkerAttentionContext({
+      facts: facts(local),
+      isRoot: false,
+      evidence: status({ state: 'done', mainAgent: failedMainAgent, restoredUnconfirmed: true }),
+      now: NOW
+    })
+
+    expect(attention.categories).not.toContain('failure')
+  })
+
+  it('clears once the next turn starts', () => {
+    const attention = projectWorkerAttentionContext({
+      facts: facts(local),
+      isRoot: false,
+      evidence: status({ state: 'working', mainAgent: { state: 'working', stateStartedAt: NOW } }),
+      now: NOW
+    })
+
+    expect(attention).toEqual({ categories: [], requiresAction: false })
+  })
+})

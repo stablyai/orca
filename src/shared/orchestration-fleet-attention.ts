@@ -1,3 +1,6 @@
+import { agentVerdictDisplayMark } from './agent-main-agent-verdict'
+import type { AgentMainAgentStatus } from './main-agent-status'
+
 export const ORCHESTRATION_FLEET_ATTENTION_CATEGORIES = [
   'guidance',
   'input',
@@ -24,6 +27,8 @@ export type OrchestrationFleetAttentionFacts = {
   pendingGuidance?: boolean
   pendingApproval?: boolean
   interrupted?: boolean
+  /** The worker's current main-agent turn failed, derived from its own record on every read. */
+  mainTurnFailed?: boolean
   liveness: {
     verdict: 'live' | 'unverifiable' | 'exited'
     reason?: string
@@ -52,7 +57,7 @@ export function projectOrchestrationFleetAttention(
   if (facts.pendingApproval) {
     categories.push('approval')
   }
-  if (facts.outcome === 'failed') {
+  if (facts.outcome === 'failed' || facts.mainTurnFailed) {
     categories.push('failure')
   }
   if (facts.interrupted) {
@@ -83,6 +88,15 @@ export function projectOrchestrationFleetAttention(
     categories,
     requiresAction: categories.some((category) => ACTION_CATEGORIES.has(category))
   }
+}
+
+/** The `mainTurnFailed` fact: whatever the agent's own display draws as Failed. The Failed mark
+ *  ignores the combined row state, so the main agent's record alone answers it. */
+export function isFleetMainTurnFailed(mainAgent: AgentMainAgentStatus | undefined): boolean {
+  return (
+    mainAgent !== undefined &&
+    agentVerdictDisplayMark({ state: mainAgent.state, mainAgent }) === 'failed'
+  )
 }
 
 export function orchestrationFleetAttentionEqual(

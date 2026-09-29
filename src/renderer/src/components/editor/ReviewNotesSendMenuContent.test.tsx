@@ -126,6 +126,8 @@ vi.mock('@/components/AgentStateDot', () => ({
         return 'Done'
       case 'idle':
         return 'Idle'
+      case 'failed':
+        return 'Failed'
       default:
         return state
     }
@@ -786,6 +788,39 @@ describe('ReviewNotesSendMenuContent', () => {
       prompt: 'my notes',
       noteTarget: { tabId: TAB_A, leafId: LEAF_A }
     })
+  })
+
+  it('labels an agent whose main turn failed as Failed while its subagents work', () => {
+    const statusPaneKey = makePaneKey(TAB_A, LEAF_A)
+    setStore({
+      tabsByWorktree: { 'wt-1': [tab(TAB_A, { title: 'Terminal 1' })] },
+      terminalLayoutsByTabId: { [TAB_A]: leafLayout(LEAF_A, 'pty-a') },
+      ptyIdsByTabId: { [TAB_A]: ['pty-a'] }
+    })
+    harness.noteTargets = [
+      {
+        paneKey: statusPaneKey,
+        tabId: TAB_A,
+        leafId: LEAF_A,
+        agentType: 'claude',
+        tabTitle: 'Terminal 1',
+        status: 'eligible'
+      }
+    ]
+    const row = agentRow({
+      paneKey: statusPaneKey,
+      tabId: TAB_A,
+      title: 'Terminal 1',
+      agentType: 'claude',
+      state: 'working'
+    })
+    row.entry.mainAgent = { state: 'done', outcome: 'failure', stateStartedAt: harness.now }
+    harness.worktreeAgentRows = [row]
+
+    const item = findByType(render(), 'DropdownMenuItem')
+
+    expect(collectText(item)).toContain('Failed')
+    expect(collectText(item)).not.toContain('Working')
   })
 
   it('does not render an active agent fallback when no agents are derived', () => {
