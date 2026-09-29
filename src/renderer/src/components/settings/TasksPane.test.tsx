@@ -163,6 +163,15 @@ describe('TasksPane', () => {
     expect(markup).toContain('API access, the agent skill, and Show in Tasks')
   })
 
+  it('offers an opt-in to assign unassigned GitHub issues when starting work', () => {
+    const markup = renderPane()
+
+    expect(markup).toContain('Assign unassigned GitHub issues to me when starting work')
+    expect(markup).toContain('Existing assignees are never changed')
+    expect(markup).toContain('data-slot="switch"')
+    expect(markup).toContain('data-state="unchecked"')
+  })
+
   it('does not warn on a fresh install where nothing is connected yet', () => {
     // Settings ship with every provider visible, so untouched providers are the
     // default state; the cards still say "Connect required" on their own.

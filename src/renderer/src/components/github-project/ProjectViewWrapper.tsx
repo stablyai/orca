@@ -108,6 +108,7 @@ function ProjectViewBody({
           void launchWorkItemDirect({
             item,
             repoId: dialogItem.workItem.repoId,
+            sourceContext: rowActions.dialogSourceContext,
             launchSource: 'task_page',
             telemetrySource: 'sidebar',
             openModalFallback: () => {

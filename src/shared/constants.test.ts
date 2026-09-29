@@ -37,6 +37,10 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').autoRenameBranchFromWorkDefaultedOn).toBe(true)
   })
 
+  it('does not assign unassigned GitHub issues on Start until the user opts in', () => {
+    expect(getDefaultSettings('/tmp').assignUnassignedGitHubIssuesOnStart).toBe(false)
+  })
+
   it('uses a block terminal cursor by default for new settings', () => {
     expect(getDefaultSettings('/tmp').terminalCursorStyle).toBe('block')
     expect(getDefaultSettings('/tmp').terminalCursorStyleDefaultedToBlock).toBe(true)

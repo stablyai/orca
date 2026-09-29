@@ -34,6 +34,11 @@ export function buildProjectWorkItem(
     labels: row.content.labels.map((label) => label.name),
     updatedAt: row.updatedAt,
     author: null,
+    assignees: row.content.assignees.map((user) => ({
+      login: user.login,
+      name: user.name,
+      avatarUrl: user.avatarUrl ?? ''
+    })),
     repoId,
     prRepo
   }
