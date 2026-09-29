@@ -20,7 +20,7 @@ import {
 import { BrowserCookieImportDisclosure } from '../BrowserCookieImportDisclosure'
 import { BrowserCookieImportMachineNotice } from '../BrowserCookieImportMachineNotice'
 import { useAppStore } from '../../store'
-import { BROWSER_FAMILY_LABELS } from '../../../../shared/constants'
+import { BROWSER_FAMILY_LABELS } from '../../../../shared/browser-family-labels'
 import { translate } from '@/i18n/i18n'
 
 type DetectedBrowser = {

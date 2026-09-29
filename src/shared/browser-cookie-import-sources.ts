@@ -6,7 +6,8 @@ const CHROMIUM_COOKIE_IMPORT_SOURCES = [
   { label: 'Arc', mac: true, win: false, linux: false },
   { label: 'Brave', mac: true, win: true, linux: true },
   { label: 'Comet', mac: true, win: true, linux: false },
-  { label: 'Helium', mac: true, win: false, linux: false }
+  { label: 'Helium', mac: true, win: false, linux: false },
+  { label: 'Aside', mac: true, win: false, linux: false }
 ] as const
 
 export function getBrowserCookieImportSourceLabels(
