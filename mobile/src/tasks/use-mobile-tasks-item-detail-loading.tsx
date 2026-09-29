@@ -161,9 +161,13 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
               return current
             }
             // Returning a new object every time would re-trigger this effect, which depends on
-            // actionItem — the detail would refetch forever. Only swap when the fetch actually
-            // added something the row reads.
+            // actionItem — the detail would refetch forever. So swap only on a real change, and
+            // compare every field the drawer reads off the task (title and status included) or
+            // the opposite defect appears: a title or status edited after the list loaded would
+            // stay stale behind the guard.
             const alreadyHydrated =
+              current.title === issue.title &&
+              current.status === issue.status.name &&
               current.source.description === issue.description &&
               (current.source.labels ?? []).length === (issue.labels ?? []).length &&
               current.source.assignee?.accountId === issue.assignee?.accountId

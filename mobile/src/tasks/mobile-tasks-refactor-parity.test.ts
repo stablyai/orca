@@ -112,9 +112,9 @@ const hash = (parts: string[] | string): string =>
 // rather than left failing. GitHubPrFileDiff's hash is deliberately unchanged — Jira
 // touched no code outside the Tasks surface.
 
-const SCREEN_RPC_SCREEN_HOOKS = '6ea6b734747360ddb66f79720c43d1c31da46fdea0213734de8881d97089458d'
+const SCREEN_RPC_SCREEN_HOOKS = '8d0d2d52a362c611093b6e388c5f85635395cf33d3d50aa15a51a2e7c49511ba'
 const PRE_REFACTOR_DIFF_HOOKS = '93c7189b32bed8456cc51814fffa8ce80cf62011ef968a9d53ddec2b9686f58f'
-const SCREEN_RPC_STATEMENTS = '6dbfccdbe3e03cad1af6f554b8e4b44d52783390a3d630b295c27542d3bd8940'
+const SCREEN_RPC_STATEMENTS = '35941a66ec2feb6be338f79ae7091b0bbf6ec16f0a06c4b81cc9a571012f6a7d'
 // Saved Linear selections now accept unknown persisted values; reconciliation tests cover them.
 const MAIN_REBASED_DECLARATIONS = 'bb2ca9edfeb24e9ef9cf439f417d0bd1ff3b2ac01e72f99f81ca38d50a9f6896'
 const SCREEN_RPC_SEMANTICS = '5ea6791ba8529c1d5480314eea098bf4a3b180c2b2e9d55c056a6a85772ebbf3'
