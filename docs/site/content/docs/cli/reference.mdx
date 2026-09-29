@@ -120,6 +120,8 @@ orca terminal show --terminal <handle> --json
 orca terminal read --terminal <handle> --json
 orca terminal read --terminal <handle> --screen --json
 orca terminal read --terminal <handle> --cursor <cursor> --limit 1000 --json
+orca terminal history --terminal <handle> --json
+orca terminal history --terminal <handle> --tail-lines 500 --screen --json
 orca terminal send --terminal <handle> --text "continue" --enter --json
 orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 300000 --json
 orca terminal create --worktree active --title "tests" --command "npm test" --json
@@ -149,6 +151,8 @@ close returns a failing `unverifiable` result rather than claiming the processes
 By default, `terminal read` returns the accumulated output stream with terminal escapes stripped. Programs that redraw lines can therefore appear as stacked fragments. Use `--screen` when you need the currently rendered frame; the response's `source` identifies `stream`, `screen`, or `screen-unavailable`. Screen reads have no history to page, so `--screen` and `--cursor` are mutually exclusive.
 
 For long output, use cursor reads. Save `nextCursor` from one stream read, then pass it back with `--cursor` to fetch only new output.
+
+`terminal history` is the simpler alternative when you just need the scrollback as one string — a stack trace, a build log — without cursor bookkeeping. It takes `--tail-lines` (default 200) in place of a cursor and supports `--screen` the same way `terminal read` does.
 
 ## Files
 

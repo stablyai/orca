@@ -12,6 +12,7 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
     '--direction <dir>      Direction: up|down|left|right for scroll, horizontal|vertical for split',
   'display-name': '--display-name <name>  Override the Orca display name',
   'element-index': '--element-index <n>   Element index from get-app-state',
+  'tail-lines': '--tail-lines <n>      Scrollback lines to return (default 200)',
   title: '--title <text>         Custom title for the terminal tab (omit to reset)',
   enter: '--enter                Append Enter after sending text',
   force:

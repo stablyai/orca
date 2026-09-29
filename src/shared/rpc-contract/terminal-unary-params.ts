@@ -92,6 +92,16 @@ export const TerminalRead = TerminalHandle.extend({
   message: 'Cursor cannot be combined with a screen read'
 })
 
+/**
+ * The agent-facing shape of the same read: one ANSI-free string instead of a paged line array.
+ * `tailLines` is `terminal.read`'s `limit` under the name a tool schema uses, and `screen` carries
+ * the identical meaning, because a repainted stack trace is unreadable as accumulated output.
+ */
+export const TerminalHistory = TerminalHandle.extend({
+  tailLines: OptionalFiniteNumber,
+  screen: z.literal(true).optional()
+})
+
 // Why: preserve the legacy contract — `title: string | null` only, `undefined` rejected, so the CLI's "reset" signal stays distinct.
 export const TerminalRename = TerminalHandle.extend({
   title: z.custom<string | null>((value) => value === null || typeof value === 'string', {

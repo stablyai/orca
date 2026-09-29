@@ -84,6 +84,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  terminal list             List live Orca-managed terminals',
   '  terminal show             Show terminal metadata and preview',
   '  terminal read             Read bounded terminal output',
+  '  terminal history          Read terminal scrollback as one string (for debugging)',
   '  terminal send             Send input to a live terminal',
   '  terminal wait             Wait for a terminal condition (exit, tui-idle)',
   '  terminal create           Create a terminal session in a worktree',

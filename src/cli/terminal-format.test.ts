@@ -4,13 +4,52 @@ import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitBlockedReason
 } from '../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalHistory } from '../shared/runtime-types'
 import {
   formatTerminalClose,
   formatTerminalFocus,
+  formatTerminalHistory,
   formatTerminalSend,
   formatTerminalShow,
   formatTerminalWait
 } from './terminal-format'
+
+function historyResult(overrides: Partial<RuntimeTerminalHistory> = {}): {
+  history: RuntimeTerminalHistory
+} {
+  return {
+    history: {
+      handle: 'term_abc123',
+      status: 'running',
+      history: 'line one\nline two',
+      lineCount: 2,
+      truncated: false,
+      ...overrides
+    }
+  }
+}
+
+describe('formatTerminalHistory', () => {
+  it('renders the header and flattened buffer with no warnings by default', () => {
+    expect(formatTerminalHistory(historyResult())).toBe(
+      ['handle: term_abc123', 'status: running', 'lines: 2', '', 'line one\nline two'].join('\n')
+    )
+  })
+
+  it('warns to raise --tail-lines when truncated', () => {
+    expect(formatTerminalHistory(historyResult({ truncated: true }))).toContain(
+      'warning: older output is not in this history; raise --tail-lines to ask for more'
+    )
+  })
+
+  it('warns that accumulated output stands in for an unavailable screen', () => {
+    const rendered = formatTerminalHistory(historyResult({ source: 'screen-unavailable' }))
+    expect(rendered).toContain('source: screen-unavailable')
+    expect(rendered).toContain(
+      'warning: no rendered screen was available, so this is accumulated output; repainted lines may appear as stacked fragments'
+    )
+  })
+})
 
 describe('formatTerminalFocus', () => {
   it('distinguishes superseded navigation from a winning focus', () => {

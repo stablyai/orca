@@ -62,6 +62,7 @@ export const ROOT_HELP_TEXT_SECONDARY = [
   '  orca terminal list [--worktree <selector>] [--limit <n>] [--include-visual-layouts] [--json]',
   '  orca terminal show [--terminal <handle>] [--json]',
   '  orca terminal read [--terminal <handle>] [--cursor <n>] [--limit <n>] [--json]',
+  '  orca terminal history [--terminal <handle>] [--tail-lines <n>] [--screen] [--json]',
   '  orca terminal send [--terminal <handle>] [--text <text>] [--enter] [--interrupt] [--wait-submit <seconds>] [--retry-request <id>] [--json]',
   '  orca terminal wait [--terminal <handle>] --for exit|tui-idle [--timeout-ms <ms>] [--json]',
   '  orca terminal create [--worktree <selector>] [--title <name>] [--command <text>] [--shell <shell>] [--focus] [--json]',

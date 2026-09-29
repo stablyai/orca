@@ -16,6 +16,7 @@ const METHOD_CASES: readonly (readonly [string, unknown, boolean])[] = [
   ['terminal.show', { terminal: 'term' }, false],
   ['terminal.resolveIdentity', { terminal: 'term' }, false],
   ['terminal.read', { terminal: 'term' }, false],
+  ['terminal.history', { terminal: 'term' }, false],
   ['terminal.inspectProcess', { terminal: 'term' }, false],
   ['terminal.isRunningAgent', { terminal: 'term' }, false],
   ['terminal.agentStatus', { terminal: 'term' }, false],

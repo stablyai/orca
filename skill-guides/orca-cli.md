@@ -147,6 +147,9 @@ ORCA terminal show --terminal <handle> --json
 ORCA terminal read --terminal <handle> --json
 ORCA terminal read --terminal <handle> --cursor <cursor> --limit 1000 --json
 ORCA terminal read --json
+ORCA terminal read --terminal <handle> --screen --json
+ORCA terminal history --terminal <handle> --json
+ORCA terminal history --terminal <handle> --tail-lines 500 --screen --json
 ORCA terminal send --terminal <handle> --text "continue" --enter --json
 ORCA terminal send --terminal <handle> --text "continue" --enter --wait-submit 10 --json
 ORCA terminal send --text "echo hello" --enter --json
@@ -171,6 +174,11 @@ Terminal rules:
 - Use workspace Sleep, not close, when the terminals and agent sessions should resume later. `terminal stop` is legacy compatibility plumbing and should not be used in new agent workflows.
 - `terminal list --json` omits `visualLayouts` to keep the common agent payload bounded. Add `--include-visual-layouts` only when tab and pane topology is required.
 - Use `terminal read` before `terminal send` unless the next input is obvious.
+- Use `terminal history` when you just need the scrollback as one string to debug from — a stack trace, a build log, a command's output. It takes `--tail-lines` (default 200) instead of a cursor, and `terminal list` is how you find handles for terminals other than the active one.
+- Use `terminal read` instead of `terminal history` when you need cursor pagination to follow a long-running command incrementally.
+- Both read verbs return accumulated output with escapes stripped, not the rendered screen, so anything that repaints a line — shells, progress bars, TUIs — comes back as stacked fragments and a typed `clear` reads as `cclclecleaclear`.
+- Pass `--screen` to either whenever the answer depends on how output looks rather than what was emitted over time; the default is unsuitable for verifying rendered output. `--screen` and `--cursor` are mutually exclusive.
+- The result reports `source`: `stream` for accumulated output, `screen` for the rendered screen, and `screen-unavailable` when a screen was requested but none could be rendered. An absent `source` means the host predates the field.
 - Use `terminal send` only for direct terminal input or one-off prompts where no task state, inbox, or reply tracking is needed.
 - `accepted: true` proves input acceptance, not a started turn. Use the receipt's `turn_started` stage when submission proof is needed; never resend on silence.
 - A text-plus-Enter agent prompt returns a durable request ID and additive stages: `input_accepted`, then `turn_started` once the agent's turn is proven. Raw text-only, bare Enter, interrupt, and terminal query replies keep their existing direct-input behavior.
