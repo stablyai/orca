@@ -227,7 +227,9 @@ The hook launcher is prior art worth knowing about. #16003 measured, on a
 reporting Kaspersky host, that `-WindowStyle Hidden` paired with
 `-EncodedCommand` was denied at `CreateProcess` with exit 126 regardless of
 payload — `exit 0` was denied too. The fix was to stop _spelling_ the flags:
-`WINDOWS_POWERSHELL_HOOK_SWITCHES` is now just `-NoProfile`, and separately, in
+`WINDOWS_POWERSHELL_HOOK_SWITCHES` keeps `-NoProfile` and adds `-NonInteractive`
+to prevent PowerShell 5.1 from consuming redirected hook JSON as interactive input.
+The added flag has not been measured on that Kaspersky host. Separately, in
 #16576, the execution policy bypass moved in-payload as a process-scope
 `Set-ExecutionPolicy` — a real command-line signal reduction, though #16003's
 measured denial keyed on `-WindowStyle Hidden` + `-EncodedCommand`, not on the
