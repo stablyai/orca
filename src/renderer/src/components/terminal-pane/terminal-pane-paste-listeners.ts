@@ -10,6 +10,7 @@ import {
 import { assertClipboardTextWithinLimitWithYield } from '../../../../shared/clipboard-text'
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
 import { APP_MENU_PASTE_EVENT } from '@/lib/app-menu-paste'
+import { requestNativeChatOverlayPaste } from '@/lib/native-chat-paste-request'
 import {
   APP_MENU_SELECTION_ACTION_EVENT,
   type AppMenuSelectionAction
@@ -118,6 +119,9 @@ export function registerTerminalPanePasteListeners({
       pasteSuppressionTimerId = null
       suppressNextNativePaste = false
     }, 0)
+    if (requestNativeChatOverlayPaste(pane.container)) {
+      return
+    }
     pasteFromClipboard(pane, 'keyboard')
   }
 
@@ -149,6 +153,9 @@ export function registerTerminalPanePasteListeners({
     if (!pane) {
       return
     }
+    if (requestNativeChatOverlayPaste(pane.container)) {
+      return
+    }
     if (isClipboardEventPasteRequired()) {
       const eventText = getClipboardEventText(event)
       pasteFromClipboard(pane, 'paste-event', (options) =>
@@ -177,6 +184,9 @@ export function registerTerminalPanePasteListeners({
     }
     const pane = manager.getActivePane() ?? manager.getPanes()[0]
     if (!pane) {
+      return
+    }
+    if (requestNativeChatOverlayPaste(pane.container)) {
       return
     }
     const connectionId = getConnectionId(worktreeId) ?? null

@@ -1,6 +1,7 @@
 import { useCallback, useEffect } from 'react'
 import type { RefObject } from 'react'
 import { APP_MENU_PASTE_EVENT } from '@/lib/app-menu-paste'
+import { NATIVE_CHAT_PASTE_REQUEST_EVENT } from '@/lib/native-chat-paste-request'
 import { pasteTextIntoTextControl, TEXT_CONTROL_PASTE_MAX_BYTES } from '@/lib/text-control-paste'
 import type { NativeChatComposerHandle } from './NativeChatComposer'
 
@@ -46,11 +47,21 @@ export function useNativeChatPasteBridge({
     const onPaste = (event: ClipboardEvent): void => {
       composerRef.current?.handlePasteEvent(event)
     }
+    // The terminal under this chat caught a paste while its textarea still held focus.
+    const onPasteRequest = (event: Event): void => {
+      if (!composerRef.current && !questionAnswerInputRef?.current) {
+        return
+      }
+      event.preventDefault()
+      pasteClipboardIntoComposer()
+    }
     root.addEventListener('paste', onPaste, { capture: true })
+    root.addEventListener(NATIVE_CHAT_PASTE_REQUEST_EVENT, onPasteRequest)
     return () => {
       root.removeEventListener('paste', onPaste, { capture: true })
+      root.removeEventListener(NATIVE_CHAT_PASTE_REQUEST_EVENT, onPasteRequest)
     }
-  }, [composerRef, rootRef])
+  }, [composerRef, pasteClipboardIntoComposer, questionAnswerInputRef, rootRef])
 
   useEffect(() => {
     const onAppMenuPaste = (event: Event): void => {
