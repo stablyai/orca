@@ -8,7 +8,7 @@ const claudeTarget = getManagedAgentHookTarget('claude')!
 // Real `bob --help` output from the two products that install under that name.
 const NEOVIM_BOB_HELP = 'bob 4.0.0\nA version manager for neovim\n\nUSAGE:\n    bob <SUBCOMMAND>'
 const BOB_SHELL_HELP = 'Usage: bob [options] [command]\n\nBob in your terminal\n'
-const allOnPath = async (): Promise<boolean> => true
+const resolveAsIs = async (command: string): Promise<string | null> => command
 
 describe('managed hook identity gate', () => {
   it('excludes Bob when the bob on PATH is the Neovim version manager', async () => {
@@ -19,7 +19,7 @@ describe('managed hook identity gate', () => {
         stderr: ''
       }),
       null,
-      allOnPath
+      resolveAsIs
     )
     expect([...excluded]).toEqual(['bob'])
   })
@@ -32,7 +32,7 @@ describe('managed hook identity gate', () => {
         stderr: ''
       }),
       null,
-      allOnPath
+      resolveAsIs
     )
     expect([...excluded]).toEqual([])
   })
@@ -45,7 +45,7 @@ describe('managed hook identity gate', () => {
         throw new Error('ENOENT')
       },
       null,
-      allOnPath
+      resolveAsIs
     )
     expect([...excluded]).toEqual([])
   })
@@ -56,7 +56,7 @@ describe('managed hook identity gate', () => {
       [claudeTarget],
       probe,
       null,
-      allOnPath
+      resolveAsIs
     )
     expect(probe).not.toHaveBeenCalled()
     expect([...excluded]).toEqual([])
@@ -71,7 +71,7 @@ describe('managed hook identity gate', () => {
       [bobTarget],
       probe,
       { agentCmdOverrides: { bob: '/opt/bobshell/bob chat --trust' } },
-      allOnPath
+      resolveAsIs
     )
     expect(probe).toHaveBeenCalledWith('/opt/bobshell/bob', ['--help'])
     expect([...excluded]).toEqual([])
@@ -86,7 +86,7 @@ describe('managed hook identity gate', () => {
         stderr: ''
       }),
       null,
-      allOnPath
+      resolveAsIs
     )
     expect([...excluded]).toEqual(['bob'])
   })
@@ -94,7 +94,7 @@ describe('managed hook identity gate', () => {
   it('excludes Bob when a stale override is off PATH and bare bob is Neovim', async () => {
     // Why throw: the real probe throws for a command it cannot resolve, which fails open.
     const probe = vi.fn(async (command: string) => {
-      if (command !== 'bob') {
+      if (command !== '/usr/local/bin/bob') {
         throw new Error(`${command} is not on PATH`)
       }
       return { stdout: NEOVIM_BOB_HELP, stderr: '' }
@@ -103,10 +103,10 @@ describe('managed hook identity gate', () => {
       [bobTarget],
       probe,
       { agentCmdOverrides: { bob: 'bobshell chat --trust' } },
-      async (command) => command === 'bob'
+      async (command) => (command === 'bob' ? '/usr/local/bin/bob' : null)
     )
     expect(probe).toHaveBeenCalledTimes(1)
-    expect(probe).toHaveBeenCalledWith('bob', ['--help'])
+    expect(probe).toHaveBeenCalledWith('/usr/local/bin/bob', ['--help'])
     expect([...excluded]).toEqual(['bob'])
   })
 })
