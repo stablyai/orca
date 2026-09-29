@@ -100,7 +100,7 @@ export function createAppUpdateChecker(deps: AppUpdateCheckerDeps) {
   function ensureLoaded(): Promise<void> {
     loaded ??= deps.loadPreferences().then((stored) => {
       prefs = stored
-      // A check time ahead of the clock (clock corrected since) would defer the next check by the skew.
+      // A stored check time ahead of the clock (clock since corrected) would defer the next check.
       const checkedAt = stored.lastCheckedAt
       nextDueAt =
         checkedAt === null || checkedAt > deps.now() ? 0 : checkedAt + APP_UPDATE_CHECK_INTERVAL_MS
