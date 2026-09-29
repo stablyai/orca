@@ -7,6 +7,8 @@ import type {
   NativeChatImageRefBlock,
   NativeChatToolResultBlock
 } from '../../shared/native-chat-types'
+import { buildImageDataUri } from '../../shared/image-data-uri'
+import { isKnownRasterImageMimeType } from '../../shared/raster-image-preview-limits'
 import { asRecord, extractString } from '../ai-vault/session-scanner-values'
 
 /** Coerce an arbitrary tool-result payload into a single output string. */
@@ -60,36 +62,35 @@ export function claudeContentBlocks(content: unknown): NativeChatBlock[] {
     if (!record) {
       continue
     }
-    const block = claudeContentBlock(record)
-    if (block) {
-      blocks.push(block)
-    }
+    blocks.push(...claudeContentBlock(record))
   }
   return blocks
 }
 
-function claudeContentBlock(record: Record<string, unknown>): NativeChatBlock | null {
+function claudeContentBlock(record: Record<string, unknown>): NativeChatBlock[] {
   switch (record.type) {
     case 'text': {
       const text = extractString(record.text)
-      return text ? { type: 'text', text } : null
+      return text ? [{ type: 'text', text }] : []
     }
     case 'thinking': {
       // Reasoning surfaces as a text block; the message role marks it as reasoning.
       const text = extractString(record.thinking) ?? extractString(record.text)
-      return text ? { type: 'text', text } : null
+      return text ? [{ type: 'text', text }] : []
     }
     case 'tool_use': {
       const name = extractString(record.name) ?? 'tool'
       const callId = extractString(record.id)
-      return { type: 'tool-call', name, input: record.input, ...(callId ? { callId } : {}) }
+      return [{ type: 'tool-call', name, input: record.input, ...(callId ? { callId } : {}) }]
     }
     case 'tool_result':
-      return toolResultBlock(record)
-    case 'image':
-      return imageRefBlock(record)
+      return toolResultBlocks(record)
+    case 'image': {
+      const ref = imageRefBlock(record)
+      return ref ? [ref] : []
+    }
     default:
-      return null
+      return []
   }
 }
 
@@ -99,6 +100,45 @@ function toolResultBlock(record: Record<string, unknown>): NativeChatToolResultB
     output: toolResultOutput(record.content),
     ...(record.is_error === true ? { isError: true } : {})
   }
+}
+
+// Agent-taken screenshots ride inside tool_result content as image parts; the
+// text still flattens to the tool-result block above, and each image part
+// additionally promotes to an image-ref. Pure (no I/O): base64 stays inline as
+// a data: URL and a later hydration stage persists it to the image cache.
+function toolResultBlocks(record: Record<string, unknown>): NativeChatBlock[] {
+  const blocks: NativeChatBlock[] = [toolResultBlock(record)]
+  const content = record.content
+  if (!Array.isArray(content)) {
+    return blocks
+  }
+  for (const item of content) {
+    const part = asRecord(item)
+    if (!part || part.type !== 'image') {
+      continue
+    }
+    const ref = toolImageRef(part)
+    if (ref) {
+      blocks.push(ref)
+    }
+  }
+  return blocks
+}
+
+function toolImageRef(part: Record<string, unknown>): NativeChatImageRefBlock | null {
+  const source = asRecord(part.source)
+  // Only inline bytes promote: a remote URL here would make chat fetch an agent-chosen host.
+  if (source?.type === 'base64') {
+    const mediaType = extractString(source.media_type)
+    const data = extractString(source.data)
+    if (mediaType && data && isKnownRasterImageMimeType(mediaType)) {
+      const inline = buildImageDataUri(mediaType, data)
+      if (inline) {
+        return { type: 'image-ref', url: inline }
+      }
+    }
+  }
+  return null
 }
 
 function imageRefBlock(record: Record<string, unknown>): NativeChatImageRefBlock | null {

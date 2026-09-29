@@ -1,14 +1,25 @@
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import {
+  hydrateNativeChatImageRefs,
+  NATIVE_CHAT_IMAGE_CACHE_MAX_BYTES,
+  readNativeChatCachedImage
+} from '../../../native-chat/transcript-image-cache'
+import {
+  assertPreviewWithinTransportBudget,
+  previewableBinaryByteLimit
+} from '../../runtime-file-preview-transport-budget'
+import {
   readNativeChatTranscriptTail,
   subscribeNativeChatTranscript,
   type NativeChatTranscriptSubscription,
   type SubscribeNativeChatTranscriptArgs
 } from '../../../native-chat/transcript-watch'
 import { defineMethod, defineStreamingMethod, type RpcContext } from '../core'
+import { remoteFileContentBudget } from './files-remote-content-budget'
 import { sanitizeNativeChatRpcBlock } from './native-chat-rpc-block-sanitize'
 import {
   MOBILE_NATIVE_CHAT_MAX_WINDOW,
+  NativeChatReadImage,
   NativeChatSession,
   NativeChatUnsubscribe
 } from '../../../../shared/rpc-contract/native-chat-params'
@@ -36,7 +47,7 @@ function sanitizeAppendForClient(
   messages: readonly NativeChatMessage[],
   clientKind: RpcContext['clientKind']
 ): NativeChatMessage[] {
-  return messages.map((message) => sanitizeMessage(message, clientKind))
+  return hydrateNativeChatImageRefs(messages).map((message) => sanitizeMessage(message, clientKind))
 }
 
 /** Window a transcript to its most recent `limit` messages so a long session
@@ -52,15 +63,17 @@ function windowTranscript(
 }
 
 /** Apply the windowed slice and keep inline image bytes off every RPC transport.
- *  Mobile clients additionally receive bounded text and tool bodies; runtime
- *  clients keep those bodies intact. */
+ *  Inline images persist to the host image cache first (after windowing, so only
+ *  shipped turns pay for it) and cross as fetchable path refs. Mobile clients
+ *  additionally receive bounded text and tool bodies; runtime clients keep those
+ *  bodies intact. */
 function windowForClient(
   messages: readonly NativeChatMessage[],
   clientKind: RpcContext['clientKind'],
   limit = MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
 ): NativeChatMessage[] {
   const windowed = windowTranscript(messages, limit)
-  return windowed.map((message) => sanitizeMessage(message, clientKind))
+  return hydrateNativeChatImageRefs(windowed).map((message) => sanitizeMessage(message, clientKind))
 }
 
 export const NATIVE_CHAT_METHODS = [
@@ -206,6 +219,19 @@ export const NATIVE_CHAT_METHODS = [
         })
       }
       unsubscribe = subscription.unsubscribe
+    }
+  }),
+  defineMethod({
+    name: 'nativeChat.readImage',
+    params: NativeChatReadImage,
+    handler: async (params, { clientKind, requestId }) => {
+      const budget = remoteFileContentBudget(clientKind, requestId)
+      const maxBytes = Math.min(
+        NATIVE_CHAT_IMAGE_CACHE_MAX_BYTES,
+        budget === undefined ? Infinity : previewableBinaryByteLimit(budget)
+      )
+      const image = await readNativeChatCachedImage(params.path, { maxBytes })
+      return assertPreviewWithinTransportBudget(image, budget)
     }
   }),
   defineMethod({

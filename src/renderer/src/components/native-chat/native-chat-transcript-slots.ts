@@ -107,8 +107,12 @@ export function buildNativeChatTranscriptSlots(
       rendersProse: content.markdown.length > 0 || content.hasImages,
       // The raw blocks, not the renderable ones: a childless roster draws no row
       // and its plain-text twin is then the only record the spawn happened.
+      // A tool's screenshot is what the reader asked to see, so it stays out of the fold too.
       outlivesTurn: message.blocks.some(
-        (block) => isSubagentGroupBlock(block) || isBackgroundTaskBlock(block)
+        (block) =>
+          isSubagentGroupBlock(block) ||
+          isBackgroundTaskBlock(block) ||
+          (message.role === 'tool' && block.type === 'image-ref')
       ),
       ...(agentId === null ? {} : { agentId })
     }

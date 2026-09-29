@@ -214,7 +214,8 @@ const HEAD_RUNTIME_STRING_SHA256 =
 // Again when the frame's first laid-out layout alone subscribes a held-back document.
 // Again when the frame's onLayout made one `notifyTerminalFrame` call.
 const HEAD_HOST_JSX_SHA256 = 'f71b1ee495f67a6e389abf597948ffdff1f9a4a10cde6abefd2611ea4dd94245'
-const HEAD_LEAF_JSX_SHA256 = '62eb05c6e2ac0be6d553a141fc8aa1641fcb0c678777d5d539f490aab8648417'
+// Leaf hash moved when the chat overlay took `loadImage` for host-cached agent screenshots.
+const HEAD_LEAF_JSX_SHA256 = 'e178a59dbfe2e552c035ef5f4da0703026a667a24aa7e95ec8f5d6b8bc3083bc'
 const HEAD_STYLE_REFERENCE_SHA256 =
   '56a005a1f65b30c11092e3422caef67810e1ec50f66fdd06471c370138b1eeb6'
 const HEAD_IDENTITY_FIELD_SHA256 =

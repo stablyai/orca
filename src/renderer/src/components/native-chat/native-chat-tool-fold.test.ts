@@ -16,6 +16,26 @@ function msg(
 }
 
 describe('foldToolMessages', () => {
+  it('folds a screenshot tool result into the run and keeps its images as their own row', () => {
+    const image = { type: 'image-ref' as const, url: 'data:image/png;base64,AA==' }
+    const folded = foldToolMessages([
+      msg({ id: 'a', blocks: [{ type: 'tool-call', name: 'Bash', input: {} }] }),
+      msg({ id: 't', role: 'tool', blocks: [{ type: 'tool-result', output: 'saved' }, image] }),
+      msg({ id: 'b', blocks: [{ type: 'tool-call', name: 'Read', input: {} }] })
+    ])
+    // The run keeps absorbing later calls; the screenshot row does not break it.
+    expect(folded.map((m) => [m.id, m.role])).toEqual([
+      ['a', 'assistant'],
+      ['t', 'tool']
+    ])
+    expect(folded[0]?.blocks).toEqual([
+      { type: 'tool-call', name: 'Bash', input: {} },
+      { type: 'tool-result', output: 'saved' },
+      { type: 'tool-call', name: 'Read', input: {} }
+    ])
+    expect(folded[1]?.blocks).toEqual([image])
+  })
+
   it('merges a tool-only message into the preceding assistant turn', () => {
     const folded = foldToolMessages([
       msg({

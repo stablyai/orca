@@ -6,24 +6,62 @@ import { selectActiveToolCall } from '../../../src/shared/native-chat-tool-activ
 import { isImageRefBlock, isTextBlock } from '../../../src/shared/native-chat-types'
 import { agentJournalItemSubagentId } from '../../../src/shared/agent-session-journal-producer'
 import { NATIVE_CHAT_SUBAGENT_ATTRIBUTION_COPY } from '../../../src/shared/native-chat-subagent-attribution'
-import type { NativeChatBlock, NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type {
+  NativeChatBlock,
+  NativeChatImageRefBlock,
+  NativeChatMessage
+} from '../../../src/shared/native-chat-types'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
 import { ToolRun } from './MobileNativeChatToolRun'
 import type { NativeChatTurnStatus } from './use-mobile-native-chat-turn-status'
 import { isRenderableImageUri } from './mobile-native-chat-image-preview'
+import { useNativeChatHostImage, type NativeChatImageLoad } from './mobile-native-chat-host-image'
 import { styles, TEXT_SIZE } from './mobile-native-chat-message-styles'
+
+function ImageRef({
+  block,
+  fontScale,
+  loadImage
+}: {
+  block: NativeChatImageRefBlock
+  fontScale: number
+  loadImage?: NativeChatImageLoad
+}): React.JSX.Element {
+  // A local preview (composer echo) or real URL renders directly; a host image-cache
+  // path is fetched over RPC; any other bare host path stays a text placeholder.
+  const direct = block.url ?? block.path
+  const fetched = useNativeChatHostImage(block.url ? undefined : block.path, loadImage)
+  const uri = isRenderableImageUri(direct) ? direct : fetched
+  if (uri) {
+    return (
+      <Image
+        source={{ uri }}
+        style={styles.imageThumb}
+        resizeMode="contain"
+        accessibilityLabel={block.alt ?? 'Attached image'}
+      />
+    )
+  }
+  return (
+    <NativeText style={[styles.imageRef, { fontSize: TEXT_SIZE * fontScale }]}>
+      🖼 {block.alt ?? block.path ?? block.url ?? 'image'}
+    </NativeText>
+  )
+}
 
 function Prose({
   block,
   invert,
   fontScale,
-  onOpenFile
+  onOpenFile,
+  loadImage
 }: {
   block: NativeChatBlock
   invert?: boolean
   fontScale: number
   onOpenFile?: (relativePath: string) => void
+  loadImage?: NativeChatImageLoad
 }): React.JSX.Element | null {
   if (isTextBlock(block)) {
     // Inverted (user) bubbles use a fixed dark-on-light text rather than the
@@ -45,24 +83,7 @@ function Prose({
     )
   }
   if (isImageRefBlock(block)) {
-    // A local preview (composer echo) or real URL renders as a thumbnail; a bare
-    // host path (not loadable on the device) falls back to a text placeholder.
-    const uri = block.url ?? block.path
-    if (isRenderableImageUri(uri)) {
-      return (
-        <Image
-          source={{ uri }}
-          style={styles.imageThumb}
-          resizeMode="contain"
-          accessibilityLabel={block.alt ?? 'Attached image'}
-        />
-      )
-    }
-    return (
-      <NativeText style={[styles.imageRef, { fontSize: TEXT_SIZE * fontScale }]}>
-        🖼 {block.alt ?? block.path ?? block.url ?? 'image'}
-      </NativeText>
-    )
+    return <ImageRef block={block} fontScale={fontScale} loadImage={loadImage} />
   }
   return null
 }
@@ -78,7 +99,8 @@ function MobileNativeChatMessageImpl({
   onToggleTurn,
   activeTurnIsWorking,
   structuredActivityUi = false,
-  subagentLabel
+  subagentLabel,
+  loadImage
 }: {
   message: NativeChatMessage
   toolsExpanded?: boolean
@@ -99,6 +121,8 @@ function MobileNativeChatMessageImpl({
   structuredActivityUi?: boolean
   /** The roster's name for the subagent that wrote this row, when one names it. */
   subagentLabel?: string
+  /** Fetches agent screenshots the host cached; absent while disconnected. */
+  loadImage?: NativeChatImageLoad
 }): React.JSX.Element {
   const isUser = message.role === 'user'
   const isReasoning = message.role === 'reasoning'
@@ -161,6 +185,7 @@ function MobileNativeChatMessageImpl({
               invert={isUser}
               fontScale={fontScale}
               onOpenFile={onOpenFile}
+              loadImage={loadImage}
             />
           ))}
           {showToolRun ? (

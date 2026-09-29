@@ -234,6 +234,7 @@ export const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   // mobile builds that still call them.
   'agentSession.hold',
   'agentSession.release',
+  'nativeChat.readImage',
   'nativeChat.readSession',
   'nativeChat.subscribe',
   'nativeChat.unsubscribe',

@@ -206,4 +206,40 @@ describe('NativeChatImageAttachments', () => {
     expect(container.firstElementChild).toBe(observedElement)
     root.unmount()
   })
+
+  it('previews an inline screenshot even in the chip-only lane', async () => {
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    const url = 'data:image/png;base64,AA=='
+    await act(async () => {
+      root.render(
+        createElement(NativeChatImageAttachments, {
+          blocks: [{ type: 'image-ref' as const, url }],
+          enablePreview: false
+        })
+      )
+      await flushPromises()
+    })
+
+    expect(container.querySelector('img')?.getAttribute('src')).toBe(url)
+    expect(container.textContent).not.toContain('base64')
+    root.unmount()
+  })
+
+  it('keeps a remote image a chip in the chip-only lane, so no request leaves the app', async () => {
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(
+        createElement(NativeChatImageAttachments, {
+          blocks: [{ type: 'image-ref' as const, url: 'https://x.test/shot.png' }],
+          enablePreview: false
+        })
+      )
+      await flushPromises()
+    })
+
+    expect(container.querySelector('img')).toBeNull()
+    root.unmount()
+  })
 })

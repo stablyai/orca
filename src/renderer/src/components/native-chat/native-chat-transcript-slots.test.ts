@@ -206,6 +206,35 @@ describe('a send the host rejected', () => {
       ['orca:restart-exit', false, undefined]
     ])
   })
+
+  it('keeps a tool screenshot on screen when its settled turn folds', () => {
+    const screenshot: NativeChatMessage = {
+      id: 'shot',
+      role: 'tool',
+      blocks: [{ type: 'image-ref', url: 'data:image/png;base64,AA==' }],
+      timestamp: 1,
+      source: 'transcript'
+    }
+    const messages = [
+      text('u', 'show me google.com', 'user'),
+      toolRun('run'),
+      screenshot,
+      text('answer', 'Here it is.')
+    ]
+    const turnStatuses = {
+      active: null,
+      completedByTurn: { u: { startedAt: 1, thinking: false, workedSeconds: 5 } }
+    }
+
+    const slots = build(messages, { turnStatuses })
+
+    // The folded run gets no slot at all; the screenshot keeps its own.
+    expect(slots.map((slot) => [slot.message.id, slot.folded])).toEqual([
+      ['u', false],
+      ['shot', false],
+      ['answer', false]
+    ])
+  })
 })
 
 describe("a subagent's rows speak as that subagent", () => {

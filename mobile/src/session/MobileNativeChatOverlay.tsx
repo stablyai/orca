@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
+import type { NativeChatImageLoad } from './mobile-native-chat-host-image'
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 import type { MobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
@@ -11,6 +12,8 @@ type Props = {
   /** Opens a tapped file reference (worktree-relative or absolute, optional
    *  :line(:col) suffix) through the shared tap-to-open flow. */
   onOpenFile: (pathText: string) => void
+  /** Fetches agent screenshots the host cached; absent while disconnected. */
+  loadImage?: NativeChatImageLoad
   /** Native-chat image attachments: picking adds a composer chip, and sending
    *  rides the pending images along with the message text (desktop parity). */
   images: MobileNativeChatImageAttachments
@@ -38,6 +41,7 @@ type Props = {
 export function MobileNativeChatOverlay({
   controller,
   onOpenFile,
+  loadImage,
   images,
   onMicPress,
   micActive,
@@ -90,6 +94,7 @@ export function MobileNativeChatOverlay({
         permission={controller.nativeChatPermission}
         onRespondPermission={controller.handleNativeChatRespondPermission}
         onOpenFile={onOpenFile}
+        loadImage={loadImage}
         hasMore={session.hasMore}
         loadingEarlier={session.loadingEarlier}
         onLoadEarlier={session.loadEarlier}

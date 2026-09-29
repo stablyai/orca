@@ -115,7 +115,7 @@ export function decodeClaudeTranscriptLine(
   const blocks = isInjectedUserTurn
     ? isImageSourceRecord(decodedBlocks)
       ? decodedBlocks
-      : decodedBlocks.filter((block) => block.type === 'tool-result')
+      : toolOutputBlocks(decodedBlocks)
     : decodedBlocks
   if (blocks.length === 0) {
     return null
@@ -139,6 +139,14 @@ function isImageSourceRecord(blocks: NativeChatBlock[]): boolean {
   )
 }
 
+// A tool result plus the screenshots promoted out of it; images alone are a user attachment.
+function toolOutputBlocks(blocks: NativeChatBlock[]): NativeChatBlock[] {
+  if (!blocks.some((block) => block.type === 'tool-result')) {
+    return []
+  }
+  return blocks.filter((block) => block.type === 'tool-result' || block.type === 'image-ref')
+}
+
 // Claude marks reasoning via `thinking` content blocks; when a message is made
 // up solely of reasoning, surface it as a reasoning-role message.
 function claudeMessageRole(
@@ -146,8 +154,7 @@ function claudeMessageRole(
   blocks: NativeChatBlock[]
 ): NativeChatMessage['role'] {
   if (role === 'user') {
-    const onlyToolResults = blocks.every((block) => block.type === 'tool-result')
-    return onlyToolResults && blocks.length > 0 ? 'tool' : 'user'
+    return blocks.length > 0 && toolOutputBlocks(blocks).length === blocks.length ? 'tool' : 'user'
   }
   return role
 }

@@ -1,3 +1,4 @@
+import { filePreviewImageSchema } from '../files/file-preview-reply-schema'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import {
@@ -154,6 +155,21 @@ export const nativeChatSessionPageRead = bindDeferredRpcOperation(
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('native-chat-session-page', sessionForwardedReplySchema)
+  })
+)
+
+/**
+ * A cached agent screenshot, by the host path `nativeChat.readSession` shipped. A skip: a refused or
+ * missing image keeps the message's text placeholder, and an older host's `method_not_found` is read
+ * raw by the loader so it stops asking.
+ */
+export const nativeChatImageRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'nativeChat.read-image-or-skip',
+    method: 'nativeChat.readImage',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('native-chat-image', filePreviewImageSchema)
   })
 )
 

@@ -3,6 +3,7 @@ import { saveTerminalTextScale } from '../storage/preferences'
 import { MobileBrowserPane } from '../browser/MobileBrowserPane'
 import { TerminalPaneView } from './TerminalPaneView'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
+import { useNativeChatHostImageLoader } from './mobile-native-chat-host-image'
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
@@ -80,6 +81,7 @@ export function MobileSessionActiveContent({
     toastAnimatedStyle,
     createTabBusy
   } = controller
+  const loadNativeChatImage = useNativeChatHostImageLoader(client)
   const content = showLoadingState ? (
     <View style={styles.emptyState}>
       <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -224,6 +226,7 @@ export function MobileSessionActiveContent({
       <MobileNativeChatOverlay
         controller={nativeChatController}
         onOpenFile={handleNativeChatFileTap}
+        loadImage={loadNativeChatImage}
         images={nativeChatImages}
         onMicPress={handleDictationToggle}
         micActive={dictation.isRecording}

@@ -47,4 +47,9 @@ export const NativeChatUnsubscribe = z.object({
   subscriptionId: z.string().min(1).optional()
 })
 
+// A cached chat image ref's host path, as `nativeChat.readSession` shipped it.
+export const NativeChatReadImage = z.object({
+  path: z.string().min(1).max(4096)
+})
+
 export const MOBILE_NATIVE_CHAT_MAX_WINDOW = 2000

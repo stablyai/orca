@@ -1,8 +1,12 @@
+import { mkdtempSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type {
   NativeChatMessage,
   NativeChatSubagentEntry
 } from '../../../../shared/native-chat-types'
+import { setNativeChatImageCacheDirForTests } from '../../../native-chat/transcript-image-cache'
 import type { RpcContext } from '../core'
 
 // Stub the bounded tail reader so the handler returns a deterministic transcript with
@@ -238,39 +242,59 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
   })
 
   it.each(['mobile', 'runtime', undefined] as const)(
-    'omits inline image bodies and oversized metadata for %s clients',
+    'persists valid inline image bodies to fetchable paths and omits the rest for %s clients',
     async (clientKind) => {
-      cachedResult.value = {
-        messages: [
-          {
-            ...makeMessage('ignored'),
-            blocks: [
-              {
-                type: 'image-ref',
-                url: `data:image/png;base64,${'a'.repeat(10_000)}`,
-                alt: 'Inline image'
-              },
-              { type: 'image-ref', url: ' \tdata:image/png;base64,abc' },
-              { type: 'image-ref', url: 'https://example.com/reference.png' },
-              { type: 'image-ref', path: '/'.repeat(600) }
-            ]
-          }
-        ]
+      // #23246 changed the wire contract: valid inline bytes persist to the host
+      // image cache and cross as short path refs instead of being dropped, so
+      // mobile can fetch agent screenshots. Malformed/oversized refs still drop.
+      const cacheDir = mkdtempSync(join(tmpdir(), 'nnc-rpc-matrix-'))
+      setNativeChatImageCacheDirForTests(cacheDir)
+      try {
+        cachedResult.value = {
+          messages: [
+            {
+              ...makeMessage('ignored'),
+              blocks: [
+                {
+                  type: 'image-ref',
+                  url: `data:image/png;base64,${'a'.repeat(10_000)}`,
+                  alt: 'Inline image'
+                },
+                { type: 'image-ref', url: ' \tdata:image/png;base64,abc' },
+                { type: 'image-ref', url: 'https://example.com/reference.png' },
+                { type: 'image-ref', path: '/'.repeat(600) }
+              ]
+            }
+          ]
+        }
+
+        const result = await readSessionHandler()(
+          { agent: 'codex', sessionId: 's' },
+          ctxWith(clientKind)
+        )
+        const messages = (result as { messages: NativeChatMessage[] }).messages
+
+        const [persisted, malformed, remote, oversized] = messages[0].blocks
+        if (persisted?.type !== 'image-ref' || !persisted.path) {
+          throw new Error('expected the valid inline image to ship as a path ref')
+        }
+        expect(persisted.path.startsWith(cacheDir)).toBe(true)
+        expect(persisted).toEqual({
+          type: 'image-ref',
+          path: persisted.path,
+          alt: 'Inline image'
+        })
+        expect(readFileSync(persisted.path).toString('base64')).toBe('a'.repeat(10_000))
+        expect(malformed).toEqual({ type: 'image-ref' })
+        expect(remote).toEqual({
+          type: 'image-ref',
+          url: 'https://example.com/reference.png'
+        })
+        expect(oversized).toEqual({ type: 'image-ref' })
+        expect(JSON.stringify(messages).length).toBeLessThan(1_000)
+      } finally {
+        setNativeChatImageCacheDirForTests(undefined)
       }
-
-      const result = await readSessionHandler()(
-        { agent: 'codex', sessionId: 's' },
-        ctxWith(clientKind)
-      )
-      const messages = (result as { messages: NativeChatMessage[] }).messages
-
-      expect(messages[0].blocks).toEqual([
-        { type: 'image-ref', alt: 'Inline image' },
-        { type: 'image-ref' },
-        { type: 'image-ref', url: 'https://example.com/reference.png' },
-        { type: 'image-ref' }
-      ])
-      expect(JSON.stringify(messages).length).toBeLessThan(1_000)
     }
   )
 
