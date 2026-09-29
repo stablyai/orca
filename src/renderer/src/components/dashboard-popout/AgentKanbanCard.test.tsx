@@ -52,7 +52,8 @@ function renderCard(props: {
   card: DashboardCard
   now: number
   repoIcon?: RepoIcon | null
-  onOpenTerminal?: () => void
+  clickOpensWorktree?: boolean
+  onActivate?: (card: DashboardCard, event: React.MouseEvent<HTMLButtonElement>) => void
 }): ReturnType<typeof render> {
   return render(
     <TooltipProvider>
@@ -60,10 +61,17 @@ function renderCard(props: {
         card={props.card}
         repoIcon={props.repoIcon}
         now={props.now}
-        onOpenTerminal={props.onOpenTerminal ?? vi.fn()}
+        clickOpensWorktree={props.clickOpensWorktree ?? false}
+        onActivate={props.onActivate ?? vi.fn()}
       />
     </TooltipProvider>
   )
+}
+
+const originalUserAgent = navigator.userAgent
+
+function stubUserAgent(userAgent: string): void {
+  Object.defineProperty(navigator, 'userAgent', { configurable: true, value: userAgent })
 }
 
 describe('AgentKanbanCard', () => {
@@ -74,6 +82,35 @@ describe('AgentKanbanCard', () => {
   afterEach(() => {
     cleanup()
     vi.clearAllMocks()
+    stubUserAgent(originalUserAgent)
+  })
+
+  it('hands the click event to the host so it can read the modifier', () => {
+    const onActivate = vi.fn()
+    renderCard({ card: card(), now: 1_000, onActivate })
+
+    fireEvent.click(screen.getByText('dashboard-review'), { metaKey: true })
+
+    expect(onActivate).toHaveBeenCalledTimes(1)
+    expect(onActivate.mock.calls[0][0]).toMatchObject({ paneKey: 'tab:leaf' })
+    expect(onActivate.mock.calls[0][1]).toMatchObject({ metaKey: true })
+  })
+
+  it('hints both actions with the platform modifier, following the swap', () => {
+    stubUserAgent('Macintosh')
+    const { unmount } = renderCard({ card: card(), now: 1_000 })
+    expect(screen.getByText('dashboard-review').closest('button')).toHaveAttribute(
+      'title',
+      'Click for a live preview · ⌘-click to open the worktree'
+    )
+    unmount()
+
+    stubUserAgent('Windows NT 10.0')
+    renderCard({ card: card(), now: 1_000, clickOpensWorktree: true })
+    expect(screen.getByText('dashboard-review').closest('button')).toHaveAttribute(
+      'title',
+      'Click to open the worktree · Ctrl+click for a live preview'
+    )
   })
 
   it('does not render an invented age when the start time is unknown', () => {
@@ -98,7 +135,8 @@ describe('AgentKanbanCard', () => {
         <AgentKanbanCard
           card={{ ...attentionCard, askSummary: undefined }}
           now={2_000}
-          onOpenTerminal={vi.fn()}
+          clickOpensWorktree={false}
+          onActivate={vi.fn()}
         />
       </TooltipProvider>
     )
@@ -124,7 +162,7 @@ describe('AgentKanbanCard', () => {
   })
 
   it('shows review metadata and expands grouped subagents without opening the terminal', () => {
-    const onOpenTerminal = vi.fn()
+    const onActivate = vi.fn()
     renderCard({
       card: card({
         review: { number: 11012, state: 'open' },
@@ -134,7 +172,7 @@ describe('AgentKanbanCard', () => {
         ]
       }),
       now: 2_000,
-      onOpenTerminal
+      onActivate
     })
 
     expect(screen.getByText('#11012')).toBeInTheDocument()
@@ -143,11 +181,11 @@ describe('AgentKanbanCard', () => {
     fireEvent.click(screen.getByRole('button', { name: '2 subagents' }))
     expect(screen.getByText('Review loop')).toBeInTheDocument()
     expect(screen.getByText('Smoke tests')).toBeInTheDocument()
-    expect(onOpenTerminal).not.toHaveBeenCalled()
+    expect(onActivate).not.toHaveBeenCalled()
   })
 
-  it('opens the terminal from the footer while keeping subagent disclosure isolated', () => {
-    const onOpenTerminal = vi.fn()
+  it('activates from the footer while keeping subagent disclosure isolated', () => {
+    const onActivate = vi.fn()
     renderCard({
       card: card({
         conversationName: 'Dashboard review',
@@ -155,14 +193,14 @@ describe('AgentKanbanCard', () => {
         subagents: [{ id: 'child-1', name: 'Review loop', dotState: 'working' }]
       }),
       now: 61_000,
-      onOpenTerminal
+      onActivate
     })
 
     fireEvent.click(screen.getByText('#11042'))
-    expect(onOpenTerminal).toHaveBeenCalledTimes(1)
+    expect(onActivate).toHaveBeenCalledTimes(1)
 
     fireEvent.click(screen.getByRole('button', { name: '1 subagent' }))
-    expect(onOpenTerminal).toHaveBeenCalledTimes(1)
+    expect(onActivate).toHaveBeenCalledTimes(1)
   })
 
   it('labels one subagent accessibly and never renders a workspace-status dot', () => {
@@ -242,7 +280,7 @@ describe('AgentKanbanCard', () => {
   })
 
   it('skips structured-clone rerenders until visible card data or its age changes', () => {
-    const onOpenTerminal = vi.fn()
+    const onActivate = vi.fn()
     const initial = card({
       startedAt: 1_000,
       subagents: [{ id: 'child-1', name: 'Review loop', dotState: 'working' }]
@@ -254,7 +292,8 @@ describe('AgentKanbanCard', () => {
           card={initial}
           repoIcon={repoIcon}
           now={61_500}
-          onOpenTerminal={onOpenTerminal}
+          clickOpensWorktree={false}
+          onActivate={onActivate}
         />
       </TooltipProvider>
     )
@@ -268,7 +307,8 @@ describe('AgentKanbanCard', () => {
           card={{ ...initial, subagents: initial.subagents?.map((subagent) => ({ ...subagent })) }}
           repoIcon={{ ...repoIcon }}
           now={62_000}
-          onOpenTerminal={onOpenTerminal}
+          clickOpensWorktree={false}
+          onActivate={onActivate}
         />
       </TooltipProvider>
     )
@@ -280,7 +320,8 @@ describe('AgentKanbanCard', () => {
           card={{ ...initial, subagents: initial.subagents?.map((subagent) => ({ ...subagent })) }}
           repoIcon={{ ...repoIcon }}
           now={121_500}
-          onOpenTerminal={onOpenTerminal}
+          clickOpensWorktree={false}
+          onActivate={onActivate}
         />
       </TooltipProvider>
     )
@@ -298,7 +339,8 @@ describe('AgentKanbanCard', () => {
         <AgentKanbanCard
           card={{ ...initial, workingMode: 'monitoring' }}
           now={2_000}
-          onOpenTerminal={vi.fn()}
+          clickOpensWorktree={false}
+          onActivate={vi.fn()}
         />
       </TooltipProvider>
     )
@@ -307,7 +349,7 @@ describe('AgentKanbanCard', () => {
   })
 
   it('rerenders when the repo icon changes', () => {
-    const onOpenTerminal = vi.fn()
+    const onActivate = vi.fn()
     const initial = card({ startedAt: 1_000 })
     const { rerender } = render(
       <TooltipProvider>
@@ -315,7 +357,8 @@ describe('AgentKanbanCard', () => {
           card={initial}
           repoIcon={{ type: 'lucide', name: 'Rocket' }}
           now={61_500}
-          onOpenTerminal={onOpenTerminal}
+          clickOpensWorktree={false}
+          onActivate={onActivate}
         />
       </TooltipProvider>
     )
@@ -327,7 +370,8 @@ describe('AgentKanbanCard', () => {
           card={{ ...initial }}
           repoIcon={{ type: 'lucide', name: 'Database' }}
           now={61_500}
-          onOpenTerminal={onOpenTerminal}
+          clickOpensWorktree={false}
+          onActivate={onActivate}
         />
       </TooltipProvider>
     )

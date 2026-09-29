@@ -728,6 +728,18 @@ describe('buildDashboardSnapshot', () => {
     expect(snapshot.showIdle).toBe(true)
   })
 
+  it('relays the card-click action setting in the serialized snapshot', () => {
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        settings: { experimentalAgentDashboardCardClickOpensWorktree: true } as never
+      }),
+      NOW
+    )
+
+    expect(snapshot.cardClickOpensWorktree).toBe(true)
+    expect(buildDashboardSnapshot(baseState({}), NOW).cardClickOpensWorktree).toBe(false)
+  })
+
   it('attaches batched runtime orchestration metadata to dashboard rows', () => {
     const snapshot = buildDashboardSnapshot(
       baseState({

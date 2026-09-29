@@ -99,6 +99,8 @@ export function buildDashboardSnapshot(
   const includeCardDetails = options.includeCardDetails !== false
   const generatedTitlesEnabled = state.settings?.tabAutoGenerateTitle === true
   const showIdle = state.settings?.experimentalAgentDashboardShowIdle === true
+  const cardClickOpensWorktree =
+    state.settings?.experimentalAgentDashboardCardClickOpensWorktree === true
   const activeWorktrees = collectActiveDashboardWorkspaces(state, includeCardDetails)
   const filterOptions =
     options.includeFilterOptions === false
@@ -270,6 +272,7 @@ export function buildDashboardSnapshot(
     cards,
     ...(workspaces ? { workspaces } : {}),
     showIdle,
+    cardClickOpensWorktree,
     filterOptions,
     // Only the dashboard surfaces offer a launcher; the count-only rebuild that
     // feeds the sidebar must not pay for host-detection lookups.
