@@ -13394,6 +13394,7 @@
             "jumpToOriginalPane": "원래 창으로 이동",
             "jumpToWorktree": "작업 트리로 이동",
             "recoverableBadge": "저장 안 됨",
+            "remoteHostTitle": "{{value0}}에서 실행됨",
             "subagentCountSingular": "서브에이전트 1개",
             "subagentCountPlural": "서브에이전트 {{value0}}개",
             "delete": "삭제",

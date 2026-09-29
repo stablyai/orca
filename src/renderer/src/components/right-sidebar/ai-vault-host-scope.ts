@@ -1,15 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useAppStore } from '@/store'
 import { getAiVaultResumeWorkspaceExecutionHostId } from '@/lib/ai-vault-resume-target'
 import {
+  isRuntimeOwnedSshTargetId,
   ALL_EXECUTION_HOSTS_SCOPE,
   getExecutionHostLabel,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
+  toSshExecutionHostId,
   type ExecutionHostId,
   type ExecutionHostScope
 } from '../../../../shared/execution-host'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import type { AiVaultSessionResumeTargetState } from './ai-vault-session-resume'
 
 export type AiVaultHostScopeOption = {
@@ -97,9 +101,36 @@ export function buildRuntimeAiVaultHostScopeOptions(
   })
 }
 
+/** Connected SSH targets, labelled with the name the user gave them (never the internal id). */
+export function buildSshAiVaultHostScopeOptions(args: {
+  sshTargetLabels: ReadonlyMap<string, string> | undefined
+  sshConnectionStates: ReadonlyMap<string, { status: SshConnectionStatus }> | undefined
+}): AiVaultHostScopeOption[] {
+  const options: AiVaultHostScopeOption[] = []
+  for (const [targetId, state] of args.sshConnectionStates ?? []) {
+    // Why connected only: an SSH host's history is read through its live relay, so a
+    // disconnected target could only ever answer with a scan issue.
+    // Why skip runtime-owned targets: they belong to a paired Orca server's session, not to this desktop.
+    if (state.status !== 'connected' || isRuntimeOwnedSshTargetId(targetId)) {
+      continue
+    }
+    const id = toSshExecutionHostId(targetId)
+    options.push({
+      id,
+      label: args.sshTargetLabels?.get(targetId)?.trim() || getExecutionHostLabel(id)
+    })
+  }
+  return options.sort((a, b) => a.label.localeCompare(b.label))
+}
+
 export function buildAiVaultHostScopeOptions(args: {
   activeExecutionHostScope: ExecutionHostId | null
   runtimeHostOptions: readonly AiVaultHostScopeOption[]
+  sshHostOptions?: readonly AiVaultHostScopeOption[]
+  /** Labels of every known SSH target, so the active host keeps its name while disconnected. */
+  sshTargetLabels?: ReadonlyMap<string, string>
+  /** Last-known labels of removed SSH targets, so a removed active host is still named. */
+  removedSshTargetLabels?: ReadonlyMap<string, string>
 }): AiVaultHostScopeOption[] {
   const options: AiVaultHostScopeOption[] = []
   const seen = new Set<ExecutionHostScope>()
@@ -115,8 +146,17 @@ export function buildAiVaultHostScopeOptions(args: {
     : null
 
   add({ id: LOCAL_EXECUTION_HOST_ID, label: getExecutionHostLabel(LOCAL_EXECUTION_HOST_ID) })
+  const sshHostOptions = args.sshHostOptions ?? []
   if (activeHost?.kind === 'ssh') {
-    add({ id: activeHost.id, label: getExecutionHostLabel(activeHost.id) })
+    const named = sshHostOptions.find((option) => option.id === activeHost.id)
+    const label =
+      args.sshTargetLabels?.get(activeHost.targetId)?.trim() ||
+      args.removedSshTargetLabels?.get(activeHost.targetId)?.trim() ||
+      getExecutionHostLabel(activeHost.id)
+    add(named ?? { id: activeHost.id, label })
+  }
+  for (const option of sshHostOptions) {
+    add(option)
   }
   for (const option of args.runtimeHostOptions) {
     add(option)
@@ -127,4 +167,29 @@ export function buildAiVaultHostScopeOptions(args: {
   add({ id: ALL_EXECUTION_HOSTS_SCOPE, label: getExecutionHostLabel(ALL_EXECUTION_HOSTS_SCOPE) })
 
   return options
+}
+
+/** Remote hosts the Session History can scope to: saved Orca servers and connected SSH targets. */
+export function useAiVaultRemoteHostOptions(): {
+  runtimeHostOptions: AiVaultHostScopeOption[]
+  sshHostOptions: AiVaultHostScopeOption[]
+  sshTargetLabels: ReadonlyMap<string, string> | undefined
+  removedSshTargetLabels: ReadonlyMap<string, string> | undefined
+  availableExecutionHostScopes: ExecutionHostScope[]
+} {
+  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
+  const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
+  const removedSshTargetLabels = useAppStore((s) => s.removedSshTargetLabels)
+  const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
+  return useMemo(() => {
+    const runtimeHostOptions = buildRuntimeAiVaultHostScopeOptions(runtimeEnvironments)
+    const sshHostOptions = buildSshAiVaultHostScopeOptions({ sshTargetLabels, sshConnectionStates })
+    return {
+      runtimeHostOptions,
+      sshHostOptions,
+      sshTargetLabels,
+      removedSshTargetLabels,
+      availableExecutionHostScopes: [...sshHostOptions, ...runtimeHostOptions].map((o) => o.id)
+    }
+  }, [runtimeEnvironments, sshTargetLabels, removedSshTargetLabels, sshConnectionStates])
 }

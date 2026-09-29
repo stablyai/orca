@@ -10,7 +10,6 @@ import type { RepoSlice } from '../repos/repo-state'
 import {
   getProjectHostSetupOwnerKey,
   getReposById,
-  getSourceRepoIdsOutsideHost,
   mergePreviousProjectMetadata,
   mergeProjectCompatibilityProjects,
   mergeProjectHostSetupsByOwner,
@@ -135,13 +134,26 @@ export function mergeFetchedProjectCompatibilityForHost({
   repos: readonly Repo[]
   hostId: string
 }): Pick<RepoSlice, 'projects' | 'projectHostSetups'> {
-  const setupBelongsToFetchedCatalog = (setup: ProjectHostSetup): boolean => {
+  const hostBelongsToFetchedCatalog = (ownerHostId: string): boolean => {
     if (hostId !== LOCAL_EXECUTION_HOST_ID) {
-      return setup.hostId === hostId
+      return ownerHostId === hostId
     }
-    const owner = parseExecutionHostId(setup.hostId)
+    const owner = parseExecutionHostId(ownerHostId)
     // Why: desktop persistence owns local and direct-SSH setups; runtime setups stay authoritative on their remote Orca server.
-    return setup.hostId === LOCAL_EXECUTION_HOST_ID || owner?.kind === 'ssh'
+    return ownerHostId === LOCAL_EXECUTION_HOST_ID || owner?.kind === 'ssh'
+  }
+  const setupBelongsToFetchedCatalog = (setup: ProjectHostSetup): boolean =>
+    hostBelongsToFetchedCatalog(setup.hostId)
+  // Why the same ownership rule as setups: a project that lives only on a direct-SSH host is
+  // persisted by the desktop too; judging it by `hostId === local` alone dropped it while keeping
+  // its setup, which hid the project from the new-workspace picker.
+  const hasHostInFetchedCatalog = (hostIds: ReadonlySet<string>): boolean => {
+    for (const ownerHostId of hostIds) {
+      if (hostBelongsToFetchedCatalog(ownerHostId)) {
+        return true
+      }
+    }
+    return false
   }
   const fetchedSetupsForHost = fetched.projectHostSetups.filter(setupBelongsToFetchedCatalog)
   const preservedSetups = previous.projectHostSetups.filter(
@@ -168,7 +180,7 @@ export function mergeFetchedProjectCompatibilityForHost({
   )
   const projectHasCurrentOwnerOutsideHost = (project: Project): boolean => {
     for (const ownerHostId of currentProjectOwnerHostIds(project)) {
-      if (ownerHostId !== hostId) {
+      if (!hostBelongsToFetchedCatalog(ownerHostId)) {
         return true
       }
     }
@@ -179,8 +191,8 @@ export function mergeFetchedProjectCompatibilityForHost({
       const previousProject = previousProjectById.get(project.id)
       // Why: repo-derived compatibility projects include every host; a one-host refresh should only reconcile or prune that host's ownership.
       return (
-        fetchedProjectHostIds(project).has(hostId) ||
-        (previousProject ? previousProjectHostIds(previousProject).has(hostId) : false)
+        hasHostInFetchedCatalog(fetchedProjectHostIds(project)) ||
+        (previousProject ? hasHostInFetchedCatalog(previousProjectHostIds(previousProject)) : false)
       )
     })
     .map((project) => {
@@ -198,7 +210,8 @@ export function mergeFetchedProjectCompatibilityForHost({
   const preservedProjects = previous.projects.filter(
     (project) =>
       !fetchedProjectIds.has(project.id) &&
-      (!previousProjectHostIds(project).has(hostId) || projectHasCurrentOwnerOutsideHost(project))
+      (!hasHostInFetchedCatalog(previousProjectHostIds(project)) ||
+        projectHasCurrentOwnerOutsideHost(project))
   )
   // Why: both merges always allocate (sourceRepoIds is rebuilt per project, and fetched setups
   // arrive freshly cloned over IPC), so reconcile against `previous` to recover identity when a
@@ -208,7 +221,13 @@ export function mergeFetchedProjectCompatibilityForHost({
       previous.projects,
       mergeProjectCompatibilityProjects(
         preservedProjects.map((project) => {
-          const sourceRepoIds = getSourceRepoIdsOutsideHost(project, reposById, hostId)
+          // Why the ownership rule and not `host !== hostId`: a local refresh also owns direct-SSH
+          // repos, so keeping them here left a removed SSH repo in the project's identity.
+          const sourceRepoIds = project.sourceRepoIds.filter((repoId) =>
+            (reposById.get(repoId) ?? []).some(
+              (repo) => !hostBelongsToFetchedCatalog(getRepoExecutionHostId(repo))
+            )
+          )
           return sourceRepoIds.length === project.sourceRepoIds.length
             ? project
             : { ...project, sourceRepoIds }

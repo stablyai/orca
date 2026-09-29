@@ -13474,6 +13474,7 @@
           "AiVaultSessionRow": {
             "noPreviewAvailable": "Aucun aperçu de conversation disponible",
             "recoverableBadge": "Non enregistré",
+            "remoteHostTitle": "Exécutée sur {{value0}}",
             "dragToResume": "Glissez pour reprendre dans un nouvel onglet",
             "resumeAgentSession": "Reprendre la session {{value0}}",
             "resumeInNewTab": "Reprendre dans un nouvel onglet",

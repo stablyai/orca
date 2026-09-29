@@ -4,8 +4,8 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { resolveAiVaultSearchSettings } from '../../../../shared/ai-vault-search-settings'
 import type { AiVaultSearchHostOutcome } from '../../../../shared/ai-vault-search-types'
-import { getExecutionHostLabel, parseExecutionHostId } from '../../../../shared/execution-host'
 import type { useAiVaultPanelSearch } from './use-ai-vault-search'
+import { useAiVaultHostLabeler } from './ai-vault-session-host-label'
 
 // Short English like `getExecutionHostLabel`, which these read beside; null means the host answered.
 function hostSkipReason(outcome: AiVaultSearchHostOutcome['outcome']): string | null {
@@ -35,14 +35,17 @@ const UNSETTLED_SCOPE_OUTCOMES = new Set<AiVaultSearchHostOutcome['outcome']>([
 
 // A computer that simply lacks this project is the ordinary case, worth naming
 // only when it is what explains an empty result.
-function describeSkippedHosts(hosts: readonly AiVaultSearchHostOutcome[]): string | null {
+function describeSkippedHosts(
+  hosts: readonly AiVaultSearchHostOutcome[],
+  hostLabel: (executionHostId: string) => string
+): string | null {
   const anyResolved = hosts.some((entry) => !UNSETTLED_SCOPE_OUTCOMES.has(entry.outcome))
   const skipped = hosts.flatMap((entry) => {
     if (entry.outcome === 'scope-unknown' && anyResolved) {
       return []
     }
     const reason = hostSkipReason(entry.outcome)
-    const label = getExecutionHostLabel(parseExecutionHostId(entry.executionHostId)?.id ?? null)
+    const label = hostLabel(entry.executionHostId)
     return reason ? [`${label} (${reason})`] : []
   })
   return skipped.length > 0
@@ -62,6 +65,7 @@ export function AiVaultPanelSearch({
   children: ReactNode
 }) {
   const { needsLocalConsent, response, error, loading, retry: onRetry } = search
+  const hostLabel = useAiVaultHostLabeler()
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(false)
   async function enable() {
@@ -145,7 +149,7 @@ export function AiVaultPanelSearch({
     )
   }
   const skippedHosts =
-    response?.kind === 'results' ? describeSkippedHosts(response.hosts ?? []) : null
+    response?.kind === 'results' ? describeSkippedHosts(response.hosts ?? [], hostLabel) : null
   return (
     <>
       {(message || skippedHosts) && (

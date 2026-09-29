@@ -13394,6 +13394,7 @@
             "jumpToOriginalPane": "元のペインにジャンプ",
             "jumpToWorktree": "ワークツリーにジャンプ",
             "recoverableBadge": "未保存",
+            "remoteHostTitle": "{{value0}} で実行",
             "subagentCountSingular": "1 件のサブ Agent",
             "subagentCountPlural": "{{value0}} 件のサブ Agent",
             "delete": "削除",

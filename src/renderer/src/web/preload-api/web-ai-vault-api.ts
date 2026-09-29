@@ -44,6 +44,8 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
     setSearchEnabled: () => Promise.reject(new Error('unsupported')),
     clearSearchIndex: () =>
       Promise.reject(new Error('Clearing Agent Session History is unavailable in the browser.')),
+    // Why empty: suggestions describe folders on this desktop, which a browser client doesn't have.
+    suggestProjects: () => Promise.resolve([]),
     listSessions: (args?: AiVaultListArgs) => {
       const environment = requireActiveEnvironment()
       const executionHostId = toRuntimeExecutionHostId(environment.id)

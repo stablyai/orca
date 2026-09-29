@@ -13394,6 +13394,7 @@
             "jumpToOriginalPane": "跳转到原始窗格",
             "jumpToWorktree": "跳转到工作树",
             "recoverableBadge": "未保存",
+            "remoteHostTitle": "运行于 {{value0}}",
             "subagentCountSingular": "1 个子智能体",
             "subagentCountPlural": "{{value0}} 个子智能体",
             "delete": "删除",

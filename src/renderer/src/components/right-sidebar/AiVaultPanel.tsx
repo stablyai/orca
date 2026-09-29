@@ -47,14 +47,15 @@ import { AiVaultSessionVirtualList } from './AiVaultSessionVirtualList'
 import { useAiVaultSessionRefresh } from './ai-vault-session-refresh'
 import {
   buildAiVaultHostScopeOptions,
-  buildRuntimeAiVaultHostScopeOptions,
-  useAiVaultExecutionHostScope
+  useAiVaultExecutionHostScope,
+  useAiVaultRemoteHostOptions
 } from './ai-vault-host-scope'
 import { useAiVaultPanelScope } from './use-ai-vault-panel-scope'
 import { useAiVaultSearchFocusRequest } from './use-ai-vault-search-focus-request'
 import { usePersistedAiVaultViewOptions } from './use-persisted-ai-vault-view-options'
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
 import { AiVaultScanIssueBanners } from './AiVaultScanIssueBanners'
+import { AiVaultProjectSuggestions } from './AiVaultProjectSuggestions'
 import { useAiVaultSessionDeleteAction } from './ai-vault-session-delete-action'
 import { useAiVaultPanelSearch } from './use-ai-vault-search'
 import { aiVaultSearchScopeIdentity } from './ai-vault-search-scope-identity'
@@ -75,7 +76,6 @@ export default function AiVaultPanel(): React.JSX.Element {
     }))
   )
   const settings = useAppStore((s) => s.settings)
-  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const agentCmdOverrides = settings?.agentCmdOverrides
   const paneActions = useAiVaultOriginalPaneActions()
   const [query, setQuery] = useState('')
@@ -97,14 +97,13 @@ export default function AiVaultPanel(): React.JSX.Element {
     resetViewOptions
   } = usePersistedAiVaultViewOptions()
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
-  const runtimeHostOptions = useMemo(
-    () => buildRuntimeAiVaultHostScopeOptions(runtimeEnvironments),
-    [runtimeEnvironments]
-  )
-  const availableExecutionHostScopes = useMemo(
-    () => runtimeHostOptions.map((option) => option.id),
-    [runtimeHostOptions]
-  )
+  const {
+    runtimeHostOptions,
+    sshHostOptions,
+    sshTargetLabels,
+    removedSshTargetLabels,
+    availableExecutionHostScopes
+  } = useAiVaultRemoteHostOptions()
   const { executionHostScope, activeExecutionHostScope, onExecutionHostScopeChange } =
     useAiVaultExecutionHostScope({
       activeWorktreeId: activeWorktreeId ?? null,
@@ -115,9 +114,18 @@ export default function AiVaultPanel(): React.JSX.Element {
     () =>
       buildAiVaultHostScopeOptions({
         activeExecutionHostScope,
-        runtimeHostOptions
+        runtimeHostOptions,
+        sshHostOptions,
+        sshTargetLabels,
+        removedSshTargetLabels
       }),
-    [activeExecutionHostScope, runtimeHostOptions]
+    [
+      activeExecutionHostScope,
+      runtimeHostOptions,
+      sshHostOptions,
+      sshTargetLabels,
+      removedSshTargetLabels
+    ]
   )
   const activeWorktreePath = activeWorktree?.path ?? null
   // Why: AI Vault ownership is cwd-based, so we must consider live worktrees across all repos.
@@ -330,6 +338,7 @@ export default function AiVaultPanel(): React.JSX.Element {
       ) : null}
 
       {!searching && <AiVaultScanIssueBanners scanResult={scanResult} />}
+      {!searching && <AiVaultProjectSuggestions sessions={history} />}
       <AiVaultPanelSearch search={search} noAgents={agents.length === 0}>
         {searching
           ? filteredSessions.length > 0 && (

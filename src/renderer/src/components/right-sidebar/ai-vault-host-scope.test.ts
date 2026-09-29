@@ -8,6 +8,7 @@ import type { AiVaultSessionResumeTargetState } from './ai-vault-session-resume'
 import {
   buildAiVaultHostScopeOptions,
   buildRuntimeAiVaultHostScopeOptions,
+  buildSshAiVaultHostScopeOptions,
   useAiVaultExecutionHostScope
 } from './ai-vault-host-scope'
 import type { ExecutionHostScope } from '../../../../shared/execution-host'
@@ -220,5 +221,75 @@ describe('buildAiVaultHostScopeOptions', () => {
       { id: 'runtime:remote-server', label: 'remote-server' },
       { id: 'all', label: 'All hosts' }
     ])
+  })
+
+  it('names SSH hosts by their target label and lists every connected one', () => {
+    const sshHostOptions = buildSshAiVaultHostScopeOptions({
+      sshTargetLabels: new Map([
+        ['ssh-runner', 'runner-box'],
+        ['ssh-2', 'build-box'],
+        ['ssh-3', 'offline-box']
+      ]),
+      sshConnectionStates: new Map([
+        ['ssh-runner', { status: 'connected' as const }],
+        ['ssh-2', { status: 'connected' as const }],
+        ['ssh-3', { status: 'disconnected' as const }]
+      ])
+    })
+    expect(sshHostOptions).toEqual([
+      { id: 'ssh:ssh-2', label: 'build-box' },
+      { id: 'ssh:ssh-runner', label: 'runner-box' }
+    ])
+
+    expect(
+      buildAiVaultHostScopeOptions({
+        activeExecutionHostScope: 'ssh:ssh-runner',
+        runtimeHostOptions: [],
+        sshHostOptions
+      })
+    ).toEqual([
+      { id: 'local', label: expect.any(String) },
+      { id: 'ssh:ssh-runner', label: 'runner-box' },
+      { id: 'ssh:ssh-2', label: 'build-box' },
+      { id: 'all', label: 'All hosts' }
+    ])
+  })
+
+  it('keeps the active SSH host named while it is disconnected', () => {
+    expect(
+      buildAiVaultHostScopeOptions({
+        activeExecutionHostScope: 'ssh:ssh-1',
+        runtimeHostOptions: [],
+        sshHostOptions: [],
+        sshTargetLabels: new Map([['ssh-1', 'build-box']])
+      })
+    ).toContainEqual({ id: 'ssh:ssh-1', label: 'build-box' })
+  })
+
+  it('keeps naming the active SSH host after its target was removed', () => {
+    expect(
+      buildAiVaultHostScopeOptions({
+        activeExecutionHostScope: 'ssh:ssh-gone',
+        runtimeHostOptions: [],
+        sshHostOptions: [],
+        sshTargetLabels: new Map(),
+        removedSshTargetLabels: new Map([['ssh-gone', 'retired-box']])
+      })
+    ).toContainEqual({ id: 'ssh:ssh-gone', label: 'retired-box' })
+  })
+
+  it('leaves out SSH targets owned by a paired Orca server', () => {
+    expect(
+      buildSshAiVaultHostScopeOptions({
+        sshTargetLabels: new Map([
+          ['ssh-2', 'build-box'],
+          ['runtime-ssh-env-1', 'server session']
+        ]),
+        sshConnectionStates: new Map([
+          ['ssh-2', { status: 'connected' as const }],
+          ['runtime-ssh-env-1', { status: 'connected' as const }]
+        ])
+      })
+    ).toEqual([{ id: 'ssh:ssh-2', label: 'build-box' }])
   })
 })
