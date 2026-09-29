@@ -16,6 +16,8 @@ import type {
   CodexSessionBackfillSummary
 } from './codex-session-backfill-types'
 
+const STALE_PROMPTLESS_ROLLOUT_MS = 24 * 60 * 60 * 1000
+
 export async function backfillOneManagedSessionFile(
   paths: CodexSessionBackfillPaths,
   managedSessionFilePath: string,
@@ -98,6 +100,12 @@ export async function backfillOneManagedSessionFile(
     return
   }
   if (promptKind === 'pending') {
+    const sourceStat = await readCodexSessionTargetStat(managedSessionFilePath)
+    if (sourceStat && Date.now() - sourceStat.mtimeMs >= STALE_PROMPTLESS_ROLLOUT_MS) {
+      // A never-started Codex pane must not keep the full-history marker pending forever.
+      summary.skippedStalePendingFiles += 1
+      return
+    }
     summary.deferredFiles += 1
     return
   }

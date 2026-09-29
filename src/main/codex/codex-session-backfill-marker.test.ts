@@ -36,6 +36,7 @@ function createSummary(scannedFiles = 3): CodexSessionBackfillSummary {
     skippedSymlinkFiles: 0,
     skippedWorkerFiles: 0,
     deferredFiles: 0,
+    skippedStalePendingFiles: 0,
     skippedUnsupportedFilesystemFiles: 0,
     failedDirectories: 0,
     failedFiles: 0,

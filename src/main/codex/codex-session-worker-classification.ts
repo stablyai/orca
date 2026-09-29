@@ -1,54 +1,72 @@
-import { open } from 'node:fs/promises'
+import { createReadStream } from 'node:fs'
+import { createInterface } from 'node:readline'
 import { ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX } from '../../shared/orca-dispatch-status-prompt'
-
-const HEADER_BYTES = 1024 * 1024
 
 export type InitialCodexPromptKind = 'worker' | 'other' | 'pending'
 
 export async function classifyInitialCodexPrompt(
   filePath: string
 ): Promise<InitialCodexPromptKind> {
-  const file = await open(filePath, 'r')
+  const stream = createReadStream(filePath, { encoding: 'utf8' })
+  const lines = createInterface({ input: stream, crlfDelay: Infinity })
+  const classifier = new CodexRolloutClassifier()
   try {
-    const buffer = Buffer.alloc(HEADER_BYTES)
-    const { bytesRead } = await file.read(buffer, 0, buffer.length, 0)
-    return classifyCodexRolloutHeader(buffer.subarray(0, bytesRead).toString('utf8'))
+    for await (const line of lines) {
+      const kind = classifier.accept(line)
+      if (kind !== 'pending') {
+        return kind
+      }
+    }
+    return classifier.finish()
   } finally {
-    await file.close()
+    lines.close()
+    stream.destroy()
   }
 }
 
 export function classifyCodexRolloutHeader(header: string): InitialCodexPromptKind {
+  const classifier = new CodexRolloutClassifier()
   const lines = header.split('\n')
   if (!header.endsWith('\n')) {
     lines.pop()
   }
-  let hasCodexMetadata = false
   for (const line of lines) {
+    const kind = classifier.accept(line)
+    if (kind !== 'pending') {
+      return kind
+    }
+  }
+  return classifier.finish()
+}
+
+class CodexRolloutClassifier {
+  private hasCodexMetadata = false
+
+  accept(line: string): InitialCodexPromptKind {
     if (!line) {
-      continue
+      return 'pending'
     }
     let record: unknown
     try {
       record = JSON.parse(line)
     } catch {
-      return hasCodexMetadata ? 'pending' : 'other'
+      return this.finish()
     }
     if (!isRecord(record)) {
-      continue
+      return 'pending'
     }
     const payload = isRecord(record.payload) ? record.payload : null
     if (record.type === 'session_meta') {
-      hasCodexMetadata = typeof payload?.id === 'string'
-      continue
+      this.hasCodexMetadata = typeof payload?.id === 'string'
+      return 'pending'
     }
     if (record.type !== 'response_item' || payload?.type !== 'message' || payload.role !== 'user') {
-      continue
+      return 'pending'
     }
     const content = Array.isArray(payload.content) ? payload.content : []
     const texts = content.filter(isInputText).map((part) => part.text)
     if (texts.every(isInjectedContext)) {
-      continue
+      return 'pending'
     }
     const prompt = texts.join('\n')
     return prompt.startsWith(
@@ -59,7 +77,10 @@ export function classifyCodexRolloutHeader(header: string): InitialCodexPromptKi
       ? 'worker'
       : 'other'
   }
-  return hasCodexMetadata ? 'pending' : 'other'
+
+  finish(): InitialCodexPromptKind {
+    return this.hasCodexMetadata ? 'pending' : 'other'
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { classifyCodexRolloutHeader } from './codex-session-worker-classification'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import {
+  classifyCodexRolloutHeader,
+  classifyInitialCodexPrompt
+} from './codex-session-worker-classification'
 
 const line = (type: string, payload: unknown): string => `${JSON.stringify({ type, payload })}\n`
 const metadata = line('session_meta', { id: 'session_1' })
@@ -51,5 +57,23 @@ describe('classifyCodexRolloutHeader', () => {
   it('keeps legacy or non-Codex fixture files eligible for backfill', () => {
     expect(classifyCodexRolloutHeader('{"type":"session_meta","id":"old"}\n')).toBe('other')
     expect(classifyCodexRolloutHeader('legacy text\n')).toBe('other')
+  })
+
+  it('reads past a large injected context before classifying the worker prompt', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-codex-prompt-'))
+    try {
+      const file = join(root, 'rollout.jsonl')
+      const longContext = line('response_item', {
+        type: 'message',
+        role: 'user',
+        content: [
+          { type: 'input_text', text: `# AGENTS.md instructions for /repo\n${'x'.repeat(1100000)}` }
+        ]
+      })
+      writeFileSync(file, metadata + longContext + worker)
+      expect(await classifyInitialCodexPrompt(file)).toBe('worker')
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 })

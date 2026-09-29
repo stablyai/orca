@@ -1,10 +1,9 @@
-import type { Stats } from 'node:fs'
+import type { BigIntStats } from 'node:fs'
 import { lstat, unlink } from 'node:fs/promises'
-import { readCodexSessionTargetStat } from './codex-session-backfill-audit-pass'
 
-export async function readArchivedCodexSessionStat(filePath: string): Promise<Stats | null> {
+export async function readArchivedCodexSessionStat(filePath: string): Promise<BigIntStats | null> {
   try {
-    return await lstat(filePath)
+    return await lstat(filePath, { bigint: true })
   } catch (error) {
     if (isNotFoundError(error)) {
       return null
@@ -16,11 +15,11 @@ export async function readArchivedCodexSessionStat(filePath: string): Promise<St
 export async function removeRedundantActiveCodexSessionHardlink(
   managedSessionFilePath: string,
   systemSessionFilePath: string,
-  archivedTargetStat: Stats
+  archivedTargetStat: BigIntStats
 ): Promise<void> {
   const [managedTargetStat, activeTargetStat] = await Promise.all([
-    readCodexSessionTargetStat(managedSessionFilePath),
-    readCodexSessionTargetStat(systemSessionFilePath)
+    readArchivedCodexSessionStat(managedSessionFilePath),
+    readArchivedCodexSessionStat(systemSessionFilePath)
   ])
   if (
     !managedTargetStat ||
@@ -50,7 +49,7 @@ export async function removeNewActiveCodexSessionLink(filePath: string): Promise
   }
 }
 
-function isSameFile(left: Stats, right: Stats): boolean {
+function isSameFile(left: BigIntStats, right: BigIntStats): boolean {
   return left.dev === right.dev && left.ino === right.ino
 }
 

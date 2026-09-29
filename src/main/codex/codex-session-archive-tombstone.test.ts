@@ -24,7 +24,11 @@ describe('archived Codex session tombstone', () => {
     linkSync(managed, active)
     linkSync(managed, archived)
 
-    await removeRedundantActiveCodexSessionHardlink(managed, active, lstatSync(archived))
+    await removeRedundantActiveCodexSessionHardlink(
+      managed,
+      active,
+      lstatSync(archived, { bigint: true })
+    )
 
     expect(existsSync(active)).toBe(false)
     expect(existsSync(managed)).toBe(true)
@@ -41,7 +45,11 @@ describe('archived Codex session tombstone', () => {
     linkSync(managed, archived)
     writeFileSync(active, 'different active rollout\n')
 
-    await removeRedundantActiveCodexSessionHardlink(managed, active, lstatSync(archived))
+    await removeRedundantActiveCodexSessionHardlink(
+      managed,
+      active,
+      lstatSync(archived, { bigint: true })
+    )
 
     expect(existsSync(active)).toBe(true)
   })

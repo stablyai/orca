@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  utimesSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { backfillManagedCodexSessionsIntoSystemHome } from './codex-session-backfill'
@@ -82,6 +90,26 @@ describe('Orca worker session backfill', () => {
     const summary = await backfillManagedCodexSessionsIntoSystemHome(paths)
 
     expect(summary).toMatchObject({ linkedFiles: 0, deferredFiles: 1, failedFiles: 0 })
+    expect(existsSync(join(paths.systemSessionsRoot, relativePath))).toBe(false)
+  })
+
+  it('settles a promptless rollout after a day so it cannot block the completion marker', async () => {
+    const relativePath = join('2026', '05', '26', 'rollout-never-started.jsonl')
+    writeManaged(
+      relativePath,
+      `${JSON.stringify({ type: 'session_meta', payload: { id: 'session_never_started' } })}\n`
+    )
+    const source = join(paths.managedSessionsRoot, relativePath)
+    const stale = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000)
+    utimesSync(source, stale, stale)
+
+    const summary = await backfillManagedCodexSessionsIntoSystemHome(paths)
+
+    expect(summary).toMatchObject({
+      linkedFiles: 0,
+      deferredFiles: 0,
+      skippedStalePendingFiles: 1
+    })
     expect(existsSync(join(paths.systemSessionsRoot, relativePath))).toBe(false)
   })
 
