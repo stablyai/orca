@@ -13,6 +13,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { buildGitHubPRStackMergeConfirmation } from './github-pr-stack-confirmation'
 import { useReadyHostedReviewAction } from './use-ready-hosted-review-action'
+import { useUpdatePullRequestBranch } from './use-update-pull-request-branch'
 
 export type HostedReviewActionInfo = Pick<
   HostedReviewInfo,
@@ -50,6 +51,8 @@ export function useHostedReviewActions({
   autoMergeAction: GitHubPRAutoMergeAction | null
   onRefreshReview: () => Promise<void>
 }): {
+  updatingBranch: boolean
+  handleUpdateBranch: () => Promise<void>
   merging: boolean
   readying: boolean
   stateUpdating: 'open' | 'closed' | null
@@ -64,6 +67,13 @@ export function useHostedReviewActions({
   const [merging, setMerging] = useState(false)
   const [stateUpdating, setStateUpdating] = useState<'open' | 'closed' | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const { updatingBranch, handleUpdateBranch } = useUpdatePullRequestBranch({
+    repo,
+    prNumber: review.number,
+    githubPR,
+    onRefreshReview,
+    setActionError
+  })
   const { readying, handleMarkReadyForReview } = useReadyHostedReviewAction({
     reviewNumber: review.number,
     githubPR,
@@ -265,6 +275,8 @@ export function useHostedReviewActions({
   }, [handleReviewStateChange])
 
   return {
+    updatingBranch,
+    handleUpdateBranch,
     merging,
     readying,
     stateUpdating,

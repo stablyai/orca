@@ -74,6 +74,7 @@ describe('web GitHub preload API', () => {
         'updateIssueBySlug',
         'updateIssueCommentBySlug',
         'updateIssueTypeBySlug',
+        'updatePRBranch',
         'updatePRState',
         'updatePRTitle',
         'updateProjectItemField',
@@ -484,7 +485,7 @@ describe('web GitHub preload API', () => {
 
     expect(routeCases.map((routeCase) => routeCase.key).sort()).toEqual(
       Object.keys(GITHUB_WEB_RPC_METHODS)
-        .filter((key) => key !== 'markPRReadyForReview')
+        .filter((key) => key !== 'markPRReadyForReview' && key !== 'updatePRBranch')
         .sort()
     )
 
@@ -596,5 +597,52 @@ describe('web GitHub preload API', () => {
 
     expect(result).toMatchObject({ ok: false })
     expect(runtimeCalls).toEqual([{ method: 'status.get', params: undefined }])
+  })
+  it.each([true, false])('gates branch updates on paired-host support: %s', async (supported) => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result:
+              method === 'status.get'
+                ? { capabilities: supported ? ['github.updatePRBranch'] : [] }
+                : { ok: true },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+        close(): void {}
+      }
+    }))
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+    const expectedHeadSha = 'a'.repeat(40)
+    const result = await globals.window.api.gh.updatePRBranch({
+      repoPath: '/workspace/repo',
+      prNumber: 7,
+      expectedHeadSha
+    })
+    expect(result.ok).toBe(supported)
+    expect(runtimeCalls).toEqual([
+      { method: 'status.get', params: undefined },
+      ...(supported
+        ? [
+            {
+              method: 'github.updatePRBranch',
+              params: {
+                repoPath: '/workspace/repo',
+                repo: '/workspace/repo',
+                prNumber: 7,
+                expectedHeadSha
+              }
+            }
+          ]
+        : [])
+    ])
   })
 })

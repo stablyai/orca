@@ -43,6 +43,12 @@ export const MarkPrReadyForReview = RepoSelector.extend({
   prRepo: SlugRepo.nullable().optional()
 })
 
+export const UpdatePrBranch = RepoSelector.extend({
+  prNumber: z.number().int().positive(),
+  expectedHeadSha: z.string().regex(/^[a-f0-9]{40}$/i),
+  prRepo: SlugRepo.nullable().optional()
+})
+
 export const RequestPrReviewers = RepoSelector.extend({
   prNumber: z.number().int().positive(),
   prRepo: SlugRepo.nullable().optional(),

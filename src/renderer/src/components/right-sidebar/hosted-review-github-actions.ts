@@ -2,6 +2,8 @@ import type { GitHubPRMergeMethod, PRInfo } from '../../../../shared/github/pull
 import type { Repo } from '../../../../shared/repo-types'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import {
+  GITHUB_UPDATE_PR_BRANCH_RUNTIME_CAPABILITY,
+  GITHUB_UPDATE_PR_BRANCH_UPDATE_REQUIRED_MESSAGE,
   GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY,
   GITHUB_MARK_PR_READY_UPDATE_REQUIRED_MESSAGE
 } from '../../../../shared/protocol-version'
@@ -140,6 +142,40 @@ export async function markGitHubHostedReviewReadyForReview(args: {
     repoPath: args.repo.path,
     repoId: args.repo.id,
     prNumber: args.prNumber,
+    prRepo: args.prRepo ?? null
+  })
+}
+
+export async function updateGitHubHostedReviewBranch(args: {
+  repo: Repo
+  prNumber: number
+  expectedHeadSha: string
+  prRepo?: GitHubPRRepo | null
+}): Promise<Awaited<ReturnType<typeof window.api.gh.updatePRBranch>>> {
+  const target = getGitHubActionTarget(args.repo)
+  if (target.kind === 'environment') {
+    await assertRuntimeEnvironmentCapability(
+      target.environmentId,
+      GITHUB_UPDATE_PR_BRANCH_RUNTIME_CAPABILITY,
+      GITHUB_UPDATE_PR_BRANCH_UPDATE_REQUIRED_MESSAGE
+    )
+    return callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.updatePRBranch>>>(
+      target,
+      'github.updatePRBranch',
+      {
+        repo: args.repo.id,
+        prNumber: args.prNumber,
+        expectedHeadSha: args.expectedHeadSha,
+        prRepo: args.prRepo ?? null
+      },
+      { timeoutMs: 30_000 }
+    )
+  }
+  return window.api.gh.updatePRBranch({
+    repoPath: args.repo.path,
+    repoId: args.repo.id,
+    prNumber: args.prNumber,
+    expectedHeadSha: args.expectedHeadSha,
     prRepo: args.prRepo ?? null
   })
 }

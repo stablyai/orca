@@ -21,6 +21,7 @@ export type WebGitHubRouteKey =
   | 'updatePRTitle'
   | 'mergePR'
   | 'markPRReadyForReview'
+  | 'updatePRBranch'
   | 'setPRAutoMerge'
   | 'updatePRState'
   | 'requestPRReviewers'
@@ -74,6 +75,7 @@ export type WebGitHubRuntimeMethod =
   | 'github.updatePRTitle'
   | 'github.mergePR'
   | 'github.markPRReadyForReview'
+  | 'github.updatePRBranch'
   | 'github.setPRAutoMerge'
   | 'github.updatePRState'
   | 'github.requestPRReviewers'
@@ -127,6 +129,7 @@ export const GITHUB_WEB_RPC_METHODS = {
   updatePRTitle: 'github.updatePRTitle',
   mergePR: 'github.mergePR',
   markPRReadyForReview: 'github.markPRReadyForReview',
+  updatePRBranch: 'github.updatePRBranch',
   setPRAutoMerge: 'github.setPRAutoMerge',
   updatePRState: 'github.updatePRState',
   requestPRReviewers: 'github.requestPRReviewers',

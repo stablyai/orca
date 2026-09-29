@@ -164,6 +164,13 @@ export type GithubPullRequestApi = {
       prRepo?: GitHubOwnerRepo | null
     }
   ) => Promise<{ ok: true } | { ok: false; error: string }>
+  updatePRBranch: (
+    args: GitHubRepoSelectorArgs & {
+      prNumber: number
+      expectedHeadSha: string
+      prRepo?: GitHubOwnerRepo | null
+    }
+  ) => Promise<{ ok: true } | { ok: false; error: string }>
   requestPRReviewers: (
     args: GitHubRepoSelectorArgs & {
       prNumber: number

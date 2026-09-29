@@ -32,6 +32,7 @@ import {
   RIGHT_SIDEBAR_SPLIT_ACTION_ROW_CLASS
 } from './right-sidebar-primary-action-layout'
 import { translate } from '@/i18n/i18n'
+import { UpdateBranchButton } from './UpdateBranchButton'
 import {
   getGitHubPRStackMergeBlocker,
   getGitHubPRStackMergeScope,
@@ -123,6 +124,8 @@ export default function HostedReviewActions({
     [githubPR?.mergeMethodSettings, isGitLab]
   )
   const {
+    updatingBranch,
+    handleUpdateBranch,
     merging,
     readying,
     stateUpdating,
@@ -143,7 +146,7 @@ export default function HostedReviewActions({
     autoMergeAction: mergePresentation.autoMergeAction,
     onRefreshReview
   })
-  const isUpdatingReviewState = stateUpdating !== null
+  const isUpdatingReviewState = stateUpdating !== null || updatingBranch
   const primaryMergeDisabled =
     merging ||
     isUpdatingReviewState ||
@@ -307,6 +310,13 @@ export default function HostedReviewActions({
             </DropdownMenu>
           </div>
         </TooltipProvider>
+        {review.provider === 'github' && (
+          <UpdateBranchButton
+            updating={updatingBranch}
+            disabled={menuDisabled || !githubPR?.headSha}
+            onUpdate={() => void handleUpdateBranch()}
+          />
+        )}
         <HostedReviewActionError message={actionError} />
       </div>
     )

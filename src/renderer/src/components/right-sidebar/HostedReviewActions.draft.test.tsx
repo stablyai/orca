@@ -14,6 +14,8 @@ const actionMocks = vi.hoisted(() => ({
 vi.mock('@/store', () => ({ useAppStore: () => false }))
 vi.mock('./use-hosted-review-actions', () => ({
   useHostedReviewActions: () => ({
+    updatingBranch: false,
+    handleUpdateBranch: vi.fn(),
     merging: false,
     readying: false,
     stateUpdating: null,
@@ -72,4 +74,45 @@ describe('HostedReviewActions draft state', () => {
       expect(renderDraft(provider)).toBe('')
     }
   )
+})
+
+describe('HostedReviewActions update branch placement', () => {
+  function renderOpen(provider: HostedReviewActionInfo['provider']): string {
+    return renderToStaticMarkup(
+      <HostedReviewActions
+        review={{
+          provider,
+          number: 42,
+          state: 'open',
+          status: 'pending',
+          mergeable: 'MERGEABLE',
+          autoMergeEnabled: true
+        }}
+        githubPR={{
+          number: 42,
+          title: 'Feature',
+          state: 'open',
+          url: '',
+          checksStatus: 'pending',
+          updatedAt: '',
+          mergeable: 'MERGEABLE',
+          headSha: 'a'.repeat(40)
+        }}
+        repo={repo}
+        worktree={worktree}
+        onRefreshReview={vi.fn()}
+      />
+    )
+  }
+
+  it('renders Update branch after the green auto-merge action', () => {
+    const markup = renderOpen('github')
+    expect(markup).toContain('Update branch')
+    expect(markup.indexOf('Update branch')).toBeGreaterThan(markup.indexOf('Disable auto-merge'))
+    expect(markup).toContain('data-variant="outline"')
+  })
+
+  it('does not offer a GitHub update on GitLab reviews', () => {
+    expect(renderOpen('gitlab')).not.toContain('Update branch')
+  })
 })

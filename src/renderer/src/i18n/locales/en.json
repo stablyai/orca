@@ -13734,6 +13734,11 @@
             "sourceMissing": "Transcript is no longer available",
             "metadataMatch": "Match in session metadata",
             "sourceActionsUnavailable": "The transcript source is unavailable."
+          },
+          "UpdateBranch": {
+            "updating": "Updating…",
+            "label": "Update branch",
+            "requested": "Branch update requested"
           }
         }
       },
