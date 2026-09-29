@@ -5,6 +5,8 @@ export type NotificationSettings = {
   enabled: boolean
   agentTaskComplete: boolean
   terminalBell: boolean
+  /** Optional for backward compatibility with settings persisted before this toggle existed. */
+  needsAttention?: boolean
   suppressWhenFocused: boolean
   customSoundId:
     | 'system'
@@ -22,7 +24,11 @@ export type NotificationSettings = {
   customSoundVolume: number
 }
 
-export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 'test'
+export type NotificationEventSource =
+  | 'agent-task-complete'
+  | 'terminal-bell'
+  | 'needs-attention'
+  | 'test'
 
 export type NotificationDispatchRequest = {
   source: NotificationEventSource
@@ -44,6 +50,9 @@ export type NotificationDispatchRequest = {
   agentToolName?: string
   agentToolInput?: string
   agentLastAssistantMessage?: string
+  agentInterrupted?: boolean
+  /** Opaque caller-provided reason from `orca worktree set --needs-attention`, shown verbatim. */
+  needsAttentionReason?: string
   /** The verdict on the turn this notification reports, which picks its wording. */
   agentTurnOutcome?: AgentJournalTurnOutcome
   /**

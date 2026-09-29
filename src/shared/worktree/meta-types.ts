@@ -31,6 +31,8 @@ export type WorktreeMeta = {
   /** True when a user-authored label must survive branch changes. */
   displayNameIsPinned?: boolean
   comment: string
+  /** See {@link Worktree.needsAttention}. Persisted to orca-data.json. */
+  needsAttention?: string | null
   linkedIssue: number | null
   linkedPR: number | null
   /** GitHub PR hidden from branch discovery after an explicit unlink. */

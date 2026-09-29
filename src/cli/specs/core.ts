@@ -2,6 +2,7 @@ import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
 import { WORKTREE_LISTING_SCOPE_NOTES } from './worktree-listing-scope-notes'
 import { SERVE_COMMAND_SPECS } from './serve'
+import { REPO_COMMAND_SPECS } from './repo'
 import { TERMINAL_SEND_COMMAND_SPEC } from './terminal-send'
 import { TERMINAL_CLOSE_COMMAND_SPEC } from './terminal-close'
 
@@ -33,36 +34,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     ],
     examples: ['orca claude-teams', 'orca claude-teams --resume <session-id>']
   },
-  {
-    path: ['repo', 'list'],
-    summary: 'List repos registered in Orca',
-    usage: 'orca repo list [--json]',
-    allowedFlags: [...GLOBAL_FLAGS]
-  },
-  {
-    path: ['repo', 'add'],
-    summary: 'Add a project to Orca by filesystem path',
-    usage: 'orca repo add --path <path> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'path']
-  },
-  {
-    path: ['repo', 'show'],
-    summary: 'Show one registered repo',
-    usage: 'orca repo show --repo <selector> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'repo']
-  },
-  {
-    path: ['repo', 'set-base-ref'],
-    summary: "Set the repo's default base ref for future worktrees",
-    usage: 'orca repo set-base-ref --repo <selector> --ref <ref> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'ref']
-  },
-  {
-    path: ['repo', 'search-refs'],
-    summary: 'Search branch/tag refs within a repo',
-    usage: 'orca repo search-refs --repo <selector> --query <text> [--limit <n>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'query', 'limit']
-  },
+  ...REPO_COMMAND_SPECS,
   {
     path: ['worktree', 'list'],
     summary: 'List Orca-managed worktrees',
@@ -141,7 +113,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     path: ['worktree', 'set'],
     summary: 'Update Orca metadata for a worktree',
     usage:
-      'orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--linear-issue <identifier-or-url|null>] [--comment <text>] [--workspace-status <id>] [--parent-worktree <selector>|--no-parent] [--json]',
+      'orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--linear-issue <identifier-or-url|null>] [--comment <text>] [--needs-attention <text|null>] [--workspace-status <id>] [--parent-worktree <selector>|--no-parent] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'worktree',
@@ -149,17 +121,21 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'issue',
       'linear-issue',
       'comment',
+      'needs-attention',
       'workspace-status',
       'parent-worktree',
       'no-parent'
     ],
     notes: [
       'Workspace status ids match the board columns (defaults: todo, in-progress, in-review, completed); custom statuses use their configured id.',
-      'Pass --linear-issue null to clear the Linear issue link.'
+      'Pass --linear-issue null to clear the Linear issue link.',
+      '--needs-attention is a provider-agnostic hook: any external tool can flag a worktree with a free-form reason, shown in the sidebar. Pass --needs-attention null to clear it.'
     ],
     examples: [
       'orca worktree set --worktree active --linear-issue STA-335 --json',
-      'orca worktree set --worktree active --linear-issue null --json'
+      'orca worktree set --worktree active --linear-issue null --json',
+      'orca worktree set --worktree active --needs-attention "PR #996: 1 unresolved thread" --json',
+      'orca worktree set --worktree active --needs-attention null --json'
     ]
   },
   {

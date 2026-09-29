@@ -22,7 +22,8 @@ describe('updateRuntimeManagedWorktreeMetadata', () => {
       invalidateResolved: vi.fn(),
       invalidateScan: vi.fn(),
       notifyChanged: vi.fn(),
-      showWorktree: vi.fn(async () => worktree as unknown as Worktree)
+      showWorktree: vi.fn(async () => worktree as unknown as Worktree),
+      notifyNeedsAttentionChange: vi.fn()
     }
 
     await updateRuntimeManagedWorktreeMetadata({

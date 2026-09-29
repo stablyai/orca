@@ -7,6 +7,7 @@ import { stripOrcaProvenanceMetaUpdates } from '../worktree-removal-safety'
 import type { RuntimeStore } from './runtime-store-contract'
 import { RuntimeLineageError } from './runtime-worktree-lineage-resolution'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
+import { shouldNotifyNeedsAttentionChange } from './needs-attention-notification-trigger'
 
 type Updates = Omit<Partial<WorktreeMeta>, 'pushTarget'> & {
   pushTarget?: GitPushTarget | null
@@ -20,6 +21,13 @@ type Ports = {
   invalidateScan: (repoId: string) => void
   notifyChanged: (repoId: string) => void
   showWorktree: (selector: string) => Promise<Worktree>
+  /** Fires only on a genuinely new, non-empty needsAttention reason — see shouldNotifyNeedsAttentionChange. */
+  notifyNeedsAttentionChange: (args: {
+    worktreeId: string
+    repoId: string
+    worktreeLabel: string
+    needsAttentionReason: string
+  }) => void
 }
 
 export async function updateRuntimeManagedWorktreeMetadata(args: {
@@ -99,6 +107,18 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
   // Why: CLI callers need an explicit push for metadata changed outside the renderer's optimistic update path.
   args.ports.invalidateResolved()
   args.ports.notifyChanged(worktree.repoId)
+  if (
+    shouldNotifyNeedsAttentionChange(worktree.needsAttention ?? null, metaUpdates.needsAttention)
+  ) {
+    args.ports.notifyNeedsAttentionChange({
+      worktreeId: worktree.id,
+      repoId: worktree.repoId,
+      // Why: `worktree` was resolved before this call's own displayName update (if any)
+      // was persisted, so prefer the just-set value to avoid notifying with a stale name.
+      worktreeLabel: persisted.displayName ?? worktree.displayName,
+      needsAttentionReason: metaUpdates.needsAttention
+    })
+  }
   return args.ports.showWorktree(`id:${worktree.id}`)
 }
 

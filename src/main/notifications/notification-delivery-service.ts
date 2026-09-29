@@ -51,8 +51,14 @@ export function createNotificationDeliveryService(
   const recentDesktopNotifications = new Map<string, number>()
   const recentMobileNotifications = new Map<string, number>()
 
-  const dedupeKeyFor = (request: NotificationDispatchRequest): string =>
-    request.worktreeId ?? request.worktreeLabel ?? 'global'
+  // Why: agent-task-complete and terminal-bell intentionally share one cooldown bucket per
+  // worktree (they often co-fire and only the first should surface), but needs-attention is a
+  // fully independent external-tool signal — sharing that bucket let a just-fired agent
+  // notification silently swallow a distinct needs-attention notification for 5s afterward.
+  const dedupeKeyFor = (request: NotificationDispatchRequest): string => {
+    const worktreeKey = request.worktreeId ?? request.worktreeLabel ?? 'global'
+    return request.source === 'needs-attention' ? `needs-attention:${worktreeKey}` : worktreeKey
+  }
 
   const deliverNativeAndRecord = (
     request: NotificationDispatchRequest,
@@ -73,7 +79,11 @@ export function createNotificationDeliveryService(
     dispatch: (request) => {
       // Why: light the tray attention dot before the cooldown/focus/enabled gates so they
       // can't hold it back (clears on window show/restore; see index.ts).
-      if (request.source === 'agent-task-complete' || request.source === 'terminal-bell') {
+      if (
+        request.source === 'agent-task-complete' ||
+        request.source === 'terminal-bell' ||
+        request.source === 'needs-attention'
+      ) {
         if (!deps.isWindowVisible(deps.findActiveWindow())) {
           deps.setTrayAttention(true)
         }
@@ -83,7 +93,8 @@ export function createNotificationDeliveryService(
       const desktopAllowed =
         settings.enabled &&
         (request.source !== 'agent-task-complete' || settings.agentTaskComplete) &&
-        (request.source !== 'terminal-bell' || settings.terminalBell)
+        (request.source !== 'terminal-bell' || settings.terminalBell) &&
+        (request.source !== 'needs-attention' || settings.needsAttention)
 
       const notificationOptions = buildNotificationOptions(request)
 

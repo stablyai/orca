@@ -43,6 +43,7 @@ export function mergeFolderWorkspace(repo: Repo, worktreeId: string, meta: Workt
     isMainWorktree: worktreeId === getFolderWorkspaceRootId(repo),
     displayName: meta.displayName || repo.displayName,
     comment: meta.comment || '',
+    needsAttention: meta.needsAttention ?? null,
     linkedIssue: meta.linkedIssue ?? null,
     linkedPR: meta.linkedPR ?? null,
     linkedLinearIssue: meta.linkedLinearIssue ?? null,

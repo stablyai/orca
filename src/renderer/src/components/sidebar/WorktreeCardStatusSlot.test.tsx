@@ -473,6 +473,111 @@ describe('WorktreeCardStatusSlot', () => {
     expect(markup).not.toContain('data-tooltip-root')
   })
 
+  it('shows the needs-attention indicator alongside the quiet status dot', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCardStatusSlot
+        worktreeId="wt-1"
+        showStatus
+        showUnreadAction={false}
+        isUnread={false}
+        unreadTooltip="Mark as unread"
+        onPointerDown={vi.fn()}
+        onToggleUnread={vi.fn()}
+        needsAttentionReason="PR #996: 1 unresolved thread"
+      />
+    )
+
+    expect(markup).toContain('bg-emerald-500')
+    expect(markup).toContain('data-worktree-needs-attention=""')
+    expect(markup).toContain('PR #996: 1 unresolved thread')
+  })
+
+  it('shows the needs-attention indicator alongside the branch icon without replacing it', () => {
+    mocks.status = 'inactive'
+    const markup = renderToStaticMarkup(
+      <WorktreeCardStatusSlot
+        worktreeId="wt-1"
+        showStatus
+        showUnreadAction={false}
+        isUnread={false}
+        unreadTooltip="Mark as unread"
+        onPointerDown={vi.fn()}
+        onToggleUnread={vi.fn()}
+        newCardStyle
+        hasBranchIdentity
+        needsAttentionReason="PR #996: 1 unresolved thread"
+      />
+    )
+
+    expect(markup).toContain('lucide-git-branch')
+    expect(markup).toContain('data-worktree-needs-attention=""')
+    expect(markup).toContain('PR #996: 1 unresolved thread')
+  })
+
+  it('shows the needs-attention indicator in the unread toggle affordance', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCardStatusSlot
+        worktreeId="wt-1"
+        showStatus
+        showUnreadAction
+        isUnread
+        unreadTooltip="Mark as read"
+        onPointerDown={vi.fn()}
+        onToggleUnread={vi.fn()}
+        needsAttentionReason="PR #996: 1 unresolved thread"
+      />
+    )
+
+    expect(markup).toContain('aria-label="Mark as read"')
+    expect(markup).toContain('data-worktree-needs-attention=""')
+    expect(markup).toContain('PR #996: 1 unresolved thread')
+  })
+
+  it('omits the needs-attention indicator when no reason is set', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCardStatusSlot
+        worktreeId="wt-1"
+        showStatus
+        showUnreadAction={false}
+        isUnread={false}
+        unreadTooltip="Mark as unread"
+        onPointerDown={vi.fn()}
+        onToggleUnread={vi.fn()}
+      />
+    )
+
+    expect(markup).not.toContain('data-worktree-needs-attention=""')
+  })
+
+  it('overlays an unread badge on the branch icon in new card style', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCardStatusSlot
+        worktreeId="wt-1"
+        showStatus
+        showUnreadAction
+        isUnread
+        unreadTooltip="Mark as read"
+        onPointerDown={vi.fn()}
+        onToggleUnread={vi.fn()}
+        newCardStyle
+        hasBranchIdentity
+      />
+    )
+
+    expect(markup).toContain('Branch · Unread')
+    expect(markup).toContain('data-worktree-status-lane-unread=""')
+    expect(markup).toContain('data-worktree-unread-alert=""')
+    expect(markup).not.toContain('Mark as read')
+    expect(markup).not.toContain('group/unread')
+    expect(markup).not.toContain('cursor-pointer')
+    expect(markup).toContain('lucide-git-branch')
+    expect(markup).toContain('bg-amber-500')
+    expect(markup).not.toContain('lucide-bell')
+    expect(markup).not.toContain('text-amber-500')
+    expect(markup).not.toContain('bg-emerald-500')
+    expect(markup).not.toContain('data-tooltip-root')
+  })
+
   it('overlays an unread badge on the sleeping moon in new card style', () => {
     mocks.status = 'done'
     mocks.sleeping = true
