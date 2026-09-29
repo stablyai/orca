@@ -14,9 +14,13 @@ vi.mock('../provider/registry', () => ({
 }))
 
 function createWriteInput(facts: TerminalRunFactsRegister) {
-  const runtime = { getDriver: () => ({ kind: 'desktop' }), terminalRunFacts: facts }
+  const runtime = {
+    getDriver: () => ({ kind: 'desktop' }),
+    terminalRunFacts: facts,
+    notePtyInput: () => {}
+  }
   const mainWindow = { isDestroyed: () => false, webContents: { send: vi.fn() } }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: write input reads only getDriver and terminalRunFacts from the runtime, and isDestroyed/webContents from the window.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: write input reads only getDriver, terminalRunFacts, and notePtyInput from the runtime, and isDestroyed/webContents from the window.
   return createPtyWriteInput({ mainWindow: mainWindow as never, runtime: runtime as never })
 }
 

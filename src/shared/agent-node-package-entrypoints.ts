@@ -16,3 +16,13 @@ export const NODE_PACKAGE_SCRIPT_ENTRYPOINTS: Record<string, readonly string[]> 
   'dsh-tui': ['node_modules/@deepseek-harness-tui/dsh-tui/'],
   bob: ['node_modules/bobshell/']
 }
+
+/** Why a segment boundary: `fake-node_modules/bobshell/` is not the package. */
+export function isNodePackageScriptPath(
+  comparablePath: string,
+  markers: readonly string[]
+): boolean {
+  return markers.some(
+    (marker) => comparablePath.startsWith(marker) || comparablePath.includes(`/${marker}`)
+  )
+}

@@ -3,7 +3,7 @@ import { getCommandTokenPathBasename } from './command-token-scanner'
 import {
   isNodePackageScriptPath,
   NODE_PACKAGE_SCRIPT_ENTRYPOINTS
-} from './node-package-script-entrypoints'
+} from './agent-node-package-entrypoints'
 import { optionName } from './print-mode-headless-command'
 
 // Why: taken from Bob Shell 2.x `bob --help`. `chat` is the only subcommand that

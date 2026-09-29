@@ -15,6 +15,7 @@ const EXPECTED_REST_SIGNALS: Record<TuiAgent, TuiAgentRestSignal> = {
   hermes: 'synthetic-title',
   devin: 'synthetic-title',
   zcode: 'synthetic-title',
+  bob: 'synthetic-title',
   claude: 'title',
   'claude-agent-teams': 'title',
   openclaude: 'title',

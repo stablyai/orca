@@ -1,6 +1,5 @@
 import { getTuiAgentDetectCommands, TUI_AGENT_CONFIG } from './tui-agent-config'
 import { EXACT_NODE_ENTRYPOINT_IDENTITIES } from './agent-node-entrypoint-identities'
-import { NODE_PACKAGE_SCRIPT_ENTRYPOINTS } from './agent-node-package-entrypoints'
 import type { AgentType } from './agent-status-types'
 import type { TuiAgent } from './tui-agent'
 import { filterHeadlessOneShotAgentCommand } from './agent-headless-command'
@@ -15,7 +14,7 @@ import { isFreshOmpLaunchCommand } from './omp-fresh-launch'
 import {
   isNodePackageScriptPath,
   NODE_PACKAGE_SCRIPT_ENTRYPOINTS
-} from './node-package-script-entrypoints'
+} from './agent-node-package-entrypoints'
 
 export type RecognizedAgentProcess = { agent: TuiAgent; processName: string }
 

@@ -42,8 +42,8 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
       // first turn, which is the point stale tool/prompt caches from a reused pane must go.
       return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
     case 'zcode':
-      // Why: matches Codex/Claude — SessionStart lands an idle boundary row and drops stale
-      // tool/prompt caches, while UserPromptSubmit is the actual turn boundary.
+    // Why: matches Codex/Claude — SessionStart lands an idle boundary row and drops stale
+    // tool/prompt caches, while UserPromptSubmit is the actual turn boundary.
     // falls through
     case 'bob':
       // Why: Bob reuses the pane across sessions, so SessionStart must drop the previous

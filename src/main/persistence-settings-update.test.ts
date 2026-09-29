@@ -456,19 +456,19 @@ describe('Store', () => {
     expect(store.getSettings().claudeAgentTeamsDefaultDisabledMigrated).toBe(true)
   })
 
-  it('hides IBM Bob on existing profiles once, then respects an explicit opt-in', async () => {
+  it('hides IBM Bob on existing profiles once', async () => {
     writeFileSync(
       join(testState.dir, 'orca-data.json'),
       JSON.stringify({
         settings: { claudeAgentTeamsDefaultDisabledMigrated: true, disabledTuiAgents: [] }
       })
     )
-    const migrated = await createStore()
-    expect(migrated.getSettings().disabledTuiAgents).toEqual(['bob'])
-    expect(migrated.getSettings().bobDefaultDisabledMigrated).toBe(true)
-    // Why: the migration schedules a debounced write that would otherwise clobber the opt-in fixture below.
-    migrated.flush()
+    const store = await createStore()
+    expect(store.getSettings().disabledTuiAgents).toEqual(['bob'])
+    expect(store.getSettings().bobDefaultDisabledMigrated).toBe(true)
+  })
 
+  it('respects an explicit IBM Bob opt-in after the hide migration ran', async () => {
     writeFileSync(
       join(testState.dir, 'orca-data.json'),
       JSON.stringify({
@@ -479,8 +479,8 @@ describe('Store', () => {
         }
       })
     )
-    const optedIn = await createStore()
-    expect(optedIn.getSettings().disabledTuiAgents).toEqual([])
+    const store = await createStore()
+    expect(store.getSettings().disabledTuiAgents).toEqual([])
   })
 
   it('migrates yolo default args onto untouched agent launch settings', async () => {
