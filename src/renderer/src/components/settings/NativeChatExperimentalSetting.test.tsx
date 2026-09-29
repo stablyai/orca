@@ -205,3 +205,18 @@ describe('NativeChatExperimentalSetting shell environment', () => {
     expect(nameInput(container).value).toBe('HTTPS_PRO')
   })
 })
+
+describe('NativeChatExperimentalSetting finished turns', () => {
+  const TOGGLE = '[aria-label="Toggle keeping finished turns expanded"]'
+
+  it('shows under Chat UI and flips nativeChatExpandFinishedTurns', () => {
+    expect(renderSetting({ experimentalNativeChat: false }).container.querySelector(TOGGLE)).toBe(
+      null
+    )
+    cleanup()
+    const updateSettings = vi.fn()
+    const { container } = renderSetting({ experimentalNativeChat: true }, updateSettings)
+    fireEvent.click(container.querySelector(TOGGLE)!)
+    expect(updateSettings).toHaveBeenCalledWith({ nativeChatExpandFinishedTurns: true })
+  })
+})

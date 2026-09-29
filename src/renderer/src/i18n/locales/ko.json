@@ -7086,7 +7086,10 @@
             "structuredToggleLabel": "업데이트된 구조화된 기본 채팅 전환",
             "resumeTitle": "다시 시작한 후 작업 중인 채팅을 자동으로 재개합니다.",
             "resumeCopy": "Orca가 종료되거나 업데이트를 설치하면 Orca가 다시 열릴 때 작업 중이던 채팅이 자동으로 재개됩니다.",
-            "resumeToggleLabel": "다시 시작한 후 자동 재개 전환"
+            "resumeToggleLabel": "다시 시작한 후 자동 재개 전환",
+            "expandFinishedTurnsTitle": "완료된 턴을 펼친 상태로 유지",
+            "expandFinishedTurnsCopy": "완료된 턴의 생각과 도구 단계를 “작업 완료” 아래로 접지 않고 표시합니다.",
+            "expandFinishedTurnsToggleLabel": "완료된 턴 펼침 유지 전환"
           },
           "agentDashboard": {
             "title": "에이전트 대시보드",

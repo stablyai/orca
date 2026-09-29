@@ -22,6 +22,7 @@ export function NativeChatExperimentalSetting({
   const nativeChatEnabled = settings.experimentalNativeChat === true
   const structuredNativeChatEnabled = settings.experimentalStructuredNativeChat === true
   const resumeOnRestartEnabled = settings.nativeChatResumeWorkOnRestart === true
+  const expandFinishedTurns = settings.nativeChatExpandFinishedTurns === true
   const defaultView: NativeChatDefaultView =
     settings.openAgentTabsInChatByDefault === true ? 'native-chat' : 'terminal-chat'
   // Structured-only settings; terminal-backed chat never reads them.
@@ -114,6 +115,33 @@ export function NativeChatExperimentalSetting({
                 </SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 shrink space-y-0.5">
+              <Label>
+                {translate(
+                  'auto.components.settings.ExperimentalPane.nativeChat.expandFinishedTurnsTitle',
+                  'Keep finished turns expanded'
+                )}
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.settings.ExperimentalPane.nativeChat.expandFinishedTurnsCopy',
+                  'Show the thinking and tool steps of finished turns instead of folding them behind “Worked for”.'
+                )}
+              </p>
+            </div>
+            <SettingsSwitch
+              checked={expandFinishedTurns}
+              ariaLabel={translate(
+                'auto.components.settings.ExperimentalPane.nativeChat.expandFinishedTurnsToggleLabel',
+                'Toggle keeping finished turns expanded'
+              )}
+              onChange={() =>
+                updateSettings({ nativeChatExpandFinishedTurns: !expandFinishedTurns })
+              }
+            />
           </div>
 
           {/* Structured chat rides the Chat UI default view; it has no entry path under Terminal

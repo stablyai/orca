@@ -233,6 +233,8 @@ export type GlobalSettings = {
   /** Opt-in: resume working structured chats automatically on the next launch. Off still offers
    *  the list, so the user sees exactly what would run before anything spends tokens. */
   nativeChatResumeWorkOnRestart?: boolean
+  /** Chat UI: leave settled turns expanded instead of folding them behind their status row. */
+  nativeChatExpandFinishedTurns?: boolean
   /** Structured chat only: Codex/Claude children inherit the whole login-shell environment.
    *  Off passes only `nativeChatShellEnvironmentVariables` (plus a PATH/locale baseline). */
   nativeChatInheritShellEnvironment?: boolean

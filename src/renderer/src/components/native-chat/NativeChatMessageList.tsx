@@ -12,6 +12,7 @@ import { projectNativeChatTaskListFrames } from './native-chat-task-list-frames'
 import { omitNativeChatThreadGoalRows } from './native-chat-thread-goal-rows'
 import { shouldShowNativeChatTypingIndicator } from './native-chat-typing-indicator'
 import { useNativeChatTurnStatus } from './use-native-chat-turn-status'
+import { useNativeChatTurnExpansion } from './use-native-chat-turn-expansion'
 import { NativeChatTypingIndicatorRow } from './NativeChatTypingIndicatorRow'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import type { NativeChatTurnActivity } from '../../../../shared/native-chat-turn-activity'
@@ -52,8 +53,6 @@ import {
 } from './native-chat-turn-diffs'
 
 export { ProviderFrameRow } from './NativeChatTranscriptChrome'
-
-const MAX_EXPANDED_TURNS = 128
 
 type NativeChatNavigationRequest =
   | { kind: 'diff'; target: NativeChatDiffReveal }
@@ -112,25 +111,7 @@ export function NativeChatMessageList({
   )
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
-  const [expandedTurnIds, setExpandedTurnIds] = useState<ReadonlySet<string>>(new Set())
   const disclosures = useNativeChatDisclosures()
-  const toggleExpandedTurn = useCallback((turnKey: string) => {
-    setExpandedTurnIds((current) => {
-      const next = new Set(current)
-      if (next.has(turnKey)) {
-        next.delete(turnKey)
-      } else {
-        if (next.size >= MAX_EXPANDED_TURNS) {
-          const oldest = next.values().next().value
-          if (oldest) {
-            next.delete(oldest)
-          }
-        }
-        next.add(turnKey)
-      }
-      return next
-    })
-  }, [])
 
   const { hasMore, loadingEarlier, loadEarlier } = session
   // No paging from a pending or errored read: the lane would no-op, and its recovery
@@ -168,6 +149,7 @@ export function NativeChatMessageList({
       return currentTurnKey
     })
   }, [messages])
+  const { expandedTurnIds, toggleExpandedTurn } = useNativeChatTurnExpansion(turnKeys)
   const turnDiffs = useMemo(
     () =>
       journalItems

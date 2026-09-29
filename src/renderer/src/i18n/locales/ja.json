@@ -7086,7 +7086,10 @@
             "structuredToggleLabel": "更新された構造化ネイティブチャットの切り替え",
             "resumeTitle": "再起動後に作業中のチャットを自動的に再開する",
             "resumeCopy": "Orca が終了するかアップデートをインストールすると、Orca が再度開かれたときに作業中だったチャットが自動的に再開されます。",
-            "resumeToggleLabel": "再起動後の自動再開の切り替え"
+            "resumeToggleLabel": "再起動後の自動再開の切り替え",
+            "expandFinishedTurnsTitle": "完了したターンを展開したままにする",
+            "expandFinishedTurnsCopy": "完了したターンの思考とツール手順を「完了」の下に折りたたまずに表示します。",
+            "expandFinishedTurnsToggleLabel": "完了したターンを展開したままにするを切り替え"
           },
           "agentDashboard": {
             "title": "Agent ダッシュボード",

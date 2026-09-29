@@ -7204,7 +7204,10 @@
             "structuredToggleLabel": "Basculer le chat natif structuré mis à jour",
             "resumeTitle": "Reprendre automatiquement les discussions de travail après un redémarrage",
             "resumeCopy": "Lorsqu'Orca quitte ou installe une mise à jour, les discussions en cours reprennent automatiquement à la réouverture d'Orca.",
-            "resumeToggleLabel": "Activer la reprise automatique après un redémarrage"
+            "resumeToggleLabel": "Activer la reprise automatique après un redémarrage",
+            "expandFinishedTurnsTitle": "Garder les tours terminés dépliés",
+            "expandFinishedTurnsCopy": "Afficher la réflexion et les étapes d’outils des tours terminés au lieu de les replier sous « A travaillé pendant ».",
+            "expandFinishedTurnsToggleLabel": "Activer ou désactiver le dépliage des tours terminés"
           },
           "agentDashboard": {
             "title": "Tableau de bord des agents",

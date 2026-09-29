@@ -136,6 +136,7 @@ export function buildDefaultSettings(args: {
     experimentalNativeChat: false,
     experimentalStructuredNativeChat: false,
     nativeChatResumeWorkOnRestart: false,
+    nativeChatExpandFinishedTurns: false,
     nativeChatInheritShellEnvironment: true,
     nativeChatShellEnvironmentVariables: [],
     nativeChatSessionOptions: {},

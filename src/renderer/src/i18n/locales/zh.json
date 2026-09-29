@@ -7086,7 +7086,10 @@
             "structuredToggleLabel": "切换更新的结构化本机聊天",
             "resumeTitle": "重启后自动恢复工作聊天",
             "resumeCopy": "当 Orca 退出或安装更新时，重新打开 Orca 后，正在工作的聊天会自动恢复。",
-            "resumeToggleLabel": "重启后切换自动恢复"
+            "resumeToggleLabel": "重启后切换自动恢复",
+            "expandFinishedTurnsTitle": "已完成的回合保持展开",
+            "expandFinishedTurnsCopy": "显示已完成回合的思考和工具步骤，不折叠到“工作了”后面。",
+            "expandFinishedTurnsToggleLabel": "切换已完成回合保持展开"
           },
           "agentDashboard": {
             "title": "智能体仪表盘",
