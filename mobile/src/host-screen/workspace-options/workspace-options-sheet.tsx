@@ -174,7 +174,8 @@ function WorkspaceOptionsContent({
   const optionLabels = workspaceOptionLabels(t)
   const sectionLabels = workspaceSectionLabels(t)
   const sections = getShownWorkspaceViewSections({
-    groupBy: state.view.groupBy,
+    // Why: the phone has no tag view and lists desktop Tag grouping flat, as None.
+    groupBy: state.view.groupBy === 'tag' ? 'none' : state.view.groupBy,
     hideSleepingWorkspaces: state.view.filters.hideSleepingWorkspaces,
     hideWorkspacesFromOtherDevices: state.view.filters.hideWorkspacesFromOtherDevices,
     newCardStyle: state.view.newCardStyle,

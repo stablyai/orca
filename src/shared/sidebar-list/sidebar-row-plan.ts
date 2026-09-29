@@ -56,6 +56,7 @@ import { appendImportedWorktreeLines } from './sections/imported-worktree-lines'
 import { withRepoSectionDisplayLabels } from './sections/project-section-order'
 import { buildOrderedGroups } from './sections/worktree-grouping'
 import type { WorkspaceSortBy } from '../workspace-view/workspace-row-sort'
+import { DEFAULT_TAG_SECTION_ORDER, type TagSectionOrder } from './sections/tag-section-order'
 
 type SidebarOccurrenceSection = WorktreeOccurrenceSection<Worktree> & { group: WorktreeGroupEntry }
 
@@ -90,6 +91,8 @@ export type SidebarRowPlanInputs = {
   filterRepoIds: readonly string[]
   /** A hidden project's rows reach the plan only under a folder workspace; they never make its section. */
   hiddenProjects?: HiddenProjects
+  /** Read only in Tag mode; clients without tag grouping leave it out. */
+  tagOrder?: TagSectionOrder
 }
 
 /** Plans the sidebar's sections once; `render` emits rows for a collapse state. */
@@ -118,7 +121,8 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     hostLabelById,
     defaultHostId,
     pinnedDisplayPolicy,
-    filterRepoIds
+    filterRepoIds,
+    tagOrder = DEFAULT_TAG_SECTION_ORDER
   } = inputs
   const projectIndex = buildProjectGroupingIndex(projectGrouping)
   const repoOf = repoOfWorktree ?? ((worktree: Worktree) => repoMap.get(worktree.repoId))
@@ -177,6 +181,8 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
               pendingByRepo,
               repoOrder,
               projectOrderBy,
+              tagOrderBy: tagOrder.by,
+              manualTagOrder: tagOrder.manual,
               folderWorkspaces: renderableFolderWorkspaces
             })
       if (pinned.length > 0) {

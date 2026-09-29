@@ -56,12 +56,15 @@ import {
 } from '../selection/visible-worktrees'
 import { isIdleWorkspaceActivity } from '../feed-facts/workspace-activity-facts'
 import { prGroupOfReviewFact } from '../feed-facts/workspace-review-facts'
+import type { TagSectionOrder } from '../sections/tag-section-order'
 
 /** The host's view settings a reader shows the list with; the host's own phone reads them off ui.get. */
 export type SidebarFeedView = {
   groupBy: WorktreeGroupBy
   sortBy: SortBy
   projectOrderBy: ProjectOrderBy
+  /** Tag mode's section order; the phone has no Tag mode and leaves it out. */
+  tagOrder?: TagSectionOrder
   collapsedGroups: ReadonlySet<string>
   filters: WorkspaceRowFilters
   workspaceHostScope: ExecutionHostScope
@@ -239,7 +242,8 @@ export function planSidebarFeedRows(
     defaultHostId,
     pinnedDisplayPolicy: view.pinnedDisplayPolicy,
     filterRepoIds: view.filters.filterRepoIds,
-    hiddenProjects
+    hiddenProjects,
+    tagOrder: view.tagOrder
   })
   return {
     visibleWorktrees,

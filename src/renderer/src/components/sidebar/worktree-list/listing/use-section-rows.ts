@@ -170,7 +170,8 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
         defaultHostId,
         pinnedDisplayPolicy: args.pinnedDisplayPolicy,
         filterRepoIds: args.filterRepoIds,
-        hiddenProjects: indexHiddenProjects(repos, defaultHostId)
+        hiddenProjects: indexHiddenProjects(repos, defaultHostId),
+        tagOrder: args.tagOrder
       }),
     [
       args.groupBy,
@@ -196,7 +197,8 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       pendingCreations,
       hostLabelById,
       args.pinnedDisplayPolicy,
-      args.filterRepoIds
+      args.filterRepoIds,
+      args.tagOrder
     ]
   )
   const effectiveCollapsedGroups = useEffectiveCollapsedGroups({

@@ -2,6 +2,7 @@ import type { PersistedUIState } from '../orca-profiles/persisted-ui-state-types
 import type {
   AgentActivityDisplayMode,
   ProjectOrderBy,
+  TagOrderBy,
   WorktreeCardProperty
 } from '../ui-chrome/ui-chrome-types'
 
@@ -44,6 +45,12 @@ export const WORKSPACE_PROJECT_ORDER_CHOICES = [
   { id: 'manual', label: 'Manual', description: 'Drag projects to arrange them' },
   { id: 'recent', label: 'Recent', description: 'Most recent workspace activity' }
 ] as const satisfies readonly WorkspaceViewChoice<ProjectOrderBy>[]
+
+export const WORKSPACE_TAG_ORDER_CHOICES = [
+  { id: 'name', label: 'Name', description: 'Alphabetical, ignoring case' },
+  { id: 'manual', label: 'Manual', description: 'Drag tag headers to arrange them' },
+  { id: 'activity', label: 'Activity', description: 'Most recent agent activity in the tag' }
+] as const satisfies readonly WorkspaceViewChoice<TagOrderBy>[]
 
 /** Card layout is the `compactWorktreeCards` setting, not UI state. */
 export const WORKSPACE_CARD_LAYOUT_CHOICES = [
@@ -122,6 +129,7 @@ export const WORKSPACE_VIEW_OPTIONS = [
   { key: 'groupBy', section: 'group', label: 'Group by' },
   { key: 'sortBy', section: 'arrange', label: 'Sort by' },
   { key: 'projectOrderBy', section: 'arrange', label: 'Project order' },
+  { key: 'tagOrderBy', section: 'arrange', label: 'Tag order' },
   { key: 'cardLayout', section: 'arrange', label: 'Card layout' },
   // Also holds the agent activity layout choice.
   { key: 'cardProperties', section: 'arrange', label: 'Show properties' },
@@ -168,6 +176,7 @@ const SHOWN: Record<WorkspaceViewOptionKey, (context: WorkspaceViewOptionContext
   groupBy: () => true,
   sortBy: () => true,
   projectOrderBy: (context) => context.groupBy === 'repo',
+  tagOrderBy: (context) => context.groupBy === 'tag',
   cardLayout: (context) => !context.newCardStyle,
   cardProperties: (context) => !context.newCardStyle,
   cardDisplay: (context) => context.newCardStyle,

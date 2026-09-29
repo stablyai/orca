@@ -1,5 +1,5 @@
 import type { Repo } from '../../repository/repo-types'
-import type { ProjectOrderBy } from '../../ui-chrome/ui-chrome-types'
+import type { ProjectOrderBy, TagOrderBy } from '../../ui-chrome/ui-chrome-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../worktree/types'
 import { getWorktreeHostIdentity } from '../../worktree/host-qualified-identity'
 import {
@@ -23,7 +23,7 @@ import type {
   SidebarPRGroupReader,
   WorktreeGroupBy
 } from '../row-types'
-import { compareTagSections, getTagSections, type TaggedSection } from './tag-groups'
+import { getTagSections, sortTagEntries, type TaggedSection } from './tag-groups'
 import { preferTagSpelling } from '../../worktree/metadata/worktree-tags'
 
 function getFolderTagLaneLabel(key: string, pair: RenderableFolderWorkspace): string {
@@ -44,6 +44,8 @@ export function buildOrderedGroups(args: {
   pendingByRepo: ReadonlyMap<string, PendingCreationRef[]>
   repoOrder: Map<string, number> | undefined
   projectOrderBy: ProjectOrderBy
+  tagOrderBy?: TagOrderBy
+  manualTagOrder?: readonly string[]
   folderWorkspaces?: readonly RenderableFolderWorkspace[]
 }): OrderedGroupEntry[] {
   const {
@@ -60,6 +62,8 @@ export function buildOrderedGroups(args: {
     pendingByRepo,
     repoOrder,
     projectOrderBy,
+    tagOrderBy = 'name',
+    manualTagOrder = [],
     folderWorkspaces = []
   } = args
 
@@ -150,10 +154,7 @@ export function buildOrderedGroups(args: {
       }
     }
   } else if (groupBy === 'tag') {
-    const entries = Array.from(grouped.entries()).sort(([leftKey, left], [rightKey, right]) =>
-      compareTagSections({ key: leftKey, label: left.label }, { key: rightKey, label: right.label })
-    )
-    for (const entry of entries) {
+    for (const entry of sortTagEntries(Array.from(grouped.entries()), tagOrderBy, manualTagOrder)) {
       orderedGroups.push(entry)
     }
   } else if (groupBy === 'workspace-status') {

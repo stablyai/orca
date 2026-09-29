@@ -41,6 +41,7 @@ export function useWindowSidebarListModel(args: SidebarListModelArgs): SidebarLi
     groupBy: args.groupBy,
     sortBy: args.sortBy,
     projectOrderBy: args.projectOrderBy,
+    tagOrder: args.tagOrder,
     pinnedDisplayPolicy: args.pinnedDisplayPolicy,
     defaultHostId,
     worktrees: visibleWorktrees,

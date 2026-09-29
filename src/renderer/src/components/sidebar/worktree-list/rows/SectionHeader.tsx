@@ -1,7 +1,4 @@
-import {
-  getRootProjectHeaderKey,
-  getRootProjectHeaderOccurrenceKey
-} from '../drag/root-project-header-drop'
+import { getRootProjectHeaderOccurrenceKey } from '../drag/root-project-header-drop'
 import React from 'react'
 import { ChevronDown } from 'lucide-react'
 import { ProjectHeaderHostLabel, ProjectHeaderHostTooltip } from './ProjectHeaderHostLabel'
@@ -49,6 +46,7 @@ import {
   shouldIgnoreRepoHeaderToggle,
   toggleSectionHeaderCollapse
 } from './header-event-guards'
+import { getSectionHeaderDragState } from './section-header-drag-state'
 import { getWorktreeOptionId } from './option-dom'
 import type { SectionHeaderRowContext } from './section-header-row-context'
 import type { Translate } from '@/i18n/use-translate'
@@ -89,48 +87,28 @@ export function renderWorktreeSectionHeaderRow(
     row.projectGroup && 'createdFrom' in row.projectGroup
       ? getRepoExecutionHostId(row.projectGroup)
       : undefined
-  const repoHeaderIndex = headerRepo && headerDrag.repoHeaderIndexByRepoId.get(headerRepo.id)
-  const repoHeaderBucketKey = headerRepo && headerDrag.repoHeaderBucketByRepoId.get(headerRepo.id)
-  const projectGroupHeaderIndex =
-    projectGroupDragIdForHeader !== undefined
-      ? headerDrag.projectGroupHeaderIndexByGroupId.get(projectGroupDragIdForHeader)
-      : undefined
-  const projectGroupHeaderBucketKey =
-    projectGroupDragIdForHeader !== undefined
-      ? headerDrag.projectGroupHeaderBucketByGroupId.get(projectGroupDragIdForHeader)
-      : undefined
-  const rootProjectHeaderKey = usesRootProjectDrag ? getRootProjectHeaderKey(row) : undefined
-  const rootProjectHeaderCount = rootProjectHeaderKey
-    ? (headerDrag.rootProjectHeaderCountByOccurrenceKey.get(
-        getRootProjectHeaderOccurrenceKey(rootProjectHeaderKey, row.hostId)
-      ) ??
-      headerDrag.rootProjectHeaderCountByOccurrenceKey.get(
-        getRootProjectHeaderOccurrenceKey(rootProjectHeaderKey)
-      ))
-    : undefined
-  const isDraggableRepoHeader = Boolean(
-    headerDrag.canReorderRepoHeaders &&
-    projectIdForHeader &&
-    repoHeaderBucketKey &&
-    (rootProjectHeaderCount !== undefined
-      ? rootProjectHeaderCount > 1
-      : (headerDrag.sidebarRepoHeaderIdsByBucket.get(repoHeaderBucketKey)?.length ?? 0) > 1)
-  )
-  const isDraggableProjectGroupHeader = Boolean(
-    headerDrag.canReorderProjectGroupHeaders &&
-    projectGroupDragIdForHeader &&
-    projectGroupHeaderBucketKey &&
-    (rootProjectHeaderCount !== undefined
-      ? rootProjectHeaderCount > 1
-      : (headerDrag.sidebarProjectGroupHeaderIdsByBucket.get(projectGroupHeaderBucketKey)?.length ??
-          0) > 1)
-  )
-  const isDraggingThis =
-    headerDrag.canReorderRepoHeaders &&
-    headerDrag.repoDrag.state.draggingRepoId === projectIdForHeader
-  const isDraggingThisProjectGroup =
-    headerDrag.canReorderProjectGroupHeaders &&
-    headerDrag.projectGroupDrag.state.draggingGroupId === projectGroupDragIdForHeader
+  const {
+    repoHeaderIndex,
+    repoHeaderBucketKey,
+    projectGroupHeaderIndex,
+    projectGroupHeaderBucketKey,
+    rootProjectHeaderKey,
+    isDraggableRepoHeader,
+    isDraggableProjectGroupHeader,
+    tagLabel,
+    isDraggableTagHeader,
+    isDraggingThisTag,
+    isDraggingThis,
+    isDraggingThisProjectGroup
+  } = getSectionHeaderDragState({
+    headerDrag,
+    groupBy: ctx.groupBy,
+    row,
+    headerRepo,
+    projectIdForHeader,
+    projectGroupDragIdForHeader,
+    usesRootProjectDrag
+  })
   const headerWorkspaceStatus =
     ctx.groupBy === 'workspace-status'
       ? getWorkspaceStatusFromGroupKey(row.key, ctx.workspaceStatuses)
@@ -230,6 +208,7 @@ export function renderWorktreeSectionHeaderRow(
               : undefined
           }
           data-project-group-header-drag-handle={isDraggableProjectGroupHeader ? '' : undefined}
+          data-tag-header-drag-id={tagLabel}
           data-workspace-status-drop-target={headerWorkspaceStatus ? '' : undefined}
           data-workspace-status={headerWorkspaceStatus ?? undefined}
           {...getTagDropTargetProps(ctx.groupBy === 'tag' ? row.key : undefined)}
@@ -241,6 +220,8 @@ export function renderWorktreeSectionHeaderRow(
               'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/50',
             (isDraggingThis || isDraggingThisProjectGroup) &&
               'bg-accent/80 ring-1 ring-ring/40 shadow-md rounded-md scale-[1.01]',
+            isDraggingThisTag && 'pointer-events-none opacity-0',
+            isDraggableTagHeader && 'cursor-grab active:cursor-grabbing',
             headerWorkspaceStatus &&
               ctx.dragOverStatus === headerWorkspaceStatus &&
               'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/40',
@@ -286,7 +267,9 @@ export function renderWorktreeSectionHeaderRow(
                       event,
                       projectGroupDragIdForHeader
                     )
-                : undefined
+                : isDraggableTagHeader && tagLabel
+                  ? (event) => headerDrag.tagDrag.onHandlePointerDown(event, tagLabel)
+                  : undefined
           }
           onClick={(event) => {
             if (!shouldIgnoreRepoHeaderToggle(event)) {
@@ -374,7 +357,7 @@ export function renderWorktreeSectionHeaderRow(
               />
             ) : null}
 
-            {row.icon.kind === 'tag' && row.label ? <TagHeaderMenu tag={row.label} /> : null}
+            {tagLabel ? <TagHeaderMenu tag={tagLabel} /> : null}
 
             {folderBackedProjectGroup ? (
               <ProjectGroupCreateWorkspaceButton

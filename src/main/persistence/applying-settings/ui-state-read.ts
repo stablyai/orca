@@ -19,6 +19,7 @@ import {
   normalizeVisibleExecutionHostIds,
   normalizeExecutionHostOrder
 } from '../../../shared/execution-host/execution-host'
+import { normalizeManualTagOrder } from '../../../shared/worktree/metadata/manual-tag-order'
 import { normalizeManualRepoOrder } from '../../../shared/repository/manual-repo-order'
 import { normalizeBrowserPageZoomLevel } from '../../../shared/browser/site-settings/browser-page-zoom'
 import { normalizeFeatureTipIds } from '../../../shared/feature-education/feature-tips'
@@ -28,6 +29,7 @@ import {
   normalizeGroupBy,
   normalizeProjectOrderBy,
   normalizeNotificationsMutedByWorktree,
+  normalizeTagOrderBy,
   normalizeRightSidebarExplorerView,
   normalizeRightSidebarTab,
   normalizeShowDotfilesByWorktree,
@@ -46,6 +48,7 @@ export function getPersistedUI(
     groupBy: normalizeGroupBy(state.ui?.groupBy),
     sortBy: normalizeSortBy(state.ui?.sortBy),
     projectOrderBy: normalizeProjectOrderBy(state.ui?.projectOrderBy),
+    tagOrderBy: normalizeTagOrderBy(state.ui?.tagOrderBy),
     rightSidebarTab: normalizeRightSidebarTab(state.ui?.rightSidebarTab),
     rightSidebarExplorerView: normalizeRightSidebarExplorerView(
       state.ui?.rightSidebarExplorerView,
@@ -73,6 +76,7 @@ export function getPersistedUI(
     agentsVisibleHostIds: normalizeVisibleExecutionHostIds(state.ui?.agentsVisibleHostIds),
     workspaceHostOrder: normalizeExecutionHostOrder(state.ui?.workspaceHostOrder),
     manualRepoOrder: normalizeManualRepoOrder(state.ui?.manualRepoOrder),
+    manualTagOrder: normalizeManualTagOrder(state.ui?.manualTagOrder),
     browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(state.ui?.browserDefaultZoomLevel),
     explorerDisplayRootByWorktree: normalizeExplorerDisplayRootByWorktree(
       state.ui?.explorerDisplayRootByWorktree
