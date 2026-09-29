@@ -1,3 +1,4 @@
+import { emitOrchestrationTaskTerminal } from '../../orchestration-task-terminal-event'
 import type { WorkerDispatchRow } from '../../types'
 import { OrchestrationError } from '../../orchestration-error'
 import {
@@ -78,6 +79,11 @@ export function abandonWorkerDispatch(
     reconcileTaskAfterDispatchInterruption(this, dispatch.task_id, dispatchId)
     this.closeQuestionsForDispatch(dispatchId)
     this.db.exec('COMMIT')
+    emitOrchestrationTaskTerminal(this, {
+      taskId: dispatch.task_id,
+      dispatchId,
+      kind: 'cancelled'
+    })
     return {
       disposition: 'abandoned',
       worker: this.getWorkerDispatch(dispatchId) as WorkerDispatchRow

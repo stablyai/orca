@@ -1,4 +1,5 @@
 import Database from '../../../sqlite/sync-database'
+import type { OrchestrationTaskTerminalListener } from '../orchestration-task-terminal-event'
 import { attachOrchestrationDbMethods } from './attach-orchestration-db-methods'
 import { hardenOrchestrationDatabaseFiles } from './database-file-permissions'
 import { backfillFederatedStubHomeRuns } from './federation/federated-stub-home-run-backfill'
@@ -22,6 +23,7 @@ class OrchestrationDbCore {
   // per-terminal fan-out. Only createDispatchContext flips this false→true.
   hasAnyDispatchContextsCache: boolean | undefined
   localMutationCallerFingerprint: string | undefined
+  taskTerminalTeardown?: OrchestrationTaskTerminalListener
 
   constructor(dbPath: (string & {}) | ':memory:') {
     this.db = new Database(dbPath)

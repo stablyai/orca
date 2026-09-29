@@ -1,3 +1,4 @@
+import { emitOrchestrationTaskTerminal } from '../../orchestration-task-terminal-event'
 import type { DispatchContextRow, WorkerDispatchRow } from '../../types'
 import { OrchestrationError } from '../../orchestration-error'
 import {
@@ -258,6 +259,14 @@ export function markWorkerStopUnknown(
       }
     })
     this.db.exec('RELEASE mark_worker_stop_unknown')
+    const dispatch = this.getDispatchContextById(dispatchId)
+    if (dispatch) {
+      emitOrchestrationTaskTerminal(this, {
+        taskId: dispatch.task_id,
+        dispatchId,
+        kind: 'cancelled'
+      })
+    }
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
   } catch (error) {
     this.db.exec('ROLLBACK TO mark_worker_stop_unknown')

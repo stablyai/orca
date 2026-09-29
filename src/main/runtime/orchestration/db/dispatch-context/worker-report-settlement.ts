@@ -1,3 +1,4 @@
+import { emitOrchestrationTaskTerminal } from '../../orchestration-task-terminal-event'
 import type { WorkerReportOutcome, WorkerReportSettlement } from '../../types'
 import type { OrchestrationDb } from '../orchestration-db'
 import { AGENT_PROMPT_STALLED_ERROR } from '../../../agent-prompt-submission-verification'
@@ -56,9 +57,19 @@ export function settleWorkerReport(
   this: OrchestrationDb,
   params: WorkerReportSettlementParams
 ): WorkerReportSettlement {
-  return runLifecycleWriteTransaction(this.db, WORKER_REPORT_TRANSACTION_SAVEPOINT, () =>
-    this.settleWorkerReportInTransaction(params)
+  const settlement = runLifecycleWriteTransaction(
+    this.db,
+    WORKER_REPORT_TRANSACTION_SAVEPOINT,
+    () => this.settleWorkerReportInTransaction(params)
   )
+  if (settlement.action === 'settled' && !settlement.duplicate) {
+    emitOrchestrationTaskTerminal(this, {
+      taskId: params.taskId,
+      dispatchId: params.dispatchId,
+      kind: params.outcome === 'succeeded' ? 'completed' : 'failed'
+    })
+  }
+  return settlement
 }
 
 export function settleWorkerReportInTransaction(
