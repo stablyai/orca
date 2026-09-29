@@ -24,6 +24,10 @@ export function printLineageSummary(result: RuntimeWorktreeCreateResult, json: b
     return
   }
   for (const warning of result.warnings ?? []) {
+    // Share/include skips also live on `warning` and would otherwise print twice.
+    if (warning.code === 'WORKTREE_SHARE_SKIPPED' || warning.code === 'WORKTREE_INCLUDE_SKIPPED') {
+      continue
+    }
     console.error(`warning: ${warning.message}`)
   }
   if (result.workspaceLineage) {
