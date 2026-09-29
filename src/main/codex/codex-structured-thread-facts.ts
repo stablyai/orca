@@ -65,6 +65,14 @@ export function readCodexTurnDurationMs(payload: unknown): number | null {
 /** `thread/status/changed` carries a TAGGED status (`{status:{type}}`), never a
  *  bare string. `idle` and `systemError` are the two arms that mean the thread
  *  is not running; `active` and `notLoaded` are not. */
+/**
+ * Codex hardcodes `willRetry: false` on an `error` that affects turn status, and `true` on a
+ * stream error it is about to retry, which ends nothing.
+ */
+export function readCodexErrorWillRetry(payload: unknown): boolean {
+  return record(payload)?.willRetry === true
+}
+
 export function codexThreadStoppedRunning(payload: unknown): boolean {
   const type = record(record(payload)?.status)?.type
   return type === 'idle' || type === 'systemError'
