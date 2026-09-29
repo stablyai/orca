@@ -1,10 +1,11 @@
 import { appendFileSync, mkdirSync, readFileSync, statSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
 } from '../../shared/cross-platform-path'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
+import { readArchivedCodexSessionStat } from './codex-session-archive-tombstone'
 import { streamCodexSessionLedgerRecords } from './codex-session-ledger-stream'
 
 // State files for the session index heal: which backfilled rollouts exist
@@ -55,7 +56,7 @@ export async function collectPendingHealThreads(
   paths: CodexSessionIndexHealPaths
 ): Promise<PendingHealThread[]> {
   const processed = await readProcessedHealThreads(paths)
-  const pendingByThreadId = new Map<string, PendingHealThread>()
+  const pendingByThreadId = new Map<string, PendingHealThread & { targetPath: string }>()
   for await (const line of streamCodexSessionLedgerRecords(paths.auditLogPath, {
     throwOnReadFailure: true
   })) {
@@ -88,9 +89,30 @@ export async function collectPendingHealThreads(
       pendingByThreadId.delete(threadId)
       continue
     }
-    pendingByThreadId.set(threadId, { threadId, rolloutStamp: rollout.rolloutStamp, auditRecordId })
+    pendingByThreadId.set(threadId, {
+      threadId,
+      rolloutStamp: rollout.rolloutStamp,
+      auditRecordId,
+      targetPath: line.target
+    })
   }
-  return [...pendingByThreadId.values()].sort((left, right) =>
+  const pending: PendingHealThread[] = []
+  for (const entry of pendingByThreadId.values()) {
+    const archivedPath = join(
+      dirname(paths.systemSessionsRoot),
+      'archived_sessions',
+      basename(entry.targetPath)
+    )
+    if (await readArchivedCodexSessionStat(archivedPath)) {
+      continue
+    }
+    pending.push({
+      threadId: entry.threadId,
+      rolloutStamp: entry.rolloutStamp,
+      auditRecordId: entry.auditRecordId
+    })
+  }
+  return pending.sort((left, right) =>
     left.rolloutStamp < right.rolloutStamp ? 1 : left.rolloutStamp > right.rolloutStamp ? -1 : 0
   )
 }

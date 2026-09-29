@@ -200,6 +200,27 @@ function readLedgerOutcomes(paths: CodexSessionIndexHealPaths): Record<string, s
 }
 
 describe('runCodexSessionIndexHeal', () => {
+  it('does not reindex an archived rollout from an old publication record', async () => {
+    const id = threadId('1')
+    const stamp = '2026-07-01T10-00-00'
+    const rig = createHealRig({ auditedThreads: [{ stamp, id }] })
+    const archivedPath = join(
+      dirname(rig.paths.systemSessionsRoot),
+      'archived_sessions',
+      `rollout-${stamp}-${id}.jsonl`
+    )
+    mkdirSync(dirname(archivedPath), { recursive: true })
+    writeFileSync(archivedPath, 'archived rollout\n')
+
+    const summary = await runCodexSessionIndexHeal(rig.paths, {
+      buildInvocation: rig.buildInvocation,
+      interBatchDelayMs: 0
+    })
+
+    expect(summary).toMatchObject({ pendingThreads: 0, healedThreads: 0 })
+    expect(rig.readLog().serverStarts).toBe(0)
+  })
+
   it('reads every backfilled session recent-first and completes with a marker', async () => {
     const rig = createHealRig({
       auditedThreads: [

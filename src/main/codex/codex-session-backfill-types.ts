@@ -8,6 +8,8 @@ export type CodexSessionBackfillSummary = {
   skippedExistingFiles: number
   skippedUnexpectedFiles: number
   skippedSymlinkFiles: number
+  skippedWorkerFiles: number
+  deferredFiles: number
   skippedUnsupportedFilesystemFiles: number
   failedDirectories: number
   failedFiles: number
