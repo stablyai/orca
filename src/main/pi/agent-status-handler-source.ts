@@ -42,27 +42,51 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
 
   // Why: OMP suppresses its approval lifecycle unless an extension listens for it,
   // and it is the only signal that the run is parked on a permission prompt rather
-  // than still working. Prime has no OMP runtime, so the handlers would be dead there.
+  // than still working. Since OMP 18.4.3, listening also turns off speculative task
+  // launch (on by default) and opt-in speculative reads, a cost every OMP pane would
+  // pay for prompts OMP's default yolo approval mode rarely raises, so this status is
+  // opt-in. Prime has no OMP runtime, so the handlers would be dead there.
   const approvalHandlers =
     kind === 'prime-agent'
       ? []
       : [
-          `  onStatus('tool_approval_requested', (event${ctxParam}) => {`,
-          ...captureSessionMetadata,
-          '    if (!isOmpRuntime()) return',
-          "    post('tool_approval_requested', {",
-          '      tool_name: event.toolName,',
-          '      reason: event.reason,',
-          '      approval_mode: event.approvalMode,',
+          "  if (process.env.ORCA_OMP_APPROVAL_STATUS === '1') {",
+          `    onStatus('tool_approval_requested', (event${ctxParam}) => {`,
+          ...captureSessionMetadata.map((line) => `  ${line}`),
+          '      if (!isOmpRuntime()) return',
+          "      post('tool_approval_requested', {",
+          '        tool_name: event.toolName,',
+          '        reason: event.reason,',
+          '        approval_mode: event.approvalMode,',
+          '      })',
           '    })',
-          '  })',
           '',
-          `  onStatus('tool_approval_resolved', (event${ctxParam}) => {`,
+          `    onStatus('tool_approval_resolved', (event${ctxParam}) => {`,
+          ...captureSessionMetadata.map((line) => `  ${line}`),
+          '      if (!isOmpRuntime()) return',
+          "      post('tool_approval_resolved', {",
+          '        tool_name: event.toolName,',
+          '        approved: event.approved,',
+          '      })',
+          '    })',
+          '  }',
+          ''
+        ]
+
+  // Why: the same OMP gate counts a tool_call listener. OMP reports every call before
+  // it runs as tool_execution_start with the same tool name and raw arguments, which the
+  // host maps identically; tool_call's one extra, edit's resolved path, never reached the
+  // host because that input carries a symbol key and is redacted. So under OMP tool_call
+  // only repeated it. A Pi-kind extension loaded by a bare-shell OMP drops it the same way.
+  const toolCallHandler =
+    kind === 'omp'
+      ? []
+      : [
+          `  ${kind === 'pi' ? 'if (!isOmpRuntime()) ' : ''}onStatus('tool_call', (event${ctxParam}) => {`,
           ...captureSessionMetadata,
-          '    if (!isOmpRuntime()) return',
-          "    post('tool_approval_resolved', {",
+          "    post('tool_call', {",
           '      tool_name: event.toolName,',
-          '      approved: event.approved,',
+          '      tool_input: sanitizeStatusToolInput(event.input),',
           '    })',
           '  })',
           ''
@@ -180,14 +204,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '    })',
     '  })',
     '',
-    `  onStatus('tool_call', (event${ctxParam}) => {`,
-    ...captureSessionMetadata,
-    "    post('tool_call', {",
-    '      tool_name: event.toolName,',
-    '      tool_input: sanitizeStatusToolInput(event.input),',
-    '    })',
-    '  })',
-    '',
+    ...toolCallHandler,
     `  onStatus('tool_execution_end', (event${ctxParam}) => {`,
     ...captureSessionMetadata,
     "    post('tool_execution_end', {",
