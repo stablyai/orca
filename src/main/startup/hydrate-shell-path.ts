@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import { delimiter, win32 as pathWin32 } from 'node:path'
 import type { ShellHydrationFailureReason } from '../../shared/shell-path-hydration-types'
+import { SHELL_PATH_PROBE_ENV_VAR } from '../../shared/shell-path-probe-env'
 import { resolveWindowsShellStartupFamily } from '../../shared/windows-terminal-shell'
 import { WindowsShellPathOwnership, createWindowsPathKey } from './windows-shell-path-ownership'
 
@@ -58,9 +59,6 @@ let probeQueue = Promise.resolve()
 const LAUNCH_PATH_KEY =
   process.platform === 'win32' && process.env.Path !== undefined ? 'Path' : 'PATH'
 const LAUNCH_PATH = process.env[LAUNCH_PATH_KEY] ?? null
-// Why: rc files that exec into a multiplexer or start a heavy prompt can outrun the
-// probe budget. This lets them detect the probe and take a fast path.
-const PROBE_MARKER_ENV_VAR = 'ORCA_SHELL_PATH_PROBE'
 let launchPathOverride: { key: string; value: string } | null = null
 let configuredWindowsShell = 'powershell.exe'
 let configuredWindowsGitBashPath: string | null = null
@@ -149,7 +147,7 @@ function applyLaunchPath(env: NodeJS.ProcessEnv, key: string, value: string | nu
 }
 
 function shellProbeEnv(): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env, [PROBE_MARKER_ENV_VAR]: '1' }
+  const env: NodeJS.ProcessEnv = { ...process.env, [SHELL_PATH_PROBE_ENV_VAR]: '1' }
   const key = launchPathOverride?.key ?? LAUNCH_PATH_KEY
   const value = launchPathOverride?.value ?? LAUNCH_PATH
   applyLaunchPath(env, key, value)

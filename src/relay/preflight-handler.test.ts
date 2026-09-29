@@ -33,13 +33,14 @@ vi.mock('../main/wsl', () => ({
 vi.mock('../main/git-bash', () => ({ isGitBashAvailable: isGitBashAvailableMock }))
 vi.mock('../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
 
+import { PreflightHandler } from './preflight-handler'
 import {
   buildCommandLookupSpec,
   buildCommandLookupSpecs,
   hasAbsoluteCommandPath,
   isCommandOnPathForRelay,
-  PreflightHandler
-} from './preflight-handler'
+  resolveCommandPathsForRelay
+} from './relay-command-path-lookup'
 
 function lookupArgs(command: string, mode: '-lc' | '-ilc' = '-lc'): string[] {
   return [
@@ -171,7 +172,7 @@ describe('isCommandOnPathForRelay', () => {
     ).resolves.toBe(true)
     expect(execFileAsyncMock).toHaveBeenNthCalledWith(1, '/bin/zsh', lookupArgs('codex', '-ilc'), {
       encoding: 'utf-8',
-      env: expect.objectContaining({ SHELL: '/bin/zsh' }),
+      env: expect.objectContaining({ SHELL: '/bin/zsh', ORCA_SHELL_PATH_PROBE: '1' }),
       timeout: 5000
     })
     expect(execFileAsyncMock).toHaveBeenNthCalledWith(2, '/bin/sh', lookupArgs('codex'), {
@@ -215,6 +216,153 @@ describe('isCommandOnPathForRelay', () => {
   })
 })
 
+describe('resolveCommandPathsForRelay', () => {
+  it('resolves every command with one login shell instead of one shell per command', async () => {
+    execFileAsyncMock.mockResolvedValueOnce({
+      stdout:
+        '__ORCA_AGENT_PATH__claude\t/opt/bin/claude\n__ORCA_AGENT_PATH__codex\t/opt/bin/codex\n'
+    })
+
+    const resolved = await resolveCommandPathsForRelay(['claude', 'codex', 'claude'], {
+      platform: 'darwin',
+      env: { SHELL: '/bin/zsh', PATH: '/usr/bin' },
+      accountLoginShell: '/bin/zsh'
+    })
+
+    expect(Object.fromEntries(resolved)).toEqual({
+      claude: '/opt/bin/claude',
+      codex: '/opt/bin/codex'
+    })
+    expect(execFileAsyncMock).toHaveBeenCalledTimes(1)
+    const [file, args, options] = execFileAsyncMock.mock.calls[0]
+    expect(file).toBe('/bin/zsh')
+    expect(args[0]).toBe('-ilc')
+    expect(args[1]).toContain("for _orca_agent_cmd in 'claude' 'codex'; do")
+    expect(options).toEqual({
+      encoding: 'utf-8',
+      env: expect.objectContaining({ ORCA_SHELL_PATH_PROBE: '1' }),
+      timeout: 5000,
+      windowsHide: true
+    })
+  })
+
+  it('retries only the commands the login shell missed with the inherited-PATH shell', async () => {
+    execFileAsyncMock
+      .mockResolvedValueOnce({ stdout: '__ORCA_AGENT_PATH__claude\t/opt/bin/claude\n' })
+      .mockResolvedValueOnce({ stdout: '__ORCA_AGENT_PATH__codex\t/usr/local/bin/codex\n' })
+
+    const resolved = await resolveCommandPathsForRelay(['claude', 'codex', 'gemini'], {
+      platform: 'linux',
+      env: { SHELL: '/bin/bash', PATH: '/usr/bin' },
+      accountLoginShell: '/bin/bash'
+    })
+
+    expect(Object.fromEntries(resolved)).toEqual({
+      claude: '/opt/bin/claude',
+      codex: '/usr/local/bin/codex',
+      gemini: null
+    })
+    expect(execFileAsyncMock).toHaveBeenCalledTimes(2)
+    const [fallbackFile, fallbackArgs] = execFileAsyncMock.mock.calls[1]
+    expect(fallbackFile).toBe('/bin/sh')
+    expect(fallbackArgs[0]).toBe('-lc')
+    expect(fallbackArgs[1]).toContain("for _orca_agent_cmd in 'codex' 'gemini'; do")
+  })
+
+  it('skips the fallback shell once the login shell resolved everything', async () => {
+    execFileAsyncMock.mockResolvedValueOnce({
+      stdout: '__ORCA_AGENT_PATH__claude\t/opt/bin/claude\n'
+    })
+
+    await resolveCommandPathsForRelay(['claude'], {
+      platform: 'linux',
+      env: { SHELL: '/bin/zsh' },
+      accountLoginShell: '/bin/zsh'
+    })
+
+    expect(execFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('falls back to the inherited-PATH shell when the login shell fails to start', async () => {
+    execFileAsyncMock
+      .mockRejectedValueOnce(new Error('startup failed'))
+      .mockResolvedValueOnce({ stdout: '__ORCA_AGENT_PATH__codex\t/usr/bin/codex\n' })
+
+    const resolved = await resolveCommandPathsForRelay(['codex'], {
+      platform: 'linux',
+      env: { SHELL: '/bin/zsh' },
+      accountLoginShell: '/bin/zsh'
+    })
+
+    expect(resolved.get('codex')).toBe('/usr/bin/codex')
+  })
+
+  it('ignores banners, unrequested commands, and non-absolute paths', async () => {
+    execFileAsyncMock.mockResolvedValueOnce({
+      stdout: [
+        'welcome to the host',
+        '__ORCA_AGENT_PATH__claude\trelative/claude',
+        '__ORCA_AGENT_PATH__intruder\t/tmp/intruder',
+        '__ORCA_AGENT_PATH__codex\t/opt/bin/codex',
+        '__ORCA_AGENT_PATH__codex\t/second/codex',
+        '__ORCA_AGENT_PATH__/no/separator'
+      ].join('\n')
+    })
+
+    const resolved = await resolveCommandPathsForRelay(['claude', 'codex'], {
+      platform: 'linux',
+      env: {},
+      accountLoginShell: null
+    })
+
+    expect(Object.fromEntries(resolved)).toEqual({ claude: null, codex: '/opt/bin/codex' })
+  })
+
+  it('uses fish syntax for a trusted fish login shell', async () => {
+    execFileAsyncMock.mockResolvedValueOnce({
+      stdout: '__ORCA_AGENT_PATH__codex\t/opt/bin/codex\n'
+    })
+
+    await resolveCommandPathsForRelay(['codex'], {
+      platform: 'linux',
+      env: { SHELL: '/usr/bin/fish' },
+      accountLoginShell: null
+    })
+
+    const [file, args] = execFileAsyncMock.mock.calls[0]
+    expect(file).toBe('/usr/bin/fish')
+    expect(args).toEqual([
+      '-ilc',
+      [
+        "for _orca_agent_cmd in 'codex'",
+        'set -l resolved (command -v $_orca_agent_cmd 2>/dev/null)',
+        'if test -n "$resolved"',
+        'printf \'__ORCA_AGENT_PATH__%s\\t%s\\n\' $_orca_agent_cmd "$resolved"',
+        'end',
+        'end'
+      ].join('\n')
+    ])
+  })
+
+  it('keeps per-command where.exe lookups on native Windows SSH hosts', async () => {
+    execFileAsyncMock.mockImplementation(async (_file, args) => {
+      if (String(args[0]) === 'claude') {
+        return { stdout: 'C:\\Users\\test\\AppData\\Roaming\\npm\\claude.cmd\r\n' }
+      }
+      throw new Error('not found')
+    })
+
+    const resolved = await resolveCommandPathsForRelay(['claude', 'codex'], { platform: 'win32' })
+
+    expect(Object.fromEntries(resolved)).toEqual({
+      claude: 'C:\\Users\\test\\AppData\\Roaming\\npm\\claude.cmd',
+      codex: null
+    })
+    expect(execFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(execFileAsyncMock).toHaveBeenCalledWith('where.exe', ['claude'], expect.anything())
+  })
+})
+
 describe('hasAbsoluteCommandPath', () => {
   it('ignores banners and shell function output', () => {
     expect(hasAbsoluteCommandPath('/tmp/not-the-agent\ncodex is a shell function\n', 'linux')).toBe(
@@ -242,7 +390,7 @@ describe('hasAbsoluteCommandPath', () => {
 describe('PreflightHandler', () => {
   it('reports a requested version from the resolved execution-host binary', async () => {
     execFileAsyncMock.mockResolvedValue({
-      stdout: '__ORCA_AGENT_PATH__/home/dev/.local/bin/claude\n'
+      stdout: '__ORCA_AGENT_PATH__claude\t/home/dev/.local/bin/claude\n'
     })
     runProcessMock.mockResolvedValue({
       code: 0,
@@ -277,14 +425,42 @@ describe('PreflightHandler', () => {
     )
   })
 
-  it('honors required commands when reporting detected agents', async () => {
-    execFileAsyncMock.mockImplementation(async (_file, args) => {
-      const script = String(args[1])
-      if (script.includes("'orca'")) {
-        return { stdout: '__ORCA_AGENT_PATH__/relay/path/orca\n' }
+  it('probes every agent CLI through a single shell per lookup stage', async () => {
+    const originalShell = process.env.SHELL
+    process.env.SHELL = '/bin/sh'
+    execFileAsyncMock.mockResolvedValue({ stdout: '__ORCA_AGENT_PATH__claude\t/opt/bin/claude\n' })
+    const requestHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>()
+    const dispatcher = {
+      onRequest: vi.fn(
+        (method: string, handler: (params: Record<string, unknown>) => Promise<unknown>) => {
+          requestHandlers.set(method, handler)
+        }
+      )
+    }
+    new PreflightHandler(dispatcher as never)
+    const commands = Array.from({ length: 40 }, (_, index) => ({
+      id: `agent-${index}`,
+      cmd: `agent-${index}`
+    }))
+
+    try {
+      await expect(
+        requestHandlers.get('preflight.detectAgents')!({
+          commands: [...commands, { id: 'claude', cmd: 'claude' }]
+        })
+      ).resolves.toEqual({ agents: ['claude'] })
+      expect(execFileAsyncMock).toHaveBeenCalledTimes(1)
+    } finally {
+      if (originalShell === undefined) {
+        delete process.env.SHELL
+      } else {
+        process.env.SHELL = originalShell
       }
-      throw new Error('not found')
-    })
+    }
+  })
+
+  it('honors required commands when reporting detected agents', async () => {
+    execFileAsyncMock.mockResolvedValue({ stdout: '__ORCA_AGENT_PATH__orca\t/relay/path/orca\n' })
     const requestHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>()
     const dispatcher = {
       onRequest: vi.fn(
