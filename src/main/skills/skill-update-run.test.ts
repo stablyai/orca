@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
+import { SKILLS_CLI_PACKAGE_SPEC } from '../../shared/agent-feature-install-commands'
 import type { SkillUpdateRun } from '../../shared/skill-freshness'
 import {
   getSpawnArgsForWindows,
@@ -55,7 +56,7 @@ describe('SkillUpdateRunner', () => {
     // non-interactive branch. Dropping either can wedge the run.
     expect(spawnCalls[0].args).toEqual([
       '--yes',
-      'skills',
+      SKILLS_CLI_PACKAGE_SPEC,
       'update',
       'orca-cli',
       'orchestration',
