@@ -112,15 +112,15 @@ const hash = (parts: string[] | string): string =>
 // rather than left failing. GitHubPrFileDiff's hash is deliberately unchanged — Jira
 // touched no code outside the Tasks surface.
 
-const SCREEN_RPC_SCREEN_HOOKS = '309742a0d2b84106c331277bceac2675112607a6b964e1e76fe16d3522a18ecf'
+const SCREEN_RPC_SCREEN_HOOKS = '6ea6b734747360ddb66f79720c43d1c31da46fdea0213734de8881d97089458d'
 const PRE_REFACTOR_DIFF_HOOKS = '93c7189b32bed8456cc51814fffa8ce80cf62011ef968a9d53ddec2b9686f58f'
-const SCREEN_RPC_STATEMENTS = 'f51c2564dcde169a55d7687624ade19be76ab781b053594e8f2a25d0a90e46e2'
+const SCREEN_RPC_STATEMENTS = '6dbfccdbe3e03cad1af6f554b8e4b44d52783390a3d630b295c27542d3bd8940'
 // Saved Linear selections now accept unknown persisted values; reconciliation tests cover them.
-const MAIN_REBASED_DECLARATIONS = '55ebbb326f1dcf8143a5894fc5403801e9931f28be4b3384a540d44bb18de50e'
-const SCREEN_RPC_SEMANTICS = 'c2142a20c0d10aaca03bcc8e5e8e4eefffd44ddba3263bbfc34eee0d0d74d673'
+const MAIN_REBASED_DECLARATIONS = 'bb2ca9edfeb24e9ef9cf439f417d0bd1ff3b2ac01e72f99f81ca38d50a9f6896'
+const SCREEN_RPC_SEMANTICS = '5ea6791ba8529c1d5480314eea098bf4a3b180c2b2e9d55c056a6a85772ebbf3'
 // StatusDot's spacing moved to the tasks title row as `gap: spacing.sm`; same 8 px.
 const PRE_REFACTOR_STYLES = 'eeebacf3666cd66602f774200da65da39a1e658af737afabfc6e42510b6cb7f0'
-const SCREEN_RPC_RENDER_TREE = '0692ae65fd0d01d9bb3b675c3008f8e17a4340b0637eb2e00a24ebca2183d5ed'
+const SCREEN_RPC_RENDER_TREE = 'd5cc117c613f4c7b956a963a1c742177ad632f0bd3edd59cc75ef05367171bc0'
 
 describe('Mobile Tasks refactor parity', () => {
   it('preserves recursively flattened hook and dependency order', () => {
@@ -147,13 +147,13 @@ describe('Mobile Tasks refactor parity', () => {
 
   it('preserves RPC calls, runtime strings, and JSX host signatures', () => {
     const semantics = readMobileTasksSemanticSource()
-    expect(semantics.split('\n')).toHaveLength(3_317)
+    expect(semantics.split('\n')).toHaveLength(3_323)
     expect(hash(semantics)).toBe(SCREEN_RPC_SEMANTICS)
   })
 
   it('preserves render expressions and event handlers in tree order', () => {
     const tokens = readFlattenedMobileTasksRenderTokens()
-    expect(tokens).toHaveLength(35_766)
+    expect(tokens).toHaveLength(35_777)
     expect(hash(tokens)).toBe(SCREEN_RPC_RENDER_TREE)
   })
 

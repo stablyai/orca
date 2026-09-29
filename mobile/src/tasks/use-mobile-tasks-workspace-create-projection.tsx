@@ -99,7 +99,9 @@ export function useMobileTasksWorkspaceCreateProjection(model: ProjectMetadataLo
   const workspaceCreateSshConnectInProgress = workspaceCreateSshGate.connectInProgress
   const workspaceCreateSshError = workspaceCreateSshGate.error
   const workspaceCreateCanPickRepo =
-    workspaceCreateDraft?.item.provider === 'linear' && workspaceRepos.length > 1
+    (workspaceCreateDraft?.item.provider === 'linear' ||
+      workspaceCreateDraft?.item.provider === 'jira') &&
+    workspaceRepos.length > 1
   const workspaceSparseCheckoutAvailable =
     workspaceCreateTargetRepo != null && !workspaceCreateTargetRepo.connectionId
   const workspaceSparseDraftParsed = useMemo(

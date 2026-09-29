@@ -156,11 +156,21 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
             issueTypeName: issue.issueType.name,
             priorityName: issue.priority?.name
           })
-          setActionItem((current) =>
-            current?.provider === 'jira' && current.source.key === issue.key
-              ? (createJiraTask(issue) as Extract<TaskItem, { provider: 'jira' }>)
-              : current
-          )
+          setActionItem((current) => {
+            if (current?.provider !== 'jira' || current.source.key !== issue.key) {
+              return current
+            }
+            // Returning a new object every time would re-trigger this effect, which depends on
+            // actionItem — the detail would refetch forever. Only swap when the fetch actually
+            // added something the row reads.
+            const alreadyHydrated =
+              current.source.description === issue.description &&
+              (current.source.labels ?? []).length === (issue.labels ?? []).length &&
+              current.source.assignee?.accountId === issue.assignee?.accountId
+            return alreadyHydrated
+              ? current
+              : (createJiraTask(issue) as Extract<TaskItem, { provider: 'jira' }>)
+          })
         }
         return
       }

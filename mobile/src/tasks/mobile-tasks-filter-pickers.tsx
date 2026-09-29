@@ -384,9 +384,10 @@ export function renderMobileTasksJiraSitePicker(model: ConnectionPresentationMod
       onSelect={(siteId) => {
         setJiraConnection((current) => ({ ...current, selection: siteId }))
         setItems([])
-        if (client && siteId !== 'all') {
-          // 'all' is a client-side fan-out; only a concrete site is persisted
-          // host-side, so selectSite would reject it.
+        if (client) {
+          // 'all' is persisted too — selectSite keeps activeSiteId and stores 'all' as the
+          // selection, so skipping the write here would let the next status read restore the
+          // host's previous site.
           void jiraSiteSelectWrite.request(client, { siteId }).catch((err: unknown) => {
             console.warn('[mobile tasks] failed to select jira site', err)
           })

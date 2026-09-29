@@ -279,6 +279,8 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
       gitlabFilter,
       gitlabView,
       githubMode,
+      jiraConnection,
+      jiraFilter,
       linearConnected,
       linearFilter,
       linearOrderBy,
