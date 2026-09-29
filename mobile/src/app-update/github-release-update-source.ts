@@ -4,6 +4,8 @@ import type { AppUpdateCheckResult, AppUpdateSource } from './app-update-source'
 import { isNewerReleaseVersion } from './app-update-source'
 
 const REPO_API = 'https://api.github.com/repos/stablyai/orca'
+// Why tag refs, not releases.atom or /releases?per_page=100: both are newest-first windows that a
+// run of desktop releases fills, pushing the newest mobile release out and reading as "current".
 const TAG_PREFIX = 'mobile-android-v'
 // Why: the release workflow pushes the tag before the APK build, so a failed build leaves a
 // tag with no release; probe a few older candidates, bounded like the desktop's manifest probe.
