@@ -1,6 +1,7 @@
 import type React from 'react'
 
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { DarkAppearanceVariant } from '../../../../shared/ui-chrome-types'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { UIZoomControl } from './UIZoomControl'
 import { SearchableSetting } from './SearchableSetting'
@@ -19,6 +20,7 @@ import {
   getLanguageEntries,
   getMenuBarIconEntries,
   getSystemTrayEntries,
+  getDarkAppearanceEntries,
   getThemeEntries,
   getTitlebarEntries,
   getTypographyEntries,
@@ -33,6 +35,7 @@ import { translate } from '@/i18n/i18n'
 import type { UiLanguage } from '../../../../shared/ui-language'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
 import { usePluginLanguagePacks } from '@/store/plugin-language-packs'
+import { useSystemPrefersDark } from '../terminal-pane/use-system-prefers-dark'
 
 type AppearanceInterfaceSectionProps = {
   settings: GlobalSettings
@@ -65,6 +68,19 @@ export function AppearanceInterfaceSection({
   const systemTrayEntry = getSystemTrayEntries({ showSystemTray: true })[0]
   const themeEntry = getThemeEntries()[0]
   const themeLabel = translate('auto.components.settings.AppearancePane.932ff1fbff', 'Theme')
+  const darkAppearanceEntry = getDarkAppearanceEntries()[0]
+  const darkAppearanceLabel = translate(
+    'settings.appearance.darkAppearance.title',
+    'Dark Appearance'
+  )
+  const systemPrefersDark = useSystemPrefersDark()
+  const darkThemeActive =
+    settings.theme === 'dark' || (settings.theme === 'system' && systemPrefersDark)
+  // Why the search escape: the row is hidden as inert in light mode, but
+  // "oled"/"pure black" must still resolve to something the user can read.
+  const showDarkAppearance =
+    darkThemeActive ||
+    (isSearching && matchesSettingsSearch(searchQuery, getDarkAppearanceEntries()))
   const titlebarEntry = getTitlebarEntries()[0]
   const typographyEntry = getTypographyEntries()[0]
   const zoomEntry = getZoomEntries()[0]
@@ -112,6 +128,42 @@ export function AppearanceInterfaceSection({
           }
         />
       </SearchableSetting>
+
+      {showDarkAppearance ? (
+        <SearchableSetting
+          title={darkAppearanceLabel}
+          description={darkAppearanceEntry?.description}
+          keywords={darkAppearanceEntry?.keywords ?? ['pure black', 'oled', 'amoled', 'contrast']}
+          forceVisible={forceVisiblePrimary}
+        >
+          <SettingsRow
+            label={darkAppearanceLabel}
+            // Why kept despite the visibility gate: search can surface this row
+            // while Light is active, where the control does nothing.
+            description={translate(
+              'settings.appearance.darkAppearance.description',
+              'Pure Black drops the app surfaces to #000 for OLED displays. Applies whenever the dark theme is active.'
+            )}
+            control={
+              <SettingsSegmentedControl<DarkAppearanceVariant>
+                ariaLabel={darkAppearanceLabel}
+                value={settings.darkAppearanceVariant ?? 'default'}
+                onChange={(darkAppearanceVariant) => updateSettings({ darkAppearanceVariant })}
+                options={[
+                  {
+                    value: 'default',
+                    label: translate('settings.appearance.darkAppearance.default', 'Default')
+                  },
+                  {
+                    value: 'pure-black',
+                    label: translate('settings.appearance.darkAppearance.pureBlack', 'Pure Black')
+                  }
+                ]}
+              />
+            }
+          />
+        </SearchableSetting>
+      ) : null}
 
       {SHOW_UI_LANGUAGE_SETTING ? (
         <SearchableSetting
