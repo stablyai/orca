@@ -9,9 +9,7 @@ import type {
 } from '../../../../shared/computer-use-permissions-types'
 import type { SkillFreshnessInventory } from '../../../../shared/skill-freshness'
 import type { SkillDiscoveryResult } from '../../../../shared/skills'
-import type { SkillDeletePlan, SkillDeleteResult } from '../../../../shared/skill-delete-contract'
-import { SKILL_DELETE_CAPABILITY } from '../../../../shared/skill-install-capability'
-import { callRuntimeResult, getRemoteRuntimeStatus } from './web-runtime-calls'
+import { callRuntimeResult } from './web-runtime-calls'
 import { requireActiveEnvironmentOrNull } from './web-runtime-session'
 import { getBrowserPlatform } from './web-storage'
 
@@ -181,14 +179,10 @@ export function createSkillsApi(): NonNullable<Partial<PreloadApi>['skills']> {
     previewBundleInstall: () =>
       Promise.reject(new Error('Skill installation requires the desktop app.')),
     removeInstall: () => Promise.reject(new Error('Skill installation requires the desktop app.')),
-    // Disable deletion when the paired host predates the capability.
-    deleteSupported: async () => {
-      const status = await getRemoteRuntimeStatus().catch(() => null)
-      return status?.capabilities?.includes(SKILL_DELETE_CAPABILITY) === true
-    },
-    previewDelete: (request) =>
-      callRuntimeResult<SkillDeletePlan>('skills.previewDelete', request, 60_000),
-    delete: (request) => callRuntimeResult<SkillDeleteResult>('skills.delete', request, 5 * 60_000),
+    // Why: web is always a paired client; host skill-delete RPCs reject paired callers.
+    deleteSupported: async () => false,
+    previewDelete: () => Promise.reject(new Error('Deleting skills requires the desktop app.')),
+    delete: () => Promise.reject(new Error('Deleting skills requires the desktop app.')),
     listManagedInstalls: () =>
       Promise.reject(new Error('Skill installation requires the desktop app.')),
     getPackage: () => Promise.reject(new Error('Skill installation requires the desktop app.')),

@@ -62,24 +62,23 @@ describe('runtimeTargetSupportsSkillDelete', () => {
     expect(runtimeEnvironmentSupportsCapability).not.toHaveBeenCalled()
   })
 
-  it('asks the environment for the capability', async () => {
-    runtimeEnvironmentSupportsCapability.mockResolvedValue(false)
+  it('does not offer delete on a paired environment target', async () => {
+    runtimeEnvironmentSupportsCapability.mockResolvedValue(true)
     expect(
       await runtimeTargetSupportsSkillDelete({ kind: 'environment', environmentId: 'env-1' })
     ).toBe(false)
-    expect(runtimeEnvironmentSupportsCapability).toHaveBeenCalledWith('env-1', 'skills.delete.v1')
+    expect(runtimeEnvironmentSupportsCapability).not.toHaveBeenCalled()
   })
 })
 
 describe('delete routing', () => {
-  it('issues no RPC against a host that lacks the capability', async () => {
-    assertRuntimeEnvironmentCapability.mockRejectedValue(
-      new Error(SKILL_DELETE_UPDATE_REQUIRED_MESSAGE)
-    )
+  it('refuses a paired environment delete before any RPC', async () => {
+    assertRuntimeEnvironmentCapability.mockResolvedValue(undefined)
     await expect(
       deleteSkillsOnRuntimeTarget({ kind: 'environment', environmentId: 'env-1' }, REQUEST)
-    ).rejects.toThrow(SKILL_DELETE_UPDATE_REQUIRED_MESSAGE)
+    ).rejects.toThrow(/paired client/)
     expect(callRuntimeRpc).not.toHaveBeenCalled()
+    expect(assertRuntimeEnvironmentCapability).not.toHaveBeenCalled()
   })
 
   it('routes a local delete through IPC rather than RPC', async () => {
@@ -98,23 +97,12 @@ describe('delete routing', () => {
     expect(localDelete).not.toHaveBeenCalled()
   })
 
-  it('sends the whole request to a capable remote host', async () => {
+  it('refuses a paired environment preview before any RPC', async () => {
     assertRuntimeEnvironmentCapability.mockResolvedValue(undefined)
-    callRuntimeRpc.mockResolvedValue({ operationId: 'op', skills: [] })
-    await deleteSkillsOnRuntimeTarget({ kind: 'environment', environmentId: 'env-1' }, REQUEST)
-    expect(callRuntimeRpc).toHaveBeenCalledWith(
-      { kind: 'environment', environmentId: 'env-1' },
-      'skills.delete',
-      REQUEST,
-      expect.objectContaining({ timeoutMs: expect.any(Number) })
-    )
-  })
-
-  it('gates the preview on the same capability', async () => {
-    assertRuntimeEnvironmentCapability.mockRejectedValue(new Error('nope'))
     await expect(
       previewSkillDeletionOnRuntimeTarget({ kind: 'environment', environmentId: 'env-1' }, REQUEST)
-    ).rejects.toThrow('nope')
+    ).rejects.toThrow(/paired client/)
     expect(callRuntimeRpc).not.toHaveBeenCalled()
+    expect(assertRuntimeEnvironmentCapability).not.toHaveBeenCalled()
   })
 })
