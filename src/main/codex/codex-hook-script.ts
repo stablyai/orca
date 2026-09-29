@@ -25,7 +25,7 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   return [
     '#!/bin/sh',
     ...buildPosixHookPayloadCapture(),
-    ...buildPosixHookSpoolLines('codex'),
+    ...buildPosixHookSpoolLines('codex', undefined, 'disabled'),
     // Why: sourcing refreshes PORT/TOKEN/ENV/VERSION from the current Orca so a surviving PTY keeps reporting after a restart (see claude/hook-service.ts).
     'load_hook_endpoint() {',
     '  endpoint_path="$1"',

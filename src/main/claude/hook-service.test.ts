@@ -755,6 +755,7 @@ describe('ClaudeHookService.installRemote', () => {
     expect(script).toContain('#!/bin/sh')
     expect(script).toContain('DEVIN_PROJECT_DIR')
     expect(script).toContain('GROK_HOOK_EVENT')
+    expect(script).not.toContain('>> "$spool_file"')
     // Why: remote guard paths must still return neutral JSON (#14818).
     expect(script!.indexOf('printf "{}\\n"')).toBe(
       script!.indexOf('#!/bin/sh') + '#!/bin/sh\n'.length
@@ -903,5 +904,8 @@ describe('OpenClaudeHookService-compatible install', () => {
     expect(command).toContain('"${HOME-}/.orca/agent-hooks/openclaude-hook.sh"')
     expect(command).not.toContain('/home/dev/.orca/agent-hooks/openclaude-hook.sh')
     expect(fs.files.get('/home/dev/.orca/agent-hooks/openclaude-hook.sh')).toContain('/hook/claude')
+    expect(fs.files.get('/home/dev/.orca/agent-hooks/openclaude-hook.sh')).toContain(
+      '>> "$spool_file"'
+    )
   })
 })

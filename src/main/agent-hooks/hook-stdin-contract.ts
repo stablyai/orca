@@ -1,4 +1,5 @@
 export type PosixHookEmptyPayloadPolicy = 'exit' | 'empty-object'
+export type PosixHookSpoolPersistence = 'full' | 'disabled'
 
 // Why: a stripped PATH must not stop a hook from consuming stdin, or the agent
 // sees exit 127 and a broken pipe mid-write (#8110). `command -p` resolves from
@@ -121,7 +122,17 @@ export function buildPosixHookPayloadCapture(
 /** Shell-side durable fallback shared by every POSIX managed hook.
  *  `eventNameVar` is for providers that send the event name out-of-band rather than in the
  *  payload JSON; without it both the progress filter and replay would miss the event name. */
-export function buildPosixHookSpoolLines(source: string, eventNameVar?: string): string[] {
+export function buildPosixHookSpoolLines(
+  source: string,
+  eventNameVar?: string,
+  persistence: PosixHookSpoolPersistence = 'full'
+): string[] {
+  // Why: Claude and Codex hooks can contain prompts and commands; their offline fallback
+  // must not write the full payload to disk.
+  if (persistence === 'disabled') {
+    return ['spool_hook_event() {', '  return 0', '}']
+  }
+
   // Why: the event name must be a printf ARG, not inlined in the single-quoted format,
   // where a command substitution would be emitted literally.
   const eventFormat = eventNameVar ? '"hookEventName":"%s",' : ''
