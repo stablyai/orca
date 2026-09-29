@@ -1,5 +1,6 @@
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import { buildConfiguredProxyEnv, type NetworkProxySettings } from '../../shared/network-proxy'
+import { resolveWslGuestProxySettings } from '../wsl/wsl-guest-proxy-gateway'
 import { resolveClaudeCommand } from '../codex-cli/command'
 // Why: import from the shared module, not the codex-cli re-export, so a test that
 // mocks '../codex-cli/command' does not have to restate this pure helper.
@@ -53,6 +54,31 @@ export async function fetchViaPty(options?: {
     return abortedClaudeUsageResult()
   }
 
+  const authPreparation = options?.authPreparation
+  const wslConfig =
+    authPreparation?.runtime === 'wsl' &&
+    authPreparation.wslDistro &&
+    authPreparation.wslLinuxConfigDir
+      ? { distro: authPreparation.wslDistro, linuxConfigDir: authPreparation.wslLinuxConfigDir }
+      : null
+  // Why: a Windows loopback proxy dies inside WSL2 NAT; swap in the host
+  // gateway when the guest confirms it can reach it (no-op otherwise).
+  const wslProxyResolution = await resolveWslGuestProxySettings(options?.networkProxySettings, {
+    isWsl: wslConfig !== null,
+    distro: wslConfig?.distro ?? null
+  })
+  // Why drop it: an unverified loopback the guest cannot reach is worse than no
+  // proxy — exporting it into the guest command only forces a dead egress path,
+  // so keep it out unless the resolver confirmed it crosses the boundary.
+  const networkProxySettings =
+    wslConfig && !wslProxyResolution.crossesBoundary ? undefined : wslProxyResolution.settings
+  // Why: the uncached gateway-rewrite path can run three WSL probes (up to 15s)
+  // before returning — an abort during that window must not still spawn the PTY.
+  if (options?.signal?.aborted) {
+    return abortedClaudeUsageResult()
+  }
+  const proxyEnv = buildConfiguredProxyEnv(networkProxySettings)
+
   return new Promise<ProviderRateLimits>((resolve) => {
     let output = ''
     let resolved = false
@@ -78,18 +104,7 @@ export async function fetchViaPty(options?: {
     // wrapper, so without the configured proxy it would reach api.anthropic.com
     // from the app's own IP — bypassing the proxy the user set for Claude and
     // risking rate-limit/geo signals on the account. Falls back to {} when unset.
-    const proxyEnv = buildConfiguredProxyEnv(options?.networkProxySettings)
     Object.assign(spawnEnv, proxyEnv)
-    const authPreparation = options?.authPreparation
-    const wslConfig =
-      authPreparation?.runtime === 'wsl' &&
-      authPreparation.wslDistro &&
-      authPreparation.wslLinuxConfigDir
-        ? {
-            distro: authPreparation.wslDistro,
-            linuxConfigDir: authPreparation.wslLinuxConfigDir
-          }
-        : null
     const spawnFile = wslConfig ? 'wsl.exe' : isWin32 ? 'cmd.exe' : claudeCommand
     const spawnArgs = wslConfig
       ? [

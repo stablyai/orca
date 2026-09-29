@@ -12,6 +12,7 @@ import {
 import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
 import { markClaudePtyExited } from '../../../claude-accounts/live-pty-gate'
 import { buildPtyHostEnv } from '../host-env/assembly'
+import { wslProxyForTarget } from '../../../wsl/wsl-guest-proxy-gateway'
 import {
   getCompatibleSelectedCodexHomePath,
   isCodexStatusHooksEnabled,
@@ -90,7 +91,10 @@ export function configureLocalPtyProvider(args: {
         agentStatusHooksEnabled: isAgentStatusHooksEnabled(ptySettings),
         disabledTuiAgents: ptySettings?.disabledTuiAgents,
         codexStatusHooksEnabled: isCodexStatusHooksEnabled(ptySettings),
-        networkProxySettings: ptySettings,
+        // Why: a Windows loopback proxy dies inside WSL2 NAT; the helper swaps in
+        // the host gateway when the guest confirms it, and reports whether the
+        // resolved proxy should cross into the guest via WSLENV.
+        wslProxyResolution: await wslProxyForTarget(ptySettings, codexSelectionTarget),
         routeBrowserOpensToClient: runtime?.shouldRelayTerminalBrowserOpens?.()
       })
       // Why: agents need their terminal handle at process start to self-identify in orchestration messages without an extra RPC.
