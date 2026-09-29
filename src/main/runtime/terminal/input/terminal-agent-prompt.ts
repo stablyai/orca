@@ -72,7 +72,7 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     generation: number,
     pastePayload: string,
     options: RuntimeAgentPromptWriteOptions,
-    onInputWritten?: () => void
+    onInputWritten?: () => void | Promise<void>
   ): Promise<{ submits: number; prompt?: RuntimeTerminalPromptDelivery }> {
     const observationSignal = agentPromptObservationSignal(options)
     assertAgentPromptRequestActive(observationSignal)
@@ -223,7 +223,7 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
           }
         ))
     // Receipt observation must not hold later terminal input after the submit bytes land.
-    onInputWritten?.()
+    await onInputWritten?.()
     const effectTimeoutMs = resolveAgentPromptEffectTimeoutMs(this.getPtyAgent(ptyId))
     if (!options.acceptQueued || !options.requestId) {
       await verifyAgentPromptSubmission({
