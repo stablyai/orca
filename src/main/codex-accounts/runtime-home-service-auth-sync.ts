@@ -7,6 +7,9 @@ import type { CodexSystemDefaultSnapshot } from './runtime-home-service-types'
 
 export abstract class CodexRuntimeHomeAuthSync extends CodexRuntimeHomeLaunch {
   protected captureSystemDefaultSnapshot(options: { force: boolean }): void {
+    if (!this.hasCredentialMirrorConsent()) {
+      return
+    }
     const snapshotPath = this.getSystemDefaultSnapshotPath()
     if (!options.force && existsSync(snapshotPath)) {
       return
@@ -20,6 +23,9 @@ export abstract class CodexRuntimeHomeAuthSync extends CodexRuntimeHomeLaunch {
   }
 
   protected syncRuntimeAuthWithSystemDefault(): void {
+    if (!this.hasCredentialMirrorConsent()) {
+      return
+    }
     const runtimeAuthPath = this.getRuntimeAuthPath()
     const systemDefaultAuthPath = join(getSystemCodexHomePath(), 'auth.json')
     if (!existsSync(runtimeAuthPath)) {
@@ -209,8 +215,20 @@ export abstract class CodexRuntimeHomeAuthSync extends CodexRuntimeHomeLaunch {
   }
 
   protected restoreSystemDefaultSnapshot(options: { detectExternalLogin: boolean }): void {
-    const snapshotPath = this.getSystemDefaultSnapshotPath()
     const runtimeAuthPath = this.getRuntimeAuthPath()
+    if (!this.hasCredentialMirrorConsent()) {
+      // Why: every branch below either reads ~/.codex/auth.json or a cached snapshot of it and
+      // writes that credential into the runtime home. Without consent this method may still do
+      // the clearing/logout bookkeeping every caller relies on (switch-away, system-default-
+      // changed), but it must never read or write the credential itself (G1, G3): pass null
+      // explicitly so the marker's default-arg readSystemDefaultAuth() never runs.
+      rmSync(runtimeAuthPath, { force: true })
+      this.persistRuntimeLogoutMarker(null)
+      this.lastWrittenAuthJson = null
+      this.persistSharedRuntimeAuthProvenance({ owner: 'system-default', authJson: null })
+      return
+    }
+    const snapshotPath = this.getSystemDefaultSnapshotPath()
     const systemDefaultAuthPath = join(getSystemCodexHomePath(), 'auth.json')
     if (existsSync(systemDefaultAuthPath)) {
       const systemDefaultAuth = readFileSync(systemDefaultAuthPath, 'utf-8')
