@@ -64,6 +64,7 @@ export type StatusBarItem =
   | 'grok'
   | 'cursor'
   | 'zcode'
+  | 'glm'
   | 'ssh'
   | 'resource-usage'
   | 'ports'

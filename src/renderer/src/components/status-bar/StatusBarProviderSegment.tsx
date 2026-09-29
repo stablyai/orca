@@ -153,6 +153,9 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
       return 'U'
     case 'zcode':
       return 'Z'
+    // Why: 'Z' is taken by zcode; gemini has 'G'.
+    case 'glm':
+      return 'L'
     case 'codex':
       return 'X'
   }

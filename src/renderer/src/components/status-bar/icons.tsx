@@ -327,6 +327,25 @@ export function ClaudeIcon({ size = 14 }: { size?: number }): React.JSX.Element 
   )
 }
 
+export function GlmIcon({ size = 14 }: { size?: number }): React.JSX.Element {
+  // Official Z.ai mark (dark rounded square + white Z), extracted from
+  // docs.z.ai's favicon so it reads on both light and dark themes without
+  // needing theme-aware colors.
+  return (
+    <svg width={size} height={size} viewBox="0 0 30 30" xmlns="http://www.w3.org/2000/svg">
+      <path
+        d="M24.51 28.51H5.49c-2.21 0-4-1.79-4-4V5.49c0-2.21 1.79-4 4-4h19.03c2.21 0 4 1.79 4 4v19.03c-.01 2.2-1.8 3.99-4.01 3.99z"
+        fill="#2D2D2D"
+      />
+      <g fill="#FFFFFF">
+        <path d="M15.47 7.1l-1.3 1.85c-.2.29-.54.47-.9.47H6.17V7.1h9.3z" />
+        <polygon points="24.3,7.1 13.14,22.91 5.7,22.91 16.86,7.1" />
+        <path d="M14.53 22.91l1.31-1.86c.2-.29.54-.47.9-.47h7.09v2.33h-9.3z" />
+      </g>
+    </svg>
+  )
+}
+
 export function DroidIcon({ size = 14 }: { size?: number }): React.JSX.Element {
   // Why: Factory.ai's favicon is a white glyph on transparent bg — unreadable on
   // light surfaces (README kbd pills, light-mode UI). Bake in a black rounded

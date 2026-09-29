@@ -11,6 +11,7 @@ export const DEFAULT_STATUS_BAR_ITEMS: StatusBarItem[] = [
   'grok',
   'cursor',
   'zcode',
+  'glm',
   'ssh',
   'resource-usage',
   'ports'

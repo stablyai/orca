@@ -107,6 +107,13 @@ export function initializeMainProcessAccountServices(): void {
         )
       })
     }
+    // Why: a saved/removed GLM key or platform switch should surface the new
+    // plan's quota promptly; the cycle's config-hash reset discards the old snapshot.
+    if ('glmCodingPlanUsage' in updates) {
+      void state.rateLimits?.refresh().catch((error: unknown) => {
+        console.warn('[rate-limits] Failed to refresh GLM usage after a settings change:', error)
+      })
+    }
   })
   state.rateLimits.setClaudeAuthPreparationResolver((target) =>
     state.claudeRuntimeAuth!.prepareForRateLimitFetch(target)
@@ -135,6 +142,7 @@ export function initializeMainProcessAccountServices(): void {
     }
   })
   state.rateLimits.setGeminiCliOAuthEnabledResolver(() => store.getSettings().geminiCliOAuthEnabled)
+  state.rateLimits.setGlmConfigResolver(() => store.getSettings().glmCodingPlanUsage)
   state.rateLimits.setNetworkProxySettingsResolver(() => store.getSettings())
   state.keybindings = new KeybindingService({
     homePath: app.getPath('home'),

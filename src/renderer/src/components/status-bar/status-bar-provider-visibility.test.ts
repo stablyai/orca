@@ -78,6 +78,7 @@ function usageSettings(overrides: Partial<UsageProviderSettings> = {}): UsagePro
     opencodeGoApiKeyConfigured: false,
     grokAuthConfigured: false,
     cursorAuthConfigured: false,
+    glmCodingPlanUsage: null,
     ...overrides
   }
 }
@@ -425,7 +426,23 @@ describe('isUsageEmptyState', () => {
   })
 
   it('waits for provider snapshots before showing the setup CTA', () => {
-    expect(isUsageEmptyState(createEmptyRateLimitState(), usageSettings())).toBe(false)
+    expect(
+      isUsageEmptyState(
+        {
+          claude: null,
+          codex: null,
+          gemini: null,
+          opencodeGo: null,
+          kimi: null,
+          antigravity: null,
+          minimax: null,
+          grok: null,
+          cursor: undefined,
+          glm: null
+        },
+        usageSettings()
+      )
+    ).toBe(false)
   })
 
   it('treats provider keys omitted by an older main process as pending', () => {
@@ -440,7 +457,8 @@ describe('isUsageEmptyState', () => {
           antigravity: undefined,
           minimax: undefined,
           grok: undefined,
-          cursor: undefined
+          cursor: undefined,
+          glm: undefined
         },
         usageSettings()
       )
@@ -460,7 +478,8 @@ describe('isUsageEmptyState', () => {
           minimax: provider('unavailable', { provider: 'minimax' }),
           grok: provider('unavailable', { provider: 'grok' }),
           cursor: provider('unavailable', { provider: 'cursor' }),
-          zcode: provider('unavailable', { provider: 'zcode' })
+          zcode: provider('unavailable', { provider: 'zcode' }),
+          glm: null
         },
         usageSettings()
       )
@@ -480,7 +499,8 @@ describe('isUsageEmptyState', () => {
           minimax: provider('unavailable', { provider: 'minimax' }),
           grok: provider('unavailable', { provider: 'grok' }),
           cursor: provider('unavailable', { provider: 'cursor' }),
-          zcode: provider('unavailable', { provider: 'zcode' })
+          zcode: provider('unavailable', { provider: 'zcode' }),
+          glm: null
         },
         usageSettings({
           codexManagedAccounts: [
@@ -500,6 +520,23 @@ describe('isUsageEmptyState', () => {
 
   it('waits for settings before showing the setup CTA', () => {
     expect(isUsageEmptyState(createEmptyRateLimitState(), null)).toBe(false)
+    expect(
+      isUsageEmptyState(
+        {
+          claude: null,
+          codex: null,
+          gemini: null,
+          opencodeGo: null,
+          kimi: null,
+          antigravity: null,
+          minimax: null,
+          grok: null,
+          cursor: null,
+          glm: null
+        },
+        null
+      )
+    ).toBe(false)
   })
 
   it('shows the setup CTA for a loaded profile with no configured usage provider', () => {
@@ -513,11 +550,29 @@ describe('isUsageEmptyState', () => {
       minimax: provider('unavailable', { provider: 'minimax' }),
       grok: provider('unavailable', { provider: 'grok' }),
       cursor: provider('unavailable', { provider: 'cursor' }),
-      zcode: provider('unavailable', { provider: 'zcode' })
+      zcode: provider('unavailable', { provider: 'zcode' }),
+      glm: null
     }
     expect(isUsageEmptyState(settledProviders, usageSettings())).toBe(true)
     expect(isUsageEmptyState({ ...settledProviders, zcode: undefined }, usageSettings())).toBe(true)
     expect(isUsageEmptyState({ ...settledProviders, zcode: null }, usageSettings())).toBe(false)
+    expect(
+      isUsageEmptyState(
+        {
+          claude: provider('unavailable', { provider: 'claude' }),
+          codex: provider('unavailable', { provider: 'codex' }),
+          gemini: provider('unavailable'),
+          opencodeGo: provider('unavailable', { provider: 'opencode-go' }),
+          kimi: provider('unavailable', { provider: 'kimi' }),
+          antigravity: null,
+          minimax: provider('unavailable', { provider: 'minimax' }),
+          grok: provider('unavailable', { provider: 'grok' }),
+          cursor: provider('unavailable', { provider: 'cursor' }),
+          glm: null
+        },
+        usageSettings()
+      )
+    ).toBe(true)
   })
 
   it('does not show the setup CTA while checked Antigravity usage is awaiting a snapshot', () => {
@@ -533,7 +588,8 @@ describe('isUsageEmptyState', () => {
           grok: provider('unavailable', { provider: 'grok' }),
           minimax: provider('unavailable', { provider: 'minimax' }),
           cursor: provider('unavailable', { provider: 'cursor' }),
-          zcode: provider('unavailable', { provider: 'zcode' })
+          zcode: provider('unavailable', { provider: 'zcode' }),
+          glm: null
         },
         usageSettings({ antigravityUsageConfigured: true, geminiCliOAuthEnabled: true })
       )
@@ -555,7 +611,8 @@ describe('isUsageEmptyState', () => {
           grok: provider('unavailable', { provider: 'grok' }),
           minimax: provider('unavailable', { provider: 'minimax' }),
           cursor: provider('unavailable', { provider: 'cursor' }),
-          zcode: provider('unavailable', { provider: 'zcode' })
+          zcode: provider('unavailable', { provider: 'zcode' }),
+          glm: null
         },
         usageSettings({ antigravityUsageConfigured: true })
       )

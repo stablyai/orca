@@ -25,5 +25,7 @@ export function getUsageProviderAccountsSectionId(
       // Why: Orca must not mutate Kimi's CLI-owned credential lifecycle.
       // ZCode likewise owns its Coding Plan credential in ~/.zcode/cli/config.json.
       return null
+    case 'glm':
+      return 'accounts-glm'
   }
 }

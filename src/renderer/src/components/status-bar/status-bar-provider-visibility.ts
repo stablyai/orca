@@ -7,6 +7,7 @@ export type UsageProviderSettings = Pick<
   | 'claudeManagedAccounts'
   | 'opencodeSessionCookie'
   | 'geminiCliOAuthEnabled'
+  | 'glmCodingPlanUsage'
 > & {
   // Why: Antigravity has no separate persisted usage credential in Orca. The
   // checked status-bar item is the durable user signal; StatusBar only sets
@@ -35,6 +36,7 @@ type UsageProviderSnapshots = {
   grok: ProviderRateLimits | null | undefined
   cursor: ProviderRateLimits | null | undefined
   zcode?: ProviderRateLimits | null
+  glm: ProviderRateLimits | null | undefined
 }
 
 type UsageProviderId = ProviderRateLimits['provider']
@@ -87,8 +89,15 @@ export function hasUsageProviderSettings(
     settings?.minimaxCookieConfigured === true ||
     settings?.minimaxApiKeyConfigured === true ||
     settings?.grokAuthConfigured === true ||
-    settings?.cursorAuthConfigured === true
+    settings?.cursorAuthConfigured === true ||
+    hasGlmUsageConfigured(settings?.glmCodingPlanUsage)
   )
+}
+
+function hasGlmUsageConfigured(
+  config: { platform: 'zai' | 'zhipu'; apiKey: string } | null | undefined
+): boolean {
+  return Boolean(config && config.apiKey.length > 0)
 }
 
 export function hasUsageProviderSettingsForProvider(
@@ -128,6 +137,9 @@ export function hasUsageProviderSettingsForProvider(
   if (providerId === 'cursor') {
     return settings.cursorAuthConfigured === true
   }
+  if (providerId === 'glm') {
+    return hasGlmUsageConfigured(settings.glmCodingPlanUsage)
+  }
   return false
 }
 
@@ -138,6 +150,7 @@ function createPendingProviderSnapshot(providerId: UsageProviderId): ProviderRat
     weekly: null,
     ...(providerId === 'opencode-go' ? { monthly: null } : {}),
     ...(providerId === 'gemini' || providerId === 'cursor' ? { buckets: [] } : {}),
+    ...(providerId === 'glm' ? { monthly: null } : {}),
     updatedAt: 0,
     error: null,
     status: 'fetching'
@@ -173,6 +186,8 @@ export function isUsageEmptyState(
   const antigravitySnapshotPending =
     hasUsageProviderSettingsForProvider('antigravity', settings) &&
     isProviderSnapshotPending(providers.antigravity)
+  const glmSnapshotPending =
+    hasUsageProviderSettingsForProvider('glm', settings) && isProviderSnapshotPending(providers.glm)
   if (
     isProviderSnapshotPending(providers.claude) ||
     isProviderSnapshotPending(providers.codex) ||
@@ -183,7 +198,8 @@ export function isUsageEmptyState(
     isProviderSnapshotPending(providers.minimax) ||
     isProviderSnapshotPending(providers.grok) ||
     isProviderSnapshotPending(providers.cursor) ||
-    (providers.zcode !== undefined && isProviderSnapshotPending(providers.zcode))
+    (providers.zcode !== undefined && isProviderSnapshotPending(providers.zcode)) ||
+    glmSnapshotPending
   ) {
     return false
   }
@@ -198,6 +214,7 @@ export function isUsageEmptyState(
     !isProviderConfigured(providers.minimax) &&
     !isProviderConfigured(providers.grok) &&
     !isProviderConfigured(providers.cursor) &&
-    !isProviderConfigured(providers.zcode)
+    !isProviderConfigured(providers.zcode) &&
+    !isProviderConfigured(providers.glm)
   )
 }
