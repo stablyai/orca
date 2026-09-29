@@ -5504,7 +5504,10 @@
           "e888362def": "状態: クローズ",
           "f394b3e86e": "状態: マージ済み",
           "af2b07bda5": "状態: {{value0}}",
-          "29df45afa2": "MR"
+          "29df45afa2": "MR",
+          "reviewApproved": "レビュー: 承認済み",
+          "reviewChangesRequested": "レビュー: 変更リクエスト",
+          "reviewRequired": "レビュー: 必須"
         },
         "WorktreeCardPorts": {
           "34f733dda2": "ワークツリーに移動",

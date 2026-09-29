@@ -4746,7 +4746,10 @@
           "e888362def": "Estado: Cerrado",
           "f394b3e86e": "Estado: merged",
           "af2b07bda5": "Estado: {{value0}}",
-          "29df45afa2": "MR"
+          "29df45afa2": "MR",
+          "reviewApproved": "Revisión: Aprobada",
+          "reviewChangesRequested": "Revisión: Cambios solicitados",
+          "reviewRequired": "Revisión: Requerida"
         },
         "WorktreeCardPorts": {
           "34f733dda2": "Ir al worktree",

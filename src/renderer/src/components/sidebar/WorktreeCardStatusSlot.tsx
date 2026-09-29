@@ -9,7 +9,7 @@ import StatusIndicator from './StatusIndicator'
 import { useWorktreeActivityStatus } from './use-worktree-activity-status'
 import { useIsSleepingWorktree } from './use-worktree-sleep-state'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
-import { getReviewLabel, ReviewIcon } from './worktree-review-helpers'
+import { getActiveReviewDecision, getReviewLabel, ReviewIcon } from './worktree-review-helpers'
 
 type WorktreeCardStatusSlotProps = {
   worktreeId: string
@@ -70,7 +70,22 @@ function overlayNewCardUnreadStatus(
   )
 }
 
+function getReviewDecisionSuffix(review: WorktreeCardPrDisplay): string {
+  const decision = getActiveReviewDecision(review)
+  if (decision === 'APPROVED') {
+    return ' · Approved'
+  }
+  if (decision === 'CHANGES_REQUESTED') {
+    return ' · Changes requested'
+  }
+  return ''
+}
+
 function getReviewStatusLabel(review: WorktreeCardPrDisplay): string {
+  return getReviewStateStatusLabel(review) + getReviewDecisionSuffix(review)
+}
+
+function getReviewStateStatusLabel(review: WorktreeCardPrDisplay): string {
   const label = getReviewLabel(review)
   if (review.state === 'merged') {
     return `${label}: Merged`
