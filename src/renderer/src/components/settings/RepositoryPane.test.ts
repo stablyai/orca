@@ -104,6 +104,14 @@ describe('RepositoryPane search entries', () => {
     expect(matchesSettingsSearch('local settings scripts', entries)).toBe(true)
     expect(matchesSettingsSearch('../worktrees', entries)).toBe(true)
     expect(matchesSettingsSearch('worktree path', entries)).toBe(true)
+    expect(matchesSettingsSearch('submodule', entries)).toBe(true)
+    expect(matchesSettingsSearch('gitmodules', entries)).toBe(true)
+  })
+
+  it('omits the submodule opt-in for plain folders', () => {
+    const entries = getRepositoryPaneSearchEntries({ ...repo, kind: 'folder' })
+
+    expect(matchesSettingsSearch('submodule', entries)).toBe(false)
   })
 
   it('includes each project search section once', () => {
