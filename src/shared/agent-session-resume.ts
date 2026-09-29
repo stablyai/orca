@@ -342,11 +342,8 @@ export function getAgentResumeArgv(
     // workspace. DSH keys sessions by workspace path, so callers must keep the cwd.
     case 'dsh':
       return providerSession.key === 'session_id' ? ['dsh-tui', '--resume', id] : null
-    // Why: `bob chat` takes the task id with -r/--resume; --trust for the same first-launch
-    // trust select the fresh-launch command skips.
+    // Why: only `--resume` — the base launch command already carries `chat --trust`.
     case 'bob':
-      return providerSession.key === 'session_id'
-        ? ['bob', 'chat', '--trust', '--resume', id]
-        : null
+      return providerSession.key === 'session_id' ? ['bob', '--resume', id] : null
   }
 }
