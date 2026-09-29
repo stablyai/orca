@@ -36,6 +36,7 @@ export function WorktreeJumpPaletteEntry({
   if (entry.type === 'hint') {
     return (
       <CommandItem
+        variant="knowledge"
         value={renderKey}
         onSelect={() => {
           const previousIndex = controller.selectionItemIds.indexOf(renderKey)
@@ -99,6 +100,21 @@ export function WorktreeJumpPaletteEntry({
         renderKey={renderKey}
         controller={controller}
       />
+    )
+  }
+  if (entry.type === 'conversation-knowledge') {
+    return (
+      <CommandItem value={renderKey} onSelect={() => controller.handleSelectItem(entry)}>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[13px] font-medium">{entry.item.source.title}</p>
+          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+            {entry.item.knowledge.summary}
+          </p>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            {entry.item.knowledge.topics.join(' · ') || entry.item.generator.agent}
+          </p>
+        </div>
+      </CommandItem>
     )
   }
   if (entry.type === 'simulator-tab') {

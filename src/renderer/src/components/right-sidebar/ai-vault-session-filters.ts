@@ -36,6 +36,7 @@ export function useAiVaultPanelSessions(
   sessions: readonly AiVaultSession[],
   searching: boolean,
   group: AiVaultGroup,
+  skipFilters: boolean,
   {
     query,
     agents,
@@ -50,7 +51,7 @@ export function useAiVaultPanelSessions(
 ) {
   const filteredSessions = useMemo(
     () =>
-      searching
+      searching || skipFilters
         ? sessions
         : filterAiVaultSessions(sessions, {
             query,
@@ -65,6 +66,7 @@ export function useAiVaultPanelSessions(
           }),
     [
       searching,
+      skipFilters,
       sessions,
       query,
       agents,

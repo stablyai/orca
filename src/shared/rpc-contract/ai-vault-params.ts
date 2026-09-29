@@ -1,4 +1,7 @@
 import { z } from 'zod'
+import { getCommitMessageAgentSpec } from '../commit-message-agent-spec'
+import type { TuiAgent } from '../tui-agent'
+import { ALL_TUI_AGENTS } from '../tui-agent-display-names'
 import { parseExecutionHostId } from '../execution-host'
 import { AI_VAULT_AGENTS, AI_VAULT_SCOPE_PATHS_MAX_COUNT } from '../ai-vault-types'
 import { OptionalBoolean } from './rpc-param-primitives'
@@ -71,3 +74,58 @@ export const AiVaultSessionTitlesParams = z.object({
     )
     .max(AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT)
 })
+
+const AI_VAULT_HISTORY_QUERY_MAX_LENGTH = 512
+const AI_VAULT_HISTORY_RESULT_LIMIT_MAX = 50
+const AI_VAULT_HISTORY_READ_LIMIT_MAX = 200
+
+export const AiVaultHistorySearchParams = z.object({
+  query: z.string().trim().min(1).max(AI_VAULT_HISTORY_QUERY_MAX_LENGTH),
+  limit: z.number().int().positive().max(AI_VAULT_HISTORY_RESULT_LIMIT_MAX).optional()
+})
+
+export const AiVaultHistoryReadParams = z.object({
+  agent: z.enum(AI_VAULT_AGENTS),
+  sessionId: z.string().min(1).max(512),
+  limit: z.number().int().positive().max(AI_VAULT_HISTORY_READ_LIMIT_MAX).optional()
+})
+
+const knowledgeGeneratorAgentSchema = z.string().transform((value, ctx): TuiAgent => {
+  const agent = ALL_TUI_AGENTS.find(
+    (candidate) => candidate === value && getCommitMessageAgentSpec(candidate) !== undefined
+  )
+  if (agent) {
+    return agent
+  }
+  ctx.addIssue({ code: 'custom', message: 'Agent does not support background generation' })
+  return z.NEVER
+})
+
+export const AiVaultKnowledgeListParams = z.object({
+  query: z.string().max(AI_VAULT_HISTORY_QUERY_MAX_LENGTH).optional(),
+  scopePaths: z
+    .array(z.string().min(1).max(AI_VAULT_SCOPE_PATH_MAX_LENGTH))
+    .max(AI_VAULT_SCOPE_PATHS_MAX_COUNT)
+    .optional()
+})
+
+export const AiVaultKnowledgeGenerateParams = z.object({
+  sourceAgent: z.enum(AI_VAULT_AGENTS),
+  sessionId: z.string().min(1).max(512),
+  generatorAgent: knowledgeGeneratorAgentSchema,
+  generatorModel: z.string().min(1).max(256).nullable().optional(),
+  language: z.string().max(32).optional()
+})
+
+export const AiVaultKnowledgeIndexParams = z.object({
+  generatorAgent: knowledgeGeneratorAgentSchema,
+  generatorModel: z.string().min(1).max(256),
+  scopePaths: z
+    .array(z.string().min(1).max(AI_VAULT_SCOPE_PATH_MAX_LENGTH))
+    .max(AI_VAULT_SCOPE_PATHS_MAX_COUNT)
+    .optional(),
+  force: OptionalBoolean,
+  language: z.string().max(32).optional()
+})
+
+export const AiVaultEmptyParams = z.object({})

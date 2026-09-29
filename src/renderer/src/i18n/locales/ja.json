@@ -1,4 +1,78 @@
 {
+  "conversationKnowledge": {
+    "name": "会話ナレッジ",
+    "graph": "会話ナレッジグラフ",
+    "description": "Agent 履歴から AI が生成したトピック、結論、関連性です。",
+    "status": {
+      "indexing": "生成中",
+      "indexed": "生成済み",
+      "progress": "{{state}} · {{completed}}/{{total}} · {{failed}} 件失敗"
+    },
+    "items": {
+      "count": "{{total}} 件中 {{visible}} 件を表示",
+      "empty": "ナレッジ項目はありません"
+    },
+    "scope": {
+      "ariaLabel": "ナレッジグラフの表示範囲",
+      "all": "すべて",
+      "project": "プロジェクト別"
+    },
+    "search": {
+      "ariaLabel": "会話ナレッジを検索",
+      "placeholder": "要約またはノードを検索"
+    },
+    "generateAll": "すべて生成",
+    "regenerateAll": "すべて再生成",
+    "stop": "生成を停止",
+    "configurationRequired": "設定 → 実験的機能 → 会話ナレッジで、有効な要約 Agent とモデルを選択してください。",
+    "empty": {
+      "search": "一致する要約または関連ノードはありません。",
+      "generated": "生成済みのナレッジはまだありません。",
+      "selection": "トピックまたは要約ノードを選択すると、詳細とソースを確認できます。"
+    },
+    "error": {
+      "load": "生成済みナレッジを読み込めませんでした。",
+      "start": "ナレッジの生成を開始できませんでした。",
+      "stop": "ナレッジの生成を停止できませんでした。"
+    },
+    "detail": {
+      "generatedBy": "{{agent}} · {{model}} により生成",
+      "created": "作成",
+      "modified": "最終更新",
+      "summary": "要約",
+      "conclusions": "主な結論",
+      "topics": "トピック",
+      "entities": "エンティティ",
+      "source": "ソース",
+      "openSessionHistory": "Agent のセッション履歴を開く"
+    },
+    "nodeType": {
+      "project": "プロジェクト",
+      "worktree": "ワークツリー",
+      "topic": "トピック",
+      "entity": "エンティティ",
+      "knowledge": "要約"
+    },
+    "settings": {
+      "description": "生成されたトピック、結論、プロジェクト、ワークツリー、ソースセッションを確認するグラフと詳細ワークスペースを追加します。",
+      "searchDescription": "Agent のセッション履歴から検索可能なナレッジレイヤーを構築します。",
+      "toggle": "会話ナレッジを切り替え",
+      "summaryAgent": "要約 Agent",
+      "chooseAgent": "有効な Agent を選択",
+      "agentHelp": "検出済みかつ有効で、バックグラウンド生成に対応する Agent のみ表示されます。",
+      "summaryModel": "要約モデル",
+      "keyword": {
+        "conversation": "会話",
+        "history": "履歴",
+        "knowledge": "ナレッジ",
+        "summary": "要約",
+        "graph": "グラフ"
+      }
+    },
+    "enrichment": "AI ナレッジ強化",
+    "enrichmentCopy": "新規または変更されたセッションを 1 日 1 回確認し、要約、トピック、結論、グラフの関連性を生成します。",
+    "enrichmentToggle": "AI ナレッジ強化を切り替え"
+  },
   "app": {
     "recoverableError": {
       "rootTitle": "Orca でレンダラーエラーが発生しました。",
@@ -133,6 +207,10 @@
     "activityWaitingSuffix": "件のアクティビティが待機中"
   },
   "worktreeJumpPalette": {
+    "conversationKnowledgeHeader": "ナレッジ",
+    "searchScope": "検索範囲",
+    "allResults": "すべて",
+    "knowledgeResults": "ナレッジ",
     "matchLabel": {
       "comment": "コメント",
       "issue": "Issue",

@@ -37,6 +37,25 @@ const baseSession: AiVaultSession = {
 }
 
 describe('filterAiVaultSessions', () => {
+  it('hides sessions created by conversation knowledge generation', () => {
+    const internalSession = {
+      ...baseSession,
+      title: 'You are an information curator for a developer workspace. Summarize the conversation.'
+    }
+
+    expect(
+      filterAiVaultSessions([internalSession, baseSession], {
+        query: '',
+        agents: ['claude'],
+        scope: 'all',
+        sort: 'updated',
+        activeWorktreePaths: [],
+        activeProjectKey: null,
+        hideEmptySessions: false
+      })
+    ).toEqual([baseSession])
+  })
+
   it('filters by workspace, agent, plain terms, repo: and path: operators', () => {
     const sessions: AiVaultSession[] = [
       baseSession,

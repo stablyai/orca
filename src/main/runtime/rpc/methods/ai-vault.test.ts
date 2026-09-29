@@ -22,6 +22,8 @@ vi.mock('../../../ai-vault/session-scanner-worker-spawn', () => ({
 
 import {
   AI_VAULT_METHODS,
+  AiVaultKnowledgeGenerateParams,
+  AiVaultKnowledgeIndexParams,
   AiVaultListSessionsParams,
   AiVaultPrepareSessionResumeParams
 } from './ai-vault'
@@ -88,6 +90,40 @@ function makeFailingDispatcher(error: Error): RpcDispatcher {
   } as unknown as OrcaRuntimeService
   return new RpcDispatcher({ runtime, methods: AI_VAULT_METHODS })
 }
+
+describe('conversation knowledge RPC', () => {
+  it('accepts supported generators and rejects agents without background generation', () => {
+    expect(
+      AiVaultKnowledgeGenerateParams.safeParse({
+        sourceAgent: 'claude',
+        sessionId: 'session-1',
+        generatorAgent: 'codex',
+        generatorModel: 'gpt-5'
+      }).success
+    ).toBe(true)
+    expect(
+      AiVaultKnowledgeIndexParams.safeParse({
+        generatorAgent: 'grok',
+        generatorModel: 'grok-4'
+      }).success
+    ).toBe(false)
+  })
+
+  it('routes persisted knowledge search through the transcript-owning runtime', async () => {
+    const listConversationKnowledge = vi.fn().mockResolvedValue({ items: [] })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Test dispatcher only calls the supplied runtime method.
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      listConversationKnowledge
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: AI_VAULT_METHODS })
+
+    await expect(
+      dispatcher.dispatch(makeRequest('aiVault.listKnowledge', { query: 'ssh' }))
+    ).resolves.toMatchObject({ ok: true, result: { items: [] } })
+    expect(listConversationKnowledge).toHaveBeenCalledWith({ query: 'ssh' })
+  })
+})
 
 describe('aiVault.resolveSessionTitles handler', () => {
   beforeEach(() => {

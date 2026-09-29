@@ -1,4 +1,78 @@
 {
+  "conversationKnowledge": {
+    "name": "Conocimiento de conversaciones",
+    "graph": "Grafo de conocimiento de conversaciones",
+    "description": "Temas, conclusiones y relaciones generados por IA a partir del historial de agentes.",
+    "status": {
+      "indexing": "Generando",
+      "indexed": "Generado",
+      "progress": "{{state}} · {{completed}}/{{total}} · {{failed}} con error"
+    },
+    "items": {
+      "count": "Mostrando {{visible}} de {{total}} elementos",
+      "empty": "No hay elementos de conocimiento"
+    },
+    "scope": {
+      "ariaLabel": "Ámbito del grafo de conocimiento",
+      "all": "Todo",
+      "project": "Por proyecto"
+    },
+    "search": {
+      "ariaLabel": "Buscar conocimiento de conversaciones",
+      "placeholder": "Buscar resúmenes o nodos"
+    },
+    "generateAll": "Generar todo",
+    "regenerateAll": "Regenerar todo",
+    "stop": "Detener generación",
+    "configurationRequired": "Elige un agente y un modelo de resumen habilitados en Ajustes → Experimental → Conocimiento de conversaciones.",
+    "empty": {
+      "search": "No hay resúmenes ni nodos relacionados que coincidan.",
+      "generated": "Aún no hay conocimiento generado.",
+      "selection": "Selecciona un tema o nodo de resumen para ver sus detalles y fuentes."
+    },
+    "error": {
+      "load": "No se pudo cargar el conocimiento generado.",
+      "start": "No se pudo iniciar la generación de conocimiento.",
+      "stop": "No se pudo detener la generación de conocimiento."
+    },
+    "detail": {
+      "generatedBy": "Generado por {{agent}} · {{model}}",
+      "created": "Creada",
+      "modified": "Última modificación",
+      "summary": "Resumen",
+      "conclusions": "Conclusiones principales",
+      "topics": "Temas",
+      "entities": "Entidades",
+      "source": "Fuente",
+      "openSessionHistory": "Abrir historial de sesiones del agente"
+    },
+    "nodeType": {
+      "project": "Proyecto",
+      "worktree": "Árbol de trabajo",
+      "topic": "Tema",
+      "entity": "Entidad",
+      "knowledge": "Resumen"
+    },
+    "settings": {
+      "description": "Añade un espacio de grafo y detalles para explorar temas, conclusiones, proyectos, árboles de trabajo y sesiones de origen.",
+      "searchDescription": "Crea una capa de conocimiento consultable a partir del historial de sesiones del agente.",
+      "toggle": "Activar o desactivar Conocimiento de conversaciones",
+      "summaryAgent": "Agente de resumen",
+      "chooseAgent": "Elegir un agente habilitado",
+      "agentHelp": "Solo se muestran agentes detectados y habilitados que admiten generación en segundo plano.",
+      "summaryModel": "Modelo de resumen",
+      "keyword": {
+        "conversation": "conversación",
+        "history": "historial",
+        "knowledge": "conocimiento",
+        "summary": "resumen",
+        "graph": "grafo"
+      }
+    },
+    "enrichment": "Enriquecimiento de conocimiento con IA",
+    "enrichmentCopy": "Comprueba una vez al día las sesiones nuevas o modificadas y genera resúmenes, temas, conclusiones y relaciones.",
+    "enrichmentToggle": "Activar o desactivar el enriquecimiento de conocimiento con IA"
+  },
   "app": {
     "recoverableError": {
       "rootTitle": "Orca tuvo un error de renderizado.",
@@ -83,6 +157,10 @@
     "activityWaitingSuffix": "activity waiting"
   },
   "worktreeJumpPalette": {
+    "conversationKnowledgeHeader": "Conocimiento",
+    "searchScope": "Ámbito de búsqueda",
+    "allResults": "Todo",
+    "knowledgeResults": "Conocimiento",
     "matchLabel": {
       "comment": "Comentario",
       "issue": "Issue",

@@ -225,6 +225,7 @@ export function registerCoreHandlers(
       callRuntimeSessionSearch(app.getPath('userData'), environmentId, method, params)
   })
   registerAiVaultHandlers({
+    commitMessageAgentEnv,
     ensureStructuredSessionOwnership: () => runtime.ensureStructuredAgentSessionHost(),
     getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths,
     prepareSessionResume: lifecycleOptions.prepareAiVaultSessionResume,

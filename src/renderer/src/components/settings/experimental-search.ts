@@ -92,6 +92,27 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
       ]
     },
     {
+      title: translate('conversationKnowledge.name', 'Conversation Knowledge'),
+      description: translate(
+        'conversationKnowledge.settings.searchDescription',
+        'Build a searchable knowledge layer from agent session history.'
+      ),
+      keywords: [
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.0d24759f14',
+          'experimental'
+        ),
+        ...translateSearchKeyword(
+          'conversationKnowledge.settings.keyword.conversation',
+          'conversation'
+        ),
+        ...translateSearchKeyword('conversationKnowledge.settings.keyword.history', 'history'),
+        ...translateSearchKeyword('conversationKnowledge.settings.keyword.knowledge', 'knowledge'),
+        ...translateSearchKeyword('conversationKnowledge.settings.keyword.summary', 'summary'),
+        ...translateSearchKeyword('conversationKnowledge.settings.keyword.graph', 'graph')
+      ]
+    },
+    {
       title: translate(
         'auto.components.settings.experimental.search.9e4ddf776d',
         'Terminal attention'
@@ -206,6 +227,9 @@ export function getExperimentalSearchEntry() {
         'auto.components.settings.experimental.search.agentDashboard.title',
         'Agent Dashboard'
       )
+    ),
+    conversationKnowledge: findEntry(
+      translate('conversationKnowledge.name', 'Conversation Knowledge')
     ),
     terminalAttention: findEntry(
       translate('auto.components.settings.experimental.search.9e4ddf776d', 'Terminal attention')

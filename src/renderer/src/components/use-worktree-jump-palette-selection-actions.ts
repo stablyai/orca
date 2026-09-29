@@ -15,8 +15,10 @@ import type { SettingsNavTarget } from '@/lib/settings-navigation-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { useAppStore } from '@/store'
 import { getPaletteWorktreeExecutionHostId } from '@/lib/palette-repo-resolution'
+import { selectConversationKnowledgeItem } from '@/lib/conversation-knowledge-selection'
 import { translate } from '@/i18n/i18n'
 import type { PaletteItem } from './worktree-jump-palette-model'
+import type { ConversationKnowledgeItem } from '../../../shared/conversation-knowledge-items'
 import type { WorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-local-state'
 import type { WorktreeJumpPaletteQuickActions } from './use-worktree-jump-palette-quick-actions'
 import type { WorktreeJumpPaletteSelectionLifecycle } from './use-worktree-jump-palette-selection-lifecycle'
@@ -204,6 +206,18 @@ export function useWorktreeJumpPaletteSelectionActions({
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.
     [buildQuickActionContext, closeModal, recordFeatureInteraction]
   )
+  const handleSelectConversationKnowledge = useCallback(
+    (item: ConversationKnowledgeItem) => {
+      const store = useAppStore.getState()
+      selectConversationKnowledgeItem(item)
+      store.setConversationKnowledgeDrawerOpen(true)
+      window.dispatchEvent(new Event('orca:conversation-knowledge-select'))
+      skipRestoreFocusRef.current = true
+      closeModal()
+      setSelectedItemId('')
+    },
+    [closeModal, setSelectedItemId, skipRestoreFocusRef]
+  )
   const handleSelectProjectTarget = useCallback(
     (result: CmdJProjectSearchResult) => {
       skipRestoreFocusRef.current = true
@@ -245,6 +259,8 @@ export function useWorktreeJumpPaletteSelectionActions({
         handleSelectWorkspaceTab(item.result)
       } else if (item.type === 'settings') {
         handleSelectSettings(item.result)
+      } else if (item.type === 'conversation-knowledge') {
+        handleSelectConversationKnowledge(item.item)
       } else {
         handleSelectQuickAction(item.result)
       }
@@ -254,6 +270,7 @@ export function useWorktreeJumpPaletteSelectionActions({
       handleSelectProjectTarget,
       handleSelectQuickAction,
       handleSelectSettings,
+      handleSelectConversationKnowledge,
       handleSelectSimulatorTab,
       handleSelectWorkspaceTab,
       handleSelectWorktree

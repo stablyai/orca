@@ -45,6 +45,7 @@ export function runLocalPlanForAgent(input: {
       operation: input.operation,
       wslDistro: input.target.wslDistro,
       holdHomeLockUntilExit,
+      waitForTerminationOnFailure: input.operation === 'knowledge-enrichment',
       spawnAgent: input.spawnAgent
     })
   if (input.agentId !== 'codex') {

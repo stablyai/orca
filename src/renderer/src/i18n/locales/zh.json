@@ -1,4 +1,156 @@
 {
+  "conversationKnowledge": {
+    "name": "会话知识",
+    "graph": "会话知识图谱",
+    "description": "从智能体历史中生成会话摘要、概念和知识候选。",
+    "status": {
+      "indexing": "正在生成",
+      "indexed": "已生成",
+      "progress": "{{state}} · {{completed}}/{{total}} · {{failed}} 项失败",
+      "panelLabel": "生成进度",
+      "ready": "等待生成",
+      "readyDescription": "生成更新会索引新增或有变化的会话。",
+      "progressCount": "{{completed}} / {{total}}",
+      "currentSession": "智能体正在处理：{{title}}",
+      "waitingForAgent": "正在等待下一个智能体任务。",
+      "completed": "已完成",
+      "active": "进行中",
+      "queued": "排队中",
+      "failed": "失败",
+      "canceled": "已停止"
+    },
+    "items": {
+      "count": "显示 {{visible}} 项，共 {{total}} 项",
+      "empty": "暂无会话摘要"
+    },
+    "scope": {
+      "ariaLabel": "知识图谱展示范围",
+      "all": "全部",
+      "project": "按项目"
+    },
+    "search": {
+      "ariaLabel": "搜索会话知识",
+      "placeholder": "搜索陈述、摘要或 reliability:verified"
+    },
+    "claimResults": "匹配的陈述",
+    "graphMode": {
+      "ariaLabel": "图谱视图",
+      "map": "地图",
+      "graph": "图谱"
+    },
+    "map": {
+      "empty": "暂无具备明确概念关联的来源陈述。重新生成知识以构建地图。",
+      "relatedConcepts": "关联概念",
+      "independentConcept": "概念",
+      "conceptCount": "{{count}} 个概念",
+      "evidenceCount": "{{count}} 条有来源陈述",
+      "verifiedCount": "{{count}} 条已验证",
+      "knowledgeNote": "知识笔记",
+      "relationships": "概念关系",
+      "linkLegend": "连线表示同一条有来源陈述明确关联的概念；为保持可读性，地图保留每个概念证据最强的主连接。数字表示支持该关联的陈述数量。",
+      "zoomIn": "放大",
+      "zoomOut": "缩小",
+      "fit": "适应地图"
+    },
+    "relations": {
+      "title": "有来源陈述与语义关系",
+      "empty": "暂无有来源陈述或语义关系。重新生成知识以提取它们。",
+      "clearFocus": "显示全部",
+      "structuredClaim": "结构化关系",
+      "sourceBackedStatement": "有来源陈述"
+    },
+    "generateAll": "生成全部",
+    "generateUpdates": "生成更新",
+    "regenerateAll": "重新生成全部",
+    "regenerateAllDescription": "替换全部已生成的知识项。",
+    "generationOptions": "更多生成选项",
+    "stop": "停止生成",
+    "configurationRequired": "请在设置 → 实验性 → 会话知识中选择已启用的摘要智能体和模型。",
+    "empty": {
+      "search": "没有匹配的会话摘要或关联节点。",
+      "generated": "暂无生成的会话知识。",
+      "selection": "选择概念、知识候选或会话摘要以查看详情和来源。"
+    },
+    "error": {
+      "load": "无法加载已生成的会话知识。",
+      "start": "无法开始生成会话知识。",
+      "stop": "无法停止生成会话知识。"
+    },
+    "detail": {
+      "resize": "调整详情宽度",
+      "generatedBy": "由 {{agent}} · {{model}} 生成",
+      "created": "创建于",
+      "modified": "最后修改于",
+      "summary": "会话摘要",
+      "conclusions": "知识候选",
+      "topics": "主题",
+      "entities": "实体",
+      "source": "来源",
+      "openSessionHistory": "打开智能体会话历史",
+      "handoffUserConfirmed": "用户确认",
+      "handoffVerified": "已验证",
+      "handoffInferred": "推断",
+      "handoffProposal": "提议",
+      "handoffActive": "有效",
+      "handoffSuperseded": "已取代",
+      "handoffConflicted": "有冲突",
+      "handoffExpired": "已过期"
+    },
+    "nodeType": {
+      "project": "项目",
+      "workspace": "工作区",
+      "digest": "会话摘要",
+      "concept": "概念",
+      "candidate": "知识候选",
+      "statement": "有来源陈述",
+      "note": "知识笔记"
+    },
+    "relation": {
+      "belongsTo": "属于",
+      "occurredIn": "发生于",
+      "about": "关于",
+      "mentions": "提及",
+      "contains": "包含",
+      "records": "记录",
+      "organizes": "整理为",
+      "supports": "支持"
+    },
+    "note": {
+      "eyebrow": "知识笔记",
+      "supported": "已支持",
+      "verified": "已验证",
+      "evidence": "支持证据"
+    },
+    "conceptOverview": {
+      "eyebrow": "概念概览",
+      "description": "出现在 {{count}} 条会话摘要中。它尚不是已验证的知识笔记。",
+      "sourceBacked": "有来源陈述",
+      "noSourceBacked": "这个概念暂时没有关联的有来源陈述。",
+      "digests": "会话摘要",
+      "noDigests": "这个概念暂时没有关联的会话摘要。",
+      "sourceSessions": "来源会话",
+      "noSourceSessions": "这个概念暂时没有关联的来源会话。"
+    },
+    "settings": {
+      "description": "添加图谱和详情工作区，用于浏览会话摘要、概念、知识候选及其来源。",
+      "searchDescription": "基于智能体会话历史构建可搜索的知识层。",
+      "toggle": "启用或关闭会话知识",
+      "summaryAgent": "摘要智能体",
+      "chooseAgent": "选择已启用的智能体",
+      "agentHelp": "仅显示已检测到、已启用且支持后台生成的智能体。",
+      "summaryModel": "摘要模型",
+      "keyword": {
+        "conversation": "会话",
+        "history": "历史",
+        "knowledge": "知识",
+        "summary": "总结",
+        "graph": "图谱"
+      }
+    },
+    "enrichment": "AI 知识增强",
+    "enrichmentCopy": "每天检查一次新增或有变化的会话，并生成会话摘要、概念、知识候选和图谱关联。",
+    "enrichmentToggle": "启用或关闭 AI 知识增强"
+  },
   "app": {
     "recoverableError": {
       "rootTitle": "Orca 遇到渲染器错误。",
@@ -133,6 +285,10 @@
     "activityWaitingSuffix": "等待活动"
   },
   "worktreeJumpPalette": {
+    "conversationKnowledgeHeader": "知识",
+    "searchScope": "搜索范围",
+    "allResults": "全部",
+    "knowledgeResults": "知识",
     "matchLabel": {
       "comment": "评论",
       "issue": "议题",

@@ -12,7 +12,22 @@ import type {
   AiVaultSessionTitlesArgs,
   AiVaultSessionTitlesResult
 } from '../../../../shared/ai-vault-session-title'
-import type { AiVaultListArgs, AiVaultListResult } from '../../../../shared/ai-vault-types'
+import type {
+  AiVaultAgent,
+  AiVaultListArgs,
+  AiVaultListResult
+} from '../../../../shared/ai-vault-types'
+import type {
+  AiVaultHistoryReadResult,
+  AiVaultHistorySearchResult
+} from '../../../../shared/ai-vault-history-types'
+import type {
+  ConversationKnowledgeItem,
+  ConversationKnowledgeIndexStatus,
+  ConversationKnowledgeListResult,
+  GenerateConversationKnowledgeRequest,
+  StartConversationKnowledgeIndexRequest
+} from '../../../../shared/conversation-knowledge-items'
 import {
   normalizeExecutionHostId,
   normalizeExecutionHostScope,
@@ -30,6 +45,19 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
     'relay'
   )
   return {
+    searchHistory: (args: { query: string; limit?: number }) =>
+      callRuntimeResult<AiVaultHistorySearchResult>('aiVault.searchHistory', args),
+    readHistory: (args: { agent: AiVaultAgent; sessionId: string; limit?: number }) =>
+      callRuntimeResult<AiVaultHistoryReadResult>('aiVault.readHistory', args),
+    enrichHistory: (args: GenerateConversationKnowledgeRequest) =>
+      callRuntimeResult<ConversationKnowledgeItem>('aiVault.enrichHistory', args),
+    listKnowledge: (args?: { query?: string; scopePaths?: string[] }) =>
+      callRuntimeResult<ConversationKnowledgeListResult>('aiVault.listKnowledge', args ?? {}),
+    startKnowledgeIndex: (args: StartConversationKnowledgeIndexRequest) =>
+      callRuntimeResult<ConversationKnowledgeIndexStatus>('aiVault.startKnowledgeIndex', args),
+    getKnowledgeIndexStatus: () =>
+      callRuntimeResult<ConversationKnowledgeIndexStatus>('aiVault.getKnowledgeIndexStatus', {}),
+    cancelKnowledgeIndex: () => callRuntimeResult<void>('aiVault.cancelKnowledgeIndex', {}),
     // A browser searches only its selected paired runtime.
     searchSessions: (request, executionHostScope) =>
       addressesOwnRuntime(executionHostScope)

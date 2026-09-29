@@ -92,6 +92,21 @@ async function renderExperimentalPane(args: {
 }
 
 describe('ExperimentalPane', () => {
+  it('renders conversation knowledge first and exposes it to settings search', () => {
+    const settings = getDefaultSettings('/tmp')
+    const markup = renderToStaticMarkup(
+      <ExperimentalPane settings={settings} updateSettings={vi.fn()} />
+    )
+
+    expect(markup).toContain('id="experimental-conversation-knowledge"')
+    expect(markup.indexOf('experimental-conversation-knowledge')).toBeLessThan(
+      markup.indexOf('experimental-agent-dashboard')
+    )
+    expect(
+      getExperimentalPaneSearchEntries().some((entry) => entry.keywords?.includes('conversation'))
+    ).toBe(true)
+  })
+
   it('does not render compact worktree cards after graduation from Experimental', () => {
     const markup = renderToStaticMarkup(
       <ExperimentalPane settings={getDefaultSettings('/tmp')} updateSettings={vi.fn()} />

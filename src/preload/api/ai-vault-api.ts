@@ -8,6 +8,7 @@ import type {
   AiVaultDeleteSessionResult
 } from '../../shared/ai-vault-session-deletion'
 import type {
+  AiVaultAgent,
   AiVaultFirstUserPromptArgs,
   AiVaultFirstUserPromptResult,
   AiVaultListArgs,
@@ -23,6 +24,17 @@ import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
 } from '../../shared/ai-vault-resume-preparation'
+import type {
+  AiVaultHistoryReadResult,
+  AiVaultHistorySearchResult
+} from '../../shared/ai-vault-history-types'
+import type {
+  ConversationKnowledgeItem,
+  ConversationKnowledgeIndexStatus,
+  ConversationKnowledgeListResult,
+  GenerateConversationKnowledgeRequest,
+  StartConversationKnowledgeIndexRequest
+} from '../../shared/conversation-knowledge-items'
 import type { ExecutionHostId, ExecutionHostScope } from '../../shared/execution-host'
 
 export type AiVaultApi = {
@@ -45,6 +57,22 @@ export type AiVaultApi = {
   /** Deletes and rebuilds this desktop's local search index. */
   clearSearchIndex: () => Promise<void>
   listSessions: (args?: AiVaultListArgs) => Promise<AiVaultListResult>
+  searchHistory: (args: { query: string; limit?: number }) => Promise<AiVaultHistorySearchResult>
+  readHistory: (args: {
+    agent: AiVaultAgent
+    sessionId: string
+    limit?: number
+  }) => Promise<AiVaultHistoryReadResult>
+  enrichHistory: (args: GenerateConversationKnowledgeRequest) => Promise<ConversationKnowledgeItem>
+  listKnowledge: (args?: {
+    query?: string
+    scopePaths?: string[]
+  }) => Promise<ConversationKnowledgeListResult>
+  startKnowledgeIndex: (
+    args: StartConversationKnowledgeIndexRequest
+  ) => Promise<ConversationKnowledgeIndexStatus>
+  getKnowledgeIndexStatus: () => Promise<ConversationKnowledgeIndexStatus>
+  cancelKnowledgeIndex: () => Promise<void>
   resolveSessionTitles: (args: AiVaultSessionTitlesArgs) => Promise<AiVaultSessionTitlesResult>
   cancelListSessions: (args: { requestToken: string }) => Promise<void>
   prepareSessionResume: (

@@ -3,6 +3,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import { selectConversationHistoryTarget } from '@/lib/conversation-history-selection'
 import type { AiVaultSessionListGroup } from './ai-vault-session-filters'
 
 const mockState: {
@@ -178,6 +179,29 @@ it('shows the whole history and no offer while the box is empty', async () => {
   expect(screen.getByRole('button', { name: 'Sort sessions: Last updated' })).toBeTruthy()
   expect(screen.queryByText('2 results')).toBeNull()
   expect(screen.queryByRole('button', { name: /^Sort results:/ })).toBeNull()
+})
+
+it('opens a conversation knowledge source by its exact identity without index search', async () => {
+  mockState.settings = { aiVaultSearch: { enabled: true } }
+  selectConversationHistoryTarget({
+    executionHostId: 'local',
+    agent: 'claude',
+    sessionId: 'claude:1',
+    scope: 'all'
+  })
+  await typeQuery('')
+
+  expect(screen.getByDisplayValue('claude:1')).toBeTruthy()
+  expect(screen.getByText('Fix the foo pipeline')).toBeTruthy()
+  expect(screen.queryByText('Rename the bar widget')).toBeNull()
+  expect(searchSessions).not.toHaveBeenCalled()
+
+  await userEvent.click(screen.getByRole('button', { name: 'Clear search' }))
+  await userEvent.type(screen.getByLabelText('Search sessions'), 'foo')
+
+  await waitFor(() =>
+    expect(searchSessions).toHaveBeenCalledWith(expect.objectContaining({ query: 'foo' }), 'local')
+  )
 })
 
 it('keeps sort off the filter menu, which is filters only', async () => {

@@ -24,6 +24,7 @@ import {
 } from './ai-vault-types'
 import type { ExecutionHostId } from './execution-host'
 import { sessionPreviewSearchText } from './ai-vault-session-display'
+import { isConversationKnowledgeGenerationTitle } from './conversation-knowledge-items'
 
 // Why: the plain project descriptor is relocated here (no runtime dep) so the
 // filter-state type can reference it without dragging the renderer-located
@@ -86,6 +87,9 @@ export function filterAiVaultSessions(
       : []
 
   const filtered = sessions.filter((session) => {
+    if (isConversationKnowledgeGenerationTitle(session.title)) {
+      return false
+    }
     if (!agentSet.has(session.agent)) {
       return false
     }

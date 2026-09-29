@@ -38,7 +38,11 @@ export type RemoteCommitMessageExecResult = {
   spawnError?: string
 }
 
-export type TextGenerationOperation = 'commit-message' | 'pull-request-fields' | 'branch-name'
+export type TextGenerationOperation =
+  | 'commit-message'
+  | 'pull-request-fields'
+  | 'branch-name'
+  | 'knowledge-enrichment'
 
 export type CommitMessageGenerationTarget =
   | { kind: 'local'; cwd: string; env?: NodeJS.ProcessEnv; wslDistro?: string }
@@ -60,6 +64,7 @@ export type InternalTextGenerationResult =
       success: false
       error: string
       canceled?: boolean
+      cleanupUnverified?: boolean
       failureOutput?: AgentGenerationFailureOutput
     }
 
@@ -92,4 +97,5 @@ export type SpawnSourceControlAgent = (input: {
   commandEnv?: Record<string, string>
   stdinMode: 'ignore' | 'pipe'
   useCwdForNative: boolean
+  detached?: boolean
 }) => SpawnedSourceControlAgentProcess

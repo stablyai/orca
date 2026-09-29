@@ -7,6 +7,11 @@ import {
   type PluginHostMethodSpec
 } from '../../shared/plugins/plugin-host-api'
 import type { PluginEventName } from '../../shared/plugins/plugin-manifest'
+import type { AiVaultAgent } from '../../shared/ai-vault-types'
+import type {
+  AiVaultHistoryReadResult,
+  AiVaultHistorySearchResult
+} from '../ai-vault/session-history'
 
 export type PluginWorktreeContext = {
   worktreeId: string
@@ -28,6 +33,12 @@ export type PluginHostServices = {
     title: string
     body?: string
   }): Promise<{ delivered: boolean }>
+  searchHistory(args: { query: string; limit?: number }): Promise<AiVaultHistorySearchResult>
+  readHistory(args: {
+    agent: AiVaultAgent
+    sessionId: string
+    limit?: number
+  }): Promise<AiVaultHistoryReadResult>
   storage: {
     get(pluginId: string, key: string): unknown
     set(pluginId: string, key: string, value: unknown): { ok: true } | { ok: false; error: string }
@@ -88,6 +99,20 @@ const HANDLERS = new Map<string, BoundPluginHostMethod>([
         .slice(0, PLUGIN_WORKSPACE_TERMINAL_LIMIT)
         .map((terminal) => ({ id: terminal.id }))
     }
+  }),
+  definePluginMethod('history.search', async (params, { services }) => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Plugin method schema validates the parameters before this binding runs.
+    const { query, limit } = params as { query: string; limit?: number }
+    return services.searchHistory({ query, limit })
+  }),
+  definePluginMethod('history.read', async (params, { services }) => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Plugin method schema validates the parameters before this binding runs.
+    const { agent, sessionId, limit } = params as {
+      agent: AiVaultAgent
+      sessionId: string
+      limit?: number
+    }
+    return services.readHistory({ agent, sessionId, limit })
   }),
   definePluginMethod('terminal.sendText', async (params, { services }) => {
     const { terminalId, text, enter } = params as {
