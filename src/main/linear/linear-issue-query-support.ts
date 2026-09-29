@@ -182,6 +182,9 @@ export function getListIssueConnectionLoader(
       LinearIssueConnectionResponse,
       LinearRawVariables
     >(ALL_ISSUES_QUERY, { ...variables, ...page, filter: filterInput })
+    if (options?.rejectPartialResponse && result.errors?.length) {
+      throw new Error('Linear returned an incomplete issue response. Refresh the list.')
+    }
     return result.data?.issues
   }
 }

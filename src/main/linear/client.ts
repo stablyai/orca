@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto'
+import { getOrcaProfileListState } from '../orca-profiles/profile-index-store'
 import type { LinearClient } from '@linear/sdk'
 import { loadLinearSdk } from './linear-sdk'
 import { LEGACY_WORKSPACE_ID } from './linear-credential-paths'
@@ -9,6 +11,7 @@ import {
 import { workspaceFromLinearData } from './linear-workspace-record'
 import {
   getCredentialError,
+  recordCredentialError,
   getLegacyWorkspace,
   getWorkspaceFile,
   getWorkspaceState,
@@ -113,11 +116,19 @@ export async function connect(
 ): Promise<
   { ok: true; viewer: LinearViewer; workspace: LinearWorkspace } | { ok: false; error: string }
 > {
+  const profileId = getOrcaProfileListState().activeProfileId
   try {
     const client = new (loadLinearSdk().LinearClient)({ apiKey })
     const me = await client.viewer
     const org = await me.organization
-    const workspace = workspaceFromLinearData(me, org)
+    if (getOrcaProfileListState().activeProfileId !== profileId) {
+      return { ok: false, error: 'Orca profile changed. Connect Linear again.' }
+    }
+    const workspace = {
+      ...workspaceFromLinearData(me, org),
+      credentialOwnerProfileId: profileId,
+      credentialEpoch: randomUUID()
+    }
 
     saveWorkspaceToken(workspace.id, apiKey)
     const legacyWorkspace = getLegacyWorkspace()
@@ -196,6 +207,8 @@ export async function testConnection(
   if (!resolvedWorkspaceId) {
     return { ok: false, error: 'No API key stored.' }
   }
+  const profileId = getOrcaProfileListState().activeProfileId
+  const saved = getWorkspaceState().workspaces.find((entry) => entry.id === resolvedWorkspaceId)
   let token: string | null
   try {
     token = loadToken({ force: true, workspaceId: resolvedWorkspaceId })
@@ -211,8 +224,37 @@ export async function testConnection(
     const client = new (loadLinearSdk().LinearClient)({ apiKey: token })
     const me = await client.viewer
     const org = await me.organization
-    const workspace = workspaceFromLinearData(me, org)
+    const current = getWorkspaceState().workspaces.find((entry) => entry.id === resolvedWorkspaceId)
+    if (
+      getOrcaProfileListState().activeProfileId !== profileId ||
+      loadToken({ workspaceId: resolvedWorkspaceId }) !== token ||
+      (current !== saved && resolvedWorkspaceId !== LEGACY_WORKSPACE_ID)
+    ) {
+      return { ok: false, error: 'Linear connection changed. Test the connection again.' }
+    }
+    if (
+      (saved?.viewerId && saved.viewerId !== me.id) ||
+      (resolvedWorkspaceId !== LEGACY_WORKSPACE_ID && org.id !== resolvedWorkspaceId)
+    ) {
+      const error = 'Linear identity changed. Reconnect Linear before reading personal data.'
+      recordCredentialError(resolvedWorkspaceId, error)
+      return { ok: false, error }
+    }
+    // A health check cannot grant personal Inbox access to an unconfirmed legacy identity.
+    const workspace = {
+      ...workspaceFromLinearData(me, org),
+      viewerId: saved?.viewerId,
+      credentialOwnerProfileId: saved?.credentialOwnerProfileId,
+      credentialEpoch: saved?.credentialEpoch
+    }
     if (resolvedWorkspaceId === LEGACY_WORKSPACE_ID) {
+      if (getWorkspaceState().workspaces.some((entry) => entry.id === org.id)) {
+        return {
+          ok: false,
+          error:
+            'This workspace is already connected. Reconnect explicitly to replace its identity.'
+        }
+      }
       replaceLegacyWorkspace(workspace, token)
     } else {
       saveWorkspaceToken(workspace.id, token)
@@ -220,7 +262,12 @@ export async function testConnection(
     }
     return { ok: true, viewer: workspace, workspace }
   } catch (error) {
-    if (isAuthError(error)) {
+    if (
+      isAuthError(error) &&
+      loadToken({ workspaceId: resolvedWorkspaceId }) === token &&
+      (resolvedWorkspaceId === LEGACY_WORKSPACE_ID ||
+        getWorkspaceState().workspaces.find((entry) => entry.id === resolvedWorkspaceId) === saved)
+    ) {
       clearToken(resolvedWorkspaceId)
     }
     const message = error instanceof Error ? error.message : 'Test failed'
