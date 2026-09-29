@@ -15018,7 +15018,10 @@
           "zoomOut": "Zoom out",
           "fit": "Fit to screen",
           "close": "Close",
-          "viewportLabel": "Diagram. Arrow keys pan, plus and minus zoom, 0 fits to screen."
+          "viewportLabel": "Diagram. Arrow keys pan, plus and minus zoom, 0 fits to screen.",
+          "copyPng": "Copy as PNG",
+          "copied": "Copied",
+          "copyFailed": "Couldn't copy the diagram as an image"
         },
         "MonacoEditor": {
           "68cb83f4a7": "Add note on selected text",

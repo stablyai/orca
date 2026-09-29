@@ -14246,7 +14246,10 @@
           "zoomOut": "Zoom arrière",
           "fit": "Ajuster à l’écran",
           "close": "Fermer",
-          "viewportLabel": "Diagramme. Les flèches le déplacent, plus et moins zooment, 0 l’ajuste à l’écran."
+          "viewportLabel": "Diagramme. Les flèches le déplacent, plus et moins zooment, 0 l’ajuste à l’écran.",
+          "copyPng": "Copier en PNG",
+          "copied": "Copié",
+          "copyFailed": "Impossible de copier le diagramme en image"
         },
         "MonacoEditor": {
           "68cb83f4a7": "Ajouter une note sur le texte sélectionné",

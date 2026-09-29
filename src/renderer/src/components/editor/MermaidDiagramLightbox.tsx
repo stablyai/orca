@@ -10,8 +10,9 @@ import {
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { translate } from '@/i18n/i18n'
+import { MermaidDiagramCopyPngButton } from './MermaidDiagramCopyPngButton'
+import { MermaidDiagramToolbarButton } from './MermaidDiagramToolbarButton'
 import {
   DIAGRAM_BUTTON_ZOOM_STEP,
   MIN_DIAGRAM_SCALE,
@@ -250,7 +251,7 @@ function MermaidDiagramViewport({ svgMarkup }: MermaidDiagramViewportProps): Rea
     )
   }
 
-  const onViewportKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+  const onViewerKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
     // Why: leave modified keys (e.g. Ctrl+= app zoom) to the app.
     if (event.ctrlKey || event.metaKey || event.altKey) {
       return
@@ -274,6 +275,19 @@ function MermaidDiagramViewport({ svgMarkup }: MermaidDiagramViewportProps): Rea
     }
   }
 
+  const getDiagramForCopy = useCallback(() => {
+    const svg = diagramRef.current?.querySelector('svg')
+    const viewport = viewportRef.current
+    if (!svg || !viewport) {
+      return null
+    }
+    return {
+      svg,
+      size: naturalSizeRef.current,
+      backgroundColor: getComputedStyle(viewport).backgroundColor
+    }
+  }, [])
+
   const endDrag = (event: React.PointerEvent<HTMLDivElement>): void => {
     if (dragRef.current?.pointerId !== event.pointerId) {
       return
@@ -288,7 +302,8 @@ function MermaidDiagramViewport({ svgMarkup }: MermaidDiagramViewportProps): Rea
   return (
     <>
       <DialogTitle className="sr-only">{title}</DialogTitle>
-      <div className="relative min-h-0 flex-1">
+      {/* Why: handle keys on the wrapper so they keep working after a toolbar button takes focus. */}
+      <div className="relative min-h-0 flex-1" onKeyDown={onViewerKeyDown}>
         <div
           ref={viewportRef}
           data-mermaid-diagram-viewport=""
@@ -300,7 +315,6 @@ function MermaidDiagramViewport({ svgMarkup }: MermaidDiagramViewportProps): Rea
             'Diagram. Arrow keys pan, plus and minus zoom, 0 fits to screen.'
           )}
           className="absolute inset-0 cursor-grab touch-none overflow-hidden bg-background outline-none select-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset data-[dragging=true]:cursor-grabbing"
-          onKeyDown={onViewportKeyDown}
           onPointerDown={(event) => {
             const current = transformRef.current
             if (event.button !== 0 || !current) {
@@ -352,66 +366,41 @@ function MermaidDiagramViewport({ svgMarkup }: MermaidDiagramViewportProps): Rea
             )}
           </span>
           <Separator orientation="vertical" className="mx-1 hidden h-4 md:block" />
-          <ToolbarIconButton
+          <MermaidDiagramToolbarButton
             label={translate('auto.components.editor.MermaidDiagramLightbox.zoomOut', 'Zoom out')}
             shortcut="-"
             onClick={() => zoomAroundCenter(1 / DIAGRAM_BUTTON_ZOOM_STEP)}
           >
             <ZoomOut />
-          </ToolbarIconButton>
+          </MermaidDiagramToolbarButton>
           <span className="w-12 text-center text-xs text-muted-foreground tabular-nums">
             {zoomPercent}%
           </span>
-          <ToolbarIconButton
+          <MermaidDiagramToolbarButton
             label={translate('auto.components.editor.MermaidDiagramLightbox.zoomIn', 'Zoom in')}
             shortcut="+"
             onClick={() => zoomAroundCenter(DIAGRAM_BUTTON_ZOOM_STEP)}
           >
             <ZoomIn />
-          </ToolbarIconButton>
-          <ToolbarIconButton
+          </MermaidDiagramToolbarButton>
+          <MermaidDiagramToolbarButton
             label={translate('auto.components.editor.MermaidDiagramLightbox.fit', 'Fit to screen')}
             shortcut="0"
             onClick={fitToViewport}
           >
             <Maximize />
-          </ToolbarIconButton>
+          </MermaidDiagramToolbarButton>
+          <MermaidDiagramCopyPngButton getDiagram={getDiagramForCopy} />
           <Separator orientation="vertical" className="mx-1 h-4" />
           <DialogClose asChild>
-            <ToolbarIconButton
+            <MermaidDiagramToolbarButton
               label={translate('auto.components.editor.MermaidDiagramLightbox.close', 'Close')}
             >
               <X />
-            </ToolbarIconButton>
+            </MermaidDiagramToolbarButton>
           </DialogClose>
         </div>
       </div>
     </>
-  )
-}
-
-type ToolbarIconButtonProps = React.ComponentProps<typeof Button> & {
-  label: string
-  shortcut?: string
-}
-
-function ToolbarIconButton({
-  label,
-  shortcut,
-  children,
-  ...props
-}: ToolbarIconButtonProps): React.JSX.Element {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button type="button" variant="ghost" size="icon-sm" aria-label={label} {...props}>
-          {children}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="top" sideOffset={4}>
-        {label}
-        {shortcut && <ShortcutKeyCombo keys={[shortcut]} className="ml-1.5" />}
-      </TooltipContent>
-    </Tooltip>
   )
 }

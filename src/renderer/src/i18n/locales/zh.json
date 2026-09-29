@@ -13133,7 +13133,10 @@
           "zoomOut": "缩小",
           "fit": "适应屏幕",
           "close": "关闭",
-          "viewportLabel": "图表。方向键平移，加号和减号缩放，0 适应屏幕。"
+          "viewportLabel": "图表。方向键平移，加号和减号缩放，0 适应屏幕。",
+          "copyPng": "复制为 PNG",
+          "copied": "已复制",
+          "copyFailed": "无法将图表复制为图片"
         },
         "MonacoEditor": {
           "68cb83f4a7": "在选定的文本上添加注释",

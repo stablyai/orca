@@ -13053,7 +13053,10 @@
           "zoomOut": "Alejar",
           "fit": "Ajustar a la pantalla",
           "close": "Cerrar",
-          "viewportLabel": "Diagrama. Las flechas lo mueven, más y menos hacen zoom, 0 lo ajusta a la pantalla."
+          "viewportLabel": "Diagrama. Las flechas lo mueven, más y menos hacen zoom, 0 lo ajusta a la pantalla.",
+          "copyPng": "Copiar como PNG",
+          "copied": "Copiado",
+          "copyFailed": "No se pudo copiar el diagrama como imagen"
         },
         "MonacoEditor": {
           "68cb83f4a7": "Agregar nota sobre el texto seleccionado",
