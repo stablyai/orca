@@ -170,6 +170,76 @@ describe('terminal input serialization', () => {
     expect(writes.at(-1)).toBe('later')
   })
 
+  it('delivers a query reply immediately while a queued prompt waits for the prior receipt', async () => {
+    vi.useFakeTimers()
+    const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
+      () => {},
+      'antigravity'
+    )
+    const first = runtime.sendTerminalAgentPrompt(handle, 'first', {
+      inputKind: 'driving',
+      acceptQueued: true,
+      requestId: 'receipt-first',
+      observationTimeoutMs: 300
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersToNextTimerAsync()
+    const second = runtime.sendTerminalAgentPrompt(handle, 'second', {
+      inputKind: 'driving',
+      acceptQueued: true,
+      requestId: 'receipt-second',
+      observationTimeoutMs: 0
+    })
+    let replied = false
+    const query = runtime
+      .sendTerminal(handle, { text: '\u001b[1;1R' }, { inputKind: 'query-reply' })
+      .then((result) => {
+        replied = true
+        return result
+      })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(replied).toBe(true)
+    expect(writes.join('')).not.toContain('second')
+    await vi.runAllTimersAsync()
+    await Promise.all([first, second, query])
+  })
+
+  it('keeps protocol reply order when the earlier reply guard yields', async () => {
+    vi.useFakeTimers()
+    const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(() => {}, 'codex')
+    const prompt = runtime.sendTerminalAgentPrompt(handle, 'task', {
+      inputKind: 'driving',
+      acceptQueued: true,
+      requestId: 'reply-order',
+      observationTimeoutMs: 0
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    let unblock = (): void => {}
+    const guard = new Promise<void>((resolve) => {
+      unblock = resolve
+    })
+    const first = runtime.sendTerminal(
+      handle,
+      { text: '\u001b[1;1R' },
+      {
+        inputKind: 'query-reply',
+        beforeWrite: () => guard
+      }
+    )
+    const second = runtime.sendTerminal(
+      handle,
+      { text: '\u001b[2;2R' },
+      { inputKind: 'query-reply' }
+    )
+    await vi.advanceTimersByTimeAsync(0)
+    expect(writes).not.toContain('\u001b[2;2R')
+    unblock()
+    await Promise.all([first, second])
+    expect(writes.slice(-2)).toEqual(['\u001b[1;1R', '\u001b[2;2R'])
+    await vi.runAllTimersAsync()
+    await prompt
+  })
+
   it('stops remaining chunks and queued input after the PTY generation changes', async () => {
     const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
       (service, _data, count) => {

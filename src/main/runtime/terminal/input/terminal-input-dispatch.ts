@@ -22,6 +22,11 @@ import {
 } from '../../../../shared/agent-prompt-injection'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
+type PromptReplyWindow = {
+  writes: Set<Promise<RuntimeTerminalSend>>
+  tail: Promise<void>
+}
+
 export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithResolveTerminalPane {
   protected abstract writeTerminalAction(
     ptyId: string,
@@ -58,7 +63,11 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
 
   private lastProvenAbsentLeafPtyVerdictPruneAt: number | undefined
   private terminalInputTails = new Map<string, Promise<void>>()
-  private promptReplyWindows = new Map<string, Set<Promise<RuntimeTerminalSend>>>()
+  private promptReplyWindows = new Map<string, PromptReplyWindow>()
+  private promptReplyWaiters = new Map<
+    string,
+    Set<(window?: PromptReplyWindow) => Promise<RuntimeTerminalSend>>
+  >()
 
   protected async serializeTerminalInput<T>(
     ptyId: string,
@@ -84,6 +93,55 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     } finally {
       release()
     }
+  }
+
+  private serializeTerminalQueryReply(
+    ptyId: string,
+    generation: number,
+    write: () => Promise<RuntimeTerminalSend>
+  ): Promise<RuntimeTerminalSend> {
+    const key = `${ptyId}\u0000${generation}`
+    const waiters = this.promptReplyWaiters.get(key) ?? new Set()
+    this.promptReplyWaiters.set(key, waiters)
+    let resolve = (_value: RuntimeTerminalSend): void => {}
+    let reject = (_error: unknown): void => {}
+    const result = new Promise<RuntimeTerminalSend>((accept, fail) => {
+      resolve = accept
+      reject = fail
+    })
+    let started: Promise<RuntimeTerminalSend> | undefined
+    const start = (window?: PromptReplyWindow): Promise<RuntimeTerminalSend> => {
+      if (started) {
+        return started
+      }
+      waiters.delete(start)
+      if (waiters.size === 0) {
+        this.promptReplyWaiters.delete(key)
+      }
+      started = (window?.tail ?? Promise.resolve()).then(write)
+      if (window) {
+        const reply = started
+        window.writes.add(reply)
+        window.tail = reply.then(
+          () => undefined,
+          () => undefined
+        )
+        void reply.then(
+          () => window.writes.delete(reply),
+          () => window.writes.delete(reply)
+        )
+      }
+      void started.then(resolve, reject)
+      return started
+    }
+    waiters.add(start)
+    // Keep a queue position; an active prompt may admit the reply before that position is reached.
+    void this.serializeTerminalInput(ptyId, generation, () => start()).catch(reject)
+    const window = this.promptReplyWindows.get(key)
+    if (window) {
+      start(window)
+    }
+    return result
   }
 
   private pruneExpiredLeafPtyVerdicts(now: number): void {
@@ -210,20 +268,9 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
             : 0
       }
     }
-    const replies =
-      options.inputKind === 'query-reply'
-        ? this.promptReplyWindows.get(`${ptyId}\u0000${generation}`)
-        : undefined
-    if (replies) {
-      const reply = write()
-      replies.add(reply)
-      void reply.then(
-        () => replies.delete(reply),
-        () => replies.delete(reply)
-      )
-      return reply
-    }
-    return this.serializeTerminalInput(ptyId, generation, write)
+    return options.inputKind === 'query-reply'
+      ? this.serializeTerminalQueryReply(ptyId, generation, write)
+      : this.serializeTerminalInput(ptyId, generation, write)
   }
 
   private async launchComposerAdmitsSubmit(
@@ -284,27 +331,32 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     }
     const generation = this.getPtyLifecycleGeneration(ptyId)
     // Reserve input order before waiting for an earlier prompt's receipt observation.
-    const delivery = await this.serializeTerminalInput(ptyId, generation, (release) =>
-      this.serializeAgentPromptSubmission(ptyId, generation, async () => {
-        await assertTerminalInputWithinLimitWithYield(payload)
-        if (leaf && (await this.isLeafPtyProvenAbsent(ptyId))) {
-          throw new Error('terminal_not_writable')
-        }
-        this.assertLiveTerminalHandleTargetsPty(handle, ptyId)
-        this.assertAgentPromptGeneration(ptyId, generation)
-        // Only an active prompt needs protocol replies while awaiting composer rendering.
-        const key = `${ptyId}\u0000${generation}`
-        const replies = new Set<Promise<RuntimeTerminalSend>>()
-        this.promptReplyWindows.set(key, replies)
-        let drained: Promise<void> | undefined
-        const closeReplies = (): Promise<void> => {
-          if (!drained) {
+    const delivery = await this.serializeTerminalInput(ptyId, generation, async (release) => {
+      // A prompt owns this turn even while waiting for the prior receipt; replies must still reach it.
+      const key = `${ptyId}\u0000${generation}`
+      const window: PromptReplyWindow = { writes: new Set(), tail: Promise.resolve() }
+      this.promptReplyWindows.set(key, window)
+      for (const start of this.promptReplyWaiters.get(key) ?? []) {
+        start(window)
+      }
+      let drained: Promise<void> | undefined
+      const closeReplies = (): Promise<void> => {
+        if (!drained) {
+          if (this.promptReplyWindows.get(key) === window) {
             this.promptReplyWindows.delete(key)
-            drained = Promise.allSettled(replies).then(() => undefined)
           }
-          return drained
+          drained = Promise.allSettled(window.writes).then(() => undefined)
         }
-        try {
+        return drained
+      }
+      try {
+        return await this.serializeAgentPromptSubmission(ptyId, generation, async () => {
+          await assertTerminalInputWithinLimitWithYield(payload)
+          if (leaf && (await this.isLeafPtyProvenAbsent(ptyId))) {
+            throw new Error('terminal_not_writable')
+          }
+          this.assertLiveTerminalHandleTargetsPty(handle, ptyId)
+          this.assertAgentPromptGeneration(ptyId, generation)
           return await this.writeTerminalAgentPrompt(
             handle,
             ptyId,
@@ -316,11 +368,11 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
               release()
             }
           )
-        } finally {
-          await closeReplies()
-        }
-      })
-    )
+        })
+      } finally {
+        await closeReplies()
+      }
+    })
     return {
       handle,
       accepted: true,
