@@ -48,6 +48,16 @@ after reset, disable or disposal. `config/scripts/xterm-image-lifecycle-contract
 exercises those boundaries against the installed addon. Font zoom scales visible
 tiles without creating enlarged full-image canvases;
 `config/scripts/xterm-image-resize-contract.test.mjs` checks allocation and tile mapping.
+The patch also renders Kitty Unicode placeholders: `a=p,U=1` (or `a=T,U=1`)
+records a virtual placement instead of drawing at the cursor, and each rendered
+row scans its cells for U+10EEEE, reading the image id from the foreground
+colour, the placement id from the underline colour, and the grid position from
+the row/column diacritics. Placeholder cells are ordinary text, so they scroll
+and reflow with it; deleting the image drops the tiles. The diacritic table lives
+at the end of `src/kitty/KittyGraphicsTypes.ts` because the emitted patch cannot
+name a source file the published tarball lacks.
+`config/scripts/xterm-image-kitty-placeholder-contract.test.mjs` drives the
+installed bundle through transmit, placeholder cells, deletion and an unknown id.
 
 ## Rules
 
