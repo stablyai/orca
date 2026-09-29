@@ -1,44 +1,16 @@
+import { normalizeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
-  normalizeExecutionHostId,
-  type ExecutionHostId
-} from '../../../../../../shared/execution-host/execution-host'
+  isSidebarHeaderActionTarget,
+  readOrderedHeaderRects,
+  type OrderedHeaderRect
+} from './ordered-header-drag-dom'
 
-export type HostHeaderRect = {
-  hostId: ExecutionHostId
-  top: number
-  bottom: number
-}
+export type HostHeaderRect = OrderedHeaderRect
 
-const HOST_HEADER_ACTION_SELECTOR =
-  '[data-host-header-action], button, a, input, textarea, select, [contenteditable=""], [contenteditable="true"]'
-
-export function isHostHeaderActionTarget(
-  target: EventTarget | null,
-  currentTarget: HTMLElement
-): boolean {
-  // SVG icons are Elements too; action icons must not arm header dragging.
-  if (!(target instanceof Element) || target === currentTarget) {
-    return false
-  }
-  return currentTarget.contains(target) && target.closest(HOST_HEADER_ACTION_SELECTOR) !== null
-}
+export const isHostHeaderActionTarget = isSidebarHeaderActionTarget
 
 export function readHostHeaderRects(container: HTMLElement): HostHeaderRect[] {
-  const containerRect = container.getBoundingClientRect()
-  const headerRects: HostHeaderRect[] = []
-  for (const header of Array.from(
-    container.querySelectorAll<HTMLElement>('[data-host-header-drag-id]')
-  )) {
-    const hostId = normalizeExecutionHostId(header.dataset.hostHeaderDragId)
-    if (!hostId) {
-      continue
-    }
-    const rect = header.getBoundingClientRect()
-    headerRects.push({
-      hostId,
-      top: rect.top - containerRect.top + container.scrollTop,
-      bottom: rect.bottom - containerRect.top + container.scrollTop
-    })
-  }
-  return headerRects
+  return readOrderedHeaderRects(container, '[data-host-header-drag-id]', (header) =>
+    normalizeExecutionHostId(header.dataset.hostHeaderDragId)
+  )
 }
