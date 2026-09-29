@@ -100,6 +100,19 @@ export const getVoicePaneSearchEntries = createLocalizedCatalog(() => [
   },
   getOpenaiTranscriptionSearchEntry(),
   {
+    title: translate('settings.voice.openRouterTranscriptionTitle', 'OpenRouter Transcription'),
+    description: translate(
+      'settings.voice.openRouterTranscriptionDescription',
+      'Configure the OpenRouter API key used for cloud speech-to-text models.'
+    ),
+    keywords: [
+      ...(getOpenaiTranscriptionSearchEntry().keywords ?? []),
+      ...translateSearchKeyword('settings.voice.openRouterSearchKeyword', 'openrouter'),
+      ...translateSearchKeyword('settings.voice.maiSearchKeyword', 'mai'),
+      ...translateSearchKeyword('settings.voice.microsoftSearchKeyword', 'microsoft')
+    ]
+  },
+  {
     title: translate('auto.components.settings.voice.pane.search.7e62cd7c41', 'Speech Model'),
     description: translate(
       'auto.components.settings.voice.pane.search.56defcd6c3',

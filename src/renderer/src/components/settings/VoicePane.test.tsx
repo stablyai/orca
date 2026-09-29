@@ -1,13 +1,23 @@
 // @vitest-environment happy-dom
 
-import { act } from 'react'
+import { act, useCallback, useState, type ComponentProps } from 'react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DeveloperPermissionRequestResult } from '../../../../shared/developer-permissions-types'
 import type { SpeechModelManifest } from '../../../../shared/speech-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { getDefaultVoiceSettings } from '../../../../shared/constants'
-import { handleVoiceDictationToggle, VoicePane } from './VoicePane'
+import { handleVoiceDictationToggle, VoicePane as VoicePaneContent } from './VoicePane'
+import { TooltipProvider } from '../ui/tooltip'
+
+function VoicePane(props: ComponentProps<typeof VoicePaneContent>): React.JSX.Element {
+  return (
+    <TooltipProvider>
+      <VoicePaneContent {...props} />
+    </TooltipProvider>
+  )
+}
 
 const { useAppStoreMock, useShortcutLabelMock } = vi.hoisted(() => ({
   useAppStoreMock: vi.fn(),
@@ -57,6 +67,9 @@ function installWindowApi(
       },
       speech: {
         getCatalog: vi.fn(async () => EMPTY_SPEECH_CATALOG),
+        getOpenRouterApiKeyStatus: vi.fn(async () => ({ configured: false })),
+        saveOpenRouterApiKey: vi.fn(async () => ({ configured: true })),
+        clearOpenRouterApiKey: vi.fn(async () => ({ configured: false })),
         getOpenAiApiKeyStatus: vi.fn(async () => ({ configured: false })),
         saveOpenAiApiKey: vi.fn(async () => ({ configured: true })),
         clearOpenAiApiKey: vi.fn(async () => ({ configured: false })),
@@ -322,5 +335,379 @@ describe('VoicePane', () => {
         microphoneDeviceLabel: 'USB Microphone'
       }
     })
+  })
+})
+
+describe('Voice cloud transcription keys', () => {
+  const refreshModelStates = vi.fn()
+  const settingsChanged = vi.fn()
+  const catalog: SpeechModelManifest[] = [
+    {
+      id: 'openrouter-mai-transcribe-2',
+      label: 'MAI-Transcribe 2',
+      description: 'Microsoft multilingual transcription',
+      provider: 'openrouter',
+      type: 'openrouter',
+      language: 'multilingual',
+      sampleRate: 16000,
+      streaming: false
+    }
+  ]
+  function StatefulVoicePane({ modelId = '' }: { modelId?: string }): React.JSX.Element {
+    const [settings, setSettings] = useState<GlobalSettings>(() => ({
+      ...makeSettings(true),
+      voice: {
+        ...getDefaultVoiceSettings(),
+        enabled: true,
+        openAiApiKeyConfigured: true,
+        sttModel: modelId
+      }
+    }))
+    const updateSettings = useCallback((updates: Partial<GlobalSettings>) => {
+      settingsChanged(updates)
+      setSettings((current) => ({ ...current, ...updates }))
+    }, [])
+    return <VoicePane settings={settings} updateSettings={updateSettings} />
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    useShortcutLabelMock.mockReturnValue('Ctrl+Shift+Y')
+    useAppStoreMock.mockImplementation((selector: (state: Record<string, unknown>) => unknown) =>
+      selector({ modelStates: [], refreshModelStates, markFeatureTipsSeen: vi.fn() })
+    )
+    installWindowApi(async () => deniedMicrophoneResult)
+    let openRouterConfigured = false
+    Object.assign(window.api.speech, {
+      getCatalog: vi.fn(async () => catalog),
+      getOpenAiApiKeyStatus: vi.fn(async () => ({ configured: true })),
+      getOpenRouterApiKeyStatus: vi.fn(async () => ({ configured: openRouterConfigured })),
+      saveOpenRouterApiKey: vi.fn(async () => {
+        openRouterConfigured = true
+        return { configured: true }
+      }),
+      clearOpenRouterApiKey: vi.fn(async () => {
+        openRouterConfigured = false
+        return { configured: false }
+      })
+    })
+  })
+
+  afterEach(cleanup)
+
+  it.each([
+    ['openai', true],
+    ['openai', false],
+    ['openrouter', true],
+    ['openrouter', false]
+  ] as const)(
+    'waits for %s status persistence (success: %s) before refreshing',
+    async (provider, succeeds) => {
+      const persistence = Promise.withResolvers<void>()
+      window.api.speech.getOpenAiApiKeyStatus = vi.fn(async () => ({
+        configured: provider === 'openai'
+      }))
+      window.api.speech.getOpenRouterApiKeyStatus = vi.fn(async () => ({
+        configured: provider === 'openrouter'
+      }))
+      const updateSettings = vi.fn(() => persistence.promise)
+      render(<VoicePane settings={makeSettings(true)} updateSettings={updateSettings} />)
+      await waitFor(() => expect(updateSettings).toHaveBeenCalledTimes(1))
+      expect(refreshModelStates).toHaveBeenCalledTimes(1)
+      await act(async () => {
+        if (succeeds) {
+          persistence.resolve()
+        } else {
+          persistence.reject(new Error('Settings unavailable'))
+        }
+      })
+      expect(refreshModelStates).toHaveBeenCalledTimes(succeeds ? 2 : 1)
+    }
+  )
+
+  it.each(['openai', 'openrouter'] as const)(
+    'clears the %s key when catalog lookup fails',
+    async (provider) => {
+      window.api.speech.getCatalog = vi.fn(async () => {
+        throw new Error('Catalog unavailable')
+      })
+      window.api.speech.getOpenAiApiKeyStatus = vi.fn(async () => ({ configured: true }))
+      window.api.speech.getOpenRouterApiKeyStatus = vi.fn(async () => ({ configured: true }))
+      const settings: GlobalSettings = {
+        ...makeSettings(true),
+        voice: {
+          ...getDefaultVoiceSettings(),
+          sttModel: 'unidentified-model',
+          openAiApiKeyConfigured: true,
+          openRouterApiKeyConfigured: true
+        }
+      }
+      const updateSettings = vi.fn()
+      render(<VoicePane settings={settings} updateSettings={updateSettings} />)
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: `Disconnect ${provider === 'openai' ? 'OpenAI' : 'OpenRouter'} API key`
+        })
+      )
+      await waitFor(() =>
+        expect(updateSettings).toHaveBeenCalledWith({
+          voice: expect.objectContaining({
+            sttModel: 'unidentified-model',
+            openAiApiKeyConfigured: provider !== 'openai',
+            openRouterApiKeyConfigured: provider !== 'openrouter'
+          })
+        })
+      )
+      expect(
+        provider === 'openai'
+          ? window.api.speech.clearOpenAiApiKey
+          : window.api.speech.clearOpenRouterApiKey
+      ).toHaveBeenCalledOnce()
+    }
+  )
+
+  it.each(['openai', 'openrouter'] as const)(
+    'rechecks the other provider after replacing an existing %s key',
+    async (provider) => {
+      const otherStatus = Promise.withResolvers<{ configured: boolean }>()
+      window.api.speech.getOpenAiApiKeyStatus = vi.fn(() =>
+        provider === 'openai' ? Promise.resolve({ configured: true }) : otherStatus.promise
+      )
+      window.api.speech.getOpenRouterApiKeyStatus = vi.fn(() =>
+        provider === 'openrouter' ? Promise.resolve({ configured: true }) : otherStatus.promise
+      )
+      const settings: GlobalSettings = {
+        ...makeSettings(true),
+        voice: {
+          ...getDefaultVoiceSettings(),
+          sttModel: 'local-model',
+          openAiApiKeyConfigured: provider === 'openai',
+          openRouterApiKeyConfigured: provider === 'openrouter'
+        }
+      }
+      const updateSettings = vi.fn()
+      render(<VoicePane settings={settings} updateSettings={updateSettings} />)
+      fireEvent.click(screen.getByRole('button', { name: 'Replace key' }))
+      fireEvent.change(screen.getByLabelText('API Key'), { target: { value: 'replacement-key' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Save Key' }))
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+      await act(async () => otherStatus.resolve({ configured: true }))
+
+      expect(updateSettings).toHaveBeenLastCalledWith({
+        voice: expect.objectContaining({
+          sttModel: 'local-model',
+          openAiApiKeyConfigured: true,
+          openRouterApiKeyConfigured: true
+        })
+      })
+    }
+  )
+
+  it.each(['openai', 'openrouter'] as const)(
+    'waits for model provider evidence before clearing a %s key',
+    async (provider) => {
+      const pendingCatalog = Promise.withResolvers<SpeechModelManifest[]>()
+      const model = { ...catalog[0], provider, type: provider }
+      window.api.speech.getCatalog = vi.fn(() => pendingCatalog.promise)
+      window.api.speech.getOpenAiApiKeyStatus = vi.fn(async () => ({ configured: true }))
+      window.api.speech.getOpenRouterApiKeyStatus = vi.fn(async () => ({ configured: true }))
+      const settings: GlobalSettings = {
+        ...makeSettings(true),
+        voice: {
+          ...getDefaultVoiceSettings(),
+          sttModel: model.id,
+          openAiApiKeyConfigured: true,
+          openRouterApiKeyConfigured: true
+        }
+      }
+      const updateSettings = vi.fn()
+      render(<VoicePane settings={settings} updateSettings={updateSettings} />)
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: `Disconnect ${provider === 'openai' ? 'OpenAI' : 'OpenRouter'} API key`
+        })
+      )
+      expect(window.api.speech.clearOpenAiApiKey).not.toHaveBeenCalled()
+      expect(window.api.speech.clearOpenRouterApiKey).not.toHaveBeenCalled()
+      await act(async () => pendingCatalog.resolve([model]))
+
+      expect(updateSettings).toHaveBeenCalledWith({
+        voice: expect.objectContaining({
+          sttModel: '',
+          openAiApiKeyConfigured: provider !== 'openai',
+          openRouterApiKeyConfigured: provider !== 'openrouter'
+        })
+      })
+    }
+  )
+
+  it.each([
+    ['openai', 'save'],
+    ['openai', 'clear'],
+    ['openai', 'replace'],
+    ['openrouter', 'save'],
+    ['openrouter', 'clear'],
+    ['openrouter', 'replace']
+  ] as const)(
+    'ignores late provider status replies after %s key %s',
+    async (provider, operation) => {
+      const openAiStatus = Promise.withResolvers<{ configured: boolean }>()
+      const openRouterStatus = Promise.withResolvers<{ configured: boolean }>()
+      const persistence = Promise.withResolvers<void>()
+      window.api.speech.getOpenAiApiKeyStatus = vi.fn(() => openAiStatus.promise)
+      window.api.speech.getOpenRouterApiKeyStatus = vi.fn(() => openRouterStatus.promise)
+      const model = {
+        ...catalog[0],
+        id: 'cloud-model',
+        label: 'Cloud model',
+        provider,
+        type: provider
+      }
+      window.api.speech.getCatalog = vi.fn(async () => [model])
+      const configured = operation !== 'save'
+      const selectedModelId = operation === 'clear' ? '' : model.id
+      const settings: GlobalSettings = {
+        ...makeSettings(true),
+        voice: {
+          ...getDefaultVoiceSettings(),
+          enabled: true,
+          openAiApiKeyConfigured: configured,
+          openRouterApiKeyConfigured: configured,
+          sttModel: operation === 'clear' ? model.id : 'local-model'
+        }
+      }
+      const updateSettings = vi.fn<(updates: Partial<GlobalSettings>) => Promise<void>>(
+        () => persistence.promise
+      )
+      const view = render(<VoicePane settings={settings} updateSettings={updateSettings} />)
+      fireEvent.keyDown(screen.getByRole('button', { name: 'Select Model' }), { key: 'Enter' })
+      const option = await screen.findByRole('menuitem', { name: /Cloud model/ })
+      if (operation !== 'clear') {
+        fireEvent.click(option)
+        fireEvent.change(screen.getByLabelText('API Key'), { target: { value: 'speech-key' } })
+        fireEvent.click(screen.getByRole('button', { name: 'Save Key' }))
+      } else {
+        fireEvent.keyDown(option, { key: 'Escape' })
+        fireEvent.click(
+          screen.getByRole('button', {
+            name: `Disconnect ${provider === 'openai' ? 'OpenAI' : 'OpenRouter'} API key`
+          })
+        )
+      }
+      await waitFor(() => expect(updateSettings).toHaveBeenCalledTimes(1))
+      expect(updateSettings).toHaveBeenLastCalledWith({
+        voice: expect.objectContaining({ sttModel: selectedModelId })
+      })
+
+      // A model-state refresh can render old persisted settings before this write finishes.
+      view.rerender(
+        <VoicePane
+          settings={{ ...settings, voice: { ...(settings.voice ?? getDefaultVoiceSettings()) } }}
+          updateSettings={updateSettings}
+        />
+      )
+      await act(async () => {
+        openAiStatus.resolve({
+          configured: provider === 'openai' ? operation !== 'clear' : !configured
+        })
+        openRouterStatus.resolve({
+          configured: provider === 'openrouter' ? operation !== 'clear' : !configured
+        })
+      })
+      expect(updateSettings).toHaveBeenCalledTimes(1)
+      view.rerender(
+        <VoicePane
+          settings={{ ...settings, ...updateSettings.mock.calls[0][0] }}
+          updateSettings={updateSettings}
+        />
+      )
+      await act(async () => persistence.resolve())
+      expect(updateSettings).toHaveBeenLastCalledWith({
+        voice: expect.objectContaining({ sttModel: selectedModelId })
+      })
+    }
+  )
+
+  it.each(['Escape', 'Close'])('keeps pending key setup open on %s', async (dismiss) => {
+    let finishSave: (status: { configured: boolean }) => void = () => {}
+    window.api.speech.saveOpenRouterApiKey = vi.fn(
+      () => new Promise<{ configured: boolean }>((resolve) => (finishSave = resolve))
+    )
+    render(<StatefulVoicePane />)
+    fireEvent.click(screen.getByRole('button', { name: 'Add API key' }))
+    fireEvent.change(screen.getByLabelText('API Key'), { target: { value: 'sk-or-pending' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save Key' }))
+    if (dismiss === 'Escape') {
+      fireEvent.keyDown(document, { key: 'Escape' })
+    } else {
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    }
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    window.api.speech.getOpenRouterApiKeyStatus = vi.fn(async () => ({ configured: true }))
+    finishSave({ configured: true })
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  it('adds, replaces and disconnects the OpenRouter key independently of OpenAI', async () => {
+    render(<StatefulVoicePane modelId="openai-gpt-4o-transcribe" />)
+    fireEvent.click(screen.getByRole('button', { name: 'Add API key' }))
+    const input = screen.getByLabelText<HTMLInputElement>('API Key')
+    expect(input.type).toBe('password')
+    expect(
+      screen.getByText(
+        'Audio is sent to OpenRouter only when an OpenRouter speech model is selected.'
+      )
+    ).toBeTruthy()
+    fireEvent.change(input, { target: { value: 'sk-or-first' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save Key' }))
+    await waitFor(() =>
+      expect(window.api.speech.saveOpenRouterApiKey).toHaveBeenCalledWith('sk-or-first')
+    )
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(settingsChanged).toHaveBeenLastCalledWith({
+      voice: expect.objectContaining({
+        openAiApiKeyConfigured: true,
+        openRouterApiKeyConfigured: true,
+        sttModel: 'openai-gpt-4o-transcribe'
+      })
+    })
+    const replaceButtons = screen.getAllByRole('button', { name: 'Replace key' })
+    fireEvent.click(replaceButtons[1])
+    const replacement = screen.getByLabelText<HTMLInputElement>('API Key')
+    expect(replacement.value).toBe('')
+    fireEvent.change(replacement, { target: { value: 'sk-or-replacement' } })
+    fireEvent.keyDown(replacement, { key: 'Enter' })
+    await waitFor(() =>
+      expect(window.api.speech.saveOpenRouterApiKey).toHaveBeenLastCalledWith('sk-or-replacement')
+    )
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    fireEvent.click(screen.getByRole('button', { name: 'Disconnect OpenRouter API key' }))
+    await waitFor(() => expect(window.api.speech.clearOpenRouterApiKey).toHaveBeenCalledOnce())
+    expect(settingsChanged).toHaveBeenLastCalledWith({
+      voice: expect.objectContaining({
+        openAiApiKeyConfigured: true,
+        openRouterApiKeyConfigured: false,
+        sttModel: 'openai-gpt-4o-transcribe'
+      })
+    })
+    expect(window.api.speech.saveOpenAiApiKey).not.toHaveBeenCalled()
+    expect(window.api.speech.clearOpenAiApiKey).not.toHaveBeenCalled()
+  })
+
+  it('clears the selected MAI model when disconnecting OpenRouter', async () => {
+    window.api.speech.getOpenRouterApiKeyStatus = vi.fn(async () => ({ configured: true }))
+    render(<StatefulVoicePane modelId="openrouter-mai-transcribe-2" />)
+    const disconnect = await screen.findByRole('button', { name: 'Disconnect OpenRouter API key' })
+    window.api.speech.getOpenRouterApiKeyStatus = vi.fn(async () => ({ configured: false }))
+    fireEvent.click(disconnect)
+    await waitFor(() =>
+      expect(settingsChanged).toHaveBeenLastCalledWith({
+        voice: expect.objectContaining({
+          sttModel: '',
+          openAiApiKeyConfigured: true,
+          openRouterApiKeyConfigured: false
+        })
+      })
+    )
   })
 })

@@ -4,6 +4,7 @@ import {
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY,
+  SPEECH_OPENROUTER_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../src/shared/protocol-version'
@@ -16,6 +17,10 @@ const HOST_CAPABILITY_LIMIT = 64
 const HOST_CAPABILITY_NAME_LIMIT = 128
 
 describe('mobile runtime client capabilities', () => {
+  it('advertises support for OpenRouter speech model rows', () => {
+    expect(MOBILE_RUNTIME_CLIENT_CAPABILITIES).toContain(SPEECH_OPENROUTER_RUNTIME_CAPABILITY)
+  })
+
   it('advertises structured agent sessions, the Claude lane, and the turn item', () => {
     expect(MOBILE_RUNTIME_CLIENT_CAPABILITIES).toEqual(
       expect.arrayContaining([

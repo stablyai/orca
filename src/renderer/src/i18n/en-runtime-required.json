@@ -1371,6 +1371,15 @@
           "274af61bc0": "system",
           "d3756cf5bc": "disabled"
         },
+        "OpenAiTranscriptionKeyDialog": {
+          "07ed3e512e": "Audio is sent to OpenAI only when an OpenAI speech model is selected.",
+          "439e91879e": "OpenAI Transcription"
+        },
+        "OpenAiTranscriptionSettingsRow": {
+          "27e0cb656d": "OpenAI Transcription",
+          "893790e13b": "Add an OpenAI API key before selecting cloud speech-to-text models.",
+          "ae2df8f511": "Disconnect OpenAI API key"
+        },
         "OrchestrationSkillAgentCoverage": {
           "fullCoverage_one": "All 1 detected agent has the skill.",
           "fullCoverage_other": "All {{value0}} detected agents have the skill."
@@ -1548,6 +1557,10 @@
           "target_label": "Theme Mode"
         },
         "VoicePane": {
+          "37aba8bb63": "OpenAI API key cleared",
+          "506df81ba6": "OpenAI API key saved",
+          "62d2a84d31": "Failed to clear OpenAI API key",
+          "8572bbb537": "Failed to save OpenAI API key",
           "901985625d": "toggle",
           "b6536a1d12": "extracting"
         },

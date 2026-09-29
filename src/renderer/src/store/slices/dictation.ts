@@ -33,7 +33,9 @@ function resolveModelStates(
 }
 
 export const createDictationSlice: StateCreator<AppState, [], [], DictationSlice> = (set) => {
+  let modelStatesGeneration = 0
   const setModelStates = (states: SpeechModelState[]): void => {
+    modelStatesGeneration += 1
     set((prev) => {
       const modelStates = resolveModelStates(prev.modelStates, states)
       return modelStates === prev.modelStates ? prev : { modelStates }
@@ -52,8 +54,12 @@ export const createDictationSlice: StateCreator<AppState, [], [], DictationSlice
     setModelStates,
 
     refreshModelStates: async () => {
+      const generation = ++modelStatesGeneration
       try {
-        setModelStates(await window.api.speech.getModelStates())
+        const states = await window.api.speech.getModelStates()
+        if (generation === modelStatesGeneration) {
+          setModelStates(states)
+        }
       } catch (err) {
         console.error('Failed to fetch model states:', err)
       }

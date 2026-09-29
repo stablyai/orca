@@ -10,7 +10,8 @@ import { hostUnionArms, salvagedOptional, salvagingArray } from '../../../src/sh
 // Pinned to the host's own union through hostUnionArms: an arm added or dropped host-side fails tsc.
 export const SPEECH_MODEL_PROVIDERS = hostUnionArms<RuntimeSpeechModelSummary['provider']>({
   local: true,
-  openai: true
+  openai: true,
+  openrouter: true
 })
 export const SPEECH_MODEL_STATUSES = hostUnionArms<RuntimeSpeechModelSummary['status']>({
   ready: true,

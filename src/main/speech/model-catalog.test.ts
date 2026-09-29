@@ -2,6 +2,32 @@ import { describe, expect, it } from 'vitest'
 import { getCatalogModel, SPEECH_MODEL_CATALOG } from './model-catalog'
 
 describe('SPEECH_MODEL_CATALOG', () => {
+  it('registers MAI-Transcribe 2 as a non-streaming OpenRouter model without a download', () => {
+    const manifest = getCatalogModel('openrouter-mai-transcribe-2')
+
+    expect(manifest).toMatchObject({
+      label: 'MAI-Transcribe 2',
+      type: 'openrouter',
+      provider: 'openrouter',
+      language: 'multilingual',
+      sampleRate: 16000,
+      streaming: false
+    })
+    expect(manifest?.downloadFiles).toBeUndefined()
+    expect(manifest?.sizeBytes).toBeUndefined()
+  })
+
+  it('keeps Parakeet TDT v3 as the recommended local model', () => {
+    expect(getCatalogModel('parakeet-tdt-0.6b-v3-int8')).toMatchObject({
+      type: 'transducer',
+      provider: 'local',
+      sampleRate: 16000,
+      streaming: false,
+      modelingUnit: 'bpe',
+      recommended: true
+    })
+  })
+
   it('includes the Japanese Parakeet TDT-CTC model with a valid manifest', () => {
     const manifest = getCatalogModel('parakeet-tdt-ctc-0.6b-ja-int8')
 

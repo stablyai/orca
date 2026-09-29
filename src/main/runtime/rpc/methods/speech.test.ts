@@ -1,3 +1,5 @@
+import { SPEECH_OPENROUTER_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import type { RuntimeSpeechSetupState } from '../../../../shared/runtime-worktree-contracts'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
@@ -146,5 +148,165 @@ describe('speech RPC methods', () => {
 
     expect(runtime.configureMobileDictation).toHaveBeenCalledWith({ enabled: true, modelId: 'm1' })
     expect(response).toMatchObject({ ok: true, result: { enabled: true, selectedModelId: 'm1' } })
+  })
+})
+
+const setup: RuntimeSpeechSetupState = {
+  enabled: true,
+  selectedModelId: 'openrouter-mai-transcribe-2',
+  dictationMode: 'toggle',
+  models: [
+    {
+      id: 'local',
+      label: 'Local',
+      provider: 'local',
+      sizeBytes: 100,
+      recommended: true,
+      status: 'ready',
+      progress: null
+    },
+    {
+      id: 'openai',
+      label: 'OpenAI',
+      provider: 'openai',
+      sizeBytes: null,
+      recommended: false,
+      status: 'ready',
+      progress: null
+    },
+    {
+      id: 'openrouter-mai-transcribe-2',
+      label: 'MAI',
+      provider: 'openrouter',
+      sizeBytes: null,
+      recommended: false,
+      status: 'ready',
+      progress: null
+    }
+  ]
+}
+
+function makeCatalogDispatcher() {
+  const runtime = {
+    getRuntimeId: () => 'test-runtime',
+    listMobileSpeechModels: vi.fn().mockResolvedValue(setup),
+    deleteMobileSpeechModel: vi.fn().mockResolvedValue(setup),
+    configureMobileDictation: vi.fn().mockResolvedValue(setup),
+    startMobileDictation: vi.fn().mockResolvedValue({ dictationId: 'dict-1' })
+  }
+  const dispatcher = new RpcDispatcher({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: These methods exercise only the runtime members stubbed above.
+    runtime: runtime as unknown as OrcaRuntimeService,
+    methods: SPEECH_METHODS
+  })
+  return { dispatcher, runtime }
+}
+
+describe('speech catalog capability', () => {
+  it.each([
+    ['speech.models.list', null],
+    ['speech.models.delete', { modelId: 'local' }],
+    ['speech.dictation.setup', { enabled: true }]
+  ])('projects every %s reply for old and current clients', async (method, params) => {
+    const { dispatcher } = makeCatalogDispatcher()
+    const request = makeRequest(method, params)
+    for (const clientKind of ['mobile', 'runtime'] as const) {
+      for (const clientCapabilities of [undefined, [], [SPEECH_OPENROUTER_RUNTIME_CAPABILITY]]) {
+        const response = await dispatcher.dispatch(request, { clientKind, clientCapabilities })
+        expect(response).toMatchObject({
+          ok: true,
+          result: {
+            ...setup,
+            models: clientCapabilities?.length ? setup.models : setup.models.slice(0, 2)
+          }
+        })
+      }
+    }
+    expect(await dispatcher.dispatch(request)).toMatchObject({ ok: true, result: setup })
+    expect(setup.models).toHaveLength(3)
+  })
+})
+
+describe('speech model capability before recording', () => {
+  it.each([undefined, '', 'openrouter-mai-transcribe-2'])(
+    'refuses a legacy start with modelId %s before recording',
+    async (modelId) => {
+      const { dispatcher, runtime } = makeCatalogDispatcher()
+      for (const clientKind of ['mobile', 'runtime'] as const) {
+        const response = await dispatcher.dispatch(
+          makeRequest('speech.dictation.start', { dictationId: 'dict-1', modelId }),
+          { clientKind, clientCapabilities: [] }
+        )
+        expect(response).toMatchObject({
+          ok: false,
+          error: { message: expect.stringMatching(/^voice_model_not_ready:.*Update/) }
+        })
+      }
+      expect(runtime.startMobileDictation).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each([undefined, 'mobile', 'runtime'] as const)(
+    'preserves OpenRouter for capable or internal %s callers',
+    async (clientKind) => {
+      const { dispatcher, runtime } = makeCatalogDispatcher()
+      const options = { clientKind, clientCapabilities: [SPEECH_OPENROUTER_RUNTIME_CAPABILITY] }
+      expect(
+        await dispatcher.dispatch(
+          makeRequest('speech.dictation.start', { dictationId: 'dict-1' }),
+          clientKind ? options : undefined
+        )
+      ).toMatchObject({ ok: true })
+      expect(runtime.listMobileSpeechModels).not.toHaveBeenCalled()
+      expect(runtime.startMobileDictation).toHaveBeenCalledWith({
+        dictationId: 'dict-1',
+        clientId: undefined,
+        connectionId: undefined
+      })
+    }
+  )
+
+  it.each(['local', 'openai'])(
+    'pins a legacy %s selection before the host can change it',
+    async (modelId) => {
+      const { dispatcher, runtime } = makeCatalogDispatcher()
+      const snapshot = { ...setup, selectedModelId: modelId }
+      runtime.listMobileSpeechModels.mockImplementation(async () => {
+        runtime.listMobileSpeechModels.mockResolvedValue(setup)
+        return snapshot
+      })
+      const request = makeRequest('speech.dictation.start', { dictationId: 'dict-1' })
+      expect(await dispatcher.dispatch(request, { clientKind: 'mobile' })).toMatchObject({
+        ok: true
+      })
+      expect(runtime.startMobileDictation).toHaveBeenCalledWith(
+        expect.objectContaining({ modelId })
+      )
+      runtime.startMobileDictation.mockClear()
+      expect(await dispatcher.dispatch(request, { clientKind: 'mobile' })).toMatchObject({
+        ok: false
+      })
+      expect(runtime.startMobileDictation).not.toHaveBeenCalled()
+      expect(
+        await dispatcher.dispatch(
+          makeRequest('speech.dictation.start', { dictationId: 'dict-1', modelId }),
+          { clientKind: 'mobile' }
+        )
+      ).toMatchObject({ ok: true })
+      expect(runtime.startMobileDictation).toHaveBeenCalledWith(
+        expect.objectContaining({ modelId })
+      )
+    }
+  )
+
+  it('does not let an empty legacy selection fall through to a newly selected model', async () => {
+    const { dispatcher, runtime } = makeCatalogDispatcher()
+    runtime.listMobileSpeechModels.mockResolvedValue({ ...setup, selectedModelId: '' })
+    expect(
+      await dispatcher.dispatch(makeRequest('speech.dictation.start', { dictationId: 'dict-1' }), {
+        clientKind: 'mobile'
+      })
+    ).toMatchObject({ ok: false, error: { message: 'voice_model_not_selected' } })
+    expect(runtime.startMobileDictation).not.toHaveBeenCalled()
   })
 })

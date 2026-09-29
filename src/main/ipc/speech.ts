@@ -10,6 +10,11 @@ import {
   hasOpenAiSpeechApiKey,
   saveOpenAiSpeechApiKey
 } from '../speech/openai-api-key-store'
+import {
+  clearOpenRouterSpeechApiKey,
+  hasOpenRouterSpeechApiKey,
+  saveOpenRouterSpeechApiKey
+} from '../speech/openrouter-api-key-store'
 import type { Store } from '../persistence'
 
 export function registerSpeechHandlers(store: Store): void {
@@ -32,6 +37,20 @@ export function registerSpeechHandlers(store: Store): void {
 
   ipcMain.handle('speech:clearOpenAiApiKey', async () => {
     clearOpenAiSpeechApiKey()
+    return { configured: false }
+  })
+
+  ipcMain.handle('speech:getOpenRouterApiKeyStatus', async () => {
+    return { configured: hasOpenRouterSpeechApiKey() }
+  })
+
+  ipcMain.handle('speech:saveOpenRouterApiKey', async (_event, apiKey: string) => {
+    saveOpenRouterSpeechApiKey(apiKey)
+    return { configured: true }
+  })
+
+  ipcMain.handle('speech:clearOpenRouterApiKey', async () => {
+    clearOpenRouterSpeechApiKey()
     return { configured: false }
   })
 

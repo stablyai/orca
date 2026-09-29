@@ -4,7 +4,11 @@ import { act } from 'react'
 import type { ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SpeechModelManifest, SpeechModelState } from '../../../../shared/speech-types'
+import type {
+  SpeechModelManifest,
+  SpeechModelState,
+  VoiceSettings
+} from '../../../../shared/speech-types'
 import { getDefaultVoiceSettings } from '../../../../shared/constants'
 
 const toastErrorMock = vi.hoisted(() => vi.fn())
@@ -18,12 +22,13 @@ vi.mock('sonner', () => ({
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, string>) =>
-    values ? fallback.replace('{{value0}}', values.value0) : fallback
+    values ? fallback.replace(/{{(\w+)}}/g, (_match, key: string) => values[key] ?? '') : fallback
 }))
 
 vi.mock('../ui/dropdown-menu', () => ({
   DropdownMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   DropdownMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
+  DropdownMenuLabel: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   DropdownMenuContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   DropdownMenuItem: ({
     children,
@@ -82,6 +87,8 @@ function renderSection(args: {
   catalog?: SpeechModelManifest[]
   modelStates?: SpeechModelState[]
   refreshModelStates?: () => void
+  updateVoiceSettings?: (updates: Partial<VoiceSettings>) => void
+  openCloudDialog?: (provider: 'openai' | 'openrouter', modelId: string) => void
 }): { container: HTMLDivElement; root: Root } {
   Object.assign(window, {
     api: {
@@ -104,14 +111,25 @@ function renderSection(args: {
         voiceSettings={voiceSettings}
         catalog={catalog}
         modelStates={modelStates}
-        onUpdateVoiceSettings={vi.fn()}
-        onOpenOpenAiDialog={vi.fn()}
+        onUpdateVoiceSettings={args.updateVoiceSettings ?? vi.fn()}
+        onOpenCloudDialog={args.openCloudDialog ?? vi.fn()}
         onRefreshModelStates={args.refreshModelStates ?? vi.fn()}
       />
     )
   })
 
   return { container, root }
+}
+
+const openRouterModel: SpeechModelManifest = {
+  id: 'openrouter-mai-transcribe-2',
+  label: 'MAI-Transcribe 2',
+  description: 'Microsoft multilingual transcription',
+  provider: 'openrouter',
+  language: 'multilingual',
+  type: 'openrouter',
+  streaming: false,
+  sampleRate: 16000
 }
 
 describe('VoiceSpeechModelSection', () => {
@@ -123,6 +141,29 @@ describe('VoiceSpeechModelSection', () => {
   afterEach(() => {
     document.body.innerHTML = ''
     vi.unstubAllGlobals()
+  })
+
+  it('groups an unordered catalog into Local, OpenAI and OpenRouter', () => {
+    const openAiModel: SpeechModelManifest = {
+      ...openRouterModel,
+      id: 'openai',
+      provider: 'openai'
+    }
+    const { container, root } = renderSection({
+      deleteModel: async () => {},
+      catalog: [openRouterModel, localModel, openAiModel, secondLocalModel]
+    })
+    const menu = container.querySelector('[role="option"]')?.parentElement
+    expect(Array.from(menu?.children ?? [], (child) => child.textContent)).toEqual([
+      'LOCAL',
+      expect.stringContaining('Local Model'),
+      expect.stringContaining('Second Local Model'),
+      'OPENAI',
+      expect.stringContaining('OpenAI API'),
+      'OPENROUTER',
+      expect.stringContaining('OpenRouter API')
+    ])
+    root.unmount()
   })
 
   it('shows delete for the selected ready local row and refreshes after success', async () => {
@@ -240,6 +281,40 @@ describe('VoiceSpeechModelSection', () => {
 
     expect(window.api.speech.downloadModel).toHaveBeenCalledWith(localModel.id)
     expect(menuDismissMock).not.toHaveBeenCalled()
+    root.unmount()
+  })
+  it.each(['openai', 'openrouter'] as const)(
+    'selects ready %s models with provider metadata and no download or delete action',
+    async (provider) => {
+      const model: SpeechModelManifest = { ...openRouterModel, provider }
+      const updateVoiceSettings = vi.fn()
+      const { container, root } = renderSection({
+        deleteModel: async () => {},
+        catalog: [model],
+        modelStates: [{ id: model.id, status: 'ready' }],
+        updateVoiceSettings
+      })
+      const option = container.querySelector<HTMLElement>('[role="option"]')
+      expect(option?.textContent).toContain(provider === 'openai' ? 'OpenAI API' : 'OpenRouter API')
+      expect(option?.querySelector('button')).toBeNull()
+      await act(async () => option?.click())
+      expect(updateVoiceSettings).toHaveBeenCalledWith({ sttModel: model.id })
+      expect(window.api.speech.downloadModel).not.toHaveBeenCalled()
+      root.unmount()
+    }
+  )
+
+  it('opens OpenRouter key setup for an unavailable MAI model', async () => {
+    const openCloudDialog = vi.fn()
+    const { container, root } = renderSection({
+      deleteModel: async () => {},
+      catalog: [openRouterModel],
+      modelStates: [{ id: openRouterModel.id, status: 'not-downloaded' }],
+      openCloudDialog
+    })
+    await act(async () => container.querySelector<HTMLElement>('[role="option"]')?.click())
+    expect(openCloudDialog).toHaveBeenCalledWith('openrouter', openRouterModel.id)
+    expect(window.api.speech.downloadModel).not.toHaveBeenCalled()
     root.unmount()
   })
 })

@@ -22,31 +22,39 @@ export async function stopSttDictation(
   }
 
   if (state.cloudSession) {
+    if (state.cloudStopInFlight) {
+      return state.cloudStopInFlight
+    }
+    const session = state.cloudSession
+    const capturedSink = state.eventSink
     state.stopping = true
-    try {
-      const session = state.cloudSession
-      state.cloudSession = null
+    // Reserve the session before finish can trigger callbacks or another stop.
+    state.cloudStopInFlight = Promise.resolve().then(async () => {
       try {
         const text = await session.finish()
         if (text) {
-          state.eventSink?.({ type: 'final', text })
+          capturedSink?.({ type: 'final', text })
         }
       } catch (error) {
-        state.eventSink?.({
+        capturedSink?.({
           type: 'error',
           error: error instanceof Error ? error.message : String(error)
         })
       } finally {
-        state.eventSink?.({ type: 'stopped' })
-        state.activeModelId = null
-        state.activeHotwordsFilePath = undefined
-        state.activeOwner = null
-        state.eventSink = null
+        try {
+          capturedSink?.({ type: 'stopped' })
+        } finally {
+          state.cloudSession = null
+          state.activeModelId = null
+          state.activeHotwordsFilePath = undefined
+          state.activeOwner = null
+          state.eventSink = null
+          state.stopping = false
+          state.cloudStopInFlight = null
+        }
       }
-    } finally {
-      state.stopping = false
-    }
-    return
+    })
+    return state.cloudStopInFlight
   }
 
   const worker = state.worker

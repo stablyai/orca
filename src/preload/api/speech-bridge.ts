@@ -17,6 +17,12 @@ export const speechApi = {
     ipcRenderer.invoke('speech:saveOpenAiApiKey', apiKey),
   clearOpenAiApiKey: (): Promise<{ configured: boolean }> =>
     ipcRenderer.invoke('speech:clearOpenAiApiKey'),
+  getOpenRouterApiKeyStatus: (): Promise<{ configured: boolean }> =>
+    ipcRenderer.invoke('speech:getOpenRouterApiKeyStatus'),
+  saveOpenRouterApiKey: (apiKey: string): Promise<{ configured: boolean }> =>
+    ipcRenderer.invoke('speech:saveOpenRouterApiKey', apiKey),
+  clearOpenRouterApiKey: (): Promise<{ configured: boolean }> =>
+    ipcRenderer.invoke('speech:clearOpenRouterApiKey'),
   downloadModel: (modelId: string): Promise<void> =>
     ipcRenderer.invoke('speech:downloadModel', modelId),
   cancelDownload: (modelId: string): Promise<void> =>

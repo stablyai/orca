@@ -143,6 +143,17 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     language: 'multilingual',
     sampleRate: 16000,
     streaming: false
+  },
+  {
+    id: 'openrouter-mai-transcribe-2',
+    label: 'MAI-Transcribe 2',
+    description:
+      'Microsoft multilingual cloud transcription via OpenRouter. Supports language detection and code-switching.',
+    type: 'openrouter',
+    provider: 'openrouter',
+    language: 'multilingual',
+    sampleRate: 16000,
+    streaming: false
   }
 ]
 

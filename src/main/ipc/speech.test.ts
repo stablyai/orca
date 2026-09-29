@@ -5,13 +5,17 @@ const {
   fromWebContentsMock,
   getSpeechModelManagerMock,
   getSpeechSttServiceMock,
-  deleteLocalSpeechModelMock
+  deleteLocalSpeechModelMock,
+  openAiKeyStore,
+  openRouterKeyStore
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   fromWebContentsMock: vi.fn(),
   getSpeechModelManagerMock: vi.fn(),
   getSpeechSttServiceMock: vi.fn(),
-  deleteLocalSpeechModelMock: vi.fn()
+  deleteLocalSpeechModelMock: vi.fn(),
+  openAiKeyStore: { has: vi.fn(), save: vi.fn(), clear: vi.fn() },
+  openRouterKeyStore: { has: vi.fn(), save: vi.fn(), clear: vi.fn() }
 }))
 
 vi.mock('electron', () => ({
@@ -43,6 +47,18 @@ vi.mock('../speech/speech-model-deletion', () => ({
   deleteLocalSpeechModel: deleteLocalSpeechModelMock
 }))
 
+vi.mock('../speech/openai-api-key-store', () => ({
+  hasOpenAiSpeechApiKey: openAiKeyStore.has,
+  saveOpenAiSpeechApiKey: openAiKeyStore.save,
+  clearOpenAiSpeechApiKey: openAiKeyStore.clear
+}))
+
+vi.mock('../speech/openrouter-api-key-store', () => ({
+  hasOpenRouterSpeechApiKey: openRouterKeyStore.has,
+  saveOpenRouterSpeechApiKey: openRouterKeyStore.save,
+  clearOpenRouterSpeechApiKey: openRouterKeyStore.clear
+}))
+
 import { registerSpeechHandlers } from './speech'
 
 type SpeechDownloadHandler = (event: { sender: { id: number } }, modelId: string) => Promise<void>
@@ -62,7 +78,43 @@ describe('registerSpeechHandlers', () => {
     getSpeechModelManagerMock.mockReset()
     getSpeechSttServiceMock.mockReset()
     deleteLocalSpeechModelMock.mockReset()
+    for (const keyStore of [openAiKeyStore, openRouterKeyStore]) {
+      keyStore.has.mockReset()
+      keyStore.save.mockReset()
+      keyStore.clear.mockReset()
+    }
   })
+
+  it.each([
+    ['OpenAi', openAiKeyStore, openRouterKeyStore],
+    ['OpenRouter', openRouterKeyStore, openAiKeyStore]
+  ] as const)(
+    'keeps %s credential handlers independent',
+    async (provider, keyStore, otherStore) => {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Credential handlers do not read the persistence store.
+      registerSpeechHandlers({} as never)
+      const event = { sender: { id: 7 } }
+      keyStore.has.mockReturnValue(false)
+      await expect(getHandler(`speech:get${provider}ApiKeyStatus`)(event, '')).resolves.toEqual({
+        configured: false
+      })
+      await expect(getHandler(`speech:save${provider}ApiKey`)(event, 'new-key')).resolves.toEqual({
+        configured: true
+      })
+      expect(keyStore.save).toHaveBeenCalledWith('new-key')
+      keyStore.has.mockReturnValue(true)
+      await expect(getHandler(`speech:get${provider}ApiKeyStatus`)(event, '')).resolves.toEqual({
+        configured: true
+      })
+      await expect(getHandler(`speech:clear${provider}ApiKey`)(event, '')).resolves.toEqual({
+        configured: false
+      })
+      expect(keyStore.clear).toHaveBeenCalledOnce()
+      expect(otherStore.has).not.toHaveBeenCalled()
+      expect(otherStore.save).not.toHaveBeenCalled()
+      expect(otherStore.clear).not.toHaveBeenCalled()
+    }
+  )
 
   it('clears the model download progress callback after completion', async () => {
     const clearProgressCallback = vi.fn()

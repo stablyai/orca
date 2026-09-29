@@ -10,11 +10,16 @@ import { Label } from '../ui/label'
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuLabel,
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '../ui/dropdown-menu'
 import { Cloud, Download, Trash2, Loader2, ChevronDown, Check } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import {
+  getCloudTranscriptionProviderLabel,
+  type CloudTranscriptionProvider
+} from './cloud-transcription-provider'
 
 function describeSpeechModelDownloadError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error)
@@ -28,7 +33,7 @@ type VoiceSpeechModelSectionProps = {
   catalog: SpeechModelManifest[]
   modelStates: SpeechModelState[]
   onUpdateVoiceSettings: (updates: Partial<VoiceSettings>) => void
-  onOpenOpenAiDialog: (modelId: string) => void
+  onOpenCloudDialog: (provider: CloudTranscriptionProvider, modelId: string) => void
   onRefreshModelStates: () => void
 }
 
@@ -37,13 +42,16 @@ export function VoiceSpeechModelSection({
   catalog,
   modelStates,
   onUpdateVoiceSettings,
-  onOpenOpenAiDialog,
+  onOpenCloudDialog,
   onRefreshModelStates
 }: VoiceSpeechModelSectionProps): React.JSX.Element {
   const [pendingDeleteModelIds, setPendingDeleteModelIds] = useState<Set<string>>(() => new Set())
   const getModelState = (id: string): SpeechModelState | undefined =>
     modelStates.find((s) => s.id === id)
 
+  const groupedCatalog = (['local', 'openai', 'openrouter'] as const).flatMap((provider) =>
+    catalog.filter((model) => model.provider === provider)
+  )
   const selectedModel = catalog.find((m) => m.id === voiceSettings.sttModel)
   const selectedModelState = voiceSettings.sttModel
     ? getModelState(voiceSettings.sttModel)
@@ -78,25 +86,32 @@ export function VoiceSpeechModelSection({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-96">
-          {catalog.map((manifest) => {
+          {groupedCatalog.flatMap((manifest, index) => {
             const mState = getModelState(manifest.id)
             const isReady = mState?.status === 'ready'
             const isDownloading =
               mState?.status === 'downloading' || mState?.status === 'extracting'
             const isActive = voiceSettings.sttModel === manifest.id
-            const isCloud = manifest.provider === 'openai'
+            const isCloud = manifest.provider !== 'local'
             const deletePending = pendingDeleteModelIds.has(manifest.id)
             const sizeMb = manifest.sizeBytes ? Math.round(manifest.sizeBytes / 1_000_000) : null
 
-            return (
+            return [
+              groupedCatalog[index - 1]?.provider !== manifest.provider ? (
+                <DropdownMenuLabel key={manifest.provider}>
+                  {manifest.provider === 'local'
+                    ? translate('settings.voice.localProvider', 'LOCAL')
+                    : getCloudTranscriptionProviderLabel(manifest.provider).toUpperCase()}
+                </DropdownMenuLabel>
+              ) : null,
               <DropdownMenuItem
                 key={manifest.id}
                 disabled={isDownloading}
                 onSelect={(event) => {
                   if (isReady) {
                     onUpdateVoiceSettings({ sttModel: manifest.id })
-                  } else if (isCloud) {
-                    onOpenOpenAiDialog(manifest.id)
+                  } else if (manifest.provider !== 'local') {
+                    onOpenCloudDialog(manifest.provider, manifest.id)
                   } else if (!isDownloading) {
                     // Why: download progress appears in this menu, so starting one should not dismiss it.
                     event.preventDefault()
@@ -113,9 +128,7 @@ export function VoiceSpeechModelSection({
                     )
                   }
                 }}
-                className={`group flex items-center gap-2.5 py-2.5 ${
-                  !isCloud && !isReady && !isDownloading ? 'opacity-50' : ''
-                }`}
+                className="group"
               >
                 <span className="flex size-4 shrink-0 items-center justify-center">
                   {isActive && isReady ? (
@@ -149,8 +162,10 @@ export function VoiceSpeechModelSection({
                               'Extracting...'
                             )
                           : `${Math.round(mState.progress * 100)}%`
-                        : isCloud
-                          ? null
+                        : manifest.provider !== 'local'
+                          ? translate('settings.voice.cloudProviderApi', '{{provider}} API', {
+                              provider: getCloudTranscriptionProviderLabel(manifest.provider)
+                            })
                           : translate(
                               'auto.components.settings.VoicePane.91980ce124',
                               '{{value0}} MB',
@@ -223,7 +238,7 @@ export function VoiceSpeechModelSection({
                   </span>
                 ) : null}
               </DropdownMenuItem>
-            )
+            ]
           })}
         </DropdownMenuContent>
       </DropdownMenu>

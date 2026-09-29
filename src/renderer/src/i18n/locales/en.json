@@ -208,6 +208,18 @@
         "restartRequired": "Restart required",
         "unavailable": "Browser identity is unavailable."
       }
+    },
+    "voice": {
+      "cloudKeySaved": "{{provider}} API key saved",
+      "cloudKeyCleared": "{{provider}} API key cleared",
+      "cloudKeyFailed": "Failed to update {{provider}} API key",
+      "localProvider": "LOCAL",
+      "cloudProviderApi": "{{provider}} API",
+      "openRouterTranscriptionTitle": "OpenRouter Transcription",
+      "openRouterTranscriptionDescription": "Configure the OpenRouter API key used for cloud speech-to-text models.",
+      "openRouterSearchKeyword": "openrouter",
+      "maiSearchKeyword": "mai",
+      "microsoftSearchKeyword": "microsoft"
     }
   },
   "menu": {
@@ -12226,6 +12238,15 @@
           "usageLabel": "Usage",
           "noAllowance": "Cursor reported no usage allowance for this account.",
           "staleUsage": "Last known usage — the latest refresh failed: {{reason}}"
+        },
+        "CloudTranscriptionKeyDialog": {
+          "title": "{{provider}} Transcription",
+          "audioDisclosure": "Audio is sent to {{provider}} only when an {{provider}} speech model is selected."
+        },
+        "CloudTranscriptionSettingsRow": {
+          "title": "{{provider}} Transcription",
+          "addKeyDescription": "Add an API key before selecting {{provider}} speech-to-text models.",
+          "disconnect": "Disconnect {{provider}} API key"
         }
       },
       "right": {

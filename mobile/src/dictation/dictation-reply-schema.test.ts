@@ -63,6 +63,19 @@ describe('dictation setup reply schema', () => {
     expect(model?.status).toBe('extracting')
   })
 
+  it('retains OpenRouter model metadata and its selection id', () => {
+    const model = {
+      id: 'openrouter-mai-transcribe-2',
+      provider: 'openrouter',
+      label: 'MAI-Transcribe 2',
+      status: 'ready',
+      sizeBytes: null
+    }
+    const parsed = dictationSetupSchema.parse(setup({ models: [model], selectedModelId: model.id }))
+    expect(parsed.models).toEqual([model])
+    expect(parsed.selectedModelId).toBe(model.id)
+  })
+
   it('salvages a row member behind main own guard and keeps the truthy recommended flag', () => {
     const [model] = dictationSetupSchema.parse(
       setup({ models: [{ id: 'a', sizeBytes: 'big', progress: 'half', recommended: 1 }] })

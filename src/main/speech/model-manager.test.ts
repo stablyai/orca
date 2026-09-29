@@ -6,10 +6,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SPEECH_MODEL_CATALOG } from './model-catalog'
 import { ModelManager } from './model-manager'
 
-const { hasOpenAiSpeechApiKeyMock, netRequestMock } = vi.hoisted(() => ({
-  hasOpenAiSpeechApiKeyMock: vi.fn(),
-  netRequestMock: vi.fn()
-}))
+const { hasOpenAiSpeechApiKeyMock, hasOpenRouterSpeechApiKeyMock, netRequestMock } = vi.hoisted(
+  () => ({
+    hasOpenAiSpeechApiKeyMock: vi.fn(),
+    hasOpenRouterSpeechApiKeyMock: vi.fn(),
+    netRequestMock: vi.fn()
+  })
+)
 
 vi.mock('electron', () => ({
   app: {
@@ -22,6 +25,10 @@ vi.mock('electron', () => ({
 
 vi.mock('./openai-api-key-store', () => ({
   hasOpenAiSpeechApiKey: hasOpenAiSpeechApiKeyMock
+}))
+
+vi.mock('./openrouter-api-key-store', () => ({
+  hasOpenRouterSpeechApiKey: hasOpenRouterSpeechApiKeyMock
 }))
 
 type ModelManagerInternals = {
@@ -51,6 +58,8 @@ describe('ModelManager', () => {
     netRequestMock.mockReset()
     hasOpenAiSpeechApiKeyMock.mockReset()
     hasOpenAiSpeechApiKeyMock.mockReturnValue(false)
+    hasOpenRouterSpeechApiKeyMock.mockReset()
+    hasOpenRouterSpeechApiKeyMock.mockReturnValue(false)
   })
 
   it('requires pinned, internally consistent metadata for every model file', () => {
@@ -165,6 +174,38 @@ describe('ModelManager', () => {
         id: 'openai-gpt-4o-mini-transcribe',
         status: 'ready'
       })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps OpenRouter readiness independent and never downloads its cloud model', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+    try {
+      const manager = new ModelManager(dir)
+      const modelId = 'openrouter-mai-transcribe-2'
+      hasOpenAiSpeechApiKeyMock.mockReturnValue(true)
+      await expect(manager.getModelState(modelId)).resolves.toEqual({
+        id: modelId,
+        status: 'not-downloaded'
+      })
+      hasOpenRouterSpeechApiKeyMock.mockReturnValue(true)
+      hasOpenAiSpeechApiKeyMock.mockReturnValue(false)
+      await expect(manager.getModelState(modelId)).resolves.toEqual({
+        id: modelId,
+        status: 'ready'
+      })
+      await expect(manager.getModelState('openai-gpt-4o-mini-transcribe')).resolves.toMatchObject({
+        status: 'not-downloaded'
+      })
+      hasOpenRouterSpeechApiKeyMock.mockReturnValue(false)
+      await expect(manager.getModelState(modelId)).resolves.toMatchObject({
+        status: 'not-downloaded'
+      })
+      await expect(manager.downloadModel(modelId)).rejects.toThrow('does not support downloads')
+      await expect(manager.deleteModel(modelId)).rejects.toThrow('does not support deletion')
+      expect(netRequestMock).not.toHaveBeenCalled()
+      expect(existsSync(manager.getModelDir(modelId))).toBe(false)
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

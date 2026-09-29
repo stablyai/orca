@@ -1,4 +1,7 @@
-import { resampleToRate } from './stt-audio-resample'
+import {
+  CloudTranscriptionAudio,
+  type CloudTranscriptionSession
+} from './cloud-transcription-audio'
 
 export const OPENAI_TRANSCRIPTION_MODEL_BY_ID: Record<string, string> = {
   'openai-gpt-4o-mini-transcribe': 'gpt-4o-mini-transcribe',
@@ -6,8 +9,6 @@ export const OPENAI_TRANSCRIPTION_MODEL_BY_ID: Record<string, string> = {
 }
 
 const OPENAI_TRANSCRIPTION_URL = 'https://api.openai.com/v1/audio/transcriptions'
-const CLOUD_TRANSCRIPTION_SAMPLE_RATE = 16000
-const MAX_CLOUD_AUDIO_SECONDS = 10 * 60
 
 type OpenAiTranscriptionResponse = {
   text?: unknown
@@ -29,44 +30,6 @@ export function sanitizeOpenAiTranscriptionErrorMessage(message: string): string
   return sanitized || 'OpenAI transcription request failed'
 }
 
-function encodePcm16Wav(samples: Float32Array, sampleRate: number): Buffer {
-  const dataBytes = samples.length * 2
-  const buffer = Buffer.alloc(44 + dataBytes)
-
-  buffer.write('RIFF', 0)
-  buffer.writeUInt32LE(36 + dataBytes, 4)
-  buffer.write('WAVE', 8)
-  buffer.write('fmt ', 12)
-  buffer.writeUInt32LE(16, 16)
-  buffer.writeUInt16LE(1, 20)
-  buffer.writeUInt16LE(1, 22)
-  buffer.writeUInt32LE(sampleRate, 24)
-  buffer.writeUInt32LE(sampleRate * 2, 28)
-  buffer.writeUInt16LE(2, 32)
-  buffer.writeUInt16LE(16, 34)
-  buffer.write('data', 36)
-  buffer.writeUInt32LE(dataBytes, 40)
-
-  for (let i = 0; i < samples.length; i += 1) {
-    const clamped = Math.max(-1, Math.min(1, samples[i]))
-    const value = clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff
-    buffer.writeInt16LE(Math.round(value), 44 + i * 2)
-  }
-
-  return buffer
-}
-
-function combineChunks(chunks: Float32Array[]): Float32Array {
-  const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
-  const combined = new Float32Array(totalLength)
-  let offset = 0
-  for (const chunk of chunks) {
-    combined.set(chunk, offset)
-    offset += chunk.length
-  }
-  return combined
-}
-
 function parseOpenAiTranscriptionResponse(data: OpenAiTranscriptionResponse): string {
   if (typeof data.text === 'string') {
     return data.text.trim()
@@ -77,9 +40,8 @@ function parseOpenAiTranscriptionResponse(data: OpenAiTranscriptionResponse): st
   throw new Error('OpenAI transcription response did not include text')
 }
 
-export class OpenAiTranscriptionSession {
-  private chunks: Float32Array[] = []
-  private audioSeconds = 0
+export class OpenAiTranscriptionSession implements CloudTranscriptionSession {
+  private readonly audio = new CloudTranscriptionAudio()
 
   constructor(
     private readonly modelId: string,
@@ -87,16 +49,12 @@ export class OpenAiTranscriptionSession {
   ) {}
 
   feedAudio(samples: Float32Array, sampleRate: number): void {
-    const normalized = resampleToRate(samples, sampleRate, CLOUD_TRANSCRIPTION_SAMPLE_RATE)
-    this.audioSeconds += normalized.length / CLOUD_TRANSCRIPTION_SAMPLE_RATE
-    if (this.audioSeconds > MAX_CLOUD_AUDIO_SECONDS) {
-      throw new Error('Cloud transcription is limited to 10 minutes per dictation')
-    }
-    this.chunks.push(new Float32Array(normalized))
+    this.audio.feedAudio(samples, sampleRate)
   }
 
   async finish(): Promise<string> {
-    if (this.chunks.length === 0) {
+    const wav = this.audio.takeWav()
+    if (!wav) {
       return ''
     }
 
@@ -105,9 +63,6 @@ export class OpenAiTranscriptionSession {
       throw new Error(`Unknown OpenAI transcription model: ${this.modelId}`)
     }
 
-    const audio = combineChunks(this.chunks)
-    this.chunks = []
-    const wav = encodePcm16Wav(audio, CLOUD_TRANSCRIPTION_SAMPLE_RATE)
     const form = new FormData()
     form.append('model', apiModel)
     form.append('response_format', 'json')

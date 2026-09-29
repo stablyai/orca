@@ -11,9 +11,14 @@ import {
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { translate } from '@/i18n/i18n'
+import {
+  getCloudTranscriptionProviderLabel,
+  type CloudTranscriptionProvider
+} from './cloud-transcription-provider'
 
-type OpenAiTranscriptionKeyDialogProps = {
+type CloudTranscriptionKeyDialogProps = {
   open: boolean
+  provider: CloudTranscriptionProvider
   configured: boolean
   apiKeyDraft: string
   pending: boolean
@@ -23,8 +28,9 @@ type OpenAiTranscriptionKeyDialogProps = {
   onClear: () => void
 }
 
-export function OpenAiTranscriptionKeyDialog({
+export function CloudTranscriptionKeyDialog({
   open,
+  provider,
   configured,
   apiKeyDraft,
   pending,
@@ -32,33 +38,36 @@ export function OpenAiTranscriptionKeyDialog({
   onApiKeyDraftChange,
   onSave,
   onClear
-}: OpenAiTranscriptionKeyDialogProps): React.JSX.Element {
+}: CloudTranscriptionKeyDialogProps): React.JSX.Element {
+  const providerLabel = getCloudTranscriptionProviderLabel(provider)
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(nextOpen) => !pending && onOpenChange(nextOpen)}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
             {translate(
-              'auto.components.settings.OpenAiTranscriptionKeyDialog.439e91879e',
-              'OpenAI Transcription'
+              'auto.components.settings.CloudTranscriptionKeyDialog.title',
+              '{{provider}} Transcription',
+              { provider: providerLabel }
             )}
           </DialogTitle>
           <DialogDescription>
             {translate(
-              'auto.components.settings.OpenAiTranscriptionKeyDialog.07ed3e512e',
-              'Audio is sent to OpenAI only when an OpenAI speech model is selected.'
+              'auto.components.settings.CloudTranscriptionKeyDialog.audioDisclosure',
+              'Audio is sent to {{provider}} only when an {{provider}} speech model is selected.',
+              { provider: providerLabel }
             )}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
-          <Label htmlFor="openai-speech-api-key">
+          <Label htmlFor={`${provider}-speech-api-key`}>
             {translate(
               'auto.components.settings.OpenAiTranscriptionKeyDialog.16015322f9',
               'API Key'
             )}
           </Label>
           <Input
-            id="openai-speech-api-key"
+            id={`${provider}-speech-api-key`}
             type="password"
             value={apiKeyDraft}
             placeholder={
@@ -75,7 +84,7 @@ export function OpenAiTranscriptionKeyDialog({
             disabled={pending}
             onChange={(event) => onApiKeyDraftChange(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === 'Enter' && apiKeyDraft.trim()) {
+              if (event.key === 'Enter' && !pending && apiKeyDraft.trim()) {
                 onSave()
               }
             }}

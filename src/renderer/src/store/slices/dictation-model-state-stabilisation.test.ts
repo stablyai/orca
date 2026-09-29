@@ -20,6 +20,66 @@ beforeEach(() => {
 })
 
 describe('dictation model-state stabilisation', () => {
+  it.each(['ready', 'not-downloaded'] as const)(
+    'keeps the newer %s result when an older refresh finishes last',
+    async (status) => {
+      const older = Promise.withResolvers<SpeechModelState[]>()
+      const newer = Promise.withResolvers<SpeechModelState[]>()
+      vi.mocked(window.api.speech.getModelStates)
+        .mockReturnValueOnce(older.promise)
+        .mockReturnValueOnce(newer.promise)
+      const store = create<DictationTestStore>(dictationSlice)
+      const subscriber = vi.fn()
+      store.subscribe(subscriber)
+      const first = store.getState().refreshModelStates()
+      const second = store.getState().refreshModelStates()
+      const current: SpeechModelState[] = [{ id: 'openrouter-mai-transcribe-2', status }]
+      newer.resolve(current)
+      await second
+      older.resolve([
+        { id: current[0].id, status: status === 'ready' ? 'not-downloaded' : 'ready' }
+      ])
+      await first
+
+      expect(store.getState().modelStates).toBe(current)
+      expect(subscriber).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it('invalidates an in-flight refresh even when an explicit update is unchanged', async () => {
+    const older = Promise.withResolvers<SpeechModelState[]>()
+    vi.mocked(window.api.speech.getModelStates).mockReturnValueOnce(older.promise)
+    const store = create<DictationTestStore>(dictationSlice)
+    const current: SpeechModelState[] = [{ id: 'openrouter-mai-transcribe-2', status: 'ready' }]
+    store.getState().setModelStates(current)
+    const pending = store.getState().refreshModelStates()
+    store.getState().setModelStates(current.map((state) => ({ ...state })))
+    older.resolve([{ id: current[0].id, status: 'not-downloaded' }])
+    await pending
+
+    expect(store.getState().modelStates).toBe(current)
+  })
+
+  it('sequences refreshes independently for each store', async () => {
+    const firstReply = Promise.withResolvers<SpeechModelState[]>()
+    const secondReply = Promise.withResolvers<SpeechModelState[]>()
+    vi.mocked(window.api.speech.getModelStates)
+      .mockReturnValueOnce(firstReply.promise)
+      .mockReturnValueOnce(secondReply.promise)
+    const firstStore = create<DictationTestStore>(dictationSlice)
+    const secondStore = create<DictationTestStore>(dictationSlice)
+    const first = firstStore.getState().refreshModelStates()
+    const second = secondStore.getState().refreshModelStates()
+    const states: SpeechModelState[] = [{ id: 'openrouter-mai-transcribe-2', status: 'ready' }]
+    secondReply.resolve(states)
+    await second
+    firstReply.resolve(states)
+    await first
+
+    expect(firstStore.getState().modelStates).toEqual(states)
+    expect(secondStore.getState().modelStates).toEqual(states)
+  })
+
   it('does not publish an unchanged reply', async () => {
     reply = [{ id: 'whisper-tiny', status: 'downloading', progress: 0.42 }]
     const store = create<DictationTestStore>(dictationSlice)

@@ -9,6 +9,7 @@ import type {
 } from '../../shared/speech-types'
 import { SPEECH_MODEL_CATALOG, getCatalogModel, isLocalSpeechModel } from './model-catalog'
 import { hasOpenAiSpeechApiKey } from './openai-api-key-store'
+import { hasOpenRouterSpeechApiKey } from './openrouter-api-key-store'
 import {
   getSpeechModelCacheDirCandidates,
   migrateSpeechModelCacheIfNeeded,
@@ -97,10 +98,12 @@ export class ModelManager extends SpeechModelDownloadTransport {
       return { id: modelId, status: 'error', error: 'Unknown model' }
     }
 
-    if (manifest.provider === 'openai') {
+    if (manifest.provider !== 'local') {
+      const configured =
+        manifest.provider === 'openai' ? hasOpenAiSpeechApiKey() : hasOpenRouterSpeechApiKey()
       return {
         id: modelId,
-        status: hasOpenAiSpeechApiKey() ? 'ready' : 'not-downloaded'
+        status: configured ? 'ready' : 'not-downloaded'
       }
     }
 
