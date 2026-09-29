@@ -60,7 +60,8 @@ export function createRemoveWorktree(
       worktreeId,
       requiredExecutionHostId,
       forgetLocalOnly,
-      options?.ignoreWorkspaceCleanupScanSurvivors === true
+      options?.ignoreWorkspaceCleanupScanSurvivors === true,
+      options?.expectedInstanceId
     )
     if (!start.ok) {
       return { ok: false, error: start.error }
@@ -92,15 +93,16 @@ export function createRemoveWorktree(
 
     try {
       // Why: forget-local touches no remote, so there's no archive hook to run or trust prompt needed.
-      const skipArchive = forgetLocalOnly
-        ? true
-        : (await ensureHooksConfirmed(
-            get(),
-            getRepoIdFromWorktreeId(worktreeId),
-            'archive',
-            hostId,
-            removalRoute?.runtimeEnvironmentId
-          )) === 'skip'
+      const skipArchive =
+        forgetLocalOnly || options?.skipArchiveHooks === true
+          ? true
+          : (await ensureHooksConfirmed(
+              get(),
+              getRepoIdFromWorktreeId(worktreeId),
+              'archive',
+              hostId,
+              removalRoute?.runtimeEnvironmentId
+            )) === 'skip'
 
       const worktreeBeforeRemoval = findWorktreeOnConfirmedHost(
         get,

@@ -1,52 +1,19 @@
+import {
+  resetActiveWorktreeCreations,
+  WorktreeCreationCancelledError
+} from './worktree-creation-attempt'
+import {
+  makeRequest,
+  makePendingCreation,
+  makeCreationFlowStore
+} from './worktree-creation-test-fixtures'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  PendingWorktreeCreation,
-  WorktreeCreationRequest
-} from '@/lib/pending-worktree-creation'
 
 const { prepareEphemeralVmWorkspaceTargetMock } = vi.hoisted(() => ({
   prepareEphemeralVmWorkspaceTargetMock: vi.fn()
 }))
 
-type TestActiveView = 'terminal' | 'tasks'
-
-const store = {
-  settings: {
-    activeRuntimeEnvironmentId: null as string | null,
-    experimentalNativeChat: undefined as boolean | undefined,
-    openAgentTabsInChatByDefault: undefined as boolean | undefined
-  },
-  activeView: 'terminal' as TestActiveView,
-  activePendingCreationId: 'creation-1' as string | null,
-  repos: [{ id: 'repo-runtime', connectionId: null }],
-  pendingWorktreeCreations: {} as Record<string, PendingWorktreeCreation>,
-  beginPendingWorktreeCreation: vi.fn((entry: PendingWorktreeCreation) => {
-    store.pendingWorktreeCreations[entry.creationId] = entry
-    store.activePendingCreationId = entry.creationId
-  }),
-  updatePendingWorktreeCreation: vi.fn(
-    (creationId: string, patch: Partial<PendingWorktreeCreation>) => {
-      const entry = store.pendingWorktreeCreations[creationId]
-      if (entry) {
-        store.pendingWorktreeCreations[creationId] = { ...entry, ...patch }
-      }
-    }
-  ),
-  removePendingWorktreeCreation: vi.fn((creationId: string) => {
-    delete store.pendingWorktreeCreations[creationId]
-  }),
-  updateWorktreeMeta: vi.fn(),
-  setActivePendingWorktreeCreation: vi.fn(),
-  setActiveView: vi.fn(),
-  setSidebarOpen: vi.fn(),
-  createWorktree: vi.fn(() => new Promise(() => {})),
-  setupProjectExistingFolder: vi.fn(),
-  refreshRuntimeEnvironmentStatus: vi.fn(),
-  seedNativeChatLaunchDraft: vi.fn(),
-  setTabViewMode: vi.fn(),
-  tabsByWorktree: {} as Record<string, { id: string; launchAgent?: string }[]>,
-  unifiedTabsByWorktree: {}
-}
+const store = makeCreationFlowStore()
 
 vi.mock('@/store', () => ({
   useAppStore: {
@@ -76,7 +43,8 @@ vi.mock('@/lib/new-workspace', () => ({
 
 vi.mock('sonner', () => ({
   toast: {
-    error: vi.fn()
+    error: vi.fn(),
+    warning: vi.fn()
   }
 }))
 
@@ -96,6 +64,7 @@ import {
 } from './worktree-creation-flow'
 
 beforeEach(() => {
+  resetActiveWorktreeCreations()
   vi.clearAllMocks()
   store.settings.activeRuntimeEnvironmentId = null
   store.settings.experimentalNativeChat = undefined
@@ -110,31 +79,17 @@ beforeEach(() => {
   vi.mocked(ensureWorktreeHasInitialTerminal).mockReturnValue('tab-1')
 })
 
-function makeRequest(overrides: Partial<WorktreeCreationRequest> = {}): WorktreeCreationRequest {
-  return {
-    repoId: 'repo-1',
-    name: 'feature',
-    setupDecision: 'inherit',
-    agent: null,
-    pendingFirstAgentMessageRename: false,
-    note: '',
-    startupPlan: null,
-    quickPrompt: '',
-    quickTelemetry: null,
-    ...overrides
+/** Invoke the renderer-only `onCreated` callback the create call was handed. */
+function reportCreatedWorktree(createCall: unknown[], worktree: unknown): void {
+  const options = createCall[25]
+  const onCreated =
+    typeof options === 'object' && options !== null && 'onCreated' in options
+      ? options.onCreated
+      : undefined
+  if (typeof onCreated !== 'function') {
+    throw new Error('createWorktree was not given an onCreated callback')
   }
-}
-
-function makePendingCreation(request: WorktreeCreationRequest): PendingWorktreeCreation {
-  return {
-    creationId: 'creation-1',
-    phase: 'preparing',
-    status: 'creating',
-    startedAt: 1,
-    indeterminate: false,
-    loaderVisible: true,
-    request
-  }
+  onCreated(worktree)
 }
 
 async function flushAsyncWorktreeCreation(): Promise<void> {
@@ -473,17 +428,21 @@ describe('staged background worktree creation', () => {
     }
     const request = makeRequest({ linkedWorkItem, linkedTaskSourceContext })
     const expectedOptions = { linkedWorkItem, linkedTaskSourceContext }
+    store.createWorktree.mockRejectedValueOnce(new Error('Create failed'))
 
     expect(continueBackgroundWorktreeCreation('creation-1', request)).toBe(true)
     await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalledTimes(1))
     const stagedCreateCall = store.createWorktree.mock.calls[0] as unknown[] | undefined
-    expect(stagedCreateCall?.[25]).toEqual(expectedOptions)
+    expect(stagedCreateCall?.[25]).toEqual(expect.objectContaining(expectedOptions))
 
+    await vi.waitFor(() =>
+      expect(store.pendingWorktreeCreations['creation-1'].status).toBe('error')
+    )
     store.createWorktree.mockClear()
     retryBackgroundWorktreeCreation('creation-1')
     await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalledTimes(1))
     const retryCreateCall = store.createWorktree.mock.calls[0] as unknown[] | undefined
-    expect(retryCreateCall?.[25]).toEqual(expectedOptions)
+    expect(retryCreateCall?.[25]).toEqual(expect.objectContaining(expectedOptions))
   })
 
   it('can continue without revealing a staged create after background preflight', async () => {
@@ -603,12 +562,45 @@ describe('staged background worktree creation', () => {
 
     expect(started).toBe(true)
     await vi.waitFor(() => expect(markTrusted).toHaveBeenCalledTimes(1))
+    reportCreatedWorktree(store.createWorktree.mock.calls[0], {
+      id: 'wt-1',
+      repoId: 'repo-1',
+      hostId: 'local'
+    })
     delete store.pendingWorktreeCreations['creation-1']
     store.activePendingCreationId = null
     resolveTrust()
-    await vi.waitFor(() => expect(store.removePendingWorktreeCreation).toHaveBeenCalled())
+    await vi.waitFor(() => expect(store.removeWorktree).toHaveBeenCalled())
+    expect(ensureWorktreeHasInitialTerminal).not.toHaveBeenCalled()
 
     expect(activateAndRevealWorktree).not.toHaveBeenCalled()
+  })
+
+  // Why: a dispatched create that throws proves nothing (the host may have finished
+  // and lost the response), while a pre-dispatch refusal proves nothing was created.
+  it.each([
+    { what: 'never reported back', err: () => new Error('socket hang up'), warnings: 1 },
+    {
+      what: 'was refused before dispatch',
+      err: () => new WorktreeCreationCancelledError('Worktree creation cancelled.'),
+      warnings: 0
+    }
+  ])('cancelled create whose call $what', async ({ err, warnings }) => {
+    store.repos = [{ id: 'repo-1', connectionId: null }]
+    store.createWorktree.mockImplementationOnce(async () => {
+      delete store.pendingWorktreeCreations['creation-1']
+      throw err()
+    })
+
+    continueBackgroundWorktreeCreation('creation-1', makeRequest(), {
+      revealCreationSurface: false
+    })
+
+    await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalled())
+    await flushAsyncWorktreeCreation()
+    expect(toast.warning).toHaveBeenCalledTimes(warnings)
+    expect(store.removeWorktree).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalled()
   })
 
   // Why: one-click "Start workspace from issue" commonly backgrounds, so the
@@ -742,7 +734,9 @@ describe('staged background worktree creation', () => {
     )
     const createCall = store.createWorktree.mock.calls[0] as unknown[] | undefined
     expect(createCall?.[25]).toEqual({
-      startupDraft: 'https://github.com/o/r/issues/12'
+      startupDraft: 'https://github.com/o/r/issues/12',
+      isCancelled: expect.any(Function),
+      onCreated: expect.any(Function)
     })
   })
 
