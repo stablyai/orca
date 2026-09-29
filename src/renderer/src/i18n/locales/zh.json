@@ -1603,7 +1603,6 @@
         "reuseExistingBranchHint": "检出已有分支，而不是从它创建新分支。",
         "createMultiple": "创建更多",
         "waitForSetupBeforeAgent": "等待设置完成后再启动智能体",
-        "waitForSetupBeforeAgentHelp": "如果设置会安装依赖、MCP 服务器或智能体启动时需要的配置文件，请开启此选项。",
         "destroyDisabled": "已禁用销毁",
         "destroyConfigured": "已配置销毁",
         "noDestroyConfigured": "未配置销毁",
@@ -7835,8 +7834,7 @@
           "81057d5f71": "保存中...",
           "da37d6f10e": "复制",
           "3149964b66": "已复制",
-          "waitForSetupBeforeAgent": "等待设置完成后再启动智能体",
-          "waitForSetupBeforeAgentHelp": "如果设置会安装依赖、MCP 服务器或智能体启动时需要的配置文件，请开启此选项。"
+          "waitForSetupBeforeAgent": "等待设置完成后再启动智能体"
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "使用 {{value0}} 仓库颜色",
