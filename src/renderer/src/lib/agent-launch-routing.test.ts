@@ -98,10 +98,10 @@ describe('resolveAgentLaunchRoute', () => {
   })
 
   it.each([
-    ['SSH', 'ssh:host-a'],
-    ['paired runtime', 'runtime:environment-a']
-  ])('preserves execution ownership on %s', (_name, executionHostId) => {
-    expect(route({ executionHostId })).toBe('legacy-native-chat')
+    ['SSH', 'ssh:host-a', 'legacy-native-chat'],
+    ['paired runtime', 'runtime:environment-a', 'structured-native-chat']
+  ])('preserves execution ownership on %s', (_name, executionHostId, expectedRoute) => {
+    expect(route({ executionHostId })).toBe(expectedRoute)
   })
 
   it.each(['git-worktree', 'folder'] as const)(

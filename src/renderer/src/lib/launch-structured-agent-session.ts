@@ -25,8 +25,12 @@ import {
   recordWebSessionFocusIntent,
   resolveWebSessionVisibleTabId
 } from '@/runtime/web-session-focus-intent'
-import { LOCAL_STRUCTURED_SESSION_OWNER } from '@/runtime/local-structured-session-owner'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import {
+  structuredAgentLaunchTarget,
+  structuredAgentLaunchFocusOwner
+} from './structured-agent-launch-target'
 
 export type StructuredAgentSessionLaunchIntent = {
   sessionId: string
@@ -35,6 +39,7 @@ export type StructuredAgentSessionLaunchIntent = {
   params: StructuredAgentSessionCreateParams
   /** The saved selection create seeds, read when the intent is built. */
   seedOptions?: Readonly<Record<string, string>>
+  target: RuntimeClientTarget
 }
 
 function launchSeedOptions(
@@ -125,11 +130,13 @@ function buildStructuredAgentSessionLaunchIntent(
   worktreeId: string,
   agent: AgentSessionHandleProvider,
   sessionId: string,
-  resumeFrom?: StructuredAgentSessionResumeSource
+  resumeFrom?: StructuredAgentSessionResumeSource,
+  establishedTarget?: RuntimeClientTarget
 ): StructuredAgentSessionLaunchIntent {
   const state = useAppStore.getState()
+  const target = establishedTarget ?? structuredAgentLaunchTarget(state, worktreeId)
   recordWebSessionFocusIntent(
-    { environmentId: LOCAL_STRUCTURED_SESSION_OWNER },
+    structuredAgentLaunchFocusOwner(target),
     worktreeId,
     `agent-session:${sessionId}`,
     undefined,
@@ -139,6 +146,7 @@ function buildStructuredAgentSessionLaunchIntent(
     sessionId,
     worktreeId,
     agent,
+    target,
     params: structuredAgentSessionCreateParams({
       sessionId,
       worktree: toRuntimeWorktreeSelector(worktreeId),
@@ -158,7 +166,8 @@ export function retryStructuredAgentSessionLaunchIntent(
     intent.worktreeId,
     intent.agent,
     intent.sessionId,
-    intent.params.resumeFrom
+    intent.params.resumeFrom,
+    intent.target
   )
 }
 
@@ -171,10 +180,13 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
   payloadFingerprint: string
   expectedRuntimeFence: number | null
   resumeFrom?: StructuredAgentSessionResumeSource
+  target?: RuntimeClientTarget
 }): StructuredAgentSessionLaunchIntent {
   const state = useAppStore.getState()
+  // Records predating remote launches were always owned by the local runtime.
+  const target: RuntimeClientTarget = args.target ?? { kind: 'local' }
   recordWebSessionFocusIntent(
-    { environmentId: LOCAL_STRUCTURED_SESSION_OWNER },
+    structuredAgentLaunchFocusOwner(target),
     args.worktreeId,
     `agent-session:${args.sessionId}`,
     undefined,
@@ -184,6 +196,7 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
     sessionId: args.sessionId,
     worktreeId: args.worktreeId,
     agent: args.agent,
+    target,
     params: {
       envelope: {
         sessionId: args.sessionId,
@@ -203,7 +216,7 @@ export function abandonStructuredAgentSessionLaunchIntent(
   intent: StructuredAgentSessionLaunchIntent
 ): void {
   clearWebSessionFocusIntentIfMatches(
-    { environmentId: LOCAL_STRUCTURED_SESSION_OWNER },
+    structuredAgentLaunchFocusOwner(intent.target),
     intent.worktreeId,
     `agent-session:${intent.sessionId}`
   )
@@ -242,7 +255,7 @@ async function hostSupportsCreate(intent: StructuredAgentSessionLaunchIntent): P
   for (let attempt = 0; ; attempt += 1) {
     try {
       const support = await callStructuredAgentSession<{ supported: boolean; reason?: string }>(
-        { kind: 'local' },
+        intent.target,
         'agentSession.createSupport',
         { worktree: intent.params.worktree, agent: intent.agent }
       )
@@ -293,7 +306,7 @@ export async function launchStructuredAgentSession(
   let result: AgentSessionMutationResult<AgentSessionAttachResult>
   try {
     result = await callStructuredAgentSession<AgentSessionMutationResult<AgentSessionAttachResult>>(
-      { kind: 'local' },
+      intent.target,
       'agentSession.create',
       intent.params
     )

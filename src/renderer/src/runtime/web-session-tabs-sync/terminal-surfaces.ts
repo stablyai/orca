@@ -22,6 +22,9 @@ import type {
 } from './state'
 import type { Tab } from '../../../../shared/tab-types'
 import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
+import { structuredAgentLaunchCancellationBelongsTo } from '@/lib/structured-agent-session-launch-persistence'
+import { LOCAL_STRUCTURED_SESSION_OWNER } from '../local-structured-session-owner'
+import { getRuntimeEnvironmentRevision } from '../runtime-environment-revision'
 import { hasStructuredAgentSessionLaunchCancellationTombstone } from '@/lib/structured-agent-session-launch-registry'
 
 export function isReadyTerminalTab(
@@ -60,13 +63,25 @@ export function buildMirroredAgentTabs(
   fallbackGroupId: string,
   sortOffset: number,
   currentUnifiedTabs: readonly Tab[],
-  now: number
+  now: number,
+  environmentId: string = LOCAL_STRUCTURED_SESSION_OWNER
 ): MirroredAgentTab[] {
+  const target =
+    environmentId === LOCAL_STRUCTURED_SESSION_OWNER
+      ? ({ kind: 'local' } as const)
+      : ({
+          kind: 'environment',
+          environmentId,
+          expectedEnvironmentPairingRevision: getRuntimeEnvironmentRevision(environmentId)
+        } as const)
   const agentTabs = snapshot.tabs
     .filter(isAgentSessionTab)
     .filter(
       (tab) =>
-        !hasStructuredAgentSessionLaunchCancellationTombstone(snapshot.worktree, tab.sessionId)
+        !(
+          structuredAgentLaunchCancellationBelongsTo(tab.sessionId, target) &&
+          hasStructuredAgentSessionLaunchCancellationTombstone(snapshot.worktree, tab.sessionId)
+        )
     )
   const occupiedIds = new Set(currentUnifiedTabs.map((tab) => tab.id))
   const assignedIds = new Set<string>()
@@ -121,6 +136,8 @@ export function buildMirroredAgentTabs(
         groupId: existing?.groupId ?? hostGroupIdByTabId.get(tab.id) ?? fallbackGroupId,
         worktreeId: snapshot.worktree,
         contentType: 'agent-session',
+        executionHostId:
+          target.kind === 'local' ? 'local' : `runtime:${encodeURIComponent(target.environmentId)}`,
         agentSessionAgent: tab.agent,
         // Why: `title` is wire data typed `string`; a host that violates that must
         // degrade to the placeholder, not throw inside the snapshot patch.

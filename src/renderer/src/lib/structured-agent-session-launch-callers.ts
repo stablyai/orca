@@ -2,6 +2,7 @@ import { settleStructuredAgentLaunchPrompt } from '@/lib/structured-agent-sessio
 import type { StructuredPromptDeliveryResult } from '@/lib/structured-agent-session-launch-prompt'
 import type { StructuredAgentSessionOutboxEntry } from '../../../shared/structured-agent-session-outbox'
 import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 
 export type StructuredAgentLaunchOptions = {
   prompt?: string
@@ -45,6 +46,7 @@ function trackPromptDelivery(
 }
 
 export function addStructuredLaunchCaller(args: {
+  target: RuntimeClientTarget
   group: StructuredLaunchCallerGroup
   launchResult: Promise<{ sessionId: string; fence: number }>
   options: StructuredAgentLaunchOptions
@@ -53,6 +55,7 @@ export function addStructuredLaunchCaller(args: {
   const caller: StructuredLaunchCaller = {}
   args.group.entries.add(caller)
   const promptDeliveryResult = settleStructuredAgentLaunchPrompt({
+    target: args.target,
     launchResult: args.launchResult,
     options: args.options,
     stagedEntry: args.stagedEntry

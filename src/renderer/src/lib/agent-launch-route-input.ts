@@ -26,6 +26,7 @@ import type { NativeChatLaunchPromptDelivery } from '@/lib/native-chat-initial-v
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { readLocalRuntimeCapabilitiesOrUnknown } from '@/runtime/local-runtime-capabilities'
+import type { RuntimeEnvironmentStatus } from '@/store/slices/runtime-status-types'
 
 export type ProspectiveWorkspaceKind = NonNullable<AgentLaunchRoutingInput['workspaceKind']>
 
@@ -51,7 +52,9 @@ export type AgentLaunchRouteStore = {
   folderWorkspaces?: AppState['folderWorkspaces']
 } & Parameters<typeof getExecutionHostIdForWorktree>[0] &
   Parameters<typeof getLocalProjectExecutionRuntimeContext>[0] &
-  Parameters<typeof getConnectionIdFromState>[0]
+  Parameters<typeof getConnectionIdFromState>[0] & {
+    runtimeStatusByEnvironmentId?: ReadonlyMap<string, RuntimeEnvironmentStatus>
+  }
 
 export type AgentLaunchRouteArgs = {
   agent: TuiAgent
@@ -81,7 +84,7 @@ function resolveProjectRuntime(
   executionHostId: string
 ): AgentLaunchRoutingInput['projectRuntime'] {
   // Why: a remote host owns its own runtime; the local project's Windows/WSL preference is
-  // not evidence about it, and the remote blocker fires before it would be read.
+  // not evidence about it; createSupport asks the executing runtime instead.
   if (executionHostId !== LOCAL_EXECUTION_HOST_ID || workspace.kind === 'floating') {
     return undefined
   }
@@ -116,11 +119,18 @@ export function buildAgentLaunchRouteInput(
 ): AgentLaunchRoutingInput {
   const { agent, workspace, tuiCustomization } = args
   const executionHostId = resolveExecutionHostId(store, workspace)
+  const host = parseExecutionHostId(executionHostId)
+  const hostCapabilities =
+    host?.kind === 'runtime'
+      ? (store.runtimeStatusByEnvironmentId?.get(host.environmentId)?.status?.capabilities ?? null)
+      : host?.kind === 'local'
+        ? readLocalRuntimeCapabilitiesOrUnknown()
+        : null
   return {
     agent,
     settings: store.settings,
     executionHostId,
-    hostCapabilities: readLocalRuntimeCapabilitiesOrUnknown(),
+    hostCapabilities,
     workspaceKind: workspace.kind,
     projectRuntime: resolveProjectRuntime(store, workspace, executionHostId),
     promptDelivery: args.promptDelivery,

@@ -1,6 +1,6 @@
-import { useSyncExternalStore } from 'react'
 import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
 import type { AgentSessionWriteRefusal } from '../../../shared/agent-session-write-failure'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
 import type { StructuredLaunchRecoveryState } from './structured-agent-session-launch-recovery'
 import type { StructuredLaunchSelection } from './structured-agent-session-launch-options'
@@ -120,6 +120,7 @@ function persistStructuredLaunchState(state: StructuredLaunchState): void {
     clientOperationId: envelope.clientOperationId,
     payloadFingerprint: envelope.payloadFingerprint,
     expectedRuntimeFence: envelope.expectedRuntimeFence,
+    target: state.intent.target,
     ...(resumeFrom ? { resumeFrom } : {})
   }
   writeStructuredAgentLaunchRecord(record)
@@ -190,28 +191,6 @@ export function getStructuredAgentSessionLaunchFailure(
     : null
 }
 
-export function useStructuredAgentSessionLaunchFailure(
-  worktreeId: string,
-  sessionId: string
-): AgentSessionWriteRefusal | null {
-  return useSyncExternalStore(
-    subscribeStructuredAgentLaunchStatus,
-    () => getStructuredAgentSessionLaunchFailure(worktreeId, sessionId),
-    () => null
-  )
-}
-
-export function useStructuredAgentSessionLaunchLifecycle(
-  worktreeId: string,
-  sessionId: string
-): StructuredAgentSessionLaunchLifecycle | null {
-  return useSyncExternalStore(
-    subscribeStructuredAgentLaunchStatus,
-    () => getStructuredAgentSessionLaunchLifecycle(worktreeId, sessionId),
-    () => null
-  )
-}
-
 export function shouldRetainStructuredAgentSessionLaunchTab(
   worktreeId: string,
   sessionId: string
@@ -254,19 +233,25 @@ export function markStructuredAgentSessionLaunchPublished(
 function markStructuredAgentSessionLaunchCancelledInternal(
   worktreeId: string,
   sessionId: string,
-  notify: boolean
+  notify: boolean,
+  ownerTarget?: RuntimeClientTarget
 ): boolean {
   const alreadyCancelled = hasStructuredAgentLaunchCancellationTombstonePersisted(sessionId)
   const state = getStructuredLaunchStateBySessionId(sessionId)
   if (matchesLaunchWorktree(state, worktreeId) && state) {
-    markStructuredAgentLaunchCancellation(sessionId, alreadyCancelled, state.promise)
+    markStructuredAgentLaunchCancellation(
+      sessionId,
+      alreadyCancelled,
+      state.promise,
+      state.intent.target
+    )
     state.cancelled = true
     state.callers.outcome = 'cancelled'
     // The tombstone is the durable authority; drop the in-memory launch so bulk closes cannot
     // retain a dead promise for the lifetime of the renderer.
     deleteStructuredLaunchStateIfCurrent(state)
   } else if (!alreadyCancelled) {
-    markStructuredAgentLaunchCancellation(sessionId, alreadyCancelled)
+    markStructuredAgentLaunchCancellation(sessionId, alreadyCancelled, undefined, ownerTarget)
   }
   if (!alreadyCancelled && notify) {
     notifyStructuredLaunchListeners()
@@ -276,17 +261,24 @@ function markStructuredAgentSessionLaunchCancelledInternal(
 
 export function markStructuredAgentSessionLaunchCancelled(
   worktreeId: string,
-  sessionId: string
+  sessionId: string,
+  ownerTarget?: RuntimeClientTarget
 ): boolean {
-  return markStructuredAgentSessionLaunchCancelledInternal(worktreeId, sessionId, true)
+  return markStructuredAgentSessionLaunchCancelledInternal(worktreeId, sessionId, true, ownerTarget)
 }
 
 /** Bulk workspace purges run inside a store updater; persist cancellation without notifying React. */
 export function markStructuredAgentSessionLaunchCancelledSilently(
   worktreeId: string,
-  sessionId: string
+  sessionId: string,
+  ownerTarget?: RuntimeClientTarget
 ): boolean {
-  return markStructuredAgentSessionLaunchCancelledInternal(worktreeId, sessionId, false)
+  return markStructuredAgentSessionLaunchCancelledInternal(
+    worktreeId,
+    sessionId,
+    false,
+    ownerTarget
+  )
 }
 
 export function hasStructuredAgentSessionLaunchCancellationTombstone(
@@ -310,11 +302,13 @@ export function retireStructuredAgentSessionLaunchCancellationTombstone(
 
 export function retireAbsentStructuredAgentSessionLaunchCancellationTombstones(
   publishedSessionIds: ReadonlySet<string>,
-  authoritativeInventory: number
+  authoritativeInventory: number,
+  target: RuntimeClientTarget = { kind: 'local' }
 ): boolean {
   const changed = retireAbsentStructuredAgentLaunchCancellations(
     publishedSessionIds,
-    authoritativeInventory
+    authoritativeInventory,
+    target
   )
   if (changed) {
     notifyStructuredLaunchListeners()

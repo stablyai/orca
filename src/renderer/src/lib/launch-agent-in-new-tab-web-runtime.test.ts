@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { adoptAgentSessionLaunchVerdict } from './agent-session-launch-plan'
 
 const mocks = vi.hoisted(() => ({
+  launchStructured: vi.fn(),
   createTab: vi.fn(),
   closeTab: vi.fn(),
   createWebRuntimeSessionTerminal: vi.fn(),
@@ -48,6 +50,9 @@ const store = {
   markNativeChatLaunchPromptFailed: vi.fn()
 }
 
+vi.mock('@/lib/launch-agent-in-new-tab-structured', () => ({
+  launchAgentInStructuredNewTab: mocks.launchStructured
+}))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
 vi.mock('sonner', () => ({ toast: { message: vi.fn(), error: vi.fn() } }))
 vi.mock('@/components/tab-bar/reconcile-order', () => ({ reconcileTabOrder: vi.fn(() => []) }))
@@ -74,6 +79,49 @@ describe('launchAgentInNewTab paired web runtime', () => {
     store.tabsByWorktree = { 'wt-1': [{ id: 'tab-1' }] }
     mocks.createWebRuntimeSessionTerminal.mockResolvedValue({ status: 'created' })
   })
+
+  it.each([true, false])(
+    'keeps structured web launches out of the terminal path (created: %s)',
+    async (created) => {
+      const plan = adoptAgentSessionLaunchVerdict({
+        route: 'structured-native-chat',
+        agent: 'codex',
+        worktreeId: 'wt-1',
+        prompt: '',
+        promptDelivery: 'draft'
+      })
+      mocks.launchStructured.mockReturnValue(
+        created
+          ? {
+              sessionId: 'session-web',
+              tabId: 'agent-session:session-web',
+              structuredSettlement: Promise.resolve({
+                kind: 'structured',
+                sessionId: 'session-web'
+              })
+            }
+          : null
+      )
+      const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+      const result = launchAgentInNewTab({
+        agent: 'codex',
+        worktreeId: 'wt-1',
+        agentSessionLaunchPlan: plan
+      })
+      expect(mocks.launchStructured).toHaveBeenCalledWith({ plan })
+      expect(mocks.createWebRuntimeSessionTerminal).not.toHaveBeenCalled()
+      expect(mocks.createTab).not.toHaveBeenCalled()
+      if (created) {
+        expect(result?.surface).toEqual({
+          kind: 'local-agent-session',
+          tabId: 'agent-session:session-web',
+          sessionId: 'session-web'
+        })
+      } else {
+        expect(result).toBeNull()
+      }
+    }
+  )
 
   it('delegates agent quick launch to the host runtime', async () => {
     store.tabsByWorktree['wt-1'].push({ id: 'stale-agent-tab', launchAgent: 'claude' })

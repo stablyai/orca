@@ -22,6 +22,12 @@ import {
 import { applyWebSessionTabsSnapshots } from './snapshot-api'
 import { applyWebSessionTabsStorePatch } from './store-patch'
 import { isHostMirroredWorktree } from './visibility-types'
+import {
+  beginStructuredAgentSessionAuthoritativeInventory,
+  startStructuredAgentLaunchCancellationCleanup
+} from '../../lib/structured-agent-session-launch-cancellation'
+import { retireAbsentStructuredAgentSessionLaunchCancellationTombstones } from '../../lib/structured-agent-session-launch-registry'
+import { closeStructuredAgentSession } from '../structured-agent-session-close'
 
 export type InitialSessionTabsLoadArgs = {
   environmentId: string
@@ -41,6 +47,12 @@ export function loadInitialWebSessionTabs({
 }: InitialSessionTabsLoadArgs): void {
   // Why: listAll is bootstrap fallback; a stream received after this boundary owns the result.
   const requestReceivedFrame = nextReceivedSessionTabsFrame()
+  const cancellationInventory = beginStructuredAgentSessionAuthoritativeInventory()
+  const target = { kind: 'environment', environmentId, expectedEnvironmentPairingRevision } as const
+  startStructuredAgentLaunchCancellationCleanup(
+    (sessionId) => closeStructuredAgentSession(target, sessionId),
+    target
+  )
   let settleHydration: (() => void) | null = null
   void window.api.runtimeEnvironments
     .call({
@@ -128,6 +140,17 @@ export function loadInitialWebSessionTabs({
         latestReceivedSessionTabsFrameByEnvironment.get(environmentId) === requestReceivedFrame &&
         (latestReceivedSessionTabsInventoryFrameByEnvironment.get(environmentId) ?? 0) <=
           requestReceivedFrame
+      if (initialInventoryStillCurrent && result.authoritative === true) {
+        retireAbsentStructuredAgentSessionLaunchCancellationTombstones(
+          new Set(
+            result.snapshots.flatMap((snapshot) =>
+              snapshot.tabs.flatMap((tab) => (tab.type === 'agent-session' ? [tab.sessionId] : []))
+            )
+          ),
+          cancellationInventory,
+          target
+        )
+      }
       settleHydration = applyWebSessionTabsStorePatch(
         (state) => applyWebSessionTabsSnapshots(state, freshSnapshots, environmentId),
         {

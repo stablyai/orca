@@ -27,6 +27,7 @@ import {
   type RuntimeCapability
 } from '../../shared/protocol-version'
 import { supportsAgentLaunch } from '../runtime/rpc/methods/agent-launch'
+import { supportsStructuredAgentSessions } from '../runtime/rpc/methods/structured-agent-session-policy'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from './desktop-renderer-runtime-capabilities'
 
 /** Advertised to a remote host and deliberately NOT to main: each would change local behaviour or
@@ -50,15 +51,11 @@ const REMOTE_ONLY_BY_DECISION: readonly RuntimeCapability[] = [
   SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY
 ]
 
-/** Gates the renderer must pass against its own main process. The Electron remote list omits all
- *  five; mobile advertises the structured ones, so this is an Electron-remote gap rather than a
- *  statement that no remote client wants them. Why it is one is not recorded here. */
+/** Task-control capabilities not yet advertised over the paired Electron transport. */
 const LOCAL_ONLY_BY_DECISION: readonly RuntimeCapability[] = [
   AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
-  AGENT_SESSION_TURN_ITEM_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-  CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+  AGENT_SESSION_TURN_ITEM_CAPABILITY
 ]
 
 function missingFrom(
@@ -69,6 +66,27 @@ function missingFrom(
 }
 
 describe('desktop renderer runtime client capabilities', () => {
+  it('admits paired structured chats only with both client support and host opt-in', () => {
+    const remote = {
+      clientKind: 'runtime',
+      clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+      structuredNativeChatEnabled: true
+    } as const
+    expect(supportsStructuredAgentSessions(remote)).toBe(true)
+    expect(supportsStructuredAgentSessions({ ...remote, structuredNativeChatEnabled: false })).toBe(
+      false
+    )
+    expect(
+      supportsStructuredAgentSessions({
+        ...remote,
+        clientCapabilities: remote.clientCapabilities.filter(
+          (capability) => capability !== STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+        )
+      })
+    ).toBe(false)
+    expect(remote.clientCapabilities).toContain(CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
+  })
+
   it('passes the host gate that refuses agent.launch', () => {
     const renderer = {
       clientKind: 'runtime',

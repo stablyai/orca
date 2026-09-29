@@ -56,6 +56,45 @@ describe('per-launch structured feasibility', () => {
     expect(support({ agent })).toEqual({ supported: true })
   })
 
+  it.each(['git-worktree', 'folder'] as const)('supports a paired runtime %s', (workspaceKind) => {
+    expect(
+      support({
+        executionHostId: 'runtime:nexbox',
+        pairedRuntimeTransportAvailable: true,
+        workspaceKind
+      })
+    ).toEqual({
+      supported: true
+    })
+    expect(
+      support({
+        executionHostId: 'runtime:nexbox',
+        pairedRuntimeTransportAvailable: true,
+        hostCapabilities: []
+      })
+    ).toEqual({
+      supported: false,
+      blocker: 'runtime-capability'
+    })
+    expect(
+      support({
+        executionHostId: 'runtime:nexbox',
+        pairedRuntimeTransportAvailable: true,
+        hostCapabilities: null
+      })
+    ).toEqual({
+      supported: false,
+      blocker: 'runtime-capability-unknown'
+    })
+  })
+
+  it('keeps callers without paired runtime transport off remote structured launches', () => {
+    expect(support({ executionHostId: 'runtime:nexbox' })).toEqual({
+      supported: false,
+      blocker: 'remote-execution-host'
+    })
+  })
+
   const blockerCases: [string, Partial<StructuredNativeChatSupportInput>, string][] = [
     ['a reused PTY agent', { reusesTerminal: true }, 'reused-terminal'],
     ['grok', { agent: 'grok' }, 'agent-without-structured-session'],

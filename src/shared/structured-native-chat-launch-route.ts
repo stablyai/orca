@@ -14,6 +14,7 @@ import type { ProjectExecutionRuntimeResolution } from './project-execution-runt
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from './protocol-version'
 import type { TuiAgent } from './tui-agent'
 import type { WorkspaceLaunchKind } from './workspace-launch-kind'
+import { parseExecutionHostId } from './execution-host'
 
 export type NativeChatDefaultSettings = Pick<
   GlobalSettings,
@@ -43,6 +44,8 @@ export type StructuredNativeChatSupport =
 export type StructuredNativeChatSupportInput = {
   agent: TuiAgent
   executionHostId: string
+  /** The caller can route the whole launch lifecycle through paired-runtime RPCs. */
+  pairedRuntimeTransportAvailable?: boolean
   /** Capabilities of the host this launch would run on. `null` = not yet established. */
   hostCapabilities: readonly string[] | null
   /** Host-derived. Absent means the kind was never established, which is not evidence of any kind. */
@@ -74,7 +77,12 @@ export function prefersStructuredNativeChatByDefault(
 export function resolveStructuredNativeChatSupport(
   input: StructuredNativeChatSupportInput
 ): StructuredNativeChatSupport {
-  if (input.executionHostId !== 'local') {
+  const host = parseExecutionHostId(input.executionHostId)
+  if (
+    !host ||
+    host.kind === 'ssh' ||
+    (host.kind === 'runtime' && input.pairedRuntimeTransportAvailable !== true)
+  ) {
     return { supported: false, blocker: 'remote-execution-host' }
   }
   if (input.reusesTerminal === true) {

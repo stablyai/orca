@@ -52,12 +52,15 @@ export {
   retireStructuredAgentSessionLaunchCancellationTombstone,
   shouldRetainStructuredAgentSessionLaunchTab,
   subscribeStructuredAgentLaunchStatus,
-  useStructuredAgentSessionLaunchFailure,
-  useStructuredAgentSessionLaunchLifecycle,
   type StructuredAgentLaunchStatus,
   type StructuredAgentSessionLaunchLifecycle
 } from './structured-agent-session-launch-registry'
-export { useStructuredAgentLaunchStatus } from './structured-agent-session-launch-status'
+export {
+  useStructuredAgentLaunchStatus,
+  useStructuredAgentSessionLaunchFailure,
+  useStructuredAgentSessionLaunchFailureReason,
+  useStructuredAgentSessionLaunchLifecycle
+} from './structured-agent-session-launch-status'
 export { useStructuredAgentSessionLaunchSelection } from './structured-agent-session-launch-options'
 
 type StructuredLaunchStateResult = {
@@ -217,6 +220,7 @@ function structuredAgentLaunchState(
     return {
       state: existing,
       caller: addStructuredLaunchCaller({
+        target: existing.intent.target,
         group: existing.callers,
         launchResult: existing.promise,
         options: callerOptions,
@@ -258,6 +262,7 @@ function structuredAgentLaunchState(
         )
       : publishWithHeldOptions(state, launchAndReconcile(state))
   const caller = addStructuredLaunchCaller({
+    target: intent.target,
     group: state.callers,
     launchResult: state.promise,
     options,

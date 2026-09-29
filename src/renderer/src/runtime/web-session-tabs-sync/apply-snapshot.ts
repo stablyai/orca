@@ -1,3 +1,4 @@
+import { getRuntimeEnvironmentRevision } from '../runtime-environment-revision'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import type {
@@ -15,6 +16,8 @@ import { applyBrowserRecordUpdates } from './apply-browser-records'
 import { applyWorktreeRecordUpdates } from './apply-worktree-records'
 import { applyActiveStateUpdates } from './apply-active-state'
 import { buildWebSessionTabsFinalPatch } from './apply-final-patch'
+import { suppressCancelledStructuredSessionTabs } from '../structured-agent-session-tab-retirement'
+import { LOCAL_STRUCTURED_SESSION_OWNER } from '../local-structured-session-owner'
 
 /** Reconcile one host frame through the staged terminal/browser/layout pipeline. */
 export function applyWebSessionTabsSnapshotWithContext(
@@ -32,9 +35,17 @@ export function applyWebSessionTabsSnapshotWithContext(
     return state
   }
   const worktreeId = rawSnapshot.worktree
+  const snapshot =
+    environmentId === LOCAL_STRUCTURED_SESSION_OWNER
+      ? rawSnapshot
+      : suppressCancelledStructuredSessionTabs(rawSnapshot, {
+          kind: 'environment',
+          environmentId,
+          expectedEnvironmentPairingRevision: getRuntimeEnvironmentRevision(environmentId)
+        })
   const base = prepareWebSessionTabsSnapshotBase(
     state,
-    rawSnapshot,
+    snapshot,
     environmentId,
     worktreeId,
     now,
