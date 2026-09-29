@@ -17,6 +17,7 @@ import {
   type RemoteOrcaCliResult
 } from './ssh-remote-cli-host-passthrough'
 import { RemoteCliArgumentError, type ParsedRemoteCli } from './ssh-remote-cli-argument-error'
+import { runRemoteOpenUrl } from './ssh-remote-open-url'
 import {
   optionalRemoteCliNumber,
   optionalRemoteCliString,
@@ -69,6 +70,10 @@ export async function runRemoteOrcaCli(
       }
     }
     return { stdout: '', stderr: `${interactiveMessage}\n`, exitCode: 1 }
+  }
+
+  if (command === 'open-url' && !parsed.flags.has('help')) {
+    return runRemoteOpenUrl(runtime, request, parsed)
   }
 
   if (command === 'orchestration check' || command === 'orchestration ask') {

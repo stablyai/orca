@@ -220,9 +220,11 @@ export function createRemoteCliInstallPlan(env: RemoteCliInstallEnv): RemoteCliI
   }
 
   const launcherPath = joinRemotePath(env.hostPlatform, env.binDir, 'orca')
+  const xdgOpenPath = joinRemotePath(env.hostPlatform, env.binDir, 'xdg-open')
   return {
     launcherPath,
     files: [
+      { path: xdgOpenPath, contents: POSIX_REMOTE_XDG_OPEN_SHIM },
       {
         path: launcherPath,
         contents: [
@@ -242,6 +244,46 @@ export function createRemoteCliInstallPlan(env: RemoteCliInstallEnv): RemoteCliI
       }
     ],
     // Surface chmod failures: a non-executable launcher must fail install loudly, not silently.
-    postWriteCommands: [`chmod +x ${quoteSh(launcherPath)}`]
+    postWriteCommands: [`chmod +x ${quoteSh(launcherPath)}`, `chmod +x ${quoteSh(xdgOpenPath)}`]
   }
 }
+
+/**
+ * `xdg-open` shim deployed beside the remote `orca` launcher (first on PATH in Orca terminals).
+ * Why: agent CLIs open login pages with xdg-open, not $BROWSER. http(s) links go to the desktop
+ * that owns this SSH session, which asks its owner before opening; if that is unavailable the
+ * link is printed so it stays clickable. Anything else goes to the host's real xdg-open.
+ */
+export const POSIX_REMOTE_XDG_OPEN_SHIM = [
+  '#!/usr/bin/env sh',
+  'self_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)',
+  'case "${1:-}" in',
+  '  http://*|https://*)',
+  '    if "$self_dir/orca" open-url --url "$1" >/dev/null 2>&1; then exit 0; fi',
+  '    printf \'Open this link: %s\\n\' "$1" >&2',
+  '    exit 0',
+  '    ;;',
+  'esac',
+  // Why a one-shot marker: however PATH spells this directory, a shim that was reached by
+  // delegation must never delegate again, so a loop back to itself cannot happen.
+  'if [ -n "${ORCA_XDG_OPEN_DELEGATED:-}" ]; then',
+  '  echo "xdg-open: no handler for ${1:-}" >&2',
+  '  exit 3',
+  'fi',
+  'old_ifs=$IFS',
+  'IFS=:',
+  'for dir in $PATH; do',
+  '  IFS=$old_ifs',
+  '  [ -n "$dir" ] || continue',
+  // Why physical paths: `/bin/` and a symlink to this directory are both this shim.
+  '  real_dir=$(CDPATH= cd -- "$dir" 2>/dev/null && pwd -P) || continue',
+  '  [ "$real_dir" = "$self_dir" ] && continue',
+  '  if [ -x "$dir/xdg-open" ]; then',
+  '    export ORCA_XDG_OPEN_DELEGATED=1',
+  '    exec "$dir/xdg-open" "$@"',
+  '  fi',
+  'done',
+  'echo "xdg-open: no handler for ${1:-}" >&2',
+  'exit 3',
+  ''
+].join('\n')

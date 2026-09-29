@@ -100,6 +100,7 @@ const BROWSER_COMMAND_NAMES = [
   'browserExec',
   'browserTabCreate',
   'browserOpenUrlOnClient',
+  'requestDesktopOpenUrlForSshTarget',
   'browserTabSetProfile',
   'browserTabProfileShow',
   'browserTabProfileClone',

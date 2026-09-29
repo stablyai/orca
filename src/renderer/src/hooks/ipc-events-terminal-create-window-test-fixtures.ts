@@ -128,6 +128,7 @@ export function buildTerminalCreateWindow(args: {
         onRequestTabCreate: () => () => {},
         replyTabCreate: () => {},
         onRequestTabClose: () => () => {},
+        onRemoteOpenUrlRequest: () => () => {},
         replyTabClose: vi.fn(),
         onRequestTabSetProfile: () => () => {},
         replyTabSetProfile: () => {},

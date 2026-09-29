@@ -18500,5 +18500,10 @@
   },
   "common": {
     "retry": "Retry"
+  },
+  "remoteOpenUrl": {
+    "title": "{{value0}} wants to open {{value1}}",
+    "open": "Open",
+    "dismiss": "Dismiss"
   }
 }

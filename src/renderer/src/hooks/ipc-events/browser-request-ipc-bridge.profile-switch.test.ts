@@ -68,6 +68,7 @@ describe('browser profile request teardown', () => {
           },
           replyTabSetProfile: mocks.replyTabSetProfile,
           onRequestTabClose: () => () => {},
+          onRemoteOpenUrlRequest: () => () => {},
           replyTabClose: vi.fn()
         }
       }

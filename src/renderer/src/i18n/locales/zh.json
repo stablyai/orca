@@ -18489,5 +18489,10 @@
   },
   "common": {
     "retry": "重试"
+  },
+  "remoteOpenUrl": {
+    "title": "{{value0}} 想要打开 {{value1}}",
+    "open": "打开",
+    "dismiss": "忽略"
   }
 }

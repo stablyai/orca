@@ -54,6 +54,16 @@ export const uiTabAndBrowserCommandsApi = {
   }): void => {
     ipcRenderer.send('browser:tabCloseReply', reply)
   },
+  onRemoteOpenUrlRequest: (
+    callback: (data: { url: string; sshTargetId: string }) => void
+  ): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      data: { url: string; sshTargetId: string }
+    ) => callback(data)
+    ipcRenderer.on('browser:remoteOpenUrlRequest', listener)
+    return () => ipcRenderer.removeListener('browser:remoteOpenUrlRequest', listener)
+  },
   onNewTerminalTab: (callback: () => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent) => callback()
     ipcRenderer.on('ui:newTerminalTab', listener)

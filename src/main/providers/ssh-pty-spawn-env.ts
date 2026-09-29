@@ -25,6 +25,11 @@ export function buildSshPtySpawnEnv(args: {
     if (args.remoteCliBridgeEnv.credentialFile) {
       merged.ORCA_RELAY_CREDENTIAL_FILE = args.remoteCliBridgeEnv.credentialFile
     }
+    // Why: CLIs that honor $BROWSER (gh, git credential helpers) then ask the desktop that owns
+    // this SSH session to open the page, after its owner approves. A user's own BROWSER wins.
+    if (pathDelimiter === ':' && merged.BROWSER === undefined) {
+      merged.BROWSER = `${quotePosixShellWord(`${args.remoteCliBridgeEnv.binDir}/orca`)} open-url --url %s`
+    }
   }
   // Why: match local/daemon precedence—managed defaults cannot restore explicitly removed values.
   for (const key of args.envToDelete ?? []) {
@@ -32,4 +37,10 @@ export function buildSshPtySpawnEnv(args: {
   }
   seedPowerlevel10kWizardEnv(merged, { envToDelete: args.envToDelete })
   return merged
+}
+
+// Why: $BROWSER is run through a shell by the tools that honor it, so a bin dir with spaces or
+// quotes must stay one word.
+function quotePosixShellWord(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`
 }

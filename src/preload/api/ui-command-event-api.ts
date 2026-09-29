@@ -106,6 +106,10 @@ export type UiCommandEventApi = {
   onRequestTabClose: (
     callback: (data: { requestId: string; tabId: string | null; worktreeId?: string }) => void
   ) => () => void
+  /** A terminal on a remote host asked to open a URL; the desktop owner approves it first. */
+  onRemoteOpenUrlRequest: (
+    callback: (data: { url: string; sshTargetId: string }) => void
+  ) => () => void
   replyTabClose: (reply: {
     requestId: string
     error?: string

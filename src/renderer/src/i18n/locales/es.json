@@ -15366,5 +15366,10 @@
       "settingsLink": "Ajustes → Búsqueda de sesiones de agentes",
       "startSearching": "Empezar a buscar"
     }
+  },
+  "remoteOpenUrl": {
+    "title": "{{value0}} quiere abrir {{value1}}",
+    "open": "Abrir",
+    "dismiss": "Descartar"
   }
 }

@@ -18489,5 +18489,10 @@
   },
   "common": {
     "retry": "再試行"
+  },
+  "remoteOpenUrl": {
+    "title": "{{value0}} が {{value1}} を開こうとしています",
+    "open": "開く",
+    "dismiss": "閉じる"
   }
 }
