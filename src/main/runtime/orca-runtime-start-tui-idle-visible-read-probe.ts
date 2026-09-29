@@ -28,16 +28,14 @@ import { isAntigravityReadyPromptSnapshot } from './antigravity-terminal-readine
 import type { TuiAgent } from '../../shared/tui-agent'
 
 export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWithCreateAgentPromptRenderGate {
-  /** One bounded look at the provider's screen for an adopted PTY whose retained
-   *  readiness metadata was lost. Deliberately single-shot: it answers "is the
-   *  screen already showing a settled prompt", and the poll above owns every
-   *  later transition. A provider screen that is still working when this fires
-   *  resolves through the poll, not here. */
+  /** Read the provider's visible screen when retained terminal text cannot prove readiness.
+   *  Codex retries until the waiter expires because its ready header can arrive after launch. */
   protected startTuiIdleVisibleReadProbe(
     waiter: TerminalWaiter,
     waiterTimeoutMs: number,
     agent: TuiAgent | null
   ): void {
+    const deadline = Date.now() + waiterTimeoutMs
     const settleMarginMs = Math.min(
       TUI_IDLE_VISIBLE_PROBE_SETTLE_MARGIN_MS,
       Math.max(1, Math.floor(waiterTimeoutMs / 3))
@@ -53,44 +51,62 @@ export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWith
     if (providerTimeoutMs < 1) {
       return
     }
-    void withTimeout(
-      this.readTerminal(waiter.handle, agent === 'antigravity' ? { screen: true } : {}, {
-        timeoutMs: providerTimeoutMs,
-        retireOnTimeout: true,
-        // Why: the ready banner stays in scrollback for the whole session, so
-        // classifying history would call a working agent idle (#15569 review).
-        visibleScreenOnly: true
-      } satisfies RuntimeProviderSnapshotReadOptions),
-      probeTimeoutMs,
-      null
-    )
-      .then((projection) => {
-        if (
-          !projection ||
-          projection.source !== 'screen' ||
-          !this.terminalWaiters.get(waiter.handle)?.has(waiter)
-        ) {
-          return
-        }
-        const snapshotText =
-          agent === 'antigravity'
-            ? [...projection.tail, projection.draft ?? ''].join('\n')
-            : projection.tail.join('\n')
-        const blockedReason = detectTerminalWaitBlockedReason(snapshotText)
-        const ready =
-          agent === 'antigravity'
-            ? isAntigravityReadyPromptSnapshot(snapshotText)
-            : isKnownReadyPromptPreview(snapshotText)
-        if (!blockedReason && !ready) {
-          return
-        }
-        const result = this.buildTuiIdleProbeResult(waiter.handle, blockedReason)
-        if (waiter.cancelIdlePoll) {
-          waiter.cancelIdlePoll()
-        }
-        this.terminalWaiters.resolve(waiter, result)
-      })
-      .catch(() => {})
+    const retry = (): void => {
+      if (agent !== 'codex' || !this.terminalWaiters.get(waiter.handle)?.has(waiter)) {
+        return
+      }
+      const remainingMs = deadline - Date.now()
+      if (remainingMs <= providerTimeoutMs + settleMarginMs) {
+        return
+      }
+      const timer = setTimeout(probe, Math.min(2_000, remainingMs - providerTimeoutMs))
+      timer.unref?.()
+    }
+    const probe = (): void => {
+      if (!this.terminalWaiters.get(waiter.handle)?.has(waiter)) {
+        return
+      }
+      void withTimeout(
+        this.readTerminal(waiter.handle, { screen: true }, {
+          timeoutMs: providerTimeoutMs,
+          retireOnTimeout: true,
+          // Why: the ready banner stays in scrollback for the whole session, so
+          // classifying history would call a working agent idle (#15569 review).
+          visibleScreenOnly: true
+        } satisfies RuntimeProviderSnapshotReadOptions),
+        probeTimeoutMs,
+        null
+      )
+        .then((projection) => {
+          if (!this.terminalWaiters.get(waiter.handle)?.has(waiter)) {
+            return
+          }
+          if (!projection || projection.source !== 'screen') {
+            retry()
+            return
+          }
+          const snapshotText =
+            agent === 'antigravity'
+              ? [...projection.tail, projection.draft ?? ''].join('\n')
+              : projection.tail.join('\n')
+          const blockedReason = detectTerminalWaitBlockedReason(snapshotText)
+          const ready =
+            agent === 'antigravity'
+              ? isAntigravityReadyPromptSnapshot(snapshotText)
+              : isKnownReadyPromptPreview(snapshotText)
+          if (!blockedReason && !ready) {
+            retry()
+            return
+          }
+          const result = this.buildTuiIdleProbeResult(waiter.handle, blockedReason)
+          if (waiter.cancelIdlePoll) {
+            waiter.cancelIdlePoll()
+          }
+          this.terminalWaiters.resolve(waiter, result)
+        })
+        .catch(retry)
+    }
+    probe()
   }
 
   protected buildTuiIdleProbeResult(
