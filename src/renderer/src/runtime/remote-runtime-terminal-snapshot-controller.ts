@@ -38,10 +38,9 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
     return startSeq > stream.expectedSeq
   }
 
-  // Why: on a detected gap, discard the corrupt tail and pull a fresh
-  // authoritative snapshot. The request carries no requestId so the server
-  // reply renders through the initial-snapshot path (full reset), self-healing
-  // without surfacing an error to the user.
+  // Why: on a detected gap, pull a fresh authoritative snapshot. The request
+  // carries no requestId so the server reply uses the recovery path (full
+  // reset), self-healing without surfacing an error to the user.
   protected requestResyncSnapshot(stream: RemoteRuntimeMultiplexedTerminalState): void {
     if (stream.resyncInFlight) {
       return
@@ -51,7 +50,7 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
       // Why: snapshot frame groups are not multiplexed; wait for the manual
       // snapshot to finish so its response cannot be mistaken for recovery.
       // Arm the watchdog now so a dispatch path that consumes the pending
-      // request without re-dispatching cannot hold the gate shut forever.
+      // request without re-dispatching cannot leave recovery pending forever.
       stream.resyncPendingSend = true
       this.startResyncTimer(stream)
       return
@@ -81,8 +80,8 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
     }
   }
 
-  // Why: keep the gate shut across the backoff — the post-gap tail is corrupt
-  // either way — and heal even if the flood ends with no further output.
+  // Why: keep recovery pending across the backoff and heal even if the flood
+  // ends with no further output.
   protected scheduleResyncRetry(stream: RemoteRuntimeMultiplexedTerminalState): void {
     stream.resyncAttempts += 1
     const delay = Math.min(
