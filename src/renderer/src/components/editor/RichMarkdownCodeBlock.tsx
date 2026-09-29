@@ -5,7 +5,7 @@ import { NodeViewContent, NodeViewWrapper } from '@tiptap/react'
 import type { NodeViewProps } from '@tiptap/react'
 import { Copy, Check } from 'lucide-react'
 import { useAppStore } from '@/store'
-import MermaidBlock from './MermaidBlock'
+import { ExpandableMermaidDiagram } from './MermaidDiagramLightbox'
 import { translate } from '@/i18n/i18n'
 import {
   getCodeBlockLanguageLabel,
@@ -151,7 +151,11 @@ export function RichMarkdownCodeBlock({
           Mermaid HTML labels just like markdown preview to keep labels visible. */}
       {isMermaid && node.textContent.trim() && (
         <div contentEditable={false} className="mermaid-preview">
-          <MermaidBlock content={node.textContent.trim()} isDark={isDark} htmlLabels={false} />
+          <ExpandableMermaidDiagram
+            content={node.textContent.trim()}
+            isDark={isDark}
+            htmlLabels={false}
+          />
         </div>
       )}
     </NodeViewWrapper>
