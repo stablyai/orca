@@ -10,6 +10,7 @@ import type { GlobalSettings } from './global-settings-types'
 export const AGENT_KIND_VALUES = [
   'claude-code',
   'claude-agent-teams',
+  'codebuddy',
   'openclaude',
   'codex',
   'autohand',
@@ -19,6 +20,7 @@ export const AGENT_KIND_VALUES = [
   'pi',
   'omp',
   'prime-agent',
+  'qoder',
   'gemini',
   'antigravity',
   'aider',
@@ -30,6 +32,7 @@ export const AGENT_KIND_VALUES = [
   'aug',
   'cline',
   'codebuff',
+  'freebuff',
   'command-code',
   'continue',
   'cursor',

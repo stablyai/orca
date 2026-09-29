@@ -8,9 +8,11 @@ import type {
 } from '../../../shared/agent-session-resume'
 import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner'
 import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
+import type { ClosedTerminalTabTombstonesByTabId } from '../../../shared/closed-terminal-tab-tombstones'
 
 export type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
   tabsByWorktree: Record<string, { id: string }[]>
+  closedTerminalTabTombstonesByTabId?: ClosedTerminalTabTombstonesByTabId
   defaultTerminalTabsAppliedByWorktreeId: Record<string, true>
   createTab: (
     worktreeId: string,

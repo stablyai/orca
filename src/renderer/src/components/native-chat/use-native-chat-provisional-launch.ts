@@ -3,7 +3,7 @@ import {
   getStructuredAgentSessionLaunchLifecycle,
   getStructuredAgentSessionLaunchResumes,
   retryStructuredAgentSessionLaunch,
-  useStructuredAgentSessionLaunchFailureReason,
+  useStructuredAgentSessionLaunchFailure,
   useStructuredAgentSessionLaunchLifecycle,
   useStructuredAgentSessionLaunchSelection
 } from '@/lib/structured-agent-session-launch'
@@ -66,7 +66,7 @@ export function useNativeChatProvisionalLaunch(
   sessionId: string
 ) {
   const lifecycle = useStructuredAgentSessionLaunchLifecycle(worktreeId ?? '', sessionId)
-  const failureReason = useStructuredAgentSessionLaunchFailureReason(worktreeId ?? '', sessionId)
+  const failure = useStructuredAgentSessionLaunchFailure(worktreeId ?? '', sessionId)
   const launch = useLatchedLaunchView(sessionId, worktreeId, lifecycle !== null)
   const retry = useCallback(() => {
     if (worktreeId) {
@@ -91,7 +91,7 @@ export function useNativeChatProvisionalLaunch(
   return {
     lifecycle,
     launch,
-    failureReason,
+    failure,
     retry,
     sendThroughRelaunch,
     transportEnabled: lifecycle === null || lifecycle === 'published'

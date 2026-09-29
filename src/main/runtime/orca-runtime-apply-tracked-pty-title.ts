@@ -191,6 +191,7 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
       pty.managementTitleAt = null
       pty.waitBlockedAt = null
       pty.tailWaitState = undefined
+      pty.commandPaint = undefined
     }
     for (const leaf of this.getLeavesForPty(ptyId)) {
       leaf.lastOscTitle = null

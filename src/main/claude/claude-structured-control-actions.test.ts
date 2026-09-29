@@ -16,7 +16,7 @@ type InterruptResult = Awaited<ReturnType<ClaudeSession['connection']['interrupt
 function sessionWith(input: {
   capabilities?: string[]
   interrupt: (options?: { cancelQueued?: boolean; timeoutMs?: number }) => Promise<InterruptResult>
-  cancelAsyncMessage?: (uuid: string) => Promise<void>
+  cancelAsyncMessage?: (uuid: string) => Promise<boolean>
   prompts?: ClaudePromptRegistry
 }): {
   session: ClaudeSession
@@ -24,7 +24,7 @@ function sessionWith(input: {
   cancelAsyncMessage: ReturnType<typeof vi.fn>
 } {
   const interrupt = vi.fn(input.interrupt)
-  const cancelAsyncMessage = vi.fn(input.cancelAsyncMessage ?? (async () => {}))
+  const cancelAsyncMessage = vi.fn(input.cancelAsyncMessage ?? (async () => false))
   const session = sessionFor()
   session.capabilities = input.capabilities ?? []
   session.prompts = input.prompts ?? new ClaudePromptRegistry()
@@ -54,6 +54,53 @@ describe('cancelClaudeTurn', () => {
     // No cancel_queued capability, so the queue is swept one uuid at a time.
     expect(interrupt).toHaveBeenCalledWith({ timeoutMs: 5_000 })
     expect(cancelAsyncMessage.mock.calls.map((call) => call[0])).toEqual(['queued-1', 'queued-2'])
+  })
+
+  it('settles each still-queued send the CLI confirms it withdrew, and only those', async () => {
+    const { session, cancelAsyncMessage } = sessionWith({
+      capabilities: ['interrupt_receipt_v1'],
+      interrupt: async () => ({ still_queued: ['queued-1', 'queued-2', 'queued-3'] }),
+      // queued-2 already ran; queued-3's answer never arrived.
+      cancelAsyncMessage: async (uuid) => {
+        if (uuid === 'queued-3') {
+          throw new ClaudeControlRequestError('cancel_async_message', 'timed out')
+        }
+        return uuid === 'queued-1'
+      }
+    })
+    const resolutions = [vi.fn(), vi.fn(), vi.fn()]
+    session.dispatchWaiters = ['queued-1', 'queued-2', 'queued-3'].map(
+      (sentUuid, index): ClaudeDispatchWaiter => ({
+        acceptsResult: false,
+        clientMessageId: `client-${index + 1}`,
+        sentUuid,
+        dispatchSequence: index + 1,
+        requestedAt: null,
+        replayContentKey: `content-${index}`,
+        resolve: resolutions[index]!
+      })
+    )
+    const settled = vi.fn()
+
+    await expect(cancelClaudeTurn(session, 5_000, () => true, settled)).resolves.toEqual({
+      cancelled: true
+    })
+    expect(cancelAsyncMessage).toHaveBeenCalledTimes(3)
+    expect(settled.mock.calls).toEqual([
+      [
+        {
+          clientMessageId: 'client-1',
+          state: 'rejected',
+          reason: 'provider_cancelled_before_start',
+          rejection: { kind: 'cancelled' }
+        }
+      ]
+    ])
+    expect(resolutions[0]).toHaveBeenCalledWith(null)
+    expect(session.dispatchWaiters.map((waiter) => waiter.sentUuid)).toEqual([
+      'queued-2',
+      'queued-3'
+    ])
   })
 
   it('settles every cancelled queued waiter when the CLI advertises the capability', async () => {

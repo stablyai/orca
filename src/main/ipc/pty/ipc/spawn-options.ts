@@ -1,3 +1,5 @@
+import { getAppEnvironment } from '../../../../shared/app-environment'
+import { getLegacyOpenCodeEnvKeysToDelete } from '../../../opencode/legacy-shared-config-dir'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { CLAUDE_AUTH_ENV_VARS } from '../../../claude-accounts/environment'
 import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../../../pty/legacy-terminal-shim-dir'
@@ -7,7 +9,7 @@ import {
   mergePtyEnvDeletions,
   removeCodexHomeDeletionRequests,
   getInheritedAgentHookEnvKeysToDelete,
-  getInheritedClaudeSessionStampEnvKeysToDelete
+  getInheritedAgentSessionStampEnvKeysToDelete
 } from '../host-env/pi-agent'
 import { promoteAgentTeamsShimPath, deleteRequestedEnvKeys } from '../host-env/path'
 import { beginPtySpawnForWorktree } from '../host-env/fresh-spawn-routing'
@@ -43,7 +45,11 @@ export async function buildPtyIpcSpawnOptions(
     // Why: disable old hosts without removing ORCA_REAL_* while their Windows shim remains on PATH.
     ctx.isDaemonHostSpawn || args.connectionId ? LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS : [],
     ctx.isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(ctx.spawnEnv) : [],
-    getInheritedClaudeSessionStampEnvKeysToDelete(ctx.spawnEnv),
+    // The daemon must judge its own inherited value; main may have a different config.
+    !args.connectionId && !ctx.isDaemonHostSpawn
+      ? getLegacyOpenCodeEnvKeysToDelete(ctx.spawnEnv, getAppEnvironment().getPath('userData'))
+      : [],
+    getInheritedAgentSessionStampEnvKeysToDelete(ctx.spawnEnv),
     ctx.skipCodexHomeEnv ? CODEX_HOME_ENV_KEYS : [],
     // Why: the persistent daemon compares its own merged CODEX_HOME pair;
     // main cannot safely decide ownership for a process it may not parent.

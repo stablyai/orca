@@ -1,3 +1,4 @@
+import { qoderHookService } from '../qoder/hook-service'
 import { describe, expect, it, vi } from 'vitest'
 import { parse as parseJsonc } from 'jsonc-parser'
 import type { SFTPWrapper } from 'ssh2'
@@ -683,6 +684,18 @@ describe('remote hook service installers', () => {
     expect(config.disableAllHooks).toBeUndefined()
     expect(fs.files.get('/home/dev/.orca/agent-hooks/copilot-hook.sh')).toContain('#!/bin/sh')
     expect(fs.modes.get('/home/dev/.orca/agent-hooks/copilot-hook.sh')).toBe(0o755)
+  })
+
+  it('installs Qoder on the execution host with its own event endpoint', async () => {
+    const { sftp, fs } = createFakeSftp()
+    const result = await qoderHookService.installRemote(sftp, '/home/dev/')
+    expect(result.state).toBe('installed')
+    expect(result.configPath).toBe('/home/dev/.qoder/settings.json')
+    const settings = JSON.parse(fs.files.get(result.configPath) ?? '{}')
+    expect(settings.hooks.SessionEnd).toHaveLength(1)
+    expect(settings.hooks.Notification).toHaveLength(1)
+    expect(settings.hooks.TeammateIdle).toBeUndefined()
+    expect(fs.files.get('/home/dev/.orca/agent-hooks/qoder-hook.sh')).toContain('/hook/qoder')
   })
 
   it('installs Droid and Copilot when running the aggregate remote installer (issue #7253)', async () => {

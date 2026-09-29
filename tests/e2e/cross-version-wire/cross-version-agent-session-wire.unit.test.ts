@@ -795,11 +795,10 @@ describe('cross-version structured agent sessions', () => {
     // a rejection that arrives after it. So it is answered once the message is handed over, while
     // a client that advertises accepted sends is answered at acceptance, start or no start (W9).
     it('holds the send reply of a released client until the handover, and answers a current one at once', async () => {
-      const released = [
-        STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-        AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY
-      ]
-      expect(baseline.capabilities).not.toContain(AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY)
+      // Why: the baseline is the newest release, which will itself carry accepted sends.
+      const released = baseline.capabilities.filter(
+        (capability) => capability !== AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY
+      )
       const created = await answer('agentSession.create', createIntentParams())
       await bootHost('b')
       let open = (): void => undefined

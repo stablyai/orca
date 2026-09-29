@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   adjudicateAgentSessionRestart,
   agentSessionLeaseAdmitsWriter,
-  classifyObservedAgentSessionSpawnToken,
   evaluateAgentSessionAcquisition,
   isProvenAliveProbe,
   isProvenDeadProbe,
@@ -315,26 +314,12 @@ describe('restart reconciliation', () => {
   )
 })
 
-describe('writer admission and orphan spawn tokens', () => {
+describe('writer admission', () => {
   it('admits a writer only when reconciled, settled, live, and holding a process', () => {
     expect(agentSessionLeaseAdmitsWriter(lease())).toBe(true)
     expect(agentSessionLeaseAdmitsWriter(lease({ unreconciled: true }))).toBe(false)
     expect(agentSessionLeaseAdmitsWriter(lease({ handoffStage: 'new-owner-proving' }))).toBe(false)
     expect(agentSessionLeaseAdmitsWriter(lease({ claimStatus: 'reserved' }))).toBe(false)
     expect(agentSessionLeaseAdmitsWriter(lease({ ownerProcess: null }))).toBe(false)
-  })
-
-  it('calls a spawn token with no matching lease an orphan', () => {
-    const leases = [lease(), lease({ sessionId: 'session-beta-1', reservedSpawnToken: 'spawn-b' })]
-    expect(classifyObservedAgentSessionSpawnToken({ spawnToken: 'spawn-a', leases })).toBe('owned')
-    expect(classifyObservedAgentSessionSpawnToken({ spawnToken: 'spawn-b', leases })).toBe('owned')
-    expect(classifyObservedAgentSessionSpawnToken({ spawnToken: 'spawn-z', leases })).toBe('orphan')
-  })
-
-  it('still recognises an owner whose reservation token was cleared after proving', () => {
-    const proved = lease({ reservedSpawnToken: null })
-    expect(
-      classifyObservedAgentSessionSpawnToken({ spawnToken: 'spawn-a', leases: [proved] })
-    ).toBe('owned')
   })
 })

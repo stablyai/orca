@@ -73,6 +73,10 @@ function agentForNormalizedProcess(normalized: string): TuiAgent | undefined {
   if (normalized.startsWith('codex-')) {
     return PROCESS_TO_AGENT.get('codex')
   }
+  // Qoder's launcher resolves to a versioned native binary.
+  if (/^qodercli-\d/.test(normalized)) {
+    return PROCESS_TO_AGENT.get('qodercli')
+  }
   if (normalized.startsWith('grok-')) {
     return PROCESS_TO_AGENT.get('grok')
   }
@@ -158,6 +162,7 @@ export function isExpectedAgentProcess(
   return (
     normalizedProcess === normalizedExpected ||
     normalizedProcess.startsWith(`${normalizedExpected}.`) ||
+    (normalizedExpected === 'qodercli' && /^qodercli-\d/.test(normalizedProcess)) ||
     (normalizedExpected === 'muse' && normalizedProcess.startsWith('muse-bin-'))
   )
 }

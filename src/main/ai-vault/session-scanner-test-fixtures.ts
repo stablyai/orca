@@ -54,6 +54,7 @@ export async function writeOpenCode2SqliteFixture(root: string): Promise<string>
 export function isolatedScanRoots(root: string) {
   return {
     claudeProjectsDir: join(root, 'claude-projects'),
+    codebuddyProjectsDir: join(root, 'codebuddy-projects'),
     codexSessionsDir: join(root, 'codex-sessions'),
     geminiSessionsDir: join(root, 'gemini-sessions'),
     antigravityBrainDir: join(root, 'antigravity-brain'),

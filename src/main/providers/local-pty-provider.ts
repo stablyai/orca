@@ -118,6 +118,8 @@ export class LocalPtyProvider implements IPtyProvider {
   clearBuffer(id: string): Promise<void> {
     return clearLocalPtyBuffer(id)
   }
+  // A direct PTY keeps no terminal model of its own.
+  async resetInputModes(_id: string): Promise<void> {}
   closeStartupQueryAuthority(id: string): number {
     return closeLocalPtyStartupQueryAuthority(id)
   }

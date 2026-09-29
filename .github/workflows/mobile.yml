@@ -61,7 +61,10 @@ concurrency:
 jobs:
   verify:
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    # Why ARM: 209s of this job is Vitest and nothing here needs x86: no Android SDK, emulator, gradle,
+    # Hermes or Watchman, no docker, and no artifacts. The Gemfile.lock lists the generic `ruby`
+    # platform, so frozen bundler installs without an aarch64-linux entry.
+    runs-on: ubuntu-24.04-arm
 
     env:
       # Why: an unfrozen bundler silently re-resolves when Gemfile.lock drifts
@@ -177,7 +180,8 @@ jobs:
 
   recording-pin:
     name: RPC recording pin
-    runs-on: ubuntu-latest
+    # Why ARM: pure Node plus git; the golden comparison masks `platform`.
+    runs-on: ubuntu-24.04-arm
 
     defaults:
       run:

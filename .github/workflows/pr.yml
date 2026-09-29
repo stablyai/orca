@@ -435,7 +435,8 @@ jobs:
     name: Codex index-heal contract
     needs: [code_paths]
     if: needs.code_paths.outputs.codex_index_heal_contract == 'true'
-    runs-on: ubuntu-latest
+    # Why ARM: @openai/codex ships @openai/codex-linux-arm64.
+    runs-on: ubuntu-24.04-arm
     env:
       CODEX_CLI_VERSION: '0.150.1'
 
@@ -470,7 +471,10 @@ jobs:
     name: xterm patch sync
     needs: [code_paths]
     if: needs.code_paths.outputs.xterm_patch_sync == 'true'
-    runs-on: ubuntu-latest
+    # Why ARM: the patch check rebuilds 4 packages x 2 builds and byte-compares against the
+    # checked-in bundles. Those were generated on Linux x64 and reproduce byte-for-byte on
+    # darwin-arm64, so the output is neither host-arch nor host-OS dependent.
+    runs-on: ubuntu-24.04-arm
 
     steps:
       - name: Checkout
@@ -478,21 +482,14 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: ./.github/actions/install-node-dependencies
-
-      # Why: the check rebuilds every package in the manifest from a pinned upstream
-      # commit — @xterm/xterm and its three addons, each built twice (once unmodified to
-      # prove the toolchain still reproduces the published bundles, once patched). Caching
-      # the npm metadata and the shallow clone keeps the repeated cost to the builds
-      # themselves; the key is the manifest, so a commit, package or toolchain bump
-      # invalidates it.
-      - name: Restore upstream xterm build inputs
-        uses: actions/cache@v5
+      # The generator uses Node built-ins and installs its own upstream toolchain.
+      - uses: actions/setup-node@v6
         with:
-          path: |
-            ~/.npm
-            ${{ runner.temp }}/xterm-patch-build/upstream/.git
-          key: xterm-upstream-${{ hashFiles('config/patches/xterm-upstream.json') }}
+          node-version-file: package.json
+          package-manager-cache: false
+
+      # Rebuild both pristine and patched bundles; reuse only the pinned toolchain.
+      - uses: ./.github/actions/prepare-xterm-dependencies
 
       - name: Verify xterm patches match the pinned upstream build
         env:
@@ -503,7 +500,8 @@ jobs:
     name: shell contracts
     needs: [code_paths]
     if: needs.code_paths.outputs.shell_contracts == 'true'
-    runs-on: ubuntu-latest
+    # Why ARM: fish 4.x is published for noble/arm64 and zsh is in the arm64 archive.
+    runs-on: ubuntu-24.04-arm
     # Why: this job's cost is almost entirely package download, and a stalled mirror has
     # no wall-clock bound of its own. A successful run finishes in ~4.5 minutes, so this
     # is generous; it exists so a wedge fails the job instead of holding the whole run
@@ -616,6 +614,7 @@ jobs:
             src/main/zsh-scoped-histfile.live-shell.test.ts \
             src/main/zsh-startup-hook-user-config-equivalence.live-shell.test.ts \
             src/main/zsh-wrapper-version-mismatch.live-shell.test.ts \
+            src/main/runtime/structured-session-cli-login-shell.live-shell.test.ts \
             src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts \
             src/shared/fish-query-reply-child-stdin.node-pty.test.ts \
             src/shared/pty-reply-echo-shapes.node-pty.test.ts \
@@ -776,7 +775,8 @@ jobs:
     name: cross-version wire compatibility
     needs: [code_paths]
     if: needs.code_paths.outputs.cross-version-wire == 'true'
-    runs-on: ubuntu-latest
+    # Why ARM: source-only: tagged checkout plus in-process vitest, no docker or browser.
+    runs-on: ubuntu-24.04-arm
 
     steps:
       # Why fetch-depth 0: the harness extracts the newest release tag to skew
@@ -816,7 +816,8 @@ jobs:
     name: managed hooks on Node 18
     needs: [code_paths]
     if: needs.code_paths.outputs.managed_hook_node18 == 'true'
-    runs-on: ubuntu-latest
+    # Why ARM: Node 18 publishes linux-arm64; the per-platform runtime files are read as data.
+    runs-on: ubuntu-24.04-arm
 
     steps:
       - name: Checkout
@@ -1106,11 +1107,9 @@ jobs:
         uses: actions/cache@v5
         with:
           path: native/windows-cli-launcher/.build
-          key: windows-cli-launcher-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('native/windows-cli-launcher/**', 'config/scripts/build-windows-cli-launcher.mjs') }}
+          key: windows-cli-launcher-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('native/windows-cli-launcher/**', 'config/scripts/build-windows-cli-launcher.mjs', 'resources/build/icon.ico', 'package.json') }}
 
       - name: Build package inputs
-        env:
-          ORCA_REUSE_WINDOWS_CLI_LAUNCHER: '1'
         run: pnpm run build:release:parallel
 
       - name: Restore compiled Electron native modules

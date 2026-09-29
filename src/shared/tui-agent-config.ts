@@ -41,7 +41,7 @@ export type TuiAgentConfig = {
   /** Claude Code follows pasted text only where the user's typed words ask, so dispatch briefs need a typed lead line. */
   pasteNeedsTypedRequest?: boolean
   /** Pre-write a trust artifact so the agent's first-launch "trust this folder?" menu doesn't consume the bracketed paste (see agent-trust-presets.ts). */
-  preflightTrust?: 'cursor' | 'copilot' | 'codex' | 'antigravity'
+  preflightTrust?: 'cursor' | 'copilot' | 'codex' | 'antigravity' | 'qoder'
   /** Agent-specific signal that the composer is ready for paste, stronger than the default quiet-render window. */
   draftPasteReadySignal?: DraftPasteReadySignal
   /** Hard deadline for the agent's composer readiness signal. */
@@ -97,6 +97,11 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     promptInjectionMode: 'stdin-after-start',
     pasteNeedsTypedRequest: true
   },
+  codebuddy: {
+    detectCmd: 'codebuddy',
+    detectCmdAliases: ['cbc'],
+    promptInjectionMode: 'argv'
+  },
   openclaude: {
     detectCmd: 'openclaude',
     promptInjectionMode: 'argv',
@@ -148,7 +153,6 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     detectCmd: 'opencode2',
     // The private server inherits this pane's hook endpoint and identity.
     launchCmd: 'opencode2 --standalone',
-    expectedProcess: 'opencode2',
     promptInjectionMode: 'flag-prompt',
     draftPasteReadySignal: 'render-cursor-after-bracketed-paste',
     draftPasteReadyTimeoutMs: 20_000
@@ -183,6 +187,11 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     argvPromptSeparator: '--',
     // Why: Prime Agent embeds Pi's TUI and decodes CSI-u the same way (see pi above).
     windowsShiftEnterEncoding: 'csi-u'
+  },
+  qoder: {
+    detectCmd: 'qodercli',
+    promptInjectionMode: 'flag-prompt-interactive',
+    preflightTrust: 'qoder'
   },
   gemini: {
     detectCmd: 'gemini',
@@ -234,6 +243,10 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   },
   cline: {
     detectCmd: 'cline',
+    promptInjectionMode: 'stdin-after-start'
+  },
+  freebuff: {
+    detectCmd: 'freebuff',
     promptInjectionMode: 'stdin-after-start'
   },
   codebuff: {

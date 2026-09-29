@@ -80,6 +80,16 @@ export class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRuntimeWithA
     return { handle, cleared: true }
   }
 
+  async resetTerminalInputModes(handle: string): Promise<{ handle: string; reset: boolean }> {
+    const leaf = this.resolveLeafForHandle(handle)
+    if (!leaf?.ptyId) {
+      throw new Error('terminal_not_found')
+    }
+    await this.ptyController?.resetInputModes?.(leaf.ptyId)
+    await this.resetHeadlessTerminalInputModes(leaf.ptyId)
+    return { handle, reset: true }
+  }
+
   getTerminalSize(ptyId: string): { cols: number; rows: number } | null {
     return this.ptyController?.getSize?.(ptyId) ?? null
   }

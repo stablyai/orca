@@ -1,13 +1,17 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   existsSync,
+  openSync,
+  closeSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
   rmSync,
+  statSync,
   symlinkSync,
+  utimesSync,
   writeFileSync
 } from 'node:fs'
 import { createHash } from 'node:crypto'
@@ -311,6 +315,93 @@ describe('OpenCodeHookService buildPtyEnv / clearPty round-trip', () => {
     expect(module.default?.server).toBeTypeOf('function')
     // v2 loader: "Plugin must export a default definition with an id and an effect or setup function."
     expect(module.default?.setup).toBeTypeOf('function')
+  })
+
+  // Why: pre-1.4.209 Orca wrote a server()-only plugin into <userData>/opencode-hooks/shared and
+  // stopped maintaining it; shells and OpenCode 2 background services still pointing there got
+  // "Plugin must export a default definition with an id and an effect or setup function."
+  it('refreshes a stale plugin left in the retired shared hooks dir', async () => {
+    const legacyPluginPath = join(
+      userDataDir,
+      'opencode-hooks',
+      'shared',
+      'plugins',
+      'orca-opencode-status.js'
+    )
+    mkdirSync(join(legacyPluginPath, '..'), { recursive: true })
+    writeFileSync(
+      legacyPluginPath,
+      'export default { id: "orca-opencode-status", server: async () => ({}) };\n'
+    )
+
+    new OpenCodeHookService().buildPtyEnv(daemonSessionId)
+
+    const modulePath = join(userDataDir, `legacy-opencode-plugin-${Date.now()}.mjs`)
+    writeFileSync(modulePath, readFileSync(legacyPluginPath, 'utf8'))
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the assertions below validate the shape this names.
+    const module = (await import(pathToFileURL(modulePath).href)) as {
+      default?: { id?: unknown; server?: unknown; setup?: unknown }
+    }
+    expect(module.default?.id).toBe('orca-opencode-status')
+    expect(module.default?.server).toBeTypeOf('function')
+    expect(module.default?.setup).toBeTypeOf('function')
+  })
+
+  it('repairs late and overwritten legacy plugins atomically on the same service', () => {
+    const service = new OpenCodeHookService()
+    service.refreshLegacySharedPlugin()
+    const path = join(userDataDir, 'opencode-hooks', 'shared', 'plugins', 'orca-opencode-status.js')
+    mkdirSync(join(path, '..'), { recursive: true })
+    for (const stale of ['// late old install', '// old process overwrote repair']) {
+      writeFileSync(path, stale)
+      const reader = openSync(path, 'r')
+      try {
+        service.refreshLegacySharedPlugin()
+        expect(readFileSync(path, 'utf8')).toBe(getOpenCodePluginSource())
+        expect(readFileSync(reader, 'utf8')).toBe(stale)
+        expect(readdirSync(join(path, '..'))).toEqual(['orca-opencode-status.js'])
+      } finally {
+        closeSync(reader)
+      }
+    }
+  })
+
+  it('reports repair failures and retries after the obstruction is removed', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const path = join(userDataDir, 'opencode-hooks', 'shared', 'plugins', 'orca-opencode-status.js')
+    const service = new OpenCodeHookService()
+    try {
+      service.refreshLegacySharedPlugin()
+      expect(warn).not.toHaveBeenCalled()
+      mkdirSync(path, { recursive: true })
+      service.refreshLegacySharedPlugin()
+      expect(warn).toHaveBeenCalledWith(
+        '[OpenCode] Failed to repair legacy status plugin:',
+        path,
+        expect.any(Error)
+      )
+      rmSync(path, { recursive: true })
+      writeFileSync(path, '// stale')
+      service.refreshLegacySharedPlugin()
+      expect(readFileSync(path, 'utf8')).toBe(getOpenCodePluginSource())
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('leaves an up-to-date legacy plugin untouched and never creates the retired dir', () => {
+    const legacyDir = join(userDataDir, 'opencode-hooks')
+    new OpenCodeHookService().buildPtyEnv(daemonSessionId)
+    expect(existsSync(legacyDir)).toBe(false)
+
+    const legacyPluginPath = join(legacyDir, 'shared', 'plugins', 'orca-opencode-status.js')
+    mkdirSync(join(legacyPluginPath, '..'), { recursive: true })
+    writeFileSync(legacyPluginPath, getOpenCodePluginSource())
+    const past = new Date('2020-01-01T00:00:00Z')
+    utimesSync(legacyPluginPath, past, past)
+    new OpenCodeHookService().buildPtyEnv(daemonSessionId)
+    // Why: a running OpenCode 2 service re-runs its plugin load on every write to a watched plugin file.
+    expect(statSync(legacyPluginPath).mtimeMs).toBe(past.getTime())
   })
 
   // Why: #22506 — both variants install side by side in one global plugins dir, and

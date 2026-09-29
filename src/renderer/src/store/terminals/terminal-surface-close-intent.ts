@@ -4,11 +4,12 @@ import type { TerminalSurfaceCloseTarget } from '../../../../shared/terminal-sur
  *  cannot shrink it, so without this the close would ride on the PTY exit. */
 export function commitTerminalSurfaceClose(
   worktreeId: string,
-  target: TerminalSurfaceCloseTarget
+  target: TerminalSurfaceCloseTarget,
+  reason?: 'user' | 'cleanup'
 ): void {
   // Why optional: an older preload can linger through an in-place renderer reload.
   void globalThis.window?.api?.session
-    ?.closeTerminalSurface?.({ worktreeId, target })
+    ?.closeTerminalSurface?.({ worktreeId, target, ...(reason ? { reason } : {}) })
     ?.catch((error: unknown) => {
       console.warn('[terminal-close] main did not commit the close', error)
     })

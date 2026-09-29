@@ -20,7 +20,15 @@ import { agentStatusSubjectsEqual, type AgentStatusSubject } from './agent-statu
  *  a handle is unique per parent and provider without being unique across producers. */
 export const STRUCTURED_CHILD_WORK_PRODUCER_ID = 'structured-session-child-work'
 const SEGMENT_ID = STRUCTURED_CHILD_WORK_PRODUCER_ID
-const RUN_ALIAS_KIND: AgentChildWorkAliasKind = 'tool_use_id'
+/** A run is named in the provider's own terms: a task runs under its spawn call, a thread under
+ *  its turn. The kinds stay apart so a turn id can never pass for a spawn call. */
+const RUN_ALIAS_KIND_BY_ID_KIND = {
+  task_id: 'tool_use_id',
+  thread_id: 'turn_id'
+} as const satisfies Record<AgentChildWorkEvidenceHandle['idKind'], AgentChildWorkAliasKind>
+const RUN_ALIAS_KINDS: ReadonlySet<AgentChildWorkAliasKind> = new Set(
+  Object.values(RUN_ALIAS_KIND_BY_ID_KIND)
+)
 
 export const STRUCTURED_CHILD_WORK_PROVENANCE: AgentChildWorkProvenance = {
   source: 'structured-session',
@@ -70,7 +78,13 @@ export function agentChildWorkHandleAliases(
   return [
     { segmentId: SEGMENT_ID, aliasKind: handle.idKind, alias: handle.id },
     ...(handle.runId !== undefined && handle.runId !== handle.id
-      ? [{ segmentId: SEGMENT_ID, aliasKind: RUN_ALIAS_KIND, alias: handle.runId }]
+      ? [
+          {
+            segmentId: SEGMENT_ID,
+            aliasKind: RUN_ALIAS_KIND_BY_ID_KIND[handle.idKind],
+            alias: handle.runId
+          }
+        ]
       : [])
   ]
 }
@@ -123,14 +137,14 @@ export function resolveAgentChildWorkHandle(
     : { child: child ?? null, ambiguous: false, highestGeneration }
 }
 
-/** The owner a handle id names, by its stable id or by the run handle it spawned under. */
+/** The owner a handle id names, by its stable id or by the spawn call it runs under. */
 export function resolveAgentChildWorkOwner(
   scope: AgentChildWorkEvidenceScope,
   ownerId: string
 ): string | undefined {
   const resolution = resolveAgentChildWorkHandle(
     scope,
-    ['task_id', 'thread_id', RUN_ALIAS_KIND],
+    ['task_id', 'thread_id', 'tool_use_id'],
     ownerId
   )
   return resolution?.child?.childWorkId
@@ -164,7 +178,7 @@ export function currentAgentChildWorkAliases(
   return {
     ...(stable ? { stable } : {}),
     stableId: stable?.id,
-    runId: current.find((alias) => alias.aliasKind === RUN_ALIAS_KIND)?.alias,
+    runId: current.find((alias) => RUN_ALIAS_KINDS.has(alias.aliasKind))?.alias,
     aliases: current.map((alias) => ({
       segmentId: alias.segmentId,
       aliasKind: alias.aliasKind,
@@ -183,7 +197,7 @@ export function isPreviousAgentChildWorkRun(
     .getAliasesForChild(child.childWorkId)
     .some(
       (alias) =>
-        alias.aliasKind === RUN_ALIAS_KIND &&
+        RUN_ALIAS_KINDS.has(alias.aliasKind) &&
         alias.alias === runId &&
         !agentChildWorkFencesEqual(alias.fence, child.invocation)
     )

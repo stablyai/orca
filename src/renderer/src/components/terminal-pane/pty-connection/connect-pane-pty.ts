@@ -114,10 +114,6 @@ export function connectPanePty(
   session.remoteOutputGatedPtyId = null
   session.remoteOutputFactConsumerPtyId = null
   session.suppressViewportClaimTerminalResize = false
-  // Why: idle callbacks are registered before the deferred PTY output plumbing
-  // exists. Start with the shared scheduler, then switch to the PTY writer
-  // below so hidden-tab resets keep backlog-recovery callbacks and byte order.
-  session.idleAgentTerminalModeReset = RESET_TERMINAL_CURSOR_STYLE
   session.suppressNativeWindowsIdleCodexFocusReports = false
   session.setFocusReportSuppressionForAgentCompletion = (
     title: string | undefined,
@@ -127,11 +123,14 @@ export function connectPanePty(
     session.suppressNativeWindowsIdleCodexFocusReports =
       agentType && agentType !== 'unknown' ? agentType === 'codex' : titleAgentType === 'codex'
   }
+  // Why: idle callbacks are registered before the deferred PTY output plumbing
+  // exists. Start with the shared scheduler, then switch to the PTY writer
+  // so hidden-tab resets keep backlog-recovery callbacks and byte order.
   session.queueAgentIdleTerminalModeReset = (): void => {
     if (session.disposed) {
       return
     }
-    writeTerminalOutput(session.pane.terminal, session.idleAgentTerminalModeReset, {
+    writeTerminalOutput(session.pane.terminal, RESET_TERMINAL_CURSOR_STYLE, {
       foreground: shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)
     })
   }
@@ -162,15 +161,16 @@ export function connectPanePty(
   // Why: paneKey crosses PTY env, hook IPC, retained rows, and reload/replay.
   // Use the stable layout leaf UUID, not the renderer-local numeric pane id.
   session.cacheKey = makePaneKey(session.deps.tabId, session.pane.leafId)
-  // Why: mirrors the kitty keyboard flags the pane's application negotiates,
-  // so it still reflects what a live application expects after the renderer's
-  // defensive kitty wipes; see TerminalKittyKeyboardModeTracker for its feeds.
+  // Why: xterm exposes no kitty read, so this mirror tracks the flags xterm's
+  // encoder applies; see TerminalKittyKeyboardModeTracker for its feeds.
   session.kittyKeyboardModes = (() => {
     const existing = session.deps.paneKittyKeyboardModesRef.current.get(session.pane.id)
     if (existing) {
       return existing
     }
-    const created = new TerminalKittyKeyboardModeTracker()
+    const created = new TerminalKittyKeyboardModeTracker({
+      kittyKeyboard: session.pane.terminal.options.vtExtensions?.kittyKeyboard === true
+    })
     session.deps.paneKittyKeyboardModesRef.current.set(session.pane.id, created)
     return created
   })()

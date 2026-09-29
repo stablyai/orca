@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { agentSessionPromptQuestions } from '../../../../shared/agent-session-question-answer'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
@@ -22,10 +22,15 @@ import { NativeChatStructuredSessionStatus } from './NativeChatStructuredSession
 import { useNativeChatLaunchDraftSignal } from './use-native-chat-launch-draft-adoption'
 import { NativeChatLaunchRetry } from './NativeChatLaunchRetry'
 import { useNativeChatProvisionalLaunch } from './use-native-chat-provisional-launch'
-import { NativeChatDeliveryRetry } from './NativeChatDeliveryRetry'
 import { useStructuredAgentSessionHostExecutionPhase } from './StructuredAgentSessionStatusBridge'
 import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
 import { NativeChatThreadGoalBanner } from './NativeChatThreadGoalBanner'
+import { structuredAgentSessionReadFailureNotice } from './structured-agent-session-read-failure-notice'
+import { useStructuredAgentSessionStartFailureFacts } from './use-structured-agent-session-start-failure-facts'
+import { structuredAgentSessionDeliveryNotices } from './structured-agent-session-delivery-notices'
+import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
+
+const NO_SUBMISSIONS: readonly AgentJournalSubmission[] = []
 
 export function NativeChatStructuredSession(
   props: Omit<NativeChatStructuredViewProps, 'mode'>
@@ -100,7 +105,46 @@ export function NativeChatStructuredSession(
     }),
     [controller, props.agent, props.sessionId]
   )
+  // Read at click time, so the notices stay put while the outbox's Retry is rebuilt each render.
+  const retryRef = useRef(controller.retry)
+  useEffect(() => {
+    retryRef.current = controller.retry
+  })
+  const retryDelivery = useCallback((clientMessageId: string) => {
+    retryRef.current(clientMessageId)
+  }, [])
+  const agentLabel = structuredAgentLabel(props.agent === 'codex' ? 'codex' : 'claude')
+  // Only a rejected message reads the journal's rows, so a new batch of them re-renders no row else.
+  const hasRejected = controller.outbox.some((entry) => entry.state === 'rejected')
+  const rejectionRows = hasRejected ? controller.submissions : NO_SUBMISSIONS
+  const startFailures = useStructuredAgentSessionStartFailureFacts(
+    controller.journalItems,
+    hasRejected
+  )
+  const deliveryNotices = useMemo(
+    () =>
+      structuredAgentSessionDeliveryNotices(
+        controller.outbox,
+        controller.blockedClientMessageId,
+        agentLabel,
+        retryDelivery,
+        rejectionRows,
+        startFailures
+      ),
+    [
+      controller.outbox,
+      controller.blockedClientMessageId,
+      agentLabel,
+      retryDelivery,
+      rejectionRows,
+      startFailures
+    ]
+  )
   const viewState = selectNativeChatViewState(session, { readRetries: true })
+  const readFailure =
+    controller.status === 'error'
+      ? structuredAgentSessionReadFailureNotice(controller.readRefusal)
+      : null
   const fontScale = useNativeChatFontScale(viewState.kind === 'ready')
   const imageRuntimeContext = useNativeChatImageRuntimeContext(props.tabId)
   const { onLinkClick, linkActionRequest, closeLinkActions } = useNativeChatLinkActions(
@@ -217,7 +261,11 @@ export function NativeChatStructuredSession(
         {viewState.kind === 'loading' ? (
           <NativeChatEmptyState kind="loading" />
         ) : viewState.kind === 'error' ? (
-          <NativeChatEmptyState kind="error" retrying />
+          <NativeChatEmptyState
+            kind="error"
+            retrying={!readFailure?.final}
+            {...(readFailure?.named ? { headline: readFailure.text } : {})}
+          />
         ) : viewState.kind === 'empty' ? (
           <NativeChatEmptyState kind="empty" agent={props.agent} />
         ) : (
@@ -237,24 +285,26 @@ export function NativeChatStructuredSession(
             onLinkClick={onLinkClick}
             allowFileUriLinks={onLinkClick !== undefined}
             runtimeContext={imageRuntimeContext}
+            deliveryNotices={deliveryNotices}
           />
         )}
       </div>
-      <NativeChatDeliveryRetry
-        outbox={controller.outbox}
-        blockedClientMessageId={controller.blockedClientMessageId}
-        retry={controller.retry}
-      />
       <NativeChatLaunchRetry
         lifecycle={provisionalLaunch.lifecycle}
-        failureReason={provisionalLaunch.failureReason}
+        failure={provisionalLaunch.failure}
+        agentLabel={agentLabel}
         onRetry={provisionalLaunch.retry}
       />
       <NativeChatStructuredSessionStatus
         sessionId={props.sessionId}
-        agentLabel={structuredAgentLabel(props.agent === 'codex' ? 'codex' : 'claude')}
+        agentLabel={agentLabel}
         startupPhase={startupPhase}
-        error={controller.error}
+        // Said once: on the pane when the failure took it, else here beside the transcript. A
+        // failure that names nothing is only the pane reconnecting.
+        error={
+          viewState.kind === 'error' || !readFailure?.named ? controller.error : readFailure.text
+        }
+        reconnecting={viewState.kind !== 'error' && readFailure !== null && !readFailure.named}
         composerError={composerError}
         isVisible={props.isVisible}
         backgroundTasks={controller.backgroundTasks}

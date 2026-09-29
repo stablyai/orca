@@ -4,7 +4,6 @@ import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { DashboardAgentChildDisclosure } from './DashboardAgentChildDisclosure'
 import { DashboardAgentRowMessage } from './DashboardAgentRowMessage'
 import { DashboardAgentRowTrailingControls } from './DashboardAgentRowTrailingControls'
 import { DashboardAgentRowToolStep } from './DashboardAgentRowToolStep'
@@ -56,12 +55,10 @@ type Props = {
   hideExpand?: boolean
   /** Reuse the row's hover tint to show the focused terminal pane's agent. */
   isFocusedPane?: boolean
-  // Why: inline-card orchestration rows fold children under a leading chevron.
+  // Why: inline-card orchestration rows can fold their child agents.
   childAgentCount?: number
   childAgentsExpanded?: boolean
   onToggleChildAgents?: () => void
-  // Why: a top-level chevron hangs in the card gutter so the state dot keeps the column of chevron-less rows.
-  disclosureInGutter?: boolean
   // Why: chevron indentation replaces fixed-offset lineage connector art.
   hideLineageConnectors?: boolean
   // Why: send-popover target mode makes row clicks send/no-op instead of navigating.
@@ -83,7 +80,6 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   childAgentCount,
   childAgentsExpanded = false,
   onToggleChildAgents,
-  disclosureInGutter = false,
   hideLineageConnectors = false,
   sendTargetStatus,
   sendTargetDisabledReason,
@@ -185,8 +181,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
       onClick={handleActivate}
       className={cn(
         // Why: named group scopes the X-reveal to this row, not every row in the card.
-        'group/agent-row relative flex flex-col py-1',
-        hasChildDisclosure && disclosureInGutter ? '-ml-7' : '-ml-2',
+        'agent-disclosure-row group/agent-row relative -ml-2 flex flex-col py-1',
         isLineageChild ? 'pl-5 pr-2' : 'px-2',
         // Why: hover wash stays softer than the enclosing card's highlight.
         'cursor-pointer rounded-sm worktree-agent-row-hover',
@@ -229,11 +224,6 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         </span>
       ) : null}
       <div className="flex items-center gap-1.5">
-        <DashboardAgentChildDisclosure
-          childAgentCount={childAgentCount}
-          childAgentsExpanded={childAgentsExpanded}
-          onToggleChildAgents={onToggleChildAgents}
-        />
         {/* Why: state dot sits in the leading gutter so the eye can scan one column for row state. */}
         <Tooltip>
           <TooltipTrigger asChild>
@@ -288,6 +278,9 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         <DashboardAgentRowTrailingControls
           paneKey={agent.paneKey}
           relativeTimestamp={relativeTimestamp}
+          childAgentCount={childAgentCount}
+          childAgentsExpanded={childAgentsExpanded}
+          onToggleChildAgents={onToggleChildAgents}
           expanded={expanded}
           hideExpand={hideExpand}
           hideDismiss={agent.rowSource === 'subagent'}

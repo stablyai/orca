@@ -91,8 +91,8 @@ export function createReattachPayloadHandlers(
             : daemonSnapshotReplay
         }`
       )
-      session.writeReplayData(
-        session.reattachReplayResetSequence(
+      session.writeReplayEpilogue(
+        session.chooseReattachReplayReset(
           daemonSnapshotReplay,
           Boolean(ctx.connectResult.coldRestore),
           ctx.connectResult.isAlternateScreen,
@@ -198,8 +198,8 @@ export function createReattachPayloadHandlers(
         })) {
           session.writeReplayData(replayChunk)
         }
-        session.writeReplayData(
-          session.reattachReplayResetSequence(
+        session.writeReplayEpilogue(
+          session.chooseReattachReplayReset(
             modelData,
             Boolean(ctx.connectResult?.coldRestore),
             modelSnapshot.alternateScreen ?? ctx.connectResult?.isAlternateScreen,
@@ -237,8 +237,8 @@ export function createReattachPayloadHandlers(
         session.writeReplayData(
           `${ctx.connectResult.coldRestore ? RESET_GRAPHIC_RENDITION : ''}${ctx.connectResult.replay}`
         )
-        session.writeReplayData(
-          session.reattachReplayResetSequence(
+        session.writeReplayEpilogue(
+          session.chooseReattachReplayReset(
             ctx.connectResult.replay,
             Boolean(ctx.connectResult.coldRestore),
             ctx.connectResult.isAlternateScreen
@@ -305,9 +305,7 @@ export function createReattachPayloadHandlers(
         session.clearSleepingRecordAfterColdRestoreSpawn(preparedStartup)
       }
       // Why: cold-restore spawned a fresh shell; reset mode bytes a crashed TUI (e.g. Claude's \e[?1004h) left in scrollback that no live TUI now consumes.
-      session.writeReplayData(POST_REPLAY_MODE_RESET)
-      // Why: the dead run's kitty flags died with it and its scrollback was never scanned — the fresh shell starts at zero.
-      session.kittyKeyboardModes.reset()
+      session.writeInputModeGround(POST_REPLAY_MODE_RESET)
       session.consumeRestoredViewportBlankingMarker()
       // Why: a taller destination fit must not pull recovered rows back into the fresh shell's viewport after source-grid replay.
       session.writeFreshShellViewportBlanking(Math.max(destinationRows, session.pane.terminal.rows))

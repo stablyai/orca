@@ -236,6 +236,78 @@ describe('the accessor', () => {
     })
   })
 
+  it('refuses a read whose journal will not open with the classified reason, never the storage text', async () => {
+    await restingChat()
+    const open = vi.spyOn(rig.host.collaboratorsForTests().conversationDelivery, 'open')
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const storagePath = '/Users/someone/.orca/journals/session-1/journal.sqlite'
+    const failWith = (error: Error): void => {
+      open.mockRejectedValue(error)
+    }
+    const failures = async (): Promise<RpcResponse[]> =>
+      [
+        ...(await call('agentSession.history', { sessionId: SESSION, direction: 'tail' })),
+        ...(await call('agentSession.subscribe', { sessionId: SESSION })),
+        ...(await call('agentSession.options', { sessionId: SESSION }))
+      ].filter((reply) => !reply.ok)
+
+    failWith(
+      Object.assign(new Error(`file is not a database: ${storagePath}`), {
+        code: 'ERR_SQLITE_ERROR',
+        errcode: 26
+      })
+    )
+    const corrupt = await failures()
+    failWith(Object.assign(new Error(`EACCES: permission denied, open '${storagePath}'`), {}))
+    const unavailable = await failures()
+
+    for (const [replies, reason] of [
+      [corrupt, 'journalCorrupt'],
+      [unavailable, 'journalUnavailable']
+    ] as const) {
+      expect(replies).toHaveLength(3)
+      for (const reply of replies) {
+        expect(reply).toMatchObject({
+          ok: false,
+          error: {
+            // Not a passthrough code: released clients read the message, which stays the code.
+            code: 'runtime_error',
+            message: 'agent_session_journal_unreadable',
+            data: { refusal: { code: 'agent_session_journal_unreadable', details: { reason } } }
+          }
+        })
+        expect(JSON.stringify(reply)).not.toContain(storagePath)
+      }
+    }
+  })
+
+  it('logs a reader reconnecting to a journal that will not open once per failure', async () => {
+    await restingChat()
+    const open = vi.spyOn(rig.host.collaboratorsForTests().conversationDelivery, 'open')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const logged = (): unknown[] =>
+      warn.mock.calls
+        .filter(([line]) => line === '[agent-session] opening the conversation for a read failed:')
+        .map(([, error]) => error)
+    const reconnect = async (): Promise<RpcResponse[]> => [
+      ...(await call('agentSession.subscribe', { sessionId: SESSION })),
+      ...(await call('agentSession.history', { sessionId: SESSION, direction: 'tail' }))
+    ]
+    const denied = new Error('EACCES: permission denied')
+    const exhausted = new Error('EMFILE: too many open files')
+
+    open.mockRejectedValue(denied)
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      // Every attempt is still refused with its reason; only the log is quiet.
+      expect((await reconnect()).filter((reply) => !reply.ok)).toHaveLength(2)
+    }
+    expect(logged()).toEqual([denied])
+    open.mockRejectedValue(exhausted)
+    await reconnect()
+    await reconnect()
+    expect(logged()).toEqual([denied, exhausted])
+  })
+
   it('opens a corrupt journal through the recovering open and still accepts a send (P2-03)', async () => {
     await foundRestTestChat(rig)
     await rig.host.flushAllStreamedEvents()

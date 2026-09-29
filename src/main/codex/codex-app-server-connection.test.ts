@@ -11,7 +11,11 @@ import {
   type CodexAppServerConnection,
   type CodexAppServerConnectionHandlers
 } from './codex-app-server-connection'
+import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from './codex-app-server-posix-supervisor'
 import { isCodexAppServerUnsupportedError } from './codex-app-server-session'
+
+// close() waits out the supervisor's own stop before forcing the tree.
+const GRACEFUL_EXIT_MS = process.platform === 'win32' ? 1_500 : PROVIDER_SUPERVISOR_MAX_STOP_MS
 
 const originalCodexHome = process.env.CODEX_HOME
 
@@ -392,7 +396,7 @@ describe('openCodexAppServerConnection', () => {
       openCodexAppServerConnection({ command: 'codex', args: ['app-server'] }, {}, spawnImpl)
     )
 
-    await vi.advanceTimersByTimeAsync(5_000)
+    await vi.advanceTimersByTimeAsync(GRACEFUL_EXIT_MS + 3_500)
     const error = (await opening) as Error & { connection?: CodexAppServerConnection }
 
     expect(error.name).toBe('CodexAppServerHandshakeExitUnprovenError')
@@ -434,7 +438,7 @@ describe('openCodexAppServerConnection', () => {
     })
 
     const closing = connection.close()
-    await vi.advanceTimersByTimeAsync(2_000)
+    await vi.advanceTimersByTimeAsync(GRACEFUL_EXIT_MS + 500)
     await closing
 
     await vi.waitFor(() => expect(child.kill).toHaveBeenCalledWith('SIGKILL'))
@@ -468,7 +472,7 @@ describe('openCodexAppServerConnection', () => {
 
     const first = connection.close()
     const second = connection.close()
-    await vi.advanceTimersByTimeAsync(4_100)
+    await vi.advanceTimersByTimeAsync(GRACEFUL_EXIT_MS + 2_600)
 
     await expect(Promise.all([first, second])).resolves.toEqual([true, true])
     expect(child.kill.mock.calls.map(([signal]) => signal)).toEqual(['SIGSTOP', 'SIGKILL'])
@@ -485,7 +489,7 @@ describe('openCodexAppServerConnection', () => {
     )
 
     const first = connection.close()
-    await vi.advanceTimersByTimeAsync(5_000)
+    await vi.advanceTimersByTimeAsync(GRACEFUL_EXIT_MS + 3_500)
     await expect(first).resolves.toBe(false)
     child.emit('exit', 0, null)
 

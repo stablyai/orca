@@ -136,7 +136,10 @@ export function useStructuredAgentSession(args: {
     journalItems: transportState.journalItems,
     messages,
     status: transportEnabled ? state.status : 'ready',
-    error: transportEnabled ? (state.error ?? outboxController.error) : outboxController.error,
+    /** The outbox's own line; a failed read is worded from `readRefusal`, never its text. */
+    error: outboxController.error,
+    /** The refusal the failed read met, while `status` is `error`. */
+    readRefusal: transportEnabled ? state.readRefusal : undefined,
     hasOlder: transportEnabled && state.hasOlder,
     railOutline: transportEnabled ? railOutline : null,
     loadingOlder: transportEnabled && loadingOlder,
@@ -144,6 +147,8 @@ export function useStructuredAgentSession(args: {
     loadOlder,
     prompts,
     outbox,
+    /** The journal's rows for sent messages, which carry a rejected message's whole fact. */
+    submissions: transportState.submissions,
     blockedClientMessageId: outboxController.blockedClientMessageId,
     send: (...input: Parameters<typeof outboxController.send>) =>
       !commandPending.current && outboxController.send(...input),

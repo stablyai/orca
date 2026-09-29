@@ -10,7 +10,7 @@ import {
   type AgentJournalSubmission,
   type AgentJournalTurnOutcome
 } from './agent-session-journal-types'
-import { isRootAgentJournalItem } from './agent-session-journal-producer'
+import { agentJournalLinkageFields, isRootAgentJournalItem } from './agent-session-journal-producer'
 import { structuredAgentSessionStatusBlock } from './structured-agent-session-status-block'
 import { agentJournalItemRowOrigin } from './agent-session-journal-position'
 import {
@@ -133,8 +133,8 @@ function isAgentJournalMessageSendMode(value: string): value is AgentJournalMess
 const projectedItems = new WeakMap<AgentJournalRenderItem, NativeChatMessage | null>()
 
 /** Deliberately NOT scoped by producer: the transcript shows every agent's
- *  output. The line this module draws is that the transcript renders every item,
- *  while every "what is this agent doing right now" scan renders only the
+ *  output, and each message keeps its row's linkage so the transcript can say
+ *  whose it is. Every "what is this agent doing right now" scan renders only the
  *  session's own agent's. */
 export function projectStructuredItemsToNativeChat(
   items: readonly AgentJournalRenderItem[]
@@ -162,6 +162,7 @@ export function projectStructuredItemToNativeChat(
   const message: NativeChatMessage | null = projected
     ? {
         ...agentJournalItemRowOrigin(item),
+        ...agentJournalLinkageFields(item),
         role: projected.role,
         blocks: projected.blocks,
         // A send mode this build cannot name renders as an ordinary message.

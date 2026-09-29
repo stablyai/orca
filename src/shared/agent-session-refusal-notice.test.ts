@@ -5,6 +5,7 @@ import {
 } from './agent-session-wire-refusals'
 import {
   agentSessionReadHistoryRefusalParts,
+  agentSessionRefusalCauseParts,
   agentSessionRefusalNotice,
   agentSessionRefusalReasonWords,
   agentSessionWriteFailureNotice,
@@ -368,6 +369,45 @@ describe('the notice for every reason a host names', () => {
     }
   })
 
+  // Beside a Retry, that Retry is the step for a reason whose action is to retry, and only for it.
+  it('leaves out only a retry step when a Retry stands beside the words', () => {
+    const beside = { agentName: 'Codex', retryControl: true }
+    for (const { failure, write, parts, words, cell } of cells) {
+      if (words && 'cause' in words) {
+        const retried = words.action === 'retry' ? words.step : undefined
+        expect(agentSessionWriteNoticeParts(failure, write, beside), cell).toEqual(
+          parts.filter((part) => part !== retried)
+        )
+      }
+    }
+    const send = (failure: AgentSessionWriteRefusal) =>
+      agentSessionWriteNoticeParts(failure, 'send', beside)
+    expect(
+      send({
+        kind: 'refused',
+        code: 'agent_session_journal_unreadable',
+        details: { reason: 'journalUnavailable' }
+      })
+    ).toEqual(['historyUnavailable', 'notDoneSend'])
+    expect(
+      send({
+        kind: 'refused',
+        code: 'agent_session_operation_invalid',
+        details: { reason: 'notSignedIn' }
+      })
+    ).toEqual([
+      'notDoneSend',
+      { text: 'Codex is not signed in for the selected account. Sign in first.' }
+    ])
+    expect(
+      send({
+        kind: 'refused',
+        code: 'agent_session_operation_invalid',
+        details: { reason: 'providerStartFailed' }
+      })
+    ).toEqual(['notDoneSend', { text: 'Codex stopped before it finished starting.' }])
+  })
+
   it('says the write did not happen, once, and never shows the host message', () => {
     for (const { failure, write, parts, cell } of cells) {
       const english = agentSessionWriteNoticeEnglish(parts)
@@ -520,5 +560,86 @@ describe('a chat whose history the host could not open', () => {
     expect(agentSessionReadHistoryRefusalParts('agent_session_from_the_future')).toEqual([
       'notDoneReadHistory'
     ])
+  })
+})
+
+// For a line that already says what did not happen and shows its own Retry, such as a chat that
+// could not start: the Retry is the step for retrying and for sending again, and only for those.
+describe('agentSessionRefusalCauseParts', () => {
+  it('keeps a step other than retrying, beside the cause', () => {
+    expect(
+      agentSessionRefusalCauseParts({
+        kind: 'refused',
+        code: 'agent_session_operation_invalid',
+        details: { reason: 'turnActive' }
+      })
+    ).toEqual(['turnActive', 'waitForTurn'])
+    expect(
+      agentSessionRefusalCauseParts({
+        kind: 'refused',
+        code: 'agent_session_operation_invalid',
+        details: { reason: 'historyTooLarge' }
+      })
+    ).toEqual([
+      {
+        text: "This conversation's history is too large to restore here. Start a new chat to continue."
+      }
+    ])
+  })
+
+  it('leaves out a step the Retry beside it takes', () => {
+    expect(
+      agentSessionRefusalCauseParts({
+        kind: 'refused',
+        code: 'agent_session_journal_unreadable',
+        details: { reason: 'journalUnavailable' }
+      })
+    ).toEqual(['historyUnavailable'])
+    expect(
+      agentSessionRefusalCauseParts(
+        {
+          kind: 'refused',
+          code: 'agent_session_operation_invalid',
+          details: { reason: 'notSignedIn' }
+        },
+        { agentName: 'Claude' }
+      )
+    ).toEqual([{ text: 'Claude is not signed in for the selected account. Sign in first.' }])
+    expect(
+      agentSessionRefusalCauseParts({
+        kind: 'refused',
+        code: 'agent_session_operation_invalid',
+        details: { reason: 'providerStartFailed' }
+      })
+    ).toEqual([{ text: 'The agent stopped before it finished starting.' }])
+    expect(
+      agentSessionRefusalCauseParts({
+        kind: 'refused',
+        code: 'agent_session_operation_invalid',
+        details: { reason: 'managedAccountUnsupported' }
+      })
+    ).toEqual([
+      {
+        text: 'While a Claude account is added in WSL, Claude chats need a Windows Claude account. Choose or add one in Claude Accounts settings.'
+      }
+    ])
+  })
+
+  it('writes the same sentences as before where no Retry stands beside them', () => {
+    expect(agentSessionFailureSentence({ kind: 'notSignedIn' }, 'rejection')).toBe(
+      'The agent is not signed in for the selected account. Sign in, then send your message again.'
+    )
+  })
+
+  it.each<[string, AgentSessionWriteFailure]>([
+    ['a refusal with no reason', { kind: 'refused', code: 'agent_session_operation_invalid' }],
+    [
+      "a reason whose code's words stand",
+      { kind: 'refused', code: 'agent_session_conflict', details: { reason: 'ownerAlive' } }
+    ],
+    ['a failed request', { kind: 'failed' }],
+    ['an unconfirmed one', { kind: 'unconfirmed' }]
+  ])('names nothing for %s', (_label, failure) => {
+    expect(agentSessionRefusalCauseParts(failure)).toEqual([])
   })
 })

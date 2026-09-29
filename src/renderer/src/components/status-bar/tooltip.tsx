@@ -210,11 +210,14 @@ export function getWindowSections(
 
 // Why: urgency color tracks % used even when fill represents % remaining;
 // low usage stays neutral so persistent chrome stays quiet.
+export const USAGE_WARNING_PERCENT = 60
+export const USAGE_URGENT_PERCENT = 80
+
 export function barColor(usedPct: number): string {
-  if (usedPct < 60) {
+  if (usedPct < USAGE_WARNING_PERCENT) {
     return 'bg-muted-foreground/40'
   }
-  if (usedPct < 80) {
+  if (usedPct < USAGE_URGENT_PERCENT) {
     return 'bg-yellow-500'
   }
   return 'bg-red-500'

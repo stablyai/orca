@@ -322,4 +322,13 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
       .catch(() => {})
     runtime?.clearHeadlessTerminalBuffer(args.id).catch(() => {})
   })
+
+  ipcMain.removeAllListeners('pty:resetInputModes')
+  ipcMain.on('pty:resetInputModes', (_event, args: { id: string }) => {
+    // Why: an older daemon or relay rejects the request; its model keeps the modes until reattach.
+    tryGetProviderForPty(args.id)
+      ?.resetInputModes(args.id)
+      .catch(() => {})
+    runtime?.resetHeadlessTerminalInputModes(args.id).catch(() => {})
+  })
 }

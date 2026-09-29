@@ -50,7 +50,7 @@ export function requestTerminalLinkAction(
     !event ||
     !context ||
     !(
-      isTerminalLinkActionActivation(event) ||
+      (isTerminalLinkActionActivation(event) && context.plainClickBehavior !== 'none') ||
       (isTerminalMiddleClickActivation(event) && context.middleClickBehavior !== 'none')
     ) ||
     !context.pointerGesture.canRequestAction(event)

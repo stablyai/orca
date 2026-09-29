@@ -285,3 +285,74 @@ describe('MobileNativeChatMessage', () => {
     })
   })
 })
+
+describe("MobileNativeChatMessage — a subagent's row speaks as that subagent", () => {
+  let renderer: ReactTestRenderer | null = null
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  function renderAgentRow(agentId: string | undefined, subagentLabel?: string): ReactTestRenderer {
+    const message: NativeChatMessage = {
+      id: 'a1',
+      role: 'assistant',
+      blocks: [{ type: 'text', text: 'The PR is CLEAN.' }],
+      timestamp: null,
+      source: 'transcript',
+      ...(agentId === undefined ? {} : { agentId })
+    }
+    act(() => {
+      renderer = create(createElement(MobileNativeChatMessage, { message, subagentLabel }))
+    })
+    return renderer!
+  }
+
+  const captions = (tree: ReactTestRenderer): ReactTestInstance[] =>
+    tree.root
+      .findAllByType('Text' as never)
+      .filter((node) => typeof node.props.accessibilityLabel === 'string')
+
+  it('names the subagent that wrote the row', () => {
+    const [caption] = captions(renderAgentRow('task-1', 'review the PR'))
+    expect(caption?.props.accessibilityLabel).toBe('Written by subagent review the PR')
+    expect(caption?.children.join('')).toBe('review the PR')
+  })
+
+  it('still marks the row as a subagent when no loaded roster names it', () => {
+    const [caption] = captions(renderAgentRow('task-9'))
+    expect(caption?.children.join('')).toBe('Subagent')
+  })
+
+  it("adds nothing to the session's own row", () => {
+    expect(captions(renderAgentRow(undefined, 'review the PR'))).toEqual([])
+  })
+
+  it('names no one on a settled row whose only content is hidden, and names the live one', () => {
+    const toolOnly: NativeChatMessage = {
+      id: 'a2',
+      role: 'assistant',
+      blocks: [{ type: 'tool-call', name: 'Grep', input: {}, state: 'completed' }],
+      timestamp: null,
+      source: 'transcript',
+      agentId: 'task-1'
+    }
+    const renderToolOnly = (activeTurnIsWorking: boolean): ReactTestRenderer => {
+      act(() => {
+        renderer = create(
+          createElement(MobileNativeChatMessage, {
+            message: toolOnly,
+            subagentLabel: 'review the PR',
+            structuredActivityUi: true,
+            activeTurnIsWorking
+          })
+        )
+      })
+      return renderer!
+    }
+    expect(captions(renderToolOnly(false))).toEqual([])
+    act(() => renderer?.unmount())
+    expect(captions(renderToolOnly(true))).toHaveLength(1)
+  })
+})

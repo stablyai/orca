@@ -10,6 +10,7 @@ import {
   type ParkedTerminalTabWatcherSyncEntry
 } from './terminal-pane/terminal-parked-tab-watchers'
 import { useAppStore } from '@/store'
+import { isTerminalWorkspaceEmptiedOnPurpose } from '../../../shared/closed-terminal-tab-tombstones'
 import { gateWorktreeAgentActivation } from '@/lib/worktree-agent-activation-gate'
 import { createWorkspaceTerminalHostAuthoritySelector } from '@/lib/workspace-terminal-host-authority'
 import { getStructuredAgentLaunchStatus } from '@/lib/structured-agent-session-launch'
@@ -238,10 +239,10 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
       }
       // Why: the activation gate reconciles durable/live agent state first; only an actually empty, never-visited workspace receives a default shell.
       const { renderableTabCount } = reconcileWorktreeTabModel(activeWorktreeId)
-      // Why (main): a missing row means never initialized, an explicit empty row means the user
-      // closed the last terminal. Read at decision time: the row can change while the check runs.
-      const activeWorktreeHasTerminalState = Object.hasOwn(
-        useAppStore.getState().tabsByWorktree,
+      // Why (main): only a workspace emptied by a recorded close stays empty; an empty row with no
+      // record is unknown and seeds. Read at decision time: the row can change while the check runs.
+      const activeWorktreeHasTerminalState = isTerminalWorkspaceEmptiedOnPurpose(
+        useAppStore.getState(),
         activeWorktreeId
       )
       if (shouldAutoCreateInitialTerminal(renderableTabCount, activeWorktreeHasTerminalState)) {

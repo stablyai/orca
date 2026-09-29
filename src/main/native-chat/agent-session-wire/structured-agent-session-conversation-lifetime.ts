@@ -5,11 +5,11 @@
 // public entry point here takes the session's serialize once and calls the under-serialize forms,
 // because the queue is not reentrant.
 
-import { TUI_AGENT_DISPLAY_NAMES } from '../../../shared/tui-agent-display-names'
 import {
   AgentSessionRefusalError,
   agentSessionRefusalError
 } from '../../../shared/agent-session-wire-refusals'
+import { createJournalOpenReadRefusals } from '../agent-session-journal/journal-open-failure'
 import type { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
 import {
   abandonQueuedStructuredAgentSessionMessages,
@@ -40,6 +40,7 @@ export function createStructuredAgentSessionConversationLifetime(host: {
   let disposed = false
   const { sessions, serialize } = host
   const deps = () => host.context().deps
+  const readRefusals = createJournalOpenReadRefusals()
   // The sweep's stop puts an idle agent to rest: nothing is queued, so no loop reads its cause.
   const stopAgent = (sessionId: string) =>
     stopStructuredAgentSessionAgentUnderSerialize(host.context(), sessionId)
@@ -69,12 +70,11 @@ export function createStructuredAgentSessionConversationLifetime(host: {
       return record !== null && deps().hasOpenDispatch?.(record) === true
     },
     stopAgent,
-    // A host stop with its reason: the delivery loop waiting on this child writes the one error
-    // row and rejects what is queued with it.
+    // A host stop: the delivery loop waiting on this child writes the one error row and rejects
+    // what is queued with it, both worded from the hostStopped fact.
     stopStartingAgent: (sessionId) =>
       stopStructuredAgentSessionAgentUnderSerialize(host.context(), sessionId, {
-        cause: 'host-stop',
-        reason: `${TUI_AGENT_DISPLAY_NAMES[sessions.get(sessionId)?.params.provider ?? 'claude']} never finished starting, so Orca stopped it.`
+        cause: 'host-stop'
       }),
     closeConversation,
     onError: (sessionId, error) => deps().onEventSinkError?.({ sessionId, error }),
@@ -98,6 +98,7 @@ export function createStructuredAgentSessionConversationLifetime(host: {
     conversation: async (sessionId: string): Promise<StructuredAgentSessionHostSession> => {
       const open = sessions.get(sessionId)
       if (open) {
+        readRefusals.forget(sessionId)
         return open
       }
       const record = deps().store.getRecord(sessionId)
@@ -116,12 +117,15 @@ export function createStructuredAgentSessionConversationLifetime(host: {
         if (disposed) {
           throw new AgentSessionRefusalError(AGENT_SESSION_NOT_ATTACHED)
         }
-        const session = await host.open(sessionId)
+        const session = await host.open(sessionId).catch((error: unknown) => {
+          throw readRefusals.refusal(sessionId, error)
+        })
         if (!session) {
           throw agentSessionRefusalError('agent_session_identity_required', {
             reason: 'recordMissing'
           })
         }
+        readRefusals.forget(sessionId)
         return session
       })
     },
@@ -129,6 +133,7 @@ export function createStructuredAgentSessionConversationLifetime(host: {
      *  still queued will not be sent. */
     close: (sessionId: string): Promise<void> =>
       serialize(sessionId, async () => {
+        readRefusals.forget(sessionId)
         const session = sessions.get(sessionId)
         if (session) {
           // Abandoned before the stop, so no start delivers it.

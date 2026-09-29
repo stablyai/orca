@@ -109,6 +109,7 @@ overrides:
   monaco-editor>dompurify: 3.4.15
 
 patchedDependencies:
+  i18next-cli@1.74.2: 7955b89d3aa229f477408608d331f78c85148a85a85913729f89fac65ad8b207
   '@vscode/windows-process-tree@0.8.0': b4be93859cefb159949d9cf05f97fa91a221dff0f793a6f03d02d78ae5b32035
   '@xterm/addon-image@0.10.0-beta.300': 5fc280019957573eefe8daa2969534d6090ddb29c6b5842b8f22e99dc1ce3146
   '@xterm/addon-ligatures@0.11.0-beta.300': 47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920
@@ -128,7 +129,7 @@ importers:
         version: 0.3.251(@anthropic-ai/sdk@0.122.0(zod@4.6.5))(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(zod@4.6.5)
       '@electron-toolkit/utils':
         specifier: ^4.0.0
-        version: 4.0.0(electron@43.7.0(supports-color@7.2.0))
+        version: 4.0.0(electron@43.7.5(supports-color@7.2.0))
       '@floating-ui/dom':
         specifier: 1.8.0
         version: 1.8.0
@@ -365,8 +366,8 @@ importers:
         specifier: 3.4.15
         version: 3.4.15
       electron:
-        specifier: 43.7.0
-        version: 43.7.0(supports-color@7.2.0)
+        specifier: 43.7.5
+        version: 43.7.5(supports-color@7.2.0)
       electron-builder:
         specifier: ^26.15.3
         version: 26.15.3(electron-builder-squirrel-windows@26.15.3)
@@ -395,8 +396,8 @@ importers:
         specifier: ^9.1.7
         version: 9.1.7
       i18next-cli:
-        specifier: 1.74.1
-        version: 1.74.1(@types/node@25.9.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2)
+        specifier: 1.74.2
+        version: 1.74.2(patch_hash=7955b89d3aa229f477408608d331f78c85148a85a85913729f89fac65ad8b207)(@types/node@25.9.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2)
       katex:
         specifier: ^0.16.45
         version: 0.16.45
@@ -4770,8 +4771,8 @@ packages:
     resolution: {integrity: sha512-bO3y10YikuUwUuDUQRM4KfwNkKhnpVO7IPdbsrejwN9/AABJzzTQ4GeHwyzNSrVO+tEH3/Np255a3sVZpZDjvg==}
     engines: {node: '>=8.0.0'}
 
-  electron@43.7.0:
-    resolution: {integrity: sha512-m98FUehwnoo6q2D9Mr+n602Natb2CRFeKD81GhTdJlKh/Iyud0R1X8hChjpaMBLSsIX9r2ZEFnz0sdIALiO9ZQ==}
+  electron@43.7.5:
+    resolution: {integrity: sha512-AR+OLH/8QAwx6Lz6mhaDQhesbjC/Xh2WOiFSI/CDFU6FKX/qJdBg65bEUn+MLvbvIi/LlaRQeLljnUcKb1KS0A==}
     engines: {node: '>= 22.12.0'}
     hasBin: true
 
@@ -5339,13 +5340,13 @@ packages:
     engines: {node: '>=18'}
     hasBin: true
 
-  i18next-cli@1.74.1:
-    resolution: {integrity: sha512-8OEbo4jfn4r4/QwieyAvoLWV/rJW2OR6SG09I12jA6kffyhUNsyrH6OaA4bumLIWkdBaGySbiFm0wj1k19N/jA==}
+  i18next-cli@1.74.2:
+    resolution: {integrity: sha512-y32hOiVNLs85f+TKCl4XqERjD0dFy274IOEXe7/Zyp+WMaQC9VhF33JLO0hQZZKK4PUmYwbRDXaSObeE3PbsmA==}
     engines: {node: '>=22'}
     hasBin: true
 
-  i18next-resources-for-ts@2.1.0:
-    resolution: {integrity: sha512-n5UexwEVt0OoIAhG2MWpSnAVJW1U8mQrQTmXyxc5DMAx+NLhcLZhSMJo/FnUsA5JQ3obTYqTgB7YIuZKWpDgow==}
+  i18next-resources-for-ts@2.1.1:
+    resolution: {integrity: sha512-Xhz8S8dtNIPawzeWdmssnsII1JYsbvPWOLmstJakNcgKSFLCneA+xN7qajj/zlk5nf9sx1KGDTx8RNZ73h68tw==}
     hasBin: true
 
   i18next@26.3.1:
@@ -7965,9 +7966,9 @@ snapshots:
     dependencies:
       '@types/node': 25.9.5
 
-  '@electron-toolkit/utils@4.0.0(electron@43.7.0(supports-color@7.2.0))':
+  '@electron-toolkit/utils@4.0.0(electron@43.7.5(supports-color@7.2.0))':
     dependencies:
-      electron: 43.7.0(supports-color@7.2.0)
+      electron: 43.7.5(supports-color@7.2.0)
 
   '@electron/asar@3.4.1':
     dependencies:
@@ -11628,7 +11629,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  electron@43.7.0(supports-color@7.2.0):
+  electron@43.7.5(supports-color@7.2.0):
     dependencies:
       '@electron-internal/extract-zip': 1.0.4
       '@electron/get': 5.0.0(supports-color@7.2.0)
@@ -12377,7 +12378,7 @@ snapshots:
 
   husky@9.1.7: {}
 
-  i18next-cli@1.74.1(@types/node@25.9.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2):
+  i18next-cli@1.74.2(patch_hash=7955b89d3aa229f477408608d331f78c85148a85a85913729f89fac65ad8b207)(@types/node@25.9.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2):
     dependencies:
       '@croct/json5-parser': 0.2.2
       '@swc/core': 1.16.2
@@ -12386,7 +12387,7 @@ snapshots:
       execa: 10.0.1
       glob: 13.0.6
       i18next: 26.4.2(typescript@7.0.2)
-      i18next-resources-for-ts: 2.1.0
+      i18next-resources-for-ts: 2.1.1
       inquirer: 14.2.2(@types/node@25.9.5)
       jiti: 2.7.0
       jsonc-parser: 3.3.1
@@ -12403,10 +12404,10 @@ snapshots:
       - react-native
       - typescript
 
-  i18next-resources-for-ts@2.1.0:
+  i18next-resources-for-ts@2.1.1:
     dependencies:
       '@babel/runtime': 7.29.7
-      '@swc/core': 1.15.46
+      '@swc/core': 1.16.2
       chokidar: 5.0.0
       yaml: 2.9.1
     transitivePeerDependencies:

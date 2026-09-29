@@ -9,7 +9,7 @@ import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 import { getVisibleUsageProvider, isUsageEmptyState } from './status-bar-provider-visibility'
 import { getUsageProviderAccountsSectionId } from './usage-provider-settings-target'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT, useStatusBarMenuFocusHandoff } from './ProviderDetailsMenu'
-import { observeStatusBarContainer } from './status-bar-container-observer'
+import { useStatusBarDensity } from './status-bar-density'
 
 export function useStatusBarController(floatingTerminalOpen: boolean) {
   const floatingTerminalShortcut = useShortcutLabel('floatingTerminal.toggle')
@@ -40,14 +40,18 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const petEnabled = useAppStore((s) => s.settings?.experimentalPet === true)
   const toggleStatusBarItem = useAppStore((s) => s.toggleStatusBarItem)
   const usageEmptyStateDismissed = useAppStore((s) => s.usageEmptyStateDismissed)
-  const containerRef = useRef<HTMLDivElement>(null)
   const mountedRef = useRef(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
-
-  const [containerWidth, setContainerWidth] = useState(900)
-  const resizeObserverRef = useRef<ResizeObserver | null>(null)
+  const {
+    density: { compact, usageTightestOnly, segmentsIconOnly, collapseUsage },
+    overflowing,
+    collapsedUsageProviders,
+    barRef,
+    usageRef,
+    segmentsRef
+  } = useStatusBarDensity()
 
   useEffect(() => {
     mountedRef.current = true
@@ -66,18 +70,6 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   useEffect(() => {
     void ensureDetectedAgents()
   }, [ensureDetectedAgents])
-
-  const containerRefCallback = useCallback((node: HTMLDivElement | null) => {
-    if (resizeObserverRef.current) {
-      resizeObserverRef.current.disconnect()
-      resizeObserverRef.current = null
-    }
-    if (node) {
-      containerRef.current = node
-      resizeObserverRef.current = observeStatusBarContainer(node, setContainerWidth)
-      setContainerWidth(node.getBoundingClientRect().width)
-    }
-  }, [])
 
   const refreshDetectedAgents = useAppStore((s) => s.refreshDetectedAgents)
   const handleRefresh = useCallback(async () => {
@@ -200,8 +192,6 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     cursor?.status === 'fetching' ||
     zcode?.status === 'fetching'
 
-  const compact = containerWidth < 900
-  const iconOnly = containerWidth < 500
   const floatingTerminalActionLabel = floatingTerminalOpen
     ? 'Minimize Floating Workspace'
     : 'Show Floating Workspace'
@@ -252,8 +242,10 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   return {
     anyFetching,
     anyVisible,
+    barRef,
+    collapseUsage,
+    collapsedUsageProviders,
     compact,
-    containerRefCallback,
     detectedAgentIds,
     floatingTerminalActionLabel,
     floatingTerminalShortcut,
@@ -263,14 +255,16 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     handleUsageDetails,
     handleUsageMenuOpenChange,
     hasVisibleUsageMeters,
-    iconOnly,
     isEmptyUsageState,
     isRefreshing,
     menuOpen,
     menuPoint,
+    overflowing,
     petEnabled,
     recordFeatureInteraction,
     rosterProviders,
+    segmentsIconOnly,
+    segmentsRef,
     setMenuOpen,
     setMenuPoint,
     setStatusBarUsageMode,
@@ -285,7 +279,9 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     toggleStatusBarItem,
     usageMenuFocusHandoff,
     usageMenuOpen,
-    usagePercentageDisplay
+    usagePercentageDisplay,
+    usageRef,
+    usageTightestOnly
   }
 }
 

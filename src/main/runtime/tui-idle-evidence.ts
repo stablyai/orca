@@ -8,6 +8,7 @@ import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-type
 import { getSyntheticAgentTerminalTitle } from '../../shared/synthetic-agent-title'
 import { resolveExplicitTerminalTitleAgentType } from '../../shared/terminal-title-agent-type'
 import type { TuiAgent } from '../../shared/tui-agent'
+import { getTuiAgentRestSignal } from '../../shared/tui-agent-rest-signal'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import {
   detectExplicitIdleStatusFromTitle,
@@ -157,13 +158,22 @@ export function hasSustainedTitleIdle(
 }
 
 /**
- * Tier 3, cold start: Orca launched a known agent on this PTY, so a quiet non-shell
- * foreground process is an agent still booting, not one sitting at its prompt. Resolving
- * on it is what let `dispatch --inject` write into a TUI that had not yet attached its
- * reader and silently lose the prompt (#9976).
+ * When a quiet non-shell foreground process may settle a pending wait.
+ * - `closed`: the agent has a stronger rest signal, so its silence is boot, not rest.
+ *   Resolving on it let `dispatch --inject` write into a TUI that had not yet attached
+ *   its reader and silently lose the prompt (#9976).
+ * - `after-paint`: Orca knows an agent runs here but it has no other rest signal, so this
+ *   lane is its only one. A TUI that has painted nothing yet is still booting.
+ * - `open`: nothing is known about the pane, so a missing output clock also counts as quiet
+ *   (see isQuietForQuiescence).
  */
-export function quietForegroundProcessProvesTuiIdle(agent: TuiAgent | null | undefined): boolean {
-  return !agent
+export type QuietForegroundLane = 'closed' | 'after-paint' | 'open'
+
+function quietForegroundLane(agent: TuiAgent | null | undefined): QuietForegroundLane {
+  if (!agent) {
+    return 'open'
+  }
+  return getTuiAgentRestSignal(agent) === 'none' ? 'after-paint' : 'closed'
 }
 
 export type TuiIdleEvaluationInput = {
@@ -191,8 +201,7 @@ export type TuiIdleVerdict =
   | { kind: 'ready-weak' }
   /** The agent says it is mid-turn: nothing may settle, and its screen is not read. */
   | { kind: 'working' }
-  /** `quietForeground`: whether a quiet non-shell foreground process may still settle it. */
-  | { kind: 'pending'; quietForeground: boolean }
+  | { kind: 'pending'; quietForeground: QuietForegroundLane }
 
 const READY_STRONG: TuiIdleVerdict = { kind: 'ready-strong' }
 const READY_WEAK: TuiIdleVerdict = { kind: 'ready-weak' }
@@ -234,6 +243,18 @@ export function evaluateTuiIdle(input: TuiIdleEvaluationInput): TuiIdleVerdict {
   if (blockedReason) {
     return { kind: 'blocked', reason: blockedReason }
   }
+  // Qoder publishes "Ready" before its trust dialog is dismissed; only its composer proves input is live.
+  if (input.agent === 'qoder') {
+    if (
+      hasFreshWorkingFirstPartyStatus(input.firstPartyStatus) ||
+      input.record.lastAgentStatus === 'working'
+    ) {
+      return WORKING
+    }
+    return input.readPositiveBodyEvidence()
+      ? READY_STRONG
+      : { kind: 'pending', quietForeground: 'closed' }
+  }
   // Why the title before the body: both are tier 1, so either settles, but the title is a
   // memoized lookup and the body is a fresh multi-KB scan. Same verdict, cheaper order.
   if (hasExplicitIdleTitle(input.record, input.rendererTitle) || input.readPositiveBodyEvidence()) {
@@ -249,7 +270,7 @@ export function evaluateTuiIdle(input: TuiIdleEvaluationInput): TuiIdleVerdict {
     // when a dialog is on screen, so the screen read must still run.
     return input.firstPartyStatus?.state === 'working'
       ? WORKING
-      : { kind: 'pending', quietForeground: false }
+      : { kind: 'pending', quietForeground: 'closed' }
   }
   // Why after the veto: a first-party working account outranks inferred body evidence.
   if (
@@ -271,7 +292,7 @@ export function evaluateTuiIdle(input: TuiIdleEvaluationInput): TuiIdleVerdict {
   return {
     kind: 'pending',
     quietForeground:
-      input.record.lastAgentStatus === null && quietForegroundProcessProvesTuiIdle(input.agent)
+      input.record.lastAgentStatus === null ? quietForegroundLane(input.agent) : 'closed'
   }
 }
 
@@ -325,7 +346,7 @@ export function ptyTuiIdleEvidence(
     record: pty,
     readTailBlockedReason: () => detectTerminalWaitBlockedReason(waitText()),
     readPositiveBodyEvidence: () =>
-      source.getAdoptedPtyIdleStatus(pty) === 'idle' ||
+      (agent !== 'qoder' && source.getAdoptedPtyIdleStatus(pty) === 'idle') ||
       isKnownReadyPromptBody(waitText(), agent, () => source.readScreenLines(pty.ptyId)),
     readMuseReadyBodyEvidence: () => isMuseReadyPromptPreview(waitText()),
     agent,

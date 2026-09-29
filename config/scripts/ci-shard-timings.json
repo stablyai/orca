@@ -3241,7 +3241,6 @@
       "src/main/runtime/agent-session-launch-env-backfill.test.ts": 264,
       "src/main/runtime/agent-session-lease-renewal.test.ts": 242,
       "src/main/runtime/agent-session-operation-admission.test.ts": 165,
-      "src/main/runtime/agent-session-orphan-child-reaper.test.ts": 90,
       "src/main/runtime/agent-session-process-identity-probe-windows-batch.test.ts": 47,
       "src/main/runtime/agent-session-process-identity-probe.test.ts": 78,
       "src/main/runtime/agent-session-provider-handle-transition.test.ts": 104,

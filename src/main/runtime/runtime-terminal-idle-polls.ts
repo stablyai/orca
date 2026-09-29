@@ -15,21 +15,36 @@ import {
   evaluateTuiIdle,
   leafTuiIdleEvidence,
   ptyTuiIdleEvidence,
+  type QuietForegroundLane,
   type TuiIdleEvidenceSource,
   type TuiIdleVerdict
 } from './tui-idle-evidence'
 
 /**
- * Why null counts as quiet: a record with no output timestamp has produced nothing the
- * RUNTIME OBSERVED since it was created. That is not the same as silence — the reachable
- * case is a daemon-hosted pane whose bytes never reach the runtime, which may still be
- * streaming. The trade is deliberate: "never settles" becomes "settles uncorroborated",
+ * Why null counts as quiet on an `open` lane: a record with no output timestamp has produced
+ * nothing the RUNTIME OBSERVED since it was created. That is not the same as silence — the
+ * reachable case is a daemon-hosted pane whose bytes never reach the runtime, which may still
+ * be streaming. The trade is deliberate: "never settles" becomes "settles uncorroborated",
  * the caller keeps its timeout, and delivery cannot reach this lane. Reading it as `0ms since output`
  * inverted that — `0 >= quiescenceMs` is false forever, so an adopted pane that never
  * emitted could not settle no matter how long the caller waited.
+ * Why not on `after-paint`: that pane runs a known agent, whose TUI must paint before it can
+ * take input, so until the command has painted it is still booting. The shell's prompt and
+ * echoed command line are not the agent's paint (see terminal-command-paint.ts).
  */
-function isQuietForQuiescence(lastOutputAt: number | null, quiescenceMs: number): boolean {
-  return lastOutputAt === null ? true : Date.now() - lastOutputAt >= quiescenceMs
+function isQuietForQuiescence(
+  lastOutputAt: number | null,
+  quiescenceMs: number,
+  lane: QuietForegroundLane,
+  commandPainted: () => boolean
+): boolean {
+  if (lane === 'after-paint' && !commandPainted()) {
+    return false
+  }
+  if (lastOutputAt === null) {
+    return lane === 'open'
+  }
+  return Date.now() - lastOutputAt >= quiescenceMs
 }
 import type { TerminalWaiter } from './runtime-terminal-contracts'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
@@ -37,6 +52,8 @@ import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-term
 type RuntimeTerminalIdlePollDependencies = TuiIdleEvidenceSource & {
   intervalMs: number
   getForegroundProcess(ptyId: string): Promise<string | null> | null
+  /** Whether the pane's running command has painted anything of its own. */
+  hasCommandPainted(ptyId: string): boolean
   /** The pane's rendered viewport, or null when the runtime holds no screen model for it. */
   readVisibleScreen(ptyId: string): Promise<string | null> | null
   /** Re-read the record the waiter registered against; see `sample` below. */
@@ -56,7 +73,7 @@ type IdlePollSample = {
   ptyId: string | null
   ready(): RuntimeTerminalWait
   blocked(reason: RuntimeTerminalWaitBlockedReason): RuntimeTerminalWait
-  isQuiet(): boolean
+  isQuiet(lane: QuietForegroundLane): boolean
 }
 
 const IDLE_ENTRY_FLAGS = { foregroundPollInFlight: false, screenReadInFlight: false }
@@ -120,7 +137,10 @@ export class RuntimeTerminalIdlePolls {
         ptyId: pty.ptyId,
         ready: () => buildPtyTerminalWaitResult(handle, 'tui-idle', pty),
         blocked: (reason) => buildPtyTerminalWaitBlockedResult(handle, 'tui-idle', pty, reason),
-        isQuiet: () => isQuietForQuiescence(pty.lastOutputAt, this.deps.quiescenceMs)
+        isQuiet: (lane) =>
+          isQuietForQuiescence(pty.lastOutputAt, this.deps.quiescenceMs, lane, () =>
+            this.deps.hasCommandPainted(pty.ptyId)
+          )
       }
     }
     // Why re-read: `syncWindowGraph` rebuilds `this.leaves` with fresh objects on every
@@ -136,7 +156,13 @@ export class RuntimeTerminalIdlePolls {
       ptyId: leaf.ptyId,
       ready: () => buildTerminalWaitResult(handle, 'tui-idle', live()),
       blocked: (reason) => buildTerminalWaitBlockedResult(handle, 'tui-idle', live(), reason),
-      isQuiet: () => isQuietForQuiescence(live().lastOutputAt, this.deps.quiescenceMs)
+      isQuiet: (lane) =>
+        isQuietForQuiescence(
+          live().lastOutputAt,
+          this.deps.quiescenceMs,
+          lane,
+          () => !leaf.ptyId || this.deps.hasCommandPainted(leaf.ptyId)
+        )
     }
   }
 
@@ -177,7 +203,10 @@ export class RuntimeTerminalIdlePolls {
         this.settle(entry, sample.ready())
         return
       }
-      if (verdict.quietForeground && ptyId && !entry.foregroundPollInFlight) {
+      const lane = verdict.quietForeground
+      // Why quiet before the read too: a streaming or not-yet-painted pane cannot settle, so it
+      // must not pay a process inspection every tick for a whole turn.
+      if (lane !== 'closed' && ptyId && !entry.foregroundPollInFlight && sample.isQuiet(lane)) {
         const foregroundRead = this.deps.getForegroundProcess(ptyId)
         if (!foregroundRead) {
           return
@@ -185,7 +214,7 @@ export class RuntimeTerminalIdlePolls {
         entry.foregroundPollInFlight = true
         startedForegroundPoll = true
         const foreground = await foregroundRead
-        if (foreground && !isShellProcess(foreground) && sample.isQuiet()) {
+        if (foreground && !isShellProcess(foreground) && sample.isQuiet(lane)) {
           this.settle(entry, sample.ready())
         }
       }

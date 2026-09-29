@@ -34,6 +34,7 @@ import {
   translateCodexNotification
 } from './codex-structured-provider-events'
 import { CodexStructuredTurnCancellation } from './codex-structured-turn-cancellation'
+import { settleCodexSendsInEndedTurn } from './codex-structured-turn-end-settlement'
 import { createCodexStructuredNotificationRetry } from './codex-structured-notification-retry'
 import { acquireCodexStructuredSession } from './codex-structured-session-acquire'
 import { changeCodexThreadGoal } from './codex-structured-thread-goal'
@@ -154,11 +155,17 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     }
     if (event.type === 'notification') {
       this.compactions.codex(event.sessionId, event.method, event.params)
+      // Only an admitted turn end settles; a refused one settles on the retry that lands.
+      settleCodexSendsInEndedTurn(session, event.method, event.params, (settlement) =>
+        this.deps.onDispatchSettledLate?.({ sessionId: event.sessionId, ...settlement })
+      )
       // After the admission check, so a refused frame is observed by the strip
       // only on the retry that also reaches the journal.
-      if (session.backgroundTasks.observe(event)) {
+      if (session.backgroundTasks.observe(event, session.prompts.takeAbandonedCommands())) {
         this.deps.onBackgroundTasksChanged?.(event.sessionId, session.backgroundTasks.state)
       }
+      // After the journal and the parent's republished row, never ahead of either.
+      session.backgroundTasks.publishChildWork()
     }
     if (event.type === 'ended') {
       this.compactions.ended(event.sessionId)

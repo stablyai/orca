@@ -1,3 +1,4 @@
+import { qoderTitleStatus } from './qoder-terminal-title'
 import {
   AGY_AGENT_NAME_RE,
   BRAILLE_SPINNER_RE,
@@ -129,6 +130,10 @@ export function createAgentStatusTracker(
  * Normalize high-churn agent titles into stable display labels before storage.
  */
 export function normalizeTerminalTitle(title: string): string {
+  const qoderStatus = qoderTitleStatus(title)
+  if (qoderStatus) {
+    return `${qoderStatus === 'working' ? '✦' : qoderStatus === 'permission' ? '▲' : '◇'} Qoder CLI`
+  }
   if (!title) {
     return title
   }
@@ -181,6 +186,10 @@ function canonicalizeBrailleSpinnerFrame(title: string): string {
 }
 
 function computeAgentStatusFromTitle(title: string): AgentStatus | null {
+  const qoderStatus = qoderTitleStatus(title)
+  if (qoderStatus) {
+    return qoderStatus
+  }
   if (!title || isClaudeManagementTitle(title)) {
     return null
   }

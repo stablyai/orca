@@ -7,17 +7,20 @@ import type { NativeChatSession } from '../../../../shared/native-chat-types'
 export function NativeChatEmptyState({
   kind,
   message,
+  headline,
   agent,
   retrying = false
 }: {
   kind: 'loading' | 'empty' | 'error' | 'not-agent'
   message?: string
+  /** The chat's own sentence for the failure, said once: it takes the generic title's place. */
+  headline?: string
   agent?: NativeChatSession['agent']
   /** The read retries on its own (structured chat), so the error says so instead of pointing
-   *  back to the terminal. The host's message is on the pane's status line already. */
+   *  back to the terminal. */
   retrying?: boolean
 }): React.JSX.Element {
-  const copy = emptyStateCopy(kind, message, agent, retrying)
+  const copy = emptyStateCopy(kind, { message, headline }, agent, retrying)
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-3 p-6 text-center">
       <div
@@ -43,7 +46,7 @@ export function NativeChatEmptyState({
 
 function emptyStateCopy(
   kind: 'loading' | 'empty' | 'error' | 'not-agent',
-  message?: string,
+  words: { message?: string; headline?: string },
   agent?: NativeChatSession['agent'],
   retrying = false
 ): { title: string; subtitle: string | null } {
@@ -59,23 +62,30 @@ function emptyStateCopy(
           NATIVE_CHAT_EMPTY_STATE_COPY.loading.subtitle
         )
       }
-    case 'error':
+    case 'error': {
+      const retryingLine = retrying
+        ? translate(
+            'components.native-chat.state.error.retryingSubtitle',
+            NATIVE_CHAT_EMPTY_STATE_COPY.retryingError.subtitle
+          )
+        : null
+      if (words.headline) {
+        return { title: words.headline, subtitle: retryingLine }
+      }
       return {
         title: translate(
           'components.native-chat.state.error.title',
           NATIVE_CHAT_EMPTY_STATE_COPY.error.title
         ),
-        subtitle: retrying
-          ? translate(
-              'components.native-chat.state.error.retryingSubtitle',
-              NATIVE_CHAT_EMPTY_STATE_COPY.retryingError.subtitle
-            )
-          : (message ??
-            translate(
-              'components.native-chat.state.error.subtitle',
-              NATIVE_CHAT_EMPTY_STATE_COPY.error.subtitle
-            ))
+        subtitle:
+          retryingLine ??
+          words.message ??
+          translate(
+            'components.native-chat.state.error.subtitle',
+            NATIVE_CHAT_EMPTY_STATE_COPY.error.subtitle
+          )
       }
+    }
     case 'not-agent':
       return {
         title: translate(

@@ -172,7 +172,7 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
         setPermissionMode: () => optionWrite('set_permission_mode'),
         applyFlagSettings: () => optionWrite('apply_flag_settings'),
         interrupt: async () => undefined,
-        cancelAsyncMessage: async () => {},
+        cancelAsyncMessage: async () => false,
         stopTask: async () => {},
         send: async () => {
           child.calls.push('send')

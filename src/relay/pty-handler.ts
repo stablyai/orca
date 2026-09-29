@@ -1,3 +1,4 @@
+import { FreebuffStatusProjection } from './freebuff-status-projection'
 /* oxlint-disable max-lines */
 import type { IPty } from 'node-pty'
 import { killWithDescendantSweep } from '../main/pty-descendant-termination'
@@ -205,6 +206,7 @@ function parseSourceRecoveryRequest(value: unknown): PtySourceRecoveryRequest | 
 }
 
 type ManagedPty = {
+  freebuffStatus?: FreebuffStatusProjection
   id: string
   incarnationId: string
   pty: IPty
@@ -971,11 +973,12 @@ export class PtyHandler {
     this.notifyPoolListener(this.ptyPoolActiveListener, 'pty-pool-active')
     const emitIngressData = (emission: PtyIngressEmission): void => {
       const rawLength = emission.rawEndSeq - emission.rawStartSeq
-      this.appendReplayBuffer(managed, emission.data)
+      const data = managed.freebuffStatus?.project(emission.data) ?? emission.data
+      this.appendReplayBuffer(managed, data)
       this.enqueuePtyOutput(
         managed.id,
-        emission.data,
-        emission.transformed || rawLength !== emission.data.length
+        data,
+        emission.transformed || rawLength !== data.length
           ? { rawLength, seq: emission.rawEndSeq, transformed: true }
           : {}
       )
@@ -1086,6 +1089,7 @@ export class PtyHandler {
     // teardown mid-proof must still deliver the held prompt before exit.
     managed.recoveryBarrier?.flushPending()
     managed.recoveryBarrier?.dispose()
+    managed.freebuffStatus?.dispose()
   }
 
   private notifyExitListener(managed: ManagedPty): void {
@@ -1114,6 +1118,7 @@ export class PtyHandler {
     this.dispatcher.onRequest('pty.getInitialCwd', (p) => this.getInitialCwd(p))
     this.dispatcher.onRequest('pty.getSize', (p) => this.getSize(p))
     this.dispatcher.onRequest('pty.clearBuffer', (p) => this.clearBuffer(p))
+    this.dispatcher.onRequest('pty.resetInputModes', (p) => this.resetInputModes(p))
     this.dispatcher.onRequest('pty.hasChildProcesses', (p) => this.hasChildProcesses(p))
     this.dispatcher.onRequest('pty.getForegroundProcess', (p) => this.getForegroundProcess(p))
     this.dispatcher.onRequest('pty.inspectProcess', (p) => this.inspectProcess(p))
@@ -2011,6 +2016,9 @@ export class PtyHandler {
     const ownerClientInstanceId =
       context === undefined ? null : (this.consumerIdentityResolver?.(context.clientId) ?? null)
     const managed: ManagedPty = {
+      ...(launchAgent === 'freebuff'
+        ? { freebuffStatus: new FreebuffStatusProjection(cols, rows) }
+        : {}),
       id,
       incarnationId: randomUUID(),
       pty: term,
@@ -2257,6 +2265,7 @@ export class PtyHandler {
     // npm, where the patch is not applied. So the catch below stays.
     try {
       managed.pty.resize(cols, rows)
+      managed.freebuffStatus?.resize(cols, rows)
     } catch (err) {
       // A failed ioctl observed the handle, not the host's process table, so on
       // its own it is `unverifiable`. Re-probe: a now-absent pid retires the
@@ -2675,6 +2684,15 @@ export class PtyHandler {
     if (managed && !managed.disposed) {
       managed.startupIngress?.snapshotBarrier()
       managed.pty.clear()
+    }
+  }
+
+  // Why the replay buffer and not the stream: a zero-raw span never crosses the
+  // credit window, and the client grounds its own view; reattach replays this.
+  private async resetInputModes(params: Record<string, unknown>): Promise<void> {
+    const managed = this.ptys.get(params.id as string)
+    if (managed?.recoveryBarrier && !managed.disposed) {
+      this.appendReplayBuffer(managed, managed.recoveryBarrier.groundInputModes())
     }
   }
 

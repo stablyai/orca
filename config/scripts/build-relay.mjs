@@ -118,13 +118,7 @@ const OUT_ROOT = process.env.ORCA_RELAY_OUT_ROOT ?? join(ROOT, 'out', 'relay')
 
 const RELAY_VERSION = '0.1.0'
 
-for (const platform of RELAY_BUILD_PLATFORMS) {
-  const outDir = join(OUT_ROOT, platform)
-  // Why: a stale companion left by an earlier build would otherwise satisfy the
-  // manifest check and be hashed into .version, shipping mixed-generation bytes.
-  rmSync(outDir, { recursive: true, force: true })
-  mkdirSync(outDir, { recursive: true })
-
+async function buildRelayBundles(outDir) {
   await build({
     entryPoints: [RELAY_ENTRY],
     bundle: true,
@@ -141,22 +135,6 @@ for (const platform of RELAY_BUILD_PLATFORMS) {
       'process.env.NODE_ENV': '"production"'
     }
   })
-
-  if (isWindowsRelayPlatform(platform)) {
-    copyFileSync(
-      NODE_PTY_CONSOLE_LIST_PATCH_SOURCE,
-      join(outDir, NODE_PTY_CONSOLE_LIST_PATCH_FILENAME)
-    )
-    copyFileSync(
-      NODE_PTY_WINDOWS_TEARDOWN_PATCH_SOURCE,
-      join(outDir, NODE_PTY_WINDOWS_TEARDOWN_PATCH_FILENAME)
-    )
-  }
-  copyFileSync(
-    NODE_PTY_MASTER_CLOEXEC_PATCH_SOURCE,
-    join(outDir, NODE_PTY_MASTER_CLOEXEC_PATCH_FILENAME)
-  )
-  stageWindowsProcessTreeAddon(platform, outDir)
 
   await build({
     entryPoints: [WATCHER_ENTRY],
@@ -234,6 +212,44 @@ for (const platform of RELAY_BUILD_PLATFORMS) {
       'process.env.NODE_ENV': '"production"'
     }
   })
+}
+
+let bundledSourceDir
+let bundledFilenames = []
+
+for (const platform of RELAY_BUILD_PLATFORMS) {
+  const outDir = join(OUT_ROOT, platform)
+  // Why: a stale companion left by an earlier build would otherwise satisfy the
+  // manifest check and be hashed into .version, shipping mixed-generation bytes.
+  rmSync(outDir, { recursive: true, force: true })
+  mkdirSync(outDir, { recursive: true })
+
+  // The JavaScript selects its host at runtime; only native addons and patches vary.
+  if (bundledSourceDir) {
+    for (const filename of bundledFilenames) {
+      copyFileSync(join(bundledSourceDir, filename), join(outDir, filename))
+    }
+  } else {
+    await buildRelayBundles(outDir)
+    bundledSourceDir = outDir
+    bundledFilenames = readdirSync(outDir)
+  }
+
+  if (isWindowsRelayPlatform(platform)) {
+    copyFileSync(
+      NODE_PTY_CONSOLE_LIST_PATCH_SOURCE,
+      join(outDir, NODE_PTY_CONSOLE_LIST_PATCH_FILENAME)
+    )
+    copyFileSync(
+      NODE_PTY_WINDOWS_TEARDOWN_PATCH_SOURCE,
+      join(outDir, NODE_PTY_WINDOWS_TEARDOWN_PATCH_FILENAME)
+    )
+  }
+  copyFileSync(
+    NODE_PTY_MASTER_CLOEXEC_PATCH_SOURCE,
+    join(outDir, NODE_PTY_MASTER_CLOEXEC_PATCH_FILENAME)
+  )
+  stageWindowsProcessTreeAddon(platform, outDir)
 
   // Why: include a content hash so the deploy check detects code changes even
   // when RELAY_VERSION hasn't been bumped. Hashing the whole manifest means a

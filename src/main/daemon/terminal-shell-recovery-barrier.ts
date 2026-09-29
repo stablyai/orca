@@ -86,6 +86,13 @@ export class TerminalShellRecoveryBarrier {
     return this.scanner.owner
   }
 
+  /** Reset Terminal: grounds the lifecycle model now and returns the bytes for
+   *  the host's other models. Not released downstream: a zero-raw span is dropped
+   *  by credit-windowed delivery and snapshot-seq dedup, so each client grounds itself. */
+  groundInputModes(): string {
+    return this.scanner.groundProcessBoundary()
+  }
+
   /** Answers a paired runtime's ownership question from the barrier's settled
    *  state. The barrier scans bytes before any consumer receives them, so its
    *  verdict is never behind the caller's parse position — a fresh process

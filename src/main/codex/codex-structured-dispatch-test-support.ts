@@ -1,5 +1,4 @@
 import type {
-  AgentJournalItemIdentity,
   AgentJournalMessageItem,
   AgentSessionJournalIdentity
 } from '../../shared/agent-session-journal-types'
@@ -30,11 +29,9 @@ type FakeConnection = Omit<CodexAppServerConnection, 'closed'> & {
   calls: { method: string; params?: Record<string, unknown> }[]
 }
 
-export type LateSettlement = {
-  sessionId: string
-  clientMessageId: string
-  providerIdentity: AgentJournalItemIdentity
-}
+export type LateSettlement = Parameters<
+  NonNullable<CodexStructuredSessionAdapterDeps['onDispatchSettledLate']>
+>[0]
 
 /** A `codex app-server` whose turn traffic the test drives by hand. */
 export function fakeCodexAppServer(routes: Record<string, CodexTestRoute> = {}): {

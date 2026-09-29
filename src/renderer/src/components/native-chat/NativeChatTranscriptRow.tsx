@@ -1,7 +1,7 @@
 import { memo } from 'react'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
-import { MessageRow } from './NativeChatMessageRow'
+import { MessageRow, type NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import { NativeChatResolutionReceipt } from './NativeChatResolutionReceipt'
 import { NativeChatWorkingStatus } from './NativeChatWorkingStatus'
 import { NativeChatTurnDiffRollup } from './NativeChatTurnDiffRollup'
@@ -17,7 +17,8 @@ export type NativeChatTranscriptRowContext = {
   revealedDiff: NativeChatDiffReveal | null
   taskListPredecessors: ReadonlyMap<string, NativeChatTaskListPredecessors>
   expandedTurnIds: ReadonlySet<string>
-  failedDeliveryMessageIds?: ReadonlySet<string>
+  /** Keyed by message id: the user messages that did not go through, each with its own words. */
+  deliveryNotices?: ReadonlyMap<string, NativeChatDeliveryNotice>
   allowFileUriLinks: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
   onLinkClick?: CommentMarkdownLinkClickHandler
@@ -60,9 +61,10 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           onScrollMessageToTop={context.onScrollMessageToTop}
           onLinkClick={context.onLinkClick}
           allowFileUriLinks={context.allowFileUriLinks}
-          deliveryFailed={context.failedDeliveryMessageIds?.has(message.id) === true}
+          deliveryNotice={context.deliveryNotices?.get(message.id)}
           structuredActivityUi={context.showTurnStatus}
           folded={slot.folded}
+          subagentLabel={slot.subagentLabel}
           runtimeContext={context.runtimeContext}
         />
       )}

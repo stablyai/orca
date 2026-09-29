@@ -496,6 +496,7 @@
           "mimo_code_label": "MiMo Code",
           "muse_label": "Muse",
           "opencode2_label": "OpenCode 2",
+          "codebuddy_label": "CodeBuddy",
           "zcode_label": "ZCode"
         },
         "skill": {
@@ -3033,6 +3034,7 @@
           },
           "TerminalContextMenu": {
             "b4cdd9314e": "清屏",
+            "resetTerminal": "重置终端",
             "8c17d6786d": "关闭窗格",
             "copyTerminalId": "复制终端 ID",
             "2cf85a6a55": "复制窗格 ID",
@@ -3674,7 +3676,8 @@
             "floatingTerminalNewActivity": "{{label}}，有新活动",
             "codexSignInSuccess": "已登录 Codex",
             "codexSignInError": "Codex 登录失败，请重试。",
-            "cursorUsageMenu": "Cursor 用量"
+            "cursorUsageMenu": "Cursor 用量",
+            "hiddenUsageProviders": "另有：{{value0}}"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "连接账户",
@@ -17520,6 +17523,7 @@
           "subtitle": "无法读取记录。请切回终端继续工作。",
           "retryingSubtitle": "无法读取记录。Orca 会继续尝试加载。"
         },
+        "reconnecting": "正在重新连接此聊天…",
         "pairHost": "配对主机以查看智能体聊天记录。",
         "notAgent": {
           "title": "这里没有对话",
@@ -17667,7 +17671,9 @@
         "startedN": "启动 {{value0}} 子代理",
         "ranOne": "Ran 1 子代理",
         "ranN": "Ran {{value0}} 子代理",
-        "tokens": "{{value0}} 代币"
+        "tokens": "{{value0}} 代币",
+        "unnamed": "子代理",
+        "writtenBy": "由子代理 {{value0}} 输出"
       },
       "conversationCommand": {
         "pendingWork": "在使用此命令之前，请等待挂起的工作和消息完成。",

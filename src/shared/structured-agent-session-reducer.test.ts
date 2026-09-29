@@ -158,6 +158,46 @@ describe('structured agent session reducer', () => {
     ])
   })
 
+  it("keeps a failed read's refusal beside its text until the read recovers", () => {
+    const refusal = {
+      code: 'agent_session_journal_unreadable',
+      details: { reason: 'journalCorrupt' }
+    } as const
+    const failed = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
+      type: 'error',
+      message: 'agent_session_journal_unreadable',
+      refusal
+    })
+    expect(failed).toMatchObject({ status: 'error', readRefusal: refusal })
+
+    expect(reduceStructuredAgentSession(failed, { type: 'loading' }).readRefusal).toBeUndefined()
+    const live = reduceStructuredAgentSession(
+      reduceStructuredAgentSession(failed, {
+        type: 'history-page',
+        page: hydrationPage([item('a', 1)])
+      }),
+      { type: 'error', message: 'transport died' }
+    )
+    expect(live.readRefusal).toBeUndefined()
+    const recovered = reduceStructuredAgentSession(
+      { ...live, readRefusal: refusal },
+      {
+        type: 'event',
+        event: {
+          type: 'batch',
+          sessionId: 'session-a',
+          batch: {
+            cursor: { epoch: 'epoch-a', sequence: 2 },
+            items: [item('b', 2)],
+            removedItemIds: [],
+            submissions: []
+          }
+        }
+      }
+    )
+    expect(recovered).toMatchObject({ status: 'ready', error: undefined, readRefusal: undefined })
+  })
+
   it('uses the bounded hydration page pagination boundary', () => {
     const restored = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
       type: 'event',

@@ -24,7 +24,7 @@ export function linuxFormatArguments({ format, appDirectory, outputDirectory }) 
   }
   return [
     '--config',
-    'config/electron-builder.config.cjs',
+    'config/electron-builder-pr-linux.config.cjs',
     '--linux',
     format,
     '--x64',

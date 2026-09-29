@@ -385,7 +385,8 @@
           "d443a47995": "Prime Agent",
           "mimo_code_label": "MiMo Code",
           "muse_label": "Muse",
-          "zcode_label": "ZCode"
+          "zcode_label": "ZCode",
+          "codebuddy_label": "CodeBuddy"
         },
         "skill": {
           "cli": {
@@ -2751,6 +2752,7 @@
           },
           "TerminalContextMenu": {
             "b4cdd9314e": "Borrar pantalla",
+            "resetTerminal": "Restablecer terminal",
             "8c17d6786d": "Cerrar panel",
             "copyTerminalId": "Copiar ID de terminal",
             "2cf85a6a55": "Copiar ID del panel",
@@ -3347,7 +3349,8 @@
             "floatingTerminalNewActivity": "{{label}}, nueva actividad",
             "codexSignInSuccess": "Sesión iniciada en Codex",
             "codexSignInError": "No se pudo iniciar sesión en Codex. Inténtalo de nuevo.",
-            "cursorUsageMenu": "Uso de Cursor"
+            "cursorUsageMenu": "Uso de Cursor",
+            "hiddenUsageProviders": "También: {{value0}}"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Conectar una cuenta",
@@ -15057,6 +15060,7 @@
           "subtitle": "No se pudo leer la transcripción. Vuelva a la terminal para seguir trabajando.",
           "retryingSubtitle": "No se pudo leer la transcripción. Orca sigue intentando cargarla."
         },
+        "reconnecting": "Reconectando con este chat…",
         "pairHost": "Empareje un host para ver el historial de chat del agente.",
         "notAgent": {
           "title": "No hay conversación aquí",
@@ -15101,6 +15105,10 @@
         "label": "Contexto: {{used}} de {{window}} tokens, {{percent}} % usados",
         "title": "Contexto",
         "estimated": "Estimado a partir de la última respuesta."
+      },
+      "subagents": {
+        "unnamed": "Subagente",
+        "writtenBy": "Escrito por el subagente {{value0}}"
       }
     },
     "tab": {

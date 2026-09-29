@@ -168,6 +168,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   }
 
   clearBuffer = (id: string): Promise<void> => this.providerFor(id).clearBuffer(id)
+  resetInputModes = (id: string): Promise<void> => this.providerFor(id).resetInputModes(id)
 
   async closeStartupQueryAuthority(id: string): Promise<number> {
     return (await this.providerFor(id).closeStartupQueryAuthority?.(id)) ?? 0

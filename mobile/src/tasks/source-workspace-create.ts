@@ -15,7 +15,7 @@ import {
   type WorkspaceCreateTaskItem
 } from './workspace-create-params'
 import { createWorktreeWithNameRetry, type WorktreeCreateResult } from './worktree-create-retry'
-import type { WorktreeCreateAgentLaunch } from './agent-launch-worktree-create'
+import type { WorktreeCreateAgentLaunch } from './agent-launch-request'
 import type { WorktreeCreateIdempotencyProbe } from './worktree-create-idempotency-policy'
 
 // The agent bundle the modal resolved: `choice` drives launch resolution — the

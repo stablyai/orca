@@ -35,7 +35,7 @@ const STRIP = '[data-native-chat-background-tasks]'
 const GOAL = '[data-native-chat-thread-goal]'
 // The seam is CSS on DOM adjacency: the strip styles itself when a goal tab follows
 // it, and the goal tab styles itself when the strip precedes it.
-const STRIP_DOCK_RULE = /^group-has-\[\+\[([a-z-]+)\]\]\/tasks:(.+)$/
+const STRIP_DOCK_RULE = /^\[\[data-native-chat-background-tasks\]:has\(\+\[([a-z-]+)\]\)_&\]:(.+)$/
 const GOAL_DOCK_RULE = /^group-\[\[([a-z-]+)\]\+&\]\/goal:(.+)$/
 
 function dockRules(root: Element, rule: RegExp): { attribute: string; utility: string }[] {

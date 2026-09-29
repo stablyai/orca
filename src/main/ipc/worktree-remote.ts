@@ -1,3 +1,4 @@
+import { markQoderWorkspaceTrusted } from '../qoder/workspace-trust'
 /* eslint-disable max-lines */
 // Why: worktree create helpers (local + remote) split out of worktrees.ts; the cohesive create flow runs this file just over the per-file line limit.
 
@@ -439,7 +440,9 @@ async function spawnLocalStartupAndSetupTerminals(args: {
     if (isTuiAgent(createdWithAgent)) {
       const preset = TUI_AGENT_CONFIG[createdWithAgent].preflightTrust
       try {
-        if (preset === 'cursor') {
+        if (preset === 'qoder') {
+          markQoderWorkspaceTrusted(worktree.path)
+        } else if (preset === 'cursor') {
           markCursorWorkspaceTrusted(worktree.path)
         } else if (preset === 'copilot') {
           markCopilotFolderTrusted(worktree.path)

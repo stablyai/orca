@@ -28,7 +28,7 @@ const RESUME_MARKER_RECORD_TIMEOUT_MS = 2_000
 /** Eight steps at ten seconds each would outlast the global quit deadline, and a quit that dies
  *  mid-eviction leaves the lease unreleased — the exact state restart has to clean up. Bounded
  *  well below that deadline so the phases after this one still get to run. */
-const CHILD_EVICTION_TIMEOUT_MS = 8_000
+export const CHILD_EVICTION_TIMEOUT_MS = 8_000
 
 /** Bounds a phase without swallowing its failure, which `withTimeout` alone would. */
 async function withPhaseTimeout(run: () => Promise<void>, timeoutMs: number): Promise<void> {

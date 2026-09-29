@@ -173,7 +173,7 @@ export function fakeClaude(
       },
       cancelAsyncMessage: async (uuid) => {
         connection.calls.push({ subtype: 'cancel_async_message', params: { uuid } })
-        routed('cancel_async_message', { uuid })
+        return routed('cancel_async_message', { uuid }) === true
       },
       stopTask: async (taskId) => {
         connection.calls.push({ subtype: 'stop_task', params: { taskId } })

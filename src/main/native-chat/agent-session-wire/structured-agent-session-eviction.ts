@@ -52,7 +52,7 @@ export type StructuredAgentSessionEvictionContext = {
 }
 
 /** The resume offer is advisory; a stalled sink must not hold the child's stop behind it. */
-const SNAPSHOT_DRAIN_TIMEOUT_MS = 1_000
+export const SNAPSHOT_DRAIN_TIMEOUT_MS = 1_000
 
 export type StructuredAgentSessionEvictionStep = {
   name: string

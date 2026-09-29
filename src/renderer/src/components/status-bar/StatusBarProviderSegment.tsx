@@ -6,7 +6,14 @@ import {
   type UsagePercentageDisplay
 } from '../../../../shared/usage-percentage-display'
 import type { StatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
-import { ProviderIcon, clampUsedPercent, getProviderUsageStatusLabel } from './tooltip'
+import {
+  ProviderIcon,
+  USAGE_URGENT_PERCENT,
+  USAGE_WARNING_PERCENT,
+  clampUsedPercent,
+  getProviderDisplayName,
+  getProviderUsageStatusLabel
+} from './tooltip'
 import { getTightestUsageSection } from './UsageRosterPanel'
 import { formatRateLimitWindowChipLabel } from '@/lib/window-label-formatter'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
@@ -63,6 +70,65 @@ export function ProviderLetterBadge({ p }: { p: ProviderRateLimits }): React.JSX
         className={`inline-block h-2 w-2 rounded-full ${hasData ? 'bg-muted-foreground/60' : 'bg-muted-foreground/30'}`}
       />
       {getProviderLetter(p.provider)}
+    </span>
+  )
+}
+
+export type UsageTone = 'urgent' | 'warning' | 'normal'
+
+/** Urgency by consumption, matching the usage bar colors, whatever % display the user chose. */
+export function getUsageTone(p: ProviderRateLimits): UsageTone {
+  const tightest = getTightestUsageSection(p)
+  const used = tightest ? clampUsedPercent(tightest.window.usedPercent) : 0
+  return used >= USAGE_URGENT_PERCENT
+    ? 'urgent'
+    : used >= USAGE_WARNING_PERCENT
+      ? 'warning'
+      : 'normal'
+}
+
+/**
+ * Stands in for usage chips a narrow bar can't fit. Always rendered at the collapsing
+ * density so its width is known before anything collapses; out of the row while empty.
+ */
+export function UsageOverflowChip({
+  hidden,
+  display
+}: {
+  hidden: readonly ProviderRateLimits[]
+  display: UsagePercentageDisplay
+}): React.JSX.Element {
+  const tones = hidden.map(getUsageTone)
+  const tone = tones.includes('urgent')
+    ? 'urgent'
+    : tones.includes('warning')
+      ? 'warning'
+      : 'normal'
+  const names = hidden
+    .map((p) => {
+      const tightest = getTightestUsageSection(p)
+      const name = getProviderDisplayName(p.provider)
+      return tightest
+        ? `${name} ${formatUsagePercentageLabel(tightest.window.usedPercent, display)}`
+        : name
+    })
+    .join(', ')
+  return (
+    <span
+      data-usage-more
+      data-usage-collapsed={hidden.length === 0}
+      data-tone={tone}
+      aria-hidden={hidden.length === 0}
+      title={translate(
+        'auto.components.status.bar.StatusBar.hiddenUsageProviders',
+        'Also: {{value0}}',
+        {
+          value0: names
+        }
+      )}
+      className="inline-flex h-4 items-center rounded-full border border-border px-1.5 text-[11px] font-medium tabular-nums text-foreground data-[tone=urgent]:border-destructive/40 data-[tone=urgent]:text-destructive data-[tone=warning]:border-status-warning-border data-[tone=warning]:text-status-warning data-[usage-collapsed=true]:invisible data-[usage-collapsed=true]:absolute"
+    >
+      +{Math.max(1, hidden.length)}
     </span>
   )
 }

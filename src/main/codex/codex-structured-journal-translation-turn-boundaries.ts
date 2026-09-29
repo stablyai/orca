@@ -37,6 +37,14 @@ type TurnBoundaryEvent = {
   dispatchSequenceAtReceipt?: number
 }
 
+type TurnTerminal = {
+  state: 'completed' | 'interrupted'
+  completedAt: number
+  /** Null when Codex named no verdict, or when the host inferred this end itself. */
+  outcome?: AgentJournalTurnOutcome | null
+  durationMs?: number | null
+}
+
 /** Opens and settles the durable lifecycle row for each primary-thread turn. */
 export class CodexJournalTurnBoundaries {
   private readonly recentTurns = new CodexJournalRecentTurns()
@@ -146,46 +154,12 @@ export class CodexJournalTurnBoundaries {
     // turn boundary is no evidence contact was lost. Only `settleSession` may
     // write `unverifiable`.
     const status = readCodexTurnStatus(event.params)
-    const turnLifecycle =
-      event.threadId === this.deps.primaryThreadId()
-        ? this.settled(event.threadId, turnId, {
-            state: codexTurnLifecycleState(status),
-            outcome: codexTurnOutcome(status),
-            completedAt: this.receiptTime(event),
-            durationMs: readCodexTurnDurationMs(event.params)
-          })
-        : null
-    const requestOrigin = this.deps.activeTurns.requestOrigin(event.threadId, turnId)
-    const latestDispatchSequence = this.deps.activeTurns.latestDispatchSequence(
-      event.threadId,
-      turnId
-    )
-    const admission = settleCodexJournalTurn({
-      sink: this.deps.sink,
-      sessionId: event.sessionId,
-      threadId: event.threadId,
-      turnId,
-      turnLifecycle,
-      streams: this.deps.items.streams,
-      activeItems: this.deps.items.activeItems,
-      pendingPrompts: this.deps.pendingPrompts,
-      ...(this.deps.clearPromptTurn ? { clearPromptTurn: this.deps.clearPromptTurn } : {}),
-      linkageFor: this.deps.linkageFor
+    return this.end(event, turnId, {
+      state: codexTurnLifecycleState(status),
+      outcome: codexTurnOutcome(status),
+      completedAt: this.receiptTime(event),
+      durationMs: readCodexTurnDurationMs(event.params)
     })
-    if (admission.accepted) {
-      if (turnLifecycle) {
-        this.recentTurns.remember(
-          event.threadId,
-          turnLifecycle,
-          requestOrigin,
-          latestDispatchSequence
-        )
-      }
-      this.deps.items.ordinals.forgetTurn(event.threadId, turnId)
-      this.deps.activeTurns.forget(event.threadId, turnId)
-      this.deps.resetActivity(event.threadId)
-    }
-    return admission
   }
 
   /**
@@ -204,18 +178,34 @@ export class CodexJournalTurnBoundaries {
       return suppressionAdmission
     }
     const turnId = readCodexTurnId(event.params) ?? this.deps.activeTurns.current(event.threadId)
-    // An error naming an already-settled turn is not a second end: its terminal
-    // row holds the start and duration this one could not reconstruct.
+    // An error ends only a turn this host saw open; its `turn/completed` settles any other.
     if (!turnId || !this.deps.activeTurns.isActive(event.threadId, turnId)) {
+      return CODEX_JOURNAL_ADMITTED
+    }
+    return this.end(event, turnId, {
+      state: 'completed',
+      outcome: 'failure',
+      completedAt: this.receiptTime(event)
+    })
+  }
+
+  /**
+   * A turn's first terminal settlement is final. Codex follows a turn-ending
+   * `error` with a failed `turn/completed` for the same turn, and by then the
+   * start and attributed send this row carries are forgotten, so a second end
+   * could only overwrite the record with less.
+   */
+  private end(
+    event: TurnBoundaryEvent,
+    turnId: string,
+    terminal: TurnTerminal
+  ): CodexJournalTranslationAdmission {
+    if (this.recentTurns.has(event.threadId, turnId)) {
       return CODEX_JOURNAL_ADMITTED
     }
     const turnLifecycle =
       event.threadId === this.deps.primaryThreadId()
-        ? this.settled(event.threadId, turnId, {
-            state: 'completed',
-            outcome: 'failure',
-            completedAt: this.receiptTime(event)
-          })
+        ? this.settled(event.threadId, turnId, terminal)
         : null
     const requestOrigin = this.deps.activeTurns.requestOrigin(event.threadId, turnId)
     const latestDispatchSequence = this.deps.activeTurns.latestDispatchSequence(
@@ -252,17 +242,7 @@ export class CodexJournalTurnBoundaries {
 
   /** Terminal lifecycle for a remembered turn; `startedAt` is absent when the start was never seen.
    *  The verdict travels as one record so a caller cannot supply the state and drop the outcome. */
-  settled(
-    threadId: string,
-    turnId: string,
-    terminal: {
-      state: 'completed' | 'interrupted'
-      completedAt: number
-      /** Null when Codex named no verdict, or when the host inferred this end itself. */
-      outcome?: AgentJournalTurnOutcome | null
-      durationMs?: number | null
-    }
-  ): AgentJournalTurnLifecycle {
+  settled(threadId: string, turnId: string, terminal: TurnTerminal): AgentJournalTurnLifecycle {
     const startedAt = this.deps.activeTurns.startedAt(threadId, turnId)
     // Carried forward from the exact echoed send that was attributed to this turn.
     const requestOrigin = this.deps.activeTurns.requestOrigin(threadId, turnId)

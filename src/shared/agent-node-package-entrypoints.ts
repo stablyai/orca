@@ -6,6 +6,7 @@
 // new agent's install path is a data edit, as in agent-node-entrypoint-identities.ts.
 export const NODE_PACKAGE_SCRIPT_ENTRYPOINTS: Record<string, readonly string[]> = {
   codex: ['node_modules/@openai/codex/'],
+  codebuddy: ['node_modules/@tencent-ai/codebuddy-code/'],
   gemini: ['node_modules/@google/gemini-cli/'],
   // Why: ZCode's npm bin is `dist/zcode.cjs`, so a package install runs as `node …zcode.cjs`
   // and never shows `zcode` as the foreground name (a SEA build still matches by name).

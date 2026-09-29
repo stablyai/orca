@@ -38,7 +38,6 @@ import {
 } from '../native-chat/claude-structured-managed-account-support'
 import { AgentSessionRecordStore } from './agent-session-record-store'
 import { agentSessionStorePath } from './agent-session-record-store-file'
-import { stopOrphanAgentSessionChildren } from './agent-session-orphan-child-reaper'
 import {
   createStructuredAgentSessionOwnerProbe,
   createStructuredAgentSessionOwnerProbes
@@ -106,7 +105,6 @@ export type StructuredAgentSessionRuntimeDeps = {
   statusSink?: StructuredAgentSessionHostDeps['statusSink']
   /** See `StructuredAgentSessionHostDeps.hasOpenDispatch`. */
   hasOpenDispatch?: StructuredAgentSessionHostDeps['hasOpenDispatch']
-  reapOrphanChildren?: typeof stopOrphanAgentSessionChildren
   /** The account home a structured launch would pin right now, for catalog
    *  reads with no session record. Absent disables the catalog surface. */
   resolveAgentAccountHome?: RuntimeAgentAccountHomeResolver
@@ -199,21 +197,6 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
     directory: join(deps.stateDirectory, RECORD_STORE_DIR_NAME),
     hostId: deps.hostId
   })
-  // Why: only the durable store can identify a provider child lost before record publication.
-  void (deps.reapOrphanChildren ?? stopOrphanAgentSessionChildren)({ store }).catch((error) => {
-    try {
-      if (deps.onError) {
-        deps.onError({ scope: 'agent-session-orphan-child-reaper', error })
-      } else {
-        console.error('[structured-agent-session] orphan reaper failed', error)
-      }
-    } catch (reportingError) {
-      console.error(
-        '[structured-agent-session] orphan reaper error reporting failed',
-        reportingError
-      )
-    }
-  })
   let host: StructuredAgentSessionHost | null = null
   const lifecycle = createStructuredAgentSessionLifecycleDelivery({
     handle: (event) => host?.handleAdapterEvent(event),
@@ -247,6 +230,8 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
     modelCatalog: agentModelCatalogStore,
     onBackgroundTasksChanged: (sessionId, state) =>
       host?.publishBackgroundTaskState(sessionId, state),
+    onChildWorkEvidence: (sessionId, evidence) =>
+      host?.publishChildWorkEvidence(sessionId, evidence),
     onDispatchSettledLate,
     onPrimaryThreadStoppedRunning: ({ sessionId }) => {
       void host

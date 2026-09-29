@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { RESUMABLE_TUI_AGENTS } from '../../../shared/agent-session-resume'
 import {
+  AGENT_SESSION_QODER_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CODEBUDDY_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_DSH_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY,
@@ -55,7 +57,9 @@ describe('agentResumeHostAuthorityCapability', () => {
       )
     ).toEqual({
       claude: undefined,
+      codebuddy: AGENT_SESSION_CODEBUDDY_RESUME_RUNTIME_CAPABILITY,
       codex: undefined,
+      qoder: AGENT_SESSION_QODER_RESUME_RUNTIME_CAPABILITY,
       gemini: undefined,
       antigravity: undefined,
       opencode: undefined,

@@ -1,3 +1,4 @@
+import { isQoderTerminalTitle } from './qoder-terminal-title'
 import {
   AGY_AGENT_NAME_RE,
   DROID_AGENT_NAME_RE,
@@ -42,6 +43,9 @@ export function containsBrailleSpinner(title: string): boolean {
 export function isGeminiTerminalTitle(title: string): boolean {
   // Why: DSH-TUI's idle prefix is `✦`, Gemini's working glyph. The whale is decisive
   // and is checked first so a resting DSH pane never reads as a working Gemini.
+  if (isQoderTerminalTitle(title)) {
+    return false
+  }
   if (isDshTerminalTitle(title)) {
     return false
   }
@@ -170,6 +174,9 @@ function computeAgentLabel(title: string): string | null {
   if (isDshTerminalTitle(title)) {
     return 'DeepSeek Harness'
   }
+  if (isQoderTerminalTitle(title)) {
+    return 'Qoder CLI'
+  }
   if (isGeminiTerminalTitle(title)) {
     return 'Gemini CLI'
   }
@@ -250,6 +257,7 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TuiAgent>> = {
   'Claude Code': 'claude',
   OpenClaude: 'openclaude',
   Codex: 'codex',
+  'Qoder CLI': 'qoder',
   'Gemini CLI': 'gemini',
   'GitHub Copilot': 'copilot',
   Grok: 'grok',

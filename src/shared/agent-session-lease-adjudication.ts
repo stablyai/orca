@@ -233,8 +233,8 @@ export function adjudicateAgentSessionRestart(args: {
     // Why: a child spawned before its identity was recorded lost its stdio with the runtime that
     // crashed, so nothing can drive it. A token scan that proves no child is the only evidence there
     // can be; without it the lease is released anyway. A live child still carrying the token is
-    // not signalled here, and the orphan reaper, which runs once at store open, may have seen this
-    // lease still claiming it.
+    // never signalled: the token is inherited by every descendant, so it cannot prove which one is
+    // the provider child.
     return {
       disposition: 'evicted',
       nextFence: nextAgentSessionFence(lease),
@@ -264,20 +264,4 @@ export function adjudicateAgentSessionRestart(args: {
     reason:
       probe.outcome === 'indeterminate' ? probe.reason : 'process identity could not be verified'
   }
-}
-
-/**
- * A process carrying an Orca spawn token with no matching lease is an orphan: stop it, never
- * adopt it. Neither age nor CPU is evidence — only a token match justifies acting on a process.
- */
-export function classifyObservedAgentSessionSpawnToken(args: {
-  spawnToken: string
-  leases: readonly AgentSessionLease[]
-}): 'owned' | 'orphan' {
-  const owned = args.leases.some(
-    (lease) =>
-      lease.reservedSpawnToken === args.spawnToken ||
-      lease.ownerProcess?.spawnToken === args.spawnToken
-  )
-  return owned ? 'owned' : 'orphan'
 }

@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,6 +9,7 @@ import {
   writeOlderBuildLease
 } from '../../runtime/agent-session-older-build-lease.test-fixture'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { supervisedPosixLaunch } from '../../codex/codex-app-server-posix-supervisor'
 import {
   resolveStructuredSessionRecovery,
   type StructuredSessionRecoveryResolutionDeps
@@ -62,7 +64,7 @@ async function reserve(store: AgentSessionRecordStore) {
   })
 }
 
-async function liveOwner(store: AgentSessionRecordStore) {
+async function liveOwner(store: AgentSessionRecordStore, pid = 4242) {
   const reserved = await reserve(store)
   const fence = reserved.record.lease.runtimeFence
   await store.commitProcessIdentity({
@@ -70,7 +72,7 @@ async function liveOwner(store: AgentSessionRecordStore) {
     fence,
     process: {
       hostId: 'local',
-      pid: 4242,
+      pid,
       processStartTimeMs: NOW - 1_000,
       spawnToken: 'spawn-recovery'
     },
@@ -302,3 +304,72 @@ describe('structured session recovery resolution', () => {
     ).toBe('not-applicable')
   })
 })
+
+describe.runIf(process.platform !== 'win32')(
+  'structured session recovery of a supervised owner',
+  () => {
+    const recordedPids: number[] = []
+    const alive = (pid: number): boolean => {
+      try {
+        process.kill(pid, 0)
+        return true
+      } catch (error) {
+        return !(error instanceof Error && 'code' in error && error.code === 'ESRCH')
+      }
+    }
+
+    afterEach(() => {
+      for (const pid of recordedPids.splice(0)) {
+        if (alive(pid)) {
+          process.kill(pid, 'SIGKILL')
+        }
+      }
+    })
+
+    it('evicts only after the supervisor has reaped a provider that ignores SIGTERM', async () => {
+      const launch = supervisedPosixLaunch(
+        {
+          command: process.execPath,
+          args: [
+            '-e',
+            "process.on('SIGTERM', () => {}); process.stdout.write(process.pid + '\\n'); setInterval(() => {}, 60000)"
+          ]
+        },
+        process.env
+      )
+      const supervisor = spawn(launch.command, launch.args, {
+        env: launch.env,
+        stdio: ['pipe', 'pipe', 'ignore'],
+        detached: true
+      })
+      recordedPids.push(supervisor.pid!)
+      const provider = await new Promise<number>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('provider never started')), 10_000)
+        supervisor.stdout.once('data', (chunk: Buffer) => {
+          clearTimeout(timeout)
+          resolve(Number(chunk.toString().trim()))
+        })
+      })
+      recordedPids.push(provider)
+      const store = await openStore()
+      await liveOwner(store, supervisor.pid!)
+      await latch(store)
+
+      const result = await resolveStructuredSessionRecovery(
+        {
+          store,
+          // The recorded pid is the supervisor's; its absence is the proof recovery evicts on.
+          probeRecord: async () =>
+            alive(supervisor.pid!) ? MATCHED : { outcome: 'pid-absent' as const },
+          now: () => NOW + 10_000
+        },
+        SESSION
+      )
+
+      expect(result).toBe('resolved')
+      // Evicted on proof of death, which must hold for the provider too, not only the supervisor.
+      expect(store.getRecord(SESSION)?.lease.deathEvidence).not.toBeNull()
+      expect(alive(provider)).toBe(false)
+    })
+  }
+)

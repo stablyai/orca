@@ -167,7 +167,8 @@ type RecentTurn = {
   bytes: number
 }
 
-/** Bounded terminal lifecycle window for exact echoes that arrive after completion. */
+/** Bounded terminal lifecycle window: exact echoes that arrive after completion
+ *  revise it, and a later end for a turn in it is not a second settlement. */
 export class CodexJournalRecentTurns {
   private readonly turns = new Map<string, RecentTurn>()
   private retainedBytes = 0
@@ -229,6 +230,10 @@ export class CodexJournalRecentTurns {
       this.turns.delete(oldest)
       this.retainedBytes = Math.max(0, this.retainedBytes - (removed?.bytes ?? 0))
     }
+  }
+
+  has(threadId: string, turnId: string): boolean {
+    return this.turns.has(this.turnKey(threadId, turnId))
   }
 
   requestOriginRevision(

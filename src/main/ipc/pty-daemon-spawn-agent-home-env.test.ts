@@ -413,6 +413,17 @@ describe('registerPtyHandlers', () => {
           ])
         )
       })
+      it('strips an inherited agent session id', async () => {
+        // Why: a daemon forked by an Orca launched inside a structured session inherits its id,
+        // and every daemon pane would present that session as its orchestration caller.
+        const inherited = await daemonSpawnAndGetOptions(undefined, undefined, undefined, {
+          ORCA_AGENT_SESSION_ID: 'a0b1c2d3-0000-4000-8000-00000000abcd',
+          ORCA_STRUCTURED_SESSION: '1'
+        })
+        expect(inherited.envToDelete).toEqual(
+          expect.arrayContaining(['ORCA_AGENT_SESSION_ID', 'ORCA_STRUCTURED_SESSION'])
+        )
+      })
       it('preserves an explicitly requested Claude child-session stamp', async () => {
         // Why: only inherited values are poison; a caller deliberately spawning a
         // nested Claude child passes the stamp in args.env and must keep it.

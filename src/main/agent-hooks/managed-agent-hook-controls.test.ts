@@ -19,7 +19,7 @@ vi.mock('./local-agent-cli-presence', () => ({
   detectLocalManagedAgentCliPresence: mocks.detect
 }))
 
-vi.mock('../claude/claude-session-end-hook-capability', () => ({
+vi.mock('../claude/claude-hook-event-versions', () => ({
   probeClaudeCliVersion: mocks.probeClaudeVersion
 }))
 

@@ -1,3 +1,4 @@
+import { markQoderWorkspaceTrusted } from '../qoder/workspace-trust'
 import { ipcMain } from 'electron'
 import {
   type AgentTrustPreset,
@@ -42,6 +43,8 @@ export function registerAgentTrustHandlers(): void {
             }),
             { preset: args.preset, workspacePath: args.workspacePath }
           )
+        } else if (args.preset === 'qoder') {
+          markQoderWorkspaceTrusted(args.workspacePath)
         } else if (args.preset === 'cursor') {
           markCursorWorkspaceTrusted(args.workspacePath)
         } else if (args.preset === 'copilot') {

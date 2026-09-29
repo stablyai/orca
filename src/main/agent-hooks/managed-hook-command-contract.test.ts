@@ -83,6 +83,34 @@ const buildersByAgent = new Map<string, CommandBuilders>([
     }
   ],
   [
+    'qoder',
+    {
+      local: (path) => [
+        getManagedLifecycleHook(path, {
+          configDirName: '.qoder',
+          scriptBaseName: 'qoder-hook',
+          usesWindowsCompatLauncher: true,
+          windowsHookShell: 'powershell'
+        }).command
+      ],
+      remote: (path) => [getClaudeRemoteCommand(path)]
+    }
+  ],
+  [
+    'codebuddy',
+    {
+      local: (path) => [
+        getManagedLifecycleHook(path, {
+          configDirName: '.codebuddy',
+          scriptBaseName: 'codebuddy-hook',
+          usesWindowsCompatLauncher: true,
+          windowsHookShell: 'powershell'
+        }).command
+      ],
+      remote: (path) => [getClaudeRemoteCommand(path)]
+    }
+  ],
+  [
     'codex',
     {
       local: (path) => [getCodexCommand(path), wrapReadablePosixHookCommand(path)],
@@ -206,10 +234,16 @@ describe('managed hook command contract', () => {
       expect(commands.length).toBeGreaterThan(0)
       for (const command of commands) {
         expect(command.length).toBeGreaterThan(0)
-        // Native Windows Codex evaluates PowerShell variables without Grok's dollar-byte scanner.
+        // Native PowerShell hooks evaluate these variables without Grok's dollar-byte scanner.
         const scannedCommand =
-          agent === 'codex' && platform === 'win32' && command.startsWith('if (Test-Path')
-            ? command.replaceAll('$LASTEXITCODE', '').replaceAll('$env:', '')
+          platform === 'win32' &&
+          ((agent === 'codex' && command.startsWith('if (Test-Path')) ||
+            ((agent === 'qoder' || agent === 'codebuddy') &&
+              command.startsWith('$scriptPath = Join-Path')))
+            ? command
+                .replaceAll('$LASTEXITCODE', '')
+                .replaceAll('$env:', '')
+                .replaceAll('$scriptPath', '')
             : command
         expect(findBareHookCommandVariables(scannedCommand), command).toEqual([])
       }

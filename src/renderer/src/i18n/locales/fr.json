@@ -595,6 +595,7 @@
           "mimo_code_label": "MiMo Code",
           "muse_label": "Muse",
           "opencode2_label": "OpenCode 2",
+          "codebuddy_label": "CodeBuddy",
           "zcode_label": "ZCode"
         },
         "skill": {
@@ -3136,6 +3137,7 @@
           },
           "TerminalContextMenu": {
             "b4cdd9314e": "Effacer l'écran",
+            "resetTerminal": "Réinitialiser le terminal",
             "8c17d6786d": "Fermer le volet",
             "copyTerminalId": "Copier l'ID du terminal",
             "2cf85a6a55": "Copier l'ID du volet",
@@ -3769,7 +3771,8 @@
             "floatingTerminalNewActivity": "{{label}}, nouvelle activité",
             "codexSignInSuccess": "Connecté à Codex",
             "codexSignInError": "Échec de la connexion à Codex. Veuillez réessayer.",
-            "cursorUsageMenu": "Utilisation Cursor"
+            "cursorUsageMenu": "Utilisation Cursor",
+            "hiddenUsageProviders": "Aussi : {{value0}}"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connecter un compte",
@@ -17619,6 +17622,7 @@
           "subtitle": "La transcription n'a pas pu être lue. Rebasculez sur le terminal pour continuer à travailler.",
           "retryingSubtitle": "La transcription n'a pas pu être lue. Orca continue d'essayer de la charger."
         },
+        "reconnecting": "Reconnexion à ce chat…",
         "pairHost": "Associez un hôte pour consulter l'historique de chat des agents.",
         "notAgent": {
           "title": "Aucune conversation ici",
@@ -17766,7 +17770,9 @@
         "startedN": "Lancement des sous-agents {{value0}}",
         "ranOne": "A exécuté 1 sous-agent",
         "ranN": "Ran les sous-agents {{value0}}",
-        "tokens": "Jetons {{value0}}"
+        "tokens": "Jetons {{value0}}",
+        "unnamed": "Sous-agent",
+        "writtenBy": "Écrit par le sous-agent {{value0}}"
       },
       "conversationCommand": {
         "pendingWork": "Attendez la fin du travail et des messages en attente avant d'utiliser cette commande.",

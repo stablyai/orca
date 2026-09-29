@@ -10,6 +10,7 @@ import type {
   AgentSessionSubscribeEvent,
   AgentSessionTurnActivity
 } from './agent-session-wire'
+import type { AgentSessionRefusalReference } from './agent-session-wire-refusals'
 import { backgroundTaskStatesEqual } from './agent-session-background-task-state-equality'
 import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
 import { compareAgentJournalItems } from './agent-session-journal-position'
@@ -32,7 +33,10 @@ export type StructuredAgentSessionState = {
   retainedItemLimit: number
   hasOlder: boolean
   status: 'idle' | 'loading' | 'ready' | 'error'
+  /** The failed read's own text, for logs; a surface words `readRefusal` instead. */
   error?: string
+  /** The refusal the failed read met, when the host sent one; cleared with `error`. */
+  readRefusal?: AgentSessionRefusalReference
   backgroundTasks?: AgentSessionBackgroundTaskState | null
   commands?: AgentSessionSlashCommand[] | null
   activity?: AgentSessionTurnActivity | null
@@ -45,7 +49,7 @@ export type StructuredAgentSessionState = {
 
 export type StructuredAgentSessionAction =
   | { type: 'loading' }
-  | { type: 'error'; message: string }
+  | { type: 'error'; message: string; refusal?: AgentSessionRefusalReference }
   | { type: 'event'; event: AgentSessionSubscribeEvent }
   | { type: 'history-page'; page: AgentSessionHistoryPage }
   | { type: 'older-page'; requestedCursor: AgentJournalCursor; page: AgentSessionHistoryPage }
@@ -176,10 +180,10 @@ export function reduceStructuredAgentSession(
 ): StructuredAgentSessionState {
   if (action.type === 'loading') {
     // Keep the last transcript visible while a reconnect rehydrates the stream.
-    return { ...state, status: 'loading', error: undefined }
+    return { ...state, status: 'loading', error: undefined, readRefusal: undefined }
   }
   if (action.type === 'error') {
-    return { ...state, status: 'error', error: action.message }
+    return { ...state, status: 'error', error: action.message, readRefusal: action.refusal }
   }
   if (action.type === 'history-page') {
     return {
@@ -272,6 +276,7 @@ export function reduceStructuredAgentSession(
         : mergeSubmissions(state.submissions, event.batch.submissions, items),
     status: 'ready',
     error: undefined,
+    readRefusal: undefined,
     commands: event.commands !== undefined ? event.commands : state.commands,
     ...(backgroundTasks !== undefined ? { backgroundTasks } : {}),
     ...(activity !== undefined ? { activity } : {}),

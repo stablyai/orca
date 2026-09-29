@@ -1,3 +1,4 @@
+import { getLegacyOpenCodeEnvKeysToDelete } from '../../opencode/legacy-shared-config-dir'
 import { restoreOrStripOverlayEnv } from '../../../shared/agent-overlay-env'
 import { delimiter } from 'node:path'
 import { dropInheritedOrcaFishHistory } from '../../fish-history-session'
@@ -54,6 +55,12 @@ function deleteRequestedDaemonEnvKeys(
   env: Record<string, string>,
   keys: readonly string[] | undefined
 ): void {
+  const userDataPath = process.env.ORCA_USER_DATA_PATH
+  if (userDataPath) {
+    for (const key of getLegacyOpenCodeEnvKeysToDelete(env, userDataPath, {})) {
+      delete env[key]
+    }
+  }
   // Why: persistent daemon state can differ from Electron; delete CODEX_HOME only when its Orca overlay owns it.
   const deleteOrcaOwnedCodexHome =
     keys?.includes('ORCA_CODEX_HOME') === true &&

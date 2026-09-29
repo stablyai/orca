@@ -99,11 +99,11 @@
         "setupKindGit": "Git repo"
       },
       "PullRequestPage": {
-        "3450247584": "Comment",
         "19f19560d5": "destructive",
         "1ff5d979df": "No one assigned",
         "2b4fdb880c": "Unmark viewed",
         "2e528e1c2d": "Viewed",
+        "3450247584": "Comment",
         "42c36d9166": "{{value0}} {{value1}} reaction{{value2}}",
         "4b960e5978": "Loading code context…",
         "50b8fb290f": "Mark viewed",
@@ -245,9 +245,9 @@
           "f0202f3a89": "Daily"
         },
         "AutomationsPage": {
-          "2695883141": "delete",
           "0329f9bef1": "Close · Esc",
           "0ae52dd760": "hermes",
+          "2695883141": "delete",
           "3e42a5cc1b": "SSH connection failed.",
           "53f06f0ad5": "Retry source",
           "587a4b205c": "Next",
@@ -297,13 +297,6 @@
           "unknownManager": "This external automation is no longer listed for any host in view."
         }
       },
-      "browser-pane": {
-        "markup": {
-          "errorAttach": "Could not attach the markup screenshot.",
-          "errorCapture": "Could not capture the page to draw on.",
-          "errorUnavailable": "Screenshot markup is not available on this page."
-        }
-      },
       "browser": {
         "pane": {
           "BrowserPane": {
@@ -338,6 +331,13 @@
               }
             }
           }
+        }
+      },
+      "browser-pane": {
+        "markup": {
+          "errorAttach": "Could not attach the markup screenshot.",
+          "errorCapture": "Could not capture the page to draw on.",
+          "errorUnavailable": "Screenshot markup is not available on this page."
         }
       },
       "contextual": {
@@ -595,9 +595,6 @@
           }
         }
       },
-      "linear-issue-attribute-filter-dropdowns": {
-        "optionsFromTeam": "Options from {{team}}"
-      },
       "linear": {
         "api": {
           "key": {
@@ -615,6 +612,9 @@
             }
           }
         }
+      },
+      "linear-issue-attribute-filter-dropdowns": {
+        "optionsFromTeam": "Options from {{team}}"
       },
       "mobile": {
         "MobileHero": {
@@ -878,9 +878,9 @@
               },
               "empty": {
                 "state": {
-                  "3322603418": "Pull request status unavailable",
                   "13e1c7d5ed": "No {{value0}} found",
                   "2bdd7aaf2d": "GitHub status could not be refreshed. Existing cached data was preserved.",
+                  "3322603418": "Pull request status unavailable",
                   "3d4af82ff4": "Refreshing GitHub status for this branch",
                   "41252bc53f": "Branch not published",
                   "5b0cfae9a5": "Create a {{value0}} to start checks and review.",
@@ -2005,6 +2005,15 @@
               }
             }
           }
+        },
+        "worktree": {
+          "card": {
+            "compact": {
+              "agents": {
+                "a128d7006b": "{{value0}} {{value1}} child {{value2}}"
+              }
+            }
+          }
         }
       },
       "skills": {
@@ -2691,10 +2700,13 @@
       },
       "status": {
         "responding": "Agent is responding",
-        "thinking": "Thinking",
         "toggleDetails": "Toggle turn details",
         "workedFor": "Worked for {{value0}}",
         "workingFor": "Working for {{value0}}"
+      },
+      "subagents": {
+        "unnamed": "Subagent",
+        "writtenBy": "Written by subagent {{value0}}"
       },
       "tool": {
         "countN": "{{value0}} tool calls",

@@ -496,6 +496,7 @@
           "mimo_code_label": "MiMo Code",
           "muse_label": "Muse",
           "opencode2_label": "OpenCode 2",
+          "codebuddy_label": "CodeBuddy",
           "zcode_label": "ZCode"
         },
         "skill": {
@@ -3033,6 +3034,7 @@
           },
           "TerminalContextMenu": {
             "b4cdd9314e": "화면 지우기",
+            "resetTerminal": "터미널 초기화",
             "8c17d6786d": "창 닫기",
             "copyTerminalId": "터미널 ID 복사",
             "2cf85a6a55": "창 ID 복사",
@@ -3674,7 +3676,8 @@
             "floatingTerminalNewActivity": "{{label}}, 새 활동",
             "codexSignInSuccess": "Codex에 로그인했습니다",
             "codexSignInError": "Codex 로그인에 실패했습니다. 다시 시도해 주세요.",
-            "cursorUsageMenu": "Cursor 사용량"
+            "cursorUsageMenu": "Cursor 사용량",
+            "hiddenUsageProviders": "그 외: {{value0}}"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "계정 연결",
@@ -17555,6 +17558,7 @@
           "subtitle": "스크립트를 읽을 수 없습니다. 계속 작업하려면 terminal로 다시 전환하세요.",
           "retryingSubtitle": "스크립트를 읽을 수 없습니다. Orca가 계속 다시 불러오기를 시도합니다."
         },
+        "reconnecting": "이 채팅에 다시 연결하는 중…",
         "pairHost": "호스트를 페어링하여 에이전트 채팅 기록을 확인하세요.",
         "notAgent": {
           "title": "여기에는 대화가 없습니다.",
@@ -17702,7 +17706,9 @@
         "startedN": "{{value0}} 하위 에이전트가 시작되었습니다.",
         "ranOne": "하위 에이전트 1개 실행",
         "ranN": "{{value0}} 하위 에이전트를 실행했습니다.",
-        "tokens": "{{value0}} 토큰"
+        "tokens": "{{value0}} 토큰",
+        "unnamed": "하위 에이전트",
+        "writtenBy": "하위 에이전트 {{value0}}의 출력"
       },
       "conversationCommand": {
         "pendingWork": "이 명령을 사용하기 전에 보류 중인 작업과 메시지가 완료될 때까지 기다리십시오.",

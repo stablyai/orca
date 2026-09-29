@@ -8,7 +8,11 @@ import { isClaudeAuthSwitchInProgress } from '../claude-accounts/live-pty-gate'
 import { openClaudeStreamJsonConnection } from './claude-stream-json-connection'
 import { buildClaudePermissionCallbacks } from './claude-structured-inbound-control'
 import { resolveClaudeReplayTurn } from './claude-structured-dispatch'
-import { readClaudeFrameString, readClaudeInit } from './claude-structured-init-proof'
+import {
+  readClaudeCapabilities,
+  readClaudeFrameString,
+  readClaudeInit
+} from './claude-structured-init-proof'
 import { claudeConfigDirEnvPatch } from './claude-config-dir-pin'
 import { CLAUDE_SPAWN_TOKEN_ENV, claudeProcessIdentity } from './claude-structured-owner-identity'
 import { ClaudePromptRegistry } from './claude-structured-prompt-replies'
@@ -100,6 +104,9 @@ export async function acquireClaudeSession({
       if (liveSession && init.model) {
         liveSession.reportedOptions.model = init.model
         liveSession.reportedModelMutation = liveSession.optionMutationSequence
+      }
+      if (liveSession) {
+        liveSession.capabilities = readClaudeCapabilities(liveSession.capabilities, init.message)
       }
     }
     observedLeafUuid = readClaudeTranscriptEntryUuid(message) ?? observedLeafUuid

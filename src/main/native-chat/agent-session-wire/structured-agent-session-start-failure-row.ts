@@ -1,5 +1,6 @@
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import { structuredAgentSessionStartFailureRowIdentity } from '../../../shared/structured-agent-session-start-failure-row-key'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionStartFailureWords } from './structured-agent-session-failure-text'
@@ -21,7 +22,7 @@ export function structuredAgentSessionStartFailureRow(
 ): JournalLifecycleMutationInput {
   return {
     kind: 'item',
-    identity: startFailureRowIdentity(startKey),
+    identity: structuredAgentSessionStartFailureRowIdentity(startKey),
     // The row repeats the sentence the start's rejected messages carry.
     body: { kind: 'status', text: words.reason, tone: 'error', failure: words.rejection }
   }
@@ -33,12 +34,8 @@ export function hasStructuredAgentSessionStartFailureRow(
   items: readonly { itemId: string }[],
   startKey: string
 ): boolean {
-  const itemId = agentJournalItemKey(startFailureRowIdentity(startKey))
+  const itemId = agentJournalItemKey(structuredAgentSessionStartFailureRowIdentity(startKey))
   return items.some((item) => item.itemId === itemId)
-}
-
-function startFailureRowIdentity(startKey: string) {
-  return { provider: 'orca' as const, clientMessageId: `start-failure:${startKey}` }
 }
 
 /**

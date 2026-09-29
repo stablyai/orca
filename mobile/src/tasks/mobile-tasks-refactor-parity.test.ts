@@ -118,7 +118,8 @@ const SCREEN_RPC_STATEMENTS = 'f51c2564dcde169a55d7687624ade19be76ab781b053594e8
 // Saved Linear selections now accept unknown persisted values; reconciliation tests cover them.
 const MAIN_REBASED_DECLARATIONS = '55ebbb326f1dcf8143a5894fc5403801e9931f28be4b3384a540d44bb18de50e'
 const SCREEN_RPC_SEMANTICS = 'c2142a20c0d10aaca03bcc8e5e8e4eefffd44ddba3263bbfc34eee0d0d74d673'
-const PRE_REFACTOR_STYLES = '03787649f5e97089b07779886a920f68a0dfc27f7409c81ae9711530c78975e6'
+// StatusDot's spacing moved to the tasks title row as `gap: spacing.sm`; same 8 px.
+const PRE_REFACTOR_STYLES = 'eeebacf3666cd66602f774200da65da39a1e658af737afabfc6e42510b6cb7f0'
 const SCREEN_RPC_RENDER_TREE = '0692ae65fd0d01d9bb3b675c3008f8e17a4340b0637eb2e00a24ebca2183d5ed'
 
 describe('Mobile Tasks refactor parity', () => {

@@ -13,7 +13,8 @@ import type {
 import type { AgentSessionFailureFact } from './agent-session-failure'
 import type {
   AgentJournalMessageSendMode,
-  AgentJournalPosition
+  AgentJournalPosition,
+  AgentJournalProducerLinkage
 } from './agent-session-journal-types'
 import type { AgentType } from './agent-status-types'
 import type { NativeChatToolMetadata } from './native-chat-tool-identity'
@@ -190,7 +191,9 @@ export type NativeChatBlock =
   | NativeChatSubagentGroupBlock
   | NativeChatBackgroundTaskBlock
 
-export type NativeChatMessage = {
+/** A transcript row. Structured rows carry the journal row's producer linkage, so
+ *  "who said this" survives the projection; terminal-backed rows carry none. */
+export type NativeChatMessage = AgentJournalProducerLinkage & {
   /** Stable across re-reads/appends so the assembler and the renderer list can
    *  dedup and key by it. */
   id: string

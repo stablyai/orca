@@ -6,6 +6,7 @@ import { useNativeChatRetainedSession } from './use-native-chat-retained-session
 import { isNativeChatTranscriptUnsettled } from './native-chat-live-session-contract'
 import { selectNativeChatViewState } from './native-chat-view-state'
 import { NativeChatMessageList } from './NativeChatMessageList'
+import { useNativeChatLaunchPromptDeliveryNotice } from './use-native-chat-launch-prompt-delivery-notice'
 import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatComposer'
 import { useNativeChatFontScale } from './use-native-chat-font-scale'
 import { useNativeChatCanSend } from './use-native-chat-can-send'
@@ -246,13 +247,10 @@ export function NativeChatResolvedView({
       ? sessionWithLaunchPrompt
       : { ...sessionWithLaunchPrompt, messages }
   }, [sessionWithLaunchPrompt, commandMarkers])
-  const failedLaunchPromptMessageIds = useMemo(() => {
-    const id = paneLaunchPrompt?.failed ? launchPromptMessage?.id : null
-    if (!id || !sessionAfterCommandBoundaries.messages.some((message) => message.id === id)) {
-      return undefined
-    }
-    return new Set([id])
-  }, [paneLaunchPrompt?.failed, launchPromptMessage?.id, sessionAfterCommandBoundaries.messages])
+  const launchPromptDeliveryNotices = useNativeChatLaunchPromptDeliveryNotice(
+    paneLaunchPrompt?.failed ? launchPromptMessage?.id : null,
+    sessionAfterCommandBoundaries.messages
+  )
 
   // The streaming preview bubble (if any) sits after the transcript but before
   // the optimistic user echoes — same order mobile uses.
@@ -408,7 +406,7 @@ export function NativeChatResolvedView({
             showTurnStatus={false}
             onLinkClick={onLinkClick}
             allowFileUriLinks={fileLinkContext !== null}
-            failedDeliveryMessageIds={failedLaunchPromptMessageIds}
+            deliveryNotices={launchPromptDeliveryNotices}
           />
         )}
       </div>

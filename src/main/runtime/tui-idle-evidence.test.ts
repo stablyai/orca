@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import { detectAgentStatusFromTitle } from '../../shared/agent-title-status'
+import { getSyntheticAgentTerminalTitle } from '../../shared/synthetic-agent-title'
+import { isTuiAgent, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
+import { getTuiAgentRestSignal } from '../../shared/tui-agent-rest-signal'
+import { isKnownReadyPromptBody } from './terminal-wait-detection'
 import {
   evaluateTuiIdle,
+  hasFreshDoneFirstPartyStatus,
   isTuiIdleReadyVerdict,
   hasQuietMuseReadyPrompt,
   nameOnlyIdleNeedsCorroboration,
@@ -121,7 +127,7 @@ describe('evaluateTuiIdle ranking', () => {
     })
     expect(evaluateTuiIdle(input({ ...noMuse, agent: 'claude', record: streaming }))).toEqual({
       kind: 'pending',
-      quietForeground: false
+      quietForeground: 'closed'
     })
     const quiet = record({ lastAgentStatus: 'idle', lastOscTitle: 'claude' })
     expect(evaluateTuiIdle(input({ ...noMuse, agent: 'claude', record: quiet }))).toEqual({
@@ -145,18 +151,72 @@ describe('evaluateTuiIdle ranking', () => {
         firstPartyStatus: { state: 'blocked', updatedAt: Date.now() }
       })
     )
-    expect(verdict).toEqual({ kind: 'pending', quietForeground: false })
+    expect(verdict).toEqual({ kind: 'pending', quietForeground: 'closed' })
   })
 
-  it('leaves the quiet-foreground lane open only for an unidentified pane with no title status', () => {
+  it('leaves the quiet-foreground lane open for an unidentified pane with no title status', () => {
     expect(evaluateTuiIdle(input({ ...noMuse, agent: null }))).toEqual({
       kind: 'pending',
-      quietForeground: true
+      quietForeground: 'open'
     })
-    expect(evaluateTuiIdle(input({ ...noMuse, agent: 'claude' }))).toEqual({
-      kind: 'pending',
-      quietForeground: false
+  })
+
+  it('closes the quiet-foreground lane for an agent with a stronger rest signal still to come', () => {
+    for (const agent of ['claude', 'codex', 'grok', 'dsh'] as const) {
+      expect(evaluateTuiIdle(input({ ...noMuse, agent }))).toEqual({
+        kind: 'pending',
+        quietForeground: 'closed'
+      })
+    }
+  })
+
+  // Why: a launched agent whose title Orca cannot classify has no other lane; closing this
+  // one for every known agent left `worker start` failing at agent_readiness (STA-7440).
+  it('keeps the quiet-foreground lane for an agent with no other rest signal, after it paints', () => {
+    for (const agent of ['amp', 'goose', 'crush', 'kimi', 'qwen-code', 'rovo', 'aug'] as const) {
+      expect(evaluateTuiIdle(input({ ...noMuse, agent }))).toEqual({
+        kind: 'pending',
+        quietForeground: 'after-paint'
+      })
+    }
+  })
+
+  it('closes the lane once any title has classified, so a title that does arrive outranks it', () => {
+    const verdict = evaluateTuiIdle(
+      input({ ...noMuse, agent: 'amp', record: record({ lastAgentStatus: 'permission' }) })
+    )
+    expect(verdict).toEqual({ kind: 'pending', quietForeground: 'closed' })
+  })
+})
+
+// Why: `none` reopens the quiet-foreground lane, which is only safe where no stronger lane
+// could have settled the wait; the identity-keyed lanes must agree with the declared signal.
+describe('rest signal agrees with the lanes that can settle a wait', () => {
+  it.each(Object.keys(TUI_AGENT_CONFIG).filter(isTuiAgent))('%s', (agent) => {
+    const signal = getTuiAgentRestSignal(agent)
+    const hookDone = hasFreshDoneFirstPartyStatus(agent, { state: 'done', updatedAt: Date.now() })
+    expect(hookDone).toBe(signal === 'hook-done')
+    let screenRead = false
+    isKnownReadyPromptBody('', agent, () => {
+      screenRead = true
+      return null
     })
+    const museBody = hasQuietMuseReadyPrompt(record(), agent, () => true, QUIESCENCE_MS)
+    if (museBody) {
+      expect(signal).toBe('ready-body')
+    }
+    // Why a screen read also counts: Qoder's ready body is its composer, read by identity.
+    if (signal === 'ready-body') {
+      expect(museBody || screenRead).toBe(true)
+    }
+    if (signal !== 'none') {
+      return
+    }
+    expect({
+      screenRead,
+      syntheticTitle: getSyntheticAgentTerminalTitle(agent, 'done'),
+      processTitle: detectAgentStatusFromTitle(TUI_AGENT_CONFIG[agent].expectedProcess)
+    }).toEqual({ screenRead: false, syntheticTitle: null, processTitle: null })
   })
 })
 

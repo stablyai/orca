@@ -1,3 +1,5 @@
+import { codebuddyHookService } from '../codebuddy/hook-service'
+import { qoderHookService } from '../qoder/hook-service'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallStatus, AgentHookTarget } from '../../shared/agent-hook-types'
 import { ampHookService } from '../amp/hook-service'
@@ -62,6 +64,8 @@ const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
       })
   ],
   ['gemini', (sftp, remoteHome) => geminiHookService.installRemote(sftp, remoteHome)],
+  ['qoder', (sftp, remoteHome) => qoderHookService.installRemote(sftp, remoteHome)],
+  ['codebuddy', (sftp, remoteHome) => codebuddyHookService.installRemote(sftp, remoteHome)],
   ['antigravity', (sftp, remoteHome) => antigravityHookService.installRemote(sftp, remoteHome)],
   ['amp', (sftp, remoteHome) => ampHookService.installRemote(sftp, remoteHome)],
   ['cursor', (sftp, remoteHome) => cursorHookService.installRemote(sftp, remoteHome)],

@@ -36,8 +36,9 @@ export type StructuredAgentSessionOutboxEntry = {
   lastFailure?: StructuredAgentSessionAttemptFailure
 }
 
-/** A host's rejection fact as a message keeps it: never its provider detail, whose person-facing
- *  words are already in the reason and whose log text is not kept client-side. */
+/** A host's rejection fact as a message keeps it: never its provider detail, whose log text is not
+ *  kept client-side, or its refusal. The journal row keeps the whole fact, and words the notice
+ *  while it is loaded; this copy words it when it is not. */
 export type StructuredAgentSessionRejectionFact = Pick<
   AgentSessionFailureFact,
   'kind' | 'attachment'

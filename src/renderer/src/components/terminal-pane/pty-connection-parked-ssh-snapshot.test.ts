@@ -4,6 +4,7 @@ import {
   POST_REPLAY_REATTACH_RESET,
   RESET_GRAPHIC_RENDITION
 } from '../../../../shared/terminal-mode-reset-profiles'
+import { replayEpilogue } from './pty-connection-test-replay-epilogue'
 import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 import { flushAsyncTicks, createDeferred } from './pty-connection-test-async'
@@ -209,7 +210,7 @@ describe('connectPanePty', () => {
     // Why: the relay's replay buffer holds full history, so clear xterm before writing to avoid duplicating prior-session content.
     expect(writes).toContain(`${RESET_GRAPHIC_RENDITION}\x1b[2J\x1b[3J\x1b[H`)
     expect(writes).toContain('restored-ssh-output')
-    expect(writes).toContain(POST_REPLAY_REATTACH_RESET)
+    expect(writes).toContain(replayEpilogue(POST_REPLAY_REATTACH_RESET))
     expect(api.pty.signal).toHaveBeenCalledWith('leaf-session', 'SIGWINCH')
   })
 

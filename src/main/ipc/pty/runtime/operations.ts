@@ -193,6 +193,21 @@ export async function clearBufferFromRuntimeController(
   }
 }
 
+export async function resetInputModesFromRuntimeController(
+  deps: PtyRuntimeControllerDeps,
+  ptyId: string
+): Promise<void> {
+  // Why: a remote client's reset must also ground this host window's view of the pane.
+  if (deps.mainWindow && !deps.mainWindow.isDestroyed()) {
+    deps.mainWindow.webContents.send('pty:resetInputModes:request', { ptyId })
+  }
+  try {
+    await getProviderForPty(ptyId).resetInputModes(ptyId)
+  } catch {
+    /* best effort: an older daemon or relay rejects the request */
+  }
+}
+
 const settledLocalPtyProviderStartups = new WeakSet<Promise<void>>()
 const watchedLocalPtyProviderStartups = new WeakSet<Promise<void>>()
 

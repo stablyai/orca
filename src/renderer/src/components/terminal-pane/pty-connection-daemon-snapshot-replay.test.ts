@@ -6,6 +6,7 @@ import {
   POST_REPLAY_REATTACH_RESET,
   RESET_GRAPHIC_RENDITION
 } from '../../../../shared/terminal-mode-reset-profiles'
+import { replayEpilogue } from './pty-connection-test-replay-epilogue'
 import { Terminal } from '@xterm/headless'
 import { flushAsyncTicks, createDeferred, writeHeadlessTerminal } from './pty-connection-test-async'
 import { createRect } from './pty-connection-test-dom'
@@ -192,11 +193,11 @@ describe('connectPanePty', () => {
       expect.any(Function)
     )
     expect(pane.terminal.write).toHaveBeenCalledWith(
-      POST_REPLAY_REATTACH_RESET,
+      replayEpilogue(POST_REPLAY_REATTACH_RESET),
       expect.any(Function)
     )
     expect(pane.terminal.write).not.toHaveBeenCalledWith(
-      POST_REPLAY_MODE_RESET,
+      replayEpilogue(POST_REPLAY_MODE_RESET, 0),
       expect.any(Function)
     )
 
@@ -252,7 +253,7 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(20)
 
     expect(pane.terminal.write).toHaveBeenCalledWith(
-      POST_REPLAY_DEAD_TUI_RESET,
+      replayEpilogue(POST_REPLAY_DEAD_TUI_RESET),
       expect.any(Function)
     )
   })
@@ -461,7 +462,7 @@ describe('connectPanePty', () => {
     expect(writes.join('')).toContain('RESTORE-LIVE-STATE')
     expect(writes.join('')).not.toContain('ALT-FRAME-BODY')
     expect(writes).toContain(`${RESET_GRAPHIC_RENDITION}PREFIX-SCROLLBACKRESTORE-LIVE-STATE`)
-    expect(writes).toContain(POST_REPLAY_MODE_RESET)
+    expect(writes).toContain(replayEpilogue(POST_REPLAY_MODE_RESET, 0))
   })
 
   it('resizes the pane to the snapshot grid before replaying daemon snapshot bytes (bug #7279)', async () => {

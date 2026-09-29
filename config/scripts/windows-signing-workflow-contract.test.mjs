@@ -184,7 +184,7 @@ describe('Windows signing workflow contract', () => {
     )
   })
 
-  it('verifies Windows inner binary signatures fail-open before publishing', () => {
+  it('requires Windows inner binary signatures before publishing', () => {
     const parsedWorkflow = readWorkflow('.github/workflows/release-cut.yml')
     const steps = parsedWorkflow.jobs.build.steps
     const stepNames = steps.map((step) => step.name)
@@ -195,22 +195,18 @@ describe('Windows signing workflow contract', () => {
 
     expect(outerVerifyIndex).toBeGreaterThan(-1)
     expect(innerVerifyIndex).toBe(outerVerifyIndex + 1)
-    expect(evidenceIndex).toBe(innerVerifyIndex + 1)
+    expect(stepNames[innerVerifyIndex + 1]).toBe('Notify Slack when Windows signing fails')
+    expect(evidenceIndex).toBe(innerVerifyIndex + 2)
     expect(publishIndex).toBe(evidenceIndex + 1)
 
-    // Why fail-open: unsigned inner binaries must warn, not block, until the
-    // flow is proven on a real release (issue #7785). Flip this to 'true'
-    // together with the workflow env to make the gate required.
-    expect(steps[innerVerifyIndex].env.ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED).toBe('false')
+    expect(steps[innerVerifyIndex].env.ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED).toBe('true')
+    expect(steps[innerVerifyIndex].run).toContain("@('Orca.exe', 'resources\\bin\\orca.exe')")
+    expect(stepNames).not.toContain('Roll back to original installer after failed rebuild')
 
-    // Why: every step in the inner-signing chain must be unable to fail the
-    // release — a SignPath outage or timeout falls through to today's
-    // unsigned-inner flow instead of blocking the cut.
     const innerChainStepNames = [
       'Stage unsigned inner PE files for signing',
       'Upload unsigned inner binaries for SignPath',
       'Submit inner binaries signing request',
-      'Notify Slack that inner-binary signing is waiting for approval',
       'Download signed inner binaries from SignPath',
       'Restore signed inner binaries into unpacked app',
       'Restore signed uninstaller for the installer rebuild',
@@ -220,7 +216,7 @@ describe('Windows signing workflow contract', () => {
     for (const stepName of innerChainStepNames) {
       const step = steps[stepNames.indexOf(stepName)]
       expect(step, stepName).toBeDefined()
-      expect(step['continue-on-error'], stepName).toBe(true)
+      expect(step['continue-on-error'], stepName).toBeUndefined()
     }
   })
 })
@@ -294,8 +290,6 @@ describe('Windows NSIS uninstaller signing', () => {
     expect(submissions).toHaveLength(2)
   })
 
-  // A staged-but-unreturned uninstaller must not fail the inner chain, or a
-  // SignPath artifact-configuration gap would cost the inner-binary signatures.
   it('keeps the uninstaller out of the inner-binary copy-back list', () => {
     const stage = stepNamed(releaseSteps(), 'Stage unsigned inner PE files for signing')
     const restoreInner = stepNamed(
@@ -307,26 +301,72 @@ describe('Windows NSIS uninstaller signing', () => {
     expect(restoreInner.run).not.toContain('orca-uninstaller.exe')
   })
 
-  // This step's outcome gates the upload of every inner binary, so a filesystem
-  // error while staging the uninstaller must not escape — otherwise one
-  // uninstaller-specific failure costs every inner-binary signature, which is
-  // strictly worse than the behaviour before this chain existed.
-  it('cannot let an uninstaller staging failure cost the inner-binary signatures', () => {
+  it('blocks publication when the exported uninstaller is missing', () => {
     const stage = stepNamed(releaseSteps(), 'Stage unsigned inner PE files for signing')
     const uninstallerBlock = stage.run.slice(stage.run.indexOf('$exportedUninstaller'))
 
-    expect(stage.run).toMatch(/try \{[\s\S]*\$exportedUninstaller[\s\S]*\} catch \{/)
-    expect(uninstallerBlock).toContain('::warning::Could not stage the NSIS uninstaller')
-    expect(uninstallerBlock).not.toContain('throw')
-    // Explicit, so the catch does not silently depend on GitHub's
-    // $ErrorActionPreference='Stop' default for `shell: pwsh`.
-    expect(uninstallerBlock).toContain('New-Item -ItemType Directory -Force -Path (Split-Path')
-    expect(uninstallerBlock).toMatch(/New-Item[^\r\n]*-ErrorAction Stop/)
+    expect(uninstallerBlock).toContain('throw "No exported NSIS uninstaller')
+    expect(uninstallerBlock).not.toContain('catch')
     expect(uninstallerBlock).toMatch(/Copy-Item[^\r\n]*-ErrorAction Stop/)
-    // The upload it gates still keys off this step, so the catch is load-bearing.
-    expect(stepNamed(releaseSteps(), 'Upload unsigned inner binaries for SignPath').if).toContain(
-      "steps.stage-inner.outcome == 'success'"
+  })
+
+  it('restores exact artifact paths rather than suffix-matching another executable', () => {
+    for (const [name, path] of [
+      ['Restore signed inner binaries into unpacked app', '$relative'],
+      [
+        'Restore signed uninstaller for the installer rebuild',
+        "'uninstaller\\orca-uninstaller.exe'"
+      ]
+    ]) {
+      const restore = stepNamed(releaseSteps(), name)
+      expect(restore.run).toContain(`(Join-Path 'signed-inner' ${path})`)
+      expect(restore.run).toContain(`(Join-Path 'signed-inner/signing-stage' ${path})`)
+      expect(restore.run).toContain('if (@($candidates).Count -ne 1)')
+      expect(restore.run).not.toContain('Select-Object -First 1')
+      expect(restore.run).not.toContain('-like "*$relative"')
+      const rehearsal = readWorkflow('.github/workflows/windows-signing-rehearsal.yml')
+      const rehearseRestore = stepNamed(rehearsal.jobs.rehearse.steps, name)
+      expect(rehearseRestore.run).toBe(restore.run)
+      expect(restore.env.SIGNING_POLICY).toBe('release-signing')
+      expect(rehearseRestore.env.SIGNING_POLICY).toBe(
+        "${{ inputs.signing-policy-slug || 'test-signing' }}"
+      )
+      expect(restore.run).toContain("$requireValid = $env:SIGNING_POLICY -ne 'test-signing'")
+      expect(restore.run).toContain(
+        "if ($null -eq $signature.SignerCertificate -or ($requireValid -and ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notlike '*CN=SignPath Foundation*')))"
+      )
+    }
+  })
+
+  it('requires the CLI signature at its electron-builder extraResources destination', () => {
+    const require = createRequire(import.meta.url)
+    const config = require('../electron-builder.config.cjs')
+    const cli = config.win.extraResources.find((resource) => resource.to === 'bin/orca.exe')
+    expect(cli).toBeDefined()
+    const payloadPath = `resources/${cli.to}`.replaceAll('/', '\\')
+    const rehearsal = readWorkflow('.github/workflows/windows-signing-rehearsal.yml')
+    for (const gate of [
+      stepNamed(releaseSteps(), 'Verify Windows inner binary signatures'),
+      stepNamed(rehearsal.jobs.rehearse.steps, 'Verify signatures end to end')
+    ]) {
+      expect(gate.run).toContain(`foreach ($requiredTarget in @('Orca.exe', '${payloadPath}'))`)
+      expect(gate.run).toContain(
+        'if ($targets -notcontains $requiredTarget) { $targets += $requiredTarget }'
+      )
+      expect(gate.run).toContain('foreach ($relative in $targets)')
+    }
+  })
+
+  it('waits for approval even when the notification fails', () => {
+    const steps = releaseSteps()
+    const notify = stepNamed(
+      steps,
+      'Notify Slack that inner-binary signing is waiting for approval'
     )
+    const download = stepNamed(steps, 'Download signed inner binaries from SignPath')
+    expect(notify['continue-on-error']).toBe(true)
+    expect(download.if).not.toContain('notify-inner-signing')
+    expect(download.if).toContain("steps.submit-inner-signing.outcome == 'success'")
   })
 
   it('re-injects the signed uninstaller into the rebuilt installer', () => {
@@ -340,8 +380,7 @@ describe('Windows NSIS uninstaller signing', () => {
     expect(restore.run).toContain('orca-uninstaller.exe')
     expect(names.indexOf(restore.name)).toBeLessThan(names.indexOf(rebuild.name))
     expect(rebuild.env[SIGNED_ENV]).toContain('uninstaller-signing')
-    // The rebuild must not depend on the uninstaller leg: a missing signed
-    // uninstaller ships today's installer, it does not skip the rebuild.
+    // Default success() gating blocks the rebuild after a failed restore.
     expect(rebuild.if).not.toContain('restore-signed-uninstaller')
   })
 
@@ -355,6 +394,7 @@ describe('Windows NSIS uninstaller signing', () => {
       "${{ steps.restore-signed-uninstaller.outcome == 'success' }}"
     )
     expect(gate.run).toContain('.embedded-sha256')
+    expect(gate.run).toContain("$failures.Add('The NSIS uninstaller signing did not complete.')")
     expect(gate.run).toContain("$env:UNINSTALLER_SIGNING_COMPLETED -eq 'true'")
     expect(gate.run).toContain('not signed by SignPath Foundation: Uninstall Orca.exe')
     // The uninstaller must not join the 7z payload loop, which cannot see it.

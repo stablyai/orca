@@ -586,6 +586,7 @@
           "9e2a9bb87b": "Continue",
           "6f8056a565": "Command Code",
           "4238b771b5": "Codebuff",
+          "freebuff_label": "Freebuff",
           "cbaf0c2e0b": "Cline",
           "1f8a19e9ad": "Autohand Code",
           "5e8eff11b3": "Auggie",
@@ -611,10 +612,12 @@
           "060d152fb5": "Trae",
           "muse_label": "Muse",
           "dsh_label": "DeepSeek Harness",
+          "qoder_label": "Qoder CLI",
           "zcode_label": "ZCode",
           "d443a47995": "Prime Agent",
           "mimo_code_label": "MiMo Code",
-          "opencode2_label": "OpenCode 2"
+          "opencode2_label": "OpenCode 2",
+          "codebuddy_label": "CodeBuddy"
         },
         "skill": {
           "cli": {
@@ -3191,6 +3194,7 @@
           },
           "TerminalContextMenu": {
             "b4cdd9314e": "Clear Screen",
+            "resetTerminal": "Reset Terminal",
             "8c17d6786d": "Close Pane",
             "copyTerminalId": "Copy Terminal ID",
             "2cf85a6a55": "Copy Pane ID",
@@ -3825,6 +3829,7 @@
             "codexSignInSuccess": "Signed in to Codex",
             "codexSignInError": "Codex sign-in failed. Please try again.",
             "cursorUsageMenu": "Cursor Usage",
+            "hiddenUsageProviders": "Also: {{value0}}",
             "zcodeUsageMenu": "ZCode Usage"
           },
           "StatusBarUsageEmptyCta": {
@@ -17762,6 +17767,7 @@
           "subtitle": "The transcript could not be read. Toggle back to the terminal to keep working.",
           "retryingSubtitle": "The transcript could not be read. Orca keeps trying to load it."
         },
+        "reconnecting": "Reconnecting to this chat…",
         "pairHost": "Pair a host to view agent chat history.",
         "notAgent": {
           "title": "No conversation here",
@@ -17832,7 +17838,9 @@
         "startedN": "Kicked off {{value0}} subagents",
         "ranOne": "Ran 1 subagent",
         "ranN": "Ran {{value0}} subagents",
-        "tokens": "{{value0}} tokens"
+        "tokens": "{{value0}} tokens",
+        "unnamed": "Subagent",
+        "writtenBy": "Written by subagent {{value0}}"
       },
       "conversationCommand": {
         "pendingWork": "Wait for pending work and messages to finish before using this command.",

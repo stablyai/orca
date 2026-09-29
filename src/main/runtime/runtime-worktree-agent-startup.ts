@@ -1,3 +1,4 @@
+import { markQoderWorkspaceTrusted } from '../qoder/workspace-trust'
 import type { AgentLaunchPreferences } from '../../shared/agent-session-host-authority'
 import { tuiAgentToAgentKind } from '../../shared/agent-kind'
 import type { Repo } from '../../shared/repo-types'
@@ -195,7 +196,9 @@ export async function markLocalWorktreeTrusted(
     return
   }
   try {
-    if (preset === 'cursor') {
+    if (preset === 'qoder') {
+      markQoderWorkspaceTrusted(workspacePath)
+    } else if (preset === 'cursor') {
       markCursorWorkspaceTrusted(workspacePath)
     } else if (preset === 'copilot') {
       markCopilotFolderTrusted(workspacePath)

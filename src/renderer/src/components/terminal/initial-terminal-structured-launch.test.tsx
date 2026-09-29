@@ -6,18 +6,24 @@ import { useTerminalWatcherEffects } from '../use-terminal-watcher-effects'
 
 const mocks = vi.hoisted(() => {
   const storeTabsByWorktree: Record<string, unknown[]> = {}
+  const storeClosedRecords: Record<string, { worktreeId: string; closedAt: number }> = {}
   return {
     gate: vi.fn(),
     resume: vi.fn(),
     authority: 'none',
     launchStatus: vi.fn((_worktreeId: string, _provider: string): string => 'idle'),
     createTab: vi.fn(),
-    storeTabsByWorktree
+    storeTabsByWorktree,
+    storeClosedRecords
   }
 })
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(() => mocks.authority, {
-    getState: () => ({ activeWorktreeId: 'wt-1', tabsByWorktree: mocks.storeTabsByWorktree })
+    getState: () => ({
+      activeWorktreeId: 'wt-1',
+      tabsByWorktree: mocks.storeTabsByWorktree,
+      closedTerminalTabTombstonesByTabId: mocks.storeClosedRecords
+    })
   })
 }))
 vi.mock('@/lib/worktree-agent-activation-gate', () => ({
@@ -46,6 +52,7 @@ afterEach(async () => {
   vi.clearAllMocks()
   mocks.authority = 'none'
   mocks.storeTabsByWorktree = {}
+  mocks.storeClosedRecords = {}
 })
 
 function Watcher({ restored = true, hydrated = false, worktreeId = 'wt-1' } = {}): null {
@@ -179,9 +186,20 @@ describe('passive terminal seeding retries until a decision applies', () => {
     const finishGate = deferredGate()
     root = createRoot(document.createElement('div'))
     await act(async () => root?.render(<Watcher />))
+    // closeTab empties the row and records the close in the same store write.
     mocks.storeTabsByWorktree = { 'wt-1': [] }
+    mocks.storeClosedRecords = { 'closed-tab': { worktreeId: 'wt-1', closedAt: Date.now() } }
     await finishGate('empty')
     expect(mocks.createTab).not.toHaveBeenCalled()
+  })
+
+  it('seeds an empty row that has no close record, which legacy data leaves', async () => {
+    const finishGate = deferredGate()
+    root = createRoot(document.createElement('div'))
+    await act(async () => root?.render(<Watcher />))
+    mocks.storeTabsByWorktree = { 'wt-1': [] }
+    await finishGate('empty')
+    expect(mocks.createTab).toHaveBeenCalledTimes(1)
   })
 
   it('seeds after leaving and returning to a blocked workspace', async () => {

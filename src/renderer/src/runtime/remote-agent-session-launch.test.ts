@@ -45,7 +45,7 @@ describe('remote agent-session launch routing', () => {
     expect(legacy).not.toHaveBeenCalled()
   })
 
-  it.each(['kimi', 'muse'] as const)(
+  it.each(['kimi', 'muse', 'codebuddy'] as const)(
     'falls back to legacy when an older host lacks the %s resume capability',
     async (agent) => {
       const hostAuthority = vi.fn().mockResolvedValue('structured')
@@ -70,23 +70,29 @@ describe('remote agent-session launch routing', () => {
     }
   )
 
-  it('uses host authority when the host supports Muse resume', async () => {
-    const hostAuthority = vi.fn().mockResolvedValue('host')
-    const legacy = vi.fn()
-    mocks.supportsCapability.mockResolvedValue(true)
+  it.each(['muse', 'codebuddy'] as const)(
+    'uses host authority when the host supports %s resume',
+    async (agent) => {
+      const hostAuthority = vi.fn().mockResolvedValue('host')
+      const legacy = vi.fn()
+      mocks.supportsCapability.mockResolvedValue(true)
 
-    await expect(
-      runRemoteAgentSessionLaunch({
-        environmentId: 'env-1',
-        hostAuthority,
-        hostAuthorityCapability: agentResumeHostAuthorityCapability('muse'),
-        legacy
-      })
-    ).resolves.toBe('host')
-    expect(mocks.supportsCapability).toHaveBeenCalledWith('env-1', 'agent-session.muse-resume.v1')
-    expect(hostAuthority).toHaveBeenCalledOnce()
-    expect(legacy).not.toHaveBeenCalled()
-  })
+      await expect(
+        runRemoteAgentSessionLaunch({
+          environmentId: 'env-1',
+          hostAuthority,
+          hostAuthorityCapability: agentResumeHostAuthorityCapability(agent),
+          legacy
+        })
+      ).resolves.toBe('host')
+      expect(mocks.supportsCapability).toHaveBeenCalledWith(
+        'env-1',
+        `agent-session.${agent}-resume.v1`
+      )
+      expect(hostAuthority).toHaveBeenCalledOnce()
+      expect(legacy).not.toHaveBeenCalled()
+    }
+  )
 
   it('preserves the exact legacy path when the capability is absent', async () => {
     const hostAuthority = vi.fn().mockResolvedValue('structured')

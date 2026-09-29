@@ -22,6 +22,7 @@ import {
 } from './native-chat-disclosure-store'
 import { NativeChatTranscriptItems } from './NativeChatTranscriptItems'
 import type { NativeChatTranscriptRowContext } from './NativeChatTranscriptRow'
+import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import {
   buildNativeChatTranscriptSlots,
   nativeChatSlotIndexOf
@@ -41,6 +42,7 @@ import { nativeChatReaderScrollInputHandlers } from './native-chat-reader-scroll
 
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import { isStructuredAgentSessionThinking } from '../../../../shared/structured-agent-session-live-turn'
+import { nativeChatSubagentLabels } from '../../../../shared/native-chat-subagent-attribution'
 import type { NativeChatSettledTurns } from '../../../../shared/native-chat-turn-status'
 import {
   nativeChatTurnDiffs,
@@ -69,7 +71,7 @@ export function NativeChatMessageList({
   allowFileUriLinks = false,
   workingStartedAt,
   settledTurns,
-  failedDeliveryMessageIds,
+  deliveryNotices,
   showTurnStatus = true,
   showLiveTurnActivity = true,
   turnActivity,
@@ -90,7 +92,7 @@ export function NativeChatMessageList({
   settledTurns?: NativeChatSettledTurns
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
-  failedDeliveryMessageIds?: ReadonlySet<string>
+  deliveryNotices?: ReadonlyMap<string, NativeChatDeliveryNotice>
   /** Turn timing and disclosure are available on structured agent sessions. */
   showTurnStatus?: boolean
   /** Whether the active turn's foreground activity row should be visible. */
@@ -146,6 +148,7 @@ export function NativeChatMessageList({
     // Structured sessions show goal state in the banner above the composer.
     return journalItems ? omitNativeChatThreadGoalRows(projected) : projected
   }, [journalItems, projectMessages, session.messages])
+  const subagentLabels = useMemo(() => nativeChatSubagentLabels(messages), [messages])
   const taskListPredecessors = useMemo(() => nativeChatTaskListPredecessors(messages), [messages])
   const taskListState = useMemo(() => nativeChatTaskListState(messages), [messages])
   const showTypingIndicator = showTurnStatus
@@ -200,7 +203,8 @@ export function NativeChatMessageList({
         showTurnStatus,
         expandedTurnKeys: expandedTurnIds,
         isWorking,
-        lifecycleWorking
+        lifecycleWorking,
+        subagentLabels
       }),
     [
       currentTurnKey,
@@ -211,6 +215,7 @@ export function NativeChatMessageList({
       messages,
       receipts,
       showTurnStatus,
+      subagentLabels,
       turnDiffs,
       turnKeys,
       turnStatuses
@@ -328,7 +333,7 @@ export function NativeChatMessageList({
       revealedDiff,
       taskListPredecessors,
       expandedTurnIds,
-      failedDeliveryMessageIds,
+      deliveryNotices,
       allowFileUriLinks,
       runtimeContext,
       onLinkClick,
@@ -340,7 +345,7 @@ export function NativeChatMessageList({
       allowFileUriLinks,
       expandSignal,
       expandedTurnIds,
-      failedDeliveryMessageIds,
+      deliveryNotices,
       onLinkClick,
       revealDiff,
       revealedDiff,

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   agentSessionRefusalFailure,
-  parseAgentSessionWriteFailure
+  agentSessionThrownFailure,
+  parseAgentSessionWriteFailure,
+  readAgentSessionErrorRefusal
 } from './agent-session-write-failure'
 
 const HOST_TEXT = 'Expected runtime fence 1; the session is at 3.'
@@ -119,6 +121,47 @@ describe('agentSessionRefusalFailure', () => {
     expect(agentSessionRefusalFailure(refusal)).toEqual({
       kind: 'refused',
       code: 'agent_session_from_the_future'
+    })
+  })
+})
+
+describe('a refusal a failed request carried in its error', () => {
+  const refusal = {
+    code: 'agent_session_journal_unreadable',
+    details: { reason: 'journalCorrupt', stray: 'dropped' }
+  }
+  const payload = { code: 'runtime_error', message: 'agent_session_journal_unreadable' }
+
+  it('is read from a thrown RPC error and from a stream payload alike', () => {
+    const expected = {
+      code: 'agent_session_journal_unreadable',
+      details: { reason: 'journalCorrupt' }
+    }
+    expect(
+      readAgentSessionErrorRefusal({ response: { error: { ...payload, data: { refusal } } } })
+    ).toEqual(expected)
+    expect(readAgentSessionErrorRefusal(saved({ ...payload, data: { refusal } }))).toEqual(expected)
+  })
+
+  it.each([
+    ['an older host', payload],
+    ['a thrown error without a response', new Error('agent_session_journal_unreadable')],
+    ['a code this build does not know', { ...payload, data: { refusal: { code: 'from_later' } } }],
+    ['nothing', undefined]
+  ])('is absent from %s', (_label, error) => {
+    expect(readAgentSessionErrorRefusal(error)).toBeUndefined()
+  })
+
+  it("words the refusal when there is one, else what the request's error code proves", () => {
+    expect(agentSessionThrownFailure({ ...payload, data: { refusal } }, 'runtime_error')).toEqual({
+      kind: 'refused',
+      code: 'agent_session_journal_unreadable',
+      details: { reason: 'journalCorrupt' }
+    })
+    expect(agentSessionThrownFailure(payload, 'runtime_error')).toEqual({ kind: 'unconfirmed' })
+    expect(agentSessionThrownFailure(payload, 'method_not_found')).toEqual({
+      kind: 'refused',
+      code: 'structured_agent_session_unsupported'
     })
   })
 })

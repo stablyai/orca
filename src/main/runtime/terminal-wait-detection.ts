@@ -1,3 +1,4 @@
+import { isQoderComposerReady } from './qoder-terminal-readiness'
 import { memoizeTitleClassification } from '../../shared/terminal-title-classification-memo'
 import {
   detectAgentStatusFromTitle,
@@ -61,6 +62,9 @@ export function isKnownReadyPromptBody(
   agent: TuiAgent | null,
   readScreenLines: () => readonly string[] | null
 ): boolean {
+  if (agent === 'qoder') {
+    return isQoderComposerReady(readScreenLines())
+  }
   if (isKnownReadyPromptPreview(waitText)) {
     return true
   }

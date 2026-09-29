@@ -3,6 +3,7 @@ import type {
   AgentSessionJournalIdentity
 } from '../../shared/agent-session-journal-types'
 import { randomUUID } from 'node:crypto'
+import type { AgentJournalDispatchRejection } from '../../shared/agent-session-failure-words'
 import { cancelProcessAcquisition } from '../../shared/child-process/cancel-process-acquisition'
 import type {
   CodexAppServerConnection,
@@ -11,6 +12,7 @@ import type {
 import { CodexAcquisitionWindow } from './codex-structured-acquisition-window'
 import type { CodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
 import type { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import type { CodexJournalTranslator } from './codex-structured-journal-translation'
 import type { CodexTurnProcessSnapshot } from './codex-structured-turn-processes'
@@ -77,12 +79,16 @@ export type CodexStructuredSessionAdapterDeps = {
     sessionId: string,
     state: AgentSessionBackgroundTaskState | null
   ) => void
-  /** Identity for a send admitted earlier, once Codex echoes the user message. */
-  onDispatchSettledLate?: (input: {
-    sessionId: string
-    clientMessageId: string
-    providerIdentity: AgentJournalItemIdentity
-  }) => void
+  /** What the session's child work did, delivered after the journal handled the frame. */
+  onChildWorkEvidence?: (sessionId: string, evidence: AgentChildWorkEvidence[]) => void
+  /** A send admitted earlier: its identity once Codex echoes it, or its rejection when the turn
+   *  Codex answered it into ended without taking it. */
+  onDispatchSettledLate?: (
+    input: { sessionId: string; clientMessageId: string } & (
+      | { providerIdentity: AgentJournalItemIdentity }
+      | ({ state: 'rejected' } & AgentJournalDispatchRejection)
+    )
+  ) => void
   /** Codex reported its thread not running with no turn open: a send whose
    *  dispatch was never answered is owed nothing after this. */
   onPrimaryThreadStoppedRunning?: (input: { sessionId: string }) => void

@@ -665,6 +665,18 @@ describe("producer linkage — a subagent's output never speaks for the parent",
     expect(prose).toContain('delegating')
   })
 
+  it("keeps the child's output as the child's: the transcript message names its producer", () => {
+    // Rendering the child's rows is not enough; unless the message still says who
+    // wrote it, the transcript can only present it as the parent speaking.
+    const messages = projectStructuredItemsToNativeChat(items)
+    const byId = new Map(messages.map((message) => [message.id, message]))
+    expect(byId.get('child-prose')).toMatchObject({ agentId: 'task-1', producerKind: 'agent' })
+    expect(byId.get('child-grep')).toMatchObject({ agentId: 'task-1' })
+    // The session's own rows name no producer: absence is the claim that they are its own.
+    expect(byId.get('root-prose')).not.toHaveProperty('agentId')
+    expect(byId.get('root-task')).not.toHaveProperty('agentId')
+  })
+
   it("falls back to nothing rather than a child's line when the parent said nothing", () => {
     const summary = projectStructuredAgentSessionStatusSummary([
       userAsk,

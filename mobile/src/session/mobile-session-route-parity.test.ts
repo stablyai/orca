@@ -137,7 +137,8 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // Again when an init took one options object.
 // Again when the frame's layout became one `notifyTerminalFrame`.
 // Again when the init option took the message's name, `initialData`.
-const HEAD_CALLBACK_BODY_SHA256 = '4848e925f478f1656f26031c1bdebbb9f2da60811c7e91cfd732fc9da9764079'
+// Again when the document readers mapped refusal codes through one function and kept truncation.
+const HEAD_CALLBACK_BODY_SHA256 = 'ff818790399c8532ead38d047d072caf715070b21311538932da2dc811312b06'
 // Refreshed for the startup effect: both `worktree.activate` sends became `worktreeActivate`, and
 // the sleeping-agent check reads that operation's verdict instead of the reply envelope. Refreshed
 // again when the reporter took the reply and interpreted it itself, retiring the hand-built
@@ -203,8 +204,9 @@ const HEAD_TIMER_CLEANUP_SHA256 = 'c73f1d1c2cc89642f3d727d6f3b6b81860a9d6f342345
 // 530 -> 532, and the host-JSX hash: the tab bar and the accessory bar take a ref that gives the
 // page `keyboardShouldPersistTaps` ('handled', 'always'), which react-native-web ignores. Natively
 // the ref is undefined. 532 -> 531: the live input's reopen flag reads the host OS, not an 'android' literal.
+// 531 -> 529: the markdown status line moved to `markdownReaderStatusText`.
 const HEAD_RUNTIME_STRING_SHA256 =
-  'ab8cc43940d3a3e0fdb8df3bdc178b9b61e51c7ccd55a944933862a3c290e8e3'
+  '4ab2f316f60c234480615136c02273675543f24d653eb76a62b76f6bc986d985'
 // Moved by both of the dock's fields: their refs, and the live one's submit handler, are the seam's now;
 // their keyboard type and remount key read the host OS.
 // Moved again when the terminal frame kept its laid-out width unrounded, for every fit.
@@ -654,7 +656,7 @@ describe('mobile session route extraction parity', () => {
 
   it('preserves runtime strings, styles, and the expanded JSX tree', () => {
     const strings = readRuntimeStrings()
-    expect(strings).toHaveLength(531)
+    expect(strings).toHaveLength(529)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     expect(jsx.host).toHaveLength(125)

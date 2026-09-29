@@ -224,6 +224,8 @@ export type IPtyProvider = {
   getCwd(id: string): Promise<string>
   getInitialCwd(id: string): Promise<string>
   clearBuffer(id: string): Promise<void>
+  /** Grounds the host's own terminal models (Reset Terminal); renderers ground themselves. */
+  resetInputModes(id: string): Promise<void>
   /** Ordered handoff from startup source authority to the live/hidden view authority. */
   closeStartupQueryAuthority?: (id: string) => Promise<number> | number
   acknowledgeDataEvent(id: string, charCount: number): void
