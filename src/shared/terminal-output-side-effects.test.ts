@@ -20,20 +20,26 @@ type RecordedEvent =
   | ['2031-subscribe']
   | ['2031-unsubscribe']
 
-function createRecordingTracker(overrides: TerminalTitleTrackerCallbacks = {}): {
+function createRecordingTracker(
+  overrides: TerminalTitleTrackerCallbacks = {},
+  options: { initialTitle?: string } = {}
+): {
   events: RecordedEvent[]
   tracker: ReturnType<typeof createTerminalTitleTracker>
 } {
   const events: RecordedEvent[] = []
-  const tracker = createTerminalTitleTracker({
-    onTitle: (normalized) => events.push(['title', normalized]),
-    onBell: () => events.push(['bell']),
-    onCommandFinished: (exitCode) => events.push(['finished', exitCode]),
-    onPrLink: (link) => events.push(['pr', link.url, link.number]),
-    onMode2031Subscribe: () => events.push(['2031-subscribe']),
-    onMode2031Unsubscribe: () => events.push(['2031-unsubscribe']),
-    ...overrides
-  })
+  const tracker = createTerminalTitleTracker(
+    {
+      onTitle: (normalized) => events.push(['title', normalized]),
+      onBell: () => events.push(['bell']),
+      onCommandFinished: (exitCode) => events.push(['finished', exitCode]),
+      onPrLink: (link) => events.push(['pr', link.url, link.number]),
+      onMode2031Subscribe: () => events.push(['2031-subscribe']),
+      onMode2031Unsubscribe: () => events.push(['2031-unsubscribe']),
+      ...overrides
+    },
+    options
+  )
   return { events, tracker }
 }
 
@@ -76,6 +82,39 @@ describe('createTerminalTitleTracker command-finished facts', () => {
     tracker.handleChunk(`${ESC}]0;zsh${BEL}${ESC}]133;D;0${BEL}done${BEL}`)
 
     expect(events).toEqual([['title', 'zsh'], ['finished', 0], ['bell']])
+  })
+})
+
+describe('createTerminalTitleTracker restored-title provenance', () => {
+  it('keeps a seeded title restored-unconfirmed until a live frame confirms it', () => {
+    const { tracker } = createRecordingTracker({}, { initialTitle: '⠧ π - Jenkins-Details' })
+    expect(tracker.getLastNormalizedTitle()).toBe('⠋ π - Jenkins-Details')
+    expect(tracker.isLastTitleRestoredUnconfirmed()).toBe(true)
+
+    tracker.handleChunk('output without a title')
+    expect(tracker.isLastTitleRestoredUnconfirmed()).toBe(true)
+
+    tracker.handleChunk(`${ESC}]0;⠋ π - Jenkins-Details${BEL}`)
+    expect(tracker.isLastTitleRestoredUnconfirmed()).toBe(false)
+  })
+
+  it('treats seedInitialTitle as restored state and never overrides observed titles', () => {
+    const { tracker } = createRecordingTracker()
+    tracker.seedInitialTitle('⠧ π - Remove-Team')
+    expect(tracker.isLastTitleRestoredUnconfirmed()).toBe(true)
+
+    tracker.handleChunk(`${ESC}]0;π - Remove-Team${BEL}`)
+    expect(tracker.isLastTitleRestoredUnconfirmed()).toBe(false)
+
+    tracker.seedInitialTitle('⠧ π - orca')
+    expect(tracker.getLastNormalizedTitle()).toBe('π - Remove-Team')
+    expect(tracker.isLastTitleRestoredUnconfirmed()).toBe(false)
+  })
+
+  it('confirms provenance from synthetic hook frames like observed bytes', () => {
+    const { tracker } = createRecordingTracker({}, { initialTitle: '⠧ π - Jenkins-Details' })
+    tracker.applySyntheticTitleFrame(`${ESC}]0;⠋ π - Jenkins-Details${BEL}`)
+    expect(tracker.isLastTitleRestoredUnconfirmed()).toBe(false)
   })
 })
 

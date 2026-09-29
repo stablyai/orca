@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  clearWorkingIndicators,
   detectAgentStatusFromTitle,
   extractAllOscTitles,
   extractLastOscTitle,
@@ -312,5 +313,33 @@ describe('Cursor agent title identity', () => {
     undefined
   ])('rejects the non-Cursor title %j', (title) => {
     expect(isCursorAgentTitle(title)).toBe(false)
+  })
+})
+
+describe('restored checkpoint spinner titles', () => {
+  // Why: checkpoint.json's lastTitle is written on checkpoint ticks, so a cold restore can
+  // hand back a mid-turn spinner frame. normalizeTerminalTitle canonicalizes the frame but
+  // never strips it — that preserved working claim is what the restore fix must neutralize.
+  const CHECKPOINT_TITLES = ['⠴ π - orca', '⠧ π - Jenkins-Details', '⠧ π - Remove-Team']
+
+  it.each(CHECKPOINT_TITLES)('normalizes %j yet still classifies working', (title) => {
+    expect(detectAgentStatusFromTitle(normalizeTerminalTitle(title))).toBe('working')
+  })
+
+  it.each(CHECKPOINT_TITLES)('clears %j to a title that reads idle', (title) => {
+    expect(detectAgentStatusFromTitle(clearWorkingIndicators(normalizeTerminalTitle(title)))).toBe(
+      'idle'
+    )
+  })
+
+  it('keeps the OMP static marker protocol intact when clearing', () => {
+    expect(clearWorkingIndicators('π : my-project')).toBe('π > my-project')
+    expect(detectAgentStatusFromTitle(clearWorkingIndicators('π : my-project'))).toBe('idle')
+  })
+
+  it('keeps the permission marker signalling after clearing', () => {
+    expect(detectAgentStatusFromTitle(clearWorkingIndicators('⠋ π ! Jenkins-Details'))).toBe(
+      'permission'
+    )
   })
 })

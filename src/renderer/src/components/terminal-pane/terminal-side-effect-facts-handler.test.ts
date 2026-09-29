@@ -650,3 +650,104 @@ describe('registerTerminalSideEffectFactConsumer', () => {
     expect(events).toEqual([['title', 'restored', 'restored']])
   })
 })
+
+describe('restoredUnconfirmed title facts', () => {
+  // Why: the stamped titles are exactly what getTerminalSideEffectSnapshot serves after a
+  // cold restore of checkpoint.json's spinner-form lastTitle. Readers must not read working
+  // from restored history, while observed titles (park/unpark and worktree-switch replays)
+  // stay trusted.
+  it('keeps a restored spinner title from reading as working', () => {
+    const { callbacks, events } = createCallbackRecorder()
+    registerTerminalSideEffectFactConsumer({ ptyId: PTY_ID, callbacks })
+
+    _dispatchTerminalSideEffectBatchForTest(
+      batch(
+        [
+          {
+            kind: 'title',
+            normalizedTitle: '⠋ π - Jenkins-Details',
+            rawTitle: '⠋ π - Jenkins-Details',
+            restoredUnconfirmed: true
+          }
+        ],
+        { replay: true }
+      )
+    )
+
+    expect(events).toEqual([['title', 'π - Jenkins-Details', 'π - Jenkins-Details']])
+  })
+
+  it('treats an unconfirmed working claim in a live fact the same way', () => {
+    const { callbacks, events } = createCallbackRecorder()
+    registerTerminalSideEffectFactConsumer({ ptyId: PTY_ID, callbacks })
+
+    _dispatchTerminalSideEffectBatchForTest(
+      batch([
+        {
+          kind: 'title',
+          normalizedTitle: '⠋ π - Remove-Team',
+          rawTitle: '⠧ π - Remove-Team',
+          restoredUnconfirmed: true
+        }
+      ])
+    )
+
+    expect(events).toEqual([['title', 'π - Remove-Team', 'π - Remove-Team']])
+  })
+
+  it('passes observed replays through verbatim', () => {
+    const { callbacks, events } = createCallbackRecorder()
+    registerTerminalSideEffectFactConsumer({ ptyId: PTY_ID, callbacks })
+
+    _dispatchTerminalSideEffectBatchForTest(
+      batch(
+        [
+          {
+            kind: 'title',
+            normalizedTitle: '⠋ π - Jenkins-Details',
+            rawTitle: '⠋ π - Jenkins-Details'
+          }
+        ],
+        { replay: true }
+      )
+    )
+
+    expect(events).toEqual([['title', '⠋ π - Jenkins-Details', '⠋ π - Jenkins-Details']])
+  })
+
+  it('keeps restored permission markers signalling', () => {
+    const { callbacks, events } = createCallbackRecorder()
+    registerTerminalSideEffectFactConsumer({ ptyId: PTY_ID, callbacks })
+
+    _dispatchTerminalSideEffectBatchForTest(
+      batch([
+        {
+          kind: 'title',
+          normalizedTitle: '⠋ π ! Jenkins-Details',
+          rawTitle: '⠋ π ! Jenkins-Details',
+          restoredUnconfirmed: true
+        }
+      ])
+    )
+
+    expect(events).toEqual([['title', '⠋ π ! Jenkins-Details', '⠋ π ! Jenkins-Details']])
+  })
+
+  it('rewrites a restored OMP static working marker to the idle marker', () => {
+    const { callbacks, events } = createCallbackRecorder()
+    registerTerminalSideEffectFactConsumer({ ptyId: PTY_ID, callbacks })
+
+    _dispatchTerminalSideEffectBatchForTest(
+      batch([
+        {
+          kind: 'title',
+          normalizedTitle: 'π : my-project',
+          rawTitle: 'π : my-project',
+          restoredUnconfirmed: true
+        }
+      ])
+    )
+
+    expect(events).toEqual([['title', 'π > my-project', 'π > my-project']])
+  })
+})

@@ -14,7 +14,16 @@ import type { TerminalGitHubPRLink } from './terminal-github-pr-link-detector'
  *  merely-paused agent (>3s silent mid-task) is not a completion. */
 export type TerminalSideEffectFact =
   | { kind: 'agent-status'; payload: ParsedAgentStatusPayload }
-  | { kind: 'title'; normalizedTitle: string; rawTitle: string; staleWorkingTitleClear?: boolean }
+  | {
+      kind: 'title'
+      normalizedTitle: string
+      rawTitle: string
+      staleWorkingTitleClear?: boolean
+      /** Mirrors the hydration `restoredUnconfirmed` stamp: the title state came
+       *  from restored history this process never observed live, so readers must
+       *  treat its working claim as not-working until a live frame confirms it. */
+      restoredUnconfirmed?: boolean
+    }
   | { kind: 'bell' }
   | { kind: 'agent-working' }
   | { kind: 'agent-idle'; title: string; staleWorkingTitleClear?: boolean }

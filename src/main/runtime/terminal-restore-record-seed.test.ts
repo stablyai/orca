@@ -219,4 +219,36 @@ describe('seedTerminalRestoreTail', () => {
     expect(pty.preview).toBe('orphan restored')
     expect(pty.lastOutputAt).toBeNull()
   })
+
+  it('stamps the side-effect snapshot unconfirmed for a restored spinner title', () => {
+    const runtime = makeRuntimeWithLeaf()
+
+    runtime.seedTerminalRestoreTail(PTY_ID, { lastTitle: '⠧ π - Jenkins-Details' })
+
+    // Why: the checkpoint tick captured a mid-turn frame — the replay records what was
+    // restored, stamped unconfirmed so readers keep its working claim quiet.
+    expect(runtime.getTerminalSideEffectSnapshot(PTY_ID)?.facts).toEqual([
+      {
+        kind: 'title',
+        normalizedTitle: '⠋ π - Jenkins-Details',
+        rawTitle: '⠋ π - Jenkins-Details',
+        restoredUnconfirmed: true
+      }
+    ])
+  })
+
+  it('keeps observed titles trusted in the side-effect snapshot', () => {
+    const runtime = makeRuntimeWithLeaf()
+
+    runtime.onPtyData(PTY_ID, '\x1b]0;⠧ π - Jenkins-Details\x07', 42)
+
+    // Why: park/unpark and worktree-switch replays of observed titles stay trusted.
+    expect(runtime.getTerminalSideEffectSnapshot(PTY_ID)?.facts).toEqual([
+      {
+        kind: 'title',
+        normalizedTitle: '⠋ π - Jenkins-Details',
+        rawTitle: '⠋ π - Jenkins-Details'
+      }
+    ])
+  })
 })

@@ -15,6 +15,10 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import type { TerminalGitHubPRLink } from '../../../../shared/terminal-github-pr-link-detector'
+import {
+  clearWorkingIndicators,
+  detectAgentStatusFromTitle
+} from '../../../../shared/agent-detection'
 import type {
   TerminalSideEffectBatch,
   TerminalSideEffectFact
@@ -101,6 +105,31 @@ type ConsumerEntry = {
   lastLiveTitleSeq: number | null
 }
 
+/** Why: an unconfirmed title is restored history — a checkpoint tick can capture a
+ *  mid-turn spinner the receiver never observed — so readers must treat its working
+ *  claim as not-working until a live frame confirms it (the quiet-until-live rule
+ *  restored hook rows already get). Permission/idle claims and observed titles pass
+ *  through verbatim, and clearing both fields keeps the completion coordinator from
+ *  arming on the restored raw title and minting a false task-complete later. */
+function resolveTitleFactForReaders(fact: Extract<TerminalSideEffectFact, { kind: 'title' }>): {
+  normalizedTitle: string
+  rawTitle: string
+} {
+  if (fact.restoredUnconfirmed !== true) {
+    return fact
+  }
+  const assertsWorking =
+    detectAgentStatusFromTitle(fact.normalizedTitle) === 'working' ||
+    detectAgentStatusFromTitle(fact.rawTitle) === 'working'
+  if (!assertsWorking) {
+    return fact
+  }
+  return {
+    normalizedTitle: clearWorkingIndicators(fact.normalizedTitle),
+    rawTitle: clearWorkingIndicators(fact.rawTitle)
+  }
+}
+
 const consumersByPtyId = new Map<string, ConsumerEntry>()
 let channelUnsubscribe: (() => void) | null = null
 
@@ -109,14 +138,16 @@ function applyLiveFact(entry: ConsumerEntry, fact: TerminalSideEffectFact, seq: 
     case 'agent-status':
       entry.callbacks.onAgentStatus?.(fact.payload)
       return
-    case 'title':
+    case 'title': {
       entry.lastLiveTitleSeq = seq
+      const { normalizedTitle, rawTitle } = resolveTitleFactForReaders(fact)
       entry.callbacks.onTitleChange?.(
-        fact.normalizedTitle,
-        fact.rawTitle,
+        normalizedTitle,
+        rawTitle,
         fact.staleWorkingTitleClear ? { staleWorkingTitleClear: true } : undefined
       )
       return
+    }
     case 'bell':
       entry.callbacks.onBell?.()
       return
@@ -162,7 +193,8 @@ function applyBatchToConsumer(entry: ConsumerEntry, batch: TerminalSideEffectBat
     }
     for (const fact of batch.facts) {
       if (fact.kind === 'title') {
-        entry.callbacks.onTitleChange?.(fact.normalizedTitle, fact.rawTitle)
+        const { normalizedTitle, rawTitle } = resolveTitleFactForReaders(fact)
+        entry.callbacks.onTitleChange?.(normalizedTitle, rawTitle)
       }
     }
     return

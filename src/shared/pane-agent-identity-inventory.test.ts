@@ -320,7 +320,8 @@ const INVENTORY: readonly InventoryGroup[] = [
         'src/renderer/src/components/terminal-pane/pty-connection/command-inferred-pane-agent.ts',
         3
       ],
-      ['src/renderer/src/components/terminal-pane/pty-connection/interrupt-input-intent.ts', 3]
+      ['src/renderer/src/components/terminal-pane/pty-connection/interrupt-input-intent.ts', 3],
+      ['src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler.ts', 3]
     ]
   },
   {

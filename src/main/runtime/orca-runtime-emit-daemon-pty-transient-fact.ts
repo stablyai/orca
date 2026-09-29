@@ -147,6 +147,12 @@ export class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithSc
     if (normalizedTitle === null && !rawTitle) {
       return null
     }
+    // Why: a seeded or record-fallback title is restored state (a checkpoint tick can capture
+    // a mid-turn spinner), so the replay is stamped unconfirmed and readers keep its working
+    // claim quiet until a live frame re-asserts it; observed tracker titles — park/unpark and
+    // worktree-switch replays — stay trusted.
+    const restoredUnconfirmed =
+      normalizedTitle === null || (tracker?.isLastTitleRestoredUnconfirmed() ?? true)
     return {
       ptyId,
       seq: this.ptyOutputSequenceById.get(ptyId) ?? 0,
@@ -155,7 +161,8 @@ export class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithSc
         {
           kind: 'title',
           normalizedTitle: normalizedTitle ?? normalizeTerminalTitle(rawTitle!),
-          rawTitle: rawTitle ?? normalizedTitle!
+          rawTitle: rawTitle ?? normalizedTitle!,
+          ...(restoredUnconfirmed ? { restoredUnconfirmed: true } : {})
         }
       ],
       ...this.resolveTerminalSideEffectAttribution(ptyId)

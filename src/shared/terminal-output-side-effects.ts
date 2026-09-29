@@ -96,6 +96,10 @@ export type TerminalTitleTracker = {
   restoreLastAgentExit: (confirmedStatus?: AgentStatus) => AgentStatus | null
   /** Last title surfaced through onTitle, after normalization. */
   getLastNormalizedTitle: () => string | null
+  /** Why: a seeded title is restored history this process never observed on the
+   *  wire (the `restoredUnconfirmed` mirror) — it must not assert working until
+   *  a live frame confirms it. */
+  isLastTitleRestoredUnconfirmed: () => boolean
   /**
    * While suppressed, handleChunk skips the transient-fact scanners (bell/133/pr-link/2031)
    * because a thinning transport owns scan authority and the delivered bytes may be gapped.
@@ -135,6 +139,8 @@ export function createTerminalTitleTracker(
   // Why: seed both so a mid-session tracker behaves as if it had observed the pane's last live title (renderer parity).
   let lastEmittedTitle: string | null =
     options.initialTitle !== undefined ? normalizeTerminalTitle(options.initialTitle) : null
+  // Why: seeds carry persisted state (possibly a mid-turn checkpoint frame), never live evidence.
+  let lastTitleRestoredUnconfirmed = options.initialTitle !== undefined
   let staleTitleTimer: ReturnType<typeof setTimeout> | null = null
   // Why: flags the stale-timer clear so its idle callback carries timer provenance, not a genuine task-complete.
   let applyingStaleWorkingTitleClear = false
@@ -173,10 +179,12 @@ export function createTerminalTitleTracker(
       // Why: a hookless Cursor pane needs the literal once so it has an identity (#10258),
       // but never as activity — its null status would read as an exit in the status tracker.
       lastEmittedTitle = normalizeTerminalTitle(rawTitle)
+      lastTitleRestoredUnconfirmed = false
       onTitle?.(lastEmittedTitle, rawTitle)
       return
     }
     lastEmittedTitle = normalizeTerminalTitle(rawTitle)
+    lastTitleRestoredUnconfirmed = false
     onTitle?.(lastEmittedTitle, rawTitle)
     agentTracker?.handleTitle(rawTitle)
   }
@@ -274,6 +282,7 @@ export function createTerminalTitleTracker(
         return
       }
       lastEmittedTitle = normalizeTerminalTitle(rawTitle)
+      lastTitleRestoredUnconfirmed = true
       // Why: the cursor-agent literal seeds identity only — feeding its null status to the
       // tracker would make the next real frame look like an agent exit.
       if (!isCursorNativeAgentTitle(rawTitle)) {
@@ -284,6 +293,7 @@ export function createTerminalTitleTracker(
       return agentTracker?.restoreLastExit(confirmedStatus) ?? null
     },
     getLastNormalizedTitle: () => lastEmittedTitle,
+    isLastTitleRestoredUnconfirmed: () => lastTitleRestoredUnconfirmed,
     setTransientFactScanningSuppressed(suppressed: boolean): void {
       if (suppressed === transientFactScanningSuppressed) {
         return
