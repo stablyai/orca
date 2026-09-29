@@ -48,8 +48,6 @@ export function createAppUpdateChecker(deps: AppUpdateCheckerDeps) {
   let nextDueAt = 0
   let timer: TimerHandle | null = null
   let activeStarts = 0
-  // Bumped by every stop, so a check that outlives its start writes nothing.
-  let stopCount = 0
   let snapshot = buildSnapshot()
   const listeners = new Set<() => void>()
 
@@ -119,7 +117,6 @@ export function createAppUpdateChecker(deps: AppUpdateCheckerDeps) {
 
   async function runCheck(source: AppUpdateSource, installed: string) {
     await ensureLoaded()
-    const stopsAtStart = stopCount
     const controller = new AbortController()
     // Why race: the bound holds even for a request that does not honour the signal.
     const timedOut = new Promise<never>((_, reject) => {
@@ -128,9 +125,6 @@ export function createAppUpdateChecker(deps: AppUpdateCheckerDeps) {
     const timeout = deps.setTimer(() => controller.abort(), APP_UPDATE_CHECK_TIMEOUT_MS)
     try {
       const result = await Promise.race([source.check(installed, controller.signal), timedOut])
-      if (stopCount !== stopsAtStart) {
-        return 'failed'
-      }
       const checkedAt = deps.now()
       const latest =
         result.kind === 'available' ? { version: result.version, url: result.url } : null
@@ -139,9 +133,7 @@ export function createAppUpdateChecker(deps: AppUpdateCheckerDeps) {
       await deps.saveCheck(checkedAt, latest).catch(() => {})
       return result.kind === 'available' ? 'available' : 'up-to-date'
     } catch {
-      if (stopCount === stopsAtStart) {
-        schedule(deps.now() + APP_UPDATE_RETRY_INTERVAL_MS)
-      }
+      schedule(deps.now() + APP_UPDATE_RETRY_INTERVAL_MS)
       return 'failed'
     } finally {
       deps.clearTimer(timeout)
@@ -181,7 +173,6 @@ export function createAppUpdateChecker(deps: AppUpdateCheckerDeps) {
       }
       active = false
       activeStarts -= 1
-      stopCount += 1
       unsubscribe()
       if (activeStarts === 0) {
         clearScheduled()

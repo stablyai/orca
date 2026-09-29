@@ -237,24 +237,41 @@ describe('app update checker', () => {
     expect(checks(h)).toBe(1)
   })
 
-  it('writes nothing for a check that finishes after stop()', async () => {
+  function deferredReply() {
     let answer: (result: AppUpdateCheckResult) => void = () => {}
-    const h = harness({
-      stored: { lastCheckedAt: T0 },
-      replies: [
-        new Promise<AppUpdateCheckResult>((resolve) => {
-          answer = resolve
-        })
-      ]
+    const reply = new Promise<AppUpdateCheckResult>((resolve) => {
+      answer = resolve
     })
+    return { reply, answer: (result: AppUpdateCheckResult) => answer(result) }
+  }
+
+  it('arms no timer for a check that finishes after stop()', async () => {
+    const pending = deferredReply()
+    const h = harness({ stored: { lastCheckedAt: T0 }, replies: [pending.reply] })
     const stop = h.checker.start()
     await vi.advanceTimersByTimeAsync(0)
     const outcome = h.checker.checkNow()
     await vi.advanceTimersByTimeAsync(0)
     stop()
-    answer({ kind: 'available', ...RELEASE_051 })
+    pending.answer({ kind: 'current' })
     await outcome
-    expect(h.saves).toEqual([])
-    expect(h.checker.getSnapshot()).toMatchObject({ lastCheckedAt: T0, available: null })
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('schedules the next check when a check in flight across stop and restart completes', async () => {
+    const pending = deferredReply()
+    const h = harness({ stored: { lastCheckedAt: T0 }, replies: [pending.reply] })
+    const stop = h.checker.start()
+    await vi.advanceTimersByTimeAsync(0)
+    const outcome = h.checker.checkNow()
+    await vi.advanceTimersByTimeAsync(0)
+    stop()
+    h.checker.start()
+    await vi.advanceTimersByTimeAsync(0)
+    pending.answer({ kind: 'current' })
+    await outcome
+    expect(vi.getTimerCount()).toBe(1)
+    await vi.advanceTimersByTimeAsync(24 * HOUR)
+    expect(checks(h)).toBe(2)
   })
 })
