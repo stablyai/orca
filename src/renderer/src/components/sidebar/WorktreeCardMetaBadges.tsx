@@ -149,7 +149,8 @@ export const WorktreeCardMetaBadges = React.forwardRef<
             { value0: getReviewLabel(review), value1: review.number }
           )}
         >
-          <ReviewIcon review={review} />
+          {/* Why: the decision dot wraps the svg, so MetaIconBadge's [&>svg] sizing can't reach it. */}
+          <ReviewIcon review={review} className="size-3.5" />
         </MetaIconBadge>
       )}
     </div>
