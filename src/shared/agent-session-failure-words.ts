@@ -196,7 +196,10 @@ const FAILURE_SENTENCES = {
   writeFailed: () => "Orca couldn't hand this message to the agent, so it was not sent.",
   cancelled: () => 'This message was withdrawn before the agent started it.',
   chatClosed: () => 'The chat closed before this message was sent.',
-  hostRestarted: () => 'Orca restarted before this message was sent.',
+  hostRestarted: ({ agentName }, _, surface) =>
+    surface === 'row'
+      ? `${agentName ?? 'The agent'}'s session didn't survive the restart. Send a message to continue.`
+      : 'Orca restarted before this message was sent.',
   notDelivered: ({ retryControl }) =>
     retryControl
       ? 'This message was not delivered.'

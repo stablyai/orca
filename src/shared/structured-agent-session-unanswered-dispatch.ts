@@ -1,5 +1,6 @@
 import type { AgentJournalSubmission } from './agent-session-journal-types'
 import { isQueuedAgentJournalSubmission } from './agent-session-queued-submission'
+import { structuredAgentSessionSubmissionSettlement } from './structured-agent-session-submission-settlement'
 
 /** One send the provider has neither opened a turn for nor refused; the rule is explained on
  *  `hasUnansweredStructuredAgentSessionDispatch`, which asks it of every send. */
@@ -13,11 +14,7 @@ export function isUnansweredStructuredAgentSessionDispatch(
   }
   return (
     (currentFence == null || submission.fence >= currentFence) &&
-    (submission.dispatchState === 'pending' ||
-      (submission.dispatchState === 'unknown' &&
-        submission.recovered !== true &&
-        // Older hosts publish the recovery reason but omit the optional marker.
-        submission.reason !== 'host_restarted_before_acknowledgement'))
+    structuredAgentSessionSubmissionSettlement(submission) === 'open'
   )
 }
 
@@ -30,9 +27,9 @@ export function isUnansweredStructuredAgentSessionDispatch(
  * working leaves the whole gap reading idle in the chat and in every session list, so the send
  * itself is the evidence.
  *
- * A live `unknown` still counts because an ambiguous adapter reply does not prove the provider
- * stopped. A recovered `unknown` does not — it outlived the host generation that sent it, so
- * there is nothing still running to report.
+ * A live `unknown` (only an older host writes one) still counts: an ambiguous adapter reply does
+ * not prove the provider stopped. A recovered `unknown` does not — the provider's turn end, a
+ * Stop, a start that threw or the end of the host generation left nothing owing it an answer.
  */
 export function hasUnansweredStructuredAgentSessionDispatch(
   submissions: readonly AgentJournalSubmission[],

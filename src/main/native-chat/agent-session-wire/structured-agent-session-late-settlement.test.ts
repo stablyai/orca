@@ -224,8 +224,7 @@ describe('settling a send the provider proves it received after the ack window',
     expect(await submissions()).toMatchObject([
       { clientMessageId: params.envelope.clientOperationId, dispatchState: 'accepted' }
     ])
-    // The point of the fix: the client stops rendering Retry, and Retry is what
-    // was delivering the message to the agent a second time.
+    // The late echo settles it; nothing sends the message a second time.
     expect(dispatch).toHaveBeenCalledTimes(1)
   })
 

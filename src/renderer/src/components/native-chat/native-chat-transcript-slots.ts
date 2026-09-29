@@ -21,6 +21,7 @@ import {
 } from '../../../../shared/native-chat-turn-status'
 import { nativeChatSelfAnchoredTurnRows } from '../../../../shared/native-chat-turn-grouping'
 import {
+  nativeChatRowReportsFailure,
   nativeChatTurnFold,
   type NativeChatTurnFoldRow
 } from '../../../../shared/native-chat-turn-fold'
@@ -113,6 +114,7 @@ export function buildNativeChatTranscriptSlots(
       outlivesTurn: message.blocks.some(
         (block) => isSubagentGroupBlock(block) || isBackgroundTaskBlock(block)
       ),
+      reportsFailure: nativeChatRowReportsFailure(message.blocks),
       ...(agentId === null ? {} : { agentId })
     }
   })

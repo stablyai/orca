@@ -433,7 +433,7 @@ describe('a request the agent or its start refused', () => {
     expect(h.outcomes()).toEqual([['t1', 'success']])
   })
 
-  it('never notifies a crash-stranded send that restart reconciliation finds undelivered', () => {
+  it('never notifies a crash-stranded send an older host settled as not delivered', () => {
     const h = afterSuccessfulTurn()
     const items = [userEntry('m1', 1), settledTurn, userEntry('m2', 3)]
     const accepted = sent('m1', { dispatchState: 'accepted' })

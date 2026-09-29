@@ -10,7 +10,7 @@
 // hides a different row on each surface is the same bug twice.
 
 import { isRootAgentJournalItem } from './agent-session-journal-producer'
-import type { NativeChatRole } from './native-chat-types'
+import type { NativeChatBlock, NativeChatRole } from './native-chat-types'
 
 /** What the fold needs to know about one transcript row. Deliberately not a
  *  `NativeChatMessage`: each surface derives "renders prose" through its own
@@ -25,8 +25,23 @@ export type NativeChatTurnFoldRow = {
    *  spawn roster or a background task. That row is the durable report of how
    *  the work ended — often the only one — so it never folds. */
   outlivesTurn: boolean
+  /** Whether the row reports a failure (`nativeChatRowReportsFailure`). It stays
+   *  out of the fold only when the turn ended in it: see `nativeChatTurnEndingFailureRows`. */
+  reportsFailure: boolean
   /** The subagent that produced the row. Absent ⇒ the session's own agent. */
   agentId?: string
+}
+
+/** A failure row — the agent stopped, the session did not survive a restart. When it is how the
+ *  turn ended it says what to do next; one the turn moved past was only on the way. A
+ *  provider retry is not a failure yet. */
+export function nativeChatRowReportsFailure(blocks: readonly NativeChatBlock[]): boolean {
+  return blocks.some(
+    (block) =>
+      block.type === 'text' &&
+      block.failure !== undefined &&
+      block.failure.kind !== 'providerRetrying'
+  )
 }
 
 export type NativeChatTurnFold = {
@@ -63,6 +78,26 @@ export function nativeChatTurnAnswerRows(
   return answers
 }
 
+/** The failure row each turn ended in: its last, with no answer after it. A failure the turn
+ *  moved past, by answering or by failing again, folds with the work. */
+function nativeChatTurnEndingFailureRows(
+  rows: readonly NativeChatTurnFoldRow[],
+  answers: ReadonlyMap<string, number>
+): ReadonlyMap<string, number> {
+  const endings = new Map<string, number>()
+  for (const [index, row] of rows.entries()) {
+    if (row.turnKey !== undefined && row.reportsFailure) {
+      endings.set(row.turnKey, index)
+    }
+  }
+  for (const [turnKey, index] of endings) {
+    if ((answers.get(turnKey) ?? -1) > index) {
+      endings.delete(turnKey)
+    }
+  }
+  return endings
+}
+
 /**
  * Fold every settled, unexpanded turn to its answer.
  *
@@ -82,6 +117,7 @@ export function nativeChatTurnFold({
   expandedTurnKeys: ReadonlySet<string>
 }): NativeChatTurnFold {
   const answers = nativeChatTurnAnswerRows(rows)
+  const endings = nativeChatTurnEndingFailureRows(rows, answers)
   const foldedRows = new Set<number>()
   const foldableTurnKeys = new Set<string>()
   for (const [index, row] of rows.entries()) {
@@ -99,7 +135,8 @@ export function nativeChatTurnFold({
     // A turn that produced no prose folds whole: its status row is the anchor,
     // so there is still something on screen to open. Keeping such a turn
     // unfolded instead would put every command it ran back in the transcript.
-    if (index === answers.get(turnKey)) {
+    // The failure a turn ended in stays in view: it says what to do next.
+    if (index === answers.get(turnKey) || index === endings.get(turnKey)) {
       continue
     }
     foldableTurnKeys.add(turnKey)

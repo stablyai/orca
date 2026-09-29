@@ -17446,7 +17446,7 @@
         "backgroundTasksRunning": "Des tâches en arrière-plan sont encore en cours.",
         "waitForBackgroundTasks": "Attendez la fin des tâches en arrière-plan.",
         "messagesUnsettled": "Un message que vous avez envoyé plus tôt n'a pas encore été confirmé.",
-        "settleEarlierMessage": "Attendez que votre message précédent soit transmis, ou renvoyez-le.",
+        "settleEarlierMessage": "Attendez que votre message précédent soit transmis.",
         "optionRejected": "L'agent n'a pas accepté ce réglage.",
         "goalsUnsupported": "Cet agent ne prend pas en charge les objectifs.",
         "agentRefused": "L'agent l'a refusé.",

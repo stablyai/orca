@@ -212,7 +212,8 @@ describe('codex journal translation', () => {
     expect(translator.handle(notification('turn/completed', { turn: { id: TURN_ID } }))).toEqual({
       accepted: true
     })
-    expect(deferred.state()).toMatchObject({ queuedOperations: 5, backpressured: true })
+    // The turn-over declaration after the end row is admitted across the watermark too.
+    expect(deferred.state()).toMatchObject({ queuedOperations: 6, backpressured: true })
 
     deferred.bind(deferredTarget(bodies, publishes))
     await expect(deferred.lifecycleBarrier()).resolves.toEqual({ ok: true })

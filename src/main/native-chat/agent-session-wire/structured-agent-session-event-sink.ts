@@ -5,6 +5,7 @@ import type {
   AgentJournalProducerLinkage
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionTurnActivity } from '../../../shared/agent-session-wire'
+import { DISPATCH_DOUBT_TURN_SETTLED } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
@@ -134,6 +135,9 @@ export type StructuredAgentSessionEventSink = {
   tryPublish?(options?: StructuredAgentSessionAppendOptions): StructuredAgentSessionSinkAdmission
   /** Couples durable-queue pressure to the exact provider stream producing it. */
   bindReadingControl?(control: StructuredAgentSessionReadingControl): () => void
+  /** The provider's own word that its turn is over: after the rows queued ahead of it land, no
+   *  send handed to it is still owed an answer. Each provider calls it at its turn-over signal. */
+  settleSendsAtTurnOver?(): void
 }
 
 export type StructuredAgentSessionEventTarget = {
@@ -304,7 +308,27 @@ export function createDeferredStructuredAgentSessionEventSink(
           run: (bound) => bound.publish(activity)
         })
       },
-      tryPublish: publish
+      tryPublish: publish,
+      settleSendsAtTurnOver: () => {
+        queue.submit(
+          {
+            bytes: 64,
+            // Bookkeeping: a failure is logged and the next exit (Stop, the child's end, the next
+            // open) settles the send; it must never fail the sink and take the provider down.
+            run: async (bound) => {
+              try {
+                await bound.journal.markPendingSubmissionsUnknown(
+                  bound.fence,
+                  DISPATCH_DOUBT_TURN_SETTLED
+                )
+              } catch (error) {
+                console.warn('[agent-session] settling sends at a turn end failed:', error)
+              }
+            }
+          },
+          { lifecycle: true }
+        )
+      }
     },
     bind: (next) => queue.bind(next),
     unbind: () => queue.unbind(),

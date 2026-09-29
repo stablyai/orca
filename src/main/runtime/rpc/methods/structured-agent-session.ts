@@ -9,13 +9,9 @@ import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-
 import { agentSessionFingerprintConflict } from '../../../../shared/agent-session-mutation-envelope'
 import type { z } from 'zod'
 import {
-  projectBackgroundTaskEvent,
-  projectBackgroundTaskHistory
-} from './structured-agent-session-background-task-capability'
-import {
-  projectTurnItemEvent,
-  projectTurnItemHistory
-} from './structured-agent-session-turn-item-capability'
+  projectStructuredAgentSessionEventForClient,
+  projectStructuredAgentSessionHistoryForClient
+} from './structured-agent-session-client-projection'
 import { defineMethod, defineStreamingMethod, type RpcContext } from '../core'
 import {
   ensureStructuredHostInstalled as ensureHostInstalled,
@@ -255,8 +251,8 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     name: 'agentSession.history',
     params: HistoryParams,
     handler: async (params, ctx) =>
-      projectTurnItemHistory(
-        projectBackgroundTaskHistory(await (await requireInstalledHost(ctx)).history(params), ctx),
+      projectStructuredAgentSessionHistoryForClient(
+        await (await requireInstalledHost(ctx)).history(params),
         ctx
       )
   }),
@@ -277,7 +273,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       dispose = await host.subscribe({
         id: subscriptionId,
         sessionId: params.sessionId,
-        emit: (event) => emit(projectTurnItemEvent(projectBackgroundTaskEvent(event, ctx), ctx)),
+        emit: (event) => emit(projectStructuredAgentSessionEventForClient(event, ctx)),
         ...(params.cursor ? { cursor: params.cursor } : {})
       })
       if (stream.isClosed()) {

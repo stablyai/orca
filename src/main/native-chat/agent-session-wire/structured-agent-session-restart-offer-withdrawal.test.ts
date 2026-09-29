@@ -38,7 +38,7 @@ const SUPERSEDED = 'agent_session_restart_work_superseded'
 const COLD_START = { timeout: 10_000 }
 
 async function offered(work: 'turn' | 'submission' = 'turn') {
-  const state = await interruptedRestart(work, false)
+  const state = await interruptedRestart(work)
   expect(await state.host.restartResume.list()).toHaveLength(1)
   return state
 }

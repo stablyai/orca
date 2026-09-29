@@ -194,6 +194,48 @@ describe('the idle sweep', () => {
     expect(rig.adapter.closeSession).not.toHaveBeenCalled()
   })
 
+  // The start that threw is no longer waiting on anything: the send settles in doubt, not owed.
+  it.each([
+    ['threw', () => rig.adapter.dispatch.mockRejectedValueOnce(new Error('turn/start timed out'))],
+    [
+      'lost its write outcome',
+      () =>
+        rig.adapter.dispatch.mockResolvedValueOnce({
+          state: 'unknown',
+          reason: 'provider_write_outcome_unknown: timeout'
+        })
+    ]
+  ])(
+    'stops an agent once idle after its send start %s, the send drawn as sent',
+    async (_, fail) => {
+      fail()
+      await foundRestTestChat(rig)
+      await vi.waitFor(async () =>
+        expect((await rig.host.journalSnapshot(SESSION)).submissions).toEqual([
+          expect.objectContaining({ dispatchState: 'unknown', recovered: true })
+        ])
+      )
+      rig.clock.now += IDLE_MS + 1
+
+      await vi.waitFor(() => expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION))
+      // Settled without a row: nothing explains the idle agent.
+      const settled = await rig.host.journalSnapshot(SESSION)
+      expect(settled.items.some((item) => item.body.kind === 'status')).toBe(false)
+    }
+  )
+
+  it('never stops an agent a handed-over send still waits on to open its turn', async () => {
+    rig.adapter.dispatch.mockResolvedValueOnce({ state: 'admitted' })
+    await foundRestTestChat(rig)
+    rig.clock.now += 2 * IDLE_MS
+
+    await sweepTicks()
+    expect(rig.adapter.closeSession).not.toHaveBeenCalled()
+    expect((await rig.host.journalSnapshot(SESSION)).submissions).toEqual([
+      expect.objectContaining({ dispatchState: 'pending' })
+    ])
+  })
+
   it('stops an agent whose chat is still open on screen (P2-12)', async () => {
     await foundRestTestChat(rig)
     const reader = collectSubscriber()

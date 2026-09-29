@@ -11,6 +11,7 @@ import type {
 } from './agent-session-journal-types'
 import { readAgentJournalTurn } from './agent-session-turn-record'
 import type { NativeChatSettledTurn, NativeChatSettledTurns } from './native-chat-turn-status'
+import { structuredAgentSessionSubmissionSettlement } from './structured-agent-session-submission-settlement'
 
 export type StructuredAgentTurnTiming = {
   state: AgentJournalTurnLifecycleState
@@ -112,7 +113,11 @@ function readStructuredAgentJournalTurns(
   // echoes the send, so for that gap the turn names a key no alias resolves yet.
   const inFlight = new Set(
     submissions
-      .filter((submission) => submission.dispatchState === 'pending' && !submission.providerItemId)
+      .filter(
+        (submission) =>
+          structuredAgentSessionSubmissionSettlement(submission) === 'open' &&
+          !submission.providerItemId
+      )
       .map((submission) => agentJournalSubmissionKey(submission.clientMessageId))
   )
   const byUserItem = new Map<string, StructuredAgentTurnTiming | null>()
@@ -272,7 +277,7 @@ export function structuredAgentTurnLocalStartedAt(
 /** What a chat surface hands to the shared turn-status selector: every turn the
  *  host recorded, with its duration or null. A null still outranks the local
  *  clock, so a turn whose end the host never observed shows no duration on the
- *  surface that watched it, exactly as it will after a reload. A rejected send
+ *  surface that watched it, exactly as it will after a reload. A refused send
  *  never reached the provider, so it opened no turn and its message shows none. */
 export function selectStructuredAgentSettledTurns(
   items: readonly AgentJournalRenderItem[],
@@ -297,7 +302,10 @@ function settledTurnsOf(
   }
   for (const submission of submissions) {
     const userItemId = agentJournalSubmissionKey(submission.clientMessageId)
-    if (submission.dispatchState === 'rejected' && !settled.has(userItemId)) {
+    if (
+      structuredAgentSessionSubmissionSettlement(submission) === 'refused' &&
+      !settled.has(userItemId)
+    ) {
       settled.set(userItemId, null)
     }
   }

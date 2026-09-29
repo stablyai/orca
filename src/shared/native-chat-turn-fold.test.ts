@@ -11,6 +11,7 @@ function row(overrides: Partial<NativeChatTurnFoldRow> = {}): NativeChatTurnFold
     role: 'assistant',
     rendersProse: true,
     outlivesTurn: false,
+    reportsFailure: false,
     ...overrides
   }
 }
@@ -96,6 +97,45 @@ describe('nativeChatTurnFold', () => {
     })
     expect(foldedRows.has(2)).toBe(false)
     expect(foldedRows.has(1)).toBe(true)
+  })
+
+  describe('a failure row', () => {
+    const failure = (overrides: Partial<NativeChatTurnFoldRow> = {}) =>
+      row({ role: 'system', rendersProse: false, reportsFailure: true, ...overrides })
+    const fold = (rows: NativeChatTurnFoldRow[]) =>
+      nativeChatTurnFold({ rows, settledTurnKeys: SETTLED, expandedTurnKeys: NONE }).foldedRows
+
+    it('stays in view when the turn ended in it', () => {
+      expect([...fold([row({ role: 'user' }), row({ rendersProse: false }), failure()])]).toEqual([
+        1
+      ])
+    })
+
+    it('stays in view after a partial answer, as the last row of its turn', () => {
+      const folded = fold([row({ role: 'user' }), row(), row(), failure()])
+      expect([...folded]).toEqual([1])
+    })
+
+    it('folds with the work when the agent answered after it', () => {
+      const folded = fold([row({ role: 'user' }), failure(), row({ rendersProse: false }), row()])
+      expect([...folded].sort()).toEqual([1, 2])
+    })
+
+    it("stays in view when only a subagent spoke after it, which is not the turn's answer", () => {
+      const folded = fold([row({ role: 'user' }), row(), failure(), row({ agentId: 'task-1' })])
+      expect(folded.has(2)).toBe(false)
+      expect(folded.has(3)).toBe(true)
+    })
+
+    it('folds an earlier failure the turn failed past, keeping the one it ended in', () => {
+      expect([...fold([row({ role: 'user' }), failure(), failure()])]).toEqual([1])
+      const afterAnswer = fold([row({ role: 'user' }), row(), failure(), failure()])
+      expect([...afterAnswer]).toEqual([2])
+    })
+
+    it('stays in view when it is tied to no turn', () => {
+      expect(fold([failure({ turnKey: undefined }), row({ role: 'user' }), row()]).size).toBe(0)
+    })
   })
 
   it('folds a prose-less turn whole, so its commands do not return to the transcript', () => {

@@ -29,7 +29,10 @@ import {
 import { claudeTurnEndForResult } from './claude-turn-lifecycle-item'
 import { ClaudeOpenTurn } from './claude-open-turn'
 import { ClaudeContextFacts } from './claude-context-facts'
-import { claudeSessionStateEndsTurn } from './claude-session-state-turn-over'
+import {
+  claudeReportsSessionState,
+  claudeSessionStateEndsTurn
+} from './claude-session-state-turn-over'
 import { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
 import { claudeChildToolQueries } from './claude-child-tool-queries'
 import { journalClaudeMessage, type ClaudeMessageJournalContext } from './claude-message-journaling'
@@ -161,6 +164,9 @@ export function createClaudeJournalTranslator(
     turn
   }
 
+  // See `claude-session-state-turn-over.ts`: the CLI's idle is its turn-over when it reports state.
+  let reportsSessionState = false
+
   const handleMessage = (
     message: Record<string, unknown>,
     startsTurn: boolean,
@@ -183,6 +189,7 @@ export function createClaudeJournalTranslator(
         return
       }
       if (event.type === 'message') {
+        reportsSessionState ||= claudeReportsSessionState(event.message)
         context.observe(event.message, event.observedAt ?? Date.now())
         // A root init is the CLI starting a new request cycle (measured per turn,
         // per queued turn, per background wake, per /compact); a send replayed
@@ -238,6 +245,9 @@ export function createClaudeJournalTranslator(
           // would otherwise retain that text for the life of the session.
           streamedBlocks.clear()
           streamedText.settle()
+          if (!reportsSessionState) {
+            deps.sink.settleSendsAtTurnOver?.()
+          }
         }
         const kind = claudeProviderFrameKind(event.message)
         const failure = claudeResultFailure(event.message)
@@ -286,6 +296,7 @@ export function createClaudeJournalTranslator(
           subagents.settleTurn(turn.groupKey)
           // No verdict: the CLI said the turn is over, not how it ended.
           turn.settle({ state: 'completed', completedAt: event.observedAt ?? Date.now() })
+          deps.sink.settleSendsAtTurnOver?.()
         }
       } else if (event.type === 'provider-frame') {
         providerFallback.append(event.kind, event.payload)

@@ -2,6 +2,7 @@ import { vi } from 'vitest'
 import type { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
 import {
+  AGENT_SESSION_RECOVERED_SEND_CAPABILITY,
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../src/shared/protocol-version'
@@ -74,7 +75,7 @@ export function structuredHostStub(
     readOptions: vi.fn(async () => ({ models: [], current: { model: 'gpt-live' } })),
     modelCatalog: vi.fn(() => ({ origin: 'unknown' as const })),
     readCommands: vi.fn(() => ({ commands: [{ name: 'clear', kind: 'command' as const }] })),
-    history: vi.fn(() => ({ ok: true, page: { items: [] } })),
+    history: vi.fn(() => ({ ok: true, page: { items: [], submissions: [] } })),
     journalSnapshot: vi.fn(() => ({
       sessionId,
       cursor: { epoch: 'epoch-a', sequence: 0 },
@@ -126,7 +127,7 @@ export const turnItemSkew = {
   install(sessionId: string, workspaceId: string): void {
     const host = structuredHostStub(sessionId, workspaceId)
     const items = [{ ...TURN_ROW, body: { kind: 'turn', ...TURN } }]
-    host.history.mockReturnValue({ ok: true, page: { items } })
+    host.history.mockReturnValue({ ok: true, page: { items, submissions: [] } })
     setStructuredAgentSessionHost(installableHost(host))
   },
   /** Each skew's advertised list and the item it must be published. */
@@ -141,6 +142,45 @@ export const turnItemSkew = {
         { ...TURN_ROW, body: { kind: 'status', turnLifecycle: TURN } }
       ],
       [[...current.capabilities], { ...TURN_ROW, body: { kind: 'turn', ...TURN } }]
+    ] as const
+  }
+}
+
+const SEND = {
+  clientMessageId: 'client-1',
+  fence: 1,
+  payloadFingerprint: 'f'.repeat(64),
+  providerItemId: null,
+  submittedAt: 1,
+  resolvedAt: 2
+}
+
+/** One send a crash left in doubt for good, and the two ways the current host publishes it. The
+ *  old client is derived from the baseline by removing the capability, as for the turn item. */
+export const recoveredSendSkew = {
+  install(sessionId: string, workspaceId: string): void {
+    const host = structuredHostStub(sessionId, workspaceId)
+    const submissions = [
+      { ...SEND, dispatchState: 'unknown', reason: 'host_restarted', recovered: true }
+    ]
+    host.history.mockReturnValue({ ok: true, page: { items: [], submissions } })
+    setStructuredAgentSessionHost(installableHost(host))
+  },
+  /** Each skew's advertised list and the submission it must be published. */
+  clients(
+    baseline: { capabilities: readonly string[] },
+    current: { capabilities: readonly string[] }
+  ) {
+    const old = baseline.capabilities.filter((c) => c !== AGENT_SESSION_RECOVERED_SEND_CAPABILITY)
+    return [
+      [
+        [...old, STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
+        { ...SEND, dispatchState: 'accepted', reason: null }
+      ],
+      [
+        [...current.capabilities],
+        { ...SEND, dispatchState: 'unknown', reason: 'host_restarted', recovered: true }
+      ]
     ] as const
   }
 }

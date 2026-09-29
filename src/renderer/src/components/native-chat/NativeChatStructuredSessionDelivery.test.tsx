@@ -517,7 +517,7 @@ describe('NativeChatStructuredSession delivery', () => {
     )
   }, 20000)
 
-  it('parks a host-confirmed unknown instead of probing it', async () => {
+  it('draws a host-confirmed unknown as sent: never re-sent, and the next message goes out', async () => {
     mocks.mode = 'outbox'
     mocks.call.mockRejectedValueOnce(new Error('socket closed')).mockResolvedValue({
       ok: true,
@@ -542,7 +542,7 @@ describe('NativeChatStructuredSession delivery', () => {
     await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
 
     const sent = mocks.call.mock.calls[0]?.[2] as { envelope: { clientOperationId: string } }
-    // The host now reports an unresolved unknown: another replay is the user's call.
+    // The host recorded it and cannot tell whether the agent took it: drawn as sent.
     mocks.submissions = [
       {
         clientMessageId: sent.envelope.clientOperationId,
@@ -555,15 +555,15 @@ describe('NativeChatStructuredSession delivery', () => {
         resolvedAt: null
       }
     ]
-    // Queue a second message purely to re-render so the effect observes the
-    // new submissions; it must stay wedged behind the parked head.
+    // The next message re-renders with the new submissions, and nothing holds it back.
     await act(async () => {
       send?.('second', [])
     })
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 3000))
     })
-    expect(mocks.call).toHaveBeenCalledOnce()
+    const texts = mocks.call.mock.calls.map((call) => call[2]?.body?.blocks?.[0]?.text)
+    expect(texts).toEqual(['first', 'second'])
   }, 20000)
 
   it('still probes while streaming batches rebuild the submissions array', async () => {

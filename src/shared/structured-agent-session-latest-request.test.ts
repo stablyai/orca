@@ -21,6 +21,7 @@ import {
   latestStructuredAgentSessionRequest
 } from './structured-agent-session-latest-request'
 import { projectStructuredAgentSessionStatusSummary } from './structured-agent-session-projection'
+import { structuredAgentSessionSubmissionSettlement } from './structured-agent-session-submission-settlement'
 
 const START_FAILURE = 'Claude is not signed in.'
 
@@ -111,7 +112,7 @@ const ROWS: Row[] = [
     listed: false
   },
   {
-    name: 'a send crash recovery found the provider never received (no verdict)',
+    name: "an older host's not_delivered restart verdict, drawn as sent (no verdict)",
     items: [userEntry('m1', 1)],
     submissions: [
       sent('m1', {
@@ -121,7 +122,7 @@ const ROWS: Row[] = [
       })
     ],
     outcome: null,
-    listed: false
+    listed: true
   },
   {
     name: 'a turn that succeeded, then a send crash recovery found the provider never received',
@@ -142,11 +143,20 @@ const ROWS: Row[] = [
     listed: true
   },
   {
-    name: 'a send crash recovery left unknown',
+    name: 'a send a crash left in doubt, drawn as sent (no verdict)',
     items: [userEntry('m1', 1)],
     submissions: [sent('m1', { dispatchState: 'unknown', recovered: true })],
     outcome: null,
-    listed: false
+    listed: true
+  },
+  {
+    name: 'a restart-doubted send from a host without `recovered` on the wire (no verdict)',
+    items: [userEntry('m1', 1)],
+    submissions: [
+      sent('m1', { dispatchState: 'unknown', reason: 'host_restarted_before_acknowledgement' })
+    ],
+    outcome: null,
+    listed: true
   },
   {
     name: 'a send pending at an older fence',
@@ -239,6 +249,22 @@ describe('the latest request and its verdict', () => {
     }
   })
 
+  it('reports a chat whose only send a crash cut off as idle on that prompt, as the chat draws it', () => {
+    // Recovery settled it, so nothing is working and no one failed: the prompt with no verdict.
+    const items = [userEntry('m1', 1)]
+    const doubted = sent('m1', { dispatchState: 'unknown', recovered: true, resolvedAt: 30 })
+    expect(projectStructuredAgentSessionStatusSummary(items, [doubted], 2)).toEqual({
+      status: 'idle',
+      latestPrompt: 'm1'
+    })
+    // Still live, it is a send the provider may yet answer.
+    const live = sent('m1', { dispatchState: 'unknown', resolvedAt: 30, fence: 2 })
+    expect(projectStructuredAgentSessionStatusSummary(items, [live], 2)).toMatchObject({
+      status: 'working',
+      latestPrompt: 'm1'
+    })
+  })
+
   it('dates an idle session by the refusal it reports, not by the older turn', () => {
     const items = [
       userEntry('m1', 1),
@@ -287,7 +313,9 @@ describe('the sidebar verdict agrees with the rejection classifier', () => {
     const items = [userEntry('m1', 1)]
     const { verdict } = classifyDispatchRejection(submission)
     expect(latestStructuredAgentSessionRequest(items, [submission])?.outcome ?? null).toBe(verdict)
-    expect(hasStructuredAgentSessionRequest(items, [submission])).toBe(verdict === 'failure')
+    expect(hasStructuredAgentSessionRequest(items, [submission])).toBe(
+      verdict === 'failure' || structuredAgentSessionSubmissionSettlement(submission) === 'sent'
+    )
   })
 
   const failedNobody = new Set([

@@ -2,7 +2,7 @@ import type { ProviderDiagnostic } from '../../shared/agent-session-failure'
 import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
 
 /** Sends awaiting their echo. One bound to a turn that ended without taking it settles from that
- *  end; any other whose echo never arrives is retired by the journal's recovery on exit. */
+ *  end; any other whose echo never arrives is settled in doubt when its turn completes. */
 export const MAX_CODEX_PENDING_DISPATCH_ECHOES = 256
 /** Turn ends kept for an answer read after the turn it names had already ended. */
 export const MAX_CODEX_RECORDED_TURN_ENDS = 64
@@ -43,7 +43,8 @@ export type CodexDispatchEchoes = {
   answeredUnopenedTurn: (threadId: string, openTurnIds: ReadonlySet<string>) => string | null
   /**
    * Records a turn's end and returns the sends bound to it that it settles: all of them unless it
-   * completed, which echoes its pending input first, so one it never echoed waits for recovery.
+   * completed, which echoes its pending input first, so one it never echoed is left to the
+   * turn-over the translator declares, and stays armed for a late echo.
    */
   endTurn: (threadId: string, turnId: string, end: CodexTurnEnd) => string[]
   /** Submission origin for this exact send, retained until its echo settles it. */

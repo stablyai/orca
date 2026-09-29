@@ -171,18 +171,19 @@ describe('mobile structured send operation journal', () => {
       clientMessageId: operationId,
       fence: 1,
       payloadFingerprint,
-      dispatchState: 'unknown' as const,
+      dispatchState: 'pending' as const,
       providerItemId: null,
-      reason: 'ack lost',
+      reason: null,
       submittedAt: NOW,
-      resolvedAt: NOW
+      resolvedAt: null
     }
 
     await clearMobileStructuredSettledSendOperations({ submissions: [submission] })
     expect(values.size).toBe(1)
 
+    // Doubt the host recorded is settled too: the chat draws it as sent.
     await clearMobileStructuredSettledSendOperations({
-      submissions: [{ ...submission, dispatchState: 'accepted', reason: null }]
+      submissions: [{ ...submission, dispatchState: 'unknown', reason: 'ack lost' }]
     })
     expect(values.size).toBe(0)
   })

@@ -73,7 +73,8 @@ function invalid(
 /** A thrown adapter error is indistinguishable from a lost reply, so it settles as `unknown`
  *  rather than as a rejection — unless the child had not proven its start. Such a child has
  *  accepted nothing (input is written only after it initializes), so a dispatch it could not
- *  take is provably unwritten and is rejected with the cause the adapter gave. */
+ *  take is provably unwritten and is rejected with the cause the adapter gave. The `unknown` is
+ *  written settled (see `handOverSubmission`). */
 async function dispatchSafely(
   ctx: AgentSessionHandoverContext,
   clientMessageId: string,
@@ -206,17 +207,25 @@ export async function handOverSubmission(
               rejection: outcome.rejection,
               fence: ctx.fence
             }
-          : { clientMessageId, state: 'unknown', reason: outcome.reason, fence: ctx.fence }
+          : // A start that threw is no longer waiting on anything: the send is settled in doubt,
+            // not owed work. If the provider did take it, its turn and echo say so.
+            {
+              clientMessageId,
+              state: 'unknown',
+              reason: outcome.reason,
+              fence: ctx.fence,
+              recovered: true
+            }
     )
   } catch (error) {
-    // A failed resolution must not strand a pending row; an unknown result is
-    // explicitly replayable.
+    // A failed resolution must not strand a pending row; the send is settled in doubt.
     try {
       await ctx.journal.resolveDispatch({
         clientMessageId,
         state: 'unknown',
         reason: DISPATCH_DOUBT_PERSISTENCE_FAILED,
-        fence: ctx.fence
+        fence: ctx.fence,
+        recovered: true
       })
     } catch {
       // Nothing further to record; the pending row is settled on the next open.

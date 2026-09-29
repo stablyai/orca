@@ -12,8 +12,11 @@ import {
 import type { AgentSessionMutationEnvelope } from './agent-session-wire'
 import { structuredAgentSessionPayloadFingerprint } from './structured-agent-session-mutation'
 import { classifyDispatchRejection } from './structured-agent-session-dispatch-rejection'
+import { structuredAgentSessionSubmissionSettlement } from './structured-agent-session-submission-settlement'
 
-/** `rejected`: the host settled the send as not delivered. The drain never sends it again on its
+/** `unconfirmed`: this client cannot tell whether the host recorded the send (a lost reply, a
+ *  remount mid-send); a same-id resend asks it, and nothing may overtake it meanwhile.
+ *  `rejected`: the host settled the send as not delivered. The drain never sends it again on its
  *  own and nothing queues behind it; only the user's Retry does. */
 export type StructuredAgentSessionOutboxState =
   | 'queued'
@@ -29,6 +32,8 @@ export type StructuredAgentSessionOutboxEntry = {
   state: StructuredAgentSessionOutboxState
   queuedAt: number
   lastAttemptAt: number | null
+  /** Non-null once the user retried an `unconfirmed` entry: it keeps its id and is not probed
+   *  again. The name is stored; older builds kept a doubted submission's time here. */
   retryAfterUnknownSubmittedAt: number | null
   source?: 'launch'
   /** Why the last attempt did not go through. Lives on the message so it goes when the message
@@ -190,41 +195,35 @@ export function reconcileStructuredAgentSessionOutbox(
   const settled = new Map(submissions.map((entry) => [entry.clientMessageId, entry]))
   return entries.flatMap((entry) => {
     const submission = settled.get(entry.clientMessageId)
-    if (submission?.dispatchState === 'accepted') {
-      return []
+    if (!submission) {
+      return [entry]
     }
-    if (
-      submission?.dispatchState === 'rejected' &&
-      classifyDispatchRejection(submission).category === 'withdrawn'
-    ) {
-      return []
-    }
-    if (submission?.dispatchState === 'pending') {
-      return entry.state === 'dispatching' ? [entry] : [{ ...entry, state: 'dispatching' as const }]
-    }
-    // Accepted, then not delivered — the agent never started, or its start was refused. The text
-    // and why stay here for the user's Retry, and nothing queues behind it. `unconfirmed` is how a
-    // remount reads an entry it left dispatching; the journal has since answered it.
-    if (
-      submission?.dispatchState === 'rejected' &&
-      (entry.state === 'dispatching' || entry.state === 'unconfirmed')
-    ) {
-      return [
-        {
-          ...entry,
-          state: 'rejected' as const,
-          lastFailure: structuredAgentSessionRejectedFailure(submission)
+    switch (structuredAgentSessionSubmissionSettlement(submission)) {
+      // The journal draws it, and the entry has nothing left to hold or retry.
+      case 'sent':
+        return []
+      // The host holds it and may still reject it: kept, not a barrier, for a Retry that answer needs.
+      case 'open':
+        return entry.state === 'dispatching'
+          ? [entry]
+          : [{ ...entry, state: 'dispatching' as const }]
+      case 'refused':
+        if (classifyDispatchRejection(submission).category === 'withdrawn') {
+          return []
         }
-      ]
+        // Accepted, then not delivered — the agent never started, or its start was refused. The
+        // text and why stay here for the user's Retry, and nothing queues behind it. `unconfirmed`
+        // is how a remount reads an entry it left dispatching; the journal has since answered it.
+        return entry.state === 'dispatching' || entry.state === 'unconfirmed'
+          ? [
+              {
+                ...entry,
+                state: 'rejected' as const,
+                lastFailure: structuredAgentSessionRejectedFailure(submission)
+              }
+            ]
+          : [entry]
     }
-    if (
-      submission?.dispatchState === 'unknown' &&
-      entry.retryAfterUnknownSubmittedAt !== -1 &&
-      entry.retryAfterUnknownSubmittedAt !== submission.submittedAt
-    ) {
-      return [{ ...entry, state: 'unconfirmed' as const }]
-    }
-    return [entry]
   })
 }
 

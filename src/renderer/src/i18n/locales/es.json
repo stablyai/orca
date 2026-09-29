@@ -14963,7 +14963,7 @@
         "backgroundTasksRunning": "Todavía hay tareas en segundo plano en ejecución.",
         "waitForBackgroundTasks": "Espere a que terminen las tareas en segundo plano.",
         "messagesUnsettled": "Un mensaje que envió antes todavía no se ha confirmado.",
-        "settleEarlierMessage": "Espere a que se entregue su mensaje anterior o vuelva a intentarlo.",
+        "settleEarlierMessage": "Espere a que se entregue su mensaje anterior.",
         "optionRejected": "El agente no aceptó este ajuste.",
         "goalsUnsupported": "Este agente no admite objetivos.",
         "agentRefused": "El agente lo rechazó.",

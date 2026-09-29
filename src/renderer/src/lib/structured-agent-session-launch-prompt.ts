@@ -10,6 +10,7 @@ import {
 } from '../../../shared/structured-agent-session-outbox'
 import { agentSessionRefusalFailure } from '../../../shared/agent-session-write-failure'
 import { createStructuredAgentSessionOperationId } from '../../../shared/structured-agent-session-mutation'
+import { structuredAgentSessionSubmissionSettlement } from '../../../shared/structured-agent-session-submission-settlement'
 import {
   mutateStructuredAgentSessionLaunchPrompt,
   type StructuredAgentSessionLaunchPromptMutation
@@ -119,21 +120,18 @@ async function dispatchStructuredLaunchPrompt(
       )
       return false
     }
-    const dispatchState = result.value.submission.dispatchState
-    mutateEntry(entry, (current) =>
-      dispatchState === 'accepted'
-        ? null
-        : {
-            ...current,
-            state:
-              dispatchState === 'unknown'
-                ? 'unconfirmed'
-                : dispatchState === 'pending'
-                  ? 'dispatching'
-                  : 'queued'
-          }
-    )
-    return dispatchState === 'accepted' || dispatchState === 'pending'
+    switch (structuredAgentSessionSubmissionSettlement(result.value.submission)) {
+      case 'sent':
+        mutateEntry(entry, () => null)
+        return true
+      // The host holds it and may still reject it.
+      case 'open':
+        mutateEntry(entry, (current) => ({ ...current, state: 'dispatching' }))
+        return true
+      case 'refused':
+        mutateEntry(entry, (current) => ({ ...current, state: 'queued' }))
+        return false
+    }
   } catch {
     mutateEntry(entry, (current) => ({ ...current, state: 'unconfirmed' }))
     return false

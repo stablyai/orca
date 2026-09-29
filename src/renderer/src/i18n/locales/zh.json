@@ -17347,7 +17347,7 @@
         "backgroundTasksRunning": "后台任务仍在运行。",
         "waitForBackgroundTasks": "请等待后台任务完成。",
         "messagesUnsettled": "您之前发送的一条消息尚未确认。",
-        "settleEarlierMessage": "请等待之前的消息送达，或重试该消息。",
+        "settleEarlierMessage": "请等待之前的消息送达。",
         "optionRejected": "智能体未接受此设置。",
         "goalsUnsupported": "此智能体不支持目标。",
         "agentRefused": "智能体拒绝了此请求。",

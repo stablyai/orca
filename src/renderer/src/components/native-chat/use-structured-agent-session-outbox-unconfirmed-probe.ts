@@ -27,10 +27,8 @@ export function useStructuredAgentSessionOutboxUnconfirmedProbe(args: {
 
   // A transport-side unknown may never have reached the host, and nothing else
   // moves it out of `unconfirmed`, so one wedges the whole FIFO queue. Re-issuing
-  // the same envelope without `retryUnknown` is idempotent: the operation ledger
-  // replays a recorded outcome, or the host performs a genuine first delivery.
-  // A host-confirmed unknown stays parked until the user explicitly asks Retry
-  // to replay the same operation.
+  // the same envelope is idempotent: the operation ledger replays a recorded
+  // outcome, or the host performs a genuine first delivery.
   // The first `unconfirmed` entry is the one holding the queue, at whatever index it sits: an
   // unconfirmed tail behind an admitted head would otherwise wedge until the head cleared,
   // which is the wedge this probe exists to prevent.

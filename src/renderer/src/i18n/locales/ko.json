@@ -17382,7 +17382,7 @@
         "backgroundTasksRunning": "백그라운드 작업이 아직 실행 중입니다.",
         "waitForBackgroundTasks": "백그라운드 작업이 끝날 때까지 기다리세요.",
         "messagesUnsettled": "앞서 보낸 메시지가 아직 확인되지 않았습니다.",
-        "settleEarlierMessage": "앞서 보낸 메시지가 전달될 때까지 기다리거나 다시 시도하세요.",
+        "settleEarlierMessage": "앞서 보낸 메시지가 전달될 때까지 기다리세요.",
         "optionRejected": "에이전트가 이 설정을 받아들이지 않았습니다.",
         "goalsUnsupported": "이 에이전트는 목표를 지원하지 않습니다.",
         "agentRefused": "에이전트가 이를 거부했습니다.",

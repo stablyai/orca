@@ -54,7 +54,10 @@ describe('background-task stop capability at the RPC boundary', () => {
     ['current reader', CURRENT_CLIENT, TASKS],
     ['in-process reader', undefined, TASKS]
   ] as const)('projects history for a %s', async (_label, client, expected) => {
-    hostCalls.history.mockReturnValue({ ok: true, page: { items: [], backgroundTasks: TASKS } })
+    hostCalls.history.mockReturnValue({
+      ok: true,
+      page: { items: [], submissions: [], backgroundTasks: TASKS }
+    })
     expect(
       await call('agentSession.history', { sessionId: SESSION, direction: 'tail' }, client)
     ).toMatchObject({ ok: true, result: { page: { backgroundTasks: expected } } })
@@ -131,7 +134,7 @@ describe('background-task stop capability at the RPC boundary', () => {
   ] as const)('projects unstoppable rows for a %s', async (_label, client, expected) => {
     hostCalls.history.mockReturnValue({
       ok: true,
-      page: { items: [], backgroundTasks: MIXED_ROWS }
+      page: { items: [], submissions: [], backgroundTasks: MIXED_ROWS }
     })
     expect(
       await call('agentSession.history', { sessionId: SESSION, direction: 'tail' }, client())
@@ -147,7 +150,7 @@ describe('background-task stop capability at the RPC boundary', () => {
     }
     hostCalls.history.mockReturnValue({
       ok: true,
-      page: { items: [], backgroundTasks: foregroundOnly }
+      page: { items: [], submissions: [], backgroundTasks: foregroundOnly }
     })
     expect(
       await call(
@@ -163,7 +166,10 @@ describe('background-task stop capability at the RPC boundary', () => {
 
   it('preserves legacy stoppable state for both readers', async () => {
     const stoppable = { state: 'monitoring', tasks: TASKS.tasks }
-    hostCalls.history.mockReturnValue({ ok: true, page: { items: [], backgroundTasks: stoppable } })
+    hostCalls.history.mockReturnValue({
+      ok: true,
+      page: { items: [], submissions: [], backgroundTasks: stoppable }
+    })
     for (const client of [STRUCTURED_CLIENT, CURRENT_CLIENT]) {
       expect(
         await call('agentSession.history', { sessionId: SESSION, direction: 'tail' }, client)

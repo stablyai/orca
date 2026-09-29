@@ -9,8 +9,8 @@
 // Owed work is derived on every tick, never stored, so there is nothing to disagree with it.
 
 import { agentChildWorkLiveness } from '../../../shared/agent-status-child-work-liveness'
-import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-projection'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import { owesStructuredAgentSessionWork } from '../../../shared/structured-agent-session-owed-work'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionBackgroundTaskState } from '../../../shared/agent-session-wire'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
@@ -110,7 +110,11 @@ export class StructuredAgentSessionIdleSweep {
     }
     // Owed work is activity, read every tick, so the agent gets a full window once it ends: a child
     // can read done before the lead's wake-up turn writes anything.
-    if (session.child && session.child.phase !== 'starting' && this.owesWork(sessionId, session)) {
+    if (
+      session.child &&
+      session.child.phase !== 'starting' &&
+      this.owesWork(sessionId, session, session.child.fence)
+    ) {
       this.deps.sessions.touch(sessionId)
       return
     }
@@ -137,12 +141,18 @@ export class StructuredAgentSessionIdleSweep {
   }
 
   /** Work the running child still owes. Scoped to the child: with none, nothing here can pin the
-   *  handle, and a leftover prompt or turn row is only history. */
-  private owesWork(sessionId: string, session: StructuredAgentSessionHostSession): boolean {
+   *  handle, and a leftover prompt or turn row is only history. A send the child has neither
+   *  answered nor refused is owed too: stopping the child would retire it in doubt. Its answer or
+   *  refusal settles it, as do its turn's end, a Stop, a start that threw and an exit. */
+  private owesWork(
+    sessionId: string,
+    session: StructuredAgentSessionHostSession,
+    childFence: number
+  ): boolean {
     const items = session.journal.snapshot().items
     return (
-      activeStructuredAgentSessionTurnId(items) !== null ||
-      this.queuedOrDelivering(sessionId, session) ||
+      owesStructuredAgentSessionWork(items, session.journal.submissions(), childFence) ||
+      this.deps.deliveryActive(sessionId) ||
       agentChildWorkLiveness(this.deps.backgroundTaskState(sessionId)?.tasks) !== null ||
       this.deps.hasOpenDispatch(sessionId) ||
       hasPendingStructuredAgentSessionPrompt(items)

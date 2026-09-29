@@ -28,6 +28,7 @@ import {
 } from '../../../../shared/structured-agent-session-outbox'
 import type { AgentSessionFailureWordsContext } from '../../../../shared/agent-session-failure-words'
 import { structuredAgentSessionAttemptFailureParts } from '../../../../shared/structured-agent-session-send-disposition'
+import { structuredAgentSessionSubmissionSettlement } from '../../../../shared/structured-agent-session-submission-settlement'
 import { translate } from '@/i18n/i18n'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
@@ -113,7 +114,7 @@ export function structuredAgentSessionDeliveryNotices(
   const held = admission.state === 'blocked' ? admission.entry.clientMessageId : null
   const rejected = new Map(
     submissions
-      .filter((submission) => submission.dispatchState === 'rejected')
+      .filter((submission) => structuredAgentSessionSubmissionSettlement(submission) === 'refused')
       .map((submission) => [submission.clientMessageId, submission])
   )
   const notices = new Map<string, NativeChatDeliveryNotice>()

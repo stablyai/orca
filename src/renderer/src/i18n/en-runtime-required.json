@@ -2767,7 +2767,7 @@
         "recordUnreadable": "Orca couldn't read this chat's saved state.",
         "reopenChat": "Reopen the chat to check again.",
         "restartFailed": "The agent couldn't restart.",
-        "settleEarlierMessage": "Wait for your earlier message to go through, or retry it.",
+        "settleEarlierMessage": "Wait for your earlier message to go through.",
         "startNewChat": "Start a new chat to continue.",
         "terminalAgentHoldsChat": "This chat is still open in a terminal agent.",
         "tryAgain": "Try again.",

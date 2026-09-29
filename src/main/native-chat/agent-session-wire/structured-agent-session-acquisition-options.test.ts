@@ -10,7 +10,6 @@ import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { digestPayload } from '../agent-session-journal/journal-payload-bounds'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
 import {
   attachFingerprintFields,
   type AgentSessionAttachParams
@@ -113,23 +112,16 @@ function expectSettledAttachLease(record: AgentSessionRecord | null): void {
 }
 
 describe('structured session acquisition options', () => {
-  it('samples provider history before acquiring a replacement child', async () => {
-    root = await mkdtemp(join(tmpdir(), 'orca-history-before-acquire-'))
+  it("leaves a crashed send in doubt at an acquisition's first open, and says so once", async () => {
+    root = await mkdtemp(join(tmpdir(), 'orca-doubt-at-acquire-'))
     const initialStore = await AgentSessionRecordStore.open({
       directory: join(root, 'store'),
       hostId: 'local'
-    })
-    let childAcquired = false
-    const historyWindow = (): ProviderHistoryWindow => ({
-      items: [],
-      boundaryConsistent: true,
-      turnInFlight: childAcquired
     })
     const withHistory = (origin: 'created' | 'resumed'): StructuredAgentSessionAdapter => {
       const sessionAdapter = adapter({ origin })
       const acquire = vi.mocked(sessionAdapter.acquire)
       acquire.mockImplementation(async (input) => {
-        childAcquired = true
         return {
           process: {
             hostId: 'local',
@@ -146,7 +138,6 @@ describe('structured session acquisition options', () => {
           }
         }
       })
-      sessionAdapter.providerHistoryWindow = vi.fn(async () => historyWindow())
       return sessionAdapter
     }
 
@@ -189,7 +180,6 @@ describe('structured session acquisition options', () => {
       probe: async () => ({ outcome: 'pid-absent' }),
       now: NOW + 1
     })
-    childAcquired = false
     const releasedFence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
 
     const second = await performAttach({
@@ -209,12 +199,23 @@ describe('structured session acquisition options', () => {
       onAttached: () => {}
     })
 
-    expect(second).toMatchObject({ ok: true, value: { unconfirmedClientMessageIds: [] } })
     expect(second).toMatchObject({
+      ok: true,
       value: {
-        page: { submissions: [{ clientMessageId: 'crashed-send', dispatchState: 'rejected' }] }
+        unconfirmedClientMessageIds: [],
+        page: {
+          submissions: [
+            { clientMessageId: 'crashed-send', dispatchState: 'unknown', recovered: true }
+          ]
+        }
       }
     })
+    const rows = second.ok
+      ? second.value.page.items.flatMap((item) =>
+          item.body.kind === 'status' ? [item.body.failure?.kind] : []
+        )
+      : []
+    expect(rows).toEqual(['hostRestarted'])
   })
 
   it('persists create defaults before the first provider acquisition', async () => {

@@ -101,9 +101,18 @@ describe('what a rejection shows the user', () => {
     expect(notice(reason)).toBe(reason)
   })
 
-  it('never puts the legacy not_delivered marker on screen', () => {
-    // Released clients printed it as it was; it is a marker, not a sentence.
-    expect(notice('not_delivered')).toBe('Your message was not sent.')
+  it("draws an older host's not_delivered verdict as a sent message, with nothing to retry", () => {
+    // That verdict was only restart doubt inferred from the transcript: no marker, no Retry.
+    for (const rejection of [undefined, { kind: 'notDelivered' as const }]) {
+      const disposition = disposeStructuredAgentSessionSendResult({
+        entries: [entry],
+        entry,
+        blockedClientMessageId: null,
+        result: rejectedWith('not_delivered', rejection ? { rejection } : {}),
+        createOperationId: () => 'unused'
+      })
+      expect(disposition).toMatchObject({ entries: [], error: null })
+    }
   })
 
   it.each([
@@ -358,7 +367,7 @@ describe('ambiguous operation refusals', () => {
     expect(disposition.blockedClientMessageId).toBe(entry.clientMessageId)
   })
 
-  it('parks a recovered missing submission without polling forever', () => {
+  it('draws a recovered missing submission as sent, neither parked nor polled', () => {
     const result = rejectedWith(null)
     if (!result.ok) {
       throw new Error('expected a send result')
@@ -378,12 +387,34 @@ describe('ambiguous operation refusals', () => {
       createOperationId: () => 'unused'
     })
 
-    expect(disposition.entries).toMatchObject([
-      {
-        clientMessageId: entry.clientMessageId,
-        state: 'unconfirmed',
-        retryAfterUnknownSubmittedAt: -1
-      }
-    ])
+    expect(disposition).toMatchObject({ entries: [], error: null, blockedClientMessageId: null })
+  })
+
+  it('holds a live unknown like a pending, with nothing behind it held', () => {
+    const tail = { ...entry, clientMessageId: 'client-2', queuedAt: 2 }
+    const result = rejectedWith(null)
+    if (!result.ok) {
+      throw new Error('expected a send result')
+    }
+    result.value.submission = {
+      ...result.value.submission,
+      dispatchState: 'unknown',
+      reason: 'provider_write_outcome_unknown: socket closed'
+    }
+
+    const disposition = disposeStructuredAgentSessionSendResult({
+      entries: [entry, tail],
+      entry,
+      blockedClientMessageId: null,
+      result,
+      createOperationId: () => 'unused'
+    })
+
+    // It can still settle `rejected`; only the entry keeps the text a Retry would need.
+    expect(disposition).toMatchObject({
+      entries: [{ clientMessageId: entry.clientMessageId, state: 'dispatching' }, tail],
+      error: null,
+      blockedClientMessageId: null
+    })
   })
 })

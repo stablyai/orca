@@ -7,6 +7,7 @@ import {
   type StructuredAgentSessionOutboxEntry
 } from './structured-agent-session-outbox'
 import { projectStructuredItemsToNativeChat } from './structured-agent-session-projection'
+import { structuredAgentSessionSubmissionSettlement } from './structured-agent-session-submission-settlement'
 
 export function projectStructuredAgentSessionMessages(
   items: readonly AgentJournalRenderItem[],
@@ -16,9 +17,10 @@ export function projectStructuredAgentSessionMessages(
 ): NativeChatMessage[] {
   const optimistic = reconcileStructuredAgentSessionOutbox(outbox, submissions)
   // Refused sends are ledger evidence, not conversation history; local drafts remain in the outbox.
+  // An older host's inferred "not delivered" is drawn as the sent message it may well have been.
   const rejected = new Set(
     submissions
-      .filter((submission) => submission.dispatchState === 'rejected')
+      .filter((submission) => structuredAgentSessionSubmissionSettlement(submission) === 'refused')
       .map((submission) => agentJournalSubmissionKey(submission.clientMessageId))
   )
   const visibleItems: AgentJournalRenderItem[] = []

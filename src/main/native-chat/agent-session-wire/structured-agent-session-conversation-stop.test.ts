@@ -165,6 +165,12 @@ describe('a Stop that names no turn', () => {
     expect(cancelTurn.mock.calls[0]![0]).not.toHaveProperty('turnId')
     expect(cancelTurn.mock.calls[0]![0]).toMatchObject({ sessionId: SESSION, fence: 1 })
     expect(await statusRows()).toEqual(['Cancellation requested.'])
+    // Nothing is owed the interrupted send any more: settled in doubt, so the chat reads idle.
+    expect(await submission(id)).toMatchObject({
+      dispatchState: 'unknown',
+      reason: 'stopped_before_acknowledgement',
+      recovered: true
+    })
   })
 
   it('withdraws what is queued on a ready child and asks the provider for nothing more', async () => {

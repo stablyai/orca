@@ -190,7 +190,7 @@ export function hostStub(): StructuredAgentSessionHost {
       models: [{ id: 'gpt-live', label: 'GPT Live', isDefault: true, efforts: [] }],
       current: { model: 'gpt-live' }
     })),
-    history: vi.fn(() => ({ ok: true, page: { items: [] } })),
+    history: vi.fn(() => ({ ok: true, page: { items: [], submissions: [] } })),
     journalSnapshot: vi.fn((sessionId: string) => ({
       sessionId,
       cursor: { epoch: 'epoch-a', sequence: 0 },

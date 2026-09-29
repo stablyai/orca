@@ -11,19 +11,21 @@
 // ledger and never puts it back on the wire. Releasing the id turns that replay
 // into a genuine second delivery, which is why only a settled answer releases it:
 //
-//   accepted/pending — the send happened. The id is spent; a later identical
-//     message is a new message and must carry a new id.
+//   accepted/pending/unknown — the host recorded the send, and the chat draws it
+//     as sent even when a crash or a dead agent left its delivery in doubt. The id
+//     is spent; a later identical message is a new message, which is how the chat
+//     continues, and must carry a new id.
 //   rejected — a terminal refusal or rejected submission spends a fresh id. A
 //     pending-admission refusal, or any refusal after earlier transport doubt,
 //     keeps it because neither proves a retained delivery did not happen.
-//   unknown — the one answer that KEEPS its id, whether it came from the host or
-//     from an ack-loss on the way back. The message may be with the provider, so
-//     the retry has to stay a replay. Rotating here is what sent one message to a
-//     model five times.
+//   no answer — an ack-loss on the way back KEEPS its id: the host may not have
+//     recorded the message, so the retry has to stay a replay. Rotating here is
+//     what sent one message to a model five times.
 
 import type { AgentSessionSendResult } from '../../../src/shared/agent-session-wire'
 import { agentSessionRefusalOperationState } from '../../../src/shared/agent-session-refusal-retry'
 import { structuredAgentSessionRejectionNotice } from '../../../src/shared/structured-agent-session-send-disposition'
+import { structuredAgentSessionSubmissionSettlement } from '../../../src/shared/structured-agent-session-submission-settlement'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { StructuredAgentSessionMutationCallResult } from './mobile-structured-agent-session-rpc'
 
@@ -61,10 +63,10 @@ export function mobileStructuredSendDelivery(
     }
   }
   const submission = result.value.submission as AgentSessionSendResult['submission'] | undefined
-  if (!submission || submission.dispatchState === 'unknown') {
+  if (!submission) {
     return { outcome: 'unknown', operationIdSpent: false, error: null }
   }
-  if (submission.dispatchState === 'rejected') {
+  if (structuredAgentSessionSubmissionSettlement(submission) === 'refused') {
     return {
       outcome: 'rejected',
       operationIdSpent: true,

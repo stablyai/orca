@@ -95,7 +95,6 @@ export async function acquireCodexStructuredSession(input: {
         sessionId,
         ...(deps.now ? { now: deps.now } : {}),
         primaryThreadId: () => primaryThreadId,
-        onPrimaryThreadStoppedRunning: () => deps.onPrimaryThreadStoppedRunning?.({ sessionId }),
         dispatchRequestOrigin: (clientMessageId) => dispatchEchoes.requestOrigin(clientMessageId),
         subagentExecutions,
         bindPromptItemId: (journalItemId, threadId, promptKey, turnId) =>

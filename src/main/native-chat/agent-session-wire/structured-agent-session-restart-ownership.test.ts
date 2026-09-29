@@ -79,7 +79,7 @@ it('reports a failed attribution note without an installed error sink or private
 it.each(['turn', 'submission'] as const)(
   'does not continue a marked %s after the user submits new work without a provider echo',
   async (work) => {
-    const { host, dispatch } = await interruptedRestart(work, false)
+    const { host, dispatch } = await interruptedRestart(work)
     expect(await host.restartResume.list()).toHaveLength(1)
     await startAgent(hostTestState())
     dispatch.mockResolvedValueOnce({ state: 'admitted' })
@@ -91,16 +91,15 @@ it.each(['turn', 'submission'] as const)(
   }
 )
 
-// Teardown judged the chat working. A send the provider proves it never received is still the chat
-// Orca stopped; the continuation asks the agent
-// to check what finished rather than refusing.
-it('still continues a chat whose last send acquisition proves was never delivered', async () => {
+// Teardown judged the chat working. A send the restart left in doubt is still the chat Orca
+// stopped; the continuation asks the agent to check what finished rather than refusing.
+it('still continues a chat whose last send the restart left in doubt', async () => {
   const { host, acquire, dispatch } = await interruptedRestart('submission')
   expect(await host.restartResume.list()).toHaveLength(1)
   const result = await host.restartResume.continueAfterRestart([SESSION], 'modal')
   expect((await host.journalSnapshot(SESSION)).submissions[0]).toMatchObject({
-    dispatchState: 'rejected',
-    rejection: { kind: 'notDelivered' }
+    dispatchState: 'unknown',
+    recovered: true
   })
   expect(acquire).toHaveBeenCalledTimes(1)
   expect(dispatch).toHaveBeenCalledTimes(1)
@@ -110,7 +109,7 @@ it('still continues a chat whose last send acquisition proves was never delivere
 // The send the user made just before quitting, after an earlier exchange had finished: that
 // finished turn does not withdraw it.
 it('offers and continues a send made after an earlier completed turn', async () => {
-  const { host, dispatch, marker } = await interruptedRestart('send-after-reply', false)
+  const { host, dispatch, marker } = await interruptedRestart('send-after-reply')
   expect(marker?.work.kind).toBe('submission')
   const result = await host.restartResume.continueAfterRestart([SESSION], 'modal')
   expect(result.continued).toMatchObject([{ outcome: 'continued' }])
@@ -460,7 +459,7 @@ it('logs teardown capsule publication failure and still releases the provider', 
 // on; the details are filed beside it, never in its place.
 it('files a restart refused by a conflicted claim under its code, with its details beside it', async () => {
   // The terminal agent that holds the claim is still running, so nothing may take it over.
-  const { host, store } = await interruptedRestart('turn', true, async () => ({
+  const { host, store } = await interruptedRestart('turn', async () => ({
     outcome: 'identity-matched',
     matchedOn: ['spawn-token']
   }))

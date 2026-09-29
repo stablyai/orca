@@ -27,6 +27,7 @@ import {
   type AgentJournalDispatchRejection
 } from '../../../shared/agent-session-failure-words'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
+import { DISPATCH_DOUBT_STOPPED } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import type { AgentSessionPromptRequest } from './structured-agent-session-turns-prompt'
 import { threadGoalPlan } from './structured-agent-session-thread-goal'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
@@ -195,12 +196,23 @@ export function cancelStructuredAgentSessionTurn(
             ctx.fence
           )
         const record = context.deps.store.getRecord(ctx.sessionId)
-        return child && inFlight
-          ? plan.run({
-              ...ctx,
-              failureTextContext: structuredAgentSessionFailureWordsContext(record)
-            })
-          : { ok: true, value: { ...named, cancelled: withdrawn.length > 0 } }
+        try {
+          return child && inFlight
+            ? await plan.run({
+                ...ctx,
+                failureTextContext: structuredAgentSessionFailureWordsContext(record)
+              })
+            : { ok: true, value: { ...named, cancelled: withdrawn.length > 0 } }
+        } finally {
+          // After the interrupt, so the provider's own answer for a send it withdrew lands first.
+          // Nothing is owed a handed-over send once the user stopped: it settles in doubt, drawn as
+          // sent, and a late answer still replaces that. A failure here is reported, never Stop's.
+          await ctx.journal
+            .markPendingSubmissionsUnknown(ctx.fence, DISPATCH_DOUBT_STOPPED)
+            .catch((error: unknown) =>
+              context.deps.onEventSinkError?.({ sessionId: ctx.sessionId, error })
+            )
+        }
       }
     },
     openForWrite(context, params.envelope)

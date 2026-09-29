@@ -35,6 +35,7 @@ import { resolveBaselineReleaseRef } from './release-checkout'
 import {
   installableHost,
   structuredHostStub,
+  recoveredSendSkew,
   turnItemSkew
 } from './structured-agent-session-host-fixture'
 import {
@@ -237,6 +238,26 @@ describe('cross-version structured agent sessions', () => {
         ...legacyClientCapabilities(),
         STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
       ])
+    })
+  })
+
+  describe('a client that draws a recovered send as unconfirmed', () => {
+    beforeEach(() => recoveredSendSkew.install(SESSION, WORKSPACE))
+    afterEach(() => setStructuredAgentSessionHost(null))
+
+    it('is published it as accepted where a capable client gets the recovered facts', async () => {
+      const params = paramsFor('agentSession.history')
+      for (const [clientCapabilities, submission] of recoveredSendSkew.clients(baseline, current)) {
+        const client = { clientKind: 'runtime' as const, clientCapabilities }
+        const replies = await callBuild(current, 'agentSession.history', params, client)
+        expect(replies[0]).toEqual(
+          expect.objectContaining({
+            result: expect.objectContaining({
+              page: expect.objectContaining({ submissions: [submission] })
+            })
+          })
+        )
+      }
     })
   })
 

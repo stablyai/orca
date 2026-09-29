@@ -30,6 +30,10 @@ import {
   turnVerdictFromDeathEvidence,
   type StructuredAgentSessionTurnVerdict
 } from './structured-agent-session-stale-turn-verdict'
+import {
+  crashBoundaryExplainedProvenTurn,
+  staleSettlementRow
+} from './structured-agent-session-stale-settlement-row'
 
 /** Bounds the exit reason the lease keeps as log evidence; a provider diagnostic is held to the
  *  same cap. */
@@ -189,6 +193,9 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
  * death evidence each time, so nothing is owed in between. Proven death ends the turn interrupted,
  * and a proof written after an earlier settle revises what that settle left `unverifiable`. Must
  * run before a new child's buffered events land, or a live turn would be judged.
+ *
+ * Writes at most one row per boundary: the exit's, or at a crash boundary the one saying the
+ * session did not survive. Both come from here so one boundary can never show two.
  */
 export async function settleStaleStructuredAgentSessionState(input: {
   journal: AgentSessionJournal
@@ -196,8 +203,10 @@ export async function settleStaleStructuredAgentSessionState(input: {
   fence: number
   acquisitionGeneration: string | null
   deathEvidence: AgentSessionDeathEvidence | null
-  /** Who the exit row names. */
+  /** Who the row names. */
   failureTextContext?: AgentSessionFailureWordsContext
+  /** Set only by the conversation's open: how many sends it just left in doubt. */
+  crashBoundary?: { sendsLeftInDoubt: number }
 }): Promise<number> {
   const { journal } = input
   const items = journal.snapshot().items
@@ -220,29 +229,15 @@ export async function settleStaleStructuredAgentSessionState(input: {
     ...items.flatMap((item) => runningTurnLifecycleRevisions([item], verdictFor(item))),
     ...proven
   )
-  const evidence = input.deathEvidence
-  if (
-    evidence &&
-    (proven.length > 0 ||
-      items.some((item) => isInProgressItem(item) && verdictFor(item).state === 'interrupted'))
-  ) {
-    mutations.unshift({
-      kind: 'item',
-      // Named by the death it explains, so a retry after a partly written settle adds no second row.
-      identity: {
-        provider: 'orca',
-        clientMessageId: `stale-session:${input.sessionId}:death-${evidence.ownerFence ?? 'unowned'}-${evidence.observedAt}`
-      },
-      // The death evidence is Orca's log text, never a sentence for a person: the row says only
-      // that the provider stopped.
-      body: {
-        kind: 'status',
-        ...agentSessionFailureWords(agentSessionFailureFact('providerExited'), {
-          ...input.failureTextContext,
-          surface: 'row'
-        })
-      }
-    })
+  const inProgress = items.filter(isInProgressItem)
+  const row = staleSettlementRow(input, {
+    inProgress: inProgress.length > 0,
+    diedInProgress: inProgress.some((item) => verdictFor(item).state === 'interrupted'),
+    provenUnexplained:
+      proven.length > 0 && !crashBoundaryExplainedProvenTurn(input.deathEvidence, journal, items)
+  })
+  if (row) {
+    mutations.unshift({ kind: 'item', ...row })
   }
   for (const chunk of partitionJournalLifecycleMutations(settlementId, mutations)) {
     await journal.appendLifecycleBatch({

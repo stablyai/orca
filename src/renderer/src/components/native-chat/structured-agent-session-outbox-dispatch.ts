@@ -15,6 +15,7 @@ import {
   updateStructuredAgentSessionOutboxEntry,
   type StructuredAgentSessionOutboxEntry
 } from '../../../../shared/structured-agent-session-outbox'
+import { structuredAgentSessionSubmissionSettlement } from '../../../../shared/structured-agent-session-submission-settlement'
 import { writeOutbox } from './structured-agent-session-outbox-storage'
 import {
   getStructuredAgentLaunchPromptDispatch,
@@ -118,10 +119,10 @@ export function dispatchStructuredAgentSessionOutboxEntry(args: {
           createOperationId: args.createOperationId
         })
       )
-      return result.ok
-        ? result.value.submission.dispatchState === 'accepted' ||
-            result.value.submission.dispatchState === 'pending'
-        : false
+      return (
+        result.ok &&
+        structuredAgentSessionSubmissionSettlement(result.value.submission) !== 'refused'
+      )
     } catch (caught) {
       if (args.dispatchGenerationRef.current !== args.dispatchGeneration) {
         return false

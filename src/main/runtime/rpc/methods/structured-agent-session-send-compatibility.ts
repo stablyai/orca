@@ -5,14 +5,22 @@ import {
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import { STRUCTURED_AGENT_SESSION_START_WAIT_MS } from '../../../native-chat/agent-session-wire/structured-agent-session-send-settlement'
 import type { RpcContext } from '../core'
+import { projectRecoveredSendResult } from './structured-agent-session-recovered-send-capability'
 import { requireStructuredHost, structuredCallerFor } from './structured-agent-session-gate'
+
+export async function sendStructuredAgentSessionForClient(
+  params: Parameters<StructuredAgentSessionHost['send']>[1],
+  context: RpcContext
+) {
+  return projectRecoveredSendResult(await sendHeldForClient(params, context), context)
+}
 
 /**
  * A send answers once the host accepts it. A client that predates that answer cannot show a
  * message rejected after it, so its reply is held until the message is handed over or rejected;
  * one that predates pending replies at all waits, as before, for the provider's answer.
  */
-export async function sendStructuredAgentSessionForClient(
+async function sendHeldForClient(
   params: Parameters<StructuredAgentSessionHost['send']>[1],
   context: RpcContext
 ) {

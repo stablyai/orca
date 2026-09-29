@@ -87,8 +87,7 @@ export type AgentSessionHistoryPage = {
   items: AgentJournalRenderItem[]
   /** Populated by `after` reads so a disconnected client can apply tombstones. */
   removedItemIds: string[]
-  /** Submissions overlapping this page, so an unconfirmed bubble renders with
-   *  its dispatch state instead of as a plain message. */
+  /** Submissions overlapping this page, so a bubble renders with its dispatch state. */
   submissions: AgentJournalSubmission[]
   /** Page edges. `nextCursor` is what the client sends back for the same
    *  direction; it equals the request cursor when the page is empty. */
@@ -302,7 +301,8 @@ export type AgentSessionAttachResult = {
   sessionId: string
   fence: number
   page: AgentSessionHistoryPage
-  /** Submissions a crash boundary left `unknown` that provider history could not decide. */
+  /** Always empty: no host decides delivery after a restart. Kept, since the field is required
+   *  on the wire and no client ever read it. */
   unconfirmedClientMessageIds: string[]
   /** The host-owned id of the tab showing this chat, when it has one. Absent from older hosts. */
   tabId?: string

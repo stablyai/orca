@@ -216,6 +216,12 @@ export const AGENT_SESSION_REWIND_RUNTIME_CAPABILITY = 'agent-session.rewind.v1'
 // status form to clients that do not advertise this. Transitional: drop the downgrade once no
 // supported release lacks the capability.
 export const AGENT_SESSION_TURN_ITEM_CAPABILITY = 'agent-session.turn-item.v1' as const
+// Why: a send a crash or a dead agent left in doubt for good (`unknown`, `recovered`), or an older
+// host's inferred `not_delivered`, is drawn as an ordinary sent message. A client that predates
+// this draws it unconfirmed or hidden, behind a Retry, so the host publishes such a send to it as
+// `accepted`. Transitional: drop the projection once no supported release lacks the capability.
+export const AGENT_SESSION_RECOVERED_SEND_CAPABILITY =
+  'agent-session.crash-doubted-send.v1' as const
 export const AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY =
   'agent-session.background-task-stop.v1' as const
 // Why: agentSession.cancel has a strict schema, so clients must not send prompt identity to an
@@ -404,6 +410,7 @@ export const RUNTIME_CAPABILITIES = [
   AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
+  AGENT_SESSION_RECOVERED_SEND_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
   AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_OPENCODE2_RESUME_RUNTIME_CAPABILITY,

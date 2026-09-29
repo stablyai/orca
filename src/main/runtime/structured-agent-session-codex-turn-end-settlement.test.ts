@@ -54,6 +54,8 @@ let host: StructuredAgentSessionHost
 let fence: number
 let handlers: CodexAppServerConnectionHandlers | undefined
 let answers: number
+/** Codex answers the next `turn/start` without naming a turn, so the send binds to none. */
+let answerWithoutTurn: boolean
 let interrupts: number
 let childCloses: number
 let turns: ReturnType<typeof codexTurnLifecycleFake>
@@ -117,6 +119,7 @@ function verdictOf(submissions: readonly AgentJournalSubmission[], clientMessage
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-codex-turn-end-'))
   answers = 0
+  answerWithoutTurn = false
   interrupts = 0
   childCloses = 0
   turns = codexTurnLifecycleFake(
@@ -140,7 +143,8 @@ beforeEach(async () => {
         }
         if (method === 'turn/start') {
           answers += 1
-          return turns.routes['turn/start']()
+          const answer = turns.routes['turn/start']()
+          return answerWithoutTurn ? {} : answer
         }
         if (method === 'turn/interrupt') {
           interrupts += 1
@@ -224,6 +228,82 @@ describe('a Codex send its turn ended without taking it', () => {
     const after = await settled()
     expect(verdictOf(after.submissions, opening)).toBe('accepted')
     expect(verdictOf(after.submissions, followUp)).toBe('withdrawn')
+    expect(after.owesWork).toBe(false)
+  })
+})
+
+describe('a Codex send its turn ended without answering', () => {
+  it('settles in doubt when the turn completes without echoing it', async () => {
+    const opening = await send('look around')
+    await vi.waitFor(() => expect(answers).toBe(1))
+    turns.start()
+    turns.echo(opening)
+    const followUp = await send('and check the tests')
+    await vi.waitFor(() => expect(answers).toBe(2))
+
+    turns.end('completed')
+
+    await vi.waitFor(async () =>
+      expect(verdictOf((await settled()).submissions, followUp)).not.toBe('pending')
+    )
+    const after = await settled()
+    expect(after.submissions.find((entry) => entry.clientMessageId === followUp)).toMatchObject({
+      dispatchState: 'unknown',
+      reason: 'turn_settled_before_acknowledgement',
+      recovered: true
+    })
+    expect(after.owesWork).toBe(false)
+  })
+
+  // A subagent's thread ends its own turns; only the primary thread's turn-over ends a user's send.
+  it('keeps the send owed through a child thread ending its turn', async () => {
+    const opening = await send('look around')
+    await vi.waitFor(() => expect(answers).toBe(1))
+    turns.start()
+    turns.echo(opening)
+    const followUp = await send('and check the tests')
+    await vi.waitFor(() => expect(answers).toBe(2))
+
+    const child = { threadId: 'child-thread', turn: { id: 'child-turn-1', status: 'completed' } }
+    handlers?.onNotification?.('turn/started', {
+      ...child,
+      turn: { ...child.turn, status: 'inProgress' }
+    })
+    handlers?.onNotification?.('turn/completed', child)
+    const during = await settled()
+    expect(verdictOf(during.submissions, followUp)).toBe('pending')
+    expect(during.owesWork).toBe(true)
+
+    turns.end('completed')
+    await vi.waitFor(async () =>
+      expect(verdictOf((await settled()).submissions, followUp)).toBe('unknown')
+    )
+  })
+
+  // Codex follows every error it will not retry with its turn's failed completion.
+  it('settles in doubt after an error Codex will not retry ends its turn', async () => {
+    answerWithoutTurn = true
+    const sent = await send('look around')
+    await vi.waitFor(() => expect(answers).toBe(1))
+    turns.start()
+
+    handlers?.onNotification?.('error', {
+      threadId: THREAD,
+      turnId: turns.turnId,
+      willRetry: false,
+      error: { message: 'Selected model is at capacity. Please try a different model.' }
+    })
+    turns.end('failed', 'Selected model is at capacity. Please try a different model.')
+
+    await vi.waitFor(async () =>
+      expect(verdictOf((await settled()).submissions, sent)).not.toBe('pending')
+    )
+    const after = await settled()
+    expect(after.submissions[0]).toMatchObject({
+      dispatchState: 'unknown',
+      reason: 'turn_settled_before_acknowledgement',
+      recovered: true
+    })
     expect(after.owesWork).toBe(false)
   })
 })

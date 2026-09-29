@@ -371,8 +371,8 @@ export type AgentJournalRenderItem = AgentJournalProducerLinkage & {
 export const AGENT_JOURNAL_DISPATCH_STATES = ['pending', 'accepted', 'rejected', 'unknown'] as const
 export type AgentJournalDispatchState = (typeof AGENT_JOURNAL_DISPATCH_STATES)[number]
 
-/** The write-ahead submission row, projected. `unknown` is a displayed state:
- *  the turn reads as delivery unconfirmed, never as sent and never as failed. */
+/** The write-ahead submission row, projected. `unknown` means Orca cannot tell whether the
+ *  provider took it; it is never re-sent, and the chat draws it as an ordinary sent message. */
 export type AgentJournalSubmission = {
   clientMessageId: string
   /** Execution fence of the latest dispatch attempt or recovery. */
@@ -388,7 +388,7 @@ export type AgentJournalSubmission = {
   rejection?: UnreadAgentSessionFailureFact
   submittedAt: number
   resolvedAt: number | null
-  /** Set when crash reconciliation resolved the dispatch, not the provider. A live
+  /** Set when a crash boundary or a dead agent resolved the dispatch, not the provider. A live
    *  `unknown` is a send still outstanding; a recovered one outlived its writer. */
   recovered?: true
   /** The host accepted this send to hand over later; absent on sends dispatched as they were

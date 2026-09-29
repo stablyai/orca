@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
-import { dispatchWasWithdrawn } from '../../../../shared/structured-agent-session-dispatch-rejection'
+import { structuredAgentSessionSubmissionWasWithdrawn } from '../../../../shared/structured-agent-session-submission-settlement'
 import type { StructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
 import { appendNativeChatDraftCache } from './native-chat-draft-cache'
 import { readOutbox } from './structured-agent-session-outbox-storage'
@@ -61,7 +61,9 @@ export function useStructuredAgentSessionWithdrawnRestore(
     () => ({
       byHost: (entries, submissions) => {
         const withdrawn = new Set(
-          submissions.filter(dispatchWasWithdrawn).map((submission) => submission.clientMessageId)
+          submissions
+            .filter(structuredAgentSessionSubmissionWasWithdrawn)
+            .map((submission) => submission.clientMessageId)
         )
         restoreWithdrawnMessages(
           sessionId,

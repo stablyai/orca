@@ -64,6 +64,8 @@ export function structuredClaudeLifecycleEvent(
       cause: event.cause,
       fence: event.fence,
       acquisitionGeneration: event.acquisitionGeneration,
+      // The instant the adapter ended the running turn at; the host matches that end to this exit.
+      ...(event.observedAt !== undefined ? { observedAt: event.observedAt } : {}),
       ...(event.startupUnproven ? { startupUnproven: event.startupUnproven } : {})
     }
   }

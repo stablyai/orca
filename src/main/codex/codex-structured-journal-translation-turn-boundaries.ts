@@ -190,6 +190,8 @@ export class CodexJournalTurnBoundaries {
           requestOrigin,
           latestDispatchSequence
         )
+        // Codex runs one turn per thread and echoes a send's pending input before this frame.
+        this.deps.sink.settleSendsAtTurnOver?.()
       }
       this.deps.items.ordinals.forgetTurn(event.threadId, turnId)
       this.deps.activeTurns.forget(event.threadId, turnId)

@@ -3,7 +3,7 @@
 // and is withdrawn, as a Stop's host-side withdrawal is. Any other end records pending
 // input before `turn/completed`, a failed turn after its `error` frame, so only that
 // frame settles: a failed turn that never echoed the send refused it, in Codex's words,
-// and a completed one leaves it pending for the journal's recovery on exit.
+// and a completed one leaves it to the translator's turn-over, which settles it in doubt.
 
 import {
   agentSessionFailureFact,

@@ -186,6 +186,16 @@ async function errorFailures(): Promise<(AgentSessionFailureFact | undefined)[]>
   )
 }
 
+/** The failure kind of every row saying the session ended; one per crash boundary. */
+async function restartRows(): Promise<string[]> {
+  return (await host.journalSnapshot(SESSION)).items.flatMap((item) =>
+    item.body.kind === 'status' &&
+    (item.body.failure?.kind === 'hostRestarted' || item.body.failure?.kind === 'providerExited')
+      ? [item.body.failure.kind]
+      : []
+  )
+}
+
 let subscriptions = 0
 
 async function subscribe(): Promise<AgentSessionSubscribeEvent[]> {
@@ -540,8 +550,6 @@ describe('what an earlier host process left behind', () => {
   })
 
   it('leaves a legacy pending message and a handed-over one in doubt, never re-sent (W4′c)', async () => {
-    const providerHistoryWindow = vi.fn(async () => null)
-    adapterExtras = { providerHistoryWindow }
     await writeAsEarlierProcess(async (journal, fence) => {
       await journal.appendSubmission({ ...earlierSubmission('legacy', 'l'), fence })
       await journal.appendSubmission({ ...earlierSubmission('handed', 'h', true), fence })
@@ -554,8 +562,41 @@ describe('what an earlier host process left behind', () => {
 
     expect(await submission('legacy')).toMatchObject({ dispatchState: 'unknown', recovered: true })
     expect(await submission('handed')).toMatchObject({ dispatchState: 'unknown', recovered: true })
-    // Deciding them from provider history waits for a won lease (W4′d).
-    expect(providerHistoryWindow).not.toHaveBeenCalled()
+    expect(await restartRows()).toEqual(['hostRestarted'])
+    expect(dispatch).not.toHaveBeenCalled()
+  })
+
+  it('says once that the session did not survive, however often the chat reopens', async () => {
+    await writeAsEarlierProcess(async (journal, fence) => {
+      await journal.appendSubmission({ ...earlierSubmission('handed', 'h', true), fence })
+      await journal.resolveDispatch({ clientMessageId: 'handed', state: 'pending', fence })
+    })
+    await host.flushAllStreamedEvents()
+    await startHost()
+    await host.revealSession(SESSION)
+    await host.flushAllStreamedEvents()
+    await startHost()
+    await host.revealSession(SESSION)
+
+    expect(await restartRows()).toEqual(['hostRestarted'])
+  })
+
+  it('writes the one row when an acquisition is the first to open the chat', async () => {
+    await writeAsEarlierProcess(async (journal, fence) => {
+      await journal.appendSubmission({ ...earlierSubmission('handed', 'h', true), fence })
+      await journal.resolveDispatch({ clientMessageId: 'handed', state: 'pending', fence })
+    })
+    await host.flushAllStreamedEvents()
+    await startHost()
+
+    const fence = store.getRecord(SESSION)!.lease.runtimeFence
+    expect(await host.attach(CALLER, hostTestAttachParams(fence))).toMatchObject({
+      ok: true,
+      value: { unconfirmedClientMessageIds: [] }
+    })
+
+    expect(await submission('handed')).toMatchObject({ dispatchState: 'unknown', recovered: true })
+    expect(await restartRows()).toEqual(['hostRestarted'])
     expect(dispatch).not.toHaveBeenCalled()
   })
 })

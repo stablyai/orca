@@ -12,7 +12,7 @@ export function openTestAttachConversation(
   return async (record) =>
     (
       await openStructuredAgentSessionConversationJournal({ journalRoot, adapter }, record, {
-        acquisition: true
+        acquisition: { deathEvidence: record.lease.deathEvidence ?? null }
       })
     ).session.journal
 }

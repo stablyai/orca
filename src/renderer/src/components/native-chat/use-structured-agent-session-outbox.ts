@@ -12,6 +12,7 @@ import {
   journalAnswersInFlightSend,
   type StructuredAgentSessionSendDisposition
 } from '../../../../shared/structured-agent-session-send-disposition'
+import { structuredAgentSessionSubmissionSettlement } from '../../../../shared/structured-agent-session-submission-settlement'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { readOutbox, writeOutbox } from './structured-agent-session-outbox-storage'
 import {
@@ -93,8 +94,7 @@ export function useStructuredAgentSessionOutbox(args: {
     const hostOwns = new Set(
       submissions
         .filter(
-          (submission) =>
-            submission.dispatchState === 'pending' || submission.dispatchState === 'accepted'
+          (submission) => structuredAgentSessionSubmissionSettlement(submission) !== 'refused'
         )
         .map((submission) => submission.clientMessageId)
     )
@@ -275,12 +275,16 @@ export function useStructuredAgentSessionOutbox(args: {
     )
     const current = outboxRef.current.find((entry) => entry.clientMessageId === clientMessageId)
     // The host settled this id as rejected, and reusing it only replays that forever, so rotate the
-    // id for a safe resend. Read from the message itself, which outlives a restart, or from a
-    // reconciliation that settled an earlier unknown before the outbox caught up. A refusal that
-    // settled the message already rotated it.
+    // id for a safe resend. Read from the message itself, which outlives a restart, or from the
+    // journal, which can settle it before the outbox catches up. A refusal that settled the message
+    // already rotated it.
     const recordedRejection =
       current?.state === 'rejected' && current.lastFailure?.kind === 'rejected'
-    if (current && (recordedRejection || submission?.dispatchState === 'rejected')) {
+    if (
+      current &&
+      (recordedRejection ||
+        (submission && structuredAgentSessionSubmissionSettlement(submission) === 'refused'))
+    ) {
       const rotated = outboxRef.current.map((entry) =>
         entry.clientMessageId === clientMessageId
           ? {
@@ -300,12 +304,7 @@ export function useStructuredAgentSessionOutbox(args: {
       setOutbox(rotated)
       return
     }
-    const retryAfterUnknownSubmittedAt =
-      submission?.dispatchState === 'unknown'
-        ? submission.submittedAt
-        : current?.state === 'unconfirmed'
-          ? -1
-          : null
+    const retryAfterUnknownSubmittedAt = current?.state === 'unconfirmed' ? -1 : null
     const next = outboxRef.current.map((entry) =>
       entry.clientMessageId === clientMessageId
         ? {

@@ -5,10 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../shared/agent-session-wire'
-import {
-  AGENT_SESSION_TURN_ITEM_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import { remoteRuntimeClientCapabilities } from '../../shared/remote-runtime-client-capabilities'
 import { fakeClaude } from './claude-structured-fake-connection-test-fixture'
 import { claudeSessionIdForOrcaSession } from '../claude/claude-structured-launch-resolution'
 import { CLAUDE_SPAWN_TOKEN_ENV } from '../claude/claude-structured-owner-identity'
@@ -33,10 +31,12 @@ const WORKSPACE = 'workspace-claude'
 // Why 'runtime': this file exercises the Claude structured integration over agentSession.*, not the
 // mobile surface — nothing here asserts anything mobile-specific, and its sibling integration
 // suites use 'runtime' too. Mobile additionally requires the experimental structured-chat setting,
-// which structured-agent-session.test.ts pins in both its satisfied and refused states.
+// which structured-agent-session.test.ts pins in both its satisfied and refused states. It
+// advertises what a current remote client does, so it reads the host's current shapes, not the
+// down-projection an older client gets.
 const CLIENT = {
   clientKind: 'runtime' as const,
-  clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+  clientCapabilities: remoteRuntimeClientCapabilities([STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY])
 }
 
 const { resolveSessionFilePath } = vi.hoisted(() => ({
@@ -157,9 +157,7 @@ async function ok<T>(method: string, params: unknown): Promise<T> {
   return result.value as T
 }
 
-async function subscribe(
-  client: { clientKind: 'runtime'; clientCapabilities: string[] } = CLIENT
-): Promise<AgentSessionSubscribeEvent[]> {
+async function subscribe(): Promise<AgentSessionSubscribeEvent[]> {
   const frames: AgentSessionSubscribeEvent[] = []
   await dispatcher.dispatchStreaming(
     {
@@ -174,7 +172,7 @@ async function subscribe(
         frames.push(response.result)
       }
     },
-    client
+    CLIENT
   )
   return frames
 }
@@ -549,16 +547,28 @@ describe('a structured Claude session over agentSession.*', () => {
         connection.sent.push(message)
       }
       const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'in flight' }] }
-      const inFlight = ok<{ submission: { dispatchState: string; reason: string | null } }>(
-        'agentSession.send',
-        { envelope: envelope('agentSession.send', { body }, created.fence), body }
-      )
+      const inFlight = ok<{ submission: unknown }>('agentSession.send', {
+        envelope: envelope('agentSession.send', { body }, created.fence),
+        body
+      })
       await vi.waitFor(() => expect(connection.sent).toHaveLength(1))
       connection.handlers.onExit?.(new Error('claude stream-json exited (code 1): crashed'))
 
-      expect((await inFlight).submission).toMatchObject({
+      // The death leaves the send in doubt for good: drawn as sent, never re-sent by the host.
+      const doubted = {
         dispatchState: 'unknown',
-        reason: 'provider_exited_before_acknowledgement'
+        reason: 'provider_exited_before_acknowledgement',
+        recovered: true
+      }
+      expect((await inFlight).submission).toMatchObject(doubted)
+      const journal = await call('agentSession.history', {
+        sessionId: SESSION,
+        direction: 'tail',
+        limit: 10
+      })
+      expect(journal).toMatchObject({
+        ok: true,
+        result: { page: { submissions: [expect.objectContaining(doubted)] } }
       })
       // The crash releases the lease; nothing restarts Claude until the chat has work for it.
       await waitForStructuredAgentSessionRecovery()
@@ -781,10 +791,7 @@ describe('a structured Claude session over agentSession.*', () => {
     const answers: ((value: unknown) => void)[] = []
     claude.setContextUsage(() => new Promise((resolve) => answers.push(resolve)))
     const created = await ok<{ fence: number }>('agentSession.create', createIntentParams())
-    const stream = await subscribe({
-      ...CLIENT,
-      clientCapabilities: [...CLIENT.clientCapabilities, AGENT_SESSION_TURN_ITEM_CAPABILITY]
-    })
+    const stream = await subscribe()
     const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Hi' }] }
     await ok('agentSession.send', {
       envelope: envelope('agentSession.send', { body }, created.fence),

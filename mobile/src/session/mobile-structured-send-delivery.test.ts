@@ -13,30 +13,30 @@ function accepted(
 }
 
 describe('mobileStructuredSendDelivery', () => {
-  it('keeps the operation id for every unknown, host-recorded or ack-lost', () => {
-    // The one answer that may be a delivery. Spending the id here turns the next
-    // identical send into a second copy in front of the model.
+  it('keeps the operation id when the reply was lost, so a retry stays a replay', () => {
+    // The host may never have recorded it; rotating here is what sent one message five times.
     expect(mobileStructuredSendDelivery({ status: 'unknown' })).toEqual({
-      outcome: 'unknown',
-      operationIdSpent: false,
-      error: null
-    })
-    expect(mobileStructuredSendDelivery(accepted('unknown'))).toEqual({
       outcome: 'unknown',
       operationIdSpent: false,
       error: null
     })
   })
 
-  it('reports a written send as sent and spends its id', () => {
-    // `pending` is written and awaiting the provider's acknowledgement — not doubt.
-    for (const dispatchState of ['accepted', 'pending'] as const) {
+  it('reports a written send as sent and spends its id, in doubt or not', () => {
+    // `pending` awaits the provider's acknowledgement; `unknown` is doubt the host recorded and
+    // the chat draws as sent. Typing it again is a new message, as on the desktop.
+    for (const dispatchState of ['accepted', 'pending', 'unknown'] as const) {
       expect(mobileStructuredSendDelivery(accepted(dispatchState))).toEqual({
         outcome: 'accepted',
         operationIdSpent: true,
         error: null
       })
     }
+    expect(mobileStructuredSendDelivery(accepted('rejected', 'not_delivered'))).toEqual({
+      outcome: 'accepted',
+      operationIdSpent: true,
+      error: null
+    })
   })
 
   it('does not report a retained payload replay as a new accepted send', () => {

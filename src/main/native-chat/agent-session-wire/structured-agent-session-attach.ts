@@ -40,9 +40,6 @@ import {
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session-provider-handle'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { reconcileJournalSubmissionsAgainstHistory } from '../agent-session-journal/journal-restart-reconciliation'
-import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
-import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { structuredAgentSessionRefusalMessage } from './structured-agent-session-refusal-message'
 
 /**
@@ -164,95 +161,17 @@ export function journalIdentityFor(
 
 export type AttachedJournal = {
   journal: AgentSessionJournal
-  /** Submissions the crash boundary left `unknown` that provider history could not decide. */
-  unconfirmedClientMessageIds: string[]
 }
 
-/**
- * The conversation's journal — opened, and its crash boundary settled, by the conversation's own
- * open — with provider history deciding the submissions that boundary could only doubt.
- *
- * Why the reconciliation belongs HERE and nowhere else: this runs after the
- * record store handed this host the lease and before `onAttached` starts a
- * provider child, so nothing can be appending to the provider's history while it
- * is read, and the window stays valid until the resume consumes it. Every other
- * settlement site — a proven child exit — runs while the host
- * may still start another child, and a read there could be overtaken before it
- * is acted on. Orca still never re-sends: this decides state only. A queued
- * submission is left alone: it was never handed over, so history cannot hold it.
- */
+/** The conversation's journal, opened — and its crash boundary settled — by the conversation's
+ *  own open. Nothing here reads provider history: a send a gone generation left in doubt is drawn
+ *  as sent, and the open's one session row says the session did not survive. */
 export async function attachJournal(input: {
   record: AgentSessionRecord
-  params: AgentSessionAttachParams
-  journalRoot: string
-  adapter: StructuredAgentSessionAdapter
   /** The host's open conversation, whose journal the attach adopts. */
   openConversation: (record: AgentSessionRecord) => Promise<AgentSessionJournal>
-  /** Provider history sampled before a new child is acquired. `null` means the
-   *  adapter had no usable history; omit to read lazily for direct callers. */
-  providerHistoryWindow?: ProviderHistoryWindow | null
 }): Promise<AttachedJournal> {
-  const identity = journalIdentityFor(input.record, input.params)
-  const fence = input.record.lease.runtimeFence
-  const journal = await input.openConversation(input.record)
-  const settled = await reconcileAgainstProviderHistory({
-    adapter: input.adapter,
-    identity,
-    journal,
-    fence,
-    accountHome: input.record.accountHome,
-    ...(Object.hasOwn(input, 'providerHistoryWindow')
-      ? { history: input.providerHistoryWindow }
-      : {})
-  })
-  return {
-    journal,
-    unconfirmedClientMessageIds: journal
-      .submissions()
-      .filter(
-        (entry) =>
-          entry.dispatchState === 'unknown' &&
-          entry.recovered === true &&
-          !settled.includes(entry.clientMessageId)
-      )
-      .map((entry) => entry.clientMessageId)
-  }
-}
-
-/** Reading provider history is best effort: a provider that reports none, or a
- *  read that fails, leaves every submission exactly as the crash boundary wrote
- *  it. The journal writes the outcome implies are NOT caught here — a failed
- *  write must reach the caller that retains the journal handle. */
-async function reconcileAgainstProviderHistory(input: {
-  adapter: StructuredAgentSessionAdapter
-  identity: AgentSessionJournalIdentity
-  journal: AgentSessionJournal
-  fence: number
-  accountHome: AgentSessionAccountHome
-  history?: ProviderHistoryWindow | null
-}): Promise<string[]> {
-  let history = input.history
-  if (history === undefined) {
-    if (!input.adapter.providerHistoryWindow) {
-      return []
-    }
-    try {
-      history = await input.adapter.providerHistoryWindow({
-        identity: input.identity,
-        accountHome: input.accountHome
-      })
-    } catch {
-      return []
-    }
-  }
-  if (!history) {
-    return []
-  }
-  return reconcileJournalSubmissionsAgainstHistory({
-    journal: input.journal,
-    fence: input.fence,
-    history
-  })
+  return { journal: await input.openConversation(input.record) }
 }
 
 /**

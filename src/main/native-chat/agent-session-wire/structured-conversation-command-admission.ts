@@ -81,7 +81,7 @@ export function conversationCommandBlocked(
   ) {
     return blocked(
       'messagesUnsettled',
-      'Resolve pending or unconfirmed messages before using this command.'
+      'Wait for your last message to reach the agent before using this command.'
     )
   }
   return null

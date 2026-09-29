@@ -279,15 +279,14 @@ describe('structured agent session outbox admission', () => {
     expect(result.current.blockedClientMessageId).toBe(heldId)
   })
 
-  it('keeps a refused message held when an unconfirmed message ahead of it is retried', async () => {
+  it('keeps a refused message held when the journal leaves a message ahead of it in doubt', async () => {
     const none: readonly AgentJournalSubmission[] = []
     mocks.call.mockImplementation((_target, _method, params) => {
       const id = requestId(params)
       if (requestText(params) === 'held') {
         return Promise.resolve(refusedResult('agent_session_ownership_unknown'))
       }
-      const sent = sentTexts().filter((text) => text === 'first').length
-      return Promise.resolve(submissionResult(id, sent === 1 ? 'pending' : 'accepted', 10))
+      return Promise.resolve(submissionResult(id, 'pending', 10))
     })
     const { result, rerender } = renderHook(
       ({ submissions }: { submissions: readonly AgentJournalSubmission[] }) =>
@@ -310,12 +309,23 @@ describe('structured agent session outbox admission', () => {
       dispatchState: 'unknown'
     }
     rerender({ submissions: [unknown] })
-    await waitFor(() => expect(result.current.outbox[0]?.state).toBe('unconfirmed'))
-
-    act(() => result.current.retry(firstId))
-    await waitFor(() => expect(result.current.outbox).toHaveLength(1))
     await settleTimers(50)
-    expect(sentTexts()).toEqual(['first', 'held', 'first'])
+
+    // A live doubt is held like a pending: no barrier, no Retry of its own, and the held one stays.
+    expect(result.current.outbox[0]).toMatchObject({
+      clientMessageId: firstId,
+      state: 'dispatching'
+    })
+    const notices = structuredAgentSessionDeliveryNotices(
+      result.current.outbox,
+      result.current.blockedClientMessageId,
+      'Claude',
+      () => {},
+      [unknown],
+      []
+    )
+    expect(notices.has(agentJournalSubmissionKey(firstId))).toBe(false)
+    expect(sentTexts()).toEqual(['first', 'held'])
     expect(result.current.blockedClientMessageId).toBe(heldId)
   })
 })

@@ -34,7 +34,6 @@ import {
   type ClaudeExitLifecycle
 } from './claude-structured-session-exit-lifecycle'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
-import { resolveClaudeProviderHistoryWindow } from './claude-structured-history-window'
 import { drainClaudeChildWork } from './claude-child-work-evidence'
 import {
   admitClaudePromptCancellation,
@@ -129,17 +128,6 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     await session.startup.settled
     return claudeStartupFailureFact(session) ?? undefined
   }
-
-  /** Restart reconciliation reads the transcript a resume replays; these maps track liveness. */
-  providerHistoryWindow: NonNullable<StructuredAgentSessionAdapter['providerHistoryWindow']> = (
-    input
-  ) =>
-    resolveClaudeProviderHistoryWindow({
-      identity: input.identity,
-      accountHomePath: input.accountHome.path,
-      hasLiveSession:
-        this.sessions.has(input.identity.sessionId) || this.exits.has(input.identity.sessionId)
-    })
 
   private emit(session: ClaudeSession | null, event: ClaudeStructuredSessionEvent): void {
     if (event.type === 'ended') {

@@ -53,6 +53,8 @@ export type ScriptedClaudeChild = {
   sessionId: string
   launch: ClaudeStreamJsonLaunch
   calls: string[]
+  /** Every frame the host wrote to the CLI's stdin, so a test can echo one as the CLI would. */
+  sent: Record<string, unknown>[]
   handlers: ClaudeStreamJsonConnectionHandlers
   connection: Omit<ClaudeStreamJsonConnection, 'closed' | 'exitVerdict'> & {
     closed: boolean
@@ -109,6 +111,7 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
       sessionId,
       launch,
       calls: [],
+      sent: [],
       handlers,
       exit: (error) => {
         child.connection.exitVerdict = { root: 'exited', tree: 'unverifiable' }
@@ -174,8 +177,9 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
         interrupt: async () => undefined,
         cancelAsyncMessage: async () => false,
         stopTask: async () => {},
-        send: async () => {
+        send: async (message) => {
           child.calls.push('send')
+          child.sent.push(message)
         },
         close: async () => {
           child.connection.closed = true

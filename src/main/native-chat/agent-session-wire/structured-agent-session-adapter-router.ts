@@ -1,9 +1,6 @@
 import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
-import type {
-  AgentSessionAccountHome,
-  AgentSessionExecutionLocation
-} from '../../../shared/agent-session-record'
+import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 
 type RoutedAgent = 'claude' | 'codex'
@@ -139,11 +136,6 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
 
   historyFilePath = (input: { identity: AgentSessionJournalIdentity }) =>
     this.requireAgent(input.identity).historyFilePath?.(input) ?? Promise.resolve(null)
-
-  providerHistoryWindow = (input: {
-    identity: AgentSessionJournalIdentity
-    accountHome: AgentSessionAccountHome
-  }) => this.requireAgent(input.identity).providerHistoryWindow?.(input) ?? Promise.resolve(null)
 
   closeSession = (sessionId: string): Promise<boolean> =>
     this.stopSession(sessionId, (adapter) => adapter.closeSession)

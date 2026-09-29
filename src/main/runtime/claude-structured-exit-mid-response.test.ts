@@ -69,4 +69,63 @@ describe('a started Claude CLI that exits while a response is in progress', () =
       ])
     )
   })
+
+  // The CLI echoed the send and was streaming its reply when it was killed. The adapter ends the
+  // running turn itself, at the exit time it stamped; the host must read that turn as one this
+  // exit interrupted however late it takes the exit up.
+  it('says Claude stopped when the exit lands after the send was accepted and output streamed', async () => {
+    const host = await claude.install()
+    await expect(host.attach(CALLER, claude.attachParams(SESSION, null))).resolves.toMatchObject({
+      ok: true
+    })
+    await send(host, 'write a story')
+    const child = claude.child(SESSION)
+    await vi.waitFor(() => expect(child.sent).toHaveLength(1))
+    const providerSession = String(child.launch.options.sessionId)
+    child.handlers.onMessage?.({ ...child.sent[0], uuid: 'user-echo' })
+    child.handlers.onMessage?.({
+      type: 'stream_event',
+      session_id: providerSession,
+      uuid: 'assistant-partial',
+      event: { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Once upon' } }
+    })
+    await host.flushStreamedEvents(SESSION)
+    await vi.waitFor(async () =>
+      expect(
+        (await host.journalSnapshot(SESSION)).submissions.map((entry) => entry.dispatchState)
+      ).toEqual(['accepted'])
+    )
+
+    // As on a loaded machine: the host takes up the exit only after the adapter's own end of the
+    // turn has landed in the journal, and on a later millisecond than the one the adapter stamped.
+    let clock = Date.now()
+    vi.spyOn(Date, 'now').mockImplementation(() => (clock += 1))
+    const handleAdapterEvent = host.handleAdapterEvent
+    vi.spyOn(host, 'handleAdapterEvent').mockImplementation(async (event) => {
+      await host.flushStreamedEvents(SESSION)
+      return handleAdapterEvent(event)
+    })
+    child.exit(scriptedClaudeExitError('claude stream-json exited (code 137)'))
+    await waitForStructuredAgentSessionRecovery()
+
+    await vi.waitFor(async () =>
+      expect(
+        (await host.journalSnapshot(SESSION)).items.flatMap((item) =>
+          item.body.kind === 'status' && item.body.failure ? [item.body.failure.kind] : []
+        )
+      ).toEqual(['providerExited'])
+    )
+
+    // The next send starts a fresh child; settling the dead one again adds no second row.
+    vi.mocked(host.handleAdapterEvent).mockRestore()
+    await send(host, 'carry on')
+    await vi.waitFor(() => expect(claude.children(SESSION)).toHaveLength(2))
+    await vi.waitFor(() => expect(claude.child(SESSION).sent).toHaveLength(1))
+    await host.flushStreamedEvents(SESSION)
+    expect(
+      (await host.journalSnapshot(SESSION)).items.flatMap((item) =>
+        item.body.kind === 'status' ? [item.body.failure?.kind ?? item.body.text] : []
+      )
+    ).toEqual(['providerExited'])
+  })
 })

@@ -245,6 +245,16 @@ The cross-version suite derives the old client's list by removing this capabilit
 baseline's own list, per the rule above, so the downgrade stays exercised after a release ships
 it.
 
+The same boundary carries a second downgrade, `agent-session.crash-doubted-send.v1`
+(`structured-agent-session-recovered-send-capability.ts`). A send a crash or a dead agent left in
+doubt for good (`unknown` with `recovered`) is drawn as an ordinary sent message, as is an older
+host's inferred `not_delivered`; a client that predates that reading drew the first unconfirmed,
+with a Retry that held its queue, and hid the second. So whatever
+`structuredAgentSessionSubmissionSettlement` reads as sent reaches such a client as `accepted`, the
+one state it already draws as sent, on history, the live stream and a replayed send's reply. The
+journal keeps the real facts. Both compositions live in
+`structured-agent-session-client-projection.ts`, so history and the stream cannot disagree.
+
 ## Known debt: JSON-RPC errors drop Node's string code
 
 An error raised on an SSH host crosses the relay as JSON-RPC, and

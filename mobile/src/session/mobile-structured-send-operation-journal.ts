@@ -185,7 +185,7 @@ export async function clearMobileStructuredSettledSendOperations(input: {
 }): Promise<void> {
   const settled = new Set(
     input.submissions.flatMap((submission) =>
-      submission.dispatchState === 'accepted' || submission.dispatchState === 'rejected'
+      submission.dispatchState !== 'pending'
         ? [`${submission.payloadFingerprint}\u0000${submission.clientMessageId}`]
         : []
     )

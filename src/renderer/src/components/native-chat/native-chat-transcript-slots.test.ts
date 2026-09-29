@@ -6,6 +6,9 @@ import {
   type NativeChatTurnStatus
 } from '../../../../shared/native-chat-turn-status'
 import { selectStructuredAgentSettledTurns } from '../../../../shared/structured-agent-session-turn-timing'
+import { agentSessionFailureFact } from '../../../../shared/agent-session-failure'
+import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
+import { structuredAgentSessionStatusBlock } from '../../../../shared/structured-agent-session-status-block'
 import type { NativeChatResolvedPrompt } from './native-chat-resolution-receipt'
 import type { NativeChatTurnDiff } from './native-chat-turn-diffs'
 import {
@@ -203,6 +206,82 @@ describe('a send the host rejected', () => {
       ['orca:dead', false, undefined],
       ['orca:restart-exit', false, undefined]
     ])
+  })
+})
+
+describe('a turn a crash or a dead agent cut off', () => {
+  // The row the host writes at the boundary, as the journal projection draws it.
+  function statusRow(id: string, kind: 'hostRestarted' | 'providerExited' | 'providerRetrying') {
+    const words = agentSessionFailureWords(agentSessionFailureFact(kind), {
+      surface: 'row',
+      agentName: 'Claude'
+    })
+    return {
+      id,
+      role: 'system' as const,
+      blocks: [structuredAgentSessionStatusBlock({ kind: 'status', ...words })],
+      timestamp: 1,
+      source: 'transcript' as const
+    }
+  }
+  const settled = {
+    active: null,
+    completedByTurn: { u: { startedAt: 1, thinking: false, workedSeconds: 7 } }
+  }
+
+  it.each(['hostRestarted', 'providerExited'] as const)(
+    'keeps the %s row outside the settled turn it landed in',
+    (kind) => {
+      const slots = build(
+        [
+          text('u', 'go', 'user'),
+          toolRun('work'),
+          text('partial', 'Half an answer'),
+          statusRow('boundary', kind),
+          text('next', 'again', 'user')
+        ],
+        { turnStatuses: settled }
+      )
+      expect(slots.map((slot) => [slot.message.id, slot.folded])).toEqual([
+        ['u', false],
+        ['partial', false],
+        ['boundary', false],
+        ['next', false]
+      ])
+    }
+  )
+
+  it('folds a failure the agent answered past in the same turn', () => {
+    const slots = build(
+      [
+        text('u', 'go', 'user'),
+        statusRow('failed-step', 'providerExited'),
+        toolRun('work'),
+        text('a', 'Done after all.')
+      ],
+      { turnStatuses: settled }
+    )
+    expect(slots.map((slot) => slot.message.id)).toEqual(['u', 'a'])
+  })
+
+  it('still folds a provider retry, which is the turn working', () => {
+    const slots = build(
+      [text('u', 'go', 'user'), statusRow('retry', 'providerRetrying'), text('a', 'Done.')],
+      { turnStatuses: settled }
+    )
+    expect(slots.map((slot) => slot.message.id)).toEqual(['u', 'a'])
+  })
+
+  it("keeps a failure row outside the fold whichever agent's row it is", () => {
+    const slots = build(
+      [
+        text('u', 'go', 'user'),
+        text('partial', 'Half an answer'),
+        { ...statusRow('boundary', 'providerExited'), agentId: 'task-1' }
+      ],
+      { turnStatuses: settled }
+    )
+    expect(slots.map((slot) => slot.message.id)).toEqual(['u', 'partial', 'boundary'])
   })
 })
 

@@ -4,7 +4,10 @@ import type {
   AgentJournalSubmission
 } from '../../../../shared/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
-import { createStructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
+import {
+  createStructuredAgentSessionOutboxEntry,
+  reconcileStructuredAgentSessionOutbox
+} from '../../../../shared/structured-agent-session-outbox'
 import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
 
 function submission(index: number): AgentJournalSubmission {
@@ -38,6 +41,32 @@ describe('structured agent session message projection', () => {
     expect(
       projectStructuredAgentSessionMessages([refusedItem, acceptedItem], [], [rejected])
     ).toMatchObject([{ id: acceptedItem.itemId, role: 'user' }])
+  })
+
+  it.each([
+    ['left in doubt by a restart', { dispatchState: 'unknown' as const, recovered: true as const }],
+    [
+      'left in doubt by a restart on a host that omits the recovered flag',
+      { dispatchState: 'unknown' as const, reason: 'host_restarted_before_acknowledgement' }
+    ],
+    [
+      "rejected by an older host's not-delivered verdict",
+      { dispatchState: 'rejected' as const, reason: 'not_delivered' }
+    ]
+  ])('draws a send %s as an ordinary sent message, with no outbox entry left', (_label, state) => {
+    const settled = { ...submission(0), providerItemId: null, ...state }
+    const sentItem = { ...item(0), itemId: agentJournalSubmissionKey(settled.clientMessageId) }
+    const left = createStructuredAgentSessionOutboxEntry({
+      clientMessageId: settled.clientMessageId,
+      sessionId: 'session-1',
+      text: 'send 0',
+      attachments: [],
+      queuedAt: 1
+    })
+    expect(projectStructuredAgentSessionMessages([sentItem], [left], [settled])).toEqual([
+      expect.objectContaining({ id: sentItem.itemId, role: 'user' })
+    ])
+    expect(reconcileStructuredAgentSessionOutbox([left], [settled])).toEqual([])
   })
 
   it('keeps a refused local draft available through its outbox', () => {

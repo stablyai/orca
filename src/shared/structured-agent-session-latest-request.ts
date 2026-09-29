@@ -15,6 +15,7 @@ import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
 import { isRootAgentJournalItem } from './agent-session-journal-producer'
 import { readAgentJournalTurn, readAgentJournalTurnOutcome } from './agent-session-turn-record'
 import { classifyDispatchRejection } from './structured-agent-session-dispatch-rejection'
+import { structuredAgentSessionSubmissionSettlement } from './structured-agent-session-submission-settlement'
 import { isUnansweredStructuredAgentSessionDispatch } from './structured-agent-session-unanswered-dispatch'
 
 export type StructuredAgentSessionLatestRequest = {
@@ -70,10 +71,11 @@ export function latestStructuredAgentSessionRequest(
   return null
 }
 
-/** Whether the session has a request to list. A send that failed nobody and never became a turn
- *  leaves nothing to report, so a session holding only those is not listed; a user message the
- *  provider journaled itself (history, an older host) still is. Deliberately NOT scoped by
- *  producer: a session whose only content came from a subagent still has content. */
+/** Whether the session has a request to list. A refused send that failed nobody leaves nothing to
+ *  report, so a session holding only those is not listed; a send drawn as sent is listed even when
+ *  a crash left it in doubt, and so is a user message the provider journaled itself (history, an
+ *  older host). Deliberately NOT scoped by producer: a session whose only content came from a
+ *  subagent still has content. */
 export function hasStructuredAgentSessionRequest(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[],
@@ -89,13 +91,16 @@ export function hasStructuredAgentSessionRequest(
         (item.body.kind === 'message' &&
           (item.body.role === 'assistant' || (item.body.role === 'user' && !sent.has(item.itemId))))
     ) ||
-    submissions.some(
-      (submission) =>
-        submission.dispatchState === 'accepted' ||
-        isUnansweredStructuredAgentSessionDispatch(submission, currentFence) ||
-        (submission.dispatchState === 'rejected' &&
-          classifyDispatchRejection(submission).verdict === 'failure')
-    )
+    submissions.some((submission) => {
+      switch (structuredAgentSessionSubmissionSettlement(submission)) {
+        case 'sent':
+          return true
+        case 'open':
+          return isUnansweredStructuredAgentSessionDispatch(submission, currentFence)
+        case 'refused':
+          return classifyDispatchRejection(submission).verdict === 'failure'
+      }
+    })
   )
 }
 
@@ -104,7 +109,7 @@ function rejectedSubmissionsByItem(
 ): Map<string, AgentJournalSubmission> {
   const rejected = new Map<string, AgentJournalSubmission>()
   for (const submission of submissions) {
-    if (submission.dispatchState === 'rejected') {
+    if (structuredAgentSessionSubmissionSettlement(submission) === 'refused') {
       rejected.set(agentJournalSubmissionKey(submission.clientMessageId), submission)
     }
   }
