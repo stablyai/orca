@@ -1,19 +1,21 @@
 import {
   getExecutionHostLabel,
-  isRuntimeOwnedSshTargetId,
   LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host-registry'
-import { isHostLocalProjectId } from '../../../shared/project-host-setup-projection'
-import { isEphemeralVmRuntimeEnvironment } from '../../../shared/runtime-environments'
-import {
-  PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
-  WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
-} from '../../../shared/protocol-version'
+import { parseWslUncPath } from '../../../shared/wsl-paths'
 import type { ProjectHostSetup } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
+import { translate } from '@/i18n/i18n'
+import {
+  getHostConnectAction,
+  getHostSetupAvailability,
+  getPendingSetupDetail,
+  isEphemeralVmProjectHost,
+  isRuntimeOwnedSshSetupHost,
+  canSetProjectLocation
+} from './project-host-setup-availability'
 
 export type ProjectHostSetupOption =
   | {
@@ -132,16 +134,34 @@ function buildReadySetupOptions({
         !isRuntimeOwnedSshSetupHost(setup.hostId)
       )
     })
-    .map((setup) => ({
-      id: setup.id,
-      kind: 'ready' as const,
-      projectId: setup.projectId,
-      hostId: setup.hostId,
-      repoId: setup.repoId,
-      label: hostById.get(setup.hostId)?.label || getExecutionHostLabel(setup.hostId),
-      detail: setup.displayName,
-      path: setup.path
-    }))
+    .map((setup) => {
+      const host = hostById.get(setup.hostId)
+      const hostLabel = host?.label || getExecutionHostLabel(setup.hostId)
+      // Why: a WSL-UNC setup path is where the worktree mirror lands, so the
+      // run-target row names the storage distro instead of reading as Windows.
+      // Scoped to local by product decision: this series ships the WSL runtime
+      // only for the local Windows host, so the label follows the same scope. A
+      // Windows SSH host can also report a \\wsl.localhost path — labelling that
+      // is deferred with the rest of the remote-WSL story.
+      const storageDistro =
+        host?.kind === 'local' ? (parseWslUncPath(setup.path)?.distro ?? null) : null
+      return {
+        id: setup.id,
+        kind: 'ready' as const,
+        projectId: setup.projectId,
+        hostId: setup.hostId,
+        repoId: setup.repoId,
+        label: storageDistro
+          ? translate(
+              'auto.lib.projectHostSetupOptions.wslStorageLabel',
+              '{{value0}} · WSL ({{distro}})',
+              { value0: hostLabel, distro: storageDistro }
+            )
+          : hostLabel,
+        detail: setup.displayName,
+        path: setup.path
+      }
+    })
     .filter(dedupeByHost())
 }
 
@@ -197,125 +217,9 @@ function buildNeedsSetupOptions({
     })
 }
 
-function isEphemeralVmProjectHost(host: ExecutionHostRegistryEntry | undefined): boolean {
-  return host?.kind === 'runtime' && isEphemeralVmRuntimeEnvironment(host)
-}
-
 // Why: a per-workspace-env SSH repo projects a setup with hostId `ssh:runtime-ssh-<id>`. The
 // execution-host registry filters runtime-owned targets, so its host is absent here — guard on the
 // hostId directly so the hidden target never becomes a selectable run-target option.
-function isRuntimeOwnedSshSetupHost(hostId: ExecutionHostId): boolean {
-  const parsed = parseExecutionHostId(hostId)
-  return parsed?.kind === 'ssh' && isRuntimeOwnedSshTargetId(parsed.targetId)
-}
-
-function getHostSetupAvailability(host: ExecutionHostRegistryEntry): {
-  isAvailable: boolean
-  detail: string
-} {
-  if (host.health === 'blocked') {
-    return {
-      isAvailable: false,
-      detail: 'Orca server version is incompatible'
-    }
-  }
-  // Why: disconnected hosts cannot confirm project setup or runtime capabilities,
-  // so connection state needs to win over setup guidance.
-  const healthUnavailableDetail = getHostHealthUnavailableDetail(host.health)
-  if (healthUnavailableDetail) {
-    return {
-      isAvailable: false,
-      detail: healthUnavailableDetail
-    }
-  }
-  if (host.kind === 'runtime') {
-    if (!host.capabilities) {
-      return {
-        isAvailable: false,
-        detail: 'Checking host capabilities'
-      }
-    }
-    if (
-      !host.capabilities.includes(PROJECT_HOST_SETUP_RUNTIME_CAPABILITY) ||
-      !host.capabilities.includes(WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY)
-    ) {
-      return {
-        isAvailable: false,
-        detail: 'Update Orca on this host to set up projects'
-      }
-    }
-  }
-  return {
-    isAvailable: true,
-    detail: ''
-  }
-}
-
-function getHostHealthUnavailableDetail(
-  health: ExecutionHostRegistryEntry['health']
-): string | null {
-  switch (health) {
-    case 'connecting':
-      return 'Connecting to host'
-    case 'disconnected':
-      return 'Connect this host to set up projects'
-    case 'error':
-      return 'Host connection needs attention'
-    case 'available':
-    case 'blocked':
-    case 'local':
-      return null
-  }
-}
-
-function canSetProjectLocation(
-  projectId: string,
-  isAvailable: boolean,
-  pendingSetup: ProjectHostSetup | undefined
-): boolean {
-  // Why: setting up on another host links by project identity, and a host-local
-  // `repo:<id>` project has none to match against — the call always fails, so offer
-  // the plain status line rather than a button that only ever toasts an error.
-  if (!isAvailable || isHostLocalProjectId(projectId)) {
-    return false
-  }
-  if (!pendingSetup) {
-    return true
-  }
-  return pendingSetup.setupState === 'not-set-up' || pendingSetup.setupState === 'error'
-}
-
-function getHostConnectAction(
-  host: ExecutionHostRegistryEntry
-): NeedsSetupProjectHostOption['connectAction'] | undefined {
-  if (host.health !== 'disconnected' && host.health !== 'error') {
-    return undefined
-  }
-  const parsed = parseExecutionHostId(host.id)
-  if (parsed?.kind === 'ssh') {
-    return { kind: 'ssh', targetId: parsed.targetId }
-  }
-  if (parsed?.kind === 'runtime') {
-    return { kind: 'runtime', environmentId: parsed.environmentId }
-  }
-  return undefined
-}
-
-function getPendingSetupDetail(setup: ProjectHostSetup): string {
-  switch (setup.setupState) {
-    case 'not-set-up':
-      return 'Project tracked on this host but not set up'
-    case 'setting-up':
-      return 'Project setup is in progress'
-    case 'error':
-      return 'Project setup needs attention'
-    case 'unsupported':
-      return 'Project is unsupported on this host'
-    case 'ready':
-      return setup.path
-  }
-}
-
 function compareProjectHostSetupOptions(
   a: ProjectHostSetupOption,
   b: ProjectHostSetupOption
