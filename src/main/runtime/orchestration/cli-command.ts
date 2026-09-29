@@ -10,6 +10,7 @@ export function resolveTerminalOrchestrationCliCommand(args: {
   worktreeId: string
   projectRuntime?: ProjectExecutionRuntimeResolution
   runtimeCliCommand?: OrchestrationCliCommand
+  hostPlatform?: NodeJS.Platform
 }): OrchestrationCliCommand {
   if (args.connectionId) {
     return 'orca'
@@ -17,13 +18,23 @@ export function resolveTerminalOrchestrationCliCommand(args: {
   if (args.runtimeCliCommand) {
     return args.runtimeCliCommand
   }
+  if (args.isWsl === true) {
+    return 'orca-ide'
+  }
+  // Why: GNOME's screen reader also installs `/usr/bin/orca`; Linux workers need Orca's scoped launcher.
+  if (args.hostPlatform === 'linux') {
+    return 'orca-ide'
+  }
   if (args.isWsl !== null && args.isWsl !== undefined) {
-    return args.isWsl ? 'orca-ide' : 'orca'
+    return 'orca'
   }
   if (args.projectRuntime?.status === 'resolved' && args.projectRuntime.runtime.kind === 'wsl') {
     return 'orca-ide'
   }
 
   const worktreePath = splitWorktreeIdForFilesystem(args.worktreeId)?.worktreePath
-  return worktreePath && isWslUncPath(worktreePath) ? 'orca-ide' : 'orca'
+  if (worktreePath && isWslUncPath(worktreePath)) {
+    return 'orca-ide'
+  }
+  return 'orca'
 }
