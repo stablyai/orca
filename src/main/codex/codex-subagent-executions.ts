@@ -94,17 +94,12 @@ export class CodexSubagentExecutions {
     return { child, execution }
   }
 
-  /** A child turn that ended with no `turn/completed`. With no turn named, the one the child is
-   *  running ended; a child running none has nothing to end. The first ending a turn gets stands. */
-  endTurn(
-    agentThreadId: string,
-    turnId: string | null,
-    state: Exclude<NativeChatSubagentState, 'working'>
-  ): void {
+  /** The child's thread closed with no `turn/completed`: the turn it was running ended, and how
+   *  it went is unknown. A child running none has nothing to end. */
+  closeThread(agentThreadId: string): void {
     const current = this.children.get(agentThreadId)?.execution
-    const ended = turnId ?? (current?.state === 'working' ? current.turnId : null)
-    if (current && ended !== null) {
-      this.observeTurn(agentThreadId, ended, state)
+    if (current?.state === 'working') {
+      this.observeTurn(agentThreadId, current.turnId, 'unverifiable')
     }
   }
 

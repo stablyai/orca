@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
+import { tuiAgentToAgentKind } from '../../shared/agent-kind'
 
 const mocks = vi.hoisted(() => ({
   markAntigravityWorkspaceTrusted: vi.fn(),
@@ -102,6 +103,22 @@ describe('buildWorktreeStartupForAgent host resolution', () => {
       request_kind: 'new'
     })
   })
+
+  it('attributes a startup agent whose caller named no surface as unknown', () => {
+    const result = buildWorktreeStartupForAgent({
+      repo: makeRepo({}),
+      settings,
+      agent: 'claude',
+      getLaunchPlatform: () => 'linux',
+      toSessionOptions: () => undefined
+    })
+
+    expect(result.startup.telemetry).toEqual({
+      agent_kind: 'claude-code',
+      launch_source: 'unknown',
+      request_kind: 'new'
+    })
+  })
 })
 
 describe('buildWorktreeStartupForDraft agent detection', () => {
@@ -135,6 +152,34 @@ describe('buildWorktreeStartupForDraft agent detection', () => {
     expect(mocks.detectRemoteAgents).not.toHaveBeenCalled()
     expect(result?.agent).toBe('claude')
   })
+
+  // The host picks and launches this agent itself, so it is attributed like any other it builds,
+  // whether the draft rides the launch command or is pasted once the agent is up.
+  it.each([
+    ['claude', 'cli', 'cli', false],
+    ['claude', undefined, 'unknown', false],
+    ['claude-agent-teams', 'orchestration', 'orchestration', true],
+    ['claude-agent-teams', undefined, 'unknown', true]
+  ] as const)(
+    'attributes a %s draft launch named %s as %s',
+    async (agent, launchSource, expected, pasted) => {
+      const result = await buildWorktreeStartupForDraft({
+        repo: makeRepo({}),
+        settings,
+        draft: 'ship it',
+        requestedAgent: agent,
+        getLaunchPlatform: () => 'linux',
+        ...(launchSource ? { launchSource } : {})
+      })
+
+      expect(result?.draftPaste !== undefined).toBe(pasted)
+      expect(result?.startup.telemetry).toEqual({
+        agent_kind: tuiAgentToAgentKind(agent),
+        launch_source: expected,
+        request_kind: 'new'
+      })
+    }
+  )
 })
 
 describe('markLocalWorktreeTrusted', () => {

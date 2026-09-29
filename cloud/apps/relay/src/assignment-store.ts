@@ -8482,7 +8482,7 @@ function isDatabaseLockUnavailable(error: unknown): boolean {
   return error instanceof Error && error.message === 'database_lock_unavailable'
 }
 
-export function cellInventoryLockOptions(mode: CellInventoryLockMode): RelayLockOptions {
+function cellInventoryLockOptions(mode: CellInventoryLockMode): RelayLockOptions {
   if (mode === 'nowait') return { failIfUnavailable: true, measureHoldMs: true }
   if (mode === 'pool-default') return { measureHoldMs: true }
   return { lockTimeoutMs: CELL_INVENTORY_LOCK_TIMEOUT_MS, measureHoldMs: true }

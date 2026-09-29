@@ -7,34 +7,35 @@ export const BUN_PERSISTENCE_RUNNERS = [
   'windows-11-arm'
 ]
 
-const QUALIFICATION_PREFIXES = [
-  'config/',
+// Only surfaces whose behaviour actually differs per platform. Escalating on `config/`,
+// `resources/` and `.github/` wholesale took 36.5% of the last 1100 commits through all six
+// platforms where a platform-flavoured predicate takes 19%.
+const PLATFORM_PREFIXES = [
   'native/',
-  'resources/',
-  '.github/',
+  'config/patches/',
+  '.github/actions/install-node-dependencies/',
   'src/main/persistence/',
   'src/main/sqlite/',
   'src/main/orcad/',
   'src/main/providers/',
   'src/main/daemon/',
   'src/main/ssh/',
+  'src/main/wsl/',
   'src/relay/',
   'src/shared/child-process/'
 ]
 
-export function bunProfileQualification(changedFiles, scope, event = {}) {
-  const sensitive = changedFiles.some(
+export function bunProfileQualification(changedFiles, scope) {
+  const platformSpecific = changedFiles.some(
     (file) =>
+      // A root manifest can move a native dependency on every platform at once.
       !file.includes('/') ||
-      QUALIFICATION_PREFIXES.some((prefix) => file.startsWith(prefix)) ||
+      PLATFORM_PREFIXES.some((prefix) => file.startsWith(prefix)) ||
       /(?:^|[/.-])(?:windows|win32|wsl|macos|darwin|linux|posix|bun)(?:[/.-]|$)/i.test(file)
   )
-  // Only a proven unrelated platform change in a draft may defer qualification.
-  const full =
-    event.pull_request?.draft !== true ||
-    changedFiles.length === 0 ||
-    scope.graphUnavailable === true ||
-    sensitive
+  // A pull request qualifies one platform unless the change is platform-flavoured; the push to
+  // main re-qualifies all six, so an unescalated miss surfaces minutes after merge, not a day.
+  const full = changedFiles.length === 0 || scope.graphUnavailable === true || platformSpecific
   return {
     qualification: full,
     runners: full ? BUN_PERSISTENCE_RUNNERS : ['ubuntu-22.04']

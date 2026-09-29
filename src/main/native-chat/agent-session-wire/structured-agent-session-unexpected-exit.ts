@@ -131,8 +131,8 @@ export async function settleUnexpectedStructuredAgentSessionExit<
           acquisitionGeneration: child.generation,
           now: context.now(),
           exitObservedAt: observedAt,
-          // Bare cause: whatever this settlement could not write is settled from it later, by the
-          // next acquire or read restore, and `exit-observed` already says the rest.
+          // Bare cause: whatever this settlement could not write is settled from it later (the
+          // settle recording it queues, or the next open or acquire); `exit-observed` says the rest.
           exitReason: unexpectedEvent.reason.slice(0, MAX_UNEXPECTED_EXIT_REASON_CHARS)
         })
       } catch (error) {

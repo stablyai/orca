@@ -42,7 +42,9 @@ export type ClaudeStructuredSessionEvent =
       type: 'message'
       sessionId: string
       message: Record<string, unknown>
-      /** Present only when this replay acknowledged Orca's in-flight dispatch. */
+      /** Present only when this replay acknowledged Orca's in-flight dispatch
+       *  AND opens a turn; a replay folded into the running turn settles
+       *  delivery without one. */
       startsTurn?: true
       /** Submission instant of the dispatch this replay acknowledged; the origin
        *  of the turn it opens. Absent when the host cannot name a send. */

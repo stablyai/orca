@@ -640,12 +640,24 @@ jobs:
           native-runtime: node
           node-version: '24'
 
+  # Why hoisted out of unit-tests.yml: a caller's `needs` gate the whole called workflow, so
+  # while planning lived in there it queued behind static analysis and typecheck and the shards
+  # then queued behind it. Planning needs none of their output, so running it against
+  # code_paths alone overlaps it with the gate. Measured a median 93s off the matrix's start.
+  unit_plan:
+    needs: [code_paths]
+    if: needs.code_paths.outputs.test == 'true'
+    uses: ./.github/workflows/unit-plan.yml
+    with:
+      selection_mode: ${{ vars.ORCA_UNIT_SELECTION_MODE || 'shadow' }}
+
   test:
-    needs: [code_paths, test_native_cache, static_analysis, typecheck]
+    needs: [code_paths, unit_plan, test_native_cache, static_analysis, typecheck]
     # Honor cancellation while allowing the optional native-cache primer to skip.
     if: >-
       !cancelled() &&
       needs.code_paths.outputs.test == 'true' &&
+      needs.unit_plan.result == 'success' &&
       needs.static_analysis.result == 'success' &&
       needs.typecheck.result == 'success' &&
       (needs.test_native_cache.result == 'success' || needs.test_native_cache.result == 'skipped')
@@ -653,7 +665,15 @@ jobs:
     with:
       node_versions: '["24"]'
       runner: ubuntu-24.04-arm
-      selection_mode: ${{ vars.ORCA_UNIT_SELECTION_MODE || 'shadow' }}
+      shards: ${{ needs.unit_plan.outputs.shards }}
+
+  # Why a sibling and not part of the test workflow: it is advisory, so it must not delay the
+  # gate. Inside unit-tests.yml a caller's `needs: test` waited for it, holding verify ~36s
+  # after the last shard. Deliberately absent from verify's needs for the same reason.
+  unit_selection_evidence:
+    needs: [test]
+    if: ${{ !cancelled() && needs.test.result == 'success' }}
+    uses: ./.github/workflows/unit-selection-evidence.yml
 
   # Why a separate job: the test needs a real Chrome, and the sharded `test` matrix
   # would pay for it on every shard to run one file in whichever shard it landed in.

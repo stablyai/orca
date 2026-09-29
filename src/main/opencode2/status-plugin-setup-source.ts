@@ -24,7 +24,8 @@ async function setupOpenCode2Status(ctx) {
     // Without it, resolveRootSessionID returns null for every session and a
     // subagent's work publishes as if it were the root's.
     const client = { session: { get: async (input, options) => { const result = await ctx.session.get(input, options); return result && typeof result.id === "string" ? { data: result } : result; } } };
-    hooks = await OrcaOpenCodeStatusPlugin({ client });
+    // Why: this host disposes plugins on a hot reload while turns keep running.
+    hooks = await OrcaOpenCodeStatusPlugin({ client, sessionsOutliveDispose: true });
     if (!hooks || typeof hooks.event !== "function") return noop;
     const promptRegistration = await ctx.session.hook("prompt", async (properties) => {
       await hooks.event({ event: { type: "session.next.prompt.admitted", properties } });

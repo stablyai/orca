@@ -140,6 +140,44 @@ describe('NativeChatMessageList settled turn fold', () => {
     expect(screen.queryByRole('button', { name: 'Toggle turn details' })).toBeNull()
   })
 
+  // The #23621 shape: the host folded a mid-turn send into the running turn, so
+  // the rows after it are still the opener's. One bar under the opener folds
+  // them all; the steered bubble stays visible and never grows a bar or group.
+  it("folds the rows after a mid-turn send behind the opener's bar", () => {
+    const startedAt = Date.now() - 3000
+    const base = session(startedAt)
+    const steer: (typeof base.messages)[number] = {
+      id: 'mid-b',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'Also check the tests.' }],
+      timestamp: startedAt + 2,
+      source: 'transcript'
+    }
+    const messages = [...base.messages.slice(0, 3), steer, ...base.messages.slice(3)]
+    const turnKeysByItemId = new Map(messages.map((message) => [message.id, 'user-1']))
+    render(
+      <NativeChatMessageList
+        session={{ ...base, messages }}
+        isWorking={false}
+        workingStartedAt={null}
+        settledTurns={new Map([['user-1', { startedAt, workedSeconds: 70 }]])}
+        turnKeysByItemId={turnKeysByItemId}
+        expandSignal={false}
+        fontScale={1}
+      />
+    )
+
+    expect(screen.getByText('Also check the tests.')).toBeInTheDocument()
+    expect(screen.queryByText(NARRATION)).toBeNull()
+    expect(screen.queryByText(MORE_NARRATION)).toBeNull()
+    const toggles = screen.getAllByRole('button', { name: 'Toggle turn details' })
+    expect(toggles).toHaveLength(1)
+
+    fireEvent.click(toggles[0]!)
+    expect(screen.getByText(NARRATION)).toBeInTheDocument()
+    expect(screen.getByText(MORE_NARRATION)).toBeInTheDocument()
+  })
+
   // The answer is the LAST prose the agent produced. A turn whose final output
   // is a tool run still answers with the prose before it.
   it('keeps the last prose row when the turn ends on tool activity', () => {

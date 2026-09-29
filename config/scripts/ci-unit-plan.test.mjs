@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, it } from 'vitest'
 import { runProcessSync } from './script-child-process.mjs'
+import { FULL_SHARD_COUNT } from './ci-unit-selection.mjs'
 
 it.each([true, false])(
   'plans from a real Git diff, with parent evidence available: %s',
@@ -70,7 +71,7 @@ it.each([true, false])(
           ? 'Transitive imports plus indirect-input consumers'
           : 'Error: Changed paths unavailable'
       )
-      expect(plan.shards).toHaveLength(withParent ? 1 : 8)
+      expect(plan.shards).toHaveLength(withParent ? 1 : FULL_SHARD_COUNT)
     } finally {
       rmSync(root, { recursive: true, force: true })
     }

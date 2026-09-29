@@ -96,6 +96,7 @@ describe('provider-exit settlement', () => {
         snapshot: () => ({
           items: [lifecycleItem('turn-1', 1, { state: 'running', startedAt: 1_000 })]
         }),
+        itemFence: () => 7,
         appendLifecycleBatch,
         markPendingSubmissionsUnknown: vi.fn(async () => [])
       }
@@ -123,7 +124,7 @@ describe('provider-exit settlement', () => {
         observedAt
       }
     )
-    // Released, not latched: the next acquire or read restore settles what this write left.
+    // Released, not latched: a later settle from this evidence finishes what this write left.
     expect(record.lease).toMatchObject({
       claimStatus: 'released',
       handoffStage: null,

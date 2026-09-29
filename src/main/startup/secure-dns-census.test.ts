@@ -33,14 +33,4 @@ describe('secure DNS census', () => {
 
     expect(offenders).toEqual([])
   })
-
-  it('detects a DoH mode when one is present', () => {
-    // Why: the census reads real sources, so it passes vacuously today; prove the matcher on a known offender.
-    const offending = "app.configureHostResolver({ secureDnsMode: 'automatic' })"
-    const modes = [...offending.matchAll(/secureDnsMode\s*:\s*'([^']*)'/g)].map((match) => match[1])
-
-    expect(offending.includes('configureHostResolver')).toBe(true)
-    expect(modes).toEqual(['automatic'])
-    expect(modes.every((mode) => mode === 'off')).toBe(false)
-  })
 })

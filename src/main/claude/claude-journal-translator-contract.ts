@@ -13,6 +13,10 @@ export type ClaudeJournalTranslator = {
   /** The open turn's provider id — the same id its journal row carries, and the one
    *  a client's Stop names. Sole owner: no reader keeps a copy to disagree with. */
   readonly currentTurnId: string | null
+  /** True while a turn is open and the provider's current request cycle has
+   *  done root work since its init — the state in which the CLI folds an
+   *  arriving send into the turn. */
+  readonly openTurnInLiveProviderCycle: boolean
   flush: () => void
   childToolOwner?: ClaudeChildToolQueries['childToolOwner']
   childActivity?: ClaudeChildToolQueries['childActivity']

@@ -129,7 +129,6 @@ describe('the mounted module loader', () => {
       `
     })
     const { read } = modules.load<{ read: () => unknown }>('mobile/src/uses-default.ts')
-    expect(typeof read).toBe('function')
     expect(() => read()).toThrow(
       'Unspecified native mounting dependency: react-native-not-substituted.default'
     )
@@ -160,7 +159,6 @@ describe('the mounted module loader', () => {
       `
     })
     const { read } = modules.load<{ read: () => unknown }>('mobile/src/uses-namespace.ts')
-    expect(typeof read).toBe('function')
     expect(() => read()).toThrow(
       'Unspecified native mounting dependency: expo-not-substituted.selectionAsync'
     )

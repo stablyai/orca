@@ -73,8 +73,14 @@ async function session() {
   }
 }
 
+function turnRecord(rows: Awaited<ReturnType<Awaited<ReturnType<typeof session>>['items']>>) {
+  return rows
+    .map((item) => readAgentJournalTurn(item.body))
+    .findLast((record) => record?.turnId === TURN)
+}
+
 describe('a failed Codex turn in the journal', () => {
-  it('keeps the failure and its duration when the failed completion lands while the error is still queued', async () => {
+  it('keeps the failed completion, its duration and the start, when it lands while the error is still queued', async () => {
     const { on, drained, items } = await session()
     on('turn/started', { turn: { id: TURN } }, 1_000)
     on(
@@ -85,7 +91,7 @@ describe('a failed Codex turn in the journal', () => {
     await drained()
 
     // Codex writes both frames back to back; the error's status row is still being
-    // written when the failed completion arrives, so the error's settlement is queued.
+    // written when the failed completion arrives.
     on(
       'error',
       { turnId: TURN, willRetry: false, error: { message: 'stream disconnected' } },
@@ -94,18 +100,50 @@ describe('a failed Codex turn in the journal', () => {
     on('turn/completed', { turn: { id: TURN, status: 'failed', durationMs: 1_900 } }, 3_100)
 
     const rows = await items()
-    const turn = rows
-      .map((item) => readAgentJournalTurn(item.body))
-      .findLast((record) => record?.turnId === TURN)
-    expect(turn).toMatchObject({
+    expect(turnRecord(rows)).toMatchObject({
       state: 'completed',
       outcome: 'failure',
       startedAt: 1_000,
-      completedAt: 3_000
+      completedAt: 3_100,
+      durationMs: 1_900
     })
-    // The duration "Worked for" shows under the turn's message.
+    // "Worked for" under the turn's message reads Codex's own duration.
     expect(
       completedStructuredAgentTurnSeconds(selectStructuredAgentRunningTurnTiming(rows, TURN))
-    ).toBe(2)
+    ).toBe(1)
   })
+
+  // Codex ends a turn once, so a second completion is not expected. If one came,
+  // the settlement id keeps the first record, whether it is still queued or written.
+  it.each([
+    ['still queued', false],
+    ['already written', true]
+  ] as const)(
+    'keeps the first completion when a second one arrives while the first is %s',
+    async (_label, drainFirst) => {
+      const { on, drained, items } = await session()
+      on('turn/started', { turn: { id: TURN } }, 1_000)
+      await drained()
+
+      // The reply's row is being written, so the first completion waits behind it.
+      on(
+        'item/completed',
+        { turnId: TURN, item: { type: 'agentMessage', id: 'agent-1', text: 'Done' } },
+        1_900
+      )
+      on('turn/completed', { turn: { id: TURN, status: 'completed', durationMs: 900 } }, 2_000)
+      if (drainFirst) {
+        await drained()
+      }
+      on('turn/completed', { turn: { id: TURN, status: 'failed' } }, 3_000)
+
+      expect(turnRecord(await items())).toMatchObject({
+        state: 'completed',
+        outcome: 'success',
+        startedAt: 1_000,
+        completedAt: 2_000,
+        durationMs: 900
+      })
+    }
+  )
 })

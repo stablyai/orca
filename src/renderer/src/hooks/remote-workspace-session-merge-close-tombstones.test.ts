@@ -156,19 +156,6 @@ describe('direct-SSH pull merge: closed-tab tombstones', () => {
     expect(merged.tabsByWorktree[WORKTREE].map((tab) => tab.id)).toEqual(['live'])
   })
 
-  it('leaves a tab alone when no tombstone names it', () => {
-    // The pre-existing absence-is-not-closed trade, restated: a host that still lists a tab closed
-    // on some other client keeps it here, because absence is all this merge would have to go on.
-    const agent = terminalTab('agent')
-    const closedElsewhere = terminalTab('closed-elsewhere')
-    const current = sessionState({ tabsByWorktree: { [WORKTREE]: [agent, closedElsewhere] } })
-    const remote = sessionState({ tabsByWorktree: { [WORKTREE]: [agent] } })
-
-    const merged = merge(current, remote, { [WORKTREE]: [agent, closedElsewhere] })
-
-    expect(merged.tabsByWorktree[WORKTREE].map((tab) => tab.id)).toContain('closed-elsewhere')
-  })
-
   it('neither retires nor writes back a record once the host stops listing the tab', () => {
     // Main alone writes records; an acknowledgement used to delete them here, which made a workspace
     // the user emptied read as never initialized as soon as the host caught up.

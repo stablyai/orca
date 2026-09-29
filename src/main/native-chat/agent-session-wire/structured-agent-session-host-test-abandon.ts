@@ -16,7 +16,7 @@ export async function abandonStructuredAgentSessionHost(
   host: StructuredAgentSessionHost
 ): Promise<void> {
   // First, so the drain below cannot race the loop into enqueueing another step.
-  host['conversationDelivery'].loop.dispose()
+  host['conversationDelivery'].dispose()
   host['lifetime'].dispose()
   await host['runtimeState'].stopLeaseRenewal()
   await host['tasks'].drainAttaches()

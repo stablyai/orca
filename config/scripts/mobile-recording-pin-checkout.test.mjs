@@ -19,12 +19,15 @@ it('keeps full ancestry and credentials for lazy pinned-tree reads', () => {
   expect(job.if).toBeUndefined()
   expect(workflow.on.push.branches).toEqual(['main'])
   expect(workflow.concurrency.group).toContain('github.sha')
-  expect(job.steps.find((step) => step.name === 'Check the recording pin is reachable').run).toBe(
-    'pnpm exec tsx scripts/rpc-recording-pin-guard.mts ancestry'
-  )
+  const reachable = job.steps.find((step) => step.name === 'Check the recording pin is reachable')
+  expect(reachable.run).toBe('pnpm exec tsx scripts/rpc-recording-pin-guard.mts reachable')
   const reproduce = job.steps.find(
     (step) => step.name === 'Reproduce the corpus from the pinned tree'
   )
+  // Both steps ask GitHub which pull requests hold a pin main's history lacks.
+  expect(job.permissions).toEqual({ contents: 'read', 'pull-requests': 'read' })
+  expect(reachable.env.GITHUB_TOKEN).toContain('github.token')
+  expect(reproduce.env.GITHUB_TOKEN).toContain('github.token')
   expect(reproduce.run).toContain('reproduce --if-changed-since "$PIN_GUARD_BASE"')
   expect(reproduce.run).toContain(
     'else\n  pnpm exec tsx scripts/rpc-recording-pin-guard.mts reproduce\nfi'

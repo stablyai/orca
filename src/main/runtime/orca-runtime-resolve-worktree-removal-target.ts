@@ -21,6 +21,7 @@ import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtim
 import { resolveBareAgentLaunchCommand } from './runtime-agent-launch-resolution'
 import { buildAgentStartupPlan } from '../../shared/tui-agent-startup'
 import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
+import { agentStartedTelemetry } from '../agent-launch/agent-started-telemetry'
 
 export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWithRemoveManagedWorktree {
   protected async resolveWorktreeRemovalTarget(
@@ -250,7 +251,9 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
       ...(startupPlan.env ? { env: startupPlan.env } : {}),
       launchConfig: startupPlan.launchConfig,
       launchAgent: agent,
-      startupCommandDelivery: startupPlan.startupCommandDelivery
+      startupCommandDelivery: startupPlan.startupCommandDelivery,
+      // A bare command the user typed stays out of launch accounting, as before.
+      ...(opts.startupAgent ? { telemetry: agentStartedTelemetry(agent, opts.launchSource) } : {})
     }
   }
 }

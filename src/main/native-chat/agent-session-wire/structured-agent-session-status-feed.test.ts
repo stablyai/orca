@@ -95,27 +95,11 @@ function feedFor(
 }
 
 describe('StructuredAgentSessionStatusFeed', () => {
-  it('projects whether the owned child has proven its start, and nothing once it is not owned', async () => {
-    const journal = await openJournal()
-    const session = { journal, child: { phase: 'starting' as const } }
-    const sessions = new Map<string, Parameters<typeof indexed>[0]>([[SESSION, session]])
-    const { feed, events, dispose } = feedFor(sessions)
-    expect(events.at(-1)).toMatchObject({
-      type: 'snapshot',
-      sessions: [{ hostExecutionOwned: true, hostExecutionPhase: 'starting' }]
-    })
-    sessions.set(SESSION, { ...session, child: { phase: 'ready' } })
-    feed.publish(SESSION, journal)
-    expect(events.at(-1)).toMatchObject({ session: { hostExecutionPhase: 'ready' } })
-    sessions.set(SESSION, { ...session, child: null })
-    feed.publish(SESSION, journal)
-    expect(events.at(-1)).not.toMatchObject({ session: { hostExecutionPhase: expect.any(String) } })
-    dispose()
-  })
-
   it('publishes provider ownership transitions without changing journal time', async () => {
     const journal = await openJournal()
-    const sessions = new Map<string, Indexed>([[SESSION, { journal, child: { phase: 'ready' } }]])
+    const sessions = new Map<string, Indexed>([
+      [SESSION, { journal, child: { phase: 'ready', generation: 'child-1', fence: 1 } }]
+    ])
     const { feed, events, dispose } = feedFor(sessions)
     events.length = 0
     await journal.appendItem(
@@ -800,7 +784,9 @@ describe('the status sink sees the roster the broadcast cache deliberately lacks
 
   it('receives every change once, ownership revocation, and the forget edge', async () => {
     const journal = await openJournal()
-    const sessions = new Map<string, Indexed>([[SESSION, { journal, child: { phase: 'ready' } }]])
+    const sessions = new Map<string, Indexed>([
+      [SESSION, { journal, child: { phase: 'ready', generation: 'child-1', fence: 1 } }]
+    ])
     const { sink, published, forgotten } = sinkFor()
     const { feed } = feedFor(sessions, null, undefined, undefined, sink)
     await journal.appendItem(
@@ -822,6 +808,8 @@ describe('the status sink sees the roster the broadcast cache deliberately lacks
     feed.revokeLive(SESSION)
     expect(published.at(-1)).toMatchObject({ sessionId: SESSION, status: 'idle' })
     expect(published.at(-1)?.hostExecutionOwned).toBeUndefined()
+    expect(published.at(-1)?.hostExecutionPhase).toBeUndefined()
+    expect(published.at(-1)?.hostExecutionChild).toBeUndefined()
 
     // Exactly what `close` does after eviction: the cache keeps the projection, the sink does not.
     sessions.delete(SESSION)

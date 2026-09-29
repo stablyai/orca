@@ -1,8 +1,9 @@
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { StructuredAgentSessionProviderChildIdentity } from './structured-agent-session-host-types'
 
 export function indexedStatusFeedSession(session: {
   journal: AgentSessionJournal
-  child?: { phase: 'starting' | 'ready' } | null
+  child?: (StructuredAgentSessionProviderChildIdentity & { phase: 'starting' | 'ready' }) | null
 }) {
   return {
     journal: session.journal,

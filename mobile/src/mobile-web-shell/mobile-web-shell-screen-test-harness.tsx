@@ -68,7 +68,7 @@ export const SCREEN_SNAPSHOT = {
   host: { id: 'host-1', name: 'Host One', endpoint: 'ws://host-1', lastConnected: 3 }
 }
 
-export const DEFAULT_ROUTE_GRANTS: readonly string[] = [
+const DEFAULT_ROUTE_GRANTS: readonly string[] = [
   'navigate',
   'storage',
   'externalLink',

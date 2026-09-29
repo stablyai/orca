@@ -14,6 +14,7 @@ import { isTerminalWorkspaceEmptiedOnPurpose } from '../../../shared/closed-term
 import { gateWorktreeAgentActivation } from '@/lib/worktree-agent-activation-gate'
 import { createWorkspaceTerminalHostAuthoritySelector } from '@/lib/workspace-terminal-host-authority'
 import { getStructuredAgentLaunchStatus } from '@/lib/structured-agent-session-launch'
+import { isEmptyWorkspaceDefaultSurfacePending } from '@/lib/empty-workspace-default-surface-claims'
 import { AGENT_SESSION_PROVIDER_HANDLE_PROVIDERS } from '../../../shared/agent-session-provider-handle'
 import type { TerminalColdActivationController } from './terminal-cold-activation'
 import { selectParkedEquivalentMountTabIds } from './terminal/startup-terminal-tab-hold'
@@ -221,6 +222,11 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
         outcome === 'blocked' ||
         useAppStore.getState().activeWorktreeId !== activeWorktreeId
       ) {
+        return
+      }
+      // A reseed awaiting agent detection owns the surface. Left unmarked: that reseed bails if the
+      // user leaves during the wait, so a later return must seed here.
+      if (outcome === 'empty' && isEmptyWorkspaceDefaultSurfacePending(activeWorktreeId)) {
         return
       }
       // Why mark only once a decision applies: a cancelled or blocked check must stay retryable,

@@ -1,6 +1,7 @@
 import { dirname, join } from 'node:path'
 import { resolveCodexCommand } from '../codex-cli/command'
 import { isTransientSqliteContention } from '../sqlite/sqlite-read-failure'
+import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
 import { getSpawnArgsForWindows } from '../win32-utils'
 import { getCodexSessionBackfillStateDirPath } from './codex-home-paths'
 import { resolveCodexSessionBackfillPaths } from './codex-session-backfill'
@@ -17,7 +18,8 @@ import {
 import {
   isCodexAppServerUnsupportedError,
   runCodexAppServerSession,
-  type CodexAppServerInvocation
+  type CodexAppServerInvocation,
+  type CodexAppServerRpc
 } from './codex-app-server-session'
 
 export type { CodexSessionIndexHealPaths } from './codex-session-index-heal-state'
@@ -49,11 +51,19 @@ export type CodexSessionIndexHealSummary = {
 export type CodexSessionIndexHealOptions = {
   /** Polled between reads and batches; true stops promptly, progress is kept. */
   shouldStop?: () => boolean
-  buildInvocation?: (systemCodexHomePath: string, timeoutMs: number) => CodexAppServerInvocation
+  buildInvocation?: (codexHomePath: string, timeoutMs: number) => CodexAppServerInvocation
+  runSession?: (
+    invocation: CodexAppServerInvocation,
+    body: (rpc: CodexAppServerRpc) => Promise<void>
+  ) => Promise<void>
   readsPerServerSession?: number
   readConcurrency?: number
   interBatchDelayMs?: number
 }
+
+export type CodexThreadReadOutcome = HealLedgerOutcome
+
+export type CodexThreadReadPassOutcome = 'completed' | 'stopped' | 'unsupported' | 'aborted'
 
 let backgroundHealTask: Promise<CodexSessionIndexHealSummary | null> | null = null
 
@@ -132,69 +142,30 @@ export async function runCodexSessionIndexHeal(
     return summary
   }
 
-  const systemCodexHomePath = dirname(paths.systemSessionsRoot)
-  const buildInvocation = options.buildInvocation ?? buildNativeHealInvocation
-  const readsPerServerSession = resolveHealWorkLimit(
-    options.readsPerServerSession,
-    HEAL_READS_PER_SERVER_SESSION
-  )
-  const readConcurrency = resolveHealWorkLimit(options.readConcurrency, HEAL_READ_CONCURRENCY)
-  const interBatchDelayMs = options.interBatchDelayMs ?? HEAL_INTER_BATCH_DELAY_MS
   const shouldStop = options.shouldStop ?? ((): boolean => false)
-
-  for (let offset = 0; offset < pending.length; offset += readsPerServerSession) {
-    if (shouldStop()) {
-      summary.outcome = 'stopped'
-      return summary
-    }
-    if (offset > 0 && interBatchDelayMs > 0) {
-      await new Promise((resolve) => setTimeout(resolve, interBatchDelayMs))
-      if (shouldStop()) {
-        // Why: opt-out can happen during the throttle delay; do not spawn a
-        // real-home app-server after the lane has been disabled.
-        summary.outcome = 'stopped'
-        return summary
+  const outcome = await readCodexThreadsForIndexHeal(
+    dirname(paths.systemSessionsRoot),
+    pending,
+    (thread, readOutcome) => {
+      if (readOutcome === 'healed') {
+        summary.healedThreads += 1
+      } else if (readOutcome === 'missing') {
+        // The backfilled rollout was deleted after the audit was written.
+        summary.missingThreads += 1
+      } else {
+        summary.failedThreads += 1
       }
-    }
-    const batch = pending.slice(offset, offset + readsPerServerSession)
-    const timeoutMs = HEAL_BATCH_TIMEOUT_BASE_MS + HEAL_BATCH_TIMEOUT_PER_READ_MS * batch.length
-    try {
-      await runCodexAppServerSession(
-        buildInvocation(systemCodexHomePath, timeoutMs),
-        async (rpc) => {
-          let nextIndex = 0
-          const worker = async (): Promise<void> => {
-            while (nextIndex < batch.length && !shouldStop()) {
-              const thread = batch[nextIndex]
-              nextIndex += 1
-              await healOneThread(rpc, thread, paths, summary)
-            }
-          }
-          await Promise.all(Array.from({ length: readConcurrency }, () => worker()))
-        }
-      )
-    } catch (error) {
-      if (isCodexAppServerUnsupportedError(error)) {
-        if (shouldStop()) {
-          summary.outcome = 'stopped'
-          return summary
-        }
-        // Why: no retry churn on old CLIs — remember unsupported and re-probe
-        // after the retry interval or a version bump; nothing is marked healed.
-        writeHealMarker(paths, auditBytes, summary, { unsupportedAt: Date.now() })
-        summary.outcome = 'unsupported'
-        return summary
-      }
-      // Transport failure (timeout, early exit, spawn error): unprocessed ids
-      // were never appended to the ledger, so the next pass resumes them.
-      console.warn('[codex-session-index-heal] Heal batch aborted:', error)
-      summary.outcome = 'aborted'
-      return summary
-    }
+      recordHealOutcome(paths, thread, readOutcome)
+    },
+    options
+  )
+  if (outcome === 'unsupported') {
+    // Why: no retry churn on old CLIs — remember unsupported and re-probe
+    // after the retry interval or a version bump; nothing is marked healed.
+    writeHealMarker(paths, auditBytes, summary, { unsupportedAt: Date.now() })
   }
-
-  if (shouldStop()) {
-    summary.outcome = 'stopped'
+  if (outcome !== 'completed' || shouldStop()) {
+    summary.outcome = outcome === 'completed' ? 'stopped' : outcome
     return summary
   }
   writeHealMarker(
@@ -206,16 +177,76 @@ export async function runCodexSessionIndexHeal(
   return summary
 }
 
-async function healOneThread(
-  rpc: { request: (method: string, params?: Record<string, unknown>) => Promise<unknown> },
-  thread: PendingHealThread,
-  paths: CodexSessionIndexHealPaths,
-  summary: CodexSessionIndexHealSummary
-): Promise<void> {
+/**
+ * Drives `thread/read` over `threads` in bounded app-server batches, reporting
+ * each settled read. Transport failures and sqlite contention abort the pass
+ * without reporting, so the caller's next pass retries those threads.
+ */
+export async function readCodexThreadsForIndexHeal<T extends { threadId: string }>(
+  codexHomePath: string,
+  threads: readonly T[],
+  onOutcome: (thread: T, outcome: CodexThreadReadOutcome) => void,
+  options: CodexSessionIndexHealOptions = {}
+): Promise<CodexThreadReadPassOutcome> {
+  const buildInvocation = options.buildInvocation ?? buildNativeHealInvocation
+  const runSession = options.runSession ?? runCodexAppServerSession
+  const readsPerServerSession = resolveHealWorkLimit(
+    options.readsPerServerSession,
+    HEAL_READS_PER_SERVER_SESSION
+  )
+  const readConcurrency = resolveHealWorkLimit(options.readConcurrency, HEAL_READ_CONCURRENCY)
+  const interBatchDelayMs = options.interBatchDelayMs ?? HEAL_INTER_BATCH_DELAY_MS
+  const shouldStop = options.shouldStop ?? ((): boolean => false)
+
+  for (let offset = 0; offset < threads.length; offset += readsPerServerSession) {
+    if (shouldStop()) {
+      return 'stopped'
+    }
+    if (offset > 0 && interBatchDelayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, interBatchDelayMs))
+      if (shouldStop()) {
+        // Why: opt-out can happen during the throttle delay; do not spawn an
+        // app-server after the lane has been disabled.
+        return 'stopped'
+      }
+    }
+    const batch = threads.slice(offset, offset + readsPerServerSession)
+    const timeoutMs = HEAL_BATCH_TIMEOUT_BASE_MS + HEAL_BATCH_TIMEOUT_PER_READ_MS * batch.length
+    try {
+      await runSession(buildInvocation(codexHomePath, timeoutMs), async (rpc) => {
+        let nextIndex = 0
+        const worker = async (): Promise<void> => {
+          while (nextIndex < batch.length && !shouldStop()) {
+            const thread = batch[nextIndex]
+            nextIndex += 1
+            onOutcome(thread, await readOneThread(rpc, thread.threadId))
+          }
+        }
+        await Promise.all(Array.from({ length: readConcurrency }, () => worker()))
+      })
+    } catch (error) {
+      if (shouldStop()) {
+        return 'stopped'
+      }
+      if (isCodexAppServerUnsupportedError(error)) {
+        return 'unsupported'
+      }
+      // Transport failure (timeout, early exit, spawn error): unprocessed ids
+      // were never reported, so the next pass resumes them.
+      console.warn('[codex-session-index-heal] Heal batch aborted:', error)
+      return 'aborted'
+    }
+  }
+  return 'completed'
+}
+
+async function readOneThread(
+  rpc: CodexAppServerRpc,
+  threadId: string
+): Promise<CodexThreadReadOutcome> {
   try {
-    await rpc.request('thread/read', { threadId: thread.threadId })
-    summary.healedThreads += 1
-    recordHealOutcome(paths, thread, 'healed')
+    await rpc.request('thread/read', { threadId })
+    return 'healed'
   } catch (error) {
     if (isCodexAppServerUnsupportedError(error)) {
       throw error
@@ -223,22 +254,18 @@ async function healOneThread(
     const message = error instanceof Error ? error.message : String(error)
     if (!message.startsWith('codex app-server thread/read failed')) {
       // Not an RPC-level response: the server died or timed out. Abort the
-      // batch without recording, so the id is retried on the next pass.
+      // batch without reporting, so the id is retried on the next pass.
       throw error
     }
     if (/no rollout found/i.test(message)) {
-      // The backfilled rollout was deleted after the audit was written.
-      summary.missingThreads += 1
-      recordHealOutcome(paths, thread, 'missing')
-      return
+      return 'missing'
     }
     if (isTransientSqliteContention(message)) {
-      // Why: an active Codex process can briefly own sqlite; leave the id off
-      // the ledger and abort this pass so a later startup resumes it.
+      // Why: an active Codex process can briefly own sqlite; leave the id
+      // unreported and abort this pass so a later startup resumes it.
       throw error
     }
-    summary.failedThreads += 1
-    recordHealOutcome(paths, thread, 'failed')
+    return 'failed'
   }
 }
 
@@ -259,20 +286,23 @@ function resolveHealWorkLimit(value: number | undefined, maximum: number): numbe
   return Math.min(Math.floor(value), maximum)
 }
 
-function buildNativeHealInvocation(
-  systemCodexHomePath: string,
+export function buildNativeHealInvocation(
+  codexHomePath: string,
   timeoutMs: number
 ): CodexAppServerInvocation {
   const command = resolveCodexCommand()
-  const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(command, ['app-server'])
+  // Why: each session is torn down after one batch, so plugin startup could
+  // leave marketplace clones running; indexing needs neither plugins nor tools.
+  const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(command, [
+    ...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS
+  ])
   return {
     command: spawnCmd,
     args: spawnArgs,
     cliPath: command,
-    // Why: pin the real home explicitly — nested Orca launches can inherit a
-    // managed CODEX_HOME from the daemon environment, which would index the
-    // wrong sqlite DB.
-    env: { CODEX_HOME: systemCodexHomePath },
+    // Why: pin the home explicitly — nested Orca launches can inherit a managed
+    // CODEX_HOME from the daemon environment, which would index the wrong sqlite DB.
+    env: { CODEX_HOME: codexHomePath },
     timeoutMs
   }
 }

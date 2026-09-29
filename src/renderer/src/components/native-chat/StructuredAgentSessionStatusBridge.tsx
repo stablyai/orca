@@ -47,18 +47,30 @@ export function useStructuredAgentSessionStatusSummary(
   return { summary, observation }
 }
 
-/** Only the host's startup phase, so a chat re-renders when that changes, not on every status. */
-export function useStructuredAgentSessionHostExecutionPhase(
+/** The host's child state, projected to stable primitives so journal updates do not re-render chat. */
+export function useStructuredAgentSessionHostExecution(
   sessionId: string,
   target: RuntimeClientTarget
-): NonNullable<AgentSessionStatusSummary['hostExecutionPhase']> | null {
+): {
+  phase: NonNullable<AgentSessionStatusSummary['hostExecutionPhase']> | null
+  childKey: string | number | null
+} {
   const feed = useMemo(() => getStructuredAgentSessionStatusFeed(target), [target])
   useEffect(() => feed.activate(), [feed])
-  return useSyncExternalStore(
+  const phase = useSyncExternalStore(
     feed.subscribe,
     () => feed.getSnapshot().get(sessionId)?.hostExecutionPhase ?? null,
     () => null
   )
+  const childKey = useSyncExternalStore(
+    feed.subscribe,
+    () => {
+      const child = feed.getSnapshot().get(sessionId)?.hostExecutionChild
+      return child?.generation ?? child?.fence ?? null
+    },
+    () => null
+  )
+  return { phase, childKey }
 }
 
 function projectStatus(

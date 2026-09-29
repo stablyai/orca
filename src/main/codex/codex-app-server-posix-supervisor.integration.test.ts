@@ -52,8 +52,11 @@ const RECORDS_SIGTERM_PROVIDER = String.raw`
 
 // Stands in for Orca: launches the supervisor as its own child, then can be killed outright. A
 // second child holds the supervisor's stdin open, so only the parent-death watch can notice.
+// A clean-quit owner has no holder and exits normally on SIGUSR2, the way Orca quits.
 const OWNER = String.raw`
   const { spawn } = require('node:child_process')
+  const quitsCleanly = Boolean(process.env.ORCA_TEST_OWNER_QUITS_CLEANLY)
+  if (quitsCleanly) process.on('SIGUSR2', () => process.exit(0))
   const spec = JSON.parse(Buffer.from(process.env.ORCA_PROVIDER_SUPERVISOR_SPEC, 'base64').toString())
   spec.ownerPid = process.pid
   const supervisor = spawn(process.execPath, ['-e', process.env.ORCA_TEST_SUPERVISOR_SCRIPT], {
@@ -61,10 +64,12 @@ const OWNER = String.raw`
     stdio: ['pipe', 'pipe', 'ignore'],
     detached: true
   })
-  const holder = spawn(process.execPath, ['-e', 'setInterval(() => {}, 60000)'], {
-    stdio: ['ignore', supervisor.stdin, 'ignore']
-  })
-  process.stdout.write(JSON.stringify({ supervisor: supervisor.pid, holder: holder.pid }) + '\n')
+  const holder = quitsCleanly
+    ? null
+    : spawn(process.execPath, ['-e', 'setInterval(() => {}, 60000)'], {
+        stdio: ['ignore', supervisor.stdin, 'ignore']
+      })
+  process.stdout.write(JSON.stringify({ supervisor: supervisor.pid, ...(holder && { holder: holder.pid }) }) + '\n')
   supervisor.stdout.pipe(process.stdout)
   setInterval(() => {}, 60000)
 `
@@ -175,7 +180,7 @@ async function launchUnderOwner(
     stdio: ['ignore', 'pipe', 'ignore']
   })
   recordedPids.add(owner.pid!)
-  const pids = await readPids(owner, ['supervisor', 'holder', 'provider', 'grandchild'])
+  const pids = await readPids(owner, ['supervisor', 'provider', 'grandchild'])
   return { owner, pids }
 }
 
@@ -316,6 +321,23 @@ describe.runIf(process.platform !== 'win32')('POSIX provider supervisor processe
     expect(exitedAt - signalledAt).toBeGreaterThanOrEqual(3_000 - 20)
     expect(exitedAt - endedAt).toBeLessThan(PROVIDER_SUPERVISOR_MAX_STOP_MS + 1_000)
     expect(alive(provider)).toBe(false)
+  })
+
+  it('reaps the provider group and exits when its owner quits cleanly', async () => {
+    const { owner, pids } = await launchUnderOwner(
+      { sigtermGraceMs: 300 },
+      { ORCA_TEST_OWNER_QUITS_CLEANLY: '1' }
+    )
+    const ownerExit = new Promise((resolve) =>
+      owner.once('exit', (code, signal) => resolve({ code, signal }))
+    )
+
+    owner.kill('SIGUSR2')
+
+    await expect(ownerExit).resolves.toEqual({ code: 0, signal: null })
+    expect(await waitFor(() => !alive(-pids.provider), 3_000)).toBe(true)
+    expect(await waitFor(() => !alive(pids.supervisor), 3_000)).toBe(true)
+    expect(alive(pids.grandchild)).toBe(false)
   })
 
   it('asks the provider to stop with SIGTERM when its owner dies', async () => {

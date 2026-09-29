@@ -30,8 +30,8 @@ export type StructuredSessionRecoveryResolutionDeps = {
 }
 
 const STOP_PROBE_INTERVAL_MS = 250
-// A POSIX Codex owner is its provider supervisor, which exits only after its provider group. A
-// SIGKILL that lands first leaves the group running, so SIGTERM outlasts the supervisor's stop.
+// A POSIX structured owner is its provider supervisor, which exits only after its provider
+// group. A SIGKILL that lands first leaves the group running, so SIGTERM outlasts its stop.
 const STOP_PROBES: Record<StructuredSessionRecoveryStopSignal, number> = {
   SIGTERM: Math.ceil(PROVIDER_SUPERVISOR_MAX_STOP_MS / STOP_PROBE_INTERVAL_MS) + 1,
   SIGKILL: 4

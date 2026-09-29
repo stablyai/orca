@@ -41,9 +41,8 @@ on:
       - 'config/scripts/mobile-test-change-scope*'
       - 'config/scripts/pr-code-change-scope.mjs'
       - 'config/scripts/mobile-recording-pin-checkout.test.mjs'
-  # Why main too: a behaviour-change branch legitimately pins its own last fenced commit, and that
-  # commit only stops being reachable when the branch squash-merges. The pull_request run cannot
-  # see that; this one is where the pin guard finds it.
+  # Why main too: a squash is where a spliced corpus lands, and where a behaviour-change branch's
+  # own pinned commit leaves main's history for its pull request's head ref, which the guard follows.
   push:
     branches:
       - main
@@ -182,6 +181,10 @@ jobs:
     name: RPC recording pin
     # Why ARM: pure Node plus git; the golden comparison masks `platform`.
     runs-on: ubuntu-24.04-arm
+    # Why pull-requests: the guard asks GitHub which pull requests hold a pin main's history lacks.
+    permissions:
+      contents: read
+      pull-requests: read
 
     defaults:
       run:
@@ -191,7 +194,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          # The ancestry verdict is read straight off history. On a shallow checkout
+          # The reachability verdict is read straight off history. On a shallow checkout
           # `git merge-base --is-ancestor` answers from grafted parents, so the guard refuses to
           # answer at all rather than reporting a pass it has no evidence for -- and the pinned tree
           # below has to be checkable out.
@@ -211,12 +214,14 @@ jobs:
       # Seconds. No `--ref`, so the pin is judged against the same tree it was read out of. On a
       # pull request that is the merge preview, which already carries main's repins; judging the
       # branch head instead fails every branch cut before the day's repin, and its instruction would
-      # tell the author to pin their own head -- creating the break this guard exists to catch. A
-      # branch that pins its own commit passes here and fails on the push after the squash, which is
-      # where the pin actually leaves the history.
+      # tell the author to pin their own head. A branch that pins its own commit still passes on the
+      # push after the squash: the guard asks GitHub which pull requests hold the pin and fetches
+      # their `refs/pull/<n>/head`, which GitHub keeps for good. The token lifts the API rate limit.
       - name: Check the recording pin is reachable
         shell: bash
-        run: pnpm exec tsx scripts/rpc-recording-pin-guard.mts ancestry
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: pnpm exec tsx scripts/rpc-recording-pin-guard.mts reachable
 
       # ~2 min locally for the record itself, so it is gated rather than run twice over. A pull
       # request that moves none of the corpus, the manifest or the recorder cannot move this
@@ -226,6 +231,7 @@ jobs:
       - name: Reproduce the corpus from the pinned tree
         shell: bash
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           PIN_GUARD_BASE: ${{ github.event.pull_request.base.sha }}
         run: |
           if [ -n "$PIN_GUARD_BASE" ]; then

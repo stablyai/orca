@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef } from 'react'
 import { DashboardAgentChildDisclosure } from '@/components/dashboard/DashboardAgentChildDisclosure'
 import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
+import { AgentChildRowContent } from '@/components/AgentChildRowContent'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
@@ -183,41 +184,55 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     </span>
   ) : null
 
+  // Why: the selected-row fill is strong enough to wash out the dimmed prompt/secondary text, so
+  // lift the lead toward full foreground when focused; an unvisited row stays bold either way.
+  const leadClassName = cn(
+    isUnvisited ? 'font-semibold text-foreground' : 'font-normal text-muted-foreground/90',
+    isFocusedPane && !isUnvisited && 'text-foreground'
+  )
+
   const rowBody = (
     <>
-      {/* Why: the row's actionable disabled reason must win on every hit area. */}
-      <AgentStateDot
-        state={dotState}
-        size="sm"
-        title={sendTargetDisabledReason ? null : undefined}
-        tooltipSide="right"
-      />
-      {!hideIcon && (
-        <span className="inline-flex shrink-0" title={formatAgentTypeLabel(agent.agentType)}>
-          <AgentIcon agent={agentTypeToIconAgent(agent.agentType)} size={13} />
-        </span>
-      )}
-      <span
-        className="min-w-0 flex-1 truncate"
-        title={sendTargetDisabledReason ? undefined : rowTitle}
-      >
-        {/* Why: the selected-row fill is strong enough to wash out the dimmed
-            prompt/secondary text, so lift both toward full foreground when focused. */}
-        <span
-          className={cn(
-            isUnvisited ? 'font-semibold text-foreground' : 'font-normal text-muted-foreground/90',
-            isFocusedPane && !isUnvisited && 'text-foreground'
+      {agent.childRow ? (
+        // Why: a child row reads through the piece the chat strip renders, so both say the same.
+        <AgentChildRowContent
+          row={agent.childRow}
+          now={now}
+          leadClassName={leadClassName}
+          trailClassName={isFocusedPane ? 'text-foreground/70' : 'text-muted-foreground/65'}
+          separator=" - "
+          dotTitle={sendTargetDisabledReason ? null : undefined}
+          tooltipSide="right"
+          lineTitle={!sendTargetDisabledReason}
+        />
+      ) : (
+        <>
+          {/* Why: the row's actionable disabled reason must win on every hit area. */}
+          <AgentStateDot
+            state={dotState}
+            size="sm"
+            title={sendTargetDisabledReason ? null : undefined}
+            tooltipSide="right"
+          />
+          {!hideIcon && (
+            <span className="inline-flex shrink-0" title={formatAgentTypeLabel(agent.agentType)}>
+              <AgentIcon agent={agentTypeToIconAgent(agent.agentType)} size={13} />
+            </span>
           )}
-        >
-          {leadingText}
-        </span>
-        {trailingText && (
-          <span className={isFocusedPane ? 'text-foreground/70' : 'text-muted-foreground/65'}>
-            {' '}
-            - {trailingText}
+          <span
+            className="min-w-0 flex-1 truncate"
+            title={sendTargetDisabledReason ? undefined : rowTitle}
+          >
+            <span className={leadClassName}>{leadingText}</span>
+            {trailingText && (
+              <span className={isFocusedPane ? 'text-foreground/70' : 'text-muted-foreground/65'}>
+                {' '}
+                - {trailingText}
+              </span>
+            )}
           </span>
-        )}
-      </span>
+        </>
+      )}
       {model && (
         <span
           className={cn(

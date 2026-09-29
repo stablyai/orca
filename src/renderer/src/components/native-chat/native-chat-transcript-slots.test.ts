@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import {
+  selectNativeChatActiveTurnKey,
   selectNativeChatTurnStatuses,
   type NativeChatTurnStatus
 } from '../../../../shared/native-chat-turn-status'
@@ -38,8 +39,7 @@ function build(
   return buildNativeChatTranscriptSlots({
     messages,
     turnKeys,
-    latestUserIndex: messages.findLastIndex((message) => message.role === 'user'),
-    currentTurnKey: undefined,
+    activeTurnKey: selectNativeChatActiveTurnKey(messages),
     receipts: new Map<string, NativeChatResolvedPrompt>(),
     turnStatuses: NO_STATUSES,
     turnDiffs: new Map<string, NativeChatTurnDiff>(),
@@ -112,7 +112,7 @@ describe('transcript slots', () => {
   it('keeps a message whose only content is a turn status under it', () => {
     const status: NativeChatTurnStatus = { startedAt: 1, thinking: false, workedSeconds: 4 }
     const slots = build([text('u', '', 'user')], {
-      latestUserIndex: 0,
+      activeTurnKey: 'u',
       turnStatuses: { active: status, completedByTurn: {} }
     })
     expect(slots).toHaveLength(1)
@@ -142,7 +142,7 @@ describe('transcript slots', () => {
   it('puts the running turn bar under the prompt it answers', () => {
     const status: NativeChatTurnStatus = { startedAt: 1, thinking: false, workedSeconds: null }
     const slots = build([text('u', 'ask', 'user'), text('a', 'answer')], {
-      latestUserIndex: 0,
+      activeTurnKey: 'u',
       turnStatuses: { active: status, completedByTurn: {} },
       isWorking: true
     })
@@ -203,6 +203,113 @@ describe('a send the host rejected', () => {
       ['orca:first-start', false, undefined],
       ['orca:dead', false, undefined],
       ['orca:restart-exit', false, undefined]
+    ])
+  })
+})
+
+// Rows belong to the turn the host says owns them, not to the nearest preceding
+// user bubble. The owned turn keys reshape the fold, the bar and liveness.
+describe('turn-owned grouping', () => {
+  const settled: NativeChatTurnStatus = { startedAt: 1, thinking: false, workedSeconds: 70 }
+  // The #23621 shape: B lands mid-turn, three tool calls follow, one turn.
+  const midTurn = [
+    text('A', 'go', 'user'),
+    toolRun('t1'),
+    text('B', 'and also this', 'user'),
+    toolRun('t2'),
+    toolRun('t3'),
+    toolRun('t4'),
+    text('answer', 'Done.')
+  ]
+  const ownedKeys = midTurn.map(() => 'A')
+
+  it("folds every row of a settled turn behind its opener's bar, across a mid-turn send", () => {
+    const slots = build(midTurn, {
+      turnKeys: ownedKeys,
+      turnStatuses: { active: null, completedByTurn: { A: settled } }
+    })
+    // All four tool rows fold; the steered bubble stays visible with no bar of its own.
+    expect(slots.map((slot) => [slot.message.id, slot.status ?? null])).toEqual([
+      ['A', settled],
+      ['B', null],
+      ['answer', null]
+    ])
+    expect(slots[0]?.turnFolds).toBe(true)
+  })
+
+  it('returns every row of the turn when the reader opens it', () => {
+    const slots = build(midTurn, {
+      turnKeys: ownedKeys,
+      turnStatuses: { active: null, completedByTurn: { A: settled } },
+      expandedTurnKeys: new Set(['A'])
+    })
+    expect(slots.map((slot) => slot.message.id)).toEqual([
+      'A',
+      't1',
+      'B',
+      't2',
+      't3',
+      't4',
+      'answer'
+    ])
+  })
+
+  it("anchors a provider-opened turn's bar above its first row", () => {
+    const messages = [text('u1', 'earlier', 'user'), toolRun('w1'), text('done', 'Woke up.')]
+    const slots = build(messages, {
+      turnKeys: ['u1', 'wake', 'wake'],
+      activeTurnKey: 'wake',
+      turnStatuses: { active: settled, completedByTurn: {} },
+      isWorking: true
+    })
+    expect(slots.map((slot) => [slot.message.id, slot.status ?? null, slot.statusAbove])).toEqual([
+      ['u1', null, false],
+      ['w1', settled, true],
+      ['done', null, false]
+    ])
+  })
+
+  it("rolls a turn's diff up once, under its last row, when another prompt lands among its rows", () => {
+    // B opens its own turn but was sent before A's last row was written.
+    const messages = [
+      text('A', 'go', 'user'),
+      toolRun('t1'),
+      text('B', 'next', 'user'),
+      text('a-answer', 'Done with A.'),
+      toolRun('b1')
+    ]
+    const diff = (added: number): NativeChatTurnDiff => ({
+      files: [],
+      added,
+      removed: 0,
+      truncated: false
+    })
+    const slots = build(messages, {
+      turnKeys: ['A', 'A', 'B', 'A', 'B'],
+      turnDiffs: new Map([
+        ['A', diff(1)],
+        ['B', diff(2)]
+      ])
+    })
+    expect(
+      slots.filter((slot) => slot.turnDiff).map((slot) => [slot.message.id, slot.turnDiff?.added])
+    ).toEqual([
+      ['a-answer', 1],
+      ['b1', 2]
+    ])
+  })
+
+  it("keeps a running turn's rows live while a newer message waits behind it", () => {
+    const messages = [text('A', 'go', 'user'), toolRun('t1'), text('C', 'next up', 'user')]
+    const slots = build(messages, {
+      turnKeys: ['A', 'A', 'C'],
+      activeTurnKey: 'A',
+      isWorking: true
+    })
+    expect(slots.map((slot) => [slot.message.id, slot.activeTurnIsWorking])).toEqual([
+      ['A', true],
+      ['t1', true],
+      ['C', false]
     ])
   })
 })

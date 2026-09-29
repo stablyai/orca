@@ -23,12 +23,18 @@ export type StructuredAgentTurnTiming = {
   completedAt?: number
   /** The provider's own measurement; used when exact host endpoints are unavailable. */
   durationMs?: number
+  /** Host clock this turn's send stopped waiting behind the journal's previous
+   *  turn; present only when the send was issued before that turn ended. */
+  queuedUntil?: number
   /** Host clock when the lifecycle row was appended; with `startedAt` it gives
    *  the host-side lag a client must subtract to anchor a live counter. */
   observedAt: number
 }
 
-function readTiming(item: AgentJournalRenderItem): StructuredAgentTurnTiming | null {
+function readTiming(
+  item: AgentJournalRenderItem,
+  precedingTurnEndedAt: number | undefined
+): StructuredAgentTurnTiming | null {
   const turn = readAgentJournalTurn(item.body)
   if (!turn) {
     return null
@@ -49,26 +55,50 @@ function readTiming(item: AgentJournalRenderItem): StructuredAgentTurnTiming | n
     durationMs !== undefined && Number.isFinite(durationMs) && durationMs >= 0
       ? durationMs
       : undefined
+  // A send queued behind the previous turn counts from that turn's end (recorded, else its row's
+  // last host revision), never past this turn's own start: the provider opens it only after.
+  const queuedUntil =
+    precedingTurnEndedAt === undefined ? undefined : Math.min(precedingTurnEndedAt, startedAt)
   return {
     state,
     startedAt,
     ...(requested !== undefined ? { requestedAt: requested } : {}),
     ...(end !== undefined ? { completedAt: end } : {}),
     ...(measured !== undefined ? { durationMs: measured } : {}),
+    ...(requested !== undefined && queuedUntil !== undefined && queuedUntil > requested
+      ? { queuedUntil }
+      : {}),
     observedAt: item.observedAt
   }
 }
 
-/** Timing keyed by the user message that opened each turn. A row can name the
- *  submission directly or by a provider key that resolves through its alias.
- *  Rows from older hosts carry no key and fall back
+/** One turn record, read in journal order. */
+type StructuredAgentJournalTurn = {
+  timing: StructuredAgentTurnTiming | null
+  /** The transcript key that anchors this turn's bar and owns its rows: the
+   *  opener user item when the host names one it can resolve (or the send still
+   *  in flight ahead of the record), else the turn record's own item (a turn the
+   *  provider opened, or an opener outside the loaded window). Null only for an
+   *  older host that names nothing. */
+  key: string | null
+}
+
+type StructuredAgentJournalTurns = {
+  /** Timing keyed by the user message that opened each turn. */
+  byUserItem: ReadonlyMap<string, StructuredAgentTurnTiming | null>
+  byTurnId: ReadonlyMap<string, StructuredAgentJournalTurn>
+}
+
+/** Every turn record in one pass over the journal. A row can name its user
+ *  message directly or by a provider key that resolves through its alias.
+ *  Rows from older hosts carry no key and fall back, for timing only,
  *  to the nearest user message before them in journal order — the submission
  *  row is written ahead of dispatch, so it always precedes the provider's
  *  turn-start. Untimed rows are skipped unless explicitly unverifiable (null). */
-export function selectStructuredAgentTurnTimings(
+function readStructuredAgentJournalTurns(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[] = []
-): ReadonlyMap<string, StructuredAgentTurnTiming | null> {
+): StructuredAgentJournalTurns {
   const itemIds = new Set(items.map((item) => item.itemId))
   const aliases = new Map<string, string>()
   // Codex folds a send issued mid-turn into the running turn under the SAME provider
@@ -78,26 +108,108 @@ export function selectStructuredAgentTurnTimings(
       aliases.set(submission.providerItemId, agentJournalSubmissionKey(submission.clientMessageId))
     }
   }
-  const timings = new Map<string, StructuredAgentTurnTiming | null>()
+  // Sends not yet matched to a provider item. Codex reports a turn open before it
+  // echoes the send, so for that gap the turn names a key no alias resolves yet.
+  const inFlight = new Set(
+    submissions
+      .filter((submission) => submission.dispatchState === 'pending' && !submission.providerItemId)
+      .map((submission) => agentJournalSubmissionKey(submission.clientMessageId))
+  )
+  const byUserItem = new Map<string, StructuredAgentTurnTiming | null>()
+  const byTurnId = new Map<string, StructuredAgentJournalTurn>()
   let precedingUserItemId: string | null = null
+  let inFlightSinceLastTurn: string | null = null
+  let precedingTurnEndedAt: number | undefined
   for (const item of items) {
     if (item.body.kind === 'message' && item.body.role === 'user') {
       precedingUserItemId = item.itemId
+      if (inFlightSinceLastTurn === null && inFlight.has(item.itemId)) {
+        inFlightSinceLastTurn = item.itemId
+      }
       continue
     }
     const turn = readAgentJournalTurn(item.body)
-    const timing = readTiming(item)
-    if (!timing && turn?.state !== 'unverifiable') {
+    if (!turn) {
       continue
     }
-    const key = turn?.userItemId
-    const userItemId =
-      key === undefined ? precedingUserItemId : itemIds.has(key) ? key : (aliases.get(key) ?? null)
+    const timing = readTiming(item, precedingTurnEndedAt)
+    precedingTurnEndedAt = timing?.completedAt ?? item.observedAt
+    const key = turn.userItemId
+    const named = key === undefined ? null : itemIds.has(key) ? key : (aliases.get(key) ?? null)
+    // An unresolved opener is the send still in flight ahead of this record; with none,
+    // it is outside the window, and the turn anchors to its own record like a
+    // provider-opened one — never to a preceding prompt that did not open it.
+    const turnKey = key === undefined ? null : (named ?? inFlightSinceLastTurn ?? item.itemId)
+    inFlightSinceLastTurn = null
+    byTurnId.set(turn.turnId, { timing, key: turnKey })
+    if (!timing && turn.state !== 'unverifiable') {
+      continue
+    }
+    const userItemId = key === undefined ? precedingUserItemId : turnKey
     if (userItemId !== null) {
-      timings.set(userItemId, timing)
+      byUserItem.set(userItemId, timing)
     }
   }
-  return timings
+  return { byUserItem, byTurnId }
+}
+
+/**
+ * Which turn owns each journal item, as the transcript groups rows: every item
+ * between a turn record and the next belongs to that record's turn (the record
+ * is appended when the turn opens and revised in place, and an opener's user
+ * item is written ahead of dispatch, so journal order is turn order). A user
+ * item that opened any turn — even a later one it queued for — keys itself; one
+ * the provider folded into a running turn (a steer) takes that turn's key, but
+ * only once the turn produces more rows after it, so a fresh tail send is not
+ * pulled into the turn it is merely waiting behind. Items before the first turn
+ * record stay absent, and the surface keeps its positional grouping for them.
+ */
+function turnKeysByItemIdOf(
+  items: readonly AgentJournalRenderItem[],
+  byTurnId: ReadonlyMap<string, StructuredAgentJournalTurn>
+): ReadonlyMap<string, string> {
+  const openers = new Set<string>()
+  for (const turn of byTurnId.values()) {
+    if (turn.key !== null) {
+      openers.add(turn.key)
+    }
+  }
+  const keys = new Map<string, string>()
+  let currentKey: string | null = null
+  // User items folded into the current turn, held until a later row proves the
+  // turn continued past them.
+  let pendingUserItemIds: string[] = []
+  for (const item of items) {
+    const turn = readAgentJournalTurn(item.body)
+    if (turn) {
+      currentKey = byTurnId.get(turn.turnId)?.key ?? null
+      pendingUserItemIds = []
+      continue
+    }
+    if (item.body.kind === 'message' && item.body.role === 'user') {
+      if (openers.has(item.itemId)) {
+        keys.set(item.itemId, item.itemId)
+      } else if (currentKey !== null) {
+        pendingUserItemIds.push(item.itemId)
+      }
+      continue
+    }
+    if (currentKey !== null) {
+      for (const userItemId of pendingUserItemIds) {
+        keys.set(userItemId, currentKey)
+      }
+      pendingUserItemIds = []
+      keys.set(item.itemId, currentKey)
+    }
+  }
+  return keys
+}
+
+export function selectStructuredAgentTurnTimings(
+  items: readonly AgentJournalRenderItem[],
+  submissions: readonly AgentJournalSubmission[] = []
+): ReadonlyMap<string, StructuredAgentTurnTiming | null> {
+  return readStructuredAgentJournalTurns(items, submissions).byUserItem
 }
 
 /** The live turn's lifecycle timing, or null when its row carries no host start
@@ -106,20 +218,15 @@ export function selectStructuredAgentRunningTurnTiming(
   items: readonly AgentJournalRenderItem[],
   turnId: string
 ): StructuredAgentTurnTiming | null {
-  for (let index = items.length - 1; index >= 0; index -= 1) {
-    const item = items[index]
-    if (item && readAgentJournalTurn(item.body)?.turnId === turnId) {
-      return readTiming(item)
-    }
-  }
-  return null
+  return readStructuredAgentJournalTurns(items).byTurnId.get(turnId)?.timing ?? null
 }
 
 /** The single instant every reading of a turn's elapsed time counts from: the
- *  send that opened it when the host named one, the provider turn-open otherwise.
+ *  send that opened it when the host named one — or, for a send queued behind the
+ *  previous turn, that turn's end — and the provider turn-open otherwise.
  *  One origin is what keeps the live counter and the settled duration agreeing. */
 export function structuredAgentTurnOrigin(timing: StructuredAgentTurnTiming): number {
-  return timing.requestedAt ?? timing.startedAt
+  return timing.queuedUntil ?? timing.requestedAt ?? timing.startedAt
 }
 
 /** Whole seconds a settled turn ran, or null when the host never observed its end. */
@@ -129,9 +236,9 @@ export function completedStructuredAgentTurnSeconds(
   if (!timing || (timing.state !== 'completed' && timing.state !== 'interrupted')) {
     return null
   }
-  // Provider durations may begin at turn-open, so exact host endpoints preserve the live origin.
+  // Provider durations may begin before the live origin (turn-open, or a turn this send queued behind).
   if (timing.requestedAt !== undefined && timing.completedAt !== undefined) {
-    return Math.max(0, Math.floor((timing.completedAt - timing.requestedAt) / 1000))
+    return Math.max(0, Math.floor((timing.completedAt - structuredAgentTurnOrigin(timing)) / 1000))
   }
   if (timing.durationMs !== undefined) {
     return Math.floor(timing.durationMs / 1000)
@@ -171,8 +278,15 @@ export function selectStructuredAgentSettledTurns(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[] = []
 ): NativeChatSettledTurns {
+  return settledTurnsOf(readStructuredAgentJournalTurns(items, submissions), submissions)
+}
+
+function settledTurnsOf(
+  turns: StructuredAgentJournalTurns,
+  submissions: readonly AgentJournalSubmission[]
+): NativeChatSettledTurns {
   const settled = new Map<string, NativeChatSettledTurn | null>()
-  for (const [userItemId, timing] of selectStructuredAgentTurnTimings(items, submissions)) {
+  for (const [userItemId, timing] of turns.byUserItem) {
     const workedSeconds = completedStructuredAgentTurnSeconds(timing)
     settled.set(
       userItemId,
@@ -188,4 +302,31 @@ export function selectStructuredAgentSettledTurns(
     }
   }
   return settled
+}
+
+/** Everything a chat surface reads off the journal for its turn bars, from one
+ *  pass: settled durations, the running turn's timing, the item that anchors its
+ *  bar — which a message sent while the turn runs is not — and which turn owns
+ *  each row of the transcript. */
+export function selectStructuredAgentTurnBars(
+  items: readonly AgentJournalRenderItem[],
+  submissions: readonly AgentJournalSubmission[],
+  turnId: string | null
+): {
+  settledTurns: NativeChatSettledTurns
+  runningTiming: StructuredAgentTurnTiming | null
+  /** The transcript key the running turn's bar anchors to: its opening user
+   *  message, or the turn record itself when the provider opened the turn.
+   *  Null on an older host, where the newest user message stays the anchor. */
+  activeTurnOpenedBy: string | null
+  turnKeysByItemId: ReadonlyMap<string, string>
+} {
+  const turns = readStructuredAgentJournalTurns(items, submissions)
+  const running = turnId === null ? undefined : turns.byTurnId.get(turnId)
+  return {
+    settledTurns: settledTurnsOf(turns, submissions),
+    runningTiming: running?.timing ?? null,
+    activeTurnOpenedBy: running?.key ?? null,
+    turnKeysByItemId: turnKeysByItemIdOf(items, turns.byTurnId)
+  }
 }

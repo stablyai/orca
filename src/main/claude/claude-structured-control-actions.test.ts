@@ -243,6 +243,7 @@ describe('answerClaudePrompt', () => {
     const resolvePrompt = vi.fn()
     session.translator = {
       handle: vi.fn(),
+      openTurnInLiveProviderCycle: false,
       journalPrompts: {
         cancel: vi.fn(() => ({ accepted: true as const })),
         resolve: resolvePrompt

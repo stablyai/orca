@@ -17,9 +17,9 @@ import {
   acquired,
   adapterFor,
   fakeClaude,
-  identityFor,
-  invokeCanUseTool
+  identityFor
 } from './claude-structured-session-test-support'
+import { invokeCanUseTool } from './claude-can-use-tool-test-support'
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve = (): void => {}

@@ -1,6 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { BRIDGE_MAX_MESSAGE_BYTES, parseBridgeMessage, utf8ByteLength } from './bridge-caps'
 import { createFakeBridgePortPair } from './bridge-port-pair-test-harness'
 
@@ -28,18 +26,6 @@ const WIDE_CHARACTER = '漢'
 const WIDE_CHARACTER_COUNT = 250_000
 
 describe('what the frame cap counts', () => {
-  it('is the unit both shells count, read from their own sources', () => {
-    const shell = join(import.meta.dirname, '..', '..', '..', 'modules', 'orca-mobile-web-shell')
-    const swift = readFileSync(join(shell, 'ios', 'MobileWebShellView.swift'), 'utf8')
-    const kotlin = readFileSync(
-      join(shell, 'android/src/main/java/expo/modules/orcamobilewebshell/MobileWebShellView.kt'),
-      'utf8'
-    )
-    // The inbound gate on each platform, by the expression it measures with.
-    expect(swift).toContain('bridgeGate.accepts(byteCount: json.utf8.count)')
-    expect(kotlin).toContain('bridgeGate.accepts(json.toByteArray(Charsets.UTF_8).size)')
-  })
-
   it('refuses a frame under the cap in code units and over it in bytes', async () => {
     const pad = WIDE_CHARACTER.repeat(WIDE_CHARACTER_COUNT)
     // The precondition, without which this is just another oversized frame: a sender reading

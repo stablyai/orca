@@ -3,7 +3,7 @@ import { pathToFileURL } from 'node:url'
 import { runProcessSync } from './script-child-process.mjs'
 import { collectUnitDependencyGraph } from './ci-unit-dependency-graph.mjs'
 import { discoverUnitFiles } from './ci-unit-files.mjs'
-import { planUnitSelection } from './ci-unit-selection.mjs'
+import { FULL_SHARD_COUNT, planUnitSelection } from './ci-unit-selection.mjs'
 import { readTimingBaseline, writeAssignment } from './ci-shard-assignment.mjs'
 
 export function prepareUnitPlan(env = process.env) {
@@ -39,7 +39,10 @@ export function prepareUnitPlan(env = process.env) {
       files,
       candidateFiles: files,
       executionFiles: files,
-      shards: Array.from({ length: 8 }, (_, index) => ({ index: index + 1, count: 8 }))
+      shards: Array.from({ length: FULL_SHARD_COUNT }, (_, index) => ({
+        index: index + 1,
+        count: FULL_SHARD_COUNT
+      }))
     }
   }
   writeAssignment('ci-shards/unit-selection.json', plan)

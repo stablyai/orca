@@ -309,15 +309,16 @@ export async function openClaudeStreamJsonConnection(
     closePromise ??= (async () => {
       closing = true
       resumeReading()
-      // Arm the descendant proof before ending stdin. The SDK may exit the root
-      // immediately; a post-exit walk cannot recover descendants that reparented.
+      // Arm the descendant proof before the stop. The root may exit immediately;
+      // a post-exit walk cannot recover descendants that reparented.
       await (tree.refresh?.() ?? tree.capture())
       inbox.end()
       const proven = await proveClaudeChildExit({
         child,
         exitPromise,
         exited: rootSettled,
-        tree
+        tree,
+        supervised: spawner.supervised
       })
       inbox.fail(new Error('claude stream-json connection closed'))
       if (!proven) {

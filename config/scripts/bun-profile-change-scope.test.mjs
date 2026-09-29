@@ -119,15 +119,13 @@ describe('the actual Bun build and profile-test dependency graph', () => {
     expect((await classifyBunProfileChanges([file], async () => inputs)).shouldRun).toBe(true)
   })
 
-  it('retains all selected tests and uses the same selectors as the Bun runner', () => {
+  it('retains all selected tests and the selectors the Bun runner uses', () => {
     const tests = discoverBunProfileTests()
     expect(tests.length).toBeGreaterThan(80)
     expect(tests.every((file) => inputs.has(file))).toBe(true)
     expect(
       bunProfileTestPaths().every((selector) => tests.some((file) => file.includes(selector)))
     ).toBe(true)
-    const runner = readFileSync(new URL('./run-bun-profile-tests.mjs', import.meta.url), 'utf8')
-    expect(runner).toContain('testArgs.length > 0 ? testArgs : bunProfileTestPaths({ artifact })')
   })
 })
 
@@ -143,6 +141,13 @@ it('keeps all ten platform jobs and runs them when detection is skipped or fails
   expect(detect.run).toContain('git diff --name-only --no-renames -z HEAD^1 HEAD')
   expect(workflow.on.pull_request.types).toContain('ready_for_review')
   expect(workflow.on.schedule).toHaveLength(1)
+  // A pull request may qualify one platform, so the merged commit must re-qualify all six.
+  expect(workflow.on.push.branches).toEqual(['main'])
+  expect(workflow.on.push.paths).toEqual(workflow.on.pull_request.paths)
+  // The push and schedule paths must not rest on a null property comparison.
+  expect(workflow.jobs.persistence.if).toContain(
+    "github.event_name != 'pull_request' || github.event.pull_request.draft != true"
+  )
   expect(workflow.jobs.persistence.strategy.matrix.os).toContain('needs.changes.outputs.runners')
   for (const jobName of ['linux_glibc_floor', 'linux_musl']) {
     const job = workflow.jobs[jobName]

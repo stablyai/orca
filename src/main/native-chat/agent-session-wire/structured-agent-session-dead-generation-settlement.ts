@@ -25,6 +25,7 @@ import {
 } from './structured-agent-session-start-failure-row'
 import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-record'
 import {
+  provenUnverifiableTurnRevisions,
   runningTurnLifecycleRevisions,
   turnVerdictFromDeathEvidence,
   type StructuredAgentSessionTurnVerdict
@@ -185,9 +186,9 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
 /**
  * Settles whatever a generation with no child in this process left running: found when a new child
  * is acquired, or when a chat is reopened for reading. Derived from the journal and the lease's
- * death evidence each time, so nothing is owed in between. Only an observed exit earns an end time
- * and the exit copy. Must run before a new child's buffered events land, or a live turn would be
- * judged.
+ * death evidence each time, so nothing is owed in between. Proven death ends the turn interrupted,
+ * and a proof written after an earlier settle revises what that settle left `unverifiable`. Must
+ * run before a new child's buffered events land, or a live turn would be judged.
  */
 export async function settleStaleStructuredAgentSessionState(input: {
   journal: AgentSessionJournal
@@ -200,7 +201,10 @@ export async function settleStaleStructuredAgentSessionState(input: {
 }): Promise<number> {
   const { journal } = input
   const items = journal.snapshot().items
-  const verdict = turnVerdictFromDeathEvidence(input.deathEvidence)
+  // Each turn is judged by the evidence only if it names that turn's owner.
+  const verdictFor = (item: AgentJournalRenderItem) =>
+    turnVerdictFromDeathEvidence(input.deathEvidence, journal.itemFence(item.itemId))
+  // Per attempt: a retry re-partitions only what is left, and a reused chunk id would skip it.
   const generation = input.acquisitionGeneration ?? `seq-${journal.cursor().sequence}`
   const settlementId = `stale-session:${input.sessionId}:${input.fence}:${generation}`
   const mutations: JournalLifecycleMutationInput[] = []
@@ -211,11 +215,24 @@ export async function settleStaleStructuredAgentSessionState(input: {
       mutations.push({ kind: 'item', identity, body })
     }
   }
-  mutations.push(...runningTurnLifecycleRevisions(items, verdict))
-  if (verdict.state === 'interrupted' && items.some(isInProgressItem)) {
+  const proven = provenUnverifiableTurnRevisions(items, input.deathEvidence, journal)
+  mutations.push(
+    ...items.flatMap((item) => runningTurnLifecycleRevisions([item], verdictFor(item))),
+    ...proven
+  )
+  const evidence = input.deathEvidence
+  if (
+    evidence &&
+    (proven.length > 0 ||
+      items.some((item) => isInProgressItem(item) && verdictFor(item).state === 'interrupted'))
+  ) {
     mutations.unshift({
       kind: 'item',
-      identity: { provider: 'orca', clientMessageId: settlementId },
+      // Named by the death it explains, so a retry after a partly written settle adds no second row.
+      identity: {
+        provider: 'orca',
+        clientMessageId: `stale-session:${input.sessionId}:death-${evidence.ownerFence ?? 'unowned'}-${evidence.observedAt}`
+      },
       // The death evidence is Orca's log text, never a sentence for a person: the row says only
       // that the provider stopped.
       body: {

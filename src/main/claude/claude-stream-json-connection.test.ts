@@ -107,6 +107,18 @@ async function open(
   return connection
 }
 
+function launchedArgv(spec: ProcessSpec | undefined): string[] {
+  const supervised = spec?.env?.ORCA_PROVIDER_SUPERVISOR_SPEC
+  if (!supervised) {
+    return [spec?.program ?? '', ...(spec?.args ?? [])]
+  }
+  const launch: unknown = JSON.parse(Buffer.from(supervised, 'base64').toString())
+  if (!launch || typeof launch !== 'object' || !('command' in launch) || !('args' in launch)) {
+    return []
+  }
+  return [String(launch.command), ...(Array.isArray(launch.args) ? launch.args.map(String) : [])]
+}
+
 function childEnv(): Record<string, string | undefined> {
   return (spawned.at(-1)?.env ?? {}) as Record<string, string | undefined>
 }
@@ -201,8 +213,9 @@ describe('Claude stream-json connection', () => {
     const report = await until(() => readReportSafely(scenario), 'the scripted CLI report')
     expect(report.argv[0]).toBe(FAKE_CLI)
     // The .mjs fixture makes the SDK run it under node; a real CLI path is the program
-    // itself. Either way the resolved path is what Orca's spawner is asked to execute.
-    expect([spawned.at(-1)?.program, ...(spawned.at(-1)?.args ?? [])]).toContain(FAKE_CLI)
+    // itself. Either way the resolved path is what Orca's spawner is asked to execute,
+    // through the POSIX supervisor's spec where there is one.
+    expect(launchedArgv(spawned.at(-1))).toContain(FAKE_CLI)
     expect(report.argv).toContain('--replay-user-messages')
     expect(report.argv).toContain(`--session-id=${SESSION_ID}`)
   })
@@ -647,37 +660,63 @@ describe('Claude stream-json connection', () => {
     20_000
   )
 
-  it('settles a spawn error followed by close as processless and closes idempotently', async () => {
-    const scenario = scriptScenario([HOLD_OPEN])
-    const missingCli = join(scenario.cwd, 'claude-that-does-not-exist')
-    let fault: Error | null = null
-    let exit: Error | null = null
-    const connection = await open(
-      { ...launchFor(scenario), pathToClaudeCodeExecutable: missingCli },
-      {
-        onFault: (error) => {
-          fault = error
-        },
-        onExit: (error) => {
-          exit = error
+  it.skipIf(process.platform === 'win32')(
+    'reports a missing CLI under the supervisor as a root exit that names the spawn error',
+    async () => {
+      const scenario = scriptScenario([HOLD_OPEN])
+      const missingCli = join(scenario.cwd, 'claude-that-does-not-exist')
+      let exit: Error | null = null
+      const connection = await open(
+        { ...launchFor(scenario), pathToClaudeCodeExecutable: missingCli },
+        {
+          onExit: (error) => {
+            exit = error
+          }
         }
-      }
-    )
+      )
 
-    await until(
-      () => (connection.exitVerdict.root === 'processless' ? connection.exitVerdict : null),
-      'the processless spawn settlement'
-    )
-    expect(connection.pid).toBeUndefined()
-    expect(fault).toBeInstanceOf(Error)
-    expect(exit).toBeNull()
-    await expect(Promise.all([connection.close(), connection.close()])).resolves.toEqual([
-      true,
-      true
-    ])
-    await expect(connection.close()).resolves.toBe(true)
-    expect(connection.exitVerdict).toEqual({ root: 'processless', tree: 'exited' })
-  })
+      const reported = await until(() => exit, 'the supervised spawn failure')
+      // The supervisor spawned, so this is its exit; only its stderr can say why.
+      expect(reported.message).toMatch(/\(code 127\).*ENOENT/s)
+      // A first-hand root exit, which releases the lease like a processless start did.
+      expect(connection.exitVerdict.root).toBe('exited')
+    }
+  )
+
+  it.skipIf(process.platform !== 'win32')(
+    'settles a spawn error followed by close as processless and closes idempotently',
+    async () => {
+      const scenario = scriptScenario([HOLD_OPEN])
+      const missingCli = join(scenario.cwd, 'claude-that-does-not-exist')
+      let fault: Error | null = null
+      let exit: Error | null = null
+      const connection = await open(
+        { ...launchFor(scenario), pathToClaudeCodeExecutable: missingCli },
+        {
+          onFault: (error) => {
+            fault = error
+          },
+          onExit: (error) => {
+            exit = error
+          }
+        }
+      )
+
+      await until(
+        () => (connection.exitVerdict.root === 'processless' ? connection.exitVerdict : null),
+        'the processless spawn settlement'
+      )
+      expect(connection.pid).toBeUndefined()
+      expect(fault).toBeInstanceOf(Error)
+      expect(exit).toBeNull()
+      await expect(Promise.all([connection.close(), connection.close()])).resolves.toEqual([
+        true,
+        true
+      ])
+      await expect(connection.close()).resolves.toBe(true)
+      expect(connection.exitVerdict).toEqual({ root: 'processless', tree: 'exited' })
+    }
+  )
 
   it('does not treat a child error event as first-hand root exit proof', async () => {
     const scenario = scriptScenario([HOLD_OPEN])

@@ -7,7 +7,10 @@ import { IpynbRunPrompt } from './IpynbCellToolbar'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { IpynbCell, IpynbOutput } from './ipynb-parse'
 
-vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
+vi.mock('@/i18n/i18n', () => ({
+  i18n: { language: 'en' },
+  translate: (_key: string, fallback: string) => fallback
+}))
 vi.mock('./use-document-dark-theme', () => ({ useDocumentDarkTheme: () => true }))
 vi.mock('@/lib/monaco-setup', () => ({ monaco: {} }))
 vi.mock('./MonacoCodeExcerpt', () => ({

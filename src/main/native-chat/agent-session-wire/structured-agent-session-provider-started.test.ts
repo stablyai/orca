@@ -37,7 +37,17 @@ beforeEach(async () => {
   resetHostTestOperationIds()
   lifecycle = []
   statuses = []
-  const claude = fakeClaude({ initDelayMs: INIT_DELAY_MS, initModel: 'claude-opus-9' })
+  // A CLI whose own default is not the catalog's: startup reports it through get_settings,
+  // since system/init arrives only with the first command.
+  const claude = fakeClaude({
+    initDelayMs: INIT_DELAY_MS,
+    initModel: 'claude-opus-9',
+    settings: {
+      applied: { model: 'claude-opus-9', effort: 'high', advisor: null, ultracode: false },
+      effective: { model: 'claude-opus-9', effortLevel: 'high', env: {} },
+      sources: {}
+    }
+  })
   adapter = new ClaudeStructuredSessionAdapter({
     resolveLaunch: async () => ({
       pathToClaudeCodeExecutable: 'claude',

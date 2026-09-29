@@ -10,7 +10,7 @@ import {
   cancelClaudeTurn,
   supportsClaudeQueuedInterruptCancellation
 } from './claude-structured-control-actions'
-import type { ClaudeLateDispatchSettlement } from './claude-structured-dispatch'
+import type { ClaudeLateDispatchSettlement } from './claude-replay-turn-resolution'
 import { buildClaudePromptReply } from './claude-structured-prompt-replies'
 import type { ClaudeSession } from './claude-structured-session-state'
 import type { ClaudePendingPrompt } from './claude-prompt-registry'

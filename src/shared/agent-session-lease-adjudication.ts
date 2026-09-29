@@ -80,16 +80,23 @@ export function isProvenAliveProbe(probe: AgentSessionOwnerProbe): boolean {
 
 function deathEvidenceFor(
   probe: AgentSessionOwnerProbe,
-  observedAt: number
+  observedAt: number,
+  lease: AgentSessionLease
 ): AgentSessionDeathEvidence | null {
+  // Capped so a clock that stepped back across the restart still writes a valid interval.
+  const interval = {
+    observedAt,
+    ownerFence: lease.runtimeFence,
+    lastProvenAliveAt: Math.min(lease.lastRenewedAt, observedAt)
+  }
   if (probe.outcome === 'exit-observed') {
-    return { kind: 'exit-observed', detail: 'observed process exit', observedAt }
+    return { kind: 'exit-observed', detail: 'observed process exit', ...interval }
   }
   if (probe.outcome === 'pid-absent') {
-    return { kind: 'pid-absent', detail: 'recorded pid absent on host', observedAt }
+    return { kind: 'pid-absent', detail: 'recorded pid absent on host', ...interval }
   }
   if (probe.outcome === 'identity-mismatch') {
-    return { kind: 'identity-mismatch', detail: `mismatched ${probe.field}`, observedAt }
+    return { kind: 'identity-mismatch', detail: `mismatched ${probe.field}`, ...interval }
   }
   return null
 }
@@ -240,7 +247,12 @@ export function adjudicateAgentSessionRestart(args: {
       nextFence: nextAgentSessionFence(lease),
       evidence:
         probe.outcome === 'reservation-unused'
-          ? { kind: 'pid-absent', detail: 'reservation never spawned', observedAt }
+          ? {
+              kind: 'pid-absent',
+              detail: 'reservation never spawned',
+              observedAt,
+              ownerFence: lease.runtimeFence
+            }
           : null
     }
   }
@@ -253,7 +265,7 @@ export function adjudicateAgentSessionRestart(args: {
       reason: 'owner outlived the runtime that held its transport'
     }
   }
-  const evidence = deathEvidenceFor(probe, observedAt)
+  const evidence = deathEvidenceFor(probe, observedAt, lease)
   if (evidence) {
     return { disposition: 'evicted', nextFence: nextAgentSessionFence(lease), evidence }
   }

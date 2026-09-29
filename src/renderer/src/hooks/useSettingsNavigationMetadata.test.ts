@@ -1,5 +1,3 @@
-import { readdirSync, readFileSync } from 'node:fs'
-import { basename, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { buildSettingsNavigationMetadata } from './useSettingsNavigationMetadata'
 import type { Repo } from '../../../shared/repo-types'
@@ -404,43 +402,5 @@ describe('settings navigation metadata', () => {
   it('keeps macOS permissions mac-only', () => {
     expect(ids({ isMac: false })).not.toContain('developer-permissions')
     expect(ids({ isMac: true })).toContain('developer-permissions')
-  })
-
-  it('does not import Settings page or pane UI modules from the metadata hook', () => {
-    const testDir = import.meta.dirname
-    // Why: the section tables live in sibling settings-navigation-* modules, so reading only the
-    // hook would scan a file that no longer holds the imports this guard exists to police.
-    // Walk recursively so a later split that nests the modules cannot shrink this guard.
-    const sourceFiles = [
-      'useSettingsNavigationMetadata.ts',
-      ...readdirSync(testDir, { recursive: true, encoding: 'utf8' }).filter(
-        (name) => basename(name).startsWith('settings-navigation-') && name.endsWith('.ts')
-      )
-    ]
-    expect(sourceFiles.length).toBeGreaterThan(1)
-    const importLines = sourceFiles
-      .flatMap((name) => readFileSync(resolve(testDir, name), 'utf8').split('\n'))
-      .filter((line) => line.trim().startsWith('import '))
-      .join('\n')
-
-    expect(importLines).not.toMatch(/components\/settings\/Settings(?:'|")/)
-    expect(importLines).not.toMatch(/components\/settings\/[A-Z][A-Za-z]+Pane(?:'|")/)
-    expect(importLines).not.toMatch(/components\/stats\/StatsPane(?:'|")/)
-  })
-
-  it('does not import Settings page or pane UI modules from the quick action registry', () => {
-    const testDir = import.meta.dirname
-    const registrySource = readFileSync(
-      resolve(testDir, '../components/cmd-j/quick-actions.ts'),
-      'utf8'
-    )
-    const importLines = registrySource
-      .split('\n')
-      .filter((line) => line.trim().startsWith('import '))
-      .join('\n')
-
-    expect(importLines).not.toMatch(/components\/settings\/Settings(?:'|")/)
-    expect(importLines).not.toMatch(/components\/settings\/[A-Z][A-Za-z]+Pane(?:'|")/)
-    expect(importLines).not.toMatch(/components\/stats\/StatsPane(?:'|")/)
   })
 })

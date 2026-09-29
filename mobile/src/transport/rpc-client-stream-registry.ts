@@ -14,6 +14,7 @@ import {
   isTerminalSubscribedResult
 } from './rpc-subscription-result-shapes'
 import { RpcClientTerminalStreamRouter } from './rpc-client-terminal-stream-router'
+import * as sessionTabsStream from './rpc-client-session-tabs-stream'
 import type { ConnectionState, RpcResponse, RpcSuccess } from './types'
 
 export type RpcStreamingListener = (result: unknown) => void
@@ -30,6 +31,7 @@ type StreamRequest = {
   subscriptionId?: string
   cancelled?: boolean
   sent?: boolean
+  receivedSnapshot?: boolean
 }
 
 type StreamRegistryOptions = {
@@ -108,6 +110,7 @@ export class RpcClientStreamRegistry {
     this.pendingBrowserRequestId = null
     for (const [id, stream] of this.streams) {
       stream.sent = false
+      stream.receivedSnapshot = false
       // The id named a registration on the closed socket; the replay's ready brings the new one.
       stream.subscriptionId = undefined
       this.resetTerminalRouting(id)
@@ -169,6 +172,10 @@ export class RpcClientStreamRegistry {
       return
     }
     const result = response.result
+    if (sessionTabsStream.recordSnapshot(stream, result) && stream.cancelled) {
+      this.dispose(response.id)
+      return
+    }
     if (isStreamingSubscriptionReadyResult(result)) {
       stream.subscriptionId = result.subscriptionId
       if (stream.cancelled) {
@@ -215,6 +222,8 @@ export class RpcClientStreamRegistry {
         // Why: `requestId` names this exact request; hosts that predate it strip it and use the slot.
         this.sendRpc('terminal.unsubscribe', { ...params, requestId: id })
       }
+    } else if (stream && sessionTabsStream.holdUnsubscribe(stream)) {
+      return
     } else {
       const unsubscribe = buildStreamUnsubscribe(stream?.method, stream?.params, id)
       if (unsubscribe) {

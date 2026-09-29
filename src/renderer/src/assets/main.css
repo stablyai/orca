@@ -409,12 +409,14 @@
 
 [data-sonner-toaster] {
   font-family: var(--font-sans);
-  z-index: 40 !important;
+  z-index: var(--toaster-z-index, 40) !important;
 }
 
-/* Keep errors above standard modal backdrops at the existing popover tier. */
-body:has([data-slot='dialog-overlay'], [data-slot='sheet-overlay']) [data-sonner-toaster] {
-  z-index: 60 !important;
+/* Keep errors above standard modal backdrops at the existing popover tier.
+   Why: overlays portal straight into body, and `>` plus a :has() on body alone (not in the toaster's
+   selector) keeps unrelated DOM changes from rescanning the page; the old form froze large diffs. */
+body:has(> [data-slot='dialog-overlay'], > [data-slot='sheet-overlay']) {
+  --toaster-z-index: 60;
 }
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] {

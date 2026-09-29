@@ -12,9 +12,9 @@ import { agentChildWorkLiveness } from '../../shared/agent-status-child-work-liv
 import { reconcileAgentChildWorkEvidence } from '../../shared/agent-status-child-work-reconciliation'
 import {
   agentChildWorkOwnedLiveness,
-  deriveAgentChildDisplayState,
-  projectAgentChildWorkViews
-} from '../../shared/agent-status-child-work-view'
+  deriveAgentChildDisplayState
+} from '../../shared/agent-status-child-work-display'
+import { projectAgentChildWorkViews } from '../../shared/agent-status-child-work-view'
 import { createAgentStatusStore } from '../../shared/agent-status-store'
 import { agentJournalLinkageFields } from '../../shared/agent-session-journal-producer'
 import type {
@@ -332,12 +332,17 @@ describe('Codex structured child-work producer', () => {
       { frame: turn('turn/started', TESTER, 't1'), lead: 'working' },
       { frame: spawned(LINTER, 'lint', 'p2'), lead: 'working' },
       { frame: turn('turn/started', LINTER, 'l1'), lead: 'working' },
-      // Codex ends this child's turn with an error it will not retry, and no turn/completed.
+      // Codex ends this child's turn with an error it will not retry, then a failed completion.
       {
         frame: {
           method: 'error',
           params: { threadId: LINTER, turnId: 'l1', willRetry: false, error: { message: 'boom' } }
         },
+        lead: 'working',
+        check: () => expect(byDescription('lint')).toMatchObject({ membership: 'live' })
+      },
+      {
+        frame: turn('turn/completed', LINTER, 'l1', 'failed'),
         lead: 'working',
         check: () =>
           expect(byDescription('lint')).toMatchObject({ membership: 'settled', outcome: 'failed' })

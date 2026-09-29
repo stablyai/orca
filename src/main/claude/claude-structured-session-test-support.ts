@@ -51,6 +51,9 @@ export function fakeClaude(
     initSessionId?: string
     initUuid?: string
     initModel?: string
+    /** 'session-start' (default) mirrors live: a SessionStart hook frame proves the
+     *  session and system/init arrives only when the first command starts a cycle.
+     *  'init' emits init at startup — an UNMEASURED shape, opt-in only. */
     initProof?: 'init' | 'session-start' | 'none'
     initAccount?: unknown
     initCommands?: unknown
@@ -81,6 +84,22 @@ export function fakeClaude(
     return route ? route(params) : undefined
   }
   const openConnection: typeof openClaudeStreamJsonConnection = async (launch, handlers = {}) => {
+    let cycleInitEmitted = false
+    // Keys mirror the real system/init frame, which carries `model` but no
+    // effort of any kind: the current effort only comes back from get_settings.
+    // Never add a field the CLI does not send.
+    const emitCycleInit = (): void => {
+      cycleInitEmitted = true
+      handlers.onMessage?.({
+        type: 'system',
+        subtype: 'init',
+        session_id: options.initSessionId ?? PROVIDER_SESSION_ID,
+        uuid: options.initUuid ?? 'init-uuid',
+        model: options.initModel ?? 'claude-sonnet-5',
+        apiKeySource: 'none',
+        ...(options.capabilities ? { capabilities: options.capabilities } : {})
+      })
+    }
     const connection: FakeConnection = {
       launch,
       handlers,
@@ -102,7 +121,13 @@ export function fakeClaude(
           // The SDK rejects pending control requests once the transport ends.
           throw new Error('Query closed before response received')
         }
-        if (options.initProof === 'session-start') {
+        if (options.initProof === 'init') {
+          // UNMEASURED startup shape, kept only as an explicit opt-in: live
+          // sessions prove startup with a SessionStart hook frame instead.
+          emitCycleInit()
+        } else if (options.initProof !== 'none') {
+          // The live proof order (measured through Orca's adapter): SessionStart
+          // hook frames arrive first; system/init only when a cycle starts.
           handlers.onMessage?.({
             type: 'system',
             subtype: 'hook_started',
@@ -110,22 +135,19 @@ export function fakeClaude(
             session_id: options.initSessionId ?? PROVIDER_SESSION_ID,
             uuid: options.initUuid ?? 'init-uuid'
           })
-        } else if (options.initProof !== 'none') {
-          // Keys mirror the real system/init frame, which carries `model` but no
-          // effort of any kind: the current effort only comes back from
-          // get_settings. Never add a field the CLI does not send.
           handlers.onMessage?.({
             type: 'system',
-            subtype: 'init',
+            subtype: 'hook_response',
+            hook_name: 'SessionStart:startup',
             session_id: options.initSessionId ?? PROVIDER_SESSION_ID,
-            uuid: options.initUuid ?? 'init-uuid',
-            model: options.initModel ?? 'claude-sonnet-5',
-            apiKeySource: 'none',
-            ...(options.capabilities ? { capabilities: options.capabilities } : {})
+            uuid: 'hook-response-uuid'
           })
         }
         return {
           models: options.initModels ?? [{ value: 'claude-sonnet', displayName: 'Sonnet' }],
+          // Capabilities ride the initialize result, where startup facts read
+          // them regardless of when the first init frame arrives.
+          ...(options.capabilities ? { capabilities: options.capabilities } : {}),
           ...(options.initCommands === undefined ? {} : { commands: options.initCommands }),
           ...(options.initAccount === undefined ? {} : { account: options.initAccount })
         }
@@ -184,6 +206,11 @@ export function fakeClaude(
           await beforeDispatch()
         }
         connection.sent.push(message)
+        // Live: the first command starts a request cycle, whose init precedes
+        // the replay. Later cycles are the test's own frames.
+        if (message.type === 'user' && !cycleInitEmitted && options.initProof !== 'none') {
+          emitCycleInit()
+        }
         if (message.type === 'user' && options.replayUuid !== null) {
           const configuredReplayUuid = options.replayUuids
             ? options.replayUuids[replayIndex++]
@@ -296,30 +323,4 @@ export function recordingJournalSink(): StructuredAgentSessionEventSink {
 
 export function tick(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve))
-}
-
-export function invokeCanUseTool(
-  connection: FakeConnection,
-  toolName: string,
-  requestId: string,
-  toolUseID: string,
-  extra: {
-    input?: Record<string, unknown>
-    suggestions?: unknown[]
-    signal?: AbortSignal
-  } = {}
-): { promise: Promise<unknown>; settled: () => boolean } {
-  const options = {
-    requestId,
-    toolUseID,
-    signal: extra.signal ?? new AbortController().signal,
-    ...(extra.suggestions ? { suggestions: extra.suggestions } : {})
-  } as unknown as Parameters<NonNullable<ClaudeStreamJsonConnectionHandlers['canUseTool']>>[2]
-  let done = false
-  const promise = Promise.resolve(
-    connection.handlers.canUseTool?.(toolName, extra.input ?? {}, options)
-  ).finally(() => {
-    done = true
-  })
-  return { promise, settled: () => done }
 }

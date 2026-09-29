@@ -184,6 +184,21 @@ export function createClaudeJournalTranslator(
       }
       if (event.type === 'message') {
         context.observe(event.message, event.observedAt ?? Date.now())
+        // A root init is the CLI starting a new request cycle (measured per turn,
+        // per queued turn, per background wake, per /compact); a send replayed
+        // after that cycle's first root work was folded into it. Task frames are
+        // not cycle work: they arrive between cycles too.
+        if (isRootClaudeFrame(event.message)) {
+          if (event.message.type === 'system' && event.message.subtype === 'init') {
+            turn.observeProviderCycleStart()
+          } else if (
+            event.startsTurn === true ||
+            event.message.type === 'assistant' ||
+            event.message.type === 'stream_event'
+          ) {
+            turn.observeProviderCycleWork()
+          }
+        }
       }
       if (event.type === 'message' && handleStream(event.message, event.observedAt ?? Date.now())) {
         return
@@ -280,6 +295,9 @@ export function createClaudeJournalTranslator(
     journalPrompts: prompts,
     get currentTurnId() {
       return turn.id
+    },
+    get openTurnInLiveProviderCycle() {
+      return turn.openedInLiveProviderCycle
     },
     flush: streamedText.flush,
     childToolOwner: childQueries.childToolOwner,

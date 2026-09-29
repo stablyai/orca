@@ -767,7 +767,9 @@ describe('an unexpected provider exit', () => {
       runtimeFence: exitedFence + 1,
       deathEvidence: { kind: 'exit-observed', detail: 'provider exited', observedAt: NOW }
     })
-    // Nothing retries the settlement; the journal writes again, and the next acquire re-derives it.
+    // The retry recording the exit queues is refused too; once the journal writes again, the next
+    // acquire re-derives it.
+    await host.collaboratorsForTests().serialize(SESSION, async () => {})
     refusing.mockRestore()
 
     dispatch.mockResolvedValueOnce({

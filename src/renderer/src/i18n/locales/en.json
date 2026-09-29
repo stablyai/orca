@@ -1728,7 +1728,6 @@
         "notConnected": "Not connected",
         "notePasteTooLarge": "Paste is too large for the note field.",
         "waitForSetupBeforeAgent": "Wait for setup to complete before starting agent",
-        "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup.",
         "destroyDisabled": "destroy disabled",
         "destroyConfigured": "destroy configured",
         "noDestroyConfigured": "no destroy",
@@ -8055,8 +8054,7 @@
           "81057d5f71": "Saving...",
           "da37d6f10e": "Copy",
           "3149964b66": "Copied",
-          "waitForSetupBeforeAgent": "Wait for setup to complete before starting agent",
-          "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup."
+          "waitForSetupBeforeAgent": "Wait for setup to complete before starting agent"
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "Use {{value0}} repo color",
@@ -18199,6 +18197,9 @@
           }
         }
       }
+    },
+    "agentChildRow": {
+      "ended": "Ended"
     }
   },
   "dashboardPopout": {
@@ -18501,5 +18502,12 @@
   },
   "common": {
     "retry": "Retry"
+  },
+  "terminal": {
+    "sessionSaveFailure": {
+      "title": "Could not save terminal session",
+      "capacity": "The device saving this terminal reported full storage or an exceeded storage quota. Free space on that device, then try again.",
+      "unknown": "Orca could not save the terminal state. Try again. If this continues, share the Orca logs with support so we can identify the cause."
+    }
   }
 }

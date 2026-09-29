@@ -1,50 +1,24 @@
-import { spawnSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { basename, join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
-import { resolveClaudeCommand } from '../codex-cli/command'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
-import { getSpawnArgsForWindows } from '../win32-utils'
 import { CLAUDE_STRUCTURED_BASE_OPTIONS } from './claude-structured-launch-resolution'
+import {
+  realClaudeAuthenticated,
+  realClaudeAuthStatus,
+  realClaudeAvailable,
+  realClaudeCommand
+} from './claude-real-cli-availability-test-support'
 import {
   ClaudeStructuredSessionAdapter,
   type ClaudeStructuredSessionEvent
 } from './claude-structured-session-adapter'
 import type { ClaudeStructuredSessionAdapterDeps } from './claude-structured-session-state'
 
-const command = resolveClaudeCommand()
-const versionLaunch = getSpawnArgsForWindows(command, ['--version'])
-const realClaudeAvailable =
-  spawnSync(versionLaunch.spawnCmd, versionLaunch.spawnArgs, {
-    stdio: 'ignore',
-    windowsHide: true,
-    timeout: 5_000
-  }).status === 0
-const authStatusLaunch = getSpawnArgsForWindows(command, ['auth', 'status', '--json'])
-/** The CLI's own account report — the only source of truth for where it writes that
- *  is not derived from Orca's own path expressions. */
-const realClaudeAuthStatus = (() => {
-  if (!realClaudeAvailable) {
-    return null
-  }
-  const result = spawnSync(authStatusLaunch.spawnCmd, authStatusLaunch.spawnArgs, {
-    encoding: 'utf8',
-    windowsHide: true,
-    timeout: 5_000
-  })
-  if (result.status !== 0) {
-    return null
-  }
-  try {
-    return JSON.parse(result.stdout) as { loggedIn?: boolean; projectsDirectory?: string }
-  } catch {
-    return null
-  }
-})()
-const realClaudeAuthenticated = realClaudeAuthStatus?.loggedIn === true
+const command = realClaudeCommand
 
 function realAdapter(
   providerSessionId: string,

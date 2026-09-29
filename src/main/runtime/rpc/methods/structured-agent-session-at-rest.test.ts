@@ -424,7 +424,10 @@ describe('an agent exit', () => {
         { kind: 'turn', turnId: 'working', state: 'running' }
       )
     await rig.host.flushStreamedEvents(SESSION)
-    vi.spyOn(open.journal, 'appendLifecycleBatch').mockRejectedValueOnce(new Error('disk full'))
+    // The exit's own write and the retry recording the exit queues are both refused.
+    vi.spyOn(open.journal, 'appendLifecycleBatch')
+      .mockRejectedValueOnce(new Error('disk full'))
+      .mockRejectedValueOnce(new Error('disk full'))
     await rig.host.handleAdapterEvent({
       type: 'ended',
       sessionId: SESSION,
@@ -440,6 +443,7 @@ describe('an agent exit', () => {
         deathEvidence: { kind: 'exit-observed' }
       })
     )
+    await rig.host.collaboratorsForTests().serialize(SESSION, async () => {})
 
     const sent = await rig.host.send(
       CALLER,

@@ -7,7 +7,7 @@ import { CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE } from '../claude-accounts/envir
 import { isClaudeAuthSwitchInProgress } from '../claude-accounts/live-pty-gate'
 import { openClaudeStreamJsonConnection } from './claude-stream-json-connection'
 import { buildClaudePermissionCallbacks } from './claude-structured-inbound-control'
-import { resolveClaudeReplayTurn } from './claude-structured-dispatch'
+import { resolveClaudeReplayTurn } from './claude-replay-turn-resolution'
 import {
   readClaudeCapabilities,
   readClaudeFrameString,

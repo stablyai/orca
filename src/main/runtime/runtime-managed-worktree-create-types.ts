@@ -54,6 +54,7 @@ export type RuntimeManagedWorktreeCreateArgs = {
   /** Per-launch inputs used when `startupAgent` is the created terminal surface. */
   startupAgentArgs?: string | null
   startupCwd?: string
+  /** The surface behind a host-built startup agent (`startupAgent` or `startupDraft`). */
   startupLaunchSource?: string
   /** A caller-minted `tabId:leafId` for the startup terminal's pane. */
   startupPaneKey?: string

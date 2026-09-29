@@ -1603,7 +1603,6 @@
         "reuseExistingBranchHint": "기존 브랜치에서 새 브랜치를 만들지 않고 해당 브랜치를 체크아웃합니다.",
         "createMultiple": "더 만들기",
         "waitForSetupBeforeAgent": "agent를 시작하기 전에 설정이 완료될 때까지 기다리세요.",
-        "waitForSetupBeforeAgentHelp": "설치 프로그램이 시작 중에 agent에 필요한 종속성, MCP 서버 또는 구성 파일을 설치할 때 이 기능을 켜십시오.",
         "destroyDisabled": "비활성화된 파괴",
         "destroyConfigured": "구성된 파괴",
         "noDestroyConfigured": "파괴하지 마세요",
@@ -7835,8 +7834,7 @@
           "81057d5f71": "저장 중...",
           "da37d6f10e": "복사",
           "3149964b66": "복사됨",
-          "waitForSetupBeforeAgent": "agent를 시작하기 전에 설정이 완료될 때까지 기다리세요.",
-          "waitForSetupBeforeAgentHelp": "설치 프로그램이 시작 중에 agent에 필요한 종속성, MCP 서버 또는 구성 파일을 설치할 때 이 기능을 켜십시오."
+          "waitForSetupBeforeAgent": "agent를 시작하기 전에 설정이 완료될 때까지 기다리세요."
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "{{value0}} repo 색상 사용",
@@ -18072,6 +18070,9 @@
           }
         }
       }
+    },
+    "agentChildRow": {
+      "ended": "종료됨"
     }
   },
   "dashboardPopout": {

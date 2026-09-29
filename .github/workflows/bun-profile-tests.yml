@@ -17,6 +17,24 @@ on:
       - '.pnpmfile.cjs'
       - '.github/actions/install-node-dependencies/**'
       - '.github/workflows/bun-profile-tests.yml'
+  # The pull request qualifies one platform for an unflavoured change; this is where all six
+  # are re-qualified, so a platform break surfaces minutes after merge instead of next cron.
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'config/**'
+      - 'native/**'
+      - 'tests/**'
+      - 'resources/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'tsconfig.json'
+      - '.npmrc'
+      - '.pnpmfile.cjs'
+      - '.github/actions/install-node-dependencies/**'
+      - '.github/workflows/bun-profile-tests.yml'
   workflow_dispatch:
   schedule:
     - cron: '30 11 * * *'
@@ -57,7 +75,11 @@ jobs:
   persistence:
     needs: changes
     # Missing/failed detection runs the full matrix; manual runs remain unconditional.
-    if: ${{ !cancelled() && needs.changes.outputs.should_run != 'false' }}
+    # A draft carries no platform verdict; readiness re-triggers this workflow. Spelled against
+    # the event name so the push and schedule paths do not rest on a null property comparison.
+    if: >-
+      ${{ !cancelled() && needs.changes.outputs.should_run != 'false' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft != true) }}
     strategy:
       fail-fast: false
       matrix:

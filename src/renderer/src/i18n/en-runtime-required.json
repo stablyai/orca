@@ -2480,6 +2480,10 @@
           "TerminalRemoteRuntimeReconnectBanner": {
             "retryingBody": "Orca will retry for up to one minute. This terminal will resume if the connection returns."
           },
+          "TerminalSessionStateSaveFailureDialog": {
+            "678c780a2c": "Disk space is unavailable",
+            "e2fcf07c0d": "Orca could not save this terminal session because local storage is full or not writable. Open the disk space analyzer to find workspace storage you can clean up."
+          },
           "TerminalSshReconnectOverlay": {
             "connectButton": "Connect",
             "connectingButton": "Connecting..."

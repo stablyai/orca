@@ -118,7 +118,8 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
   protected async buildStartupForDraft(
     repo: Repo,
     draft: string,
-    requestedAgent?: TuiAgent
+    requestedAgent?: TuiAgent,
+    launchSource?: string
   ): Promise<{
     agent: TuiAgent
     startup: WorktreeStartupLaunch
@@ -131,6 +132,7 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
       repo,
       draft,
       ...(requestedAgent ? { requestedAgent } : {}),
+      ...(launchSource ? { launchSource } : {}),
       settings: this.store.getSettings(),
       getLaunchPlatform: () => this.getAgentLaunchPlatformForRepo(repo)
     })

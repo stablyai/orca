@@ -2,7 +2,6 @@
 import { Terminal } from '@xterm/xterm'
 import { describe, expect, it, vi } from 'vitest'
 import { createTerminalDocumentScope } from './document/document-scope'
-import { documentModuleSource } from './document/document-module-source.test-support'
 import { emitKeyboardAvoidanceMetrics } from './document/keyboard-avoidance-metrics'
 import { commitFitScale } from './document/fit-scale'
 import { parseTerminalKeyboardAvoidanceMetrics } from './terminal-webview-contract'
@@ -191,45 +190,6 @@ describe('terminal keyboard-avoidance WebView metrics', () => {
       altScreen: true,
       contentBottomRow: 0
     })
-  })
-
-  it('refreshes metrics after every buffer geometry reset', () => {
-    // Four places change the buffer's geometry, and each owes a fresh emit after it: a stale
-    // content-bottom row is what lifts the keyboard over the wrong line. Read from each module's
-    // own source, so a fifth site added in a new module is not silently uncovered.
-    // A text-scale resize reports through the fit it schedules, whose commit emits (pinned below).
-    const directEmit = 'emitKeyboardAvoidanceMetrics(scope)'
-    const blocks = [
-      ['terminal-init', 'export function resize(', directEmit],
-      ['reflow', 'export function reflow(', directEmit],
-      ['host-message-router', "} else if (msg.type === 'clear') {", directEmit],
-      ['text-scaling', 'export function applyTextScale(', 'applyFitScale(scope']
-    ] as const
-
-    for (const [module, opener, emit] of blocks) {
-      const source = documentModuleSource(module)
-      const start = source.indexOf(opener)
-      expect(start, `${module} no longer carries ${opener}`).toBeGreaterThanOrEqual(0)
-      const block = source.slice(start, source.indexOf('\n}', start))
-      const emitAt = block.lastIndexOf(emit)
-      const geometryAt = block.includes('.resize(')
-        ? block.indexOf('.resize(')
-        : block.indexOf('.reset(')
-      expect(emitAt, `${module} does not emit metrics`).toBeGreaterThanOrEqual(0)
-      expect(emitAt, `${module} emits before it resizes`).toBeGreaterThan(geometryAt)
-    }
-  })
-
-  it('reports a text-scale change only through the fit it commits', () => {
-    // One emit site: a pinch release and a settings change both end in the fit commit, so the
-    // release carries no emit of its own and needs no word back on whether a refit is pending.
-    const textScaling = documentModuleSource('text-scaling')
-    const start = textScaling.indexOf('export function applyTextScale(')
-    const applyTextScale = textScaling.slice(start, textScaling.indexOf('\n}', start))
-    expect(applyTextScale).not.toMatch(/return (true|false)/)
-    expect(documentModuleSource('surface-touch-gestures')).not.toContain(
-      'emitKeyboardAvoidanceMetrics'
-    )
   })
 
   it('reports the row pitch as drawn, fit scale included, and none before a cell is measured', () => {

@@ -22,7 +22,7 @@ import { NativeChatStructuredSessionStatus } from './NativeChatStructuredSession
 import { useNativeChatLaunchDraftSignal } from './use-native-chat-launch-draft-adoption'
 import { NativeChatLaunchRetry } from './NativeChatLaunchRetry'
 import { useNativeChatProvisionalLaunch } from './use-native-chat-provisional-launch'
-import { useStructuredAgentSessionHostExecutionPhase } from './StructuredAgentSessionStatusBridge'
+import { useStructuredAgentSessionHostExecution } from './StructuredAgentSessionStatusBridge'
 import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
 import { NativeChatThreadGoalBanner } from './NativeChatThreadGoalBanner'
 import { structuredAgentSessionReadFailureNotice } from './structured-agent-session-read-failure-notice'
@@ -42,10 +42,10 @@ export function NativeChatStructuredSession(
   )
   const { sendThroughRelaunch } = provisionalLaunch
   // The host's own word on whether the provider child has answered startup yet.
-  const startupPhase = useStructuredAgentSessionHostExecutionPhase(props.sessionId, props.target)
+  const hostExecution = useStructuredAgentSessionHostExecution(props.sessionId, props.target)
   const controller = useStructuredAgentSession({
     ...props,
-    providerStarting: startupPhase === 'starting',
+    providerStarting: hostExecution.phase === 'starting',
     transportEnabled: provisionalLaunch.transportEnabled,
     ...(provisionalLaunch.launch ? { launch: provisionalLaunch.launch } : {})
   })
@@ -279,6 +279,8 @@ export function NativeChatStructuredSession(
             fontScale={fontScale.scale}
             workingStartedAt={controller.workingStartedAt}
             settledTurns={controller.settledTurns}
+            activeTurnOpenedBy={controller.activeTurnOpenedBy}
+            turnKeysByItemId={controller.turnKeysByItemId}
             showTurnStatus
             showLiveTurnActivity={prompt === null}
             turnActivity={controller.turnActivity}
@@ -298,7 +300,8 @@ export function NativeChatStructuredSession(
       <NativeChatStructuredSessionStatus
         sessionId={props.sessionId}
         agentLabel={agentLabel}
-        startupPhase={startupPhase}
+        startupPhase={hostExecution.phase}
+        startupChildKey={hostExecution.childKey}
         // Said once: on the pane when the failure took it, else here beside the transcript. A
         // failure that names nothing is only the pane reconnecting.
         error={

@@ -97,11 +97,11 @@ describe('OpenCode hook plugin source', () => {
     const digest = (source: string): string => createHash('sha256').update(source).digest('hex')
 
     expect(digest(getOpenCodePluginSource())).toBe(
-      'c81893814f08bfb2f9b5c133c5355b53d485982402d89e92ff15fc4e7d543079'
+      '655d603f31c3e4462b4c600861833cbdba9dd541f693e11a349e7a57b8c059d7'
     )
     expect(
       digest(getOpenCodeFamilyPluginSource('/hook/mimo-code', { emitSessionStart: false }))
-    ).toBe('2267e2ab6e854e71c9bae12afed97e464f93b2b14f3e25dca133ca6666c98752')
+    ).toBe('d36d869823cc3dd506565e0512beb278fe4fd6533bd12be30bd98db140ca9f3e')
   })
 
   it('filters child sessions via parentID lookup before forwarding events', () => {
@@ -293,6 +293,51 @@ describe('OpenCodeHookService buildPtyEnv / clearPty round-trip', () => {
     expect(pluginSource).toContain('OrcaOpenCodeStatusPlugin')
     expect(pluginSource).toContain('messageID: part.messageID')
   })
+
+  // Why: OpenCode 2 reloads a plugin whose file mtime changed, which restarted status mid-turn.
+  it('leaves a current installed plugin untouched and replaces a stale one', () => {
+    const service = new OpenCodeHookService()
+    service.buildPtyEnv(daemonSessionId)
+    const pluginPath = join(resolveOpenCodeConfigDirectory(), 'plugins', 'orca-opencode-status.js')
+    const past = new Date('2020-01-01T00:00:00Z')
+    utimesSync(pluginPath, past, past)
+
+    service.buildPtyEnv(daemonSessionId)
+    expect(statSync(pluginPath).mtimeMs).toBe(past.getTime())
+
+    writeFileSync(pluginPath, 'stale plugin')
+    service.buildPtyEnv(daemonSessionId)
+    expect(readFileSync(pluginPath, 'utf8')).toBe(_internals.getOpenCodePluginSource())
+  })
+
+  // Why: OpenCode 2 loads through a file-level symlink (dotfile managers) and stats its target.
+  it.skipIf(process.platform === 'win32')(
+    'compares a symlinked plugin by its target and writes through only when stale',
+    () => {
+      const service = new OpenCodeHookService()
+      const pluginPath = join(
+        resolveOpenCodeConfigDirectory(),
+        'plugins',
+        'orca-opencode-status.js'
+      )
+      const targetPath = join(userDataDir, 'dotfiles-orca-opencode-status.js')
+      writeFileSync(targetPath, _internals.getOpenCodePluginSource())
+      rmSync(pluginPath, { force: true })
+      symlinkSync(targetPath, pluginPath)
+      const past = new Date('2020-01-01T00:00:00Z')
+      utimesSync(targetPath, past, past)
+
+      service.buildPtyEnv(daemonSessionId)
+      expect(statSync(targetPath).mtimeMs).toBe(past.getTime())
+
+      writeFileSync(targetPath, 'stale plugin')
+      service.buildPtyEnv(daemonSessionId)
+      expect(lstatSync(pluginPath).isSymbolicLink()).toBe(true)
+      expect(readFileSync(targetPath, 'utf8')).toBe(_internals.getOpenCodePluginSource())
+      rmSync(pluginPath, { force: true })
+      rmSync(targetPath, { force: true })
+    }
+  )
 
   // Why: #22234 — OpenCode 2 installs under the plain `opencode` name, and its loader
   // rejects a default export that only has server(). Asserting the emitted *source* is
@@ -698,6 +743,19 @@ describe('OpenCodeHookService overlay mode (user OPENCODE_CONFIG_DIR set)', () =
       readFileSync(join(env.OPENCODE_CONFIG_DIR!, 'plugins', 'orca-opencode-status.js'), 'utf8')
     ).toContain('OrcaOpenCodeStatusPlugin')
     expectUserConfigIntact()
+  })
+
+  it('leaves a current overlay plugin file in place across spawns', () => {
+    const service = new OpenCodeHookService()
+    const overlayDir = service.buildPtyEnv(ptyId, userConfigDir).OPENCODE_CONFIG_DIR!
+    const pluginPath = join(overlayDir, 'plugins', 'orca-opencode-status.js')
+    const past = new Date('2020-01-01T00:00:00Z')
+    utimesSync(pluginPath, past, past)
+
+    service.buildPtyEnv(ptyId, userConfigDir)
+
+    expect(statSync(pluginPath).mtimeMs).toBe(past.getTime())
+    expect(readFileSync(pluginPath, 'utf8')).toBe(_internals.getOpenCodePluginSource())
   })
 
   it('reconciles stale mirrored entries while preserving OpenCode runtime files', () => {

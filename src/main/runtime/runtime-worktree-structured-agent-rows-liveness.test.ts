@@ -89,7 +89,7 @@ async function awaitingApproval() {
       SESSION,
       {
         journal,
-        child: { phase: 'ready' as const },
+        child: { phase: 'ready' as const, generation: 'child-1', fence: 1 },
         params: {
           location: {
             executionHostId: 'local' as const,

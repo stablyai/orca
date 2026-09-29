@@ -32,7 +32,7 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<P
       throw error
     }
     console.error('[pty] failed to persist PTY binding after attach:', error)
-    throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage()), {
+    throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage(error)), {
       agentSessionOperationOutcome: 'unknown' as const
     })
   }
@@ -73,7 +73,10 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<P
           ctx.deps.store.removeSshRemotePtyLease(args.connectionId, relayResultId)
         }
       })
-      throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage()), {
+      if (err instanceof Error && err.message === 'terminal_pane_owner_changed') {
+        throw err
+      }
+      throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage(err)), {
         agentSessionOperationOutcome: 'unknown' as const
       })
     }

@@ -45,7 +45,10 @@ suite. A shard verifies the plan's source SHA and complete discovery list before
 using it. Missing/stale artifacts fall back to full coverage, even if that means
 running the suite on fewer shards.
 
-The initial policy is **shadow**, with all eight shards retained. The first
+The initial policy is **shadow**, with every shard retained. A full run spends
+`FULL_SHARD_COUNT` (five) concurrency slots: the account is charged a slot per job
+rather than per core, so eight 6.5-minute shards made this matrix 68% of daily slot
+demand while the arm pool queued 10.5 minutes at p95. The first
 local inventory matched Vitest exactly (9,950 files at validation); representative
 source changes retained roughly 88% of files because of indirect input readers.
 That is evidence for conservative coverage, not evidence of the analysis's

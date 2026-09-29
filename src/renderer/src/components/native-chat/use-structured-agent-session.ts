@@ -156,6 +156,8 @@ export function useStructuredAgentSession(args: {
     isWorking: transportState.isWorking,
     workingStartedAt: transportState.turnTiming.workingStartedAt,
     settledTurns: transportState.turnTiming.settledTurns,
+    activeTurnOpenedBy: transportState.turnTiming.activeTurnOpenedBy,
+    turnKeysByItemId: transportState.turnTiming.turnKeysByItemId,
     turnActivity: transportState.turnActivity,
     backgroundTasks: transportState.backgroundTasks,
     turnId: transportState.turnId,

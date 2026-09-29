@@ -14,48 +14,23 @@ on:
         default: ubuntu-latest
         type: string
 
-      selection_mode:
-        description: Shadow validates selection; selected applies it only to draft PRs.
-        required: false
-        default: shadow
+      shards:
+        description: JSON array of shard assignments, produced by unit-plan.yml.
+        required: true
         type: string
 
 permissions:
   contents: read
 
 jobs:
-  plan:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      shards: ${{ steps.plan.outputs.shards }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 2
-          persist-credentials: false
-      - uses: ./.github/actions/install-node-dependencies
-      - name: Plan unit selection
-        id: plan
-        env:
-          ORCA_UNIT_SELECTION_MODE: ${{ inputs.selection_mode }}
-        run: node config/scripts/ci-unit-plan.mjs
-      - uses: actions/upload-artifact@v7
-        continue-on-error: true
-        with:
-          name: unit-selection-attempt-${{ github.run_attempt }}
-          path: ci-shards/unit-selection.json
-          retention-days: 14
-
   test:
-    needs: plan
     name: tests node ${{ matrix.node }} ${{ matrix.shard.index }}/${{ matrix.shard.count }}
     runs-on: ${{ inputs.runner }}
     strategy:
       fail-fast: false
       matrix:
         node: ${{ fromJSON(inputs.node_versions) }}
-        shard: ${{ fromJSON(needs.plan.outputs.shards) }}
+        shard: ${{ fromJSON(inputs.shards) }}
 
     steps:
       - name: Checkout
@@ -99,35 +74,6 @@ jobs:
           path: ci-shards/
           retention-days: 14
           if-no-files-found: warn
-
-  selection_evidence:
-    needs: test
-    if: ${{ !cancelled() }}
-    continue-on-error: true
-    runs-on: ubuntu-slim
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          sparse-checkout: config/scripts/ci-unit-selection-review.mjs
-          sparse-checkout-cone-mode: false
-          persist-credentials: false
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '24'
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: unit-shard-node-*-attempt-${{ github.run_attempt }}
-          path: unit-evidence/
-      - name: Compare selection with full results
-        continue-on-error: true
-        run: node config/scripts/ci-unit-selection-review.mjs unit-evidence
-      - uses: actions/upload-artifact@v7
-        if: always()
-        continue-on-error: true
-        with:
-          name: unit-selection-review-attempt-${{ github.run_attempt }}
-          path: unit-evidence/selection-review.json
-          retention-days: 30
 
   relay_integration:
     name: relay integration node ${{ matrix.node }}

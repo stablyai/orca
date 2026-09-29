@@ -3,6 +3,10 @@ import { act, StrictMode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useTerminalWatcherEffects } from '../use-terminal-watcher-effects'
+import {
+  claimEmptyWorkspaceDefaultSurface,
+  releaseEmptyWorkspaceDefaultSurface
+} from '@/lib/empty-workspace-default-surface-claims'
 
 const mocks = vi.hoisted(() => {
   const storeTabsByWorktree: Record<string, unknown[]> = {}
@@ -44,6 +48,8 @@ vi.mock('../terminal-pane/terminal-parked-tab-watchers', () => ({
   syncParkedTerminalTabWatchersForWorkspaces: vi.fn(),
   disposeAllParkedTerminalWatchers: vi.fn()
 }))
+
+const PENDING_INTENT = { callerProvidesSurface: false, seedUserDefaultSurface: true }
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 let root: Root | undefined
@@ -199,6 +205,36 @@ describe('passive terminal seeding retries until a decision applies', () => {
     await act(async () => root?.render(<Watcher />))
     mocks.storeTabsByWorktree = { 'wt-1': [] }
     await finishGate('empty')
+    expect(mocks.createTab).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves the seed to an activation reseed awaiting agent detection', async () => {
+    const finishGate = deferredGate()
+    root = createRoot(document.createElement('div'))
+    await act(async () => root?.render(<Watcher />))
+    claimEmptyWorkspaceDefaultSurface('wt-1', PENDING_INTENT)
+    try {
+      await finishGate('empty')
+      expect(mocks.createTab).not.toHaveBeenCalled()
+    } finally {
+      releaseEmptyWorkspaceDefaultSurface('wt-1')
+    }
+  })
+
+  // Why: that reseed bails once the user leaves, so a workspace left mid-wait must seed on return.
+  it('seeds on return to a workspace left while a reseed awaited agent detection', async () => {
+    mocks.gate.mockResolvedValue('empty')
+    claimEmptyWorkspaceDefaultSurface('wt-1', PENDING_INTENT)
+    root = createRoot(document.createElement('div'))
+    try {
+      await act(async () => root?.render(<Watcher />))
+      expect(mocks.createTab).not.toHaveBeenCalled()
+    } finally {
+      releaseEmptyWorkspaceDefaultSurface('wt-1')
+    }
+
+    await act(async () => root?.render(<Watcher worktreeId="wt-2" />))
+    await act(async () => root?.render(<Watcher />))
     expect(mocks.createTab).toHaveBeenCalledTimes(1)
   })
 

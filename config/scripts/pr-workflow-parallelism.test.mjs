@@ -7,7 +7,6 @@ import { MOBILE_WEB_APP_DEPENDENCIES_REQUIRED_ENV } from './mobile-web-app-bundl
 
 const workflow = parse(readFileSync('.github/workflows/pr.yml', 'utf8'))
 const prTestLocWorkflow = parse(readFileSync('.github/workflows/pr-test-loc.yml', 'utf8'))
-const trackingWorkflow = parse(readFileSync('.github/workflows/track-community-prs.yaml', 'utf8'))
 const releasePolicyWorkflow = parse(readFileSync('.github/workflows/release-policy.yml', 'utf8'))
 const issueLabelWorkflow = parse(readFileSync('.github/workflows/issue-os-labeler.yaml', 'utf8'))
 const unitTestWorkflow = parse(readFileSync('.github/workflows/unit-tests.yml', 'utf8'))
@@ -55,7 +54,6 @@ describe('PR workflow parallelism', () => {
     expect(workflow.jobs.typecheck['runs-on']).toBe('ubuntu-24.04-arm')
     expect(workflow.jobs.verify['runs-on']).toBe('ubuntu-slim')
     expect(prTestLocWorkflow.jobs.loc['runs-on']).toBe('ubuntu-slim')
-    expect(trackingWorkflow.jobs['track-community-pr']['runs-on']).toBe('ubuntu-slim')
     expect(releasePolicyWorkflow.jobs.enforce['runs-on']).toBe('ubuntu-slim')
     expect(issueLabelWorkflow.jobs['apply-os-label']['runs-on']).toBe('ubuntu-slim')
   })
@@ -107,8 +105,12 @@ describe('PR workflow parallelism', () => {
     expect(nodeNextWorkflow.on.schedule).toHaveLength(1)
     expect(nodeNextWorkflow.on.workflow_dispatch).toBeNull()
     expect(sharedTest.strategy.matrix.node).toBe('${{ fromJSON(inputs.node_versions) }}')
-    expect(sharedTest.strategy.matrix.shard).toBe('${{ fromJSON(needs.plan.outputs.shards) }}')
-    expect(sharedTest.needs).toBe('plan')
+    expect(sharedTest.strategy.matrix.shard).toBe('${{ fromJSON(inputs.shards) }}')
+    // The shard matrix no longer needs an in-workflow plan job: planning moved to
+    // unit-plan.yml so it can run before the static-analysis gate clears.
+    expect(sharedTest.needs).toBeUndefined()
+    expect(unitTestWorkflow.jobs.plan).toBeUndefined()
+    expect(unitTestWorkflow.on.workflow_call.inputs.shards.required).toBe(true)
     expect(installStep.with['node-version']).toBe('${{ matrix.node }}')
     expect(installStep.with['cache-electron-package']).toBe('true')
     expect(testStep.run).toContain('--shard=${{ matrix.shard.index }}/${{ matrix.shard.count }}')
@@ -120,7 +122,7 @@ describe('PR workflow parallelism', () => {
     expect(workflow.jobs.test.needs).toContain('test_native_cache')
     expect(nodeNextPrimerInstall.with['native-runtime']).toBe('node')
     expect(nodeNextPrimerInstall.with['node-version']).toBe('${{ matrix.node }}')
-    expect(nodeNextWorkflow.jobs.test.needs).toEqual(['test_native_cache'])
+    expect(nodeNextWorkflow.jobs.test.needs).toEqual(['test_native_cache', 'unit_plan'])
   })
 
   it('runs real-shell coverage once outside the general shards', () => {
@@ -495,6 +497,22 @@ describe('PR workflow parallelism', () => {
     for (const checkout of fullHistoryCheckouts) {
       expect(checkout.with.filter).toBe('blob:none')
     }
+  })
+
+  it('keeps advisory unit-selection evidence off the gate', () => {
+    // It is continue-on-error, so it can never fail a PR. Living inside unit-tests.yml made a
+    // caller's `needs: test` wait for it anyway, holding verify ~36s past the last shard. Pinned
+    // here so it cannot drift back onto the critical path.
+    const evidence = workflow.jobs.unit_selection_evidence
+    expect(evidence.uses).toBe('./.github/workflows/unit-selection-evidence.yml')
+    expect(evidence.needs).toEqual(['test'])
+    expect(workflow.jobs.verify.needs).not.toContain('unit_selection_evidence')
+    expect(unitTestWorkflow.jobs.selection_evidence).toBeUndefined()
+    const evidenceWorkflow = parse(
+      readFileSync('.github/workflows/unit-selection-evidence.yml', 'utf8')
+    )
+    const job = evidenceWorkflow.jobs.selection_evidence
+    expect(job['continue-on-error']).toBe(true)
   })
 
   it('keeps verify as the aggregate required check', () => {

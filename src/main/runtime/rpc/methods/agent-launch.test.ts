@@ -331,6 +331,23 @@ describe('the worktree factory', () => {
     })
   })
 
+  it("attributes a create by the launch's own source, never a copy inside the create payload", async () => {
+    const createWithSource = {
+      ...CREATE_LAUNCH,
+      target: {
+        kind: 'create-worktree',
+        create: { ...CREATE_LAUNCH.target.create, launchSource: 'cli' }
+      }
+    }
+    const named = runtimeStub({ settings: {} })
+    await launch({ ...createWithSource, launchSource: 'onboarding' }, named)
+    expect(createArgs(named)).toMatchObject({ startupLaunchSource: 'onboarding' })
+
+    const unnamed = runtimeStub({ settings: {} })
+    await launch(createWithSource, unnamed)
+    expect(createArgs(unnamed)).not.toHaveProperty('startupLaunchSource')
+  })
+
   it('preserves an explicit no-arguments value for an agent-first worktree create', async () => {
     const runtime = runtimeStub({ settings: {} })
     await launch({ ...CREATE_LAUNCH, agentArgs: null }, runtime)
@@ -554,15 +571,14 @@ describe('launch inputs that cross the wire', () => {
     })
   })
 
-  it('derives agent_kind and request_kind, taking only launch_source from the caller', async () => {
+  it("hands the caller's launch_source to the runtime, which attributes the launch", async () => {
     const runtime = runtimeStub({ settings: {} })
     await launch({ ...EXISTING_LAUNCH, launchSource: 'source_control_recovery' }, runtime)
 
-    expect(terminalOptions(runtime).telemetry).toEqual({
-      agent_kind: 'claude-code',
-      launch_source: 'source_control_recovery',
-      request_kind: 'new'
-    })
+    // The runtime derives agent_kind and request_kind from the agent it builds, so the handler
+    // forwards only the one member it cannot know, and never a prebuilt triple.
+    expect(terminalOptions(runtime)).toMatchObject({ launchSource: 'source_control_recovery' })
+    expect(terminalOptions(runtime)).not.toHaveProperty('telemetry')
   })
 
   it('starts the agent anyway when launch_source is one this build has never heard of', async () => {
@@ -573,16 +589,16 @@ describe('launch inputs that cross the wire', () => {
     )
 
     // The whole point of the open arm set: attribution is bookkeeping, and bookkeeping must never
-    // gate a user action. The row is dropped; the launch is not.
+    // gate a user action. The runtime records it as `unknown`; the launch still starts.
     expect(result.outcome).toEqual({ kind: 'terminal', handle: 'term_1' })
-    expect(terminalOptions(runtime)).not.toHaveProperty('telemetry')
+    expect(terminalOptions(runtime)).toMatchObject({ launchSource: 'a_surface_added_later' })
   })
 
-  it('sends no telemetry at all when the caller named no launch source', async () => {
+  it('names no launch source when the caller named none', async () => {
     const runtime = runtimeStub({ settings: {} })
     await launch(EXISTING_LAUNCH, runtime)
 
-    expect(terminalOptions(runtime)).not.toHaveProperty('telemetry')
+    expect(terminalOptions(runtime)).not.toHaveProperty('launchSource')
   })
 
   it('keeps a structured preference when the cwd names the workspace root', async () => {

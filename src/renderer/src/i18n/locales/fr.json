@@ -1706,7 +1706,6 @@
         "notConnected": "Non connecté",
         "notePasteTooLarge": "Le contenu collé est trop volumineux pour le champ de note.",
         "waitForSetupBeforeAgent": "Attendre la fin du setup avant de démarrer l'agent",
-        "waitForSetupBeforeAgentHelp": "Activez cette option quand le setup installe des dépendances, des serveurs MCP ou des fichiers de configuration dont l'agent a besoin au démarrage.",
         "destroyDisabled": "destroy désactivé",
         "destroyConfigured": "destroy configuré",
         "noDestroyConfigured": "pas de destroy",
@@ -7991,8 +7990,7 @@
           "81057d5f71": "Enregistrement...",
           "da37d6f10e": "Copier",
           "3149964b66": "Copied",
-          "waitForSetupBeforeAgent": "Attendre la fin du setup avant de démarrer l'agent",
-          "waitForSetupBeforeAgentHelp": "Activez cette option quand le setup installe des dépendances, des serveurs MCP ou des fichiers de configuration dont l'agent a besoin au démarrage."
+          "waitForSetupBeforeAgent": "Attendre la fin du setup avant de démarrer l'agent"
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "Utiliser la couleur de dépôt {{value0}}",
@@ -18171,6 +18169,9 @@
           }
         }
       }
+    },
+    "agentChildRow": {
+      "ended": "Terminé"
     }
   },
   "dashboardPopout": {

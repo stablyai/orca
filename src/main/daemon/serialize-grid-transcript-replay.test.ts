@@ -43,6 +43,22 @@ const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   'codex-0157-effort-override-embedded-warning': 4,
   'codex-0157-no-daemon-effort-override': 16,
   'codex-0157-plain-ready': 18,
+  // Fresh-home 0.157/0.158 captures: the live pen's true-colour fg/bg leaks onto restored cells.
+  'codex-0157-fresh-home-daemon-install': 48,
+  'codex-0158-fresh-home-greeting': 9,
+  'codex-0158-model-announcement-dialog': 8,
+  // Codex 0.157/0.158 startup-dialog captures: the same live-pen true-colour leak onto restored cells.
+  'codex-0157-update-available-dialog': 26,
+  'codex-0158-update-available-dialog': 8,
+  'codex-0157-hooks-review-dialog': 24,
+  'codex-0158-hooks-review-dialog': 8,
+  'codex-0157-model-retired-dialog': 22,
+  'codex-0158-model-retired-dialog': 6,
+  // Same extra dim bit on the 0.157/0.158 header row (STA-8834 fixtures).
+  'codex-0-157-1-update-dialog': 16,
+  'codex-0-158-0-approval': 12,
+  'codex-0-158-0-timed-turn': 20,
+  'codex-0-158-0-trustprompt': 36,
   'claude-dialog-trust-workspace-answered': 13,
   // DSH-TUI's whale intro paints whole rows of 24-bit background, and every one of this
   // transcript's divergences is the same shape: `visible-grid row=0`, a true-colour

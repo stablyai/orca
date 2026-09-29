@@ -288,6 +288,10 @@ export function useMobileNativeChatController(args: {
     nativeChatTurnIndicator: activeChatStructured ? structuredNativeChat.turnIndicator : null,
     nativeChatWorkingStartedAt: activeChatStructured ? structuredNativeChat.workingStartedAt : null,
     nativeChatSettledTurns: activeChatStructured ? structuredNativeChat.settledTurns : null,
+    nativeChatActiveTurnOpenedBy: activeChatStructured
+      ? structuredNativeChat.activeTurnOpenedBy
+      : null,
+    nativeChatTurnKeysByItemId: activeChatStructured ? structuredNativeChat.turnKeysByItemId : null,
     nativeChatCanStop: activeChatStructured
       ? structuredNativeChat.turnId !== null
       : nativeChatAgentWorking,

@@ -384,6 +384,32 @@ describe('deferred structured agent-session event sink', () => {
     expect(log).toEqual([{ call: 'appendItem', fence: 6, ordinal: 1 }])
   })
 
+  it('keeps the first queued lifecycle batch for a settlement, as the journal does', async () => {
+    // The journal applies a settlement id once and skips any later batch with it,
+    // so the queue must not let a later batch replace one it has not run yet.
+    const log: Recorded[] = []
+    const deferred = createDeferredStructuredAgentSessionEventSink()
+    const batch = (ordinal: number) => [
+      { kind: 'item' as const, identity: identity(ordinal), body: BODY }
+    ]
+
+    deferred.sink.appendLifecycleBatch?.('turn-completed:turn-1', batch(0))
+    expect(deferred.sink.tryAppendLifecycleBatch?.('turn-completed:turn-1', batch(1))).toEqual({
+      accepted: true
+    })
+    expect(deferred.state().queuedOperations).toBe(1)
+
+    const bound = target(6, log)
+    deferred.bind(bound)
+    await deferred.drained()
+
+    expect(
+      vi
+        .mocked(bound.journal.appendLifecycleBatch)
+        .mock.calls.map(([input]) => input.mutations.map((mutation) => mutation.identity))
+    ).toEqual([[identity(0)]])
+  })
+
   it('keeps a replacement checkpoint after distinct intervening operations', async () => {
     const log: Recorded[] = []
     const deferred = createDeferredStructuredAgentSessionEventSink()

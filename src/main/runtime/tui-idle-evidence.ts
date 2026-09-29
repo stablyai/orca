@@ -14,7 +14,7 @@ import {
   detectExplicitIdleStatusFromTitle,
   detectTerminalWaitBlockedReason,
   isKnownReadyPromptBody,
-  isMuseReadyPromptPreview
+  isQuietReadyScreenBody
 } from './terminal-wait-detection'
 
 /**
@@ -29,8 +29,8 @@ import {
  *   0. BLOCKED — the tail shows a prompt waiting on the user.
  *   1. STRONG READY — the agent states it is ready: an explicit idle marker in its own
  *      title, or a known ready-prompt body.
- *   1b. MUSE — Muse emits no title signal at all, so its ready-screen body stands in
- *      for the strong evidence, believed only once the stream has gone quiet.
+ *   1b. QUIET READY SCREEN — Muse and an idle Codex title no rest signal, so their
+ *      ready-screen body stands in for the strong evidence, believed only once quiet.
  *   2. WORKING — a fresh first-party agent status (OSC 9999) saying working/blocked/
  *      waiting, or a working title. The agent's own account of itself outranks anything
  *      inferred.
@@ -187,8 +187,8 @@ export type TuiIdleEvaluationInput = {
    *  (~11us and a multi-KB string on a full tail); the title check below usually answers
    *  first, and then none of that has to happen at all. */
   readPositiveBodyEvidence: () => boolean
-  /** Tier 1b body evidence: a Muse ready screen. Thunk for the same reason as above. */
-  readMuseReadyBodyEvidence: () => boolean
+  /** Tier 1b body evidence: a Muse or Codex ready screen. Thunk for the same reason as above. */
+  readQuietReadyBodyEvidence: () => boolean
   agent: TuiAgent | null | undefined
   firstPartyStatus: FirstPartyAgentStatus
   quiescenceMs: number
@@ -207,34 +207,34 @@ const READY_STRONG: TuiIdleVerdict = { kind: 'ready-strong' }
 const READY_WEAK: TuiIdleVerdict = { kind: 'ready-weak' }
 const WORKING: TuiIdleVerdict = { kind: 'working' }
 
+const QUIET_READY_SCREEN_AGENTS: ReadonlySet<TuiAgent> = new Set(['muse', 'codex'])
+
 /**
- * Tier 1b: a Muse ready screen in the body, believed only once the stream has gone quiet.
+ * Tier 1b: a ready screen in the body, believed only once the stream has gone quiet.
  *
- * Muse is the one agent with no title signal at all — its OSC title is the bare cwd and
- * never changes — so neither the explicit-idle nor the sustained-title lane can fire.
- * The ready screen proves the TUI is up; the quiescence demand keeps a mid-turn
- * streaming pane from satisfying, mirroring the codex tier-3 lane's
- * positive-evidence-plus-quiet shape. Scoped to Muse and agent-unknown panes: another
- * agent's scrollback quoting Muse must not settle its wait.
+ * Muse's OSC title is the bare cwd and never changes, and an idle Codex titles its pane with
+ * the cwd (plus a thread name) and no agent name, so neither the explicit-idle nor the
+ * sustained-title lane can fire. The ready screen proves the TUI is up; the quiescence
+ * demand keeps a mid-turn streaming pane from satisfying, mirroring the tier-3 lane's
+ * positive-evidence-plus-quiet shape. Scoped to those agents and agent-unknown panes (which
+ * read only Muse's screen): another agent's scrollback quoting them must not settle its wait.
  */
-export function hasQuietMuseReadyPrompt(
+export function hasQuietReadyScreen(
   record: TuiIdleEvidenceRecord,
   agent: TuiAgent | null | undefined,
   readBodyEvidence: () => boolean,
   quiescenceMs: number
 ): boolean {
-  if (agent !== null && agent !== undefined && agent !== 'muse') {
-    return false
-  }
-  if (!readBodyEvidence()) {
+  if (agent && !QUIET_READY_SCREEN_AGENTS.has(agent)) {
     return false
   }
   // Why: same rule as the tier-3 lane — without an output clock there is no
   // corroboration available, so hold out instead of settling.
-  if (record.lastOutputAt === null) {
+  if (record.lastOutputAt === null || Date.now() - record.lastOutputAt < quiescenceMs) {
     return false
   }
-  return Date.now() - record.lastOutputAt >= quiescenceMs
+  // Why last: a streaming pane never pays for the screen projection.
+  return readBodyEvidence()
 }
 
 /** The one place the tiers are combined; every settle site branches only on the verdict. */
@@ -273,11 +273,13 @@ export function evaluateTuiIdle(input: TuiIdleEvaluationInput): TuiIdleVerdict {
       : { kind: 'pending', quietForeground: 'closed' }
   }
   // Why after the veto: a first-party working account outranks inferred body evidence.
+  // Why before the working title: Codex can leave a stale spinner title after a turn, and a
+  // live spinner emits output every ~100 ms, so a spinning pane is never quiet here.
   if (
-    hasQuietMuseReadyPrompt(
+    hasQuietReadyScreen(
       input.record,
       input.agent,
-      input.readMuseReadyBodyEvidence,
+      input.readQuietReadyBodyEvidence,
       input.quiescenceMs
     )
   ) {
@@ -328,7 +330,8 @@ export function leafTuiIdleEvidence(
     rendererTitle: leaf.paneTitle ?? source.getTabTitle(leaf.tabId),
     readPositiveBodyEvidence: () =>
       isKnownReadyPromptBody(waitText(), agent, () => source.readScreenLines(leaf.ptyId)),
-    readMuseReadyBodyEvidence: () => isMuseReadyPromptPreview(waitText()),
+    readQuietReadyBodyEvidence: () =>
+      isQuietReadyScreenBody(waitText(), agent, () => source.readScreenLines(leaf.ptyId)),
     agent,
     firstPartyStatus: source.getFirstPartyAgentStatus(leaf.ptyId),
     quiescenceMs: source.quiescenceMs
@@ -348,7 +351,8 @@ export function ptyTuiIdleEvidence(
     readPositiveBodyEvidence: () =>
       (agent !== 'qoder' && source.getAdoptedPtyIdleStatus(pty) === 'idle') ||
       isKnownReadyPromptBody(waitText(), agent, () => source.readScreenLines(pty.ptyId)),
-    readMuseReadyBodyEvidence: () => isMuseReadyPromptPreview(waitText()),
+    readQuietReadyBodyEvidence: () =>
+      isQuietReadyScreenBody(waitText(), agent, () => source.readScreenLines(pty.ptyId)),
     agent,
     firstPartyStatus: source.getFirstPartyAgentStatus(pty.ptyId),
     quiescenceMs: source.quiescenceMs

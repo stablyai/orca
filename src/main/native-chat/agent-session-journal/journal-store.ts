@@ -234,6 +234,9 @@ export class AgentSessionJournal {
   /** Includes revisions and completion tombstones, whose timestamps disappear from render items. */
   lastActivityAt = (): number => this.state.lastActivityAt
 
+  /** Fence of the writer that created the item, while it is in the timeline. */
+  itemFence = (itemId: string): number | undefined => this.state.itemFences.get(itemId)
+
   submissions = (): AgentJournalSubmission[] => [...this.state.submissions.values()]
 
   pendingSubmissions = (): AgentJournalSubmission[] =>

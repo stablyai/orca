@@ -46,7 +46,7 @@ export type CodexAppServerLaunch = {
 }
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
-const GRACEFUL_EXIT_MS = 1_500
+export const GRACEFUL_EXIT_MS = 1_500
 const FORCED_EXIT_MS = 1_000
 const STDERR_TAIL_MAX_BYTES = 8192
 

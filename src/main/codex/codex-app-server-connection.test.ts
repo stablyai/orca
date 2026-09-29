@@ -583,6 +583,36 @@ describe('openCodexAppServerConnection', () => {
     await connection.close()
   })
 
+  it('delivers a notification beyond the daemon wire limit whole, never as an oversized frame', async () => {
+    const { child, spawnImpl } = stubChild()
+    answerInitialize(child)
+    const frames: string[] = []
+    const deltas: unknown[] = []
+    const connection = await openCodexAppServerConnection(
+      { command: 'codex', args: ['app-server'] },
+      {
+        onUnhandledFrame: (kind) => frames.push(kind),
+        onNotification: (method, params) => {
+          if (method === 'item/commandExecution/outputDelta') {
+            deltas.push(params)
+          }
+        }
+      },
+      spawnImpl
+    )
+
+    const params = { threadId: 'thread-1', itemId: 'exec-1', delta: '' }
+    params.delta = 'x'.repeat(16 * 1024 * 1024 + 1)
+    child.stdout.write(
+      `${JSON.stringify({ method: 'item/commandExecution/outputDelta', params })}\n`
+    )
+
+    await vi.waitFor(() => expect(deltas).toEqual([params]))
+    expect(frames).toEqual([])
+    expect(connection.closed).toBe(false)
+    await connection.close()
+  })
+
   it('keeps malformed and non-object JSON non-fatal and processes the next record', async () => {
     const { child, spawnImpl } = stubChild()
     answerInitialize(child)

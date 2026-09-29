@@ -68,8 +68,8 @@ export function listAddressableStructuredWorkers(
  * A structured worker's agent status, in the vocabulary `@idle` already matches on.
  *
  * Null when the session cannot be read: unknown must not read as idle, or a broadcast to `@idle`
- * would wake a worker mid-turn — which Codex coalesces into the running turn and Claude queues
- * behind it.
+ * would wake a worker mid-turn — which Codex coalesces into the running turn and Claude folds
+ * into it.
  */
 export async function structuredWorkerAgentStatus(sessionId: string): Promise<string | null> {
   const facts = await readStructuredSessionGateFacts(sessionId)

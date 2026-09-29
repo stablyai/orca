@@ -125,13 +125,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const changedFiles = readFileSync(process.argv[2], 'utf8').split('\0').filter(Boolean)
   const result = await classifyBunProfileChanges(changedFiles)
   console.log(result.reason)
-  let event = {}
-  try {
-    event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'))
-  } catch {
-    // Missing event evidence retains full qualification.
-  }
-  const policy = bunProfileQualification(changedFiles, result, event)
+  const policy = bunProfileQualification(changedFiles, result)
   const output = `should_run=${result.shouldRun}\nqualification=${policy.qualification}\nrunners=${JSON.stringify(policy.runners)}\n`
   if (process.env.GITHUB_OUTPUT) {
     appendFileSync(process.env.GITHUB_OUTPUT, output)

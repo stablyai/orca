@@ -7,7 +7,6 @@ import {
 import { codexChildTurnState } from './codex-subagent-executions'
 import { readRecord } from './codex-item-field-readers'
 import { readCodexThreadItem } from './codex-structured-item-translation'
-import { readCodexProviderVerdict } from './codex-structured-journal-provider-verdicts'
 import { readCodexTurnId } from './codex-structured-thread-facts'
 
 export type CodexBackgroundTaskFrame =
@@ -26,14 +25,10 @@ export type CodexBackgroundTaskFrame =
       state: NativeChatSubagentState
     }
   | {
-      /** A child turn that ended with no `turn/completed`. No `turnId`: the one it is running. */
-      kind: 'turn-ended'
+      /** A child thread that closed: it ran its last turn, and Codex never said how it went. */
+      kind: 'thread-closed'
       threadId: string
-      turnId: string | null
-      state: CodexChildTurnEnding
     }
-
-type CodexChildTurnEnding = Extract<NativeChatSubagentState, 'failed' | 'unverifiable'>
 
 export type CodexBackgroundTaskEvent = {
   method: string
@@ -42,21 +37,16 @@ export type CodexBackgroundTaskEvent = {
 }
 
 /**
- * The two ways Codex ends a child's turn without `turn/completed`. An `error` it will not retry is
- * that turn's own end: the verdict the transcript settles the same turn on. A closed thread ran
- * its last turn, and Codex never said how it went. A `systemError` status is neither: Codex raises
- * it for errors that leave the turn running too (a refused steer), and a turn one ends also
- * carries the `error`.
+ * The one way Codex ends a child's turn without `turn/completed`: a closed thread ran its last
+ * turn and Codex never said how it went. A turn-ending `error` is not one — Codex follows it with
+ * a failed `turn/completed` for the same turn, which is that turn's end and carries the duration
+ * and receipt time the error does not.
  */
-function readCodexChildTurnEnding(
+function readCodexChildThreadClosed(
   event: CodexBackgroundTaskEvent
 ): CodexBackgroundTaskFrame | null {
-  if (readCodexProviderVerdict(event.method, event.params) === 'turn-failed') {
-    const turnId = readCodexTurnId(event.params)
-    return { kind: 'turn-ended', threadId: event.threadId, turnId, state: 'failed' }
-  }
   return event.method === 'thread/closed'
-    ? { kind: 'turn-ended', threadId: event.threadId, turnId: null, state: 'unverifiable' }
+    ? { kind: 'thread-closed', threadId: event.threadId }
     : null
 }
 
@@ -65,7 +55,7 @@ export function readCodexBackgroundTaskFrame(
   primaryThreadId: string
 ): CodexBackgroundTaskFrame | null {
   // The session's own turn ends through the journal's turn boundaries, never here.
-  const ending = event.threadId === primaryThreadId ? null : readCodexChildTurnEnding(event)
+  const ending = event.threadId === primaryThreadId ? null : readCodexChildThreadClosed(event)
   if (ending) {
     return ending
   }

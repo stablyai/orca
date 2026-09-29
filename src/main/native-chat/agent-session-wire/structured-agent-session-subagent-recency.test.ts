@@ -64,7 +64,13 @@ async function openSession() {
   const server = new AgentHookServer()
   const feed = new StructuredAgentSessionStatusFeed({
     sessions: new Map([
-      [SESSION, indexedStatusFeedSession({ journal, child: { phase: 'ready' } })]
+      [
+        SESSION,
+        indexedStatusFeedSession({
+          journal,
+          child: { phase: 'ready', generation: 'child-1', fence: 1 }
+        })
+      ]
     ]),
     getRecord: () => null,
     now: () => 1,

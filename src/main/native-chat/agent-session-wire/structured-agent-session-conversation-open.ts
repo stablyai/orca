@@ -10,6 +10,7 @@
 
 import type { AgentJournalResetReason } from '../../../shared/agent-session-journal-types'
 import { journalDirectoryFor } from '../agent-session-journal/journal-paths'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { openAgentSessionJournalWithRecovery } from './agent-session-journal-recovery'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
@@ -103,27 +104,51 @@ export async function openStructuredAgentSessionConversationJournal(
   } catch (error) {
     deps.onEventSinkError?.({ sessionId, error })
   }
-  try {
-    // No child in this process writes to a journal nobody had open, so whatever it shows running
-    // belongs to a generation that is gone, whatever the lease still claims. Settled before any
-    // reader or child sees it.
-    if (!options.acquisition) {
-      await settleStaleStructuredAgentSessionState({
-        journal: opened.journal,
-        sessionId,
-        fence,
-        acquisitionGeneration: null,
-        deathEvidence: record.lease.deathEvidence ?? null,
-        failureTextContext: structuredAgentSessionFailureWordsContext(record)
-      })
-    }
-  } catch (error) {
-    // Best effort: the next acquire re-derives it.
-    deps.onEventSinkError?.({ sessionId, error })
+  // No child in this process writes to a journal nobody had open, so whatever it shows running
+  // belongs to a generation that is gone, whatever the lease still claims. Settled before any
+  // reader or child sees it.
+  if (!options.acquisition) {
+    await settleGoneGeneration(deps, record, opened.journal)
   }
   return {
     session: { journal: opened.journal, params, child: null },
     reset: opened.recovery?.reset ?? null
+  }
+}
+
+/**
+ * The open's settle again, for a conversation already open: a proof of death written since it
+ * opened (the startup reconcile, a recovery) revises what the open could only call `unverifiable`.
+ * A record holds a proof only while released, so no child here is writing. A no-op once revised.
+ */
+export async function resettleOpenStructuredAgentSessionConversation(
+  deps: StructuredAgentSessionConversationOpenDeps,
+  sessionId: string,
+  session: StructuredAgentSessionHostSession | undefined
+): Promise<void> {
+  const record = deps.store.getRecord(sessionId)
+  if (session && record?.lease.deathEvidence) {
+    await settleGoneGeneration(deps, record, session.journal)
+  }
+}
+
+async function settleGoneGeneration(
+  deps: Pick<StructuredAgentSessionConversationOpenDeps, 'onEventSinkError'>,
+  record: AgentSessionRecord,
+  journal: AgentSessionJournal
+): Promise<void> {
+  try {
+    await settleStaleStructuredAgentSessionState({
+      journal,
+      sessionId: record.sessionId,
+      fence: record.lease.runtimeFence,
+      acquisitionGeneration: null,
+      deathEvidence: record.lease.deathEvidence ?? null,
+      failureTextContext: structuredAgentSessionFailureWordsContext(record)
+    })
+  } catch (error) {
+    // Best effort: the next open or acquire re-derives it.
+    deps.onEventSinkError?.({ sessionId: record.sessionId, error })
   }
 }
 
