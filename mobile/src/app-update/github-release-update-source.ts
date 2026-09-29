@@ -6,6 +6,7 @@ import { isNewerReleaseVersion } from './app-update-source'
 const REPO_API = 'https://api.github.com/repos/stablyai/orca'
 // Why tag refs, not releases.atom or /releases?per_page=100: both are newest-first windows that a
 // run of desktop releases fills, pushing the newest mobile release out and reading as "current".
+// The release `prerelease` flag is not a filter: every mobile-android-v* release is published as one.
 const TAG_PREFIX = 'mobile-android-v'
 // Why: the release workflow pushes the tag before the APK build, so a failed build leaves a
 // tag with no release; probe a few older candidates, bounded like the desktop's manifest probe.
@@ -13,7 +14,7 @@ const MAX_RELEASE_PROBES = 3
 
 type Fetch = typeof fetch
 
-const tagRefSchema = z.looseObject({ ref: z.string() })
+const tagRefsSchema = z.array(z.looseObject({ ref: z.string() }))
 const installableReleaseSchema = z.looseObject({
   draft: z.literal(false),
   html_url: z.string(),
@@ -23,15 +24,10 @@ const installableReleaseSchema = z.looseObject({
 /** Versions named by the tag refs GitHub returns for the mobile-android prefix. */
 export function parseMobileAndroidTagVersions(refs: unknown): string[] {
   const prefix = `refs/tags/${TAG_PREFIX}`
-  return z
-    .array(z.unknown())
+  return tagRefsSchema
     .parse(refs)
-    .flatMap((entry) => {
-      const parsed = tagRefSchema.safeParse(entry)
-      return parsed.success && parsed.data.ref.startsWith(prefix)
-        ? [parsed.data.ref.slice(prefix.length)]
-        : []
-    })
+    .filter(({ ref }) => ref.startsWith(prefix))
+    .map(({ ref }) => ref.slice(prefix.length))
 }
 
 /** The release page when the tag has a published release carrying an APK, else null. */

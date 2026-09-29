@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { appUpdateChecker, installedAppVersion } from '../app-update/app-update-runtime'
-import { openAppUpdate } from '../app-update/open-app-update'
-import { useAppUpdateState } from '../app-update/use-app-update-state'
+import {
+  appUpdateChecker,
+  installedAppVersion,
+  openAppUpdate,
+  useAppUpdateState
+} from '../app-update/app-update-runtime'
 import { AppUpdateSettingsRows, type AppUpdateCheckRowStatus } from './app-update-settings-rows'
 
 const CHECK_RESULT_VISIBLE_MS = 3000

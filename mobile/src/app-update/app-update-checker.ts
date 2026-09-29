@@ -43,12 +43,13 @@ export type AppUpdateChecker = ReturnType<typeof createAppUpdateChecker>
 
 export function createAppUpdateChecker(deps: AppUpdateCheckerDeps) {
   let prefs = EMPTY_APP_UPDATE_PREFERENCES
-  let checking = false
+  let loaded: Promise<void> | null = null
   let inFlight: Promise<AppUpdateCheckOutcome> | null = null
-  // Nothing is due until the stored last check has been read.
-  let nextDueAt = Number.POSITIVE_INFINITY
+  let nextDueAt = 0
   let timer: TimerHandle | null = null
-  let started = false
+  let activeStarts = 0
+  // Bumped by every stop, so a check that outlives its start writes nothing.
+  let stopCount = 0
   let snapshot = buildSnapshot()
   const listeners = new Set<() => void>()
 
@@ -64,7 +65,7 @@ export function createAppUpdateChecker(deps: AppUpdateCheckerDeps) {
       lastCheckedAt: prefs.lastCheckedAt,
       available,
       dismissedVersion: prefs.dismissedVersion,
-      checking
+      checking: inFlight !== null
     }
   }
 
@@ -75,13 +76,17 @@ export function createAppUpdateChecker(deps: AppUpdateCheckerDeps) {
     }
   }
 
-  function schedule(dueAt: number): void {
-    nextDueAt = dueAt
+  function clearScheduled(): void {
     if (timer !== null) {
       deps.clearTimer(timer)
       timer = null
     }
-    if (started) {
+  }
+
+  function schedule(dueAt: number): void {
+    nextDueAt = dueAt
+    clearScheduled()
+    if (activeStarts > 0) {
       timer = deps.setTimer(
         () => {
           timer = null
@@ -92,15 +97,29 @@ export function createAppUpdateChecker(deps: AppUpdateCheckerDeps) {
     }
   }
 
+  /** The stored state is read once; every check and dismissal waits for it, so none is overwritten. */
+  function ensureLoaded(): Promise<void> {
+    loaded ??= deps.loadPreferences().then((stored) => {
+      prefs = stored
+      publish()
+      schedule(
+        stored.lastCheckedAt === null ? 0 : stored.lastCheckedAt + APP_UPDATE_CHECK_INTERVAL_MS
+      )
+    })
+    return loaded
+  }
+
   function runIfDue(): void {
-    if (started && inFlight === null && deps.now() >= nextDueAt) {
-      void checkNow()
-    }
+    void ensureLoaded().then(() => {
+      if (activeStarts > 0 && inFlight === null && deps.now() >= nextDueAt) {
+        void checkNow()
+      }
+    })
   }
 
   async function runCheck(source: AppUpdateSource, installed: string) {
-    checking = true
-    publish()
+    await ensureLoaded()
+    const stopsAtStart = stopCount
     const controller = new AbortController()
     // Why race: the bound holds even for a request that does not honour the signal.
     const timedOut = new Promise<never>((_, reject) => {
@@ -109,6 +128,9 @@ export function createAppUpdateChecker(deps: AppUpdateCheckerDeps) {
     const timeout = deps.setTimer(() => controller.abort(), APP_UPDATE_CHECK_TIMEOUT_MS)
     try {
       const result = await Promise.race([source.check(installed, controller.signal), timedOut])
+      if (stopCount !== stopsAtStart) {
+        return 'failed'
+      }
       const checkedAt = deps.now()
       const latest =
         result.kind === 'available' ? { version: result.version, url: result.url } : null
@@ -117,12 +139,12 @@ export function createAppUpdateChecker(deps: AppUpdateCheckerDeps) {
       await deps.saveCheck(checkedAt, latest).catch(() => {})
       return result.kind === 'available' ? 'available' : 'up-to-date'
     } catch {
-      schedule(deps.now() + APP_UPDATE_RETRY_INTERVAL_MS)
+      if (stopCount === stopsAtStart) {
+        schedule(deps.now() + APP_UPDATE_RETRY_INTERVAL_MS)
+      }
       return 'failed'
     } finally {
       deps.clearTimer(timeout)
-      checking = false
-      publish()
     }
   }
 
@@ -132,48 +154,47 @@ export function createAppUpdateChecker(deps: AppUpdateCheckerDeps) {
     if (!source || !installedVersion) {
       return Promise.resolve('failed')
     }
-    inFlight ??= runCheck(source, installedVersion).finally(() => {
-      inFlight = null
-    })
+    if (inFlight === null) {
+      inFlight = runCheck(source, installedVersion).finally(() => {
+        inFlight = null
+        publish()
+      })
+      publish()
+    }
     return inFlight
   }
 
-  /** Cold start: loads what the last run saw, then checks only if the cadence says it is due. */
+  /** Cold start: reads what the last run saw, then checks only if the cadence says it is due. */
   function start(): () => void {
-    started = true
+    let active = true
+    activeStarts += 1
     const unsubscribe = deps.subscribeForeground(runIfDue)
-    void deps.loadPreferences().then((loaded) => {
-      if (!started) {
-        return
-      }
-      // A check or dismissal that landed while the store was read is newer than what it holds.
-      const checkedMeanwhile = prefs.lastCheckedAt !== null
-      prefs = {
-        lastCheckedAt: checkedMeanwhile ? prefs.lastCheckedAt : loaded.lastCheckedAt,
-        latest: checkedMeanwhile ? prefs.latest : loaded.latest,
-        dismissedVersion: prefs.dismissedVersion ?? loaded.dismissedVersion
-      }
-      publish()
-      if (!checkedMeanwhile) {
-        schedule(
-          loaded.lastCheckedAt === null ? 0 : loaded.lastCheckedAt + APP_UPDATE_CHECK_INTERVAL_MS
-        )
+    // A second start (StrictMode) shares the one load; only the schedule is re-armed.
+    void ensureLoaded().then(() => {
+      if (active && timer === null && inFlight === null) {
+        schedule(nextDueAt)
       }
     })
     return () => {
-      started = false
+      if (!active) {
+        return
+      }
+      active = false
+      activeStarts -= 1
+      stopCount += 1
       unsubscribe()
-      if (timer !== null) {
-        deps.clearTimer(timer)
-        timer = null
+      if (activeStarts === 0) {
+        clearScheduled()
       }
     }
   }
 
   function dismiss(version: string): void {
-    prefs = { ...prefs, dismissedVersion: version }
-    publish()
-    void deps.saveDismissedVersion(version).catch(() => {})
+    void ensureLoaded().then(() => {
+      prefs = { ...prefs, dismissedVersion: version }
+      publish()
+      void deps.saveDismissedVersion(version).catch(() => {})
+    })
   }
 
   return {

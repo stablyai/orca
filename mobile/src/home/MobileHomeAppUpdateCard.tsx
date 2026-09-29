@@ -1,9 +1,11 @@
 import { StyleSheet, View } from 'react-native'
 import { undismissedAppUpdate } from '../app-update/app-update-checker'
-import { appUpdateChecker } from '../app-update/app-update-runtime'
-import { openAppUpdate } from '../app-update/open-app-update'
-import { useAppUpdateState } from '../app-update/use-app-update-state'
-import { AppUpdateCard } from '../components/AppUpdateCard'
+import {
+  appUpdateChecker,
+  openAppUpdate,
+  useAppUpdateState
+} from '../app-update/app-update-runtime'
+import { AppUpdateCard } from './AppUpdateCard'
 import { spacing } from '../theme/mobile-theme'
 
 export function MobileHomeAppUpdateCard() {

@@ -120,6 +120,42 @@ describe('GitHub release source (Android sideload)', () => {
     expect(requested).toEqual([REFS_URL])
   })
 
+  it('opens the release page GitHub reports, not one built from the tag', async () => {
+    const renamed = {
+      ...Object(release050),
+      html_url: 'https://github.com/stablyai/orca/releases/tag/renamed-page'
+    }
+    const { fetchImpl } = fakeFetch({
+      [REFS_URL]: { status: 200, body: tagRefs },
+      [releaseUrl('0.0.50')]: { status: 200, body: renamed }
+    })
+    await expect(
+      createGithubReleaseUpdateSource(fetchImpl).check('0.0.48', signal)
+    ).resolves.toEqual({
+      kind: 'available',
+      version: '0.0.50',
+      url: 'https://github.com/stablyai/orca/releases/tag/renamed-page'
+    })
+  })
+
+  it('rejects on a release probe 5xx instead of moving to an older candidate', async () => {
+    const { fetchImpl, requested } = fakeFetch({
+      [REFS_URL]: { status: 200, body: tagRefs },
+      [releaseUrl('0.0.50')]: { status: 502 }
+    })
+    await expect(
+      createGithubReleaseUpdateSource(fetchImpl).check('0.0.47', signal)
+    ).rejects.toThrow('release HTTP 502')
+    expect(requested).toEqual([REFS_URL, releaseUrl('0.0.50')])
+  })
+
+  it('rejects when a release probe cannot reach GitHub', async () => {
+    const { fetchImpl } = fakeFetch({ [REFS_URL]: { status: 200, body: tagRefs } })
+    await expect(
+      createGithubReleaseUpdateSource(fetchImpl).check('0.0.47', signal)
+    ).rejects.toThrow('unexpected request')
+  })
+
   it('rejects when GitHub refuses, so the check counts as failed rather than current', async () => {
     const { fetchImpl } = fakeFetch({ [REFS_URL]: { status: 403 } })
     await expect(

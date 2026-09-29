@@ -23,9 +23,14 @@ export const EMPTY_APP_UPDATE_PREFERENCES: AppUpdatePreferences = {
 
 const knownAppUpdateSchema = z.object({ version: z.string(), url: z.string() })
 
+// A corrupt record loses only itself, never the check time or the dismissal stored beside it.
 function parseLatest(raw: string | null): KnownAppUpdate | null {
-  const parsed = raw ? knownAppUpdateSchema.safeParse(JSON.parse(raw)) : null
-  return parsed?.success ? parsed.data : null
+  try {
+    const parsed = raw ? knownAppUpdateSchema.safeParse(JSON.parse(raw)) : null
+    return parsed?.success ? parsed.data : null
+  } catch {
+    return null
+  }
 }
 
 export async function loadAppUpdatePreferences(): Promise<AppUpdatePreferences> {
