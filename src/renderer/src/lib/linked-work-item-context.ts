@@ -199,20 +199,22 @@ export function getLaunchableWorkItemDraftContent(args: {
   return args.url
 }
 
+export type QuickCreateLinkedWorkItemReference =
+  | (Pick<
+      {
+        provider?: TaskProvider
+        number: number
+        url: string
+        title?: string
+        linearIdentifier?: string
+      },
+      'provider' | 'number' | 'url' | 'title' | 'linearIdentifier'
+    > & { linkedContext?: LinkedWorkItemContext })
+  | null
+  | undefined
+
 export function resolveQuickCreateLinkedWorkItemPrompt(
-  linkedWorkItem:
-    | (Pick<
-        {
-          provider?: TaskProvider
-          number: number
-          url: string
-          title?: string
-          linearIdentifier?: string
-        },
-        'provider' | 'number' | 'url' | 'title' | 'linearIdentifier'
-      > & { linkedContext?: LinkedWorkItemContext })
-    | null
-    | undefined,
+  linkedWorkItem: QuickCreateLinkedWorkItemReference,
   note: string
 ): { prompt: string; draftPrompt: string | null } {
   const trimmedNote = note.trim()

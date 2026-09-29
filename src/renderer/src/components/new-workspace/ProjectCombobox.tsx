@@ -22,6 +22,8 @@ type ProjectComboboxProps = {
   onAddProject?: () => void
   placeholder?: string
   triggerClassName?: string
+  /** Pill mode: show only the name, no path detail. */
+  compact?: boolean
   invalid?: boolean
   describedBy?: string
 }
@@ -44,6 +46,7 @@ export default function ProjectCombobox({
   onAddProject,
   placeholder = 'Choose project',
   triggerClassName,
+  compact = false,
   invalid = false,
   describedBy
 }: ProjectComboboxProps): React.JSX.Element {
@@ -199,13 +202,15 @@ export default function ProjectCombobox({
                     group itself is baseline-aligned — centring two different
                     type sizes leaves the smaller one sitting visibly high. */}
                 <div className="flex min-w-0 flex-1 items-baseline gap-2">
-                  <span className="min-w-0 max-w-[50%] shrink truncate">
+                  <span className={cn('min-w-0 shrink truncate', !compact && 'max-w-[50%]')}>
                     {selected.displayName}
                   </span>
-                  <ProjectOptionDetail
-                    detail={selected.detail}
-                    className="min-w-0 flex-1 shrink-[999] justify-end text-right text-xs text-muted-foreground"
-                  />
+                  {compact ? null : (
+                    <ProjectOptionDetail
+                      detail={selected.detail}
+                      className="min-w-0 flex-1 shrink-[999] justify-end text-right text-xs text-muted-foreground"
+                    />
+                  )}
                 </div>
               </div>
             ) : null}

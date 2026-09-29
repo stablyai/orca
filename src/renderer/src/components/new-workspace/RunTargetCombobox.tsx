@@ -36,6 +36,8 @@ type RunTargetComboboxProps = {
   onAddSshHost?: () => void
   onConnectHost?: (option: NeedsSetupProjectHostOption) => Promise<void> | void
   onSetLocation?: (option: NeedsSetupProjectHostOption) => void
+  triggerClassName?: string
+  compact?: boolean
 }
 
 const ROOT_ATTRIBUTE = 'data-run-target-combobox-root'
@@ -59,7 +61,9 @@ export default function RunTargetCombobox({
   onAddRemoteServer,
   onAddSshHost,
   onConnectHost,
-  onSetLocation
+  onSetLocation,
+  triggerClassName,
+  compact
 }: RunTargetComboboxProps): React.JSX.Element {
   const [submenu, setSubmenu] = useState<'recipes' | 'add-host' | null>(null)
   // Track in-flight connects per host so one stalling connect never blocks the others.
@@ -236,6 +240,8 @@ export default function RunTargetCombobox({
         hasArmedRow={armedRow !== null}
         inputRef={inputRef}
         onKeyDown={handleKeyDown}
+        className={triggerClassName}
+        compact={compact}
       />
       <PopoverContent
         align="start"

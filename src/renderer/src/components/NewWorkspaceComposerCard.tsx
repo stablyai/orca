@@ -28,6 +28,9 @@ import { NewWorkspaceComposerAgentSection } from './new-workspace/NewWorkspaceCo
 import { NewWorkspaceComposerFooter } from './new-workspace/NewWorkspaceComposerFooter'
 import { NewWorkspaceComposerNameSection } from './new-workspace/NewWorkspaceComposerNameSection'
 import { NewWorkspaceComposerProjectSection } from './new-workspace/NewWorkspaceComposerProjectSection'
+import { NewWorkspaceComposerPromptSection } from './new-workspace/NewWorkspaceComposerPromptSection'
+import { NewWorkspaceComposerPromptToolbar } from './new-workspace/NewWorkspaceComposerPromptToolbar'
+import { NewWorkspaceComposerTargetNotices } from './new-workspace/NewWorkspaceComposerTargetNotices'
 import {
   EMPTY_EPHEMERAL_VM_RECIPES,
   EMPTY_PROJECT_HOST_SETUP_OPTIONS,
@@ -36,6 +39,7 @@ import {
   type NewWorkspaceComposerCardProps
 } from './new-workspace/new-workspace-composer-card-props'
 import { getSshStatusLabel } from './new-workspace/new-workspace-composer-ssh-status'
+import { getSetupDecisionLabels } from './new-workspace/setup-decision-labels'
 import { useComposerFileDragOver } from './new-workspace/use-composer-file-drag-over'
 
 // Why lazy: this pulls the ~41 KB project-location browser onto the boot graph, and nothing
@@ -86,6 +90,9 @@ export default function NewWorkspaceComposerCard(
   const openModal = useAppStore((state) => state.openModal)
   const activeModal = useAppStore((state) => state.activeModal)
   const defaultTuiAgent = useAppStore((state) => state.settings?.defaultTuiAgent ?? null)
+  const promptFirst = useAppStore(
+    (state) => state.settings?.experimentalPromptFirstComposer === true
+  )
   const disabledTuiAgents = useAppStore(
     (state) => state.settings?.disabledTuiAgents ?? DEFAULT_DISABLED_TUI_AGENTS
   )
@@ -136,26 +143,7 @@ export default function NewWorkspaceComposerCard(
     selectedRepoSshStatus === 'disconnected' || selectedRepoSshStatus === null
       ? 'Connect'
       : 'Reconnect'
-  const setupConfigLabel =
-    setupConfig?.kind === 'default-tabs'
-      ? 'Default tab commands'
-      : setupConfig?.kind === 'setup-and-default-tabs'
-        ? 'Setup and default tab commands'
-        : 'Setup script'
-  const setupRunLabel =
-    setupConfig?.kind === 'default-tabs'
-      ? 'Run default tab commands'
-      : setupConfig?.kind === 'setup-and-default-tabs'
-        ? 'Run setup and default tab commands'
-        : 'Run setup command'
-  const setupAskLabel =
-    setupConfig?.kind === 'default-tabs'
-      ? 'Run default tab commands now?'
-      : setupConfig?.kind === 'setup-and-default-tabs'
-        ? 'Run setup and default tab commands now?'
-        : 'Run setup now?'
-  const setupRunButtonLabel = setupConfig?.kind === 'setup' ? 'Run setup now' : 'Run commands now'
-  const setupSkipButtonLabel = setupConfig?.kind === 'setup' ? 'Skip for now' : 'Skip commands'
+  const setupDecisionLabels = getSetupDecisionLabels(setupConfig)
   const showSetupAgentStartupPolicy =
     setupControlsEnabled && setupConfig !== null && setupConfig.kind !== 'default-tabs'
   const agentCatalog = getAgentCatalog()
@@ -190,13 +178,21 @@ export default function NewWorkspaceComposerCard(
     },
     [cancelNameInputFocusFrame, composerRef, onComposerNodeChange]
   )
-  const focusNameInput = React.useCallback((): void => {
+  // Why: picking a project hands focus to whatever gets typed next — the prompt
+  // in the prompt-first layout, the name/source field in the classic one.
+  const focusNextInput = React.useCallback((): void => {
     cancelNameInputFocusFrame()
     nameInputFocusFrameRef.current = requestAnimationFrame(() => {
       nameInputFocusFrameRef.current = null
+      if (promptFirst) {
+        composerRef?.current
+          ?.querySelector<HTMLElement>('[data-workspace-prompt-input="true"]')
+          ?.focus()
+        return
+      }
       nameInputRef?.current?.focus()
     })
-  }, [cancelNameInputFocusFrame, nameInputRef])
+  }, [cancelNameInputFocusFrame, composerRef, nameInputRef, promptFirst])
   const handleAddProject = React.useCallback((): void => {
     if (onAddProjectOverride) {
       onAddProjectOverride()
@@ -296,40 +292,81 @@ export default function NewWorkspaceComposerCard(
         containerClassName
       )}
     >
-      <div className={cn('min-h-0 min-w-0 space-y-4 pt-3', contentClassName)}>
-        <NewWorkspaceComposerProjectSection
-          {...props}
-          projectOptions={projectOptions}
-          projectHostSetupOptions={projectHostSetupOptions}
-          ephemeralVmRecipes={ephemeralVmRecipes}
-          projectDescriptionId={projectDescriptionId}
-          onAddProject={handleAddProject}
-          focusNameInput={focusNameInput}
-          shouldShowRunTargetPicker={shouldShowRunTargetPicker}
-          handleProjectHostSetupChange={(setupId) => onProjectHostSetupChange?.(setupId)}
-          handleAddSshHost={() => setAddRemoteHostMode('ssh')}
-          handleAddRemoteServer={() => setAddRemoteHostMode('server')}
-          handleConnectRunTargetHost={handleConnectRunTargetHost}
-          handleSetLocation={handleSetLocation}
-          sshStatusLabel={sshStatusLabel}
-          connectButtonLabel={connectButtonLabel}
-          selectedProjectName={selectedProjectName}
-        />
+      <div
+        className={cn(
+          'min-h-0 min-w-0 pt-3',
+          promptFirst ? 'space-y-3' : 'space-y-4',
+          contentClassName
+        )}
+      >
+        {promptFirst ? (
+          <>
+            <NewWorkspaceComposerPromptSection
+              {...props}
+              toolbar={
+                <NewWorkspaceComposerPromptToolbar
+                  {...props}
+                  projectOptions={projectOptions}
+                  projectHostSetupOptions={projectHostSetupOptions}
+                  ephemeralVmRecipes={ephemeralVmRecipes}
+                  projectDescriptionId={projectDescriptionId}
+                  onAddProject={handleAddProject}
+                  focusPromptInput={focusNextInput}
+                  shouldShowRunTargetPicker={shouldShowRunTargetPicker}
+                  handleProjectHostSetupChange={(setupId) => onProjectHostSetupChange?.(setupId)}
+                  handleAddSshHost={() => setAddRemoteHostMode('ssh')}
+                  handleAddRemoteServer={() => setAddRemoteHostMode('server')}
+                  handleConnectRunTargetHost={handleConnectRunTargetHost}
+                  handleSetLocation={handleSetLocation}
+                  visibleQuickAgents={visibleQuickAgents}
+                  defaultTuiAgent={defaultTuiAgent}
+                  handleSetDefaultAgent={handleSetDefaultAgent}
+                  submitShortcutModifierLabel={getScreenSubmitModifierLabel()}
+                />
+              }
+            />
+            <NewWorkspaceComposerTargetNotices
+              {...props}
+              projectOptions={projectOptions}
+              projectDescriptionId={projectDescriptionId}
+              sshStatusLabel={sshStatusLabel}
+              connectButtonLabel={connectButtonLabel}
+              selectedProjectName={selectedProjectName}
+            />
+          </>
+        ) : (
+          <NewWorkspaceComposerProjectSection
+            {...props}
+            projectOptions={projectOptions}
+            projectHostSetupOptions={projectHostSetupOptions}
+            ephemeralVmRecipes={ephemeralVmRecipes}
+            projectDescriptionId={projectDescriptionId}
+            onAddProject={handleAddProject}
+            focusNameInput={focusNextInput}
+            shouldShowRunTargetPicker={shouldShowRunTargetPicker}
+            handleProjectHostSetupChange={(setupId) => onProjectHostSetupChange?.(setupId)}
+            handleAddSshHost={() => setAddRemoteHostMode('ssh')}
+            handleAddRemoteServer={() => setAddRemoteHostMode('server')}
+            handleConnectRunTargetHost={handleConnectRunTargetHost}
+            handleSetLocation={handleSetLocation}
+            sshStatusLabel={sshStatusLabel}
+            connectButtonLabel={connectButtonLabel}
+            selectedProjectName={selectedProjectName}
+          />
+        )}
         <NewWorkspaceComposerNameSection {...props} onNamePlainEnter={handleNamePlainEnter} />
-        <NewWorkspaceComposerAgentSection
-          {...props}
-          visibleQuickAgents={visibleQuickAgents}
-          defaultTuiAgent={defaultTuiAgent}
-          handleSetDefaultAgent={handleSetDefaultAgent}
-        />
+        {promptFirst ? null : (
+          <NewWorkspaceComposerAgentSection
+            {...props}
+            visibleQuickAgents={visibleQuickAgents}
+            defaultTuiAgent={defaultTuiAgent}
+            handleSetDefaultAgent={handleSetDefaultAgent}
+          />
+        )}
         <NewWorkspaceComposerAdvancedSection
           {...props}
           branchNameInputId={branchNameInputId}
-          setupConfigLabel={setupConfigLabel}
-          setupRunLabel={setupRunLabel}
-          setupAskLabel={setupAskLabel}
-          setupRunButtonLabel={setupRunButtonLabel}
-          setupSkipButtonLabel={setupSkipButtonLabel}
+          {...setupDecisionLabels}
           showSetupAgentStartupPolicy={showSetupAgentStartupPolicy}
           parentWorktreeId={parentWorktreeId}
           onParentWorktreeIdChange={onParentWorktreeIdChange}
@@ -342,6 +379,7 @@ export default function NewWorkspaceComposerCard(
         <NewWorkspaceComposerFooter
           {...props}
           submitShortcutModifierLabel={getScreenSubmitModifierLabel()}
+          hidePrimaryAction={promptFirst}
         />
       </div>
       <AddRemoteHostDialog mode={addRemoteHostMode} onOpenChange={setAddRemoteHostMode} />

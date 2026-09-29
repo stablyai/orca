@@ -2,6 +2,7 @@ import type { ComposerModel } from './composer-model'
 
 type FolderSubmitOrchestrationInput = Pick<
   ComposerModel,
+  | 'agentPrompt'
   | 'clearNewWorkspaceDraft'
   | 'createFolderWorkspace'
   | 'decisions'
@@ -50,6 +51,7 @@ import { toast } from 'sonner'
 
 export function useFolderSubmitOrchestration(input: FolderSubmitOrchestrationInput) {
   const {
+    agentPrompt,
     clearNewWorkspaceDraft,
     createFolderWorkspace,
     decisions,
@@ -107,8 +109,9 @@ export function useFolderSubmitOrchestration(input: FolderSubmitOrchestrationInp
         if (isSubmissionCancelled()) {
           return
         }
+        // Why: mirrors submitFolderWorkspaceCreate; a typed prompt auto-submits instead of drafting.
         const folderLaunchDraftText =
-          agent && submitLinkedWorkItem
+          agent && submitLinkedWorkItem && !agentPrompt.trim()
             ? resolveFolderWorkspaceLaunchDraft(submitLinkedWorkItem, note)
             : null
         const folderWorkspaceCreated = await submitFolderWorkspaceCreate({
@@ -118,6 +121,7 @@ export function useFolderSubmitOrchestration(input: FolderSubmitOrchestrationInp
           linkedWorkItem: submitLinkedWorkItem,
           linkedTaskSourceContext: taskSourceContext,
           note,
+          typedPrompt: agentPrompt,
           quickAgent: agent,
           autoRenameBranchFromWork: settings?.autoRenameBranchFromWork,
           agentCmdOverrides: settings?.agentCmdOverrides,
@@ -183,6 +187,7 @@ export function useFolderSubmitOrchestration(input: FolderSubmitOrchestrationInp
       }
     },
     [
+      agentPrompt,
       clearNewWorkspaceDraft,
       createFolderWorkspace,
       canResolveFolderSmartGitHubSubmit,

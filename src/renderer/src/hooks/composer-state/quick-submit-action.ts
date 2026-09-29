@@ -15,6 +15,7 @@ import type { ComposerModel } from './composer-model'
 
 type QuickSubmitActionInput = Pick<
   ComposerModel,
+  | 'agentPrompt'
   | 'effectiveLinkedPR'
   | 'executeQuickCreation'
   | 'fallbackCreatureName'
@@ -41,6 +42,7 @@ type QuickSubmitActionInput = Pick<
 
 export function useQuickSubmitAction(input: QuickSubmitActionInput) {
   const {
+    agentPrompt,
     effectiveLinkedPR,
     executeQuickCreation,
     fallbackCreatureName,
@@ -74,7 +76,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
 
       const workspaceNameSeed = getWorkspaceSeedName({
         explicitName: name,
-        prompt: '',
+        prompt: agentPrompt,
         linkedIssueNumber: parsedLinkedIssueNumber,
         linkedPR,
         fallbackName: fallbackCreatureName
@@ -158,6 +160,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
       }
     },
     [
+      agentPrompt,
       effectiveLinkedPR,
       executeQuickCreation,
       fallbackCreatureName,

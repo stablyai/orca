@@ -4,6 +4,30 @@ import { describe, expect, it } from 'vitest'
 import { getWorkspaceComposerInitialFocusTarget } from './workspace-composer-initial-focus'
 
 describe('getWorkspaceComposerInitialFocusTarget', () => {
+  it('prefers the prompt textarea over the name input', () => {
+    const root = document.createElement('div')
+    root.innerHTML = `
+      <input data-workspace-name-input="true" />
+      <textarea data-workspace-prompt-input="true"></textarea>
+    `
+
+    expect(getWorkspaceComposerInitialFocusTarget(root)).toBe(
+      root.querySelector('[data-workspace-prompt-input="true"]')
+    )
+  })
+
+  it('skips a disabled prompt textarea and falls back to the name input', () => {
+    const root = document.createElement('div')
+    root.innerHTML = `
+      <textarea data-workspace-prompt-input="true" disabled></textarea>
+      <input data-workspace-name-input="true" />
+    `
+
+    expect(getWorkspaceComposerInitialFocusTarget(root)).toBe(
+      root.querySelector('[data-workspace-name-input="true"]')
+    )
+  })
+
   it('focuses the workspace name input used by the current composer', () => {
     const root = document.createElement('div')
     const nameInput = document.createElement('input')

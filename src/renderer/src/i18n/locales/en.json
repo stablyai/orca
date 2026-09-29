@@ -1750,7 +1750,10 @@
         "addSshHostHint": "Use an existing machine over SSH",
         "addRemoteOrcaServer": "Add Remote Orca Server",
         "addRemoteOrcaServerHint": "Pair another Orca runtime",
-        "hostConnectionFailed": "Connection failed"
+        "hostConnectionFailed": "Connection failed",
+        "promptLabel": "Prompt",
+        "promptPlaceholderNoAgent": "Pick an agent to send it a prompt",
+        "promptPlaceholder": "What should the agent do in this worktree?"
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "Create worktree",
@@ -7276,6 +7279,12 @@
             "modeAriaLabel": "Agent Dashboard open mode",
             "modeInWindow": "In-window",
             "modePopout": "Pop-out"
+          },
+          "promptFirstComposer": {
+            "title": "Prompt-first worktree creation",
+            "description": "Open Create worktree on a chat-style prompt box with project, host and agent as compact pills.",
+            "copy": "New worktree opens on a prompt box. Enter creates the worktree and sends the prompt to the selected agent as its first message.",
+            "toggleLabel": "Toggle prompt-first worktree creation"
           }
         },
         "FloatingWorkspacePane": {
@@ -9735,6 +9744,15 @@
               "board": "board",
               "inWindow": "in-window",
               "worktrees": "worktrees"
+            },
+            "promptFirstComposer": {
+              "title": "Prompt-first worktree creation",
+              "description": "Open Create worktree on a chat-style prompt box with project, host and agent as compact pills.",
+              "prompt": "prompt",
+              "composer": "composer",
+              "worktree": "worktree",
+              "create": "create",
+              "chat": "chat"
             }
           }
         },

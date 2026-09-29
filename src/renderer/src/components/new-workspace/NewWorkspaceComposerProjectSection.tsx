@@ -1,5 +1,5 @@
 import React from 'react'
-import { FolderPlus, LoaderCircle, PlugZap } from 'lucide-react'
+import { FolderPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import ProjectCombobox from '@/components/new-workspace/ProjectCombobox'
@@ -11,6 +11,11 @@ import type {
   NewWorkspaceComposerCardProps
 } from './new-workspace-composer-card-props'
 import { EMPTY_PROJECT_OPTIONS } from './new-workspace-composer-card-props'
+import {
+  ConnectHostNotice,
+  EphemeralVmRecipeErrorNotice,
+  ProjectNotice
+} from './NewWorkspaceComposerTargetNotices'
 
 type NewWorkspaceComposerProjectSectionProps = Pick<
   NewWorkspaceComposerCardProps,
@@ -125,19 +130,12 @@ export function NewWorkspaceComposerProjectSection({
             invalid={Boolean(projectError)}
             describedBy={projectDescriptionId}
           />
-          {projectError ? (
-            <p id={projectDescriptionId} className="text-[11px] text-destructive">
-              {projectError}
-            </p>
-          ) : projectOptions.length === 0 ? (
-            <p id={projectDescriptionId} className="text-[11px] text-muted-foreground">
-              {emptyProjectMessage ??
-                translate(
-                  'auto.components.NewWorkspaceComposerCard.addProjectBeforeWorkspace',
-                  'Add a project before creating a workspace.'
-                )}
-            </p>
-          ) : null}
+          <ProjectNotice
+            projectOptions={projectOptions}
+            projectError={projectError}
+            emptyProjectMessage={emptyProjectMessage}
+            projectDescriptionId={projectDescriptionId}
+          />
         </div>
       </div>
       {shouldShowRunTargetPicker ? (
@@ -157,47 +155,20 @@ export function NewWorkspaceComposerProjectSection({
             onConnectHost={handleConnectRunTargetHost}
             onSetLocation={handleSetLocation}
           />
-          {ephemeralVmRecipeError ? (
-            <p className="whitespace-pre-line text-[11px] text-destructive">
-              {ephemeralVmRecipeError}
-            </p>
-          ) : null}
+          <EphemeralVmRecipeErrorNotice ephemeralVmRecipeError={ephemeralVmRecipeError} />
         </div>
-      ) : ephemeralVmRecipeError ? (
-        <p className="whitespace-pre-line text-[11px] text-destructive">{ephemeralVmRecipeError}</p>
-      ) : null}
-      {selectedRepoRequiresConnection && selectedRepoConnectionId ? (
-        <div
-          role="status"
-          aria-live="polite"
-          className="flex items-center justify-between gap-3 rounded-md border border-border/70 bg-muted/35 px-3 py-2"
-        >
-          <div className="min-w-0">
-            <div className="truncate text-xs font-medium text-foreground">
-              {translate('auto.components.NewWorkspaceComposerCard.b5a0796911', 'Connect')}{' '}
-              {selectedProjectName}
-            </div>
-            <div className="mt-0.5 text-[11px] text-muted-foreground">{sshStatusLabel}</div>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="xs"
-            onClick={() => void onConnectSelectedRepo()}
-            disabled={selectedRepoConnectInProgress}
-            className="shrink-0"
-          >
-            {selectedRepoConnectInProgress ? (
-              <LoaderCircle className="size-3.5 animate-spin" />
-            ) : (
-              <PlugZap className="size-3.5" />
-            )}
-            {selectedRepoConnectInProgress
-              ? translate('auto.components.NewWorkspaceComposerCard.f660aa1454', 'Connecting')
-              : connectButtonLabel}
-          </Button>
-        </div>
-      ) : null}
+      ) : (
+        <EphemeralVmRecipeErrorNotice ephemeralVmRecipeError={ephemeralVmRecipeError} />
+      )}
+      <ConnectHostNotice
+        selectedRepoRequiresConnection={selectedRepoRequiresConnection}
+        selectedRepoConnectionId={selectedRepoConnectionId}
+        selectedRepoConnectInProgress={selectedRepoConnectInProgress}
+        onConnectSelectedRepo={onConnectSelectedRepo}
+        sshStatusLabel={sshStatusLabel}
+        connectButtonLabel={connectButtonLabel}
+        selectedProjectName={selectedProjectName}
+      />
     </div>
   )
 }
