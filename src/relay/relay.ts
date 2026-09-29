@@ -11,9 +11,11 @@ import { runRelayDaemon } from './relay-daemon'
 import { relayLogLine } from './relay-diagnostic-log'
 import { configureRelayBundledRipgrep } from './relay-bundled-ripgrep'
 import { launchDetachedWindowsRelay } from './windows-detached-launch'
+import { assertWindowsRelayConptyProvider } from './windows-relay-conpty-admission'
 
 async function main(): Promise<void> {
   const options = parseRelayLaunchOptions(process.argv)
+  assertWindowsRelayConptyProvider(options)
   if (options.connectMode) {
     runRelayConnectChannel(options.sockPath, readRelayEndpointCredential(options.credentialFile))
     return

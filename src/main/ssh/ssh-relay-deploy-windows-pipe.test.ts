@@ -195,6 +195,9 @@ describe('deployAndLaunchRelay on Windows remotes', () => {
     expect(launchScript).toContain('--endpoint-dir')
     expect(launchScript).toContain("& 'C:/Program Files/Orca/bun.exe'")
     expect(launchScript).toContain('--launch-error-file')
+    expect(launchScript).toContain(
+      "$env:BUN_CONPTY_LIBRARY = 'C:/Users/me user/.orca-remote/relay-0.1.0+abcdef012345/conpty.dll'; & 'C:/Program Files/Orca/bun.exe'"
+    )
     expect(launchScript).not.toMatch(/Invoke-CimMethod|cmd\.exe|\$env:PATH/)
     expect(launchScript).toContain('Set-Location')
     expect(launchScript).toContain(

@@ -12,10 +12,13 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   RELAY_BUILD_PLATFORMS,
   RELAY_VERSION_FILENAME,
+  RELAY_WINDOWS_CONPTY_FILENAMES,
   isWindowsRelayPlatform,
   relayArtifactFilenames,
   relayOptionalArtifactFilenames
 } from '../../src/shared/relay-artifacts.ts'
+
+import { verifyConptyDirectory } from './build-windows-conpty.mjs'
 
 const projectDir = resolve(import.meta.dirname, '../..')
 // Its own tree: building into out/relay would clobber a developer's build and
@@ -35,6 +38,16 @@ afterAll(() => {
 })
 
 describe('packaged relay artifact manifest', () => {
+  it.each(['x64', 'arm64'])('ships the pinned %s provider as required flat artifacts', (arch) => {
+    const outDir = join(relayOutDir, `win32-${arch}`)
+    verifyConptyDirectory(outDir, arch)
+    for (const filename of RELAY_WINDOWS_CONPTY_FILENAMES) {
+      expect(relayArtifactFilenames(true)).toContain(filename)
+      expect(relayArtifactFilenames(false)).not.toContain(filename)
+      expect(relayOptionalArtifactFilenames(true)).not.toContain(filename)
+    }
+  })
+
   it.each([...RELAY_BUILD_PLATFORMS])('emits exactly the declared artifacts for %s', (platform) => {
     const outDir = join(relayOutDir, platform)
     const expected = relayArtifactFilenames(isWindowsRelayPlatform(platform))

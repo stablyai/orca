@@ -3,6 +3,7 @@
 import { build } from 'esbuild'
 import { bundledParcelWatcherPlugin } from './parcel-watcher-bundle.mjs'
 import { readWindowsWatcherArtifact } from './windows-watcher-artifact.mjs'
+import { stageWindowsRelayConpty } from './relay-conpty-packaging.mjs'
 import { createHash } from 'node:crypto'
 import {
   copyFileSync,
@@ -107,6 +108,7 @@ for (const platform of RELAY_BUILD_PLATFORMS) {
     const watcher = readWindowsWatcherArtifact(platform.slice('win32-'.length))
     copyFileSync(watcher.binary, join(outDir, RELAY_WINDOWS_WATCHER_FILENAME))
     copyFileSync(watcher.license, join(outDir, RELAY_WINDOWS_WATCHER_LICENSE))
+    await stageWindowsRelayConpty(platform, outDir)
   }
 
   await build({

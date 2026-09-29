@@ -50,6 +50,13 @@ export const RELAY_WINDOWS_PROCESS_TREE_FILENAME = 'windows-process-tree.node'
 export const RELAY_WINDOWS_WATCHER_FILENAME = 'parcel-watcher.node'
 export const RELAY_WINDOWS_WATCHER_LICENSE = 'parcel-watcher-LICENSE'
 export const RELAY_OPENCODE_SQLITE_READER_FILENAME = 'opencode-sqlite-reader.cjs'
+export const RELAY_WINDOWS_CONPTY_FILENAMES = [
+  'conpty.dll',
+  'OpenConsole.exe',
+  'conpty-LICENSE.txt',
+  'conpty.json',
+  'Microsoft.Windows.Console.ConPTY.nuspec'
+] as const
 
 export const RELAY_ARTIFACTS: readonly RelayArtifact[] = [
   { filename: 'relay.js' },
@@ -57,6 +64,7 @@ export const RELAY_ARTIFACTS: readonly RelayArtifact[] = [
   { filename: 'relay-watcher.js', daemonServiceChild: true },
   { filename: RELAY_WINDOWS_WATCHER_FILENAME, windowsOnly: true },
   { filename: RELAY_WINDOWS_WATCHER_LICENSE, windowsOnly: true },
+  ...RELAY_WINDOWS_CONPTY_FILENAMES.map((filename) => ({ filename, windowsOnly: true })),
   { filename: 'relay-ai-vault-service.js', daemonServiceChild: true },
   { filename: RELAY_OPENCODE_SQLITE_READER_FILENAME },
   { filename: 'managed-hook-runtime.js' },

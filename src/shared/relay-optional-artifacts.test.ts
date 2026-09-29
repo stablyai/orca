@@ -1,11 +1,39 @@
 import { describe, expect, it } from 'vitest'
 import {
   RELAY_WINDOWS_PROCESS_TREE_FILENAME,
+  RELAY_WINDOWS_CONPTY_FILENAMES,
   relayArtifactFilenames,
   relayOptionalArtifactFilenames
 } from './relay-artifacts'
 
 describe('optional relay artifacts', () => {
+  it('requires the complete Windows provider without metadata name collisions', () => {
+    const windows = relayArtifactFilenames(true)
+    expect(RELAY_WINDOWS_CONPTY_FILENAMES).toEqual([
+      'conpty.dll',
+      'OpenConsole.exe',
+      'conpty-LICENSE.txt',
+      'conpty.json',
+      'Microsoft.Windows.Console.ConPTY.nuspec'
+    ])
+    for (const filename of RELAY_WINDOWS_CONPTY_FILENAMES) {
+      expect(windows).toContain(filename)
+      expect(relayOptionalArtifactFilenames(true)).not.toContain(filename)
+    }
+    expect(new Set(windows).size).toBe(windows.length)
+  })
+
+  it('preserves the POSIX required artifact order and content', () => {
+    expect(relayArtifactFilenames(false)).toEqual([
+      'relay.js',
+      'relay-watcher.js',
+      'relay-ai-vault-service.js',
+      'opencode-sqlite-reader.cjs',
+      'managed-hook-runtime.js',
+      'wsl-transcript-fs-process-entry.js'
+    ])
+  })
+
   it('keeps the process-table addon out of the required set', () => {
     // The remote install probe requires every name this returns. Demanding an
     // artifact only a Windows build machine can emit would make a correct relay

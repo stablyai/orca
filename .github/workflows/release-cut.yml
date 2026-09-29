@@ -1782,6 +1782,13 @@ jobs:
           node config/scripts/finalize-signed-cli-runtime.mjs $root 'signing-stage'
           if ($LASTEXITCODE -ne 0) { throw 'Signed runtime identity finalization failed.' }
 
+      - name: Verify relay provider identity after signing
+        if: matrix.platform == 'win' && github.run_attempt == 1
+        shell: pwsh
+        run: |
+          node --input-type=module -e "import { verifyConptyDirectory } from './config/scripts/build-windows-conpty.mjs'; for (const arch of ['x64', 'arm64']) verifyConptyDirectory('dist/win-unpacked/resources/relay/win32-' + arch, arch)"
+          if ($LASTEXITCODE -ne 0) { throw 'Signing changed a pinned relay terminal provider.' }
+
       # Why gated separately from the inner restore above: if SignPath's
       # windows-inner-binaries-zip artifact configuration does not (yet) cover the
       # uninstaller/ directory, the uninstaller comes back missing. That must cost

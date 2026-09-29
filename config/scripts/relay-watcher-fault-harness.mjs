@@ -1,4 +1,6 @@
 import { build } from 'esbuild'
+import { relayDaemonLaunchEnvironment } from './relay-daemon-launch-environment.mjs'
+import { resolveRelayFaultHarnessRuntime } from './relay-fault-harness-runtime.mjs'
 import { spawn } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { createRequire } from 'node:module'
@@ -120,8 +122,8 @@ function waitForStdoutSentinel(proc, protocol, stderr) {
   )
 }
 
-function createRelayClient(entryPath, args, env, protocol) {
-  const proc = spawn(process.execPath, [entryPath, ...args], {
+function createRelayClient(runtime, entryPath, args, env, protocol) {
+  const proc = spawn(runtime.executable, [...runtime.args, entryPath, ...args], {
     cwd: dirname(entryPath),
     env,
     stdio: ['pipe', 'pipe', 'pipe']
@@ -234,6 +236,7 @@ function includesWatchPath(params, targetPath) {
 }
 
 async function main() {
+  const runtime = resolveRelayFaultHarnessRuntime(resolve(import.meta.dirname, '../..'))
   const platform = `${process.platform}-${process.arch}`
   const relayEntry = resolve('out', 'relay', platform, 'relay.js')
   const watcherEntry = resolve('out', 'relay', platform, 'relay-watcher.js')
@@ -260,8 +263,9 @@ async function main() {
     // Why detached + --connect: the daemon primary stdio is unproved, so it cannot open a consumer
     // session; only an endpoint-credential socket client is admitted for pty.data after #12746.
     daemon = spawn(
-      process.execPath,
+      runtime.executable,
       [
+        ...runtime.args,
         relayEntry,
         '--detached',
         '--grace-time',
@@ -275,7 +279,9 @@ async function main() {
       ],
       {
         cwd: dirname(relayEntry),
-        env: { ...process.env, ORCA_WATCHER_CHILD_PID_FILE: pidFile },
+        env: relayDaemonLaunchEnvironment(relayEntry, {
+          env: { ...process.env, ORCA_WATCHER_CHILD_PID_FILE: pidFile }
+        }),
         stdio: ['ignore', 'pipe', 'pipe']
       }
     )
@@ -283,9 +289,10 @@ async function main() {
     await waitForStdoutSentinel(daemon, protocol, daemonStreams.stderr)
 
     relay = createRelayClient(
+      runtime,
       relayEntry,
       ['--connect', '--sock-path', socketPath, '--credential-file', credentialFile],
-      process.env,
+      relayDaemonLaunchEnvironment(relayEntry),
       protocol
     )
     await relay.sentinelReceived

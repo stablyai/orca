@@ -1485,6 +1485,7 @@ function windowsRelayLaunchCommand(
   ripgrepPath?: string
 ): string {
   const relayScript = joinRemotePath(hostPlatform, remoteDir, 'relay.js')
+  const provider = joinRemotePath(hostPlatform, remoteDir, 'conpty.dll')
   const args = [
     '--no-env-file',
     '--config=NUL',
@@ -1508,7 +1509,7 @@ function windowsRelayLaunchCommand(
   return commandInRemoteDirectory(
     hostPlatform,
     remoteDir,
-    `& ${powerShellLiteral(nodePath)} ${args.map(powerShellLiteral).join(' ')}; if ($LASTEXITCODE -ne 0) { throw "Bun detached launch failed with exit $LASTEXITCODE" }`
+    `$env:BUN_CONPTY_LIBRARY = ${powerShellLiteral(provider)}; & ${powerShellLiteral(nodePath)} ${args.map(powerShellLiteral).join(' ')}; if ($LASTEXITCODE -ne 0) { throw "Bun detached launch failed with exit $LASTEXITCODE" }`
   )
 }
 
