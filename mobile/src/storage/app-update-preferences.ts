@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { z } from 'zod'
 
 const LAST_CHECKED_AT_KEY = 'orca:appUpdate:lastCheckedAt'
 const LATEST_KEY = 'orca:appUpdate:latest'
@@ -20,17 +21,11 @@ export const EMPTY_APP_UPDATE_PREFERENCES: AppUpdatePreferences = {
   dismissedVersion: null
 }
 
+const knownAppUpdateSchema = z.object({ version: z.string(), url: z.string() })
+
 function parseLatest(raw: string | null): KnownAppUpdate | null {
-  if (!raw) {
-    return null
-  }
-  const parsed: unknown = JSON.parse(raw)
-  if (typeof parsed !== 'object' || parsed === null) {
-    return null
-  }
-  const version: unknown = Reflect.get(parsed, 'version')
-  const url: unknown = Reflect.get(parsed, 'url')
-  return typeof version === 'string' && typeof url === 'string' ? { version, url } : null
+  const parsed = raw ? knownAppUpdateSchema.safeParse(JSON.parse(raw)) : null
+  return parsed?.success ? parsed.data : null
 }
 
 export async function loadAppUpdatePreferences(): Promise<AppUpdatePreferences> {

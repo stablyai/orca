@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import { compareAppVersions } from '../../../src/shared/app-version'
 import type { AppUpdateCheckResult, AppUpdateSource } from './app-update-source'
 import { isNewerReleaseVersion } from './app-update-source'
@@ -10,38 +11,33 @@ const MAX_RELEASE_PROBES = 3
 
 type Fetch = typeof fetch
 
-/** Newest-first versions from the tag refs GitHub returns for the mobile-android prefix. */
+const tagRefSchema = z.looseObject({ ref: z.string() })
+const installableReleaseSchema = z.looseObject({
+  draft: z.literal(false),
+  html_url: z.string(),
+  assets: z.array(z.looseObject({ name: z.string() }))
+})
+
+/** Versions named by the tag refs GitHub returns for the mobile-android prefix. */
 export function parseMobileAndroidTagVersions(refs: unknown): string[] {
-  if (!Array.isArray(refs)) {
-    throw new Error('tag refs reply is not a list')
-  }
-  const versions: string[] = []
-  for (const entry of refs) {
-    const ref: unknown =
-      typeof entry === 'object' && entry !== null ? Reflect.get(entry, 'ref') : null
-    if (typeof ref === 'string' && ref.startsWith(`refs/tags/${TAG_PREFIX}`)) {
-      versions.push(ref.slice(`refs/tags/${TAG_PREFIX}`.length))
-    }
-  }
-  return versions
+  const prefix = `refs/tags/${TAG_PREFIX}`
+  return z
+    .array(z.unknown())
+    .parse(refs)
+    .flatMap((entry) => {
+      const parsed = tagRefSchema.safeParse(entry)
+      return parsed.success && parsed.data.ref.startsWith(prefix)
+        ? [parsed.data.ref.slice(prefix.length)]
+        : []
+    })
 }
 
 /** The release page when the tag has a published release carrying an APK, else null. */
 export function installableReleaseUrl(release: unknown): string | null {
-  if (typeof release !== 'object' || release === null) {
-    return null
-  }
-  const draft: unknown = Reflect.get(release, 'draft')
-  const htmlUrl: unknown = Reflect.get(release, 'html_url')
-  const assets: unknown = Reflect.get(release, 'assets')
-  const hasApk =
-    Array.isArray(assets) &&
-    assets.some((asset: unknown) => {
-      const name: unknown =
-        typeof asset === 'object' && asset !== null ? Reflect.get(asset, 'name') : null
-      return typeof name === 'string' && name.endsWith('.apk')
-    })
-  return draft === false && hasApk && typeof htmlUrl === 'string' ? htmlUrl : null
+  const parsed = installableReleaseSchema.safeParse(release)
+  return parsed.success && parsed.data.assets.some((asset) => asset.name.endsWith('.apk'))
+    ? parsed.data.html_url
+    : null
 }
 
 export function createGithubReleaseUpdateSource(fetchImpl: Fetch): AppUpdateSource {
