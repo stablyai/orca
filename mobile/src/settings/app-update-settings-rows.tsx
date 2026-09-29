@@ -29,28 +29,30 @@ export function AppUpdateSettingsRows(props: {
   lastCheckedAt: number | null
   now: number
   checkStatus: AppUpdateCheckRowStatus
-  onUpdate: () => void
+  onUpdate: (url: string) => void
   onCheck: () => void
 }) {
   const checkValue = checkRowValue(props.checkStatus, props.lastCheckedAt, props.now)
+  const { available, installedVersion, onUpdate } = props
+  const versionRow = available ? (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Update to Orca ${available.version}`}
+      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+      onPress={() => onUpdate(available.url)}
+    >
+      <Text style={styles.rowLabel}>Update to Orca {available.version}</Text>
+      <Text style={styles.actionValue}>Update</Text>
+    </Pressable>
+  ) : installedVersion ? (
+    <View style={styles.row}>
+      <Text style={styles.rowLabel}>Version {installedVersion}</Text>
+    </View>
+  ) : null
   return (
     <View style={styles.section}>
-      {props.available ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Update to Orca ${props.available.version}`}
-          style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-          onPress={props.onUpdate}
-        >
-          <Text style={styles.rowLabel}>Update to Orca {props.available.version}</Text>
-          <Text style={styles.actionValue}>Update</Text>
-        </Pressable>
-      ) : props.installedVersion ? (
-        <View style={styles.row}>
-          <Text style={styles.rowLabel}>Version {props.installedVersion}</Text>
-        </View>
-      ) : null}
-      {props.available || props.installedVersion ? <View style={styles.separator} /> : null}
+      {versionRow}
+      {versionRow && <View style={styles.separator} />}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Check for updates, ${checkValue}`}

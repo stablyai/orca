@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   appUpdateChecker,
   installedAppVersion,
@@ -13,7 +13,6 @@ const RELATIVE_TIME_TICK_MS = 60_000
 export function SettingsAppUpdateSection() {
   const state = useAppUpdateState()
   const [result, setResult] = useState<'up-to-date' | 'failed' | null>(null)
-  const clearResultTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   // A check newer than this reads as "just now", so the tick only has to age the label.
   const [now, setNow] = useState(() => Date.now())
 
@@ -22,24 +21,19 @@ export function SettingsAppUpdateSection() {
     return () => clearInterval(tick)
   }, [])
 
-  useEffect(
-    () => () => {
-      if (clearResultTimer.current) {
-        clearTimeout(clearResultTimer.current)
-      }
-    },
-    []
-  )
+  useEffect(() => {
+    if (result === null) {
+      return
+    }
+    const hide = setTimeout(() => setResult(null), CHECK_RESULT_VISIBLE_MS)
+    return () => clearTimeout(hide)
+  }, [result])
 
   const runCheck = () => {
     setResult(null)
     void appUpdateChecker.checkNow().then((outcome) => {
       // An available update shows in the row above, so only the other outcomes need words here.
       setResult(outcome === 'available' ? null : outcome)
-      if (clearResultTimer.current) {
-        clearTimeout(clearResultTimer.current)
-      }
-      clearResultTimer.current = setTimeout(() => setResult(null), CHECK_RESULT_VISIBLE_MS)
     })
   }
 
@@ -51,7 +45,7 @@ export function SettingsAppUpdateSection() {
       lastCheckedAt={state.lastCheckedAt}
       now={now}
       checkStatus={checkStatus}
-      onUpdate={() => state.available && openAppUpdate(state.available.url)}
+      onUpdate={openAppUpdate}
       onCheck={runCheck}
     />
   )

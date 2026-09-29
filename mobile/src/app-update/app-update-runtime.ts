@@ -18,7 +18,7 @@ import { githubReleaseUpdateSource } from './github-release-update-source'
  */
 export const installedAppVersion: string | null = Constants.expoConfig?.version ?? null
 
-/** The channel that installed this binary; a Play Store source would be picked here. */
+/** The channel that installed this binary. */
 function resolveAppUpdateSource(): AppUpdateSource | null {
   if (Platform.OS === 'android') {
     return githubReleaseUpdateSource

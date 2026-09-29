@@ -5,8 +5,8 @@ import { isNewerReleaseVersion } from './app-update-source'
 
 // Same cadence as the desktop updater (src/main/updater-events.ts).
 export const APP_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
-export const APP_UPDATE_RETRY_INTERVAL_MS = 60 * 60 * 1000
-export const APP_UPDATE_CHECK_TIMEOUT_MS = 8000
+const APP_UPDATE_RETRY_INTERVAL_MS = 60 * 60 * 1000
+const APP_UPDATE_CHECK_TIMEOUT_MS = 8000
 
 type TimerHandle = ReturnType<typeof setTimeout>
 
@@ -38,8 +38,6 @@ export type AppUpdateCheckerDeps = {
   saveCheck: (checkedAt: number, latest: KnownAppUpdate | null) => Promise<void>
   saveDismissedVersion: (version: string) => Promise<void>
 }
-
-export type AppUpdateChecker = ReturnType<typeof createAppUpdateChecker>
 
 export function createAppUpdateChecker(deps: AppUpdateCheckerDeps) {
   let prefs = EMPTY_APP_UPDATE_PREFERENCES
@@ -99,10 +97,9 @@ export function createAppUpdateChecker(deps: AppUpdateCheckerDeps) {
   function ensureLoaded(): Promise<void> {
     loaded ??= deps.loadPreferences().then((stored) => {
       prefs = stored
-      publish()
-      schedule(
+      nextDueAt =
         stored.lastCheckedAt === null ? 0 : stored.lastCheckedAt + APP_UPDATE_CHECK_INTERVAL_MS
-      )
+      publish()
     })
     return loaded
   }
@@ -131,7 +128,7 @@ export function createAppUpdateChecker(deps: AppUpdateCheckerDeps) {
       prefs = { ...prefs, lastCheckedAt: checkedAt, latest }
       schedule(checkedAt + APP_UPDATE_CHECK_INTERVAL_MS)
       await deps.saveCheck(checkedAt, latest).catch(() => {})
-      return result.kind === 'available' ? 'available' : 'up-to-date'
+      return latest ? 'available' : 'up-to-date'
     } catch {
       schedule(deps.now() + APP_UPDATE_RETRY_INTERVAL_MS)
       return 'failed'
@@ -161,9 +158,8 @@ export function createAppUpdateChecker(deps: AppUpdateCheckerDeps) {
     let active = true
     activeStarts += 1
     const unsubscribe = deps.subscribeForeground(runIfDue)
-    // A second start (StrictMode) shares the one load; only the schedule is re-armed.
     void ensureLoaded().then(() => {
-      if (active && timer === null && inFlight === null) {
+      if (active && inFlight === null) {
         schedule(nextDueAt)
       }
     })
