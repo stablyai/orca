@@ -714,8 +714,81 @@
    in diagram mode. Centers the rendered SVG and adds padding so diagrams
    don't press against viewport edges. */
 .mermaid-viewer {
-  background: var(--color-background, transparent);
+  display: flex;
+  flex-direction: column;
+  background: var(--background);
 }
+.mermaid-text-diagram-toolbar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--background) 96%, var(--foreground));
+}
+
+.mermaid-text-diagram-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mermaid-text-diagram-body {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  background: var(--editor-surface);
+}
+
+.mermaid-text-diagram-body.is-split {
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+}
+
+.mermaid-text-diagram-source {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  overflow: auto;
+  padding: 16px 18px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--foreground);
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.mermaid-text-diagram-source-editor {
+  resize: none;
+  outline: none;
+  tab-size: 2;
+}
+
+.mermaid-text-diagram-source-editor:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.mermaid-text-diagram-body.is-split .mermaid-text-diagram-source {
+  border-right: 1px solid var(--border);
+}
+
+.mermaid-text-diagram-chart {
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+}
+
 .mermaid-viewer-canvas {
   display: flex;
   align-items: flex-start;
@@ -729,6 +802,121 @@
 .mermaid-viewer-canvas .mermaid-block svg {
   width: 100%;
   height: auto;
+}
+
+.zoomable-diagram-surface {
+  --diagram-surface-padding: 24px; /* Why: fit math uses DIAGRAM_SURFACE_PADDING. */
+
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--editor-surface);
+}
+
+.zoomable-diagram-surface-viewport {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: color-mix(in srgb, var(--editor-surface) 96%, var(--foreground));
+  cursor: grab;
+  outline: none;
+  overscroll-behavior: contain;
+  touch-action: none;
+}
+
+.zoomable-diagram-surface-viewport:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.zoomable-diagram-surface-viewport.is-pan-ready,
+.zoomable-diagram-surface-viewport.is-panning {
+  cursor: grabbing;
+}
+
+.zoomable-diagram-surface-viewport.is-panning {
+  user-select: none;
+}
+
+.zoomable-diagram-surface-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 100%;
+  min-height: 100%;
+  padding: var(--diagram-surface-padding);
+}
+
+.zoomable-diagram-surface-content {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+}
+
+.zoomable-diagram-surface-content.is-sized .mermaid-block {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+}
+
+.zoomable-diagram-surface-content.is-sized .mermaid-block svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+}
+
+.zoomable-diagram-surface-toolbar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 34px;
+  padding: 5px 8px;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--background) 94%, var(--foreground));
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.zoomable-diagram-surface-controls {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
+}
+
+.zoomable-diagram-surface-zoom {
+  min-width: 38px;
+  margin-left: 2px;
+}
+
+.zoomable-diagram-surface-label {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .mermaid-text-diagram-body.is-split {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(160px, 0.9fr) minmax(220px, 1.1fr);
+  }
+
+  .mermaid-text-diagram-body.is-split .mermaid-text-diagram-source {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
 }
 
 .markdown-body ul,

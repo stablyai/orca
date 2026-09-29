@@ -993,6 +993,68 @@
   color: var(--foreground);
 }
 
+.rich-markdown-mermaid-code-block {
+  container-type: inline-size;
+  overflow: hidden;
+}
+
+.rich-markdown-mermaid-view-toggle {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 2;
+  background: color-mix(in srgb, var(--background) 86%, transparent);
+}
+
+.rich-markdown-mermaid-view-toggle [data-slot='toggle-group-item'] {
+  height: 22px;
+  padding-inline: 8px;
+  font-size: 11px;
+}
+
+.rich-markdown-mermaid-layout > pre {
+  min-width: 0;
+  padding-top: 42px;
+}
+
+.rich-markdown-code-block-source-hidden {
+  display: none;
+}
+
+.rich-markdown-mermaid-layout.is-chart .mermaid-preview {
+  min-height: 260px;
+  padding: 42px 12px 12px;
+  border-top: none;
+}
+
+.rich-markdown-mermaid-layout.is-split .mermaid-preview {
+  min-height: 240px;
+  padding: 42px 12px 12px;
+}
+
+.rich-markdown-mermaid-layout.is-chart .zoomable-diagram-surface,
+.rich-markdown-mermaid-layout.is-split .zoomable-diagram-surface {
+  min-height: 220px;
+}
+
+@container (min-width: 760px) {
+  .rich-markdown-mermaid-layout.is-split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .rich-markdown-mermaid-layout.is-split > pre {
+    margin: 0;
+    border-right: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+    border-radius: 0;
+  }
+
+  .rich-markdown-mermaid-layout.is-split .mermaid-preview {
+    min-width: 0;
+    border-top: none;
+  }
+}
+
 /* Live mermaid diagram preview rendered below the editable source */
 .mermaid-preview {
   padding: 12px 18px;
