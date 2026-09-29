@@ -76,3 +76,18 @@ describe('machine name setting', () => {
     expect(normalizeLegacyProfile({ machineName: 'x'.repeat(300) }).machineName).toHaveLength(255)
   })
 })
+
+describe('native chat send shortcut', () => {
+  it('defaults legacy profiles to Enter and preserves the supported modifier shortcut', () => {
+    expect(normalizeLegacyProfile({}).nativeChatSendShortcut).toBe('enter')
+    expect(
+      normalizeLegacyProfile({ nativeChatSendShortcut: 'cmd-or-ctrl-enter' }).nativeChatSendShortcut
+    ).toBe('cmd-or-ctrl-enter')
+  })
+
+  it('normalizes malformed persisted values to Enter', () => {
+    expect(
+      normalizeLegacyProfile({ nativeChatSendShortcut: 'bad-value' }).nativeChatSendShortcut
+    ).toBe('enter')
+  })
+})

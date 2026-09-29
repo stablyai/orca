@@ -8,6 +8,7 @@ import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-t
 import { projectSourceControlAiToLegacyCommitMessageAi } from '../../../shared/source-control-ai'
 import { normalizeUiLanguage } from '../../../shared/ui-language'
 import { normalizeNativeChatShellEnvironmentVariables } from '../../../shared/native-chat-shell-environment'
+import { normalizeNativeChatSendShortcut } from '../../../shared/native-chat-send-shortcut'
 import { stripRetiredGlobalSettings } from '../applying-settings/terminal-settings-migrations'
 import { readLegacySidekickFlag } from '../applying-settings/onboarding-normalization'
 import { normalizeMachineName } from '../../../shared/machine-name'
@@ -15,6 +16,7 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { PreparedLoadedTerminalSettings } from './prepare-loaded-terminal-settings'
 import type { PreparedLoadedProfileSettings } from './prepare-loaded-profile-settings'
 
+/** Builds normalized global settings from persisted values and migration results. */
 export function normalizeLoadedGlobalSettings(
   parsed: PersistedState,
   terminal: PreparedLoadedTerminalSettings,
@@ -60,6 +62,9 @@ export function normalizeLoadedGlobalSettings(
     // old default indistinguishable from a real opt-in. Preserve stored `true`; only
     // the default changed.
     ...stripRetiredGlobalSettings(parsed.settings),
+    nativeChatSendShortcut: normalizeNativeChatSendShortcut(
+      parsed.settings?.nativeChatSendShortcut
+    ),
     worktreeVisibilityDefaults: migratedExternalVisibility.defaults,
     prBotAuthorOverrides: normalizePRBotAuthorOverrides(parsed.settings?.prBotAuthorOverrides),
     // Why: v1.3.42 renamed the sidekick setting to pet; carry the old flag forward once so enabled users don't lose it.
