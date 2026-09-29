@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { buildUnitDependencyGraph } from './ci-unit-dependency-graph.mjs'
-import { auditUnitSelection, planUnitSelection, selectUnitFiles } from './ci-unit-selection.mjs'
+import {
+  FULL_SHARD_COUNT,
+  auditUnitSelection,
+  planUnitSelection,
+  selectUnitFiles
+} from './ci-unit-selection.mjs'
 
 const sources = new Map(
   Object.entries({
@@ -77,6 +82,17 @@ describe('conservative unit selection', () => {
     })
     expect(selected.executionFiles).not.toContain('src/unrelated.test.ts')
     expect(selected.shards).toEqual([{ index: 1, count: 1 }])
+  })
+
+  it('spends five concurrency slots on a full run', () => {
+    const plan = planUnitSelection({ files, changed: ['src/leaf.ts'], graph, timings: {} })
+    expect(plan.shards).toEqual(
+      Array.from({ length: FULL_SHARD_COUNT }, (_, index) => ({
+        index: index + 1,
+        count: FULL_SHARD_COUNT
+      }))
+    )
+    expect(FULL_SHARD_COUNT).toBe(5)
   })
 
   it('records failures that would have been missed while shadow runs remain full', () => {

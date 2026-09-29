@@ -1,22 +1,32 @@
 import { expect, it } from 'vitest'
 import { BUN_PERSISTENCE_RUNNERS, bunProfileQualification } from './bun-profile-qualification.mjs'
 
-const draft = { pull_request: { draft: true } }
 const scope = { shouldRun: true }
 
-it('defers only platform qualification for ordinary draft runtime changes', () => {
-  expect(
-    bunProfileQualification(['src/main/runtime/rpc/methods/example.ts'], scope, draft)
-  ).toEqual({
+it('qualifies one platform for a change no platform can alter', () => {
+  expect(bunProfileQualification(['src/main/runtime/rpc/methods/example.ts'], scope)).toEqual({
     qualification: false,
     runners: ['ubuntu-22.04']
   })
 })
 
 it.each([
-  'package.json',
-  'native/windows-registry/src/addon.cc',
+  'src/renderer/src/components/TabStrip.tsx',
   'config/vitest.config.ts',
+  'config/scripts/ci-unit-plan.mjs',
+  'resources/icons/tray.png',
+  '.github/workflows/pr.yml',
+  'docs/reference/agent-status-store.md'
+])('keeps one platform for unflavoured input %s', (file) => {
+  expect(bunProfileQualification([file], scope).runners).toEqual(['ubuntu-22.04'])
+})
+
+it.each([
+  'package.json',
+  'pnpm-lock.yaml',
+  'native/windows-registry/src/addon.cc',
+  'config/patches/node-pty.patch',
+  '.github/actions/install-node-dependencies/action.yml',
   'src/main/ssh/ssh-provider.ts',
   'src/main/providers/local-pty-provider.ts',
   'src/shared/child-process/run-process.ts',
@@ -28,20 +38,19 @@ it.each([
   'src/main/daemon/entry.ts',
   'src/relay/index.ts',
   'src/main/wsl/runner.ts'
-])('retains all platforms for sensitive input %s', (file) => {
-  expect(bunProfileQualification([file], scope, draft)).toEqual({
+])('retains all platforms for platform-flavoured input %s', (file) => {
+  expect(bunProfileQualification([file], scope)).toEqual({
     qualification: true,
     runners: BUN_PERSISTENCE_RUNNERS
   })
 })
 
-it('qualifies every ready commit, scheduled/manual runs and incomplete evidence', () => {
-  const paths = ['src/main/runtime/rpc/methods/example.ts']
-  for (const event of [{}, { pull_request: { draft: false } }]) {
-    expect(bunProfileQualification(paths, scope, event).qualification).toBe(true)
-  }
-  expect(bunProfileQualification([], scope, draft).qualification).toBe(true)
+it('fails closed to every platform when the evidence is incomplete', () => {
+  expect(bunProfileQualification([], scope).qualification).toBe(true)
   expect(
-    bunProfileQualification(paths, { ...scope, graphUnavailable: true }, draft).qualification
+    bunProfileQualification(['src/main/runtime/rpc/methods/example.ts'], {
+      ...scope,
+      graphUnavailable: true
+    }).qualification
   ).toBe(true)
 })
