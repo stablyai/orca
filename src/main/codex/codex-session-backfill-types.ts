@@ -6,6 +6,8 @@ export type CodexSessionBackfillSummary = {
   linkedFiles: number
   copiedFiles: number
   skippedExistingFiles: number
+  /** Rollouts the user archived in Codex, which this pass must never republish. */
+  skippedArchivedFiles: number
   skippedUnexpectedFiles: number
   skippedSymlinkFiles: number
   skippedUnsupportedFilesystemFiles: number

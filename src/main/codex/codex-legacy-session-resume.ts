@@ -175,6 +175,7 @@ async function materializeLegacyRollout(
     linkedFiles: 0,
     copiedFiles: 0,
     skippedExistingFiles: 0,
+    skippedArchivedFiles: 0,
     skippedUnexpectedFiles: 0,
     skippedSymlinkFiles: 0,
     skippedUnsupportedFilesystemFiles: 0,

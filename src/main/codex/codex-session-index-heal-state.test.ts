@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -104,6 +104,53 @@ describe('codex session index heal state', () => {
 
     expect(await collectPendingHealThreads(paths)).toEqual([
       expect.objectContaining({ threadId: THREAD_ID, auditRecordId: 'audit-2' })
+    ])
+  })
+
+  it.each([
+    ['plain', `rollout-2026-07-01T10-00-00-${THREAD_ID}.jsonl`],
+    ['compressed', `rollout-2026-07-01T10-00-00-${THREAD_ID}.jsonl.zst`]
+  ])(
+    'drops a thread whose %s rollout Codex moved into archived_sessions',
+    async (_, archivedName) => {
+      const systemCodexHome = mkdtempSync(join(tmpdir(), 'orca-codex-heal-home-'))
+      tempRoots.push(systemCodexHome)
+      const paths = createPaths(join(systemCodexHome, 'sessions'))
+      const rolloutName = `rollout-2026-07-01T10-00-00-${THREAD_ID}.jsonl`
+      appendAuditRecord(
+        paths,
+        join(paths.systemSessionsRoot, '2026', '07', '01', rolloutName),
+        'audit-1'
+      )
+      mkdirSync(join(systemCodexHome, 'archived_sessions'), { recursive: true })
+      writeFileSync(join(systemCodexHome, 'archived_sessions', archivedName), 'archived\n', 'utf-8')
+
+      expect(await collectPendingHealThreads(paths)).toEqual([])
+    }
+  )
+
+  it('still heals a thread whose newer rollout is back in the sessions tree', async () => {
+    const systemCodexHome = mkdtempSync(join(tmpdir(), 'orca-codex-heal-home-'))
+    tempRoots.push(systemCodexHome)
+    const paths = createPaths(join(systemCodexHome, 'sessions'))
+    const archivedName = `rollout-2026-07-01T10-00-00-${THREAD_ID}.jsonl`
+    appendAuditRecord(paths, join(paths.systemSessionsRoot, '2026', '07', '01', archivedName), 'a1')
+    appendAuditRecord(
+      paths,
+      join(
+        paths.systemSessionsRoot,
+        '2026',
+        '07',
+        '02',
+        `rollout-2026-07-02T10-00-00-${THREAD_ID}.jsonl`
+      ),
+      'a2'
+    )
+    mkdirSync(join(systemCodexHome, 'archived_sessions'), { recursive: true })
+    writeFileSync(join(systemCodexHome, 'archived_sessions', archivedName), 'archived\n', 'utf-8')
+
+    expect(await collectPendingHealThreads(paths)).toEqual([
+      expect.objectContaining({ threadId: THREAD_ID, auditRecordId: 'a2' })
     ])
   })
 
