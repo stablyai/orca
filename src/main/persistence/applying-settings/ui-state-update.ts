@@ -26,6 +26,7 @@ import { normalizeContextualTourIds } from '../../../shared/feature-education/co
 import { normalizeFeatureInteractions } from '../../../shared/feature-education/interactions/feature-interactions'
 import { mergeWorkspaceCleanupUIState } from '../../../shared/workspace-cleanup/workspace-cleanup-ui-state'
 import { persistedUIValuesEqual } from '../../../shared/collections/persisted-ui-equality'
+import { normalizeManualTagOrder } from '../../../shared/worktree/metadata/manual-tag-order'
 import {
   PROTECTED_SECRET_SLOT,
   type ProtectedSecretPersistence
@@ -34,6 +35,7 @@ import {
   normalizeGroupBy,
   normalizeProjectOrderBy,
   normalizeNotificationsMutedByWorktree,
+  normalizeTagOrderBy,
   normalizeRightSidebarExplorerView,
   normalizeRightSidebarTab,
   normalizeShowDotfilesByWorktree,
@@ -121,6 +123,9 @@ export function updatePersistedUI(
     projectOrderBy: sanitizedUpdates.projectOrderBy
       ? normalizeProjectOrderBy(sanitizedUpdates.projectOrderBy)
       : normalizeProjectOrderBy(operations.state.ui?.projectOrderBy),
+    tagOrderBy: sanitizedUpdates.tagOrderBy
+      ? normalizeTagOrderBy(sanitizedUpdates.tagOrderBy)
+      : normalizeTagOrderBy(operations.state.ui?.tagOrderBy),
     activeView: currentUI.activeView,
     rightSidebarTab: nextRightSidebarTab,
     rightSidebarExplorerView: nextRightSidebarExplorerView,
@@ -184,6 +189,10 @@ export function updatePersistedUI(
       sanitizedUpdates.manualRepoOrder !== undefined
         ? normalizeManualRepoOrder(sanitizedUpdates.manualRepoOrder)
         : normalizeManualRepoOrder(operations.state.ui?.manualRepoOrder),
+    manualTagOrder:
+      sanitizedUpdates.manualTagOrder !== undefined
+        ? normalizeManualTagOrder(sanitizedUpdates.manualTagOrder)
+        : normalizeManualTagOrder(operations.state.ui?.manualTagOrder),
     browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(
       sanitizedUpdates.browserDefaultZoomLevel ?? operations.state.ui?.browserDefaultZoomLevel
     ),

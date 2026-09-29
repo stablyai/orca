@@ -66,6 +66,13 @@ export function normalizeProjectOrderBy(
   return getDefaultUIState().projectOrderBy
 }
 
+export function normalizeTagOrderBy(tagOrderBy: unknown): PersistedState['ui']['tagOrderBy'] {
+  if (tagOrderBy === 'name' || tagOrderBy === 'manual' || tagOrderBy === 'activity') {
+    return tagOrderBy
+  }
+  return getDefaultUIState().tagOrderBy
+}
+
 export function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['rightSidebarTab'] {
   if (
     tab === 'explorer' ||

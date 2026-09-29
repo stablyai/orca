@@ -6,6 +6,7 @@ import {
   WORKSPACE_GROUP_BY_CHOICES,
   WORKSPACE_PROJECT_ORDER_CHOICES,
   WORKSPACE_SORT_BY_CHOICES,
+  WORKSPACE_TAG_ORDER_CHOICES,
   WORKSPACE_CARD_DISPLAY_CHOICES,
   type WorkspaceViewChoice
 } from '../../../../../../shared/workspace-view/workspace-view-options'
@@ -100,6 +101,34 @@ export const PROJECT_ORDER_OPTIONS = localizeChoices<
       translate(
         'auto.components.sidebar.SidebarWorkspaceOptionsMenu.af9249c505',
         'Most recent workspace activity'
+      )
+  }
+)
+
+export const TAG_ORDER_OPTIONS = localizeChoices<ChoiceId<typeof WORKSPACE_TAG_ORDER_CHOICES>>(
+  WORKSPACE_TAG_ORDER_CHOICES,
+  {
+    name: () =>
+      translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.tagOrderName', 'Name'),
+    manual: manualLabel,
+    activity: () =>
+      translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.tagOrderActivity', 'Activity')
+  },
+  {
+    name: () =>
+      translate(
+        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.tagOrderNameHint',
+        'Alphabetical, ignoring case'
+      ),
+    manual: () =>
+      translate(
+        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.tagOrderManualHint',
+        'Drag tag headers to arrange them'
+      ),
+    activity: () =>
+      translate(
+        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.tagOrderActivityHint',
+        'Most recent agent activity in the tag'
       )
   }
 )
