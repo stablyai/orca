@@ -19,6 +19,47 @@ describe('shared agent-hook-listener', () => {
     vi.unstubAllEnvs()
   })
 
+  it('rejects Codex hooks stamped by a shared daemon for another workspace', () => {
+    const worktreeId = 'repo-a::/workspaces/FusionRF'
+    const wrong = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        worktreeId,
+        payload: {
+          hook_event_name: 'PostToolUse',
+          session_id: 'albedo-session',
+          cwd: '/workspaces/Albedo',
+          tool_name: 'Bash',
+          tool_input: { command: 'echo from Albedo' }
+        }
+      },
+      'production'
+    )
+    expect(wrong).toBeNull()
+    expect(state.lastStatusByPaneKey.has(PANE_KEY)).toBe(false)
+
+    const own = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        worktreeId,
+        payload: {
+          hook_event_name: 'PostToolUse',
+          session_id: 'fusion-session',
+          cwd: '/workspaces/FusionRF/crates',
+          tool_name: 'Bash',
+          tool_input: { command: 'echo from FusionRF' }
+        }
+      },
+      'production'
+    )
+    expect(own?.providerSession?.id).toBe('fusion-session')
+    expect(own?.payload.toolInput).toBe('echo from FusionRF')
+  })
+
   it('normalizes Hermes pre_llm_call to a working turn with prompt text', () => {
     const event = normalizeHookPayload(
       state,

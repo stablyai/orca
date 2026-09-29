@@ -1,6 +1,7 @@
 import { normalizeAgentStatusPayload } from './agent-status-types'
 import type { AgentHookSource } from './agent-hook-relay'
 import { extractAgentProviderSession } from './agent-session-resume'
+import { isPathInsideOrEqual } from './cross-platform-path'
 import {
   canAcceptClaudeCompactCompletion,
   isClaudeCompactCompletionConsumed,
@@ -23,6 +24,7 @@ import {
   trackOpenCodePaneLaunchToken
 } from './agent-hook-listener/opencode-session-registry'
 import { readString } from './agent-hook-listener/tool-input-preview'
+import { splitWorktreeIdForFilesystem } from './worktree/id'
 /** Canonical transport-agnostic normalization entry shared by main and relay listeners. */
 export function normalizeHookPayload(
   state: HookListenerState,
@@ -43,6 +45,14 @@ export function normalizeHookPayload(
     worktreeId: stampedWorktreeId,
     launchToken: stampedLaunchToken
   } = envelope
+  const codexCwd = source === 'codex' ? readString(hookPayloadRecord, 'cwd') : undefined
+  const stampedWorktreePath = stampedWorktreeId
+    ? splitWorktreeIdForFilesystem(stampedWorktreeId)?.worktreePath
+    : undefined
+  // Codex's shared app-server can inherit another pane's Orca env; reject a mismatched session.
+  if (codexCwd && stampedWorktreePath && !isPathInsideOrEqual(stampedWorktreePath, codexCwd)) {
+    return null
+  }
   if (source === 'claude') {
     state.claudeUnconfirmedRestoredStatusPaneKeys.delete(stampedPaneKey)
   }
