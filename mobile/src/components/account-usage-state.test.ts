@@ -76,6 +76,22 @@ describe('hasActiveProviderUsage', () => {
     expect(hasActiveProviderUsage(makeLimits({ status: 'ok' }))).toBe(true)
   })
 
+  it('is true when only the Fable weekly window has data', () => {
+    expect(
+      hasActiveProviderUsage(
+        makeLimits({
+          status: 'error',
+          fableWeekly: {
+            usedPercent: 42,
+            windowMinutes: 10_080,
+            resetsAt: null,
+            resetDescription: null
+          }
+        })
+      )
+    ).toBe(true)
+  })
+
   it('is false for an unavailable/error provider with no window data (no creds)', () => {
     expect(hasActiveProviderUsage(makeLimits({ status: 'unavailable' }))).toBe(false)
     expect(hasActiveProviderUsage(makeLimits({ status: 'error', error: 'nope' }))).toBe(false)
@@ -173,6 +189,13 @@ describe('getWindowResetLabel', () => {
     expect(
       getWindowResetLabel(makeLimits({ weekly: makeWindow(now + 7 * day) }), 'weekly', now)
     ).toBe('Resets in 7d')
+    expect(
+      getWindowResetLabel(
+        makeLimits({ fableWeekly: makeWindow(now + 4 * day) }),
+        'fableWeekly',
+        now
+      )
+    ).toBe('Resets in 4d')
   })
 
   it('reports "Resets now" for a reset timestamp in the past', () => {
@@ -206,6 +229,26 @@ describe('getUsageBarState', () => {
       usedPercent: null,
       unavailable: false,
       loading: true
+    })
+  })
+
+  it('reads the Fable weekly window when requested', () => {
+    expect(
+      getUsageBarState(
+        makeLimits({
+          fableWeekly: {
+            usedPercent: 58,
+            windowMinutes: 10_080,
+            resetsAt: null,
+            resetDescription: null
+          }
+        }),
+        'fableWeekly'
+      )
+    ).toEqual({
+      usedPercent: 58,
+      unavailable: false,
+      loading: false
     })
   })
 })
