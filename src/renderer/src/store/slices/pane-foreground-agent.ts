@@ -1,6 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import { parsePaneKey } from '../../../../shared/stable-pane-id'
 
 export type PaneForegroundAgentEntry = {
   /** Recognized agent process in the pane's foreground; null when unknown. */
@@ -43,7 +44,17 @@ export const createPaneForegroundAgentSlice: StateCreator<
   setPaneForegroundAgent: (paneKey, entry) => {
     set((s) => {
       const current = s.paneForegroundAgentByPaneKey[paneKey]
+      const pane = parsePaneKey(paneKey)
+      const layout = pane ? s.terminalLayoutsByTabId[pane.tabId] : undefined
+      const clearResumeClaim = Boolean(
+        entry.shellForeground &&
+        pane &&
+        layout?.root?.type === 'leaf' &&
+        layout.root.leafId === pane.leafId &&
+        s.automaticAgentResumeClaimsByTabId[pane.tabId]
+      )
       if (
+        !clearResumeClaim &&
         current &&
         current.agent === entry.agent &&
         current.routingTrusted === entry.routingTrusted &&
@@ -53,8 +64,16 @@ export const createPaneForegroundAgentSlice: StateCreator<
       ) {
         return s
       }
+      if (!clearResumeClaim || !pane) {
+        return {
+          paneForegroundAgentByPaneKey: { ...s.paneForegroundAgentByPaneKey, [paneKey]: entry }
+        }
+      }
+      const claims = { ...s.automaticAgentResumeClaimsByTabId }
+      delete claims[pane.tabId]
       return {
-        paneForegroundAgentByPaneKey: { ...s.paneForegroundAgentByPaneKey, [paneKey]: entry }
+        paneForegroundAgentByPaneKey: { ...s.paneForegroundAgentByPaneKey, [paneKey]: entry },
+        automaticAgentResumeClaimsByTabId: claims
       }
     })
   },

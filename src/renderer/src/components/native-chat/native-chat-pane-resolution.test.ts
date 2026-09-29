@@ -78,6 +78,33 @@ describe('resolveNativeChatSession', () => {
     ).toEqual({ agent: 'claude', sessionId: null, transcriptPath: null, ptyId: 'pty-1', paneKey })
   })
 
+  it('uses the exact resume identity while the Codex hook has not reported', () => {
+    const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
+    const resumeSession = {
+      agent: 'codex' as const,
+      providerSession: { key: 'session_id' as const, id: 'resumed-codex' }
+    }
+    expect(
+      resolveNativeChatSession({ paneKey, launchAgent: 'codex', resumeSession, ptyId: 'pty-1' })
+    ).toMatchObject({ agent: 'codex', sessionId: 'resumed-codex' })
+    expect(
+      resolveNativeChatSession({
+        paneKey,
+        launchAgent: 'codex',
+        resumeSession,
+        agentStatusEntry: entry({
+          paneKey,
+          agentType: 'codex',
+          providerSession: { key: 'session_id', id: 'hook-codex' }
+        }),
+        ptyId: 'pty-1'
+      })
+    ).toMatchObject({ agent: 'codex', sessionId: 'hook-codex' })
+    expect(
+      resolveNativeChatSession({ paneKey, launchAgent: 'claude', resumeSession, ptyId: 'pty-1' })
+    ).toMatchObject({ agent: 'claude', sessionId: null })
+  })
+
   it('resolves two split leaves independently to their own values', () => {
     const leftKey = 'tab-1:11111111-1111-4111-8111-111111111111'
     const rightKey = 'tab-1:22222222-2222-4222-8222-222222222222'

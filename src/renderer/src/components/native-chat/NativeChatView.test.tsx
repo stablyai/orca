@@ -91,6 +91,46 @@ describe('NativeChatSessionGate', () => {
     )
   })
 
+  it('keeps a resumed Codex conversation open when its hook reports later', () => {
+    const paneKey = 'tab-1:leaf-1'
+    const resumeSession = {
+      agent: 'codex' as const,
+      providerSession: { key: 'session_id' as const, id: 'resumed-codex' }
+    }
+    const view = render(
+      <NativeChatSessionGate
+        paneKey={paneKey}
+        launchAgent="codex"
+        resumeSession={resumeSession}
+        ptyId="pty-1"
+      >
+        {(resolution) => <DraftProbe paneKey={paneKey} sessionId={resolution.sessionId} />}
+      </NativeChatSessionGate>
+    )
+    const composer = screen.getByRole('textbox', { name: 'Message draft' })
+    fireEvent.change(composer, { target: { value: 'continue this task' } })
+
+    view.rerender(
+      <NativeChatSessionGate
+        paneKey={paneKey}
+        launchAgent="codex"
+        resumeSession={resumeSession}
+        agentStatusEntry={entry({
+          paneKey,
+          agentType: 'codex',
+          providerSession: { key: 'session_id', id: 'resumed-codex' }
+        })}
+        ptyId="pty-1"
+      >
+        {(resolution) => <DraftProbe paneKey={paneKey} sessionId={resolution.sessionId} />}
+      </NativeChatSessionGate>
+    )
+
+    expect(screen.getByText('Session resumed-codex')).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Message draft' })).toBe(composer)
+    expect(composer).toHaveValue('continue this task')
+  })
+
   it('preserves the open composer, session, and draft through disconnect and reconnect', () => {
     const paneKey = 'tab-1:leaf-1'
     const connectedEntry = entry({

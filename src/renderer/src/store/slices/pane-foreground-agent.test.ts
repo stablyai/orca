@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createTestStore } from './store-test-helpers'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { singlePaneLayoutSnapshot } from './terminal-helpers'
 
 function terminalTab(id: string, worktreeId: string): TerminalTab {
   return {
@@ -107,5 +108,26 @@ describe('pane foreground agent slice', () => {
     store.getState().clearPaneForegroundAgentByWorktree('wt-1')
 
     expect(Object.keys(store.getState().paneForegroundAgentByPaneKey)).toEqual(['tab-3:leaf-1'])
+  })
+
+  it('retires a resume identity when its single pane is proven back at the shell', () => {
+    const store = createTestStore()
+    const leaf = '11111111-1111-4111-8111-111111111111'
+    const paneKey = `tab-1:${leaf}`
+    const claim = {
+      worktreeId: 'wt-1',
+      launchAgent: 'codex' as const,
+      providerSession: { key: 'session_id' as const, id: 'prior-codex-session' }
+    }
+    store.setState({
+      terminalLayoutsByTabId: { 'tab-1': singlePaneLayoutSnapshot(leaf) },
+      automaticAgentResumeClaimsByTabId: { 'tab-1': claim, 'tab-2': claim }
+    })
+    store.getState().setPaneForegroundAgent(paneKey, { agent: 'codex', shellForeground: false })
+    expect(store.getState().automaticAgentResumeClaimsByTabId['tab-1']).toEqual(claim)
+
+    store.getState().setPaneForegroundAgent(paneKey, { agent: null, shellForeground: true })
+    expect(store.getState().automaticAgentResumeClaimsByTabId['tab-1']).toBeUndefined()
+    expect(store.getState().automaticAgentResumeClaimsByTabId['tab-2']).toEqual(claim)
   })
 })

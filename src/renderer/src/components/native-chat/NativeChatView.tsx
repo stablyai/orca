@@ -4,6 +4,7 @@ import { NativeChatResolvedView } from './NativeChatResolvedView'
 import { useNativeChatStatusEntry } from './use-native-chat-status-entry'
 import type { NativeChatViewProps } from './native-chat-view-types'
 import { NativeChatPaneFileDropSurface } from './NativeChatPaneFileDropSurface'
+import { useAppStore } from '../../store'
 
 export type { NativeChatViewProps } from './native-chat-view-types'
 
@@ -37,12 +38,21 @@ function NativeChatBridgeView({
     terminalTabId,
     preferredPaneKey
   )
+  const resumeClaim = useAppStore((state) => state.automaticAgentResumeClaimsByTabId[terminalTabId])
+  const shellForeground = useAppStore(
+    (state) => state.paneForegroundAgentByPaneKey[paneKey]?.shellForeground === true
+  )
   return (
     <NativeChatSessionGate
       paneKey={paneKey}
       launchAgent={launchAgent}
       resolvedAgent={resolvedAgent}
       agentStatusEntry={agentStatusEntry}
+      resumeSession={
+        ownsTabWideLaunchDraft && !shellForeground && resumeClaim
+          ? { agent: resumeClaim.launchAgent, providerSession: resumeClaim.providerSession }
+          : null
+      }
       ptyId={targetPtyId}
     >
       {(resolution) => (

@@ -1,5 +1,6 @@
 import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session-resume'
 import { isNativeChatSupportedAgent } from './native-chat-availability'
 
 /** Inputs that resolve the active pane to the agent/session/pty triple the
@@ -17,6 +18,8 @@ export type NativeChatPaneResolutionInput = {
    *  captured `providerSession` (the agent's own session id) once the agent has
    *  reported it, plus the detected `agentType`. */
   agentStatusEntry?: AgentStatusEntry
+  /** Exact resume identity Orca used to start this pane, when hooks have not reported yet. */
+  resumeSession?: { agent: TuiAgent; providerSession: AgentProviderSessionMetadata } | null
   /** Runtime PTY id bound to this pane. ptyId is pane-manager runtime state, so
    *  it's passed in rather than looked up inside this pure function. */
   ptyId: string | null
@@ -40,9 +43,8 @@ export type NativeChatPaneResolution = {
 /** Resolve the active pane to `{ agent, sessionId, ptyId, paneKey }`, or null
  *  when the pane runs no agent. A pane qualifies when a live agent-status entry,
  *  launch-time hint, or the same title-derived fallback used by the toggle is
- *  present. sessionId comes from the entry's `providerSession.id` (the captured
- *  agent session id) — null until the agent reports one, so a just-launched
- *  pane resolves without throwing. */
+ *  present. Hook identity wins; a matching launch resume identity fills the gap
+ *  until the hook reports. Fresh sessions stay null until the agent reports one. */
 export function resolveNativeChatSession(
   input: NativeChatPaneResolutionInput
 ): NativeChatPaneResolution | null {
@@ -50,10 +52,13 @@ export function resolveNativeChatSession(
   if (!agent || !isNativeChatSupportedAgent(agent)) {
     return null
   }
+  const providerSession =
+    input.agentStatusEntry?.providerSession ??
+    (input.resumeSession?.agent === agent ? input.resumeSession.providerSession : undefined)
   return {
     agent,
-    sessionId: input.agentStatusEntry?.providerSession?.id ?? null,
-    transcriptPath: input.agentStatusEntry?.providerSession?.transcriptPath ?? null,
+    sessionId: providerSession?.id ?? null,
+    transcriptPath: providerSession?.transcriptPath ?? null,
     ptyId: input.ptyId,
     paneKey: input.paneKey
   }
