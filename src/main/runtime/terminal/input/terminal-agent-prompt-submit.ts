@@ -2,6 +2,7 @@ import { agentPromptObservationSignal } from './agent-prompt-signals'
 import type { RuntimeAgentPromptWriteOptions } from '../../runtime-terminal-contracts'
 import type { RuntimeTerminalSend } from '../../../../shared/runtime-types'
 import type { AgentTransitionDetector } from '../../../agent-hooks/agent-transition-detector'
+import { assertTerminalInputWithinLimitWithYield } from '../../terminal-send-payload'
 import { OrcaRuntimeWithWriteTerminalAgentPrompt } from './terminal-agent-prompt'
 import {
   AgentPromptPermissionReturnedError,
@@ -25,6 +26,7 @@ export abstract class OrcaRuntimeWithSubmitTerminalAgentPrompt extends OrcaRunti
       }
       try {
         const delivery = await this.serializeAgentPromptSubmission(ptyId, generation, async () => {
+          await assertTerminalInputWithinLimitWithYield(payload)
           this.assertLiveTerminalHandleTargetsPty(handle, ptyId)
           this.assertAgentPromptGeneration(ptyId, generation)
           this.assertAgentPromptExpectedBinding(handle, options.expectedBinding)

@@ -39,6 +39,11 @@ export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged ext
     text: string,
     options: RuntimeTerminalWriteOptions
   ): Promise<WriteSettlement | undefined>
+  protected abstract serializeTerminalInput<T>(
+    ptyId: string,
+    generation: number,
+    write: (release: () => void) => Promise<T>
+  ): Promise<T>
 
   protected notifyRemoteTerminalViewPresenceChanged(ptyId: string): void {
     try {
@@ -168,11 +173,21 @@ export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged ext
     if (data.length === 0) {
       return false
     }
+    const generation = this.getPtyLifecycleGeneration(ptyId)
     try {
-      await assertTerminalInputWithinLimitWithYield(data)
-      await this.writeTerminalInputChunks(ptyId, data, {
-        inputKind: 'driving',
-        inputSource: 'desktop'
+      await this.serializeTerminalInput(ptyId, generation, async () => {
+        await assertTerminalInputWithinLimitWithYield(data)
+        await this.writeTerminalInputChunks(ptyId, data, {
+          inputKind: 'driving',
+          inputSource: 'desktop',
+          beforeWrite: () => {
+            this.assertAgentPromptGeneration(ptyId, generation)
+            // A phone can claim the floor while a paste yields between chunks.
+            if (this.getDriver(ptyId).kind === 'mobile') {
+              throw new Error('terminal_mobile_driver_active')
+            }
+          }
+        })
       })
       return true
     } catch {
