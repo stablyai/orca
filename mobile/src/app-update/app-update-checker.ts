@@ -86,7 +86,10 @@ export function createAppUpdateChecker(deps: AppUpdateCheckerDeps) {
       timer = deps.setTimer(
         () => {
           timer = null
-          runIfDue()
+          // The timer is the due time; re-reading the wall clock would stall on a clock step back.
+          if (activeStarts > 0 && inFlight === null) {
+            void checkNow()
+          }
         },
         Math.max(0, dueAt - deps.now())
       )

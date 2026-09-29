@@ -274,4 +274,13 @@ describe('app update checker', () => {
     await vi.advanceTimersByTimeAsync(24 * HOUR)
     expect(checks(h)).toBe(2)
   })
+
+  it('runs the check when the armed timer fires even if the clock stepped back', async () => {
+    const h = harness({ stored: { lastCheckedAt: T0 - 2 * HOUR } })
+    h.checker.start()
+    await vi.advanceTimersByTimeAsync(0)
+    vi.setSystemTime(Date.now() - 10 * 60 * 1000)
+    await vi.advanceTimersByTimeAsync(22 * HOUR)
+    expect(checks(h)).toBe(1)
+  })
 })

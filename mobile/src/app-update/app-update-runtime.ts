@@ -13,8 +13,9 @@ import type { AppUpdateSource } from './app-update-source'
 import { githubReleaseUpdateSource } from './github-release-update-source'
 
 /**
- * The shell has no expo-updates, so `expoConfig` is the manifest embedded when the binary was
- * built: its version is the binary's (app.json `version`, Android `versionName`), never the page's.
+ * Invariant: this app does not use expo-updates, so `expoConfig` is the manifest embedded in the
+ * binary and its version is the binary's (app.json `version`, Android `versionName`). SDK 55
+ * removed `Constants.nativeAppVersion`; adopting expo-updates would make this the update's version.
  */
 export const installedAppVersion: string | null = Constants.expoConfig?.version ?? null
 
