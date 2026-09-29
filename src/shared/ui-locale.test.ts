@@ -5,6 +5,7 @@ import {
   UI_LANGUAGE_CHINESE,
   UI_LANGUAGE_ENGLISH,
   UI_LANGUAGE_FRENCH,
+  UI_LANGUAGE_GALICIAN,
   UI_LANGUAGE_JAPANESE,
   UI_LANGUAGE_KOREAN,
   UI_LANGUAGE_SPANISH,
@@ -41,6 +42,11 @@ describe('ui-locale', () => {
     expect(normalizeSupportedUiLocale('fr')).toBe('fr')
   })
 
+  it('normalizes Galician locale prefixes', () => {
+    expect(normalizeSupportedUiLocale('gl-ES')).toBe('gl')
+    expect(normalizeSupportedUiLocale('gl')).toBe('gl')
+  })
+
   it('falls back unsupported locales to English', () => {
     expect(normalizeSupportedUiLocale('de-DE')).toBe('en')
   })
@@ -75,6 +81,10 @@ describe('ui-locale', () => {
     expect(resolveUiLocale(UI_LANGUAGE_FRENCH, 'en-US')).toBe('fr')
   })
 
+  it('resolves explicit Galician independently of system locale', () => {
+    expect(resolveUiLocale(UI_LANGUAGE_GALICIAN, 'en-US')).toBe('gl')
+  })
+
   it('preserves a selected plugin language bundle id', () => {
     expect(resolveUiLocale('plugin:orca-samples.portuguese/pt-BR')).toBe(
       'plugin:orca-samples.portuguese/pt-BR'
@@ -88,6 +98,7 @@ describe('ui-locale', () => {
     expect(resolveUiLocale(UI_LANGUAGE_SYSTEM, 'ja-JP')).toBe('ja')
     expect(resolveUiLocale(UI_LANGUAGE_SYSTEM, 'es-MX')).toBe('es')
     expect(resolveUiLocale(UI_LANGUAGE_SYSTEM, 'fr-FR')).toBe('fr')
+    expect(resolveUiLocale(UI_LANGUAGE_SYSTEM, 'gl-ES')).toBe('gl')
   })
 
   it('uses renderer system locale only for the system setting', () => {
@@ -97,5 +108,6 @@ describe('ui-locale', () => {
     expect(resolveRendererUiLocale(UI_LANGUAGE_JAPANESE)).toBe('ja')
     expect(resolveRendererUiLocale(UI_LANGUAGE_SPANISH)).toBe('es')
     expect(resolveRendererUiLocale(UI_LANGUAGE_FRENCH)).toBe('fr')
+    expect(resolveRendererUiLocale(UI_LANGUAGE_GALICIAN)).toBe('gl')
   })
 })
