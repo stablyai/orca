@@ -11,8 +11,12 @@ import {
   hasActiveEditorPathMoves,
   isActiveMoveSourcePath
 } from '@/components/editor/editor-path-move-inflight'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import {
+  normalizeRuntimePathForComparison,
+  relativePathInsideRoot
+} from '../../../shared/cross-platform-path'
 import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import {
   ORCA_WORKTREE_FILE_CHANGE_EVENT,
   type WorktreeFileChangeEventDetail
@@ -41,8 +45,9 @@ type PendingDeleteTimer = {
 export function buildEditorExternalWatchEventHandler(
   findTarget: (
     worktreePath: string,
-    runtimeEnvironmentId: string | null
-  ) => EditorExternalWatchTarget | undefined
+    runtimeEnvironmentId: string | null,
+    connectionId?: string
+  ) => EditorExternalWatchTarget | EditorExternalWatchTarget[] | undefined
 ): {
   handleFsChanged: (payload: FsChangedPayload, runtimeEnvironmentId?: string | null) => void
   dispose: () => void
@@ -54,23 +59,10 @@ export function buildEditorExternalWatchEventHandler(
     absolutePath: string
   ): string => `${worktreeId}::${runtimeEnvironmentId ?? 'client'}::${absolutePath}`
 
-  const handleFsChanged = (
+  const handleTargetChange = (
     payload: FsChangedPayload,
-    runtimeEnvironmentId: string | null = null
+    target: EditorExternalWatchTarget
   ): void => {
-    const target = findTarget(payload.worktreePath, runtimeEnvironmentId)
-    if (!target) {
-      return
-    }
-    // Why: this app-level hook owns watcher subscriptions; other consumers listen here so they don't fight over watch/unwatch ownership.
-    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
-      window.dispatchEvent(
-        new CustomEvent<WorktreeFileChangeEventDetail>(ORCA_WORKTREE_FILE_CHANGE_EVENT, {
-          detail: { payload, runtimeEnvironmentId: target.runtimeEnvironmentId }
-        })
-      )
-    }
-
     // Why: one batch index keeps local WSL alias normalization out of event×tab loops.
     const openFilesAtStart = useAppStore.getState().openFiles
     const batchPaths = indexEditorExternalWatchBatchPaths(payload, openFilesAtStart, {
@@ -226,6 +218,27 @@ export function buildEditorExternalWatchEventHandler(
     }
   }
 
+  const handleFsChanged = (
+    payload: FsChangedPayload,
+    runtimeEnvironmentId: string | null = null
+  ): void => {
+    const found = findTarget(payload.worktreePath, runtimeEnvironmentId, payload.connectionId)
+    const targets = Array.isArray(found) ? found : found ? [found] : []
+    if (targets.length === 0) {
+      return
+    }
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      window.dispatchEvent(
+        new CustomEvent<WorktreeFileChangeEventDetail>(ORCA_WORKTREE_FILE_CHANGE_EVENT, {
+          detail: { payload, runtimeEnvironmentId }
+        })
+      )
+    }
+    for (const target of targets) {
+      handleTargetChange(payload, target)
+    }
+  }
+
   const dispose = (): void => {
     for (const pending of pendingDeletes.values()) {
       clearTimeout(pending.timer)
@@ -248,7 +261,12 @@ export function collectOverflowEditorExternalReloadTargets(
   const state = useAppStore.getState()
   const notifications: EditorExternalWatchNotification[] = []
   for (const file of state.openFiles) {
+    const relativePath =
+      file.worktreeId === FLOATING_TERMINAL_WORKTREE_ID
+        ? relativePathInsideRoot(target.worktreePath, file.filePath)
+        : file.relativePath
     if (
+      relativePath === null ||
       file.worktreeId !== target.worktreeId ||
       getOpenFileRuntimeOwner(file) !== (target.runtimeEnvironmentId ?? null) ||
       !isExternalReloadableEditorTab(file) ||
@@ -262,7 +280,7 @@ export function collectOverflowEditorExternalReloadTargets(
     notifications.push({
       worktreeId: target.worktreeId,
       worktreePath: target.worktreePath,
-      relativePath: file.relativePath,
+      relativePath,
       runtimeEnvironmentId: target.runtimeEnvironmentId ?? null,
       ...getLocalWindowsWslAliasOption(target)
     })

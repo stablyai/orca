@@ -17,6 +17,18 @@ import { verifyLatchedEditorMoveDestinations } from './editor-external-watch-dis
 
 export type { EditorExternalWatchTargetState }
 
+function getWatchSubscriptionKey(target: EditorExternalWatchTarget): string {
+  return target.runtimeEnvironmentId
+    ? getEditorExternalWatchTargetKey(target)
+    : `${normalizeRuntimePathForComparison(target.worktreePath)}::${target.connectionId ?? 'local'}`
+}
+
+function uniqueWatchSubscriptions(
+  targets: EditorExternalWatchTarget[]
+): EditorExternalWatchTarget[] {
+  return [...new Map(targets.map((target) => [getWatchSubscriptionKey(target), target])).values()]
+}
+
 function warnExternalWatchFailure(target: EditorExternalWatchTarget, err: unknown): void {
   console.warn('[filesystem-watch] failed to watch worktree', {
     worktreeId: target.worktreeId,
@@ -40,14 +52,15 @@ export function useEditorExternalWatch(): void {
   // Why: diff targets so unchanged worktrees keep their subscription; full teardown on every store change drops events in the gap.
   useEffect(() => {
     const nextTargets = latestTargetsRef.current
-    const previousTargets = targetsRef.current
-    const previousKeys = new Set(previousTargets.map(getEditorExternalWatchTargetKey))
-    const nextKeys = new Set(nextTargets.map(getEditorExternalWatchTargetKey))
+    const previousTargets = uniqueWatchSubscriptions(targetsRef.current)
+    const nextSubscriptions = uniqueWatchSubscriptions(nextTargets)
+    const previousKeys = new Set(previousTargets.map(getWatchSubscriptionKey))
+    const nextKeys = new Set(nextSubscriptions.map(getWatchSubscriptionKey))
     const removed = previousTargets.filter(
-      (target) => !nextKeys.has(getEditorExternalWatchTargetKey(target))
+      (target) => !nextKeys.has(getWatchSubscriptionKey(target))
     )
-    const added = nextTargets.filter(
-      (target) => !previousKeys.has(getEditorExternalWatchTargetKey(target))
+    const added = nextSubscriptions.filter(
+      (target) => !previousKeys.has(getWatchSubscriptionKey(target))
     )
 
     for (const target of removed) {
@@ -86,12 +99,13 @@ export function useEditorExternalWatch(): void {
   useEffect(() => {
     const remoteWatchUnsubs = remoteWatchUnsubsRef.current
     const { handleFsChanged, dispose } = buildEditorExternalWatchEventHandler(
-      (worktreePath, runtimeEnvironmentId) =>
-        targetsRef.current.find(
+      (worktreePath, runtimeEnvironmentId, connectionId) =>
+        targetsRef.current.filter(
           (target) =>
             normalizeRuntimePathForComparison(target.worktreePath) ===
               normalizeRuntimePathForComparison(worktreePath) &&
-            target.runtimeEnvironmentId === runtimeEnvironmentId
+            target.runtimeEnvironmentId === runtimeEnvironmentId &&
+            target.connectionId === connectionId
         )
     )
     const unsubscribe = window.api.fs.onFsChanged((payload) => handleFsChanged(payload, null))
@@ -101,7 +115,7 @@ export function useEditorExternalWatch(): void {
       unsubscribe()
       dispose()
       fsChangedHandlerRef.current = null
-      for (const target of targetsRef.current) {
+      for (const target of uniqueWatchSubscriptions(targetsRef.current)) {
         const key = getEditorExternalWatchTargetKey(target)
         const remoteUnsubscribe = remoteWatchUnsubs.get(key)
         if (remoteUnsubscribe) {
@@ -140,7 +154,12 @@ function subscribeRuntimeTarget(
       worktreePath: target.worktreePath,
       connectionId: target.connectionId
     },
-    (payload) => fsChangedHandlerRef.current?.(payload, target.runtimeEnvironmentId),
+    // Why: the subscription owns the connection even when an older runtime omits it from events.
+    (payload) =>
+      fsChangedHandlerRef.current?.(
+        { ...payload, connectionId: target.connectionId },
+        target.runtimeEnvironmentId
+      ),
     (err) => warnExternalWatchFailure(target, err)
   )
     .then((unsubscribe) => {

@@ -1,6 +1,7 @@
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { joinPath } from '@/lib/path'
+import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import {
   getOpenFilesForExternalFileChange,
   notifyEditorExternalFileChange
@@ -33,7 +34,8 @@ const pendingExternalReloadTimers = new Map<string, ReturnType<typeof setTimeout
 export function scheduleDebouncedEditorExternalReload(
   notification: EditorExternalWatchNotification
 ): void {
-  const key = `${notification.worktreeId}::${notification.runtimeEnvironmentId ?? 'client'}::${notification.relativePath}`
+  const absolutePath = joinPath(notification.worktreePath, notification.relativePath)
+  const key = `${notification.worktreeId}::${notification.runtimeEnvironmentId ?? 'client'}::${normalizeRuntimePathForComparison(absolutePath)}`
   const existing = pendingExternalReloadTimers.get(key)
   if (existing !== undefined) {
     globalThis.clearTimeout(existing)

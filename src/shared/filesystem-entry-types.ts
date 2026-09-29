@@ -23,6 +23,8 @@ export type FsChangeEvent = {
 }
 
 export type FsChangedPayload = {
+  /** Desktop SSH events carry their connection; absent means client-local. */
+  connectionId?: string
   worktreePath: string
   events: FsChangeEvent[]
 }
