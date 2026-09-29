@@ -170,7 +170,7 @@ describe('App Store source (iOS)', () => {
   it('reads the store version and App Store page from the recorded lookup', () => {
     expect(parseAppStoreLookup(lookup)).toEqual({
       version: '0.0.51',
-      url: 'https://apps.apple.com/app/id6766130217'
+      url: 'https://apps.apple.com/us/app/orca-ide/id6766130217?uo=4'
     })
   })
 
@@ -180,7 +180,7 @@ describe('App Store source (iOS)', () => {
     await expect(source.check('0.0.48', signal)).resolves.toEqual({
       kind: 'available',
       version: '0.0.51',
-      url: 'https://apps.apple.com/app/id6766130217'
+      url: 'https://apps.apple.com/us/app/orca-ide/id6766130217?uo=4'
     })
     await expect(source.check('0.0.51', signal)).resolves.toEqual({ kind: 'current' })
   })

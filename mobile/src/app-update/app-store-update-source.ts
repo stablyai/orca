@@ -7,7 +7,7 @@ const LOOKUP_URL = 'https://itunes.apple.com/lookup?bundleId=com.stably.orca.mob
 type Fetch = typeof fetch
 
 const lookupSchema = z.looseObject({ results: z.array(z.unknown()) })
-const listingSchema = z.looseObject({ version: z.string(), trackId: z.number() })
+const listingSchema = z.looseObject({ version: z.string(), trackViewUrl: z.string() })
 
 /**
  * The store listing's version and page. TestFlight installs have no receipt signal without a new
@@ -16,9 +16,7 @@ const listingSchema = z.looseObject({ version: z.string(), trackId: z.number() }
 export function parseAppStoreLookup(reply: unknown): { version: string; url: string } | null {
   const lookup = lookupSchema.safeParse(reply)
   const listing = listingSchema.safeParse(lookup.success ? lookup.data.results[0] : null)
-  return listing.success
-    ? { version: listing.data.version, url: `https://apps.apple.com/app/id${listing.data.trackId}` }
-    : null
+  return listing.success ? { version: listing.data.version, url: listing.data.trackViewUrl } : null
 }
 
 export function createAppStoreUpdateSource(fetchImpl: Fetch): AppUpdateSource {

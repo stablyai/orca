@@ -283,4 +283,11 @@ describe('app update checker', () => {
     await vi.advanceTimersByTimeAsync(22 * HOUR)
     expect(checks(h)).toBe(1)
   })
+
+  it('treats a stored check time ahead of the clock as never checked', async () => {
+    const h = harness({ stored: { lastCheckedAt: T0 + 365 * 24 * HOUR } })
+    h.checker.start()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(checks(h)).toBe(1)
+  })
 })
