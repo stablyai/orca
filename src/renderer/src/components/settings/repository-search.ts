@@ -261,3 +261,33 @@ export function getRepositoryPaneSearchEntries(
       : [...getRepositoryGitAuthorSearchEntries(repo), ...getRepositoryGitHooksSearchEntries(repo)])
   ]
 }
+
+/**
+ * Titles of the sections the pane renders inside its Identity block. A section
+ * rendered there but missing here makes the whole block collapse for a query
+ * that only matches that section, so the two must stay in step.
+ */
+function identityEntryTitles(): Set<string> {
+  return new Set([
+    translate('auto.components.settings.repository.search.7e1e456a95', 'Display Name'),
+    translate('auto.components.settings.repository.search.b24f00294a', 'Project Icon'),
+    translate('auto.components.settings.repository.search.githubAccount', 'GitHub Account'),
+    translate(
+      'auto.components.settings.repository.search.keepForkUpToDate',
+      'Keep Fork Up to Date'
+    ),
+    translate('auto.components.settings.repository.search.094adbe930', 'Default Worktree Base'),
+    translate('auto.components.settings.repository.search.443d127b5a', 'Worktree Location'),
+    translate('auto.components.settings.repository.search.externalWorktrees', 'External worktrees'),
+    translate('auto.components.settings.repository.search.projectRuntime', 'Project Runtime'),
+    translate(
+      'auto.components.settings.repository.search.showSubmoduleChanges',
+      'Show Submodule Changes'
+    ),
+    translate('auto.components.settings.repository.search.c5266c2c9d', 'Remove Project')
+  ])
+}
+
+export function isRepositoryIdentityEntry(title: string): boolean {
+  return identityEntryTitles().has(title)
+}

@@ -1,5 +1,6 @@
 import { getRuntimeGitStatus, getRuntimeGitUpstreamStatus } from '@/runtime/runtime-git-client'
 import { getBranchLineTotalMergeBase } from './branch-line-total-request-gate'
+import { getShowSubmoduleChangesForWorktree } from './submodule-changes-opt-in'
 import {
   clearAutomaticPushTargetUpstreamStatusCache,
   getCachedAutomaticPushTargetUpstreamStatus,
@@ -123,6 +124,9 @@ export async function refreshGitStatusForWorktree({
   // Why: every status path must carry the merge base, or the chip blanks out on
   // whichever poll happened to omit it.
   const branchLineTotalMergeBase = getBranchLineTotalMergeBase(worktreeId)
+  // Why: the host handler reads the repo record only for local worktrees, so an
+  // SSH- or runtime-hosted repo needs the opt-in carried on the request.
+  const showSubmoduleChanges = getShowSubmoduleChangesForWorktree(worktreeId)
   try {
     const status = (await getRuntimeGitStatus(
       {
@@ -133,6 +137,7 @@ export async function refreshGitStatusForWorktree({
       },
       {
         admissionTier: request?.admissionTier ?? 'status',
+        ...(showSubmoduleChanges ? { showSubmoduleChanges: true } : {}),
         ...(request?.reuseLineStats === true ? { reuseLineStats: true } : {}),
         ...(request?.signal ? { signal: request.signal } : {}),
         ...(branchLineTotalMergeBase ? { branchLineTotalMergeBase } : {})
@@ -250,6 +255,7 @@ export async function refreshGitStatusForWorktreeStrict({
   beginStrictUpstreamRefresh(worktreeId)
   clearAutomaticPushTargetUpstreamStatusCache()
   const strictBranchLineTotalMergeBase = getBranchLineTotalMergeBase(worktreeId)
+  const strictShowSubmoduleChanges = getShowSubmoduleChangesForWorktree(worktreeId)
   const status = (await getRuntimeGitStatus(
     {
       settings,
@@ -259,6 +265,7 @@ export async function refreshGitStatusForWorktreeStrict({
     },
     {
       admissionTier: 'interactive',
+      ...(strictShowSubmoduleChanges ? { showSubmoduleChanges: true } : {}),
       // Why: strict refreshes are user-triggered reconciliation and must not reuse
       // automatic polling's no-upstream backoff window.
       bypassEffectiveUpstreamNegativeCache: true,

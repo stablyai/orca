@@ -20,7 +20,10 @@ afterEach(() => {
   container.remove()
 })
 
-function renderSection(repo: Partial<Repo>, updateRepo: (repoId: string, updates: object) => void) {
+function renderSection(
+  repo: Partial<Repo>,
+  updateRepo: (repoId: string, updates: Pick<Repo, 'showSubmoduleChanges'>) => void
+) {
   act(() => {
     root.render(
       <RepositorySubmoduleChangesSection
