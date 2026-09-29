@@ -1,4 +1,5 @@
 import type { GitRuntimeOptions } from './git-runtime-options'
+import { repairAbbreviatedRefName } from '../../shared/git-abbreviated-ref-repair'
 import { gitOptionsForWorktree } from './git-runtime-options'
 import { gitExecFileAsync } from './runner'
 import { runWithGitReadCacheInvalidation } from './status'
@@ -43,7 +44,7 @@ export async function listLocalBranches(
   options: GitRuntimeOptions = {}
 ): Promise<{ current: string | null; branches: string[] }> {
   const { stdout } = await gitExecFileAsync(
-    ['for-each-ref', '--format=%(HEAD)%09%(refname:short)', 'refs/heads/'],
+    ['for-each-ref', '--format=%(HEAD)%09%(refname)%09%(refname:short)', 'refs/heads/'],
     gitOptionsForWorktree(worktreePath, options)
   )
   let current: string | null = null
@@ -52,7 +53,9 @@ export async function listLocalBranches(
     if (line.length === 0) {
       continue
     }
-    const [marker, name] = line.split('\t')
+    const [marker, fullRef, shortRef] = line.split('\t')
+    // `%(refname)` keeps the full bytes even where git truncated `:short` mid-UTF-8.
+    const name = repairAbbreviatedRefName(fullRef ?? '', shortRef ?? '')
     if (!name) {
       continue
     }

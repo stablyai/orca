@@ -1,3 +1,4 @@
+import { readBranchNameFromFullRef } from '../../shared/git-abbreviated-ref-repair'
 // On first agent work in a fresh workspace, replace the auto-generated creature branch (e.g. `you/Nautilus`) with a short work-derived name.
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { Repo } from '../../shared/repo-types'
@@ -133,6 +134,16 @@ export async function maybeAutoRenameBranchOnFirstWork(
   }
 }
 
+/** Full ref, not --abbrev-ref: git truncates the abbreviated form mid-UTF-8 under a UTF-8 LC_CTYPE. */
+async function readCheckedOutBranchName(exec: GitExec): Promise<string | null> {
+  try {
+    return readBranchNameFromFullRef((await exec(['symbolic-ref', '--quiet', 'HEAD'])).stdout)
+  } catch {
+    // Detached HEAD.
+    return null
+  }
+}
+
 /** Returns true for a definitive verdict (renamed or permanently ineligible → stop re-probing), false for a transient bail worth retrying. */
 async function runAutoRename(
   worktreeId: string,
@@ -184,7 +195,7 @@ async function runAutoRename(
     ? (args) => provider.exec(args, worktreePath)
     : (args) => gitExecFileAsync(args, { cwd: worktreePath })
 
-  const currentBranch = (await exec(['rev-parse', '--abbrev-ref', 'HEAD'])).stdout.trim()
+  const currentBranch = await readCheckedOutBranchName(exec)
   if (!currentBranch || currentBranch === 'HEAD') {
     return retry(`no checked-out branch (${currentBranch || 'empty'})`)
   }
@@ -241,7 +252,7 @@ async function runAutoRename(
   }
 
   // Re-validate after generation (takes seconds): bail if the branch changed or was published meanwhile.
-  const branchNow = (await exec(['rev-parse', '--abbrev-ref', 'HEAD'])).stdout.trim()
+  const branchNow = await readCheckedOutBranchName(exec)
   if (branchNow !== currentBranch) {
     return retry(`branch changed during generation (${currentBranch} -> ${branchNow})`)
   }

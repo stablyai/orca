@@ -1,3 +1,4 @@
+import { readBranchNameFromFullRef } from '../../shared/git-abbreviated-ref-repair'
 import { windowsLongPathGitArgs } from '../../shared/windows-long-path-git-args'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 import type { AddWorktreeOptions, AddWorktreeResult, GitWorktreeExecOptions } from './worktree'
@@ -151,11 +152,12 @@ async function removeFailedFinalization(
   let branchAttached = false
   if (moved) {
     try {
+      // Full ref, not --short: git truncates the abbreviated form mid-UTF-8 under a UTF-8 LC_CTYPE.
       const { stdout } = await gitExecFileAsync(
-        ['symbolic-ref', '--short', 'HEAD'],
+        ['symbolic-ref', '--quiet', 'HEAD'],
         gitCleanupOptions(cleanupPath, options)
       )
-      branchAttached = stdout.trim() === branch
+      branchAttached = readBranchNameFromFullRef(stdout) === branch
     } catch {
       // Detached or no longer readable.
     }

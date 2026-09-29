@@ -461,20 +461,9 @@
         "app version and remote update display",
         "autosave settings draft"
       ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "remote-runtime",
-        "ssh",
-        "wsl"
-      ],
-      "coveredPlatforms": [
-        "macos"
-      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "remote-runtime", "ssh", "wsl"],
+      "coveredPlatforms": ["macos"],
       "coveredProviders": [],
       "coverageNotes": "Actual GeneralPane, update/version and remote-status components with mocked store/API; actual autosave form. Windows runtime on/off simulated. No physical updater, paired host, settings write or native input.",
       "motivatingLinks": [
@@ -485,9 +474,7 @@
       "commands": [
         "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/GeneralPane.section-lifetime.test.tsx"
       ],
-      "testFiles": [
-        "src/renderer/src/components/settings/GeneralPane.section-lifetime.test.tsx"
-      ],
+      "testFiles": ["src/renderer/src/components/settings/GeneralPane.section-lifetime.test.tsx"],
       "assertionRefs": [
         {
           "file": "src/renderer/src/components/settings/GeneralPane.section-lifetime.test.tsx",
@@ -551,20 +538,9 @@
         "Grok and Cursor account status",
         "Codex pending sign-in link"
       ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "remote-runtime",
-        "ssh",
-        "wsl"
-      ],
-      "coveredPlatforms": [
-        "macos"
-      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "remote-runtime", "ssh", "wsl"],
+      "coveredPlatforms": ["macos"],
       "coveredProviders": [],
       "coverageNotes": "Actual AccountsPane, Grok, Cursor and Codex login components; synthetic APIs/store with Windows account support enabled/disabled. No real account, keychain or provider action.",
       "motivatingLinks": [
@@ -575,9 +551,7 @@
       "commands": [
         "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/AccountsPane.section-lifetime.test.tsx"
       ],
-      "testFiles": [
-        "src/renderer/src/components/settings/AccountsPane.section-lifetime.test.tsx"
-      ],
+      "testFiles": ["src/renderer/src/components/settings/AccountsPane.section-lifetime.test.tsx"],
       "assertionRefs": [
         {
           "file": "src/renderer/src/components/settings/AccountsPane.section-lifetime.test.tsx",

@@ -1,4 +1,5 @@
 import { isSafeGitRefName } from '../../shared/git-status-upstream-ref'
+import { repairAbbreviatedRefName } from '../../shared/git-abbreviated-ref-repair'
 
 type GitStatusUpstreamRefExec = (
   args: string[],
@@ -33,7 +34,8 @@ export async function resolveGitStatusUpstreamRef(
   if (fields.length !== 3 || fields[0] !== branch) {
     return undefined
   }
-  if (fields[2] === upstreamName) {
+  // `%(upstream)` keeps the full bytes even where git truncated `:short` mid-UTF-8.
+  if (repairAbbreviatedRefName(fields[1] ?? '', fields[2] ?? '') === upstreamName) {
     return exactRefFromOutput(fields[1])
   }
   try {

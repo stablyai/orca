@@ -1,3 +1,4 @@
+import { readBranchNameFromFullRef } from '../../shared/git-abbreviated-ref-repair'
 // Why: preparing a fork-PR push target means adding (or reusing) the contributor's
 // fork as a git remote, fetching the head, and wiring the new branch's upstream.
 // The git-driven core lives here behind an injectable `execGit` seam so the
@@ -57,9 +58,9 @@ export async function resolveCheckedOutBranchName(
   repoPath: string
 ): Promise<string | null> {
   try {
-    const { stdout } = await execGit(['symbolic-ref', '--short', 'HEAD'], repoPath)
-    const branch = stdout.trim()
-    return branch.length > 0 ? branch : null
+    // Full ref, not --short: git truncates the abbreviated form mid-UTF-8 under a UTF-8 LC_CTYPE.
+    const { stdout } = await execGit(['symbolic-ref', '--quiet', 'HEAD'], repoPath)
+    return readBranchNameFromFullRef(stdout)
   } catch {
     // Detached HEAD or an unreadable ref -- nothing to point upstream.
     return null

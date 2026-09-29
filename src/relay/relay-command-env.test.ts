@@ -242,7 +242,11 @@ describe('buildRelayGitEnv', () => {
       'linux'
     )
 
-    expect(env.LC_ALL).toBe('en_US.UTF-8')
+    // LC_ALL is emptied, not pinned: it would also pin a UTF-8 LC_CTYPE, under
+    // which libc cuts non-ASCII ref names out of git's abbreviated forms.
+    expect(env.LC_ALL).toBe('')
+    expect(env.LC_MESSAGES).toBe('en_US.UTF-8')
+    expect(env.LC_CTYPE).toBe('C')
     expect(env.LANG).toBe('en_US.UTF-8')
     expect(env.LANGUAGE).toBe('en')
     // PATH fallback behavior is unchanged.
@@ -271,7 +275,8 @@ describe('buildRelayUnattendedGitEnv', () => {
     expect(env.GIT_CONFIG_KEY_1).toBe('credential.guiPrompt')
     expect(env.GIT_CONFIG_VALUE_1).toBe('false')
     expect(env.GIT_SSH_COMMAND).toBe('ssh -o BatchMode=yes')
-    expect(env.LC_ALL).toBe('en_US.UTF-8')
+    expect(env.LC_MESSAGES).toBe('en_US.UTF-8')
+    expect(env.LC_CTYPE).toBe('C')
     expect(env.PATH?.split(':')).toEqual(expect.arrayContaining(['/custom/bin', '/usr/bin']))
   })
 })

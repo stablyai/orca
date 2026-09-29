@@ -1,3 +1,4 @@
+import { repairAbbreviatedRefName } from '../../shared/git-abbreviated-ref-repair'
 // Why: fork-PR worktrees can add a contributor's fork as a git remote. When such
 // a worktree is deleted we prune that remote, but only when it's truly unused.
 // This module holds that decision logic behind an injectable `execGit` boundary so
@@ -123,10 +124,16 @@ async function branchesExist(
 ): Promise<boolean> {
   try {
     const { stdout } = await execGit(
-      ['for-each-ref', '--format=%(refname:short)', 'refs/heads/'],
+      // `%(refname)` keeps the full bytes even where git truncated `:short` mid-UTF-8.
+      ['for-each-ref', '--format=%(refname)%00%(refname:short)', 'refs/heads/'],
       repoPath
     )
-    const existingBranches = new Set(iterateProcessOutputLines(stdout))
+    const existingBranches = new Set(
+      [...iterateProcessOutputLines(stdout)].map((line) => {
+        const [fullRef, shortRef] = line.split('\0')
+        return repairAbbreviatedRefName(fullRef ?? '', shortRef ?? '')
+      })
+    )
     return branchNames.some((branchName) => existingBranches.has(branchName))
   } catch {
     return false

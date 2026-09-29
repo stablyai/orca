@@ -322,19 +322,29 @@ describe('git env forces untranslated diagnostics (issue #7808)', () => {
     // A gettext-enabled git under de_DE translates even the `fatal:` prefix,
     // breaking isNoUpstreamError and every other stderr phrase match.
     const env = promptGuardGitEnv({ PATH: '/usr/bin', LC_ALL: 'de_DE.UTF-8' })
-    expect(env.LC_ALL).toBe('en_US.UTF-8')
+    expect(env.LC_MESSAGES).toBe('en_US.UTF-8')
     expect(env.LANG).toBe('en_US.UTF-8')
+  })
+
+  it('empties LC_ALL and pins a C LC_CTYPE so git does not truncate non-ASCII refs', () => {
+    // A UTF-8 LC_CTYPE makes macOS libc call 0xA0 whitespace, and git's
+    // shorten_unambiguous_ref() parses with sscanf("%s") -- so a branch whose
+    // encoding contains that byte comes back cut mid-sequence.
+    const env = promptGuardGitEnv({ PATH: '/usr/bin', LC_ALL: 'de_DE.UTF-8' })
+    expect(env.LC_ALL).toBe('')
+    expect(env.LC_CTYPE).toBe('C')
   })
 
   it('pins LANGUAGE, which outranks LC_ALL in gettext lookups', () => {
     const env = untranslatedGitOutputEnv({ PATH: '/usr/bin', LANGUAGE: 'de:en' })
     expect(env.LANGUAGE).toBe('en')
-    expect(env.LC_ALL).toBe('en_US.UTF-8')
+    expect(env.LC_MESSAGES).toBe('en_US.UTF-8')
   })
 
   it('applies to nonInteractiveGitEnv as well', () => {
     const env = nonInteractiveGitEnv({ PATH: '/usr/bin', LANG: 'fr_FR.UTF-8' })
-    expect(env.LC_ALL).toBe('en_US.UTF-8')
+    expect(env.LC_MESSAGES).toBe('en_US.UTF-8')
+    expect(env.LC_CTYPE).toBe('C')
     expect(env.LANGUAGE).toBe('en')
   })
 })

@@ -1,3 +1,8 @@
+import {
+  looksTruncatedMidUtf8,
+  readBranchNameFromFullRef,
+  repairAbbreviatedRefName
+} from './git-abbreviated-ref-repair'
 import { isNoUpstreamError } from './git-remote-error'
 import type { GitUpstreamStatus } from './git-status-types'
 import {
@@ -62,11 +67,20 @@ async function splitRemoteBranchNameByKnownRemote(
 
 async function getCurrentBranchName(runGit: GitCommandRunner): Promise<string | null> {
   try {
-    const { stdout } = await runGit(['symbolic-ref', '--quiet', '--short', 'HEAD'])
-    const branchName = stdout.trim()
-    return branchName || null
+    // Full ref, not --short: git truncates the abbreviated form mid-UTF-8 under a UTF-8 LC_CTYPE.
+    const { stdout } = await runGit(['symbolic-ref', '--quiet', 'HEAD'])
+    return readBranchNameFromFullRef(stdout)
   } catch {
     return null
+  }
+}
+
+async function readFullUpstreamRef(runGit: GitCommandRunner): Promise<string> {
+  try {
+    const { stdout } = await runGit(['rev-parse', '--symbolic-full-name', 'HEAD@{u}'])
+    return stdout.trim()
+  } catch {
+    return ''
   }
 }
 
@@ -74,8 +88,13 @@ async function getConfiguredUpstream(
   runGit: GitCommandRunner
 ): Promise<EffectiveGitUpstream | null> {
   try {
+    // Only a name git cut mid-UTF-8 needs the full ref, so the ASCII path keeps
+    // its single spawn. `--symbolic-full-name` carries bytes git never truncates.
     const { stdout } = await runGit(['rev-parse', '--abbrev-ref', 'HEAD@{u}'])
-    const upstreamName = stdout.trim()
+    const abbreviatedName = stdout.trim()
+    const upstreamName = looksTruncatedMidUtf8(abbreviatedName)
+      ? repairAbbreviatedRefName(await readFullUpstreamRef(runGit), abbreviatedName)
+      : abbreviatedName
     if (!upstreamName) {
       return null
     }
