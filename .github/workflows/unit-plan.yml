@@ -35,6 +35,8 @@ jobs:
           fetch-depth: 2
           persist-credentials: false
       - uses: ./.github/actions/install-node-dependencies
+      - name: Verify Codex readiness captured fixture
+        run: pnpm run verify:codex-readiness
       - name: Plan unit selection
         id: plan
         env:

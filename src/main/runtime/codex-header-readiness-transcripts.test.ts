@@ -104,25 +104,6 @@ describe('Codex 0.157 header readiness from captured bytes', () => {
     }
   )
 
-  // Why these sizes: grids out of step with the 120x40 recording garble the header (review of #23475).
-  describe.each([
-    [120, 40],
-    [80, 24],
-    [30, 50],
-    [108, 30],
-    [60, 5]
-  ])('at %ix%i the screen never takes readiness away from the text rules', (cols, rows) => {
-    it.each(ALL_FIXTURES)('%s', async (name) => {
-      for await (const frame of replay(readFixture(name), cols, rows)) {
-        if (isKnownReadyPromptPreview(frame.waitText)) {
-          expect(isKnownReadyPromptBody(frame.waitText, 'codex', () => frame.screenLines)).toBe(
-            true
-          )
-        }
-      }
-    })
-  })
-
   it('keeps the text rules when there is no live screen', async () => {
     const { waitText } = await finalFrame(PLAIN, 120, 40)
     expect(isKnownReadyPromptBody(waitText, 'codex', () => null)).toBe(
@@ -173,7 +154,8 @@ describe('Codex 0.157 header readiness from captured bytes', () => {
     const readScreenLines = vi.fn(() => screenLines)
     expect(isKnownReadyPromptBody('', 'claude', readScreenLines)).toBe(false)
     expect(readScreenLines).not.toHaveBeenCalled()
-    expect(isKnownReadyPromptBody('', 'codex', readScreenLines)).toBe(true)
+    // An unframed header is retained history until a current composer/scanner watermark exists.
+    expect(isKnownReadyPromptBody('', 'codex', readScreenLines)).toBe(false)
   })
 
   describe('at the 80x24 default grid the header garbles and today’s answer stands', () => {

@@ -9,10 +9,7 @@ import {
   VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS
 } from './orca-runtime-postlude'
 import { withTimeout } from './runtime-async-boundaries'
-import {
-  detectTerminalWaitBlockedReason,
-  isKnownReadyPromptPreview
-} from './terminal-wait-detection'
+import { detectTerminalWaitBlockedReason, isKnownReadyPromptBody } from './terminal-wait-detection'
 import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitBlockedReason
@@ -26,6 +23,17 @@ import {
 import { createSetupCompletionScanner } from './orchestration/setup-completion-signal'
 import { isAntigravityReadyPromptSnapshot } from './antigravity-terminal-readiness'
 import type { TuiAgent } from '../../shared/tui-agent'
+import { createDraftPasteReadyScanner } from '../../shared/draft-paste-ready-scanner'
+import { isVisibleReadProbeIdentityCurrent } from './visible-read-probe-identity'
+import {
+  beginVisibleReadProbeRead,
+  createVisibleReadProbeRetryState,
+  finishVisibleReadProbeRead,
+  hasCurrentVisibleReadProbeComposerSignal,
+  noteVisibleReadProbeComposerSignal,
+  noteVisibleReadProbeEvent,
+  shouldRetryVisibleReadProbeRead
+} from './visible-read-probe-retry'
 
 export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWithCreateAgentPromptRenderGate {
   /** One bounded look at the provider's screen for an adopted PTY whose retained
@@ -38,6 +46,64 @@ export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWith
     waiterTimeoutMs: number,
     agent: TuiAgent | null
   ): void {
+    // Capture the exact surface before the provider read. A waiter handle can be rebound while
+    // the read is in flight, and a provider can respawn the same pty id under a new lifecycle.
+    // Applying that response to the replacement would turn an old screen into readiness.
+    let initialPty: ReturnType<typeof this.getLivePtyForHandle>
+    let initialLeaf: ReturnType<typeof this.getLiveLeafForHandle>['leaf'] | null = null
+    let initialHandleRecord: ReturnType<typeof this.getLiveLeafForHandle>['record'] | null = null
+    try {
+      initialPty = this.getLivePtyForHandle(waiter.handle)
+      if (!initialPty) {
+        const liveLeaf = this.getLiveLeafForHandle(waiter.handle)
+        initialHandleRecord = liveLeaf.record
+        initialLeaf = liveLeaf.leaf
+      } else {
+        initialHandleRecord = initialPty.record
+      }
+    } catch {
+      return
+    }
+    const ptyId = initialPty?.pty.ptyId ?? initialLeaf?.ptyId ?? null
+    if (!ptyId) {
+      return
+    }
+    const rendererGraphEpoch =
+      initialPty?.record.rendererGraphEpoch ?? initialHandleRecord?.rendererGraphEpoch ?? null
+    const ptyGeneration = initialPty?.record.ptyGeneration ?? initialLeaf?.ptyGeneration ?? null
+    const lifecycleGeneration = this.getPtyLifecycleGeneration(ptyId)
+    const capturedIdentity = {
+      ptyId,
+      rendererGraphEpoch,
+      ptyGeneration,
+      lifecycleGeneration
+    }
+    const isCurrentProbe = (): boolean => {
+      try {
+        const currentPty = this.getLivePtyForHandle(waiter.handle)
+        const currentLeafRecord = currentPty ? null : this.getLiveLeafForHandle(waiter.handle)
+        const currentLeaf = currentLeafRecord?.leaf ?? null
+        const currentPtyId = currentPty?.pty.ptyId ?? currentLeaf?.ptyId ?? null
+        const currentRendererGraphEpoch =
+          currentPty?.record.rendererGraphEpoch ??
+          currentLeafRecord?.record.rendererGraphEpoch ??
+          null
+        const currentPtyGeneration =
+          currentPty?.record.ptyGeneration ?? currentLeaf?.ptyGeneration ?? null
+        return isVisibleReadProbeIdentityCurrent(
+          capturedIdentity,
+          {
+            ptyId: currentPtyId ?? '',
+            rendererGraphEpoch: currentRendererGraphEpoch,
+            ptyGeneration: currentPtyGeneration,
+            lifecycleGeneration: this.getPtyLifecycleGeneration(ptyId)
+          },
+          Boolean(this.terminalWaiters.get(waiter.handle)?.has(waiter))
+        )
+      } catch {
+        return false
+      }
+    }
     const settleMarginMs = Math.min(
       TUI_IDLE_VISIBLE_PROBE_SETTLE_MARGIN_MS,
       Math.max(1, Math.floor(waiterTimeoutMs / 3))
@@ -53,44 +119,104 @@ export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWith
     if (providerTimeoutMs < 1) {
       return
     }
-    void withTimeout(
-      this.readTerminal(waiter.handle, agent === 'antigravity' ? { screen: true } : {}, {
-        timeoutMs: providerTimeoutMs,
-        retireOnTimeout: true,
-        // Why: the ready banner stays in scrollback for the whole session, so
-        // classifying history would call a working agent idle (#15569 review).
-        visibleScreenOnly: true
-      } satisfies RuntimeProviderSnapshotReadOptions),
-      probeTimeoutMs,
-      null
-    )
-      .then((projection) => {
-        if (
-          !projection ||
-          projection.source !== 'screen' ||
-          !this.terminalWaiters.get(waiter.handle)?.has(waiter)
-        ) {
+    const codexComposerScanner =
+      agent === 'codex' ? createDraftPasteReadyScanner('codex-composer-prompt') : null
+    const readRetryState = createVisibleReadProbeRetryState()
+    let closed = false
+    let unsubscribe: (() => void) | null = null
+    let cleanupTimer: NodeJS.Timeout | null = null
+    const cleanup = (): void => {
+      closed = true
+      unsubscribe?.()
+      unsubscribe = null
+      if (cleanupTimer) {
+        clearTimeout(cleanupTimer)
+        cleanupTimer = null
+      }
+    }
+    const readAndClassify = (): void => {
+      if (closed) {
+        return
+      }
+      const requestedScreenEpoch = beginVisibleReadProbeRead(readRetryState)
+      if (requestedScreenEpoch === null) {
+        return
+      }
+      void withTimeout(
+        this.readTerminal(waiter.handle, agent === 'antigravity' ? { screen: true } : {}, {
+          timeoutMs: providerTimeoutMs,
+          retireOnTimeout: true,
+          // Why: the ready banner stays in scrollback for the whole session, so
+          // classifying history would call a working agent idle (#15569 review).
+          visibleScreenOnly: true
+        } satisfies RuntimeProviderSnapshotReadOptions),
+        probeTimeoutMs,
+        null
+      )
+        .then((projection) => {
+          if (!projection || closed || !isCurrentProbe()) {
+            return
+          }
+          // A PTY event during the provider snapshot makes that screen a historical frame. Do
+          // not settle from it; the finalizer below coalesces the event into one fresh read.
+          if (shouldRetryVisibleReadProbeRead(readRetryState, requestedScreenEpoch)) {
+            return
+          }
+          const hasScreen = projection.source === 'screen'
+          const currentCodexComposerSignal =
+            hasCurrentVisibleReadProbeComposerSignal(readRetryState)
+          if (!hasScreen && !currentCodexComposerSignal) {
+            return
+          }
+          const snapshotText =
+            agent === 'antigravity'
+              ? [...projection.tail, projection.draft ?? ''].join('\n')
+              : projection.tail.join('\n')
+          const blockedReason = detectTerminalWaitBlockedReason(snapshotText)
+          const ready =
+            agent === 'antigravity'
+              ? hasScreen && isAntigravityReadyPromptSnapshot(snapshotText)
+              : isKnownReadyPromptBody(
+                  hasScreen ? snapshotText : '',
+                  agent,
+                  () => (hasScreen ? projection.tail : null),
+                  () => currentCodexComposerSignal
+                )
+          if (!blockedReason && !ready) {
+            return
+          }
+          if (!isCurrentProbe()) {
+            return
+          }
+          closed = true
+          cleanup()
+          const result = this.buildTuiIdleProbeResult(waiter.handle, blockedReason)
+          if (waiter.cancelIdlePoll) {
+            waiter.cancelIdlePoll()
+          }
+          this.terminalWaiters.resolve(waiter, result)
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (finishVisibleReadProbeRead(readRetryState) && !closed) {
+            readAndClassify()
+          }
+        })
+    }
+    if (codexComposerScanner) {
+      unsubscribe = this.subscribeToTerminalData(ptyId, (data) => {
+        if (closed) {
           return
         }
-        const snapshotText =
-          agent === 'antigravity'
-            ? [...projection.tail, projection.draft ?? ''].join('\n')
-            : projection.tail.join('\n')
-        const blockedReason = detectTerminalWaitBlockedReason(snapshotText)
-        const ready =
-          agent === 'antigravity'
-            ? isAntigravityReadyPromptSnapshot(snapshotText)
-            : isKnownReadyPromptPreview(snapshotText)
-        if (!blockedReason && !ready) {
-          return
+        noteVisibleReadProbeEvent(readRetryState)
+        if (codexComposerScanner.observe(data).ready) {
+          noteVisibleReadProbeComposerSignal(readRetryState)
         }
-        const result = this.buildTuiIdleProbeResult(waiter.handle, blockedReason)
-        if (waiter.cancelIdlePoll) {
-          waiter.cancelIdlePoll()
-        }
-        this.terminalWaiters.resolve(waiter, result)
+        readAndClassify()
       })
-      .catch(() => {})
+    }
+    cleanupTimer = setTimeout(cleanup, probeTimeoutMs)
+    readAndClassify()
   }
 
   protected buildTuiIdleProbeResult(
