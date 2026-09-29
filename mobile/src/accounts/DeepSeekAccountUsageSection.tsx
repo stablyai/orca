@@ -21,12 +21,14 @@ export function DeepSeekAccountUsageSection({ snapshot }: { snapshot: AccountsSn
         <View style={styles.row}>
           <View style={styles.rowMain}>
             <Text style={styles.rowTitle}>Balance</Text>
-            <Text style={styles.rowSubtitle} numberOfLines={1}>
+            <Text accessibilityLiveRegion="polite" style={styles.rowSubtitle} numberOfLines={1}>
               {usage.balanceLabel ?? usage.statusLabel}
             </Text>
             <Text style={styles.rowSubtitle}>Read from the connected host</Text>
             {usage.balanceLabel && usage.status !== 'available' ? (
-              <Text style={styles.errorText}>{usage.statusLabel}</Text>
+              <Text accessibilityLiveRegion="polite" style={styles.errorText}>
+                {usage.statusLabel}
+              </Text>
             ) : null}
           </View>
         </View>

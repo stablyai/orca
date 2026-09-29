@@ -18,12 +18,8 @@ export type DeepSeekAccountUsage = {
   statusLabel: string
 }
 
-function readField(value: object, key: string): unknown {
-  return (value as Record<string, unknown>)[key]
-}
-
 function readDeepSeekAuthConfigured(snapshot: AccountsSnapshot): boolean {
-  return readField(snapshot.rateLimits, 'deepseekAuthConfigured') === true
+  return snapshot.rateLimits['deepseekAuthConfigured'] === true
 }
 
 // Why: isolate the optional provider slot so a malformed DeepSeek payload cannot
@@ -31,7 +27,7 @@ function readDeepSeekAuthConfigured(snapshot: AccountsSnapshot): boolean {
 function readDeepSeekLimits(
   snapshot: AccountsSnapshot
 ): z.infer<typeof DeepSeekProviderRateLimitsSchema> | null {
-  const raw = readField(snapshot.rateLimits, 'deepseek')
+  const raw = snapshot.rateLimits['deepseek']
   if (raw == null) {
     return null
   }
