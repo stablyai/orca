@@ -150,7 +150,7 @@ async function createHostTerminal(
     hostTabId,
     sinkPath,
     terminal: result.tab.terminal,
-    webTabId: toWebTerminalSurfaceTabId(hostTabId)
+    webTabId: toWebTerminalSurfaceTabId(hostTabId, { environmentId, worktreeId })
   }
 }
 
@@ -171,7 +171,7 @@ async function openClientTab(page: Page, worktreeId: string, webTabId: string): 
       state?.setActiveView('terminal')
       state?.setActiveWorktree(worktreeId)
       state?.setActiveTab(webTabId)
-      state?.setActiveTabType('terminal')
+      state?.setActiveTabType('terminal', worktreeId)
     },
     { webTabId, worktreeId }
   )
@@ -224,7 +224,6 @@ async function readPaneDiagnostics(
         bufferLength: pane?.serializeAddon?.serialize?.()?.length ?? null,
         paneLeafIds: manager?.getPanes?.().map((entry) => entry.leafId ?? null) ?? null,
         storeTabPtyId: tab?.ptyId ?? null,
-        storeTabLayout: tab?.paneLayout ? JSON.stringify(tab.paneLayout) : null,
         storePtyIdsByTab: state?.ptyIdsByTabId?.[webTabId] ?? null
       }
     },
@@ -287,8 +286,16 @@ async function probeInteractivity(
     `LINE:${token}`,
     LIVE_PAINT_BUDGET_MS
   )
-  const paneGrid = await readActivePaneGrid(page, target.webTabId)
+  let paneGrid = await readActivePaneGrid(page, target.webTabId)
+  let ptyGrid = readPtyGridFromContent(readSink(target.sinkPath))
+  console.log(`[paired-grid-initial] ${JSON.stringify({ name, paneGrid, ptyGrid })}`)
   const diagnostics = await readPaneDiagnostics(page, worktreeId, target.webTabId)
+  const screenshotPath = test.info().outputPath(`paired-terminal-${name}.png`)
+  await page.screenshot({ path: screenshotPath })
+  await test.info().attach(`paired-terminal-${name}`, {
+    path: screenshotPath,
+    contentType: 'image/png'
+  })
   let paintedAfterFlip = paintedLive
   if (!paintedLive) {
     await openClientTab(page, worktreeId, flipTo.webTabId)
@@ -300,6 +307,31 @@ async function probeInteractivity(
       LIVE_PAINT_BUDGET_MS
     )
   }
+  // Preserve the scenario report even when geometry fails to converge.
+  await expect
+    .configure({ soft: true })
+    .poll(
+      async () => {
+        paneGrid = await readActivePaneGrid(page, target.webTabId)
+        ptyGrid = readPtyGridFromContent(readSink(target.sinkPath))
+        return {
+          paneGrid,
+          ptyGrid,
+          converged:
+            paneGrid !== null &&
+            ptyGrid !== null &&
+            paneGrid.cols > 0 &&
+            paneGrid.rows > 0 &&
+            paneGrid.cols === ptyGrid.cols &&
+            paneGrid.rows === ptyGrid.rows
+        }
+      },
+      {
+        timeout: REVEAL_BUDGET_MS,
+        message: `${name}: revealed pane and host PTY grids did not converge`
+      }
+    )
+    .toMatchObject({ converged: true })
   const sink = readSink(target.sinkPath)
   return {
     name,
@@ -308,7 +340,7 @@ async function probeInteractivity(
     paintedLive,
     paintedAfterFlip,
     paneGrid,
-    ptyGrid: readPtyGridFromContent(sink),
+    ptyGrid,
     diagnostics
   }
 }
@@ -392,6 +424,29 @@ test('paired client keeps revealed remote terminals interactive', async ({
       const { target, decoys } = await seedScenario(client, worktreeId)
       createdTerminals.push(target.terminal, ...decoys.map((decoy) => decoy.terminal))
       await openClientTab(client.page, worktreeId, decoys[0].webTabId)
+      const originalGrid = await readActivePaneGrid(client.page, target.webTabId)
+      await client.page.setViewportSize({ width: 960, height: 800 })
+      await expect
+        .poll(() => readActivePaneGrid(client.page, decoys[0].webTabId))
+        .not.toEqual(originalGrid)
+      const revealGrid = await readActivePaneGrid(client.page, decoys[0].webTabId)
+      if (!revealGrid) {
+        throw new Error('visible decoy has no grid')
+      }
+      // Hidden xterm changes locally, but its authority gate drops the PTY resize.
+      await client.page.evaluate(
+        ({ id, grid }) => {
+          const pane = window.__paneManagers?.get(id)?.getPanes()[0]
+          if (!pane) {
+            throw new Error('hidden target parked before resize injection')
+          }
+          pane.terminal.resize(grid.cols, grid.rows)
+        },
+        { id: target.webTabId, grid: revealGrid }
+      )
+      expect(readPtyGridFromContent(readSink(target.sinkPath))).toEqual(originalGrid)
+      expect(await readActivePaneGrid(client.page, target.webTabId)).toEqual(revealGrid)
+      expect(revealGrid).not.toEqual(originalGrid)
       // Pins the scenario label: this reveal must not have gone through a park.
       await expectStillMounted(client.page, target.webTabId, 'hidden-mounted target')
       await openClientTab(client.page, worktreeId, target.webTabId)

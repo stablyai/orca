@@ -19,6 +19,7 @@ type BrowserScreencastMessageHandlerDeps = {
   scheduleNavigationFrameCapture: () => void
   clearNavigationCaptureTimer: () => void
   bumpSnapshotGeneration: () => void
+  setDialogOpen: (open: boolean) => void
 }
 
 export function createBrowserScreencastMessageHandler(
@@ -27,6 +28,7 @@ export function createBrowserScreencastMessageHandler(
   const { dbg, options, isClosed, isStopping, queueFrame, ackScreencastFrame } = deps
   const { scheduleNavigationFrameCapture, clearNavigationCaptureTimer, bumpSnapshotGeneration } =
     deps
+  const { setDialogOpen } = deps
 
   return (_event: unknown, method: string, params: unknown): void => {
     if (isClosed()) {
@@ -38,6 +40,7 @@ export function createBrowserScreencastMessageHandler(
     if (method === 'Page.javascriptDialogOpening') {
       const payload =
         params && typeof params === 'object' ? (params as Record<string, unknown>) : {}
+      setDialogOpen(true)
       options.onEvent?.({
         type: 'dialog',
         dialogType: typeof payload.type === 'string' ? payload.type : 'alert',
@@ -46,6 +49,7 @@ export function createBrowserScreencastMessageHandler(
       return
     }
     if (method === 'Page.javascriptDialogClosed') {
+      setDialogOpen(false)
       options.onEvent?.({ type: 'dialogClosed' })
       return
     }

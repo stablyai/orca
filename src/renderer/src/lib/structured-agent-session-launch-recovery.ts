@@ -6,7 +6,6 @@ import {
 } from '@/lib/launch-structured-agent-session'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync'
-import { useAppStore } from '@/store'
 
 export type StructuredAgentLaunchReceipt = { sessionId: string; fence: number }
 
@@ -32,10 +31,7 @@ function throwIfLaunchCancelled(state: StructuredLaunchRecoveryState): void {
 }
 
 async function verifyPublishedSession(state: StructuredLaunchRecoveryState): Promise<void> {
-  if (hasAdoptedStructuredSession(state.intent)) {
-    return
-  }
-  const snapshots = await refreshLocalStructuredSessionTabs()
+  const snapshots = await refreshLocalStructuredSessionTabs(undefined, { authoritative: true })
   throwIfLaunchCancelled(state)
   const published = snapshots.some(
     (snapshot) =>
@@ -44,22 +40,9 @@ async function verifyPublishedSession(state: StructuredLaunchRecoveryState): Pro
         (tab) => tab.type === 'agent-session' && tab.sessionId === state.intent.sessionId
       )
   )
-  if (!published && !hasAdoptedStructuredSession(state.intent)) {
+  if (!published) {
     throw new Error('structured session tab publication unavailable')
   }
-}
-
-function hasAdoptedStructuredSession(intent: StructuredAgentSessionLaunchIntent): boolean {
-  return Boolean(
-    useAppStore
-      .getState()
-      .unifiedTabsByWorktree[intent.worktreeId]?.some(
-        (tab) =>
-          tab.contentType === 'agent-session' &&
-          tab.entityId === intent.sessionId &&
-          tab.worktreeId === intent.worktreeId
-      )
-  )
 }
 
 async function recoverPublishedSessionReceipt(

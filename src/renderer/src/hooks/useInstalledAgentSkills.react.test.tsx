@@ -735,6 +735,8 @@ describe('useInstalledAgentSkill', () => {
     // fresh discovery per store write for as long as the host stays unreachable.
     expect(discover).toHaveBeenCalledTimes(1)
     expect(latestState?.error).toBe('runtime host unreachable')
+    // No result ever landed, so "not installed" is a claim this scan cannot back.
+    expect(latestState?.installedUnverifiable).toBe(true)
   })
 
   it('hydrates from the warm cache on its very first render pass', async () => {
@@ -880,6 +882,34 @@ describe('useInstalledAgentSkill', () => {
     await flushMicrotasks()
     expect(discover).toHaveBeenCalledTimes(2)
     expect(latestState?.installed).toBe(false)
+  })
+
+  it('keeps a landed answer authoritative when a later refresh fails', async () => {
+    const discover = vi
+      .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
+      .mockResolvedValueOnce(discoveryResult([]))
+      .mockRejectedValue(new Error('refresh failed'))
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { skills: { discover } }
+    })
+
+    await renderProbe()
+    await flushMicrotasks()
+    expect(discover).toHaveBeenCalledTimes(1)
+    expect(latestState?.settled).toBe(true)
+    expect(latestState?.installedUnverifiable).toBe(false)
+
+    await act(async () => {
+      notifyInstalledAgentSkillsChanged()
+    })
+    await flushMicrotasks()
+
+    // The refresh failed, but the answer the scan already landed still stands.
+    expect(discover).toHaveBeenCalledTimes(2)
+    expect(latestState?.error).toBe('refresh failed')
+    expect(latestState?.settled).toBe(true)
+    expect(latestState?.installedUnverifiable).toBe(false)
   })
 
   it('empties the discovery cache when an install notification fires', async () => {

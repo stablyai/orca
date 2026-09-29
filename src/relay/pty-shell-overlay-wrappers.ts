@@ -32,6 +32,7 @@ function getRelayZshWrapperSpec(): ZshStartupHookSpec {
     overlayRestoreComment:
       '# Why: remote startup files can re-export user defaults after relay spawn.',
     restores: {
+      managedWslCli: false,
       agentTeamsPath: false,
       remoteCliBinDir: true,
       codexHome: false,

@@ -69,13 +69,17 @@ it.each([1, 100, 200])('serializes each of %i unchanged forward page items once'
   await appendItems(count, 'x'.repeat(8_000))
   const snapshot = journal.snapshot()
   const stringify = JSON.stringify
+  // Method-shaped type: the JSON.stringify overloads split on replacer shape and reject a forwarded one.
+  const forwardStringify: {
+    stringify(value: unknown, replacer?: unknown, space?: unknown): string
+  }['stringify'] = stringify
   let itemSerializations = 0
-  JSON.stringify = ((value: unknown, ...args: unknown[]) => {
+  JSON.stringify = (value: unknown, replacer?: unknown, space?: unknown): string => {
     if (value && typeof value === 'object' && 'itemId' in value && 'body' in value) {
       itemSerializations++
     }
-    return Reflect.apply(stringify, JSON, [value, ...args])
-  }) as typeof JSON.stringify
+    return forwardStringify(value, replacer, space)
+  }
   try {
     const result = readAgentSessionHistory(
       journal,

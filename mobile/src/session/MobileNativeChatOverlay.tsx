@@ -16,7 +16,7 @@ type Props = {
   images: MobileNativeChatImageAttachments
   onMicPress: () => void
   micActive: boolean
-  dictationMode: 'toggle' | 'hold'
+  dictationMode: string | undefined
   onMicPressIn: () => void
   onMicPressOut: () => void
   inputLockReason: MobileNativeChatInputLockReason | null
@@ -76,6 +76,8 @@ export function MobileNativeChatOverlay({
         turnIndicator={controller.nativeChatTurnIndicator}
         workingStartedAt={controller.nativeChatWorkingStartedAt}
         settledTurns={controller.nativeChatSettledTurns}
+        activeTurnOpenedBy={controller.nativeChatActiveTurnOpenedBy}
+        turnKeysByItemId={controller.nativeChatTurnKeysByItemId}
         streaming={streaming}
         onStop={controller.handleNativeChatStop}
         ask={controller.nativeChatAsk}

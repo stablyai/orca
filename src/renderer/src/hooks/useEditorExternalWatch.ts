@@ -7,7 +7,7 @@ import {
   getEditorExternalWatchTargetKey,
   selectEditorExternalWatchTargets,
   type EditorExternalWatchTarget,
-  type EditorExternalWatchTargetState as EditorExternalWatchTargetStateShape
+  type EditorExternalWatchTargetState
 } from './editor-external-watch-targets'
 import {
   buildEditorExternalWatchEventHandler,
@@ -15,7 +15,7 @@ import {
 } from './editor-external-watch-event-reconciliation'
 import { verifyLatchedEditorMoveDestinations } from './editor-external-watch-disk-verification'
 
-export type EditorExternalWatchTargetState = EditorExternalWatchTargetStateShape
+export type { EditorExternalWatchTargetState }
 
 function warnExternalWatchFailure(target: EditorExternalWatchTarget, err: unknown): void {
   console.warn('[filesystem-watch] failed to watch worktree', {

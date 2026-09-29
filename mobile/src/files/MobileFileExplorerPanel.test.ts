@@ -9,11 +9,17 @@ type MockClient = {
   sendRequest: ReturnType<typeof vi.fn>
 }
 
-const mockTransport = vi.hoisted(() => ({
-  client: null as MockClient | null,
-  connectionState: 'connected',
-  forceReconnect: vi.fn()
-}))
+const mockTransport = vi.hoisted(
+  (): {
+    client: MockClient | null
+    connectionState: string
+    forceReconnect: ReturnType<typeof vi.fn> | null
+  } => ({
+    client: null,
+    connectionState: 'connected',
+    forceReconnect: vi.fn()
+  })
+)
 
 vi.mock('react-native', async () => {
   const React = await import('react')
@@ -377,5 +383,79 @@ describe('MobileFileExplorerPanel', () => {
 
     expect(renderedText(renderer)).toContain('legacy list failed')
     expect(renderedText(renderer)).not.toContain('not available to mobile clients')
+  })
+
+  describe('Retry while the host is unreachable', () => {
+    function failingClient(failedPaths: Set<string>): MockClient {
+      return {
+        sendRequest: vi.fn(async (_method: string, params: { relativePath: string }) =>
+          failedPaths.has(params.relativePath)
+            ? {
+                id: 'response-id',
+                ok: false,
+                error: { code: 'internal', message: 'read failed' },
+                _meta: { runtimeId: 'runtime-id' }
+              }
+            : ok(params.relativePath === '' ? [entry('src', true)] : [entry('app.ts')])
+        )
+      }
+    }
+
+    async function unreachableAfterRootFailure(): Promise<ReactTestRenderer> {
+      mockTransport.client = failingClient(new Set(['']))
+      const renderer = await renderExplorer()
+      mockTransport.connectionState = 'reconnecting'
+      await updateExplorer(renderer)
+      return renderer
+    }
+
+    function retryButtons(renderer: ReactTestRenderer) {
+      return renderer.root
+        .findAllByType('Pressable')
+        .filter((node) =>
+          node.findAllByType('Text').some((text) => text.props.children === 'Retry')
+        )
+    }
+
+    it('offers no root Retry on the page, where nothing can re-dial', async () => {
+      mockTransport.forceReconnect = null
+      const renderer = await unreachableAfterRootFailure()
+      expect(renderedText(renderer)).toContain('Waiting for desktop...')
+      expect(retryButtons(renderer)).toHaveLength(0)
+    })
+
+    it('still offers it natively, and re-dials this host', async () => {
+      const forceReconnect = vi.fn()
+      mockTransport.forceReconnect = forceReconnect
+      const renderer = await unreachableAfterRootFailure()
+      const [retry] = retryButtons(renderer)
+      await act(async () => {
+        retry?.props.onPress()
+      })
+      expect(forceReconnect.mock.calls).toEqual([['host-a']])
+    })
+
+    it("keeps a folder's Retry on the page, whose read runs when the shell reconnects", async () => {
+      // The one retry that does something without a re-dial: it queues the folder, and the
+      // queue drains on the next `connected` whoever brought it back.
+      mockTransport.forceReconnect = null
+      const client = failingClient(new Set(['src']))
+      mockTransport.client = client
+      const renderer = await renderExplorer()
+      await pressByLabel(renderer, 'Open folder src')
+      await vi.waitFor(() => expect(renderedText(renderer)).toContain('read failed'))
+      mockTransport.connectionState = 'reconnecting'
+      await updateExplorer(renderer)
+      client.sendRequest = failingClient(new Set()).sendRequest
+      await pressByLabel(renderer, 'Retry loading src')
+      mockTransport.connectionState = 'connected'
+      await updateExplorer(renderer)
+      await vi.waitFor(() =>
+        expect(client.sendRequest).toHaveBeenLastCalledWith('files.readDir', {
+          worktree: 'id:worktree-a',
+          relativePath: 'src'
+        })
+      )
+    })
   })
 })

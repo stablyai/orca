@@ -8,22 +8,26 @@ import {
   closeFailedCodexAcquisition,
   stopSupersededCodexAcquisition
 } from './codex-structured-acquisition-lifecycle'
-import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
+import { CodexBackgroundTaskTracker, codexChildWorkSink } from './codex-background-task-tracker'
 import { CodexSubagentExecutions } from './codex-subagent-executions'
 import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import { openCodexAppServerConnection } from './codex-app-server-connection'
-import { codexProcessIdentity, codexProviderHandleLink } from './codex-structured-owner-identity'
+import {
+  codexProviderHandleLink,
+  codexSpawnedProcessIdentity
+} from './codex-structured-owner-identity'
 import { buildCodexStructuredChildEnvironment } from './codex-structured-child-environment'
 import { openCodexThread } from './codex-structured-thread-open'
 import {
   closeCodexPublishedSession,
   handleCodexSessionExit
 } from './codex-structured-session-close'
+import { restoredCodexSessionOptions } from './codex-structured-session-options'
 import {
-  readCodexStructuredSessionOptionCatalog,
-  restoredCodexSessionOptions
-} from './codex-structured-session-options'
+  codexAcquireCatalogAccess,
+  codexAcquireFastModeCatalog
+} from './codex-structured-acquire-catalog'
 import {
   reconcileCodexFastModeOption,
   reportedCodexThreadOptions
@@ -39,6 +43,8 @@ import {
 import type { CodexStructuredTurnCancellation } from './codex-structured-turn-cancellation'
 import type { CodexStructuredNotificationRetry } from './codex-structured-notification-retry'
 import type { deliverCodexServerRequest } from './codex-structured-provider-events'
+
+const TURN_BOUNDARIES: ReadonlySet<string> = new Set(['turn/started', 'turn/completed'])
 
 export async function acquireCodexStructuredSession(input: {
   input: StructuredAgentSessionAcquireInput
@@ -89,6 +95,8 @@ export async function acquireCodexStructuredSession(input: {
         sessionId,
         ...(deps.now ? { now: deps.now } : {}),
         primaryThreadId: () => primaryThreadId,
+        onPrimaryThreadStoppedRunning: () => deps.onPrimaryThreadStoppedRunning?.({ sessionId }),
+        dispatchRequestOrigin: (clientMessageId) => dispatchEchoes.requestOrigin(clientMessageId),
         subagentExecutions,
         bindPromptItemId: (journalItemId, threadId, promptKey, turnId) =>
           acquisition.prompts.bindJournalItemId(journalItemId, threadId, promptKey, turnId),
@@ -103,6 +111,7 @@ export async function acquireCodexStructuredSession(input: {
       })
     : null
   const open = deps.openConnection ?? openCodexAppServerConnection
+  const spawnIdentity = codexSpawnedProcessIdentity(acquireInput, deps.readProcessStartTime)
   try {
     await stopSupersededCodexAcquisition({
       sessionId,
@@ -131,11 +140,20 @@ export async function acquireCodexStructuredSession(input: {
       {
         onNotification: (method, params) => {
           // Stamped at receipt, ahead of any pre-publication buffering or retry.
-          const observedAt = isCodexTurnBoundary(method) ? (deps.now?.() ?? Date.now()) : undefined
+          const observedAt = TURN_BOUNDARIES.has(method) ? (deps.now?.() ?? Date.now()) : undefined
+          const dispatchSequenceAtReceipt =
+            method === 'turn/started' ? dispatchEchoes.latestSequence() : undefined
           input.deliver(
             acquisition,
             sessionId,
-            () => notificationRetries.handle(sessionId, method, params, observedAt),
+            () =>
+              notificationRetries.handle(
+                sessionId,
+                method,
+                params,
+                observedAt,
+                dispatchSequenceAtReceipt
+              ),
             Buffer.byteLength(JSON.stringify(params ?? null), 'utf8')
           )
         },
@@ -153,6 +171,7 @@ export async function acquireCodexStructuredSession(input: {
             () => input.handleUnhandledFrame(sessionId, kind, payload),
             Buffer.byteLength(JSON.stringify(payload ?? null), 'utf8')
           ),
+        onSpawned: spawnIdentity.onSpawned,
         onExit: (error) => {
           try {
             handleCodexSessionExit({
@@ -186,20 +205,19 @@ export async function acquireCodexStructuredSession(input: {
     primaryThreadId = opened.threadId
     const restoreAdmission = translator?.restoreThread(opened.threadId, opened.thread ?? {})
     if (restoreAdmission && !restoreAdmission.accepted) {
-      throw new AgentSessionAcquisitionRefusal(
+      throw AgentSessionAcquisitionRefusal.historyTooLarge(
         'Codex thread history exceeds the bounded restore queue; history was not partially imported.'
       )
     }
-    const process = await codexProcessIdentity(
-      { ...acquireInput, pid: connection.pid },
-      deps.readProcessStartTime
-    )
+    const process = await spawnIdentity.read(connection.pid)
     acquisitions.assertCurrent(sessionId, attempt)
     const acquired: AgentSessionAcquisition = {
       process,
       link: codexProviderHandleLink({
         threadId: opened.threadId,
-        resumed: launch.resumeThreadId !== null,
+        ...(opened.supersededThreadId
+          ? { resumed: false, supersedesThreadId: opened.supersededThreadId }
+          : { resumed: launch.resumeThreadId !== null }),
         fence: acquireInput.fence,
         linkId: deps.mintLinkId?.(),
         observedAt: deps.now?.() ?? Date.now()
@@ -211,23 +229,21 @@ export async function acquireCodexStructuredSession(input: {
     }
     acquisitions.assertCurrent(sessionId, attempt)
     const options = restoredCodexSessionOptions(acquireInput.options)
-    const fastModeCatalog =
-      options.get('fastMode') === 'true' || options.has('serviceTier')
-        ? await readCodexStructuredSessionOptionCatalog({
-            connection,
-            current: {
-              ...(opened.model ? { model: opened.model } : {}),
-              ...(opened.effort ? { effort: opened.effort } : {}),
-              fastMode: true
-            },
-            timeoutMs: deps.requestTimeoutMs
-          }).catch(() => null)
-        : null
+    const catalogAccess = codexAcquireCatalogAccess(deps, launch)
+    const fastModeCatalog = await codexAcquireFastModeCatalog({
+      connection,
+      catalogAccess,
+      opened,
+      restoreNeedsCatalog: options.get('fastMode') === 'true' || options.has('serviceTier'),
+      timeoutMs: deps.requestTimeoutMs
+    })
     acquisitions.assertCurrent(sessionId, attempt)
     if (connection.closed) {
       throw new Error(`codex app-server for session ${sessionId} exited while being acquired`)
     }
     acquisitions.deleteIfCurrent(sessionId, attempt)
+    // Where this session's child work goes: the host's records, after each frame is journaled.
+    const sink = codexChildWorkSink(sessionId, deps)
     const session: CodexSession = {
       connection,
       ...codexSessionLifecycle(acquireInput.fence, acquired.acquisitionGeneration as string),
@@ -239,9 +255,10 @@ export async function acquireCodexStructuredSession(input: {
       options,
       reportedOptions: reportedCodexThreadOptions(opened),
       fastModeTierByModel: fastModeCatalog?.fastModeTierByModel ?? new Map(),
+      ...(catalogAccess ? { catalogAccess } : {}),
       dispatchEchoes,
       translator,
-      backgroundTasks: new CodexBackgroundTaskTracker(opened.threadId, subagentExecutions),
+      backgroundTasks: new CodexBackgroundTaskTracker(opened.threadId, subagentExecutions, sink),
       forceCloseUnexpected: (reason) =>
         input.forceCloseUnexpected(
           sessionId,
@@ -285,8 +302,4 @@ export async function acquireCodexStructuredSession(input: {
   } finally {
     attempt.finish()
   }
-}
-
-function isCodexTurnBoundary(method: string): boolean {
-  return method === 'turn/started' || method === 'turn/completed'
 }

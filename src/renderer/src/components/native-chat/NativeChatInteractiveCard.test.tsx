@@ -33,6 +33,7 @@ vi.mock('../../store', () => ({
 }))
 
 import { NativeChatInteractiveCard } from './NativeChatInteractiveCard'
+import { useNativeChatInteractivePromptCard } from './use-native-chat-interactive-prompt-card'
 
 const mocks = {
   sendAnswer: vi.fn<NativeChatInteractiveSend['sendAnswer']>(),
@@ -45,6 +46,8 @@ function renderCard(canSend = true): ReturnType<typeof render> {
   return render(cardElement(canSend))
 }
 
+const NO_MESSAGES: readonly NativeChatMessage[] = []
+
 function cardElement(
   canSend = true,
   messages?: readonly NativeChatMessage[],
@@ -52,11 +55,36 @@ function cardElement(
   transcriptSettled = true
 ): React.JSX.Element {
   return (
-    <NativeChatInteractiveCard
-      paneKey="tab-1:leaf-1"
+    <CardHarness
       canSend={canSend}
       messages={messages}
+      onShowingQuestionChange={onShowingQuestionChange}
       transcriptSettled={transcriptSettled}
+    />
+  )
+}
+
+// The view derives the card and hands it over; this stands in for that view.
+function CardHarness({
+  canSend,
+  messages,
+  onShowingQuestionChange,
+  transcriptSettled
+}: {
+  canSend: boolean
+  messages?: readonly NativeChatMessage[]
+  onShowingQuestionChange?: (showing: boolean) => void
+  transcriptSettled: boolean
+}): React.JSX.Element | null {
+  const card = useNativeChatInteractivePromptCard({
+    paneKey: 'tab-1:leaf-1',
+    messages: messages ?? NO_MESSAGES,
+    transcriptSettled: transcriptSettled && messages !== undefined
+  })
+  return (
+    <NativeChatInteractiveCard
+      card={card}
+      canSend={canSend}
       onShowingQuestionChange={onShowingQuestionChange}
       send={{
         sendAnswer: mocks.sendAnswer,

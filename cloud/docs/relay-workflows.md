@@ -165,6 +165,30 @@ or moving a cell and rejects intervening drift. Then
 atomically register the new cells as migration-only, binding every mutation to
 the exact live selector generation and a durable attempt ID. Deploy and verify
 the director configuration only after registration, then promote C27 alone before C28/C29.
+
+The production Asia set is C27-C30. C27-C29 launched as one wave; C30 is an additive wave of its
+own at the same shape. Its plan names C30's template, MIG, and backend plus the shared URL map, and
+the URL map pulls every existing cell's backend, MIG, and template into the plan. Committed images
+lag what same-cap rolls serve, so the workflow first reads each non-target cell's served image out
+of its live template in state and plans that cell at it. It reads the committed cell map from a
+no-refresh, unlocked plan over the same targets, not `terraform console`. Console evaluates every
+output against state, so `relay_gce_cell_deployments` wraps each per-cell resource lookup in
+`try`: until C30's topology apply, console succeeds and that output shows C30 with null MIG,
+backend, and template fields. The validator then rejects any change to a
+cell outside the wave, so the plan must read as C30's three creations plus the URL map update.
+Before the apply dispatch, run the plan mode and read its `Plan:` line; any other drift, such as a
+cell whose startup script changed since its last roll, fails the plan and must be rolled first.
+Register C30 alone as migration-only, configure the director with `cell-ids` set to C30 while
+regional rehome is paused, then promote it alone. Promotion requires C27-C29 to be general and takes
+no input evidence. It runs the same five-minute production control and splice canary C27 ran, on
+C30: the evidence must show the canary control was placed on C30, read C30's own runtime metrics,
+and bind the selector generation, and any failure returns C30 to migration-only. The SQL-failure and
+database-pool rules read C30's own metrics only. Director values are recorded under
+`director`-prefixed names but do not fail the canary, because directors show a steady baseline of
+`relay_cells` lock refusals and pool waits unrelated to C30. C30 was promoted to general on
+2026-09-23, so the same-cap job now rolls it as a general cell and the shadow gate's fleet pool list
+reads it beside C27-C29. A later Asia cell stays in the same-cap migration-only list and out of the
+fleet pool list until its own promotion, then moves to both together, as its own reviewed wave.
 Rollback returns
 Asia cells to migration-only; it does not destroy the network or use
 existing-only. The production topology dispatch remains unavailable until the
@@ -374,7 +398,8 @@ remain general at 1,000/60. The workflow lock, single-use evidence marker, exact
 targeted Terraform plan, and per-cell heartbeat/admission oracle are unchanged.
 
 `Deploy Relay Production Same-Cap` rolls only the reviewed US 1,000/60 and Asia 3,000/60 serving
-sets without changing a cell's connection shape. Use `canary-apply` for exactly one cell. A successful canary
+sets and the two migration-only US 600/60 cells, C17 and C18, without changing a cell's connection
+shape. Use `canary-apply` for exactly one cell. A successful canary
 seals its commit, target and rollback digests, selector generation, and durable rehome generation;
 `batch-apply` accepts only that same authority and rolls two to four cells sequentially. Each cell is
 isolated, drained to two restart-safe samples, replaced from a targeted saved plan, and restored only
@@ -383,6 +408,89 @@ worker must remain disabled throughout. The post-restart trust check is applicat
 director; the workflow never receives or mints a director or stamped-cell runtime token. A failure
 keeps only the selected cell migration-only, while the exact rollback digest remains dispatchable via
 the same workflow's `rollback` mode.
+
+A roll holds the whole startup script identical before and after except the image, so a
+template stale enough to predate a pinned line fails closed rather than absorbing the drift.
+The one exception is the capacity identity: a cell that predates it gains it on its next roll,
+and the plan validator pins the exact reviewed identity instead of comparing that line, so a
+roll can never drop or rewrite it. Any other stale line still fails closed and needs a
+convergence apply first.
+
+A drained cell is refused before a roll, because draining means something is already
+shedding its connections. A migration-only cell has none to shed, so the flag decides nothing
+there and is accepted on entry; the replacement VM is still required not to be draining, and
+the incarnation check still proves it was replaced. That also unwedges the state a failed
+canary leaves behind, where the wave's own drain set the flag and no restart followed.
+
+C17 and C18 hold no hosts and are not general, so rolling one displaces nobody: they are the
+zero-displacement canary for a new image. Their wave enters and leaves migration-only, so its
+isolate and its restore are both no-ops and the selector generation does not move; a general
+cell's wave still advances it by two. One wave may not mix the two classes, because every cell
+after the first offsets from a single per-wave delta. Neither cell is a declared regional-rehome
+source, so its template carries no rehome trust lines and it may roll only at rehome protocol `0`;
+the job refuses a trusted protocol for it before it plans anything.
+
+### Recovering a wave that died after its drain
+
+A cell's drain flag is a one-way latch on the running process. Only a restart clears it, and
+the failsafe that isolates a failed cell does not restart anything. So a wave that stopped
+any time after its drain step leaves the cell migration-only and draining, and it stays that
+way until the cell is rolled.
+
+Read the failed run before dispatching anything. If its log has a
+`"event":"relay_production_capacity_canary","mode":"drain"` line for the cell, the cell is
+drained. Then read the cell's live runtime image from
+`POST https://<hostname>.relay.onorca.dev/v1/admin/runtime-status`.
+
+1. **Do not re-dispatch `apply`.** It requires the cell general and not draining, and a
+   drained cell is neither. It will fail closed at the predecessor check.
+2. **Dispatch `rollback`,** with the same `target-image-digest` and `rollback-image-digest`
+   the failed wave used, the live selector generation, and the live tri-state membership
+   with the failed cell listed under migration-only. The confirmation is
+   `ROLL_BACK_RELAY_SAME_CAP <rollback-digest> <cell-id>`.
+3. The job classifies the cell itself and needs no extra input:
+   - serving the **rollback** image and draining, it is `stranded`. The wave stopped before
+     or during its template apply. The job re-isolates, re-drains, applies the reviewed
+     template, and rolls the MIG explicitly if that template was already in place. The cell
+     comes back on a new instance, so the drain clears, and it is restored to its entry class.
+   - serving the **target** image, it is `roll`, the ordinary rollback. The template applied
+     and the instance was replaced.
+   - serving the **rollback** image and not draining, it is `resume`: a rollback that failed
+     after its own template apply. Nothing is applied and nothing restarts.
+4. Rollback takes exactly one cell per dispatch. Recover the cells one at a time.
+5. If the run died inside `wait-until stable`, the MIG is still rolling on its own. Wait for
+   it to settle and re-read the runtime before dispatching, or the stage will be read off a
+   state that is about to change.
+6. A `stranded` dispatch that fails at plan review means the template already carries the
+   target image while the old instance is still up. Wait for the MIG to finish replacing it,
+   then dispatch again; it will classify as `roll`.
+
+A mutating dispatch still needs a fresh aggregate monitor dry-run unless the break-glass
+override below is used.
+
+### Gate override (break-glass)
+
+Every mutating same-cap wave normally consumes a fresh 15-minute aggregate monitor dry-run.
+`gate-override-reason` plus `gate-override-confirmation`, the latter exactly
+`SKIP_RELAY_MONITOR_GATE <target-image-digest>`, skips that aggregate evidence and nothing
+else. A partial or mismatched override fails the run before any mutation, and `verify` mode
+rejects it outright.
+
+It is legitimate when the roll is the fix for the condition the gate is freezing on, or
+during an incident with the director healthy. It is not a way to move faster on an ordinary
+wave.
+
+The live per-wave preflight still runs, against the same thresholds, with the expected
+selector taken from the dispatch inputs and the migration policy pinned to `strict`. That
+membership is canonicalised the same way the monitor canonicalises its own, so it must name
+every configured cell exactly once and its order does not matter.
+Durable rehome disabled, the exact selector generation and membership, the reviewed
+Terraform plan, the predecessor and new-incarnation checks, the rollout lease, the
+failed-wave failsafe, and single-dispatch mutation are all unchanged. The actor, reason,
+and confirmation are recorded in the gate job's run summary and, for a canary, sealed into
+the canary artifact under `gateOverride`; a batch may reuse a canary rolled under an
+override, because that authority never carried a monitor run ID. See
+[gate override (break-glass)](./relay-incident-monitor.md#gate-override-break-glass).
 
 The first compatible director rollout uses `bootstrap-runtime-identity=true` with
 `BOOTSTRAP_RELAY_DIRECTOR_REHOME_IDENTITY`. That one-time path requires the exact stamped-cell

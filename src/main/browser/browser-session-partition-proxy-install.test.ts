@@ -25,6 +25,8 @@ const { sessionsByPartition, fromPartitionMock } = vi.hoisted(() => {
   return { sessionsByPartition, fromPartitionMock }
 })
 
+const identityState = vi.hoisted(() => ({ unavailable: false }))
+
 vi.mock('electron', () => ({
   session: {
     defaultSession: { resolveProxy: vi.fn(async () => 'DIRECT'), setProxy: vi.fn(async () => {}) },
@@ -44,12 +46,19 @@ vi.mock('./browser-media-access', () => ({
   requestSystemMediaAccess: vi.fn(async () => false)
 }))
 vi.mock('./browser-session-ua', () => ({
-  cleanElectronUserAgent: vi.fn((ua: string) => ua),
-  setupGoogleAuthUserAgentOverride: vi.fn()
+  installBrowserSessionUserAgentPolicy: vi.fn(() => vi.fn())
 }))
-vi.mock('./browser-session-user-agent-mode', () => ({
-  setBrowserSessionUserAgentMode: vi.fn(),
-  clearBrowserSessionUserAgentMode: vi.fn()
+vi.mock('./browser-process-user-agent', () => ({
+  getBrowserProcessUserAgentIdentity: () => {
+    // The real one throws when the process identity was never initialized.
+    if (identityState.unavailable) {
+      throw new Error('Browser process user agent is not initialized')
+    }
+    return {
+      mode: 'clean',
+      userAgent: 'Mozilla/5.0 Chrome/150.0.0.0 Safari/537.36'
+    }
+  }
 }))
 vi.mock('./browser-webauthn-access', () => ({
   allowsBrowserWebAuthnPermission: vi.fn(() => false),
@@ -99,6 +108,23 @@ describe('installBrowserSessionPartitionPolicies proxy wiring', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs()
+    identityState.unavailable = false
+  })
+
+  // The installer returns Promise<void>, so every caller reports failure through the promise —
+  // `void install(...).catch(...)` at browser-session-registry.ts:136 and :336, and a bare
+  // `void install(...)` at browser-session-route-policies.ts:16. The user agent policy is
+  // configured synchronously before the first await, so a throw from there escapes all of them
+  // and takes down browser-session startup instead of being reported.
+  it('reports an unavailable process identity through the promise, not a synchronous throw', async () => {
+    const profile = nextProfile()
+    identityState.unavailable = true
+
+    let installation: Promise<void> | undefined
+    expect(() => {
+      installation = installBrowserSessionPartitionPolicies(profile)
+    }).not.toThrow()
+    await expect(installation).rejects.toThrow('Browser process user agent is not initialized')
   })
 
   // Why (STA-4779): the installer is the single funnel every browser partition passes through.

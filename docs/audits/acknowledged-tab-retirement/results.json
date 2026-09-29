@@ -1,0 +1,66 @@
+{
+  "comparison": "Actual renderer close, durable Store, runtime close/graph/physical-exit methods; before reverses only fix.patch in a temporary Vite transform",
+  "sourceHashes": {
+    "src/main/runtime/orca-runtime-close-mobile-session-tab.ts": {
+      "before": "fcf1a22bc7aa72af40593c00008a83695fc3ebd78b76a6707ecca300beaedece",
+      "after": "b5f5ff9df47165c6c9b41b49ee78f4d84b4d6210e69c04d3ca63bc53e9d32ad5"
+    },
+    "src/main/runtime/workspace-session-terminal-tab-retirement-identity.ts": {
+      "before": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "after": "333a0d11659e4034a634c423253b20f3aab25686c20894804b6a1f08aefcd702"
+    },
+    "src/main/runtime/acknowledged-terminal-tab-retirement.test.ts": {
+      "current": "efcd9dca5f4ceff69c968d886bf01ed87762301a4470fcadaae257c4e4881c81"
+    },
+    "src/main/runtime/acknowledged-terminal-tab-retirement-fixture.ts": {
+      "current": "632d0dd0535b136f0474ed7d0f8bcac6830a9a9e165e7696f6a7c89304eda058"
+    },
+    "docs/audits/acknowledged-tab-retirement/fixture.test.ts": {
+      "current": "176f26c95a7cf7526e4a1e8131e5ac897f6ecd45876772945b7363db5f622aa6"
+    }
+  },
+  "before": {
+    "exitCode": 1,
+    "timedOut": false,
+    "passed": 3,
+    "failed": 28,
+    "failedCases": [
+      "durably commits acknowledged close for repo/local before graph removal",
+      "durably commits acknowledged close for repo/ssh:target before graph removal",
+      "durably commits acknowledged close for folder/local before graph removal",
+      "durably commits acknowledged close for folder/ssh:target before graph removal",
+      "preserves createdAt replacement while acknowledgement is pending",
+      "preserves generation replacement while acknowledgement is pending",
+      "preserves binding replacement while acknowledgement is pending",
+      "preserves leaf replacement while acknowledgement is pending",
+      "preserves incarnation replacement while acknowledgement is pending",
+      "keeps current pin guard after renderer acknowledges",
+      "does not confuse title/color metadata with replacement",
+      "finishes durable close after physical exit retires only one original split leaf",
+      "preserves registered same-ID successor even after old snapshot was removed",
+      "reports host persistence failure after renderer ack without claiming durable success",
+      "retains force permission across an acknowledged close with a newly pinned row",
+      "protects a replacement execution-host partition while acknowledgement is pending",
+      "also commits when the renderer graph removal arrives before acknowledgement",
+      "documents live snapshot pending until graph removal, then rejects the older queued graph",
+      "durably retires an acknowledged row with graph-before-ack=false",
+      "durably retires an acknowledged row with graph-before-ack=true",
+      "protects a same-ID replacement with newer createdAt",
+      "protects a same-ID replacement with newer generation",
+      "finishes physical split exit with remote-session promotion=false",
+      "finishes physical split exit with remote-session promotion=true",
+      "protects a new incarnation admitted after the old snapshot disappeared",
+      "protects a persisted incarnation replacement on the same leaf and raw PTY ID",
+      "rechecks current pins after renderer acknowledgement",
+      "protects a persisted sibling omitted by a partial mobile snapshot"
+    ]
+  },
+  "after": {
+    "exitCode": 0,
+    "timedOut": false,
+    "passed": 31,
+    "failed": 0,
+    "failedCases": []
+  },
+  "passed": true
+}

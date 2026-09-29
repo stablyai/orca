@@ -4,7 +4,7 @@ import { editorSelectionCache, scrollTopCache, setWithLRU } from '@/lib/scroll-c
 
 type MonacoViewStateTrackingParams = {
   editorInstance: editor.IStandaloneCodeEditor
-  filePath: string
+  fileIdRef: MutableRefObject<string>
   viewStateKey: string
   scrollThrottleTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | null>
   setEditorCursorLine: (fileId: string, line: number) => void
@@ -14,16 +14,16 @@ export function installMonacoViewStateTracking(params: MonacoViewStateTrackingPa
   cursorPositionSub: { dispose: () => void }
   scrollStateSub: { dispose: () => void }
 } {
-  const { editorInstance, filePath, viewStateKey, scrollThrottleTimerRef, setEditorCursorLine } =
+  const { editorInstance, fileIdRef, viewStateKey, scrollThrottleTimerRef, setEditorCursorLine } =
     params
 
   // Track cursor line for "copy path to line" feature
   const pos = editorInstance.getPosition()
   if (pos) {
-    setEditorCursorLine(filePath, pos.lineNumber)
+    setEditorCursorLine(fileIdRef.current, pos.lineNumber)
   }
   const cursorPositionSub = editorInstance.onDidChangeCursorPosition((e) => {
-    setEditorCursorLine(filePath, e.position.lineNumber)
+    setEditorCursorLine(fileIdRef.current, e.position.lineNumber)
   })
 
   // Why: only the resting scroll position matters, so trailing-throttle writes (~150ms) instead of writing every 60fps frame.

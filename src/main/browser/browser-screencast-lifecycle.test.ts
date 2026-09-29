@@ -143,7 +143,8 @@ describe('browser screencast lifecycle', () => {
       ackScreencastFrame,
       scheduleNavigationFrameCapture: vi.fn(),
       clearNavigationCaptureTimer: vi.fn(),
-      bumpSnapshotGeneration: vi.fn()
+      bumpSnapshotGeneration: vi.fn(),
+      setDialogOpen: vi.fn()
     })
 
     handler({}, 'Page.screencastFrame', { sessionId: 42, data: '' })

@@ -1,8 +1,10 @@
+import { markRemoteQoderWorkspaceTrusted } from './qoder/workspace-trust'
 import type { AgentTrustPreset } from './agent-trust-presets'
 import { upsertProjectTrustLevelInContent } from './codex/config-toml-trust'
 import { getActiveMultiplexer } from './ssh/ssh-target-registry'
 import { getSshFilesystemProvider } from './providers/ssh-filesystem-dispatch'
-import type { IFilesystemProvider } from './providers/types'
+import type { FileReadResult, IFilesystemProvider } from './providers/types'
+import { isENOENT } from './ipc/filesystem-path-containment'
 import {
   isWindowsAbsolutePathLike,
   normalizeRuntimePathSeparators
@@ -20,13 +22,21 @@ export async function markRemoteAgentWorkspaceTrusted(args: {
   }
 
   const workspacePath = await canonicalizeRemoteWorkspacePath(fsProvider, args.workspacePath)
-  if (args.preset === 'codex') {
+  if (args.preset === 'qoder') {
+    await markRemoteQoderWorkspaceTrusted(fsProvider, home, workspacePath)
+  } else if (args.preset === 'codex') {
     await markRemoteCodexProjectTrusted(fsProvider, home, workspacePath)
   } else if (args.preset === 'cursor') {
     await markRemoteCursorWorkspaceTrusted(fsProvider, home, workspacePath)
   } else if (args.preset === 'copilot') {
     await markRemoteCopilotFolderTrusted(fsProvider, home, workspacePath)
   }
+  // KNOWN GAP: 'antigravity' is deliberately absent. The local preset writes
+  // ~/.gemini/antigravity-cli/settings.json, and the remote equivalent has not been verified
+  // against an SSH execution host, so an agy worker launched over SSH still raises its
+  // first-launch trust prompt and will stall at agent_readiness. Falling through silently
+  // matches the pre-existing behaviour for agy; it is recorded here rather than left as an
+  // unexplained omission. Mirror markRemoteCopilotFolderTrusted once it can be tested.
 }
 
 async function resolveRemoteHome(connectionId: string): Promise<string | null> {
@@ -67,12 +77,20 @@ async function readRemoteTextFile(
   fsProvider: IFilesystemProvider,
   filePath: string
 ): Promise<string> {
+  let result: FileReadResult
   try {
-    const result = await fsProvider.readFile(filePath)
-    return result.isBinary ? '' : result.content
-  } catch {
-    return ''
+    result = await fsProvider.readFile(filePath)
+  } catch (error) {
+    // Why: only definitive absence may seed empty; a failed read would otherwise overwrite the user's config.
+    if (isENOENT(error)) {
+      return ''
+    }
+    throw error
   }
+  if (result.isBinary) {
+    throw new Error(`Refusing to rewrite non-text remote config: ${filePath}`)
+  }
+  return result.content
 }
 
 async function markRemoteCodexProjectTrusted(

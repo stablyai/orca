@@ -63,7 +63,7 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
       if (!session.shouldSendFocusedAgentReattachFocusIn() || !sendFocusMode) {
         return
       }
-      session.transport.sendInput(TERMINAL_FOCUS_IN_SEQUENCE)
+      session.transport.sendInput(TERMINAL_FOCUS_IN_SEQUENCE, 'query-reply')
     })
   }
 
@@ -158,8 +158,9 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
         continue
       }
       if (clearBeforeReplay || data.length > 0) {
-        await session.writeReplayDataAsync(
-          session.reattachReplayResetSequence(data, false, alternateScreen, terminalOwner)
+        await session.writeReplayEpilogue(
+          session.chooseReattachReplayReset(data, false, alternateScreen, terminalOwner),
+          session.writeReplayDataAsync
         )
         if (!isCurrentPayload()) {
           continue

@@ -1,28 +1,21 @@
 import { settingsRead } from '../transport/settings-read-operations'
 import { decodeAccountsSnapshot, type AccountsSnapshot } from '../components/AccountUsage'
-import type { HomeStatsSummary } from '../stats/home-stats-total'
+import type { HomeStatsRow } from '../stats/home-stats-total'
+import { taskLinearStatusRead, taskPreflightRead } from '../tasks/mobile-task-runtime-operations'
 import {
   filterAvailableTaskProviders,
   normalizeVisibleTaskProviders,
   type TaskProvider
 } from '../tasks/mobile-task-providers'
 import type { RpcClient } from '../transport/rpc-client'
-import { sendSingleFlightRequest } from '../transport/request-single-flight'
+import { homeHostAccountsRead, homeHostStatsRead } from './mobile-home-host-operations'
 
 type HomeTaskSettings = {
   visibleTaskProviders?: unknown
 }
 
-type HomePreflightStatus = {
-  glab?: { installed?: boolean }
-}
-
-type HomeLinearStatus = {
-  connected?: boolean
-}
-
 export type HomeStatsSetter = (
-  updater: (previous: Record<string, HomeStatsSummary>) => Record<string, HomeStatsSummary>
+  updater: (previous: Record<string, HomeStatsRow>) => Record<string, HomeStatsRow>
 ) => void
 
 export type HomeAccountsSetter = (
@@ -39,13 +32,12 @@ export function fetchMobileHomeStats(
   setStats: HomeStatsSetter,
   disposed: () => boolean
 ): void {
-  sendSingleFlightRequest(client, hostId, 'stats.summary')
-    .then((response) => {
-      if (!disposed() && response.ok) {
-        setStats((previous) => ({
-          ...previous,
-          [hostId]: response.result as HomeStatsSummary
-        }))
+  homeHostStatsRead
+    .requestSingleFlight(client, hostId)
+    .then((reply) => {
+      const summary = homeHostStatsRead.interpret(reply)
+      if (!disposed() && summary.accepted) {
+        setStats((previous) => ({ ...previous, [hostId]: summary.value }))
       }
     })
     .catch(() => {})
@@ -57,10 +49,12 @@ export function fetchMobileHomeAccounts(
   setSnapshots: HomeAccountsSetter,
   disposed: () => boolean
 ): void {
-  sendSingleFlightRequest(client, hostId, 'accounts.list')
-    .then((response) => {
-      if (!disposed() && response.ok) {
-        const snapshot = decodeAccountsSnapshot(response.result)
+  homeHostAccountsRead
+    .requestSingleFlight(client, hostId)
+    .then((reply) => {
+      const accounts = homeHostAccountsRead.interpret(reply)
+      if (!disposed() && accounts.accepted) {
+        const snapshot = decodeAccountsSnapshot(accounts.value)
         setSnapshots((previous) => ({ ...previous, [hostId]: snapshot }))
       }
     })
@@ -75,8 +69,8 @@ export function fetchMobileHomeTaskProviders(
 ): void {
   Promise.all([
     settingsRead.requestSingleFlight(client, hostId),
-    sendSingleFlightRequest(client, hostId, 'preflight.check'),
-    sendSingleFlightRequest(client, hostId, 'linear.status')
+    taskPreflightRead.requestSingleFlight(client, hostId),
+    taskLinearStatusRead.requestSingleFlight(client, hostId)
   ])
     .then(([settingsResponse, preflightResponse, linearResponse]) => {
       if (disposed()) {
@@ -87,10 +81,10 @@ export function fetchMobileHomeTaskProviders(
         ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
           ((settingsResult.value ?? {}) as HomeTaskSettings)
         : {}
-      const preflight = preflightResponse.ok
-        ? (preflightResponse.result as HomePreflightStatus)
-        : null
-      const linear = linearResponse.ok ? (linearResponse.result as HomeLinearStatus) : null
+      const preflightResult = taskPreflightRead.interpret(preflightResponse)
+      const preflight = preflightResult.accepted ? preflightResult.value : null
+      const linearResult = taskLinearStatusRead.interpret(linearResponse)
+      const linear = linearResult.accepted ? linearResult.value : null
       const providers = filterAvailableTaskProviders(
         normalizeVisibleTaskProviders(settings.visibleTaskProviders),
         {

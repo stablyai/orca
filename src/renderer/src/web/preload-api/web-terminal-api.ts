@@ -17,6 +17,8 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     signal: () => {},
     // Web panes clear the host buffer via the terminal.clearBuffer runtime RPC.
     clearBuffer: () => {},
+    // Likewise terminal.resetInputModes.
+    resetInputModes: () => {},
     kill: () => Promise.resolve(),
     ackColdRestore: () => {},
     ackData: () => {},
@@ -84,6 +86,7 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     onSpawned: () => noopUnsubscribe,
     onSerializeBufferRequest: () => noopUnsubscribe,
     onClearBufferRequest: () => noopUnsubscribe,
+    onResetInputModesRequest: () => noopUnsubscribe,
     sendSerializedBuffer: () => {},
     declarePendingPaneSerializer: () => Promise.resolve(0),
     settlePaneSerializer: () => Promise.resolve(),
@@ -95,7 +98,10 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
       killOne: () => Promise.resolve({ success: false }),
       restart: () => Promise.resolve({ success: false }),
       // Why: web clients can't inspect the host daemon's pid record; 'unknown' keeps the banner hidden.
-      macTccAttribution: () => Promise.resolve({ health: 'unknown' as const })
+      macTccAttribution: () =>
+        Promise.resolve({ health: 'unknown' as const, folderAccessMismatch: null }),
+      // Why: the TCC row belongs to the host's app bundle, which a web client cannot reach.
+      resetFolderAccess: () => Promise.resolve({ outcome: 'unsupported' as const })
     }
   }
 }

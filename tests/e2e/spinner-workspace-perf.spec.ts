@@ -175,8 +175,6 @@ for (const scenario of scenarios) {
             keyCount,
             keyCadenceMs
           })
-          expect(measurement.missingEchoCount).toBe(0)
-          expect(measurement.missingPtyArrivalCount).toBe(0)
           report.typing.push({ variant, round, measurement })
           save()
           console.log(

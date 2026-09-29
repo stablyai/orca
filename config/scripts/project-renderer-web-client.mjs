@@ -1,5 +1,6 @@
 import {
   cpSync,
+  existsSync,
   mkdirSync,
   readFileSync,
   readdirSync,
@@ -18,6 +19,7 @@ const manifestPath = join(rendererOutput, '.vite', 'manifest.json')
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
 const selectedFiles = new Set(['web-index.html'])
 const visitedEntries = new Set()
+const PDFJS_VIEWER_ASSET_DIRS = ['cmaps', 'standard_fonts', 'wasm']
 
 function assertEntryIsolation() {
   const entryKeys = new Set(
@@ -119,6 +121,17 @@ function includeReferencedOutputs() {
   }
 }
 
+function includePdfjsViewerAssets() {
+  for (const directory of PDFJS_VIEWER_ASSET_DIRS) {
+    const root = join(rendererOutput, directory)
+    if (existsSync(root)) {
+      for (const outputPath of listOutputFiles(root, directory)) {
+        addOutputPath(outputPath)
+      }
+    }
+  }
+}
+
 async function minifyWebOutput() {
   await Promise.all(
     [...selectedFiles]
@@ -140,6 +153,7 @@ async function minifyWebOutput() {
 assertEntryIsolation()
 visitManifestEntry('web-index.html')
 includeReferencedOutputs()
+includePdfjsViewerAssets()
 
 rmSync(stagingOutput, { force: true, recursive: true })
 try {

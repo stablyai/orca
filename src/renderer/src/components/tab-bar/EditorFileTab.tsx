@@ -105,6 +105,10 @@ export default function EditorFileTab({
     diffSource: file.diffSource
   })
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
+  // Why: the stored flag outlives the setting (sessions persist it, other windows change it), so preview-ness is derived, never reconciled.
+  const isPreviewTab = useAppStore(
+    (s) => file.isPreview === true && s.settings?.editorPreviewTabsEnabled !== false
+  )
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
   const [isRenaming, setIsRenaming] = useState(false)
@@ -242,7 +246,7 @@ export default function EditorFileTab({
         )
       }}
       onDoubleClick={() => {
-        if (file.isPreview && onMakePermanent) {
+        if (isPreviewTab && onMakePermanent) {
           onMakePermanent()
         }
       }}
@@ -326,10 +330,10 @@ export default function EditorFileTab({
           />
         ) : (
           <span
-            className={`${TAB_LABEL_WIDTH_CLASSES}${file.isPreview ? ' italic' : ''}${isMissingFileMutation ? ' line-through' : ''}`}
+            className={`${TAB_LABEL_WIDTH_CLASSES}${isPreviewTab ? ' italic' : ''}${isMissingFileMutation ? ' line-through' : ''}`}
             style={tabStatusColor ? { color: tabStatusColor } : undefined}
             onDoubleClick={(e) => {
-              if (file.isPreview && onMakePermanent) {
+              if (isPreviewTab && onMakePermanent) {
                 e.stopPropagation()
                 onMakePermanent()
                 return

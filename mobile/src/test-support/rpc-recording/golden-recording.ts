@@ -158,7 +158,7 @@ export function compareGolden(expected: GoldenRecording, actual: GoldenRecording
     throw new Error(`Recording differs: ${scenario} (encoding)`)
   }
 }
-function firstDifference(
+export function firstDifference(
   expected: RecordedValue,
   actual: RecordedValue,
   path = ''

@@ -55,7 +55,6 @@ export type AgentCompletionCoordinatorOptions = {
   // panes without agent evidence relax to a slow cadence and re-arm from
   // output/title/hook activity. See agent-process-inspection-cost.ts.
   isProcessInspectionCostly?: () => boolean
-  shouldSuppressHookCompletion?: (payload: AgentCompletionStatusSnapshot) => boolean
 }
 
 export type AgentCompletionCoordinator = {

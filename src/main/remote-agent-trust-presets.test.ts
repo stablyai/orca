@@ -159,4 +159,122 @@ describe('markRemoteAgentWorkspaceTrusted', () => {
 
     expect(fsProvider.writeFile).not.toHaveBeenCalled()
   })
+
+  it.each(['codex', 'copilot'] as const)(
+    'leaves the remote %s config untouched when the read fails',
+    async (preset) => {
+      const fsProvider = makeFsProvider({
+        readFile: vi.fn(async () => {
+          throw new Error('file stream stalled')
+        })
+      })
+      mocks.getSshFilesystemProvider.mockReturnValue(fsProvider)
+
+      await expect(
+        markRemoteAgentWorkspaceTrusted({ preset, connectionId: 'ssh-1', workspacePath: '/repo' })
+      ).rejects.toThrow()
+
+      expect(fsProvider.writeFile).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each(['codex', 'copilot'] as const)(
+    'leaves the remote %s config untouched when the read comes back binary',
+    async (preset) => {
+      const fsProvider = makeFsProvider({
+        readFile: vi.fn(async () => ({ content: 'AAEC', isBinary: true }))
+      })
+      mocks.getSshFilesystemProvider.mockReturnValue(fsProvider)
+
+      await expect(
+        markRemoteAgentWorkspaceTrusted({ preset, connectionId: 'ssh-1', workspacePath: '/repo' })
+      ).rejects.toThrow()
+
+      expect(fsProvider.writeFile).not.toHaveBeenCalled()
+    }
+  )
+
+  it('creates the remote Codex config when the relay reports it missing', async () => {
+    // The relay rebuilds remote errors without Node's .code; only the message survives.
+    const fsProvider = makeFsProvider({
+      readFile: vi.fn(async () => {
+        throw new Error("ENOENT: no such file or directory, stat '/home/u/.codex/config.toml'")
+      })
+    })
+    mocks.getSshFilesystemProvider.mockReturnValue(fsProvider)
+
+    await markRemoteAgentWorkspaceTrusted({
+      preset: 'codex',
+      connectionId: 'ssh-1',
+      workspacePath: '/repo'
+    })
+
+    expect(fsProvider.writeFile).toHaveBeenCalledWith(
+      '/home/u/.codex/config.toml',
+      '[projects."/real/repo"]\ntrust_level = "trusted"\n'
+    )
+  })
+})
+
+describe('remote Qoder trust', () => {
+  it('preserves settings and hooks while trusting the execution host canonical folder', async () => {
+    const original = {
+      model: 'custom',
+      hooks: { Stop: [] },
+      permissions: { trustDirectories: ['/old'], other: true }
+    }
+    const fsProvider = makeFsProvider({
+      readFile: vi.fn(async () => ({ content: JSON.stringify(original), isBinary: false }))
+    })
+    mocks.getActiveMultiplexer.mockReturnValue({
+      request: vi.fn(async () => ({ resolvedPath: '/home/remote' }))
+    })
+    mocks.getSshFilesystemProvider.mockReturnValue(fsProvider)
+    await markRemoteAgentWorkspaceTrusted({
+      preset: 'qoder',
+      connectionId: 'ssh-qoder',
+      workspacePath: '/folder'
+    })
+    expect(fsProvider.writeFile).toHaveBeenCalledWith(
+      '/home/remote/.qoder/settings.json',
+      `${JSON.stringify(
+        {
+          ...original,
+          permissions: { ...original.permissions, trustDirectories: ['/old', '/real/folder'] }
+        },
+        null,
+        2
+      )}\n`
+    )
+  })
+
+  it.each(['malformed', 'denied', 'binary', 'trusted'])(
+    'does not overwrite %s remote settings',
+    async (kind) => {
+      const fsProvider = makeFsProvider({
+        readFile: vi.fn(async () => {
+          if (kind === 'denied') {
+            throw Object.assign(new Error('denied'), { code: 'EACCES' })
+          }
+          return {
+            content:
+              kind === 'trusted'
+                ? JSON.stringify({ permissions: { trustDirectories: ['/real/folder'] } })
+                : '{broken',
+            isBinary: kind === 'binary'
+          }
+        })
+      })
+      mocks.getActiveMultiplexer.mockReturnValue({
+        request: vi.fn(async () => ({ resolvedPath: '/home/remote' }))
+      })
+      mocks.getSshFilesystemProvider.mockReturnValue(fsProvider)
+      await markRemoteAgentWorkspaceTrusted({
+        preset: 'qoder',
+        connectionId: 'ssh-qoder',
+        workspacePath: '/folder'
+      })
+      expect(fsProvider.writeFile).not.toHaveBeenCalled()
+    }
+  )
 })

@@ -44,7 +44,12 @@ function classifyHookProcessResult(
     return { success: false, output: `${streams}\n${message}`.trim() }
   }
   if (result.code !== 0) {
-    const message = `Command failed with exit code ${result.code}.`
+    // `null` means signalled: there is no exit code, and saying "exit code null" reads as a
+    // reporting glitch rather than the `unverifiable` verdict the gate is about to give it.
+    const message =
+      result.code === null
+        ? 'Command was terminated without reporting an exit code.'
+        : `Command failed with exit code ${result.code}.`
     console.error(`[hooks] ${context.hookName} hook failed in ${context.cwd}:`, message)
     return {
       success: false,

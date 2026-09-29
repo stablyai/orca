@@ -1,5 +1,8 @@
 import { webContents } from 'electron'
-import type { BrowserViewportScrollState } from '../../shared/browser-workspace-types'
+import type {
+  BrowserViewportOverride,
+  BrowserViewportScrollState
+} from '../../shared/browser-workspace-types'
 
 /**
  * Renderer routing plus the host-side viewport-preset geometry the wheel path needs to decide
@@ -7,11 +10,11 @@ import type { BrowserViewportScrollState } from '../../shared/browser-workspace-
  */
 export abstract class BrowserManagerViewportScrollState {
   protected readonly rendererWebContentsIdByTabId = new Map<string, number>()
-  // Why: host-side wheel panning follows the requested local viewport on the owning guest;
-  // replacement guests must not inherit a retired guest's state.
-  protected readonly viewportPresetActiveByTabId = new Map<
+  // Why: the requested preset, not the applied one — host-side wheel panning and the tab's identity
+  // both follow what was asked for; replacement guests must not inherit a retired guest's preset.
+  protected readonly viewportPresetByTabId = new Map<
     string,
-    { guestWebContentsId: number; active: boolean }
+    { guestWebContentsId: number; override: BrowserViewportOverride | null }
   >()
   protected readonly viewportScrollStateByTabId = new Map<string, BrowserViewportScrollState>()
 

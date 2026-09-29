@@ -12,17 +12,18 @@ export type { NativeChatTurnStatus }
 
 export function useNativeChatTurnStatus({
   messages,
-  latestUserIndex,
+  activeTurnKey,
   isWorking,
   workingStartedAt,
   settledTurns,
   thinking = false
 }: {
   messages: readonly NativeChatMessage[]
-  latestUserIndex: number
+  /** The user message whose bar carries the live clock (`selectNativeChatActiveTurnKey`). */
+  activeTurnKey: string
   isWorking: boolean
   workingStartedAt?: number | null
-  /** Host-recorded durations; they outrank whatever this client observed. */
+  /** Recorded durations (the host's journal or the transcript); they outrank what this client observed. */
   settledTurns?: NativeChatSettledTurns | null
   /** Whether the turn is reasoning right now, derived from its journal content. */
   thinking?: boolean
@@ -30,8 +31,6 @@ export function useNativeChatTurnStatus({
   active: NativeChatTurnStatus | null
   completedByTurn: Readonly<Record<string, NativeChatTurnStatus>>
 } {
-  const latestUserId = latestUserIndex !== -1 ? (messages[latestUserIndex]?.id ?? null) : null
-  const activeTurnKey = latestUserId ?? '__unanchored__'
   const [timingByTurn, setTimingByTurn] = useState<NativeChatTurnTimingByTurn>({})
 
   useLayoutEffect(() => {

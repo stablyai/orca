@@ -161,6 +161,113 @@ async function focusMirroredPage(page: Page, worktreeId: string, pageId: string)
   )
 }
 
+/** Every browser row this client holds for the worktree, as the store sees it. */
+async function readMirroredRows(
+  page: Page,
+  worktreeId: string
+): Promise<{ environmentId: string | null; staged: boolean; title: string; url: string }[]> {
+  return page.evaluate((worktreeId) => {
+    const state = window.__store?.getState()
+    return (state?.browserTabsByWorktree[worktreeId] ?? []).flatMap((workspace) =>
+      (state?.browserPagesByWorkspace[workspace.id] ?? []).map((browserPage) => {
+        const handle = state?.remoteBrowserPageHandlesByPageId[browserPage.id]
+        return {
+          environmentId: handle?.environmentId ?? null,
+          staged: handle?.staged === true,
+          title: browserPage.title,
+          url: browserPage.url
+        }
+      })
+    )
+  }, worktreeId)
+}
+
+/**
+ * What the host reports to THIS client over the client's own connection.
+ *
+ * Read alongside the store: the host answering with the link while the store still says
+ * about:blank puts the loss in the client's apply, not in what the host published.
+ */
+async function readHostRowsThroughClient(
+  page: Page,
+  environmentId: string,
+  worktreeId: string
+): Promise<string[]> {
+  return page.evaluate(
+    async ({ environmentId, worktreeId }) => {
+      const response = await window.api.runtimeEnvironments.call({
+        selector: environmentId,
+        method: 'session.tabs.list',
+        params: { worktree: `id:${worktreeId}` },
+        timeoutMs: 15_000
+      })
+      if (!response.ok) {
+        return ['<host tab inventory unavailable>']
+      }
+      const result = response.result
+      if (
+        !result ||
+        typeof result !== 'object' ||
+        !('tabs' in result) ||
+        !Array.isArray(result.tabs)
+      ) {
+        return ['<host tab inventory unavailable>']
+      }
+      const tabs = result.tabs.filter(
+        (tab): tab is { type: string; url?: string } =>
+          typeof tab === 'object' &&
+          tab !== null &&
+          'type' in tab &&
+          typeof tab.type === 'string' &&
+          (!('url' in tab) || typeof tab.url === 'string')
+      )
+      return tabs.filter((tab) => tab.type === 'browser').map((tab) => tab.url ?? '')
+    },
+    { environmentId, worktreeId }
+  )
+}
+
+/**
+ * The mirrored row for a link the host just opened.
+ *
+ * A link opens in a background tab, so the row lands well before any pane does: only a surfaced
+ * workspace mounts one, and a runtime-backed page is never mount-admitted the way a local guest is.
+ * Every pane count below is therefore read against this row, not against the click.
+ */
+async function waitForMirroredLinkPageId(
+  page: Page,
+  environmentId: string,
+  hostRowsAtOpen: readonly string[],
+  worktreeId: string,
+  url: string
+): Promise<string> {
+  try {
+    await expect
+      .poll(() => findMirroredPage(page, worktreeId, url), { timeout: 60_000 })
+      .not.toBeNull()
+  } catch {
+    // All three, because they fail differently: a client store stuck at about:blank against a host
+    // that answers with the link is a lost apply, a host that answers about:blank to this client
+    // but the link to its own socket is a per-client projection, and a host holding about:blank
+    // everywhere is a lost navigation. The bare poll failure separates none of them. The host's own
+    // list is the one sampled on the happy path — asking that socket here hung past the deadline.
+    const clientRows = await readMirroredRows(page, worktreeId)
+    const hostRowsViaClient = await readHostRowsThroughClient(page, environmentId, worktreeId)
+    throw new Error(
+      `the client never mirrored the link the host opened; client rows: ${JSON.stringify(
+        clientRows
+      )}; host rows at open: ${JSON.stringify(
+        hostRowsAtOpen
+      )}; host rows through client: ${JSON.stringify(hostRowsViaClient)}`
+    )
+  }
+  const opened = await findMirroredPage(page, worktreeId, url)
+  if (!opened) {
+    throw new Error('mirrored link page disappeared')
+  }
+  return opened.pageId
+}
+
 /** Placement is a user setting whose default has already flipped once, so every act pins its own. */
 async function pinClientHostedPlacement(page: Page, enabled: boolean): Promise<void> {
   await page.evaluate(async (enabled) => {
@@ -300,13 +407,25 @@ test('opens a remote pane link on the pane runtime and refuses to fall back to t
         message: 'the runtime process never held a page for the link'
       })
       .toHaveLength(1)
-    // One more remote pane, and still nothing rendered by this machine's own browser.
-    await expect(page.getByTestId('remote-browser-pane')).toHaveCount(paneCountBeforeOpen + 1, {
-      timeout: 60_000
-    })
+    // The link takes a tab without taking the surface: the user keeps reading the pane they
+    // right-clicked, which is the whole point of opening a link in the background.
+    const hostRowsAtFirstOpen = await readHostServerPlacedBrowserUrls(host, worktreeId)
+    const linkPageId = await waitForMirroredLinkPageId(
+      page,
+      environmentId,
+      hostRowsAtFirstOpen,
+      worktreeId,
+      fixture.linkUrl
+    )
+    expect(await page.getByTestId('remote-browser-pane').count()).toBe(paneCountBeforeOpen)
     expect(await readRemotePaneUrls(page, worktreeId)).toContainEqual(
       expect.stringContaining(fixture.linkUrl)
     )
+    // Surfaced, it is one more streamed pane — and this machine's own browser still renders none.
+    await focusMirroredPage(page, worktreeId, linkPageId)
+    await expect(page.getByTestId('remote-browser-pane')).toHaveCount(paneCountBeforeOpen + 1, {
+      timeout: 60_000
+    })
     expect(await readLocalBrowserViewUrls(page)).toHaveLength(0)
 
     // Drop every tab except the pane's, so the next act drives the pane it started with against a
@@ -352,8 +471,22 @@ test('opens a remote pane link on the pane runtime and refuses to fall back to t
       })
       .toHaveLength(1)
     expect(await readOwnedPageUrls(client!.app, fixture.linkUrl)).toHaveLength(0)
+    // Background here too, and still streamed once surfaced — the placement preference moved, the
+    // owner pin did not.
+    const hostRowsAtOwnerPinnedOpen = await readHostServerPlacedBrowserUrls(host, worktreeId)
+    const ownerPinnedLinkPageId = await waitForMirroredLinkPageId(
+      page,
+      environmentId,
+      hostRowsAtOwnerPinnedOpen,
+      worktreeId,
+      fixture.linkUrl
+    )
+    expect(await page.getByTestId('remote-browser-pane').count()).toBe(paneCountBeforeOpen)
+    await focusMirroredPage(page, worktreeId, ownerPinnedLinkPageId)
+    await expect(page.getByTestId('remote-browser-pane')).toHaveCount(paneCountBeforeOpen + 1, {
+      timeout: 60_000
+    })
     expect(await readLocalBrowserViewUrls(page)).toHaveLength(0)
-    await expect(page.getByTestId('remote-browser-pane')).toHaveCount(paneCountBeforeOpen + 1)
 
     // The store drops the tab synchronously and only then fires browser.tabClose, so settle the
     // mirror, host inventory, and host guest before act 3 reads them as its own baseline.

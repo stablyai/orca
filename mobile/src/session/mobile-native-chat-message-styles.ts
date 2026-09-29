@@ -32,6 +32,17 @@ export const styles = StyleSheet.create({
   reasoning: {
     opacity: 0.7
   },
+  // A subagent's row is an aside to the conversation, set off the way desktop sets it off.
+  subagent: {
+    borderLeftWidth: 2,
+    borderLeftColor: colors.borderSubtle,
+    paddingLeft: spacing.md
+  },
+  subagentCaption: {
+    color: colors.textMuted,
+    fontFamily: typography.monoFamily,
+    fontSize: MONO_SIZE
+  },
   toolRun: {
     marginTop: spacing.xs
   },

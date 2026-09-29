@@ -10,6 +10,7 @@ import type { RuntimeHostStatusSnapshot } from '../../../../shared/runtime-host-
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/runtime-host-connection-state'
+import { ensureBrowserClientHostForRestartedRuntime } from '@/runtime/restored-client-hosted-browser-host-attach'
 
 vi.mock('sonner', () => ({ toast: { warning: vi.fn(), dismiss: vi.fn() } }))
 vi.mock('@/runtime/restored-client-hosted-browser-host-attach', () => ({
@@ -77,17 +78,33 @@ it('represents failed verification honestly without manufacturing a session rest
   expect(
     runtimeHostConnectionStateForEntry(viewer.getState().runtimeStatusByEnvironmentId.get('env-a'))
   ).toBe('runtime-unavailable')
-  viewer.getState().applyRuntimeHostStatusSnapshot(snapshot(3))
   expect(viewer.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(
     generation
   )
+  viewer.getState().applyRuntimeHostStatusSnapshot(snapshot(3))
+  // Regaining contact on the same runtime is neither a new connection nor a new session: the
+  // generation holds so the session mirror is not rebuilt (#19647), and only the contact epoch
+  // — the mirror's resubscribe trigger — moves. No restart hook, no toast.
+  expect(viewer.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(
+    generation
+  )
+  expect(viewer.getState().runtimeStatusByEnvironmentId.get('env-a')?.hostContactEpoch).toBe(1)
+  expect(viewer.getState().runtimeStatusByEnvironmentId.get('env-a')?.status?.runtimeId).toBe(
+    'rt-1'
+  )
+  expect(ensureBrowserClientHostForRestartedRuntime).not.toHaveBeenCalled()
   expect(toast.warning).not.toHaveBeenCalled()
+  const reconnectedGeneration = viewer
+    .getState()
+    .runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration
   viewer
     .getState()
     .applyRuntimeHostStatusSnapshot(snapshot(4, { status: { runtimeId: 'rt-2' } as RuntimeStatus }))
-  expect(
-    viewer.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration
-  ).toBeGreaterThan(generation ?? 0)
+  // A replacement runtime id is a restart: a genuinely new connection, so the generation moves.
+  expect(viewer.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(
+    (reconnectedGeneration ?? 0) + 1
+  )
+  expect(ensureBrowserClientHostForRestartedRuntime).toHaveBeenCalled()
 })
 
 it('retains disconnect ordering and rejects publications for removed or replaced pairings', () => {

@@ -57,7 +57,6 @@ it('persists resumed provider options atomically with owner proof', async () => 
     },
     provider: 'codex',
     accountHome: { variable: 'CODEX_HOME', path: '/accounts/codex' },
-    runtimeKind: 'native',
     expectedFence: null,
     spawnToken: 'spawn-options',
     claimKeyId: 'key-1',

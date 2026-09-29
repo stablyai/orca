@@ -11,6 +11,35 @@ const decode = (line: string, id: string) => ({
 })
 
 describe('decodeTranscriptStream', () => {
+  it('accepts the exact source limit with split UTF-8 bytes and preserves order', async () => {
+    const bytes = Buffer.from('é\n😀\n')
+    const result = await decodeTranscriptStream(
+      Readable.from([bytes.subarray(0, 1), bytes.subarray(1, 5), bytes.subarray(5)]),
+      '/chat.jsonl',
+      0,
+      decode,
+      true,
+      bytes.length
+    )
+    expect(result.messages.map((message) => message.blocks[0])).toEqual([
+      { type: 'text', text: 'é' },
+      { type: 'text', text: '😀' }
+    ])
+  })
+
+  it.each([Buffer.from('é'), 'é', Buffer.from([0xff, 0xff])])(
+    'counts source bytes before decoding an oversized chunk %j',
+    async (chunk) => {
+      const stream = Readable.from([chunk])
+      const trackedDecode = vi.fn(decode)
+      await expect(
+        decodeTranscriptStream(stream, '/chat.jsonl', 0, trackedDecode, true, 1)
+      ).rejects.toThrow('exceeds 1 byte limit')
+      expect(trackedDecode).not.toHaveBeenCalled()
+      expect(stream.destroyed).toBe(true)
+    }
+  )
+
   it.each([true, false])('preserves chunked record offsets with trailing=%s', async (trailing) => {
     const first = `${'long record '.repeat(10_000)}😀`
     const prefix = `\r\n${first}\r\n\n`

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   detectTerminalWaitBlockedReason,
-  isKnownReadyPromptPreview
+  isKnownReadyPromptPreview,
+  isMuseReadyPromptPreview
 } from './terminal-wait-detection'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
 
@@ -296,22 +297,16 @@ describe('detectTerminalWaitBlockedReason on non-Codex agents', () => {
 
 // Antigravity readiness, and what this file does NOT claim about it.
 //
-// The detector recognizes a ready screen by header + a 'gemini'-prefixed model line + a lone '>'
-// caret. That is narrow: an Antigravity user on a non-Gemini model never reaches ready and the pane
-// wedges. Widening it was attempted and reverted -- every candidate rule was tuned against the
-// constructed fixtures below, and the last one let a live sign-in dialog read as ready (the
-// orchestrator then types the task prompt into an authentication dialog, which is strictly worse
-// than a timeout). No real Antigravity transcript exists in this repo; the cursor-agent rules are
-// derived from captures under src/main/runtime/__fixtures__ and Antigravity has no equivalent.
-// Widening the model rule needs one first. See the ratchet at the bottom of this block for the
-// shapes any replacement has to refuse.
+// The detector recognizes a ready screen by the Antigravity header and a lone '>' caret. Model
+// names are not part of the signal: the logo can prefix the row, and Antigravity can run models
+// other than Gemini. Dialog selections keep their labels after '>', so they remain distinguishable.
 describe('Antigravity readiness does not absorb its own startup dialog', () => {
   const TRUST_DIALOG_WITH_CARET = [
     'Antigravity CLI 1.0.3',
     'Do you trust the files in this folder?',
     '1. Yes, I trust this folder',
     '2. No, exit',
-    '>'
+    '> Yes, I trust this folder'
   ]
 
   const LIVE_DIALOGS_UNDER_THE_HEADER: { name: string; lines: string[]; reason: string | null }[] =
@@ -329,7 +324,7 @@ describe('Antigravity readiness does not absorb its own startup dialog', () => {
           'Do you trust the files in this folder?',
           '1. Yes, I trust this folder',
           '2. No, exit',
-          '>'
+          '> Yes, I trust this folder'
         ],
         reason: 'agent-trust-workspace'
       },
@@ -341,7 +336,7 @@ describe('Antigravity readiness does not absorb its own startup dialog', () => {
           '~/orca/workspaces/orca/agy-dispatch-issue',
           '1. Yes',
           '2. No',
-          '>'
+          '> Yes'
         ],
         reason: 'agent-trust-workspace'
       }
@@ -374,6 +369,19 @@ describe('Antigravity readiness does not absorb its own startup dialog', () => {
     expect(detectTerminalWaitBlockedReason(waitText)).toBe('agent-interactive-prompt')
   })
 
+  it('rejects a stale composer caret while the Antigravity model picker is active', () => {
+    const waitText = waitTextFor([
+      'Antigravity CLI 1.2.0',
+      '>',
+      'Switch Model',
+      '> Gemini 3.8 Flash',
+      'Gemini 3.7 Flash (current)',
+      'Keyboard: ↑/↓ Navigate · enter Select · esc Go Back'
+    ])
+
+    expect(isKnownReadyPromptPreview(waitText)).toBe(false)
+  })
+
   // Discriminating: a stale dialog above a reprinted Gemini ready screen must stop being reported,
   // which is the whole point of the dismissed-modal rule.
   it('clears once a Gemini ready screen replaces the dialog', () => {
@@ -389,10 +397,7 @@ describe('Antigravity readiness does not absorb its own startup dialog', () => {
     expect(detectTerminalWaitBlockedReason(waitText)).toBeNull()
   })
 
-  // Characterization, not a guard: records the wedge this file has not fixed. An Antigravity user on
-  // a non-Gemini model has no 'gemini' line, so readiness never resolves and the wait times out.
-  // Flipping this to true is the goal of the follow-up, and needs a captured transcript first.
-  it('does not yet recognize a non-Gemini ready screen (known wedge)', () => {
+  it('recognizes a non-Gemini ready screen', () => {
     const waitText = waitTextFor([
       'Antigravity CLI 1.0.3',
       'user@example.com (Antigravity Business)',
@@ -401,15 +406,24 @@ describe('Antigravity readiness does not absorb its own startup dialog', () => {
       '>'
     ])
 
+    expect(isKnownReadyPromptPreview(waitText)).toBe(true)
+  })
+
+  it('rejects a visible unsent draft whose wrap continuation is a bare caret', () => {
+    const waitText = waitTextFor([
+      'Antigravity CLI 1.2.1',
+      'Gemini 3.7 Flash (Low)',
+      '────────────────────────────────────────',
+      '> abc',
+      '  >',
+      '────────────────────────────────────────',
+      'Gemini 3.7 Flash · low'
+    ])
+
     expect(isKnownReadyPromptPreview(waitText)).toBe(false)
   })
 
-  // Ratchet, not a guard of today's code: these pass now only because none of them prints a 'gemini'
-  // model line. They exist so the next attempt to widen the model rule has to refuse them -- the
-  // reverted attempt accepted all five as ready on the strength of the account row alone (and an
-  // 'x@y.z' anywhere in the dialog body did just as well), and readiness is what gates typing the
-  // task prompt into the pane. A replacement must rest on positive evidence that the agent's input
-  // prompt is accepting input, not on absence-of-dialog plus an account row.
+  // Ratchet: these dialogs must remain unready because their selection row is not a bare caret.
   const SILENT_STARTUP_DIALOGS: { name: string; lines: string[] }[] = [
     {
       name: 'an update banner',
@@ -419,7 +433,7 @@ describe('Antigravity readiness does not absorb its own startup dialog', () => {
         'A new version is available',
         '~/orca/workspaces/orca/agy-dispatch-issue',
         'Press enter to continue',
-        '>'
+        '> Continue'
       ]
     },
     {
@@ -431,7 +445,7 @@ describe('Antigravity readiness does not absorb its own startup dialog', () => {
         '~/orca/workspaces/orca/agy-dispatch-issue',
         '1. Open browser',
         '2. Paste an API key',
-        '>'
+        '> Open browser'
       ]
     },
     {
@@ -443,7 +457,7 @@ describe('Antigravity readiness does not absorb its own startup dialog', () => {
         '~/orca/workspaces/orca/agy-dispatch-issue',
         '1. Claude Sonnet 4.5',
         '2. GPT-5.1',
-        '>'
+        '> Claude Sonnet 4.5'
       ]
     },
     {
@@ -455,7 +469,7 @@ describe('Antigravity readiness does not absorb its own startup dialog', () => {
         '~/orca/workspaces/orca/agy-dispatch-issue',
         '1. Accept',
         '2. Decline',
-        '>'
+        '> Accept'
       ]
     },
     {
@@ -467,7 +481,7 @@ describe('Antigravity readiness does not absorb its own startup dialog', () => {
         '~/orca/workspaces/orca/agy-dispatch-issue',
         '1. Dark',
         '2. Light',
-        '>'
+        '> Dark'
       ]
     }
   ]
@@ -486,10 +500,85 @@ describe('Antigravity readiness does not absorb its own startup dialog', () => {
       const waitText = waitTextFor([
         ...dialog.lines.slice(0, -1),
         'contact support@antigravity.dev for help',
-        '>'
+        '> Selected option'
       ])
 
       expect(isKnownReadyPromptPreview(waitText)).toBe(false)
     })
   }
+})
+
+// Real bytes: node-pty capture of `muse --provider echo --trust-workspace` at its ready
+// prompt (banner, skills summary, `❯` composer, provider status line), plus the
+// trust dialog from the same capture with no trust flag.
+const MUSE_READY_SCREEN_ECHO = [
+  '  Muse Code 1.3.0',
+  '  Skills: 77 loaded · 1 warning · 28 details hidden (ctrl+o to expand)',
+  '── Voice input (⌥ + v to start) ──────────────────────────────────────────',
+  '❯ ────────────────────────────────────────────────────────────────────',
+  '  echo · /private/tmp · YOLO'
+]
+
+const MUSE_READY_SCREEN_META = [
+  '  Muse Code 1.3.0',
+  '  Skills: 77 loaded · 1 warning · 28 details hidden (ctrl+o to expand)',
+  '── Voice input (⌥ + v to start) ──────────────────────────────────────────',
+  '❯ ────────────────────────────────────────────────────────────────────',
+  '  muse-spark-1.3 · max · ~/Downloads/interview-coach · YOLO'
+]
+
+const MUSE_TRUST_DIALOG = [
+  'Do you trust this workspace?',
+  'Workspace: /private/tmp',
+  'Trusting allows project-local skills, rules, hooks, and plugin config to load before the model runs.',
+  'Only trust this workspace when you trust its contents.',
+  '> 1  Trust and continue',
+  '  2  Quit',
+  'Use Up/Down or 1/2, then Enter. Esc quits.'
+]
+
+describe('isMuseReadyPromptPreview', () => {
+  it('recognizes a Muse ready screen across providers', () => {
+    expect(isMuseReadyPromptPreview(waitTextFor(MUSE_READY_SCREEN_ECHO))).toBe(true)
+    expect(isMuseReadyPromptPreview(waitTextFor(MUSE_READY_SCREEN_META))).toBe(true)
+  })
+
+  it('tolerates ANSI styling around the ready markers', () => {
+    const esc = String.fromCharCode(27)
+    expect(
+      isMuseReadyPromptPreview(
+        waitTextFor([
+          `  ${esc}[1m${esc}[38;2;204;211;219;49mMuse Code 1.3.0`,
+          `── Voice input (⌥ + v to start) ───`,
+          `${esc}[38;2;90;160;255;49m❯ ${esc}[39m${esc}[49m`,
+          `  echo · /private/tmp · ${esc}[38;2;243;139;168;49mYOLO`
+        ])
+      )
+    ).toBe(true)
+  })
+
+  it('refuses a bare Muse mention without its composer', () => {
+    expect(isMuseReadyPromptPreview(waitTextFor(['comparing Muse Code vs codex']))).toBe(false)
+    expect(
+      isMuseReadyPromptPreview(waitTextFor(['Muse Code 1.3.0', '  echo · /private/tmp · YOLO']))
+    ).toBe(false)
+  })
+
+  it('refuses the Muse trust dialog, which carries no banner or composer', () => {
+    const waitText = waitTextFor(MUSE_TRUST_DIALOG)
+    expect(isMuseReadyPromptPreview(waitText)).toBe(false)
+    expect(detectTerminalWaitBlockedReason(waitText)).toBe('agent-trust-workspace')
+  })
+
+  it('dismisses a trust dialog once Muse paints its ready screen', () => {
+    const waitText = waitTextFor([...MUSE_TRUST_DIALOG, ...MUSE_READY_SCREEN_META])
+    expect(detectTerminalWaitBlockedReason(waitText)).toBeNull()
+    expect(isMuseReadyPromptPreview(waitText)).toBe(true)
+  })
+
+  it('refuses a ready screen once a blocked dialog opens below it', () => {
+    const waitText = waitTextFor([...MUSE_READY_SCREEN_META, ...MUSE_TRUST_DIALOG])
+    expect(detectTerminalWaitBlockedReason(waitText)).toBe('agent-trust-workspace')
+    expect(isMuseReadyPromptPreview(waitText)).toBe(false)
+  })
 })

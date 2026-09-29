@@ -14,6 +14,8 @@ type PtyIdsByTabId = Record<string, string[]>
 type BrowserTabsByWorktree = Record<string, readonly BrowserLikeTab[]>
 export type LiveAgentWorktreeStatus = 'working' | 'monitoring' | 'permission'
 
+const EMPTY_WORKTREE_IDS: ReadonlySet<string> = new Set()
+
 /**
  * Worktree ids that currently have a live agent session, derived from the
  * live `agentStatusByPaneKey` map.
@@ -74,7 +76,8 @@ export function hasActiveWorkspaceActivity(
   tabsByWorktree: TabsByWorktree | null | undefined,
   ptyIdsByTabId: PtyIdsByTabId | null | undefined,
   browserTabsByWorktree: BrowserTabsByWorktree | null | undefined,
-  worktreeIdsWithLiveAgent: ReadonlySet<string>
+  worktreeIdsWithLiveAgent: ReadonlySet<string>,
+  worktreeIdsWithStructuredChat: ReadonlySet<string> = EMPTY_WORKTREE_IDS
 ): boolean {
   const tabs = tabsByWorktree?.[worktreeId] ?? []
   const hasLiveTerminal =
@@ -83,7 +86,10 @@ export function hasActiveWorkspaceActivity(
   // Why: a running agent keeps the workspace visible through brief PTY gaps
   // such as an SSH reconnect or an unmounted remote pane. #7197
   const hasLiveAgent = worktreeIdsWithLiveAgent.has(worktreeId)
-  return hasLiveTerminal || hasBrowser || hasLiveAgent
+  // Why not folded into hasLiveTerminal: a structured chat has no PTY and no entry in
+  // tabsByWorktree, so every terminal-shaped signal above reads it as absent.
+  const hasStructuredChat = worktreeIdsWithStructuredChat.has(worktreeId)
+  return hasLiveTerminal || hasBrowser || hasLiveAgent || hasStructuredChat
 }
 
 export function isInactiveWorkspace(
@@ -91,13 +97,15 @@ export function isInactiveWorkspace(
   tabsByWorktree: TabsByWorktree | null | undefined,
   ptyIdsByTabId: PtyIdsByTabId | null | undefined,
   browserTabsByWorktree: BrowserTabsByWorktree | null | undefined,
-  worktreeIdsWithLiveAgent: ReadonlySet<string>
+  worktreeIdsWithLiveAgent: ReadonlySet<string>,
+  worktreeIdsWithStructuredChat: ReadonlySet<string> = EMPTY_WORKTREE_IDS
 ): boolean {
   return !hasActiveWorkspaceActivity(
     worktreeId,
     tabsByWorktree,
     ptyIdsByTabId,
     browserTabsByWorktree,
-    worktreeIdsWithLiveAgent
+    worktreeIdsWithLiveAgent,
+    worktreeIdsWithStructuredChat
   )
 }

@@ -218,7 +218,6 @@ describe('connectPanePty', () => {
         worktreeId: 'wt-1',
         repoLabel: 'orca',
         worktreeLabel: 'feat/notis',
-        hasMultipleActiveRepos: true,
         terminalTitle: '* Claude done',
         agentType: 'claude',
         agentState: 'done',
@@ -226,7 +225,7 @@ describe('connectPanePty', () => {
         agentToolName: 'Edit',
         agentToolInput: 'src/main/ipc/notifications.ts',
         agentLastAssistantMessage: 'Implemented the formatter.',
-        agentInterrupted: false
+        agentTurnOutcome: undefined
       })
     )
   })

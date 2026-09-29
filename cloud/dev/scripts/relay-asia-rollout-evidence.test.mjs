@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { RELAY_GITHUB_REPOSITORY, relayWorkflowPath } from './relay-repository.mjs'
 import {
-  buildC27CanaryEvidence,
+  buildProductionCanaryEvidence,
   buildStagingEvidence,
   verifyRolloutEvidence
 } from './relay-asia-rollout-evidence.mjs'
@@ -115,18 +115,19 @@ function stagingInput(overrides = {}) {
   }
 }
 
-function canaryInput(overrides = {}) {
+function canaryInput(overrides = {}, cellId = 'production-gce-c27') {
   const load = loadReport({ controls: 1, shardIndex: 0, splices: 1 })
   Object.assign(load, {
     shardCount: 1,
     configuredSteadySeconds: 300,
     configuredSpliceHoldSeconds: 60,
-    relayAsiaLoadPrincipalCount: 1
+    relayAsiaLoadPrincipalCount: 1,
+    assignedCellOrigins: [`https://${cellId.split('-').at(-1)}.relay.onorca.dev`]
   })
   return {
-    ...sourceInput(), startedAt: start.toISOString(), endedAt: canaryEnd.toISOString(),
+    ...sourceInput(), cellId, startedAt: start.toISOString(), endedAt: canaryEnd.toISOString(),
     loadReport: load,
-    logs: completeLogs('production-gce-c27', canaryEnd), cloudSql: cloudSql(319, canaryEnd),
+    logs: completeLogs(cellId, canaryEnd), cloudSql: cloudSql(319, canaryEnd),
     ...overrides
   }
 }
@@ -295,7 +296,7 @@ test('rejects mismatched staging provenance, digest, topology, or age', () => {
 })
 
 test('builds and verifies a passing continuous 5-minute C27 canary', () => {
-  const evidence = buildC27CanaryEvidence(canaryInput())
+  const evidence = buildProductionCanaryEvidence(canaryInput())
   assert.equal(evidence.load.completedSplices, 1)
   assert.equal(evidence.metrics.asiaSelections, 6)
   assert.equal(evidence.metrics.cloudSqlBackendsMax, 319)
@@ -306,14 +307,14 @@ test('builds and verifies a passing continuous 5-minute C27 canary', () => {
 })
 
 test('rejects short, sparse, or unrelated-cell-only C27 coverage', () => {
-  assert.throws(() => buildC27CanaryEvidence(canaryInput({
+  assert.throws(() => buildProductionCanaryEvidence(canaryInput({
     endedAt: new Date(canaryEnd.valueOf() - 1).toISOString()
   })), /shorter than 5 minutes/)
   const sparse = completeLogs('production-gce-c27', canaryEnd).filter((entry) =>
     entry.timestamp === start.toISOString() || entry.timestamp === canaryEnd.toISOString()
   )
-  assert.throws(() => buildC27CanaryEvidence(canaryInput({ logs: sparse })), /sampling gap/)
-  assert.throws(() => buildC27CanaryEvidence(canaryInput({
+  assert.throws(() => buildProductionCanaryEvidence(canaryInput({ logs: sparse })), /sampling gap/)
+  assert.throws(() => buildProductionCanaryEvidence(canaryInput({
     logs: completeLogs('production-gce-c26', canaryEnd)
   })), /production-gce-c27 metrics has no samples/)
 })
@@ -321,20 +322,20 @@ test('rejects short, sparse, or unrelated-cell-only C27 coverage', () => {
 test('rejects a C27 canary without a real control and splice', () => {
   const input = canaryInput()
   input.loadReport.completedSplices = 0
-  assert.throws(() => buildC27CanaryEvidence(input), /did not match/)
+  assert.throws(() => buildProductionCanaryEvidence(input), /did not match/)
   const shortHold = canaryInput()
   shortHold.loadReport.configuredSpliceHoldSeconds = 59
-  assert.throws(() => buildC27CanaryEvidence(shortHold), /did not match/)
+  assert.throws(() => buildProductionCanaryEvidence(shortHold), /did not match/)
 })
 
 for (const [label, mutation, message] of [
   ['Asia selections', (input) => input.logs.forEach((entry) => { entry.jsonPayload.selectedRegionsDelta = {} }), /no Asia selections/],
   ['region fallbacks', (input) => { input.logs[0].jsonPayload.regionFallbacksDelta = { 'asia-east2': 1 } }, /regionFallbacks/],
   ['unavailable regions', (input) => { input.logs[0].jsonPayload.unavailableRegionsDelta = { 'asia-east2': 1 } }, /unavailableRegions/],
-  ['Relay SQL failures', (input) => { input.logs[0].jsonPayload.sqlFailuresDelta = 1 }, /relaySqlFailures/],
-  ['pool waiting', (input) => { input.logs[0].jsonPayload.databasePoolWaiting = 1 }, /databasePoolWaitingMax/],
-  ['pool waiters', (input) => { input.logs[0].jsonPayload.databasePoolWaitersMax = 5 }, /transient database pool pressure/],
-  ['pool wait time', (input) => { input.logs[0].jsonPayload.databasePoolWaitMsMax = 51 }, /transient database pool pressure/],
+  ['C27 SQL failures', (input) => { input.logs[1].jsonPayload.sqlFailuresDelta = 1 }, /C27 canary relaySqlFailures must be zero/],
+  ['C27 pool waiting', (input) => { input.logs[1].jsonPayload.databasePoolWaiting = 1 }, /databasePoolWaitingMax/],
+  ['C27 pool waiters', (input) => { input.logs[1].jsonPayload.databasePoolWaitersMax = 5 }, /transient database pool pressure/],
+  ['C27 pool wait time', (input) => { input.logs[1].jsonPayload.databasePoolWaitMsMax = 51 }, /transient database pool pressure/],
   ['C27 controls', (input) => input.logs.filter((entry) => entry.jsonPayload.role === 'cell')
     .forEach((entry) => { entry.jsonPayload.controls = 0 }), /did not reach C27/],
   ['C27 splices', (input) => input.logs.filter((entry) => entry.jsonPayload.role === 'cell')
@@ -344,14 +345,138 @@ for (const [label, mutation, message] of [
   test(`rejects C27 evidence with ${label}`, () => {
     const input = canaryInput()
     mutation(input)
-    assert.throws(() => buildC27CanaryEvidence(input), message)
+    assert.throws(() => buildProductionCanaryEvidence(input), message)
   })
 }
 
 test('rejects C27 evidence from a different selector generation', () => {
-  const evidence = buildC27CanaryEvidence(canaryInput())
+  const evidence = buildProductionCanaryEvidence(canaryInput())
   assert.throws(() => verifyRolloutEvidence(
     evidence, workflowRun(evidence),
     verifyExpected('production-c27-canary', { selectorGeneration: 10 })
   ), /selector generation/)
+})
+
+test('rejects a C27 canary whose control was placed on another cell', () => {
+  for (const origins of [
+    ['https://c28.relay.onorca.dev'],
+    ['https://c27.relay.onorca.dev', 'https://c28.relay.onorca.dev'],
+    [],
+    undefined
+  ]) {
+    const input = canaryInput()
+    input.loadReport.assignedCellOrigins = origins
+    assert.throws(() => buildProductionCanaryEvidence(input), /C27 canary load was not placed only on C27/)
+  }
+})
+
+const c30 = 'production-gce-c30'
+
+test('builds and verifies a C30 canary from C30 runtime metrics and placement', () => {
+  const evidence = buildProductionCanaryEvidence(canaryInput({}, c30))
+  assert.equal(evidence.kind, 'production-c30-canary')
+  assert.deepEqual(evidence.topology, { cellIds: [c30], selectorGeneration: 9 })
+  assert.equal(verifyRolloutEvidence(
+    evidence, workflowRun(evidence),
+    verifyExpected('production-c30-canary', { cellIds: [c30], selectorGeneration: 9 })
+  ), evidence)
+  assert.throws(() => verifyRolloutEvidence(
+    evidence, workflowRun(evidence),
+    verifyExpected('production-c30-canary', { cellIds: [c30], selectorGeneration: 10 })
+  ), /selector generation/)
+  assert.throws(() => verifyRolloutEvidence(
+    evidence, workflowRun(evidence), verifyExpected('production-c27-canary', { selectorGeneration: 9 })
+  ), /evidence kind is invalid/)
+})
+
+test('rejects a C30 canary that C30 did not serve', () => {
+  const onLaunchCell = canaryInput({}, c30)
+  onLaunchCell.loadReport.assignedCellOrigins = ['https://c27.relay.onorca.dev']
+  assert.throws(() => buildProductionCanaryEvidence(onLaunchCell), /C30 canary load was not placed only on C30/)
+  assert.throws(() => buildProductionCanaryEvidence(canaryInput({
+    logs: completeLogs('production-gce-c27', canaryEnd)
+  }, c30)), /production-gce-c30 metrics has no samples/)
+  const idle = canaryInput({}, c30)
+  idle.logs.filter((entry) => entry.jsonPayload.role === 'cell')
+    .forEach((entry) => { entry.jsonPayload.splices = 0 })
+  assert.throws(() => buildProductionCanaryEvidence(idle), /C30 canary traffic did not reach C30/)
+  const poolPressure = canaryInput({}, c30)
+  poolPressure.logs.at(-1).jsonPayload.databasePoolWaiting = 1
+  assert.throws(() => buildProductionCanaryEvidence(poolPressure), /C30 canary databasePoolWaitingMax/)
+  assert.throws(() => buildProductionCanaryEvidence(canaryInput({
+    endedAt: new Date(canaryEnd.valueOf() - 1).toISOString()
+  }, c30)), /C30 canary window is shorter than 5 minutes/)
+})
+
+test('gates a C30 canary on C30 pool pressure and only reports the director baseline', () => {
+  const directorPressure = canaryInput({}, c30)
+  const directorLogs = directorPressure.logs.filter((entry) => entry.jsonPayload.role === 'director')
+  Object.assign(directorLogs[0].jsonPayload, { databasePoolWaiting: 3 })
+  Object.assign(directorLogs[1].jsonPayload, { databasePoolWaitersMax: 9, databasePoolWaitMsMax: 240 })
+  const evidence = buildProductionCanaryEvidence(directorPressure)
+  assert.deepEqual([
+    evidence.metrics.databasePoolWaitingMax,
+    evidence.metrics.databasePoolWaitersMax,
+    evidence.metrics.databasePoolWaitMsMax
+  ], [0, 0, 0])
+  assert.deepEqual([
+    evidence.metrics.directorDatabasePoolWaitingMax,
+    evidence.metrics.directorDatabasePoolWaitersMax,
+    evidence.metrics.directorDatabasePoolWaitMsMax
+  ], [3, 9, 240])
+
+  for (const [field, value, message] of [
+    ['databasePoolWaiting', 1, /C30 canary databasePoolWaitingMax must be zero/],
+    ['databasePoolWaitersMax', 5, /C30 canary transient database pool pressure/],
+    ['databasePoolWaitMsMax', 51, /C30 canary transient database pool pressure/]
+  ]) {
+    const cellPressure = canaryInput({}, c30)
+    cellPressure.logs.find((entry) => entry.jsonPayload.role === 'cell').jsonPayload[field] = value
+    assert.throws(() => buildProductionCanaryEvidence(cellPressure), message)
+  }
+})
+
+test('gates a C30 canary on C30 SQL failures and only reports the director baseline', () => {
+  const directorNoise = canaryInput({}, c30)
+  directorNoise.logs.filter((entry) => entry.jsonPayload.role === 'director')
+    .slice(0, 3).forEach((entry) => { entry.jsonPayload.sqlFailuresDelta = 2 })
+  const evidence = buildProductionCanaryEvidence(directorNoise)
+  assert.equal(evidence.metrics.relaySqlFailures, 0)
+  assert.equal(evidence.metrics.directorSqlFailures, 6)
+  assert.equal(verifyRolloutEvidence(
+    evidence, workflowRun(evidence),
+    verifyExpected('production-c30-canary', { cellIds: [c30], selectorGeneration: 9 })
+  ), evidence)
+
+  const cellFailure = canaryInput({}, c30)
+  cellFailure.logs.find((entry) => entry.jsonPayload.role === 'cell').jsonPayload.sqlFailuresDelta = 1
+  assert.throws(() => buildProductionCanaryEvidence(cellFailure), /C30 canary relaySqlFailures must be zero/)
+})
+
+test('keeps staging gated on director database metrics without director-only fields', () => {
+  const metrics = buildStagingEvidence(stagingInput()).metrics
+  assert.equal(metrics.relaySqlFailures, 0)
+  assert.equal(Object.keys(metrics).some((key) => key.startsWith('director')), false)
+  for (const [field, value, message] of [
+    ['databasePoolWaiting', 1, /staging proof databasePoolWaitingMax must be zero/],
+    ['databasePoolWaitersMax', 5, /staging proof transient database pool pressure/],
+    ['databasePoolWaitMsMax', 51, /staging proof transient database pool pressure/]
+  ]) {
+    const directorPressure = stagingInput()
+    directorPressure.logs[0].jsonPayload[field] = value
+    assert.throws(() => buildStagingEvidence(directorPressure), message)
+  }
+
+  const directorFailure = stagingInput()
+  directorFailure.logs[0].jsonPayload.sqlFailuresDelta = 1
+  assert.throws(() => buildStagingEvidence(directorFailure), /staging proof relaySqlFailures must be zero/)
+})
+
+test('accepts canaries only for the reviewed production Asia cells', () => {
+  for (const cellId of ['production-gce-c28', 'production-gce-c29', 'staging-gce-c4', undefined]) {
+    assert.throws(
+      () => buildProductionCanaryEvidence({ ...canaryInput(), cellId }),
+      /not a reviewed production Asia canary/
+    )
+  }
 })

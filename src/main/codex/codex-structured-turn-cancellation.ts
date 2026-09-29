@@ -3,6 +3,8 @@ import {
   type CodexAppServerConnection
 } from './codex-app-server-connection'
 import { isCodexAppServerUnsupportedError } from './codex-app-server-session'
+import { providerDiagnosticOf } from '../../shared/agent-session-failure'
+import type { AgentSessionCancelOutcome } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type {
   CodexSession,
   CodexStructuredSessionAdapterDeps,
@@ -91,7 +93,7 @@ export class CodexStructuredTurnCancellation {
     turnId: string,
     isCurrent: () => boolean = () => true,
     onConfirmed?: () => CodexJournalTranslationAdmission
-  ): Promise<{ cancelled: boolean }> {
+  ): Promise<AgentSessionCancelOutcome> {
     const state = this.state(session)
     const key = turnKey(threadId, turnId)
     state.blockedCompletions.add(key)
@@ -151,7 +153,14 @@ export class CodexStructuredTurnCancellation {
     // A failed cancellation must not permanently divert the provider's later
     // completion for this turn. Let the normal completion path settle it.
     this.releaseCompletion(session, key)
-    return { cancelled: false }
+    if (acknowledged) {
+      return { cancelled: false, unconfirmed: true }
+    }
+    if (!requestError) {
+      return { cancelled: false }
+    }
+    const detail = providerDiagnosticOf(requestError)
+    return { cancelled: false, refusal: detail ? { detail } : {} }
   }
 
   private capture(pid: number | undefined): Promise<CodexTurnProcessSnapshot | null> {

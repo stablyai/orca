@@ -13,6 +13,7 @@ import {
 } from '../../store/pinned-tab-close-guard'
 import { useAppStore } from '../../store'
 import { resolveBrowserSessionTabTarget } from './browser-session-tab-target'
+import { resolveWindowTabIdForHostTab } from './host-session-tab-target'
 
 export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
@@ -20,8 +21,9 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
       if (isLocalSessionTabCloseOwned(worktreeId, tabId)) {
         return
       }
+      const localTabId = resolveWindowTabIdForHostTab(worktreeId, tabId)
       const store = useAppStore.getState()
-      const browserTarget = resolveBrowserSessionTabTarget(store, worktreeId, tabId)
+      const browserTarget = resolveBrowserSessionTabTarget(store, worktreeId, localTabId)
       if (browserTarget) {
         guardPinnedTabClose({
           isPinned: isUnifiedTabPinned(store, worktreeId, browserTarget.workspaceId),
@@ -31,11 +33,11 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
         return
       }
       guardPinnedTabClose({
-        isPinned: isUnifiedTabPinned(store, worktreeId, tabId),
-        tabLabel: resolvePinnedTabLabel(store, worktreeId, tabId),
+        isPinned: isUnifiedTabPinned(store, worktreeId, localTabId),
+        tabLabel: resolvePinnedTabLabel(store, worktreeId, localTabId),
         onClose: () => {
           const currentStore = useAppStore.getState()
-          closeMobileSessionTabInStore(currentStore, worktreeId, tabId)
+          closeMobileSessionTabInStore(currentStore, worktreeId, localTabId)
         }
       })
     })
@@ -43,8 +45,9 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
 
   unsubs.push(
     window.api.ui.onSessionTabCloseRequest(({ requestId, tabId, worktreeId, expiresAt }) => {
+      const localTabId = resolveWindowTabIdForHostTab(worktreeId, tabId)
       const store = useAppStore.getState()
-      const browserTarget = resolveBrowserSessionTabTarget(store, worktreeId, tabId)
+      const browserTarget = resolveBrowserSessionTabTarget(store, worktreeId, localTabId)
       let cancelConfirmation: (() => void) | undefined
       let timeout: ReturnType<typeof setTimeout> | undefined
       let settled = false
@@ -78,7 +81,11 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
             respond()
             return
           }
-          const closed = closeMobileSessionTabInStore(useAppStore.getState(), worktreeId, tabId)
+          const closed = closeMobileSessionTabInStore(
+            useAppStore.getState(),
+            worktreeId,
+            localTabId
+          )
           respond(closed ? undefined : SESSION_TAB_NOT_FOUND_ERROR)
         } catch (error) {
           respond(error instanceof Error ? error.message : SESSION_TAB_CLOSE_FAILED_ERROR)
@@ -92,7 +99,7 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
         )
         return
       }
-      const visibleId = browserTarget?.workspaceId ?? tabId
+      const visibleId = browserTarget?.workspaceId ?? localTabId
       cancelConfirmation = guardPinnedTabClose({
         isPinned: isUnifiedTabPinned(store, worktreeId, visibleId),
         tabLabel: resolvePinnedTabLabel(store, worktreeId, visibleId),

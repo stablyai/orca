@@ -1,9 +1,10 @@
 import { mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { app, ipcMain } from 'electron'
-import type {
-  WriteTerminalRenderDesyncEvidenceArgs,
-  WriteTerminalRenderDesyncEvidenceResult
+import {
+  TERMINAL_RENDER_DESYNC_CAPTURE_ID_PATTERN,
+  type WriteTerminalRenderDesyncEvidenceArgs,
+  type WriteTerminalRenderDesyncEvidenceResult
 } from '../../shared/terminal-render-desync-evidence'
 import { isTrustedUIRenderer } from './ui'
 
@@ -12,7 +13,6 @@ const MAX_PNG_DATA_URL_BYTES = 40 * 1024 * 1024
 const MAX_METADATA_BYTES = 1024 * 1024
 const MAX_CAPTURE_DIRECTORIES = 4
 const MAX_EVIDENCE_BYTES = 96 * 1024 * 1024
-const CAPTURE_ID_PATTERN = /^[a-zA-Z0-9_-]{1,120}$/
 const PNG_DATA_URL_PREFIX = 'data:image/png;base64,'
 let evidenceWriteQueue = Promise.resolve()
 
@@ -41,7 +41,7 @@ export async function writeTerminalRenderDesyncEvidence(
   userDataPath: string,
   args: WriteTerminalRenderDesyncEvidenceArgs
 ): Promise<WriteTerminalRenderDesyncEvidenceResult> {
-  if (!CAPTURE_ID_PATTERN.test(args.captureId)) {
+  if (!TERMINAL_RENDER_DESYNC_CAPTURE_ID_PATTERN.test(args.captureId)) {
     throw new Error('Invalid render-desync capture id')
   }
   if (args.phase !== 'corrupt' && args.phase !== 'healed') {

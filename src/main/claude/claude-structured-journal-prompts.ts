@@ -54,7 +54,7 @@ export class ClaudeJournalPrompts {
   constructor(
     private readonly deps: {
       sink: StructuredAgentSessionEventSink
-      bindPromptItemId?: (journalItemId: string, promptKey: string, questionId?: string) => void
+      bindPromptItemId?: (journalItemId: string, promptKey: string) => void
       questionItems?: (input: {
         sessionId: string
         prompt: Extract<ClaudeStructuredSessionEvent, { type: 'prompt' }>['prompt']
@@ -62,6 +62,17 @@ export class ClaudeJournalPrompts {
     }
   ) {}
 
+  /**
+   * Prompt rows carry NO producer linkage, and cannot.
+   *
+   * A prompt is not a transcript frame: it reaches Orca through the SDK's
+   * permission callback, whose options carry a request id and the tool awaiting
+   * approval and no parent reference of any kind. So when a subagent asks, the
+   * row cannot name it — unattributable at this site, not deliberately root.
+   *
+   * No reader is wrong because of it. A pending prompt projects the session as
+   * `attention` whoever raised it, which is the truth: the USER has to answer.
+   */
   handle(event: Extract<ClaudeStructuredSessionEvent, { type: 'prompt' }>): void {
     const items: ClaudeJournalPrompt[] = []
     if (event.prompt.kind === 'question') {

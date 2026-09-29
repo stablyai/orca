@@ -1,4 +1,5 @@
-export type HostClientAcquisition = object
+/** Holder identity token: the registry only compares references, never reads fields. */
+export type HostClientAcquisition = Record<string, never>
 
 export class HostClientAcquisitionRegistry {
   private readonly acquisitions = new Map<string, Set<HostClientAcquisition>>()

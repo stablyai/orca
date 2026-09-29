@@ -1,6 +1,7 @@
 import type SyncDatabase from '../sqlite/sync-database'
 
 const GENERATION_KEY = 'index_generation'
+const INCARNATION_KEY = 'index_incarnation'
 
 export const SESSION_SEARCH_GENERATION_TRIGGERS = [
   'search_generation_file_insert',
@@ -39,4 +40,12 @@ export function readIndexGeneration(db: SyncDatabase): number {
     | undefined
   const parsed = row ? Number(row.value) : Number.NaN
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : 0
+}
+
+export function readIndexIncarnation(db: SyncDatabase): string {
+  const row: unknown = db.prepare('SELECT value FROM meta WHERE key = ?').get(INCARNATION_KEY)
+  if (!row || typeof row !== 'object' || !('value' in row) || typeof row.value !== 'string') {
+    throw new Error('Session search index has no incarnation.')
+  }
+  return row.value
 }

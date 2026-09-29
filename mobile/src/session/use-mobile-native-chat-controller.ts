@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, type MutableRefObject } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { MobileNativeChatTab } from './mobile-native-chat-eligibility'
+import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import { useMobileNativeChatAskDismiss } from './use-mobile-native-chat-ask-dismiss'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import { useMobileNativeChatFileSearch } from './use-mobile-native-chat-file-search'
@@ -36,7 +37,7 @@ export function useMobileNativeChatController(args: {
   /** Live socket state; the lease collapses on disconnect but one render later. */
   connState: ConnectionState
   /** Host capability fact from the shared runtime status probe. */
-  agentSessionPromptCancelSupported?: boolean | null
+  agentSessionHostSupport?: StructuredAgentSessionHostSupport | null
   onSendError: (message: string) => void
   /** Retires a held failure banner. Any accepted chat write clears it — a delivered
    *  answer or permission reply must not sit under a stale "not sent". */
@@ -53,7 +54,7 @@ export function useMobileNativeChatController(args: {
     nativeChatTranscriptIsLocalReadable,
     nativeChatInputLeaseReady,
     connState,
-    agentSessionPromptCancelSupported = null,
+    agentSessionHostSupport = null,
     onSendError,
     onSendResolved
   } = args
@@ -93,7 +94,7 @@ export function useMobileNativeChatController(args: {
       callerIdentity: deviceTokenRef.current ?? '',
       enabled: showNativeChat,
       connState,
-      promptCancelSupported: agentSessionPromptCancelSupported,
+      hostSupport: agentSessionHostSupport,
       onSendError
     })
   const {
@@ -233,6 +234,7 @@ export function useMobileNativeChatController(args: {
 
   const { nativeChatSessionOptions, recordCommand: recordNativeChatSessionOptionCommand } =
     useMobileNativeChatSessionOptionController({
+      client,
       activeChatStructured,
       activeSessionTabId,
       agent: activeChatResolution?.agent ?? null,
@@ -241,6 +243,7 @@ export function useMobileNativeChatController(args: {
       isTabChatView,
       isWorking: nativeChatAgentWorking,
       reportedModel: activeSessionTab?.agentStatus?.model ?? null,
+      modelSwitchCommand: activeSessionTab?.agentStatus?.modelSwitchCommand,
       structured: {
         optionPickerRequest: structuredNativeChat.optionPickerRequest,
         conversationCommands: structuredNativeChat.conversationCommands,
@@ -285,6 +288,10 @@ export function useMobileNativeChatController(args: {
     nativeChatTurnIndicator: activeChatStructured ? structuredNativeChat.turnIndicator : null,
     nativeChatWorkingStartedAt: activeChatStructured ? structuredNativeChat.workingStartedAt : null,
     nativeChatSettledTurns: activeChatStructured ? structuredNativeChat.settledTurns : null,
+    nativeChatActiveTurnOpenedBy: activeChatStructured
+      ? structuredNativeChat.activeTurnOpenedBy
+      : null,
+    nativeChatTurnKeysByItemId: activeChatStructured ? structuredNativeChat.turnKeysByItemId : null,
     nativeChatCanStop: activeChatStructured
       ? structuredNativeChat.turnId !== null
       : nativeChatAgentWorking,

@@ -12,6 +12,7 @@ import { applyDirectSshRemoteWorkspaceSnapshot } from './remote-workspace-snapsh
 import { createRemoteWorkspaceSnapshotArrivalCoordinator } from './remote-workspace-snapshot-arrival-coordinator'
 import { createDeferredSnapshotPlacementRetries } from './remote-workspace-deferred-placement-retry'
 import { applyRemoteWorkspacePushStatus } from './remote-workspace-push-status'
+import { terminalLayoutNodeEqual } from '../lib/terminal-layout-equality'
 import { waitForRemoteWorkspaceSessionReady } from './remote-workspace-session-readiness'
 import type {
   RemoteWorkspaceTargetSync,
@@ -191,6 +192,7 @@ export function createRemoteWorkspaceTargetSync(
     if (!isArrivalCurrent(authority.targetId, arrival) || !deps.isPreparationTokenCurrent(token)) {
       return
     }
+    const pendingLayoutEdits = deps.store.getState().pendingDirectSshLayoutEditsByTabId
     const results = await deps.remoteWorkspace.setForConnectedTargets({
       session: buildWorkspaceSessionPayload(deps.store.getState()),
       hydratedTargetIds: [authority.targetId],
@@ -203,6 +205,21 @@ export function createRemoteWorkspaceTargetSync(
       return
     }
     const result = results.find((entry) => entry.targetId === authority.targetId)?.result
+    if (result?.ok) {
+      const currentState = deps.store.getState()
+      currentState.acknowledgeDirectSshLayoutEdits(
+        Object.fromEntries(
+          Object.entries(pendingLayoutEdits ?? {}).flatMap(([tabId, entry]) => {
+            const uploaded = result.snapshot.session.terminalLayoutsByTabId[tabId]
+            return entry.targetId === authority.targetId &&
+              uploaded &&
+              terminalLayoutNodeEqual(entry.root, uploaded.root)
+              ? [[tabId, entry]]
+              : []
+          })
+        )
+      )
+    }
     applyRemoteWorkspacePushStatus(deps.store.getState(), authority.targetId, result, snapshot)
   }
 

@@ -1,5 +1,8 @@
 import type { ClaudeSession, ClaudeStructuredSessionEvent } from './claude-structured-session-state'
-import type { StructuredSessionCompaction } from '../native-chat/agent-session-wire/structured-session-compaction'
+import type {
+  StructuredSessionCompaction,
+  StructuredSessionCompactionResult
+} from '../native-chat/agent-session-wire/structured-session-compaction'
 import { dispatchClaudeTurn } from './claude-structured-dispatch'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 /** Compaction needs no ack deadline of its own: `compactions.run` keeps its own
@@ -9,7 +12,7 @@ export function compactClaudeSession(
   session: ClaudeSession,
   compactions: StructuredSessionCompaction,
   input: Parameters<NonNullable<StructuredAgentSessionAdapter['compact']>>[0]
-): Promise<{ error?: string }> {
+): Promise<StructuredSessionCompactionResult> {
   return compactions.run(
     input.sessionId,
     session.providerSessionId,
@@ -18,7 +21,7 @@ export function compactClaudeSession(
         body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: '/compact' }] }
       })
       if (result.state === 'rejected') {
-        return { error: result.reason }
+        return { outcome: 'failed' as const }
       }
       return undefined
     },

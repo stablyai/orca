@@ -26,7 +26,7 @@ const REPAIR_DROPPED_EPOCHS: StructuredSessionSnapshotApplyOptions = {
 
 type SessionTabsEvent =
   | (RuntimeMobileSessionTabsResult & { type: 'snapshot' | 'updated' })
-  | { type: 'snapshots'; snapshots: RuntimeMobileSessionTabsResult[] }
+  | { type: 'snapshots'; snapshots: RuntimeMobileSessionTabsResult[]; authoritative?: boolean }
   | { type: 'end' }
 
 export async function startLocalStructuredSessionTabsSync(args: {
@@ -97,7 +97,10 @@ export async function startLocalStructuredSessionTabsSync(args: {
         }
         const event = response.result as SessionTabsEvent
         if (event.type === 'snapshots') {
-          applyStructuredSessionTabSnapshots(event.snapshots, undefined, REPAIR_DROPPED_EPOCHS)
+          applyStructuredSessionTabSnapshots(event.snapshots, undefined, {
+            ...REPAIR_DROPPED_EPOCHS,
+            authoritative: event.authoritative === true
+          })
         } else if (event.type === 'snapshot' || event.type === 'updated') {
           applyStructuredSessionTabSnapshots([event], undefined, REPAIR_DROPPED_EPOCHS)
         } else if (event.type === 'end' && generation === subscriptionGeneration) {

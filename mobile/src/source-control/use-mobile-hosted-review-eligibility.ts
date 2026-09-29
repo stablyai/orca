@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { HostedReviewCreationEligibility } from '../../../src/shared/hosted-review'
+import type { MobileHostedReviewEligibilityReply } from './hosted-review-reply-schema'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import {
@@ -144,7 +144,7 @@ export function useMobileHostedReviewEligibility(
       behind
     }
     void fetchMobileHostedReviewEligibility(client, worktreeId, requestInput)
-      .then((eligibility: HostedReviewCreationEligibility | null) => {
+      .then((eligibility: MobileHostedReviewEligibilityReply | null) => {
         if (!active) {
           return
         }

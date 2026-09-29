@@ -20,6 +20,8 @@ import {
 } from './codex-structured-journal-sink'
 import type { CodexPendingJournalPrompt } from './codex-structured-journal-settlement'
 import { readCodexTurnId } from './codex-structured-thread-facts'
+import type { CodexRowLinkage } from './codex-subagent-linkage'
+import { journalLifecycleItemMutation } from '../native-chat/agent-session-journal/journal-row-builders'
 
 type CodexGroupedPendingJournalPrompt = CodexPendingJournalPrompt & { promptKey: string }
 
@@ -27,7 +29,9 @@ export class CodexJournalPrompts {
   readonly pending = new Map<string, CodexGroupedPendingJournalPrompt>()
 
   constructor(
-    private readonly deps: Pick<CodexJournalTranslatorDeps, 'sink' | 'bindPromptItemId'>,
+    private readonly deps: Pick<CodexJournalTranslatorDeps, 'sink' | 'bindPromptItemId'> & {
+      linkageFor: CodexRowLinkage
+    },
     private readonly detailFor: (threadId: string, itemId: string) => string | null,
     private readonly activeTurn: (threadId: string) => string | null
   ) {}
@@ -47,7 +51,7 @@ export class CodexJournalPrompts {
         params: event.params
       })
       const promptItems = questions.map(({ identity, body }) => ({ identity, body }))
-      const admission = this.admit(event, promptItems)
+      const admission = this.admit(event, turnId, promptItems)
       if (!admission.accepted) {
         return admission
       }
@@ -77,7 +81,7 @@ export class CodexJournalPrompts {
       params: event.params,
       detail: this.detailFor(event.threadId, event.codexItemId)
     })
-    const admission = this.admit(event, [{ identity, body }])
+    const admission = this.admit(event, turnId, [{ identity, body }])
     if (!admission.accepted) {
       return admission
     }
@@ -114,7 +118,8 @@ export class CodexJournalPrompts {
     )
     const mutations = group.flatMap(([, prompt]) => {
       const body = cancelledJournalPromptBody(prompt.body)
-      return body ? [{ kind: 'item' as const, identity: prompt.identity, body }] : []
+      const producer = this.deps.linkageFor(prompt.threadId, prompt.turnId)
+      return body ? [journalLifecycleItemMutation(producer, prompt.identity, body)] : []
     })
     const admission = appendCodexLifecycleMutations(
       this.deps.sink,
@@ -137,6 +142,7 @@ export class CodexJournalPrompts {
 
   private admit(
     event: { method: string; threadId: string; promptKey: string },
+    turnId: string | null,
     items: readonly Pick<CodexPendingJournalPrompt, 'identity' | 'body'>[]
   ): CodexJournalTranslationAdmission {
     return admitCodexLifecycleItems(
@@ -144,7 +150,9 @@ export class CodexJournalPrompts {
       `prompt:${encodeURIComponent(event.method)}:${encodeURIComponent(
         event.threadId
       )}:${encodeURIComponent(event.promptKey)}`,
-      items
+      items,
+      // A child's approval arrives on the child's own thread, so it names the asker.
+      this.deps.linkageFor(event.threadId, turnId)
     )
   }
 
@@ -158,7 +166,12 @@ export class CodexJournalPrompts {
       if (evicted) {
         const cancelled = cancelledJournalPromptBody(evicted.body)
         if (cancelled) {
-          const admission = appendCodexLifecycleItem(this.deps.sink, evicted.identity, cancelled)
+          const admission = appendCodexLifecycleItem(
+            this.deps.sink,
+            evicted.identity,
+            cancelled,
+            this.deps.linkageFor(evicted.threadId, evicted.turnId)
+          )
           if (!admission.accepted) {
             return admission
           }

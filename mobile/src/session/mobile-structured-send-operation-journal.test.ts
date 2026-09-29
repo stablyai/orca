@@ -18,8 +18,11 @@ import {
   mobileStructuredSendOperationKey,
   resetMobileStructuredSendOperationJournalForTests
 } from './mobile-structured-send-operation-journal'
+import { readMirroredStorage } from '../storage/mirrored-storage-keys'
 
 const NOW = 1_900_000_000_000
+/** The key the journal persists under, which the hybrid shell mirrors into every `init`. */
+const JOURNAL_KEY = 'orca:mobileStructuredSendOperations:v1'
 const OPERATION_KEY = 'a'.repeat(64)
 const CALLER_IDENTITY = 'mobile-device-a'
 
@@ -78,6 +81,47 @@ describe('mobile structured send operation journal', () => {
       })
     ).resolves.toEqual({ operationId: firstId, retained: true })
     expect(createAfterRemount).not.toHaveBeenCalled()
+  })
+
+  /**
+   * A mirror the page reads is not allowed to run ahead of the store (round 4, CodeRabbit).
+   *
+   * The hybrid shell builds `init` from the mirror synchronously, so the page is handed whatever
+   * was noted here. Noting the write before it is persisted is what keeps an `init` in the same
+   * turn current; keeping the note after the persist was refused publishes a journal that does
+   * not exist, and the page resumes operations the device never wrote down.
+   */
+  it('rolls the mirror back when persisting an added entry fails', async () => {
+    await getOrCreateMobileStructuredSendOperation({
+      operationKey: OPERATION_KEY,
+      createOperationId: () => operationIdAt(NOW, '8'),
+      now: NOW
+    })
+    const held = readMirroredStorage([JOURNAL_KEY])[JOURNAL_KEY]
+    asyncStorage.setItem.mockRejectedValueOnce(new Error('the store is full'))
+    await expect(
+      getOrCreateMobileStructuredSendOperation({
+        operationKey: 'c'.repeat(64),
+        createOperationId: () => operationIdAt(NOW, '9'),
+        now: NOW
+      })
+    ).rejects.toThrow('the store is full')
+    expect(readMirroredStorage([JOURNAL_KEY])[JOURNAL_KEY]).toBe(held)
+  })
+
+  it('rolls the mirror back when persisting the last clear fails', async () => {
+    const firstId = operationIdAt(NOW, 'a')
+    await getOrCreateMobileStructuredSendOperation({
+      operationKey: OPERATION_KEY,
+      createOperationId: () => firstId,
+      now: NOW
+    })
+    const held = readMirroredStorage([JOURNAL_KEY])[JOURNAL_KEY]
+    asyncStorage.removeItem.mockRejectedValueOnce(new Error('the store is full'))
+    await expect(
+      clearMobileStructuredSendOperation({ operationKey: OPERATION_KEY, operationId: firstId })
+    ).rejects.toThrow('the store is full')
+    expect(readMirroredStorage([JOURNAL_KEY])[JOURNAL_KEY]).toBe(held)
   })
 
   it('clears only the exact settled operation', async () => {

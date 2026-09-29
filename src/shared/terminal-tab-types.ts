@@ -132,6 +132,8 @@ export type TerminalLayoutSnapshot = {
   root: TerminalPaneLayoutNode | null
   activeLeafId: string | null
   expandedLeafId: string | null
+  /** Stable leaf that owns the terminal tab's native chat surface. */
+  chatLeafId?: string
   /** Live PTY IDs per leaf for in-session remounts such as tab-group moves.
    *  Not used for app restart because PTYs are transient processes. */
   ptyIdsByLeafId?: Record<string, string>

@@ -4,14 +4,20 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
+import {
+  agentSessionFailureFact,
+  MAX_PROVIDER_DIAGNOSTIC_CHARS,
+  providerDiagnostic
+} from '../../../shared/agent-session-failure'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   captureUnfinishedStructuredAgentSessionWork,
-  MAX_UNEXPECTED_EXIT_REASON_CHARS,
   settleStructuredAgentSessionDeadGeneration,
-  UNEXPECTED_PROVIDER_EXIT_OUTCOME,
   unfinishedStructuredAgentSessionWorkWasInterrupted
 } from './structured-agent-session-dead-generation-settlement'
+
+const UNEXPECTED_PROVIDER_EXIT_OUTCOME =
+  'The agent stopped while this response was in progress. You can continue in this conversation.'
 
 const SESSION = 'session-dead-generation'
 const THREAD = 'thread-1'
@@ -142,7 +148,7 @@ describe('dead structured-session generation settlement', () => {
     ).toHaveLength(1)
   })
 
-  it('keeps the actionable tail when the provider dumps a stderr wall into its exit reason', async () => {
+  it('keeps a stderr wall out of the sentence, as a bounded detail for a log', async () => {
     await seedUnfinishedWork()
 
     await expect(
@@ -154,19 +160,47 @@ describe('dead structured-session generation settlement', () => {
         pendingSubmissionReason: 'provider_exited_before_acknowledgement',
         verdict: { state: 'interrupted', completedAt: 1_000 },
         showUnexpectedExitOutcome: true,
-        unexpectedExitReason: 'stack frame '.repeat(4_000)
+        exitFailure: agentSessionFailureFact('providerExited', {
+          detail: providerDiagnostic('stack frame '.repeat(4_000), 'log')
+        })
       })
     ).resolves.toBe(true)
 
     const statuses = journal
       .snapshot()
-      .items.flatMap((item) => (item.body.kind === 'status' ? [item.body.text] : []))
+      .items.flatMap((item) => (item.body.kind === 'status' ? [item.body] : []))
     expect(statuses).toHaveLength(1)
-    // The cause is bounded before composing, so the row never reaches the byte cap that would
-    // truncate the sentence telling the user the conversation is still usable.
-    expect(statuses[0]).toContain('stack frame')
-    expect(statuses[0]).toMatch(/You can continue in this conversation\.$/)
-    expect(statuses[0]?.length).toBeLessThan(MAX_UNEXPECTED_EXIT_REASON_CHARS * 2)
+    expect(statuses[0]?.text).toBe(UNEXPECTED_PROVIDER_EXIT_OUTCOME)
+    expect(statuses[0]?.failure?.kind).toBe('providerExited')
+    expect(statuses[0]?.failure?.detail?.audience).toBe('log')
+    expect(statuses[0]?.failure?.detail?.text.length).toBe(MAX_PROVIDER_DIAGNOSTIC_CHARS)
+  })
+
+  it("words Orca's own fault as Orca's, never as the provider stopping", async () => {
+    await seedUnfinishedWork()
+
+    await settleStructuredAgentSessionDeadGeneration({
+      journal,
+      sessionId: SESSION,
+      fence: 7,
+      settlementId: `provider-exit:${SESSION}:7:generation-1`,
+      pendingSubmissionReason: 'provider_exited_before_acknowledgement',
+      verdict: { state: 'interrupted', completedAt: 1_000 },
+      showUnexpectedExitOutcome: true,
+      // Orca stopped the provider because its own journal failed.
+      exitFailure: agentSessionFailureFact('hostFault')
+    })
+
+    const statuses = journal
+      .snapshot()
+      .items.flatMap((item) => (item.body.kind === 'status' ? [item.body] : []))
+    expect(statuses).toEqual([
+      {
+        kind: 'status',
+        text: "Orca ran into a problem, so this didn't go through. Try again.",
+        failure: { kind: 'hostFault' }
+      }
+    ])
   })
 
   it('retries an already settled expected close without writing through a closed journal gate', async () => {
@@ -185,7 +219,12 @@ describe('dead structured-session generation settlement', () => {
     const settledSnapshot = journal.snapshot()
     const closedJournal: Pick<
       AgentSessionJournal,
-      'snapshot' | 'submissions' | 'markPendingSubmissionsUnknown' | 'appendLifecycleBatch'
+      | 'snapshot'
+      | 'submissions'
+      | 'markPendingSubmissionsUnknown'
+      | 'rejectPendingSubmissions'
+      | 'rejectQueuedSubmissions'
+      | 'appendLifecycleBatch'
     > = {
       snapshot: () => ({
         ...settledSnapshot,
@@ -193,6 +232,12 @@ describe('dead structured-session generation settlement', () => {
       }),
       submissions: () => [],
       markPendingSubmissionsUnknown: async () => {
+        throw new Error('journal_closed')
+      },
+      rejectPendingSubmissions: async () => {
+        throw new Error('journal_closed')
+      },
+      rejectQueuedSubmissions: async () => {
         throw new Error('journal_closed')
       },
       appendLifecycleBatch: async () => {
@@ -247,6 +292,120 @@ describe('dead structured-session generation settlement', () => {
         reason: 'provider write outcome unknown'
       })
     ])
+  })
+
+  it('rejects a send a child that never started left pending with its diagnostic, in words', async () => {
+    await journal.appendSubmission({
+      clientMessageId: 'client-held',
+      payloadFingerprint: 'fingerprint',
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello?' }] },
+      fence: 7
+    })
+
+    await settleStructuredAgentSessionDeadGeneration({
+      journal,
+      sessionId: SESSION,
+      fence: 7,
+      settlementId: `provider-exit:${SESSION}:7:generation-1`,
+      pendingSubmissionReason: 'provider_closed_before_acknowledgement',
+      verdict: { state: 'interrupted', completedAt: 1_000 },
+      exitFailure: agentSessionFailureFact('providerExited', {
+        detail: providerDiagnostic('code 1\nnot signed in', 'log')
+      }),
+      exitedDuringStartup: { generation: 'generation-1' }
+    })
+
+    // The sentence is Orca's; the stderr the exit carried rides as a log detail only.
+    expect(journal.submissions()).toEqual([
+      expect.objectContaining({
+        clientMessageId: 'client-held',
+        dispatchState: 'rejected',
+        reason: 'The agent stopped before it finished starting. Send your message to try again.',
+        rejection: {
+          kind: 'providerStartFailed',
+          detail: { text: 'code 1\nnot signed in', audience: 'log' }
+        }
+      })
+    ])
+  })
+
+  it("keeps a subagent's settled rows the subagent's, in one batch and after a reopen", async () => {
+    // One batch settles rows several agents wrote and names none of them. Each
+    // row keeps the producer its first write named, including after a replay.
+    const child = { agentId: 'thread-child', producerKind: 'agent' as const }
+    const childCall = {
+      provider: 'codex' as const,
+      threadId: 'thread-child',
+      turnId: 'c',
+      ordinal: 1
+    }
+    const childAsk = {
+      provider: 'codex' as const,
+      threadId: 'thread-child',
+      turnId: 'c',
+      ordinal: 2
+    }
+    await seedUnfinishedWork()
+    await journal.appendItem(
+      childCall,
+      { kind: 'tool-call', name: 'shell', input: { command: 'ls' }, state: 'running' },
+      { fence: 7, ...child }
+    )
+    await journal.appendItem(
+      childAsk,
+      {
+        kind: 'approval',
+        title: 'Run ls?',
+        detail: null,
+        options: [{ id: 'yes', label: 'Allow' }],
+        resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+      },
+      { fence: 7, ...child }
+    )
+
+    await settleStructuredAgentSessionDeadGeneration({
+      journal,
+      sessionId: SESSION,
+      fence: 8,
+      settlementId: `restart-eviction:${SESSION}:8`,
+      pendingSubmissionReason: 'provider_exited_before_acknowledgement',
+      verdict: { state: 'unverifiable' },
+      showUnexpectedExitOutcome: false
+    })
+    const settledProducers = (): [string, number, string | undefined][] =>
+      journal
+        .snapshot()
+        .items.map((item): [string, number, string | undefined] => [
+          item.body.kind,
+          item.revision,
+          item.agentId
+        ])
+
+    const settled = settledProducers()
+    // Every seeded row was revised by the batch, so these are revision-2 producers.
+    expect(settled).toEqual([
+      ['message', 0, undefined],
+      ['tool-call', 2, undefined],
+      ['approval', 2, undefined],
+      ['question', 2, undefined],
+      ['turn', 2, undefined],
+      ['tool-call', 2, 'thread-child'],
+      ['approval', 2, 'thread-child']
+    ])
+
+    await journal.close()
+    journal = await openAgentSessionJournal({
+      identity: {
+        sessionId: SESSION,
+        workspaceId: 'workspace-1',
+        hostId: 'local',
+        agent: 'codex',
+        providerHandle: { kind: 'codex', threadId: THREAD }
+      },
+      journalDir: root,
+      now: () => 1_000
+    })
+    expect(settledProducers()).toEqual(settled)
   })
 })
 

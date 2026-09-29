@@ -71,7 +71,7 @@ export class DurablePushWorker {
                 Math.min(30_000, 1000 * 2 ** Math.min(queued.attempts, 5))
               )
             : undefined
-        await this.store.finish(queued, retryAfterMs, outcome.status)
+        await this.store.finish(queued, retryAfterMs)
       } catch {
         await this.store.finish(queued, 5000)
       } finally {

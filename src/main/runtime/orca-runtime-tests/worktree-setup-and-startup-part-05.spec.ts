@@ -189,7 +189,11 @@ describe('OrcaRuntimeService', () => {
     }
     const fsProvider = {
       realpath: vi.fn().mockResolvedValue('/remote/mobile-codex-draft'),
-      readFile: vi.fn().mockRejectedValue(new Error('missing config')),
+      readFile: vi
+        .fn()
+        .mockRejectedValue(
+          new Error("ENOENT: no such file or directory, stat '/home/dev/.codex/config.toml'")
+        ),
       createDir: vi.fn().mockResolvedValue(undefined),
       writeFile: vi.fn().mockResolvedValue(undefined)
     }
@@ -302,7 +306,11 @@ describe('OrcaRuntimeService', () => {
     }
     const fsProvider = {
       realpath: vi.fn().mockResolvedValue('/remote/mobile-codex-command'),
-      readFile: vi.fn().mockRejectedValue(new Error('missing config')),
+      readFile: vi
+        .fn()
+        .mockRejectedValue(
+          new Error("ENOENT: no such file or directory, stat '/home/dev/.codex/config.toml'")
+        ),
       createDir: vi.fn().mockResolvedValue(undefined),
       writeFile: vi.fn().mockResolvedValue(undefined)
     }

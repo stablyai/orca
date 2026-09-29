@@ -53,6 +53,14 @@ export function buildStreamUnsubscribe(
         }
       : null
   }
+  if (method === 'agentSession.subscribe') {
+    const sessionId = (params as { sessionId?: unknown }).sessionId
+    // The host keys each transcript stream by its frame id; without it every stream of the
+    // session on this socket would end.
+    return typeof sessionId === 'string' && requestId
+      ? { method: 'agentSession.unsubscribe', params: { sessionId, subscriptionId: requestId } }
+      : null
+  }
   if (method === 'nativeChat.subscribe') {
     const subscriptionId = (params as { subscriptionId?: unknown }).subscriptionId
     if (typeof subscriptionId === 'string') {

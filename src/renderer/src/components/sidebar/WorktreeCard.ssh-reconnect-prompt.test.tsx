@@ -73,6 +73,10 @@ vi.mock('./use-worktree-activity-status', () => ({
   useWorktreeActivityStatus: () => 'idle'
 }))
 
+vi.mock('./use-worktree-sleep-state', () => ({
+  useIsSleepingWorktree: () => false
+}))
+
 vi.mock('./WorktreeContextMenu', () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
   CLOSE_ALL_CONTEXT_MENUS_EVENT: 'orca:test-close-context-menus',

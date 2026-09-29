@@ -27,6 +27,18 @@ import { mergeFetchedProjectCompatibilityForHost } from '../projects/project-com
 import { scheduleSafeAutoForkSync } from './safe-auto-fork-sync'
 
 export const runtimeRepoFetchGenerationByEnvironment = new Map<string, number>()
+const MAX_RUNTIME_REPO_FETCH_GENERATIONS = 512
+let runtimeRepoFetchGenerationSequence = 0
+
+function pruneRuntimeRepoFetchGenerations(): void {
+  while (runtimeRepoFetchGenerationByEnvironment.size > MAX_RUNTIME_REPO_FETCH_GENERATIONS) {
+    const oldest = runtimeRepoFetchGenerationByEnvironment.keys().next()
+    if (oldest.done) {
+      return
+    }
+    runtimeRepoFetchGenerationByEnvironment.delete(oldest.value)
+  }
+}
 
 export function createRuntimeRepoCatalogActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -34,9 +46,9 @@ export function createRuntimeRepoCatalogActions(
 ): Pick<RepoSlice, 'fetchRuntimeEnvironmentRepos'> {
   return {
     fetchRuntimeEnvironmentRepos: async (environmentId) => {
-      const requestGeneration =
-        (runtimeRepoFetchGenerationByEnvironment.get(environmentId) ?? 0) + 1
+      const requestGeneration = ++runtimeRepoFetchGenerationSequence
       runtimeRepoFetchGenerationByEnvironment.set(environmentId, requestGeneration)
+      pruneRuntimeRepoFetchGenerations()
       const connectionGeneration = getEnvironmentSshStateGeneration(environmentId)
       const runtimeConnectionGeneration = getRuntimeEnvironmentConnectionGeneration(environmentId)
       let catalogGeneration = 0

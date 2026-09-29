@@ -38,7 +38,7 @@ export async function detectRemoteHostPlatform(
   }
   // Why: only the PowerShell probe can settle a uname the parser cannot map
   // (Cygwin, say), so a refused or timed-out channel leaves it unsettled.
-  const windowsProbeNeverRan = windows.kind === 'failed' && isTransportShapedError(windows.error)
+  const windowsProbeNeverRan = windows.kind === 'failed' && isTransportFailure(windows.error)
   if ((uname.kind === 'unsupported' && !windowsProbeNeverRan) || windows.kind === 'unsupported') {
     const reported = uname.kind === 'unsupported' ? uname.uname : probeUname(windows)
     console.warn(`[ssh-relay] Remote reported an unsupported platform: ${reported}`)
@@ -66,7 +66,7 @@ function undetectedPlatformError(
   windows: PlatformProbeOutcome
 ): Error {
   for (const outcome of [uname, windows]) {
-    if (outcome.kind === 'failed' && isTransportShapedError(outcome.error)) {
+    if (outcome.kind === 'failed' && isTransportFailure(outcome.error)) {
       return wrapProbeError(outcome.error)
     }
   }
@@ -84,7 +84,7 @@ function undetectedPlatformError(
 
 // Why: a refused or timed-out channel explains the failure better than the
 // other probe's mundane non-zero exit (e.g. "sh: not found" on Windows).
-function isTransportShapedError(error: unknown): boolean {
+function isTransportFailure(error: unknown): boolean {
   return (
     isSshSessionLimitError(error) ||
     isUnconfirmedSshCommandTermination(error) ||

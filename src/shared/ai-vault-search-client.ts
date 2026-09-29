@@ -29,7 +29,7 @@ export function unavailableSessionSearchStatus(): AiVaultSearchStatus {
 }
 
 // Only an explicit unknown-method refusal proves the old host lacks this surface.
-function isUnknownMethod(error: unknown): boolean {
+export function isUnknownSessionSearchMethod(error: unknown): boolean {
   if (!error || typeof error !== 'object' || !('code' in error)) {
     return false
   }
@@ -50,7 +50,7 @@ export function createSessionSearchClient(
       try {
         raw = await call('aiVault.searchSessions', parsed)
       } catch (error) {
-        if (isUnknownMethod(error)) {
+        if (isUnknownSessionSearchMethod(error)) {
           return { kind: 'unavailable', reason: 'no-service' }
         }
         throw error
@@ -73,7 +73,7 @@ export function createSessionSearchClient(
           transport
         )
       } catch (error) {
-        if (isUnknownMethod(error)) {
+        if (isUnknownSessionSearchMethod(error)) {
           return unavailableSessionSearchStatus()
         }
         throw error

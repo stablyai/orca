@@ -69,10 +69,10 @@ type DispatcherModule = {
 function registeredMethodNames(methods: readonly unknown[]): string[] {
   return methods
     .flatMap((method) => {
-      if (!method || typeof method !== 'object') {
+      if (!method || typeof method !== 'object' || !('name' in method)) {
         return []
       }
-      const name = Reflect.get(method, 'name')
+      const { name } = method
       return typeof name === 'string' ? [name] : []
     })
     .sort()

@@ -6,7 +6,7 @@ import {
 } from './claude-structured-control-actions'
 import { dispatchClaudeTurn } from './claude-structured-dispatch'
 import { ClaudeControlRequestError } from './claude-stream-json-connection'
-import { ClaudePromptRegistry } from './claude-structured-prompt-replies'
+import { buildClaudePromptReply, ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import type { ClaudeDispatchWaiter, ClaudeSession } from './claude-structured-session-state'
 import { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
 import { sessionFor, userMessage } from './claude-structured-dispatch-test-support'
@@ -16,7 +16,7 @@ type InterruptResult = Awaited<ReturnType<ClaudeSession['connection']['interrupt
 function sessionWith(input: {
   capabilities?: string[]
   interrupt: (options?: { cancelQueued?: boolean; timeoutMs?: number }) => Promise<InterruptResult>
-  cancelAsyncMessage?: (uuid: string) => Promise<void>
+  cancelAsyncMessage?: (uuid: string) => Promise<boolean>
   prompts?: ClaudePromptRegistry
 }): {
   session: ClaudeSession
@@ -24,7 +24,7 @@ function sessionWith(input: {
   cancelAsyncMessage: ReturnType<typeof vi.fn>
 } {
   const interrupt = vi.fn(input.interrupt)
-  const cancelAsyncMessage = vi.fn(input.cancelAsyncMessage ?? (async () => {}))
+  const cancelAsyncMessage = vi.fn(input.cancelAsyncMessage ?? (async () => false))
   const session = sessionFor()
   session.capabilities = input.capabilities ?? []
   session.prompts = input.prompts ?? new ClaudePromptRegistry()
@@ -56,6 +56,53 @@ describe('cancelClaudeTurn', () => {
     expect(cancelAsyncMessage.mock.calls.map((call) => call[0])).toEqual(['queued-1', 'queued-2'])
   })
 
+  it('settles each still-queued send the CLI confirms it withdrew, and only those', async () => {
+    const { session, cancelAsyncMessage } = sessionWith({
+      capabilities: ['interrupt_receipt_v1'],
+      interrupt: async () => ({ still_queued: ['queued-1', 'queued-2', 'queued-3'] }),
+      // queued-2 already ran; queued-3's answer never arrived.
+      cancelAsyncMessage: async (uuid) => {
+        if (uuid === 'queued-3') {
+          throw new ClaudeControlRequestError('cancel_async_message', 'timed out')
+        }
+        return uuid === 'queued-1'
+      }
+    })
+    const resolutions = [vi.fn(), vi.fn(), vi.fn()]
+    session.dispatchWaiters = ['queued-1', 'queued-2', 'queued-3'].map(
+      (sentUuid, index): ClaudeDispatchWaiter => ({
+        acceptsResult: false,
+        clientMessageId: `client-${index + 1}`,
+        sentUuid,
+        dispatchSequence: index + 1,
+        requestedAt: null,
+        replayContentKey: `content-${index}`,
+        resolve: resolutions[index]!
+      })
+    )
+    const settled = vi.fn()
+
+    await expect(cancelClaudeTurn(session, 5_000, () => true, settled)).resolves.toEqual({
+      cancelled: true
+    })
+    expect(cancelAsyncMessage).toHaveBeenCalledTimes(3)
+    expect(settled.mock.calls).toEqual([
+      [
+        {
+          clientMessageId: 'client-1',
+          state: 'rejected',
+          reason: 'provider_cancelled_before_start',
+          rejection: { kind: 'cancelled' }
+        }
+      ]
+    ])
+    expect(resolutions[0]).toHaveBeenCalledWith(null)
+    expect(session.dispatchWaiters.map((waiter) => waiter.sentUuid)).toEqual([
+      'queued-2',
+      'queued-3'
+    ])
+  })
+
   it('settles every cancelled queued waiter when the CLI advertises the capability', async () => {
     const cancelled = Array.from({ length: 64 }, (_, index) => `queued-${index}`)
     const { session, interrupt, cancelAsyncMessage } = sessionWith({
@@ -68,6 +115,7 @@ describe('cancelClaudeTurn', () => {
       clientMessageId: `client-${index}`,
       sentUuid,
       dispatchSequence: index + 1,
+      requestedAt: null,
       replayContentKey: `content-${index}`,
       resolve: resolutions[index]!
     }))
@@ -84,7 +132,8 @@ describe('cancelClaudeTurn', () => {
     expect(settled).toHaveBeenNthCalledWith(1, {
       clientMessageId: 'client-0',
       state: 'rejected',
-      reason: 'provider_cancelled_before_start'
+      reason: 'provider_cancelled_before_start',
+      rejection: { kind: 'cancelled' }
     })
   })
 
@@ -117,7 +166,8 @@ describe('cancelClaudeTurn', () => {
     expect(settled).toHaveBeenCalledWith({
       clientMessageId: 'client-ambiguous',
       state: 'rejected',
-      reason: 'provider_cancelled_before_start'
+      reason: 'provider_cancelled_before_start',
+      rejection: { kind: 'cancelled' }
     })
   })
 
@@ -193,11 +243,19 @@ describe('answerClaudePrompt', () => {
     const resolvePrompt = vi.fn()
     session.translator = {
       handle: vi.fn(),
+      openTurnInLiveProviderCycle: false,
       journalPrompts: {
         cancel: vi.fn(() => ({ accepted: true as const })),
         resolve: resolvePrompt
       },
+      currentTurnId: null,
       flush: vi.fn(),
+      contextActivity: 0,
+      markContextActivity: vi.fn(),
+      subscribeContextUsageRequests: () => () => {},
+      recordContextReport: () => {},
+      modelMayHaveChanged: () => {},
+      modelWritten: () => {},
       pendingStreamedBlocks: 0,
       dispose: vi.fn()
     }
@@ -206,7 +264,11 @@ describe('answerClaudePrompt', () => {
     if (!claim) {
       throw new Error('expected prompt claim')
     }
-    await answerClaudePrompt(session, claim, 'allow')
+    await answerClaudePrompt(
+      session,
+      claim,
+      buildClaudePromptReply(prompt, { kind: 'option', optionId: 'allow' })
+    )
 
     expect(settle).toHaveBeenCalledWith(
       expect.objectContaining({ behavior: 'allow', toolUseID: 'tool-1' })

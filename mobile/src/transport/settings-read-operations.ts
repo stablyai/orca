@@ -7,6 +7,12 @@ function settingsMember(raw: unknown): unknown {
   return boxed!.settings
 }
 
+// Box primitives so a non-object settings value reads as absent instead of throwing.
+function settingsField(settings: unknown, key: string): unknown {
+  const boxed: Record<string, unknown> = Object(settings)
+  return boxed[key]
+}
+
 // Settings remain opaque: callers historically retain fields without validating their shapes.
 const settingsReader: RpcCompatibleReader<unknown, 'settings-member', unknown> = (raw) => ({
   compatible: true,
@@ -27,7 +33,7 @@ const optionalSettingsReader: RpcCompatibleReader<unknown, 'optional-settings-me
 const botOverridesReader: RpcCompatibleReader<unknown, 'bot-logins', string[]> = (raw) => {
   const settings = raw == null ? undefined : settingsMember(raw)
   const overrides: unknown =
-    settings == null ? undefined : Reflect.get(Object(settings), 'prBotAuthorOverrides')
+    settings == null ? undefined : settingsField(settings, 'prBotAuthorOverrides')
   return {
     compatible: true,
     variant: 'bot-logins',
@@ -85,7 +91,7 @@ export const newTabSettingsRead = bindDeferredRpcOperation(
 const copyTrimsGutterReader: RpcCompatibleReader<unknown, 'copy-trims-gutter', boolean> = (raw) => {
   const settings = raw == null ? undefined : settingsMember(raw)
   const trims: unknown =
-    settings == null ? undefined : Reflect.get(Object(settings), 'terminalCopyTrimsGutter')
+    settings == null ? undefined : settingsField(settings, 'terminalCopyTrimsGutter')
   return {
     compatible: true,
     variant: 'copy-trims-gutter',

@@ -57,7 +57,9 @@ export function updatePersistedUI(
   operations: UIUpdateOperations,
   updates: Partial<PersistedState['ui']>
 ): void {
-  if ('browserKagiSessionLink' in updates && !updates.browserKagiSessionLink) {
+  const clearsProtectedSecret =
+    'browserKagiSessionLink' in updates && !updates.browserKagiSessionLink
+  if (clearsProtectedSecret) {
     operations.removeRetainedBlob(PROTECTED_SECRET_SLOT.browserKagiSessionLink)
   }
   const sanitizedUpdates = stripMainOwnedTelemetryMarkerFromUI(updates)
@@ -192,7 +194,8 @@ export function updatePersistedUI(
           )
         : normalizeFeatureInteractions(operations.state.ui?.featureInteractions)
   }
-  if (persistedUIValuesEqual(previousUI, nextUI)) {
+  // A sealed secret looks empty in memory; an explicit clear must still reach disk.
+  if (!clearsProtectedSecret && persistedUIValuesEqual(previousUI, nextUI)) {
     if (activeViewChanged) {
       operations.notifyUIChanged()
     }

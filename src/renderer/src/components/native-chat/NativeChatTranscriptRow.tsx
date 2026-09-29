@@ -1,7 +1,7 @@
 import { memo } from 'react'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
-import { MessageRow } from './NativeChatMessageRow'
+import { MessageRow, type NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import { NativeChatResolutionReceipt } from './NativeChatResolutionReceipt'
 import { NativeChatWorkingStatus } from './NativeChatWorkingStatus'
 import { NativeChatTurnDiffRollup } from './NativeChatTurnDiffRollup'
@@ -13,11 +13,11 @@ import type { NativeChatDiffReveal, NativeChatDiffTarget } from './native-chat-t
  *  object so a row's props change only when that row's own slot does. */
 export type NativeChatTranscriptRowContext = {
   expandSignal: boolean
-  showTurnStatus: boolean
   revealedDiff: NativeChatDiffReveal | null
   taskListPredecessors: ReadonlyMap<string, NativeChatTaskListPredecessors>
   expandedTurnIds: ReadonlySet<string>
-  failedDeliveryMessageIds?: ReadonlySet<string>
+  /** Keyed by message id: the user messages that did not go through, each with its own words. */
+  deliveryNotices?: ReadonlyMap<string, NativeChatDeliveryNotice>
   allowFileUriLinks: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
   onLinkClick?: CommentMarkdownLinkClickHandler
@@ -42,10 +42,22 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   const { message, turnKey, status, receipt, turnDiff } = slot
   const predecessors = context.taskListPredecessors.get(message.id)
   const expanded = turnKey ? context.expandedTurnIds.has(turnKey) : undefined
+  const statusRow = status ? (
+    <NativeChatWorkingStatus
+      startedAt={status.startedAt}
+      workedSeconds={status.workedSeconds}
+      expanded={expanded === true}
+      onToggleExpanded={
+        slot.turnFolds && turnKey ? () => context.onToggleExpandedTurn(turnKey) : undefined
+      }
+    />
+  ) : null
   return (
     <div className="flex flex-col gap-5">
+      {/* A turn with no user bubble carries its bar above its first row. */}
+      {slot.statusAbove ? statusRow : null}
       {receipt ? (
-        <NativeChatResolutionReceipt body={receipt} />
+        <NativeChatResolutionReceipt body={receipt} disclosureId={message.id} />
       ) : (
         <MessageRow
           message={message}
@@ -56,28 +68,17 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           }
           expandSignal={context.expandSignal}
           activeTurnIsWorking={slot.activeTurnIsWorking}
+          trailingRun={slot.trailingRun}
           onScrollMessageToTop={context.onScrollMessageToTop}
           onLinkClick={context.onLinkClick}
           allowFileUriLinks={context.allowFileUriLinks}
-          deliveryFailed={context.failedDeliveryMessageIds?.has(message.id) === true}
-          structuredActivityUi={context.showTurnStatus}
-          activityExpandOverride={expanded}
+          deliveryNotice={context.deliveryNotices?.get(message.id)}
+          folded={slot.folded}
+          subagentLabel={slot.subagentLabel}
           runtimeContext={context.runtimeContext}
         />
       )}
-      {status ? (
-        <NativeChatWorkingStatus
-          startedAt={status.startedAt}
-          thinking={status.thinking}
-          workedSeconds={status.workedSeconds}
-          expanded={expanded === true}
-          onToggleExpanded={
-            status.workedSeconds != null && turnKey
-              ? () => context.onToggleExpandedTurn(turnKey)
-              : undefined
-          }
-        />
-      ) : null}
+      {slot.statusAbove ? null : statusRow}
       {turnDiff ? (
         <NativeChatTurnDiffRollup diff={turnDiff} onReveal={context.onRevealDiff} />
       ) : null}

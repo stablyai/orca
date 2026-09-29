@@ -13,8 +13,9 @@ describe('CodexSubagentExecutions retention and identity', () => {
       executions.observeTurn(id, id, 'completed')
     }
     expect(executions.workingChildren().map((child) => child.agentThreadId)).toEqual(['long-lived'])
-    expect(Reflect.get(executions, 'children').size).toBeLessThanOrEqual(128)
-    expect(Reflect.get(executions, 'settledTurns').size).toBeLessThanOrEqual(256)
+    const { children, settledTurns } = executions.retentionSizes()
+    expect(children).toBeLessThanOrEqual(128)
+    expect(settledTurns).toBeLessThanOrEqual(256)
   })
 
   it('retains early live owner events at capacity and makes room only after settlement', () => {
@@ -45,7 +46,6 @@ describe('CodexSubagentExecutions retention and identity', () => {
     executions.observeTurn('child', 'turn', 'failed')
     expect(executions.workingChildren()[0]?.execution?.turnId).toBe('new-turn')
     executions.clear()
-    expect(Reflect.get(executions, 'children').size).toBe(0)
-    expect(Reflect.get(executions, 'settledTurns').size).toBe(0)
+    expect(executions.retentionSizes()).toEqual({ children: 0, settledTurns: 0 })
   })
 })

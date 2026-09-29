@@ -254,6 +254,23 @@ describe('useNativeChatComposerRevealFocus', () => {
     expect(focusCalls).toBe(1)
   })
 
+  it('re-arms when a prompt replaces an already focused composer', () => {
+    render({ isVisible: true, isFocusedGroup: true, composerReady: true })
+    drainFrames()
+    expect(focusCalls).toBe(1)
+
+    render({ isVisible: true, isFocusedGroup: true, composerReady: false })
+    drainFrames()
+    act(() => {
+      ;(document.activeElement as HTMLElement | null)?.blur()
+    })
+    render({ isVisible: true, isFocusedGroup: true, composerReady: true })
+    drainFrames()
+
+    expect(focusCalls).toBe(2)
+    expect(container.querySelector('textarea')).toBe(document.activeElement)
+  })
+
   it('leaves focus alone when it is already inside the pane', () => {
     render({ isVisible: false, isFocusedGroup: true })
     const field = container.querySelector('textarea')

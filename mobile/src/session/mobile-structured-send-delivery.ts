@@ -43,7 +43,7 @@ export function mobileStructuredSendDelivery(
     return { outcome: 'unknown', operationIdSpent: false, error: null }
   }
   if (result.status === 'refused') {
-    const refusalState = agentSessionRefusalOperationState('agentSession.send', result.code)
+    const refusalState = agentSessionRefusalOperationState(result.code)
     if (refusalState === 'unknown') {
       return { outcome: 'unknown', operationIdSpent: false, error: null }
     }
@@ -57,7 +57,7 @@ export function mobileStructuredSendDelivery(
     return {
       outcome: 'rejected',
       operationIdSpent: !retained,
-      error: result.message === 'Request not sent' ? 'Message not sent' : result.message
+      error: result.message
     }
   }
   const submission = result.value.submission as AgentSessionSendResult['submission'] | undefined
@@ -68,7 +68,7 @@ export function mobileStructuredSendDelivery(
     return {
       outcome: 'rejected',
       operationIdSpent: true,
-      error: structuredAgentSessionRejectionNotice(submission.reason)
+      error: structuredAgentSessionRejectionNotice(submission.reason, 'composer-send')
     }
   }
   if (retained) {

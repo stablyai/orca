@@ -4,7 +4,10 @@ import type {
 } from '../../../shared/agent-status-types'
 import type { ClaudeStatusLineRateLimits } from '../../../shared/claude-statusline-rate-limits'
 import type { HookTransportInterferenceReport } from '../../../shared/agent-hook-transport-interference'
-import type { HookListenerState } from '../../../shared/agent-hook-listener/listener-state'
+import {
+  getLegacyStatusListingOrder,
+  type HookListenerState
+} from '../../../shared/agent-hook-listener/listener-state'
 import type {
   AgentHookAuthorityEvidence,
   AgentHookProviderSessionIdentity,
@@ -15,8 +18,54 @@ import type {
 } from './server-types'
 import { toAgentStatusIpcPayload } from './server-status-identity'
 import { AgentHookServerState } from './server-state'
+import { serializeAgentStatusSubject } from '../../../shared/agent-status-subject'
+import { structuredStatusLegacyEvent } from './server-structured-status-row'
+
+// Why: the listing counter starts at 1, so an unassigned row must sort last — never above every ordered row.
+const UNORDERED_STATUS_ROW = Number.MAX_SAFE_INTEGER
 
 export abstract class AgentHookServerListeners extends AgentHookServerState {
+  protected emitEnrichedStatus(enriched: EnrichedAgentHookEventPayload): void {
+    this.onAgentStatus?.(enriched)
+    for (const listener of this.enrichedStatusListeners) {
+      try {
+        listener(enriched)
+      } catch (err) {
+        console.error('[agent-hooks] enriched status listener threw', err)
+      }
+    }
+  }
+
+  getCanonicalStatusSnapshot() {
+    return this.canonicalStatusStore.getSnapshot()
+  }
+
+  _resetCanonicalStatusForTests(): void {
+    this.resetCanonicalStatus()
+  }
+
+  private combinedStatusEntries(): EnrichedAgentHookEventPayload[] {
+    const rows: { entry: EnrichedAgentHookEventPayload; order: number }[] = []
+    for (const [paneKey, entry] of this.state.lastStatusByPaneKey) {
+      rows.push({
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; shared listeners expose only the base event type.
+        entry: entry as EnrichedAgentHookEventPayload,
+        order: getLegacyStatusListingOrder(this.state, paneKey) ?? UNORDERED_STATUS_ROW
+      })
+    }
+    for (const parent of this.canonicalStatusStore.getParents()) {
+      if (!parent.status) {
+        continue
+      }
+      rows.push({
+        entry: structuredStatusLegacyEvent(parent.status),
+        order:
+          this.canonicalListingOrder.get(serializeAgentStatusSubject(parent.subject)) ??
+          UNORDERED_STATUS_ROW
+      })
+    }
+    return rows.sort((a, b) => a.order - b.order).map(({ entry }) => entry)
+  }
   /**
    * Notified once per process when repeated hook POSTs are cut off mid-body (#11217).
    * Why: the listener fails open on every request error, so without this the only symptom is
@@ -34,10 +83,9 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
       return
     }
     // Why: replay is best-effort per pane so one throwing listener can't starve the rest.
-    for (const payload of this.state.lastStatusByPaneKey.values()) {
+    for (const payload of this.combinedStatusEntries()) {
       try {
-        // Why: cache always holds enriched payloads; the map's declared type is the bare shape only because the shared module never reads it.
-        listener({ ...(payload as EnrichedAgentHookEventPayload), isReplay: true })
+        listener({ ...payload, isReplay: true })
       } catch (err) {
         console.error('[agent-hooks] replay listener threw', err)
       }
@@ -153,9 +201,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
   /** Snapshot of cached statuses in IPC shape. Used by `agentStatus:getSnapshot` after tabs hydrate so the
    *  dashboard catches up on hook events that fired during startup. */
   getStatusSnapshot(): AgentStatusIpcPayload[] {
-    return Array.from(this.state.lastStatusByPaneKey.values(), (entry) =>
-      toAgentStatusIpcPayload(entry as EnrichedAgentHookEventPayload)
-    )
+    return this.combinedStatusEntries().map(toAgentStatusIpcPayload)
   }
 
   /** Provider-session identities, including Pi's metadata-only rows. */
@@ -164,8 +210,19 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
   }
 
   getStatusSnapshotForPane(paneKey: string): AgentStatusIpcPayload[] {
-    const entry = this.state.lastStatusByPaneKey.get(paneKey)
-    return entry ? [toAgentStatusIpcPayload(entry as EnrichedAgentHookEventPayload)] : []
+    const legacy = this.state.lastStatusByPaneKey.get(paneKey)
+    if (legacy) {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
+      return [toAgentStatusIpcPayload(legacy as EnrichedAgentHookEventPayload)]
+    }
+    const rows: AgentStatusIpcPayload[] = []
+    for (const subject of this.canonicalSubjectsByPane.get(paneKey)?.values() ?? []) {
+      const status = this.canonicalStatusStore.getParent(subject)?.status
+      if (status) {
+        rows.push(status)
+      }
+    }
+    return rows
   }
 
   getHydratedAuthorityCommitments(): readonly AgentHookAuthorityEvidence[] {
@@ -184,8 +241,8 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
   } {
     const statuses: AgentHookStatusChangeEntry[] = []
     const providerSessions: AgentHookProviderSessionIdentity[] = []
-    for (const [paneKey, entry] of this.state.lastStatusByPaneKey) {
-      const enriched = entry as EnrichedAgentHookEventPayload
+    for (const enriched of this.combinedStatusEntries()) {
+      const paneKey = enriched.paneKey
       if (enriched.providerSession) {
         providerSessions.push({
           paneKey,
@@ -201,7 +258,8 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
           paneKey,
           state: enriched.payload.state,
           receivedAt: enriched.receivedAt,
-          observedInCurrentRuntime: this.runtimeObservedStatusPaneKeys.has(paneKey)
+          observedInCurrentRuntime:
+            Boolean(enriched.structuredHost) || this.runtimeObservedStatusPaneKeys.has(paneKey)
         })
       }
     }

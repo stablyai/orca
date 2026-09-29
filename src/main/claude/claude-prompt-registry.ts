@@ -1,9 +1,23 @@
 import type { PermissionResult, PermissionUpdate } from '@anthropic-ai/claude-agent-sdk'
+import type {
+  AgentJournalApprovalMatchedAskRule,
+  AgentJournalApprovalSubject
+} from '../../shared/agent-session-journal-types'
 
 /** Settles the SDK's `canUseTool` promise; `null` writes no provider response. */
 export type ClaudePromptSettle = (response: PermissionResult | null) => void
 
-export type ClaudePendingPrompt = {
+export type ClaudePromptPresentation = {
+  title?: string
+  displayName?: string
+  description?: string
+  decisionReason?: string
+  blockedPath?: string
+  matchedAskRule?: AgentJournalApprovalMatchedAskRule
+  subject?: AgentJournalApprovalSubject
+}
+
+export type ClaudePendingPrompt = ClaudePromptPresentation & {
   requestId: string
   promptKey: string
   toolUseId: string
@@ -12,12 +26,11 @@ export type ClaudePendingPrompt = {
   input: Record<string, unknown>
   suggestions: PermissionUpdate[]
   questionIds: readonly string[]
-  answers: Map<string, string | readonly string[]>
   settle: ClaudePromptSettle
   turnId?: string | null
 }
 
-export type ClaudePromptRegistration = {
+export type ClaudePromptRegistration = ClaudePromptPresentation & {
   requestId: string
   toolName: string
   toolUseId: string
@@ -29,13 +42,12 @@ export type ClaudePromptRegistration = {
 
 type PromptBinding = {
   address: string
-  questionId?: string
   turnId: string | null
 }
 
 export type ClaudePromptClaim = {
   readonly itemId: string
-  readonly found: { prompt: ClaudePendingPrompt; questionId?: string }
+  readonly found: { prompt: ClaudePendingPrompt }
 }
 
 type ClaudePromptCancellationObservation = {
@@ -89,8 +101,14 @@ export class ClaudePromptRegistry {
       kind: questions.length > 0 ? 'question' : 'approval',
       input,
       suggestions: Array.isArray(registration.suggestions) ? registration.suggestions : [],
+      ...(registration.title ? { title: registration.title } : {}),
+      ...(registration.displayName ? { displayName: registration.displayName } : {}),
+      ...(registration.description ? { description: registration.description } : {}),
+      ...(registration.decisionReason ? { decisionReason: registration.decisionReason } : {}),
+      ...(registration.blockedPath ? { blockedPath: registration.blockedPath } : {}),
+      ...(registration.matchedAskRule ? { matchedAskRule: registration.matchedAskRule } : {}),
+      ...(registration.subject ? { subject: registration.subject } : {}),
       questionIds: questions.map(questionId),
-      answers: new Map(),
       settle: registration.settle,
       turnId: registration.turnId ?? null
     }
@@ -109,26 +127,18 @@ export class ClaudePromptRegistry {
     return true
   }
 
-  bindJournalItemId(
-    journalItemId: string,
-    promptKey: string,
-    questionIdForItem?: string,
-    turnId: string | null = null
-  ): void {
+  bindJournalItemId(journalItemId: string, promptKey: string, turnId: string | null = null): void {
     const prompt = this.prompts.get(promptKey)
     this.journalBindings.set(journalItemId, {
       address: promptKey,
-      ...(questionIdForItem ? { questionId: questionIdForItem } : {}),
       turnId: turnId ?? prompt?.turnId ?? null
     })
   }
 
-  find(itemId: string): { prompt: ClaudePendingPrompt; questionId?: string } | null {
+  find(itemId: string): { prompt: ClaudePendingPrompt } | null {
     const binding = this.journalBindings.get(itemId)
     const prompt = this.prompts.get(binding?.address ?? itemId)
-    return prompt
-      ? { prompt, ...(binding?.questionId ? { questionId: binding.questionId } : {}) }
-      : null
+    return prompt ? { prompt } : null
   }
 
   claim(itemId: string, kind?: 'approval' | 'question'): ClaudePromptClaim | null {
@@ -147,8 +157,7 @@ export class ClaudePromptRegistry {
     if (!binding || !prompt || binding.turnId !== turnId || this.claims.has(prompt)) {
       return null
     }
-    const found = { prompt, ...(binding.questionId ? { questionId: binding.questionId } : {}) }
-    const claim = { itemId, found }
+    const claim = { itemId, found: { prompt } }
     this.claims.set(prompt, claim)
     return claim
   }

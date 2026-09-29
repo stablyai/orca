@@ -3,9 +3,9 @@
   "family": "git.review-preparation",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "2e90933db32efc17d752cf5d506ecdd9ec54ce53ea30ba55021ea3d1bc1d3fb2",
+  "baseline": "ccdb324b63e4942891942edde1216586a51774bd",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
   "adapterSha256": "c582ce355b0704b38d7e84cbce352630096c91231bf09aecd1f6dbb409fed17f",
   "scenarioSha256": "dba1676583dc832ef059285a6bd4c3eefe6be0230e42100cb9d7a125755d136b",
   "platform": "darwin",
@@ -13,6 +13,11 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "342343f97688": {
+      "name": "git.commit#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.commit\",\"params\":{\"worktree\":\"id:repo42::/p\",\"message\":\"recorded message\"}}"
+    },
     "45f289a0f3ae": {
       "committed": {
         "error": "Commit failed",
@@ -29,8 +34,9 @@
         "ok": false
       }
     },
-    "a130dfa9b176": {
+    "b14d9ec6b441": {
       "name": "git.commit#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -63,10 +69,6 @@
           "ok": false
         }
       }
-    },
-    "e9c816eee026": {
-      "name": "git.commit#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.commit\",\"params\":{\"worktree\":\"id:repo42::/p\",\"message\":\"recorded message\"}}"
     }
   },
   "recording": {
@@ -75,8 +77,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["a130dfa9b176"],
-          "payloads": ["e9c816eee026"],
+          "sender": ["b14d9ec6b441"],
+          "payloads": ["342343f97688"],
           "settlements": {
             "commit": "9dac5d637ed4"
           },

@@ -91,6 +91,8 @@ export type MarkdownDocState =
       saving?: boolean
       saveError?: string
       readOnlyReason?: string
+      truncated?: true
+      byteLength?: number
     }
   | { status: 'error'; message: string }
 
@@ -138,16 +140,7 @@ export type DirtyMarkdownDraft = {
   content: string
 }
 
-export type TerminalCreateResult = {
-  tab: Extract<MobileSessionTab, { type: 'terminal' }>
-}
-
 export type MobileNewTabAgentLoadState = 'idle' | 'loading' | 'loaded' | 'error'
-
-export type RuntimeRepoSummary = {
-  id: string
-  connectionId?: string | null
-}
 
 export type MobileDisplayMode = 'auto' | 'phone' | 'desktop'
 

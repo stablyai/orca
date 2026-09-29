@@ -361,6 +361,19 @@ describe('TerminalErrorToast environment footer', () => {
     await waitFor(() => expect(environmentMocks.resolveFooter).not.toHaveBeenCalled())
   })
 
+  it('shows the issue request once for a host error that already asks for one', () => {
+    const view = render(
+      React.createElement(TerminalErrorToast, {
+        error:
+          'Failed to spawn shell "/bin/zsh": boom (shell: /bin/zsh). If this persists, please file an issue.',
+        onDismiss: vi.fn()
+      })
+    )
+
+    expect(view.container.textContent?.match(/If this persists/g)).toHaveLength(1)
+    expect(view.container.textContent).toContain('(shell: /bin/zsh).')
+  })
+
   it('renders owner-unverified as a warning without an issue link', () => {
     const onRetry = vi.fn().mockResolvedValue(true)
     const view = render(

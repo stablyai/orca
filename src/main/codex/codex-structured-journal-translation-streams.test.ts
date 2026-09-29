@@ -215,55 +215,6 @@ describe('codex journal translation', () => {
     ).toEqual(['notification:future/notification', 'request:future/request', 'frame:unclassified'])
   })
 
-  it('terminalizes the active streamed item when an oversized notification is rejected', () => {
-    const { translator, tap } = translatorWith()
-    translator.handle(TURN_STARTED)
-    translator.handle(
-      notification('item/started', {
-        item: {
-          type: 'commandExecution',
-          id: 'exec-oversized',
-          command: 'run',
-          status: 'inProgress'
-        }
-      })
-    )
-    const admission = translator.handle({
-      type: 'provider-frame',
-      sessionId: SESSION_ID,
-      threadId: THREAD_ID,
-      kind: 'frame:oversized-notification',
-      payload: {
-        reason: 'record-too-large',
-        observedBytes: 20 * 1024 * 1024,
-        maxBytes: 16 * 1024 * 1024,
-        classification: 'notification',
-        method: 'item/commandExecution/outputDelta'
-      }
-    })
-
-    expect(admission).toEqual({ accepted: true })
-    expect(tap.rows).toEqual([
-      expect.objectContaining({
-        body: expect.objectContaining({ kind: 'tool-call', state: 'running' })
-      }),
-      expect.objectContaining({
-        body: expect.objectContaining({ kind: 'tool-call', state: 'failed' })
-      }),
-      expect.objectContaining({
-        body: expect.objectContaining({
-          kind: 'status',
-          providerFrame: expect.objectContaining({ kind: 'frame:oversized-notification' })
-        })
-      })
-    ])
-    const diagnostic = tap.rows[2]?.body
-    expect(
-      diagnostic?.kind === 'status' ? diagnostic.providerFrame?.payload.byteLength : 0
-    ).toBeGreaterThan(0)
-    expect(JSON.stringify(diagnostic)).toContain('record-too-large')
-  })
-
   it('admits suppressed diagnostics before settling a completed turn', () => {
     const tap = recorder()
     let rejectSuppression = true

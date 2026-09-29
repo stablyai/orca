@@ -1,3 +1,4 @@
+import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -74,7 +75,10 @@ function adapter(): StructuredAgentSessionAdapter {
   return {
     acquire,
     releaseAcquisition,
-    dispatch,
+    dispatch: async (input) => {
+      await input.beforeDispatch?.()
+      return dispatch(input)
+    },
     cancelTurn,
     answerPrompt,
     setOption
@@ -103,7 +107,7 @@ async function seedApproval(optionId = 'allow'): Promise<{ itemId: string; revis
   })
   await host.flushStreamedEvents(SESSION)
   const itemId = agentJournalItemKey(identity)
-  const page = host.history({ sessionId: SESSION, direction: 'tail' })
+  const page = await host.history({ sessionId: SESSION, direction: 'tail' })
   const appended = page.ok ? page.page.items.find((item) => item.itemId === itemId) : null
   if (!appended) {
     throw new Error('provider approval was not written to the journal')
@@ -140,6 +144,7 @@ beforeEach(async () => {
     store,
     adapter: adapter(),
     journalRoot: root,
+    recoveryCapsule: new AgentSessionRecoveryCapsule(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     now: () => NOW

@@ -1,4 +1,4 @@
-import type { BrowserWindow } from 'electron'
+import type { BrowserWindow, WebContents } from 'electron'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { Store } from '../../persistence'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
@@ -57,8 +57,15 @@ export type PtyIpcSessionOptions = {
   onPtyExit?: (id: string, exitSequence: number) => void
 }
 
+export type PtyRendererDelivery = Pick<
+  BrowserWindow,
+  'isDestroyed' | 'isFocused' | 'isVisible' | 'isMinimized'
+> & {
+  webContents: Pick<WebContents, 'id' | 'isDestroyed' | 'send' | 'on' | 'removeListener'>
+}
+
 export type PtyIpcSession = {
-  mainWindow: BrowserWindow
+  mainWindow?: PtyRendererDelivery
   runtime?: OrcaRuntimeService
   store?: Store
   getSettings?: () => GlobalSettings
@@ -96,8 +103,10 @@ export type PtyIpcSession = {
   producerFlowControl: PtyProducerFlowController
   sourceCreditPendingPtys: Set<string>
   backgroundedDeliverySyncByPty: Map<string, boolean>
-  syntheticKillExitPtyIds: Map<string, NodeJS.Timeout>
-  reversibleStopOwnersByPtyId: Map<string, number>
+  syntheticKillExitPtyIds: Map<
+    string,
+    { cleanupTimer: NodeJS.Timeout; incarnationId: string | undefined }
+  >
   retiredRejectedPtyIds: Map<string, NodeJS.Timeout>
   pendingSerializeRequests: Map<
     string,
@@ -156,9 +165,9 @@ export type PtyIpcSession = {
     id: string,
     opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
   ) => Promise<boolean>
-  rememberSyntheticKillExit: (id: string) => void
+  rememberSyntheticKillExit: (id: string, incarnationId?: string) => void
   rememberRetiredRejectedPty: (id: string) => void
-  consumeSyntheticKillExit: (id: string) => boolean
+  consumeSyntheticKillExit: (id: string, incarnationId?: string) => boolean
   syncPtyBackgroundedDelivery: (id: string, caller: string) => void
   resyncBackgroundedDeliveriesAfterGateReset: () => void
   transitionHiddenRendererPtyDeliveryState: (
@@ -167,8 +176,6 @@ export type PtyIpcSession = {
   ) => { droppable: boolean; droppedWhileHidden: boolean; policyChanged: boolean }
   transitionSpawnHiddenRendererPtyDeliveryState: (id: string, hidden: boolean) => void
   rendererPtyIsKnownHidden: (id: string) => boolean
-  clearHiddenRendererResizeOutput: (id: string) => void
-  clearDeliveredHiddenRendererResizeOutput: (id: string) => void
   schedulePendingDataAfterCreditReport: (creditedAny: boolean) => void
   writeOffLostRendererDelivery: (report: PtyRendererDeliveryStateReport) => PtyDeliveryWriteOff[]
   getRendererInFlightCharsForPty: (id: string) => number
@@ -179,7 +186,7 @@ const unsetSessionFn = (): never => {
 }
 
 export function createPtyIpcSession(args: {
-  mainWindow: BrowserWindow
+  mainWindow?: PtyRendererDelivery
   runtime?: OrcaRuntimeService
   store?: Store
   getSettings?: () => GlobalSettings
@@ -228,7 +235,6 @@ export function createPtyIpcSession(args: {
     sourceCreditPendingPtys: new Set(),
     backgroundedDeliverySyncByPty: new Map(),
     syntheticKillExitPtyIds: new Map(),
-    reversibleStopOwnersByPtyId: new Map(),
     retiredRejectedPtyIds: new Map(),
     pendingSerializeRequests: new Map(),
     canSendPtyDataToRenderer: unsetSessionFn,
@@ -260,8 +266,6 @@ export function createPtyIpcSession(args: {
     transitionHiddenRendererPtyDeliveryState: unsetSessionFn,
     transitionSpawnHiddenRendererPtyDeliveryState: unsetSessionFn,
     rendererPtyIsKnownHidden: unsetSessionFn,
-    clearHiddenRendererResizeOutput: unsetSessionFn,
-    clearDeliveredHiddenRendererResizeOutput: unsetSessionFn,
     schedulePendingDataAfterCreditReport: unsetSessionFn,
     writeOffLostRendererDelivery: unsetSessionFn,
     getRendererInFlightCharsForPty: unsetSessionFn

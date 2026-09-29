@@ -134,6 +134,7 @@ describe('performCancel for a pending prompt', () => {
       sessionId: 'session-1',
       turnId: 'turn-1',
       fence: 1,
+      resolveLiveTurnId: expect.any(Function),
       prompt: { itemId }
     })
     expect(journal.snapshot().items.map((item) => item.body)).toEqual([

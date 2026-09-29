@@ -247,12 +247,9 @@ describe('NativeChatToolRun with a spawn group', () => {
     expect(screen.queryByText('1 tool call')).toBeNull()
   })
 
-  // Every settled turn sits here by default: the list passes
-  // `expandOverride={expandedTurnIds.has(turnKey)}` — false until the reader
-  // opens that turn — and `activeTurnIsWorking={false}`. The completed-turn
-  // guard above bailed before the roster branch, so the one row this feature
-  // exists to draw vanished the moment its turn finished, and the message row
-  // that kept itself alive for it rendered an empty ghost bubble.
+  // A completed turn can keep its roster visible while the regular tool-run
+  // disclosure remains closed. This durable row is the work's status, not a
+  // reason to open the rest of the activity automatically.
   it('keeps the roster visible on a completed turn whose activity is collapsed', () => {
     render(
       <NativeChatToolRun
@@ -313,6 +310,6 @@ describe('NativeChatToolRun with a spawn group', () => {
     )
 
     expect(screen.getByText('Ran 1 subagent')).toBeInTheDocument()
-    expect(screen.getByText('shell').closest('button')).toHaveTextContent('shell ls')
+    expect(screen.getByText('ls').closest('button')).toHaveTextContent('ls')
   })
 })

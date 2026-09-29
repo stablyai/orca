@@ -157,11 +157,20 @@ async function forceKillProcessTree(proc: ChildProcess): Promise<void> {
  * Use `closeElectronAppForE2E` for an ordinary quit — this exists for specs that need a client to
  * vanish without unwinding its sockets or subscriptions.
  */
-export async function forceQuitElectronAppForE2E(app: ElectronApplication): Promise<void> {
+export async function forceQuitElectronAppForE2E(
+  app: ElectronApplication,
+  options: { preserveDaemons?: boolean } = {}
+): Promise<void> {
   const proc = app.process()
   const pid = proc.pid
   if (pid) {
-    if (process.platform === 'win32') {
+    if (options.preserveDaemons) {
+      // Chromium helpers hold Windows profile handles; Electron's list excludes detached daemons.
+      const appPids = await app.evaluate(({ app }) => app.getAppMetrics().map(({ pid }) => pid))
+      for (const targetPid of new Set([pid, ...appPids])) {
+        killPid(targetPid, 'SIGKILL')
+      }
+    } else if (process.platform === 'win32') {
       try {
         execFileSync('taskkill', ['/pid', String(pid), '/T', '/F'], {
           stdio: 'ignore'
@@ -178,8 +187,12 @@ export async function forceQuitElectronAppForE2E(app: ElectronApplication): Prom
   }
   await waitForExit(proc, PROCESS_EXIT_TIMEOUT_MS)
   releaseExitedProcessPipes(proc)
-  // Hands the dead app back to Playwright so worker teardown has nothing left to wait on.
-  await app.close().catch(() => undefined)
+  // Playwright close can remain pending after an external force-kill.
+  await withTimeout(
+    app.close(),
+    PROCESS_EXIT_TIMEOUT_MS,
+    'Timed out releasing killed Electron app'
+  ).catch(() => undefined)
 }
 
 export async function closeElectronAppForE2E(app: ElectronApplication): Promise<void> {

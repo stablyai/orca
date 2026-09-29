@@ -1,4 +1,5 @@
 import {
+  isBackgroundTaskBlock,
   isSubagentGroupBlock,
   isToolCallBlock,
   isToolResultBlock,
@@ -7,6 +8,7 @@ import {
   type NativeChatToolCallBlock,
   type NativeChatToolResultBlock
 } from './native-chat-types'
+import { agentJournalItemSubagentId } from './agent-session-journal-producer'
 import { isKnownHarnessInjectedUserTurnText } from './harness-injected-user-turns'
 import { isNoiseMessage } from './native-chat-noise'
 
@@ -36,11 +38,15 @@ function isHarnessSidecarToolMessage(message: NativeChatMessage): boolean {
   )
 }
 
-/** The spawn-group roster row lands mid-turn, between the assistant's tool
- *  calls. It is activity chrome, not a new turn, so it must not end the run the
- *  following tool messages fold into. */
+/** Activity rows land mid-turn, between the assistant's tool calls. They are
+ *  chrome, not a new turn, so they must not end the run the following tool
+ *  messages fold into. */
 function isSubagentRosterMessage(message: NativeChatMessage): boolean {
   return message.blocks.some(isSubagentGroupBlock)
+}
+
+function isBackgroundTaskMessage(message: NativeChatMessage): boolean {
+  return message.blocks.some(isBackgroundTaskBlock)
 }
 
 function isInterruptionBoundary(message: NativeChatMessage): boolean {
@@ -73,14 +79,23 @@ function dropUnattributableToolResults(message: NativeChatMessage): NativeChatMe
   return blocks.length > 0 ? { ...message, blocks } : null
 }
 
-/** Fold consecutive tool-only messages into their preceding assistant turn. */
+/** Fold consecutive tool-only messages into their preceding assistant turn.
+ *  Only into a run the same agent wrote: a subagent's calls interleave with its
+ *  parent's in one journal, and absorbing one into the other would present one
+ *  agent's work as the other's. */
 export function foldToolMessages(messages: readonly NativeChatMessage[]): NativeChatMessage[] {
   const output: NativeChatMessage[] = []
   let mutableAssistantIndex = -1
   let clonedAssistantIndex = -1
   for (const message of messages) {
-    if (isHarnessSidecarToolMessage(message) && mutableAssistantIndex >= 0) {
-      const index = mutableAssistantIndex
+    const foldTarget =
+      mutableAssistantIndex >= 0 &&
+      agentJournalItemSubagentId(output[mutableAssistantIndex]) ===
+        agentJournalItemSubagentId(message)
+        ? mutableAssistantIndex
+        : -1
+    if (isHarnessSidecarToolMessage(message) && foldTarget >= 0) {
+      const index = foldTarget
       const assistant = output[index]
       if (assistant?.role === 'assistant') {
         if (clonedAssistantIndex !== index) {
@@ -95,8 +110,8 @@ export function foldToolMessages(messages: readonly NativeChatMessage[]): Native
         continue
       }
     }
-    if (isToolOnlyMessage(message) && mutableAssistantIndex >= 0) {
-      const index = mutableAssistantIndex
+    if (isToolOnlyMessage(message) && foldTarget >= 0) {
+      const index = foldTarget
       const assistant = output[index]
       if (assistant?.role !== 'assistant') {
         output.push(message)
@@ -116,6 +131,7 @@ export function foldToolMessages(messages: readonly NativeChatMessage[]): Native
       clonedAssistantIndex = -1
     } else if (
       !isSubagentRosterMessage(message) &&
+      !isBackgroundTaskMessage(message) &&
       (!isNoiseMessage(message) || isInterruptionBoundary(message))
     ) {
       mutableAssistantIndex = -1

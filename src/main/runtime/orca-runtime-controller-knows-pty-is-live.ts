@@ -3,12 +3,16 @@ import { OrcaRuntimeWithResolveTerminalPane } from './orca-runtime-resolve-termi
 import { PROVEN_ABSENT_LEAF_PTY_TTL_MS } from './orca-runtime-core'
 import { pruneExpiredProvenAbsentLeafPtyVerdicts } from './proven-absent-leaf-pty-verdicts'
 import type { RuntimeTerminalSend } from '../../shared/runtime-types'
+import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 import type { RuntimeAgentPromptWriteOptions } from './runtime-terminal-contracts'
 import {
   assertTerminalInputWithinLimitWithYield,
   buildTerminalSendPayload
 } from './terminal-send-payload'
-import { buildAgentPromptPasteBytes } from '../../shared/agent-prompt-injection'
+import {
+  agentPromptTakesLeadLine,
+  buildAgentPromptPasteBytes
+} from '../../shared/agent-prompt-injection'
 
 export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithResolveTerminalPane {
   private lastProvenAbsentLeafPtyVerdictPruneAt: number | undefined
@@ -100,7 +104,8 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
       reserveWrite?: (ptyId: string) => void
       afterWrite?: (ptyId: string) => void | Promise<void>
       suffixFailureError?: string
-    } = {}
+      inputKind: TerminalInputKind
+    }
   ): Promise<RuntimeTerminalSend> {
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
@@ -149,14 +154,23 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
   async sendTerminalAgentPrompt(
     handle: string,
     prompt: string,
-    options: RuntimeAgentPromptWriteOptions = {}
+    options: RuntimeAgentPromptWriteOptions
   ): Promise<RuntimeTerminalSend> {
-    const payload = buildAgentPromptPasteBytes(prompt)
+    // Why the consuming agent: the foreground process reads the bytes; launchAgent covers startup.
+    const payloadFor = (ptyId: string): string => {
+      const pty = this.ptysById.get(ptyId)
+      const agent = pty?.foregroundAgent ?? pty?.launchAgent
+      return buildAgentPromptPasteBytes(
+        prompt,
+        agentPromptTakesLeadLine(agent) ? options.leadLine : undefined
+      )
+    }
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       if (!pty.pty.connected) {
         throw new Error('terminal_not_writable')
       }
+      const payload = payloadFor(pty.pty.ptyId)
       await assertTerminalInputWithinLimitWithYield(payload)
       const generation = this.getPtyLifecycleGeneration(pty.pty.ptyId)
       const delivery = await this.serializeAgentPromptSubmission(
@@ -165,13 +179,10 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
         async () => {
           this.assertLiveTerminalHandleTargetsPty(handle, pty.pty.ptyId)
           this.assertAgentPromptGeneration(pty.pty.ptyId, generation)
-          return await this.writeTerminalAgentPrompt(
-            handle,
-            pty.pty.ptyId,
-            generation,
-            payload,
-            options
-          )
+          return await this.writeTerminalAgentPrompt(handle, pty.pty.ptyId, generation, payload, {
+            ...options,
+            promptForSchedule: prompt
+          })
         }
       )
       const bytesWritten = Buffer.byteLength(payload, 'utf8') + delivery.submits
@@ -187,6 +198,7 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
     if (!leaf.writable || !leaf.ptyId) {
       throw new Error('terminal_not_writable')
     }
+    const payload = payloadFor(leaf.ptyId)
     await assertTerminalInputWithinLimitWithYield(payload)
     // Why: same absence gate as sendTerminal — a stale graph mirror must not
     // accept a prompt into a void; unknown liveness still proceeds.
@@ -197,7 +209,10 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
     const delivery = await this.serializeAgentPromptSubmission(leaf.ptyId, generation, async () => {
       this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId!)
       this.assertAgentPromptGeneration(leaf.ptyId!, generation)
-      return await this.writeTerminalAgentPrompt(handle, leaf.ptyId!, generation, payload, options)
+      return await this.writeTerminalAgentPrompt(handle, leaf.ptyId!, generation, payload, {
+        ...options,
+        promptForSchedule: prompt
+      })
     })
     const bytesWritten = Buffer.byteLength(payload, 'utf8') + delivery.submits
     return {

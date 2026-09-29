@@ -9,7 +9,7 @@ import {
   stageMobileHostedReviewPaths
 } from './mobile-hosted-review-git-preparation'
 import { applyMobileHostedReviewRemotePrerequisite } from './mobile-hosted-review-remote-prerequisite'
-import type { MobileSourceControlRpcSender } from './mobile-source-control-rpc-sender'
+import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 
 export type MobileHostedReviewCreateIntentProgress =
   | 'staging'
@@ -71,7 +71,7 @@ function hasUnresolvedConflicts(status: MobileGitStatusResult | null): boolean {
 }
 
 async function resolvePrefillFromStatus(
-  client: MobileSourceControlRpcSender,
+  client: RpcOperationSender,
   worktreeId: string,
   branch: string,
   title: string,
@@ -85,7 +85,7 @@ async function resolvePrefillFromStatus(
 }
 
 async function ensureLocalChangesCommitted(
-  client: MobileSourceControlRpcSender,
+  client: RpcOperationSender,
   worktreeId: string,
   input: PrepareInput,
   currentStatus: MobileGitStatusResult | null
@@ -184,7 +184,7 @@ async function ensureLocalChangesCommitted(
 }
 
 export async function prepareMobileHostedReviewCreateIntent(
-  client: MobileSourceControlRpcSender,
+  client: RpcOperationSender,
   worktreeId: string,
   input: PrepareInput
 ): Promise<MobileHostedReviewCreateIntentOutcome> {

@@ -1,3 +1,4 @@
+import { parsePtyStartupIngressIntent } from '../../shared/pty-startup-ingress-intent'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { agentKindSchema } from '../../shared/telemetry-events'
@@ -44,15 +45,20 @@ function shouldReplyToStartupTerminalColorQueries(args: {
   return recognizeAgentProcessFromCommandLine(command) !== null
 }
 
-export function getStartupTerminalColorQueryReplyColors(args: {
+export function getStartupTerminalIngressIntent(args: {
   launchAgent?: unknown
   telemetry?: { agent_kind?: unknown } | undefined
   command?: string
   launchConfig?: SleepingAgentLaunchConfig
   terminalColorQueryReplies?: unknown
-}): TerminalOscColorQueryReplyColors | null {
+  terminalKittyKeyboardProtocol?: boolean
+}) {
   if (!shouldReplyToStartupTerminalColorQueries(args)) {
-    return null
+    return undefined
   }
-  return normalizeTerminalColorQueryReplyColors(args.terminalColorQueryReplies)
+  return parsePtyStartupIngressIntent({
+    colors: normalizeTerminalColorQueryReplyColors(args.terminalColorQueryReplies) ?? {},
+    kittyKeyboardProtocol: args.terminalKittyKeyboardProtocol,
+    deadlineMs: 5_000
+  })
 }

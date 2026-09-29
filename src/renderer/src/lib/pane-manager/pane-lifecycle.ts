@@ -19,6 +19,7 @@ import { attachWebgl, cancelPendingWebglRefresh, disposeWebgl } from './pane-web
 import { rebuildAttachedWebgl } from './pane-webgl-reattach'
 import { configureLazyArabicShapingJoiner } from './terminal-arabic-shaping-joiner'
 import { TerminalLigaturesAddon } from './terminal-ligatures-addon'
+import { attachInlineImages, detachInlineImages } from './pane-inline-images'
 import { installTerminalImeCandidateAnchor } from './terminal-ime-candidate-anchor'
 
 // ---------------------------------------------------------------------------
@@ -28,7 +29,11 @@ import { installTerminalImeCandidateAnchor } from './terminal-ime-candidate-anch
 export { createPaneDOM } from './pane-dom-creation'
 
 /** Open terminal into its container and load addons. Must be called after the container is in the DOM. */
-export function openTerminal(pane: ManagedPaneInternal, ligaturesEnabled = false): void {
+export function openTerminal(
+  pane: ManagedPaneInternal,
+  // Named rather than positional: two adjacent optional booleans swap silently.
+  { ligatures = false, inlineImages = false }: { ligatures?: boolean; inlineImages?: boolean } = {}
+): void {
   const {
     terminal,
     container,
@@ -101,8 +106,12 @@ export function openTerminal(pane: ManagedPaneInternal, ligaturesEnabled = false
   pane.focusClassSyncCleanup = attachDomRendererFocusClassSync(terminal.element)
 
   // Configure the first atlas with ligatures instead of immediately rebuilding it.
-  if (ligaturesEnabled) {
+  if (ligatures) {
     attachLigatures(pane)
+  }
+  // Deferred attachment restores Orca's DA1 handler after the addon registers its own.
+  if (inlineImages) {
+    attachInlineImages(pane)
   }
   if (pane.gpuRenderingEnabled) {
     attachWebgl(pane)
@@ -229,6 +238,9 @@ export function disposePane(
   } catch {
     /* ignore */
   }
+  // Detach removes the pane from the deferred-attach set and disposes the addon
+  // (canvas layers + parser handlers) before the terminal surface goes away.
+  detachInlineImages(pane)
   disposeWebgl(pane)
   try {
     pane.searchAddon.dispose()

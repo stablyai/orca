@@ -60,6 +60,20 @@ type ContextualTourOverlaySurfaceProps = {
   onOverlayKeyDownCapture: (event: KeyboardEvent<HTMLDivElement>) => void
 }
 
+function disposeContextualTourGlobalKeyGuard(): void {
+  if (typeof window === 'undefined') {
+    return
+  }
+  const guardedWindow = window as Window & {
+    __orcaContextualTourGlobalKeyGuardInstalled?: boolean
+  }
+  if (!guardedWindow.__orcaContextualTourGlobalKeyGuardInstalled) {
+    return
+  }
+  window.removeEventListener('keydown', handleContextualTourGlobalKeyDown, true)
+  delete guardedWindow.__orcaContextualTourGlobalKeyGuardInstalled
+}
+
 if (typeof window !== 'undefined') {
   const guardedWindow = window as Window & {
     __orcaContextualTourGlobalKeyGuardInstalled?: boolean
@@ -68,6 +82,12 @@ if (typeof window !== 'undefined') {
     guardedWindow.__orcaContextualTourGlobalKeyGuardInstalled = true
     window.addEventListener('keydown', handleContextualTourGlobalKeyDown, true)
   }
+}
+
+if (import.meta !== undefined && import.meta.hot) {
+  // Vite can replace this module without a full renderer reload. Remove the
+  // global key guard so dev sessions do not retain stale module closures.
+  import.meta.hot.dispose(disposeContextualTourGlobalKeyGuard)
 }
 
 const PANEL_BASE_CLASSES =

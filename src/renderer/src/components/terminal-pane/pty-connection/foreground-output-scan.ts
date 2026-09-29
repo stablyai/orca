@@ -58,27 +58,30 @@ export function scanSynchronizedForegroundOutput(
   let active = wasActive
   let started = false
   let ended = false
-  let offset = 0
+  let startIndex = scanData.indexOf(SYNCHRONIZED_OUTPUT_START_SEQUENCE)
+  let endIndex = scanData.indexOf(SYNCHRONIZED_OUTPUT_END_SEQUENCE)
 
-  while (offset < scanData.length) {
-    const startIndex = scanData.indexOf(SYNCHRONIZED_OUTPUT_START_SEQUENCE, offset)
-    const endIndex = scanData.indexOf(SYNCHRONIZED_OUTPUT_END_SEQUENCE, offset)
-    if (startIndex === -1 && endIndex === -1) {
-      break
-    }
+  // Each marker search advances independently, so a missing counterpart is scanned only once.
+  while (startIndex !== -1 || endIndex !== -1) {
     if (endIndex !== -1 && (startIndex === -1 || endIndex < startIndex)) {
       active = false
       if (endIndex + SYNCHRONIZED_OUTPUT_END_SEQUENCE.length > currentChunkStartIndex) {
         ended = true
       }
-      offset = endIndex + SYNCHRONIZED_OUTPUT_END_SEQUENCE.length
+      endIndex = scanData.indexOf(
+        SYNCHRONIZED_OUTPUT_END_SEQUENCE,
+        endIndex + SYNCHRONIZED_OUTPUT_END_SEQUENCE.length
+      )
       continue
     }
     active = true
     if (startIndex + SYNCHRONIZED_OUTPUT_START_SEQUENCE.length > currentChunkStartIndex) {
       started = true
     }
-    offset = startIndex + SYNCHRONIZED_OUTPUT_START_SEQUENCE.length
+    startIndex = scanData.indexOf(
+      SYNCHRONIZED_OUTPUT_START_SEQUENCE,
+      startIndex + SYNCHRONIZED_OUTPUT_START_SEQUENCE.length
+    )
   }
 
   return {

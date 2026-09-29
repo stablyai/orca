@@ -5,20 +5,33 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type {
   AgentSessionJournalIdentity,
   AgentSessionProviderHandle
 } from '../../../shared/agent-session-journal-types'
+import type { NativeChatMessage } from '../../../shared/native-chat-types'
+import type * as TranscriptLineDecoders from '../transcript-line-decoders'
 import { createLegacyIdentityTracker } from './journal-legacy-identity'
-import {
-  appendLegacyTranscriptMessages,
-  importLegacyTranscriptIntoJournal
-} from './journal-legacy-import'
+import { importLegacyTranscriptIntoJournal } from './journal-legacy-import'
 import { DEFAULT_JOURNAL_PAYLOAD_LIMITS } from './journal-payload-bounds'
 import { openAgentSessionJournal } from './journal-store-factory'
 import type { AgentSessionJournal } from './journal-store'
+
+// No shipped decoder emits a subagent roster, so the roster bounds are reached by standing one in.
+const decodedClaudeOverride = vi.hoisted((): { message: NativeChatMessage | null } => ({
+  message: null
+}))
+
+vi.mock('../transcript-line-decoders', async (importOriginal) => {
+  const actual = await importOriginal<typeof TranscriptLineDecoders>()
+  return {
+    ...actual,
+    decodeClaudeTranscriptLine: (...args: Parameters<typeof actual.decodeClaudeTranscriptLine>) =>
+      decodedClaudeOverride.message ?? actual.decodeClaudeTranscriptLine(...args)
+  }
+})
 
 const CLAUDE_SESSION = '29eb22a4-6a5f-4f21-9b0c-1d7f3a2e5c88'
 const CODEX_SESSION = '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'
@@ -189,6 +202,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  decodedClaudeOverride.message = null
   await rm(root, { recursive: true, force: true })
 })
 
@@ -297,46 +311,6 @@ describe('claude import', () => {
 })
 
 describe('codex import', () => {
-  it('upserts live transcript messages without rolling the structured epoch', async () => {
-    const journal = await open('codex', CODEX_SESSION)
-    const epoch = journal.epoch
-    const message = {
-      id: 'live-tui-message',
-      role: 'assistant' as const,
-      blocks: [{ type: 'text' as const, text: 'first version' }],
-      timestamp: 1_800_000_000_000,
-      source: 'transcript' as const
-    }
-
-    await appendLegacyTranscriptMessages({
-      journal,
-      agent: 'codex',
-      sessionId: CODEX_SESSION,
-      fence: 2,
-      messages: [message]
-    })
-    await appendLegacyTranscriptMessages({
-      journal,
-      agent: 'codex',
-      sessionId: CODEX_SESSION,
-      fence: 2,
-      messages: [{ ...message, blocks: [{ type: 'text', text: 'final version' }] }]
-    })
-
-    expect(journal.epoch).toBe(epoch)
-    expect(journal.snapshot().items).toMatchObject([
-      {
-        itemId: legacyKey('live-tui-message'),
-        revision: 2,
-        body: {
-          kind: 'message',
-          role: 'assistant',
-          blocks: [{ type: 'text', text: 'final version' }]
-        }
-      }
-    ])
-  })
-
   it('keys rollout records in the import-scoped namespace, not as app-server ordinals', async () => {
     const filePath = await writeFixture('rollout.jsonl', CODEX_LINES)
     const journal = await open('codex', CODEX_SESSION)
@@ -396,6 +370,32 @@ describe('codex import', () => {
   })
 })
 
+type RosterAgents = Extract<
+  NativeChatMessage['blocks'][number],
+  { type: 'subagent-group' }
+>['agents']
+
+async function importDecodedRoster(agents: RosterAgents): Promise<AgentSessionJournal> {
+  decodedClaudeOverride.message = {
+    id: 'legacy-roster',
+    role: 'assistant',
+    timestamp: null,
+    source: 'transcript',
+    blocks: [{ type: 'subagent-group', groupId: 'group-1', agents }]
+  }
+  const filePath = await writeFixture('claude-roster.jsonl', [CLAUDE_LINES[2]])
+  const journal = await open('claude', CLAUDE_SESSION)
+  const result = await importLegacyTranscriptIntoJournal({
+    journal,
+    agent: 'claude',
+    sessionId: CLAUDE_SESSION,
+    fence: 1,
+    options: { filePath }
+  })
+  expect(result).toMatchObject({ ok: true, imported: 1 })
+  return journal
+}
+
 describe('payload bounds on import', () => {
   it('marks a clipped tool result and discards the remainder', async () => {
     const output = 'y'.repeat(64 * 1024)
@@ -436,32 +436,13 @@ describe('payload bounds on import', () => {
   it('bounds an imported subagent roster by entry count, label and id', async () => {
     // The import reads an untrusted file: nothing upstream bounded either string.
     const oversized = 'z'.repeat(20 * 1024)
-    const journal = await open('claude', CLAUDE_SESSION)
-    await appendLegacyTranscriptMessages({
-      journal,
-      agent: 'claude',
-      sessionId: CLAUDE_SESSION,
-      fence: 1,
-      messages: [
-        {
-          id: 'legacy-roster',
-          role: 'assistant',
-          timestamp: null,
-          source: 'transcript',
-          blocks: [
-            {
-              type: 'subagent-group',
-              groupId: 'group-1',
-              agents: Array.from({ length: 80 }, (_, index) => ({
-                id: index === 0 ? oversized : `task-${index}`,
-                label: index === 0 ? oversized : `label-${index}`,
-                state: 'working' as const
-              }))
-            }
-          ]
-        }
-      ]
-    })
+    const journal = await importDecodedRoster(
+      Array.from({ length: 80 }, (_, index) => ({
+        id: index === 0 ? oversized : `task-${index}`,
+        label: index === 0 ? oversized : `label-${index}`,
+        state: 'working' as const
+      }))
+    )
 
     const body = journal.snapshot().items[0]?.body
     const block = body?.kind === 'message' ? body.blocks[0] : undefined
@@ -478,31 +459,10 @@ describe('payload bounds on import', () => {
     // The id is the roster key: it takes the same bounded-id format the wires
     // use, so a later wire bound is a no-op instead of a second, merging clip.
     const head = 'y'.repeat(512)
-    const journal = await open('claude', CLAUDE_SESSION)
-    await appendLegacyTranscriptMessages({
-      journal,
-      agent: 'claude',
-      sessionId: CLAUDE_SESSION,
-      fence: 1,
-      messages: [
-        {
-          id: 'legacy-roster-collision',
-          role: 'assistant',
-          timestamp: null,
-          source: 'transcript',
-          blocks: [
-            {
-              type: 'subagent-group',
-              groupId: 'group-1',
-              agents: [
-                { id: `${head}-one`, label: 'Audit', state: 'working' as const },
-                { id: `${head}-two`, label: 'Audit', state: 'working' as const }
-              ]
-            }
-          ]
-        }
-      ]
-    })
+    const journal = await importDecodedRoster([
+      { id: `${head}-one`, label: 'Audit', state: 'working' as const },
+      { id: `${head}-two`, label: 'Audit', state: 'working' as const }
+    ])
 
     const body = journal.snapshot().items[0]?.body
     const block = body?.kind === 'message' ? body.blocks[0] : undefined

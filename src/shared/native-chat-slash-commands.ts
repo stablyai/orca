@@ -82,10 +82,40 @@ const CODEX_COMMANDS: readonly SlashCommandSuggestion[] = [
   { name: 'subagents', description: 'Switch the active agent thread' }
 ]
 
+// OMP built-in registry; interactive commands still execute in its terminal.
+const OMP_COMMANDS: readonly SlashCommandSuggestion[] = [
+  { name: 'model', description: 'Open the model selector in Terminal' },
+  {
+    name: 'switch',
+    description: 'Open the temporary model selector in Terminal'
+  },
+  { name: 'plan', description: 'Toggle plan mode' },
+  { name: 'compact', description: 'Compact conversation context' },
+  { name: 'clear', description: 'Clear context while keeping the session' },
+  { name: 'new', description: 'Start a new session' },
+  { name: 'resume', description: 'Resume a session; without arguments, choose in Terminal' },
+  { name: 'fork', description: 'Fork from a previous message in Terminal' },
+  { name: 'branch', description: 'Rewind to a previous message in Terminal' },
+  { name: 'tree', description: 'Browse the session tree in Terminal' },
+  { name: 'session', description: 'Show session information and controls' },
+  { name: 'rename', description: 'Rename the session' },
+  { name: 'context', description: 'Show estimated context usage' },
+  { name: 'usage', description: 'Show provider usage and limits' },
+  { name: 'fast', description: 'Toggle priority service tier' },
+  { name: 'tools', description: 'Show tools visible to the agent' },
+  { name: 'jobs', description: 'Show background jobs' },
+  { name: 'git', description: 'Open the Git viewer in Terminal' },
+  { name: 'export', description: 'Export the session to HTML' },
+  { name: 'settings', description: 'Open settings in Terminal' },
+  { name: 'extensions', description: 'Open the extension dashboard in Terminal' },
+  { name: 'hotkeys', description: 'Show keyboard shortcuts in Terminal' }
+]
+
 const COMMANDS_BY_AGENT: Partial<Record<AgentType, readonly SlashCommandSuggestion[]>> = {
   claude: CLAUDE_COMMANDS,
   openclaude: CLAUDE_COMMANDS,
-  codex: CODEX_COMMANDS
+  codex: CODEX_COMMANDS,
+  omp: OMP_COMMANDS
 }
 
 /** Known slash commands for an agent, falling back to a small common set so the

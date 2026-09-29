@@ -98,16 +98,33 @@ it('resumes into a grown transcript instead of re-reading it whole', async () =>
 
 // Nothing is recorded about what a deadline cut off, because being owed is a
 // fact about the row: the file is read on the next pass for the same reason it
-// was owed on this one.
+// was owed on this one. The one thing handed back is how many there were, since
+// a candidate with no row yet is a backlog no query can see.
 it('leaves what it ran out of time for owed, with nothing written down', async () => {
   const all = await candidates()
   const cut = await runSessionSearchIndexPass(store, all, { rows: rows(), overdue: () => true })
 
-  expect(cut.outOfTime).toBe(true)
+  expect(cut).toMatchObject({ outOfTime: true, left: 1 })
   expect(store.files()).toHaveLength(1)
   const second = await passOverAll()
   expect(second.stats.fullParses).toBe(1)
   expect(store.files()).toHaveLength(2)
+})
+
+// A deferred candidate whose row already says `due` is in `stateCounts().due`,
+// which the status adds `left` to; counting it here would report it twice.
+it('leaves a deferred candidate out of the count when its row already says due', async () => {
+  await passOverAll()
+  for (const row of store.files()) {
+    store.setFileState(row.path, 'due')
+  }
+
+  const cut = await runSessionSearchIndexPass(store, await candidates(), {
+    rows: rows(),
+    overdue: () => true
+  })
+
+  expect(cut).toMatchObject({ outOfTime: true, left: 0 })
 })
 
 // The deadline is never applied before the pass has read anything, so a single
@@ -116,7 +133,7 @@ it('reads one file even when the deadline has already expired', async () => {
   const only = (await candidates()).slice(0, 1)
   const alone = await runSessionSearchIndexPass(store, only, { rows: rows(), overdue: () => true })
 
-  expect(alone.outOfTime).toBe(false)
+  expect(alone).toMatchObject({ outOfTime: false, left: 0 })
   expect(store.files()).toHaveLength(1)
 })
 

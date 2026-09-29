@@ -95,6 +95,9 @@ describe('mailbox delivery consumption', () => {
     const message = insert('pending')
     const first = db.getOrCreateRunDelivery(params)!
     expect(() => db.acknowledgeRunDelivery({ ...params, deliveryId: message.id })).toThrow(
+      `${message.id} is a message id, not a delivery id. Acknowledge the batch with the deliveryId field from the check response; process the entire batch before acknowledging.`
+    )
+    expect(() => db.acknowledgeRunDelivery({ ...params, deliveryId: 'delivery_missing' })).toThrow(
       '--ack requires a delivery_* ID returned by orchestration check; process the entire batch before acknowledging.'
     )
     expect(db.getMessageById(message.id)?.read).toBe(0)

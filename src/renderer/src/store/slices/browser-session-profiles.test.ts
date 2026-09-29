@@ -86,15 +86,14 @@ describe('createBrowserSlice runtime guard', () => {
     ])
   })
 
-  it('forwards profile UA options to the active runtime environment', async () => {
+  it('creates a profile in the active runtime environment', async () => {
     const store = createTestStore()
     const profile = {
       id: 'remote-google',
       scope: 'isolated' as const,
       partition: 'persist:remote-google',
       label: 'Google',
-      source: null,
-      userAgentMode: 'native' as const
+      source: null
     }
     runtimeEnvironmentCall.mockResolvedValueOnce({
       id: 'rpc-create',
@@ -105,14 +104,12 @@ describe('createBrowserSlice runtime guard', () => {
     store.setState({ settings: settingsWithRuntime('env-1') })
 
     await expect(
-      store
-        .getState()
-        .createBrowserSessionProfile('isolated', 'Google', { userAgentMode: 'native' })
+      store.getState().createBrowserSessionProfile('isolated', 'Google')
     ).resolves.toEqual(profile)
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'browser.profileCreate',
-      params: { scope: 'isolated', label: 'Google', userAgentMode: 'native' },
+      params: { scope: 'isolated', label: 'Google' },
       timeoutMs: 15_000
     })
   })
@@ -337,27 +334,23 @@ describe('createBrowserSlice runtime guard', () => {
     ])
   })
 
-  it('forwards profile UA options to local browser IPC', async () => {
+  it('creates a profile through local browser IPC', async () => {
     const store = createTestStore()
     const profile = {
       id: 'local-google',
       scope: 'isolated' as const,
       partition: 'persist:local-google',
       label: 'Google',
-      source: null,
-      userAgentMode: 'native' as const
+      source: null
     }
     mockApi.browser.sessionCreateProfile.mockResolvedValueOnce(profile)
 
     await expect(
-      store
-        .getState()
-        .createBrowserSessionProfile('isolated', 'Google', { userAgentMode: 'native' })
+      store.getState().createBrowserSessionProfile('isolated', 'Google')
     ).resolves.toEqual(profile)
     expect(mockApi.browser.sessionCreateProfile).toHaveBeenCalledWith({
       scope: 'isolated',
-      label: 'Google',
-      userAgentMode: 'native'
+      label: 'Google'
     })
   })
 })

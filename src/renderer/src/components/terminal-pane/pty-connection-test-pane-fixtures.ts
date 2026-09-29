@@ -103,6 +103,7 @@ export type MockPaneTerminal = {
     scrollback: number
     ignoreBracketedPasteMode: boolean
     theme: { foreground: string; background: string }
+    vtExtensions: { kittyKeyboard: boolean }
   }
   write: Mock<(data: string, callback?: () => void) => void>
   resize: Mock<(cols: number, rows: number) => void>
@@ -162,7 +163,8 @@ export function createPane(paneId: number): MockPane {
       theme: {
         foreground: '#eeeeee',
         background: '#111111'
-      }
+      },
+      vtExtensions: { kittyKeyboard: true }
     },
     write: vi.fn<(data: string, callback?: () => void) => void>(function write(...args): void {
       const [data, callback] = args

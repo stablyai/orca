@@ -1,5 +1,8 @@
+import type { RpcAcceptedResult } from './rpc-accepted-result'
 import type { RpcMethodName } from './rpc-params-contract'
 import type { RpcFailure, RpcResponse, RpcSuccess } from './types'
+
+export type { RpcAcceptedResult }
 
 // An operation descriptor fixes the method, the acceptance policy and the interpretation
 // barrier at definition time. Per-call freedom over those three is what produced acceptance
@@ -156,11 +159,6 @@ export type StreamOpenerRpcDefinition<
   /** The opener's value is the reply itself; frames arrive on the subscription, not here. */
   read?: never
 }
-
-/** Refusal is distinct from an accepted null/undefined payload. */
-export type RpcAcceptedResult<Value> =
-  | { readonly accepted: false }
-  | { readonly accepted: true; readonly value: Value }
 
 export type RpcReaderAcceptance =
   | 'require-result-or-throw'

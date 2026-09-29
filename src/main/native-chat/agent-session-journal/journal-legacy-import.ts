@@ -62,30 +62,6 @@ export type LegacyImportResult =
     }
   | { ok: false; error: string }
 
-export async function appendLegacyTranscriptMessages(input: {
-  journal: AgentSessionJournal
-  agent: AgentType
-  sessionId: string
-  fence: number
-  messages: NativeChatMessage[]
-}): Promise<number> {
-  let appended = 0
-  for (const message of input.messages) {
-    await input.journal.appendItem(
-      {
-        provider: 'legacy',
-        agent: input.agent,
-        sessionId: input.sessionId,
-        recordId: message.id
-      },
-      legacyItemBody(message, DEFAULT_JOURNAL_PAYLOAD_LIMITS),
-      { fence: input.fence, observedAt: message.timestamp ?? undefined }
-    )
-    appended += 1
-  }
-  return appended
-}
-
 export async function importLegacyTranscriptIntoJournal(input: {
   journal: AgentSessionJournal
   agent: AgentType
@@ -194,7 +170,8 @@ async function decodeWithIdentities(input: {
   const identities: AgentJournalItemIdentity[] = []
   let lineIndex = 0
 
-  const stream = createReadStream(input.filePath, { encoding: 'utf-8' })
+  // Count raw bytes while reading: the source can grow after the stat check.
+  const stream = createReadStream(input.filePath)
   const { messages } = await decodeTranscriptStream(
     stream,
     input.filePath,
@@ -217,7 +194,8 @@ async function decodeWithIdentities(input: {
       }
       return message
     },
-    true
+    true,
+    MAX_LEGACY_IMPORT_SOURCE_BYTES
   )
   return { messages, identities }
 }

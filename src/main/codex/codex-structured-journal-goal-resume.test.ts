@@ -43,6 +43,7 @@ function goalJournal(
   const rows = new Map<string, AgentJournalRenderItem>()
   const writes: string[] = []
   const deferred = createDeferredStructuredAgentSessionEventSink(options)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a fake journal exposing only the members the goal translator and deferred sink call.
   const journal = {
     get epoch() {
       return `epoch-${epochNumber}`
@@ -68,11 +69,11 @@ function goalJournal(
       items: [...rows.values()].sort((left, right) => left.sequence - right.sequence),
       submissions: []
     }),
-    visitItems: (visit: (itemId: string, sequence: number) => void) => {
+    visitItems: (visit: (itemId: string, sequence: number, body: AgentJournalItemBody) => void) => {
       visits += 1
       for (const item of rows.values()) {
         visitedItems += 1
-        visit(item.itemId, item.sequence)
+        visit(item.itemId, item.sequence, item.body)
       }
     }
   } as unknown as StructuredAgentSessionEventTarget['journal']
@@ -129,7 +130,7 @@ describe('codex goal lifecycle resume', () => {
   it('does not append a cleared snapshot when the journal has no prior goal occurrence', async () => {
     const journal = goalJournal()
     journal.unbind()
-    const resumed = new CodexJournalGoals(journal.sink)
+    const resumed = new CodexJournalGoals(journal.sink, () => ({}))
 
     expect(
       resumed.handle({
@@ -150,7 +151,7 @@ describe('codex goal lifecycle resume', () => {
 
   it('does not revisit durable history for accounting-only updates', async () => {
     const journal = goalJournal()
-    const goals = new CodexJournalGoals(journal.sink)
+    const goals = new CodexJournalGoals(journal.sink, () => ({}))
     goals.handle({ threadId: THREAD, method: 'thread/goal/updated', params: goalFrame() })
     await journal.drained()
     const visits = journal.visits()
@@ -175,7 +176,7 @@ describe('codex goal lifecycle resume', () => {
 
   it('rebuilds dedupe state after the journal epoch is replaced', async () => {
     const journal = goalJournal()
-    const goals = new CodexJournalGoals(journal.sink)
+    const goals = new CodexJournalGoals(journal.sink, () => ({}))
     const event = { threadId: THREAD, method: 'thread/goal/updated', params: goalFrame() }
 
     goals.handle(event)
@@ -197,7 +198,7 @@ describe('codex goal lifecycle resume', () => {
   it('visits a large journal once per epoch when thread churn exceeds the transient LRU', async () => {
     const journal = goalJournal()
     journal.seedProviderItems(10_000)
-    const goals = new CodexJournalGoals(journal.sink)
+    const goals = new CodexJournalGoals(journal.sink, () => ({}))
     const threadCount = MAX_CODEX_GOAL_THREADS + 1
     const sendRound = () => {
       for (let index = 0; index < threadCount; index += 1) {
@@ -226,7 +227,7 @@ describe('codex goal lifecycle resume', () => {
     const journal = goalJournal()
     journal.seedProviderItems(10_000)
     journal.unbind()
-    const goals = new CodexJournalGoals(journal.sink)
+    const goals = new CodexJournalGoals(journal.sink, () => ({}))
 
     for (let index = 0; index < MAX_CODEX_GOAL_THREADS; index += 1) {
       goals.handle({
@@ -248,7 +249,7 @@ describe('codex goal lifecycle resume', () => {
 
   it('retries a journal-derived transition after lifecycle backpressure', async () => {
     const journal = goalJournal({ watermarks: { maxLifecycleQueuedOperations: 1 } })
-    const goals = new CodexJournalGoals(journal.sink)
+    const goals = new CodexJournalGoals(journal.sink, () => ({}))
     journal.unbind()
 
     expect(
@@ -316,7 +317,7 @@ describe('codex goal lifecycle resume', () => {
       })
     }
 
-    const prior = new CodexJournalGoals(journal.sink)
+    const prior = new CodexJournalGoals(journal.sink, () => ({}))
     for (const state of scenario.beforeResume) {
       send(prior, state)
     }
@@ -328,7 +329,7 @@ describe('codex goal lifecycle resume', () => {
     prior.dispose()
     journal.unbind()
 
-    const resumed = new CodexJournalGoals(journal.sink)
+    const resumed = new CodexJournalGoals(journal.sink, () => ({}))
     resumed.handle({
       threadId: THREAD,
       method: scenario.resumed.method,
@@ -354,12 +355,22 @@ describe('codex goal lifecycle resume', () => {
         prefix === 'Goal cleared' ? prefix : `${prefix}: Keep the current scratch directory tidy.`
       )
     )
-    expect(journal.writes).toHaveLength(writesBeforeResume)
-    expect(journal.publishes()).toBe(publishesBeforeResume)
+    // A resumed goal's fresh accounting revises the row it already has: no new
+    // row, and the text a reader sees is unchanged. A cleared goal has no accounting.
+    const cleared = scenario.resumed.method === 'thread/goal/cleared'
+    expect(journal.writes).toHaveLength(writesBeforeResume + (cleared ? 0 : 1))
+    expect(journal.publishes()).toBe(publishesBeforeResume + (cleared ? 0 : 1))
     expect(journal.writes.at(-1)).toBe(acceptedOccurrence)
-    expect(journal.rows().find((row) => row.itemId === acceptedOccurrence)?.body).toEqual(
-      acceptedBody
-    )
+    const revised = journal.rows().find((row) => row.itemId === acceptedOccurrence)
+    if (cleared) {
+      expect(revised?.body).toEqual(acceptedBody)
+    } else {
+      expect(revised?.revision).toBe(2)
+      expect(revised?.body).toMatchObject({
+        text: acceptedBody?.kind === 'status' ? acceptedBody.text : undefined,
+        threadGoal: { goal: { tokensUsed: 12_345, timeUsedSeconds: 42 } }
+      })
+    }
     resumed.dispose()
   })
 })

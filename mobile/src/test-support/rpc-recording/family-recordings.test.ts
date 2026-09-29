@@ -28,7 +28,7 @@ async function certify(id: string, scenarios: RecordingScenario[]) {
   for (let run = 0; run < determinismRuns(); run++) {
     const checkpoints: Recording['checkpoints'] = []
     for (const scenario of scenarios) {
-      const { adapters } = pilotMountAdapters(root)
+      const { adapters } = pilotMountAdapters(root, { device: scenario })
       const recording = await runRecording(
         scenario,
         adapters[scenario.operation],

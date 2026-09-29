@@ -14,7 +14,8 @@ import {
 } from '@/lib/agent-launch-routing'
 import type { NativeChatLaunchPromptDelivery } from '@/lib/native-chat-initial-view-mode'
 import {
-  settleStructuredAgentLaunch,
+  beginStructuredAgentLaunchSettlement,
+  type StructuredAgentLaunchHandle,
   type StructuredAgentLaunchHooks,
   type StructuredAgentLaunchSettlement
 } from '@/lib/structured-agent-launch-settlement'
@@ -52,6 +53,11 @@ export type AgentSessionLaunchTarget = {
 }
 
 export type AgentSessionLaunchPlan = Readonly<AgentSessionLaunchVerdict> & {
+  /** Begins the launch and exposes its durable identity before host acquisition settles. */
+  begin(
+    hooks: StructuredAgentLaunchHooks,
+    target?: AgentSessionLaunchTarget
+  ): StructuredAgentLaunchHandle | null
   /** Runs the structured settle loop for this plan. Null when the route is not structured. */
   launch(
     hooks: StructuredAgentLaunchHooks,
@@ -68,30 +74,35 @@ function structuredLaunchOptions(verdict: AgentSessionLaunchVerdict): Structured
   }
 }
 
+function beginStructuredPlanLaunch(
+  verdict: AgentSessionLaunchVerdict,
+  hooks: StructuredAgentLaunchHooks,
+  target?: AgentSessionLaunchTarget
+): StructuredAgentLaunchHandle | null {
+  if (verdict.route !== 'structured-native-chat' || !isAgentSessionHandleProvider(verdict.agent)) {
+    return null
+  }
+  const worktreeId = target?.worktreeId ?? verdict.worktreeId
+  if (!worktreeId) {
+    throw new Error('A structured agent launch needs the workspace it targets.')
+  }
+  return beginStructuredAgentLaunchSettlement(
+    worktreeId,
+    verdict.agent,
+    structuredLaunchOptions(verdict),
+    hooks
+  )
+}
+
 /** Re-enter with a verdict decided earlier; the route is data here and is never re-resolved. */
 export function adoptAgentSessionLaunchVerdict(
   verdict: AgentSessionLaunchVerdict
 ): AgentSessionLaunchPlan {
   return {
     ...verdict,
-    launch: async (hooks, target) => {
-      if (
-        verdict.route !== 'structured-native-chat' ||
-        !isAgentSessionHandleProvider(verdict.agent)
-      ) {
-        return null
-      }
-      const worktreeId = target?.worktreeId ?? verdict.worktreeId
-      if (!worktreeId) {
-        throw new Error('A structured agent launch needs the workspace it targets.')
-      }
-      return settleStructuredAgentLaunch(
-        worktreeId,
-        verdict.agent,
-        structuredLaunchOptions(verdict),
-        hooks
-      )
-    }
+    begin: (hooks, target) => beginStructuredPlanLaunch(verdict, hooks, target),
+    launch: async (hooks, target) =>
+      beginStructuredPlanLaunch(verdict, hooks, target)?.settlement ?? null
   }
 }
 

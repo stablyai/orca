@@ -138,29 +138,22 @@ describe('RuntimeBrowserCommands browser screencast', () => {
     browserSessionRegistryMock.createProfile.mockReset()
   })
 
-  it('creates profiles with the requested user-agent mode', async () => {
+  it('creates profiles with the requested scope and label', async () => {
     const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
     const profile = {
       id: 'profile-google',
       scope: 'isolated',
       partition: 'persist:orca-browser-session-profile-google',
       label: 'Google',
-      source: null,
-      userAgentMode: 'native'
+      source: null
     }
     browserSessionRegistryMock.createProfile.mockReturnValue(profile)
     const commands = new RuntimeBrowserCommands(createHost())
 
     await expect(
-      commands.browserProfileCreate({
-        label: 'Google',
-        scope: 'isolated',
-        userAgentMode: 'native'
-      })
+      commands.browserProfileCreate({ label: 'Google', scope: 'isolated' })
     ).resolves.toEqual({ profile })
-    expect(browserSessionRegistryMock.createProfile).toHaveBeenCalledWith('isolated', 'Google', {
-      userAgentMode: 'native'
-    })
+    expect(browserSessionRegistryMock.createProfile).toHaveBeenCalledWith('isolated', 'Google')
   })
 
   it('waits for explicit worktree browser registration after requesting a hidden mount', async () => {

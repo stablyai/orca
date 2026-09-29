@@ -1,3 +1,4 @@
+import type { LocalGitExecOptions } from '../git/repo-default-base-ref'
 import { randomUUID } from 'node:crypto'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-lookup'
@@ -39,7 +40,7 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
   displayNameKind: CreateWorktreeArgs['displayNameKind']
   effectiveSanitizedName: string
   effectiveCreatedWithAgent?: TuiAgent
-  localWorktreeGitOptions: { wslDistro?: string }
+  localWorktreeGitOptions: LocalGitExecOptions
   onMetadataPersisted: (worktree: Worktree) => T
 }): Promise<{ worktree: Worktree; metadataResult: T; includeCopyWarning?: string }> {
   const {

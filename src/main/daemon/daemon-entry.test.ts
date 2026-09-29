@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { parseArgs } from './daemon-entry'
 
 describe('daemon-entry parseArgs', () => {
+  it('only enables scope cleanup with the fresh launch flag', () => {
+    const args = ['--socket', '/tmp/t.sock', '--token', '/tmp/t.token']
+    expect(parseArgs(args)).not.toHaveProperty('freshDaemonScope')
+    expect(parseArgs([...args, '--fresh-daemon-scope'])).toHaveProperty('freshDaemonScope', true)
+  })
   it('parses --socket and --token flags', () => {
     const result = parseArgs(['--socket', '/tmp/test.sock', '--token', '/tmp/test.token'])
     expect(result).toEqual({

@@ -28,7 +28,7 @@ describe('large remote history through real relay filesystem', () => {
       await writeFile(badPath, metadata('bad') + 'x'.repeat(11 * 1024 * 1024))
       await writeFile(join(directory, 'good.jsonl'), metadata('good'))
       const result = await scanRemoteAiVaultSessions({
-        provider: createRelayAiVaultFilesystemProvider(),
+        provider: createRelayAiVaultFilesystemProvider({ homeDirectory: home, environment: {} }),
         executionHostId: 'ssh:record-limit',
         remoteHome: home,
         hostPlatform: platform,
@@ -37,7 +37,7 @@ describe('large remote history through real relay filesystem', () => {
       expect(result.sessions.map((session) => session.sessionId)).toEqual(['good'])
       expect(result.issues).toEqual([
         expect.objectContaining({
-          path: badPath,
+          path: badPath.replace(/\\/g, '/'),
           message: 'Session transcript record exceeds 10485760 byte limit'
         })
       ])
@@ -94,7 +94,7 @@ describe('large remote history through real relay filesystem', () => {
           filler.slice(filler.length / 2)
       )
       const result = await scanRemoteAiVaultSessions({
-        provider: createRelayAiVaultFilesystemProvider(),
+        provider: createRelayAiVaultFilesystemProvider({ homeDirectory: home, environment: {} }),
         executionHostId: 'ssh:synthetic-17744',
         remoteHome: home,
         hostPlatform: platform,
@@ -128,7 +128,10 @@ describe('large remote history through real relay filesystem', () => {
           path = join(home, '.hermes', 'sessions', 'large.json')
           record = { session_id: 'large', cwd: '/repo', model: 'test-model', messages }
         } else if (agent === 'devin') {
-          path = join(home, '.local', 'share', 'devin', 'cli', 'transcripts', 'large.json')
+          path =
+            platform.os === 'win32'
+              ? join(home, 'AppData', 'Roaming', 'devin', 'cli', 'transcripts', 'large.json')
+              : join(home, '.local', 'share', 'devin', 'cli', 'transcripts', 'large.json')
           record = {
             session_id: 'large',
             working_directory: '/repo',
@@ -158,7 +161,7 @@ describe('large remote history through real relay filesystem', () => {
         await mkdir(dirname(path), { recursive: true })
         await writeFile(path, JSON.stringify(record))
         const result = await scanRemoteAiVaultSessions({
-          provider: createRelayAiVaultFilesystemProvider(),
+          provider: createRelayAiVaultFilesystemProvider({ homeDirectory: home, environment: {} }),
           executionHostId: `ssh:large-${agent}`,
           remoteHome: home,
           hostPlatform: platform,
@@ -182,7 +185,10 @@ describe('large remote history through real relay filesystem', () => {
       await mkdir(directory, { recursive: true })
       const content = jsonl([{ type: 'session_meta', payload: { id: 'small', cwd: '/repo' } }])
       await writeFile(join(directory, 'small.jsonl'), content)
-      const provider = createRelayAiVaultFilesystemProvider()
+      const provider = createRelayAiVaultFilesystemProvider({
+        homeDirectory: home,
+        environment: {}
+      })
       provider.readTranscriptBytes = () => {
         throw new Error('Small file must keep its existing read path')
       }

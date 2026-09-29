@@ -1,11 +1,8 @@
 import { createHash } from 'node:crypto'
-import { normalizeSubagentState } from '../../../shared/native-chat-subagent-summary'
-import type {
-  NativeChatBlock,
-  NativeChatMessage,
-  NativeChatSubagentState
-} from '../../../shared/native-chat-types'
+import type { NativeChatBlock, NativeChatMessage } from '../../../shared/native-chat-types'
+import { agentJournalItemSubagentId } from '../../../shared/agent-session-journal-producer'
 import { boundSubagentEntryId } from '../../native-chat/subagent-entry-id-bounds'
+import { boundWorkerTranscriptActivityBlock } from './worker-transcript-activity-block-bounds'
 
 export const DEFAULT_WORKER_TRANSCRIPT_MESSAGE_LIMIT = 40
 export const MAX_WORKER_TRANSCRIPT_MESSAGE_LIMIT = 50
@@ -13,10 +10,6 @@ const MAX_WORKER_TRANSCRIPT_BLOCKS = 6
 const MAX_WORKER_TRANSCRIPT_BLOCK_CHARS = 1_200
 const MAX_WORKER_TRANSCRIPT_INPUT_ITEMS = 20
 const MAX_WORKER_TRANSCRIPT_INPUT_NODES = 100
-// Matches the producer's per-group cap, so no group this build writes is clipped
-// here. The bound stays because the journal schema declares no maximum and a
-// remote host may run a build with a larger one.
-const MAX_WORKER_TRANSCRIPT_SUBAGENTS = 64
 // Message ids, turn ids, tool-call names and image urls, not only roster fields.
 // Equal to `MAX_SUBAGENT_FIELD_CHARS` today, kept a separate literal so a
 // roster-motivated change to that cap cannot silently move this one.
@@ -116,10 +109,25 @@ function boundMessage(
   if (blocks.length < message.blocks.length) {
     markClipped(state, 'Some transcript blocks were omitted from oversized messages.')
   }
+  // The journal position only orders a live list; a worker read is already in order.
+  // Of the producer linkage only the agent's id is served, so a reader can say whose
+  // line it is; the rest is provenance.
+  const {
+    journalPosition: _journalPosition,
+    agentId: _agentId,
+    parentAgentId: _parentAgentId,
+    providerParentRef: _providerParentRef,
+    producerKind: _producerKind,
+    attempt: _attempt,
+    ...served
+  } = message
+  const subagentId = agentJournalItemSubagentId(message)
   return {
-    ...message,
+    ...served,
     id: boundIdentifier(message.id, transcriptPath, state),
     ...(message.turnId ? { turnId: boundIdentifier(message.turnId, transcriptPath, state) } : {}),
+    // Same key as the roster entry that names it, so it is bounded the same way.
+    ...(subagentId === null ? {} : { agentId: boundEntryId(subagentId, state) }),
     blocks: blocks.map((block) => boundBlock(block, state))
   }
 }
@@ -142,23 +150,13 @@ function boundBlock(block: NativeChatBlock, state: TranscriptBoundState): Native
       input: boundToolInput(block.input, budget, 0, state)
     }
   }
-  if (block.type === 'subagent-group') {
-    const agents = block.agents.slice(0, MAX_WORKER_TRANSCRIPT_SUBAGENTS)
-    if (agents.length < block.agents.length) {
-      markClipped(state, 'Some subagents were omitted from oversized spawn groups.')
-    }
-    // Labels, ids and states come from provider-supplied strings, so they get the
-    // same redaction and clipping every other piece of transcript metadata gets.
-    return {
-      ...block,
-      groupId: clipMetadata(block.groupId, state),
-      agents: agents.map((agent) => ({
-        ...agent,
-        id: boundEntryId(agent.id, state),
-        label: clipMetadata(agent.label, state),
-        state: clipSubagentState(agent.state, state)
-      }))
-    }
+  if (block.type === 'subagent-group' || block.type === 'background-task') {
+    return boundWorkerTranscriptActivityBlock(block, {
+      clipMetadata: (value) => clipMetadata(value, state),
+      clipText: (value) => clipText(value, state),
+      boundEntryId: (value) => boundEntryId(value, state),
+      markClipped: (warning) => markClipped(state, warning)
+    })
   }
   if (block.path || (block.url && isLocalFileLocator(block.url))) {
     markClipped(state, 'Local image paths were omitted from transcript output.')
@@ -214,17 +212,6 @@ function clipMetadata(value: string, state: TranscriptBoundState): string {
   }
   markClipped(state, 'Oversized transcript metadata was clipped.')
   return redacted.slice(0, MAX_WORKER_TRANSCRIPT_METADATA_CHARS)
-}
-
-/** `state` is an open string on the wire, so it takes the same bound. A value
- *  that had to be redacted or clipped names no state any build knows, which is
- *  exactly what `unverifiable` records. */
-function clipSubagentState(
-  value: NativeChatSubagentState,
-  state: TranscriptBoundState
-): NativeChatSubagentState {
-  const clipped = clipMetadata(value, state)
-  return clipped === value ? value : normalizeSubagentState(clipped)
 }
 
 function clipText(value: string, state: TranscriptBoundState): string {

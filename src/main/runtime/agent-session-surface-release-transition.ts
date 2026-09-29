@@ -2,12 +2,13 @@
 //
 // Every other release in the wire needs a probe, because every other release is about a process
 // somebody else started and nobody watched die. This one is different: the host stopped its own
-// child through the adapter and the adapter proved the exit before this runs, so the evidence is
-// `exit-observed` rather than an adjudicated absence.
+// lease-owning provider root through the adapter. Its observed exit is sufficient because the
+// lease follows that root, even when descendants remain `unverifiable`.
 //
-// The fence still moves. A released lease at the old fence would let a mutation a client queued
-// against the dead generation land on the next one.
+// The fence still moves, so the next owner is a new generation: an attach or settlement still
+// holding the stopped owner's fence is refused as stale rather than acting on its successor.
 
+import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { nextAgentSessionFence } from '../../shared/agent-session-next-fence'
 import { assertFence, withLease } from './agent-session-lease-transitions'
@@ -15,11 +16,10 @@ import type { AgentSessionRecordStore } from './agent-session-record-store'
 
 export type AgentSessionRecordTransitionStore = Pick<AgentSessionRecordStore, 'transitionHandoff'>
 
-/** Whether this record is one THIS host may release on its own proof. A TUI owner, a session
- *  mid-handoff, and a lease nobody holds are all somebody else's transition. */
+/** Whether this record is one THIS host may release on its own proof. A session mid-handoff and a
+ *  lease nobody holds are somebody else's transition. */
 export function isSurfaceReleasableAgentSessionRecord(record: AgentSessionRecord): boolean {
   return (
-    record.lease.runtimeKind === 'native' &&
     record.lease.claimStatus === 'live' &&
     record.lease.handoffStage === null &&
     record.lease.ownerProcess !== null
@@ -32,28 +32,27 @@ export function releaseAgentSessionOwnerAfterSurfaceClose(args: {
   now: number
   /** Exit receipt can precede a delayed journal settlement and lease release. */
   exitObservedAt?: number
-  settlementRetry?: { settlementId: string; detail: string }
+  /** Why the provider exited, when the host saw it die on its own. */
+  exitReason?: string
 }): AgentSessionRecord {
   const { record } = args
   assertFence(record.lease, args.expectedFence)
   if (!isSurfaceReleasableAgentSessionRecord(record)) {
-    throw new Error('agent_session_ownership_unknown')
+    throw agentSessionRefusalError('agent_session_ownership_unknown', { reason: 'leaseMoved' })
   }
   return withLease(record, {
     ...record.lease,
     runtimeFence: nextAgentSessionFence(record.lease),
     ownerProcess: null,
     reservedSpawnToken: null,
-    processlessAt: null,
     claimStatus: 'released',
-    handoffStage: args.settlementRetry ? 'recovering' : null,
-    settlementRetryRequired: args.settlementRetry ? true : undefined,
-    settlementRetryId: args.settlementRetry?.settlementId,
+    handoffStage: null,
     lastRenewedAt: args.now,
     deathEvidence: {
       kind: 'exit-observed',
-      detail: args.settlementRetry?.detail ?? 'the last surface holding this session released it',
-      observedAt: args.exitObservedAt ?? args.now
+      detail: args.exitReason ?? 'the last surface holding this session released it',
+      observedAt: args.exitObservedAt ?? args.now,
+      ownerFence: record.lease.runtimeFence
     }
   })
 }
@@ -66,7 +65,7 @@ export function releaseStoredAgentSessionOwnerAfterSurfaceClose(
     expectedFence: number
     now: number
     exitObservedAt?: number
-    settlementRetry?: { settlementId: string; detail: string }
+    exitReason?: string
   }
 ): Promise<AgentSessionRecord> {
   return store.transitionHandoff(args.sessionId, (record) =>

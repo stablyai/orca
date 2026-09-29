@@ -21,7 +21,8 @@ import {
 } from './pane-webgl-reattach'
 import {
   releaseHiddenWebglRetention,
-  tryRetainHiddenPanesWebgl
+  tryRetainHiddenPanesWebgl,
+  type HiddenWebglRetentionOwner
 } from './terminal-webgl-hidden-retention'
 
 export function setPaneGpuRenderingState(
@@ -59,7 +60,10 @@ export function markPaneComplexScriptOutput(
 
 export function suspendPaneRendering(
   panes: Iterable<ManagedPaneInternal>,
-  retention?: { owner: object; livePanes: () => Iterable<ManagedPaneInternal> }
+  retention?: {
+    owner: HiddenWebglRetentionOwner
+    livePanes: () => Iterable<ManagedPaneInternal>
+  }
 ): void {
   const suspended = Array.from(panes)
   // Why: both branches must leave a suspended pane in the same state; only the retention
@@ -89,7 +93,7 @@ export function suspendPaneRendering(
 
 export function resumePaneRendering(
   panes: Iterable<ManagedPaneInternal>,
-  retentionOwner?: object
+  retentionOwner?: HiddenWebglRetentionOwner
 ): void {
   if (retentionOwner) {
     releaseHiddenWebglRetention(retentionOwner)

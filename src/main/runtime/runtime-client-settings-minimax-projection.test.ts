@@ -12,6 +12,19 @@ function getProjected(overrides: Partial<GlobalSettings>) {
 }
 
 describe('RuntimeClientSettingsController MiniMax projection', () => {
+  it('publishes and updates the machine name setting', async () => {
+    const settings = createGlobalSettingsFixture({ workspaceDir: '/w', machineName: 'desk' })
+    const store = {
+      getSettings: () => settings,
+      updateSettings: (updates: Partial<GlobalSettings>) => Object.assign(settings, updates)
+    }
+    const controller = new RuntimeClientSettingsController(store)
+    expect(controller.get().machineName).toBe('desk')
+    await controller.update({ machineName: 'build-server' })
+    expect(settings.machineName).toBe('build-server')
+    expect(controller.get().machineName).toBe('build-server')
+  })
+
   it('publishes the China endpoint to paired clients', () => {
     expect(getProjected({ minimaxEndpoint: 'cn' }).minimaxEndpoint).toBe('cn')
   })

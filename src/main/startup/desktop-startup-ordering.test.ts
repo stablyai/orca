@@ -104,6 +104,30 @@ describe('startup ordering', () => {
     expect(foundationSource.split('initializeBrowserClientHostId(')).toHaveLength(2)
   })
 
+  it('fails closed with offline recovery guidance when profile state is unreadable', () => {
+    const entrySource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+
+    expect(entrySource).toContain('formatProfileStateStartupFailure')
+    expect(entrySource).toContain('formatProfileStateStartupFailure(error) ??')
+    expect(entrySource).toContain('presentProfileStateStartupRecoveryDialog')
+    expect(entrySource).toContain('!state.isServeMode && !isBackgroundLaunch()')
+    expect(entrySource).toContain(
+      "console.warn('[profile-state] Recovery dialog failed; exiting safely:'"
+    )
+    expect(entrySource).toContain('app.exit(1)')
+  })
+
+  it('initializes telemetry before publishing profile-state authority selection', () => {
+    const source = readFileSync(
+      join(process.cwd(), 'src/main/startup/main-process-observers.ts'),
+      'utf8'
+    )
+    const telemetryInit = source.indexOf('initTelemetry(store)')
+    const authoritySelection = source.indexOf("track('profile_state_authority_selected'")
+    expect(telemetryInit).toBeGreaterThanOrEqual(0)
+    expect(authoritySelection).toBeGreaterThan(telemetryInit)
+  })
+
   it('requires daemon authority before restored-subagent liveness runs', () => {
     const source = readFileSync(
       join(process.cwd(), 'src/main/startup/main-process-pty-startup.ts'),

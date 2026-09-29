@@ -10,6 +10,7 @@ import { clampNumber } from '@/lib/terminal-theme'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { SearchableSetting } from './SearchableSetting'
+import { CollapseUnchangedRegionsSetting } from './CollapseUnchangedRegionsSetting'
 import {
   SettingsSegmentedControl,
   SettingsSubsectionHeader,
@@ -234,6 +235,8 @@ export function GeneralEditorSettingsSection({
       <EditorWordWrapSetting settings={settings} updateSettings={updateSettings} />
 
       <DiffShowWhitespaceSetting settings={settings} updateSettings={updateSettings} />
+
+      <CollapseUnchangedRegionsSetting settings={settings} updateSettings={updateSettings} />
 
       <SearchableSetting
         title={translate(

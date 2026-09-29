@@ -34,6 +34,9 @@ export function createSshPtyProviderRpcOperations({ mux, toRelayPtyId }: SshPtyP
     clearBuffer: async (id: string): Promise<void> => {
       await mux.request('pty.clearBuffer', { id: toRelayPtyId(id) })
     },
+    resetInputModes: async (id: string): Promise<void> => {
+      await mux.request('pty.resetInputModes', { id: toRelayPtyId(id) })
+    },
     closeStartupQueryAuthority: async (id: string): Promise<number> => {
       const result = (await mux.request('pty.closeStartupQueryAuthority', {
         id: toRelayPtyId(id)

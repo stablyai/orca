@@ -7,6 +7,20 @@ export function refusedRpcMessageOrFallback(error: unknown, fallback: string): s
 }
 
 /**
+ * A reply interpreted, or the host's own refusal message as a plain Error when it refused — the
+ * screen's copy when it sent none. The caller awaits the request and passes only the interpretation
+ * as a thunk, so a transport rejection stays outside the catch and reaches the caller as the object
+ * the transport threw, delivery-unknown mark intact.
+ */
+export function interpretOrThrowRefusalMessage<T>(interpret: () => T, fallback: string): T {
+  try {
+    return interpret()
+  } catch (error) {
+    throw new Error(refusedRpcMessageOrFallback(error, fallback))
+  }
+}
+
+/**
  * An error a host reported inside an accepted reply, or the screen's copy when it sent none.
  *
  * The host contract declares `error` as a string, so a non-string is a malformed reply and reads

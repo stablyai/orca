@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionPtyWriteRefusal } from '../../../shared/agent-session-pty-write-admission'
 import {
   OrchestrationStructuredMailboxPointerDelivery,
   type StructuredMailboxPointerHost
@@ -75,7 +74,6 @@ function attentionJournal(): AgentJournalRenderItem[] {
 function harness(options: {
   journal: AgentJournalRenderItem[] | null
   dispatchState?: 'accepted' | 'rejected' | 'unknown'
-  refusal?: AgentSessionPtyWriteRefusal
   /** The coordinator of this worker's Run is mid-batch: it checked and has not acked yet. */
   outstandingRunDelivery?: boolean
   outstandingOwnDelivery?: boolean
@@ -109,15 +107,9 @@ function harness(options: {
     getDb: () => db as never,
     getMessageWaiters: () => undefined,
     resolveStructuredTarget: (mailboxHandle) =>
-      mailboxHandle === mailbox
-        ? {
-            sessionId: IDENTITY.sessionId,
-            dispatchId,
-            ...(options.refusal ? { refusal: options.refusal } : {})
-          }
-        : null,
+      mailboxHandle === mailbox ? { sessionId: IDENTITY.sessionId, dispatchId } : null,
     host: {
-      readGateFacts: () => (journal === null ? null : structuredSessionGateFacts(journal)),
+      readGateFacts: async () => (journal === null ? null : structuredSessionGateFacts(journal)),
       currentFence: () => 4,
       send
     }
@@ -305,41 +297,6 @@ describe('structured mailbox pointer delivery', () => {
   })
 })
 
-describe('an adopted pane is redirected through its native owner', () => {
-  const settled: AgentSessionPtyWriteRefusal = {
-    code: 'agent_session_conflict',
-    sessionId: 'session-1',
-    ownerRuntimeKind: 'native',
-    handoffStage: null,
-    ownerPid: 4242,
-    runtimeFence: 7
-  }
-
-  it('sends through the session when the refusal names a settled native owner', async () => {
-    const { delivery, send, markAsDelivered } = harness({
-      journal: idleJournal(),
-      refusal: settled
-    })
-    delivery.deliverForHandle('dispatch:d1')
-    await flush()
-    expect(send).toHaveBeenCalledTimes(1)
-    expect(markAsDelivered).toHaveBeenCalledWith(['m1'])
-  })
-
-  it('retains rather than redirecting into a lease that is handing back to a TUI', async () => {
-    // Re-checked at SEND time: the owner can settle differently between resolve and send, and
-    // redirecting into a mid-handoff lease races the takeover.
-    const { delivery, send, markAsDelivered } = harness({
-      journal: idleJournal(),
-      refusal: { ...settled, handoffStage: 'preparing' }
-    })
-    delivery.deliverForHandle('dispatch:d1')
-    await flush()
-    expect(send).not.toHaveBeenCalled()
-    expect(markAsDelivered).not.toHaveBeenCalled()
-  })
-})
-
 describe('forgetting one settled worker', () => {
   /** Two workers, each mid-turn and so each parked on its OWN session's journal edge. */
   function twoWorkerHarness() {
@@ -372,7 +329,7 @@ describe('forgetting one settled worker', () => {
           : null
       },
       host: {
-        readGateFacts: () => structuredSessionGateFacts(journal),
+        readGateFacts: async () => structuredSessionGateFacts(journal),
         currentFence: () => 4,
         send
       }

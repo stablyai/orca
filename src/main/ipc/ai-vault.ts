@@ -202,14 +202,16 @@ async function scanAiVaultSessionsByHostScope(
   })
 }
 
-function getActiveRuntimeAiVaultHostInfosResult(): AiVaultHostDiscoveryResult<RuntimeAiVaultHostInfo> {
+export function getActiveRuntimeAiVaultHostInfosResult(): AiVaultHostDiscoveryResult<RuntimeAiVaultHostInfo> {
   return discoverAiVaultHosts(() => handlerOptions.getActiveRuntimeAiVaultHostInfos?.() ?? [], {
     path: 'runtime environments',
     fallbackMessage: 'Runtime hosts are unavailable.'
   })
 }
 
-function getActiveSshAiVaultHostInfosResult(): AiVaultHostDiscoveryResult<{ targetId: string }> {
+export function getActiveSshAiVaultHostInfosResult(): AiVaultHostDiscoveryResult<{
+  targetId: string
+}> {
   return discoverAiVaultHosts(getActiveSshAiVaultHostInfos, {
     path: 'SSH hosts',
     fallbackMessage: 'SSH hosts are unavailable.'

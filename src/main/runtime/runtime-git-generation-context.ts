@@ -48,7 +48,10 @@ export function pullRequestDraftGitExec(
 }
 
 export type RuntimeCommitMessageSettingsOverride = Partial<
-  Pick<GlobalSettings, 'commitMessageAi' | 'sourceControlAi' | 'agentCmdOverrides'>
+  Pick<
+    GlobalSettings,
+    'commitMessageAi' | 'sourceControlAi' | 'agentCmdOverrides' | 'defaultTuiAgent'
+  >
 > & {
   commitMessageDiscoveryHostKey?: string
   sourceControlAiResolvedParams?: ResolvedSourceControlAiGenerationParams

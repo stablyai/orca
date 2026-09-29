@@ -4,18 +4,11 @@
 // in-app/phone browser). Regression guard for taps that jitter a few pixels —
 // those were being swallowed because the tap shared the long-press slop gate.
 import { beforeEach, describe, expect, it } from 'vitest'
-import { XTERM_HTML } from './terminal-webview-html'
-
-function iifeSource(): string {
-  const start = XTERM_HTML.indexOf('(function() {')
-  const end = XTERM_HTML.lastIndexOf('})();')
-  return XTERM_HTML.slice(start, end + '})();'.length)
-}
+import { TERMINAL_DOCUMENT_SCRIPT } from './terminal-webview-document-script.generated'
+import { TERMINAL_DOCUMENT_MARKUP } from './terminal-webview-html'
 
 function bodyMarkup(): string {
-  const start = XTERM_HTML.indexOf('<body>') + '<body>'.length
-  const end = XTERM_HTML.indexOf('<script>', start)
-  return XTERM_HTML.slice(start, end)
+  return TERMINAL_DOCUMENT_MARKUP
 }
 
 // Minimal xterm stub: one scrollback line containing a URL, fixed 8x15 cells.
@@ -92,7 +85,8 @@ function boot(
   }
   document.body.innerHTML = bodyMarkup()
   // eslint-disable-next-line no-new-func
-  new Function(iifeSource())()
+  // The bundle the WebView loads, run as the WebView runs it.
+  new Function(TERMINAL_DOCUMENT_SCRIPT)()
   window.dispatchEvent(
     new MessageEvent('message', {
       data: JSON.stringify({ type: 'init', cols: 80, rows: 24, initialData: '', oscLinks })

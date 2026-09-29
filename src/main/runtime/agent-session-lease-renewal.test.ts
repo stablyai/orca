@@ -27,7 +27,6 @@ async function establishOwner(
     },
     provider: 'codex',
     accountHome: { variable: 'CODEX_HOME', path: directory },
-    runtimeKind: 'native',
     expectedFence: null,
     spawnToken,
     claimKeyId: 'key-1',

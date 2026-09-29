@@ -33,7 +33,7 @@ type FixtureResult = {
   afterCookies: JarCookie[]
 }
 
-type SourceShape = {
+type SourceCookieRow = {
   name: string
   samesite: number | null
   is_secure: number
@@ -147,18 +147,26 @@ run().catch((error) => {
 `
 }
 
-function readSourceShape(sourceDbPath: string): SourceShape[] {
+function readSourceCookieRows(sourceDbPath: string): SourceCookieRow[] {
   const db = new DatabaseSync(sourceDbPath, { readOnly: true })
   try {
     return db
       .prepare('SELECT name, samesite, is_secure FROM cookies ORDER BY rowid')
-      .all() as SourceShape[]
+      .all()
+      .map((row) => ({
+        name: String(row.name),
+        samesite: row.samesite === null ? null : Number(row.samesite),
+        is_secure: Number(row.is_secure)
+      }))
   } finally {
     db.close()
   }
 }
 
-async function runFixture(): Promise<{ fixture: FixtureResult; sourceShape: SourceShape[] }> {
+async function runFixture(): Promise<{
+  fixture: FixtureResult
+  sourceCookieRows: SourceCookieRow[]
+}> {
   const root = mkdtempSync(join(tmpdir(), 'orca-samesite-enum-'))
   fixtureRoots.push(root)
   const bundlePath = join(root, 'cookie-import-samesite.cjs')
@@ -176,7 +184,7 @@ async function runFixture(): Promise<{ fixture: FixtureResult; sourceShape: Sour
     })
   )
   createChromiumCookieTestDatabase(sourceDbPath, rows).close()
-  const sourceShape = readSourceShape(sourceDbPath)
+  const sourceCookieRows = readSourceCookieRows(sourceDbPath)
   writeFileSync(
     bundleEntryPath,
     `export { importCookiesFromBrowser } from ${JSON.stringify(join(process.cwd(), 'src/main/browser/browser-cookie-import.ts'))}`
@@ -212,22 +220,23 @@ async function runFixture(): Promise<{ fixture: FixtureResult; sourceShape: Sour
   const fixtureResult = existsSync(resultPath) ? readFileSync(resultPath, 'utf8') : 'no result'
   expect(run.error).toBeUndefined()
   expect(run.status, `${fixtureResult}\n${run.stdout}\n${run.stderr}`).toBe(0)
-  return { fixture: JSON.parse(fixtureResult) as FixtureResult, sourceShape }
+  const fixture: FixtureResult = JSON.parse(fixtureResult)
+  return { fixture, sourceCookieRows }
 }
 
 describe('Chromium SameSite storage enum import', () => {
   let fixture: FixtureResult
-  let sourceShape: SourceShape[]
+  let sourceCookieRows: SourceCookieRow[]
 
   beforeAll(async () => {
-    ;({ fixture, sourceShape } = await runFixture())
+    ;({ fixture, sourceCookieRows } = await runFixture())
   }, 120_000)
 
   it('runs the real Chromium import against the complete synthetic matrix', () => {
     expect(fixture.step).toBe('import finished')
     expect(fixture.beforeCookieCount).toBe(0)
     expect(fixture.importResult.ok).toBe(true)
-    expect(sourceShape).toEqual(
+    expect(sourceCookieRows).toEqual(
       [REJECTION_CONTROL, ...VALID_COMBINATIONS, NULL_CASE].map(
         ({ name, rawSameSite, secure }) => ({
           name,

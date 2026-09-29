@@ -1,5 +1,350 @@
 # CI efficiency and runner capacity
 
+The [September 28 demand rollout](ci-demand-rollout.md) documents staged checks,
+unit-selection evidence, Bun qualification, review cancellation and daily occupancy reports.
+
+## September 27 follow-up
+
+### Shared E2E CLI output
+
+E2E consumers previously compiled the CLI individually even though they downloaded
+shared Electron, web, and relay output. The producer now compiles the CLI once,
+in parallel with web projection after Electron has finished clearing `out/main`.
+Consumers repair executable permissions and install their own dev launcher with
+the same preparation script used by local CLI builds. Older refs without that
+script retain their original per-consumer compilation.
+
+An [eight-sample comparison](https://github.com/stablyai/orca/actions/runs/36307081200)
+measured producer time increasing from 26.3–27.9s to 38.8–41.0s, while consumer
+CLI compilation fell from 20.9–21.2s to 0.06–0.07s of direct preparation. All 5,519
+output files matched byte-for-byte, and every sample passed the CLI help smoke.
+A four-sample
+[final implementation comparison](https://github.com/stablyai/orca/actions/runs/36307382635)
+also passed parity and CLI smoke checks. Consumer compilation took 4.7 / 12.8s
+versus 0.08 / 0.06s of preparation; producer time increased by 0.2 / 7.1s in
+the paired trials. Across both runs this models roughly 1.1–4.7 aggregate runner
+minutes saved across 14 consumers, before artifact transfer overhead. Runner
+variation is substantial; this is not a measured workflow wall-time reduction.
+Test coverage and deadlines stay intact.
+
+
+[PR #23368](https://github.com/stablyai/orca/pull/23368) overlaps shell installation
+with dependency setup, starts localization extraction before the orcad smoke,
+and prepares mobile route snapshots while WebKit and the bundle are being built.
+Its 27 checks passed without retries; seven existing conditional checks skipped.
+
+Same-runner comparisons in both orders measured:
+
+| Work | Before | After | Evidence |
+| --- | --- | --- | --- |
+| Static block | 63.5 / 74.7s | 38.9 / 55.6s | [Full comparisons](https://github.com/stablyai/orca/actions/runs/36302208990) |
+| Shell job, downloads warmed equally | 76.8 / 70.3s | 64.4 / 64.0s | [Controlled shell runs](https://github.com/stablyai/orca/actions/runs/36302612626) |
+| Mobile preparation | 19.8–21.6s | 18.0–18.5s | [Eight measurements](https://github.com/stablyai/orca/actions/runs/36302877583) |
+| Web projection and mobile build | 17.2–17.3s | 11.7–12.1s | [Eight measurements](https://github.com/stablyai/orca/actions/runs/36302974324) |
+| Mobile verifier fixture suite | 25.47 / 25.35s | 20.04 / 19.92s | [Four full-suite runs](https://github.com/stablyai/orca/actions/runs/36302692823) |
+| E2E build outputs | 28.6–30.4s | 25.8–27.8s | [Eight measurements](https://github.com/stablyai/orca/actions/runs/36304001325) |
+
+Full mobile-job timings were dominated by first-run apt installation and browser
+test variation; the controlled preparation measurement is the scheduling evidence.
+All 1,248 web/mobile output files matched byte-for-byte in the build comparison.
+The fixture suite kept all 47 tests, isolated mutable copies, and the verifier's
+two fresh builds. No deadline, isolation, or worker-count changes were needed.
+
+E2E builds reuse the existing isolated main/preload/renderer build wrapper, now
+forwarding `--mode e2e` to each target. All 2,640 output files matched byte-for-byte
+in both execution orders, including the exposed test store and relay artifacts.
+This saves a few build seconds; it does not speed up the E2E tests themselves.
+
+The existing unit assignment was already balanced at about 919 historical
+worker-seconds per shard; fresh x86 elapsed times still ranged from 254 to 433s.
+Refreshing weights alone would encode runner variation rather than resolve it.
+An [identical-source architecture pilot](https://github.com/stablyai/orca/actions/runs/36302250920)
+ran shards 1 and 8 on both four-CPU hosted runners. Complete jobs improved from
+449 to 404s and 461 to 384s on ARM, including setup; test and skip counts matched.
+A [full ARM run](https://github.com/stablyai/orca/actions/runs/36302906752) then passed
+all eight shards in 329–373 test seconds (365–412 job seconds). Uploaded reports
+matched the same complete x86 assignment: 9,876 files, each exactly once, no
+unhandled errors. These are elapsed samples excluding queue time, not a guarantee
+that every ARM allocation is faster than every x86 allocation.
+
+PR unit shards and their cache primer now use ARM; a main-branch warmer seeds
+that architecture's existing native and pnpm cache keys. Native, package, and
+relay gates continue on x86. The daily workflow retains complete x86 coverage on
+both Node 24 and Node 26, including relay integration. Thus PR unit architecture
+changes, while x86 unit coverage remains scheduled; this is an explicit coverage
+placement tradeoff rather than a claim of identical per-PR host coverage.
+
+PR validation exposed a WebRTC probe timeout inside a hidden renderer. Isolated
+and four-concurrent probes passed on both architectures; the original cause is
+unproven. The probe now uses Electron main for the same three-second observation
+interval. A [fault-injection comparison](https://github.com/stablyai/orca/actions/runs/36304349257)
+passed with renderer timers unavailable on both architectures, while the original
+probe failed the negative control. Packet assertions and deadlines are unchanged.
+A subsequent Windows run timed out in the installer's real CIM process query
+after verifying restricted policy. Its unchanged probe now runs before the
+concurrent native suite, removing that source of contention without relaxing
+the twenty-second process deadline or dropping either PowerShell architecture.
+
+Replacing Vitest deep comparisons with Node assertions in the status-store
+oracle saved only about one local second in an initial trial. The change was
+not retained: that evidence did not justify changing assertion semantics.
+
+The combined root/mobile pnpm cache is now present on main and was restored in
+the September 27 static comparison, so another warmer for that key is unnecessary.
+
+A [fixture-warmer overlap trial](https://github.com/stablyai/orca/actions/runs/36303613587)
+ran faster after initialization but exposed a first-use action-download race:
+both background composites downloaded `actions/cache@v5` simultaneously, and
+one briefly could not find `restore/action.yml`. The existing cache fallback
+rebuilt the image and the job passed, but that recovery erased the speedup.
+Keep the dedicated warmer serial. PR package restores remain safe from this
+observed first-use race because their earlier top-level cache action is loaded
+before the composites start; the workflow contract now preserves that ordering.
+
+## Four follow-up changes
+
+- Keep the readiness event, but reuse required checks only after an Actions API
+  lookup proves that the same PR head, tested merge commit, and workflow commit
+  already completed successfully. A changed base, missing proof, failed lookup,
+  or still-running check falls back to the full checks. Advisory tests retain
+  their normal readiness routing. The mobile and line-count workflows have no
+  draft-dependent work, so they no longer run again when a draft becomes ready.
+- Route the Bun matrix using the actual headless build and selected tests'
+  transitive imports, with conservative inclusion for dynamic workers, native
+  inputs, fixtures, and toolchain changes. A graph failure runs the full matrix;
+  manual dispatch still runs all ten platform jobs. The shared test selectors
+  retain the same 85 files. Unrelated shard timings and mobile-test tooling can
+  skip the matrix; shared shortcut definitions remain real runtime dependencies
+  and still run it. Building the graph does not execute the imported modules.
+- Restore pnpm stores on PRs using setup-node's existing key and store path,
+  without publishing more PR-private copies. Non-PR setup-node caching and
+  native/TypeScript caches keep their existing behavior. A missing main store
+  still installs with the frozen lockfile. The mixed root/mobile store may miss
+  repeatedly because the existing main warmer only seeds the root lockfile.
+- Batch only the PowerShell quota-fixture reservations within each test, using
+  the original generated scripts in fresh local scopes. Commands under test
+  retain separate processes, real file identities, and existing race assertions.
+  A traced local run confirms 44 PowerShell starts become 24, with all 21 cases
+  passing. Alternating after/before/after elapsed times were 50.00/59.28/37.00
+  seconds on a shared macOS arm64 host; that variance does not justify a precise
+  percentage or hosted runner-time claim. Test budgets and worker counts are
+  unchanged.
+
+The reproducible pnpm-store comparison is
+`ORCA_BACKGROUND_LAUNCH=1 node config/scripts/ci-pnpm-store-benchmark.mjs --samples=3`.
+On macOS arm64 with BSD tar, three alternating fresh-store pairs eliminated a
+median 332,746,995-byte archive per miss. Median install time was 17.33 seconds
+before and 16.94 after; the removed archive step alone took 53.51 seconds.
+Those local disk/CPU measurements exclude uploads and are not a prediction of
+Linux or Windows hosted savings. Restore cost is common to both policies.
+
+## September 26 verification
+
+[PR #23053](https://github.com/stablyai/orca/pull/23053) was merged before its
+latest full run finished. That run,
+[36221874572](https://github.com/stablyai/orca/actions/runs/36221874572), ultimately
+failed the mobile pending-frame precondition, just as the previous run had.
+All eight unit shards passed, but the aggregate did not. An unchanged assertion
+was not enough evidence to label the failure an unrelated flake.
+
+Main subsequently received the deterministic frame hold in PR #22635. The real
+terminal refit now queues a frame that the recorder holds until disposal has
+finished, then releases surviving work against a remounted terminal. This
+follow-up adds a negative control: cancellation is disabled only during disposal,
+and the same recorder must report a document-owned callback after disposal.
+The normal case retains its pending-work and zero-leak assertions. Both cases
+passed five fresh headless Chromium runs locally; the complete terminal-render
+file passed all 13 tests. Browser dependencies were required, so these were real
+render checks rather than skipped bundles.
+
+Unit model tests now import Monaco's editor API directly, preserving real models
+and undo stacks without loading every language contribution. The registry bridge
+requires only the editor and URI interfaces it actually uses. The full application
+still imports its existing Monaco entry point; no production runtime behavior,
+assertions, worker counts, timeouts or isolation settings changed.
+A controlled local comparison (macOS arm64, Node 26.6.0, Vitest 4.1.11,
+`--maxWorkers=1` only for this comparison) kept six files and all 32 tests.
+Three warm original samples took 14.53/12.84/11.62 seconds; three editor-API
+samples took 12.95/9.81/7.99 seconds, alternating back to the original imports
+between measurements. Median elapsed time fell 12.84 to 9.81 seconds (23.6%);
+median import time fell 10.73 to 7.94 seconds (26.0%). The initial cold original
+sample, 20.29 seconds, is excluded. Shared-host variance remains; this is a
+focused measurement, not a claim of a 23.6% improvement to the full unit suite.
+
+The default-branch warmer
+[36221917346](https://github.com/stablyai/orca/actions/runs/36221917346) successfully
+published native modules and TypeScript state. Fresh PRs
+[#23101](https://github.com/stablyai/orca/pull/23101) and
+[#23104](https://github.com/stablyai/orca/pull/23104) restored both on their first
+runs. Scope inventories showed neither PR had a private copy; the TypeScript
+key existed only on main. Native restore took 0.45/0.54 seconds; TypeScript restore
+took 0.38/1.31 seconds, with compiler steps of 8/39 seconds versus the warmer's
+80-second cold compiler step. PR #23104 used the prefix fallback after its base
+advanced, confirming reuse across commits as well as PRs.
+
+The same warmer saved a 22.5 MB Git cache, but the exact key disappeared before
+it was reused. Quota eviction is plausible, not proven: the usage API reported
+17.48 GiB while a separate live 100-entry sample contained 15.15 GiB of pnpm
+stores alone. These rapidly changing inventories are not atomic. The root-only
+warmer does not seed the root-plus-mobile download-store key used by static
+analysis, so both fresh PRs saved another roughly 350 MiB store. Controlling that
+cache duplication is a remaining opportunity; hourly warming alone cannot
+promise retention. Git's checksum-verified cold-build fallback remains required.
+
+The unit scheduling baseline now comes from all eight successful Node 24 shards in
+[run 36294142683](https://github.com/stablyai/orca/actions/runs/36294142683).
+All 9,847 measurements match current discovery exactly once; the previous baseline
+had 165 unmeasured files and one deleted path. Applying the same measurements to
+both assignments reduces the largest projected load from 1,043.811 to 919.695
+worker-seconds (11.9%). This is a scheduling projection, not an elapsed-time claim;
+runner variation remains visible in the source run. See
+[provenance and reproduction](../../config/scripts/ci-shard-timings.md).
+
+## Recording compilation reuse
+
+[Benchmark run 36295773765](https://github.com/stablyai/orca/actions/runs/36295773765)
+compared the complete mobile suite on two hosted runners in opposite orders.
+Compilation reuse reduced elapsed time from 439.002 to 138.308 seconds and from
+560.926 to 200.751 seconds (64–68%). Each run preserved all 9,629 original test
+verdicts and passed four additional cache regression tests. Compiled code is
+bounded to 512 entries; exports, dependencies, and scenario state remain fresh.
+
+Splitting family recordings across four files took 145.165 and 217.226 seconds,
+5–8% slower than compilation reuse alone, so the original suite structure stays.
+All 787 goldens were regenerated from the unchanged pinned product tree; only
+the recorder digest changed, with identical recording bodies and value pools.
+
+Desktop validation in [run 36295671576](https://github.com/stablyai/orca/actions/runs/36295671576)
+passed all eight shards. The longest test step was 419 seconds versus 429 in the
+source run; summed test time was 3,028 versus 3,031 seconds. Runner variation
+prevents attributing that small elapsed-time difference solely to the weights.
+
+## September 25 follow-up
+
+The current queue is a bigger part of PR latency than setup. Successful full PR
+[36212793136](https://github.com/stablyai/orca/actions/runs/36212793136) used
+**74.6 aggregate runner-minutes**, including **55.5** for its eight unit shards.
+Those jobs ran for 315–448 seconds but waited 229–1,076 seconds to start. The
+three-second final `verify` job waited another 264 seconds. These are observed
+job creation-to-start and start-to-completion intervals, not billing figures.
+
+This follow-up keeps the existing tests, isolation, eight unit shards, platform
+coverage, and release behavior:
+
+- Make the reusable unit-test call and final aggregate respect cancellation.
+  Their old `always()` conditions kept superseded work alive despite workflow
+  cancellation. In [36215475069](https://github.com/stablyai/orca/actions/runs/36215475069),
+  a newer push cancelled ordinary jobs while all eight unit shards remained
+  queued and the replacement workflow remained pending. `!cancelled()` still
+  evaluates after failed/skipped dependencies, without resisting cancellation.
+  Two other superseded PR runs reproduced this: at 04:27 UTC on September 26,
+  [36216165253](https://github.com/stablyai/orca/actions/runs/36216165253) and
+  [36215543186](https://github.com/stablyai/orca/actions/runs/36215543186) still held
+  11 runners, with two more obsolete jobs queued. They had consumed another
+  71.3 runner-minutes after replacement pushes. After rechecking current PR heads
+  and replacement runs, both obsolete runs were force-cancelled; their replacements
+  left the blocked pending state.
+- Combine root/README guards with change detection. A real sparse checkout kept
+  all 29,487 index entries while materializing only 12 files (192 KB). This
+  eliminates one runner allocation and checkout per PR. README link checks still
+  see tracked targets outside the working tree and run on docs-only PRs.
+- Use free `ubuntu-slim` containers for small guard/aggregate/API jobs; trial
+  free `ubuntu-24.04-arm` for typechecking, which needs no native runtime.
+  Both share the account's standard concurrency limit. Different labels do
+  **not** grant extra concurrent jobs; hosted timings determine their value.
+- Cancel superseded PR attempts in the Git termination, Pi owner, and Pi provider
+  runtime workflows, retaining independent manual runs.
+- Fetch only complete HEAD ancestry for cloud secret scanning. The old checkout
+  fetched every branch and tag and took 55 seconds in
+  [36214130174](https://github.com/stablyai/orca/actions/runs/36214130174).
+  Real Git fixtures prove both merge parents and deleted historical contents
+  still produce the identical scanned patches.
+- Remove the cloud lockfile from the eight unit shards' download-cache key; the
+  dedicated relay integration job still includes it. Record actual per-file
+  environment, setup, import, and test durations for the existing shard planner.
+  Shard 4 spent 535 worker-seconds importing and 357 executing tests; a uniform
+  per-file import estimate misses that cost. See [timing refresh](../../config/scripts/ci-shard-timings.md).
+- Seed Node 24 native modules, the pinned Git compatibility binary, and TypeScript
+  state on the default branch, hourly
+  and when dependency/toolchain inputs change. One ten-minute-bounded hosted job
+  reuses existing cache keys and skips typechecking an already-cached commit.
+  New PRs can restore default-branch caches, while caches saved by another PR
+  are inaccessible. The audit found 80 entries totaling 10.67 GiB, including
+  9.31 GiB of pnpm stores, but no main-branch Node 24 native or TypeScript state.
+  Seven PRs held separate copies of the same pnpm key (2.36 GB combined).
+  Git preparation now has one shared action with the unchanged cache key,
+  checksum, and build command. In
+  [36212101873](https://github.com/stablyai/orca/actions/runs/36212101873), a new PR
+  spent 40 seconds compiling the same Git 2.25.5 binary; main-branch warming
+  makes that cache available to new PRs too.
+
+The hosted trial also removes repeated work in mobile bundle checks. The
+builder keeps private snapshots of the default real output for read-only checks
+(15 identical builds become two), and haptics checks reuse each route closure
+(32 builds become eight). Determinism, custom inputs, malformed routes, stale
+outputs, and tampered manifests retain independent builds. A mutation regression
+proves Buffer/manifest consumers cannot change another assertion's fixture.
+The grant census reuses parsed references for unchanged file contents, still
+reads source every time, and has a real-file edit invalidation regression.
+The first hosted mobile lane used 400 seconds for its 448 tests; the grant
+census alone took 259 seconds. Locally, the same one-worker invocation of the
+three changed files fell from 243.07 seconds (101 passing tests) to 49.49 seconds
+(103 passing tests). Hosted run
+[36217238462](https://github.com/stablyai/orca/actions/runs/36217238462) retained
+the same 43 files and passed all 450 tests: the original 448 plus two regressions.
+Its test step fell from 400.26 to 205.17 seconds, and the complete job fell from
+498 to 298 seconds (40% less runner time). Builder, haptics, and grant-census file
+times fell from 73.70/88.94/258.58 seconds to 29.24/32.98/22.58 seconds.
+The later default-worker verification retained the same 450-test coverage, but
+its unchanged terminal-render test failed twice on the pre-existing timing
+assertion that a frame must be pending at disposal (`expected 0 to be greater
+than 0`). Its other 449 tests passed; no mobile source or assertion was relaxed.
+
+A four-worker experiment reduced aggregate unit job time from 3,386 to 3,133
+seconds (7.5%), but the repeat run exceeded the palette matcher's existing
+180ms performance budget at 235ms. The override was removed; retain Vitest's
+default worker count, isolation, timeouts, retries, and coverage. The first trial
+also found an outdated hook-order snapshot after main added three layout-persistence
+hooks. That snapshot was refreshed only after comparing the exact old and merged
+hook sequences. Final verification is linked from
+[PR #23053](https://github.com/stablyai/orca/pull/23053). Failed timing reports
+never replace the checked-in baseline.
+
+No account settings, paid services, or runner entitlements changed. Standard
+public-repository runners remain free. GitHub documents plan concurrency limits
+of Free 20, Pro 40, Team 60, Enterprise 500, and permits support requests for
+increases. The organization's actual entitlement was not exposed by the API.
+See [runner specifications](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
+and [concurrency limits](https://docs.github.com/en/actions/reference/limits).
+
+Hosted observations from [PR run 36215718607](https://github.com/stablyai/orca/actions/runs/36215718607):
+
+| Check                                     | Earlier sample |        Trial | Result               |
+| ----------------------------------------- | -------------: | -----------: | -------------------- |
+| Detection plus repository guards          |  54s, two jobs | 26s, one job | Passed               |
+| Typecheck (whole job)                     |       109s x64 |      81s ARM | Passed               |
+| Typecheck command, cold incremental state |        76s x64 |      51s ARM | Passed               |
+| Cloud secret scan (whole job)             |            69s |          55s | Passed               |
+| Cloud checkout/history fetch              |            55s |          40s | Identical scan scope |
+
+The [warmup trial](https://github.com/stablyai/orca/actions/runs/36215718295)
+passed in 54 seconds. Its x64 compiler restored the ARM job's incremental state
+and rechecked the same source in eight seconds. Unit shard 3 subsequently
+restored its pnpm/native cache keys successfully. Actual sharing across different
+PRs requires the producer to land on the default branch; this trial validates
+commands and key compatibility, not a completed default-branch rollout.
+The follow-up warmup built the Git binary in 40 seconds; the PR Git check restored
+that exact key and passed in 62 seconds overall. Its TypeScript refresh took
+seven seconds after restoring earlier incremental state.
+
+These are small observational samples from different revisions, not controlled
+benchmarks. The cold typecheck log confirms an incremental-cache miss. Queue
+changes must be separated from active duration and concurrent account traffic.
+At the time of that trial, checked-in shard weights were unchanged; the September
+26 refresh above now uses the complete successful unit reports.
+
+## September 5 audit
+
 Audit date: September 5, 2026. No paid capacity or provider configuration changed.
 
 ## Measurements and changes

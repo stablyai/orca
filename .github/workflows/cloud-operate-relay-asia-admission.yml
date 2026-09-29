@@ -39,11 +39,11 @@ on:
         required: false
         type: string
       evidence-run-id:
-        description: Successful staging or C27 evidence workflow run ID; required for production promotion
+        description: Staging evidence run ID for C27, C27 canary run ID for C28/C29; C30 takes none and proves itself by its own canary
         required: false
         type: string
       evidence-run-attempt:
-        description: Exact evidence workflow run attempt; required for production promotion
+        description: Exact evidence workflow run attempt; required with an evidence run ID
         required: false
         type: string
       confirmation:
@@ -104,6 +104,8 @@ jobs:
           test -n "${DEPLOY_SERVICE_ACCOUNT}"
           [[ "${IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]
           evidence_kind=none
+          canary_cell=none
+          artifact_name=none
           if test "${OPERATION_MODE}" = inspect; then
             test -z "${EXPECTED_SELECTOR_GENERATION}"
             test -z "${SELECTOR_ATTEMPT_ID}"
@@ -143,28 +145,42 @@ jobs:
             esac
           fi
           if test "${TARGET_ENVIRONMENT}:${OPERATION_MODE}" = production:promote; then
-            [[ "${EVIDENCE_RUN_ID}" =~ ^[1-9][0-9]*$ ]]
-            [[ "${EVIDENCE_RUN_ATTEMPT}" =~ ^[1-9][0-9]*$ ]]
             case "${TARGET_CELL_IDS}" in
               production-gce-c27)
-                test "${#SELECTOR_ATTEMPT_ID}" -le 119
                 evidence_kind=staging
                 artifact_name="relay-asia-staging-${EVIDENCE_RUN_ID}-${EVIDENCE_RUN_ATTEMPT}"
+                canary_cell=production-gce-c27
                 ;;
               production-gce-c28,production-gce-c29)
                 evidence_kind=c27
                 artifact_name="relay-asia-c27-canary-${EVIDENCE_RUN_ID}-${EVIDENCE_RUN_ATTEMPT}"
                 ;;
+              production-gce-c30)
+                # No earlier proof binds C30's generation; its own canary below rolls it back on failure.
+                canary_cell=production-gce-c30
+                ;;
               *) echo "production promotion wave is not reviewed" >&2; exit 1 ;;
             esac
-          else
+          fi
+          if test "${evidence_kind}" = none; then
             test -z "${EVIDENCE_RUN_ID}"
             test -z "${EVIDENCE_RUN_ATTEMPT}"
-            artifact_name=none
+          else
+            [[ "${EVIDENCE_RUN_ID}" =~ ^[1-9][0-9]*$ ]]
+            [[ "${EVIDENCE_RUN_ATTEMPT}" =~ ^[1-9][0-9]*$ ]]
+          fi
+          canary=false
+          if test "${canary_cell}" != none; then
+            canary=true
+            # Leaves room for the rollback attempt's -rollback suffix within 128 characters.
+            test "${#SELECTOR_ATTEMPT_ID}" -le 119
           fi
           {
             echo "evidence_kind=${evidence_kind}"
             echo "artifact_name=${artifact_name}"
+            echo "canary=${canary}"
+            echo "canary_cell=${canary_cell}"
+            echo "canary_hostname=${canary_cell##*-}"
           } >> "${GITHUB_OUTPUT}"
 
       - uses: actions/setup-node@v4
@@ -174,14 +190,14 @@ jobs:
       - uses: pnpm/action-setup@v4
         with:
           package_json_file: cloud/package.json
-        if: ${{ inputs.environment == 'production' && inputs.mode == 'promote' && inputs.cell-ids == 'production-gce-c27' }}
+        if: ${{ steps.inputs.outputs.canary == 'true' }}
 
-      - name: Install exact C27 canary dependencies
-        if: ${{ inputs.environment == 'production' && inputs.mode == 'promote' && inputs.cell-ids == 'production-gce-c27' }}
+      - name: Install exact canary dependencies
+        if: ${{ steps.inputs.outputs.canary == 'true' }}
         run: pnpm install --frozen-lockfile
 
-      - name: Build the C27 canary Relay contract
-        if: ${{ inputs.environment == 'production' && inputs.mode == 'promote' && inputs.cell-ids == 'production-gce-c27' }}
+      - name: Build the canary Relay contract
+        if: ${{ steps.inputs.outputs.canary == 'true' }}
         run: pnpm --filter @orca-cloud/relay-contract build
 
       - name: Download immutable rollout evidence
@@ -249,7 +265,7 @@ jobs:
         with:
           bucket: ${{ inputs.environment == 'production' && 'onorca-cloud-terraform-state' || 'onorca-cloud-staging-terraform-state' }}
           object: ${{ inputs.environment == 'production' && 'terraform/state/cloud-sql-rollout/production.lock' || 'terraform/state/cloud-sql-rollout/staging.lock' }}
-        if: ${{ inputs.mode == 'configure' || (inputs.environment == 'production' && inputs.mode == 'promote' && inputs.cell-ids == 'production-gce-c27') }}
+        if: ${{ inputs.mode == 'configure' || steps.inputs.outputs.canary == 'true' }}
 
       - uses: hashicorp/setup-terraform@v3
         if: ${{ inputs.mode == 'configure' }}
@@ -292,33 +308,45 @@ jobs:
             fi
           } >> "${GITHUB_STEP_SUMMARY}"
 
-      - name: Verify C27 state and start the timed canary
-        id: c27-start
-        if: ${{ inputs.environment == 'production' && inputs.mode == 'promote' && inputs.cell-ids == 'production-gce-c27' }}
+      - name: Verify the canary cell state and start the timed canary
+        id: canary-start
+        if: ${{ steps.inputs.outputs.canary == 'true' }}
         env:
           ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.auth.outputs.id_token }}
+          CANARY_CELL: ${{ steps.inputs.outputs.canary_cell }}
         shell: bash
         run: |
           set -euo pipefail
+          # C30's launch cells were checked general by the promotion; verify reads only C30's digest.
+          case "${CANARY_CELL}" in
+            production-gce-c27)
+              verify_cells=production-gce-c27,production-gce-c28,production-gce-c29
+              expected_states='{"production-gce-c27":"general","production-gce-c28":"migration-only","production-gce-c29":"migration-only"}'
+              ;;
+            production-gce-c30)
+              verify_cells=production-gce-c30
+              expected_states='{"production-gce-c30":"general"}'
+              ;;
+            *) exit 1 ;;
+          esac
           result="$(node dev/scripts/operate-relay-asia-admission.mjs \
             --environment production \
             --mode verify \
-            --cell-ids production-gce-c27,production-gce-c28,production-gce-c29 \
+            --cell-ids "${verify_cells}" \
             --expected-generation "${{ steps.admission-operation.outputs.generation }}" \
             --image-digest "${IMAGE_DIGEST}")"
-          test "$(jq -r '.states["production-gce-c27"]' <<< "${result}")" = general
-          test "$(jq -r '.states["production-gce-c28"]' <<< "${result}")" = migration-only
-          test "$(jq -r '.states["production-gce-c29"]' <<< "${result}")" = migration-only
+          test "$(jq -cS '.states' <<< "${result}")" = "$(jq -cS '.' <<< "${expected_states}")"
+          echo "verify_cells=${verify_cells}" >> "${GITHUB_OUTPUT}"
           echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${GITHUB_OUTPUT}"
 
-      - name: Run a real five-minute C27 control and splice canary
-        id: c27-load
-        if: ${{ inputs.environment == 'production' && inputs.mode == 'promote' && inputs.cell-ids == 'production-gce-c27' }}
+      - name: Run a real five-minute canary control and splice
+        id: canary-load
+        if: ${{ steps.inputs.outputs.canary == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
-          log="${RUNNER_TEMP}/relay-asia-c27-load.jsonl"
-          report="${RUNNER_TEMP}/relay-asia-c27-load.json"
+          log="${RUNNER_TEMP}/relay-asia-canary-load.jsonl"
+          report="${RUNNER_TEMP}/relay-asia-canary-load.json"
           node dev/scripts/load-relay-controls.mjs \
             --director-origin "${DIRECTOR_ORIGIN}" \
             --auth-origin "${AUTH_ORIGIN}" \
@@ -335,31 +363,34 @@ jobs:
           echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${GITHUB_OUTPUT}"
 
       - name: Collect regional, Relay SQL, and Cloud SQL canary evidence
-        if: ${{ inputs.environment == 'production' && inputs.mode == 'promote' && inputs.cell-ids == 'production-gce-c27' }}
+        if: ${{ steps.inputs.outputs.canary == 'true' }}
         env:
           ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.auth.outputs.id_token }}
-          CANARY_STARTED_AT: ${{ steps.c27-start.outputs.started_at }}
+          CANARY_CELL: ${{ steps.inputs.outputs.canary_cell }}
+          CANARY_STARTED_AT: ${{ steps.canary-start.outputs.started_at }}
+          CANARY_VERIFY_CELLS: ${{ steps.canary-start.outputs.verify_cells }}
         shell: bash
         run: |
           set -euo pipefail
           result="$(node dev/scripts/operate-relay-asia-admission.mjs \
             --environment production \
             --mode verify \
-            --cell-ids production-gce-c27,production-gce-c28,production-gce-c29 \
+            --cell-ids "${CANARY_VERIFY_CELLS}" \
             --expected-generation "${{ steps.admission-operation.outputs.generation }}" \
             --image-digest "${IMAGE_DIGEST}")"
-          test "$(jq -r '.states["production-gce-c27"]' <<< "${result}")" = general
-          ended_at="${{ steps.c27-load.outputs.ended_at }}"
+          test "$(jq -r --arg cell "${CANARY_CELL}" '.states[$cell]' <<< "${result}")" = general
+          ended_at="${{ steps.canary-load.outputs.ended_at }}"
           sleep 60
           output="${RUNNER_TEMP}/relay-asia-output-evidence"
-          logs="${RUNNER_TEMP}/relay-asia-c27-runtime-metrics.json"
+          logs="${RUNNER_TEMP}/relay-asia-canary-runtime-metrics.json"
           mkdir -p "${output}"
           gcloud logging read \
             "timestamp>=\"${CANARY_STARTED_AT}\" AND timestamp<=\"${ended_at}\" AND jsonPayload.event=\"orca_relay_runtime_metrics\"" \
             --project "${GCP_PROJECT_ID}" \
             --limit 20000 \
             --format json > "${logs}"
-          node dev/scripts/relay-asia-rollout-evidence.mjs create-c27 \
+          node dev/scripts/relay-asia-rollout-evidence.mjs create-canary \
+            --cell-id "${CANARY_CELL}" \
             --repository "${GITHUB_REPOSITORY}" \
             --run-id "${GITHUB_RUN_ID}" \
             --run-attempt "${GITHUB_RUN_ATTEMPT}" \
@@ -368,18 +399,18 @@ jobs:
             --selector-generation "${{ steps.admission-operation.outputs.generation }}" \
             --started-at "${CANARY_STARTED_AT}" \
             --ended-at "${ended_at}" \
-            --load-report "${RUNNER_TEMP}/relay-asia-c27-load.json" \
+            --load-report "${RUNNER_TEMP}/relay-asia-canary-load.json" \
             --logs-json "${logs}" \
             --output "${output}/evidence.json"
           jq -r '.metrics | to_entries[] | "- \(.key): \(.value)"' \
             "${output}/evidence.json" >> "${GITHUB_STEP_SUMMARY}"
 
-      - name: Upload immutable C27 canary evidence
-        id: c27-evidence-upload
-        if: ${{ inputs.environment == 'production' && inputs.mode == 'promote' && inputs.cell-ids == 'production-gce-c27' }}
+      - name: Upload immutable canary evidence
+        id: canary-evidence-upload
+        if: ${{ steps.inputs.outputs.canary == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: relay-asia-c27-canary-${{ github.run_id }}-${{ github.run_attempt }}
+          name: relay-asia-${{ steps.inputs.outputs.canary_hostname }}-canary-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/relay-asia-output-evidence/evidence.json
           if-no-files-found: error
           retention-days: 7
@@ -393,17 +424,18 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Return an unproven C27 canary to migration-only
-        if: ${{ always() && inputs.environment == 'production' && inputs.mode == 'promote' && inputs.cell-ids == 'production-gce-c27' && steps.admission-operation.outcome != 'skipped' && steps.c27-evidence-upload.outcome != 'success' }}
+      - name: Return an unproven canary cell to migration-only
+        if: ${{ always() && steps.inputs.outputs.canary == 'true' && steps.admission-operation.outcome != 'skipped' && steps.canary-evidence-upload.outcome != 'success' }}
         env:
           ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.auth.outputs.id_token }}
+          CANARY_CELL: ${{ steps.inputs.outputs.canary_cell }}
         shell: bash
         run: |
           set -euo pipefail
           promoted="$(node dev/scripts/operate-relay-asia-admission.mjs \
             --environment production \
             --mode recover-promotion \
-            --cell-ids production-gce-c27 \
+            --cell-ids "${CANARY_CELL}" \
             --expected-generation "${EXPECTED_SELECTOR_GENERATION}" \
             --attempt-id "${SELECTOR_ATTEMPT_ID}" \
             --image-digest "${IMAGE_DIGEST}")"
@@ -412,11 +444,11 @@ jobs:
           result="$(node dev/scripts/operate-relay-asia-admission.mjs \
             --environment production \
             --mode rollback \
-            --cell-ids production-gce-c27 \
+            --cell-ids "${CANARY_CELL}" \
             --expected-generation "${promoted_generation}" \
             --attempt-id "${SELECTOR_ATTEMPT_ID}-rollback" \
             --image-digest "${IMAGE_DIGEST}")"
-          test "$(jq -r '.states["production-gce-c27"]' <<< "${result}")" = migration-only
+          test "$(jq -r --arg cell "${CANARY_CELL}" '.states[$cell]' <<< "${result}")" = migration-only
 
       - name: Require registered migration-only cells before director configuration
         if: ${{ inputs.mode == 'configure' }}

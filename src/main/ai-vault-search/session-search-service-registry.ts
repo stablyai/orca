@@ -5,6 +5,8 @@ import {
   AiVaultSearchStatusSchema
 } from '../../shared/ai-vault-search-contract'
 import { unavailableSessionSearchStatus } from '../../shared/ai-vault-search-client'
+import { sessionSearchScopeCatalog } from './session-search-scope-catalog'
+import { resolveSessionSearchScope } from './session-search-scope-resolution'
 import type { AiVaultSearchResponse, AiVaultSearchStatus } from '../../shared/ai-vault-search-types'
 import {
   redactForTransport,
@@ -24,16 +26,23 @@ export async function searchSessionService(
   transport: SessionSearchTransport,
   freshnessTimeoutMs = 5_000
 ): Promise<AiVaultSearchResponse> {
-  const request = AiVaultSearchRequestSchema.parse(raw)
+  const parsed = AiVaultSearchRequestSchema.parse(raw)
   const current = service
   if (!current) {
     return { kind: 'unavailable', reason: 'no-service' }
   }
+  // The choke point every entry point funnels through, so every host kind
+  // resolves alike; the verdict goes to the service, which answers off and
+  // not-ready first.
+  const { within, ...request } = parsed
+  const hostScope = within
+    ? resolveSessionSearchScope(within, sessionSearchScopeCatalog())
+    : undefined
   const freshness =
     request.freshness === 'wait-until-current'
       ? await reconcileWithin(current, freshnessTimeoutMs)
       : false
-  const result = AiVaultSearchResponseSchema.parse(await current.search(request))
+  const result = AiVaultSearchResponseSchema.parse(await current.search(request, hostScope))
   if (result.kind !== 'results') {
     return result
   }

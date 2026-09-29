@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
 import {
   buildMobileSessionTabSnapshots,
@@ -77,11 +78,24 @@ describe('runtime terminal registration ownership', () => {
   })
 
   it('focuses the requested worktree when tab ids collide', () => {
-    const focusA = vi.fn()
-    const focusB = vi.fn()
+    const textareaA = document.createElement('textarea')
+    const textareaB = document.createElement('textarea')
+    document.body.append(textareaA, textareaB)
+    const focusA = vi.fn(() => textareaA.focus())
+    const focusB = vi.fn(() => textareaB.focus())
     const container = { querySelector: () => null }
-    const paneA = { id: 1, leafId: LEAF_A, container, terminal: { focus: focusA } }
-    const paneB = { id: 1, leafId: LEAF_B, container, terminal: { focus: focusB } }
+    const paneA = {
+      id: 1,
+      leafId: LEAF_A,
+      container,
+      terminal: { focus: focusA, textarea: textareaA }
+    }
+    const paneB = {
+      id: 1,
+      leafId: LEAF_B,
+      container,
+      terminal: { focus: focusB, textarea: textareaB }
+    }
     const managerA = {
       getPanes: () => [paneA],
       getActivePane: () => paneA,
@@ -113,9 +127,12 @@ describe('runtime terminal registration ownership', () => {
     try {
       expect(focusRuntimeTerminalSurface(TAB_ID, null, WORKTREE_B)).toBe(true)
       expect(focusB).toHaveBeenCalledOnce()
+      expect(document.activeElement).toBe(textareaB)
       expect(focusA).not.toHaveBeenCalled()
       expect(focusRuntimeTerminalSurface(TAB_ID)).toBe(false)
     } finally {
+      textareaA.remove()
+      textareaB.remove()
       unregisterB()
       unregisterA()
     }

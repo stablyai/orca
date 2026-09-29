@@ -10,7 +10,9 @@ const JWT = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/
 const EVIDENCE_MAX_AGE_MS = 5 * 60_000
 // Matches the same-cap cell job timeout-minutes; bounds each predecessor wave.
 const WAVE_PREDECESSOR_TIMEOUT_MS = 75 * 60_000
-const WAVE_INDEX = /^[0-3]$/
+// Widest any wave chain declares (same-cap's cell_1..cell_10); each job workflow
+// pins its own narrower range.
+const WAVE_INDEX = /^[0-9]$/
 const EVIDENCE_SAMPLE_INTERVAL_MS = 60_000
 const EVIDENCE_MAX_LINEAGE_MS = 25 * 60_000
 const MIGRATION_POLICIES = new Set([

@@ -1,6 +1,9 @@
 import type { ListAndDetailEffectsModel } from './use-mobile-tasks-list-and-detail-effects'
 import { useEffect } from './mobile-tasks-dependencies'
-import { type GitHubAssignableUser, isSuccess } from './mobile-tasks-legacy-foundation'
+import {
+  githubAssignableUserListRead,
+  githubRepoLabelListRead
+} from './mobile-task-item-detail-operations'
 
 export function useMobileTasksItemDetailMetadataEffects(model: ListAndDetailEffectsModel) {
   const {
@@ -42,20 +45,13 @@ export function useMobileTasksItemDetailMetadataEffects(model: ListAndDetailEffe
       setItemAvailableLabels([])
       setItemLabelsError('')
       setItemLabelsLoading(true)
-      void client
-        .sendRequest(
-          'github.listLabels',
-          { repo: `id:${actionItem.source.repoId}` },
-          { timeoutMs: 30_000 }
-        )
+      void githubRepoLabelListRead
+        .request(client, { repo: `id:${actionItem.source.repoId}` }, { timeoutMs: 30_000 })
         .then((response) => {
           if (stale) {
             return
           }
-          if (!isSuccess(response)) {
-            throw new Error(response.error.message)
-          }
-          setItemAvailableLabels(response.result as string[])
+          setItemAvailableLabels(githubRepoLabelListRead.interpret(response))
         })
         .catch((err) => {
           if (!stale) {
@@ -76,20 +72,13 @@ export function useMobileTasksItemDetailMetadataEffects(model: ListAndDetailEffe
     setItemAssignableUsers([])
     setItemAssignableUsersError('')
     setItemAssignableUsersLoading(true)
-    void client
-      .sendRequest(
-        'github.listAssignableUsers',
-        { repo: `id:${actionItem.source.repoId}` },
-        { timeoutMs: 30_000 }
-      )
+    void githubAssignableUserListRead
+      .request(client, { repo: `id:${actionItem.source.repoId}` }, { timeoutMs: 30_000 })
       .then((response) => {
         if (stale) {
           return
         }
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        setItemAssignableUsers(response.result as GitHubAssignableUser[])
+        setItemAssignableUsers(githubAssignableUserListRead.interpret(response))
       })
       .catch((err) => {
         if (!stale) {

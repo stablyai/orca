@@ -77,7 +77,8 @@ export class SkillUploadSessionService {
       return skillUploadBeginResult(session)
     } finally {
       leaveOperation()
-      await this.removeOwnershipIfDisposed()
+      // Opportunistic cleanup: disposal retries it, so its failure must not replace this outcome.
+      await this.removeOwnershipIfDisposed().catch(() => undefined)
     }
   }
 

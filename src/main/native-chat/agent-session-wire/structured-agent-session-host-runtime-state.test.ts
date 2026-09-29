@@ -130,12 +130,7 @@ describe('host runtime-state owner probe', () => {
       probeOwner,
       onEventSinkError
     } as unknown as StructuredAgentSessionHostDeps
-    const state = new StructuredAgentSessionHostRuntimeState(
-      deps,
-      undefined,
-      undefined,
-      onEventSinkFailure
-    )
+    const state = new StructuredAgentSessionHostRuntimeState(deps, onEventSinkFailure)
 
     await (
       state as unknown as { leaseRenewer: { renewNow: () => Promise<void> } }

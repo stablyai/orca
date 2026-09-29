@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { RelayAssignmentStore } from './assignment-store.js'
 import type { RelayDatabase, RelayLockOptions, SqlRow } from './database.js'
+import { openInMemoryRelayDatabase } from './database.js'
 
 const identity = { userId: 'user-a', relayHostId: 'host000000000001' }
 const activityId = 'splice:connection-1'
@@ -482,5 +483,198 @@ describe('RelayAssignmentStore activity lock order', () => {
       'cell-b',
       'cell-a'
     ])
+  })
+})
+
+const TARGET_ROW_LOCK = 'FOR UPDATE OF cell, admission NOWAIT'
+
+type RecordedStatement = { sql: string; locked: boolean; options?: RelayLockOptions }
+
+// Reports Postgres (or no dialect) so the store emits its real lock clause,
+// and strips that clause before SQLite runs the statement.
+function recordAsPostgres(
+  database: RelayDatabase,
+  statements: RecordedStatement[],
+  dialect: 'postgres' | 'omitted'
+): RelayDatabase {
+  const decorate = (delegate: RelayDatabase): RelayDatabase => ({
+    ...(dialect === 'postgres' ? { dialect } : {}),
+    query: async (sql, params) => {
+      statements.push({ sql, locked: false })
+      return await delegate.query(sql, params)
+    },
+    queryLocked: async (sql, params, options) => {
+      statements.push({ sql, locked: true, options })
+      return await delegate.queryLocked(sql.replace(TARGET_ROW_LOCK, ''), params, options)
+    },
+    transaction: async (operation, options) =>
+      await delegate.transaction(async (transaction) => await operation(decorate(transaction)), options),
+    close: async () => await delegate.close()
+  })
+  return decorate(database)
+}
+
+async function idleRehomeCommitStatements(dialect: 'postgres' | 'omitted' = 'postgres'): Promise<{
+  outcome: string
+  statements: RecordedStatement[]
+}> {
+  const sqlite = await openInMemoryRelayDatabase()
+  const statements: RecordedStatement[] = []
+  let recording = false
+  const recorded = recordAsPostgres(sqlite, statements, dialect)
+  let now = 100_000_000
+  const plain = new RelayAssignmentStore(sqlite, () => now, { regionalRehomeCohortPercent: 100 })
+  const store = new RelayAssignmentStore(
+    {
+      ...recorded,
+      transaction: async (operation, options) =>
+        recording
+          ? await recorded.transaction(operation, options)
+          : await sqlite.transaction(operation, options)
+    },
+    () => now,
+    { regionalRehomeCohortPercent: 100 }
+  )
+  await plain.inspectRegionalRehomeControl()
+  now += 86_400_000
+  await plain.applyRegionalRehomeControl({
+    expectedGeneration: 0,
+    enabled: true,
+    notBefore: now,
+    ratePerMinute: 10,
+    preferenceMaxAgeMs: 86_400_000,
+    hostCooldownMs: 604_800_000,
+    drainGraceMs: 60_000
+  })
+  const cells = [
+    { id: 'source', url: 'https://source.example.test', region: 'asia-east2' as const, capacityRequests: 100 },
+    { id: 'target', url: 'https://target.example.test', region: 'us-central1' as const, capacityRequests: 100 }
+  ]
+  const incarnations = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222']
+  const safety = {
+    observedAt: now,
+    sqlFailures: 0,
+    reconnects: 0,
+    controlActivityRecoveryFailures: 0,
+    databasePoolWaiting: 0,
+    databasePoolWaitersMax: 0,
+    databasePoolWaitMsMax: 0
+  }
+  await plain.reconcileCells(cells)
+  for (const [index, cell] of cells.entries()) {
+    await plain.recordCellHeartbeat({
+      cellId: cell.id,
+      cellUrl: cell.url,
+      region: cell.region,
+      cellIncarnation: incarnations[index]!,
+      startedAt: now - 1_000,
+      ready: true,
+      observedRequests: 0
+    })
+    await plain.recordCellRegionalRehomeStatus({
+      cellId: cell.id,
+      cellIncarnation: incarnations[index]!,
+      regionalRehomeProtocol: 3,
+      safety
+    })
+  }
+  const assignment = await plain.assign(identity, undefined, 'asia-east2')
+  await plain.activateControl(identity, {
+    cellId: 'source',
+    assignmentEpoch: assignment.assignmentEpoch,
+    generation: 7,
+    cellIncarnation: incarnations[0],
+    idleRegionalRehome: true
+  })
+  const issued = await plain.exchangeRegionCorrection(
+    identity,
+    { v: 1, action: 'issue-window' },
+    assignment.assignmentEpoch
+  )
+  await plain.exchangeRegionCorrection(
+    identity,
+    {
+      v: 1,
+      action: 'report',
+      generation: issued.window!.generation,
+      assignmentEpoch: assignment.assignmentEpoch,
+      policyVersion: 1,
+      outcome: 'conclusive',
+      measurements: { 'us-central1': 40, 'asia-east2': 180 }
+    },
+    assignment.assignmentEpoch
+  )
+  const [request] = await plain.selectIdleRegionalRehomeCandidates(safety)
+  expect(request).toMatchObject({ sourceCellId: 'source', targetCellId: 'target' })
+  recording = true
+  const result = await store.commitIdleRegionalRehome(request!, safety)
+  recording = false
+  await sqlite.close()
+  return { outcome: result.outcome, statements }
+}
+
+function lockedTable(statement: RecordedStatement): string {
+  return /\bFROM\s+(\w+)/.exec(statement.sql)?.[1] ?? '?'
+}
+
+// The rehome commit takes the host's assignment row before any cell row, the
+// reverse of placement (cells, then assignment). That is deadlock-free only
+// because its one cell lock never waits.
+describe('RelayAssignmentStore idle rehome commit lock order', () => {
+  it('locks host rows first and the target cell row last, NOWAIT, with no fleet-wide lock', async () => {
+    const { outcome, statements } = await idleRehomeCommitStatements()
+    expect(outcome).toBe('committed')
+    // The commit transaction is everything after the reconcile transaction's
+    // attempt read, which is the first statement touching the control row.
+    const commit = statements.slice(
+      statements.findIndex((statement) => statement.sql.includes('relay_region_rehome_control'))
+    )
+    const locked = commit.filter((statement) => statement.locked)
+
+    expect(locked.map(lockedTable)).toEqual([
+      'relay_region_rehome_control',
+      'relay_region_rehome_worker_state',
+      'relay_assignments',
+      'relay_region_decisions',
+      'relay_assignment_migrations',
+      'relay_assignment_activity_leases',
+      'relay_control_connection_reservations',
+      // insertControlConnectionReservation re-reads the host's rows locked.
+      'relay_control_connection_reservations',
+      'relay_cells'
+    ])
+    // Control and worker rows serialise the budget and hard-cap reads; they
+    // must refuse rather than queue behind another cross-region commit.
+    expect(locked.slice(0, 2).map((statement) => statement.options?.failIfUnavailable)).toEqual([
+      true,
+      true
+    ])
+    const target = locked[locked.length - 1]!
+    expect(commit[commit.length - 1]).toBe(target)
+    expect(target.sql).toContain(TARGET_ROW_LOCK)
+    expect(target.sql).toMatch(/WHERE cell\.cell_id = \?/)
+    expect(target.options).toMatchObject({
+      failIfUnavailable: true,
+      lockClauseInStatement: true,
+      measureHoldMs: true,
+      holdSite: 'rehome-target-row'
+    })
+    expect(
+      commit.filter((statement) =>
+        /FROM relay_cell(s|_runtime|_capabilities|_rehome_safety)\b/.test(statement.sql) &&
+        statement !== target &&
+        (statement.locked || /FOR UPDATE/.test(statement.sql))
+      )
+    ).toEqual([])
+  })
+  // Why: dialect is optional, and a wrapper that omits it must not silently
+  // run the target-row write unlocked and without NOWAIT.
+  it('keeps the target-row lock clause when a wrapper omits the dialect', async () => {
+    const { outcome, statements } = await idleRehomeCommitStatements('omitted')
+    expect(outcome).toBe('committed')
+    const target = statements.filter((statement) => statement.sql.includes('WITH target AS'))
+
+    expect(target).toHaveLength(1)
+    expect(target[0]!.sql).toContain(TARGET_ROW_LOCK)
   })
 })

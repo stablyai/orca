@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState, type SetStateAction } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type SetStateAction
+} from 'react'
 import {
   TOGGLE_FLOATING_TERMINAL_EVENT,
   requestFloatingTerminalOpenMaximized
@@ -111,7 +118,8 @@ export function useFloatingWorkspacePanel() {
     setOpenWithFocus(true)
   }, [setOpenWithFocus])
 
-  useEffect(() => {
+  // Why layout: enable-then-toggle callers dispatch a frame later, which a passive rebind can miss.
+  useLayoutEffect(() => {
     const toggleFloatingTerminal = (): void => {
       if (enabled) {
         setOpenWithFocus((current) => !current)

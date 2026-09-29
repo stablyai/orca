@@ -6,6 +6,7 @@ import { isMarkdownComment } from '@/lib/diff-comment-compat'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
 import { prewarmMarkdownPreviewLocalImages } from './markdown-preview-local-images'
+import type { MarkdownPreviewSearchInstance } from './markdown-preview-search'
 import {
   deriveMarkdownPreviewSourceRoot,
   findMarkdownPreviewSourceOpenFile,
@@ -40,7 +41,7 @@ export function useMarkdownPreviewSourceFoundation({
     input.select()
   }, [])
   const matchesRef = useRef<Range[]>([])
-  const searchInstanceRef = useRef<object>({})
+  const searchInstanceRef = useRef<MarkdownPreviewSearchInstance>({})
   const lastAppliedInitialAnchorRef = useRef<string | null>(null)
   const pendingEditorRevealFrameIdsRef = useRef<number[]>([])
   const [isSearchOpen, setIsSearchOpen] = useState(false)

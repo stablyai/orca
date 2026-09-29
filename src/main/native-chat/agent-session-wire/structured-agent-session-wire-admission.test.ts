@@ -49,7 +49,7 @@ afterEach(async () => {
 })
 
 describe('structured agent-session outbound admission', () => {
-  it('admits bounded initial, handoff, epoch, compaction, and history recovery frames', async () => {
+  it('admits bounded initial, background-task, epoch, compaction, and history recovery frames', async () => {
     expect(Buffer.byteLength(JSON.stringify(journal.snapshot()), 'utf8')).toBeGreaterThan(
       REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
     )
@@ -67,13 +67,7 @@ describe('structured agent-session outbound admission', () => {
     expect(initial[0]).toMatchObject({ type: 'snapshot', page: { hasOlder: true } })
     expectAdmitted(initial[0])
 
-    subscribers.handoff(SESSION, 2, {
-      owner: 'native',
-      direction: 'to-tui',
-      phase: 'switching',
-      stage: 'preparing',
-      operationId: 'handoff-1'
-    })
+    subscribers.backgroundTasks(SESSION, null, 2)
     subscribers.snapshot(SESSION, journal, 2)
     expect(initial.slice(1)).toHaveLength(2)
     initial.slice(1).forEach(expectAdmitted)

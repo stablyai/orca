@@ -22,7 +22,7 @@ describe('Claude compaction transcript content', () => {
       }
     }
     expect(isClaudeCompactionContent(tracker, event)).toBe(false)
-    const completion = tracker.run('orca-session', 'provider', async () => ({}))
+    const completion = tracker.run('orca-session', 'provider', async () => undefined)
     expect(isClaudeCompactionContent(tracker, event)).toBe(true)
     expect(isClaudeCompactionContent(tracker, { ...event, sessionId: 'other' })).toBe(false)
     expect(isClaudeCompactionContent(tracker, { ...event, message: { type: 'result' } })).toBe(
@@ -46,7 +46,7 @@ describe('Claude compaction transcript content', () => {
 
     await vi.advanceTimersByTimeAsync(1)
 
-    await expect(pending).resolves.toEqual({ error: 'provider_write_failed: input closed' })
+    await expect(pending).resolves.toEqual({ outcome: 'failed' })
   })
 
   it('keeps waiting when the command write outcome is ambiguous', async () => {

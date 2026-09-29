@@ -1,3 +1,9 @@
+import type { Terminal } from '@xterm/xterm'
+
+/** The pane's terminal, used only as the queue's identity key — no member is ever read, so a
+ *  bare stand-in is a valid target. */
+type HiddenOutputRestoreTarget = Partial<Terminal>
+
 type HiddenOutputRestorePriority = 'active' | 'inactive'
 
 /** Returns whether the pane actually started a replay; a guard-only return is free. */
@@ -11,7 +17,7 @@ type HiddenOutputRestoreEntry = {
 // on the active pane while still catching watched split panes up quickly.
 const INACTIVE_RESTORE_INTERVAL_MS = 16
 
-const inactiveRestoreQueue = new Map<object, HiddenOutputRestoreEntry>()
+const inactiveRestoreQueue = new Map<HiddenOutputRestoreTarget, HiddenOutputRestoreEntry>()
 let inactiveRestoreTimer: ReturnType<typeof setTimeout> | null = null
 
 function clearInactiveRestoreTimer(): void {
@@ -51,7 +57,7 @@ function drainInactiveRestoreQueue(): void {
 }
 
 export function scheduleHiddenOutputRestore(
-  target: object,
+  target: HiddenOutputRestoreTarget,
   requestRestore: HiddenOutputRestoreRequest,
   priority: HiddenOutputRestorePriority
 ): void {
@@ -64,7 +70,7 @@ export function scheduleHiddenOutputRestore(
   scheduleInactiveRestoreDrain()
 }
 
-export function cancelScheduledHiddenOutputRestore(target: object): void {
+export function cancelScheduledHiddenOutputRestore(target: HiddenOutputRestoreTarget): void {
   inactiveRestoreQueue.delete(target)
   if (inactiveRestoreQueue.size === 0) {
     clearInactiveRestoreTimer()

@@ -62,7 +62,9 @@ vi.mock('fs', () => ({
 // transitive readFile/mkdir would otherwise resolve to undefined.
 vi.mock('node:fs/promises', async () => ({
   ...(await vi.importActual<typeof FsPromises>('node:fs/promises')),
-  rm: rmAsyncMock
+  rm: rmAsyncMock,
+  // The tombstone drain lists pending-delete asynchronously; same fixture as the sync reads.
+  readdir: async (path: string) => readdirSyncMock(path) ?? []
 }))
 
 const { parseWslPathMock, toLinuxPathMock } = vi.hoisted(() => ({

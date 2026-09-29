@@ -76,7 +76,10 @@ function formatAgentNotificationStatusText(args: NotificationDispatchRequest): s
   if (args.agentState === 'working') {
     return translateMain('notifications.agentStatus.working', 'working')
   }
-  return args.agentState === 'done' && args.agentInterrupted
+  if (args.agentState === 'done' && args.agentTurnOutcome === 'failure') {
+    return translateMain('notifications.agentStatus.failed', 'failed')
+  }
+  return args.agentState === 'done' && args.agentTurnOutcome === 'cancellation'
     ? translateMain('notifications.agentStatus.stopped', 'stopped')
     : translateMain('notifications.agentStatus.finished', 'finished')
 }
@@ -87,7 +90,7 @@ function formatNotificationWorktreeContext(args: NotificationDispatchRequest): s
     NOTIFICATION_TITLE_CONTEXT_MAX_LENGTH
   )
   const repoLabel = normalizeNotificationText(args.repoLabel, NOTIFICATION_TITLE_CONTEXT_MAX_LENGTH)
-  if (args.hasMultipleActiveRepos && repoLabel && worktreeLabel) {
+  if (repoLabel && worktreeLabel) {
     return normalizeNotificationText(
       `${repoLabel} / ${worktreeLabel}`,
       NOTIFICATION_TITLE_CONTEXT_MAX_LENGTH
@@ -104,7 +107,7 @@ function hasAgentNotificationSnapshot(args: NotificationDispatchRequest): boolea
     args.agentToolName ||
     args.agentToolInput ||
     args.agentLastAssistantMessage ||
-    args.agentInterrupted
+    args.agentTurnOutcome !== undefined
   )
 }
 

@@ -1,9 +1,11 @@
+import { z } from 'zod'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import type { RpcCompatibleReader } from '../transport/rpc-operation-contract'
-import { rpcUncheckedPayloadReader } from '../transport/rpc-reader-payload'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 
-// Opening a file from the Changes list. Neither reply's payload is read: the tab arrives over the
-// session stream, and the caller only needs to know the host accepted.
+// Opening a file from the Changes list. Neither open reply's payload is read: the tab arrives over
+// the session stream, and the caller only needs to know the host accepted. `z.unknown()` is the
+// honest schema for a payload with no reader, not a holdout.
+const unreadPayload = z.unknown()
 
 export const sourceFileDiffOpenRun = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -11,7 +13,7 @@ export const sourceFileDiffOpenRun = bindDeferredRpcOperation(
     method: 'files.openDiff',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('diff-tab-opened')
+    read: rpcResultVariant('diff-tab-opened', unreadPayload)
   })
 )
 
@@ -22,39 +24,42 @@ export const sourceFileOpenRun = bindDeferredRpcOperation(
     method: 'files.open',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('edit-tab-opened')
+    read: rpcResultVariant('edit-tab-opened', unreadPayload)
   })
 )
 
-export type MobileSessionFileTabCandidate = {
-  readonly id: string
-  readonly type: string
-  readonly mode?: unknown
-  readonly relativePath?: unknown
-  readonly diffSource?: unknown
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
-}
-
-function isSessionFileTabCandidate(value: unknown): value is MobileSessionFileTabCandidate {
-  return isRecord(value) && typeof value.id === 'string' && typeof value.type === 'string'
-}
-
-const sessionFileTabsReader: RpcCompatibleReader<
-  unknown,
-  'session-file-tabs',
-  { tabs: MobileSessionFileTabCandidate[] } | null
-> = (raw) => ({
-  compatible: true,
-  variant: 'session-file-tabs',
-  value:
-    isRecord(raw) && Array.isArray(raw.tabs) && raw.tabs.every(isSessionFileTabCandidate)
-      ? { tabs: raw.tabs }
-      : null,
-  salvage: { droppedPaths: [], droppedCount: 0 }
+/**
+ * One candidate tab from `session.tabs.list`.
+ *
+ * `id` and `type` are required because the reveal filters on `tab.type` and returns the candidate
+ * by identity (reveal-mobile-source-control-session-diff.ts:70). `mode`, `relativePath` and
+ * `diffSource` stay `unknown`: :72-81 compares each to a literal or to null, so a host that sends
+ * a shape mobile does not recognise must simply not match, never fail the list.
+ */
+const sessionFileTabSchema = z.looseObject({
+  id: z.string(),
+  type: z.string(),
+  mode: z.unknown().optional(),
+  relativePath: z.unknown().optional(),
+  diffSource: z.unknown().optional()
 })
+
+export type MobileSessionFileTabCandidate = z.output<typeof sessionFileTabSchema>
+
+/**
+ * The reveal polls this list, so an unreadable reply must read as "not yet", not as a failure:
+ * :64 treats a null value exactly like a refusal and polls again. `.catch(null)` keeps that,
+ * and it is also what main did — one bad tab in the array made the whole list null.
+ */
+const sessionFileTabListSchema: z.ZodType<
+  { tabs: MobileSessionFileTabCandidate[] } | null,
+  unknown
+> = z
+  .object({ tabs: z.array(sessionFileTabSchema) })
+
+  .transform((value) => ({ tabs: value.tabs }))
+  .nullable()
+  .catch(null)
 
 /** A refused list means poll again, so refusal is a skip rather than the end of the reveal. */
 export const sessionFileTabListRead = bindDeferredRpcOperation(
@@ -63,6 +68,6 @@ export const sessionFileTabListRead = bindDeferredRpcOperation(
     method: 'session.tabs.list',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: sessionFileTabsReader
+    read: rpcResultVariant('session-file-tabs', sessionFileTabListSchema)
   })
 )

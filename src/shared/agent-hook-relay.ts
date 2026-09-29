@@ -37,10 +37,13 @@ import type { AgentHookTarget } from './agent-hook-types'
 const AGENT_HOOK_SOURCES = [
   'claude',
   'codex',
+  'qoder',
+  'codebuddy',
   'gemini',
   'antigravity',
   'amp',
   'opencode',
+  'opencode2',
   'mimo-code',
   'cursor',
   'pi',
@@ -52,7 +55,10 @@ const AGENT_HOOK_SOURCES = [
   'copilot',
   'hermes',
   'devin',
-  'kimi'
+  'kimi',
+  'muse',
+  'zcode',
+  'dsh'
 ] as const
 
 export type AgentHookSource = (typeof AGENT_HOOK_SOURCES)[number]

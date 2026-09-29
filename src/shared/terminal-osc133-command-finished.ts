@@ -8,6 +8,8 @@
  * terminators, best-effort exit codes) must be identical in both.
  */
 
+import { ownRetainedString } from './own-retained-string'
+
 type OscTerminator = {
   index: number
   length: number
@@ -57,15 +59,19 @@ export type Osc133CommandFinishedScanner = {
 
 export function createOsc133CommandFinishedScanner(
   onCommandFinished: (bestEffortExitCode: number | null) => void,
-  /** OSC 133;C — the shell exec'd a command; the pane's foreground changed. */
-  onCommandStarted?: () => void
+  /**
+   * OSC 133;C — the shell exec'd a command; the pane's foreground changed.
+   * `endInChunk` is the index in the scanned chunk just past the sequence, where the command's own
+   * output begins.
+   */
+  onCommandStarted?: (endInChunk: number) => void
 ): Osc133CommandFinishedScanner {
   let carry = ''
 
-  const handleOsc133 = (payload: string): void => {
+  const handleOsc133 = (payload: string, endInChunk: number): void => {
     const [sequence, exitCode] = payload.split(';')
     if (sequence === 'C') {
-      onCommandStarted?.()
+      onCommandStarted?.(endInChunk)
       return
     }
     if (sequence === 'D') {
@@ -75,6 +81,8 @@ export function createOsc133CommandFinishedScanner(
 
   const scan = (data: string): void => {
     let combined = carry + data
+    // `combined` starts at this index in `data`; negative while it still holds the carry.
+    let combinedStartInChunk = -carry.length
     carry = ''
 
     while (combined.length > 0) {
@@ -91,11 +99,17 @@ export function createOsc133CommandFinishedScanner(
         if (carry.length > MAX_OSC_CARRY_LENGTH) {
           carry = carry.slice(carry.length - MAX_OSC_CARRY_LENGTH)
         }
+        carry = ownRetainedString(carry)
         return
       }
 
-      handleOsc133(combined.slice(payloadStart, terminator.index))
-      combined = combined.slice(terminator.index + terminator.length)
+      const sequenceEnd = terminator.index + terminator.length
+      handleOsc133(
+        combined.slice(payloadStart, terminator.index),
+        combinedStartInChunk + sequenceEnd
+      )
+      combined = combined.slice(sequenceEnd)
+      combinedStartInChunk += sequenceEnd
     }
   }
 

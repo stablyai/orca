@@ -2,6 +2,7 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { RuntimeStatusSlice } from './runtime-status-types'
 export type { RuntimeEnvironmentStatus, RuntimeStatusSlice } from './runtime-status-types'
+import { lastVerifiedRuntimeStatus } from '../../../../shared/runtime-host-status'
 import { runtimeEnvironmentStatusesEqual } from './runtime-environment-status-equality'
 import {
   clearRecentRuntimeCompatibilityFailure,
@@ -171,7 +172,7 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
     if (previous?.snapshot && !status.snapshot) {
       return
     }
-    const previousVerifiedStatus = previous?.snapshot?.status ?? previous?.status
+    const previousVerifiedStatus = lastVerifiedRuntimeStatus(previous)
     const pairedDeviceId = status.status?.pairedDeviceId?.trim()
     // A new runtime id under a known previous one is a restart, not a first connect: the guests are
     // still ours to host, but only a fresh attach hands them back to the replacement runtime.
@@ -199,7 +200,7 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
       // already issued against this very connection — a startup worktree scan that had
       // already answered was discarded, leaving those repos absent until an unrelated
       // refresh (#19241).
-      const connectionChanged = runtimeSessionStarted && previous !== undefined
+      const connectionChanged = previous !== undefined && runtimeSessionStarted
       const activeEnvironmentId = s.settings?.activeRuntimeEnvironmentId?.trim()
       const connectionGeneration = connectionChanged
         ? runtimeStatusConnectionGeneration.advanceRuntimeEnvironmentConnectionGeneration(
@@ -210,12 +211,20 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
           runtimeStatusConnectionGeneration.getRuntimeEnvironmentConnectionGeneration(
             environmentId
           ))
+      // A same-runtime return is not a new connection, so it must not move the generation the
+      // mirror is keyed on. It still needs its own "the host is back" edge: the streams died with
+      // the transport, an 'end' frame resubscribes nothing, and the parking layer retries only a
+      // rejected subscribe. This counter is that edge, read only as a subscription-effect dep.
+      const reconnectedAfterLostContact = status.status !== null && previous?.status === null
+      const hostContactEpoch =
+        (previous?.hostContactEpoch ?? status.hostContactEpoch ?? 0) +
+        (reconnectedAfterLostContact ? 1 : 0)
       // Why the session flag and not `connectionChanged`: integration-readiness caches key
       // off the runtime session, for which a first publication is a real transition.
       if (activeEnvironmentId === environmentId && (sessionEnded || runtimeSessionStarted)) {
         bumpProviderRuntimeSessionGeneration()
       }
-      const nextEntry = { ...status, connectionGeneration }
+      const nextEntry = { ...status, connectionGeneration, hostContactEpoch }
       const currentEntry = s.runtimeStatusByEnvironmentId.get(environmentId)
       // Why: an unchanged re-probe must not invalidate every Map subscriber. Real
       // transitions change `status` or advance `connectionGeneration`, so they still write.
@@ -289,24 +298,25 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
   },
 
   refreshRuntimeEnvironmentStatus: (environmentId, timeoutMs = 10_000) =>
-    refreshRuntimeEnvironmentStatus(environmentId, timeoutMs, (entry) => {
-      if (entry.snapshot) {
-        get().applyRuntimeHostStatusSnapshot(entry.snapshot)
-        return
-      }
-      // Why: setRuntimeEnvironmentStatus drops any stale compat failure on a non-null
-      // (reachable) status, so a recovered host's reuse-flagged refetches re-probe.
-      get().setRuntimeEnvironmentStatus(environmentId, entry)
-      if (entry.status) {
-        // Why here: hydration can ask before the environment is reachable, and a restored
-        // client-hosted page only comes back once this desktop attaches as its host.
-        void ensureBrowserClientHostsForRestoredPages(get())
-        // Why alongside: the same restart that hands those rows back also restores rows the user
-        // already closed while this environment was down, so the closes it never heard have to be
-        // replayed before its persisted records can put them on screen again.
-        void replayClientHostedBrowserCloseIntents(environmentId, get())
-      }
-    }),
+    refreshRuntimeEnvironmentStatus(
+      environmentId,
+      timeoutMs,
+      (entry) => {
+        // Why: setRuntimeEnvironmentStatus drops any stale compat failure on a non-null
+        // (reachable) status, so a recovered host's reuse-flagged refetches re-probe.
+        get().setRuntimeEnvironmentStatus(environmentId, entry)
+        if (entry.status) {
+          // Why here: hydration can ask before the environment is reachable, and a restored
+          // client-hosted page only comes back once this desktop attaches as its host.
+          void ensureBrowserClientHostsForRestoredPages(get())
+          // Why alongside: the same restart that hands those rows back also restores rows the user
+          // already closed while this environment was down, so the closes it never heard have to be
+          // replayed before its persisted records can put them on screen again.
+          void replayClientHostedBrowserCloseIntents(environmentId, get())
+        }
+      },
+      (snapshot) => get().applyRuntimeHostStatusSnapshot(snapshot)
+    ),
 
   hydrateRuntimeEnvironmentStatuses: createRuntimeStatusHydration({
     listEnvironments: () => window.api.runtimeEnvironments.list(),

@@ -40,7 +40,7 @@ export function useSidebarRevealRequests(args: {
   worktrees: readonly Worktree[]
   folderWorkspaces: readonly FolderWorkspace[]
   hasFilters: boolean
-  clearFilters: () => void
+  revealWorkspaceFilters: (worktree: Worktree) => void
 }): void {
   const {
     groupBy,
@@ -53,7 +53,7 @@ export function useSidebarRevealRequests(args: {
     worktrees,
     folderWorkspaces,
     hasFilters,
-    clearFilters
+    revealWorkspaceFilters
   } = args
   const setGroupBy = useAppStore((s) => s.setGroupBy)
   const pendingRevealSidebarRow = useAppStore((s) => s.pendingRevealSidebarRow)
@@ -80,15 +80,28 @@ export function useSidebarRevealRequests(args: {
       return
     }
     if (!renderedSidebarRowKeys.has(rowKey) && hasFilters) {
-      clearFilters()
+      const target = getKnownSidebarWorktreeById(
+        rowKey,
+        worktreeMap,
+        folderWorkspaces,
+        worktrees,
+        currentSidebarExecutionHostId
+      )
+      if (target) {
+        revealWorkspaceFilters(target)
+      }
     }
   }, [
-    clearFilters,
     groupBy,
     hasFilters,
+    currentSidebarExecutionHostId,
+    folderWorkspaces,
     pendingRevealSidebarRow,
     renderedSidebarRowKeys,
-    setGroupBy
+    setGroupBy,
+    worktreeMap,
+    worktrees,
+    revealWorkspaceFilters
   ])
 
   const handleRevealCurrentWorkspaceRequest = useCallback(
@@ -139,9 +152,9 @@ export function useSidebarRevealRequests(args: {
             title: translate('sidebar.revealFiltered.title', 'Reveal hidden workspace?'),
             description: translate(
               'sidebar.revealFiltered.description',
-              'The active workspace is hidden in the sidebar. Revealing it will clear your sidebar filters.'
+              'The active workspace is hidden in the sidebar. Revealing it will adjust only the filters hiding it.'
             ),
-            confirmLabel: translate('sidebar.revealFiltered.confirm', 'Clear filters and reveal'),
+            confirmLabel: translate('sidebar.revealFiltered.confirm', 'Adjust filters and reveal'),
             cancelLabel: translate('sidebar.revealFiltered.cancel', 'Keep filters')
           })
         } finally {
@@ -164,7 +177,7 @@ export function useSidebarRevealRequests(args: {
             latest.visibleFolderWorkspaces
           )
         ) {
-          latest.clearFilters()
+          revealWorkspaceFilters(activeWorktree)
         }
       }
       revealWorktreeInSidebar(currentSidebarWorktreeId, {
@@ -185,7 +198,8 @@ export function useSidebarRevealRequests(args: {
       visibleFolderWorkspaces,
       revealWorktreeInSidebar,
       worktreeMap,
-      worktrees
+      worktrees,
+      revealWorkspaceFilters
     ]
   )
 

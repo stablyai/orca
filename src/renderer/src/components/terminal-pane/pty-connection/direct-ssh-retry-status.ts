@@ -6,16 +6,11 @@ import {
   hasCachedWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
 import { requestTerminalWritePipelineProbe } from '@/lib/pane-manager/terminal-write-pipeline-health'
-import {
-  RESET_KITTY_KEYBOARD_PROTOCOL,
-  RESET_TERMINAL_CURSOR_STYLE
-} from '../../../../../shared/terminal-mode-reset-profiles'
 import { subscribeToTerminalUserInput } from '../terminal-user-input-signal'
 import {
   isLocalNativeWindowsConpty,
   resolveWindowsShellOverride
 } from '@/lib/pane-manager/windows-pty-compatibility'
-import { shouldSuppressCodexAutoApprovalStatus } from '../codex-auto-approval-notification-suppression'
 import { createCommandCodeOutputStatusDetector } from '../../../../../shared/command-code-output-status'
 import { readInFlightCommandCodeTurn } from '../parked-terminal-command-status'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
@@ -87,11 +82,6 @@ export function installDirectSshRetryStatus(session: ConnectPanePtySession): voi
     ),
     executionHostId: session.executionHostId
   })
-  if (session.isNativeWindowsConpty) {
-    // Why: Windows ConPTY agent turns can leave renderer keyboard modes armed
-    // after completion, corrupting plain input with encoded bytes.
-    session.idleAgentTerminalModeReset = `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`
-  }
   session.shouldApplyNativeWindowsRewriteRefresh = session.isNativeWindowsConpty
   session.shouldApplyWindowsRendererUnicodeRefresh = CLIENT_PLATFORM === 'win32'
   session.shouldProtectNativeWindowsSynchronizedOutput = session.isNativeWindowsConpty
@@ -153,15 +143,6 @@ export function installDirectSshRetryStatus(session: ConnectPanePtySession): voi
       ? registerRendererOwnedAgentStatusPane(session.cacheKey, session.runtimeEnvironmentId)
       : null
   session.handleRendererOwnedAgentStatus = (payload): void => {
-    if (
-      shouldSuppressCodexAutoApprovalStatus(payload, {
-        paneKey: session.cacheKey,
-        tabId: session.deps.tabId,
-        ...(session.launchToken ? { launchToken: session.launchToken } : {})
-      })
-    ) {
-      return
-    }
     const currentState = useAppStore.getState()
     const routing = session.resolveCurrentAgentStatusRouting()
     if (!routing) {
@@ -276,6 +257,10 @@ export function installDirectSshRetryStatus(session: ConnectPanePtySession): voi
   }
   session.markInteractiveRedrawInput = (): void => {
     session.lastInteractiveRedrawInputAt = performance.now()
+    if (session.synchronizedForegroundOutputActive) {
+      session.synchronizedForegroundFrameInteractive = true
+      session.synchronizedForegroundInteractivePresentPending = true
+    }
     // Why: input must probe a wedged xterm even when the PTY produces no renderer output.
     requestTerminalWritePipelineProbe(session.pane.terminal)
   }

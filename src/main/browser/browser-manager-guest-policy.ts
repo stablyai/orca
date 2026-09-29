@@ -26,7 +26,7 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     if (inheritedOwnerContext) {
       this.popupOwnerContextByGuestId.set(guest.id, inheritedOwnerContext)
     }
-    const disposeAuthDetachTracking = this.trackDebuggerDetachForAuthUserAgent(guest)
+    const disposeDetachTracking = this.trackDebuggerDetachForUserAgentOverride(guest)
     // Why: disable throttling so background screenshots still get frames; else the compositor stalls and capture returns empty.
     guest.setBackgroundThrottling(false)
     const disposePopupPolicy = this.installGuestPopupPolicy(guest, !inheritedOwnerContext)
@@ -34,7 +34,7 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
 
     // Why: store cleanup so unregisterGuest can drop these listeners on teardown and let the WebContents wrapper GC.
     this.policyCleanupByGuestId.set(guest.id, () => {
-      disposeAuthDetachTracking()
+      disposeDetachTracking()
       disposePopupPolicy()
       disposeNavigationPolicy()
     })

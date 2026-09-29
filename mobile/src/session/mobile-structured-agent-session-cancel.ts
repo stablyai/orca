@@ -61,7 +61,10 @@ export async function requestMobileStructuredAgentSessionCancel(args: {
       fields,
       clientOperationId
     })
-  if (result.status !== 'unknown') {
+  // Cancel's plan recovers no unknown ledger row, so an id the host answered that
+  // way earns the same refusal until it expires; keeping it leaves Stop unusable.
+  // Transport doubt proves nothing about delivery, so it stays a replay.
+  if (result.status !== 'unknown' || result.hostReportedOperationUnknown === true) {
     operationIds.delete(key)
   }
   if (result.status === 'accepted') {
@@ -72,7 +75,7 @@ export async function requestMobileStructuredAgentSessionCancel(args: {
   } else if (result.status === 'refused') {
     onSendError(result.message)
   } else if (result.status === 'failed') {
-    onSendError(result.message === 'Request not sent' ? 'Stop not sent' : result.message)
+    onSendError(result.message)
   }
   return false
 }

@@ -118,6 +118,8 @@ export class LocalPtyProvider implements IPtyProvider {
   clearBuffer(id: string): Promise<void> {
     return clearLocalPtyBuffer(id)
   }
+  // A direct PTY keeps no terminal model of its own.
+  async resetInputModes(_id: string): Promise<void> {}
   closeStartupQueryAuthority(id: string): number {
     return closeLocalPtyStartupQueryAuthority(id)
   }
@@ -130,11 +132,20 @@ export class LocalPtyProvider implements IPtyProvider {
   }
 
   async inspectProcess(id: string): Promise<PtyProcessInspection> {
+    const proc = ptyProcesses.get(id)
     const foregroundProcess = await getLocalPtyForegroundProcess(id)
-    const childProcessEvidence = inspectLocalPtyChildProcesses(id)
+    const childProcessEvidence = await inspectLocalPtyChildProcesses(id)
+    // Neither asynchronous inspection may publish a replacement pane's identity.
+    if (ptyProcesses.get(id) !== proc) {
+      return {
+        foregroundProcess: null,
+        hasChildProcesses: true,
+        childProcessEvidence: 'unverifiable'
+      }
+    }
     return {
       foregroundProcess,
-      hasChildProcesses: childProcessEvidence === 'children',
+      hasChildProcesses: childProcessEvidence !== 'no-children',
       childProcessEvidence
     }
   }

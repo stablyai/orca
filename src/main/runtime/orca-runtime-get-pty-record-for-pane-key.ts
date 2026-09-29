@@ -4,10 +4,8 @@ import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-term
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import { detectAgentStatusFromTitle, isClaudeManagementTitle } from '../../shared/agent-detection'
 import { recognizeAgentProcess } from '../../shared/agent-process-recognition'
-import { agentSessionPtyWriteGate } from './agent-session-pty-write-gate'
 import { resolveStructuredWorkerAuthority } from './structured-worker-authority'
 import { structuredWorkerIdentities } from './structured-worker-identity'
-import { isSettledNativeOwner } from './orchestration/structured-session-pointer-delivery'
 import type { StructuredPointerTarget } from './orchestration/structured-mailbox-pointer-delivery'
 import {
   resolveTerminalIdentityFromProbes,
@@ -216,10 +214,7 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
       return null
     }
     const identity = resolveStructuredWorkerAuthority(assignee, this._orchestrationDb)?.identity
-    if (identity) {
-      return { sessionId: identity.sessionId, dispatchId }
-    }
-    return this.resolveAdoptedStructuredMailboxTarget(assignee, dispatchId)
+    return identity ? { sessionId: identity.sessionId, dispatchId } : null
   }
 
   /**
@@ -251,7 +246,7 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
    * The worker's ACTIVE dispatch is preferred when it has one, so peer and coordinator nudges share
    * one operation-ledger budget and one set of retain rules. A worker BETWEEN dispatches is still
    * nudged, under a session-scoped budget: the mail is durable, the session is live, and a dispatch
-   * says nothing about whether delivery is safe — the idle gate and the lease fence do that.
+   * says nothing about whether delivery is safe — the idle gate and the writer lease do that.
    */
   protected resolveStructuredWorkerDirectMailboxTarget(
     handle: string
@@ -265,33 +260,6 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
     }
     const dispatchId = db?.findActiveDispatchForAssignee?.(handle, identity.paneKey)?.id ?? null
     return { sessionId: identity.sessionId, dispatchId }
-  }
-
-  /**
-   * A PTY-born worker whose pane was since adopted by native chat.
-   *
-   * Its bytes cannot land — every runtime write path re-admits through the same gate — so the
-   * pointer has to travel as a session turn instead. Only a SETTLED native owner qualifies: a
-   * mid-handoff lease may become a TUI again, and redirecting there races the takeover.
-   */
-  protected resolveAdoptedStructuredMailboxTarget(
-    assignee: string,
-    dispatchId: string
-  ): StructuredPointerTarget | null {
-    let ptyId: string | null | undefined
-    try {
-      ptyId = this.getLiveLeafForHandle(assignee).leaf.ptyId
-    } catch {
-      return null
-    }
-    if (!ptyId) {
-      return null
-    }
-    const admission = agentSessionPtyWriteGate.admit(ptyId)
-    if (admission.admitted || !isSettledNativeOwner(admission.refusal)) {
-      return null
-    }
-    return { sessionId: admission.refusal.sessionId, dispatchId, refusal: admission.refusal }
   }
 
   protected scheduleRestoredMessageRepoints(): void {

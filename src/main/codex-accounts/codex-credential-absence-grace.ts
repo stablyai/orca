@@ -7,6 +7,7 @@ import {
 } from './managed-codex-auth-readiness'
 
 export const CODEX_CREDENTIAL_ABSENCE_GRACE_MS = 5_000
+export const CODEX_CREDENTIAL_ABSENCE_MAX_TRACKED_PATHS = 512
 
 export type CodexCredentialAbsenceVerdict = {
   state: StoredCodexCredentialState
@@ -39,8 +40,20 @@ export class CodexCredentialAbsenceGrace {
     const firstAbsenceAt = this.firstAbsenceAtByPath.get(key)
     if (firstAbsenceAt === undefined) {
       this.firstAbsenceAtByPath.set(key, now)
+      while (this.firstAbsenceAtByPath.size > CODEX_CREDENTIAL_ABSENCE_MAX_TRACKED_PATHS) {
+        const oldest = this.firstAbsenceAtByPath.keys().next()
+        if (oldest.done) {
+          break
+        }
+        this.firstAbsenceAtByPath.delete(oldest.value)
+      }
       return { state, durable: false }
     }
     return { state, durable: now - firstAbsenceAt >= this.graceMs }
+  }
+
+  /** @internal - exposed for leak-regression tests. */
+  trackedPathCountForTests(): number {
+    return this.firstAbsenceAtByPath.size
   }
 }

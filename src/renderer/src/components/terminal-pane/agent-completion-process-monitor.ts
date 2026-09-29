@@ -18,7 +18,6 @@ export function createAgentCompletionProcessMonitor({
   establishAgentEvidence,
   clearAgentRunEvidence,
   hasPendingHookDone,
-  hasPendingCodexAttention,
   dispatchCompletion
 }: ProcessMonitorOptions) {
   const remoteInspection: RemoteInspectionState = {
@@ -47,7 +46,7 @@ export function createAgentCompletionProcessMonitor({
     createAgentCompletionPollScheduler({ options, state, pendingTitle, requestInspection })
 
   function handleRecognizedProcess(process: RecognizedAgentProcess): void {
-    state.pendingProcessExitAgent = null
+    state.pendingProcessExit = null
     const replayIdentity = identityScope.getLast()
     if (
       !state.lastForegroundAgent &&
@@ -139,7 +138,6 @@ export function createAgentCompletionProcessMonitor({
                 identityScope,
                 clearAgentRunEvidence,
                 hasPendingHookDone,
-                hasPendingCodexAttention,
                 scheduleNextPoll,
                 handleRecognizedProcess,
                 dispatchCompletion,
@@ -149,7 +147,7 @@ export function createAgentCompletionProcessMonitor({
             inspectionSucceeded = true
           }
         } catch {
-          state.pendingProcessExitAgent = null
+          state.pendingProcessExit = null
           state.consecutiveInspectionErrors += 1
         } finally {
           state.inspectionInFlight = false

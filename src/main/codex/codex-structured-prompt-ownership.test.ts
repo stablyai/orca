@@ -159,7 +159,7 @@ describe('Codex live prompt ownership', () => {
       sessionId: 'session-1',
       itemId: 'journal-prompt',
       kind: 'approval',
-      optionId: 'accept',
+      response: { kind: 'option', optionId: 'accept' },
       fence: 7,
       commit: async () => {
         expect(codex.connections[0]?.replies).toEqual([])
@@ -210,7 +210,7 @@ describe('Codex live prompt ownership', () => {
         sessionId: 'session-1',
         itemId: 'journal-prompt',
         kind: 'approval',
-        optionId: 'accept',
+        response: { kind: 'option', optionId: 'accept' },
         fence: 7,
         commit
       })
@@ -224,7 +224,7 @@ describe('Codex live prompt ownership', () => {
         sessionId: 'session-1',
         itemId: 'journal-prompt',
         kind: 'approval',
-        optionId: 'accept',
+        response: { kind: 'option', optionId: 'accept' },
         fence: 7,
         commit
       })
@@ -237,7 +237,7 @@ describe('Codex live prompt ownership', () => {
         sessionId: 'session-1',
         itemId: 'journal-prompt',
         kind: 'approval',
-        optionId: 'accept',
+        response: { kind: 'option', optionId: 'accept' },
         fence: 8,
         commit
       })
@@ -261,12 +261,12 @@ describe('Codex live prompt ownership', () => {
         fence: 7,
         prompt: { itemId: 'journal-prompt' }
       })
-    ).resolves.toEqual({ cancelled: false })
+    ).resolves.toEqual({ cancelled: false, refusal: {} })
     await adapter.answerPrompt({
       sessionId: 'session-1',
       itemId: 'journal-prompt',
       kind: 'approval',
-      optionId: 'decline',
+      response: { kind: 'option', optionId: 'decline' },
       fence: 7,
       commit: async () => undefined
     })
@@ -382,7 +382,7 @@ describe('Codex live prompt ownership', () => {
         sessionId: 'session-1',
         itemId: siblingItemId,
         kind: 'question',
-        optionId: 'no',
+        response: { kind: 'answers', answers: [{ questionId: 'q2', optionIds: [], other: 'no' }] },
         fence: 7,
         commit: async () => undefined
       })
@@ -497,7 +497,7 @@ describe('Codex live prompt ownership', () => {
         sessionId: 'session-1',
         itemId: promptItemId,
         kind: 'approval',
-        optionId: 'accept',
+        response: { kind: 'option', optionId: 'accept' },
         fence: 7,
         commit
       })
@@ -545,7 +545,7 @@ describe('Codex live prompt ownership', () => {
         sessionId: 'session-1',
         itemId: promptItemId,
         kind: 'approval',
-        optionId: 'accept',
+        response: { kind: 'option', optionId: 'accept' },
         fence: 7,
         commit
       })
@@ -587,7 +587,7 @@ describe('Codex live prompt ownership', () => {
         sessionId: 'session-1',
         itemId: promptItemId,
         kind: 'approval',
-        optionId: 'accept',
+        response: { kind: 'option', optionId: 'accept' },
         fence: 7,
         commit
       })

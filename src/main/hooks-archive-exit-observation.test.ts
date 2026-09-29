@@ -118,6 +118,11 @@ describe('archive hook exit observation', () => {
     ).resolves.toMatchObject({ success: true })
   })
 
+  it('names a signalled exit as one rather than reporting "exit code null"', async () => {
+    const result = await runArchiveWith({ code: null, signal: 'SIGKILL' })
+    expect(result.output).toContain('terminated without reporting an exit code')
+  })
+
   it.each([
     ['was killed by a signal', { code: null, signal: 'SIGKILL' as const }],
     // A real spawn failure carries a STRING code; the guard under test is `typeof code ===

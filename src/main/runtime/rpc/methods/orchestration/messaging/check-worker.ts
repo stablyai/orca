@@ -5,6 +5,8 @@ import { formatMessageBanner } from '../../../../orchestration/formatter'
 import { exposeMessages } from './mailbox-message-receipt'
 import { routeAllMailboxPages } from '../schemas'
 import { asDispatchFence, callerHoldsDispatchPane, dispatchFenced } from './dispatch-mailbox-fence'
+import { interruptedAcknowledgedCheck } from '../routing'
+import { currentDispatchAssigneeRun } from './recipient-routing'
 import type { CheckParams } from '../schemas'
 import type { z } from 'zod'
 
@@ -24,7 +26,11 @@ export async function checkWorkerMailbox(args: {
   signal: AbortSignal | undefined
   activeDispatch: ActiveDispatch | undefined
   remoteAttachment: RemoteAttachment | undefined
-}): Promise<unknown> {
+  wakeTypes?: MessageType[]
+  revalidateConsumer?: () => void
+  deferDelivery?: () => boolean
+  recordMutationReceipt?: (receipt: unknown) => void
+}) {
   const {
     params,
     runtime,
@@ -54,6 +60,7 @@ export async function checkWorkerMailbox(args: {
   }
   const deliveryRunId = workerMailbox.runId
   db.requireRun(deliveryRunId)
+  const mailboxIdentity = { runId: deliveryRunId, dispatchId: workerMailbox.dispatchId }
   const address = `dispatch:${workerMailbox.dispatchId}`
   // Why: a federated worker host has no dispatch_contexts row, so its generation lives on the
   // remote_dispatch_attachments row instead.
@@ -165,6 +172,7 @@ export async function checkWorkerMailbox(args: {
     }
   }
   await revalidateWorkerMailbox()
+  args.revalidateConsumer?.()
   let acknowledged
   try {
     acknowledged = params.ack
@@ -179,9 +187,17 @@ export async function checkWorkerMailbox(args: {
   } catch (error) {
     throw asDispatchFence(error)
   }
+  if (acknowledged) {
+    args.recordMutationReceipt?.(
+      interruptedAcknowledgedCheck(deliveryRunId, acknowledged.delivery.id, 'outcome_unknown')
+    )
+  }
   const showAll = params.all === true || (params.unread === false && params.peek !== true)
   const readPeek = () => db.getUnreadMessages(address, typeFilter)
   const readDelivery = (wakeTypes?: MessageType[]) => {
+    if (args.deferDelivery?.()) {
+      return undefined
+    }
     try {
       return db.getOrCreateMailboxDelivery({
         runId: deliveryRunId,
@@ -197,8 +213,7 @@ export async function checkWorkerMailbox(args: {
   if (showAll) {
     const messages = db.getAllMessagesForHandle(address, 100, typeFilter)
     return {
-      ...(workerMailbox.runId ? { runId: workerMailbox.runId } : {}),
-      dispatchId: workerMailbox.dispatchId,
+      ...mailboxIdentity,
       messages: exposeMessages(messages),
       count: messages.length,
       acknowledged: acknowledged?.delivery.id ?? null,
@@ -211,8 +226,7 @@ export async function checkWorkerMailbox(args: {
     const messages = readPeek()
     if (messages.length > 0 || !params.wait) {
       return {
-        ...(workerMailbox.runId ? { runId: workerMailbox.runId } : {}),
-        dispatchId: workerMailbox.dispatchId,
+        ...mailboxIdentity,
         messages: exposeMessages(messages),
         count: messages.length,
         acknowledged: acknowledged?.delivery.id ?? null,
@@ -222,11 +236,10 @@ export async function checkWorkerMailbox(args: {
       }
     }
   } else {
-    const current = readDelivery(params.wait ? typeFilter : undefined)
+    const current = readDelivery(params.wait ? typeFilter : args.wakeTypes)
     if (current || !params.wait) {
       return {
-        ...(workerMailbox.runId ? { runId: workerMailbox.runId } : {}),
-        dispatchId: workerMailbox.dispatchId,
+        ...mailboxIdentity,
         deliveryId: current?.delivery.id ?? null,
         messages: exposeMessages(current?.messages ?? []),
         count: current?.messages.length ?? 0,
@@ -241,19 +254,22 @@ export async function checkWorkerMailbox(args: {
       }
     }
   }
-  const waitResult = await runtime.waitForMessage(address, {
-    typeFilter: typeFilter as string[] | undefined,
-    timeoutMs: params.timeoutMs ?? undefined,
-    signal
-  })
+  // Binding can happen during recovery, before run-create/run-use can cancel this wait.
+  const waitResult =
+    activeDispatch && currentDispatchAssigneeRun(runtime, db, activeDispatch)
+      ? 'cancelled'
+      : await runtime.waitForMessage(address, {
+          typeFilter: typeFilter as string[] | undefined,
+          timeoutMs: params.timeoutMs ?? undefined,
+          signal
+        })
   await revalidateWorkerMailbox()
   if (readCurrentGeneration() !== workerMailbox.generation) {
     throw dispatchFenced()
   }
   if (waitResult === 'timed_out' || waitResult === 'cancelled') {
     return {
-      ...(workerMailbox.runId ? { runId: workerMailbox.runId } : {}),
-      dispatchId: workerMailbox.dispatchId,
+      ...mailboxIdentity,
       messages: [],
       count: 0,
       acknowledged: acknowledged?.delivery.id ?? null,
@@ -265,8 +281,7 @@ export async function checkWorkerMailbox(args: {
   if (params.peek) {
     const arrived = readPeek()
     return {
-      ...(workerMailbox.runId ? { runId: workerMailbox.runId } : {}),
-      dispatchId: workerMailbox.dispatchId,
+      ...mailboxIdentity,
       messages: exposeMessages(arrived),
       count: arrived.length,
       acknowledged: acknowledged?.delivery.id ?? null,
@@ -277,8 +292,7 @@ export async function checkWorkerMailbox(args: {
   }
   const arrived = readDelivery(typeFilter)
   return {
-    ...(workerMailbox.runId ? { runId: workerMailbox.runId } : {}),
-    dispatchId: workerMailbox.dispatchId,
+    ...mailboxIdentity,
     deliveryId: arrived?.delivery.id ?? null,
     messages: exposeMessages(arrived?.messages ?? []),
     count: arrived?.messages.length ?? 0,

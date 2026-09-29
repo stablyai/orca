@@ -1,3 +1,4 @@
+import { isQoderComposerReady } from './qoder-terminal-readiness'
 import { memoizeTitleClassification } from '../../shared/terminal-title-classification-memo'
 import {
   detectAgentStatusFromTitle,
@@ -5,11 +6,16 @@ import {
   type AgentStatus
 } from '../../shared/agent-detection'
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
+import type { TuiAgent } from '../../shared/tui-agent'
+import { findAntigravityReadyPromptIndex } from './antigravity-terminal-readiness'
 import {
-  isTerminalWaitWhitespace,
-  startOfLastLines,
-  startOfLastNonBlankLines
-} from './terminal-wait-tail-window'
+  findCodexHeaderIndex,
+  findCodexScreenReadyPromptIndex,
+  isCodexComposerReadyScreen,
+  isCodexProvisionalStartupText
+} from './codex-terminal-readiness'
+import { findStartupDialogBlockedSignals } from './startup-dialog-blocked-signals'
+import { startOfLastLines, startOfLastNonBlankLines } from './terminal-wait-tail-window'
 
 const EXPLICIT_IDLE_TITLE_RE = /(^|\s)(ready|idle|done)(\s|$|[.!?])/i
 const CLAUDE_IDLE_PREFIX = '\u2733'
@@ -46,15 +52,82 @@ export const detectExplicitIdleStatusFromTitle: (title: string) => AgentStatus |
 
 export function isKnownReadyPromptPreview(preview: string): boolean {
   const normalized = preview.toLowerCase()
-  const readyIndex = findKnownReadyPromptIndex(normalized)
+  return isReadyPromptUnblocked(normalized, findKnownReadyPromptIndex(normalized))
+}
+
+/**
+ * The ready-prompt text rules for a pane about to take input. Unlike isKnownReadyPromptPreview
+ * (agent presence), Codex's provisional startup header does not count: 0.157 discards input typed
+ * behind it while its daemon starts.
+ */
+export function isKnownReadyPromptSettled(preview: string): boolean {
+  const normalized = preview.toLowerCase()
+  return (
+    isReadyPromptUnblocked(normalized, findKnownReadyPromptIndex(normalized)) &&
+    !isCodexProvisionalStartupText(normalized)
+  )
+}
+
+/**
+ * Tier 1 body evidence for every tui-idle site. `readScreenLines` yields the live emulator's
+ * visible grid, or null when the runtime has no trustworthy one.
+ *
+ * Why the screen: Codex repaints its header by cell diff (`ESC[5;3Hdir ESC[5;7Hctory:`), which
+ * only a grid reassembles — the line-folded wait text reads `dirctory:` forever.
+ * Why it can only add readiness: a grid out of step with the PTY (size mismatch, resize
+ * mid-paint) garbles the header, so the text rules keep every verdict they give today.
+ */
+export function isKnownReadyPromptBody(
+  waitText: string,
+  agent: TuiAgent | null,
+  readScreenLines: () => readonly string[] | null
+): boolean {
+  if (agent === 'qoder') {
+    return isQoderComposerReady(readScreenLines())
+  }
+  if (isKnownReadyPromptSettled(waitText)) {
+    return true
+  }
+  // Why the agent gate: another agent's screen can merely mention "OpenAI Codex".
+  if (agent !== null && agent !== 'codex') {
+    return false
+  }
+  const screen = readScreen(readScreenLines)
+  return screen !== null && isReadyPromptUnblocked(screen, findCodexScreenReadyPromptIndex(screen))
+}
+
+/**
+ * Tier 1b body evidence: a ready screen from an agent with no title rest signal. Unlike tier 1
+ * it only proves the TUI is up, so the ranking holds it to quiescence.
+ * Why codex panes only: a `cat`ed transcript or pager in an unknown pane can show the composer.
+ */
+export function isQuietReadyScreenBody(
+  waitText: string,
+  agent: TuiAgent | null,
+  readScreenLines: () => readonly string[] | null
+): boolean {
+  if (agent === 'codex') {
+    const screen = readScreen(readScreenLines)
+    return screen !== null && isCodexComposerReadyScreen(screen)
+  }
+  return (agent === null || agent === 'muse') && isMuseReadyPromptPreview(waitText)
+}
+
+function readScreen(readScreenLines: () => readonly string[] | null): string | null {
+  return readScreenLines()?.join('\n').toLowerCase() ?? null
+}
+
+function isReadyPromptUnblocked(normalized: string, readyIndex: number | null): boolean {
   if (readyIndex === null) {
     return false
   }
   const blockedSignal = findTerminalWaitBlockedSignal(normalized)
-  if (blockedSignal !== null && blockedSignal.index > readyIndex) {
-    return false
-  }
-  return true
+  return blockedSignal === null || blockedSignal.index <= readyIndex
+}
+
+export function isMuseReadyPromptPreview(preview: string): boolean {
+  const normalized = preview.toLowerCase()
+  return isReadyPromptUnblocked(normalized, findMuseReadyPromptIndex(normalized))
 }
 
 export function detectTerminalWaitBlockedReason(
@@ -82,8 +155,10 @@ export function findActionableTerminalWaitBlockedSignal(
 function findDismissedStartupModalIndex(normalized: string): number | null {
   const indexes = [
     findCodexReadyPromptIndex(normalized),
+    findCodexHeaderIndex(normalized),
     findAntigravityReadyPromptIndex(normalized),
-    findCursorActivePromptIndex(normalized)
+    findCursorActivePromptIndex(normalized),
+    findMuseReadyPromptIndex(normalized)
   ].filter((index): index is number => index !== null)
   return indexes.length > 0 ? Math.max(...indexes) : null
 }
@@ -117,6 +192,19 @@ function findCursorReadyPromptIndex(normalized: string): number | null {
   return CURSOR_BUSY_SPINNER_RE.test(normalized.slice(activeIndex)) ? null : activeIndex
 }
 
+// Why: Muse titles its OSC with the bare cwd and never updates it, so only the body can
+// prove the TUI is up. The voice-input composer is present even without loaded skills.
+function findMuseReadyPromptIndex(normalized: string): number | null {
+  const headerIndex = normalized.lastIndexOf('muse code')
+  if (headerIndex === -1) {
+    return null
+  }
+  const segment = normalized.slice(headerIndex)
+  return segment.includes('voice') && segment.includes('input') && segment.includes('❯')
+    ? headerIndex
+    : null
+}
+
 function findCodexReadyPromptIndex(normalized: string): number | null {
   const headerIndex = normalized.lastIndexOf('openai codex')
   if (headerIndex === -1) {
@@ -127,48 +215,8 @@ function findCodexReadyPromptIndex(normalized: string): number | null {
   return readySegment.includes('model:') && readySegment.includes('directory:') ? headerIndex : null
 }
 
-function findAntigravityReadyPromptIndex(normalized: string): number | null {
-  const headerIndex = normalized.lastIndexOf('antigravity cli')
-  if (headerIndex === -1) {
-    return null
-  }
-  let lineStart = headerIndex
-  let modelIndex: number | null = null
-  let promptIndex: number | null = null
-
-  // Why: ready previews can include echoed paste after the header; scan line bounds directly instead of splitting the whole tail.
-  for (let cursor = headerIndex; cursor <= normalized.length; cursor += 1) {
-    if (cursor < normalized.length && normalized.charCodeAt(cursor) !== 10) {
-      continue
-    }
-    let trimmedStart = lineStart
-    let trimmedEnd = cursor
-    while (trimmedStart < trimmedEnd && isTerminalWaitWhitespace(normalized, trimmedStart)) {
-      trimmedStart += 1
-    }
-    while (trimmedEnd > trimmedStart && isTerminalWaitWhitespace(normalized, trimmedEnd - 1)) {
-      trimmedEnd -= 1
-    }
-    if (lineStart > headerIndex && trimmedStart < trimmedEnd) {
-      if (modelIndex === null && normalized.startsWith('gemini', trimmedStart)) {
-        modelIndex = trimmedStart
-      }
-      if (
-        promptIndex === null &&
-        trimmedEnd - trimmedStart === 1 &&
-        normalized.charCodeAt(trimmedStart) === 62
-      ) {
-        promptIndex = trimmedStart
-      }
-    }
-    lineStart = cursor + 1
-  }
-
-  return modelIndex !== null && promptIndex !== null ? Math.max(modelIndex, promptIndex) : null
-}
-
 export const TERMINAL_WAIT_BLOCKED_SENTINEL_RE =
-  /update available|choose working directory to|codex just got an upgrade|hooks need review|do you trust|trust this|trusted workspace|press enter to (?:confirm|continue|view|insert)|press t to trust|permission required|requires permission|allow once|allow always|run this command\?/i
+  /update available|choose working directory to|codex just got an upgrade|available\s*·|esc\s*skip|enter\s*confirm\s*·|enter\/esc\s*(?:continue|confirm)|hooks need review|do you trust|trust this|trusted workspace|press enter to (?:confirm|continue|view|insert)|press t to trust|permission required|requires permission|allow once|allow always|run this command\?/i
 
 // Why text at all: cursor-agent has no approval hook, so the key-bound menu is the only authority.
 const CURSOR_APPROVAL_CHOICE_MARKERS = [
@@ -237,27 +285,7 @@ function findTerminalWaitBlockedSignal(
 function findBlockedSignalInLiveWindow(
   normalized: string
 ): { reason: RuntimeTerminalWaitBlockedReason; index: number } | null {
-  const candidates: { reason: RuntimeTerminalWaitBlockedReason; index: number }[] = []
-  const updateIndex = normalized.lastIndexOf('update available')
-  if (updateIndex !== -1 && normalized.includes('press enter to continue', updateIndex)) {
-    candidates.push({ reason: 'agent-update-prompt', index: updateIndex })
-  }
-  const cwdIndex = normalized.lastIndexOf('choose working directory to')
-  if (cwdIndex !== -1 && normalized.includes('press enter to continue', cwdIndex)) {
-    candidates.push({ reason: 'agent-cwd-prompt', index: cwdIndex })
-  }
-  const modelMigrationIndex = normalized.lastIndexOf('codex just got an upgrade')
-  if (
-    modelMigrationIndex !== -1 &&
-    normalized.includes('press enter to continue', modelMigrationIndex)
-  ) {
-    candidates.push({ reason: 'codex-model-migration-prompt', index: modelMigrationIndex })
-  }
-  const hooksIndex = normalized.lastIndexOf('hooks need review')
-  if (hooksIndex !== -1 && normalized.includes('press enter to confirm', hooksIndex)) {
-    // Why neutral: this matcher never inspects the agent -- 'hooks need review' is not Codex-only wording.
-    candidates.push({ reason: 'agent-hooks-review-prompt', index: hooksIndex })
-  }
+  const candidates = findStartupDialogBlockedSignals(normalized)
   const trustIndex = Math.max(
     normalized.lastIndexOf('do you trust'),
     normalized.lastIndexOf('trust this'),

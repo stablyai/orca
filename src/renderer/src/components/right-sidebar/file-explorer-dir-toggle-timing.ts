@@ -1,24 +1,18 @@
 /** Marks the filename text, which doubles as the double-click-to-rename hotspot. */
 export const RENAME_HOTSPOT_ATTR = 'data-file-explorer-row-name'
 
-/**
- * Matches Chromium/Electron's double-click window (`kDoubleClickTimeMS`), so a
- * deferred toggle can't fire before the second click of a slow double-click
- * arrives and turns the gesture into a rename.
- */
-export const DIR_TOGGLE_DOUBLE_CLICK_MS = 500
-
-export type DirToggleTiming = 'immediate' | 'deferred' | 'skip'
+export type DirToggleTiming = 'immediate' | 'skip'
 
 export function isRenameHotspotTarget(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest(`[${RENAME_HOTSPOT_ATTR}]`) !== null
 }
 
 /**
- * Why: a double-click on the filename toggles the directory twice before the
- * rename starts, so the row visibly collapses and re-expands. Clicks on the
- * rename hotspot wait out the double-click window; the second click drops the
- * toggle entirely and lets the rename take over.
+ * Why: a double-click on the filename used to toggle the directory twice before
+ * the rename started, so the row visibly collapsed and re-expanded. The first
+ * click toggles instantly (a delay here reads as lag next to the chevron); only
+ * the second click of a double-click on the rename hotspot drops its toggle so
+ * the folder doesn't flip back under the rename input.
  */
 export function resolveDirToggleTiming({
   fromRenameHotspot,
@@ -27,8 +21,5 @@ export function resolveDirToggleTiming({
   fromRenameHotspot: boolean
   clickCount: number
 }): DirToggleTiming {
-  if (!fromRenameHotspot) {
-    return 'immediate'
-  }
-  return clickCount > 1 ? 'skip' : 'deferred'
+  return fromRenameHotspot && clickCount > 1 ? 'skip' : 'immediate'
 }

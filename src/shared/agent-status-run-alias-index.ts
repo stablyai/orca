@@ -8,12 +8,13 @@ import {
   parseAgentStatusExecutionScope,
   type AgentStatusExecutionScope
 } from './agent-status-subject'
+import { AGENT_STATUS_STORE_LIMITS } from './agent-status-store-contract'
 import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
 import { measureUtf8ByteLength } from './utf8-byte-limits'
 
 const PROVIDER_ALIAS_KEY_PREFIX = 'agent-status-provider-alias-v1:'
 const MAX_ALIAS_INDEX_ENTRIES = 4096
-const MAX_RUN_IDS_PER_ALIAS = 256
+const MAX_RUN_IDS_PER_ALIAS = AGENT_STATUS_STORE_LIMITS.parents
 const MAX_ALIAS_INDEX_RUN_REFERENCES = 16_384
 const MAX_ALIAS_INDEX_SERIALIZED_BYTES = 4 * 1024 * 1024
 const ALIAS_INDEX_JSON_STRUCTURE_LIMITS = {

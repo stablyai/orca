@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  REGIONAL_REHOME_POOL_WAIT_MS_MAX_LIMIT,
-  REGIONAL_REHOME_POOL_WAITERS_MAX_LIMIT,
   REGIONAL_REHOME_RECONNECTS_PER_CELL_LIMIT,
   REGIONAL_REHOME_SQL_FAILURES_LIMIT,
   regionalRehomeSafetyFailure
@@ -41,14 +39,38 @@ describe('regionalRehomeSafetyFailure', () => {
     ).toBeNull()
   })
 
-  it('still fails closed on each pool pressure bound', () => {
-    for (const overrides of [
-      { databasePoolWaitersMax: REGIONAL_REHOME_POOL_WAITERS_MAX_LIMIT + 1 },
-      { databasePoolWaitMsMax: REGIONAL_REHOME_POOL_WAIT_MS_MAX_LIMIT + 1 }
-    ]) {
-      expect(regionalRehomeSafetyFailure(safety(overrides), NOW, 19)).toBe(
-        'database_pool_pressure'
+  it('passes asia-scale pool pressure, which excludes a cell rather than the fleet', () => {
+    // Measured 2026-09-16 on the asia-east2 cells: a client pool too narrow for
+    // a 176ms round trip, with 0.2ms server-side execution. The fleet snapshot
+    // is a Math.max, so gating on it here stops every region.
+    expect(
+      regionalRehomeSafetyFailure(
+        safety({ databasePoolWaitersMax: 150, databasePoolWaitMsMax: 2_005 }),
+        NOW,
+        19
       )
+    ).toBeNull()
+    // Every other bar still fails closed at that same pool pressure.
+    for (const [overrides, reason] of [
+      [{ sqlFailures: REGIONAL_REHOME_SQL_FAILURES_LIMIT + 1 }, 'sql_failures'],
+      [{ controlActivityRecoveryFailures: 1 }, 'control_recovery_failures'],
+      [
+        { reconnects: 19 * REGIONAL_REHOME_RECONNECTS_PER_CELL_LIMIT + 1 },
+        'elevated_reconnects'
+      ],
+      [{ observedAt: 0 }, 'monitoring_stale']
+    ] as const) {
+      expect(
+        regionalRehomeSafetyFailure(
+          safety({
+            databasePoolWaitersMax: 150,
+            databasePoolWaitMsMax: 2_005,
+            ...overrides
+          }),
+          NOW,
+          19
+        )
+      ).toBe(reason)
     }
   })
 

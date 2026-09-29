@@ -6,7 +6,6 @@ import { selectFloatingTerminalPanelInputs } from './floating-terminal-panel-inp
 export function useFloatingTerminalPanelStoreState() {
   const { tabs, browserTabs, groups, unifiedTabs, floatingFiles, expandedPaneByTabId } =
     useAppStore(selectFloatingTerminalPanelInputs)
-  const createTab = useAppStore((state) => state.createTab)
   const createBrowserTab = useAppStore((state) => state.createBrowserTab)
   const closeTab = useAppStore((state) => state.closeTab)
   const closeBrowserTab = useAppStore((state) => state.closeBrowserTab)
@@ -39,7 +38,6 @@ export function useFloatingTerminalPanelStoreState() {
     unifiedTabs,
     floatingFiles,
     expandedPaneByTabId,
-    createTab,
     createBrowserTab,
     closeTab,
     closeBrowserTab,

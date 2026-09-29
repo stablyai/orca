@@ -69,6 +69,16 @@ describe('activateAndRevealWorktree', () => {
     expect(recordWorktreeVisit).toHaveBeenCalledWith(worktree.id)
   })
 
+  it('adds the activated project to an active project filter', () => {
+    const worktree = makeWorktree()
+    seedEmptyActivatableWorktree(worktree)
+    useAppStore.setState({ filterRepoIds: ['repo-2'] })
+
+    activateAndRevealWorktree(worktree.id)
+
+    expect(useAppStore.getState().filterRepoIds).toEqual(['repo-2', worktree.repoId])
+  })
+
   it('does not relaunch the creation-time agent when reopening an empty worktree', () => {
     const worktree = makeWorktree()
     const { revealWorktreeInSidebar } = seedEmptyActivatableWorktree(worktree)

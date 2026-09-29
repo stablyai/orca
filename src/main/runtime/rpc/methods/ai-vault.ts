@@ -1,6 +1,7 @@
 import {
   AiVaultSearchRequestSchema,
-  AiVaultSearchStatusRequestSchema
+  AiVaultSearchStatusRequestSchema,
+  AiVaultSetSearchEnabledParamsSchema
 } from '../../../../shared/ai-vault-search-contract'
 import {
   searchSessionService,
@@ -35,6 +36,25 @@ export const AI_VAULT_METHODS = [
     params: AiVaultSearchStatusRequestSchema,
     handler: (params, { clientKind }) =>
       sessionSearchServiceStatus(params, clientKind ? 'relay' : 'runtime')
+  }),
+  defineMethod({
+    name: 'aiVault.setSearchEnabled',
+    params: AiVaultSetSearchEnabledParamsSchema,
+    handler: async (params, { runtime, clientKind, pairedDeviceId }) => {
+      // Paired clients only: an in-process caller writes this host's own settings directly,
+      // and admitting one here would let any unauthenticated local path flip consent.
+      if (!pairedDeviceId) {
+        throw Object.assign(
+          new Error('Session search consent can only be changed by a paired client.'),
+          { code: 'forbidden' }
+        )
+      }
+      await runtime.setSessionSearchEnabled(params.enabled)
+      console.warn(
+        `[ai-vault-search] device ${pairedDeviceId} set indexing enabled=${params.enabled}`
+      )
+      return sessionSearchServiceStatus({}, clientKind ? 'relay' : 'runtime')
+    }
   }),
   defineMethod({
     name: 'aiVault.resolveSessionTitles',

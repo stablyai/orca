@@ -1,0 +1,84 @@
+{
+  "operation": "terminal.takeover-report",
+  "family": "terminal.takeover-report",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "ccdb324b63e4942891942edde1216586a51774bd",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
+  "adapterSha256": "42e1fe434b591ab5a945b6b366bbb20b567085d58bade63413f2251e8202b255",
+  "scenarioSha256": "c2236257032fab72ebb007391313eec4e5f0a1bdb4fbcbd907117f9914ffafc6",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "30ac06d94f6f": {
+      "name": "orchestration.workerTerminalUserInput#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "orchestration.workerTerminalUserInput"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "failWhenDisconnected": true,
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "changed": 1
+          }
+        }
+      }
+    },
+    "44136fa355b3": {},
+    "a98cf260f79c": {
+      "name": "orchestration.workerTerminalUserInput#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "terminal-takeover-report-accepted",
+    "checkpoints": [
+      {
+        "id": "reported",
+        "observation": {
+          "sender": ["30ac06d94f6f"],
+          "payloads": ["a98cf260f79c"],
+          "settlements": {
+            "report": "eb79a9b3682a"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

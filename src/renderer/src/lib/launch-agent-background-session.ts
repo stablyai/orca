@@ -118,7 +118,7 @@ export async function launchAgentBackgroundSession(
     command: sshConnectionId ? startupPlan.launchCommand : null,
     waitForShellReady:
       Boolean(sshConnectionId) && sshBackgroundLaunchWaitsForShellReady(startupPlan),
-    write: (ptyId, data) => window.api.pty.write(ptyId, data)
+    write: (ptyId, data) => window.api.pty.write(ptyId, data, 'launch')
   })
   // Route by the worktree's owner host, not the focused runtime.
   const runtimeTarget = getActiveRuntimeTarget(

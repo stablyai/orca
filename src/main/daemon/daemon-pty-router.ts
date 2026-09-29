@@ -162,6 +162,10 @@ export class DaemonPtyRouter implements IPtyProvider {
     await this.adapterFor(id).clearBuffer(id)
   }
 
+  async resetInputModes(id: string): Promise<void> {
+    await this.adapterFor(id).resetInputModes(id)
+  }
+
   async closeStartupQueryAuthority(id: string): Promise<number> {
     return (await this.adapterFor(id).closeStartupQueryAuthority?.(id)) ?? 0
   }

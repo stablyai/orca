@@ -1,9 +1,10 @@
-import { compileFunction } from 'node:vm'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-import * as React from 'react'
 import ts from 'typescript'
+import { nativeMountingSubstitutes } from './native-mounting-substitutes'
+import { observeSalvagedReads } from './salvage-observation'
 import * as deliveryAmbiguity from '../../transport/rpc-delivery-ambiguity'
+import { compiledOperationModule } from './compiled-operation-module'
 
 export type OperationModule = Record<string, (...args: any[]) => unknown>
 /** One anchored in-memory source edit, resolved by the caller so the loader needs no mutant table. */
@@ -26,9 +27,12 @@ const SHARED_MODULE = 'mobile/src/transport/rpc-delivery-ambiguity.ts'
 export function operationModuleLoader(
   root: string,
   mutation?: OperationMutation,
-  exposures: readonly OperationExposure[] = []
+  exposures: readonly OperationExposure[] = [],
+  /** What this recording declared about its device, overlaid on the refusing defaults. */
+  declared: ReadonlyMap<string, unknown> = new Map()
 ) {
   const cache = new Map<string, OperationModule>()
+  const natives = new Map([...nativeMountingSubstitutes(), ...declared])
   const sharedModulePath = resolve(root, SHARED_MODULE)
   let mutationCount = 0
   function pathFor(base: string): string {
@@ -41,8 +45,9 @@ export function operationModuleLoader(
     return file
   }
   function imported(base: string, name: string): unknown {
-    if (name === 'react') {
-      return React
+    const native = natives.get(name)
+    if (native !== undefined) {
+      return native
     }
     if (name.startsWith('.') && pathFor(resolve(dirname(base), name)) === sharedModulePath) {
       return deliveryAmbiguity
@@ -51,8 +56,15 @@ export function operationModuleLoader(
       return new Proxy(
         {},
         {
-          get: () => {
-            throw new Error(`Unspecified native mounting dependency: ${name}`)
+          // Answering `__esModule` binds this trap as the module itself in every import form; the
+          // rule is in the `__esModule` paragraph of `native-module-traps.ts`. The refusal then
+          // lands on the first member the emit reads, which for a default import is `.default`
+          // rather than whichever member the product went on to touch.
+          get: (_target, key) => {
+            if (key === '__esModule') {
+              return true
+            }
+            throw new Error(`Unspecified native mounting dependency: ${name}.${String(key)}`)
           }
         }
       )
@@ -127,16 +139,10 @@ export function operationModuleLoader(
     }
     const exports: OperationModule = {}
     cache.set(file, exports)
-    const output = ts.transpileModule(source, {
-      compilerOptions: {
-        module: ts.ModuleKind.CommonJS,
-        target: ts.ScriptTarget.ES2022,
-        jsx: ts.JsxEmit.React
-      }
-    }).outputText
     const exposure = exposures.find(([suffix]) => file.endsWith(suffix))?.[1] ?? ''
-    const evaluate = compileFunction(output + exposure, ['require', 'exports'], { filename: file })
+    const evaluate = compiledOperationModule(file, source, exposure)
     evaluate((name: string) => imported(file, name), exports)
+    observeSalvagedReads(file, exports)
     return exports
   }
   return {

@@ -463,6 +463,8 @@ describe('WorktreeCard agent-list <-> child-worktrees expansion coupling', () =>
       for (const root of mountedRoots.splice(0)) {
         root.unmount()
       }
+      // Lazy markdown imports must finish before Vitest tears down the module environment.
+      await vi.dynamicImportSettled()
     })
     document.body.innerHTML = ''
     clearWorktreeAgentExpansionStateForTests()

@@ -6,6 +6,7 @@
  * the send and reports what the host said.
  */
 
+import { ORCHESTRATION_READINESS_TIMEOUT_MS } from '../../../shared/orchestration-timing-budgets'
 import { AGENT_SESSION_NOT_ATTACHED } from '../../native-chat/agent-session-wire/structured-agent-session-mutation-admission'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { StructuredMailboxPointerHost } from './structured-mailbox-pointer-delivery'
@@ -38,15 +39,16 @@ export function structuredSessionPointerCallerKey(sessionId: string): string {
  * idle-with-history is the normal steady state of a working agent. Shared so the pointer lane and
  * group addressing cannot disagree about it.
  */
-export function readStructuredSessionGateFacts(
+export async function readStructuredSessionGateFacts(
   sessionId: string
-): StructuredSessionGateFacts | null {
+): Promise<StructuredSessionGateFacts | null> {
   const host = getStructuredAgentSessionHost()
   if (!host) {
     return null
   }
   try {
-    return structuredSessionGateFacts(host.journalSnapshot(sessionId).items)
+    // Opens a conversation the idle sweep closed; that starts no agent.
+    return structuredSessionGateFacts((await host.journalSnapshot(sessionId)).items)
   } catch (error) {
     // Not attached is a retain reason, not a failure; anything else is still unreadable.
     if ((error as Error)?.message !== AGENT_SESSION_NOT_ATTACHED.code) {
@@ -94,8 +96,19 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
           ? { kind: 'unattached' }
           : { kind: 'sent', state: 'rejected' }
       }
-      // `pending` is not yet an acknowledgement; only `accepted` may consume mail.
-      const state = result.value.submission.dispatchState
+      // `pending` is not yet an acknowledgement; only `accepted` may consume mail. Accepted is not
+      // delivered, so wait out a start; a wait that runs out parks for the next journal edge.
+      const submission =
+        result.value.submission.dispatchState === 'pending'
+          ? ((
+              await host
+                .waitForSendSettlement(input.sessionId, result.value.clientMessageId, {
+                  budgetMs: ORCHESTRATION_READINESS_TIMEOUT_MS
+                })
+                .catch(() => undefined)
+            )?.value.submission ?? result.value.submission)
+          : result.value.submission
+      const state = submission.dispatchState
       return {
         kind: 'sent',
         state: state === 'accepted' ? 'accepted' : state === 'rejected' ? 'rejected' : 'unknown'

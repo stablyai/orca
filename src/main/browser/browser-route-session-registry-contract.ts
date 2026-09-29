@@ -22,7 +22,7 @@ export type BrowserRouteSessionRegistryDependencies = {
     partition: string
     browserProfileId: string
     session: BrowserRouteElectronSession
-  }): void
+  }): void | Promise<void>
   clearPolicies(input: { partition: string; session: BrowserRouteElectronSession }): void
   retirePageAuthority(input: BrowserRoutePageAuthorityRetirement): boolean
   bindingStore: BrowserRoutePartitionBindingStore

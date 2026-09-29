@@ -311,8 +311,9 @@ Every `relay_gce_cells` entry is one durable cell generation and must pin both i
 image and its Artifact Registry relay image. Terraform creates one private COS instance template, one size-one zonal
 MIG, and one backend service for that exact host. The MIG uses `RECREATE`, zero surge, and one
 unavailable worker; `/health` alone drives autoheal while SQL/JWKS-backed `/ready` controls LB
-admission. The backend timeout is 86,400 seconds with connection draining, and the URL map aborts
-unknown wildcard hosts before they reach a worker. The startup script obtains short-lived metadata
+admission. The backend timeout is 86,400 seconds and connection draining is 60 seconds, which
+covers only a host still mid-handshake because the rollout drains a cell before Terraform runs.
+The URL map aborts unknown wildcard hosts before they reach a worker. The startup script obtains short-lived metadata
 credentials, fetches the two relay secrets without logging them, and runs a digest-pinned Cloud SQL
 Auth Proxy beside the digest-pinned relay image.
 
@@ -322,7 +323,8 @@ only additive regional resources; cells select the subnet from their declared
 region. Every cell also declares an explicit database pool maximum in startup
 metadata and deployment outputs. The initial Asia shape is `e2-standard-4`,
 3,000 physical connections, 60 unobserved connections, 6,000 request units,
-and a database pool maximum of 10.
+and a database pool maximum of 10. Production Asia pools now run at 16 and
+staging C4 stays at 10; the topology and director validators pin both.
 
 Provision the complete identical Asia wave in one `Deploy Relay Asia Topology`
 saved plan. Its validator permits only the additive subnet/router/NAT, reviewed
@@ -330,7 +332,10 @@ cell templates/MIGs/backends, and exact shared URL-map host additions. It
 rejects deletes, replacements, loss of an existing host route, US-resource
 changes, and unrelated drift. Do not add production C27-C29 until the
 compatible image has been published and each entry can pin its immutable
-digest.
+digest. A later cell, such as C30, is its own reviewed wave. The shared URL map
+pulls every live cell into its plan, so the workflow plans each live cell at the
+image its state template already serves, and the validator rejects any change
+to a cell outside the wave.
 
 Topology creation intentionally does not apply the director resource. Once all
 MIGs and backends are healthy, register every new cell atomically as

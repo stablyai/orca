@@ -11,6 +11,7 @@ import type { HeadlessEmulator } from '../daemon/headless-emulator'
 import type { PtyProviderBufferSnapshot } from '../providers/types'
 import type { RetainedTailRedrawCursor } from './terminal-tail-redraw-buffer'
 import type { TerminalTailWaitState } from './terminal-wait-tail-state'
+import type { TerminalCommandPaint } from './terminal-command-paint'
 import type { PtyShellOwnershipMirror } from './pty-shell-ownership-mirror'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
@@ -54,6 +55,12 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   wslDistro: string | null
   tabId: string | null
   paneKey: string | null
+  /**
+   * `graphSequence` when `paneKey` was last written. A surface recorded since the last graph
+   * statement has not yet been offered one that could contradict it — see
+   * pty-recorded-surface-topology.ts.
+   */
+  surfaceRecordedAtGraphSequence: number
   launchConfig: SleepingAgentLaunchConfig | null
   launchToken: string | null
   launchIncarnationId: PtyIncarnationId | null
@@ -81,6 +88,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   title: string | null
   titleUpdatedAt: number | null
   lastOutputAt: number | null
+  /** See terminal-command-paint.ts; absent until the pane's first output, and again after a gap or a new process. */
+  commandPaint?: TerminalCommandPaint
 }
 
 export type RuntimePtyTabCloseAuthority = {

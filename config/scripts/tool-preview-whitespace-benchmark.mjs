@@ -77,7 +77,7 @@ for (const input of [
 ]) {
   assert.deepEqual(display(after, input), display(before, input))
 }
-for (const [shape, input] of [
+for (const [caseName, input] of [
   ['tiny', 'ls -la'],
   ['100KB', 'a   b\n\t'.repeat(15000)],
   ['1MB', 'a   b\n\t'.repeat(150000)],
@@ -110,5 +110,5 @@ for (const [shape, input] of [
       samples[label].push((cpu.user + cpu.system) / 20000)
     }
   }
-  console.log(JSON.stringify({ shape, samples }))
+  console.log(JSON.stringify({ caseName, samples }))
 }

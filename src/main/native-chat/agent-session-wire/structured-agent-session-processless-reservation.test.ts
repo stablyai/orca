@@ -12,6 +12,7 @@ import {
   attachFingerprintFields,
   type AgentSessionAttachParams
 } from './structured-agent-session-attach'
+import { openTestAttachConversation } from './structured-agent-session-attach-test-conversation'
 import { performAttach } from './structured-agent-session-attach-flow'
 
 const NOW = 1_800_000_000_000
@@ -86,6 +87,7 @@ describe('processless structured session reservation', () => {
         store,
         adapter,
         journalRoot: root,
+        openConversation: openTestAttachConversation(root!),
         authority: {
           spawnToken: 'spawn-a',
           claimKeyId: 'key-1',
@@ -133,6 +135,7 @@ describe('processless structured session reservation', () => {
       store,
       adapter,
       journalRoot: root,
+      openConversation: openTestAttachConversation(root!),
       authority: {
         spawnToken: 'spawn-a',
         claimKeyId: 'key-1',
@@ -172,6 +175,7 @@ describe('processless structured session reservation', () => {
       store,
       adapter,
       journalRoot: root,
+      openConversation: openTestAttachConversation(root!),
       authority: {
         spawnToken: 'spawn-drift',
         claimKeyId: 'key-1',
@@ -194,7 +198,6 @@ describe('processless structured session reservation', () => {
       claimStatus: 'released',
       handoffStage: null,
       reservedSpawnToken: null,
-      processlessAt: null,
       runtimeFence: 2,
       deathEvidence: { kind: 'pid-absent', detail: 'reservation failed before spawn' }
     })
@@ -218,7 +221,6 @@ describe('processless structured session reservation', () => {
         throw new AgentSessionPreSpawnError(new Error('workspace no longer exists'))
       })
     } as unknown as StructuredAgentSessionAdapter
-    const processlessProof = vi.spyOn(store, 'setReservationProcesslessProof')
     const settlement = vi.spyOn(store, 'settleFailedAcquisition')
 
     await expect(
@@ -226,6 +228,7 @@ describe('processless structured session reservation', () => {
         store,
         adapter,
         journalRoot: root,
+        openConversation: openTestAttachConversation(root!),
         authority: {
           spawnToken: 'spawn-a',
           claimKeyId: 'key-1',
@@ -237,20 +240,15 @@ describe('processless structured session reservation', () => {
         now: () => NOW,
         onAttached: () => {}
       })
-    ).rejects.toThrow('workspace no longer exists')
+    ).rejects.toThrow("Codex couldn't restart. Send your message to try again.")
     expect(settlement).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ exitProof: 'processless', spawnToken: 'spawn-a' })
-    )
-    // No separate durable proof write: the only proof call is acquisition's single-use clear.
-    expect(processlessProof).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ processlessAt: null })
     )
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'released',
       handoffStage: null,
       handoffOperationId: null,
       runtimeFence: 2,
-      processlessAt: null,
       reservedSpawnToken: null,
       deathEvidence: { kind: 'pid-absent', detail: 'reservation failed before spawn' }
     })
@@ -297,6 +295,7 @@ describe('processless structured session reservation', () => {
       store,
       adapter,
       journalRoot: root,
+      openConversation: openTestAttachConversation(root!),
       authority: {
         spawnToken: 'spawn-a',
         claimKeyId: 'key-1',
@@ -309,7 +308,9 @@ describe('processless structured session reservation', () => {
       onAttached: () => {}
     }
 
-    await expect(performAttach(input)).rejects.toThrow('launch not ready')
+    await expect(performAttach(input)).rejects.toThrow(
+      "Codex couldn't restart. Send your message to try again."
+    )
     await expect(performAttach(input)).resolves.toMatchObject({
       ok: false,
       refusal: { code: 'agent_session_operation_invalid' }

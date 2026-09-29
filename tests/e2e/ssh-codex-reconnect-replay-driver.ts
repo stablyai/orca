@@ -104,7 +104,7 @@ export async function connectDockerRemote(
     if ((store.getState().tabsByWorktree[worktree.id] ?? []).length === 0) {
       store.getState().createTab(worktree.id)
     }
-    store.getState().setActiveTabType('terminal')
+    store.getState().setActiveTabType('terminal', store.getState().activeWorktreeId)
     return worktree.id
   }, remote.repoId)
 

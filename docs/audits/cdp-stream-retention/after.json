@@ -1,0 +1,55 @@
+{
+  "node": "v26.6.0",
+  "platform": "darwin",
+  "bundleSha256": "60daf233a12cd9427de1783054e397c1968bb1d23fa9aad0408972337b6d087b",
+  "samples": [
+    {
+      "producedMiB": 16,
+      "bufferedBytes": 8389120,
+      "readyState": 1,
+      "rss": 92291072
+    },
+    {
+      "producedMiB": 32,
+      "bufferedBytes": 8389120,
+      "readyState": 1,
+      "rss": 111542272
+    },
+    {
+      "producedMiB": 48,
+      "bufferedBytes": 7340480,
+      "readyState": 1,
+      "rss": 143523840
+    },
+    {
+      "producedMiB": 64,
+      "bufferedBytes": 7340480,
+      "readyState": 1,
+      "rss": 160694272
+    },
+    {
+      "producedMiB": 80,
+      "bufferedBytes": 0,
+      "readyState": 3,
+      "rss": 172490752
+    },
+    {
+      "producedMiB": 96,
+      "bufferedBytes": 0,
+      "readyState": 3,
+      "rss": 172490752
+    },
+    {
+      "producedMiB": 112,
+      "bufferedBytes": 0,
+      "readyState": 3,
+      "rss": 172490752
+    },
+    {
+      "producedMiB": 128,
+      "bufferedBytes": 0,
+      "readyState": 3,
+      "rss": 172490752
+    }
+  ]
+}

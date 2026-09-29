@@ -73,6 +73,31 @@ export class OrcaRuntimeWithApplyMobileSessionTabNavigation extends OrcaRuntimeW
   }
 
   /**
+   * Records a tab a create just published as one paired client's selection, as a create does for
+   * its own tab. Not the tap path: a tap is a wake gesture that may respawn a non-ready pane.
+   * Returns false when the tab is not in the snapshot.
+   */
+  selectCreatedMobileSessionTabForClient(
+    worktreeId: string,
+    surface: { tabId: string; leafId: string } | { sessionId: string },
+    clientNavigationId: string
+  ): boolean {
+    const snapshot = this.getMobileSessionTabsForWorktree(worktreeId)
+    const tab = snapshot.tabs.find((candidate) =>
+      'sessionId' in surface
+        ? candidate.type === 'agent-session' && candidate.sessionId === surface.sessionId
+        : candidate.type === 'terminal' &&
+          candidate.parentTabId === surface.tabId &&
+          candidate.leafId === surface.leafId
+    )
+    if (!tab) {
+      return false
+    }
+    this.applyMobileSessionTabNavigation(snapshot, tab.id, 'caller', clientNavigationId)
+    return true
+  }
+
+  /**
    * Whether persistence proves this pane's PTY was deliberately taken down and parked
    * (workspace sleep or completed-agent hibernation) rather than lost and awaiting reconnect.
    * Why: `pending-handle` alone cannot tell those apart — a parked pane publishes it

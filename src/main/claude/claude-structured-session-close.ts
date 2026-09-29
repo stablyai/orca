@@ -17,7 +17,15 @@ import type { ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
 import { closeProcessRegistry } from '../../shared/child-process/close-process-registry'
 import { retireClaudeDispatchWaiters } from './claude-structured-dispatch'
-import { readClaudeTranscriptLeafWithReproof } from './claude-transcript-branch-proof'
+import { settledClaudeTurnEndLeaf } from './claude-structured-resume-point'
+
+/** The root's own exit was seen first-hand. The lease follows the root, so a descendant
+ *  left unverified or seen alive does not hold it. */
+export function claudeRootExitObserved(
+  connection: ClaudeStreamJsonConnection | null | undefined
+): boolean {
+  return connection?.exitVerdict.root === 'exited'
+}
 
 export function claudeAcquisitionCleanupError(
   connection: ClaudeStreamJsonConnection | null | undefined,
@@ -27,7 +35,7 @@ export function claudeAcquisitionCleanupError(
   if (verdict?.root === 'processless') {
     return new AgentSessionPreSpawnError(cause)
   }
-  return verdict?.root === 'exited' && verdict.tree === 'unverifiable'
+  return claudeRootExitObserved(connection)
     ? new AgentSessionAcquisitionRootExitObservedError(cause)
     : new AgentSessionAcquisitionExitUnprovenError(cause)
 }
@@ -80,11 +88,6 @@ type CloseClaudePublishedSessionInput = {
     sessionId: string,
     state: AgentSessionBackgroundTaskState | null
   ) => void
-  readTranscriptLeaf?: (input: {
-    providerSessionId: string
-    previousLeafUuid: string | null
-    claudeConfigDir: string
-  }) => Promise<string | null>
 }
 
 async function finalizeClaudePublishedSession(
@@ -97,35 +100,34 @@ async function finalizeClaudePublishedSession(
   for (const prompt of session.prompts.clear()) {
     prompt.settle(null)
   }
-  if ((await session.connection.close()) !== true) {
-    return false
+  const connectionClosed = await session.connection.close()
+  session.unbindReadingControl?.()
+  let rootExitVerdict: Error | undefined
+  if (connectionClosed !== true) {
+    const cleanupError = claudeAcquisitionCleanupError(
+      session.connection,
+      new Error('provider close unproven')
+    )
+    // Only a genuinely unknown exit stays indexed for a retry. A proven root exit or processless
+    // close is final — the owner releases the lease on it — so the session finalizes like a proven
+    // close and still reports the verdict; kept indexed, it refused every later start of the chat.
+    if (cleanupError instanceof AgentSessionAcquisitionExitUnprovenError) {
+      return false
+    }
+    rootExitVerdict = cleanupError
   }
+  session.childWork.clear()
   if (session.backgroundTasks.clear()) {
     input.onBackgroundTasksChanged?.(input.sessionId, null)
   }
-  try {
-    const transcriptLeaf = input.readTranscriptLeaf
-      ? await readClaudeTranscriptLeafWithReproof({
-          readTranscriptLeaf: input.readTranscriptLeaf,
-          providerSessionId: session.providerSessionId,
-          previousLeafUuid: session.leafUuid,
-          claudeConfigDir: session.claudeConfigDir
-        })
-      : null
-    if (transcriptLeaf) {
-      session.leafUuid = transcriptLeaf
-    }
-  } catch {
-    // Keep the last observed main-transcript frame when the durable tail is
-    // unavailable or proves a stale/divergent branch.
-  }
+  const leafUuid = await settledClaudeTurnEndLeaf(session)
   const persistence =
     session.closePersistence ??
     (session.closePersistence = (async () => {
       await input.persistHandle?.({
         sessionId: input.sessionId,
         providerSessionId: session.providerSessionId,
-        leafUuid: session.leafUuid,
+        leafUuid,
         fence: session.fence
       })
     })())
@@ -154,7 +156,7 @@ async function finalizeClaudePublishedSession(
       type: 'handle',
       sessionId: input.sessionId,
       providerSessionId: session.providerSessionId,
-      leafUuid: session.leafUuid,
+      leafUuid,
       fence: session.fence
     })
   } catch (error) {
@@ -187,6 +189,9 @@ async function finalizeClaudePublishedSession(
   }
   if (callbackThrew) {
     throw callbackError
+  }
+  if (rootExitVerdict) {
+    throw rootExitVerdict
   }
   return true
 }
@@ -230,11 +235,6 @@ export function closeClaudePublishedSessionForDeps(
       sessionId: string,
       state: AgentSessionBackgroundTaskState | null
     ) => void
-    readTranscriptLeaf?: (input: {
-      providerSessionId: string
-      previousLeafUuid: string | null
-      claudeConfigDir: string
-    }) => Promise<string | null>
   }
 ): Promise<boolean> {
   return closeClaudePublishedSession({ sessions, sessionId, ...deps })
@@ -255,14 +255,17 @@ export async function closeClaudeSession(input: {
     sessionId: string,
     state: AgentSessionBackgroundTaskState | null
   ) => void
-  readTranscriptLeaf?: (input: {
-    providerSessionId: string
-    previousLeafUuid: string | null
-    claudeConfigDir: string
-  }) => Promise<string | null>
 }): Promise<boolean> {
   const attempt = input.acquisitions.get(input.sessionId)
   if (!(await cancelClaudeAcquisitionAttempt(attempt))) {
+    const cleanupError = claudeAcquisitionCleanupError(
+      attempt?.connection,
+      new Error('acquisition cancel unproven')
+    )
+    // Why: cancellation must preserve the same actionable verdict as published-session close.
+    if (!(cleanupError instanceof AgentSessionAcquisitionExitUnprovenError)) {
+      throw cleanupError
+    }
     return false
   }
   if (attempt) {

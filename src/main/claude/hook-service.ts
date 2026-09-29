@@ -1,4 +1,5 @@
 import { existsSync, rmSync, writeFileSync } from 'node:fs'
+import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
@@ -21,7 +22,6 @@ import { getManagedStatusLineScript } from './statusline-script'
 import {
   applyManagedHooks,
   applyManagedStatusLine,
-  CLAUDE_EVENTS,
   CLAUDE_HOOK_SETTINGS,
   getManagedScriptFileName,
   getConfigPath,
@@ -40,11 +40,19 @@ import {
   removeManagedStatusLine,
   type ClaudeCompatibleHookSettings
 } from './hook-settings'
+import {
+  getClaudeManagedHookPlan,
+  OPENCLAUDE_MANAGED_HOOK_PLAN,
+  type ClaudeManagedHookPlan
+} from './claude-managed-hook-events'
 
 type ClaudeHookServiceOptions = {
   agent: AgentHookInstallStatus['agent']
   displayName: string
   settings: ClaudeCompatibleHookSettings
+  source?: AgentHookSource
+  /** A Claude-compatible CLI with its own settings file writes a fixed plan, not Claude's version table. */
+  hookPlan?: ClaudeManagedHookPlan
 }
 
 type ClaudeHookInstallOptions = {
@@ -64,7 +72,15 @@ export class ClaudeHookService {
     this.options = options
   }
 
-  getStatus(): AgentHookInstallStatus {
+  // Why: Claude's settings loader rejects events newer than the running CLI, so its plan follows the
+  // resolved version; OpenClaude and Qoder read their own settings files.
+  private managedHookPlan(options: ClaudeHookInstallOptions): ClaudeManagedHookPlan {
+    return this.options.agent === 'claude'
+      ? getClaudeManagedHookPlan(options.claudeVersion)
+      : (this.options.hookPlan ?? OPENCLAUDE_MANAGED_HOOK_PLAN)
+  }
+
+  getStatus(options: ClaudeHookInstallOptions = {}): AgentHookInstallStatus {
     const configPath = getConfigPath(this.options.settings)
     const scriptPath = getManagedScriptPath(this.options.settings)
     const config = readHooksJson(configPath)
@@ -82,7 +98,7 @@ export class ClaudeHookService {
     const expectedHook = getManagedLifecycleHook(scriptPath, this.options.settings)
     const missing: string[] = []
     let presentCount = 0
-    for (const event of CLAUDE_EVENTS) {
+    for (const event of this.managedHookPlan(options).install) {
       const definitions = Array.isArray(config.hooks?.[event.eventName])
         ? config.hooks![event.eventName]!
         : []
@@ -115,6 +131,7 @@ export class ClaudeHookService {
     await refreshManagedScriptIfPresent(
       getManagedScriptPath(this.options.settings),
       getManagedScript('local', {
+        source: this.options.source,
         skipWhenDevinImportsClaude: this.options.agent === 'claude',
         skipWhenGrokImportsClaude: this.options.agent === 'claude'
       })
@@ -141,25 +158,28 @@ export class ClaudeHookService {
     }
 
     const hook = getManagedLifecycleHook(scriptPath, this.options.settings)
+    const plan = this.managedHookPlan(options)
     let nextConfig = applyManagedHooks(
       config,
       hook,
       getManagedScriptFileName(this.options.settings),
-      this.options.agent === 'claude' ? options : undefined
+      plan
     )
     writeManagedScript(
       scriptPath,
       getManagedScript('local', {
+        source: this.options.source,
         skipWhenDevinImportsClaude: this.options.agent === 'claude',
         skipWhenGrokImportsClaude: this.options.agent === 'claude'
       })
     )
-    // Why: the statusline usage feed is Claude-only — OpenClaude data would be misattributed to the Claude provider.
-    if (this.options.agent === 'claude') {
+    if (plan.statusLine === 'install') {
       nextConfig = this.installManagedStatusLine(nextConfig)
+    } else if (plan.statusLine === 'retire') {
+      nextConfig = this.retireManagedStatusLine(nextConfig)
     }
     writeHooksJson(configPath, nextConfig)
-    return this.getStatus()
+    return this.getStatus(options)
   }
 
   // Why: the statusline feed is opportunistic (usage display, not agent status); a user who deleted the
@@ -182,6 +202,23 @@ export class ClaudeHookService {
       writeFileSync(markerPath, '')
     } catch {
       // Best-effort: a missing marker only means one future user deletion gets re-installed once.
+    }
+    return next
+  }
+
+  // Why: a Claude that predates statusLine discards the whole settings file over Orca's; dropping the
+  // marker with it keeps an upgrade from reading the removal as the user's opt-out.
+  private retireManagedStatusLine(config: HooksConfig): HooksConfig {
+    const { config: next, changed } = removeManagedStatusLine(
+      config,
+      getStatusLineScriptFileName(this.options.settings)
+    )
+    if (changed) {
+      try {
+        rmSync(getStatusLineInstallMarkerPath(this.options.settings), { force: true })
+      } catch {
+        // Best-effort: a stale marker only means one upgrade skips re-adding the statusline.
+      }
     }
     return next
   }
@@ -215,7 +252,7 @@ export class ClaudeHookService {
         config,
         hook,
         remoteScriptFileName,
-        this.options.agent === 'claude' ? options : undefined
+        this.managedHookPlan(options)
       )
 
       // Why: write scripts before settings to avoid settings pointing to missing scripts.
@@ -224,6 +261,7 @@ export class ClaudeHookService {
         sftp,
         remoteScriptPath,
         getManagedScript('posix', {
+          source: this.options.source,
           skipWhenDevinImportsClaude: this.options.agent === 'claude',
           skipWhenGrokImportsClaude: this.options.agent === 'claude'
         })

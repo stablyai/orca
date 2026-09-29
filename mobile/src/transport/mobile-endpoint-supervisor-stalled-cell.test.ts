@@ -43,7 +43,8 @@ describe('relay dial against a cell that took the dial and stalled', () => {
     const onLog = vi.fn()
     const supervisor = new MobileEndpointSupervisor(
       logical,
-      host,
+      host.id,
+      relay,
       dependencies({ openRelay, resolveRelay, onLog })
     )
 
@@ -67,7 +68,8 @@ describe('relay dial against a cell that took the dial and stalled', () => {
     const resolveRelay = vi.fn(async () => relay)
     const supervisor = new MobileEndpointSupervisor(
       logical,
-      host,
+      host.id,
+      relay,
       dependencies({ openRelay, resolveRelay })
     )
 

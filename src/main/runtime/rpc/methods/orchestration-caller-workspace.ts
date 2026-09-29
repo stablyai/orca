@@ -14,12 +14,18 @@
  */
 
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { OrchestrationSessionCaller } from '../../orchestration/orchestration-caller-identity'
 import { isStructuredWorkerHandle } from '../../structured-worker-identity'
 
 export async function resolveDispatchCallerWorktreeId(
   runtime: Pick<OrcaRuntimeService, 'showTerminal' | 'getOrchestrationDispatchAuthority'>,
-  callerHandle: string
+  callerHandle: string,
+  callerSession: OrchestrationSessionCaller | undefined
 ): Promise<string> {
+  // A session caller's workspace is on its record, whichever owner (chat or terminal) holds it.
+  if (callerSession) {
+    return callerSession.workspaceId
+  }
   if (isStructuredWorkerHandle(callerHandle)) {
     const worktreeId = runtime.getOrchestrationDispatchAuthority?.(callerHandle)?.worktreeId ?? null
     if (worktreeId) {

@@ -1,22 +1,48 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DaemonSessionInfo } from '../daemon/types'
 
+// Mirrors DaemonFolderAccessResetResult; declared here so the mock is not typed by the module it
+// replaces.
+type FolderAccessResetResult = {
+  outcome: string
+  mismatch?: { daemonScope: string; cwdClass: string; freshDaemonAccess: string } | null
+}
+
 const {
   handleMock,
   removeHandlerMock,
   getDaemonProviderMock,
   restartDaemonMock,
-  getCurrentDaemonMacTccAttributionHealthMock
+  getCurrentDaemonMacTccAttributionHealthMock,
+  getDaemonFolderAccessMismatchMock,
+  refreshDaemonFolderAccessProbeMock,
+  resetFolderAccessForDaemonMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   removeHandlerMock: vi.fn(),
   getDaemonProviderMock: vi.fn(),
   restartDaemonMock: vi.fn(),
-  getCurrentDaemonMacTccAttributionHealthMock: vi.fn(async () => 'unknown')
+  getCurrentDaemonMacTccAttributionHealthMock: vi.fn(async () => 'unknown'),
+  getDaemonFolderAccessMismatchMock: vi.fn<
+    () => { daemonScope: string; cwdClass: string; freshDaemonAccess: string } | null
+  >(() => null),
+  refreshDaemonFolderAccessProbeMock: vi.fn(async () => {}),
+  resetFolderAccessForDaemonMock: vi.fn<() => Promise<FolderAccessResetResult>>(async () => ({
+    outcome: 'unsupported'
+  }))
 }))
 
 vi.mock('electron', () => ({
   ipcMain: { handle: handleMock, removeHandler: removeHandlerMock }
+}))
+
+vi.mock('../daemon/daemon-folder-access-mismatch', () => ({
+  getDaemonFolderAccessMismatch: getDaemonFolderAccessMismatchMock,
+  refreshDaemonFolderAccessProbe: refreshDaemonFolderAccessProbeMock
+}))
+
+vi.mock('../daemon/daemon-folder-access-reset', () => ({
+  resetFolderAccessForDaemon: resetFolderAccessForDaemonMock
 }))
 
 vi.mock('../daemon/daemon-init', () => ({
@@ -35,11 +61,20 @@ vi.mock('../daemon/daemon-init', () => ({
 vi.mock('../daemon/daemon-pty-router', () => {
   class DaemonPtyRouter {
     private allAdapters: unknown[]
+    private current: unknown
     constructor(opts: { current: unknown; legacy: unknown[] }) {
+      this.current = opts.current
       this.allAdapters = [opts.current, ...opts.legacy]
     }
     getAllAdapters() {
       return this.allAdapters
+    }
+    // Why: the folder-access read asks the *current* adapter for the daemon identity.
+    getCurrentAdapter() {
+      return this.current
+    }
+    getLegacyAdapters() {
+      return this.allAdapters.slice(1)
     }
   }
   return { DaemonPtyRouter }
@@ -51,9 +86,17 @@ vi.mock('../daemon/daemon-pty-router', () => {
 vi.mock('../daemon/degraded-daemon-pty-provider', () => {
   class DegradedDaemonPtyProvider {
     private allAdapters: unknown[]
+    private current: unknown
     private routesFreshToFallback = true
     constructor(opts: { current: unknown; legacy: unknown[] }) {
+      this.current = opts.current
       this.allAdapters = [opts.current, ...opts.legacy]
+    }
+    getCurrentAdapter() {
+      return this.current
+    }
+    getLegacyAdapters() {
+      return this.allAdapters.slice(1)
     }
     get routesFreshSpawnsToLocalProvider(): true | undefined {
       return this.routesFreshToFallback ? true : undefined
@@ -103,6 +146,7 @@ type MockAdapter = {
   protocolVersion: number
   listSessions: ReturnType<typeof vi.fn>
   shutdown: ReturnType<typeof vi.fn>
+  getDaemonIdentity: ReturnType<typeof vi.fn>
 }
 
 function makeAdapter(
@@ -117,7 +161,8 @@ function makeAdapter(
   return {
     protocolVersion,
     listSessions: vi.fn(async () => sessions.map(({ protocolVersion: _pv, ...rest }) => rest)),
-    shutdown: vi.fn(shutdownImpl ?? (async () => {}))
+    shutdown: vi.fn(shutdownImpl ?? (async () => {})),
+    getDaemonIdentity: vi.fn(() => ({ pid: 1530, startedAtMs: 1_700_000, launchNonce: 'n1' }))
   }
 }
 
@@ -148,6 +193,9 @@ describe('pty:management IPC handlers', () => {
     restartDaemonMock.mockReset()
     getCurrentDaemonMacTccAttributionHealthMock.mockReset()
     getCurrentDaemonMacTccAttributionHealthMock.mockResolvedValue('unknown')
+    getDaemonFolderAccessMismatchMock.mockReset().mockReturnValue(null)
+    refreshDaemonFolderAccessProbeMock.mockReset().mockResolvedValue(undefined)
+    resetFolderAccessForDaemonMock.mockReset().mockResolvedValue({ outcome: 'unsupported' })
   })
 
   afterEach(() => {
@@ -465,32 +513,128 @@ describe('pty:management IPC handlers', () => {
   })
 
   describe('macTccAttribution', () => {
+    type AttributionResult = {
+      health: string
+      folderAccessMismatch: {
+        daemonScope: string
+        cwdClass: string
+        freshDaemonAccess: string
+      } | null
+    }
+
+    async function readAttribution(): Promise<AttributionResult> {
+      const { registerDaemonManagementHandlers } = await importFresh()
+      registerDaemonManagementHandlers()
+      const handlers = buildHandlerMap()
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler map is untyped by construction; this channel's handler is the one registered above.
+      return (await handlers['pty:management:macTccAttribution']({})) as AttributionResult
+    }
+
     it('reports the daemon attribution health', async () => {
       getCurrentDaemonMacTccAttributionHealthMock.mockResolvedValue('severed')
 
-      const { registerDaemonManagementHandlers } = await importFresh()
-      registerDaemonManagementHandlers()
-
-      const handlers = buildHandlerMap()
-      const result = (await handlers['pty:management:macTccAttribution']({})) as {
-        health: string
-      }
+      const result = await readAttribution()
 
       expect(result.health).toBe('severed')
+      expect(result.folderAccessMismatch).toBeNull()
     })
 
-    it('fails open to unknown when the probe throws', async () => {
+    it('fails open to unknown when the probe throws, keeping the folder evidence', async () => {
       getCurrentDaemonMacTccAttributionHealthMock.mockRejectedValue(new Error('no pid record'))
+      const current = makeAdapter(5, [])
+      getDaemonProviderMock.mockReturnValue(await makeRouter(current, []))
+      getDaemonFolderAccessMismatchMock.mockReturnValue(evidence('denied'))
 
-      const { registerDaemonManagementHandlers } = await importFresh()
-      registerDaemonManagementHandlers()
-
-      const handlers = buildHandlerMap()
-      const result = (await handlers['pty:management:macTccAttribution']({})) as {
-        health: string
-      }
+      const result = await readAttribution()
 
       expect(result.health).toBe('unknown')
+      expect(result.folderAccessMismatch).toEqual(evidence('denied'))
+    })
+
+    it('carries folder-access evidence for the current daemon', async () => {
+      const current = makeAdapter(5, [])
+      getDaemonProviderMock.mockReturnValue(await makeRouter(current, [makeAdapter(4, [])]))
+      getDaemonFolderAccessMismatchMock.mockReturnValue({
+        daemonScope: 'abc123def4567890',
+        cwdClass: 'documents',
+        freshDaemonAccess: 'allowed'
+      })
+
+      const result = await readAttribution()
+
+      expect(result.folderAccessMismatch).toEqual({
+        daemonScope: 'abc123def4567890',
+        cwdClass: 'documents',
+        freshDaemonAccess: 'allowed'
+      })
+      // Why: evidence belongs to the daemon spawning terminals now, never a legacy adapter's.
+      expect(getDaemonFolderAccessMismatchMock).toHaveBeenCalledWith({
+        pid: 1530,
+        startedAtMs: 1_700_000,
+        launchNonce: 'n1'
+      })
+      expect(current.getDaemonIdentity).toHaveBeenCalled()
+    })
+
+    function evidence(freshDaemonAccess: string): {
+      daemonScope: string
+      cwdClass: string
+      freshDaemonAccess: string
+    } {
+      return { daemonScope: 'abc123def4567890', cwdClass: 'documents', freshDaemonAccess }
+    }
+
+    // Why re-probe on the poll: the fix dialog's first step completes in System Settings, and
+    // this is the only moment anything can notice that it landed.
+    it.each([['denied'], ['unknown']])(
+      'reports the verdict the re-probe leaves behind, not the %s one it started from',
+      async (initial) => {
+        getDaemonFolderAccessMismatchMock.mockReturnValue(evidence(initial))
+        refreshDaemonFolderAccessProbeMock.mockImplementation(async () => {
+          getDaemonFolderAccessMismatchMock.mockReturnValue(evidence('allowed'))
+        })
+
+        const result = await readAttribution()
+
+        expect(refreshDaemonFolderAccessProbeMock).toHaveBeenCalledTimes(1)
+        expect(result.folderAccessMismatch?.freshDaemonAccess).toBe('allowed')
+      }
+    )
+
+    // Whether a refresh is worth running is the refresh's own decision; the handler just reports
+    // whatever evidence is there afterwards.
+    it('reports a settled allowed verdict unchanged', async () => {
+      getDaemonFolderAccessMismatchMock.mockReturnValue(evidence('allowed'))
+
+      const result = await readAttribution()
+
+      expect(result.folderAccessMismatch).toEqual(evidence('allowed'))
+    })
+
+    it('reports no evidence at all as no mismatch', async () => {
+      getDaemonFolderAccessMismatchMock.mockReturnValue(null)
+
+      const result = await readAttribution()
+
+      expect(result.folderAccessMismatch).toBeNull()
+    })
+
+    it('keeps the folder evidence when the refresh throws', async () => {
+      getDaemonFolderAccessMismatchMock.mockReturnValue(evidence('denied'))
+      refreshDaemonFolderAccessProbeMock.mockRejectedValue(new Error('probe exploded'))
+
+      const result = await readAttribution()
+
+      expect(result.folderAccessMismatch).toEqual(evidence('denied'))
+    })
+
+    it('reads a null identity when no daemon provider exists', async () => {
+      getDaemonProviderMock.mockReturnValue(null)
+
+      const result = await readAttribution()
+
+      expect(getDaemonFolderAccessMismatchMock).toHaveBeenCalledWith(null)
+      expect(result.folderAccessMismatch).toBeNull()
     })
   })
 
@@ -520,6 +664,58 @@ describe('pty:management IPC handlers', () => {
       consoleErrorSpy.mockRestore()
 
       expect(result.success).toBe(false)
+    })
+  })
+
+  describe('resetFolderAccess', () => {
+    async function runReset(): Promise<FolderAccessResetResult> {
+      const { registerDaemonManagementHandlers } = await importFresh()
+      registerDaemonManagementHandlers()
+      const handlers = buildHandlerMap()
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler map is untyped by construction; this channel's handler is the one registered above.
+      return (await handlers['pty:management:resetFolderAccess']({})) as FolderAccessResetResult
+    }
+
+    it('hands the current daemon to the reset and returns its verdict', async () => {
+      const current = makeAdapter(5, [])
+      getDaemonProviderMock.mockReturnValue(await makeRouter(current, [makeAdapter(4, [])]))
+      resetFolderAccessForDaemonMock.mockResolvedValue({
+        outcome: 'probed',
+        mismatch: {
+          daemonScope: 'abc123def4567890',
+          cwdClass: 'documents',
+          freshDaemonAccess: 'allowed'
+        }
+      })
+
+      expect(await runReset()).toEqual({
+        outcome: 'probed',
+        mismatch: {
+          daemonScope: 'abc123def4567890',
+          cwdClass: 'documents',
+          freshDaemonAccess: 'allowed'
+        }
+      })
+      // Why the current adapter: a legacy daemon's denial is not the one the user is looking at.
+      expect(resetFolderAccessForDaemonMock).toHaveBeenCalledWith({
+        pid: 1530,
+        startedAtMs: 1_700_000,
+        launchNonce: 'n1'
+      })
+    })
+
+    it('reports unsupported rather than rejecting when the reset throws', async () => {
+      resetFolderAccessForDaemonMock.mockRejectedValue(new Error('no app bundle'))
+
+      expect(await runReset()).toEqual({ outcome: 'unsupported' })
+    })
+
+    it('registers the channel exactly once per registration', async () => {
+      const { registerDaemonManagementHandlers } = await importFresh()
+      registerDaemonManagementHandlers()
+
+      expect(removeHandlerMock).toHaveBeenCalledWith('pty:management:resetFolderAccess')
+      expect(buildHandlerMap()['pty:management:resetFolderAccess']).toBeTypeOf('function')
     })
   })
 })

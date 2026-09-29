@@ -44,7 +44,9 @@ describe('OrcaRuntimeService', () => {
       const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
 
       await expect(runtime.isTerminalRunningSettledPromptAgent(handle)).resolves.toBe(true)
-      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change')
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change', {
+        inputKind: 'driving'
+      })
       await vi.advanceTimersByTimeAsync(1_199)
       expect(writes).not.toContain('\r')
       await vi.advanceTimersByTimeAsync(1_500)
@@ -78,7 +80,9 @@ describe('OrcaRuntimeService', () => {
         launchAgent: 'claude'
       })
 
-      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change')
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change', {
+        inputKind: 'driving'
+      })
       await vi.advanceTimersByTimeAsync(renderGateCapMs('review this change') - 1)
       expect(writes).not.toContain('\r')
 
@@ -117,7 +121,9 @@ describe('OrcaRuntimeService', () => {
         launchAgent: 'codex'
       })
 
-      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change')
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change', {
+        inputKind: 'driving'
+      })
       await vi.advanceTimersByTimeAsync(8_000)
       expect(writes).not.toContain('\r')
       await vi.advanceTimersByTimeAsync(1_599)
@@ -159,7 +165,9 @@ describe('OrcaRuntimeService', () => {
         launchAgent: 'claude'
       })
 
-      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change')
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change', {
+        inputKind: 'driving'
+      })
       // The marker at 100 ms re-arms the cap, but the ingest term is absolute: a prompt this
       // small is already ingested by then, so the fallback is one flat render timeout later.
       await vi.advanceTimersByTimeAsync(100 + 8_000 - 1)
@@ -193,7 +201,7 @@ describe('OrcaRuntimeService', () => {
       })
       const prompt = `${'x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES)}\ntail`
 
-      const sendPromise = runtime.sendTerminalAgentPrompt(handle, prompt)
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, prompt, { inputKind: 'driving' })
       await vi.runAllTimersAsync()
       const result = await sendPromise
 
@@ -230,7 +238,7 @@ describe('OrcaRuntimeService', () => {
       })
       const prompt = 'x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES + 1)
 
-      const sendPromise = runtime.sendTerminalAgentPrompt(handle, prompt)
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, prompt, { inputKind: 'driving' })
       const sendRejection = expect(sendPromise).rejects.toThrow('terminal_not_writable')
       await vi.runAllTimersAsync()
 
@@ -258,7 +266,7 @@ describe('OrcaRuntimeService', () => {
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
     const text = ['x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES), 'tail'].join('')
 
-    const result = await runtime.sendTerminal(handle, { text })
+    const result = await runtime.sendTerminal(handle, { text }, { inputKind: 'driving' })
 
     expect(result).toMatchObject({
       handle,
@@ -285,7 +293,7 @@ describe('OrcaRuntimeService', () => {
       const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
 
       const text = `${'x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES)}\nline two\nline three`
-      await runtime.sendTerminal(handle, { text, enter: true })
+      await runtime.sendTerminal(handle, { text, enter: true }, { inputKind: 'driving' })
 
       expect(writes.at(-1)).toBe('\r')
       expect(writes.slice(0, -1).join('')).toBe(text)
@@ -312,7 +320,7 @@ describe('OrcaRuntimeService', () => {
 
     vi.useFakeTimers()
     try {
-      const sendPromise = runtime.sendTerminal(handle, { text })
+      const sendPromise = runtime.sendTerminal(handle, { text }, { inputKind: 'driving' })
 
       expect(writes).toEqual([])
 
@@ -346,7 +354,11 @@ describe('OrcaRuntimeService', () => {
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
 
     await expect(
-      runtime.sendTerminal(handle, { text: 'x'.repeat(TERMINAL_INPUT_MAX_BYTES + 1) })
+      runtime.sendTerminal(
+        handle,
+        { text: 'x'.repeat(TERMINAL_INPUT_MAX_BYTES + 1) },
+        { inputKind: 'driving' }
+      )
     ).rejects.toThrow(TERMINAL_INPUT_TOO_LARGE_ERROR)
     expect(writes).toEqual([])
   })

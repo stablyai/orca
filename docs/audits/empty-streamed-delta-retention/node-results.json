@@ -1,0 +1,864 @@
+{
+  "runtime": {
+    "node": "26.6.0",
+    "acorn": "8.17.0",
+    "ada": "4.0.0",
+    "amaro": "1.1.11",
+    "ares": "1.34.8",
+    "brotli": "1.2.0",
+    "cldr": "48.0",
+    "icu": "78.3",
+    "libffi": "3.7.1",
+    "llhttp": "9.4.3",
+    "merve": "1.2.2",
+    "modules": "147",
+    "napi": "10",
+    "nbytes": "0.1.4",
+    "ncrypto": "0.0.1",
+    "nghttp2": "1.70.0",
+    "nghttp3": "",
+    "ngtcp2": "",
+    "openssl": "3.6.3",
+    "simdjson": "4.6.6",
+    "simdutf": "7.7.0",
+    "sqlite": "3.53.4",
+    "tz": "2026a",
+    "undici": "8.9.0",
+    "unicode": "17.0",
+    "uv": "1.52.1",
+    "uvwasi": "0.0.23",
+    "v8": "14.6.202.34-node.26",
+    "zlib": "1.2.12",
+    "zstd": "1.5.7"
+  },
+  "sourceVersions": {
+    "main": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+    "reported": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+    "reportedTag": "v1.4.198"
+  },
+  "scope": "Exact current/main coalescer before/after plus exact v1.4.198 coalescer and same local guard, using current Codex stream callers/dependencies. Not a packaged historical release replay.",
+  "crlfLoaderControl": {
+    "reads": 3,
+    "equal": true
+  },
+  "artifactHashes": {
+    "sources.cjs": "7902098e4cd0e07825684c778d7d2af74ba1438a55ccf0b9ffe6eb96f76698c8",
+    "scenario.cjs": "66cfb53b821f631d2f57988c2fab5d28aa0da95fb4a6a3a2b8b643a82d233550",
+    "reproduce.cjs": "e55b45abda1a7c6078cc3fc867f2553cf9ed6ffea10fbffdb61c99494d797fe1",
+    "before.config.mjs": "a55e7576be2348edddc137af9c34fca4323bd060d325a1140ab0ede66618c6e9",
+    "source-versions.json": "1038900fcbc3310ae4b38eb8603d0eea3d6a417c3835a70f3537d27eee6debc9",
+    "fix.patch": "06f11750dcd64042b7f208b00ae0feb3e0bdea6d5db66b3823ce063fce8ab97a",
+    "reported.patch": "9d340925bd2a875334a1a4c3ce58c4ba0f977c66bf0c6f5d66848f862fc95d59"
+  },
+  "phases": {
+    "baseline": {
+      "sourceSha256": "48828e4ee21858075cbb87ec1caa4a82991a55f80928482615d1df7ec5dc0fb2",
+      "bundleSha256": "cbdd64b9e21f410645660ac33afe3bede8a58b7680641d5d98883facc0e6a120",
+      "samples": [
+        {
+          "streams": 1,
+          "slots": 16384,
+          "retainedBytes": 0,
+          "observedBytes": 0
+        },
+        {
+          "streams": 1,
+          "slots": 32768,
+          "retainedBytes": 0,
+          "observedBytes": 0
+        },
+        {
+          "streams": 1,
+          "slots": 49152,
+          "retainedBytes": 0,
+          "observedBytes": 0
+        },
+        {
+          "streams": 1,
+          "slots": 65536,
+          "retainedBytes": 0,
+          "observedBytes": 0
+        }
+      ],
+      "behavior": {
+        "scheduled": 6,
+        "published": 5,
+        "publications": [
+          {
+            "identity": {
+              "provider": "codex",
+              "threadId": "thread-a",
+              "turnId": "turn-a",
+              "ordinal": 0
+            },
+            "body": {
+              "kind": "message",
+              "role": "assistant",
+              "blocks": [
+                {
+                  "type": "text",
+                  "text": ""
+                }
+              ]
+            }
+          },
+          {
+            "identity": {
+              "provider": "codex",
+              "threadId": "thread-a",
+              "turnId": "turn-a",
+              "ordinal": 0
+            },
+            "body": {
+              "kind": "message",
+              "role": "assistant",
+              "blocks": [
+                {
+                  "type": "text",
+                  "text": ""
+                }
+              ]
+            }
+          },
+          {
+            "identity": {
+              "provider": "codex",
+              "threadId": "thread-a",
+              "turnId": "turn-a",
+              "ordinal": 0
+            },
+            "body": {
+              "kind": "message",
+              "role": "assistant",
+              "blocks": [
+                {
+                  "type": "text",
+                  "text": ""
+                }
+              ]
+            }
+          },
+          {
+            "identity": {
+              "provider": "codex",
+              "threadId": "thread-a",
+              "turnId": "turn-a",
+              "ordinal": 0
+            },
+            "body": {
+              "kind": "message",
+              "role": "assistant",
+              "blocks": [
+                {
+                  "type": "text",
+                  "text": ""
+                }
+              ]
+            }
+          },
+          {
+            "identity": {
+              "provider": "codex",
+              "threadId": "thread-a",
+              "turnId": "turn-a",
+              "ordinal": 0
+            },
+            "body": {
+              "kind": "message",
+              "role": "assistant",
+              "blocks": [
+                {
+                  "type": "text",
+                  "text": "hé"
+                }
+              ]
+            }
+          }
+        ],
+        "directScheduled": 7,
+        "emitted": [
+          {
+            "key": "one",
+            "text": "",
+            "snapshot": {
+              "text": "",
+              "observedBytes": 0,
+              "truncated": false
+            }
+          },
+          {
+            "key": "one",
+            "text": "",
+            "snapshot": {
+              "text": "",
+              "observedBytes": 0,
+              "truncated": false
+            }
+          },
+          {
+            "key": "one",
+            "text": "unchanged",
+            "snapshot": {
+              "text": "unchanged",
+              "observedBytes": 9,
+              "truncated": false
+            }
+          },
+          {
+            "key": "one",
+            "text": "unchanged",
+            "snapshot": {
+              "text": "unchanged",
+              "observedBytes": 9,
+              "truncated": false
+            }
+          },
+          {
+            "key": "two",
+            "text": "",
+            "snapshot": {
+              "text": "",
+              "observedBytes": 0,
+              "truncated": false
+            }
+          },
+          {
+            "key": "two",
+            "text": "😀😀😀😀😀😀😀\n[Orca: streamed output truncated]",
+            "snapshot": {
+              "text": "😀😀😀😀😀😀😀\n[Orca: streamed output truncated]",
+              "observedBytes": 400,
+              "truncated": true
+            }
+          }
+        ],
+        "truncated": {
+          "text": "😀😀😀😀😀😀😀\n[Orca: streamed output truncated]",
+          "observedBytes": 400,
+          "truncated": true
+        }
+      },
+      "controls": [
+        "actual Codex empty notification stream",
+        "empty snapshot remains present",
+        "four explicit flushes",
+        "Unicode text retained",
+        "forget clears",
+        "dispose clears",
+        "first empty publication and retries",
+        "emit receiver preserved",
+        "new empty key rejected under backpressure",
+        "accepted eviction",
+        "UTF-8 truncation",
+        "already-truncated empty append keeps no-new-publication behavior"
+      ]
+    },
+    "fixed": {
+      "sourceSha256": "7caf0f24250b42e0ac4fe99e93bcbe0a4acb7cb3465fdde6b248d8bf6ba0d2d0",
+      "bundleSha256": "3e8b7e8430737f4cb0ca8454add7730770d8cd19ab175266d8b7626a059f3912",
+      "samples": [
+        {
+          "streams": 1,
+          "slots": 0,
+          "retainedBytes": 0,
+          "observedBytes": 0
+        },
+        {
+          "streams": 1,
+          "slots": 0,
+          "retainedBytes": 0,
+          "observedBytes": 0
+        },
+        {
+          "streams": 1,
+          "slots": 0,
+          "retainedBytes": 0,
+          "observedBytes": 0
+        },
+        {
+          "streams": 1,
+          "slots": 0,
+          "retainedBytes": 0,
+          "observedBytes": 0
+        }
+      ],
+      "behavior": {
+        "scheduled": 6,
+        "published": 5,
+        "publications": [
+          {
+            "identity": {
+              "provider": "codex",
+              "threadId": "thread-a",
+              "turnId": "turn-a",
+              "ordinal": 0
+            },
+            "body": {
+              "kind": "message",
+              "role": "assistant",
+              "blocks": [
+                {
+                  "type": "text",
+                  "text": ""
+                }
+              ]
+            }
+          },
+          {
+            "identity": {
+              "provider": "codex",
+              "threadId": "thread-a",
+              "turnId": "turn-a",
+              "ordinal": 0
+            },
+            "body": {
+              "kind": "message",
+              "role": "assistant",
+              "blocks": [
+                {
+                  "type": "text",
+                  "text": ""
+                }
+              ]
+            }
+          },
+          {
+            "identity": {
+              "provider": "codex",
+              "threadId": "thread-a",
+              "turnId": "turn-a",
+              "ordinal": 0
+            },
+            "body": {
+              "kind": "message",
+              "role": "assistant",
+              "blocks": [
+                {
+                  "type": "text",
+                  "text": ""
+                }
+              ]
+            }
+          },
+          {
+            "identity": {
+              "provider": "codex",
+              "threadId": "thread-a",
+              "turnId": "turn-a",
+              "ordinal": 0
+            },
+            "body": {
+              "kind": "message",
+              "role": "assistant",
+              "blocks": [
+                {
+                  "type": "text",
+                  "text": ""
+                }
+              ]
+            }
+          },
+          {
+            "identity": {
+              "provider": "codex",
+              "threadId": "thread-a",
+              "turnId": "turn-a",
+              "ordinal": 0
+            },
+            "body": {
+              "kind": "message",
+              "role": "assistant",
+              "blocks": [
+                {
+                  "type": "text",
+                  "text": "hé"
+                }
+              ]
+            }
+          }
+        ],
+        "directScheduled": 7,
+        "emitted": [
+          {
+            "key": "one",
+            "text": "",
+            "snapshot": {
+              "text": "",
+              "observedBytes": 0,
+              "truncated": false
+            }
+          },
+          {
+            "key": "one",
+            "text": "",
+            "snapshot": {
+              "text": "",
+              "observedBytes": 0,
+              "truncated": false
+            }
+          },
+          {
+            "key": "one",
+            "text": "unchanged",
+            "snapshot": {
+              "text": "unchanged",
+              "observedBytes": 9,
+              "truncated": false
+            }
+          },
+          {
+            "key": "one",
+            "text": "unchanged",
+            "snapshot": {
+              "text": "unchanged",
+              "observedBytes": 9,
+              "truncated": false
+            }
+          },
+          {
+            "key": "two",
+            "text": "",
+            "snapshot": {
+              "text": "",
+              "observedBytes": 0,
+              "truncated": false
+            }
+          },
+          {
+            "key": "two",
+            "text": "😀😀😀😀😀😀😀\n[Orca: streamed output truncated]",
+            "snapshot": {
+              "text": "😀😀😀😀😀😀😀\n[Orca: streamed output truncated]",
+              "observedBytes": 400,
+              "truncated": true
+            }
+          }
+        ],
+        "truncated": {
+          "text": "😀😀😀😀😀😀😀\n[Orca: streamed output truncated]",
+          "observedBytes": 400,
+          "truncated": true
+        }
+      },
+      "controls": [
+        "actual Codex empty notification stream",
+        "empty snapshot remains present",
+        "four explicit flushes",
+        "Unicode text retained",
+        "forget clears",
+        "dispose clears",
+        "first empty publication and retries",
+        "emit receiver preserved",
+        "new empty key rejected under backpressure",
+        "accepted eviction",
+        "UTF-8 truncation",
+        "already-truncated empty append keeps no-new-publication behavior"
+      ]
+    },
+    "reported": {
+      "sourceSha256": "bfff14bd820a2d7be90e82db6403d2415c0fb3de998cf61d7c3830ff4c415605",
+      "bundleSha256": "c8e429f7f35a4a61c3189fcedcac5abc9658dab841ea927cf285f90eeccd381c",
+      "samples": [
+        {
+          "streams": 1,
+          "slots": 16384,
+          "retainedBytes": 0,
+          "observedBytes": 0
+        },
+        {
+          "streams": 1,
+          "slots": 32768,
+          "retainedBytes": 0,
+          "observedBytes": 0
+        },
+        {
+          "streams": 1,
+          "slots": 49152,
+          "retainedBytes": 0,
+          "observedBytes": 0
+        },
+        {
+          "streams": 1,
+          "slots": 65536,
+          "retainedBytes": 0,
+          "observedBytes": 0
+        }
+      ],
+      "behavior": {
+        "scheduled": 6,
+        "published": 5,
+        "publications": [
+          {
+            "identity": {
+              "provider": "codex",
+              "threadId": "thread-a",
+              "turnId": "turn-a",
+              "ordinal": 0
+            },
+            "body": {
+              "kind": "message",
+              "role": "assistant",
+              "blocks": [
+                {
+                  "type": "text",
+                  "text": ""
+                }
+              ]
+            }
+          },
+          {
+            "identity": {
+              "provider": "codex",
+              "threadId": "thread-a",
+              "turnId": "turn-a",
+              "ordinal": 0
+            },
+            "body": {
+              "kind": "message",
+              "role": "assistant",
+              "blocks": [
+                {
+                  "type": "text",
+                  "text": ""
+                }
+              ]
+            }
+          },
+          {
+            "identity": {
+              "provider": "codex",
+              "threadId": "thread-a",
+              "turnId": "turn-a",
+              "ordinal": 0
+            },
+            "body": {
+              "kind": "message",
+              "role": "assistant",
+              "blocks": [
+                {
+                  "type": "text",
+                  "text": ""
+                }
+              ]
+            }
+          },
+          {
+            "identity": {
+              "provider": "codex",
+              "threadId": "thread-a",
+              "turnId": "turn-a",
+              "ordinal": 0
+            },
+            "body": {
+              "kind": "message",
+              "role": "assistant",
+              "blocks": [
+                {
+                  "type": "text",
+                  "text": ""
+                }
+              ]
+            }
+          },
+          {
+            "identity": {
+              "provider": "codex",
+              "threadId": "thread-a",
+              "turnId": "turn-a",
+              "ordinal": 0
+            },
+            "body": {
+              "kind": "message",
+              "role": "assistant",
+              "blocks": [
+                {
+                  "type": "text",
+                  "text": "hé"
+                }
+              ]
+            }
+          }
+        ],
+        "directScheduled": 7,
+        "emitted": [
+          {
+            "key": "one",
+            "text": "",
+            "snapshot": {
+              "text": "",
+              "observedBytes": 0,
+              "truncated": false
+            }
+          },
+          {
+            "key": "one",
+            "text": "",
+            "snapshot": {
+              "text": "",
+              "observedBytes": 0,
+              "truncated": false
+            }
+          },
+          {
+            "key": "one",
+            "text": "unchanged",
+            "snapshot": {
+              "text": "unchanged",
+              "observedBytes": 9,
+              "truncated": false
+            }
+          },
+          {
+            "key": "one",
+            "text": "unchanged",
+            "snapshot": {
+              "text": "unchanged",
+              "observedBytes": 9,
+              "truncated": false
+            }
+          },
+          {
+            "key": "two",
+            "text": "",
+            "snapshot": {
+              "text": "",
+              "observedBytes": 0,
+              "truncated": false
+            }
+          },
+          {
+            "key": "two",
+            "text": "😀😀😀😀😀😀😀\n[Orca: streamed output truncated]",
+            "snapshot": {
+              "text": "😀😀😀😀😀😀😀\n[Orca: streamed output truncated]",
+              "observedBytes": 400,
+              "truncated": true
+            }
+          }
+        ],
+        "truncated": {
+          "text": "😀😀😀😀😀😀😀\n[Orca: streamed output truncated]",
+          "observedBytes": 400,
+          "truncated": true
+        }
+      },
+      "controls": [
+        "actual Codex empty notification stream",
+        "empty snapshot remains present",
+        "four explicit flushes",
+        "Unicode text retained",
+        "forget clears",
+        "dispose clears",
+        "first empty publication and retries",
+        "emit receiver preserved",
+        "new empty key rejected under backpressure",
+        "accepted eviction",
+        "UTF-8 truncation",
+        "already-truncated empty append keeps no-new-publication behavior"
+      ]
+    },
+    "reportedFixed": {
+      "sourceSha256": "2f00aec9b7a4fb24cad4e01d1bf7e1d0b881076f9760b322cdf72c39594ae89c",
+      "bundleSha256": "3749aae7c5eb00f3eea98c66a7b0c4e0e7114cde1d983d89951bd4c21b33e680",
+      "samples": [
+        {
+          "streams": 1,
+          "slots": 0,
+          "retainedBytes": 0,
+          "observedBytes": 0
+        },
+        {
+          "streams": 1,
+          "slots": 0,
+          "retainedBytes": 0,
+          "observedBytes": 0
+        },
+        {
+          "streams": 1,
+          "slots": 0,
+          "retainedBytes": 0,
+          "observedBytes": 0
+        },
+        {
+          "streams": 1,
+          "slots": 0,
+          "retainedBytes": 0,
+          "observedBytes": 0
+        }
+      ],
+      "behavior": {
+        "scheduled": 6,
+        "published": 5,
+        "publications": [
+          {
+            "identity": {
+              "provider": "codex",
+              "threadId": "thread-a",
+              "turnId": "turn-a",
+              "ordinal": 0
+            },
+            "body": {
+              "kind": "message",
+              "role": "assistant",
+              "blocks": [
+                {
+                  "type": "text",
+                  "text": ""
+                }
+              ]
+            }
+          },
+          {
+            "identity": {
+              "provider": "codex",
+              "threadId": "thread-a",
+              "turnId": "turn-a",
+              "ordinal": 0
+            },
+            "body": {
+              "kind": "message",
+              "role": "assistant",
+              "blocks": [
+                {
+                  "type": "text",
+                  "text": ""
+                }
+              ]
+            }
+          },
+          {
+            "identity": {
+              "provider": "codex",
+              "threadId": "thread-a",
+              "turnId": "turn-a",
+              "ordinal": 0
+            },
+            "body": {
+              "kind": "message",
+              "role": "assistant",
+              "blocks": [
+                {
+                  "type": "text",
+                  "text": ""
+                }
+              ]
+            }
+          },
+          {
+            "identity": {
+              "provider": "codex",
+              "threadId": "thread-a",
+              "turnId": "turn-a",
+              "ordinal": 0
+            },
+            "body": {
+              "kind": "message",
+              "role": "assistant",
+              "blocks": [
+                {
+                  "type": "text",
+                  "text": ""
+                }
+              ]
+            }
+          },
+          {
+            "identity": {
+              "provider": "codex",
+              "threadId": "thread-a",
+              "turnId": "turn-a",
+              "ordinal": 0
+            },
+            "body": {
+              "kind": "message",
+              "role": "assistant",
+              "blocks": [
+                {
+                  "type": "text",
+                  "text": "hé"
+                }
+              ]
+            }
+          }
+        ],
+        "directScheduled": 7,
+        "emitted": [
+          {
+            "key": "one",
+            "text": "",
+            "snapshot": {
+              "text": "",
+              "observedBytes": 0,
+              "truncated": false
+            }
+          },
+          {
+            "key": "one",
+            "text": "",
+            "snapshot": {
+              "text": "",
+              "observedBytes": 0,
+              "truncated": false
+            }
+          },
+          {
+            "key": "one",
+            "text": "unchanged",
+            "snapshot": {
+              "text": "unchanged",
+              "observedBytes": 9,
+              "truncated": false
+            }
+          },
+          {
+            "key": "one",
+            "text": "unchanged",
+            "snapshot": {
+              "text": "unchanged",
+              "observedBytes": 9,
+              "truncated": false
+            }
+          },
+          {
+            "key": "two",
+            "text": "",
+            "snapshot": {
+              "text": "",
+              "observedBytes": 0,
+              "truncated": false
+            }
+          },
+          {
+            "key": "two",
+            "text": "😀😀😀😀😀😀😀\n[Orca: streamed output truncated]",
+            "snapshot": {
+              "text": "😀😀😀😀😀😀😀\n[Orca: streamed output truncated]",
+              "observedBytes": 400,
+              "truncated": true
+            }
+          }
+        ],
+        "truncated": {
+          "text": "😀😀😀😀😀😀😀\n[Orca: streamed output truncated]",
+          "observedBytes": 400,
+          "truncated": true
+        }
+      },
+      "controls": [
+        "actual Codex empty notification stream",
+        "empty snapshot remains present",
+        "four explicit flushes",
+        "Unicode text retained",
+        "forget clears",
+        "dispose clears",
+        "first empty publication and retries",
+        "emit receiver preserved",
+        "new empty key rejected under backpressure",
+        "accepted eviction",
+        "UTF-8 truncation",
+        "already-truncated empty append keeps no-new-publication behavior"
+      ]
+    }
+  },
+  "measurement": "Read-only closure observes private Map and chunk-array cardinalities in source overlay. No heap/RSS measurement, native process or affected-host inference."
+}

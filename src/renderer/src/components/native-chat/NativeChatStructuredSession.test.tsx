@@ -2,7 +2,6 @@
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { decodeAgentSessionQuestionAnswers } from '../../../../shared/agent-session-question-answer'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import { useAppStore } from '@/store'
 import {
@@ -28,11 +27,28 @@ vi.mock('./NativeChatApprovalCard', () => moduleFactories.nativeChatApprovalCard
 vi.mock('./NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard())
 
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
+import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 
 describe('NativeChatStructuredSession', () => {
   afterEach(() => {
     cleanup()
     resetStructuredSessionMocks()
+  })
+
+  it('gives what a Stop withdrew back to the composer this pane shows', () => {
+    render(
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="structured-tab-1"
+        sessionId="session-1"
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    )
+    const paneKey = structuredAgentSessionPaneKey('structured-tab-1', 'session-1')
+    expect(mocks.composerProps).toMatchObject({ paneKey })
+    expect(mocks.controllerProps).toMatchObject({ composerScopeKey: paneKey })
   })
 
   it('routes the launch draft and app-menu paste to the structured composer', () => {
@@ -134,8 +150,52 @@ describe('NativeChatStructuredSession', () => {
     expect(mocks.fileLinkClick).toHaveBeenCalledWith(event, 'file:///repo/src/a.ts')
   })
 
-  // Turn status and transcript image previews shipped Codex-first. Every
-  // structured session renders through the same list, so neither is agent-gated.
+  // The list defaults to visible, so a dropped prop silently re-arms auto-scroll
+  // on reveal and drags a reader who left a hidden pane detached to the bottom.
+  it.each([true, false])('tells the transcript the pane is visible: %s', (isVisible) => {
+    render(
+      <NativeChatStructuredSession
+        isVisible={isVisible}
+        isFocusedGroup
+        tabId="structured-tab-visibility"
+        sessionId="session-visibility"
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    )
+
+    expect(mocks.messageListProps?.isVisible).toBe(isVisible)
+  })
+
+  // The list stops auto-loading on a failed page and re-arms on a new paging
+  // generation, so both the page result and the generation must reach it.
+  it('hands the list the controller older-history state, generation, and page result', async () => {
+    mocks.hasOlder = true
+    mocks.loadingOlder = true
+    mocks.olderHistoryGeneration = 3
+    mocks.loadOlder.mockResolvedValueOnce('failed')
+    render(
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="structured-tab-older"
+        sessionId="session-older"
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    )
+
+    expect(mocks.messageListProps?.session).toMatchObject({
+      hasMore: true,
+      loadingEarlier: true,
+      olderHistoryGeneration: 3
+    })
+    await expect(mocks.messageListProps?.session?.loadEarlier()).resolves.toBe('failed')
+    expect(mocks.loadOlder).toHaveBeenCalledOnce()
+  })
+
+  // Transcript image previews shipped Codex-first. Every structured session
+  // renders through the same list, so they are not agent-gated.
   it.each(['codex', 'claude'] as const)(
     'renders the same structured transcript chrome for %s',
     (agent) => {
@@ -150,7 +210,6 @@ describe('NativeChatStructuredSession', () => {
         />
       )
 
-      expect(mocks.messageListProps?.showTurnStatus).toBe(true)
       expect(mocks.messageListProps?.runtimeContext).not.toBeUndefined()
     }
   )
@@ -173,7 +232,7 @@ describe('NativeChatStructuredSession', () => {
 
     expect(mocks.messageListProps).toMatchObject({
       isWorking: true,
-      showLiveTurnActivity: false
+      awaitingInput: 'shown'
     })
     expect(
       document
@@ -188,13 +247,13 @@ describe('NativeChatStructuredSession', () => {
       itemId: 'legacy-question-item',
       expectedRevision: 1
     })
-    expect(mocks.messageListProps?.showLiveTurnActivity).toBe(false)
+    expect(mocks.messageListProps?.awaitingInput).toBe('shown')
 
     mocks.promptItems = []
     rerender(view())
     expect(mocks.messageListProps).toMatchObject({
       isWorking: true,
-      showLiveTurnActivity: true
+      awaitingInput: null
     })
     expect(screen.getByTestId('structured-composer')).toBeTruthy()
     expect(mocks.composerProps?.isWorking).toBe(true)
@@ -242,15 +301,18 @@ describe('NativeChatStructuredSession', () => {
 
     expect(mocks.messageListProps).toMatchObject({
       isWorking: true,
-      showLiveTurnActivity: false
+      awaitingInput: 'shown'
     })
     expect(mocks.approvalCardProps?.approval.title).toBe('Allow command?')
     expect(screen.queryByTestId('structured-composer')).toBeNull()
     expect(document.querySelector('[data-native-chat-background-tasks="true"]')).not.toBeNull()
 
     act(() => mocks.approvalCardProps?.onChoose('allow'))
-    expect(mocks.respond).toHaveBeenCalledWith(approvalItems[0], 'allow')
-    expect(mocks.messageListProps?.showLiveTurnActivity).toBe(false)
+    expect(mocks.respond).toHaveBeenCalledWith(approvalItems[0], {
+      kind: 'option',
+      optionId: 'allow'
+    })
+    expect(mocks.messageListProps?.awaitingInput).toBe('shown')
 
     act(() => mocks.approvalCardProps?.onCancel?.())
     expect(mocks.cancel).toHaveBeenCalledWith('turn-approval', {
@@ -322,6 +384,16 @@ describe('NativeChatStructuredSession', () => {
     expect(screen.getByRole('list', { name: 'Agents' })).toBeTruthy()
   })
 
+  it('offers Stop before any turn opens when the controller can stop, and stops through it', () => {
+    mocks.canStop = true
+    render(claudeSessionView('structured-tab-pre-turn', 'session-pre-turn'))
+
+    expect(mocks.composerProps?.isWorking).toBe(true)
+    act(() => mocks.composerProps?.onStop?.())
+    expect(mocks.stop).toHaveBeenCalledOnce()
+    expect(mocks.cancel).not.toHaveBeenCalled()
+  })
+
   it('keeps the strip mounted through a running turn, with the turn owning the voice', () => {
     // The strip stands for work that OUTLIVES a turn, so `show` is true while
     // `isMonitoring` is false: mounted, but not speaking as the live indicator.
@@ -354,7 +426,7 @@ describe('NativeChatStructuredSession', () => {
     let finishFirst!: (value: unknown) => void
     let finishSecond!: (value: unknown) => void
     mocks.stopBackgroundTask.mockImplementation(
-      (_sessionId: string, taskId: string) =>
+      (_sessionId: string, taskId?: string) =>
         new Promise((resolve) => {
           if (taskId === 'task-one') {
             finishFirst = resolve
@@ -491,14 +563,16 @@ describe('NativeChatStructuredSession', () => {
       { indices: [0, 1], other: '' },
       { indices: [], other: 'SSH host' }
     ])
-    const encoded = mocks.respond.mock.calls[0]?.[1]
-    expect(decodeAgentSessionQuestionAnswers(encoded)).toEqual([
-      { questionId: 'q1', optionIds: ['target-web', 'target-mobile'] },
-      { questionId: 'q2', optionIds: [], other: 'SSH host' }
-    ])
+    expect(mocks.respond).toHaveBeenCalledWith(mocks.promptItems[0], {
+      kind: 'answers',
+      answers: [
+        { questionId: 'q1', optionIds: ['target-web', 'target-mobile'] },
+        { questionId: 'q2', optionIds: [], other: 'SSH host' }
+      ]
+    })
   })
 
-  it('keeps legacy single-question option ids and free text behavior', () => {
+  it('answers a single-question item as its one question', () => {
     mocks.promptItems = legacySingleQuestionPromptItems
 
     render(
@@ -524,6 +598,14 @@ describe('NativeChatStructuredSession', () => {
       }
     ])
     card.onAnswer([{ indices: [1], other: '' }])
-    expect(mocks.respond).toHaveBeenCalledWith(mocks.promptItems[0], 'q1:choice-2')
+    expect(mocks.respond).toHaveBeenLastCalledWith(mocks.promptItems[0], {
+      kind: 'answers',
+      answers: [{ questionId: 'q1', optionIds: ['q1:choice-2'] }]
+    })
+    card.onAnswer([{ indices: [], other: ' Svelte ' }])
+    expect(mocks.respond).toHaveBeenLastCalledWith(mocks.promptItems[0], {
+      kind: 'answers',
+      answers: [{ questionId: 'q1', optionIds: [], other: 'Svelte' }]
+    })
   })
 })

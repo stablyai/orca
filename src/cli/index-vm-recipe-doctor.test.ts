@@ -198,11 +198,13 @@ describe('orca cli worktree awareness', () => {
           process.nextTick(() => {
             startChild.stdout.emit(
               'data',
-              JSON.stringify({
-                schemaVersion: 1,
-                pairingCode,
-                projectRoot: '/workspace/repo'
-              })
+              Buffer.from(
+                JSON.stringify({
+                  schemaVersion: 1,
+                  pairingCode,
+                  projectRoot: '/workspace/repo'
+                })
+              )
             )
             startChild.emit('exit', 0, null)
             startChild.emit('close', 0, null)
@@ -289,8 +291,8 @@ describe('orca cli worktree awareness', () => {
       // create emits a non-JSON line to stdout + a real diagnostic to stderr, then exits 0
       spawnMock.mockImplementationOnce(() => {
         process.nextTick(() => {
-          startChild.stdout.emit('data', 'Provisioning sandbox...\n')
-          startChild.stderr.emit('data', 'vercel: error: missing scope\n')
+          startChild.stdout.emit('data', Buffer.from('Provisioning sandbox...\n'))
+          startChild.stderr.emit('data', Buffer.from('vercel: error: missing scope\n'))
           startChild.emit('exit', 0, null)
           startChild.emit('close', 0, null)
         })

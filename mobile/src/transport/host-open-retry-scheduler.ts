@@ -1,3 +1,5 @@
+import { defaultCancelTimer, defaultScheduleTimer, type ScheduleTimer } from './timer-scheduler'
+
 const RETRY_DELAYS_MS = [1_000, 2_000, 5_000, 15_000, 30_000, 60_000] as const
 
 type RetryState = {
@@ -9,18 +11,18 @@ type RetryState = {
 type HostOpenRetrySchedulerOptions = {
   canRetry: (hostId: string, generation: number) => boolean
   open: (hostId: string) => void
-  setTimer?: typeof setTimeout
+  setTimer?: ScheduleTimer
   clearTimer?: typeof clearTimeout
 }
 
 export class HostOpenRetryScheduler {
   private readonly states = new Map<string, RetryState>()
-  private readonly setTimer: typeof setTimeout
+  private readonly setTimer: ScheduleTimer
   private readonly clearTimer: typeof clearTimeout
 
   constructor(private readonly options: HostOpenRetrySchedulerOptions) {
-    this.setTimer = options.setTimer ?? setTimeout
-    this.clearTimer = options.clearTimer ?? clearTimeout
+    this.setTimer = options.setTimer ?? defaultScheduleTimer
+    this.clearTimer = options.clearTimer ?? defaultCancelTimer
   }
 
   recordFailure(hostId: string, generation: number): { failureCount: number; nextDelayMs: number } {

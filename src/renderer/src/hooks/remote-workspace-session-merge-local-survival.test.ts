@@ -353,6 +353,57 @@ describe('local rows the snapshot carries no answer for', () => {
     expect(merged.tabsByWorktree[WORKTREE]).toEqual([])
   })
 
+  it('keeps the user standing in the workspace they emptied', () => {
+    // Same row, one level up. `localActiveWorkspaceSurvives` counted tabs, so the workspace the
+    // user had just closed the last terminal in read as "did not survive the merge" and the host's
+    // null active worktree was taken literally — the home screen, for closing a tab.
+    const current = sessionState({ tabsByWorktree: { [WORKTREE]: [] } })
+    const remote = sessionState({
+      activeWorktreeId: null,
+      activeWorkspaceKey: null,
+      activeRepoId: null,
+      tabsByWorktree: { [WORKTREE]: [] }
+    })
+
+    const merged = merge(current, remote, { [WORKTREE]: [] })
+
+    expect(merged.activeWorktreeId).toBe(WORKTREE)
+    expect(merged.activeWorkspaceKey).toBe(worktreeWorkspaceKey(WORKTREE))
+    expect(merged.activeRepoId).toBe('repo-1')
+  })
+
+  it('still lets the host move the user off a workspace it does name one for', () => {
+    // The counterweight: presence must not turn into "never follow the host". A host that names an
+    // active worktree still wins over the emptied local one.
+    const current = sessionState({ tabsByWorktree: { [WORKTREE]: [] } })
+    const remote = sessionState({
+      activeWorktreeId: OTHER_WORKTREE,
+      tabsByWorktree: { [WORKTREE]: [] }
+    })
+
+    const merged = merge(current, remote, { [WORKTREE]: [] })
+
+    expect(merged.activeWorktreeId).toBe(OTHER_WORKTREE)
+  })
+
+  it('does not stand the user in a workspace that survived in neither side', () => {
+    // The boundary the presence rule actually draws, and the only case that separates it from
+    // "always preserve": an emptied row is evidence the workspace exists, but NO row on either
+    // side is not. Preserving here would leave the user pointed at a workspace the merge has no
+    // record of, which is the home screen's job to catch.
+    const current = sessionState()
+    const remote = sessionState({
+      activeWorktreeId: null,
+      activeWorkspaceKey: null,
+      activeRepoId: null
+    })
+
+    const merged = merge(current, remote)
+
+    expect(merged.activeWorktreeId).toBeNull()
+    expect(merged.activeWorkspaceKey).toBeNull()
+  })
+
   it('invents no row for a worktree neither side has one for', () => {
     // The counterweight: presence has to come from a real local row, not from membership in the
     // replace set, or a never-initialized workspace gets a tombstone it never earned.

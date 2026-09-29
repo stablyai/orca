@@ -52,11 +52,16 @@ export async function persistSetupHookTrustApproval(args: {
   return next
 }
 
+// Takes a partial record because a checked `repo.hooks` reader requires neither member: the
+// recorded reply carries a hooks payload with no setupTrust at all, so the pair is proven here
+// rather than declared upstream. The spread keeps whatever else the host sent on the record.
 export function normalizeSetupHookTrust(
-  setupTrust: SetupHookTrust | null | undefined
+  setupTrust: { contentHash?: string; scriptContent?: string } | null | undefined
 ): SetupHookTrust | null {
-  if (!setupTrust?.contentHash || !setupTrust.scriptContent) {
+  const contentHash = setupTrust?.contentHash
+  const scriptContent = setupTrust?.scriptContent
+  if (!contentHash || !scriptContent) {
     return null
   }
-  return setupTrust
+  return { ...setupTrust, contentHash, scriptContent }
 }

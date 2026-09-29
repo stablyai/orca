@@ -6,6 +6,12 @@ import {
   type TabStripScrollMetrics
 } from './tab-strip-scroll-metrics'
 import { isTabStripPointerGestureActive } from './tab-strip-pointer-gesture'
+import {
+  captureTabStripScrollAnchor,
+  isLastTabStripTab,
+  restoreTabStripScrollAnchor,
+  type TabStripScrollAnchor
+} from './tab-strip-scroll-anchor'
 
 const TAB_STRIP_SCROLL_FRACTION = 0.75
 const TAB_STRIP_MIN_SCROLL_STEP_PX = 120
@@ -23,6 +29,11 @@ export function scrollTabStripByStep(
     left: direction === 'start' ? -scrollStep : scrollStep,
     behavior
   })
+}
+
+function isTabStripScrolledToEnd(el: HTMLElement): boolean {
+  const max = Math.max(0, el.scrollWidth - el.clientWidth)
+  return el.scrollLeft >= max - 2
 }
 
 const EMPTY_TAB_STRIP_OVERFLOW_STATE: TabStripScrollMetrics = {
@@ -51,6 +62,11 @@ export function useTabStripOverflowNavigation({
   const tabStripRef = useRef<HTMLDivElement>(null)
   const prevStripLenRef = useRef<{ worktreeId: string; len: number } | null>(null)
   const stickToEndRef = useRef(false)
+  const activeTabIdRef = useRef<string | null>(null)
+  const scrollAnchorRef = useRef<{
+    activeTabId: string | null
+    anchor: TabStripScrollAnchor | null
+  } | null>(null)
   const [tabStripOverflowState, setTabStripOverflowState] = useState<TabStripScrollMetrics>(
     EMPTY_TAB_STRIP_OVERFLOW_STATE
   )
@@ -74,6 +90,14 @@ export function useTabStripOverflowNavigation({
     },
     []
   )
+  const recordScrollAnchor = useCallback((): void => {
+    const el = tabStripRef.current
+    if (!el) {
+      return
+    }
+    const activeTabId = activeTabIdRef.current
+    scrollAnchorRef.current = { activeTabId, anchor: captureTabStripScrollAnchor(el, activeTabId) }
+  }, [])
 
   useEffect(() => {
     const el = tabStripRef.current
@@ -96,14 +120,11 @@ export function useTabStripOverflowNavigation({
     if (!el) {
       return
     }
-    const isAtEnd = (): boolean => {
-      const max = Math.max(0, el.scrollWidth - el.clientWidth)
-      return el.scrollLeft >= max - 2
-    }
     const onScroll = (): void => {
       // Only keep sticking while the user hasn't intentionally scrolled away.
-      stickToEndRef.current = isAtEnd()
+      stickToEndRef.current = isTabStripScrolledToEnd(el)
       updateTabStripOverflowState()
+      recordScrollAnchor()
     }
     el.addEventListener('scroll', onScroll, { passive: true })
     onScroll()
@@ -112,13 +133,10 @@ export function useTabStripOverflowNavigation({
       updateTabStripOverflowState()
       // If the user is pinned to the right edge, keep it pinned even as tab
       // labels (e.g. "Terminal 5" -> branch name) expand and change scrollWidth.
-      if (!stickToEndRef.current) {
-        return
+      if (stickToEndRef.current && !isTabStripPointerGestureActive()) {
+        el.scrollLeft = Math.max(0, el.scrollWidth - el.clientWidth)
       }
-      if (isTabStripPointerGestureActive()) {
-        return
-      }
-      el.scrollLeft = Math.max(0, el.scrollWidth - el.clientWidth)
+      recordScrollAnchor()
     }
 
     const disconnectResizeObservers = bindTabStripContentResizeObservers(el, handleStripResize)
@@ -127,7 +145,12 @@ export function useTabStripOverflowNavigation({
       el.removeEventListener('scroll', onScroll)
       disconnectResizeObservers()
     }
-  }, [updateTabStripOverflowState])
+  }, [recordScrollAnchor, updateTabStripOverflowState])
+
+  // Why a ref set first: the growth effect below must see this commit's active tab without re-running on every tab switch.
+  useLayoutEffect(() => {
+    activeTabIdRef.current = activeVisibleTabId
+  }, [activeVisibleTabId])
 
   useLayoutEffect(() => {
     const strip = tabStripRef.current
@@ -142,56 +165,65 @@ export function useTabStripOverflowNavigation({
       return
     }
     const pointerGestureActive = isTabStripPointerGestureActive()
-    if (stickToEndRef.current && !pointerGestureActive) {
-      const scrollToEnd = (): void => {
-        const el = tabStripRef.current
-        if (!el) {
-          return
-        }
-        el.scrollLeft = Math.max(0, el.scrollWidth - el.clientWidth)
-        updateTabStripOverflowState()
+    const scrollToEnd = (stick: boolean): void => {
+      const el = tabStripRef.current
+      if (!el) {
+        return
       }
-      scrollToEnd()
-      requestAnimationFrame(scrollToEnd)
-    }
-    if (tabCount > prev.len && !pointerGestureActive) {
-      const scrollToEnd = (): void => {
-        const el = tabStripRef.current
-        if (!el) {
-          return
-        }
-        el.scrollLeft = Math.max(0, el.scrollWidth - el.clientWidth)
+      el.scrollLeft = Math.max(0, el.scrollWidth - el.clientWidth)
+      if (stick) {
         stickToEndRef.current = true
-        updateTabStripOverflowState()
       }
-      scrollToEnd()
-      requestAnimationFrame(scrollToEnd)
+      updateTabStripOverflowState()
+    }
+    const recorded = scrollAnchorRef.current
+    if (tabCount > prev.len && !pointerGestureActive) {
+      if (recorded?.activeTabId === activeTabIdRef.current) {
+        // Why: a background open must not move the tab the user is looking at; insertions
+        // around it keep its on-screen x, the way VS Code and Chrome leave the viewed tab still.
+        if (recorded.anchor) {
+          restoreTabStripScrollAnchor(strip, recorded.anchor)
+        }
+        stickToEndRef.current = isTabStripScrolledToEnd(strip)
+      } else if (isLastTabStripTab(strip, activeTabIdRef.current)) {
+        scrollToEnd(true)
+        requestAnimationFrame(() => scrollToEnd(true))
+      }
+      // A foreground tab opened mid-strip is revealed by the active-tab effect below.
+    } else if (stickToEndRef.current && !pointerGestureActive) {
+      scrollToEnd(false)
+      requestAnimationFrame(() => scrollToEnd(false))
     }
     prevStripLenRef.current = { worktreeId, len: tabCount }
     updateTabStripOverflowState()
     requestAnimationFrame(updateTabStripOverflowState)
-  }, [layoutKey, tabCount, updateTabStripOverflowState, worktreeId])
+    recordScrollAnchor()
+  }, [layoutKey, recordScrollAnchor, tabCount, updateTabStripOverflowState, worktreeId])
 
   useLayoutEffect(() => {
     const strip = tabStripRef.current
     if (!strip || !activeVisibleTabId) {
+      recordScrollAnchor()
       return
     }
     const activeTab = strip.querySelector<HTMLElement>(
       `[data-tab-id="${CSS.escape(activeVisibleTabId)}"]`
     )
     if (!activeTab) {
+      recordScrollAnchor()
       return
     }
     if (isTabStripPointerGestureActive()) {
       // Why: active-tab preview changes during a tab press must not move the
       // strip under a stationary pointer before the release decides click/drag.
       requestAnimationFrame(updateTabStripOverflowState)
+      recordScrollAnchor()
       return
     }
     activeTab.scrollIntoView({ block: 'nearest', inline: 'nearest' })
     requestAnimationFrame(updateTabStripOverflowState)
-  }, [activeVisibleTabId, updateTabStripOverflowState])
+    recordScrollAnchor()
+  }, [activeVisibleTabId, recordScrollAnchor, updateTabStripOverflowState])
 
   return { tabStripRef, tabStripOverflowState, scrollTabStrip }
 }

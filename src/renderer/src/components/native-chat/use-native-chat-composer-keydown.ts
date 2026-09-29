@@ -50,6 +50,10 @@ export function useNativeChatComposerKeyDown({
         }
         return
       }
+      // An open layer that keeps focus here, like the context card, already spent this Escape closing itself.
+      if (event.key === 'Escape' && event.defaultPrevented) {
+        return
+      }
 
       if (autocomplete.mode === 'slash') {
         const items = autocomplete.items

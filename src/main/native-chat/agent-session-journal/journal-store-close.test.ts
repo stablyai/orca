@@ -13,6 +13,8 @@ import type {
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
+import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { journalDatabaseFile } from './journal-paths'
 import type { AgentSessionJournal } from './journal-store'
 import { createTrackedJournalOpener } from './journal-store-test-open'
@@ -117,7 +119,16 @@ describe('closed-state admission happens at enqueue', () => {
           fence: 1
         })
       ),
-      settle(journal.resolveDispatch({ clientMessageId: 'cm_1', state: 'rejected', fence: 1 })),
+      settle(
+        journal.resolveDispatch({
+          clientMessageId: 'cm_1',
+          state: 'rejected',
+          ...agentSessionFailureWords(agentSessionFailureFact('hostFault'), {
+            surface: 'rejection'
+          }),
+          fence: 1
+        })
+      ),
       settle(
         journal.appendLifecycleBatch({
           settlementId: 'settle',

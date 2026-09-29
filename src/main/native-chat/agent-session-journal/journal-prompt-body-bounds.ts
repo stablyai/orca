@@ -51,6 +51,34 @@ export function boundJournalPromptBody(
     return {
       ...body,
       title: boundPromptText(body.title),
+      ...(body.displayName === undefined ? {} : { displayName: boundPromptText(body.displayName) }),
+      ...(body.description === undefined ? {} : { description: boundPromptText(body.description) }),
+      ...(body.decisionReason === undefined
+        ? {}
+        : { decisionReason: boundPromptText(body.decisionReason) }),
+      ...(body.blockedPath === undefined ? {} : { blockedPath: boundPromptText(body.blockedPath) }),
+      ...(body.matchedAskRule === undefined
+        ? {}
+        : {
+            matchedAskRule: {
+              source: boundPromptText(body.matchedAskRule.source),
+              toolName: boundPromptText(body.matchedAskRule.toolName),
+              ...(body.matchedAskRule.ruleContent === undefined
+                ? {}
+                : { ruleContent: boundPromptText(body.matchedAskRule.ruleContent) })
+            }
+          }),
+      ...(body.subject === undefined
+        ? {}
+        : {
+            subject: {
+              kind: 'plan',
+              text: boundPromptText(body.subject.text),
+              ...(body.subject.filePath === undefined
+                ? {}
+                : { filePath: boundPromptText(body.subject.filePath) })
+            }
+          }),
       detail: body.detail === null ? null : boundPromptText(body.detail),
       options: boundPromptOptions(body.options)
     }

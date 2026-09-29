@@ -8,13 +8,15 @@ import {
 import { MAX_CODEX_GENERIC_TURN_BUCKETS } from './codex-structured-journal-limits'
 import { appendCodexLifecycleItem, publishCodexLifecycle } from './codex-structured-journal-sink'
 import { readCodexTurnId } from './codex-structured-thread-facts'
+import type { CodexRowLinkage } from './codex-subagent-linkage'
 
 export class CodexJournalCompactions {
   private readonly turns = new Map<string, 'item' | 'legacy'>()
 
   constructor(
     private readonly sink: StructuredAgentSessionEventSink,
-    private readonly activeTurn: (threadId: string) => string | null
+    private readonly activeTurn: (threadId: string) => string | null,
+    private readonly linkageFor: CodexRowLinkage
   ) {}
 
   handle(event: {
@@ -41,7 +43,8 @@ export class CodexJournalCompactions {
     const admission = appendCodexLifecycleItem(
       this.sink,
       { provider: 'orca', clientMessageId: `codex-compaction:${key}` },
-      { kind: 'status', text: 'Context compacted', presentation: 'compaction' }
+      { kind: 'status', text: 'Context compacted', presentation: 'compaction' },
+      this.linkageFor(event.threadId, turnId)
     )
     if (!admission.accepted) {
       return admission

@@ -1,10 +1,13 @@
+import { markQoderWorkspaceTrusted } from '../qoder/workspace-trust'
 import { ipcMain } from 'electron'
 import {
   type AgentTrustPreset,
+  markAntigravityWorkspaceTrusted,
   markCodexProjectTrusted,
   markCopilotFolderTrusted,
   markCursorWorkspaceTrusted
 } from '../agent-trust-presets'
+import { awaitAgentTrustWriteWithinDeadline } from '../agent-trust-write-deadline'
 import { markRemoteAgentWorkspaceTrusted } from '../remote-agent-trust-presets'
 
 /**
@@ -32,17 +35,27 @@ export function registerAgentTrustHandlers(): void {
         if (connectionId) {
           // Why: SSH-launched agents read trust artifacts from the remote
           // user's home, not from this desktop process.
-          await markRemoteAgentWorkspaceTrusted({
-            preset: args.preset,
-            connectionId,
-            workspacePath: args.workspacePath
-          })
+          await awaitAgentTrustWriteWithinDeadline(
+            markRemoteAgentWorkspaceTrusted({
+              preset: args.preset,
+              connectionId,
+              workspacePath: args.workspacePath
+            }),
+            { preset: args.preset, workspacePath: args.workspacePath }
+          )
+        } else if (args.preset === 'qoder') {
+          markQoderWorkspaceTrusted(args.workspacePath)
         } else if (args.preset === 'cursor') {
           markCursorWorkspaceTrusted(args.workspacePath)
         } else if (args.preset === 'copilot') {
           markCopilotFolderTrusted(args.workspacePath)
         } else if (args.preset === 'codex') {
-          markCodexProjectTrusted(args.workspacePath)
+          await awaitAgentTrustWriteWithinDeadline(markCodexProjectTrusted(args.workspacePath), {
+            preset: args.preset,
+            workspacePath: args.workspacePath
+          })
+        } else if (args.preset === 'antigravity') {
+          markAntigravityWorkspaceTrusted(args.workspacePath)
         }
       } catch {
         // Best-effort: see Why above. The user can still accept the trust

@@ -3,9 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
   POST_REPLAY_REATTACH_RESET,
-  RESET_KITTY_KEYBOARD_PROTOCOL,
   RESET_TERMINAL_CURSOR_STYLE
 } from '../../../../shared/terminal-mode-reset-profiles'
+import { replayEpilogue } from './pty-connection-test-replay-epilogue'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import {
   NORMAL_BUFFER_PROLOGUE,
@@ -397,10 +397,10 @@ describe('connectPanePty', () => {
       await flushAsyncTicks(12)
 
       expect(pane.terminal.write).toHaveBeenCalledWith(
-        POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
+        replayEpilogue(POST_REPLAY_LIVE_AGENT_REATTACH_RESET),
         expect.any(Function)
       )
-      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I')
+      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I', 'query-reply')
       return connection
     })
     disposable.dispose()
@@ -437,7 +437,7 @@ describe('connectPanePty', () => {
       await flushAsyncTicks(12)
 
       expect(pane.terminal.write).toHaveBeenCalledWith(
-        POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
+        replayEpilogue(POST_REPLAY_LIVE_AGENT_REATTACH_RESET),
         expect.any(Function)
       )
       return connection
@@ -514,7 +514,7 @@ describe('connectPanePty', () => {
       await flushAsyncTicks(12)
 
       expect(pane.terminal.write).toHaveBeenCalledWith(
-        `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`,
+        replayEpilogue(RESET_TERMINAL_CURSOR_STYLE),
         expect.any(Function)
       )
       expect(pane.terminal.write).toHaveBeenCalledWith('\x1b[?25h\x1b[?1004l', expect.any(Function))
@@ -673,7 +673,7 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(8)
 
     const replayIndex = writes.indexOf('authoritative replay')
-    const resetIndex = writes.indexOf(POST_REPLAY_REATTACH_RESET)
+    const resetIndex = writes.indexOf(replayEpilogue(POST_REPLAY_REATTACH_RESET))
     const liveIndex = writes.indexOf('NEWER-LIVE\r\n')
     expect(replayIndex).toBeGreaterThan(0)
     expect(resetIndex).toBeGreaterThan(replayIndex)

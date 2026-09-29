@@ -82,3 +82,28 @@ describe('FTS5 expressions quote every term', () => {
     expect(orExpression(['alpha', 'beta'])).toBe('"alpha" OR "beta"')
   })
 })
+
+describe('the phrase candidate is the query as typed', () => {
+  const sentence = 'The sol review says the PR is not quite merge-ready yet'
+
+  it('is prose, so nothing about its shape reaches the phrase route', () => {
+    expect(isLiteralQuery(sentence)).toBe(false)
+  })
+
+  it('keeps the stop words the OR body drops, because the index holds them', () => {
+    const plan = planSessionSearchQuery('why is the relay dropping frames')
+    expect(plan.phrase).toEqual(['why', 'is', 'the', 'relay', 'dropping', 'frames'])
+    expect(plan.body).toEqual(['relay', 'dropping', 'frames'])
+  })
+
+  it('is the same list as the body for a literal, which keeps every token', () => {
+    const plan = planSessionSearchQuery('the foo.ts file')
+    expect(plan.phrase).toEqual(plan.body)
+  })
+
+  it('quotes into one phrase a pasted sentence can actually match', () => {
+    expect(phraseExpression(planSessionSearchQuery(sentence).phrase)).toBe(
+      '"The sol review says the PR is not quite merge-ready yet"'
+    )
+  })
+})

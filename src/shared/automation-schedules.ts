@@ -94,27 +94,29 @@ function classifyParsedCronSchedule(rule: ParsedCron): AutomationCronScheduleCla
   }
   const minute = getSingleSetValue(rule.minutes)
   const hour = getSingleSetValue(rule.hours)
-  const unrestrictedDayOfMonth = !rule.dayOfMonthRestricted
   const unrestrictedMonth = setContainsRange(rule.months, 1, 12)
-  const unrestrictedDayOfWeek = !rule.dayOfWeekRestricted
-  const unrestrictedCalendar = unrestrictedDayOfMonth && unrestrictedMonth
-  if (
-    minute !== null &&
-    setContainsRange(rule.hours, 0, 23) &&
-    unrestrictedCalendar &&
-    unrestrictedDayOfWeek
-  ) {
+  const everyDayOfMonth = setContainsRange(rule.daysOfMonth, 1, 31)
+  const everyDayOfWeek = setContainsRange(rule.daysOfWeek, 0, 6)
+  // Labels describe the days the rule actually fires on, so they need coverage of the
+  // matched set, not the lexical restriction flags that pick OR over AND.
+  const matchesEitherDayField = rule.dayOfMonthRestricted && rule.dayOfWeekRestricted
+  const everyDay = matchesEitherDayField
+    ? everyDayOfMonth || everyDayOfWeek
+    : everyDayOfMonth && everyDayOfWeek
+  const unrestrictedCalendar = everyDayOfMonth && unrestrictedMonth
+  if (minute !== null && setContainsRange(rule.hours, 0, 23) && unrestrictedMonth && everyDay) {
     return {
       kind: 'hourly',
       minute,
       label: `Hourly at :${String(minute).padStart(2, '0')}`
     }
   }
-  if (minute !== null && hour !== null && unrestrictedCalendar) {
+  if (minute !== null && hour !== null && unrestrictedMonth && everyDay) {
+    return { kind: 'daily', hour, minute, label: `Daily at ${formatTime(hour, minute)}` }
+  }
+  // Weekday/weekly names only read true under AND; under OR the day-of-month half fires too.
+  if (minute !== null && hour !== null && unrestrictedCalendar && !matchesEitherDayField) {
     const time = formatTime(hour, minute)
-    if (unrestrictedDayOfWeek) {
-      return { kind: 'daily', hour, minute, label: `Daily at ${time}` }
-    }
     if (setContainsExactly(rule.daysOfWeek, [1, 2, 3, 4, 5])) {
       return { kind: 'weekdays', hour, minute, label: `Weekdays at ${time}` }
     }

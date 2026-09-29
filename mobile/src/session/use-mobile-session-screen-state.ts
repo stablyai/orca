@@ -119,7 +119,9 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const [canPaste, setCanPaste] = useState(false)
   const [showDictationSetup, setShowDictationSetup] = useState(false)
   // 'hold' = press-and-hold mic, 'toggle' = tap-to-start/stop; mirrors Settings ▸ Voice ▸ Dictation Mode.
-  const [dictationMode, setDictationMode] = useState<'toggle' | 'hold'>('toggle')
+  // Holds the host's spelling verbatim, and undefined once a setup reply arrives without one: only
+  // the two arms below bind mic handlers, so anything else leaves the button as inert as it starts.
+  const [dictationMode, setDictationMode] = useState<string | undefined>('toggle')
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const toastOpacityRef = useRef(new Animated.Value(0))
   const toastHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)

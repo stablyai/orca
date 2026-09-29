@@ -79,6 +79,7 @@ export type CreateOrAttachRequest = {
      *  instead of defaulting to COMSPEC (which is always cmd.exe on Windows)
      *  or the hard-coded powershell.exe fallback. */
     shellOverride?: string
+    terminalShellArgs?: string[]
     /** Preferred WSL distro for generic `wsl.exe` launches. */
     terminalWindowsWslDistro?: string | null
     /** Why: the UI keeps PowerShell as one shell family, but the runtime may
@@ -205,9 +206,10 @@ export type GetCwdRequest = {
   }
 }
 
-export type ClearScrollbackRequest = {
+// Why resetInputModes is a type, not a clear flag: an older daemon rejects it instead of clearing.
+export type TerminalBufferActionRequest = {
   id: string
-  type: 'clearScrollback'
+  type: 'clearScrollback' | 'resetInputModes'
   payload: {
     sessionId: string
   }
@@ -320,7 +322,7 @@ export type DaemonRequest =
   | InspectProcessRequest
   | ConfirmForegroundProcessRequest
   | ConfirmShellForegroundRequest
-  | ClearScrollbackRequest
+  | TerminalBufferActionRequest
   | ShutdownRequest
   | PingRequest
   | SystemResolverHealthRequest

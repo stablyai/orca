@@ -5,14 +5,15 @@
 // conversation Orca is about to resume. Absence here is not an inference about a
 // dead child — it is the content of the next turn's context.
 //
-// The window is anchored on the leaf uuid Orca durably recorded for the session.
+// The window is anchored on the leaf uuid Orca durably recorded for the session
+// and walks back to it from the file's last transcript row, which is where a
+// resume by session id continues; Claude's marker lags a crash mid-turn.
 // Without that anchor the read has no proven start, and the branch proof is what
 // decides whether the file we just read still descends from it: a fork, a
 // compaction, a sibling branch, or a torn tail all fail the proof, and every one
 // of those makes absence meaningless. Failing it reports an inconsistent
 // boundary rather than an empty window, because the two decide opposite things.
 
-import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
@@ -24,11 +25,15 @@ import { claudeContentBlocks } from '../native-chat/transcript-record-blocks'
 import { isKnownHarnessInjectedUserTurnText } from '../../shared/harness-injected-user-turns'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import type { NativeChatBlock } from '../../shared/native-chat-types'
-import { proveClaudeTranscriptBranchFromJsonl } from './claude-transcript-branch-proof'
+import {
+  replayClaudeTranscriptBranchAncestry,
+  replayClaudeTranscriptBranchAncestryFromJsonl
+} from './claude-transcript-branch-proof'
 
-/** Matches the legacy-import bound: a prefix read would make absence meaningless. */
-const MAX_HISTORY_WINDOW_SOURCE_BYTES = 16 * 1024 * 1024
-const MAX_HISTORY_WINDOW_WALK = 10_000
+/** The legacy-import bound, now applied PER RECORD rather than per file. The
+ *  line framer buffers one record at a time, so this is the only thing standing
+ *  between a pathological row and the whole file being resident. */
+const MAX_HISTORY_WINDOW_RECORD_BYTES = 16 * 1024 * 1024
 
 const INCONSISTENT: ProviderHistoryWindow = {
   items: [],
@@ -146,55 +151,7 @@ function promptFingerprint(sessionId: string, blocks: NativeChatBlock[]): string
   })
 }
 
-function indexRecords(contents: string): Map<string, TranscriptRecord> {
-  const byUuid = new Map<string, TranscriptRecord>()
-  for (const line of contents.split('\n')) {
-    if (!line.trim()) {
-      continue
-    }
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(line)
-    } catch {
-      continue
-    }
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      continue
-    }
-    const record = parsed as TranscriptRecord
-    const uuid = stringField(record, 'uuid')
-    if (uuid && !byUuid.has(uuid)) {
-      byUuid.set(uuid, record)
-    }
-  }
-  return byUuid
-}
-
-/** Records strictly after the anchor, oldest first. The branch proof already
- *  established that this walk reaches the anchor. */
-function walkFromLeaf(
-  byUuid: Map<string, TranscriptRecord>,
-  leafUuid: string,
-  anchorUuid: string
-): TranscriptRecord[] {
-  const collected: TranscriptRecord[] = []
-  let cursor: string | null = leafUuid
-  for (let depth = 0; cursor !== null && cursor !== anchorUuid; depth += 1) {
-    if (depth >= MAX_HISTORY_WINDOW_WALK) {
-      return []
-    }
-    const record = byUuid.get(cursor)
-    if (!record) {
-      return []
-    }
-    collected.push(record)
-    cursor = stringField(record, 'parentUuid')
-  }
-  return collected.toReversed()
-}
-
-export function claudeProviderHistoryWindowFromJsonl(input: {
-  contents: string
+type HistoryWindowInput = {
   providerSessionId: string
   previousLeafUuid: string | null
   /** Orca session id: the fingerprint a submission carries is scoped to it. */
@@ -202,31 +159,23 @@ export function claudeProviderHistoryWindowFromJsonl(input: {
   /** The caller must PROVE no provider child can be appending; absence proves
    *  nothing while a turn is running. */
   turnInFlight: boolean
-}): ProviderHistoryWindow {
-  if (!input.previousLeafUuid) {
-    return INCONSISTENT
-  }
-  let leafUuid: string
-  try {
-    leafUuid = proveClaudeTranscriptBranchFromJsonl({
-      contents: input.contents,
-      providerSessionId: input.providerSessionId,
-      previousLeafUuid: input.previousLeafUuid
-    }).leafUuid
-  } catch {
-    // Every failure mode here — missing ancestor, sibling branch, compacted
-    // cursor, torn tail — is a boundary we cannot vouch for.
-    return INCONSISTENT
-  }
-  const byUuid = indexRecords(input.contents)
-  const items: ProviderHistoryItem[] = []
-  for (const record of walkFromLeaf(byUuid, leafUuid, input.previousLeafUuid)) {
+}
+
+/**
+ * Sink for the ancestry replay. Only the fingerprinted item survives the call,
+ * so the window holds at most one small row per anchor..leaf record — never the
+ * prompt bodies it was computed from.
+ */
+function createWindowCollector(input: HistoryWindowInput) {
+  const byUuid = new Map<string, ProviderHistoryItem>()
+  return { byUuid, onAncestorRecord }
+
+  function onAncestorRecord(record: TranscriptRecord, uuid: string): void {
     const blocks = claudePromptBlocks(record)
-    const uuid = stringField(record, 'uuid')
-    if (!blocks || !uuid) {
-      continue
+    if (!blocks) {
+      return
     }
-    items.push({
+    byUuid.set(uuid, {
       providerItemId: uuid,
       // Claude echoes no client message id, so identity matching reduces to the
       // fingerprint pass; the reconciler treats that as the weakest evidence.
@@ -239,7 +188,46 @@ export function claudeProviderHistoryWindowFromJsonl(input: {
       }
     })
   }
-  return { items, boundaryConsistent: true, turnInFlight: input.turnInFlight }
+}
+
+/** The chain is leaf first; a history window is oldest first. */
+function windowFromChain(
+  chain: readonly string[],
+  byUuid: Map<string, ProviderHistoryItem>,
+  turnInFlight: boolean
+): ProviderHistoryWindow {
+  const items: ProviderHistoryItem[] = []
+  for (const uuid of chain.toReversed()) {
+    const item = byUuid.get(uuid)
+    if (item) {
+      items.push(item)
+    }
+  }
+  return { items, boundaryConsistent: true, turnInFlight }
+}
+
+export function claudeProviderHistoryWindowFromJsonl(
+  input: HistoryWindowInput & { contents: string }
+): ProviderHistoryWindow {
+  const ancestryAnchorUuid = input.previousLeafUuid
+  if (!ancestryAnchorUuid) {
+    return INCONSISTENT
+  }
+  const collector = createWindowCollector(input)
+  try {
+    const { chain } = replayClaudeTranscriptBranchAncestryFromJsonl({
+      contents: input.contents,
+      providerSessionId: input.providerSessionId,
+      previousLeafUuid: ancestryAnchorUuid,
+      ancestryAnchorUuid,
+      onAncestorRecord: collector.onAncestorRecord
+    })
+    return windowFromChain(chain, collector.byUuid, input.turnInFlight)
+  } catch {
+    // Every failure mode here — missing ancestor, sibling branch, compacted
+    // cursor, torn tail — is a boundary we cannot vouch for.
+    return INCONSISTENT
+  }
 }
 
 /**
@@ -272,24 +260,33 @@ export async function resolveClaudeProviderHistoryWindow(input: {
   })
 }
 
-export async function readClaudeProviderHistoryWindow(input: {
-  transcriptPath: string
-  providerSessionId: string
-  previousLeafUuid: string | null
-  sessionId: string
-  turnInFlight: boolean
-}): Promise<ProviderHistoryWindow> {
-  if (!input.previousLeafUuid) {
+export async function readClaudeProviderHistoryWindow(
+  input: HistoryWindowInput & { transcriptPath: string }
+): Promise<ProviderHistoryWindow> {
+  const ancestryAnchorUuid = input.previousLeafUuid
+  if (!ancestryAnchorUuid) {
     return INCONSISTENT
   }
-  let contents: string
+  const collector = createWindowCollector(input)
   try {
-    if ((await stat(input.transcriptPath)).size > MAX_HISTORY_WINDOW_SOURCE_BYTES) {
-      return INCONSISTENT
-    }
-    contents = await readFile(input.transcriptPath, 'utf8')
-  } catch {
+    const { chain } = await replayClaudeTranscriptBranchAncestry({
+      transcriptPath: input.transcriptPath,
+      providerSessionId: input.providerSessionId,
+      previousLeafUuid: ancestryAnchorUuid,
+      ancestryAnchorUuid,
+      maxRecordBytes: MAX_HISTORY_WINDOW_RECORD_BYTES,
+      onAncestorRecord: collector.onAncestorRecord
+    })
+    return windowFromChain(chain, collector.byUuid, input.turnInFlight)
+  } catch (error) {
+    // Unreadable, unprovable, or a single record too large to frame: all of them
+    // leave the boundary unvouched for, which is not the same as an empty window.
+    // Oversize is no longer among them, so only the log separates what is left.
+    console.warn('[claude-history-window] transcript unprovable; boundary inconsistent:', {
+      transcriptPath: input.transcriptPath,
+      sessionId: input.sessionId,
+      error
+    })
     return INCONSISTENT
   }
-  return claudeProviderHistoryWindowFromJsonl({ ...input, contents })
 }

@@ -684,6 +684,31 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     expect(trackMock).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
   })
 
+  it.each([{ isReplay: 'true' }, { isReplay: null }, { launchToken: 42 }])(
+    'rejects malformed OMP authority metadata before forwarding: %j',
+    async (invalid) => {
+      relay = createFakeRelay()
+      vi.mocked(deployAndLaunchRelay).mockResolvedValue({
+        transport: relay.transport,
+        serverBuildId: 'test-relay-build',
+        platform: 'linux-x64'
+      })
+      session = createSession('conn-omp-invalid')
+      await session.establish({} as SshConnection)
+      const ingestSpy = vi.spyOn(agentHookServer, 'ingestRemote')
+      const envelope = makeEnvelope({
+        source: 'omp',
+        hookEventName: 'before_agent_start',
+        payload: { agentType: 'omp', state: 'working', prompt: 'new turn' }
+      })
+      relay.notifyAgentHook(JSON.parse(JSON.stringify({ ...envelope, ...invalid })))
+      await new Promise((resolve) => setImmediate(resolve))
+      await new Promise((resolve) => setImmediate(resolve))
+      expect(ingestSpy).not.toHaveBeenCalled()
+      ingestSpy.mockRestore()
+    }
+  )
+
   it('preserves replay metadata from remote hook notifications', async () => {
     relay = createFakeRelay()
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({

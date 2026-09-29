@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
-import type { editor as monacoEditor, IDisposable } from 'monaco-editor'
+import type { editor as monacoEditor } from 'monaco-editor'
 import { createRoot, type Root } from 'react-dom/client'
 import { getCommentBodyLayoutLineCount } from '@/lib/comment-body-line-count'
 import { useAppStore } from '@/store'
-import { installDiffCommentAddButtonOverlay } from './diff-comment-add-button-overlay'
+import {
+  installDiffCommentAddButtonOverlay,
+  type DiffCommentAddButtonOverlayHandle
+} from './diff-comment-add-button-overlay'
+import { installDiffCommentAddNoteShortcut } from './diff-comment-add-note-shortcut'
 import { installDiffCommentZoneMouseDownStopper } from './diff-comment-zone-mouse-events'
 import { getRenderSignature, renderDiffCommentZoneCard } from './diff-comment-zone-card'
 import type { DecoratedDiffComment } from './decorated-diff-comment'
@@ -14,6 +18,10 @@ import {
   ZONE_MIN_PX,
   type ZoneEntry
 } from './diff-comment-view-zone-entry'
+import type { DiffCommentLineRange, DiffCommentLineTarget } from './diff-comment-line-range'
+import { useDiffCommentDraftZone, type DiffCommentDraft } from './diff-comment-draft-zone'
+
+export type { DiffCommentDraft }
 
 type DecoratorArgs = {
   editor: monacoEditor.ICodeEditor | null
@@ -24,7 +32,19 @@ type DecoratorArgs = {
   comments: readonly DecoratedDiffComment[]
   commentableLineNumbers?: readonly number[]
   addButtonLabel?: string
-  onAddCommentClick: (args: { lineNumber: number; startLine?: number; top: number }) => void
+  pendingCommentTarget?: DiffCommentLineTarget | null
+  // Bind the Add Review Note chord to this editor. Off for the markdown editor, which already
+  // binds it through its own input bindings.
+  addNoteShortcutEnabled?: boolean
+  onCreateComment?: (args: {
+    lineNumber: number
+    startLine?: number
+    body: string
+  }) => Promise<boolean>
+  draftPlaceholder?: string
+  draftSubmitLabel?: string
+  canOpenDraft?: boolean
+  onAddCommentClick?: (args: { lineNumber: number; startLine?: number; top: number }) => void
   onDeleteComment: (commentId: string) => void
   // Present only on surfaces that allow editing (local diffs); PR review notes are remote and can't be edited here.
   onUpdateComment?: (commentId: string, body: string) => Promise<boolean>
@@ -42,6 +62,12 @@ export function useDiffCommentDecorator({
   comments,
   commentableLineNumbers,
   addButtonLabel = 'Add note for the AI',
+  pendingCommentTarget = null,
+  addNoteShortcutEnabled = false,
+  onCreateComment,
+  draftPlaceholder,
+  draftSubmitLabel,
+  canOpenDraft,
   onAddCommentClick,
   onDeleteComment,
   onUpdateComment,
@@ -54,23 +80,37 @@ export function useDiffCommentDecorator({
     worktreeId ? (s.activeGroupIdByWorktree[worktreeId] ?? worktreeId) : worktreeId
   )
   const hoverLineRef = useRef<number | null>(null)
+  const overlayRef = useRef<DiffCommentAddButtonOverlayHandle | null>(null)
+  const pendingCommentRangeRef = useRef<DiffCommentLineRange | null>(null)
+  const setPendingCommentRange = useCallback((range: DiffCommentLineRange | null): void => {
+    pendingCommentRangeRef.current = range
+    overlayRef.current?.setPendingRange(range)
+  }, [])
   // One React root per view zone: body updates re-render into it so Monaco's zone DOM stays put and only the card contents change.
   const zonesRef = useRef<Map<string, ZoneEntry>>(new Map())
-  const disposablesRef = useRef<IDisposable[]>([])
   // Pending scroll-to-note comment id; a ref (not state) so the request survives renders while we wait for layout.
   const pendingScrollRef = useRef<string | null>(null)
   // Stash the diff-zones effect's scrollToZone closure so the request-effect can invoke the latest version.
   const scrollToZoneRef = useRef<((commentId: string) => void) | null>(null)
   const scrollToZoneFrameRef = useRef<number | null>(null)
+
   // Stash callbacks in refs so the effect doesn't tear down + re-attach on every parent render (parent passes inline arrows) — avoids flicker.
-  const onAddCommentClickRef = useRef(onAddCommentClick)
   const onDeleteCommentRef = useRef(onDeleteComment)
   const onUpdateCommentRef = useRef(onUpdateComment)
   const onPendingScrollConsumedRef = useRef(onPendingScrollConsumed)
-  onAddCommentClickRef.current = onAddCommentClick
   onDeleteCommentRef.current = onDeleteComment
   onUpdateCommentRef.current = onUpdateComment
   onPendingScrollConsumedRef.current = onPendingScrollConsumed
+
+  const { onAddCommentClickRef, isDraftOpen } = useDiffCommentDraftZone({
+    editor,
+    monacoModelIdentity,
+    onCreateComment,
+    draftPlaceholder,
+    draftSubmitLabel,
+    canOpenDraft,
+    onAddCommentClick
+  })
 
   const cancelScrollToZoneFrame = useCallback((): void => {
     if (scrollToZoneFrameRef.current === null) {
@@ -106,16 +146,71 @@ export function useDiffCommentDecorator({
       return
     }
 
-    return installDiffCommentAddButtonOverlay({
+    const overlay = installDiffCommentAddButtonOverlay({
       editor,
       editorDomNode,
       addButtonLabel,
       commentableLineSet,
       hoverLineRef,
-      disposablesRef,
       onAddCommentClickRef
     })
-  }, [addButtonLabel, commentableLineSet, editor, monacoModelIdentity])
+    overlayRef.current = overlay
+    overlay.setPendingRange(pendingCommentRangeRef.current)
+    return () => {
+      overlayRef.current = null
+      overlay.dispose()
+    }
+  }, [addButtonLabel, commentableLineSet, editor, monacoModelIdentity, onAddCommentClickRef])
+
+  const pendingLineNumber = pendingCommentTarget?.lineNumber ?? null
+  const pendingStartLine = pendingCommentTarget?.startLine ?? null
+  useEffect(() => {
+    const range =
+      pendingLineNumber === null
+        ? null
+        : { startLine: pendingStartLine ?? pendingLineNumber, endLine: pendingLineNumber }
+    setPendingCommentRange(range)
+  }, [pendingLineNumber, pendingStartLine, setPendingCommentRange])
+
+  const hasDraftComposer = onCreateComment !== undefined
+  useEffect(() => {
+    if (!editor || !addNoteShortcutEnabled) {
+      return
+    }
+    return installDiffCommentAddNoteShortcut({
+      editor,
+      commentableLineSet,
+      // An open draft card owns the chord: claiming it here would re-open the card at the editor's
+      // selection and move the user's text. The card mounts synchronously, so a second chord in the
+      // same event turn already sees it. A live gutter drag owns the band the same way; opening
+      // from the stale editor selection during a drag would remount the card mid-gesture.
+      isComposerOpen: () =>
+        isDraftOpen() ||
+        pendingCommentRangeRef.current !== null ||
+        overlayRef.current?.isDragging() === true,
+      onOpenComposer: (args) => {
+        // Legacy popover callers commit composer state through React, so claim now or a same-turn
+        // repeat opens a second one; their pendingCommentTarget releases the claim on close. The
+        // inline draft card never passes one, so a claim here would never be released.
+        if (!hasDraftComposer) {
+          setPendingCommentRange({
+            startLine: args.startLine ?? args.lineNumber,
+            endLine: args.lineNumber
+          })
+        }
+        onAddCommentClickRef.current(args)
+      }
+    })
+  }, [
+    addNoteShortcutEnabled,
+    commentableLineSet,
+    editor,
+    hasDraftComposer,
+    isDraftOpen,
+    monacoModelIdentity,
+    onAddCommentClickRef,
+    setPendingCommentRange
+  ])
 
   // Deps must stay a subset of the zone-creating effect's, or a teardown here is never followed by a rebuild.
   useEffect(() => {
@@ -304,12 +399,12 @@ export function useDiffCommentDecorator({
     activeGroupId,
     cancelScrollToZoneFrame,
     clearDeliveredDiffComments,
+    comments,
     editor,
     filePath,
     formatCommentPrompt,
     monacoModelIdentity,
-    worktreeId,
-    comments
+    worktreeId
   ])
 
   // Scroll-to-note resolution splits across this effect (request after layout) and onDomNodeTop (before), via pendingScrollRef.

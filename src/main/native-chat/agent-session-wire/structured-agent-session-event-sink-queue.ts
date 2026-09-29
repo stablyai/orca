@@ -15,6 +15,8 @@ export type StructuredAgentSessionSinkOperation = {
   lifecycleBytes?: number
   lifecycle?: boolean
   coalescingKey?: string
+  /** The queued operation with this key wins, as the journal keeps a settlement's first batch. */
+  keepsFirst?: boolean
   run: (target: StructuredAgentSessionEventTarget) => Promise<unknown> | void
 }
 
@@ -117,10 +119,13 @@ export class StructuredAgentSessionSinkQueue {
     if (this.failure !== null) {
       return { accepted: false, reason: 'failed' }
     }
-    const sequence = ++this.acceptedSequence
     const key = options.coalescingKey ?? operation.coalescingKey
     const replaceAt = key ? this.queue.findIndex((queued) => queued.coalescingKey === key) : -1
     const replaced = replaceAt >= 0 ? this.queue[replaceAt] : undefined
+    if (replaced && operation.keepsFirst) {
+      return { accepted: true }
+    }
+    const sequence = ++this.acceptedSequence
     const lifecycle = operation.lifecycle ?? options.lifecycle === true
     const lifecycleBytes = lifecycle ? (operation.lifecycleBytes ?? operation.bytes) : 0
     const nextBytes = this.queuedBytes - (replaced?.bytes ?? 0) + operation.bytes

@@ -38,6 +38,7 @@ import {
 import { readRecord } from './codex-item-field-readers'
 import { readCodexTurnId } from './codex-structured-thread-facts'
 import { codexSubagentGroupBody } from './codex-subagent-group-body'
+import { CodexSubagentLinkage } from './codex-subagent-linkage'
 export { codexSubagentGroupBody } from './codex-subagent-group-body'
 import type { CodexThreadItem } from './codex-structured-item-translation'
 import {
@@ -93,10 +94,16 @@ export class CodexSubagentRoster {
   private readonly tokensByThread = new Map<string, number>()
   private readonly now: () => number
   private readonly executions: CodexSubagentExecutions
+  /** Who produced a row, from what this roster learned about each child thread. */
+  readonly linkage: CodexSubagentLinkage
 
   constructor(private readonly deps: CodexSubagentRosterDeps) {
     this.now = deps.now ?? (() => Date.now())
     this.executions = deps.executions ?? new CodexSubagentExecutions()
+    this.linkage = new CodexSubagentLinkage({
+      primaryThreadId: deps.primaryThreadId,
+      executions: this.executions
+    })
   }
 
   /** Consume a `subAgentActivity` item. Returns null when the item is not one. */
@@ -119,7 +126,9 @@ export class CodexSubagentRoster {
     const child = this.executions.register(
       activity.agentThreadId,
       codexSubagentLabel(activity),
-      activity.kind === 'started' || activity.kind === 'interacted' ? input.turnId : undefined
+      activity.kind === 'started' || activity.kind === 'interacted' ? input.turnId : undefined,
+      // Only `started` names the spawner: other kinds ride whichever agent acted.
+      activity.kind === 'started' ? input.threadId : undefined
     )
     if (!child?.execution) {
       return ADMITTED
@@ -346,6 +355,8 @@ export class CodexSubagentRoster {
       return ADMITTED
     }
     group.lastSerialized = serialized
+    // Deliberately unstamped: a child's frame can trigger this write, but the
+    // row is the PARENT's roster of its children.
     // The append coalesces per group so a burst collapses to the latest roster.
     // The publish must NOT reuse that key: the queue coalesces by key alone,
     // with no op-kind check, so a publish carrying it would splice out the

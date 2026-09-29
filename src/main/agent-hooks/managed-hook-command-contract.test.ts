@@ -21,6 +21,9 @@ import {
 } from '../copilot/copilot-managed-hook-definitions'
 import { getDevinManagedCommand, getDevinRemoteManagedCommand } from '../devin/hook-settings'
 import { getGrokManagedCommand } from '../grok/grok-hook-script'
+import { getMuseManagedCommand, getMuseRemoteManagedCommand } from '../muse/hook-settings'
+import { getDshManagedCommand, getDshRemoteManagedCommand } from '../dsh/hook-settings'
+import { getZCodeManagedCommand, getZCodeRemoteManagedCommand } from '../zcode/hook-settings'
 import {
   wrapPosixHookCommand,
   wrapWindowsCmdHookCommand,
@@ -76,6 +79,34 @@ const buildersByAgent = new Map<string, CommandBuilders>([
     'openclaude',
     {
       local: (path) => [getManagedLifecycleHook(path, OPENCLAUDE_HOOK_SETTINGS).command],
+      remote: (path) => [getClaudeRemoteCommand(path)]
+    }
+  ],
+  [
+    'qoder',
+    {
+      local: (path) => [
+        getManagedLifecycleHook(path, {
+          configDirName: '.qoder',
+          scriptBaseName: 'qoder-hook',
+          usesWindowsCompatLauncher: true,
+          windowsHookShell: 'powershell'
+        }).command
+      ],
+      remote: (path) => [getClaudeRemoteCommand(path)]
+    }
+  ],
+  [
+    'codebuddy',
+    {
+      local: (path) => [
+        getManagedLifecycleHook(path, {
+          configDirName: '.codebuddy',
+          scriptBaseName: 'codebuddy-hook',
+          usesWindowsCompatLauncher: true,
+          windowsHookShell: 'powershell'
+        }).command
+      ],
       remote: (path) => [getClaudeRemoteCommand(path)]
     }
   ],
@@ -141,6 +172,27 @@ const buildersByAgent = new Map<string, CommandBuilders>([
       local: (path) => [wrapPosixHookCommand(path.replaceAll('\\', '/'))],
       remote: (path) => [wrapPosixHookCommand(path)]
     }
+  ],
+  [
+    'muse',
+    {
+      local: (path) => [getMuseManagedCommand(path)],
+      remote: (path) => [getMuseRemoteManagedCommand(path)]
+    }
+  ],
+  [
+    'dsh',
+    {
+      local: (path) => [getDshManagedCommand(path)],
+      remote: (path) => [getDshRemoteManagedCommand(path)]
+    }
+  ],
+  [
+    'zcode',
+    {
+      local: (path) => [getZCodeManagedCommand(path)],
+      remote: (path) => [getZCodeRemoteManagedCommand(path)]
+    }
   ]
 ])
 
@@ -182,7 +234,18 @@ describe('managed hook command contract', () => {
       expect(commands.length).toBeGreaterThan(0)
       for (const command of commands) {
         expect(command.length).toBeGreaterThan(0)
-        expect(findBareHookCommandVariables(command), command).toEqual([])
+        // Native PowerShell hooks evaluate these variables without Grok's dollar-byte scanner.
+        const scannedCommand =
+          platform === 'win32' &&
+          ((agent === 'codex' && command.startsWith('if (Test-Path')) ||
+            ((agent === 'qoder' || agent === 'codebuddy') &&
+              command.startsWith('$scriptPath = Join-Path')))
+            ? command
+                .replaceAll('$LASTEXITCODE', '')
+                .replaceAll('$env:', '')
+                .replaceAll('$scriptPath', '')
+            : command
+        expect(findBareHookCommandVariables(scannedCommand), command).toEqual([])
       }
     })
   })

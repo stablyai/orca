@@ -105,10 +105,11 @@ export function getDispatchHandler(): (event: unknown, args: unknown) => unknown
   ) => unknown
 }
 
-export function getDismissHandler(): (event: unknown, args: unknown) => unknown {
+export function getDismissHandler(): (event: unknown, ...args: unknown[]) => unknown {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: selected by its exact channel; the handler takes (event, ids, paneKeys?).
   return findRegisteredHandler('notifications:dismiss') as (
     event: unknown,
-    args: unknown
+    ...args: unknown[]
   ) => unknown
 }
 

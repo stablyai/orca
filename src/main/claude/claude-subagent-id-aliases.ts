@@ -24,6 +24,13 @@ export class ClaudeSubagentIds {
     return this.canonicalByToolUse.get(id) ?? id
   }
 
+  /** Whether an announcement has named this tool id. Distinct from `canonical`
+   *  returning the id unchanged, which is also what an unknown id gets: only
+   *  this says the identity behind the id is settled rather than provisional. */
+  isAnnounced(toolUseId: string): boolean {
+    return this.canonicalByToolUse.has(toolUseId)
+  }
+
   alias(toolUseId: string, taskId: string): void {
     if (!isBoundedClaudeTaskId(toolUseId) || !isBoundedClaudeTaskId(taskId)) {
       return

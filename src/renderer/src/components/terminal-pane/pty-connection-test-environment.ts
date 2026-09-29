@@ -54,6 +54,8 @@ export function installTerminalTestGlobals(): void {
         setPtyDeliveryInterest: vi.fn(),
         ackColdRestore: vi.fn(),
         onClearBufferRequest: vi.fn(() => vi.fn()),
+        onResetInputModesRequest: vi.fn(() => vi.fn()),
+        resetInputModes: vi.fn(),
         onSerializeBufferRequest: vi.fn(() => vi.fn()),
         sendSerializedBuffer: vi.fn(),
         declarePendingPaneSerializer: vi.fn().mockResolvedValue(1),

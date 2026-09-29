@@ -158,7 +158,7 @@ function readSnapshotRows(
   return rows
 }
 
-async function projectWorkerListPage(args: {
+type WorkerListPageArgs = {
   runtime: OrcaRuntimeService
   params: WorkerListPageParams
   limit: number
@@ -166,7 +166,9 @@ async function projectWorkerListPage(args: {
   snapshotCursor: WorkerListCursor | null
   snapshot?: Exclude<WorkerListCursor, { version: 3 }>['snapshot']
   completeProjection?: boolean
-}) {
+}
+
+async function projectWorkerListPage(args: WorkerListPageArgs) {
   const pinnedSnapshot =
     args.snapshotCursor?.version === 3
       ? pinWorkerListSnapshot(args.runtime, args.snapshotCursor.snapshot.id, {
@@ -182,15 +184,7 @@ async function projectWorkerListPage(args: {
 }
 
 async function projectWorkerListPageWithFilteredSnapshot(
-  args: {
-    runtime: OrcaRuntimeService
-    params: WorkerListPageParams
-    limit: number
-    rows: ReturnType<OrchestrationDb['listWorkerTerminalResources']>
-    snapshotCursor: WorkerListCursor | null
-    snapshot?: Exclude<WorkerListCursor, { version: 3 }>['snapshot']
-    completeProjection?: boolean
-  },
+  args: WorkerListPageArgs,
   filteredSnapshot: ReturnType<typeof readWorkerListSnapshot> | null
 ) {
   const { runtime, params, limit, rows, snapshotCursor } = args
@@ -300,6 +294,14 @@ async function projectWorkerListPageWithFilteredSnapshot(
     workers,
     counts,
     page: fleet.page,
+    // `page.hasMore` alone reads as complete to a caller that scans rows; say the page truncated.
+    ...(hasMore
+      ? {
+          warnings: [
+            `Showing ${pageRows.length} of ${inventory.total} Dispatches, newest first; more are on later pages. Follow page.nextCursor with --cursor.`
+          ]
+        }
+      : {}),
     ...(federated?.errors.length ? { partialHostErrors: federated.errors } : {})
   }
 }

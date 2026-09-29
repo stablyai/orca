@@ -7,8 +7,10 @@ import { prepareLegacySharedCodexSessionResume } from '../codex/codex-legacy-ses
 import { ManagedCodexHomeTemporarilyUnavailableError } from '../codex-accounts/host-codex-managed-home-ownership'
 import { codexHookService } from '../codex/hook-service'
 import { ensureRealHomeCodexHookState } from '../codex/codex-real-home-hook-install'
+import { ensureCodexDaemonSocketGuard } from '../codex/codex-config-mirror'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { markCodexProjectTrusted } from '../agent-trust-presets'
+import { awaitAgentTrustWriteWithinDeadline } from '../agent-trust-write-deadline'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../codex/codex-home-paths'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { mainProcessState as state } from './main-process-state'
@@ -82,7 +84,11 @@ export async function prepareCodexSessionResumeForLaunch(args: {
       const resumeHome = migrated.useRealCodexHome ? systemHomePath : sessionSource.homePath
       if (args.workspacePath) {
         try {
-          await markCodexProjectTrusted(args.workspacePath)
+          // Why: the PTY spawn waits on the home this resolver returns, so the write stays ahead of the agent's trust menu — bounded so a wedged lane cannot hang the resume.
+          await awaitAgentTrustWriteWithinDeadline(markCodexProjectTrusted(args.workspacePath), {
+            preset: 'codex',
+            workspacePath: args.workspacePath
+          })
         } catch (error) {
           console.warn('[codex-project-trust] failed to pre-mark resumed workspace:', error)
         }
@@ -105,6 +111,10 @@ export async function prepareCodexSessionResumeForLaunch(args: {
       } catch (error) {
         // Why: hook repair is best-effort; session provenance must still win over the currently selected home.
         console.warn('[codex-hook-service] failed to prepare automatic resume home:', error)
+      }
+      if (!isSystemHome) {
+        // Why: this pins the resumed pane's CODEX_HOME, and hook repair above can skip or fail before its config mirror applies the daemon guard.
+        ensureCodexDaemonSocketGuard(resumeHome)
       }
       return resumeHome
     }

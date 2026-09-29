@@ -8,12 +8,17 @@ const ADMISSION_WORKFLOW = relayWorkflowPath('operate-relay-asia-admission.yml')
 const STAGING_WORKFLOW = relayWorkflowPath('prove-relay-asia-staging.yml')
 const STAGING_CELL = 'staging-gce-c4'
 const C27 = 'production-gce-c27'
+// Each canary proves its own cell under production load; C28/C29 promotion consumes only C27's.
+const PRODUCTION_CANARIES = {
+  [C27]: { kind: 'production-c27-canary', origin: 'https://c27.relay.onorca.dev' },
+  'production-gce-c30': { kind: 'production-c30-canary', origin: 'https://c30.relay.onorca.dev' }
+}
 const DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/
 const SHA_PATTERN = /^[a-f0-9]{40}$/
 const MAX_LOG_EDGE_GAP_MS = 120_000
 const MAX_LOG_SAMPLE_GAP_MS = 120_000
 const CLOUD_SQL_LIMIT = 320
-const C27_CANARY_MINIMUM_MS = 5 * 60_000
+const CANARY_MINIMUM_MS = 5 * 60_000
 const GENERATOR_CPU_PERCENT_LIMIT = 80
 const GENERATOR_EVENT_LOOP_P99_MS_LIMIT = 100
 const GENERATOR_RSS_GROWTH_MIB_LIMIT = 512
@@ -280,28 +285,37 @@ function cloudSqlMaximum(response, start, end) {
   return Math.max(...values)
 }
 
-export function buildC27CanaryEvidence(input) {
+function productionCanary(cellId) {
+  const canary = PRODUCTION_CANARIES[cellId]
+  if (!canary) throw new Error('canary cell is not a reviewed production Asia canary')
+  return { ...canary, label: cellId.split('-').at(-1).toUpperCase() }
+}
+
+export function buildProductionCanaryEvidence(input) {
+  const canary = productionCanary(input.cellId)
   const start = instant(input.startedAt, 'canary start')
   const end = instant(input.endedAt, 'canary end')
-  if (end.valueOf() - start.valueOf() < C27_CANARY_MINIMUM_MS) {
-    throw new Error('C27 canary window is shorter than 5 minutes')
+  if (end.valueOf() - start.valueOf() < CANARY_MINIMUM_MS) {
+    throw new Error(`${canary.label} canary window is shorter than 5 minutes`)
   }
-  const load = object(input.loadReport, 'C27 load report')
-  assertC27CanaryLoad(load)
-  const metrics = runtimeMetrics(input.logs, start, end, C27)
-  assertPassingRuntimeMetrics(metrics, 'C27 canary')
+  const load = object(input.loadReport, `${canary.label} load report`)
+  assertCanaryLoad(load, input.cellId)
+  // Directors show a steady relay_cells lock and pool-wait baseline unrelated to the canary cell.
+  const metrics = runtimeMetrics(input.logs, start, end, input.cellId, { gateDirectorDatabase: false })
+  assertPassingRuntimeMetrics(metrics, `${canary.label} canary`)
   metrics.cloudSqlBackendsMax = cloudSqlMaximum(input.cloudSql, start, end)
-  assertPassingCanary(metrics)
+  assertPassingCanary(metrics, input.cellId)
   return {
-    ...baseEvidence(input, 'production', [C27]),
-    kind: 'production-c27-canary',
+    ...baseEvidence(input, 'production', [input.cellId]),
+    kind: canary.kind,
     window: { startedAt: start.toISOString(), endedAt: end.toISOString() },
     load,
     metrics
   }
 }
 
-function assertC27CanaryLoad(report) {
+function assertCanaryLoad(report, cellId) {
+  const { label, origin } = productionCanary(cellId)
   if (
     report.event !== 'relay_load_complete' ||
     report.controls !== 1 || report.shardCount !== 1 || report.shardIndex !== 0 ||
@@ -312,21 +326,25 @@ function assertC27CanaryLoad(report) {
     report.peakActive !== 1 || report.steadyMinimumActive !== 1 ||
     report.configuredSplices !== 1 || report.peakActiveSplices !== 1 ||
     report.completedSplices !== 1 || report.failedSplices !== 0
-  ) throw new Error('C27 control and splice canary did not match')
+  ) throw new Error(`${label} control and splice canary did not match`)
+  // Placement picks the least-loaded general Asia cell, so the canary's own control must be on it.
+  if (JSON.stringify(report.assignedCellOrigins) !== JSON.stringify([origin])) {
+    throw new Error(`${label} canary load was not placed only on ${label}`)
+  }
   for (const key of [
     'connectionFailures', 'unexpectedCloses', 'protocolErrors',
     'refreshErrors', 'socketErrors'
   ]) {
-    if (number(report[key], key) !== 0) throw new Error(`C27 canary ${key} must be zero`)
+    if (number(report[key], key) !== 0) throw new Error(`${label} canary ${key} must be zero`)
   }
-  const shutdown = object(report.shutdownEvidence, 'C27 load shutdown evidence')
+  const shutdown = object(report.shutdownEvidence, `${label} load shutdown evidence`)
   if (
     shutdown.peerShutdowns !== 1 || shutdown.activeControls !== 0 ||
     shutdown.activeSplices !== 0 || shutdown.reconnectTimers !== 0
-  ) throw new Error('C27 load cleanup is incomplete')
+  ) throw new Error(`${label} load cleanup is incomplete`)
 }
 
-function runtimeMetrics(logs, start, end, targetCellId) {
+function runtimeMetrics(logs, start, end, targetCellId, { gateDirectorDatabase = true } = {}) {
   const entries = logs.map((entry) => object(entry, 'runtime metric entry'))
   const directorEntries = entries.filter((entry) => entry.jsonPayload?.role === 'director')
   const cellEntries = entries.filter((entry) =>
@@ -345,8 +363,7 @@ function runtimeMetrics(logs, start, end, targetCellId) {
   }
   const directorPayloads = directorEntries.map((entry) => entry.jsonPayload)
   const cellPayloads = cellEntries.map((entry) => entry.jsonPayload)
-  const payloads = [...directorPayloads, ...cellPayloads]
-  return {
+  const placement = {
     asiaSelections: directorPayloads.reduce(
       (total, payload) => total + number(payload.selectedRegionsDelta?.['asia-east2'] ?? 0, 'Asia selections'), 0
     ),
@@ -361,19 +378,43 @@ function runtimeMetrics(logs, start, end, targetCellId) {
     ),
     unavailableRegions: directorPayloads.reduce(
       (total, payload) => total + sumMap(payload.unavailableRegionsDelta, 'unavailable regions'), 0
-    ),
-    relaySqlFailures: payloads.reduce(
-      (total, payload) => total + number(payload.sqlFailuresDelta, 'Relay SQL failures'), 0
-    ),
-    databasePoolWaitingMax: Math.max(...payloads.map(
-      (payload) => number(payload.databasePoolWaiting, 'database pool waiting')
-    )),
-    databasePoolWaitersMax: Math.max(...payloads.map(
-      (payload) => number(payload.databasePoolWaitersMax, 'database pool waiters')
-    )),
-    databasePoolWaitMsMax: Math.max(...payloads.map(
-      (payload) => number(payload.databasePoolWaitMsMax, 'database pool wait time')
-    )),
+    )
+  }
+  // Director before cell per metric keeps the old validation order.
+  const split = (read) => ({ director: read(directorPayloads), cell: read(cellPayloads) })
+  const sqlFailures = split((list) => list.reduce(
+    (total, payload) => total + number(payload.sqlFailuresDelta, 'Relay SQL failures'), 0
+  ))
+  const waitingMax = split((list) => Math.max(...list.map(
+    (payload) => number(payload.databasePoolWaiting, 'database pool waiting')
+  )))
+  const waitersMax = split((list) => Math.max(...list.map(
+    (payload) => number(payload.databasePoolWaitersMax, 'database pool waiters')
+  )))
+  const waitMsMax = split((list) => Math.max(...list.map(
+    (payload) => number(payload.databasePoolWaitMsMax, 'database pool wait time')
+  )))
+  // Ungated director values stay reported so the artifact still shows them.
+  const gated = gateDirectorDatabase
+    ? {
+        relaySqlFailures: sqlFailures.director + sqlFailures.cell,
+        databasePoolWaitingMax: Math.max(waitingMax.director, waitingMax.cell),
+        databasePoolWaitersMax: Math.max(waitersMax.director, waitersMax.cell),
+        databasePoolWaitMsMax: Math.max(waitMsMax.director, waitMsMax.cell)
+      }
+    : {
+        relaySqlFailures: sqlFailures.cell,
+        directorSqlFailures: sqlFailures.director,
+        databasePoolWaitingMax: waitingMax.cell,
+        databasePoolWaitersMax: waitersMax.cell,
+        databasePoolWaitMsMax: waitMsMax.cell,
+        directorDatabasePoolWaitingMax: waitingMax.director,
+        directorDatabasePoolWaitersMax: waitersMax.director,
+        directorDatabasePoolWaitMsMax: waitMsMax.director
+      }
+  return {
+    ...placement,
+    ...gated,
     targetControlsMax: Math.max(...cellPayloads.map(
       (payload) => number(payload.controls, 'target controls')
     )),
@@ -406,11 +447,12 @@ function assertPassingRuntimeMetrics(metrics, label, expectedRegionFallbacks = 0
   ) throw new Error(`${label} transient database pool pressure exceeded its bound`)
 }
 
-function assertPassingCanary(metrics) {
+function assertPassingCanary(metrics, cellId) {
+  const { label } = productionCanary(cellId)
   if (
-    number(metrics.targetControlsMax, 'C27 controls') < 1 ||
-    number(metrics.targetSplicesMax, 'C27 splices') < 1
-  ) throw new Error('C27 canary traffic did not reach C27')
+    number(metrics.targetControlsMax, `${label} controls`) < 1 ||
+    number(metrics.targetSplicesMax, `${label} splices`) < 1
+  ) throw new Error(`${label} canary traffic did not reach ${label}`)
   if (number(metrics.cloudSqlBackendsMax, 'Cloud SQL backends') >= CLOUD_SQL_LIMIT) {
     throw new Error(`Cloud SQL backends must remain below ${CLOUD_SQL_LIMIT}`)
   }
@@ -457,13 +499,16 @@ export function verifyRolloutEvidence(evidence, run, expected) {
   if (proofTime > now || now.valueOf() - proofTime.valueOf() > maxAgeMs) {
     throw new Error('rollout evidence is stale')
   }
-  if (expected.kind === 'production-c27-canary') {
+  const canaryCell = Object.keys(PRODUCTION_CANARIES)
+    .find((cellId) => PRODUCTION_CANARIES[cellId].kind === expected.kind)
+  if (canaryCell) {
+    if (!exactCells(expected.cellIds, [canaryCell])) throw new Error('evidence topology does not match')
     const start = instant(evidence.window?.startedAt, 'canary start')
-    if (proofTime.valueOf() - start.valueOf() < C27_CANARY_MINIMUM_MS) {
-      throw new Error('C27 canary window is shorter than 5 minutes')
+    if (proofTime.valueOf() - start.valueOf() < CANARY_MINIMUM_MS) {
+      throw new Error(`${productionCanary(canaryCell).label} canary window is shorter than 5 minutes`)
     }
-    assertC27CanaryLoad(object(evidence.load, 'canary load'))
-    assertPassingCanary(object(evidence.metrics, 'canary metrics'))
+    assertCanaryLoad(object(evidence.load, 'canary load'), canaryCell)
+    assertPassingCanary(object(evidence.metrics, 'canary metrics'), canaryCell)
   }
   return evidence
 }
@@ -511,11 +556,11 @@ async function main(argv) {
     }), null, 2)}\n`)
     return
   }
-  if (command === 'create-c27') {
+  if (command === 'create-canary') {
     const startedAt = required(values, 'started-at')
     const endedAt = required(values, 'ended-at')
-    writeFileSync(output, `${JSON.stringify(buildC27CanaryEvidence({
-      ...commonInput(values), startedAt, endedAt,
+    writeFileSync(output, `${JSON.stringify(buildProductionCanaryEvidence({
+      ...commonInput(values), cellId: required(values, 'cell-id'), startedAt, endedAt,
       loadReport: JSON.parse(readFileSync(required(values, 'load-report'), 'utf8')),
       logs: JSON.parse(readFileSync(required(values, 'logs-json'), 'utf8')),
       cloudSql: await readCloudSqlBackends('production', startedAt, endedAt)

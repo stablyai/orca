@@ -65,11 +65,12 @@ export function rankSessionHits(
   )
   // Why a total order and not just the key: a cursor is an offset into this
   // list, so two entries that tie must not be free to swap between pages.
+  // Newer first among equal scores, so relevance never hands ties to whichever id is lower.
   scored.sort(
     (left, right) =>
-      (sort === 'newest'
-        ? (right.session.updated_at ?? '').localeCompare(left.session.updated_at ?? '')
-        : right.score - left.score) || left.session.id - right.session.id
+      (sort === 'newest' ? 0 : right.score - left.score) ||
+      (right.session.updated_at ?? '').localeCompare(left.session.updated_at ?? '') ||
+      left.session.id - right.session.id
   )
   return scored
 }

@@ -55,6 +55,7 @@ export class SshPtyProvider implements IPtyProvider {
   getCwd = (id: string): Promise<string> => this.rpcOperations.getCwd(id)
   getInitialCwd = (id: string): Promise<string> => this.rpcOperations.getInitialCwd(id)
   clearBuffer = (id: string): Promise<void> => this.rpcOperations.clearBuffer(id)
+  resetInputModes = (id: string): Promise<void> => this.rpcOperations.resetInputModes(id)
   closeStartupQueryAuthority = (id: string): Promise<number> =>
     this.rpcOperations.closeStartupQueryAuthority(id)
   acknowledgeDataEvent = (id: string, charCount: number): void =>

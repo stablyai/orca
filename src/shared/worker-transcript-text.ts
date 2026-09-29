@@ -6,13 +6,42 @@
  * copied: two renderings would let the two surfaces disagree about what a tool call looked like.
  */
 
+import { claimBackgroundTaskTwins } from './native-chat-background-task-row'
 import {
   isSubagentGroupFallbackText,
   subagentGroupFallbackText
 } from './native-chat-subagent-summary'
 import type { NativeChatMessage } from './native-chat-types'
+import { agentJournalItemSubagentId } from './agent-session-journal-producer'
+import {
+  nativeChatSubagentLabel,
+  nativeChatSubagentLabels
+} from './native-chat-subagent-attribution'
 
-export function formatWorkerTranscriptMessage(message: NativeChatMessage): string {
+/** Every message in one read, each tagged with who it speaks as. A subagent is
+ *  named by the roster on the same page. */
+export function formatWorkerTranscriptMessages(messages: readonly NativeChatMessage[]): string[] {
+  const subagentLabels = nativeChatSubagentLabels(messages)
+  return messages.map((message) => formatWorkerTranscriptMessage(message, subagentLabels))
+}
+
+/** Who a line speaks as. A subagent's lines are tagged as its own, so a peer reading
+ *  a worker's transcript never takes a subagent's words for the worker's. */
+function workerTranscriptSpeaker(
+  message: NativeChatMessage,
+  subagentLabels: ReadonlyMap<string, string> | undefined
+): string {
+  if (agentJournalItemSubagentId(message) === null) {
+    return message.role
+  }
+  const label = nativeChatSubagentLabel(subagentLabels, message)
+  return label === undefined ? `${message.role}, subagent` : `${message.role}, subagent ${label}`
+}
+
+function formatWorkerTranscriptMessage(
+  message: NativeChatMessage,
+  subagentLabels: ReadonlyMap<string, string>
+): string {
   // Every roster block is written beside a plain-text twin carrying the same
   // sentence, for clients that cannot draw the block. Text surfaces are those
   // clients, so they print the twin and drop the block. The renderer reaches the
@@ -20,9 +49,16 @@ export function formatWorkerTranscriptMessage(message: NativeChatMessage): strin
   // every fallback-shaped text block as soon as any group is present and draws
   // each group, so it never has to decide which twin belongs to which group.
   const standIns = claimSubagentGroupTwins(message.blocks)
+  // A background task's row is the same shape: one block, one frozen twin. Its
+  // twin is matched on exact text rather than by shape, because the sentence is
+  // often the provider's own and has none.
+  const taskTwins = claimBackgroundTaskTwins(message.blocks)
   const blocks = message.blocks.map((block, index) => {
     if (block.type === 'text') {
       return block.text
+    }
+    if (block.type === 'background-task') {
+      return taskTwins.unpairedRows.get(index) ?? null
     }
     if (block.type === 'tool-call') {
       return `[tool ${block.name}] ${safeJson(block.input)}`
@@ -41,7 +77,7 @@ export function formatWorkerTranscriptMessage(message: NativeChatMessage): strin
     // than reading fields off a shape that has none.
     return '[unsupported block]'
   })
-  return `[${message.role}] ${blocks.filter((line) => line !== null).join('\n')}`.trimEnd()
+  return `[${workerTranscriptSpeaker(message, subagentLabels)}] ${blocks.filter((line) => line !== null).join('\n')}`.trimEnd()
 }
 
 /** For each roster block, the sentence it must print itself — absent when a twin

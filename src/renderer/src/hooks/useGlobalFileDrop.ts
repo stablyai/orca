@@ -120,7 +120,7 @@ export function useGlobalFileDrop(): void {
                 continue
               }
               const maybeRelative = toWorktreeRelativePath(result.destPath, worktreePath)
-              store.setActiveTabType('editor')
+              store.setActiveTabType('editor', activeWorktreeId)
               store.openFile(
                 {
                   filePath: result.destPath,
@@ -181,7 +181,7 @@ export function useGlobalFileDrop(): void {
             // tab-strip editor target. Keeping the editor-open path centralized
             // here avoids the regression where CLI drops were all coerced into
             // editor tabs once the renderer lost the original drop surface.
-            store.setActiveTabType('editor')
+            store.setActiveTabType('editor', activeWorktreeId)
             store.openFile({
               filePath,
               relativePath,

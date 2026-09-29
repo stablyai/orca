@@ -9,6 +9,7 @@ import {
   readQuestionIds,
   readQuestionOptionAnswers
 } from './codex-prompt-registry-bounds'
+import { readRecord, readString as readRecordString } from './codex-item-field-readers'
 
 export const CODEX_COMMAND_APPROVAL_METHOD = 'item/commandExecution/requestApproval'
 export const CODEX_FILE_CHANGE_APPROVAL_METHOD = 'item/fileChange/requestApproval'
@@ -30,17 +31,16 @@ export type CodexPendingPrompt = {
   answers: Map<string, string>
 }
 
+export type CodexAbandonedCommand = { threadId: string; itemId: string }
+const NO_ABANDONED_COMMANDS: readonly CodexAbandonedCommand[] = []
+
 export type CodexPromptClaim = {
   readonly itemId: string
   readonly prompt: CodexPendingPrompt
 }
 
 function readString(params: unknown, key: string): string | null {
-  if (typeof params !== 'object' || params === null) {
-    return null
-  }
-  const value = Reflect.get(params, key)
-  return typeof value === 'string' && value.length > 0 ? value : null
+  return readRecordString(readRecord(params), key)
 }
 
 export function isCodexPromptMethod(method: string): boolean {
@@ -57,6 +57,7 @@ export class CodexPromptRegistry {
   private readonly journalItemIds = new Map<string, string>()
   private readonly boundPrompts = new Map<string, CodexPendingPrompt>()
   private readonly claims = new Map<CodexPendingPrompt, CodexPromptClaim>()
+  private abandonedCommands: CodexAbandonedCommand[] = []
 
   get sizes(): { prompts: number; journalBindings: number } {
     return { prompts: this.byAddress.size, journalBindings: this.journalItemIds.size }
@@ -229,13 +230,31 @@ export class CodexPromptRegistry {
 
   clearTurn(threadId: string, turnId: string): void {
     const prompts = new Set(
-      [...this.byAddress.values(), ...this.boundPrompts.values()].filter(
+      [...this.byAddress.values(), ...this.boundPrompts.values(), ...this.claims.keys()].filter(
         (prompt) => prompt.threadId === threadId && codexPromptMatchesTurn(prompt, turnId)
       )
     )
     for (const prompt of prompts) {
       this.forget(prompt)
+      // Codex abandons a turn's unanswered prompts: a command still awaiting approval never ran.
+      // An `approvalId` asks for a subcommand, not the item's own command.
+      if (
+        prompt.method === CODEX_COMMAND_APPROVAL_METHOD &&
+        prompt.promptKey === prompt.codexItemId
+      ) {
+        this.abandonedCommands.push({ threadId: prompt.threadId, itemId: prompt.codexItemId })
+      }
     }
+  }
+
+  /** The commands whose approval a turn ended without, since the last call. */
+  takeAbandonedCommands(): readonly CodexAbandonedCommand[] {
+    if (this.abandonedCommands.length === 0) {
+      return NO_ABANDONED_COMMANDS
+    }
+    const taken = this.abandonedCommands
+    this.abandonedCommands = []
+    return taken
   }
 
   clear(): void {
@@ -243,6 +262,7 @@ export class CodexPromptRegistry {
     this.journalItemIds.clear()
     this.boundPrompts.clear()
     this.claims.clear()
+    this.abandonedCommands = []
   }
 
   private address(threadId: string, promptKey: string): string {

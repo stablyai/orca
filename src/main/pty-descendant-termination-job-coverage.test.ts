@@ -16,7 +16,8 @@ import { describe, expect, it } from 'vitest'
  */
 const SRC_DIR = join(__dirname, '..')
 const CALL = 'killWithDescendantSweep('
-const EXPECTED_MINIMUM_SITES = 5
+// Local immediate and recognized-agent shutdown share one guarded call site.
+const EXPECTED_MINIMUM_SITES = 4
 
 function collectTypeScriptFiles(dir: string): string[] {
   const found: string[] = []

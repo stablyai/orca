@@ -5,11 +5,8 @@ import {
   useCallback,
   useMemo
 } from './mobile-tasks-dependencies'
-import {
-  type TaskItem,
-  buildPartialRepositoryNotice,
-  isSuccess
-} from './mobile-tasks-legacy-foundation'
+import { type TaskItem, buildPartialRepositoryNotice } from './mobile-tasks-legacy-foundation'
+import { linearAccountConnect } from './mobile-task-list-operations'
 
 export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel) {
   const {
@@ -53,11 +50,8 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
     setLinearConnectState('connecting')
     setLinearConnectError('')
     try {
-      const response = await client.sendRequest('linear.connect', { apiKey })
-      if (!isSuccess(response)) {
-        throw new Error(response.error.message)
-      }
-      const result = response.result as { ok?: boolean; error?: string }
+      const reply = await linearAccountConnect.request(client, { apiKey })
+      const result = linearAccountConnect.interpret(reply)
       if (result.ok === false) {
         throw new Error(result.error ?? 'Failed to connect Linear')
       }

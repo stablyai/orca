@@ -27,6 +27,7 @@
  * hook restores zsh option semantics for the body at call time.
  */
 import { getPosixOmpShellWrapper } from './pty/omp-shell-wrapper'
+import { WSL_MANAGED_CLI_PATH_RESTORE } from './wsl-managed-cli-path-restore'
 import { getPosixCodexShellLaunchPreflight } from './pty/codex-shell-launch-preflight'
 import {
   getZshShellReadyMarkerRegistrationBlock,
@@ -38,6 +39,8 @@ import {
 
 /** Runtime values the hook re-exports after the user's own startup files ran. */
 export type ZshWrapperRestoreSpec = {
+  /** The managed WSL CLI dir onto PATH — local wrappers only; a no-op outside WSL. */
+  managedWslCli: boolean
   /** Orca's agent-teams shim dir back onto PATH. */
   agentTeamsPath: boolean
   /** Remote CLI bin dir onto PATH — relay hosts only. */
@@ -170,6 +173,7 @@ ${indentBlock(getZshShellReadyMarkerRegistrationBlock(spec.readyMarkerEscaped, t
   builtin typeset -g precmd_functions
 ${permanentPrecmd}
 ${joinBlocks([
+  spec.restores.managedWslCli ? indentBlock(WSL_MANAGED_CLI_PATH_RESTORE, '  ') : null,
   featureGuard('overlay', getOverlayRestoreBlocks(spec)),
   // Why no /etc/zshrc repair branch: ZDOTDIR was handed back before that file
   // ran, so the value it derives is the user's own path. #11044 is unreachable.

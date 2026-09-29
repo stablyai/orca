@@ -86,7 +86,10 @@ export function setupGuestMouseWheelZoomForwarding(args: {
       // Why: wheel input over a focused webview never reaches renderer DOM handlers, so consume and forward here.
       event.preventDefault()
       markGuestWheelZoom(guest, direction)
-      resolveRenderer(browserTabId)?.send('ui:zoomBrowserPage', direction)
+      resolveRenderer(browserTabId)?.send('ui:zoomBrowserPage', {
+        browserPageId: browserTabId,
+        direction
+      })
       return
     }
     if (

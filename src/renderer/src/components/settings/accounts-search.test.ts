@@ -15,7 +15,11 @@ vi.mock('./settings-search-keywords', () => ({
   translateSearchKeyword: (_key: string, fallback: string) => [fallback]
 }))
 
-import { getAccountsMiniMaxSearchEntries, getAccountsPaneSearchEntries } from './accounts-search'
+import {
+  getAccountsMiniMaxSearchEntries,
+  getAccountsOpencodeSearchEntries,
+  getAccountsPaneSearchEntries
+} from './accounts-search'
 
 describe('getAccountsMiniMaxSearchEntries', () => {
   it('returns a single entry that targets the MiniMax session cookie flow', () => {
@@ -40,5 +44,21 @@ describe('getAccountsMiniMaxSearchEntries', () => {
     const allEntries = getAccountsPaneSearchEntries()
     const titles = allEntries.map((entry) => entry.title)
     expect(titles).toContain('MiniMax Usage')
+  })
+})
+
+describe('getAccountsOpencodeSearchEntries', () => {
+  it('tells search to paste the full Cookie header including the console session', () => {
+    const cookieEntry = getAccountsOpencodeSearchEntries().find(
+      (entry) => entry.title === 'OpenCode Go Session Cookie'
+    )
+
+    expect(cookieEntry).toBeDefined()
+    expect(cookieEntry?.description).toContain('__Host-console_session')
+    expect(cookieEntry?.description).toContain('Cookie header')
+    expect(cookieEntry?.description).not.toMatch(/Fe26\.2\*\*/)
+    expect(cookieEntry?.keywords).toEqual(
+      expect.arrayContaining(['opencode', 'cookie', 'session', 'console', 'rate limit'])
+    )
   })
 })

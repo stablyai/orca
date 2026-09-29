@@ -40,6 +40,10 @@ export type NativeChatToolIconName =
   | 'bot'
   | 'list-checks'
   | 'wrench'
+  /** The awaiting-input row's glyph. Carried here for the shared aligned slot;
+   *  it names no tool category, because that row stands for a question rather
+   *  than for the call that asked it. */
+  | 'message-square-more'
 
 /** Category to glyph. */
 export const NATIVE_CHAT_TOOL_ICON_NAMES: Record<NativeChatToolCategory, NativeChatToolIconName> = {

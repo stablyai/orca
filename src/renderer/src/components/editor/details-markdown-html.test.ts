@@ -3,6 +3,7 @@ import {
   extractDetailsSummaryHtml,
   isEditableDetailsHtmlBlock,
   matchDetailsHtmlBlock,
+  normalizeDetailsOpeningTag,
   parseDetailsAttributes,
   parseToggleHeadingVariant,
   type DetailsHtmlBlock
@@ -26,6 +27,45 @@ afterEach(() => {
 })
 
 describe('details markdown html', () => {
+  it.each([
+    ['<details>', '<details class="orca-details">'],
+    ['<details open="open">', '<details class="orca-details" open>'],
+    ['<details CLASS="orca-details">', '<details class="orca-details">'],
+    ["<details Class='orca-details'>", '<details class="orca-details">'],
+    ['<details cLaSs=orca-details>', '<details class="orca-details">'],
+    [
+      "<details open data-orca-toggle = 'heading-2' class='orca-details'>",
+      '<details class="orca-details" data-orca-toggle="heading-2" open>'
+    ]
+  ])('normalizes supported opening tag %s like the serializer', (input, expected) => {
+    expect(normalizeDetailsOpeningTag(input)).toBe(expected)
+  })
+
+  it.each([
+    '<details id="keep">',
+    '<details class="custom">',
+    '<details class="ORCA-DETAILS">',
+    "<details CLASS='Orca-Details'>",
+    '<details Class=ORCA-DETAILS>',
+    '<details data-orca-toggle="heading-6">',
+    '<details open="false">',
+    '<detailsish>',
+    '</details>',
+    '<summary>',
+    '<!-- <details> -->'
+  ])('leaves noncanonical or unrelated fragment %s unchanged', (fragment) => {
+    expect(normalizeDetailsOpeningTag(fragment)).toBe(fragment)
+  })
+
+  it.each(['ORCA-DETAILS', 'Orca-Details'])(
+    'keeps case-sensitive class %s out of editable details nodes',
+    (className) => {
+      expect(
+        isEditableHtml(`<details class="${className}"><summary>Toggle</summary>Body</details>`)
+      ).toBe(false)
+    }
+  )
+
   it('extracts leading summary html without regex capture', () => {
     const matchSpy = vi.spyOn(String.prototype, 'match')
     const inner = `\n<SUMMARY>${'Heading line\n'.repeat(1_000)}</SUMMARY><p>Body</p>`

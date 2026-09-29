@@ -2,6 +2,7 @@ import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { ResumableSessionParseState } from './session-scanner-types'
 import type { SessionSidecarObservation } from './session-sidecar-stat'
 import type { TranscriptMessageChannel } from './session-transcript-channel'
+import type { SkippedTranscriptRecord } from './session-transcript-record-budget'
 
 // Sized past the default recency cap (1000) plus the in-scope cap (2000) so a
 // full steady-state result set stays resident between forced rescans.
@@ -17,6 +18,9 @@ export type SessionParseResumePoint = {
   // Bound to the cached state, which keeps the reference its parsers were built
   // with; a resumed read re-points this channel instead of replacing it.
   channel: TranscriptMessageChannel
+  // Records this fold dropped for exceeding the per-record budget, accumulated
+  // across resumes. Lives with the fold, so a whole-file re-read starts clean.
+  skippedRecords: SkippedTranscriptRecord[]
 }
 
 export type SessionParseCacheEntry = {

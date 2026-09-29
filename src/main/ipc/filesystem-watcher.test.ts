@@ -1,3 +1,4 @@
+import { createWatcherSender } from './filesystem-watcher-test-sender'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { handleMock, getSshFilesystemProviderMock, providerRegistrationListeners } = vi.hoisted(
@@ -106,7 +107,7 @@ describe('registerFilesystemWatcherHandlers', () => {
     vi.mocked(subscribeParcelWatcher).mockResolvedValue({ unsubscribe: vi.fn() } as never)
 
     await handlers['fs:watchWorktree'](
-      { sender: { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 } },
+      { sender: createWatcherSender(1) },
       { worktreePath: 'C:\\repo' }
     )
 
@@ -140,7 +141,7 @@ describe('registerFilesystemWatcherHandlers', () => {
         rootPath: worktreePath
       }
     })
-    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const sender = createWatcherSender(1)
     const args = { worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo' }
 
     await expect(handlers['fs:watchWorktree']({ sender }, args)).resolves.toBeUndefined()
@@ -162,7 +163,7 @@ describe('registerFilesystemWatcherHandlers', () => {
       reserveWatcherChild()
     )
     vi.mocked(createWslWatcher).mockRejectedValue(new WatcherChildCapacityError())
-    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const sender = createWatcherSender(1)
     const args = { worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo' }
 
     await handlers['fs:watchWorktree']({ sender }, args)
@@ -178,7 +179,7 @@ describe('registerFilesystemWatcherHandlers', () => {
   it('rejects installs during destructive removal and allows a retry afterward', async () => {
     vi.mocked(stat).mockResolvedValue({ isDirectory: () => true } as never)
     vi.mocked(subscribeParcelWatcher).mockResolvedValue({ unsubscribe: vi.fn() } as never)
-    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const sender = createWatcherSender(1)
     const removal = acquireWatcherRemovalGate('/repo')
     await removal.ready
 
@@ -201,12 +202,12 @@ describe('registerFilesystemWatcherHandlers', () => {
 
     await expect(
       handlers['fs:watchWorktree'](
-        { sender: { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 } },
+        { sender: createWatcherSender(1) },
         { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
       )
     ).resolves.toBeUndefined()
     await handlers['fs:watchWorktree'](
-      { sender: { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 } },
+      { sender: createWatcherSender(1) },
       { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
     )
 
@@ -226,7 +227,7 @@ describe('registerFilesystemWatcherHandlers', () => {
     vi.useFakeTimers()
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const sendMock = vi.fn()
-    const sender = { isDestroyed: () => false, send: sendMock, once: vi.fn(), id: 1 }
+    const sender = createWatcherSender(1, sendMock)
     const unwatchMock = vi.fn()
     const watchMock = vi.fn().mockResolvedValue(unwatchMock)
     getSshFilesystemProviderMock.mockReturnValueOnce(undefined)
@@ -261,7 +262,7 @@ describe('registerFilesystemWatcherHandlers', () => {
     vi.useFakeTimers()
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const sendMock = vi.fn()
-    const sender = { isDestroyed: () => false, send: sendMock, once: vi.fn(), id: 1 }
+    const sender = createWatcherSender(1, sendMock)
     const unwatchMock = vi.fn()
     const retryWatchMock = vi.fn().mockResolvedValue(unwatchMock)
     getSshFilesystemProviderMock
@@ -299,7 +300,7 @@ describe('registerFilesystemWatcherHandlers', () => {
     getSshFilesystemProviderMock.mockReturnValueOnce(undefined)
 
     await handlers['fs:watchWorktree'](
-      { sender: { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 } },
+      { sender: createWatcherSender(1) },
       { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
     )
 
@@ -315,8 +316,8 @@ describe('registerFilesystemWatcherHandlers', () => {
   it('retries all live renderer owners after a terminal relay watch failure', async () => {
     vi.useFakeTimers()
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const senderOne = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
-    const senderTwo = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 2 }
+    const senderOne = createWatcherSender(1)
+    const senderTwo = createWatcherSender(2)
     const watchMock = vi.fn().mockResolvedValue(vi.fn())
     getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
 
@@ -354,7 +355,7 @@ describe('registerFilesystemWatcherHandlers', () => {
   })
 
   it('reinstalls an SSH worktree watch when the provider is re-registered after a reconnect', async () => {
-    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const sender = createWatcherSender(1)
     const staleUnwatch = vi.fn()
     const watchMock = vi.fn().mockResolvedValue(staleUnwatch)
     getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
@@ -390,7 +391,7 @@ describe('registerFilesystemWatcherHandlers', () => {
 
   it('re-arms an SSH watch whose first install found no provider yet', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const sender = createWatcherSender(1)
     // A connect slower than the retry window leaves the renderer subscribed with nothing installed.
     getSshFilesystemProviderMock.mockReturnValue(undefined)
 
@@ -411,7 +412,7 @@ describe('registerFilesystemWatcherHandlers', () => {
   it('resyncs after a reconnect whose reinstall only succeeded on a retry', async () => {
     vi.useFakeTimers()
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const sender = createWatcherSender(1)
     getSshFilesystemProviderMock.mockReturnValue({ watch: vi.fn().mockResolvedValue(vi.fn()) })
 
     await handlers['fs:watchWorktree'](
@@ -440,7 +441,7 @@ describe('registerFilesystemWatcherHandlers', () => {
   })
 
   it('does not resurrect an SSH watch the renderer already unwatched', async () => {
-    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const sender = createWatcherSender(1)
     const watchMock = vi.fn().mockResolvedValue(vi.fn())
     getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
 
@@ -462,7 +463,7 @@ describe('registerFilesystemWatcherHandlers', () => {
   })
 
   it('leaves watches on other connections untouched when one provider re-registers', async () => {
-    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const sender = createWatcherSender(1)
     const watchMock = vi.fn().mockResolvedValue(vi.fn())
     getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
 
@@ -480,8 +481,8 @@ describe('registerFilesystemWatcherHandlers', () => {
   })
 
   it('reinstalls one shared watch when several senders share a re-registered connection', async () => {
-    const senderOne = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
-    const senderTwo = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 2 }
+    const senderOne = createWatcherSender(1)
+    const senderTwo = createWatcherSender(2)
     const watchMock = vi.fn().mockResolvedValue(vi.fn())
     getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
 
@@ -515,8 +516,11 @@ describe('registerFilesystemWatcherHandlers', () => {
     const sender = {
       isDestroyed: () => destroyed,
       send: vi.fn(),
-      once: vi.fn((_event: string, handler: () => void) => {
-        destroyHandlers.push(handler)
+      removeListener: vi.fn(),
+      once: vi.fn((event: string, handler: () => void) => {
+        if (event === 'destroyed') {
+          destroyHandlers.push(handler)
+        }
       }),
       id: 1
     }
@@ -545,8 +549,8 @@ describe('registerFilesystemWatcherHandlers', () => {
   it('shares SSH worktree watchers across renderer senders until the last unwatch', async () => {
     const sendOne = vi.fn()
     const sendTwo = vi.fn()
-    const senderOne = { isDestroyed: () => false, send: sendOne, once: vi.fn(), id: 1 }
-    const senderTwo = { isDestroyed: () => false, send: sendTwo, once: vi.fn(), id: 2 }
+    const senderOne = createWatcherSender(1, sendOne)
+    const senderTwo = createWatcherSender(2, sendTwo)
     const unwatchMock = vi.fn()
     const watchMock = vi.fn().mockResolvedValue(unwatchMock)
     getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
@@ -590,7 +594,7 @@ describe('registerFilesystemWatcherHandlers', () => {
     const provider = { watch: vi.fn().mockResolvedValue(vi.fn()), closeWatch }
     getSshFilesystemProviderMock.mockReturnValue(provider)
     await handlers['fs:watchWorktree'](
-      { sender: { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 } },
+      { sender: createWatcherSender(1) },
       { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
     )
 
@@ -615,7 +619,7 @@ describe('registerFilesystemWatcherHandlers', () => {
       .mockResolvedValueOnce(replacementUnwatch)
     const closeWatch = vi.fn().mockResolvedValue(undefined)
     getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock, closeWatch })
-    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const sender = createWatcherSender(1)
 
     await handlers['fs:watchWorktree'](
       { sender },
@@ -642,7 +646,7 @@ describe('registerFilesystemWatcherHandlers', () => {
     const watchMock = vi.fn().mockResolvedValue(vi.fn())
     const closeWatch = vi.fn().mockResolvedValue(undefined)
     getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock, closeWatch })
-    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const sender = createWatcherSender(1)
 
     await handlers['fs:watchWorktree'](
       { sender },
@@ -666,7 +670,7 @@ describe('registerFilesystemWatcherHandlers', () => {
     const watchMock = vi.fn().mockResolvedValue(firstUnwatch)
     const closeWatch = vi.fn().mockResolvedValue(undefined)
     getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock, closeWatch })
-    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const sender = createWatcherSender(1)
     const args = { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
 
     await handlers['fs:watchWorktree']({ sender }, args)
@@ -685,14 +689,12 @@ describe('registerFilesystemWatcherHandlers', () => {
     getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock, closeWatch })
     const destroyedCallbacks: (() => void)[] = []
     const sender = {
-      isDestroyed: () => false,
-      send: vi.fn(),
+      ...createWatcherSender(1),
       once: vi.fn((event: string, callback: () => void) => {
         if (event === 'destroyed') {
           destroyedCallbacks.push(callback)
         }
-      }),
-      id: 1
+      })
     }
     const args = { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
 
@@ -709,8 +711,8 @@ describe('registerFilesystemWatcherHandlers', () => {
   it('preserves remote event routing when acknowledged teardown rejects', async () => {
     const sendOne = vi.fn()
     const sendTwo = vi.fn()
-    const senderOne = { isDestroyed: () => false, send: sendOne, once: vi.fn(), id: 1 }
-    const senderTwo = { isDestroyed: () => false, send: sendTwo, once: vi.fn(), id: 2 }
+    const senderOne = createWatcherSender(1, sendOne)
+    const senderTwo = createWatcherSender(2, sendTwo)
     const watchMock = vi.fn().mockResolvedValue(vi.fn())
     const closeWatch = vi
       .fn()
@@ -747,8 +749,8 @@ describe('registerFilesystemWatcherHandlers', () => {
   it('dedupes concurrent pending SSH worktree watcher installs', async () => {
     const sendOne = vi.fn()
     const sendTwo = vi.fn()
-    const senderOne = { isDestroyed: () => false, send: sendOne, once: vi.fn(), id: 1 }
-    const senderTwo = { isDestroyed: () => false, send: sendTwo, once: vi.fn(), id: 2 }
+    const senderOne = createWatcherSender(1, sendOne)
+    const senderTwo = createWatcherSender(2, sendTwo)
     const unwatchMock = vi.fn()
     let resolveWatch: (unwatch: () => void) => void = () => {}
     const watchPromise = new Promise<() => void>((resolve) => {
@@ -791,8 +793,8 @@ describe('registerFilesystemWatcherHandlers', () => {
   it('keeps a pending SSH watcher install alive when only one pending sender unwatches', async () => {
     const sendOne = vi.fn()
     const sendTwo = vi.fn()
-    const senderOne = { isDestroyed: () => false, send: sendOne, once: vi.fn(), id: 1 }
-    const senderTwo = { isDestroyed: () => false, send: sendTwo, once: vi.fn(), id: 2 }
+    const senderOne = createWatcherSender(1, sendOne)
+    const senderTwo = createWatcherSender(2, sendTwo)
     const unwatchMock = vi.fn()
     let resolveWatch: (unwatch: () => void) => void = () => {}
     const watchPromise = new Promise<() => void>((resolve) => {
@@ -833,14 +835,12 @@ describe('registerFilesystemWatcherHandlers', () => {
   it('unsubscribes if the sender is destroyed while an SSH watcher is opening', async () => {
     const destroyedCallbacks: (() => void)[] = []
     const sender = {
-      isDestroyed: () => false,
-      send: vi.fn(),
+      ...createWatcherSender(1),
       once: vi.fn((event: string, callback: () => void) => {
         if (event === 'destroyed') {
           destroyedCallbacks.push(callback)
         }
-      }),
-      id: 1
+      })
     }
     const unwatchMock = vi.fn()
     let resolveWatch: (unwatch: () => void) => void = () => {}
@@ -871,8 +871,8 @@ describe('registerFilesystemWatcherHandlers', () => {
 
   it('revives a pending SSH watcher install when a new sender joins after cancellation', async () => {
     const args = { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
-    const senderOne = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
-    const senderTwo = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 2 }
+    const senderOne = createWatcherSender(1)
+    const senderTwo = createWatcherSender(2)
     const unwatchMock = vi.fn()
     let resolveWatch!: (unwatch: () => void) => void
     const watchMock = vi.fn().mockReturnValue(
@@ -907,14 +907,12 @@ describe('registerFilesystemWatcherHandlers', () => {
   it('registers one destroyed listener for many SSH worktree watches', async () => {
     const destroyedCallbacks: (() => void)[] = []
     const sender = {
-      isDestroyed: () => false,
-      send: vi.fn(),
+      ...createWatcherSender(99),
       once: vi.fn((event: string, callback: () => void) => {
         if (event === 'destroyed') {
           destroyedCallbacks.push(callback)
         }
-      }),
-      id: 99
+      })
     }
     const unwatchMock = vi.fn()
     const watchMock = vi.fn().mockResolvedValue(unwatchMock)
@@ -929,7 +927,7 @@ describe('registerFilesystemWatcherHandlers', () => {
 
     // Why: WebContents warns after 10 listeners. The cleanup work still covers
     // every remote watch by scanning the shared remote watcher registry.
-    expect(sender.once).toHaveBeenCalledTimes(1)
+    expect(sender.once).toHaveBeenCalledTimes(3)
     expect(destroyedCallbacks).toHaveLength(1)
 
     destroyedCallbacks[0]()

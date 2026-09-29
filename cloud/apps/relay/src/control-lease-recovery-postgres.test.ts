@@ -3,6 +3,7 @@ import { ASSIGNMENT_LIMITS, RELAY_CLOSE_CODE } from '@orca-cloud/relay-contract'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type WebSocket from 'ws'
 import { RelayAssignmentStore } from './assignment-store.js'
+import { CONTROL_RENEWAL_BATCH_INTERVAL_MS } from './control-renewal-batch.js'
 import type { RelayConfig } from './config.js'
 import type { RelayCredentialStore } from './credential-store.js'
 import { openRelayDatabase, type RelayDatabase } from './database.js'
@@ -133,6 +134,10 @@ describePostgres('expired control lease after a database outage', () => {
     internals.heartbeat(session)
   }
 
+  // A due renewal leaves the heartbeat as a batch enqueue, so a poll has to
+  // outlast the batch window before it can call the renewal missing.
+  const renewalPoll = { timeout: CONTROL_RENEWAL_BATCH_INTERVAL_MS + 4_000 }
+
   const leaseRows = async (relayHostId: string) =>
     await database.query(
       `SELECT activity_id, cell_id FROM relay_assignment_activity_leases
@@ -149,7 +154,8 @@ describePostgres('expired control lease after a database outage', () => {
       .poll(
         async () =>
           socket.close.mock.calls.length > 0 ||
-          (await leaseRows(relayHostId)).length === expectedRows
+          (await leaseRows(relayHostId)).length === expectedRows,
+        renewalPoll
       )
       .toBe(true)
   }
@@ -212,7 +218,7 @@ describePostgres('expired control lease after a database outage', () => {
     ).rejects.toThrow('control_activity_moved')
 
     heartbeat(registry, session)
-    await expect.poll(() => socket.close.mock.calls.length).toBe(1)
+    await expect.poll(() => socket.close.mock.calls.length, renewalPoll).toBe(1)
 
     expect(socket.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.DRAINING, 'control activity moved')
     expect(await leaseRows(identity.relayHostId)).toEqual([

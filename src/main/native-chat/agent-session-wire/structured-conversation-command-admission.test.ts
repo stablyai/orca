@@ -29,12 +29,12 @@ describe('conversationCommandBlocked background tasks', () => {
       contextWith({ state: 'monitoring', supportsTaskStop: true }),
       RECORD
     )
-    expect(blocked).toBe('Stop background tasks before using this command.')
+    expect(blocked?.message).toBe('Stop background tasks before using this command.')
   })
 
   it('asks for a stop on a host that predates the stop-capability field', () => {
     const blocked = conversationCommandBlocked(contextWith({ state: 'monitoring' }), RECORD)
-    expect(blocked).toBe('Stop background tasks before using this command.')
+    expect(blocked?.message).toBe('Stop background tasks before using this command.')
   })
 
   it('asks the user to wait when the provider exposes no stop at all', () => {
@@ -43,7 +43,7 @@ describe('conversationCommandBlocked background tasks', () => {
       contextWith({ state: 'monitoring', supportsStopAll: false }),
       RECORD
     )
-    expect(blocked).toBe('Wait for background tasks to finish before using this command.')
+    expect(blocked?.message).toBe('Wait for background tasks to finish before using this command.')
   })
 
   it('still refuses on the open turn, not on the work the strip now shows', () => {
@@ -63,7 +63,7 @@ describe('conversationCommandBlocked background tasks', () => {
           }
         ]
       }) as unknown as ReturnType<typeof ctx.journal.snapshot>
-    expect(conversationCommandBlocked(ctx, RECORD)).toBe(
+    expect(conversationCommandBlocked(ctx, RECORD)?.message).toBe(
       'Wait for the current turn to finish before using this command.'
     )
   })

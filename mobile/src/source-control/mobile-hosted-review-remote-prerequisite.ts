@@ -2,7 +2,7 @@ import type { MobileGitStatusResult } from './mobile-git-status'
 import type { MobileHostedReviewCreateIntentProgress } from './mobile-hosted-review-create-intent'
 import type { MobilePrPrefill } from './mobile-pr-create'
 import { pushMobileHostedReviewBranch } from './mobile-hosted-review-git-preparation'
-import type { MobileSourceControlRpcSender } from './mobile-source-control-rpc-sender'
+import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 
 type RemotePrerequisiteInput = {
   status: MobileGitStatusResult | null
@@ -10,7 +10,7 @@ type RemotePrerequisiteInput = {
 }
 
 export async function applyMobileHostedReviewRemotePrerequisite(
-  client: MobileSourceControlRpcSender,
+  client: RpcOperationSender,
   worktreeId: string,
   prefill: MobilePrPrefill,
   input: RemotePrerequisiteInput

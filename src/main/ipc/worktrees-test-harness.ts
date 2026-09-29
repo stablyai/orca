@@ -11,6 +11,7 @@ import { resetSshProviderAuthorities } from '../ssh/ssh-provider-authority'
 import { createWorktreeRuntimeStub, type WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
 import { handlers, mainWindow, store } from './worktrees-test-ipc-surface'
 import { configureMetadataPruningStoreMocks } from './worktrees-test-metadata-pruning-store'
+import { resetWorktreeTestSshHostHome } from '../worktree-removal-test-ssh-host-home'
 import {
   ORIGINAL_PLATFORM,
   setPlatform,
@@ -87,6 +88,7 @@ export const harnessRepo = {
 
 /** Registers worktree IPC handlers against freshly reset shared mocks and returns the runtime stub. */
 export function setupWorktreeHandlers(): WorktreeRuntimeStub {
+  resetWorktreeTestSshHostHome()
   delete (store as typeof store & { getAllWorktreeMetaForHost?: (...args: unknown[]) => unknown })
     .getAllWorktreeMetaForHost
   setPlatform(ORIGINAL_PLATFORM)

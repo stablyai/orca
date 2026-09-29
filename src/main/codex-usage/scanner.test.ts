@@ -10,6 +10,7 @@ vi.mock('electron', () => ({
   }
 }))
 
+import { createUsageWorktreeResolver } from '../usage/usage-worktree-resolver'
 import { attributeCodexUsageEvent } from './codex-usage-event-attribution'
 import { parseCodexUsageRecord } from './codex-usage-record-parser'
 
@@ -104,6 +105,9 @@ describe('parseCodexUsageRecord', () => {
       cwd: '/workspace/repo/packages/app',
       model: 'gpt-5.2-codex',
       hasInferredPricing: false,
+      longContextInputTokens: 0,
+      longContextCachedInputTokens: 0,
+      longContextOutputTokens: 0,
       inputTokens: 1000,
       cachedInputTokens: 400,
       outputTokens: 250,
@@ -202,28 +206,29 @@ describe('attributeCodexUsageEvent', () => {
         cwd: '/workspace/repo/app2/subdir',
         model: 'gpt-5.2-codex',
         hasInferredPricing: false,
+        longContextInputTokens: 0,
+        longContextCachedInputTokens: 0,
+        longContextOutputTokens: 0,
         inputTokens: 100,
         cachedInputTokens: 10,
         outputTokens: 25,
         reasoningOutputTokens: 10,
         totalTokens: 125
       },
-      [
+      await createUsageWorktreeResolver([
         {
           repoId: 'repo-1',
           worktreeId: 'repo-1::/workspace/repo/app',
           path: '/workspace/repo/app',
-          displayName: 'App',
-          canonicalPath: '/workspace/repo/app'
+          displayName: 'App'
         },
         {
           repoId: 'repo-2',
           worktreeId: 'repo-2::/workspace/repo/app2',
           path: '/workspace/repo/app2',
-          displayName: 'App 2',
-          canonicalPath: '/workspace/repo/app2'
+          displayName: 'App 2'
         }
-      ]
+      ])
     )
 
     expect(attributed?.projectKey).toBe('worktree:repo-2::/workspace/repo/app2')
@@ -240,21 +245,23 @@ describe('attributeCodexUsageEvent', () => {
         cwd: '/workspace/repo/..fixtures/session',
         model: 'gpt-5.2-codex',
         hasInferredPricing: false,
+        longContextInputTokens: 0,
+        longContextCachedInputTokens: 0,
+        longContextOutputTokens: 0,
         inputTokens: 100,
         cachedInputTokens: 10,
         outputTokens: 25,
         reasoningOutputTokens: 10,
         totalTokens: 125
       },
-      [
+      await createUsageWorktreeResolver([
         {
           repoId: 'repo-1',
           worktreeId: 'repo-1::/workspace/repo',
           path: '/workspace/repo',
-          displayName: 'Repo',
-          canonicalPath: '/workspace/repo'
+          displayName: 'Repo'
         }
-      ]
+      ])
     )
 
     expect(attributed?.projectKey).toBe('worktree:repo-1::/workspace/repo')
@@ -271,21 +278,23 @@ describe('attributeCodexUsageEvent', () => {
         cwd: '/workspace/repo/../other/session',
         model: 'gpt-5.2-codex',
         hasInferredPricing: false,
+        longContextInputTokens: 0,
+        longContextCachedInputTokens: 0,
+        longContextOutputTokens: 0,
         inputTokens: 100,
         cachedInputTokens: 10,
         outputTokens: 25,
         reasoningOutputTokens: 10,
         totalTokens: 125
       },
-      [
+      await createUsageWorktreeResolver([
         {
           repoId: 'repo-1',
           worktreeId: 'repo-1::/workspace/repo',
           path: '/workspace/repo',
-          displayName: 'Repo',
-          canonicalPath: '/workspace/repo'
+          displayName: 'Repo'
         }
-      ]
+      ])
     )
 
     expect(attributed?.projectKey).toBe('cwd:/workspace/repo/../other/session')
@@ -301,21 +310,23 @@ describe('attributeCodexUsageEvent', () => {
         cwd: 'D:\\other\\repo',
         model: 'gpt-5.2-codex',
         hasInferredPricing: false,
+        longContextInputTokens: 0,
+        longContextCachedInputTokens: 0,
+        longContextOutputTokens: 0,
         inputTokens: 100,
         cachedInputTokens: 10,
         outputTokens: 25,
         reasoningOutputTokens: 10,
         totalTokens: 125
       },
-      [
+      await createUsageWorktreeResolver([
         {
           repoId: 'repo-1',
           worktreeId: 'repo-1::C:\\repo',
           path: 'C:\\repo',
-          displayName: 'Repo',
-          canonicalPath: 'C:\\repo'
+          displayName: 'Repo'
         }
-      ]
+      ])
     )
 
     expect(attributed?.projectKey).toBe('cwd:d:/other/repo')

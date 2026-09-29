@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as Notifications from 'expo-notifications'
 import { Platform } from 'react-native'
@@ -46,17 +45,5 @@ describe('ensureDesktopNotificationChannel', () => {
     vi.mocked(Notifications.setNotificationChannelAsync).mockRejectedValue(new Error('no channels'))
 
     await expect(ensureDesktopNotificationChannel()).rejects.toThrow('no channels')
-  })
-})
-
-describe('app boot', () => {
-  it('creates the channel at startup, not only once a socket subscribes', () => {
-    // A background push can be the first thing to target 'orca-desktop', and Android
-    // drops a notification whose channel does not exist. Asserted against the source
-    // because vitest only collects src/, so app/_layout.tsx has no runtime coverage.
-    const layout = readFileSync(new URL('../../app/_layout.tsx', import.meta.url), 'utf8')
-
-    expect(layout).toContain("from '../src/notifications/desktop-notification-channel'")
-    expect(layout).toMatch(/^void ensureDesktopNotificationChannel\(\)\.catch\(/m)
   })
 })

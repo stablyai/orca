@@ -217,3 +217,27 @@ describe('new-tab settlement barriers', () => {
     expect(() => readSettings()).toThrow(TypeError)
   })
 })
+
+describe('the bound descriptor', () => {
+  // Eleven call sites pass `interpret` detached from its descriptor, five of them
+  // settlePreviewSend's second argument in files/mobile-file-preview-request.ts:
+  // filePreviewTextRead, filePreviewImageRead, terminalArtifactTextRead,
+  // terminalArtifactImageRead and terminalArtifactWrite.
+  it('interprets the same reply when taken as an unbound reference', async () => {
+    const settings = { futureField: 'kept' }
+    const accepted = await settingsRead.request(replyWith(success({ settings })))
+    const readSettings = settingsRead.interpret
+    expect(readSettings(accepted)).toEqual(settingsRead.interpret(accepted))
+    expect(readSettings(accepted)).toEqual({ accepted: true, value: settings })
+
+    const refused = await botOverridesRead.request(replyWith(refusal()))
+    const readOverrides = botOverridesRead.interpret
+    expect(readOverrides(refused)).toEqual(botOverridesRead.interpret(refused))
+    expect(readOverrides(refused)).toEqual({ accepted: false })
+
+    // The throwing acceptance family keeps its throw unbound rather than losing it.
+    const missing = await newTabSettingsRead.request(replyWith(success(null)))
+    const readNewTab = newTabSettingsRead.interpret
+    expect(() => readNewTab(missing)()).toThrow(TypeError)
+  })
+})

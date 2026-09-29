@@ -129,6 +129,9 @@ export class DaemonRequestRouter {
       case 'clearScrollback':
         this.options.host.clearScrollback(request.payload.sessionId)
         return {}
+      case 'resetInputModes':
+        this.options.host.resetInputModes(request.payload.sessionId)
+        return {}
       case 'listSessions':
         return { sessions: this.options.host.listSessions() }
       case 'shutdownIfIdle':

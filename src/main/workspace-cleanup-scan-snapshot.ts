@@ -196,6 +196,17 @@ function clearSupersededPrunes(
 // comparison — on a large fleet that read is a multi-hundred-KB synchronous
 // JSON.parse per scan.
 const lastPersistedScannedAtByFile = new Map<string, number>()
+const MAX_PERSISTED_SCAN_FILES = 512
+
+function prunePersistedScanTimes(): void {
+  while (lastPersistedScannedAtByFile.size > MAX_PERSISTED_SCAN_FILES) {
+    const oldest = lastPersistedScannedAtByFile.keys().next()
+    if (oldest.done) {
+      return
+    }
+    lastPersistedScannedAtByFile.delete(oldest.value)
+  }
+}
 
 export async function persistWorkspaceCleanupScanResult(
   snapshotDirectory: string,
@@ -218,10 +229,12 @@ export async function persistWorkspaceCleanupScanResult(
         }
         if (knownScannedAt !== undefined && knownScannedAt > filteredResult.scannedAt) {
           lastPersistedScannedAtByFile.set(file, knownScannedAt)
+          prunePersistedScanTimes()
           return
         }
         await writeSnapshot(file, filteredResult)
         lastPersistedScannedAtByFile.set(file, filteredResult.scannedAt)
+        prunePersistedScanTimes()
         clearSupersededPrunes(file, result, true)
         return
       }

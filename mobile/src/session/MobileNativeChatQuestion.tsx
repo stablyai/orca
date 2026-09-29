@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { ArrowUp, Check, CircleHelp, X } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { mobileNativeChatInputStyles } from './mobile-native-chat-input-styles'
 import {
   formatQuestionAnswerByIndexes,
   formatQuestionAnswerWithOtherByIndexes,
@@ -175,7 +176,7 @@ export function MobileNativeChatQuestion({
       {allowOther ? (
         <View style={styles.freeTextRow}>
           <TextInput
-            style={styles.freeInput}
+            style={mobileNativeChatInputStyles.freeInput}
             value={freeText}
             onChangeText={setFreeText}
             placeholder={hasOptions ? 'Or type a reply…' : 'Type your reply…'}
@@ -302,18 +303,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: spacing.sm
-  },
-  freeInput: {
-    flex: 1,
-    minHeight: 40,
-    maxHeight: 120,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize + 1,
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm
   },
   freeSend: {
     width: 40,

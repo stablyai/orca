@@ -32,14 +32,22 @@ export type SessionSearchIndexStatus = {
   phase: SessionSearchIndexPhase
   /** Rows whose content matches the file at the stat the row records. */
   filesIndexed: number
-  /** Rows owed a whole read: a declined append, or a window that widened. */
+  /**
+   * Files owed a read: rows the index holds and must re-read (a declined
+   * append, a window that widened), plus candidates the last pass ran out of
+   * time for, which have no row to be counted by.
+   */
   filesDue: number
   /** Rows whose last read did not commit. */
   filesFailed: number
+  /** Messages the index holds across every indexed row. */
+  messagesIndexed: number
   degradedRoots: SessionSearchDegradedRoot[]
   lastReconcileAt: number | null
   /** When a whole-machine sweep last finished; null until one has. */
   lastSweepCompletedAt: number | null
+  /** Indexed sessions per agent; an agent with files and none is unsearchable. */
+  sessionsByAgent: Record<string, number>
 }
 
 /**
@@ -64,8 +72,10 @@ export type SessionSearchIndexStatus = {
  *   `session-search-deleted-sources.ts`.
  * - `cyclesSinceSweep` and `sweepNext`, which are about the timer rather than
  *   about any file, and mean nothing to a second process.
- * - `degradedRoots`, `lastReconcileAt` and `lastSweepCompletedAt`: what the last
- *   pass observed, held so `status()` can answer between passes.
+ * - `degradedRoots`, `lastReconcileAt`, `lastSweepCompletedAt` and `left`: what
+ *   the last pass observed, held so `status()` can answer between passes.
+ *   `left` cannot be a row: a candidate the deadline never reached has no row
+ *   yet, which is exactly why no query can see the backlog.
  * - `lastCounts`, the one cached query result, read only after `close()` so that
  *   describing what happened does not reopen a handle the owner has finished
  *   with. While the indexer is open every call re-queries.
@@ -99,6 +109,8 @@ export class SessionSearchIndexer {
   private degradedRoots: SessionSearchDegradedRoot[] = []
   private lastReconcileAt: number | null = null
   private lastSweepCompletedAt: number | null = null
+  /** Candidates the last completed pass was owed and did not read. */
+  private left = 0
   private lastCounts: SessionSearchStateCounts | null = null
   private cyclesSinceSweep = 0
   private sweepNext = false
@@ -187,16 +199,20 @@ export class SessionSearchIndexer {
     const settled = (this.closed ? this.lastCounts : this.readCounts()) ?? {
       current: 0,
       due: 0,
-      failed: 0
+      failed: 0,
+      sessionsByAgent: {},
+      messages: 0
     }
     return {
       phase: this.phase(settled),
       filesIndexed: settled.current,
-      filesDue: settled.due,
+      filesDue: settled.due + this.left,
       filesFailed: settled.failed,
+      messagesIndexed: settled.messages,
       degradedRoots: this.degradedRoots.map((root) => ({ ...root })),
       lastReconcileAt: this.lastReconcileAt,
-      lastSweepCompletedAt: this.lastSweepCompletedAt
+      lastSweepCompletedAt: this.lastSweepCompletedAt,
+      sessionsByAgent: { ...settled.sessionsByAgent }
     }
   }
 
@@ -234,11 +250,11 @@ export class SessionSearchIndexer {
   }
 
   /**
-   * `current` is a claim, so it takes all three: no row owed a read, no row
-   * whose last read failed, and a whole sweep that finished. `idle` is the
-   * other end of it — an indexer nobody started has not promised to index
-   * anything, and calling that `current` would claim an index nobody built is
-   * up to date.
+   * `current` is a claim, so it takes all of it: nothing owed a read by a row,
+   * nothing owed a read that has no row yet, no row whose last read failed,
+   * and a whole sweep that finished. `idle` is the other end of it
+   * — an indexer nobody started has not promised to index anything, and calling
+   * that `current` would claim an index nobody built is up to date.
    */
   private phase(counts: SessionSearchStateCounts): SessionSearchIndexPhase {
     if (this.closed) {
@@ -251,6 +267,10 @@ export class SessionSearchIndexer {
     // the index knows about and cannot close on its own.
     if (this.degradedRoots.length > 0 || counts.failed > 0) {
       return 'degraded'
+    }
+    // Work the rows cannot show: a candidate the deadline cut off has no row.
+    if (this.left > 0) {
+      return 'indexing'
     }
     return counts.due === 0 && this.lastSweepCompletedAt !== null ? 'current' : 'indexing'
   }
@@ -303,12 +323,20 @@ export class SessionSearchIndexer {
       this.degradedRoots = result.degradedRoots
       this.previousRootsWithFiles = result.rootsWithFiles
       this.lastReconcileAt = this.clock.now()
+      // Replaced, not accumulated: it is this pass's measure of the backlog, and
+      // a pass that read everything it was owed measures zero.
+      this.left = result.left
       // A backlog outside the recency window is only visible to a sweep, so a
       // pass that ran out of time asks for one. It is self-limiting: the first
       // pass that finishes its reads hands the interval back to cycles.
       this.sweepNext ||= result.outOfTime
       if (full) {
-        this.lastSweepCompletedAt = this.lastReconcileAt
+        // A sweep the deadline stopped with candidates still unread did not
+        // sweep the machine, and stamping it would let `current` be claimed
+        // over a backlog no row can account for.
+        if (!result.outOfTime) {
+          this.lastSweepCompletedAt = this.lastReconcileAt
+        }
         this.cyclesSinceSweep = 0
         return
       }

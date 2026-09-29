@@ -52,4 +52,23 @@ describe('sweep schedule jitter', () => {
 
     expect(cleanup?.[1]).toBe('jitteredSweepIntervalMs(30_000)')
   })
+
+  it('jitters the credential cleanup tick', () => {
+    const source = readFileSync(new URL('./index.ts', import.meta.url), 'utf8')
+    const cleanup = /'\[orca-relay\] credential cleanup failed'\s*\),\s*([^\n]*?)\n/.exec(source)
+
+    expect(cleanup?.[1]).toBe('jitteredSweepIntervalMs(30_000)')
+  })
+
+  // A census, not a list of the timers that happen to be gated today: an ungated sweep runs in
+  // every cell as well as the director, which multiplies one table scan by the fleet size.
+  it('gates every periodic sweep in index.ts on the maintenance role', () => {
+    const source = readFileSync(new URL('./index.ts', import.meta.url), 'utf8')
+    const timers = source.match(/setInterval\(/g) ?? []
+    const gated =
+      source.match(/roleOwnsAssignmentMaintenance\(config\.role\)\s*\?\s*setInterval\(/g) ?? []
+
+    expect(timers.length).toBeGreaterThan(0)
+    expect(gated.length).toBe(timers.length)
+  })
 })

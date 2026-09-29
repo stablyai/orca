@@ -316,7 +316,7 @@ describe('resumeAiVaultSessionInTerminal', () => {
     const sendRequest = vi.fn().mockResolvedValueOnce({ ok: true, result: { tab: { id: 'x' } } })
     await expect(
       resumeAiVaultSessionInTerminal({ sendRequest }, 'worktree-1', { command: 'command' })
-    ).rejects.toThrow('Created terminal response was invalid')
+    ).rejects.toThrow('The host sent a reply this app could not read (session.tabs.createTerminal)')
   })
 
   it('throws when terminal send fails or is locked', async () => {

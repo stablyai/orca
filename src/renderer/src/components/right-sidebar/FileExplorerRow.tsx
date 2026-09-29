@@ -215,8 +215,8 @@ export function FileExplorerRow({
             </>
           )}
           <span
-            // Why: marks the rename hotspot so the row's click handler can hold
-            // back the directory toggle until the double-click window closes.
+            // Why: marks the rename hotspot so the row's click handler can drop
+            // the directory toggle on the second click of a double-click rename.
             {...{ [RENAME_HOTSPOT_ATTR]: '' }}
             className={cn(
               'truncate',

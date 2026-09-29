@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -608,38 +609,50 @@ describe('registerFilesystemHandlers', () => {
   // Why #7721: without a cancel path, every workspace switch left the previous
   // workspace's full-tree SSH scan running, stacking scans on the relay until
   // interactive fs.readDir/fs.stat starved past their 30s timeout.
-  it('fs:cancelListFiles aborts an in-flight SSH listing by request token (#7721)', async () => {
-    let capturedSignal: AbortSignal | undefined
-    const listFilesMock = vi.fn(
-      (_rootPath: string, options: { signal?: AbortSignal }) =>
-        new Promise<string[]>((_resolve, reject) => {
-          capturedSignal = options.signal
-          options.signal?.addEventListener('abort', () => reject(new Error('listing cancelled')), {
-            once: true
+  it.each(['cancel', 'did-navigate', 'render-process-gone', 'destroyed'])(
+    'aborts an in-flight SSH file listing on %s (#7721)',
+    async (eventName) => {
+      let capturedSignal: AbortSignal | undefined
+      const listFilesMock = vi.fn(
+        (_rootPath: string, options: { signal?: AbortSignal }) =>
+          new Promise<string[]>((_resolve, reject) => {
+            capturedSignal = options.signal
+            options.signal?.addEventListener(
+              'abort',
+              () => reject(new Error('listing cancelled')),
+              {
+                once: true
+              }
+            )
           })
-        })
-    )
-    getSshFilesystemProviderMock.mockReturnValue({ listFiles: listFilesMock })
+      )
+      getSshFilesystemProviderMock.mockReturnValue({ listFiles: listFilesMock })
 
-    registerFilesystemHandlers(store as never)
+      registerFilesystemHandlers(store as never)
 
-    // Why: cancellation keys are scoped to the issuing webContents, so the
-    // cancel must come from the same sender as the listing request.
-    const senderEvent = { sender: { id: 7 } }
-    const pending = handlers.get('fs:listFiles')!(senderEvent, {
-      rootPath: '/home/user/repo',
-      connectionId: 'conn-1',
-      requestToken: 'token-1'
-    }) as Promise<string[]>
+      // Why: cancellation keys are scoped to the issuing webContents, so the
+      // cancel must come from the same sender as the listing request.
+      const senderEvent = { sender: Object.assign(new EventEmitter(), { id: 7 }) }
+      const pending = handlers.get('fs:listFiles')!(senderEvent, {
+        rootPath: '/home/user/repo',
+        connectionId: 'conn-1',
+        requestToken: 'token-1'
+      }) as Promise<string[]>
 
-    expect(capturedSignal?.aborted).toBe(false)
-    await handlers.get('fs:cancelListFiles')!(senderEvent, { requestToken: 'token-1' })
-    expect(capturedSignal?.aborted).toBe(true)
-    await expect(pending).rejects.toThrow('listing cancelled')
+      expect(capturedSignal?.aborted).toBe(false)
+      if (eventName === 'cancel') {
+        await handlers.get('fs:cancelListFiles')!(senderEvent, { requestToken: 'token-1' })
+      } else {
+        senderEvent.sender.emit(eventName)
+      }
+      expect(capturedSignal?.aborted).toBe(true)
+      await expect(pending).rejects.toThrow('listing cancelled')
+      expect(senderEvent.sender.eventNames()).toEqual([])
 
-    // Unknown or already-settled tokens are a no-op, not an error.
-    expect(() =>
-      handlers.get('fs:cancelListFiles')!(senderEvent, { requestToken: 'unknown' })
-    ).not.toThrow()
-  })
+      // Unknown or already-settled tokens are a no-op, not an error.
+      expect(() =>
+        handlers.get('fs:cancelListFiles')!(senderEvent, { requestToken: 'unknown' })
+      ).not.toThrow()
+    }
+  )
 })

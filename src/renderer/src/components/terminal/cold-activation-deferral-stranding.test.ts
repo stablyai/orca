@@ -31,6 +31,7 @@ import {
 import { capturedPanesByTabId } from '../terminal-pane/terminal-parked-watcher-registry'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TerminalParkingFoundation } from '../use-terminal-parking-foundation'
+import type { StartupTerminalTabHold } from './startup-terminal-tab-hold'
 
 const WORKTREE_ID = 'repo::/worktree'
 const OTHER_WORKTREE_ID = 'repo::/other-worktree'
@@ -82,9 +83,11 @@ function useStrandingHarness(props: HarnessProps) {
   const backgroundMountTabIdsByWorktreeRef = useRef(new Map<string, ReadonlySet<string>>())
   const activationDeferredMountTabIdsByWorktreeRef = useRef(new Map<string, ReadonlySet<string>>())
   const lastActivationWorktreeIdRef = useRef<string | null>(null)
+  const startupTerminalTabHoldRef = useRef<StartupTerminalTabHold | null>(null)
   const mountedWorktreeIdsRef = useRef(new Set<string>())
   const activationDeferralPlanRevisionRef = useRef(0)
   const [backgroundMountRevision, setBackgroundMountRevision] = useState(0)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: applyTerminalColdActivation and the admission hook read only the fields listed here; the rest of the foundation is render machinery this harness never exercises.
   const foundation = {
     activationDeferralPlanRevisionRef,
     activationDeferredMountTabIdsByWorktreeRef,
@@ -98,6 +101,7 @@ function useStrandingHarness(props: HarnessProps) {
     groupsByWorktree: {},
     hydrationSucceeded: props.gateOpen,
     lastActivationWorktreeIdRef,
+    startupTerminalTabHoldRef,
     layoutByWorktree: {},
     mountedWorktreeIdsRef,
     pairedRuntimeParkingEnvironmentIds: new Set<string>(),

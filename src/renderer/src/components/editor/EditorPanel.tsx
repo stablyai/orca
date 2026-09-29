@@ -12,7 +12,6 @@ import { EditorPanelShell } from './EditorPanelShell'
 import { DiffNavigationProvider } from './diff-navigation-context'
 import { canUseChangesModeForFile } from './editor-panel-file-mode'
 import { getEditorPanelRenderModel } from './editor-panel-render-model'
-import { useClosedEditorTabCleanup } from './useClosedEditorTabCleanup'
 import { useEditorCmdSaveRequest } from './useEditorCmdSaveRequest'
 import { useEditorPanelContentState } from './useEditorPanelContentState'
 import { useMarkdownPreviewShortcut } from './useMarkdownPreviewShortcut'
@@ -142,7 +141,6 @@ function EditorPanelInner({
     handleRenameConfirm
   } = useUntitledFileRename({ openFiles, clearUntitled })
 
-  useClosedEditorTabCleanup(openFiles)
   useMarkdownPreviewShortcut({ activeFile, panelRef, openMarkdownPreview })
 
   const handleContentChangeForFile = useEditorContentChangeHandler({ fileContents, diffContents })

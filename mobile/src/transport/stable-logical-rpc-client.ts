@@ -7,6 +7,7 @@ import {
 import { waitForAuthenticated } from './replacement-session-authentication'
 import { projectMobileRpcRequestParams } from './mobile-rpc-request-projection'
 import { LogicalClientConnectionPath } from './logical-client-connection-path'
+import type { RelayHostReachability } from './relay-host-reachability'
 import { isRpcDeliveryUnknown, markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 
 export type MobileConnectionPath = 'lan' | 'tailscale' | 'relay'
@@ -55,9 +56,10 @@ export type StableLogicalRpcClient = RpcClient & {
   // Latched when the desktop has repeatedly refused this device's relay credential.
   setPairingRejected(rejected: boolean): void
   isPairingRejected(): boolean
-  // Latched when the relay named the desktop's own sign-out as the reason it is absent.
-  setHostSignedOut(signedOut: boolean): void
-  isHostSignedOut(): boolean
+  // Latched by the relay's own verdict: the cell's close reason outright, or
+  // consecutive identical dial failures naming the desktop's state.
+  setRelayHostReachability(reachability: RelayHostReachability): void
+  getRelayHostReachability(): RelayHostReachability
   // Recovery attempts share this signal so status-only changes rerender.
   onConnectionPathChange(listener: () => void): () => void
   getGeneration(): number
@@ -277,8 +279,9 @@ export function createStableLogicalRpcClient(
     setRecoveryAttempt: (attempt) => connectionPath.setRecoveryAttempt(attempt),
     setPairingRejected: (rejected) => connectionPath.setPairingRejected(rejected),
     isPairingRejected: () => connectionPath.isPairingRejected(),
-    setHostSignedOut: (signedOut) => connectionPath.setHostSignedOut(signedOut),
-    isHostSignedOut: () => connectionPath.isHostSignedOut(),
+    setRelayHostReachability: (reachability) =>
+      connectionPath.setRelayHostReachability(reachability),
+    getRelayHostReachability: () => connectionPath.getRelayHostReachability(),
     onConnectionPathChange: (listener) => connectionPath.subscribe(listener),
     getGeneration: () => generation
   }

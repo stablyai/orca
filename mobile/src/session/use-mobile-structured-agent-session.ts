@@ -7,7 +7,7 @@ import {
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
-import { hasUnansweredStructuredAgentSessionDispatch } from '../../../src/shared/structured-agent-session-projection'
+import { isStructuredAgentSessionMainAgentWorking } from '../../../src/shared/structured-agent-session-main-agent-working'
 import {
   activeStructuredAgentSessionTurnId,
   isStructuredAgentSessionThinking
@@ -32,6 +32,7 @@ import type { MobileNativeChatSession } from './use-mobile-native-chat-session'
 import type { NativeChatLiveTurnIndicator } from '../../../src/shared/native-chat-turn-status'
 import { useMobileStructuredAgentState } from './use-mobile-structured-agent-state'
 import { useMobileStructuredPromptResponses } from './use-mobile-structured-prompt-responses'
+import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
 import { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
 import { sendMobileStructuredAgentSessionMessage } from './mobile-structured-agent-session-send'
@@ -77,8 +78,8 @@ export function useMobileStructuredAgentSession(args: {
   enabled: boolean
   /** Live transport only; gates the connection-scoped hold, nothing else. */
   connected: boolean
-  /** Capability fact from the shared runtime status probe; null follows legacy cancellation. */
-  promptCancelSupported?: boolean | null
+  /** Capability facts from the shared runtime status probe; null follows the legacy wire. */
+  hostSupport: StructuredAgentSessionHostSupport | null
   agent: string | null
   onSendError: (message: string) => void
 }): StructuredMobileSession {
@@ -91,8 +92,9 @@ export function useMobileStructuredAgentSession(args: {
     sourceIdentity = '',
     enabled,
     onSendError,
-    promptCancelSupported = null
+    hostSupport
   } = args
+  const promptCancelSupported = hostSupport?.promptCancel ?? null
   const sessionKey = encodeNativeChatTranscriptIdentity([sourceIdentity, agent, sessionId])
   const operationIdsRef = useRef(new Map<string, string>())
   const commandPendingRef = useRef(false)
@@ -240,6 +242,7 @@ export function useMobileStructuredAgentSession(args: {
     stateRef,
     sessionKey,
     mutate,
+    questionAnswersSupported: hostSupport?.questionAnswers ?? null,
     onSendError
   })
 
@@ -289,9 +292,7 @@ export function useMobileStructuredAgentSession(args: {
       loadingEarlier: loadingOlder,
       loadEarlier
     },
-    isWorking:
-      turnId !== null ||
-      hasUnansweredStructuredAgentSessionDispatch(state.submissions, state.fence),
+    isWorking: isStructuredAgentSessionMainAgentWorking(turnId, state.submissions, state.fence),
     turnId,
     turnIndicator,
     ...turnTiming,

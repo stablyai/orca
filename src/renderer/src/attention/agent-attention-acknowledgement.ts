@@ -95,6 +95,23 @@ export function computeLapsedManualUnreadProtections(
 }
 
 /**
+ * One workspace's attention as every surface kind sees it.
+ *
+ * Why a union: workspace unread is owned by the workspace, not by a surface kind, so a surface
+ * that can only see its own tabs would report a sibling of another kind as absent and let the
+ * clear through. A workspace owns surfaces when any kind owns one.
+ */
+export function mergeAgentAttentionRemainders(
+  remainders: readonly AgentAttentionRemainder[]
+): AgentAttentionRemainder {
+  return {
+    hasSurfaces: remainders.some((remainder) => remainder.hasSurfaces),
+    unreadSubjectKeys: remainders.flatMap((remainder) => [...remainder.unreadSubjectKeys]),
+    unreadGroupIds: remainders.flatMap((remainder) => [...remainder.unreadGroupIds])
+  }
+}
+
+/**
  * Workspace unread is coarse, so a hidden sibling still wanting attention keeps it lit even
  * while the user acknowledges the subject in front of them.
  */

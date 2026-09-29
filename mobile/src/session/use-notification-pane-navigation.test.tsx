@@ -1,10 +1,8 @@
 import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { expect, it, vi } from 'vitest'
-import {
-  notificationPaneTab,
-  useNotificationPaneNavigation
-} from './use-notification-pane-navigation'
+import { notificationPaneTab } from './notification-pane-tab'
+import { useNotificationPaneNavigation } from './use-notification-pane-navigation'
 import type { MobileSessionTab } from './mobile-session-route-types'
 const route = vi.hoisted(() => ({ paneKey: '', setParams: vi.fn() }))
 vi.mock('expo-router', () => ({

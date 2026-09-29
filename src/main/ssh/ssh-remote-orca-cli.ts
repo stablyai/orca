@@ -185,7 +185,10 @@ async function dispatchRemoteCli(
           state: status.graphStatus === 'ready' ? 'ready' : 'graph_not_ready',
           reachable: true,
           connectionState: runtimeHostConnectionState({ hasStatusEntry: true, status }),
-          runtimeId: status.runtimeId
+          runtimeId: status.runtimeId,
+          // Why: `status.get` ran in-process on the execution host, so these ARE that host's
+          // capabilities; dropping them made `--shell` report an outdated host instead of SSH.
+          ...(status.capabilities ? { capabilities: status.capabilities } : {})
         },
         graph: { state: status.graphStatus }
       }

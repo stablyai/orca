@@ -19,6 +19,7 @@ vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', (
 const { closeStructuredAgentSessionChild } = await import('./structured-agent-session-close')
 
 const SESSION = 'session-1'
+const TAB_ID = 'tab-of-session-1'
 
 function record(sessionId: string): AgentSessionRecord {
   return {
@@ -85,14 +86,18 @@ function installHost(options: HostOptions = {}) {
     }
   })
   hostRef.current = {
-    deps: { store: { getRecord: (id: string) => (id === SESSION ? entry : null) } },
-    hasSession: (sessionId: string) => held.has(sessionId),
-    getPersistedVisibleSessionTabIndex: () => {
-      if (options.indexThrows) {
-        throw new Error('visible tab index unreadable')
+    deps: {
+      store: {
+        getRecord: (id: string) => (id === SESSION ? entry : null),
+        getSessionTabId: (id: string) => {
+          if (options.indexThrows) {
+            throw new Error('visible tab index unreadable')
+          }
+          return visible.has(id) ? TAB_ID : null
+        }
       }
-      return { present: true, sessionIds: [...visible] }
     },
+    hasSession: (sessionId: string) => held.has(sessionId),
     setSessionTabVisibility,
     close
   }
@@ -133,7 +138,7 @@ describe('closeStructuredAgentSessionChild tab-visibility rollback', () => {
     expect(host.visible.has(SESSION)).toBe(true)
     expect(host.setSessionTabVisibility.mock.calls).toEqual([
       [SESSION, false],
-      [SESSION, true]
+      [SESSION, true, TAB_ID]
     ])
   })
 
@@ -147,7 +152,7 @@ describe('closeStructuredAgentSessionChild tab-visibility rollback', () => {
     expect(host.visible.has(SESSION)).toBe(true)
     expect(host.setSessionTabVisibility.mock.calls).toEqual([
       [SESSION, false],
-      [SESSION, true]
+      [SESSION, true, TAB_ID]
     ])
   })
 

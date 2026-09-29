@@ -6,7 +6,7 @@ import {
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import type { AgentHookTarget } from '../shared/agent-hook-types'
 import { isManagedAgentHookTarget } from '../shared/managed-agent-hook-targets'
-import { parseClaudeCliVersion } from '../main/claude/claude-session-end-hook-capability'
+import { parseClaudeCliVersion } from '../main/claude/claude-hook-event-versions'
 
 export type ManagedHookInstallSummary = {
   installers: number
@@ -45,7 +45,9 @@ function readAgents(params: unknown): AgentHookTarget[] {
 
 function readClaudeVersion(params: unknown): string | undefined {
   const raw =
-    params !== null && typeof params === 'object' ? Reflect.get(params, 'claudeVersion') : null
+    params !== null && typeof params === 'object' && 'claudeVersion' in params
+      ? params.claudeVersion
+      : null
   return parseClaudeCliVersion(typeof raw === 'string' ? raw : null) ?? undefined
 }
 

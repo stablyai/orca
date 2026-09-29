@@ -25,6 +25,7 @@ export type TabsSlice = {
         | 'id'
         | 'entityId'
         | 'executionHostId'
+        | 'agentSessionAgent'
         | 'label'
         | 'generatedLabel'
         | 'quickCommandLabel'
@@ -34,6 +35,8 @@ export type TabsSlice = {
         | 'isPinned'
       > & {
         targetGroupId: string
+        /** Client-local unified tab id to insert after; an explicit targetGroupId still wins. */
+        afterTabId: string
         activate: boolean
         recordInteraction: boolean
       }
@@ -52,6 +55,7 @@ export type TabsSlice = {
         | 'id'
         | 'entityId'
         | 'executionHostId'
+        | 'agentSessionAgent'
         | 'label'
         | 'generatedLabel'
         | 'quickCommandLabel'

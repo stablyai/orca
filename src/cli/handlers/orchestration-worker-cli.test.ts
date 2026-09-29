@@ -275,15 +275,14 @@ describe('orchestration worker-start CLI contract', () => {
     }
   )
 
-  it('prints the Structured Chat recovery action for a refused worker start', async () => {
+  it('prints the host error for a refused worker start', async () => {
     callMock.mockResolvedValue({
       result: {
         taskId: 'task_1',
         dispatchId: 'ctx_1',
         state: 'failed',
         failedStage: 'dispatch_input',
-        lastError:
-          'The target terminal is in Structured Chat. Switch it to Terminal, then retry `orca orchestration worker-start`.',
+        lastError: 'terminal_not_writable',
         effects: [],
         residualResources: []
       }
@@ -315,10 +314,9 @@ describe('orchestration worker-start CLI contract', () => {
         dispatchId: 'ctx_1',
         state: 'failed',
         failedStage: 'dispatch_input',
-        lastError:
-          'The target terminal is in Structured Chat. Switch it to Terminal, then retry `orca orchestration worker-start`.'
+        lastError: 'terminal_not_writable'
       })
-    ).toMatch(/Structured Chat.*Switch it to Terminal.*orca orchestration worker-start/s)
+    ).toContain('terminal_not_writable')
   })
 
   it('prints a reveal warning for a live background worker', async () => {
@@ -553,6 +551,37 @@ describe('orchestration worker-start CLI contract', () => {
         counts: { active: 1 }
       })
     ).toContain('ctx_legacy task=task_legacy [ready] terminal=active')
+  })
+
+  it('passes a truncation warning to the receipt and still prints the cursor hint', async () => {
+    const response = {
+      result: {
+        workers: [],
+        counts: { active: 1 },
+        page: { total: 105, hasMore: true, nextCursor: 'owlc_next' },
+        warnings: ['Showing 100 of 105 Dispatches, newest first; more are on later pages.']
+      }
+    }
+    callMock.mockResolvedValue(response)
+
+    await ORCHESTRATION_HANDLERS['orchestration worker-list']({
+      flags: new Map<string, string | boolean>(),
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: true
+    } as never)
+
+    expect(vi.mocked(printResult).mock.calls[0]?.[0]).toMatchObject({
+      result: { warnings: response.result.warnings }
+    })
+    const formatter = vi.mocked(printResult).mock.calls[0]?.[2] as
+      | ((result: (typeof response)['result']) => string)
+      | undefined
+    const output = formatter?.(response.result)
+    expect(output).toContain('More: --cursor owlc_next')
+    expect(output).toContain(
+      'Warning: Showing 100 of 105 Dispatches, newest first; more are on later pages.'
+    )
   })
 
   it.each([

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
-import { CodexSessionCollection } from './codex-session-root-dedup'
+import { ScannedSessionCollection } from './session-root-dedup'
 import { canStopParsingSessions } from './session-scan-cutoff'
 import { createAccumulator, finalizeSession, sessionSortTime } from './session-scanner-accumulator'
 
@@ -23,8 +23,8 @@ function session(time: number | string, overrides: Partial<AiVaultSession> = {})
   })
 }
 
-function collection(rows: AiVaultSession[]): CodexSessionCollection {
-  const result = new CodexSessionCollection()
+function collection(rows: AiVaultSession[]): ScannedSessionCollection {
+  const result = new ScannedSessionCollection()
   rows.forEach((row) => result.add(row))
   return result
 }

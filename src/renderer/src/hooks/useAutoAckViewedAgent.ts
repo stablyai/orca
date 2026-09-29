@@ -8,27 +8,16 @@ import {
 import { useAppStore } from '@/store'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import { createTerminalAttentionSurface } from '@/components/terminal-pane/terminal-attention-surface'
 import {
-  applyAgentAttentionAcknowledgement,
+  acknowledgeViewedAutoAckTarget,
+  readAgentAttentionTurnRecords,
+  surfaceForAutoAckTarget
+} from './agent-auto-ack-surfaces'
+import {
   computeAgentAcknowledgementTargets,
   computeLapsedManualUnreadProtections,
-  readAgentAttentionTurnStartedAt,
-  resolveViewedUnreadSubjectKey,
-  shouldClearWorkspaceAttention,
-  type AgentAttentionTurnRecords
+  resolveViewedUnreadSubjectKey
 } from '@/attention/agent-attention-acknowledgement'
-
-type StoreSnapshot = ReturnType<typeof useAppStore.getState>
-
-/** Subject-keyed view of the store's turn bookkeeping for the neutral acknowledgement policy. */
-function readTurnRecords(state: StoreSnapshot): AgentAttentionTurnRecords {
-  return {
-    liveTurns: state.agentStatusByPaneKey,
-    retainedTurns: state.retainedAgentsByPaneKey,
-    acknowledgedTurnStartedAt: state.acknowledgedAgentsByPaneKey
-  }
-}
 
 // Auto-ack an agent row as "seen" when the user is already on its tab, so the dashboard/Dock don't stay bold for an event they watched happen.
 // Scans live + retained maps: Codex's title-revert (pty-connection.ts:onAgentExited) migrates `done` rows to retained mid-race — see docs/codex-agent-row-bold-stuck.md.
@@ -43,7 +32,12 @@ export function useAutoAckViewedAgent(floatingPanelVisible: boolean): void {
     // Init to undefined so the first maybeAck() (on mount) always passes the ref guard and scans.
     let lastActiveView: unknown = undefined
     let lastActiveTabId: unknown = undefined
+    let lastActiveWorktreeId: unknown = undefined
+    let lastActiveWorkspaceGroupId: unknown = undefined
+    let lastActiveWorkspaceGroups: unknown = undefined
     let lastFloatingWorkspaceActiveTabId: unknown = undefined
+    let lastFloatingWorkspaceGroupId: unknown = undefined
+    let lastFloatingWorkspaceGroups: unknown = undefined
     let lastAgentStatus: unknown = undefined
     let lastRetained: unknown = undefined
     let lastAcknowledged: unknown = undefined
@@ -57,13 +51,28 @@ export function useAutoAckViewedAgent(floatingPanelVisible: boolean): void {
     )
     const maybeAck = (options?: { force?: boolean; presenceConfirmed?: boolean }): void => {
       const s = useAppStore.getState()
+      const activeWorktreeId = s.activeWorktreeId
+      const activeWorkspaceGroupId = activeWorktreeId
+        ? (s.activeGroupIdByWorktree[activeWorktreeId] ?? null)
+        : null
+      const activeWorkspaceGroups = activeWorktreeId
+        ? s.groupsByWorktree[activeWorktreeId]
+        : undefined
       const floatingWorkspaceActiveTabId =
         s.activeTabIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? null
+      const floatingWorkspaceGroupId =
+        s.activeGroupIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? null
+      const floatingWorkspaceGroups = s.groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]
       if (
         !options?.force &&
         s.activeView === lastActiveView &&
         s.activeTabId === lastActiveTabId &&
+        activeWorktreeId === lastActiveWorktreeId &&
+        activeWorkspaceGroupId === lastActiveWorkspaceGroupId &&
+        activeWorkspaceGroups === lastActiveWorkspaceGroups &&
         floatingWorkspaceActiveTabId === lastFloatingWorkspaceActiveTabId &&
+        floatingWorkspaceGroupId === lastFloatingWorkspaceGroupId &&
+        floatingWorkspaceGroups === lastFloatingWorkspaceGroups &&
         s.agentStatusByPaneKey === lastAgentStatus &&
         s.retainedAgentsByPaneKey === lastRetained &&
         s.acknowledgedAgentsByPaneKey === lastAcknowledged &&
@@ -76,7 +85,12 @@ export function useAutoAckViewedAgent(floatingPanelVisible: boolean): void {
       // Presence signals force a rescan; unrelated writes must not retry an away result.
       lastActiveView = s.activeView
       lastActiveTabId = s.activeTabId
+      lastActiveWorktreeId = activeWorktreeId
+      lastActiveWorkspaceGroupId = activeWorkspaceGroupId
+      lastActiveWorkspaceGroups = activeWorkspaceGroups
       lastFloatingWorkspaceActiveTabId = floatingWorkspaceActiveTabId
+      lastFloatingWorkspaceGroupId = floatingWorkspaceGroupId
+      lastFloatingWorkspaceGroups = floatingWorkspaceGroups
       lastAgentStatus = s.agentStatusByPaneKey
       lastRetained = s.retainedAgentsByPaneKey
       lastAcknowledged = s.acknowledgedAgentsByPaneKey
@@ -95,7 +109,6 @@ export function useAutoAckViewedAgent(floatingPanelVisible: boolean): void {
       const targets = resolveAutoAckTabTargets(s, {
         floatingPanelVisible: floatingPanelVisibleRef.current
       })
-      const surface = createTerminalAttentionSurface(s)
       // Why no protection reset here: zero targets just means nothing is on screen
       // (Settings, browser, an overlay) — a transient view switch must not lapse an
       // explicit mark-unread the user just made.
@@ -104,9 +117,11 @@ export function useAutoAckViewedAgent(floatingPanelVisible: boolean): void {
       }
       // Browsers have no native idle capability; their visible/focused gates still apply.
       if (!options?.presenceConfirmed && !isWebClientLocation()) {
-        const records = readTurnRecords(s)
-        const hasAttention = targets.some(({ tabId }) => {
-          const subjectKey = surface.resolveViewedSubjectKey(tabId)
+        const records = readAgentAttentionTurnRecords(s)
+        const hasAttention = targets.some((target) => {
+          const subjectKey = surfaceForAutoAckTarget(s, target).resolveViewedSubjectKey(
+            target.tabId
+          )
           return (
             computeAgentAcknowledgementTargets(records, subjectKey).length > 0 ||
             resolveViewedUnreadSubjectKey(s.unreadAgentCompletionPanes, subjectKey) !== null
@@ -120,7 +135,7 @@ export function useAutoAckViewedAgent(floatingPanelVisible: boolean): void {
 
       const activeSubjectKeys = new Set<string>()
       for (const target of targets) {
-        const subjectKey = surface.resolveViewedSubjectKey(target.tabId)
+        const subjectKey = surfaceForAutoAckTarget(s, target).resolveViewedSubjectKey(target.tabId)
         if (subjectKey) {
           activeSubjectKeys.add(subjectKey)
         }
@@ -142,48 +157,7 @@ export function useAutoAckViewedAgent(floatingPanelVisible: boolean): void {
       for (const target of targets) {
         // Why re-read: acking target[0] writes to the store, which re-enters this scan synchronously
         // and may already have handled target[1]; `s` is a pre-write snapshot that would re-ack it.
-        const current = useAppStore.getState()
-        const currentSurface = createTerminalAttentionSurface(current)
-        const currentRecords = readTurnRecords(current)
-        const groupId = target.tabId
-        const subjectKey = currentSurface.resolveViewedSubjectKey(groupId)
-        const toAck = computeAgentAcknowledgementTargets(currentRecords, subjectKey).filter(
-          (key) =>
-            current.manuallyUnreadTurnsByPaneKey[key] !==
-            readAgentAttentionTurnStartedAt(currentRecords, key)
-        )
-        const viewedUnreadSubjectKey = resolveViewedUnreadSubjectKey(
-          current.unreadAgentCompletionPanes,
-          subjectKey
-        )
-        if (toAck.length > 0 || viewedUnreadSubjectKey) {
-          const clearedSubjectKeys = new Set(toAck)
-          if (viewedUnreadSubjectKey) {
-            clearedSubjectKeys.add(viewedUnreadSubjectKey)
-          }
-          const workspaceId = target.worktreeId
-          applyAgentAttentionAcknowledgement(
-            {
-              acknowledgeSubjects: current.acknowledgeAgents,
-              clearWorkspaceUnread: current.clearWorktreeUnread,
-              clearGroupUnread: current.clearTerminalTabUnread,
-              clearSubjectUnread: current.clearTerminalPaneUnread
-            },
-            {
-              workspaceIdToClear:
-                workspaceId !== null &&
-                shouldClearWorkspaceAttention(
-                  currentSurface.collectWorkspaceAttentionRemainder(workspaceId),
-                  { viewedGroupId: groupId, clearedSubjectKeys }
-                )
-                  ? workspaceId
-                  : null,
-              viewedGroupId: groupId,
-              subjectKeys: toAck,
-              viewedUnreadSubjectKey
-            }
-          )
-        }
+        acknowledgeViewedAutoAckTarget(useAppStore.getState(), target)
       }
     }
     rescanRef.current = (): void => maybeAck({ force: true })

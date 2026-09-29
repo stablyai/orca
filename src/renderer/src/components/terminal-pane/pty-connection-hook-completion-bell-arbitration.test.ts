@@ -528,7 +528,7 @@ describe('connectPanePty', () => {
       'terminal-bell'
     )
     expect(deps.clearTerminalPaneUnread).not.toHaveBeenCalled()
-    expect(transport.sendInput).toHaveBeenCalledWith('a')
+    expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply')
   })
 
   // Why: xterm auto-replies during replay must not count as user interaction, or a BELed pane would self-dismiss unseen.

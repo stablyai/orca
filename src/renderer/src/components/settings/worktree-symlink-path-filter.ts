@@ -44,11 +44,26 @@ export function getWorktreeSymlinkPathFilterState<T extends WorktreeSymlinkPathS
   }
 
   const normalizedQuery = queryTrimmed.toLowerCase()
-  const filtered = (
-    normalizedQuery
-      ? suggestions.filter((entry) => entry.name.toLowerCase().includes(normalizedQuery))
-      : suggestions
-  ).slice(0, maxSuggestions)
+  let filtered: T[]
+  if (normalizedQuery && Number.isInteger(maxSuggestions) && maxSuggestions >= 0) {
+    filtered = []
+    for (let index = 0; index < suggestions.length && filtered.length < maxSuggestions; index++) {
+      if (!(index in suggestions)) {
+        continue
+      }
+      const entry = suggestions[index]
+      if (entry.name.toLowerCase().includes(normalizedQuery)) {
+        filtered.push(entry)
+      }
+    }
+  } else {
+    // Preserve slice semantics for empty queries and unusual caller-supplied limits.
+    filtered = (
+      normalizedQuery
+        ? suggestions.filter((entry) => entry.name.toLowerCase().includes(normalizedQuery))
+        : suggestions
+    ).slice(0, maxSuggestions)
+  }
   const hasExactMatch = filtered.some((entry) => entry.name === queryTrimmed)
 
   return {

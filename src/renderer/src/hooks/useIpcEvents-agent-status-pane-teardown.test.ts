@@ -1,7 +1,6 @@
 import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusClearIpcPayload } from '../../../shared/agent-status-types'
-import { YOLO_TUI_AGENT_ARGS } from '../../../shared/tui-agent-permissions'
 import {
   buildStoreState,
   expectWorktreeRouting,
@@ -94,21 +93,15 @@ describe('useIpcEvents agent status snapshot integration', () => {
     expect(observeAgentHookCompletionForNotification).not.toHaveBeenCalled()
   })
 
-  it('keeps auto-approved Codex done statuses on the completion path', async () => {
+  it('keeps Codex done statuses on the completion path', async () => {
     const setAgentStatus = vi.fn()
     const observeAgentHookCompletionForNotification = vi.fn()
-    const getAgentLaunchConfigForStatusMetadata = vi.fn((metadata: { launchToken?: string }) =>
-      metadata.launchToken === 'launch-yolo'
-        ? { agentArgs: YOLO_TUI_AGENT_ARGS.codex ?? '', agentEnv: {} }
-        : undefined
-    )
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
 
     const storeState: StoreLike = buildStoreState({
       setAgentStatus,
-      getAgentLaunchConfigForStatusMetadata,
       workspaceSessionReady: true,
       settings: { terminalFontSize: 13, notifications: { enabled: true, agentTaskComplete: true } },
       tabsByWorktree: {
@@ -154,9 +147,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
       tabId: 'tab-future',
       worktreeId: 'wt-1',
       state: 'done',
-      prompt: 'auto-approved task',
+      prompt: 'codex task',
       agentType: 'codex',
-      launchToken: 'launch-yolo',
       lastAssistantMessage: 'Done.',
       receivedAt: 1_700_000_000_500,
       stateStartedAt: 1_699_999_999_500

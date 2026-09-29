@@ -129,7 +129,9 @@ export function acknowledgeMailboxDelivery(
     ) {
       throw new OrchestrationError(
         'stale_delivery',
-        `Delivery ${params.deliveryId} does not belong to this mailbox. --ack requires a delivery_* ID returned by orchestration check; process the entire batch before acknowledging.`
+        !delivery && this.getMessageById(params.deliveryId)
+          ? `${params.deliveryId} is a message id, not a delivery id. Acknowledge the batch with the deliveryId field from the check response; process the entire batch before acknowledging.`
+          : `Delivery ${params.deliveryId} does not belong to this mailbox. --ack requires a delivery_* ID returned by orchestration check; process the entire batch before acknowledging.`
       )
     }
     if (

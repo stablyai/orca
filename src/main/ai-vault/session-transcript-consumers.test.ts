@@ -16,12 +16,18 @@ const OPENCODE_SQLITE_SESSION = {
   agent: 'opencode' as const,
   sessionId: 'sqlite-session'
 }
+const OPENCODE_SQLITE_MESSAGES = [
+  { role: 'user' as const, text: 'ask sqlite', timestamp: null },
+  { role: 'assistant' as const, text: 'reply sqlite', timestamp: null }
+]
 
-// Stands in for the worker thread: the point is that its messages never come
-// back over the channel, not what the SQLite read returns.
+// Stands in for the worker thread: the point is which leg the reader asks for
+// and that what comes back reaches the channel, not what the SQLite read returns.
 vi.mock('./session-scanner-opencode-sqlite-worker-spawn', async (importOriginal) => ({
   ...(await importOriginal<typeof OpenCodeSqliteWorkerSpawn>()),
-  parseOpenCodeSqliteSessionViaWorker: () => Promise.resolve(OPENCODE_SQLITE_SESSION)
+  parseOpenCodeSqliteSessionViaWorker: () => Promise.resolve(OPENCODE_SQLITE_SESSION),
+  captureOpenCodeSqliteSessionViaWorker: () =>
+    Promise.resolve({ session: OPENCODE_SQLITE_SESSION, messages: OPENCODE_SQLITE_MESSAGES })
 }))
 import type * as OpenCodeSqliteWorkerSpawn from './session-scanner-opencode-sqlite-worker-spawn'
 import {
@@ -304,7 +310,7 @@ it('serializes overlapping parses of one path so no consumer read is orphaned', 
   expect(second?.messageCount).toBe(10)
 })
 
-it('reports a read whose parser cannot publish its messages as not complete', async () => {
+it('publishes an OpenCode SQLite session over the channel and reports it complete', async () => {
   const root = await mkdtemp(join(tmpdir(), 'orca-transcript-opencode-'))
   tempRoots.push(root)
   const dbPath = join(root, 'opencode.db')
@@ -327,8 +333,9 @@ it('reports a read whose parser cannot publish its messages as not complete', as
 
   expect(session).toEqual(OPENCODE_SQLITE_SESSION)
   expect(consumer.reads).toHaveLength(1)
-  expect(consumer.reads[0].messages).toEqual([])
-  expect(consumer.reads[0].outcome?.incomplete).toBe(true)
+  expect(consumer.reads[0].messages).toEqual(OPENCODE_SQLITE_MESSAGES)
+  expect(consumer.reads[0].outcome?.incomplete).toBe(false)
+  consumer.unregister()
 })
 
 it('reports the transcript size, not the cache key, as a whole-file read offset', async () => {

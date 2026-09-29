@@ -50,7 +50,7 @@ describe('connection log persistence revisions', () => {
     )
   })
 
-  it('preserves distinct queued revisions while a save is delayed', async () => {
+  it('replaces obsolete queued revisions while a save is delayed', async () => {
     const saved: string[][] = []
     let release!: () => void
     let delay = false
@@ -79,27 +79,29 @@ describe('connection log persistence revisions', () => {
     expect(saved).toEqual([['1']])
     release()
     await drain()
-    expect(saved).toEqual([['1'], ['1', '2'], ['2', '3']])
+    expect(saved).toEqual([['1'], ['2', '3']])
   })
 
-  it('retains retries and later attempts when both initial save attempts fail', async () => {
+  it('attempts a failed snapshot once and carries the entries into the next write', async () => {
     const save = vi.fn<ConnectionLogPersistence['save']>(async () => {})
     const store = createConnectionLogStore(200, { load: async () => [], save })
     await store.hydrate('a')
     await drain()
     save.mockClear()
-    save.mockRejectedValueOnce(new Error('first')).mockRejectedValueOnce(new Error('retry'))
+    save.mockRejectedValueOnce(new Error('first'))
     store.append('a', entry(1))
     store.append('a', entry(2))
     store.append('a', entry(3))
     await drain()
-    expect(save).toHaveBeenCalledTimes(3)
-    expect(save.mock.calls[2]?.[1]).toBe(save.mock.calls[0]?.[1])
-    for (const [, snapshot] of save.mock.calls) {
-      expect(snapshot).toEqual([entry(1), entry(2), entry(3)])
-    }
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(save.mock.calls[0]?.[1]).toEqual([entry(1), entry(2), entry(3)])
+    store.append('a', entry(4))
+    await drain()
+    expect(save).toHaveBeenCalledTimes(2)
+    expect(save).toHaveBeenLastCalledWith('a', store.get('a'))
   })
-  it('keeps every queued retry opportunity during a sustained failure', async () => {
+
+  it('writes once per snapshot during a sustained failure', async () => {
     const save = vi.fn<ConnectionLogPersistence['save']>(async () => {})
     const store = createConnectionLogStore(200, { load: async () => [], save })
     await store.hydrate('a')
@@ -109,7 +111,7 @@ describe('connection log persistence revisions', () => {
       store.append('a', entry(i))
     }
     await drain()
-    expect(save).toHaveBeenCalledTimes(6)
+    expect(save).toHaveBeenCalledTimes(1)
     save.mockClear().mockResolvedValue(undefined)
     store.append('a', entry(3))
     await drain()

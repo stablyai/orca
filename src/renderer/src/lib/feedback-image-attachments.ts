@@ -5,9 +5,18 @@ import {
   RASTER_IMAGE_PREVIEW_TOO_LARGE_ERROR,
   assertRasterImagePreviewWithinLimits
 } from '../../../shared/raster-image-preview-limits'
+import {
+  MAX_FEEDBACK_IMAGE_BYTES,
+  MAX_FEEDBACK_IMAGE_COUNT,
+  MAX_FEEDBACK_IMAGE_TOTAL_BYTES
+} from '../../../shared/feedback-image-limits'
 
-export const MAX_FEEDBACK_IMAGE_COUNT = 4
-export const MAX_FEEDBACK_IMAGE_BYTES = 8 * 1024 * 1024
+export {
+  MAX_FEEDBACK_IMAGE_BYTES,
+  MAX_FEEDBACK_IMAGE_COUNT,
+  MAX_FEEDBACK_IMAGE_TOTAL_BYTES
+} from '../../../shared/feedback-image-limits'
+
 export const SUPPORTED_FEEDBACK_IMAGE_TYPES = [
   'image/png',
   'image/jpeg',
@@ -36,14 +45,21 @@ function isSupportedType(contentType: string): boolean {
  * Whether a paste should be consumed. Extraction stays broad so unsupported
  * image types still reach the rejection toast, but swallowing the paste when
  * nothing is attachable would also discard any text riding along on the
- * clipboard.
+ * clipboard. Every limit readFeedbackImageFiles enforces has to be mirrored
+ * here, or a doomed paste eats the co-pasted text on its way to a rejection.
  */
-export function hasAttachableFeedbackImage(files: readonly File[], existingCount = 0): boolean {
+export function hasAttachableFeedbackImage(
+  files: readonly File[],
+  existingCount = 0,
+  existingBytes = 0
+): boolean {
+  const remainingBytes = Math.min(
+    MAX_FEEDBACK_IMAGE_BYTES,
+    MAX_FEEDBACK_IMAGE_TOTAL_BYTES - existingBytes
+  )
   return (
     existingCount < MAX_FEEDBACK_IMAGE_COUNT &&
-    files.some(
-      (file) => isSupportedType(file.type) && file.size > 0 && file.size <= MAX_FEEDBACK_IMAGE_BYTES
-    )
+    files.some((file) => isSupportedType(file.type) && file.size > 0 && file.size <= remainingBytes)
   )
 }
 
@@ -70,11 +86,13 @@ function feedbackImageDisplayName(file: File): string {
  */
 export async function readFeedbackImageFiles(
   files: readonly File[],
-  existingCount: number
+  existingCount: number,
+  existingBytes = 0
 ): Promise<{ images: FeedbackImageDraft[]; errors: string[] }> {
   const images: FeedbackImageDraft[] = []
   const errors: string[] = []
   let remaining = MAX_FEEDBACK_IMAGE_COUNT - existingCount
+  let remainingBytes = MAX_FEEDBACK_IMAGE_TOTAL_BYTES - existingBytes
   let omittedErrorCount = 0
   const addError = (createMessage: () => string): void => {
     if (errors.length < MAX_FEEDBACK_IMAGE_DETAIL_ERRORS) {
@@ -128,6 +146,19 @@ export async function readFeedbackImageFiles(
         )
         break
       }
+      if (file.size > remainingBytes) {
+        addError(() =>
+          translate(
+            'auto.lib.feedback.image.attachments.totalTooLarge',
+            '{{fileName}} would bring the attachments over {{maxSize}} in total.',
+            {
+              fileName,
+              maxSize: formatFeedbackImageSize(MAX_FEEDBACK_IMAGE_TOTAL_BYTES)
+            }
+          )
+        )
+        continue
+      }
       const data = new Uint8Array(await file.arrayBuffer())
       try {
         assertRasterImagePreviewWithinLimits(data, file.type)
@@ -155,6 +186,7 @@ export async function readFeedbackImageFiles(
         throw error
       }
       remaining -= 1
+      remainingBytes -= file.size
       images.push({
         // Why: crypto.randomUUID is undefined in non-secure browser contexts (LAN
         // web client over plain HTTP); createBrowserUuid falls back safely.

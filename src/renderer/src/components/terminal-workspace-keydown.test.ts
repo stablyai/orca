@@ -193,20 +193,14 @@ describe('tab.close uses the unified active tab', () => {
   }
 
   it.each(['darwin', 'win32', 'linux'] as const)(
-    'closes native chat from its composer on %s',
+    'routes native chat close from its composer through the unified tab action on %s',
     async (platform) => {
       expect(close(platform).defaultPrevented).toBe(true)
       await vi.waitFor(() => expect(closeUnifiedTab).toHaveBeenCalledWith(tab.id))
-      expect(mocks.closeStructuredAgentSession).toHaveBeenCalledWith(
-        { kind: 'local' },
-        'chat-session'
-      )
-      expect(mocks.callRuntimeRpc).toHaveBeenCalledWith({ kind: 'local' }, 'session.tabs.close', {
-        worktree: `id:${worktreeId}`,
-        tabId: 'agent-session:chat-session',
-        reason: 'user'
-      })
-      expect(mocks.cancelStructuredAgentLaunch).toHaveBeenCalledTimes(1)
+      // Why: the unified store action owns cancellation and host retirement for every close path.
+      expect(mocks.closeStructuredAgentSession).not.toHaveBeenCalled()
+      expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
+      expect(mocks.cancelStructuredAgentLaunch).not.toHaveBeenCalled()
       expect(mocks.closeTerminalTab).not.toHaveBeenCalled()
     }
   )

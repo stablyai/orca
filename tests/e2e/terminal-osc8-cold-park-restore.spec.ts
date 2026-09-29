@@ -113,7 +113,7 @@ async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
     if (!state) {
       throw new Error('Orca store unavailable')
     }
-    state.setActiveTabType('terminal')
+    state.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
     state.setActiveTab(tabId)
   }, tabId)
   await expect.poll(() => getActiveTabId(page)).toBe(tabId)

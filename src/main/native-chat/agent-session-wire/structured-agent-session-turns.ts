@@ -1,27 +1,40 @@
 // The effects behind send / cancel / respond / setOption.
 //
-// Admission (lease, fence, idempotency) has already passed by the time anything
+// Admission (writer lease, idempotency) has already passed by the time anything
 // here runs; these functions own only the journal writes and the adapter call,
 // in that order. Journal first is deliberate: a crash between the two leaves a
 // row the next attach settles as `unknown`, whereas the reverse would lose a
 // turn the provider already accepted.
 
+import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
+import {
+  agentSessionFailureWords,
+  type AgentSessionFailureWordsContext
+} from '../../../shared/agent-session-failure-words'
 import type {
   AgentJournalMessageItem,
+  AgentJournalStatusItem,
   AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
-import type {
-  AgentSessionCancelResult,
-  AgentSessionSendResult,
-  AgentSessionWireRefusal
+import {
+  refuse,
+  type AgentSessionCancelResult,
+  type AgentSessionRefusalReason,
+  type AgentSessionSendResult,
+  type AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
 import { DISPATCH_DOUBT_PERSISTENCE_FAILED } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { latestJournalDispatchObservation } from '../agent-session-journal/journal-dispatch-observation'
 import type {
+  AgentSessionCancelOutcome,
   AgentSessionDispatchOutcome,
-  StructuredAgentSessionAdapter
+  StructuredAgentSessionAdapter,
+  StructuredAgentSessionProviderChildPhase
 } from './structured-agent-session-adapter'
+import { structuredAgentSessionStartFailure } from './structured-agent-session-failure-text'
 import { validatePendingPrompt } from './structured-agent-session-prompt-state'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 export { performSetOption } from './structured-agent-session-turns-options'
 export { performPrompt } from './structured-agent-session-turns-prompt'
 
@@ -34,9 +47,15 @@ export type AgentSessionTurnContext = {
   persistOptions: (options: Readonly<Record<string, string>>) => Promise<void>
   /** Opaque client identity recorded as the resolver of a prompt. */
   resolvedBy: string
+  /** Republishes state kept outside the journal, such as the record's options or rewind phase.
+   *  Journal appends reach readers on their own. */
   publish: () => void
   /** Drains provider lifecycle already accepted by the execution host. */
   flushStreamedEvents: () => Promise<void>
+  /** What the host holds about the child this dispatch is for, read at the moment it is needed. */
+  providerChildPhase?: () => StructuredAgentSessionProviderChildPhase | undefined
+  /** Who a Stop's refusal row names. */
+  failureTextContext?: AgentSessionFailureWordsContext
   now: () => number
 }
 
@@ -44,25 +63,38 @@ export type TurnOutcome<TValue> =
   | { ok: true; value: TValue }
   | { ok: false; refusal: AgentSessionWireRefusal }
 
-function invalid(message: string): { ok: false; refusal: AgentSessionWireRefusal } {
-  return { ok: false, refusal: { code: 'agent_session_operation_invalid', message } }
+function invalid(
+  reason: AgentSessionRefusalReason<'agent_session_operation_invalid'>,
+  message: string
+): { ok: false; refusal: AgentSessionWireRefusal } {
+  return { ok: false, refusal: refuse('agent_session_operation_invalid', { reason }, message) }
 }
 
-/** A thrown adapter error is indistinguishable from a lost reply, so it settles
- *  as `unknown` rather than as a rejection. */
+/** A thrown adapter error is indistinguishable from a lost reply, so it settles as `unknown`
+ *  rather than as a rejection — unless the child had not proven its start. Such a child has
+ *  accepted nothing (input is written only after it initializes), so a dispatch it could not
+ *  take is provably unwritten and is rejected with the cause the adapter gave. */
 async function dispatchSafely(
-  ctx: AgentSessionTurnContext,
+  ctx: AgentSessionHandoverContext,
   clientMessageId: string,
-  body: AgentJournalMessageItem
+  body: AgentJournalMessageItem,
+  requestedAt: number
 ): Promise<AgentSessionDispatchOutcome> {
   try {
     return await ctx.adapter.dispatch({
       sessionId: ctx.sessionId,
       clientMessageId,
       body,
-      fence: ctx.fence
+      fence: ctx.fence,
+      requestedAt
     })
   } catch (error) {
+    if (ctx.providerChildPhase?.() === 'starting') {
+      return {
+        state: 'rejected',
+        ...structuredAgentSessionStartFailure({ error }, ctx.failureTextContext)
+      }
+    }
     return { state: 'unknown', reason: error instanceof Error ? error.message : String(error) }
   }
 }
@@ -70,14 +102,9 @@ async function dispatchSafely(
 async function appendStatus(
   ctx: AgentSessionTurnContext,
   clientMessageId: string,
-  text: string
+  body: AgentJournalStatusItem
 ): Promise<void> {
-  await ctx.journal.appendItem(
-    { provider: 'orca', clientMessageId },
-    { kind: 'status', text },
-    { fence: ctx.fence }
-  )
-  ctx.publish()
+  await ctx.journal.appendItem({ provider: 'orca', clientMessageId }, body, { fence: ctx.fence })
 }
 
 /**
@@ -87,6 +114,8 @@ async function appendStatus(
  * the whole content of the word — and one message reached the model five times
  * when this was a judgement call instead of an invariant. A distinct send after
  * a terminal rejection uses a fresh id, which is a first delivery.
+ *
+ * Accepting only records the message; the session's delivery loop hands it over.
  */
 export async function performSend(
   ctx: AgentSessionTurnContext,
@@ -100,7 +129,10 @@ export async function performSend(
     .submissions()
     .find((entry) => entry.clientMessageId === input.clientMessageId)
   if (existing && existing.payloadFingerprint !== input.payloadFingerprint) {
-    return invalid(`Message id ${input.clientMessageId} was already used for another send.`)
+    return invalid(
+      'messageIdReused',
+      `Message id ${input.clientMessageId} was already used for another send.`
+    )
   }
   if (existing) {
     return {
@@ -109,63 +141,87 @@ export async function performSend(
     }
   }
   try {
-    await ctx.journal.appendSubmission({ ...input, fence: ctx.fence })
+    await ctx.journal.appendSubmission({ ...input, fence: ctx.fence, handoverRecorded: true })
   } catch {
-    return invalid('The message could not be recorded and was not sent.')
+    return invalid('journalWriteFailed', 'The message could not be recorded and was not sent.')
   }
-  ctx.publish()
-
-  const outcome = await dispatchSafely(ctx, input.clientMessageId, input.body)
-  // An admission needs no dispatch row: the submission is already pending.
-  if (outcome.state === 'admitted') {
-    ctx.publish()
-    return {
-      ok: true,
-      value: {
-        clientMessageId: input.clientMessageId,
-        submission: requireSubmission(ctx, input.clientMessageId)
-      }
-    }
-  }
-  try {
-    await ctx.journal.resolveDispatch(
-      outcome.state === 'accepted'
-        ? {
-            clientMessageId: input.clientMessageId,
-            state: 'accepted',
-            providerIdentity: outcome.providerIdentity,
-            fence: ctx.fence
-          }
-        : {
-            clientMessageId: input.clientMessageId,
-            state: outcome.state,
-            reason: outcome.reason,
-            fence: ctx.fence
-          }
-    )
-  } catch (error) {
-    // A failed resolution must not strand a pending row; an unknown result is
-    // explicitly replayable.
-    try {
-      await ctx.journal.resolveDispatch({
-        clientMessageId: input.clientMessageId,
-        state: 'unknown',
-        reason: DISPATCH_DOUBT_PERSISTENCE_FAILED,
-        fence: ctx.fence
-      })
-    } catch {
-      // Nothing further to record; the pending row is settled on the next attach.
-    }
-    ctx.publish()
-    throw error
-  }
-  ctx.publish()
   return {
     ok: true,
     value: {
       clientMessageId: input.clientMessageId,
       submission: requireSubmission(ctx, input.clientMessageId)
     }
+  }
+}
+
+export type AgentSessionHandoverContext = Pick<
+  AgentSessionTurnContext,
+  'sessionId' | 'journal' | 'fence' | 'adapter' | 'providerChildPhase'
+> & {
+  /** Who a start failure met at dispatch names, as the start's own row does. */
+  failureTextContext?: AgentSessionFailureWordsContext
+}
+
+/**
+ * Hands one queued submission to the provider. The `dispatch{pending}` row goes first: a crash
+ * after it leaves a message in doubt, never one that reads as queued and so provably unwritten.
+ */
+export async function handOverSubmission(
+  ctx: AgentSessionHandoverContext,
+  submission: AgentJournalSubmission
+): Promise<void> {
+  const { clientMessageId } = submission
+  const body = ctx.journal.itemBody(agentJournalSubmissionKey(clientMessageId))
+  if (body?.kind !== 'message') {
+    await ctx.journal.resolveDispatch({
+      clientMessageId,
+      state: 'rejected',
+      ...agentSessionFailureWords(agentSessionFailureFact('hostFault'), { surface: 'rejection' }),
+      fence: ctx.fence
+    })
+    return
+  }
+  await ctx.journal.resolveDispatch({ clientMessageId, state: 'pending', fence: ctx.fence })
+  // The row written at acceptance is the send's instant on the host clock; the turn this
+  // dispatch opens records it so the live counter never re-anchors at turn-open.
+  const outcome = await dispatchSafely(ctx, clientMessageId, body, submission.submittedAt)
+  // An admission needs no dispatch row: the submission is already pending.
+  if (outcome.state === 'admitted') {
+    return
+  }
+  try {
+    await ctx.journal.resolveDispatch(
+      outcome.state === 'accepted'
+        ? {
+            clientMessageId,
+            state: 'accepted',
+            providerIdentity: outcome.providerIdentity,
+            fence: ctx.fence
+          }
+        : outcome.state === 'rejected'
+          ? {
+              clientMessageId,
+              state: 'rejected',
+              reason: outcome.reason,
+              rejection: outcome.rejection,
+              fence: ctx.fence
+            }
+          : { clientMessageId, state: 'unknown', reason: outcome.reason, fence: ctx.fence }
+    )
+  } catch (error) {
+    // A failed resolution must not strand a pending row; an unknown result is
+    // explicitly replayable.
+    try {
+      await ctx.journal.resolveDispatch({
+        clientMessageId,
+        state: 'unknown',
+        reason: DISPATCH_DOUBT_PERSISTENCE_FAILED,
+        fence: ctx.fence
+      })
+    } catch {
+      // Nothing further to record; the pending row is settled on the next open.
+    }
+    throw error
   }
 }
 
@@ -186,7 +242,8 @@ export async function performCancel(
   ctx: AgentSessionTurnContext,
   input: {
     clientOperationId: string
-    turnId: string
+    /** Absent: whatever the conversation has in flight; present: only while that turn is current. */
+    turnId?: string
     scope?: 'background-tasks'
     taskId?: string
     prompt?: { itemId: string; expectedRevision: number }
@@ -199,42 +256,70 @@ export async function performCancel(
     }
   }
   let cancelled = false
-  let note = 'Cancellation requested.'
+  let note: AgentJournalStatusItem | null = { kind: 'status', text: 'Cancellation requested.' }
   try {
-    cancelled = input.scope
-      ? (
-          await ctx.adapter.stopBackgroundTasks?.({
-            sessionId: ctx.sessionId,
-            fence: ctx.fence,
-            ...(input.taskId ? { taskId: input.taskId } : {})
-          })
-        )?.cancelled === true
-      : (
-          await ctx.adapter.cancelTurn({
-            sessionId: ctx.sessionId,
-            turnId: input.turnId,
-            fence: ctx.fence,
-            ...(input.prompt ? { prompt: { itemId: input.prompt.itemId } } : {})
-          })
-        ).cancelled
-    if (!cancelled) {
-      note = 'The provider had already finished this turn.'
+    const dispatchStatus = latestJournalDispatchObservation(ctx.journal, ctx.fence)
+    const outcome: AgentSessionCancelOutcome = input.scope
+      ? {
+          cancelled:
+            (
+              await ctx.adapter.stopBackgroundTasks?.({
+                sessionId: ctx.sessionId,
+                fence: ctx.fence,
+                ...(input.taskId ? { taskId: input.taskId } : {})
+              })
+            )?.cancelled === true
+        }
+      : await ctx.adapter.cancelTurn({
+          sessionId: ctx.sessionId,
+          ...(input.turnId !== undefined ? { turnId: input.turnId } : {}),
+          fence: ctx.fence,
+          // The journal is what the client read to name a turn, so it is what judges the request.
+          resolveLiveTurnId: () => ctx.journal.activeTurnId(),
+          ...(dispatchStatus ? { dispatchStatus } : {}),
+          ...(input.prompt ? { prompt: { itemId: input.prompt.itemId } } : {})
+        })
+    cancelled = outcome.cancelled
+    if (!cancelled && input.turnId !== undefined) {
+      note = { kind: 'status', text: 'The provider had already finished this turn.' }
+    } else if (!cancelled && input.prompt) {
+      note = null
+    } else if (!cancelled && outcome.unconfirmed) {
+      note = {
+        kind: 'status',
+        ...agentSessionFailureWords(agentSessionFailureFact('cancelUnconfirmed'), {
+          surface: 'row'
+        })
+      }
+    } else if (!cancelled) {
+      // Sent only while the chat reads working, so a Stop that ended nothing must say why.
+      const detail = outcome.refusal?.detail
+      note = {
+        kind: 'status',
+        ...agentSessionFailureWords(
+          agentSessionFailureFact('stopRefused', detail ? { detail } : {}),
+          { ...ctx.failureTextContext, surface: 'row' }
+        )
+      }
     }
   } catch (error) {
     if (input.prompt) {
       throw error
     }
-    note = `Cancellation was not confirmed: ${
-      error instanceof Error ? error.message : String(error)
-    }`
+    // The adapter's error is Orca's; the row says only that the stop is unconfirmed.
+    note = {
+      kind: 'status',
+      ...agentSessionFailureWords(agentSessionFailureFact('cancelUnconfirmed'), { surface: 'row' })
+    }
   }
   if (cancelled && input.prompt) {
     await ctx.flushStreamedEvents()
   }
-  if (input.scope) {
-    return { ok: true, value: { turnId: input.turnId, cancelled } }
+  const value = { ...(input.turnId !== undefined ? { turnId: input.turnId } : {}), cancelled }
+  if (input.scope || note === null) {
+    return { ok: true, value }
   }
   // Keyed by the operation id so a replayed cancel upserts one item, not two.
   await appendStatus(ctx, input.clientOperationId, note)
-  return { ok: true, value: { turnId: input.turnId, cancelled } }
+  return { ok: true, value }
 }

@@ -1,7 +1,6 @@
 import { chmod, mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { parserPublishesMessages } from '../ai-vault/session-scanner-agent-parser'
 import { resetTranscriptConsumersForTests } from '../ai-vault/session-transcript-consumers'
 import { retireDeletedSessionSearchSources } from './session-search-deleted-sources'
 import {
@@ -265,6 +264,31 @@ it('keeps a synthetic row when this pass did not enumerate its container', async
   ).resolves.toMatchObject({ retired: [], unverifiable: [row] })
 })
 
+it('keeps a ZCode SQLite row when its database read failed during discovery', async () => {
+  const db = join(harness.root, 'db.sqlite')
+  await writeFile(db, '')
+  const row = `${db}#zcode-session`
+
+  const result = await retire([row], { roots: [] })
+  expect(result.retired).toEqual([])
+  expect(result.unverifiable).toEqual([row])
+  expect(removed).toEqual([])
+})
+
+it('retires a ZCode SQLite row only after a successful full database enumeration', async () => {
+  const db = join(harness.root, 'db.sqlite')
+  await writeFile(db, '')
+  const kept = `${db}#session-1`
+  const deleted = `${db}#session-2`
+
+  const result = await retire([kept, deleted], {
+    roots: [],
+    enumeratedContainers: new Map([[db, new Set(['session-1'])]])
+  })
+  expect(result.retired).toEqual([deleted])
+  expect(result.unverifiable).toEqual([])
+})
+
 it('retires a synthetic row when the container it came from is gone', async () => {
   const db = join(harness.root, 'opencode.db')
   await writeFile(db, '')
@@ -278,22 +302,6 @@ it('retires a synthetic row when the container it came from is gone', async () =
   await expect(retire([row], { roots: [], enumeratedContainers })).resolves.toMatchObject({
     retired: [row]
   })
-})
-
-// Nothing in this PR can hold a synthetic row: the index pass refuses a source
-// whose parser decodes its messages where the message channel cannot reach
-// them, and OpenCode's SQLite sessions are read on a worker thread. The rule
-// above is the guard for the day that changes -- without it the walk would read
-// `<db>#<id>` as a filename and retire every such row the moment it appeared.
-it('does not index a source whose messages the channel cannot reach', () => {
-  const db = join(harness.root, 'opencode.db')
-  expect(
-    parserPublishesMessages({
-      agent: 'opencode',
-      codexHome: null,
-      file: { path: `${db}#session-1`, mtimeMs: 1, modifiedAt: '', sizeBytes: 0 }
-    })
-  ).toBe(false)
 })
 
 // Round 12, F1. The cap counts directories because that is what costs: rows

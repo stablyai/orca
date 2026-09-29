@@ -167,6 +167,27 @@ it('removes the database on clear and rebuilds only while consent stands', async
   expect(errors).toEqual([])
 })
 
+it('refuses a page cursor minted before clear even when the rebuilt generation matches', async () => {
+  for (const id of [RECENT_SESSION_ID, ANCIENT_SESSION_ID]) {
+    await writeClaudeTranscript(transcriptPath(id), [`shared clear fence ${id}`], id)
+  }
+  const subject = newInstance()
+  subject.apply({ enabled: true, historyDays: null })
+  await subject.settled()
+  const first = await subject.search({ query: 'shared clear fence', limit: 1 })
+  if (first.kind !== 'results' || !first.page.cursor) {
+    throw new Error('expected a paged result')
+  }
+
+  subject.clear()
+  await subject.settled()
+  expect(subject.status().generation).toBe(first.generation)
+  expect(
+    await subject.search({ query: 'shared clear fence', limit: 1, cursor: first.page.cursor })
+  ).toMatchObject({ kind: 'stale-cursor', generation: first.generation })
+  expect(errors).toEqual([])
+})
+
 it('keeps pagination stable when the clock crosses retention before a purge', async () => {
   for (const id of [RECENT_SESSION_ID, ANCIENT_SESSION_ID]) {
     await writeClaudeTranscript(transcriptPath(id), [`distinctive conversation ${id}`], id)
@@ -192,4 +213,49 @@ it('keeps pagination stable when the clock crosses retention before a purge', as
   expect(second.hits).toHaveLength(1)
   expect(second.hits[0].sessionId).not.toBe(first.hits[0].sessionId)
   expect(errors).toEqual([])
+})
+
+// An unresolvable scope is the host's last word, not its first: consent and
+// readiness are what the reader can act on, so they have to answer first.
+it('reports being switched off before blaming a scope it does not know', async () => {
+  const subject = newInstance()
+  subject.apply({ enabled: false, historyDays: null })
+  await subject.settled()
+
+  expect(await subject.search({ query: 'anything' }, { kind: 'unknown' })).toEqual({
+    kind: 'unavailable',
+    reason: 'disabled'
+  })
+})
+
+it('reports not being ready before blaming a scope it does not know', async () => {
+  const subject = newInstance()
+  subject.apply({ enabled: true, historyDays: null })
+  await subject.settled()
+  // Consent stands while no index does, which is what `not-ready` names.
+  subject.close()
+
+  expect(await subject.search({ query: 'anything' }, { kind: 'unknown' })).toEqual({
+    kind: 'unavailable',
+    reason: 'not-ready'
+  })
+})
+
+it('answers scope-unknown once it is switched on and ready', async () => {
+  await writeClaudeTranscript(
+    transcriptPath(RECENT_SESSION_ID),
+    ['a distinctive conversation'],
+    RECENT_SESSION_ID
+  )
+  const subject = newInstance()
+  subject.apply({ enabled: true, historyDays: null })
+  await subject.settled()
+
+  expect(await subject.search({ query: 'distinctive' }, { kind: 'unknown' })).toEqual({
+    kind: 'unavailable',
+    reason: 'scope-unknown'
+  })
+  // The same query answers with hits when no scope is in the way, so the refusal
+  // above is the scope's and not an empty or unreadable index.
+  expect(await searchFor('distinctive')).toEqual([RECENT_SESSION_ID])
 })

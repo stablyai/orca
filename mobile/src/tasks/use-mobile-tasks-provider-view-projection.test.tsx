@@ -243,7 +243,7 @@ function countLinearWork(run: () => void): WorkCounts {
   }
 }
 
-function shape(sections: LinearIssueSection[]) {
+function summarizeSections(sections: LinearIssueSection[]) {
   return sections.map((section) => ({
     key: section.key,
     label: section.label,
@@ -268,8 +268,8 @@ describe('useMobileTasksProviderViewProjection linear sections', () => {
     (linearGroupBy) => {
       const projection = mount({ linearGroupBy })
       expect(projection.linearBoardSections).toBe(projection.linearIssueSections)
-      expect(shape(projection.linearBoardSections)).toEqual(
-        shape(legacyProjection({ ...DEFAULT_INPUT, linearGroupBy }).boardSections)
+      expect(summarizeSections(projection.linearBoardSections)).toEqual(
+        summarizeSections(legacyProjection({ ...DEFAULT_INPUT, linearGroupBy }).boardSections)
       )
     }
   )
@@ -278,8 +278,12 @@ describe('useMobileTasksProviderViewProjection linear sections', () => {
     const projection = mount({ linearGroupBy: 'none' })
     const legacy = legacyProjection({ ...DEFAULT_INPUT, linearGroupBy: 'none' })
     expect(projection.linearBoardSections).not.toBe(projection.linearIssueSections)
-    expect(shape(projection.linearIssueSections)).toEqual(shape(legacy.listSections))
-    expect(shape(projection.linearBoardSections)).toEqual(shape(legacy.boardSections))
+    expect(summarizeSections(projection.linearIssueSections)).toEqual(
+      summarizeSections(legacy.listSections)
+    )
+    expect(summarizeSections(projection.linearBoardSections)).toEqual(
+      summarizeSections(legacy.boardSections)
+    )
     expect(projection.linearIssueSections.map((section) => section.key)).toEqual(['all'])
     expect(projection.linearBoardSections.length).toBeGreaterThan(1)
     expect(projection.linearListEntries.every((entry) => entry.type === 'issue')).toBe(true)
@@ -293,8 +297,12 @@ describe('useMobileTasksProviderViewProjection linear sections', () => {
         linearGroupBy,
         linearOrderBy: order
       })
-      expect(shape(projection.linearIssueSections)).toEqual(shape(legacy.listSections))
-      expect(shape(projection.linearBoardSections)).toEqual(shape(legacy.boardSections))
+      expect(summarizeSections(projection.linearIssueSections)).toEqual(
+        summarizeSections(legacy.listSections)
+      )
+      expect(summarizeSections(projection.linearBoardSections)).toEqual(
+        summarizeSections(legacy.boardSections)
+      )
       expect(projection.linearIssuesForView.map((issue) => issue.id)).toEqual(
         legacy.issuesForView.map((issue) => issue.id)
       )
@@ -310,20 +318,24 @@ describe('useMobileTasksProviderViewProjection transitions', () => {
 
     const grouped = rerender({ linearGroupBy: 'status' })
     expect(grouped.linearBoardSections).toBe(grouped.linearIssueSections)
-    expect(shape(grouped.linearBoardSections)).toEqual(
-      shape(legacyProjection({ ...DEFAULT_INPUT, linearGroupBy: 'status' }).boardSections)
+    expect(summarizeSections(grouped.linearBoardSections)).toEqual(
+      summarizeSections(
+        legacyProjection({ ...DEFAULT_INPUT, linearGroupBy: 'status' }).boardSections
+      )
     )
 
     const assignee = rerender({ linearGroupBy: 'assignee' })
     expect(assignee.linearBoardSections).toBe(assignee.linearIssueSections)
-    expect(shape(assignee.linearBoardSections)).toEqual(
-      shape(legacyProjection({ ...DEFAULT_INPUT, linearGroupBy: 'assignee' }).boardSections)
+    expect(summarizeSections(assignee.linearBoardSections)).toEqual(
+      summarizeSections(
+        legacyProjection({ ...DEFAULT_INPUT, linearGroupBy: 'assignee' }).boardSections
+      )
     )
 
     const none = rerender({ linearGroupBy: 'none' })
     expect(none.linearBoardSections).not.toBe(none.linearIssueSections)
-    expect(shape(none.linearBoardSections)).toEqual(
-      shape(legacyProjection({ ...DEFAULT_INPUT, linearGroupBy: 'none' }).boardSections)
+    expect(summarizeSections(none.linearBoardSections)).toEqual(
+      summarizeSections(legacyProjection({ ...DEFAULT_INPUT, linearGroupBy: 'none' }).boardSections)
     )
   })
 
@@ -333,8 +345,8 @@ describe('useMobileTasksProviderViewProjection transitions', () => {
     const next = rerender({ linearGroupBy: 'priority', linearOrderBy: 'identifier' })
     expect(next.linearBoardSections).not.toBe(firstSections)
     expect(next.linearBoardSections).toBe(next.linearIssueSections)
-    expect(shape(next.linearBoardSections)).toEqual(
-      shape(
+    expect(summarizeSections(next.linearBoardSections)).toEqual(
+      summarizeSections(
         legacyProjection({
           ...DEFAULT_INPUT,
           linearGroupBy: 'priority',
@@ -369,17 +381,17 @@ describe('useMobileTasksProviderViewProjection transitions', () => {
     const refreshed = rerender({ linearGroupBy: 'status', items: makeItems(50) })
     expect(refreshed.linearBoardSections).not.toBe(sections)
     expect(refreshed.linearBoardSections).toBe(refreshed.linearIssueSections)
-    expect(shape(refreshed.linearBoardSections)).toEqual(shape(sections))
+    expect(summarizeSections(refreshed.linearBoardSections)).toEqual(summarizeSections(sections))
   })
 
   it('does not mutate the shared sections when the list entries are built', () => {
     const projection = mount({ linearGroupBy: 'status' })
-    const before = shape(projection.linearIssueSections)
+    const before = summarizeSections(projection.linearIssueSections)
     const entryIssueIds = projection.linearListEntries
       .filter((entry) => entry.type === 'issue')
       .map((entry) => (entry.type === 'issue' ? entry.issue.id : ''))
     expect(entryIssueIds).toHaveLength(50)
-    expect(shape(projection.linearBoardSections)).toEqual(before)
+    expect(summarizeSections(projection.linearBoardSections)).toEqual(before)
   })
 })
 
