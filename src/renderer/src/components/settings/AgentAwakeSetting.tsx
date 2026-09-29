@@ -1,13 +1,16 @@
+import { getRendererAppPlatform } from '../../lib/renderer-app-platform'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { Label } from '../ui/label'
 import {
   getAgentAwakeDescription,
   getAgentAwakeModeLabel,
   getAgentAwakeSearchKeywords,
-  getAgentAwakeTitle
+  getAgentAwakeTitle,
+  getKeepDisplayAwakeDescription,
+  getKeepDisplayAwakeTitle
 } from './agent-awake-copy'
 import { SearchableSetting } from './SearchableSetting'
-import { SettingsSegmentedControl } from './SettingsFormControls'
+import { SettingsSegmentedControl, SettingsSwitchRow } from './SettingsFormControls'
 import {
   computerAwakeSettingsForMode,
   normalizeComputerAwakeMode,
@@ -29,6 +32,7 @@ export function AgentAwakeSetting({
     settings.computerAwakeMode,
     settings.keepComputerAwakeWhileAgentsRun
   )
+  const showDisplayToggle = getRendererAppPlatform() === 'darwin'
   const setMode = (nextMode: ComputerAwakeMode): void => {
     updateSettings(computerAwakeSettingsForMode(nextMode))
   }
@@ -67,6 +71,20 @@ export function AgentAwakeSetting({
           />
         </div>
       </SearchableSetting>
+      {showDisplayToggle ? (
+        <SearchableSetting
+          title={getKeepDisplayAwakeTitle()}
+          description={getKeepDisplayAwakeDescription()}
+        >
+          <SettingsSwitchRow
+            label={getKeepDisplayAwakeTitle()}
+            description={getKeepDisplayAwakeDescription()}
+            checked={settings.keepDisplayAwake === true}
+            disabled={mode === 'off'}
+            onChange={(checked) => updateSettings({ keepDisplayAwake: checked })}
+          />
+        </SearchableSetting>
+      ) : null}
     </section>
   )
 }

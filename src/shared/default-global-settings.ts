@@ -224,6 +224,7 @@ export function buildDefaultSettings(args: {
     confirmClosePinnedTab: true,
     editorPreviewTabsEnabled: true,
     keepComputerAwakeWhileAgentsRun: false,
+    keepDisplayAwake: false,
     // Why: 'auto' probes keyboard layout so non-US users can type Option chars like @/€/[ out of the box (issue #903). See src/renderer/src/lib/keyboard-layout/*.
     terminalMacOptionAsAlt: 'auto',
     terminalMacOptionAsAltMigrated: false,

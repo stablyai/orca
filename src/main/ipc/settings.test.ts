@@ -388,8 +388,25 @@ describe('registerSettingsHandlers', () => {
     expect(agentAwakeService.setMode).toHaveBeenCalledWith('auto')
   })
 
+  it('forwards the display-awake preference to the agent awake service', () => {
+    const agentAwakeService = { setMode: vi.fn(), setKeepDisplayAwake: vi.fn() }
+    store.getSettings.mockReturnValue({ keepDisplayAwake: false })
+    store.updateSettings.mockReturnValue({ keepDisplayAwake: true })
+    registerSettingsHandlers(store as never, agentAwakeService as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => unknown
+
+    handler(settingsInvokeEvent, { keepDisplayAwake: true })
+
+    expect(agentAwakeService.setKeepDisplayAwake).toHaveBeenCalledWith(true)
+    expect(agentAwakeService.setMode).not.toHaveBeenCalled()
+  })
+
   it('does not notify the agent awake service for unrelated setting changes', () => {
-    const agentAwakeService = { setMode: vi.fn() }
+    const agentAwakeService = { setMode: vi.fn(), setKeepDisplayAwake: vi.fn() }
     store.getSettings.mockReturnValue({ keepComputerAwakeWhileAgentsRun: false })
     store.updateSettings.mockReturnValue({ keepComputerAwakeWhileAgentsRun: false })
     registerSettingsHandlers(store as never, agentAwakeService as never)
@@ -402,6 +419,7 @@ describe('registerSettingsHandlers', () => {
     handler(settingsInvokeEvent, { defaultTuiAgent: 'codex' })
 
     expect(agentAwakeService.setMode).not.toHaveBeenCalled()
+    expect(agentAwakeService.setKeepDisplayAwake).not.toHaveBeenCalled()
   })
 
   it('prepares local worktree roots when workspace directory changes', async () => {
