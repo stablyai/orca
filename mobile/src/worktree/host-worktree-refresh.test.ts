@@ -126,4 +126,27 @@ describe('startHostWorktreeRefresh', () => {
     expect(fetchWorktrees).toHaveBeenCalledTimes(2)
     expect(fetchRepoMetadata).toHaveBeenCalledWith({ force: true, queueIfInFlight: true })
   })
+
+  it('refreshes project groups when a fetch is provided', () => {
+    const fetchProjectGroups = vi.fn().mockResolvedValue(undefined)
+    const client = {
+      subscribe: vi.fn(
+        (_method: string, _params: unknown, listener: (payload: unknown) => void) => {
+          eventListener = listener
+          return unsubscribe
+        }
+      )
+    } as unknown as RpcClient
+    stop = startHostWorktreeRefresh({
+      client,
+      fetchWorktrees,
+      fetchRepoMetadata,
+      fetchProjectGroups
+    })
+
+    expect(fetchProjectGroups).toHaveBeenCalledWith({ force: true, queueIfInFlight: true })
+    fetchProjectGroups.mockClear()
+    eventListener?.({ type: 'reposChanged' })
+    expect(fetchProjectGroups).toHaveBeenCalledWith({ force: true, queueIfInFlight: true })
+  })
 })

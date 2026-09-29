@@ -17,6 +17,8 @@ import {
 import { applyWorktreeRowDisplayState } from '../worktree/worktree-host-row-identity'
 import { applyWorktreeHostContextLabels } from '../worktree/worktree-host-context-labels'
 import { useWorkspaceSections } from '../worktree/use-workspace-sections'
+import { buildRepoGroupingById } from '../worktree/workspace-list-project-groups'
+import { useHostProjectGroupCatalog } from './use-host-project-group-catalog'
 import { useHostRepoMetadata } from './use-host-repo-metadata'
 import { useHostScreenIdentity } from './use-host-screen-identity'
 import { useHostScreenState } from './use-host-screen-state'
@@ -73,11 +75,21 @@ export function useHostScreenController({
   )
 
   useHostScreenIdentity({ client, hostId, state })
-  const fetchRepoMetadata = useHostRepoMetadata({ client, connState, hostId, state })
+  const fetchProjectGroups = useHostProjectGroupCatalog({ client, connState, hostId, state })
+  const fetchRepoMetadata = useHostRepoMetadata({
+    client,
+    connState,
+    hostId,
+    state,
+    onRepoCatalog: (repos) => {
+      state.setRepoGroupingById(buildRepoGroupingById(repos))
+    }
+  })
   const catalog = useHostWorktreeCatalog({
     client,
     connState,
     embedded,
+    fetchProjectGroups,
     fetchRepoMetadata,
     hostId,
     state,
@@ -134,7 +146,9 @@ export function useHostScreenController({
     repoIdsByName: state.repoIdsByName,
     repoColorsByName: state.repoColorsByName,
     collapsedGroups: state.collapsedGroups,
-    workspaceStatuses: state.workspaceStatuses
+    workspaceStatuses: state.workspaceStatuses,
+    projectGroups: state.projectGroups,
+    repoGroupingById: state.repoGroupingById
   })
   const existingWorktreePaths = useMemo(() => state.worktrees.map((w) => w.path), [state.worktrees])
   const activeWorktreeScroll = useActiveWorktreeScroll(sectionsResult.sections)

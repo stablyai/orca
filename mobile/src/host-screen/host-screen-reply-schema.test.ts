@@ -3,6 +3,7 @@ import type { RepoIcon } from '../../../src/shared/repo-icon'
 import { NODE_PLATFORM_NAMES } from '../transport/mobile-runtime-host-platform'
 import {
   hostPlatformSchema,
+  hostProjectGroupListSchema,
   hostRepoCatalogSchema,
   hostSshTargetSummariesSchema,
   hostViewSettingsSchema,
@@ -65,12 +66,44 @@ describe('host screen reply schemas', () => {
     })
   })
 
+  it('keeps project group membership used to nest the workspace list', () => {
+    const [repo] = hostRepoCatalogSchema.parse({
+      repos: [
+        {
+          id: 'r',
+          displayName: 'o',
+          projectGroupId: 'group-1',
+          projectGroupOrder: 2
+        }
+      ]
+    })
+    expect(repo?.projectGroupId).toBe('group-1')
+    expect(repo?.projectGroupOrder).toBe(2)
+  })
+
   it('passes a host-id spelling through for getRepoExecutionHostId to judge', () => {
     const [repo] = hostRepoCatalogSchema.parse({
       repos: [{ id: 'r', displayName: 'o', executionHostId: 'cloud:zone-a', connectionId: null }]
     })
     expect(repo?.executionHostId).toBe('cloud:zone-a')
     expect(repo?.connectionId).toBeNull()
+  })
+
+  it('reads project groups and degrades an unreadable list to empty', () => {
+    expect(
+      hostProjectGroupListSchema.parse({
+        groups: [
+          { id: 'g1', name: 'Client A', parentGroupId: 'root', tabOrder: 3 },
+          { id: 'g2', name: 'Nested' },
+          { name: 'dropped' }
+        ]
+      })
+    ).toEqual([
+      { id: 'g1', name: 'Client A', parentGroupId: 'root', tabOrder: 3 },
+      { id: 'g2', name: 'Nested', parentGroupId: null, tabOrder: 0 }
+    ])
+    expect(hostProjectGroupListSchema.parse({})).toEqual([])
+    expect(hostProjectGroupListSchema.parse(null)).toEqual([])
   })
 
   it('degrades an unreadable ssh target list to the empty one that falls back to host ids', () => {

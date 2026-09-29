@@ -11,15 +11,25 @@ import type { FilterState, Section, Worktree } from './workspace-list-types'
 import type { MobileGroupMode, MobileSortMode } from './workspace-view-settings'
 import { sortWorktrees } from './workspace-list-ordering'
 import { getWorktreeRowIdentity } from './worktree-host-row-identity'
+import {
+  buildMobileProjectGroupSections,
+  type MobileProjectGroup,
+  type MobileRepoGrouping
+} from './workspace-list-project-groups'
 
 export type { FilterState, Section, Worktree } from './workspace-list-types'
 export { CREATE_GRACE_MS, getWorktreeStatus, sortWorktrees } from './workspace-list-ordering'
+
+/** Repo labels are redundant only under a `repo:` header; Pinned mixes repos. */
+export function shouldHideMobileWorktreeRepoLabel(sectionKey: string): boolean {
+  return sectionKey.startsWith('repo:')
+}
 
 function makeSection(
   key: string,
   title: string,
   data: Worktree[],
-  icon?: 'pin',
+  icon?: Section['icon'],
   collapsedGroups?: ReadonlySet<string>
 ): Section {
   const rows = collapsedGroups ? applyMobileWorkspaceLineage(data, collapsedGroups) : data
@@ -129,7 +139,9 @@ export function buildSections(
   pinnedIds: Set<string>,
   repoIdsByName: ReadonlyMap<string, string> = new Map(),
   workspaceStatuses: readonly WorkspaceStatusDefinition[] = DEFAULT_MOBILE_WORKSPACE_STATUSES,
-  collapsedGroups: ReadonlySet<string> = new Set()
+  collapsedGroups: ReadonlySet<string> = new Set(),
+  projectGroups: readonly MobileProjectGroup[] = [],
+  repoGroupingById: ReadonlyMap<string, MobileRepoGrouping> = new Map()
 ): Section[] {
   const filtered = filterWorktrees(worktrees, filters, search)
   const sorted = sortWorktrees(filtered, sortMode)
@@ -232,6 +244,19 @@ export function buildSections(
         )
       }
     }
+  } else if (groupMode === 'projectGroup') {
+    sections.push(
+      ...buildMobileProjectGroupSections({
+        worktrees,
+        canonicalGroupWorktrees,
+        filters,
+        search,
+        repoIdsByName,
+        collapsedGroups,
+        projectGroups,
+        repoGroupingById
+      })
+    )
   }
 
   return sections

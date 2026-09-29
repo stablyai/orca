@@ -12,6 +12,7 @@ import {
   retainLiveSleptWorktreeIdentities
 } from '../worktree/worktree-host-row-identity'
 import { savePinnedIds } from '../storage/preferences'
+import type { FetchHostProjectGroups } from './use-host-project-group-catalog'
 import type { FetchHostRepoMetadata } from './use-host-repo-metadata'
 import type { HostScreenState } from './use-host-screen-state'
 
@@ -19,6 +20,7 @@ export function useHostWorktreeCatalog(args: {
   client: RpcClient | null
   connState: ConnectionState
   embedded: boolean
+  fetchProjectGroups: FetchHostProjectGroups
   fetchRepoMetadata: FetchHostRepoMetadata
   hostId: string | undefined
   state: HostScreenState
@@ -28,6 +30,7 @@ export function useHostWorktreeCatalog(args: {
     client,
     connState,
     embedded,
+    fetchProjectGroups,
     fetchRepoMetadata,
     hostId,
     state,
@@ -150,8 +153,20 @@ export function useHostWorktreeCatalog(args: {
       return
     }
     void syncViewSettingsFromDesktop()
-    return startHostWorktreeRefresh({ client, fetchWorktrees, fetchRepoMetadata })
-  }, [client, connState, fetchWorktrees, fetchRepoMetadata, syncViewSettingsFromDesktop])
+    return startHostWorktreeRefresh({
+      client,
+      fetchWorktrees,
+      fetchRepoMetadata,
+      fetchProjectGroups
+    })
+  }, [
+    client,
+    connState,
+    fetchWorktrees,
+    fetchRepoMetadata,
+    fetchProjectGroups,
+    syncViewSettingsFromDesktop
+  ])
 
   useFocusEffect(
     useCallback(() => {
@@ -174,7 +189,8 @@ export function useHostWorktreeCatalog(args: {
     client,
     connState,
     fetchWorktrees,
-    fetchRepoMetadata
+    fetchRepoMetadata,
+    fetchProjectGroups
   })
 
   return { fetchWorktrees, onRefresh, refreshing }

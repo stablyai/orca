@@ -70,11 +70,45 @@ export const hostRepoCatalogSchema = z
           z.union([repoIconBranches.lucide, repoIconBranches.emoji, repoIconBranches.image])
         ),
         connectionId: salvagedOptional('connectionId', z.string().nullable()),
-        executionHostId: salvagedOptional('executionHostId', z.string().nullable())
+        executionHostId: salvagedOptional('executionHostId', z.string().nullable()),
+        projectGroupId: salvagedOptional('projectGroupId', z.string().nullable()),
+        projectGroupOrder: salvagedOptional('projectGroupOrder', z.number())
       })
     )
   })
   .transform((reply) => reply.repos)
+
+/**
+ * Project groups the host screen nests under Group by Project Group.
+ *
+ * `groups` is salvaged: a host that predates `projectGroup.list`, or a refusal the skip already
+ * swallowed, reads as `[]` and the list falls through to a trailing Ungrouped section. Rows
+ * without `id`/`name` drop; `parentGroupId` and `tabOrder` degrade to a root group at order 0.
+ */
+export const hostProjectGroupListSchema = z
+  .looseObject({
+    groups: salvagedOptional(
+      'groups',
+      salvagingArray(
+        z.looseObject({
+          id: z.string(),
+          name: z.string(),
+          parentGroupId: salvagedOptional('parentGroupId', z.string().nullable()),
+          tabOrder: salvagedOptional('tabOrder', z.number())
+        })
+      )
+    )
+  })
+  .transform((reply) =>
+    (reply.groups ?? []).map((group) => ({
+      id: group.id,
+      name: group.name,
+      parentGroupId: group.parentGroupId ?? null,
+      tabOrder:
+        typeof group.tabOrder === 'number' && Number.isFinite(group.tabOrder) ? group.tabOrder : 0
+    }))
+  )
+  .catch(() => [])
 
 /**
  * The SSH target labels a mixed-host catalog names its rows with.
@@ -171,6 +205,8 @@ export const hostViewSettingsSchema = z
  * (:141) is chained `.then(…).catch(…)` and would survive a throw.
  */
 export const hostScreenUnreadReplySchema = z.unknown()
+
+export type HostRepoCatalog = z.output<typeof hostRepoCatalogSchema>
 
 /** One decoded catalog icon: the members MobileRepoIcon reads, with the rest passed through. */
 export type MobileHostRepoIcon = NonNullable<

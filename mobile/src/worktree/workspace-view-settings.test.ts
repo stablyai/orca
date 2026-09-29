@@ -5,6 +5,7 @@ import {
   buildWorkspaceViewSettingsUpdate,
   groupModeFromDesktop,
   groupModeToDesktop,
+  MOBILE_GROUP_MODES,
   sortModeFromDesktop,
   type MobileViewState,
   type WorkspaceViewSettings
@@ -22,9 +23,26 @@ const base: MobileViewState = {
 }
 
 describe('group mode mapping', () => {
+  it('exposes five mobile group modes including projectGroup', () => {
+    expect(MOBILE_GROUP_MODES).toEqual([
+      'none',
+      'workspaceStatus',
+      'repo',
+      'projectGroup',
+      'prStatus'
+    ])
+  })
+
   it('round-trips every mobile group mode through the desktop value', () => {
-    for (const mode of ['none', 'workspaceStatus', 'repo', 'prStatus'] as const) {
-      expect(groupModeFromDesktop(groupModeToDesktop(mode))).toBe(mode)
+    for (const mode of MOBILE_GROUP_MODES) {
+      const desktop = groupModeToDesktop(mode)
+      const back = groupModeFromDesktop(desktop)
+      if (mode === 'projectGroup') {
+        expect(desktop).toBe('repo')
+        expect(back).toBe('repo')
+      } else {
+        expect(back).toBe(mode)
+      }
     }
   })
 
@@ -84,6 +102,14 @@ describe('applyDesktopViewSettings', () => {
     const next = applyDesktopViewSettings(base, { groupBy: 'mystery' as never })
     expect(next.groupMode).toBe('repo')
   })
+
+  it('keeps projectGroup when desktop still groups by repo', () => {
+    const next = applyDesktopViewSettings(
+      { ...base, groupMode: 'projectGroup' },
+      { groupBy: 'repo' }
+    )
+    expect(next.groupMode).toBe('projectGroup')
+  })
 })
 
 describe('buildWorkspaceViewSettingsUpdate', () => {
@@ -105,6 +131,12 @@ describe('buildWorkspaceViewSettingsUpdate', () => {
     expect(buildWorkspaceViewSettingsUpdate({ groupMode: 'workspaceStatus' }, next)).toEqual({
       groupBy: 'workspace-status'
     })
+    expect(
+      buildWorkspaceViewSettingsUpdate(
+        { groupMode: 'projectGroup' },
+        { ...next, groupMode: 'projectGroup' }
+      )
+    ).toEqual({ groupBy: 'repo' })
     expect(buildWorkspaceViewSettingsUpdate({ collapsedGroups: ['g1'] }, next)).toEqual({
       collapsedGroups: ['g1']
     })
