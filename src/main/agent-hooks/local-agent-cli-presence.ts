@@ -155,6 +155,27 @@ export async function hydrateAgentCliShellPath(
   }
 }
 
+/** Resolves one command exactly as presence detection does (`~` expanded, relative PATH kept). */
+export async function resolveLocalAgentCommand(
+  command: string,
+  options: DetectOptions = {}
+): Promise<string | null> {
+  const platform = options.platform ?? process.platform
+  const fileProbe = options.fileProbe ?? {
+    isExecutableFile: (filePath: string) => isExecutableFile(filePath, platform)
+  }
+  if (hasPathSeparatorToken(command)) {
+    const expanded = expandHomePathToken(command, platform, options.homeDir ?? homedir())
+    return isPlatformAbsolutePath(expanded, platform) &&
+      (await fileProbe.isExecutableFile(expanded))
+      ? expanded
+      : null
+  }
+  const delimiter = options.pathDelimiter ?? pathApiForPlatform(platform).delimiter
+  const dirs = pathEntries(options.pathEnv ?? process.env.PATH ?? '', delimiter)
+  return probePathCandidate(command, dirs, platform, fileProbe, options.pathExt)
+}
+
 export async function detectLocalManagedAgentCliPresence(
   targets: readonly ManagedAgentHookTarget[],
   settings: CommandOverrideSettings,

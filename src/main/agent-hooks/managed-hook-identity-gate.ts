@@ -5,7 +5,7 @@ import {
   excludeMisidentifiedAgents,
   type IdentityProbe
 } from '../../shared/tui-agent-identity-exclusion'
-import { resolveCommandOnLocalPath } from '../ipc/command-path-resolver'
+import { resolveLocalAgentCommand } from './local-agent-cli-presence'
 import {
   buildManagedHookDetectionCommands,
   type ManagedHookDetectionSettings
@@ -13,20 +13,12 @@ import {
 
 const IDENTITY_PROBE_TIMEOUT_MS = 5000
 
-/** Probes the resolved executable, never a bare name the child's own PATH might re-resolve. */
+/** Runs the path the gate already resolved, never a bare name the child's own PATH might re-resolve. */
 export function buildManagedHookIdentityProbe(): IdentityProbe {
-  return async (command, args) => {
-    const program = await resolveCommandOnLocalPath(command)
-    if (!program) {
-      throw new Error(`${command} is not on PATH`)
-    }
-    const result = await runProcess({
-      program,
-      args,
-      timeoutMs: IDENTITY_PROBE_TIMEOUT_MS
-    })
+  return async (program, args) => {
+    const result = await runProcess({ program, args, timeoutMs: IDENTITY_PROBE_TIMEOUT_MS })
     if (result.timedOut) {
-      throw new Error(`${command} identity probe timed out`)
+      throw new Error(`${program} identity probe timed out`)
     }
     return { stdout: result.stdout, stderr: result.stderr }
   }
@@ -46,19 +38,28 @@ export async function agentsFailingHookInstallIdentityProbe(
   targets: readonly ManagedAgentHookTarget[],
   probe: IdentityProbe,
   settings: ManagedHookDetectionSettings = null,
-  isOnPath: (command: string) => Promise<boolean> = async (command) =>
-    (await resolveCommandOnLocalPath(command)) !== null
+  resolve: (command: string) => Promise<string | null> = (command) =>
+    resolveLocalAgentCommand(command)
 ): Promise<Set<AgentHookTarget>> {
   const ids = new Set<string>(targets.map((target) => target.tuiAgent))
   const commands = buildManagedHookDetectionCommands(settings, process.platform).filter(
     (command) => ids.has(command.id) && command.identityExclusion
   )
   const probed = [...new Set(commands.map((command) => command.id))]
-  // Why resolve each candidate: presence passing on bare `bob` says nothing about a stale override,
-  // whose probe would throw and fail open past an unrelated `bob`.
-  const onPath = await Promise.all(commands.map((command) => isOnPath(command.cmd)))
-  const found = new Set(commands.filter((_, i) => onPath[i]).map((command) => command.cmd))
-  const kept = new Set(await excludeMisidentifiedAgents(commands, probed, found, probe))
+  // Why resolve each candidate the way presence does: presence passing on bare `bob` says nothing
+  // about a stale override, whose probe would throw and fail open past an unrelated `bob`.
+  const resolved = new Map<string, string>()
+  for (const command of commands) {
+    const program = await resolve(command.cmd)
+    if (program) {
+      resolved.set(command.cmd, program)
+    }
+  }
+  const kept = new Set(
+    await excludeMisidentifiedAgents(commands, probed, new Set(resolved.keys()), (cmd, args) =>
+      probe(resolved.get(cmd) ?? cmd, args)
+    )
+  )
   return new Set(
     targets
       .filter((target) => probed.includes(target.tuiAgent) && !kept.has(target.tuiAgent))
