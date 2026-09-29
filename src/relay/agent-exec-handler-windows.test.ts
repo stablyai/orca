@@ -66,7 +66,10 @@ describe('AgentExecHandler Windows command spawning', () => {
             cwd: 'C:\\repo',
             env: expect.objectContaining({ PATH: tempDir }),
             stdio: ['pipe', 'pipe', 'pipe'],
-            windowsHide: true
+            windowsHide: true,
+            detached: undefined,
+            windowsVerbatimArguments: undefined,
+            shell: false
           }
         )
       })
