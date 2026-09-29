@@ -3,22 +3,17 @@ import type {
   ComputerUsePermissionSetupResult,
   ComputerUsePermissionStatusResult
 } from '../../../../shared/computer-use-permissions-types'
-import {
-  COMPUTER_USE_SKILL_NAME,
-  ORCA_LINEAR_SKILL_NAME,
-  ORCA_CLI_SKILL_NAME,
-  ORCHESTRATION_SKILL_NAME,
-  buildAgentFeatureSkillInstallCommand
-} from '@/lib/agent-feature-install-commands'
 import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser-use-setup-state'
 import { e2eConfig } from '@/lib/e2e-config'
 import { showOrcaCliRegistrationPromptToast } from '@/lib/agent-skill-cli-prerequisite'
 import type { ProjectAgentSkillRuntime } from '@/lib/project-skill-runtime'
 import type { OnboardingFeatureSetupRuntimeContext } from './onboarding-feature-setup-runtime'
+import { getWslCliDistroRequest } from '../settings/CliSkillRuntimeSetup'
 import {
-  buildSkillCommandForRuntime,
-  getWslCliDistroRequest
-} from '../settings/CliSkillRuntimeSetup'
+  buildOnboardingFeatureSetupClipboardText,
+  buildOnboardingFeatureSetupSkillCommand,
+  buildOnboardingFeatureSetupTerminalCommand
+} from './onboarding-feature-setup-commands'
 import {
   ORCHESTRATION_ENABLED_STORAGE_KEY,
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
@@ -54,13 +49,6 @@ const ONBOARDING_PROGRESS_FEATURE_SETUP_IDS: readonly OnboardingFeatureSetupId[]
   'orchestration'
 ]
 
-const FEATURE_SKILL_NAMES: Record<OnboardingFeatureSetupId, string> = {
-  browserUse: ORCA_CLI_SKILL_NAME,
-  computerUse: COMPUTER_USE_SKILL_NAME,
-  orchestration: ORCHESTRATION_SKILL_NAME,
-  linearTickets: ORCA_LINEAR_SKILL_NAME
-}
-
 const FEATURE_TELEMETRY_IDS: Record<
   OnboardingFeatureSetupId,
   EventProps<'onboarding_feature_setup_toggled'>['feature']
@@ -81,6 +69,7 @@ export type OnboardingFeatureSetupResult = {
   cliTouched: boolean
   skillCommandsCopied: boolean
   skillInstallCommand: string | null
+  skillTerminalCommand: string | null
   computerUsePermissionsOpened: boolean
   warnings: OnboardingFeatureSetupWarning[]
 }
@@ -109,26 +98,11 @@ export function selectedOnboardingFeatureSetupIds(
   return ONBOARDING_FEATURE_SETUP_IDS.filter((id) => selection[id])
 }
 
-export function buildOnboardingFeatureSetupClipboardText(
-  selection: OnboardingFeatureSetupSelection,
-  agentRuntime?: ProjectAgentSkillRuntime
-): string | null {
-  const command = buildOnboardingFeatureSetupSkillCommand(selection)
-  // Keep clipboard and terminal commands on the same runtime (#12103).
-  return command === null ? null : buildSkillCommandForRuntime(command, agentRuntime)
-}
-
-export function buildOnboardingFeatureSetupSkillCommand(
-  selection: OnboardingFeatureSetupSelection
-): string | null {
-  const skillNames = selectedOnboardingFeatureSetupIds(selection).map(
-    (id) => FEATURE_SKILL_NAMES[id]
-  )
-  if (skillNames.length === 0) {
-    return null
-  }
-  return buildAgentFeatureSkillInstallCommand(skillNames)
-}
+export {
+  buildOnboardingFeatureSetupClipboardText,
+  buildOnboardingFeatureSetupSkillCommand,
+  buildOnboardingFeatureSetupTerminalCommand
+} from './onboarding-feature-setup-commands'
 
 export function onboardingFeatureSetupTelemetryFeature(
   id: OnboardingFeatureSetupId
@@ -222,6 +196,7 @@ export async function runOnboardingFeatureSetup(
   let cliTouched = false
   let skillCommandsCopied = false
   const skillInstallCommand = buildOnboardingFeatureSetupSkillCommand(selection)
+  const skillTerminalCommand = buildOnboardingFeatureSetupTerminalCommand(selection)
   let computerUsePermissionsOpened = false
 
   deps.setStorageItem(BROWSER_USE_ENABLED_STORAGE_KEY, selection.browserUse ? '1' : '0')
@@ -237,6 +212,7 @@ export async function runOnboardingFeatureSetup(
       cliTouched,
       skillCommandsCopied,
       skillInstallCommand,
+      skillTerminalCommand,
       computerUsePermissionsOpened,
       warnings
     }
@@ -309,6 +285,7 @@ export async function runOnboardingFeatureSetup(
     cliTouched,
     skillCommandsCopied,
     skillInstallCommand,
+    skillTerminalCommand,
     computerUsePermissionsOpened,
     warnings
   }
