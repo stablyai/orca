@@ -62,11 +62,18 @@ export default function SparseCheckoutPresetSelect({
       : null
   const nameError =
     draft && trimmedName.length === 0
-      ? 'Name is required.'
+      ? translate('components.sparse.preset.validation.nameRequired', 'Name is required.')
       : trimmedName.length > 80
-        ? 'Name must be 80 characters or fewer.'
+        ? translate(
+            'components.sparse.preset.validation.nameTooLong',
+            'Name must be 80 characters or fewer.'
+          )
         : nameCollision
-          ? `"${nameCollision.name}" already exists.`
+          ? translate(
+              'components.sparse.preset.validation.nameAlreadyExists',
+              '"{{name}}" already exists.',
+              { name: nameCollision.name }
+            )
           : null
   const canSave =
     draft !== null &&

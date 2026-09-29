@@ -17346,6 +17346,15 @@
         }
       }
     },
+    "sparse": {
+      "preset": {
+        "validation": {
+          "nameRequired": "이름을 입력해 주세요.",
+          "nameTooLong": "이름은 80자 이하여야 합니다.",
+          "nameAlreadyExists": "\"{{name}}\" 이름의 사전 설정이 이미 있습니다."
+        }
+      }
+    },
     "native-chat": {
       "writeNotice": {
         "notDoneReadHistory": "이 채팅의 기록을 불러오지 못했습니다.",
