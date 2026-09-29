@@ -440,7 +440,10 @@ describe('fetchCodexRateLimits', () => {
       primary: { usedPercent: 22, windowDurationMins: 10080 },
       secondary: null
     })
-    readFileMock.mockResolvedValue(
+    // Why: the first (backend-first) auth read must fail so this exercises RPC
+    // + supplementCodexSessionWindow's merge — not the backend-first short
+    // circuit, which would never reach the RPC path this test is named for.
+    readFileMock.mockRejectedValueOnce(new Error('no auth fixture')).mockResolvedValue(
       JSON.stringify({
         tokens: { access_token: 'access-token', account_id: 'account-id' }
       })
@@ -477,6 +480,7 @@ describe('fetchCodexRateLimits', () => {
       weekly: { usedPercent: 23, windowMinutes: 10080, resetsAt: 1_800_100_000_000 },
       status: 'ok'
     })
+    expect(childSpawnMock).toHaveBeenCalled()
     expect(fetch).toHaveBeenCalledTimes(1)
   })
 
@@ -606,7 +610,7 @@ describe('fetchCodexRateLimits', () => {
     )
   })
 
-  it('uses reset-credit count from newer app-server responses without backend fallback', async () => {
+  it('uses reset-credit count from newer app-server responses without a backend supplement fetch', async () => {
     const rpcChild = makeRpcChild()
     childSpawnMock.mockReturnValue(rpcChild)
     rpcChild.stdin.write.mockImplementation((line: string) => {
@@ -663,7 +667,10 @@ describe('fetchCodexRateLimits', () => {
         }
       ]
     })
-    expect(readFileMock).not.toHaveBeenCalled()
+    // Why: the fetch-first backend attempt reads auth.json (rejected by the
+    // default beforeEach fixture) before falling through to RPC, so it does
+    // touch readFile — but never reaches an actual network fetch, and RPC's
+    // own reset-credit data is used as-is without a backend supplement call.
     expect(fetch).not.toHaveBeenCalled()
   })
 
