@@ -6,9 +6,27 @@ import {
 import { getUtf8ChunkEndIndex } from './utf8-byte-limits'
 
 export const TERMINAL_INPUT_CHUNK_MAX_BYTES = 16 * 1024
+export const TERMINAL_INPUT_CHUNK_GAP_MS = 0
+// Why: #10416 silent truncation was never reproduced on real ConPTY (see #10504
+// review); keep win32 aliases equal to the shared budget so host-aware call sites
+// still compile without reintroducing 1 KiB / 16 ms pacing cost.
+export const TERMINAL_INPUT_CHUNK_MAX_BYTES_WIN32 = TERMINAL_INPUT_CHUNK_MAX_BYTES
+export const TERMINAL_INPUT_CHUNK_GAP_MS_WIN32 = TERMINAL_INPUT_CHUNK_GAP_MS
 export const TERMINAL_INPUT_MAX_BYTES = 16 * 1024 * 1024
 export const TERMINAL_INPUT_TOO_LARGE_ERROR =
   'Terminal input is too large for a safe terminal send.'
+
+/** Chunk size for PTY writes (inject / terminal send). `platform` reserved for host-aware callers. */
+export function getTerminalInputChunkMaxBytes(
+  _platform: NodeJS.Platform = process.platform
+): number {
+  return TERMINAL_INPUT_CHUNK_MAX_BYTES
+}
+
+/** Gap between PTY input chunks; 0 skips the timer (all platforms after #10504 review). */
+export function getTerminalInputChunkGapMs(_platform: NodeJS.Platform = process.platform): number {
+  return TERMINAL_INPUT_CHUNK_GAP_MS
+}
 
 export function getTerminalInputByteLength(text: string): number {
   return measureClipboardTextByteLength(text).byteLength
