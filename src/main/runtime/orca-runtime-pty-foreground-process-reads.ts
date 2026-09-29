@@ -201,6 +201,12 @@ export class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRuntimeWithSta
     return this.clientSettings.get()
   }
 
+  // Why: wired post-construction from main-process-runtime-launch.ts once the live RPC server
+  // exists, so revoking network exposure consent can re-close its listener.
+  setNetworkExposureNarrower(narrow: (() => Promise<void>) | undefined): void {
+    this.clientSettings.setNetworkExposureNarrower(narrow)
+  }
+
   async updateClientSettings(updates: RuntimeClientSettingsUpdate) {
     return await this.clientSettings.update(updates)
   }

@@ -49,6 +49,9 @@ export type OrcaRuntimeRpcServerOptions = {
    * has to outrank both, and `ensureNetworkExposure()` has to refuse rather than widen.
    */
   pinnedBindHost?: string
+  // Why: explicit user consent for widening the WS listener beyond loopback (device-connected-history
+  // no longer counts on its own); read fresh per call so a live revoke takes effect immediately.
+  networkExposureConsent?: () => boolean
   webClientRoot?: string
   // Why: test-only overrides for the two constants below; production must not pass these (defaults set by §3.1).
   keepaliveIntervalMs?: number

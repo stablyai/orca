@@ -139,10 +139,10 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
     })
   }
 
-  // Why: STA-2370 — a desktop with no previously-connected device stays on loopback until the user
-  // explicitly pairs; `orca serve`/E2E (exposeNetworkByDefault) and a reconnecting paired device bind wide.
-  // A grant minted for "This computer only" is excluded: its client is a browser on this machine, so
-  // counting it would republish the runtime on every interface one restart after the user declined that.
+  // Why: a desktop stays on loopback until the user explicitly consents to network exposure;
+  // `orca serve`/E2E (exposeNetworkByDefault) is a separate explicit opt-in that outranks consent.
+  // Pairing history no longer widens on its own — that inferred consent from a device merely having
+  // connected before, with no positive record of the user granting network exposure.
   protected resolveInitialWebSocketBindHost(): string {
     if (this.pinnedBindHost) {
       return this.pinnedBindHost
@@ -150,11 +150,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
     if (this.exposeNetworkByDefault) {
       return WS_BIND_HOST_ALL_INTERFACES
     }
-    const hasConnectedNetworkDevice =
-      this.deviceRegistry
-        ?.listDevices()
-        .some((device) => device.lastSeenAt > 0 && device.pairingReach !== 'this-computer') ?? false
-    return hasConnectedNetworkDevice ? WS_BIND_HOST_ALL_INTERFACES : WS_BIND_HOST_LOOPBACK
+    return this.networkExposureConsent() ? WS_BIND_HOST_ALL_INTERFACES : WS_BIND_HOST_LOOPBACK
   }
 
   // Why: builds and starts a WS transport bound to `host`, wiring the session-scoped mobile socket
