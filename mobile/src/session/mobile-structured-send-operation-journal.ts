@@ -3,13 +3,12 @@ import { z } from 'zod'
 import { persistMirrored } from '../storage/mirrored-storage-keys'
 import type { AgentJournalSubmission } from '../../../src/shared/agent-session-journal-types'
 import {
-  AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
-  AGENT_SESSION_OPERATION_FUTURE_SKEW_MS,
+  AGENT_SESSION_MAX_OPERATION_REPLAY_AGE_MS,
   parseAgentSessionOperationTimestamp
 } from '../../../src/shared/agent-session-host-authority'
 import { AGENT_SESSION_DURABLE_OPERATION_GLOBAL_LIMIT } from '../../../src/shared/agent-session-operation-ledger'
-import { structuredAgentSessionDomainFingerprint } from '../../../src/shared/structured-agent-session-mutation'
 
+// Older builds and host-served pages keyed a send by its text here; this build only drains it.
 const STORAGE_KEY = 'orca:mobileStructuredSendOperations:v1'
 const OperationEntrySchema = z
   .object({
@@ -32,38 +31,7 @@ type OperationJournal = z.infer<typeof OperationJournalSchema>
 
 const mutations: { tail: Promise<void> } = { tail: Promise.resolve() }
 
-export function mobileStructuredSendOperationKey(input: {
-  sessionKey: string
-  intentFingerprint: string
-}): string {
-  return structuredAgentSessionDomainFingerprint({
-    domain: 'mobile.agentSession.send.operation',
-    sessionId: input.sessionKey,
-    fields: { intentFingerprint: input.intentFingerprint }
-  })
-}
-
-export function mobileStructuredSendCallerFingerprint(callerIdentity: string): string {
-  return structuredAgentSessionDomainFingerprint({
-    domain: 'mobile.agentSession.send.caller',
-    sessionId: callerIdentity,
-    fields: {}
-  })
-}
-
-function newOperationIdIsAdmissible(operationId: string, now: number): boolean {
-  const timestamp = parseAgentSessionOperationTimestamp(operationId)
-  return (
-    timestamp !== null &&
-    timestamp <= now + AGENT_SESSION_OPERATION_FUTURE_SKEW_MS &&
-    now - timestamp <= AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS
-  )
-}
-
-function parseJournal(raw: string | null): OperationJournal {
-  if (raw === null) {
-    return { v: 1, entries: [] }
-  }
+function parseJournal(raw: string): OperationJournal {
   let value: unknown
   try {
     value = JSON.parse(raw)
@@ -88,8 +56,7 @@ function parseJournal(raw: string | null): OperationJournal {
 
 async function writeEntries(entries: OperationEntry[]): Promise<void> {
   // Through the one write path, which notes the mirror on an accepted write and on nothing else
-  // (ruling 35). The rejection this can raise is the point of the key: a journal the device never
-  // wrote must not reach the page, and the composer above catches it as "Message not sent".
+  // (ruling 35).
   await persistMirrored(
     STORAGE_KEY,
     entries.length === 0 ? null : JSON.stringify({ v: 1, entries })
@@ -105,83 +72,10 @@ async function serialize<T>(action: () => Promise<T>): Promise<T> {
   return operation
 }
 
-export async function getOrCreateMobileStructuredSendOperation(input: {
-  operationKey: string
-  callerIdentity: string
-  payloadFingerprint: string
-  attachmentPaths: readonly string[]
-  createOperationId: () => string
-  now?: number
-}): Promise<{
-  operationId: string
-  retained: boolean
-  payloadFingerprint: string
-  attachmentPaths: string[]
-}> {
-  return serialize(async () => {
-    const now = input.now ?? Date.now()
-    const callerFingerprint = mobileStructuredSendCallerFingerprint(input.callerIdentity)
-    const journal = parseJournal(await AsyncStorage.getItem(STORAGE_KEY))
-    const entries = journal.entries
-    const existing = entries.find((entry) => entry.operationKey === input.operationKey)
-    if (existing) {
-      if (existing.callerFingerprint !== callerFingerprint) {
-        throw new Error('Structured send caller identity changed')
-      }
-      return {
-        operationId: existing.operationId,
-        retained: true,
-        payloadFingerprint: existing.payloadFingerprint,
-        attachmentPaths: [...existing.attachmentPaths]
-      }
-    }
-    // Ambiguity has no TTL. At the fixed capacity, refusing a new send is safer
-    // than evicting an id whose message may already be in provider context.
-    if (entries.length >= AGENT_SESSION_DURABLE_OPERATION_GLOBAL_LIMIT) {
-      throw new Error('Structured send operation journal is full')
-    }
-    const operationId = input.createOperationId()
-    if (!newOperationIdIsAdmissible(operationId, now)) {
-      throw new Error('Structured send operation id is invalid')
-    }
-    const entry = OperationEntrySchema.parse({
-      operationKey: input.operationKey,
-      operationId,
-      callerFingerprint,
-      payloadFingerprint: input.payloadFingerprint,
-      attachmentPaths: [...input.attachmentPaths]
-    })
-    await writeEntries([...entries, entry])
-    return {
-      operationId,
-      retained: false,
-      payloadFingerprint: input.payloadFingerprint,
-      attachmentPaths: [...input.attachmentPaths]
-    }
-  })
-}
-
-export async function clearMobileStructuredSendOperation(input: {
-  operationKey: string
-  operationId: string
-}): Promise<void> {
-  return serialize(async () => {
-    const journal = parseJournal(await AsyncStorage.getItem(STORAGE_KEY))
-    const entries = journal.entries
-    const existing = entries.find((entry) => entry.operationKey === input.operationKey)
-    if (!existing) {
-      return
-    }
-    if (existing.operationId !== input.operationId) {
-      throw new Error('Structured send operation identity changed')
-    }
-    await writeEntries(entries.filter((entry) => entry !== existing))
-  })
-}
-
-/** Reconcile an ack-lost operation once the authoritative journal settles it. */
-export async function clearMobileStructuredSettledSendOperations(input: {
+/** Drops entries the host shows settled, and entries past the host's replay window. */
+export async function reconcileMobileStructuredSendOperations(input: {
   submissions: readonly AgentJournalSubmission[]
+  now?: number
 }): Promise<void> {
   const settled = new Set(
     input.submissions.flatMap((submission) =>
@@ -190,13 +84,18 @@ export async function clearMobileStructuredSettledSendOperations(input: {
         : []
     )
   )
-  if (settled.size === 0) {
-    return
-  }
   return serialize(async () => {
-    const journal = parseJournal(await AsyncStorage.getItem(STORAGE_KEY))
+    const raw = await AsyncStorage.getItem(STORAGE_KEY)
+    if (raw === null) {
+      return
+    }
+    const journal = parseJournal(raw)
+    const now = input.now ?? Date.now()
     const entries = journal.entries.filter(
-      (entry) => !settled.has(`${entry.payloadFingerprint}\u0000${entry.operationId}`)
+      (entry) =>
+        !settled.has(`${entry.payloadFingerprint}\u0000${entry.operationId}`) &&
+        now - (parseAgentSessionOperationTimestamp(entry.operationId) ?? now) <=
+          AGENT_SESSION_MAX_OPERATION_REPLAY_AGE_MS
     )
     if (entries.length !== journal.entries.length) {
       await writeEntries(entries)

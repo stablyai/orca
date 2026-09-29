@@ -29,7 +29,7 @@ export const PAGE_STORAGE_EXACT_KEYS = [
   'orca:custom-accessory-keys',
   /** Whether a supported agent session opens on the terminal or the native chat. */
   'orca:defaultSessionView',
-  /** The durable send journal: which `agentSession.send` operation ids are still unsettled. */
+  /** The v1 send journal: kept writable because pages served by older hosts still write it. */
   'orca:mobileStructuredSendOperations:v1',
   /** The terminal's text scale, which pinch-to-zoom writes. */
   'orca:terminalTextScale',
@@ -174,23 +174,22 @@ export type PageStorageForInit = {
  * The allowlisted values as `init` may carry them: nothing over the caps the page's schema refines
  * on, and the names of whatever was left out.
  *
- * The send journal is why this exists and is not a hypothetical. Measured on this tree: one entry
- * with no attachment costs 343 characters in the array — 342 of its own plus the comma that joins
- * it — so 47 unsettled sends measure 16,140 and 48 measure 16,483, past
- * `PAGE_STORAGE_MAX_VALUE_CHARS`, and the journal's own schema admits 4,096 of them. Handed to
- * `init` whole, the page's `BridgeInitStorageSchema` refuses the *frame* — not the key — and the
- * session screen never opens at all. Dropping the key instead leaves the page reading a default,
- * which is what `dropped` is for: a degradation the caller can name rather than a page that does
- * not start.
+ * The v1 send journal, which older builds and pages still write, is why this exists and is not a
+ * hypothetical. Measured on this tree: one entry with no attachment costs 343 characters in the
+ * array — 342 of its own plus the comma that joins it — so 47 unsettled sends measure 16,140 and
+ * 48 measure 16,483, past `PAGE_STORAGE_MAX_VALUE_CHARS`, and the journal's own schema admits
+ * 4,096 of them. Handed to `init` whole, the page's `BridgeInitStorageSchema` refuses the *frame*
+ * — not the key — and the session screen never opens at all. Dropping the key instead leaves the
+ * page reading a default, which is what `dropped` is for: a degradation the caller can name rather
+ * than a page that does not start.
  *
  * `oversize` is the half of `dropped` the page must be told about, and it is a correctness matter
  * rather than a diagnostic one (ruling 33.6). A dropped key is still in
  * `pageStorageKeysForRoute`, so the page may write it — and for the journal that is destructive:
- * the page reads no journal, builds an empty one, and its first send writes a one-entry value over
- * the device's, losing every native entry and issuing a fresh `operationId` for an operation
- * native already holds. Named here, the page refuses the write instead. Only the value-cap drops
- * qualify: an entry-cap drop is a key that fits and did not make the frame, and the page's own
- * write of it is the same size the shell would have carried.
+ * a page from an older host reads no journal, builds an empty one, and its first send writes a
+ * one-entry value over the device's, losing every native entry. Named here, the page refuses the
+ * write instead. Only the value-cap drops qualify: an entry-cap drop is a key that fits and did
+ * not make the frame, and the page's own write of it is the same size the shell would have carried.
  */
 export function pageStorageEntriesForInit(held: Readonly<Record<string, string>>): {
   entries: Record<string, string>

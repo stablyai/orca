@@ -15,7 +15,6 @@ export function useMobileNativeChatSessionLane({
   transcriptPath,
   sessionId,
   sourceIdentity,
-  callerIdentity,
   hostSupport,
   enabled,
   connState,
@@ -30,7 +29,6 @@ export function useMobileNativeChatSessionLane({
   transcriptPath: string | null
   sessionId: string | null
   sourceIdentity: Parameters<typeof useMobileNativeChatSession>[0]['sourceIdentity']
-  callerIdentity: string
   hostSupport: StructuredAgentSessionHostSupport | null
   enabled: boolean
   connState: ConnectionState
@@ -50,7 +48,6 @@ export function useMobileNativeChatSessionLane({
     client,
     sessionId: structured ? sessionId : null,
     sourceIdentity,
-    callerIdentity,
     hostSupport,
     enabled,
     // Holds are connection-scoped; dropping this on transport loss lets the hook

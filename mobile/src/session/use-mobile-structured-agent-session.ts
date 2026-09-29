@@ -41,10 +41,7 @@ import {
   requestMobileStructuredAgentSessionCancel
 } from './mobile-structured-agent-session-cancel'
 
-type StructuredMobileAttachment = StructuredAgentSessionAttachment & {
-  id?: string
-  contentFingerprint?: string
-}
+type StructuredMobileAttachment = StructuredAgentSessionAttachment & { id?: string }
 
 type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgentOptions> &
   ReturnType<typeof useMobileStructuredAgentTurnTiming> & {
@@ -72,8 +69,6 @@ export function useMobileStructuredAgentSession(args: {
   sessionId: string | null
   /** Host/workspace scope used to keep same provider ids isolated. */
   sourceIdentity?: string
-  /** Authenticated identity the host keys mutation admission under. */
-  callerIdentity?: string
   enabled: boolean
   /** Live transport only; gates the connection-scoped hold, nothing else. */
   connected: boolean
@@ -84,7 +79,6 @@ export function useMobileStructuredAgentSession(args: {
 }): StructuredMobileSession {
   const {
     agent,
-    callerIdentity = '',
     client,
     connected,
     sessionId,
@@ -202,18 +196,14 @@ export function useMobileStructuredAgentSession(args: {
       return sendMobileStructuredAgentSessionMessage({
         client,
         sessionId,
-        sessionKey,
-        callerIdentity,
         expectedRuntimeFence: currentFence,
-        text,
-        attachments: sendAttachments,
+        body,
         deadline,
         onError: onSendError
       })
     },
     [
       agent,
-      callerIdentity,
       client,
       conversationCommands,
       enabled,
@@ -221,7 +211,6 @@ export function useMobileStructuredAgentSession(args: {
       onSendError,
       optionSnapshot,
       sessionId,
-      sessionKey,
       setStructuredOption
     ]
   )

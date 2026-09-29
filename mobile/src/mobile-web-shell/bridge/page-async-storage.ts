@@ -30,9 +30,9 @@ const REFUSAL_SENTENCES: Record<PageStorageRefusal, string> = {
  * Raised for one refusal only, `too-large`, and that scope is the whole of ruling 33.4. The real
  * AsyncStorage rejects when its store refuses — a value over the row limit is a SQLite error on
  * Android — so rejecting is the module's own contract for a value too big, and the caller that
- * needs it is written for it: the durable send journal, whose composer catches this and answers
- * "Message not sent" rather than sending a mutation whose operation id was never written down
- * (ruling 7).
+ * needs it is written for it: the v1 send journal, whose composer in pages served by older hosts
+ * catches this and answers "Message not sent" rather than sending a mutation whose operation id
+ * was never written down (ruling 7).
  *
  * The other two refusals stay silent drops, because nothing catches them. A page-closure writer of
  * an unlisted key calls `setItem` and awaits it with no catch —

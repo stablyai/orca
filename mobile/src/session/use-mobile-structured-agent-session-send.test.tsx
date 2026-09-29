@@ -3,6 +3,10 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalDispatchState } from '../../../src/shared/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
+import { AGENT_SESSION_MAX_OPERATION_REPLAY_AGE_MS } from '../../../src/shared/agent-session-host-authority'
+import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
+import { structuredAgentSessionPayloadFingerprint } from '../../../src/shared/structured-agent-session-mutation'
+import { structuredAgentSessionSendBody } from '../../../src/shared/structured-agent-session-outbox'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { resetMobileStructuredSendOperationJournalForTests } from './mobile-structured-send-operation-journal'
@@ -16,6 +20,49 @@ const asyncStorage = vi.hoisted(() => ({
 }))
 
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStorage }))
+
+const JOURNAL_KEY = 'orca:mobileStructuredSendOperations:v1'
+const SESSION_KEY = encodeNativeChatTranscriptIdentity([
+  'host-a\0workspace-a',
+  'codex',
+  'session-1'
+])
+
+function operationIdAt(timestamp: number, entropy: string): string {
+  return `${timestamp}-${entropy.repeat(32)}`
+}
+
+/** A journal entry exactly as the build before per-press ids wrote it for this harness. */
+function v1Entry(text: string, operationId: string) {
+  const intentFingerprint = structuredAgentSessionPayloadFingerprint({
+    method: 'mobile.agentSession.send.intent',
+    sessionId: SESSION_KEY,
+    fields: { text, attachments: [] }
+  })
+  return {
+    operationKey: structuredAgentSessionPayloadFingerprint({
+      method: 'mobile.agentSession.send.operation',
+      sessionId: SESSION_KEY,
+      fields: { intentFingerprint }
+    }),
+    operationId,
+    callerFingerprint: structuredAgentSessionPayloadFingerprint({
+      method: 'mobile.agentSession.send.caller',
+      sessionId: '',
+      fields: {}
+    }),
+    payloadFingerprint: structuredAgentSessionPayloadFingerprint({
+      method: 'agentSession.send',
+      sessionId: 'session-1',
+      fields: { body: structuredAgentSessionSendBody(text, []) }
+    }),
+    attachmentPaths: []
+  }
+}
+
+function v1Journal(entries: readonly ReturnType<typeof v1Entry>[]): string {
+  return JSON.stringify({ v: 1, entries })
+}
 
 function ok(result: unknown) {
   return { ok: true, result, _meta: { runtimeId: 'runtime-1' } }
@@ -126,85 +173,51 @@ describe('mobile structured send retries', () => {
     listener = null
   })
 
-  it('keeps one id across acknowledgement loss and host unknown replays', async () => {
-    let attempts = 0
-    sendRequest.mockImplementation(async (method) => {
-      if (method !== 'agentSession.send') {
-        return method === 'agentSession.options' ? ok({ models: [], current: {} }) : ok({})
-      }
-      attempts += 1
-      if (attempts === 1) {
-        throw markRpcDeliveryUnknown(new Error('Connection closed'))
-      }
-      return sendResult('unknown')
-    })
-    await mountSession()
-
-    await act(async () => {
-      expect(await hook!.sendWithOutcome('retry me')).toBe('unknown')
-      expect(await hook!.sendWithOutcome('retry me')).toBe('unknown')
-      expect(await hook!.sendWithOutcome('retry me')).toBe('unknown')
-    })
-
-    expect(calls()).toHaveLength(3)
-    expect(new Set(sentIds()).size).toBe(1)
-    expect(calls().every(([, params]) => !('retryUnknown' in (params as object)))).toBe(true)
-  })
-
-  it('releases an ack-lost id after the journal accepts it for a later identical intent', async () => {
-    let attempts = 0
-    sendRequest.mockImplementation(async (method) => {
-      if (method !== 'agentSession.send') {
-        return method === 'agentSession.options' ? ok({ models: [], current: {} }) : ok({})
-      }
-      attempts += 1
-      return attempts === 1
-        ? Promise.reject(markRpcDeliveryUnknown(new Error('Connection closed')))
-        : sendResult('accepted')
-    })
-    await mountSession()
-    await act(async () => {
-      expect(await hook!.sendWithOutcome('same text, later intent')).toBe('unknown')
-    })
-    const firstRequest = calls()[0]![1] as {
-      envelope: { clientOperationId: string; payloadFingerprint: string }
-    }
-    const event = snapshotEvent()
-    act(() =>
-      listener?.({
-        ...event,
-        page: {
-          ...event.page,
-          submissions: [
-            {
-              ...structuredSendResultFixture('accepted').submission,
-              clientMessageId: firstRequest.envelope.clientOperationId,
-              payloadFingerprint: firstRequest.envelope.payloadFingerprint
-            }
-          ]
-        }
+  it.each([
+    ['an acknowledgement loss', () => Promise.reject(markRpcDeliveryUnknown(new Error('Closed')))],
+    [
+      'a host failure after dispatch',
+      async () => ({
+        id: 'request-1',
+        ok: false as const,
+        error: { code: 'runtime_error', message: 'journal resolve failed' },
+        _meta: { runtimeId: 'runtime-1' }
       })
-    )
-    await vi.waitFor(() => expect(storedOperations.size).toBe(0))
+    ],
+    [
+      'an unknown-outcome refusal',
+      async () =>
+        ok({
+          ok: false,
+          refusal: { code: 'agent_session_operation_unknown', message: 'The outcome is unknown.' }
+        })
+    ]
+  ])('sends the same text again after %s, as a second message', async (_, firstAnswer) => {
+    let attempts = 0
+    sendRequest.mockImplementation(async (method) => {
+      if (method !== 'agentSession.send') {
+        return method === 'agentSession.options' ? ok({ models: [], current: {} }) : ok({})
+      }
+      attempts += 1
+      return attempts === 1 ? firstAnswer() : sendResult('accepted')
+    })
+    await mountSession()
 
     await act(async () => {
-      expect(await hook!.sendWithOutcome('same text, later intent')).toBe('accepted')
+      expect(await hook!.sendWithOutcome('same text')).toBe('unknown')
+      expect(await hook!.sendWithOutcome('same text')).toBe('accepted')
     })
 
-    expect(sentIds()).toHaveLength(2)
+    expect(calls()).toHaveLength(2)
     expect(new Set(sentIds()).size).toBe(2)
   })
 
-  it('reuses an ambiguous id after the session hook remounts', async () => {
-    let attempts = 0
+  it('writes nothing to the device for a send, so a remount mints a new id', async () => {
     sendRequest.mockImplementation(async (method) => {
       if (method !== 'agentSession.send') {
         return method === 'agentSession.options' ? ok({ models: [], current: {} }) : ok({})
       }
-      attempts += 1
-      return attempts === 1
-        ? Promise.reject(markRpcDeliveryUnknown(new Error('Connection closed')))
-        : sendResult('unknown')
+      throw markRpcDeliveryUnknown(new Error('Connection closed'))
     })
     await mountSession()
     await act(async () => {
@@ -220,44 +233,11 @@ describe('mobile structured send retries', () => {
       expect(await hook!.sendWithOutcome('survive remount')).toBe('unknown')
     })
 
-    expect(new Set(sentIds()).size).toBe(1)
-    expect(calls().every(([, params]) => !('retryUnknown' in (params as object)))).toBe(true)
-    expect(asyncStorage.setItem.mock.invocationCallOrder[0]).toBeLessThan(
-      sendRequest.mock.invocationCallOrder.find(
-        (_, index) => sendRequest.mock.calls[index]?.[0] === 'agentSession.send'
-      )!
-    )
+    expect(new Set(sentIds()).size).toBe(2)
+    expect(asyncStorage.setItem).not.toHaveBeenCalled()
   })
 
-  it('keeps the id when the host fails after provider dispatch', async () => {
-    let attempts = 0
-    sendRequest.mockImplementation(async (method) => {
-      if (method !== 'agentSession.send') {
-        return method === 'agentSession.options' ? ok({ models: [], current: {} }) : ok({})
-      }
-      attempts += 1
-      return attempts === 1
-        ? {
-            id: 'request-1',
-            ok: false as const,
-            error: { code: 'runtime_error', message: 'journal resolve failed' },
-            _meta: { runtimeId: 'runtime-1' }
-          }
-        : sendResult('unknown')
-    })
-    await mountSession()
-
-    await act(async () => {
-      expect(await hook!.sendWithOutcome('possibly delivered')).toBe('unknown')
-      expect(await hook!.sendWithOutcome('possibly delivered')).toBe('unknown')
-    })
-
-    expect(calls()).toHaveLength(2)
-    expect(new Set(sentIds()).size).toBe(1)
-    expect(calls().every(([, params]) => !('retryUnknown' in (params as object)))).toBe(true)
-  })
-
-  it('reuses the original uploaded attachment identity after acknowledgement loss', async () => {
+  it('sends a re-uploaded attachment as its own message', async () => {
     let attempts = 0
     sendRequest.mockImplementation(async (method) => {
       if (method !== 'agentSession.send') {
@@ -266,36 +246,22 @@ describe('mobile structured send retries', () => {
       attempts += 1
       return attempts === 1
         ? Promise.reject(markRpcDeliveryUnknown(new Error('Connection closed')))
-        : sendResult('unknown')
+        : sendResult('accepted')
     })
     await mountSession()
-    const contentFingerprint = 'f'.repeat(64)
 
     await act(async () => {
-      expect(
+      for (const path of ['/tmp/original.png', '/tmp/reuploaded.png']) {
         await hook!.sendWithOutcome('describe', undefined, undefined, [
-          {
-            path: '/tmp/original.png',
-            previewUri: 'file:///photo.jpg',
-            contentFingerprint
-          }
+          { path, previewUri: 'file:///photo.jpg' }
         ])
-      ).toBe('unknown')
-      expect(
-        await hook!.sendWithOutcome('describe', undefined, undefined, [
-          {
-            path: '/tmp/reuploaded.png',
-            previewUri: 'file:///photo.jpg',
-            contentFingerprint
-          }
-        ])
-      ).toBe('unknown')
+      }
     })
 
-    expect(new Set(sentIds()).size).toBe(1)
+    expect(new Set(sentIds()).size).toBe(2)
     expect(calls()[1]?.[1]).toMatchObject({
       body: {
-        blocks: expect.arrayContaining([{ type: 'image-ref', path: '/tmp/original.png' }])
+        blocks: expect.arrayContaining([{ type: 'image-ref', path: '/tmp/reuploaded.png' }])
       }
     })
   })
@@ -329,7 +295,7 @@ describe('mobile structured send retries', () => {
     }
   )
 
-  it('keeps the send id after a pending-admission refusal', async () => {
+  it('sends a press after a pending-admission refusal under a new id', async () => {
     let attempts = 0
     sendRequest.mockImplementation(async (method) => {
       if (method !== 'agentSession.send') {
@@ -351,73 +317,75 @@ describe('mobile structured send retries', () => {
 
     await act(async () => {
       expect(await hook!.sendWithOutcome('retry at the current fence')).toBe('rejected')
-      expect(await hook!.sendWithOutcome('retry at the current fence')).toBe('unknown')
+      expect(await hook!.sendWithOutcome('retry at the current fence')).toBe('accepted')
     })
 
     expect(sentIds()).toHaveLength(2)
-    expect(new Set(sentIds()).size).toBe(1)
+    expect(new Set(sentIds()).size).toBe(2)
   })
 
-  it('keeps the id when an older host refuses an unknown replay', async () => {
-    let attempts = 0
+  it('does not join a v1 entry an earlier build left for the same text', async () => {
+    const leftOver = operationIdAt(Date.now(), 'a')
+    const journal = v1Journal([v1Entry('same text as before the update', leftOver)])
+    storedOperations.set(JOURNAL_KEY, journal)
     sendRequest.mockImplementation(async (method) => {
       if (method !== 'agentSession.send') {
         return method === 'agentSession.options' ? ok({ models: [], current: {} }) : ok({})
       }
-      attempts += 1
-      if (attempts === 1) {
-        throw markRpcDeliveryUnknown(new Error('Connection closed'))
-      }
-      return attempts === 2
-        ? ok({
-            ok: false,
-            refusal: {
-              code: 'agent_session_operation_unknown',
-              message: 'The outcome is unknown.'
-            }
-          })
-        : sendResult('unknown')
+      return sendResult('accepted')
     })
     await mountSession()
 
     await act(async () => {
-      expect(await hook!.sendWithOutcome('old host replay')).toBe('unknown')
-      expect(await hook!.sendWithOutcome('old host replay')).toBe('unknown')
-      expect(await hook!.sendWithOutcome('old host replay')).toBe('unknown')
+      expect(await hook!.sendWithOutcome('same text as before the update')).toBe('accepted')
     })
 
-    expect(new Set(sentIds()).size).toBe(1)
-    expect(calls().every(([, params]) => !('retryUnknown' in (params as object)))).toBe(true)
+    expect(sentIds()).toHaveLength(1)
+    expect(sentIds()[0]).not.toBe(leftOver)
+    expect(storedOperations.get(JOURNAL_KEY)).toBe(journal)
   })
 
-  it('keeps an ambiguous id after the host replay window expires', async () => {
-    let attempts = 0
-    sendRequest.mockImplementation(async (method) => {
-      if (method !== 'agentSession.send') {
-        return method === 'agentSession.options' ? ok({ models: [], current: {} }) : ok({})
-      }
-      attempts += 1
-      if (attempts === 1) {
-        throw markRpcDeliveryUnknown(new Error('Connection closed'))
-      }
-      return ok({
-        ok: false,
-        refusal: {
-          code: 'agent_session_operation_expired',
-          message: 'Operation expired.'
+  it('clears a v1 entry once the host shows it settled', async () => {
+    const leftOver = operationIdAt(Date.now(), 'b')
+    const entry = v1Entry('sent before the update', leftOver)
+    storedOperations.set(JOURNAL_KEY, v1Journal([entry]))
+    await mountSession()
+    const event = snapshotEvent()
+    act(() =>
+      listener?.({
+        ...event,
+        page: {
+          ...event.page,
+          submissions: [
+            {
+              ...structuredSendResultFixture('accepted').submission,
+              clientMessageId: leftOver,
+              payloadFingerprint: entry.payloadFingerprint
+            }
+          ]
         }
       })
-    })
+    )
+
+    await vi.waitFor(() => expect(storedOperations.has(JOURNAL_KEY)).toBe(false))
+  })
+
+  it('prunes v1 entries past the host replay window and keeps younger ones', async () => {
+    const now = Date.now()
+    const young = v1Entry('young', operationIdAt(now - 60_000, 'c'))
+    storedOperations.set(
+      JOURNAL_KEY,
+      v1Journal([
+        v1Entry(
+          'expired',
+          operationIdAt(now - AGENT_SESSION_MAX_OPERATION_REPLAY_AGE_MS - 60_000, 'd')
+        ),
+        young
+      ])
+    )
     await mountSession()
 
-    await act(async () => {
-      expect(await hook!.sendWithOutcome('old ambiguity')).toBe('unknown')
-      expect(await hook!.sendWithOutcome('old ambiguity')).toBe('rejected')
-      expect(await hook!.sendWithOutcome('old ambiguity')).toBe('rejected')
-    })
-
-    expect(calls()).toHaveLength(3)
-    expect(new Set(sentIds()).size).toBe(1)
+    await vi.waitFor(() => expect(storedOperations.get(JOURNAL_KEY)).toBe(v1Journal([young])))
   })
 
   it('does not retain an id when the action budget expires before dispatch', async () => {
@@ -431,21 +399,24 @@ describe('mobile structured send retries', () => {
     expect(asyncStorage.setItem).not.toHaveBeenCalled()
   })
 
-  it('puts a store that would not take the journal on screen, and sends nothing', async () => {
-    // Inside the page the store is the app's, reached over the `storage` grant, and it rejects a
-    // journal past `PAGE_STORAGE_MAX_VALUE_CHARS` — 48 unsettled sends, measured. A refusal that
-    // resolved instead would put a mutation on the wire carrying an operation id nothing holds,
-    // and a retry after a crash would send this message twice (rulings-ota-c7.md ruling 7).
-    asyncStorage.setItem.mockImplementation(async () => {
-      throw new Error('Orca could not save orca:mobileStructuredSendOperations:v1')
+  it('sends even when the device store refuses every read and write', async () => {
+    asyncStorage.getItem.mockRejectedValue(new Error('storage unavailable'))
+    asyncStorage.setItem.mockRejectedValue(
+      new Error('Orca could not save orca:mobileStructuredSendOperations:v1')
+    )
+    sendRequest.mockImplementation(async (method) => {
+      if (method !== 'agentSession.send') {
+        return method === 'agentSession.options' ? ok({ models: [], current: {} }) : ok({})
+      }
+      return sendResult('accepted')
     })
     await mountSession()
 
     await act(async () => {
-      expect(await hook!.sendWithOutcome('the journal will not take this')).toBe('rejected')
+      expect(await hook!.sendWithOutcome('the store is broken')).toBe('accepted')
     })
 
-    expect(onSendError).toHaveBeenCalledWith('Message not sent')
-    expect(calls()).toHaveLength(0)
+    expect(onSendError).not.toHaveBeenCalled()
+    expect(calls()).toHaveLength(1)
   })
 })

@@ -13,34 +13,28 @@ function accepted(
 }
 
 describe('mobileStructuredSendDelivery', () => {
-  it('keeps the operation id for every unknown, host-recorded or ack-lost', () => {
-    // The one answer that may be a delivery. Spending the id here turns the next
-    // identical send into a second copy in front of the model.
+  it('reports every unknown as unconfirmed, host-recorded or ack-lost', () => {
     expect(mobileStructuredSendDelivery({ status: 'unknown' })).toEqual({
       outcome: 'unknown',
-      operationIdSpent: false,
       error: null
     })
     expect(mobileStructuredSendDelivery(accepted('unknown'))).toEqual({
       outcome: 'unknown',
-      operationIdSpent: false,
       error: null
     })
   })
 
-  it('reports a written send as sent and spends its id', () => {
+  it('reports a written send as sent', () => {
     // `pending` is written and awaiting the provider's acknowledgement — not doubt.
     for (const dispatchState of ['accepted', 'pending'] as const) {
       expect(mobileStructuredSendDelivery(accepted(dispatchState))).toEqual({
         outcome: 'accepted',
-        operationIdSpent: true,
         error: null
       })
     }
   })
 
-  it('classifies a queued draft answer as accepted and spends its id, replays included', () => {
-    // The host holds the message now; a later identical send is a new message.
+  it('classifies a queued draft answer as accepted, replays included', () => {
     for (const state of ['waiting', 'dispatched', 'returned', 'withdrawn'] as const) {
       const queued: StructuredAgentSessionMutationCallResult<AgentSessionSendResult> = {
         status: 'accepted',
@@ -49,38 +43,16 @@ describe('mobileStructuredSendDelivery', () => {
           queued: { messageId: 'client-1', position: 1, state }
         }
       }
-      expect(mobileStructuredSendDelivery(queued)).toEqual({
-        outcome: 'accepted',
-        operationIdSpent: true,
-        error: null
-      })
-      expect(mobileStructuredSendDelivery(queued, true)).toEqual({
-        outcome: 'accepted',
-        operationIdSpent: true,
-        error: null
-      })
+      expect(mobileStructuredSendDelivery(queued)).toEqual({ outcome: 'accepted', error: null })
     }
   })
 
-  it('does not report a retained payload replay as a new accepted send', () => {
-    for (const dispatchState of ['accepted', 'pending'] as const) {
-      expect(mobileStructuredSendDelivery(accepted(dispatchState), true)).toEqual({
-        outcome: 'unknown',
-        operationIdSpent: false,
-        error: null
-      })
-    }
-  })
-
-  it('spends the id of a rejection and withholds its internal reason', () => {
-    // Provably undelivered and terminal, so the id can only replay it: spending the
-    // id makes the retry a first delivery. The marker itself names nothing a person
-    // can act on, so it must not reach the screen.
+  it('withholds the internal reason of a rejection', () => {
+    // The marker names nothing a person can act on, so it must not reach the screen.
     expect(
       mobileStructuredSendDelivery(accepted('rejected', 'provider_write_failed: broken pipe'))
     ).toEqual({
       outcome: 'rejected',
-      operationIdSpent: true,
       error: "Orca couldn't reach the agent. Your message was not sent. Send it again."
     })
   })
@@ -90,33 +62,32 @@ describe('mobileStructuredSendDelivery', () => {
       mobileStructuredSendDelivery(accepted('rejected', 'Claude does not support .bmp'))
     ).toEqual({
       outcome: 'rejected',
-      operationIdSpent: true,
       error: 'Claude does not support .bmp'
     })
   })
 
-  it('spends only refusals that prove the operation is settled', () => {
+  it('reports only an unknown-outcome refusal as unconfirmed', () => {
     expect(
       mobileStructuredSendDelivery({
         status: 'refused',
         code: 'agent_session_operation_invalid',
         message: 'Invalid operation'
       })
-    ).toEqual({ outcome: 'rejected', operationIdSpent: true, error: 'Invalid operation' })
+    ).toEqual({ outcome: 'rejected', error: 'Invalid operation' })
     expect(
       mobileStructuredSendDelivery({
         status: 'refused',
         code: 'agent_session_checkpoint_stale',
         message: 'Fence moved'
       })
-    ).toEqual({ outcome: 'rejected', operationIdSpent: false, error: 'Fence moved' })
+    ).toEqual({ outcome: 'rejected', error: 'Fence moved' })
     expect(
       mobileStructuredSendDelivery({
         status: 'refused',
         code: 'agent_session_operation_unknown',
         message: 'Outcome unknown'
       })
-    ).toEqual({ outcome: 'unknown', operationIdSpent: false, error: null })
+    ).toEqual({ outcome: 'unknown', error: null })
     expect(
       mobileStructuredSendDelivery({
         status: 'failed',
@@ -124,30 +95,6 @@ describe('mobileStructuredSendDelivery', () => {
       })
     ).toEqual({
       outcome: 'rejected',
-      operationIdSpent: true,
-      error: 'Your message was not sent. Send it again.'
-    })
-  })
-
-  it('never releases an ambiguous id on a later RPC refusal or failure', () => {
-    expect(
-      mobileStructuredSendDelivery(
-        {
-          status: 'refused',
-          code: 'agent_session_operation_expired',
-          message: 'Operation expired'
-        },
-        true
-      )
-    ).toEqual({ outcome: 'rejected', operationIdSpent: false, error: 'Operation expired' })
-    expect(
-      mobileStructuredSendDelivery(
-        { status: 'failed', message: 'Your message was not sent. Send it again.' },
-        true
-      )
-    ).toEqual({
-      outcome: 'rejected',
-      operationIdSpent: false,
       error: 'Your message was not sent. Send it again.'
     })
   })
@@ -159,7 +106,6 @@ describe('mobileStructuredSendDelivery', () => {
     } as unknown as StructuredAgentSessionMutationCallResult<AgentSessionSendResult>
     expect(mobileStructuredSendDelivery(result)).toEqual({
       outcome: 'unknown',
-      operationIdSpent: false,
       error: null
     })
   })
