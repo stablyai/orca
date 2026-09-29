@@ -13,7 +13,8 @@ import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
   buildWindowsHookEnvironmentGuardLines,
-  buildWindowsHookStdinDrainEpilogue
+  buildWindowsHookStdinDrainEpilogue,
+  type PosixHookSpoolPersistence
 } from '../agent-hooks/hook-stdin-contract'
 
 export function getManagedScript(
@@ -22,6 +23,7 @@ export function getManagedScript(
     source?: AgentHookSource
     skipWhenDevinImportsClaude?: boolean
     skipWhenGrokImportsClaude?: boolean
+    spoolPersistence?: PosixHookSpoolPersistence
   } = {}
 ): string {
   const source = options.source ?? 'claude'
@@ -62,7 +64,11 @@ export function getManagedScript(
     'printf "{}\\n"',
     ...buildPosixHookPayloadCapture(),
     ...(options.skipWhenGrokImportsClaude ? buildPosixGrokReplayGuardLines() : []),
-    ...buildPosixHookSpoolLines(source),
+    ...buildPosixHookSpoolLines(
+      source,
+      undefined,
+      options.spoolPersistence ?? (source === 'claude' ? 'disabled' : 'full')
+    ),
     ...(options.skipWhenDevinImportsClaude
       ? [
           // Why: Devin imports .claude hooks by default; skip Orca's managed hook there so status posts stay attributed to Devin.

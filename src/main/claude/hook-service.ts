@@ -132,6 +132,7 @@ export class ClaudeHookService {
       getManagedScriptPath(this.options.settings),
       getManagedScript('local', {
         source: this.options.source,
+        spoolPersistence: this.options.agent === 'claude' ? 'disabled' : 'full',
         skipWhenDevinImportsClaude: this.options.agent === 'claude',
         skipWhenGrokImportsClaude: this.options.agent === 'claude'
       })
@@ -169,6 +170,7 @@ export class ClaudeHookService {
       scriptPath,
       getManagedScript('local', {
         source: this.options.source,
+        spoolPersistence: this.options.agent === 'claude' ? 'disabled' : 'full',
         skipWhenDevinImportsClaude: this.options.agent === 'claude',
         skipWhenGrokImportsClaude: this.options.agent === 'claude'
       })
@@ -262,6 +264,7 @@ export class ClaudeHookService {
         remoteScriptPath,
         getManagedScript('posix', {
           source: this.options.source,
+          spoolPersistence: this.options.agent === 'claude' ? 'disabled' : 'full',
           skipWhenDevinImportsClaude: this.options.agent === 'claude',
           skipWhenGrokImportsClaude: this.options.agent === 'claude'
         })

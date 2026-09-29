@@ -2,14 +2,17 @@ import { describe, expect, it } from 'vitest'
 import {
   appendFileSync,
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
+  rmSync,
   statSync,
   writeFileSync
 } from 'node:fs'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
+import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -22,8 +25,36 @@ import {
 import { AgentHookServer, _internals } from './server'
 import { buildBody } from './server.test-fixtures'
 import { _internals as codexInternals } from '../codex/hook-service'
+import { getManagedScript as getClaudeScript } from '../claude/hook-script'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { buildPosixHookSpoolLines } from './hook-stdin-contract'
+
+function runPosixHook(script: string, input: string, env: NodeJS.ProcessEnv): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn('/bin/sh', [script], { env, stdio: ['pipe', 'ignore', 'pipe'] })
+    let stderr = ''
+    const timeout = setTimeout(() => {
+      child.kill('SIGKILL')
+      reject(new Error('managed hook did not exit'))
+    }, 15_000)
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString()
+    })
+    child.on('error', (error) => {
+      clearTimeout(timeout)
+      reject(error)
+    })
+    child.on('close', (code) => {
+      clearTimeout(timeout)
+      if (code === 0) {
+        resolve()
+      } else {
+        reject(new Error(`managed hook exited ${code}: ${stderr}`))
+      }
+    })
+    child.stdin.end(input)
+  })
+}
 
 describe('agent hook spool', () => {
   it('appends each record with one printf write to prevent concurrent field interleaving', () => {
@@ -33,6 +64,14 @@ describe('agent hook spool', () => {
     expect(spoolLine).toBeDefined()
     expect(spoolLine!.match(/printf/g)).toHaveLength(1)
     expect(spoolLine).toContain('"$spool_now" "$payload"')
+  })
+
+  it('can disable durable persistence without changing the fallback call contract', () => {
+    expect(buildPosixHookSpoolLines('codex', undefined, 'disabled')).toEqual([
+      'spool_hook_event() {',
+      '  return 0',
+      '}'
+    ])
   })
 
   it('drops torn lines while retaining complete records', () => {
@@ -219,7 +258,7 @@ describe('agent hook spool', () => {
     }
   })
 
-  it('spools when the endpoint is present but the receiver is unavailable', () => {
+  it('does not spool Codex payloads when the receiver is unavailable', () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-spool-failure-'))
     const endpointDir = join(dir, 'agent-hooks')
     mkdirSync(endpointDir, { recursive: true })
@@ -242,12 +281,82 @@ describe('agent hook spool', () => {
       },
       timeout: 5000
     })
-    const spoolFiles = readdirSync(join(endpointDir, 'spool'))
-    expect(spoolFiles).toHaveLength(1)
-    expect(readFileSync(join(endpointDir, 'spool', spoolFiles[0]!), 'utf8')).toContain(
-      'SubagentStop'
-    )
+    expect(readdirSync(endpointDir)).toEqual(['endpoint.env'])
   })
+
+  it.skipIf(process.platform === 'win32').each([
+    { agent: 'Claude', script: () => getClaudeScript('posix') },
+    { agent: 'Codex', script: () => codexInternals.getManagedScript('posix') }
+  ])(
+    'still delivers $agent payloads to a live loopback receiver without persistence',
+    async (entry) => {
+      const dir = mkdtempSync(join(tmpdir(), 'orca-spool-live-'))
+      const endpointDir = join(dir, 'agent-hooks')
+      mkdirSync(endpointDir, { recursive: true })
+      const server = createServer()
+      let requestTimeout: NodeJS.Timeout | undefined
+      try {
+        await new Promise<void>((resolve, reject) => {
+          server.once('error', reject)
+          server.listen(0, '127.0.0.1', resolve)
+        })
+        const received = new Promise<{ body: string; token: string | undefined }>(
+          (resolve, reject) => {
+            requestTimeout = setTimeout(
+              () => reject(new Error('managed hook did not post')),
+              15_000
+            )
+            server.on('request', (request, response) => {
+              const chunks: Buffer[] = []
+              request.on('data', (chunk: Buffer) => chunks.push(chunk))
+              request.on('end', () => {
+                response.statusCode = 204
+                response.end()
+                const tokenHeader = request.headers['x-orca-agent-hook-token']
+                resolve({
+                  body: Buffer.concat(chunks).toString('utf8'),
+                  token: typeof tokenHeader === 'string' ? tokenHeader : undefined
+                })
+              })
+            })
+          }
+        )
+        const address = server.address()
+        if (!address || typeof address === 'string') {
+          throw new Error('loopback listener did not expose a TCP port')
+        }
+        const endpoint = join(endpointDir, 'endpoint.fixture')
+        writeFileSync(
+          endpoint,
+          `ORCA_AGENT_HOOK_PORT=${address.port}\nORCA_AGENT_HOOK_TOKEN=synthetic-token\nORCA_AGENT_HOOK_ENV=test\nORCA_AGENT_HOOK_VERSION=1\nORCA_AGENT_HOOK_TRANSPORT=raw-json-v1\n`
+        )
+        const script = join(dir, 'codex-hook.sh')
+        writeFileSync(script, entry.script())
+        chmodSync(script, 0o755)
+        const payload = '{"hook_event_name":"SubagentStop","agent_id":"synthetic-child"}'
+        const [, posted] = await Promise.all([
+          runPosixHook(script, `${payload}\n`, {
+            PATH: '/usr/bin:/bin:/usr/sbin:/sbin',
+            ORCA_AGENT_HOOK_ENDPOINT: endpoint,
+            ORCA_PANE_KEY: 'tab-live:0',
+            ORCA_TAB_ID: 'tab-live',
+            ORCA_AGENT_LAUNCH_TOKEN: 'synthetic-generation'
+          }),
+          received
+        ])
+        expect(posted).toEqual({ body: payload, token: 'synthetic-token' })
+        expect(existsSync(join(endpointDir, 'spool'))).toBe(false)
+      } finally {
+        if (requestTimeout) {
+          clearTimeout(requestTimeout)
+        }
+        if (server.listening) {
+          await new Promise<void>((resolve) => server.close(() => resolve()))
+        }
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+  )
 
   it('does not mark a non-terminal downtime replay as runtime-observed', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-spool-observed-'))
