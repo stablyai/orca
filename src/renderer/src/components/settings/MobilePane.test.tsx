@@ -12,6 +12,8 @@ import {
   type PairedMobileDevice
 } from '../mobile/paired-mobile-devices'
 import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
+import type { MobileRelayStatusDetail } from '../../../../shared/mobile-relay-status'
+import type { MobileRelayProvider } from '../../../../shared/mobile-relay-provider'
 
 type PairedDevice = PairedMobileDevice
 
@@ -27,6 +29,7 @@ type StoreState = {
   settings: {
     mobileAutoRestoreFitMs: number | null
     mobilePairingConnectionMode?: MobilePairingConnectionMode
+    mobilePairingRelayProvider?: MobileRelayProvider
     mobilePairingCustomAddress?: string | null
     mobilePairingCustomAddresses?: string[]
   }
@@ -220,6 +223,32 @@ describe('MobilePane pairing connection mode', () => {
 
     await user.click(screen.getByRole('button', { name: 'Generate' }))
     await waitFor(() => expect(getPairingQR).toHaveBeenCalledWith({ connectionMode: 'automatic' }))
+  })
+
+  it('pairs through self-hosted Relay while signed out and clears its code when removed', async () => {
+    mocks.holder.state.orcaProfileAuthStatus = { state: 'local' }
+    mocks.holder.state.settings.mobilePairingRelayProvider = 'self-hosted'
+    window.api.mobile.getRelayStatus = vi.fn().mockResolvedValue({
+      status: 'offline',
+      selfHosted: { configured: true, status: 'standby', configurationId: 'first' }
+    })
+    let publish = (_status: MobileRelayStatusDetail): void => {}
+    window.api.mobile.onRelayStatusChanged = (listener) => {
+      publish = listener
+      return vi.fn()
+    }
+    const user = userEvent.setup()
+    render(<MobilePane />)
+    await waitFor(() => expect(screen.getByTestId('can-generate')).toHaveTextContent('true'))
+    await user.click(screen.getByRole('button', { name: 'Generate' }))
+    expect(getPairingQR).toHaveBeenCalledWith({
+      connectionMode: 'automatic',
+      relayProvider: 'self-hosted'
+    })
+    await waitFor(() => expect(screen.getByTestId('pairing-url')).toHaveTextContent('orca://pair'))
+    act(() => publish({ status: 'offline', selfHosted: { configured: false, status: 'offline' } }))
+    expect(screen.getByTestId('pairing-url')).toHaveTextContent('none')
+    expect(screen.getByTestId('can-generate')).toHaveTextContent('false')
   })
 
   it('keeps Anywhere selected but blocks generation when signed out', async () => {

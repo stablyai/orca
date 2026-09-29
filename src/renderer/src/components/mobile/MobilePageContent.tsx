@@ -12,7 +12,7 @@ import { getInstallCopy, type IosChannel } from './mobile-platform-copy'
 import type { MobilePageStage } from './mobile-page-stage'
 import { MobilePageToolbar } from './MobilePageToolbar'
 import { PhoneCarousel } from './PhoneCarousel'
-import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
+import type { MobilePairingPath } from '../../../../shared/mobile-pairing-path'
 import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
 
 type MobilePageContentProps = {
@@ -40,8 +40,8 @@ type MobilePageContentProps = {
   openInstallUrl: () => void
   pairAnotherDevice: () => void
   pairLoading: boolean
-  connectionMode: MobilePairingConnectionMode
-  handleConnectionModeChange: (mode: MobilePairingConnectionMode) => void
+  connectionMode: MobilePairingPath
+  handleConnectionModeChange: (mode: MobilePairingPath) => void
   pairQrDataUrl: string | null
   pairQrSize: number | null
   pairingUrl: string | null

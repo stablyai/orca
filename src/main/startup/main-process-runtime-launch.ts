@@ -14,7 +14,7 @@ import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-types'
 import { OffscreenBrowserBackend } from '../browser/offscreen-browser-backend'
 import { browserManager } from '../browser/browser-manager'
 import { getDesktopRelayStatus, publishDesktopRelayStatus } from './main-process-relay-status'
-import { DesktopRelayService } from '../runtime/relay/desktop-relay-service'
+import { DesktopRelayProviders } from '../runtime/relay/desktop-relay-providers'
 import { getServeOptions, getBundledWebClientRoot, printServeReady } from './main-process-serve'
 import {
   bindTerminalRuntimeStartupServices,
@@ -96,6 +96,17 @@ function installRuntimeRpc(
   state.runtimeRpc = runtimeRpc
   registerMobileHandlers(runtimeRpc, {
     getRelayStatus: getDesktopRelayStatus,
+    configureSelfHostedRelay: (settings) => {
+      const service = state.desktopRelayService
+      if (!service) {
+        throw new Error('Relay is not ready. Try again after startup.')
+      }
+      if (settings) {
+        service.saveSelfHosted(settings)
+      } else {
+        service.removeSelfHosted()
+      }
+    },
     consumePendingUnpairedDeviceAuthFailure: (webContentsId) => {
       if (
         !state.mainWindow ||
@@ -253,33 +264,25 @@ async function launchDesktopMode(
   // issue its first request ahead of the persisted proxy.
   startDesktopPushService(runtimeRpc)
   const cloudAuth = getOrcaCloudAuthConfig()
-  if (cloudAuth.configured) {
-    try {
-      const relayService = new DesktopRelayService({
-        authConfig: cloudAuth.config,
-        userDataPath: getProfileUserDataPath(),
-        appVersion: app.getVersion(),
-        runtimeRpc,
-        onStatus: publishDesktopRelayStatus
-      })
-      state.desktopRelayService = relayService
-      runtimeRpc.setMobileRelayPairingProvider({
-        createPairingRelay: (relayDeviceId) => relayService.createPairingRelay(relayDeviceId),
-        onDeviceRevokeQueued: (item) => relayService.onDeviceRevokeQueued(item),
-        onDemandStateChanged: () => relayService.demandStateChanged(),
-        getEndpoints: (context, params) => relayService.getEndpoints(context, params),
-        provisionRelay: (context, params) => relayService.provisionRelay(context, params)
-      })
-      relayService.start()
-      // Why: sleeping past relay-token expiry kills the broker with no retry
-      // timer; resume is the moment that state becomes recoverable.
-      powerMonitor.on('resume', () => state.desktopRelayService?.ensureLive())
-    } catch (error) {
-      console.warn(
-        '[relay] Desktop relay startup unavailable:',
-        error instanceof Error ? error.message : String(error)
-      )
-    }
+  try {
+    const relayService = new DesktopRelayProviders({
+      authConfig: cloudAuth.configured ? cloudAuth.config : undefined,
+      userDataPath: getProfileUserDataPath(),
+      settingsPath: getCanonicalUserDataPath(),
+      packaged: app.isPackaged,
+      appVersion: app.getVersion(),
+      runtimeRpc,
+      onStatus: publishDesktopRelayStatus
+    })
+    state.desktopRelayService = relayService
+    runtimeRpc.setMobileRelayPairingProvider(relayService)
+    relayService.start()
+    powerMonitor.on('resume', () => state.desktopRelayService?.ensureLive())
+  } catch (error) {
+    console.warn(
+      '[relay] Desktop relay startup unavailable:',
+      error instanceof Error ? error.message : String(error)
+    )
   }
   // Why: macOS notification permission dialog must fire after the window is shown, else it's hidden behind the maximized window.
   win.once('show', () => {

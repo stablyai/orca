@@ -4,7 +4,7 @@ export type MobilePairingConnectionMode = 'automatic' | 'local-only'
  * Resolve the pairing path to show / remember.
  *
  * - Explicit saved preference wins (user already chose).
- * - Otherwise default to Anywhere (`automatic`). Relay still requires sign-in
+ * - Otherwise default to Anywhere (`automatic`). Relay still requires authorization
  *   at QR time; the UI can keep Anywhere selected while signed out.
  */
 export function resolveMobilePairingConnectionMode(
@@ -15,13 +15,13 @@ export function resolveMobilePairingConnectionMode(
 
 /**
  * Mode encoded into a pairing QR. Anywhere cannot be committed without a
- * signed-in desktop session for Relay.
+ * Cloud session or self-hosted Relay key.
  */
 export function effectiveMobilePairingConnectionMode(args: {
   preferred: MobilePairingConnectionMode
-  signedIn: boolean
+  relayAuthorized: boolean
 }): MobilePairingConnectionMode {
-  if (args.preferred === 'automatic' && !args.signedIn) {
+  if (args.preferred === 'automatic' && !args.relayAuthorized) {
     return 'local-only'
   }
   return args.preferred
@@ -29,13 +29,13 @@ export function effectiveMobilePairingConnectionMode(args: {
 
 /**
  * Whether a scannable pairing offer may be minted for the selected path. Anywhere
- * (Relay) needs a signed-in desktop; minting a local-only QR under the Relay
+ * (Relay) needs desktop authorization; minting a local-only QR under the Relay
  * label would misrepresent what the code encodes, so both surfaces gate
  * generation on this rather than silently degrading to local-only.
  */
 export function canMintMobilePairingOffer(args: {
-  connectionMode: MobilePairingConnectionMode
-  signedIn: boolean
+  connectionMode: MobilePairingConnectionMode | 'self-hosted'
+  relayAuthorized: boolean
 }): boolean {
-  return !(args.connectionMode === 'automatic' && !args.signedIn)
+  return args.connectionMode === 'local-only' || args.relayAuthorized
 }

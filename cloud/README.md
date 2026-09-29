@@ -124,5 +124,11 @@ docker rm -f orca-relay-pg
 ```
 
 Configuration is read from environment variables validated in
-`apps/relay/src/config.ts`. `ORCA_RELAY_ASSIGNMENT_SIGNING_KEY` (at least 32
-bytes) is the only required value; everything else has a local default.
+`apps/relay/src/config.ts`. Both advertised URLs and an assignment signing key
+are required. Cloud mode also requires an issuer, JWKS URL and administration
+identity; self-hosted mode uses the owner access key described below.
+
+## Self-hosted mobile Relay
+
+For a single-server relay without Cloud authentication, see
+[Self-hosted mobile Relay](./self-hosted/README.md).

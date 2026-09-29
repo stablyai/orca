@@ -7,10 +7,10 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { NetworkInterfacePicker } from '../mobile/NetworkInterfacePicker'
 import type { MobileNetworkInterface } from './mobile-network-interface-selection'
-import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
+import type { MobilePairingPath } from '../../../../shared/mobile-pairing-path'
 
 type MobilePairingSetupSectionProps = {
-  connectionMode: MobilePairingConnectionMode
+  connectionMode: MobilePairingPath
   /** False when Anywhere is selected but Relay cannot be committed yet. */
   canGenerate?: boolean
   /** Reveals the Relay address disclosure when a settings search matches it. */
@@ -50,7 +50,7 @@ export function MobilePairingSetupSection({
   showGenerateAction = true,
   onGenerateQr
 }: MobilePairingSetupSectionProps): React.JSX.Element {
-  const usingRelay = connectionMode === 'automatic'
+  const usingRelay = connectionMode !== 'local-only'
   const [addressDisclosureOpen, setAddressDisclosureOpen] = useState(false)
   // A search hit or a custom address pins the picker open: render it outright
   // rather than behind a trigger that could not collapse it anyway.

@@ -44,6 +44,7 @@ export class RelaySessionBroker {
       keypair: options.keypair,
       appVersion: options.appVersion,
       mobileSocketWiring: options.mobileSocketWiring,
+      relayProvider: options.relayProvider,
       isCurrent: () => this.isCurrent(),
       onStatus: (status) => this.publishStatus(status),
       resolvePreferredRegion: options.resolvePreferredRegion,

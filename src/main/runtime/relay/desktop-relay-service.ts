@@ -1,4 +1,3 @@
-import type { OrcaCloudAuthConfig } from '../../orca-profiles/profile-cloud-auth-config'
 import type { MobilePairingConnectionContext, OrcaRuntimeRpcServer } from '../runtime-rpc'
 import type {
   DeviceCredentialInstalled,
@@ -6,8 +5,10 @@ import type {
   PairingGetEndpointsResult,
   PairingProvisionRelayParams
 } from '../../../shared/mobile-relay-credential-contract'
-import type { RelayHostCloseReason } from '../../../shared/relay-host-close-reason'
-import { readRelayAuthContext } from './relay-auth-context'
+import {
+  RELAY_HOST_CLOSE_REASON,
+  type RelayHostCloseReason
+} from '../../../shared/relay-host-close-reason'
 import { RelayAuthCoordinator } from './relay-auth-coordinator'
 import { RelaySessionBroker, type RelayBrokerStatus } from './relay-session-broker'
 import type { PairingRelay } from '../../../shared/mobile-relay-pairing-offer'
@@ -19,11 +20,12 @@ import type {
 import type { DeviceCredentialInstallAuthorization } from './relay-control-requests'
 import { deriveRelayHostId } from './relay-http-client'
 import { RelayDemandLedger } from './relay-demand-ledger'
-import { createRelayRegionPreferenceReader } from './relay-region-preference-reader'
+import {
+  createDesktopRelayAuthOptions,
+  type DesktopRelayAuthOptions
+} from './desktop-relay-auth-options'
 
-type DesktopRelayServiceOptions = {
-  authConfig: OrcaCloudAuthConfig
-  userDataPath: string
+type DesktopRelayServiceOptions = DesktopRelayAuthOptions & {
   appVersion: string
   runtimeRpc: OrcaRuntimeRpcServer
   onStatus: (status: RelayBrokerStatus, cellUrl?: string) => void
@@ -50,6 +52,7 @@ export function pairingAuthorizationForContext(
 const RELAY_LIVENESS_INTERVAL_MS = 5 * 60_000
 
 export class DesktopRelayService {
+  readonly selfHosted: boolean
   private readonly coordinator: RelayAuthCoordinator
   private readonly revokeOutbox: RelayRevokeOutbox
   private readonly runtimeRpc: OrcaRuntimeRpcServer
@@ -59,6 +62,8 @@ export class DesktopRelayService {
   private stopped = false
 
   constructor(options: DesktopRelayServiceOptions) {
+    this.selfHosted = options.selfHosted !== undefined
+    const auth = createDesktopRelayAuthOptions(options)
     const keypair = options.runtimeRpc.getE2EEKeypair()
     const mobileSocketWiring = options.runtimeRpc.getMobileSocketWiring()
     if (!keypair || !mobileSocketWiring) {
@@ -71,16 +76,16 @@ export class DesktopRelayService {
       revokeOutbox: this.revokeOutbox,
       relayHostId: deriveRelayHostId(keypair.publicKey)
     })
-    const regionPreference = createRelayRegionPreferenceReader(options)
     this.coordinator = new RelayAuthCoordinator({
-      readContext: () => readRelayAuthContext(options.authConfig, options.userDataPath),
+      readContext: auth.readContext,
       hasDemand: ({ identity }) =>
         this.demandLedger.hasDemand(
           `${identity.userId}\0${identity.profileId}\0${identity.organizationId}`
         ),
       openBroker: async ({ context, isCurrent, refreshAccessToken }) => {
         const broker = await RelaySessionBroker.connect({
-          authConfig: options.authConfig,
+          ...auth.brokerOptions,
+          relayProvider: this.selfHosted ? 'self-hosted' : 'official',
           accessToken: context.accessToken,
           identity: context.identity,
           keypair,
@@ -88,9 +93,6 @@ export class DesktopRelayService {
           mobileSocketWiring,
           isCurrent,
           refreshAccessToken,
-          resolvePreferredRegion: regionPreference.resolvePreferredRegion,
-          measureRegionDecision: regionPreference.measureRegionDecision,
-          onAssignedCellActive: regionPreference.noteAssignedCell,
           onStatus: options.onStatus
         })
         void this.flushRevokeOutbox(broker)
@@ -111,11 +113,10 @@ export class DesktopRelayService {
     }
   }
 
-  authMutated(): void {
-    this.refreshDemand()
-  }
-
   fenceAndCloseNow(hostCloseReason?: RelayHostCloseReason): void {
+    if (this.selfHosted && hostCloseReason === RELAY_HOST_CLOSE_REASON.SIGNED_OUT) {
+      return
+    }
     // Why: a fence must be hard — a surviving liveness tick could catch the
     // window between the pre-sign-out fence and the profile wipe and briefly
     // resurrect a broker. The next auth mutation re-arms via refreshDemand.

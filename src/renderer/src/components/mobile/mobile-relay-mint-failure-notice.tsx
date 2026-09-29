@@ -13,6 +13,7 @@ export function MobileRelayMintFailureNotice({
   onCopyDiagnostics,
   className,
   compact = false,
+  selfHosted = false,
   busy = false
 }: {
   failure: MobileRelayMintFailure
@@ -22,11 +23,12 @@ export function MobileRelayMintFailureNotice({
   className?: string
   compact?: boolean
   busy?: boolean
+  selfHosted?: boolean
 }): React.JSX.Element {
   const providerMissing = failure.stage === 'provider_missing'
   // Why: a revoked cloud session fails every mint; "retry or use LAN" hides the one action that works.
   const reconnectRequired = useAppStore(
-    (state) => state.orcaProfileAuthStatus?.state === 'reconnect-required'
+    (state) => !selfHosted && state.orcaProfileAuthStatus?.state === 'reconnect-required'
   )
   const [showBusyFeedback, setShowBusyFeedback] = useState(false)
   useEffect(() => {
@@ -38,25 +40,30 @@ export function MobileRelayMintFailureNotice({
     return () => window.clearTimeout(timer)
   }, [busy])
   const visibleBusy = busy && showBusyFeedback
-  const title = visibleBusy
+  const title = selfHosted
     ? translate(
-        'auto.components.mobile.MobileRelayMintFailureNotice.retryingTitle',
-        'Retrying Orca Relay…'
+        'mobile.selfHostedRelay.mintFailed',
+        'Couldn’t create a self-hosted Relay pairing code.'
       )
-    : providerMissing
+    : visibleBusy
       ? translate(
-          'auto.components.mobile.MobileRelayMintFailureNotice.unavailableTitle',
-          'Orca Relay isn’t available on this desktop.'
+          'auto.components.mobile.MobileRelayMintFailureNotice.retryingTitle',
+          'Retrying Orca Relay…'
         )
-      : reconnectRequired
+      : providerMissing
         ? translate(
-            'auto.components.mobile.MobileRelayMintFailureNotice.reconnectTitle',
-            'Your Orca account session expired.'
+            'auto.components.mobile.MobileRelayMintFailureNotice.unavailableTitle',
+            'Orca Relay isn’t available on this desktop.'
           )
-        : translate(
-            'auto.components.mobile.MobileRelayMintFailureNotice.title',
-            'Couldn’t create a Relay pairing code.'
-          )
+        : reconnectRequired
+          ? translate(
+              'auto.components.mobile.MobileRelayMintFailureNotice.reconnectTitle',
+              'Your Orca account session expired.'
+            )
+          : translate(
+              'auto.components.mobile.MobileRelayMintFailureNotice.title',
+              'Couldn’t create a Relay pairing code.'
+            )
   const body = visibleBusy
     ? translate(
         'auto.components.mobile.MobileRelayMintFailureNotice.retryingBody',

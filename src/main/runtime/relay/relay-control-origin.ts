@@ -43,6 +43,7 @@ export class RelayControlOrigin {
       relayHostId: options.relayHostId,
       generation: 0,
       createSocket: options.createDataSocket,
+      relayProvider: options.relayProvider,
       onConnectionClosed: (connectionId) => options.onConnectionReleased(connectionId, this)
     })
     this.detachMobileSocketTransport = options.mobileSocketWiring.attachTransport(

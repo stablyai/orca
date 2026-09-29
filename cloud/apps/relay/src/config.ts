@@ -48,9 +48,15 @@ const EnvSchema = z.object({
   PORT: z.coerce.number().int().positive().default(8080),
   ORCA_RELAY_PUBLIC_URL: z.string().url(),
   ORCA_RELAY_CELL_URL: z.string().url(),
-  ORCA_RELAY_AUTH_ISSUER: z.string().url(),
+  ORCA_RELAY_AUTH_ISSUER: z.string().url().optional(),
   ORCA_RELAY_AUTH_AUDIENCE: z.literal('orca-relay').default('orca-relay'),
-  ORCA_RELAY_JWKS_URL: z.string().url(),
+  ORCA_RELAY_JWKS_URL: z.string().url().optional(),
+  ORCA_RELAY_SELF_HOSTED_KEY: z
+    .string()
+    .min(32)
+    .max(256)
+    .regex(/^[A-Za-z0-9_-]+$/)
+    .optional(),
   ORCA_RELAY_ASSIGNMENT_SIGNING_KEY: z.string().min(32),
   ORCA_RELAY_ROLE: z.enum(['combined', 'director', 'cell']).default('combined'),
   ORCA_RELAY_CELL_ID: z.string().min(1).max(128).default('combined'),
@@ -73,8 +79,8 @@ const EnvSchema = z.object({
     .max(RELAY_MAX_CELL_CONNECTION_UNOBSERVED_BOUND)
     .optional(),
   ORCA_RELAY_CELLS_JSON: z.string().default('[]'),
-  ORCA_RELAY_ADMIN_AUDIENCE: z.string().url(),
-  ORCA_RELAY_DEPLOY_SERVICE_ACCOUNT: z.string().email(),
+  ORCA_RELAY_ADMIN_AUDIENCE: z.string().url().optional(),
+  ORCA_RELAY_DEPLOY_SERVICE_ACCOUNT: z.string().email().optional(),
   ORCA_RELAY_CAPACITY_SERVICE_ACCOUNT: OptionalServiceAccountSchema,
   ORCA_RELAY_ASIA_PROOF_SERVICE_ACCOUNT: OptionalServiceAccountSchema,
   ORCA_RELAY_MONITOR_SERVICE_ACCOUNT: OptionalServiceAccountSchema,
@@ -131,6 +137,32 @@ const EnvSchema = z.object({
   ORCA_RELAY_DATA_DIR: z.string().default('./data/relay')
 })
 
+function validateAuthentication(env: z.infer<typeof EnvSchema>): void {
+  if (env.ORCA_RELAY_SELF_HOSTED_KEY) {
+    if (env.ORCA_RELAY_SELF_HOSTED_KEY === env.ORCA_RELAY_ASSIGNMENT_SIGNING_KEY) {
+      throw new Error('self-hosted relay requires different owner and signing keys')
+    }
+    if (
+      env.ORCA_RELAY_ROLE !== 'combined' ||
+      env.ORCA_RELAY_PUBLIC_URL !== env.ORCA_RELAY_CELL_URL
+    ) {
+      throw new Error('self-hosted relay requires one combined public origin')
+    }
+    if (env.ORCA_RELAY_AUTH_ISSUER || env.ORCA_RELAY_JWKS_URL || env.ORCA_RELAY_DIRECTOR_URL) {
+      throw new Error('self-hosted relay cannot use external host authentication or a director')
+    }
+    return
+  }
+  for (const name of [
+    'ORCA_RELAY_AUTH_ISSUER',
+    'ORCA_RELAY_JWKS_URL',
+    'ORCA_RELAY_ADMIN_AUDIENCE',
+    'ORCA_RELAY_DEPLOY_SERVICE_ACCOUNT'
+  ] as const) {
+    if (!env[name]) throw new Error(`${name} is required for Cloud authentication`)
+  }
+}
+
 const RelayCellConfigSchema = z
   .object({
     id: z.string().min(1).max(128),
@@ -179,14 +211,15 @@ export type RelayConfig = {
   cellUrl: string
   authIssuer: string
   authAudience: 'orca-relay'
-  jwksUrl: string
+  jwksUrl?: string
+  selfHostedKey?: string
   assignmentSigningKey: Uint8Array
   role: 'combined' | 'director' | 'cell'
   cellId: string
   region?: RelayRegion
   cells: RelayCellConfig[]
   adminAudience: string
-  deployServiceAccount: string
+  deployServiceAccount?: string
   capacityServiceAccount?: string
   asiaProofServiceAccount?: string
   monitorServiceAccount?: string
@@ -194,7 +227,7 @@ export type RelayConfig = {
   fenceBrokerServiceAccount?: string
   rehomeDirectorServiceAccount?: string
   rehomeAudience?: string
-  runtimeServiceAccount: string
+  runtimeServiceAccount?: string
   directorUrl?: string
   heartbeatAudience?: string
   imageDigest?: string
@@ -233,6 +266,7 @@ function canonicalOrigin(value: string, name: string): string {
 
 export function loadRelayConfig(env: NodeJS.ProcessEnv = process.env): RelayConfig {
   const parsed = EnvSchema.parse(env)
+  validateAuthentication(parsed)
   const adminServiceAccounts = [
     parsed.ORCA_RELAY_DEPLOY_SERVICE_ACCOUNT,
     parsed.ORCA_RELAY_CAPACITY_SERVICE_ACCOUNT,
@@ -322,15 +356,19 @@ export function loadRelayConfig(env: NodeJS.ProcessEnv = process.env): RelayConf
     port: parsed.PORT,
     publicUrl,
     cellUrl: ownCell.url,
-    authIssuer: canonicalOrigin(parsed.ORCA_RELAY_AUTH_ISSUER, 'ORCA_RELAY_AUTH_ISSUER'),
+    authIssuer: canonicalOrigin(
+      parsed.ORCA_RELAY_AUTH_ISSUER ?? publicUrl,
+      'ORCA_RELAY_AUTH_ISSUER'
+    ),
     authAudience: parsed.ORCA_RELAY_AUTH_AUDIENCE,
     jwksUrl: parsed.ORCA_RELAY_JWKS_URL,
+    selfHostedKey: parsed.ORCA_RELAY_SELF_HOSTED_KEY,
     assignmentSigningKey: new TextEncoder().encode(parsed.ORCA_RELAY_ASSIGNMENT_SIGNING_KEY),
     role: parsed.ORCA_RELAY_ROLE,
     cellId: ownCell.id,
     region: ownCell.region,
     cells,
-    adminAudience: parsed.ORCA_RELAY_ADMIN_AUDIENCE,
+    adminAudience: parsed.ORCA_RELAY_ADMIN_AUDIENCE ?? publicUrl,
     deployServiceAccount: parsed.ORCA_RELAY_DEPLOY_SERVICE_ACCOUNT,
     capacityServiceAccount: parsed.ORCA_RELAY_CAPACITY_SERVICE_ACCOUNT,
     asiaProofServiceAccount: parsed.ORCA_RELAY_ASIA_PROOF_SERVICE_ACCOUNT,

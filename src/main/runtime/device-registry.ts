@@ -14,6 +14,7 @@ import type { DeviceScope } from '../../shared/runtime-types'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
 import type { RelayDeviceBinding } from './relay/relay-revoke-outbox'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
+import type { MobileRelayProvider } from '../../shared/mobile-relay-provider'
 import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
 import {
   parseMobilePushRegistration,
@@ -31,6 +32,7 @@ export type DeviceEntry = {
   lastSeenAt: number
   relayBinding?: RelayDeviceBinding
   mobilePairingConnectionMode?: MobilePairingConnectionMode
+  mobileRelayProvider?: MobileRelayProvider
   // Why: STA-2370 — a grant minted for "This computer only" proves nothing about off-host reach when its
   // client connects, so the bind decision must be able to tell it apart from a LAN/phone grant.
   pairingReach?: RuntimePairingReach
@@ -206,7 +208,11 @@ export class DeviceRegistry {
     return true
   }
 
-  setMobilePairingConnectionMode(deviceId: string, mode: MobilePairingConnectionMode): boolean {
+  setMobilePairingConnectionMode(
+    deviceId: string,
+    mode: MobilePairingConnectionMode,
+    relayProvider?: MobileRelayProvider
+  ): boolean {
     const index = this.devices.findIndex((candidate) => candidate.deviceId === deviceId)
     if (index === -1 || this.devices[index]?.scope !== 'mobile') {
       return false
@@ -214,7 +220,13 @@ export class DeviceRegistry {
     // Why: persist before swapping memory so a failed write does not leave a
     // mode the UI/runtime believe was stored.
     const nextDevices = this.devices.map((device, candidateIndex) =>
-      candidateIndex === index ? { ...device, mobilePairingConnectionMode: mode } : device
+      candidateIndex === index
+        ? {
+            ...device,
+            mobilePairingConnectionMode: mode,
+            ...(relayProvider ? { mobileRelayProvider: relayProvider } : {})
+          }
+        : device
     )
     this.save(nextDevices)
     this.devices = nextDevices
@@ -229,6 +241,14 @@ export class DeviceRegistry {
     // Why: pairings created before this preference existed used automatic
     // direct-first Relay fallback, so missing state must preserve that behavior.
     return device.mobilePairingConnectionMode === 'local-only' ? 'local-only' : 'automatic'
+  }
+
+  getMobileRelayProvider(deviceId: string): MobileRelayProvider | null {
+    const device = this.devices.find((candidate) => candidate.deviceId === deviceId)
+    if (!device || device.scope !== 'mobile') {
+      return null
+    }
+    return device.mobileRelayProvider === 'self-hosted' ? 'self-hosted' : 'official'
   }
 
   listDevices(): readonly DeviceEntry[] {
@@ -322,6 +342,8 @@ export class DeviceRegistry {
         relayBinding: validRelayBinding(device.relayBinding, device.deviceId),
         mobilePairingConnectionMode:
           device.mobilePairingConnectionMode === 'local-only' ? 'local-only' : 'automatic',
+        mobileRelayProvider:
+          device.mobileRelayProvider === 'self-hosted' ? 'self-hosted' : 'official',
         // Why: registries written before this field existed only ever held network-reach grants (phones and
         // LAN links), so a missing value must keep binding every interface on reconnect.
         pairingReach: device.pairingReach === 'this-computer' ? 'this-computer' : 'network',

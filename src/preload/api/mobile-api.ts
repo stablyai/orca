@@ -1,3 +1,8 @@
+import type {
+  MobileRelayProvider,
+  SelfHostedRelaySettings,
+  SelfHostedRelaySettingsResult
+} from '../../shared/mobile-relay-provider'
 import type { MobileRelayStatusDetail } from '../../shared/mobile-relay-status'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
 import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
@@ -11,6 +16,7 @@ export type MobileApi = {
   getPairingQR: (args?: {
     address?: string
     connectionMode?: MobilePairingConnectionMode
+    relayProvider?: MobileRelayProvider
     rotate?: boolean
   }) => Promise<
     | {
@@ -79,6 +85,9 @@ export type MobileApi = {
   listRuntimeAccessGrants: () => Promise<{ grants: RuntimeAccessGrant[] }>
   revokeRuntimeAccess: (args: { deviceId: string }) => Promise<{ revoked: boolean }>
   isWebSocketReady: () => Promise<{ ready: boolean; endpoint: string | null }>
+  configureSelfHostedRelay?: (
+    settings: SelfHostedRelaySettings | null
+  ) => Promise<SelfHostedRelaySettingsResult>
   getRelayStatus: () => Promise<MobileRelayStatusDetail>
   onRelayStatusChanged: (callback: (detail: MobileRelayStatusDetail) => void) => () => void
   /** Consumes an auth-failure notification that arrived before the renderer listener mounted. */

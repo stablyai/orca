@@ -1,4 +1,5 @@
 import { app, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
+import { registerMobileRelaySettingsHandlers } from './mobile-relay-settings'
 import type { RuntimeAccessGrant } from '../../shared/runtime-access-grants'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
 import { classifyRemotePairingHostname } from '../../shared/remote-pairing-address'
@@ -13,6 +14,10 @@ import {
 } from '../runtime/pairing-network-interfaces'
 import { resolveAdvertisedPairingHostname } from '../runtime/pairing-endpoint'
 import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
+import type {
+  MobileRelayProvider,
+  SelfHostedRelaySettings
+} from '../../shared/mobile-relay-provider'
 import type { MobileRelayStatusDetail } from '../../shared/mobile-relay-status'
 import { encodeMobilePairingQr, type MobilePairingQrResult } from '../runtime/mobile-pairing-qr'
 import { getWindowsDefaultRouteInterfaceNames } from '../runtime/windows-default-route-interfaces'
@@ -52,6 +57,7 @@ export type MobileHandlerDependencies = {
   firewallEnvironment?: WindowsMobileFirewallEnvironment
   openWindowsNetworkSettings?: () => Promise<void>
   getRelayStatus?: () => MobileRelayStatusDetail
+  configureSelfHostedRelay?: (settings: SelfHostedRelaySettings | null) => void
   consumePendingUnpairedDeviceAuthFailure?: (webContentsId: number) => boolean
   encodePairingQr?: (pairingUrl: string) => Promise<MobilePairingQrResult>
   getDefaultRouteInterfaceNames?: DefaultRouteInterfaceLookup
@@ -61,6 +67,7 @@ export function registerMobileHandlers(
   rpcServer: OrcaRuntimeRpcServer,
   dependencies: MobileHandlerDependencies = {}
 ): void {
+  registerMobileRelaySettingsHandlers(dependencies.configureSelfHostedRelay)
   const firewallEnvironment = dependencies.firewallEnvironment ?? {
     platform: process.platform,
     isPackaged: app.isPackaged,
@@ -83,6 +90,7 @@ export function registerMobileHandlers(
       args?: {
         address?: string
         connectionMode?: MobilePairingConnectionMode
+        relayProvider?: MobileRelayProvider
         rotate?: boolean
       }
     ) => {
@@ -113,6 +121,7 @@ export function registerMobileHandlers(
       const offer = await rpcServer.createMobilePairingOffer({
         address: ip,
         connectionMode: args?.connectionMode,
+        ...(args?.relayProvider ? { relayProvider: args.relayProvider } : {}),
         rotate: args?.rotate,
         name: `Mobile ${new Date().toLocaleDateString()}`
       })

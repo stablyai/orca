@@ -8,7 +8,7 @@ import {
   type MobileE2EEV2Ready
 } from '../../../shared/mobile-e2ee-v2-contract'
 import { sealMobileE2EEV2Frame } from '../../../shared/mobile-e2ee-v2-framing'
-import type { DeviceRegistry } from '../device-registry'
+import type { DeviceEntry, DeviceRegistry } from '../device-registry'
 import { deriveSharedKey, encrypt, generateKeyPair } from './e2ee-crypto'
 import { deriveMobileE2EEV2KeySchedule } from './mobile-e2ee-v2-key-schedule'
 import {
@@ -52,8 +52,9 @@ class FakeTransport implements MobileSocketTransport {
 function registryFor(
   deviceId: string,
   token: string,
-  scope: 'mobile' | 'runtime' = 'mobile'
-): DeviceRegistry {
+  scope: 'mobile' | 'runtime' = 'mobile',
+  policy: Pick<DeviceEntry, 'mobileRelayProvider' | 'mobilePairingConnectionMode'> = {}
+): Pick<DeviceRegistry, 'validateToken' | 'updateLastSeenDeferred'> {
   return {
     validateToken: (candidate: string) =>
       candidate === token
@@ -63,12 +64,12 @@ function registryFor(
             name: 'Phone',
             scope,
             pairedAt: 1,
-            lastSeenAt: 0
+            lastSeenAt: 0,
+            ...policy
           }
         : null,
-    updateLastSeen: vi.fn(),
     updateLastSeenDeferred: vi.fn()
-  } as unknown as DeviceRegistry
+  }
 }
 
 describe('MobileSocketWiring', () => {
@@ -333,7 +334,19 @@ describe('MobileSocketWiring', () => {
     expect(ws.close).toHaveBeenCalledWith(4001, 'Unauthorized')
   })
 
-  it('rejects a relay socket whose immutable relayDeviceId differs from E2EE identity', () => {
+  it.each([
+    { reason: 'device mismatch', relayDeviceId: 'outer-device', policy: {} },
+    {
+      reason: 'provider mismatch',
+      relayDeviceId: 'e2ee-device',
+      policy: { mobileRelayProvider: 'self-hosted' as const }
+    },
+    {
+      reason: 'LAN-only policy',
+      relayDeviceId: 'e2ee-device',
+      policy: { mobilePairingConnectionMode: 'local-only' as const }
+    }
+  ])('rejects a relay socket before E2EE readiness for $reason', ({ relayDeviceId, policy }) => {
     const desktop = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(1))
     const phone = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(2))
     const ws = new FakeSocket()
@@ -341,12 +354,12 @@ describe('MobileSocketWiring', () => {
     const metadata: MobileSocketTransportMetadata = {
       transport: 'relay',
       relayHostId: 'AbCdEf0123_-xyZ9',
-      relayDeviceId: 'outer-device',
+      relayDeviceId,
       basisConnId: 'connection-1',
       credentialKind: 'invite'
     }
     const wiring = new MobileSocketWiring({
-      deviceRegistry: registryFor('e2ee-device', 'valid-token'),
+      deviceRegistry: registryFor('e2ee-device', 'valid-token', 'mobile', policy),
       e2eeKeypair: {
         publicKey: desktop.publicKey,
         secretKey: desktop.secretKey,

@@ -9,6 +9,7 @@ import type {
 import type { PushUnregisterOutbox } from '../push/push-unregister-outbox'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../../shared/pairing'
 import type { RuntimePairingReach } from '../../../shared/runtime-pairing-reach'
+import type { MobileRelayProvider } from '../../../shared/mobile-relay-provider'
 import { resolveAdvertisedPairingEndpoint } from '../pairing-endpoint'
 import { RuntimeRpcNetworkExposure } from './runtime-rpc-network-exposure'
 import {
@@ -83,6 +84,13 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
 
   setMobileRelayPairingProvider(provider: MobileRelayPairingProvider | null): void {
     this.mobileRelayPairingProvider = provider
+  }
+
+  invalidateMobilePairingOffers(provider: MobileRelayProvider): void {
+    if (this.mobileRelayPairingOfferInFlight?.relayProvider !== provider) {
+      return
+    }
+    this.mobilePairingOfferGeneration += 1
   }
 
   async revokeMobileDevice(deviceId: string): Promise<boolean> {

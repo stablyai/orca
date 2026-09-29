@@ -4,7 +4,7 @@ import { cn } from '../../lib/utils'
 import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
 import { AndroidLogo, IosBrandIcon } from './MobileBrandIcons'
 import { getChannelTagline, type InstallCopy, type IosChannel } from './mobile-platform-copy'
-import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
+import type { MobilePairingPath } from '../../../../shared/mobile-pairing-path'
 import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
 import { MobileHeroPairingStep } from './MobileHeroPairingStep'
 import { MobileAndroidInstallHelp } from './MobileAndroidInstallHelp'
@@ -35,8 +35,8 @@ type HeroFlowProps = {
   onRetryRelay: () => void
   onCopyRelayDiagnostics: () => void
   pairLoading: boolean
-  connectionMode: MobilePairingConnectionMode
-  onConnectionModeChange: (mode: MobilePairingConnectionMode) => void
+  connectionMode: MobilePairingPath
+  onConnectionModeChange: (mode: MobilePairingPath) => void
   onRegeneratePairing: () => void
   canGeneratePairing: boolean
   onCopyPairingCode: () => void

@@ -3,6 +3,7 @@ import type { E2EEKeypair } from '../e2ee-keypair'
 import type { MobileSocketWiring } from '../rpc/mobile-socket-wiring'
 import type { RelayBrokerStatus, RelayIdentity } from './relay-session-broker-contract'
 import type { RelayRegion } from './relay-region-preference'
+import type { MobileRelayProvider } from '../../../shared/mobile-relay-provider'
 
 export type RelayOriginPoolOptions = {
   directorUrl: string
@@ -13,6 +14,7 @@ export type RelayOriginPoolOptions = {
   mobileSocketWiring: MobileSocketWiring
   isCurrent: () => boolean
   onStatus: (status: RelayBrokerStatus) => void
+  relayProvider?: MobileRelayProvider
   resolvePreferredRegion?: () => Promise<RelayRegion | undefined>
   fetch?: typeof globalThis.fetch
   createControlSocket?: (url: string, relayJwt: string) => WebSocket

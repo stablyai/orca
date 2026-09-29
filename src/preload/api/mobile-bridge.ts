@@ -1,4 +1,9 @@
 import { ipcRenderer } from 'electron'
+import type {
+  MobileRelayProvider,
+  SelfHostedRelaySettings,
+  SelfHostedRelaySettingsResult
+} from '../../shared/mobile-relay-provider'
 import type { MobileRelayStatusDetail } from '../../shared/mobile-relay-status'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
 import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
@@ -13,6 +18,7 @@ export const mobileApi = {
   getPairingQR: (args?: {
     address?: string
     connectionMode?: MobilePairingConnectionMode
+    relayProvider?: MobileRelayProvider
     rotate?: boolean
   }): Promise<
     | {
@@ -73,6 +79,11 @@ export const mobileApi = {
 
   isWebSocketReady: (): Promise<{ ready: boolean; endpoint: string | null }> =>
     ipcRenderer.invoke('mobile:isWebSocketReady'),
+
+  configureSelfHostedRelay: (
+    settings: SelfHostedRelaySettings | null
+  ): Promise<SelfHostedRelaySettingsResult> =>
+    ipcRenderer.invoke('mobile:configureSelfHostedRelay', settings),
 
   getRelayStatus: (): Promise<MobileRelayStatusDetail> =>
     ipcRenderer.invoke('mobile:getRelayStatus'),

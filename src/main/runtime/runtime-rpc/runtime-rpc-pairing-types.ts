@@ -5,6 +5,7 @@ import type { E2EEKeypair } from '../e2ee-keypair'
 import type { MobileSocketTransportMetadata } from '../rpc/mobile-socket-wiring'
 import type { PairingRelay } from '../../../shared/mobile-relay-pairing-offer'
 import type { MobilePairingConnectionMode } from '../../../shared/mobile-pairing-connection-mode'
+import type { MobileRelayProvider } from '../../../shared/mobile-relay-provider'
 import type { MobileRelayMintFailure } from '../../../shared/mobile-relay-mint-failure'
 import type {
   DeviceCredentialInstalled,
@@ -105,8 +106,10 @@ export const E2EE_KEY_UNAVAILABLE_GUIDANCE =
 
 export type MobileRelayPairingProvider = {
   createPairingRelay(
-    relayDeviceId: string
+    relayDeviceId: string,
+    provider?: MobileRelayProvider
   ): Promise<{ relay: PairingRelay; binding: RelayDeviceBinding }>
+  ownsBinding?(provider: MobileRelayProvider, binding: RelayDeviceBinding): boolean
   onDeviceRevokeQueued(item: RelayRevokeOutboxItem): void
   onDemandStateChanged?(): void
   getEndpoints(

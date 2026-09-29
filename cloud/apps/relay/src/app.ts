@@ -52,6 +52,7 @@ import {
 } from './regional-rehome-trust-probe.js'
 import { createRelayTokenVerifier, readBearer } from './relay-token-verifier.js'
 import { stagingAsiaProofMembership } from './staging-asia-proof-admission.js'
+import { registerSelfHostedRelayAuth } from './self-hosted-relay-auth.js'
 
 const RelayCellConnectionHardCapSchema = z.custom<RelayCellConnectionHardCap>(
   isRelayCellConnectionHardCap
@@ -117,6 +118,7 @@ export function createRelayApp(
   }
 ): Hono {
   const app = new Hono()
+  registerSelfHostedRelayAuth(app, config)
   let regionCatalogCache:
     | { expiresAt: number; value: Awaited<ReturnType<RelayAssignmentStore['regionCatalog']>> }
     | undefined
