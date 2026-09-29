@@ -12,7 +12,11 @@ import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { MermaidDiagramCopyPngButton } from './MermaidDiagramCopyPngButton'
-import { MermaidDiagramToolbarButton } from './MermaidDiagramToolbarButton'
+import {
+  MermaidDiagramToolbarButton,
+  MermaidDiagramViewerCloseContext
+} from './MermaidDiagramToolbarButton'
+import { isWebClientLocation } from '@/lib/web-client-location'
 import {
   DIAGRAM_BUTTON_ZOOM_STEP,
   MIN_DIAGRAM_SCALE,
@@ -37,10 +41,8 @@ type MermaidDiagramViewportProps = {
 
 type DragState = {
   pointerId: number
-  startX: number
-  startY: number
-  originX: number
-  originY: number
+  lastX: number
+  lastY: number
 }
 
 /**
@@ -51,6 +53,7 @@ export default function MermaidDiagramLightbox({
   getSvgMarkup
 }: MermaidDiagramLightboxProps): React.JSX.Element {
   const [open, setOpen] = useState(false)
+  const closeViewer = useCallback(() => setOpen(false), [])
   // Why: captured on open and dropped after close so idle diagrams hold no second SVG copy.
   const [svgMarkup, setSvgMarkup] = useState<string | null>(null)
   const expandLabel = translate(
@@ -122,7 +125,9 @@ export default function MermaidDiagramLightbox({
         // clicks here would otherwise reach the markdown host's click handlers.
         onClick={(event) => event.stopPropagation()}
       >
-        {svgMarkup && <MermaidDiagramViewport svgMarkup={svgMarkup} />}
+        <MermaidDiagramViewerCloseContext.Provider value={closeViewer}>
+          {svgMarkup && <MermaidDiagramViewport svgMarkup={svgMarkup} />}
+        </MermaidDiagramViewerCloseContext.Provider>
       </DialogContent>
     </Dialog>
   )
@@ -323,10 +328,8 @@ function MermaidDiagramViewport({ svgMarkup }: MermaidDiagramViewportProps): Rea
             event.currentTarget.setPointerCapture(event.pointerId)
             dragRef.current = {
               pointerId: event.pointerId,
-              startX: event.clientX,
-              startY: event.clientY,
-              originX: current.x,
-              originY: current.y
+              lastX: event.clientX,
+              lastY: event.clientY
             }
             setDragging(true)
           }}
@@ -335,11 +338,13 @@ function MermaidDiagramViewport({ svgMarkup }: MermaidDiagramViewportProps): Rea
             if (!drag || drag.pointerId !== event.pointerId) {
               return
             }
-            applyUserTransform((current) => ({
-              ...current,
-              x: drag.originX + event.clientX - drag.startX,
-              y: drag.originY + event.clientY - drag.startY
-            }))
+            // Why: apply per-move deltas so a wheel/key zoom mid-drag keeps the zoomed
+            // position instead of snapping back to where the drag started.
+            const dx = event.clientX - drag.lastX
+            const dy = event.clientY - drag.lastY
+            drag.lastX = event.clientX
+            drag.lastY = event.clientY
+            applyUserTransform((current) => ({ ...current, x: current.x + dx, y: current.y + dy }))
           }}
           onPointerUp={endDrag}
           onPointerCancel={endDrag}
@@ -390,7 +395,9 @@ function MermaidDiagramViewport({ svgMarkup }: MermaidDiagramViewportProps): Rea
           >
             <Maximize />
           </MermaidDiagramToolbarButton>
-          <MermaidDiagramCopyPngButton getDiagram={getDiagramForCopy} />
+          {/* Why: the web client's clipboard bridge resolves without writing images, so the
+              button would report a copy that never happened. */}
+          {!isWebClientLocation() && <MermaidDiagramCopyPngButton getDiagram={getDiagramForCopy} />}
           <Separator orientation="vertical" className="mx-1 h-4" />
           <DialogClose asChild>
             <MermaidDiagramToolbarButton
