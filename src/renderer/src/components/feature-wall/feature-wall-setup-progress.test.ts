@@ -41,6 +41,23 @@ function makeWorktree(
 }
 
 describe('getFeatureWallSetupProgress', () => {
+  it.each([
+    ['blank', true],
+    ['claude', true],
+    ['codex', true],
+    [null, false]
+  ] as const)('counts default agent %s as configured: %s', (defaultTuiAgent, done) => {
+    const progress = getFeatureWallSetupProgress(
+      makeInput({
+        settings: { defaultTuiAgent, notifications: {} } as never
+      })
+    )
+
+    expect(progress.stepDone['default-agent']).toBe(done)
+    expect(progress.coreDoneCount).toBe(done ? 1 : 0)
+    expect(progress.stepDone['agent-capabilities']).toBe(false)
+  })
+
   it('tracks Add 2 projects from durable git repo count', () => {
     expect(getFeatureWallSetupProgress(makeInput({ gitRepoCount: 1 })).stepDone).toMatchObject({
       'add-two-repos': false

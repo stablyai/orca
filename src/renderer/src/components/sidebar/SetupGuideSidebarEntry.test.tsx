@@ -7,6 +7,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FeatureWallSetupProgress } from '../feature-wall/feature-wall-setup-progress'
 import { SetupGuideSidebarEntry } from './SetupGuideSidebarEntry'
+import { getDefaultSettings } from '../../../../shared/constants'
 
 const mocks = vi.hoisted(() => ({
   useSetupGuideProgress: vi.fn(),
@@ -17,11 +18,13 @@ const mocks = vi.hoisted(() => ({
 let persistedUIReady = true
 let activeModal = 'none'
 let setupGuideSidebarDismissed = false
+let settings = getDefaultSettings('/tmp')
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) =>
     selector({
       activeModal,
+      settings,
       openModal: mocks.openModal,
       persistedUIReady,
       setupGuideSidebarDismissed,
@@ -127,6 +130,7 @@ describe('SetupGuideSidebarEntry', () => {
     persistedUIReady = true
     activeModal = 'none'
     setupGuideSidebarDismissed = false
+    settings = getDefaultSettings('/tmp')
     mocks.openModal.mockReset()
     mocks.setSetupGuideSidebarDismissed.mockReset()
     mocks.useSetupGuideProgress.mockReturnValue(makeProgress())
@@ -196,5 +200,21 @@ describe('SetupGuideSidebarEntry', () => {
     await rerender()
 
     expect(container.textContent).not.toContain('Onboarding checklist')
+  })
+
+  it('hides immediately for No agent even during a refresh and restores saved progress', async () => {
+    const { container, rerender } = await renderSetupGuideSidebarEntry()
+    expect(container.textContent).toContain('Onboarding checklist')
+
+    settings = { ...settings, defaultTuiAgent: 'blank' }
+    mocks.useSetupGuideProgress.mockReturnValue(makeProgress({ ready: false }))
+    await rerender()
+    expect(container.textContent).not.toContain('Onboarding checklist')
+    expect(mocks.setSetupGuideSidebarDismissed).not.toHaveBeenCalled()
+
+    settings = { ...settings, defaultTuiAgent: 'codex' }
+    mocks.useSetupGuideProgress.mockReturnValue(makeProgress())
+    await rerender()
+    expect(container.textContent).toContain('Onboarding checklist')
   })
 })
