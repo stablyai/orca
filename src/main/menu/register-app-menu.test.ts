@@ -72,6 +72,20 @@ function getSubmenu(
 }
 
 describe('registerAppMenu', () => {
+  it.each(['linux', 'win32', 'darwin'] as const)(
+    'leaves Ctrl+M to the terminal while preserving macOS minimize on %s',
+    (platform) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      registerAppMenu(buildMenuOptions())
+
+      const minimize = getSubmenu(getTemplate(), 'Window').find((item) => item.role === 'minimize')
+      expect(minimize).toMatchObject({
+        accelerator: platform === 'darwin' ? 'CmdOrCtrl+M' : '',
+        registerAccelerator: platform === 'darwin'
+      })
+    }
+  )
+
   it('shows the Settings hint when the user assigns a shortcut', () => {
     registerAppMenu({
       ...buildMenuOptions(),
