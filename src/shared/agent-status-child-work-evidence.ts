@@ -2,7 +2,8 @@
 //
 // A producer decodes provider frames into these edges and the host folds them into the one
 // record per child it owns. Edges carry facts, not records: which child is live, what it is
-// doing, how it ended. Only a child's own ending settles it, or the end of its session.
+// doing, how it ended, or that it is gone. Only a child's own ending settles it, or the end of its
+// session. Edges are host-internal: the producer and the store share one process.
 
 import type { AgentChildWorkAliasKind } from './agent-status-child-work-alias'
 import type {
@@ -13,9 +14,9 @@ import type {
   AgentChildWorkState
 } from './agent-status-child-work'
 
-/** How the provider names one child. `id` is the stable handle today's wire already publishes
- *  (a Claude task id); `runId` names the current run when the provider mints one per run (the
- *  spawn call), and a different one is the provider starting the child again. */
+/** How the provider names one child. `id` is the stable handle: a task id, or the child's own
+ *  thread. `runId` names the current run when the provider mints one per run (a task's spawn
+ *  call, a thread's turn), and a different one is the provider starting the child again. */
 export type AgentChildWorkEvidenceHandle = {
   idKind: Extract<AgentChildWorkAliasKind, 'task_id' | 'thread_id'>
   id: string
@@ -74,8 +75,17 @@ export type AgentChildWorkEndedEvidence = {
  *  with an outcome nobody reported. Settled children stay; the parent's removal drops them. */
 export type AgentChildWorkSessionEndedEvidence = { type: 'session-ended'; observedAt: number }
 
+/** Work that leaves nothing to report once it stops, such as a command whose process exited: its
+ *  record goes rather than settles. For work that owns no other record. */
+export type AgentChildWorkRemovedEvidence = {
+  type: 'removed'
+  observedAt: number
+  handle: AgentChildWorkEvidenceHandle
+}
+
 export type AgentChildWorkEvidence =
   | AgentChildWorkLiveEvidence
   | AgentChildWorkOperationEvidence
   | AgentChildWorkEndedEvidence
+  | AgentChildWorkRemovedEvidence
   | AgentChildWorkSessionEndedEvidence

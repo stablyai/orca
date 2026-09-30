@@ -1,8 +1,7 @@
 import { agentTypeToIconAgent } from '@/lib/agent-status'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
-import { replayIntoTerminal } from '../replay-guard'
-import { POST_REPLAY_REATTACH_RESET } from '../../../../../shared/terminal-mode-reset-profiles'
+import { CONFIRMED_SHELL_MODE_RESET } from '../../../../../shared/terminal-mode-reset-profiles'
 import {
   isLocalNativeWindowsConpty,
   resolveWindowsShellOverride
@@ -181,14 +180,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
       // Why: a hard-killed agent leaves mouse/focus/kitty modes armed, and the
       // surviving shell then receives pointer moves as typed SGR reports; the
       // replay guard keeps xterm's auto-replies from leaking to the shell.
-      replayIntoTerminal(session.pane, session.deps.replayingPanesRef, POST_REPLAY_REATTACH_RESET, {
-        breadcrumbIdentity: {
-          tabId: session.deps.tabId,
-          worktreeId: session.deps.worktreeId,
-          ptyId: session.transport.getPtyId()
-        },
-        shouldRefreshViewportSynchronously: session.shouldRefreshForegroundSynchronously
-      })
+      session.writeInputModeGround(CONFIRMED_SHELL_MODE_RESET)
       if (reason === 'visible-pty') {
         state.clearAgentLaunchConfig(session.cacheKey)
         return

@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -8,7 +9,10 @@ import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
+import {
+  createTrackedJournalOpener,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import type {
   AgentSessionDispatchOutcome,
   StructuredAgentSessionAdapter
@@ -98,16 +102,20 @@ async function seedApproval(optionId = 'allow'): Promise<{ itemId: string; revis
   if (!events) {
     throw new Error('seedApproval requires an acquired session')
   }
-  events.appendItem(identity, {
-    kind: 'approval',
-    title: 'Run the command?',
-    detail: null,
-    options: [{ id: optionId, label: 'Allow' }],
-    resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
-  })
+  events.appendItem(
+    identity,
+    {
+      kind: 'approval',
+      title: 'Run the command?',
+      detail: null,
+      options: [{ id: optionId, label: 'Allow' }],
+      resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+    },
+    { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+  )
   await host.flushStreamedEvents(SESSION)
   const itemId = agentJournalItemKey(identity)
-  const page = host.history({ sessionId: SESSION, direction: 'tail' })
+  const page = await host.history({ sessionId: SESSION, direction: 'tail' })
   const appended = page.ok ? page.page.items.find((item) => item.itemId === itemId) : null
   if (!appended) {
     throw new Error('provider approval was not written to the journal')
@@ -143,7 +151,7 @@ beforeEach(async () => {
   host = new StructuredAgentSessionHost({
     store,
     adapter: adapter(),
-    journalRoot: root,
+    journalDatabase: openTestJournalHostDatabase(root),
     recoveryCapsule: new AgentSessionRecoveryCapsule(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
@@ -152,8 +160,8 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  await journals.closeAll()
   await host.flushAllStreamedEvents()
+  await journals.closeAll()
   await rm(root, { recursive: true, force: true })
 })
 

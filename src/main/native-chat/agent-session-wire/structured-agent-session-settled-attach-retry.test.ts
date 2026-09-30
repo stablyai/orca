@@ -24,6 +24,7 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -112,7 +113,7 @@ beforeEach(async () => {
   host = new StructuredAgentSessionHost({
     store,
     adapter: adapter(),
-    journalRoot: root,
+    journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     now: () => NOW
@@ -125,6 +126,11 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
+/** The host starting the agent with no message to deliver, as an operation that needs it does. */
+function startAgent(): Promise<unknown> {
+  return host['serialize'](SESSION, () => host['mutationContext']().ensureAgent(SESSION))
+}
+
 describe('settled attach retry', () => {
   it('settles a post-acquisition journal failure and retries without a restart', async () => {
     const historyFilePath = vi
@@ -134,7 +140,7 @@ describe('settled attach retry', () => {
     host = new StructuredAgentSessionHost({
       store,
       adapter: { ...adapter(), historyFilePath },
-      journalRoot: root,
+      journalDatabase: openTestJournalHostDatabase(root),
       claimKeyId: 'key-1',
       mintSpawnToken: () => 'spawn-a',
       now: () => NOW
@@ -191,7 +197,7 @@ describe('settled attach retry', () => {
     host = new StructuredAgentSessionHost({
       store,
       adapter: adapter(),
-      journalRoot: root,
+      journalDatabase: openTestJournalHostDatabase(root),
       claimKeyId: 'key-1',
       mintSpawnToken,
       now: () => NOW
@@ -235,7 +241,7 @@ describe('settled attach retry', () => {
     host = new StructuredAgentSessionHost({
       store,
       adapter: adapter(),
-      journalRoot: root,
+      journalDatabase: openTestJournalHostDatabase(root),
       claimKeyId: 'key-1',
       mintSpawnToken,
       // A host that cannot read another process's environment, so no scan can prove anything.
@@ -265,7 +271,7 @@ describe('settled attach retry', () => {
     host = new StructuredAgentSessionHost({
       store,
       adapter: adapter(),
-      journalRoot: root,
+      journalDatabase: openTestJournalHostDatabase(root),
       claimKeyId: 'key-1',
       mintSpawnToken,
       // A host that cannot read another process's environment, so no scan can prove anything.
@@ -314,20 +320,22 @@ describe('settled attach retry', () => {
     }
     const first = await host.send(CALLER, unknownParams)
     expect(first).toMatchObject({ ok: true, value: { submission: { dispatchState: 'pending' } } })
+    // Handed over before the host dies: that is what makes the restart's answer doubt.
+    await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1))
 
     await host.flushAllStreamedEvents()
     store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
     host = new StructuredAgentSessionHost({
       store,
       adapter: adapter(),
-      journalRoot: root,
+      journalDatabase: openTestJournalHostDatabase(root),
       claimKeyId: 'key-1',
       mintSpawnToken: () => 'spawn-restarted',
       probeOwner: async () => ({ outcome: 'pid-absent' }),
       now: () => NOW
     })
     await host.restoreReadableSessions()
-    await host.hold(SESSION, 'desktop-chat:restart')
+    await startAgent()
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'live',
       handoffStage: null,
@@ -343,8 +351,8 @@ describe('settled attach retry', () => {
     if (!sent.ok) {
       throw new Error(`unexpected restored send refusal: ${sent.refusal.message}`)
     }
-    expect(dispatch).toHaveBeenCalledTimes(2)
-    const restoredHistory = host.history({ sessionId: SESSION, direction: 'tail' })
+    await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(2))
+    const restoredHistory = await host.history({ sessionId: SESSION, direction: 'tail' })
     if (!restoredHistory.ok) {
       throw new Error(`unexpected restored history reset: ${restoredHistory.reset}`)
     }
@@ -376,7 +384,10 @@ describe('settled attach retry', () => {
 
     await expect(host.attach(CALLER, hostTestAttachParams(null))).resolves.toMatchObject({
       ok: false,
-      refusal: { message: 'resume rejected', ownerVerdict: 'exited' }
+      refusal: {
+        message: "Codex couldn't restart. Send your message to try again.",
+        ownerVerdict: 'exited'
+      }
     })
 
     expect(releaseAcquisition).toHaveBeenCalledTimes(1)

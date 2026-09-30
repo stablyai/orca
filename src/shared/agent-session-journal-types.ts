@@ -7,6 +7,8 @@
 // rewritten in place, so a host that cannot read a row refuses to write the
 // journal rather than skipping or compacting past it.
 
+import type { UnreadAgentSessionFailureFact } from './agent-session-failure'
+import type { AgentSessionFailureRowWords } from './agent-session-failure-words'
 import type { AgentType } from './agent-status-types'
 import type { AgentSessionQuestionAnswer } from './agent-session-question-answer'
 import type { AgentJournalTurnOutcome } from './agent-turn-outcome'
@@ -101,6 +103,9 @@ export type AgentJournalMessageItem = {
   /** Absent ⇒ an ordinary turn input. `goal` ⇒ the text was set as the thread
    *  goal's objective, and the provider pursues it without a turn of its own. */
   sentAs?: AgentJournalMessageSendMode
+  /** Present on a conversation command the user sent, such as `/compact`. The text is what the
+   *  user typed; this names the command so no reader parses it. Open like `sentAs`. */
+  command?: { name: string }
 }
 
 export type AgentJournalToolCallState = 'running' | 'completed' | 'failed'
@@ -226,6 +231,9 @@ export type AgentJournalTurnLifecycle = {
   /** What the provider said about its context window during or after this turn.
    *  Usually written by a later revision, since the provider answers after the end. */
   contextUsage?: AgentSessionContextUsage
+  /** On a turn a conversation command opened: the provider turn that carried out the command,
+   *  once the provider opened one. Nothing else re-derives it after the command settles. */
+  providerTurnId?: string
 }
 
 /** Provider thread-goal lifecycle. Open like other persisted vocabularies: a
@@ -257,9 +265,8 @@ export type AgentJournalThreadGoalState =
   | { state: 'set'; goal: AgentJournalThreadGoal }
   | { state: 'cleared' }
 
-export type AgentJournalStatusItem = {
+type AgentJournalStatusItemFields = {
   kind: 'status'
-  text: string
   /** Optional display hints; unknown values retain the ordinary text fallback. */
   presentation?: string
   tone?: string
@@ -277,6 +284,19 @@ export type AgentJournalStatusItem = {
   /** Present on thread-goal transitions; absent on rows from older hosts. */
   threadGoal?: AgentJournalThreadGoalState
 }
+
+/** A status row that reports no failure; its text is its writer's own. */
+export type AgentJournalPlainStatusItem = AgentJournalStatusItemFields & {
+  text: string
+  failure?: undefined
+}
+
+export type AgentJournalStatusItem =
+  | AgentJournalPlainStatusItem
+  | (AgentJournalStatusItemFields &
+      /** A row that reports a failure: what failed, typed, beside the sentence older clients print,
+       *  both from `agentSessionFailureWords`. Absent on rows from older hosts. */
+      AgentSessionFailureRowWords)
 
 /** The durable record of one root turn. `running` exposes cancellation while
  *  the provider can still accept it; the item is revised to a terminal state,
@@ -327,6 +347,25 @@ export type AgentJournalProducerLinkage = {
   attempt?: number
 }
 
+/** Which turn a row belongs to, stated by the write that created it. `turn` names the turn
+ *  record's journal key; `thread` is a row that belongs to no turn — a notice about the
+ *  conversation, or a message not yet delivered into one. Turn records themselves are `thread`. */
+export type AgentJournalTurnScope = { kind: 'turn'; turnItemId: string } | { kind: 'thread' }
+
+export const AGENT_JOURNAL_THREAD_SCOPE: AgentJournalTurnScope = { kind: 'thread' }
+
+/** Who produced a row and which turn it belongs to: what every item write states. */
+export type AgentJournalRowAttribution = AgentJournalProducerLinkage & {
+  turnScope: AgentJournalTurnScope
+}
+
+/** Where the journal placed an item: the sequence of the row that created it,
+ *  then its place among that row's writes. The timeline's only ordering key. */
+export type AgentJournalPosition = {
+  sequence: number
+  index: number
+}
+
 /** One reduced timeline entry. `sequence` orders the list; `observedAt` is the
  *  provider's own clock and may sort earlier than a later sequence when the row
  *  was recovered after a crash. */
@@ -335,11 +374,16 @@ export type AgentJournalRenderItem = AgentJournalProducerLinkage & {
   revision: number
   body: AgentJournalItemBody
   sequence: number
+  /** Place among the writes of the row at `sequence`, which one lifecycle batch
+   *  shares across every item it creates. Absent ⇒ 0, and on a host that predates it. */
+  sequenceIndex?: number
   observedAt: number
   /** Set when the row was appended by crash reconciliation rather than live. */
   recovered?: true
   /** When crash reconciliation wrote this revision; present exactly when `recovered` is. */
   recoveredAt?: number
+  /** Absent only from a host that predates it. */
+  turnScope?: AgentJournalTurnScope
 }
 
 // ─── Submissions ────────────────────────────────────────────────────────────
@@ -357,13 +401,29 @@ export type AgentJournalSubmission = {
   dispatchState: AgentJournalDispatchState
   /** Provider item identity adopted on accept; null otherwise. */
   providerItemId: string | null
-  /** Terminal reason on `rejected`. */
+  /** Terminal reason on `rejected`: a sentence a person can read, or one of the legacy markers
+   *  older clients already recognise. On `unknown`, the doubt marker. */
   reason: string | null
+  /** On `rejected`, why, typed; absent on rows from older hosts. */
+  rejection?: UnreadAgentSessionFailureFact
   submittedAt: number
   resolvedAt: number | null
   /** Set when crash reconciliation resolved the dispatch, not the provider. A live
    *  `unknown` is a send still outstanding; a recovered one outlived its writer. */
   recovered?: true
+  /** The host accepted this send to hand over later; absent on sends dispatched as they were
+   *  recorded (older hosts). With no `handedOverAt` yet, a pending one is still queued. */
+  handoverRecorded?: true
+  /** When the host handed it to the provider (its `dispatch{pending}` row). */
+  handedOverAt?: number
+  /** Host-only: the submission row's sequence, which tells which host process accepted it. */
+  acceptedSequence?: number
+  /** The queued draft this submission hands off; absent for a direct send. Read this, never
+   *  a draft id compared with `clientMessageId`. */
+  queuedMessageId?: string
+  /** Host-only: who asked for this turn — a person over the client send RPC, or Orca itself.
+   *  A person's turn is what ends a Stop's queue pause. */
+  origin?: 'client' | 'host'
 }
 
 /** Durable answer to "did my send land?", keyed by client message id. Only an

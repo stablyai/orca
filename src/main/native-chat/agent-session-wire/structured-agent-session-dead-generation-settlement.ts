@@ -1,80 +1,48 @@
+import {
+  agentSessionFailureFact,
+  MAX_PROVIDER_DIAGNOSTIC_CHARS,
+  type SubmissionRejectionFact
+} from '../../../shared/agent-session-failure'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import type {
-  AgentJournalItemBody,
-  AgentJournalRenderItem
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalItemBody,
+  type AgentJournalRenderItem
 } from '../../../shared/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { partitionJournalLifecycleMutations } from '../agent-session-journal/journal-lifecycle-batch-partition'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
-import {
-  boundJournalStatusText,
-  cancelledJournalPromptBody
-} from '../agent-session-journal/journal-prompt-body-bounds'
+import { cancelledJournalPromptBody } from '../agent-session-journal/journal-prompt-body-bounds'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import {
+  agentSessionFailureWords,
+  type AgentSessionFailureWordsContext
+} from '../../../shared/agent-session-failure-words'
+import { structuredAgentSessionStartFailure } from './structured-agent-session-failure-text'
+import {
+  hasStructuredAgentSessionStartFailureRow,
+  structuredAgentSessionStartFailureRow
+} from './structured-agent-session-start-failure-row'
 import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-record'
 import {
+  provenUnverifiableTurnRevisions,
   runningTurnLifecycleRevisions,
   turnVerdictFromDeathEvidence,
   type StructuredAgentSessionTurnVerdict
 } from './structured-agent-session-stale-turn-verdict'
+import {
+  exitedRootTurnScope,
+  runningRootTurnScope
+} from './structured-agent-session-exit-turn-scope'
 
-export const UNEXPECTED_PROVIDER_EXIT_OUTCOME =
-  'The provider stopped while this response was in progress. You can continue in this conversation.'
-
-/** A provider may put a whole stderr dump in its exit reason; unbounded it would push the
- *  actionable tail past the row's byte cap and lose it to truncation. */
-export const MAX_UNEXPECTED_EXIT_REASON_CHARS = 512
-
-/** The cause is the only thing separating an auth failure from an OOM kill, so it is carried
- *  into the copy rather than left in the durable record nothing renders. */
-export function unexpectedProviderExitOutcome(reason?: string): string {
-  const detail = exitReasonDetail(reason)
-  return detail
-    ? `The provider stopped while this response was in progress: ${detail}. You can continue in this conversation.`
-    : UNEXPECTED_PROVIDER_EXIT_OUTCOME
-}
-
-/** A restart that produced no child, answered to the send that asked for it; its cause is the
- *  whole story, and nothing is remembered, so the next try is a fresh one. A new chat is offered
- *  only when the host holds nothing this chat could restart from. */
-export function ownerRestartFailedOutcome(input: {
-  agentName: string
-  reason?: string
-  resumable: boolean
-}): string {
-  const detail = exitReasonDetail(input.reason)
-  const failed = detail
-    ? `${input.agentName} couldn't restart: ${detail}.`
-    : `${input.agentName} couldn't restart.`
-  return input.resumable ? failed : `${failed} Start a new chat to continue.`
-}
-
-/** A start that never finished has no response to interrupt; its cause is the whole story. */
-export function providerStartupFailureOutcome(reason?: string): string {
-  const detail = exitReasonDetail(reason)
-  return detail
-    ? `The provider stopped before it finished starting: ${detail}.`
-    : 'The provider stopped before it finished starting.'
-}
-
-/** Why a send a child that never started left unwritten was rejected. The child's own diagnostic is
- *  the cause the user can act on, so it is the reason, in the words the chat row uses. */
-export function providerStartupFailureRejection(cause?: unknown): string {
-  return providerStartupFailureOutcome(
-    cause === undefined ? undefined : cause instanceof Error ? cause.message : String(cause)
-  )
-}
-
-function exitReasonDetail(reason: string | undefined): string | undefined {
-  return reason
-    ?.slice(0, MAX_UNEXPECTED_EXIT_REASON_CHARS)
-    .trim()
-    .replace(/[.\s]+$/, '')
-}
+/** Bounds the exit reason the lease keeps as log evidence; a provider diagnostic is held to the
+ *  same cap. */
+export const MAX_UNEXPECTED_EXIT_REASON_CHARS = MAX_PROVIDER_DIAGNOSTIC_CHARS
 
 type DeadGenerationSubmission = Pick<
   ReturnType<AgentSessionJournal['submissions']>[number],
-  'clientMessageId' | 'dispatchState' | 'recovered'
+  'clientMessageId' | 'dispatchState' | 'recovered' | 'handoverRecorded' | 'handedOverAt'
 >
 
 export type DeadGenerationJournal = {
@@ -142,10 +110,13 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
   verdict: StructuredAgentSessionTurnVerdict
   pendingSubmissionReason: string
   showUnexpectedExitOutcome?: boolean
-  /** Why the provider stopped, when the host has it. Rendered with the outcome copy. */
-  unexpectedExitReason?: string
-  /** The provider never finished starting; the outcome says so instead of naming a response. */
-  exitedDuringStartup?: boolean
+  /** Why the provider stopped, as the adapter told it; the row's sentence is this fact's. */
+  exitFailure?: SubmissionRejectionFact
+  /** Who a failed start's sentence names. */
+  failureTextContext?: AgentSessionFailureWordsContext
+  /** The provider never finished starting: the start that failed, keyed by the child's
+   *  generation. Its row is the one the delivery loop writes for the same start. */
+  exitedDuringStartup?: { generation: string | null }
   onError?: (sessionId: string, error: unknown) => void
 }): Promise<boolean> {
   try {
@@ -154,36 +125,58 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
     if (!showUnexpectedExitOutcome && !hasUnfinishedWork) {
       return true
     }
-    // A child that never proved its start accepted nothing — input is written only after it
-    // initializes — so every send it left unanswered is provably unwritten and is rejected with the
-    // child's own diagnostic. A proven child's unanswered sends stay in doubt.
-    await (input.exitedDuringStartup
-      ? input.journal.rejectPendingSubmissions(
-          input.fence,
-          providerStartupFailureRejection(input.unexpectedExitReason)
-        )
+    // A queued message is the delivery loop's to settle: it was never handed to this child. A
+    // child that never proved its start accepted nothing either — input is written only after it
+    // initializes — so every send it was handed is rejected with the child's own diagnostic. A
+    // proven child's handed-over sends stay in doubt.
+    const startupFailure = input.exitedDuringStartup
+      ? structuredAgentSessionStartFailure({ exit: input.exitFailure }, input.failureTextContext)
+      : null
+    await (startupFailure
+      ? input.journal.rejectPendingSubmissions(input.fence, startupFailure)
       : input.journal.markPendingSubmissionsUnknown(input.fence, input.pendingSubmissionReason))
     const items = input.journal.snapshot().items
     const mutations: JournalLifecycleMutationInput[] = []
-    if (showUnexpectedExitOutcome) {
+    if (showUnexpectedExitOutcome && input.exitedDuringStartup && startupFailure) {
+      const startKey = input.exitedDuringStartup.generation ?? input.settlementId
+      // A start a message waited on is the delivery loop's to record, before or after this exit,
+      // in the words it rejected the message with; this row is for a command, goal or rewind start.
+      // A row already written stays: rejected is terminal, so its words are not reworded.
+      const recordedByDeliveryLoop =
+        input.journal.submissions?.().some(isQueuedAgentJournalSubmission) ||
+        hasStructuredAgentSessionStartFailureRow(items, startKey)
+      if (!recordedByDeliveryLoop) {
+        mutations.push(structuredAgentSessionStartFailureRow(startKey, startupFailure))
+      }
+    } else if (showUnexpectedExitOutcome) {
+      // The turn the exit ended, and an error so no fold ever hides why it stopped.
       mutations.push({
         kind: 'item',
         identity: { provider: 'orca', clientMessageId: input.settlementId },
         body: {
           kind: 'status',
-          text: boundJournalStatusText(
-            input.exitedDuringStartup
-              ? providerStartupFailureOutcome(input.unexpectedExitReason)
-              : unexpectedProviderExitOutcome(input.unexpectedExitReason)
-          )
-        }
+          ...agentSessionFailureWords(
+            input.exitFailure ?? agentSessionFailureFact('providerExited'),
+            {
+              ...input.failureTextContext,
+              surface: 'row'
+            }
+          ),
+          tone: 'error'
+        },
+        turnScope: exitedRootTurnScope(items, input.verdict)
       })
     }
     for (const item of items) {
       const identity = parseAgentJournalItemKey(item.itemId)
       const body = terminalDeadGenerationBody(item)
       if (identity && body) {
-        mutations.push({ kind: 'item', identity, body })
+        mutations.push({
+          kind: 'item',
+          identity,
+          body,
+          turnScope: item.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE
+        })
       }
     }
     mutations.push(...runningTurnLifecycleRevisions(items, input.verdict))
@@ -206,9 +199,9 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
 /**
  * Settles whatever a generation with no child in this process left running: found when a new child
  * is acquired, or when a chat is reopened for reading. Derived from the journal and the lease's
- * death evidence each time, so nothing is owed in between. Only an observed exit earns an end time
- * and the exit copy. Must run before a new child's buffered events land, or a live turn would be
- * judged.
+ * death evidence each time, so nothing is owed in between. Proven death ends the turn interrupted,
+ * and a proof written after an earlier settle revises what that settle left `unverifiable`. Must
+ * run before a new child's buffered events land, or a live turn would be judged.
  */
 export async function settleStaleStructuredAgentSessionState(input: {
   journal: AgentSessionJournal
@@ -216,10 +209,15 @@ export async function settleStaleStructuredAgentSessionState(input: {
   fence: number
   acquisitionGeneration: string | null
   deathEvidence: AgentSessionDeathEvidence | null
+  /** Who the exit row names. */
+  failureTextContext?: AgentSessionFailureWordsContext
 }): Promise<number> {
   const { journal } = input
   const items = journal.snapshot().items
-  const verdict = turnVerdictFromDeathEvidence(input.deathEvidence)
+  // Each turn is judged by the evidence only if it names that turn's owner.
+  const verdictFor = (item: AgentJournalRenderItem) =>
+    turnVerdictFromDeathEvidence(input.deathEvidence, journal.itemFence(item.itemId))
+  // Per attempt: a retry re-partitions only what is left, and a reused chunk id would skip it.
   const generation = input.acquisitionGeneration ?? `seq-${journal.cursor().sequence}`
   const settlementId = `stale-session:${input.sessionId}:${input.fence}:${generation}`
   const mutations: JournalLifecycleMutationInput[] = []
@@ -227,18 +225,43 @@ export async function settleStaleStructuredAgentSessionState(input: {
     const identity = parseAgentJournalItemKey(item.itemId)
     const body = terminalDeadGenerationBody(item)
     if (identity && body) {
-      mutations.push({ kind: 'item', identity, body })
+      mutations.push({
+        kind: 'item',
+        identity,
+        body,
+        turnScope: item.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE
+      })
     }
   }
-  mutations.push(...runningTurnLifecycleRevisions(items, verdict))
-  if (verdict.state === 'interrupted' && items.some(isInProgressItem)) {
+  const proven = provenUnverifiableTurnRevisions(items, input.deathEvidence, journal)
+  mutations.push(
+    ...items.flatMap((item) => runningTurnLifecycleRevisions([item], verdictFor(item))),
+    ...proven
+  )
+  const evidence = input.deathEvidence
+  if (
+    evidence &&
+    (proven.length > 0 ||
+      items.some((item) => isInProgressItem(item) && verdictFor(item).state === 'interrupted'))
+  ) {
     mutations.unshift({
       kind: 'item',
-      identity: { provider: 'orca', clientMessageId: settlementId },
+      // Named by the death it explains, so a retry after a partly written settle adds no second row.
+      identity: {
+        provider: 'orca',
+        clientMessageId: `stale-session:${input.sessionId}:death-${evidence.ownerFence ?? 'unowned'}-${evidence.observedAt}`
+      },
+      // The death evidence is Orca's log text, never a sentence for a person: the row says only
+      // that the provider stopped.
       body: {
         kind: 'status',
-        text: boundJournalStatusText(unexpectedProviderExitOutcome(input.deathEvidence?.detail))
-      }
+        ...agentSessionFailureWords(agentSessionFailureFact('providerExited'), {
+          ...input.failureTextContext,
+          surface: 'row'
+        }),
+        tone: 'error'
+      },
+      turnScope: runningRootTurnScope(items)
     })
   }
   for (const chunk of partitionJournalLifecycleMutations(settlementId, mutations)) {
@@ -298,7 +321,9 @@ function hasUnsettledSubmission(journal: DeadGenerationJournal): boolean {
   return submissions
     ? submissions.some(
         (submission) =>
-          submission.dispatchState === 'pending' ||
+          // A queued message is not work in progress: nothing has it yet.
+          (submission.dispatchState === 'pending' &&
+            !(submission.handoverRecorded && submission.handedOverAt === undefined)) ||
           (submission.dispatchState === 'unknown' && submission.recovered !== true)
       )
     : (journal.pendingSubmissions?.().length ?? 0) > 0

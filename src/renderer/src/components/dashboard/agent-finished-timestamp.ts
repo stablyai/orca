@@ -1,4 +1,8 @@
 import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
+import {
+  agentTurnStoppedByUser,
+  agentVerdictDisplayMark
+} from '../../../../shared/agent-main-agent-verdict'
 import type { DashboardAgentRow } from './useDashboardData'
 
 /**
@@ -8,11 +12,11 @@ import type { DashboardAgentRow } from './useDashboardData'
  * agent reads "N since it finished", an active one falls through to its start.
  */
 export function lastEnteredDoneAt(
-  agent: Pick<DashboardAgentRow, 'rowSource' | 'state' | 'entry'>
+  agent: Pick<DashboardAgentRow, 'rowSource' | 'state' | 'entry' | 'childRow'>
 ): number | null {
-  // Why: a subagent's synthetic entry may say done while its row is idle or unverifiable.
-  if (agent.rowSource === 'subagent' && agent.state !== 'done') {
-    return null
+  // Why: a subagent has no turns; it ended when its host settled it, if it has.
+  if (agent.rowSource === 'subagent') {
+    return agent.childRow?.settledAt ?? null
   }
   const entry = agent.entry
   // Why: same primitive Smart Sort ranks on, so the displayed age and Done eligibility share a clock.
@@ -22,9 +26,13 @@ export function lastEnteredDoneAt(
   if (completedAt !== null) {
     return completedAt
   }
-  // Why: display is looser than ranking — an interrupted turn still shows when it stopped.
-  if (entry.state === 'done' && entry.interrupted === true && entry.sessionBoundary !== true) {
+  // Why: display is looser than ranking — a stopped turn still shows when it ended.
+  if (entry.state === 'done' && agentTurnStoppedByUser(entry) && entry.sessionBoundary !== true) {
     return entry.stateStartedAt
+  }
+  // Why: a failed main agent reads failed while its subagents run, so it shows when it failed.
+  if (entry.state !== 'done' && entry.mainAgent && agentVerdictDisplayMark(entry) === 'failed') {
+    return entry.mainAgent.stateStartedAt
   }
   for (let i = (entry.stateHistory?.length ?? 0) - 1; i >= 0; i--) {
     if (entry.stateHistory[i].state === 'done') {

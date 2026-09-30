@@ -12,7 +12,9 @@ import {
   attachFingerprintFields,
   type AgentSessionAttachParams
 } from './structured-agent-session-attach'
+import { openTestAttachConversation } from './structured-agent-session-attach-test-conversation'
 import { performAttach } from './structured-agent-session-attach-flow'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 
 const NOW = 1_800_000_000_000
 const SESSION = 'session-alpha'
@@ -85,7 +87,7 @@ describe('processless structured session reservation', () => {
       performAttach({
         store,
         adapter,
-        journalRoot: root,
+        openConversation: openTestAttachConversation(openTestJournalHostDatabase(root!)),
         authority: {
           spawnToken: 'spawn-a',
           claimKeyId: 'key-1',
@@ -132,7 +134,8 @@ describe('processless structured session reservation', () => {
     const input = {
       store,
       adapter,
-      journalRoot: root,
+      journalDatabase: openTestJournalHostDatabase(root),
+      openConversation: openTestAttachConversation(openTestJournalHostDatabase(root!)),
       authority: {
         spawnToken: 'spawn-a',
         claimKeyId: 'key-1',
@@ -171,7 +174,8 @@ describe('processless structured session reservation', () => {
     const input = {
       store,
       adapter,
-      journalRoot: root,
+      journalDatabase: openTestJournalHostDatabase(root),
+      openConversation: openTestAttachConversation(openTestJournalHostDatabase(root!)),
       authority: {
         spawnToken: 'spawn-drift',
         claimKeyId: 'key-1',
@@ -223,7 +227,7 @@ describe('processless structured session reservation', () => {
       performAttach({
         store,
         adapter,
-        journalRoot: root,
+        openConversation: openTestAttachConversation(openTestJournalHostDatabase(root!)),
         authority: {
           spawnToken: 'spawn-a',
           claimKeyId: 'key-1',
@@ -235,7 +239,7 @@ describe('processless structured session reservation', () => {
         now: () => NOW,
         onAttached: () => {}
       })
-    ).rejects.toThrow('workspace no longer exists')
+    ).rejects.toThrow("Codex couldn't restart. Send your message to try again.")
     expect(settlement).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ exitProof: 'processless', spawnToken: 'spawn-a' })
     )
@@ -289,7 +293,8 @@ describe('processless structured session reservation', () => {
     const input = {
       store,
       adapter,
-      journalRoot: root,
+      journalDatabase: openTestJournalHostDatabase(root),
+      openConversation: openTestAttachConversation(openTestJournalHostDatabase(root!)),
       authority: {
         spawnToken: 'spawn-a',
         claimKeyId: 'key-1',
@@ -302,7 +307,9 @@ describe('processless structured session reservation', () => {
       onAttached: () => {}
     }
 
-    await expect(performAttach(input)).rejects.toThrow('launch not ready')
+    await expect(performAttach(input)).rejects.toThrow(
+      "Codex couldn't restart. Send your message to try again."
+    )
     await expect(performAttach(input)).resolves.toMatchObject({
       ok: false,
       refusal: { code: 'agent_session_operation_invalid' }

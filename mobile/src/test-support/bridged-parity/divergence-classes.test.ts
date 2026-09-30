@@ -7,7 +7,6 @@ import {
   classifyBridgedParity,
   BRIDGED_PARITY_BASELINE,
   BRIDGED_PARITY_EXCLUSIONS,
-  BRIDGED_PARITY_FLAG,
   BRIDGED_PARITY_MEMBERS,
   BRIDGED_PARITY_OFF,
   BRIDGED_PARITY_NAMEABLE,
@@ -37,12 +36,7 @@ const droppedUndefinedKey: BridgedParityEvidence = {
 }
 
 describe('the bridged-parity flag', () => {
-  it('is the name the suite and the pin both spell', () => {
-    expect(BRIDGED_PARITY_FLAG).toBe('RPC_FOUNDATION_BRIDGE')
-  })
-
   it('skips on one value only, so an unset or mistyped variable still runs the gate', () => {
-    expect(BRIDGED_PARITY_OFF).toBe('0')
     const skips = (value: string | undefined): boolean => value === BRIDGED_PARITY_OFF
     expect([undefined, '', '1', 'false', 'off'].filter(skips)).toEqual([])
     expect(skips('0')).toBe(true)
@@ -236,7 +230,7 @@ describe('what the pin still admits', () => {
   it('goes red on a golden that stopped diverging, which every other check lets through', () => {
     // The direction the rest of the suite cannot see. One `result-absent-settlement` golden
     // reported `identical` instead: nothing is unclassified, every diverging golden is still in an
-    // excluded class, and the corpus is still 787. Only these two numbers moved.
+    // excluded class, and the corpus is still 790. Only these two numbers moved.
     const tally = asCounted()
     const moved: BridgedParityTally = {
       identical: tally.identical + 1,
@@ -250,7 +244,7 @@ describe('what the pin still admits', () => {
     expect(drift.join('\n')).toContain(
       `identical: pinned ${tally.identical}, ran ${moved.identical}`
     )
-    expect(drift.join('\n')).toContain('result-absent-settlement: pinned 341, ran 340')
+    expect(drift.join('\n')).toContain('result-absent-settlement: pinned 343, ran 342')
   })
 
   it('goes red on a class that grew and on the corpus losing a golden', () => {

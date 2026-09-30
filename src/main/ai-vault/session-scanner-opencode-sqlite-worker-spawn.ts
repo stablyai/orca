@@ -81,6 +81,15 @@ export function listOpenCode2SqliteSessionsViaWorker(args: {
   return listForHost({ ...args, agent: 'opencode2' })
 }
 
+export function listZcodeSqliteSessionsViaWorker(args: {
+  dbPaths: readonly string[]
+  limit: number
+  issues: AiVaultScanIssue[]
+  signal?: AbortSignal
+}): Promise<SessionFileCandidate[]> {
+  return listForHost({ ...args, agent: 'zcode' })
+}
+
 /**
  * Parse one OpenCode SQLite session through the shared worker client.
  * @param args.dbPath - Absolute path to the opencode.db file.
@@ -106,6 +115,16 @@ export function parseOpenCode2SqliteSessionViaWorker(args: {
   signal?: AbortSignal
 }): Promise<AiVaultSession | null> {
   return parseForHost({ ...args, agent: 'opencode2' })
+}
+
+export function parseZcodeSqliteSessionViaWorker(args: {
+  fullFirstUserPrompt?: boolean
+  dbPath: string
+  sessionId: string
+  platform: NodeJS.Platform
+  signal?: AbortSignal
+}): Promise<AiVaultSession | null> {
+  return parseForHost({ ...args, agent: 'zcode' })
 }
 
 /**
@@ -134,6 +153,15 @@ export function captureOpenCode2SqliteSessionViaWorker(args: {
   return captureForHost({ ...args, agent: 'opencode2' })
 }
 
+export function captureZcodeSqliteSessionViaWorker(args: {
+  dbPath: string
+  sessionId: string
+  platform: NodeJS.Platform
+  signal?: AbortSignal
+}): Promise<OpenCodeSqliteCaptureValue> {
+  return captureForHost({ ...args, agent: 'zcode' })
+}
+
 async function listForHost(
   args: Parameters<OpenCodeSqliteWorkerClient['list']>[0]
 ): Promise<SessionFileCandidate[]> {
@@ -160,7 +188,7 @@ async function listForHost(
         const client = await openCodeWslClient(distro, first, args.signal)
         const result = await client.list({ ...args, dbPaths: [...paths.keys()], issues })
         return result.flatMap((candidate) => {
-          const parsed = splitOpenCodeSqliteCandidate(candidate.file.path)
+          const parsed = splitOpenCodeSqliteCandidate(candidate.file.path, args.agent)
           const original = parsed && paths.get(parsed.dbPath)
           return parsed && original
             ? [

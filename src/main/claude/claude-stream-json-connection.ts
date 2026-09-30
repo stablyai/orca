@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { providerDiagnostic, withProviderDiagnostic } from '../../shared/agent-session-failure'
 import type * as ClaudeAgentSdk from '@anthropic-ai/claude-agent-sdk'
 import type { CanUseTool, OnUserDialog, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import { spawnProcess } from '../../shared/child-process/run-process'
@@ -103,7 +104,12 @@ function exitError(stderrTail: string, status: ExitStatus | null, cause?: Error)
         ? ` (code ${status.code})`
         : ''
   const message = `claude stream-json exited${how}${detail ? `: ${detail}` : ''}`
-  return cause ? new Error(message, { cause }) : new Error(message)
+  // Written for a log, not a person: the chat keeps it behind Details.
+  const diagnostic = providerDiagnostic([how.trim(), detail].filter(Boolean).join('\n'), 'log')
+  return withProviderDiagnostic(
+    cause ? new Error(message, { cause }) : new Error(message),
+    diagnostic
+  )
 }
 
 export async function openClaudeStreamJsonConnection(
@@ -303,15 +309,16 @@ export async function openClaudeStreamJsonConnection(
     closePromise ??= (async () => {
       closing = true
       resumeReading()
-      // Arm the descendant proof before ending stdin. The SDK may exit the root
-      // immediately; a post-exit walk cannot recover descendants that reparented.
+      // Arm the descendant proof before the stop. The root may exit immediately;
+      // a post-exit walk cannot recover descendants that reparented.
       await (tree.refresh?.() ?? tree.capture())
       inbox.end()
       const proven = await proveClaudeChildExit({
         child,
         exitPromise,
         exited: rootSettled,
-        tree
+        tree,
+        supervised: spawner.supervised
       })
       inbox.fail(new Error('claude stream-json connection closed'))
       if (!proven) {

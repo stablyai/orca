@@ -221,6 +221,8 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     webView.backgroundColor = .clear
     webView.scrollView.backgroundColor = .clear
     webView.scrollView.contentInsetAdjustmentBehavior = .never
+    hideKeyboardAccessoryBar(of: webView)
+    ignoreKeyboardNotifications(in: webView)
     webView.translatesAutoresizingMaskIntoConstraints = false
     addSubview(webView)
     NSLayoutConstraint.activate([

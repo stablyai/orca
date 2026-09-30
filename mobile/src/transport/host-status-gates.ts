@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import type { RpcClient } from './rpc-client'
 import type { ConnectionState } from './types'
-import { hostStatusProbe, readHostStatusGates } from './host-status-probe-operations'
 import { evaluateCompat, type CompatVerdict } from './protocol-compat'
 import type { HostStatusReply } from './host-status-reply-schema'
 import { normalizeHostAppVersion } from './host-app-version'
 import { recordHostAppVersion } from './host-app-version-store'
 import { recordHostDescriptorFromStatus } from './host-descriptor-recorder'
+import { startRuntimeStatusProbe } from './runtime-status-probe'
 
 export type HostStatusGates = {
   hostCapabilities: string[]
@@ -46,6 +46,15 @@ const EMPTY_HOST_PROTOCOL_WINDOW: HostProtocolWindow = {
   minCompatibleMobileVersion: undefined
 }
 
+const UNREADABLE_STATUS_GATES: Omit<HostStatusGates, 'statusPending'> = {
+  hostCapabilities: EMPTY_HOST_CAPABILITIES,
+  floatingWorkspaceEnabled: false,
+  desktopAppVersion: null,
+  compatVerdict: { kind: 'ok' },
+  hostProtocolWindow: EMPTY_HOST_PROTOCOL_WINDOW,
+  statusReadable: false
+}
+
 // Reads status.get on connect for capabilities, protocol-compat verdict, and the
 // floating-workspace flag. Compat constants are wide-open today so this never blocks yet.
 export function useHostStatusGates(args: {
@@ -64,80 +73,10 @@ export function useHostStatusGates(args: {
       setUnverified(true)
       return
     }
-    let cancelled = false
-    const requestClient = client
-    const settle = (gates: Omit<HostStatusGates, 'statusPending'>) => {
-      setLoaded({ hostId, client: requestClient, ...gates })
+    return startHostStatusRead(client, hostId, (gates) => {
+      setLoaded({ hostId, client, ...gates })
       setUnverified(false)
-    }
-    void (async () => {
-      try {
-        const reply = await hostStatusProbe.request(requestClient)
-        if (cancelled) {
-          return
-        }
-        const status = readHostStatusGates(reply)
-        if (!status) {
-          settle({
-            hostCapabilities: [],
-            floatingWorkspaceEnabled: false,
-            desktopAppVersion: null,
-            compatVerdict: { kind: 'ok' },
-            hostProtocolWindow: EMPTY_HOST_PROTOCOL_WINDOW,
-            statusReadable: false
-          })
-          return
-        }
-        const verdict = evaluateCompat({
-          desktopProtocolVersion: status.protocolVersion,
-          desktopMinCompatibleMobileVersion: status.minCompatibleMobileVersion
-        })
-        const desktopAppVersion = normalizeHostAppVersion(status.appVersion)
-        if (hostId && desktopAppVersion) {
-          void recordHostAppVersion(hostId, desktopAppVersion)
-        }
-        if (hostId) {
-          // Why also here: the web page never runs the connection layer's probe, and the host
-          // screen should not wait for it; the recorder is idempotent across the two feeds.
-          recordHostDescriptorFromStatus(hostId, status)
-        }
-        settle({
-          hostCapabilities: status.capabilities ?? [],
-          floatingWorkspaceEnabled: status.floatingWorkspaceEnabled === true,
-          desktopAppVersion,
-          compatVerdict: verdict,
-          hostProtocolWindow: {
-            protocolVersion: status.protocolVersion,
-            minCompatibleMobileVersion: status.minCompatibleMobileVersion
-          },
-          statusReadable: true
-        })
-        if (verdict.kind === 'blocked') {
-          // Why: support breadcrumb to confirm a block fired vs a render bug; no PII, just version ints.
-          console.warn('[protocol-compat] blocked', {
-            reason: verdict.reason,
-            desktopVersion: verdict.desktopVersion,
-            requiredMobileVersion: verdict.requiredMobileVersion,
-            requiredDesktopVersion: verdict.requiredDesktopVersion
-          })
-        }
-      } catch {
-        // Why: a transient status failure must not trap navigation; conservative feature gates remain disabled.
-        if (!cancelled) {
-          settle({
-            hostCapabilities: [],
-            floatingWorkspaceEnabled: false,
-            desktopAppVersion: null,
-            compatVerdict: { kind: 'ok' },
-            hostProtocolWindow: EMPTY_HOST_PROTOCOL_WINDOW,
-            statusReadable: false
-          })
-        }
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
+    })
   }, [client, connState, hostId])
 
   // Why: effects run after render, so key loaded gates by host and client to fail closed during route reuse.
@@ -164,4 +103,68 @@ export function useHostStatusGates(args: {
     // longer blanks the capabilities this same host already proved.
     statusPending: connState === 'connected' && unverified
   }
+}
+
+/**
+ * Reads status.get until it lands, settling closed on the first failure. Returns the stop function
+ * the effect hands back, so the probe's retry timer is owned outside React.
+ */
+function startHostStatusRead(
+  client: RpcClient,
+  hostId: string | undefined,
+  settle: (gates: Omit<HostStatusGates, 'statusPending'>) => void
+): () => void {
+  let settledClosed = false
+  // Why: a transient status failure must not trap navigation; conservative feature gates remain
+  // disabled. Later failures keep the first one's answer rather than re-render the same closed gates.
+  const settleClosed = () => {
+    if (!settledClosed) {
+      settledClosed = true
+      settle(UNREADABLE_STATUS_GATES)
+    }
+  }
+  return startRuntimeStatusProbe(
+    client,
+    (status) => {
+      // A status this app cannot decode reads the same on every retry, so the probe stops on it.
+      if (!status) {
+        settleClosed()
+        return
+      }
+      const verdict = evaluateCompat({
+        desktopProtocolVersion: status.protocolVersion,
+        desktopMinCompatibleMobileVersion: status.minCompatibleMobileVersion
+      })
+      const desktopAppVersion = normalizeHostAppVersion(status.appVersion)
+      if (hostId && desktopAppVersion) {
+        void recordHostAppVersion(hostId, desktopAppVersion)
+      }
+      if (hostId) {
+        // Why also here: the web page never runs the connection layer's probe, and the host
+        // screen should not wait for it; the recorder is idempotent across the two feeds.
+        recordHostDescriptorFromStatus(hostId, status)
+      }
+      settle({
+        hostCapabilities: status.capabilities ?? [],
+        floatingWorkspaceEnabled: status.floatingWorkspaceEnabled === true,
+        desktopAppVersion,
+        compatVerdict: verdict,
+        hostProtocolWindow: {
+          protocolVersion: status.protocolVersion,
+          minCompatibleMobileVersion: status.minCompatibleMobileVersion
+        },
+        statusReadable: true
+      })
+      if (verdict.kind === 'blocked') {
+        // Why: support breadcrumb to confirm a block fired vs a render bug; no PII, just version ints.
+        console.warn('[protocol-compat] blocked', {
+          reason: verdict.reason,
+          desktopVersion: verdict.desktopVersion,
+          requiredMobileVersion: verdict.requiredMobileVersion,
+          requiredDesktopVersion: verdict.requiredDesktopVersion
+        })
+      }
+    },
+    settleClosed
+  )
 }

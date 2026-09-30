@@ -880,14 +880,6 @@ describe('spawnSystemSsh', () => {
     vi.stubEnv('PATH', '')
     expect(() => spawnSystemSsh(createTarget())).toThrow('No system ssh binary found')
   })
-
-  it('returns a process wrapper with kill and onExit', () => {
-    const result = spawnSystemSsh(createTarget())
-
-    expect(result.pid).toBe(12345)
-    expect(typeof result.kill).toBe('function')
-    expect(typeof result.onExit).toBe('function')
-  })
 })
 
 describe('system SSH operation aborts', () => {

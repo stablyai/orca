@@ -57,16 +57,12 @@ function createRuntime(provider?: {
   )
   const internal = runtime as unknown as {
     resolveTerminalWorkspaceLaunchScope: ReturnType<typeof vi.fn>
-    markLocalWorkspaceTrustedForAgent: ReturnType<typeof vi.fn>
-    markRemoteWorkspaceTrustedForAgent: ReturnType<typeof vi.fn>
   }
   internal.resolveTerminalWorkspaceLaunchScope = vi.fn(async () => ({
     id: 'worktree-1',
     path: '/tmp/worktree-1',
     connectionId: null
   }))
-  internal.markLocalWorkspaceTrustedForAgent = vi.fn()
-  internal.markRemoteWorkspaceTrustedForAgent = vi.fn()
   return runtime
 }
 
@@ -84,7 +80,6 @@ function installRemoteReclaimHarness(
       connectionId: 'ssh-1'
     })),
     executionOwnerSupportsAgentSessionOperation: vi.fn(async () => true),
-    markWorkspaceTrustedForAgent: vi.fn(async () => {}),
     adoptControllerTerminalHandle: vi.fn((ptyId: string, handle: string) => {
       handleByPtyId.set(ptyId, handle)
     }),
@@ -149,16 +144,13 @@ describe('agent-session create operation ledger', () => {
     expect(createTerminal).toHaveBeenCalledOnce()
   })
 
-  it('selects legacy before trust, spawn, or ledger state for an old daemon', async () => {
+  it('selects legacy before spawn or ledger state for an old daemon', async () => {
     const provider = {
       supportsAgentSessionClaims: vi.fn(() => false),
       supportsAgentSessionCreateOperations: vi.fn(() => false)
     }
     const runtime = createRuntime(provider)
     const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
-    const internal = runtime as unknown as {
-      markLocalWorkspaceTrustedForAgent: ReturnType<typeof vi.fn>
-    }
     const id = operationId()
 
     await expect(runtime.createAgentSession(request(id))).rejects.toThrow(
@@ -174,7 +166,6 @@ describe('agent-session create operation ledger', () => {
     ).rejects.toThrow('agent_session_legacy_required')
 
     expect(createTerminal).not.toHaveBeenCalled()
-    expect(internal.markLocalWorkspaceTrustedForAgent).not.toHaveBeenCalled()
 
     provider.supportsAgentSessionCreateOperations.mockReturnValue(true)
     await expect(runtime.createAgentSession(request(id))).resolves.toMatchObject({
@@ -270,7 +261,6 @@ describe('agent-session create operation ledger', () => {
     const runtime = createRuntime()
     const internal = runtime as unknown as {
       resolveTerminalWorkspaceLaunchScope: ReturnType<typeof vi.fn>
-      markRemoteWorkspaceTrustedForAgent: ReturnType<typeof vi.fn>
     }
     internal.resolveTerminalWorkspaceLaunchScope.mockResolvedValue({
       id: 'worktree-1',
@@ -293,7 +283,6 @@ describe('agent-session create operation ledger', () => {
     ).rejects.toThrow('agent_session_legacy_required')
 
     expect(createTerminal).not.toHaveBeenCalled()
-    expect(internal.markRemoteWorkspaceTrustedForAgent).not.toHaveBeenCalled()
   })
 
   it('replays the same completed operation without spawning again', async () => {

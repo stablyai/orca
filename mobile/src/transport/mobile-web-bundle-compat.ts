@@ -1,6 +1,10 @@
 import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../src/shared/mobile-web-bundle/mobile-web-bundle-capability'
 import type { HostStatusReply } from './host-status-reply-schema'
 
+/** The oldest page this shell serves: the `MOBILE_WEB_PAGE_VERSION` of the page built beside it. An
+ *  older desktop is walled rather than served, so the shell keeps no path for an older page. */
+export const MOBILE_WEB_PAGE_VERSION_FLOOR = 1
+
 /** The manifest schemas this app shell can mount. Widening it is a shell release, so the list is
  *  stated here rather than read off the contract's current version: the contract names the schema
  *  the desktop writes, which is exactly the number this shell may not recognise. */
@@ -24,6 +28,8 @@ export type MobileWebBundleCompatManifest = {
   schemaVersion: number
   runtimeProtocolVersion: number
   minCompatibleRuntimeProtocolVersion: number
+  /** Absent from a desktop older than the field, which reads as 0: below every floor. */
+  pageVersion?: number
 }
 
 export type MobileWebBundleCompatVerdict =
@@ -41,6 +47,14 @@ export type MobileWebBundleCompatVerdict =
       side: 'desktop'
       hostProtocolVersion: number
       requiredHostProtocolVersion: number
+    }
+  /** The host serves a page older than this shell's floor. */
+  | {
+      kind: 'blocked'
+      reason: 'bundle-incompatible'
+      side: 'desktop'
+      pageVersion: number
+      requiredPageVersion: number
     }
   /** The bundle is older than the host expects; the caller refetches. */
   | {
@@ -88,6 +102,16 @@ export function evaluateMobileWebBundleCompat(input: {
       kind: 'blocked',
       reason: 'bundle-shell-too-old',
       schemaVersion: manifest.schemaVersion
+    }
+  }
+  const pageVersion = manifest.pageVersion ?? 0
+  if (pageVersion < MOBILE_WEB_PAGE_VERSION_FLOOR) {
+    return {
+      kind: 'blocked',
+      reason: 'bundle-incompatible',
+      side: 'desktop',
+      pageVersion,
+      requiredPageVersion: MOBILE_WEB_PAGE_VERSION_FLOOR
     }
   }
   const hostProtocolVersion = input.hostStatus.protocolVersion ?? 0

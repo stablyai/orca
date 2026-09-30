@@ -147,12 +147,13 @@ ${params.taskSpec}`
 
 export type DispatchPreambleSendOptions = Pick<
   RuntimeAgentPromptWriteOptions,
-  'leadLine' | 'acceptQueued' | 'observationTimeoutMs' | 'requestId'
+  'leadLine' | 'acceptQueued' | 'observationTimeoutMs' | 'requestId' | 'inputKind'
 >
 
 export function dispatchPreambleSendOptions(requestId: string): DispatchPreambleSendOptions {
   // Why: a delayed provider hook must not revoke an accepted Dispatch.
   return {
+    inputKind: 'driving',
     leadLine: ORCA_DISPATCH_PROMPT_LEAD_LINE,
     acceptQueued: true,
     observationTimeoutMs: 0,

@@ -529,7 +529,9 @@ describe('claude journal translation — which agent produced a row', () => {
       (entry) => orcaClientMessageId(entry.identity) === 'claude-tool:claude-session:toolu_bash'
     )
     expect(row?.body).toMatchObject({ kind: 'tool-call', state: 'completed' })
-    expect(row?.options).toEqual({})
+    expect(row?.options).toEqual({
+      turnScope: { kind: 'turn', turnItemId: expect.any(String) }
+    })
   })
 
   /** One streamed text block, as the SDK sends it: a message start, then deltas.

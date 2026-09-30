@@ -88,6 +88,8 @@ export type AgentStatusTiming = {
   /** Observation clock for staleness; see `AgentStatusEntry.evidenceObservedAt`. */
   evidenceObservedAt?: number
   stateStartedAt?: number
+  /** The host's turn start; see `AgentStatusEntry.turnStartedAt`. */
+  turnStartedAt?: number
 }
 
 export type AgentStatusRouting = {

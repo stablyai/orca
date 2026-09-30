@@ -255,8 +255,8 @@ export function buildParityMainBufferSnapshot(
   if (!alternateScreen && terminal.modes.applicationCursorKeysMode) {
     seqs.push('\x1b[?1h')
   }
-  // Mouse-mode rehydrate omitted: TerminalMouseModeMirror is main-only and
-  // mouse reporting is input encoding — it cannot alter rendered output.
+  // Mouse-mode rehydrate omitted: mouse reporting is input encoding — it
+  // cannot alter rendered output.
   const snapshot: ParityMainSnapshot = {
     data: seqs.join('') + snapshotAnsi,
     cols: terminal.cols,

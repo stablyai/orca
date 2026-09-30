@@ -6,11 +6,11 @@
 // launch — is reachable in Agent Session History by id and by nothing else. This is the lookup that
 // turns that id back into something a client can publish.
 //
-// It is deliberately the whole of what reveal does on the host. It takes no hold: a provider child
-// exists because a surface asked for one, and the chat pane asks when it binds. And a journal it
-// cannot read is not a refusal — a chat whose journal predates the SQLite store restores to nothing
-// here, yet attach still recovers it, so the tab is worth publishing either way.
+// It is deliberately the whole of what reveal does on the host. It starts no provider child: only
+// a send does. And a journal it cannot open is not a refusal — the chat shows that failure with a
+// Retry, so the tab is worth publishing either way.
 
+import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
 import { adapterSupportsRecord } from './structured-agent-session-provider-support'
 import { StructuredAgentSessionReadableRestorer } from './structured-agent-session-readable-restorer'
 import { StructuredAgentSessionRestartRestoreGate } from './structured-agent-session-restart-restore-gate'
@@ -18,26 +18,29 @@ import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionReveal
 } from './structured-agent-session-host-types'
-import { settleStaleStructuredAgentSessionState } from './structured-agent-session-dead-generation-settlement'
 
-/** Throws its refusal as the code itself, matching `resumeHeldStructuredAgentSession`. */
+/** Throws its refusal as the code itself. */
 export async function revealStructuredAgentSession(
   deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'adapter'>,
   sessionId: string,
-  hasSession: (sessionId: string) => boolean,
-  restoreReadable: (sessionId: string) => Promise<boolean>
+  openConversation: (sessionId: string) => Promise<unknown>
 ): Promise<StructuredAgentSessionReveal> {
   const record = deps.store.getRecord(sessionId)
   if (!record) {
-    throw new Error('agent_session_identity_required')
+    throw agentSessionRefusalError('agent_session_identity_required', { reason: 'recordMissing' })
   }
   if (!adapterSupportsRecord(deps.adapter, record)) {
-    throw new Error('structured_agent_session_unsupported')
+    throw agentSessionRefusalError('structured_agent_session_unsupported', {
+      reason: 'hostUnsupported'
+    })
   }
   // Lease state is not consulted on purpose: this neither claims the lease nor spawns a child, so a
-  // contested or reconciling chat still reveals and the hold that follows adjudicates it. Refusing
+  // contested or reconciling chat still reveals and the send that follows adjudicates it. Refusing
   // here would hide the one view of a session a user needs when its ownership is in doubt.
-  const readable = hasSession(sessionId) || (await restoreReadable(sessionId))
+  const readable = await openConversation(sessionId).then(
+    () => true,
+    () => false
+  )
   return {
     sessionId,
     // From the record, never from a caller: a client that knows only a session id must not be able
@@ -48,50 +51,23 @@ export async function revealStructuredAgentSession(
   }
 }
 
-/**
- * The host's whole readable-restore surface: the startup sweep and the on-demand reveal.
- *
- * Bundled the way the lifetime collaborators are, because the two share the restorer
- * and differ only in who is asking — startup, once, for everything; a surface, later, for one.
- */
+/** The host's startup readable-restore sweep: reconcile, resolve, then open each chat's journal. */
 export function createStructuredAgentSessionHostRestore(
   deps: StructuredAgentSessionHostDeps,
   wiring: Omit<
     ConstructorParameters<typeof StructuredAgentSessionReadableRestorer>[0],
-    'store' | 'journalRoot' | 'supportsRecord' | 'settleStaleState'
+    'openDeps' | 'supportsRecord'
   >
 ): {
   restoreReadableSessions: (sessionIds?: readonly string[]) => Promise<void>
-  revealSession: (sessionId: string) => Promise<StructuredAgentSessionReveal>
-  /** One session, for a caller already inside its serialize. */
-  restoreReadableUnderSerialize: (sessionId: string) => Promise<boolean>
 } {
   const restorer = new StructuredAgentSessionReadableRestorer({
-    store: deps.store,
-    journalRoot: deps.journalRoot,
+    openDeps: deps,
     supportsRecord: (record) => adapterSupportsRecord(deps.adapter, record),
-    settleStaleState: async (sessionId, restored) => {
-      try {
-        await settleStaleStructuredAgentSessionState({
-          journal: restored.journal,
-          sessionId,
-          fence: restored.fence,
-          acquisitionGeneration: null,
-          deathEvidence: deps.store.getRecord(sessionId)?.lease.deathEvidence ?? null
-        })
-      } catch (error) {
-        deps.onEventSinkError?.({ sessionId, error })
-      }
-    },
     ...wiring
   })
   const gate = new StructuredAgentSessionRestartRestoreGate()
   return {
-    restoreReadableSessions: (sessionIds) => gate.run(() => restorer.restore(sessionIds)),
-    revealSession: (sessionId) =>
-      revealStructuredAgentSession(deps, sessionId, wiring.hasSession, (id) =>
-        restorer.restoreOne(id)
-      ),
-    restoreReadableUnderSerialize: (sessionId) => restorer.restoreOneUnderSerialize(sessionId)
+    restoreReadableSessions: (sessionIds) => gate.run(() => restorer.restore(sessionIds))
   }
 }

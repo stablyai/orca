@@ -69,6 +69,7 @@ vi.mock('react-native-reanimated', () => ({
 }))
 
 import { MountedBottomDrawer } from './mounted-bottom-drawer'
+import { publishShellKeyboardSource } from '../platform/keyboard-occlusion.web'
 
 const RESTING_HEIGHT = 900
 const IME_HEIGHT = 300
@@ -106,15 +107,36 @@ describe('a fill-mode sheet on the page', () => {
     act(() => renderer.unmount())
   })
 
-  it('does not lift over a keyboard the shell already shortened the WebView for', () => {
-    setWindowHeight(RESTING_HEIGHT)
-    const renderer = renderFillSheet()
-    act(() => setWindowHeight(RESTING_HEIGHT - IME_HEIGHT))
-    // The shortened window is the whole avoidance: the sheet's height follows it and nothing lifts.
-    expect(sheetStyle(renderer)).toMatchObject({
-      marginBottom: 0,
-      height: RESTING_HEIGHT - IME_HEIGHT - 24 - 16
+  it('sits on the keyboard the shell says covers the page, as it does natively', () => {
+    let height = 0
+    const listeners = new Set<(next: number) => void>()
+    publishShellKeyboardSource({
+      read: () => height,
+      subscribe: (listener) => {
+        listeners.add(listener)
+        return () => listeners.delete(listener)
+      }
     })
-    act(() => renderer.unmount())
+    try {
+      setWindowHeight(RESTING_HEIGHT)
+      const renderer = renderFillSheet()
+      act(() => {
+        height = IME_HEIGHT
+        listeners.forEach((listener) => listener(IME_HEIGHT))
+      })
+      expect(sheetStyle(renderer)).toMatchObject({
+        marginBottom: IME_HEIGHT,
+        height: RESTING_HEIGHT - IME_HEIGHT - 24 - 16
+      })
+      act(() => {
+        height = 0
+        listeners.forEach((listener) => listener(0))
+      })
+      expect(sheetStyle(renderer).marginBottom).toBe(0)
+      act(() => renderer.unmount())
+      expect(listeners.size).toBe(0)
+    } finally {
+      publishShellKeyboardSource(null)
+    }
   })
 })

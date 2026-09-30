@@ -56,6 +56,7 @@ export type MockWebContents = {
   on: Mock<(event: string, listener: MockEmitterListener) => void>
   removeListener: Mock<(event: string, listener: MockEmitterListener) => void>
   isDestroyed: () => boolean
+  isCrashed: () => boolean
   invalidate: Mock<() => void>
   focus: Mock<() => void>
   debugger: MockWebContentsDebugger
@@ -78,6 +79,7 @@ export function mockWebContents(
     on: vi.fn(),
     removeListener: vi.fn(),
     isDestroyed: () => false,
+    isCrashed: () => false,
     invalidate: vi.fn(),
     focus: vi.fn(),
     debugger: {

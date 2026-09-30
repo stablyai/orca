@@ -18,12 +18,12 @@ import {
   adapterFor,
   fakeClaude,
   identityFor,
-  invokeCanUseTool,
   PROVIDER_SESSION_ID,
   tick,
   USER_MESSAGE,
   type FakeConnection
 } from './claude-structured-session-test-support'
+import { invokeCanUseTool } from './claude-can-use-tool-test-support'
 
 describe('ClaudeStructuredSessionAdapter.acquire', () => {
   it('pins the account and proves init without treating the system-frame uuid as a chain leaf', async () => {
@@ -62,7 +62,8 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
       mintedAtFence: 7,
       observedAt: 1_700_000_000_500
     })
-    expect(events[0]).toMatchObject({ type: 'message', message: { subtype: 'init' } })
+    // Live proof order: the SessionStart hook frame arrives before any init.
+    expect(events[0]).toMatchObject({ type: 'message', message: { subtype: 'hook_started' } })
   })
 
   it('restores persisted model and effort before publishing a reacquired session', async () => {
@@ -344,7 +345,10 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
       session_id: 'foreign-provider-session'
     })
     await Promise.resolve()
-    expect(events.filter((event) => event.type === 'message')).toHaveLength(1)
+    // Startup hook proof + the first cycle's init are admitted; nothing foreign is.
+    expect(
+      events.flatMap((event) => (event.type === 'message' ? [event.message.subtype] : []))
+    ).toEqual(['hook_started', 'hook_response', 'init'])
     expect(settled).not.toHaveBeenCalled()
 
     connection.handlers.onMessage?.({

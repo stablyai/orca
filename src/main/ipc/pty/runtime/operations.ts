@@ -12,16 +12,28 @@ import {
   writeUnverifiable,
   type WriteSettlement
 } from '../../../../shared/pty-write-settlement'
+import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 
-export function writePtyFromRuntimeController(ptyId: string, data: string): boolean
+type RuntimeWriteDeps = Pick<PtyRuntimeControllerDeps, 'runtime'>
+
 export function writePtyFromRuntimeController(
+  deps: RuntimeWriteDeps,
   ptyId: string,
   data: string,
+  inputKind: TerminalInputKind
+): boolean
+export function writePtyFromRuntimeController(
+  deps: RuntimeWriteDeps,
+  ptyId: string,
+  data: string,
+  inputKind: TerminalInputKind,
   options: { waitForSettlement: true }
 ): WriteSettlement | Promise<WriteSettlement>
 export function writePtyFromRuntimeController(
+  deps: RuntimeWriteDeps,
   ptyId: string,
   data: string,
+  inputKind: TerminalInputKind,
   options?: { waitForSettlement: true }
 ): boolean | WriteSettlement | Promise<WriteSettlement> {
   let provider: IPtyProvider
@@ -36,6 +48,7 @@ export function writePtyFromRuntimeController(
     if (!provider.writeWithSettlement) {
       return writeRefused('provider_cannot_settle')
     }
+    deps.runtime?.terminalRunFacts?.recordInput(ptyId, inputKind, data)
     try {
       return provider.writeWithSettlement(ptyId, data)
     } catch {
@@ -43,6 +56,7 @@ export function writePtyFromRuntimeController(
       return writeUnverifiable('provider_threw_after_handoff', true)
     }
   }
+  deps.runtime?.terminalRunFacts?.recordInput(ptyId, inputKind, data)
   try {
     return provider.write(ptyId, data) !== false
   } catch {
@@ -176,6 +190,21 @@ export async function clearBufferFromRuntimeController(
     await getProviderForPty(ptyId).clearBuffer(ptyId)
   } catch {
     /* best effort: renderer clear still handles local PTYs */
+  }
+}
+
+export async function resetInputModesFromRuntimeController(
+  deps: PtyRuntimeControllerDeps,
+  ptyId: string
+): Promise<void> {
+  // Why: a remote client's reset must also ground this host window's view of the pane.
+  if (deps.mainWindow && !deps.mainWindow.isDestroyed()) {
+    deps.mainWindow.webContents.send('pty:resetInputModes:request', { ptyId })
+  }
+  try {
+    await getProviderForPty(ptyId).resetInputModes(ptyId)
+  } catch {
+    /* best effort: an older daemon or relay rejects the request */
   }
 }
 

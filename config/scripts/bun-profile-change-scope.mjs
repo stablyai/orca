@@ -8,6 +8,7 @@ import {
   ORCAD_ENTRY_POINT
 } from './orcad-entry-build.mjs'
 import { bunProfileTestPaths } from './bun-profile-test-paths.mjs'
+import { bunProfileQualification } from './bun-profile-qualification.mjs'
 
 const ROOT = resolve(import.meta.dirname, '../..')
 const BUILD_SCRIPTS = [
@@ -29,7 +30,9 @@ const ALWAYS_FILES = new Set([
   'tsconfig.json',
   '.github/workflows/bun-profile-tests.yml',
   'config/scripts/bun-profile-change-scope.mjs',
-  'config/scripts/bun-profile-change-scope.test.mjs'
+  'config/scripts/bun-profile-change-scope.test.mjs',
+  'config/scripts/bun-profile-qualification.mjs',
+  'config/scripts/bun-profile-qualification.test.mjs'
 ])
 const ALWAYS_PREFIXES = [
   '.github/actions/install-node-dependencies/',
@@ -110,7 +113,11 @@ export async function classifyBunProfileChanges(changedFiles, collect = collectB
       reason: matched ? `Runtime or test dependency changed: ${matched}` : 'No Bun inputs changed'
     }
   } catch (error) {
-    return { shouldRun: true, reason: `Dependency graph unavailable: ${String(error)}` }
+    return {
+      shouldRun: true,
+      graphUnavailable: true,
+      reason: `Dependency graph unavailable: ${String(error)}`
+    }
   }
 }
 
@@ -118,7 +125,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const changedFiles = readFileSync(process.argv[2], 'utf8').split('\0').filter(Boolean)
   const result = await classifyBunProfileChanges(changedFiles)
   console.log(result.reason)
-  const output = `should_run=${String(result.shouldRun)}\n`
+  const policy = bunProfileQualification(changedFiles, result)
+  const output = `should_run=${result.shouldRun}\nqualification=${policy.qualification}\nrunners=${JSON.stringify(policy.runners)}\n`
   if (process.env.GITHUB_OUTPUT) {
     appendFileSync(process.env.GITHUB_OUTPUT, output)
   } else {

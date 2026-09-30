@@ -190,9 +190,34 @@ describe('structured agent-session lease renewal', () => {
         { timeout: 5000 }
       )
     } finally {
-      renewer.stop()
+      await renewer.stop()
       vi.useRealTimers()
     }
+  })
+
+  it('stops only once a renewal already in flight has finished writing', async () => {
+    const store = await liveStore()
+    let releaseProbe = (): void => {}
+    const probing = new Promise<void>((resolve) => {
+      releaseProbe = resolve
+    })
+    const renewer = new StructuredAgentSessionLeaseRenewer({
+      store,
+      probe: async () => {
+        await probing
+        return { outcome: 'identity-matched', matchedOn: ['process-start-time'] }
+      },
+      now: () => NOW + 10_000
+    })
+
+    void renewer.renewNow()
+    // Nothing has been written yet: the tick is parked in its probe.
+    expect(store.getRecord('session-renewal')?.lease.lastRenewedAt).toBe(NOW)
+    const stopped = renewer.stop()
+    releaseProbe()
+    await stopped
+
+    expect(store.getRecord('session-renewal')?.lease.lastRenewedAt).toBe(NOW + 10_000)
   })
 
   it('renews every live owner only after re-proving its child identity', async () => {

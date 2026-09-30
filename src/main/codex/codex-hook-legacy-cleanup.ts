@@ -8,6 +8,10 @@ import {
   writeHooksJson
 } from '../agent-hooks/installer-utils'
 import { resolveHooksJsonWritePath } from '../agent-hooks/hook-config-write-path'
+import {
+  isAgentStatusHooksEnabledForAgent,
+  type AgentStatusHooksSettings
+} from '../../shared/agent-status-hooks-setting'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { findManagedTomlBlocks } from '../agent-hooks/managed-toml-ownership'
 import { writeConfigAtomically, type CodexTrustEntry } from './config-toml-trust'
@@ -40,6 +44,17 @@ let systemCodexHomeHookSweepSuppressed: () => boolean = () => false
 
 export function setSystemCodexHomeHookSweepSuppressed(gate: () => boolean): void {
   systemCodexHomeHookSweepSuppressed = gate
+}
+
+// Why per agent: Codex turned off must re-arm the sweep exactly like the global switch off,
+// or its remove() leaves Orca's entry in the real ~/.codex.
+export function shouldSuppressSystemCodexHomeHookSweep(args: {
+  isHostSystemDefaultRealHome: boolean
+  settings: AgentStatusHooksSettings
+}): boolean {
+  return (
+    args.isHostSystemDefaultRealHome && isAgentStatusHooksEnabledForAgent(args.settings, 'codex')
+  )
 }
 
 function getLegacyCodexProfileTomlPath(): string {

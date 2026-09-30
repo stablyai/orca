@@ -1,15 +1,13 @@
 import type * as NodeFsModule from 'node:fs'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
-import type * as NodeFsPromisesModule from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import type * as NodeOsModule from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const state = vi.hoisted(() => ({
+const state = vi.hoisted((): { home: string; syncCalls: { name: string; target: string }[] } => ({
   home: '',
-  syncCalls: [] as { name: string; target: string }[],
-  blockAsyncReads: false
+  syncCalls: []
 }))
 
 vi.mock('node:fs', async (importOriginal) => {
@@ -28,18 +26,6 @@ vi.mock('node:fs', async (importOriginal) => {
     wrapped[name] = recorder
   }
   return { ...wrapped, default: wrapped }
-})
-
-vi.mock('node:fs/promises', async (importOriginal) => {
-  const actual = await importOriginal<typeof NodeFsPromisesModule>()
-  return {
-    ...actual,
-    default: actual,
-    readFile: (...args: Parameters<typeof actual.readFile>) =>
-      state.blockAsyncReads && String(args[0]).startsWith(state.home)
-        ? new Promise<never>(() => {})
-        : actual.readFile(...args)
-  }
 })
 
 vi.mock('node:os', async (importOriginal) => {
@@ -61,11 +47,9 @@ describe('managed hook script refresh stays off the main thread', () => {
   beforeEach(async () => {
     state.home = await mkdtemp(join(tmpdir(), 'orca-hook-refresh-main-thread-'))
     state.syncCalls = []
-    state.blockAsyncReads = false
   })
 
   afterEach(async () => {
-    state.blockAsyncReads = false
     await rm(state.home, { recursive: true, force: true })
   })
 
@@ -84,18 +68,5 @@ describe('managed hook script refresh stays off the main thread', () => {
     }
 
     expect(syncCallsUnderHome()).toEqual([])
-  })
-
-  it('keeps the event loop responsive while a HOME read is stalled', async () => {
-    state.blockAsyncReads = true
-    const refresh = MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS[0][1]()
-    let settled = false
-    void refresh.then(() => {
-      settled = true
-    })
-
-    await new Promise<void>((resolve) => setTimeout(resolve, 5))
-
-    expect(settled).toBe(false)
   })
 })

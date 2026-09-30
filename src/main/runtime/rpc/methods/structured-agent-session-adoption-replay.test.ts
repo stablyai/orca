@@ -12,6 +12,7 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcRequest, RpcResponse } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
+import { openTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 
 const SESSION = 'session-adoption-replay'
 const THREAD = 'thread-adoption-replay'
@@ -183,7 +184,7 @@ describe('committed adopting create RPC replay', () => {
     host = new StructuredAgentSessionHost({
       store,
       adapter: sessionAdapter,
-      journalRoot: root,
+      journalDatabase: openTestJournalHostDatabase(root),
       claimKeyId: 'key-1'
     })
     setStructuredAgentSessionHost(host)

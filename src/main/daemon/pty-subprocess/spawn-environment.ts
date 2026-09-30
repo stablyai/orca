@@ -1,3 +1,4 @@
+import { getLegacyOpenCodeEnvKeysToDelete } from '../../opencode/legacy-shared-config-dir'
 import { restoreOrStripOverlayEnv } from '../../../shared/agent-overlay-env'
 import { delimiter } from 'node:path'
 import { dropInheritedOrcaFishHistory } from '../../fish-history-session'
@@ -22,6 +23,7 @@ import {
   expandWindowsEnvironmentVariables,
   expandWindowsPathEnvironmentVariables
 } from '../../../shared/windows-environment-expansion'
+import { applyScrubSafeAgentEnvAliases } from '../../../shared/agent-hook-scrub-safe-env'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { PtySubprocessOptions } from '../pty-subprocess'
 
@@ -53,6 +55,12 @@ function deleteRequestedDaemonEnvKeys(
   env: Record<string, string>,
   keys: readonly string[] | undefined
 ): void {
+  const userDataPath = process.env.ORCA_USER_DATA_PATH
+  if (userDataPath) {
+    for (const key of getLegacyOpenCodeEnvKeysToDelete(env, userDataPath, {})) {
+      delete env[key]
+    }
+  }
   // Why: persistent daemon state can differ from Electron; delete CODEX_HOME only when its Orca overlay owns it.
   const deleteOrcaOwnedCodexHome =
     keys?.includes('ORCA_CODEX_HOME') === true &&
@@ -188,6 +196,9 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
   delete env.ELECTRON_RUN_AS_NODE
   removeAppImageRuntimeEnv(env)
   removeInheritedNoColor(env)
+  // Why last: the aliases mirror pane identity AFTER every strip above has settled, so an
+  // alias can never outlive the value it mirrors.
+  applyScrubSafeAgentEnvAliases(env)
   env.LANG ??= 'en_US.UTF-8'
   return env
 }

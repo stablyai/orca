@@ -682,8 +682,7 @@ describe('ssh host partition remote-workspace round trip', () => {
       new Set([WORKTREE_ID]),
       read.session.tabsByWorktree,
       new Set(),
-      SSH_HOST_ID,
-      1
+      SSH_HOST_ID
     )
 
     expect(merged.tabsByWorktree[WORKTREE_ID]?.map((entry) => entry.id)).toEqual(['tab-runtime'])
@@ -718,8 +717,7 @@ describe('ssh host partition remote-workspace round trip', () => {
       new Set([WORKTREE_ID]),
       read.session.tabsByWorktree,
       new Set(),
-      SSH_HOST_ID,
-      2
+      SSH_HOST_ID
     )
 
     expect(merged.tabsByWorktree[WORKTREE_ID]?.map((entry) => entry.id)).toEqual(['tab-runtime'])

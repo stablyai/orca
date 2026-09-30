@@ -72,10 +72,10 @@ function turnReportsModel(model: string): void {
   })
 }
 
-function statusRows(host: StructuredAgentSessionHost): string[] {
-  return host
-    .journalSnapshot(SESSION)
-    .items.flatMap((item) => (item.body.kind === 'status' ? [item.body.text] : []))
+async function statusRows(host: StructuredAgentSessionHost): Promise<string[]> {
+  return (await host.journalSnapshot(SESSION)).items.flatMap((item) =>
+    item.body.kind === 'status' ? [item.body.text] : []
+  )
 }
 
 async function send(host: StructuredAgentSessionHost, text: string): Promise<void> {
@@ -119,7 +119,7 @@ describe('a Claude start whose CLI answers initialize but not a control request'
       timeout: DEADLINE_MS * 40
     })
     expect(host.deps.adapter.readOptionRestoreFailures?.(SESSION)).toEqual([])
-    expect(statusRows(host)).toEqual([])
+    expect(await statusRows(host)).toEqual([])
     expect(claude.children(SESSION)).toHaveLength(1)
 
     // The proven child takes the next message.
@@ -245,7 +245,7 @@ describe('a Claude start whose CLI answers initialize but not a control request'
       timeout: DEADLINE_MS * 40
     })
     expect(record(host)?.lease.claimStatus).toBe('live')
-    expect(statusRows(host)).toEqual([])
+    expect(await statusRows(host)).toEqual([])
     expect(claude.children(SESSION)).toHaveLength(1)
   })
 })

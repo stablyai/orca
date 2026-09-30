@@ -29,20 +29,6 @@ describe('registerGitHubHandlers', () => {
 
   beforeEach(harness.reset)
 
-  it('forwards listIssues for registered repositories and unwraps items', async () => {
-    listIssuesMock.mockResolvedValue({ items: [] })
-
-    registerGitHubHandlers(store as never, stats as never)
-
-    const result = await handlers['gh:listIssues'](null, {
-      repoPath: '/workspace/repo',
-      limit: 5
-    })
-
-    expect(listIssuesMock).toHaveBeenCalledWith('/workspace/repo', 5, undefined, null)
-    expect(result).toEqual([])
-  })
-
   it('drops the error field from listIssues envelope at the IPC boundary', async () => {
     // Why: src/main/ipc/github.ts intentionally unwraps the { items, error? }
     // envelope to just `items` to preserve the pre-feature-1

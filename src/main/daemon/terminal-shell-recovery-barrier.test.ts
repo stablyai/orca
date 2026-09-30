@@ -4,6 +4,10 @@ import { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
 import type { PtyIngressEmission } from '../../shared/pty-startup-ingress'
 
 const TRIGGER = '\x1b[?1049hTUI\x1b]133;D;137\x07'
+// The barrier holds the whole D mark; the ground rides on it.
+const MARK = '\x1b]133;D;137\x07'
+const HEAD = TRIGGER.slice(0, -MARK.length)
+const GROUNDED = `${MARK}${PROCESS_BOUNDARY_GROUND}`
 
 function passthrough(data: string, rawStartSeq = 0): PtyIngressEmission {
   return { data, rawStartSeq, rawEndSeq: rawStartSeq + data.length, transformed: false }
@@ -47,14 +51,14 @@ describe('TerminalShellRecoveryBarrier', () => {
     barrier.accept(passthrough(`${TRIGGER}SHELL-PROMPT`, 100))
     expect(confirm).toHaveBeenCalledTimes(1)
     expect(released).toEqual([
-      { data: TRIGGER, rawStartSeq: 100, rawEndSeq: 100 + TRIGGER.length, transformed: false }
+      { data: HEAD, rawStartSeq: 100, rawEndSeq: 100 + HEAD.length, transformed: false }
     ])
 
     resolveConfirm?.(true)
     await vi.waitFor(() => expect(released).toHaveLength(3))
     expect(released[1]).toEqual({
-      data: PROCESS_BOUNDARY_GROUND,
-      rawStartSeq: 100 + TRIGGER.length,
+      data: GROUNDED,
+      rawStartSeq: 100 + HEAD.length,
       rawEndSeq: 100 + TRIGGER.length,
       transformed: true
     })
@@ -80,12 +84,7 @@ describe('TerminalShellRecoveryBarrier', () => {
 
     resolveConfirm?.(true)
     await vi.waitFor(() => expect(released).toHaveLength(4))
-    expect(released.map((emission) => emission.data)).toEqual([
-      TRIGGER,
-      PROCESS_BOUNDARY_GROUND,
-      'late-1',
-      'late-2'
-    ])
+    expect(released.map((emission) => emission.data)).toEqual([HEAD, GROUNDED, 'late-1', 'late-2'])
   })
 
   it('flushes unmodified with no injection when the proof is refuted', async () => {
@@ -97,8 +96,8 @@ describe('TerminalShellRecoveryBarrier', () => {
     barrier.accept(passthrough(`${TRIGGER}nested-shell`))
     resolveConfirm?.(false)
 
-    await vi.waitFor(() => expect(released).toHaveLength(2))
-    expect(released.map((emission) => emission.data)).toEqual([TRIGGER, 'nested-shell'])
+    await vi.waitFor(() => expect(released).toHaveLength(3))
+    expect(released.map((emission) => emission.data)).toEqual([HEAD, MARK, 'nested-shell'])
     expect(barrier.getOwner()).toBeUndefined()
   })
 
@@ -110,12 +109,12 @@ describe('TerminalShellRecoveryBarrier', () => {
     })
 
     barrier.accept(passthrough(`${TRIGGER}prompt`))
-    await vi.waitFor(() => expect(released).toHaveLength(2))
-    expect(released.map((emission) => emission.data)).toEqual([TRIGGER, 'prompt'])
+    await vi.waitFor(() => expect(released).toHaveLength(3))
+    expect(released.map((emission) => emission.data)).toEqual([HEAD, MARK, 'prompt'])
 
     resolveConfirm?.(true)
     await new Promise((resolve) => setTimeout(resolve, 5))
-    expect(released).toHaveLength(2)
+    expect(released).toHaveLength(3)
     expect(barrier.getOwner()).toBeUndefined()
   })
 
@@ -128,7 +127,7 @@ describe('TerminalShellRecoveryBarrier', () => {
     barrier.accept(passthrough(TRIGGER))
     barrier.accept(passthrough('0123456789'))
 
-    expect(released.map((emission) => emission.data)).toEqual([TRIGGER, '0123456789'])
+    expect(released.map((emission) => emission.data)).toEqual([HEAD, MARK, '0123456789'])
     expect(barrier.getOwner()).toBeUndefined()
   })
 
@@ -144,8 +143,8 @@ describe('TerminalShellRecoveryBarrier', () => {
     alive = false
     resolveConfirm?.(true)
 
-    await vi.waitFor(() => expect(released).toHaveLength(2))
-    expect(released.map((emission) => emission.data)).toEqual([TRIGGER, 'prompt'])
+    await vi.waitFor(() => expect(released).toHaveLength(3))
+    expect(released.map((emission) => emission.data)).toEqual([HEAD, MARK, 'prompt'])
     expect(barrier.getOwner()).toBeUndefined()
   })
 
@@ -165,11 +164,11 @@ describe('TerminalShellRecoveryBarrier', () => {
 
     await vi.waitFor(() =>
       expect(released.map((emission) => emission.data)).toEqual([
-        TRIGGER,
-        PROCESS_BOUNDARY_GROUND,
+        HEAD,
+        GROUNDED,
         'first-prompt',
-        '\x1b[?1049hAGAIN\x1b]133;D;9\x07',
-        PROCESS_BOUNDARY_GROUND,
+        '\x1b[?1049hAGAIN',
+        `\x1b]133;D;9\x07${PROCESS_BOUNDARY_GROUND}`,
         'second-prompt'
       ])
     )
@@ -274,13 +273,12 @@ describe('TerminalShellRecoveryBarrier', () => {
     await vi.waitFor(() =>
       expect(released.map((emission) => emission.data)).toEqual([
         head,
-        '37\x07',
-        PROCESS_BOUNDARY_GROUND,
+        `37\x07${PROCESS_BOUNDARY_GROUND}`,
         'PROMPT'
       ])
     )
     expect(released[1]).toMatchObject({ rawStartSeq: head.length, rawEndSeq: head.length + 3 })
-    expect(released[3]).toMatchObject({
+    expect(released[2]).toMatchObject({
       rawStartSeq: head.length + 3,
       rawEndSeq: head.length + tail.length
     })
@@ -308,34 +306,71 @@ describe('TerminalShellRecoveryBarrier', () => {
 
     await settled
     await vi.waitFor(() =>
-      expect(released.map((emission) => emission.data)).toEqual([
-        TRIGGER,
-        PROCESS_BOUNDARY_GROUND,
-        'after-poison'
-      ])
+      expect(released.map((emission) => emission.data)).toEqual([HEAD, GROUNDED, 'after-poison'])
     )
     await expect(barrier.idle()).resolves.toBeUndefined()
   })
 
-  it('opens at most one episode per alternate-screen occupancy after a refuted proof', async () => {
+  it('asks at every D of a live TUI and releases every byte, in order, unmodified', async () => {
     const { barrier, released, confirm } = createBarrier({ confirm: async () => false })
-
-    barrier.accept(passthrough(`${TRIGGER}prompt`))
-    await vi.waitFor(() => expect(released).toHaveLength(2))
-    expect(confirm).toHaveBeenCalledTimes(1)
-
-    // Why: the refuted path never scans a reset, so alt stays active — later
-    // ordinary prompts must not each re-open a pause-and-inspect episode.
+    const leak = '\x1b]133;C\x07nested\x1b]133;D;0\x07'
+    const sent = [`\x1b[?1049h\x1b[?1003hTUI${leak}frame`]
     for (let index = 0; index < 5; index += 1) {
-      const prompt = passthrough(`\x1b]133;C\x07ls\r\n\x1b]133;D;0\x07`)
-      barrier.accept(prompt)
-      expect(released.at(-1)).toBe(prompt)
+      sent.push(`${leak}frame${index}`)
     }
-    expect(confirm).toHaveBeenCalledTimes(1)
 
-    // A fresh alternate-screen entry re-arms recovery.
-    barrier.accept(passthrough(`\x1b]133;C\x07\x1b[?1049hAGAIN\x1b]133;D;9\x07`))
-    expect(confirm).toHaveBeenCalledTimes(2)
+    let seq = 0
+    for (const data of sent) {
+      barrier.accept(passthrough(data, seq))
+      seq += data.length
+    }
+    await vi.waitFor(() => expect(confirm).toHaveBeenCalledTimes(6))
+    await barrier.idle()
+
+    expect(released.map((emission) => emission.data).join('')).toBe(sent.join(''))
+    expect(released.every((emission) => !emission.transformed)).toBe(true)
+    expect(barrier.getOwner()).toBeUndefined()
+  })
+
+  it("grounds a TUI that dies after many nested shells' Ds were refuted", async () => {
+    let dead = false
+    const { barrier, released, confirm } = createBarrier({ confirm: async () => dead })
+    const leak = '\x1b]133;C\x07nested\x1b]133;D;0\x07'
+
+    barrier.accept(passthrough(`\x1b[?1049hTUI${leak.repeat(5)}`))
+    await vi.waitFor(() => expect(confirm).toHaveBeenCalledTimes(5))
+    await barrier.idle()
+    dead = true
+    barrier.accept(passthrough('\x1b]133;D;137\x07prompt'))
+
+    await vi.waitFor(() => expect(barrier.getOwner()).toBe('shell'))
+    expect(released.slice(-2).map((emission) => emission.data)).toEqual([GROUNDED, 'prompt'])
+    // Grounded once: the next prompt opens no episode.
+    barrier.accept(passthrough('\x1b]133;C\x07ls\x1b]133;D;0\x07'))
+    expect(confirm).toHaveBeenCalledTimes(6)
+  })
+
+  it('grounds a real death D that arrives while a stray D is still being proven', async () => {
+    const proofs: ((confirmed: boolean) => void)[] = []
+    const { barrier, released, confirm } = createBarrier({
+      confirm: () => new Promise((resolve) => void proofs.push(resolve))
+    })
+    const leak = '\x1b[?1049h\x1b[?1003hTUI\x1b]133;C\x07nested\x1b]133;D;0\x07'
+
+    barrier.accept(passthrough(leak, 0))
+    barrier.accept(passthrough('frame\x1b]133;D;137\x07prompt', leak.length))
+    proofs[0]?.(false)
+    await vi.waitFor(() => expect(confirm).toHaveBeenCalledTimes(2))
+    proofs[1]?.(true)
+
+    await vi.waitFor(() => expect(barrier.getOwner()).toBe('shell'))
+    expect(released.map((emission) => emission.data)).toEqual([
+      leak.slice(0, -'\x1b]133;D;0\x07'.length),
+      '\x1b]133;D;0\x07',
+      'frame',
+      GROUNDED,
+      'prompt'
+    ])
   })
 
   it('bounds awaitProofSettled by its own deadline when a clean-exit proof hangs', async () => {
@@ -359,7 +394,7 @@ describe('TerminalShellRecoveryBarrier', () => {
     const barrier = new TerminalShellRecoveryBarrier({
       confirmShellForeground: confirm,
       release: (emission) => {
-        if (!headThrown && emission.data === TRIGGER) {
+        if (!headThrown && emission.data === HEAD) {
           headThrown = true
           throw new Error('client transport died mid-broadcast')
         }
@@ -373,10 +408,7 @@ describe('TerminalShellRecoveryBarrier', () => {
     resolveConfirm?.(true)
 
     await vi.waitFor(() =>
-      expect(released.map((emission) => emission.data)).toEqual([
-        PROCESS_BOUNDARY_GROUND,
-        'SHELL-PROMPT'
-      ])
+      expect(released.map((emission) => emission.data)).toEqual([GROUNDED, 'SHELL-PROMPT'])
     )
     expect(barrier.getOwner()).toBe('shell')
   })
@@ -385,11 +417,11 @@ describe('TerminalShellRecoveryBarrier', () => {
     const { barrier, released } = createBarrier({ confirm: () => new Promise(() => {}) })
 
     barrier.accept(passthrough(`${TRIGGER}prompt`))
-    expect(released.map((emission) => emission.data)).toEqual([TRIGGER])
+    expect(released.map((emission) => emission.data)).toEqual([HEAD])
 
     barrier.flushPending()
 
-    expect(released.map((emission) => emission.data)).toEqual([TRIGGER, 'prompt'])
+    expect(released.map((emission) => emission.data)).toEqual([HEAD, MARK, 'prompt'])
     expect(barrier.getOwner()).toBeUndefined()
   })
 
@@ -398,8 +430,50 @@ describe('TerminalShellRecoveryBarrier', () => {
     barrier.accept(passthrough(`${TRIGGER}prompt`))
     barrier.dispose()
 
-    expect(released.map((emission) => emission.data)).toEqual([TRIGGER])
+    expect(released.map((emission) => emission.data)).toEqual([HEAD])
     barrier.accept(passthrough('after-dispose'))
     expect(released).toHaveLength(1)
+  })
+
+  it('carries the ground on an ESC-backslash terminator split from its ESC', async () => {
+    const { barrier, released } = createBarrier()
+    const head = '\x1b[?1049hTUI\x1b]133;D;137\x1b'
+    barrier.accept(passthrough(head, 0))
+    barrier.accept(passthrough('\\PROMPT', head.length))
+
+    await vi.waitFor(() => expect(barrier.getOwner()).toBe('shell'))
+    expect(released).toEqual([
+      passthrough(head, 0),
+      {
+        data: `\\${PROCESS_BOUNDARY_GROUND}`,
+        rawStartSeq: head.length,
+        rawEndSeq: head.length + 1,
+        transformed: true
+      },
+      passthrough('PROMPT', head.length + 1)
+    ])
+  })
+
+  it.each([
+    ['confirmed', async () => true],
+    ['refuted', async () => false],
+    ['timed out', () => new Promise<boolean>(() => {})]
+  ])('covers at least one raw unit with every emission when %s', async (_, confirm) => {
+    const { barrier, released } = createBarrier({ confirm, maxPendingMs: 20 })
+    const stream = [`${TRIGGER}p1`, '\x1b[?1049h\x1b]133;D;1\x1b', '\\p2', `${TRIGGER}`, 'p3']
+    let seq = 0
+    for (const data of stream) {
+      barrier.accept(passthrough(data, seq))
+      seq += data.length
+    }
+    await vi.waitFor(() => expect(released.at(-1)?.rawEndSeq).toBe(seq))
+
+    expect(released.every((emission) => emission.rawEndSeq > emission.rawStartSeq)).toBe(true)
+    const raw = released.map((emission) =>
+      emission.transformed
+        ? emission.data.slice(0, emission.rawEndSeq - emission.rawStartSeq)
+        : emission.data
+    )
+    expect(raw.join('')).toBe(stream.join(''))
   })
 })

@@ -54,6 +54,10 @@ jobs:
         with:
           native-runtime: node
           node-version: '24'
+          cache-electron-package: 'true'
+
+      - name: Populate shared Electron archive
+        run: node config/scripts/install-electron-package-binary.mjs
 
       - uses: ./.github/actions/prepare-git-compatibility
 
@@ -83,6 +87,9 @@ jobs:
         with:
           native-runtime: node
           node-version: '24'
+          cache-electron-package: 'true'
+      - name: Populate shared Electron archive
+        run: node config/scripts/install-electron-package-binary.mjs
       - name: Verify native cache is usable
         run: node config/scripts/ensure-native-runtime.mjs --check-only
 

@@ -94,6 +94,15 @@ export class CodexSubagentExecutions {
     return { child, execution }
   }
 
+  /** The child's thread closed with no `turn/completed`: the turn it was running ended, and how
+   *  it went is unknown. A child running none has nothing to end. */
+  closeThread(agentThreadId: string): void {
+    const current = this.children.get(agentThreadId)?.execution
+    if (current?.state === 'working') {
+      this.observeTurn(agentThreadId, current.turnId, 'unverifiable')
+    }
+  }
+
   /** Survives the child's turn, so a row outliving that turn can still name it. */
   label(agentThreadId: string): string | null {
     return this.children.get(agentThreadId)?.label ?? null
@@ -107,6 +116,11 @@ export class CodexSubagentExecutions {
    *  one more per follow-up turn. Null when the turn was never observed. */
   turnOrdinal(agentThreadId: string, turnId: string): number | null {
     return this.children.get(agentThreadId)?.turnOrdinals.get(turnId) ?? null
+  }
+
+  /** The child as last observed, without creating one. */
+  find(agentThreadId: string): Readonly<CodexExecutionChild> | undefined {
+    return this.children.get(agentThreadId)
   }
 
   workingChildren(): CodexExecutionChild[] {

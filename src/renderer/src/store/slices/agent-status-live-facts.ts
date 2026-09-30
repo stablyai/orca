@@ -16,6 +16,7 @@ import {
 } from './agent-status-pane-key-tab-binding'
 import { pruneMigrationUnsupportedEntries } from './agent-status-migration-unsupported-entries'
 import { sleepingRecordFromEntry } from './agent-status-sleeping-records'
+import { agentMainAgentVerdict } from '../../../../shared/agent-main-agent-verdict'
 
 export type AgentStatusLiveFacts = {
   existingSleepingRecord: SleepingAgentSessionRecord | undefined
@@ -95,12 +96,16 @@ export function deriveAgentStatusLiveFacts(args: AgentStatusLiveFactsArgs): Agen
       entry.lastAssistantMessageIsToolOutput !== existing.lastAssistantMessageIsToolOutput ||
       entry.orchestration !== existing.orchestration ||
       entry.subagents !== existing.subagents ||
-      entry.providerSession !== existing.providerSession ||
-      entry.interrupted !== existing.interrupted)
+      entry.providerSession !== existing.providerSession)
+  // A verdict moves no clock: a failure keeps a done's completion time, and a main agent that fails
+  // while its subagents keep the row working leaves the row's state and start as they were.
+  const verdictChanged =
+    !!existing && agentMainAgentVerdict(entry) !== agentMainAgentVerdict(existing)
   const retentionRelevantChange =
     sortRelevantChange ||
     attributionChanged ||
     existing?.workingMode !== entry.workingMode ||
+    verdictChanged ||
     doneRetentionFieldsChanged
   const existingSleepingRecord = state.sleepingAgentSessionsByPaneKey[paneKey]
   const liveRecoveryWorktreeId =

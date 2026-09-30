@@ -409,12 +409,14 @@
 
 [data-sonner-toaster] {
   font-family: var(--font-sans);
-  z-index: 40 !important;
+  z-index: var(--toaster-z-index, 40) !important;
 }
 
-/* Keep errors above standard modal backdrops at the existing popover tier. */
-body:has([data-slot='dialog-overlay'], [data-slot='sheet-overlay']) [data-sonner-toaster] {
-  z-index: 60 !important;
+/* Keep errors above standard modal backdrops at the existing popover tier.
+   Why: overlays portal straight into body, and `>` plus a :has() on body alone (not in the toaster's
+   selector) keeps unrelated DOM changes from rescanning the page; the old form froze large diffs. */
+body:has(> [data-slot='dialog-overlay'], > [data-slot='sheet-overlay']) {
+  --toaster-z-index: 60;
 }
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] {
@@ -724,7 +726,9 @@ body:has([data-slot='dialog-overlay'], [data-slot='sheet-overlay']) [data-sonner
   mask-image: linear-gradient(to right, transparent, #000 1.5rem, #000 100%);
 }
 
-.terminal-tab-strip--fade-end:not(.terminal-tab-strip--fade-start) {
+/* Why: the status bar's usage cluster reuses the end fade so a clipped cluster never cuts a glyph. */
+.terminal-tab-strip--fade-end:not(.terminal-tab-strip--fade-start),
+.status-bar-usage-cluster[data-overflowing='true'] {
   -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.5rem), transparent);
   mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.5rem), transparent);
 }
@@ -1622,6 +1626,31 @@ html.native-shell .app-layout {
 
 .compact-agent-expansion-grid-expanded .compact-agent-expansion-content {
   animation: compact-agent-expansion-reveal 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Keep the disclosure in the timestamp slot without moving adjacent content. */
+.agent-child-disclosure-time {
+  visibility: hidden;
+}
+
+@media (hover: hover) {
+  .agent-child-disclosure[data-expanded='false'] .agent-child-disclosure-time {
+    visibility: visible;
+  }
+
+  .agent-child-disclosure[data-expanded='false'] [data-agent-child-disclosure-button] {
+    opacity: 0;
+  }
+
+  .agent-disclosure-row:hover .agent-child-disclosure-time,
+  .agent-disclosure-row:focus-within .agent-child-disclosure-time {
+    visibility: hidden;
+  }
+
+  .agent-disclosure-row:hover [data-agent-child-disclosure-button],
+  .agent-disclosure-row:focus-within [data-agent-child-disclosure-button] {
+    opacity: 1;
+  }
 }
 
 /* Why: the collapsed summary still uses pill spacing, while expanded compact

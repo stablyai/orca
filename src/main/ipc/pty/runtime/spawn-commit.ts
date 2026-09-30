@@ -66,7 +66,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
       throw error
     }
     console.error('[pty] failed to persist runtime PTY binding after attach:', error)
-    throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage()), {
+    throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage(error)), {
       agentSessionOperationOutcome: 'unknown' as const
     })
   }
@@ -92,6 +92,11 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
     if (rejectedRegistration) {
       await rejectedRegistration
     }
+    // Why here: an adoption returns before the commit site below.
+    ctx.deps.runtime?.noteTerminalSpawnCommit?.(
+      ctx.result,
+      ctx.hostSessionBinding?.expectedSourceBinding
+    )
     ptyOwnership.set(ctx.result.id, args.connectionId ?? ptyOwnership.get(ctx.result.id) ?? null)
     ctx.deps.runtime?.registerPreAllocatedHandleForPty(ctx.result.id, owner.surface.terminalHandle)
     if (ctx.result.incarnationId) {
@@ -151,7 +156,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
       if (err instanceof Error && err.message === 'terminal_split_source_not_found') {
         throw err
       }
-      throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage()), {
+      throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage(err)), {
         agentSessionOperationOutcome: 'unknown' as const
       })
     }
@@ -187,6 +192,12 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
     // Why: non-worktree PTYs have no later surface-registration phase to clear admission intent.
     ctx.deps.runtime?.cancelPendingPtyRegistration?.(ctx.result.id, ctx.result.incarnationId)
   }
+  // Why after registration: a spawn discarded for a failed save or rejected for exiting during
+  // start must not record facts or end a stop.
+  ctx.deps.runtime?.noteTerminalSpawnCommit?.(
+    ctx.result,
+    ctx.hostSessionBinding?.expectedSourceBinding
+  )
   if (args.preAllocatedHandle && !ctx.stablePaneOwner?.handle) {
     ctx.deps.runtime?.registerPreAllocatedHandleForPty(ctx.result.id, args.preAllocatedHandle)
   }

@@ -149,6 +149,7 @@ export function sanitizeHydratedEntry(
     source === 'claude' && (record.compactTrigger === 'manual' || record.compactTrigger === 'auto')
       ? record.compactTrigger
       : undefined
+  const turnStartedAt = record.turnStartedAt
   return {
     paneKey,
     source,
@@ -170,7 +171,10 @@ export function sanitizeHydratedEntry(
     retainedForLiveness: retainedForLiveness ? true : undefined,
     payload,
     receivedAt,
-    stateStartedAt
+    stateStartedAt,
+    ...(typeof turnStartedAt === 'number' && Number.isFinite(turnStartedAt) && turnStartedAt > 0
+      ? { turnStartedAt }
+      : {})
   }
 }
 

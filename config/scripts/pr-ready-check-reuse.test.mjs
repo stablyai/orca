@@ -45,6 +45,12 @@ describe('ready-for-review required check reuse', () => {
   it('reuses a completed success only for the identical PR, merge source and workflow', () => {
     expect(reusablePrCheckRun([passed], identity)).toBe(passed)
     expect(reusablePrCheckRun([], identity)).toBeUndefined()
+    expect(
+      reusablePrCheckRun(
+        [{ ...passed, display_title: prCheckRunTitle({ ...identity, unitMode: 'selected' }) }],
+        identity
+      )
+    ).toBeUndefined()
     for (const key of ['number', 'sourceSha', 'workflowSha', 'headSha', 'runId']) {
       const changed = key === 'number' ? 43 : key === 'runId' ? '123' : 'd'.repeat(40)
       expect(reusablePrCheckRun([passed], { ...identity, [key]: changed }), key).toBeUndefined()
@@ -121,7 +127,7 @@ describe('ready-for-review required check reuse', () => {
 
   it('keeps required skips conditional on proof and leaves advisory routing eligible', () => {
     expect(workflow['run-name']).toBe(
-      'PR ${{ github.event.pull_request.number }} | source ${{ github.sha }} | workflow ${{ github.workflow_sha }}'
+      "PR ${{ github.event.pull_request.number }} | source ${{ github.sha }} | workflow ${{ github.workflow_sha }} | unit ${{ github.event.pull_request.draft && vars.ORCA_UNIT_SELECTION_MODE == 'selected' && 'selected' || 'full' }}"
     )
     expect(workflow.on.pull_request.types).toContain('ready_for_review')
     const detector = workflow.jobs.code_paths

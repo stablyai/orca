@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -7,7 +8,7 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
+import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import {
   journalRecordsThreadGoalChange,
@@ -37,7 +38,7 @@ afterEach(async () => {
 
 async function openJournal(): Promise<AgentSessionJournal> {
   root ??= await mkdtemp(join(tmpdir(), 'orca-thread-goal-'))
-  return journals.open({ identity: IDENTITY, journalDir: root })
+  return journals.open({ identity: IDENTITY, stateDirectory: root })
 }
 
 const GOAL: AgentJournalThreadGoal = {
@@ -57,7 +58,7 @@ function appendGoalRow(
   return journal.appendItem(
     { provider: 'orca', clientMessageId: `goal-row:${journal.snapshot().items.length}` },
     { kind: 'status', text: 'Goal', threadGoal: { state: 'set', goal: { ...GOAL, ...overrides } } },
-    { fence: 1 }
+    { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
 }
 
@@ -125,7 +126,11 @@ describe('performThreadGoalChange', () => {
 
     expect(result).toEqual({
       ok: false,
-      refusal: { code: 'agent_session_operation_invalid', message: 'goals feature is disabled' }
+      refusal: {
+        code: 'agent_session_operation_invalid',
+        details: { reason: 'providerRejected' },
+        message: 'goals feature is disabled'
+      }
     })
     expect(journal.snapshot().items).toEqual([])
   })

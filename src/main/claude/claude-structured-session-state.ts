@@ -1,3 +1,5 @@
+import type { AgentJournalDispatchRejection } from '../../shared/agent-session-failure-words'
+import type { SubmissionRejectionFact } from '../../shared/agent-session-failure'
 import type {
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
@@ -9,7 +11,7 @@ import type {
   openClaudeStreamJsonConnection
 } from './claude-stream-json-connection'
 import type { ClaudeStructuredLaunch } from './claude-structured-launch-resolution'
-import type { ClaudeJournalTranslator } from './claude-structured-journal-translation'
+import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
 import type { ClaudePendingPrompt, ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import { cancelProcessAcquisition } from '../../shared/child-process/cancel-process-acquisition'
 import { randomUUID } from 'node:crypto'
@@ -25,7 +27,7 @@ import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-wor
 import type { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
 import type { ClaudeChildWorkDecoder } from './claude-child-work-decoder'
 import type { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
-import type { ClaudeSessionStartupGate } from './claude-structured-session-startup-gate'
+import type { ClaudeSessionStartup } from './claude-structured-session-startup-state'
 
 export type ClaudeAuthDiagnostic = {
   apiKeySourceConfigured: boolean
@@ -40,7 +42,9 @@ export type ClaudeStructuredSessionEvent =
       type: 'message'
       sessionId: string
       message: Record<string, unknown>
-      /** Present only when this replay acknowledged Orca's in-flight dispatch. */
+      /** Present only when this replay acknowledged Orca's in-flight dispatch
+       *  AND opens a turn; a replay folded into the running turn settles
+       *  delivery without one. */
       startsTurn?: true
       /** Submission instant of the dispatch this replay acknowledged; the origin
        *  of the turn it opens. Absent when the host cannot name a send. */
@@ -66,6 +70,7 @@ export type ClaudeStructuredSessionEvent =
       type: 'ended'
       sessionId: string
       reason: string
+      failure?: SubmissionRejectionFact
       /** Present for first-hand child exits so the host can fence recovery. */
       cause?: 'unexpected-exit' | 'requested-close'
       fence?: number
@@ -81,7 +86,7 @@ export type ClaudeLateDispatchOutcome =
       clientMessageId: string
       providerIdentity: AgentJournalItemIdentity
     }
-  | { clientMessageId: string; state: 'rejected'; reason: string }
+  | ({ clientMessageId: string; state: 'rejected' } & AgentJournalDispatchRejection)
 
 export type ClaudeStructuredSessionAdapterDeps = {
   resolveLaunch: (input: {
@@ -90,6 +95,8 @@ export type ClaudeStructuredSessionAdapterDeps = {
   onEvent?: (event: ClaudeStructuredSessionEvent) => void
   /** Direct settlement path for provider-proven late dispatch outcomes. */
   onDispatchSettledLate?: (input: { sessionId: string } & ClaudeLateDispatchOutcome) => void
+  /** The CLI reported `session_state_changed idle`, which it sends only once its queue drains. */
+  onSessionIdle?: (input: { sessionId: string }) => void
   onBackgroundTasksChanged?: (
     sessionId: string,
     state: AgentSessionBackgroundTaskState | null
@@ -134,6 +141,8 @@ export type ClaudeDispatchWaiter = {
   settledUuid?: string
   /** The write failed or the child died, but a replay may still name it. */
   retired?: boolean
+  /** The CLI's last non-terminal `command_lifecycle` state for this send; in memory only. */
+  commandLifecycle?: 'queued' | 'started'
   /** Bounded digest/summary for compatibility CLIs that mint UUIDs. */
   replayContentKey: string
 }
@@ -195,7 +204,7 @@ export type ClaudeSession = {
   events: StructuredAgentSessionEventSink | undefined
   unbindReadingControl?: () => void
   /** Published at spawn; init facts, option restore and queued prompts land when startup does. */
-  startup: ClaudeSessionStartupGate
+  startup: ClaudeSessionStartup
 }
 
 export function mintClaudeAcquisitionGeneration(deps: ClaudeStructuredSessionAdapterDeps): string {

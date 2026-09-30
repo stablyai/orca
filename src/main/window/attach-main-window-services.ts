@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { ipcMain, nativeTheme } from 'electron'
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
 import type { Store } from '../persistence'
 import {
@@ -97,7 +97,8 @@ export function attachMainWindowServices(
       awaitLocalPtyProviderStartup: options?.awaitLocalPtyProviderStartup,
       isRecoveryReloadInFlight: options?.isRecoveryReloadInFlight,
       onCodexHomePtySpawned: options?.onCodexHomePtySpawned,
-      onPtyExit: options?.onPtyExit
+      onPtyExit: options?.onPtyExit,
+      systemPrefersDark: () => nativeTheme.shouldUseDarkColors
     }
   )
   // Why: register after registerPtyHandlers so pty:management:* IPC re-installs on macOS re-activation (docs/daemon-staleness-ux.md §Phase 1).

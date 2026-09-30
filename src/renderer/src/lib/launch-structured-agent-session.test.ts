@@ -3,7 +3,6 @@ import { structuredAgentSessionPayloadFingerprint } from '../../../shared/struct
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import {
   createStructuredAgentSessionLaunchIntent,
-  isDefinitiveStructuredAgentSessionCreateError,
   launchStructuredAgentSession,
   StructuredAgentSessionCreateRefusalError,
   StructuredAgentSessionCreateUnknownOutcomeError
@@ -266,7 +265,6 @@ describe('structured agent session launch', () => {
     expect(error).toBeInstanceOf(StructuredAgentSessionCreateUnknownOutcomeError)
     expect(error).not.toBeInstanceOf(StructuredAgentSessionCreateRefusalError)
     expect(error).toMatchObject({ code: 'agent_session_operation_unknown' })
-    expect(isDefinitiveStructuredAgentSessionCreateError(error)).toBe(false)
   })
 
   /** The class is the verdict, so a refusal message that happens to end in a definitive token
@@ -285,7 +283,6 @@ describe('structured agent session launch', () => {
     ).catch((caught: unknown) => caught)
 
     expect(error).toBeInstanceOf(StructuredAgentSessionCreateUnknownOutcomeError)
-    expect(isDefinitiveStructuredAgentSessionCreateError(error)).toBe(false)
   })
 
   it('preserves a definitive refusal code for the fallback path', async () => {
@@ -303,7 +300,6 @@ describe('structured agent session launch', () => {
 
     expect(error).toBeInstanceOf(StructuredAgentSessionCreateRefusalError)
     expect(error).toMatchObject({ code: 'structured_agent_session_unsupported' })
-    expect(isDefinitiveStructuredAgentSessionCreateError(error)).toBe(true)
   })
 
   it.each(['method_not_found', 'structured_agent_session_unsupported'])(
@@ -330,6 +326,5 @@ describe('structured agent session launch', () => {
     ).catch((caught: unknown) => caught)
 
     expect(transportError).not.toBeInstanceOf(StructuredAgentSessionCreateRefusalError)
-    expect(isDefinitiveStructuredAgentSessionCreateError(transportError)).toBe(false)
   })
 })

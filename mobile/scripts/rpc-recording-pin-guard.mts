@@ -1,10 +1,12 @@
 /**
  * Guards the two claims `mobile/rpc-foundation/goldens` makes about its pin.
  *
- * `ancestry`  — `baseline` names a commit in this history. A behaviour-change branch pins its own
- *               last fenced commit; that commit stops being reachable the moment the branch
- *               squash-merges, and nobody can run `--record` on main again until a hand-made repin
- *               lands. Ordinary product drift past a reachable pin is normal and is not a failure.
+ * `reachable` — `baseline` names a commit this repository keeps: one in this history, or one in
+ *               the head of a pull request GitHub associates with that commit. A behaviour-change
+ *               branch pins its own last fenced commit, which the squash leaves out of main's
+ *               history; `refs/pull/<n>/head` outlives the branch, so the pin stays checkable out.
+ *               GitHub only names the candidates; git's ancestry check decides. Ordinary product
+ *               drift past a kept pin is normal and is not a failure.
  * `reproduce` — the goldens on disk are what the recorder produces from the PINNED tree. The
  *               recording suites replay the corpus against the CURRENT tree on every run, which is
  *               the same claim only while the fenced tree still matches the pin.
@@ -17,6 +19,7 @@ import { join, resolve } from 'node:path'
 import { runProcess } from '../../src/shared/child-process/run-process.ts'
 import { RECORDING_DRIVERS } from '../src/test-support/rpc-recording/recording-drivers.ts'
 import { readScenarios } from '../src/test-support/rpc-recording/scenario-input.ts'
+import { checkPinReachable, PIN_MANIFEST } from './rpc-recording-pin-reachability.mts'
 
 /** The recorder is exempt from the fence, so a reproduction lays the candidate copy over the pin. */
 const RECORDER_OVERLAY = 'mobile/src/test-support/rpc-recording'
@@ -67,90 +70,11 @@ export function assertReproductionSuitesExist(root: string): void {
   }
 }
 
-export type PinAncestryFailure = 'shallow' | 'unreachable' | 'not-an-ancestor'
-export type PinAncestryVerdict =
-  | { ok: true; baseline: string; ref: string }
-  | { ok: false; baseline: string; ref: string; failure: PinAncestryFailure; message: string }
-
 async function git(cwd: string, args: readonly string[]) {
   return await runProcess({ program: 'git', args: [...args], cwd })
 }
 function readPinnedBaseline(root: string): string {
-  return readScenarios(resolve(root, 'mobile/rpc-foundation/pilot-scenarios.json')).baseline
-}
-export function repinInstruction(baseline: string, ref: string, cause: string): string {
-  return [
-    `The RPC recording corpus is pinned to a commit that ${cause}.`,
-    '',
-    `  baseline  ${baseline}   (mobile/rpc-foundation/pilot-scenarios.json)`,
-    `  head      ${ref}`,
-    '',
-    'Every golden under mobile/rpc-foundation/goldens claims it was recorded from that tree, and',
-    '`--record` refuses on any other tree, so the corpus cannot be refreshed until the pin names a',
-    'commit that is reachable from here. Repin and re-record, both in one commit:',
-    '',
-    `  git switch -c repin-rpc-recording ${ref}`,
-    `  # set "baseline" in mobile/rpc-foundation/pilot-scenarios.json to ${ref}`,
-    '  ORCA_BACKGROUND_LAUNCH=1 RPC_FOUNDATION_RECORD=1 \\',
-    '    pnpm --dir mobile exec tsx scripts/rpc-recording.mts --record',
-    '',
-    'Re-record everything: the repin rewrites the `baseline` header of every golden, so a partial',
-    'refresh leaves the corpus pinned to two different trees. See',
-    'mobile/src/test-support/rpc-recording/README.md, "Recording a behaviour change".'
-  ].join('\n')
-}
-const SHALLOW_MESSAGE = [
-  'Cannot judge the recording pin: this is a shallow clone.',
-  '',
-  '`git merge-base --is-ancestor` answers from grafted history, so it would report a verdict this',
-  'guard has no evidence for. Check out with `fetch-depth: 0`.'
-].join('\n')
-
-export async function checkPinAncestry(
-  root: string,
-  baseline: string,
-  ref: string
-): Promise<PinAncestryVerdict> {
-  const shallow = await git(root, ['rev-parse', '--is-shallow-repository'])
-  if (shallow.code !== 0) {
-    throw new Error(`Could not ask git whether the clone is shallow: ${shallow.stderr.trim()}`)
-  }
-  if (shallow.stdout.trim() !== 'false') {
-    return { ok: false, baseline, ref, failure: 'shallow', message: SHALLOW_MESSAGE }
-  }
-  const head = await git(root, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])
-  if (head.code !== 0) {
-    throw new Error(`Cannot resolve ${ref} to a commit in this repository`)
-  }
-  // Resolved, because the instruction below is a command to paste: `HEAD` in it moves with whatever
-  // the reader has checked out by the time they read the log.
-  const resolved = head.stdout.trim()
-  const pinned = await git(root, ['rev-parse', '--verify', '--quiet', `${baseline}^{commit}`])
-  if (pinned.code !== 0) {
-    return {
-      ok: false,
-      baseline,
-      ref,
-      failure: 'unreachable',
-      message: repinInstruction(baseline, resolved, 'is not a commit in this repository at all')
-    }
-  }
-  const ancestor = await git(root, ['merge-base', '--is-ancestor', baseline, ref])
-  if (ancestor.code === 0) {
-    return { ok: true, baseline, ref }
-  }
-  // Why only 1: git reserves higher codes for real errors, and treating one as "not an ancestor"
-  // would turn a broken repository into a repin instruction nobody can act on.
-  if (ancestor.code !== 1) {
-    throw new Error(`git merge-base --is-ancestor failed: ${ancestor.stderr.trim()}`)
-  }
-  return {
-    ok: false,
-    baseline,
-    ref,
-    failure: 'not-an-ancestor',
-    message: repinInstruction(baseline, resolved, 'is not an ancestor of this commit')
-  }
+  return readScenarios(resolve(root, PIN_MANIFEST)).baseline
 }
 
 /** Whether anything a reproduction reads from the candidate tree moved since `since`. */
@@ -284,18 +208,22 @@ async function main(argv: readonly string[]): Promise<void> {
   const check = argv[0]
   const root = resolve(import.meta.dirname, '../..')
   const baseline = readPinnedBaseline(root)
-  if (check === 'ancestry') {
+  if (check === 'reachable') {
     const ref = argv.includes('--ref') ? argv[argv.indexOf('--ref') + 1] : 'HEAD'
     if (!ref) {
       throw new Error('--ref needs a commit')
     }
-    const verdict = await checkPinAncestry(root, baseline, ref)
+    const verdict = await checkPinReachable(root, baseline, ref)
     if (!verdict.ok) {
       process.stderr.write(`${verdict.message}\n`)
       process.exitCode = 1
       return
     }
-    process.stdout.write(`Recording pin ${baseline} is an ancestor of ${ref}.\n`)
+    process.stdout.write(
+      verdict.pullRequest === null
+        ? `Recording pin ${baseline} is an ancestor of ${ref}.\n`
+        : `Recording pin ${baseline} is kept by refs/pull/${verdict.pullRequest}/head.\n`
+    )
     return
   }
   if (check === 'reproduce') {
@@ -313,6 +241,13 @@ async function main(argv: readonly string[]): Promise<void> {
         return
       }
     }
+    // Also fetches a pin that only its pull request's head still holds, so the checkout can find it.
+    const verdict = await checkPinReachable(root, baseline, 'HEAD')
+    if (!verdict.ok) {
+      process.stderr.write(`${verdict.message}\n`)
+      process.exitCode = 1
+      return
+    }
     if (!(await reproduceFromPin(root, baseline))) {
       process.stderr.write(`\n${REPRODUCTION_FAILURE}\n`)
       process.exitCode = 1
@@ -322,7 +257,7 @@ async function main(argv: readonly string[]): Promise<void> {
     return
   }
   throw new Error(
-    'Usage: rpc-recording-pin-guard.mts ancestry [--ref <commit>]\n     | reproduce [--if-changed-since <commit>]'
+    'Usage: rpc-recording-pin-guard.mts reachable [--ref <commit>]\n     | reproduce [--if-changed-since <commit>]'
   )
 }
 

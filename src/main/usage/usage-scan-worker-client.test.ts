@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { join, sep } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { resolveWorkerThreadEntryPath } from '../worker-thread-entry-path'
@@ -234,17 +233,5 @@ describe('usage scan worker entry path', () => {
       'main',
       USAGE_SCAN_WORKER_ENTRY_FILENAME
     ])
-  })
-
-  // A rename in the build config would leave both branches pointing at a file
-  // that is never emitted, and only the packaged one fails silently.
-  it('names the entry the main build actually emits', () => {
-    const config = readFileSync(
-      join(import.meta.dirname, '..', '..', '..', 'electron.vite.config.ts'),
-      'utf8'
-    )
-
-    expect(USAGE_SCAN_WORKER_ENTRY_FILENAME).toBe('usage-scan-worker-entry.js')
-    expect(config).toContain("'usage-scan-worker-entry': resolve(")
   })
 })

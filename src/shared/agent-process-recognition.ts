@@ -1,5 +1,6 @@
 import { getTuiAgentDetectCommands, TUI_AGENT_CONFIG } from './tui-agent-config'
 import { EXACT_NODE_ENTRYPOINT_IDENTITIES } from './agent-node-entrypoint-identities'
+import { NODE_PACKAGE_SCRIPT_ENTRYPOINTS } from './agent-node-package-entrypoints'
 import type { AgentType } from './agent-status-types'
 import type { TuiAgent } from './tui-agent'
 import { filterHeadlessOneShotAgentCommand } from './agent-headless-command'
@@ -35,13 +36,6 @@ function normalizeProcessName(
 }
 
 const FOREGROUND_AGENT_WRAPPER_PROCESS_NAMES = new Set(['node', 'python', 'python3'])
-const NODE_PACKAGE_SCRIPT_ENTRYPOINTS: Record<string, readonly string[]> = {
-  codex: ['node_modules/@openai/codex/'],
-  gemini: ['node_modules/@google/gemini-cli/'],
-  // Why: ZCode's npm bin is `dist/zcode.cjs`, so a package install runs as `node …zcode.cjs`
-  // and never shows `zcode` as the foreground name (a SEA build still matches by name).
-  zcode: ['node_modules/@zcode/cli/']
-}
 const PYTHON_SCRIPT_ENTRYPOINT_DIRECTORIES = ['/bin/', '/scripts/', '/site-packages/']
 
 const PROCESS_TO_AGENT = new Map<string, TuiAgent>()
@@ -78,6 +72,10 @@ function agentForNormalizedProcess(normalized: string): TuiAgent | undefined {
   // (for example codex-aarch64-ap) instead of the launch command.
   if (normalized.startsWith('codex-')) {
     return PROCESS_TO_AGENT.get('codex')
+  }
+  // Qoder's launcher resolves to a versioned native binary.
+  if (/^qodercli-\d/.test(normalized)) {
+    return PROCESS_TO_AGENT.get('qodercli')
   }
   if (normalized.startsWith('grok-')) {
     return PROCESS_TO_AGENT.get('grok')
@@ -164,6 +162,7 @@ export function isExpectedAgentProcess(
   return (
     normalizedProcess === normalizedExpected ||
     normalizedProcess.startsWith(`${normalizedExpected}.`) ||
+    (normalizedExpected === 'qodercli' && /^qodercli-\d/.test(normalizedProcess)) ||
     (normalizedExpected === 'muse' && normalizedProcess.startsWith('muse-bin-'))
   )
 }

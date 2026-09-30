@@ -333,13 +333,6 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     expect(setDisplayName).not.toHaveBeenCalled()
   })
 
-  it('resolves the worktree from the tab when the hook payload omits worktreeId', async () => {
-    // workingEvent() carries worktreeId: undefined; resolveWorktreeIdForTab supplies it.
-    const { deps, onRenamed } = makeDeps()
-    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
-    expect(onRenamed).toHaveBeenCalledWith(REPO_ID)
-  })
-
   it('runs Git against the backing folder for a folder-workspace instance id', async () => {
     // Why: instance ids carry a synthetic `::workspace:<uuid>` suffix that is not
     // a real directory. The Git cwd must resolve to the folder or `rev-parse`

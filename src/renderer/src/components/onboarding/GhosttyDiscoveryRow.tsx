@@ -36,8 +36,8 @@ export function GhosttyDiscoveryRow({
 
   if (discovery.status === 'imported') {
     return (
-      <div className="flex items-center gap-2.5 rounded-lg border border-emerald-500/30 bg-emerald-500/[0.07] px-3.5 py-2.5 text-[12px] text-foreground">
-        <Check className="size-3.5 text-emerald-600 dark:text-emerald-400" strokeWidth={3} />
+      <div className="flex items-center gap-2.5 rounded-lg border border-border px-3.5 py-2.5 text-[12px] text-foreground">
+        <Check className="size-3.5" />
         <span className="flex-1">
           <span className="font-medium">
             {translate('auto.components.onboarding.ThemeStep.78b6386140', 'Imported from Ghostty.')}
@@ -52,7 +52,7 @@ export function GhosttyDiscoveryRow({
 
   const { preview, fields } = discovery
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-violet-500/30 bg-violet-500/[0.06] px-3.5 py-2.5">
+    <div className="flex items-center gap-3 rounded-lg border border-border px-3.5 py-2.5">
       <img src={ghosttyIcon} alt="" className="size-4 shrink-0" />
       <div className="min-w-0 flex-1">
         <div className="text-[12px] text-foreground">

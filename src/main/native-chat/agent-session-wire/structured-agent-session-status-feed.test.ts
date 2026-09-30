@@ -1,8 +1,10 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import { agentSessionRecordFixture } from '../../../shared/agent-session-record.test-fixture'
 import type {
   AgentSessionBackgroundTask,
   AgentSessionStatusEvent,
@@ -11,7 +13,7 @@ import type {
 import { createClaudeJournalTranslator } from '../../claude/claude-structured-journal-translation'
 import { publishCodexTurnLifecycle } from '../../codex/codex-structured-journal-translation-turns'
 import { createDeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
-import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
+import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import { indexedStatusFeedSession as indexed } from './structured-agent-session-status-feed-test-session'
 import {
   StructuredAgentSessionStatusFeed,
@@ -32,6 +34,8 @@ const USER_IDENTITY = {
   turnId: 'turn-1',
   ordinal: 1
 } as const
+
+type Indexed = Parameters<typeof indexed>[0]
 
 let root: string
 const journals = createTrackedJournalOpener()
@@ -55,7 +59,7 @@ async function openJournal(sessionId = SESSION, now?: () => number) {
       providerHandle: { kind: 'codex', threadId: 'thread-1' }
     },
     now,
-    journalDir: join(root, sessionId)
+    stateDirectory: join(root, sessionId)
   })
 }
 
@@ -82,7 +86,8 @@ function feedFor(
         }
       }
     } as unknown as ReadonlyMap<string, ReturnType<typeof indexed>>,
-    getRecord: () => record as AgentSessionRecord | null,
+    // A partial record still has a lease: the feed reads the conversation's fence off it.
+    getRecord: () => (record ? { ...agentSessionRecordFixture(), ...record } : null),
     now: () => (now += 1)
   })
   const events: AgentSessionStatusEvent[] = []
@@ -91,33 +96,17 @@ function feedFor(
 }
 
 describe('StructuredAgentSessionStatusFeed', () => {
-  it('projects whether the owned child has proven its start, and nothing once it is not owned', async () => {
-    const journal = await openJournal()
-    const session = { journal, hasProviderChild: true, providerChildPhase: 'starting' as const }
-    const sessions = new Map<string, Parameters<typeof indexed>[0]>([[SESSION, session]])
-    const { feed, events, dispose } = feedFor(sessions)
-    expect(events.at(-1)).toMatchObject({
-      type: 'snapshot',
-      sessions: [{ hostExecutionOwned: true, hostExecutionPhase: 'starting' }]
-    })
-    sessions.set(SESSION, { ...session, providerChildPhase: 'ready' })
-    feed.publish(SESSION, journal)
-    expect(events.at(-1)).toMatchObject({ session: { hostExecutionPhase: 'ready' } })
-    sessions.set(SESSION, { ...session, hasProviderChild: false })
-    feed.publish(SESSION, journal)
-    expect(events.at(-1)).not.toMatchObject({ session: { hostExecutionPhase: expect.any(String) } })
-    dispose()
-  })
-
   it('publishes provider ownership transitions without changing journal time', async () => {
     const journal = await openJournal()
-    const sessions = new Map([[SESSION, { journal, hasProviderChild: true }]])
+    const sessions = new Map<string, Indexed>([
+      [SESSION, { journal, child: { phase: 'ready', generation: 'child-1', fence: 1 } }]
+    ])
     const { feed, events, dispose } = feedFor(sessions)
     events.length = 0
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     feed.publish(SESSION, journal)
     expect(events.at(-1)).toEqual({
@@ -130,7 +119,7 @@ describe('StructuredAgentSessionStatusFeed', () => {
       throw new Error('status publication missing')
     }
     const journalTime = firstStatus.session.updatedAt
-    sessions.get(SESSION)!.hasProviderChild = false
+    sessions.get(SESSION)!.child = null
     feed.publish(SESSION, journal)
     expect(events.at(-1)).toEqual({
       type: 'status',
@@ -167,8 +156,10 @@ describe('StructuredAgentSessionStatusFeed', () => {
 
   it('stops projecting an old-host unknown submission after the owner fence advances', async () => {
     const journal = await openJournal()
-    const session = { journal, fence: 1 }
-    const { feed, events } = feedFor(new Map([[SESSION, session]]))
+    // The conversation's fence is the record's: a child's end moves it.
+    const lease = agentSessionRecordFixture().lease
+    const record = agentSessionRecordFixture({ ...lease, runtimeFence: 1 })
+    const { feed, events } = feedFor(new Map([[SESSION, { journal }]]), record)
     await journal.appendSubmission({
       clientMessageId: 'old-host',
       payloadFingerprint: 'fp',
@@ -183,9 +174,10 @@ describe('StructuredAgentSessionStatusFeed', () => {
     })
     feed.publish(SESSION)
     expect(events.at(-1)).toMatchObject({ session: { status: 'working' } })
-    session.fence = 2
+    record.lease.runtimeFence = 2
     feed.publish(SESSION)
-    expect(events.at(-1)).toMatchObject({ session: { status: 'idle' } })
+    // Its only send outlived the host that sent it and became no turn: nothing left to list.
+    expect(events.at(-1)).toMatchObject({ session: { status: null } })
   })
 
   it('publishes working from the pending submission, before the provider replays the turn', async () => {
@@ -224,12 +216,12 @@ describe('StructuredAgentSessionStatusFeed', () => {
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'write a poem' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await journal.appendItem(
       TURN_IDENTITY,
       { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
 
     feed.publish(SESSION)
@@ -260,12 +252,12 @@ describe('StructuredAgentSessionStatusFeed', () => {
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await journal.appendItem(
       TURN_IDENTITY,
       { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     const { feed, events } = feedFor(new Map([[SESSION, { journal }]]))
     now = 200
@@ -291,20 +283,20 @@ describe('StructuredAgentSessionStatusFeed', () => {
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     const assistant = { ...USER_IDENTITY, ordinal: 2 }
     await journal.appendItem(
       assistant,
       { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'first' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     const { feed, events } = feedFor(new Map([[SESSION, { journal }]]))
     now = 200
     await journal.appendItem(
       assistant,
       { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'finished' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     feed.publish(SESSION)
     expect(events.at(-1)).toMatchObject({
@@ -328,12 +320,12 @@ describe('StructuredAgentSessionStatusFeed', () => {
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await journal.appendItem(
       TURN_IDENTITY,
       { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     const { feed, events } = feedFor(new Map([[SESSION, { journal }]]))
     for (let revision = 1; revision <= 20; revision += 1) {
@@ -341,7 +333,7 @@ describe('StructuredAgentSessionStatusFeed', () => {
       await journal.appendItem(
         TURN_IDENTITY,
         { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } },
-        { fence: 1 }
+        { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
       )
       feed.publish(SESSION)
     }
@@ -365,12 +357,12 @@ describe('StructuredAgentSessionStatusFeed', () => {
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'run the tests' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await journal.appendItem(
       TURN_IDENTITY,
       { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     feed.publish(SESSION)
     expect(events.at(-1)).toEqual({
@@ -381,7 +373,7 @@ describe('StructuredAgentSessionStatusFeed', () => {
     await journal.appendItem(
       { ...USER_IDENTITY, ordinal: 2 },
       { kind: 'tool-call', name: 'shell', input: { command: 'pnpm test' }, state: 'running' },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     feed.publish(SESSION)
 
@@ -399,7 +391,7 @@ describe('StructuredAgentSessionStatusFeed', () => {
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'run it' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await journal.appendItem(
       TURN_IDENTITY,
@@ -410,7 +402,7 @@ describe('StructuredAgentSessionStatusFeed', () => {
         options: [{ id: 'yes', label: 'Allow' }],
         resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
       },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
 
     feed.publish(SESSION)
@@ -427,7 +419,7 @@ describe('StructuredAgentSessionStatusFeed', () => {
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     feed.publish(SESSION)
     expect(events.at(-1)).toEqual({
@@ -458,7 +450,7 @@ describe('StructuredAgentSessionStatusFeed', () => {
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
 
     const late: AgentSessionStatusEvent[] = []
@@ -490,7 +482,7 @@ describe('StructuredAgentSessionStatusFeed', () => {
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     feed.publish(SESSION)
 
@@ -509,12 +501,12 @@ describe('StructuredAgentSessionStatusFeed', () => {
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'fix the auth bug' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await journal.appendItem(
       TURN_IDENTITY,
       { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
 
     feed.publish(SESSION, journal)
@@ -542,7 +534,7 @@ describe('StructuredAgentSessionStatusFeed', () => {
           role: 'user',
           blocks: [{ type: 'text', text: 'Fix auth' }]
         },
-        { fence: 1 }
+        { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
       )
       const seen: (string | null)[] = []
       const { feed } = feedFor(new Map([[SESSION, { journal }]]), null, (summary) =>
@@ -622,7 +614,7 @@ describe('StructuredAgentSessionStatusFeed', () => {
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
 
     expect(() => feed.publish(SESSION, journal)).not.toThrow()
@@ -637,12 +629,12 @@ describe('StructuredAgentSessionStatusFeed', () => {
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'fan out' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await journal.appendItem(
       TURN_IDENTITY,
       { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     const snapshot = vi.spyOn(journal, 'snapshot')
     let taskState: 'working' | 'waiting' = 'working'
@@ -671,7 +663,7 @@ describe('StructuredAgentSessionStatusFeed', () => {
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     const record = { options: { model: 'first-model' }, providerHandleChain: [] }
     const { feed, events } = feedFor(new Map([[SESSION, { journal }]]), record)
@@ -701,7 +693,7 @@ describe('StructuredAgentSessionStatusFeed', () => {
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'fan out' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     feed.publish(SESSION, journal)
     expect(events.at(-1)).toEqual({
@@ -740,7 +732,7 @@ describe('StructuredAgentSessionStatusFeed', () => {
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'fan out' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     feed.publish(SESSION, journal)
     const before = events.length
@@ -793,13 +785,15 @@ describe('the status sink sees the roster the broadcast cache deliberately lacks
 
   it('receives every change once, ownership revocation, and the forget edge', async () => {
     const journal = await openJournal()
-    const sessions = new Map([[SESSION, { journal, hasProviderChild: true }]])
+    const sessions = new Map<string, Indexed>([
+      [SESSION, { journal, child: { phase: 'ready', generation: 'child-1', fence: 1 } }]
+    ])
     const { sink, published, forgotten } = sinkFor()
     const { feed } = feedFor(sessions, null, undefined, undefined, sink)
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     feed.publish(SESSION, journal)
     // A second identical publication is deduped for the sink exactly as for subscribers, so the
@@ -815,6 +809,8 @@ describe('the status sink sees the roster the broadcast cache deliberately lacks
     feed.revokeLive(SESSION)
     expect(published.at(-1)).toMatchObject({ sessionId: SESSION, status: 'idle' })
     expect(published.at(-1)?.hostExecutionOwned).toBeUndefined()
+    expect(published.at(-1)?.hostExecutionPhase).toBeUndefined()
+    expect(published.at(-1)?.hostExecutionChild).toBeUndefined()
 
     // Exactly what `close` does after eviction: the cache keeps the projection, the sink does not.
     sessions.delete(SESSION)
@@ -859,7 +855,7 @@ describe('the status sink sees the roster the broadcast cache deliberately lacks
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     feed.publish(SESSION, journal)
     expect(() => feed.forget(SESSION)).not.toThrow()

@@ -136,7 +136,7 @@ describe('host-admitted terminal membership survives a stale renderer replay', (
   })
 
   // Closing must still work afterwards. Closes are host-driven: the retirement is
-  // computed from the store's own session (see persistTerminalSurfaceRetirements),
+  // computed from the store's own session (see stageTerminalSurfaceRetirements),
   // which is what outranks the fence this create just raised.
   it('still lets the authoritative retirement path close the host-admitted tab', async () => {
     const store = await createStore()

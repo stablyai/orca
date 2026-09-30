@@ -2,9 +2,6 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
-import { agentSessionJournalCloseRetries } from '../native-chat/agent-session-journal/journal-close-retry'
-import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-store-test-open'
 import type {
   AgentSessionClaimStatus,
   AgentSessionExecutionLocation,
@@ -205,36 +202,6 @@ describe('structured agent-session runtime install', () => {
     vi.restoreAllMocks()
   })
 
-  it('starts orphan reaping and reports failures without failing installation', async () => {
-    stateDirectory = await mkdtemp(join(tmpdir(), 'orca-structured-runtime-'))
-    const failure = new Error('scan failed')
-    const reapOrphanChildren = vi.fn(async () => {
-      throw failure
-    })
-    const onError = vi.fn()
-
-    await expect(
-      ensureStructuredAgentSessionHost({
-        stateDirectory,
-        hostId: HOST_ID,
-        claimKeyId: 'key-1',
-        resolveWorkspacePath: async () => stateDirectory!,
-        resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
-        resolveEnvironment: async () => ({}),
-        reapOrphanChildren,
-        onError
-      })
-    ).resolves.toBeDefined()
-
-    await vi.waitFor(() =>
-      expect(onError).toHaveBeenCalledWith({
-        scope: 'agent-session-orphan-child-reaper',
-        error: failure
-      })
-    )
-    expect(reapOrphanChildren).toHaveBeenCalledWith({ store: expect.anything() })
-  })
-
   it('holds stop until the model catalog has written its coalesced save', async () => {
     stateDirectory = await mkdtemp(join(tmpdir(), 'orca-structured-runtime-'))
     await ensureStructuredAgentSessionHost({
@@ -243,8 +210,7 @@ describe('structured agent-session runtime install', () => {
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => stateDirectory!,
       resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
-      resolveEnvironment: async () => ({}),
-      reapOrphanChildren: async () => []
+      resolveEnvironment: async () => ({})
     })
     let finishWrite = (): void => {}
     vi.spyOn(agentModelCatalogStore, 'flushPersistence').mockReturnValue(
@@ -263,33 +229,6 @@ describe('structured agent-session runtime install', () => {
     finishWrite()
     await stop
     expect(stopped).toBe(true)
-  })
-
-  it('logs an orphan-reaper failure when no reporter is configured', async () => {
-    stateDirectory = await mkdtemp(join(tmpdir(), 'orca-structured-runtime-'))
-    const failure = new Error('scan failed')
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-
-    await expect(
-      ensureStructuredAgentSessionHost({
-        stateDirectory,
-        hostId: HOST_ID,
-        claimKeyId: 'key-1',
-        resolveWorkspacePath: async () => stateDirectory!,
-        resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
-        resolveEnvironment: async () => ({}),
-        reapOrphanChildren: async () => {
-          throw failure
-        }
-      })
-    ).resolves.toBeDefined()
-
-    await vi.waitFor(() =>
-      expect(consoleError).toHaveBeenCalledWith(
-        '[structured-agent-session] orphan reaper failed',
-        failure
-      )
-    )
   })
 
   it('does not infer Windows process identity support from an injected reader', async () => {
@@ -319,72 +258,5 @@ describe('structured agent-session runtime install', () => {
       __setWindowsProcessTreeLoaderForTests()
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
     }
-  })
-})
-
-// A stop whose teardown fails must not forget the runtime it was tearing down.
-// `installing` is cleared either way so nothing new attaches, but the host keeps
-// every journal whose close rejected, and this module slot is the only handle
-// onto that host once it is gone.
-describe('a teardown that fails is retried by the next stop', () => {
-  const JOURNAL_IDENTITY: AgentSessionJournalIdentity = {
-    sessionId: 'session-teardown-retry',
-    workspaceId: 'ws-1',
-    hostId: HOST_ID,
-    agent: 'codex',
-    providerHandle: { kind: 'codex', threadId: 'thread-1' }
-  }
-  const journals = createTrackedJournalOpener()
-  let directory: string | null = null
-
-  afterEach(async () => {
-    await agentSessionJournalCloseRetries.retryAll()
-    await journals.closeAll()
-    await stopStructuredAgentSessionRuntime().catch(() => undefined)
-    if (directory) {
-      await rm(directory, { recursive: true, force: true })
-      directory = null
-    }
-  })
-
-  it('reports the failure, then releases the handle on the following stop', async () => {
-    directory = await mkdtemp(join(tmpdir(), 'orca-structured-runtime-'))
-    await ensureStructuredAgentSessionHost({
-      stateDirectory: directory,
-      hostId: HOST_ID,
-      claimKeyId: 'key-1',
-      resolveWorkspacePath: async () => directory!,
-      resolveEnvironment: async () => ({}),
-      reapOrphanChildren: async () => [],
-      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true })
-    })
-
-    const journalDir = join(directory, 'stubborn-journal')
-    const real = await journals.open({ identity: JOURNAL_IDENTITY, journalDir })
-    let closeFailures = 2
-    const flaky = new Proxy(real, {
-      get(target, property, receiver) {
-        if (property !== 'close') {
-          // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: only Reflect.get forwards a raw string|symbol key with the proxy receiver.
-          return Reflect.get(target, property, receiver)
-        }
-        return async () => {
-          if (closeFailures > 0) {
-            closeFailures -= 1
-            throw new Error('close rejected')
-          }
-          await target.close()
-        }
-      }
-    })
-    await agentSessionJournalCloseRetries.closeOrRetain(flaky)
-
-    // The host's teardown runs the registry retry, so this stop surfaces it.
-    await expect(stopStructuredAgentSessionRuntime()).rejects.toThrow()
-    expect(agentSessionJournalCloseRetries.pendingDirectories).toEqual([journalDir])
-
-    // The retained runtime is what makes this a retry rather than a no-op.
-    await stopStructuredAgentSessionRuntime()
-    expect(agentSessionJournalCloseRetries.pendingDirectories).toEqual([])
   })
 })

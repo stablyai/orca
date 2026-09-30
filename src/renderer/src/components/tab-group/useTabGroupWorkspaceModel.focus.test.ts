@@ -659,13 +659,13 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
     const model = useTabGroupWorkspaceModel({ groupId: 'group-1', worktreeId: 'wt-1' })
 
-    model.commands.duplicateBrowserTab('browser-workspace-1')
+    model.commands.duplicateBrowserTab('browser-workspace-1', 'browser-unified-1')
 
     expect(mocks.createBrowserTab).toHaveBeenCalledWith('wt-1', 'https://example.com', {
       title: 'Example',
       sessionProfileId: 'profile-1',
       sessionPartition: 'persist:orca-browser-session-profile-1',
-      targetGroupId: 'group-1'
+      afterTabId: 'browser-unified-1'
     })
   })
 

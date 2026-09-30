@@ -57,12 +57,6 @@ export class CodexJournalActiveTurns {
     return [...(this.byThread.get(threadId) ?? [])].at(-1) ?? null
   }
 
-  /** Whether this turn is still open here. A terminal row already written carries
-   *  the turn's start and duration, so a later end must not overwrite it. */
-  isActive(threadId: string, turnId: string): boolean {
-    return this.byThread.get(threadId)?.has(turnId) === true
-  }
-
   startedAt(threadId: string, turnId: string): number | undefined {
     return this.startedAtByTurn.get(this.turnKey(threadId, turnId))
   }
@@ -167,7 +161,7 @@ type RecentTurn = {
   bytes: number
 }
 
-/** Bounded terminal lifecycle window for exact echoes that arrive after completion. */
+/** Bounded terminal lifecycle window: exact echoes that arrive after completion revise it. */
 export class CodexJournalRecentTurns {
   private readonly turns = new Map<string, RecentTurn>()
   private retainedBytes = 0

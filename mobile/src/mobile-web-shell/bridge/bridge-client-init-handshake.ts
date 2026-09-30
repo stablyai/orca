@@ -1,8 +1,4 @@
 import { BRIDGE_PROTOCOL_VERSION, type BridgeClientMessage } from './bridge-envelope'
-import { BRIDGE_BACK_FRAME } from './bridge-page-back'
-import { BRIDGE_PAGE_PAINTED } from './bridge-page-painted'
-import { BRIDGE_ROUTE_UPDATE_ACCEPT } from './bridge-route-update'
-import { BRIDGE_SAFE_AREA_ACCEPT } from './bridge-safe-area-insets'
 
 /** The page asks again until the shell answers; a session has no other way to start. */
 export const BRIDGE_READY_RETRY_MIN_MS = 50
@@ -53,17 +49,8 @@ export function createBridgeInitHandshake(ask: () => void): BridgeInitHandshake 
   }
 }
 
-/**
- * What the page says on every ask, because the shell reads it off whichever `ready` it answers.
- * `accepts` is what this page build can be sent: a second `init` for the session it holds, the
- * Back frame, and insets it pads for itself. `reports` runs the other way: what a shell may wait
- * for this page to post, and the shell holds a frame over the view until it arrives.
- */
+/** What the page says on every ask. It declares nothing: the shell serves no page older than its
+ *  floor, so every page it talks to takes everything the shell sends. */
 export function createPageReadyFrame(): Extract<BridgeClientMessage, { type: 'ready' }> {
-  return {
-    v: BRIDGE_PROTOCOL_VERSION,
-    type: 'ready',
-    accepts: [BRIDGE_ROUTE_UPDATE_ACCEPT, BRIDGE_BACK_FRAME, BRIDGE_SAFE_AREA_ACCEPT],
-    reports: [BRIDGE_PAGE_PAINTED]
-  }
+  return { v: BRIDGE_PROTOCOL_VERSION, type: 'ready' }
 }

@@ -163,11 +163,18 @@ describe('admitAgentSessionMutation', () => {
   it('surfaces a ledger refusal verbatim', () => {
     const admission = admitAgentSessionMutation({
       ...base,
-      ledger: { decision: 'refused', code: 'agent_session_operation_expired' }
+      ledger: {
+        decision: 'refused',
+        code: 'agent_session_operation_expired',
+        details: { reason: 'operationExpired' }
+      }
     })
     expect(admission).toMatchObject({
       decision: 'refused',
-      refusal: { code: 'agent_session_operation_expired' }
+      refusal: {
+        code: 'agent_session_operation_expired',
+        details: { reason: 'operationExpired' }
+      }
     })
   })
 })

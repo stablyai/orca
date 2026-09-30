@@ -30,10 +30,9 @@ import type {
 } from '../../shared/agent-session-wire'
 import { attachFingerprintFields } from '../native-chat/agent-session-wire/structured-agent-session-attach'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
-import { journalDirectoryFor } from '../native-chat/agent-session-journal/journal-paths'
 import { importLegacyTranscriptIntoJournal } from '../native-chat/agent-session-journal/journal-legacy-import'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
-import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-store-test-open'
+import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import type { OrcaRuntimeService } from './orca-runtime'
 import type { RpcRequest, RpcResponse } from './rpc/core'
 import { RpcDispatcher } from './rpc/dispatcher'
@@ -218,6 +217,11 @@ function createIntentParams() {
 }
 
 let codex: CodexScript
+/** Accepted first; the delivery loop hands the send over as `turn/start` after the reply. */
+const handedOverAs = (params: Record<string, unknown>) =>
+  vi.waitFor(() =>
+    expect(codex.live().calls.at(-1)).toMatchObject({ method: 'turn/start', params })
+  )
 let root: string
 let dispatcher: RpcDispatcher
 let bootEnvironmentReads: number
@@ -284,10 +288,10 @@ function textOf(item: AgentJournalRenderItem): string {
 }
 
 /** The durable submission row, which settlement rewrites after the send returns. */
-function submissionOf(clientMessageId: string): AgentJournalSubmission | undefined {
-  return getStructuredAgentSessionHost()
-    ?.journalSnapshot(SESSION)
-    .submissions.find((entry) => entry.clientMessageId === clientMessageId)
+async function submissionOf(clientMessageId: string): Promise<AgentJournalSubmission | undefined> {
+  return (await getStructuredAgentSessionHost()?.journalSnapshot(SESSION))?.submissions.find(
+    (entry) => entry.clientMessageId === clientMessageId
+  )
 }
 
 async function historyPage(
@@ -405,7 +409,7 @@ describe('a structured codex session over agentSession.*', () => {
     }
     const journal = await journals.open({
       identity,
-      journalDir: journalDirectoryFor(root, identity)
+      stateDirectory: root
     })
     const rollout = join(root, 'legacy-rollout.jsonl')
     await writeFile(
@@ -423,6 +427,8 @@ describe('a structured codex session over agentSession.*', () => {
       fence: 0,
       options: { filePath: rollout }
     })
+    // The previous process exits, closing its database.
+    await journals.closeAll()
 
     const created = await ok<{ page: { items: AgentJournalRenderItem[] } }>(
       'agentSession.create',
@@ -466,10 +472,7 @@ describe('a structured codex session over agentSession.*', () => {
     // send coalesced into a running turn is answered with that turn's id, so
     // which message landed where is knowable only from the echo.
     expect(sent.submission).toMatchObject({ dispatchState: 'pending', providerItemId: null })
-    expect(codex.live().calls.at(-1)).toMatchObject({
-      method: 'turn/start',
-      params: { threadId: THREAD, clientUserMessageId: sent.clientMessageId }
-    })
+    await handedOverAs({ threadId: THREAD, clientUserMessageId: sent.clientMessageId })
 
     codex.notify('turn/started', { turn: { id: TURN } })
     // Codex echoes the message back carrying the `clientId` it was sent under,
@@ -493,8 +496,8 @@ describe('a structured codex session over agentSession.*', () => {
     // The echo is the first item of this turn, so the settled key is ordinal 0 —
     // minted by the same `identityFor` a history replay computes with, rather
     // than guessed from the turn/start response.
-    await vi.waitFor(() =>
-      expect(submissionOf(sent.clientMessageId)).toMatchObject({
+    await vi.waitFor(async () =>
+      expect(await submissionOf(sent.clientMessageId)).toMatchObject({
         dispatchState: 'accepted',
         providerItemId: `codex:${THREAD}:${TURN}:0`
       })
@@ -557,14 +560,11 @@ describe('a structured codex session over agentSession.*', () => {
     // "delivery unconfirmed" — it carries no identity yet, because the response
     // to a coalesced send names the running turn rather than this message.
     expect(sent.submission).toMatchObject({ dispatchState: 'pending', providerItemId: null })
-    expect(codex.live().calls.at(-1)).toMatchObject({
-      method: 'turn/start',
-      params: {
-        threadId: THREAD,
-        clientUserMessageId: sent.clientMessageId,
-        model: 'gpt-live',
-        effort: 'high'
-      }
+    await handedOverAs({
+      threadId: THREAD,
+      clientUserMessageId: sent.clientMessageId,
+      model: 'gpt-live',
+      effort: 'high'
     })
 
     // ── stream ──────────────────────────────────────────────────────────────
@@ -585,8 +585,8 @@ describe('a structured codex session over agentSession.*', () => {
     expect(itemsOf(stream).filter((item) => textOf(item) === 'list files')).toHaveLength(1)
     // Settled from the echo's own journal identity, so it is by construction the
     // key a replay recomputes for this row.
-    await vi.waitFor(() =>
-      expect(submissionOf(sent.clientMessageId)).toMatchObject({
+    await vi.waitFor(async () =>
+      expect(await submissionOf(sent.clientMessageId)).toMatchObject({
         dispatchState: 'accepted',
         providerItemId: `codex:${THREAD}:${TURN}:0`
       })
@@ -828,7 +828,7 @@ describe('a structured codex session over agentSession.*', () => {
     }
     const reopened = await journals.open({
       identity,
-      journalDir: journalDirectoryFor(root, identity)
+      stateDirectory: root
     })
     expect(reopened.snapshot().items.map(textOf)).toContain('Final text before shutdown.')
     expect(

@@ -1,10 +1,13 @@
 import type { AgentHookSource } from './agent-hook-relay'
 import type { AgentStatusState } from './agent-status-types'
+import type { AgentMainAgentStatus } from './main-agent-status'
 import type { TuiAgent } from './tui-agent'
 
 export const RESUMABLE_TUI_AGENTS = [
   'claude',
+  'codebuddy',
   'codex',
+  'qoder',
   'gemini',
   'antigravity',
   'opencode',
@@ -19,7 +22,8 @@ export const RESUMABLE_TUI_AGENTS = [
   'copilot',
   'kimi',
   'muse',
-  'zcode'
+  'zcode',
+  'dsh'
 ] as const satisfies readonly TuiAgent[]
 
 export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
@@ -58,6 +62,9 @@ export type SleepingAgentSessionRecord = {
   terminalTitle?: string
   lastAssistantMessage?: string
   interrupted?: boolean
+  /** The main agent's own status when captured, copied with `interrupted` by `agentVerdictFields`;
+   *  read the verdict through `agentMainAgentVerdict`. */
+  mainAgent?: AgentMainAgentStatus
   connectionId?: string | null
   launchConfig?: SleepingAgentLaunchConfig
   /** How the record was captured. Worktree-sleep records (legacy records have
@@ -189,6 +196,8 @@ export function extractAgentProviderSession(
     // Native-chat agents: also capture the hook's authoritative transcript_path,
     // since recent Claude Code names the transcript file with a UUID that differs
     // from the hook session_id (so the id-based glob no longer finds it).
+    case 'qoder':
+    case 'codebuddy':
     case 'claude':
     case 'codex': {
       const id = readSessionId(payload, ['session_id'])
@@ -209,6 +218,12 @@ export function extractAgentProviderSession(
     // Why: ZCode's `transcript_path` is a per-invocation temp file it deletes when the hook
     // returns (`createCompatibleHookStdin` mkdtemp + cleanup), so only the id is durable.
     case 'zcode': {
+      const id = readSessionId(payload, ['session_id'])
+      return id ? { key: 'session_id', id } : null
+    }
+    // Why: DSH's hook bridge always sends an empty `transcript_path` (its persistence seam
+    // exposes no artifact path), so the session id alone carries the resume target.
+    case 'dsh': {
       const id = readSessionId(payload, ['session_id'])
       return id ? { key: 'session_id', id } : null
     }
@@ -264,10 +279,14 @@ export function getAgentResumeArgv(
 ): string[] | null {
   const id = providerSession.id
   switch (agent) {
+    case 'codebuddy':
+      return providerSession.key === 'session_id' ? ['codebuddy', '--resume', id] : null
     case 'claude':
       return providerSession.key === 'session_id' ? ['claude', '--resume', id] : null
     case 'codex':
       return providerSession.key === 'session_id' ? ['codex', 'resume', id] : null
+    case 'qoder':
+      return providerSession.key === 'session_id' ? ['qodercli', '--resume', id] : null
     case 'gemini':
       return providerSession.key === 'session_id' ? ['gemini', '--resume', id] : null
     case 'antigravity':
@@ -314,5 +333,9 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id' ? ['muse', 'resume', id] : null
     case 'zcode':
       return providerSession.key === 'session_id' ? ['zcode', '--resume', id] : null
+    // Why: `dsh-tui --resume <id>` re-enters the session the launcher recorded for this
+    // workspace. DSH keys sessions by workspace path, so callers must keep the cwd.
+    case 'dsh':
+      return providerSession.key === 'session_id' ? ['dsh-tui', '--resume', id] : null
   }
 }

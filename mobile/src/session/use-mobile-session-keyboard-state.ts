@@ -31,8 +31,7 @@ export type MobileSessionKeyboardScope = Pick<
   | 'tabStripOffsetRef'
   | 'tabStripRef'
   | 'tabStripViewportWidthRef'
-  | 'terminalFrameHeightRef'
-  | 'terminalFrameWidth'
+  | 'terminalFrameRef'
   | 'terminalRefs'
   | 'terminals'
   | 'terminalTextScale'
@@ -67,17 +66,21 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
     terminalRefs,
     initializedHandlesRef,
     activeHandleRef,
-    terminalFrameHeightRef,
-    terminalFrameWidth,
+    terminalFrameRef,
     showNativeChatRef,
     unsubscribeTerminal,
     subscribeToTerminal
   } = scope
   // Why: non-subscribe layout refits (tab strip, fold, rotation) live in a dedicated hook — see terminal-viewport-refit.ts.
-  const { notifyTerminalFrameHeight, notifyKeyboardVisibility } = useTerminalViewportRefit({
+  const {
+    notifyTerminalFrameHeight,
+    notifyTerminalFrameWidth,
+    notifyKeyboardVisibility,
+    notifyTerminalCellBoxChange
+  } = useTerminalViewportRefit({
     activeHandleRef,
     terminalRefs,
-    terminalFrameHeightRef,
+    terminalFrameRef,
     viewportRef,
     viewportMeasuredRef,
     nativeChatCoveredRef: showNativeChatRef,
@@ -87,7 +90,6 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
     connState,
     tabStripVisible: terminals.length > 1,
     textScale: terminalTextScale,
-    terminalFrameWidth,
     unsubscribeTerminal,
     subscribeToTerminal
   })
@@ -151,7 +153,9 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
   }, [router])
   return {
     notifyTerminalFrameHeight,
+    notifyTerminalFrameWidth,
     notifyKeyboardVisibility,
+    notifyTerminalCellBoxChange,
     scrollActiveTabIntoView,
     handleDeleteCustomKey,
     handleManageShortcuts

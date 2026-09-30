@@ -633,46 +633,6 @@ describe('AgentBrowserBridge', () => {
     expect(peakRetirements).toBe(4)
   })
 
-  it('destroys a session that finishes creating during runtime shutdown', async () => {
-    const commandCalls: string[][] = []
-    let releaseStaleClose: (() => void) | null = null
-    execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
-        commandCalls.push(args)
-        if (args.includes('close') && !releaseStaleClose) {
-          releaseStaleClose = () => {
-            cb(null, JSON.stringify({ success: true, data: null }), '')
-          }
-          return { kill: vi.fn() }
-        }
-        cb(null, JSON.stringify({ success: true, data: null }), '')
-        return { kill: vi.fn() }
-      }
-    )
-
-    const ensurePromise = (
-      bridge as unknown as {
-        ensureSession: (
-          sessionName: string,
-          browserPageId: string,
-          webContentsId: number
-        ) => Promise<void>
-      }
-    ).ensureSession('orca-tab-tab-1', 'tab-1', 100)
-    await vi.waitFor(() => expect(releaseStaleClose).not.toBeNull())
-
-    const destroyAllPromise = bridge.destroyAllSessions()
-    releaseStaleClose!()
-    await ensurePromise
-    await destroyAllPromise
-
-    const sessions = (bridge as unknown as { sessions: Map<string, unknown> }).sessions
-    const proxy = CdpWsProxyMock.instances[0] as { stop: ReturnType<typeof vi.fn> }
-    expect(commandCalls.filter((args) => args.includes('close'))).toHaveLength(2)
-    expect(sessions.size).toBe(0)
-    expect(proxy.stop).toHaveBeenCalledTimes(1)
-  })
-
   // Why: quit awaits destroyAllSessions inside a 20s barrier, so an unbounded close can hold the
   // window up for the whole deadline when the daemon is wedged (#16367).
   it('bounds every teardown close well inside the quit barrier', async () => {

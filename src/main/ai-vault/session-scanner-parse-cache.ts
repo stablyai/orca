@@ -5,6 +5,7 @@ import { createCodexSessionResumeState } from './session-scanner-codex-parser'
 import { createDroidSessionResumeState } from './session-scanner-droid-parser'
 import { createMessageGraphSessionResumeState } from './session-scanner-graph-parsers'
 import { createClaudeSessionResumeState } from './session-scanner-primary-parsers'
+import { createCodebuddySessionResumeState } from './session-scanner-codebuddy-parser'
 import { createGeminiJsonlSessionResumeState } from './session-scanner-gemini-parsers'
 import { createCopilotSessionResumeState } from './session-scanner-copilot-parser'
 import { createCursorSessionResumeState } from './session-scanner-cursor-parser'
@@ -51,6 +52,8 @@ function resumableStateFactoryFor(
   switch (candidate.agent) {
     case 'claude':
       return (messages) => createClaudeSessionResumeState(candidate.file, messages)
+    case 'codebuddy':
+      return (messages) => createCodebuddySessionResumeState(candidate.file, messages)
     case 'codex':
       return (messages) =>
         createCodexSessionResumeState(candidate.file, candidate.codexHome, messages)
@@ -81,6 +84,7 @@ function resumableStateFactoryFor(
     case 'muse':
     case 'opencode':
     case 'opencode2':
+    case 'zcode':
     case 'rovo':
       return null
   }

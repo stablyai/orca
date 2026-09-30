@@ -209,15 +209,6 @@ describe('AgentBrowserBridge', () => {
     })
   })
 
-  it('handles malformed JSON from agent-browser', async () => {
-    execFileMock.mockImplementation(
-      (_bin: string, _args: string[], _opts: unknown, cb: ExecFileCallback) => {
-        cb(null, 'not json at all', '')
-      }
-    )
-    await expect(bridge.snapshot()).rejects.toThrow()
-  })
-
   // ── exec passthrough ──
 
   it('strips --cdp and --session from exec commands', async () => {

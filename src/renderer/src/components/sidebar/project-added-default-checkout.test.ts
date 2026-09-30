@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultOnboardingState } from '../../../../shared/constants'
+import { getDefaultOnboardingState } from '../../../../shared/onboarding-defaults'
 import type { Repo } from '../../../../shared/repo-types'
 import type {
   DetectedWorktree,

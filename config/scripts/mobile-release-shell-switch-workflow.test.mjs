@@ -120,6 +120,8 @@ const BUNDLER_CACHE_PATHS = ['metro-cache', '.expo', 'node_modules/.cache']
 const REVIEWED_COMPUTED_PATHS = [
   '${{ steps.electron-package-cache.outputs.cache-root }}',
   '${{ steps.pnpm-store.outputs.path }}',
+  // Only pnpm's lockfile-verified.jsonl record, never Metro transforms.
+  '${{ steps.verification-cache.outputs.path }}',
   "${{ github.event_name != 'pull_request' && 'pnpm' || '' }} store"
 ]
 

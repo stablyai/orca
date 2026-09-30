@@ -3,10 +3,7 @@
 // side of the bridge already did, and this provider only carries what it holds across the boundary.
 import { createContext, useContext, useMemo, useRef, type ReactNode } from 'react'
 import type { BridgeRpcClient } from '../mobile-web-shell/bridge/bridge-rpc-client'
-import {
-  BRIDGE_PAGE_CLIENT_ID,
-  BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT
-} from '../mobile-web-shell/bridge/bridge-page-client-identity'
+import { BRIDGE_PAGE_CLIENT_ID } from '../mobile-web-shell/bridge/bridge-page-client-identity'
 import type { ConnectionState, HostProfile } from './types'
 import type { RpcClientContextValue } from './rpc-client-context-contract'
 
@@ -61,17 +58,8 @@ export function RpcClientProvider({
       getState: () => client.getState(),
       // Nothing mounts before `init`, so the page's state is never the unknown this answers null for.
       getKnownState: () => client.getState(),
-      /**
-       * A placeholder the shell swaps for this device's real identity, never the credential itself.
-       *
-       * Only when the shell said it performs the swap; a shell that did not leaves this null, which
-       * is no terminal and no live input, because the session route refuses to subscribe or send
-       * without one — but a placeholder the host read itself would be refused as a spoof.
-       */
-      getClientId: () =>
-        client.getShellSession()?.accepts.includes(BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT) === true
-          ? BRIDGE_PAGE_CLIENT_ID
-          : null,
+      /** A placeholder the shell swaps for this device's real identity, never the credential. */
+      getClientId: () => BRIDGE_PAGE_CLIENT_ID,
       getReconnectAttempt: () => client.getReconnectAttempt(),
       getLastConnectedAt: () => client.getLastConnectedAt(),
       // The page reaches its host through the shell bridge, which rides whatever path the RN

@@ -5,10 +5,7 @@ import type {
   AgentChildWorkEvidence,
   AgentChildWorkLiveObservation
 } from './agent-status-child-work-evidence'
-import {
-  reconcileAgentChildWorkEvidence,
-  STRUCTURED_CHILD_WORK_MAX_SETTLED
-} from './agent-status-child-work-reconciliation'
+import { reconcileAgentChildWorkEvidence } from './agent-status-child-work-reconciliation'
 import { STRUCTURED_CHILD_WORK_MAX_LIVE } from './agent-status-child-work-evidence-admission'
 import { createAgentStatusStore, type AgentStatusStore } from './agent-status-store'
 import { makeStructuredAgentStatusSubject } from './agent-status-subject'
@@ -399,17 +396,9 @@ describe('structured child-work reconciliation', () => {
     expect(records(store)).toHaveLength(STRUCTURED_CHILD_WORK_MAX_LIVE)
   })
 
-  it('keeps a bounded settled history, never dropping a child that owns live work', () => {
+  it('keeps every settled child until the parent row goes', () => {
     const { store, apply } = harness()
-    apply(live(child('owner')))
-    apply(live(child('shell', { kind: 'command', ownerId: 'owner' })))
-    apply({
-      type: 'ended',
-      observedAt: 101,
-      handle: { idKind: 'task_id', id: 'owner' },
-      outcome: 'succeeded'
-    })
-    for (let index = 0; index < STRUCTURED_CHILD_WORK_MAX_SETTLED + 1; index += 1) {
+    for (let index = 0; index < 100; index += 1) {
       apply(live(child(`done-${index}`), 200 + index), {
         type: 'ended',
         observedAt: 200 + index,
@@ -418,9 +407,22 @@ describe('structured child-work reconciliation', () => {
       })
     }
     const settled = records(store).filter((record) => record.membership === 'settled')
-    expect(settled).toHaveLength(STRUCTURED_CHILD_WORK_MAX_SETTLED)
-    expect(settled.map((record) => record.description)).toContain('Task owner')
-    expect(settled.map((record) => record.description)).not.toContain('Task done-0')
-    expect(settled.map((record) => record.description)).not.toContain('Task done-1')
+    expect(settled).toHaveLength(100)
+    expect(settled.map((record) => record.description)).toContain('Task done-0')
+  })
+
+  it('removes work that stopped with nothing to report, and only the record it names', () => {
+    const { store, apply } = harness()
+    apply(live(child('owner')), live(child('shell', { kind: 'command', ownerId: 'owner' })))
+    expect(
+      apply({ type: 'removed', observedAt: 200, handle: { idKind: 'task_id', id: 'shell' } })
+    ).toMatchObject({ removed: 1, settled: 0 })
+    expect(only(store)).toMatchObject({ description: 'Task owner', membership: 'live' })
+    expect(store.getAliasesForChild('child-2')).toEqual([])
+    // A handle it no longer answers to removes nothing.
+    expect(
+      apply({ type: 'removed', observedAt: 201, handle: { idKind: 'task_id', id: 'shell' } })
+    ).toMatchObject({ removed: 0 })
+    expect(records(store)).toHaveLength(1)
   })
 })

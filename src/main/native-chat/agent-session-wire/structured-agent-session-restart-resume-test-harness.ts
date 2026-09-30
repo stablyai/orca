@@ -145,7 +145,7 @@ export type HarnessJournal = {
   appendItem: (envelope: unknown, body: { kind: string; text: string }) => Promise<void>
 }
 
-export type HarnessSession = { journal: HarnessJournal; hasProviderChild: boolean; fence?: number }
+export type HarnessSession = { journal: HarnessJournal; child: { fence: number } | null }
 
 export function journal(
   items: AgentJournalRenderItem[],
@@ -203,13 +203,12 @@ export function resumableSet(input: {
   markers: AgentSessionResumeMarker[]
   items?: AgentJournalRenderItem[]
   chain?: AgentSessionRecord['providerHandleChain']
-  latestUserItemId?: string | null
 }) {
   return structuredAgentSessionResumableSet({
     markers: input.markers,
     getRecord: () => record(input.chain === undefined ? {} : { chain: input.chain }),
     supportsRecord: () => true,
     latestPrompt: () => 'fix the auth bug',
-    latestUserItemId: () => input.latestUserItemId ?? null
+    movedOn: () => false
   })
 }

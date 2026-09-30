@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
@@ -26,6 +27,7 @@ import {
   HOST_TEST_THREAD as THREAD,
   hostTestMessage
 } from './structured-agent-session-host-test-data'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 
 let root: string
 let store: AgentSessionRecordStore
@@ -132,18 +134,20 @@ describe('attach', () => {
     host = new StructuredAgentSessionHost({
       store,
       adapter: { ...adapter(), acquire },
-      journalRoot: root,
+      journalDatabase: openTestJournalHostDatabase(root),
       claimKeyId: 'key-1',
       mintSpawnToken: () => 'spawn-a',
       now: () => NOW
     })
     const params = attachParams()
 
+    // Orca's own store fault: the child is gone, but nothing blames the provider.
     const refused = {
       ok: false,
       refusal: {
         code: 'agent_session_operation_invalid',
-        message: 'agent_session_provider_handle_stale_fence',
+        details: { ownerVerdict: 'exited' },
+        message: "Codex couldn't restart. Send your message to try again.",
         ownerVerdict: 'exited'
       }
     }
@@ -161,7 +165,10 @@ describe('attach', () => {
 
     await expect(host.attach(CALLER, attachParams())).resolves.toMatchObject({
       ok: false,
-      refusal: { message: 'commit failed', ownerVerdict: 'exited' }
+      refusal: {
+        message: "Codex couldn't restart. Send your message to try again.",
+        ownerVerdict: 'exited'
+      }
     })
 
     expect(releaseAcquisition).toHaveBeenCalledWith({ sessionId: SESSION })
@@ -181,7 +188,8 @@ describe('attach', () => {
     })
     events?.appendItem(
       { provider: 'orca', clientMessageId: 'old-journal-write' },
-      { kind: 'status', text: 'old journal write' }
+      { kind: 'status', text: 'old journal write' },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await vi.waitFor(() => expect(append).toHaveBeenCalledOnce())
     const released = await store.evictProvenDeadOwner({
@@ -209,7 +217,7 @@ describe('cancel', () => {
       turnId: 'turn-1'
     })
     expect(result).toMatchObject({ ok: true, value: { cancelled: true } })
-    const page = host.history({ sessionId: SESSION, direction: 'tail' })
+    const page = await host.history({ sessionId: SESSION, direction: 'tail' })
     expect(page.ok && page.page.items[0]?.body).toMatchObject({
       kind: 'status',
       text: 'Cancellation requested.'
@@ -333,7 +341,7 @@ describe('cancel', () => {
       refusal: { code: 'agent_session_operation_unknown' }
     })
     expect(cancelTurn).toHaveBeenCalledTimes(1)
-    expect(host.history({ sessionId: SESSION, direction: 'tail' })).toMatchObject({
+    expect(await host.history({ sessionId: SESSION, direction: 'tail' })).toMatchObject({
       ok: true,
       page: {
         items: [
@@ -384,7 +392,7 @@ describe('respondToPrompt', () => {
         options: [{ id: 'allow', label: 'Allow' }],
         resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
       },
-      child
+      { ...child, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await host.flushStreamedEvents(SESSION)
     const itemId = agentJournalItemKey(identity)
@@ -396,7 +404,7 @@ describe('respondToPrompt', () => {
       ...fields
     })
 
-    const page = host.history({ sessionId: SESSION, direction: 'tail' })
+    const page = await host.history({ sessionId: SESSION, direction: 'tail' })
     const answered = page.ok ? page.page.items.find((item) => item.itemId === itemId) : null
     expect(answered).toMatchObject({
       revision: 2,
@@ -491,7 +499,7 @@ describe('respondToPrompt', () => {
       ...fields
     })
     expect(result.ok).toBe(true)
-    const page = host.history({ sessionId: SESSION, direction: 'tail' })
+    const page = await host.history({ sessionId: SESSION, direction: 'tail' })
     const statusId = agentJournalItemKey({
       provider: 'orca',
       clientMessageId: `${prompt.itemId}#delivery`
@@ -521,7 +529,7 @@ describe('setOption', () => {
     })
     expect(setOption).toHaveBeenCalledTimes(1)
     expect(store.getRecord(SESSION)?.options).toEqual({ model: 'gpt-5', effort: 'high' })
-    const page = host.history({ sessionId: SESSION, direction: 'tail' })
+    const page = await host.history({ sessionId: SESSION, direction: 'tail' })
     expect(page.ok && page.page.items).toHaveLength(0)
   })
 
@@ -556,7 +564,7 @@ describe('restart', () => {
     host = new StructuredAgentSessionHost({
       store,
       adapter: { ...adapter(), ...adapterOverrides },
-      journalRoot: root,
+      journalDatabase: openTestJournalHostDatabase(root),
       claimKeyId: 'key-1',
       mintSpawnToken: () => 'spawn-b',
       probeOwner,
@@ -605,13 +613,13 @@ describe('restart', () => {
     expect(host.listSessionTabs()).toEqual([
       { sessionId: SESSION, workspaceId: 'workspace-1', agent: 'codex' }
     ])
-    const history = host.history({ sessionId: SESSION, direction: 'tail' })
+    const history = await host.history({ sessionId: SESSION, direction: 'tail' })
     expect(history.ok && history.page.items).not.toHaveLength(0)
     expect(acquire).not.toHaveBeenCalled()
     expect(listRecords).toHaveBeenCalledTimes(restoreReads)
   })
 
-  it('clears a stale conflicted recovery at restart, and reacquires the native owner when a surface holds it', async () => {
+  it('clears a stale conflicted recovery at restart, and reacquires the native owner on the next start', async () => {
     await attach()
     await store.transitionHandoff(SESSION, (record) => ({
       ...record,
@@ -626,9 +634,10 @@ describe('restart', () => {
     acquire.mockClear()
 
     await host.restoreReadableSessions()
-    // The recovery stage clears on evidence at startup; the child comes back only once a surface
-    // holds the session (see structured-agent-session-surface-lifetime.test.ts).
-    await host.hold(SESSION, 'surface-1')
+    // The recovery stage clears on evidence at startup; the child comes back only once work
+    // starts it — here the explicit attach a send's delivery would make.
+    const fence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
+    expect(await host.attach(CALLER, ensureParams(fence))).toMatchObject({ ok: true })
 
     expect(acquire).toHaveBeenCalledOnce()
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
@@ -660,12 +669,15 @@ describe('restart', () => {
       return settled(input)
     })
 
-    const hold = host.hold(SESSION, 'surface-1')
+    const start = host.attach(
+      CALLER,
+      ensureParams(store.getRecord(SESSION)?.lease.runtimeFence ?? 0)
+    )
     await started.promise
     const claimMidStart = store.getRecord(SESSION)?.lease.claimStatus
     const status = host.handoffStatus(SESSION)
     release.resolve()
-    await hold
+    await start
 
     // Mid-start the lease is only reserved; ownership does not wait for the agent.
     expect(claimMidStart).toBe('reserved')
@@ -718,7 +730,7 @@ describe('subscribe', () => {
   it('opens with a snapshot and then streams cursor-qualified batches', async () => {
     await attach()
     const events: AgentSessionSubscribeEvent[] = []
-    const dispose = host.subscribe({
+    const dispose = await host.subscribe({
       id: 'sub-1',
       sessionId: SESSION,
       emit: (event) => events.push(event)
@@ -748,7 +760,7 @@ describe('subscribe', () => {
     }
 
     const events: AgentSessionSubscribeEvent[] = []
-    host.subscribe({
+    await host.subscribe({
       id: 'sub-2',
       sessionId: SESSION,
       emit: (event) => events.push(event),
@@ -769,14 +781,14 @@ describe('subscribe', () => {
   it('drops a failed transport without aborting the mutation or other subscribers', async () => {
     await attach()
     const events: AgentSessionSubscribeEvent[] = []
-    host.subscribe({
+    await host.subscribe({
       id: 'dead-sub',
       sessionId: SESSION,
       emit: () => {
         throw new Error('socket closed')
       }
     })
-    host.subscribe({
+    await host.subscribe({
       id: 'live-sub',
       sessionId: SESSION,
       emit: (event) => events.push(event)
@@ -788,15 +800,25 @@ describe('subscribe', () => {
       body
     })
 
-    expect(result).toMatchObject({ ok: true, value: { submission: { dispatchState: 'accepted' } } })
-    expect(dispatch).toHaveBeenCalledTimes(1)
-    expect(events.some((event) => event.type === 'batch')).toBe(true)
+    expect(result).toMatchObject({ ok: true, value: { submission: { dispatchState: 'pending' } } })
+    // The failed transport does not stop the delivery loop either: the handover still lands and
+    // reaches the live subscriber.
+    await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() =>
+      expect(
+        events.some(
+          (event) =>
+            event.type === 'batch' &&
+            event.batch.submissions?.some((entry) => entry.dispatchState === 'accepted')
+        )
+      ).toBe(true)
+    )
   })
 
   it('resets a subscriber whose epoch is gone', async () => {
     await attach()
     const events: AgentSessionSubscribeEvent[] = []
-    host.subscribe({
+    await host.subscribe({
       id: 'sub-3',
       sessionId: SESSION,
       emit: (event) => events.push(event),
@@ -808,7 +830,7 @@ describe('subscribe', () => {
   it('publishes the replacement fence when the owner generation changes', async () => {
     const record = await attach()
     const events: AgentSessionSubscribeEvent[] = []
-    host.subscribe({
+    await host.subscribe({
       id: 'sub-4',
       sessionId: SESSION,
       emit: (event) => events.push(event)

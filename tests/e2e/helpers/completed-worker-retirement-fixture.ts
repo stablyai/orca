@@ -20,14 +20,34 @@ import { buildFakeAgentCommandOverride } from './fake-agent-command-override'
 import { FAKE_AGENT_PASTE_END_SCANNER_SOURCE } from './fake-agent-paste-end-scanner'
 
 const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-retired-worker-'))
+const recoveryConfigPath = path.join(fakeCliDir, 'recovery-config.json')
 const lifecycleLedgerPath = path.join(fakeCliDir, 'codex-lifecycle.jsonl')
 export const completedWorkerFakeCodexCommand = buildFakeAgentCommandOverride(
   path.join(fakeCliDir, process.platform === 'win32' ? 'codex.cmd' : 'codex')
 )
 const fakeCodexSource = `
-const { appendFileSync } = require('node:fs')
+const { appendFileSync, readFileSync } = require('node:fs')
 const ledger = process.env.ORCA_E2E_CODEX_LIFECYCLE_LEDGER
 const append = (event) => appendFileSync(ledger, JSON.stringify({ pid: process.pid, ...event }) + '\\n')
+async function publishRecovery() {
+  const config = JSON.parse(readFileSync(${JSON.stringify(recoveryConfigPath)}, 'utf8'))
+  for (const hook_event_name of ['UserPromptSubmit', 'Stop']) {
+    const response = await fetch('http://127.0.0.1:' + process.env.ORCA_AGENT_HOOK_PORT + '/hook/codex', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Orca-Agent-Hook-Token': process.env.ORCA_AGENT_HOOK_TOKEN },
+      body: JSON.stringify({
+        paneKey: process.env.ORCA_PANE_KEY,
+        tabId: process.env.ORCA_TAB_ID,
+        worktreeId: process.env.ORCA_WORKTREE_ID,
+        launchToken: process.env.ORCA_AGENT_LAUNCH_TOKEN,
+        env: process.env.ORCA_AGENT_HOOK_ENV,
+        version: process.env.ORCA_AGENT_HOOK_VERSION,
+        payload: { hook_event_name, prompt: 'Report completion, then exit normally', ...config }
+      })
+    })
+    if (response.status !== 204) throw new Error('Recovery hook rejected: ' + response.status)
+  }
+}
 const args = process.argv.slice(2)
 if (args.includes('app-server')) {
   process.stderr.write("error: unrecognized subcommand 'app-server'\\n")
@@ -44,6 +64,10 @@ process.stdin.on('data', (chunk) => {
     process.stdout.write('\\x1b[?25h')
   }
   append({ event: 'input', input })
+  if (input.includes('ORCA_E2E_PUBLISH_DONE')) {
+    void publishRecovery().catch((error) => process.stderr.write(String(error)))
+    return
+  }
   if (input.includes('ORCA_E2E_EXIT_AFTER_DONE')) {
     append({ event: 'normal-exit' })
     process.exit(0)
@@ -178,6 +202,10 @@ export function seedCurrentCodexTranscript(
       type: 'session_meta',
       payload: { id: providerSessionId, cwd }
     })}\n`
+  )
+  writeFileSync(
+    recoveryConfigPath,
+    JSON.stringify({ session_id: providerSessionId, transcript_path: transcriptPath })
   )
   return transcriptPath
 }

@@ -9,7 +9,6 @@ import {
 } from './pty-ipc-mock-registry'
 import { posixOnlyIt } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
-import type { TuiAgent } from '../../shared/tui-agent'
 import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../shared/setup-agent-sequencing'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
@@ -60,13 +59,13 @@ describe('registerPtyHandlers', () => {
   const { spawnAndGetEnv } = setupPtyIpcSuite()
 
   describe('spawn environment', () => {
-    it('prepares Codex launch state for the workspace before spawning an interactive tab', async () => {
+    it('prepares Codex launch state before spawning an interactive tab', async () => {
       const workspacePath = '/repo/worktrees/new-feature'
       const resolveHome = vi.fn(
         (
           _target?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null },
           _launchEnv?: NodeJS.ProcessEnv,
-          _launchContext?: { workspacePath?: string; launchAgent?: TuiAgent }
+          _launchContext?: { unavailableManagedHomePath?: string }
         ) => null
       )
 
@@ -82,7 +81,6 @@ describe('registerPtyHandlers', () => {
       )
 
       expect(resolveHome.mock.calls[0]?.[0]).toEqual({ runtime: 'host' })
-      expect(resolveHome.mock.calls[0]?.[2]).toEqual({ workspacePath, launchAgent: 'codex' })
       expect(resolveHome.mock.invocationCallOrder[0]).toBeLessThan(
         spawnMock.mock.invocationCallOrder[0]!
       )

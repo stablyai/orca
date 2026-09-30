@@ -48,10 +48,6 @@ export function launchTokenHash(token: string | undefined): string | null {
   return token?.trim() ? createHash('sha256').update(token.trim()).digest('hex') : null
 }
 
-export function readSpoolRecords(path: string, now = Date.now()): SpoolRecord[] {
-  return readSpoolFile(path, now).records
-}
-
 /** Records plus the byte offset through the last COMPLETE line. A torn trailing line is
  *  left unconsumed so a writer still finishing it is not truncated away. */
 export function readSpoolFile(

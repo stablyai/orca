@@ -12,17 +12,21 @@ import type {
   AgentJournalMessageItem,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
-import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  AGENT_SESSION_JOURNAL_SCHEMA_VERSION
+} from '../../../shared/agent-session-journal-types'
 import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../../shared/agent-session-wire'
 import {
   REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES,
   serializeRemoteRuntimePayload
 } from '../../../shared/remote-runtime-memory-limits'
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
-import { openJournalDatabase } from '../agent-session-journal/journal-database'
-import { journalDatabaseFile } from '../agent-session-journal/journal-paths'
-import { insertJournalRow } from '../agent-session-journal/journal-row-table'
-import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
+import {
+  createTrackedJournalOpener,
+  openTestJournalHostDatabase,
+  insertTestJournalRow
+} from '../agent-session-journal/journal-host-database-test-support'
 import type {
   JournalItemRow,
   JournalRow,
@@ -61,7 +65,10 @@ function body(text: string): AgentJournalItemBody {
 
 async function appendItems(count: number): Promise<void> {
   for (let ordinal = 1; ordinal <= count; ordinal += 1) {
-    await journal.appendItem(item(ordinal), body(`item-${ordinal}`), { fence: 1 })
+    await journal.appendItem(item(ordinal), body(`item-${ordinal}`), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
   }
 }
 
@@ -71,7 +78,7 @@ beforeEach(async () => {
   epochs = 0
   journal = await journals.open({
     identity: IDENTITY,
-    journalDir: root,
+    stateDirectory: root,
     now: tick,
     mintEpoch: () => {
       epochs += 1
@@ -216,7 +223,10 @@ describe('history page byte ceiling', () => {
 
   async function appendLargeItems(count: number): Promise<void> {
     for (let ordinal = 1; ordinal <= count; ordinal += 1) {
-      await journal.appendItem(item(ordinal), body(`${ordinal}:${LARGE_TEXT}`), { fence: 1 })
+      await journal.appendItem(item(ordinal), body(`${ordinal}:${LARGE_TEXT}`), {
+        fence: 1,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
     }
   }
 
@@ -300,7 +310,10 @@ describe('history page byte ceiling', () => {
   })
 
   it('degrades a single over-budget item to a visible truncation marker instead of overflowing', async () => {
-    await journal.appendItem(item(1), body(`1:${'y'.repeat(3 * 1024 * 1024)}`), { fence: 1 })
+    await journal.appendItem(item(1), body(`1:${'y'.repeat(3 * 1024 * 1024)}`), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
 
     const tail = pageOf(
       readAgentSessionHistory(journal, { sessionId: 'session-1', direction: 'tail', limit: 40 })
@@ -320,14 +333,28 @@ describe('projectJournalBatch', () => {
       sessionId: 'session-1',
       recordId: 'turn-lifecycle:turn-1'
     }
-    await journal.appendItem(turn, { kind: 'status', text: 'working' }, { fence: 1 })
+    await journal.appendItem(
+      turn,
+      { kind: 'status', text: 'working' },
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
     const cursor = journal.cursor()
     await journal.appendLifecycleBatch({
       settlementId: 'settlement-1',
       fence: 1,
       mutations: [
-        { kind: 'item', identity: item(1), body: body('one') },
-        { kind: 'item', identity: item(2), body: body('two') },
+        {
+          kind: 'item',
+          identity: item(1),
+          body: body('one'),
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        },
+        {
+          kind: 'item',
+          identity: item(2),
+          body: body('two'),
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        },
         { kind: 'tombstone', identity: turn }
       ]
     })
@@ -371,7 +398,10 @@ describe('projectJournalBatch', () => {
   it('publishes touched items at their current reduced state, not as a delta', async () => {
     await appendItems(1)
     const cursor = journal.cursor()
-    await journal.appendItem(item(1), body('revised'), { fence: 1 })
+    await journal.appendItem(item(1), body('revised'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     const since = journal.readSince(cursor)
     if (!since.ok) {
       throw new Error(`expected rows, got reset ${since.reset}`)
@@ -440,7 +470,7 @@ describe('projectJournalBatch', () => {
     await journal.appendItem(
       { provider: 'codex', threadId: 'thread-1', turnId: 'root-turn', ordinal: 2 },
       message,
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
 
     const page = readAgentSessionHistory(journal, {
@@ -483,17 +513,17 @@ async function reopenWithRawRows(rows: readonly RawSeedRow[]): Promise<AgentSess
   // Rows are staged straight into the session database: the reopen below has to
   // see them exactly as a previous writer would have committed them.
   await journal.close()
-  const opened = openJournalDatabase(journalDatabaseFile(root))
+  const opened = openTestJournalHostDatabase(root)
   try {
     opened.db.exec('BEGIN IMMEDIATE')
     for (const row of full) {
-      insertJournalRow(opened.db, IDENTITY.sessionId, row)
+      insertTestJournalRow(opened.db, IDENTITY.sessionId, row)
     }
     opened.db.exec('COMMIT')
   } finally {
-    opened.db.close()
+    opened.close()
   }
-  return journals.open({ identity: IDENTITY, journalDir: root, now: tick })
+  return journals.open({ identity: IDENTITY, stateDirectory: root, now: tick })
 }
 
 describe('pre-existing oversized identities', () => {
@@ -636,7 +666,10 @@ describe('identity bounding at admission', () => {
       ordinal: 1
     }
     const start = { epoch: journal.epoch, sequence: journal.cursor().sequence }
-    const appended = await journal.appendItem(oversized, body('bounded'), { fence: 1 })
+    const appended = await journal.appendItem(oversized, body('bounded'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     expect(appended.itemId.length).toBeLessThan(2048)
     expect(appended.itemId).toContain('~orca-oversized~')
 

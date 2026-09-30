@@ -3,6 +3,7 @@ import { EventEmitter } from 'node:events'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as RunProcess from '../../shared/child-process/run-process'
 
 const { childSpawnMock, readFileMock, resolveCodexCommandMock, ptySpawnMock } = vi.hoisted(() => ({
   childSpawnMock: vi.fn(),
@@ -12,6 +13,12 @@ const { childSpawnMock, readFileMock, resolveCodexCommandMock, ptySpawnMock } = 
 }))
 
 vi.mock('node:child_process', () => ({ spawn: childSpawnMock }))
+// The chokepoint is the seam: assertions see what the fetcher asked for, before shim resolution.
+vi.mock('../../shared/child-process/run-process', async (importOriginal) => ({
+  ...(await importOriginal<typeof RunProcess>()),
+  spawnProcess: (spec: { program: string; args?: readonly string[] }) =>
+    childSpawnMock(spec.program, spec.args ?? [], spec)
+}))
 vi.mock('node:fs/promises', () => ({ readFile: readFileMock }))
 vi.mock('../codex-cli/command', () => ({ resolveCodexCommand: resolveCodexCommandMock }))
 vi.mock('node-pty', () => ({ spawn: ptySpawnMock }))
@@ -79,18 +86,17 @@ describe('codex rate-limit spawn runtime pairing', () => {
     await vi.advanceTimersByTimeAsync(0)
 
     const spawnEnv = childSpawnMock.mock.calls[0]?.[2]?.env as NodeJS.ProcessEnv
-    // Guards the argument choice: pairing spawnCmd (cmd.exe on win32) rather than
-    // the resolved CLI silently reverts the ABI fix (stablyai/orca#10932).
+    // Guards the argument choice: pairing anything but the resolved CLI silently
+    // reverts the ABI fix (stablyai/orca#10932).
     expect(spawnEnv.PATH?.split(delimiter)[0]).toBe(bin)
 
     rpcChild.emit('close')
     await resultPromise
   })
 
-  it('pairs the resolved CLI on win32, where the spawn command is cmd.exe', async () => {
-    // Why win32 specifically: on posix getSpawnArgsForWindows returns the CLI
-    // itself, so pairing the spawn command instead of the resolved CLI is
-    // indistinguishable. Only here does the wrong argument become cmd.exe.
+  it('hands an npm .cmd shim to the spawn chokepoint unwrapped, paired with its node', async () => {
+    // Why win32 specifically: only here could a pre-wrap turn the program into
+    // cmd.exe, which hides the shim from spawnProcess's resolver.
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     try {
@@ -103,7 +109,7 @@ describe('codex rate-limit spawn runtime pairing', () => {
       await vi.advanceTimersByTimeAsync(0)
 
       const spawnCommand = childSpawnMock.mock.calls[0]?.[0] as string
-      expect(spawnCommand.toLowerCase()).toContain('cmd.exe')
+      expect(spawnCommand).toBe(cli)
       const spawnEnv = childSpawnMock.mock.calls[0]?.[2]?.env as NodeJS.ProcessEnv
       expect((spawnEnv.Path ?? spawnEnv.PATH)?.split(';')[0]).toBe(bin)
 

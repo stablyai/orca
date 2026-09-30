@@ -86,6 +86,14 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
         notify: false
       })
     }
+    const wasUnverifiable = this.structuredAgentSessionInventoryUnverifiable
+    // No host means no one can say which chats exist; with none on disk, empty is the answer.
+    this.structuredAgentSessionInventoryUnverifiable =
+      !host && this.hasPersistedStructuredAgentSessionStore()
+    // This restore published quietly; subscribers still hold the frames that said "cannot tell".
+    if (wasUnverifiable && !this.structuredAgentSessionInventoryUnverifiable) {
+      this.notifyMobileSessionTabSnapshots()
+    }
   }
 
   async publishStructuredAgentSessionTab(input: {

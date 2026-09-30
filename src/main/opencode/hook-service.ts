@@ -1,3 +1,4 @@
+import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { join } from 'node:path'
 import {
@@ -22,11 +23,18 @@ import { getStatusPluginOwnershipSource } from './status-plugin-ownership-source
 import { getStatusPluginLifecycleSource } from './status-plugin-lifecycle-source'
 import { getStatusPluginFactorySource } from './status-plugin-factory-source'
 import { resolveOpenCodeConfigDirectory } from '../../shared/opencode-config-directory'
+import {
+  getOpenCodeLegacySharedConfigDir,
+  OPENCODE2_LEGACY_HOOKS_DIR,
+  OPENCODE_LEGACY_HOOKS_DIR
+} from './legacy-shared-config-dir'
+import {
+  isInstalledOpenCodePluginCurrent,
+  isOverlayOpenCodePluginCurrent
+} from '../../shared/opencode-installed-plugin'
 
 const ORCA_OPENCODE_PLUGIN_FILE = 'orca-opencode-status.js'
-const OPENCODE_LEGACY_HOOKS_DIR = 'opencode-hooks'
 const OPENCODE_OVERLAY_DIR = 'opencode-config-overlays'
-const OPENCODE_SHARED_CONFIG_DIR = 'shared'
 const OPENCODE_OVERLAY_MANIFEST_FILE = '.orca-opencode-overlay-manifest.json'
 
 type OpenCodeOverlayManifest = {
@@ -127,6 +135,7 @@ export class OpenCodeHookService {
       return existingConfigDir ? { OPENCODE_CONFIG_DIR: existingConfigDir } : {}
     }
 
+    this.refreshLegacySharedPlugin()
     const managedConfigDir = this.getSharedConfigDir()
     if (!existingConfigDir || existingConfigDir === managedConfigDir) {
       try {
@@ -150,6 +159,23 @@ export class OpenCodeHookService {
     }
   }
 
+  // Why: pre-1.4.209 Orca left a server()-only plugin here that OpenCode 2 rejects. Only helps
+  // processes that load it later; a running OpenCode 2 service keeps its cached module until restarted.
+  refreshLegacySharedPlugin(): void {
+    const pluginPath = join(this.getSharedConfigDir(), 'plugins', this.pluginFileName)
+    try {
+      const source = this.pluginSource()
+      if (readFileSync(pluginPath, 'utf8') !== source) {
+        writeFileAtomically(pluginPath, source)
+      }
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+        return
+      }
+      console.warn('[OpenCode] Failed to repair legacy status plugin:', pluginPath, error)
+    }
+  }
+
   private getOverlayRoot(): string {
     return join(getAppEnvironment().getPath('userData'), this.overlayDir)
   }
@@ -159,10 +185,9 @@ export class OpenCodeHookService {
   }
 
   private getSharedConfigDir(): string {
-    return join(
+    return getOpenCodeLegacySharedConfigDir(
       getAppEnvironment().getPath('userData'),
-      this.legacyHooksDir,
-      OPENCODE_SHARED_CONFIG_DIR
+      this.legacyHooksDir
     )
   }
 
@@ -257,25 +282,32 @@ export class OpenCodeHookService {
     const pluginsDir = join(overlayDir, 'plugins')
     mkdirSync(pluginsDir, { recursive: true })
     const pluginPath = join(pluginsDir, this.pluginFileName)
-    try {
-      unlinkSync(pluginPath)
-    } catch {
-      // File may not exist on a fresh overlay; a real failure surfaces on writeFileSync below.
+    const source = this.pluginSource()
+    if (!isOverlayOpenCodePluginCurrent(pluginPath, source)) {
+      try {
+        unlinkSync(pluginPath)
+      } catch {
+        // File may not exist on a fresh overlay; a real failure surfaces on writeFileSync below.
+      }
+      writeFileSync(pluginPath, source)
     }
-    writeFileSync(pluginPath, this.pluginSource())
   }
 
   private writePluginToConfigDir(configDir: string): void {
     const pluginsDir = join(configDir, 'plugins')
     mkdirSync(pluginsDir, { recursive: true })
-    writeFileSync(join(pluginsDir, this.pluginFileName), this.pluginSource())
+    const pluginPath = join(pluginsDir, this.pluginFileName)
+    const source = this.pluginSource()
+    if (!isInstalledOpenCodePluginCurrent(pluginPath, source)) {
+      writeFileSync(pluginPath, source)
+    }
   }
 }
 
 export const openCodeHookService = new OpenCodeHookService()
 export const openCode2HookService = new OpenCodeHookService({
   pluginFileName: 'orca-opencode2-status.js',
-  legacyHooksDir: 'opencode2-hooks',
+  legacyHooksDir: OPENCODE2_LEGACY_HOOKS_DIR,
   overlayDir: 'opencode2-config-overlays',
   pluginSource: getOpenCode2PluginSource
 })

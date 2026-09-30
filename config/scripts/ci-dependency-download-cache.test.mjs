@@ -48,7 +48,11 @@ describe('CI dependency download caches', () => {
       action.runs.steps.findIndex((step) => step.name === 'Install dependencies')
     )
     const saves = action.runs.steps.filter((step) => step.uses === 'actions/cache/save@v5')
-    expect(saves).toEqual([])
+    expect(saves).toHaveLength(1)
+    expect(saves[0].name).toBe('Save pnpm verification record on main')
+    expect(saves[0].if).toContain("github.ref == 'refs/heads/main'")
+    expect(saves[0].if).toContain("github.event_name != 'pull_request'")
+    expect(saves[0].with.path).toBe('${{ steps.verification-cache.outputs.path }}')
   })
 
   it('restores Windows packaging downloads from the release cache without a PR upload', () => {
@@ -99,14 +103,28 @@ describe('CI dependency download caches', () => {
     expect(writer.with['restore-keys']).toBeUndefined()
     expect(writer.with['lookup-only']).toBe(true)
     expect(release.steps.indexOf(writer)).toBeGreaterThan(release.steps.indexOf(combined))
-    // Retain PR fallback saves until a successful release seeds the default-branch entry.
-    expect(consumer.uses).toBe('actions/cache@v5')
+    expect(consumer.uses).toBe('actions/cache/restore@v5')
+    expect(consumer.with['restore-keys'].trim()).toBe('electron-builder-linux-')
     expect(combined.uses).toBe('actions/cache@v5')
     expect(linux.eb_cache_path.trim().split('\n')).toEqual([
       '~/.cache/electron',
       '~/.cache/electron-builder'
     ])
   })
+})
+
+it('shares Electron archives with PRs without uploading PR-local copies', () => {
+  const save = action.runs.steps.find((step) => step.name === 'Cache Electron package archive')
+  const restore = action.runs.steps.find(
+    (step) => step.name === 'Restore Electron package archive without saving'
+  )
+  expect(save.if).toContain("github.event_name != 'pull_request' || runner.os != 'Linux'")
+  expect(restore.if).toContain("github.event_name == 'pull_request' && runner.os == 'Linux'")
+  expect(save.if).toContain("steps.electron-package-cache.outputs.version != ''")
+  expect(restore.if).toContain("steps.electron-package-cache.outputs.version != ''")
+  expect(save.uses).toBe('actions/cache@v5')
+  expect(restore.uses).toBe('actions/cache/restore@v5')
+  expect(restore.with).toEqual(save.with)
 })
 
 describe('release install targets', () => {

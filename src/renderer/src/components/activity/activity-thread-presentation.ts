@@ -3,6 +3,10 @@ import { formatAgentTypeLabel } from '@/lib/agent-status'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { showsAgentToolPreview } from '@/lib/agent-row-tool-preview'
 import {
+  agentMainAgentVerdict,
+  agentVerdictDisplayMark
+} from '../../../../shared/agent-main-agent-verdict'
+import {
   getActivityThreadTaskTitle,
   getActivityThreadWorkspaceTitle,
   resolveActivityThreadStatusPreview
@@ -68,7 +72,12 @@ export function agentTitle(event: ActivityEvent): string {
     return 'Agent working'
   }
   if (event.state === 'done') {
-    return event.entry.interrupted ? 'Agent interrupted' : 'Agent finished'
+    const verdict = agentMainAgentVerdict(event.entry)
+    return verdict === 'failure'
+      ? 'Agent failed'
+      : verdict === 'cancellation'
+        ? 'Agent interrupted'
+        : 'Agent finished'
   }
   return event.state === 'waiting' ? 'Agent waiting for input' : 'Agent needs input'
 }
@@ -91,7 +100,12 @@ export function agentMeta(event: ActivityEvent): string {
     return `${agent} ${event.state}`
   }
   if (event.state === 'done') {
-    return event.entry.interrupted ? `${agent} interrupted` : `${agent} completed`
+    const verdict = agentMainAgentVerdict(event.entry)
+    return verdict === 'failure'
+      ? `${agent} failed`
+      : verdict === 'cancellation'
+        ? `${agent} interrupted`
+        : `${agent} completed`
   }
   return event.state === 'waiting' ? `${agent} waiting` : `${agent} blocked`
 }
@@ -120,13 +134,18 @@ export function statusPreviewForEntry(
 export type ActivityThreadStatusId = AgentDotState
 
 /** Single classifier behind grouping, labels, and clear-completed; the only place the
- *  interrupted predicate is spelled. */
+ *  verdict predicate is spelled. */
 export function activityThreadStatusId(thread: AgentPaneThread): ActivityThreadStatusId {
+  // Why: a failed main agent outranks the subagent work still holding its row live.
+  if (thread.currentAgentEntry && agentVerdictDisplayMark(thread.currentAgentEntry) === 'failed') {
+    return 'failed'
+  }
   const paneEntry = paneActivityEntry(thread)
   const state = threadCurrentState(thread) ?? 'done'
-  const interrupted = paneEntry ? paneEntry.interrupted : thread.latestEvent?.entry.interrupted
-  if (!thread.currentAgentState && state === 'done' && interrupted) {
-    return 'interrupted'
+  const verdictEntry = paneEntry ?? thread.latestEvent?.entry
+  const verdictDot = verdictEntry ? agentVerdictDisplayMark(verdictEntry) : null
+  if (!thread.currentAgentState && state === 'done' && verdictDot) {
+    return verdictDot
   }
   return state
 }
@@ -149,7 +168,7 @@ function threadCurrentState(
   )
 }
 
-// Interrupted rows deliberately keep the done glyph (#2569).
+// Interrupted rows deliberately keep the done glyph (#2569); a failure is a fault and does not.
 export function threadAgentState(thread: AgentPaneThread): AgentDotState {
   const id = activityThreadStatusId(thread)
   return id === 'interrupted' ? 'done' : id

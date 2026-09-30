@@ -66,6 +66,7 @@ export async function deliverTerminalAgentLaunchPrompt(args: {
       return false
     }
     const sent = await args.runtime.sendTerminalAgentPrompt(args.handle, args.text, {
+      inputKind: 'launch',
       // Paired: together these take the queued path, which settles an unobserved turn start into
       // an `input_accepted` receipt rather than raising it. Without the id the write is verified
       // strictly and a slow first turn throws.

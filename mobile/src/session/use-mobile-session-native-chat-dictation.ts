@@ -27,7 +27,7 @@ export function useMobileSessionNativeChatDictation(
     worktreeId,
     client,
     connState,
-    agentSessionPromptCancelSupported,
+    agentSessionHostSupport,
     setInput,
     liveInputTerminalHandles,
     activeHandle,
@@ -73,7 +73,7 @@ export function useMobileSessionNativeChatDictation(
     nativeChatTranscriptIsLocalReadable,
     nativeChatInputLeaseReady,
     connState,
-    agentSessionPromptCancelSupported,
+    agentSessionHostSupport,
     onSendError: nativeChatSendError.show,
     onSendResolved: nativeChatSendError.clear
   })

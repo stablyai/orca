@@ -1,3 +1,7 @@
+import type {
+  AgentSessionAnyRefusalDetails,
+  AgentSessionRefusalDetailsByCode
+} from './agent-session-refusal-details'
 import {
   isAgentSessionRewindResult,
   type AgentSessionRewindReason,
@@ -55,7 +59,15 @@ export type AgentSessionOperationOutcome =
        */
       launch?: unknown
     }
-  | { status: 'failed'; code: string; message?: string; rewindReason?: AgentSessionRewindReason }
+  | {
+      status: 'failed'
+      code: string
+      message?: string
+      rewindReason?: AgentSessionRewindReason
+      /** Beside the code, so a replay says what the first answer did. Read back against the code,
+       *  since the code is a string here; a row written before details carries none. */
+      details?: AgentSessionAnyRefusalDetails
+    }
   /** The effect may or may not have happened; replay this answer instead of spawning again. */
   | { status: 'unknown' }
 
@@ -78,7 +90,13 @@ export type AgentSessionOperationRefusalCode =
 export type AgentSessionOperationDecision =
   | { decision: 'replay'; row: AgentSessionOperationRow }
   | { decision: 'admit'; row: AgentSessionOperationRow }
-  | { decision: 'refused'; code: AgentSessionOperationRefusalCode }
+  | {
+      [C in AgentSessionOperationRefusalCode]: {
+        decision: 'refused'
+        code: C
+        details: AgentSessionRefusalDetailsByCode[C]
+      }
+    }[AgentSessionOperationRefusalCode]
 
 /** NUL cannot occur in a caller key or operation id, so no pair can forge another pair's key. */
 const OPERATION_KEY_SEPARATOR = '\u0000'
@@ -228,19 +246,31 @@ export function evaluateAgentSessionOperation(args: {
     operationTimestamp > now + AGENT_SESSION_OPERATION_FUTURE_SKEW_MS
   ) {
     // Why: a future-dated id could look new again after its tombstone is collected.
-    return { decision: 'refused', code: 'agent_session_operation_invalid' }
+    return {
+      decision: 'refused',
+      code: 'agent_session_operation_invalid',
+      details: { reason: 'operationIdInvalid' }
+    }
   }
   const key = agentSessionOperationKey(callerKey, operationId)
   const existing = rows.get(key)
   if (existing) {
     return existing.fingerprint === fingerprint
       ? { decision: 'replay', row: existing }
-      : { decision: 'refused', code: 'agent_session_operation_conflict' }
+      : {
+          decision: 'refused',
+          code: 'agent_session_operation_conflict',
+          details: { reason: 'operationIdReused' }
+        }
   }
   if (now - operationTimestamp > AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS) {
     // Why: once a tombstone could have expired, an unseen replay must never be reinterpreted as
     // permission to start another fresh agent.
-    return { decision: 'refused', code: 'agent_session_operation_expired' }
+    return {
+      decision: 'refused',
+      code: 'agent_session_operation_expired',
+      details: { reason: 'operationExpired' }
+    }
   }
   const perClientLimit = args.perClientLimit ?? AGENT_SESSION_DURABLE_OPERATION_PER_CLIENT_LIMIT
   const globalLimit = args.globalLimit ?? AGENT_SESSION_DURABLE_OPERATION_GLOBAL_LIMIT
@@ -253,7 +283,11 @@ export function evaluateAgentSessionOperation(args: {
   if (callerCount >= perClientLimit || rows.size >= globalLimit) {
     // Why: tombstones cannot be evicted early without making an old replay capable of spawning
     // again; reject new ids until retained rows age out.
-    return { decision: 'refused', code: 'agent_session_operation_capacity' }
+    return {
+      decision: 'refused',
+      code: 'agent_session_operation_capacity',
+      details: { reason: 'operationCapacity' }
+    }
   }
   return {
     decision: 'admit',

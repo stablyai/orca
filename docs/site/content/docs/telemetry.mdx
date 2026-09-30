@@ -21,12 +21,12 @@ The categories of behavior we observe:
 
 - **Lifecycle** — when the app opens. Used to estimate daily, weekly, and monthly active users.
 - **Repos and workspaces** — when you add a repo or create a workspace. We record _how_ you did it (e.g. folder picker vs. clone URL; command palette vs. drag-and-drop), never the repo name, URL, path, branch name, or any free-form text.
-- **Agents** — when you start an agent, which agent kind it was (from a fixed list like `claude-code`, `codex`, `gemini`, etc.), and where you launched it from. Never the prompt, model details, or agent output.
+- **Agents** — which agents you use and their token counts. Never prompts or agent output.
 - **Agent errors** — a coarse error category and which agent kind was involved. We never see raw error messages or stack traces; per-incident detail stays in a local diagnostic trace file on your machine and only reaches Orca if you explicitly share a diagnostic bundle.
 - **Settings** — when you toggle one of a small whitelisted set of feature-flag or UX preferences. We record which preference changed and whether it's a boolean or an enum, never the raw value of any free-form setting.
 - **Privacy controls** — when you opt in or out of telemetry, so we can tell from aggregate data whether our consent UI is working.
 
-Every field we transmit is either a fixed enum value, a version string, or the anonymous local ID. No free-form strings from any UI input ever leave your machine.
+Fields include fixed enum values, version strings, numeric counts and revisions, and random local IDs. Conversation IDs allow repeated token summaries for the same conversation to be associated; they are pseudonymous. No free-form strings from any UI input ever leave your machine.
 
 ## What we never send
 

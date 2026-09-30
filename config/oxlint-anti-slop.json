@@ -113,7 +113,7 @@
     // `shapedSidebar` is a persisted onboarding-checklist field and a telemetry enum member;
     // renaming it would orphan saved state.
     {
-      "files": ["**/src/shared/constants.ts", "**/src/shared/onboarding-state-types.ts"],
+      "files": ["**/src/shared/onboarding-defaults.ts", "**/src/shared/onboarding-state-types.ts"],
       "rules": {
         "anti-slop/no-shape-in-symbol-names": "off"
       }

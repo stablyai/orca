@@ -1,5 +1,7 @@
-import { restoreRewindJournalBody } from './structured-rewind-journal-body'
-import { mergeRetainedHostLifecycleRows } from './structured-rewind-retained-host-rows'
+import {
+  mergeRetainedHostLifecycleRows,
+  retainedRowReplacement
+} from './structured-rewind-retained-host-rows'
 import { isDeepStrictEqual } from 'node:util'
 import {
   agentJournalItemKey,
@@ -83,11 +85,9 @@ export async function recoverStructuredRewind(
       beforeTurnId: target.turnId
     })
     if (!recovered?.ok) {
-      if (
-        recovered?.reason === 'provider-refused' &&
-        rewind.phase === 'prepared' &&
-        !rewind.providerApplied
-      ) {
+      // The target is still in the provider's history, and the journal is replaced only once the
+      // revert is proven, so both still hold it even when the provider acknowledged the revert.
+      if (recovered?.reason === 'provider-refused' && rewind.phase === 'prepared') {
         await persistRewindRecord(store, sessionId, fence, {
           ...rewind,
           phase: 'refused',
@@ -141,13 +141,7 @@ export async function recoverStructuredRewind(
   if (rewind.phase !== 'provider-succeeded') {
     return
   }
-  const replacement = rewind.retained.map((item) => {
-    const identity = parseAgentJournalItemKey(item.itemId)
-    if (!identity) {
-      throw new Error('agent_session_rewind:invalid-retained-identity')
-    }
-    return { identity, body: restoreRewindJournalBody(item.body), observedAt: item.observedAt }
-  })
+  const replacement = rewind.retained.map(retainedRowReplacement)
   // A crash after the journal transaction must settle its existing epoch, not replace it twice.
   const alreadyReplaced = journal.cursor().epoch !== rewind.expectedEpoch
   if (

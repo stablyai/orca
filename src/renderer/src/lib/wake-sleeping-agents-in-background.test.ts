@@ -26,7 +26,7 @@ const isPassiveSpy = vi.fn()
 vi.mock('./sleeping-agent-pane-ownership', async (importOriginal) => ({
   getSleepingRecordTabId: (await importOriginal<typeof SleepingAgentPaneOwnership>())
     .getSleepingRecordTabId,
-  isPassiveCompletedHibernationEvidence: (record: unknown) => isPassiveSpy(record),
+  activationTreatsNoteAsFinished: (record: unknown) => isPassiveSpy(record),
   recordPaneIsOwnedByPreservedPane: () => false,
   getProviderSessionClaimKey: (record: {
     worktreeId: string

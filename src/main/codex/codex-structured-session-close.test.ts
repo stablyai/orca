@@ -1,4 +1,5 @@
 import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'
+import { createCodexTurnOpenWaits } from './codex-structured-turn-open-wait'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import type {
@@ -76,7 +77,7 @@ function claudeAdapterStub(): StructuredAgentSessionAdapter {
 }
 
 describe('Codex structured session close lifecycle', () => {
-  it('forwards a one-shot exit when lifecycle admission is rejected', () => {
+  function backpressuredSession(requestedClose: boolean) {
     const connection: CodexAppServerConnection = {
       pid: 4321,
       closed: true,
@@ -87,7 +88,6 @@ describe('Codex structured session close lifecycle', () => {
       close: async () => true
     }
     const prompts = new CodexPromptRegistry()
-    const clearPrompts = vi.spyOn(prompts, 'clear')
     const translator = {
       handle: vi.fn().mockReturnValueOnce({ accepted: false, reason: 'backpressure' as const }),
       dispose: vi.fn()
@@ -96,7 +96,7 @@ describe('Codex structured session close lifecycle', () => {
       connection,
       backgroundTasks: new CodexBackgroundTaskTracker('thread-1'),
       ended: false,
-      requestedClose: false,
+      requestedClose,
       fence: 7,
       acquisitionGeneration: 'generation-1',
       threadId: THREAD,
@@ -106,9 +106,15 @@ describe('Codex structured session close lifecycle', () => {
       reportedOptions: {},
       fastModeTierByModel: new Map(),
       dispatchEchoes: createCodexDispatchEchoes(),
+      turnOpenWaits: createCodexTurnOpenWaits(),
       translator
     }
-    const sessions = new Map([['session-1', session]])
+    return { connection, prompts, translator, session, sessions: new Map([['session-1', session]]) }
+  }
+
+  it('forwards a one-shot exit when lifecycle admission is rejected', () => {
+    const { connection, prompts, translator, session, sessions } = backpressuredSession(false)
+    const clearPrompts = vi.spyOn(prompts, 'clear')
     const onEvent = vi.fn()
 
     expect(
@@ -127,6 +133,29 @@ describe('Codex structured session close lifecycle', () => {
     expect(translator.dispose).toHaveBeenCalledOnce()
     expect(onEvent.mock.calls[0]?.[0]).toMatchObject({ cause: 'unexpected-exit' })
     expect(translator.handle).toHaveBeenCalledOnce()
+  })
+
+  it("ends a Stop's wait for its turn to open when a requested close cannot publish its end yet", async () => {
+    const { connection, prompts, session, sessions } = backpressuredSession(true)
+    let released = false
+    void session.turnOpenWaits.wait('turn-1', 60_000).then(() => {
+      released = true
+    })
+
+    expect(
+      handleCodexSessionExit({
+        sessions,
+        sessionId: 'session-1',
+        connection,
+        error: new Error('codex session closed'),
+        closedByOrca: true,
+        prompts
+      })
+    ).toBe(false)
+    await Promise.resolve()
+    // Left for the retry, but the child is gone: nothing waits on a turn it would open.
+    expect(session.ended).toBe(false)
+    expect(released).toBe(true)
   })
 
   it('mints a distinct child generation even when acquisitions share one fence', async () => {

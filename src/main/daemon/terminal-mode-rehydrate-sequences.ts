@@ -1,11 +1,9 @@
 import type { TerminalModes } from './types'
 import { RESET_GRAPHIC_RENDITION } from '../../shared/terminal-mode-reset-profiles'
 
-// Why no kitty flags here: rehydrateSequences feeds renderer xterms, and
-// POST_REPLAY_REATTACH_RESET's deliberate kitty reset (stale CSI-u Ctrl+C
-// hazard) must stay authoritative. modes.kittyKeyboardFlags exists for
-// emulator re-seed parity only; a re-seeded emulator answers ?0u and
-// protocol-conformant programs re-push.
+// Why no kitty flags here: renderers re-assert the snapshot's kitty flags
+// (carried beside the payload) in their replay epilogue, after these screen
+// switches. A re-seeded emulator uses modes.kittyKeyboardFlags directly.
 export function buildRehydrateSequences(modes: TerminalModes): string {
   const seqs: string[] = []
   if (modes.alternateScreen) {

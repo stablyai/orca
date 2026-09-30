@@ -5,15 +5,21 @@
 // keeping a copy, so there is nothing to disagree with.
 
 import type { AgentSessionContextUsage } from '../../shared/agent-session-context-usage'
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
+import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalItemIdentity,
+  type AgentJournalTurnScope
+} from '../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import {
-  claudeTurnLifecycleIdentity,
+  claudeCurrentTurnIdentity,
   claudeTurnLifecycleItem,
   type ClaudeCurrentTurn,
   type ClaudeTurnEnd
 } from './claude-turn-lifecycle-item'
 import { writeClaudeTurnRow } from './claude-turn-row-revision'
+import type { ClaudeCommandTurn } from './claude-command-turn'
 import { createClaudeTurnOpener, type ClaudeTurnSource } from './claude-turn-opening'
 
 export type ClaudeOpenTurnDeps = {
@@ -30,6 +36,11 @@ export class ClaudeOpenTurn {
    *  failed: nothing would ever close the turn it opened, and the row would read
    *  working for the life of the session. Only an accepted send lifts it. */
   private reopenSuppressed = false
+  /** Whether the provider's current request cycle has done root work — a send
+   *  echo or model output — since its init. Output can open a turn ahead of its
+   *  cycle's init (a background task finishing), so membership is read from the
+   *  cycle's work, not from when the turn opened. */
+  private cycleWorkObserved = false
   private readonly opener: (
     frame: Record<string, unknown>,
     source: ClaudeTurnSource | null,
@@ -50,9 +61,21 @@ export class ClaudeOpenTurn {
 
   /** The open turn's row, where a fact about the running turn lands. */
   get identity(): AgentJournalItemIdentity | null {
-    return this.current
-      ? claudeTurnLifecycleIdentity(this.current.sessionId, this.current.turnId)
-      : null
+    return this.current ? claudeCurrentTurnIdentity(this.current) : null
+  }
+
+  /** The conversation command the open turn is, if it is one. */
+  get command(): ClaudeCommandTurn | null {
+    return this.current?.command ?? null
+  }
+
+  /** Which turn a row written now belongs to: the open one, or none. A subagent's rows too —
+   *  its work is its parent turn's. */
+  get turnScope(): AgentJournalTurnScope {
+    const identity = this.identity
+    return identity
+      ? { kind: 'turn', turnItemId: agentJournalItemKey(identity) }
+      : AGENT_JOURNAL_THREAD_SCOPE
   }
 
   get groupKey(): string | null {
@@ -61,6 +84,23 @@ export class ClaudeOpenTurn {
 
   get isOpen(): boolean {
     return this.current !== null
+  }
+
+  /** Whether a turn is open inside a provider request cycle that has already
+   *  done work — the state in which the CLI folds an arriving send into it. A
+   *  cycle's first send is its opener, never a fold. */
+  get openedInLiveProviderCycle(): boolean {
+    return this.current !== null && this.cycleWorkObserved
+  }
+
+  /** A root init frame: the CLI is starting a new request cycle. */
+  observeProviderCycleStart(): void {
+    this.cycleWorkObserved = false
+  }
+
+  /** A root send echo or model output inside the current request cycle. */
+  observeProviderCycleWork(): void {
+    this.cycleWorkObserved = true
   }
 
   /** Open a turn, ending whichever one was still open. A new turn starting is the
@@ -77,6 +117,32 @@ export class ClaudeOpenTurn {
     this.deps.sink.setActivity?.(null)
   }
 
+  /** A conversation command the host opened a turn for. Its row is the host's, already written,
+   *  so only an end is published; the command's result is what ends it. */
+  beginCommand(turn: ClaudeCurrentTurn): void {
+    this.deps.onOpen?.()
+    if (this.current) {
+      this.deps.settleChildren(this.groupKey)
+      this.publish(this.current, { state: 'interrupted', completedAt: turn.startedAt })
+    }
+    this.current = turn
+    this.deps.sink.setActivity?.(null)
+  }
+
+  /** Orca asked the provider to stop the command `turnId` names. */
+  commandInterruptRequested(turnId: string): void {
+    if (this.current?.command && this.current.turnId === turnId) {
+      this.current.command.interruptRequested = true
+    }
+  }
+
+  /** The command was never sent; its turn is the host's to settle. */
+  forgetCommand(turnId: string): void {
+    if (this.current?.command && this.current.turnId === turnId) {
+      this.current = null
+    }
+  }
+
   /** The provider produced, so a turn is running. Idempotent: every frame of one
    *  reply stays inside the turn its first frame opened. A subagent's output is
    *  its parent turn's work and never a turn of its own. */
@@ -91,6 +157,8 @@ export class ClaudeOpenTurn {
   /** End the open turn, if one is open, and clear the live activity line. The
    *  context facts the end brings ride the same revision. */
   settle(end: ClaudeTurnEnd, contextUsage?: AgentSessionContextUsage): void {
+    // Every settle is a provider cycle ending (result, idle, child exit).
+    this.cycleWorkObserved = false
     if (this.current) {
       this.publish(this.current, end, contextUsage)
       this.current = null

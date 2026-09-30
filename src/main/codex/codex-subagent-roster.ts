@@ -13,12 +13,9 @@
 // thread, and a real turn id is assumed freshly minted per turn. Seeding from
 // the journal is the fix.
 
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-types'
 import { isTerminalSubagentState } from '../../shared/native-chat-subagent-summary'
-import type {
-  NativeChatSubagentEntry,
-  NativeChatSubagentState
-} from '../../shared/native-chat-types'
+import type { NativeChatSubagentState } from '../../shared/native-chat-types'
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission
@@ -40,6 +37,12 @@ import { readCodexTurnId } from './codex-structured-thread-facts'
 import { codexSubagentGroupBody } from './codex-subagent-group-body'
 import { CodexSubagentLinkage } from './codex-subagent-linkage'
 export { codexSubagentGroupBody } from './codex-subagent-group-body'
+export { codexSubagentGroupId, codexSubagentGroupIdentity } from './codex-subagent-roster-state'
+import {
+  codexSubagentGroupId,
+  codexSubagentGroupIdentity,
+  type RosterGroup
+} from './codex-subagent-roster-state'
 import type { CodexThreadItem } from './codex-structured-item-translation'
 import {
   MAX_CODEX_SUBAGENT_GROUPS,
@@ -49,38 +52,12 @@ import {
 
 const ADMITTED: StructuredAgentSessionSinkAdmission = { accepted: true }
 
-/** The turn a group belongs to when Codex reports activity outside any turn.
- *  Mirrors the generic-frame bucket name so the two read alike in the journal. */
-type RosterGroup = {
-  groupId: string
-  identity: AgentJournalItemIdentity
-  /** Insertion order is the display order; the map holds the state. */
-  entries: Map<string, NativeChatSubagentEntry>
-  executionTurns: Map<string, string | null>
-  /** Times each label has been claimed, so a repeat gets an ordinal suffix. */
-  labelCounts: Map<string, number>
-  /** Last body written, so an idempotent replay writes no new revision. */
-  lastSerialized: string | null
-}
-
-/** Group identity: the parent turn that spawned the children. `agentPath` is a
- *  tree rooted at the parent thread, so every child of one turn shares a row
- *  no matter which thread's stream carried its activity item. */
-export function codexSubagentGroupId(threadId: string, turnId: string | null): string {
-  return `${threadId}:${turnId ?? 'outside-turn'}`
-}
-
-/** Durable journal identity for the group's row — stable across revisions and
- *  across a restart, so replay finds the same row instead of appending a new one. */
-export function codexSubagentGroupIdentity(groupId: string): AgentJournalItemIdentity {
-  return { provider: 'orca', clientMessageId: `codex-subagents:${groupId}` }
-}
-
 export type CodexSubagentRosterDeps = {
   sink: StructuredAgentSessionEventSink
   /** The thread that owns the agent tree; falls back to the event's thread. */
   primaryThreadId: () => string | null
   activeTurn: (threadId: string) => string | null
+  turnScopeFor: (threadId: string, turnId: string | null) => AgentJournalTurnScope
   now?: () => number
   executions?: CodexSubagentExecutions
 }
@@ -280,6 +257,7 @@ export class CodexSubagentRoster {
     const group: RosterGroup = {
       groupId,
       identity: codexSubagentGroupIdentity(groupId),
+      turnScope: this.deps.turnScopeFor(ownerThreadId, ownerTurnId),
       entries: new Map(),
       executionTurns: new Map(),
       labelCounts: new Map(),
@@ -361,7 +339,10 @@ export class CodexSubagentRoster {
     // The publish must NOT reuse that key: the queue coalesces by key alone,
     // with no op-kind check, so a publish carrying it would splice out the
     // still-queued append and the row would never reach the journal.
-    const options = { coalescingKey: `codex-subagents:${group.groupId}` }
+    const options = {
+      coalescingKey: `codex-subagents:${group.groupId}`,
+      turnScope: group.turnScope
+    }
     const admission = this.deps.sink.tryAppendItem
       ? this.deps.sink.tryAppendItem(group.identity, body, options)
       : (this.deps.sink.appendItem(group.identity, body, options), ADMITTED)

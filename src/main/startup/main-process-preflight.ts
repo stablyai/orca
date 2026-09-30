@@ -35,7 +35,12 @@ import { getDevInstanceIdentity, shouldApplyPreReadyAppName } from './dev-instan
 import { enableRendererHeapHeadroom } from './renderer-heap-headroom'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from './startup-diagnostics'
 import { startEventLoopStallProbe } from './event-loop-stall-probe'
-import { startMainThreadChurnProbe } from '../diagnostics/main-thread-churn-probe'
+import {
+  isMainThreadDiagnosticsEnabled,
+  recordSubprocessSpawn,
+  startMainThreadChurnProbe
+} from '../diagnostics/main-thread-churn-probe'
+import { setSpawnObserver } from '../../shared/child-process/spawn-observer'
 import { settledDiffCache } from '../git/source-control/git-read-cache-invalidation'
 import { reserveServeStdoutForReadiness } from '../server/serve-stdout-boundary'
 import { createServeDesktopActivationGate } from './serve-desktop-activation'
@@ -222,9 +227,14 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   // Self-gated on ORCA_MAIN_THREAD_DIAGNOSTICS; runs the whole session to catch steady-state churn (issue #7576).
   // Why the diff-cache counters ride along: a stamp the filesystem reports unstably makes the cache
   // look exactly like a cold start, and only the hit/miss/unprovable split tells the two apart.
+  if (isMainThreadDiagnosticsEnabled()) {
+    // Why here too: the probe's own call sites only cover src/main/git, so without
+    // this every spawnProcess/runProcess child (rg, ps, pty helpers) is invisible.
+    setSpawnObserver(recordSubprocessSpawn)
+  }
   startMainThreadChurnProbe({ extraStats: () => ({ diffCache: settledDiffCache.stats() }) })
   // Why: acquire AFTER configureDevUserDataPath — Electron derives lock identity from `userData`, so dev/packaged lock in separate namespaces.
-  // Why skip in dev: parallel `pnpm dev` from multiple worktrees would make the second exit silently; packaged keeps the lock (corruption PR #1326 / #1312).
+  // Why dev locks too: two processes on one profile corrupt its stores (PR #1326 / #1312); parallel `pnpm dev` needs ORCA_DEV_USER_DATA_PATH per copy.
   const bypass = shouldBypassSingleInstanceLock({ isDev, isServeMode: state.isServeMode })
   const skip = shouldSkipSingleInstanceLock({ isDev, isServeMode: state.isServeMode })
   if (bypass) {
@@ -236,12 +246,16 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
     logStartupDiagnostic('single-instance-lock-result', {
       acquired: hasLock,
       bypassed: bypass,
-      skippedForDev: skip
+      skippedForE2E: skip
     })
   }
   if (!hasLock) {
     // Why: a false-negative lock loss otherwise looks like a silent crash on packaged macOS; `open --stderr` can capture this line.
-    logSingleInstanceLockFailure()
+    // In dev it is the line `pnpm dev` prints before exiting.
+    logSingleInstanceLockFailure({
+      isDevDesktop: isDev && !state.isServeMode,
+      userDataPath: app.getPath('userData')
+    })
     // Why: a graceful quit is deferred pre-ready, so this launch would still walk into Linux display init and SIGSEGV (#11935).
     app.exit(SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE)
     return false

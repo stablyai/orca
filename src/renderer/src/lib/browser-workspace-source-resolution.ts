@@ -1,3 +1,4 @@
+import type { Tab } from '../../../shared/tab-types'
 import type { AppState } from '../store/types'
 
 export type BrowserWorkspaceOwner = {
@@ -24,4 +25,40 @@ export function resolveBrowserWorkspaceOwner(
     }
   }
   return null
+}
+
+/**
+ * The unified tab wrapping a source browser page. Anything but exactly one live wrapper in the
+ * caller's workspace is ambiguous, so the caller omits the source relationship.
+ */
+export function resolveBrowserSourceUnifiedTab(
+  state: Pick<
+    AppState,
+    | 'browserTabsByWorktree'
+    | 'browserPagesByWorkspace'
+    | 'unifiedTabsByWorktree'
+    | 'groupsByWorktree'
+  >,
+  sourcePageId: string,
+  worktreeId: string
+): Tab | undefined {
+  const owningWorkspaceIds = (state.browserTabsByWorktree[worktreeId] ?? [])
+    .filter((workspace) =>
+      (state.browserPagesByWorkspace[workspace.id] ?? []).some((page) => page.id === sourcePageId)
+    )
+    .map((workspace) => workspace.id)
+  if (owningWorkspaceIds.length !== 1) {
+    return undefined
+  }
+  const wrappers = (state.unifiedTabsByWorktree[worktreeId] ?? []).filter(
+    (tab) => tab.contentType === 'browser' && tab.entityId === owningWorkspaceIds[0]
+  )
+  if (wrappers.length !== 1) {
+    return undefined
+  }
+  const wrapper = wrappers[0]
+  const group = (state.groupsByWorktree[worktreeId] ?? []).find(
+    (candidate) => candidate.id === wrapper.groupId
+  )
+  return group?.tabOrder.includes(wrapper.id) ? wrapper : undefined
 }

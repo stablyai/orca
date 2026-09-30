@@ -53,7 +53,6 @@ src/session/QuickCommandsSheet.test.ts
 src/session/ai-vault-resume-launch.test.ts
 src/session/mobile-file-tap-open.test.ts
 src/session/mobile-native-chat-open-file.test.ts
-src/session/mobile-session-route-parity.test.ts
 src/session/mobile-session-tab-activation.test.ts
 src/session/mobile-worker-takeover-send-sites.test.ts
 src/session/pending-terminal-handle-recovery-poll.test.ts

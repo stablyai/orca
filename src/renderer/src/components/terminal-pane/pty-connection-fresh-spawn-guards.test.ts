@@ -177,28 +177,6 @@ describe('connectPanePty', () => {
     )
   })
 
-  // Why: a late exit from a replaced PTY skips onExit's kitty reset, so a fresh spawn must reset the reused per-pane tracker itself or restart-in-place leaks old kitty flags.
-  it('resets a stale kitty keyboard mirror when spawning a fresh PTY', async () => {
-    const { connectPanePty } = await import('./pty-connection')
-    const { TerminalKittyKeyboardModeTracker } =
-      await import('../../../../shared/terminal-kitty-keyboard-mode-tracker')
-    const transport = createMockTransport()
-    transportFactoryQueue.push(transport)
-    const staleTracker = new TerminalKittyKeyboardModeTracker()
-    staleTracker.scan('\x1b[>1u')
-    expect(staleTracker.flags).toBe(1)
-    // Why: a unique tab id keeps this pane's key clear of other tests' pendingSpawnByPaneKey entries so the connect deterministically fresh-spawns.
-    const deps = createDeps({
-      tabId: 'tab-kitty-fresh-spawn',
-      paneKittyKeyboardModesRef: { current: new Map([[91, staleTracker]]) }
-    })
-
-    connectPanePty(createPane(91) as never, createManager(91) as never, deps as never)
-    await flushAsyncTicks()
-
-    expect(staleTracker.flags).toBe(0)
-  })
-
   // Why: deleting a worktree kills its PTYs for the filesystem teardown; the
   // renderer must not race a doomed respawn into a directory main is deleting
   // (main fences it with TerminalRemovalInProgressError and the pane is about to
@@ -490,7 +468,7 @@ describe('connectPanePty', () => {
     // Released (via the guard's fallback or parse completion): input flows again.
     deps.replayingPanesRef.current.delete(pane.id)
     sendTerminalInputThroughPane(pane, 'echo hi\r')
-    expect(transport.sendInput).toHaveBeenCalledWith('echo hi\r')
+    expect(transport.sendInput).toHaveBeenCalledWith('echo hi\r', 'query-reply')
   })
 
   it('preserves classified user input during replay while suppressing synthetic replies', async () => {
@@ -533,7 +511,7 @@ describe('connectPanePty', () => {
     for (const forward of deferred.splice(0)) {
       forward()
     }
-    expect(transport.sendInput).toHaveBeenCalledExactlyOnceWith('input_under_flood\r')
+    expect(transport.sendInput).toHaveBeenCalledExactlyOnceWith('input_under_flood\r', 'driving')
 
     // A wheel over a replayed alt-screen frame becomes cursor keys; the fresh shell must not recall history from them.
     pane.terminal.buffer.active.type = 'alternate'
@@ -544,7 +522,7 @@ describe('connectPanePty', () => {
     for (const forward of deferred.splice(0)) {
       forward()
     }
-    expect(transport.sendInput).toHaveBeenCalledExactlyOnceWith('input_under_flood\r')
+    expect(transport.sendInput).toHaveBeenCalledExactlyOnceWith('input_under_flood\r', 'driving')
 
     // The same bytes on the normal buffer can only be a keyboard arrow, which survives replay.
     pane.terminal.buffer.active.type = 'normal'
@@ -556,7 +534,7 @@ describe('connectPanePty', () => {
       forward()
     }
     expect(transport.sendInput).toHaveBeenCalledTimes(2)
-    expect(transport.sendInput).toHaveBeenLastCalledWith('\x1b[B')
+    expect(transport.sendInput).toHaveBeenLastCalledWith('\x1b[B', 'driving')
 
     // Once the guard releases, the same mouse report is ordinary input again.
     deps.replayingPanesRef.current.delete(pane.id)
@@ -567,7 +545,7 @@ describe('connectPanePty', () => {
     for (const forward of deferred.splice(0)) {
       forward()
     }
-    expect(transport.sendInput).toHaveBeenLastCalledWith('\x1b[<0;12;4M')
+    expect(transport.sendInput).toHaveBeenLastCalledWith('\x1b[<0;12;4M', 'driving')
   })
 
   it('settles a queued startup only after the pane binds its spawned PTY', async () => {

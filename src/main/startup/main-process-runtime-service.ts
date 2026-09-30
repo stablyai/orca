@@ -131,11 +131,8 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
         runtimeHome: state.codexRuntimeHome,
         systemCodexHomePath: resolveHostCodexSessionSourceHome(store.getSettings())
       }),
-    prepareCodexStructuredLaunch: ({ workspacePath, launchEnv }) =>
-      prepareCodexRuntimeHomeForLaunch(undefined, launchEnv, {
-        launchAgent: 'codex',
-        workspacePath
-      }),
+    prepareCodexStructuredLaunch: ({ launchEnv }) =>
+      prepareCodexRuntimeHomeForLaunch(undefined, launchEnv),
     // Why throw like prepare does: a null from an uninitialized service would
     // map to the system home and key a catalog read to the wrong account.
     resolveCodexStructuredLaunchHome: ({ launchEnv }) => {

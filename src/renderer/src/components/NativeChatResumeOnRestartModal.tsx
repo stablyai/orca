@@ -28,8 +28,8 @@ import {
 import {
   continueNativeChatRestartOffer,
   dismissNativeChatRestartOffer,
-  getNativeChatRestartOffer,
-  useNativeChatRestartOffer
+  useNativeChatRestartOffer,
+  useNativeChatRestartResuming
 } from './native-chat-resume-on-restart-store'
 
 /**
@@ -42,9 +42,13 @@ import {
  * The "don't ask again" box removes the PROMPT, never a safety check — an opted-in launch calls
  * the same RPC, which re-derives the same predicate and staggers the same way.
  *
+ * Resume closes the dialog at once and the status-bar entry carries the run, then any chat it could
+ * not carry on. The run lives in the store, as a skill update's does, so the dialog is one view of it.
+ *
  * A chat an earlier resume could not carry on is listed too, as the same row plus what went wrong
  * and what to do; selecting it and resuming is a retry, unless the host says a retry cannot run.
- * The dialog stays open while any remain, so the outcome is never left to a toast.
+ * Row actions (Retry, Dismiss) act on their row and leave the dialog open. It closes only on the
+ * user's own way out, or once the host confirms nothing is left; a resume settling never closes it.
  *
  * Closing is a SNOOZE, so looking around before deciding cannot remove the recovery. Dismiss all is
  * the explicit path that deletes the durable records.
@@ -78,11 +82,22 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
   )
   const updateSettings = useAppStore((store) => store.updateSettings)
   const [dontAskAgain, setDontAskAgain] = useState(false)
-  const [busy, setBusy] = useState(false)
+  // The store's: the resume outlives this dialog, which can close or reopen mid-run.
+  const resuming = useNativeChatRestartResuming()
+  const busy = resuming.length > 0
   /** The user's own ticks and unticks, over each row's default. Tracked as OVERRIDES rather than a
    *  selection because the list is the host's and arrives — and shrinks — under an open dialog; a
    *  stored selection would need seeding from an effect every time it changed. */
   const [overrides, setOverrides] = useState<ReadonlyMap<string, boolean>>(() => new Map())
+  // Each opening starts from the rows' defaults. This component never unmounts, so an untick made
+  // before a close would otherwise greet a reopen, e.g. as "Resume 0 chats" over what a run left.
+  const [openedWith, setOpenedWith] = useState(open)
+  if (openedWith !== open) {
+    setOpenedWith(open)
+    if (open) {
+      setOverrides(new Map())
+    }
+  }
   /** Derived from the host's own list, so an action can never name a chat it did not list. */
   const chosen = useMemo(
     () =>
@@ -99,6 +114,8 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
     [rows, overrides, failureBySession]
   )
   const selected = useMemo(() => new Set(chosen), [chosen])
+  // Mid-run the ticks show what is running; this opening's own ticks may name chats left out of it.
+  const ticked = useMemo(() => (busy ? new Set(resuming) : selected), [busy, resuming, selected])
 
   const toggleSelected = useCallback((sessionId: string, checked: boolean) => {
     setOverrides((current) => new Map(current).set(sessionId, checked))
@@ -111,19 +128,11 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
     }
   }, [dontAskAgain, updateSettings])
 
+  // Never closes the dialog: only the user's own ways out do, and the store once nothing is left.
   const resume = useCallback(
     async (sessionIds: string[]): Promise<void> => {
-      setBusy(true)
-      try {
-        void persistPreference()
-        await continueNativeChatRestartOffer(sessionIds)
-      } finally {
-        setBusy(false)
-        // Stays open when a chat did not carry on: its row now says what to do about it.
-        if (getNativeChatRestartOffer().failed.length === 0) {
-          consumeNativeChatResumeOnRestartDialogRequest()
-        }
-      }
+      void persistPreference()
+      await continueNativeChatRestartOffer(sessionIds)
     },
     [persistPreference]
   )
@@ -173,7 +182,7 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
     <Dialog
       open
       onOpenChange={(next) => {
-        if (!next && !busy) {
+        if (!next) {
           snooze()
         }
       }}
@@ -217,7 +226,7 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
             candidates={rows}
             listedAt={listedAt}
             busy={busy}
-            selected={selected}
+            selected={ticked}
             onToggle={toggleSelected}
             failureFor={(sessionId) => failureBySession.get(sessionId)}
             onFailureAction={(action, sessionId) => void actOnFailure(action, sessionId)}
@@ -258,7 +267,11 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
             variant="default"
             size="sm"
             disabled={busy || chosen.length === 0}
-            onClick={() => void resume(chosen)}
+            onClick={() => {
+              // Resume hands the run to the status bar.
+              consumeNativeChatResumeOnRestartDialogRequest()
+              void resume(chosen)
+            }}
           >
             {busy
               ? translate('auto.components.NativeChatResumeOnRestartModal.resuming', 'Resuming…')

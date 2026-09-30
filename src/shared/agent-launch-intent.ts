@@ -305,7 +305,9 @@ export const AGENT_LAUNCH_RESERVED_CREATE_FIELDS = [
   'startupDraft',
   'startupLaunchConfig',
   'startupEnv',
-  'startupCommandDelivery'
+  'startupCommandDelivery',
+  // The launch carries its own; a create's copy would be a second, possibly contradicting, answer.
+  'launchSource'
 ] as const
 
 /** Strips the reserved agent fields from a create payload. Callers migrating from

@@ -1,6 +1,9 @@
 import { expect, it, vi } from 'vitest'
-import { formatWorkerTranscriptMessage } from './worker-transcript-text'
+import { formatWorkerTranscriptMessages } from './worker-transcript-text'
 import type { NativeChatMessage } from './native-chat-types'
+
+const formatWorkerTranscriptMessage = (message: NativeChatMessage): string =>
+  formatWorkerTranscriptMessages([message]).join('')
 
 it('does not shift the remaining twin list for each matching roster', () => {
   const blocks: NativeChatMessage['blocks'] = Array.from({ length: 1000 }, (_, index) => ({

@@ -13,11 +13,50 @@ import {
   type StructuredAgentSessionState
 } from '../../../src/shared/structured-agent-session-reducer'
 import type { RpcClient } from '../transport/rpc-client'
-import { callAgentSession } from './mobile-structured-agent-session-rpc'
+import {
+  agentSessionReadFailureText,
+  callAgentSession
+} from './mobile-structured-agent-session-rpc'
+import {
+  reduceMobileQueuePause,
+  reduceMobileQueuedMessageFeed,
+  type MobileQueuedMessageFeed,
+  type MobileQueuePause
+} from './mobile-structured-queued-message-feed'
+
+type QueuedFeed = { messages: MobileQueuedMessageFeed; pause: MobileQueuePause }
+const NO_QUEUED_FEED: QueuedFeed = { messages: null, pause: null }
 
 const MAX_RETAINED_SESSION_STATES = 32
 /** Bounded so a busy stream cannot turn one Load-earlier tap into an endless read chain. */
 const OLDER_PAGE_ANCHOR_ATTEMPTS = 3
+
+/**
+ * Opens the transcript stream once the hold settles, either way: a refused hold is an older host
+ * saying it could not start the agent — which the next send does — never a reason to hide the
+ * transcript. Returns what ends the stream, opened or not yet. Outside the effect so its cleanup
+ * rule can see the stream is owned.
+ */
+function openTranscriptAfterHold(
+  client: RpcClient,
+  sessionId: string,
+  held: Promise<unknown>,
+  onFrame: (raw: unknown) => void
+): () => void {
+  let ended = false
+  let close = (): void => {}
+  void held
+    .catch(() => undefined)
+    .then(() => {
+      if (!ended) {
+        close = client.subscribe('agentSession.subscribe', { sessionId }, onFrame)
+      }
+    })
+  return () => {
+    ended = true
+    close()
+  }
+}
 
 function isSubscribeEvent(value: unknown): value is AgentSessionSubscribeEvent {
   if (typeof value !== 'object' || value === null) {
@@ -38,6 +77,10 @@ export function useMobileStructuredAgentState(args: {
 }): {
   state: StructuredAgentSessionState
   stateRef: { readonly current: StructuredAgentSessionState }
+  /** Host-held queued drafts from the live stream; null until the host claims any. */
+  queuedMessages: MobileQueuedMessageFeed
+  /** The whole queue's pause, published with the drafts. */
+  queuePause: MobileQueuePause
   loadingOlder: boolean
   loadEarlier: () => void
 } {
@@ -47,10 +90,14 @@ export function useMobileStructuredAgentState(args: {
   const [sessionStates, setSessionStates] = useState<Map<string, StructuredAgentSessionState>>(
     () => new Map()
   )
+  const [queuedBySession, setQueuedBySession] = useState<Map<string, QueuedFeed>>(() => new Map())
   const state =
     enabled && sessionKey
       ? (sessionStates.get(sessionKey) ?? EMPTY_STRUCTURED_AGENT_SESSION)
       : EMPTY_STRUCTURED_AGENT_SESSION
+  const queued =
+    (enabled && sessionKey ? queuedBySession.get(sessionKey) : undefined) ?? NO_QUEUED_FEED
+  const queuedMessages = queued.messages
   const [loadingOlder, setLoadingOlder] = useState(false)
   const stateRef = useRef(state)
   const sessionKeyRef = useRef(sessionKey)
@@ -87,6 +134,34 @@ export function useMobileStructuredAgentState(args: {
     [sessionKey]
   )
 
+  const applyQueued = useCallback(
+    (event: AgentSessionSubscribeEvent) => {
+      if (!sessionKey) {
+        return
+      }
+      setQueuedBySession((current) => {
+        const previous = current.get(sessionKey) ?? NO_QUEUED_FEED
+        const messages = reduceMobileQueuedMessageFeed(previous.messages, event)
+        const pause = reduceMobileQueuePause(previous.pause, event)
+        if (messages === previous.messages && pause === previous.pause) {
+          return current
+        }
+        const updated = new Map(current)
+        updated.delete(sessionKey)
+        updated.set(sessionKey, { messages, pause })
+        while (updated.size > MAX_RETAINED_SESSION_STATES) {
+          const oldest = updated.keys().next().value
+          if (oldest === undefined) {
+            break
+          }
+          updated.delete(oldest)
+        }
+        return updated
+      })
+    },
+    [sessionKey]
+  )
+
   useEffect(() => {
     streamGenerationRef.current += 1
     sessionKeyRef.current = sessionKey
@@ -101,39 +176,22 @@ export function useMobileStructuredAgentState(args: {
     }
     apply({ type: 'loading' })
     const holderId = structuredAgentSessionHolderId('mobile-chat')
-    let cancelled = false
-    let unsubscribe = (): void => {}
     const held = callAgentSession(client, 'agentSession.hold', {
       sessionId,
       holderId
     })
-    void held
-      .then(() => {
-        if (cancelled) {
-          return
-        }
-        unsubscribe = client.subscribe('agentSession.subscribe', { sessionId }, (raw) => {
-          if (
-            typeof raw === 'object' &&
-            raw !== null &&
-            (raw as { type?: unknown }).type === 'error'
-          ) {
-            apply({ type: 'error', message: String((raw as { message?: unknown }).message ?? '') })
-            return
-          }
-          if (isSubscribeEvent(raw)) {
-            apply({ type: 'event', event: raw })
-          }
-        })
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) {
-          apply({ type: 'error', message: error instanceof Error ? error.message : String(error) })
-        }
-      })
+    const endStream = openTranscriptAfterHold(client, sessionId, held, (raw) => {
+      if (typeof raw === 'object' && raw !== null && 'type' in raw && raw.type === 'error') {
+        apply({ type: 'error', message: agentSessionReadFailureText(raw) })
+        return
+      }
+      if (isSubscribeEvent(raw)) {
+        apply({ type: 'event', event: raw })
+        applyQueued(raw)
+      }
+    })
     return () => {
-      cancelled = true
-      unsubscribe()
+      endStream()
       void held
         .then(() =>
           callAgentSession(
@@ -149,7 +207,7 @@ export function useMobileStructuredAgentState(args: {
         )
         .catch(() => undefined)
     }
-  }, [apply, client, connected, enabled, sessionId, sessionKey])
+  }, [apply, applyQueued, client, connected, enabled, sessionId, sessionKey])
 
   const loadEarlier = useCallback(() => {
     const current = stateRef.current
@@ -190,7 +248,7 @@ export function useMobileStructuredAgentState(args: {
     })()
       .catch((error: unknown) => {
         if (isCurrentRead()) {
-          apply({ type: 'error', message: error instanceof Error ? error.message : String(error) })
+          apply({ type: 'error', message: agentSessionReadFailureText(error) })
         }
       })
       .finally(() => {
@@ -200,5 +258,5 @@ export function useMobileStructuredAgentState(args: {
       })
   }, [apply, client, loadingOlder, sessionId, sessionKey])
 
-  return { state, stateRef, loadingOlder, loadEarlier }
+  return { state, stateRef, queuedMessages, queuePause: queued.pause, loadingOlder, loadEarlier }
 }

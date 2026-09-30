@@ -1,3 +1,4 @@
+import { agentTokenUsageSchema } from './telemetry-agent-token-usage-schema'
 import {
   agentErrorSchema,
   agentPromptSentSchema,
@@ -116,6 +117,7 @@ export const eventSchemas = {
   setup_script_prompt_shown: setupScriptPromptShownSchema,
   setup_script_prompt_action: setupScriptPromptActionSchema,
 
+  agent_token_usage: agentTokenUsageSchema,
   agent_started: agentStartedSchema,
   agent_prompt_sent: agentPromptSentSchema,
   agent_error: agentErrorSchema,

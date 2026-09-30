@@ -42,12 +42,10 @@ function slotsOf(messages: NativeChatMessage[]) {
   return buildNativeChatTranscriptSlots({
     messages,
     turnKeys,
-    latestUserIndex: messages.findLastIndex((message) => message.role === 'user'),
-    currentTurnKey: undefined,
+    liveTurnKey: undefined,
     receipts: new Map<string, NativeChatResolvedPrompt>(),
     turnStatuses: { active: null, completedByTurn: {} },
     turnDiffs: new Map<string, NativeChatTurnDiff>(),
-    showTurnStatus: false,
     expandedTurnKeys: new Set<string>(),
     isWorking: false,
     lifecycleWorking: false

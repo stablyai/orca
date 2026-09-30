@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { parse } from 'yaml'
 import { expect, it } from 'vitest'
-import { selectPrE2eSpecs } from './pr-e2e-source-routing.mjs'
+import { selectPrE2eSpecs, shouldRunReusablePrE2e } from './pr-e2e-source-routing.mjs'
 
 const root = resolve(import.meta.dirname, '../..')
 const workflow = parse(readFileSync(join(root, '.github/workflows/e2e.yml'), 'utf8'))
@@ -61,4 +61,25 @@ it('executes both Docker network routes in a Node job with their opt-in enabled'
   expect(selectPrE2eSpecs(['tests/e2e/helpers/docker-ssh-relay-terminal-tabs.ts'])).not.toContain(
     spec
   )
+})
+
+it('runs the local SSH browser spec when its route source changes', () => {
+  const spec = 'tests/e2e/local-ssh-browser-routing.spec.ts'
+  for (const changed of [
+    'src/main/browser/local-ssh-browser-route.ts',
+    'src/main/browser/local-ssh-browser-partitions.ts',
+    'src/renderer/src/components/browser-pane/use-ssh-workspace-browser-route.ts',
+    'src/renderer/src/components/browser-pane/assemble-chrome/ssh-routed-browser-page-gate.tsx',
+    'src/renderer/src/lib/worktree-host-connection-phase.ts'
+  ]) {
+    expect(selectPrE2eSpecs([changed])).toContain(spec)
+    expect(shouldRunReusablePrE2e([changed])).toBe(true)
+  }
+  for (const unrelated of [
+    'src/renderer/src/components/browser-pane/use-ssh-workspace-browser-route.host-connection.test.tsx',
+    'src/main/browser/local-ssh-browser-route.test.ts',
+    'src/renderer/src/components/browser-pane/BrowserPane.tsx'
+  ]) {
+    expect(selectPrE2eSpecs([unrelated])).not.toContain(spec)
+  }
 })

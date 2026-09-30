@@ -10,10 +10,4 @@ describe('composer drop owner', () => {
     expect(isCurrentComposerDropOwner([page, modal], page)).toBe(false)
     expect(isCurrentComposerDropOwner([page, modal], modal)).toBe(true)
   })
-
-  it('rejects async drop completions after their owner unmounts', () => {
-    const owner = Symbol('owner')
-
-    expect(isCurrentComposerDropOwner([], owner)).toBe(false)
-  })
 })

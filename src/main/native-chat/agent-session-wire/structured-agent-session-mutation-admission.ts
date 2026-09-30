@@ -15,10 +15,11 @@ import {
 } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionOperationDecision } from '../../../shared/agent-session-operation-ledger'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type {
-  AgentSessionMutationEnvelope,
-  AgentSessionMutationResult,
-  AgentSessionWireRefusal
+import {
+  refuse,
+  type AgentSessionMutationEnvelope,
+  type AgentSessionMutationResult,
+  type AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
 import { AGENT_SESSION_UNATTACHED_REFUSAL_CODE } from '../../../shared/structured-agent-session-read-refusal'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
@@ -31,10 +32,11 @@ import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 
 // The code is shared with the client so a read that refuses this way can be told apart from a
 // transcript that failed to load; the two must never drift apart.
-export const AGENT_SESSION_NOT_ATTACHED: AgentSessionWireRefusal = {
-  code: AGENT_SESSION_UNATTACHED_REFUSAL_CODE,
-  message: 'This host holds no attached session by that id.'
-}
+export const AGENT_SESSION_NOT_ATTACHED: AgentSessionWireRefusal = refuse(
+  AGENT_SESSION_UNATTACHED_REFUSAL_CODE,
+  { reason: 'sessionNotAttached' },
+  'This host holds no attached session by that id.'
+)
 
 export function refuseAgentSessionMutation(refusal: AgentSessionWireRefusal): {
   ok: false
@@ -107,7 +109,8 @@ export async function admitAndRunAgentSessionMutation<TValue>(
     envelope,
     hostFingerprint,
     now: request.now(),
-    ...(plan.operationIdScope ? { operationIdScope: plan.operationIdScope } : {})
+    ...(plan.operationIdScope ? { operationIdScope: plan.operationIdScope } : {}),
+    ...(plan.conversationWrite ? { conversationWrite: true } : {})
   })
   if (!admitted) {
     return refuseAgentSessionMutation(AGENT_SESSION_NOT_ATTACHED)
@@ -141,7 +144,8 @@ export async function admitAndRunAgentSessionMutation<TValue>(
       envelope,
       hostFingerprint,
       ledger: { decision: 'admit', row: admission.row },
-      lease: record.lease
+      lease: record.lease,
+      ...(plan.conversationWrite ? { conversationWrite: true } : {})
     })
     if (rerun.decision === 'refused') {
       return refuseAgentSessionMutation(rerun.refusal)

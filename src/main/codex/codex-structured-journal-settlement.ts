@@ -1,7 +1,8 @@
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity,
-  AgentJournalTurnLifecycle
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalItemBody,
+  type AgentJournalItemIdentity,
+  type AgentJournalTurnLifecycle
 } from '../../shared/agent-session-journal-types'
 import {
   journalLifecycleItemMutation,
@@ -26,7 +27,7 @@ import {
   codexTurnLifecycleIdentity
 } from './codex-structured-journal-translation-turns'
 import { appendCodexLifecycleMutations } from './codex-structured-journal-sink'
-import type { CodexRowLinkage } from './codex-subagent-linkage'
+import type { CodexRowAttribution } from './codex-subagent-linkage'
 
 export type CodexActiveJournalItem = {
   threadId: string
@@ -53,9 +54,10 @@ export function settleCodexJournalSession(input: {
   currentTurnIds: ReadonlyMap<string, ReadonlySet<string>>
   primaryThreadId: string | null
   ordinals: CodexTurnOrdinals
-  /** Terminal lifecycle for a turn the provider left running when it ended. */
-  settledTurnLifecycle: (threadId: string, turnId: string) => AgentJournalTurnLifecycle
-  linkageFor: CodexRowLinkage
+  /** Terminal lifecycle for a turn the provider left running when it ended; null for a turn a
+   *  conversation command claimed, whose record the host settles. */
+  settledTurnLifecycle: (threadId: string, turnId: string) => AgentJournalTurnLifecycle | null
+  attributionFor: CodexRowAttribution
 }): StructuredAgentSessionSinkAdmission {
   // Rows from every thread settle in this one batch, so each names its own producer.
   const mutations: JournalLifecycleMutationInput[] = []
@@ -67,13 +69,13 @@ export function settleCodexJournalSession(input: {
       : codexJournalItem(active.item)
     const body = interruptedBody(translated.body)
     if (body) {
-      mutations.push(settledRow(input.linkageFor, active, body))
+      mutations.push(settledRow(input.attributionFor, active, body))
     }
   }
   for (const prompt of input.pendingPrompts.values()) {
     const body = cancelledJournalPromptBody(prompt.body)
     if (body) {
-      mutations.push(settledRow(input.linkageFor, prompt, body))
+      mutations.push(settledRow(input.attributionFor, prompt, body))
     }
   }
   for (const [threadId, turnIds] of input.currentTurnIds) {
@@ -81,11 +83,15 @@ export function settleCodexJournalSession(input: {
       continue
     }
     for (const turnId of turnIds) {
-      mutations.push({
-        kind: 'item',
-        identity: codexTurnLifecycleIdentity(input.event.sessionId, turnId),
-        body: codexTurnLifecycleBody(input.settledTurnLifecycle(threadId, turnId))
-      })
+      const turnLifecycle = input.settledTurnLifecycle(threadId, turnId)
+      if (turnLifecycle) {
+        mutations.push({
+          kind: 'item',
+          identity: codexTurnLifecycleIdentity(input.event.sessionId, turnId),
+          body: codexTurnLifecycleBody(turnLifecycle),
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        })
+      }
       turnOrdinalsToForget.push({ threadId, turnId })
     }
   }
@@ -114,7 +120,9 @@ export function settleCodexJournalTurn(input: {
   activeItems: Map<string, CodexActiveJournalItem>
   pendingPrompts?: Map<string, CodexPendingJournalPrompt>
   clearPromptTurn?: (threadId: string, turnId: string) => void
-  linkageFor: CodexRowLinkage
+  attributionFor: CodexRowAttribution
+  /** The end of a conversation command the turn carried, which settles with it. */
+  commandEnd?: readonly JournalLifecycleMutationInput[]
 }): StructuredAgentSessionSinkAdmission {
   const mutations: JournalLifecycleMutationInput[] = []
   const activeItemsToForget: { key: string; threadId: string; itemId: string }[] = []
@@ -133,7 +141,7 @@ export function settleCodexJournalTurn(input: {
       : codexJournalItem(active.item)
     const body = interruptedBody(translated.body)
     if (body) {
-      mutations.push(settledRow(input.linkageFor, active, body))
+      mutations.push(settledRow(input.attributionFor, active, body))
     }
     activeItemsToForget.push({ key, threadId: active.threadId, itemId: active.item.id })
   }
@@ -143,7 +151,7 @@ export function settleCodexJournalTurn(input: {
     }
     const body = cancelledJournalPromptBody(prompt.body)
     if (body) {
-      mutations.push(settledRow(input.linkageFor, prompt, body))
+      mutations.push(settledRow(input.attributionFor, prompt, body))
     }
     pendingPromptsToForget.push(key)
   }
@@ -152,9 +160,11 @@ export function settleCodexJournalTurn(input: {
     mutations.push({
       kind: 'item',
       identity: codexTurnLifecycleIdentity(input.sessionId, input.turnId),
-      body: codexTurnLifecycleBody(input.turnLifecycle)
+      body: codexTurnLifecycleBody(input.turnLifecycle),
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
     })
   }
+  mutations.push(...(input.commandEnd ?? []))
   const admission = appendCodexLifecycleMutations(
     input.sink,
     `turn-completed:${input.sessionId}:${input.threadId}:${input.turnId}`,
@@ -174,89 +184,13 @@ export function settleCodexJournalTurn(input: {
   return ADMITTED
 }
 
-/** Settle streamed items whose terminal notification was rejected as oversized. */
-export function settleCodexOversizedNotification(input: {
-  sessionId: string
-  threadId: string
-  method: string
-  sink: StructuredAgentSessionEventSink
-  streams: CodexStructuredItemStreams
-  activeItems: Map<string, CodexActiveJournalItem>
-  linkageFor: CodexRowLinkage
-}): StructuredAgentSessionSinkAdmission {
-  const itemType = oversizedStreamItemType(input.method)
-  if (!itemType) {
-    return ADMITTED
-  }
-  const mutations: JournalLifecycleMutationInput[] = []
-  const activeItemsToForget: { key: string; threadId: string; itemId: string }[] = []
-  for (const [key, active] of input.activeItems) {
-    if (active.threadId !== input.threadId || active.item.type !== itemType) {
-      continue
-    }
-    const streamed = input.streams.snapshot(active.threadId, active.item.id)
-    const translated = streamed
-      ? codexStreamingJournalItem(active.item, streamed.text)
-      : codexJournalItem(active.item)
-    const body = interruptedBody(translated.body)
-    if (body) {
-      mutations.push(settledRow(input.linkageFor, active, body))
-    }
-    activeItemsToForget.push({ key, threadId: active.threadId, itemId: active.item.id })
-  }
-  if (mutations.length === 0) {
-    return ADMITTED
-  }
-  const admission = appendCodexLifecycleMutations(
-    input.sink,
-    `oversized-notification:${input.sessionId}:${input.threadId}:${input.method}`,
-    mutations
-  )
-  if (!admission.accepted) {
-    return admission
-  }
-  for (const active of activeItemsToForget) {
-    input.streams.forget(active.threadId, active.itemId)
-    input.activeItems.delete(active.key)
-  }
-  return ADMITTED
-}
-
-function oversizedStreamItemType(method: string): CodexThreadItem['type'] | null {
-  if (method === 'item/agentMessage/delta') {
-    return 'agentMessage'
-  }
-  if (method === 'item/plan/delta') {
-    return 'plan'
-  }
-  if (
-    method === 'command/exec/outputDelta' ||
-    method === 'process/outputDelta' ||
-    method === 'item/commandExecution/outputDelta' ||
-    method === 'item/commandExecution/terminalInteraction'
-  ) {
-    return 'commandExecution'
-  }
-  if (method === 'item/fileChange/outputDelta' || method === 'item/fileChange/patchUpdated') {
-    return 'fileChange'
-  }
-  if (
-    method === 'item/reasoning/summaryTextDelta' ||
-    method === 'item/reasoning/summaryPartAdded' ||
-    method === 'item/reasoning/textDelta'
-  ) {
-    return 'reasoning'
-  }
-  return null
-}
-
 /** A settled item or prompt, naming its producer: the settlement can be the row's first write. */
 function settledRow(
-  linkageFor: CodexRowLinkage,
+  attributionFor: CodexRowAttribution,
   row: { threadId: string; turnId: string | null; identity: AgentJournalItemIdentity },
   body: AgentJournalItemBody
 ): JournalLifecycleMutationInput {
-  return journalLifecycleItemMutation(linkageFor(row.threadId, row.turnId), row.identity, body)
+  return journalLifecycleItemMutation(attributionFor(row.threadId, row.turnId), row.identity, body)
 }
 
 function interruptedBody(body: AgentJournalItemBody | null): AgentJournalItemBody | null {

@@ -13,8 +13,10 @@ type UseFileExplorerRowScrollingParams = {
   inlineInputIndex: number
   rowProjection: FileExplorerRowProjection
   scrollRef: RefObject<HTMLDivElement | null>
+  onRevealOutsideRoot?: () => void
   activeWorktreeId: string | null
   worktreePath: string | null
+  displayRootPath?: string | null
   expanded: Set<string>
   dirCache: Record<string, DirCache>
   loadingDirPaths: ReadonlySet<string>
@@ -29,18 +31,21 @@ type UseFileExplorerRowScrollingResult = {
   virtualizer: Virtualizer<HTMLDivElement, Element>
   scrollToIndex: (index: number) => void
   flashingPath: string | null
+  cancelRevealTimers: () => void
   explorerShellRef: RefObject<HTMLDivElement | null>
   setExplorerShellRef: (node: HTMLDivElement | null) => void
 }
 
 /** Decides which explorer row is measured and scrolled into view. */
 export function useFileExplorerRowScrolling({
+  onRevealOutsideRoot,
   visibleRowCount,
   inlineInputIndex,
   rowProjection,
   scrollRef,
   activeWorktreeId,
   worktreePath,
+  displayRootPath = worktreePath,
   expanded,
   dirCache,
   loadingDirPaths,
@@ -77,14 +82,16 @@ export function useFileExplorerRowScrolling({
   })
 
   const cancelRevealTimers = useFileExplorerReveal({
+    onRevealOutsideRoot,
     activeWorktreeId,
     worktreePath,
+    displayRootPath,
     pendingExplorerReveal,
     clearPendingExplorerReveal,
     expanded,
     dirCache,
     loadingDirPaths,
-    rootCache,
+    rootCache: displayRootPath ? dirCache[displayRootPath] : rootCache,
     rowProjection,
     loadDir,
     setSelectedPath,
@@ -109,6 +116,7 @@ export function useFileExplorerRowScrolling({
     activeFileId,
     activeWorktreeId,
     worktreePath,
+    displayRootPath,
     pendingExplorerReveal,
     openFiles,
     rowProjection,
@@ -129,5 +137,12 @@ export function useFileExplorerRowScrolling({
     [virtualizer]
   )
 
-  return { virtualizer, scrollToIndex, flashingPath, explorerShellRef, setExplorerShellRef }
+  return {
+    virtualizer,
+    scrollToIndex,
+    flashingPath,
+    explorerShellRef,
+    setExplorerShellRef,
+    cancelRevealTimers
+  }
 }

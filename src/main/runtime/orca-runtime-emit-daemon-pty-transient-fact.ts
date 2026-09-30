@@ -51,6 +51,7 @@ export class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithSc
     const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
     if (pty) {
       pty.tailPendingAnsi = ''
+      pty.commandPaint = undefined
     }
     for (const leaf of this.getLeavesForPty(ptyId)) {
       leaf.tailPendingAnsi = ''

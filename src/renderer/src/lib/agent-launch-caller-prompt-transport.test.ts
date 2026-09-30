@@ -158,21 +158,6 @@ describe('agent launch caller prompt transport', () => {
     }
   )
 
-  it.each(cases)('pins whether %s asks the pasted prompt to submit', async (_id, profile) => {
-    await launch(profile)
-
-    if (!mockPasteDraftWhenAgentReady.mock.calls.length) {
-      return
-    }
-    expect(mockPasteDraftWhenAgentReady.mock.calls[0]?.[0]).toMatchObject({
-      tabId: 'tab-1',
-      content: profile.args.prompt,
-      agent: profile.args.agent,
-      submit: profile.args.promptDelivery === 'submit-after-ready',
-      forcePaste: true
-    })
-  })
-
   it.each(cases)(
     'exposes a delivery promise to %s only for submit-after-ready',
     async (_id, profile) => {

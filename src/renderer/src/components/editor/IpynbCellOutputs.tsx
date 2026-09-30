@@ -9,7 +9,7 @@ import { IpynbMarkdownCell } from './IpynbCellEditor'
 import { IpynbHtmlOutput } from './IpynbHtmlOutput'
 import { parseAnsiSegments, type AnsiColor } from './ipynb-ansi'
 import type { IpynbCell, IpynbOutput, IpynbOutputItem } from './ipynb-parse'
-import { useDocumentDarkTheme } from './use-document-dark-theme'
+import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 
 const ANSI_PALETTE_KEYS = [
   'black',

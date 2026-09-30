@@ -11,7 +11,8 @@ import { replayPreviewConnectionSnapshot } from './preview-terminal-snapshot-rep
 import { useEffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
 import {
   buildPreviewAppearanceOptions,
-  buildPreviewTerminalOptions
+  buildPreviewTerminalOptions,
+  previewAdvertisesKittyKeyboard
 } from './preview-terminal-options'
 import { syncPreviewTerminalLigatures } from './preview-terminal-ligatures'
 import { installPreviewTerminalCompatibility } from './preview-terminal-compatibility'
@@ -116,9 +117,13 @@ export function AgentTerminalPreview({
     let disposeKeyHandler: (() => void) | null = null
     let disposeNativeCopyGutterTrim: (() => void) | null = null
     let disposeTerminalCompatibility: (() => void) | null = null
+    // Why one read: the xterm's advertisement and its mirror must never disagree.
+    const mountTerminalInput = terminalInputRef.current
     // Why: mirrors the pane's tracker — the policy needs the flags the TUI
     // negotiated, and this preview parses the same output stream the pane does.
-    const kittyKeyboardModes = new TerminalKittyKeyboardModeTracker()
+    const kittyKeyboardModes = new TerminalKittyKeyboardModeTracker({
+      kittyKeyboard: previewAdvertisesKittyKeyboard(mountTerminalInput)
+    })
     let refreshInFlight = false
     let refreshAgain = false
     let retryTimer: ReturnType<typeof setTimeout> | null = null
@@ -254,7 +259,7 @@ export function AgentTerminalPreview({
         terminal = new Terminal(
           buildPreviewTerminalOptions({
             settings: settingsRef.current,
-            terminalInput: terminalInputRef.current,
+            terminalInput: mountTerminalInput,
             macOptionIsMeta: macOptionAsAltRef.current === 'true',
             theme: terminalTheme,
             themeMode: terminalMode,

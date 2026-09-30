@@ -218,7 +218,9 @@ function buildAgentResumeInvocation(
       return `${baseCommand} resume ${sessionArg}`
     case 'cline':
       return `${baseCommand} --id ${sessionArg}`
+    case 'codebuddy':
     case 'claude':
+    case 'zcode':
     case 'cursor':
     case 'gemini':
     case 'grok':

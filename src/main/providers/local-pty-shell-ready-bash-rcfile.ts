@@ -7,7 +7,7 @@
 import { BASH_PROMPT_COMMAND_COMPOSITION_BLOCK } from '../bash-prompt-command-composition'
 import { WSL_MANAGED_CLI_PATH_RESTORE } from '../wsl-managed-cli-path-restore'
 import { getPosixOmpShellWrapper } from '../pty/omp-shell-wrapper'
-import { getPosixCodexShellLaunchPreflight } from '../pty/codex-shell-launch-preflight'
+import { getPosixCodexShellLaunchPreflight } from '../../shared/codex-shell-function'
 import { getBashStartupCommandPromptBlock } from '../pty/posix-shell-startup-command'
 import { BASH_FEATURE_CHANNEL_BLOCK, SHELL_STARTUP_IDENTITY_MARKER_BLOCK } from '../shell-templates'
 import { SHELL_READY_MARKER_ESCAPED } from './local-pty-shell-ready-marker'

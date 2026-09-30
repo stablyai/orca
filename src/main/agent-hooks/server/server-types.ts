@@ -19,6 +19,9 @@ export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
    *  main restart; absent means "never separately observed" and consumers use `receivedAt`. */
   evidenceObservedAt?: number
   stateStartedAt: number
+  /** When the main agent's current turn began, on this server's clock. Stamped only here, from the
+   *  main agent's own turn-opening event; absent when no such event was seen. */
+  turnStartedAt?: number
   /** Provenance/ordering stamped by this server as the pane authority (STA-4293). Read by nothing yet. */
   observation?: AgentStatusObservation
   /** Stamped at hydrate for nonterminal states; never persisted (hydrate re-stamps) and cleared by any accepted live event replacing the entry. */

@@ -38,7 +38,6 @@ main/providers/process-cwd.ts
 main/pty-descendant-termination.ts
 main/pty/posix-pty-foreground-group.ts
 main/pty/windows-environment-path.ts
-main/rate-limits/codex-fetcher.ts
 main/runtime/tls-certificate.ts
 main/ssh/ssh-connection.ts
 main/startup/ensure-virtual-display.ts

@@ -14,6 +14,7 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 
 const CALLER = { callerKey: 'client-claude' }
 const CLAUDE_SESSION = '019fd532-7c11-7a90-b6de-4e1a2c3d5f61'
@@ -83,7 +84,7 @@ beforeEach(async () => {
   host = new StructuredAgentSessionHost({
     store,
     adapter: adapter(),
-    journalRoot: root,
+    journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-claude',
     now: () => NOW

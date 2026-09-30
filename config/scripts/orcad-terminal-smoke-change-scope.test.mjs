@@ -97,12 +97,12 @@ it('only skips the unchanged smoke after a successful diff and dependency analys
   )
   expect(step.env).toEqual({
     BASE_SHA: '${{ github.event.pull_request.base.sha }}',
-    HEAD_SHA: '${{ github.event.pull_request.head.sha }}',
     ORCA_BACKGROUND_LAUNCH: '1'
   })
-  expect(step.run).toContain(
-    'git diff --name-only --no-renames -z --merge-base "$BASE_SHA" "$HEAD_SHA"'
-  )
+  // See the localization gate: HEAD^1 removes the merge-base computation, so a shallow checkout
+  // is enough and the payload head SHA is unused.
+  expect(step.run).toContain('node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA"')
+  expect(step.run).toContain('git diff --name-only --no-renames -z "$DIFF_BASE" HEAD')
   expect(step.run).not.toContain('--diff-filter')
   expect(step.run).toContain('&& [ "$scope" = false ]; then')
   expect(step.run).toMatch(/else\s+pnpm run smoke:orcad-terminal\s+fi/)

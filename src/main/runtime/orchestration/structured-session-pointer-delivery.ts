@@ -68,7 +68,8 @@ export function structuredSessionGateFacts(
  * them. Neither refuses the frame: Codex COALESCES a mid-turn `turn/start` into
  * the running turn -- measured on codex-cli 0.147.0, 0.150.1 and 0.153.4, none
  * of which refuse it and none of which fire a second `turn/started` -- and
- * Claude queues it behind the turn. Both therefore
+ * Claude folds it into the running turn (or runs it as the next turn when the
+ * turn ends first). Both therefore
  * fold the nudge into work already in flight, where it reads as part of the
  * running turn rather than a new instruction. Waiting for the turn to settle is
  * the one contract that holds for both, and it preserves orchestration's
@@ -98,7 +99,7 @@ export function decideStructuredSessionPointerDelivery(input: {
  * adapters cannot tell them apart — so it must retain. Treating it as delivered
  * would drop mail whenever a child died mid-send.
  */
-export function structuredDispatchDelivered(state: StructuredDispatchState): boolean {
+export function structuredDispatchDelivered(state: StructuredDispatchState): state is 'accepted' {
   return state === 'accepted'
 }
 

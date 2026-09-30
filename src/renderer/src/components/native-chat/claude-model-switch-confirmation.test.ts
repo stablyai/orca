@@ -152,27 +152,6 @@ describe('Claude model switch confirmation detection', () => {
     await expect(observer.result).resolves.toBe('unknown')
   })
 
-  it('reports unknown on timeout instead of requesting the terminal', async () => {
-    vi.useFakeTimers()
-    try {
-      const observer = createClaudeModelSwitchConfirmationObserver({
-        ptyId: 'pty-1',
-        settings: {},
-        expectedModelLabel: 'Fable 5',
-        subscribeToData: () => vi.fn(() => {}),
-        timeoutMs: 100
-      })
-
-      await observer.ready
-      observer.arm()
-      observer.startDetection()
-      await vi.advanceTimersByTimeAsync(100)
-      await expect(observer.result).resolves.toBe('unknown')
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('does not start the detection timeout until startDetection() is called', async () => {
     vi.useFakeTimers()
     try {

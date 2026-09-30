@@ -94,6 +94,8 @@ export function createCodexStructuredLaunchResolver(
     const permissionPolicy = deps.resolvePermissionPolicy?.()
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
     const resumeThreadId = head?.handle.provider === 'codex' ? head.handle.threadId : null
+    // The same saved options every turn sends, so the thread and its turns name one model.
+    const model = record.options?.model
     return {
       command,
       args: ['app-server'],
@@ -107,6 +109,7 @@ export function createCodexStructuredLaunchResolver(
       // forked or adopted head names a conversation Codex held.
       ...(resumeThreadId && head?.origin === 'created' ? { supersedeIfUnsaved: true } : {}),
       ...(permissionPolicy ? { permissionPolicy } : {}),
+      ...(model ? { model } : {}),
       ...(resumeThreadId
         ? {
             resumePath: await (deps.resolveRollout ?? resolvePinnedCodexRolloutProof)(

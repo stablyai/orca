@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as RunProcess from '../../shared/child-process/run-process'
 
 const {
   childSpawnMock,
@@ -20,6 +21,13 @@ const {
 
 vi.mock('node:child_process', () => ({
   spawn: childSpawnMock
+}))
+
+// The chokepoint is the seam: assertions see what the fetcher asked for, before shim resolution.
+vi.mock('../../shared/child-process/run-process', async (importOriginal) => ({
+  ...(await importOriginal<typeof RunProcess>()),
+  spawnProcess: (spec: { program: string; args?: readonly string[] }) =>
+    childSpawnMock(spec.program, spec.args ?? [], spec)
 }))
 
 vi.mock('node:fs/promises', () => ({
@@ -51,7 +59,6 @@ vi.mock('./codex-auth-presence', () => ({
 import { fetchCodexRateLimits } from './codex-fetcher'
 import { probeCodexAuthPresence } from './codex-auth-presence'
 import { getActiveHiddenRateLimitPtyCount } from './hidden-pty-cleanup'
-import { getCmdExePath } from '../win32-utils'
 import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
 
 function makeDisposable() {
@@ -787,13 +794,9 @@ describe('fetchCodexRateLimits', () => {
       await resultPromise
 
       const [spawnFile, spawnArgs, spawnOptions] = childSpawnMock.mock.calls[0]
-      expect(spawnFile).toBe(getCmdExePath())
-      expect(spawnArgs).toEqual([
-        '/d',
-        '/c',
-        codexCommand,
-        ...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS
-      ])
+      // Pre-wrapping in cmd.exe would hide the npm shim from spawnProcess's resolver.
+      expect(spawnFile).toBe(codexCommand)
+      expect(spawnArgs).toEqual([...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS])
       expect(spawnOptions).toEqual(
         expect.objectContaining({
           env: expect.objectContaining({ CODEX_HOME: 'C:\\Users\\alice\\.codex' })

@@ -19,6 +19,7 @@ import {
   hostTestAttachParams,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 
 const CALLER = { callerKey: 'client-1' }
 const EXIT_REASON = 'claude stream-json exited (code 1): claude: not signed in'
@@ -54,7 +55,7 @@ beforeEach(async () => {
       answerPrompt: vi.fn(async () => undefined),
       setOption: vi.fn(async () => undefined)
     },
-    journalRoot: root,
+    journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     now: () => NOW
@@ -82,8 +83,11 @@ describe('a create that fails after its child wrote through the unbound sink', (
 
       const failed = host.attach(CALLER, hostTestAttachParams(null))
       await (cause instanceof AgentSessionPreSpawnError
-        ? expect(failed).rejects.toThrow(EXIT_REASON)
-        : expect(failed).resolves.toMatchObject({ ok: false, refusal: { message: EXIT_REASON } }))
+        ? expect(failed).rejects.toThrow("Codex couldn't restart. Send your message to try again.")
+        : expect(failed).resolves.toMatchObject({
+            ok: false,
+            refusal: { message: "Codex couldn't restart. Send your message to try again." }
+          }))
 
       await expect(host.attach(CALLER, hostTestAttachParams(null))).resolves.toMatchObject({
         ok: true
@@ -118,7 +122,7 @@ describe('a create that fails after its child wrote through the unbound sink', (
     // The session stays indexed across this failure: it is a resume, not a create.
     const failed = host.attach(CALLER, hostTestAttachParams(releasedFence))
     await (cause instanceof AgentSessionPreSpawnError
-      ? expect(failed).rejects.toThrow(EXIT_REASON)
+      ? expect(failed).rejects.toThrow("Codex couldn't restart. Send your message to try again.")
       : expect(failed).resolves.toMatchObject({ ok: false }))
 
     const fence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0

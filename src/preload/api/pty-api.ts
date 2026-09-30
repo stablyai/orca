@@ -3,6 +3,7 @@ import type {
   SleepingAgentLaunchConfig
 } from '../../shared/agent-session-resume'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
+import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import type { PtyListedSession, PtySessionListScope } from '../../shared/pty-listed-session'
 import type { PtyMainDeliveryDiagnostics } from '../../shared/pty-delivery-diagnostics'
@@ -75,14 +76,15 @@ export type PtyApi = {
     /** Host verdict on the shell-ready marker; absent when the execution host predates the field. */
     shellReadyArmed?: boolean
   }>
-  write: (id: string, data: string) => void
-  writeAccepted: (id: string, data: string) => Promise<boolean>
+  write: (id: string, data: string, inputKind: TerminalInputKind) => void
+  writeAccepted: (id: string, data: string, inputKind: TerminalInputKind) => Promise<boolean>
   onWriteUnavailable?: (callback: (payload: { id: string }) => void) => () => void
   resize: (id: string, cols: number, rows: number) => void
   claimViewport: (id: string, cols: number, rows: number) => void
   reportGeometry: (id: string, cols: number, rows: number) => void
   signal: (id: string, signal: string) => void
   clearBuffer: (id: string) => void
+  resetInputModes: (id: string) => void
   kill: (id: string, opts?: { keepHistory?: boolean }) => Promise<void>
   ackColdRestore: (id: string) => void
   ackData: (id: string, charCount: number, processedChars?: number) => void
@@ -228,6 +230,7 @@ export type PtyApi = {
     }) => void
   ) => () => void
   onClearBufferRequest: (callback: (data: { ptyId: string }) => void) => () => void
+  onResetInputModesRequest: (callback: (data: { ptyId: string }) => void) => () => void
   sendSerializedBuffer: (
     requestId: string,
     snapshot: {

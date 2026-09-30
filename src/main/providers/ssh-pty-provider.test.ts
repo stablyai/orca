@@ -236,6 +236,13 @@ describe('SshPtyProvider', () => {
     expectRequest(mux.request, 'pty.clearBuffer', { id: 'pty-1' })
   })
 
+  it('pushes host colours as a notification an older relay can ignore', () => {
+    const colors = { foreground: '#ffffff', background: '#282c34' }
+    provider.setColorQueryReplyColors(colors)
+    expect(mux.notify).toHaveBeenCalledWith('pty.setColorQueryReplyColors', { colors })
+    expect(mux.request).not.toHaveBeenCalledWith('pty.setColorQueryReplyColors', expect.anything())
+  })
+
   it('acknowledgeDataEvent sends pty.ackData notification', () => {
     provider.acknowledgeDataEvent(scopedPty1, 1024)
     expect(mux.notify).toHaveBeenCalledWith('pty.ackData', { id: 'pty-1', charCount: 1024 })

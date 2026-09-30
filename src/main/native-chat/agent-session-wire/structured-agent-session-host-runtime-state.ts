@@ -34,8 +34,9 @@ export class StructuredAgentSessionHostRuntimeState {
     this.leaseRenewer.start()
   }
 
-  stopLeaseRenewal(): void {
-    this.leaseRenewer.stop()
+  /** Resolves once a renewal tick already in flight has finished writing. */
+  stopLeaseRenewal(): Promise<void> {
+    return this.leaseRenewer.stop()
   }
 
   /** The sink the session's current child writes through, created on first use. */

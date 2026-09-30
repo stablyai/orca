@@ -233,6 +233,9 @@ export type GlobalSettings = {
   /** Opt-in: resume working structured chats automatically on the next launch. Off still offers
    *  the list, so the user sees exactly what would run before anything spends tokens. */
   nativeChatResumeWorkOnRestart?: boolean
+  /** Chat-wide: hold a mid-turn send as an editable queued draft that goes when the turn ends
+   *  (capable hosts only). Absent = on; off keeps mid-turn sends immediate. */
+  nativeChatQueueFollowUps?: boolean
   /** Structured chat only: Codex/Claude children inherit the whole login-shell environment.
    *  Off passes only `nativeChatShellEnvironmentVariables` (plus a PATH/locale baseline). */
   nativeChatInheritShellEnvironment?: boolean
@@ -417,6 +420,10 @@ export type GlobalSettings = {
   agentYoloDefaultsMigrated?: boolean
   /** Why: disabling must persist so startup doesn't reinstall global agent hook entries the user just removed. */
   agentStatusHooksEnabled: boolean
+  /** Pre-trust the worktree or folder Orca starts an agent in, so its "trust this folder?" prompt is skipped. Defaults on. */
+  agentWorkspaceTrustEnabled: boolean
+  /** Why: Codex's shared server runs every tab's hooks with the first tab's env; off opts new terminals back into it. Absent reads as on. */
+  codexTerminalServerIsolation?: boolean
   /** Dismissed freshness tuples: no write authority, just suppress re-nudging the same official placement/revision. */
   dismissedSkillFreshnessNudges?: string[]
   /** Why: generated tab titles are subjective, so they stay opt-in and manual renames win. */

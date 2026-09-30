@@ -24,7 +24,15 @@ const baseline = await runProcess({
   ],
   cwd: root
 })
-if (baseline.code !== 0) {
+// A pin a squash left only in its pull request's head is a missing object, not product drift.
+if (baseline.code !== 0 && baseline.code !== 1) {
+  throw new Error(
+    `Could not diff against the pinned baseline ${input.baseline}: ${baseline.stderr.trim()}\n` +
+      'If your clone lacks that commit, fetch it with\n' +
+      '  pnpm --dir mobile exec tsx scripts/rpc-recording-pin-guard.mts reachable'
+  )
+}
+if (baseline.code === 1) {
   throw new Error('Product sources or lockfile differ from the pinned main baseline')
 }
 // Why a second check: `git diff` only sees tracked paths, so an untracked module under the

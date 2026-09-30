@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // A turn that was running when its host went away ends when recovery settles it. That settlement is
 // the edge the user needs to see — their work stopped — so the session reads as newly done then,
 // and nothing along the way may call it a success. Every hop is the real one: durable journal,
@@ -12,7 +13,7 @@ import type {
   AgentSessionTurnCompletionEvent
 } from '../../../shared/agent-session-wire'
 import { AgentHookServer, _internals } from '../../agent-hooks/server'
-import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
+import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   settleStaleStructuredAgentSessionState,
@@ -54,17 +55,17 @@ async function sessionWithRunningTurn() {
       providerHandle: { kind: 'codex', threadId: THREAD }
     },
     now: () => clock,
-    journalDir: join(root, SESSION)
+    stateDirectory: join(root, SESSION)
   })
   await journal.appendItem(
     { provider: 'orca', clientMessageId: 'prompt-1' },
     { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'long job' }] },
-    { fence: 1 }
+    { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   await journal.appendItem(
     { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 9 },
     { kind: 'turn', turnId: 'turn-1', state: 'running', startedAt: TURN_STARTED },
-    { fence: 1 }
+    { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   const server = new AgentHookServer()
   const sessions = new Map([[SESSION, indexedStatusFeedSession({ journal })]])
@@ -88,7 +89,11 @@ async function sessionWithRunningTurn() {
       }
     }
   })
-  const completions = new StructuredAgentSessionTurnCompletionFeed({ sessions, now: () => clock })
+  const completions = new StructuredAgentSessionTurnCompletionFeed({
+    sessions,
+    now: () => clock,
+    readStatusState: (sessionId, source) => feed.statusState(sessionId, source)
+  })
   const completionEvents: AgentSessionTurnCompletionEvent[] = []
   completions.subscribe({ id: 'dot-1', emit: (event) => completionEvents.push(event) })
   // Both feeds have seen the turn running, so its settlement is a transition they must judge.
@@ -192,7 +197,7 @@ describe('a turn recovery settled after its host went away', () => {
         startedAt: TURN_STARTED,
         completedAt: EXIT_OBSERVED
       },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     session.publish()
 

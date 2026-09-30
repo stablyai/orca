@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { expect, it } from 'vitest'
 import { parse } from 'yaml'
+import { BUN_PERSISTENCE_RUNNERS } from './bun-profile-qualification.mjs'
 
 const readWorkflow = (name) =>
   parse(readFileSync(new URL(`../../.github/workflows/${name}.yml`, import.meta.url), 'utf8'))
@@ -15,7 +16,21 @@ it('warms the same Linux Node runtime the PR shards restore', () => {
   const primer = readWorkflow('pr').jobs.test_native_cache
   expect(arm['runs-on']).toBe(primer['runs-on'])
   expect(arm.steps.at(-1).run).toBe('node config/scripts/ensure-native-runtime.mjs --check-only')
-  expect(install.with).toEqual(primer.steps.find((step) => step.uses === install.uses).with)
+  expect(install.with).toMatchObject(primer.steps.find((step) => step.uses === install.uses).with)
+})
+
+it('populates shared Electron archives on both Linux architectures without changing the Node ABI', () => {
+  for (const name of ['warm', 'warm-linux-arm']) {
+    const steps = workflow.jobs[name].steps
+    const install = steps.find(
+      (step) => step.uses === './.github/actions/install-node-dependencies'
+    )
+    expect(install.with['native-runtime']).toBe('node')
+    expect(install.with['cache-electron-package']).toBe('true')
+    const populate = steps.find((step) => step.name === 'Populate shared Electron archive')
+    expect(populate.run).toBe('node config/scripts/install-electron-package-binary.mjs')
+    expect(steps.indexOf(populate)).toBeGreaterThan(steps.indexOf(install))
+  }
 })
 
 it('publishes incremental state under a key and prefix that new PRs restore', () => {
@@ -50,9 +65,8 @@ it('bounds warming to the required platforms and validates changes without grant
 
 it('warms and probes both Windows images with the persistence job runtime', () => {
   const job = workflow.jobs['warm-windows']
-  const persistence = readWorkflow('bun-profile-tests').jobs.persistence
   expect(job.strategy.matrix.os).toEqual(
-    persistence.strategy.matrix.os.filter((os) => os.startsWith('windows-'))
+    BUN_PERSISTENCE_RUNNERS.filter((os) => os.startsWith('windows-'))
   )
   expect(job['runs-on']).toBe('${{ matrix.os }}')
   expect(job.strategy['fail-fast']).toBe(false)

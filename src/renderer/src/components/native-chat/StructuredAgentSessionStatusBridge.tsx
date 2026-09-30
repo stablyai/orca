@@ -8,7 +8,8 @@ import {
 } from '../../../../shared/agent-status-child-work-projection'
 import {
   continueMainAgentStatus,
-  isAgentStatusHeldOpenByChildWork
+  isAgentStatusHeldOpenByChildWork,
+  mainAgentTurnInterrupted
 } from '../../../../shared/agent-lead-status-fold'
 import { mainAgentStatusEqual, agentSubagentsEqual } from '../../../../shared/agent-status-types'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
@@ -46,18 +47,30 @@ export function useStructuredAgentSessionStatusSummary(
   return { summary, observation }
 }
 
-/** Only the host's startup phase, so a chat re-renders when that changes, not on every status. */
-export function useStructuredAgentSessionHostExecutionPhase(
+/** The host's child state, projected to stable primitives so journal updates do not re-render chat. */
+export function useStructuredAgentSessionHostExecution(
   sessionId: string,
   target: RuntimeClientTarget
-): NonNullable<AgentSessionStatusSummary['hostExecutionPhase']> | null {
+): {
+  phase: NonNullable<AgentSessionStatusSummary['hostExecutionPhase']> | null
+  childKey: string | number | null
+} {
   const feed = useMemo(() => getStructuredAgentSessionStatusFeed(target), [target])
   useEffect(() => feed.activate(), [feed])
-  return useSyncExternalStore(
+  const phase = useSyncExternalStore(
     feed.subscribe,
     () => feed.getSnapshot().get(sessionId)?.hostExecutionPhase ?? null,
     () => null
   )
+  const childKey = useSyncExternalStore(
+    feed.subscribe,
+    () => {
+      const child = feed.getSnapshot().get(sessionId)?.hostExecutionChild
+      return child?.generation ?? child?.fence ?? null
+    },
+    () => null
+  )
+  return { phase, childKey }
 }
 
 function projectStatus(
@@ -98,6 +111,8 @@ function projectStatus(
     state: agentStatus.state,
     ...(agentStatus.workingMode ? { workingMode: agentStatus.workingMode } : {}),
     mainAgent,
+    // Derived from `mainAgent`, so the equality below needs no second check of it.
+    interrupted: mainAgentTurnInterrupted(mainAgent),
     prompt: summary.latestPrompt,
     agentType: tab.agentSessionAgent,
     // The host projects these from the journal so the row reads like a hook-reported one:

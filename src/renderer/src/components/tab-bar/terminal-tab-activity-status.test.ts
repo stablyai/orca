@@ -163,6 +163,39 @@ describe('resolveTerminalTabActivityStatus', () => {
     ).toBe('interrupted')
   })
 
+  it('reports a failed done as failed, and not as a clean finish', () => {
+    const failed = entry(FIRST_LEAF_ID, 'done', {
+      mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: NOW }
+    })
+    const finished = entry(SECOND_LEAF_ID, 'done')
+    expect(
+      resolveTerminalTabActivityStatus({
+        tab: TAB,
+        agentStatusByPaneKey: { [failed.paneKey]: failed, [finished.paneKey]: finished },
+        ptyIdsByTabId: LIVE_PTY
+      })
+    ).toBe('failed')
+  })
+
+  it('reads a main agent that failed while its subagent works as failed; success or stop as working', () => {
+    const status = (outcome: 'failure' | 'success' | 'cancellation') => {
+      const held = entry(FIRST_LEAF_ID, 'working', {
+        mainAgent: { state: 'done', outcome, stateStartedAt: NOW }
+      })
+      return resolveTerminalTabActivityStatus({
+        tab: TAB,
+        agentStatusByPaneKey: { [held.paneKey]: held },
+        ptyIdsByTabId: LIVE_PTY
+      })
+    }
+    expect(status('failure')).toBe('failed')
+    expect(resolveTerminalTabAttentionBadge({ status: status('failure'), hasUnread: false })).toBe(
+      'failed'
+    )
+    expect(status('success')).toBe('working')
+    expect(status('cancellation')).toBe('working')
+  })
+
   it('does not let a finished sibling mask an interrupted outcome', () => {
     const interrupted = entry(FIRST_LEAF_ID, 'done', { interrupted: true })
     const finished = entry(SECOND_LEAF_ID, 'done')

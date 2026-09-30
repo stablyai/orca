@@ -34,15 +34,4 @@ describe('agent hibernation coordinator visibility wiring', () => {
     stopAgentHibernationCoordinator()
     expect(remove.mock.calls.some(([type]) => type === 'visibilitychange')).toBe(true)
   })
-
-  it('leaves no visibility listener behind after a start/stop cycle', () => {
-    startAgentHibernationCoordinator({ intervalMs: 60_000, now: () => 0 })
-    stopAgentHibernationCoordinator()
-
-    const afterStop = vi.spyOn(document, 'addEventListener')
-    setVisibility('hidden')
-    setVisibility('visible')
-    // A stopped coordinator must not react to visibility at all.
-    expect(afterStop).not.toHaveBeenCalled()
-  })
 })

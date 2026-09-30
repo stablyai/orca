@@ -191,6 +191,7 @@ export function hostStub(): StructuredAgentSessionHost {
       current: { model: 'gpt-live' }
     })),
     history: vi.fn(() => ({ ok: true, page: { items: [] } })),
+    sessionAgent: vi.fn(() => null),
     journalSnapshot: vi.fn((sessionId: string) => ({
       sessionId,
       cursor: { epoch: 'epoch-a', sequence: 0 },
@@ -203,8 +204,7 @@ export function hostStub(): StructuredAgentSessionHost {
     subscribeStatus: vi.fn((subscriber: StructuredAgentSessionStatusSubscriber) =>
       statusFeed().subscribe(subscriber)
     ),
-    unsubscribe: vi.fn(),
-    release: vi.fn()
+    unsubscribe: vi.fn()
   })
   return hostCalls as unknown as StructuredAgentSessionHost
 }

@@ -4,6 +4,8 @@ import { Image, Text as NativeText, View } from 'react-native'
 import { splitNativeChatBlocks } from '../../../src/shared/native-chat-tool-fold'
 import { selectActiveToolCall } from '../../../src/shared/native-chat-tool-activity'
 import { isImageRefBlock, isTextBlock } from '../../../src/shared/native-chat-types'
+import { agentJournalItemSubagentId } from '../../../src/shared/agent-session-journal-producer'
+import { NATIVE_CHAT_SUBAGENT_ATTRIBUTION_COPY } from '../../../src/shared/native-chat-subagent-attribution'
 import type { NativeChatBlock, NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
@@ -71,19 +73,23 @@ function MobileNativeChatMessageImpl({
   fontScale = 1,
   onOpenFile,
   turnStatus,
+  turnStatusAbove = false,
   turnExpanded,
   turnKey,
   onToggleTurn,
   activeTurnIsWorking,
-  structuredActivityUi = false
+  structuredActivityUi = false,
+  subagentLabel
 }: {
   message: NativeChatMessage
   toolsExpanded?: boolean
   /** Multiplies all chat text sizes for pinch-to-zoom (1 = no change). */
   fontScale?: number
   onOpenFile?: (relativePath: string) => void
-  /** This settled turn's status row, rendered under its user message. */
+  /** This turn's status row, rendered under its opening user message. */
   turnStatus?: NativeChatTurnStatus | null
+  /** Render the status above the row: its turn has no user bubble of its own. */
+  turnStatusAbove?: boolean
   /** Whether the turn caret has disclosed this turn's activity. */
   turnExpanded?: boolean
   /** Set only when this row's turn has settled and can disclose its activity. */
@@ -94,6 +100,8 @@ function MobileNativeChatMessageImpl({
   activeTurnIsWorking?: boolean
   /** Structured lane only: live tool progress plus the turn-status disclosure. */
   structuredActivityUi?: boolean
+  /** The roster's name for the subagent that wrote this row, when one names it. */
+  subagentLabel?: string
 }): React.JSX.Element {
   const isUser = message.role === 'user'
   const isReasoning = message.role === 'reasoning'
@@ -115,13 +123,50 @@ function MobileNativeChatMessageImpl({
     !turnExpanded &&
     !toolsExpanded
   const showToolRun = tools.length > 0 && !settledToolsHidden
+  // A subagent's row sits where it happened but speaks as that subagent. A row
+  // whose only content is hidden behind its settled turn names no one.
+  const subagentName =
+    isUser || agentJournalItemSubagentId(message) === null || (prose.length === 0 && !showToolRun)
+      ? null
+      : (subagentLabel ?? NATIVE_CHAT_SUBAGENT_ATTRIBUTION_COPY.unnamed)
 
+  const statusRow = turnStatus ? (
+    <MobileNativeChatTurnStatus
+      startedAt={turnStatus.startedAt}
+      workedSeconds={turnStatus.workedSeconds}
+      expanded={turnExpanded ?? false}
+      onToggleExpanded={turnKey && onToggleTurn ? () => onToggleTurn(turnKey) : undefined}
+    />
+  ) : null
   return (
     <>
+      {/* A turn with no user bubble carries its bar above its first row. */}
+      {turnStatusAbove ? statusRow : null}
       <View style={[styles.row, isUser && styles.rowUser]}>
         <View
-          style={[styles.content, isUser && styles.userBubble, isReasoning && styles.reasoning]}
+          style={[
+            styles.content,
+            isUser && styles.userBubble,
+            isReasoning && styles.reasoning,
+            subagentName !== null && styles.subagent
+          ]}
         >
+          {subagentName !== null ? (
+            <NativeText
+              style={styles.subagentCaption}
+              accessibilityLabel={
+                subagentLabel === undefined
+                  ? subagentName
+                  : NATIVE_CHAT_SUBAGENT_ATTRIBUTION_COPY.writtenBy.replaceAll(
+                      '{{value0}}',
+                      subagentLabel
+                    )
+              }
+              numberOfLines={1}
+            >
+              {subagentName}
+            </NativeText>
+          ) : null}
           {prose.map((block, index) => (
             <Prose
               key={index}
@@ -145,15 +190,7 @@ function MobileNativeChatMessageImpl({
           ) : null}
         </View>
       </View>
-      {turnStatus ? (
-        <MobileNativeChatTurnStatus
-          startedAt={turnStatus.startedAt}
-          thinking={turnStatus.thinking}
-          workedSeconds={turnStatus.workedSeconds}
-          expanded={turnExpanded ?? false}
-          onToggleExpanded={turnKey && onToggleTurn ? () => onToggleTurn(turnKey) : undefined}
-        />
-      ) : null}
+      {turnStatusAbove ? null : statusRow}
     </>
   )
 }

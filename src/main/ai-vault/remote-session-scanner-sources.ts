@@ -8,6 +8,7 @@ import { isAntigravityTranscriptPath } from './session-scanner-antigravity-paths
 import { parseCodexSessionContent } from './session-scanner-codex-parser'
 import { parseDroidSessionContent } from './session-scanner-droid-parser'
 import { parseClaudeSessionContent } from './session-scanner-primary-parsers'
+import { parseCodebuddySessionContent } from './session-scanner-codebuddy-parser'
 import { parseGeminiSessionContent } from './session-scanner-gemini-parsers'
 import { parseCopilotSessionContent } from './session-scanner-copilot-parser'
 import { parseCursorSessionContent } from './session-scanner-cursor-parser'
@@ -63,6 +64,17 @@ export function remoteSessionSources(
       // subagent counts instead. Partitioning also prunes the subagent
       // transcripts themselves, which would otherwise list as phantom
       // top-level sessions carrying the parent's sessionId.
+      partitionSubagentTranscripts: partitionSubagentTranscriptPaths
+    },
+    {
+      // The execution host owns CodeBuddy's transcripts, including subagent pruning.
+      ...jsonlSource(
+        'codebuddy',
+        remoteHome,
+        hostPlatform,
+        ['.codebuddy', 'projects'],
+        parseCodebuddySessionContent
+      ),
       partitionSubagentTranscripts: partitionSubagentTranscriptPaths
     },
     remoteAntigravitySource(remoteHome, hostPlatform),

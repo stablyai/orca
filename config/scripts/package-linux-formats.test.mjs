@@ -11,6 +11,7 @@ import {
   symlinkSync,
   writeFileSync
 } from 'node:fs'
+import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -55,7 +56,7 @@ it('preserves configured hooks, architecture, names, and PR compression with exa
   })
   expect(args).toEqual([
     '--config',
-    'config/electron-builder.config.cjs',
+    'config/electron-builder-pr-linux.config.cjs',
     '--linux',
     'deb',
     '--x64',
@@ -207,5 +208,19 @@ describe('independent Linux package formats', () => {
       })
     ).rejects.toThrow('Expected a fresh Linux directory build')
     expect(readdirSync(outputDirectory)).toEqual([])
+  })
+})
+
+it('changes only CI deb/rpm compression levels without mutating release settings or hooks', () => {
+  const require = createRequire(import.meta.url)
+  const release = require('../electron-builder.config.cjs')
+  const before = { deb: { ...release.deb }, rpm: { ...release.rpm } }
+  const ci = require('../electron-builder-pr-linux.config.cjs')
+  expect(release.deb).toEqual(before.deb)
+  expect(release.rpm).toEqual(before.rpm)
+  expect(ci).toEqual({
+    ...release,
+    deb: { ...release.deb, fpm: [...(release.deb.fpm ?? []), '--deb-compression-level=1'] },
+    rpm: { ...release.rpm, fpm: [...(release.rpm.fpm ?? []), '--rpm-compression-level=1'] }
   })
 })

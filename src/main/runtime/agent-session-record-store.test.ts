@@ -753,13 +753,7 @@ describe('host and workspace isolation', () => {
   })
 })
 
-describe('orphans, claim keys, checkpoints, and unreadable rows', () => {
-  it('calls a spawn token with no lease an orphan', async () => {
-    const store = await open()
-    await establishOwner(store)
-    expect(store.listOrphanSpawnTokens(['spawn-a', 'spawn-z'])).toEqual(['spawn-z'])
-  })
-
+describe('claim keys, checkpoints, and unreadable rows', () => {
   it('keeps a retired claim key verifiable for the retention window', async () => {
     const store = await open()
     await store.retireClaimKey('key-1', NOW)

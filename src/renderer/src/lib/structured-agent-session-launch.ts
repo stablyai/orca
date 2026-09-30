@@ -27,6 +27,7 @@ import {
 } from '@/lib/structured-agent-session-launch-callers'
 import * as launchDraft from './structured-agent-session-launch-draft'
 import { trackStructuredLaunchFailureToast } from './structured-agent-session-launch-failure-toast'
+import { structuredLaunchFailure } from './structured-agent-session-launch-failure'
 import {
   deleteStructuredLaunchStateIfCurrent,
   getStructuredLaunchState,
@@ -51,7 +52,7 @@ export {
   retireStructuredAgentSessionLaunchCancellationTombstone,
   shouldRetainStructuredAgentSessionLaunchTab,
   subscribeStructuredAgentLaunchStatus,
-  useStructuredAgentSessionLaunchFailureReason,
+  useStructuredAgentSessionLaunchFailure,
   useStructuredAgentSessionLaunchLifecycle,
   type StructuredAgentLaunchStatus,
   type StructuredAgentSessionLaunchLifecycle
@@ -138,7 +139,13 @@ function trackLaunchSettlement(
         }
         return
       }
-      state.failureReason = error instanceof Error ? error.message : String(error)
+      // The host's message is for its log; the Retry line words the refusal itself.
+      const failure = structuredLaunchFailure(error)
+      if (failure) {
+        state.failure = failure
+      } else {
+        delete state.failure
+      }
       if (error instanceof StructuredAgentSessionCreateRefusalError) {
         settleStructuredLaunchRefusal(state)
       } else if (!state.visibilityUnknown) {
@@ -171,7 +178,7 @@ function restartStructuredLaunchState(state: StructuredLaunchState): void {
     state.intent = retryStructuredAgentSessionLaunchIntent(state.intent)
   }
   resetStructuredLaunchCallers(state)
-  delete state.failureReason
+  delete state.failure
   state.callers.outcome = 'pending'
   // A new create seeds from the settings of now; picks held through the failure still apply.
   state.selection = { ...state.selection, seed: state.intent.seedOptions }

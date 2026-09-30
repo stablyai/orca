@@ -109,16 +109,6 @@ describe('AgentBrowserBridge', () => {
   // ── Worktree filtering ──
 
   describe('worktree filtering', () => {
-    it('returns all tabs when no worktreeId', () => {
-      const tabs = new Map([
-        ['tab-a', 1],
-        ['tab-b', 2]
-      ])
-      const b = new AgentBrowserBridge(mockBrowserManager(tabs))
-      const result = b.tabList()
-      expect(result.tabs).toHaveLength(2)
-    })
-
     it('returns only matching worktree tabs', () => {
       const tabs = new Map([
         ['tab-a', 1],

@@ -86,13 +86,6 @@ describe('AgentSessionRecordStore.setConversationName', () => {
     expect(store.getRecord(SESSION)?.conversationName).toBeUndefined()
   })
 
-  it('does not need the lease: an unfenced rename never contends with the writer', async () => {
-    const store = await reservedStore()
-
-    // No fence argument exists to pass, and no fence error is raised.
-    await expect(store.setConversationName(SESSION, 'Fix the lease probe')).resolves.toBeDefined()
-  })
-
   it('refuses a session it has no record for', async () => {
     const store = await reservedStore()
 

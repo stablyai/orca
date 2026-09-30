@@ -9,17 +9,21 @@
  *
  * Coordinators are in scope here, unlike the PTY lane's reasoning: a PTY coordinator blocks in
  * `check --wait`, where a waiter preempts pointer delivery, but a structured coordinator is a chat
- * session whose turn ends — so nothing else would ever wake it for its own `run:` mail.
+ * session whose turn ends — so nothing else would ever prompt it for its own `run:` mail.
  */
 
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import type { OrchestrationDb } from './db'
 import { formatMessagePointer } from './formatter'
+import type { OrchestrationCliCommand } from './cli-command'
 import {
   selectOrchestrationPointerBatch,
   type OrchestrationMessageWaiter
 } from './mailbox-pointer-eligibility'
-import { resolveStructuredPointerOperation } from './structured-pointer-operation-id'
+import {
+  resolveStructuredPointerOperation,
+  type StructuredPointerSubmission
+} from './structured-pointer-operation-id'
 import {
   decideStructuredSessionPointerDelivery,
   retainReasonForDispatch,
@@ -48,9 +52,14 @@ export type StructuredPointerSendOutcome =
   | { kind: 'sent'; state: StructuredDispatchState }
   | { kind: 'unattached' }
 
+export type StructuredPointerGateFacts = StructuredSessionGateFacts & {
+  /** Every send the session recorded, oldest first: what the lane's own sends settled as. */
+  submissions: readonly StructuredPointerSubmission[]
+}
+
 export type StructuredMailboxPointerHost = {
-  /** The idle gate, read off the session's full reduced timeline; `null` when it is not attached. */
-  readGateFacts: (sessionId: string) => StructuredSessionGateFacts | null
+  /** The idle gate, read off the session's full reduced timeline; `null` when it cannot be read. */
+  readGateFacts: (sessionId: string) => Promise<StructuredPointerGateFacts | null>
   send: (input: {
     sessionId: string
     dispatchId: string | null
@@ -73,6 +82,8 @@ type StructuredPointerDeliveryDependencies<TWaiter extends OrchestrationMessageW
    * agents mail each other outside a dispatch, and no other lane can serve it.
    */
   resolveStructuredTarget: (mailboxHandle: string) => StructuredPointerTarget | null
+  /** The CLI name the PTY lane types for a local agent, so both lanes send the same pointer. */
+  getCliCommand: () => OrchestrationCliCommand
   host: StructuredMailboxPointerHost
   onRetain?: (input: {
     mailboxHandle: string
@@ -95,6 +106,9 @@ export class OrchestrationStructuredMailboxPointerDelivery<
    * edge until the next explicit check.
    */
   private readonly parkedUntilJournalEdge = new Map<string, ParkedPointerDelivery>()
+  /** The operation id this lane last sent per mailbox: a row holding any other id outlived the
+   *  process that minted it. A fact, not a clock reading, so no clock step can fake it. */
+  private readonly sentOperationIds = new Map<string, string>()
 
   constructor(private readonly deps: StructuredPointerDeliveryDependencies<TWaiter>) {}
 
@@ -176,6 +190,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     }
   }
 
+  // A session whose agent is not running needs nothing first: an accepted send starts it.
   private async attempt(
     db: OrchestrationDb,
     mailboxHandle: string,
@@ -184,7 +199,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     reservedTypes: ReadonlySet<string> | undefined
   ): Promise<void> {
     const sessionId = target.sessionId
-    const session = this.deps.host.readGateFacts(sessionId)
+    const session = await this.deps.host.readGateFacts(sessionId)
     const decision = decideStructuredSessionPointerDelivery({ session })
     if (!decision.deliver) {
       this.retain(mailboxHandle, sessionId, decision.retain, reservedTypes)
@@ -198,7 +213,12 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     const body: AgentJournalMessageItem = {
       kind: 'message',
       role: 'user',
-      blocks: [{ type: 'text', text: formatMessagePointer(unread.length, mailboxHandle).trim() }]
+      blocks: [
+        {
+          type: 'text',
+          text: formatMessagePointer(unread.length, mailboxHandle, this.deps.getCliCommand()).trim()
+        }
+      ]
     }
     const staged = unread.map((message) => message.id)
     const operation = resolveStructuredPointerOperation({
@@ -206,8 +226,22 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       mailboxHandle,
       sessionId,
       body,
-      messageIds: staged
+      messageIds: staged,
+      submissions: session?.submissions ?? [],
+      sentByThisProcess: this.sentOperationIds.get(mailboxHandle)
     })
+    if (operation.kind === 'stamp') {
+      // A send this lane gave up waiting on ran after all.
+      db.markAsDelivered(staged)
+      db.deleteStructuredPointerOperation(mailboxHandle)
+      this.sentOperationIds.delete(mailboxHandle)
+      return
+    }
+    if (operation.kind === 'park') {
+      this.retain(mailboxHandle, sessionId, 'turn-unsettled', reservedTypes)
+      return
+    }
+    this.sentOperationIds.set(mailboxHandle, operation.operationId)
     const outcome = await this.deps.host.send({
       sessionId,
       dispatchId: target.dispatchId,
@@ -221,21 +255,15 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       return
     }
     if (!structuredDispatchDelivered(outcome.state)) {
-      if (outcome.state === 'rejected') {
-        db.deleteStructuredPointerOperation(mailboxHandle)
-      }
-      this.retain(
-        mailboxHandle,
-        sessionId,
-        retainReasonForDispatch(outcome.state as Exclude<StructuredDispatchState, 'accepted'>),
-        reservedTypes
-      )
+      // The row stays: resending under its id replays this verdict and starts nothing.
+      this.retain(mailboxHandle, sessionId, retainReasonForDispatch(outcome.state), reservedTypes)
       return
     }
     db.markAsDelivered(staged)
     // The nudge landed as its own turn, so the next settle edge is the natural retry point for
     // anything that arrives while it runs.
     db.deleteStructuredPointerOperation(mailboxHandle)
+    this.sentOperationIds.delete(mailboxHandle)
   }
 
   /**

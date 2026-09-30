@@ -27,10 +27,8 @@ export async function execFileCaptureToTermination(
   options: ExecFileCaptureOptions,
   termination?: WslProcessGroupTermination
 ): Promise<{ stdout: string | Buffer; stderr: string | Buffer }> {
-  // Why measured here: runProcess spawns inside its promise executor, which runs
-  // synchronously, so this brackets exactly the main-thread block execFileCapture
-  // reports for its own spawns.
-  const spawnStartedAt = performance.now()
+  // Spawn cost is reported by spawnProcess's observer, which runProcess goes
+  // through; recording it again here would double-count every capture.
   const pending = runProcess({
     program: command,
     args,
@@ -43,7 +41,6 @@ export async function execFileCaptureToTermination(
     onChildTerminated: options.onChildTerminated,
     ...(options.stdin === undefined ? {} : { input: options.stdin })
   })
-  recordSubprocessSpawn(command, args, performance.now() - spawnStartedAt)
   const result = await pending
   const stdout = options.encoding === 'buffer' ? Buffer.from(result.stdout) : result.stdout
   const cleanStderr = termination?.stripControlOutput(result.stderr) ?? result.stderr

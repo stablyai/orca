@@ -307,10 +307,7 @@ describe('structured session cold restoration', () => {
       reason: 'user'
     })
 
-    expect(closeSessionTab).toHaveBeenCalledWith(
-      'structured-agent-session-restored-session',
-      'workspace-1'
-    )
+    expect(closeSessionTab).toHaveBeenCalledWith('agent-session:restored-session', 'workspace-1')
     expect(closeStructuredSession).toHaveBeenCalledWith('restored-session')
     expect(setSessionTabVisibility).toHaveBeenCalledWith('restored-session', false)
     expect(setSessionTabVisibility.mock.invocationCallOrder[0]).toBeLessThan(

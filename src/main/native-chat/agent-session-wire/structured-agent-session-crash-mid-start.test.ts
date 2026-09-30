@@ -23,6 +23,7 @@ import {
   hostTestAttachParams,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 
 const CALLER = { callerKey: 'client-1' }
 const CHILD_PID = 4321
@@ -95,7 +96,7 @@ function host(
   return new StructuredAgentSessionHost({
     store,
     adapter,
-    journalRoot: generationRoot(generation),
+    journalDatabase: openTestJournalHostDatabase(generationRoot(generation)),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     now: () => NOW,
@@ -146,7 +147,9 @@ describe('a host that dies while its Codex child is starting', () => {
       ownerProcess: null,
       deathEvidence: { kind: 'pid-absent' }
     })
-    await relaunched.hold(SESSION, 'desktop-chat:1')
+    // What the next send's delivery does: start at the record's current fence.
+    const fence = store.getRecord(SESSION)?.lease.runtimeFence ?? null
+    expect(await relaunched.attach(CALLER, hostTestAttachParams(fence))).toMatchObject({ ok: true })
     expect(restarted.connections).toHaveLength(1)
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'live',
@@ -156,7 +159,7 @@ describe('a host that dies while its Codex child is starting', () => {
 })
 
 // The client keeps a create it never heard back from and retries it under the same operation id, so
-// that replay, not a fresh hold, is what the user's Retry and first send go through.
+// that replay, not a fresh start, is what the user's Retry and first send go through.
 describe('a create replayed after the host that ran it died', () => {
   const PAST_OPERATION_EXPIRY =
     AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS + AGENT_SESSION_OPERATION_FUTURE_SKEW_MS + 60_000

@@ -1,4 +1,8 @@
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
+import {
+  agentSessionPromptQuestions,
+  type AgentSessionQuestionAnswer
+} from '../../../src/shared/agent-session-question-answer'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import type { MobileChatQuestion } from './mobile-native-chat-question'
 import {
@@ -21,6 +25,12 @@ export type StructuredPromptResponseTarget = {
   optionId: string
 }
 
+export type StructuredQuestionResponseTarget = {
+  itemId: string
+  expectedRevision: number
+  answer: AgentSessionQuestionAnswer
+}
+
 type PromptTokenPayload =
   | {
       kind: 'approval'
@@ -32,6 +42,7 @@ type PromptTokenPayload =
       kind: 'question-option'
       itemId: string
       revision: number
+      questionId: string
       optionId: string
     }
   | {
@@ -53,10 +64,6 @@ export function pendingStructuredQuestion(
   item: AgentJournalRenderItem
 ): item is StructuredQuestionItem {
   return item.body.kind === 'question' && item.body.resolution.state === 'pending'
-}
-
-function encodeQuestionAnswer(questionId: string, answer: string): string {
-  return `${encodeURIComponent(questionId)}:${encodeURIComponent(answer)}`
 }
 
 function encodePromptToken(payload: PromptTokenPayload): string {
@@ -86,11 +93,16 @@ function decodePromptToken(value: string): PromptTokenPayload | null {
         optionId: decoded.optionId
       }
     }
-    if (decoded.kind === 'question-option' && typeof decoded.optionId === 'string') {
+    if (
+      decoded.kind === 'question-option' &&
+      typeof decoded.questionId === 'string' &&
+      typeof decoded.optionId === 'string'
+    ) {
       return {
         kind: decoded.kind,
         itemId: decoded.itemId,
         revision: decoded.revision,
+        questionId: decoded.questionId,
         optionId: decoded.optionId
       }
     }
@@ -169,6 +181,10 @@ export function projectStructuredQuestion(
       { itemId: prompt.itemId, expectedRevision: prompt.revision }
     )
   }
+  const [question] = agentSessionPromptQuestions(prompt.body)
+  if (!question) {
+    return null
+  }
   const optionDescriptions = prompt.body.options.map((option) => option.description)
   return {
     question: prompt.body.question,
@@ -182,6 +198,7 @@ export function projectStructuredQuestion(
         kind: 'question-option',
         itemId: prompt.itemId,
         revision: prompt.revision,
+        questionId: question.id,
         optionId: option.id
       })
     ),
@@ -228,13 +245,13 @@ export function structuredApprovalResponseTarget(
 export function structuredQuestionResponseTarget(
   response: string,
   currentPrompt: StructuredQuestionItem | null
-): StructuredPromptResponseTarget | null {
+): StructuredQuestionResponseTarget | null {
   const token = decodePromptToken(response)
   if (token?.kind === 'question-option') {
     return {
       itemId: token.itemId,
       expectedRevision: token.revision,
-      optionId: token.optionId
+      answer: { questionId: token.questionId, optionIds: [token.optionId] }
     }
   }
   if (token) {
@@ -247,29 +264,30 @@ export function structuredQuestionResponseTarget(
       ? {
           itemId: freeText.payload.itemId,
           expectedRevision: freeText.payload.revision,
-          optionId: encodeQuestionAnswer(freeText.payload.questionId, answer)
+          answer: { questionId: freeText.payload.questionId, optionIds: [], other: answer }
         }
       : null
   }
   if (!currentPrompt) {
     return null
   }
+  const [question] = agentSessionPromptQuestions(currentPrompt.body)
   const trimmed = response.trim()
   const option = currentPrompt.body.options.find(
     (candidate) => candidate.id === response || candidate.label === trimmed
   )
-  if (option) {
+  if (question && option) {
     return {
       itemId: currentPrompt.itemId,
       expectedRevision: currentPrompt.revision,
-      optionId: option.id
+      answer: { questionId: question.id, optionIds: [option.id] }
     }
   }
-  return currentPrompt.body.freeTextQuestionId && trimmed
+  return question && currentPrompt.body.freeTextQuestionId && trimmed
     ? {
         itemId: currentPrompt.itemId,
         expectedRevision: currentPrompt.revision,
-        optionId: encodeQuestionAnswer(currentPrompt.body.freeTextQuestionId, trimmed)
+        answer: { questionId: question.id, optionIds: [], other: trimmed }
       }
     : null
 }

@@ -1,6 +1,7 @@
 // `agentSession.threadGoal`: change the provider thread's goal through the same
 // admission, ledger and journal path every other session mutation takes.
 
+import { refuse, type AgentSessionRefusalReason } from '../../../shared/agent-session-wire-refusals'
 import type {
   AgentJournalItemIdentity,
   AgentJournalThreadGoal
@@ -13,8 +14,11 @@ import type {
 import type { MutationPlan } from './structured-agent-session-mutation-plans'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 
-function refused(message: string): TurnOutcome<AgentSessionThreadGoalResult> {
-  return { ok: false, refusal: { code: 'agent_session_operation_invalid', message } }
+function refused(
+  reason: AgentSessionRefusalReason<'agent_session_operation_invalid'>,
+  message: string
+): TurnOutcome<AgentSessionThreadGoalResult> {
+  return { ok: false, refusal: refuse('agent_session_operation_invalid', { reason }, message) }
 }
 
 /** Keyed by the operation, so a replayed set upserts its one objective row. */
@@ -44,7 +48,7 @@ export async function performThreadGoalChange(
   input: { clientOperationId: string; change: AgentSessionThreadGoalChange }
 ): Promise<TurnOutcome<AgentSessionThreadGoalResult>> {
   if (!ctx.adapter.changeThreadGoal || !ctx.adapter.supportsThreadGoal?.(ctx.sessionId)) {
-    return refused('Goals are unavailable for this chat session.')
+    return refused('goalsUnsupported', 'Goals are unavailable for this chat session.')
   }
   const { change } = input
   const identity = objectiveIdentity(input.clientOperationId)
@@ -66,7 +70,8 @@ export async function performThreadGoalChange(
         blocks: [{ type: 'text', text: change.objective }],
         sentAs: 'goal'
       },
-      { fence: ctx.fence }
+      // Accepting a goal is delivering it, so it joins whatever turn runs now.
+      { fence: ctx.fence, turnScope: ctx.journal.liveTurnScope() }
     )
   }
   const withdrawObjective = async (): Promise<void> => {
@@ -89,7 +94,7 @@ export async function performThreadGoalChange(
   }
   if (!result.ok) {
     await withdrawObjective()
-    return refused(result.rejected)
+    return refused('providerRejected', result.rejected)
   }
   return { ok: true, value: { change: change.kind } }
 }

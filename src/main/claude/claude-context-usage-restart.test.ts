@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { selectStructuredAgentContextUsage } from '../../shared/structured-agent-session-context-usage'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
-import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-store-test-open'
+import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { settleStaleStructuredAgentSessionState } from '../native-chat/agent-session-wire/structured-agent-session-dead-generation-settlement'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
@@ -106,7 +106,7 @@ async function openJournal(): Promise<AgentSessionJournal> {
       providerHandle: { kind: 'claude', sessionId: 'claude-session', leafUuid: null }
     },
     now: () => 9_000,
-    journalDir: join(root, 'orca-session')
+    stateDirectory: join(root, 'orca-session')
   })
 }
 

@@ -9,7 +9,7 @@ import { BackHandler, Platform } from 'react-native'
  * and posted; iOS has none, so what is taken away is the stack's swipe-back gesture — a swipe while
  * a sheet is open would leave the screen with the sheet still on it.
  *
- * Nothing is registered without a live claim, so a page too old to make one, a shell whose page has
+ * Nothing is registered without a live claim, so a page holding nothing, a shell whose page has
  * faulted, and a session between documents all keep today's behaviour: the navigator pops.
  */
 export function useShellPageBack(args: {

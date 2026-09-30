@@ -26,7 +26,7 @@ import { buildDiffEditorHideUnchangedOptions } from './diff-editor-hide-unchange
 import { useDiffEditorRegistration } from './diff-navigation-context'
 import { preserveDiffViewStateAcrossModelSwaps } from './diff-model-swap-view-state'
 import { monacoFindOptions } from './monaco-find-options'
-import { resolveDocumentTheme } from '@/lib/document-theme'
+import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 
 export default function DiffViewer({
   modelKey,
@@ -50,6 +50,7 @@ export default function DiffViewer({
   largeDiffSaveContentAvailable
 }: DiffViewerProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+  const isDark = useDocumentDarkTheme()
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
@@ -294,7 +295,7 @@ export default function DiffViewer({
             language={language}
             original={originalContent}
             modified={modifiedContent}
-            theme={resolveDocumentTheme(settings?.theme ?? 'light') ? 'vs-dark' : 'vs'}
+            theme={isDark ? 'vs-dark' : 'vs'}
             onMount={handleMount}
             // Why: key models by tab identity and preserve the modified undo stack across Changes-mode HEAD rotations.
             originalModelPath={currentDiffModelPaths.originalModelPath}

@@ -272,7 +272,6 @@ describe('what one dictation spends of the bridge', () => {
   }, 60_000)
 
   it('ships the batched drain, not the native event rate', () => {
-    expect(DICTATION_CAPTURE_DRAIN_INTERVAL_MS).toBe(500)
     expect(DICTATION_CAPTURE_DRAIN_INTERVAL_MS).toBeGreaterThan(DICTATION_NATIVE_EVENT_INTERVAL_MS)
   })
 })

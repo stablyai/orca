@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { MAX_CODEX_SUBAGENTS_PER_GROUP } from '../../codex/codex-structured-journal-limits'
+import { projectStructuredItemsToNativeChat } from '../../../shared/structured-agent-session-projection'
 import {
   boundWorkerTranscriptMessages,
+  boundWorkerTranscriptTail,
   redactWorkerTerminalLines
 } from './worker-transcript-payload'
 
@@ -177,6 +179,28 @@ describe('worker transcript wire bounds', () => {
     expect(result).toMatchObject({ limited: false, warnings: [] })
   })
 
+  it("serves a structured worker's journal rows without their list position", () => {
+    const [message] = projectStructuredItemsToNativeChat([
+      {
+        itemId: 'reply',
+        revision: 1,
+        sequence: 7,
+        sequenceIndex: 1,
+        observedAt: 1,
+        body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'done' }] }
+      }
+    ])
+    // Anti-vacuous: the projection itself does position the row.
+    expect(message?.journalPosition).toEqual({ sequence: 7, index: 1 })
+    for (const served of [
+      boundWorkerTranscriptMessages([message!]).messages,
+      boundWorkerTranscriptTail([message!], 262_144).messages
+    ]) {
+      expect(served).toHaveLength(1)
+      expect(served[0]).not.toHaveProperty('journalPosition')
+    }
+  })
+
   it('keeps two roster ids sharing a 512-char prefix distinct', () => {
     // The id is the roster key: a plain prefix clip would merge the two children.
     const head = 'a'.repeat(512)
@@ -273,5 +297,50 @@ describe('worker transcript wire bounds', () => {
         warnings: ['Dispatch capability tokens were redacted from terminal output.']
       }
     )
+  })
+})
+
+describe("worker transcript wire bounds — a subagent's line names its agent and nothing more", () => {
+  it('serves the producing agent id, bounded like the roster key, and drops provenance', () => {
+    const longId = `task-${'x'.repeat(2_000)}`
+    const result = boundWorkerTranscriptMessages([
+      {
+        id: 'child-line',
+        role: 'assistant',
+        timestamp: null,
+        source: 'transcript',
+        blocks: [{ type: 'text', text: 'The PR is CLEAN.' }],
+        agentId: longId,
+        parentAgentId: 'task-parent',
+        providerParentRef: 'toolu_provider_call',
+        producerKind: 'agent',
+        attempt: 2
+      },
+      {
+        id: 'roster',
+        role: 'system',
+        timestamp: null,
+        source: 'transcript',
+        blocks: [
+          {
+            type: 'subagent-group',
+            groupId: 'group-1',
+            agents: [{ id: longId, label: 'review the PR', state: 'working' }]
+          }
+        ]
+      }
+    ])
+    const [child, roster] = result.messages
+    expect(child).not.toHaveProperty('providerParentRef')
+    expect(child).not.toHaveProperty('parentAgentId')
+    expect(child).not.toHaveProperty('producerKind')
+    expect(child).not.toHaveProperty('attempt')
+    // The line's agent id and the roster entry that names it bound to the same key,
+    // so the reader can still put a name to the line.
+    const rosterBlock = roster?.blocks[0]
+    expect(rosterBlock?.type).toBe('subagent-group')
+    const entryId = rosterBlock?.type === 'subagent-group' ? rosterBlock.agents[0]?.id : undefined
+    expect(child?.agentId).toBeDefined()
+    expect(child?.agentId).toBe(entryId)
   })
 })

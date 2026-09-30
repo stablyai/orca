@@ -58,6 +58,7 @@ function slot(id: string): NativeChatTranscriptSlot {
     folded: false,
     turnFolds: false,
     turnDiff: undefined,
+    subagentLabel: undefined,
     estimatedHeight: 48
   }
 }

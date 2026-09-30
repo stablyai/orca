@@ -66,6 +66,9 @@ export type NativeChatComposerProps = {
   launchSeed?: NativeChatLaunchSeed
   /** Structured journal transport; absent keeps the existing PTY path unchanged. */
   structuredTransport?: NativeChatStructuredComposerTransport
+  /** Cmd/Ctrl+Enter from an empty composer: send the newest queued draft now.
+   *  False = nothing queued, and the chord falls through to a plain send. */
+  steerQueued?: () => boolean
 }
 
 /** Launch context prefilled into the TUI input as an unsent draft, plus the two

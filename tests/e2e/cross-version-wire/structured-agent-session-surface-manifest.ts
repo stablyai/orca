@@ -64,6 +64,23 @@ export const STRUCTURED_CALLS: {
   },
   { method: 'agentSession.send', hostMethod: 'send', result: { ok: true, replayed: false } },
   { method: 'agentSession.cancel', hostMethod: 'cancel', result: { ok: true, replayed: false } },
+  // Draft mutations for mid-turn queueing. Methods exist ahead of the
+  // capability's advertisement; only capability-gated clients ever call them.
+  {
+    method: 'agentSession.queuedMessageSend',
+    hostMethod: 'queuedMessageSend',
+    result: { ok: true, replayed: false }
+  },
+  {
+    method: 'agentSession.queuedMessageDelete',
+    hostMethod: 'queuedMessageDelete',
+    result: { ok: true, replayed: false }
+  },
+  {
+    method: 'agentSession.queuedMessagesResume',
+    hostMethod: 'queuedMessagesResume',
+    result: { ok: true, replayed: false }
+  },
   {
     method: REWIND_METHOD,
     hostMethod: 'rewind',
@@ -115,7 +132,8 @@ export const STRUCTURED_CALLS: {
     hostMethod: 'revealSession',
     result: { ok: true, sessionId: SESSION, workspaceId: WORKSPACE, agent: 'codex', readable: true }
   },
-  { method: 'agentSession.hold', hostMethod: 'hold', result: { held: true } },
+  // A no-op on a host that starts an agent only for work; it still builds the host.
+  { method: 'agentSession.hold', hostMethod: null, result: { held: true } },
   // The restart-resume surface. Bare additions, not capability-negotiated: an RPC method's
   // absence is explicit (`method_not_found`), which the old-dispatcher case below asserts, so a
   // newer client learns it during negotiation instead of by being met with silence.
@@ -129,17 +147,14 @@ export const STRUCTURED_CALLS: {
     hostMethod: 'restartResumableDismiss',
     result: { dismissed: 0 }
   },
-  {
-    method: 'agentSession.restartResume',
-    hostMethod: 'restartResumeAll',
-    result: { results: [] }
-  },
+  // Reattaching alone is nothing now, so this answers that nothing was resumed.
+  { method: 'agentSession.restartResume', hostMethod: null, result: { results: [] } },
   {
     method: 'agentSession.restartContinue',
     hostMethod: 'restartContinueAll',
     result: { resumed: [], continued: [] }
   },
-  { method: 'agentSession.release', hostMethod: 'release', result: { released: true } },
+  { method: 'agentSession.release', hostMethod: null, result: { released: true } },
   {
     method: 'agentSession.history',
     hostMethod: 'history',
@@ -252,6 +267,13 @@ export function paramsFor(method: string): unknown {
         envelope: envelope({ method: 'agentSession.cancel', fields: { turnId: 'turn-1' }, fence }),
         turnId: 'turn-1'
       }
+    case 'agentSession.queuedMessageSend':
+    case 'agentSession.queuedMessageDelete': {
+      const fields = { messageId: 'queued-1' }
+      return { envelope: envelope({ method, fields, fence }), ...fields }
+    }
+    case 'agentSession.queuedMessagesResume':
+      return { envelope: envelope({ method, fields: {}, fence }) }
     case 'agentSession.respondToApproval':
     case 'agentSession.respondToQuestion': {
       const fields = { itemId: 'item-1', expectedRevision: 1, optionId: 'allow' }

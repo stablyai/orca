@@ -364,9 +364,28 @@ describe('a structured Claude session over agentSession.*', () => {
     claudeAuthPolicy = { stripAuthEnv: true }
     // The default overlay carries ANTHROPIC_AUTH_TOKEN, which the terminal path
     // refuses at spawn-env.ts:25 rather than letting it beat the pinned account.
-    const refused = await call('agentSession.create', createIntentParams())
+    const params = createIntentParams()
+    const sentence =
+      'This Claude launch sets its own Anthropic sign-in variables. Remove them to use a managed Claude account.'
+    const refused = await call('agentSession.create', params)
 
-    expect(JSON.stringify(refused)).toContain('explicit Anthropic auth environment')
+    // The thrown answer keeps its wire code; only its words are the ones its replay reads.
+    expect(refused).toMatchObject({
+      ok: false,
+      error: { code: 'runtime_error', message: sentence }
+    })
+    // Its replay reads the same sentence, beside the situation it names.
+    expect(await call('agentSession.create', params)).toMatchObject({
+      ok: true,
+      result: {
+        ok: false,
+        refusal: {
+          code: 'agent_session_operation_invalid',
+          details: { reason: 'managedAccountEnvOverride' },
+          message: sentence
+        }
+      }
+    })
     // Refused before spawn: no provider child was ever opened.
     expect(claude.connections).toHaveLength(0)
   })
@@ -379,11 +398,11 @@ describe('a structured Claude session over agentSession.*', () => {
     await waitForStructuredAgentSessionRecovery()
 
     const guidance = itemsOf(await subscribe()).find((item) => item.body?.kind === 'status')
+    // The adapter typed the refusal, so the row names the situation rather than quoting Orca.
     expect(guidance?.body).toMatchObject({
       kind: 'status',
-      text: expect.stringMatching(
-        /stopped before it finished starting: .*not signed in.*Claude CLI.*CLAUDE_CONFIG_DIR/s
-      )
+      text: 'Claude is not signed in for the selected account. Sign in, then send your message again.',
+      failure: { kind: 'notSignedIn' }
     })
     expect(leaseOf(SESSION)).toMatchObject({ claimStatus: 'released', handoffStage: null })
     // A failed start is not auto-resumed into the same failure.
@@ -393,7 +412,7 @@ describe('a structured Claude session over agentSession.*', () => {
   // The root's death is first-hand. Its descendants were never snapshottable, or one was seen
   // alive; either way the lease follows the root, so the reservation goes with it.
   it.each(['unverifiable', 'live'] as const)(
-    'releases a session whose CLI self-exited during create with its tree %s, with its diagnostic intact',
+    'releases a session whose CLI self-exited during create with its tree %s, refused in a sentence',
     async (tree) => {
       claude.setSelfExit({
         message: 'claude stream-json exited (code 1): claude: not signed in',
@@ -409,7 +428,8 @@ describe('a structured Claude session over agentSession.*', () => {
           ok: false,
           refusal: {
             code: 'agent_session_operation_invalid',
-            message: expect.stringContaining('claude: not signed in'),
+            // The CLI's stderr is log text; the person reads what the chat's start failure says.
+            message: 'Claude stopped before it finished starting. Send your message to try again.',
             ownerVerdict: 'exited'
           }
         }
@@ -444,7 +464,7 @@ describe('a structured Claude session over agentSession.*', () => {
         ok: false,
         refusal: {
           code: 'agent_session_operation_invalid',
-          message: expect.stringContaining('claude: not signed in'),
+          message: 'Claude stopped before it finished starting. Send your message to try again.',
           ownerVerdict: 'exited'
         }
       }
@@ -473,7 +493,7 @@ describe('a structured Claude session over agentSession.*', () => {
   })
 
   it.each(['unverifiable', 'live'] as const)(
-    'reopens a chat whose stop saw the Claude root exit with its tree %s',
+    'restarts a chat whose stop saw the Claude root exit with its tree %s',
     async (tree) => {
       await ok('agentSession.create', createIntentParams())
       const first = claude.live()
@@ -483,14 +503,19 @@ describe('a structured Claude session over agentSession.*', () => {
         return false
       }
       const host = getStructuredAgentSessionHost()
-      // The idle release clock's eviction: the lease follows the root, so the host lets go.
+      // The lease follows the root, so the host lets go.
       await host?.close(SESSION)
       expect(host?.hasSession(SESSION)).toBe(false)
 
-      // What the chat surface's `agentSession.hold` does when the user comes back to it.
-      await host?.hold(SESSION, 'desktop-chat:reopen')
+      // The user comes back and sends: that send is what starts Claude again.
+      const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'back' }] }
+      await ok('agentSession.send', {
+        envelope: envelope('agentSession.send', { body }, leaseOf(SESSION).runtimeFence),
+        body
+      })
 
-      expect(claude.connections).toHaveLength(2)
+      await vi.waitFor(() => expect(claude.connections).toHaveLength(2))
+      await vi.waitFor(() => expect(claude.live().sent).toHaveLength(1))
       expect(host?.hasSession(SESSION)).toBe(true)
     }
   )
@@ -510,11 +535,9 @@ describe('a structured Claude session over agentSession.*', () => {
   // A descendant seen alive is one that survived the close ladder, such as an MCP server that
   // ignores SIGTERM; it no longer holds the chat.
   it.each(['unverifiable', 'live'] as const)(
-    'restarts an open chat after a Claude crash whose tree was %s',
+    'restarts a chat on its next send after a Claude crash whose tree was %s',
     async (tree) => {
       const created = await ok<{ fence: number }>('agentSession.create', createIntentParams())
-      // The open chat surface is what asks the host to bring Claude back.
-      await getStructuredAgentSessionHost()?.hold(SESSION, 'desktop-chat:open')
       const connection = claude.live()
       connection.exitVerdict = { root: 'exited', tree }
       connection.close = async () => {
@@ -537,19 +560,19 @@ describe('a structured Claude session over agentSession.*', () => {
         dispatchState: 'unknown',
         reason: 'provider_exited_before_acknowledgement'
       })
-      // Held back, sends failed with the crash until the idle clock stopped the chat.
+      // The crash releases the lease; nothing restarts Claude until the chat has work for it.
       await waitForStructuredAgentSessionRecovery()
-      expect(claude.connections).toHaveLength(2)
-      expect(claude.live().launch.options).toMatchObject({ resume: PROVIDER_SESSION })
-      const lease = leaseOf(SESSION)
-      expect(lease).toMatchObject({ claimStatus: 'live', handoffStage: null })
+      expect(claude.connections).toHaveLength(1)
+      expect(leaseOf(SESSION)).toMatchObject({ claimStatus: 'released', handoffStage: null })
       const next = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'after' }] }
-      const sent = await ok<{ submission: { dispatchState: string } }>('agentSession.send', {
-        envelope: envelope('agentSession.send', { body: next }, lease.runtimeFence),
+      await ok('agentSession.send', {
+        envelope: envelope('agentSession.send', { body: next }, leaseOf(SESSION).runtimeFence),
         body: next
       })
-      expect(sent.submission.dispatchState).toBe('accepted')
-      expect(claude.live().sent).toHaveLength(1)
+      await vi.waitFor(() => expect(claude.connections).toHaveLength(2))
+      expect(claude.live().launch.options).toMatchObject({ resume: PROVIDER_SESSION })
+      await vi.waitFor(() => expect(claude.live().sent).toHaveLength(1))
+      expect(leaseOf(SESSION)).toMatchObject({ claimStatus: 'live', handoffStage: null })
     }
   )
 

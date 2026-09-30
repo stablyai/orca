@@ -2,19 +2,28 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as Win32Utils from '../win32-utils'
+import type * as RunProcess from '../../shared/child-process/run-process'
 import { isCodexAuthError } from '../../shared/codex-auth-errors'
 
-const { getSpawnArgsForWindowsMock, ptySpawnMock, resolveCodexCommandMock } = vi.hoisted(() => ({
-  getSpawnArgsForWindowsMock: vi.fn(),
+const { ptySpawnMock, resolveCodexCommandMock, stubScript } = vi.hoisted(() => ({
+  stubScript: { path: '' },
   ptySpawnMock: vi.fn(),
   resolveCodexCommandMock: vi.fn()
 }))
 
-vi.mock('../win32-utils', async (importOriginal) => ({
-  ...(await importOriginal<typeof Win32Utils>()),
-  getSpawnArgsForWindows: getSpawnArgsForWindowsMock
-}))
+// Runs the node stub in place of the resolved CLI, through the real chokepoint.
+vi.mock('../../shared/child-process/run-process', async (importOriginal) => {
+  const actual = await importOriginal<typeof RunProcess>()
+  return {
+    ...actual,
+    spawnProcess: (spec: Parameters<typeof actual.spawnProcess>[0]) =>
+      actual.spawnProcess({
+        ...spec,
+        program: process.execPath,
+        args: [stubScript.path, ...(spec.args ?? [])]
+      })
+  }
+})
 
 vi.mock('../codex-cli/command', () => ({
   resolveCodexCommand: resolveCodexCommandMock
@@ -62,10 +71,7 @@ describe('Codex RPC exit diagnostics', () => {
     stubPath = join(tempRoot, 'codex-exit-stub.cjs')
     writeFileSync(stubPath, STUB_CODEX_SOURCE)
     resolveCodexCommandMock.mockReturnValue('codex')
-    getSpawnArgsForWindowsMock.mockImplementation((_command: string, args: string[]) => ({
-      spawnCmd: process.execPath,
-      spawnArgs: [stubPath, ...args]
-    }))
+    stubScript.path = stubPath
   })
 
   afterEach(() => {

@@ -68,12 +68,10 @@ export function hashedAsset(bytes, extension) {
   }
 }
 
-function readIntegerConstant(source, name) {
+function readIntegerConstant(source, name, file = 'src/shared/protocol-version.ts') {
   const match = new RegExp(`export const ${name} = (\\d+)`).exec(source)
   if (!match) {
-    throw new Error(
-      `[mobile-web-bundle-manifest] ${name} not found in src/shared/protocol-version.ts`
-    )
+    throw new Error(`[mobile-web-bundle-manifest] ${name} not found in ${file}`)
   }
   return Number.parseInt(match[1], 10)
 }
@@ -92,6 +90,13 @@ export async function readProtocolWindow() {
       'MIN_COMPATIBLE_RUNTIME_SERVER_VERSION'
     )
   }
+}
+
+/** The page's build number, parsed for the same reason the protocol window is. */
+export async function readPageVersion() {
+  const file = join('src', 'shared', 'mobile-web-bundle', 'manifest-contract.ts')
+  const source = await readFile(join(projectDir, file), 'utf8')
+  return readIntegerConstant(source, 'MOBILE_WEB_PAGE_VERSION', file)
 }
 
 export async function readDesktopVersion() {
@@ -124,6 +129,7 @@ export async function writeMobileWebBundleTree({
     desktopVersion,
     minCompatibleRuntimeProtocolVersion: protocolWindow.minCompatibleRuntimeProtocolVersion,
     runtimeProtocolVersion: protocolWindow.runtimeProtocolVersion,
+    pageVersion: await readPageVersion(),
     entrypoint: MOBILE_WEB_BUNDLE_ENTRYPOINT,
     totalBytes: assets.reduce((total, asset) => total + asset.byteLength, 0),
     assets,

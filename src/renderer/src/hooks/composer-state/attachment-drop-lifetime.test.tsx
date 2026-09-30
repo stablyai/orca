@@ -139,21 +139,6 @@ describe('local composer drop lifetime', () => {
     expect(hook.attach).not.toHaveBeenCalled()
   })
 
-  it('keeps the current request pending until it settles', async () => {
-    const gate = Promise.withResolvers<void>()
-    authorize.mockImplementationOnce(() => gate.promise)
-    const hook = renderDrop()
-    const settled = vi.fn()
-    const pending = hook.result.current.applyLocalComposerDrop(['/drop/one']).then(settled)
-    hook.unmount()
-    await Promise.resolve()
-    expect(settled).not.toHaveBeenCalled()
-    gate.resolve()
-    await pending
-    expect(settled).toHaveBeenCalledOnce()
-    expect(stat).not.toHaveBeenCalled()
-  })
-
   it('preserves mixed results, order, duplicate filtering and one failure report', async () => {
     const order: string[] = []
     authorize.mockImplementation(async ({ targetPath }) => {

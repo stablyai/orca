@@ -92,7 +92,7 @@ function mount(client: FakeRpcClient): Mounted {
       worktreeId: 'w1',
       client,
       connState: 'connected',
-      agentSessionPromptCancelSupported: true,
+      agentSessionHostSupport: { promptCancel: true, questionAnswers: false },
       setInput: () => {},
       liveInputTerminalHandles: new Set<string>(),
       activeHandle: 't1',

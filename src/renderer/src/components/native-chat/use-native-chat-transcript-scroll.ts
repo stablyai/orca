@@ -52,7 +52,7 @@ export function useNativeChatTranscriptScroll({
   contentRef,
   itemCount,
   isWorking,
-  showTypingIndicator,
+  showsTailRow,
   isVisible,
   alignToViewportTop,
   scrollToEnd,
@@ -64,7 +64,8 @@ export function useNativeChatTranscriptScroll({
   contentRef: React.RefObject<HTMLDivElement | null>
   itemCount: number
   isWorking: boolean
-  showTypingIndicator: boolean
+  /** Whether the list draws a row after the transcript (live activity or a wait). */
+  showsTailRow: boolean
   isVisible: boolean
   alignToViewportTop: (element: HTMLElement) => void
   scrollToEnd: () => void
@@ -156,7 +157,7 @@ export function useNativeChatTranscriptScroll({
     itemCount,
     isWorking,
     restoreScrollOffset,
-    showTypingIndicator,
+    showsTailRow,
     scrollToEndWhenMeasurable
   ])
 

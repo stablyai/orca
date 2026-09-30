@@ -1,10 +1,8 @@
 import type { PermissionResult } from '@anthropic-ai/claude-agent-sdk'
 import type { ClaudePromptClaim } from './claude-structured-prompt-replies'
 import { ClaudeControlRequestError } from './claude-stream-json-connection'
-import {
-  settleCancelledClaudeDispatchWaiters,
-  type ClaudeLateDispatchSettlement
-} from './claude-structured-dispatch'
+import { settleCancelledClaudeDispatchWaiters } from './claude-structured-dispatch'
+import type { ClaudeLateDispatchSettlement } from './claude-replay-turn-resolution'
 import type { ClaudeSession } from './claude-structured-session-state'
 
 const INTERRUPT_CANCEL_QUEUED_CAPABILITY = 'interrupt_cancel_queued_v1'
@@ -19,8 +17,9 @@ export type ClaudeTurnCancellationGuard = () => boolean
  * Interrupt the running turn, then make sure no queued async user message survives to spawn a
  * later unexpected turn. On a CLI advertising `interrupt_cancel_queued_v1` one round trip
  * cancels the queue alongside the abort; otherwise the interrupt receipt lists `still_queued`
- * uuids, and each is withdrawn best-effort with `cancel_async_message`. Older CLIs resolve no
- * receipt, so there is nothing to sweep.
+ * uuids, and each is withdrawn best-effort with `cancel_async_message`. Either way, every send
+ * the CLI confirms it withdrew settles as cancelled. Older CLIs resolve no receipt, so there is
+ * nothing to sweep.
  */
 export async function cancelClaudeTurn(
   session: ClaudeSession,
@@ -42,9 +41,13 @@ export async function cancelClaudeTurn(
     if (cancelQueued) {
       settleCancelledClaudeDispatchWaiters(session, receipt?.cancelled ?? [], onDispatchSettledLate)
     } else {
+      const withdrawn: string[] = []
       for (const uuid of receipt?.still_queued ?? []) {
-        await session.connection.cancelAsyncMessage(uuid, { timeoutMs }).catch(() => {})
+        if (await session.connection.cancelAsyncMessage(uuid, { timeoutMs }).catch(() => false)) {
+          withdrawn.push(uuid)
+        }
       }
+      settleCancelledClaudeDispatchWaiters(session, withdrawn, onDispatchSettledLate)
     }
     return { cancelled: true }
   } catch (error) {

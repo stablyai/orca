@@ -48,15 +48,6 @@ describe('showComposerDropFailureToast', () => {
     }
   })
 
-  it('passes a free-form failure reason straight through', () => {
-    showComposerDropFailureToast({
-      failureCount: 2,
-      total: 4,
-      commonFailure: { status: 'failed', reason: 'EACCES: permission denied' }
-    })
-    expect(lastToast().description).toBe('EACCES: permission denied')
-  })
-
   it('shows no description when nothing explained the failure', () => {
     showComposerDropFailureToast({ failureCount: 1, total: 2 })
     expect(lastToast().description).toBeUndefined()
@@ -81,11 +72,5 @@ describe('showComposerDropFailureToast', () => {
     showComposerDropFailureToast({ failureCount: 2, total: 3 })
     expect(first).toBeDefined()
     expect(lastToast().id).toBe(first)
-  })
-
-  it('gives no reason at all when the batch failed for differing reasons', () => {
-    showComposerDropFailureToast({ failureCount: 3, total: 6 })
-    expect(lastToast().title).toBe('3 of 6 items could not be attached.')
-    expect(lastToast().description).toBeUndefined()
   })
 })

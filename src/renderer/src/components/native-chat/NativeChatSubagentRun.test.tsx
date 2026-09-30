@@ -6,8 +6,7 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import type {
   NativeChatSubagentEntry,
-  NativeChatSubagentGroupBlock,
-  NativeChatSubagentState
+  NativeChatSubagentGroupBlock
 } from '../../../../shared/native-chat-types'
 import { NativeChatSubagentRun } from './NativeChatSubagentRun'
 import { NativeChatToolRun } from './NativeChatToolRun'
@@ -95,38 +94,6 @@ describe('NativeChatSubagentRun', () => {
     expect(container.querySelector('.bg-destructive')).toBeNull()
   })
 
-  // The QA defect: a mid-turn correction opened a new turn while three real
-  // children were still running, and the row relabelled every one of them
-  // `unverifiable` and flipped its headline to `Ran`. The children completed
-  // 57-87s later. A turn boundary says nothing about a child.
-  it('keeps a working child working once its turn is no longer the current one', () => {
-    render(<NativeChatSubagentRun block={group([{ id: 'a', label: 'read', state: 'working' }])} />)
-
-    const row = screen.getByRole('button')
-    expect(row).toHaveTextContent('working')
-    expect(row).not.toHaveTextContent('unverifiable')
-    expect(screen.getByText('Kicked off 1 subagent')).toBeInTheDocument()
-  })
-
-  it('reports the verdict a child lands after its turn ended', () => {
-    render(
-      <NativeChatSubagentRun block={group([{ id: 'a', label: 'read', state: 'completed' }])} />
-    )
-
-    expect(screen.getByText('Ran 1 subagent')).toBeInTheDocument()
-    expect(screen.getByRole('button')).toHaveTextContent('completed')
-  })
-
-  // Only the writing host may claim loss of contact, and it writes that verdict
-  // into the row itself. The renderer draws it, and never infers it.
-  it('draws the unverifiable verdict the host recorded', () => {
-    render(
-      <NativeChatSubagentRun block={group([{ id: 'a', label: 'read', state: 'unverifiable' }])} />
-    )
-
-    expect(screen.getByRole('button')).toHaveTextContent('unverifiable')
-  })
-
   it('leads with the bot glyph, decorative beside the word that names the group', () => {
     const { container } = render(
       <NativeChatSubagentRun block={group([{ id: 'a', label: 'read', state: 'working' }])} />
@@ -137,28 +104,6 @@ describe('NativeChatSubagentRun', () => {
     expect(glyph).toHaveAttribute('aria-hidden', 'true')
     // Never icon-only: the word is what carries the accessible name.
     expect(screen.getByRole('button')).toHaveAccessibleName(/Kicked off 1 subagent/)
-  })
-
-  it('keeps the same glyph in every state, so a settling row never changes identity', () => {
-    const states: NativeChatSubagentState[] = [
-      'working',
-      'idle',
-      'completed',
-      'failed',
-      'stopped',
-      'unverifiable'
-    ]
-
-    for (const state of states) {
-      const { container } = render(
-        <NativeChatSubagentRun block={group([{ id: 'a', label: 'read', state }])} />
-      )
-
-      expect(container.querySelectorAll('.lucide-bot')).toHaveLength(1)
-      expect(container.querySelector('.lucide-check')).toBeNull()
-      expect(container.querySelector('.lucide-users')).toBeNull()
-      cleanup()
-    }
   })
 
   // The only aria-hidden span carrying text is the elapsed-clock wrapper: the

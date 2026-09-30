@@ -1,6 +1,7 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
 import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
+import { subscribeTabGroupBodyRect, type TabGroupBodyRect } from './tab-group-body-geometry'
 
 const HAS_CSS_ANCHOR_POSITIONING =
   typeof CSS !== 'undefined' &&
@@ -9,20 +10,12 @@ const HAS_CSS_ANCHOR_POSITIONING =
   CSS.supports('width', 'anchor-size(--orca-terminal-overlay-probe width)')
 const MIN_OVERLAY_FIT_WIDTH_PX = 48
 const MIN_OVERLAY_FIT_HEIGHT_PX = 24
-const FALLBACK_RECT_MIN_CHANGE_PX = 1
 
 function shouldUseCssAnchorPositioning(): boolean {
   return (
     HAS_CSS_ANCHOR_POSITIONING &&
     (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ !== true
   )
-}
-
-type MeasuredFallbackRect = {
-  top: number
-  left: number
-  width: number
-  height: number
 }
 
 type RetainedPaneHostProps = {
@@ -47,67 +40,17 @@ export function RetainedPaneHost({
 }: RetainedPaneHostProps): React.JSX.Element {
   const anchorName = groupId !== undefined ? tabGroupBodyAnchorName(groupId) : undefined
   const overlayRef = useRef<HTMLDivElement | null>(null)
-  const [measuredFallbackRect, setMeasuredFallbackRect] = useState<MeasuredFallbackRect | null>(
-    null
-  )
+  const [measuredFallbackRect, setMeasuredFallbackRect] = useState<TabGroupBodyRect | null>(null)
+  // Why: a hidden host renders display:none, so it has no use for group geometry until shown.
+  const measuresFallbackRect =
+    groupId !== undefined && !shouldUseCssAnchorPositioning() && (isVisible || measureWhileHidden)
   useLayoutEffect(() => {
-    if (!anchorName || shouldUseCssAnchorPositioning() || !groupId) {
+    const container = overlayRef.current?.parentElement
+    if (!measuresFallbackRect || groupId === undefined || !container) {
       return
     }
-
-    const findBody = (): HTMLElement | null => {
-      for (const candidate of document.querySelectorAll<HTMLElement>('[data-tab-group-body-id]')) {
-        if (candidate.dataset.tabGroupBodyId === groupId) {
-          return candidate
-        }
-      }
-      return null
-    }
-
-    const updateRect = (): void => {
-      const overlay = overlayRef.current
-      const parent = overlay?.parentElement
-      const body = findBody()
-      if (!parent || !body) {
-        setMeasuredFallbackRect(null)
-        return
-      }
-      const parentRect = parent.getBoundingClientRect()
-      const bodyRect = body.getBoundingClientRect()
-      const next: MeasuredFallbackRect = {
-        top: bodyRect.top - parentRect.top,
-        left: bodyRect.left - parentRect.left,
-        width: bodyRect.width,
-        height: bodyRect.height
-      }
-      // Why: ResizeObserver and xterm fit can otherwise amplify sub-pixel jitter forever.
-      setMeasuredFallbackRect((prev) =>
-        prev &&
-        Math.abs(prev.top - next.top) < FALLBACK_RECT_MIN_CHANGE_PX &&
-        Math.abs(prev.left - next.left) < FALLBACK_RECT_MIN_CHANGE_PX &&
-        Math.abs(prev.width - next.width) < FALLBACK_RECT_MIN_CHANGE_PX &&
-        Math.abs(prev.height - next.height) < FALLBACK_RECT_MIN_CHANGE_PX
-          ? prev
-          : next
-      )
-    }
-
-    updateRect()
-    const body = findBody()
-    const parent = overlayRef.current?.parentElement
-    const resizeObserver = new ResizeObserver(updateRect)
-    if (body) {
-      resizeObserver.observe(body)
-    }
-    if (parent) {
-      resizeObserver.observe(parent)
-    }
-    window.addEventListener('resize', updateRect)
-    return () => {
-      resizeObserver.disconnect()
-      window.removeEventListener('resize', updateRect)
-    }
-  }, [anchorName, groupId, isVisible])
+    return subscribeTabGroupBodyRect(groupId, container, setMeasuredFallbackRect)
+  }, [groupId, measuresFallbackRect])
 
   useLayoutEffect(() => {
     if (!fitTerminal || !isVisible || !anchorName) {

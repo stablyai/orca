@@ -6,6 +6,7 @@ import {
   pruneCreatedWorktreeRoots
 } from './registered-worktree-root-probes'
 import { isDescendantOrEqual, normalizeExistingPath } from './filesystem-path-containment'
+import { shouldRelistOwner } from './registered-worktree-root-relist-policy'
 import {
   getLocalWorktreeRootOwners,
   resolveWorktreeRootOwner
@@ -36,6 +37,12 @@ function advanceOwner(owner: RegisteredOwner): void {
   owner.revision = ++revisionSequence
   owner.aliases.clear()
   registeredWorktreeRootsRevisionByRepo.set(owner.repoId, owner.revision)
+}
+
+function resolveOwnerForRepo(store: Store, repo: Repo | string): RegisteredOwner | undefined {
+  const repos = synchronizeOwners(store)
+  const key = resolveWorktreeRootOwner(repos, repo, currentOwners)
+  return key === undefined ? undefined : registeredOwners.get(key)
 }
 
 function synchronizeOwners(store: Store): Repo[] {
@@ -88,15 +95,22 @@ export function invalidateAuthorizedRootsCache(): void {
   registeredWorktreeRootsRevisionByRepo.clear()
 }
 
-export async function rebuildAuthorizedRootsCache(store: Store): Promise<void> {
+/** `onlyDirty` is the ensure path; an explicit rebuild still re-lists every repo. */
+export async function rebuildAuthorizedRootsCache(store: Store, onlyDirty = false): Promise<void> {
   synchronizeOwners(store)
   const generation = invalidationGeneration
-  const pending = [...currentOwners].map(([key, repo]) => ({
-    key,
-    repo,
-    owner: registeredOwners.get(key),
-    revision: registeredOwners.get(key)?.revision
-  }))
+  const pending = [...currentOwners]
+    .map(([key, repo]) => ({
+      key,
+      repo,
+      owner: registeredOwners.get(key),
+      revision: registeredOwners.get(key)?.revision
+    }))
+    // Why only dirty owners: `dirty` used to gate whether a rebuild ran, not what it
+    // listed, so a single-repo invalidation still spawned `git worktree list` for
+    // every registered repo. An owner with no listing yet (`listed === null`) is
+    // always included, so a first rebuild is unchanged.
+    .filter((entry) => shouldRelistOwner(entry.owner, onlyDirty))
   const listings = await listWorktreeRootsWithConcurrency(pending.map((entry) => entry.repo))
   const results = pending.map((entry, index) => ({ ...entry, ...listings[index] }))
   const isCurrent = (entry: (typeof pending)[number]): boolean =>
@@ -128,14 +142,33 @@ export async function rebuildAuthorizedRootsCache(store: Store): Promise<void> {
   registeredWorktreeRootsDirty = [...registeredOwners.values()].some((owner) => owner.dirty)
 }
 
+/**
+ * Dirties exactly one owner so the next ensure-path rebuild re-lists only that repo.
+ * Returns false when the repo has no known owner, leaving the decision to the caller.
+ *
+ * Deliberately leaves `baseRevision` and the per-repo revision map alone: that pair is
+ * the global side-effect-token fence, and bumping it would retire in-flight tokens for
+ * untouched repos. `advanceOwner` still records this repo's new revision.
+ */
+export function markAuthorizedRootsOwnerDirty(store: Store, repo: Repo | string): boolean {
+  const owner = resolveOwnerForRepo(store, repo)
+  if (!owner) {
+    return false
+  }
+  owner.listed = null
+  owner.dirty = true
+  advanceOwner(owner)
+  refreshRegisteredWorktreeRoots()
+  registeredWorktreeRootsDirty = true
+  return true
+}
+
 export function registerWorktreeRootsForRepo(
   store: Store,
   repo: Repo | string,
   worktreeRoots: string[]
 ): void {
-  const repos = synchronizeOwners(store)
-  const key = resolveWorktreeRootOwner(repos, repo, currentOwners)
-  const owner = key === undefined ? undefined : registeredOwners.get(key)
+  const owner = resolveOwnerForRepo(store, repo)
   if (!owner) {
     return
   }
@@ -152,9 +185,7 @@ export function registerCreatedWorktreeRoot(
   repo: Repo | string,
   worktreeRoot: string
 ): void {
-  const repos = synchronizeOwners(store)
-  const key = resolveWorktreeRootOwner(repos, repo, currentOwners)
-  const owner = key === undefined ? undefined : registeredOwners.get(key)
+  const owner = resolveOwnerForRepo(store, repo)
   if (!owner) {
     return
   }
@@ -189,7 +220,7 @@ export async function ensureAuthorizedRootsCache(store: Store): Promise<void> {
   // Follow one superseded refresh; continuous catalog churn must not pin authorization forever.
   for (let attempt = 0; registeredWorktreeRootsDirty && attempt < 2; attempt++) {
     if (!registeredWorktreeRootsRefresh) {
-      registeredWorktreeRootsRefresh = rebuildAuthorizedRootsCache(store).finally(() => {
+      registeredWorktreeRootsRefresh = rebuildAuthorizedRootsCache(store, true).finally(() => {
         registeredWorktreeRootsRefresh = null
       })
     }

@@ -23,8 +23,8 @@ const GENERATIONS_DIRECTORY_NAME = 'generations'
 const STAGING_DIRECTORY_NAME = 'tmp'
 const HOST_INDEX_FILE_NAME = 'hosts.json'
 
-/** The architecture reference's cache ceiling: four hosts, least recently activated evicted. */
-export const MAX_CACHED_HOSTS = 4
+/** Least recently used host evicted past this. */
+export const MAX_CACHED_HOSTS = 6
 
 export type ActiveGeneration = {
   readonly buildId: string
@@ -67,15 +67,14 @@ export type GenerationStore = {
   forgetHostUpdateFailures(hostId: string): Promise<void>
 }
 
-/** Recency only, so anything unreadable degrades to "evict this host first". */
-const HostIndexSchema = z.record(z.string(), z.number().int().nonnegative())
+/** Host cache keys, least recently used first. Recency only, so anything unreadable degrades to
+ *  "evict this host first"; the timestamp record earlier builds wrote reads as empty once. */
+const HostOrderSchema = z.array(z.string())
 
 export function createGenerationStore(options: {
   fileSystem: GenerationFileSystem
-  now?: () => number
 }): GenerationStore {
   const fs = options.fileSystem
-  const now = options.now ?? Date.now
   // `StagedGeneration` is structurally typed, so any object of that shape would otherwise let
   // `commitGeneration` rename over, and `abortStagedGeneration` delete, a directory of the caller's
   // choosing. Only handles this store minted are honoured.
@@ -87,23 +86,28 @@ export function createGenerationStore(options: {
   const stagingRoot = (hostKey: string): string =>
     joinUri(hostRoot(hostKey), STAGING_DIRECTORY_NAME)
 
-  async function readHostIndex(): Promise<Map<string, number>> {
+  async function readHostOrder(): Promise<readonly string[]> {
     // Unreadable is treated as absent here, unlike a manifest: an index nobody can read costs
     // eviction order, and the next activation rewrites it whole.
     const text = await fs.readText(joinUri(fs.rootUri, HOST_INDEX_FILE_NAME)).catch(() => null)
-    const parsed = text === null ? null : HostIndexSchema.safeParse(parseJson(text))
-    return new Map(Object.entries(parsed?.success === true ? parsed.data : {}))
+    const parsed = text === null ? null : HostOrderSchema.safeParse(parseJson(text))
+    return parsed?.success === true ? parsed.data : []
   }
 
-  async function writeHostIndex(index: ReadonlyMap<string, number>): Promise<void> {
+  async function writeHostOrder(order: readonly string[]): Promise<void> {
     // Recency, not truth: a full disk here must not turn an activation that is already on disk
     // into a thrown commit, and the next activation rewrites the whole index anyway.
     await fs
-      .writeText(
-        joinUri(fs.rootUri, HOST_INDEX_FILE_NAME),
-        JSON.stringify(Object.fromEntries(index))
-      )
+      .writeText(joinUri(fs.rootUri, HOST_INDEX_FILE_NAME), JSON.stringify(order))
       .catch(() => undefined)
+  }
+
+  /** Use without an eviction pass, because the host count did not change. */
+  async function touchHost(hostKey: string): Promise<void> {
+    const order = await readHostOrder()
+    if (order.at(-1) !== hostKey) {
+      await writeHostOrder(withHostLast(order, hostKey))
+    }
   }
 
   async function listHostDirectories(): Promise<readonly GenerationDirectoryEntry[]> {
@@ -129,26 +133,20 @@ export function createGenerationStore(options: {
     await fs.delete(hostRoot(hostKey))
   }
 
-  async function enforceHostLimit(index: Map<string, number>, activated: string): Promise<void> {
+  async function enforceHostLimit(order: readonly string[]): Promise<void> {
     const hosts = await listActivatedHosts()
-    const present = new Set(hosts)
-    for (const key of Array.from(index.keys())) {
-      if (!present.has(key)) {
-        index.delete(key)
-      }
-    }
-    // A host with no index entry sorts first: the index is recency, not truth, so a lost or
+    // A host missing from the order sorts first: the index is recency, not truth, so a lost or
     // truncated one costs eviction order rather than a generation. The host just activated is
-    // never a candidate, because `now()` is a wall clock: one backward jump would otherwise make
-    // the newest entry the oldest and evict the tree the caller is about to open.
-    const candidates = hosts
-      .filter((host) => host !== activated)
-      .sort((left, right) => (index.get(left) ?? 0) - (index.get(right) ?? 0))
-    for (const host of candidates.slice(0, Math.max(0, hosts.length - MAX_CACHED_HOSTS))) {
+    // last, so it is never among the evicted.
+    const evicted = new Set(
+      [...hosts]
+        .sort((left, right) => order.indexOf(left) - order.indexOf(right))
+        .slice(0, Math.max(0, hosts.length - MAX_CACHED_HOSTS))
+    )
+    for (const host of evicted) {
       await dropHostTree(host)
-      index.delete(host)
     }
-    await writeHostIndex(index)
+    await writeHostOrder(order.filter((key) => hosts.includes(key) && !evicted.has(key)))
   }
 
   async function readActive(hostKey: string): Promise<ActiveGeneration | null> {
@@ -242,12 +240,9 @@ export function createGenerationStore(options: {
       existing?.isDirectory === true &&
       (await fs.fileExists(joinUri(target, MANIFEST_FILE_NAME)))
     ) {
-      // Still an activation, so it still counts as use: without this a host that redownloads the
-      // bundle it already has stays the least recently activated and is evicted first. No eviction
-      // pass, because the host count did not change.
-      const index = await readHostIndex()
-      index.set(staged.hostKey, now())
-      await writeHostIndex(index)
+      // Still an activation: without this a host that redownloads the bundle it already has stays
+      // the least recently used and is evicted first.
+      await touchHost(staged.hostKey)
       await fs.delete(staged.directory)
       return active
     }
@@ -271,10 +266,17 @@ export function createGenerationStore(options: {
       await fs.delete(target)
       throw new Error(`generation ${staged.buildId} did not carry its manifest through the rename`)
     }
-    const index = await readHostIndex()
-    index.set(staged.hostKey, now())
-    // Enforced here rather than left to a caller: the four-host ceiling is this module's invariant.
-    await enforceHostLimit(index, staged.hostKey)
+    // Enforced here rather than left to a caller: the host ceiling is this module's invariant.
+    await enforceHostLimit(withHostLast(await readHostOrder(), staged.hostKey))
+    return active
+  }
+
+  async function openActive(hostKey: string): Promise<ActiveGeneration | null> {
+    const active = await readActive(hostKey)
+    // An open is use, so a daily host downloaded long ago is not evicted first.
+    if (active !== null) {
+      await touchHost(hostKey)
+    }
     return active
   }
 
@@ -304,9 +306,9 @@ export function createGenerationStore(options: {
 
   async function deleteHost(hostKey: string): Promise<void> {
     await dropHostTree(hostKey)
-    const index = await readHostIndex()
-    if (index.delete(hostKey)) {
-      await writeHostIndex(index)
+    const order = await readHostOrder()
+    if (order.includes(hostKey)) {
+      await writeHostOrder(order.filter((key) => key !== hostKey))
     }
   }
 
@@ -322,7 +324,7 @@ export function createGenerationStore(options: {
   }
 
   return {
-    readActiveGeneration: (hostKey) => serialize(() => readActive(hostKey)),
+    readActiveGeneration: (hostKey) => serialize(() => openActive(hostKey)),
     stageGeneration: (hostKey, result) => serialize(() => stage(hostKey, result)),
     commitGeneration: (staged) => serialize(() => commit(staged)),
     abortStagedGeneration: (staged) =>
@@ -337,6 +339,10 @@ export function createGenerationStore(options: {
     forgetHostUpdateFailures: (hostId) =>
       serialize(() => forgetHostUpdateFailuresIn(fs, hostId)).catch(() => undefined)
   }
+}
+
+function withHostLast(order: readonly string[], hostKey: string): string[] {
+  return [...order.filter((key) => key !== hostKey), hostKey]
 }
 
 function parseJson(text: string): unknown {

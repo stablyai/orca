@@ -13,9 +13,11 @@ import {
 } from './constants'
 import {
   getDroppedMode2031RendererData,
+  getDroppedSynchronizedOutputRendererData,
   pendingProjectionAdmissionOptions,
   updatePendingProjectionAdmissions
 } from './pending'
+import { resolveSynchronizedOutputSafeSplit } from '../../../../shared/terminal-synchronized-output-scan'
 import { makePtyDataPayload, sendModelRestoreNeededMarker, sendPtyDataToRenderer } from './payload'
 import { warnIfDroppingHiddenBytesForVisiblePty } from './debug-snapshot'
 import type { PtyIpcSession } from '../session'
@@ -144,7 +146,12 @@ export function flushPendingData(session: PtyIpcSession): void {
             id,
             {
               id,
-              data: pending.data + getDroppedMode2031RendererData(pending),
+              // 2026 release before the 2031 data: that payload ends with a retained
+              // partial private-mode sequence an ESC after it would abort.
+              data:
+                pending.data +
+                getDroppedSynchronizedOutputRendererData(pending) +
+                getDroppedMode2031RendererData(pending),
               droppedOutput: true
             },
             pending.projectionAdmissionIds
@@ -158,8 +165,14 @@ export function flushPendingData(session: PtyIpcSession): void {
       }
       const { data } = pending
       const indivisible = pending.transformed === true
-      const chunk = indivisible ? data : data.slice(0, PTY_BATCH_FLUSH_CHUNK_CHARS)
-      const remaining = indivisible ? '' : data.slice(PTY_BATCH_FLUSH_CHUNK_CHARS)
+      // Why not a blind offset: splitting inside an open DEC 2026 frame strands
+      // the closing \x1b[?2026l on a later flush, and xterm stops repainting until
+      // it arrives or its 1000ms timeout fires.
+      const splitAt = indivisible
+        ? data.length
+        : resolveSynchronizedOutputSafeSplit(data, PTY_BATCH_FLUSH_CHUNK_CHARS)
+      const chunk = indivisible ? data : data.slice(0, splitAt)
+      const remaining = indivisible ? '' : data.slice(splitAt)
       let nextPending: PendingPtyData | undefined
       if (remaining) {
         nextPending = { data: remaining }

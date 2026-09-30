@@ -1,6 +1,5 @@
 import { toast } from 'sonner'
 import { getAgentLabel } from '@/lib/agent-catalog'
-import { preflightAgentTrust } from '@/lib/agent-trust-preflight'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
@@ -15,7 +14,6 @@ type LaunchAgentSessionContinuationArgs = {
   prompt: string
   worktreeId: string
   groupId?: string | null
-  workspacePath: string
   initialCwd?: string | null
   launchSource: LaunchSource
 }
@@ -73,16 +71,12 @@ export async function launchAgentSessionContinuation({
   prompt,
   worktreeId,
   groupId,
-  workspacePath,
   initialCwd,
   launchSource
 }: LaunchAgentSessionContinuationArgs): Promise<boolean> {
   if (!(await ensureAgentAvailable(agent, worktreeId))) {
     return false
   }
-
-  const connectionId = getConnectionIdFromState(useAppStore.getState(), worktreeId)
-  await preflightAgentTrust({ agent, workspacePath, connectionId })
 
   const label = getAgentLabel(agent)
   // Why: the paste helper writes blind when the agent's composer was never observed, so a

@@ -1,7 +1,7 @@
 import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity,
-  AgentJournalProducerLinkage
+  AgentJournalRowAttribution
 } from '../../shared/agent-session-journal-types'
 import { requiresTerminalSettlement } from '../native-chat/agent-session-journal/journal-terminal-settlement'
 import {
@@ -31,7 +31,7 @@ import type { CodexActiveJournalItem } from './codex-structured-journal-settleme
 import { readCodexJournalString } from './codex-structured-journal-translation-values'
 import { readCodexTurnId } from './codex-structured-thread-facts'
 import { readCodexDispatchEcho } from './codex-structured-dispatch-echo'
-import type { CodexRowLinkage } from './codex-subagent-linkage'
+import type { CodexRowAttribution } from './codex-subagent-linkage'
 
 export class CodexJournalItems {
   readonly ordinals = new CodexTurnOrdinals()
@@ -44,7 +44,7 @@ export class CodexJournalItems {
     private readonly deps: Pick<
       CodexJournalTranslatorDeps,
       'sink' | 'coalesceMs' | 'maxRetainedBytes' | 'schedule'
-    > & { maxMetadataBytes?: number; linkageFor: CodexRowLinkage },
+    > & { maxMetadataBytes?: number; attributionFor: CodexRowAttribution },
     private readonly activeTurn: (threadId: string) => string | null,
     private readonly suppress: (threadId: string, turnId: string) => void
   ) {
@@ -56,7 +56,7 @@ export class CodexJournalItems {
       maxMetadataBytes: deps.maxMetadataBytes,
       turnIdFor: (threadId, params) => readCodexTurnId(params) ?? this.activeTurn(threadId),
       identityFor: (threadId, turnId, item) => this.identityFor(threadId, turnId, item),
-      linkageFor: deps.linkageFor
+      attributionFor: deps.attributionFor
     })
   }
 
@@ -122,7 +122,7 @@ export class CodexJournalItems {
       event.method,
       identity,
       translated,
-      this.deps.linkageFor(event.threadId, turnId)
+      this.deps.attributionFor(event.threadId, turnId)
     )
     if (!admission.accepted) {
       return { handled: true, admission }
@@ -151,17 +151,22 @@ export class CodexJournalItems {
     method: string,
     identity: AgentJournalItemIdentity,
     translated: ReturnType<typeof codexJournalItem>,
-    linkage: AgentJournalProducerLinkage
+    attribution: AgentJournalRowAttribution
   ): CodexJournalTranslationAdmission {
     if (!translated.body) {
       return CODEX_JOURNAL_ADMITTED
     }
     if (method === 'item/completed') {
-      const admission = appendCodexLifecycleItem(this.deps.sink, identity, translated.body, linkage)
+      const admission = appendCodexLifecycleItem(
+        this.deps.sink,
+        identity,
+        translated.body,
+        attribution
+      )
       return admission.accepted ? publishCodexLifecycle(this.deps.sink) : admission
     }
     const options = requiresTerminalSettlement(translated.body) ? { lifecycle: true } : {}
-    const appendOptions = { ...options, ...linkage }
+    const appendOptions = { ...options, ...attribution }
     const admission = this.deps.sink.tryAppendItem
       ? this.deps.sink.tryAppendItem(identity, translated.body, appendOptions)
       : (this.deps.sink.appendItem(identity, translated.body, appendOptions),
@@ -235,7 +240,7 @@ export class CodexJournalItems {
             this.deps.sink,
             evicted.identity,
             evictedActiveBody(translated),
-            this.deps.linkageFor(evicted.threadId, evicted.turnId)
+            this.deps.attributionFor(evicted.threadId, evicted.turnId)
           )
           if (!admission.accepted) {
             return admission

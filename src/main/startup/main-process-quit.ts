@@ -15,6 +15,7 @@ import { clearRuntimeMetadataIfOwned } from '../runtime/runtime-metadata'
 import { shutdownPairedRuntimeBrowserClientHosts } from '../browser/paired-runtime-browser-client-host-runtime'
 import { browserManager } from '../browser/browser-manager'
 import { stopCodexStateDbBackfillRecoveries } from '../codex/codex-state-db-backfill-recovery'
+import { stopCodexAccountSessionBridges } from '../codex/codex-account-session-bridge'
 import { awaitPackedRefsLockRelease } from '../git/local-repo-ref-maintenance'
 import { settleTeardownWithinDeadline, settleWithinMs } from '../quit-teardown-deadline'
 import { quitTeardownStartGate } from '../quit-teardown-start-gate'
@@ -134,6 +135,7 @@ function installWillQuitHandler(): void {
     state.pluginMarketplaceInstaller = null
     const pluginHostShutdown = state.pluginService?.dispose() ?? Promise.resolve()
     const codexBackfillRecoveryShutdown = stopCodexStateDbBackfillRecoveries()
+    stopCodexAccountSessionBridges()
     // Why before the stop: teardown stamps each working session's resume marker with why the app
     // went away, and an update install is a restart the user never chose.
     setStructuredAgentSessionTeardownTrigger(updateQuitInProgress ? 'update' : 'quit')

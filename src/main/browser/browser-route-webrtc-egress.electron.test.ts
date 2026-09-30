@@ -110,7 +110,7 @@ async function probe() {
     (async () => {
       const peer = new RTCPeerConnection({
         iceServers: [{ urls: 'stun:\${target}:\${udpAddress.port}' }],
-        iceCandidatePoolSize: 1
+        iceCandidatePoolSize: 0
       })
       globalThis.__webrtcEgressPeer = peer
       peer.createDataChannel('probe')

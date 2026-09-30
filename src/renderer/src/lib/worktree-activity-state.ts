@@ -71,7 +71,7 @@ export function getLiveAgentStatusByWorktreeId(
   return result
 }
 
-export function hasActiveWorkspaceActivity(
+function hasActiveWorkspaceActivity(
   worktreeId: string,
   tabsByWorktree: TabsByWorktree | null | undefined,
   ptyIdsByTabId: PtyIdsByTabId | null | undefined,

@@ -19,6 +19,7 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 
 const CALLER = { callerKey: 'client-1' }
 const DEFAULT_MODEL = 'gpt-default'
@@ -124,7 +125,7 @@ beforeEach(async () => {
   host = new StructuredAgentSessionHost({
     store,
     adapter: router,
-    journalRoot: root,
+    journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-native',
     now: () => NOW
@@ -152,6 +153,11 @@ describe('structured session options and close', () => {
       envelope: envelope('agentSession.send', { body }),
       body
     })
+    // Accepted, then handed over by the delivery loop; the status is read once it answered.
+    await vi.waitFor(() => expect(dispatchedModels).toEqual([DEFAULT_MODEL]))
+    await vi.waitFor(async () =>
+      expect((await host.journalSnapshot(SESSION)).submissions[0]?.dispatchState).toBe('accepted')
+    )
     const events: AgentSessionStatusEvent[] = []
     host.subscribeStatus({ id: 'session-list', emit: (event) => events.push(event) })
     expect(events).toEqual([

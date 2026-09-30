@@ -165,7 +165,7 @@ export const BRIDGED_PARITY_EXCLUSIONS: Readonly<Partial<Record<BridgedParityCla
 }
 
 /**
- * What this tree measures, per class, over all 787 goldens.
+ * What this tree measures, per class, over all 790 goldens.
  *
  * A pin, not a description: `bridgedParityTallyDrift` holds every number below to itself exactly,
  * in both directions, and this module's test pins their sum to the size of the corpus. A class that
@@ -179,14 +179,14 @@ export const BRIDGED_PARITY_EXCLUSIONS: Readonly<Partial<Record<BridgedParityCla
  * same story — both numbers move, and both moves are edits here rather than a quiet pass.
  */
 export const BRIDGED_PARITY_BASELINE: Readonly<Record<BridgedParityClass | 'identical', number>> = {
-  identical: 396,
+  identical: 397,
   // Closed by the `_meta` widening: the page's reader is `isRpcResponse` itself.
   'reply-meta-required': 0,
   // Settling a refused reply moved three goldens here out of `write-ordinal`: a rejection that
   // now arrives differs before the ordinal that also moved does. Nothing stopped replaying
   // identically, and the corpus is a fixed size, so a shuffle between two excluded classes cannot
   // hide one.
-  'result-absent-settlement': 341,
+  'result-absent-settlement': 343,
   // Four left here and two left `write-ordinal` for the class below, which is the `cancel` a
   // refused stream frame now posts: the run stops at a renamed occurrence before it reaches the
   // checkpoint or the ordinal that used to be what differed first.

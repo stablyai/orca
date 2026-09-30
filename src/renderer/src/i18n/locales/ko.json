@@ -496,6 +496,7 @@
           "mimo_code_label": "MiMo Code",
           "muse_label": "Muse",
           "opencode2_label": "OpenCode 2",
+          "codebuddy_label": "CodeBuddy",
           "zcode_label": "ZCode"
         },
         "skill": {
@@ -893,6 +894,12 @@
       },
       "clipboardWriteFailure": {
         "tooLarge": "텍스트가 너무 커서 복사할 수 없습니다."
+      },
+      "dropSkipReason": {
+        "missing": "더 이상 원래 경로에 있지 않습니다.",
+        "symlink": "심볼릭 링크는 첨부할 수 없습니다.",
+        "permissionDenied": "액세스가 거부되었습니다.",
+        "unsupported": "지원되지 않는 파일 형식입니다."
       }
     },
     "hooks": {
@@ -915,11 +922,7 @@
         "5f3d2c8a1b": "MR베이스 확인 실패",
         "dropPartiallyAttached": "{{count}} 항목 중 {{failureCount}}개 항목을 첨부할 수 없습니다.",
         "dropPartiallyAttached_one": "{{count}} 항목 중 {{failureCount}}을(를) 첨부할 수 없습니다.",
-        "dropPartiallyAttached_other": "{{count}} 항목 중 {{failureCount}}개 항목을 첨부할 수 없습니다.",
-        "attachSkipMissing": "더 이상 원래 경로에 있지 않습니다.",
-        "attachSkipSymlink": "심볼릭 링크는 첨부할 수 없습니다.",
-        "attachSkipPermissionDenied": "허가가 거부되었습니다.",
-        "attachSkipUnsupported": "지원되지 않는 파일 형식입니다."
+        "dropPartiallyAttached_other": "{{count}} 항목 중 {{failureCount}}개 항목을 첨부할 수 없습니다."
       },
       "useGlobalFileDrop": {
         "38c9f034ff": "드롭한 파일을 업로드하지 못했습니다.",
@@ -1602,7 +1605,6 @@
         "reuseExistingBranchHint": "기존 브랜치에서 새 브랜치를 만들지 않고 해당 브랜치를 체크아웃합니다.",
         "createMultiple": "더 만들기",
         "waitForSetupBeforeAgent": "agent를 시작하기 전에 설정이 완료될 때까지 기다리세요.",
-        "waitForSetupBeforeAgentHelp": "설치 프로그램이 시작 중에 agent에 필요한 종속성, MCP 서버 또는 구성 파일을 설치할 때 이 기능을 켜십시오.",
         "destroyDisabled": "비활성화된 파괴",
         "destroyConfigured": "구성된 파괴",
         "noDestroyConfigured": "파괴하지 마세요",
@@ -3033,6 +3035,7 @@
           },
           "TerminalContextMenu": {
             "b4cdd9314e": "화면 지우기",
+            "resetTerminal": "터미널 초기화",
             "8c17d6786d": "창 닫기",
             "copyTerminalId": "터미널 ID 복사",
             "2cf85a6a55": "창 ID 복사",
@@ -3068,7 +3071,9 @@
             "42b283ecfc": "호스트가 저장된 세션을 확인할 수 없기 때문에 Orca가 이 터미널을 안전하게 다시 연결할 수 없습니다. 오르카는 저장된 세션을 변경하지 않고 그대로 두었습니다. 지금 다시 연결을 시도하려면 재시도를 클릭하세요. 그래도 다시 연결할 수 없으면 새 터미널을 엽니다.",
             "e16012e31e": "이 세션을 소유한 터미널 데몬이 종료되었으므로 세션과 해당 스크롤백을 복구할 수 없습니다. 계속하려면 새 터미널을 여세요.",
             "sessionUnavailable": "Orca가 호스트에서 이 창의 터미널 세션에 다시 연결할 수 없습니다. 계속하려면 새 터미널을 여세요.",
-            "sourceRestoring": "이 터미널을 다시 연결하는 중 - 출력이 다시 설정되고 있습니다. 세션이 아직 실행 중입니다."
+            "sourceRestoring": "이 터미널을 다시 연결하는 중 - 출력이 다시 설정되고 있습니다. 세션이 아직 실행 중입니다.",
+            "ptyAllocationLimit": "시스템에서 더 이상 pty 장치를 할당할 수 없습니다. Orca 또는 다른 프로그램에서 사용하지 않는 터미널을 몇 개 닫은 후 다시 시도하세요.",
+            "terminalProcessLimit": "시스템에서 터미널 프로세스를 더 시작할 수 없습니다. 사용하지 않는 터미널을 닫거나 불필요한 프로세스를 종료한 후 다시 시도하세요."
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Git Bash 콘솔 한도에 도달했습니다",
@@ -3241,6 +3246,9 @@
           "TerminalQuickCommandsSubmenu": {
             "3ccc7981bb": "호스트를 사용할 수 없음",
             "54f29b7c0d": "호스트 로드 중…"
+          },
+          "TerminalRestoringPlaceholder": {
+            "restoring": "터미널 복원 중…"
           }
         }
       },
@@ -3669,7 +3677,8 @@
             "floatingTerminalNewActivity": "{{label}}, 새 활동",
             "codexSignInSuccess": "Codex에 로그인했습니다",
             "codexSignInError": "Codex 로그인에 실패했습니다. 다시 시도해 주세요.",
-            "cursorUsageMenu": "Cursor 사용량"
+            "cursorUsageMenu": "Cursor 사용량",
+            "hiddenUsageProviders": "그 외: {{value0}}"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "계정 연결",
@@ -3959,7 +3968,12 @@
             "checkLabel": "확인할 채팅 {{value0}}개",
             "checkAriaOne": "재개한 후 확인할 채팅 1개. 자세히 보려면 클릭하세요.",
             "checkAria": "재개한 후 확인할 채팅 {{value0}}개. 자세히 보려면 클릭하세요.",
-            "checkTooltip": "다시 시작한 후 Orca가 재개하지 못했거나 재개했는지 확인하지 못한 채팅. 자세히 보려면 클릭하세요."
+            "checkTooltip": "다시 시작한 후 Orca가 재개하지 못했거나 재개했는지 확인하지 못한 채팅. 자세히 보려면 클릭하세요.",
+            "resumingLabelOne": "채팅 1개 재개 중",
+            "resumingLabel": "채팅 {{value0}}개 재개 중",
+            "resumingAriaOne": "채팅 1개 재개 중. 자세히 보려면 클릭하세요.",
+            "resumingAria": "채팅 {{value0}}개 재개 중. 자세히 보려면 클릭하세요.",
+            "resumingTooltip": "중단된 채팅을 복원하고 계속하도록 요청하는 중…"
           }
         }
       },
@@ -5914,13 +5928,11 @@
           }
         },
         "LinearAgentSkillSetupPrompt": {
-          "missingCliAndSkill": "Orca CLI와 Linear agent 스킬이 없습니다.",
           "modalTitle": "Linear 티켓 접근 활성화",
           "modalDescription": "terminal에서 Linear 스킬을 설치합니다.",
           "modalPrompt": "agents가 첨부된 Linear 티켓을 읽고 편집할 수 있게 합니다.",
           "dontShowAgain": "다시 표시하지 않음",
           "missingBoth": "Orca CLI와 Linear agent 스킬이 없습니다.",
-          "missingCli": "Orca CLI가 없습니다.",
           "missingSkill": "Linear agent 스킬이 없습니다.",
           "title": "Linear agent 스킬 설정",
           "remoteCopy": "호스트 설정을 설치합니다. 원격 agent 환경에는 별도 설정이 필요할 수 있습니다.",
@@ -5932,7 +5944,6 @@
           "panelDescription": "연결된 Linear 작업 인계를 위해 호스트 agent 스킬을 설치합니다.",
           "terminalTitle": "Linear agent 스킬 설치",
           "terminalAria": "Linear agent 스킬 설치 terminal",
-          "install": "CLI 및 스킬 설치",
           "successTitle": "Linear 티켓 접근이 준비되었습니다",
           "successDescription": "이제 agents가 이 워크스페이스에서 연결된 Linear 티켓을 읽고 업데이트할 수 있습니다.",
           "successDescriptionWsl": "이제 WSL agents가 이 워크스페이스에서 연결된 Linear 티켓을 사용할 수 있습니다.",
@@ -5941,11 +5952,7 @@
           "done": "완료",
           "wslCopy": "연결된 Linear 작업에서 WSL agent 인계를 위해 설치합니다.",
           "wslLabel": "WSL 기본값",
-          "toastMissingCliAndSkill": "Orca CLI와 Linear 스킬이 없습니다",
-          "toastMissingCli": "Orca CLI가 없습니다",
           "toastMissingSkill": "Linear 스킬이 없습니다",
-          "toastInstallCliAndSkillDescription": "Orca CLI와 Linear 스킬을 설치하여 agents가 Linear 작업을 읽고 편집할 수 있게 하세요.",
-          "toastInstallCliDescription": "Orca CLI를 설치하여 agents가 Linear 작업을 읽고 편집할 수 있게 하세요.",
           "toastInstallSkillDescription": "Linear 스킬을 설치하여 agents가 Orca CLI를 통해 Linear 작업을 읽고 편집할 수 있게 하세요.",
           "toastRemoteDescription": "{{value0}} 원격 agent 환경에는 자체 설정이 필요할 수 있습니다.",
           "toastWslDescription": "{{value0}} 이 설정은 선택한 WSL agent 런타임에서 실행됩니다."
@@ -6346,7 +6353,6 @@
           "SetupGuideModal": {
             "3598a3ca0c": "Orca를 병렬 agent 작업에 유용하게 만드는 핵심 워크플로를 완료합니다.",
             "48a9e5ef2d": "시작하기",
-            "28cf59fcb4": "이렇게 하면 사이드바에서 체크리스트가 숨겨집니다.",
             "f3b5ffb2a6": "사이드바에서 체크리스트 숨기기"
           },
           "SetupGuideProgressRing": {
@@ -6820,24 +6826,15 @@
           "af8c83ed61": "agents가 로그인을 재사용할 수 있도록 Chrome, Edge 또는 기타 브라우저에서 쿠키를 가져옵니다.",
           "68ea76eb71": "agents가 Orca의 브라우저를 작동할 수 있도록 브라우저 사용 스킬을 설치하세요.",
           "2d6ead9ab2": "브라우저 사용 스킬 설치",
-          "e9f3f3b488": "설치 위치",
-          "9fca1f7f5d": "agents가 셸에서 브라우저를 조정할 수 있도록 Orca CLI 명령을 등록합니다.",
-          "c6065d205d": "Orca CLI 활성화",
-          "c79eff0213": "agents가 브라우저를 구동할 수 있도록 Orca CLI를 등록하세요.",
-          "702488a5f7": "코딩 agents가 로그인을 통해 이 브라우저를 구동하게 하세요. 아래 세 단계를 완료하세요.",
           "b8a1f2d84d": "Agent 브라우저 사용",
           "96b91c6349": "코딩 agents가 로그인을 통해 이 브라우저를 구동하게 하세요.",
           "2ea4617e3a": "{{value1}}{{value2}}에서 {{value0}} 쿠키를 가져왔습니다.",
-          "721aee31b4": "PATH에 Orca CLI를 등록했습니다.",
-          "180a9abf3a": "CLI 상태를 로드하지 못했습니다.",
           "2ccfc9cff8": "가져오기",
           "0462565413": "다시 가져오기",
           "de9b2f32f3": "활성화",
-          "ad8cb0ee22": "경로 수정",
-          "0289434ed6": "활성화됨",
-          "8b3054dac7": "등록 중...",
           "8f2675c2f3": "파일에서 {{value0}}개의 쿠키를 가져왔습니다.",
-          "5301857d88": "{{value0}}에서"
+          "5301857d88": "{{value0}}에서",
+          "finishSteps": "코딩 agents가 로그인된 상태로 이 브라우저를 조작하게 합니다. 아래 단계를 완료하세요."
         },
         "BrowserUseSkillStep": {
           "0871b6998d": "agents가 Orca 브라우저에서 페이지를 탐색하고 확인할 수 있습니다.",
@@ -6858,7 +6855,6 @@
           "5dae812f50": "새로고침",
           "52e640f3a0": "CLI 상태 새로 고침",
           "38edbb5721": "셸 명령",
-          "6930feda9e": "terminals에서 Orca를 사용하여 앱을 열고, 작업 트리를 관리하고, Orca terminals과 상호 작용할 수 있습니다.",
           "c5c0f2641d": "Orca CLI",
           "d77352f2df": "PATH에서 `{{value0}}`을(를) 제거하지 못했습니다.",
           "af5540930c": "PATH에서 `{{value0}}`을 제거했습니다.",
@@ -6882,7 +6878,8 @@
           "cbe55e4d48": "탐색기에서 보기",
           "9fd4023db0": "파일 관리자에서 보기",
           "installFailureUnknownReason": "Orca가 CLI 등록을 완료하지 못했고 이유를 보고하지 않았습니다.",
-          "installFailureConflictRemedy": "{{value0}}을(를) 제거하고 더 이상 필요하지 않으면 다시 등록하세요."
+          "installFailureConflictRemedy": "{{value0}}을(를) 제거하고 더 이상 필요하지 않으면 다시 등록하세요.",
+          "outsideOrcaDescription": "Orca 터미널에서는 이미 `orca`를 쓸 수 있습니다. Orca 밖의 다른 터미널에서 `orca`를 쓰려면 켜세요."
         },
         "CliSkillRuntimeSetup": {
           "04325573f8": "WSL",
@@ -7468,15 +7465,9 @@
           "c7f3fe0a6e": "일반 에뮬레이터 명령",
           "d94ca6a623": "agents가 모바일 에뮬레이터 제어를 포함하여 Orca CLI 명령을 사용할 수 있도록 합니다.",
           "67e19ee03c": "Orca CLI 스킬",
-          "aaf62a3dd2": "설치 위치",
-          "2fef055608": "agents가 셸에서 활성 에뮬레이터를 제어할 수 있도록 Orca CLI 명령을 등록합니다.",
-          "4f2205f3b6": "Orca CLI 활성화",
           "ff4b7e65d6": "코딩 agents가 Orca CLI 명령을 사용하여 활성 모바일 에뮬레이터를 제어하도록 합니다.",
           "2a674aa810": "Agent 모바일 에뮬레이터 제어",
-          "cdeaed9e37": "PATH에 Orca CLI를 등록했습니다.",
-          "3d34423e88": "Orca CLI를 등록하는 중",
-          "3be27641c9": "agent 셸에서 에뮬레이터 명령을 실행할 수 있도록 합니다.",
-          "3941719a56": "스킬 설정을 열기 전에 Orca CLI를 확인하고 있습니다."
+          "cdeaed9e37": "PATH에 Orca CLI를 등록했습니다."
         },
         "MobileEmulatorExamples": {
           "edf13dd03b": "복사",
@@ -7827,8 +7818,7 @@
           "81057d5f71": "저장 중...",
           "da37d6f10e": "복사",
           "3149964b66": "복사됨",
-          "waitForSetupBeforeAgent": "agent를 시작하기 전에 설정이 완료될 때까지 기다리세요.",
-          "waitForSetupBeforeAgentHelp": "설치 프로그램이 시작 중에 agent에 필요한 종속성, MCP 서버 또는 구성 파일을 설치할 때 이 기능을 켜십시오."
+          "waitForSetupBeforeAgent": "agent를 시작하기 전에 설정이 완료될 때까지 기다리세요."
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "{{value0}} repo 색상 사용",
@@ -8943,6 +8933,9 @@
             "0d1c334987": "뚜껑",
             "ff8de8a2ad": "표시",
             "0d752916f8": "훅",
+            "agent-trust-trust": "신뢰",
+            "agent-trust-folder": "폴더",
+            "agent-trust-worktree": "워크트리",
             "6984d4291a": "상태",
             "13b20636a6": "대기",
             "8599603496": "완료",
@@ -9301,16 +9294,7 @@
               "9d97446873": "agent",
               "a2d489263e": "스킬",
               "a7e82445fa": "agents가 Orca의 브라우저를 작동할 수 있도록 브라우저 사용 스킬을 설치하세요.",
-              "a1414dcefb": "브라우저 사용 스킬 설치",
-              "e56c7b55c9": "설정",
-              "034c5e8d7f": "활성화",
-              "7e0dcb257a": "셸",
-              "3ffafc9b95": "명령",
-              "30c74aaa1f": "경로",
-              "ff05cbc344": "orca",
-              "85fab5e12c": "CLI",
-              "890ddf943d": "agents가 브라우저를 구동할 수 있도록 Orca CLI를 등록하세요.",
-              "50f0860e18": "Orca CLI 활성화"
+              "a1414dcefb": "브라우저 사용 스킬 설치"
             }
           }
         },
@@ -9486,7 +9470,8 @@
               "openclaude": "개방형",
               "omp": "펌프",
               "terminal": "터미널",
-              "agent": "에이전트"
+              "agent": "에이전트",
+              "queue": "대기열"
             },
             "agentDashboard": {
               "title": "에이전트 대시보드",
@@ -10708,6 +10693,10 @@
         "agent-status-hooks-copy": {
           "7707c15abb": "Agent 상태 훅",
           "a68a642835": "Orca에서 작업 중, 대기 중, 완료 상태를 표시합니다. 끄면 Orca가 관리하는 훅을 제거하고 재설치를 중단합니다."
+        },
+        "agent-workspace-trust-copy": {
+          "title": "Orca가 에이전트를 시작할 때 폴더 신뢰",
+          "description": "Orca가 시작한 에이전트는 \"Do you trust this folder?\" 확인을 건너뛰므로, 프로젝트의 에이전트 훅과 설정이 바로 실행됩니다. 이 설정이 없으면 각 에이전트가 폴더에서 처음 실행될 때 확인을 요청합니다. 오케스트레이션 워커, 자동화, 휴대폰에서 시작한 에이전트처럼 사용자가 지켜보지 않는 동안 실행되는 에이전트는 해당 터미널에서 응답할 때까지 그 확인에서 기다립니다. 이미 신뢰한 폴더는 계속 신뢰됩니다."
         },
         "agent-generated-tab-title-copy": {
           "19ad21615a": "탭 제목 자동 생성",
@@ -13627,9 +13616,8 @@
           "1eee1c7bd8": "PATH에서 agents를 찾지 못했습니다. 나중에 설치할 항목을 선택하거나 빈 terminal로 계속 진행하세요.",
           "hideAgents": "agents 숨기기",
           "showMoreAgents": "agents {{value0}}개 더 보기→",
-          "yoloPermissionsLabel": "Yolo / 권한 확인 위험하게 건너뛰기",
-          "yoloPermissionsInfo": "Agent 권한 정보",
-          "yoloPermissionsTooltip": "중단을 줄이기 위해 agents 권한 확인을 건너뜁니다."
+          "yoloModeLabel": "Yolo 모드",
+          "yoloPermissionsDescription": "agents가 묻지 않고 명령을 실행하고 파일을 편집하며, 일부는 샌드박스도 우회합니다. 신뢰할 수 있는 프로젝트에서만 사용하세요."
         },
         "FeatureSetupInlineTerminal": {
           "789b59936e": "Enter를 눌러 명령을 실행하고 요청 시 npx를 확인합니다. 나중에 설정에서 설정할 수도 있습니다.",
@@ -13664,7 +13652,6 @@
         "NotificationStep": {
           "3bede04483": "테스트 알림 보내기",
           "dc897423e1": "알림 소리 선택",
-          "53aaffe49a": "알림음",
           "0fe570690c": "데스크톱 알림이 전달된 후 Orca가 재생하는 경고를 선택합니다.",
           "0af746e41f": "소리를 선택하세요",
           "8124d085a6": "맥 설정 열기",
@@ -14188,7 +14175,8 @@
             "3a59452a67": "리뷰를 위해 스킬 명령을 아래에 복사하여 삽입했습니다.",
             "c605f51f2b": "기능 설정 준비 완료",
             "1aa657d8f4": "일부 기능 설정에 주의가 필요합니다.",
-            "c89534cbe9": "CLI 및 스킬 설치"
+            "allInstalled": "모든 스킬 설치됨",
+            "installSkills": "스킬 설치"
           },
           "AiCommitPrSettingsCard": {
             "8d4152701a": "예: ollama run llama3.1 {{value0}}",
@@ -14281,7 +14269,6 @@
             "1a6a7d6c80": "설정",
             "713cc529a5": "마일스톤",
             "b1f1981c5e": "작업 보기",
-            "0235b268b2": "아직 완료되지 않음",
             "13294d3405": "완료"
           },
           "FeatureWallSetupWorkflowActions": {
@@ -14392,13 +14379,13 @@
               "setup": {
                 "status": {
                   "8eccfcb314": "설치됨",
-                  "21d4f79c93": "CLI 및 스킬 설치를 클릭하여 macOS 액세스 설정을 엽니다.",
                   "5c9293e51a": "앱 액세스 확인 중",
-                  "aae94eeb52": "CLI 및 스킬 설치를 클릭하세요.",
                   "aa8e143a2f": "설치를 확인할 수 없습니다.",
                   "9b33e7fb13": "설치 확인 중",
-                  "4c8e1f92a7": "이 Mac에서 Orca Desktop을 여세요",
-                  "6d2b0a84e1": "이 빌드에서는 사용할 수 없습니다"
+                  "6d2b0a84e1": "이 빌드에서는 사용할 수 없습니다",
+                  "needsMacAccess": "macOS 접근 권한 필요",
+                  "notInstalled": "설치되지 않음",
+                  "requiresOrcaDesktop": "Orca Desktop 필요"
                 }
               }
             }
@@ -14409,7 +14396,6 @@
                 "checklist": {
                   "localized": {
                     "copy": {
-                      "ec0a363633": "동시 작업",
                       "62bac8f43c": "동시에 2개의 서로 다른 워크트리에서 작업하세요. 같은 프로젝트 내에서도 각각 완벽히 격리되어 있어 2개의 기능을 동시에 작업하기에 적합합니다.",
                       "908898c3ee": "Orca 브라우저 사용",
                       "43781563c3": "Orca를 벗어나지 않고 웹 앱을 탐색하세요. 원하는 요소를 선택하고 클릭 한 번으로 정확한 소스와 스타일을 에이전트에 전달할 수 있습니다.",
@@ -14417,14 +14403,15 @@
                       "71bd9a8c95": "에이전트가 작업을 완료했거나, 확인이 필요하거나, 차단된 순간을 즉시 알 수 있습니다.",
                       "46db810da8": "기본 에이전트 선택",
                       "b8e5bae17f": "선호하는 에이전트를 미리 선택하여 새로운 작업을 더 빠르게 시작하세요.",
-                      "fee5557b02": "Orca CLI 활성화",
-                      "7bcb4097fa": "Orca 셸 명령을 등록하고 브라우저, 컴퓨터 및 오케스트레이션 워크플로를 위한 에이전트 스킬을 설치하세요.",
                       "ad342dd4c6": "서비스 연동",
                       "06fe30fdb0": "클릭 한 번으로 작업에서 에이전트를 시작하고 PR 상태를 한눈에 확인하세요.",
                       "eddc532e58": "워크스페이스 설정 자동화",
                       "56049b74c2": "설치 및 설정 명령을 자동으로 실행하여 모든 새 워크트리가 에이전트 작업을 바로 수행할 수 있도록 준비합니다.",
                       "2cf795433b": "여러 저장소에서 작업 시작",
-                      "42525ba8a4": "주요 저장소를 Orca로 가져와 폴더를 일일이 찾을 필요 없이 에이전트 작업을 시작하세요."
+                      "42525ba8a4": "주요 저장소를 Orca로 가져와 폴더를 일일이 찾을 필요 없이 에이전트 작업을 시작하세요.",
+                      "agentSkillsName": "에이전트에 Orca 스킬 제공",
+                      "agentSkillsDescription": "에이전트가 Orca 브라우저를 조작하고, 컴퓨터를 제어하고, 여러 단계 작업을 조율하는 데 쓰는 스킬을 설치하세요.",
+                      "workOnTwoTasks": "두 작업을 동시에 진행하기"
                     }
                   }
                 }
@@ -14544,8 +14531,7 @@
             "d6d15077df": "리뷰를 위해 스킬 명령을 아래에 복사하여 삽입했습니다.",
             "78e65f19d9": "브라우저 설정에 실패했습니다",
             "b7345c18db": "예기치 않은 오류가 발생했습니다.",
-            "5f97caf76b": "설치 중…",
-            "c2df599513": "CLI 및 스킬 설치"
+            "5f97caf76b": "설치 중…"
           },
           "ConnectIntegrationsList": {
             "3dddb2d565": "작업용으로 연결됨",
@@ -14687,17 +14673,9 @@
                 "agent": {
                   "setup": {
                     "state": {
-                      "fdcca1ec75": "등록 중...",
-                      "69fb2c2289": "활성화됨",
-                      "c6705092ba": "PATH 수정",
-                      "7c1b6bdb1e": "활성화",
-                      "51074ccb05": "CLI 상태를 불러오지 못했습니다.",
                       "35dea1ae12": "agent 제어가 준비되었습니다.",
-                      "9dff3a6338": "스킬이 설치되었습니다. Orca CLI를 활성화하여 설정을 완료하세요.",
-                      "15986a1080": "Orca CLI가 준비되었습니다. 스킬을 설치하여 설정을 완료하세요.",
-                      "4c26913def": "아직 설정되지 않았습니다. agent 제어를 활성화하려면 두 단계를 모두 완료하세요.",
                       "c94ff11e91": "설정 상태를 다시 확인할 수 없습니다.",
-                      "2b519eed94": "Orca CLI가 PATH에 등록되었습니다."
+                      "skillNotInstalled": "Orca CLI 스킬이 아직 설치되지 않았습니다."
                     }
                   }
                 },
@@ -14715,23 +14693,18 @@
             "2fda9ff015": "agent 제어 설정",
             "0ac0fef514": "agent 제어가 준비되었습니다.",
             "2bdfff8763": "agent 제어(선택 사항).",
-            "72736b051f": "agents가 이 시뮬레이터를 제어하도록 하려면 Orca CLI + 스킬을 설정하세요.",
             "d10ae98046": "완료",
             "3756cbeca7": "나중에",
             "6d950431d2": "숨기기",
             "ebceac65a4": "설정",
-            "3f003507f4": "설정에서 전체 설정 열기"
+            "3f003507f4": "설정에서 전체 설정 열기",
+            "installSkillPrompt": "agents가 이 시뮬레이터를 조작하게 하려면 Orca CLI 스킬을 설치하세요."
           },
           "MobileEmulatorAgentSetupGuideSteps": {
-            "9b49d892e3": "Orca CLI 활성화",
-            "3d8dc52c93": "agents 셸에서 에뮬레이터 제어를 위해 orca 명령을 등록합니다.",
             "21f5687c07": "Orca CLI 스킬",
             "64fb057667": "이 워크트리의 orca 에뮬레이터 명령을 agents에게 알려줍니다.",
             "5c59ea96ca": "모바일 에뮬레이터 Orca CLI 스킬 설정",
-            "bff5341ac3": "모바일 에뮬레이터 Orca CLI 스킬 설치 terminal",
-            "3d34423e88": "Orca CLI를 등록하는 중",
-            "3be27641c9": "agent 셸에서 에뮬레이터 명령을 실행할 수 있도록 합니다.",
-            "3941719a56": "스킬 설정을 열기 전에 Orca CLI를 확인하고 있습니다."
+            "bff5341ac3": "모바일 에뮬레이터 Orca CLI 스킬 설치 terminal"
           },
           "MobileEmulatorTabIntroCallout": {
             "1924982130": "닫기",
@@ -17341,6 +17314,58 @@
       }
     },
     "native-chat": {
+      "writeNotice": {
+        "notDoneReadHistory": "이 채팅의 기록을 불러오지 못했습니다.",
+        "notDoneSend": "메시지가 전송되지 않았습니다.",
+        "tryAgainComposerSend": "다시 보내세요.",
+        "notDoneStop": "에이전트가 중지되지 않았습니다.",
+        "notDoneStopTask": "백그라운드 작업이 중지되지 않았습니다.",
+        "notDoneStopTasks": "백그라운드 작업이 중지되지 않았습니다.",
+        "notDoneAnswer": "답변이 전송되지 않았습니다.",
+        "notDoneOption": "설정이 변경되지 않았습니다.",
+        "notDoneCommand": "명령이 실행되지 않았습니다.",
+        "notDoneGoal": "목표가 변경되지 않았습니다.",
+        "restartFailed": "에이전트를 다시 시작하지 못했습니다.",
+        "capacity": "Orca가 지난 하루 동안 너무 많은 요청을 받았습니다.",
+        "outcomeUnknown": "Orca가 무슨 일이 있었는지 확인하지 못했습니다. 채팅을 확인하세요.",
+        "questionChanged": "이 질문은 이미 답변되었거나 변경되었습니다.",
+        "historyUnreadable": "Orca가 이 채팅의 저장된 기록을 읽지 못했습니다.",
+        "historyUnusable": "이 채팅을 불러올 수 없습니다.",
+        "historyUnavailable": "Orca가 지금 이 채팅의 기록을 열지 못했습니다.",
+        "savedByNewerOrca": "채팅이 최신 버전의 Orca에서 저장되었습니다.",
+        "updateOrcaToKeepUsing": "계속 사용하려면 Orca를 업데이트하세요.",
+        "unsupported": "이 채팅을 실행 중인 Orca가 이 기능을 지원하지 않습니다. Orca를 업데이트한 후 다시 시도하세요.",
+        "unreachable": "Orca가 에이전트에 연결하지 못했습니다.",
+        "recordFailed": "Orca가 이 채팅의 기록에 저장하지 못했습니다.",
+        "conversationCleared": "이 대화는 지워졌습니다.",
+        "openCurrentConversation": "계속하려면 현재 대화를 여세요.",
+        "clearUnfinished": "마지막 /clear가 완료되지 않았습니다.",
+        "commandRunning": "/compact 또는 /clear가 아직 실행 중입니다.",
+        "waitForCommand": "/compact 또는 /clear가 끝날 때까지 기다리세요.",
+        "agentStarting": "에이전트가 아직 시작 중입니다.",
+        "waitForStart": "에이전트가 시작을 마칠 때까지 기다리세요.",
+        "turnActive": "에이전트가 아직 응답 중입니다.",
+        "waitForTurn": "에이전트가 응답을 마칠 때까지 기다리거나 에이전트를 중지하세요.",
+        "promptPending": "에이전트가 질문 또는 승인에 대한 응답을 기다리고 있습니다.",
+        "answerFirst": "먼저 질문 또는 승인에 응답하세요.",
+        "backgroundTasksRunning": "백그라운드 작업이 아직 실행 중입니다.",
+        "waitForBackgroundTasks": "백그라운드 작업이 끝날 때까지 기다리세요.",
+        "messagesUnsettled": "앞서 보낸 메시지가 아직 확인되지 않았습니다.",
+        "settleEarlierMessage": "앞서 보낸 메시지가 전달될 때까지 기다리거나 다시 시도하세요.",
+        "optionRejected": "에이전트가 이 설정을 받아들이지 않았습니다.",
+        "goalsUnsupported": "이 에이전트는 목표를 지원하지 않습니다.",
+        "agentRefused": "에이전트가 이를 거부했습니다.",
+        "ownerUnproven": "Orca가 이 채팅의 이전 에이전트가 중지되었는지 아직 확인하지 못했습니다.",
+        "reopenChat": "다시 확인하려면 채팅을 다시 여세요.",
+        "terminalAgentHoldsChat": "이 채팅은 아직 터미널 에이전트에서 열려 있습니다.",
+        "quitTerminalAgent": "여기에서 채팅을 계속하려면 해당 에이전트를 종료하세요.",
+        "hostReconciling": "Orca가 다시 시작된 후 이 채팅을 아직 확인하고 있습니다.",
+        "waitMoment": "잠시 기다리세요.",
+        "recordUnreadable": "Orca가 이 채팅의 저장된 상태를 읽지 못했습니다.",
+        "chatNotFound": "이 채팅을 실행하는 Orca에 이 채팅의 기록이 없습니다.",
+        "startNewChat": "계속하려면 새 채팅을 시작하세요.",
+        "tryAgain": "다시 시도하세요."
+      },
       "composer": {
         "imageUnsupported": "이 에이전트는 이미지 붙여넣기를 지원하지 않습니다.",
         "send": "보내기",
@@ -17497,8 +17522,10 @@
         },
         "error": {
           "title": "대화를 로드할 수 없습니다.",
-          "subtitle": "스크립트를 읽을 수 없습니다. 계속 작업하려면 terminal로 다시 전환하세요."
+          "subtitle": "스크립트를 읽을 수 없습니다. 계속 작업하려면 terminal로 다시 전환하세요.",
+          "retryingSubtitle": "스크립트를 읽을 수 없습니다. Orca가 계속 다시 불러오기를 시도합니다."
         },
+        "reconnecting": "이 채팅에 다시 연결하는 중…",
         "pairHost": "호스트를 페어링하여 에이전트 채팅 기록을 확인하세요.",
         "notAgent": {
           "title": "여기에는 대화가 없습니다.",
@@ -17623,6 +17650,7 @@
       "railEmptyMessage": "메시지",
       "ask": {
         "awaiting": "사용자 입력을 기다리는 중:",
+        "awaitingUnnamed": "사용자 입력을 기다리는 중",
         "asked": "질문:",
         "questionCount": "{{value0}} 질문"
       },
@@ -17646,7 +17674,9 @@
         "startedN": "{{value0}} 하위 에이전트가 시작되었습니다.",
         "ranOne": "하위 에이전트 1개 실행",
         "ranN": "{{value0}} 하위 에이전트를 실행했습니다.",
-        "tokens": "{{value0}} 토큰"
+        "tokens": "{{value0}} 토큰",
+        "unnamed": "하위 에이전트",
+        "writtenBy": "하위 에이전트 {{value0}}의 출력"
       },
       "conversationCommand": {
         "pendingWork": "이 명령을 사용하기 전에 보류 중인 작업과 메시지가 완료될 때까지 기다리십시오.",
@@ -17682,6 +17712,29 @@
         "label": "컨텍스트 {{used}}/{{window}} 토큰, {{percent}}% 사용",
         "title": "컨텍스트",
         "estimated": "마지막 응답 기준 추정치입니다."
+      },
+      "queuedMessages": {
+        "alreadySent": "이 메시지는 이미 전송되었습니다.",
+        "editAlreadySent": "이미 전송되었습니다 — 텍스트는 입력창에 남아 있습니다.",
+        "listLabel": "대기 중인 메시지",
+        "behindReturnedHold": "대기 중 — 앞의 메시지에 확인이 필요합니다",
+        "awaitingAnswerHold": "답변을 기다리는 중",
+        "steer": "지금 보내기",
+        "send": "보내기",
+        "steerHint": "모델을 중단하지 않고 보냅니다",
+        "sendHint": "이 메시지를 지금 보냅니다",
+        "delete": "삭제",
+        "moreActions": "추가 작업",
+        "editMessage": "메시지 편집",
+        "turnOffQueueing": "대기열 사용 안 함",
+        "withdrawnHold": "전송 전에 중지됨",
+        "pausedSendFailed": "보낼 수 없습니다. 보내기를 눌러 다시 시도하세요.",
+        "paused": "일시 중지됨",
+        "queuePausedStopped": "중단했기 때문에 대기열이 일시 중지되었습니다",
+        "queuePausedRestarted": "Orca가 다시 시작되어 대기열이 일시 중지되었습니다",
+        "queuePausedCleared": "대화를 지워서 대기열이 일시 중지되었습니다",
+        "queuePaused": "대기열이 일시 중지되었습니다",
+        "resume": "재개"
       }
     },
     "tab": {
@@ -18009,7 +18062,15 @@
             "spaces": "공백"
           }
         }
+      },
+      "nativeChat": {
+        "queueFollowUpsTitle": "후속 메시지 대기열에 추가",
+        "queueFollowUpsCopy": "Agent가 작업하는 동안 보낸 메시지는 지금 보내기, 편집, 삭제할 수 있는 카드로 대기합니다. 이미지가 포함된 메시지는 바로 전송됩니다.",
+        "queueFollowUpsToggleLabel": "후속 메시지 대기열 전환"
       }
+    },
+    "agentChildRow": {
+      "ended": "종료됨"
     }
   },
   "dashboardPopout": {
@@ -18236,6 +18297,7 @@
       "needsInput": "입력 필요",
       "working": "작업 중",
       "stopped": "중지됨",
+      "failed": "실패함",
       "finished": "완료됨"
     }
   },
@@ -18427,5 +18489,63 @@
   },
   "common": {
     "retry": "다시 시도"
+  },
+  "fileExplorer": {
+    "root": {
+      "label": "탐색기 루트",
+      "full": "저장소 루트",
+      "viewing": "보기: {{path}}",
+      "back": "{{path}}(으)로 돌아가기",
+      "searchScope": "검색 범위: 작업 공간 파일",
+      "retry": "다시 시도",
+      "omittedFiles": "희소 체크아웃에서 제외된 파일은 검색되지 않습니다.",
+      "viewOnly": "희소 체크아웃 · 보기를 바꿔도 체크아웃된 파일은 변경되지 않습니다.",
+      "sparseStatus": "스파스 체크아웃",
+      "scopeDetails": "스파스 체크아웃 범위 안내",
+      "scopeExplanation": "폴더 선택은 표시 범위만 바꾸며 체크아웃된 파일은 바꾸지 않습니다. 저장소 루트에는 루트와 상위 폴더에 체크아웃된 파일도 표시됩니다.",
+      "searchExplanation": "이름 검색은 현재 보고 있는 폴더를 필터링합니다. 내용 검색은 전체 워크스페이스를 검색합니다. 스파스 체크아웃에서 제외된 파일은 검색하지 않습니다.",
+      "findInFolder": "{{path}}에서 찾기",
+      "folderLoadError": "이 폴더를 불러오지 못했습니다:",
+      "emptyFolder": "이 폴더에 파일이 없습니다"
+    }
+  },
+  "sparsePreset": {
+    "nameRequired": "이름을 입력하세요.",
+    "nameTooLong": "이름은 80자 이하여야 합니다.",
+    "nameExists": "같은 이름의 프리셋이 이미 있습니다: {{name}}",
+    "name": "이름",
+    "namePlaceholder": "웹 앱 및 공용 UI",
+    "directories": "디렉터리",
+    "pathHelp": "한 줄에 저장소 기준 상대 경로를 하나씩 입력하세요. 경로 내 공백은 유지됩니다.",
+    "coneHelp": "Git은 저장소 루트와 선택한 디렉터리의 상위 폴더에 있는 파일도 유지합니다.",
+    "cancel": "취소",
+    "save": "프리셋 저장",
+    "new": "새 희소 체크아웃 프리셋",
+    "edit": "희소 체크아웃 프리셋 편집",
+    "description": "새 워크스페이스에서 체크아웃할 폴더를 선택하세요.",
+    "saveFailed": "프리셋을 저장하지 못했습니다. 다시 시도하세요.",
+    "loading": "프리셋을 불러오는 중...",
+    "details": "어떤 파일이 체크아웃되나요?",
+    "finishEditing": "워크스페이스 만들기를 계속하려면 프리셋을 저장하거나 취소하세요.",
+    "pathInstructions": "저장소 루트 기준 상대 경로로 한 줄에 폴더 하나씩 입력하세요.",
+    "retryLoad": "프리셋 불러오기 다시 시도",
+    "fullCheckout": "전체 체크아웃",
+    "checkoutPreset": "체크아웃 프리셋",
+    "search": "프리셋 찾기…",
+    "noMatches": "일치하는 프리셋이 없습니다.",
+    "allFiles": "저장소의 모든 파일",
+    "editNamed": "프리셋 편집: {{name}}",
+    "addPath": "Add a folder",
+    "findPath": "Find a folder…",
+    "noPathMatches": "No folders found.",
+    "repositoryRoot": "Repository root",
+    "loadingPaths": "Reading folders…",
+    "pathsUnavailable": "Could not read this folder. Type the path instead.",
+    "pathAdded": "Added",
+    "openFolder": "Open {{name}}",
+    "findOrTypePath": "Find a folder, or type any path…",
+    "addTypedPath": "Add",
+    "noDirectories": "No folders added yet.",
+    "removePath": "Remove {{name}}"
   }
 }

@@ -455,7 +455,8 @@ describe('HeadlessEmulator', () => {
 
     it('tracks long split private mouse mode sequences', async () => {
       emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
-      const fillerModes = Array.from({ length: 40 }, (_, i) => String(3000 + i)).join(';')
+      // Within xterm's 32-param cap: modes follow what xterm itself parsed, as every live viewer does.
+      const fillerModes = Array.from({ length: 29 }, (_, i) => String(3000 + i)).join(';')
 
       await emulator.write(`\x1b[?1002;${fillerModes};100`)
       await emulator.write('6h')

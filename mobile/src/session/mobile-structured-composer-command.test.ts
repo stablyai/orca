@@ -1,9 +1,20 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
+
+const asyncStorage = vi.hoisted(() => ({
+  getItem: vi.fn(),
+  setItem: vi.fn(),
+  removeItem: vi.fn()
+}))
+
+vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStorage }))
+
 import { dispatchMobileStructuredCommand } from './mobile-structured-composer-command'
 
 function setup() {
-  const sendRequest = vi.fn(async (_method: string, _params: unknown, _options: unknown) => ({
+  const sendRequest = vi.fn<
+    (method: string, params: unknown, options: unknown) => Promise<unknown>
+  >(async () => ({
     ok: true,
     result: { ok: true, value: { command: 'compact', state: 'completed' } }
   }))
@@ -29,7 +40,17 @@ function setup() {
   }
   return { input, sendRequest }
 }
+/** The fields one recorded request carried, read without asserting their shape. */
+function requestFields(call: readonly unknown[] | undefined): Record<string, unknown> {
+  const params = call?.[1]
+  return typeof params === 'object' && params !== null
+    ? Object.fromEntries(Object.entries(params))
+    : {}
+}
 describe('mobile structured conversation commands', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
   it.each(['/clear', '/compact'])(
     'uses the command RPC for %s without an ordinary send',
     async (text) => {
@@ -97,6 +118,16 @@ describe('mobile structured conversation commands', () => {
       expect(input.onError).toHaveBeenCalled()
     }
   )
+  it('/clear is a plain command on every host: no withdrawal fields, nothing persisted', async () => {
+    // The host carries queued cards to the replacement session itself; the
+    // client asks for nothing back and has nothing to restore.
+    const { input, sendRequest } = setup()
+    expect(await dispatchMobileStructuredCommand({ ...input, text: '/clear' })).toBe('accepted')
+    const fields = requestFields(sendRequest.mock.calls[0])
+    expect(Object.keys(fields).sort()).toEqual(['command', 'envelope'])
+    expect(fields.command).toBe('clear')
+    expect(asyncStorage.setItem).not.toHaveBeenCalled()
+  })
   it('keeps ordinary messages on the existing send path', async () => {
     const { input, sendRequest } = setup()
     expect(await dispatchMobileStructuredCommand({ ...input, text: 'hello' })).toBeNull()

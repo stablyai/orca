@@ -14,6 +14,7 @@ import type { OpenCodeWslRuntime } from './session-scanner-opencode-wsl-runtime'
 
 export type AiVaultScanOptions = {
   claudeProjectsDir?: string
+  codebuddyProjectsDir?: string
   codexSessionsDir?: string
   additionalCodexSessionsDirs?: readonly string[]
   // Why: tests inject a sandbox "real ~/.codex" so real-home attribution
@@ -29,6 +30,8 @@ export type AiVaultScanOptions = {
   // Why: OpenCode 1.17.x stores sessions in SQLite; tests inject a temp DB
   // here so they don't depend on the real ~/.local/share/opencode.
   opencodeDbPaths?: readonly string[]
+  /** Test override for the ZCode CLI's OpenCode-shaped SQLite database. */
+  zcodeDbPath?: string
   grokSessionsDir?: string
   devinTranscriptsDir?: string
   hermesSessionsDir?: string

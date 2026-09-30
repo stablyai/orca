@@ -241,23 +241,3 @@ export const GRAB_SECRET_PATTERNS = [
   'password',
   'passwd'
 ]
-
-/** Computed style properties to extract — matches BrowserGrabComputedStyles keys. */
-export const GRAB_STYLE_PROPERTIES: readonly (keyof BrowserGrabComputedStyles)[] = [
-  'display',
-  'position',
-  'width',
-  'height',
-  'margin',
-  'padding',
-  'color',
-  'backgroundColor',
-  'border',
-  'borderRadius',
-  'fontFamily',
-  'fontSize',
-  'fontWeight',
-  'lineHeight',
-  'textAlign',
-  'zIndex'
-]

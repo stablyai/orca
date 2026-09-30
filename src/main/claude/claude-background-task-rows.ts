@@ -1,6 +1,7 @@
 // One durable row per Claude background `task_id`, revised in place from the
 // lifecycle frames so a failed command prints once with the provider sentence.
 
+import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-types'
 import { isSettledBackgroundTaskState } from '../../shared/native-chat-background-task-row'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { record, taskAliasId } from './claude-background-task-frames'
@@ -46,6 +47,8 @@ export type ClaudeBackgroundTaskRowsDeps = {
    *  output, so writing one must reopen a turn the provider resumed itself —
    *  otherwise the session renders the row while reporting idle. */
   openOutputTurn?: (frame: Record<string, unknown>, observedAt: number) => void
+  /** The turn a row written now belongs to: the open one, else the conversation. */
+  turnScope: () => AgentJournalTurnScope
   onPersistenceFailure?: (error: Error) => void
   now?: () => number
 }
@@ -60,7 +63,11 @@ export class ClaudeBackgroundTaskRows {
 
   constructor(private readonly deps: ClaudeBackgroundTaskRowsDeps) {
     this.now = deps.now ?? (() => Date.now())
-    this.writer = new ClaudeBackgroundTaskRowWriter(deps.sink, deps.onPersistenceFailure)
+    this.writer = new ClaudeBackgroundTaskRowWriter(
+      deps.sink,
+      deps.turnScope,
+      deps.onPersistenceFailure
+    )
     this.overflowTerminalRows = new ClaudeOverflowTerminalRows(
       this.ledgers,
       this.now,

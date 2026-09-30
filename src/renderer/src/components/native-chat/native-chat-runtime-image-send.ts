@@ -56,20 +56,20 @@ export function sendNativeChatMessageWithImageAttachments(
           ),
           trimmedText.length > 0
         )) {
-          sendRuntimePtyInput(settings, ptyId, payload)
+          sendRuntimePtyInput(settings, ptyId, payload, 'driving')
         }
         if (trimmedText.length > 0) {
           delay(NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS, () => {
-            sendRuntimePtyInput(settings, ptyId, buildNativeChatPasteBytes(text))
+            sendRuntimePtyInput(settings, ptyId, buildNativeChatPasteBytes(text), 'driving')
             delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
-              sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT)
+              sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT, 'driving')
               markSubmitted()
             })
           })
           return
         }
         delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
-          sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT)
+          sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT, 'driving')
           markSubmitted()
         })
       })

@@ -1,5 +1,8 @@
 # CI efficiency and runner capacity
 
+The [September 28 demand rollout](ci-demand-rollout.md) documents staged checks,
+unit-selection evidence, Bun qualification, review cancellation and daily occupancy reports.
+
 ## September 27 follow-up
 
 ### Shared E2E CLI output

@@ -14,12 +14,11 @@ import type { RpcResponse } from './types'
  * surfaces the host's message, `status.create-capabilities-or-skip` is the create drawer's) because
  * an operation name is what a decode failure reports, and because transport must not import tasks.
  *
- * One reader, but three different meanings for an unreadable status, which is why the three
- * readers below exist rather than each caller calling `interpret` directly. The gate wants the
- * failure (its own `catch` degrades to closed gates), and the probe and the race must not have it:
- * both call `interpret` inside a `.then` fulfilment handler, where a throw becomes a detached
- * rejection instead of reaching their rejection handler — the probe would latch capability-gated UI
- * hidden with no retry, and the race would never count the candidate at all.
+ * The readers below exist rather than each caller calling `interpret` directly because neither the
+ * probe (which the gate also runs on) nor the race may have an unreadable status thrown at it: both
+ * call `interpret` inside a `.then` fulfilment handler, where a throw becomes a detached rejection
+ * instead of reaching their rejection handler — the probe would latch capability-gated UI hidden
+ * with no retry, and the race would never count the candidate at all.
  */
 export const hostStatusProbe = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -30,16 +29,6 @@ export const hostStatusProbe = bindDeferredRpcOperation(
     read: rpcResultVariant('host-status', hostStatusSchema)
   })
 )
-
-/**
- * The gate's read. An unreadable status raises `RpcIncompatibleReplyError` naming `status.get`,
- * which host-status-gates.ts already catches into the same closed gates a property read on a null
- * status used to throw its way to.
- */
-export function readHostStatusGates(reply: RpcResponse): HostStatusReply | null {
-  const accepted = hostStatusProbe.interpret(reply)
-  return accepted.accepted ? accepted.value : null
-}
 
 /**
  * The status the retrying probe delivers, or `null` for a refusal it should back off from.

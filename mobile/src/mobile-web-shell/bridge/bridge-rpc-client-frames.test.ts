@@ -12,10 +12,6 @@ import {
   BRIDGE_ACK_INTERVAL_FRAMES
 } from './bridge-client-subscriptions'
 import { BRIDGE_PROTOCOL_VERSION, type BridgeHostMessage } from './bridge-envelope'
-import { BRIDGE_BACK_FRAME } from './bridge-page-back'
-import { BRIDGE_PAGE_PAINTED } from './bridge-page-painted'
-import { BRIDGE_ROUTE_UPDATE_ACCEPT } from './bridge-route-update'
-import { BRIDGE_SAFE_AREA_ACCEPT } from './bridge-safe-area-insets'
 import {
   BRIDGE_READY_RETRY_MAX_MS,
   BRIDGE_READY_RETRY_MIN_MS
@@ -43,16 +39,9 @@ afterEach(() => {
 })
 
 describe('bridge client handshake', () => {
-  it('asks for a session as soon as it exists, naming what it can be sent and what it reports', () => {
+  it('asks for a session as soon as it exists, declaring nothing', () => {
     const page = createPageClient()
-    expect(page.frames()).toEqual([
-      {
-        v: BRIDGE_PROTOCOL_VERSION,
-        type: 'ready',
-        accepts: [BRIDGE_ROUTE_UPDATE_ACCEPT, BRIDGE_BACK_FRAME, BRIDGE_SAFE_AREA_ACCEPT],
-        reports: [BRIDGE_PAGE_PAINTED]
-      }
-    ])
+    expect(page.frames()).toEqual([{ v: BRIDGE_PROTOCOL_VERSION, type: 'ready' }])
   })
 
   it('keeps asking on a widening backoff until init answers', () => {
@@ -141,13 +130,11 @@ describe('bridge client handshake', () => {
       pageRouteGrants: null,
       // And no insets, which is the shell that reserves the bar strips outside the view.
       safeAreaInsets: { top: 0, right: 0, bottom: 0, left: 0 },
+      keyboardInset: 0,
       // And no host and no stored keys, which is what `host-store.web.ts` then answers with.
       host: null,
       storage: {},
-      storageOversize: [],
-      // And one that takes nothing from the page beyond the frames every shell has taken, which
-      // is what stops the page posting an erase it would refuse whole (ruling 34).
-      accepts: []
+      storageOversize: []
     })
   })
 

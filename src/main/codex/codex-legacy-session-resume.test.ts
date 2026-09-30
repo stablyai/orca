@@ -135,18 +135,15 @@ describe('prepareLegacySharedCodexSessionResume', () => {
     }
   )
 
-  it.each(['managed account', 'custom CODEX_HOME'])(
-    'preserves the legacy home while the %s lane is selected',
-    async () => {
-      const result = await prepareLegacySharedCodexSessionResume(legacyArgs(), {
-        ...options(),
-        isHostSystemDefaultRealHome: () => false
-      })
+  it('preserves the legacy home while a non-default Codex home lane is selected', async () => {
+    const result = await prepareLegacySharedCodexSessionResume(legacyArgs(), {
+      ...options(),
+      isHostSystemDefaultRealHome: () => false
+    })
 
-      expect(result).toEqual({ useRealCodexHome: false })
-      expect(existsSync(targetRolloutPath())).toBe(false)
-    }
-  )
+    expect(result).toEqual({ useRealCodexHome: false })
+    expect(existsSync(targetRolloutPath())).toBe(false)
+  })
 
   it('still materializes a legacy resume when an account selection exists', async () => {
     const result = await prepareLegacySharedCodexSessionResume(legacyArgs(), {

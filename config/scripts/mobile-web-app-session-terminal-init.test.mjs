@@ -148,8 +148,6 @@ async function openSessionWithTerminalTab() {
     faultGrant,
     grants: [faultGrant, ...sessionGrants()],
     pageRoutes: PAGE_ROUTE_PATTERNS,
-    // The page claims an identity only against a shell that says it swaps one in.
-    accepts: [pageClientIdentity.accept],
     streams: ['session.tabs.subscribe', 'terminal.subscribe'],
     replies: {
       'worktree.show': { worktree: { id: WORKTREE, name: WORKTREE, path: `/tmp/${WORKTREE}` } },
@@ -257,8 +255,17 @@ describeRender(
       // `.xterm-screen` does: it is created by `term.open()`, which only ever runs from the
       // document's `init`. The emulator run had the surface with zero children inside a correctly
       // sized container, which is this element missing.
+      // Then the grid readable: xterm sizes its one-cell helper textarea only on a cursor move or
+      // resize, so a read the moment the screen exists can land before the replay has drained.
       await page.waitForFunction(
-        () => document.querySelector('.xterm-screen') !== null,
+        () => {
+          const cell = document.querySelector('#terminal-surface .xterm-helper-textarea')
+          return (
+            document.querySelector('.xterm-screen') !== null &&
+            cell !== null &&
+            cell.getBoundingClientRect().width > 0
+          )
+        },
         undefined,
         {
           timeout: 60_000,

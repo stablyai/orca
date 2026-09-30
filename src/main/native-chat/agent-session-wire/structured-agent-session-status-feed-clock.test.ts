@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // Which journal changes republish a session's status now that the summary carries its own state
 // clock: a moved clock always does, and row activity alone does not once the clock dates the state.
 
@@ -10,7 +11,7 @@ import type {
   AgentJournalItemIdentity
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
-import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
+import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
 import { indexedStatusFeedSession } from './structured-agent-session-status-feed-test-session'
 
@@ -56,7 +57,7 @@ async function openFeed() {
       providerHandle: { kind: 'codex', threadId: THREAD }
     },
     now: () => (clock += 100),
-    journalDir: join(root, SESSION)
+    stateDirectory: join(root, SESSION)
   })
   const feed = new StructuredAgentSessionStatusFeed({
     sessions: new Map([[SESSION, indexedStatusFeedSession({ journal })]]),
@@ -73,7 +74,7 @@ async function openFeed() {
     }
   })
   const write = async (identity: AgentJournalItemIdentity, body: AgentJournalItemBody) => {
-    await journal.appendItem(identity, body, { fence: 1 })
+    await journal.appendItem(identity, body, { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE })
     feed.publish(SESSION, journal)
   }
   await write(

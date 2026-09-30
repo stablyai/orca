@@ -3,7 +3,6 @@ import {
   AGENT_PROMPT_BRACKETED_PASTE_END,
   AGENT_PROMPT_BRACKETED_PASTE_START,
   buildAgentPromptPasteBytes,
-  buildAgentPromptSubmitBytes,
   agentPromptSubmitJoinsPasteFrame,
   agentPromptTakesLeadLine,
   getAgentPromptSubmitDelayMs,
@@ -48,7 +47,6 @@ describe('agent prompt injection bytes', () => {
 
   it('keeps submit separate from the paste frame', () => {
     expect(buildAgentPromptPasteBytes('hello')).not.toContain('\r')
-    expect(buildAgentPromptSubmitBytes()).toBe('\r')
   })
 
   it('costs a common-sized prompt far less than the old flat Windows delay', () => {

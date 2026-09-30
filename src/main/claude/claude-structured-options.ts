@@ -41,6 +41,13 @@ export function restoredClaudeStructuredSessionOptions(
   )
 }
 
+/** The keys `setClaudeStructuredOption` writes; a pick made at rest is checked against these. */
+const CLAUDE_STRUCTURED_OPTION_KEYS = new Set(['model', 'permissionMode', 'effort', 'fastMode'])
+
+export function isClaudeStructuredOptionKey(key: string): boolean {
+  return CLAUDE_STRUCTURED_OPTION_KEYS.has(key)
+}
+
 /** A client's write; the startup restore writes through `setClaudeStructuredOption` directly. */
 export function setClaudeStructuredSessionOption(
   session: ClaudeSession,
@@ -51,7 +58,8 @@ export function setClaudeStructuredSessionOption(
   if (session.startup.state !== 'proven') {
     return Promise.reject(
       new AgentSessionOptionRejectedError(
-        'Claude is still starting; options can be changed once it is ready.'
+        'Claude is still starting; options can be changed once it is ready.',
+        'providerStarting'
       )
     )
   }

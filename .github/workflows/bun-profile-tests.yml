@@ -2,6 +2,25 @@ name: Bun profile persistence
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'src/**'
+      - 'config/**'
+      - 'native/**'
+      - 'tests/**'
+      - 'resources/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'tsconfig.json'
+      - '.npmrc'
+      - '.pnpmfile.cjs'
+      - '.github/actions/install-node-dependencies/**'
+      - '.github/workflows/bun-profile-tests.yml'
+  # The pull request qualifies one platform for an unflavoured change; this is where all six
+  # are re-qualified, so a platform break surfaces minutes after merge instead of next cron.
+  push:
+    branches: [main]
     paths:
       - 'src/**'
       - 'config/**'
@@ -17,6 +36,8 @@ on:
       - '.github/actions/install-node-dependencies/**'
       - '.github/workflows/bun-profile-tests.yml'
   workflow_dispatch:
+  schedule:
+    - cron: '30 11 * * *'
 
 permissions:
   contents: read
@@ -32,6 +53,8 @@ jobs:
     timeout-minutes: 5
     outputs:
       should_run: ${{ steps.scope.outputs.should_run }}
+      qualification: ${{ steps.scope.outputs.qualification }}
+      runners: ${{ steps.scope.outputs.runners }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -52,11 +75,15 @@ jobs:
   persistence:
     needs: changes
     # Missing/failed detection runs the full matrix; manual runs remain unconditional.
-    if: ${{ !cancelled() && needs.changes.outputs.should_run != 'false' }}
+    # A draft carries no platform verdict; readiness re-triggers this workflow. Spelled against
+    # the event name so the push and schedule paths do not rest on a null property comparison.
+    if: >-
+      ${{ !cancelled() && needs.changes.outputs.should_run != 'false' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft != true) }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, ubuntu-24.04-arm, macos-14, macos-15-intel, windows-2022, windows-11-arm]
+        os: ${{ fromJSON(needs.changes.outputs.runners || '["ubuntu-22.04","ubuntu-24.04-arm","macos-14","macos-15-intel","windows-2022","windows-11-arm"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     env:
@@ -82,9 +109,12 @@ jobs:
           node out/orcad/orcad.js --orcad-profile-state-preflight 00000000-0000-4000-8000-000000000018
 
   linux_glibc_floor:
-    needs: changes
-    # Missing/failed detection runs the full matrix; manual runs remain unconditional.
-    if: ${{ !cancelled() && needs.changes.outputs.should_run != 'false' }}
+    needs: [changes, persistence]
+    # A failed smoke already blocks qualification; missing scope still selects every platform.
+    if: >-
+      ${{ !cancelled() && needs.persistence.result == 'success' &&
+      needs.changes.outputs.should_run != 'false' &&
+      needs.changes.outputs.qualification != 'false' }}
     strategy:
       fail-fast: false
       matrix:
@@ -107,9 +137,12 @@ jobs:
       - run: pnpm test:bun:profile --artifact
 
   linux_musl:
-    needs: changes
-    # Missing/failed detection runs the full matrix; manual runs remain unconditional.
-    if: ${{ !cancelled() && needs.changes.outputs.should_run != 'false' }}
+    needs: [changes, persistence]
+    # A failed smoke already blocks qualification; missing scope still selects every platform.
+    if: >-
+      ${{ !cancelled() && needs.persistence.result == 'success' &&
+      needs.changes.outputs.should_run != 'false' &&
+      needs.changes.outputs.qualification != 'false' }}
     strategy:
       fail-fast: false
       matrix:

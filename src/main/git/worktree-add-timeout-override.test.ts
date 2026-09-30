@@ -26,11 +26,7 @@ vi.mock('../worktree-trash', () => ({
   scheduleWorktreeTrashDeletion: vi.fn()
 }))
 
-import {
-  resolveWorktreeAddTimeoutMs,
-  WORKTREE_ADD_TIMEOUT_MAX_MS,
-  WORKTREE_ADD_TIMEOUT_MS
-} from './worktree'
+import { resolveWorktreeAddTimeoutMs, WORKTREE_ADD_TIMEOUT_MS } from './worktree'
 import { registerWorktreeSuiteHooks } from './worktree-test-harness'
 
 registerWorktreeSuiteHooks()
@@ -44,12 +40,6 @@ describe('resolveWorktreeAddTimeoutMs', () => {
 
   afterEach(() => {
     warnSpy.mockRestore()
-  })
-
-  // Why: pin the literals so a future edit to either bound has to be deliberate.
-  it('bounds the override to [180s, 30min]', () => {
-    expect(WORKTREE_ADD_TIMEOUT_MS).toBe(180_000)
-    expect(WORKTREE_ADD_TIMEOUT_MAX_MS).toBe(1_800_000)
   })
 
   it('falls back to the default when the override is unset, blank, or unparseable', () => {

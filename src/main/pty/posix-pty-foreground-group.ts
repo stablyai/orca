@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process'
+import { notifySpawnObserver } from '../../shared/child-process/spawn-observer'
 
 const PROCESS_TABLE_LOOKUP_TIMEOUT_MS = 250
 const PROCESS_TABLE_QUERY_TIMEOUT_MS = PROCESS_TABLE_LOOKUP_TIMEOUT_MS / 2
@@ -26,11 +27,18 @@ function hasUsableTty(tty: string): boolean {
 }
 
 function runPs(pid: number): string {
-  return execFileSync('ps', ['-p', String(pid), '-o', 'pid=,tpgid=,tty='], {
-    encoding: 'utf8',
-    timeout: PROCESS_TABLE_QUERY_TIMEOUT_MS,
-    maxBuffer: PROCESS_TABLE_MAX_BYTES
-  })
+  const args = ['-p', String(pid), '-o', 'pid=,tpgid=,tty=']
+  const startedAt = performance.now()
+  try {
+    return execFileSync('ps', args, {
+      encoding: 'utf8',
+      timeout: PROCESS_TABLE_QUERY_TIMEOUT_MS,
+      maxBuffer: PROCESS_TABLE_MAX_BYTES
+    })
+  } finally {
+    // Diagnostics only: execFileSync blocks the caller for the child's whole life.
+    notifySpawnObserver('ps', args, performance.now() - startedAt)
+  }
 }
 
 let ownRowCache: { pid: number; row: string } | null = null

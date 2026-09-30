@@ -21,8 +21,8 @@
  * for a workspace it can resolve. That is why the decision is in two halves rather than one.
  *
  * What genuinely differs per surface is only how a surface is *built* — an orchestration worker's
- * session takes a dispatch hold and a mailbox that a plain launch must not take — so that is
- * injected as a factory instead of branched on here.
+ * session takes a redrive subscription and a mailbox that a plain launch must not take — so that
+ * is injected as a factory instead of branched on here.
  */
 
 import { parsePaneKey } from '../../shared/stable-pane-id'

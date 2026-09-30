@@ -7,9 +7,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   AutomationTimeField,
-  formatAutomationTimeFromClockParts,
   formatAutomationTimeInput,
-  getAutomationClockParts,
   parseAutomationTime,
   resolveDigitCommit,
   resolveDigitStep
@@ -26,21 +24,6 @@ describe('AutomationTimeField helpers', () => {
     expect(parseAutomationTime('bad')).toEqual({ hour: 9, minute: 0 })
     expect(formatAutomationTimeInput(9, 5)).toBe('09:05')
     expect(formatAutomationTimeInput(0, 0)).toBe('00:00')
-  })
-
-  it('converts between 12h clock parts and 24h storage', () => {
-    expect(getAutomationClockParts('00:05')).toEqual({ hour12: 12, minute: 5, period: 'AM' })
-    expect(getAutomationClockParts('13:30')).toEqual({ hour12: 1, minute: 30, period: 'PM' })
-    expect(getAutomationClockParts('12:00')).toEqual({ hour12: 12, minute: 0, period: 'PM' })
-    expect(formatAutomationTimeFromClockParts({ hour12: 12, minute: 5, period: 'AM' })).toBe(
-      '00:05'
-    )
-    expect(formatAutomationTimeFromClockParts({ hour12: 1, minute: 30, period: 'PM' })).toBe(
-      '13:30'
-    )
-    expect(formatAutomationTimeFromClockParts({ hour12: 12, minute: 0, period: 'PM' })).toBe(
-      '12:00'
-    )
   })
 
   it('resolves digit commits with empty → min and range clamp', () => {

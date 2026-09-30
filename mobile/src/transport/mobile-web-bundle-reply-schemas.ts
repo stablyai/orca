@@ -72,6 +72,7 @@ export const MobileWebBundleManifestReadSchema = z
     buildId: z.string().regex(SHA256_PATTERN),
     minCompatibleRuntimeProtocolVersion: z.number().int().nonnegative(),
     runtimeProtocolVersion: z.number().int().nonnegative(),
+    pageVersion: z.number().int().nonnegative().optional(),
     entrypoint: MobileWebBundleAssetPathSchema,
     totalBytes: z.number().int().nonnegative().max(MOBILE_WEB_BUNDLE_MAX_TOTAL_BYTES),
     assets: z.array(assetSchema).min(1).max(MOBILE_WEB_BUNDLE_MAX_ASSETS),

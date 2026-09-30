@@ -381,6 +381,7 @@ describe('orchestration worker-start prompt contract', () => {
     const { runtime, handle } = await createAgentPromptSubmissionRuntime(() => undefined, 'codex')
     runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
     const pending = runtime.sendTerminalAgentPrompt(handle, 'queued prompt', {
+      inputKind: 'driving',
       acceptQueued: true,
       requestId: 'busy-swallowed',
       observationTimeoutMs: 0

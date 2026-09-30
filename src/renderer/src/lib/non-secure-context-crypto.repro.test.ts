@@ -20,19 +20,6 @@ afterEach(() => {
 })
 
 describe('non-secure context (plain HTTP LAN web client)', () => {
-  it('crypto.randomUUID is undefined, like the browser reports', () => {
-    // oxlint-disable-next-line no-restricted-properties -- asserting the absence this suite exists for
-    expect((globalThis.crypto as Crypto).randomUUID).toBeUndefined()
-    // oxlint-disable-next-line no-restricted-properties -- asserting the absence this suite exists for
-    expect(() => (globalThis.crypto as Crypto).randomUUID()).toThrow()
-  })
-
-  it('hashOrcaHookScript does not throw when crypto.subtle is missing', async () => {
-    const { hashOrcaHookScript } = await import('./orca-hook-trust')
-    const hash = await hashOrcaHookScript('echo hi')
-    expect(hash).toMatch(/^[0-9a-f]+$/)
-  })
-
   // The fallback must match the secure-context hash, or the shared trust store
   // mismatches and the user is re-prompted to approve a hook they already
   // trusted on the desktop app.
@@ -54,9 +41,7 @@ describe('non-secure context (plain HTTP LAN web client)', () => {
   it('loads the renderer agent-status authority and its store slice', async () => {
     vi.resetModules()
     const { rendererAgentStatusObservations } = await import('./renderer-agent-status-observations')
-    const { createAgentStatusAuthorityActions } =
-      await import('../store/slices/agent-status-authority-actions')
-    expect(typeof createAgentStatusAuthorityActions).toBe('function')
+    await import('../store/slices/agent-status-authority-actions')
     expect(rendererAgentStatusObservations.getAuthorityId()).toMatch(
       /^renderer:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
     )

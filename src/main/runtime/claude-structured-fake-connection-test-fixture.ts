@@ -76,7 +76,7 @@ export function fakeClaude(providerSession: string) {
         connection.calls.push({ subtype: 'interrupt', params: {} })
         return undefined
       },
-      cancelAsyncMessage: async () => {},
+      cancelAsyncMessage: async () => false,
       stopTask: async (taskId) => {
         connection.calls.push({ subtype: 'stop_task', params: { taskId } })
       },

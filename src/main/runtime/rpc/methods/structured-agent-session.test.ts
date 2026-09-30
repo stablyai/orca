@@ -4,6 +4,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
+  AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
   RUNTIME_CAPABILITIES,
   RUNTIME_PROTOCOL_VERSION,
@@ -12,6 +14,7 @@ import {
   STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_START_WAIT_MS } from '../../../native-chat/agent-session-wire/structured-agent-session-send-settlement'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
 import { ALL_RPC_METHODS } from './index'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
@@ -149,6 +152,10 @@ describe('capability gating', () => {
   it('advertises the capability without bumping the protocol version', () => {
     expect(RUNTIME_CAPABILITIES).toContain(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
     expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY)
+    // A client tells a host that accepts first, and admits a writer-free Stop before a turn, by it.
+    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY)
+    // And a cancel naming no turn, which a host that only accepts first still refuses as invalid.
+    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY)
     expect(RUNTIME_CAPABILITIES).toContain(STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY)
     expect(RUNTIME_CAPABILITIES).toContain(STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY)
     // Separate from the structured capability on purpose: a host can serve the rest of the
@@ -167,7 +174,7 @@ describe('capability gating', () => {
     }
     // Bump deliberately: the whole agentSession.* surface is behind the structured capability,
     // so an additive method is invisible to old clients and needs no protocol bump.
-    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(29)
+    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(32)
   })
 
   it('hides the surface from a declared client that did not advertise it', async () => {
@@ -252,11 +259,11 @@ describe('capability gating', () => {
       signal: controller.signal
     })
 
-    expect(hostCalls.waitForSendSettlement).toHaveBeenCalledWith(
-      SESSION,
-      'client-1',
-      controller.signal
-    )
+    expect(hostCalls.waitForSendSettlement).toHaveBeenCalledWith(SESSION, 'client-1', {
+      until: 'answered',
+      budgetMs: STRUCTURED_AGENT_SESSION_START_WAIT_MS,
+      signal: controller.signal
+    })
     expect(response).toMatchObject({
       ok: true,
       result: {
@@ -302,36 +309,6 @@ describe('capability gating', () => {
     })
   })
 
-  it('returns durable pending immediately to clients that understand admission', async () => {
-    hostCalls.send.mockResolvedValueOnce({
-      ok: true,
-      replayed: false,
-      fence: 1,
-      cursor: { epoch: 'epoch-a', sequence: 1 },
-      value: {
-        clientMessageId: 'client-1',
-        submission: {
-          clientMessageId: 'client-1',
-          fence: 1,
-          payloadFingerprint: 'fingerprint',
-          dispatchState: 'pending',
-          providerItemId: null,
-          reason: null,
-          submittedAt: 1,
-          resolvedAt: null
-        }
-      }
-    })
-
-    const response = await call('agentSession.send', sendParams(), STRUCTURED_CLIENT)
-
-    expect(hostCalls.waitForSendSettlement).not.toHaveBeenCalled()
-    expect(response).toMatchObject({
-      ok: true,
-      result: { value: { submission: { dispatchState: 'pending' } } }
-    })
-  })
-
   it('requires the host structured-chat setting for mobile clients', async () => {
     const response = await call('agentSession.send', sendParams(), STRUCTURED_MOBILE_CLIENT, {
       getClientSettings: () => ({ experimentalStructuredNativeChat: false })
@@ -363,7 +340,9 @@ describe('capability gating', () => {
         ok: false,
         error: { message: expect.stringContaining('structured_agent_session_unsupported') }
       })
-      expect(hostCalls[hostCall]).not.toHaveBeenCalled()
+      if (hostCall !== null) {
+        expect(hostCalls[hostCall]).not.toHaveBeenCalled()
+      }
     }
   )
 

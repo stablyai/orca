@@ -27,11 +27,8 @@ import type { SFTPWrapper } from 'ssh2'
 import { createManagedCommandMatcher, WINDOWS_CMD_SAFE_PATH } from '../agent-hooks/installer-utils'
 import { WINDOWS_HOOK_STDIN_DRAIN_LABEL } from '../agent-hooks/hook-stdin-contract'
 import { ClaudeHookService } from './hook-service'
-import {
-  CLAUDE_EVENTS,
-  getWindowsManagedLifecycleHook,
-  OPENCLAUDE_HOOK_SETTINGS
-} from './hook-settings'
+import { CLAUDE_EVENTS } from './claude-managed-hook-events'
+import { getWindowsManagedLifecycleHook, OPENCLAUDE_HOOK_SETTINGS } from './hook-settings'
 
 const CLAUDE_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'claude-hook.cmd' : 'claude-hook.sh'
 const STATUSLINE_SCRIPT_FILE_NAME =
@@ -42,6 +39,9 @@ const isClaudeManagedCommand = createManagedCommandMatcher(CLAUDE_SCRIPT_FILE_NA
 const isOpenClaudeManagedCommand = createManagedCommandMatcher(OPENCLAUDE_SCRIPT_FILE_NAME)
 
 type TestHook = { command: string; args?: string[] }
+
+// Why: the managed event set follows the resolved Claude; this one knows every event Orca writes.
+const CURRENT_CLAUDE = { claudeVersion: '2.1.261 (Claude Code)' }
 
 function hasManagedCommand(hook: TestHook, matcher: (command: string | undefined) => boolean) {
   return matcher(hook.command) || hook.args?.some(matcher) === true
@@ -217,7 +217,7 @@ describe('ClaudeHookService.install', () => {
         })
       )
 
-      const status = new ClaudeHookService().install()
+      const status = new ClaudeHookService().install(CURRENT_CLAUDE)
       expect(status.state).toBe('installed')
 
       const legacy = JSON.parse(readFileSync(legacyPath, 'utf-8'))
@@ -269,6 +269,48 @@ describe('ClaudeHookService.install', () => {
           ? /^@echo off\r\nsetlocal\r\necho \{\}\r\n/
           : /^#!\/bin\/sh\nprintf "\{\}\\n"\n/
       )
+    } finally {
+      vi.unstubAllEnvs()
+      rmSync(tmpHome, { recursive: true, force: true })
+    }
+  })
+
+  it('writes only the events an old resolved Claude knows and reports that as installed', () => {
+    const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-old-version-'))
+    vi.stubEnv('HOME', tmpHome)
+    vi.stubEnv('USERPROFILE', tmpHome)
+    try {
+      const service = new ClaudeHookService()
+      expect(service.install({ claudeVersion: '2.1.32' }).state).toBe('installed')
+
+      const settings = JSON.parse(readFileSync(join(tmpHome, '.claude', 'settings.json'), 'utf-8'))
+      for (const event of ['StopFailure', 'PostCompact', 'TeammateIdle', 'SessionEnd']) {
+        expect(settings.hooks[event], event).toBeUndefined()
+      }
+      expect(settings.hooks.SubagentStart).toBeDefined()
+      // Why: a reader without the version still sees a complete install of the universal set.
+      expect(service.getStatus().state).toBe('installed')
+    } finally {
+      vi.unstubAllEnvs()
+      rmSync(tmpHome, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps newer Orca events and reports installed when a later probe cannot resolve the version', () => {
+    const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-unknown-version-'))
+    vi.stubEnv('HOME', tmpHome)
+    vi.stubEnv('USERPROFILE', tmpHome)
+    try {
+      const service = new ClaudeHookService()
+      const settingsPath = join(tmpHome, '.claude', 'settings.json')
+      expect(service.install(CURRENT_CLAUDE).state).toBe('installed')
+      const known = JSON.parse(readFileSync(settingsPath, 'utf-8'))
+
+      expect(service.install().state).toBe('installed')
+
+      const unknown = JSON.parse(readFileSync(settingsPath, 'utf-8'))
+      expect(unknown.hooks).toEqual(known.hooks)
+      expect(service.getStatus().state).toBe('installed')
     } finally {
       vi.unstubAllEnvs()
       rmSync(tmpHome, { recursive: true, force: true })
@@ -458,7 +500,7 @@ describe('ClaudeHookService.install', () => {
         return
       }
       try {
-        expect(new ClaudeHookService().install().state).toBe('installed')
+        expect(new ClaudeHookService().install(CURRENT_CLAUDE).state).toBe('installed')
 
         const settings = JSON.parse(
           readFileSync(join(tmpHome, '.claude', 'settings.json'), 'utf-8')
@@ -472,7 +514,7 @@ describe('ClaudeHookService.install', () => {
         }
         // Why: the whole point of #18875 — no interpreter is started to reach the script.
         expect(JSON.stringify(settings.hooks)).not.toMatch(/powershell|EncodedCommand/i)
-        expect(new ClaudeHookService().getStatus().state).toBe('installed')
+        expect(new ClaudeHookService().getStatus(CURRENT_CLAUDE).state).toBe('installed')
       } finally {
         vi.unstubAllEnvs()
         rmSync(tmpHome, { recursive: true, force: true })
@@ -681,7 +723,7 @@ describe('ClaudeHookService.installRemote', () => {
   it('writes Claude settings + managed script under the remote $HOME', async () => {
     const svc = new ClaudeHookService()
     const { sftp, fs } = createFakeSftp()
-    const status = await svc.installRemote(sftp, '/home/dev')
+    const status = await svc.installRemote(sftp, '/home/dev', CURRENT_CLAUDE)
     expect(status.state).toBe('installed')
     expect(status.configPath).toBe('/home/dev/.claude/settings.json')
     const settings = fs.files.get('/home/dev/.claude/settings.json')
@@ -730,6 +772,25 @@ describe('ClaudeHookService.installRemote', () => {
     // listener doesn't route /statusline/claude and whose accounts aren't attributable locally.
     expect(parsed.statusLine).toBeUndefined()
     expect(fs.files.get('/home/dev/.orca/agent-hooks/claude-statusline.sh')).toBeUndefined()
+  })
+
+  it('writes only the events the remote Claude knows, adding newer ones once it upgrades', async () => {
+    const svc = new ClaudeHookService()
+    const { sftp, fs } = createFakeSftp()
+    const settingsPath = '/home/dev/.claude/settings.json'
+    const userStop = { hooks: [{ type: 'command', command: '/usr/local/bin/my-user-hook' }] }
+    fs.files.set(settingsPath, JSON.stringify({ env: { A: '1' }, hooks: { Stop: [userStop] } }))
+
+    await svc.installRemote(sftp, '/home/dev', { claudeVersion: '2.1.77' })
+    const old = JSON.parse(fs.files.get(settingsPath)!)
+    expect(old.hooks.StopFailure).toBeUndefined()
+    expect(old.hooks.PostCompact).toBeDefined()
+
+    await svc.installRemote(sftp, '/home/dev', { claudeVersion: '2.1.78' })
+    const upgraded = JSON.parse(fs.files.get(settingsPath)!)
+    expect(upgraded.hooks.StopFailure[0].hooks[0].command).toContain('claude-hook.sh')
+    expect(upgraded.hooks.Stop[0]).toEqual(userStop)
+    expect(upgraded.env).toEqual({ A: '1' })
   })
 
   it('reports parse error when remote settings.json cannot be parsed', async () => {
