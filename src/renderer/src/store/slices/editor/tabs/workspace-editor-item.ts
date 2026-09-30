@@ -1,4 +1,10 @@
 import type { AppState } from '../../../types'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host'
 import type { EditorSlice } from '../types/editor-slice'
 import type { OpenFile } from '../types/open-file'
 import { resolveEditorOpenTargetGroupId } from './editor-open-target-group'
@@ -28,13 +34,36 @@ export function openWorkspaceEditorItem(
       return existing.id
     }
   }
+  // Why: editable files carry an owner captured at open time; virtual diff and review tabs retain their existing host selection.
+  const executionHostId =
+    contentType === 'editor' ? resolveEditorItemExecutionHostId(state, fileId, worktreeId) : null
   const created = state.createUnifiedTab?.(worktreeId, contentType, {
     entityId: fileId,
     label,
     isPreview,
+    ...(executionHostId ? { executionHostId } : {}),
     ...(resolvedGroupId ? { targetGroupId: resolvedGroupId } : {})
   })
   return created?.id ?? fileId
+}
+
+function resolveEditorItemExecutionHostId(
+  state: Pick<AppState, 'openFiles'>,
+  fileId: string,
+  worktreeId: string
+): ExecutionHostId | null {
+  const file = state.openFiles.find(
+    (candidate) => candidate.id === fileId && candidate.worktreeId === worktreeId
+  )
+  if (!file) {
+    return null
+  }
+  return (
+    file.operationProvenance?.generation.route.executionHostId ??
+    (file.externalSshTargetId ? toSshExecutionHostId(file.externalSshTargetId) : null) ??
+    (file.runtimeEnvironmentId ? toRuntimeExecutionHostId(file.runtimeEnvironmentId) : null) ??
+    LOCAL_EXECUTION_HOST_ID
+  )
 }
 export function getReplaceablePreviewFileId(
   state: Pick<AppState, 'openFiles' | 'unifiedTabsByWorktree' | 'settings'>,

@@ -125,6 +125,47 @@ describe('createEditorSlice floating editor activation', () => {
   })
 })
 
+describe('createEditorSlice editor host ownership', () => {
+  it('keeps an editor tab on its local file owner while another host is focused', () => {
+    const store = createEditorTabsStore()
+    store.setState({
+      repos: [{ id: 'repo-1' } as never],
+      worktreesByRepo: {
+        'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo' } as never]
+      },
+      activeWorktreeId: 'wt-1',
+      activeWorkspaceExecutionHostId: 'runtime:hub-b',
+      settings: { activeRuntimeEnvironmentId: null } as never
+    } as Partial<AppState>)
+
+    store.getState().openFile({
+      filePath: '/repo/local.ts',
+      relativePath: 'local.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+
+    expect(store.getState().openFiles).toContainEqual(
+      expect.objectContaining({
+        filePath: '/repo/local.ts',
+        runtimeEnvironmentId: null,
+        operationProvenance: expect.objectContaining({
+          generation: expect.objectContaining({
+            route: { executionHostId: 'local', runtimeEnvironmentId: null }
+          })
+        })
+      })
+    )
+    expect(
+      store
+        .getState()
+        .unifiedTabsByWorktree['wt-1']?.find((tab) => tab.entityId === '/repo/local.ts')
+        ?.executionHostId
+    ).toBe('local')
+  })
+})
+
 describe('createEditorSlice split-group editor routing', () => {
   function openSourceFile(
     store: StoreApi<AppState>,

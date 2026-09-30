@@ -93,6 +93,30 @@ describe('editor file operation owner', () => {
     expect(context.settings?.activeRuntimeEnvironmentId).toBe('hub-a')
   })
 
+  it('keeps an unstamped local worktree local while another host is focused', () => {
+    useAppStore.setState({
+      repos: [{ id: 'repo' } as never],
+      worktreesByRepo: {
+        repo: [{ id: worktreeId, repoId: 'repo', path: '/local/repo' } as never]
+      },
+      activeWorktreeId: worktreeId,
+      activeWorkspaceExecutionHostId: 'runtime:hub-b',
+      settings: { activeRuntimeEnvironmentId: null } as never
+    })
+
+    const provenance = captureEditorFileOperationProvenance(
+      useAppStore.getState(),
+      worktreeId,
+      undefined,
+      false
+    )
+
+    expect(provenance.generation.route).toEqual({
+      executionHostId: 'local',
+      runtimeEnvironmentId: null
+    })
+  })
+
   it('rejects an open tab after the same environment id is re-paired', () => {
     useAppStore.getState().setRuntimeEnvironments([runtimeEnvironment('hub-a', 1)])
     useAppStore.setState({

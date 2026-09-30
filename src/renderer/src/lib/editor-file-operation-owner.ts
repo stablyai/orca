@@ -23,6 +23,8 @@ export type EditorFileOperationProvenance = {
 type EditorOwnerState = Pick<
   AppState,
   | 'settings'
+  | 'activeWorktreeId'
+  | 'activeWorkspaceExecutionHostId'
   | 'repos'
   | 'worktreesByRepo'
   | 'detectedWorktreesByRepo'
@@ -66,7 +68,7 @@ export function captureEditorFileOperationProvenance(
                   : ('local' as const),
                 runtimeEnvironmentId: hintedRuntimeEnvironmentId
               }
-            : resolveWorktreeOperationRoute(state, worktreeId)
+            : resolveLegacyEditorFileRoute(state, worktreeId)
   if (!route || (ownerHintProvided && (ownerHint?.trim() || null) !== route.runtimeEnvironmentId)) {
     throw new Error(OWNER_CHANGED_MESSAGE)
   }
@@ -76,6 +78,21 @@ export function captureEditorFileOperationProvenance(
     ownershipProjection,
     ...(expectedSshConnectionGeneration === undefined ? {} : { expectedSshConnectionGeneration })
   }
+}
+
+function resolveLegacyEditorFileRoute(
+  state: EditorOwnerState,
+  worktreeId: string
+): WorktreeOperationRoute | null {
+  // Why: a focused workspace selects where the UI is looking, not which host owns a file.
+  return resolveWorktreeOperationRoute(
+    {
+      ...state,
+      activeWorktreeId: null,
+      activeWorkspaceExecutionHostId: null
+    },
+    worktreeId
+  )
 }
 
 export function assertEditorFileOperationCurrent(
