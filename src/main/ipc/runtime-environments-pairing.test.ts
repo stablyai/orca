@@ -493,12 +493,17 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       ok: false,
       error: { code: 'runtime_manually_disconnected' }
     })
-    const subscribe = handler<{ selector: string; method: string }, { subscriptionId: string }>(
-      'runtimeEnvironments:subscribe'
-    )
+    const subscribe = handler<
+      { selector: string; method: string },
+      | { ok: true; subscriptionId: string; requestId: string }
+      | { ok: false; error: { code: string; message: string } }
+    >('runtimeEnvironments:subscribe')
     await expect(
       subscribe(null, { selector: 'desk', method: 'terminal.multiplex' })
-    ).rejects.toThrow('runtime_manually_disconnected')
+    ).resolves.toEqual({
+      ok: false,
+      error: { code: 'runtime_error', message: 'runtime_manually_disconnected' }
+    })
     expect(sendRemoteRuntimeRequestMock).not.toHaveBeenCalled()
     expect(subscribeRemoteRuntimeRequestMock).not.toHaveBeenCalled()
 

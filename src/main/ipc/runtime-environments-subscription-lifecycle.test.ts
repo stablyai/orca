@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/protocol-version'
+import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+import type { RuntimeEnvironmentSubscriptionStartResult } from '../../shared/runtime-environment-subscription-start-result'
 import * as environmentStore from '../../shared/runtime-environment-store'
 
 const {
@@ -352,6 +354,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     resolveSubscribe({ requestId: 'stream-late', close, sendBinary: vi.fn() })
 
     await expect(resultPromise).resolves.toEqual({
+      ok: true,
       subscriptionId: 'late-sub',
       requestId: 'stream-late'
     })
@@ -444,9 +447,15 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       expect(senderSend).not.toHaveBeenCalled()
       resolveSubscribe({ requestId: 'retired-stream', close, sendBinary })
 
-      await expect(resultPromise).rejects.toThrow(
-        'Runtime environment pairing changed; refresh and try again'
-      )
+      // Why: dedicated subscribe start failures must stay serializable across
+      // contextBridge as ok-union data rather than thrown Error objects.
+      await expect(resultPromise).resolves.toEqual({
+        ok: false,
+        error: {
+          code: 'runtime_error',
+          message: 'Runtime environment pairing changed; refresh and try again'
+        }
+      })
       expect(close).toHaveBeenCalledTimes(1)
 
       const binaryListener = onMock.mock.calls.find(
@@ -502,8 +511,202 @@ describe('registerRuntimeEnvironmentHandlers', () => {
           subscriptionId: 'failed-sub'
         }
       )
-    ).rejects.toThrow('connect failed')
+    ).resolves.toEqual({
+      ok: false,
+      error: { code: 'runtime_error', message: 'connect failed' }
+    })
 
     expect(destroyedListenerRemoved).toHaveBeenCalledWith('destroyed', expect.any(Function))
+  })
+
+  it('returns structured dedicated subscription startup failures as serializable data', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    subscribeRemoteRuntimeRequestMock.mockRejectedValue(
+      new RemoteRuntimeClientError(
+        'unauthorized',
+        'Remote Orca runtime rejected the pairing token.'
+      )
+    )
+
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    await add(null, { name: 'desk', pairingCode: pairingCode() })
+
+    const destroyedListenerRemoved = vi.fn()
+    const subscribe = handler<
+      {
+        selector: string
+        method: string
+        subscriptionId: string
+      },
+      RuntimeEnvironmentSubscriptionStartResult
+    >('runtimeEnvironments:subscribe')
+
+    await expect(
+      subscribe(
+        {
+          sender: {
+            id: 1,
+            isDestroyed: () => false,
+            send: vi.fn(),
+            once: vi.fn(),
+            removeListener: destroyedListenerRemoved
+          }
+        },
+        {
+          selector: 'desk',
+          method: 'terminal.multiplex',
+          subscriptionId: 'sub-test'
+        }
+      )
+    ).resolves.toEqual({
+      ok: false,
+      error: {
+        code: 'unauthorized',
+        message: 'Remote Orca runtime rejected the pairing token.'
+      }
+    })
+    expect(destroyedListenerRemoved).toHaveBeenCalledWith('destroyed', expect.any(Function))
+  })
+
+  it('returns duplicate subscription ids and environment lookup failures as runtime_error data', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    const close = vi.fn()
+    subscribeRemoteRuntimeRequestMock.mockResolvedValue({
+      requestId: 'stream-duplicate',
+      close,
+      sendBinary: vi.fn()
+    })
+
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    await add(null, { name: 'desk', pairingCode: pairingCode() })
+
+    const subscribe = handler<
+      { selector: string; method: string; subscriptionId: string },
+      RuntimeEnvironmentSubscriptionStartResult
+    >('runtimeEnvironments:subscribe')
+    const sender = {
+      id: 1,
+      isDestroyed: () => false,
+      send: vi.fn(),
+      once: vi.fn(),
+      removeListener: vi.fn()
+    }
+
+    await expect(
+      subscribe(
+        { sender },
+        { selector: 'desk', method: 'terminal.multiplex', subscriptionId: 'duplicate-sub' }
+      )
+    ).resolves.toEqual({
+      ok: true,
+      subscriptionId: 'duplicate-sub',
+      requestId: 'stream-duplicate'
+    })
+    await expect(
+      subscribe(
+        { sender },
+        { selector: 'desk', method: 'terminal.multiplex', subscriptionId: 'duplicate-sub' }
+      )
+    ).resolves.toEqual({
+      ok: false,
+      error: {
+        code: 'runtime_error',
+        message: 'Runtime environment subscription id already exists'
+      }
+    })
+    await expect(
+      subscribe(
+        { sender },
+        {
+          selector: 'missing-environment',
+          method: 'terminal.multiplex',
+          subscriptionId: 'missing-env-sub'
+        }
+      )
+    ).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'runtime_error', message: expect.any(String) }
+    })
+    expect(subscribeRemoteRuntimeRequestMock).toHaveBeenCalledTimes(1)
+
+    const unsubscribe = handler<{ subscriptionId: string }, { unsubscribed: boolean }>(
+      'runtimeEnvironments:unsubscribe'
+    )
+    expect(await unsubscribe({ sender: { id: 1 } }, { subscriptionId: 'duplicate-sub' })).toEqual({
+      unsubscribed: true
+    })
+    expect(close).toHaveBeenCalledTimes(1)
+  })
+
+  it('tombstones an onClose that arrives before the dedicated subscription handle resolves', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    const close = vi.fn()
+    let resolveSubscribe!: (value: {
+      requestId: string
+      close: () => void
+      sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => boolean
+    }) => void
+    let closeFromTransport!: () => void
+    subscribeRemoteRuntimeRequestMock.mockImplementation(
+      (_pairing, _method, _params, _timeoutMs, callbacks) =>
+        new Promise((resolve) => {
+          closeFromTransport = callbacks.onClose
+          resolveSubscribe = resolve
+        })
+    )
+
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    await add(null, { name: 'desk', pairingCode: pairingCode() })
+
+    const sent: unknown[] = []
+    const destroyedListenerRemoved = vi.fn()
+    const subscribe = handler<
+      { selector: string; method: string; subscriptionId: string },
+      { ok: true; subscriptionId: string; requestId: string }
+    >('runtimeEnvironments:subscribe')
+    const resultPromise = subscribe(
+      {
+        sender: {
+          id: 1,
+          isDestroyed: () => false,
+          send: (_channel: string, payload: unknown) => sent.push(payload),
+          once: vi.fn(),
+          removeListener: destroyedListenerRemoved
+        }
+      },
+      { selector: 'desk', method: 'terminal.multiplex', subscriptionId: 'early-close-sub' }
+    )
+
+    await vi.waitFor(() => expect(closeFromTransport).toBeTypeOf('function'))
+    closeFromTransport()
+    expect(destroyedListenerRemoved).toHaveBeenCalledWith('destroyed', expect.any(Function))
+    expect(sent).toContainEqual({ subscriptionId: 'early-close-sub', type: 'close' })
+
+    resolveSubscribe({ requestId: 'stream-closed', close, sendBinary: vi.fn(() => false) })
+    await expect(resultPromise).resolves.toEqual({
+      ok: true,
+      subscriptionId: 'early-close-sub',
+      requestId: 'stream-closed'
+    })
+    expect(close).toHaveBeenCalledTimes(1)
+
+    const unsubscribe = handler<{ subscriptionId: string }, { unsubscribed: boolean }>(
+      'runtimeEnvironments:unsubscribe'
+    )
+    expect(await unsubscribe({ sender: { id: 1 } }, { subscriptionId: 'early-close-sub' })).toEqual(
+      {
+        unsubscribed: false
+      }
+    )
+    expect(close).toHaveBeenCalledTimes(1)
   })
 })
