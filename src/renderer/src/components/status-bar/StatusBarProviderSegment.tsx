@@ -171,20 +171,37 @@ function isVisibleStatusBarBucket(name: string): boolean {
   return STATUS_BAR_BUCKET_NAMES.has(name) || isCursorUsageBucket(name)
 }
 
+// Why: the bar leads the row, so the window it measures must come first or the bar
+// reads as its neighbour's fill (#23670). Stable sort keeps the default order on ties.
+function sortByUsageDesc<T>(items: readonly T[], windowOf: (item: T) => RateLimitWindow): T[] {
+  return [...items].sort(
+    (a, b) => clampUsedPercent(windowOf(b).usedPercent) - clampUsedPercent(windowOf(a).usedPercent)
+  )
+}
+
 function VerboseProviderUsage({
   p,
-  display
+  display,
+  showBar
 }: {
   p: ProviderRateLimits
   display: UsagePercentageDisplay
+  showBar: boolean
 }): React.JSX.Element {
+  const renderBar = (w: RateLimitWindow | null | undefined): React.JSX.Element | null =>
+    showBar && w ? <MiniBar usedPct={clampUsedPercent(w.usedPercent)} display={display} /> : null
+
   if (p.buckets && p.buckets.length > 0) {
-    const visibleBuckets = p.buckets.filter((bucket) => isVisibleStatusBarBucket(bucket.name))
+    const visibleBuckets = sortByUsageDesc(
+      p.buckets.filter((bucket) => isVisibleStatusBarBucket(bucket.name)),
+      (bucket) => bucket
+    )
     // Why: a provider whose buckets are all filtered out still has a headline
     // window worth showing rather than rendering an empty segment.
     const fallbackWindow = p.session ?? p.monthly ?? null
     return (
       <>
+        {renderBar(visibleBuckets[0] ?? fallbackWindow)}
         {visibleBuckets.map((bucket, index) => (
           <React.Fragment key={bucket.name}>
             {index > 0 ? <span className="text-muted-foreground">·</span> : null}
@@ -204,7 +221,7 @@ function VerboseProviderUsage({
     )
   }
 
-  const visibleWindows = [
+  const unsortedWindows = [
     p.session
       ? {
           key: 'session',
@@ -237,9 +254,11 @@ function VerboseProviderUsage({
   ].filter((window): window is { key: string; window: RateLimitWindow; label: string } => {
     return window !== null
   })
+  const visibleWindows = sortByUsageDesc(unsortedWindows, (window) => window.window)
 
   return (
     <>
+      {renderBar(visibleWindows[0]?.window)}
       {visibleWindows.map((window, index) => (
         <React.Fragment key={window.key}>
           {index > 0 ? <span className="text-muted-foreground">·</span> : null}
@@ -313,12 +332,7 @@ export function ProviderSegment({
     <span className="inline-flex items-center gap-1.5">
       <ProviderIcon provider={provider} />
       {mode === 'verbose' ? (
-        <>
-          {tightest && !compact ? (
-            <MiniBar usedPct={clampUsedPercent(tightest.window.usedPercent)} display={display} />
-          ) : null}
-          <VerboseProviderUsage p={p} display={display} />
-        </>
+        <VerboseProviderUsage p={p} display={display} showBar={!compact} />
       ) : tightest ? (
         <WindowLabel
           w={tightest.window}

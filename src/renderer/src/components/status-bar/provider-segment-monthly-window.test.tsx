@@ -184,6 +184,102 @@ describe('ProviderSegment monthly window', () => {
   })
 })
 
+// Why: #23670, the bar tracked the most-used window but rendered before the
+// session label, so it read as the session window's fill.
+describe('ProviderSegment verbose usage bar placement', () => {
+  function claudeLimits(sessionUsed: number, weeklyUsed: number): ProviderRateLimits {
+    return {
+      provider: 'claude',
+      session: windowOf(sessionUsed, 300),
+      weekly: windowOf(weeklyUsed, 10_080),
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    }
+  }
+
+  function expectInOrder(markup: string, needles: readonly string[]): void {
+    const positions = needles.map((needle) => markup.indexOf(needle))
+    for (const position of positions) {
+      expect(position).toBeGreaterThanOrEqual(0)
+    }
+    expect(positions).toEqual([...positions].sort((a, b) => a - b))
+  }
+
+  it.each([
+    ['used', 'width:88%', ['88% used wk', '53% used 5h']],
+    ['remaining', 'width:12%', ['12% left wk', '47% left 5h']]
+  ] as const)('leads with the window the bar measures (%s)', async (display, width, labels) => {
+    const { ProviderSegment } = await import('./StatusBar')
+
+    const markup = renderToStaticMarkup(
+      <ProviderSegment p={claudeLimits(53, 88)} compact={false} display={display} mode="verbose" />
+    )
+
+    expectInOrder(markup, ['data-usage-bar', ...labels])
+    expect(markup).toContain(width)
+  })
+
+  it('keeps session first when usage ties', async () => {
+    const { ProviderSegment } = await import('./StatusBar')
+
+    const markup = renderToStaticMarkup(
+      <ProviderSegment p={claudeLimits(40, 40)} compact={false} display="used" mode="verbose" />
+    )
+
+    expect(markup.match(/data-usage-bar/g)).toHaveLength(1)
+    expectInOrder(markup, ['data-usage-bar', '40% used 5h', '40% used wk'])
+  })
+
+  it('ignores a window the verbose row does not show', async () => {
+    const { ProviderSegment } = await import('./StatusBar')
+    const limits: ProviderRateLimits = {
+      ...claudeLimits(10, 20),
+      monthly: windowOf(90, 43_200)
+    }
+
+    const markup = renderToStaticMarkup(
+      <ProviderSegment p={limits} compact={false} display="used" mode="verbose" />
+    )
+
+    expect(markup).toContain('width:20%')
+    expectInOrder(markup, ['data-usage-bar', '20% used wk', '10% used 5h'])
+  })
+
+  it('leads with the most-used visible bucket', async () => {
+    const { ProviderSegment } = await import('./StatusBar')
+    const limits: ProviderRateLimits = {
+      provider: 'gemini',
+      session: null,
+      weekly: null,
+      buckets: [
+        { ...windowOf(25, 300), name: 'Flash' },
+        { ...windowOf(80, 300), name: 'Pro' }
+      ],
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    }
+
+    const markup = renderToStaticMarkup(
+      <ProviderSegment p={limits} compact={false} display="used" mode="verbose" />
+    )
+
+    expect(markup).toContain('width:80%')
+    expectInOrder(markup, ['data-usage-bar', 'Pro 80% used', 'Flash 25% used'])
+  })
+
+  it('omits the bar in the narrow layout', async () => {
+    const { ProviderSegment } = await import('./StatusBar')
+
+    const markup = renderToStaticMarkup(
+      <ProviderSegment p={claudeLimits(53, 88)} compact={true} display="used" mode="verbose" />
+    )
+
+    expect(markup).not.toContain('data-usage-bar')
+  })
+})
+
 describe('undefined provider window safety (crash d2c1da69 / bb74236c)', () => {
   // A partial/rehydrated provider can carry an undefined (not null) window even
   // though the type declares `session`/`weekly` as `RateLimitWindow | null`. The
@@ -211,5 +307,16 @@ describe('undefined provider window safety (crash d2c1da69 / bb74236c)', () => {
         <ProviderSegment p={partialProvider} compact={false} display="used" mode="compact" />
       )
     ).not.toThrow()
+  })
+
+  it('draws the verbose bar for the defined window when another is undefined', async () => {
+    const { ProviderSegment } = await import('./StatusBar')
+
+    const markup = renderToStaticMarkup(
+      <ProviderSegment p={partialProvider} compact={false} display="used" mode="verbose" />
+    )
+
+    expect(markup.match(/data-usage-bar/g)).toHaveLength(1)
+    expect(markup).toContain('width:42%')
   })
 })
