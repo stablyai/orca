@@ -6,6 +6,7 @@ import type { NativeChatAttachmentOwner } from './native-chat-attachment-upload'
 
 const mocks = vi.hoisted(() => ({
   saveClipboardImageAsTempFile: vi.fn(),
+  saveCopiedClipboardImageFileAsTempFile: vi.fn(async (): Promise<string | null> => null),
   readClipboardText: vi.fn(),
   readClipboardImageThumbnail: vi.fn()
 }))
@@ -28,6 +29,7 @@ vi.stubGlobal('window', {
   api: {
     ui: {
       saveClipboardImageAsTempFile: mocks.saveClipboardImageAsTempFile,
+      saveCopiedClipboardImageFileAsTempFile: mocks.saveCopiedClipboardImageFileAsTempFile,
       readClipboardText: mocks.readClipboardText,
       readClipboardImageThumbnail: mocks.readClipboardImageThumbnail
     }
@@ -248,6 +250,25 @@ describe('useNativeChatComposerPaste', () => {
       expect(setNotice.mock.calls.every(([notice]) => notice === null)).toBe(true)
     }
   )
+
+  it('attaches a Finder-copied image file instead of the clipboard icon image', async () => {
+    mocks.saveCopiedClipboardImageFileAsTempFile.mockResolvedValueOnce('/remote/tmp/shot.png')
+    mocks.readClipboardImageThumbnail.mockResolvedValue(null)
+    const attachResolvedPaths = vi.fn()
+    const probe = await renderProbe({
+      resolveAttachmentOwner: () => sshOwner,
+      store: createChipStore(),
+      attachResolvedPaths
+    })
+    await act(async () => {
+      probe.latest().pasteFromClipboard()
+    })
+    expect(mocks.saveCopiedClipboardImageFileAsTempFile).toHaveBeenCalledWith({
+      connectionId: 'conn-1'
+    })
+    expect(mocks.saveClipboardImageAsTempFile).not.toHaveBeenCalled()
+    expect(attachResolvedPaths).toHaveBeenCalledWith(['/remote/tmp/shot.png'], 'conn-1')
+  })
 
   it('saves on the SSH host and settles the chip on the returned remote path', async () => {
     mocks.saveClipboardImageAsTempFile.mockResolvedValue('/remote/tmp/orca-paste-1.png')

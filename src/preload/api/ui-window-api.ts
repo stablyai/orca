@@ -13,6 +13,10 @@ export type UiWindowApi = {
     connectionId?: string | null
     runtimeEnvironmentId?: string | null
   }) => Promise<string | null>
+  saveCopiedClipboardImageFileAsTempFile: (args?: {
+    connectionId?: string | null
+    runtimeEnvironmentId?: string | null
+  }) => Promise<string | null>
   readClipboardImageThumbnail: () => Promise<ClipboardImageThumbnail | null>
   writeClipboardText: (text: string) => Promise<void>
   writeTerminalClipboardText: (text: string) => Promise<void>

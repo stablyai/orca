@@ -133,6 +133,7 @@ export function createTerminalPanePasteExecution(
     void pasteTerminalClipboard({
       readClipboardText,
       saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
+      saveCopiedClipboardImageFileAsTempFile: window.api.ui.saveCopiedClipboardImageFileAsTempFile,
       connectionId,
       runtimeEnvironmentId,
       forceBracketedMultilineTextPaste,

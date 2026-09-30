@@ -15,6 +15,7 @@ type SaveClipboardImageAsTempFile = (args?: {
 type PasteTerminalClipboardDeps = {
   readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
   saveClipboardImageAsTempFile: SaveClipboardImageAsTempFile
+  saveCopiedClipboardImageFileAsTempFile?: SaveClipboardImageAsTempFile
   pasteText: (
     text: string,
     options?: TerminalPasteTextOptions
@@ -40,9 +41,26 @@ export type TerminalClipboardPasteResult =
         | 'text-too-large'
     }
 
+async function pasteClipboardImagePath(
+  filePath: string,
+  pasteText: PasteTerminalClipboardDeps['pasteText']
+): Promise<TerminalClipboardPasteResult> {
+  const result = await pasteText(filePath, {
+    // Why: a generated clipboard-image path is terminal image injection, not
+    // ordinary one-line text. Keep it off the Ctrl+C stale-text paste path.
+    forceBracketedPaste: true,
+    recoverImagePasteWebglAtlas: true
+  })
+  if (result === false) {
+    return { status: 'skipped', reason: 'image-paste-rejected' }
+  }
+  return { status: 'pasted', kind: 'image-path' }
+}
+
 export async function pasteTerminalClipboard({
   readClipboardText,
   saveClipboardImageAsTempFile,
+  saveCopiedClipboardImageFileAsTempFile,
   pasteText,
   connectionId,
   runtimeEnvironmentId,
@@ -51,6 +69,22 @@ export async function pasteTerminalClipboard({
   onTextPasteError,
   onImagePasteError
 }: PasteTerminalClipboardDeps): Promise<TerminalClipboardPasteResult> {
+  if (saveCopiedClipboardImageFileAsTempFile) {
+    // Why: a macOS Finder-copied image also carries its filename as text, which
+    // would otherwise win and paste only "Screenshot ….png".
+    try {
+      const filePath = await saveCopiedClipboardImageFileAsTempFile({
+        connectionId,
+        runtimeEnvironmentId
+      })
+      if (filePath) {
+        return await pasteClipboardImagePath(filePath, pasteText)
+      }
+    } catch (error) {
+      onImagePasteError?.(error)
+      return { status: 'skipped', reason: 'image-paste-failed' }
+    }
+  }
   let text = ''
   try {
     text = await readClipboardText({ maxBytes: TERMINAL_PASTE_MAX_BYTES })
@@ -83,16 +117,7 @@ export async function pasteTerminalClipboard({
     if (!filePath) {
       return { status: 'skipped', reason: 'empty' }
     }
-    const result = await pasteText(filePath, {
-      // Why: a generated clipboard-image path is terminal image injection, not
-      // ordinary one-line text. Keep it off the Ctrl+C stale-text paste path.
-      forceBracketedPaste: true,
-      recoverImagePasteWebglAtlas: true
-    })
-    if (result === false) {
-      return { status: 'skipped', reason: 'image-paste-rejected' }
-    }
-    return { status: 'pasted', kind: 'image-path' }
+    return await pasteClipboardImagePath(filePath, pasteText)
   } catch (error) {
     onImagePasteError?.(error)
     return { status: 'skipped', reason: 'image-paste-failed' }

@@ -158,6 +158,8 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       }
       return saveClipboardImageAsTempFileInRuntime(contentBase64, args)
     },
+    // Why: browsers expose no Finder file URL, so text-first paste stays correct.
+    saveCopiedClipboardImageFileAsTempFile: async () => null,
     readClipboardImageThumbnail: () => readClipboardImageThumbnail().catch(() => null),
     writeClipboardText: writeWebClipboardText,
     writeTerminalClipboardText: writeWebClipboardText,

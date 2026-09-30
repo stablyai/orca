@@ -38,11 +38,18 @@ import {
 } from './clipboard-remote-file-copy'
 import { saveClipboardImageBufferInRuntime } from './clipboard-runtime-image-upload'
 import { readWindowsClipboardImageFileAsPng } from './clipboard-windows-image-file'
+import { isMacClipboardFileUrl, readMacClipboardImageFileAsPng } from './clipboard-mac-image-file'
+import type { ClipboardImageFileDeps } from './clipboard-image-file-read'
 import { buildClipboardImageThumbnail } from './clipboard-image-thumbnail'
 import { writeClipboardTextAndVerify } from './clipboard-text-write-verify'
 import { isDashboardPopoutRenderer } from './dashboard-popout-window'
 
 let trustedClipboardRendererWebContentsId: number | null = null
+
+const clipboardImageFileDeps: ClipboardImageFileDeps = {
+  createImageFromBuffer: (buffer) => nativeImage.createFromBuffer(buffer),
+  openFile: (filePath) => open(filePath, 'r')
+}
 
 type ClipboardWriteFileRequest = {
   filePath: string
@@ -95,6 +102,7 @@ export function registerClipboardHandlers(store: Store): void {
   ipcMain.removeHandler('clipboard:writeImage')
   ipcMain.removeHandler('clipboard:writeFile')
   ipcMain.removeHandler('clipboard:saveImageAsTempFile')
+  ipcMain.removeHandler('clipboard:saveCopiedImageFileAsTempFile')
   ipcMain.removeHandler('clipboard:readImageThumbnail')
 
   void cleanupExpiredRemoteClipboardFiles()
@@ -134,15 +142,38 @@ export function registerClipboardHandlers(store: Store): void {
             fileNameW: clipboard.readBuffer('FileNameW'),
             shellIdListArray: clipboard.readBuffer('Shell IDList Array')
           },
-          {
-            createImageFromBuffer: (buffer) => nativeImage.createFromBuffer(buffer),
-            openFile: (filePath) => open(filePath, 'r')
-          }
+          clipboardImageFileDeps
         )
         return copiedFilePng ? saveClipboardImageBufferForTarget(copiedFilePng, args) : null
       }
       assertClipboardImageDimensionsWithinLimit(image.getSize())
       return saveClipboardImageBufferForTarget(image.toPNG(), args)
+    }
+  )
+  // Why: a Finder-copied image file also carries its filename as text (and its
+  // icon as the image), so terminals must check for the file before text.
+  ipcMain.handle(
+    'clipboard:saveCopiedImageFileAsTempFile',
+    async (event, args?: SaveClipboardImageAsTempFileArgs) => {
+      assertTrustedClipboardTextSender(event)
+      // Why: runs before every terminal text paste; popouts keep text-only authority.
+      if (process.platform !== 'darwin' || !isTrustedClipboardRenderer(event.sender)) {
+        return null
+      }
+      // Why: bail before reading (possibly huge) text when no file was copied.
+      const fileUrl = clipboard.read('public.file-url')
+      if (!isMacClipboardFileUrl(fileUrl)) {
+        return null
+      }
+      const png = await readMacClipboardImageFileAsPng(
+        {
+          fileUrl,
+          filenamesPlist: clipboard.read('NSFilenamesPboardType'),
+          text: clipboard.readText()
+        },
+        clipboardImageFileDeps
+      )
+      return png ? saveClipboardImageBufferForTarget(png, args) : null
     }
   )
   // Why: copy the actual file to the OS clipboard so pasting in Finder/Explorer

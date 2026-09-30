@@ -388,4 +388,70 @@ describe('terminal clipboard paste', () => {
     expect(observedIgnoreBracketedPasteMode).toEqual([true])
     expect(saveClipboardImageAsTempFile).not.toHaveBeenCalled()
   })
+
+  it('pastes a Finder-copied screenshot file as an image instead of its filename text', async () => {
+    const pasteText = vi.fn()
+    const readClipboardText = vi.fn().mockResolvedValue('Screenshot 2026-09-28 at 09.30.00.png')
+    const saveClipboardImageAsTempFile = vi.fn()
+    const saveCopiedClipboardImageFileAsTempFile = vi
+      .fn()
+      .mockResolvedValue('/tmp/orca-paste-finder.png')
+
+    const result = await pasteTerminalClipboard({
+      readClipboardText,
+      saveClipboardImageAsTempFile,
+      saveCopiedClipboardImageFileAsTempFile,
+      pasteText,
+      connectionId: 'ssh-1'
+    })
+
+    expect(result).toEqual({ status: 'pasted', kind: 'image-path' })
+    expect(saveCopiedClipboardImageFileAsTempFile).toHaveBeenCalledWith({
+      connectionId: 'ssh-1',
+      runtimeEnvironmentId: undefined
+    })
+    expect(pasteText).toHaveBeenCalledWith('/tmp/orca-paste-finder.png', {
+      forceBracketedPaste: true,
+      recoverImagePasteWebglAtlas: true
+    })
+    expect(readClipboardText).not.toHaveBeenCalled()
+    expect(saveClipboardImageAsTempFile).not.toHaveBeenCalled()
+  })
+
+  it('keeps text-first paste when the clipboard has no copied image file', async () => {
+    const pasteText = vi.fn()
+    const saveClipboardImageAsTempFile = vi.fn()
+    const saveCopiedClipboardImageFileAsTempFile = vi.fn().mockResolvedValue(null)
+
+    const result = await pasteTerminalClipboard({
+      readClipboardText: vi.fn().mockResolvedValue('/Users/u/Desktop/Screenshot.png'),
+      saveClipboardImageAsTempFile,
+      saveCopiedClipboardImageFileAsTempFile,
+      pasteText
+    })
+
+    expect(result).toEqual({ status: 'pasted', kind: 'text' })
+    expect(pasteText).toHaveBeenCalledWith('/Users/u/Desktop/Screenshot.png')
+    expect(saveClipboardImageAsTempFile).not.toHaveBeenCalled()
+  })
+
+  it('reports a failed copied-image-file save instead of pasting the filename', async () => {
+    const error = new Error('clipboard image is too large')
+    const onImagePasteError = vi.fn()
+    const pasteText = vi.fn()
+    const readClipboardText = vi.fn().mockResolvedValue('huge.png')
+
+    const result = await pasteTerminalClipboard({
+      readClipboardText,
+      saveClipboardImageAsTempFile: vi.fn(),
+      saveCopiedClipboardImageFileAsTempFile: vi.fn().mockRejectedValue(error),
+      pasteText,
+      onImagePasteError
+    })
+
+    expect(result).toEqual({ status: 'skipped', reason: 'image-paste-failed' })
+    expect(onImagePasteError).toHaveBeenCalledWith(error)
+    expect(readClipboardText).not.toHaveBeenCalled()
+    expect(pasteText).not.toHaveBeenCalled()
+  })
 })

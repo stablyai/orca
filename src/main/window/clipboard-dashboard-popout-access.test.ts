@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   handlers,
+  clipboardRead,
   clipboardReadText,
   clipboardWriteText,
   clipboardReadImage,
@@ -10,6 +11,7 @@ const {
   isDashboardPopoutRenderer
 } = vi.hoisted(() => ({
   handlers: new Map<string, (...args: unknown[]) => unknown>(),
+  clipboardRead: vi.fn(() => ''),
   clipboardReadText: vi.fn(() => 'terminal clipboard text'),
   clipboardWriteText: vi.fn(),
   clipboardReadImage: vi.fn(),
@@ -21,6 +23,7 @@ const {
 vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp') },
   clipboard: {
+    read: clipboardRead,
     readText: clipboardReadText,
     readBuffer: vi.fn(),
     writeText: clipboardWriteText,
@@ -119,6 +122,23 @@ describe('dashboard popout clipboard access', () => {
     expect(clipboardReadImage).not.toHaveBeenCalled()
     expect(clipboardWriteImage).not.toHaveBeenCalled()
     expect(clipboardWriteBuffer).not.toHaveBeenCalled()
+  })
+
+  it('lets popout terminal paste skip the copied-image-file probe without reading files', async () => {
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    try {
+      await expect(
+        handlers.get('clipboard:saveCopiedImageFileAsTempFile')?.(popoutEvent)
+      ).resolves.toBeNull()
+      expect(clipboardRead).not.toHaveBeenCalled()
+
+      isDashboardPopoutRenderer.mockReturnValue(false)
+      await expect(
+        handlers.get('clipboard:saveCopiedImageFileAsTempFile')?.(popoutEvent)
+      ).rejects.toThrow('Unauthorized clipboard IPC sender')
+    } finally {
+      platformSpy.mockRestore()
+    }
   })
 
   it('still rejects unrelated renderer windows from text clipboard APIs', async () => {

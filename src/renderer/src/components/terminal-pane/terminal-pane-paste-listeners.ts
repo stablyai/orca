@@ -187,6 +187,7 @@ export function registerTerminalPanePasteListeners({
     void pasteTerminalClipboard({
       readClipboardText: window.api.ui.readClipboardText,
       saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
+      saveCopiedClipboardImageFileAsTempFile: window.api.ui.saveCopiedClipboardImageFileAsTempFile,
       connectionId,
       runtimeEnvironmentId,
       forceBracketedMultilineTextPaste,

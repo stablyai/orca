@@ -122,6 +122,7 @@ export const pasteTerminalPaneMenuClipboard = async (
   const result = await pasteTerminalClipboard({
     readClipboardText: window.api.ui.readClipboardText,
     saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
+    saveCopiedClipboardImageFileAsTempFile: window.api.ui.saveCopiedClipboardImageFileAsTempFile,
     connectionId,
     runtimeEnvironmentId,
     protectedMultilineTextPasteOptions: resolveProtectedMultilinePasteOptionsForPane({
