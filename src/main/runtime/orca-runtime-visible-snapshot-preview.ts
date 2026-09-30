@@ -1,5 +1,8 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
-import { AntigravityScreenPermissionPublisher } from './antigravity-screen-permission-publisher'
+import {
+  AntigravityScreenPermissionPublisher,
+  antigravityHookRowMatchesPty
+} from './antigravity-screen-permission-publisher'
 import { OrcaRuntimeWithCaptureProviderTerminalBuffer } from './orca-runtime-capture-provider-terminal-buffer'
 import type { RuntimeTerminalProjection } from './orca-runtime-core'
 import { buildPreview } from './terminal-tail-state'
@@ -29,7 +32,9 @@ export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptur
           candidate.providerSessionOnly !== true && candidate.agentType === 'antigravity'
       )
       // Native hooks identify the pane; the runtime owns its live terminal binding.
-      return row && terminalHandle ? { ...row, terminalHandle } : null
+      return row && terminalHandle && antigravityHookRowMatchesPty(row.connectionId, pty)
+        ? { ...row, terminalHandle }
+        : null
     },
     readScreen: (ptyId) => this.readVisibleTerminalState(ptyId),
     isCurrent: (ptyId, screen) =>

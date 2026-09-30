@@ -1,6 +1,7 @@
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { AgentHookServerIngestNormalization } from './server-ingest-normalization'
+import { isWslHookRelayConnectionId } from '../../../shared/wsl-hook-relay-contract'
 
 export type AntigravityScreenPermissionObservation = {
   baseline: Pick<AgentStatusIpcPayload, 'paneKey' | 'terminalHandle' | 'observation'>
@@ -20,7 +21,8 @@ export abstract class AgentHookServerIngestAntigravityScreen extends AgentHookSe
     if (
       !previous ||
       previous.restoredUnconfirmed ||
-      previous.connectionId ||
+      // Why: SSH mirrors stay on their execution host; a WSL relay row is this host's own pty.
+      (previous.connectionId && !isWslHookRelayConnectionId(previous.connectionId)) ||
       previous.payload.agentType !== 'antigravity' ||
       !baseline.terminalHandle ||
       (previous.terminalHandle !== undefined &&

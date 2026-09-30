@@ -2,6 +2,10 @@ import { existsSync } from 'node:fs'
 import { isAbsolute } from 'node:path'
 import { isWslUncPath, parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
 import { WSL_CODEX_RUNTIME_HOME_SEGMENTS } from '../pty/codex-home-wsl-env'
+import {
+  ANTIGRAVITY_BRAIN_HOME_SEGMENTS,
+  antigravityTranscriptSegmentsInBrain
+} from '../ai-vault/session-scanner-antigravity-paths'
 import { getWslHomeAsync, listRunningWslDistrosAsync, listRunningWslHomeDirsAsync } from '../wsl'
 import {
   filterPathsToRunningWslDistrosAsync,
@@ -290,6 +294,28 @@ export async function wslCodexSessionsDirs(
     }
   }
   return dirs.filter((dir, index) => dirs.indexOf(dir) === index)
+}
+
+/** agy launched in a WSL pane writes under the guest home, like AI Vault's WSL brain roots. */
+export async function wslAntigravityTranscriptPaths(
+  conversationId: string,
+  deps: Pick<HostReadableTranscriptPathDeps, 'platform' | 'listWslHomeDirs' | 'wslSnapshot'> = {}
+): Promise<string[]> {
+  const platform = deps.platform ?? process.platform
+  if (platform !== 'win32') {
+    return []
+  }
+  const homeDirs = deps.wslSnapshot
+    ? await snapshotHomeDirs(deps.wslSnapshot)
+    : await resolveWslHomeDirs(deps.listWslHomeDirs)
+  const paths = homeDirs.map((home) =>
+    joinUnderWslHome(
+      home,
+      ...ANTIGRAVITY_BRAIN_HOME_SEGMENTS,
+      ...antigravityTranscriptSegmentsInBrain(conversationId)
+    )
+  )
+  return paths.filter((path, index) => paths.indexOf(path) === index)
 }
 
 // Why: node:path.join is posix-flavoured off Windows and would mangle the

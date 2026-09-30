@@ -9,14 +9,20 @@ import { isWslUncPath } from '../../shared/wsl-paths'
 import { walkSessionFiles } from '../ai-vault/session-scanner-discovery'
 import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from '../ai-vault/session-scanner-omp-subagent-transcripts'
 import { normalizeAgentSessionsDir } from '../ai-vault/session-scanner-values'
+import {
+  ANTIGRAVITY_BRAIN_HOME_SEGMENTS,
+  antigravityTranscriptSegmentsInBrain
+} from '../ai-vault/session-scanner-antigravity-paths'
 import { resolveOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
 import {
   findGrokChatHistoryBySessionId,
   resolveGrokSessionsDir
 } from '../../shared/grok-session-paths'
 import {
+  createWslTranscriptResolutionSnapshot,
   needsWslHostResolution,
   toHostReadableTranscriptPath,
+  wslAntigravityTranscriptPaths,
   wslCodexSessionsDirs
 } from './host-readable-transcript-path'
 import { findWslCodexSessionPath } from './wsl-codex-session-path-scan'
@@ -213,20 +219,7 @@ async function resolveSessionFileById(
     )
   }
   if (transcriptAgent === 'antigravity') {
-    // A conversation id is one directory segment, never a caller-supplied path.
-    if (!/^[a-zA-Z0-9_-]+$/.test(trimmedId)) {
-      return null
-    }
-    return toHostReadableTranscriptPath(
-      join(
-        options.antigravityBrainDir ?? join(homedir(), '.gemini', 'antigravity-cli', 'brain'),
-        trimmedId,
-        '.system_generated',
-        'logs',
-        'transcript.jsonl'
-      ),
-      { signal }
-    )
+    return resolveAntigravitySessionFile(trimmedId, options.antigravityBrainDir, signal)
   }
   if (transcriptAgent === 'grok') {
     return resolveGrokSessionFile(trimmedId, options.grokSessionsDir ?? grokSessionsDir(), signal)
@@ -323,6 +316,52 @@ async function findCodexRolloutInDirs(
     }
   }
   // No hit and at least one root never scanned: "couldn't look", not "missing".
+  if (unavailable) {
+    throw unavailable
+  }
+  return null
+}
+
+async function resolveAntigravitySessionFile(
+  conversationId: string,
+  brainDirOverride: string | undefined,
+  signal?: AbortSignal
+): Promise<string | null> {
+  // A conversation id is one directory segment, never a caller-supplied path.
+  if (!/^[a-zA-Z0-9_-]+$/.test(conversationId)) {
+    return null
+  }
+  const hostHit = await toHostReadableTranscriptPath(
+    join(
+      brainDirOverride ?? join(homedir(), ...ANTIGRAVITY_BRAIN_HOME_SEGMENTS),
+      ...antigravityTranscriptSegmentsInBrain(conversationId)
+    ),
+    { signal }
+  )
+  if (hostHit || brainDirOverride) {
+    return hostHit
+  }
+  if (process.platform !== 'win32') {
+    return null
+  }
+  // Why: enumerating WSL homes spawns wsl.exe, so only pay it after the host misses,
+  // and once per attempt — Chat re-resolves every few seconds until the file appears.
+  signal?.throwIfAborted()
+  const wslSnapshot = await createWslTranscriptResolutionSnapshot()
+  signal?.throwIfAborted()
+  let unavailable: WslTranscriptFsError | undefined
+  for (const candidate of await wslAntigravityTranscriptPaths(conversationId, { wslSnapshot })) {
+    try {
+      const hit = await toHostReadableTranscriptPath(candidate, { signal, wslSnapshot })
+      if (hit) {
+        return hit
+      }
+    } catch (error) {
+      signal?.throwIfAborted()
+      // Why: one stalled distro must not hide another distro's hit.
+      unavailable = wslTranscriptFsRefusal(error)
+    }
+  }
   if (unavailable) {
     throw unavailable
   }

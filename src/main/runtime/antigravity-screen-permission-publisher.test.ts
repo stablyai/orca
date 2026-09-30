@@ -4,7 +4,10 @@ import { Terminal } from '@xterm/headless'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type { RuntimeVisibleTerminalState } from './runtime-terminal-state-records'
-import { AntigravityScreenPermissionPublisher } from './antigravity-screen-permission-publisher'
+import {
+  AntigravityScreenPermissionPublisher,
+  antigravityHookRowMatchesPty
+} from './antigravity-screen-permission-publisher'
 
 const baseline: AgentStatusIpcPayload = {
   paneKey: 'pane',
@@ -116,6 +119,21 @@ describe('Antigravity screen publication scheduling', () => {
     expect(readScreen).not.toHaveBeenCalled()
   })
 
+  it('reads a WSL relay row, whose pty this host owns', async () => {
+    const publish = vi.fn(() => true)
+    const publisher = new AntigravityScreenPermissionPublisher({
+      baseline: () => ({ ...baseline, connectionId: 'wsl:Ubuntu-26.04' }),
+      readScreen: async () => approval,
+      isCurrent: () => true,
+      publish
+    })
+    publisher.schedule('wsl')
+    await vi.waitFor(() => expect(publish).toHaveBeenCalledTimes(1))
+    expect(publish).toHaveBeenCalledWith(
+      expect.objectContaining({ command: expect.stringContaining('echo') })
+    )
+  })
+
   it('does not lose output queued between a synchronous empty read and its cleanup', async () => {
     const readBaseline = vi.fn().mockReturnValueOnce(null).mockReturnValue(baseline)
     const publish = vi.fn(() => true)
@@ -128,5 +146,26 @@ describe('Antigravity screen publication scheduling', () => {
     publisher.schedule('pty')
     publisher.schedule('pty')
     await vi.waitFor(() => expect(publish).toHaveBeenCalledTimes(1))
+  })
+})
+
+describe('antigravityHookRowMatchesPty', () => {
+  const wslPty = { isWsl: true, wslDistro: 'Ubuntu-26.04' }
+  const nativePty = { isWsl: false, wslDistro: null }
+
+  it.each([
+    ['a native hook row', null, nativePty, true],
+    ['a WSL relay row on its own distro', 'wsl:Ubuntu-26.04', wslPty, true],
+    [
+      'a WSL relay row when the pty distro is the default',
+      'wsl:Ubuntu-26.04',
+      { isWsl: true, wslDistro: null },
+      true
+    ],
+    ['a WSL relay row on another distro', 'wsl:Debian', wslPty, false],
+    ['a WSL relay row on a native pty', 'wsl:Ubuntu-26.04', nativePty, false],
+    ['an SSH mirror row', 'ssh-connection', wslPty, false]
+  ] as const)('%s → %s', (_label, connectionId, pty, expected) => {
+    expect(antigravityHookRowMatchesPty(connectionId, pty)).toBe(expected)
   })
 })

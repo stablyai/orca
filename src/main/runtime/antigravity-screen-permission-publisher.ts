@@ -1,4 +1,8 @@
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import {
+  isWslHookRelayConnectionId,
+  wslHookRelayConnectionId
+} from '../../shared/wsl-hook-relay-contract'
 import type { AntigravityScreenPermissionObservation } from '../agent-hooks/server/server-ingest-antigravity-screen'
 import type { RuntimeVisibleTerminalState } from './runtime-terminal-state-records'
 import { isAntigravityCommandApprovalScreen } from './antigravity-command-approval-screen'
@@ -12,6 +16,21 @@ type Dependencies = {
   readScreen(ptyId: string): Promise<RuntimeVisibleTerminalState | null>
   isCurrent(ptyId: string, screen: RuntimeVisibleTerminalState): boolean
   publish(observation: AntigravityScreenPermissionObservation): boolean
+}
+
+/** A WSL relay row is local screen evidence, but only for a WSL pty in that same distro. */
+export function antigravityHookRowMatchesPty(
+  rowConnectionId: string | null | undefined,
+  pty: { isWsl: boolean | null; wslDistro: string | null }
+): boolean {
+  if (!rowConnectionId) {
+    return true
+  }
+  return (
+    isWslHookRelayConnectionId(rowConnectionId) &&
+    pty.isWsl === true &&
+    (!pty.wslDistro || rowConnectionId === wslHookRelayConnectionId(pty.wslDistro))
+  )
 }
 
 export class AntigravityScreenPermissionPublisher {
@@ -39,7 +58,11 @@ export class AntigravityScreenPermissionPublisher {
     while (pending.dirty) {
       pending.dirty = false
       const baseline = this.deps.baseline(ptyId)
-      if (!baseline || baseline.agentType !== 'antigravity' || baseline.connectionId) {
+      if (
+        !baseline ||
+        baseline.agentType !== 'antigravity' ||
+        (baseline.connectionId && !isWslHookRelayConnectionId(baseline.connectionId))
+      ) {
         continue
       }
       try {

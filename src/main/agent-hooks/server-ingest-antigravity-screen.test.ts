@@ -101,6 +101,14 @@ describe('host-owned Antigravity screen permission', () => {
     ).toBe(false)
   })
 
+  it('publishes permission for a WSL relay row, whose pty this host owns', () => {
+    const server = workingPane('antigravity', 'wsl:Ubuntu-26.04')
+    expect(
+      server.ingestAntigravityScreenPermission({ baseline: baseline(server), command: 'echo OK' })
+    ).toBe(true)
+    expect(baseline(server)).toMatchObject({ state: 'waiting', connectionId: 'wsl:Ubuntu-26.04' })
+  })
+
   it('does not clear a permission prompt from another producer', () => {
     const server = workingPane()
     server.ingestTerminalStatus({
