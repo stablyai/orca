@@ -164,6 +164,20 @@ describe('buildAiVaultResumeCommand', () => {
     ).toBe("cd '/Users/ada/repo' && prime-agent --resume 'dddddddd-eeee-4fff-8aaa-111111111111'")
   })
 
+  it('resumes OmO with --session so a known transcript does not open the picker', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'omo',
+        sessionId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+        resumeFilePath: '/Users/ada/.omo/agent/sessions/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.jsonl',
+        cwd: '/Users/ada/repo',
+        platform: 'darwin'
+      })
+    ).toBe(
+      "cd '/Users/ada/repo' && omo --session '/Users/ada/.omo/agent/sessions/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.jsonl'"
+    )
+  })
+
   it('resumes Muse by session id in the session cwd', () => {
     expect(
       buildAiVaultResumeCommand({

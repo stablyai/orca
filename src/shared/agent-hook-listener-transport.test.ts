@@ -270,6 +270,7 @@ describe('shared agent-hook-listener', () => {
     expect(resolveHookSource('/hook/pi')).toBe('pi')
     expect(resolveHookSource('/hook/omp')).toBe('omp')
     expect(resolveHookSource('/hook/prime-agent')).toBe('prime-agent')
+    expect(resolveHookSource('/hook/omo')).toBe('omo')
     expect(resolveHookSource('/hook/command-code')).toBe('command-code')
     expect(resolveHookSource('/hook/opencode2')).toBe('opencode2')
     expect(resolveHookSource('/hook/mimo-code')).toBe('mimo-code')

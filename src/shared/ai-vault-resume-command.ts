@@ -210,6 +210,9 @@ function buildAgentResumeInvocation(
     // falls through
     case 'kimi':
       return `${baseCommand} --session ${sessionArg}`
+    case 'omo':
+      // Why: `omo --resume` opens the picker. A known transcript must use `--session`.
+      return `${baseCommand} --session ${sessionArg}`
     case 'copilot':
       return `${baseCommand} --resume=${sessionArg}`
     // Why: `muse resume <uuid>` reopens the session (resume is workspace-scoped,
@@ -234,7 +237,6 @@ function buildAgentResumeInvocation(
     // falls through
     case 'omp':
     case 'prime-agent':
-    case 'omo':
       return `${baseCommand} --resume ${sessionArg}`
     case 'antigravity':
       return `${baseCommand} --conversation ${sessionArg}`
