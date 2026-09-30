@@ -9,7 +9,6 @@ import type {
 } from '@/lib/agent-session-launch-plan'
 import {
   buildDirectWorkItemStartup,
-  markDirectWorkItemAgentTrusted,
   resolveDirectWorkItemAgent
 } from '@/lib/launch-work-item-direct-agent-routing'
 
@@ -101,13 +100,6 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
           initialSessionOptions: startupPlan?.sessionOptions
         })
   const structuredLaunch = plan?.route === 'structured-native-chat'
-
-  await markDirectWorkItemAgentTrusted({
-    structuredLaunch,
-    agent: effectiveAgent,
-    workspacePath: args.worktreePath,
-    connectionId: args.repoConnectionId
-  })
 
   return {
     launchConnectionId,

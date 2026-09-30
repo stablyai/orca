@@ -28,8 +28,13 @@ type MobileNativeChatSendArgs = {
 
 /** 'unknown' = the RPC failed without proof the request never reached the
  *  desktop (ack loss after a write, or a cutover that cannot tell whether the
- *  frame was written) — callers must not present it as a definite send failure. */
-export type MobileNativeChatSendOutcome = 'accepted' | 'rejected' | 'unknown'
+ *  frame was written) — callers must not present it as a definite send failure.
+ *  'queued' = structured lane only: the host holds the message as a queued
+ *  draft, so it shows as a card above the composer, never a transcript echo. */
+export type MobileNativeChatSendOutcome = 'accepted' | 'rejected' | 'unknown' | 'queued'
+
+/** What a terminal write can answer: the PTY lane has no draft queue. */
+export type MobileNativeChatWriteOutcome = Exclude<MobileNativeChatSendOutcome, 'queued'>
 
 /** Without an explicit timeout `sendRequest` waits for reconnect indefinitely, and
  *  the composer holds `sending` (send arrow dimmed, no error) for as long as it
@@ -46,7 +51,7 @@ export function openMobileNativeChatSendBudget(): number {
 
 export async function sendMobileNativeChatMessageWithOutcome(
   args: MobileNativeChatSendArgs
-): Promise<MobileNativeChatSendOutcome> {
+): Promise<MobileNativeChatWriteOutcome> {
   const timeoutMs =
     args.deadline === undefined ? MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS : args.deadline - Date.now()
   // Starting an underfunded final write risks delivery followed by a false timeout.
@@ -98,7 +103,7 @@ export async function typeMobileNativeChatCommandWithOutcome(args: {
   resolvedLaunchDraft?: { text: string; createdAt: number }
   mobileClient?: MobileTerminalClient
   deadline?: number
-}): Promise<MobileNativeChatSendOutcome> {
+}): Promise<MobileNativeChatWriteOutcome> {
   let writeIndex = 0
   return typeAgentTuiCommand({
     command: args.command,

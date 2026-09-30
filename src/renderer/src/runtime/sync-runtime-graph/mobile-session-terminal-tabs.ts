@@ -54,6 +54,7 @@ export function buildMobileTerminalSurfaceTabs(
     }),
     activeLeafId,
     expandedLeafId: sanitizedSavedLayout?.expandedLeafId ?? null,
+    ...(sanitizedSavedLayout?.chatLeafId ? { chatLeafId: sanitizedSavedLayout.chatLeafId } : {}),
     ...(Object.keys(savedPtyIdsByLeafId).length > 0 ? { ptyIdsByLeafId: savedPtyIdsByLeafId } : {}),
     ...(sanitizedSavedLayout?.titlesByLeafId
       ? { titlesByLeafId: sanitizedSavedLayout.titlesByLeafId }

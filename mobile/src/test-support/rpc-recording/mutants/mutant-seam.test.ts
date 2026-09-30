@@ -1,16 +1,13 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join, resolve, sep } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { RECORDER_DIRECTORY } from '../recorder-digest'
 import { RECORDING_DRIVERS } from '../recording-drivers'
 
 const root = resolve(import.meta.dirname, '../../../../..')
-const recorder = join(root, RECORDER_DIRECTORY)
-const mutants = join(root, RECORDER_DIRECTORY, 'mutants')
-/** The one file allowed to name this directory: it names it in order to exclude it. */
-const EXCLUDER = 'recorder-digest.ts'
-/** Both spellings of the path, so a constant is no more usable than the literal. */
-const NAMES = ['mutants', 'MUTANT_DIRECTORY']
+const recorder = join(root, 'mobile/src/test-support/rpc-recording')
+const mutants = join(recorder, 'mutants')
+/** Names the drivers for the record script and the suites that check them; no recording loads it. */
+const OFF_RECORDING_PATH = ['recording-drivers.ts']
 
 function sources(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true, recursive: true })
@@ -59,12 +56,11 @@ function reachable(entries: readonly string[]): Set<string> {
 }
 
 /**
- * `recorderSha256` skips this directory, so nothing here is pinned by any golden. That is only
- * sound while no recording can reach it: a mutant table an adapter imported would change what the
- * recording loads while every header stayed still. Reachability is proved from the recording
- * drivers outward rather than from this directory inward, because the question is what a golden's
- * bytes can depend on. The name scan then covers the paths a module can be read by rather than
- * imported, under either spelling of the directory.
+ * A mutant planted on the recording path would be recorded and replayed alike, so every golden
+ * would compare clean while certifying the mutated code rather than the product. Reachability is
+ * proved from the recording drivers outward rather than from this directory inward, because the
+ * question is what a golden's bytes can depend on. The name scan then covers the paths a module can
+ * be read by rather than imported.
  */
 describe('the mutant seam', () => {
   const outside = sources(recorder).filter((file) => !file.startsWith(`${mutants}${sep}`))
@@ -80,6 +76,7 @@ describe('the mutant seam', () => {
     // recording file is reachable today, and one that stops being reachable is an orphan.
     const missed = outside
       .filter((file) => !suite(file) && !graph.has(file))
+      .filter((file) => !OFF_RECORDING_PATH.includes(relative(file)))
       .map(relative)
       .sort()
     expect(missed).toEqual([])
@@ -88,15 +85,9 @@ describe('the mutant seam', () => {
 
   // A test that does not record cannot change a recording; the drivers do record, so they are held
   // to the engine's rule — a driver that read the table would change what it records silently.
-  // Both names, because `MUTANT_DIRECTORY` spells the same path without the literal.
-  it('is named in no recording file but the digest that excludes it', () => {
+  it('is named in no recording file', () => {
     const naming = outside
-      .filter(
-        (file) =>
-          !file.endsWith(EXCLUDER) &&
-          !suite(file) &&
-          NAMES.some((name) => readFileSync(file, 'utf8').includes(name))
-      )
+      .filter((file) => !suite(file) && readFileSync(file, 'utf8').includes('mutants'))
       .map(relative)
     expect(naming).toEqual([])
   })

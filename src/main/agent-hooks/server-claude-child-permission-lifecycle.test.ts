@@ -74,6 +74,85 @@ describe('Claude child permission lifecycle', () => {
     }
   })
 
+  it('clears a child permission when an API error ends that child', async () => {
+    const { server, postClaudeHook } = await createServer()
+    try {
+      await postClaudeHook({ hook_event_name: 'UserPromptSubmit', prompt: 'guarded task' })
+      await postClaudeHook({
+        hook_event_name: 'PermissionRequest',
+        agent_id: 'a-blocked',
+        agent_type: 'general-purpose',
+        tool_name: 'Bash',
+        tool_input: { command: 'false' }
+      })
+      // Why: the lead's own progress overwrites the listener's wait slot; only the server keeps the prompt.
+      await postClaudeHook({ hook_event_name: 'PreToolUse', tool_name: 'Read' })
+      await postClaudeHook({
+        hook_event_name: 'StopFailure',
+        agent_id: 'a-other',
+        error: 'rate_limit'
+      })
+      expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'waiting', toolName: 'Bash' })
+
+      await postClaudeHook({
+        hook_event_name: 'StopFailure',
+        agent_id: 'a-blocked',
+        agent_type: 'general-purpose',
+        error: 'rate_limit'
+      })
+
+      const status = server.getStatusSnapshot()[0]
+      expect(status).toMatchObject({ paneKey: PANE, state: 'working', agentType: 'claude' })
+      expect(status?.toolName).toBe('Read')
+      expect(status?.interactivePrompt).toBeUndefined()
+      expect(status?.subagents).toBeUndefined()
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('settles a finished lead when its background child fails on a pending permission', async () => {
+    const { server, postClaudeHook } = await createServer()
+    try {
+      await postClaudeHook({
+        hook_event_name: 'UserPromptSubmit',
+        prompt: 'research in background'
+      })
+      await postClaudeHook({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'a6324370b7bede0c7',
+        agent_type: 'general-purpose'
+      })
+      await postClaudeHook({
+        hook_event_name: 'Stop',
+        last_assistant_message: 'Started the research.',
+        background_tasks: [{ id: 'a6324370b7bede0c7', type: 'subagent', status: 'running' }]
+      })
+      await postClaudeHook({
+        hook_event_name: 'PermissionRequest',
+        agent_id: 'a6324370b7bede0c7',
+        agent_type: 'general-purpose',
+        tool_name: 'Bash',
+        tool_input: { command: 'false' }
+      })
+      expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'waiting', toolName: 'Bash' })
+
+      await postClaudeHook({
+        hook_event_name: 'StopFailure',
+        agent_id: 'a6324370b7bede0c7',
+        agent_type: 'general-purpose',
+        error: 'rate_limit'
+      })
+
+      const status = server.getStatusSnapshot()[0]
+      expect(status).toMatchObject({ paneKey: PANE, state: 'done', agentType: 'claude' })
+      expect(status?.interactivePrompt).toBeUndefined()
+      expect(status?.subagents).toBeUndefined()
+    } finally {
+      server.stop()
+    }
+  })
+
   it('clears a teammate permission when that teammate idles', async () => {
     const { server, postClaudeHook } = await createServer()
     try {

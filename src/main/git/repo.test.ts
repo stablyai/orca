@@ -6,7 +6,7 @@ import path from 'node:path'
 
 import {
   buildSearchBaseRefsArgv,
-  getDefaultBaseRef,
+  getBaseRefDefault,
   getBranchConflictKind,
   getRemoteCount,
   parseAndFilterSearchRefDetails,
@@ -537,7 +537,7 @@ describe('searchBaseRefs (widened glob)', () => {
   })
 })
 
-describe('getDefaultBaseRef (regression — unchanged behavior)', () => {
+describe('getBaseRefDefault (regression — unchanged behavior)', async () => {
   let tmpDir: string
 
   beforeEach(() => {
@@ -549,52 +549,52 @@ describe('getDefaultBaseRef (regression — unchanged behavior)', () => {
     rmSync(tmpDir, { recursive: true, force: true })
   })
 
-  it('returns origin/main when both origin/main and upstream/main exist (origin wins)', () => {
+  it('returns origin/main when both origin/main and upstream/main exist (origin wins)', async () => {
     const sha = getHeadSha(tmpDir)
     createRemoteRef(tmpDir, 'origin/main', sha)
     createRemoteRef(tmpDir, 'upstream/main', sha)
 
-    const result = getDefaultBaseRef(tmpDir)
+    const result = await getBaseRefDefault(tmpDir)
 
     expect(result).toBe('origin/main')
   })
 
-  it('returns the target of origin/HEAD when set', () => {
+  it('returns the target of origin/HEAD when set', async () => {
     const sha = getHeadSha(tmpDir)
     createRemoteRef(tmpDir, 'origin/main', sha)
     git(tmpDir, ['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main'])
 
-    const result = getDefaultBaseRef(tmpDir)
+    const result = await getBaseRefDefault(tmpDir)
 
     expect(result).toBe('origin/main')
   })
 
-  it('falls through from a stale origin/HEAD target to an existing primary ref', () => {
+  it('falls through from a stale origin/HEAD target to an existing primary ref', async () => {
     const sha = getHeadSha(tmpDir)
     createRemoteRef(tmpDir, 'origin/main', sha)
     git(tmpDir, ['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/master'])
 
-    const result = getDefaultBaseRef(tmpDir)
+    const result = await getBaseRefDefault(tmpDir)
 
     expect(result).toBe('origin/main')
   })
 
-  it('falls through from a stale origin/HEAD primary target to another existing default ref', () => {
+  it('falls through from a stale origin/HEAD primary target to another existing default ref', async () => {
     const sha = getHeadSha(tmpDir)
     createRemoteRef(tmpDir, 'origin/master', sha)
     git(tmpDir, ['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main'])
 
-    const result = getDefaultBaseRef(tmpDir)
+    const result = await getBaseRefDefault(tmpDir)
 
     expect(result).toBe('origin/master')
   })
 
-  it('does NOT fall through to upstream/main when origin/* is absent', () => {
+  it('does NOT fall through to upstream/main when origin/* is absent', async () => {
     // Why: default probe order is origin-only by design; upstream-aware defaulting is deferred.
     const sha = getHeadSha(tmpDir)
     createRemoteRef(tmpDir, 'upstream/main', sha)
 
-    const result = getDefaultBaseRef(tmpDir)
+    const result = await getBaseRefDefault(tmpDir)
 
     // initRepo creates a local `main`, so with no origin/* we expect it — not `upstream/main`.
     expect(result).toBe('main')
@@ -602,7 +602,7 @@ describe('getDefaultBaseRef (regression — unchanged behavior)', () => {
   })
 })
 
-describe('resolveDefaultBaseRefViaExec', () => {
+describe('resolveDefaultBaseRefViaExec', async () => {
   it('falls through from a stale origin/HEAD target to the probe list', async () => {
     const calls: string[][] = []
     const exec = async (argv: string[]): Promise<{ stdout: string }> => {
@@ -649,7 +649,7 @@ describe('resolveDefaultBaseRefViaExec', () => {
   })
 })
 
-describe('getRemoteCount', () => {
+describe('getRemoteCount', async () => {
   let tmpDir: string
 
   beforeEach(() => {

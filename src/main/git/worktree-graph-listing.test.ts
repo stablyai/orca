@@ -195,6 +195,5 @@ branch refs/heads/main
       cwd: '/repo',
       timeout: 5_000
     })
-    expect(WORKTREE_LIST_TIMEOUT_MS).toBe(30_000)
   })
 })

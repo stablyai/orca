@@ -1,6 +1,7 @@
 /** The managed Claude-compatible hook script, built for local, POSIX-remote and Windows targets.
  *  Split from hook-service.ts so the service owns install/status and this owns script text,
  *  mirroring the same split under src/main/cursor/. */
+import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import { buildWindowsAgentHookCurlPostCommand } from '../agent-hooks/installer-utils'
 import { buildPosixAgentHookPostCommand } from '../agent-hooks/hook-post-command'
 import {
@@ -15,13 +16,21 @@ import {
   buildWindowsHookStdinDrainEpilogue
 } from '../agent-hooks/hook-stdin-contract'
 
+// Why: a backgrounded session runs in a daemon worker that inherited the dispatching
+// pane's env, so ORCA_PANE_KEY names a pane this session does not run in (#9236).
+// Why exit, not the drain label: the drain parks in more.com and a worker is outside
+// an Orca pane — the abandoned-stdin hang #11549 guards against.
+export const WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD = 'if not "%CLAUDE_JOB_DIR%"=="" exit /b 0'
+
 export function getManagedScript(
   target: 'local' | 'posix' = 'local',
   options: {
+    source?: AgentHookSource
     skipWhenDevinImportsClaude?: boolean
     skipWhenGrokImportsClaude?: boolean
   } = {}
 ): string {
+  const source = options.source ?? 'claude'
   if (target === 'local' && process.platform === 'win32') {
     return [
       '@echo off',
@@ -33,11 +42,7 @@ export function getManagedScript(
       // Why (#11549): the env guards must outrank the Devin skip — the Devin skip parks in more.com,
       // and outside an Orca pane the caller can abandon stdin, so more.com never returns.
       ...buildWindowsHookEnvironmentGuardLines(),
-      // Why: a backgrounded session runs in a daemon worker that inherited the dispatching
-      // pane's env, so ORCA_PANE_KEY names a pane this session does not run in (#9236).
-      // Why exit, not the drain label: the drain parks in more.com and a worker is outside
-      // an Orca pane — the abandoned-stdin hang #11549 guards against.
-      'if not "%CLAUDE_JOB_DIR%"=="" exit /b 0',
+      WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD,
       ...(options.skipWhenGrokImportsClaude ? buildWindowsGrokReplayGuardLines() : []),
       ...(options.skipWhenDevinImportsClaude
         ? [
@@ -46,7 +51,7 @@ export function getManagedScript(
           ]
         : []),
       // Why: use curl.exe to avoid an extra PowerShell startup per hook.
-      buildWindowsAgentHookCurlPostCommand('claude'),
+      buildWindowsAgentHookCurlPostCommand(source),
       'exit /b 0',
       ...buildWindowsHookStdinDrainEpilogue(),
       ''
@@ -59,7 +64,7 @@ export function getManagedScript(
     'printf "{}\\n"',
     ...buildPosixHookPayloadCapture(),
     ...(options.skipWhenGrokImportsClaude ? buildPosixGrokReplayGuardLines() : []),
-    ...buildPosixHookSpoolLines('claude'),
+    ...buildPosixHookSpoolLines(source),
     ...(options.skipWhenDevinImportsClaude
       ? [
           // Why: Devin imports .claude hooks by default; skip Orca's managed hook there so status posts stay attributed to Devin.
@@ -84,7 +89,7 @@ export function getManagedScript(
     '  exit 0',
     'fi',
     // Why: keep full hook JSON off the command line and avoid IDS-friendly URL-encoded paths.
-    ...buildPosixAgentHookPostCommand('claude').map((line, index, lines) =>
+    ...buildPosixAgentHookPostCommand(source).map((line, index, lines) =>
       index === lines.length - 1 ? `${line} >/dev/null 2>&1 || spool_hook_event` : line
     ),
     'exit 0',

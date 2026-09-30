@@ -1,3 +1,8 @@
+import {
+  closeTestStores,
+  createSqliteTestStore,
+  readPersistedStateJson
+} from '../../persistence-test-harness'
 /**
  * The write path now hands the file a Buffer it built in one pass instead of a string it rebuilt
  * per secret. Drives the real `Store` end to end — encrypted settings, a local session and a remote
@@ -5,7 +10,7 @@
  * against (a mis-sliced segment, a re-encoded payload, a dropped sentinel) is invisible until
  * something reads the bytes back.
  */
-import { mkdtempSync, readFileSync, realpathSync } from 'node:fs'
+import { mkdtempSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -35,15 +40,16 @@ const { Store } = await import('./store')
 const HOST_ID = 'ssh:user@host'
 
 const stores: InstanceType<typeof Store>[] = []
-afterEach(() => {
+afterEach(async () => {
   for (const store of stores.splice(0)) {
-    store.flush()
+    store.freezeWrites()
   }
+  await closeTestStores()
   vi.restoreAllMocks()
 })
 
 function openStore(dataFile: string): InstanceType<typeof Store> {
-  const store = new Store({ dataFile })
+  const store = createSqliteTestStore(Store, { dataFile })
   stores.push(store)
   return store
 }
@@ -95,7 +101,7 @@ describe('persisted state survives a save/load round trip', () => {
     }
 
     // The file is valid UTF-8 JSON and holds ciphertext, not the plaintext secrets.
-    const bytes = readFileSync(dataFile)
+    const bytes = Buffer.from(readPersistedStateJson(dataFile))
     const onDisk = JSON.parse(bytes.toString('utf8'))
     expect(onDisk.settings.opencodeSessionCookie).not.toBe('cookie-é-value')
     expect(Buffer.from(onDisk.settings.opencodeSessionCookie, 'base64').toString('utf8')).toContain(
@@ -118,7 +124,7 @@ describe('persisted state survives a save/load round trip', () => {
     // Deep equality of the whole reloaded state, taken across a second round trip so the assertion
     // is not comparing against the first load's one-time settings migrations.
     reloaded.flush()
-    const bytesAfterReload = readFileSync(dataFile)
+    const bytesAfterReload = Buffer.from(readPersistedStateJson(dataFile))
     const again = openStore(dataFile)
     expect(again.getSettings()).toEqual(reloaded.getSettings())
     expect(again.getUI()).toEqual(reloaded.getUI())
@@ -126,6 +132,6 @@ describe('persisted state survives a save/load round trip', () => {
     expect(again.getWorkspaceSession(HOST_ID)).toEqual(reloaded.getWorkspaceSession(HOST_ID))
     // ...and the bytes are stable, so a quiet app is not rewriting a 4 MB file with new content.
     again.flush()
-    expect(readFileSync(dataFile).equals(bytesAfterReload)).toBe(true)
+    expect(Buffer.from(readPersistedStateJson(dataFile)).equals(bytesAfterReload)).toBe(true)
   })
 })

@@ -25,6 +25,7 @@ const { CodexAppServerUnsupportedError } = await import('./codex-app-server-clie
 const { codexAppServerCapabilityCache } = await import('./codex-app-server-capability-cache')
 const { _internals, grantManagedCodexHookTrust } = await import('./codex-hook-trust-grant')
 const { markCodexProjectTrusted } = await import('../agent-trust-presets')
+const { getLocalCodexTrustConfigFiles } = await import('./codex-home-paths')
 const { setCodexTrustGrantTelemetry } = await import('./codex-trust-grant-telemetry')
 const {
   computeTrustKey,
@@ -207,7 +208,10 @@ describe('two Codex pane launches against one config.toml', () => {
       // Let the grant capture config.toml and start its session.
       await tick()
       await tick()
-      const marked = markCodexProjectTrusted(workspace)
+      const marked = markCodexProjectTrusted(
+        workspace,
+        getLocalCodexTrustConfigFiles(testState.fakeHomeDir)
+      )
       await tick()
       // The lane must hold the preset write back until rollback has run.
       expect(readFileSync(tomlPath, 'utf-8')).not.toContain('trust_level')
@@ -397,7 +401,10 @@ describe('reentrancy under concurrency', () => {
       // write nested inside both.
       const outcome = await runExclusivelyForCodexTrustConfig(tomlPath, () =>
         runExclusivelyForCodexTrustConfig(systemToml, async () => {
-          await markCodexProjectTrusted(workspace)
+          await markCodexProjectTrusted(
+            workspace,
+            getLocalCodexTrustConfigFiles(testState.fakeHomeDir)
+          )
           return grantManagedCodexHookTrust(buildPlan(entries))
         })
       )

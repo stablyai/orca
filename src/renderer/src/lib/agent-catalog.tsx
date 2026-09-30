@@ -1,3 +1,4 @@
+import { getCatalogPlatform } from './agent-catalog-platform'
 import type React from 'react'
 import { ClaudeIcon, DroidIcon, OpenAIIcon } from '@/components/status-bar/icons'
 import openClaudeLogoUrl from '../../../../resources/openclaude-logo.png?url'
@@ -28,20 +29,6 @@ export type AgentCatalogEntry = {
   faviconDomain?: string
   /** Homepage/install docs URL, sourced from the README agent badge list. */
   homepageUrl: string
-}
-
-function getCatalogPlatform(): NodeJS.Platform {
-  const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent
-  if (userAgent.includes('Windows')) {
-    return 'win32'
-  }
-  if (userAgent.includes('Mac')) {
-    return 'darwin'
-  }
-  if (userAgent) {
-    return 'linux'
-  }
-  return typeof process === 'undefined' ? 'linux' : process.platform
 }
 
 export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] => [
@@ -119,6 +106,34 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     // Why: bare `trae.cn` 404s on Google's favicon service.
     faviconDomain: 'www.trae.cn',
     homepageUrl: 'https://docs.trae.cn/cli_get-started-with-trae-cli'
+  },
+  {
+    id: 'muse',
+    label: translate('auto.lib.agent.catalog.muse_label', 'Muse'),
+    cmd: 'muse',
+    faviconDomain: 'dev.meta.ai',
+    homepageUrl: 'https://dev.meta.ai/docs/muse-code'
+  },
+  {
+    id: 'dsh',
+    label: translate('auto.lib.agent.catalog.dsh_label', 'DeepSeek Harness'),
+    cmd: 'dsh-tui',
+    searchAliases: ['deepseek', 'dsh', 'dst', 'deepseek harness'],
+    homepageUrl: 'https://deepseek-harness.github.io/deepseek-harness/'
+  },
+  {
+    id: 'qoder',
+    label: translate('auto.lib.agent.catalog.qoder_label', 'Qoder CLI'),
+    cmd: 'qodercli',
+    faviconDomain: 'qoder.com',
+    homepageUrl: 'https://docs.qoder.com/cli/overview'
+  },
+  {
+    id: 'zcode',
+    label: translate('auto.lib.agent.catalog.zcode_label', 'ZCode'),
+    cmd: 'zcode',
+    faviconDomain: 'zcode.z.ai',
+    homepageUrl: 'https://zcode.z.ai/en/docs'
   },
   {
     id: 'pi',
@@ -229,6 +244,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://www.codebuff.com/docs/help/quick-start'
   },
   {
+    id: 'freebuff',
+    label: translate('auto.lib.agent.catalog.freebuff_label', 'Freebuff'),
+    cmd: 'freebuff',
+    faviconDomain: 'freebuff.com',
+    homepageUrl: 'https://freebuff.com/cli'
+  },
+  {
     id: 'command-code',
     label: translate('auto.lib.agent.catalog.6f8056a565', 'Command Code'),
     // Why: `npm i -g command-code` installs both `command-code` and the
@@ -314,6 +336,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     cmd: 'openclaw',
     faviconDomain: 'openclaw.ai',
     homepageUrl: 'https://github.com/openclaw/openclaw'
+  },
+  {
+    id: 'codebuddy',
+    label: translate('auto.lib.agent.catalog.codebuddy_label', 'CodeBuddy'),
+    cmd: 'codebuddy',
+    faviconDomain: 'codebuddy.ai',
+    homepageUrl: 'https://www.codebuddy.ai/cli'
   }
 ])
 

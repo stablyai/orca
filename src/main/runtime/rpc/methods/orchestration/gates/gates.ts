@@ -84,7 +84,10 @@ export const ORCHESTRATION_GATE_METHODS = [
   defineMethod({
     name: 'orchestration.gateCreate',
     params: GateCreateParams,
-    handler: (params, { orchestrationCompatibilityEvidence, runtime, legacyCoordinatorRunId }) => {
+    handler: (
+      params,
+      { orchestrationCompatibilityEvidence, orchestrationCaller, runtime, legacyCoordinatorRunId }
+    ) => {
       const db = runtime.getOrchestrationDb()
       let options: string[] | undefined
       if (params.options) {
@@ -107,7 +110,8 @@ export const ORCHESTRATION_GATE_METHODS = [
         callerTerminalHandle: params.from,
         requireCurrentConsumer: true,
         legacyCoordinatorRunId,
-        callerEvidence: orchestrationCompatibilityEvidence
+        callerEvidence: orchestrationCompatibilityEvidence,
+        callerSession: orchestrationCaller
       })
       if (task.run_id !== run.id) {
         throw taskNotFoundError(`Task ${params.task} was not found in Run ${run.id}.`, {
@@ -127,7 +131,10 @@ export const ORCHESTRATION_GATE_METHODS = [
   defineMethod({
     name: 'orchestration.gateResolve',
     params: GateResolveParams,
-    handler: (params, { orchestrationCompatibilityEvidence, runtime, legacyCoordinatorRunId }) => {
+    handler: (
+      params,
+      { orchestrationCompatibilityEvidence, orchestrationCaller, runtime, legacyCoordinatorRunId }
+    ) => {
       const db = runtime.getOrchestrationDb()
       const existing = db.getGate(params.id)
       if (!existing) {
@@ -138,7 +145,8 @@ export const ORCHESTRATION_GATE_METHODS = [
         callerTerminalHandle: params.from,
         requireCurrentConsumer: true,
         legacyCoordinatorRunId,
-        callerEvidence: orchestrationCompatibilityEvidence
+        callerEvidence: orchestrationCompatibilityEvidence,
+        callerSession: orchestrationCaller
       })
       // Why: a gate outside the caller's Run is indistinguishable from a missing one, so probing cannot map foreign Runs.
       if (existing.run_id !== run.id) {
@@ -155,7 +163,10 @@ export const ORCHESTRATION_GATE_METHODS = [
   defineMethod({
     name: 'orchestration.gateList',
     params: GateListParams,
-    handler: (params, { orchestrationCompatibilityEvidence, runtime, legacyCoordinatorRunId }) => {
+    handler: (
+      params,
+      { orchestrationCompatibilityEvidence, orchestrationCaller, runtime, legacyCoordinatorRunId }
+    ) => {
       const db = runtime.getOrchestrationDb()
       const explicitRun = params.run ? db.getRun(params.run) : undefined
       // Why: same read posture as taskList — an explicitly named Run is inspectable, an unnamed one means the caller's own.
@@ -167,7 +178,8 @@ export const ORCHESTRATION_GATE_METHODS = [
               callerTerminalHandle: params.from,
               requireCurrentConsumer: params.run === undefined,
               legacyCoordinatorRunId,
-              callerEvidence: orchestrationCompatibilityEvidence
+              callerEvidence: orchestrationCompatibilityEvidence,
+              callerSession: orchestrationCaller
             })
       const gates = db
         .listGates({

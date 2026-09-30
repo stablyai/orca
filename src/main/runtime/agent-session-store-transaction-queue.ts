@@ -1,5 +1,5 @@
 import type { AgentSessionOperationRow } from '../../shared/agent-session-operation-ledger'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionLease, AgentSessionRecord } from '../../shared/agent-session-record'
 import { raiseAgentSessionFencesAfterBackupRecovery } from './agent-session-backup-recovery-fence'
 import {
   AGENT_SESSION_STORE_SCHEMA_VERSION,
@@ -11,11 +11,26 @@ import {
 } from './agent-session-record-store-file'
 import { withFileTransactionLock } from '../file-transaction-lock'
 
+/** Latch fields older builds wrote. Nothing reads them, and dropping them keeps a lease this build
+ *  writes back from carrying a stale latch to an older build after a downgrade. */
+type RetiredAgentSessionLeaseFields = {
+  processlessAt?: unknown
+  settlementRetryRequired?: unknown
+  settlementRetryId?: unknown
+}
+
 function markLoadedLeasesUnreconciled(state: AgentSessionStoreState): void {
   for (const [sessionId, record] of state.records) {
+    const lease: AgentSessionLease & RetiredAgentSessionLeaseFields = record.lease
+    const {
+      processlessAt: _processlessAt,
+      settlementRetryRequired: _settlementRetryRequired,
+      settlementRetryId: _settlementRetryId,
+      ...current
+    } = lease
     state.records.set(sessionId, {
       ...record,
-      lease: { ...record.lease, unreconciled: true }
+      lease: { ...current, unreconciled: true }
     })
   }
 }
@@ -38,16 +53,15 @@ function agentSessionStoreStateChanged(
   operations: ReadonlyMap<string, AgentSessionOperationRow>,
   retiredClaimKeys: AgentSessionStoreState['retiredClaimKeys'],
   unreadableRecords: AgentSessionStoreState['unreadableRecords'],
-  visibleSessionIds: AgentSessionStoreState['visibleSessionIds'],
-  visibleSessionIdsIndexPresent: AgentSessionStoreState['visibleSessionIdsIndexPresent']
+  sessionTabs: AgentSessionStoreState['sessionTabs']
 ): boolean {
   return (
     !mapEntriesMatch(state.records, records) ||
     !mapEntriesMatch(state.operations, operations) ||
     !mapEntriesMatch(state.unreadableRecords, unreadableRecords) ||
-    state.visibleSessionIdsIndexPresent !== visibleSessionIdsIndexPresent ||
-    state.visibleSessionIds.size !== visibleSessionIds.size ||
-    [...state.visibleSessionIds].some((id) => !visibleSessionIds.has(id)) ||
+    (state.sessionTabs && sessionTabs
+      ? !state.sessionTabs.equals(sessionTabs)
+      : state.sessionTabs !== sessionTabs) ||
     state.retiredClaimKeys.length !== retiredClaimKeys.length ||
     state.retiredClaimKeys.some((entry, index) => entry !== retiredClaimKeys[index])
   )
@@ -99,8 +113,7 @@ export class AgentSessionStoreTransactionQueue {
         const operations = new Map(this.state.operations)
         const retiredClaimKeys = [...this.state.retiredClaimKeys]
         const unreadableRecords = new Map(this.state.unreadableRecords)
-        const visibleSessionIds = new Set(this.state.visibleSessionIds)
-        const visibleSessionIdsIndexPresent = this.state.visibleSessionIdsIndexPresent
+        const sessionTabs = this.state.sessionTabs?.clone() ?? null
         try {
           // The lost commit may have granted a higher fence than the backup records show. Rather
           // than refuse forever, raise every recovered fence clear of anything that commit could
@@ -119,8 +132,7 @@ export class AgentSessionStoreTransactionQueue {
               operations,
               retiredClaimKeys,
               unreadableRecords,
-              visibleSessionIds,
-              visibleSessionIdsIndexPresent
+              sessionTabs
             )
           ) {
             return result
@@ -139,8 +151,7 @@ export class AgentSessionStoreTransactionQueue {
           this.state.operations = operations
           this.state.retiredClaimKeys = retiredClaimKeys
           this.state.unreadableRecords = unreadableRecords
-          this.state.visibleSessionIds = visibleSessionIds
-          this.state.visibleSessionIdsIndexPresent = visibleSessionIdsIndexPresent
+          this.state.sessionTabs = sessionTabs
           throw error
         }
       })

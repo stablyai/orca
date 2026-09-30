@@ -171,13 +171,17 @@ async function listDetectedWorktreesForRuntimeRepoOnce(
     // Why (#10562): the scan coalesces, but teardown must not — each caller carries
     // its own known-id snapshot and purges its own state, so a caller that joined
     // an in-flight scan would otherwise purge without ever stopping those terminals.
-    await teardownMissingWorktreeTerminalsBestEffort(
-      settings,
-      repoId,
-      options.connectionId,
-      options.knownWorktreeIds,
-      result
-    )
+    // Why gated: a listing older than an applied create or remove is not applied, so it must
+    // not stop terminals either.
+    if (!options.isStaleCatalogPublication?.(result)) {
+      await teardownMissingWorktreeTerminalsBestEffort(
+        settings,
+        repoId,
+        options.connectionId,
+        options.knownWorktreeIds,
+        result
+      )
+    }
     return {
       status: 'admitted',
       result,
@@ -252,13 +256,15 @@ export async function listDetectedWorktreesForRepoCoalesced(
       directSshAuthority: options.directSshAuthority
     }
   }
-  await teardownMissingWorktreeTerminalsBestEffort(
-    settings,
-    repoId,
-    options.connectionId,
-    options.knownWorktreeIds,
-    providerResult.result
-  )
+  if (!options.isStaleCatalogPublication?.(providerResult.result)) {
+    await teardownMissingWorktreeTerminalsBestEffort(
+      settings,
+      repoId,
+      options.connectionId,
+      options.knownWorktreeIds,
+      providerResult.result
+    )
+  }
   return {
     status: 'admitted',
     result: providerResult.result,

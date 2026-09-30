@@ -141,7 +141,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  computer set-value        Set the value of a settable app element',
   '',
   'Linear:',
-  '  linear                    Read Linear ticket context for agents',
+  '  linear                    Read and write Linear issues for agents',
   '',
   'Mobile Emulator (iOS Simulator):',
   '  emulator list             List available/running emulators (Orca-managed + raw serve-sim)',

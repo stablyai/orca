@@ -1,4 +1,5 @@
 import { win32 as pathWin32 } from 'node:path'
+import { canUseBunPty } from '../daemon/pty-subprocess/bun-pty-process-capabilities'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
 import { resolveWindowsGitBashShellPath } from '../git-bash'
@@ -76,7 +77,9 @@ function finalizeLocalPtyLaunchPlan(
     windowsFallbackAttempts?: ReturnType<typeof buildWindowsPowerShellSpawnAttempts>
   }
 ): LocalPtyLaunchPlan {
-  ensureNodePtySpawnHelperExecutable()
+  if (!canUseBunPty()) {
+    ensureNodePtySpawnHelperExecutable()
+  }
   if (seed.args.prevalidatedCwd !== shell.validationCwd) {
     validateWorkingDirectory(shell.validationCwd)
   }

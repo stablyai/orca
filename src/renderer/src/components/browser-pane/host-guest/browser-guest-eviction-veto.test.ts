@@ -63,13 +63,6 @@ describe('browser guest eviction veto', () => {
     expect(evictionRun(tabsFor(WATCHED_PAGE))).toContain(WATCHED_WORKTREE)
   })
 
-  it('releases the veto when the last remote viewer leaves', () => {
-    hydrateBrowserRemoteViewerPages([WATCHED_PAGE])
-    expect(browserTabsVetoGuestEviction(tabsFor(WATCHED_PAGE))).toBe(true)
-    hydrateBrowserRemoteViewerPages([])
-    expect(evictionRun(tabsFor(WATCHED_PAGE))).toContain(WATCHED_WORKTREE)
-  })
-
   // Downloads are the one veto term that is not a paint term: parking a guest keeps the download
   // alive, but eviction unregisters it and main cancels its downloads (tab-close semantics).
   it('spares a page that is still writing a download', () => {

@@ -364,7 +364,7 @@ describe('connectPanePty', () => {
     vi.advanceTimersByTime(500)
     await flushAsyncTicks()
 
-    expect(transport.sendInput).toHaveBeenCalledWith('\x03')
+    expect(transport.sendInput).toHaveBeenCalledWith('\x03', 'query-reply')
     expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
     expect(deps.setRuntimePaneTitle).not.toHaveBeenCalled()
     expect(deps.updateTabTitle).not.toHaveBeenCalled()
@@ -478,7 +478,7 @@ describe('connectPanePty', () => {
     vi.advanceTimersByTime(500)
     await flushAsyncTicks()
 
-    expect(transport.sendInputAccepted).toHaveBeenCalledWith('\x1b[99;5u')
+    expect(transport.sendInputAccepted).toHaveBeenCalledWith('\x1b[99;5u', 'query-reply')
     expect(window.api.agentStatus.inferInterrupt).toHaveBeenCalledWith({
       paneKey,
       baselineUpdatedAt: 1_000,
@@ -652,7 +652,7 @@ describe('connectPanePty', () => {
     vi.advanceTimersByTime(500)
     await flushAsyncTicks()
 
-    expect(transport.sendInput).toHaveBeenCalledWith('\x03')
+    expect(transport.sendInput).toHaveBeenCalledWith('\x03', 'query-reply')
     expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
   })
 

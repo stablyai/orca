@@ -1,11 +1,13 @@
+import { createMarkdownTokenizerStart } from './markdown-tokenizer-start'
 import type { AnyExtension } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
+import { RichMarkdownTrailingParagraph } from './rich-markdown-trailing-paragraph'
 import Link from '@tiptap/extension-link'
 import { Code } from '@tiptap/extension-code'
 import Image from '@tiptap/extension-image'
 import Placeholder from '@tiptap/extension-placeholder'
 import TaskItem from '@tiptap/extension-task-item'
-import { Table } from '@tiptap/extension-table'
+import { RichMarkdownTable } from './rich-markdown-table'
 import { TableCell } from '@tiptap/extension-table-cell'
 import { TableHeader } from '@tiptap/extension-table-header'
 import { TableRow } from '@tiptap/extension-table-row'
@@ -73,9 +75,11 @@ export function createRichMarkdownExtensions({
       code: false,
       codeBlock: false,
       orderedList: false,
-      paragraph: false
+      paragraph: false,
+      trailingNode: false
     }),
     RichMarkdownParagraph,
+    RichMarkdownTrailingParagraph,
     RichMarkdownCode,
     RichMarkdownCodeBlockLowlight.extend({
       addNodeView() {
@@ -218,7 +222,7 @@ export function createRichMarkdownExtensions({
       nested: true
     }),
     ...createOrcaDetailsExtensions(),
-    Table.configure({
+    RichMarkdownTable.configure({
       resizable: false
     }),
     TableRow,
@@ -229,7 +233,16 @@ export function createRichMarkdownExtensions({
         throwOnError: false
       }
     }),
-    BlockMath.configure({
+    BlockMath.extend({
+      markdownTokenizer:
+        BlockMath.config.markdownTokenizer &&
+        typeof BlockMath.config.markdownTokenizer !== 'function'
+          ? {
+              ...BlockMath.config.markdownTokenizer,
+              start: createMarkdownTokenizerStart('$$')
+            }
+          : BlockMath.config.markdownTokenizer
+    }).configure({
       katexOptions: {
         displayMode: true,
         throwOnError: false

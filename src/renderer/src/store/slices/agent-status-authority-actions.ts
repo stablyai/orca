@@ -16,6 +16,7 @@ import {
   getTabIdFromPaneKey,
   isRecentlyClosedAgentStatusTab
 } from './agent-status-pane-key-tab-binding'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 export function createAgentStatusAuthorityActions(
   runtime: AgentStatusRuntime
@@ -31,7 +32,7 @@ export function createAgentStatusAuthorityActions(
     scheduleAgentStatusFreshness: () => freshness.schedule(),
 
     retireAgentPaneAuthority: (paneKey, options) => {
-      const retirementId = crypto.randomUUID()
+      const retirementId = createBrowserUuid()
       const ownerPaneKey = resolveAgentPaneAuthorityKey(paneKey)
       const previousRetirement = get().recentlyRetiredAgentStatusPaneKeys[ownerPaneKey]
       const retiredPaneKeys = [

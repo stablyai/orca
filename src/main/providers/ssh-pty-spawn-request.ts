@@ -26,6 +26,7 @@ export function buildSshPtySpawnRequest(args: {
     ...(options.historyIsolationEnabled !== undefined
       ? { historyIsolationEnabled: options.historyIsolationEnabled }
       : {}),
+    ...(options.agentWorkspaceTrust ? { agentWorkspaceTrust: options.agentWorkspaceTrust } : {}),
     ...(options.shellOverride !== undefined ? { shellOverride: options.shellOverride } : {}),
     ...(options.terminalWindowsWslDistro !== undefined
       ? { terminalWindowsWslDistro: options.terminalWindowsWslDistro }

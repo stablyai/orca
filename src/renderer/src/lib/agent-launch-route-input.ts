@@ -3,6 +3,9 @@ import {
   parseExecutionHostId,
   toRuntimeExecutionHostId
 } from '../../../shared/execution-host'
+import type { AppState } from '@/store/types'
+import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { requestsCwdOutsideWorkspaceRootForWorkspace } from '../../../shared/terminal-startup-cwd'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { workspaceKindForWorktreeId } from '../../../shared/workspace-launch-kind'
 import {
@@ -40,11 +43,15 @@ export type ProspectiveWorkspace = {
   runtimeEnvironmentId?: string | null
 }
 
-export type AgentLaunchRouteStore = Parameters<typeof getExecutionHostIdForWorktree>[0] &
+export type AgentLaunchRouteStore = {
+  settings?: AgentLaunchRoutingInput['settings']
+  /** Where each workspace's root is, so a cwd naming it is not read as a custom directory. First
+   *  in the intersection so these lookups resolve to the full records. */
+  worktreesByRepo?: AppState['worktreesByRepo']
+  folderWorkspaces?: AppState['folderWorkspaces']
+} & Parameters<typeof getExecutionHostIdForWorktree>[0] &
   Parameters<typeof getLocalProjectExecutionRuntimeContext>[0] &
-  Parameters<typeof getConnectionIdFromState>[0] & {
-    settings?: AgentLaunchRoutingInput['settings']
-  }
+  Parameters<typeof getConnectionIdFromState>[0]
 
 export type AgentLaunchRouteArgs = {
   agent: TuiAgent
@@ -123,8 +130,18 @@ export function buildAgentLaunchRouteInput(
       workspace,
       executionHostId
     ),
+    // A cwd decides the route only when it names somewhere other than the workspace root; the
+    // host applies the same rule (`agent-launch-mode.ts`), so the two never disagree on it.
     requiresTuiLaunchCommand:
-      Boolean(tuiCustomization?.cwd?.trim()) || hasExplicitTuiLaunchCommand(store.settings, agent),
+      requestsCwdOutsideWorkspaceRootForWorkspace({
+        workspaceId: workspace.worktreeId,
+        requestedCwd: tuiCustomization?.cwd,
+        workspacePath: workspace.worktreeId
+          ? findWorktreeById(store.worktreesByRepo ?? {}, workspace.worktreeId)?.path
+          : undefined,
+        resolveFolderWorkspacePath: (folderWorkspaceId) =>
+          store.folderWorkspaces?.find((entry) => entry.id === folderWorkspaceId)?.folderPath
+      }) || hasExplicitTuiLaunchCommand(store.settings, agent),
     initialSessionOptions: args.initialSessionOptions
   }
 }

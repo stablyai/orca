@@ -69,7 +69,9 @@ export function runQuickCommandInNewTab({
       prompt: command.prompt,
       worktreeId,
       groupId: targetGroupId,
-      ...(command.agent === 'opencode2' ? { promptDelivery: 'submit-after-ready' as const } : {}),
+      ...(command.agent === 'opencode' || command.agent === 'opencode2'
+        ? { promptDelivery: 'submit-after-ready' as const }
+        : {}),
       launchSource: 'quick_command',
       quickCommandLabel: command.label
     })
@@ -112,7 +114,7 @@ export function runQuickCommandInNewTab({
   // Why: match `+` button's createNewTerminalTab — without this, a worktree
   // currently showing an editor file keeps rendering the editor and the new
   // terminal tab stays invisible.
-  store.setActiveTabType('terminal')
+  store.setActiveTabType('terminal', worktreeId)
 
   // Why: persist tab-bar order with the new terminal appended. Without this,
   // reconcileTabOrder falls back to terminals-first when the stored order is

@@ -71,6 +71,7 @@ function MobileNativeChatMessageImpl({
   fontScale = 1,
   onOpenFile,
   turnStatus,
+  turnStatusAbove = false,
   turnExpanded,
   turnKey,
   onToggleTurn,
@@ -82,8 +83,10 @@ function MobileNativeChatMessageImpl({
   /** Multiplies all chat text sizes for pinch-to-zoom (1 = no change). */
   fontScale?: number
   onOpenFile?: (relativePath: string) => void
-  /** This settled turn's status row, rendered under its user message. */
+  /** This turn's status row, rendered under its opening user message. */
   turnStatus?: NativeChatTurnStatus | null
+  /** Render the status above the row: its turn has no user bubble of its own. */
+  turnStatusAbove?: boolean
   /** Whether the turn caret has disclosed this turn's activity. */
   turnExpanded?: boolean
   /** Set only when this row's turn has settled and can disclose its activity. */
@@ -116,8 +119,18 @@ function MobileNativeChatMessageImpl({
     !toolsExpanded
   const showToolRun = tools.length > 0 && !settledToolsHidden
 
+  const statusRow = turnStatus ? (
+    <MobileNativeChatTurnStatus
+      startedAt={turnStatus.startedAt}
+      workedSeconds={turnStatus.workedSeconds}
+      expanded={turnExpanded ?? false}
+      onToggleExpanded={turnKey && onToggleTurn ? () => onToggleTurn(turnKey) : undefined}
+    />
+  ) : null
   return (
     <>
+      {/* A turn with no user bubble carries its bar above its first row. */}
+      {turnStatusAbove ? statusRow : null}
       <View style={[styles.row, isUser && styles.rowUser]}>
         <View
           style={[styles.content, isUser && styles.userBubble, isReasoning && styles.reasoning]}
@@ -145,15 +158,7 @@ function MobileNativeChatMessageImpl({
           ) : null}
         </View>
       </View>
-      {turnStatus ? (
-        <MobileNativeChatTurnStatus
-          startedAt={turnStatus.startedAt}
-          thinking={turnStatus.thinking}
-          workedSeconds={turnStatus.workedSeconds}
-          expanded={turnExpanded ?? false}
-          onToggleExpanded={turnKey && onToggleTurn ? () => onToggleTurn(turnKey) : undefined}
-        />
-      ) : null}
+      {turnStatusAbove ? null : statusRow}
     </>
   )
 }

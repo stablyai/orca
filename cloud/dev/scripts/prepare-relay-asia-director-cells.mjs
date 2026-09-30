@@ -15,6 +15,9 @@ function argumentsFrom(argv) {
   return values
 }
 
+// Production Asia pools sit 176 ms from Cloud SQL and run at 16; staging C4 stays at 10.
+const ASIA_DATABASE_POOL_MAX = { production: 16, staging: 10 }
+
 export function prepareRelayAsiaDirectorCells({ currentCells, topology, cellIds, imageDigest }) {
   if (!Array.isArray(currentCells) || !topology || Array.isArray(topology)) {
     throw new Error('director inputs are invalid')
@@ -36,7 +39,7 @@ export function prepareRelayAsiaDirectorCells({ currentCells, topology, cellIds,
       !cell ||
       cell.region !== 'asia-east2' ||
       cell.capacity_requests !== 6_000 ||
-      cell.database_pool_max !== 10 ||
+      cell.database_pool_max !== ASIA_DATABASE_POOL_MAX[cellId.split('-')[0]] ||
       cell.connection_hard_cap !== 3_000 ||
       cell.connection_unobserved_bound !== 60 ||
       cell.initially_enabled !== false ||

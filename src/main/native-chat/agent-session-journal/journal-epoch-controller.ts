@@ -2,7 +2,7 @@ import type {
   AgentJournalCursor,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
-import type Database from '../../sqlite/sync-database'
+import type { JournalHostDatabase } from './journal-host-database'
 import { replaceJournalEpoch, type JournalReplacementItem } from './journal-epoch-replacement'
 import { publishNewEpoch } from './journal-epoch-rollover'
 import type { JournalLoad } from './journal-open'
@@ -16,7 +16,7 @@ export class JournalEpochController {
       now: () => number
       mintEpoch: () => string
       serialize: <T>(run: () => Promise<T>) => Promise<T>
-      database: () => { db: Database.Database }
+      database: () => JournalHostDatabase
       readOnly: () => boolean
       setReadOnly: (readOnly: boolean) => void
       highestFence: () => number
@@ -27,9 +27,8 @@ export class JournalEpochController {
 
   start(reason: AgentJournalEpochReason, fence: number): void {
     publishNewEpoch({
-      db: this.deps.database().db,
-      sessionId: this.deps.identity.sessionId,
-      providerHandle: this.deps.identity.providerHandle,
+      database: this.deps.database(),
+      identity: this.deps.identity,
       epoch: this.deps.mintEpoch(),
       reason,
       fence,
@@ -63,7 +62,7 @@ export class JournalEpochController {
       assertJournalWritable(this.deps.readOnly(), this.deps.identity.sessionId)
       assertJournalFence(fence, this.deps.highestFence())
       replaceJournalEpoch({
-        db: this.deps.database().db,
+        database: this.deps.database(),
         identity: this.deps.identity,
         reason,
         fence,

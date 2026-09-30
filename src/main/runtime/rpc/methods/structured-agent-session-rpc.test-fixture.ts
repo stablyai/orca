@@ -183,21 +183,7 @@ export function hostStub(): StructuredAgentSessionHost {
     setSessionTabVisibility: vi.fn(async () => undefined),
     respondToPrompt: vi.fn(async () => ({ ok: true, replayed: false })),
     setOption: vi.fn(async () => ({ ok: true, replayed: false })),
-    requestHandoff: vi.fn(async () => ({
-      ok: true,
-      replayed: false,
-      fence: 1,
-      cursor: { epoch: 'epoch-a', sequence: 0 },
-      value: {
-        status: {
-          owner: 'native',
-          direction: null,
-          phase: 'idle',
-          stage: null,
-          operationId: null
-        }
-      }
-    })),
+    changeThreadGoal: vi.fn(async () => ({ ok: true, replayed: false })),
     supportsCreate: vi.fn(() => true),
     handoffStatus: vi.fn(async () => ({ owner: 'native' })),
     readOptions: vi.fn(async () => ({
@@ -205,14 +191,20 @@ export function hostStub(): StructuredAgentSessionHost {
       current: { model: 'gpt-live' }
     })),
     history: vi.fn(() => ({ ok: true, page: { items: [] } })),
+    sessionAgent: vi.fn(() => null),
+    journalSnapshot: vi.fn((sessionId: string) => ({
+      sessionId,
+      cursor: { epoch: 'epoch-a', sequence: 0 },
+      items: [],
+      submissions: []
+    })),
     subscribe: vi.fn(() => () => undefined),
     // A real feed, so the snapshot this method hands back is a genuine projection rather
     // than a shape the stub restated.
     subscribeStatus: vi.fn((subscriber: StructuredAgentSessionStatusSubscriber) =>
       statusFeed().subscribe(subscriber)
     ),
-    unsubscribe: vi.fn(),
-    release: vi.fn()
+    unsubscribe: vi.fn()
   })
   return hostCalls as unknown as StructuredAgentSessionHost
 }

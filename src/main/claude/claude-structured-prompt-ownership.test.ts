@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
@@ -17,9 +18,9 @@ import {
   acquired,
   adapterFor,
   fakeClaude,
-  identityFor,
-  invokeCanUseTool
+  identityFor
 } from './claude-structured-session-test-support'
+import { invokeCanUseTool } from './claude-can-use-tool-test-support'
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve = (): void => {}
@@ -120,7 +121,7 @@ describe('Claude live prompt ownership', () => {
       sessionId: 'session-1',
       itemId: 'journal-prompt',
       kind: 'approval',
-      optionId: 'allow',
+      response: { kind: 'option', optionId: 'allow' },
       fence: 7,
       commit: async () => {
         expect(answered.settled()).toBe(false)
@@ -185,7 +186,7 @@ describe('Claude live prompt ownership', () => {
         sessionId: 'session-1',
         itemId: 'journal-prompt',
         kind: 'approval',
-        optionId: 'allow',
+        response: { kind: 'option', optionId: 'allow' },
         fence: 7,
         commit
       })
@@ -204,7 +205,7 @@ describe('Claude live prompt ownership', () => {
         sessionId: 'session-1',
         itemId: 'journal-prompt',
         kind: 'approval',
-        optionId: 'allow',
+        response: { kind: 'option', optionId: 'allow' },
         fence: 7,
         commit
       })
@@ -269,7 +270,8 @@ describe('Claude live prompt ownership', () => {
       sessionId: 'session-1',
       clientMessageId: 'queued-message',
       state: 'rejected',
-      reason: 'provider_cancelled_before_start'
+      reason: 'provider_cancelled_before_start',
+      rejection: { kind: 'cancelled' }
     })
   })
 
@@ -340,7 +342,10 @@ describe('Claude live prompt ownership', () => {
   })
 
   it('drops resolved prompt bodies instead of retaining them for the session lifetime', () => {
-    const prompts = new ClaudeJournalPrompts({ sink: lifecycleRecorder().sink })
+    const prompts = new ClaudeJournalPrompts({
+      sink: lifecycleRecorder().sink,
+      turnScope: () => AGENT_JOURNAL_THREAD_SCOPE
+    })
 
     for (let index = 0; index < 128; index += 1) {
       const promptKey = `resolved-${index}`
@@ -356,7 +361,6 @@ describe('Claude live prompt ownership', () => {
           input: { command: 'git status' },
           suggestions: [],
           questionIds: [],
-          answers: new Map(),
           settle: vi.fn()
         }
       })
@@ -398,7 +402,7 @@ describe('Claude live prompt ownership', () => {
       sessionId: 'session-1',
       itemId: 'journal-prompt',
       kind: 'approval',
-      optionId: 'allow',
+      response: { kind: 'option', optionId: 'allow' },
       fence: 7,
       commit: async () => undefined
     })
@@ -557,7 +561,7 @@ describe('Claude live prompt ownership', () => {
         sessionId: 'session-1',
         itemId: promptItemId,
         kind: 'approval',
-        optionId: 'allow',
+        response: { kind: 'option', optionId: 'allow' },
         fence: 7,
         commit
       })
@@ -610,7 +614,7 @@ describe('Claude live prompt ownership', () => {
         sessionId: 'session-1',
         itemId: 'journal-prompt',
         kind: 'approval',
-        optionId: 'allow',
+        response: { kind: 'option', optionId: 'allow' },
         fence: 8,
         commit
       })
@@ -673,7 +677,8 @@ describe('Claude live prompt ownership', () => {
               }
             ]
           : []
-      }
+      },
+      turnScope: () => AGENT_JOURNAL_THREAD_SCOPE
     })
     const prompt: ClaudePendingPrompt = {
       requestId: 'grouped-request',
@@ -689,7 +694,6 @@ describe('Claude live prompt ownership', () => {
       },
       suggestions: [],
       questionIds: ['First?', 'Second?'],
-      answers: new Map(),
       settle: vi.fn()
     }
     prompts.handle({ type: 'prompt', sessionId: 'session-1', prompt })
@@ -715,7 +719,8 @@ describe('Claude live prompt ownership', () => {
           lifecycleAttempts += 1
           return backpressured ? { accepted: false, reason: 'backpressure' } : { accepted: true }
         }
-      }
+      },
+      turnScope: () => AGENT_JOURNAL_THREAD_SCOPE
     })
     const registerCancellation = (index: number): void => {
       const promptKey = `permission-${index}`
@@ -728,7 +733,6 @@ describe('Claude live prompt ownership', () => {
         input: { command: 'git status' },
         suggestions: [],
         questionIds: [],
-        answers: new Map(),
         settle: vi.fn()
       }
       prompts.handle({ type: 'prompt', sessionId: 'session-1', prompt })

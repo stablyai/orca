@@ -1,7 +1,9 @@
 import { useSyncExternalStore } from 'react'
 import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import type { AgentSessionWriteRefusal } from '../../../shared/agent-session-write-failure'
 import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
 import type { StructuredLaunchRecoveryState } from './structured-agent-session-launch-recovery'
+import type { StructuredLaunchSelection } from './structured-agent-session-launch-options'
 import type {
   StructuredAgentLaunchOptions,
   StructuredLaunchCallerGroup
@@ -25,6 +27,10 @@ export type StructuredLaunchState = StructuredLaunchRecoveryState & {
   /** Fixed by the caller that opened this launch so coalesced prompts use one delivery mode. */
   promptDelivery: StructuredAgentLaunchOptions['promptDelivery']
   callers: StructuredLaunchCallerGroup
+  /** The host's refusal behind the last failed attempt, worded beside Retry; the toast stays
+   *  generic. Absent when the failure named none. */
+  failure?: AgentSessionWriteRefusal
+  selection: StructuredLaunchSelection
 }
 
 export type StructuredAgentLaunchStatus = 'idle' | 'pending' | 'unknown'
@@ -163,6 +169,38 @@ export function getStructuredAgentSessionLaunchLifecycle(
   return getPersistedStructuredAgentLaunchRecord(sessionId)?.lifecycle ?? null
 }
 
+/** The launch adopts an existing conversation, which may keep a model of its own. */
+export function getStructuredAgentSessionLaunchResumes(sessionId: string): boolean {
+  const state = getStructuredLaunchStateBySessionId(sessionId)
+  const resumeFrom = state
+    ? state.intent.params.resumeFrom
+    : getPersistedStructuredAgentLaunchRecord(sessionId)?.resumeFrom
+  return resumeFrom !== undefined
+}
+
+export function getStructuredAgentSessionLaunchFailure(
+  worktreeId: string,
+  sessionId: string
+): AgentSessionWriteRefusal | null {
+  const state = getStructuredLaunchStateBySessionId(sessionId)
+  return state &&
+    matchesLaunchWorktree(state, worktreeId) &&
+    launchStateLifecycle(state) === 'failed'
+    ? (state.failure ?? null)
+    : null
+}
+
+export function useStructuredAgentSessionLaunchFailure(
+  worktreeId: string,
+  sessionId: string
+): AgentSessionWriteRefusal | null {
+  return useSyncExternalStore(
+    subscribeStructuredAgentLaunchStatus,
+    () => getStructuredAgentSessionLaunchFailure(worktreeId, sessionId),
+    () => null
+  )
+}
+
 export function useStructuredAgentSessionLaunchLifecycle(
   worktreeId: string,
   sessionId: string
@@ -200,6 +238,10 @@ export function markStructuredAgentSessionLaunchPublished(
     return false
   }
   if (state.callers.outcome === 'published') {
+    return true
+  }
+  // Still in flight: its own settlement publishes once the picks held during launch land.
+  if (state.callers.outcome === 'pending') {
     return true
   }
   state.callers.outcome = 'published'

@@ -2,15 +2,20 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import { abandonStructuredAgentSessionHost } from './structured-agent-session-host-test-abandon'
 import {
   HOST_TEST_NOW,
   HOST_TEST_SESSION,
   hostTestAttachParams,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
+import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 
 const CLAUDE_SESSION = 'claude-session'
 const hosts: StructuredAgentSessionHost[] = []
@@ -34,7 +39,12 @@ function claudeAdapter(): StructuredAgentSessionAdapter {
         observedAt: HOST_TEST_NOW
       }
     }),
-    dispatch: async () => ({ state: 'rejected', reason: 'unused' }),
+    dispatch: async () => ({
+      state: 'rejected',
+      ...agentSessionFailureWords(agentSessionFailureFact('providerRejected'), {
+        surface: 'rejection'
+      })
+    }),
     cancelTurn: async () => ({ cancelled: false }),
     answerPrompt: async () => undefined,
     setOption: async () => undefined
@@ -48,7 +58,7 @@ function createHost(
   const host = new StructuredAgentSessionHost({
     store,
     adapter: claudeAdapter(),
-    journalRoot: root,
+    journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     probeOwner,
@@ -58,15 +68,8 @@ function createHost(
   return host
 }
 
-async function abandonHost(host: StructuredAgentSessionHost): Promise<void> {
-  host['runtimeState'].stopLeaseRenewal()
-  host['holds'].dispose()
-  await Promise.all([...host['sessions'].values()].map((session) => session.journal.close()))
-  host['sessions'].clear()
-}
-
 afterEach(async () => {
-  await Promise.all(hosts.splice(0).map(abandonHost))
+  await Promise.all(hosts.splice(0).map(abandonStructuredAgentSessionHost))
   await rm(root, { recursive: true, force: true })
   root = ''
 })
@@ -75,8 +78,7 @@ describe('structured session provider restore', () => {
   it('restores a durable Claude session tab with its recorded provider', async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-provider-restore-'))
     resetHostTestOperationIds()
-    const storeDirectory = join(root, 'store')
-    const store = await AgentSessionRecordStore.open({ directory: storeDirectory, hostId: 'local' })
+    const store = await openTestAgentSessionRecordStore(root)
     const host = createHost(store)
     const attached = await host.attach(
       { callerKey: 'client-1' },
@@ -89,10 +91,7 @@ describe('structured session provider restore', () => {
     )
     expect(attached).toMatchObject({ ok: true })
 
-    const reopenedStore = await AgentSessionRecordStore.open({
-      directory: storeDirectory,
-      hostId: 'local'
-    })
+    const reopenedStore = await openTestAgentSessionRecordStore(root)
     const restarted = createHost(reopenedStore, async () => ({
       outcome: 'indeterminate',
       reason: 'read does not need ownership'

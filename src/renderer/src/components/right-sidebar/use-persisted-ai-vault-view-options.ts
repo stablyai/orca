@@ -3,6 +3,7 @@ import {
   AI_VAULT_AGENTS,
   type AiVaultAgent,
   type AiVaultGroup,
+  type AiVaultSearchSort,
   type AiVaultSort
 } from '../../../../shared/ai-vault-types'
 import {
@@ -19,10 +20,12 @@ type AiVaultViewOptionsUpdate = (current: AiVaultViewOptions) => AiVaultViewOpti
 export function usePersistedAiVaultViewOptions(): {
   agents: AiVaultAgent[]
   sort: AiVaultSort
+  searchSort: AiVaultSearchSort
   group: AiVaultGroup
   hideEmptySessions: boolean
   sessionLimit: AiVaultSessionLimit
   setSort: (sort: AiVaultSort) => void
+  setSearchSort: (sort: AiVaultSearchSort) => void
   setGroup: (group: AiVaultGroup) => void
   setHideEmptySessions: (hide: boolean) => void
   setSessionLimit: (limit: AiVaultSessionLimit) => void
@@ -52,6 +55,13 @@ export function usePersistedAiVaultViewOptions(): {
   const setSort = useCallback(
     (sort: AiVaultSort) =>
       updateOptions((current) => (current.sort === sort ? current : { ...current, sort })),
+    [updateOptions]
+  )
+  const setSearchSort = useCallback(
+    (searchSort: AiVaultSearchSort) =>
+      updateOptions((current) =>
+        current.searchSort === searchSort ? current : { ...current, searchSort }
+      ),
     [updateOptions]
   )
   const setGroup = useCallback(
@@ -118,10 +128,12 @@ export function usePersistedAiVaultViewOptions(): {
   return {
     agents,
     sort: options.sort,
+    searchSort: options.searchSort,
     group: options.group,
     hideEmptySessions: options.hideEmptySessions,
     sessionLimit: options.sessionLimit,
     setSort,
+    setSearchSort,
     setGroup,
     setHideEmptySessions,
     setSessionLimit,

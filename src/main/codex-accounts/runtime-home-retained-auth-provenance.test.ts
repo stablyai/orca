@@ -17,6 +17,12 @@ import {
   testState
 } from './runtime-home-service-test-harness'
 
+// Why: temp homes exceed sun_path on macOS but not on Linux; keep asserted config bytes host-independent.
+vi.mock('../codex/codex-daemon-socket-path-guard', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  applyCodexDaemonSocketGuard: (config: string) => config
+}))
+
 vi.mock('electron', () => ({
   app: {
     getPath: () => testState.userDataDir

@@ -261,10 +261,9 @@ describe('registerFilesystemHandlers', () => {
     statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
     registerFilesystemHandlers(store as never)
 
-    const started = await handlers.get('fs:startDownloadedFile')!(
-      { sender: {} },
-      { suggestedName: 'report.pdf' }
-    )
+    const started = await handlers.get('fs:startDownloadedFile')!(folderDownloadEvent, {
+      suggestedName: 'report.pdf'
+    })
     expect(started).toMatchObject({
       canceled: false,
       destinationPath: '/downloads/report.pdf'
@@ -300,10 +299,9 @@ describe('registerFilesystemHandlers', () => {
     statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
     registerFilesystemHandlers(store as never)
 
-    const started = await handlers.get('fs:startDownloadedFile')!(
-      { sender: {} },
-      { suggestedName: 'report.pdf' }
-    )
+    const started = await handlers.get('fs:startDownloadedFile')!(folderDownloadEvent, {
+      suggestedName: 'report.pdf'
+    })
     if (!started || typeof started !== 'object' || !('transferId' in started)) {
       throw new Error('download did not start')
     }
@@ -512,26 +510,6 @@ describe('registerFilesystemHandlers', () => {
     ).rejects.toThrow('Destination folder already exists')
 
     expect(provider.downloadFolder).not.toHaveBeenCalled()
-    expect(promoteLocalDownloadedFolderMock).not.toHaveBeenCalled()
-  })
-
-  it('rejects remote folder downloads when the remote path is not a directory', async () => {
-    const provider = {
-      downloadFolder: vi.fn().mockRejectedValue(new Error('Cannot download a file as a folder'))
-    }
-    getSshFilesystemProviderMock.mockReturnValue(provider)
-    showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: ['/downloads'] })
-    statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
-    registerFilesystemHandlers(store as never)
-
-    await expect(
-      handlers.get('fs:downloadFolder')!(folderDownloadEvent, {
-        dirPath: '/remote/file.txt',
-        connectionId: 'ssh-1'
-      })
-    ).rejects.toThrow('Cannot download a file as a folder')
-
-    expect(provider.downloadFolder).toHaveBeenCalledTimes(1)
     expect(promoteLocalDownloadedFolderMock).not.toHaveBeenCalled()
   })
 

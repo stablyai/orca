@@ -20,6 +20,7 @@ export function useHostScreenIdentity(args: {
     setHostLabelById,
     setHostName,
     setHostPlatform,
+    setHostStoredDescriptor,
     setLastKnownWorktrees,
     setPinnedIds,
     setRepoColorsByName,
@@ -54,6 +55,7 @@ export function useHostScreenIdentity(args: {
 
   useEffect(() => {
     setHostName('')
+    setHostStoredDescriptor(null)
     setError('')
     setRepoColorsByName(new Map())
     setRepoIconsByName(new Map())
@@ -87,6 +89,15 @@ export function useHostScreenIdentity(args: {
         return
       }
       setHostName(host.name)
+      setHostStoredDescriptor({
+        ...(host.personalName !== undefined ? { personalName: host.personalName } : {}),
+        ...(host.lastKnownMachineName !== undefined
+          ? { lastKnownMachineName: host.lastKnownMachineName }
+          : {}),
+        ...(host.lastKnownHostPlatform !== undefined
+          ? { lastKnownHostPlatform: host.lastKnownHostPlatform }
+          : {})
+      })
       void updateLastConnected(host.id)
     })
     return () => {

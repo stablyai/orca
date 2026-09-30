@@ -3,6 +3,7 @@ import { getTabIdsAwaitingHostHydrationRemount } from '@/lib/parked-terminal-hos
 import { emitAutomationsChangedWindowEvent } from '@/lib/automations-changed-window-event'
 import { createBackgroundSleepingAgentWakeDispatcher } from '@/lib/wake-sleeping-agents-in-background'
 import { attachMobileMarkdownBridge } from '@/runtime/mobile-markdown-bridge'
+import { remoteRuntimeTerminalColorPush } from '@/runtime/remote-runtime-terminal-color-push'
 import { resetAgentHookCompletionNotificationCoordinators } from '../agent-hook-completion-notifications'
 import { useAppStore } from '../../store'
 import { registerAgentStatusIpcBridge } from './agent-status-ipc-bridge'
@@ -68,6 +69,7 @@ export function installAppLifetimeIpcEvents(
   if (statusApi?.onStatusChanged) {
     const apply = (snapshot: RuntimeHostStatusSnapshot): void => {
       useAppStore.getState().applyRuntimeHostStatusSnapshot(snapshot)
+      remoteRuntimeTerminalColorPush.observeStatusSnapshot(snapshot)
     }
     let stopped = false
     unsubs.push(statusApi.onStatusChanged(apply), () => {

@@ -32,8 +32,6 @@ export function mockBrowserManager(
     getBrowserPageLoadError: vi.fn(() => null),
     getBrowserPageCertificateFailure: vi.fn(() => null),
     unregisterGuest: vi.fn(),
-    ensureWebviewVisible: vi.fn(async () => () => {}),
-    acquireAutomationVisibility: vi.fn(async () => () => {}),
     ...overrides
   } as unknown as BrowserManager
 }
@@ -58,6 +56,7 @@ export type MockWebContents = {
   on: Mock<(event: string, listener: MockEmitterListener) => void>
   removeListener: Mock<(event: string, listener: MockEmitterListener) => void>
   isDestroyed: () => boolean
+  isCrashed: () => boolean
   invalidate: Mock<() => void>
   focus: Mock<() => void>
   debugger: MockWebContentsDebugger
@@ -80,6 +79,7 @@ export function mockWebContents(
     on: vi.fn(),
     removeListener: vi.fn(),
     isDestroyed: () => false,
+    isCrashed: () => false,
     invalidate: vi.fn(),
     focus: vi.fn(),
     debugger: {

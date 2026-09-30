@@ -28,7 +28,10 @@ import {
 } from './inventory-generation-fence'
 import { forgetRetiredEpochRepairsOutside } from './retired-epoch-repair'
 import { projectLocalStructuredSessionTabs } from './snapshot-projection'
-import { hostSnapshotAffirmsWorktreeContents } from '../host-session-snapshot-authority'
+import {
+  hostSnapshotAffirmsAgentSessions,
+  hostSnapshotAffirmsWorktreeContents
+} from '../host-session-snapshot-authority'
 import {
   hasStructuredAgentSessionLaunchCancellationTombstone,
   markStructuredAgentSessionLaunchPublished,
@@ -92,6 +95,9 @@ export function applyStructuredSessionTabSnapshots(
     startStructuredAgentLaunchCancellationCleanup((sessionId) =>
       closeStructuredAgentSession({ kind: 'local' }, sessionId)
     )
+  }
+  // A chat missing from an inventory that cannot list chats is not proof the host dropped it.
+  if (options.authoritative && snapshots.every(hostSnapshotAffirmsAgentSessions)) {
     retireAbsentStructuredAgentSessionLaunchCancellationTombstones(
       new Set(
         snapshots.flatMap((snapshot) =>

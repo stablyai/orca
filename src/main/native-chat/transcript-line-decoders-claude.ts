@@ -15,6 +15,7 @@ import {
 } from '../ai-vault/session-scanner-values'
 import { imageSourcePathFromText } from '../../shared/native-chat-image-transcript-markers'
 import { claudeContentBlocks } from './transcript-record-blocks'
+import { unwrapClaudePastedContentBlock } from '../../shared/claude-pasted-content'
 import { claudeInterruptedMessageId } from './transcript-turn-markers'
 
 const MAX_EDIT_PATCH_HUNKS = 40
@@ -124,7 +125,7 @@ export function decodeClaudeTranscriptLine(
   return {
     id: messageId ?? fallbackId,
     role: claudeMessageRole(role, blocks),
-    blocks,
+    blocks: role === 'user' ? blocks.map(unwrapClaudePastedContentBlock) : blocks,
     timestamp,
     source: 'transcript'
   }

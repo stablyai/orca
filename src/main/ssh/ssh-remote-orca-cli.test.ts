@@ -84,6 +84,7 @@ describe('runRemoteOrcaCli', () => {
       getActiveDispatchForIdentity: vi.fn(() => undefined),
       getActiveDispatchMailboxOwners: vi.fn(() => []),
       getCurrentRunForPane: vi.fn(() => undefined),
+      getCurrentRunForCoordinator: vi.fn(() => undefined),
       getRunMailboxOwnerIdsForHandle: vi.fn(() => []),
       findActiveRemoteAttachmentForPane: vi.fn(() => undefined)
     }
@@ -584,7 +585,9 @@ describe('runRemoteOrcaCli', () => {
     )
 
     expect(result.exitCode).toBe(0)
-    expect(db.getCurrentRunForPane).toHaveBeenCalledWith('tab_ssh:leaf_ssh')
+    expect(db.getCurrentRunForCoordinator).toHaveBeenCalledWith(
+      expect.objectContaining({ paneKey: 'tab_ssh:leaf_ssh' })
+    )
     expect(db.getActiveDispatchForIdentity).toHaveBeenCalledWith(
       'term_stale_ssh',
       'tab_ssh:leaf_ssh'
@@ -608,7 +611,7 @@ describe('runRemoteOrcaCli', () => {
     )
 
     expect(result.exitCode).toBe(0)
-    expect(db.getCurrentRunForPane).not.toHaveBeenCalled()
+    expect(db.getCurrentRunForCoordinator).not.toHaveBeenCalled()
     expect(db.getActiveDispatchForIdentity).toHaveBeenCalledWith('term_legacy_worker', undefined)
   })
 

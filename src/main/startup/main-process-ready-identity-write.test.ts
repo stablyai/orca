@@ -82,6 +82,16 @@ vi.mock('../persistence', () => ({
   },
   getCanonicalUserDataPath: () => mocks.userDataPath
 }))
+vi.mock('../persistence/profile-state/profile-state-startup-authority', () => ({
+  createProfileStateStoreForStartup: () => ({
+    store: {
+      getSettings: () => ({}),
+      onSettingsChanged: () => {},
+      getClaudeLivePtySessionIds: () => [],
+      getSshTargets: () => []
+    }
+  })
+}))
 // The registry reads the canonical path from this module, not from '../persistence'.
 vi.mock('../persistence/loading-store/user-data-path', () => ({
   getCanonicalUserDataPath: () => mocks.userDataPath

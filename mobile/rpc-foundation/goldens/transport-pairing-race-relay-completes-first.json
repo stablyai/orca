@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "transport.pairing-race",
   "family": "transport.pairing-race",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
-  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
-  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
-  "adapterSha256": "34b382b13fe75e8ef4002325287c95b3c4db62eeaaf3762af7fbaf6f836c2fa1",
-  "scenarioSha256": "dee9824e5ec32115fa7dfaaf223fc34c28d057a5526ac3dad42365543288a934",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "2a6d50107927": {
       "name": "candidate-closed",

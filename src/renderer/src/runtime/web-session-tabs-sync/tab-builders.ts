@@ -56,8 +56,12 @@ export function buildBrowserUnifiedTab(
     label: tab.title,
     customLabel: null,
     color: hostTab.color !== undefined ? hostTab.color : (existingUnifiedTab?.color ?? null),
-    sortOrder: tab.createdAt,
+    // Why: adoption must not reset the staged row's placement or manufacture/drop a focus visit.
+    sortOrder: existingUnifiedTab?.sortOrder ?? tab.createdAt,
     createdAt: tab.createdAt,
+    ...(existingUnifiedTab?.lastFocusedAt !== undefined
+      ? { lastFocusedAt: existingUnifiedTab.lastFocusedAt }
+      : {}),
     isPreview: false,
     isPinned:
       hostTab.isPinned !== undefined

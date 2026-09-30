@@ -3,8 +3,8 @@ import {
   AGENT_PROMPT_BRACKETED_PASTE_END,
   AGENT_PROMPT_BRACKETED_PASTE_START,
   buildAgentPromptPasteBytes,
-  buildAgentPromptSubmitBytes,
   agentPromptSubmitJoinsPasteFrame,
+  agentPromptTakesLeadLine,
   getAgentPromptSubmitDelayMs,
   getMaxTerminalPasteBytesForIngestMs,
   getTerminalPasteIngestMs,
@@ -30,9 +30,23 @@ describe('agent prompt injection bytes', () => {
     )
   })
 
+  it('types the lead line only for Claude agents and unidentified ones', () => {
+    expect(agentPromptTakesLeadLine('claude')).toBe(true)
+    expect(agentPromptTakesLeadLine('claude-agent-teams')).toBe(true)
+    expect(agentPromptTakesLeadLine(null)).toBe(true)
+    expect(agentPromptTakesLeadLine('codex')).toBe(false)
+    expect(agentPromptTakesLeadLine('opencode')).toBe(false)
+  })
+
+  it('types the lead line ahead of the paste frame on one line', () => {
+    expect(buildAgentPromptPasteBytes('brief', 'Please\r\nfollow\x03\x1b[201~\x7f')).toBe(
+      `Please follow [201~  ${BEGIN}brief${END}`
+    )
+    expect(buildAgentPromptPasteBytes('brief', '')).toBe(`${BEGIN}brief${END}`)
+  })
+
   it('keeps submit separate from the paste frame', () => {
     expect(buildAgentPromptPasteBytes('hello')).not.toContain('\r')
-    expect(buildAgentPromptSubmitBytes()).toBe('\r')
   })
 
   it('costs a common-sized prompt far less than the old flat Windows delay', () => {

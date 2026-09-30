@@ -19,8 +19,9 @@ import {
   isPiCompatibleAgentType
 } from '../shared/pi-agent-kind'
 import { resolveSetupAgentSequenceLaunchCommand } from '../shared/setup-agent-sequencing'
-import { isOpenCode2LaunchCommand } from '../shared/opencode-launch-command'
+import { selectOpenCodeHookAgent } from '../shared/opencode-launch-command'
 import { relayLogLine } from './relay-diagnostic-log'
+import { restoreOrStripOverlayEnv } from '../shared/agent-overlay-env'
 import { registerManagedHookInstaller } from './managed-hook-installer'
 
 export class RelayAgentHookRuntime {
@@ -85,12 +86,22 @@ export class RelayAgentHookRuntime {
     const env: Record<string, string> = {}
     const overlayId = context.paneKey ?? context.id
     const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(context.env, context.command)
-    const opencodeAgent =
-      context.launchAgent === 'opencode2' || isOpenCode2LaunchCommand(launchCommandHint)
-        ? 'opencode2'
-        : 'opencode'
-    env.ORCA_OPENCODE_AGENT = opencodeAgent
-    if (this.pluginOverlay.hasOpenCodeSource(opencodeAgent)) {
+    const opencodeAgent = selectOpenCodeHookAgent(context.launchAgent, launchCommandHint, (agent) =>
+      this.pluginOverlay.hasOpenCodeSource(agent)
+    )
+    restoreOrStripOverlayEnv(
+      context.env,
+      {
+        primary: 'OPENCODE_CONFIG_DIR',
+        overlay: 'ORCA_OPENCODE_CONFIG_DIR',
+        source: 'ORCA_OPENCODE_SOURCE_CONFIG_DIR',
+        preserveExplicitPrimary: true
+      },
+      {}
+    )
+    delete context.env.ORCA_OPENCODE_AGENT
+    if (opencodeAgent) {
+      env.ORCA_OPENCODE_AGENT = opencodeAgent
       const sourceDir = resolveOpenCodeSourceConfigDir(context.env, context.shell)
       const inheritedRelayOverlay = sourceDir
         ? this.pluginOverlay.isRelayOverlayPath(sourceDir)

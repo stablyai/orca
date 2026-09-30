@@ -137,6 +137,7 @@ export function isBridgeExternalLinkUrl(url: string): boolean {
   return readBridgeExternalLinkUrl(url) !== null
 }
 export const BRIDGE_MAX_PAGE_ROUTES = 64
+
 /** A host id, its name and its endpoint. Bounded because the page renders all three. */
 export const BRIDGE_MAX_HOST_FIELD_CHARS = 1024
 

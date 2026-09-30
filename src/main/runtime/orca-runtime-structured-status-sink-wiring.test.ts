@@ -66,6 +66,9 @@ describe('every host that constructs a runtime wires the agent-status store', ()
       for (const dep of AGENT_STATUS_STORE_DEPS) {
         expect(construction).toContain(`${dep}:`)
       }
+      // A sink without it leaves the host holding no child records for that entry point.
+      expect(construction).toContain('publishChildWork: (subject, evidence, provider) =>')
+      expect(construction).toContain('ingestStructuredChildWork(subject, evidence, provider)')
     }
   )
 })

@@ -1,21 +1,27 @@
 import { ipcMain } from 'electron'
 import {
   clearMiniMaxSessionCookie,
+  getMiniMaxSessionCookieProtection,
   hasMiniMaxSessionCookie,
   saveMiniMaxSessionCookie
 } from '../minimax/minimax-cookie-store'
 import {
   clearMiniMaxApiKey,
+  getMiniMaxApiKeyProtection,
   hasMiniMaxApiKey,
   saveMiniMaxApiKey
 } from '../minimax/minimax-api-key-store'
 import { clearMiniMaxSessionCookieJar } from '../rate-limits/minimax/minimax-request-context'
 import type { RateLimitService } from '../rate-limits/service'
+import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 
 export type MiniMaxCredentialsStatus = {
   configured: boolean
   cookieConfigured: boolean
   apiKeyConfigured: boolean
+  /** How each stored credential sits on disk, so Settings can warn when it is unsealed. */
+  cookieProtection: SecretAtRestProtection | null
+  apiKeyProtection: SecretAtRestProtection | null
 }
 
 function getMiniMaxCredentialsStatus(): MiniMaxCredentialsStatus {
@@ -24,7 +30,9 @@ function getMiniMaxCredentialsStatus(): MiniMaxCredentialsStatus {
   return {
     configured: cookieConfigured || apiKeyConfigured,
     cookieConfigured,
-    apiKeyConfigured
+    apiKeyConfigured,
+    cookieProtection: cookieConfigured ? getMiniMaxSessionCookieProtection() : null,
+    apiKeyProtection: apiKeyConfigured ? getMiniMaxApiKeyProtection() : null
   }
 }
 

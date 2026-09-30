@@ -48,14 +48,6 @@ export type AgentStatusApi = {
   transferPaneAuthority: (args: { fromPaneKey: string; toPaneKey: string; ptyId?: string }) => void
 }
 
-export type AgentTrustApi = {
-  markTrusted: (args: {
-    preset: 'cursor' | 'copilot' | 'codex'
-    workspacePath: string
-    connectionId?: string
-  }) => Promise<void>
-}
-
 export type AgentAwakeApi = {
   getStatus: () => Promise<ComputerAwakeStatus>
   onChanged: (callback: (status: ComputerAwakeStatus) => void) => () => void

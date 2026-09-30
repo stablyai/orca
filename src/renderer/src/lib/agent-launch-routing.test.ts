@@ -49,13 +49,6 @@ describe('resolveAgentLaunchRoute', () => {
     }
   )
 
-  it('routes a supported local Codex launch to structured native chat', () => {
-    expect(route()).toBe('structured-native-chat')
-    expect(route({ launchText: 'explain this change', promptDelivery: 'auto-submit' })).toBe(
-      'structured-native-chat'
-    )
-  })
-
   it('routes editable drafts to the structured chat composer', () => {
     expect(route({ launchText: 'reviewable context', promptDelivery: 'draft' })).toBe(
       'structured-native-chat'
@@ -111,6 +104,9 @@ describe('resolveAgentLaunchRoute', () => {
     }
   )
 
+  // Why floating is here and not with the structured kinds: it has no workspace a session can
+  // be filed under, but the chat view is a pane-level rendering the panel already hosts, so the
+  // chat default still applies — terminal-backed, not structured.
   it('keeps floating, WSL, and repair-required launches terminal-backed', () => {
     expect(route({ workspaceKind: 'floating' })).toBe('legacy-native-chat')
     expect(route({ agent: 'claude', workspaceKind: 'floating' })).toBe('legacy-native-chat')

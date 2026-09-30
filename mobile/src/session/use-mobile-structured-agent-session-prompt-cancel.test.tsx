@@ -5,7 +5,14 @@ import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-j
 import type { StructuredAgentSessionState } from '../../../src/shared/structured-agent-session-reducer'
 import type { RpcClient } from '../transport/rpc-client'
 
-const mocks = vi.hoisted(() => ({ sendRequest: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  sendRequest: vi.fn(),
+  promptResponses: vi.fn(() => ({
+    groupedDraft: null,
+    respondPermission: vi.fn(),
+    respondQuestion: vi.fn()
+  }))
+}))
 vi.mock('./use-mobile-structured-agent-state', () => ({
   useMobileStructuredAgentState: () => ({
     state,
@@ -25,11 +32,7 @@ vi.mock('./use-mobile-structured-agent-options', () => ({
   })
 }))
 vi.mock('./use-mobile-structured-prompt-responses', () => ({
-  useMobileStructuredPromptResponses: () => ({
-    groupedDraft: null,
-    respondPermission: vi.fn(),
-    respondQuestion: vi.fn()
-  })
+  useMobileStructuredPromptResponses: mocks.promptResponses
 }))
 vi.mock('./use-mobile-structured-send-operation-reconciliation', () => ({
   useMobileStructuredSendOperationReconciliation: vi.fn()
@@ -104,7 +107,13 @@ const client: RpcClient = {
   close: () => {}
 }
 
-function Harness({ promptCancelSupported }: { promptCancelSupported: boolean }): null {
+function Harness({
+  promptCancelSupported,
+  questionAnswersSupported = false
+}: {
+  promptCancelSupported: boolean
+  questionAnswersSupported?: boolean
+}): null {
   hook = useMobileStructuredAgentSession({
     client,
     sessionId: 'session-1',
@@ -112,7 +121,11 @@ function Harness({ promptCancelSupported }: { promptCancelSupported: boolean }):
     enabled: true,
     connected: true,
     agent: 'codex',
-    promptCancelSupported,
+    hostSupport: {
+      promptCancel: promptCancelSupported,
+      questionAnswers: questionAnswersSupported,
+      queuedMessages: false
+    },
     onSendError: vi.fn()
   })
   return null
@@ -130,10 +143,10 @@ describe('mobile structured prompt cancellation', () => {
       fence: 3,
       items: [runningTurn(), pendingApproval()],
       submissions: [],
-      retainedItemLimit: 1024,
+      retainedOwnItemLimit: 1024,
+      retainedItemCap: 8192,
       hasOlder: false,
-      status: 'ready',
-      handoff: null
+      status: 'ready'
     }
     mocks.sendRequest.mockResolvedValue({
       ok: true,
@@ -150,6 +163,17 @@ describe('mobile structured prompt cancellation', () => {
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
+  })
+
+  it('hands question answering the host answers capability', () => {
+    act(() => {
+      renderer = create(
+        createElement(Harness, { promptCancelSupported: false, questionAnswersSupported: true })
+      )
+    })
+    expect(mocks.promptResponses).toHaveBeenLastCalledWith(
+      expect.objectContaining({ questionAnswersSupported: true })
+    )
   })
 
   it('sends the clicked prompt identity on capable hosts', async () => {

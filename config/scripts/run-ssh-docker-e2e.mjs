@@ -40,9 +40,6 @@ if (runtime.status !== 0) {
 // grep-inverts away.
 //
 // Known gaps in SSH e2e coverage, recorded here because nothing else names them:
-//   - The job that runs this is still called `ssh-docker-watcher-isolation`, though watcher
-//     isolation is now one spec of many. Renaming it changes the GitHub check name and can
-//     break required-check config, so the name understates the job on purpose.
 //   - E2E does not gate merges: `verify.needs` in pr.yml omits `e2e` while the suite is red on
 //     main. Nothing in this lane blocks a PR yet. pr.yml's Require-successful-checks comment
 //     has the exact wiring to flip it, and the gate contract asserts the current state.

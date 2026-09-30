@@ -41,6 +41,7 @@ const doubles = vi.hoisted((): Doubles => {
     buildId: 'b'.repeat(64),
     minCompatibleRuntimeProtocolVersion: 2,
     runtimeProtocolVersion: 5,
+    pageVersion: 1,
     entrypoint: 'index.html',
     totalBytes: 2048,
     assets: [
@@ -120,6 +121,7 @@ function createFakeStore(): {
   staged: () => number
   committed: () => number
   aborted: () => number
+  persisted: () => readonly MobileWebBundleManifestRead[]
 } {
   let settleCacheRead: Settle<ActiveGeneration | null> = () => {}
   let releaseStage: () => void = () => {}
@@ -127,6 +129,7 @@ function createFakeStore(): {
   let staged = 0
   let committed = 0
   let aborted = 0
+  const persisted: MobileWebBundleManifestRead[] = []
   const store: GenerationStore = {
     readActiveGeneration: () =>
       new Promise<ActiveGeneration | null>((resolve) => {
@@ -149,7 +152,14 @@ function createFakeStore(): {
       aborted += 1
     },
     sweepStagedGenerations: async () => undefined,
-    deleteHostCache: async () => undefined
+    deleteHostCache: async () => undefined,
+    persistActiveManifest: async (_hostKey, manifest) => {
+      persisted.push(manifest)
+      return 'persisted'
+    },
+    recordUpdateFailure: async () => undefined,
+    readUpdateFailures: async () => [],
+    forgetHostUpdateFailures: async () => undefined
   }
   return {
     store,
@@ -160,7 +170,8 @@ function createFakeStore(): {
     settleStage: () => releaseStage(),
     staged: () => staged,
     committed: () => committed,
-    aborted: () => aborted
+    aborted: () => aborted,
+    persisted: () => persisted
   }
 }
 
@@ -197,6 +208,8 @@ type Mounted = {
   retry: () => void
   rerender: () => void
   states: () => readonly MobileWebShellSessionState[]
+  /** Whether the page had spoken, as every render of the hook reported it. */
+  handshakes: () => readonly boolean[]
   documentLoaded: () => void
   pageReady: () => void
   timers: ReturnType<typeof createTimerSeam>
@@ -209,11 +222,13 @@ async function mount(store: GenerationStore): Promise<Mounted> {
     documentLoaded: () => void
     pageReady: () => void
     states: MobileWebShellSessionState[]
+    handshakes: boolean[]
   } = {
     retry: () => {},
     documentLoaded: () => {},
     pageReady: () => {},
-    states: []
+    states: [],
+    handshakes: []
   }
   function Probe() {
     const session = useMobileWebShellSession({
@@ -230,6 +245,7 @@ async function mount(store: GenerationStore): Promise<Mounted> {
     handle.documentLoaded = session.reportDocumentLoaded
     handle.pageReady = session.reportPageReady
     handle.states.push(session.state)
+    handle.handshakes.push(session.pageReady)
     return null
   }
   const rendered: { tree: ReactTestRenderer | null } = { tree: null }
@@ -245,6 +261,7 @@ async function mount(store: GenerationStore): Promise<Mounted> {
     retry: () => handle.retry(),
     rerender: () => tree.update(createElement(Probe)),
     states: () => handle.states,
+    handshakes: () => handle.handshakes,
     documentLoaded: () => handle.documentLoaded(),
     pageReady: () => handle.pageReady(),
     timers
@@ -315,6 +332,22 @@ describe('the hybrid shell runner', () => {
     expect(doubles.manifestReads).toBe(1)
     expect(doubles.fetches).toHaveLength(0)
     expect(mounted.states().map((state) => state.kind)).toContain('ready')
+    await act(async () => {
+      mounted.tree.unmount()
+    })
+  })
+
+  it('writes the fresh manifest onto the generation a same-build cache hit opened', async () => {
+    // Nothing is downloaded on this path, so this call is the only thing that moves the manifest
+    // beside those assets — and that manifest is the whole of the next offline verdict.
+    const fake = createFakeStore()
+    const mounted = await mount(fake.store)
+    fake.settleCacheRead(activeGeneration())
+    await flush()
+
+    expect(doubles.fetches).toHaveLength(0)
+    expect(fake.persisted()).toEqual([doubles.manifest])
+    expect(mounted.states().at(-1)?.kind).toBe('ready')
     await act(async () => {
       mounted.tree.unmount()
     })
@@ -458,6 +491,23 @@ describe('the wait for the page to speak', () => {
       mounted.timers.fire()
     })
     expect(mounted.states().at(-1)?.kind).toBe('ready')
+    await act(async () => {
+      mounted.tree.unmount()
+    })
+  })
+
+  /**
+   * The bridge host is rebuilt when the client under it changes and the page is never told, so it
+   * takes "this session has handshaken" from here. It is a fact about the session, and a render is
+   * the only thing that carries it to the mount that builds the next host.
+   */
+  it('reports the handshake the page completed, for the host that is rebuilt over it', async () => {
+    const mounted = await ready()
+    expect(mounted.handshakes().at(-1)).toBe(false)
+    await act(async () => {
+      mounted.pageReady()
+    })
+    expect(mounted.handshakes().at(-1)).toBe(true)
     await act(async () => {
       mounted.tree.unmount()
     })

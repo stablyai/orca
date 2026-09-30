@@ -258,19 +258,17 @@ describe('agentSession.create tracing', () => {
   it('emits one span with the closed phase vocabulary and no user content attributes', async () => {
     await withAgentSessionSpan(async (span) => {
       addAgentSessionCreatePhaseAttributes(span, {
-        totalDurationMs: 66,
+        totalDurationMs: 57,
         phases: [
           { phase: 'reconcile_leases', startedAtMs: 0, durationMs: 1 },
-          { phase: 'resolve_recovery', startedAtMs: 1, durationMs: 2 },
-          { phase: 'settlement_retry', startedAtMs: 3, durationMs: 3 },
+          { phase: 'resolve_recovery', startedAtMs: 1, durationMs: 5 },
           { phase: 'probe_owner', startedAtMs: 6, durationMs: 4 },
           { phase: 'reserve_owner', startedAtMs: 10, durationMs: 5 },
           { phase: 'acquire_owner', startedAtMs: 15, durationMs: 6 },
           { phase: 'auth_settle', startedAtMs: 21, durationMs: 7 },
           { phase: 'spawn', startedAtMs: 28, durationMs: 8 },
-          { phase: 'init', startedAtMs: 36, durationMs: 9 },
-          { phase: 'restore_options', startedAtMs: 45, durationMs: 10 },
-          { phase: 'publish', startedAtMs: 55, durationMs: 11 }
+          { phase: 'restore_options', startedAtMs: 36, durationMs: 10 },
+          { phase: 'publish', startedAtMs: 46, durationMs: 11 }
         ]
       })
     })

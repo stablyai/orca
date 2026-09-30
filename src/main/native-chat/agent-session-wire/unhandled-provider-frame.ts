@@ -1,18 +1,18 @@
-import type { AgentJournalStatusItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalPlainStatusItem } from '../../../shared/agent-session-journal-types'
 import {
   boundInlineText,
   boundPayload,
   DEFAULT_JOURNAL_PAYLOAD_LIMITS,
   type JournalPayloadLimits
 } from '../agent-session-journal/journal-payload-bounds'
-import { codexGoalRowText } from '../../codex/codex-goal-journal-rows'
+import { codexGoalRowText, codexThreadGoalState } from '../../codex/codex-goal-journal-rows'
 import {
   classifyProviderFrame,
   hasTypedProviderFrameTranslator
 } from './provider-frame-disposition'
 
 export type UnhandledProviderFrameJournalItem = {
-  body: AgentJournalStatusItem
+  body: AgentJournalPlainStatusItem
   /** Why the frame surfaced. Error frames are exempt from generic-row caps. */
   classification: 'timeline-substantive' | 'error-surface'
 }
@@ -139,6 +139,7 @@ export function unhandledProviderFrameJournalItem(
   const goalText = provider === 'codex' ? codexGoalRowText(method, payload) : null
   const display = message ? boundInlineText(message, limits) : null
   const goalDisplay = goalText ? boundInlineText(goalText, limits) : null
+  const threadGoal = provider === 'codex' ? codexThreadGoalState(method, payload) : null
   return {
     body: {
       kind: 'status',
@@ -147,7 +148,21 @@ export function unhandledProviderFrameJournalItem(
         : (goalDisplay?.text ?? display?.text ?? `${provider} · ${kind}`),
       ...(compaction ? { presentation: 'compaction' } : {}),
       ...(tone ? { tone } : {}),
-      providerFrame: { provider, kind, payload: bounded }
+      providerFrame: { provider, kind, payload: bounded },
+      ...(threadGoal
+        ? {
+            threadGoal:
+              threadGoal.state === 'set'
+                ? {
+                    state: 'set' as const,
+                    goal: {
+                      ...threadGoal.goal,
+                      objective: boundInlineText(threadGoal.goal.objective, limits).text
+                    }
+                  }
+                : threadGoal
+          }
+        : {})
     },
     classification: classification === 'error-surface' ? 'error-surface' : 'timeline-substantive'
   }

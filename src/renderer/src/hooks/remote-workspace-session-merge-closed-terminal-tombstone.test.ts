@@ -15,9 +15,10 @@ import { useAppStore } from '@/store'
  * The closed-last-terminal tombstone across a direct-SSH reconnect, end to end.
  *
  * The unit-level rule lives in remote-workspace-session-merge-local-survival.test.ts; this asserts
- * what that rule is FOR. `Object.hasOwn(tabsByWorktree, worktreeId)` has to keep meaning one thing
- * — the merge dropping the key turned "the user closed the last terminal" into "never
- * initialized", and the seeding pass then handed the terminal back on every reconnect.
+ * what that rule is FOR. An empty row plus a close record has to keep meaning one thing — the
+ * merge dropping the key, or the re-hydration dropping the record, turns "the user closed the last
+ * terminal" into "never initialized", and the seeding pass then hands the terminal back on every
+ * reconnect.
  */
 const initialAppStoreState = useAppStore.getState()
 
@@ -26,9 +27,13 @@ afterEach(() => {
   useAppStore.setState(initialAppStoreState, true)
 })
 
-/** The state a workspace lands in once its last terminal is closed: an explicit empty row. */
+/** The state a workspace lands in once its last terminal is closed: an explicit empty row, and
+ *  the close record the renderer mirrors from main. */
 function seedClosedLastTerminal(worktreeId: string): void {
-  useAppStore.setState({ tabsByWorktree: { [worktreeId]: [] } })
+  useAppStore.setState({
+    tabsByWorktree: { [worktreeId]: [] },
+    closedTerminalTabTombstonesByTabId: { closed: { closedAt: Date.now(), worktreeId } }
+  })
   expect(useAppStore.getState().reconcileWorktreeTabModel(worktreeId).renderableTabCount).toBe(0)
 }
 

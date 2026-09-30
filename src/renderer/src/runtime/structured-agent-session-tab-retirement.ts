@@ -19,7 +19,6 @@ function retirementKey(target: RuntimeClientTarget, worktreeId: string, sessionI
 export function retireStructuredAgentSessionTab(args: {
   target: RuntimeClientTarget
   worktreeId: string
-  tabId: string
   sessionId: string
   onError?: (error: unknown) => void
 }): void {
@@ -28,11 +27,13 @@ export function retireStructuredAgentSessionTab(args: {
   if (existing) {
     return
   }
+  const hostTabId = `agent-session:${args.sessionId}`
+  // Why: main echoes the host tab id it was asked to close, never this window's tab id.
   const closeHostTab = () =>
-    withLocalSessionTabCloseOwner(args.worktreeId, args.tabId, () =>
+    withLocalSessionTabCloseOwner(args.worktreeId, hostTabId, () =>
       callRuntimeRpc(args.target, 'session.tabs.close', {
         worktree: toRuntimeWorktreeSelector(args.worktreeId),
-        tabId: `agent-session:${args.sessionId}`,
+        tabId: hostTabId,
         reason: 'user'
       })
     )
@@ -58,7 +59,6 @@ export function retireStructuredAgentSessionTab(args: {
 export function beginStructuredAgentSessionTabClose(args: {
   target: RuntimeClientTarget
   worktreeId: string
-  tabId: string
   sessionId: string
   provisional: boolean
   onError?: (error: unknown) => void
@@ -92,7 +92,6 @@ export function suppressCancelledStructuredSessionTabs(
     retireStructuredAgentSessionTab({
       target,
       worktreeId: snapshot.worktree,
-      tabId: `agent-session:${sessionId}`,
       sessionId,
       onError
     })

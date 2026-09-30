@@ -1,17 +1,19 @@
-import { setVisibleSessionId } from './agent-session-visible-tab-index'
+import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import { commitConversationCommandRecord } from './agent-session-conversation-command-record'
 import { setAgentSessionRecordConversationName } from './agent-session-record-conversation-name'
 /** Durable single-writer session records and their operation ledger. */
 
-import type {
-  AgentSessionOperationClaim,
-  AgentSessionOperationDecision,
-  AgentSessionOperationOutcome,
-  AgentSessionOperationRow
+import {
+  agentSessionOperationKey,
+  type AgentSessionOperationClaim,
+  type AgentSessionOperationDecision,
+  type AgentSessionOperationOutcome,
+  type AgentSessionOperationRow
 } from '../../shared/agent-session-operation-ledger'
 import {
   admitAgentSessionGlobalOperationInto,
   admitAgentSessionMutationOperation,
+  evaluateAgentSessionMutationOperation,
   admitAgentSessionOperationInto,
   claimAgentSessionOperationInto,
   settleAgentSessionOperationInto,
@@ -23,7 +25,6 @@ import {
   retireAgentSessionClaimKey
 } from './agent-session-claim-key-retention'
 import type { AgentSessionOwnerProbe } from '../../shared/agent-session-lease-adjudication'
-import { classifyObservedAgentSessionSpawnToken } from '../../shared/agent-session-lease-adjudication'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 import {
   agentSessionScopeKey,
@@ -56,10 +57,6 @@ import {
 } from './agent-session-restart-reconciliation'
 import { replaceAgentSessionRecordOptions } from './agent-session-record-options'
 import {
-  setAgentSessionReservationProcesslessProof,
-  type AgentSessionReservationProcesslessProof
-} from './agent-session-processless-reservation'
-import {
   commitAgentSessionReservation,
   type AgentSessionReserveRequest,
   type AgentSessionReserveResult
@@ -69,6 +66,7 @@ import {
   agentSessionStorePath,
   type AgentSessionStoreState
 } from './agent-session-record-store-file'
+import { setAgentSessionTabVisibility } from './agent-session-tab-table'
 import { loadProtectedAgentSessionStore } from './agent-session-record-store-security'
 import {
   AgentSessionStoreTransactionQueue,
@@ -79,6 +77,8 @@ export const AGENT_SESSION_LEASE_TTL_MS = 30_000,
   AGENT_SESSION_LEASE_RENEW_INTERVAL_MS = 10_000
 
 export class AgentSessionRecordStore {
+  private readonly deathEvidenceListeners = new Set<(sessionId: string) => void>()
+
   private constructor(private readonly transactions: AgentSessionStoreTransactionQueue) {}
 
   static async open(args: { directory: string; hostId: string }): Promise<AgentSessionRecordStore> {
@@ -87,11 +87,14 @@ export class AgentSessionRecordStore {
     // Why: every persisted lease is unreconciled until this host adjudicates it, so a restart
     // grants no writer on the strength of what the previous process wrote.
     const diskRevision = agentSessionStoreRevision(loaded.state)
+    // The normalized legacy leases reach disk with this store's first transaction rather than a
+    // write here: a rewrite at open would read as an external change to any other holder of the
+    // file mid-restart.
     markAgentSessionStoreLeasesUnreconciled(loaded.state)
     const transactions = AgentSessionStoreTransactionQueue.fromLoadedStore(
       filePath,
       args.hostId,
-      loaded,
+      { ...loaded, needsRewrite: loaded.needsRewrite || loaded.legacyHandoffLeasesNormalized },
       diskRevision
     )
     if (loaded.needsRewrite && !loaded.readOnly && !loaded.recoveredFromBackup) {
@@ -122,16 +125,25 @@ export class AgentSessionRecordStore {
   listRecords = (): AgentSessionRecord[] => [...this.state.records.values()]
 
   listVisibleSessionIds = (): string[] =>
-    [...this.state.visibleSessionIds].filter((sessionId) => this.state.records.has(sessionId))
+    (this.state.sessionTabs?.sessionIds() ?? []).filter((sessionId) =>
+      this.state.records.has(sessionId)
+    )
 
   getVisibleSessionTabIndex = (): { present: boolean; sessionIds: string[] } => ({
-    present: this.state.visibleSessionIdsIndexPresent,
+    present: this.state.sessionTabs !== null,
     sessionIds: this.listVisibleSessionIds()
   })
 
-  /** Persist the user-visible tab reference separately from the rollback-sensitive profile tabs. */
-  setSessionTabVisibility(sessionId: string, visible: boolean): Promise<void> {
-    return this.transact(() => setVisibleSessionId(this.state, sessionId, visible))
+  /** The id of the chat tab showing this conversation, if one does. */
+  getSessionTabId = (sessionId: string): string | null =>
+    this.state.sessionTabs?.tabIdFor(sessionId) ?? null
+
+  /**
+   * Persist the user-visible tab reference separately from the rollback-sensitive profile tabs.
+   * Showing keeps a tab the session already has; `tabId` puts a hidden one back under its old id.
+   */
+  setSessionTabVisibility(sessionId: string, visible: boolean, tabId?: string): Promise<void> {
+    return this.transact(() => setAgentSessionTabVisibility(this.state, sessionId, visible, tabId))
   }
 
   listByScope(location: AgentSessionExecutionLocation): AgentSessionRecord[] {
@@ -163,16 +175,11 @@ export class AgentSessionRecordStore {
 
   listOperationRows = (): AgentSessionOperationRow[] => [...this.state.operations.values()]
 
+  getOperationRow = (callerKey: string, operationId: string): AgentSessionOperationRow | null =>
+    this.state.operations.get(agentSessionOperationKey(callerKey, operationId)) ?? null
+
   isClaimKeyVerifiable = (keyId: string, now: number): boolean =>
     isAgentSessionClaimKeyVerifiable(this.state, keyId, now)
-
-  /** Spawn tokens observed on the host with no matching lease. Stop them; never adopt them. */
-  listOrphanSpawnTokens(observedTokens: readonly string[]): string[] {
-    const leases = this.listRecords().map((record) => record.lease)
-    return observedTokens.filter(
-      (spawnToken) => classifyObservedAgentSessionSpawnToken({ spawnToken, leases }) === 'orphan'
-    )
-  }
 
   async reserveOwner(request: AgentSessionReserveRequest): Promise<AgentSessionReserveResult> {
     return this.transact(() =>
@@ -187,13 +194,6 @@ export class AgentSessionRecordStore {
       commitAgentSessionProcessIdentity({ ...args, record })
     )
   }
-
-  setReservationProcesslessProof = (
-    args: AgentSessionReservationProcesslessProof & { processlessAt: number | null }
-  ): Promise<AgentSessionRecord> =>
-    this.mutate(args.sessionId, (record) =>
-      setAgentSessionReservationProcesslessProof({ ...args, record })
-    )
 
   async proveOwner(args: {
     sessionId: string
@@ -242,9 +242,7 @@ export class AgentSessionRecordStore {
     probe: AgentSessionOwnerProbe
     now: number
   }): Promise<AgentSessionRecord> {
-    return this.mutate(args.sessionId, (record) =>
-      evictAgentSessionOwner({ ...args, record, journalSettlement: 'required' })
-    )
+    return this.mutate(args.sessionId, (record) => evictAgentSessionOwner({ ...args, record }))
   }
 
   async transitionHandoff(
@@ -287,6 +285,10 @@ export class AgentSessionRecordStore {
   admitMutationOperation = (args: AgentSessionMutationOperationAdmission) =>
     this.transact(() => admitAgentSessionMutationOperation(this.state, args))
 
+  /** The ledger's answer alone, placing nothing; `admitMutationOperation` is the transaction. */
+  evaluateMutationOperation = (args: AgentSessionMutationOperationAdmission) =>
+    evaluateAgentSessionMutationOperation(this.state, args)
+
   /** Durable compare-and-swap for the right to run an admitted operation's effect: two replays both
    *  read `pending`, and only a conditional swap tells the one that may run from the one that must
    *  replay. */
@@ -304,16 +306,6 @@ export class AgentSessionRecordStore {
     await this.transact(() => settleAgentSessionOperationInto(this.state, args))
   }
 
-  async markClaimConflicted(sessionId: string, now: number): Promise<AgentSessionRecord> {
-    return this.mutate(sessionId, (record) => ({
-      ...record,
-      updatedAt: now,
-      // Why: a conflicted key must stay conflicted across a restart; it cannot resolve to free
-      // merely because the process that observed the conflict is gone.
-      lease: { ...record.lease, claimStatus: 'conflicted', handoffStage: 'manual-recovery' }
-    }))
-  }
-
   replaceSessionOptions = (args: AgentSessionOptionsReplacement): Promise<AgentSessionRecord> =>
     this.mutate(args.sessionId, (record) => replaceAgentSessionRecordOptions(record, args))
 
@@ -328,11 +320,9 @@ export class AgentSessionRecordStore {
     return this.transact(() => {
       const record = this.state.records.get(sessionId)
       if (!record) {
-        throw new Error(
-          this.isSessionUnreadable(sessionId)
-            ? 'execution_owner_reconciling'
-            : 'agent_session_identity_required'
-        )
+        throw this.isSessionUnreadable(sessionId)
+          ? agentSessionRefusalError('execution_owner_reconciling', { reason: 'recordUnreadable' })
+          : agentSessionRefusalError('agent_session_identity_required', { reason: 'recordMissing' })
       }
       const next = apply(record)
       this.state.records.set(sessionId, next)
@@ -340,6 +330,32 @@ export class AgentSessionRecordStore {
     })
   }
 
+  /** Told, once committed, of each session a transaction wrote a proof of death for — whichever
+   *  transition wrote it, since every one lands here. Must not throw. */
+  onDeathEvidence(listener: (sessionId: string) => void): () => void {
+    this.deathEvidenceListeners.add(listener)
+    return () => this.deathEvidenceListeners.delete(listener)
+  }
+
   /** Serialize every mutation against the latest committed disk state. */
-  private transact = <T>(apply: () => T): Promise<T> => this.transactions.transact(apply)
+  private transact = async <T>(apply: () => T): Promise<T> => {
+    let proven: string[] = []
+    const result = await this.transactions.transact(() => {
+      if (this.deathEvidenceListeners.size === 0) {
+        return apply()
+      }
+      const before = new Map(
+        [...this.state.records].map(([id, record]) => [id, record.lease.deathEvidence])
+      )
+      const applied = apply()
+      proven = [...this.state.records]
+        .filter(([id, { lease }]) => lease.deathEvidence && lease.deathEvidence !== before.get(id))
+        .map(([id]) => id)
+      return applied
+    })
+    for (const sessionId of proven) {
+      this.deathEvidenceListeners.forEach((listener) => listener(sessionId))
+    }
+    return result
+  }
 }

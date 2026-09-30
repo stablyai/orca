@@ -1,4 +1,3 @@
-import { emitChange } from './editor-content'
 import { editorElement } from './editor-surface'
 import type { RichMarkdownEditorScope } from './document-scope'
 
@@ -76,6 +75,11 @@ export function restoreSelectionOrEnd(scope: RichMarkdownEditorScope) {
   if (selection.rangeCount > 0) {
     return
   }
+  collapseToEnd(scope)
+}
+
+/** The caret at the end of the document, which is where a command with nothing to act on goes. */
+function collapseToEnd(scope: RichMarkdownEditorScope) {
   const range = scope.getDocument().createRange()
   range.selectNodeContents(editorElement(scope))
   range.collapse(false)
@@ -83,10 +87,31 @@ export function restoreSelectionOrEnd(scope: RichMarkdownEditorScope) {
 }
 
 /**
+ * Puts the caret back where the host's dialog found it.
+ *
+ * A command that has to ask for a URL gives the caret up while it waits: the page's modal takes
+ * focus into its own field, and `execCommand` on a document that does not hold the selection
+ * inserts nothing at all — measured in both engines, with Link and Image doing nothing on a page
+ * whose modal had just answered. Unconditional, unlike `restoreSelectionOrEnd`, because the wait
+ * itself is the blur and there is nothing for a flag to tell it.
+ */
+export function restoreRememberedSelection(scope: RichMarkdownEditorScope) {
+  focusEditor(scope)
+  const saved = scope.savedSelectionRange
+  if (saved && editorElement(scope).contains(saved.commonAncestorContainer)) {
+    applySelectionRange(scope, saved)
+    return
+  }
+  collapseToEnd(scope)
+}
+
+/**
  * Wraps the selection in one element, for the formats `execCommand` has no verb for.
  *
  * `surroundContents` refuses a range that crosses an element boundary, and the fallback extracts
  * and reinserts instead, which is the same result for every selection the toolbar can produce.
+ *
+ * Emits nothing: `runCommand` is the only caller's caller and reports the change itself.
  */
 export function wrapSelection(scope: RichMarkdownEditorScope, tagName: string) {
   restoreSelectionOrEnd(scope)
@@ -107,5 +132,4 @@ export function wrapSelection(scope: RichMarkdownEditorScope, tagName: string) {
   }
   selection.removeAllRanges()
   selection.selectAllChildren(wrapper)
-  emitChange(scope)
 }

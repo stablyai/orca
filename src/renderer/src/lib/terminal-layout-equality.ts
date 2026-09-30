@@ -49,6 +49,7 @@ export function terminalLayoutEqual(
     terminalLayoutNodeEqual(a?.root, b.root) &&
     (a?.activeLeafId ?? null) === b.activeLeafId &&
     (a?.expandedLeafId ?? null) === b.expandedLeafId &&
+    (a?.chatLeafId ?? null) === (b.chatLeafId ?? null) &&
     sameStringRecord(a?.ptyIdsByLeafId, b.ptyIdsByLeafId) &&
     sameStringRecord(a?.buffersByLeafId, b.buffersByLeafId) &&
     sameStringRecord(a?.scrollbackRefsByLeafId, b.scrollbackRefsByLeafId) &&

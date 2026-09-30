@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultOnboardingState, getDefaultSettings } from '../../../../shared/constants'
+import { getDefaultSettings } from '../../../../shared/constants'
+import { getDefaultOnboardingState } from '../../../../shared/onboarding-defaults'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 
 const worktreeActivation = vi.hoisted(() => ({

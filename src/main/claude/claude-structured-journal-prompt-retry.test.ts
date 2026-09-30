@@ -18,7 +18,6 @@ function approval(promptKey: string): ClaudePendingPrompt {
     input: { command: 'git status' },
     suggestions: [],
     questionIds: [],
-    answers: new Map(),
     settle: () => {}
   }
 }

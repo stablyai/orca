@@ -77,7 +77,8 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     useState<DiffNotesDelivery | null>(null)
   const [creating, setCreating] = useState(false)
   // Why: React state isn't a synchronous lock; this ref blocks a double-tap's second create in the same tick before `creating` re-renders.
-  const creatingTerminalRef = useRef(false)
+  // It holds the create's id, so an older launch can't free a newer one's lock.
+  const creatingTerminalRef = useRef<string | null>(null)
   const [creatingBrowser, setCreatingBrowser] = useState(false)
   const [creatingMarkdown, setCreatingMarkdown] = useState(false)
   const [createError, setCreateError] = useState('')

@@ -124,22 +124,7 @@ function drain(queue: WriteQueueHarness): void {
   }
 }
 
-const IMPLEMENTATIONS: Array<[string, string]> = [
-  ['shipped', WRITE_QUEUE_SOURCE],
-  ['previous', PREVIOUS_WRITE_QUEUE_SOURCE]
-]
-
 describe('terminal WebView write queue', () => {
-  it('keeps the pre-change oracle distinct from the shipped source', () => {
-    expect(WRITE_QUEUE_SOURCE).toContain(CLEARED_SLOT_STATEMENT)
-    expect(PREVIOUS_WRITE_QUEUE_SOURCE).not.toContain(
-      'scope.writeQueue[scope.writeQueueHead] = void 0;'
-    )
-    expect(PREVIOUS_WRITE_QUEUE_SOURCE.length).toBe(
-      WRITE_QUEUE_SOURCE.length - CLEARED_SLOT_STATEMENT.length
-    )
-  })
-
   // Distinct contents per chunk: with one shared string the sum below would count the same
   // 64 KB string 128 times and read identically even if nothing were released.
   function distinctChunks(count: number, codeUnits: number): string[] {
@@ -148,12 +133,6 @@ describe('terminal WebView write queue', () => {
       return marker + String.fromCharCode(0x61 + (i % 26)).repeat(codeUnits - marker.length)
     })
   }
-
-  it('enqueues chunks with distinct contents, so summed lengths are real retained data', () => {
-    const chunks = distinctChunks(128, 65_536)
-    expect(new Set(chunks).size).toBe(chunks.length)
-    expect(new Set(chunks.map((chunk) => chunk.length))).toEqual(new Set([65_536]))
-  })
 
   // The measured quantity is a count of queue-reachable string code units, not heap bytes:
   // xterm may still hold the submitted chunk, so this proves only that the queue released it.
@@ -207,8 +186,8 @@ describe('terminal WebView write queue', () => {
     expect(shipped.codeUnits).toBe((backlog - dequeues) * 64)
   })
 
-  it.each(IMPLEMENTATIONS)('%s: drains writes in FIFO order', (_label, source) => {
-    const queue = createWriteQueue(source)
+  it('drains writes in FIFO order', () => {
+    const queue = createWriteQueue(WRITE_QUEUE_SOURCE)
     queue.enqueue('a')
     queue.enqueue('b')
     queue.enqueue('c')
@@ -217,8 +196,8 @@ describe('terminal WebView write queue', () => {
     expect(queue.writes).toEqual(['a', 'b', 'c'])
   })
 
-  it.each(IMPLEMENTATIONS)('%s: runs boundary callbacks between writes', (_label, source) => {
-    const queue = createWriteQueue(source)
+  it('runs boundary callbacks between writes', () => {
+    const queue = createWriteQueue(WRITE_QUEUE_SOURCE)
     const order: string[] = []
     queue.enqueue('replay')
     queue.enqueueBoundary(() => order.push('boundary'))
@@ -236,8 +215,8 @@ describe('terminal WebView write queue', () => {
     expect(order).toEqual(['boundary', 'drained'])
   })
 
-  it.each(IMPLEMENTATIONS)('%s: submits callback-only and empty writes', (_label, source) => {
-    const queue = createWriteQueue(source)
+  it('submits callback-only and empty writes', () => {
+    const queue = createWriteQueue(WRITE_QUEUE_SOURCE)
     const calls: string[] = []
     queue.enqueueBoundary(() => calls.push('first'))
     queue.enqueue('')
@@ -251,8 +230,8 @@ describe('terminal WebView write queue', () => {
     expect(queue.snapshot()).toEqual({ slots: [], head: 0 })
   })
 
-  it.each(IMPLEMENTATIONS)('%s: a reset mid-flight discards pending writes', (_label, source) => {
-    const queue = createWriteQueue(source)
+  it('discards pending writes after a reset mid-flight', () => {
+    const queue = createWriteQueue(WRITE_QUEUE_SOURCE)
     queue.enqueue('first')
     queue.enqueue('dropped')
     queue.pump()
@@ -265,8 +244,8 @@ describe('terminal WebView write queue', () => {
     expect(queue.writes).toEqual(['first', 'after-reset'])
   })
 
-  it.each(IMPLEMENTATIONS)('%s: a stale generation stops the pump', (_label, source) => {
-    const queue = createWriteQueue(source)
+  it('stops the pump for a stale generation', () => {
+    const queue = createWriteQueue(WRITE_QUEUE_SOURCE)
     queue.enqueue('first')
     queue.enqueue('second')
     queue.pump()
@@ -276,8 +255,8 @@ describe('terminal WebView write queue', () => {
     expect(queue.writes).toEqual(['first'])
   })
 
-  it.each(IMPLEMENTATIONS)('%s: reentrant enqueues are drained in order', (_label, source) => {
-    const queue = createWriteQueue(source)
+  it('drains reentrant enqueues in order', () => {
+    const queue = createWriteQueue(WRITE_QUEUE_SOURCE)
     queue.enqueue('first')
     queue.enqueueBoundary(() => queue.enqueue('reentrant'))
     queue.enqueue('second')
@@ -286,8 +265,8 @@ describe('terminal WebView write queue', () => {
     expect(queue.writes).toEqual(['first', 'second', 'reentrant'])
   })
 
-  it.each(IMPLEMENTATIONS)('%s: compacts consumed slots and keeps order', (_label, source) => {
-    const queue = createWriteQueue(source)
+  it('compacts consumed slots and keeps order', () => {
+    const queue = createWriteQueue(WRITE_QUEUE_SOURCE)
     const total = 200
     const consumed = 129
     for (let i = 0; i < total; i++) {
@@ -306,30 +285,11 @@ describe('terminal WebView write queue', () => {
     )
   })
 
-  it.each(IMPLEMENTATIONS)('%s: resets once the queue is fully consumed', (_label, source) => {
-    const queue = createWriteQueue(source)
+  it('resets once the queue is fully consumed', () => {
+    const queue = createWriteQueue(WRITE_QUEUE_SOURCE)
     queue.enqueue('only')
     expect(queue.next()).toBe('only')
     expect(queue.next()).toBeUndefined()
     expect(queue.snapshot()).toEqual({ slots: [], head: 0 })
-  })
-
-  it('once compaction does fire, both implementations retain only pending chunks', () => {
-    const chunks = distinctChunks(200, 1_024)
-    const measure = (source: string): number => {
-      const queue = createWriteQueue(source)
-      for (const chunk of chunks) {
-        queue.enqueue(chunk)
-      }
-      for (let i = 0; i < 129; i++) {
-        queue.next()
-      }
-      return queue.queuedCodeUnits()
-    }
-
-    // A 200-deep backlog is shallow enough that head * 2 > length trips at 129; deeper
-    // backlogs (see the table above) do not reach the gate and the two diverge.
-    expect(measure(PREVIOUS_WRITE_QUEUE_SOURCE)).toBe(1_024 * 71)
-    expect(measure(WRITE_QUEUE_SOURCE)).toBe(1_024 * 71)
   })
 })

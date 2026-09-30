@@ -22,7 +22,7 @@ export function useTerminalActivationActions(controller: TerminalBulkCloseContro
         })
       }
       setActiveTab(tabId)
-      setActiveTabType('terminal')
+      setActiveTabType('terminal', activeWorktreeId)
     },
     [activeWorktreeId, setActiveTab, setActiveTabType]
   )
@@ -55,7 +55,7 @@ export function useTerminalActivationActions(controller: TerminalBulkCloseContro
         })
       }
       setActiveBrowserTab(tabId)
-      setActiveTabType('browser')
+      setActiveTabType('browser', activeWorktreeId)
     },
     [activeWorktreeId, setActiveBrowserTab, setActiveTabType]
   )

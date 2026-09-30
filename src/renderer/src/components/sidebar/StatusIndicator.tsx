@@ -25,6 +25,7 @@ const AGENT_STATUS_TOOLTIP_STATUSES = new Set<Status>([
   'working',
   'monitoring',
   'permission',
+  'failed',
   'interrupted',
   'done'
 ])
@@ -58,7 +59,7 @@ const StatusIndicator = React.memo(function StatusIndicator({
         <Activity className="size-3 text-yellow-500" aria-hidden="true" />
       </span>
     )
-  } else if (status === 'interrupted') {
+  } else if (status === 'failed' || status === 'interrupted') {
     indicator = (
       <span
         className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}

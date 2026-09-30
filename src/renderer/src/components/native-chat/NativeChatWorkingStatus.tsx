@@ -9,27 +9,22 @@ import { useNativeChatElapsedSeconds } from './use-native-chat-elapsed-seconds'
 
 export { formatNativeChatDuration }
 
+/** The turn bar under the user's message: a running clock while the turn works,
+ *  then the settled duration, which toggles the turn's folded detail. */
 export function NativeChatWorkingStatus({
   startedAt,
-  thinking,
   workedSeconds,
   expanded = false,
   onToggleExpanded
 }: {
   startedAt: number | null
-  thinking: boolean
   workedSeconds?: number | null
   expanded?: boolean
   onToggleExpanded?: () => void
 }): React.JSX.Element {
-  const counting = !thinking && workedSeconds == null
-  const elapsedSeconds = useNativeChatElapsedSeconds(startedAt, counting)
+  const elapsedSeconds = useNativeChatElapsedSeconds(startedAt, workedSeconds == null)
 
-  const { key, duration } = describeNativeChatTurnStatus({
-    thinking,
-    workedSeconds,
-    elapsedSeconds
-  })
+  const { key, duration } = describeNativeChatTurnStatus({ workedSeconds, elapsedSeconds })
   const label =
     key === 'workedFor'
       ? translate(
@@ -39,16 +34,16 @@ export function NativeChatWorkingStatus({
             value0: duration
           }
         )
-      : key === 'thinking'
-        ? translate('components.native-chat.status.thinking', NATIVE_CHAT_TURN_STATUS_COPY.thinking)
-        : translate(
-            'components.native-chat.status.workingFor',
-            NATIVE_CHAT_TURN_STATUS_COPY.workingFor,
-            { value0: duration }
-          )
-  const className = `flex min-h-8 items-center gap-1 text-sm text-muted-foreground${thinking ? '' : ' border-b border-border'}`
+      : translate(
+          'components.native-chat.status.workingFor',
+          NATIVE_CHAT_TURN_STATUS_COPY.workingFor,
+          { value0: duration }
+        )
+  // `tabular-nums`: the live clock reflows its own label every second otherwise.
+  const className =
+    'flex min-h-8 items-center gap-1 border-b border-border text-sm text-muted-foreground tabular-nums'
   const caret =
-    workedSeconds != null ? (
+    workedSeconds != null && onToggleExpanded ? (
       <ChevronRight
         className={`size-3.5 transition-transform${expanded ? ' rotate-90' : ''}`}
         aria-hidden="true"
@@ -81,9 +76,8 @@ export function NativeChatWorkingStatus({
         'components.native-chat.status.responding',
         NATIVE_CHAT_TURN_STATUS_COPY.responding
       )}
-      aria-live="polite"
     >
-      <span className={thinking ? 'animate-pulse' : undefined}>{label}</span>
+      <span>{label}</span>
       {caret}
     </div>
   )

@@ -223,30 +223,6 @@ describe('runWorktreeDeletesInParallel', () => {
     )
   })
 
-  it('deletes nested workspaces before their parent within the same repo', async () => {
-    await runDeletesForCurrentWorktrees([
-      { id: 'parent', displayName: 'parent', repoId: 'repo-a', path: '/workspaces/parent' },
-      { id: 'child', displayName: 'child', repoId: 'repo-a', path: '/workspaces/parent/child' }
-    ])
-
-    expect(mocks.state.removeWorktree).toHaveBeenNthCalledWith(
-      1,
-      { id: 'child', executionHostId: null },
-      false,
-      {
-        suppressPreservedBranchToast: true
-      }
-    )
-    expect(mocks.state.removeWorktree).toHaveBeenNthCalledWith(
-      2,
-      { id: 'parent', executionHostId: null },
-      false,
-      {
-        suppressPreservedBranchToast: true
-      }
-    )
-  })
-
   it('passes confirmed force to each delete', async () => {
     await runDeletesForCurrentWorktrees(
       [

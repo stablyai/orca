@@ -11,7 +11,8 @@ import type {
 } from '../../shared/runtime-types'
 import type { WorktreeTerminalMutationKind } from './worktree-terminal-mutation-lock'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from './workspace-session-failed-write-rollback'
+import { cloneWorkspaceSessionState } from '../persistence/restoring-sessions/session-owner-fields'
+import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../persistence/restoring-sessions/workspace-session-write-rollback'
 import {
   getWorktreeExecutionHostId,
   parseExecutionHostId,
@@ -88,7 +89,7 @@ export class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntimeWithReso
         }
         closed += 1
       }
-      this.clearWorktreeTerminalResumeRecords(worktree.id, sessionHostId, parentTabIds)
+      await this.clearWorktreeTerminalResumeRecords(worktree.id, sessionHostId, parentTabIds)
       const { stopped } = await this.stopTerminalsForWorktree(`id:${worktree.id}`, {
         resolvedWorktreeId: worktree.id,
         ...hostFence
@@ -109,60 +110,65 @@ export class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntimeWithReso
     })
   }
 
-  private clearWorktreeTerminalResumeRecords(
+  private async clearWorktreeTerminalResumeRecords(
     worktreeId: string,
     hostId: ExecutionHostId,
     closedTabIds: readonly string[]
-  ): void {
+  ): Promise<void> {
     if (
       !this.store?.getWorkspaceSession ||
       !this.store.setWorkspaceSession ||
-      !this.store.flushOrThrow
+      !this.store.runDurableMutation
     ) {
       throw new Error('workspace_session_unavailable')
     }
-    const session = this.store.getWorkspaceSession(hostId)
-    const sleepingAgentSessionsByPaneKey = Object.fromEntries(
-      Object.entries(session.sleepingAgentSessionsByPaneKey ?? {}).filter(
-        ([, record]) => record.worktreeId !== worktreeId
+    const refusal = await this.store.runDurableMutation<Error | undefined>(() => {
+      const session = cloneWorkspaceSessionState(this.store.getWorkspaceSession(hostId))
+      const sleepingAgentSessionsByPaneKey = Object.fromEntries(
+        Object.entries(session.sleepingAgentSessionsByPaneKey ?? {}).filter(
+          ([, record]) => record.worktreeId !== worktreeId
+        )
       )
-    )
-    const terminalPtyIncarnationsByPaneKey = Object.fromEntries(
-      Object.entries(session.terminalPtyIncarnationsByPaneKey ?? {}).filter(
-        ([paneKey]) => !closedTabIds.some((tabId) => paneKey.startsWith(`${tabId}:`))
+      const terminalPtyIncarnationsByPaneKey = Object.fromEntries(
+        Object.entries(session.terminalPtyIncarnationsByPaneKey ?? {}).filter(
+          ([paneKey]) => !closedTabIds.some((tabId) => paneKey.startsWith(`${tabId}:`))
+        )
       )
-    )
-    const remainingTerminalRows = session.tabsByWorktree[worktreeId] ?? []
-    const remainingUnifiedTerminalTabs = (session.unifiedTabs?.[worktreeId] ?? []).filter(
-      (tab) => tab.contentType === 'terminal'
-    )
-    if (remainingTerminalRows.length > 0 || remainingUnifiedTerminalTabs.length > 0) {
-      throw new Error('terminal_close_incomplete')
-    }
-    const hasChanges =
-      Object.keys(sleepingAgentSessionsByPaneKey).length !==
-        Object.keys(session.sleepingAgentSessionsByPaneKey ?? {}).length ||
-      Object.keys(terminalPtyIncarnationsByPaneKey).length !==
-        Object.keys(session.terminalPtyIncarnationsByPaneKey ?? {}).length
-    if (!hasChanges) {
-      return
-    }
-    const next: WorkspaceSessionState = {
-      ...session,
-      sleepingAgentSessionsByPaneKey,
-      terminalPtyIncarnationsByPaneKey
-    }
-    this.store.setWorkspaceSession(next, hostId)
-    const staged = this.store.getWorkspaceSession(hostId)
-    try {
-      this.store.flushOrThrow()
-    } catch (error) {
-      const current = this.store.getWorkspaceSession(hostId)
-      const rolledBack = rollbackWorkspaceSessionAfterFailedAsyncWrite(session, staged, current)
-      if (rolledBack !== current) {
-        this.store.setWorkspaceSession(rolledBack, hostId)
+      const remainingTerminalRows = session.tabsByWorktree[worktreeId] ?? []
+      const remainingUnifiedTerminalTabs = (session.unifiedTabs?.[worktreeId] ?? []).filter(
+        (tab) => tab.contentType === 'terminal'
+      )
+      if (remainingTerminalRows.length > 0 || remainingUnifiedTerminalTabs.length > 0) {
+        return { value: new Error('terminal_close_incomplete'), persist: false }
       }
-      throw error
+      const hasChanges =
+        Object.keys(sleepingAgentSessionsByPaneKey).length !==
+          Object.keys(session.sleepingAgentSessionsByPaneKey ?? {}).length ||
+        Object.keys(terminalPtyIncarnationsByPaneKey).length !==
+          Object.keys(session.terminalPtyIncarnationsByPaneKey ?? {}).length
+      if (!hasChanges) {
+        return { value: undefined, persist: false }
+      }
+      const next: WorkspaceSessionState = {
+        ...session,
+        sleepingAgentSessionsByPaneKey,
+        terminalPtyIncarnationsByPaneKey
+      }
+      this.store.setWorkspaceSession(next, hostId)
+      const staged = cloneWorkspaceSessionState(this.store.getWorkspaceSession(hostId))
+      return {
+        value: undefined,
+        rollback: () => {
+          const current = this.store.getWorkspaceSession(hostId)
+          const rolledBack = rollbackWorkspaceSessionAfterFailedAsyncWrite(session, staged, current)
+          if (rolledBack !== current) {
+            this.store.setWorkspaceSession(rolledBack, hostId)
+          }
+        }
+      }
+    })
+    if (refusal) {
+      throw refusal
     }
   }
 

@@ -598,17 +598,6 @@ describe('launchAgentInNewTab', () => {
     )
   })
 
-  it('does not track prompt-sent for argv prompt launches', async () => {
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    launchAgentInNewTab({
-      agent: 'codex',
-      worktreeId: 'wt-1',
-      prompt: 'fix the spinner',
-      launchSource: 'onboarding'
-    })
-  })
-
   it('does not track prompt-sent for draft launches', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 

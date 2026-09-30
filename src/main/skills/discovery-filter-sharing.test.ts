@@ -86,17 +86,20 @@ it('retains a newly requested name when its previously observed root becomes una
     const args = { homeDir: root, repos: [], includeCwd: false, sourceKinds: ['home' as const] }
     await repair.discoverSkills({ ...args, names: ['skill-0'] })
     const original = SkillScanCoalescer.prototype.run
-    vi.spyOn(SkillScanCoalescer.prototype, 'run').mockImplementation(
-      function (this: SkillScanCoalescer<unknown>, key, options, task) {
-        if (
-          key === `home\0${join(root, '.agents', 'skills')}` ||
-          key.startsWith(`home\0${join(root, '.agents', 'skills')}\0`)
-        ) {
-          return Promise.reject(new SkillScanShedError())
-        }
-        return original.call(this, key, options, task)
+    vi.spyOn(SkillScanCoalescer.prototype, 'run').mockImplementation(function (
+      this: SkillScanCoalescer<unknown>,
+      key,
+      options,
+      task
+    ) {
+      if (
+        key === `home\0${join(root, '.agents', 'skills')}` ||
+        key.startsWith(`home\0${join(root, '.agents', 'skills')}\0`)
+      ) {
+        return Promise.reject(new SkillScanShedError())
       }
-    )
+      return original.call(this, key, options, task)
+    })
     const next = await repair.discoverSkills({ ...args, names: ['skill-47'] })
     expect(next.skills.map((skill) => skill.name)).toEqual(['skill-47'])
     expect(next.sources.find((source) => source.id === 'home-agents')?.skippedReason).toBe(

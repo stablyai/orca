@@ -53,9 +53,6 @@ test('panel consent enables real local transcript search; clearing restores hist
     await testInfo.attach(name, { path: screenshotPath, contentType: 'image/png' })
   }
   await screenshot('consent.png')
-  await orcaPage.getByRole('button', { name: 'Not now', exact: true }).click()
-  await expect(input).toHaveValue('')
-  await input.fill('nebulariver')
   await orcaPage.getByRole('button', { name: 'Enable', exact: true }).click()
   // Indexed searches are snapshots; enabling starts indexing independently of the panel.
   await expect

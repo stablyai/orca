@@ -15,7 +15,7 @@ import { elementScroll, useVirtualizer, type VirtualItem } from '@tanstack/react
 import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
 import { NATIVE_CHAT_ROW_GAP_PX } from './native-chat-row-height-estimate'
 import { nativeChatPinnedRowIndexes, nativeChatTranscriptRange } from './native-chat-pinned-rows'
-import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
+import { nativeChatSlotKey, type NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 
 /** Rows kept mounted past each edge of the viewport. Chat rows are tall and
  *  arbitrarily expensive, so this buys smoothness by the row, not by the screen. */
@@ -107,7 +107,7 @@ export function useNativeChatTranscriptWindow({
   )
   // A content-only tail revision must not rebuild measured offsets: doing so
   // breaks the end anchor while the row grows. Structural changes replace it.
-  const encodedItemKeys = JSON.stringify(slots.map((slot) => slot.message.id))
+  const encodedItemKeys = JSON.stringify(slots.map(nativeChatSlotKey))
   const itemKeys = useMemo(() => JSON.parse(encodedItemKeys) as string[], [encodedItemKeys])
   const estimateSize = useCallback(
     (index: number) => slots[index]?.estimatedHeight ?? FALLBACK_ROW_PX,
@@ -178,9 +178,9 @@ export function useNativeChatTranscriptWindow({
   }, [])
   useEffect(() => finishReaderTakeover, [finishReaderTakeover])
 
-  // Read, never assumed: the "load earlier" button sits above the window and
-  // appears exactly when a prepend is about to land, which is the one moment a
-  // stale margin would place every row wrong.
+  // Read, never assumed: whatever sits in flow above the window decides it, and
+  // a stale margin places every row wrong. The older-history row is kept out of
+  // flow for exactly that reason — it leaves as the last prepend lands.
   const readScrollMargin = useCallback(() => {
     const container = scrollRef.current
     const sizer = sizerElementRef.current

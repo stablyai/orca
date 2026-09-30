@@ -2,9 +2,15 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 
+/** 'launch-record': the daemon's launch identity on reattach, which can outlive the process. */
+export type PaneForegroundAgentEvidence = 'process-read' | 'launch-record'
+
 export type PaneForegroundAgentEntry = {
   /** Recognized agent process in the pane's foreground; null when unknown. */
   agent: TuiAgent | null
+  /** Where `agent` came from. Only 'process-read' is a live read; absent counts as unconfirmed,
+   *  so a writer that omits it cannot make a sidebar row look process-backed. */
+  agentEvidence?: PaneForegroundAgentEvidence
   /** True only when fresh provider evidence is safe for input-byte routing. */
   routingTrusted?: boolean
   /** True after exit/input evidence revokes routing until provider confirmation. */
@@ -46,6 +52,7 @@ export const createPaneForegroundAgentSlice: StateCreator<
       if (
         current &&
         current.agent === entry.agent &&
+        current.agentEvidence === entry.agentEvidence &&
         current.routingTrusted === entry.routingTrusted &&
         current.routingRevoked === entry.routingRevoked &&
         current.routingConfirmationPending === entry.routingConfirmationPending &&

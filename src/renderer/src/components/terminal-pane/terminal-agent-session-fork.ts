@@ -10,7 +10,6 @@ import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
 import { getForkAgentLaunchPlatform } from './terminal-agent-session-fork-launch-platform'
-import { preflightAgentTrust } from '@/lib/agent-trust-preflight'
 import { slugifyForWorkspaceName } from '../../../../shared/workspace-name'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -236,13 +235,6 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
     prompt: fork.prompt,
     promptDelivery: 'draft'
   })
-  if (agentSessionLaunchPlan.route !== 'structured-native-chat') {
-    await preflightAgentTrust({
-      agent: fork.agent,
-      workspacePath: created.worktree.path,
-      connectionId: sourceRepo?.connectionId
-    })
-  }
   const launchPlatform = getForkAgentLaunchPlatform({
     repo: sourceRepo,
     worktreePath: created.worktree.path,

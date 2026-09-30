@@ -91,7 +91,7 @@ export async function captureWorkerOutputArchive(args: {
   structuredWorker?: StructuredWorkerIdentity | null
 }): Promise<WorkerOutputArchiveCapture> {
   if (args.structuredWorker) {
-    const content = captureStructuredWorkerArchive(
+    const content = await captureStructuredWorkerArchive(
       args.structuredWorker,
       structuredWorkerAgent(args.structuredWorker)
     )

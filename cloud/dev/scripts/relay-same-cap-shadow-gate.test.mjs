@@ -8,6 +8,7 @@ import {
 } from './relay-same-cap-shadow-gate.mjs'
 import {
   ENTRY_LIMIT,
+  FLEET_POOL_CELL_IDS,
   SHADOW_GATE_THRESHOLDS,
   SUB_WINDOW_MINUTES,
   combineVerdict,
@@ -269,7 +270,8 @@ function productionLikeEntries() {
     },
     ...metricSamples({ cellId: 'production-gce-c28', from: '2026-09-20T20:20:00Z', count: 20 }),
     ...metricSamples({ cellId: 'production-gce-c27', from: '2026-09-20T20:20:00Z', count: 20 }),
-    ...metricSamples({ cellId: 'production-gce-c29', from: '2026-09-20T20:20:00Z', count: 20 })
+    ...metricSamples({ cellId: 'production-gce-c29', from: '2026-09-20T20:20:00Z', count: 20 }),
+    ...metricSamples({ cellId: 'production-gce-c30', from: '2026-09-20T20:20:00Z', count: 20 })
   ]
 }
 
@@ -308,6 +310,12 @@ function gcloudSeam(entries = productionLikeEntries()) {
   }
 }
 
+test('reads every promoted asia-east2 cell as fleet pool, C30 included', () => {
+  assert.deepEqual(FLEET_POOL_CELL_IDS, [
+    'production-gce-c27', 'production-gce-c28', 'production-gce-c29', 'production-gce-c30'
+  ])
+})
+
 test('a healthy roll reads as PASS and names the instance it proved serving', async () => {
   const seam = gcloudSeam()
   const report = await evaluateShadowGate(parseShadowGateArguments(ARGV), seam)
@@ -322,7 +330,8 @@ test('a healthy roll reads as PASS and names the instance it proved serving', as
     'cloudSqlFatal',
     'director503',
     'fleetPool:production-gce-c27',
-    'fleetPool:production-gce-c29'
+    'fleetPool:production-gce-c29',
+    'fleetPool:production-gce-c30'
   ])
   // Every read carries explicit bounds: --freshness does not bind on these logs.
   for (const { filter } of seam.calls) {

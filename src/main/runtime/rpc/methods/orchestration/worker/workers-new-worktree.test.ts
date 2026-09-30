@@ -140,6 +140,7 @@ describe('orchestration new-worktree workers', () => {
     expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
       expect.objectContaining({
         startupAgent: 'codex',
+        startupLaunchSource: 'orchestration',
         awaitTerminalProvisioning: true,
         observeSetupCompletion: true,
         lineage: expect.objectContaining({ noParent: true, parentWorktree: undefined })

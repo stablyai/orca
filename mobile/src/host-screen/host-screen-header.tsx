@@ -30,6 +30,7 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
     floatingWorkspaceEnabled,
     forceReconnectHost,
     hostId,
+    hostDisplay,
     lastConnectedAt,
     onHideSidebar,
     reconnectAttempts,
@@ -61,24 +62,36 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
           return (
             <>
               <View style={styles.hostIdentity}>
-                <StatusDot state={connState} verdict={headerVerdict} />
-                <Text style={styles.hostNameText} numberOfLines={1}>
-                  {state.hostName || 'Host'}
-                </Text>
+                <View style={styles.hostIdentityLine}>
+                  <StatusDot state={connState} verdict={headerVerdict} />
+                  <Text style={styles.hostNameText} numberOfLines={1}>
+                    {hostDisplay.title}
+                  </Text>
+                </View>
+                {hostDisplay.descriptorLine ? (
+                  <Text style={styles.hostPlatformText} numberOfLines={1}>
+                    {hostDisplay.descriptorLine}
+                  </Text>
+                ) : null}
               </View>
               {connState !== 'connected' &&
                 (() => {
                   // Why: auth-failed has its own banner, so suppress the Reconnect button for that verdict.
                   const verdict = headerVerdict
                   const isError = isErrorVerdict(verdict)
-                  const showReconnectButton = isError && hostId && verdict.kind !== 'auth-failed'
-                  if (!showReconnectButton) {
+                  // Null on the page, where the shell owns the connection and nothing here re-dials.
+                  if (
+                    !isError ||
+                    !hostId ||
+                    verdict.kind === 'auth-failed' ||
+                    forceReconnectHost === null
+                  ) {
                     return null
                   }
                   return (
                     <Pressable
                       style={styles.reconnectButton}
-                      onPress={() => void forceReconnectHost(hostId!)}
+                      onPress={() => void forceReconnectHost(hostId)}
                       accessibilityRole="button"
                       accessibilityLabel="Reconnect"
                       hitSlop={8}

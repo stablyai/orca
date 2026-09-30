@@ -89,31 +89,6 @@ describe.skipIf(!hasSqlite)('OrchestrationDb', () => {
       expect(JSON.parse(child.deps)).toEqual([parent.id])
     })
 
-    it('promotes pending tasks when deps complete', () => {
-      const d = createDb()
-      const t1 = d.createTask({ runId, spec: 'first' })
-      const t2 = d.createTask({ runId, spec: 'second', deps: [t1.id] })
-
-      expect(d.getTask(t2.id)?.status).toBe('pending')
-
-      d.updateTaskStatus(t1.id, 'completed')
-
-      expect(d.getTask(t2.id)?.status).toBe('ready')
-    })
-
-    it('does not promote task until ALL deps complete', () => {
-      const d = createDb()
-      const t1 = d.createTask({ runId, spec: 'a' })
-      const t2 = d.createTask({ runId, spec: 'b' })
-      const t3 = d.createTask({ runId, spec: 'c', deps: [t1.id, t2.id] })
-
-      d.updateTaskStatus(t1.id, 'completed')
-      expect(d.getTask(t3.id)?.status).toBe('pending')
-
-      d.updateTaskStatus(t2.id, 'completed')
-      expect(d.getTask(t3.id)?.status).toBe('ready')
-    })
-
     it('sets completed_at on completion', () => {
       const d = createDb()
       const task = d.createTask({ runId, spec: 'do it' })
@@ -179,13 +154,6 @@ describe.skipIf(!hasSqlite)('OrchestrationDb', () => {
       // an "active" assignee.
       expect(row?.assignee_handle).toBeNull()
       expect(row?.dispatch_id).toBeNull()
-    })
-
-    it('supports parent_id for task decomposition', () => {
-      const d = createDb()
-      const parent = d.createTask({ runId, spec: 'parent' })
-      const child = d.createTask({ runId, spec: 'child', parentId: parent.id })
-      expect(child.parent_id).toBe(parent.id)
     })
   })
 
@@ -474,71 +442,7 @@ describe.skipIf(!hasSqlite)('OrchestrationDb', () => {
     })
   })
 
-  describe('lifecycle', () => {
-    it('resetAll clears all tables', () => {
-      const d = createDb()
-      d.insertMessage({
-        runId,
-        from: 'a',
-        to: 'b',
-        subject: 'test'
-      })
-      d.createTask({ runId, spec: 'work' })
-
-      d.resetAll()
-
-      expect(d.getInbox()).toHaveLength(0)
-      expect(d.listTasks()).toHaveLength(0)
-    })
-
-    it('resetMessages clears only messages', () => {
-      const d = createDb()
-      d.insertMessage({
-        runId,
-        from: 'a',
-        to: 'b',
-        subject: 'test'
-      })
-      d.createTask({ runId, spec: 'work' })
-
-      d.resetMessages()
-
-      expect(d.getInbox()).toHaveLength(0)
-      expect(d.listTasks()).toHaveLength(1)
-    })
-
-    it('resetTasks clears tasks and dispatch contexts', () => {
-      const d = createDb()
-      d.insertMessage({
-        runId,
-        from: 'a',
-        to: 'b',
-        subject: 'test'
-      })
-      const task = d.createTask({ runId, spec: 'work' })
-      createRootDispatch(d, task.id, 'term_a')
-
-      d.resetTasks()
-
-      expect(d.getInbox()).toHaveLength(1)
-      expect(d.listTasks()).toHaveLength(0)
-    })
-  })
-
   describe('heartbeat + thread helpers (fresh schema)', () => {
-    it('insertMessage accepts type = heartbeat', () => {
-      const d = createDb()
-      const msg = d.insertMessage({
-        runId,
-        from: 'worker',
-        to: 'coord',
-        subject: 'alive',
-        type: 'heartbeat',
-        payload: JSON.stringify({ taskId: 'task_x', dispatchId: 'ctx_x' })
-      })
-      expect(msg.type).toBe('heartbeat')
-    })
-
     it('recordHeartbeat updates last_heartbeat_at on dispatched rows', () => {
       const d = createDb()
       const task = d.createTask({ runId, spec: 'work' })

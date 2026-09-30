@@ -15,7 +15,7 @@
 // on quit; overwriting it before the post-update relaunch would destroy the
 // persisted session that the cold-restore/survival assertions depend on.
 //
-// Onboarding flow-version / final-step mirror src/shared/constants
+// Onboarding flow-version / final-step mirror src/shared/onboarding-defaults
 // (ONBOARDING_FLOW_VERSION=4, ONBOARDING_FINAL_STEP=5); refresh if the app bumps
 // the flow version, or a stale version re-arms onboarding.
 

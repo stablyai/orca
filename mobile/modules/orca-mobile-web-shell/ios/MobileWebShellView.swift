@@ -213,7 +213,16 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     webView.navigationDelegate = self
     webView.uiDelegate = self
     webView.allowsBackForwardNavigationGestures = false
+    // Transparent, as the Android view is. A WKWebView is opaque by default and paints white
+    // before its document does, so a dark app opening a page flashed white for the whole of the
+    // page's boot; with no surface of its own, what shows through is the shell's own frame, which
+    // is the one thing that knows the app's colours.
+    webView.isOpaque = false
+    webView.backgroundColor = .clear
+    webView.scrollView.backgroundColor = .clear
     webView.scrollView.contentInsetAdjustmentBehavior = .never
+    hideKeyboardAccessoryBar(of: webView)
+    ignoreKeyboardNotifications(in: webView)
     webView.translatesAutoresizingMaskIntoConstraints = false
     addSubview(webView)
     NSLayoutConstraint.activate([

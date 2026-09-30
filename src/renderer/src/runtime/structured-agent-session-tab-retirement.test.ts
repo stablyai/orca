@@ -84,7 +84,6 @@ describe('structured agent session tab retirement', () => {
     beginStructuredAgentSessionTabClose({
       target,
       worktreeId: 'wt-1',
-      tabId: 'agent-tab-1',
       sessionId: 'session-1',
       provisional: true
     })
@@ -119,13 +118,11 @@ describe('structured agent session tab retirement', () => {
     retireStructuredAgentSessionTab({
       target,
       worktreeId: 'wt-1',
-      tabId: 'agent-tab-1',
       sessionId: 'session-1'
     })
     retireStructuredAgentSessionTab({
       target,
       worktreeId: 'wt-1',
-      tabId: 'agent-tab-1',
       sessionId: 'session-1'
     })
     expect(mocks.closeSession).toHaveBeenCalledTimes(1)

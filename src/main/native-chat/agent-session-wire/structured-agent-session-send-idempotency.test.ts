@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import { hasUnansweredStructuredAgentSessionDispatch } from '../../../shared/structured-agent-session-projection'
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
-import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
+import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { performSend, type AgentSessionTurnContext } from './structured-agent-session-turns'
@@ -25,7 +25,7 @@ beforeEach(async () => {
       agent: 'codex',
       providerHandle: { kind: 'codex', threadId: 'thread-1' }
     },
-    journalDir: root
+    stateDirectory: root
   })
 })
 
@@ -120,11 +120,16 @@ describe('structured send idempotency', () => {
     await performSend(context, input)
     const replay = await performSend(context, input)
 
+    // Acceptance records the one submission; the reused id answers with it and writes nothing.
+    // Handing it over is the delivery loop's, never a second accept's.
     expect(replay).toMatchObject({
       ok: true,
-      value: { clientMessageId: 'shared-send-id', submission: { dispatchState: 'accepted' } }
+      value: {
+        clientMessageId: 'shared-send-id',
+        submission: { dispatchState: 'pending', handoverRecorded: true }
+      }
     })
-    expect(dispatch).toHaveBeenCalledOnce()
+    expect(dispatch).not.toHaveBeenCalled()
     expect(journal.submissions()).toHaveLength(1)
   })
 })

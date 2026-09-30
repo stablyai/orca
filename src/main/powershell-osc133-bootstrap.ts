@@ -1,5 +1,5 @@
 import { getPowerShellOmpShellWrapper } from './pty/omp-shell-wrapper'
-import { getPowerShellCodexShellLaunchPreflight } from './pty/codex-shell-launch-preflight'
+import { getPowerShellCodexShellLaunchPreflight } from '../shared/codex-shell-function'
 export { encodePowerShellCommand } from '../shared/powershell-command-encoding'
 
 /**

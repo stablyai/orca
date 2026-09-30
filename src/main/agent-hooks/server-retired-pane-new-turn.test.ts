@@ -22,8 +22,10 @@ afterEach(() => vi.restoreAllMocks())
  *  classifier names no boundary for that source. That is not the same as "can never revive":
  *  mimo-code's boundary is an explicit-prompt MessagePart, which the gate handles separately. */
 const NEW_TURN_EVENT: Record<AgentHookSource, string | null> = {
+  qoder: 'SessionStart',
   claude: 'SessionStart',
   kimi: 'UserPromptSubmit',
+  codebuddy: 'UserPromptSubmit',
   codex: 'SessionStart',
   gemini: 'BeforeAgent',
   antigravity: 'PreInvocation',
@@ -40,7 +42,10 @@ const NEW_TURN_EVENT: Record<AgentHookSource, string | null> = {
   opencode: 'SessionStart',
   opencode2: 'SessionStart',
   'mimo-code': null,
-  'command-code': null
+  'command-code': null,
+  muse: 'UserPromptSubmit',
+  zcode: 'SessionStart',
+  dsh: 'SessionStart'
 }
 
 function reviveRetiredPane(source: unknown, hookEventName: string): boolean {

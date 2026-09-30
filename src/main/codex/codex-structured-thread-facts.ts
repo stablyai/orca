@@ -47,6 +47,11 @@ export function readCodexTurnStatus(payload: unknown): string | null {
   return nonEmptyString(record(root.turn)?.status) ?? nonEmptyString(root.status)
 }
 
+/** A failed `turn/completed` carries Codex's reason as `turn.error.message`. */
+export function readCodexTurnErrorMessage(payload: unknown): string | null {
+  return nonEmptyString(record(record(record(payload)?.turn)?.error)?.message)
+}
+
 /** Codex's own turn duration, already in milliseconds; absent or malformed reads as null. */
 export function readCodexTurnDurationMs(payload: unknown): number | null {
   const root = record(payload)
@@ -55,4 +60,22 @@ export function readCodexTurnDurationMs(payload: unknown): number | null {
   }
   const value = record(root.turn)?.durationMs ?? root.durationMs
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null
+}
+
+/** `thread/status/changed` carries a TAGGED status (`{status:{type}}`), never a
+ *  bare string. `idle` and `systemError` are the two arms that mean the thread
+ *  is not running; `active` and `notLoaded` are not. */
+export function codexThreadStoppedRunning(payload: unknown): boolean {
+  const type = record(record(payload)?.status)?.type
+  return type === 'idle' || type === 'systemError'
+}
+
+/** An `active` thread flags each request it has open on the user (an approval, a question). */
+export function codexThreadWaitsOnUser(payload: unknown): boolean {
+  const status = record(record(payload)?.status)
+  const flags = status?.type === 'active' ? status.activeFlags : null
+  return (
+    Array.isArray(flags) &&
+    flags.some((flag) => flag === 'waitingOnApproval' || flag === 'waitingOnUserInput')
+  )
 }

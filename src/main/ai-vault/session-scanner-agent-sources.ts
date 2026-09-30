@@ -12,6 +12,7 @@ import {
 import { cursorChatMetaPath } from './session-scanner-cursor-chat-meta'
 import { devinSessionsDbDependencyPath } from './session-scanner-devin-db'
 import { resolveKimiSessionsDir } from './session-scanner-kimi-paths'
+import { resolveMuseSessionsDir } from './session-scanner-muse-paths'
 import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from './session-scanner-omp-subagent-transcripts'
 import {
   claudeProjectsRootDirs,
@@ -33,6 +34,7 @@ const COPILOT_SESSIONS_DIR = join(
   'session-state'
 )
 const CURSOR_PROJECTS_DIR = join(homedir(), '.cursor', 'projects')
+const CODEBUDDY_PROJECTS_DIR = join(homedir(), '.codebuddy', 'projects')
 const HERMES_SESSIONS_DIR = join(homedir(), '.hermes', 'sessions')
 const ROVO_SESSIONS_DIR = join(homedir(), '.rovodev', 'sessions')
 const OPENCLAW_STATE_DIR = resolveAbsoluteDirOverride(
@@ -111,6 +113,15 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     // sessionId and aren't independently resumable, so they'd just duplicate the
     // parent as untitled rows; prune the subtree and read them on demand under
     // their parent instead.
+    directoryPredicate: (name) => name !== SUBAGENT_DIR_NAME
+  },
+  codebuddy: {
+    rootDirs: (options, wslHomeDirs) => [
+      options.codebuddyProjectsDir ?? CODEBUDDY_PROJECTS_DIR,
+      ...wslHomeDirs.map((homeDir) => join(homeDir, '.codebuddy', 'projects'))
+    ],
+    extensions: ['.jsonl'],
+    // Nested subagent transcripts are not independent top-level conversations.
     directoryPredicate: (name) => name !== SUBAGENT_DIR_NAME
   },
   codex: {
@@ -285,6 +296,20 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     // only those (not the sibling agents/*/wire.jsonl transcripts).
     filePredicate: (filePath) =>
       basename(filePath) === 'state.json' && basename(dirname(filePath)).startsWith('session_')
+  },
+  muse: {
+    rootDirs: (options, wslHomeDirs) =>
+      sessionRootDirs(resolveMuseSessionsDir(options.museSessionsDir), wslHomeDirs, [
+        '.local',
+        'share',
+        'muse',
+        'sessions'
+      ]),
+    extensions: ['.jsonl'],
+    // Why: each Muse session is <root>/YYYY/MM/DD/<uuid>/session.jsonl;
+    // match only those (not sibling .log/.sqlite3 sidecars or the .msp-view
+    // materialized projection).
+    filePredicate: (filePath) => basename(filePath) === 'session.jsonl'
   }
 }
 

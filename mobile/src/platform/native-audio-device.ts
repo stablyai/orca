@@ -7,11 +7,11 @@ import {
 } from '@orca/expo-two-way-audio'
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake'
 import { BRIDGE_AUDIO_INTERRUPTIONS } from '../mobile-web-shell/bridge/bridge-audio-verbs'
+import { createMicrophoneScreenLock } from './microphone-screen-lock'
 import type { NativeAudioEngine } from './native-audio'
-import type { WakelockDevice } from './native-wakelock'
 
 /**
- * The device calls the audio and wake-lock verbs actually make.
+ * The device calls the audio verbs actually make, and the screen an open microphone holds.
  *
  * Separated from the servers for the media device's reason: importing `@orca/expo-two-way-audio`
  * reaches a JSI binding that only exists in a device build, so a module naming it cannot be driven
@@ -28,6 +28,22 @@ import type { WakelockDevice } from './native-wakelock'
  * answered with what the device will really produce rather than accepted and then ignored.
  */
 export const NATIVE_AUDIO_DEVICE_SAMPLE_RATE = 16_000
+
+/** One tag for the one microphone this process has. Module-private: the lock is taken by whichever
+ *  device-side capture opened the mic, and no caller of either ever names it. */
+const MICROPHONE_SCREEN_LOCK_TAG = 'orca-microphone'
+
+/**
+ * The screen lock both device-side captures share, and the app's only reach for `expo-keep-awake`.
+ *
+ * One lock because there is one microphone: the native seam and the shell's `native.audio.*`
+ * handler are two doors to the same device, never open at once, and two tags would let one of them
+ * give back a screen the other still wants.
+ */
+export const nativeMicrophoneScreenLock = createMicrophoneScreenLock(
+  { activate: activateKeepAwakeAsync, deactivate: deactivateKeepAwake },
+  MICROPHONE_SCREEN_LOCK_TAG
+)
 
 function readInterruption(data: string): (typeof BRIDGE_AUDIO_INTERRUPTIONS)[number] | null {
   return BRIDGE_AUDIO_INTERRUPTIONS.find((kind) => kind === data) ?? null
@@ -50,6 +66,7 @@ export const nativeAudioDeviceEngine: NativeAudioEngine = {
     toggleRecording(false)
     tearDown()
   },
+  screenLock: nativeMicrophoneScreenLock,
   onMicrophoneData: (handler) =>
     addExpoTwoWayAudioEventListener('onMicrophoneData', (event) => {
       const raw = event.data
@@ -64,9 +81,4 @@ export const nativeAudioDeviceEngine: NativeAudioEngine = {
         handler(kind)
       }
     })
-}
-
-export const nativeWakelockDevice: WakelockDevice = {
-  activate: (tag) => activateKeepAwakeAsync(tag),
-  deactivate: (tag) => deactivateKeepAwake(tag)
 }

@@ -7,6 +7,7 @@ import {
   normalizeTuiAgentArgsRecord,
   normalizeTuiAgentEnvRecord
 } from '../tui-agent-launch-defaults'
+import { MACHINE_NAME_MAX_LENGTH } from '../machine-name'
 import { normalizePRBotAuthorOverrides } from '../pr-bot-author-overrides'
 import { WorktreeVisibilityDefaultsUpdate } from './worktree-visibility-defaults-params'
 
@@ -81,6 +82,7 @@ export const GitHubProjectSettings = z
 
 export const SettingsUpdate = z
   .object({
+    machineName: z.string().trim().max(MACHINE_NAME_MAX_LENGTH).optional(),
     worktreeVisibilityDefaults: WorktreeVisibilityDefaultsUpdate.optional(),
     defaultTuiAgent: z
       .unknown()

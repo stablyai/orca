@@ -78,6 +78,13 @@ function dropUnattributableToolResults(message: NativeChatMessage): NativeChatMe
   return blocks.length > 0 ? { ...message, blocks } : null
 }
 
+/** A run drawn at its assistant row can hold calls newer than rows drawn below it. */
+function recordFoldedPosition(target: NativeChatMessage, folded: NativeChatMessage): void {
+  if (folded.journalPosition) {
+    target.foldedJournalPosition = folded.journalPosition
+  }
+}
+
 /** Fold consecutive tool-only messages into their preceding assistant turn. */
 export function foldToolMessages(messages: readonly NativeChatMessage[]): NativeChatMessage[] {
   const output: NativeChatMessage[] = []
@@ -93,6 +100,7 @@ export function foldToolMessages(messages: readonly NativeChatMessage[]): Native
           clonedAssistantIndex = index
         }
         output[index].blocks.push(...message.blocks.filter(isToolResultBlock))
+        recordFoldedPosition(output[index], message)
         output.push({
           ...message,
           blocks: message.blocks.filter((block) => !isToolResultBlock(block))
@@ -113,6 +121,7 @@ export function foldToolMessages(messages: readonly NativeChatMessage[]): Native
         clonedAssistantIndex = index
       }
       output[index]!.blocks.push(...message.blocks)
+      recordFoldedPosition(output[index]!, message)
       continue
     }
     output.push(message)

@@ -5,6 +5,7 @@ import type {
   RuntimeTerminalOrphanAdoptionResult
 } from '../../shared/runtime-types'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import { hasClosedTerminalTabRecord } from '../../shared/closed-terminal-tab-tombstones'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { terminalOrphanExecutionOwnersEqual } from './terminal-orphan-owner'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
@@ -13,7 +14,7 @@ import { buildRuntimeTerminalOrphanSession } from './runtime-terminal-orphan-ses
 import { validateRuntimeTerminalOrphanTopology } from './runtime-terminal-orphan-topology-validation'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import { runtimeWorktreeIdsEqual } from './runtime-worktree-path-identity'
-import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from './workspace-session-failed-write-rollback'
+import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../persistence/restoring-sessions/workspace-session-write-rollback'
 
 type RuntimeTerminalOrphanAdoptionPorts = {
   getPty: (handle: string) => RuntimePtyWorktreeRecord | null
@@ -185,7 +186,11 @@ export async function adoptRuntimeTerminalOrphansFromInventory(args: {
     ) {
       throw new Error('terminal_orphan_surface_occupied')
     }
-    if (session.terminalSurfaceTombstonesByPaneKey?.[paneKey]) {
+    // Why the close record too: it outlives a host restart, which the client's retirement proofs do not.
+    if (
+      session.terminalSurfaceTombstonesByPaneKey?.[paneKey] ||
+      hasClosedTerminalTabRecord(session.closedTerminalTabTombstonesByTabId, claim.tabId)
+    ) {
       throw new Error('terminal_orphan_surface_retired')
     }
     for (const snapshot of ports.getMobileSnapshots()) {

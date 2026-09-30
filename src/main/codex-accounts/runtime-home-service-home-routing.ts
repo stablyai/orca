@@ -162,6 +162,17 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     return this.isHostSystemDefaultRealHomeSelected(launchEnv) && this.realHomeLaneGate()
   }
 
+  // Why: launch prep evaluates the real-home lane AFTER clearing an unusable
+  // managed selection; read-only siblings need that same verdict with the
+  // selection ignored rather than cleared.
+  protected wouldSystemDefaultRouteToRealHome(launchEnv?: NodeJS.ProcessEnv): boolean {
+    return (
+      isShellStartupEnvProbeSupported() &&
+      !hasCustomCodexHomeOverrideForLaunch(launchEnv) &&
+      this.realHomeLaneGate()
+    )
+  }
+
   reconcileLegacySharedHomeForRetainedPanes(): void {
     if (!this.isHostSystemDefaultRealHome() || !hasRecordedLegacySharedCodexPane()) {
       return

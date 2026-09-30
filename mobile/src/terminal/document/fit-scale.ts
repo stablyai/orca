@@ -3,24 +3,17 @@ import {
   computeFitScale,
   flog,
   getCellWidth,
+  getMeasuredCellHeight,
   getTotalScale,
   updateTransform
 } from './viewport-transform'
 import type { TerminalDocumentScope } from './document-scope'
+import type { TerminalViewportChange } from './document-host-seams'
 import { scheduleDocumentFrame } from './document-frame-registry'
-
-/** The narrowest grid a fit or a text-scale change will fit to. */
-export const MIN_FIT_COLS = 20
+import { emitKeyboardAvoidanceMetrics } from './keyboard-avoidance-metrics'
 
 export function getCellHeight(scope: TerminalDocumentScope) {
-  if (!scope.term || !scope.term._core) {
-    return 15
-  }
-  const core = scope.term._core
-  if (core._renderService && core._renderService.dimensions) {
-    return core._renderService.dimensions.css.cell.height || 15
-  }
-  return 15
+  return getMeasuredCellHeight(scope) || 15
 }
 
 // Why: clamp pan so the terminal content always covers the viewport
@@ -33,8 +26,7 @@ export function clampPan(scope: TerminalDocumentScope) {
   const ts = getTotalScale(scope)
   const cw = scope.term.element.scrollWidth * ts
   const ch = scope.term.element.scrollHeight * ts
-  const vpW = window.innerWidth
-  const vpH = window.innerHeight
+  const { width: vpW, height: vpH } = scope.viewportRect()
   if (cw > vpW) {
     scope.panX = Math.min(0, Math.max(vpW - cw, scope.panX))
   } else {
@@ -65,6 +57,12 @@ export function adjustRowsForViewport() {}
 // scrollWidth (xterm rendered something). Cap at 60 frames (~1s @60Hz)
 // so a backgrounded WebView never spins forever.
 const FIT_RETRY_MAX_FRAMES = 60
+
+function isViewportShown(scope: TerminalDocumentScope) {
+  const { width, hidden } = scope.viewportRect()
+  return hidden !== true && Number.isFinite(width) && width > 0
+}
+
 export function applyFitScale(scope: TerminalDocumentScope, reason: string) {
   if (!scope.term || !scope.term.element) {
     return
@@ -77,6 +75,11 @@ export function applyFitScale(scope: TerminalDocumentScope, reason: string) {
       return
     }
     if (!scope.term || !scope.term.element) {
+      return
+    }
+    // Why: a hidden grid may not measure its cells, so the fit is held until the host is shown.
+    if (!isViewportShown(scope)) {
+      scope.fitPending = reason
       return
     }
     attempts++
@@ -117,6 +120,7 @@ export function commitFitScale(
     return
   }
   const preSnapScale = computeFitScale(scope)
+  scope.fitPending = null
   scope.currentScale = preSnapScale
   // Why: when scale is very close to 1 (e.g. 0.97 from xterm scrollbar
   // sub-pixels) snap to 1 to avoid imperceptible shrinkage that prevents
@@ -133,7 +137,7 @@ export function commitFitScale(
 
   const cellW = getCellWidth(scope)
   const sw = scope.term.element.scrollWidth
-  const vpW = window.innerWidth
+  const vpW = scope.viewportRect().width
   const expectedW = cellW * scope.term.cols
   const suspect = scope.currentScale === 1 && scope.term.cols > 0 && expectedW > vpW + 1 // expected wider than viewport but no zoom
   if (suspect) {
@@ -151,6 +155,8 @@ export function commitFitScale(
     })
   }
   repositionOverlay(scope)
+  // The host's lift reads the drawn row pitch, which a new scale changes with no new output.
+  emitKeyboardAvoidanceMetrics(scope)
 }
 
 /**
@@ -162,17 +168,21 @@ export function commitFitScale(
  * had to copy the five calls into its mount to get it at all (ruling 24).
  */
 export function startFitScale(scope: TerminalDocumentScope) {
-  const refit = () => {
+  const refit = (change: TerminalViewportChange) => {
+    // Why: showing the same box again is not a resize; only a fit held while hidden runs, so pan and zoom survive.
+    if (change === 'shown') {
+      if (scope.fitPending !== null) {
+        applyFitScale(scope, scope.fitPending)
+      }
+      return
+    }
     applyFitScale(scope, 'window-resize')
     adjustRowsForViewport()
     repositionOverlay(scope)
     clampPan(scope)
     updateTransform(scope)
   }
-  window.addEventListener('resize', refit)
-  scope.removeViewportRefit = () => {
-    window.removeEventListener('resize', refit)
-  }
+  scope.removeViewportRefit = scope.observeViewport(refit)
 }
 
 /**

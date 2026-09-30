@@ -45,6 +45,7 @@ const WORKTREE_ID_KEYED_MAP_KEYS = [
   'gitBranchCompareSummaryByWorktree',
   'gitBranchCompareRequestKeyByWorktree',
   'gitBranchCompareRequestStatusHeadByWorktree',
+  'explorerDisplayRootByWorktree',
   'showDotfilesByWorktree',
   'expandedDirs',
   'defaultTerminalTabsAppliedByWorktreeId',

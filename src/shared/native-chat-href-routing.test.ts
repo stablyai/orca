@@ -76,6 +76,33 @@ describe('routeNativeChatHref', () => {
     expect(routeNativeChatHref(createNativeChatFileHref(` ${href}`))).toEqual({ kind: 'none' })
   })
 
+  it('keeps wrapped location text literal', () => {
+    expect(routeNativeChatHref(createNativeChatFileHref('My C# App/Program.cs'))).toEqual({
+      kind: 'file',
+      pathText: 'My C# App/Program.cs',
+      line: null
+    })
+    expect(routeNativeChatHref(createNativeChatFileHref('assets/icon%20big.png?v'))).toEqual({
+      kind: 'file',
+      pathText: 'assets/icon%20big.png?v',
+      line: null
+    })
+  })
+
+  it('reads a bare file name with a line suffix as a file, not a scheme', () => {
+    expect(routeNativeChatHref('README.md:5')).toEqual({
+      kind: 'file',
+      pathText: 'README.md:5',
+      line: null
+    })
+    expect(routeNativeChatHref('App.tsx:12:3')).toEqual({
+      kind: 'file',
+      pathText: 'App.tsx:12:3',
+      line: null
+    })
+    expect(routeNativeChatHref('localhost:3000')).toEqual({ kind: 'none' })
+  })
+
   it('drops anchors, unknown schemes, malformed file URIs, and empty hrefs', () => {
     expect(routeNativeChatHref('#section')).toEqual({ kind: 'none' })
     expect(routeNativeChatHref(undefined)).toEqual({ kind: 'none' })

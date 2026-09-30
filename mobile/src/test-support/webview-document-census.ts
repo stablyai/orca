@@ -17,7 +17,7 @@ import { parseSync } from 'oxc-parser'
  */
 
 /** Statement kinds that only declare. Anything else at a module's top level is work. */
-export const DECLARATION_KINDS = new Set([
+const DECLARATION_KINDS = new Set([
   'ImportDeclaration',
   'ExportNamedDeclaration',
   'ExportDefaultDeclaration',
@@ -83,7 +83,7 @@ function initialiserRuns(node: unknown): boolean {
 }
 
 /** Whether anything at a module's top level reaches an element, at any depth. */
-export function readsTheDocument(node: unknown): boolean {
+function readsTheDocument(node: unknown): boolean {
   if (Array.isArray(node)) {
     return node.some(readsTheDocument)
   }
@@ -93,7 +93,7 @@ export function readsTheDocument(node: unknown): boolean {
   return fieldsOf(node).some(([key, value]) => key !== 'type' && readsTheDocument(value))
 }
 
-export function parseModule(name: string, source: string) {
+function parseModule(name: string, source: string) {
   const { program, errors } = parseSync(`${name}.ts`, source, { lang: 'ts' })
   if (errors.length > 0) {
     throw new Error(`[webview-document-census] ${name}.ts did not parse: ${errors[0]?.message}`)

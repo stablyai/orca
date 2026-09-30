@@ -3,6 +3,9 @@ import {
   releaseAutomationWorkspaceProvenanceRequest,
   resolveAutomationWorkspaceProvenance
 } from '../../../automations/workspace-provenance'
+import { getLocalWorktreeCatalogVersion } from '../../../local-worktree-scan-generation'
+import { getExplicitWorktreeIdSelector } from '../../runtime-worktree-selection'
+import { splitWorktreeId } from '../../../../shared/worktree/id'
 import { buildCliWorkspaceProvenance } from '../../../../shared/cli-workspace-provenance'
 import { displayNameUpdatePinsLabel } from '../../../../shared/worktree/display-name-provenance'
 import { defineMethod } from '../core'
@@ -106,11 +109,14 @@ export const WORKTREE_METHODS = [
             )
           )
           finishAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
+          // Why stamped here: the create's change notification has bumped the generation, so this
+          // names the catalog that contains the new worktree.
+          const stamped = { ...result, catalogVersion: getLocalWorktreeCatalogVersion(repo.id) }
           // Why: agent callers need a stable dispatch target without traversing
           // terminal-list layout duplicates after creating the worktree.
           return params.startupAgent && result.startupTerminal?.handle
-            ? { ...result, agentTerminalHandle: result.startupTerminal.handle }
-            : result
+            ? { ...stamped, agentTerminalHandle: result.startupTerminal.handle }
+            : stamped
         } catch (error) {
           releaseAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
           throw error
@@ -235,6 +241,10 @@ export const WORKTREE_METHODS = [
           }
         }
       }
+      // Why parsed, not resolved: an `id:` selector (what clients send) names its repo, and a second
+      // resolution costs a scan and throws for an id two hosts share. Other selectors stay unstamped.
+      const explicitWorktreeId = getExplicitWorktreeIdSelector(params.worktree)
+      const repoId = explicitWorktreeId ? splitWorktreeId(explicitWorktreeId)?.repoId : undefined
       const result = await runtime.removeManagedWorktree(params.worktree, {
         force: params.force === true,
         runHooks: params.runHooks === true,
@@ -242,7 +252,11 @@ export const WORKTREE_METHODS = [
         allowFailedArchiveHook: params.allowFailedArchiveHook === true,
         ...(resolvedHostId ? { hostId: resolvedHostId } : {})
       })
-      return { removed: true, ...result }
+      return {
+        removed: true,
+        ...result,
+        ...(repoId ? { catalogVersion: getLocalWorktreeCatalogVersion(repoId) } : {})
+      }
     }
   }),
   defineMethod({

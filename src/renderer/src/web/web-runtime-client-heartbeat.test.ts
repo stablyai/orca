@@ -6,6 +6,7 @@ import { WebRuntimeClient } from './web-runtime-client'
 // keeping its timer armed while the window is hidden.
 
 const fakeSockets: FakeWebSocket[] = []
+const clients: WebRuntimeClient[] = []
 let visibilityState: DocumentVisibilityState = 'visible'
 let nextIntervalId = 1
 const documentListeners = new Map<string, () => void>()
@@ -73,6 +74,7 @@ function makeConnectedClient(): {
     deviceToken: 'token',
     publicKeyB64: Buffer.alloc(32).toString('base64')
   })
+  clients.push(client)
   const internals = client as unknown as HeartbeatInternals
   // Override the protected time/visibility seams deterministically.
   internals.now = () => nowMs
@@ -130,6 +132,7 @@ describe('WebRuntimeClient liveness heartbeat', () => {
   })
 
   afterEach(() => {
+    clients.splice(0).forEach((client) => client.close())
     vi.unstubAllGlobals()
   })
 

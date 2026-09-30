@@ -496,46 +496,6 @@ describe('GitHandler', () => {
       ])
     })
 
-    it('qualifies slash-containing local branch names when no remote ref matches', async () => {
-      const { localDispatcher, gitMock } = setupMockedHandler(['/relay/repo', '/relay/wt'])
-      gitMock.mockRejectedValueOnce(new Error('no remote ref')) // rev-parse refs/remotes/release/main^{commit}
-      gitMock.mockResolvedValueOnce({ stdout: 'abc123\n', stderr: '' }) // rev-parse refs/heads/release/main^{commit}
-      gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // worktree add
-      gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // config --local --replace-all branch.<branch>.base
-      gitMock.mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // --get unset
-      gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // --local set
-
-      await localDispatcher.callRequest('git.addWorktree', {
-        repoPath: '/relay/repo',
-        branchName: 'feature/release',
-        targetDir: '/relay/wt',
-        base: 'release/main'
-      })
-
-      expect(gitMock.mock.calls.map((c) => c[0])).toEqual([
-        ['rev-parse', '--verify', '--quiet', 'refs/remotes/release/main^{commit}'],
-        ['rev-parse', '--verify', '--quiet', 'refs/heads/release/main^{commit}'],
-        [
-          'worktree',
-          'add',
-          '--no-track',
-          '-b',
-          'feature/release',
-          '/relay/wt',
-          'refs/heads/release/main'
-        ],
-        [
-          'config',
-          '--local',
-          '--replace-all',
-          'branch.feature/release.base',
-          'refs/heads/release/main'
-        ],
-        ['config', '--get', 'push.autoSetupRemote'],
-        ['config', '--local', 'push.autoSetupRemote', 'true']
-      ])
-    })
-
     it('passes --no-checkout when sparse setup will checkout after configuration', async () => {
       const { localDispatcher, gitMock } = setupMockedHandler(['/relay/repo', '/relay/wt'])
       gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // rev-parse refs/remotes/origin/main

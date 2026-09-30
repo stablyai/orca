@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "session.pr-sidebar",
   "family": "session.pr-sidebar",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
-  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
-  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
-  "adapterSha256": "87ffa2daea415d2682f1112025b5bd9d52404c6fc7c239180a3ad2120678ff1f",
-  "scenarioSha256": "cb052d2107df7bbf24927199935dde7f30352ce875c7ddd7bbab7d8044da0add",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "07639c4f1e7f": {
       "name": "hostedReview.forBranch#1",

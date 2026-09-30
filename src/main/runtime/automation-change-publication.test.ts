@@ -1,3 +1,4 @@
+import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
 /**
  * A definition change must name the host it affected, and a change that moves a
  * record between hosts must name both — a subscriber that never hears about the
@@ -106,7 +107,7 @@ async function makeRuntime() {
   vi.resetModules()
   const { Store, initDataPath } = await import('../persistence')
   initDataPath()
-  const store = new Store()
+  const store = createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
   const { OrcaRuntimeService } = await import('./orca-runtime')
   const runtime = new OrcaRuntimeService(store as never)
   const published: AutomationsChangedPayload[] = []
@@ -127,14 +128,42 @@ beforeEach(() => {
   })
 })
 
-afterEach(() => {
+afterEach(async () => {
+  await closeTestStores()
   rmSync(testState.dir, { recursive: true, force: true })
 })
 
 describe('scoped automationsChanged publication', () => {
+  it.each(['update', 'delete'] as const)(
+    'waits for durable %s before publishing success',
+    async (operation) => {
+      const { store, runtime, published } = await makeRuntime()
+      const gate = Promise.withResolvers<void>()
+      vi.spyOn(store, 'flushPendingOrThrowAsync').mockReturnValue(gate.promise)
+      const pending =
+        operation === 'update'
+          ? runtime.updateAutomation('local-1', { name: 'Changed' })
+          : runtime.deleteAutomation('local-1')
+      await vi.waitFor(() => expect(store.flushPendingOrThrowAsync).toHaveBeenCalledOnce())
+      expect(published).toEqual([])
+      gate.resolve()
+      await pending
+      expect(published).toHaveLength(1)
+    }
+  )
+
+  it('rejects a failed durable definition write without publishing success', async () => {
+    const { store, runtime, published } = await makeRuntime()
+    vi.spyOn(store, 'flushPendingOrThrowAsync').mockRejectedValue(new Error('disk full'))
+    await expect(runtime.updateAutomation('local-1', { name: 'Changed' })).rejects.toThrow(
+      'disk full'
+    )
+    expect(published).toEqual([])
+  })
+
   it('names the host a delete removed a row from', async () => {
     const { runtime, published } = await makeRuntime()
-    runtime.deleteAutomation('ssh-1-a', {
+    await runtime.deleteAutomation('ssh-1-a', {
       selector: { kind: 'ssh', targetId: 'ssh-1', targetGeneration: 7 }
     })
     expect(published).toEqual([
@@ -144,7 +173,7 @@ describe('scoped automationsChanged publication', () => {
 
   it('names the orphan bucket when an unowned row is deleted', async () => {
     const { runtime, published } = await makeRuntime()
-    runtime.deleteAutomation('orphan-1', { selector: { kind: 'orphan' } })
+    await runtime.deleteAutomation('orphan-1', { selector: { kind: 'orphan' } })
     expect(published).toEqual([{ reason: 'definition', selector: { kind: 'orphan' } }])
   })
 

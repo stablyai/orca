@@ -1,3 +1,6 @@
+import { isDshTerminalTitle } from './dsh-terminal-title'
+export { DSH_WHALE, isDshTerminalTitle } from './dsh-terminal-title'
+import { isQoderTerminalTitle } from './qoder-terminal-title'
 import {
   AGY_AGENT_NAME_RE,
   DROID_AGENT_NAME_RE,
@@ -56,6 +59,13 @@ export const BRAILLE_SPINNER_RE = /[\u2800-\u28ff]/g
 export const QUARTER_CIRCLE_SPINNER_RE = /[\u25d0-\u25d3]/g
 
 function computeIsGeminiTerminalTitle(title: string): boolean {
+  // Why first: see isDshTerminalTitle — the two agents share the `✦` glyph.
+  if (isQoderTerminalTitle(title)) {
+    return false
+  }
+  if (isDshTerminalTitle(title)) {
+    return false
+  }
   // Why: Gemini OSC glyphs are stronger evidence than any cwd/session text.
   if (
     title.includes(GEMINI_PERMISSION) ||

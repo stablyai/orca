@@ -6,7 +6,7 @@ import {
   getPowerShellOsc133Bootstrap,
   isPowerShellExecutableName
 } from '../powershell-osc133-bootstrap'
-import { getFishCodexShellLaunchPreflight } from '../pty/codex-shell-launch-preflight'
+import { getFishCodexShellLaunchPreflight } from '../../shared/codex-shell-function'
 import { getFishShellReadyInitCommand } from '../shell-templates'
 import {
   encodeShellStartupFeatures,
@@ -126,7 +126,8 @@ const UNWRAPPED: ShellLaunchConfig = {
  */
 export function getShellLaunchConfig(
   shellPath: string,
-  features: readonly ShellStartupFeature[]
+  features: readonly ShellStartupFeature[],
+  options: { hasStartupCommand?: boolean } = {}
 ): ShellLaunchConfig {
   const shellName = pathWin32.basename(basename(shellPath)).toLowerCase()
 
@@ -177,17 +178,18 @@ export function getShellLaunchConfig(
     }
   }
 
-  // Why: mirrors local-pty-shell-ready.ts; markerless fish stays unwrapped. The
-  // selection is baked into the init command, so fish needs no feature env var.
-  if (shellName === 'fish' && features.includes('ready')) {
+  // Why: mirrors local-pty-shell-ready.ts; markerless fish stays unwrapped unless a
+  // startup command (e.g. Orca's Codex launch) needs the codex wrapper. The selection
+  // is baked into the init command, so fish needs no feature env var.
+  if (shellName === 'fish' && (features.includes('ready') || options.hasStartupCommand)) {
     return {
       args: [
         '-l',
         '-C',
-        `${getFishShellReadyInitCommand(SHELL_READY_MARKER)}\n${getFishCodexShellLaunchPreflight()}`
+        `${getFishShellReadyInitCommand(SHELL_READY_MARKER, features.includes('ready'))}\n${getFishCodexShellLaunchPreflight()}`
       ],
       env: {},
-      supportsReadyMarker: true
+      supportsReadyMarker: features.includes('ready')
     }
   }
 

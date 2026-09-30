@@ -87,16 +87,33 @@ function proveAppendOrder(nodes: Map<string, TranscriptNode>): void {
   }
 }
 
+/** Rows Claude's own loader can end a conversation on; titles and markers carry no chain. */
+const TRANSCRIPT_TAIL_TYPES: ReadonlySet<unknown> = new Set([
+  'user',
+  'assistant',
+  'system',
+  'attachment'
+])
+
 type BranchProofInput = {
   providerSessionId: string
   previousLeafUuid: string | null
   intentionalRewindUuid?: string
+  /**
+   * Which row is the branch tip. `file-tail` proves from the file's last
+   * main-chain row: Claude writes its `last-prompt` marker only sporadically, so
+   * a marker tip hides rows Claude already holds after a crash. Without an
+   * eligible tail row the marker rules apply unchanged. Default: `marker`.
+   */
+  tip?: 'marker' | 'file-tail'
 }
 
 function createBranchProof(input: BranchProofInput) {
   const nodes = new Map<string, TranscriptNode>()
   let leafUuid: string | null = null
   let leafMarkerLineIndex = -1
+  let tailUuid: string | null = null
+  let tailLineIndex = -1
   return { add, finish, ancestryChain }
 
   function add(line: string, index: number, terminated: boolean): void {
@@ -156,9 +173,23 @@ function createBranchProof(input: BranchProofInput) {
       lineIndex: existing?.lineIndex ?? index,
       disallowedLeaf
     })
+    if (
+      input.tip === 'file-tail' &&
+      TRANSCRIPT_TAIL_TYPES.has(row.type) &&
+      row.isSidechain !== true &&
+      row.parent_tool_use_id == null
+    ) {
+      tailUuid = uuid
+      tailLineIndex = index
+    }
   }
 
   function finish(): ClaudeTranscriptBranchProof {
+    if (input.tip === 'file-tail' && tailUuid) {
+      // The last main-chain row supersedes any marker; the marker lags crashes.
+      leafUuid = tailUuid
+      leafMarkerLineIndex = tailLineIndex
+    }
     if (!leafUuid) {
       throw new ClaudeTranscriptMarkerMissingError()
     }

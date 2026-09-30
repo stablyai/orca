@@ -9,9 +9,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { findActiveNativeChatRailItem } from './native-chat-active-rail-item'
 import {
   buildNativeChatRailItems,
+  mergeNativeChatRailOutline,
   selectNativeChatRailTicks,
   NATIVE_CHAT_RAIL_MIN_ITEMS,
-  type NativeChatRailItem
+  type NativeChatRailItem,
+  type NativeChatRailOutlineEntry
 } from './native-chat-message-rail-items'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 import type { NativeChatTranscriptWindow } from './use-native-chat-transcript-window'
@@ -33,18 +35,28 @@ export type NativeChatMessageRailState = {
 export function useNativeChatMessageRail({
   scrollRef,
   slots,
-  virtualItems
+  virtualItems,
+  outline = null
 }: {
   scrollRef: React.RefObject<HTMLDivElement | null>
   slots: readonly NativeChatTranscriptSlot[]
   virtualItems: NativeChatTranscriptWindow['virtualItems']
+  /** User messages older than the loaded window; null when none are known. */
+  outline?: readonly NativeChatRailOutlineEntry[] | null
 }): NativeChatMessageRailState {
   const [activeId, setActiveId] = useState<string | null>(null)
   const [wideEnough, setWideEnough] = useState(true)
 
   const previousItemsRef = useRef<readonly NativeChatRailItem[]>([])
-  const items = buildNativeChatRailItems(slots, previousItemsRef.current)
-  previousItemsRef.current = items
+  const loadedItems = buildNativeChatRailItems(slots, previousItemsRef.current)
+  // Written after commit so a discarded render cannot become the next one's baseline.
+  useEffect(() => {
+    previousItemsRef.current = loadedItems
+  }, [loadedItems])
+  const items = useMemo(
+    () => mergeNativeChatRailOutline(outline, loadedItems),
+    [outline, loadedItems]
+  )
 
   // Read through refs so a settling scroll never re-subscribes the listener:
   // `virtualItems` is a fresh array on every frame of a scroll.

@@ -110,6 +110,7 @@ class OneShotInventoryFailureDatabase implements RelayDatabase {
     return await this.delegate.transaction(
       async (transaction) =>
         await operation({
+          dialect: transaction.dialect,
           query: async (sql, params = []) => await transaction.query(sql, params),
           queryLocked: async (sql, params = [], options = {}) =>
             await this.lockedQuery(transaction, sql, params, options),
@@ -173,6 +174,7 @@ class RepeatedDrainAccountingFailureDatabase implements RelayDatabase {
     return await this.delegate.transaction(
       async (transaction) =>
         await operation({
+          dialect: transaction.dialect,
           query: async (sql, params = []) => await transaction.query(sql, params),
           queryLocked: async (sql, params = [], options = {}) =>
             await this.lockedQuery(transaction, sql, params, options),

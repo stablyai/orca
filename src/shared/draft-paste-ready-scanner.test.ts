@@ -272,6 +272,40 @@ describe('createDraftPasteReadyScanner', () => {
     })
   })
 
+  describe('Windows ConPTY, which never forwards DECSET 2004', () => {
+    // Why: measured on a remote Windows host (terminal-agent-paste-bracketing.test.ts) — the
+    // agent's `\x1b[?2004h` is consumed by conhost and never reaches the client stream. Every
+    // signal below is anchored on it, so on Windows readiness cannot resolve and delivery always
+    // falls through to the caller's hard timeout and its blind process-ownership paste (#22479).
+    const WINDOWS_OPENCODE_FRAME = `${HIDE_CURSOR}\x1b[2J\x1b[H opencode ${SHOW_CURSOR}`
+
+    it('never reports opencode ready from show-cursor frames alone', () => {
+      const scanner = createDraftPasteReadyScanner('render-cursor-after-bracketed-paste')
+      for (let frame = 0; frame < 5; frame += 1) {
+        expect(scanner.observe(WINDOWS_OPENCODE_FRAME)).toEqual({
+          ready: false,
+          armQuietTimer: false
+        })
+      }
+    })
+
+    it('never arms the default quiet window either', () => {
+      const scanner = createDraftPasteReadyScanner('render-quiet-after-bracketed-paste')
+      expect(scanner.observe(WINDOWS_OPENCODE_FRAME)).toEqual({
+        ready: false,
+        armQuietTimer: false
+      })
+    })
+
+    it('never reports the Codex composer glyph ready without its anchor', () => {
+      const scanner = createDraftPasteReadyScanner('codex-composer-prompt')
+      expect(scanner.observe(`${ALT_SCREEN_ENTER}${CODEX_PROMPT}`)).toEqual({
+        ready: false,
+        armQuietTimer: false
+      })
+    })
+  })
+
   describe('render-quiet-after-bracketed-paste (default)', () => {
     it('arms the quiet timer after bracketed paste and never reports a signal', () => {
       const scanner = createDraftPasteReadyScanner('render-quiet-after-bracketed-paste')

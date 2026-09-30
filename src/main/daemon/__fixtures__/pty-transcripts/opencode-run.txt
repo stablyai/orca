@@ -1,0 +1,47 @@
+[0m
+> build · muse-spark-1.3-contributor-free
+[0m
+Here is a 40-line script:
+```bash
+#!/bin/bash
+# Colored progress bar demo using ANSI escapes
+# 彩色进度条演示 - 使用 ANSI 转义序列
+# Usage: ./progress.sh - 用法示例
+set -euo pipefail
+# Total steps for simulation - 模拟总步数
+TOTAL=50
+# Bar width in characters - 进度条宽度
+WIDTH=40
+# ANSI color codes - 定义颜色
+GREEN="\033[32m"
+YELLOW="\033[33m"
+CYAN="\033[36m"
+GRAY="\033[90m"
+RESET="\033[0m"
+# Hide cursor for smooth animation - 隐藏光标使动画更平滑
+hide_cursor() { printf "\033[?25l"; }
+# Restore cursor - 恢复光标显示
+show_cursor() { printf "\033[?25h"; }
+# Always restore cursor on exit - 退出时自动恢复光标
+trap show_cursor EXIT
+hide_cursor
+# Draw bar: $1 = percent 0-100 - 绘制函数，参数为百分比
+draw_bar() {
+local percent=$1
+local filled=$(( percent * WIDTH / 100 ))
+local empty=$(( WIDTH - filled ))
+local color="$GREEN"
+# Change color by stage - 根据阶段变换颜色
+if [ "$percent" -lt 30 ]; then color="$CYAN"; fi
+if [ "$percent" -ge 70 ]; then color="$YELLOW"; fi
+local bar="" space=""
+printf -v bar '%*s' "$filled" ""
+printf -v space '%*s' "$empty" ""
+bar=${bar// /█}; space=${space// /░}
+# Print single line with carriage return - 回车覆盖本行打印
+printf "\r${color}[%s${GRAY}%s${color}]${RESET} %3d%%" "$bar" "$space" "$percent"
+}
+# Main loop - 主循环模拟进度
+for ((i=0; i<=TOTAL; i++)); do draw_bar $(( i*100/TOTAL )); sleep 0.05; done; echo; echo -e "${GREEN}Done! 完成!${RESET}"
+```
+[0m

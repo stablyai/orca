@@ -148,7 +148,7 @@ async function executeHistoryGc(liveWorktreeIds: Set<string>, signal: AbortSigna
     // Why: finish tombstones left by quit mid-rm before scanning live worktree hashes.
     // Safe ahead of the guard below: these entries were already condemned by a
     // completed GC, and leaving them renamed-but-present strands disk forever.
-    schedulePendingHistoryTreeRemovals(getHistoryRoot())
+    await schedulePendingHistoryTreeRemovals(getHistoryRoot())
     // Why refuse rather than treat every entry as orphaned: an empty live set is
     // what a store that fell back to default state looks like, and it cannot be
     // told apart from a user who genuinely has no worktrees — who also has no
@@ -169,7 +169,7 @@ async function executeHistoryGc(liveWorktreeIds: Set<string>, signal: AbortSigna
       if (signal.aborted) {
         break
       }
-      schedulePendingHistoryTreeRemovals(distroRoot)
+      await schedulePendingHistoryTreeRemovals(distroRoot)
       const r = await gcScanRoot(distroRoot, liveWorktreeIds, signal)
       wslTotals.totalDirs += r.totalDirs
       wslTotals.orphaned += r.orphaned

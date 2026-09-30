@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { withDurableRuntimeStore } from '../../../runtime/runtime-durable-store-fixture'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { TerminalSessionOwnerUnverifiedError } from '../../../daemon/daemon-errors'
 import {
@@ -70,13 +71,14 @@ function sessionStore(leaves: string[]): { store: Store; read: () => WorkspaceSe
   } as unknown as WorkspaceSessionState
   return {
     read: () => session,
-    store: {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies every persistence method used by stable-pane retirement.
+    store: withDurableRuntimeStore({
       getWorkspaceSession: () => session,
       setWorkspaceSession: (next: WorkspaceSessionState) => {
         session = next
       },
       flushOrThrow: () => {}
-    } as unknown as Store
+    }) as unknown as Store
   }
 }
 

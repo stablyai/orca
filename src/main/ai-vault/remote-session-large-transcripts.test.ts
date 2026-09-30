@@ -28,7 +28,7 @@ describe('large remote history through real relay filesystem', () => {
       await writeFile(badPath, metadata('bad') + 'x'.repeat(11 * 1024 * 1024))
       await writeFile(join(directory, 'good.jsonl'), metadata('good'))
       const result = await scanRemoteAiVaultSessions({
-        provider: createRelayAiVaultFilesystemProvider(),
+        provider: createRelayAiVaultFilesystemProvider({ homeDirectory: home, environment: {} }),
         executionHostId: 'ssh:record-limit',
         remoteHome: home,
         hostPlatform: platform,
@@ -94,7 +94,7 @@ describe('large remote history through real relay filesystem', () => {
           filler.slice(filler.length / 2)
       )
       const result = await scanRemoteAiVaultSessions({
-        provider: createRelayAiVaultFilesystemProvider(),
+        provider: createRelayAiVaultFilesystemProvider({ homeDirectory: home, environment: {} }),
         executionHostId: 'ssh:synthetic-17744',
         remoteHome: home,
         hostPlatform: platform,
@@ -161,7 +161,7 @@ describe('large remote history through real relay filesystem', () => {
         await mkdir(dirname(path), { recursive: true })
         await writeFile(path, JSON.stringify(record))
         const result = await scanRemoteAiVaultSessions({
-          provider: createRelayAiVaultFilesystemProvider(),
+          provider: createRelayAiVaultFilesystemProvider({ homeDirectory: home, environment: {} }),
           executionHostId: `ssh:large-${agent}`,
           remoteHome: home,
           hostPlatform: platform,
@@ -185,7 +185,10 @@ describe('large remote history through real relay filesystem', () => {
       await mkdir(directory, { recursive: true })
       const content = jsonl([{ type: 'session_meta', payload: { id: 'small', cwd: '/repo' } }])
       await writeFile(join(directory, 'small.jsonl'), content)
-      const provider = createRelayAiVaultFilesystemProvider()
+      const provider = createRelayAiVaultFilesystemProvider({
+        homeDirectory: home,
+        environment: {}
+      })
       provider.readTranscriptBytes = () => {
         throw new Error('Small file must keep its existing read path')
       }

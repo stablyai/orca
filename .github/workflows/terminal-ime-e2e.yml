@@ -49,7 +49,7 @@ jobs:
         run: >-
           xvfb-run --auto-servernum
           env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1
-          pnpm run test:e2e --
+          pnpm run test:e2e
           tests/e2e/terminal-ime-exact-byte.spec.ts
           --workers=1
 

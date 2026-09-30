@@ -102,7 +102,8 @@ describe('launchAgentInNewTab paired web runtime', () => {
     })
     expect(mocks.createTab).not.toHaveBeenCalled()
     await Promise.resolve()
-    expect(mocks.setActiveTabType).toHaveBeenCalledWith('terminal')
+    // Why: host creation is async, so the user may be viewing another worktree by the time it lands.
+    expect(mocks.setActiveTabType).toHaveBeenCalledExactlyOnceWith('terminal', 'wt-1')
     expect(mocks.closeTab).toHaveBeenCalledWith('stale-agent-tab', { reason: 'cleanup' })
   })
 

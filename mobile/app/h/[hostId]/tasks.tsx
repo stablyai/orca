@@ -1,7 +1,8 @@
 import { useLocalSearchParams } from 'expo-router'
 import { MobileWebShellScreen } from '../../../src/mobile-web-shell/MobileWebShellScreen'
+import { ShellSwitchPendingScreen } from '../../../src/mobile-web-shell/ShellSwitchPendingScreen'
 import { shellScreenRoute } from '../../../src/mobile-web-shell/shell-screen-route'
-import { useMobileWebShellEnabled } from '../../../src/mobile-web-shell/use-mobile-web-shell-enabled'
+import { useShellSwitchDecision } from '../../../src/mobile-web-shell/shell-switch-decision'
 import { firstParam } from '../../../src/navigation/route-param-reader'
 import { MobileTasksScreen } from '../../../src/tasks/MobileTasksScreen'
 
@@ -21,19 +22,24 @@ export default function MobileTasksRoute() {
   }>()
   const hostId = firstParam(params.hostId)
   const taskSource = firstParam(params.taskSource)
-  const enabled = useMobileWebShellEnabled()
   const native = <MobileTasksScreen />
 
-  if (enabled !== true || !hostId) {
-    return native
+  // Built before the decision rather than after it, as every switch does now: the decision needs
+  // to know whether the shell is a possible outcome before it can say a neutral frame is owed.
+  const route = hostId
+    ? shellScreenRoute({
+        pathname: `/h/${encodeURIComponent(hostId)}/tasks`,
+        // Omitted rather than empty: an absent provider lets the page pick its own default, where
+        // `taskSource=` is a provider named nothing.
+        ...(taskSource === '' ? {} : { params: { taskSource } })
+      })
+    : null
+  const decision = useShellSwitchDecision(route)
+
+  if (decision.kind === 'pending') {
+    return <ShellSwitchPendingScreen />
   }
-  const route = shellScreenRoute({
-    pathname: `/h/${encodeURIComponent(hostId)}/tasks`,
-    // Omitted rather than empty: an absent provider lets the page pick its own default, where
-    // `taskSource=` is a provider named nothing.
-    ...(taskSource === '' ? {} : { params: { taskSource } })
-  })
-  if (route === null) {
+  if (decision.kind === 'native') {
     return native
   }
   return (
@@ -42,7 +48,7 @@ export default function MobileTasksRoute() {
       // with, so a host id change must be a remount rather than a prop update.
       key={hostId}
       hostId={hostId}
-      route={route}
+      route={decision.route}
       fallback={native}
     />
   )

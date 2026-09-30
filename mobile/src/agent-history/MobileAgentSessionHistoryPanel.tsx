@@ -303,9 +303,11 @@ export function MobileAgentSessionHistoryPanel({
         <View style={styles.state}>
           <Text style={styles.stateTitle}>Unable to Load</Text>
           <Text style={styles.stateText}>{screenState.message}</Text>
-          <Pressable style={styles.retryButton} onPress={retry}>
-            <Text style={styles.retryText}>Retry</Text>
-          </Pressable>
+          {retry ? (
+            <Pressable style={styles.retryButton} onPress={retry}>
+              <Text style={styles.retryText}>Retry</Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : (
         <>

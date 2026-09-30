@@ -8,10 +8,12 @@
 // for old mobile clients while structured chat is enabled so they receive a fallback row, and that
 // path constructs the host. `agentSession.*` stays refused either way, which is what this gate is for.
 
+import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { StructuredAgentSessionCaller } from '../../../native-chat/agent-session-wire/structured-agent-session-host-types'
 import type { RpcContext } from '../core'
+import { structuredAgentSessionHostRefusal } from '../../structured-agent-session-host-refusal'
 import {
   supportsStructuredAgentSessionCapability,
   supportsStructuredAgentSessions
@@ -27,17 +29,15 @@ export function supportsStructuredSessions(ctx: RpcContext): boolean {
 
 export function requireStructuredCapability(ctx: RpcContext): void {
   if (!supportsStructuredSessions(ctx)) {
-    throw new Error('structured_agent_session_unsupported')
+    throw agentSessionRefusalError('structured_agent_session_unsupported', {
+      reason: 'clientCapabilityMissing'
+    })
   }
 }
 
 export function requireStructuredHost(ctx: RpcContext): StructuredAgentSessionHost {
   requireStructuredCapability(ctx)
-  const host = getStructuredAgentSessionHost()
-  if (!host) {
-    throw new Error('structured_agent_session_unsupported')
-  }
-  return host
+  return requireHostOrRefusal()
 }
 
 /**
@@ -48,7 +48,7 @@ export function requireStructuredHost(ctx: RpcContext): StructuredAgentSessionHo
  * sounds:
  *
  *   - Starts, extends, retains or reads work -> `requireStructuredHost`. Revoked admission means
- *     no new turns, no new holds, no new reads. create, send, ensure, setOption, requestHandoff,
+ *     no new turns, no new holds, no new reads. create, send, ensure, setOption,
  *     subscribe, hold, reveal, history, options and the status stream all live here.
  *   - Stops or retires work the caller already owns -> `requireStructuredCleanupHost`. close,
  *     cancel, unsubscribe and release live here.
@@ -64,19 +64,31 @@ export function requireStructuredHost(ctx: RpcContext): StructuredAgentSessionHo
  */
 export function requireStructuredCleanupHost(ctx: RpcContext): StructuredAgentSessionHost {
   if (!supportsStructuredAgentSessionCapability(ctx)) {
-    throw new Error('structured_agent_session_unsupported')
+    throw agentSessionRefusalError('structured_agent_session_unsupported', {
+      reason: 'clientCapabilityMissing'
+    })
   }
-  const host = getStructuredAgentSessionHost()
-  if (!host) {
-    throw new Error('structured_agent_session_unsupported')
-  }
-  return host
+  return requireHostOrRefusal()
 }
 
-/** Builds the host for the calls that address a session by durable record rather than by live
- *  state: attach, which is the only way a session comes into being, plus hold and reveal, which
- *  each reach for a record on disk this process may not have opened yet. Every other method
- *  addresses a session that must already be attached, and correctly reports absent when none is. */
+/**
+ * The host, or why there is none. A process whose journal would not open says so under every
+ * getter — cleanup included: nothing here can stop a child it never started.
+ */
+function requireHostOrRefusal(): StructuredAgentSessionHost {
+  const host = getStructuredAgentSessionHost()
+  if (host) {
+    return host
+  }
+  throw (
+    structuredAgentSessionHostRefusal() ??
+    agentSessionRefusalError('structured_agent_session_unsupported', { reason: 'hostDisabled' })
+  )
+}
+
+/** Builds the host for a call that may be the first this process sees. Every session is addressed
+ *  by its durable record — a read opens a conversation at rest — so each call that reaches for one
+ *  may meet a host nothing has built yet. */
 export async function ensureStructuredHostInstalled(ctx: RpcContext): Promise<void> {
   // Gated first: a client that cannot read structured sessions must not be able
   // to make the host exist, which is an observable side effect of the surface.
@@ -87,6 +99,14 @@ export async function ensureStructuredHostInstalled(ctx: RpcContext): Promise<vo
     return
   }
   await ctx.runtime.ensureStructuredAgentSessionHost()
+}
+
+/** The host for a read, built first when this process has none: the read RPCs share this one. */
+export async function requireInstalledStructuredHost(
+  ctx: RpcContext
+): Promise<StructuredAgentSessionHost> {
+  await ensureStructuredHostInstalled(ctx)
+  return requireStructuredHost(ctx)
 }
 
 /** Mirrors the existing agent-session host-authority derivation so one client

@@ -1,3 +1,4 @@
+import type { WorktreeCatalogVersion } from './catalog-version'
 import type { ExecutionHostId } from '../execution-host'
 import type { ArchiveHookOverride } from './archive-hook-removal-gate'
 import type { WorkspaceSource } from '../workspace-source'
@@ -161,6 +162,8 @@ export type AdoptProvisionedRootArgs = CreateWorktreeArgs & {
 }
 
 export type CreateWorktreeResult = {
+  /** The catalog this create produced; additive, older hosts omit it. */
+  catalogVersion?: WorktreeCatalogVersion
   worktree: Worktree & {
     parentWorktreeId?: string | null
     childWorktreeIds?: string[]
@@ -207,6 +210,8 @@ export type PreservedWorktreeBranch = {
 }
 
 export type RemoveWorktreeResult = {
+  /** The catalog this removal produced; additive, older hosts omit it. */
+  catalogVersion?: WorktreeCatalogVersion
   preservedBranch?: PreservedWorktreeBranch
   /** Present only when a FAILED archive hook was explicitly waived for this removal (#19334). */
   archiveHookOverride?: ArchiveHookOverride

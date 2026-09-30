@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session-wire'
 import type { NativeChatQuestionCardProps } from './NativeChatQuestionCard'
+import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
 
 const mocks = vi.hoisted(() => ({
   call: vi.fn(),
@@ -17,7 +18,6 @@ const mocks = vi.hoisted(() => ({
   messageListProps: null as null | {
     allowFileUriLinks?: boolean
     onLinkClick?: (...args: unknown[]) => void
-    showTurnStatus?: boolean
     runtimeContext?: unknown
   },
   composerProps: null as null | {
@@ -38,11 +38,15 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: mocks.call
+  callStructuredAgentSession: mocks.call,
+  // The pane activates the host status feed for its startup phase; nothing here drives it.
+  subscribeStructuredAgentSessionStatus: async () => ({ unsubscribe: () => {} })
 }))
 
 vi.mock('./use-structured-agent-session', async () => {
   const { useStructuredAgentSessionOutbox } = await import('./use-structured-agent-session-outbox')
+  const { projectStructuredAgentSessionMessages } =
+    await import('../../../../shared/structured-agent-session-message-projection')
   return {
     useStructuredAgentSession: (props: {
       sessionId: string
@@ -55,9 +59,10 @@ vi.mock('./use-structured-agent-session', async () => {
         submissions: mocks.submissions as never
       })
       return {
+        journalItems: [],
         messages:
           mocks.mode === 'outbox'
-            ? []
+            ? projectStructuredAgentSessionMessages([], outbox.outbox, [])
             : [
                 {
                   id: 'message-1',
@@ -74,6 +79,7 @@ vi.mock('./use-structured-agent-session', async () => {
         loadOlder: vi.fn(),
         prompts: mocks.promptItems,
         outbox: outbox.outbox,
+        submissions: mocks.submissions,
         blockedClientMessageId: outbox.blockedClientMessageId,
         send: outbox.send,
         retry: outbox.retry,
@@ -84,6 +90,13 @@ vi.mock('./use-structured-agent-session', async () => {
         backgroundTasks: mocks.backgroundTasks,
         turnId: null,
         cancel: vi.fn(),
+        queuedMessages: {
+          cards: [],
+          steer: vi.fn(async () => {}),
+          remove: vi.fn(async () => {}),
+          edit: vi.fn(async () => {}),
+          steerNewest: () => false
+        },
         stopBackgroundTask: (taskId?: string) => mocks.stopBackgroundTask(props.sessionId, taskId),
         respond: mocks.respond,
         optionSnapshot: [
@@ -128,12 +141,19 @@ vi.mock('./use-native-chat-file-link-click', () => ({
   useNativeChatFileLinkClick: (context: unknown) => (context ? mocks.fileLinkClick : undefined)
 }))
 
-vi.mock('./NativeChatMessageList', () => ({
-  NativeChatMessageList: (props: typeof mocks.messageListProps) => {
-    mocks.messageListProps = props
-    return <div data-testid="message-list" />
+vi.mock('./NativeChatMessageList', async () => {
+  const { DeliveryNoticesMock } = await import('./NativeChatStructuredSession.test-harness')
+  return {
+    NativeChatMessageList: (
+      props: NonNullable<typeof mocks.messageListProps> & {
+        deliveryNotices?: ReadonlyMap<string, NativeChatDeliveryNotice>
+      }
+    ) => {
+      mocks.messageListProps = props
+      return <DeliveryNoticesMock notices={props.deliveryNotices} />
+    }
   }
-}))
+})
 
 vi.mock('./NativeChatComposer', () => ({
   NativeChatComposer: forwardRef((props: typeof mocks.composerProps, ref) => {
@@ -147,7 +167,8 @@ vi.mock('./NativeChatComposer', () => ({
       },
       insertTypedText: () => true,
       handlePasteEvent: mocks.handlePasteEvent,
-      pasteFromClipboard: mocks.pasteFromClipboard
+      pasteFromClipboard: mocks.pasteFromClipboard,
+      contains: (node: Node | null) => fieldRef.current?.contains(node) === true
     }))
     return <textarea ref={fieldRef} data-testid="structured-composer" />
   })
@@ -275,6 +296,128 @@ describe('NativeChatStructuredSession delivery', () => {
     await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
     const request = mocks.call.mock.calls[0]?.[2] as { envelope: { clientOperationId: string } }
     expect(request.envelope.clientOperationId).toBe('op-head')
+  })
+
+  it('offers a rejected message no Retry while the queue is stopped, and gives it back once it moves', async () => {
+    mocks.mode = 'outbox'
+    mocks.submissions = []
+    mocks.call.mockResolvedValue({
+      ok: true,
+      value: { submission: { clientMessageId: 'op-head', dispatchState: 'accepted' } }
+    })
+    seedOutbox('session-held-rejected', [
+      seededEntry('session-held-rejected', 'op-head', 'first', 'unconfirmed'),
+      {
+        ...seededEntry('session-held-rejected', 'op-rejected', 'second', 'queued'),
+        state: 'rejected',
+        lastFailure: { kind: 'rejected', reason: 'Claude messages support at most 20 images' }
+      }
+    ])
+
+    render(
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="structured-tab-held-rejected"
+        sessionId="session-held-rejected"
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    )
+
+    await waitFor(() => expect(screen.getByText('Message delivery is unconfirmed.')).toBeTruthy())
+    expect(screen.getByText('Claude messages support at most 20 images')).toBeTruthy()
+    // One Retry, the stopped message's: it sends only that one.
+    fireEvent.click(screen.getByRole('button', { name: /Retry/ }))
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
+    expect(mocks.call.mock.calls[0]?.[2]).toMatchObject({
+      envelope: { clientOperationId: 'op-head' }
+    })
+
+    // The queue moved, so the rejected message offers its own Retry again.
+    await waitFor(() => expect(screen.queryByText('Message delivery is unconfirmed.')).toBeNull())
+    expect(screen.getByText('Claude messages support at most 20 images')).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: /Retry/ })).toHaveLength(1)
+    expect(mocks.call).toHaveBeenCalledOnce()
+  })
+
+  it("words a failed start on each message by the chat's agent, leaving the resend to its Retry", async () => {
+    mocks.mode = 'outbox'
+    mocks.submissions = []
+    const startFailed = (clientMessageId: string, text: string) => ({
+      ...seededEntry('session-start-failed', clientMessageId, text, 'queued'),
+      state: 'rejected' as const,
+      lastFailure: {
+        kind: 'rejected' as const,
+        reason: 'Codex stopped before it finished starting. Send your message to try again.',
+        rejection: { kind: 'providerStartFailed' as const }
+      }
+    })
+    seedOutbox('session-start-failed', [
+      startFailed('op-first', 'first'),
+      startFailed('op-second', 'second')
+    ])
+
+    render(
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="structured-tab-start-failed"
+        sessionId="session-start-failed"
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    )
+
+    await waitFor(() =>
+      expect(screen.getAllByText('Codex stopped before it finished starting.')).toHaveLength(2)
+    )
+    expect(screen.getAllByRole('button', { name: /Retry/ })).toHaveLength(2)
+    expect(screen.queryByText(/Send your message to try again/)).toBeNull()
+  })
+
+  it("words a rejected message from its loaded journal row, not the message's own copy", async () => {
+    mocks.mode = 'outbox'
+    const reason = "Claude couldn't start. Send your message to try again."
+    mocks.submissions = [
+      {
+        clientMessageId: 'op-recorded',
+        fence: 1,
+        payloadFingerprint: 'fingerprint',
+        dispatchState: 'rejected',
+        providerItemId: null,
+        reason,
+        rejection: {
+          kind: 'startFailed',
+          refusal: { code: 'agent_session_identity_required', details: { reason: 'recordMissing' } }
+        },
+        submittedAt: 1,
+        resolvedAt: 1
+      }
+    ]
+    seedOutbox('session-recorded', [
+      {
+        ...seededEntry('session-recorded', 'op-recorded', 'first', 'queued'),
+        state: 'rejected',
+        lastFailure: { kind: 'rejected', reason, rejection: { kind: 'startFailed' } }
+      }
+    ])
+
+    render(
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="structured-tab-recorded"
+        sessionId="session-recorded"
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    )
+
+    await waitFor(() =>
+      expect(screen.getByText("Codex couldn't start. Start a new chat to continue.")).toBeTruthy()
+    )
+    expect(screen.queryByText(reason)).toBeNull()
   })
 
   it('names the stuck message behind an admitted head, and its Retry sends that one', async () => {

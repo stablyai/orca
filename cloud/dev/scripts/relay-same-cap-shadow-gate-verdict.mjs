@@ -18,11 +18,13 @@ export const ENTRY_LIMIT = 20000
 export const BASELINE_OFFSET_HOURS = [24, 48]
 
 // The asia-east2 cells share a 16-connection pool at 176 ms RTT, which is where pool pressure
-// shows up first for the whole fleet.
+// shows up first for the whole fleet. A cell joins only once it serves: zero samples read as
+// unverified, so listing a not-yet-general cell would turn every verdict into WARN.
 export const FLEET_POOL_CELL_IDS = [
   'production-gce-c27',
   'production-gce-c28',
-  'production-gce-c29'
+  'production-gce-c29',
+  'production-gce-c30'
 ]
 
 export const SHADOW_GATE_THRESHOLDS = {

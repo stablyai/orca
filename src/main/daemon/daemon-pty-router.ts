@@ -13,6 +13,7 @@ import { shouldHandoffDaemonHistory } from './daemon-history-handoff'
 import type { DaemonPtyRouterDataEvent, DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
 import { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
+import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
 
 export class DaemonPtyRouter implements IPtyProvider {
   private current: DaemonPtyAdapter
@@ -162,8 +163,18 @@ export class DaemonPtyRouter implements IPtyProvider {
     await this.adapterFor(id).clearBuffer(id)
   }
 
+  async resetInputModes(id: string): Promise<void> {
+    await this.adapterFor(id).resetInputModes(id)
+  }
+
   async closeStartupQueryAuthority(id: string): Promise<number> {
     return (await this.adapterFor(id).closeStartupQueryAuthority?.(id)) ?? 0
+  }
+
+  setColorQueryReplyColors(colors: TerminalOscColorQueryReplyColors): void {
+    for (const adapter of this.allAdapters()) {
+      adapter.setColorQueryReplyColors(colors)
+    }
   }
 
   acknowledgeDataEvent(id: string, charCount: number): void {

@@ -37,6 +37,13 @@ export type RequestTerminalCreateRequest = {
   surfaceOwner?: boolean
 }
 
+/** A notification click sets userInitiated; a chat-completion courtesy reveal leaves it off. */
+export type FocusEditorTabRequest = {
+  tabId: string
+  worktreeId: string
+  userInitiated?: boolean
+}
+
 /** Subscription no-ops for every listener useIpcEvents attaches beyond the ones under test. */
 function createApiNamespaceStub(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return new Proxy(overrides, {
@@ -49,7 +56,7 @@ export type IpcEventsHarness = {
   useIpcEvents: () => void
   createTerminal: (request: CreateTerminalRequest) => void
   requestTerminalCreate: (request: RequestTerminalCreateRequest) => void
-  focusEditorTab: (request: { tabId: string; worktreeId: string }) => void
+  focusEditorTab: (request: FocusEditorTabRequest) => void
   replyTerminalCreate: ReturnType<typeof vi.fn>
   /** Fire a main-process digit chord (zero-based index). */
   jumpToWorktreeIndex: (index: number) => void
@@ -85,8 +92,7 @@ export async function loadIpcEventsHarness(
   const activateAndRevealWorkspace = vi.fn()
   let createTerminalListener: ((request: CreateTerminalRequest) => void) | null = null
   let requestTerminalCreateListener: ((request: RequestTerminalCreateRequest) => void) | null = null
-  let focusEditorTabListener: ((request: { tabId: string; worktreeId: string }) => void) | null =
-    null
+  let focusEditorTabListener: ((request: FocusEditorTabRequest) => void) | null = null
   let navigationUpdateListener:
     | ((event: { browserPageId: string; url: string; title: string }) => void)
     | null = null

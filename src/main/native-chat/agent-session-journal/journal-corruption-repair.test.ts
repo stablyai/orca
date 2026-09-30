@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // A repair drops what it cannot replay, and says so.
 //
 // Two things make a suffix unreplayable: a row this build cannot parse, and a
@@ -17,12 +18,16 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import type Database from '../../sqlite/sync-database'
-import { openJournalDatabase } from './journal-database'
-import { journalDatabaseFile } from './journal-paths'
 import { parseJournalRow, type JournalRow } from './journal-row-schema'
-import { loadJournal } from './journal-open'
 import type { openAgentSessionJournal } from './journal-store-factory'
-import { createTrackedJournalOpener } from './journal-store-test-open'
+import {
+  createTrackedJournalOpener,
+  openTestJournalHostDatabase,
+  loadTestJournal,
+  liveTestJournalRows,
+  updateTestJournalRowJson,
+  deleteTestJournalRow
+} from './journal-host-database-test-support'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
@@ -52,7 +57,7 @@ function body(value: string): AgentJournalItemBody {
 function open(overrides: Partial<Parameters<typeof openAgentSessionJournal>[0]> = {}) {
   return journals.open({
     identity: IDENTITY,
-    journalDir: root,
+    stateDirectory: root,
     now: tick,
     mintEpoch: () => `epoch-${clock}`,
     ...overrides
@@ -60,11 +65,11 @@ function open(overrides: Partial<Parameters<typeof openAgentSessionJournal>[0]> 
 }
 
 async function withJournalDatabase(run: (db: Database.Database) => void): Promise<void> {
-  const opened = openJournalDatabase(journalDatabaseFile(root))
+  const opened = openTestJournalHostDatabase(root)
   try {
     run(opened.db)
   } finally {
-    opened.db.close()
+    opened.close()
   }
 }
 
@@ -72,10 +77,8 @@ async function withJournalDatabase(run: (db: Database.Database) => void): Promis
 function firstLiveRow(): Promise<JournalRow | null> {
   let row: JournalRow | null = null
   return withJournalDatabase((db) => {
-    const stored = db.prepare('SELECT row_json FROM journal_rows ORDER BY seq LIMIT 1').get() as
-      | { row_json: string }
-      | undefined
-    const parsed = stored ? parseJournalRow(stored.row_json) : null
+    const stored = liveTestJournalRows(db, IDENTITY.sessionId)[0]
+    const parsed = stored ? parseJournalRow(stored.rowJson) : null
     row = parsed?.ok ? parsed.row : null
   }).then(() => row)
 }
@@ -83,9 +86,7 @@ function firstLiveRow(): Promise<JournalRow | null> {
 function liveSequences(): Promise<number[]> {
   let sequences: number[] = []
   return withJournalDatabase((db) => {
-    sequences = (
-      db.prepare('SELECT seq FROM journal_rows ORDER BY seq').all() as { seq: number }[]
-    ).map((row) => row.seq)
+    sequences = liveTestJournalRows(db, IDENTITY.sessionId).map((row) => row.seq)
   }).then(() => sequences)
 }
 
@@ -102,12 +103,21 @@ afterEach(async () => {
 describe('a malformed row', () => {
   it('keeps the readable prefix live and drops the rest of the epoch', async () => {
     const journal = await open()
-    await journal.appendItem(item(0), body('readable'), { fence: 1 })
-    await journal.appendItem(item(1), body('unreadable'), { fence: 1 })
-    await journal.appendItem(item(2), body('after the fault'), { fence: 1 })
+    await journal.appendItem(item(0), body('readable'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+    await journal.appendItem(item(1), body('unreadable'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+    await journal.appendItem(item(2), body('after the fault'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     await journal.close()
     await withJournalDatabase((db) => {
-      db.prepare('UPDATE journal_rows SET row_json = ? WHERE seq = ?').run('{"not":"a row"}', 3)
+      updateTestJournalRowJson(db, IDENTITY.sessionId, 3, '{"not":"a row"}')
     })
 
     const reopened = await open()
@@ -118,11 +128,17 @@ describe('a malformed row', () => {
 
   it('discloses the line it could not read', async () => {
     const journal = await open()
-    await journal.appendItem(item(0), body('readable'), { fence: 1 })
-    await journal.appendItem(item(1), body('later'), { fence: 1 })
+    await journal.appendItem(item(0), body('readable'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+    await journal.appendItem(item(1), body('later'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     await journal.close()
     await withJournalDatabase((db) => {
-      db.prepare('UPDATE journal_rows SET row_json = ? WHERE seq = ?').run('}{', 2)
+      updateTestJournalRowJson(db, IDENTITY.sessionId, 2, '}{')
     })
 
     const reopened = await open()
@@ -141,13 +157,16 @@ describe('a sequence gap', () => {
   it('drops every row after the hole and reports the epoch corrupt', async () => {
     const journal = await open()
     for (let ordinal = 0; ordinal < 5; ordinal += 1) {
-      await journal.appendItem(item(ordinal), body(`m${ordinal}`), { fence: 1 })
+      await journal.appendItem(item(ordinal), body(`m${ordinal}`), {
+        fence: 1,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
     }
     await journal.close()
     // Sequence 1 is the epoch row, so the items occupy 2..6. Removing 4 leaves
     // 5 and 6 valid but unanchored.
     await withJournalDatabase((db) => {
-      db.prepare('DELETE FROM journal_rows WHERE seq = ?').run(4)
+      deleteTestJournalRow(db, IDENTITY.sessionId, 4)
     })
 
     const reopened = await open()
@@ -163,23 +182,29 @@ describe('a sequence gap', () => {
   it('still reports corrupt on the next probe, with the deleted suffix unrebuilt', async () => {
     const journal = await open()
     for (let ordinal = 0; ordinal < 5; ordinal += 1) {
-      await journal.appendItem(item(ordinal), body(`m${ordinal}`), { fence: 1 })
+      await journal.appendItem(item(ordinal), body(`m${ordinal}`), {
+        fence: 1,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
     }
     await journal.close()
     await withJournalDatabase((db) => {
-      db.prepare('DELETE FROM journal_rows WHERE seq = ?').run(4)
+      deleteTestJournalRow(db, IDENTITY.sessionId, 4)
     })
 
     const repaired = await open()
     await repaired.close()
-    expect(loadJournal(root, IDENTITY.sessionId)).toMatchObject({ corrupt: true })
+    expect(loadTestJournal(root, IDENTITY.sessionId)).toMatchObject({ corrupt: true })
 
     // Same policy the emptied-epoch repair takes: a session that writes into the
     // epoch owns it, and a later import must not replace rows the user has seen.
     const writable = await open()
-    await writable.appendItem(item(9), body('typed after the repair'), { fence: 1 })
+    await writable.appendItem(item(9), body('typed after the repair'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     await writable.close()
-    expect(loadJournal(root, IDENTITY.sessionId)).toMatchObject({ corrupt: false })
+    expect(loadTestJournal(root, IDENTITY.sessionId)).toMatchObject({ corrupt: false })
   })
 
   // The disclosure is the repair talking about itself, not the session writing:
@@ -187,17 +212,20 @@ describe('a sequence gap', () => {
   it('is not settled by the repair disclosure it appends for a malformed row', async () => {
     const journal = await open()
     for (let ordinal = 0; ordinal < 3; ordinal += 1) {
-      await journal.appendItem(item(ordinal), body(`m${ordinal}`), { fence: 1 })
+      await journal.appendItem(item(ordinal), body(`m${ordinal}`), {
+        fence: 1,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
     }
     await journal.close()
     await withJournalDatabase((db) => {
-      db.prepare('UPDATE journal_rows SET row_json = ? WHERE seq = ?').run('}{', 3)
+      updateTestJournalRowJson(db, IDENTITY.sessionId, 3, '}{')
     })
 
     const repaired = await open()
     expect(repaired.repair.malformedRows).toBe(1)
     await repaired.close()
-    expect(loadJournal(root, IDENTITY.sessionId)).toMatchObject({ corrupt: true })
+    expect(loadTestJournal(root, IDENTITY.sessionId)).toMatchObject({ corrupt: true })
   })
 })
 
@@ -207,7 +235,10 @@ describe('a missing epoch row', () => {
   // renders a repaired journal as a clean timeline.
   it('rejects the whole surviving range rather than declaring it contiguous', async () => {
     const journal = await open()
-    await journal.appendItem(item(0), body('anchor'), { fence: 1 })
+    await journal.appendItem(item(0), body('anchor'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     await journal.appendSubmission({
       clientMessageId: 'client-message-1',
       payloadFingerprint: 'fingerprint-1',
@@ -226,7 +257,7 @@ describe('a missing epoch row', () => {
     })
     await journal.close()
     await withJournalDatabase((db) => {
-      db.prepare('DELETE FROM journal_rows WHERE seq = ?').run(1)
+      deleteTestJournalRow(db, IDENTITY.sessionId, 1)
     })
 
     const reopened = await open()
@@ -245,21 +276,27 @@ describe('a missing epoch row', () => {
   // consulted again and the dropped rows never come back.
   it('keeps asking for provider history until the epoch has content of its own', async () => {
     const journal = await open()
-    await journal.appendItem(item(0), body('anchor'), { fence: 1 })
+    await journal.appendItem(item(0), body('anchor'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     await journal.close()
     await withJournalDatabase((db) => {
-      db.prepare('DELETE FROM journal_rows WHERE seq = ?').run(1)
+      deleteTestJournalRow(db, IDENTITY.sessionId, 1)
     })
 
     const repaired = await open()
     await repaired.close()
-    expect(loadJournal(root, IDENTITY.sessionId)).toMatchObject({ corrupt: true })
+    expect(loadTestJournal(root, IDENTITY.sessionId)).toMatchObject({ corrupt: true })
 
     // A session that writes into the epoch owns it: its own rows are not a
     // repair placeholder, and a later import must not replace them.
     const writable = await open()
-    await writable.appendItem(item(1), body('typed after the repair'), { fence: 1 })
+    await writable.appendItem(item(1), body('typed after the repair'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     await writable.close()
-    expect(loadJournal(root, IDENTITY.sessionId)).toMatchObject({ corrupt: false })
+    expect(loadTestJournal(root, IDENTITY.sessionId)).toMatchObject({ corrupt: false })
   })
 })

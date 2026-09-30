@@ -40,3 +40,25 @@ export function isNavigationEscapeIntent(
     ESCAPE_ALSO_NAVIGATES_AGENT_TYPES.has(agentType)
   )
 }
+
+// Why: these TUIs spend the first Escape on a cancel that can leave the turn running —
+// opencode2 also dismisses its Subagents dock with it — so only the second Escape on the
+// same turn is evidence of an interrupt. Shared so the renderer gate and the server
+// re-check cannot drift apart.
+const DOUBLE_ESCAPE_INTERRUPT_AGENT_TYPES: ReadonlySet<AgentType> = new Set([
+  'opencode',
+  'opencode2',
+  'copilot'
+])
+
+/** True when this agent only yields an interrupt on a second same-turn Escape. */
+export function requiresDoubleEscapeInterrupt(
+  agentType: AgentType | undefined,
+  intent: AgentInterruptInputIntent
+): boolean {
+  return (
+    intent === 'plain-escape' &&
+    agentType !== undefined &&
+    DOUBLE_ESCAPE_INTERRUPT_AGENT_TYPES.has(agentType)
+  )
+}

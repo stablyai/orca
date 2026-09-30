@@ -219,29 +219,38 @@ function stringifyWithinLimit(checkpoint: TerminalCheckpointFile, maxBytes: numb
   return writer.result()
 }
 
-async function replaySnapshot(snapshot: TerminalSnapshot): Promise<HeadlessEmulator> {
+/** Rebuilds a snapshot, optionally trimmed to `scrollbackRows` of scrollback. */
+export async function replayTerminalSnapshot(
+  snapshot: TerminalSnapshot,
+  opts: { scrollbackRows?: number } = {}
+): Promise<HeadlessEmulator> {
+  const scrollbackRows = opts.scrollbackRows ?? snapshot.scrollbackLines
   const emulator = new HeadlessEmulator({
     cols: snapshot.cols,
     rows: snapshot.rows,
-    scrollback: Math.max(0, Math.min(50_000, snapshot.scrollbackLines))
+    scrollback: Math.max(0, Math.min(50_000, scrollbackRows))
   })
   const replay = new ColdRestoreReplayWriter(emulator)
-  try {
-    for (const segment of [
-      snapshot.scrollbackAnsi,
-      snapshot.rehydrateSequences,
-      snapshot.snapshotAnsi,
-      snapshot.pendingEscapeTailAnsi ?? ''
-    ]) {
-      if (!(await replay.write(segment))) {
-        throw new Error('Terminal checkpoint replay is unavailable')
-      }
+  const write = async (data: string): Promise<void> => {
+    if (!(await replay.write(data))) {
+      throw new Error('Terminal checkpoint replay is unavailable')
     }
+  }
+  try {
+    await write(snapshot.scrollbackAnsi)
+    await write(snapshot.rehydrateSequences)
+    await write(snapshot.snapshotAnsi)
+    // Why: rehydrateSequences omits kitty flags, and the torn escape tail must stay last.
+    await emulator.applyKittyKeyboardFlags(snapshot.modes.kittyKeyboardFlags ?? 0)
+    await write(snapshot.pendingEscapeTailAnsi ?? '')
     emulator.setCwd(snapshot.cwd)
     if (snapshot.lastTitle) {
       emulator.setLastTitle(snapshot.lastTitle)
     }
-    emulator.setRestoredOscLinks(snapshot.oscLinks)
+    // Why untrimmed only: seeded ranges keep pre-trim row indexes; trimmed replays collect the re-emitted OSC 8 instead.
+    if (opts.scrollbackRows === undefined) {
+      emulator.setRestoredOscLinks(snapshot.oscLinks)
+    }
     return emulator
   } catch (error) {
     emulator.dispose()
@@ -259,7 +268,7 @@ export async function serializeTerminalCheckpointWithinLimit(
     return direct
   }
 
-  const emulator = await replaySnapshot(snapshot)
+  const emulator = await replayTerminalSnapshot(snapshot)
   try {
     // Why carried, not re-derived: trimming rows cannot change who owned the
     // terminal at this checkpoint's boundary.

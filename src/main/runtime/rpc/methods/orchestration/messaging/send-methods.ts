@@ -7,6 +7,7 @@ import { resolveMessageRun } from '../routing'
 import {
   assertDispatchMailboxDeliverable,
   resolveBareOrchestrationRecipient,
+  resolveRunBoundDispatchRecipient,
   type SendRecipientWarning
 } from './recipient-routing'
 import {
@@ -16,9 +17,11 @@ import {
 } from '../../../orchestration-mutation-executor'
 import { replayMutationNudge } from './mutation-replay-nudge'
 import { sendRemoteMessage } from './send-remote'
+import { mayNameSession } from './session-recipient'
 import { sendPointToPointMessage } from './send-point-to-point'
 import { sendGroupMessage } from './send-group'
 import { sendFederatedControlMail } from './send-control-mail'
+import { orchestrationCallerIdentity } from '../runs/run-scope'
 
 export const ORCHESTRATION_SEND_METHODS = [
   defineMethod({
@@ -35,6 +38,7 @@ export const ORCHESTRATION_SEND_METHODS = [
         recordMutationReceipt,
         markWorkerDoneMutationEffectFree,
         replayedMutationReceipt,
+        orchestrationCaller,
         signal
       }
     ) => {
@@ -59,7 +63,12 @@ export const ORCHESTRATION_SEND_METHODS = [
           ? orchestrationCompatibilityCallerAuthority
           : undefined
       // Why: attested hook identity survives graph remount; caller params never supply lifecycle authority.
-      const senderPaneKey = attestedCaller?.paneKey ?? runtime.getTerminalPaneKey(from) ?? undefined
+      const sender = orchestrationCallerIdentity(runtime, {
+        handle: from,
+        session: orchestrationCaller,
+        paneKey: attestedCaller?.paneKey ?? runtime.getTerminalPaneKey(from)
+      })
+      const senderPaneKey = sender.paneKey ?? undefined
       const remoteAttachment = senderPaneKey
         ? db.findActiveRemoteAttachmentForPane(senderPaneKey)
         : undefined
@@ -84,8 +93,7 @@ export const ORCHESTRATION_SEND_METHODS = [
         params.to && isGroupAddress(params.to) && !params.to.toLowerCase().startsWith('@worktree:')
       // Run groups validate their own audience; message scope cannot select a parent Dispatch.
       const routing = resolveMessageRun(runtime, {
-        from,
-        senderPaneKey,
+        sender,
         to: params.to,
         runId: runGroup ? undefined : params.run,
         payload: runGroup ? undefined : params.payload
@@ -125,6 +133,10 @@ export const ORCHESTRATION_SEND_METHODS = [
       const sendWarnings: SendRecipientWarning[] = []
       let messageRunId = routing.run?.id
       if (!isGroupAddress(to) && !to.startsWith('run:') && !to.startsWith('dispatch:')) {
+        if (mayNameSession(to)) {
+          // Recipient routing reads the session record store, which the host opens lazily.
+          await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
+        }
         const recipient = resolveBareOrchestrationRecipient({
           runtime,
           db,
@@ -156,7 +168,18 @@ export const ORCHESTRATION_SEND_METHODS = [
             : undefined
         // Federated targets perform their own liveness check before relaying.
         if (addressedDispatchId && !federatedTarget) {
-          assertDispatchMailboxDeliverable(db, addressedDispatchId)
+          assertDispatchMailboxDeliverable(runtime, db, addressedDispatchId)
+          const runBound = resolveRunBoundDispatchRecipient(
+            runtime,
+            db,
+            addressedDispatchId,
+            params.run
+          )
+          if (runBound) {
+            to = runBound.to
+            messageRunId = runBound.runId
+            sendWarnings.push(runBound.warning)
+          }
         }
         const federatedControl = sendFederatedControlMail({
           params,
@@ -199,6 +222,7 @@ export const ORCHESTRATION_SEND_METHODS = [
         db,
         from,
         groupAddress: to,
+        sender,
         senderPaneKey,
         senderRunId: routing.run?.id,
         explicitRunId: params.run,

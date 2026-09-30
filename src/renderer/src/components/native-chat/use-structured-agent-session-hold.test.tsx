@@ -78,6 +78,26 @@ describe('a mounted structured chat', () => {
     await waitFor(() => expect(callsTo('agentSession.release')).toHaveLength(1))
   })
 
+  it('reports a hold the host refused and still releases on unmount', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const refused = new Error('structured_agent_session_unsupported')
+    mocks.call.mockImplementation((_target: unknown, method: string) =>
+      method === 'agentSession.hold' ? Promise.reject(refused) : Promise.resolve()
+    )
+    const { unmount } = renderHook(() =>
+      useStructuredAgentSessionHold({
+        sessionId: 'session-alpha',
+        target: LOCAL_TARGET,
+        surface: 'desktop-chat'
+      })
+    )
+
+    await waitFor(() => expect(warn).toHaveBeenCalledWith(expect.any(String), refused))
+    unmount()
+    await waitFor(() => expect(callsTo('agentSession.release')).toHaveLength(1))
+    warn.mockRestore()
+  })
+
   it('keeps one hold across re-renders that rebuild the target object', async () => {
     const { rerender, unmount } = renderHook(
       (props: { sessionId: string }) =>

@@ -6,8 +6,13 @@ import {
 export function getStatusPluginFactorySource(options: {
   emitSessionStart: boolean
   emitNextEvents?: boolean
+  expectedAgent?: 'opencode' | 'opencode2'
 }): string[] {
-  const expectedAgent = options.emitNextEvents ? 'opencode2' : 'opencode'
+  const expectedAgent = options.expectedAgent ?? (options.emitNextEvents ? 'opencode2' : 'opencode')
+  // Why: opencode and opencode2 share one config dir, so both plugin files load in
+  // either binary. Distinct ids keep the loader from reporting a duplicate-id
+  // collision as an 'orca-opencode-status' plugin failure.
+  const pluginID = expectedAgent === 'opencode2' ? 'orca-opencode2-status' : 'orca-opencode-status'
   return [
     ...(options.emitNextEvents ? getOpenCode2EventNormalizationSource() : []),
     '// Why: accept the factory argument as an optional opaque parameter instead',
@@ -18,6 +23,7 @@ export function getStatusPluginFactorySource(options: {
     'export const OrcaOpenCodeStatusPlugin = async (_ctx) => {',
     `  if (process.env.ORCA_OPENCODE_AGENT && process.env.ORCA_OPENCODE_AGENT !== '${expectedAgent}') return {};`,
     '  const client = _ctx?.client;',
+    '  const sessionsOutliveDispose = _ctx?.sessionsOutliveDispose === true;',
     '  const factoryID = ++nextFactoryID;',
     '  activeFactoryIDs.add(factoryID);',
     '  let disposed = false;',
@@ -237,7 +243,14 @@ export function getStatusPluginFactorySource(options: {
     '        pendingAssistantPart = null;',
     '      }',
     '      const ownsDeliveredMessagePart = deliveredMessagePartFactoryID === factoryID;',
-    '      if (desiredFactoryID === factoryID || ownsDeliveredMessagePart) {',
+    '      // Why: OpenCode 1 disposes only on instance teardown, which cancels every run, so a final',
+    '      // Idle is true. OpenCode 2 also disposes on a hot reload mid-turn, so it publishes nothing.',
+    '      if (sessionsOutliveDispose) {',
+    '        if (desiredFactoryID === factoryID) {',
+    '          clearStatusRetry();',
+    '          statusRevision += 1;',
+    '        }',
+    '      } else if (desiredFactoryID === factoryID || ownsDeliveredMessagePart) {',
     '        clearStatusRetry();',
     '        statusRevision += 1;',
     '        // A MessagePart may have changed the listener to Working after the',
@@ -245,17 +258,13 @@ export function getStatusPluginFactorySource(options: {
     '        statusDeliveryDirty = ownsDeliveredMessagePart;',
     '        busyRecoveryUsed = false;',
     '        busyRecoveryEndpointKey = "";',
-    '        const fallbackFactoryID = Array.from(activeFactoryIDs).find(',
-    '          (id) => id !== factoryID',
-    '        );',
+    '        const fallbackFactoryID = Array.from(activeFactoryIDs).find((id) => id !== factoryID);',
     '        if (fallbackFactoryID !== undefined) {',
     '          await publishAggregateStatus(',
     '            fallbackFactoryID,',
     '            desiredStatusProperties?.sessionID',
     '          );',
     '        } else {',
-    '          // Why: Instance disposal can happen while the PTY stays alive;',
-    '          // publish a final idle so Orca does not retain a dead owner.',
     '          if (!deliveredStatusKey.startsWith("idle:") || ownsDeliveredMessagePart) {',
     '            await setStatus(',
     '              "idle",',
@@ -284,7 +293,7 @@ export function getStatusPluginFactorySource(options: {
     '// export an object with server()"). `setup()` does not satisfy it. Keep the named',
     '// export so the factory-based loader still finds the same instance.',
     'export default {',
-    '  id: "orca-opencode-status",',
+    `  id: "${pluginID}",`,
     '  server: OrcaOpenCodeStatusPlugin,',
     ...(options.emitNextEvents ? ['  setup: setupOpenCode2Status,'] : []),
     '};',

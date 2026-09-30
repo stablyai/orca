@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // runtime this test does not have. Nothing below calls one.
 vi.mock('../../transport/host-client-hooks', () => ({
   useDisconnectHostClient: () => () => {},
-  useForceReconnect: () => () => Promise.resolve(),
+  useForceReconnect: () => null,
   useForgetHostClient: () => () => {},
   useHostClient: () => ({ client: null, clientId: null, state: 'disconnected' }),
   usePrimeHosts: () => () => {},
@@ -197,11 +197,6 @@ describe('a verb the shell refuses', () => {
     expect(reasons).toEqual(['native_verb_failed', 'reply-too-large', 'native_verb_result'])
   })
 
-  it('names the frame refusal when the reply could never have reached the page', async () => {
-    const error = await rejectionFrom(() => Promise.resolve({ value: 'a'.repeat(9 * 1024 * 1024) }))
-    expect(error.reason).toBe('reply-too-large')
-  })
-
   it('names the grant when this side refused before sending', async () => {
     const page = createPageClient()
     page.deliver({ ...INIT, grants: { ...GRANTS, native: ['navigate'] } })
@@ -279,7 +274,6 @@ describe('what the surface offers a screen', () => {
       'readClipboardText',
       'readMedia',
       'releaseMedia',
-      'setWakelock',
       'startAudio',
       'stopAudio',
       'writeClipboardText'

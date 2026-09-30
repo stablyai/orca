@@ -206,6 +206,27 @@ describe('SshRelaySession', () => {
     expect(registerSshGitProvider).toHaveBeenCalledWith('target-1', expect.anything())
   })
 
+  it('rechecks OpenCode preparation from scans and aborts it when the relay session disconnects', async () => {
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const prepareOpenCodeRuntime = vi.fn().mockResolvedValue(undefined)
+    vi.mocked(deployAndLaunchRelay).mockResolvedValueOnce({
+      transport: { write: vi.fn(), onData: vi.fn(), onClose: vi.fn() },
+      platform: 'linux-x64',
+      prepareOpenCodeRuntime
+    })
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+    await session.establish(mockConn)
+    await session.requestAiVaultSessionList({})
+    await session.requestSessionSearch('sessionSearch.search', {})
+    expect(prepareOpenCodeRuntime).toHaveBeenCalledTimes(2)
+    const signal = prepareOpenCodeRuntime.mock.calls[0][0]
+    expect(signal.aborted).toBe(false)
+    await session.dispose()
+    expect(signal.aborted).toBe(true)
+    await expect(session.requestAiVaultSessionList({})).rejects.toThrow('not ready')
+    expect(prepareOpenCodeRuntime).toHaveBeenCalledTimes(2)
+  })
+
   it('continues provider registration when the relay managed-hook request fails', async () => {
     process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
     muxRequestMock.mockImplementation(async (method: string) => {

@@ -232,7 +232,7 @@ export async function createHostRendererTerminalTab(
     store.getState().setActiveWorktree(id)
     const tab = store.getState().createTab(id)
     store.getState().setActiveTab(tab.id)
-    store.getState().setActiveTabType('terminal')
+    store.getState().setActiveTabType('terminal', store.getState().activeWorktreeId)
     return tab.id
   }, worktreeId)
   await expect

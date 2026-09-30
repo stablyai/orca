@@ -110,6 +110,54 @@ export function buildSecondaryCommitMessageAgentSpecs({
       ],
       defaultModelId: 'default'
     },
+    muse: {
+      id: 'muse',
+      label: 'Muse',
+      binary: 'muse',
+      // Muse's `exec` subcommand accepts a positional prompt. Keep Source
+      // Control AI one-shot and workspace-read-only, matching the other text
+      // generators rather than launching the interactive TUI.
+      promptDelivery: 'argv',
+      buildArgs: ({ prompt, model, thinkingLevel }) => [
+        'exec',
+        '--no-session-log',
+        '--approval-mode',
+        'never',
+        '--disable-sandbox',
+        '--disable-shell',
+        '--disable-write',
+        '--disable-web-tools',
+        ...(model && model !== 'default' ? ['--model', model] : []),
+        ...(thinkingLevel ? ['--reasoning-effort', thinkingLevel] : []),
+        '--',
+        prompt
+      ],
+      singletonOptions: [['--model'], ['--reasoning-effort']],
+      modelSource: 'static',
+      models: [{ id: 'default', label: 'Config default' }],
+      defaultModelId: 'default'
+    },
+    dsh: {
+      id: 'dsh',
+      label: 'DeepSeek Harness',
+      binary: 'dsh',
+      // Why: `dsh --profile headless` runs one fresh persisted session, prints the final
+      // answer and exits — the documented one-shot entry mode. The interactive `dsh-tui`
+      // profile is deliberately not used here; Source Control AI stays one-shot.
+      // Why stdin and not argv: the prompt carries the whole diff. On argv it would sit in
+      // the process table for every user on the box, and it would eventually hit the argv
+      // limit. `-` is DSH's explicit stdin marker; measured against 0.1.5-rc.1, omitting the
+      // positional entirely is rejected ("a task is required") even when stdin is a pipe.
+      promptDelivery: 'stdin',
+      buildArgs: () => ['--profile', 'headless', '-'],
+      // Why: the launcher owns `--profile`; a second one would boot a different profile.
+      singletonOptions: [['--profile']],
+      modelSource: 'static',
+      // Why: the headless app parses no `--model`. The model comes from the profile's
+      // `llm-deepseek` row, so the only honest choice here is the configured default.
+      models: [{ id: 'default', label: 'Config default' }],
+      defaultModelId: 'default'
+    },
     copilot: {
       id: 'copilot',
       label: 'GitHub Copilot',

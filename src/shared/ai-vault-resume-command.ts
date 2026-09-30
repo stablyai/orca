@@ -212,9 +212,15 @@ function buildAgentResumeInvocation(
       return `${baseCommand} --session ${sessionArg}`
     case 'copilot':
       return `${baseCommand} --resume=${sessionArg}`
+    // Why: `muse resume <uuid>` reopens the session (resume is workspace-scoped,
+    // so the cwd prefix from buildAiVaultResumeCommand is required).
+    case 'muse':
+      return `${baseCommand} resume ${sessionArg}`
     case 'cline':
       return `${baseCommand} --id ${sessionArg}`
+    case 'codebuddy':
     case 'claude':
+    case 'zcode':
     case 'cursor':
     case 'gemini':
     case 'grok':

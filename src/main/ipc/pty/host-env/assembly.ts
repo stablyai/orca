@@ -1,16 +1,21 @@
 import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/setup-agent-sequencing'
-import { isOpenCode2LaunchCommand } from '../../../../shared/opencode-launch-command'
+import { selectOpenCodeHookAgent } from '../../../../shared/opencode-launch-command'
 import {
   detectExplicitPiAgentKindFromCommand,
   isPiCompatibleAgentType
 } from '../../../../shared/pi-agent-kind'
 import { applyTerminalGitCredentialPromptGuard } from '../../terminal-git-credential-guard'
 import { openCode2HookService, openCodeHookService } from '../../../opencode/hook-service'
+import {
+  OPENCODE_CONFIG_DIR_ENV_KEYS,
+  isOpenCodeLegacySharedConfigDir
+} from '../../../opencode/legacy-shared-config-dir'
 import { mimoCodeHookService } from '../../../mimo/hook-service'
 import { agentHookServer } from '../../../agent-hooks/server'
 import { wslHookRelayManager } from '../../../agent-hooks/wsl-hook-relay-manager'
 import { piTitlebarExtensionService } from '../../../pi/titlebar-extension-service'
 import { prependOrcaCliDirToChildPath } from '../../../cli/orca-cli-child-path'
+import { getManagedWslCliDir, getWslCliCommandName } from '../../../cli/wsl-managed-cli'
 import { stripLegacyTerminalShimEnv } from '../../../pty/legacy-terminal-shim-dir'
 import { mergePersistedWindowsPath } from '../../../pty/windows-environment-path'
 import { resolveCodexShellLaunchPreflightCommand } from '../../../pty/codex-shell-launch-preflight'
@@ -44,15 +49,31 @@ export function buildPtyHostEnv(
   mergePersistedWindowsPath(baseEnv)
   Object.assign(baseEnv, buildConfiguredProxyEnv(opts.networkProxySettings))
 
-  // Why: local path's baseEnv includes process.env but the daemon path doesn't (fork inheritance, not IPC); check both sources so guards stay in lock-step across spawn paths.
-  const preexistingOpenCodeConfigDir = resolveOpenCodeSourceConfigDir(baseEnv)
+  // Why: pre-1.4.209 panes exported Orca's retired shared hooks dir; inheriting it hides the user's global OpenCode config.
+  const isLegacyOpenCodeHooksDir = (dir: string | undefined): boolean =>
+    isOpenCodeLegacySharedConfigDir(dir, opts.userDataPath)
+  const inheritedOpenCodeEnv: NodeJS.ProcessEnv = {}
+  for (const key of OPENCODE_CONFIG_DIR_ENV_KEYS) {
+    if (isLegacyOpenCodeHooksDir(baseEnv[key])) {
+      delete baseEnv[key]
+    }
+    if (!isLegacyOpenCodeHooksDir(process.env[key])) {
+      inheritedOpenCodeEnv[key] = process.env[key]
+    }
+  }
+  // A daemon or sibling shell can retain a retired path that main no longer sees.
+  openCodeHookService.refreshLegacySharedPlugin()
+  openCode2HookService.refreshLegacySharedPlugin()
+  const resolvedOpenCodeConfigDir = resolveOpenCodeSourceConfigDir(baseEnv, inheritedOpenCodeEnv)
+  const preexistingOpenCodeConfigDir = isLegacyOpenCodeHooksDir(resolvedOpenCodeConfigDir)
+    ? undefined
+    : resolvedOpenCodeConfigDir
   const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(baseEnv, opts.launchCommand)
-  // Typed launches do not carry the picker identity; infer the beta binary so
-  // it receives the OpenCode 2 hook endpoint and isolated plugin overlay.
-  const openCodeAgent =
-    opts.launchAgent === 'opencode2' || isOpenCode2LaunchCommand(launchCommandHint)
-      ? 'opencode2'
-      : 'opencode'
+  const openCodeAgent = selectOpenCodeHookAgent(
+    opts.launchAgent,
+    launchCommandHint,
+    (agent) => opts.agentStatusHooksEnabled && isTuiAgentEnabled(agent, opts.disabledTuiAgents)
+  )
   const explicitPiAgentKind = isPiCompatibleAgentType(opts.launchAgent)
     ? opts.launchAgent
     : opts.launchAgent === undefined
@@ -87,12 +108,26 @@ export function buildPtyHostEnv(
       ? resolvePiAgentSourceDir(baseEnv, 'prime-agent')
       : resolveScopedPiAgentSourceDir(baseEnv, 'prime-agent')
 
-  if (opts.agentStatusHooksEnabled) {
+  restoreOrStripOverlayEnv(
+    baseEnv,
+    {
+      primary: 'OPENCODE_CONFIG_DIR',
+      overlay: 'ORCA_OPENCODE_CONFIG_DIR',
+      source: 'ORCA_OPENCODE_SOURCE_CONFIG_DIR',
+      preserveExplicitPrimary: true
+    },
+    inheritedOpenCodeEnv
+  )
+  delete baseEnv.ORCA_OPENCODE_AGENT
+  if (openCodeAgent) {
     // Why: OPENCODE_CONFIG_DIR is a single path, not a colon-list; mirror the user's value into an overlay so their plugins and Orca's status plugin coexist. See docs/opencode-config-dir-collision.md.
     const openCodeStatusService =
       openCodeAgent === 'opencode2' ? openCode2HookService : openCodeHookService
     baseEnv.ORCA_OPENCODE_AGENT = openCodeAgent
-    Object.assign(baseEnv, openCodeStatusService.buildPtyEnv(id, preexistingOpenCodeConfigDir))
+    // WSL owns its config writes; only the guest overlay may enter a WSL pane.
+    if (!opts.isWsl) {
+      Object.assign(baseEnv, openCodeStatusService.buildPtyEnv(id, preexistingOpenCodeConfigDir))
+    }
     if (baseEnv.OPENCODE_CONFIG_DIR) {
       // Why: ~/.zshrc can re-export the user's default after spawn; shell-ready wrappers restore this PTY-scoped value.
       baseEnv.ORCA_OPENCODE_CONFIG_DIR = baseEnv.OPENCODE_CONFIG_DIR
@@ -103,6 +138,8 @@ export function buildPtyHostEnv(
         delete baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR
       }
     }
+  }
+  if (opts.agentStatusHooksEnabled) {
     if (isMimoLaunchCommand(launchCommandHint)) {
       const preexistingMimocodeHome = resolveMimocodeSourceHome(baseEnv)
       Object.assign(baseEnv, mimoCodeHookService.buildPtyEnv(id, preexistingMimocodeHome))
@@ -116,11 +153,6 @@ export function buildPtyHostEnv(
       }
     }
   } else {
-    restoreOrStripOverlayEnv(baseEnv, {
-      primary: 'OPENCODE_CONFIG_DIR',
-      overlay: 'ORCA_OPENCODE_CONFIG_DIR',
-      source: 'ORCA_OPENCODE_SOURCE_CONFIG_DIR'
-    })
     restoreOrStripOverlayEnv(baseEnv, {
       primary: 'MIMOCODE_HOME',
       overlay: 'ORCA_MIMOCODE_HOME',
@@ -147,13 +179,15 @@ export function buildPtyHostEnv(
         baseEnv.ORCA_AGENT_HOOK_ENDPOINT = guestEndpoint
       }
       // Why: OpenCode loads its status plugin from a guest config overlay, so point OPENCODE_CONFIG_DIR at the guest dir the relay materialized.
-      const opencodeOverlayDir = wslHookRelayManager.getOpenCodeOverlayDir(distro, openCodeAgent)
+      const opencodeOverlayDir = openCodeAgent
+        ? wslHookRelayManager.getOpenCodeOverlayDir(distro, openCodeAgent)
+        : null
       if (opencodeOverlayDir) {
         baseEnv.OPENCODE_CONFIG_DIR = opencodeOverlayDir
         baseEnv.ORCA_OPENCODE_CONFIG_DIR = opencodeOverlayDir
         delete baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR
       } else {
-        // Why: relay not connected yet (or older guest bundle) — never cross the Windows overlay path into WSL; drop it so in-guest OpenCode uses its own config (pre-fix behavior, no status but no regression).
+        // Only guest overlays belong in WSL; otherwise let OpenCode use its guest config.
         delete baseEnv.OPENCODE_CONFIG_DIR
         delete baseEnv.ORCA_OPENCODE_CONFIG_DIR
         delete baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR
@@ -252,7 +286,8 @@ export function buildPtyHostEnv(
     // Why: user startup files may re-export CODEX_HOME; shell-ready wrappers restore this runtime home before Codex launches.
     baseEnv.ORCA_CODEX_HOME = opts.selectedCodexHomePath
     const preflightCommand = resolveCodexShellLaunchPreflightCommand({
-      hooksEnabled: opts.codexStatusHooksEnabled ?? opts.agentStatusHooksEnabled,
+      hooksEnabled:
+        opts.agentStatusHooksEnabled && isTuiAgentEnabled('codex', opts.disabledTuiAgents),
       isPackaged: opts.isPackaged,
       isWsl: opts.isWsl,
       managedHomePath: opts.selectedCodexHomePath,
@@ -271,11 +306,17 @@ export function buildPtyHostEnv(
     delete baseEnv.ORCA_CODEX_LAUNCH_PREFLIGHT
   }
 
+  // Why: an inherited copy (e.g. Orca launched from a WSL pane) names another launch's CLI.
+  delete baseEnv.ORCA_WSL_CLI_DIR
   // Why: WSL shells need the managed userData root for shell-ready wrappers; dev-mode terminals need the same export so `orca` targets the live dev instance.
   if (opts.isWsl) {
     baseEnv.ORCA_USER_DATA_PATH = opts.userDataPath
     // Why: managed WSL registration uses `orca-ide`; exposing that literal scopes agent guidance to WSL without a bare-orca shim.
-    baseEnv.ORCA_CLI_COMMAND = opts.isPackaged ? 'orca-ide' : 'orca-dev'
+    baseEnv.ORCA_CLI_COMMAND = getWslCliCommandName(opts.isPackaged)
+    const managedCliDir = getManagedWslCliDir(opts)
+    if (managedCliDir) {
+      baseEnv.ORCA_WSL_CLI_DIR = managedCliDir
+    }
   } else {
     if (!opts.isPackaged) {
       baseEnv.ORCA_USER_DATA_PATH ??= opts.userDataPath
@@ -293,7 +334,7 @@ export function buildPtyHostEnv(
     baseEnv.BROWSER === undefined &&
     process.env.BROWSER === undefined
   ) {
-    const cliCommand = opts.isWsl ? (opts.isPackaged ? 'orca-ide' : 'orca-dev') : 'orca'
+    const cliCommand = opts.isWsl ? getWslCliCommandName(opts.isPackaged) : 'orca'
     baseEnv.BROWSER = `${cliCommand} open-url --url %s`
   }
 

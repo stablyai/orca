@@ -1,3 +1,4 @@
+import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
 /**
  * An update may not move a record to another host unless it was asked to.
  *
@@ -123,7 +124,7 @@ async function createStore() {
   installFakeAppEnvironment({ getPath: () => testState.dir })
   const { Store, initDataPath } = await import('../persistence')
   initDataPath()
-  return new Store()
+  return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
 }
 
 type Store = Awaited<ReturnType<typeof createStore>>
@@ -146,7 +147,8 @@ beforeEach(() => {
   testState.dir = mkdtempSync(join(tmpdir(), 'automation-retarget-'))
 })
 
-afterEach(() => {
+afterEach(async () => {
+  await closeTestStores()
   rmSync(testState.dir, { recursive: true, force: true })
   vi.resetModules()
 })

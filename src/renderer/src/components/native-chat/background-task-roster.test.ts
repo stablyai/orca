@@ -172,8 +172,8 @@ describe('buildBackgroundTaskGroups', () => {
       [agent('settled', { state: 'done', startedAt: 0 })]
     )
     expect(built.map((group) => group.kind)).toEqual(['agent', 'monitor'])
-    expect(built[0].tasks.map((entry) => entry.task.id)).toEqual(['settled', 'early', 'late'])
-    expect(built[0].tasks[0].settled).toBe(true)
+    expect(built[0].tasks.map((entry) => entry.row.id)).toEqual(['settled', 'early', 'late'])
+    expect(built[0].tasks[0].row.settled).toBe(true)
   })
 
   it('defaults the state slot so a stateless row still reads as work', () => {
@@ -234,9 +234,19 @@ describe('resumed tasks from mixed-version hosts', () => {
       [live, ...shells],
       [settled, agent('sibling', { state: 'done' })]
     )
-    expect(
-      groups.flatMap((group) => group.tasks).filter((entry) => entry.task.id === live.id)
-    ).toEqual([{ task: live, settled: false, state: 'working', name: 'Background agent' }])
+    const owners = groups
+      .flatMap((group) => group.tasks)
+      .filter((entry) => entry.row.id === live.id)
+    expect(owners).toHaveLength(1)
+    expect(owners[0]).toMatchObject({
+      row: {
+        settled: false,
+        displayState: 'working',
+        name: 'Background agent',
+        totalTokens: 20000
+      },
+      state: 'working'
+    })
     expect(backgroundTasksHeaderContent(groups, { narrow: false, now: NOW }).segments).toEqual([
       { text: '2 agents', kind: 'agent' },
       { text: '4 shells', kind: 'command' }

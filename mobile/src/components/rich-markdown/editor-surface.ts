@@ -14,11 +14,15 @@ export function editorElement(scope: RichMarkdownEditorScope): HTMLElement {
 }
 
 /**
- * Reads the surface out of the host's page, once per document.
+ * Reads the surface out of the host's own root, once per document.
  *
  * At start rather than where the modules are parsed (ruling 20): an ES module body runs once per
  * page, so a read there would hand every later mount the first one's element.
+ *
+ * `querySelector` under the root rather than `getElementById`, because a root may be an element:
+ * the page's host carries the markup, and only the WebView's document is a whole document.
  */
 export function startEditorSurface(scope: RichMarkdownEditorScope) {
-  scope.editor = scope.getDocument().getElementById(RICH_MARKDOWN_EDITOR_ELEMENT_ID)
+  const root = scope.root ?? scope.getDocument()
+  scope.editor = root.querySelector<HTMLElement>(`#${RICH_MARKDOWN_EDITOR_ELEMENT_ID}`)
 }

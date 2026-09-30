@@ -21,6 +21,7 @@ let faulted = false
 
 function wrap(transaction: RelayDatabase): RelayDatabase {
   return {
+    dialect: transaction.dialect,
     query: async (sql, params) => {
       if (pattern && !faulted && sql.includes(pattern)) {
         faulted = true

@@ -62,7 +62,7 @@ describe('host-created terminal close durability', () => {
 
   it('a host-created terminal does NOT push a fresh repo into host-authoritative membership', async () => {
     const store = await makeStore()
-    store.persistPtyBinding({ worktreeId: WT, tabId: TAB, leafId: LEAF, ptyId: PTY })
+    await store.persistPtyBinding({ worktreeId: WT, tabId: TAB, leafId: LEAF, ptyId: PTY })
     const session = store.getWorkspaceSession()
     expect(session.tabsByWorktree?.[WT]?.map((t) => t.id)).toContain(TAB)
     // advanceTopologyFence (store.ts:3284) deliberately declines to arm the
@@ -73,14 +73,14 @@ describe('host-created terminal close durability', () => {
 
   it('a renderer close write durably removes the row it persisted', async () => {
     const store = await makeStore()
-    store.persistPtyBinding({ worktreeId: WT, tabId: TAB, leafId: LEAF, ptyId: PTY })
+    await store.persistPtyBinding({ worktreeId: WT, tabId: TAB, leafId: LEAF, ptyId: PTY })
     store.setWorkspaceSession(rendererWriteWithout(store.getWorkspaceSession(), TAB))
     expect(store.getWorkspaceSession().tabsByWorktree?.[WT] ?? []).toEqual([])
   })
 
   it('stays removed with the PTY still connected and no exit ever delivered', async () => {
     const store = await makeStore()
-    store.persistPtyBinding({ worktreeId: WT, tabId: TAB, leafId: LEAF, ptyId: PTY })
+    await store.persistPtyBinding({ worktreeId: WT, tabId: TAB, leafId: LEAF, ptyId: PTY })
     store.setWorkspaceSession(rendererWriteWithout(store.getWorkspaceSession(), TAB))
     // Kill-failure shape: no retirement, no exit, just more renderer writes.
     for (let i = 0; i < 3; i += 1) {
@@ -96,7 +96,7 @@ describe('host-created terminal close durability', () => {
       ...store.getWorkspaceSession(),
       terminalTopologyRevisionByRepoId: { [REPO_ID]: 1 }
     })
-    store.persistPtyBinding({ worktreeId: WT, tabId: TAB, leafId: LEAF, ptyId: PTY })
+    await store.persistPtyBinding({ worktreeId: WT, tabId: TAB, leafId: LEAF, ptyId: PTY })
     store.setWorkspaceSession(rendererWriteWithout(store.getWorkspaceSession(), TAB))
     // Documents PRE-EXISTING behavior: with the fence already armed, a renderer
     // write that omits a row is treated as a stale replay and the row survives
@@ -125,7 +125,7 @@ describe('topology fence census', () => {
       { startupCwd: '/tmp/wt-cli' }
     ].entries()) {
       const store = await makeStore()
-      store.persistPtyBinding({
+      await store.persistPtyBinding({
         worktreeId: WT,
         tabId: `${TAB}-${index}`,
         leafId: LEAF,
@@ -138,8 +138,8 @@ describe('topology fence census', () => {
 
   it('a second pane in the same tab still does not arm the fence', async () => {
     const store = await makeStore()
-    store.persistPtyBinding({ worktreeId: WT, tabId: TAB, leafId: LEAF, ptyId: PTY })
-    store.persistPtyBinding({
+    await store.persistPtyBinding({ worktreeId: WT, tabId: TAB, leafId: LEAF, ptyId: PTY })
+    await store.persistPtyBinding({
       worktreeId: WT,
       tabId: TAB,
       leafId: '22222222-2222-4222-8222-222222222222',
@@ -154,7 +154,7 @@ describe('topology fence census', () => {
       ...store.getWorkspaceSession(),
       terminalTopologyRevisionByRepoId: { [REPO_ID]: 1 }
     })
-    store.persistPtyBinding({ worktreeId: WT, tabId: TAB, leafId: LEAF, ptyId: PTY })
+    await store.persistPtyBinding({ worktreeId: WT, tabId: TAB, leafId: LEAF, ptyId: PTY })
     expect(
       store.getWorkspaceSession().terminalTopologyRevisionByRepoId?.[REPO_ID] ?? 0
     ).toBeGreaterThan(1)

@@ -4,7 +4,7 @@ import type {
 } from '../mobile-rich-markdown-editor-contract'
 
 /**
- * The six seams between the editor document and whatever is hosting it, as the document's own
+ * The seven seams between the editor document and whatever is hosting it, as the document's own
  * defaults.
  *
  * Inside the WebView the host is React Native and every seam is the window read the hand-written
@@ -65,6 +65,20 @@ export type RichMarkdownEditorHostSeams = {
   getSelection: () => Selection | null
   /** `editor-commands`, `editor-selection`: the document ranges, elements and `execCommand` come from. */
   getDocument: () => Document
+  /**
+   * `editor-surface`: where this document's own markup is, which is the last thing two of them
+   * shared.
+   *
+   * The surface's id is in the markup every host plants, so a page-wide read hands both documents
+   * whichever host came first in the tree — and two at once is not a corner on the page, because a
+   * stack transition keeps the outgoing screen mounted while the incoming one starts. Inside the
+   * WebView the document *is* the page, so it names nothing and gets the whole of it.
+   *
+   * Null rather than `document` as the default, because this is the one seam whose value is data: a
+   * default of `document` would be read when the scope is built rather than when the surface is,
+   * and the rule for every seam above it is that the window read happens at the call.
+   */
+  root: ParentNode | null
 }
 
 /**
@@ -90,8 +104,13 @@ export function postToReactNativeWebView(message: MobileRichMarkdownEditorMessag
   }
 }
 
-/** The labels the WebView's dialog carried, which is the whole of what the prompt kind means there. */
-const URL_PROMPT_LABELS: Record<RichMarkdownUrlPromptKind, string> = {
+/**
+ * What each command asks for, which is the whole of what the prompt kind means.
+ *
+ * Exported because the page asks the same question through a modal, and an editor that said
+ * "Link URL" on the phone and something else on the page would be two editors.
+ */
+export const RICH_MARKDOWN_URL_PROMPT_LABELS: Record<RichMarkdownUrlPromptKind, string> = {
   link: 'Link URL',
   image: 'Image URL'
 }
@@ -104,7 +123,7 @@ const URL_PROMPT_LABELS: Record<RichMarkdownUrlPromptKind, string> = {
  * the page passes its own and this default is what the native document keeps until it does.
  */
 export function promptWindowForUrl(kind: RichMarkdownUrlPromptKind) {
-  return Promise.resolve(window.prompt(URL_PROMPT_LABELS[kind]))
+  return Promise.resolve(window.prompt(RICH_MARKDOWN_URL_PROMPT_LABELS[kind]))
 }
 
 /** The WebView's own measurement: what `visualViewport` says the keyboard covers. */

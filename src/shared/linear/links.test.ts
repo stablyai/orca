@@ -49,6 +49,18 @@ describe('linear links', () => {
     expect(parseLinearIssueInput('eng-123')).toEqual({ identifier: 'ENG-123' })
   })
 
+  it('parses Linear team keys that start with a digit', () => {
+    expect(parseLinearIssueInput('4k-12')).toEqual({ identifier: '4K-12' })
+    expect(parseLinearIssueInput('https://linear.app/acme/issue/4K-12')).toEqual({
+      identifier: '4K-12',
+      organizationUrlKey: 'acme'
+    })
+  })
+
+  it('rejects bare identifiers with no letter in the team key', () => {
+    expect(parseLinearIssueInput('2026-09')).toBeNull()
+  })
+
   it('parses Linear issue URLs with organization URL keys', () => {
     expect(parseLinearIssueInput('https://linear.app/acme/issue/eng-123/fix-auth')).toEqual({
       identifier: 'ENG-123',

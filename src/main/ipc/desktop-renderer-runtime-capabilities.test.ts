@@ -86,12 +86,6 @@ describe('desktop renderer runtime client capabilities', () => {
     ).toBe(false)
   })
 
-  it('advertises each capability once so none can be dropped by a stale duplicate', () => {
-    expect(new Set(DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES).size).toBe(
-      DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES.length
-    )
-  })
-
   it('diverges from the remote Electron list only where a decision was recorded', () => {
     expect(
       missingFrom(

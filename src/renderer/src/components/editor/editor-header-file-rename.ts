@@ -19,9 +19,21 @@ type EditorHeaderFileRenameState = {
 export function useEditorHeaderFileRename(activeFile: OpenFile): EditorHeaderFileRenameState {
   const worktree = useWorktreeById(activeFile.worktreeId)
   const [isRenaming, setIsRenaming] = useState(false)
+  const [renameFilePath, setRenameFilePath] = useState(activeFile.filePath)
   const renameInputElementRef = useRef<HTMLInputElement | null>(null)
-  const renameCancelledRef = useRef(false)
   const renameFocusFrameRef = useRef<number | null>(null)
+  // Escape fires setIsRenaming(false), which unmounts the input. The browser
+  // still fires focusout as the focused node is removed, so onBlur can invoke
+  // commitRename *after* cancel — committing the typed value against the
+  // user's intent. This flag suppresses the trailing blur-commit.
+  const renameCancelledRef = useRef(false)
+  // Why: the header renders one unkeyed path strip for every file, so a file
+  // switch mid-rename would otherwise commit the typed name against the new path.
+  if (renameFilePath !== activeFile.filePath) {
+    renameCancelledRef.current = true
+    setRenameFilePath(activeFile.filePath)
+    setIsRenaming(false)
+  }
   const currentFileName = basename(activeFile.filePath)
   // Why: read-only tabs (AI Vault View Log) are never renameable — rename would
   // rewrite the agent-owned artifact's backing path.
@@ -88,8 +100,10 @@ export function useEditorHeaderFileRename(activeFile: OpenFile): EditorHeaderFil
         return
       }
 
-      // Why: focus belongs to the rename input mount; the frame preserves the
-      // previous timing so header layout settles before selecting text.
+      // Why: focus belongs to the rename input mount; the frame lets the header
+      // layout settle before selecting text. Preselect the basename only, so
+      // typing replaces the name and leaves the extension — same as the tab bar
+      // and the file explorer.
       renameFocusFrameRef.current = requestAnimationFrame(() => {
         renameFocusFrameRef.current = null
         if (renameInputElementRef.current !== el) {

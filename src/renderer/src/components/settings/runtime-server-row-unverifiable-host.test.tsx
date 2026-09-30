@@ -127,3 +127,23 @@ it('still offers Disconnect for a verified host', () => {
 
   expect(screen.queryByRole('button', { name: /disconnect/i })).not.toBeNull()
 })
+
+it('keeps the machine under the label once the host is unreachable', () => {
+  const status = { ...answeredStatus(), machineName: 'Studio', hostPlatform: 'darwin' as const }
+  setEntry({
+    status: null,
+    checkedAt: 2,
+    snapshot: snapshot({ status, verification: 'unavailable' })
+  })
+  renderRow()
+  expect(screen.queryByText('macOS · Studio')).not.toBeNull()
+  cleanup()
+
+  setEntry({
+    status: null,
+    checkedAt: 2,
+    snapshot: snapshot({ status, verification: 'unavailable', transport: 'disconnected' })
+  })
+  renderRow()
+  expect(screen.queryByText('macOS · Studio')).not.toBeNull()
+})

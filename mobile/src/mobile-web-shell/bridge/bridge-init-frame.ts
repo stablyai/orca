@@ -8,6 +8,11 @@ import {
   type BridgeInitHost,
   type BridgeInitRoute
 } from './bridge-envelope'
+import {
+  sameSafeAreaInsets,
+  ZERO_SAFE_AREA_INSETS,
+  type BridgeSafeAreaInsets
+} from './bridge-safe-area-insets'
 
 /**
  * Every grant this app implements, which is the ceiling a session's own list is drawn from. A page
@@ -34,6 +39,10 @@ export function createBridgeInitFrame(args: {
   route: BridgeInitRoute
   /** The route patterns the page keeps for itself; everything else comes back as `navigate`. */
   pageRoutes: readonly string[]
+  /** How much of the WebView sits under a system bar, for a page that pads for them itself. */
+  safeAreaInsets?: BridgeSafeAreaInsets
+  /** The keyboard height native screens read on the shell's OS. */
+  keyboardInset?: number
   /** What each of those patterns declared, so the page can tell a hop it may keep from one it
    *  must hand back. Omitted by a shell that has none, which leaves the page on its old rule. */
   pageRouteGrants?: readonly { pathname: string; grants: readonly string[] }[]
@@ -43,6 +52,10 @@ export function createBridgeInitFrame(args: {
   host: BridgeInitHost
   /** The allowlisted keys as the app holds them right now. */
   storage: Readonly<Record<string, string>>
+  /** The allowlisted keys whose app-side value is over the page's cap, so `storage` has none
+   *  (ruling 33.6). The page refuses its own writes to these rather than replacing the device's.
+   *  Absent and empty are the same answer: nothing of the app's was left out. */
+  storageOversize?: readonly string[]
 }): Extract<BridgeHostMessage, { type: 'init' }> {
   return {
     v: BRIDGE_PROTOCOL_VERSION,
@@ -60,6 +73,14 @@ export function createBridgeInitFrame(args: {
       native: [...args.granted]
     },
     route: args.route,
+    // Omitted when zero, like `storageOversize`: the page reads absent as zeros.
+    ...(args.safeAreaInsets === undefined ||
+    sameSafeAreaInsets(args.safeAreaInsets, ZERO_SAFE_AREA_INSETS)
+      ? {}
+      : { safeAreaInsets: { ...args.safeAreaInsets } }),
+    ...(args.keyboardInset === undefined || args.keyboardInset === 0
+      ? {}
+      : { keyboardInset: args.keyboardInset }),
     pageRoutes: [...args.pageRoutes],
     // Copied entry by entry for the reason the grants are: nothing the shell keeps may be
     // reachable through a frame it hands out.
@@ -74,6 +95,11 @@ export function createBridgeInitFrame(args: {
     host: args.host,
     // Copied for the same reason the grants are: the frame is serialized straight after, and what
     // the shell holds must not be reachable through what it hands out.
-    storage: { ...args.storage }
+    storage: { ...args.storage },
+    // Omitted when empty rather than sent as `[]`: a field nobody sent and a field sent empty are
+    // the same answer, and every golden in the corpus was recorded without it.
+    ...(args.storageOversize === undefined || args.storageOversize.length === 0
+      ? {}
+      : { storageOversize: [...args.storageOversize] })
   }
 }

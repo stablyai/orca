@@ -5,9 +5,9 @@ import type { StartupCommandDelivery } from '../../../shared/codex-startup-deliv
 import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
 import type { RuntimeTerminalCreate } from '../../../shared/runtime-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import { toAgentLaunchPreferences } from '../../../shared/agent-launch-preferences'
 import {
   createAgentSessionCreateOperation,
-  toAgentLaunchPreferences,
   withAgentSessionCreateOperationId
 } from '@/runtime/agent-session-create-operation'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'

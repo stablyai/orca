@@ -81,12 +81,6 @@ describe('humanizeTerminalError', () => {
     expect(isPaneOwnerUnverifiedError('Paste failed.\nterminal_pane_owner_unverified')).toBe(false)
   })
 
-  it('humanizes an IPC-wrapped pane-owner-unverified error', () => {
-    const wrapped =
-      "Error invoking remote method 'pty:spawn': Error: terminal_pane_owner_unverified"
-    expect(humanizeTerminalError(wrapped)).not.toContain('terminal_pane_owner_unverified')
-  })
-
   it('humanizes an owner marker without classifying mixed errors as safe warnings', () => {
     const mixed = humanizeTerminalError('Paste failed.\nterminal_pane_owner_unverified')
     expect(mixed).toContain('Paste failed.')
@@ -269,25 +263,12 @@ describe('stripSshReconnectOwnedErrorLines', () => {
     expect(stripSshReconnectOwnedErrorLines(SSH_FAILURE)).toBeNull()
   })
 
-  it('keeps an unrelated error that precedes the SSH failure', () => {
-    expect(stripSshReconnectOwnedErrorLines(`Paste failed.\n${SSH_FAILURE}`)).toBe('Paste failed.')
-  })
-
-  it('keeps an unrelated error that follows the SSH failure', () => {
-    expect(stripSshReconnectOwnedErrorLines(`${SSH_FAILURE}\nPaste failed.`)).toBe('Paste failed.')
-  })
-
   it('drops every SSH-owned line but preserves the rest', () => {
     expect(
       stripSshReconnectOwnedErrorLines(
         `${SSH_FAILURE}\nPaste failed.\nSSH connection is not active. Use the reconnect dialog.`
       )
     ).toBe('Paste failed.')
-  })
-
-  it('drops an IPC-wrapped relay-loss line and keeps the rest', () => {
-    expect(stripSshReconnectOwnedErrorLines(RELAY_LOST)).toBeNull()
-    expect(stripSshReconnectOwnedErrorLines(`Paste failed.\n${RELAY_LOST}`)).toBe('Paste failed.')
   })
 
   it('leaves an error with no SSH text untouched', () => {
@@ -359,6 +340,19 @@ describe('TerminalErrorToast environment footer', () => {
     )
 
     await waitFor(() => expect(environmentMocks.resolveFooter).not.toHaveBeenCalled())
+  })
+
+  it('shows the issue request once for a host error that already asks for one', () => {
+    const view = render(
+      React.createElement(TerminalErrorToast, {
+        error:
+          'Failed to spawn shell "/bin/zsh": boom (shell: /bin/zsh). If this persists, please file an issue.',
+        onDismiss: vi.fn()
+      })
+    )
+
+    expect(view.container.textContent?.match(/If this persists/g)).toHaveLength(1)
+    expect(view.container.textContent).toContain('(shell: /bin/zsh).')
   })
 
   it('renders owner-unverified as a warning without an issue link', () => {

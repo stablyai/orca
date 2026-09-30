@@ -4,6 +4,10 @@ import { getAgentStatusInputRedactionSourceLines } from './agent-status-input-re
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
 import { getOmpSessionOwnerHandlerSourceLines } from './omp-session-status-owner-source'
 import { getPiAgentStatusUiPromptHandlerSourceLines } from './agent-status-ui-prompt-source'
+import {
+  getPiSubagentRosterEventSourceLines,
+  getPiSubagentRosterSetupSourceLines
+} from './agent-status-subagent-roster-source'
 
 // Why: keep the generated handler registrations separate from hook transport;
 // both are independently sizeable and the installed extension concatenates them.
@@ -129,19 +133,10 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '  if (ownerPid && ownerPid !== selfPid && isStatusOwnerAlive(ownerPid)) return',
     `  process.env.${ownerEnv} = selfPid`,
     '  resetPostQueue()',
-    '  const piEventBus = (pi as { events?: { on?: (name: string, handler: (event: unknown) => void) => void } }).events',
-    '  const lifecycleState = (piEventBus as { __orcaPiSubagents?: { active: Set<string>; waiting: boolean; onEvent?: (event: unknown, forcedStatus?: string) => void; listener?: (event: unknown) => void } } | undefined)?.__orcaPiSubagents ?? { active: new Set<string>(), waiting: false }',
-    '  if (piEventBus) (piEventBus as { __orcaPiSubagents?: unknown }).__orcaPiSubagents = lifecycleState',
-    '  if (piEventBus?.on && !(lifecycleState as { listener?: unknown }).listener) {',
-    '    const listener = (event: unknown) => lifecycleState.onEvent?.(event)',
-    '    lifecycleState.listener = listener',
-    "    piEventBus.on('task:subagent:lifecycle', listener)",
-    "    piEventBus.on('subagent:async-started', (event: unknown) => lifecycleState.onEvent?.(event, 'started'))",
-    "    piEventBus.on('subagent:async-complete', (event: unknown) => lifecycleState.onEvent?.(event, 'completed'))",
-    '  }',
+    ...getPiSubagentRosterSetupSourceLines(),
     ...(kind !== 'pi'
       ? [
-          "  pi.on('session_shutdown', () => { lifecycleState.active.clear(); lifecycleState.waiting = false; resetPostQueue(); clearPendingAgentEndCheck() })"
+          "  pi.on('session_shutdown', () => { lifecycleState.active.clear(); lifecycleState.exited?.clear(); lifecycleState.waiting = false; resetPostQueue(); clearPendingAgentEndCheck() })"
         ]
       : []),
     ...(kind !== 'prime-agent'
@@ -149,6 +144,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
           "  pi.on('session_switch', (_event, ctx) => {",
           '    if (!isOmpRuntime()) return',
           '    lifecycleState.active.clear()',
+          '    lifecycleState.exited?.clear()',
           '    lifecycleState.waiting = false',
           '    resetPostQueue()',
           '    clearPendingAgentEndCheck()',
@@ -239,25 +235,15 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '    pendingAgentEndCheck = null',
     '    pendingAgentEndContext = null',
     '  }',
-    '  // Defer completion while live child work remains.',
-    '  lifecycleState.onEvent = (event: unknown, forcedStatus?: string): void => {',
-    "    if (!event || typeof event !== 'object') return",
-    "    const id = typeof (event as { id?: unknown }).id === 'string' ? (event as { id: string }).id : ''",
-    '    const status = forcedStatus ?? (event as { status?: unknown }).status',
-    '    if (!id) return',
-    "    if (status === 'started') { lifecycleState.active.add(id); post('agent_start'); return }",
-    "    if (status !== 'completed' && status !== 'failed' && status !== 'aborted') return",
-    '    lifecycleState.active.delete(id)',
-    '    if (lifecycleState.active.size === 0 && lifecycleState.waiting) {',
-    '      lifecycleState.waiting = false',
-    '      postAgentEndOnce()',
-    '    }',
-    '  }',
+    ...getPiSubagentRosterEventSourceLines(),
     '  function postAgentEndOnce(): void {',
+    '    for (const id of lifecycleState.exited ?? []) lifecycleState.active.delete(id)',
+    '    lifecycleState.exited?.clear()',
     '    if (lifecycleState.active.size > 0) {',
     '      lifecycleState.waiting = true',
     '      return',
     '    }',
+    '    lifecycleState.waiting = false',
     '    if (completionPostedGeneration === endedRunGeneration) return',
     '    completionPostedGeneration = endedRunGeneration',
     // Why: distinct from the completion guard, which holds the generation of the posted run

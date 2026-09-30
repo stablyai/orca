@@ -35,6 +35,10 @@ export const WORKTREE_TERMINAL_SLEEP_TIMEOUT_ERROR = 'terminal_worktree_sleep_ti
 export class WorktreeTerminalMutationLock {
   private readonly entries = new Map<string, LockEntry>()
 
+  hasActiveSpawns(key: string): boolean {
+    return (this.entries.get(key)?.activeSpawns ?? 0) > 0
+  }
+
   /** Why exposed: entry deletion is the only thing keeping this map from
    *  becoming a per-worktree leak, so the tests assert on it directly. */
   get trackedKeyCount(): number {

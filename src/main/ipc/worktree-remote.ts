@@ -74,7 +74,7 @@ import {
 import { requireSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
-import { TUI_AGENT_CONFIG, isTuiAgent } from '../../shared/tui-agent-config'
+import { isTuiAgent } from '../../shared/tui-agent-config'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { runWorktreeChangeInvalidators } from './worktree-change-invalidators'
 import {
@@ -152,11 +152,6 @@ import {
 import { createSequencedSetupAgentCommands } from '../../shared/setup-agent-sequencing'
 import { shouldWaitForSetupBeforeAgentStartup } from '../../shared/setup-agent-startup-policy'
 import { createWorktreeCreateTimingRecorder } from '../worktree-create-timing'
-import {
-  markCodexProjectTrusted,
-  markCopilotFolderTrusted,
-  markCursorWorkspaceTrusted
-} from '../agent-trust-presets'
 import {
   getLocalProjectGitExecOptions,
   getLocalProjectWorktreeGitOptions,
@@ -435,20 +430,6 @@ async function spawnLocalStartupAndSetupTerminals(args: {
 
   try {
     // Why: only after `git worktree add` + metadata registration is the path safe for a runtime PTY to boot the agent while setup runs alongside.
-    if (isTuiAgent(createdWithAgent)) {
-      const preset = TUI_AGENT_CONFIG[createdWithAgent].preflightTrust
-      try {
-        if (preset === 'cursor') {
-          markCursorWorkspaceTrusted(worktree.path)
-        } else if (preset === 'copilot') {
-          markCopilotFolderTrusted(worktree.path)
-        } else if (preset === 'codex') {
-          markCodexProjectTrusted(worktree.path)
-        }
-      } catch {
-        // Best-effort: launch still proceeds and the agent can ask interactively.
-      }
-    }
     const terminal = await runtime.createTerminal(`id:${worktree.id}`, {
       command: sequencedStartup.command,
       ...(setup ? { claudeAgentTeamsSourceCommand: startup.command } : {}),
@@ -2105,6 +2086,8 @@ export async function createRemoteWorktree(
     }
     throw err
   }
+  // Why: the worktree is listable from here on; a scan that began before it appeared is overtaken.
+  runWorktreeChangeInvalidators(repo.id)
   if (sparseDirectories.length > 0) {
     try {
       // Why: SSH providers expose generic git exec, so remote sparse mirrors local addSparseWorktree without a new relay method.
@@ -2739,7 +2722,8 @@ async function performLocalWorktreeCreate(
             branch: branchName,
             baseBranch,
             refreshLocalBaseRef: settings.refreshLocalBaseRefOnWorktreeCreate,
-            options: preparedWorktreeOptions
+            options: preparedWorktreeOptions,
+            timing
           })
           timing.recordPreparedCheckout(
             prepared.status === 'hit'
@@ -2751,6 +2735,9 @@ async function performLocalWorktreeCreate(
             // general admission slot for the rest of this create's own git.
             rearm.fire = prepared.rearm
             return prepared.result
+          }
+          if (prepared.rearm) {
+            rearm.fire = prepared.rearm
           }
         } else {
           timing.recordPreparedCheckout({
@@ -2830,6 +2817,10 @@ async function performLocalWorktreeCreate(
     }
     throw error
   }
+  // Why: the worktree is listable from here on. Every scan that started earlier -- including a
+  // prepared checkout's, which listings hide while it is still locked -- now describes a catalog
+  // without it, and must not be served or cached as the current one.
+  runWorktreeChangeInvalidators(repo.id)
 
   // Why: fallible metadata work after creation must not leave a real workspace name reusable.
   if (shouldRetireGeneratedName) {
@@ -2934,14 +2925,14 @@ async function performLocalWorktreeCreate(
   // Why gated: registration replaces the repo's root set, so registering a create recovered without
   // a listing would revoke filesystem access to every worktree that listing would have named.
   if (listingComplete) {
-    registerWorktreeRootsForRepo(store, repo.id, [
+    registerWorktreeRootsForRepo(store, repo, [
       repo.path,
       ...gitWorktrees.map((worktree) => worktree.path)
     ])
   } else {
     // Recovered without a listing: authorize just the new root, or the create the user just made
     // is rejected by filesystem/git-status IPC until a full scan repopulates the cache.
-    registerCreatedWorktreeRoot(store, repo.id, created.path)
+    registerCreatedWorktreeRoot(store, repo, created.path)
   }
 
   // Why: link user-configured shared paths (e.g. `node_modules`, `.env`) before setup runs so setup scripts see them in place.

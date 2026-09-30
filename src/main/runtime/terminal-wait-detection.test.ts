@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   detectTerminalWaitBlockedReason,
-  isKnownReadyPromptPreview
+  isKnownReadyPromptPreview,
+  isMuseReadyPromptPreview
 } from './terminal-wait-detection'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
 
@@ -505,4 +506,79 @@ describe('Antigravity readiness does not absorb its own startup dialog', () => {
       expect(isKnownReadyPromptPreview(waitText)).toBe(false)
     })
   }
+})
+
+// Real bytes: node-pty capture of `muse --provider echo --trust-workspace` at its ready
+// prompt (banner, skills summary, `❯` composer, provider status line), plus the
+// trust dialog from the same capture with no trust flag.
+const MUSE_READY_SCREEN_ECHO = [
+  '  Muse Code 1.3.0',
+  '  Skills: 77 loaded · 1 warning · 28 details hidden (ctrl+o to expand)',
+  '── Voice input (⌥ + v to start) ──────────────────────────────────────────',
+  '❯ ────────────────────────────────────────────────────────────────────',
+  '  echo · /private/tmp · YOLO'
+]
+
+const MUSE_READY_SCREEN_META = [
+  '  Muse Code 1.3.0',
+  '  Skills: 77 loaded · 1 warning · 28 details hidden (ctrl+o to expand)',
+  '── Voice input (⌥ + v to start) ──────────────────────────────────────────',
+  '❯ ────────────────────────────────────────────────────────────────────',
+  '  muse-spark-1.3 · max · ~/Downloads/interview-coach · YOLO'
+]
+
+const MUSE_TRUST_DIALOG = [
+  'Do you trust this workspace?',
+  'Workspace: /private/tmp',
+  'Trusting allows project-local skills, rules, hooks, and plugin config to load before the model runs.',
+  'Only trust this workspace when you trust its contents.',
+  '> 1  Trust and continue',
+  '  2  Quit',
+  'Use Up/Down or 1/2, then Enter. Esc quits.'
+]
+
+describe('isMuseReadyPromptPreview', () => {
+  it('recognizes a Muse ready screen across providers', () => {
+    expect(isMuseReadyPromptPreview(waitTextFor(MUSE_READY_SCREEN_ECHO))).toBe(true)
+    expect(isMuseReadyPromptPreview(waitTextFor(MUSE_READY_SCREEN_META))).toBe(true)
+  })
+
+  it('tolerates ANSI styling around the ready markers', () => {
+    const esc = String.fromCharCode(27)
+    expect(
+      isMuseReadyPromptPreview(
+        waitTextFor([
+          `  ${esc}[1m${esc}[38;2;204;211;219;49mMuse Code 1.3.0`,
+          `── Voice input (⌥ + v to start) ───`,
+          `${esc}[38;2;90;160;255;49m❯ ${esc}[39m${esc}[49m`,
+          `  echo · /private/tmp · ${esc}[38;2;243;139;168;49mYOLO`
+        ])
+      )
+    ).toBe(true)
+  })
+
+  it('refuses a bare Muse mention without its composer', () => {
+    expect(isMuseReadyPromptPreview(waitTextFor(['comparing Muse Code vs codex']))).toBe(false)
+    expect(
+      isMuseReadyPromptPreview(waitTextFor(['Muse Code 1.3.0', '  echo · /private/tmp · YOLO']))
+    ).toBe(false)
+  })
+
+  it('refuses the Muse trust dialog, which carries no banner or composer', () => {
+    const waitText = waitTextFor(MUSE_TRUST_DIALOG)
+    expect(isMuseReadyPromptPreview(waitText)).toBe(false)
+    expect(detectTerminalWaitBlockedReason(waitText)).toBe('agent-trust-workspace')
+  })
+
+  it('dismisses a trust dialog once Muse paints its ready screen', () => {
+    const waitText = waitTextFor([...MUSE_TRUST_DIALOG, ...MUSE_READY_SCREEN_META])
+    expect(detectTerminalWaitBlockedReason(waitText)).toBeNull()
+    expect(isMuseReadyPromptPreview(waitText)).toBe(true)
+  })
+
+  it('refuses a ready screen once a blocked dialog opens below it', () => {
+    const waitText = waitTextFor([...MUSE_READY_SCREEN_META, ...MUSE_TRUST_DIALOG])
+    expect(detectTerminalWaitBlockedReason(waitText)).toBe('agent-trust-workspace')
+    expect(isMuseReadyPromptPreview(waitText)).toBe(false)
+  })
 })

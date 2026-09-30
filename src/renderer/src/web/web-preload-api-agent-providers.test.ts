@@ -161,19 +161,28 @@ describe('web MiniMax preload API', () => {
     await expect(api.minimaxCredentials.getStatus()).resolves.toEqual({
       configured: false,
       cookieConfigured: false,
-      apiKeyConfigured: false
+      apiKeyConfigured: false,
+      // Null, not 'sealed': this bridge stores nothing, so it has no protection to claim.
+      cookieProtection: null,
+      apiKeyProtection: null
     })
     await expect(api.minimaxCredentials.saveCookie('_token=abc')).rejects.toThrow(/desktop app/i)
     await expect(api.minimaxCredentials.clearCookie()).resolves.toEqual({
       configured: false,
       cookieConfigured: false,
-      apiKeyConfigured: false
+      apiKeyConfigured: false,
+      // Null, not 'sealed': this bridge stores nothing, so it has no protection to claim.
+      cookieProtection: null,
+      apiKeyProtection: null
     })
     await expect(api.minimaxCredentials.saveApiKey('sk-test')).rejects.toThrow(/desktop app/i)
     await expect(api.minimaxCredentials.clearApiKey()).resolves.toEqual({
       configured: false,
       cookieConfigured: false,
-      apiKeyConfigured: false
+      apiKeyConfigured: false,
+      // Null, not 'sealed': this bridge stores nothing, so it has no protection to claim.
+      cookieProtection: null,
+      apiKeyProtection: null
     })
   })
 })

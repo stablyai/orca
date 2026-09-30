@@ -9,15 +9,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
-import { openJournalDatabase, type OpenJournalDatabase } from './journal-database'
-import { journalDatabaseFile } from './journal-paths'
-import {
-  insertJournalRow,
-  readJournalEpochRows,
-  upsertJournalSessionRow
-} from './journal-row-table'
+import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalRow } from './journal-row-schema'
 import { JournalRowWriter } from './journal-row-writer'
+import {
+  openTestJournalHostDatabase,
+  readTestJournalRows,
+  insertTestJournalRow,
+  publishTestJournalEpoch
+} from './journal-host-database-test-support'
 
 const SESSION_ID = 'session-1'
 const EPOCH = 'epoch-1'
@@ -38,19 +38,19 @@ function row(seq: number, ts: number): JournalRow {
 
 describe('journal row writer', () => {
   let root: string
-  let database: OpenJournalDatabase
+  let database: JournalHostDatabase
   let readOnly = false
 
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-journal-row-writer-'))
-    database = openJournalDatabase(journalDatabaseFile(root))
-    upsertJournalSessionRow(database.db, SESSION_ID, EPOCH, 1)
+    database = openTestJournalHostDatabase(root)
+    publishTestJournalEpoch(database.db, SESSION_ID, EPOCH)
     readOnly = false
   })
 
   afterEach(async () => {
     try {
-      database.db.close()
+      database.close()
     } catch {
       // Already closed by the case.
     }
@@ -79,13 +79,13 @@ describe('journal row writer', () => {
   it('rolls the transaction back and sets no latch when the insert fails', async () => {
     const { writer, committedRows } = writerHarness()
     // A row already occupies sequence 1, so the insert violates the primary key.
-    insertJournalRow(database.db, SESSION_ID, row(1, 1))
+    insertTestJournalRow(database.db, SESSION_ID, row(1, 1))
 
     await expect(writer.enqueue(row)).rejects.toThrow()
 
     expect(readOnly).toBe(false)
     expect(committedRows).toHaveLength(0)
-    expect(readJournalEpochRows(database.db, SESSION_ID, EPOCH)).toHaveLength(1)
+    expect(readTestJournalRows(database.db, SESSION_ID, EPOCH)).toHaveLength(1)
     // Still writable: there is no ambiguity for a latch to protect against.
     await expect(writer.enqueue((seq, ts) => row(seq + 1, ts))).resolves.toMatchObject({
       kind: 'item'

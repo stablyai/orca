@@ -1,10 +1,10 @@
 import * as ExpoCrypto from 'expo-crypto'
 import type {
   DeviceCredentialInstalled,
+  MobileRelayEndpoint,
   PairingGetEndpointsResult
 } from '../../../src/shared/mobile-relay-credential-contract'
-import { MobileRelayUpgradeHostRemovedError, saveExistingHostRelayUpgrade } from './host-store'
-import { persistRelayHost } from './mobile-endpoint-supervisor-support'
+import { RelayRoutingHostRemovedError, setRelayRouting } from './host-store'
 import {
   MobileRelayCredentialBundleSchema,
   deleteMobileRelayCredentialBundle,
@@ -27,7 +27,7 @@ import type { HostProfile } from './types'
 import { isPairingRelayRpcUnavailable } from './pairing-relay-rpc-unavailable'
 
 export type MobileRelayDirectUpgradeResult = {
-  host: HostProfile
+  relay: MobileRelayEndpoint
   bundle: MobileRelayCredentialBundle
 }
 
@@ -36,7 +36,7 @@ type Dependencies = {
   writeJournal: typeof writeMobileRelayDirectUpgradeJournal
   clearJournal: typeof deleteMobileRelayDirectUpgradeJournal
   writeBundle: typeof writeMobileRelayCredentialBundle
-  saveHost: typeof saveExistingHostRelayUpgrade
+  setRelayRouting: typeof setRelayRouting
   deleteBundle: typeof deleteMobileRelayCredentialBundle
   randomBytes: (length: number) => Uint8Array
 }
@@ -54,7 +54,7 @@ export async function upgradeDirectMobileRelay(args: {
     writeJournal: writeMobileRelayDirectUpgradeJournal,
     clearJournal: deleteMobileRelayDirectUpgradeJournal,
     writeBundle: writeMobileRelayCredentialBundle,
-    saveHost: saveExistingHostRelayUpgrade,
+    setRelayRouting,
     deleteBundle: deleteMobileRelayCredentialBundle,
     randomBytes: ExpoCrypto.getRandomBytes,
     ...args.dependencies
@@ -120,18 +120,17 @@ async function publishCommitted(
   })
   // Why: the overlay must never advertise relay without its matching credential.
   await dependencies.writeBundle(bundle)
-  let updatedHost: HostProfile
   try {
-    updatedHost = await persistRelayHost(host, endpoints.relay, dependencies.saveHost)
+    await dependencies.setRelayRouting(host.id, endpoints.relay)
   } catch (error) {
-    if (error instanceof MobileRelayUpgradeHostRemovedError) {
+    if (error instanceof RelayRoutingHostRemovedError) {
       await dependencies.deleteBundle(host.id)
       await dependencies.clearJournal(host.id)
     }
     throw error
   }
   await dependencies.clearJournal(host.id)
-  return { host: updatedHost, bundle }
+  return { relay: endpoints.relay, bundle }
 }
 
 async function getEndpoints(

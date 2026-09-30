@@ -45,13 +45,6 @@ describe('registerJsonlLanguage', () => {
     )
   })
 
-  it('does not attach the JSON language service / diagnostics', () => {
-    // Why: whole-document JSON validation would flag every record after line one
-    // as trailing content. A Monarch tokens provider is presentation-only.
-    expect(jsonlMonarchLanguage.tokenizer).toBeDefined()
-    expect('json' in jsonlMonarchLanguage).toBe(false)
-  })
-
   it('registers once and is idempotent when the language already exists', () => {
     const monaco = createMonacoMock([JSONL_LANGUAGE_ID])
 

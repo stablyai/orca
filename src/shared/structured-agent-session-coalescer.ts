@@ -28,6 +28,13 @@ function mergeBatch(
     ...(right.commands !== undefined || left.commands !== undefined
       ? { commands: right.commands !== undefined ? right.commands : left.commands }
       : {}),
+    // Whole-list publication, latest wins: dropping it here would lose a draft
+    // update that rode a coalesced token frame. The pause rides with its list.
+    ...(right.queuedMessages !== undefined
+      ? { queuedMessages: right.queuedMessages, queuePause: right.queuePause ?? null }
+      : left.queuedMessages !== undefined
+        ? { queuedMessages: left.queuedMessages, queuePause: left.queuePause ?? null }
+        : {}),
     sessionId: right.sessionId,
     batch: {
       cursor: right.batch.cursor,
@@ -38,7 +45,6 @@ function mergeBatch(
     ...(right.fence !== undefined || left.fence !== undefined
       ? { fence: right.fence ?? left.fence }
       : {}),
-    ...(right.handoff || left.handoff ? { handoff: right.handoff ?? left.handoff } : {}),
     ...(right.backgroundTasks !== undefined || left.backgroundTasks !== undefined
       ? {
           backgroundTasks:

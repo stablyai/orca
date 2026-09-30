@@ -547,6 +547,80 @@ test('same-cap mode preserves 1000/60 while adding only the reviewed trust confi
     /reviewed image and capacity/
   )
 
+  // Production run 35684694704 died after create_before_destroy made the new template, leaving
+  // the Sep 18 template deposed; every later wave plan for that cell carries its delete.
+  const deposedTemplate = structuredClone(template)
+  deposedTemplate.deposed = '4cb19f83'
+  deposedTemplate.change.actions = ['delete']
+  deposedTemplate.change.after = null
+  deposedTemplate.change.after_unknown = {}
+  assert.deepEqual(
+    validateCapacityPlan(
+      { resource_changes: [template, manager, deposedTemplate] },
+      sameCapConfig
+    ),
+    { mode: 'same-cap-cell', changes: 2, obsoleteTemplates: 1 }
+  )
+  const updatedDeposedTemplate = structuredClone(deposedTemplate)
+  updatedDeposedTemplate.change.actions = ['update']
+  assert.throws(
+    () => validateCapacityPlan(
+      { resource_changes: [template, manager, updatedDeposedTemplate] },
+      sameCapConfig
+    ),
+    /change only the exact instance template and MIG/
+  )
+  const foreignDeposedTemplate = structuredClone(deposedTemplate)
+  foreignDeposedTemplate.address =
+    'google_compute_instance_template.relay_gce_cell["production-gce-c8"]'
+  assert.throws(
+    () => validateCapacityPlan(
+      { resource_changes: [template, manager, foreignDeposedTemplate] },
+      sameCapConfig
+    ),
+    /change only the exact instance template and MIG/
+  )
+  const secondDeposedTemplate = { ...structuredClone(deposedTemplate), deposed: 'aa17b204' }
+  assert.throws(
+    () => validateCapacityPlan(
+      { resource_changes: [template, manager, deposedTemplate, secondDeposedTemplate] },
+      sameCapConfig
+    ),
+    /change only the exact instance template and MIG/
+  )
+  // Nothing but the deposed delete left: the cell is stranded on the reviewed template, and the
+  // job's `changes == 0` roll must still fire.
+  assert.deepEqual(
+    validateCapacityPlan(
+      {
+        resource_changes: [deposedTemplate],
+        planned_values: {
+          root_module: {
+            resources: [
+              {
+                address: template.address,
+                values: {
+                  metadata_startup_script: template.change.after.metadata_startup_script,
+                  self_link: 'projects/project/global/instanceTemplates/target'
+                }
+              },
+              {
+                address: manager.address,
+                values: {
+                  version: [{
+                    instance_template: 'projects/project/global/instanceTemplates/target'
+                  }]
+                }
+              }
+            ]
+          }
+        }
+      },
+      sameCapConfig
+    ),
+    { mode: 'same-cap-cell', changes: 0, obsoleteTemplates: 1 }
+  )
+
   const imageOnly = structuredClone(template)
   imageOnly.change.after.metadata_startup_script = startup({ selectedImage: image })
   const imageOnlyConfig = {

@@ -349,7 +349,7 @@ describe('connectPanePty', () => {
     }
   })
 
-  it('keeps output after a skipped hidden alternate-screen frame pane-local', async () => {
+  it('keeps a background-origin alternate-screen chunk in the stream, pane-local', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: {
@@ -388,11 +388,12 @@ describe('connectPanePty', () => {
 
       isVisibleRef.current = false
       ;(pane.terminal.buffer.active as { type: 'normal' | 'alternate' }).type = 'normal'
-      capturedDataCallback.current?.('plain after skipped close\r\n')
+      capturedDataCallback.current?.('plain after close\r\n')
       vi.advanceTimersByTime(50)
       parseCallbacks.shift()?.()
 
-      expect(writes).toEqual(['plain after skipped close\r\n'])
+      // Dropping the close would strand xterm inside synchronized output.
+      expect(writes).toEqual(['\x1b[?2026lplain after close\r\n'])
       expectNoGlobalAtlasRecovery()
     } finally {
       vi.useRealTimers()

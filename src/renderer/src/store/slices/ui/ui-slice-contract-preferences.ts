@@ -59,7 +59,9 @@ export type UISlicePreferences = {
   setHideWorkspacesFromOtherDevices: (v: boolean) => void
   alwaysShowDefaultBranchWorkspace: boolean
   setAlwaysShowDefaultBranchWorkspace: (v: boolean) => void
+  explorerDisplayRootByWorktree: Record<string, string>
   showDotfilesByWorktree: Record<string, boolean>
+  setExplorerDisplayRootForWorktree: (worktreeId: string, value: string) => void
   setShowDotfilesForWorktree: (worktreeId: string, showDotfiles: boolean) => void
   toggleShowDotfilesForWorktree: (worktreeId: string) => void
   filterRepoIds: readonly string[]

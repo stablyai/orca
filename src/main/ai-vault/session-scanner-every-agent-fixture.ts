@@ -1,6 +1,11 @@
-import { isolatedScanRoots, writeOpenCode2SqliteFixture } from './session-scanner-test-fixtures'
+import {
+  isolatedScanRoots,
+  writeMuseScannerFixture,
+  writeOpenCode2SqliteFixture
+} from './session-scanner-test-fixtures'
 import { writeDocumentAgentFixtures } from './session-scanner-document-agent-fixtures'
 import { writeLogAgentFixtures } from './session-scanner-log-agent-fixtures'
+import { writeOpenCodeSqliteDatabase } from './session-scanner-opencode-sqlite-fixture'
 
 // Why this is shared rather than inline in one test: it is the only place that
 // writes one transcript in every supported agent's own format. A scan test and
@@ -28,6 +33,15 @@ export async function writeEveryAgentVault(root: string): Promise<EveryAgentVaul
   const antigravitySessionId = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
   const { ompSessionFile, primeAgentSessionFile } = await writeLogAgentFixtures(roots)
   await writeDocumentAgentFixtures(root, roots, antigravitySessionId)
+  await writeMuseScannerFixture(roots.museSessionsDir)
   roots.opencodeDbPaths = [await writeOpenCode2SqliteFixture(root)]
+  writeOpenCodeSqliteDatabase(roots.zcodeDbPath, [
+    {
+      id: 'zcode-session',
+      directory: '/tmp/zcode',
+      title: 'ZCode title',
+      turns: [{ role: 'user', parts: ['ZCode session prompt'] }]
+    }
+  ])
   return { roots, antigravitySessionId, ompSessionFile, primeAgentSessionFile }
 }

@@ -75,12 +75,12 @@ export function buildRgArgs(query: string, target: string, opts: SearchOptionsLi
     args.push('--fixed-strings')
   }
   if (opts.includePattern) {
-    for (const pat of splitSearchGlobPatterns(opts.includePattern)) {
+    for (const pat of splitSearchGlobPatterns(opts.includePattern, 'rg')) {
       args.push('--glob', pat)
     }
   }
   if (opts.excludePattern) {
-    for (const pat of splitSearchGlobPatterns(opts.excludePattern)) {
+    for (const pat of splitSearchGlobPatterns(opts.excludePattern, 'rg')) {
       args.push('--glob', `!${pat}`)
     }
   }
@@ -197,7 +197,7 @@ export function buildGitGrepArgs(query: string, opts: SearchOptionsLike): string
   let hasPathspecs = false
   let hasIncludePathspecs = false
   if (opts.includePattern) {
-    for (const pat of splitSearchGlobPatterns(opts.includePattern)) {
+    for (const pat of splitSearchGlobPatterns(opts.includePattern, 'git')) {
       const pathspecs = toGitGlobPathspecs(pat)
       gitArgs.push(...pathspecs)
       hasPathspecs ||= pathspecs.length > 0
@@ -205,7 +205,7 @@ export function buildGitGrepArgs(query: string, opts: SearchOptionsLike): string
     }
   }
   if (opts.excludePattern) {
-    for (const pat of splitSearchGlobPatterns(opts.excludePattern)) {
+    for (const pat of splitSearchGlobPatterns(opts.excludePattern, 'git')) {
       const pathspecs = toGitGlobPathspecs(pat, true)
       gitArgs.push(...pathspecs)
       hasPathspecs ||= pathspecs.length > 0

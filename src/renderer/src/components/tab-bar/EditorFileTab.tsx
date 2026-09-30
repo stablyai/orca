@@ -28,7 +28,8 @@ import {
 import { canOpenMarkdownPreview } from '@/components/editor/markdown-preview-controls'
 import { EditorFileTabContextMenu } from './EditorFileTabContextMenu'
 import { translate } from '@/i18n/i18n'
-import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
+import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
+import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 import { EditorFileTabCloseButton } from './EditorFileTabCloseButton'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 
@@ -105,6 +106,10 @@ export default function EditorFileTab({
     diffSource: file.diffSource
   })
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
+  // Why: the stored flag outlives the setting (sessions persist it, other windows change it), so preview-ness is derived, never reconciled.
+  const isPreviewTab = useAppStore(
+    (s) => file.isPreview === true && s.settings?.editorPreviewTabsEnabled !== false
+  )
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
   const [isRenaming, setIsRenaming] = useState(false)
@@ -225,6 +230,7 @@ export default function EditorFileTab({
     onActivate,
     disabled: isRenaming
   })
+  const slotProps = useTabStripSlotProps(file.tabId ?? file.id, isActive)
 
   const tabRoot = (
     <div
@@ -242,7 +248,7 @@ export default function EditorFileTab({
         )
       }}
       onDoubleClick={() => {
-        if (file.isPreview && onMakePermanent) {
+        if (isPreviewTab && onMakePermanent) {
           onMakePermanent()
         }
       }}
@@ -326,10 +332,10 @@ export default function EditorFileTab({
           />
         ) : (
           <span
-            className={`${TAB_LABEL_WIDTH_CLASSES}${file.isPreview ? ' italic' : ''}${isMissingFileMutation ? ' line-through' : ''}`}
+            className={`${TAB_LABEL_WIDTH_CLASSES}${isPreviewTab ? ' italic' : ''}${isMissingFileMutation ? ' line-through' : ''}`}
             style={tabStatusColor ? { color: tabStatusColor } : undefined}
             onDoubleClick={(e) => {
-              if (file.isPreview && onMakePermanent) {
+              if (isPreviewTab && onMakePermanent) {
                 e.stopPropagation()
                 onMakePermanent()
                 return
@@ -382,7 +388,7 @@ export default function EditorFileTab({
   return (
     <>
       <div
-        className={TAB_CONTAINER_WIDTH_CLASSES}
+        {...slotProps}
         onContextMenuCapture={(event) => {
           event.preventDefault()
           window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))

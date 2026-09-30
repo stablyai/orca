@@ -10,6 +10,12 @@ import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskRunState
 } from './agent-session-background-task-wire'
+import type { AgentSessionFailureFact } from './agent-session-failure'
+import type {
+  AgentJournalMessageSendMode,
+  AgentJournalPosition,
+  AgentJournalProducerLinkage
+} from './agent-session-journal-types'
 import type { AgentType } from './agent-status-types'
 import type { NativeChatToolMetadata } from './native-chat-tool-identity'
 
@@ -50,6 +56,8 @@ export type NativeChatTextBlock = {
       truncated: boolean
     }
   }
+  /** On a status line that reports a failure: what failed, typed. */
+  failure?: AgentSessionFailureFact
 }
 
 /** A tool invocation by the agent. `input` is the (already-serialized) tool
@@ -125,7 +133,7 @@ export type NativeChatSubagentEntry = {
   state: NativeChatSubagentState
   /** Latest total tokens the provider reported FOR THIS CHILD, never a running sum. */
   tokens?: number
-  /** Epoch ms of the first event that created the entry. */
+  /** Epoch ms the child's latest run started; a resumed child restarts it. */
   startedAt?: number
   /** Epoch ms the entry latched terminal. */
   settledAt?: number
@@ -183,7 +191,9 @@ export type NativeChatBlock =
   | NativeChatSubagentGroupBlock
   | NativeChatBackgroundTaskBlock
 
-export type NativeChatMessage = {
+/** A transcript row. Structured rows carry the journal row's producer linkage, so
+ *  "who said this" survives the projection; terminal-backed rows carry none. */
+export type NativeChatMessage = AgentJournalProducerLinkage & {
   /** Stable across re-reads/appends so the assembler and the renderer list can
    *  dedup and key by it. */
   id: string
@@ -196,6 +206,16 @@ export type NativeChatMessage = {
   /** Optional explicit turn key. When present, two messages with the same
    *  `turnId` are treated as the same turn for dedup regardless of `id`. */
   turnId?: string
+  /** How a user message was delivered when it was not an ordinary prompt. */
+  sentAs?: AgentJournalMessageSendMode
+  /** Accepted but not yet handed to the agent: drawn after everything the agent has done. */
+  queued?: true
+  /** Set only by the structured projection, on rows the journal holds, and ranks
+   *  them ahead of time. Terminal-backed messages never carry it, and worker reads strip it. */
+  journalPosition?: AgentJournalPosition
+  /** Set only by the tool fold, on a row that absorbed later tool rows: the newest
+   *  absorbed row's journal position. The row still sorts by its own. */
+  foldedJournalPosition?: AgentJournalPosition
 }
 
 export const NATIVE_CHAT_TURN_LIFECYCLE_STATES = ['working', 'completed', 'interrupted'] as const

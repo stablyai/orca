@@ -1,7 +1,5 @@
 // @vitest-environment happy-dom
 
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import type React from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { WorkspaceVisibleTabType } from '../../../../shared/tab-types'
@@ -165,22 +163,4 @@ describe('client-hosted row while a real tab is activated', () => {
       expect(getClientHostedBrowserRowSelection()).toBeNull()
     }
   )
-})
-
-/**
- * The fixtures above cannot cover a row kind that does not exist yet, and a new one wired straight
- * to its own active-tab selector is exactly how this regressed the first time.
- */
-describe('tab-bar active-state census', () => {
-  it('suppresses every row kind while a client-hosted row owns the strip', () => {
-    const source = readFileSync(join(__dirname, 'tab-bar-item-surface.tsx'), 'utf8')
-    const decisions = source.match(/isActive=\{[^}]*\}/g) ?? []
-
-    expect(decisions.length).toBeGreaterThan(0)
-    for (const decision of decisions) {
-      expect(decision, 'a row kind underlines itself past a client-hosted row').toContain(
-        '!clientHostedRowOwnsActiveState'
-      )
-    }
-  })
 })

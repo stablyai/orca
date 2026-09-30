@@ -182,6 +182,7 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   { file: 'src/transport/mobile-runtime-capability-negotiation.ts', references: 2 },
   // Sends through hostStatusProbe; the one reference left is its parameter type. Its callers do
   // not share a client type — push-registration.ts holds only the sender — so the parameter names
-  // the port itself. It reaches zero when the last such caller migrates.
-  { file: 'src/transport/runtime-capability-probe.ts', references: 1 }
+  // the port itself. It reaches zero when the last such caller migrates. Moved here from
+  // runtime-capability-probe.ts, which is now a projection of this probe and names no port.
+  { file: 'src/transport/runtime-status-probe.ts', references: 1 }
 ]

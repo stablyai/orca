@@ -34,6 +34,27 @@ export type AgentLaunchFingerprintInput = {
   prompt?: { text: string; delivery: string }
   sessionOptions?: Readonly<Record<string, string>>
   reuseTerminal?: { handle: string }
+  /** In: a launch carrying `--model opus` is a different operation from one without, so a retry
+   *  that changed them must conflict rather than replay the first answer. `null` is a value here,
+   *  not an absence — "explicitly no arguments" differs from "use the settings default". */
+  agentArgs?: string | null
+  /** In: it decides both where the agent runs and, through `tui_launch_command`, which surface it
+   *  gets. Two launches differing only in `cwd` are genuinely two operations. */
+  cwd?: string
+  /** In: it is baked into the pane's PTY env and names the tab the caller placed, so a retry that
+   *  reserved another pane must conflict rather than replay a key its placement cannot find. */
+  paneKey?: string
+  /** In: a retry that minted another session is a different request, since replaying would answer
+   *  with a conversation this caller did not mint. */
+  sessionId?: string
+  /**
+   * `launchSource` is deliberately absent, and this is the reasoned exclusion rather than an
+   * oversight: it is telemetry, so two launches differing only in which button produced them do the
+   * same thing, and folding it in would make an honest retry that got re-attributed conflict with
+   * its own original. That is the rule the mutable host settings above are excluded under — the
+   * digest covers what the call DOES — and the cost of leaving it out is only that a replay reports
+   * the first attempt's attribution, which is the truthful answer: one launch happened.
+   */
 }
 
 /** Host-computed, never accepted from the caller: a digest a client supplies is a digest a buggy
@@ -45,7 +66,12 @@ export function computeAgentLaunchFingerprint(input: AgentLaunchFingerprintInput
     target: input.target,
     prompt: input.prompt,
     sessionOptions: input.sessionOptions,
-    reuseTerminal: input.reuseTerminal
+    reuseTerminal: input.reuseTerminal,
+    agentArgs: input.agentArgs,
+    cwd: input.cwd,
+    // Absent keys are dropped by the canonical form, so every digest without one is unchanged.
+    paneKey: input.paneKey,
+    sessionId: input.sessionId
   })
 }
 

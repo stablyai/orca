@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 
-import { readMobileWebShellReachability } from './mobile-web-shell-session'
+import { readMobileWebShellReachability } from './mobile-web-shell-reachability'
 
 /** Only `client === null` is read, but a real shape keeps this out of the casting gate. */
 function fakeClient(): RpcClient {

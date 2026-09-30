@@ -7,7 +7,10 @@ import {
 } from './mirrored-browser-tabs'
 import { buildMirroredEditorTabs } from './tab-builders'
 import { buildMirroredAgentTabs, isReadyBrowserTab, isReadyEditorTab } from './terminal-surfaces'
-import { hostSnapshotAffirmsClientHostedPages } from '../host-session-snapshot-authority'
+import {
+  hostSnapshotAffirmsAgentSessions,
+  hostSnapshotAffirmsClientHostedPages
+} from '../host-session-snapshot-authority'
 import type { prepareWebSessionTabsSnapshotBase } from './apply-preparation-base'
 import type { OpenFile } from '../../store/slices/editor'
 import {
@@ -39,6 +42,7 @@ export function prepareWebSessionTabsSnapshotBrowser(
   const publishedAgentSessionIds = new Set(
     snapshot.tabs.filter((tab) => tab.type === 'agent-session').map((tab) => tab.sessionId)
   )
+  const agentSessionsAffirmed = hostSnapshotAffirmsAgentSessions(snapshot)
   const existingTabIndex = buildWebSessionExistingTabIndex({ unifiedTabs: currentUnifiedTabs })
   const readyBrowserTabs = reconcilesNonAgentTabs ? snapshot.tabs.filter(isReadyBrowserTab) : []
   const nextRemoteBrowserPageIds = new Set(readyBrowserTabs.map((tab) => tab.browserPageId))
@@ -177,9 +181,11 @@ export function prepareWebSessionTabsSnapshotBrowser(
     if (tab.contentType === 'agent-session') {
       // A matching host row is authoritative; retaining the provisional tab beside its mirror
       // would briefly render two panes before lifecycle publication is recorded.
+      // A host that cannot list its chats is no evidence this one closed.
       return (
         !publishedAgentSessionIds.has(tab.entityId) &&
-        shouldRetainStructuredAgentSessionLaunchTab(worktreeId, tab.entityId)
+        (!agentSessionsAffirmed ||
+          shouldRetainStructuredAgentSessionLaunchTab(worktreeId, tab.entityId))
       )
     }
     if (tab.contentType === 'browser') {

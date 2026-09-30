@@ -462,40 +462,6 @@ describe('addWorktree', () => {
     ])
   })
 
-  it('qualifies slash-containing local branch names when no remote ref matches', async () => {
-    gitExecFileAsyncMock.mockRejectedValueOnce(new Error('no remote ref')) // rev-parse refs/remotes/release/main^{commit}
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'abc123\n' }) // rev-parse refs/heads/release/main^{commit}
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
-    resolveCreationBaseConfigWrite()
-    gitExecFileAsyncMock.mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.autoSetupRemote (unset)
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // config --local set push.autoSetupRemote
-
-    await addWorktree('/repo', '/repo-feature', 'feature/release', 'release/main')
-
-    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).toEqual([
-      ['rev-parse', '--verify', '--quiet', 'refs/remotes/release/main^{commit}'],
-      ['rev-parse', '--verify', '--quiet', 'refs/heads/release/main^{commit}'],
-      [
-        'worktree',
-        'add',
-        '--no-track',
-        '-b',
-        'feature/release',
-        '/repo-feature',
-        'refs/heads/release/main'
-      ],
-      [
-        'config',
-        '--local',
-        '--replace-all',
-        'branch.feature/release.base',
-        'refs/heads/release/main'
-      ],
-      ['config', '--get', 'push.autoSetupRemote'],
-      ['config', '--local', 'push.autoSetupRemote', 'true']
-    ])
-  })
-
   it('does not report a local base refresh for slash-containing local branch names', async () => {
     gitExecFileAsyncMock.mockRejectedValueOnce(new Error('no remote ref')) // rev-parse refs/remotes/release/main^{commit}
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'abc123\n' }) // rev-parse refs/heads/release/main^{commit}

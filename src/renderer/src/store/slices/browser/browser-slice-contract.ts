@@ -39,6 +39,10 @@ export type CreateBrowserTabOptions = {
   sessionPartition?: string | null
   // Place the new tab in a specific group (e.g. "Open Preview to the Side"); defaults to the worktree's active group.
   targetGroupId?: string
+  /** Client-local unified tab id of the source; the new tab lands right after it when still live. */
+  afterTabId?: string
+  /** Verified execution host for the new wrapper; unset keeps createUnifiedTab's active-workspace fallback. */
+  executionHostId?: ExecutionHostId
   // Explicit "New Tab" focuses the address bar even with a real home URL; link-opened tabs leave it unset.
   focusAddressBar?: boolean
   browserRuntimeEnvironmentId?: string | null
@@ -192,6 +196,10 @@ export type BrowserSlice = {
   ) => void
   deleteBrowserPageAnnotation: (pageId: string, annotationId: string) => void
   clearBrowserPageAnnotations: (pageId: string) => void
+  removeDeliveredBrowserPageAnnotations: (
+    pageId: string,
+    deliveredAnnotations: readonly BrowserPageAnnotation[]
+  ) => void
   hydrateBrowserSession: (
     session: WorkspaceSessionState,
     options?: WorkspaceSessionHydrationOptions

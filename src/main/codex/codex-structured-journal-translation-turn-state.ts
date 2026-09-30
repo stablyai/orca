@@ -161,7 +161,7 @@ type RecentTurn = {
   bytes: number
 }
 
-/** Bounded terminal lifecycle window for exact echoes that arrive after completion. */
+/** Bounded terminal lifecycle window: exact echoes that arrive after completion revise it. */
 export class CodexJournalRecentTurns {
   private readonly turns = new Map<string, RecentTurn>()
   private retainedBytes = 0

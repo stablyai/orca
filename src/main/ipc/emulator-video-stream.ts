@@ -2,6 +2,7 @@ import { BrowserWindow, ipcMain, type WebContents } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { scrcpyVideoRegistry } from '../emulator/scrcpy-video-registry'
 import { emulatorProbe } from '../emulator/emulator-probe'
+import { abortWhenRendererGone } from './renderer-lifetime-abort'
 
 // Bridges the main-process scrcpy video registry to renderer subscribers. The
 // renderer calls emulator:videoStreamStart with a deviceId; meta + H.264 access
@@ -11,7 +12,8 @@ export function registerEmulatorVideoStreamHandlers(): void {
   type Subscription = {
     owner: WebContents
     unsubscribe: () => void
-    onOwnerDestroyed: () => void
+    disposeLifetime: () => void
+    startTimer: ReturnType<typeof setTimeout> | null
   }
   const subscriptions = new Map<string, Subscription>()
 
@@ -20,11 +22,12 @@ export function registerEmulatorVideoStreamHandlers(): void {
     if (!subscription || (owner && subscription.owner !== owner)) {
       return
     }
-    subscription.unsubscribe()
-    // Why: `.once('destroyed')` self-removes only when that event fires (window
-    // close), so an explicit stop must drop it or each show/hide cycle leaks one.
-    subscription.owner.removeListener('destroyed', subscription.onOwnerDestroyed)
     subscriptions.delete(streamId)
+    if (subscription.startTimer !== null) {
+      clearTimeout(subscription.startTimer)
+    }
+    subscription.disposeLifetime()
+    subscription.unsubscribe()
   }
 
   ipcMain.handle(
@@ -44,14 +47,21 @@ export function registerEmulatorVideoStreamHandlers(): void {
         throw new Error('Video stream id is already in use by another renderer')
       }
       stopSubscription(streamId, owner)
-      const onOwnerDestroyed = (): void => stopSubscription(streamId, owner)
+      const lifetime = abortWhenRendererGone(owner)
+      const onRendererGone = (): void => stopSubscription(streamId, owner)
       const pendingSubscription: Subscription = {
         owner,
         unsubscribe: () => {},
-        onOwnerDestroyed
+        disposeLifetime: () => {
+          lifetime.signal.removeEventListener('abort', onRendererGone)
+          lifetime.dispose()
+        },
+        startTimer: null
       }
       subscriptions.set(streamId, pendingSubscription)
-      setTimeout(() => {
+      lifetime.signal.addEventListener('abort', onRendererGone, { once: true })
+      pendingSubscription.startTimer = setTimeout(() => {
+        pendingSubscription.startTimer = null
         if (owner.isDestroyed() || subscriptions.get(streamId) !== pendingSubscription) {
           return
         }
@@ -75,7 +85,6 @@ export function registerEmulatorVideoStreamHandlers(): void {
         })
         pendingSubscription.unsubscribe = unsubscribe
       }, 0)
-      owner.once('destroyed', onOwnerDestroyed)
       return { streamId }
     }
   )

@@ -7,6 +7,20 @@ import { collectMobileWebAppRoutes } from './mobile-web-app-route-manifest.mjs'
 const mobileDir = fileURLToPath(new URL('../../mobile', import.meta.url))
 
 /**
+ * The file the build actually put in a chunk for this route, which is not always the one named.
+ *
+ * `resolveExtensions` puts `.web.tsx` ahead of `.tsx`, so a route with a sibling is bundled as the
+ * sibling and the named path appears in no output at all. Until C7.7 the session route had none
+ * and the lookup below was exact; the first route with a sibling to be asked for reached "no
+ * output" instead — a route that is served on the page reading as one the bundle never built.
+ */
+function chunkOwnerPaths(routeModule) {
+  const named = resolve(mobileDir, routeModule)
+  const sibling = named.replace(/\.(tsx?)$/, '.web.$1')
+  return sibling === named ? [named] : [sibling, named]
+}
+
+/**
  * What a browser must download before one page route can paint, and what it may defer.
  *
  * `mobileWebAppRouteClosure` answers a different question: it reads `metafile.inputs`, which holds
@@ -26,12 +40,14 @@ export async function mobileWebAppRouteChunkClosure(routeModule) {
     metafile: true,
     write: false
   })
-  const routePath = resolve(mobileDir, routeModule)
+  const routePaths = chunkOwnerPaths(routeModule)
   const owner = Object.entries(metafile.outputs).find(([, output]) =>
-    Object.keys(output.inputs ?? {}).some((input) => resolve(mobileDir, input) === routePath)
+    Object.keys(output.inputs ?? {}).some((input) => routePaths.includes(resolve(mobileDir, input)))
   )
   if (!owner) {
-    throw new Error(`[mobile-web-app-route-chunk-closure] ${routeModule} reached no output`)
+    throw new Error(
+      `[mobile-web-app-route-chunk-closure] ${routeModule} reached no output (tried ${routePaths.join(', ')})`
+    )
   }
   const reached = entryStaticClosure(metafile, owner[0])
   const inputsOf = (outputs) =>

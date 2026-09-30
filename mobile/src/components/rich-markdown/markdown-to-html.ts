@@ -2,6 +2,7 @@ import { escapeAttr, escapeHtml } from './markdown-escaping'
 import { renderInline } from './markdown-inline-render'
 import { renderListItems } from './markdown-list-render'
 import { parseListTree } from './markdown-list-parse'
+import { closesFence, openingFence } from './markdown-code-fence'
 import { isTableSeparator, splitTableRow } from './markdown-table-rows'
 import type { RichMarkdownEditorScope } from './document-scope'
 
@@ -27,11 +28,11 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
       index += 1
       continue
     }
-    const fence = line.match(/^```([^\s`]*)\s*$/)
+    const fence = openingFence(line)
     if (fence) {
       index += 1
       const code: string[] = []
-      while (index < lines.length && !/^```\s*$/.test(lines[index] ?? '')) {
+      while (index < lines.length && !closesFence(lines[index] ?? '', fence.fence)) {
         code.push(lines[index] ?? '')
         index += 1
       }
@@ -39,7 +40,7 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
         index += 1
       }
       html.push(
-        `<pre data-language="${escapeAttr(fence[1] ?? '')}"><code>${escapeHtml(code.join('\n'))}</code></pre>`
+        `<pre data-language="${escapeAttr(fence.language)}"><code>${escapeHtml(code.join('\n'))}</code></pre>`
       )
       continue
     }

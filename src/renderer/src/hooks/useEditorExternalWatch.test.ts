@@ -20,10 +20,10 @@ vi.mock('@/components/editor/editor-autosave', async (importOriginal) => {
 })
 
 import {
-  createExternalWatchEventHandler,
-  getOverflowExternalReloadTargets,
-  getWatchedTargetKey
-} from './useEditorExternalWatch'
+  buildEditorExternalWatchEventHandler as createExternalWatchEventHandler,
+  collectOverflowEditorExternalReloadTargets as getOverflowExternalReloadTargets
+} from './editor-external-watch-event-reconciliation'
+import { getEditorExternalWatchTargetKey as getWatchedTargetKey } from './editor-external-watch-targets'
 import { useAppStore } from '@/store'
 import {
   getOpenFilesForExternalFileChange,

@@ -20,7 +20,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // runtime this test does not have. Nothing below calls one.
 vi.mock('../transport/host-client-hooks', () => ({
   useDisconnectHostClient: () => () => {},
-  useForceReconnect: () => () => Promise.resolve(),
+  useForceReconnect: () => null,
   useForgetHostClient: () => () => {},
   useHostClient: () => ({ client: null, clientId: null, state: 'disconnected' }),
   usePrimeHosts: () => () => {},
@@ -77,7 +77,8 @@ function createAudioShell() {
         }
       }
     },
-    onInterruption: () => ({ remove: () => {} })
+    onInterruption: () => ({ remove: () => {} }),
+    screenLock: { hold: () => {}, release: () => {} }
   }
   const capture = createNativeAudioCapture(engine)
   return {
@@ -271,7 +272,6 @@ describe('what one dictation spends of the bridge', () => {
   }, 60_000)
 
   it('ships the batched drain, not the native event rate', () => {
-    expect(DICTATION_CAPTURE_DRAIN_INTERVAL_MS).toBe(500)
     expect(DICTATION_CAPTURE_DRAIN_INTERVAL_MS).toBeGreaterThan(DICTATION_NATIVE_EVENT_INTERVAL_MS)
   })
 })

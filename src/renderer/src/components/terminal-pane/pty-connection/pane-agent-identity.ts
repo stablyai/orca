@@ -1,8 +1,7 @@
 import { agentTypeToIconAgent } from '@/lib/agent-status'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
-import { replayIntoTerminal } from '../replay-guard'
-import { POST_REPLAY_REATTACH_RESET } from '../../../../../shared/terminal-mode-reset-profiles'
+import { CONFIRMED_SHELL_MODE_RESET } from '../../../../../shared/terminal-mode-reset-profiles'
 import {
   isLocalNativeWindowsConpty,
   resolveWindowsShellOverride
@@ -168,6 +167,10 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     isRemotePtyId,
     getExpectedIncarnationId: () => session.remotePtyIncarnationId ?? null,
     publish: (entry) => useAppStore.getState().setPaneForegroundAgent(session.cacheKey, entry),
+    getPublishedEntry: () => useAppStore.getState().paneForegroundAgentByPaneKey[session.cacheKey],
+    // Why lazy: the completion coordinator is installed after this tracker.
+    onAgentProcessRead: (process) =>
+      session.agentCompletionCoordinator?.observeForegroundAgentProcess(process),
     hasKnownAgentIdentity: session.paneHasKnownAgentIdentity,
     onConfirmedShellForeground: (reason) => {
       // Why: a confirmed local shell proves any hibernation record for this pane is stale;
@@ -181,15 +184,14 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
       // Why: a hard-killed agent leaves mouse/focus/kitty modes armed, and the
       // surviving shell then receives pointer moves as typed SGR reports; the
       // replay guard keeps xterm's auto-replies from leaking to the shell.
-      replayIntoTerminal(session.pane, session.deps.replayingPanesRef, POST_REPLAY_REATTACH_RESET, {
-        breadcrumbIdentity: {
-          tabId: session.deps.tabId,
-          worktreeId: session.deps.worktreeId,
-          ptyId: session.transport.getPtyId()
-        },
-        shouldRefreshViewportSynchronously: session.shouldRefreshForegroundSynchronously
-      })
-      if (reason === 'visible-pty') {
+      session.writeInputModeGround(CONFIRMED_SHELL_MODE_RESET)
+      // Why: no 133;D backs these proofs, so a deferred command-finished drop keeps its own read.
+      if (reason === 'process-exit') {
+        // Why: reopen the one-shot visible sample so the next agent typed here is identified.
+        session.visibleForegroundSamplePending = false
+        session.visibleForegroundSampleSettled = false
+      }
+      if (reason === 'visible-pty' || reason === 'process-exit') {
         state.clearAgentLaunchConfig(session.cacheKey)
         return
       }
@@ -210,6 +212,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
       }
       useAppStore.getState().setPaneForegroundAgent(session.cacheKey, {
         agent: foreground.agent,
+        agentEvidence: foreground.agentEvidence,
         routingRevoked: true,
         shellForeground: foreground.shellForeground
       })
@@ -308,6 +311,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     // as a hint, but revoke bytes until one current provider confirmation lands.
     useAppStore.getState().setPaneForegroundAgent(session.cacheKey, {
       agent: foreground.agent,
+      agentEvidence: foreground.agentEvidence,
       routingRevoked: true,
       shellForeground: false
     })
@@ -319,6 +323,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     if (session.paneForegroundAgentTracker.hasReadInFlight()) {
       useAppStore.getState().setPaneForegroundAgent(session.cacheKey, {
         agent: foreground.agent,
+        agentEvidence: foreground.agentEvidence,
         routingRevoked: true,
         shellForeground: false,
         routingConfirmationPending: true

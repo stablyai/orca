@@ -13,12 +13,13 @@ import {
   type HookTrustBlockRange
 } from './config-toml-hook-trust-blocks'
 import { escapeTomlBasicString } from './config-toml-syntax'
+import { repairOrcaDuplicateTrustTables } from './config-toml-project-duplicate-repair'
 
 export function upsertHookTrustContent(
   existingContent: string,
   entries: readonly CodexTrustEntry[]
 ): string {
-  const existing = stripLeadingBom(existingContent)
+  const existing = repairOrcaDuplicateTrustTables(stripLeadingBom(existingContent))
   let updated = entries.some((entry) =>
     usesWindowsCodexPathSeparators(normalizeCodexTrustSourcePath(entry.sourcePath))
   )

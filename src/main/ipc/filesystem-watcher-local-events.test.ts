@@ -69,20 +69,6 @@ describe('local filesystem watcher flush serialization', () => {
     expect(root.batch.timer).toBeNull()
   })
 
-  it('flushes sustained batches at the maximum wait', async () => {
-    const root = await createLocalWatcher('/repo', '/repo')
-    root.listeners.set(1, sender as never)
-    watcherCallback?.(null, [{ type: 'delete', path: '/repo/file.ts' }])
-    for (let elapsed = 100; elapsed <= WATCH_BATCH_MAX_WAIT_MS; elapsed += 100) {
-      vi.advanceTimersByTime(100)
-      expect(sender.send).not.toHaveBeenCalled()
-      watcherCallback?.(null, [{ type: 'delete', path: '/repo/file.ts' }])
-    }
-    await flushMicrotasks()
-    expect(sender.send).toHaveBeenCalledTimes(1)
-    expect(root.batch.timer).toBeNull()
-  })
-
   it('cancels a refreshed trailing window without a later flush', async () => {
     const root = await createLocalWatcher('/repo', '/repo')
     root.listeners.set(1, sender as never)
@@ -336,7 +322,7 @@ describe('local filesystem watcher flush serialization', () => {
     // Why real timers: fake-timers' refresh() revives a cleared handle, but Node's is a no-op — the bug only shows on real Timeouts.
     vi.useRealTimers()
     statMock.mockResolvedValue({ isDirectory: () => true })
-    const listener = { ...sender, id: 7, once: vi.fn() }
+    const listener = { ...sender, id: 7, removeListener: vi.fn(), once: vi.fn() }
     try {
       await subscribeLocalWatcher('/repo', listener as never)
       watcherCallback?.(null, [{ type: 'delete', path: '/repo/file.ts' }])

@@ -59,6 +59,17 @@ export function restoreCodexJournalThread(input: {
     if (!turnId) {
       continue
     }
+    // Ahead of the turn's items, as the live path writes it: readers credit every
+    // row to the nearest turn record before it.
+    const lifecycle = input.restoreTurnLifecycle
+      ? historicalTurnLifecycle(input.threadId, turn)
+      : null
+    if (lifecycle) {
+      const admission = input.restoreTurnLifecycle?.(lifecycle) ?? { accepted: true }
+      if (!admission.accepted) {
+        return admission
+      }
+    }
     input.currentTurnIds.set(input.threadId, new Set([turnId]))
     for (const item of Array.isArray(turn.items) ? turn.items : []) {
       const admission = input.handleItem({
@@ -72,15 +83,6 @@ export function restoreCodexJournalThread(input: {
     }
     input.currentTurnIds.delete(input.threadId)
     input.ordinals.forgetTurn(input.threadId, turnId)
-    const lifecycle = input.restoreTurnLifecycle
-      ? historicalTurnLifecycle(input.threadId, turn)
-      : null
-    if (lifecycle) {
-      const admission = input.restoreTurnLifecycle?.(lifecycle) ?? { accepted: true }
-      if (!admission.accepted) {
-        return admission
-      }
-    }
   }
   input.flush()
   return { accepted: true }

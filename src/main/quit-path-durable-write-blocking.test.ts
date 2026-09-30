@@ -1,10 +1,11 @@
+import { createWorkerMaintenanceFixture } from './persistence/loading-store/profile-state-maintenance-fixture'
+import type { Store } from './persistence/loading-store/store'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mkdtempSync, readFileSync, existsSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import type * as NodeFs from 'node:fs'
 import type * as NodeFsPromises from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
 
 // Why these tests exist: will-quit used to run stats.flush() and store.flush() synchronously,
 // before preventDefault(). On a stalled network profile mount those fsync/rename syscalls park
@@ -108,37 +109,68 @@ vi.mock('electron', () => ({
   }
 }))
 
-type TestStore = {
-  updateUI(updates: { sidebarWidth?: number; activeView?: string }): void
-  setGitHubCache(cache: unknown): void
-  waitForPendingWrite(): Promise<void>
-  flushAsync(): Promise<void>
-  flushOrThrow(): void
-  stageWorkspaceSessionBeforeUnload(session: Record<string, unknown>): void
-}
-
 type TestStatsCollector = {
   onAgentStart(ptyId: string, at: number, repo?: string, worktree?: string): void
   getSummary(): { totalAgentsSpawned: number; totalAgentTimeMs: number }
   flushAsync(): Promise<void>
 }
 
-async function createStore(dir: string): Promise<TestStore> {
+const profiles = new Map<string, Awaited<ReturnType<typeof createWorkerMaintenanceFixture>>>()
+const stores: Store[] = []
+const statsCollectors: TestStatsCollector[] = []
+const releases: (() => void)[] = []
+
+async function createStore(dir: string): Promise<Store> {
   testState.dir = dir
-  vi.resetModules()
-  const { Store, initDataPath } = await import('./persistence')
-  // Why: userData resolves through AppEnvironment; point it at this file's temp dir.
-  installFakeAppEnvironment({ getPath: () => testState.dir })
-  initDataPath()
-  return new Store() as unknown as TestStore
+  const fixture = await createWorkerMaintenanceFixture({ directory: dir, profileId: 'quit-test' })
+  profiles.set(dir, fixture)
+  stores.push(fixture.store)
+  fixture.store.updateUI({ activeView: 'terminal' })
+  await fixture.store.flushPendingOrThrowAsync()
+  await fixture.authority.drainBackups()
+  return fixture.store
+}
+
+function readState(dir: string) {
+  const profile = profiles.get(dir)
+  if (!profile) {
+    throw new Error('Missing test profile')
+  }
+  return profile.readState()
+}
+
+function stallFilesystem(): void {
+  const gate = Promise.withResolvers<void>()
+  releases.push(gate.resolve)
+  fsCalls.holdAsync = gate.promise
+}
+
+function stallCommit(dir: string) {
+  const profile = profiles.get(dir)
+  if (!profile) {
+    throw new Error('Missing test profile')
+  }
+  const started = Promise.withResolvers<void>()
+  const finish = Promise.withResolvers<void>()
+  releases.push(finish.resolve)
+  const original = profile.authority.writeCompleteSerializedDomains.bind(profile.authority)
+  vi.spyOn(profile.authority, 'writeCompleteSerializedDomains').mockImplementationOnce(
+    async (rows) => {
+      started.resolve()
+      await finish.promise
+      await original(rows)
+    }
+  )
+  return { started: started.promise, release: finish.resolve }
 }
 
 async function createStatsCollector(dir: string): Promise<TestStatsCollector> {
   testState.dir = dir
-  vi.resetModules()
   const { StatsCollector, initStatsPath } = await import('./stats/collector')
   initStatsPath()
-  return new StatsCollector() as unknown as TestStatsCollector
+  const stats = new StatsCollector()
+  statsCollectors.push(stats)
+  return stats
 }
 
 const dataFile = (dir: string): string => join(dir, 'orca-data.json')
@@ -165,8 +197,17 @@ describe('quit-path durable writes never park the main thread', () => {
     fsCalls.reset()
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    fsCalls.recording = false
+    for (const release of releases.splice(0)) {
+      release()
+    }
+    fsCalls.holdAsync = null
+    fsCalls.waitAsync = null
     vi.useRealTimers()
+    await Promise.all(stores.splice(0).map((store) => store.freezeWritesAsync()))
+    await Promise.all(statsCollectors.splice(0).map((stats) => stats.flushAsync()))
+    profiles.clear()
     for (const dir of dirs.splice(0)) {
       rmSync(dir, { recursive: true, force: true })
     }
@@ -183,7 +224,7 @@ describe('quit-path durable writes never park the main thread', () => {
     fsCalls.recording = false
 
     expect(fsCalls.syncCalls).toEqual([])
-    expect(JSON.parse(readFileSync(dataFile(dir), 'utf-8')).ui.sidebarWidth).toBe(321)
+    expect(readState(dir).ui.sidebarWidth).toBe(321)
   })
 
   it('renderer unload staging issues no synchronous fs syscalls', async () => {
@@ -194,6 +235,9 @@ describe('quit-path durable writes never park the main thread', () => {
     fsCalls.recording = true
     const leafId = '11111111-1111-4111-8111-111111111111'
     store.stageWorkspaceSessionBeforeUnload({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
       tabsByWorktree: {
         'remote-repo::/remote': [
           {
@@ -222,8 +266,7 @@ describe('quit-path durable writes never park the main thread', () => {
 
     expect(fsCalls.syncCalls).toEqual([])
     await store.flushAsync()
-    const layout = JSON.parse(readFileSync(dataFile(dir), 'utf-8')).workspaceSession
-      .terminalLayoutsByTabId['remote-tab']
+    const layout = readState(dir).workspaceSession.terminalLayoutsByTabId['remote-tab']
     const ref = layout.scrollbackRefsByLeafId[leafId]
     expect(layout.buffersByLeafId).toBeUndefined()
     expect(readFileSync(join(dir, 'terminal-scrollback', `${ref}.bin`), 'utf-8')).toBe(
@@ -239,7 +282,7 @@ describe('quit-path durable writes never park the main thread', () => {
     utimesSync(staleCacheTemp, staleSeconds, staleSeconds)
     const store = await createStore(dir)
     store.updateUI({ activeView: 'activity' })
-    store.setGitHubCache({ pullRequestsByWorktree: {} })
+    store.setGitHubCache({ pr: {}, issue: {} })
 
     fsCalls.dirPrefix = dir
     fsCalls.recording = true
@@ -270,7 +313,6 @@ describe('quit-path durable writes never park the main thread', () => {
     const dir = makeDir()
     const previousGrokHome = process.env.GROK_HOME
     process.env.GROK_HOME = dir
-    vi.resetModules()
     const { GrokHookService } = await import('./grok/hook-service')
     const service = new GrokHookService()
     try {
@@ -314,7 +356,7 @@ describe('quit-path durable writes never park the main thread', () => {
     stats.onAgentStart('pty-1', Date.now() - 4_000)
 
     fsCalls.dirPrefix = dir
-    fsCalls.holdAsync = new Promise(() => {})
+    stallFilesystem()
     const pending = stats.flushAsync()
 
     expect(stats.getSummary().totalAgentTimeMs).toBeGreaterThan(0)
@@ -327,9 +369,9 @@ describe('quit-path durable writes never park the main thread', () => {
     store.updateUI({ sidebarWidth: 654 })
 
     fsCalls.dirPrefix = dir
-    // Every fs call from here on never resolves — the mount is gone.
-    fsCalls.holdAsync = new Promise(() => {})
+    const gate = stallCommit(dir)
     const pending = store.flushAsync()
+    await gate.started
 
     // The whole point: timers still fire, so the app still repaints and the quit
     // deadline below can still be reached. A sync flush would have blocked here.
@@ -344,8 +386,10 @@ describe('quit-path durable writes never park the main thread', () => {
     store.updateUI({ sidebarWidth: 999 })
 
     fsCalls.dirPrefix = dir
-    fsCalls.holdAsync = new Promise(() => {})
+    const before = readState(dir).ui.sidebarWidth
+    const gate = stallCommit(dir)
     const pending = store.flushAsync()
+    await gate.started
 
     const outstanding = await settleTeardownWithinDeadline(
       [{ name: 'state', promise: pending }],
@@ -353,23 +397,28 @@ describe('quit-path durable writes never park the main thread', () => {
     )
 
     expect(outstanding).toEqual(['state'])
-    // Cut short before the rename, so the previous file is still whole — bounded loss, no corruption.
-    expect(existsSync(dataFile(dir))).toBe(false)
+    expect(readState(dir).ui.sidebarWidth).toBe(before)
+    gate.release()
+    await pending
+    expect(readState(dir).ui.sidebarWidth).toBe(999)
   })
 
   it('store.flushAsync() drains an in-flight debounced write before writing', async () => {
-    vi.useFakeTimers()
     const dir = makeDir()
     const store = await createStore(dir)
+    const gate = stallCommit(dir)
+    vi.useFakeTimers()
     store.updateUI({ sidebarWidth: 100 })
     await vi.advanceTimersByTimeAsync(1_000)
+    await gate.started
 
     store.updateUI({ sidebarWidth: 200 })
     const flushed = store.flushAsync()
-    await vi.runAllTimersAsync()
+    vi.useRealTimers()
+    gate.release()
     await flushed
 
-    expect(JSON.parse(readFileSync(dataFile(dir), 'utf-8')).ui.sidebarWidth).toBe(200)
+    expect(readState(dir).ui.sidebarWidth).toBe(200)
   })
 
   it('store.flushAsync() is one idempotent final barrier', async () => {
@@ -383,7 +432,7 @@ describe('quit-path durable writes never park the main thread', () => {
     expect(second).toBe(first)
     expect(() => store.flushOrThrow()).toThrow('final persistence')
     await first
-    expect(JSON.parse(readFileSync(dataFile(dir), 'utf-8')).ui.sidebarWidth).toBe(777)
+    expect(readState(dir).ui.sidebarWidth).toBe(777)
   })
 
   it('serializes github-cache snapshots and keeps the newest generation', async () => {
@@ -394,6 +443,7 @@ describe('quit-path durable writes never park the main thread', () => {
       releaseWrite = resolve
     })
     let signalWrite!: () => void
+    releases.push(releaseWrite)
     const writeStarted = new Promise<void>((resolve) => {
       signalWrite = resolve
     })
@@ -409,17 +459,18 @@ describe('quit-path durable writes never park the main thread', () => {
       return writeRelease
     }
 
-    store.setGitHubCache({ version: 1 })
+    store.setGitHubCache({ pr: { test: { data: null, fetchedAt: 1 } }, issue: {} })
     const finalFlush = store.flushAsync()
     await writeStarted
-    store.setGitHubCache({ version: 2 })
+    store.setGitHubCache({ pr: { test: { data: null, fetchedAt: 2 } }, issue: {} })
 
     releaseWrite()
     await finalFlush
     fsCalls.recording = false
 
     expect(JSON.parse(readFileSync(join(dir, 'orca-github-cache.json'), 'utf-8'))).toEqual({
-      version: 2
+      pr: { test: { data: null, fetchedAt: 2 } },
+      issue: {}
     })
   })
 
@@ -444,9 +495,9 @@ describe('quit-path durable writes never park the main thread', () => {
   it('the quit flush is the last write — later mutations do not schedule another', async () => {
     // A teardown step that touches the store would otherwise arm a debounced write with
     // nothing awaiting it, leaving a rename to race the process exit.
-    vi.useFakeTimers()
     const dir = makeDir()
     const store = await createStore(dir)
+    vi.useFakeTimers()
     store.updateUI({ sidebarWidth: 10 })
     await store.flushAsync()
 
@@ -457,11 +508,11 @@ describe('quit-path durable writes never park the main thread', () => {
     fsCalls.recording = false
 
     expect(fsCalls.syncCalls).toEqual([])
-    expect(JSON.parse(readFileSync(dataFile(dir), 'utf-8')).ui.sidebarWidth).toBe(10)
+    expect(readState(dir).ui.sidebarWidth).toBe(10)
     expect(JSON.parse(readFileSync(activeViewFile(dir), 'utf-8')).activeView).toBe('terminal')
   })
 
-  it('sweeps orphaned state and stats temp files before the final write', async () => {
+  it('sweeps orphaned state and stats temps while retaining fresh process temps', async () => {
     const dir = makeDir()
     const stateTemp = `${dataFile(dir)}.999999.1.orphan.tmp`
     const statsTemp = `${statsFile(dir)}.999999.1.orphan.tmp`
@@ -480,6 +531,7 @@ describe('quit-path durable writes never park the main thread', () => {
     await Promise.all([store.flushAsync(), stats.flushAsync()])
 
     expect(existsSync(stateTemp)).toBe(false)
+    expect(existsSync(dataFile(dir))).toBe(false)
     expect(existsSync(statsTemp)).toBe(false)
     expect(existsSync(freshOtherProcessTemp)).toBe(true)
   })
@@ -488,7 +540,13 @@ describe('quit-path durable writes never park the main thread', () => {
     const dir = makeDir()
     const store = await createStore(dir)
     store.updateUI({ sidebarWidth: 42 })
-    rmSync(dir, { recursive: true, force: true })
+    const profile = profiles.get(dir)
+    if (!profile) {
+      throw new Error('Missing test profile')
+    }
+    vi.spyOn(profile.authority, 'writeCompleteSerializedDomains').mockRejectedValueOnce(
+      new Error('profile mount rejected write')
+    )
 
     // It joins the teardown barrier; a rejection there is noise that must not cancel the quit.
     await expect(store.flushAsync()).resolves.toBeUndefined()

@@ -52,7 +52,10 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
     }
   )
 
-  ipcMain.handle('runtime:getStatus', (): RuntimeStatus => {
+  ipcMain.handle('runtime:getStatus', async (): Promise<RuntimeStatus> => {
+    // Why: same capped wait as `status.get`, so the renderer caption sees the friendly name unless
+    // the lookup is still running; it refetches status and picks the name up on the next read.
+    await runtime.machineNameReady()
     return runtime.getStatus()
   })
 
@@ -99,33 +102,29 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       const controller = new AbortController()
       senderSubscriptions.set(args.subscriptionId, controller)
       const channel = `runtime:subscription:${args.subscriptionId}`
-      const stop = (): void => {
-        if (senderSubscriptions.get(args.subscriptionId) === controller) {
-          senderSubscriptions.delete(args.subscriptionId)
-        }
-      }
-      void new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS })
-        .dispatchStreaming(
-          {
-            id: args.subscriptionId,
-            authToken: 'desktop-ipc',
-            method: args.method,
-            params: args.params
-          },
-          (response) => {
-            if (!controller.signal.aborted && !event.sender.isDestroyed()) {
-              event.sender.send(channel, JSON.parse(response) as RuntimeRpcResponse<unknown>)
-            }
-          },
-          {
-            signal: controller.signal,
-            clientId: 'desktop-renderer',
-            clientKind: 'runtime',
-            connectionId,
-            clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
+      // The controller outlives the dispatch: most streaming handlers return once set up and
+      // keep streaming until their signal aborts, so `runtime:unsubscribe` or sender retirement
+      // is what ends it, never the handler settling.
+      void new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatchStreaming(
+        {
+          id: args.subscriptionId,
+          authToken: 'desktop-ipc',
+          method: args.method,
+          params: args.params
+        },
+        (response) => {
+          if (!controller.signal.aborted && !event.sender.isDestroyed()) {
+            event.sender.send(channel, JSON.parse(response) as RuntimeRpcResponse<unknown>)
           }
-        )
-        .finally(stop)
+        },
+        {
+          signal: controller.signal,
+          clientId: 'desktop-renderer',
+          clientKind: 'runtime',
+          connectionId,
+          clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
+        }
+      )
       return { subscribed: true }
     }
   )

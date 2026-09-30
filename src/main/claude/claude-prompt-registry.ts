@@ -26,7 +26,6 @@ export type ClaudePendingPrompt = ClaudePromptPresentation & {
   input: Record<string, unknown>
   suggestions: PermissionUpdate[]
   questionIds: readonly string[]
-  answers: Map<string, string | readonly string[]>
   settle: ClaudePromptSettle
   turnId?: string | null
 }
@@ -43,13 +42,12 @@ export type ClaudePromptRegistration = ClaudePromptPresentation & {
 
 type PromptBinding = {
   address: string
-  questionId?: string
   turnId: string | null
 }
 
 export type ClaudePromptClaim = {
   readonly itemId: string
-  readonly found: { prompt: ClaudePendingPrompt; questionId?: string }
+  readonly found: { prompt: ClaudePendingPrompt }
 }
 
 type ClaudePromptCancellationObservation = {
@@ -111,7 +109,6 @@ export class ClaudePromptRegistry {
       ...(registration.matchedAskRule ? { matchedAskRule: registration.matchedAskRule } : {}),
       ...(registration.subject ? { subject: registration.subject } : {}),
       questionIds: questions.map(questionId),
-      answers: new Map(),
       settle: registration.settle,
       turnId: registration.turnId ?? null
     }
@@ -130,26 +127,18 @@ export class ClaudePromptRegistry {
     return true
   }
 
-  bindJournalItemId(
-    journalItemId: string,
-    promptKey: string,
-    questionIdForItem?: string,
-    turnId: string | null = null
-  ): void {
+  bindJournalItemId(journalItemId: string, promptKey: string, turnId: string | null = null): void {
     const prompt = this.prompts.get(promptKey)
     this.journalBindings.set(journalItemId, {
       address: promptKey,
-      ...(questionIdForItem ? { questionId: questionIdForItem } : {}),
       turnId: turnId ?? prompt?.turnId ?? null
     })
   }
 
-  find(itemId: string): { prompt: ClaudePendingPrompt; questionId?: string } | null {
+  find(itemId: string): { prompt: ClaudePendingPrompt } | null {
     const binding = this.journalBindings.get(itemId)
     const prompt = this.prompts.get(binding?.address ?? itemId)
-    return prompt
-      ? { prompt, ...(binding?.questionId ? { questionId: binding.questionId } : {}) }
-      : null
+    return prompt ? { prompt } : null
   }
 
   claim(itemId: string, kind?: 'approval' | 'question'): ClaudePromptClaim | null {
@@ -168,8 +157,7 @@ export class ClaudePromptRegistry {
     if (!binding || !prompt || binding.turnId !== turnId || this.claims.has(prompt)) {
       return null
     }
-    const found = { prompt, ...(binding.questionId ? { questionId: binding.questionId } : {}) }
-    const claim = { itemId, found }
+    const claim = { itemId, found: { prompt } }
     this.claims.set(prompt, claim)
     return claim
   }

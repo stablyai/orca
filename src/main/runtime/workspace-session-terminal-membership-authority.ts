@@ -70,7 +70,7 @@ function rebaseUnifiedTabs(
     (tab) => tab.contentType !== 'terminal' || terminalUnifiedTabMatches(tab, terminalTabIds)
   )
   const representedTerminalIds = new Set(
-    result.filter((tab) => tab.contentType === 'terminal').flatMap((tab) => [tab.id, tab.entityId])
+    result.flatMap((tab) => (tab.contentType === 'terminal' ? [tab.id, tab.entityId] : []))
   )
   for (const tab of current) {
     if (

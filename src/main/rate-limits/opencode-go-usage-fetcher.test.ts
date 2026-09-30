@@ -484,7 +484,7 @@ describe('fetchOpenCodeGoRateLimits', () => {
     const result = await fetchOpenCodeGoRateLimits('auth=mytoken')
 
     expect(result.status).toBe('error')
-    expect(result.error).toMatch(/No workspace ID found/)
+    expect(result.error).toMatch(/No workspace found.*OpenCode Go API key/)
   })
 
   it('returns error on non-ok usage response', async () => {

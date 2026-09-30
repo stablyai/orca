@@ -1,21 +1,25 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionOwnerProbe } from '../../shared/agent-session-lease-adjudication'
 import type {
   AgentSessionExecutionLocation,
+  AgentSessionLease,
   AgentSessionProcessIdentity,
   AgentSessionRecord
 } from '../../shared/agent-session-record'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
-import { setStoredAgentSessionHandoffStage } from './agent-session-handoff-record-transitions'
-import { AgentSessionRecordStore } from './agent-session-record-store'
-import { AGENT_SESSION_CLAIM_KEY_RETENTION_MS } from './agent-session-claim-key-retention'
+import type { PersistedAgentSessionRecord } from '../../shared/agent-session-legacy-handoff-lease'
+import type { AgentSessionRecordStore } from './agent-session-record-store'
 import {
-  agentSessionStorePath,
-  AGENT_SESSION_STORE_FILE_NAME
-} from './agent-session-record-store-file'
+  editPersistedTestAgentSessionStore,
+  openTestAgentSessionRecordStore,
+  readPersistedTestAgentSessionStore,
+  seedTestAgentSessionStoreFromNewerBuild,
+  testAgentSessionStoreFilePath
+} from './agent-session-record-store-test-harness'
+import { AGENT_SESSION_CLAIM_KEY_RETENTION_MS } from './agent-session-claim-key-retention'
 import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
 
 const NOW = 1_800_000_000_000
@@ -58,7 +62,6 @@ function reserveRequest(
     location: NATIVE,
     provider: 'claude',
     accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/home/dev/.claude-work' },
-    runtimeKind: 'native',
     expectedFence: null,
     spawnToken: 'spawn-a',
     claimKeyId: 'key-1',
@@ -98,7 +101,7 @@ function handleLink(
 let directory: string
 
 async function open(hostId = 'local'): Promise<AgentSessionRecordStore> {
-  return AgentSessionRecordStore.open({ directory, hostId })
+  return openTestAgentSessionRecordStore(directory, { hostId })
 }
 
 /** Reserve, observe the spawn, prove the handle — the full path to an admitted writer. */
@@ -121,6 +124,26 @@ async function establishOwner(
     link: handleLink({ mintedAtFence: fence }),
     now: NOW
   })
+}
+
+/** The shape the removed conflict marker wrote, as it decodes. No shipped build called it; a record
+ *  may carry it. */
+async function markLegacyConflicted(
+  store: AgentSessionRecordStore,
+  lease: Partial<AgentSessionLease> = {}
+): Promise<void> {
+  if (!store.getRecord('session-alpha')) {
+    await store.reserveOwner(reserveRequest())
+  }
+  await store.transitionHandoff('session-alpha', (record) => ({
+    ...record,
+    lease: {
+      ...record.lease,
+      claimStatus: 'conflicted',
+      handoffStage: 'recovering',
+      ...lease
+    }
+  }))
 }
 
 beforeEach(async () => {
@@ -531,7 +554,7 @@ describe('restart reconciliation', () => {
 
     releaseProbe({ outcome: 'pid-absent' })
     expect(await reconciliation).toEqual(new Map())
-    const persisted = JSON.parse(await readFile(agentSessionStorePath(directory), 'utf-8'))
+    const persisted = await readPersistedTestAgentSessionStore(directory)
     expect(persisted.records['session-alpha'].lease).toMatchObject({
       runtimeFence: 3,
       claimStatus: 'live',
@@ -598,10 +621,26 @@ describe('restart reconciliation', () => {
     ).rejects.toThrow('agent_session_ownership_unknown')
   })
 
-  it('keeps a conflict conflicted across a restart that proves nothing', async () => {
+  it('re-adjudicates a claim an older record marked conflicted by the owner it names', async () => {
     const first = await open()
     await establishOwner(first)
-    await first.markClaimConflicted('session-alpha', NOW)
+    await markLegacyConflicted(first)
+
+    const reopened = await open()
+    await reopened.reconcileOnRestart({
+      probe: async () => ({ outcome: 'indeterminate', reason: 'no answer' }),
+      now: NOW
+    })
+    // An unverifiable owner goes to recovery like any other; resolution concludes about it.
+    expect(reopened.getRecord('session-alpha')?.lease).toMatchObject({
+      handoffStage: 'recovering',
+      ownerProcess: { pid: expect.any(Number) }
+    })
+  })
+
+  it('releases a claim an older record marked conflicted that names no process', async () => {
+    const first = await open()
+    await markLegacyConflicted(first, { ownerProcess: null })
 
     const reopened = await open()
     await reopened.reconcileOnRestart({
@@ -609,18 +648,10 @@ describe('restart reconciliation', () => {
       now: NOW
     })
     expect(reopened.getRecord('session-alpha')?.lease).toMatchObject({
-      claimStatus: 'conflicted',
-      handoffStage: 'manual-recovery'
+      claimStatus: 'released',
+      handoffStage: null,
+      deathEvidence: null
     })
-    await expect(
-      reopened.reserveOwner(
-        reserveRequest({
-          expectedFence: 1,
-          probe: { outcome: 'pid-absent' },
-          operation: { callerKey: 'client-1', operationId: operationId(), fingerprint: 'fp-2' }
-        })
-      )
-    ).rejects.toThrow('agent_session_conflict')
   })
 
   it('releases a conflict whose named owner is proven gone at restart', async () => {
@@ -628,7 +659,7 @@ describe('restart reconciliation', () => {
     // the process the conflict names has exited leaves no claimant left to protect.
     const first = await open()
     await establishOwner(first)
-    await first.markClaimConflicted('session-alpha', NOW)
+    await markLegacyConflicted(first)
 
     const reopened = await open()
     await reopened.reconcileOnRestart({ probe: async () => ({ outcome: 'pid-absent' }), now: NOW })
@@ -726,13 +757,7 @@ describe('host and workspace isolation', () => {
   })
 })
 
-describe('orphans, claim keys, checkpoints, and unreadable rows', () => {
-  it('calls a spawn token with no lease an orphan', async () => {
-    const store = await open()
-    await establishOwner(store)
-    expect(store.listOrphanSpawnTokens(['spawn-a', 'spawn-z'])).toEqual(['spawn-z'])
-  })
-
+describe('claim keys, checkpoints, and unreadable rows', () => {
   it('keeps a retired claim key verifiable for the retention window', async () => {
     const store = await open()
     await store.retireClaimKey('key-1', NOW)
@@ -779,44 +804,23 @@ describe('orphans, claim keys, checkpoints, and unreadable rows', () => {
     expect(advanced.lease.journalCheckpoint).toEqual({ epoch: 3, sequence: 0 })
   })
 
-  it('rejects a handoff stage change under a different operation id', async () => {
-    const store = await open()
-    await establishOwner(store)
-    await setStoredAgentSessionHandoffStage(store, {
-      sessionId: 'session-alpha',
-      fence: 1,
-      stage: 'preparing',
-      handoffOperationId: 'op-1',
-      now: NOW
-    })
-    await expect(
-      setStoredAgentSessionHandoffStage(store, {
-        sessionId: 'session-alpha',
-        fence: 1,
-        stage: 'old-owner-stopped',
-        handoffOperationId: 'op-2',
-        now: NOW
-      })
-    ).rejects.toThrow('agent_session_operation_conflict')
-  })
-
   it.each([
     [
       'invalid checkpoint',
-      (record: AgentSessionRecord) =>
+      (record: PersistedAgentSessionRecord) =>
         Object.assign(record.lease, { journalCheckpoint: { epoch: 'bad', sequence: 1 } })
     ],
     [
       'missing live proof',
-      (record: AgentSessionRecord) => Object.assign(record.lease, { provenHandleLinkId: null })
+      (record: PersistedAgentSessionRecord) =>
+        Object.assign(record.lease, { provenHandleLinkId: null })
     ]
   ])('quarantines a record with %s', async (_name, corrupt) => {
     const first = await open()
     await establishOwner(first)
-    const filePath = agentSessionStorePath(directory)
-    const raw = JSON.parse(await readFile(filePath, 'utf-8'))
-    corrupt(raw.records['session-alpha'])
-    await writeFile(filePath, JSON.stringify(raw))
+    await editPersistedTestAgentSessionStore(directory, (persisted) => {
+      corrupt(persisted.records['session-alpha'])
+    })
     expect((await open()).isSessionUnreadable('session-alpha')).toBe(true)
   })
 
@@ -830,7 +834,7 @@ describe('orphans, claim keys, checkpoints, and unreadable rows', () => {
       checkpoint: { epoch: 1, sequence: 1 },
       now: NOW
     })
-    await writeFile(join(directory, AGENT_SESSION_STORE_FILE_NAME), '{ truncated')
+    await writeFile(testAgentSessionStoreFilePath(directory), '{ truncated')
 
     const reopened = await open()
     expect(reopened.recoveredFromBackup).toBe(true)
@@ -854,7 +858,8 @@ describe('orphans, claim keys, checkpoints, and unreadable rows', () => {
     ['invalid retired key', [BAD_KEY_STORE]],
     ['corrupt in both committed copies', ['{ truncated', '{ also truncated']]
   ])('fails closed when the store is %s', async (_name, copies) => {
-    const filePath = agentSessionStorePath(directory)
+    const filePath = testAgentSessionStoreFilePath(directory)
+    await mkdir(dirname(filePath), { recursive: true })
     await writeFile(filePath, copies[0])
     if (copies[1]) {
       await writeFile(`${filePath}.bak`, copies[1])
@@ -863,11 +868,7 @@ describe('orphans, claim keys, checkpoints, and unreadable rows', () => {
   })
 
   it('refuses to write a store written by a newer schema', async () => {
-    const filePath = agentSessionStorePath(directory)
-    await writeFile(
-      filePath,
-      JSON.stringify({ schemaVersion: 99, hostId: 'local', records: {}, operations: {} })
-    )
+    await seedTestAgentSessionStoreFromNewerBuild(directory)
     const store = await open()
     expect(store.readOnly).toBe(true)
     await expect(store.reserveOwner(reserveRequest())).rejects.toThrow(

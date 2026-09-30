@@ -10,19 +10,20 @@ export type OpenCodeSqliteListRequest = {
   id: number
   kind: 'list'
   dbPaths: readonly string[]
-  limit: number
+  limit: number | null
   /** When 'opencode2', lists from the v2 channel-scoped DB schema (session_v2). */
-  agent?: 'opencode2'
+  agent?: 'opencode2' | 'zcode'
 }
 
 export type OpenCodeSqliteParseRequest = {
   id: number
   kind: 'parse'
+  fullFirstUserPrompt?: boolean
   dbPath: string
   sessionId: string
   platform: NodeJS.Platform
   /** When 'opencode2', parses from the v2 channel-scoped DB schema (session_v2). */
-  agent?: 'opencode2'
+  agent?: 'opencode2' | 'zcode'
 }
 
 // Same arguments as `parse`, different answer: the session plus every message
@@ -35,13 +36,14 @@ export type OpenCodeSqliteCaptureRequest = {
   sessionId: string
   platform: NodeJS.Platform
   /** When 'opencode2', captures from the v2 channel-scoped schema. */
-  agent?: 'opencode2'
+  agent?: 'opencode2' | 'zcode'
 }
 
-export type OpenCodeSqliteWorkerRequest =
+export type OpenCodeSqliteWorkerRequest = (
   | OpenCodeSqliteListRequest
   | OpenCodeSqliteParseRequest
   | OpenCodeSqliteCaptureRequest
+) & { timeoutMs?: number }
 
 // The list leg returns candidates plus the issues it accumulated; the worker
 // mutates a local array and hands it back so the caller can merge it into the

@@ -8,20 +8,18 @@ import type {
   AgentJournalCursor,
   AgentJournalResetReason
 } from '../../../shared/agent-session-journal-types'
-import {
-  AGENT_SESSION_HISTORY_MAX_LIMIT,
-  type AgentSessionBackgroundTaskState,
-  type AgentSessionSlashCommand,
-  type AgentSessionHandoffStatus,
-  type AgentSessionSubscribeEvent,
-  type AgentSessionTurnActivity
+import type {
+  AgentSessionBackgroundTaskState,
+  AgentSessionSlashCommand,
+  AgentSessionSubscribeEvent,
+  AgentSessionTurnActivity
 } from '../../../shared/agent-session-wire'
+import { buildSubscriberFrame } from './agent-session-subscriber-frame-fields'
+import type { QueuePublication } from './structured-agent-session-queued-publication'
+import { deliverToSubscriber } from './agent-session-subscriber-catch-up'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
-import {
-  createAgentSessionCatchUpReader,
-  readAgentSessionHydrationPage
-} from './agent-session-history-page'
+import { readAgentSessionHydrationPage } from './agent-session-history-page'
 import { rememberSessionActivity } from './structured-agent-session-activity-retention'
 
 export type AgentSessionSubscriberEmit = (event: AgentSessionSubscribeEvent) => void
@@ -32,17 +30,23 @@ export type AgentSessionSubscribeInput = {
   cursor?: AgentJournalCursor
 }
 
-type Subscriber = {
+export type Subscriber = {
   id: string
   sessionId: string
   emit: AgentSessionSubscriberEmit
   cursor: AgentJournalCursor
   fence: number
   commands?: AgentSessionSlashCommand[] | null
+  /** The last draft list actually SENT — never advanced on a page that withheld
+   *  it, or the final replacement would be suppressed by the identity dedup. */
+  queuePublication?: QueuePublication
 }
 
 export type AgentSessionSubscribersHooks = {
   readCommands?: (sessionId: string) => AgentSessionSlashCommand[] | undefined
+  /** Revision-stable per emit: an unchanged list keeps its reference, so token
+   *  streams never re-serialize it; any draft-table write changes it. */
+  readQueuePublication?: (sessionId: string) => QueuePublication | undefined
   /** Fires after publications that can change journal content. */
   onJournalPublished?: (sessionId: string, journal: AgentSessionJournal) => void
   now?: () => number
@@ -58,6 +62,10 @@ export class AgentSessionSubscribers {
     return this.activityBySession.size
   }
 
+  subscriberCountForTests(sessionId: string): number {
+    return this.bySession.get(sessionId)?.size ?? 0
+  }
+
   open(input: {
     id: string
     sessionId: string
@@ -65,7 +73,6 @@ export class AgentSessionSubscribers {
     fence: number
     emit: AgentSessionSubscriberEmit
     cursor?: AgentJournalCursor
-    handoff?: AgentSessionHandoffStatus
     backgroundTasks?: AgentSessionBackgroundTaskState | null
   }): () => void {
     const liveCursor = input.journal.cursor()
@@ -82,7 +89,7 @@ export class AgentSessionSubscribers {
 
     const hostNow = this.now()
     if (input.cursor) {
-      this.deliver(subscriber, input.journal, hostNow, input.handoff, true, input.backgroundTasks)
+      this.deliver(subscriber, input.journal, hostNow, true, input.backgroundTasks)
     } else {
       const page = readAgentSessionHydrationPage(input.journal, input.fence)
       this.emit(subscriber, {
@@ -91,7 +98,6 @@ export class AgentSessionSubscribers {
         page,
         fence: input.fence,
         hostNow,
-        ...(input.handoff ? { handoff: input.handoff } : {}),
         ...(input.backgroundTasks !== undefined ? { backgroundTasks: input.backgroundTasks } : {}),
         ...this.activityField(input.sessionId)
       })
@@ -128,7 +134,7 @@ export class AgentSessionSubscribers {
     }
     const hostNow = this.now()
     for (const subscriber of this.subscribers(sessionId)) {
-      this.deliver(subscriber, journal, hostNow, undefined, false, undefined, activity)
+      this.deliver(subscriber, journal, hostNow, false, undefined, activity)
     }
     if (activity === undefined) {
       this.hooks.onJournalPublished?.(sessionId, journal)
@@ -181,21 +187,6 @@ export class AgentSessionSubscribers {
     this.hooks.onJournalPublished?.(sessionId, journal)
   }
 
-  handoff(sessionId: string, fence: number, handoff: AgentSessionHandoffStatus): void {
-    const hostNow = this.now()
-    for (const subscriber of this.subscribers(sessionId)) {
-      this.emit(subscriber, {
-        type: 'batch',
-        sessionId,
-        batch: emptyAgentSessionBatch(subscriber.cursor),
-        fence,
-        handoff,
-        hostNow
-      })
-      subscriber.fence = fence
-    }
-  }
-
   backgroundTasks(
     sessionId: string,
     state: AgentSessionBackgroundTaskState | null,
@@ -223,79 +214,19 @@ export class AgentSessionSubscribers {
     subscriber: Subscriber,
     journal: AgentSessionJournal,
     hostNow: number,
-    handoff?: AgentSessionHandoffStatus,
     emitCheckpoint = false,
     backgroundTasks?: AgentSessionBackgroundTaskState | null,
     activity?: AgentSessionTurnActivity | null
   ): void {
-    const checkpointActivity = emitCheckpoint
-      ? this.activityField(subscriber.sessionId).activity
-      : undefined
-    const publishedActivity = activity !== undefined ? activity : checkpointActivity
-    const readPage = createAgentSessionCatchUpReader(journal)
-    while (true) {
-      const result = readPage({
-        sessionId: subscriber.sessionId,
-        direction: 'after',
-        cursor: subscriber.cursor,
-        limit: AGENT_SESSION_HISTORY_MAX_LIMIT
-      })
-      if (!result.ok) {
-        const page = { ...result.page, fence: subscriber.fence }
-        this.emit(subscriber, {
-          type: 'reset',
-          sessionId: subscriber.sessionId,
-          reset: result.reset,
-          page,
-          fence: subscriber.fence,
-          hostNow,
-          ...(handoff ? { handoff } : {}),
-          ...(backgroundTasks !== undefined ? { backgroundTasks } : {}),
-          ...(publishedActivity !== undefined ? { activity: publishedActivity } : {})
-        })
-        subscriber.cursor = page.liveCursor ?? page.window.nextCursor
-        return
-      }
-      const page = result.page
-      const advanced = page.window.nextCursor.sequence > subscriber.cursor.sequence
-      if (!advanced) {
-        const commandsChanged =
-          this.hooks.readCommands !== undefined &&
-          (this.hooks.readCommands(subscriber.sessionId) ?? null) !== subscriber.commands
-        if (handoff || emitCheckpoint || publishedActivity !== undefined || commandsChanged) {
-          this.emit(subscriber, {
-            type: 'batch',
-            sessionId: subscriber.sessionId,
-            batch: emptyAgentSessionBatch(page.window.nextCursor),
-            fence: subscriber.fence,
-            hostNow,
-            ...(handoff ? { handoff } : {}),
-            ...(backgroundTasks !== undefined ? { backgroundTasks } : {}),
-            ...(publishedActivity !== undefined ? { activity: publishedActivity } : {})
-          })
-        }
-        return
-      }
-      this.emit(subscriber, {
-        type: 'batch',
-        sessionId: subscriber.sessionId,
-        batch: {
-          cursor: page.window.nextCursor,
-          items: page.items,
-          removedItemIds: page.removedItemIds,
-          submissions: page.submissions
-        },
-        fence: subscriber.fence,
-        hostNow,
-        ...(handoff ? { handoff } : {}),
-        ...(backgroundTasks !== undefined ? { backgroundTasks } : {}),
-        ...(publishedActivity !== undefined ? { activity: publishedActivity } : {})
-      })
-      subscriber.cursor = page.window.nextCursor
-      if (!page.hasNewer || !this.isActive(subscriber)) {
-        return
-      }
-    }
+    deliverToSubscriber(
+      {
+        hooks: this.hooks,
+        emit: (target, event, options) => this.emit(target, event, options),
+        isActive: (target) => this.isActive(target),
+        activity: (sessionId) => this.activityField(sessionId).activity
+      },
+      { subscriber, journal, hostNow, emitCheckpoint, backgroundTasks, activity }
+    )
   }
 
   private now = (): number => this.hooks.now?.() ?? Date.now()
@@ -305,15 +236,23 @@ export class AgentSessionSubscribers {
 
   /** A dead transport cannot be allowed to turn a durable mutation into an
    *  unknown outcome or poison every later publication. */
-  private emit(subscriber: Subscriber, event: AgentSessionSubscribeEvent): void {
+  private emit(
+    subscriber: Subscriber,
+    event: AgentSessionSubscribeEvent,
+    options?: { withholdQueued?: boolean }
+  ): void {
     try {
-      const commands = this.hooks.readCommands?.(subscriber.sessionId) ?? null
-      const includeCommands =
-        this.hooks.readCommands !== undefined &&
-        event.type !== 'end' &&
-        (event.type !== 'batch' || commands !== subscriber.commands)
-      subscriber.emit(includeCommands ? { ...event, commands: commands ?? null } : event)
-      subscriber.commands = commands
+      const built = buildSubscriberFrame(
+        this.hooks,
+        subscriber,
+        event,
+        options?.withholdQueued === true
+      )
+      subscriber.emit(built.frame)
+      subscriber.commands = built.commands
+      if (built.attachedQueued) {
+        subscriber.queuePublication = built.queued
+      }
     } catch {
       this.drop(subscriber)
     }

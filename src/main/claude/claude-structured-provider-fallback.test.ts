@@ -10,6 +10,7 @@ import { openAgentSessionJournal } from '../native-chat/agent-session-journal/jo
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
+import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
@@ -75,7 +76,7 @@ describe('Claude provider fallback', () => {
   it('keeps provider-fallback rows distinct across acquisitions', async () => {
     const journal = await openAgentSessionJournal({
       identity: IDENTITY,
-      journalDir: root,
+      database: openTestJournalHostDatabase(root),
       now: () => 1_700_000_000_000,
       mintEpoch: () => 'epoch-1'
     })

@@ -1,7 +1,6 @@
 import type { StoreRuntimeState } from './store-runtime-state'
 import type { Store } from './store'
 import { LoadedStateAdaptationOperations } from './loaded-state-adaptation'
-import { BackupRecoveryRotationOperations } from './backup-recovery-rotation'
 import { LoadedCohortMigrationOperations } from './loaded-cohort-migrations'
 import { LoadedStateParsingOperations } from './loaded-state-parsing'
 import { StateSerializationSecretHandlingOperations } from './state-serialization-secret-handling'
@@ -65,9 +64,25 @@ import {
   installSshLeaseRecoveryOperationsContext
 } from './ssh-lease-recovery-operations'
 
+export type StoreDomainOperations = WriteSchedulingOperations &
+  PrimaryStateWriteOperations &
+  ProjectCollectionOperations &
+  RepoLifecycleOperations &
+  MobileTabSelectionPersistence &
+  SparsePresetPersistence &
+  AutomationPersistence &
+  MetadataLineageOperations &
+  ProfilePreferences &
+  SessionHostPartitionOperations &
+  SessionSnapshotOperations &
+  PtyBindingPersistenceOperations &
+  SshProfileOperations &
+  RetiredWorktreeNamePersistence &
+  SshLeaseRecoveryOperations &
+  WriteFlushBarrierOperations
+
 export type StoreDomains = {
   adaptation: LoadedStateAdaptationOperations
-  backups: BackupRecoveryRotationOperations
   cohorts: LoadedCohortMigrationOperations
   loader: LoadedStateParsingOperations
   serialization: StateSerializationSecretHandlingOperations
@@ -130,11 +145,10 @@ export function installStoreDomainContexts(target: Store, domains: StoreDomains)
 
 export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
   const adaptation = new LoadedStateAdaptationOperations(runtime)
-  const backups = new BackupRecoveryRotationOperations(runtime)
   const cohorts = new LoadedCohortMigrationOperations(runtime)
-  const loader = new LoadedStateParsingOperations(runtime, backups, cohorts)
+  const loader = new LoadedStateParsingOperations(runtime, cohorts)
   const serialization = new StateSerializationSecretHandlingOperations(runtime)
-  const writes = new PrimaryStateWriteOperations(runtime, serialization, backups)
+  const writes = new PrimaryStateWriteOperations(runtime, serialization)
   const scheduling = new WriteSchedulingOperations(runtime, writes)
   const flushBarriers = new WriteFlushBarrierOperations(runtime, writes)
   const preferences = new ProfilePreferences(runtime, scheduling)
@@ -163,7 +177,6 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
   )
   return {
     adaptation,
-    backups,
     cohorts,
     loader,
     serialization,

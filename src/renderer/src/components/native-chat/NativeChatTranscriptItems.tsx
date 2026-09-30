@@ -2,7 +2,7 @@ import {
   NativeChatTranscriptRow,
   type NativeChatTranscriptRowContext
 } from './NativeChatTranscriptRow'
-import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
+import { nativeChatSlotKey, type NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 import type { NativeChatTranscriptWindow } from './use-native-chat-transcript-window'
 
 /** Windowed transcript rows, absolutely positioned inside a full-height spacer. */
@@ -46,5 +46,22 @@ export function NativeChatTranscriptItems({
         )
       })}
     </div>
+  )
+}
+
+/** Rows drawn after the live turn's activity, outside the window: few, and the newest there are. */
+export function NativeChatWaitingTranscriptItems({
+  slots,
+  context
+}: {
+  slots: readonly NativeChatTranscriptSlot[]
+  context: NativeChatTranscriptRowContext
+}): React.JSX.Element {
+  return (
+    <>
+      {slots.map((slot) => (
+        <NativeChatTranscriptRow key={nativeChatSlotKey(slot)} slot={slot} context={context} />
+      ))}
+    </>
   )
 }

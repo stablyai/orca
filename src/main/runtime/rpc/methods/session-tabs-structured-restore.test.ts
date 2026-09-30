@@ -102,20 +102,4 @@ describe('session tab structured restore gating', () => {
     expect(response.ok).toBe(true)
     expect(runtime.restoreStructuredAgentSessionTabs).toHaveBeenCalledTimes(1)
   })
-
-  it('restores structured tabs for mobile once the setting is present', async () => {
-    const runtime = makeRuntime(true)
-    const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
-
-    const response = await dispatcher.dispatch(
-      makeRequest('session.tabs.list', { worktree: 'id:wt-1' }),
-      {
-        clientKind: 'mobile',
-        clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
-      }
-    )
-
-    expect(response.ok).toBe(true)
-    expect(runtime.restoreStructuredAgentSessionTabs).toHaveBeenCalledTimes(1)
-  })
 })

@@ -6,7 +6,6 @@ import { buildDirectWorkItemAgentStartupPlan } from '@/lib/launch-work-item-dire
 import type { AgentSessionLaunchPlan } from '@/lib/agent-session-launch-plan'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
-import { preflightAgentTrust } from '@/lib/agent-trust-preflight'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/structured-agent-session-provisional-tab'
 
 export function buildDirectWorkItemStartup(args: {
@@ -77,23 +76,6 @@ export async function resolveDirectWorkItemAgent(args: {
     ),
     unavailable: false
   }
-}
-
-/** Why: runs only before the legacy route; structured chat has no TUI trust menu. */
-export async function markDirectWorkItemAgentTrusted(args: {
-  structuredLaunch: boolean
-  agent: TuiAgent | null
-  workspacePath: string
-  connectionId: string | null
-}): Promise<void> {
-  if (args.structuredLaunch) {
-    return
-  }
-  await preflightAgentTrust({
-    agent: args.agent,
-    workspacePath: args.workspacePath,
-    connectionId: args.connectionId
-  })
 }
 
 export function beginDirectWorkItemStructuredLaunch(args: {
