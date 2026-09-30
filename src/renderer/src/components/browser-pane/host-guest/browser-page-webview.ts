@@ -1,5 +1,8 @@
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../../shared/browser-guest-web-preferences'
+import { isBrowserRoutePartition } from '../../../../../shared/browser-route-partition'
+import { useAppStore } from '@/store'
+import { createOffscreenPageGuestElement } from './offscreen-page-guest-element'
 import {
   destroyPersistentWebview,
   registerPersistentWebview,
@@ -55,7 +58,14 @@ export function ensureBrowserPageWebview({
     return { container: activeContainer, created, webview }
   }
 
-  webview = document.createElement('webview') as Electron.WebviewTag
+  // Why not routed partitions: route registration authenticates a guest by its webview host.
+  const offscreen =
+    useAppStore.getState().settings?.experimentalOffscreenBrowserPages &&
+    !isBrowserRoutePartition(webviewPartition)
+  webview = offscreen
+    ? createOffscreenPageGuestElement(browserTabId)
+    : // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Electron registers <webview>, so createElement returns a WebviewTag.
+      (document.createElement('webview') as Electron.WebviewTag)
   webview.setAttribute('partition', webviewPartition)
   webview.setAttribute('allowpopups', '')
   // Why: Electron spreads the webpreferences keys verbatim, so the shared

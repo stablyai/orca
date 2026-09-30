@@ -115,3 +115,7 @@ export function addBrowserPageZoomEventListener(
   window.addEventListener(ORCA_BROWSER_PAGE_ZOOM_EVENT, listener)
   return () => window.removeEventListener(ORCA_BROWSER_PAGE_ZOOM_EVENT, listener)
 }
+
+export function dispatchBrowserPageZoomEvent(command: BrowserPageZoomCommand): void {
+  window.dispatchEvent(new CustomEvent(ORCA_BROWSER_PAGE_ZOOM_EVENT, { detail: command }))
+}

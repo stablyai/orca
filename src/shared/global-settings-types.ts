@@ -218,6 +218,8 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   terminalUrlMiddleClickBehavior?: 'open' | 'actions' | 'none'
   /** New supported agent launches use structured Chat UI; off defaults to terminal UI. */
   experimentalNativeChat?: boolean
+  /** Desktop browser tabs render offscreen so page input can't take the host window's focus. */
+  experimentalOffscreenBrowserPages?: boolean
   /** Opt-in: resume working structured chats automatically on the next launch. Off still offers
    *  the list, so the user sees exactly what would run before anything spends tokens. */
   nativeChatResumeWorkOnRestart?: boolean

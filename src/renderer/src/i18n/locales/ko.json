@@ -12438,6 +12438,16 @@
           "description": "이 호스트는 현재 상태 그대로 관리형 서버로 돌아갑니다. 이전 버전의 Orca가 여기에서 추가하거나 변경한 내용은 이동되지 않으며, 정리될 때까지 이 컴퓨터의 저장된 설정에만 남습니다.",
           "cancel": "취소",
           "confirm": "서버 버전 유지"
+        },
+        "offscreenBrowserPages": {
+          "detail": "Browser tabs render offscreen and paint into the pane, so an agent clicking or typing in a page never moves focus or interrupts IME composition in your terminal. Applies to tabs opened after the change.",
+          "search": {
+            "title": "Focus-safe browser pages",
+            "description": "Render browser tabs offscreen so agent clicks and typing never take focus from your terminal.",
+            "keywordBrowser": "browser",
+            "keywordFocus": "focus",
+            "keywordIme": "ime"
+          }
         }
       },
       "right": {

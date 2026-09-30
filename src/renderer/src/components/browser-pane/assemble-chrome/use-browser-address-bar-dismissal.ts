@@ -1,3 +1,4 @@
+import { isBrowserPageGuestElement } from '../host-guest/browser-page-guest-element-kind'
 import { useEffect } from 'react'
 
 /**
@@ -18,7 +19,7 @@ export function useBrowserAddressBarDismissal(open: boolean, dismissSuggestions:
 
     const handleFocusIn = (event: FocusEvent): void => {
       const target = event.target
-      if (!(target instanceof HTMLElement) || target.tagName !== 'WEBVIEW') {
+      if (!(target instanceof HTMLElement) || !isBrowserPageGuestElement(target)) {
         return
       }
       dismissSuggestions()

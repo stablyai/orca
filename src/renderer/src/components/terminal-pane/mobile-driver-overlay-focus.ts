@@ -1,3 +1,4 @@
+import { isBrowserPageGuestElement } from '../browser-pane/host-guest/browser-page-guest-element-kind'
 type FocusLike = {
   tagName?: string
   isContentEditable?: boolean
@@ -30,7 +31,7 @@ export function shouldFocusMobileDriverAction(
   // Why: focused Electron webviews represent guest-page keyboard focus; they
   // are not editable DOM controls in the host document, but stealing focus from
   // them still interrupts the user's typing in the page.
-  if (active.tagName === 'WEBVIEW') {
+  if (isBrowserPageGuestElement(active)) {
     return false
   }
 

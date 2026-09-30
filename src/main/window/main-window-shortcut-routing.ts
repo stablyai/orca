@@ -21,6 +21,11 @@ import type { CreateMainWindowOptions } from './main-window-contracts'
 import type { MainWindowFocusLifecycle } from './main-window-focus-lifecycle'
 import { sendResolvedWindowShortcutAction } from './main-window-shortcut-actions'
 import { isMacAppPasteInput } from './main-window-visual-lifecycle'
+import {
+  isOffscreenPageKeyboardFocused,
+  routeOffscreenPageShortcut,
+  routeOffscreenPageZoomCommand
+} from '../browser/offscreen-page-keyboard-routing'
 
 export function installMainWindowShortcutRouting(args: {
   focus: MainWindowFocusLifecycle
@@ -126,7 +131,11 @@ export function installMainWindowShortcutRouting(args: {
       return
     }
 
-    if (isMacAppPasteInput(input)) {
+    // Why: a focused offscreen page takes keys the way a focused guest does, so Orca's window
+    // handles only what a guest would forward to it.
+    const offscreenPageFocused = isOffscreenPageKeyboardFocused(mainWindow.webContents.id)
+
+    if (!offscreenPageFocused && isMacAppPasteInput(input)) {
       // Why: chat/terminal panes hold focus without native editable controls, so route Cmd+V through Orca's paste ownership.
       event.preventDefault()
       mainWindow.webContents.send('ui:appMenuPaste')
@@ -182,6 +191,13 @@ export function installMainWindowShortcutRouting(args: {
         }
         // No allowlisted action: let the keydown reach the renderer, whose detector completes and dispatches inline.
       }
+    }
+
+    // Why here: keys typed into an offscreen page land on this window, not on a guest, and must
+    // resolve as a focused guest's would, the recent-tab switcher included.
+    if (offscreenPageFocused) {
+      routeOffscreenPageShortcut(mainWindow.webContents.id, event, input)
+      return
     }
 
     if (
@@ -250,6 +266,9 @@ export function installMainWindowShortcutRouting(args: {
         }
       )
     ) {
+      return
+    }
+    if (routeOffscreenPageZoomCommand(mainWindow.webContents.id, event, zoomDirection)) {
       return
     }
     event.preventDefault()
