@@ -124,6 +124,7 @@ export function buildWslInteractiveLoginShellCommand(): string {
     '  _orca_shell_ready_root="${ORCA_USER_DATA_PATH%/}/shell-ready"',
     'fi',
     '_orca_wsl_shell_name=$(basename "$_orca_wsl_shell" | tr "[:upper:]" "[:lower:]")',
+    '_orca_wsl_shell_wrapped=""',
     'case "$_orca_wsl_shell_name" in',
     '  bash)',
     '    if [ -n "${_orca_shell_ready_root:-}" ] && [ -f "${_orca_shell_ready_root}/bash/rcfile" ]; then',
@@ -133,9 +134,32 @@ export function buildWslInteractiveLoginShellCommand(): string {
     '  zsh)',
     '    if [ -n "${_orca_shell_ready_root:-}" ] && [ -d "${_orca_shell_ready_root}/zsh" ]; then',
     '      export ZDOTDIR="${_orca_shell_ready_root}/zsh"',
+    '      _orca_wsl_shell_wrapped=1',
     '    fi',
     '    ;;',
     'esac',
+    WSL_UNWRAPPED_SHELL_READY_BLOCK,
     'exec "$_orca_wsl_shell" -l'
   ].join('\n')
 }
+
+/**
+ * Runs just before an unwrapped guest shell is exec'd (fish, sh, or bash/zsh
+ * whose wrapper is missing).
+ *
+ * Why: the host holds a startup command until the guest reports ready (see
+ * wsl-startup-shell-ready.ts). A wrapped shell reports from its prompt; an
+ * unwrapped one never would, and its command would sit out the whole timeout.
+ * Marking here still waits out the WSL boot and login, which is where the
+ * typed-too-early command was lost (#24188). The channel is consumed either way
+ * so it cannot leak into the user's shell. The marker must match
+ * SHELL_READY_MARKER_ESCAPED in src/main/providers/local-pty-shell-ready-marker.ts.
+ */
+export const WSL_UNWRAPPED_SHELL_READY_BLOCK = [
+  'if [ -z "$_orca_wsl_shell_wrapped" ]; then',
+  '  case ",${ORCA_SHELL_FEATURES:-}," in',
+  "    *,ready,*) printf '\\033]777;orca-shell-ready\\007' ;;",
+  '  esac',
+  '  unset ORCA_SHELL_FEATURES',
+  'fi'
+].join('\n')

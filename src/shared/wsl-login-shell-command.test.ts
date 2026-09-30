@@ -8,7 +8,8 @@ import {
   buildWslExecArgs,
   buildWslInteractiveLoginShellCommand,
   buildWslLoginShellCommand,
-  quotePosixShell
+  quotePosixShell,
+  WSL_UNWRAPPED_SHELL_READY_BLOCK
 } from './wsl-login-shell-command'
 
 const WSL_TEST_COMMAND_TIMEOUT_MS = 10_000
@@ -337,5 +338,42 @@ describe('in-guest wrapper root resolution', () => {
     const result = spawnSync('sh', ['-c', probe], { encoding: 'utf8' })
     expect(result.status).toBe(0)
     expect(result.stdout).toBe('/mnt/c/ud/shell-wrappers/deadbeefdeadbeef/shell-ready')
+  })
+})
+
+// Why: the host holds a WSL startup command until this marker (#24188); an
+// unwrapped guest shell never emits one itself.
+describe('unwrapped guest shell ready marker', () => {
+  const runBlock = (features: string | null, wrapped: boolean): string => {
+    const probe = [
+      features === null ? 'unset ORCA_SHELL_FEATURES' : `export ORCA_SHELL_FEATURES=${features}`,
+      `_orca_wsl_shell_wrapped=${wrapped ? '1' : '""'}`,
+      WSL_UNWRAPPED_SHELL_READY_BLOCK,
+      'printf "|%s" "${ORCA_SHELL_FEATURES-unset}"'
+    ].join('\n')
+    const result = spawnSync('sh', ['-c', probe], { encoding: 'utf8' })
+    expect(result.status).toBe(0)
+    return result.stdout
+  }
+
+  it('is part of the interactive login script, before the final exec', () => {
+    const script = buildWslInteractiveLoginShellCommand()
+    expect(script.indexOf(WSL_UNWRAPPED_SHELL_READY_BLOCK)).toBeGreaterThan(-1)
+    expect(script.indexOf(WSL_UNWRAPPED_SHELL_READY_BLOCK)).toBeLessThan(
+      script.lastIndexOf('exec "$_orca_wsl_shell" -l')
+    )
+  })
+
+  it('emits the marker the host scans for when ready was requested', () => {
+    expect(runBlock('ready', false)).toBe('\x1b]777;orca-shell-ready\x07|unset')
+  })
+
+  it('stays silent without the request, and never leaks the channel', () => {
+    expect(runBlock(null, false)).toBe('|unset')
+    expect(runBlock('markers', false)).toBe('|unset')
+  })
+
+  it('leaves a wrapped shell to report and consume the channel itself', () => {
+    expect(runBlock('ready', true)).toBe('|ready')
   })
 })

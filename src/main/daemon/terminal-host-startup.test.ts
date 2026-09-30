@@ -131,3 +131,61 @@ describe('TerminalHost startup command delivery logging', () => {
     expect(sub.write).toHaveBeenCalledWith(`codex${process.platform === 'win32' ? '\r' : '\n'}`)
   })
 })
+
+// Why: a command typed into wsl.exe before the distro's login shell is reading
+// is dropped (#24188). The daemon learns the pane is WSL only from the spawned
+// subprocess, so the wait has to switch on there, not from main's hint.
+describe('TerminalHost WSL startup command', () => {
+  const origPlatform = process.platform
+  let emitData: (data: string) => void
+  let sub: SubprocessHandle
+  let host: TerminalHost
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    emitData = () => {}
+    sub = {
+      ...mockSubprocess(),
+      shellPath: 'C:\\Windows\\System32\\wsl.exe',
+      onData: (cb: (data: string) => void) => {
+        emitData = cb
+      }
+    }
+    host = new TerminalHost({ spawnSubprocess: () => sub })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    Object.defineProperty(process, 'platform', { value: origPlatform })
+  })
+
+  const create = (sessionId: string): Promise<unknown> =>
+    host.createOrAttach({
+      sessionId,
+      cols: 80,
+      rows: 24,
+      command: "pi 'test'",
+      shellReadySupported: false,
+      streamClient: { onData: vi.fn(), onExit: vi.fn() }
+    })
+
+  it('holds the command until the guest shell reports ready', async () => {
+    await create('wsl-ready')
+    emitData('\x1b[?25l\x1b[2J')
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(sub.write).not.toHaveBeenCalledWith("pi 'test'\r")
+
+    emitData('\x1b]777;orca-shell-ready\x07')
+    emitData('➜  rcm ')
+    await vi.advanceTimersByTimeAsync(100)
+    // Raw submit: the guest may be a shell Orca does not wrap, so no bracketed paste.
+    expect(sub.write).toHaveBeenCalledWith("pi 'test'\r")
+  })
+
+  it('still delivers the command when the guest never reports ready', async () => {
+    await create('wsl-timeout')
+    await vi.advanceTimersByTimeAsync(15_000)
+    expect(sub.write).toHaveBeenCalledWith("pi 'test'\r")
+  })
+})

@@ -37,6 +37,8 @@ export type ShellReadyLaunchConfig = {
   args: string[] | null
   env: Record<string, string>
   supportsReadyMarker: boolean
+  /** Overrides STARTUP_COMMAND_READY_MAX_WAIT_MS for a shell whose marker is known to come late. */
+  readyTimeoutMs?: number
 }
 
 const UNWRAPPED: ShellReadyLaunchConfig = {
