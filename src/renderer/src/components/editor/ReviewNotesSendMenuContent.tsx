@@ -3,13 +3,7 @@ import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
-import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
-import { AgentIcon } from '@/lib/agent-catalog'
-import {
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator
-} from '@/components/ui/dropdown-menu'
+import { DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import {
   activeAgentNotesSendFailureMessage,
@@ -20,25 +14,19 @@ import {
   deriveNotesSendAgentTargets,
   type NotesSendAgentTarget
 } from '@/lib/notes-send-agent-targets'
-import {
-  agentKindForAgentType,
-  formatAgentTypeLabel,
-  agentTypeToIconAgent
-} from '@/lib/agent-status'
+import { agentKindForAgentType } from '@/lib/agent-status'
 import { track } from '@/lib/telemetry'
 import { useNow } from '@/hooks/use-now'
-import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
-import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
 import { selectLivePtyIdsForWorktree } from '@/components/sidebar/worktree-card-status-inputs'
 import { useWorktreeAgentRows } from '@/components/sidebar/useWorktreeAgentRows'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
-import { agentRowDotState } from '@/lib/agent-row-dot-state'
 import { translate } from '@/i18n/i18n'
-
-type OrderedSendTarget = {
-  target: NotesSendAgentTarget
-  agent: DashboardAgentRowData | null
-}
+import {
+  getTerminalIndexForTab,
+  resolveCurrentSendTargetEligibility,
+  orderSendTargetsByWorktreeAgentRows
+} from './review-notes-send-menu-helpers'
+import { AgentTargetMenuItem } from './AgentTargetMenuItem'
 
 export function ReviewNotesSendMenuContent({
   worktreeId,
@@ -185,16 +173,24 @@ export function ReviewNotesSendMenuContent({
       <DropdownMenuLabel>
         {translate('auto.components.editor.ReviewNotesSendMenuContent.03378aea75', 'Send notes to')}
       </DropdownMenuLabel>
-      {orderedSendTargets.map(({ target, agent }) => (
-        <AgentTargetMenuItem
-          key={target.paneKey}
-          target={target}
-          agent={agent}
-          now={now}
-          disabled={!hasPrompt || target.status !== 'eligible'}
-          onSend={sendToAgentTarget}
-        />
-      ))}
+      {orderedSendTargets.map(({ target, agent }) => {
+        const { terminalIndex, tabColor } = getTerminalIndexForTab(
+          tabsByWorktree?.[worktreeId],
+          target.tabId
+        )
+        return (
+          <AgentTargetMenuItem
+            key={target.paneKey}
+            target={target}
+            agent={agent}
+            terminalIndex={terminalIndex}
+            tabColor={tabColor}
+            now={now}
+            disabled={!hasPrompt || target.status !== 'eligible'}
+            onSend={sendToAgentTarget}
+          />
+        )
+      })}
       <DropdownMenuSeparator />
       <DropdownMenuLabel>
         {translate('auto.components.editor.ReviewNotesSendMenuContent.a49800405b', 'New agent')}
@@ -210,127 +206,4 @@ export function ReviewNotesSendMenuContent({
       />
     </>
   )
-}
-
-function resolveCurrentSendTargetEligibility(
-  target: NotesSendAgentTarget,
-  worktreeId: string
-): { status: 'eligible' } | { status: 'disabled'; disabledReason: string } {
-  const state = useAppStore.getState()
-  const currentTarget = deriveNotesSendAgentTargets(state, worktreeId).find(
-    (candidate) => candidate.paneKey === target.paneKey
-  )
-  if (currentTarget) {
-    return currentTarget.status === 'eligible'
-      ? { status: 'eligible' }
-      : {
-          status: 'disabled',
-          disabledReason: currentTarget.disabledReason ?? 'Terminal is no longer available'
-        }
-  }
-
-  return { status: 'disabled', disabledReason: 'Terminal is no longer available' }
-}
-
-function AgentTargetMenuItem({
-  target,
-  agent,
-  now,
-  disabled,
-  onSend
-}: {
-  target: NotesSendAgentTarget
-  agent: DashboardAgentRowData | null
-  now: number
-  disabled: boolean
-  onSend: (target: NotesSendAgentTarget) => void
-}): React.JSX.Element {
-  const tabTitle = target.tabTitle.trim()
-  const state = agentRowDotState(agent?.state ?? 'idle', agent?.entry.workingMode)
-  const timeAgo = agent ? formatAgentRelativeTime(agent, now) : null
-  const disabledReason = target.status === 'disabled' ? target.disabledReason : undefined
-  const secondaryParts = [
-    agentStateLabel(state),
-    ...(timeAgo ? [timeAgo] : []),
-    ...(tabTitle ? [tabTitle] : [])
-  ]
-  return (
-    <DropdownMenuItem
-      disabled={disabled}
-      onSelect={() => onSend(target)}
-      // Why: surface the ineligibility reason (permission/stale/no-terminal) as a
-      // hover tooltip rather than inline text, matching DashboardAgentRow's
-      // title-attribute treatment of the same disabledReason.
-      title={disabledReason}
-      className="min-w-[240px] gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-    >
-      {/* Why: the ancestor's actionable disabled reason must win on every hit area. */}
-      <AgentStateDot
-        state={state}
-        size="sm"
-        className="shrink-0"
-        title={disabledReason ? null : undefined}
-      />
-      <AgentIcon agent={agentTypeToIconAgent(target.agentType ?? agent?.agentType)} size={14} />
-      <span className="grid min-w-0 flex-1 text-left">
-        <span className="truncate">
-          {formatAgentTypeLabel(target.agentType ?? agent?.agentType)}
-        </span>
-        <span className="truncate text-[11px] font-normal text-muted-foreground">
-          {secondaryParts.join(' · ')}
-        </span>
-      </span>
-    </DropdownMenuItem>
-  )
-}
-
-function orderSendTargetsByWorktreeAgentRows(
-  sendTargets: NotesSendAgentTarget[],
-  agentRows: DashboardAgentRowData[]
-): OrderedSendTarget[] {
-  const targetsByPaneKey = new Map(sendTargets.map((target) => [target.paneKey, target]))
-  const usedPaneKeys = new Set<string>()
-  const ordered: OrderedSendTarget[] = []
-
-  for (const agent of agentRows) {
-    const target = targetsByPaneKey.get(agent.paneKey)
-    if (!target) {
-      continue
-    }
-    ordered.push({ target: { ...target, agentType: agent.agentType }, agent })
-    usedPaneKeys.add(target.paneKey)
-  }
-
-  for (const target of sendTargets) {
-    if (!usedPaneKeys.has(target.paneKey)) {
-      ordered.push({ target, agent: null })
-    }
-  }
-
-  return ordered
-}
-
-function formatAgentRelativeTime(agent: DashboardAgentRowData, now: number): string | null {
-  const doneAt = lastEnteredDoneAt(agent)
-  if (doneAt !== null) {
-    return `${formatTimeAgo(doneAt, now)}`
-  }
-  const startedAt = agent.startedAt > 0 ? agent.startedAt : agent.entry.stateStartedAt
-  return startedAt > 0 ? `${formatTimeAgo(startedAt, now)}` : null
-}
-
-function formatTimeAgo(ts: number, now: number): string {
-  const delta = now - ts
-  if (delta < 60_000) {
-    return 'just now'
-  }
-  const minutes = Math.floor(delta / 60_000)
-  if (minutes < 60) {
-    return `${minutes}m ago`
-  }
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) {
-    return `${hours}h ago`
-  }
-  return `${Math.floor(hours / 24)}d ago`
 }
