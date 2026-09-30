@@ -11,6 +11,7 @@ import type { ManagedHookDetectionSettings } from './managed-hook-detection-comm
 import { installRemoteManagedAgentHooks } from './remote-managed-hook-installers'
 import { getOpenCode2PluginSource, getOpenCodePluginSource } from '../opencode/hook-service'
 import { getPiAgentStatusExtensionSource } from '../pi/agent-status-extension-source'
+import { getPiPrefillExtensionSource } from '../pi/prefill-extension-source'
 import { codexHookService } from '../codex/hook-service'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import type { PluginSources } from '../../relay/plugin-overlay'
@@ -125,7 +126,8 @@ export const defaultWslHookRelayDeps: WslHookRelayManagerDeps = {
     opencode2PluginSource: getOpenCode2PluginSource(),
     piExtensionSource: getPiAgentStatusExtensionSource('pi'),
     ompExtensionSource: getPiAgentStatusExtensionSource('omp'),
-    omoExtensionSource: getPiAgentStatusExtensionSource('omo')
+    omoExtensionSource: getPiAgentStatusExtensionSource('omo'),
+    omoPrefillExtensionSource: getPiPrefillExtensionSource('omo')
   }),
   warn: (message) => console.warn(message),
   transientRetryDelayMs: WSL_RELAY_TRANSIENT_RETRY_DELAY_MS

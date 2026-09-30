@@ -16,7 +16,6 @@ import { materializeOmpFreshConfig } from '../shared/omp-fresh-config'
 // path. The relay's electron-free constraint forces a thin parallel
 // implementation rooted at $HOME/.orca-relay/ for OpenCode and at the remote
 // Pi/OMP homes for those agents.
-import { createHash } from 'node:crypto'
 import {
   existsSync,
   mkdirSync,
@@ -38,6 +37,11 @@ import {
 import { writeRelayOmpStatusExtension } from './omp-status-extension'
 import {
   clearPluginOverlayDirs,
+  isUsableId,
+  ORCA_MANAGED_EXTENSION_MARKER,
+  PI_AGENT_HOME_DIR_NAME,
+  safeDirName,
+  withOrcaManagedPiExtensionMarker,
   writeManagedExtension,
   writeOmoPrefillExtension
 } from './plugin-overlay-files'
@@ -56,33 +60,6 @@ const PI_AGENT_SUBDIR = 'agent'
 const OMP_MANAGED_STATUS_EXTENSION_DIR = 'omp-managed-status-extension'
 // Why: bare-shell OMP still needs ORCA_OMP_STATUS_EXTENSION without mkdir ~/.omp.
 // Mirror local userData/omp-managed-status-extension under the relay home root.
-const ORCA_MANAGED_EXTENSION_MARKER = '@orca-managed-pi-extension'
-function withOrcaManagedPiExtensionMarker(source: string): string {
-  return source.includes(ORCA_MANAGED_EXTENSION_MARKER)
-    ? source
-    : `// ${ORCA_MANAGED_EXTENSION_MARKER}\n${source}`
-}
-// Why: source-dir resolution is keyed off the launching agent (Pi or OMP).
-// Both consume `PI_CODING_AGENT_DIR` but default to different `~/.<kind>/agent`
-// paths on the remote disk. The renderer-chosen launch command flows in via
-// the relay PtyEnvAugmenter ctx; never derived from disk presence (a
-// cross-agent fallback shadows the other agent's user extensions when both
-// are installed).
-const PI_AGENT_HOME_DIR_NAME: Record<PiAgentKind, string> = {
-  pi: '.pi',
-  omp: '.omp',
-  'prime-agent': '.prime',
-  omo: '.omo'
-}
-function safeDirName(input: string): string {
-  // Why: paneKey embeds tabId:paneId where tabId may itself contain
-  // filesystem-unsafe characters in some Orca builds. Hash to a fixed-width
-  // hex name so any input produces a portable directory name.
-  return createHash('sha256').update(input).digest('hex').slice(0, 32)
-}
-function isUsableId(id: string): boolean {
-  return typeof id === 'string' && id.length > 0 && id.length <= 1024
-}
 export type PluginSources = {
   /** Empty string revokes future installs; omission preserves the cached source. */
   opencodePluginSource?: string
@@ -370,7 +347,6 @@ export class PluginOverlayManager {
   clearOverlay(id: string): void {
     if (isUsableId(id)) {
       clearPluginOverlayDirs(
-        id,
         [this.opencodeRoot, this.opencode2Root, ...Object.values(this.piRoots)],
         safeDirName(id)
       )
