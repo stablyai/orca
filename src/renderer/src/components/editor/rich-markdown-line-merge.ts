@@ -7,9 +7,13 @@ import { DIFF_DELETE, DIFF_EQUAL, DIFF_INSERT, makeDiff } from '@sanity/diff-mat
 // original bytes; regions the user DID touch emit `theirs` (canonical). No TipTap
 // re-parse, so cost scales with the line diff rather than O(n^2) document size.
 
-// Why: line diffs run only on the save/debounce fallback path, never per keystroke;
-// a 1s ceiling keeps a pathological input from stalling without truncating normal edits.
-const LINE_DIFF_TIMEOUT_SECONDS = 1
+// Why: line diffs run on the save path, so stay well inside the 300ms serialize debounce;
+// a timed-out diff collapses and the caller falls back to canonical output.
+const LINE_DIFF_TIMEOUT_SECONDS = 0.25
+
+// Why: diff chunk lengths are UTF-16 code units, so each line must encode to exactly one;
+// code points from the surrogate range upward don't (and lone surrogates can pair up).
+const MAX_DISTINCT_LINES = 0xd800
 
 type LineRegion = { baseLo: number; baseHi: number; sideLo: number; sideHi: number }
 
@@ -21,21 +25,33 @@ function splitLinesKeepingEol(text: string): string[] {
   return text.match(/[^\n]*\n|[^\n]+$/g) ?? []
 }
 
-/** Encodes each distinct line as one code point so a char diff behaves as a line diff. */
-function encodeLines(base: string[], side: string[]): { encodedBase: string; encodedSide: string } {
+/**
+ * Encodes each distinct line as one UTF-16 code unit so a char diff behaves as a line
+ * diff. Returns null when there are too many distinct lines to encode that way.
+ */
+function encodeLines(
+  base: string[],
+  side: string[]
+): { encodedBase: string; encodedSide: string } | null {
   const lineToChar = new Map<string, string>()
-  const encode = (lines: string[]): string =>
-    lines
-      .map((line) => {
-        let char = lineToChar.get(line)
-        if (char === undefined) {
-          char = String.fromCodePoint(lineToChar.size)
-          lineToChar.set(line, char)
+  const encode = (lines: string[]): string | null => {
+    let encoded = ''
+    for (const line of lines) {
+      let char = lineToChar.get(line)
+      if (char === undefined) {
+        if (lineToChar.size >= MAX_DISTINCT_LINES) {
+          return null
         }
-        return char
-      })
-      .join('')
-  return { encodedBase: encode(base), encodedSide: encode(side) }
+        char = String.fromCharCode(lineToChar.size)
+        lineToChar.set(line, char)
+      }
+      encoded += char
+    }
+    return encoded
+  }
+  const encodedBase = encode(base)
+  const encodedSide = encodedBase === null ? null : encode(side)
+  return encodedBase === null || encodedSide === null ? null : { encodedBase, encodedSide }
 }
 
 /**
@@ -46,8 +62,12 @@ function encodeLines(base: string[], side: string[]): { encodedBase: string; enc
 function diffLineRegions(
   base: string[],
   side: string[]
-): { regions: LineRegion[]; baseToSide: number[] } {
-  const { encodedBase, encodedSide } = encodeLines(base, side)
+): { regions: LineRegion[]; baseToSide: number[] } | null {
+  const encoded = encodeLines(base, side)
+  if (encoded === null) {
+    return null
+  }
+  const { encodedBase, encodedSide } = encoded
   const diffs = makeDiff(encodedBase, encodedSide, { timeout: LINE_DIFF_TIMEOUT_SECONDS })
 
   const regions: LineRegion[] = []
@@ -93,8 +113,9 @@ type Hunk = LineRegion & { side: 'ours' | 'theirs' }
 
 /**
  * diff3 line merge. Returns null when a line diff timed out into a degenerate
- * whole-document rewrite (protecting against silently dropping untouched content),
- * so the caller can keep its existing canonical fallback.
+ * whole-document rewrite (protecting against silently dropping untouched content)
+ * or the document has too many distinct lines to line-encode, so the caller can keep
+ * its existing canonical fallback.
  */
 export function mergeMarkdownSourceByLines(
   originalSource: string,
@@ -107,6 +128,9 @@ export function mergeMarkdownSourceByLines(
 
   const ours = diffLineRegions(baseLines, oursLines)
   const theirs = diffLineRegions(baseLines, theirsLines)
+  if (ours === null || theirs === null) {
+    return null
+  }
 
   // A single region spanning the whole base means the diff collapsed (e.g. timeout);
   // merging would relocate untouched content, so bail to the caller's fallback.

@@ -39,10 +39,24 @@ describe('mergeMarkdownSourceByLines', () => {
     expect(mergeMarkdownSourceByLines('_a_', '*a*', '*a* b')).toBeNull()
   })
 
+  it('keeps ours bytes on a line that only abuts an edited line', () => {
+    const original = 'a > b\nplain\n'
+    const base = 'a &gt; b\nplain\n'
+    const edited = 'a &gt; b\nplain EDITED\n'
+    expect(mergeMarkdownSourceByLines(original, base, edited)).toBe('a > b\nplain EDITED\n')
+  })
+
+  it('bails to null when distinct lines exceed the one-code-unit line alphabet', () => {
+    const lines = Array.from({ length: 0xd800 + 1 }, (_, i) => `L${i}\n`)
+    const base = lines.join('')
+    const edited = `${base}tail\n`
+    expect(mergeMarkdownSourceByLines(base, base, edited)).toBeNull()
+  })
+
   it('matches a brute-force oracle across randomized edits (fuzz)', () => {
     let seed = 987654321
     const rand = (): number => {
-      seed = (seed * 1103515245 + 12345) & 0x7fffffff
+      seed = (Math.imul(seed, 1103515245) + 12345) & 0x7fffffff
       return seed / 0x7fffffff
     }
     for (let trial = 0; trial < 500; trial += 1) {
