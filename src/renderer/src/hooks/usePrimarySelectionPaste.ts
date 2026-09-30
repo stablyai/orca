@@ -66,6 +66,7 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
   useEffect(() => {
     setPrimarySelectionEnabled(enabled)
     let pendingMiddleTarget: EditablePrimarySelectionPasteTarget | null = null
+    let swallowNextNativePasteTarget: EditablePrimarySelectionPasteTarget | null = null
     let pendingMiddleUntil = 0
 
     const targetMatchesPending = (target: EventTarget | null): boolean => {
@@ -73,6 +74,15 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
         return false
       }
       return target === pendingMiddleTarget || pendingMiddleTarget.contains(target)
+    }
+
+    const targetMatchesSwallow = (target: EventTarget | null): boolean => {
+      if (!swallowNextNativePasteTarget || !(target instanceof Node)) {
+        return false
+      }
+      return (
+        target === swallowNextNativePasteTarget || swallowNextNativePasteTarget.contains(target)
+      )
     }
 
     const rememberPendingTarget = (event: MouseEvent): boolean => {
@@ -103,6 +113,18 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
         Date.now() <= pendingMiddleUntil &&
         targetMatchesPending(event.target)
       ) {
+        suppressEvent(event)
+        return
+      }
+      // Why: Linux middle-click resolves primary selection on mouseup, then
+      // Chromium emits a follow-up native clipboard paste; single-shot swallow
+      // keeps that second paste from duplicating into the same target.
+      if (
+        swallowNextNativePasteTarget &&
+        Date.now() <= pendingMiddleUntil &&
+        targetMatchesSwallow(event.target)
+      ) {
+        swallowNextNativePasteTarget = null
         suppressEvent(event)
         return
       }
@@ -179,11 +201,17 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
     const onMouseUp = (event: MouseEvent): void => {
       if (event.button !== 1 || !pendingMiddleTarget || Date.now() > pendingMiddleUntil) {
         pendingMiddleTarget = null
+        swallowNextNativePasteTarget = null
         return
       }
 
       const target = pendingMiddleTarget
       pendingMiddleTarget = null
+      // Why: only X11/Linux emits Chromium's follow-up native paste; arming
+      // elsewhere would swallow legitimate keyboard or menu pastes.
+      if (isLinuxUserAgent()) {
+        swallowNextNativePasteTarget = target
+      }
       suppressEvent(event)
       const point = {
         clientX: event.clientX,
