@@ -161,6 +161,25 @@ const SSH_REJECTED_PTY_RECOVERY_MAX_ATTEMPTS = 2
 const SSH_REJECTED_PTY_RECOVERY_MAX_GENERATION_ATTEMPTS = 12
 const SSH_REJECTED_PTY_RECOVERY_RETRY_DELAY_MS = 150
 const SSH_SOURCE_RECOVERY_CANCELLATION_FAILED = 'ssh_source_recovery_cancellation_failed'
+export const SSH_RELAY_PLUGIN_INSTALL_MAX_RETRIES = 3
+export const SSH_RELAY_PLUGIN_INSTALL_RETRY_DELAY_MS = 1_000
+
+// Why: permanent failures (byte cap exceeded, invalid params) cannot succeed on retry,
+// while network timeouts and channel hiccups are transient and should be retried.
+function isTransientPluginInstallError(err: unknown): boolean {
+  if (!err) {
+    return false
+  }
+  const code = (err as { code?: unknown })?.code
+  if (code === -32601 || code === -32602 || code === 'CONNECTION_LOST' || code === 'DISPOSED') {
+    return false
+  }
+  const message = err instanceof Error ? err.message : String(err)
+  if (message.includes('byte cap') || message.includes('exceeds')) {
+    return false
+  }
+  return true
+}
 
 // Why: superseded attempts stop quietly; a dead mux still owned by this attempt must enter recovery.
 function verifyRelayAttempt(
@@ -321,6 +340,8 @@ export class SshRelaySession {
   // Why: hold the notification-handler disposer so teardownProviders can release it on reconnect/shutdown (symmetric with muxDisposeCleanup).
   private muxNotificationCleanup: (() => void) | null = null
   private pluginSettingsCleanup: (() => void) | null = null
+  private pluginInstallRetryTimer: ReturnType<typeof setTimeout> | null = null
+  private pluginInstallGeneration = 0
   // Why: onStateChange never fires when the relay channel closes but SSH stays up; this callback lets ssh.ts drive relay-level reconnect.
   private _onRelayLost: ((targetId: string) => void) | null = null
   // Why: a version mismatch or a blocked owner admission is terminal, so it needs a separate callback
@@ -1548,8 +1569,19 @@ export class SshRelaySession {
   }
 
   // Why: ship plugin/extension source from Orca so agent-event changes don't force a relay redeploy — the relay is versioned independently. Best-effort: failure only costs agent status on this host.
-  private async installPluginsOnRelay(mux: SshChannelMultiplexer): Promise<void> {
-    if (!isRemoteAgentHooksEnabled()) {
+  private async installPluginsOnRelay(
+    mux: SshChannelMultiplexer,
+    retryAttempt = 0,
+    generation?: number
+  ): Promise<void> {
+    if (!isRemoteAgentHooksEnabled() || this.isDisposed() || this.mux !== mux || mux.isDisposed()) {
+      return
+    }
+    if (generation === undefined) {
+      this.cancelPluginInstallRetry()
+    }
+    const currentGeneration = generation ?? this.pluginInstallGeneration
+    if (this.pluginInstallGeneration !== currentGeneration) {
       return
     }
     try {
@@ -1574,10 +1606,15 @@ export class SshRelaySession {
     } catch (err) {
       // Why: -32601 = older relay without the handler; CONNECTION_LOST/DISPOSED = routine mid-flight teardown — swallow both.
       const code = (err as { code?: unknown })?.code
-      if (code === -32601 || code === 'CONNECTION_LOST' || code === 'DISPOSED') {
-        return
-      }
-      if (mux.isDisposed()) {
+      if (
+        this.isDisposed() ||
+        this.mux !== mux ||
+        mux.isDisposed() ||
+        this.pluginInstallGeneration !== currentGeneration ||
+        code === -32601 ||
+        code === 'CONNECTION_LOST' ||
+        code === 'DISPOSED'
+      ) {
         return
       }
       console.warn(
@@ -1585,6 +1622,31 @@ export class SshRelaySession {
           err instanceof Error ? err.message : String(err)
         }`
       )
+      if (
+        isTransientPluginInstallError(err) &&
+        retryAttempt < SSH_RELAY_PLUGIN_INSTALL_MAX_RETRIES
+      ) {
+        this.pluginInstallRetryTimer = setTimeout(() => {
+          this.pluginInstallRetryTimer = null
+          if (
+            !this.isDisposed() &&
+            !mux.isDisposed() &&
+            this.mux === mux &&
+            this.pluginInstallGeneration === currentGeneration
+          ) {
+            void this.installPluginsOnRelay(mux, retryAttempt + 1, currentGeneration)
+          }
+        }, SSH_RELAY_PLUGIN_INSTALL_RETRY_DELAY_MS)
+        this.pluginInstallRetryTimer.unref?.()
+      }
+    }
+  }
+
+  private cancelPluginInstallRetry(): void {
+    this.pluginInstallGeneration++
+    if (this.pluginInstallRetryTimer) {
+      clearTimeout(this.pluginInstallRetryTimer)
+      this.pluginInstallRetryTimer = null
     }
   }
 
@@ -1698,6 +1760,7 @@ export class SshRelaySession {
     this.releaseRelayLossWatcher()
     this.pluginSettingsCleanup?.()
     this.pluginSettingsCleanup = null
+    this.cancelPluginInstallRetry()
     this.muxNotificationCleanup?.()
     this.muxNotificationCleanup = null
     for (const cleanup of this.ptyRecoveryNotificationCleanups) {
