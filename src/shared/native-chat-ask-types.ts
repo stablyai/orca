@@ -8,7 +8,7 @@ export type AskQuestion = {
   multiSelect: boolean
   options: AskOption[]
 }
-export type AskPrompt = { questions: AskQuestion[] }
+export type AskPrompt = { questions: AskQuestion[]; delivery?: 'async' }
 
 /** A parser turns one agent's interactive-question tool input into the normalized
  *  AskPrompt the card renders. */

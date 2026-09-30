@@ -52,7 +52,7 @@ export function deriveInteractivePrompt(
     toolInput !== null
   ) {
     try {
-      return JSON.stringify(toolInput)
+      return typeof toolInput === 'string' ? toolInput : JSON.stringify(toolInput)
     } catch {
       // Why: circular/unserializable input from a buggy agent — a missing live card beats throwing in the hook hot path.
       return undefined

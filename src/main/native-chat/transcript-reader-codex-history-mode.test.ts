@@ -287,4 +287,60 @@ describe('Codex transcript history modes', () => {
     expect(call).not.toBeNull()
     expect(extractPendingAsk(call ? [call] : [])).toBeNull()
   })
+
+  it('keeps a Codex async question visible after its display acknowledgement', () => {
+    const call = decodeCodexTranscriptLine(
+      JSON.stringify({
+        type: 'response_item',
+        payload: {
+          type: 'function_call',
+          id: 'async-call',
+          name: 'request_user_input_async',
+          arguments: JSON.stringify({
+            questions: [{ title: 'Which color?', options: ['Red', 'Blue'] }]
+          })
+        }
+      }),
+      'fallback-async-call'
+    )
+    const acknowledgement = decodeCodexTranscriptLine(
+      JSON.stringify({
+        type: 'response_item',
+        payload: {
+          type: 'function_call_output',
+          call_id: 'async-call',
+          output: { accepted: true }
+        }
+      }),
+      'fallback-async-output'
+    )
+
+    expect(
+      call && acknowledgement ? extractPendingAsk([call, acknowledgement]) : null
+    ).toMatchObject({
+      questions: [{ question: 'Which color?', options: [{ label: 'Red' }, { label: 'Blue' }] }],
+      delivery: 'async'
+    })
+  })
+
+  it('replays a synchronous Codex question whose arguments are serialized', () => {
+    const call = decodeCodexTranscriptLine(
+      JSON.stringify({
+        type: 'response_item',
+        payload: {
+          type: 'function_call',
+          id: 'sync-call',
+          name: 'request_user_input',
+          arguments: JSON.stringify({
+            questions: [{ question: 'Which color?', options: ['Red', 'Blue'] }]
+          })
+        }
+      }),
+      'fallback-sync-call'
+    )
+
+    expect(call ? extractPendingAsk([call]) : null).toMatchObject({
+      questions: [{ question: 'Which color?', options: [{ label: 'Red' }, { label: 'Blue' }] }]
+    })
+  })
 })

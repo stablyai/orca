@@ -182,6 +182,60 @@ describe('parseAskFromStatus', () => {
     )
     expect(prompt?.questions[0]?.options.map((o) => o.label)).toEqual(['a', 'b'])
   })
+
+  it('parses Codex async question titles and title-only questions', () => {
+    const prompt = parseAskFromStatus(
+      JSON.stringify({ questions: [{ title: 'Which color?', options: ['Red', 'Blue'] }] }),
+      'request_user_input_async'
+    )
+    expect(prompt?.questions[0]).toMatchObject({
+      question: 'Which color?',
+      options: [{ label: 'Red' }, { label: 'Blue' }]
+    })
+
+    const freeform = parseAskFromStatus(
+      JSON.stringify({ questions: [{ title: 'Any constraints?' }] }),
+      'request_user_input_async'
+    )
+    expect(freeform?.questions[0]?.question).toBe('Any constraints?')
+  })
+
+  it('keeps an async question after its display acknowledgement', () => {
+    const pending = extractPendingAsk([
+      message('m1', [
+        call('request_user_input_async', {
+          questions: [{ title: 'Which color?', options: ['Red', 'Blue'] }]
+        })
+      ]),
+      {
+        id: 'm2',
+        role: 'tool',
+        blocks: [{ type: 'tool-result', output: '{"accepted":true}' }],
+        timestamp: 1,
+        source: 'transcript'
+      }
+    ])
+
+    expect(pending?.questions[0]?.question).toBe('Which color?')
+  })
+
+  it('retires an async question when the user starts a new turn', () => {
+    const pending = extractPendingAsk([
+      message('m1', [
+        call('request_user_input_async', { questions: [{ title: 'Any constraints?' }] })
+      ]),
+      {
+        id: 'm2',
+        role: 'tool',
+        blocks: [{ type: 'tool-result', output: '{"accepted":true}' }],
+        timestamp: 1,
+        source: 'transcript'
+      },
+      userTurn('m3', 'No constraints')
+    ])
+
+    expect(pending).toBeNull()
+  })
 })
 
 describe('resolveNativeChatAsk', () => {

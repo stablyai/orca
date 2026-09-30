@@ -19,7 +19,7 @@ export function registerQuestionTool(toolName: string, parser: InteractiveQuesti
   QUESTION_TOOL_PARSERS.set(toolName, parser)
 }
 
-function parseCanonicalQuestionsInput(input: unknown): AskPrompt | null {
+function parseCanonicalQuestionsInput(input: unknown, asyncQuestion = false): AskPrompt | null {
   if (!input || typeof input !== 'object') {
     return null
   }
@@ -33,7 +33,15 @@ function parseCanonicalQuestionsInput(input: unknown): AskPrompt | null {
       continue
     }
     const question = raw as Record<string, unknown>
-    const text = typeof question.question === 'string' ? question.question : ''
+    const text = asyncQuestion
+      ? typeof question.title === 'string'
+        ? question.title
+        : typeof question.question === 'string'
+          ? question.question
+          : ''
+      : typeof question.question === 'string'
+        ? question.question
+        : ''
     const options = parseOptions(question.options)
     if (text || options.length > 0) {
       questions.push({
@@ -44,7 +52,9 @@ function parseCanonicalQuestionsInput(input: unknown): AskPrompt | null {
       })
     }
   }
-  return questions.length > 0 ? { questions } : null
+  return questions.length > 0
+    ? { questions, ...(asyncQuestion ? { delivery: 'async' as const } : {}) }
+    : null
 }
 
 function parseOptions(raw: unknown): AskOption[] {
@@ -77,6 +87,10 @@ for (const name of ['AskUserQuestion', 'ask_user_question', 'askUserQuestion']) 
 }
 
 function parseToolInput(toolName: string | undefined, input: unknown): AskPrompt | null {
+  const normalizedToolName = toolName?.replaceAll(/[^a-z0-9]/gi, '').toLowerCase()
+  if (normalizedToolName === 'requestuserinputasync') {
+    return parseCanonicalQuestionsInput(input, true)
+  }
   const parser = toolName ? QUESTION_TOOL_PARSERS.get(toolName) : undefined
   return (parser ? parser(input) : null) ?? parseCanonicalQuestionsInput(input)
 }
@@ -102,9 +116,20 @@ export function parseAskFromToolInput(
   toolName: string | undefined,
   input: unknown
 ): AskPrompt | null {
-  return typeof input === 'string'
-    ? parseAskFromStatus(input, toolName)
-    : parseToolInput(toolName, input)
+  if (typeof input !== 'string') {
+    return parseToolInput(toolName, input)
+  }
+  try {
+    const parsed = JSON.parse(input)
+    const normalizedToolName = toolName?.replaceAll(/[^a-z0-9]/gi, '').toLowerCase()
+    return normalizedToolName === 'requestuserinput' ||
+      normalizedToolName === 'requestuserinputasync' ||
+      (toolName != null && QUESTION_TOOL_PARSERS.has(toolName))
+      ? parseToolInput(toolName, parsed)
+      : null
+  } catch {
+    return null
+  }
 }
 
 /** Resolve the newest question tool that has not received its FIFO tool result.
@@ -131,7 +156,7 @@ export function extractPendingAsk(messages: readonly NativeChatMessage[]): AskPr
     }
     for (const block of message.blocks) {
       if (block.type === 'tool-call') {
-        const parsed = parseToolInput(block.name, block.input)
+        const parsed = parseAskFromToolInput(block.name, block.input)
         if (parsed) {
           pending = parsed
           pendingDepth = outstanding
@@ -140,8 +165,14 @@ export function extractPendingAsk(messages: readonly NativeChatMessage[]): AskPr
       } else if (block.type === 'tool-result' && outstanding > 0) {
         outstanding -= 1
         if (pendingDepth === 0) {
-          pending = null
-          pendingDepth = -1
+          if (!(pending?.delivery === 'async' && isAsyncQuestionAcknowledgement(block.output))) {
+            pending = null
+            pendingDepth = -1
+          } else {
+            // Codex acknowledges that an async card was displayed before the
+            // user answers it. The later user turn retires the card.
+            pendingDepth = -1
+          }
         } else if (pendingDepth > 0) {
           pendingDepth -= 1
         }
@@ -149,6 +180,20 @@ export function extractPendingAsk(messages: readonly NativeChatMessage[]): AskPr
     }
   }
   return pending
+}
+
+export function isAsyncQuestionAcknowledgement(output: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(output)
+    return (
+      parsed != null &&
+      typeof parsed === 'object' &&
+      'accepted' in parsed &&
+      parsed.accepted === true
+    )
+  } catch {
+    return false
+  }
 }
 
 /** Prefers live status and consults transcript history only after its read settles. */

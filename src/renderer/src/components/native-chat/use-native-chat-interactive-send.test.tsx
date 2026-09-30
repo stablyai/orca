@@ -98,6 +98,25 @@ describe('useNativeChatInteractiveSend', () => {
     expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
   })
 
+  it('routes a Codex async answer through the normal message path', () => {
+    const asyncPrompt: AskPrompt = {
+      delivery: 'async',
+      questions: [{ question: 'q', multiSelect: false, options: [{ label: 'A' }, { label: 'B' }] }]
+    }
+    const { result } = renderHook(() =>
+      useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'codex')
+    )
+
+    act(() => result.current.sendAnswer(asyncPrompt, [{ indices: [1] }]))
+
+    expect(mocks.sendNativeChatMessage).toHaveBeenCalledWith(
+      { terminalTabId: 'tab-1' },
+      'pty-1',
+      'B'
+    )
+    expect(mocks.sendNativeChatAskAnswer).not.toHaveBeenCalled()
+  })
+
   it('does not send a trailing Enter after Codex submits a multi-question answer', () => {
     const prompt: AskPrompt = {
       questions: [

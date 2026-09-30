@@ -4,7 +4,7 @@ import {
   type ParsedAgentStatusPayload
 } from '../../agent-status-types'
 import { normalizeOptionalField } from '../../agent-status-field-normalization'
-import { isAskUserQuestionTool } from '../../agent-question-answered-intent'
+import { isAskUserQuestionTool, isAsyncUserInputTool } from '../../agent-question-answered-intent'
 import {
   mainAgentTurnInterrupted,
   type AgentLeadStatusResolution
@@ -153,7 +153,10 @@ export function normalizeCodexEvent(
   // Why: Codex's request_user_input (0.145+) is auto-allowed, so it fires PreToolUse while blocked on a human answer; map to waiting like grok's ask_user_question.
   const isUserInputPreTool =
     eventName === 'PreToolUse' &&
-    isAskUserQuestionTool(readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name'))
+    isAskUserQuestionTool(
+      readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name')
+    ) &&
+    !isAsyncUserInputTool(readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name'))
   const stateName =
     eventName === 'SessionStart' ||
     eventName === 'UserPromptSubmit' ||
