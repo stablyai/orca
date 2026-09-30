@@ -41,6 +41,9 @@ function shortLabel(
   section: UsageSection,
   useRemainingDuration = false
 ): string {
+  if (section.window.estimated) {
+    return section.label
+  }
   if (p.buckets?.some((b) => b.name === section.label)) {
     return section.label
   }
@@ -108,7 +111,10 @@ function UsageMetric({
           />
         </span>
       ) : null}
-      <span className={`tabular-nums text-[11px] ${usageTextColorClass(used)}`}>{shown}%</span>
+      <span className={`tabular-nums text-[11px] ${usageTextColorClass(used)}`}>
+        {section.window.estimated ? '≈' : ''}
+        {shown}%
+      </span>
     </span>
   )
 }

@@ -10,6 +10,8 @@ import { formatUsagePercentageLabel } from './usage-percentage-label'
 describe('formatUsagePercentageLabel', () => {
   it('formats used and remaining percentages without changing source semantics', () => {
     expect(formatUsagePercentageLabel(8, 'used')).toBe('8% used')
+    expect(formatUsagePercentageLabel(8, 'used', true)).toBe('≈8% used')
+    expect(formatUsagePercentageLabel(8, 'remaining', true)).toBe('≈92% left')
     expect(formatUsagePercentageLabel(8, 'remaining')).toBe('92% left')
   })
 })

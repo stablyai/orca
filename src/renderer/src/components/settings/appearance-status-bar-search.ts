@@ -172,6 +172,19 @@ export const getStatusBarToggles = createLocalizedCatalog(
     getCursorStatusBarToggleSearchEntry(),
     getZcodeStatusBarToggleSearchEntry(),
     {
+      id: 'command-code',
+      title: translate('settings.appearance.commandCodeUsageTitle', 'Command Code Usage'),
+      description: translate(
+        'settings.appearance.commandCodeUsageDescription',
+        'Show Command Code quota from an API key or CLI login on this host.'
+      ),
+      keywords: ['command code', 'quota', 'usage'],
+      toggleDescription: translate(
+        'settings.appearance.commandCodeUsageToggle',
+        'Show Command Code quota usage.'
+      )
+    },
+    {
       id: 'ssh',
       title: translate('auto.components.settings.appearance.search.57fb424c56', 'Remote Hosts'),
       description: translate(

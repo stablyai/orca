@@ -162,7 +162,10 @@
           "statusItem": "status item",
           "activity": "activity"
         }
-      }
+      },
+      "commandCodeUsageTitle": "Command Code Usage",
+      "commandCodeUsageDescription": "Show Command Code quota from an API key or CLI login on this host.",
+      "commandCodeUsageToggle": "Show Command Code quota usage."
     },
     "browser": {
       "clientHostedRemote": {
@@ -3837,7 +3840,8 @@
             "codexSignInError": "Codex sign-in failed. Please try again.",
             "cursorUsageMenu": "Cursor Usage",
             "hiddenUsageProviders": "Also: {{value0}}",
-            "zcodeUsageMenu": "ZCode Usage"
+            "zcodeUsageMenu": "ZCode Usage",
+            "command-codeUsageMenu": "Command Code Usage"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -18523,6 +18527,11 @@
   },
   "common": {
     "retry": "Retry"
+  },
+  "statusBar": {
+    "usage": {
+      "monthlyEstimate": "Monthly (estimated)"
+    }
   },
   "terminal": {
     "sessionSaveFailure": {

@@ -53,7 +53,7 @@ function WindowLabel({
 }): React.JSX.Element {
   return (
     <span className="tabular-nums">
-      {formatUsagePercentageLabel(w.usedPercent, display)}
+      {formatUsagePercentageLabel(w.usedPercent, display, w.estimated)}
       {showLabel ? ` ${label}` : ''}
     </span>
   )
@@ -109,7 +109,7 @@ export function UsageOverflowChip({
       const tightest = getTightestUsageSection(p)
       const name = getProviderDisplayName(p.provider)
       return tightest
-        ? `${name} ${formatUsagePercentageLabel(tightest.window.usedPercent, display)}`
+        ? `${name} ${formatUsagePercentageLabel(tightest.window.usedPercent, display, tightest.window.estimated)}`
         : name
     })
     .join(', ')
@@ -151,6 +151,8 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
       return 'R'
     case 'cursor':
       return 'U'
+    case 'command-code':
+      return 'D'
     case 'zcode':
       return 'Z'
     case 'codex':

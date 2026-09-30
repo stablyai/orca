@@ -44,6 +44,17 @@ function grokMonthlyLimits(status: ProviderRateLimits['status']): ProviderRateLi
 }
 
 describe('ProviderSegment monthly window', () => {
+  it('keeps the estimate marker in the narrow-screen overflow summary', async () => {
+    const { UsageOverflowChip } = await import('./StatusBarProviderSegment')
+    const limits: ProviderRateLimits = {
+      ...grokMonthlyLimits('ok'),
+      provider: 'command-code',
+      monthly: { ...windowOf(60, 43200), estimated: true }
+    }
+    const markup = renderToStaticMarkup(<UsageOverflowChip hidden={[limits]} display="remaining" />)
+    expect(markup).toContain('Also: Command Code ≈40% left')
+  })
+
   it('renders a monthly-only snapshot in the chip instead of a bare icon', async () => {
     const { ProviderSegment } = await import('./StatusBar')
 

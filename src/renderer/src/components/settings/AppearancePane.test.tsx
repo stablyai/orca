@@ -553,6 +553,31 @@ describe('AppearancePane', () => {
     expect(mocks.state.toggleStatusBarItem).toHaveBeenCalledWith('minimax')
   })
 
+  it('records Command Code status bar toggles as usage tracking interactions', async () => {
+    mocks.state.availableStatusBarToggles = [
+      {
+        id: 'command-code',
+        title: 'Command Code Usage',
+        description: 'Show Command Code subscription usage in the status bar.',
+        toggleDescription: 'Show Command Code subscription usage for the active workspace.',
+        keywords: ['status bar', 'command-code', 'usage']
+      }
+    ]
+    mocks.state.settingsSearchQuery = 'Command Code'
+    const container = await renderAppearancePane(getDefaultSettings('/tmp'))
+    const commandCodeSwitch = container.querySelector<HTMLButtonElement>(
+      'button[role="switch"][aria-label="Command Code Usage"]'
+    )
+
+    expect(commandCodeSwitch).not.toBeNull()
+    await act(async () => {
+      commandCodeSwitch?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(mocks.state.recordFeatureInteraction).toHaveBeenCalledWith('usage-tracking')
+    expect(mocks.state.toggleStatusBarItem).toHaveBeenCalledWith('command-code')
+  })
+
   it('records Antigravity status bar toggles as usage tracking interactions', async () => {
     mocks.state.availableStatusBarToggles = [
       {

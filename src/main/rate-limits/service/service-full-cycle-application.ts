@@ -1,3 +1,4 @@
+import { validateCommandCodeSnapshot } from '../command-code-usage-fetcher'
 import { RateLimitServiceFullCyclePreparation } from './service-full-cycle-preparation'
 import { deriveAntigravityRateLimits } from '../antigravity-usage-mirror'
 import { settleSiblingProviderResult } from './service-sibling-provider-result'
@@ -37,7 +38,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       ],
       grokResultPromise,
       cursorResultPromise,
-      zcodeResultPromise
+      zcodeResultPromise,
+      commandCodeResultPromise
     } = prepared
     if (signal.aborted) {
       return
@@ -194,10 +196,11 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         : this.state.minimax
     })
 
-    const [grokSettled, cursorSettled, zcodeSettled] = await Promise.all([
+    const [grokSettled, cursorSettled, zcodeSettled, commandCodeSettled] = await Promise.all([
       grokResultPromise,
       cursorResultPromise,
-      zcodeResultPromise
+      zcodeResultPromise,
+      commandCodeResultPromise
     ])
     if (signal.aborted) {
       return
@@ -205,6 +208,12 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     const grok = settleSiblingProviderResult('grok', grokSettled)
     const cursor = settleSiblingProviderResult('cursor', cursorSettled)
     const zcode = settleSiblingProviderResult('zcode', zcodeSettled)
+    const commandCode = await validateCommandCodeSnapshot(
+      settleSiblingProviderResult('command-code', commandCodeSettled)
+    )
+    if (signal.aborted) {
+      return
+    }
     // Why: the stale policy keeps a recent snapshot through a failed refresh, but
     // a snapshot belonging to a different Cursor account must not survive the
     // switch — the Accounts pane would name the new account beside the old
@@ -225,10 +234,12 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     this.trackActiveFailureStreak('grok', grok)
     this.trackActiveFailureStreak('cursor', cursor)
     this.trackActiveFailureStreak('zcode', zcode)
+    this.trackActiveFailureStreak('command-code', commandCode)
     this.updateState({
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok),
       cursor: cursorAccountChanged ? cursor : this.applyStalePolicy(cursor, previousState.cursor),
+      commandCode,
       zcode:
         zcode.status === 'error' && !sameZcodeAccount
           ? zcode

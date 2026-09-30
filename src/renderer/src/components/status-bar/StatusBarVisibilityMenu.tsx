@@ -146,6 +146,19 @@ export function StatusBarVisibilityMenu({
           </DropdownMenuCheckboxItem>
         )}
         <DropdownMenuCheckboxItem
+          checked={statusBarItems.includes('command-code')}
+          onCheckedChange={() => {
+            recordFeatureInteraction('usage-tracking')
+            toggleStatusBarItem('command-code')
+          }}
+        >
+          <AgentIcon agent="command-code" size={14} />
+          {translate(
+            'auto.components.status.bar.StatusBar.command-codeUsageMenu',
+            'Command Code Usage'
+          )}
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem
           checked={statusBarItems.includes('cursor')}
           onCheckedChange={() => {
             recordFeatureInteraction('usage-tracking')

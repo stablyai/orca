@@ -39,6 +39,11 @@ vi.mock('./grok-fetcher', () => ({
   fetchGrokRateLimits: vi.fn()
 }))
 
+vi.mock('./command-code-usage-fetcher', () => ({
+  fetchCommandCodeRateLimits: vi.fn(),
+  validateCommandCodeSnapshot: vi.fn()
+}))
+
 vi.mock('./zcode-usage-fetcher', () => ({ fetchZcodeRateLimits: vi.fn() }))
 
 vi.mock('./cursor-fetcher', () => ({

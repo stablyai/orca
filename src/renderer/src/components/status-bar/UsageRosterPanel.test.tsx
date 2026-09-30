@@ -41,6 +41,38 @@ const signedOutCodex: ProviderRateLimits = {
 }
 
 describe('UsageRow', () => {
+  it('renders Command Code rolling quota with its own name and icon', () => {
+    const markup = renderToStaticMarkup(
+      <UsageRow
+        p={{
+          provider: 'command-code',
+          status: 'ok',
+          error: null,
+          updatedAt: 0,
+          session: { usedPercent: 20, windowMinutes: 300, resetsAt: null, resetDescription: null },
+          weekly: { usedPercent: 75, windowMinutes: 10080, resetsAt: null, resetDescription: null },
+          monthly: {
+            usedPercent: 60,
+            windowMinutes: 43200,
+            resetsAt: null,
+            resetDescription: null,
+            estimated: true
+          }
+        }}
+        display="used"
+        state={{ kind: 'usage', statusLabel: null }}
+        showSignInAction={false}
+        now={mocks.now}
+      />
+    )
+    expect(markup).toContain('Command Code')
+    expect(markup).toContain('data-agent-icon="command-code"')
+    expect(markup).toContain('20%')
+    expect(markup).toContain('75%')
+    expect(markup).toContain('Monthly (estimated)')
+    expect(markup).toContain('≈60%')
+  })
+
   beforeEach(() => {
     mocks.useResetCountdownClock.mockClear()
   })

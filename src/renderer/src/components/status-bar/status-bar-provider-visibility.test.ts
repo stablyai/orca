@@ -518,6 +518,18 @@ describe('isUsageEmptyState', () => {
     expect(isUsageEmptyState(settledProviders, usageSettings())).toBe(true)
     expect(isUsageEmptyState({ ...settledProviders, zcode: undefined }, usageSettings())).toBe(true)
     expect(isUsageEmptyState({ ...settledProviders, zcode: null }, usageSettings())).toBe(false)
+    expect(
+      isUsageEmptyState({ ...settledProviders, commandCode: undefined }, usageSettings())
+    ).toBe(true)
+    expect(isUsageEmptyState({ ...settledProviders, commandCode: null }, usageSettings())).toBe(
+      false
+    )
+    expect(
+      isUsageEmptyState(
+        { ...settledProviders, commandCode: provider('ok', { provider: 'command-code' }) },
+        usageSettings()
+      )
+    ).toBe(false)
   })
 
   it('does not show the setup CTA while checked Antigravity usage is awaiting a snapshot', () => {
