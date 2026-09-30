@@ -30,6 +30,9 @@ export function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
       invalidateRuntimeWorktreeCaches()
     },
     // Why: host-scoped forget targets a desktop-owned SSH host; a paired web client has one runtime and no ghost-host state.
+    // Its records are the runtime's own catalog, so there is nothing client-only to drop — a
+    // forget here could only appear to succeed until the next repo.list. RemoveFolderDialog
+    // therefore withholds the client-only forget on this client rather than offering this throw.
     removeForHost: () => {
       throw new Error('Forgetting a host is unavailable in paired web clients.')
     },

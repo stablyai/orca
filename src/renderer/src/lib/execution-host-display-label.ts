@@ -45,6 +45,19 @@ export function selectExecutionHostDisplayLabel(
 }
 
 /**
+ * The display label only when it names something: a runtime whose environment record is gone
+ * resolves to its routing id, which means nothing to a reader.
+ */
+export function selectNamedExecutionHostLabel(
+  state: AppState,
+  hostId: ExecutionHostId
+): string | null {
+  const label = selectExecutionHostDisplayLabel(state, hostId)
+  const parsed = parseExecutionHostId(hostId)
+  return parsed?.kind === 'runtime' && label === parsed.environmentId ? null : label
+}
+
+/**
  * The machine a worktree's files live on, or null when ownership is still contested — the
  * `unresolved-owner` sentinel is routing bookkeeping and must never reach a reader as a host name.
  */
