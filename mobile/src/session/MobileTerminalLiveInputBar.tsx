@@ -1,5 +1,11 @@
-import type { RefObject } from 'react'
-import { Platform, Pressable, TextInput, View, type StyleProp, type ViewStyle } from 'react-native'
+import {
+  Platform,
+  Pressable,
+  TextInput,
+  View,
+  type StyleProp,
+  type ViewStyle
+} from 'react-native'
 import { Keyboard as KeyboardIcon } from 'lucide-react-native'
 import { HardwareKeyboardCaptureView } from '@orca/expo-hardware-keyboard'
 import { getTerminalLiveInputKeyboardType } from '../terminal/terminal-keyboard-type'
@@ -17,7 +23,7 @@ type DictationState = {
 type Props = {
   readonly canSend: boolean
   readonly liveInputCapture: string
-  readonly liveInputRef: RefObject<TextInput | null>
+  readonly inputRef: (node: TextInput | null) => void
   readonly hardwareCaptureEnabled: boolean
   readonly showSoftInputOnFocus: boolean
   readonly isAttaching: boolean
@@ -35,7 +41,9 @@ type Props = {
     readonly sendButtonDisabled: StyleProp<ViewStyle>
   }
   readonly onFocusPress: () => void
-  readonly onChangeText: (text: string) => void
+  readonly onChange: (event: {
+    nativeEvent: { text: string; isComposing?: boolean }
+  }) => void
   readonly onKeyPress: (event: { nativeEvent: { key: string } }) => void
   readonly onSubmitEditing: () => void
   readonly onHardwareKey: (event: { nativeEvent: TerminalLiveHardwareKeyEvent }) => void
@@ -50,7 +58,7 @@ type Props = {
 export function MobileTerminalLiveInputBar({
   canSend,
   liveInputCapture,
-  liveInputRef,
+  inputRef,
   hardwareCaptureEnabled,
   showSoftInputOnFocus,
   isAttaching,
@@ -58,7 +66,7 @@ export function MobileTerminalLiveInputBar({
   dictationMode,
   styles,
   onFocusPress,
-  onChangeText,
+  onChange,
   onKeyPress,
   onSubmitEditing,
   onHardwareKey,
@@ -84,7 +92,11 @@ export function MobileTerminalLiveInputBar({
         accessibilityHint="Typed text is sent directly to the active terminal"
       >
         <KeyboardIcon size={16} color={colors.textSecondary} strokeWidth={2} />
-        <MobileTerminalLiveInputStatus dictation={dictation} isAttaching={isAttaching} />
+        <MobileTerminalLiveInputStatus
+          dictation={dictation}
+          isAttaching={isAttaching}
+          liveInputText={liveInputCapture}
+        />
       </Pressable>
       <MobileTerminalInputActions
         canSend={canSend}
@@ -107,10 +119,10 @@ export function MobileTerminalLiveInputBar({
         style={styles.liveInputCapture}
       >
         <TextInput
-          ref={liveInputRef}
+          ref={inputRef}
           style={styles.liveInputCapture}
           value={liveInputCapture}
-          onChangeText={onChangeText}
+          onChange={onChange}
           onKeyPress={onKeyPress}
           onSubmitEditing={onSubmitEditing}
           placeholder=""

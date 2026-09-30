@@ -52,7 +52,7 @@ type TerminalLiveInputCommitHandlers = {
   readonly handleLiveInputAccessoryBytes: (
     input: TerminalLiveAccessoryInput
   ) => Promise<TerminalLiveAccessoryInputCommitResult>
-  readonly handleLiveInputChange: (event: TerminalLiveInputChangeEvent) => void
+  readonly handleLiveInputChange: (event: TerminalLiveInputChangeEvent | string) => void
   readonly handleLiveInputHardwareKey: (event: TerminalLiveHardwareKeyEvent) => void
   readonly handleLiveInputKeyPress: (event: TerminalLiveInputKeyPressEvent) => void
   readonly handleLiveInputSubmit: () => Promise<boolean>
@@ -71,6 +71,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
   setLiveInputCapture
 }: TerminalLiveInputCommitOptions<TTabType>): TerminalLiveInputCommitHandlers {
   const liveInputInteractionGenerationRef = useRef(0)
+  const hardwareLocalEditQueueRef = useRef<Promise<void>>(Promise.resolve())
   const advanceLiveInputInteractionGeneration = useCallback(() => {
     liveInputInteractionGenerationRef.current += 1
   }, [])
@@ -141,7 +142,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
   )
 
   const handleLiveInputChange = useCallback(
-    ({ nativeEvent }: TerminalLiveInputChangeEvent) => {
+    (event: TerminalLiveInputChangeEvent | string) => {
       if (!activeHandle || !liveInputTerminalHandles.has(activeHandle)) {
         clearPendingLiveInputCommit()
         return
@@ -150,6 +151,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
       // that differs from the native field text, so the controlled capture must
       // echo the field verbatim; only the PTY mirror sees normalized text.
       advanceLiveInputInteractionGeneration()
+      const nativeEvent = typeof event === 'string' ? { text: event } : event.nativeEvent
       setLiveInputCapture(nativeEvent.text)
       void applyLiveInputMirror(
         activeHandle,
@@ -252,10 +254,14 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
           return
         case 'local-edit':
           // Native consumed the key; mirror the same local edit as the accessory bar.
-          void handleLiveInputAccessoryBytes({
-            bytes: decision.localEdit === 'backspace' ? '\x7f' : '\x1b[3~',
-            localEdit: decision.localEdit
-          })
+          hardwareLocalEditQueueRef.current = hardwareLocalEditQueueRef.current
+            .then(async () => {
+              await handleLiveInputAccessoryBytes({
+                bytes: '',
+                localEdit: decision.localEdit
+              })
+            })
+            .catch(() => {})
           return
         case 'send-bytes':
           void sendTerminalLiveControlAfterPendingFlush(waitForPendingLiveInputFlush, () =>
@@ -277,6 +283,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
       clearPendingLiveInputCommit,
       flushPendingLiveInputText,
       handleLiveInputAccessoryBytes,
+      hardwareLocalEditQueueRef,
       liveInputTerminalHandles,
       sendLiveTerminalInputRef,
       waitForPendingLiveInputFlush

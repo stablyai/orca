@@ -9,6 +9,7 @@ const sendActionsSource = readMobileSessionRouteSource(
   './use-mobile-session-terminal-send-actions.ts'
 )
 const commandDockSource = readMobileSessionRouteSource('./MobileSessionCommandDock.tsx')
+const liveInputBarSource = readMobileSessionRouteSource('./MobileTerminalLiveInputBar.tsx')
 const tabApplicationSource = readMobileSessionRouteSource('./use-mobile-session-tab-application.ts')
 const terminalListSource = readMobileSessionRouteSource('./use-mobile-session-terminal-list.ts')
 const startupSource = readMobileSessionRouteSource('./use-mobile-session-startup.ts')
@@ -83,11 +84,12 @@ describe('terminal send keyboard dismissal wiring', () => {
     // The page reaches submitLiveInput through the ref binding, because react-native-web withholds
     // onSubmitEditing under an open composition; native reaches it through the editor action.
     const slice = sourceSlice(
-      commandDockSource,
-      'ref={bindLiveInputField}',
+      liveInputBarSource,
+      'ref={inputRef}',
       'importantForAutofill="no"'
     )
-    expect(slice).toContain('onSubmitEditing={submitLiveInput}')
+    expect(commandDockSource).toContain('onSubmitEditing={submitLiveInput}')
+    expect(slice).toContain('onSubmitEditing={onSubmitEditing}')
     // Explicit dismissal replaces RN's blur, which stays off so a shell send
     // does not drop focus.
     expect(slice).toContain('blurOnSubmit={false}')
