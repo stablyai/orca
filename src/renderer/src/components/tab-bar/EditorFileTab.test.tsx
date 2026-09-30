@@ -21,6 +21,10 @@ const appStoreMocks = vi.hoisted(() => ({
 
 const renameFileOnDiskMock = vi.hoisted(() => vi.fn())
 
+vi.mock('../right-sidebar/perforce/use-perforce-edited-tab', () => ({
+  usePerforceEditedTab: () => false
+}))
+
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
   return {

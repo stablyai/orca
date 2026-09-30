@@ -13,6 +13,10 @@ import SortableTab from './SortableTab'
 
 let mockTabAgent: TuiAgent | null = null
 
+vi.mock('../right-sidebar/perforce/use-perforce-edited-tab', () => ({
+  usePerforceEditedTab: () => false
+}))
+
 vi.mock('@dnd-kit/sortable', () => ({
   useSortable: ({ id }: { id: string }) => ({
     attributes: {

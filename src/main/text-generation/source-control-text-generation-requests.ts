@@ -14,6 +14,7 @@ import {
   sanitizeBranchSlug,
   type BranchNameWorkContext
 } from '../../shared/branch-name-from-work'
+import { cleanGeneratedCommitMessage } from '../../shared/commit-message-agent-output'
 import type { CommandTemplateBackslash } from '../../shared/commit-message-prompt'
 import {
   planCommitMessageGeneration,
@@ -78,9 +79,11 @@ export async function generateCommitMessage(input: {
   params: GenerateParams
   target: CommitMessageGenerationTarget
   spawnAgent: SpawnSourceControlAgent
+  /** Replaces the git commit prompt and keeps the agent's line layout (used for Perforce descriptions). */
+  promptOverride?: string
 }): Promise<GenerateCommitMessageResult> {
   const { context, params, target } = input
-  const basePrompt = buildCommitMessagePrompt(context, '')
+  const basePrompt = input.promptOverride ?? buildCommitMessagePrompt(context, '')
   const prompt =
     params.commandInputTemplate !== undefined
       ? renderSourceControlActionCommandTemplate(params.commandInputTemplate, {
@@ -110,7 +113,11 @@ export async function generateCommitMessage(input: {
   try {
     return {
       success: true,
-      message: trimGeneratedCommitMessage(splitGeneratedCommitMessage(result.rawOutput).message),
+      message: trimGeneratedCommitMessage(
+        input.promptOverride !== undefined
+          ? cleanGeneratedCommitMessage(result.rawOutput)
+          : splitGeneratedCommitMessage(result.rawOutput).message
+      ),
       agentLabel: result.agentLabel
     }
   } catch {
