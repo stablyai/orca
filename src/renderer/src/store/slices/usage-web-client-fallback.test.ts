@@ -4,6 +4,7 @@ import type { AppState } from '../types'
 import {
   createClaudeUsageSlice,
   createCodexUsageSlice,
+  createKimiUsageSlice,
   createMuseUsageSlice,
   createOpenCodeUsageSlice
 } from './usage-provider-slices'
@@ -27,7 +28,8 @@ function stubWebClientFallback(): void {
       claudeUsage: provider,
       codexUsage: provider,
       openCodeUsage: provider,
-      museUsage: provider
+      museUsage: provider,
+      kimiUsage: provider
     }
   })
 }
@@ -73,5 +75,15 @@ describe('usage slices in the web client (preload fallback -> undefined)', () =>
     await expect(store.getState().enableMuseUsage()).resolves.toBeUndefined()
     expect(store.getState().museUsageScanState).toBeNull()
     expect(store.getState().museUsageSummary).toBeNull()
+  })
+
+  it('kimi: fetch and enable no-op without throwing', async () => {
+    stubWebClientFallback()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the test reads only this slice's own fields and actions.
+    const store = create<AppState>()((...args) => createKimiUsageSlice(...args) as AppState)
+    await expect(store.getState().fetchKimiUsage()).resolves.toBeUndefined()
+    await expect(store.getState().enableKimiUsage()).resolves.toBeUndefined()
+    expect(store.getState().kimiUsageScanState).toBeNull()
+    expect(store.getState().kimiUsageSummary).toBeNull()
   })
 })

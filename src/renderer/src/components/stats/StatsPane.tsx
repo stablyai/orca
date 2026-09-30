@@ -5,6 +5,7 @@ import { StatCard } from './StatCard'
 import { ClaudeUsagePane } from './ClaudeUsagePane'
 import { CodexUsagePane } from './CodexUsagePane'
 import { GrokUsagePane } from './GrokUsagePane'
+import { KimiUsagePane } from './KimiUsagePane'
 import { OpenCodeUsagePane } from './OpenCodeUsagePane'
 import { MuseUsagePane } from './MuseUsagePane'
 import { UsageOverviewPane } from './UsageOverviewPane'
@@ -53,7 +54,7 @@ function formatTrackingSince(timestamp: number | null): string {
   })
 }
 
-type UsageTab = 'overview' | 'claude' | 'codex' | 'opencode' | 'muse' | 'grok'
+type UsageTab = 'overview' | 'claude' | 'codex' | 'opencode' | 'muse' | 'kimi' | 'grok'
 
 const USAGE_ANALYTICS_OPTIONS = [
   {
@@ -84,6 +85,12 @@ const USAGE_ANALYTICS_OPTIONS = [
     id: 'muse',
     get label() {
       return translate('auto.lib.agent.catalog.muse_label', 'Muse')
+    }
+  },
+  {
+    id: 'kimi',
+    get label() {
+      return translate('auto.components.stats.StatsPane.kimiUsageTab', 'Kimi')
     }
   },
   {
@@ -217,6 +224,8 @@ export function StatsPane(): React.JSX.Element {
             <OpenCodeUsagePane />
           ) : activeUsageTab === 'muse' ? (
             <MuseUsagePane />
+          ) : activeUsageTab === 'kimi' ? (
+            <KimiUsagePane />
           ) : (
             <GrokUsagePane />
           )}

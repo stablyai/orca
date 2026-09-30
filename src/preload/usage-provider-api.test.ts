@@ -6,7 +6,13 @@ describe('usage provider preload API', () => {
     const invoke = vi.fn().mockResolvedValue(undefined)
     const query = { scope: 'orca' as const, range: '30d' as const }
 
-    for (const prefix of ['claudeUsage', 'codexUsage', 'openCodeUsage', 'museUsage'] as const) {
+    for (const prefix of [
+      'claudeUsage',
+      'codexUsage',
+      'openCodeUsage',
+      'museUsage',
+      'kimiUsage'
+    ] as const) {
       const api = createUsageProviderApi({ invoke } as never, prefix)
       await api.getScanState()
       await api.setEnabled({ enabled: true })

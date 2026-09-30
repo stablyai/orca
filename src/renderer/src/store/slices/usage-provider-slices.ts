@@ -19,6 +19,11 @@ import type {
   MuseUsageScope,
   MuseUsageSnapshot
 } from '../../../../shared/muse-usage-types'
+import type {
+  KimiUsageRange,
+  KimiUsageScope,
+  KimiUsageSnapshot
+} from '../../../../shared/kimi-usage-types'
 import type { AppState } from '../types'
 
 type UsageSnapshot = {
@@ -273,11 +278,13 @@ type OpenCodeUsageTypes = UsageProviderTypes<
 >
 
 type MuseUsageTypes = UsageProviderTypes<MuseUsageScope, MuseUsageRange, MuseUsageSnapshot>
+type KimiUsageTypes = UsageProviderTypes<KimiUsageScope, KimiUsageRange, KimiUsageSnapshot>
 
 export type ClaudeUsageSlice = ProviderUsageSlice<'claude', 'Claude', ClaudeUsageTypes>
 export type CodexUsageSlice = ProviderUsageSlice<'codex', 'Codex', CodexUsageTypes>
 export type OpenCodeUsageSlice = ProviderUsageSlice<'openCode', 'OpenCode', OpenCodeUsageTypes>
 export type MuseUsageSlice = ProviderUsageSlice<'muse', 'Muse', MuseUsageTypes>
+export type KimiUsageSlice = ProviderUsageSlice<'kimi', 'Kimi', KimiUsageTypes>
 
 export const createClaudeUsageSlice = createUsageProviderSlice<
   'claude',
@@ -321,4 +328,13 @@ export const createMuseUsageSlice = createUsageProviderSlice<'muse', 'Muse', Mus
   initialRange: '30d',
   getApi: () => window.api.museUsage,
   hasCachedData: (state) => state.hasAnyMuseData
+})
+
+export const createKimiUsageSlice = createUsageProviderSlice<'kimi', 'Kimi', KimiUsageTypes>({
+  prefix: 'kimi',
+  name: 'Kimi',
+  initialScope: 'orca',
+  initialRange: '30d',
+  getApi: () => window.api.kimiUsage,
+  hasCachedData: (state) => state.hasAnyKimiData
 })
