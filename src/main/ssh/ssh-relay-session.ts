@@ -1,1 +1,1 @@
-$file:/workspace/orca-pr24069/content_ssh.txt
+@/workspace/orca-pr24069/content_ssh.txt
