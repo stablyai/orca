@@ -90,6 +90,7 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const updateStatus = useAppStore((s) => s.updateStatus)
+  const prefersBlankTerminal = useAppStore((s) => s.settings?.defaultTuiAgent === 'blank')
   const setupProgress = useSetupGuideProgress(true, false, false)
 
   const settingsShortcut = useShortcutKeyDetails('app.settings')
@@ -102,7 +103,8 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
   const updateCheckHint = getUpdateCheckHint()
 
   const showMilestones =
-    setupProgress.ready && setupProgress.coreDoneCount < setupProgress.coreTotal
+    setupProgress.ready &&
+    (prefersBlankTerminal || setupProgress.coreDoneCount < setupProgress.coreTotal)
 
   const handleMenuOpenChange = (open: boolean): void => {
     setMenuOpen(open)

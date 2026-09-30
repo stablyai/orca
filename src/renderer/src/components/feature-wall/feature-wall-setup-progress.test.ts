@@ -143,32 +143,35 @@ describe('getFeatureWallSetupProgress', () => {
     expect(progress.coreTotal).toBe(8)
   })
 
-  it('marks all active steps complete without historical terminal split interaction', () => {
-    const progress = getFeatureWallSetupProgress(
-      makeInput({
-        settings: {
-          defaultTuiAgent: 'claude',
-          notifications: { enabled: true, agentTaskComplete: true }
-        } as never,
-        featureInteractions: {
-          browser: { firstInteractedAt: 1_700_000_000_000, interactionCount: 1 }
-        },
-        worktreesByRepo: {
-          'repo-1': [makeWorktree('main', { isMainWorktree: true }), makeWorktree('worktree-1')]
-        },
-        hasConnectedTaskSource: true,
-        hasSetupScript: true,
-        gitRepoCount: 2,
-        browserUseSkillInstalled: true,
-        computerUseSkillInstalled: true,
-        computerUsePermissionsReady: true,
-        orchestrationSkillInstalled: true
-      })
-    )
+  it.each(['blank', 'claude'] as const)(
+    'marks all active steps complete with default %s without historical terminal split interaction',
+    (defaultTuiAgent) => {
+      const progress = getFeatureWallSetupProgress(
+        makeInput({
+          settings: {
+            defaultTuiAgent,
+            notifications: { enabled: true, agentTaskComplete: true }
+          } as never,
+          featureInteractions: {
+            browser: { firstInteractedAt: 1_700_000_000_000, interactionCount: 1 }
+          },
+          worktreesByRepo: {
+            'repo-1': [makeWorktree('main', { isMainWorktree: true }), makeWorktree('worktree-1')]
+          },
+          hasConnectedTaskSource: true,
+          hasSetupScript: true,
+          gitRepoCount: 2,
+          browserUseSkillInstalled: true,
+          computerUseSkillInstalled: true,
+          computerUsePermissionsReady: true,
+          orchestrationSkillInstalled: true
+        })
+      )
 
-    expect(progress.coreDoneCount).toBe(8)
-    expect(Object.values(progress.stepDone).every(Boolean)).toBe(true)
-  })
+      expect(progress.coreDoneCount).toBe(8)
+      expect(Object.values(progress.stepDone).every(Boolean)).toBe(true)
+    }
+  )
 
   it('does not mark the step complete from the main checkout alone', () => {
     expect(

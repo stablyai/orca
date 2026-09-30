@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   updaterCheck: vi.fn(),
   shellOpenUrl: vi.fn(),
   useShortcutKeyDetails: vi.fn(),
+  settings: { defaultTuiAgent: 'codex' as 'blank' | 'codex' | null },
   setupProgress: {
     ready: true,
     coreDoneCount: 2,
@@ -31,7 +32,8 @@ vi.mock('@/store', () => ({
       openModal: mocks.openModal,
       openSettingsPage: mocks.openSettingsPage,
       openSettingsTarget: mocks.openSettingsTarget,
-      updateStatus
+      updateStatus,
+      settings: mocks.settings
     })
 }))
 
@@ -162,6 +164,7 @@ describe('SidebarSettingsHelpMenu', () => {
     installWindowApi()
     mocks.useShortcutKeyDetails.mockReturnValue({ keys: ['⌘', ','], doubleTap: false })
     updateStatus = { state: 'idle' }
+    mocks.settings.defaultTuiAgent = 'codex'
     mocks.setupProgress = {
       ready: true,
       coreDoneCount: 2,
@@ -220,6 +223,24 @@ describe('SidebarSettingsHelpMenu', () => {
     }
     const html = renderToStaticMarkup(<SidebarSettingsHelpMenu />)
     expect(html).not.toContain('Milestones')
+  })
+
+  it('keeps completed Milestones manually accessible with a blank terminal default', async () => {
+    mocks.settings.defaultTuiAgent = 'blank'
+    mocks.setupProgress = {
+      ready: true,
+      coreDoneCount: 8,
+      coreTotal: 8,
+      stepDone: {}
+    }
+    const container = await renderMenu()
+    const milestonesButton = findMenuItem(container, 'Milestones')
+
+    await act(async () => milestonesButton.click())
+
+    expect(mocks.openModal).toHaveBeenCalledWith('setup-guide', {
+      telemetrySource: 'help_menu'
+    })
   })
 
   it('renders the Onboarding menu item by default', () => {
