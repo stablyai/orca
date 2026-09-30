@@ -210,12 +210,20 @@ type RemoteCliBridgeEnv = {
   omoSessionsDir?: string
 }
 
+// Optional OmO history override: fail-open, short timeout so a hung remote env
+// probe cannot stall establish/reconnect after the PTY consumer is already open.
+const REMOTE_OMO_SESSIONS_DIR_PROBE_TIMEOUT_MS = 5_000
+
 async function readOptionalRemoteOmoSessionsDir(
   conn: SshConnection,
   hostPlatform: RemoteHostPlatform
 ): Promise<string | undefined> {
   try {
-    const raw = (await execCommand(conn, readRemoteOmoSessionsDirCommand(hostPlatform))).trim()
+    const raw = (
+      await execCommand(conn, readRemoteOmoSessionsDirCommand(hostPlatform), {
+        timeoutMs: REMOTE_OMO_SESSIONS_DIR_PROBE_TIMEOUT_MS
+      })
+    ).trim()
     return raw || undefined
   } catch {
     return undefined
@@ -580,9 +588,10 @@ export class SshRelaySession {
         prepareOpenCodeRuntime
       } = await deployAndLaunchRelay(conn, undefined, graceTimeSeconds, this.targetId)
       this.hostPlatform = hostPlatform ?? null
-      const omoSessionsDir = hostPlatform
-        ? await readOptionalRemoteOmoSessionsDir(conn, hostPlatform)
-        : undefined
+      // Start OmO probe without awaiting — must not gate openPtyConsumerSession.
+      const omoSessionsDirPromise = hostPlatform
+        ? readOptionalRemoteOmoSessionsDir(conn, hostPlatform)
+        : Promise.resolve(undefined)
       this.remoteCliBridgeEnv =
         remoteHome && remoteRelayDir && nodePath && sockPath && hostPlatform
           ? {
@@ -593,8 +602,7 @@ export class SshRelaySession {
               sockPath,
               ...(credentialFile ? { credentialFile } : {}),
               hostPlatform,
-              pathDelimiter: hostPlatform.pathDelimiter,
-              ...(omoSessionsDir ? { omoSessionsDir } : {})
+              pathDelimiter: hostPlatform.pathDelimiter
             }
           : null
 
@@ -671,6 +679,15 @@ export class SshRelaySession {
       verifyRelayAttempt(mux, isAttemptCurrent, 'establish')
       this.watchMuxForRelayLoss(mux)
       verifyRelayAttempt(mux, isAttemptCurrent, 'establish')
+      const omoSessionsDir = await omoSessionsDirPromise
+      if (
+        omoSessionsDir &&
+        this.remoteCliBridgeEnv &&
+        !this.isDisposed() &&
+        this.mux === mux
+      ) {
+        this.remoteCliBridgeEnv = { ...this.remoteCliBridgeEnv, omoSessionsDir }
+      }
       this._state = 'ready'
       this.startPortScanning()
       this._onReady?.(this.targetId)
@@ -743,9 +760,10 @@ export class SshRelaySession {
         prepareOpenCodeRuntime
       } = await deployAndLaunchRelay(conn, undefined, graceTimeSeconds, this.targetId)
       this.hostPlatform = hostPlatform ?? null
-      const omoSessionsDir = hostPlatform
-        ? await readOptionalRemoteOmoSessionsDir(conn, hostPlatform)
-        : undefined
+      // Start OmO probe without awaiting — must not gate openPtyConsumerSession.
+      const omoSessionsDirPromise = hostPlatform
+        ? readOptionalRemoteOmoSessionsDir(conn, hostPlatform)
+        : Promise.resolve(undefined)
       this.remoteCliBridgeEnv =
         remoteHome && remoteRelayDir && nodePath && sockPath && hostPlatform
           ? {
@@ -756,8 +774,7 @@ export class SshRelaySession {
               sockPath,
               ...(credentialFile ? { credentialFile } : {}),
               hostPlatform,
-              pathDelimiter: hostPlatform.pathDelimiter,
-              ...(omoSessionsDir ? { omoSessionsDir } : {})
+              pathDelimiter: hostPlatform.pathDelimiter
             }
           : null
 
@@ -843,6 +860,16 @@ export class SshRelaySession {
       verifyRelayAttempt(mux, isAttemptCurrent, 'reconnect')
       this.watchMuxForRelayLoss(mux)
       verifyRelayAttempt(mux, isAttemptCurrent, 'reconnect')
+      const omoSessionsDir = await omoSessionsDirPromise
+      if (
+        omoSessionsDir &&
+        this.remoteCliBridgeEnv &&
+        this.abortController === abortController &&
+        !this.isDisposed() &&
+        this.mux === mux
+      ) {
+        this.remoteCliBridgeEnv = { ...this.remoteCliBridgeEnv, omoSessionsDir }
+      }
       this._state = 'ready'
       this.startPortScanning()
       this._onReady?.(this.targetId)

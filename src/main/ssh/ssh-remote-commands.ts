@@ -20,11 +20,36 @@ export function readRemoteHomeCommand(host: RemoteHostPlatform): string {
 }
 
 export function readRemoteOmoSessionsDirCommand(host: RemoteHostPlatform): string {
+  // Mirror local normalizeAgentSessionsDir(raw, '.omo'): SESSION_DIR wins verbatim
+  // (trailing slashes stripped); DIR leaf sessions/agent/.omo gets the matching suffix.
   if (!isWindowsRemoteHost(host)) {
-    return 'if [ -n "$OMO_CODING_AGENT_SESSION_DIR" ]; then printf \'%s\\n\' "$OMO_CODING_AGENT_SESSION_DIR"; elif [ -n "$OMO_CODING_AGENT_DIR" ]; then printf \'%s/sessions\\n\' "$OMO_CODING_AGENT_DIR"; fi'
+    return (
+      'if [ -n "$OMO_CODING_AGENT_SESSION_DIR" ]; then ' +
+      'd="$OMO_CODING_AGENT_SESSION_DIR"; while [ -n "$d" ] && [ "${d%/}" != "$d" ]; do d="${d%/}"; done; ' +
+      "printf '%s\\n' \"$d\"; " +
+      'elif [ -n "$OMO_CODING_AGENT_DIR" ]; then ' +
+      'd="$OMO_CODING_AGENT_DIR"; while [ -n "$d" ] && [ "${d%/}" != "$d" ]; do d="${d%/}"; done; ' +
+      'case "${d##*/}" in ' +
+      "sessions) printf '%s\\n' \"$d\";; " +
+      "agent) printf '%s/sessions\\n' \"$d\";; " +
+      ".omo) printf '%s/agent/sessions\\n' \"$d\";; " +
+      "*) printf '%s\\n' \"$d\";; " +
+      'esac; fi'
+    )
   }
   return powerShellCommand(
-    "if ($env:OMO_CODING_AGENT_SESSION_DIR) { Write-Output $env:OMO_CODING_AGENT_SESSION_DIR } elseif ($env:OMO_CODING_AGENT_DIR) { Write-Output (Join-Path $env:OMO_CODING_AGENT_DIR 'sessions') }"
+    [
+      'if ($env:OMO_CODING_AGENT_SESSION_DIR) {',
+      "Write-Output ($env:OMO_CODING_AGENT_SESSION_DIR).TrimEnd('\\','/')",
+      '} elseif ($env:OMO_CODING_AGENT_DIR) {',
+      "$d = ($env:OMO_CODING_AGENT_DIR).TrimEnd('\\','/')",
+      '$leaf = Split-Path -Leaf $d',
+      "if ($leaf -eq 'sessions') { Write-Output $d }",
+      "elseif ($leaf -eq 'agent') { Write-Output (Join-Path $d 'sessions') }",
+      "elseif ($leaf -eq '.omo') { Write-Output (Join-Path (Join-Path $d 'agent') 'sessions') }",
+      'else { Write-Output $d }',
+      '}'
+    ].join(' ')
   )
 }
 
