@@ -14,29 +14,28 @@ export function showWorktreeCreationReadyToast(
 ): void {
   const name = resolveWorktreeDisplayName(worktree)
   const repo = getIndexedRepoMap(useAppStore.getState().repos).get(worktree.repoId)
-  // Why: a folder repo's workspace is not a git worktree, so only the title says Workspace; the button keeps one label for both.
-  const title =
-    repo && isFolderRepo(repo)
-      ? translate(
-          'components.workspace.creation.workspaceReadyToast',
-          'Workspace {{name}} is ready',
-          {
-            name
-          }
-        )
-      : translate(
-          'components.workspace.creation.worktreeReadyToast',
-          'Worktree {{name}} is ready',
-          {
-            name
-          }
-        )
+  // Why: a folder repo's workspace is not a git worktree, so its title and button say workspace.
+  const isFolder = repo !== undefined && isFolderRepo(repo)
+  const title = isFolder
+    ? translate(
+        'components.workspace.creation.workspaceReadyToast',
+        'Workspace {{name}} is ready',
+        {
+          name
+        }
+      )
+    : translate('components.workspace.creation.worktreeReadyToast', 'Worktree {{name}} is ready', {
+        name
+      })
+  const goToLabel = isFolder
+    ? translate('components.workspace.creation.goToWorkspace', 'Go to workspace')
+    : translate('components.workspace.creation.goToWorktree', 'Go to worktree')
   toast.success(title, {
     action: {
       label: (
         <span className="inline-flex items-center gap-1.5">
           <ExternalLink className="size-3" />
-          {translate('components.workspace.creation.goToWorktree', 'Go to worktree')}
+          {goToLabel}
         </span>
       ),
       onClick: () => {

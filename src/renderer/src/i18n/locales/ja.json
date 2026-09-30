@@ -17992,7 +17992,8 @@
       "creation": {
         "worktreeReadyToast": "ワークツリー {{name}} の準備ができました",
         "workspaceReadyToast": "ワークスペース {{name}} の準備ができました",
-        "goToWorktree": "ワークツリーに移動"
+        "goToWorktree": "ワークツリーに移動",
+        "goToWorkspace": "ワークスペースに移動"
       }
     },
     "agentSessionContinuation": {

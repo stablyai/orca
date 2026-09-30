@@ -18056,7 +18056,8 @@
       "creation": {
         "worktreeReadyToast": "Le worktree {{name}} est prêt",
         "workspaceReadyToast": "L'espace de travail {{name}} est prêt",
-        "goToWorktree": "Aller au worktree"
+        "goToWorktree": "Aller au worktree",
+        "goToWorkspace": "Aller à l'espace de travail"
       }
     },
     "agentSessionContinuation": {

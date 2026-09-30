@@ -68,6 +68,18 @@ describe('showWorktreeCreationReadyToast', () => {
     showWorktreeCreationReadyToast(worktree)
 
     expect(toasts[0]?.title).toBe('Workspace Feature is ready')
+    const label = renderToStaticMarkup(<>{toasts[0]?.label}</>)
+    expect(label).toContain('lucide-external-link')
+    expect(label).toContain('Go to workspace')
+    expect(label).not.toContain('Go to worktree')
+  })
+
+  it('keeps the worktree wording when the repo is unknown', () => {
+    store.repos = []
+
+    showWorktreeCreationReadyToast(worktree)
+
+    expect(toasts[0]?.title).toBe('Worktree Feature is ready')
     expect(renderToStaticMarkup(<>{toasts[0]?.label}</>)).toContain('Go to worktree')
   })
 })

@@ -17957,7 +17957,8 @@
       "creation": {
         "worktreeReadyToast": "工作树 {{name}} 已就绪",
         "workspaceReadyToast": "工作区 {{name}} 已就绪",
-        "goToWorktree": "转到工作树"
+        "goToWorktree": "转到工作树",
+        "goToWorkspace": "转到工作区"
       }
     },
     "agentSessionContinuation": {
