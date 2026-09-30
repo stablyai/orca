@@ -8,18 +8,16 @@ import { runProcess, spawnProcess } from '../../../src/shared/child-process/run-
 import { hashIdentity } from './installed-layout.mjs'
 import {
   PROCESS_TABLE_SCRIPT,
+  authenticodeScript,
+  parseAuthenticode,
   parseProcessTable,
-  powershellPath,
   processIdentity,
-  processVerdict
+  processVerdict,
+  windowsPowerShellSpec
 } from './windows-evidence.mjs'
 
 export async function powershell(script, timeoutMs = 60_000) {
-  return runProcess({
-    program: powershellPath(),
-    args: ['-NoProfile', '-NonInteractive', '-Command', script],
-    timeoutMs
-  })
+  return runProcess(windowsPowerShellSpec(script, process.env, timeoutMs))
 }
 
 /** A failed or partial snapshot is null: never evidence that something exited. */
@@ -137,14 +135,11 @@ export async function runUninstaller() {
 }
 
 export async function authenticode(path) {
-  const literal = path.replaceAll("'", "''")
-  const result = await powershell(
-    `$s=Get-AuthenticodeSignature -LiteralPath '${literal}'; ConvertTo-Json -Compress -InputObject @{status=[string]$s.Status;subject=[string]$s.SignerCertificate.Subject;thumbprint=[string]$s.SignerCertificate.Thumbprint}`
-  )
-  if (result.code !== 0) {
-    throw new Error('Authenticode query failed')
+  const result = await powershell(authenticodeScript(path))
+  if (result.code !== 0 || result.timedOut) {
+    throw new Error(`Authenticode query failed: ${result.stderr.trim()}`)
   }
-  return JSON.parse(result.stdout.trim())
+  return parseAuthenticode(result.stdout)
 }
 
 export async function availablePort() {

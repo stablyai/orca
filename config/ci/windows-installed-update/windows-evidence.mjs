@@ -14,6 +14,46 @@ export function powershellPath(env = process.env) {
   )
 }
 
+// A pwsh 7 step exports PSModulePath with pwsh 7 module dirs; 5.1 then autoloads those
+// incompatible modules and Get-AuthenticodeSignature returns nothing. Unset, 5.1 uses its defaults.
+export function windowsPowerShellEnv(env = process.env) {
+  return Object.fromEntries(
+    Object.entries(env).filter(([name]) => name.toUpperCase() !== 'PSMODULEPATH')
+  )
+}
+
+export function windowsPowerShellSpec(script, env = process.env, timeoutMs = 60_000) {
+  return {
+    program: powershellPath(env),
+    args: ['-NoProfile', '-NonInteractive', '-Command', script],
+    env: windowsPowerShellEnv(env),
+    timeoutMs
+  }
+}
+
+export function authenticodeScript(path) {
+  const literal = path.replaceAll("'", "''")
+  return [
+    "$ErrorActionPreference='Stop'",
+    `$s=Get-AuthenticodeSignature -LiteralPath '${literal}'`,
+    "if(-not $s){throw 'Get-AuthenticodeSignature returned no result'}",
+    'ConvertTo-Json -Compress -InputObject @{status=[string]$s.Status;subject=[string]$s.SignerCertificate.Subject;issuer=[string]$s.SignerCertificate.Issuer;thumbprint=[string]$s.SignerCertificate.Thumbprint;timestamped=[bool]$s.TimeStamperCertificate}'
+  ].join('\n')
+}
+
+/** Throws on an empty or statusless answer so a module-load failure never reads as a verdict. */
+export function parseAuthenticode(stdout) {
+  const text = stdout.trim()
+  if (!text) {
+    throw new Error('Authenticode query printed nothing')
+  }
+  const signer = JSON.parse(text)
+  if (typeof signer?.status !== 'string' || !signer.status) {
+    throw new Error(`Authenticode query returned no status: ${text}`)
+  }
+  return signer
+}
+
 // One CIM snapshot; @() keeps a single row an array under PowerShell 5.1.
 export const PROCESS_TABLE_SCRIPT = [
   "$ErrorActionPreference='Stop'",

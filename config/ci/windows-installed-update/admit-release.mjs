@@ -7,7 +7,11 @@ import { join, resolve } from 'node:path'
 import { runProcessSync } from '../../scripts/script-child-process.mjs'
 import { parseDaemonProtocolFacts } from './daemon-protocol-facts.mjs'
 import { hashFile } from './installed-layout.mjs'
-import { powershellPath } from './windows-evidence.mjs'
+import {
+  authenticodeScript,
+  parseAuthenticode,
+  windowsPowerShellSpec
+} from './windows-evidence.mjs'
 
 const options = new Map()
 for (let index = 2; index < process.argv.length; index += 2) {
@@ -23,19 +27,9 @@ const tag = required('tag')
 const version = /^v(\d+\.\d+\.\d+)$/u.exec(tag)?.[1]
 assert.ok(version, 'only stable release tags are admitted')
 assert.equal(await hashFile(installer), required('sha256'), 'release installer digest mismatch')
-const literal = installer.replaceAll("'", "''")
-const query = runProcessSync({
-  program: powershellPath(),
-  args: [
-    '-NoProfile',
-    '-NonInteractive',
-    '-Command',
-    `$s=Get-AuthenticodeSignature -LiteralPath '${literal}'; ConvertTo-Json -Compress -InputObject @{status=[string]$s.Status;subject=[string]$s.SignerCertificate.Subject;issuer=[string]$s.SignerCertificate.Issuer;thumbprint=[string]$s.SignerCertificate.Thumbprint;timestamped=[bool]$s.TimeStamperCertificate}`
-  ],
-  timeoutMs: 60_000
-})
-assert.equal(query.code, 0, 'Authenticode query failed')
-const signer = JSON.parse(query.stdout.trim())
+const query = runProcessSync(windowsPowerShellSpec(authenticodeScript(installer)))
+assert.equal(query.code, 0, `Authenticode query failed: ${query.stderr.trim()}`)
+const signer = parseAuthenticode(query.stdout)
 assert.equal(signer.status, 'Valid', 'release installer signature is not valid')
 assert.match(signer.thumbprint, /^[A-F0-9]{40}$/u)
 

@@ -1,13 +1,16 @@
 // Offline checks for the evidence oracle; runs anywhere, launches nothing.
 import assert from 'node:assert/strict'
 import {
+  authenticodeScript,
   generationOfImage,
   isRelocatedElectronDaemon,
   isUnder,
+  parseAuthenticode,
   parseProcessTable,
   processIdentity,
   processVerdict,
-  processesUnder
+  processesUnder,
+  windowsPowerShellSpec
 } from './windows-evidence.mjs'
 
 const managed = 'C:\\Users\\r\\AppData\\Local\\Orca\\terminal-daemon-host\\managed-v1'
@@ -110,6 +113,32 @@ assert.ok(
   !isRelocatedElectronDaemon(legacyRow, `${legacyHost}.1`),
   'another version host is not this owner'
 )
+
+// Windows PowerShell 5.1 must not inherit a pwsh 7 PSModulePath, in any casing.
+const pwshEnv = {
+  SystemRoot: 'D:\\Win',
+  PSModulePath: 'C:\\Program Files\\PowerShell\\7\\Modules',
+  psmodulepath: 'x',
+  Path: 'C:\\bin'
+}
+const spec = windowsPowerShellSpec('Get-Date', pwshEnv, 5_000)
+assert.equal(spec.program, 'D:\\Win\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')
+assert.deepEqual(spec.args, ['-NoProfile', '-NonInteractive', '-Command', 'Get-Date'])
+assert.deepEqual(spec.env, { SystemRoot: 'D:\\Win', Path: 'C:\\bin' })
+assert.equal(spec.timeoutMs, 5_000)
+assert.equal(pwshEnv.PSModulePath, 'C:\\Program Files\\PowerShell\\7\\Modules')
+for (const arg of spec.args) {
+  assert.doesNotMatch(arg, /^-(?:EncodedCommand|ExecutionPolicy|ec|ep)$/iu)
+}
+const signatureScript = authenticodeScript("C:\\it's\\Orca.exe")
+assert.match(signatureScript, /-LiteralPath 'C:\\it''s\\Orca\.exe'/u)
+assert.match(signatureScript, /if\(-not \$s\)\{throw/u)
+assert.deepEqual(parseAuthenticode('{"status":"Valid","thumbprint":"AB"}\r\n'), {
+  status: 'Valid',
+  thumbprint: 'AB'
+})
+assert.throws(() => parseAuthenticode('  \r\n'), /printed nothing/u)
+assert.throws(() => parseAuthenticode('{"status":"","thumbprint":""}'), /no status/u)
 console.log(
-  'Evidence oracle: snapshot integrity, pid-reuse, unverifiable and generation parsing checks passed'
+  'Evidence oracle: snapshot integrity, pid-reuse, unverifiable, generation parsing and PowerShell invocation checks passed'
 )
