@@ -324,6 +324,7 @@ export class SshRelaySession {
   private muxNotificationCleanup: (() => void) | null = null
   private pluginSettingsCleanup: (() => void) | null = null
   private pluginInstallRetryTimer: ReturnType<typeof setTimeout> | null = null
+  private pluginInstallGeneration = 0
   // Why: onStateChange never fires when the relay channel closes but SSH stays up; this callback lets ssh.ts drive relay-level reconnect.
   private _onRelayLost: ((targetId: string) => void) | null = null
   // Why: a version mismatch or a blocked owner admission is terminal, so it needs a separate callback
@@ -1551,7 +1552,11 @@ export class SshRelaySession {
   }
 
   // Why: ship plugin/extension source from Orca so agent-event changes don't force a relay redeploy — the relay is versioned independently. Best-effort: failure only costs agent status on this host.
-  private async installPluginsOnRelay(mux: SshChannelMultiplexer, attempt = 0): Promise<void> {
+  private async installPluginsOnRelay(
+    mux: SshChannelMultiplexer,
+    attempt = 0,
+    generation = ++this.pluginInstallGeneration
+  ): Promise<void> {
     if (!isRemoteAgentHooksEnabled()) {
       return
     }
@@ -1589,19 +1594,28 @@ export class SshRelaySession {
           err instanceof Error ? err.message : String(err)
         }`
       )
-      this.schedulePluginInstallRetry(mux, attempt)
+      this.schedulePluginInstallRetry(mux, attempt, generation)
     }
   }
 
   // Why: without a retry a timed-out install leaves the relay on stale sources until the next reconnect; each retry re-reads current settings.
-  private schedulePluginInstallRetry(mux: SshChannelMultiplexer, attempt: number): void {
-    if (attempt >= SSH_PLUGIN_INSTALL_MAX_RETRIES || this.mux !== mux) {
+  // A superseded install (older generation) must not start a retry chain the newer one can't cancel.
+  private schedulePluginInstallRetry(
+    mux: SshChannelMultiplexer,
+    attempt: number,
+    generation: number
+  ): void {
+    if (
+      attempt >= SSH_PLUGIN_INSTALL_MAX_RETRIES ||
+      this.mux !== mux ||
+      generation !== this.pluginInstallGeneration
+    ) {
       return
     }
     this.pluginInstallRetryTimer = setTimeout(() => {
       this.pluginInstallRetryTimer = null
       if (this.mux === mux && !mux.isDisposed()) {
-        void this.installPluginsOnRelay(mux, attempt + 1)
+        void this.installPluginsOnRelay(mux, attempt + 1, generation)
       }
     }, SSH_PLUGIN_INSTALL_RETRY_DELAY_MS)
     this.pluginInstallRetryTimer.unref?.()

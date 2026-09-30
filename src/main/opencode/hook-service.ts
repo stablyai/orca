@@ -277,7 +277,7 @@ export class OpenCodeHookService {
     this.writeOverlayManifest(overlayDir, nextManifest)
   }
 
-  // Why: pre-write unlink guards against POSIX writeFileSync writing through a mirrored symlink and clobbering a same-named user plugin.
+  // Why: 'replace-link' renames over a mirrored symlink rather than writing through it, so a same-named user plugin is never clobbered.
   private writePluginIntoOverlay(overlayDir: string): void {
     const pluginsDir = join(overlayDir, 'plugins')
     mkdirSync(pluginsDir, { recursive: true })

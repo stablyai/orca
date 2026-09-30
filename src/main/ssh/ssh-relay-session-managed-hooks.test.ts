@@ -247,4 +247,55 @@ describe('SshRelaySession managed hooks', () => {
       session.dispose()
     }
   })
+
+  // Why: two overlapping failed installs must leave one retry chain, not two the next install can't cancel.
+  it('retries once when overlapping settings-triggered installs both fail', async () => {
+    muxRequestMock.mockResolvedValue({ agents: [] })
+    const { mockStore, mockConn, mockPortForward, getMainWindow } = createMockDeps()
+    const settings = getDefaultSettings('/synthetic-home')
+    mockStore.getSettings = () => settings
+    let listener: Parameters<Store['onSettingsChanged']>[0] | undefined
+    mockStore.onSettingsChanged = (callback) => {
+      listener = callback
+      return vi.fn()
+    }
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const session = new SshRelaySession(
+      'target-settings',
+      getMainWindow,
+      mockStore,
+      mockPortForward
+    )
+    await session.establish(mockConn)
+    const installCalls = () =>
+      muxRequestMock.mock.calls.filter(([method]) => method === AGENT_HOOK_INSTALL_PLUGINS_METHOD)
+
+    vi.useFakeTimers()
+    try {
+      const before = installCalls().length
+      const pendingInstalls: ((error: Error) => void)[] = []
+      muxRequestMock.mockImplementation((method: string) => {
+        if (method === AGENT_HOOK_INSTALL_PLUGINS_METHOD && pendingInstalls.length < 2) {
+          return new Promise((_resolve, reject) => pendingInstalls.push(reject))
+        }
+        return Promise.resolve({ agents: [] })
+      })
+      settings.disabledTuiAgents = ['opencode2']
+      listener?.({ disabledTuiAgents: settings.disabledTuiAgents }, settings)
+      settings.disabledTuiAgents = ['opencode']
+      listener?.({ disabledTuiAgents: settings.disabledTuiAgents }, settings)
+      expect(pendingInstalls).toHaveLength(2)
+
+      for (const reject of pendingInstalls) {
+        reject(Object.assign(new Error('timed out'), { code: 'SSH_MUX_REQUEST_TIMEOUT' }))
+      }
+      await vi.advanceTimersByTimeAsync(60_000)
+
+      expect(installCalls().slice(before)).toHaveLength(3)
+    } finally {
+      vi.useRealTimers()
+      warn.mockRestore()
+      session.dispose()
+    }
+  })
 })
