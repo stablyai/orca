@@ -8,6 +8,7 @@ import {
 import { MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES } from '../../shared/claimed-agent-pty-owner'
 import { cloneAgentSessionOwnerBinding } from '../../shared/claimed-agent-pty-owner-snapshot'
 import { recordAuthenticatedInventory } from './daemon-audit-classifier'
+import { connectFailureProvesExit } from './daemon-endpoint-verdict'
 import { isMissingWindowsNamedPipeError } from './daemon-endpoint-errors'
 import { DaemonPtyProcessInspection } from './daemon-pty-process-inspection'
 import { remainingDaemonRequestTimeoutMs } from './daemon-request-deadline'
@@ -93,7 +94,14 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
         ],
         missingNamedPipe ? 'windows_named_pipe_missing' : undefined
       )
-      throw error
+      if (!(await connectFailureProvesExit(error, this.endpointRecord()))) {
+        throw error
+      }
+      // Why: an exited daemon holds nothing, so owner resolution can still answer from the rest.
+      for (const id of preRequestActiveIds) {
+        this.activeSessionIds.delete(id)
+      }
+      return []
     }
   }
 
@@ -120,8 +128,16 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
   // the IPtyProvider contract. Keep both in parallel rather than widening
   // the provider surface.
   async listSessions(): Promise<SessionInfo[]> {
-    await this.ensureConnected()
-    const result = await this.client.request<ListSessionsResult>('listSessions', undefined)
+    let result: ListSessionsResult
+    try {
+      await this.ensureConnected()
+      result = await this.client.request<ListSessionsResult>('listSessions', undefined)
+    } catch (error) {
+      if (await connectFailureProvesExit(error, this.endpointRecord())) {
+        return []
+      }
+      throw error
+    }
     return result.sessions
       .filter((s) => s.isAlive)
       .map((session) => ({

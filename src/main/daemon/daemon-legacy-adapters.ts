@@ -1,8 +1,6 @@
 import { readFileSync, unlinkSync } from 'node:fs'
-import {
-  getDaemonHistoryDir as getHistoryDir,
-  probeDaemonSocket as probeSocket
-} from './daemon-launch-paths'
+import { probeDaemonEndpoint } from './daemon-endpoint-verdict'
+import { getDaemonHistoryDir as getHistoryDir } from './daemon-launch-paths'
 import { parseDaemonPidFile } from './daemon-pid-file-parse'
 import { inspectProcessLiveness } from './daemon-process-inspection'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
@@ -51,10 +49,18 @@ export async function createLegacyDaemonAdapters(
   for (const protocolVersion of PREVIOUS_DAEMON_PROTOCOL_VERSIONS) {
     const socketPath = getDaemonSocketPath(runtimeDir, protocolVersion)
     const tokenPath = getDaemonTokenPath(runtimeDir, protocolVersion)
-    if (!(await probeSocket(socketPath))) {
+    const pidPath = getDaemonPidPath(runtimeDir, protocolVersion)
+    const verdict = await probeDaemonEndpoint(socketPath, pidPath)
+    if (verdict.status === 'exited') {
       // Why: a recycled stale pid later turns an identity check into a PowerShell spawn, so reclaim leaked pid/token files of a daemon that has exited.
-      reclaimExitedLegacyDaemonFiles(getDaemonPidPath(runtimeDir, protocolVersion), tokenPath)
+      reclaimExitedLegacyDaemonFiles(pidPath, tokenPath)
       continue
+    }
+    if (verdict.status === 'unverifiable') {
+      // Why kept: dropped, its live sessions would read as absent and their panes would start over them.
+      console.warn(
+        `[daemon] Keeping previous daemon v${protocolVersion} unverified: ${verdict.reason}`
+      )
     }
     // Keep old-protocol PTYs routed to their original daemon during upgrade; legacy adapters never respawn (new code would recreate stale env semantics).
     // historyPath is still needed for cleanup — without it a later v4 session reusing the same ID could false-restore stale scrollback.bin.
@@ -62,7 +68,7 @@ export async function createLegacyDaemonAdapters(
       new DaemonPtyAdapter({
         socketPath,
         tokenPath,
-        pidPath: getDaemonPidPath(runtimeDir, protocolVersion),
+        pidPath,
         profileScope: runtimeDir,
         runtimeDir,
         protocolVersion,

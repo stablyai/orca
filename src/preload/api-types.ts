@@ -198,7 +198,8 @@ export type {
   PtyManagementDaemonCwdClass,
   PtyManagementFolderAccessMismatch,
   PtyManagementMacTccAttributionHealth,
-  PtyManagementSession
+  PtyManagementSession,
+  PtyManagementSessionIdentity
 } from './api/pty-management-api'
 export type {
   ShellOpenExternalEditorRequest,

@@ -12,7 +12,14 @@ export type PtyManagementSession = {
   rows: number
   createdAt: number
   protocolVersion: number
+  incarnationId?: string
 }
+
+/** One row's exact identity: the same id can be live in two daemon versions at once. */
+export type PtyManagementSessionIdentity = Pick<
+  PtyManagementSession,
+  'sessionId' | 'protocolVersion' | 'incarnationId'
+>
 
 // 'severed': macOS can no longer attribute daemon terminals to Orca, so Accessibility/
 // Automation grants silently stop applying until the daemon is restarted (STA-3491).
@@ -48,7 +55,7 @@ export type PtyManagementApi = {
     remainingCount: number
     killedSessionIds?: string[]
   }>
-  killOne: (args: { sessionId: string }) => Promise<{ success: boolean }>
+  killOne: (args: PtyManagementSessionIdentity) => Promise<{ success: boolean }>
   restart: () => Promise<{ success: boolean }>
   macTccAttribution: () => Promise<{
     health: PtyManagementMacTccAttributionHealth

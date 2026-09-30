@@ -8,6 +8,7 @@ import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../../../shared/pty-livenes
 import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
 import { getProviderForPty, sshProviders, tryGetProviderForPty } from '../provider/registry'
 import { finishPtyShutdown, isPtyAlreadyGoneError } from '../provider/liveness'
+import { localPtyShutdownIncarnation } from '../provider/local-pty-shutdown-identity'
 import { recordUndeliveredSshPtyKill } from '../runtime/undelivered-ssh-kill'
 
 export type PtyKillIpcDeps = {
@@ -17,7 +18,12 @@ export type PtyKillIpcDeps = {
   shutdownProviderAndDetectExit: (
     provider: IPtyProvider,
     id: string,
-    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
+    opts: {
+      immediate?: boolean
+      keepHistory?: boolean
+      deadlineMs?: number
+      expectedIncarnationId?: string
+    }
   ) => Promise<boolean>
   rememberSyntheticKillExit: (id: string, incarnationId?: string) => void
   sendPtyExitToRenderer: (payload: { id: string; code: number; incarnationId?: string }) => void
@@ -88,6 +94,10 @@ async function stopRendererOwnedPtyProcess(
   const ownedConnectionId = ptyOwnership.get(args.id)
   const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(args.id) : null
   const connectionId = ownedConnectionId ?? parsedSshId?.connectionId
+  // Why read before any await: the tab or pane close intent, sent right after, retires its saved binding.
+  const expectedIncarnationId = connectionId
+    ? undefined
+    : localPtyShutdownIncarnation(store, args.id)
   // Why: wait for daemon startup before selecting the local provider, else a fallback shutdown falsely succeeds and orphans a restored daemon PTY (#7742).
   const startupPromise = getLocalPtyProviderStartupPromise(connectionId)
   if (startupPromise) {
@@ -126,7 +136,8 @@ async function stopRendererOwnedPtyProcess(
   try {
     providerExitObserved = await shutdownProviderAndDetectExit(shutdownProvider, args.id, {
       immediate: true,
-      keepHistory: args.keepHistory ?? false
+      keepHistory: args.keepHistory ?? false,
+      ...(expectedIncarnationId ? { expectedIncarnationId } : {})
     })
   } catch (err) {
     if (!isPtyAlreadyGoneError(err)) {

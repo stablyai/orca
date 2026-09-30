@@ -268,6 +268,9 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
           handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
           return this
         },
+        off(event: string, cb: () => void) {
+          return this.removeListener(event, cb)
+        },
         destroy() {}
       }
     })

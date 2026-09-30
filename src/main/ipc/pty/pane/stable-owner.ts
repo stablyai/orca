@@ -8,11 +8,7 @@ import { retireTerminalSurfaceFromPersistence } from '../../../runtime/mobile-se
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../../../providers/types'
 import { parseAppSshPtyId } from '../../../providers/ssh-pty-id'
-import {
-  isDaemonEndpointGoneError,
-  TerminalHostGoneError,
-  TerminalSessionOwnerUnverifiedError
-} from '../../../daemon/daemon-errors'
+import { TerminalSessionOwnerUnverifiedError } from '../../../daemon/daemon-errors'
 import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
 import { isHostReportedPtyAbsenceError, isObservedPtyExitEvidence } from '../provider/liveness'
 import { clearProviderPtyState } from '../provider/state-cleanup'
@@ -246,12 +242,12 @@ export async function attachStablePaneOwner(
     })
   } catch (error) {
     if (error instanceof TerminalSessionOwnerUnverifiedError) {
+      console.warn(
+        `[daemon] Keeping pane session ${owner.ptyId} unverified: no daemon proved its owner`
+      )
       throw new Error('terminal_pane_owner_unverified')
     }
-    // Why: translate before paired-runtime RPC strips the socket error's code and syscall.
-    if (isDaemonEndpointGoneError(error)) {
-      throw new TerminalHostGoneError()
-    }
+    // A daemon endpoint proven gone already arrives as TerminalHostGoneError (daemon-endpoint-verdict).
     if (!isHostReportedPtyAbsenceError(error)) {
       throw error
     }

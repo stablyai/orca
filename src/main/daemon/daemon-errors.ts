@@ -75,8 +75,9 @@ export class TerminalHostGoneError extends Error {
   }
 }
 
-// Connect ENOENT/ECONNREFUSED proves the endpoint is absent; open ENOENT can be a missing token file.
-export function isDaemonEndpointGoneError(err: unknown): boolean {
+// Connect ENOENT/ECONNREFUSED: nothing accepted, which alone does not prove the daemon exited
+// (probeDaemonEndpoint decides). Open ENOENT can be a missing token file.
+export function isDaemonEndpointConnectRejection(err: unknown): boolean {
   const candidate = err as { code?: unknown; syscall?: unknown } | null
   return (
     typeof candidate === 'object' &&

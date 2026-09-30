@@ -180,18 +180,27 @@ export function registerDaemonManagementHandlers(): void {
 
   ipcMain.handle(
     'pty:management:killOne',
-    async (_event, args: { sessionId: string }): Promise<{ success: boolean }> => {
-      if (typeof args?.sessionId !== 'string' || args.sessionId.length === 0) {
+    async (
+      _event,
+      args: { sessionId: string; protocolVersion: number; incarnationId?: string }
+    ): Promise<{ success: boolean }> => {
+      if (
+        typeof args?.sessionId !== 'string' ||
+        args.sessionId.length === 0 ||
+        typeof args.protocolVersion !== 'number'
+      ) {
         return { success: false }
       }
-      const adapters = getDaemonAdapters()
-      const sessions = await collectSessions(adapters)
-      const match = sessions.find((s) => s.sessionId === args.sessionId)
-      if (!match) {
-        return { success: false }
-      }
-      const owner = adapters.find((a) => a.protocolVersion === match.protocolVersion)
-      if (!owner) {
+      // Why the clicked row's exact identity: after a fresh start over an unreachable version the
+      // same id is live in two versions, and killing the first match ended the tab's own agent.
+      const owner = getDaemonAdapters().find((a) => a.protocolVersion === args.protocolVersion)
+      const listed = await owner?.listSessions().catch(() => [])
+      const match = listed?.some(
+        (s) =>
+          s.sessionId === args.sessionId &&
+          (args.incarnationId === undefined || s.incarnationId === args.incarnationId)
+      )
+      if (!owner || !match) {
         return { success: false }
       }
       try {

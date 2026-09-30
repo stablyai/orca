@@ -12,7 +12,8 @@ import {
   launchDaemonChild,
   terminateLaunchedDaemonChild
 } from './daemon-launched-child'
-import { getDaemonEntryPath, probeDaemonSocket as probeSocket } from './daemon-launch-paths'
+import { probeDaemonEndpoint } from './daemon-endpoint-verdict'
+import { getDaemonEntryPath } from './daemon-launch-paths'
 import { materializeRelocatedDaemonHost } from './daemon-host-relocation'
 import { DAEMON_RECOVERY_BUDGET_MS, daemonRecoveryProbeTimeoutMs } from './daemon-recovery-budget'
 import { cleanupDaemonForProtocol } from './daemon-protocol-cleanup'
@@ -206,7 +207,7 @@ export function createOutOfProcessLauncher(
       // after it — past the kill, the fork and the lease. Clamping to the remainder yields a 1ms
       // probe that loses to its own timer against a live socket, turning the rescue into the total
       // daemon loss it exists to prevent.
-      if (await probeSocket(socketPath)) {
+      if ((await probeDaemonEndpoint(socketPath, pidPath)).status === 'live') {
         console.warn(
           '[daemon] DEGRADED MODE: adopting the daemon that owns the endpoint after a replacement could not publish onto it. Existing sessions keep working; fresh terminals run on the local provider WITHOUT daemon persistence until you restart the daemon (Manage Sessions → Restart).'
         )

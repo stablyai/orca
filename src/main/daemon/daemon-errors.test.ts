@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   DaemonProtocolError,
   decodeDaemonResponseError,
-  isDaemonEndpointGoneError,
+  isDaemonEndpointConnectRejection,
   SessionNotFoundError,
   TerminalHostGoneError
 } from './daemon-errors'
@@ -26,34 +26,34 @@ describe('decodeDaemonResponseError', () => {
   })
 })
 
-describe('isDaemonEndpointGoneError', () => {
+describe('isDaemonEndpointConnectRejection', () => {
   it('recognizes a missing Windows named pipe', () => {
     const err = Object.assign(
       new Error('connect ENOENT \\\\?\\pipe\\orca-terminal-host-v30-14cb7f94b511'),
       { code: 'ENOENT', syscall: 'connect' }
     )
-    expect(isDaemonEndpointGoneError(err)).toBe(true)
+    expect(isDaemonEndpointConnectRejection(err)).toBe(true)
   })
 
   it('recognizes a refused socket', () => {
-    expect(isDaemonEndpointGoneError(socketError('ECONNREFUSED', 'connect'))).toBe(true)
+    expect(isDaemonEndpointConnectRejection(socketError('ECONNREFUSED', 'connect'))).toBe(true)
   })
 
-  it('ignores a missing token file, which does not prove the endpoint is gone', () => {
-    expect(isDaemonEndpointGoneError(socketError('ENOENT', 'open'))).toBe(false)
+  it('ignores a missing token file, which is not the endpoint rejecting a connect', () => {
+    expect(isDaemonEndpointConnectRejection(socketError('ENOENT', 'open'))).toBe(false)
   })
 
-  it('ignores connect failures that are not proof of absence', () => {
+  it('ignores connect failures that are not the endpoint rejecting a connect', () => {
     for (const code of ['ETIMEDOUT', 'ECONNRESET', 'EPIPE', 'EACCES']) {
-      expect(isDaemonEndpointGoneError(socketError(code, 'connect'))).toBe(false)
+      expect(isDaemonEndpointConnectRejection(socketError(code, 'connect'))).toBe(false)
     }
   })
 
   it('ignores non-socket errors and non-objects', () => {
-    expect(isDaemonEndpointGoneError(new Error('Connection lost'))).toBe(false)
-    expect(isDaemonEndpointGoneError('connect ENOENT')).toBe(false)
-    expect(isDaemonEndpointGoneError(null)).toBe(false)
-    expect(isDaemonEndpointGoneError(undefined)).toBe(false)
+    expect(isDaemonEndpointConnectRejection(new Error('Connection lost'))).toBe(false)
+    expect(isDaemonEndpointConnectRejection('connect ENOENT')).toBe(false)
+    expect(isDaemonEndpointConnectRejection(null)).toBe(false)
+    expect(isDaemonEndpointConnectRejection(undefined)).toBe(false)
   })
 
   it('keeps the host-gone marker across runtime RPC error mapping', () => {

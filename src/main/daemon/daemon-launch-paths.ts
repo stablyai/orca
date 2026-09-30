@@ -1,5 +1,4 @@
 import { existsSync } from 'node:fs'
-import { connect } from 'node:net'
 import { join } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { ensurePrivateDir } from './daemon-private-file-modes'
@@ -50,46 +49,6 @@ export function resolvePackagedDarwinAppVersion(): string | null {
 export function daemonLogArgs(): string[] {
   const disabled = (process.env.ORCA_DIAGNOSTICS_DISABLED ?? '').trim().toLowerCase()
   return disabled === '1' || disabled === 'true' ? [] : ['--log-file', getDaemonLogFilePath()]
-}
-
-/** Named so a caller clamping this probe to a deadline cannot silently decouple from its default. */
-export const DAEMON_SOCKET_PROBE_TIMEOUT_MS = 1_000
-
-// Why: a socket that accepts a connection proves a daemon survived a previous app session and can be reused.
-export function probeDaemonSocket(
-  socketPath: string,
-  timeoutMs = DAEMON_SOCKET_PROBE_TIMEOUT_MS
-): Promise<boolean> {
-  let resolve!: (alive: boolean) => void
-  const promise = new Promise<boolean>((settle) => {
-    resolve = settle
-  })
-  if (process.platform !== 'win32' && !existsSync(socketPath)) {
-    resolve(false)
-    return promise
-  }
-  const socket = connect({ path: socketPath })
-  let settled = false
-  let timer: ReturnType<typeof setTimeout>
-  const finish = (alive: boolean, destroy = false): void => {
-    if (settled) {
-      return
-    }
-    settled = true
-    clearTimeout(timer)
-    socket.removeListener('connect', onConnect)
-    socket.removeListener('error', onError)
-    if (destroy) {
-      socket.destroy()
-    }
-    resolve(alive)
-  }
-  const onConnect = (): void => finish(true, true)
-  const onError = (): void => finish(false)
-  timer = setTimeout(() => finish(false, true), timeoutMs)
-  socket.on('connect', onConnect)
-  socket.on('error', onError)
-  return promise
 }
 
 // Why recoveryDeadlineMs is required: this probe only ever runs on a startup path that has a

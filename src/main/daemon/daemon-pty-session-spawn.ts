@@ -6,6 +6,7 @@ import type {
   PendingDaemonSpawnOperation
 } from './daemon-pty-runtime-state'
 import { reportDaemonPtyCwdVerdict } from './daemon-adoption-telemetry-event'
+import { attachOnlyFailure } from './daemon-endpoint-verdict'
 import { STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION } from './daemon-protocol-version'
 import { TerminalKilledError } from './daemon-pty-lifecycle-errors'
 import { DaemonPtySpawnResult } from './daemon-pty-spawn-result'
@@ -50,6 +51,10 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
           this.doSpawn({ ...spawnOpts, sessionId }, operation, historyRecovery)
         )
       )
+    } catch (error) {
+      throw spawnOpts.attachOnly === true
+        ? await attachOnlyFailure(error, sessionId, this.endpointRecord())
+        : error
     } finally {
       if (historyRecovery.freeze) {
         this.historyManager?.abandonRecoveryFreeze(historyRecovery.freeze)

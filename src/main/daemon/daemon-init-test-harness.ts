@@ -2,7 +2,8 @@ import { vi } from 'vitest'
 import { join } from 'node:path'
 import {
   createDaemonInitModuleFactories,
-  createNetConnectStubs
+  createNetConnectStubs,
+  refusedConnectError
 } from './daemon-init-dependency-mocks'
 import { importFreshDaemonInit } from './daemon-init-fresh-import'
 import type {
@@ -40,27 +41,30 @@ function createDaemonInitMockState(): DaemonInitMockState {
 
   const probeSocketExistsMock = vi.fn((_path?: string) => false)
   const writeFileSyncMock = vi.fn()
-  // Why: readFileSync throws by default so every legacy pid record reads as unreadable, which keeps its files.
+  // Why: no pid record exists by default, so a refused endpoint reads as exited and reclaim keeps nothing to delete.
   const readFileSyncMock = vi.fn((): string => {
-    throw new Error('ENOENT')
+    throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
   })
   const unlinkSyncMock = vi.fn()
   const forkMock = vi.fn()
   const netConnectMock = vi.fn((): MockProbeSocket => {
-    // Why: stub the socket so probeSocket's 'error' path fires and cleanupDaemonForProtocol's alive=false branch runs without side effects.
-    const handlers: Record<string, (() => void)[]> = { connect: [], error: [] }
+    // Why: stub the socket so the endpoint probe's refused path fires and cleanupDaemonForProtocol's exited branch runs without side effects.
+    const handlers: Record<string, ((error?: Error) => void)[]> = { connect: [], error: [] }
     return {
-      on(event: string, cb: () => void) {
+      on(event: string, cb: (error?: Error) => void) {
         handlers[event]?.push(cb)
         if (event === 'error') {
           // Fire after microtask so destroy()/resolve ordering matches real net
-          queueMicrotask(() => cb())
+          queueMicrotask(() => cb(refusedConnectError()))
         }
         return this
       },
-      removeListener(event: string, cb: () => void) {
+      removeListener(event: string, cb: (error?: Error) => void) {
         handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
         return this
+      },
+      off(event: string, cb: (error?: Error) => void) {
+        return this.removeListener(event, cb)
       },
       destroy() {}
     }

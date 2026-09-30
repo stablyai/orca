@@ -165,6 +165,13 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
     fs: () => ({
       mkdirSync: vi.fn<(...args: unknown[]) => void>(),
       existsSync: (p: string) => probeSocketExistsMock(p) || p.includes('.pid'),
+      // Why: the endpoint probe stats the socket; mirror existsSync so one switch drives both.
+      lstatSync: (p: string) => {
+        if (!probeSocketExistsMock(p)) {
+          throw Object.assign(new Error(`ENOENT: ${p}`), { code: 'ENOENT' })
+        }
+        return {}
+      },
       unlinkSync: unlinkSyncMock,
       readFileSync: readFileSyncMock,
       writeFileSync: writeFileSyncMock
@@ -234,6 +241,14 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
   }
 }
 
+/** What connecting to a socket file no daemon listens on fails with. */
+export function refusedConnectError(): Error {
+  return Object.assign(new Error('connect ECONNREFUSED'), {
+    code: 'ECONNREFUSED',
+    syscall: 'connect'
+  })
+}
+
 /** net.connect stubs: the default dead-socket probe every suite installs, plus the one-live-socket variant. */
 export function createNetConnectStubs(state: DaemonInitMockState): NetConnectStubs {
   const { netConnectMock, probeSocketExistsMock } = state
@@ -242,21 +257,24 @@ export function createNetConnectStubs(state: DaemonInitMockState): NetConnectStu
     probeSocketExistsMock.mockReturnValue(false)
     netConnectMock.mockReset()
     netConnectMock.mockImplementation((): MockProbeSocket => {
-      const handlers: Record<string, (() => void)[]> = {
+      const handlers: Record<string, ((error?: Error) => void)[]> = {
         connect: [],
         error: []
       }
       return {
-        on(event: string, cb: () => void) {
+        on(event: string, cb: (error?: Error) => void) {
           handlers[event]?.push(cb)
           if (event === 'error') {
-            queueMicrotask(() => cb())
+            queueMicrotask(() => cb(refusedConnectError()))
           }
           return this
         },
-        removeListener(event: string, cb: () => void) {
+        removeListener(event: string, cb: (error?: Error) => void) {
           handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
           return this
+        },
+        off(event: string, cb: (error?: Error) => void) {
+          return this.removeListener(event, cb)
         },
         destroy() {}
       }
@@ -266,18 +284,24 @@ export function createNetConnectStubs(state: DaemonInitMockState): NetConnectStu
   function mockOnlyDaemonSocketAlive(socketSuffix: string): void {
     netConnectMock.mockImplementation((options?: { path?: string }): MockProbeSocket => {
       const live = options?.path?.endsWith(socketSuffix) ?? false
-      const handlers: Record<string, (() => void)[]> = { connect: [], error: [] }
+      const handlers: Record<string, ((error?: Error) => void)[]> = { connect: [], error: [] }
       return {
-        on(event: string, callback: () => void) {
+        on(event: string, callback: (error?: Error) => void) {
           handlers[event]?.push(callback)
-          if ((live && event === 'connect') || (!live && event === 'error')) {
+          if (live && event === 'connect') {
             queueMicrotask(() => callback())
+          }
+          if (!live && event === 'error') {
+            queueMicrotask(() => callback(refusedConnectError()))
           }
           return this
         },
-        removeListener(event: string, callback: () => void) {
+        removeListener(event: string, callback: (error?: Error) => void) {
           handlers[event] = handlers[event]?.filter((handler) => handler !== callback) ?? []
           return this
+        },
+        off(event: string, callback: (error?: Error) => void) {
+          return this.removeListener(event, callback)
         },
         destroy() {}
       }

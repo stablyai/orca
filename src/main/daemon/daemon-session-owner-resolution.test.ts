@@ -348,11 +348,33 @@ describe('DaemonSessionOwnerResolver', () => {
     })
   })
 
-  it('does not trust persisted incarnation proof from an incomplete inventory', async () => {
+  // Why: a stale persisted incarnation can fail to match, never falsely match, so an exact match in
+  // a version that answered is the pane's session however many other versions stayed silent.
+  it('trusts an exact persisted incarnation from an incomplete inventory', async () => {
+    const exactOwner = provider(async () => [
+      { id: 'session', incarnationId: 'persisted', cwd: '', title: 'candidate' }
+    ])
+    const resolver = new DaemonSessionOwnerResolver(
+      [
+        exactOwner,
+        provider(async () => {
+          throw new Error('offline')
+        })
+      ],
+      new Map()
+    )
+
+    await expect(resolver.resolve('session', 'persisted')).resolves.toMatchObject({
+      kind: 'owner',
+      provider: exactOwner
+    })
+  })
+
+  it('keeps a stale persisted incarnation unverified on an incomplete inventory', async () => {
     const resolver = new DaemonSessionOwnerResolver(
       [
         provider(async () => [
-          { id: 'session', incarnationId: 'persisted', cwd: '', title: 'candidate' }
+          { id: 'session', incarnationId: 'live', cwd: '', title: 'candidate' }
         ]),
         provider(async () => {
           throw new Error('offline')
@@ -361,7 +383,7 @@ describe('DaemonSessionOwnerResolver', () => {
       new Map()
     )
 
-    await expect(resolver.resolve('session', 'persisted')).resolves.toEqual({ kind: 'unknown' })
+    await expect(resolver.resolve('session', 'stale')).resolves.toEqual({ kind: 'unknown' })
   })
 
   it('accepts positive liveness proof from an incomplete inventory', async () => {

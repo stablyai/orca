@@ -4,6 +4,7 @@ import { parseAppSshPtyId } from '../../../providers/ssh-pty-id'
 import { ptyOwnership, ptyIncarnationById } from '../provider/ownership-state'
 import { getProvider, getProviderForPty } from '../provider/registry'
 import { isPtyAlreadyGoneError, delay, verifyPtyStopped } from '../provider/liveness'
+import { localPtyShutdownIncarnation } from '../provider/local-pty-shutdown-identity'
 import { recordUndeliveredSshPtyKill } from './undelivered-ssh-kill'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 
@@ -25,6 +26,7 @@ export function killPtyFromRuntimeController(
   let connectionId: string | null | undefined = ptyOwnership.get(ptyId)
   const parsedSshId = connectionId === undefined ? parseAppSshPtyId(ptyId) : null
   connectionId ??= parsedSshId?.connectionId
+  const expectedIncarnationId = connectionId ? undefined : localPtyShutdownIncarnation(store, ptyId)
   const recordUndelivered = (incarnationId?: string): void => {
     recordUndeliveredSshPtyKill({
       store,
@@ -59,7 +61,10 @@ export function killPtyFromRuntimeController(
       return false
     }
     // Why: controller is synchronous, but keep ownership until async shutdown proves whether the provider emitted an exit.
-    void shutdownProviderAndDetectExit(provider, ptyId, { immediate: false })
+    void shutdownProviderAndDetectExit(provider, ptyId, {
+      immediate: false,
+      ...(expectedIncarnationId ? { expectedIncarnationId } : {})
+    })
       .then((providerExitObserved) => {
         const retired = retiredRejectedPtyIds.has(ptyId)
         const incarnationId = finishPtyShutdown(ptyId, connectionId, store)
@@ -209,6 +214,7 @@ export async function stopAndWaitPtyFromRuntimeController(
   let connectionId: string | null | undefined = ptyOwnership.get(ptyId)
   const parsedSshId = connectionId === undefined ? parseAppSshPtyId(ptyId) : null
   connectionId ??= parsedSshId?.connectionId
+  const expectedIncarnationId = connectionId ? undefined : localPtyShutdownIncarnation(store, ptyId)
   // Why: destructive teardown threads one absolute deadline through every await
   // below; each RPC leaf converts it to the remaining time when it issues, so
   // sequential RPCs share the budget and cannot overrun the sweep deadline.
@@ -260,7 +266,8 @@ export async function stopAndWaitPtyFromRuntimeController(
     providerExitObserved = await shutdownProviderAndDetectExit(provider, ptyId, {
       immediate: true,
       keepHistory: opts?.keepHistory ?? false,
-      deadlineMs
+      deadlineMs,
+      ...(expectedIncarnationId ? { expectedIncarnationId } : {})
     })
   } catch (err) {
     if (!isPtyAlreadyGoneError(err)) {

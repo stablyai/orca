@@ -22,7 +22,10 @@ function isMissingFileError(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT'
 }
 
-export function probeSocketConnect(socketPath: string): Promise<SocketProbeOutcome> {
+export function probeSocketConnect(
+  socketPath: string,
+  timeoutMs = ENDPOINT_PROBE_TIMEOUT_MS
+): Promise<SocketProbeOutcome> {
   return new Promise((resolve) => {
     let occupiedUnixEntry = false
     if (process.platform !== 'win32') {
@@ -38,8 +41,10 @@ export function probeSocketConnect(socketPath: string): Promise<SocketProbeOutco
     }
     const sock = connect({ path: socketPath })
     let settled = false
+    let timeoutReport: NodeJS.Immediate | undefined
     const cleanup = (): void => {
       clearTimeout(timer)
+      clearImmediate(timeoutReport)
       sock.off('connect', onConnect)
       sock.off('error', onError)
     }
@@ -71,9 +76,13 @@ export function probeSocketConnect(socketPath: string): Promise<SocketProbeOutco
       )
     }
     const timer = setTimeout(() => {
-      settle('unknown')
-      sock.destroy()
-    }, ENDPOINT_PROBE_TIMEOUT_MS)
+      // Why a turn later: after a main-thread stall, expired timers run before the I/O poll, so a
+      // connect that completed during the stall is only seen after this callback.
+      timeoutReport = setImmediate(() => {
+        settle('unknown')
+        sock.destroy()
+      })
+    }, timeoutMs)
     sock.on('connect', onConnect)
     sock.on('error', onError)
   })

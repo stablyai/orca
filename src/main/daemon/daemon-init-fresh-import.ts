@@ -103,7 +103,7 @@ export async function importFreshDaemonInit(state: DaemonInitMockState) {
   writeFileSyncMock.mockClear()
   readFileSyncMock.mockReset()
   readFileSyncMock.mockImplementation(() => {
-    throw new Error('ENOENT')
+    throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
   })
   unlinkSyncMock.mockClear()
   parseDaemonPidFileMock.mockReset()

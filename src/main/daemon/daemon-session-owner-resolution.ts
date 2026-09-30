@@ -219,10 +219,10 @@ export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
         ? exactProviders.values().next().value
         : undefined
     const soleProvider = providers.size === 1 ? providers.values().next().value : undefined
+    // Why an exact match needs no complete inventory: incarnations are random per session, so a
+    // version that did not answer cannot hold the same one.
     const provider =
-      (exactProvider && (inventory.complete || expectedIncarnationIsAuthoritative)
-        ? exactProvider
-        : undefined) ??
+      exactProvider ??
       (!expectedIncarnationIsAuthoritative && inventory.complete ? soleProvider : undefined)
     if (provider) {
       const process = candidates.find((candidate) => candidate.provider === provider)?.process

@@ -79,6 +79,8 @@ describe('daemon health socket listener cleanup', () => {
 
     const result = killStaleDaemon(dir, socketPath, tokenPath)
     await vi.advanceTimersByTimeAsync(500)
+    // The probe reports its timeout one event-loop turn after the timer fires.
+    await vi.advanceTimersByTimeAsync(1)
 
     // The publisher re-probes before replacing, so an unknown launcher hint can allow a fork.
     await expect(result).resolves.toEqual({ killed: false, liveOwnerSurvived: false })

@@ -86,10 +86,11 @@ export function isHostReportedPtyAbsenceError(err: unknown): boolean {
  *
  * The relay's plain absence answer is excluded because `pty.attach` gives it for an id its session
  * map never had as readily as for a pid it probed — after a relay restart, every id the previous
- * one minted. `SessionNotFoundError` is included because the process answering is the one that owns
- * the PTY: the in-process registry itself, or a daemon whose endpoint is live (a gone endpoint
- * raises `isDaemonEndpointGoneError` instead), so its absence is an observation rather than a lost
- * route (docs/reference/ssh-execution-boundary.md).
+ * one minted. `SessionNotFoundError` is included because only an owner's answer reaches here: the
+ * in-process registry, or daemon owner resolution once every version answered — a version that did
+ * not answer yields `TerminalSessionOwnerUnverifiedError`, and a proven-exited endpoint
+ * `TerminalHostGoneError` — so its absence is an observation rather than a lost route
+ * (docs/reference/ssh-execution-boundary.md).
  */
 export function isObservedPtyExitEvidence(err: unknown): boolean {
   return isSshPtyProvenExitedOnRelayError(err) || err instanceof SessionNotFoundError

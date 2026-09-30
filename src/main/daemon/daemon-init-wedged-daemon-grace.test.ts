@@ -51,7 +51,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     vi.clearAllMocks()
   })
 
-  // Why: net.connect stub whose 'connect' fires, so probeSocket() reports the pipe alive on every grace re-check.
+  // Why: net.connect stub whose 'connect' fires, so the endpoint probe reports the pipe live on every grace re-check.
   function stubAliveSocketConnect() {
     const handlers: Record<string, (() => void)[]> = { connect: [], error: [] }
     return {
@@ -65,6 +65,9 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       removeListener(event: string, cb: () => void) {
         handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
         return this
+      },
+      off(event: string, cb: () => void) {
+        return this.removeListener(event, cb)
       },
       destroy() {}
     }
@@ -184,6 +187,62 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     // Nothing after the adopt-or-replace decision advances the simulated clock, so this is it.
     return clock.now - startedAtMs
   }
+
+  it('keeps the grace while the endpoint probe cannot answer, rather than killing unknown sessions', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+    const unanswered = function MockUnansweredDaemonClient() {
+      return {
+        ensureConnected: vi.fn(async () => {
+          throw new Error('Hello response timed out')
+        }),
+        ensureConnectedWithin: vi.fn(async () => {
+          throw new Error('Hello response timed out')
+        }),
+        request: vi.fn(),
+        disconnect: vi.fn()
+      }
+    }
+    // The adoption client and the first session count miss; the grace retry then sees a live session.
+    daemonClientMock.mockImplementationOnce(unanswered)
+    daemonClientMock.mockImplementationOnce(unanswered)
+    daemonClientMock.mockImplementationOnce(function MockDrainedDaemonClient() {
+      return {
+        ensureConnected: vi.fn(async () => {}),
+        ensureConnectedWithin: vi.fn(async () => {}),
+        request: vi.fn(async () => ({ sessions: [{ sessionId: 'wt-1@@live', isAlive: true }] })),
+        disconnect: vi.fn()
+      }
+    })
+    checkDaemonHealthMock.mockResolvedValueOnce('unreachable')
+    probeSocketExistsMock.mockReturnValue(true)
+    netConnectMock.mockImplementation(() => ({
+      on() {
+        return this
+      },
+      removeListener() {
+        return this
+      },
+      off() {
+        return this
+      },
+      destroy() {}
+    }))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked spawner stores the out-of-process launcher, which has this signature.
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void> }>
+
+    try {
+      await launcher('/fake/socket', '/fake/token')
+    } finally {
+      warn.mockRestore()
+    }
+
+    expect(killStaleDaemonMock).not.toHaveBeenCalled()
+  })
 
   it('adopts a transiently wedged daemon that drains and reports live sessions within the grace window', async () => {
     // Why: Windows update-relaunch — post-install load wedges the daemon briefly; it still owns live sessions, so grace-adopt not kill.

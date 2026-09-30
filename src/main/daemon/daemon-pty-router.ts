@@ -12,7 +12,8 @@ import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 import { shouldHandoffDaemonHistory } from './daemon-history-handoff'
 import type { DaemonPtyRouterDataEvent, DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
 import { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
-import type { WriteSettlement } from '../../shared/pty-write-settlement'
+import { SessionNotFoundError, TerminalSessionOwnerUnverifiedError } from './daemon-errors'
+import { writeRefused, type WriteSettlement } from '../../shared/pty-write-settlement'
 
 export class DaemonPtyRouter implements IPtyProvider {
   private current: DaemonPtyAdapter
@@ -91,11 +92,17 @@ export class DaemonPtyRouter implements IPtyProvider {
   }
 
   write(id: string, data: string): boolean {
-    return this.adapterFor(id).write(id, data)
+    return this.knownOwnerFor(id)?.write(id, data) ?? false
   }
 
-  writeWithSettlement(id: string, data: string): Promise<WriteSettlement> {
-    return this.adapterFor(id).writeWithSettlement(id, data)
+  async writeWithSettlement(id: string, data: string): Promise<WriteSettlement> {
+    let owner: DaemonPtyAdapter
+    try {
+      owner = await this.ownerFor(id)
+    } catch {
+      return writeRefused('provider_unavailable')
+    }
+    return await owner.writeWithSettlement(id, data)
   }
 
   resize(id: string, cols: number, rows: number): void {
@@ -114,11 +121,8 @@ export class DaemonPtyRouter implements IPtyProvider {
     this.adapterFor(id).setPtyBackgrounded(id, background)
   }
 
-  async shutdown(
-    id: string,
-    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
-  ): Promise<void> {
-    const adapter = this.adapterFor(id)
+  async shutdown(id: string, opts: Parameters<IPtyProvider['shutdown']>[1]): Promise<void> {
+    const adapter = await this.ownerFor(id, opts.expectedIncarnationId)
     const migrateHistory = shouldHandoffDaemonHistory(opts.keepHistory, adapter, this.current)
     await adapter.shutdown(id, opts)
     if (!opts.keepHistory || migrateHistory) {
@@ -327,6 +331,35 @@ export class DaemonPtyRouter implements IPtyProvider {
 
   private adapterFor(sessionId: string): DaemonPtyAdapter {
     return this.sessionAdapters.get(sessionId) ?? this.current
+  }
+
+  private knownOwnerFor(sessionId: string): DaemonPtyAdapter | undefined {
+    const routed = this.sessionAdapters.get(sessionId)
+    if (routed) {
+      return routed
+    }
+    const attached = this.allAdapters().filter((adapter) => adapter.hasPty(sessionId))
+    return attached.length === 1 ? attached[0] : undefined
+  }
+
+  // Why no fallback to the current daemon: it answers "not found" for another version's id, which
+  // a tab close reads as already gone, leaving the real session running with no tab.
+  private async ownerFor(
+    sessionId: string,
+    expectedIncarnationId?: string
+  ): Promise<DaemonPtyAdapter> {
+    const known = this.knownOwnerFor(sessionId)
+    if (known) {
+      return known
+    }
+    // Why the saved identity: it names the owner even while another version cannot list.
+    const resolution = await this.ownerResolver.resolve(sessionId, expectedIncarnationId)
+    if (resolution.kind === 'owner') {
+      return resolution.provider
+    }
+    throw resolution.kind === 'absent'
+      ? new SessionNotFoundError(sessionId)
+      : new TerminalSessionOwnerUnverifiedError(sessionId)
   }
 
   private adapterForInspection(sessionId: string): DaemonPtyAdapter {

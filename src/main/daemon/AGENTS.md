@@ -26,6 +26,9 @@ hands → probe once more → `rename` in one syscall → verify we kept it.
 - **Never collapse "can't tell" into "dead."** Only `connected` means occupied; only
   `refused`/`missing` prove death. A timeout or `EPERM` proves nothing and must decline — treating
   it as death deletes an endpoint still serving every terminal on the host.
+- **Outside the publisher, a refusal alone is not death.** macOS refuses a live listener once its
+  accept queue is full (128 queued connects), so app-side readers use `probeDaemonEndpoint`, which
+  also needs the recorded daemon process gone.
 - **`link` first, never an unconditional `rename`.** `rename` replaces whatever it finds, so it
   would let a starting daemon destroy a healthy one. `link` fails loudly and forces the liveness
   question.

@@ -4,7 +4,12 @@ import { ptyIncarnationById } from './ownership-state'
 export async function shutdownProviderAndDetectExit(
   provider: IPtyProvider,
   id: string,
-  opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
+  opts: {
+    immediate?: boolean
+    keepHistory?: boolean
+    deadlineMs?: number
+    expectedIncarnationId?: string
+  }
 ): Promise<boolean> {
   let providerExitObserved = false
   const expectedIncarnationId = ptyIncarnationById.get(id)

@@ -10,6 +10,7 @@ import { SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION } from './daemon-p
 import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
 import type { DaemonEvidenceSource, ExactDaemonIncarnation } from './daemon-incarnation-evidence'
 import { readDaemonPidRecord } from './daemon-endpoint-incarnation'
+import type { DaemonEndpointRecord } from './daemon-endpoint-verdict'
 import { removeDaemonListener } from './daemon-listener-registry'
 import type { ParsedDaemonPid } from './daemon-pid-file-parse'
 import {
@@ -254,6 +255,10 @@ export abstract class DaemonPtyRuntimeState {
 
   getHistoryManager(): HistoryManager | null {
     return this.historyManager
+  }
+
+  protected endpointRecord(): DaemonEndpointRecord {
+    return { socketPath: this.socketPath, pidPath: this.pidPath }
   }
 
   getLastAuthenticatedDaemonIdentity(): DaemonEndpointIdentity | null {

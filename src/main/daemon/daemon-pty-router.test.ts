@@ -22,6 +22,7 @@ type AdapterMock = DaemonPtyAdapter & {
   emitExit: (id: string, code: number, incarnationId?: string) => void
   emitIdentityChange: () => void
   triggerWriteUnavailable: (id: string) => void
+  attachSession: (id: string) => void
 }
 
 const LARGE_RECONCILE_SESSION_COUNT = 150_000
@@ -48,6 +49,8 @@ function createAdapter(
   const exitListeners: ((payload: { id: string; code: number; incarnationId?: string }) => void)[] =
     []
   const identityChangeListeners: (() => void)[] = []
+  const attached = new Set<string>()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the router reads only the adapter members this double implements.
   return {
     protocolVersion,
     supportsGitCredentialGuardHost: () =>
@@ -63,6 +66,7 @@ function createAdapter(
     spawn: vi.fn(async (opts: PtySpawnOptions): Promise<PtySpawnResult> => {
       const id = opts.sessionId ?? `${label}-new`
       sessions.push(id)
+      attached.add(id)
       return { id }
     }),
     listProcesses: vi.fn(async () =>
@@ -72,7 +76,8 @@ function createAdapter(
         title: label
       }))
     ),
-    hasPty: vi.fn((id: string) => sessions.includes(id)),
+    // Why attached-only: a real adapter answers only for sessions spawned or attached this run.
+    hasPty: vi.fn((id: string) => attached.has(id) && sessions.includes(id)),
     probePtyLiveness: vi.fn(async (id: string) => sessions.includes(id)),
     write: vi.fn((id: string, data: string) => {
       writes.push({ id, data })
@@ -175,6 +180,9 @@ function createAdapter(
       for (const listener of writeUnavailableListeners) {
         listener({ id })
       }
+    },
+    attachSession: (id: string) => {
+      attached.add(id)
     },
     _writes: writes
   } as unknown as AdapterMock
@@ -552,6 +560,7 @@ describe('DaemonPtyRouter', () => {
     const router = new DaemonPtyRouter({ current, legacy: [legacy] })
 
     await router.discoverLegacySessions()
+    legacy.attachSession('legacy-session')
     expect(router.hasPty('legacy-session')).toBe(true)
 
     await router.shutdown('legacy-session', { keepHistory: true })
@@ -757,7 +766,7 @@ describe('DaemonPtyRouter', () => {
     expect(current.listProcesses).toHaveBeenCalledTimes(3)
   })
 
-  it('pins colliding unmapped legacy ids falling through to the current daemon', async () => {
+  it('refuses a colliding unmapped id instead of writing it into the current daemon', async () => {
     const sessionId = 'cross-generation-collision'
     const current = createAdapter('current', [sessionId])
     const legacy = createAdapter('legacy', [sessionId])
@@ -766,9 +775,9 @@ describe('DaemonPtyRouter', () => {
     const router = new DaemonPtyRouter({ current, legacy: [legacy] })
 
     await router.discoverLegacySessions()
-    router.write(sessionId, 'misrouted\n')
 
-    expect(current.write).toHaveBeenCalledWith(sessionId, 'misrouted\n')
+    expect(router.write(sessionId, 'unroutable\n')).toBe(false)
+    expect(current.write).not.toHaveBeenCalled()
     expect(legacy.write).not.toHaveBeenCalled()
     warn.mockRestore()
   })

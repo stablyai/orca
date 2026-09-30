@@ -4,11 +4,8 @@ import { migrateLegacyDaemonScope } from './daemon-cgroup-scope'
 import { isDaemonStaleForCurrentBundle } from './daemon-bundle-staleness'
 import { DaemonEndpointOwnershipError } from './daemon-endpoint-adoption'
 import { checkDaemonHealth, getMacDaemonSystemResolverHealth } from './daemon-health'
-import {
-  DAEMON_SOCKET_PROBE_TIMEOUT_MS,
-  getAliveDaemonSessionCount,
-  probeDaemonSocket as probeSocket
-} from './daemon-launch-paths'
+import { DAEMON_ENDPOINT_PROBE_TIMEOUT_MS, probeDaemonEndpoint } from './daemon-endpoint-verdict'
+import { getAliveDaemonSessionCount } from './daemon-launch-paths'
 import { trackDaemonReplaced } from './daemon-lifecycle-event'
 import { getDaemonLaunchIdentity } from './daemon-pid-identity'
 import { readDaemonPidRecord } from './daemon-endpoint-incarnation'
@@ -166,16 +163,20 @@ export async function prepareDaemonReplacement(
     // Why: a wedged-but-connectable daemon (Windows update relaunch) may still own live sessions, so grace-retry before replacing; a permanent wedge (#8689) exhausts the grace, and 'rejected' skips it (handshake refused = never adoptable).
     // Why the clock term: without it the grace is however long the probes happen to take, which
     // ran past the startup PTY gate's fail-open cap and hung terminal restore (STA-5732).
+    // Why only 'exited' ends the grace: a probe that timed out on a loaded host proves nothing.
     let graceRetry = 0
     while (
       liveSessionCount === null &&
       health !== 'rejected' &&
       graceRetry < WEDGED_DAEMON_GRACE_RETRIES &&
       Date.now() < recoveryDeadlineMs &&
-      (await probeSocket(
-        socketPath,
-        Math.max(1, Math.min(DAEMON_SOCKET_PROBE_TIMEOUT_MS, recoveryDeadlineMs - Date.now()))
-      ))
+      (
+        await probeDaemonEndpoint(
+          socketPath,
+          getDaemonPidPath(runtimeDir),
+          Math.max(1, Math.min(DAEMON_ENDPOINT_PROBE_TIMEOUT_MS, recoveryDeadlineMs - Date.now()))
+        )
+      ).status !== 'exited'
     ) {
       liveSessionCount = await getAliveDaemonSessionCount(socketPath, tokenPath, recoveryDeadlineMs)
       graceRetry++

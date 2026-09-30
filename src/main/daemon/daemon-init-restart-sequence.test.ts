@@ -4,6 +4,7 @@ import { PROTOCOL_VERSION } from './types'
 const {
   probeSocketExistsMock,
   netConnectMock,
+  unlinkSyncMock,
   killStaleDaemonMock,
   daemonClientMock,
   spawnerInstances,
@@ -342,7 +343,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     const originalSpawner = spawnerInstances[0]
     const originalAdapter = adapterInstances[0]
 
-    // Build an ordered trace by stamping each step; cleanup has no observable in the default probeSocket=false path, so instrument resetHandle instead.
+    // Build an ordered trace by stamping each step; cleanup has no observable in the default exited-endpoint path, so instrument resetHandle instead.
     const trace: string[] = []
     originalAdapter.fanoutSyntheticExits.mockImplementation(() => trace.push('fanout'))
     unbindLocalProviderListenersMock.mockImplementation(() => trace.push('unbind'))
@@ -381,7 +382,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
   })
 
   it('exercises the alive-daemon cleanup path: issues shutdown RPC via DaemonClient before spawning a replacement', async () => {
-    // Why: default probeSocket=false skips Step 3's shutdown RPC; flip the socket "alive" to cover the shutdown-RPC-succeeded branch.
+    // Why: the default exited endpoint skips Step 3's shutdown RPC; flip the socket "alive" to cover the shutdown-RPC-succeeded branch.
 
     const requestMock = vi.fn(async (method: string) => {
       if (method === 'listSessions') {
@@ -402,7 +403,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       }
     })
 
-    // Make probeSocket return true: needs both the fs.existsSync proxy AND net.connect resolving "alive".
+    // Make the endpoint probe answer live: needs both the fs.existsSync proxy AND net.connect resolving "alive".
     probeSocketExistsMock.mockReturnValue(true)
     netConnectMock.mockImplementationOnce(() => {
       const handlers: Record<string, (() => void)[]> = {
@@ -421,6 +422,9 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
           handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
           return this
         },
+        off(event: string, cb: () => void) {
+          return this.removeListener(event, cb)
+        },
         destroy() {}
       }
     })
@@ -436,7 +440,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(killStaleDaemonMock).not.toHaveBeenCalled()
   })
 
-  it('cleans up daemon socket probe listeners when the probe times out', async () => {
+  it('cleans up probe listeners on a timeout and tears the daemon down instead of assuming it gone', async () => {
     vi.useFakeTimers()
     try {
       const handlers: Record<string, Set<() => void>> = {
@@ -449,6 +453,10 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
           return this
         },
         removeListener(event: string, cb: () => void) {
+          handlers[event]?.delete(cb)
+          return this
+        },
+        off(event: string, cb: () => void) {
           handlers[event]?.delete(cb)
           return this
         },
@@ -468,14 +476,86 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       expect(socket.listenerCount('error')).toBe(1)
 
       await vi.advanceTimersByTimeAsync(1000)
+      // The probe reports its timeout one event-loop turn after the timer fires.
+      await vi.advanceTimersByTimeAsync(1)
 
+      // Why cleaned: a probe that lost to its timer proves nothing, so cleanup asks the daemon to stop.
       await expect(cleanup).resolves.toEqual({
-        cleaned: false,
+        cleaned: true,
         killedCount: 0
       })
       expect(socket.destroy).toHaveBeenCalledTimes(1)
       expect(socket.listenerCount('connect')).toBe(0)
       expect(socket.listenerCount('error')).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  function silentProbeSocket() {
+    return {
+      on() {
+        return this
+      },
+      removeListener() {
+        return this
+      },
+      off() {
+        return this
+      },
+      destroy() {}
+    }
+  }
+
+  it('does not read an endpoint that stops answering after shutdown as the daemon exiting', async () => {
+    vi.useFakeTimers()
+    try {
+      probeSocketExistsMock.mockReturnValue(true)
+      const mod = await importFresh()
+      netConnectMock.mockImplementation(silentProbeSocket)
+      netConnectMock.mockImplementationOnce(() => ({
+        ...silentProbeSocket(),
+        on(event: string, cb: () => void) {
+          if (event === 'connect') {
+            queueMicrotask(() => cb())
+          }
+          return this
+        }
+      }))
+
+      const cleanup = mod.cleanupDaemonForProtocol('/fake/daemon', PROTOCOL_VERSION)
+      const settled = expect(cleanup).rejects.toThrow('Timed out waiting for daemon self-shutdown')
+      await vi.advanceTimersByTimeAsync(10_000)
+
+      await settled
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps a pre-v24 daemon record when its endpoint does not answer', async () => {
+    vi.useFakeTimers()
+    try {
+      probeSocketExistsMock.mockReturnValue(true)
+      netConnectMock.mockImplementation(silentProbeSocket)
+      const mod = await importFresh()
+      daemonClientMock.mockImplementationOnce(function MockUnansweredDaemonClient() {
+        return {
+          ensureConnected: vi.fn(async () => {
+            throw new Error('Hello response timed out')
+          }),
+          request: vi.fn(),
+          disconnect: vi.fn()
+        }
+      })
+      killStaleDaemonMock.mockResolvedValueOnce({ killed: false, liveOwnerSurvived: true })
+
+      const cleanup = mod.cleanupDaemonForProtocol('/fake/daemon', 20)
+      const settled = expect(cleanup).rejects.toThrow('could not be confirmed stopped')
+      await vi.advanceTimersByTimeAsync(2_000)
+
+      await settled
+      expect(unlinkSyncMock).not.toHaveBeenCalledWith('/fake/daemon/daemon-v20.pid')
     } finally {
       vi.useRealTimers()
     }

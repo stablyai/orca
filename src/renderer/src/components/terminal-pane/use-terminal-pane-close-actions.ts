@@ -51,7 +51,7 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
         clearSessionRestoredBannerForPane(paneId)
         const leafId = manager.getLeafId(paneId)
         if (leafId) {
-          commitTerminalSurfaceClose(worktreeId, { kind: 'pane', tabId, leafId })
+          // Why kill first: main stops a not-yet-reconnected pane by the saved binding this close removes.
           retireUnboundIpcTerminalPane({
             getState: useAppStore.getState,
             tabId,
@@ -59,6 +59,7 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
             transport: paneTransportsRef.current.get(paneId),
             getTransports: () => paneTransportsRef.current
           })
+          commitTerminalSurfaceClose(worktreeId, { kind: 'pane', tabId, leafId })
           useAppStore.getState().setCacheTimerStartedAt(makePaneKey(tabId, leafId), null)
           useAppStore.getState().dropAgentStatus(makePaneKey(tabId, leafId), { paneRemoved: true })
         }

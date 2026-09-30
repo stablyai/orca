@@ -54,8 +54,9 @@ export type MockSpawnerHandle = {
 
 /** Slice of net.Socket the daemon socket probe drives. */
 export type MockProbeSocket = {
-  on: (event: string, callback: () => void) => MockProbeSocket
-  removeListener: (event: string, callback: () => void) => MockProbeSocket
+  on: (event: string, callback: (error?: Error) => void) => MockProbeSocket
+  removeListener: (event: string, callback: (error?: Error) => void) => MockProbeSocket
+  off: (event: string, callback: (error?: Error) => void) => MockProbeSocket
   destroy: () => void
 }
 

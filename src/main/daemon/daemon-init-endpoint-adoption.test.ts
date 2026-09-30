@@ -539,7 +539,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       return true
     })
     probeSocketExistsMock.mockReturnValue(true)
-    // A loaded host answers late but well inside probeDaemonSocket's own 1s default.
+    // A loaded host answers late but well inside the endpoint probe's own 1s default.
     netConnectMock.mockImplementation(() => ({
       on(event: string, callback: () => void) {
         if (event === 'connect') {
@@ -548,6 +548,9 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
         return this
       },
       removeListener() {
+        return this
+      },
+      off() {
         return this
       },
       destroy() {}
