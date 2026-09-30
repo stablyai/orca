@@ -1,7 +1,6 @@
-// Why (#18875): the registered Windows Claude hook is now the script path itself, so this file
-// pins the two things that make that safe — the shape carries nothing MSYS or cmd.exe rewrites,
-// and it still answers with neutral JSON when the script is gone. The live legs run the string
-// through BOTH hosts Claude Code can pick, because the shape has to parse in either.
+// Why (#18875, #21514): the registered Windows Claude hook is the bare script path itself, so this
+// file pins that the shape carries nothing MSYS or cmd.exe rewrites, and leaves real failures
+// observable. The live legs run the string through BOTH hosts Claude Code can pick.
 import { describe, expect, it } from 'vitest'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
@@ -15,9 +14,9 @@ import { findGitBash } from './windows-git-bash-path.test-fixture'
 const SAFE_PATH = 'C:\\Users\\alice\\.orca\\agent-hooks\\claude-hook.cmd'
 
 describe('wrapWindowsDirectCmdHookCommand', () => {
-  it('emits the script path with forward slashes and a neutral-JSON fallback', () => {
+  it('emits the bare script path with forward slashes (#21514)', () => {
     expect(wrapWindowsDirectCmdHookCommand(SAFE_PATH)).toBe(
-      'C:/Users/alice/.orca/agent-hooks/claude-hook.cmd || echo {}'
+      'C:/Users/alice/.orca/agent-hooks/claude-hook.cmd'
     )
   })
 
@@ -30,6 +29,8 @@ describe('wrapWindowsDirectCmdHookCommand', () => {
     expect(command).not.toMatch(/\\/)
     expect(command).not.toMatch(/["']/)
     expect(command).not.toMatch(/powershell|cmd\.exe|conhost/i)
+    // Why (#21514): shell operators force Claude Code into WSL bash and mask real failures.
+    expect(command).not.toMatch(/[|&;]/)
     // Why: `2>nul` writes a literal file named `nul` into the cwd under MSYS (measured), and no
     // stderr sink parses in both hosts. The missing-script line is left on stderr deliberately.
     expect(command).not.toContain('2>')
@@ -117,15 +118,13 @@ describe.skipIf(process.platform !== 'win32')('direct hook command, run by both 
   })
 
   it.skipIf(!canRunLive)(
-    'still answers {} and exit 0 in both hosts when the script is gone',
+    'exposes non-zero exit in both hosts without masking failures when script is gone (#21514)',
     () => {
-      // Why: compat consumers require neutral JSON even with no managed script (#14818). The
-      // encoded launcher did this with a Test-Path; `|| echo {}` does it with no interpreter.
+      // Why (#21514): missing or failing hook script must not be silently masked with fake exit 0.
       withTempDir((dir, scriptPath, command) => {
         expect(existsSync(scriptPath)).toBe(false)
         for (const result of [runInCmd(command, dir), runInBash(command, dir)]) {
-          expect(result.stdout.trim()).toBe('{}')
-          expect(result.status).toBe(0)
+          expect(result.status).not.toBe(0)
         }
       })
     }
