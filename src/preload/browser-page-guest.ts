@@ -10,4 +10,4 @@ const { contextBridge, ipcRenderer } = require('electron') as {
 }
 
 contextBridge.executeInMainWorld({ func: installBrowserWindowCloseGuard })
-installOffscreenPageGuest(ipcRenderer)
+installOffscreenPageGuest(ipcRenderer, (func) => contextBridge.executeInMainWorld({ func }))

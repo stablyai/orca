@@ -37,6 +37,9 @@ export function createOffscreenPageSurface(args: {
   window.contentView.addChildView(view)
   view.setBounds({ x: 0, y: 0, width: args.width, height: args.height })
   const { webContents: contents } = view
+  // Why: a key the page leaves unhandled goes to the app menu on macOS; a CDP key with no text
+  // matches a menu item with no shortcut (About). User keys already met the menu in Orca's window.
+  contents.setIgnoreMenuShortcuts(true)
   // Why: a view's WebContents outlives its window; whoever closes the window ends the page too.
   window.on('closed', () => {
     if (!contents.isDestroyed()) {
