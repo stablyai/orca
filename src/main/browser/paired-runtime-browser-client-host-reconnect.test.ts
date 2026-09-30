@@ -91,6 +91,10 @@ describe('PairedRuntimeBrowserClientHost reconnect', () => {
     )
     await vi.waitFor(() => expect(attempts).toHaveLength(2))
     attempts[1]!.callbacks.onResponse(readyResponse())
+    const staleCommand = commandResponse()
+    staleCommand.result.commandId = 'stale-connection-command'
+    staleCommand.result.commandSequence = 2
+    attempts[0]!.callbacks.onResponse(staleCommand)
     attempts[1]!.callbacks.onResponse(commandResponse())
     await vi.waitFor(() => expect(attempts[1]!.sendRequest).toHaveBeenCalledOnce())
 

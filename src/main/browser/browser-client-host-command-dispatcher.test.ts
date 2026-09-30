@@ -4,7 +4,7 @@ import type {
   BrowserClientHostCommandResult,
   BrowserClientHostLeaseAuthority
 } from '../../shared/browser-client-host-protocol'
-import { BrowserClientHostCommandDispatcher } from './browser-client-host-command-dispatcher'
+import { BrowserClientHostCommandDispatcher } from '../../shared/browser-client-host/browser-client-host-command-dispatcher'
 
 const authority: BrowserClientHostLeaseAuthority = {
   authorityRuntimeId: 'runtime-a',

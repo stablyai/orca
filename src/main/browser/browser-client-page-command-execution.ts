@@ -10,7 +10,7 @@ import {
   assertCurrentBrowserClientPageRenderer
 } from './browser-client-page-command-admission'
 import { BrowserClientPageCommandError } from './browser-client-page-command-failure'
-import { sameBrowserClientPageAuthority } from './browser-client-host-command-authority'
+import { sameBrowserClientPageAuthority } from '../../shared/browser-client-host/browser-client-host-command-authority'
 import type {
   BrowserClientPageLifecycleRegistry,
   BrowserClientRetainedPage

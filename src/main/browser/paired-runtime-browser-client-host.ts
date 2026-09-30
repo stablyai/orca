@@ -8,8 +8,11 @@ import type { PairingOffer } from '../../shared/pairing'
 import type { RemoteRuntimeSubscriptionOptions } from '../../shared/remote-runtime-client'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type { BrowserClientFileChannelAvailability } from './browser-client-file-channel-transport'
-import { BrowserClientHostCommandDispatcher } from './browser-client-host-command-dispatcher'
-import type { CommandHandler, DispatcherOptions } from './browser-client-host-command-state'
+import { BrowserClientHostCommandDispatcher } from '../../shared/browser-client-host/browser-client-host-command-dispatcher'
+import type {
+  CommandHandler,
+  DispatcherOptions
+} from '../../shared/browser-client-host/browser-client-host-command-state'
 import { PairedRuntimeBrowserHostLease } from './paired-runtime-browser-host-lease'
 
 type DispatcherLimits = Omit<DispatcherOptions, 'authority' | 'handler'>

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { BrowserClientHostAttachParams } from '../../shared/browser-client-host-protocol'
 import { createBrowserClientHostAttachRequest } from './browser-client-host-attach-request'
-import { sameBrowserClientHostLeaseAuthority } from './browser-client-host-command-authority'
+import { sameBrowserClientHostLeaseAuthority } from '../../shared/browser-client-host/browser-client-host-command-authority'
 import { BrowserClientFileChannelTransport } from './browser-client-file-channel-transport'
 import { PairedRuntimeBrowserClientHost } from './paired-runtime-browser-client-host'
 

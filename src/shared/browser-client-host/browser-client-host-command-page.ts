@@ -1,7 +1,7 @@
 import type {
   BrowserClientHostCommandEvent,
   BrowserClientHostCommandResult
-} from '../../shared/browser-client-host-protocol'
+} from '../browser-client-host-protocol'
 import {
   createPageState,
   type CommandRecord,
