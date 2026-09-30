@@ -68,6 +68,7 @@ const DROID_SESSIONS_DIR = join(homedir(), '.factory', 'sessions')
 const DROID_PROJECTS_DIR = join(homedir(), '.factory', 'projects')
 const CLINE_SESSIONS_DIR =
   process.env.CLINE_SESSION_DATA_DIR?.trim() || join(homedir(), '.cline', 'data', 'sessions')
+const QODER_PROJECTS_DIR = join(homedir(), '.qoder', 'projects')
 
 /**
  * Where one agent's session files live and which of them count as sessions.
@@ -310,6 +311,11 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     // match only those (not sibling .log/.sqlite3 sidecars or the .msp-view
     // materialized projection).
     filePredicate: (filePath) => basename(filePath) === 'session.jsonl'
+  },
+  qoder: {
+    rootDirs: () => [QODER_PROJECTS_DIR],
+    extensions: ['.jsonl'],
+    directoryPredicate: (directoryName) => directoryName !== SUBAGENT_DIR_NAME
   }
 }
 
