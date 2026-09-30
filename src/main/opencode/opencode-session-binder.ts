@@ -17,6 +17,7 @@ import { listRegisteredPtys } from '../memory/pty-registry'
 import type SyncDatabase from '../sqlite/sync-database'
 import { isOpenCodeClientProcess, type ProcessIdentityRow } from './opencode-client-sweep'
 import type { HookListenerState } from '../../shared/agent-hook-listener/listener-state'
+import { buildParentPidIndex, findOwningPane } from '../agent-hooks/pane-process-ancestry'
 
 /**
  * Main-process binder feeding the session→pane registry (#21359).
@@ -98,43 +99,13 @@ export function advanceBinderCursor(args: {
   return cursor
 }
 
-/** pid→ppid index for one sweep; first row wins on duplicate pids. */
-function childrenIndex(processes: readonly ProcessIdentityRow[]): Map<number, number> {
-  const ppidByPid = new Map<number, number>()
-  for (const row of processes) {
-    if (!ppidByPid.has(row.pid)) {
-      ppidByPid.set(row.pid, row.ppid)
-    }
-  }
-  return ppidByPid
-}
-
-/** Nearest pane shell at or above this pid; external terminals stay unattributed. */
-function owningPane(
-  ppidByPid: Map<number, number>,
-  shellPidByPid: Map<number, string>,
-  pid: number
-): string | null {
-  const seen = new Set<number>()
-  let current: number | undefined = pid
-  while (current !== undefined && !seen.has(current)) {
-    seen.add(current)
-    const owner = shellPidByPid.get(current)
-    if (owner) {
-      return owner
-    }
-    current = ppidByPid.get(current)
-  }
-  return null
-}
-
 /** Attribute opencode client rows to panes via shell-subtree walks. */
 function toCorrelatedClients(
   processes: readonly ProcessIdentityRow[],
   panes: readonly BinderPaneSnapshot[],
   nowMs: number
 ): CorrelatedClient[] {
-  const ppidByPid = childrenIndex(processes)
+  const ppidByPid = buildParentPidIndex(processes)
   const shellPidByPid = new Map<number, string>()
   for (const pane of panes) {
     if (pane.shellPid !== null && !shellPidByPid.has(pane.shellPid)) {
@@ -146,7 +117,7 @@ function toCorrelatedClients(
     if (!isOpenCodeClientProcess(row)) {
       continue
     }
-    const paneKey = owningPane(ppidByPid, shellPidByPid, row.pid)
+    const paneKey = findOwningPane(ppidByPid, shellPidByPid, row.pid)
     if (!paneKey) {
       continue
     }

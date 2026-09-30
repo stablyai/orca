@@ -57,3 +57,6 @@ export const ORCA_HOOK_PROTOCOL_VERSION = '1' as const
 
 // Why: absence means the listener predates raw-JSON metadata headers, so managed scripts must keep using form posts.
 export const ORCA_HOOK_RAW_JSON_TRANSPORT = 'raw-json-v1' as const
+
+// Why: marks a Codex hook run by the shared app-server daemon, whose ORCA_* env is another pane's.
+export const ORCA_HOOK_EXECUTOR_CODEX_SHARED_DAEMON = 'codex-shared-daemon' as const

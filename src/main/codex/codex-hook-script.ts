@@ -6,6 +6,7 @@ import {
   buildWindowsHookStdinDrainEpilogue
 } from '../agent-hooks/hook-stdin-contract'
 import { buildWindowsAgentHookCurlPostCommand } from '../agent-hooks/installer-utils'
+import { ORCA_HOOK_EXECUTOR_CODEX_SHARED_DAEMON } from '../../shared/agent-hook-types'
 
 export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   if (target === 'local' && process.platform === 'win32') {
@@ -53,8 +54,9 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  load_hook_endpoint "$ORCA_AGENT_HOOK_ENDPOINT"',
     'fi',
+    ...buildCodexSharedDaemonDetectionLines(),
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
-    '  spool_hook_event',
+    '  spool_codex_hook_event',
     '  exit 0',
     'fi',
     'post_codex_hook() {',
@@ -64,7 +66,8 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     // Why: keep full hook JSON off the command line and avoid URL-encoding paths/commands into IDS-friendly traversal signatures.
     ...buildPosixAgentHookPostCommand('codex', {
       curlCommand: '"$curl_bin"',
-      indent: '    '
+      indent: '    ',
+      executorVar: 'orca_hook_executor'
     }).map((line) => `  ${line}`),
     '}',
     'is_wsl_runtime() {',
@@ -83,8 +86,38 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '    # post_codex_hook "$windows_curl" 3 5 >/dev/null 2>&1 || true',
     '  fi',
     'fi',
-    'spool_hook_event',
+    'spool_codex_hook_event',
     'exit 0',
     ''
   ].join('\n')
+}
+
+/**
+ * Codex >= 0.157 runs hooks inside a shared `app-server --managed-daemon`
+ * whose ORCA_* env is the pane that started it, so the post says so and the
+ * listener attributes it by the session's cwd instead of the stamp.
+ */
+function buildCodexSharedDaemonDetectionLines(): string[] {
+  return [
+    'orca_hook_executor=',
+    'orca_ancestor_pid=$PPID',
+    // Why gated on the pane key: outside Orca the stamp is empty and the walk would only cost forks.
+    '[ -n "${ORCA_PANE_KEY:-}" ] && orca_ancestor_depth=0 || orca_ancestor_depth=4',
+    // Why a bounded walk: Codex may run the hook through `sh -c`, so the daemon can be a grandparent.
+    'while [ "$orca_ancestor_depth" -lt 4 ]; do',
+    '  case "$orca_ancestor_pid" in ""|0|1|*[!0-9]*) break ;; esac',
+    '  orca_ancestor_line=$(ps -o ppid= -o args= -p "$orca_ancestor_pid" 2>/dev/null) || break',
+    '  orca_ancestor_line=${orca_ancestor_line#"${orca_ancestor_line%%[![:space:]]*}"}',
+    '  case "$orca_ancestor_line" in',
+    `    *" app-server "*"--managed-daemon"*) orca_hook_executor=${ORCA_HOOK_EXECUTOR_CODEX_SHARED_DAEMON}; break ;;`,
+    '  esac',
+    '  orca_ancestor_pid=${orca_ancestor_line%%[[:space:]]*}',
+    '  orca_ancestor_depth=$((orca_ancestor_depth + 1))',
+    'done',
+    'spool_codex_hook_event() {',
+    // Why: a spool record carries no executor, so a replay would re-file the post under the stamp.
+    '  [ -z "$orca_hook_executor" ] || return 0',
+    '  spool_hook_event',
+    '}'
+  ]
 }

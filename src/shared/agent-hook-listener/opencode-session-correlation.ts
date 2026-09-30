@@ -104,7 +104,7 @@ function resolveDotSegments(normalized: string): string {
  * folding and case folding come from the shared helper (a backslash stays a
  * literal filename character on POSIX); dot segments resolve lexically.
  */
-function normalizeDir(directory: string): string {
+export function normalizeAgentSessionDirectory(directory: string): string {
   return resolveDotSegments(
     normalizeRuntimePathForComparison(foldMacOsPrivateAlias(directory.trim()))
   )
@@ -178,7 +178,7 @@ export function correlateOpenCodeSessionOwners(args: {
     if (!pane.directory) {
       continue
     }
-    const key = normalizeDir(pane.directory)
+    const key = normalizeAgentSessionDirectory(pane.directory)
     const list = panesByDirectory.get(key)
     if (list) {
       list.push(pane)
@@ -189,7 +189,7 @@ export function correlateOpenCodeSessionOwners(args: {
 
   /** Panes whose worktree root contains this directory (exact or beneath). */
   function containingPanes(directory: string): CorrelatedPane[] {
-    const target = normalizeDir(directory)
+    const target = normalizeAgentSessionDirectory(directory)
     const found: CorrelatedPane[] = []
     for (const [root, list] of panesByDirectory) {
       if (target === root || target.startsWith(`${root}/`)) {

@@ -81,8 +81,11 @@ export function mergeAgentHookRequestHeaders(body: unknown, headers: IncomingHtt
   if (!metadata.paneKey) {
     return body
   }
+  // Why a separate plain header: the packed metadata has a fixed field count older listeners enforce.
+  const executor = readHookHeader(headers, 'x-orca-agent-hook-executor')?.trim()
   return {
     ...metadata,
+    ...(executor ? { executor } : {}),
     payload: body
   }
 }

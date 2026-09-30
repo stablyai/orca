@@ -19,7 +19,7 @@ import {
 } from '../shared/agent-hook-listener/endpoint-publication'
 import { HOOK_REQUEST_SLOWLORIS_MS } from '../shared/agent-hook-listener/listener-limits'
 import { normalizeHookPayload } from '../shared/agent-hook-listener'
-import { mergeAgentHookRequestHeaders } from '../shared/agent-hook-listener/hook-envelope'
+import { mergeRelayAgentHookRequest } from '../shared/agent-hook-listener/codex-shared-daemon-attribution'
 import { readRequestBody } from '../shared/agent-hook-listener/request-body'
 import { resolveHookSource } from '../shared/agent-hook-listener/source-routing'
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
@@ -274,7 +274,7 @@ export class RelayAgentHookServer {
         return
       }
       const body = await readRequestBody(req)
-      const hookBody = mergeAgentHookRequestHeaders(body, req.headers)
+      const hookBody = mergeRelayAgentHookRequest(body, req.headers)
       const event = normalizeHookPayload(this.state, source, hookBody, this.env, {
         deferCompactOwnershipToClient: true
       })
