@@ -137,6 +137,26 @@ reached through this runtime are not. An affected or unknown omission, missing s
 truncation, a failed request or lost contact makes the result `unverifiable`: defer the stop. Do
 not admit new work after the census. Orca does not yet provide an atomic census-and-stop fence.
 
+### Rotating the pairing offer
+
+`SIGUSR2` replaces orcad's pairing offer without a restart: unused pending offers are
+invalidated and a new one is written, while paired devices, live connections and terminals are
+untouched. Send it to the main process only. The launcher forwards it to the bundled runtime; a
+cgroup-wide signal would also reach the terminal daemon and its PTYs.
+
+```sh
+systemctl --user kill --kill-who=main --signal=SIGUSR2 orcad.service
+# or, outside systemd:
+kill -USR2 <orcad launcher pid>
+```
+
+The new offer is written to `<data-root>/pairing-offer.json` (mode 0600); read it from there,
+because the pairing link is a bearer credential and is never printed to the log. The log only
+records the new device id and the file path. A device that is partway through pairing when the
+signal arrives loses the old offer and must pair again with the new one; its handshake is
+refused cleanly. `SIGUSR2` does not exist on Windows, so rotation is not available there, and
+starting with `--no-pairing` disables it.
+
 ### Who supervises orcad
 
 An external supervisor (systemd, launchd, a process manager). orcad conforms to it:

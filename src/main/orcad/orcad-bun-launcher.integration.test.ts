@@ -73,6 +73,7 @@ describe.skipIf(!existsSync(runtimePath))('real Bun launcher lifecycle', () => {
                 await new Promise(resolve => setTimeout(resolve, 150))
                 await writeFile(process.env.ORCA_TEST_DONE, 'flushed')
               }, process.env.ORCA_TEST_STALL === '1' ? 100 : undefined)
+              if (process.platform !== 'win32') process.on('SIGUSR2', () => console.log('rotated'))
               console.log('ready')
             }
             // Exercise the shutdown observer before the outer startup-failure reporter.
@@ -251,6 +252,21 @@ describe.skipIf(!existsSync(runtimePath))('real Bun launcher lifecycle', () => {
       h.child.kill('SIGTERM')
       expect(await h.exit).toEqual({ code: 0, signal: null })
       expect(await readFile(join(directory, 'done'), 'utf8')).toBe('flushed')
+      await vi.waitFor(() => expect(h.isClosed()).toBe(true), { timeout: 5_000 })
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'forwards SIGUSR2 to the runtime without stopping the launcher',
+    async () => {
+      const h = launch()
+      await vi.waitFor(() => expect(h.output()).toContain('ready'), { timeout: 5_000 })
+      h.child.kill('SIGUSR2')
+      await vi.waitFor(() => expect(h.output()).toContain('rotated'), { timeout: 5_000 })
+      expect(h.child.exitCode).toBeNull()
+      expect(h.child.signalCode).toBeNull()
+      h.child.kill('SIGTERM')
+      expect(await h.exit).toEqual({ code: 0, signal: null })
       await vi.waitFor(() => expect(h.isClosed()).toBe(true), { timeout: 5_000 })
     }
   )
