@@ -50,6 +50,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       /** Payload fields the relay dropped to fit an oversized frame; validated below. */
       shedFields?: unknown
       claudeRunningNonAgentTask?: unknown
+      transcriptFact?: unknown
       /** The producing peer's advertised run-capability set — a property of the peer/connection that built this envelope, not an orthogonal call parameter. Absent (older relay/HTTP paths) defaults to the unadvertised-legacy-peer set. */
       advertisedAgentStatusCapabilities?: readonly string[]
       payload: unknown
@@ -244,10 +245,6 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
     ) {
       normalizedPayload = { ...normalizedPayload, prompt: previousStatus.payload.prompt }
     }
-    const applyClaudeBackgroundWork =
-      normalizedPayload.agentType === 'claude' &&
-      typeof envelope.claudeRunningNonAgentTask === 'boolean' &&
-      (envelope.isReplay !== true || !this.runtimeObservedStatusPaneKeys.has(paneKey))
     // Why: run the HTTP path's warn-once version/env-mismatch diagnostics with this.env as expected.
     warnOnHookEnvOrVersionMismatch(this.state, {
       version: envelope.version,
@@ -281,20 +278,12 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
         typeof envelope.claudeRunningNonAgentTask === 'boolean'
           ? envelope.claudeRunningNonAgentTask
           : undefined,
+      ...(envelope.transcriptFact === true ? { transcriptFact: true as const } : {}),
       payload: normalizedPayload
     }
     this.recordCurrentAuthorityObservation(event)
-    this.applyNormalizedStatus(
-      event,
-      applyClaudeBackgroundWork
-        ? () => {
-            if (envelope.claudeRunningNonAgentTask) {
-              this.state.claudeRunningNonAgentTaskPaneKeys.add(paneKey)
-            } else {
-              this.state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
-            }
-          }
-        : undefined
-    )
+    // Why no desktop copy of the relay's task record: the relay owns it and restates it as
+    // `claudeRunningNonAgentTask` on every row, which is what the desktop's readers read.
+    this.applyNormalizedStatus(event)
   }
 }

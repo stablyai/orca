@@ -1,0 +1,11 @@
+{
+  "source_scenario": "r1-s1",
+  "claude_version": "2.1.284 (Claude Code)",
+  "platform": "darwin",
+  "cols": 120,
+  "rows": 40,
+  "recorded_at": "2026-09-29",
+  "clock": "t is seconds since the first hook; hook records keep only the ps rows of the rig's sleep processes, taken inside the hook",
+  "note": "Claude starts `sleep 601` with run_in_background, then writes a long reply; Ctrl+C mid-reply, in the same turn. No hook for 20 s after the key; the shell keeps running; the next typed turn's Stop lists it running. /exit (default choice) kills it: Claude writes the task's `queue-operation` enqueue row with <status>killed</status> just before SessionEnd.",
+  "scrub": "Username was already a placeholder in the capture run. Every session, prompt and row UUID (in payloads, paths and transcript lines) is replaced by a placeholder distinct to this fixture (b1); Claude task ids and tool_use ids are verbatim. Transcript: only `queue-operation` lines are kept (the rest, including ~56 KB prompt_snapshot attachments carrying the system prompt, are dropped)."
+}

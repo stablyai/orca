@@ -109,6 +109,9 @@ export type AgentHookRelayEnvelope = {
   isReplay?: boolean
   /** Claude background-work evidence for input-interrupt inference on the receiving host. */
   claudeRunningNonAgentTask?: boolean
+  /** The relay's Claude transcript watch published this row for a fact no hook carried; its main
+   *  agent is the relay's, which never learns a cancel the desktop inferred. */
+  transcriptFact?: true
   /** Forwarded from the agent CLI POST body. The relay default is `remote`,
    *  which marks transport location rather than dev/prod build env. */
   env?: string

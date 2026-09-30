@@ -2,19 +2,21 @@ import { buildSpoolHookBody, type SpoolRecord } from '../../../shared/agent-hook
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
 import { isAgentHookSource, type AgentHookSource } from '../../../shared/agent-hook-relay'
 import { catchUpOnClaudeTranscript } from '../../../shared/agent-hook-listener/providers/claude-transcript-watch'
+import type { ClaudeNonAgentWork } from '../../../shared/agent-hook-listener/providers/claude-non-agent-work'
 import type { NormalizedLocalHook } from './server-types'
 import { AgentHookServerOpenCodeBinder } from './server-opencode-binder'
 
 export abstract class AgentHookServerIngestNormalization extends AgentHookServerOpenCodeBinder {
+  /** Records are replaced whole, never mutated, so the snapshot is a reference. */
   protected setClaudeBackgroundEvidence(
     paneKey: string,
-    hasRunningTask: boolean,
+    nonAgentWork: ClaudeNonAgentWork | undefined,
     hasActiveCron: boolean
   ): void {
-    if (hasRunningTask) {
-      this.state.claudeRunningNonAgentTaskPaneKeys.add(paneKey)
+    if (nonAgentWork) {
+      this.state.claudeNonAgentWorkByPaneKey.set(paneKey, nonAgentWork)
     } else {
-      this.state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+      this.state.claudeNonAgentWorkByPaneKey.delete(paneKey)
     }
     if (hasActiveCron) {
       this.state.claudeActiveSessionCronPaneKeys.add(paneKey)
@@ -44,19 +46,19 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     // Why before the snapshot: a fact the cursor has passed must not roll back with an event the
     // store then refuses. It only reads an existing cursor; spool replays after a restart find none.
     catchUpOnClaudeTranscript(this.state, paneKey)
-    const previousRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
+    const previousNonAgentWork = this.state.claudeNonAgentWorkByPaneKey.get(paneKey)
     const previousActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
     const event = normalizeHookPayload(this.state, source, body, this.env)
-    const nextRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
+    const nextNonAgentWork = this.state.claudeNonAgentWorkByPaneKey.get(paneKey)
     const nextActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
-    this.setClaudeBackgroundEvidence(paneKey, previousRunningTask, previousActiveCron)
+    this.setClaudeBackgroundEvidence(paneKey, previousNonAgentWork, previousActiveCron)
     if (!event || event.paneKey !== paneKey) {
       return { event }
     }
     // Why: nested CLIs may inherit the pane key; only accepted statuses may mutate its background-work gate.
     return {
       event,
-      onAccepted: () => this.setClaudeBackgroundEvidence(paneKey, nextRunningTask, nextActiveCron)
+      onAccepted: () => this.setClaudeBackgroundEvidence(paneKey, nextNonAgentWork, nextActiveCron)
     }
   }
 

@@ -12,6 +12,7 @@ import {
 import type { AgentStatusLegacyIngressCaller } from '../agent-status-legacy-ingress-manifest'
 import type { ClaudeSubagentRoster } from '../claude-subagent-roster'
 import type { CodexSubagentRoster } from '../codex-subagent-roster'
+import type { ClaudeNonAgentWork } from './providers/claude-non-agent-work'
 import type { ClaudeTranscriptCursor } from './providers/claude-transcript-watch'
 import type { CodexSubagentTranscriptState } from '../codex-subagent-transcript'
 import type { MuseSessionLogState } from '../muse-session-log'
@@ -38,8 +39,10 @@ export type HookListenerState = {
   claudeLeadStateByPaneKey: Map<string, ClaudeLeadTurnState>
   /** One-normalization provenance marker for a status backed only by restored child state. */
   claudeUnconfirmedRestoredStatusPaneKeys: Set<string>
-  /** Panes whose latest authoritative Claude task inventory still has running non-agent work. */
-  claudeRunningNonAgentTaskPaneKeys: Set<string>
+  /** Claude's running background work that is not an agent (shells, monitors, workflows), by task
+   *  id (claude-non-agent-work.ts). A task leaves on Claude's own end record or a new process's
+   *  session start, never /clear. */
+  claudeNonAgentWorkByPaneKey: Map<string, ClaudeNonAgentWork>
   /** Panes whose latest authoritative Claude cron inventory still has a scheduled job. */
   claudeActiveSessionCronPaneKeys: Set<string>
   /** Compact whose completion each pane already applied, so relay duplicates can't refresh the row. */
@@ -112,7 +115,7 @@ export function createHookListenerState(
     claudeSubagentRosterByPaneKey: new Map(),
     claudeLeadStateByPaneKey: new Map(),
     claudeUnconfirmedRestoredStatusPaneKeys: new Set(),
-    claudeRunningNonAgentTaskPaneKeys: new Set(),
+    claudeNonAgentWorkByPaneKey: new Map(),
     claudeActiveSessionCronPaneKeys: new Set(),
     claudeConsumedCompactPromptIdByPaneKey: new Map(),
     claudeSessionOwnerByPaneKey: new Map(),
@@ -204,7 +207,7 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   state.claudeSubagentRosterByPaneKey.delete(paneKey)
   state.claudeLeadStateByPaneKey.delete(paneKey)
   state.claudeUnconfirmedRestoredStatusPaneKeys.delete(paneKey)
-  state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+  state.claudeNonAgentWorkByPaneKey.delete(paneKey)
   state.claudeActiveSessionCronPaneKeys.delete(paneKey)
   state.claudeSessionOwnerByPaneKey.delete(paneKey)
   state.claudeTranscriptCursorByPaneKey.delete(paneKey)
@@ -230,7 +233,7 @@ export function paneHasStateClaims(state: HookListenerState, paneKey: string): b
     state.lastStatusByPaneKey.has(paneKey) ||
     state.claudeSubagentRosterByPaneKey.has(paneKey) ||
     state.claudeLeadStateByPaneKey.has(paneKey) ||
-    state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
+    state.claudeNonAgentWorkByPaneKey.has(paneKey) ||
     state.claudeActiveSessionCronPaneKeys.has(paneKey) ||
     state.claudeSessionOwnerByPaneKey.has(paneKey) ||
     state.codexSubagentRosterByPaneKey.has(paneKey) ||
@@ -283,7 +286,7 @@ export function movePaneCacheState(
   movePaneScopedMapEntries(state.claudeSubagentRosterByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeLeadStateByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.claudeUnconfirmedRestoredStatusPaneKeys, fromPaneKey, toPaneKey)
-  movePaneScopedSetEntries(state.claudeRunningNonAgentTaskPaneKeys, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.claudeNonAgentWorkByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.claudeActiveSessionCronPaneKeys, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeSessionOwnerByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeTranscriptCursorByPaneKey, fromPaneKey, toPaneKey)
@@ -338,7 +341,7 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.claudeSubagentRosterByPaneKey.clear()
   state.claudeLeadStateByPaneKey.clear()
   state.claudeUnconfirmedRestoredStatusPaneKeys.clear()
-  state.claudeRunningNonAgentTaskPaneKeys.clear()
+  state.claudeNonAgentWorkByPaneKey.clear()
   state.claudeActiveSessionCronPaneKeys.clear()
   state.claudeSessionOwnerByPaneKey.clear()
   state.claudeTranscriptCursorByPaneKey.clear()

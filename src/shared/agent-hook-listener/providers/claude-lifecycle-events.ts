@@ -10,6 +10,7 @@ import {
 import type { HookListenerState } from '../listener-state'
 import { readString } from '../tool-input-preview'
 import {
+  claudeRunningNonAgentTask,
   clearClaudePendingWaitForAgent,
   getOrCreateClaudeSubagentRoster,
   resolveClaudePaneStatus
@@ -82,12 +83,10 @@ export function normalizeClaudeSubagentLifecycleEvent(
   }
   const workingChildEvidence = claudeRosterHasRuntimeWorkingSubagent(roster)
   const hasUnconfirmedChild = claudeRosterHasRestoredSnapshotSubagent(roster)
-  // Why: a shell or cron the inventory positively reported is live evidence whatever verdict
-  // ended the main agent's turn; a cancel never discounts it.
+  // Why: a shell or cron Claude positively reported is live evidence whatever verdict ended the
+  // main agent's turn; a cancel never discounts it.
   const hasConfirmedDoneGate =
-    cachedLead?.state === 'done' &&
-    (state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
-      state.claudeActiveSessionCronPaneKeys.has(paneKey))
+    cachedLead?.state === 'done' && claudeRunningNonAgentTask(state, paneKey)
   const restoredOnlyDoneGate =
     cachedLead?.state === 'done' && !hasConfirmedDoneGate && hasUnconfirmedChild
   if (roster?.size === 0) {

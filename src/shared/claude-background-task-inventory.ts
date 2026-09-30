@@ -1,28 +1,10 @@
 import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
-import { classifyClaudeBackgroundTaskKind } from './claude-background-task-kind'
+import {
+  classifyClaudeBackgroundTaskKind,
+  isClaudeBackgroundTaskStatusTerminal
+} from './claude-background-task-kind'
 import { isAgentChildWorkKind } from './agent-status-child-work-liveness'
-
-const CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES = new Set([
-  'idle',
-  'done',
-  'success',
-  'succeeded',
-  'complete',
-  'completed',
-  'finished',
-  'failed',
-  'error',
-  'terminated',
-  'exited',
-  'aborted',
-  'expired',
-  'skipped',
-  'crashed',
-  'killed',
-  'cancelled',
-  'canceled',
-  'timed_out'
-])
+import type { AgentChildWorkKind } from './agent-status-child-work'
 
 /** One agent entry from the `background_tasks` array Claude attaches to Stop
  *  (and SubagentStop) hook payloads. Non-agent tasks do not become rows. */
@@ -37,6 +19,9 @@ export type ClaudeBackgroundAgentTask = {
   teammate: boolean
 }
 
+/** One running non-agent entry (a shell, a monitor, a workflow) Claude named in its inventory. */
+export type ClaudeBackgroundNonAgentTask = { id: string; kind: AgentChildWorkKind }
+
 /** Read the agent-typed entries of a hook payload's `background_tasks` field.
  *  `present: false` means the field was absent/malformed (older Claude builds),
  *  so callers must keep their tracked roster instead of clearing it. */
@@ -45,34 +30,51 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
   tasks: ClaudeBackgroundAgentTask[]
   truncated: boolean
   hasRunningNonAgentTask: boolean
+  /** Running non-agent entries with an id, by Claude's task id. */
+  runningNonAgentTasks: ClaudeBackgroundNonAgentTask[]
+  /** Running non-agent work reported without an id or a type, or as a non-object entry. */
+  hasUnnamedRunningNonAgentTask: boolean
 } {
   const raw = hookPayload['background_tasks']
   if (!Array.isArray(raw)) {
-    return { present: false, tasks: [], truncated: false, hasRunningNonAgentTask: false }
+    return {
+      present: false,
+      tasks: [],
+      truncated: false,
+      hasRunningNonAgentTask: false,
+      runningNonAgentTasks: [],
+      hasUnnamedRunningNonAgentTask: false
+    }
   }
   const tasks: ClaudeBackgroundAgentTask[] = []
+  const runningNonAgentTasks: ClaudeBackgroundNonAgentTask[] = []
   let truncated = false
-  let hasRunningNonAgentTask = false
+  let hasUnnamedRunningNonAgentTask = false
   for (const item of raw) {
     if (typeof item !== 'object' || item === null) {
       truncated = true
-      hasRunningNonAgentTask = true
+      hasUnnamedRunningNonAgentTask = true
       continue
     }
     const obj = item as Record<string, unknown>
     const taskType = typeof obj.type === 'string' ? obj.type.trim().toLowerCase() : ''
     const taskStatus = typeof obj.status === 'string' ? obj.status.trim().toLowerCase() : ''
-    const isTerminal =
-      taskStatus.length > 0 && CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES.has(taskStatus)
+    const isTerminal = isClaudeBackgroundTaskStatusTerminal(taskStatus)
     if (taskType.length === 0) {
       truncated = true
-      hasRunningNonAgentTask ||= !isTerminal
+      hasUnnamedRunningNonAgentTask ||= !isTerminal
       continue
     }
-    const isAgentTask = isAgentChildWorkKind(classifyClaudeBackgroundTaskKind(taskType))
+    const kind = classifyClaudeBackgroundTaskKind(taskType)
+    const isAgentTask = isAgentChildWorkKind(kind)
     // Why: future non-agent types and nonterminal labels must fail active; only typed agent rows or explicit terminal states can safely retire work.
     if (!isAgentTask && !isTerminal) {
-      hasRunningNonAgentTask = true
+      const id = typeof obj.id === 'string' ? obj.id.trim() : ''
+      if (id.length > 0) {
+        runningNonAgentTasks.push({ id, kind })
+      } else {
+        hasUnnamedRunningNonAgentTask = true
+      }
     }
     if (!isAgentTask) {
       continue
@@ -95,5 +97,12 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
       teammate: taskType === 'teammate'
     })
   }
-  return { present: true, tasks, truncated, hasRunningNonAgentTask }
+  return {
+    present: true,
+    tasks,
+    truncated,
+    hasRunningNonAgentTask: runningNonAgentTasks.length > 0 || hasUnnamedRunningNonAgentTask,
+    runningNonAgentTasks,
+    hasUnnamedRunningNonAgentTask
+  }
 }

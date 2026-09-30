@@ -1,0 +1,11 @@
+{
+  "source_scenario": "r3-tasks-run1",
+  "claude_version": "2.1.285 (Claude Code)",
+  "platform": "darwin",
+  "cols": 120,
+  "rows": 40,
+  "recorded_at": "2026-09-30",
+  "clock": "t is seconds since the first hook; hook records keep only the ps rows of the rig's sleep processes, taken inside the hook",
+  "note": "Claude starts `sleep 605` in the background (Stop lists it); the next turn runs a 45 s foreground Bash, during which the driver stops the shell from /tasks. No hook; the enqueue row (killed) lands 0.12 s after the key; the running turn absorbs it at its next tool boundary (UserPromptSubmit under the running turn's prompt id, then a `remove` row).",
+  "scrub": "Username was already a placeholder in the capture run. Every session, prompt and row UUID (in payloads, paths and transcript lines) is replaced by a placeholder distinct to this fixture (b3); Claude task ids and tool_use ids are verbatim. Transcript: only `queue-operation` lines are kept (the rest, including ~56 KB prompt_snapshot attachments carrying the system prompt, are dropped)."
+}

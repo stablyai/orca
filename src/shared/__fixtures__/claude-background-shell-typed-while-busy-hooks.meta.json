@@ -1,0 +1,11 @@
+{
+  "source_scenario": "r3-typed-run1",
+  "claude_version": "2.1.285 (Claude Code)",
+  "platform": "darwin",
+  "cols": 120,
+  "rows": 40,
+  "recorded_at": "2026-09-30",
+  "clock": "t is seconds since the first hook; hook records keep only the ps rows of the rig's sleep processes, taken inside the hook",
+  "note": "A prompt typed while Claude runs a foreground tool: UserPromptSubmit fires at once, and Claude writes a `queue-operation` enqueue row whose content is only the typed text, with the same keys a task notification row has; the later `remove` row and a `queued_command` attachment (commandMode \"prompt\", not kept here) absorb it into the running turn.",
+  "scrub": "Username was already a placeholder in the capture run. Every session, prompt and row UUID (in payloads, paths and transcript lines) is replaced by a placeholder distinct to this fixture (b5); Claude task ids and tool_use ids are verbatim. Transcript: only `queue-operation` lines are kept (the rest, including ~56 KB prompt_snapshot attachments carrying the system prompt, are dropped)."
+}

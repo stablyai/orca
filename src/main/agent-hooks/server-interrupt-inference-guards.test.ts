@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer, _internals } from './server'
 import { buildBody, PANE, RUNNING_SHELL } from './server.test-fixtures'
+import { claudePaneHasNonAgentWork } from '../../shared/agent-hook-listener/providers/claude-non-agent-work'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
   getCohortAtEmitMock: vi.fn(),
@@ -249,7 +250,11 @@ describe('AgentHookServer listener replay', () => {
         mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: 1_500 }
       })
       expect(inferred.interrupted).toBeUndefined()
-      expect(server._getStateForTests().claudeRunningNonAgentTaskPaneKeys.has(PANE)).toBe(true)
+      // The relay owns the task record; the desktop keeps no copy and reads the row's fact.
+      expect(
+        server._getStateForTests().lastStatusByPaneKey.get(PANE)?.claudeRunningNonAgentTask
+      ).toBe(true)
+      expect(claudePaneHasNonAgentWork(server._getStateForTests(), PANE)).toBe(false)
     } finally {
       vi.useRealTimers()
     }
@@ -456,7 +461,7 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
-  it('uses replayed Claude background metadata only before a live observation', () => {
+  it("reads a relayed pane's background work from its row, which a replay restates", () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
     try {
@@ -510,6 +515,10 @@ describe('AgentHookServer listener replay', () => {
         'conn-1'
       )
       const liveBaseline = server.getStatusSnapshot()[0]
+      // A relay replays the row it last sent, so the replay is its current record.
+      expect(
+        server._getStateForTests().lastStatusByPaneKey.get(PANE)?.claudeRunningNonAgentTask
+      ).toBe(true)
 
       vi.setSystemTime(2_500)
       expect(
@@ -521,13 +530,13 @@ describe('AgentHookServer listener replay', () => {
           baselineAgentType: 'claude',
           intent: 'ctrl-c'
         })
-      ).toBe(true)
+      ).toBe(false)
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('does not apply Claude background metadata from a rejected remote status', () => {
+  it("keeps no desktop copy of a relayed pane's background work, and a refused row changes nothing", () => {
     const server = new AgentHookServer()
     server.ingestRemote(
       {
@@ -561,7 +570,10 @@ describe('AgentHookServer listener replay', () => {
     )
 
     expect(server.getStatusSnapshot()[0]).toEqual(waiting)
-    expect(server._getStateForTests().claudeRunningNonAgentTaskPaneKeys.has(PANE)).toBe(true)
+    expect(
+      server._getStateForTests().lastStatusByPaneKey.get(PANE)?.claudeRunningNonAgentTask
+    ).toBe(true)
+    expect(claudePaneHasNonAgentWork(server._getStateForTests(), PANE)).toBe(false)
   })
 
   it('carries idle subagent rows through an inferred interrupt', () => {

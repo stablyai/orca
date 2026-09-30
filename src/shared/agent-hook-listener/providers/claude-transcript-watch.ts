@@ -1,9 +1,12 @@
-// Claude records some of what it does only in its session transcript, with no hook: today, killing
-// every background agent on an idle-prompt Ctrl+C (an id-less `system`/`agents_killed` row, the
-// claude-idle-ctrl-c-* fixtures). The host that runs the session keeps one cursor per pane while any
-// reason to watch holds, reads it before every Claude event and on a timer, applies what it reads to
-// the listener's records as facts, and restates the row those records now make.
-import { posix, win32 } from 'node:path'
+// Claude records some of what it does only in its session transcript, with no hook: killing every
+// background agent on an idle-prompt Ctrl+C (an id-less `system`/`agents_killed` row, the
+// claude-idle-ctrl-c-* fixtures), and the end of a background task, however it ended (a
+// `queue-operation` row carrying its task notification, the claude-background-shell-* fixtures).
+// The host that runs the session keeps one cursor per pane while any reason to watch holds, reads
+// it before every Claude event and on a timer, applies what it reads to the listener's records as
+// facts, and restates the row those records now make.
+import { existsSync, statSync } from 'node:fs'
+import { dirname, posix, win32 } from 'node:path'
 import type { ParsedAgentStatusPayload } from '../../agent-status-types'
 import {
   claudeRosterHasWorkingSubagent,
@@ -18,10 +21,17 @@ import {
 import type { AgentHookEventPayload } from '../listener-event'
 import type { HookListenerState } from '../listener-state'
 import { buildClaudeCachedLeadStatusPayload } from './claude-lifecycle-events'
+import {
+  claudePaneHasLaunchRecordedTask,
+  mayBeClaudeTaskEndLine,
+  retireClaudeNonAgentTaskFromQueueRow,
+  retireClaudeTaskEndedBeforeLaunchHook
+} from './claude-non-agent-work'
 import { claudeRunningNonAgentTask, clearClaudePendingWaitForAgent } from './claude-roster-state'
 
-/** How the row a fact leaves is attributed, since no hook carries it. */
-export type ClaudeTranscriptFactAttribution = { hookEventName: string; toolAgentId?: string }
+/** How the row a fact leaves is attributed, since no hook carries it: a fact that stands for a hook
+ *  Claude did not send names it; one that has no hook counterpart names none. */
+export type ClaudeTranscriptFactAttribution = { hookEventName?: string; toolAgentId?: string }
 
 type ClaudeTranscriptWatchReason = {
   /** Re-derived from the pane's records at every event and read; never stored. */
@@ -78,6 +88,16 @@ const CLAUDE_TRANSCRIPT_WATCH_REASONS = {
       claudeRosterHasWorkingSubagent(state.claudeSubagentRosterByPaneKey.get(paneKey)),
     admits: (line) => line.includes('"agents_killed"'),
     apply: applyAgentsKilled
+  },
+  /** A background task whose launch Orca recorded, which Claude can end with no hook (a /tasks
+   *  kill, or an end the Ctrl+C that cancelled its turn never reports). Dies when the record holds
+   *  no launch-recorded task: its end row, TaskStop, the next inventory, a new process's
+   *  SessionStart, pane teardown. */
+  'recorded-task': {
+    holds: claudePaneHasLaunchRecordedTask,
+    admits: mayBeClaudeTaskEndLine,
+    apply: (state, paneKey, row) =>
+      retireClaudeNonAgentTaskFromQueueRow(state, paneKey, row) ? {} : undefined
   }
 } satisfies Record<string, ClaudeTranscriptWatchReason>
 
@@ -96,6 +116,8 @@ export type ClaudeTranscriptCursor = JsonlCursor & {
   /** A fact read before an event rather than by a tick: the next tick restates its row with this
    *  attribution even when the event's own row already showed it, since a store may have held that. */
   unpublished?: ClaudeTranscriptFactAttribution
+  /** Armed on a session file Claude has not created yet: it is read from its start once it exists. */
+  awaitingFile?: true
 }
 
 /** The reasons to watch that hold now, re-derived from the pane's records. */
@@ -124,7 +146,7 @@ export function claudeTranscriptWatchPath(
 /** Arms or repoints the pane's cursor from a row the host ACCEPTED, never from an event being
  *  normalized: a nested CLI's refused event must not move the pane's cursor. Returns whether the
  *  pane has a cursor. A change of reasons never resets it; only a new transcript path repoints it,
- *  at that file's end, keeping its reasons (a session change is not the end of what they track). */
+ *  keeping its reasons: the records, not the session change, decide what they still track. */
 export function syncClaudeTranscriptCursor(
   state: HookListenerState,
   accepted: AgentHookEventPayload
@@ -143,24 +165,49 @@ export function syncClaudeTranscriptCursor(
   const filePath = reported !== undefined ? claudeTranscriptWatchPath(reported) : current?.filePath
   if (current && current.filePath === filePath) {
     holding.forEach((name) => current.reasons.add(name))
-    return true
-  }
-  if (!current && holding.length === 0) {
+  } else if (!current && holding.length === 0) {
     return false
+  } else {
+    // Why at the end: a resumed or forked session's file already holds rows written before arming.
+    const armed = filePath ? armClaudeTranscriptCursor(filePath) : undefined
+    if (!filePath || !armed) {
+      cursors.delete(paneKey)
+      return false
+    }
+    cursors.set(paneKey, {
+      ...armed,
+      filePath,
+      reasons: new Set([...(current?.reasons ?? []), ...holding])
+    })
   }
-  // Why at the end: a resumed session keeps its old rows, and a forked or cleared one starts a
-  // file whose copied rows were written before arming.
-  const armed = filePath ? createJsonlCursorAtEnd(filePath) : undefined
-  if (!filePath || !armed) {
-    cursors.delete(paneKey)
-    return false
+  const cursor = cursors.get(paneKey)
+  if (cursor && retireClaudeTaskEndedBeforeLaunchHook(state, accepted, cursor)) {
+    cursor.unpublished = {}
   }
-  cursors.set(paneKey, {
-    ...armed,
-    filePath,
-    reasons: new Set([...(current?.reasons ?? []), ...holding])
-  })
   return true
+}
+
+/** Whether the file is absent from a directory that exists, so Claude can still create it. */
+function isClaudeTranscriptFileAwaited(filePath: string): boolean {
+  try {
+    return !existsSync(filePath) && statSync(dirname(filePath)).isDirectory()
+  } catch {
+    return false
+  }
+}
+
+/** A cursor at the file's end, or at its start for a file Claude has not created yet: a cleared
+ *  session's file appears after the SessionStart hook that names it (r3-clear-run1: 0.09 s later),
+ *  so all of it is written after arming. */
+function armClaudeTranscriptCursor(
+  filePath: string
+): (JsonlCursor & { awaitingFile?: true }) | undefined {
+  return (
+    createJsonlCursorAtEnd(filePath) ??
+    (isClaudeTranscriptFileAwaited(filePath)
+      ? { filePath, offset: 0, carry: '', awaitingFile: true }
+      : undefined)
+  )
 }
 
 /** Reads what the pane's existing cursor gained and applies it as facts, in file order. Never
@@ -173,6 +220,12 @@ function readClaudeTranscript(
   const cursor = cursors.get(paneKey)
   if (!cursor) {
     return undefined
+  }
+  if (cursor.awaitingFile) {
+    if (isClaudeTranscriptFileAwaited(cursor.filePath)) {
+      return undefined
+    }
+    delete cursor.awaitingFile
   }
   claudeTranscriptWatchReasons(state, paneKey).forEach((name) => cursor.reasons.add(name))
   const reasons = [...cursor.reasons].map((name) => CLAUDE_TRANSCRIPT_WATCH_REASONS[name])
@@ -309,7 +362,7 @@ export function observeClaudeTranscript(
             worktreeId: current.worktreeId,
             connectionId: null,
             ...hook,
-            ...(attribution ? {} : { restatesRecords: true }),
+            ...(attribution ? { transcriptFact: true } : { restatesRecords: true }),
             claudeRunningNonAgentTask: runningNonAgentTask,
             ...(current.providerSession ? { providerSession: current.providerSession } : {}),
             payload

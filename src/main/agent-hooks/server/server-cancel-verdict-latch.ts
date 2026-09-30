@@ -68,6 +68,10 @@ function opensNewTurn(event: AgentHookEventPayload): boolean {
   )
 }
 
+/** A row a Claude transcript watch published: `restates-records` carries no fact (local only),
+ *  `fact` carries one no hook did, under the main agent its host last heard. */
+export type ClaudeTranscriptWatchRow = 'restates-records' | 'fact'
+
 /** A child's own event: one naming its agent id, or a teammate's idle, which names it by `teammate_name` only. */
 function isChildAttributed(event: AgentHookEventPayload): boolean {
   return event.toolAgentId !== undefined || event.hookEventName === 'TeammateIdle'
@@ -87,14 +91,15 @@ function restatesAnotherPrompt(
  * of the cancel the desktop infers, and TUIs emit late same-turn hooks after Ctrl+C. The latch dies
  * on the provider's own verdict (any settled `mainAgent`) or a new turn (another prompt, an
  * explicit prompt, a prompt submission, a session start). Child-attributed and replayed events keep the latched main
- * agent and are re-folded with their own child evidence; late main agent work is held.
- * `restatesRecords`: a local Claude transcript watch row that carries no fact.
+ * agent and are re-folded with their own child evidence; late main agent work is held. A transcript
+ * watch's fact row is re-folded the same way: a relay that never learned the cancel restates its
+ * stale main agent on it (a background task retired while Claude idles, long after the window).
  */
 export function resolveCancelVerdictLatch(
   previous: EnrichedAgentHookEventPayload | undefined,
   incoming: AgentHookEventPayload,
   now: number,
-  restatesRecords = false
+  watchRow?: ClaudeTranscriptWatchRow
 ): CancelVerdictLatchDecision {
   const apply: CancelVerdictLatchDecision = { hold: false, event: incoming }
   if (
@@ -109,7 +114,7 @@ export function resolveCancelVerdictLatch(
   }
   // Why: it repeats hooks this latch already judged, and the watch offers it every second: held,
   // it can never reopen the cancel once the window ends, nor rewrite the row each tick.
-  if (restatesRecords) {
+  if (watchRow === 'restates-records') {
     return HOLD
   }
   const latched = previous.payload.mainAgent
@@ -118,7 +123,7 @@ export function resolveCancelVerdictLatch(
     latched &&
     incoming.payload.agentType !== 'codex' &&
     incoming.payload.state !== 'done' &&
-    (isChildAttributed(incoming) || incoming.isReplay === true) &&
+    (isChildAttributed(incoming) || incoming.isReplay === true || watchRow === 'fact') &&
     carriesChildWork(incoming)
   ) {
     return { hold: false, event: refoldUnderLatchedMainAgent(previous, latched, incoming) }

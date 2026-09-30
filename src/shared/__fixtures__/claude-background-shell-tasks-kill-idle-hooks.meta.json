@@ -1,0 +1,11 @@
+{
+  "source_scenario": "r1-s9",
+  "claude_version": "2.1.284 (Claude Code)",
+  "platform": "darwin",
+  "cols": 120,
+  "rows": 40,
+  "recorded_at": "2026-09-29",
+  "clock": "t is seconds since the first hook; hook records keep only the ps rows of the rig's sleep processes, taken inside the hook",
+  "note": "Claude starts `sleep 604` in the background and the turn ends (Stop lists it running). At the idle prompt the driver opens /tasks and stops the shell with `x`: no hook, no turn; Claude writes one `queue-operation` enqueue row (killed) 0.17 s after the key. The next typed turn absorbs it (a `remove` row) and its Stop lists nothing.",
+  "scrub": "Username was already a placeholder in the capture run. Every session, prompt and row UUID (in payloads, paths and transcript lines) is replaced by a placeholder distinct to this fixture (b2); Claude task ids and tool_use ids are verbatim. Transcript: only `queue-operation` lines are kept (the rest, including ~56 KB prompt_snapshot attachments carrying the system prompt, are dropped)."
+}

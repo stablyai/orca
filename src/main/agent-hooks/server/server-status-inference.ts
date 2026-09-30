@@ -1,4 +1,5 @@
 import {
+  claudeRunningNonAgentTask,
   markClaudeLeadTurnInterrupted,
   clearClaudeAnsweredQuestionWait
 } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
@@ -74,11 +75,13 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
     if (isNavigationEscapeIntent(agentType, request.intent)) {
       return false
     }
+    // Why: a relayed pane's records live on the relay, which restates them on every row.
     const childWorkEvidenced =
       payload.subagents?.some((subagent) => subagent.state !== 'idle') === true ||
       (agentType === 'claude' &&
-        (this.state.claudeRunningNonAgentTaskPaneKeys.has(existing.paneKey) ||
-          this.state.claudeActiveSessionCronPaneKeys.has(existing.paneKey)))
+        (existing.connectionId
+          ? existing.claudeRunningNonAgentTask === true
+          : claudeRunningNonAgentTask(this.state, existing.paneKey)))
     // Why: a 'working' pane can be child-driven, and Ctrl+C at the idle prompt of a main agent that
     // child work holds open cancels nothing, so the main agent fact decides. A row from a host too
     // old to publish `mainAgent` keeps the evidence guard, and so does Codex: its synthesized row is

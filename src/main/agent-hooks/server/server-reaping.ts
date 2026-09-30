@@ -4,7 +4,10 @@ import {
   claudeRosterToSnapshots
 } from '../../../shared/claude-subagent-roster'
 import { admitLegacyAgentStatus } from '../../../shared/agent-hook-listener/listener-state'
-import { reapRestoredClaudeSubagentsForDeadPane } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
+import {
+  claudeRunningNonAgentTask,
+  reapRestoredClaudeSubagentsForDeadPane
+} from '../../../shared/agent-hook-listener/providers/claude-roster-state'
 import { AGENT_STATUS_PERSISTED_HYDRATION_MODE } from '../../../shared/agent-status-legacy-adapter'
 import { AgentHookServerTabCleanup } from './server-tab-cleanup'
 import type { EnrichedAgentHookEventPayload } from './server-types'
@@ -40,8 +43,7 @@ export abstract class AgentHookServerReaping extends AgentHookServerTabCleanup {
           this.state.claudeSubagentRosterByPaneKey.get(paneKey)
         ) ||
           enriched.payload.state !== 'done' ||
-          this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
-          this.state.claudeActiveSessionCronPaneKeys.has(paneKey)) &&
+          claudeRunningNonAgentTask(this.state, paneKey)) &&
         !this.runtimeObservedStatusPaneKeys.has(paneKey)
       ) {
         candidates.push({ paneKey, entry: enriched })

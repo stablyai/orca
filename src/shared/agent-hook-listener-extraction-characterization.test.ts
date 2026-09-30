@@ -11,6 +11,7 @@ import {
 import { warnOnHookEnvOrVersionMismatch } from './agent-hook-listener/listener-limits'
 import { resolveHookSource } from './agent-hook-listener/source-routing'
 import { makePaneKey } from './stable-pane-id'
+import { recordClaudeNonAgentTaskLaunch } from './agent-hook-listener/providers/claude-non-agent-work'
 
 const PANE = makePaneKey('tab-hooks', '11111111-1111-4111-8112-111111111111')
 const MOVED_PANE = makePaneKey('tab-hooks', '22222222-2222-4222-8222-222222222222')
@@ -126,6 +127,7 @@ describe('agent hook extraction boundaries', () => {
       state.antigravityCompletedTranscriptByPaneKey,
       state.claudeSubagentRosterByPaneKey,
       state.claudeLeadStateByPaneKey,
+      state.claudeNonAgentWorkByPaneKey,
       state.codexSubagentRosterByPaneKey,
       state.codexSubagentTranscriptByPaneKey,
       state.codexLeadStateByPaneKey,
@@ -151,7 +153,6 @@ describe('agent hook extraction boundaries', () => {
     const paneSets = [
       state.ampCompletedCacheKeys,
       state.claudeUnconfirmedRestoredStatusPaneKeys,
-      state.claudeRunningNonAgentTaskPaneKeys,
       state.claudeActiveSessionCronPaneKeys
     ]
     for (const set of paneSets) {
@@ -263,7 +264,7 @@ describe('agent hook extraction boundaries', () => {
     state.warnedVersions.add('old-version')
     state.warnedEnvs.add('development->production')
     state.lastPromptByPaneKey.set(PANE, 'prompt')
-    state.claudeRunningNonAgentTaskPaneKeys.add(PANE)
+    recordClaudeNonAgentTaskLaunch(state, PANE, 'btest0001', 'toolu_test')
     state.codexLeadStateByPaneKey.set(PANE, { state: 'working', stateStartedAt: 1 })
     state.grokActiveTurnByPaneKey.set(PANE, { promptId: 'prompt-1' })
 
@@ -272,7 +273,7 @@ describe('agent hook extraction boundaries', () => {
     expect(state.warnedVersions.size).toBe(0)
     expect(state.warnedEnvs.size).toBe(0)
     expect(state.lastPromptByPaneKey.size).toBe(0)
-    expect(state.claudeRunningNonAgentTaskPaneKeys.size).toBe(0)
+    expect(state.claudeNonAgentWorkByPaneKey.size).toBe(0)
     expect(state.codexLeadStateByPaneKey.size).toBe(0)
     expect(state.grokActiveTurnByPaneKey.size).toBe(0)
   })

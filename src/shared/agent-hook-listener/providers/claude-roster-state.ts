@@ -19,6 +19,7 @@ import {
 import type { AgentHookEventPayload } from '../listener-event'
 import type { ClaudeLeadTurnState, HookListenerState } from '../listener-state'
 import { readString } from '../tool-input-preview'
+import { claudePaneHasNonAgentWork } from './claude-non-agent-work'
 
 /** Lead events that may re-anchor a pane's owning session. Allow-list, not a deny-list: a payload we
  *  can't attribute (unknown name, child event missing its agent_id) must void nothing. */
@@ -38,9 +39,10 @@ const CLAUDE_SESSION_OWNER_EVENTS: ReadonlySet<string> = new Set([
  *  emits SessionEnd on /clear, but Orca previously did not install it and older binaries emit none.
  *
  *  Voids only what the replaced session provably owned. Deliberately NOT voided:
- *  - `claudeRunningNonAgentTaskPaneKeys`: a background shell is an OS process that survives /clear,
- *    and the previous inventory is positive evidence it was running. Only a fresh inventory or a
- *    certified process death may retire it.
+ *  - `claudeNonAgentWorkByPaneKey`: a background shell is an OS process that survives /clear
+ *    (capture r3-clear-run1), and Claude writes its end into the new session's transcript. Claude's
+ *    own end record, a fresh inventory, a new process's SessionStart or a certified process death
+ *    retires it.
  *  - `confirmedTeammate` roster rows: persistent in-process teammates a lead replacement can't end.
  *  - `claudeLeadStateByPaneKey`: the caller's own fold overwrites it anyway. */
 export function voidClaimsOfReplacedClaudeSession(
@@ -110,26 +112,11 @@ export function getOrCreateClaudeSubagentRoster(
   return roster
 }
 
-/** The inventory is the only judge of a running shell: it retires the gate when it omits the
- *  shell, and nothing about how the main agent's turn ended may override what it positively reports. */
-export function updateClaudeRunningNonAgentTask(
-  state: HookListenerState,
-  paneKey: string,
-  hasRunningNonAgentTask: boolean
-): void {
-  if (hasRunningNonAgentTask) {
-    state.claudeRunningNonAgentTaskPaneKeys.add(paneKey)
-  } else {
-    state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
-  }
-}
-
 /** The shell fact every Claude row carries as `claudeRunningNonAgentTask`: a running shell or an
  *  active session cron. The one stamp for every row the listener or its transcript watch builds. */
 export function claudeRunningNonAgentTask(state: HookListenerState, paneKey: string): boolean {
   return (
-    state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
-    state.claudeActiveSessionCronPaneKeys.has(paneKey)
+    claudePaneHasNonAgentWork(state, paneKey) || state.claudeActiveSessionCronPaneKeys.has(paneKey)
   )
 }
 
@@ -184,9 +171,7 @@ export function resolveClaudePaneStatus(
       hasLiveAgentWork: claudeRosterHasWorkingSubagent(
         state.claudeSubagentRosterByPaneKey.get(paneKey)
       ),
-      hasLiveNonAgentWork:
-        state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
-        state.claudeActiveSessionCronPaneKeys.has(paneKey)
+      hasLiveNonAgentWork: claudeRunningNonAgentTask(state, paneKey)
     })
   })
 }
@@ -197,7 +182,7 @@ export function resolveClaudePaneStatus(
  *  Stop would be. This is the primary source of `mainAgent.outcome: 'cancellation'` in the CLI
  *  lane, and the record is what keeps a later child lifecycle event from resurrecting the
  *  cancelled main agent. Nothing here retires a shell, cron or subagent: they outlive the cancel
- *  and leave only when their inventory says so. */
+ *  and leave on Claude's own record of their end, or when the process is replaced or ends. */
 export function markClaudeLeadTurnInterrupted(
   state: HookListenerState,
   paneKey: string

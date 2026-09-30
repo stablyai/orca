@@ -1,6 +1,7 @@
-// Loads the Claude Code 2.1.280 cancel captures (src/shared/__fixtures__/claude-cancel-*-hooks.jsonl
-// and claude-idle-ctrl-c-*-hooks.jsonl, sidecars beside them): hook payloads recorded over a real
-// PTY, merged in time order with the driver's cancel, kill and transcript-scan markers.
+// Loads the Claude Code cancel and background-shell captures (src/shared/__fixtures__/
+// claude-cancel-*-hooks.jsonl, claude-idle-ctrl-c-*-hooks.jsonl, claude-background-shell-*-hooks.jsonl,
+// sidecars beside them): hook payloads recorded over a real PTY, merged in time order with the
+// driver's keys and cancel, kill and transcript-scan markers.
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { AGENT_INTERRUPT_SETTLE_MS } from '../../shared/agent-interrupt-intent'
@@ -29,6 +30,8 @@ export type CapturedCancel = {
   hooks_before_next_typed_prompt: number[]
 }
 export type CapturedKill = { kind: 'kill'; t: number; needle: string }
+/** A driver key that is not a cancel: a submit, a /tasks stop, an exit confirmation. */
+export type CapturedKey = { kind: 'key'; t: number; label: string }
 /** Raw scrubbed lines the CLI appended to its own session transcript since the previous
  *  transcript record, in file order; a replay writes them at this position. The idle Ctrl+C
  *  captures kept only `system`/`agents_killed` lines. */
@@ -37,8 +40,15 @@ export type CapturedTranscriptScan = {
   t: number
   label: string
   lines: string[]
+  /** The transcript file the lines were written to, when the capture spans a session change. */
+  file?: string
 }
-export type CapturedRecord = CapturedHook | CapturedCancel | CapturedKill | CapturedTranscriptScan
+export type CapturedRecord =
+  | CapturedHook
+  | CapturedCancel
+  | CapturedKill
+  | CapturedKey
+  | CapturedTranscriptScan
 
 export function loadCapture(name: string): CapturedRecord[] {
   return readFileSync(
@@ -54,6 +64,7 @@ export function loadCapture(name: string): CapturedRecord[] {
         parsed.kind !== 'hook' &&
         parsed.kind !== 'cancel' &&
         parsed.kind !== 'kill' &&
+        parsed.kind !== 'key' &&
         parsed.kind !== 'transcript'
       ) {
         throw new Error(`Unknown capture record: ${line}`)

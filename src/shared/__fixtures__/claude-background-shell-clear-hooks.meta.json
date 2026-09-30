@@ -1,0 +1,15 @@
+{
+  "source_scenario": "r3-clear-run1",
+  "claude_version": "2.1.285 (Claude Code)",
+  "platform": "darwin",
+  "cols": 120,
+  "rows": 40,
+  "recorded_at": "2026-09-30",
+  "clock": "t is seconds since the first hook; hook records keep only the ps rows of the rig's sleep processes, taken inside the hook",
+  "note": "Claude starts `sleep 40.07; echo marker` in the background (Stop lists it), then /clear: SessionEnd (clear) and SessionStart (clear) under a new session id and a new transcript file, created 0.09 s after the SessionStart hook. The shell keeps running (still in ps 28 s later) and its completion lands in the NEW session's transcript (enqueue, completed), with a notification turn whose Stop lists nothing. `file` names which transcript a line is in.",
+  "scrub": "Username was already a placeholder in the capture run. Every session, prompt and row UUID (in payloads, paths and transcript lines) is replaced by a placeholder distinct to this fixture (b4); Claude task ids and tool_use ids are verbatim. Transcript: only `queue-operation` lines are kept (the rest, including ~56 KB prompt_snapshot attachments carrying the system prompt, are dropped).",
+  "files": [
+    "00000000-0000-4000-8000-0000b4000000.jsonl",
+    "00000000-0000-4000-8000-0000b4000005.jsonl"
+  ]
+}

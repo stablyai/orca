@@ -143,7 +143,7 @@ describe('a Claude cancel with a background shell (captured)', () => {
     }
   })
 
-  it('lets the shell leave only when an inventory omits it, and then settles to done', async () => {
+  it("keeps the shell past the cancel until Claude's own record of its end, then settles to done", async () => {
     const server = await startServer()
     try {
       for (const index of [0, 1, 2, 3, 4, 5, 6]) {
@@ -158,7 +158,8 @@ describe('a Claude cancel with a background shell (captured)', () => {
       await post(server, hookAt(records, 11))
       expect(row(server)).toMatchObject({ state: 'working', workingMode: 'monitoring' })
 
-      // The rig SIGKILLs the shell. That is not evidence yet: nothing has reported it.
+      // The rig SIGKILLs the shell. That is not evidence yet: Claude has recorded nothing. (This
+      // capture kept no transcript, so the end row Claude writes there is not replayed.)
       const kill = records.find((record) => record.kind === 'kill' && record.needle === 'sleep 600')
       expect(kill).toBeDefined()
       expect(row(server)).toMatchObject({ state: 'working', workingMode: 'monitoring' })
@@ -208,7 +209,7 @@ describe('a Claude cancel with a background shell (captured)', () => {
       expect(hookSupersedesCancel(records, afterKill)).toBe(true)
 
       // Had the inference won the race, the row would still read the last inventory: a process
-      // death is not evidence until an inventory reports it, and the next Stop does so at once.
+      // death is not evidence until Claude records it, and the next Stop does so at once.
       expect(pressCtrlC(server)).toBe(true)
       expect(row(server)).toMatchObject({
         state: 'working',

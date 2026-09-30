@@ -3,6 +3,7 @@ import { AgentHookServer, _internals } from './server'
 import { AGENT_STATUS_MAX_FIELD_LENGTH } from '../../shared/agent-status-types'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { buildBody, PANE, LEAF_2, LEAF_3 } from './server.test-fixtures'
+import { claudePaneHasNonAgentWork } from '../../shared/agent-hook-listener/providers/claude-non-agent-work'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
   getCohortAtEmitMock: vi.fn(),
@@ -251,7 +252,7 @@ describe('AgentHookServer listener replay', () => {
       })
 
       expect(server.getStatusSnapshot()[0]).toEqual(waiting)
-      expect(server._getStateForTests().claudeRunningNonAgentTaskPaneKeys.has(PANE)).toBe(true)
+      expect(claudePaneHasNonAgentWork(server._getStateForTests(), PANE)).toBe(true)
       expect(server._getStateForTests().claudeActiveSessionCronPaneKeys.has(PANE)).toBe(true)
     } finally {
       server.stop()

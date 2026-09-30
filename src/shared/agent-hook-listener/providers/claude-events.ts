@@ -1,6 +1,7 @@
 import type { ParsedAgentStatusPayload } from '../../agent-status-types'
 import { isAgentStatusHeldOpenByChildWork } from '../../agent-lead-status-fold'
 import { isAskUserQuestionTool } from '../../agent-question-answered-intent'
+import { isRecord } from '../../agent-status-child-work-value-guards'
 import { readClaudeBackgroundAgentTasks } from '../../claude-background-task-inventory'
 import {
   claudeRosterHasRestoredSnapshotSubagent,
@@ -22,10 +23,53 @@ import {
   getOrCreateClaudeSubagentRoster,
   resolveClaudePaneStatus,
   setClaudeMainAgentTurnState,
-  updateClaudeRunningNonAgentTask,
   voidClaimsOfReplacedClaudeSession
 } from './claude-roster-state'
 import { buildClaudeStatusPayload } from './claude-status-build'
+import {
+  claudePaneHasNonAgentWork,
+  recordClaudeNonAgentTaskLaunch,
+  replaceClaudeNonAgentWorkFromInventory,
+  retireClaudeNonAgentTask
+} from './claude-non-agent-work'
+
+/** Claude's tool that stops a background task, under its current name and its aliases. */
+const CLAUDE_TASK_STOP_TOOL_NAMES: ReadonlySet<string> = new Set([
+  'TaskStop',
+  'KillShell',
+  'KillBash'
+])
+
+/** A tool result that starts or stops a background task. Only the main agent's own launch is
+ *  recorded: a subagent's shell is its own work. A stop is Claude's confirmed result naming the
+ *  task, whoever called it, and only a task the record holds is retired. */
+function applyClaudeBackgroundTaskToolResult(
+  state: HookListenerState,
+  paneKey: string,
+  eventAgentId: string | undefined,
+  hookPayload: Record<string, unknown>
+): void {
+  const response = hookPayload['tool_response']
+  if (!isRecord(response)) {
+    return
+  }
+  const toolName = readString(hookPayload, 'tool_name')
+  if (toolName && CLAUDE_TASK_STOP_TOOL_NAMES.has(toolName)) {
+    const stopped = readString(response, 'task_id')
+    if (stopped) {
+      retireClaudeNonAgentTask(state, paneKey, stopped)
+    }
+    return
+  }
+  if (eventAgentId === undefined && response.backgroundTaskId !== undefined) {
+    recordClaudeNonAgentTaskLaunch(
+      state,
+      paneKey,
+      response.backgroundTaskId,
+      readString(hookPayload, 'tool_use_id')
+    )
+  }
+}
 
 export function normalizeClaudeEvent(
   state: HookListenerState,
@@ -46,7 +90,8 @@ export function normalizeClaudeEvent(
   if (eventName === 'SessionStart') {
     // Why: SessionStart is the only signal a resumed session emits before its first prompt
     // (STA-3386). Land it as a session-boundary 'done' row: 'working' would show a phantom
-    // spinner on an idle TUI (why Devin/Pi/Grok drop the event), and the sessionBoundary
+    // spinner on an idle TUI (why Devin/Pi/Grok drop the event); only a background task still
+    // running holds it at Monitoring, as any done main agent's row would. The sessionBoundary
     // flag keeps completion-reactive consumers (notifications, automation runs) out of it.
     const sessionStartSource = hookPayload['source']
     if (
@@ -60,15 +105,26 @@ export function normalizeClaudeEvent(
       // live turn to an idle row.
       return null
     }
-    // Why: a new process owns the pane; stale children/tasks/crons must not gate the
-    // fresh session's idle row back up to 'working' (same reset Codex does on SessionStart).
+    // Why: a new session owns the pane; stale children/crons must not gate its idle row back up to
+    // 'working' (same reset Codex does on SessionStart). A new process can never end its
+    // predecessor's background tasks either, but /clear keeps the process, whose shells report
+    // their end in the new session's transcript (r3-clear-run1).
+    const keepsTasks = sessionStartSource === 'clear'
     state.claudeSubagentRosterByPaneKey.delete(paneKey)
-    state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
     state.claudeActiveSessionCronPaneKeys.delete(paneKey)
-    // Why: a new session's main agent starts its own clock, not the old session's last Stop.
-    setClaudeMainAgentTurnState(state, paneKey, { state: 'done', stateStartedAt: Date.now() })
+    if (!keepsTasks) {
+      state.claudeNonAgentWorkByPaneKey.delete(paneKey)
+    }
+    const previousLead = state.claudeLeadStateByPaneKey.get(paneKey)
+    // Why: a shell that outlives /clear keeps the pane on the tail of the last turn that ended, so
+    // that turn's verdict and stamp stay and the shell's end is not announced as a new turn.
+    // Otherwise a new session's main agent starts its own clock, not the old session's last Stop.
+    const record =
+      keepsTasks && previousLead?.state === 'done' && claudePaneHasNonAgentWork(state, paneKey)
+        ? previousLead
+        : setClaudeMainAgentTurnState(state, paneKey, { state: 'done', stateStartedAt: Date.now() })
     return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
-      stateName: 'done',
+      ...resolveClaudePaneStatus(state, paneKey, record),
       updateToolSnapshot: true,
       sessionBoundary: true
     })
@@ -129,7 +185,10 @@ export function normalizeClaudeEvent(
     return null
   }
   if (backgroundTasks.present && eventAgentId === undefined) {
-    updateClaudeRunningNonAgentTask(state, paneKey, backgroundTasks.hasRunningNonAgentTask)
+    replaceClaudeNonAgentWorkFromInventory(state, paneKey, backgroundTasks)
+  }
+  if (eventName === 'PostToolUse') {
+    applyClaudeBackgroundTaskToolResult(state, paneKey, eventAgentId, hookPayload)
   }
   if (sessionCronInventoryPresent && eventAgentId === undefined) {
     if (hasActiveSessionCron) {
@@ -295,7 +354,7 @@ export function normalizeClaudeEvent(
     resolvedStatus.stateName === 'working' &&
     claudeRosterHasRestoredSnapshotSubagent(effectiveRoster) &&
     !claudeRosterHasRuntimeWorkingSubagent(effectiveRoster) &&
-    !state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) &&
+    !claudePaneHasNonAgentWork(state, paneKey) &&
     !state.claudeActiveSessionCronPaneKeys.has(paneKey)
   ) {
     // Why: a legacy or partial Stop confirms the lead boundary, not a child restored from disk; keep the child-only gate eligible for reconciliation.

@@ -27,6 +27,7 @@ import type {
 import { codexRosterChildWorkLiveness, seedCodexSubagentRoster } from './codex-subagent-roster'
 import { structuredAgentSessionAgentStatus } from './structured-agent-session-agent-status'
 import type { AgentJournalTurnOutcome } from './agent-turn-outcome'
+import { claudePaneHasNonAgentWork } from './agent-hook-listener/providers/claude-non-agent-work'
 
 type Published = {
   state: AgentStatusState
@@ -443,7 +444,7 @@ describe('mainAgent status parity across lanes', () => {
         state.claudeLeadStateByPaneKey.get(PANE_KEY)?.waitingAgentId !== undefined,
       hasLiveAgentWork: payload.subagents?.some((child) => child.state === 'working') === true,
       hasLiveNonAgentWork:
-        state.claudeRunningNonAgentTaskPaneKeys.has(PANE_KEY) ||
+        claudePaneHasNonAgentWork(state, PANE_KEY) ||
         state.claudeActiveSessionCronPaneKeys.has(PANE_KEY)
     })
   }

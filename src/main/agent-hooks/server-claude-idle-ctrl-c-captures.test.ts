@@ -193,8 +193,10 @@ describe('an idle-prompt Ctrl+C with a background shell and a background agent (
     })
     expect(row(server).interrupted).toBeUndefined()
     expect(row(server).mainAgent).not.toHaveProperty('outcome')
-    // Nothing is left to watch for: the watch disarms after the next read finds nothing.
-    await vi.waitFor(() => expect(watch(server)).toBeUndefined(), { timeout: 3_000 })
+    // The agent reason ends; the shell its launch named keeps the watch reading for its end.
+    await vi.waitFor(() => expect(watch(server)?.reasons).toEqual(new Set(['recorded-task'])), {
+      timeout: 3_000
+    })
 
     // The next typed turn's Stop restates what the CLI now knows: the shell alone.
     await replay([11, 12])
@@ -355,7 +357,7 @@ describe('an unsent draft before idle-prompt Ctrl+C (captured)', () => {
 describe('an idle-prompt Ctrl+C with only a background shell (captured)', () => {
   const records = loadCapture('claude-idle-ctrl-c-shell-only-hooks')
 
-  it('never watches, because no agent child is working', async () => {
+  it('watches only for the end of the shell it saw launched', async () => {
     const server = await startServer()
     const transcript = transcriptFile()
     await replayer(server, records, transcript, Date.now())([0, 1, 2, 3, 4])
@@ -364,7 +366,7 @@ describe('an idle-prompt Ctrl+C with only a background shell (captured)', () => 
       workingMode: 'monitoring',
       mainAgent: { state: 'done' }
     })
-    expect(watch(server)).toBeUndefined()
+    expect(watch(server)?.reasons).toEqual(new Set(['recorded-task']))
     // The capture: no hook and no agents_killed line; the shell survived into the next Stop.
     const cancel = cancelLabelled(records, 'CTRL-C-idle-with-bg-shell-only')
     expect(cancel.hooks_before_next_typed_prompt).toEqual([])

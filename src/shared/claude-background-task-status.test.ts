@@ -14,6 +14,7 @@ import { normalizeHookPayload } from './agent-hook-listener'
 import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
 import { readClaudeBackgroundAgentTasks } from './claude-background-task-inventory'
 import { makePaneKey } from './stable-pane-id'
+import { claudePaneHasNonAgentWork } from './agent-hook-listener/providers/claude-non-agent-work'
 
 const SOURCE_PANE = makePaneKey('tab-source', '11111111-1111-4111-8111-111111111111')
 const TARGET_PANE = makePaneKey('tab-target', '22222222-2222-4222-8222-222222222222')
@@ -174,7 +175,7 @@ describe('Claude background task status', () => {
         session_crons: []
       })?.state
     ).toBe('done')
-    expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(false)
+    expect(claudePaneHasNonAgentWork(state, SOURCE_PANE)).toBe(false)
   })
 
   // Why: STA-4119's second complaint is the missing completion notification. The renderer's
@@ -448,7 +449,7 @@ describe('Claude background task status', () => {
       workingMode: 'monitoring',
       mainAgent: { state: 'done', outcome: 'cancellation' }
     })
-    expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(true)
+    expect(claudePaneHasNonAgentWork(state, SOURCE_PANE)).toBe(true)
   })
 
   it('keeps a failed turn working while its background shell runs', () => {
@@ -527,7 +528,7 @@ describe('Claude background task status', () => {
       background_tasks: [RUNNING_SHELL],
       session_crons: [{ id: 'cron-1' }]
     })
-    expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(false)
+    expect(claudePaneHasNonAgentWork(state, SOURCE_PANE)).toBe(false)
     expect(state.claudeActiveSessionCronPaneKeys.has(SOURCE_PANE)).toBe(false)
 
     claudeEvent(state, SOURCE_PANE, {
@@ -541,7 +542,7 @@ describe('Claude background task status', () => {
       background_tasks: [],
       session_crons: []
     })
-    expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(true)
+    expect(claudePaneHasNonAgentWork(state, SOURCE_PANE)).toBe(true)
     expect(state.claudeActiveSessionCronPaneKeys.has(SOURCE_PANE)).toBe(true)
 
     claudeEvent(state, SOURCE_PANE, {
@@ -549,7 +550,7 @@ describe('Claude background task status', () => {
       background_tasks: [],
       session_crons: []
     })
-    expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(false)
+    expect(claudePaneHasNonAgentWork(state, SOURCE_PANE)).toBe(false)
     expect(state.claudeActiveSessionCronPaneKeys.has(SOURCE_PANE)).toBe(false)
   })
 
@@ -649,7 +650,7 @@ describe('Claude background task status', () => {
         is_interrupt: true
       })
     ).toMatchObject({ state: 'working' })
-    expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(true)
+    expect(claudePaneHasNonAgentWork(state, SOURCE_PANE)).toBe(true)
   })
 
   it('keeps background gating through an empty child SubagentStop inventory', () => {
@@ -682,7 +683,7 @@ describe('Claude background task status', () => {
         background_tasks: []
       })?.state
     ).toBe('working')
-    expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(true)
+    expect(claudePaneHasNonAgentWork(state, SOURCE_PANE)).toBe(true)
 
     claudeEvent(state, SOURCE_PANE, { hook_event_name: 'Stop', background_tasks: [] })
     claudeEvent(state, SOURCE_PANE, {
@@ -690,7 +691,7 @@ describe('Claude background task status', () => {
       teammate_name: 'reviewer',
       background_tasks: [RUNNING_SHELL]
     })
-    expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(false)
+    expect(claudePaneHasNonAgentWork(state, SOURCE_PANE)).toBe(false)
   })
 
   it('shows a child permission wait after the lead turn is interrupted', () => {
@@ -722,16 +723,16 @@ describe('Claude background task status', () => {
       state: 'working',
       workingMode: 'monitoring'
     })
-    expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(true)
+    expect(claudePaneHasNonAgentWork(state, SOURCE_PANE)).toBe(true)
     clearPaneCacheState(state, SOURCE_PANE)
-    expect(state.claudeRunningNonAgentTaskPaneKeys.size).toBe(0)
+    expect(state.claudeNonAgentWorkByPaneKey.size).toBe(0)
 
     claudeEvent(state, TARGET_PANE, {
       hook_event_name: 'Stop',
       background_tasks: [RUNNING_SHELL]
     })
     clearAllListenerCaches(state)
-    expect(state.claudeRunningNonAgentTaskPaneKeys.size).toBe(0)
+    expect(state.claudeNonAgentWorkByPaneKey.size).toBe(0)
   })
 
   it('keeps background gating when the server infers an interruption and folds the cancel with it', () => {
@@ -750,7 +751,7 @@ describe('Claude background task status', () => {
       workingMode: 'monitoring',
       mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: expect.any(Number) }
     })
-    expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(true)
+    expect(claudePaneHasNonAgentWork(state, SOURCE_PANE)).toBe(true)
     expect(state.claudeActiveSessionCronPaneKeys.has(SOURCE_PANE)).toBe(true)
   })
 
@@ -766,7 +767,7 @@ describe('Claude background task status', () => {
       hook_event_name: 'Stop',
       background_tasks: [{ id: 'shell-x', status: 'running' }]
     })
-    expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(true)
+    expect(claudePaneHasNonAgentWork(state, SOURCE_PANE)).toBe(true)
     markClaudeLeadTurnInterrupted(state, SOURCE_PANE)
 
     // Why: the shell the inventory reported is live evidence whatever verdict ended the turn, so

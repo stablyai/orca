@@ -326,13 +326,16 @@ describe('a session change on the pane', () => {
       source: 'clear'
     })
     // The session change moves the cursor and keeps what it watched for; the records' own
-    // SessionStart reset then ends this reason, which only the next read acts on.
+    // SessionStart reset then ends the agent reason, which only the next read acts on. The
+    // shell the capture launched outlives /clear, so its reason holds on.
     expect(cursor(server)).toMatchObject({
       filePath: cleared,
       offset: '{"type":"user","copied":true}\n'.length,
-      reasons: new Set(['agent-child-working'])
+      reasons: new Set(['agent-child-working', 'recorded-task'])
     })
-    await vi.waitFor(() => expect(cursor(server)).toBeUndefined(), { timeout: 3_000 })
+    await vi.waitFor(() => expect(cursor(server)?.reasons).toEqual(new Set(['recorded-task'])), {
+      timeout: 3_000
+    })
   })
 })
 
@@ -405,8 +408,14 @@ describe('a fact read while the main agent waits on a permission prompt', () => 
       hook_event_name: 'PermissionRequest',
       tool_use_id: undefined
     })
-    // The tick that restates the fact is the last read: nothing is left to watch.
-    await vi.waitFor(() => expect(cursor(server)).toBeUndefined(), { timeout: 3_000 })
+    // The tick that restates the fact has read; only the captured shell is left to watch.
+    await vi.waitFor(
+      () => {
+        expect(cursor(server)?.reasons).toEqual(new Set(['recorded-task']))
+        expect(cursor(server)).not.toHaveProperty('unpublished')
+      },
+      { timeout: 3_000 }
+    )
     expect(server._getStateForTests().lastStatusByPaneKey.get(PANE)).toMatchObject({
       hookEventName: 'PermissionRequest',
       toolUseId: 'toolu_gated'

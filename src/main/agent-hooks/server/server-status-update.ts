@@ -27,7 +27,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     observedAt?: number,
     mutationBefore?: EnrichedAgentHookEventPayload
   ): EnrichedAgentHookEventPayload | undefined {
-    const { authorityRestartId, restatesRecords, ...payload } = incoming
+    const { authorityRestartId, restatesRecords, transcriptFact, ...payload } = incoming
     if (!this.canWriteLegacyStatusRow(payload)) {
       return undefined
     }
@@ -158,9 +158,12 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       previous,
       attachedPayload,
       Date.now(),
-      restatesRecords === true
+      restatesRecords === true ? 'restates-records' : transcriptFact === true ? 'fact' : undefined
     )
     if (latch.hold) {
+      // Why: the latch holds the row, not the evidence; a shell launched by a hook in flight at the
+      // Ctrl+C still runs, and the store accepted the event for this pane.
+      onAccepted?.()
       if (
         attachedPayload.payload.agentType === 'codex' &&
         attachedPayload.payload.state === 'working'

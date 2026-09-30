@@ -4,6 +4,10 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { AgentHookServer } from './server'
+import {
+  claudePaneHasNonAgentWork,
+  recordClaudeNonAgentTaskLaunch
+} from '../../shared/agent-hook-listener/providers/claude-non-agent-work'
 
 const LEAF = '11111111-1111-4111-8111-111111111111'
 const PANE = makePaneKey('tab-1', LEAF)
@@ -93,12 +97,12 @@ describe('reconcileEndedProcessForPaneKeys', () => {
     const server = await startServer()
     try {
       claudeRow(server, 'done')
-      server._getStateForTests().claudeRunningNonAgentTaskPaneKeys.add(PANE)
+      recordClaudeNonAgentTaskLaunch(server._getStateForTests(), PANE, 'btest0001', 'toolu_test')
       server._getStateForTests().claudeActiveSessionCronPaneKeys.add(PANE)
 
       expect(server.reconcileEndedProcessForPaneKeys([PANE])).toBe(1)
 
-      expect(server._getStateForTests().claudeRunningNonAgentTaskPaneKeys.has(PANE)).toBe(false)
+      expect(claudePaneHasNonAgentWork(server._getStateForTests(), PANE)).toBe(false)
       expect(server._getStateForTests().claudeActiveSessionCronPaneKeys.has(PANE)).toBe(false)
     } finally {
       server.stop()
@@ -136,7 +140,7 @@ describe('reconcileEndedProcessForPaneKeys', () => {
       expect(kept?.providerSession?.id).toBe('resume-me')
       expect(kept?.launchToken).toBeUndefined()
       // The live claims still went: a latch left behind would re-gate the pane on its next event.
-      expect(server._getStateForTests().claudeRunningNonAgentTaskPaneKeys.has(PANE)).toBe(false)
+      expect(claudePaneHasNonAgentWork(server._getStateForTests(), PANE)).toBe(false)
 
       // The retained identity must not recreate dead launch authority after restart.
       server.flushStatusPersistSync()

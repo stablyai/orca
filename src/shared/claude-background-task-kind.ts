@@ -25,3 +25,32 @@ export function classifyClaudeBackgroundTaskKind(taskType: unknown): AgentChildW
       return 'unknown'
   }
 }
+
+const CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES = new Set([
+  'idle',
+  'done',
+  'success',
+  'succeeded',
+  'complete',
+  'completed',
+  'finished',
+  'failed',
+  'error',
+  'terminated',
+  'exited',
+  'aborted',
+  'expired',
+  'skipped',
+  'crashed',
+  'killed',
+  'stopped',
+  'cancelled',
+  'canceled',
+  'timed_out'
+])
+
+/** The one table of the statuses Claude reports for a task that has ended, in its task inventory
+ *  and in its task notifications. */
+export function isClaudeBackgroundTaskStatusTerminal(status: string): boolean {
+  return CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES.has(status)
+}

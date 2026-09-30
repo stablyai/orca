@@ -43,6 +43,10 @@ export type AgentHookEventPayload = {
   isReplay?: boolean
   /** Transport-only Claude background-work evidence used to reject false input-based interrupts. */
   claudeRunningNonAgentTask?: boolean
+  /** A row the executing host's Claude transcript watch published for a fact no hook carried (a
+   *  killed child, an ended background task). It restates the main agent the host last heard, so it
+   *  never opens a turn. Never persisted. */
+  transcriptFact?: true
   /** Row projected from a structured session the host holds: `owned` while its provider child
    *  runs here, `held` once the child is gone but the session is still open. Never persisted. */
   structuredHost?: StructuredHostStatus
