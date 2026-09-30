@@ -206,6 +206,21 @@ describe('grantManagedCodexHookTrust', () => {
     expect(runner).toHaveBeenCalledTimes(2)
   })
 
+  it("re-grants when the ledger hash still matches but Orca's entry was disabled (#23289)", async () => {
+    const entries = [managedEntry('session_start')]
+    const runner = vi.fn(async () => grantedSessionResult(entries))
+    _internals.setGrantSessionRunner(runner)
+    const plan = buildPlan(entries)
+    await grantManagedCodexHookTrust(plan)
+    upsertHookTrustEntries(plan.tomlPath, [
+      { ...entries[0], trustedHash: 'sha256:codex-session_start', enabled: false }
+    ])
+
+    await grantManagedCodexHookTrust(plan)
+
+    expect(runner).toHaveBeenCalledTimes(2)
+  })
+
   it('re-grants when the managed hook identity changes', async () => {
     const entries = [managedEntry('session_start')]
     const runner = vi.fn(async () => grantedSessionResult(entries))

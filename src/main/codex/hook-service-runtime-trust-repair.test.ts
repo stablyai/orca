@@ -163,7 +163,7 @@ describe('CodexHookService', () => {
     }
   )
 
-  it('repairs duplicate managed PermissionRequest trust tables on restart install', async () => {
+  it("repairs duplicate managed PermissionRequest trust tables and re-enables Orca's entry on restart install", async () => {
     const systemCodexHome = join(homes.tmpHome, '.codex')
     mkdirSync(systemCodexHome, { recursive: true })
     writeFileSync(join(systemCodexHome, 'config.toml'), 'model = "system-model"\n', 'utf-8')
@@ -207,13 +207,13 @@ describe('CodexHookService', () => {
     )
     expect(readFileSync(runtimeTomlPath, 'utf-8').split(permissionRequestHeader)).toHaveLength(3)
 
-    // Why: preserving `enabled = false` is the repair contract; status can be
-    // partial because the user-disabled managed hook remains disabled.
-    expect(['installed', 'partial']).toContain((await service.install()).state)
+    // Why (#23289): Orca's own entry is re-enabled with its hash on every install;
+    // only Orca's own switches turn its status hook off.
+    expect((await service.install()).state).toBe('installed')
 
     const repairedToml = readFileSync(runtimeTomlPath, 'utf-8')
     expect(repairedToml.split(permissionRequestHeader)).toHaveLength(2)
-    expect(repairedToml).toContain('enabled = false')
+    expect(repairedToml).not.toContain('enabled = false')
     expect(repairedToml).not.toContain('STALE_DISABLED')
     expect(repairedToml).not.toContain('STALE_ENABLED')
     expect(repairedToml).toContain('model = "system-model"')

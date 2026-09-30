@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs'
 import { join } from 'node:path'
 import { writeFileAtomically } from './codex-accounts/fs-utils'
 import { upsertProjectTrustLevel } from './codex/config-toml-trust'
+import { CodexConfigTomlEditRefusedError } from './codex/codex-config-toml-checked-edit'
 import { runExclusivelyForCodexTrustConfig } from './codex/codex-trust-config-mutation-queue'
 import type { TuiAgentConfig } from '../shared/tui-agent-config'
 
@@ -182,7 +183,15 @@ export function markCodexProjectTrusted(
         try {
           upsertProjectTrustLevel(configFile, absPath, 'trusted')
         } catch (error) {
-          failures.push(error)
+          // Why: an OS error names the atomic writer's temp file, which never exists for the user to fix.
+          failures.push(
+            error instanceof CodexConfigTomlEditRefusedError
+              ? error
+              : new Error(
+                  `could not write ${configFile}: ${error instanceof Error ? error.message : String(error)}`,
+                  { cause: error }
+                )
+          )
         }
       }
       if (failures.length === 1) {

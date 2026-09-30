@@ -67,6 +67,7 @@ vi.mock('node:os', async () => {
 })
 
 import {
+  getLocalCodexTrustConfigFiles,
   syncCodexGlobalInstructionsIntoManagedHome,
   syncSystemCodexResourcesIntoManagedHome
 } from './codex-home-paths'
@@ -133,6 +134,32 @@ afterEach(() => {
     process.env.ORCA_USER_DATA_PATH = previousUserDataPath
   }
   vi.clearAllMocks()
+})
+
+describe('getLocalCodexTrustConfigFiles', () => {
+  const managed = () => join(getRuntimeCodexHomePath(), 'config.toml')
+  const system = () => join(getSystemCodexHomePath(), 'config.toml')
+
+  it('adds the per-account home a launch reads between the managed and system homes', () => {
+    const accountHome = join(userDataDir, 'codex-accounts', 'a1', 'home')
+    expect(getLocalCodexTrustConfigFiles(fakeHomeDir, accountHome)).toEqual([
+      managed(),
+      join(accountHome, 'config.toml'),
+      system()
+    ])
+  })
+
+  it('writes each home once when the launch reads the managed or system home', () => {
+    expect(getLocalCodexTrustConfigFiles(fakeHomeDir)).toEqual([managed(), system()])
+    expect(getLocalCodexTrustConfigFiles(fakeHomeDir, getRuntimeCodexHomePath())).toEqual([
+      managed(),
+      system()
+    ])
+    expect(getLocalCodexTrustConfigFiles(fakeHomeDir, `${getSystemCodexHomePath()}/`)).toEqual([
+      managed(),
+      system()
+    ])
+  })
 })
 
 describe('syncSystemCodexResourcesIntoManagedHome', () => {

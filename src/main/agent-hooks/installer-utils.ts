@@ -18,6 +18,7 @@ import { resolveHooksJsonWritePath } from './hook-config-write-path'
 import { writeRollingFileBackup } from '../rolling-file-backup'
 import { wrapWindowsPowerShellEncodedCommand } from './windows-powershell-hook-launcher'
 import { WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD } from './hook-stdin-contract'
+import { decodePowerShellEncodedCommand } from './orca-agent-hook-identity'
 
 export type HookCommandConfig = {
   type: 'command'
@@ -60,6 +61,8 @@ export function buildManagedCommandDefinition(command: string): HookDefinition {
   return { command, timeout: MANAGED_HOOK_TIMEOUT_SECONDS }
 }
 
+export { isOrcaAgentHookCommand } from './orca-agent-hook-identity'
+
 export {
   isPlainObject,
   readHooksJson,
@@ -87,18 +90,6 @@ export function createManagedCommandMatcher(
     const searchText = decodedCommand ? `${command}\n${decodedCommand}` : command
     const normalizedCommand = searchText.replaceAll('\\', '/')
     return needles.some((needle) => normalizedCommand.includes(needle))
-  }
-}
-
-function decodePowerShellEncodedCommand(command: string): string | null {
-  const match = command.match(/\s-EncodedCommand\s+(\S+)/i)
-  if (!match) {
-    return null
-  }
-  try {
-    return Buffer.from(match[1], 'base64').toString('utf16le')
-  } catch {
-    return null
   }
 }
 

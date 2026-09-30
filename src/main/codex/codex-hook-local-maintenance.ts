@@ -1,14 +1,10 @@
 import { existsSync } from 'node:fs'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
-import {
-  createManagedCommandMatcher,
-  readHooksJson,
-  removeManagedCommands
-} from '../agent-hooks/installer-utils'
+import { readHooksJson, removeManagedCommands } from '../agent-hooks/installer-utils'
 import { syncSystemConfigIntoManagedCodexHome } from './codex-config-mirror'
 import { upsertHookTrustEntries } from './config-toml-trust'
 import { getCodexConfigTomlPath, getConfigPath, writeCodexHooksJson } from './codex-hook-definition'
-import { getCodexManagedScriptFileName } from './codex-hook-identity'
+import { createOrcaOwnedCodexHookMatcher } from './codex-hook-identity'
 import { cleanupLegacyManagedHookRepresentations } from './codex-hook-legacy-cleanup'
 import {
   removeRuntimeManagedHookTrustEntries,
@@ -45,7 +41,7 @@ export async function refreshCodexRuntimeUserHooksExclusively(
     }
   }
 
-  const isManagedCommand = createManagedCommandMatcher(getCodexManagedScriptFileName())
+  const isManagedCommand = createOrcaOwnedCodexHookMatcher()
   const hookPlan = getRuntimeHooksWithSystemUserHooks(config.hooks, isManagedCommand, configPath)
   if (!hookPlan) {
     return {
@@ -108,7 +104,7 @@ export async function removeCodexHooksExclusively(
 
   const nextHooks = { ...config.hooks }
   // Why: same broad matcher as install() so stale entries from older builds get cleaned even if scriptPath moved.
-  const isManagedCommand = createManagedCommandMatcher(getCodexManagedScriptFileName())
+  const isManagedCommand = createOrcaOwnedCodexHookMatcher()
   for (const [eventName, definitions] of Object.entries(nextHooks)) {
     if (!Array.isArray(definitions)) {
       // Why: a non-array event value would make removeManagedCommands throw; skip it.

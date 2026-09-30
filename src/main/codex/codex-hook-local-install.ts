@@ -1,7 +1,6 @@
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
   buildManagedCommandHook,
-  createManagedCommandMatcher,
   MANAGED_HOOK_TIMEOUT_SECONDS,
   readHooksJson,
   removeManagedCommands,
@@ -23,7 +22,7 @@ import {
   getManagedScriptPath,
   writeCodexHooksJson
 } from './codex-hook-definition'
-import { getCodexManagedScriptFileName } from './codex-hook-identity'
+import { createOrcaOwnedCodexHookMatcher } from './codex-hook-identity'
 import { cleanupLegacyManagedHookRepresentations } from './codex-hook-legacy-cleanup'
 import { getManagedScript } from './codex-hook-script'
 import { grantManagedCodexHookTrust } from './codex-hook-trust-grant'
@@ -65,7 +64,7 @@ export async function installCodexHooksExclusively(
   }
 
   // Why: match by script filename (not exact command) so a fresh install sweeps stale entries from older builds or a different userData path.
-  const isManagedCommand = createManagedCommandMatcher(getCodexManagedScriptFileName())
+  const isManagedCommand = createOrcaOwnedCodexHookMatcher()
   const command = getManagedCommand(scriptPath)
   const hookPlan = getRuntimeHooksWithSystemUserHooks(config.hooks, isManagedCommand, configPath)
   if (!hookPlan) {
@@ -122,7 +121,9 @@ export async function installCodexHooksExclusively(
       groupIndex: 0,
       handlerIndex: 0,
       command,
-      timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+      timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS,
+      // Why (#23289): re-derived every launch prep, so a stale `enabled = false` at Orca's position cannot silence it.
+      enabled: true
     })
   }
   const trustEntries: CodexTrustEntry[] = [...mirroredTrustEntries, ...managedTrustEntries]
@@ -164,8 +165,7 @@ export async function installCodexHooksExclusively(
       // Why: system user hook approvals are mirrored into runtime CODEX_HOME.
       // If the user later revokes approval in ~/.codex/config.toml, preserving
       // all old runtime [hooks.state.*] blocks would keep Orca Codex trusted.
-      // Upsert first so duplicate repair can preserve a disabled managed copy
-      // before stale cleanup removes old managed hook keys.
+      // Upsert first so duplicate repair runs before stale cleanup removes old managed hook keys.
       upsertHookTrustEntries(tomlPath, trustEntries)
       removeStaleRuntimeHookTrustEntries(tomlPath, configPath, trustEntries)
     }

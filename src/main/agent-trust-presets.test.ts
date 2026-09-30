@@ -1,4 +1,5 @@
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -243,6 +244,27 @@ describe('markCodexProjectTrusted', () => {
       rmSync(workspace, { recursive: true, force: true })
     }
   })
+
+  // Why: a read-only directory blocks the atomic temp file only for a non-root POSIX user.
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'names config.toml, not the atomic temp file, when a home cannot be written',
+    async () => {
+      const workspace = mkdtempSync(join(tmpdir(), 'orca-codex-ws-'))
+      const readOnlyHome = mkdtempSync(join(tmpdir(), 'orca-codex-ro-home-'))
+      const configPath = join(readOnlyHome, 'config.toml')
+      writeFileSync(configPath, 'model = "o3"\n', 'utf-8')
+      chmodSync(readOnlyHome, 0o555)
+      try {
+        await expect(markCodexProjectTrusted(workspace, [configPath])).rejects.toThrow(
+          `could not write ${configPath}:`
+        )
+      } finally {
+        chmodSync(readOnlyHome, 0o755)
+        rmSync(readOnlyHome, { recursive: true, force: true })
+        rmSync(workspace, { recursive: true, force: true })
+      }
+    }
+  )
 
   // Why: Codex checks the cwd's own entry before any repo root, so the workspace key
   // must satisfy it whatever the git layout.

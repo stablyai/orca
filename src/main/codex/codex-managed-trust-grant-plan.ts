@@ -81,7 +81,9 @@ export function findLedgerGrant(
     if (!recorded || recorded.signature !== signature) {
       return null
     }
-    if (trustStates.get(normalizedKey)?.trustedHash !== recorded.trustedHash) {
+    const state = trustStates.get(normalizedKey)
+    // Why (#23289): a matching hash on a disabled entry is not a usable grant; rerun it so Orca's hook is turned back on.
+    if (state?.trustedHash !== recorded.trustedHash || state.enabled === false) {
       return null
     }
     entries.push({ ...entry, trustedHash: recorded.trustedHash })

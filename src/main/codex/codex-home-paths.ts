@@ -18,6 +18,7 @@ import {
   targetIsOwnedFallbackCopy
 } from './codex-managed-home-resource-copy-marker'
 import { observe, observeResolvedPathEntry } from './codex-path-observation'
+import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 
 const CODEX_GLOBAL_INSTRUCTIONS_ENTRY = 'AGENTS.md'
 
@@ -48,11 +49,21 @@ export function getOrcaManagedCodexHomePath(): string {
 }
 
 /** Config files an Orca-launched local Codex reads trust from, in the hook installer's lock order. */
-export function getLocalCodexTrustConfigFiles(agentHome: string): string[] {
-  return [
-    join(getOrcaManagedCodexHomePath(), 'config.toml'),
-    join(agentHome, '.codex', 'config.toml')
-  ]
+export function getLocalCodexTrustConfigFiles(
+  agentHome: string,
+  launchCodexHome?: string
+): string[] {
+  const homes = [getOrcaManagedCodexHomePath(), launchCodexHome, join(agentHome, '.codex')]
+  const seen = new Set<string>()
+  const files: string[] = []
+  for (const home of homes) {
+    // Why (#23847): a per-account CODEX_HOME is the home the launch reads; without it trust only arrives by a later copy.
+    if (home && !seen.has(normalizeRuntimePathForComparison(home))) {
+      seen.add(normalizeRuntimePathForComparison(home))
+      files.push(join(home, 'config.toml'))
+    }
+  }
+  return files
 }
 
 export function getCodexSessionBackfillStateDirPath(): string {

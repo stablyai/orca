@@ -20,7 +20,12 @@ const mocks = vi.hoisted(() => ({
   copilot: vi.fn<(path: string, home: string) => void>(),
   antigravity: vi.fn<(path: string, home: string) => void>(),
   qoder: vi.fn<(path: string, home: string) => void>(),
-  codexConfigFiles: vi.fn<(agentHome: string) => string[]>(() => CODEX_CONFIG_FILES),
+  codexConfigFiles: vi.fn<(agentHome: string, launchCodexHome?: string) => string[]>(
+    (_agentHome, launchCodexHome) =>
+      launchCodexHome
+        ? [CODEX_CONFIG_FILES[0]!, `${launchCodexHome}/config.toml`, CODEX_CONFIG_FILES[1]!]
+        : CODEX_CONFIG_FILES
+  ),
   claudeGrant: vi.fn<typeof ClaudeFolderTrustFile.grantClaudeWorkspaceTrust>()
 }))
 
@@ -87,12 +92,24 @@ describe('applyAgentWorkspaceTrust on this machine', () => {
     )
   })
 
+  it('also trusts the per-account Codex home the launch env names (#23847)', async () => {
+    await applyAgentWorkspaceTrust('codex', WORKSPACE, {
+      ...local,
+      env: { CODEX_HOME: '/accounts/a1/home' }
+    })
+    expect(mocks.codex).toHaveBeenCalledWith(WORKSPACE, [
+      CODEX_CONFIG_FILES[0],
+      '/accounts/a1/home/config.toml',
+      CODEX_CONFIG_FILES[1]
+    ])
+  })
+
   it('writes per-user trust under the home the launch env names, where the agent reads it', async () => {
     const context = { ...local, env: { HOME: '/home/agent', USERPROFILE: '/home/agent' } }
     for (const preset of ['codex', 'cursor', 'copilot', 'qoder', 'antigravity'] as const) {
       await applyAgentWorkspaceTrust(preset, WORKSPACE, context)
     }
-    expect(mocks.codexConfigFiles).toHaveBeenCalledWith('/home/agent')
+    expect(mocks.codexConfigFiles).toHaveBeenCalledWith('/home/agent', undefined)
     for (const writer of [mocks.cursor, mocks.copilot, mocks.qoder, mocks.antigravity]) {
       expect(writer).toHaveBeenCalledWith(WORKSPACE, '/home/agent')
     }

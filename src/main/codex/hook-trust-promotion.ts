@@ -1,11 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
-import {
-  createManagedCommandMatcher,
-  readHooksJson,
-  type HookDefinition
-} from '../agent-hooks/installer-utils'
+import { readHooksJson, type HookDefinition } from '../agent-hooks/installer-utils'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
 import {
   codexHookSourcePathsEqual,
@@ -21,7 +17,7 @@ import {
   CODEX_EVENT_NAME_BY_LABEL,
   createCodexHookTrustEntry,
   getCodexHookTrustSignature,
-  getCodexManagedScriptFileName
+  createOrcaOwnedCodexHookMatcher
 } from './codex-hook-identity'
 
 // Why: ~/.codex/config.toml is the single source of truth for user-hook
@@ -189,7 +185,7 @@ function promoteCodexRuntimeHookApprovalsToSystemUnsafe(runtimeHomePath: string)
   if (!runtimeConfig?.hooks || !systemConfig?.hooks) {
     return
   }
-  const isManagedCommand = createManagedCommandMatcher(getCodexManagedScriptFileName())
+  const isManagedCommand = createOrcaOwnedCodexHookMatcher()
 
   const promotions: CodexTrustEntry[] = []
   for (const [key, state] of runtimeTrust) {

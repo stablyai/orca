@@ -21,6 +21,7 @@ const STUB_SERVER_SOURCE = `
 const config = JSON.parse(process.env.STUB_CONFIG)
 require('node:fs').writeFileSync(config.pidFile, String(process.pid))
 const trusted = new Set(config.hooks.filter(h => h.trustStatus === 'trusted').map(h => h.key))
+const disabled = new Set(config.hooks.filter(h => h.enabled === false).map(h => h.key))
 let buffer = ''
 function send(message) {
   const serialized = Buffer.from(JSON.stringify(message) + '\\n')
@@ -39,7 +40,7 @@ function listing() {
   return {
     data: [{
       cwd: config.cwd,
-      hooks: config.hooks.map(h => ({ ...h, trustStatus: trusted.has(h.key) ? 'trusted' : h.trustStatus })),
+      hooks: config.hooks.map(h => ({ ...h, trustStatus: trusted.has(h.key) ? 'trusted' : h.trustStatus, enabled: !disabled.has(h.key) })),
       warnings: [],
       errors: []
     }]
@@ -82,7 +83,10 @@ process.stdin.on('data', (chunk) => {
         process.exit(9)
       }
       writeFileSyncSafe(config.recordFile, JSON.stringify(message.params))
-      for (const key of Object.keys(message.params.edits[0].value)) trusted.add(key)
+      for (const [key, state] of Object.entries(message.params.edits[0].value)) {
+        trusted.add(key)
+        if (state.enabled === true && config.scenario !== 'ignore-enabled') disabled.delete(key)
+      }
       send({ id: message.id, result: { status: 'ok', version: 'v1', filePath: config.cwd + '/config.toml' } })
       continue
     }
@@ -107,6 +111,7 @@ type StubHook = {
   command: string | null
   currentHash: string
   trustStatus: string
+  enabled?: boolean
 }
 
 function createStubRequest(options: {
@@ -264,6 +269,45 @@ describe('runCodexHookTrustGrantSession', () => {
     expect(clearTimeoutSpy.mock.calls.map(([handle]) => handle)).toEqual(
       expect.arrayContaining(timerHandles)
     )
+  })
+
+  it('turns on a trusted but disabled Orca entry and leaves a disabled project hook alone (#23289)', async () => {
+    const key = '/home/a/.codex/hooks.json:session_start:0:0'
+    const projectHook: StubHook = {
+      key: '/repo/.codex/hooks.json:session_start:0:0',
+      command: 'echo project-hook',
+      currentHash: 'sha256:project',
+      trustStatus: 'untrusted',
+      enabled: false
+    }
+    const { request, recordFile } = createStubRequest({
+      scenario: 'happy',
+      hooks: [{ ...managedHook(key, 'trusted'), enabled: false }, projectHook],
+      expectedTrustKeys: [key],
+      managedCommand: MANAGED_COMMAND
+    })
+
+    const result = await runCodexHookTrustGrantSession(request)
+
+    expect(result).toMatchObject({ outcome: 'granted', wroteTrust: true })
+    expect(JSON.parse(readFileSync(recordFile, 'utf-8')).edits[0].value).toEqual({
+      [key]: { trusted_hash: `sha256:hash-of-${key}`, enabled: true }
+    })
+  })
+
+  it("fails verify when Orca's entry is still disabled after the grant", async () => {
+    const key = '/home/a/.codex/hooks.json:session_start:0:0'
+    const { request } = createStubRequest({
+      scenario: 'ignore-enabled',
+      hooks: [{ ...managedHook(key, 'trusted'), enabled: false }],
+      expectedTrustKeys: [key],
+      managedCommand: MANAGED_COMMAND
+    })
+
+    await expect(runCodexHookTrustGrantSession(request)).resolves.toMatchObject({
+      outcome: 'verify-failed',
+      reason: expect.stringContaining('disabled')
+    })
   })
 
   it('skips config/batchWrite when every expected entry is already trusted', async () => {

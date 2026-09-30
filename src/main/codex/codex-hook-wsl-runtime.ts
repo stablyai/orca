@@ -2,14 +2,15 @@ import { win32 as pathWin32 } from 'node:path'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
   buildManagedCommandHook,
-  createManagedCommandMatcher,
   MANAGED_HOOK_TIMEOUT_SECONDS,
   readHooksJson,
   removeManagedCommands,
   writeManagedScript,
   type HookDefinition
 } from '../agent-hooks/installer-utils'
+import { createOrcaOwnedCodexHookMatcher } from './codex-hook-identity'
 import {
+  computeTrustKey,
   normalizeCodexProjectPathForLookup,
   upsertHookTrustEntries,
   type CodexTrustEntry
@@ -21,6 +22,7 @@ import {
   writeCodexHooksJson
 } from './codex-hook-definition'
 import { grantManagedCodexHookTrust } from './codex-hook-trust-grant'
+import { relocateCodexHookTrust } from './codex-hook-trust-relocation'
 import { getManagedScript } from './codex-hook-script'
 import {
   removeStaleWslRuntimeManagedHookTrustEntries,
@@ -58,7 +60,7 @@ async function installManagedHooksIntoWslRuntimeExclusively(
     }
   }
 
-  const isManagedCommand = createManagedCommandMatcher('codex-hook.sh')
+  const isManagedCommand = createOrcaOwnedCodexHookMatcher('codex-hook.sh')
   const command = wrapReadablePosixHookCommand(plan.commandScriptPath)
   const nextHooks = { ...config.hooks }
   const managedEvents = new Set<string>(CODEX_EVENTS)
@@ -88,13 +90,23 @@ async function installManagedHooksIntoWslRuntimeExclusively(
       groupIndex: 0,
       handlerIndex: 0,
       command,
-      timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+      timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS,
+      // Why (#23289): Orca's own entry is always turned on with its hash.
+      enabled: true
     })
   }
 
+  const previousHooks = config.hooks ?? {}
   config.hooks = nextHooks
   writeManagedScript(plan.scriptPath, getManagedScript('posix'))
   writeCodexHooksJson(plan.configPath, nextHooks)
+  // Why: removing Orca's copies and prepending its entry move the user's hooks to new positional trust keys.
+  relocateCodexHookTrust(plan.tomlPath, {
+    sourcePath: plan.trustConfigPath,
+    before: previousHooks,
+    after: nextHooks,
+    keepKeys: trustEntries.map(computeTrustKey)
+  })
   try {
     // Why: same grant-then-fallback split as the host install — codex runs
     // inside the distro so the hash authority matches the codex the pane runs.
@@ -155,7 +167,7 @@ export function refreshWslRuntimeUserHooks(
     }
   }
 
-  const isManagedCommand = createManagedCommandMatcher('codex-hook.sh')
+  const isManagedCommand = createOrcaOwnedCodexHookMatcher('codex-hook.sh')
   const nextHooks = { ...config.hooks }
   for (const [eventName, definitions] of Object.entries(nextHooks)) {
     if (!Array.isArray(definitions)) {

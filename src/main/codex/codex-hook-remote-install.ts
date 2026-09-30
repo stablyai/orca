@@ -86,7 +86,9 @@ export async function installCodexHooksRemote(
         groupIndex: redirectedCodexHome ? 0 : cleaned.length,
         handlerIndex: 0,
         command,
-        timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+        timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS,
+        // Why (#23289): the SSH lane writes trust itself, so it must also turn Orca's entry on.
+        enabled: true
       })
     }
 

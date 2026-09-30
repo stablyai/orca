@@ -121,6 +121,24 @@ export function upsertHookTrustEntries(
   }
 }
 
+/** Removes `removeKeys` and writes `entries` in one checked write, so a failure cannot leave only half. */
+export function replaceHookTrustEntries(
+  configPath: string,
+  removeKeys: readonly string[],
+  entries: readonly CodexTrustEntry[]
+): void {
+  const existing = readTomlForMutation(configPath)
+  const updated = withConfigPath(configPath, () =>
+    upsertHookTrustEntriesInContent(
+      removeHookTrustEntriesFromContent(existing, removeKeys),
+      entries
+    )
+  )
+  if (updated !== existing) {
+    writeTomlConfigAtomically(configPath, updated)
+  }
+}
+
 export function upsertHookTrustEntriesInContent(
   existingContent: string,
   entries: readonly CodexTrustEntry[]

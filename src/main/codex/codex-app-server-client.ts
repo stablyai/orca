@@ -63,6 +63,8 @@ type CodexHookListing = {
   command: string | null
   currentHash: string
   trustStatus: string
+  /** False only when Codex reports the hook switched off; older Codex omits the field. */
+  enabled: boolean
 }
 
 function collectHookListings(result: unknown): CodexHookListing[] {
@@ -92,7 +94,8 @@ function collectHookListings(result: unknown): CodexHookListing[] {
         key: hook.key,
         command: typeof hook.command === 'string' ? hook.command : null,
         currentHash: hook.currentHash,
-        trustStatus: hook.trustStatus
+        trustStatus: hook.trustStatus,
+        enabled: hook.enabled !== false
       })
     }
   }
@@ -135,13 +138,17 @@ export async function runCodexHookTrustGrantSession(
         }
       }
 
-      const needingTrust = managedListings.filter((listing) => listing.trustStatus !== 'trusted')
+      // Why (#23289): a trusted but disabled Orca hook never fires SessionStart,
+      // so the grant also turns Orca's own entries on; other hooks are never listed here.
+      const needingTrust = managedListings.filter(
+        (listing) => listing.trustStatus !== 'trusted' || !listing.enabled
+      )
       if (needingTrust.length > 0) {
         // Why: same wire shape as the Codex TUI "Trust all" flow — one upsert
         // edit under hooks.state with each key's Codex-computed current hash.
-        const value: Record<string, { trusted_hash: string }> = {}
+        const value: Record<string, { trusted_hash: string; enabled: true }> = {}
         for (const listing of needingTrust) {
-          value[listing.key] = { trusted_hash: listing.currentHash }
+          value[listing.key] = { trusted_hash: listing.currentHash, enabled: true }
         }
         await rpc.request('config/batchWrite', {
           edits: [{ keyPath: 'hooks.state', value, mergeStrategy: 'upsert' }],
@@ -152,7 +159,9 @@ export async function runCodexHookTrustGrantSession(
       const verifyResult = await rpc.request('hooks/list', { cwds: [request.hooksListCwd] })
       const verifiedListings = collectHookListings(verifyResult).filter(matchManaged)
       const verifiedKeyCoverage = normalizedKeyCoverage(verifiedListings)
-      const untrusted = verifiedListings.filter((listing) => listing.trustStatus !== 'trusted')
+      const untrusted = verifiedListings.filter(
+        (listing) => listing.trustStatus !== 'trusted' || !listing.enabled
+      )
       if (
         verifiedListings.length !== expectedKeys.size ||
         !setContainsEvery(verifiedKeyCoverage, expectedKeys) ||
@@ -161,7 +170,9 @@ export async function runCodexHookTrustGrantSession(
         return untrusted.length > 0
           ? {
               outcome: 'verify-failed',
-              reason: `post-grant verify left ${untrusted.length} entries ${untrusted[0].trustStatus}`,
+              reason: `post-grant verify left ${untrusted.length} entries ${
+                untrusted[0].enabled ? untrusted[0].trustStatus : 'disabled'
+              }`,
               reasonClass: 'post-grant-untrusted'
             }
           : {

@@ -1,4 +1,9 @@
-import type { HookCommandConfig, HookDefinition } from '../agent-hooks/installer-utils'
+import {
+  createManagedCommandMatcher,
+  isOrcaAgentHookCommand,
+  type HookCommandConfig,
+  type HookDefinition
+} from '../agent-hooks/installer-utils'
 import type { CodexEventLabel, CodexTrustEntry } from './config-toml-trust'
 
 // Why: Codex's trust hash key uses the snake_case event label (see
@@ -33,6 +38,18 @@ export const CODEX_EVENT_NAME_BY_LABEL: Record<CodexEventLabel, string> = {
 
 export function getCodexManagedScriptFileName(): string {
   return process.platform === 'win32' ? 'codex-hook.cmd' : 'codex-hook.sh'
+}
+
+/**
+ * Orca's entries in an Orca-owned Codex home or mirror: any Orca agent hook
+ * (a Claude hook Codex's importer copied is Orca's, not the user's), plus the
+ * Codex hook at the legacy locations older builds used.
+ */
+export function createOrcaOwnedCodexHookMatcher(
+  scriptFileName = getCodexManagedScriptFileName()
+): (command: string | undefined) => boolean {
+  const isCodexHook = createManagedCommandMatcher(scriptFileName)
+  return (command) => isCodexHook(command) || isOrcaAgentHookCommand(command)
 }
 
 export function createCodexHookTrustEntry(
