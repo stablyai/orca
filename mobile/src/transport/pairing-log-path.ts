@@ -3,7 +3,8 @@ import type { ConnectionLogSink } from './types'
 
 const PATH_PREFIX: Record<PairingCandidatePath, string> = {
   direct: 'Direct: ',
-  relay: 'Relay: '
+  relay: 'Relay: ',
+  iroh: 'Iroh: '
 }
 
 // Why: the direct and relay candidates race into one pairing log, and only the

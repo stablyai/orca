@@ -18,7 +18,10 @@ export const ORCAD_EXTERNAL_MODULES = [
   '@parcel/watcher',
   'fsevents',
   'bun:ffi',
-  'bun:sqlite'
+  'bun:sqlite',
+  // napi-rs reaches its addon via a bare platform package whose `main` IS the .node
+  // file, so the specifier never matches externalNativeAddons' /\.node$/ filter.
+  '@number0/iroh'
 ]
 
 // Native binaries are staged separately from every JavaScript entry.

@@ -11256,7 +11256,10 @@
           "signInAgain": "Relay용 다시 로그인",
           "localTitle": "LAN",
           "retrying": "재시도 중",
-          "relayCell": "릴레이 셀"
+          "relayCell": "릴레이 셀",
+          "irohTitle": "Iroh",
+          "irohDescription": "휴대폰이 셀룰러나 어떤 Wi‑Fi에 있어도 됩니다. 로그인·주소 설정 불필요. 직접 P2P(홀 펀칭), 공개 릴레이 폴백.",
+          "irohUnavailable": "전송 계층 바인딩에 실패했습니다. Orca를 재시작하거나 로그를 확인하세요."
         },
         "MobilePairingSetupSection": {
           "title": "휴대폰 페어링",

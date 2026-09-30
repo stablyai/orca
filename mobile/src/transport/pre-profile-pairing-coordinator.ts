@@ -1,7 +1,10 @@
 import { Platform } from 'react-native'
 import { connect, type ConnectOptions } from './rpc-client'
+import { openIrohRpcClient } from './mobile-iroh-physical-link'
 import { resolvePairingHostIdentity, savePairedHost } from './host-store'
-import type { HostProfile, PairingOffer } from './types'
+import type { PairingOffer } from './types'
+import { baseHost } from './paired-host-profile'
+import { openPairingDialCandidate } from './pairing-dial-candidate'
 import { isPairingRelayRpcUnavailable } from './pairing-relay-rpc-unavailable'
 import {
   relayCredentialProvision,
@@ -42,6 +45,7 @@ export type PreProfilePairingAttempt = {
 
 type Dependencies = {
   connectDirect: typeof connect
+  connectIroh: typeof openIrohRpcClient
   connectRelay: typeof connectMobileRelayForPairing
   resolveInviteDirector: typeof resolvePairingInviteThroughDirector
   resolveHostIdentity: typeof resolvePairingHostIdentity
@@ -57,6 +61,7 @@ type Dependencies = {
 
 const defaultDependencies: Dependencies = {
   connectDirect: connect,
+  connectIroh: openIrohRpcClient,
   connectRelay: connectMobileRelayForPairing,
   resolveInviteDirector: resolvePairingInviteThroughDirector,
   resolveHostIdentity: resolvePairingHostIdentity,
@@ -156,14 +161,16 @@ async function runPairing(
     assertActive(isDisposed)
   }
 
-  const directClient = dependencies.connectDirect(
-    offer.endpoint,
-    offer.deviceToken,
-    offer.publicKeyB64,
-    { ...connectOptions, onLog: attributePairingLogPath('direct', connectOptions?.onLog) }
-  )
-  clients.add(directClient)
-  const candidates: PairingCandidate[] = [{ path: 'direct', client: directClient }]
+  const dialCandidate = openPairingDialCandidate({
+    offer,
+    hasJournal: journal !== null,
+    platform: dependencies.platform,
+    connectDirect: dependencies.connectDirect,
+    connectIroh: dependencies.connectIroh,
+    ...(connectOptions ? { connectOptions } : {})
+  })
+  clients.add(dialCandidate.client)
+  const candidates: PairingCandidate[] = [dialCandidate]
   const log = createPairingRelayLogger(connectOptions?.onLog)
   if (journal) {
     log(
@@ -209,6 +216,10 @@ async function runPairing(
     await dependencies.savePairedHost(baseHost(offer, hostId, hostName, now))
     recordWinnerDescriptor(dependencies, hostId, winner.status)
     return { hostId }
+  }
+  if (winner.path === 'iroh') {
+    // Why: iroh is only dialed for journal-less offers; a journal implies direct/relay.
+    throw new Error('iroh pairing path cannot carry a relay journal')
   }
 
   journal = {
@@ -271,22 +282,6 @@ function recordWinnerDescriptor(
     dependencies.recordDescriptorFromStatus(hostId, status)
   } catch {
     // Best-effort bookkeeping; the host is already saved.
-  }
-}
-
-function baseHost(
-  offer: PairingOffer,
-  hostId: string,
-  name: string,
-  lastConnected: number
-): HostProfile {
-  return {
-    id: hostId,
-    name,
-    endpoint: offer.endpoint,
-    deviceToken: offer.deviceToken,
-    publicKeyB64: offer.publicKeyB64,
-    lastConnected
   }
 }
 

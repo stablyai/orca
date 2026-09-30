@@ -17,6 +17,11 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    // Why: iroh is on by default in production; tests must stay hermetic — real
+    // UDP binds + public relay traffic are opt-in via injected irohBindEndpoint.
+    env: {
+      ORCA_DISABLE_IROH: '1'
+    },
     // Bun's external-module cache otherwise loses Zod named exports across mocked graphs.
     ...(process.versions.bun ? { server: { deps: { inline: ['zod'] } } } : {}),
     ...(process.env.ORCA_BALANCE_UNIT_SHARDS === '1'

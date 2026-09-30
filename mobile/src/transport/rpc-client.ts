@@ -57,6 +57,8 @@ export type RpcClient = UnvalidatedRpcRequestPort & {
 export type ConnectOptions = {
   onStateChange?: (state: ConnectionState) => void
   onLog?: ConnectionLogSink
+  // Why: iroh (and tests) inject a duck-typed socket; activity probe stays shared.
+  createSocket?: (endpoint: string) => WebSocket
 }
 
 export function connect(
