@@ -1159,7 +1159,13 @@ jobs:
       - name: Cache Windows CLI launcher
         uses: actions/cache@v5
         with:
-          path: native/windows-cli-launcher/.build
+          # Why the cargo directories ride along: a hit on .build skips the build
+          # entirely, but a miss otherwise recompiles the resource crate from a
+          # cold registry.
+          path: |
+            native/windows-cli-launcher/.build
+            native/windows-cli-launcher/target
+            ~/.cargo/registry
           key: windows-cli-launcher-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('native/windows-cli-launcher/**', 'config/scripts/build-windows-cli-launcher.mjs', 'resources/build/icon.ico', 'package.json') }}
 
       - name: Build package inputs

@@ -28,6 +28,7 @@ out/
 /build/
 release/
 native/**/.build/
+native/windows-cli-launcher/target/
 # node-gyp output for the vendored Windows registry addon; generated per host and ABI.
 native/windows-registry/build/
 native/windows-registry/bin/
