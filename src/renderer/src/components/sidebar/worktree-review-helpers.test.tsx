@@ -149,8 +149,8 @@ describe('review decision', () => {
     renderToStaticMarkup(<ReviewDecisionBadge review={review} />)
 
   it('marks approved and changes-requested PRs with a dot separate from the CI tone', () => {
-    expect(icon(openPR('APPROVED'))).toContain('bg-emerald-500')
-    expect(icon(openPR('CHANGES_REQUESTED'))).toContain('bg-amber-500')
+    expect(icon(openPR('APPROVED'))).toContain('bg-status-success')
+    expect(icon(openPR('CHANGES_REQUESTED'))).toContain('bg-status-warning')
     expect(icon(openPR('CHANGES_REQUESTED'))).toContain('text-emerald-500/80')
   })
 

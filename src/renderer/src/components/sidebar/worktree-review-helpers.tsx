@@ -90,10 +90,10 @@ export function getReviewDecisionDotLabel(review: WorktreeCardPrDisplay): string
 // Why: review-required is the default for most open PRs, so only a verdict earns a dot.
 function getDecisionDotTone(decision: PRReviewDecision | null): string | null {
   if (decision === 'APPROVED') {
-    return 'bg-emerald-500'
+    return 'bg-status-success'
   }
   if (decision === 'CHANGES_REQUESTED') {
-    return 'bg-amber-500'
+    return 'bg-status-warning'
   }
   return null
 }
