@@ -77,13 +77,23 @@ describe('RpcSessionLivenessWatchdog', () => {
     )
   })
 
-  it('authenticated activity resets suspicion', async () => {
+  it('an RPC response resets suspicion', async () => {
     const { identity, terminate, watchdog } = fixture()
     watchdog.probeNow(identity)
     await vi.advanceTimersByTimeAsync(LIVENESS_PROBE_TIMEOUT_MS)
-    watchdog.noteAuthenticatedInbound(identity)
+    watchdog.noteRpcResponse(identity)
     await vi.advanceTimersByTimeAsync(LIVENESS_IDLE_MS + LIVENESS_PROBE_TIMEOUT_MS * 2)
     expect(terminate).not.toHaveBeenCalled()
+  })
+
+  it('does not let non-response inbound settle an outstanding probe', async () => {
+    const { identity, terminate, watchdog } = fixture()
+    watchdog.probeNow(identity)
+    for (let window = 0; window < 3; window++) {
+      watchdog.noteAuthenticatedInbound(identity)
+      await vi.advanceTimersByTimeAsync(LIVENESS_PROBE_TIMEOUT_MS)
+    }
+    expect(terminate).toHaveBeenCalledOnce()
   })
 
   it('does not churn timers during continuous authenticated traffic', async () => {

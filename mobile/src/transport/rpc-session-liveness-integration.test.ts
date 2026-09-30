@@ -107,25 +107,60 @@ describe('physical session liveness', () => {
     }
   })
 
-  it('counts authenticated terminal binary output as liveness', async () => {
+  it('lets terminal output defer the idle probe', async () => {
     const client = connect('ws://desktop.invalid', 'token', 'server-key')
     const socket = sockets[0]!
     socket.authenticate()
-    client.notifyForeground()
-    socket.onmessage?.({
-      data: encodeTerminalStreamFrame({
-        opcode: TerminalStreamOpcode.Output,
-        streamId: 42,
-        seq: 1,
-        payload: new TextEncoder().encode('hello')
-      })
-    })
-    await Promise.resolve()
-    await vi.advanceTimersByTimeAsync(8_000)
 
-    expect(socket.close).not.toHaveBeenCalled()
-    expect(client.getState()).toBe('connected')
-    client.close()
+    try {
+      for (let seq = 1; seq <= 12; seq += 1) {
+        socket.onmessage?.({ data: terminalOutputFrame(seq) })
+        await vi.advanceTimersByTimeAsync(5_000)
+      }
+
+      expect(sentProbeIds(socket)).toEqual([])
+      expect(client.getState()).toBe('connected')
+    } finally {
+      client.close()
+    }
+  })
+
+  it('does not let terminal output satisfy an outstanding probe', async () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const socket = sockets[0]!
+    socket.authenticate()
+
+    try {
+      client.notifyForeground()
+      for (let seq = 1; seq <= 15; seq += 1) {
+        socket.onmessage?.({ data: terminalOutputFrame(seq) })
+        await vi.advanceTimersByTimeAsync(2_000)
+      }
+
+      expect(socket.close).toHaveBeenCalledOnce()
+    } finally {
+      client.close()
+    }
+  })
+
+  it('settles an outstanding probe on its reply', async () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const socket = sockets[0]!
+    socket.authenticate()
+
+    try {
+      client.notifyForeground()
+      const [probeId] = sentProbeIds(socket)
+      socket.onmessage?.({
+        data: `encrypted:${JSON.stringify({ id: probeId, ok: true, result: {}, _meta: {} })}`
+      })
+      await vi.advanceTimersByTimeAsync(24_000)
+
+      expect(socket.close).not.toHaveBeenCalled()
+      expect(client.getState()).toBe('connected')
+    } finally {
+      client.close()
+    }
   })
 
   it('turns a probe write exception into session recovery', () => {
@@ -190,3 +225,22 @@ describe('physical session liveness', () => {
     client.close()
   })
 })
+
+function terminalOutputFrame(seq: number): Uint8Array {
+  return encodeTerminalStreamFrame({
+    opcode: TerminalStreamOpcode.Output,
+    streamId: 42,
+    seq,
+    payload: new TextEncoder().encode('hello')
+  })
+}
+
+function sentProbeIds(socket: MockWebSocket): string[] {
+  return socket.sent
+    .map(
+      (payload) =>
+        JSON.parse(payload.replace(/^encrypted:/, '')) as { id?: string; method?: string }
+    )
+    .filter((request) => request.method === 'status.get')
+    .map((request) => request.id ?? '')
+}

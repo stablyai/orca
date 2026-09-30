@@ -28,7 +28,7 @@ type SocketSessionOptions = {
   onHandshakeStarted: () => void
   onAuthenticated: (session: RpcClientSocketSession) => void
   onAuthRejected: (reason: string) => void
-  onRpcResponse: (response: RpcResponse) => void
+  onRpcResponse: (response: RpcResponse, session: RpcClientSocketSession) => void
   onBinary: (bytes: Uint8Array) => void
   onAnyInbound: (receivedAt: number) => void
   onAuthenticatedInbound: (session: RpcClientSocketSession) => void
@@ -196,7 +196,7 @@ export class RpcClientSocketSession {
       return
     }
     if (isRpcResponse(response)) {
-      this.options.onRpcResponse(response)
+      this.options.onRpcResponse(response, this)
     }
   }
 

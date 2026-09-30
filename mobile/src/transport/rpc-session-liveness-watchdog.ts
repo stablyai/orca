@@ -73,7 +73,17 @@ export class RpcSessionLivenessWatchdog {
     return this.lastInboundAt
   }
 
+  // Any authenticated frame defers the idle probe, but only noteRpcResponse settles a sent one.
   noteAuthenticatedInbound(identity: RpcSessionIdentity): void {
+    if (this.identity !== identity) {
+      return
+    }
+    this.lastInboundAt = this.now()
+  }
+
+  // Why: stream frames prove only host→phone; a reply proves the phone's writes reach the
+  // host too, so a half-open uplink under live terminal output can't keep a probe satisfied.
+  noteRpcResponse(identity: RpcSessionIdentity): void {
     if (this.identity !== identity) {
       return
     }

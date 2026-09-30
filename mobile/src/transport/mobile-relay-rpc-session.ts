@@ -46,6 +46,7 @@ export function connectMobileRelayRpcSession(args: {
 }): MobileRelayRpcSession {
   const requestTimeoutMs = args.requestTimeoutMs ?? 30_000
   const pending = new RelayPendingRequests()
+  const livenessProbeIds = new Set<string>()
   const stateListeners = new Set<(state: ConnectionState) => void>()
   let state: ConnectionState = 'connecting'
   let lastConnectedAt: number | null = null
@@ -152,9 +153,14 @@ export function connectMobileRelayRpcSession(args: {
     probeTimeoutMs: RELAY_PROBE_TIMEOUT_MS,
     missedProbeLimit: RELAY_MISSED_PROBE_LIMIT,
     voluntaryProbeMinIntervalMs: RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS,
-    sendProbe: () =>
-      state === 'connected' &&
-      sendFrame({ id: pending.nextId(), method: 'status.get', params: undefined }),
+    sendProbe: () => {
+      if (state !== 'connected') {
+        return false
+      }
+      const id = pending.nextId()
+      livenessProbeIds.add(id)
+      return sendFrame({ id, method: 'status.get', params: undefined })
+    },
     onTimeout: (evidence) => {
       args.onLog?.({
         id: `relay-liveness-${logSessionId}-${++logSequence}`,
@@ -241,7 +247,8 @@ export function connectMobileRelayRpcSession(args: {
     if (!isRpcResponse(value)) {
       return
     }
-    if (pending.settle(value)) {
+    if (livenessProbeIds.delete(value.id) || pending.settle(value)) {
+      livenessWatchdog.noteRpcResponse(livenessIdentity)
       return
     }
     streams.handleResponse(value)
