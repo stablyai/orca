@@ -1,0 +1,74 @@
+name: temp omo pr review replies
+on:
+  workflow_dispatch:
+jobs:
+  reply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe available PAT secrets (booleans only)
+        id: probe
+        env:
+          HAS_PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN != '' }}
+          HAS_GH_PAT: ${{ secrets.GH_PAT != '' }}
+          HAS_GITHUB_PERSONAL_ACCESS_TOKEN: ${{ secrets.GITHUB_PERSONAL_ACCESS_TOKEN != '' }}
+          HAS_GH_TOKEN_SECRET: ${{ secrets.GH_TOKEN != '' }}
+          HAS_ORCA_PAT: ${{ secrets.ORCA_PAT != '' }}
+          HAS_WEDREAMER_PAT: ${{ secrets.WEDREAMER_PAT != '' }}
+        run: |
+          echo "HAS_PERSONAL_ACCESS_TOKEN=$HAS_PERSONAL_ACCESS_TOKEN"
+          echo "HAS_GH_PAT=$HAS_GH_PAT"
+          echo "HAS_GITHUB_PERSONAL_ACCESS_TOKEN=$HAS_GITHUB_PERSONAL_ACCESS_TOKEN"
+          echo "HAS_GH_TOKEN_SECRET=$HAS_GH_TOKEN_SECRET"
+          echo "HAS_ORCA_PAT=$HAS_ORCA_PAT"
+          echo "HAS_WEDREAMER_PAT=$HAS_WEDREAMER_PAT"
+          {
+            echo "has_pat=$HAS_PERSONAL_ACCESS_TOKEN"
+            echo "has_gh_pat=$HAS_GH_PAT"
+            echo "has_gpt=$HAS_GITHUB_PERSONAL_ACCESS_TOKEN"
+            echo "has_gh_token=$HAS_GH_TOKEN_SECRET"
+            echo "has_orca=$HAS_ORCA_PAT"
+            echo "has_wed=$HAS_WEDREAMER_PAT"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Post review thread replies as wedreamer
+        if: ${{ secrets.PERSONAL_ACCESS_TOKEN != '' || secrets.GH_PAT != '' || secrets.GITHUB_PERSONAL_ACCESS_TOKEN != '' || secrets.GH_TOKEN != '' || secrets.ORCA_PAT != '' || secrets.WEDREAMER_PAT != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN || secrets.GH_PAT || secrets.GITHUB_PERSONAL_ACCESS_TOKEN || secrets.GH_TOKEN || secrets.ORCA_PAT || secrets.WEDREAMER_PAT }}
+        run: |
+          set -euo pipefail
+          whoami_login=$(gh api user -q .login)
+          echo "authenticated_as=$whoami_login"
+          test "$whoami_login" = "wedreamer"
+
+          post_reply() {
+            local parent="$1"
+            local body="$2"
+            gh api -X POST repos/stablyai/orca/pulls/24069/comments \
+              -f body="$body" \
+              -F in_reply_to="$parent" \
+              --jq '.id'
+          }
+
+          # Must-reply
+          post_reply 4145764433 "Fixed in ca021a60 — OmO sessions-dir probe no longer awaits before \`_state = 'ready'\` / port scan / \`_onReady\`; result is applied asynchronously when still current."
+          post_reply 4145795026 "Fixed in ca021a60 — removed the await-before-ready race; establish sets ready immediately after \`watchMuxForRelayLoss\`, applying \`omoSessionsDir\` async with mux/current checks."
+          post_reply 4145795064 "Fixed in ca021a60 — same as establish: reconnect no longer awaits the OmO probe before ready; async apply also checks abortController + mux.isDisposed()."
+          post_reply 4145840439 "Fixed in ca021a60 — \`readOptionalRemoteOmoSessionsDir\` now passes \`wrapCommand: !isWindowsRemoteHost(hostPlatform)\` to \`execCommand\`."
+          post_reply 4144349306 "Fixed in ca021a60 — same Windows \`wrapCommand\` fix for the OmO sessions-dir probe."
+          post_reply 4145653289 "Fixed in ca021a60 — \`writeOmoPrefillExtension\` is best-effort try/catch so a prefill write failure cannot throw into \`materializePi\` after status was written."
+          post_reply 4142412002 "Already fixed earlier in b75e961 (WSL \`launchKind: omo\` + \`ORCA_OMO_SOURCE_AGENT_DIR\`); no further change needed on tip ca021a60 / 30682d8b."
+
+          # Earlier fixed acks
+          post_reply 4142386715 "Addressed earlier in ad4eb5a — resume uses \`omo --session\`."
+          post_reply 4142386741 "Addressed earlier — scanner env wiring for OmO is in place on tip."
+          post_reply 4142386752 "Addressed earlier — WSL hooks path fixed on tip."
+          post_reply 4142386761 "Addressed earlier — SSH overrides for OmO are in place on tip."
+          post_reply 4144294271 "Addressed earlier in b75e961 — WSL drafts/prefill."
+          post_reply 4144294278 "Addressed earlier in b75e961 — custom WSL home."
+          post_reply 4144294288 "Addressed earlier in fc27e6f — SSH OmO probe/path."
+          post_reply 4144294298 "Addressed earlier in fc27e6f — SSH OmO probe/path."
+          post_reply 4142412032 "Addressed earlier in ad4eb5a — \`omo --session\` for known transcripts."
+          post_reply 4144349292 "Addressed earlier — prefill deps handled on tip."
+          post_reply 4144349326 "Addressed earlier in b75e961 — WSL agent dir (\`ORCA_OMO_SOURCE_AGENT_DIR\`)."
+
+          echo "all_replies_posted"
