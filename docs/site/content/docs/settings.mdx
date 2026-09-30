@@ -115,6 +115,7 @@ Settings are grouped into panes. Everything here is searchable with `Cmd-,` then
   - **SenseVoice** — ZH / EN / JA / KO / Cantonese with auto language detection.
   - **Whisper Tiny** — 90+ languages, lower accuracy.
   - **GPT-4o mini / GPT-4o Transcribe** — cloud; needs OpenAI key under the same pane.
+  - **Custom endpoint** — send dictation to any OpenAI-compatible `/audio/transcriptions` server you control, local or remote. Set a **Base URL** (for example `http://127.0.0.1:8090/v1`, or a hosted provider such as Groq or OpenRouter), an optional **API key**, a **Model**, and an optional **Language**. A green tick marks the URL when the server answers. The **Model** field suggests names discovered from the endpoint, and any API key is stored against that specific base URL so it is never sent elsewhere.
 - While listening, a **Listening…** pill shows a **Stop** control; in toggle mode the tooltip also shows the dictation shortcut.
 
 ## SSH

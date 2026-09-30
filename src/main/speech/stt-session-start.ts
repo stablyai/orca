@@ -1,7 +1,8 @@
 import { Worker } from 'node:worker_threads'
 import { getCatalogModel } from './model-catalog'
 import { OpenAiTranscriptionSession } from './openai-transcription-client'
-import { readOpenAiSpeechApiKey } from './openai-api-key-store'
+import { resolveTranscriptionTarget } from './stt-transcription-target'
+import { isRemoteSpeechModelProvider } from '../../shared/speech-types'
 import type { SttEventSink } from './stt-service'
 import type { SttSessionState } from './stt-session-state'
 import {
@@ -71,7 +72,7 @@ async function startSttSession(
     throw new Error(`Unknown model: ${modelId}`)
   }
 
-  if (manifest.provider === 'openai') {
+  if (isRemoteSpeechModelProvider(manifest.provider)) {
     if (state.worker) {
       const existingWorker = state.worker
       await stopSttDictation(state, owner, { cancelStarting: false })
@@ -81,7 +82,7 @@ async function startSttSession(
     if (modelState.status !== 'ready') {
       throw new Error(`Model not ready: ${modelState.status}`)
     }
-    state.cloudSession = new OpenAiTranscriptionSession(modelId, readOpenAiSpeechApiKey)
+    state.cloudSession = new OpenAiTranscriptionSession(modelId, resolveTranscriptionTarget)
     state.activeModelId = modelId
     state.activeHotwordsFilePath = undefined
     state.eventSink = sink

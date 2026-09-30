@@ -5,7 +5,12 @@ export type SpeechModelType =
   | 'senseVoice'
   | 'nemo-ctc'
   | 'openai'
-export type SpeechModelProvider = 'local' | 'openai'
+export type SpeechModelProvider = 'local' | 'openai' | 'custom'
+
+/** True for providers that transcribe over HTTP rather than on-device. */
+export function isRemoteSpeechModelProvider(provider: SpeechModelProvider): boolean {
+  return provider === 'openai' || provider === 'custom'
+}
 
 export type ModelingUnit = 'bpe' | 'cjkchar' | 'cjkchar+bpe'
 
@@ -75,6 +80,15 @@ export type VoiceSettings = {
   terminalConfirmBeforeInsert: boolean
   userModels: UserModelConfig[]
   openAiApiKeyConfigured: boolean
+  /**
+   * Base URL of a user-configured OpenAI-compatible transcription endpoint
+   * (e.g. `http://127.0.0.1:8090/v1`). Empty means not configured.
+   */
+  customSttBaseUrl: string
+  /** Model id sent to the custom endpoint (e.g. `large-v3`). */
+  customSttModel: string
+  /** True when a bearer token is stored for the custom endpoint. */
+  customSttApiKeyConfigured: boolean
   /** null = system default input device */
   microphoneDeviceId: string | null
   /** Cached label for display when the preferred device is unplugged */

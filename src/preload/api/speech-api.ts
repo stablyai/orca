@@ -7,6 +7,17 @@ import type {
   SpeechTranscriptEvent
 } from '../../shared/speech-types'
 
+export type CustomSttEndpointStatus = {
+  baseUrl: string
+  model: string
+  apiKeyConfigured: boolean
+}
+
+export type CustomSttEndpointTestResult = {
+  ok: boolean
+  detail: string
+}
+
 export type SpeechApi = {
   getCatalog: () => Promise<SpeechModelManifest[]>
   getModelStates: () => Promise<SpeechModelState[]>
@@ -16,6 +27,14 @@ export type SpeechApi = {
   }>
   saveOpenAiApiKey: (apiKey: string) => Promise<{ configured: boolean }>
   clearOpenAiApiKey: () => Promise<{ configured: boolean }>
+  getCustomEndpointStatus: () => Promise<CustomSttEndpointStatus>
+  saveCustomEndpoint: (input: {
+    baseUrl: string
+    model: string
+    apiKey?: string
+  }) => Promise<CustomSttEndpointStatus>
+  clearCustomEndpoint: () => Promise<CustomSttEndpointStatus>
+  testCustomEndpoint: () => Promise<CustomSttEndpointTestResult>
   downloadModel: (modelId: string) => Promise<void>
   cancelDownload: (modelId: string) => Promise<void>
   deleteModel: (modelId: string) => Promise<void>
