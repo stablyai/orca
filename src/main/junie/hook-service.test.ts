@@ -187,4 +187,16 @@ describe('JunieHookService', () => {
       warn.mockRestore()
     }
   })
+
+  it('ignores malformed hook entries while installing managed hooks', () => {
+    const configPath = getJunieConfigPath()
+    mkdirSync(dirname(configPath), { recursive: true })
+    writeFileSync(configPath, JSON.stringify({ hooks: { Stop: [null] } }))
+
+    const status = new JunieHookService().install()
+
+    expect(status.state).toBe('installed')
+    expect(readConfig().hooks.Stop).toHaveLength(1)
+    expect(readConfig().hooks.Stop[0].hooks[0].command).toContain('junie-hook')
+  })
 })
