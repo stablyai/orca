@@ -5,7 +5,18 @@ import { terminalStatusPayloadMatchesHook } from '../../../shared/agent-terminal
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { isAgentStatusHeldOpenByChildWork } from '../../../shared/agent-lead-status-fold'
+import { isAskUserQuestionTool } from '../../../shared/agent-question-answered-intent'
 import { AgentHookServerIngestNormalization } from './server-ingest-normalization'
+
+/** A Claude permission wait a hook raised. A question is excluded: answering one emits no hook. */
+function isClaudeHookApprovalWait(row: EnrichedAgentHookEventPayload): boolean {
+  return (
+    row.payload.agentType === 'claude' &&
+    row.payload.state === 'waiting' &&
+    row.hookEventName !== undefined &&
+    !isAskUserQuestionTool(row.payload.toolName)
+  )
+}
 
 export abstract class AgentHookServerIngestTerminal extends AgentHookServerIngestNormalization {
   ingestTerminalStatus(event: {
@@ -96,6 +107,28 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       }
       return
     }
+    // Why: mirror resolveAgentStatusIdentity, which treats a literal 'unknown' exactly like an
+    // omitted type — an OSC ping that names no agent makes no claim about the pane's identity, so
+    // it must not be read as a mismatch and strip the session the renderer would have kept.
+    const claimedAgentType =
+      event.payload.agentType && event.payload.agentType !== 'unknown'
+        ? event.payload.agentType
+        : undefined
+    if (
+      previous !== undefined &&
+      isClaudeHookApprovalWait(previous) &&
+      event.payload.state === 'working' &&
+      (claimedAgentType === undefined || claimedAgentType === 'claude') &&
+      !previous.restoredUnconfirmed
+    ) {
+      // Why: OSC names no tool call, so it cannot answer a live prompt; the call's completion hook will.
+      // Another agent naming itself passes: the pane has moved on from that prompt's Claude.
+      if (mutationBefore !== undefined) {
+        this.commitStatusRowMutation(mutationBefore, previous)
+        this.emitEnrichedStatus(previous)
+      }
+      return
+    }
     // Why: preserve the hook-completed turn stamp while OSC repaints the current state.
     const preserveActiveTurnStamp =
       previous?.payload.turnCompletedAt !== undefined &&
@@ -120,13 +153,6 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
     // That erased it from persisted rows (lost across restart) and from headless `orca serve`, which
     // serves these rows to mobile directly instead of the renderer store, blanking Chat UI (#10630).
     // A new turn after `done` still starts clean so a reused pane cannot inherit a finished session.
-    // Why: mirror resolveAgentStatusIdentity, which treats a literal 'unknown' exactly like an
-    // omitted type — an OSC ping that names no agent makes no claim about the pane's identity, so
-    // it must not be read as a mismatch and strip the session the renderer would have kept.
-    const claimedAgentType =
-      event.payload.agentType && event.payload.agentType !== 'unknown'
-        ? event.payload.agentType
-        : undefined
     const preservedProviderSession =
       previous?.providerSession &&
       (claimedAgentType === undefined || claimedAgentType === previous.payload.agentType) &&

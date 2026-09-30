@@ -182,9 +182,10 @@ describe('Claude rows held open by child agents', () => {
           mainAgent: expect.objectContaining({ state: 'working' })
         })
       ])
-      // The main agent keeps working: nothing it publishes changed, so nothing is pushed.
+      // The main agent keeps working: the next hook re-states the held row unchanged.
       await post(server, { hook_event_name: 'PreToolUse', tool_name: 'Grep' })
-      expect(pushed).toHaveLength(1)
+      expect(pushed).toHaveLength(2)
+      expect(pushed[1]).toEqual(pushed[0])
     } finally {
       server.stop()
     }

@@ -1,7 +1,5 @@
-import {
-  markClaudeLeadTurnInterrupted,
-  clearClaudeAnsweredQuestionWait
-} from '../../../shared/agent-hook-listener/providers/claude-roster-state'
+import { markClaudeLeadTurnInterrupted } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
+import { clearClaudeAnsweredQuestionWait } from '../../../shared/agent-hook-listener/providers/claude-wait-lifecycle'
 import { markCodexLeadTurnInterrupted } from '../../../shared/agent-hook-listener/providers/codex-state'
 import {
   isAgentInterruptInputIntent,
@@ -197,8 +195,11 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
           ? { turnCompletedAt: restored.turnCompletedAt }
           : {}),
         ...(payload.subagents ? { subagents: payload.subagents } : {}),
+        ...restored.card,
         mainAgent: restored.mainAgent
-      }
+      },
+      // Why: a prompt still outstanding stays a hook-raised wait, so an OSC repaint cannot drop it.
+      ...(restored.card ? { hookEventName: existing.hookEventName } : {})
     })
     if (!inferred) {
       return false

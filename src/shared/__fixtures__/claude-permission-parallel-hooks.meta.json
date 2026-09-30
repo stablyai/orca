@@ -1,0 +1,17 @@
+{
+  "source_scenario": "r2-s11",
+  "claude_version": "2.1.284 (Claude Code)",
+  "argv": [
+    "claude",
+    "--settings",
+    "/Users/uuuuu/.claude/settings.json",
+    "--permission-mode",
+    "default"
+  ],
+  "platform": "darwin",
+  "cols": 120,
+  "rows": 40,
+  "recorded_at": "2026-09-28",
+  "clock": "t is seconds since the first record; sleep_procs is always empty (kept for the shared record shape)",
+  "note": "Claude Code driven over a real PTY in default permission mode with every hook logged. One assistant message calls WebFetch twice in parallel; both PermissionRequest hooks fire as the dialogs queue, each ~0.1 s after that call's PreToolUse with identical input and no tool_use_id. The second-announced call's dialog was answered first and completed; the first call's dialog stayed live for ~81 s until it was allowed and completed. Scrubbed: username replaced by a placeholder, session/prompt/turn/message ids replaced by sequential placeholder UUIDs (distinct ids stay distinct), paths neutralised; hook_event bodies otherwise verbatim."
+}

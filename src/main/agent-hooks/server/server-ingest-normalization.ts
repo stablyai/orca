@@ -1,6 +1,7 @@
 import { buildSpoolHookBody, type SpoolRecord } from '../../../shared/agent-hook-spool'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
 import { isAgentHookSource, type AgentHookSource } from '../../../shared/agent-hook-relay'
+import type { HookReplayEvidence } from '../../../shared/agent-hook-listener/listener-event'
 import type { NormalizedLocalHook } from './server-types'
 import { AgentHookServerOpenCodeBinder } from './server-opencode-binder'
 
@@ -22,9 +23,14 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     }
   }
 
-  protected normalizeLocalHookPayload(source: AgentHookSource, body: unknown): NormalizedLocalHook {
+  protected normalizeLocalHookPayload(
+    source: AgentHookSource,
+    body: unknown,
+    /** Spool re-delivery; the Claude fold must not read it as a live observation. */
+    replay?: HookReplayEvidence
+  ): NormalizedLocalHook {
     if (source !== 'claude' || typeof body !== 'object' || body === null) {
-      const event = normalizeHookPayload(this.state, source, body, this.env)
+      const event = normalizeHookPayload(this.state, source, body, this.env, { replay })
       if (
         event &&
         (source === 'opencode' || source === 'mimo-code') &&
@@ -38,11 +44,11 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     const rawPaneKey = (body as Record<string, unknown>).paneKey
     const paneKey = typeof rawPaneKey === 'string' ? rawPaneKey.trim() : ''
     if (!paneKey) {
-      return { event: normalizeHookPayload(this.state, source, body, this.env) }
+      return { event: normalizeHookPayload(this.state, source, body, this.env, { replay }) }
     }
     const previousRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
     const previousActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
-    const event = normalizeHookPayload(this.state, source, body, this.env)
+    const event = normalizeHookPayload(this.state, source, body, this.env, { replay })
     const nextRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
     const nextActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
     this.setClaudeBackgroundEvidence(paneKey, previousRunningTask, previousActiveCron)
@@ -57,12 +63,15 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
   }
 
   // Spool records are durable replay evidence, not a live observation.
-  protected ingestSpoolRecord(record: SpoolRecord): void {
+  protected ingestSpoolRecord(record: SpoolRecord, lastLiveAt?: number): void {
     if (!isAgentHookSource(record.source)) {
       return
     }
     const body = this.normalizeHookBodyPaneKeyAlias(buildSpoolHookBody(record))
-    const normalized = this.normalizeLocalHookPayload(record.source, body)
+    const normalized = this.normalizeLocalHookPayload(record.source, body, {
+      observedAt: record.receivedAt,
+      ...(lastLiveAt !== undefined ? { lastLiveAt } : {})
+    })
     if (!normalized.event) {
       return
     }

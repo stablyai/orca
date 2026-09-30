@@ -164,7 +164,9 @@ describe('a relayed Claude cancel with a live subagent (captured)', () => {
       state: 'waiting',
       mainAgent: { state: 'done', outcome: 'cancellation' }
     })
-    await pane.post(childTool)
+    // Why a completion: Claude announces a call's PreToolUse before its prompt, so only the call's
+    // own completion answers the prompt.
+    await pane.post({ ...childTool, hook_event_name: 'PostToolUse' })
     expect(row(pane.desktop)).toMatchObject({
       state: 'working',
       mainAgent: { state: 'done', outcome: 'cancellation' }

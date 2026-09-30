@@ -338,4 +338,43 @@ describe('agent completion coordinator', () => {
 
     expect(dispatchAttention).toHaveBeenCalledTimes(1)
   })
+
+  it('alerts once per wait while its re-statements keep one stateStartedAt', () => {
+    // Why: the hook server re-publishes one Claude wait on sibling and child events, and the card
+    // text moves to whichever prompt is still outstanding; only a new wait may alert again.
+    const dispatchAttention = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      statusLane: 'hook',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion: vi.fn(),
+      dispatchAttention,
+      isLive: () => true
+    })
+
+    const turn = { prompt: 'run both', agentType: 'claude' as const }
+    coordinator.observeHookStatus({ state: 'working', ...turn, stateStartedAt: 1_000 })
+    for (const toolInput of ['lead cmd', 'lead cmd', 'child cmd']) {
+      coordinator.observeHookStatus({
+        state: 'waiting',
+        ...turn,
+        toolName: 'Bash',
+        toolInput,
+        stateStartedAt: 2_000
+      })
+    }
+    expect(dispatchAttention).toHaveBeenCalledTimes(1)
+
+    coordinator.observeHookStatus({ state: 'working', ...turn, stateStartedAt: 3_000 })
+    coordinator.observeHookStatus({
+      state: 'waiting',
+      ...turn,
+      toolName: 'Bash',
+      toolInput: 'next cmd',
+      stateStartedAt: 4_000
+    })
+    expect(dispatchAttention).toHaveBeenCalledTimes(2)
+  })
 })

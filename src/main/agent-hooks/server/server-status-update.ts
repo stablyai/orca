@@ -9,12 +9,7 @@ import {
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type { AgentStatusObservationOrigin } from '../../../shared/agent-status-observation'
-import {
-  attachClaudePermissionToolUseId,
-  pairedClaudeNonAgentWork,
-  shouldKeepClaudePermissionVisible,
-  withHeldChildWaitMainAgent
-} from './server-claude-status-rules'
+import { pairedClaudeNonAgentWork } from './server-claude-status-rules'
 import { isStaleGrokTurnEnd } from './server-grok-status-rules'
 import { resolveCancelVerdictLatch } from './server-cancel-verdict-latch'
 import { AgentHookServerStatusApplication } from './server-status-application'
@@ -151,41 +146,18 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
             ...rootContextPreservingPayload,
             payload: { ...rootContextPreservingPayload.payload, agentType: identity.agentType }
           }
-    const attachedPayload = attachClaudePermissionToolUseId(previous, identityResolvedPayload)
-    // Why before the permission hold: that hold adopts the event's `mainAgent`, and a relay's
-    // restatement of a main agent the desktop cancelled must not replace the cancel.
-    const latch = resolveCancelVerdictLatch(previous, attachedPayload, Date.now())
+    const latch = resolveCancelVerdictLatch(previous, identityResolvedPayload, Date.now())
     if (latch.hold) {
       if (
-        attachedPayload.payload.agentType === 'codex' &&
-        attachedPayload.payload.state === 'working'
+        identityResolvedPayload.payload.agentType === 'codex' &&
+        identityResolvedPayload.payload.state === 'working'
       ) {
-        markCodexLeadTurnInterrupted(this.state, attachedPayload.paneKey)
+        markCodexLeadTurnInterrupted(this.state, identityResolvedPayload.paneKey)
       }
       this.commitStatusRowMutation(rowBefore, previous)
       return previous
     }
     const effectivePayload = latch.event
-    if (previous && shouldKeepClaudePermissionVisible(previous, effectivePayload)) {
-      const held = withHeldChildWaitMainAgent(previous, effectivePayload)
-      // Why: a child's prompt leaves the main agent running, so the held row takes its `mainAgent` and
-      // must take the same event's background evidence; a main agent's own prompt blocks it, so not there.
-      if (previous.toolAgentId) {
-        onAccepted?.()
-      }
-      if (held !== previous) {
-        if (!this.writeLegacyStatusRow(held)) {
-          return undefined
-        }
-        this.scheduleStatusPersist()
-      }
-      this.commitStatusRowMutation(rowBefore, held)
-      // Why: pushed readers must see the new `mainAgent` a snapshot reader already does.
-      if (held.payload !== previous.payload) {
-        this.emitEnrichedStatus(held)
-      }
-      return held
-    }
     if (
       effectivePayload.payload.state !== 'done' ||
       effectivePayload.payload.lastAssistantMessage

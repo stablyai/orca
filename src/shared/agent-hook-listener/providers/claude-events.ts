@@ -5,19 +5,28 @@ import { readClaudeBackgroundAgentTasks } from '../../claude-background-task-inv
 import {
   claudeRosterHasRestoredSnapshotSubagent,
   claudeRosterHasRuntimeWorkingSubagent,
-  foldClaudeBackgroundTasksIntoRoster,
   isClaudeChildTurnEndEvent,
-  reapUnconfirmedRestoredClaudeSubagents,
   upsertWorkingClaudeSubagent
 } from '../../claude-subagent-roster'
+import type { HookReplayEvidence } from '../listener-event'
 import type { HookListenerState } from '../listener-state'
 import { readFirstString } from '../interactive-tool'
-import { shouldIgnoreCompactContinuationUserPromptSubmit } from '../prompt-fields'
+import {
+  extractPromptText,
+  shouldIgnoreCompactContinuationUserPromptSubmit
+} from '../prompt-fields'
+import { hasExplicitUserPrompt } from '../provider-event-routing'
 import { readString } from '../tool-input-preview'
 import {
   buildClaudeCachedLeadStatusPayload,
   normalizeClaudeSubagentLifecycleEvent
 } from './claude-lifecycle-events'
+import {
+  claudeApprovalOwnedBy,
+  claudeHasOutstandingApproval,
+  claudeReplayMayRaiseWait,
+  foldClaudeApprovalEvent
+} from './claude-approval-ledger'
 import {
   getOrCreateClaudeSubagentRoster,
   resolveClaudePaneStatus,
@@ -26,13 +35,18 @@ import {
   voidClaimsOfReplacedClaudeSession
 } from './claude-roster-state'
 import { buildClaudeStatusPayload } from './claude-status-build'
+import { extractClaudeToolFields } from './claude-tool-fields'
+import { foldClaudeTurnEndChildWork } from './claude-turn-end-child-work'
+import { holdClaudeWait, recordClaudeChildToolCall } from './claude-wait-lifecycle'
 
 export function normalizeClaudeEvent(
   state: HookListenerState,
   eventName: unknown,
   promptText: string,
   paneKey: string,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  /** Present for a durable re-delivery from the spool, not a live observation. */
+  replay?: HookReplayEvidence
 ): ParsedAgentStatusPayload | null {
   const eventAgentId = readString(hookPayload, 'agent_id')
   if (
@@ -142,22 +156,67 @@ export function normalizeClaudeEvent(
     state.claudeActiveSessionCronPaneKeys.delete(paneKey)
   }
 
+  // Why before the ledger fold: which child prompts outlive a main agent turn end is this event's inventory.
+  const mainAgentTurnEnd =
+    (isTurnBoundary || isManualCompactCompletion) && eventAgentId === undefined
+      ? {
+          childOutlivesTurn: foldClaudeTurnEndChildWork(state, paneKey, {
+            backgroundTasks,
+            manualCompact: isManualCompactCompletion
+          })
+        }
+      : undefined
+
   const eventToolUseId = readFirstString(hookPayload, ['tool_use_id', 'toolUseId'])
-  const previousTool = state.lastToolByPaneKey.get(paneKey)
-  const isParallelSiblingCompletionDuringQuestion =
-    eventAgentId === undefined &&
-    previousLead?.state === 'waiting' &&
-    isAskUserQuestionTool(previousTool?.toolName) &&
-    (eventName === 'PostToolUse' || eventName === 'PostToolUseFailure') &&
-    previousLead.waitingToolUseId !== undefined &&
-    eventToolUseId !== undefined &&
-    eventToolUseId !== previousLead.waitingToolUseId
-  if (isParallelSiblingCompletionDuringQuestion) {
+  const raisedTool =
+    reportedStateName === 'waiting' ? extractClaudeToolFields(eventName, hookPayload) : undefined
+  const { toolCall, announcedCalls, approvals } = foldClaudeApprovalEvent({
+    carriedOver: previousLead,
+    eventName,
+    agentId: eventAgentId,
+    toolUseId: eventToolUseId,
+    toolName: eventToolName,
+    toolInput: hookPayload['tool_input'],
+    raisesWait: reportedStateName === 'waiting',
+    ...(raisedTool
+      ? {
+          raisedCard: {
+            toolName: raisedTool.toolName,
+            toolInput: raisedTool.toolInput,
+            interactivePrompt: raisedTool.interactivePrompt
+          }
+        }
+      : {}),
+    raisesQuestionWait: isAskUserQuestionWait,
+    mainAgentTurnEnd,
+    // Why the row's own classifier: an injected prompt (a task notification, a teammate's message)
+    // lands inside the running turn, so it must answer exactly what it did when the server held the row.
+    opensUserTurn:
+      eventName === 'UserPromptSubmit' &&
+      hasExplicitUserPrompt('claude', eventName, extractPromptText(hookPayload), promptText),
+    replay
+  })
+  // Why: a replayed prompt the ledger refused (see claudeReplayMayRaiseWait) re-states the pane's
+  // last status instead of fabricating a wait nothing could ever release.
+  if (reportedStateName === 'waiting' && !claudeReplayMayRaiseWait(replay)) {
     return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload)
+  }
+  // A tool event that is not itself a prompt, arriving while one is outstanding, is work — never
+  // an answer. Re-state the card rather than letting the activity overwrite it.
+  if (previousLead && toolCall && reportedStateName !== 'waiting') {
+    if (eventAgentId === undefined && claudeHasOutstandingApproval(approvals)) {
+      holdClaudeWait(state, paneKey, previousLead, approvals, announcedCalls, {
+        state: 'working'
+      })
+      return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload)
+    }
+    if (eventAgentId !== undefined) {
+      recordClaudeChildToolCall(state, paneKey, previousLead, approvals, announcedCalls)
+    }
   }
 
   // Why: subagent/teammate events carry `agent_id` (lead's don't); child tool activity keeps its row live but must not become the lead's state or overwrite its tool/prompt caches (a live card would vanish).
-  // Two exceptions take the full path below: waiting-inducing events (a child needs human attention on this pane) and the blocked child's own next tool event (approval granted — clear the wait as for the lead).
+  // Two exceptions take the full path below: waiting-inducing events (a child needs human attention on this pane) and the blocked child's event that settles its last outstanding prompt.
   const isWaitingInducing = reportedStateName === 'waiting'
   const subagentOriginId =
     !isWaitingInducing &&
@@ -175,29 +234,25 @@ export function normalizeClaudeEvent(
     )
   }
   if (subagentOriginId) {
-    const lead = state.claudeLeadStateByPaneKey.get(paneKey)
-    if (lead?.state !== 'waiting' || lead.waitingAgentId !== subagentOriginId) {
+    if (
+      !claudeApprovalOwnedBy(previousLead?.approvals, (agentId) => agentId === subagentOriginId)
+    ) {
       return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload, {
         workingChildEvidence: true
       })
     }
-    const isParallelSiblingCompletionDuringChildQuestion =
-      (eventName === 'PostToolUse' || eventName === 'PostToolUseFailure') &&
-      lead.waitingToolUseId !== undefined &&
-      eventToolUseId !== undefined &&
-      eventToolUseId !== lead.waitingToolUseId
-    if (isParallelSiblingCompletionDuringChildQuestion) {
+    if (claudeHasOutstandingApproval(approvals)) {
+      // Why: this child still owes an answer (or a sibling of its batch just finished); its card stays.
       return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload, {
         workingChildEvidence: true
       })
     }
-    // Why: approval granted — update the tool snapshot (drop the pending card) as the lead's own next tool event would.
+    // Why: the approved call completed — update the tool snapshot (drop the pending card) as the lead's own completion would.
     // Restore the stashed lead state, not this child's 'working': the lead may already be done, and the done-gate never upgrades working back to done once the roster drains.
-    const restored = setClaudeMainAgentTurnState(
-      state,
-      paneKey,
-      lead.stateBeforeWait ?? { state: 'working' as const }
-    )
+    const restored = setClaudeMainAgentTurnState(state, paneKey, {
+      ...(previousLead?.stateBeforeWait ?? { state: 'working' as const }),
+      ...(announcedCalls ? { announcedCalls } : {})
+    })
     return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
       ...resolveClaudePaneStatus(state, paneKey, restored),
       updateToolSnapshot: true
@@ -213,18 +268,6 @@ export function normalizeClaudeEvent(
     })
   }
 
-  if (isTurnBoundary && eventAgentId === undefined) {
-    // Why: background_tasks is trusted only where unambiguous (see foldClaudeBackgroundTasksIntoRoster) — teammates report "running" here even while idle.
-    // Older Claude builds without the field keep the incrementally tracked roster.
-    if (backgroundTasks.present) {
-      foldClaudeBackgroundTasksIntoRoster(
-        getOrCreateClaudeSubagentRoster(state, paneKey),
-        backgroundTasks.tasks,
-        Date.now(),
-        { inventoryComplete: !backgroundTasks.truncated }
-      )
-    }
-  }
   // Why: a child-induced wait displaces the lead state; stash it so clearing restores reality (lead may be done). A 2nd child wait carries the ORIGINAL stash, not the intermediate waiting state.
   const stateBeforeWait =
     isWaitingInducing && eventAgentId && previousLead
@@ -242,23 +285,6 @@ export function normalizeClaudeEvent(
               : {})
           }
       : undefined
-  const waitingToolUseId = eventToolUseId ?? previousLead?.waitingToolUseId
-
-  if (isManualCompactCompletion) {
-    // Why: a manual /compact only ever completes at an idle prompt, so a child that exists ONLY as
-    // a disk snapshot has nothing live behind it and must not keep the pane spinning — that
-    // restored child is what holds the stuck row STA-2915 actually reports. Everything else the
-    // done-gate consults is live evidence (a child observed in this runtime, an unclassifiable
-    // running background task, a registered session cron) and still holds the pane.
-    const restoredRoster = state.claudeSubagentRosterByPaneKey.get(paneKey)
-    if (
-      restoredRoster &&
-      reapUnconfirmedRestoredClaudeSubagents(restoredRoster) &&
-      restoredRoster.size === 0
-    ) {
-      state.claudeSubagentRosterByPaneKey.delete(paneKey)
-    }
-  }
 
   const resolvedStatus = resolveClaudePaneStatus(state, paneKey, { state: reportedStateName })
   // Why: #15202's compact-completion guard reads the resolved state; this branch replaced the
@@ -279,14 +305,25 @@ export function normalizeClaudeEvent(
       ? Date.now()
       : undefined
 
-  setClaudeMainAgentTurnState(state, paneKey, {
-    state: reportedStateName,
-    ...(outcome ? { outcome } : {}),
-    ...(isWaitingInducing && eventAgentId ? { waitingAgentId: eventAgentId } : {}),
-    ...(isAskUserQuestionWait && waitingToolUseId !== undefined ? { waitingToolUseId } : {}),
-    ...(stateBeforeWait ? { stateBeforeWait } : {}),
-    ...(turnCompletedAt !== undefined ? { turnCompletedAt } : {})
-  })
+  // Why: only a main agent turn end (a compact included) or an injected prompt reaches here with a wait outstanding.
+  const holdsChildWait =
+    previousLead !== undefined && !isWaitingInducing && claudeHasOutstandingApproval(approvals)
+  if (holdsChildWait) {
+    holdClaudeWait(state, paneKey, previousLead, approvals, announcedCalls, {
+      state: reportedStateName,
+      outcome,
+      turnCompletedAt
+    })
+  } else {
+    setClaudeMainAgentTurnState(state, paneKey, {
+      state: reportedStateName,
+      ...(outcome ? { outcome } : {}),
+      ...(approvals.length > 0 ? { approvals } : {}),
+      ...(announcedCalls ? { announcedCalls } : {}),
+      ...(stateBeforeWait ? { stateBeforeWait } : {}),
+      ...(turnCompletedAt !== undefined ? { turnCompletedAt } : {})
+    })
+  }
 
   const effectiveRoster = state.claudeSubagentRosterByPaneKey.get(paneKey)
   if (
@@ -300,6 +337,13 @@ export function normalizeClaudeEvent(
   ) {
     // Why: a legacy or partial Stop confirms the lead boundary, not a child restored from disk; keep the child-only gate eligible for reconciliation.
     state.claudeUnconfirmedRestoredStatusPaneKeys.add(paneKey)
+  }
+
+  if (holdsChildWait) {
+    // Why: a compact completion clears a row or says nothing, and the held wait is already on it.
+    return isManualCompactCompletion
+      ? null
+      : buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload)
   }
 
   if (isManualCompactCompletion && effectiveState !== 'done') {

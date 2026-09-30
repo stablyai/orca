@@ -10,6 +10,7 @@ import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
 import type { HookListenerState } from '../listener-state'
 import { mainAgentTurnInterrupted } from '../../agent-lead-status-fold'
 import { claudeMainAgentStatusForPayload } from './claude-roster-state'
+import { claudeLiveApprovalCard } from './claude-approval-ledger'
 
 export function buildClaudeStatusPayload(
   state: HookListenerState,
@@ -36,6 +37,11 @@ export function buildClaudeStatusPayload(
   // each caller. The normalizer clamps `interrupted` to done payloads, so a row held open by child
   // work drops it; the record keeps the verdict for the eventual done.
   const mainAgentRecord = state.claudeLeadStateByPaneKey.get(paneKey)
+  // Why: a wait's card is the live prompt's, so answering one of several never leaves its text up.
+  const card =
+    (options.stateName === 'waiting'
+      ? claudeLiveApprovalCard(mainAgentRecord?.approvals)
+      : undefined) ?? snapshot
   // Why: validate directly — the JSON stringify/parse round trip other normalizers use is pure overhead on this hot per-hook path.
   return normalizeAgentStatusPayload({
     state: options.stateName,
@@ -45,9 +51,9 @@ export function buildClaudeStatusPayload(
       resetOnNewTurn: options.updateToolSnapshot && isNewTurnEvent('claude', eventName)
     }),
     agentType: 'claude',
-    toolName: snapshot.toolName,
-    toolInput: snapshot.toolInput,
-    interactivePrompt: snapshot.interactivePrompt,
+    toolName: card.toolName,
+    toolInput: card.toolInput,
+    interactivePrompt: card.interactivePrompt,
     lastAssistantMessage: snapshot.lastAssistantMessage,
     lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
     interrupted: mainAgentTurnInterrupted(mainAgentRecord),

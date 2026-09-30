@@ -212,7 +212,9 @@ time; every guard that reconstructed a fragment of it (`fromChildWork`, the
 persisted `claudeLeadBoundaryChildOnly` flag) now reads `mainAgent` instead of a
 stored copy. A Claude row whose `mainAgent` is `done` while a child agent still
 works (including a child's permission wait) refuses OSC, which carries no child
-identity; the children's own lifecycle hooks settle it. `outcome` is the recorded verdict on
+identity; the children's own lifecycle hooks settle it. A hook-raised Claude permission
+wait also refuses a Claude (or untyped) OSC `working`, which names no tool call; the
+prompt's own completion hook settles it. `outcome` is the recorded verdict on
 the main agent's most recent finished turn, present only while `mainAgent.state` is
 `done`. It is reported by the provider, or is a `cancellation` Orca inferred
 from the user's own interrupt keystroke (the journal's turn outcome, by
@@ -263,9 +265,10 @@ child-work fact `mainAgent` cannot express: a shell running beside the main agen
 whose liveness hydration does not restore. Hydration seeds only a row that says
 `false`; a row silent about it stays unseeded. The row builder pairs the two facts in
 one place: a listener event restates the shell fact, and any other write (an OSC
-repaint, an inferred answer) keeps it only while `mainAgent` is unchanged. A child's
-sticky permission prompt still records the main agent's own progress and background
-evidence in the held row, and pushes the held row to subscribers when `mainAgent` changes.
+repaint, an inferred answer) keeps it only while `mainAgent` is unchanged. While only
+a child's permission prompt holds the row at `waiting`, the Claude listener records the
+main agent's own progress behind the wait, and every restatement of the wait publishes
+it as `mainAgent` with that event's background evidence.
 
 Every lane, Codex included, combines through the fold. A child waiting on a
 human is a fold input (`childWorkLiveness: 'waiting'`, derived from the child's
@@ -276,12 +279,15 @@ divergences, pinned by name in the parity table
 (`src/shared/main-agent-status-parity.test.ts`) where they are reachable, so a
 reader does not mistake them for drift:
 
-- The Claude hook lane holds a child's permission wait in one slot on the
-  displaced main agent record (`waitingAgentId`, `stateBeforeWait`), not on
-  the child. It publishes the displaced state as `mainAgent`, but the next
-  main agent event overwrites the slot, so the row stops reading `waiting`
-  while the child is still asking, and a second asking child replaces the
-  first.
+- The Claude hook lane holds every outstanding permission prompt, the main
+  agent's and its children's, in one set on the main agent record
+  (`approvals`, with the displaced main agent state in `stateBeforeWait`),
+  not on the children. The row reads `waiting` while the set is non-empty and
+  publishes the displaced state as `mainAgent` while only children are owed
+  answers. A prompt leaves the set when its own call completes, its child
+  stops, or the turn ends (a child's prompt outlives the main agent's turn
+  end only while that child is still working); Claude sends no hook on Deny
+  or Esc, so those linger until the next one of these.
 - The structured lane has no per-child wait: a child's pending prompt makes
   the session `attention`, which reads as the main agent's own `blocked`.
 - The Codex hook lane drops its roster on a root `Stop` when it tracks no

@@ -1,6 +1,7 @@
 // Loads the Claude Code 2.1.280 cancel captures (src/shared/__fixtures__/claude-cancel-*-hooks.jsonl,
 // sidecars beside them): hook payloads recorded over a real PTY, merged in time order with the
-// driver's cancel and kill markers.
+// driver's cancel and kill markers. The 2.1.284 permission captures (claude-permission-*-hooks.jsonl)
+// share the record shape and carry hook records only.
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { AGENT_INTERRUPT_SETTLE_MS } from '../../shared/agent-interrupt-intent'

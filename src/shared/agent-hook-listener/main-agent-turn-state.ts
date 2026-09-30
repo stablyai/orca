@@ -1,5 +1,6 @@
 import type { AgentStatusState } from '../agent-status-types'
 import type { AgentJournalTurnOutcome } from '../agent-turn-outcome'
+import type { ClaudeAnnouncedCalls, ClaudeApprovalRecord } from './providers/claude-approval-ledger'
 
 /** The Claude main agent's own turn record, published on every row as `mainAgent`. */
 export type ClaudeLeadTurnState = {
@@ -10,13 +11,16 @@ export type ClaudeLeadTurnState = {
   outcome?: AgentJournalTurnOutcome
   /** When `state` first appeared; the main agent's own clock, distinct from the gated row's. */
   stateStartedAt: number
-  /** Subagent that induced the wait; only its next tool activity may clear it, so other children's churn can't dismiss a pending human-input card. */
-  waitingAgentId?: string
-  /** Tool call that owns the wait; late completions from parallel sibling tools must not dismiss its card. */
-  waitingToolUseId?: string
+  /** Prompts Claude raised on this pane and has not been observed answering for. The pane is
+   *  paused for exactly as long as this is non-empty, so a sibling call of a parallel batch (or a
+   *  child's unrelated churn) can never dismiss the card of the prompt still on screen. */
+  approvals?: readonly ClaudeApprovalRecord[]
+  /** Per-call `tool_use_id`s this turn announced, so a prompt that carries none can still refuse
+   *  a sibling's completion. Turn-scoped: replaced wholesale at every boundary. */
+  announcedCalls?: ClaudeAnnouncedCalls
   /** End time of the main agent turn closed while background inventory kept the pane `working`. Repeated on the later all-clear `done`. */
   turnCompletedAt?: number
-  /** Main agent state a child-induced wait displaced, restored when the wait clears; can't invent 'working' since the done-gate only downgrades done→working, never back. */
+  /** Main agent state behind a child-induced wait, restored when the wait clears; can't invent 'working' since the done-gate only downgrades done→working, never back. */
   stateBeforeWait?: Pick<
     ClaudeLeadTurnState,
     'state' | 'outcome' | 'stateStartedAt' | 'turnCompletedAt'

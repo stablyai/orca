@@ -45,11 +45,22 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
       this.captureHydratedAuthorityCommitments()
       // Drain before binding the listener so replay cannot race a live hook during startup.
       if (this.endpointDir) {
+        // Why read up front: each applied replay restamps its row's receivedAt with this runtime's clock.
+        const lastLiveAtByPaneKey = new Map<string, number>()
+        for (const [paneKey, row] of this.state.lastStatusByPaneKey) {
+          if ('receivedAt' in row && typeof row.receivedAt === 'number') {
+            lastLiveAtByPaneKey.set(paneKey, row.receivedAt)
+          }
+        }
         drainAgentHookSpool({
           endpointDir: this.endpointDir,
           getPersistedLaunchTokenHash: (paneKey) =>
             this.hydratedLaunchTokenHashByPaneKey.get(this.resolvePaneKeyAlias(paneKey)),
-          ingest: (record: SpoolRecord) => this.ingestSpoolRecord(record)
+          ingest: (record: SpoolRecord) =>
+            this.ingestSpoolRecord(
+              record,
+              lastLiveAtByPaneKey.get(this.resolvePaneKeyAlias(record.paneKey))
+            )
         })
       }
       this.ownerStateInitialized = true

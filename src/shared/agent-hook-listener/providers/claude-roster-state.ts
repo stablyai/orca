@@ -6,7 +6,6 @@ import type {
 } from '../../agent-status-types'
 import {
   continueMainAgentStatus,
-  mainAgentTurnInterrupted,
   foldAgentLeadStatus,
   type AgentLeadStatusResolution
 } from '../../agent-lead-status-fold'
@@ -16,6 +15,7 @@ import {
   reapUnconfirmedRestoredClaudeSubagents,
   type ClaudeSubagentRoster
 } from '../../claude-subagent-roster'
+import { claudeWaitIsChildOwned, settleClaudeApprovalsOwnedBy } from './claude-approval-ledger'
 import type { AgentHookEventPayload } from '../listener-event'
 import type { ClaudeLeadTurnState, HookListenerState } from '../listener-state'
 import { readString } from '../tool-input-preview'
@@ -150,7 +150,7 @@ export function setClaudeMainAgentTurnState(
 export function claudeMainAgentStatusForPayload(
   record: ClaudeLeadTurnState
 ): AgentMainAgentStatus | undefined {
-  const own = record.waitingAgentId !== undefined ? record.stateBeforeWait : record
+  const own = claudeWaitIsChildOwned(record.approvals) ? record.stateBeforeWait : record
   if (!own) {
     return undefined
   }
@@ -169,8 +169,8 @@ export function resolveClaudePaneStatus(
   return foldAgentLeadStatus({
     leadState: lead.state,
     childWorkLiveness: agentChildWorkLivenessFromEvidence({
-      // A child's permission wait displaces the main agent record itself (`waitingAgentId`,
-      // `stateBeforeWait`) instead of living on the roster, so the roster never carries one.
+      // A child's permission wait lives on the main agent record (`approvals`, with the main
+      // agent's own state in `stateBeforeWait`) instead of on the roster, so the roster never carries one.
       hasWaitingChildWork: false,
       hasLiveAgentWork: claudeRosterHasWorkingSubagent(
         state.claudeSubagentRosterByPaneKey.get(paneKey)
@@ -295,56 +295,30 @@ export function clearClaudePendingWaitForAgent(
   ownsWait: (waitingAgentId: string) => boolean
 ): void {
   const lead = state.claudeLeadStateByPaneKey.get(paneKey)
-  if (lead?.state !== 'waiting' || !lead.waitingAgentId || !ownsWait(lead.waitingAgentId)) {
+  if (lead?.state !== 'waiting') {
     return
   }
-  setClaudeMainAgentTurnState(state, paneKey, lead.stateBeforeWait ?? { state: 'working' })
-  const previousTool = state.lastToolByPaneKey.get(paneKey)
-  state.lastToolByPaneKey.set(
-    paneKey,
-    previousTool?.lastAssistantMessage
-      ? {
-          lastAssistantMessage: previousTool.lastAssistantMessage,
-          lastAssistantMessageIsToolOutput: previousTool.lastAssistantMessageIsToolOutput
-        }
-      : {}
-  )
-}
-
-/** Clear an AskUserQuestion wait after the answer is typed (answering emits no hook event; the caller infers it from the submit keystroke). Restores the stashed pre-wait lead state or 'working', drops the cached card, and returns the pane state to emit (gated up to 'working' while children run). */
-export function clearClaudeAnsweredQuestionWait(
-  state: HookListenerState,
-  paneKey: string
-): Pick<ClaudeLeadTurnState, 'state' | 'turnCompletedAt'> & {
-  interrupted?: true
-  workingMode?: AgentWorkingMode
-  mainAgent?: AgentMainAgentStatus
-} {
-  const lead = state.claudeLeadStateByPaneKey.get(paneKey)
-  const stash =
-    lead?.state === 'waiting'
-      ? (lead.stateBeforeWait ?? { state: 'working' as const })
-      : { state: 'working' as const }
-  const restored = setClaudeMainAgentTurnState(state, paneKey, { ...stash })
-  const publishedMainAgent = claudeMainAgentStatusForPayload(restored)
-  const previousTool = state.lastToolByPaneKey.get(paneKey)
-  state.lastToolByPaneKey.set(
-    paneKey,
-    previousTool?.lastAssistantMessage
-      ? {
-          lastAssistantMessage: previousTool.lastAssistantMessage,
-          lastAssistantMessageIsToolOutput: previousTool.lastAssistantMessageIsToolOutput
-        }
-      : {}
-  )
-  const resolved = resolveClaudePaneStatus(state, paneKey, restored)
-  return {
-    state: resolved.stateName,
-    ...(resolved.workingMode ? { workingMode: resolved.workingMode } : {}),
-    ...(mainAgentTurnInterrupted(restored) ? { interrupted: true as const } : {}),
-    ...(restored.turnCompletedAt !== undefined
-      ? { turnCompletedAt: restored.turnCompletedAt }
-      : {}),
-    ...(publishedMainAgent ? { mainAgent: publishedMainAgent } : {})
+  const remaining = settleClaudeApprovalsOwnedBy(lead.approvals, ownsWait)
+  if (remaining === lead.approvals) {
+    return
   }
+  if (remaining.length > 0) {
+    // Why: this child is gone but somebody else on the pane is still owed an answer.
+    setClaudeMainAgentTurnState(state, paneKey, { ...lead, approvals: remaining })
+    return
+  }
+  setClaudeMainAgentTurnState(state, paneKey, {
+    ...(lead.stateBeforeWait ?? { state: 'working' as const }),
+    ...(lead.announcedCalls ? { announcedCalls: lead.announcedCalls } : {})
+  })
+  const previousTool = state.lastToolByPaneKey.get(paneKey)
+  state.lastToolByPaneKey.set(
+    paneKey,
+    previousTool?.lastAssistantMessage
+      ? {
+          lastAssistantMessage: previousTool.lastAssistantMessage,
+          lastAssistantMessageIsToolOutput: previousTool.lastAssistantMessageIsToolOutput
+        }
+      : {}
+  )
 }

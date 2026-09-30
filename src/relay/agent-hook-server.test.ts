@@ -123,6 +123,41 @@ describe('RelayAgentHookServer', () => {
     }
   })
 
+  // A relay holds no pane history to date a replay against, and an SSH relay's spooled prompts
+  // belong to PTYs that died with the previous relay, so a replayed prompt never raises a wait here.
+  it('never raises a wait from a spooled Claude prompt', async () => {
+    const spoolDir = join(dir, 'spool')
+    mkdirSync(spoolDir)
+    writeFileSync(
+      join(spoolDir, 'pane-claude.jsonl'),
+      `${JSON.stringify({
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        env: 'remote',
+        hookEventName: 'PermissionRequest',
+        source: 'claude',
+        payload: {
+          hook_event_name: 'PermissionRequest',
+          tool_name: 'Bash',
+          tool_input: { command: 'chmod 644 alpha.txt' }
+        },
+        receivedAt: Date.now() + 60_000
+      })}\n`
+    )
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+
+    await server.start()
+    try {
+      expect(forward.mock.calls.map(([envelope]) => envelope.payload.state)).not.toContain(
+        'waiting'
+      )
+    } finally {
+      server.stop()
+    }
+  })
+
   it('keeps the relay listening when spool replay forwarding fails', async () => {
     const spoolDir = join(dir, 'spool')
     const spoolFile = join(spoolDir, 'pane-codex.jsonl')

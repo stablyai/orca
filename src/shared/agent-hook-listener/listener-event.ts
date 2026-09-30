@@ -68,3 +68,11 @@ export type ToolSnapshot = {
   lastAssistantMessageIsToolOutput?: boolean
   clearLastAssistantMessage?: boolean
 }
+
+/** A spool re-delivery. Both times are the recording host's clock; a relay supplies neither. */
+export type HookReplayEvidence = {
+  /** When the hook fired, as the spool recorded it (whole seconds). */
+  readonly observedAt?: number
+  /** The pane's last observation before this runtime started. */
+  readonly lastLiveAt?: number
+}

@@ -1,0 +1,17 @@
+{
+  "source_scenario": "r2-s5",
+  "claude_version": "2.1.284 (Claude Code)",
+  "argv": [
+    "claude",
+    "--settings",
+    "/Users/uuuuu/.claude/settings.json",
+    "--permission-mode",
+    "default"
+  ],
+  "platform": "darwin",
+  "cols": 120,
+  "rows": 40,
+  "recorded_at": "2026-09-28",
+  "clock": "t is seconds since the first record; sleep_procs is always empty (kept for the shared record shape)",
+  "note": "Claude Code driven over a real PTY in default permission mode. One Bash call needs permission and the user denies it at the dialog: no hook fires until the next typed prompt's UserPromptSubmit. Scrubbed: username replaced by a placeholder, session/prompt/turn/message ids replaced by sequential placeholder UUIDs (distinct ids stay distinct), paths neutralised; hook_event bodies otherwise verbatim."
+}

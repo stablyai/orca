@@ -159,7 +159,7 @@ export abstract class AgentHookServerState {
   )
 
   protected abstract withdrawReplayObservation(paneKey: string): void
-  protected abstract ingestSpoolRecord(record: SpoolRecord): void
+  protected abstract ingestSpoolRecord(record: SpoolRecord, lastLiveAt?: number): void
   protected abstract emitPaneStatusCleared(clear: AgentStatusClearIpcPayload): void
   protected abstract buildStatusChangeNotification(): {
     statuses: AgentHookStatusChangeEntry[]

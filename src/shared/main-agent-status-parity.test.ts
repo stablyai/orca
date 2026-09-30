@@ -4,6 +4,7 @@
 // differently is caught here structurally, not by review.
 import { beforeEach, describe, expect, it } from 'vitest'
 import { normalizeHookPayload } from './agent-hook-listener'
+import { claudeWaitIsChildOwned } from './agent-hook-listener/providers/claude-approval-ledger'
 import { markClaudeLeadTurnInterrupted } from './agent-hook-listener/providers/claude-roster-state'
 import { markCodexLeadTurnInterrupted } from './agent-hook-listener/providers/codex-state'
 import {
@@ -439,8 +440,9 @@ describe('mainAgent status parity across lanes', () => {
   function claudeChildWorkLiveness(payload: ParsedAgentStatusPayload): AgentChildWorkLiveness {
     return agentChildWorkLivenessFromEvidence({
       // This lane holds a child's wait on the displaced main agent record, not the roster.
-      hasWaitingChildWork:
-        state.claudeLeadStateByPaneKey.get(PANE_KEY)?.waitingAgentId !== undefined,
+      hasWaitingChildWork: claudeWaitIsChildOwned(
+        state.claudeLeadStateByPaneKey.get(PANE_KEY)?.approvals
+      ),
       hasLiveAgentWork: payload.subagents?.some((child) => child.state === 'working') === true,
       hasLiveNonAgentWork:
         state.claudeRunningNonAgentTaskPaneKeys.has(PANE_KEY) ||
