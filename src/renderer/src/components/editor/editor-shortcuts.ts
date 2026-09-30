@@ -48,7 +48,7 @@ export function installEditorFindShortcut(target: HTMLElement, onFind: () => voi
 
 type MonacoDiffNavigationEditor = {
   getContainerDomNode: () => HTMLElement
-  goToDiff: (target: 'next' | 'previous') => void
+  navigate: (target: 'next' | 'previous') => void
 }
 
 export function installMonacoDiffChangeNavigationShortcut(
@@ -70,7 +70,7 @@ export function installMonacoDiffChangeNavigationShortcut(
     event.stopPropagation()
     // Consume matched repeats but navigate once per press (matches find shortcut).
     if (!event.repeat) {
-      editor.goToDiff(direction)
+      editor.navigate(direction)
     }
   }
 
