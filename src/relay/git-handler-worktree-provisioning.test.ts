@@ -3,6 +3,7 @@
  * worktree create, and the addWorktree state machine (base ref qualification,
  * push.autoSetupRemote probing, failure handling).
  */
+import { buildWorktreeBaseRefreshArgs } from '../shared/git-worktree-base-refresh'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
@@ -79,7 +80,7 @@ describe('GitHandler', () => {
       return { localDispatcher, gitMock }
     }
 
-    it('resets the owning worktree to the remote-tracking ref', async () => {
+    it('fast-forwards the owning worktree to the remote-tracking ref', async () => {
       gitInit(tmpDir)
       writeFileSync(path.join(tmpDir, 'base.txt'), 'base')
       gitCommit(tmpDir, 'initial')
@@ -319,7 +320,7 @@ describe('GitHandler', () => {
         if (args[0] === 'status') {
           return { stdout: '', stderr: '' }
         }
-        if (args[0] === 'reset') {
+        if (args.includes('merge')) {
           return { stdout: '', stderr: '' }
         }
         throw new Error(`unexpected git call: ${args.join(' ')}`)
@@ -337,7 +338,10 @@ describe('GitHandler', () => {
         ['merge-base', '--is-ancestor', 'old-local-oid', 'remote-oid'],
         '/repo'
       )
-      expect(gitMock).toHaveBeenCalledWith(['reset', '--hard', 'remote-oid'], '/repo')
+      expect(gitMock).toHaveBeenCalledWith(
+        buildWorktreeBaseRefreshArgs('main', 'remote-oid'),
+        '/repo'
+      )
       expect(gitMock.mock.calls.map((call) => call[0])).not.toContainEqual([
         'update-ref',
         'refs/heads/main',
