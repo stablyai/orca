@@ -9,6 +9,7 @@ import { parseCodexSessionContent } from './session-scanner-codex-parser'
 import { parseDroidSessionContent } from './session-scanner-droid-parser'
 import { parseClaudeSessionContent } from './session-scanner-primary-parsers'
 import { parseCodebuddySessionContent } from './session-scanner-codebuddy-parser'
+import { parseQoderSessionContent } from './session-scanner-qoder-parser'
 import { parseGeminiSessionContent } from './session-scanner-gemini-parsers'
 import { parseCopilotSessionContent } from './session-scanner-copilot-parser'
 import { parseCursorSessionContent } from './session-scanner-cursor-parser'
@@ -74,6 +75,16 @@ export function remoteSessionSources(
         hostPlatform,
         ['.codebuddy', 'projects'],
         parseCodebuddySessionContent
+      ),
+      partitionSubagentTranscripts: partitionSubagentTranscriptPaths
+    },
+    {
+      ...jsonlSource(
+        'qoder',
+        remoteHome,
+        hostPlatform,
+        ['.qoder', 'projects'],
+        parseQoderSessionContent
       ),
       partitionSubagentTranscripts: partitionSubagentTranscriptPaths
     },

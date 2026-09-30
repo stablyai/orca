@@ -34,3 +34,34 @@ describe('remoteSessionSources devin transcripts root', () => {
     ])
   })
 })
+
+function qoderSource(relayPlatform: RelayPlatform, remoteHome: string) {
+  const hostPlatform: RemoteHostPlatform = getRemoteHostPlatform(relayPlatform)
+  return remoteSessionSources(remoteHome, hostPlatform).find((source) => source.agent === 'qoder')
+}
+
+describe('remoteSessionSources qoder source', () => {
+  it.each([
+    {
+      relayPlatform: 'win32-x64' as const,
+      remoteHome: 'C:/Users/dev',
+      expected: 'C:/Users/dev/.qoder/projects'
+    },
+    {
+      relayPlatform: 'linux-x64' as const,
+      remoteHome: '/home/dev',
+      expected: '/home/dev/.qoder/projects'
+    },
+    {
+      relayPlatform: 'darwin-arm64' as const,
+      remoteHome: '/Users/dev',
+      expected: '/Users/dev/.qoder/projects'
+    }
+  ])('resolves $expected on $relayPlatform', ({ relayPlatform, remoteHome, expected }) => {
+    const source = qoderSource(relayPlatform, remoteHome)
+    expect(source).toBeDefined()
+    expect(source?.rootDir).toBe(expected)
+    expect(source?.extensions).toEqual(['.jsonl'])
+    expect(typeof source?.partitionSubagentTranscripts).toBe('function')
+  })
+})

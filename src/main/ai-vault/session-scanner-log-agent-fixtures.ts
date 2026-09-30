@@ -173,5 +173,35 @@ export async function writeLogAgentFixtures(
     ])
   )
 
+  await mkdir(join(roots.qoderProjectsDir, 'project'), { recursive: true })
+  await writeFile(
+    join(roots.qoderProjectsDir, 'project', 'qoder-session.jsonl'),
+    jsonlBody([
+      {
+        type: 'workspace-directories',
+        directories: ['/tmp/qoder'],
+        timestamp: '2026-05-01T10:10:00.000Z'
+      },
+      {
+        type: 'message',
+        sessionId: 'qoder-session',
+        timestamp: '2026-05-01T10:10:01.000Z',
+        message: {
+          role: 'user',
+          content: [{ type: 'text', text: 'Qoder title' }]
+        }
+      },
+      {
+        type: 'message',
+        sessionId: 'qoder-session',
+        timestamp: '2026-05-01T10:10:02.000Z',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Qoder response' }]
+        }
+      }
+    ])
+  )
+
   return { ompSessionFile, primeAgentSessionFile }
 }

@@ -7,6 +7,10 @@ import type {
   SessionAccumulator
 } from './session-scanner-types'
 import type { TranscriptMessageSink } from './session-transcript-consumers'
+import {
+  remoteSessionContentLines,
+  type RemoteSessionContent
+} from './remote-session-content-lines'
 import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-access'
 import {
   addPreviewMessage,
@@ -181,11 +185,34 @@ export async function parseQoderSessionFile(
     input: readStream,
     crlfDelay: Infinity
   })
+  return parseQoderSessionLines({ file, lines: lineInterface, platform, messages })
+}
 
-  const parseState = createQoderSessionParseState(file, messages)
-  for await (const currentLine of lineInterface) {
+export async function parseQoderSessionContent(
+  file: FileWithMtime,
+  content: RemoteSessionContent,
+  platform: NodeJS.Platform = process.platform,
+  options: ParserSessionOptions = {},
+  signal?: AbortSignal
+): Promise<AiVaultSession | null> {
+  return parseQoderSessionLines({
+    file,
+    lines: remoteSessionContentLines(content, signal),
+    platform,
+    options
+  })
+}
+
+async function parseQoderSessionLines(args: {
+  file: FileWithMtime
+  lines: AsyncIterable<string> | Iterable<string>
+  platform: NodeJS.Platform
+  options?: ParserSessionOptions
+  messages?: TranscriptMessageSink
+}): Promise<AiVaultSession | null> {
+  const parseState = createQoderSessionParseState(args.file, args.messages)
+  for await (const currentLine of args.lines) {
     consumeQoderSessionLine(parseState, currentLine)
   }
-
-  return finalizeQoderSessionParseState(parseState, platform)
+  return finalizeQoderSessionParseState(parseState, args.platform, args.options)
 }

@@ -459,6 +459,7 @@ describe('scanAiVaultSessions', () => {
     expect(commandByAgent.get('kimi')).toBe(
       "cd '/tmp/kimi' && kimi --session 'session_kimi-session'"
     )
+    expect(commandByAgent.get('qoder')).toBe("cd '/tmp/qoder' && qodercli --resume 'qoder-session'")
 
     const ompSession = result.sessions.find((session) => session.agent === 'omp')
     expect(ompSession?.model).toBe('gpt-5.4-mini')

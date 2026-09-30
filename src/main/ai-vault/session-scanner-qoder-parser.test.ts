@@ -7,7 +7,8 @@ import {
   createQoderSessionResumeState,
   consumeQoderSessionLine,
   finalizeQoderSessionParseState,
-  parseQoderSessionFile
+  parseQoderSessionFile,
+  parseQoderSessionContent
 } from './session-scanner-qoder-parser'
 import type { TranscriptMessage } from './session-transcript-consumers'
 
@@ -182,5 +183,71 @@ describe('Qoder session streaming parser', () => {
     expect(finalizedClonedSession?.messageCount).toBe(2)
     expect(finalizedClonedSession?.updatedAt).toBe('2026-09-30T10:05:00.000Z')
     expect(finalizedClonedSession?.modifiedAt).toBe('2026-09-30T10:05:00.000Z')
+  })
+
+  it('parses remote session content from string and async stream, including lines with unicode line separators', async () => {
+    const candidateFile = {
+      path: '/home/dev/.qoder/projects/remote-project/qoder-remote.jsonl',
+      mtimeMs: 1785500000000,
+      modifiedAt: '2026-09-30T10:00:00.000Z'
+    }
+
+    const contentLines = [
+      JSON.stringify({
+        type: 'workspace-directories',
+        sessionId: 'qoder-remote',
+        directories: ['/home/dev/remote-project']
+      }),
+      JSON.stringify({
+        type: 'message',
+        sessionId: 'qoder-remote',
+        timestamp: '2026-09-30T10:00:00.000Z',
+        message: {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: 'Prompt with unicode line separator \u2028 and paragraph \u2029 separator'
+            }
+          ]
+        }
+      }),
+      JSON.stringify({
+        type: 'message',
+        sessionId: 'qoder-remote',
+        timestamp: '2026-09-30T10:00:05.000Z',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Remote response' }]
+        }
+      })
+    ]
+
+    const sessionFromString = await parseQoderSessionContent(
+      candidateFile,
+      contentLines.join('\n'),
+      'linux'
+    )
+    expect(sessionFromString).not.toBeNull()
+    expect(sessionFromString?.sessionId).toBe('qoder-remote')
+    expect(sessionFromString?.cwd).toBe('/home/dev/remote-project')
+    expect(sessionFromString?.title).toBe(
+      'Prompt with unicode line separator and paragraph separator'
+    )
+    expect(sessionFromString?.messageCount).toBe(2)
+
+    async function* makeAsyncStream() {
+      for (const line of contentLines) {
+        yield line
+      }
+    }
+    const sessionFromStream = await parseQoderSessionContent(
+      candidateFile,
+      makeAsyncStream(),
+      'linux'
+    )
+    expect(sessionFromStream).not.toBeNull()
+    expect(sessionFromStream?.sessionId).toBe('qoder-remote')
+    expect(sessionFromStream?.messageCount).toBe(2)
   })
 })

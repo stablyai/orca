@@ -78,7 +78,8 @@ export function isolatedScanRoots(root: string) {
     droidProjectsDir: join(root, 'droid-projects'),
     clineSessionsDir: join(root, 'cline-sessions'),
     kimiSessionsDir: join(root, 'kimi-sessions'),
-    museSessionsDir: join(root, 'muse-sessions')
+    museSessionsDir: join(root, 'muse-sessions'),
+    qoderProjectsDir: join(root, 'qoder-projects')
   }
 }
 
