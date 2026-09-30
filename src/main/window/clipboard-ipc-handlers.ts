@@ -31,6 +31,7 @@ import {
   type ClipboardFileDeps,
   type ClipboardFileResult
 } from './clipboard-file-copy'
+import { readClipboardFilePaths } from './clipboard-file-read'
 import {
   cleanupExpiredRemoteClipboardFiles,
   scheduleLegacyRemoteClipboardFileCleanup,
@@ -89,6 +90,7 @@ function runCommand(command: string, args: string[], stdin?: string): Promise<vo
 export function registerClipboardHandlers(store: Store): void {
   ipcMain.removeHandler('clipboard:readText')
   ipcMain.removeHandler('clipboard:readSelectionText')
+  ipcMain.removeHandler('clipboard:readFilePaths')
   ipcMain.removeHandler('clipboard:writeText')
   ipcMain.removeHandler('clipboard:writeTerminalText')
   ipcMain.removeHandler('clipboard:writeSelectionText')
@@ -111,6 +113,15 @@ export function registerClipboardHandlers(store: Store): void {
       return assertClipboardTextWithinLimitWithYield(clipboard.readText('selection'), options)
     }
   )
+  // Why: a file copied in Finder/Explorer reads back as its display name in the
+  // text flavor; terminals need the real path from the OS file flavor.
+  ipcMain.handle('clipboard:readFilePaths', (event): string[] => {
+    assertTrustedClipboardSender(event)
+    return readClipboardFilePaths({
+      platform: process.platform,
+      readBuffer: (format) => clipboard.readBuffer(format)
+    })
+  })
   // Why: an unanswered paste reads as a dropped paste, so the composer probes
   // the clipboard in memory before the (slower) save lands.
   ipcMain.handle('clipboard:readImageThumbnail', (event): ClipboardImageThumbnail | null => {

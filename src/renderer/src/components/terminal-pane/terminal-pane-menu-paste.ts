@@ -4,6 +4,7 @@ import { getConnectionId } from '@/lib/connection-context'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { pasteTerminalText } from './terminal-bracketed-paste'
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
+import { pasteClipboardFilePathsToPane } from './terminal-clipboard-file-paste'
 import {
   executeTerminalPastePlan,
   planTerminalPasteWithYield,
@@ -26,6 +27,7 @@ export type TerminalPaneMenuPasteContext = {
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
   tabId: string
   worktreeId: string
+  cwd?: string
   forceBracketedMultilineTextPaste: boolean
   onPasteError: (message: string) => void
 }
@@ -121,6 +123,15 @@ export const pasteTerminalPaneMenuClipboard = async (
   const transport = context.paneTransportsRef.current.get(pane.id) ?? null
   const result = await pasteTerminalClipboard({
     readClipboardText: window.api.ui.readClipboardText,
+    readClipboardFilePaths: window.api.ui.readClipboardFilePaths,
+    pasteFilePaths: pasteClipboardFilePathsToPane({
+      manager: context.managerRef.current,
+      paneTransports: context.paneTransportsRef.current,
+      worktreeId,
+      tabId,
+      cwd: context.cwd,
+      pane
+    }),
     saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
     connectionId,
     runtimeEnvironmentId,
