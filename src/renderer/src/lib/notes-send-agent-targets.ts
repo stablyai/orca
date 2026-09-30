@@ -22,6 +22,9 @@ export type NotesSendAgentTarget = {
   leafId: string
   agentType: AgentType | null | undefined
   tabTitle: string
+  // Why: the user's own rename, exposed separately from tabTitle so callers can
+  // headline it instead of the agent type label — a live status title is not a name.
+  customTitle: string | null
   status: 'eligible' | 'disabled'
   disabledReason?: string
 }
@@ -73,7 +76,10 @@ export function deriveNotesSendAgentTargets(
       tabId: target.tabId,
       leafId: target.leafId,
       agentType: resolveNotesTargetAgentType(target.entry.agentType, target.tab.launchAgent),
-      tabTitle: target.tab.title,
+      // Why: prefer the user's own rename (same precedence as the tab bar) over
+      // the live status text agents constantly overwrite the title with.
+      tabTitle: target.tab.customTitle ?? target.tab.title,
+      customTitle: target.tab.customTitle?.trim() || null,
       status: target.status,
       ...(target.disabledReason ? { disabledReason: target.disabledReason } : {})
     })
@@ -108,6 +114,7 @@ function resolveNotesTargetAgentType(
   return launchAgent ?? entryAgentType
 }
 
+/** Builds a pre-hook target candidate for a tab from its live pane title, or null if there's no such evidence. */
 function deriveTitleHintAgentTarget(
   state: NotesSendAgentTargetState,
   tab: TerminalTab
@@ -139,7 +146,8 @@ function deriveTitleHintAgentTarget(
     tabId: tab.id,
     leafId,
     agentType: tab.launchAgent ?? resolveTerminalTitleAgentType(titleEvidence.title),
-    tabTitle: tab.title,
+    tabTitle: tab.customTitle ?? tab.title,
+    customTitle: tab.customTitle?.trim() || null,
     status: disabledReason ? 'disabled' : 'eligible',
     ...(disabledReason ? { disabledReason } : {})
   }
@@ -157,6 +165,7 @@ function mergeManualAgentTitleTarget(
   targets.push(target)
 }
 
+/** Merges a title-hint target for a launch-agent tab, promoting a stale status row on the same pane when the hint is fresher. */
 function mergeLaunchAgentTitleTarget(
   targets: NotesSendAgentTarget[],
   target: NotesSendAgentTarget
@@ -177,7 +186,8 @@ function mergeLaunchAgentTitleTarget(
         existing.agentType && existing.agentType !== 'unknown'
           ? existing.agentType
           : target.agentType,
-      tabTitle: existing.tabTitle || target.tabTitle
+      tabTitle: existing.tabTitle || target.tabTitle,
+      customTitle: existing.customTitle || target.customTitle
     }
     return
   }

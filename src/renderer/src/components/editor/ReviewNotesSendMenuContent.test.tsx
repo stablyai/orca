@@ -34,6 +34,7 @@ const harness = vi.hoisted(() => ({
     leafId: string
     agentType: TuiAgent
     tabTitle: string
+    customTitle: string | null
     status: 'eligible' | 'disabled'
     disabledReason?: string
   }[],
@@ -371,6 +372,7 @@ describe('ReviewNotesSendMenuContent', () => {
         leafId: LEAF_A,
         agentType: 'claude',
         tabTitle: 'Terminal 1',
+        customTitle: null,
         status: 'eligible'
       },
       {
@@ -379,6 +381,7 @@ describe('ReviewNotesSendMenuContent', () => {
         leafId: LEAF_B,
         agentType: 'codex',
         tabTitle: 'Codex',
+        customTitle: null,
         status: 'eligible'
       }
     ]
@@ -427,6 +430,7 @@ describe('ReviewNotesSendMenuContent', () => {
         leafId: LEAF_A,
         agentType: 'claude',
         tabTitle: 'First session',
+        customTitle: null,
         status: 'eligible'
       },
       {
@@ -435,6 +439,7 @@ describe('ReviewNotesSendMenuContent', () => {
         leafId: LEAF_B,
         agentType: 'codex',
         tabTitle: 'Second session',
+        customTitle: null,
         status: 'eligible'
       }
     ]
@@ -448,6 +453,37 @@ describe('ReviewNotesSendMenuContent', () => {
     expect(collectText(items[0])).toContain('2m ago')
     expect(collectText(items[0])).toContain('Second session')
     expect(collectText(items[1])).toContain('Claude')
+  })
+
+  /** The primary label shows the user's rename; the agent type moves to the secondary line. */
+  it('headlines the tab custom title instead of the agent type label', () => {
+    const statusPaneKey = makePaneKey(TAB_A, LEAF_A)
+    setStore({
+      tabsByWorktree: { 'wt-1': [tab(TAB_A, { title: 'Terminal 1', customTitle: 'Payments' })] },
+      terminalLayoutsByTabId: { [TAB_A]: leafLayout(LEAF_A, 'pty-a') }
+    })
+    harness.noteTargets = [
+      {
+        paneKey: statusPaneKey,
+        tabId: TAB_A,
+        leafId: LEAF_A,
+        agentType: 'claude',
+        tabTitle: 'Payments',
+        customTitle: 'Payments',
+        status: 'eligible'
+      }
+    ]
+
+    const tree = render()
+    const item = findByType(tree, 'DropdownMenuItem')
+
+    const labels = findAllByType(item, 'span').filter(
+      (span) => typeof span.props.className === 'string' && span.props.className.includes('truncate')
+    )
+    expect(collectText(labels[0])).toBe('Payments')
+    // Why: the agent type moves to the secondary line instead of duplicating the name.
+    expect(collectText(labels[1])).toContain('Claude')
+    expect(collectText(labels[1])).not.toContain('Payments')
   })
 
   it('does not target title-detected rows skipped by target derivation', async () => {
@@ -499,6 +535,7 @@ describe('ReviewNotesSendMenuContent', () => {
         leafId: LEAF_B,
         agentType: 'codex',
         tabTitle: 'Codex',
+        customTitle: null,
         status: 'disabled',
         disabledReason: 'Agent needs permission'
       }
@@ -556,6 +593,7 @@ describe('ReviewNotesSendMenuContent', () => {
         leafId: LEAF_A,
         agentType: 'claude',
         tabTitle: 'Terminal 1',
+        customTitle: null,
         status: 'eligible'
       }
     ]
@@ -582,6 +620,7 @@ describe('ReviewNotesSendMenuContent', () => {
         leafId: LEAF_A,
         agentType: 'codex',
         tabTitle: 'Codex',
+        customTitle: null,
         status: 'disabled',
         disabledReason: 'Agent status is stale'
       }
@@ -609,6 +648,7 @@ describe('ReviewNotesSendMenuContent', () => {
         leafId: LEAF_A,
         agentType: 'claude',
         tabTitle: 'Terminal 1',
+        customTitle: null,
         status: 'eligible'
       }
     ]
@@ -645,6 +685,7 @@ describe('ReviewNotesSendMenuContent', () => {
         leafId: LEAF_A,
         agentType: 'claude',
         tabTitle: 'Terminal 1',
+        customTitle: null,
         status: 'eligible'
       }
     ]
@@ -673,6 +714,7 @@ describe('ReviewNotesSendMenuContent', () => {
         leafId: LEAF_A,
         agentType: 'claude',
         tabTitle: 'Terminal 1',
+        customTitle: null,
         status: 'eligible'
       }
     ]
@@ -699,6 +741,7 @@ describe('ReviewNotesSendMenuContent', () => {
         leafId: LEAF_A,
         agentType: 'claude',
         tabTitle: 'Terminal 1',
+        customTitle: null,
         status: 'eligible'
       }
     ]
@@ -711,6 +754,7 @@ describe('ReviewNotesSendMenuContent', () => {
         leafId: LEAF_A,
         agentType: 'claude',
         tabTitle: 'Terminal 1',
+        customTitle: null,
         status: 'disabled',
         disabledReason: 'Agent status is stale'
       }
@@ -735,6 +779,7 @@ describe('ReviewNotesSendMenuContent', () => {
         leafId: LEAF_A,
         agentType: 'claude',
         tabTitle: 'Terminal 1',
+        customTitle: null,
         status: 'eligible'
       }
     ]
@@ -761,6 +806,7 @@ describe('ReviewNotesSendMenuContent', () => {
         leafId: LEAF_A,
         agentType: 'claude',
         tabTitle: 'Terminal 1',
+        customTitle: null,
         status: 'eligible'
       }
     ]

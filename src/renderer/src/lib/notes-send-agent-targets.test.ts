@@ -129,6 +129,37 @@ describe('notes send agent targets', () => {
         leafId: LEAF_A,
         agentType: 'codex',
         tabTitle: 'Terminal 1',
+        customTitle: null,
+        status: 'eligible'
+      }
+    ])
+  })
+
+  /** A status-backed target headlines the tab's rename over the live pane title. */
+  it('prefers the tab custom title over the live title when the user renamed the tab', () => {
+    const paneKey = makePaneKey(STATUS_TAB_ID, LEAF_A)
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        agentStatusByPaneKey: { [paneKey]: entry(paneKey, 'done') },
+        tabsByWorktree: {
+          [WORKTREE_ID]: [
+            tab(STATUS_TAB_ID, { title: 'Terminal 1', customTitle: 'Payments' })
+          ]
+        },
+        terminalLayoutsByTabId: { [STATUS_TAB_ID]: leafLayout(LEAF_A, 'pty-a') }
+      }),
+      WORKTREE_ID,
+      NOW
+    )
+
+    expect(targets).toEqual([
+      {
+        paneKey,
+        tabId: STATUS_TAB_ID,
+        leafId: LEAF_A,
+        agentType: 'codex',
+        tabTitle: 'Payments',
+        customTitle: 'Payments',
         status: 'eligible'
       }
     ])
@@ -197,6 +228,7 @@ describe('notes send agent targets', () => {
         leafId: LEAF_B,
         agentType: 'codex',
         tabTitle: 'Terminal 2',
+        customTitle: null,
         status: 'eligible'
       }
     ])
@@ -222,6 +254,7 @@ describe('notes send agent targets', () => {
         leafId: LEAF_B,
         agentType: 'codex',
         tabTitle: 'Terminal 2',
+        customTitle: null,
         status: 'eligible'
       }
     ])
@@ -467,6 +500,44 @@ describe('notes send agent targets', () => {
         leafId: LEAF_B,
         agentType: 'codex',
         tabTitle: 'Previous Codex session',
+        customTitle: null,
+        status: 'eligible'
+      }
+    ])
+  })
+
+  /** A title-hint-promoted launch-agent target also headlines the tab's rename. */
+  it('prefers the tab custom title over the live title for a title-hint-promoted launch-agent pane', () => {
+    const paneKey = makePaneKey(LAUNCH_TAB_ID, LEAF_B)
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        agentStatusByPaneKey: {
+          [paneKey]: entry(paneKey, 'done', OLD_STATUS_UPDATED_AT)
+        },
+        tabsByWorktree: {
+          [WORKTREE_ID]: [
+            tab(LAUNCH_TAB_ID, {
+              title: 'Previous Codex session',
+              customTitle: 'Refactor',
+              launchAgent: 'codex'
+            })
+          ]
+        },
+        terminalLayoutsByTabId: { [LAUNCH_TAB_ID]: leafLayout(LEAF_B, 'pty-b') },
+        runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'Codex ready' } }
+      }),
+      WORKTREE_ID,
+      NOW
+    )
+
+    expect(targets).toEqual([
+      {
+        paneKey,
+        tabId: LAUNCH_TAB_ID,
+        leafId: LEAF_B,
+        agentType: 'codex',
+        tabTitle: 'Refactor',
+        customTitle: 'Refactor',
         status: 'eligible'
       }
     ])
@@ -674,6 +745,7 @@ describe('notes send agent targets', () => {
         leafId: LEAF_B,
         agentType: 'opencode',
         tabTitle: 'Terminal 2',
+        customTitle: null,
         status: 'eligible'
       }
     ])
