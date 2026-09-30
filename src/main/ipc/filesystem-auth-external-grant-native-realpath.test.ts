@@ -67,6 +67,17 @@ describe('external path grants on a drive the native realpath resolves elsewhere
     ).resolves.toBe(join(shareRoot, 'notes', 'todo.md'))
   })
 
+  it('does not wait on the native realpath once the JS one has failed', () => {
+    fsMocks.jsRealpath.mockImplementationOnce(() => {
+      throw new Error('network path not found')
+    })
+    fsMocks.nativeRealpath.mockClear()
+
+    authorizeExternalPath(join(mappedDrive, 'offline', 'report.pdf'))
+
+    expect(fsMocks.nativeRealpath).not.toHaveBeenCalled()
+  })
+
   it('does not extend a file grant to its siblings', async () => {
     authorizeExternalPath(join(mappedDrive, 'private', 'shared.png'))
 
