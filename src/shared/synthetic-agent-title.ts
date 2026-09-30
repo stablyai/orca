@@ -19,7 +19,8 @@ export const SYNTHETIC_AGENT_TITLE_AGENTS = [
   'droid',
   'hermes',
   'devin',
-  'zcode'
+  'zcode',
+  'kiro'
 ] as const satisfies readonly TuiAgent[]
 
 export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleProfile> = {
@@ -86,6 +87,16 @@ export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleP
     // so there is no native title to fight with, and without this a `tui-idle` wait has no
     // signal to settle on: ZCode also repaints its ASCII banner forever, so the quiescence
     // lane never fires either.
+    synthesizeWorkingTitle: true
+  },
+  kiro: {
+    workingLabel: 'Kiro',
+    permissionLabel: 'Kiro - action required',
+    idleLabel: 'Kiro ready',
+    // Why every state synthesizes, like ZCode: `kiro-cli chat --tui` (v2.23.0) writes NO OSC
+    // title in any state — a real PTY capture shows only an OSC 11 background-color query, no
+    // OSC 0/1/2 title and no OSC 9999 status. Without a synthesized title Orca has no signal to
+    // paint the pane's agent identity or settle a `tui-idle` wait, so the sidebar stays blank.
     synthesizeWorkingTitle: true
   }
 }

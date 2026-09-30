@@ -28,7 +28,8 @@ export const AGENT_NAMES = [
   'aider',
   'grok',
   'devin',
-  'zcode'
+  'zcode',
+  'kiro'
 ]
 
 // Why: Windows agent titles can surface launcher process names such as

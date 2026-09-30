@@ -211,6 +211,12 @@ function computeAgentLabel(title: string): string | null {
   if (titleHasAgentName(title, 'devin')) {
     return 'Devin'
   }
+  // Why: Kiro (kiro-cli) emits no OSC title, so Orca synthesizes "Kiro"/"Kiro ready"/
+  // "Kiro - action required" frames. Token-match so cwd/worktree titles like
+  // "kiro-notes" do not mint a false Kiro identity.
+  if (titleHasAgentName(title, 'kiro')) {
+    return 'Kiro'
+  }
   if (titleHasAgentName(title, 'antigravity') || AGY_AGENT_NAME_RE.test(title)) {
     return 'Antigravity'
   }
@@ -262,6 +268,7 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TuiAgent>> = {
   'GitHub Copilot': 'copilot',
   Grok: 'grok',
   Devin: 'devin',
+  Kiro: 'kiro',
   Antigravity: 'antigravity',
   OpenCode: 'opencode',
   'OpenCode 2': 'opencode2',

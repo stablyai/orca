@@ -37,7 +37,7 @@ const EXPECTED_REST_SIGNALS: Record<TuiAgent, TuiAgentRestSignal> = {
   goose: 'none',
   amp: 'none',
   kilo: 'none',
-  kiro: 'none',
+  kiro: 'synthetic-title',
   crush: 'none',
   aug: 'none',
   cline: 'none',
