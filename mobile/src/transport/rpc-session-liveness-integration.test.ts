@@ -107,6 +107,27 @@ describe('physical session liveness', () => {
     }
   })
 
+  it('does not let a superseded probe reply settle the outstanding probe', async () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const socket = sockets[0]!
+    socket.authenticate()
+
+    try {
+      client.notifyForeground()
+      const [firstProbeId] = sentProbeIds(socket)
+      await vi.advanceTimersByTimeAsync(8_000)
+      expect(sentProbeIds(socket)).toHaveLength(2)
+      socket.onmessage?.({
+        data: `encrypted:${JSON.stringify({ id: firstProbeId, ok: true, result: {}, _meta: {} })}`
+      })
+      await vi.advanceTimersByTimeAsync(16_000)
+
+      expect(socket.close).toHaveBeenCalledOnce()
+    } finally {
+      client.close()
+    }
+  })
+
   it('lets terminal output defer the idle probe', async () => {
     const client = connect('ws://desktop.invalid', 'token', 'server-key')
     const socket = sockets[0]!

@@ -9,6 +9,7 @@ import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel
 import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from './rpc-request-budget'
 import { isRpcResponse } from './rpc-response-shape'
+import { LivenessProbeReplyWitness } from './liveness-probe-reply-witness'
 import { RelayDialStageTracker, type RelayDialStageSource } from './relay-dial-stage'
 import { RelayPendingRequests } from './relay-pending-requests'
 import { RpcSessionLivenessWatchdog } from './rpc-session-liveness-watchdog'
@@ -46,7 +47,7 @@ export function connectMobileRelayRpcSession(args: {
 }): MobileRelayRpcSession {
   const requestTimeoutMs = args.requestTimeoutMs ?? 30_000
   const pending = new RelayPendingRequests()
-  const livenessProbeIds = new Set<string>()
+  const probeReplies = new LivenessProbeReplyWitness()
   const stateListeners = new Set<(state: ConnectionState) => void>()
   let state: ConnectionState = 'connecting'
   let lastConnectedAt: number | null = null
@@ -158,7 +159,7 @@ export function connectMobileRelayRpcSession(args: {
         return false
       }
       const id = pending.nextId()
-      livenessProbeIds.add(id)
+      probeReplies.probeSent(id)
       return sendFrame({ id, method: 'status.get', params: undefined })
     },
     onTimeout: (evidence) => {
@@ -234,6 +235,7 @@ export function connectMobileRelayRpcSession(args: {
   }
 
   function sendFrame(request: { id: string; method: string; params?: unknown }): boolean {
+    probeReplies.requestWritten(request)
     return link.sendText(JSON.stringify({ ...request, deviceToken: args.deviceToken }))
   }
 
@@ -247,8 +249,10 @@ export function connectMobileRelayRpcSession(args: {
     if (!isRpcResponse(value)) {
       return
     }
-    if (livenessProbeIds.delete(value.id) || pending.settle(value)) {
+    if (probeReplies.settles(value.id)) {
       livenessWatchdog.noteRpcResponse(livenessIdentity)
+    }
+    if (pending.settle(value)) {
       return
     }
     streams.handleResponse(value)
