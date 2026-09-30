@@ -213,6 +213,8 @@ export function renderWorktreeItemRow(
         onCardDragStart={ctx.onCardDragStart}
         onCardDragEnd={ctx.onCardDragEnd}
         hideRepoBadge={ctx.groupBy === 'repo'}
+        // Why: non-repo groupings interleave projects, so name it inline; repo groups use the group header.
+        showProjectName={ctx.groupBy !== 'repo'}
         // Why: pinned worktrees mix repos in one section, so only it needs the leading repo identity chip.
         hostContextLabel={itemRow.hostContextLabel}
         inPinnedSection={itemRow.sectionKey === PINNED_GROUP_KEY}
