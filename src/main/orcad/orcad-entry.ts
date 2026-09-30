@@ -237,6 +237,12 @@ async function startOrcadRuntime(
     },
     reconcileAgentStatusForEndedProcess: (paneKeys) =>
       agentHookServer.reconcileEndedProcessForPaneKeys(paneKeys),
+    // Why both halves: the store owns the candidate set and its fences, the runtime owns the
+    // host-scoped inventory that is the only thing able to re-derive truth behind a stranded row.
+    agentStatusPtyInventorySettlement: {
+      listCandidates: () => agentHookServer.listPtyInventorySettlementCandidates(),
+      settle: (settled) => agentHookServer.settlePtyInventoryAbsence(settled)
+    },
     buildAgentHookPtyEnv: () =>
       isAgentStatusHooksEnabled(profileStore.getSettings()) ? agentHookServer.buildPtyEnv() : {},
     // Why the dedupe here and not in the instance: `apply` closes and reconstructs

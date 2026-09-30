@@ -73,10 +73,13 @@ describe('registerPtyHandlers daemon-swap-window presence', () => {
     )
   }
 
-  const installRuntimeControllerWithBarrier = (
-    barrier: Promise<void>
-  ): { hasPty: (ptyId: string) => boolean | null } => {
-    let controller: { hasPty: (ptyId: string) => boolean | null } | undefined
+  type RuntimeController = {
+    hasPty: (ptyId: string) => boolean | null
+    probePtyLiveness: (ptyId: string) => Promise<boolean | null>
+  }
+
+  const installRuntimeControllerWithBarrier = (barrier: Promise<void>): RuntimeController => {
+    let controller: RuntimeController | undefined
     registerWithStartupBarrier(barrier, {
       setPtyController: vi.fn((next) => {
         controller = next
@@ -142,6 +145,28 @@ describe('registerPtyHandlers daemon-swap-window presence', () => {
     await vi.waitFor(() => {
       expect(controller.hasPty('daemon-restored-pty')).toBe(true)
     })
+  })
+
+  it('runtime controller probePtyLiveness defers a restored daemon id until the provider swap lands', async () => {
+    const barrier = makeDeferred()
+    const controller = installRuntimeControllerWithBarrier(barrier.promise)
+
+    const pending = controller.probePtyLiveness('daemon-restored-pty')
+    let settled = false
+    void pending.then(() => {
+      settled = true
+    })
+
+    await Promise.resolve()
+    await Promise.resolve()
+    // The host PTY inventory settles agent-status rows on this probe's false,
+    // so a pre-swap answer would retire every restored pane's row at cold start.
+    expect(settled).toBe(false)
+
+    installDaemonTestProvider({ probePtyLiveness: vi.fn(async () => true) })
+    barrier.resolve()
+
+    await expect(pending).resolves.toBe(true)
   })
 
   it('runtime controller hasPty never answers a paired-runtime handle from the local registry', () => {

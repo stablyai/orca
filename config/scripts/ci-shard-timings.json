@@ -465,7 +465,6 @@
       "src/main/agent-hooks/posix-hook-json-stdin-reader.test.ts": 3494,
       "src/main/agent-hooks/remote-hook-service-installers.test.ts": 367,
       "src/main/agent-hooks/remote-hook-service-registry-coverage.test.ts": 238,
-      "src/main/agent-hooks/restored-subagent-liveness-sweep.test.ts": 930,
       "src/main/agent-hooks/server-ai-vault-liveness.test.ts": 606,
       "src/main/agent-hooks/server-amp-normalization.test.ts": 570,
       "src/main/agent-hooks/server-authority-evidence.test.ts": 639,

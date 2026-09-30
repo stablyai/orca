@@ -19,9 +19,9 @@ import {
   sanitizeHydratedEntry,
   sanitizePersistedAuthorityCommitment
 } from './server-persistence-validation'
-import { AgentHookServerReaping } from './server-reaping'
+import { AgentHookServerPtyInventorySettlement } from './server-pty-inventory-settlement'
 
-export abstract class AgentHookServerHydration extends AgentHookServerReaping {
+export abstract class AgentHookServerHydration extends AgentHookServerPtyInventorySettlement {
   /** Hydrate the durable cache, validating every row before it reaches the live listener state. */
   protected hydrateLastStatusFromDisk(): void {
     if (!this.lastStatusFilePath) {

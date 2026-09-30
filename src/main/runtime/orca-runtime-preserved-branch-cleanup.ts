@@ -13,6 +13,7 @@ import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
 import type { ObservedAgentStatusPaneIdentity } from '../ipc/agent-status-ipc-boundary'
 import type { AgentHookAuthorityAttestation } from '../agent-hooks/server'
+import type { AgentStatusPtyInventorySettlementPort } from './runtime-agent-status-inventory-settlement'
 import type { RuntimeDesktopWindowStatus } from '../../shared/runtime-types'
 import type {
   AiVaultPrepareSessionResumeArgs,
@@ -93,6 +94,8 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
   protected readonly reconcileAgentStatusForEndedProcessFn:
     | ((paneKeys: Iterable<string>) => void)
     | null
+
+  protected readonly agentStatusPtyInventorySettlementFn: AgentStatusPtyInventorySettlementPort | null
 
   protected readonly canRecoverPersistentLocalPtysFn: () => boolean
 

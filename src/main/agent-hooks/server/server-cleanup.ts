@@ -115,14 +115,16 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
   reconcileEndedProcessForPaneKeys(
     paneKeys: Iterable<string>,
     options?: {
-      /** The pane's PTY outlived its agent (a confirmed shell foreground), so the session can still
-       *  be resumed in place — keep the `providerSessionOnly` remnant the paired `agentStatus:drop`
-       *  minted for exactly this case. A certified PTY exit passes nothing: there is no pane left to
-       *  resume into, and dropping it matches what `clearProviderPtyState` already does. */
+      /** The pane outlived the agent, so the session can still be resumed in place — keep the
+       *  `providerSessionOnly` remnant. Two cases: the PTY outlived its agent (a confirmed shell
+       *  foreground, whose paired `agentStatus:drop` minted the remnant), or the PTY died while
+       *  Orca was down and the restored pane respawns (the PTY-inventory settlement). An exit
+       *  observed while running passes nothing: its pane goes with it, matching
+       *  `clearProviderPtyState`. */
       preserveResumeIdentity?: boolean
     }
   ): number {
-    // A certified PTY exit passes no resume identity; a surviving shell may opt into the remnant.
+    // An exit observed while running passes no resume identity; a pane that outlived it may.
     let cleared = 0
     for (const paneKey of paneKeys) {
       const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)

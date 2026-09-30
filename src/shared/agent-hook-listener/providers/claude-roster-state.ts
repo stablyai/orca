@@ -13,7 +13,6 @@ import {
 import { agentChildWorkLivenessFromEvidence } from '../../agent-status-child-work-liveness'
 import {
   claudeRosterHasWorkingSubagent,
-  reapUnconfirmedRestoredClaudeSubagents,
   type ClaudeSubagentRoster
 } from '../../claude-subagent-roster'
 import type { AgentHookEventPayload } from '../listener-event'
@@ -267,25 +266,6 @@ export function seedClaudeLeadTurnFromPersistedStatus(
       })
     }
   }
-}
-
-/** Reap this pane's unconfirmed restored seeds because no live agent process backs
- *  the pane any more (its PTY died while Orca was down, so no finish hook could
- *  arrive). Callers must have proven the pane is LOCAL-launched — a remote/SSH
- *  agent runs on the far host and can never appear in a local process index.
- *  Returns whether the roster changed. */
-export function reapRestoredClaudeSubagentsForDeadPane(
-  state: HookListenerState,
-  paneKey: string
-): boolean {
-  const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
-  if (!roster || !reapUnconfirmedRestoredClaudeSubagents(roster)) {
-    return false
-  }
-  if (roster.size === 0) {
-    state.claudeSubagentRosterByPaneKey.delete(paneKey)
-  }
-  return true
 }
 
 /** Drop a child-owned waiting state when the child stops/idles, restoring the displaced lead state. */
