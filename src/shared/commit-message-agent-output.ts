@@ -1,6 +1,6 @@
 /** Strips noise around the agent's output: surrounding whitespace, a single
- *  enclosing fenced code block, and lone "Generating…" preamble lines some
- *  CLIs print before the real answer. */
+ *  enclosing fenced code block, lone "Generating…" preamble lines some CLIs
+ *  print before the real answer, and a reasoning model's leading think block. */
 export function cleanGeneratedCommitMessage(raw: string): string {
   // Why: agent output can include very large generated bodies; normalize and
   // unwrap by scanning boundaries instead of building newline-sized arrays.
@@ -17,6 +17,8 @@ export function cleanGeneratedCommitMessage(raw: string): string {
     }
   }
 
+  text = stripLeadingReasoningBlock(text)
+
   const fenced = findEnclosingCommitMessageFenceBody(text)
   if (fenced !== null) {
     text = fenced.trim()
@@ -27,6 +29,26 @@ export function cleanGeneratedCommitMessage(raw: string): string {
   text = text.replace(/^(\s*)(?:[-*•●]\s+|\d+[.)]\s+)/, '$1').trim()
 
   return text
+}
+
+const REASONING_OPEN_TAG = '<think>'
+const REASONING_CLOSE_TAG = '</think>'
+
+// Why: reasoning models (DeepSeek-R1, Qwen3, Spark-X2.5) run through a custom
+// command print their reasoning before the answer. Chat templates that prefill
+// `<think>` in the prompt leave only the closing tag in stdout, so a close tag
+// with no open tag before it ends a reasoning block too. An open tag later in
+// the text means the message is quoting the tags, so it is left alone.
+function stripLeadingReasoningBlock(text: string): string {
+  const closeIndex = text.indexOf(REASONING_CLOSE_TAG)
+  if (closeIndex === -1) {
+    return text
+  }
+  const openIndex = text.indexOf(REASONING_OPEN_TAG)
+  if (openIndex > 0 && openIndex < closeIndex) {
+    return text
+  }
+  return text.slice(closeIndex + REASONING_CLOSE_TAG.length).trim()
 }
 
 function normalizeGeneratedCommitMessageLineFeeds(value: string): string {

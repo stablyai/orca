@@ -134,6 +134,34 @@ describe('cleanGeneratedCommitMessage', () => {
   it('returns empty string when input is whitespace', () => {
     expect(cleanGeneratedCommitMessage('   \n\t')).toBe('')
   })
+
+  it('drops a leading <think> reasoning block', () => {
+    const raw =
+      '<think>\nThe diff fixes a typo.\n</think>\n\nFix typo in README\n\n- Correct spelling'
+    expect(cleanGeneratedCommitMessage(raw)).toBe('Fix typo in README\n\n- Correct spelling')
+  })
+
+  it('drops reasoning that ends in a lone </think> from a prefilled chat template', () => {
+    const raw =
+      'We need answer only commit message text.\r\n\r\nLet\'s final.</think>Fix typo in README.md\r\n\r\n- Corrected "Instal" to "Install"\r\n'
+    expect(cleanGeneratedCommitMessage(raw)).toBe(
+      'Fix typo in README.md\n\n- Corrected "Instal" to "Install"'
+    )
+  })
+
+  it('unwraps a fenced answer that follows a reasoning block', () => {
+    const raw = '<think>short</think>\n```\nfeat: add parser\n```'
+    expect(cleanGeneratedCommitMessage(raw)).toBe('feat: add parser')
+  })
+
+  it('keeps a message that quotes both think tags', () => {
+    const raw = 'Strip <think>…</think> blocks from generated messages'
+    expect(cleanGeneratedCommitMessage(raw)).toBe(raw)
+  })
+
+  it('keeps an unterminated <think> block as-is', () => {
+    expect(cleanGeneratedCommitMessage('<think>still reasoning')).toBe('<think>still reasoning')
+  })
 })
 
 describe('excerptAgentFailureOutput', () => {
