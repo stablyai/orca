@@ -1,0 +1,144 @@
+name: omo-restore-ssh-relay-session
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/omo-native-tui-agent
+          fetch-depth: 0
+      - name: Restore ssh-relay-session.ts from fc27e6f + patch
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://raw.githubusercontent.com/wedreamer/orca/fc27e6f59e4c8415317c1c1f4e0ee92ab0156c3a/src/main/ssh/ssh-relay-session.ts" \
+            -o src/main/ssh/ssh-relay-session.ts
+          cat > /tmp/omo-ssh.patch <<'PATCH_EOF'
+--- a/src/main/ssh/ssh-relay-session.ts
++++ b/src/main/ssh/ssh-relay-session.ts
+@@ -210,8 +210,8 @@
+   omoSessionsDir?: string
+ }
+ 
+-// Optional OmO history override: fail-open, short timeout so a hung remote env
+-// probe cannot stall establish/reconnect after the PTY consumer is already open.
++// Optional OmO history override: fail-open, short timeout. The probe must not
++// gate relay ready (or openPtyConsumerSession) — apply the result asynchronously.
+ const REMOTE_OMO_SESSIONS_DIR_PROBE_TIMEOUT_MS = 5_000
+ 
+ async function readOptionalRemoteOmoSessionsDir(
+@@ -221,7 +221,8 @@
+   try {
+     const raw = (
+       await execCommand(conn, readRemoteOmoSessionsDirCommand(hostPlatform), {
+-        timeoutMs: REMOTE_OMO_SESSIONS_DIR_PROBE_TIMEOUT_MS
++        timeoutMs: REMOTE_OMO_SESSIONS_DIR_PROBE_TIMEOUT_MS,
++        wrapCommand: !isWindowsRemoteHost(hostPlatform)
+       })
+     ).trim()
+     return raw || undefined
+@@ -588,7 +589,7 @@
+         prepareOpenCodeRuntime
+       } = await deployAndLaunchRelay(conn, undefined, graceTimeSeconds, this.targetId)
+       this.hostPlatform = hostPlatform ?? null
+-      // Start OmO probe without awaiting — must not gate openPtyConsumerSession.
++      // Start OmO probe early without awaiting — must not gate ready or openPtyConsumerSession.
+       const omoSessionsDirPromise = hostPlatform
+         ? readOptionalRemoteOmoSessionsDir(conn, hostPlatform)
+         : Promise.resolve(undefined)
+@@ -679,15 +680,19 @@
+       verifyRelayAttempt(mux, isAttemptCurrent, 'establish')
+       this.watchMuxForRelayLoss(mux)
+       verifyRelayAttempt(mux, isAttemptCurrent, 'establish')
+-      const omoSessionsDir = await omoSessionsDirPromise
+-      if (
+-        omoSessionsDir &&
+-        this.remoteCliBridgeEnv &&
+-        !this.isDisposed() &&
+-        this.mux === mux
+-      ) {
++      // Probe must not gate ready — apply omoSessionsDir asynchronously when it settles.
++      void omoSessionsDirPromise.then((omoSessionsDir) => {
++        if (
++          !omoSessionsDir ||
++          !this.remoteCliBridgeEnv ||
++          this.isDisposed() ||
++          this.mux !== mux ||
++          mux.isDisposed()
++        ) {
++          return
++        }
+         this.remoteCliBridgeEnv = { ...this.remoteCliBridgeEnv, omoSessionsDir }
+-      }
++      })
+       this._state = 'ready'
+       this.startPortScanning()
+       this._onReady?.(this.targetId)
+@@ -760,7 +765,7 @@
+         prepareOpenCodeRuntime
+       } = await deployAndLaunchRelay(conn, undefined, graceTimeSeconds, this.targetId)
+       this.hostPlatform = hostPlatform ?? null
+-      // Start OmO probe without awaiting — must not gate openPtyConsumerSession.
++      // Start OmO probe early without awaiting — must not gate ready or openPtyConsumerSession.
+       const omoSessionsDirPromise = hostPlatform
+         ? readOptionalRemoteOmoSessionsDir(conn, hostPlatform)
+         : Promise.resolve(undefined)
+@@ -860,16 +865,20 @@
+       verifyRelayAttempt(mux, isAttemptCurrent, 'reconnect')
+       this.watchMuxForRelayLoss(mux)
+       verifyRelayAttempt(mux, isAttemptCurrent, 'reconnect')
+-      const omoSessionsDir = await omoSessionsDirPromise
+-      if (
+-        omoSessionsDir &&
+-        this.remoteCliBridgeEnv &&
+-        this.abortController === abortController &&
+-        !this.isDisposed() &&
+-        this.mux === mux
+-      ) {
++      // Probe must not gate ready — apply omoSessionsDir asynchronously when it settles.
++      void omoSessionsDirPromise.then((omoSessionsDir) => {
++        if (
++          !omoSessionsDir ||
++          !this.remoteCliBridgeEnv ||
++          this.abortController !== abortController ||
++          this.isDisposed() ||
++          this.mux !== mux ||
++          mux.isDisposed()
++        ) {
++          return
++        }
+         this.remoteCliBridgeEnv = { ...this.remoteCliBridgeEnv, omoSessionsDir }
+-      }
++      })
+       this._state = 'ready'
+       this.startPortScanning()
+       this._onReady?.(this.targetId)
+PATCH_EOF
+          patch -p1 < /tmp/omo-ssh.patch
+          grep -q "void omoSessionsDirPromise.then" src/main/ssh/ssh-relay-session.ts
+          grep -q "wrapCommand: !isWindowsRemoteHost(hostPlatform)" src/main/ssh/ssh-relay-session.ts
+          grep -q "Best-effort: a prefill write failure" src/relay/plugin-overlay-files.ts
+      - name: Commit and push
+        run: |
+          set -euo pipefail
+          git config user.name "shubuzuo"
+          git config user.email "shubuzuo@gmail.com"
+          git add src/main/ssh/ssh-relay-session.ts
+          git commit -m "fix(ssh): keep OmO probe off the ready path and soften prefill writes"
+          git push origin HEAD:feat/omo-native-tui-agent
+      - name: Remove temporary workflow
+        if: always()
+        run: |
+          set -euo pipefail
+          git config user.name "shubuzuo"
+          git config user.email "shubuzuo@gmail.com"
+          git fetch origin feat/omo-native-tui-agent
+          git checkout -B feat/omo-native-tui-agent origin/feat/omo-native-tui-agent
+          if [ -f .github/workflows/omo-restore-ssh-relay-session.yml ]; then
+            git rm -f .github/workflows/omo-restore-ssh-relay-session.yml
+            git commit -m "chore: remove temporary omo restore workflow" || exit 0
+            git push origin HEAD:feat/omo-native-tui-agent
+          fi
