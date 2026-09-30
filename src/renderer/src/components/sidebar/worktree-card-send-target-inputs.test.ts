@@ -16,7 +16,8 @@ const BASE: SendTargetInputsState = {
   tabsByWorktree: {},
   terminalLayoutsByTabId: {},
   ptyIdsByTabId: {},
-  runtimePaneTitlesByTabId: {}
+  runtimePaneTitlesByTabId: {},
+  paneForegroundAgentByPaneKey: {}
 }
 
 function makeMode(worktreeId: string): AgentSendPopoverTargetMode {
