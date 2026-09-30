@@ -19,6 +19,15 @@ export function readRemoteHomeCommand(host: RemoteHostPlatform): string {
   return powerShellCommand("Write-Output ([Environment]::GetFolderPath('UserProfile'))")
 }
 
+export function readRemoteOmoSessionsDirCommand(host: RemoteHostPlatform): string {
+  if (!isWindowsRemoteHost(host)) {
+    return 'if [ -n "$OMO_CODING_AGENT_SESSION_DIR" ]; then printf \'%s\\n\' "$OMO_CODING_AGENT_SESSION_DIR"; elif [ -n "$OMO_CODING_AGENT_DIR" ]; then printf \'%s/sessions\\n\' "$OMO_CODING_AGENT_DIR"; fi'
+  }
+  return powerShellCommand(
+    "if ($env:OMO_CODING_AGENT_SESSION_DIR) { Write-Output $env:OMO_CODING_AGENT_SESSION_DIR } elseif ($env:OMO_CODING_AGENT_DIR) { Write-Output (Join-Path $env:OMO_CODING_AGENT_DIR 'sessions') }"
+  )
+}
+
 export function makeRemoteDirectoryCommand(host: RemoteHostPlatform, remotePath: string): string {
   if (!isWindowsRemoteHost(host)) {
     return `mkdir -p ${shellEscape(remotePath)}`

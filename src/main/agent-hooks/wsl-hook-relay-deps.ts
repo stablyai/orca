@@ -119,12 +119,13 @@ export const defaultWslHookRelayDeps: WslHookRelayManagerDeps = {
       wslDistro: distro
     }),
   managedHookSettings: () => null,
-  // Why: only OpenCode is in scope for WSL now; the payload shape stays identical to SSH so Pi/OMP are additive later.
+  // Why: only OpenCode is in scope for WSL now; the payload shape stays identical to SSH so Pi/OMP/OmO are additive later.
   pluginSources: () => ({
     opencodePluginSource: getOpenCodePluginSource(),
     opencode2PluginSource: getOpenCode2PluginSource(),
     piExtensionSource: getPiAgentStatusExtensionSource('pi'),
-    ompExtensionSource: getPiAgentStatusExtensionSource('omp')
+    ompExtensionSource: getPiAgentStatusExtensionSource('omp'),
+    omoExtensionSource: getPiAgentStatusExtensionSource('omo')
   }),
   warn: (message) => console.warn(message),
   transientRetryDelayMs: WSL_RELAY_TRANSIENT_RETRY_DELAY_MS

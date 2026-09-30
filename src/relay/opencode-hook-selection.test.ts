@@ -56,6 +56,8 @@ beforeEach(async () => {
     'ORCA_OPENCODE_CONFIG_DIR',
     'ORCA_OPENCODE_SOURCE_CONFIG_DIR',
     'ORCA_OPENCODE_AGENT',
+    'OMO_CODING_AGENT_DIR',
+    'ORCA_OMO_SOURCE_AGENT_DIR',
     'ZDOTDIR'
   ]) {
     vi.stubEnv(key, undefined)
@@ -79,6 +81,12 @@ async function install(v1: string, v2: string): Promise<void> {
   await harness.dispatcher.callRequest(AGENT_HOOK_INSTALL_PLUGINS_METHOD, {
     opencodePluginSource: v1,
     opencode2PluginSource: v2
+  })
+}
+async function installOmo(): Promise<void> {
+  await harness.dispatcher.callRequest(AGENT_HOOK_INSTALL_PLUGINS_METHOD, {
+    omoExtensionSource: '// omo status',
+    omoPrefillExtensionSource: '// omo prefill'
   })
 }
 async function spawn(params: Record<string, unknown> = {}): Promise<Record<string, string>> {
@@ -186,3 +194,17 @@ it.each([true, false])(
     expect(env.ORCA_OPENCODE_SOURCE_CONFIG_DIR).toBe(enabled ? custom : undefined)
   }
 )
+
+describe('relay OmO managed extensions', () => {
+  it('installs the SSH OmO prefill extension beside its status extension', async () => {
+    await installOmo()
+    const env = await spawn({ launchAgent: 'omo' })
+    const extensionsDir = join(root, '.omo', 'agent', 'extensions')
+
+    expect(env.ORCA_OMO_SOURCE_AGENT_DIR).toBe(join(root, '.omo', 'agent'))
+    expect(readFileSync(join(extensionsDir, 'orca-agent-status.ts'), 'utf8')).toContain(
+      '// omo status'
+    )
+    expect(readFileSync(join(extensionsDir, 'orca-prefill.ts'), 'utf8')).toContain('// omo prefill')
+  })
+})

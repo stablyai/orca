@@ -34,6 +34,7 @@ import {
   restoreOrStripOverlayEnv
 } from './pi-agent'
 import { AGENT_HOOK_RUNTIME_ENV_KEYS } from './spawn-env-keys'
+import { applyWslGuestAgentSourceEnv } from './wsl-guest-agent-env'
 
 /**
  * Mutates `baseEnv` in place with all host-local PTY env vars and returns it.
@@ -176,7 +177,9 @@ export function buildPtyHostEnv(
       // Why: hook POSTs to 127.0.0.1 die inside WSL's NAT namespace; use the guest-resident relay's endpoint instead of the Windows one.
       const distro = opts.wslDistro ?? null
       const wslLaunchKind =
-        explicitPiAgentKind === 'pi' || explicitPiAgentKind === 'omp'
+        explicitPiAgentKind === 'pi' ||
+        explicitPiAgentKind === 'omp' ||
+        explicitPiAgentKind === 'omo'
           ? explicitPiAgentKind
           : undefined
       wslHookRelayManager.ensureForDistro(distro, opts.selectedCodexHomePath, wslLaunchKind)
@@ -279,18 +282,7 @@ export function buildPtyHostEnv(
   }
 
   if (opts.isWsl && opts.agentStatusHooksEnabled) {
-    const distro = opts.wslDistro ?? null
-    if (explicitPiAgentKind === 'pi') {
-      const guestPiDir = wslHookRelayManager.getGuestAgentPath(distro, 'pi')
-      if (guestPiDir) {
-        baseEnv.ORCA_PI_SOURCE_AGENT_DIR = guestPiDir
-      }
-    } else if (explicitPiAgentKind === 'omp') {
-      const guestOmpExtension = wslHookRelayManager.getGuestAgentPath(distro, 'omp')
-      if (guestOmpExtension) {
-        baseEnv.ORCA_OMP_STATUS_EXTENSION = guestOmpExtension
-      }
-    }
+    applyWslGuestAgentSourceEnv(baseEnv, opts.wslDistro ?? null, explicitPiAgentKind)
   }
 
   // Why: keep the Codex home override PTY-scoped so dev/prod Orcas don't share hooks through ~/.codex.

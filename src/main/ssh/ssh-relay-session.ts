@@ -6,6 +6,7 @@ import type { BrowserWindow } from 'electron'
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
 import type { RemoteOpenCodeRuntimePreparation } from './ssh-relay-opencode-runtime-retry'
 import { execCommand } from './ssh-relay-deploy-helpers'
+import { readRemoteOmoSessionsDirCommand } from './ssh-remote-commands'
 import { writeStringsViaSftp } from './sftp-upload'
 import { isRelayVersionMismatchError } from './ssh-relay-version-mismatch-error'
 import { isRelayEndpointHeldError } from './ssh-relay-endpoint-incumbent'
@@ -40,6 +41,7 @@ import {
 import { AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES } from '../../shared/agent-status-legacy-adapter'
 import { _internals as openCodeInternals } from '../opencode/hook-service'
 import { getPiAgentStatusExtensionSource } from '../pi/agent-status-extension-source'
+import { getPiPrefillExtensionSource } from '../pi/prefill-extension-source'
 import {
   registerSshPtyProvider,
   unregisterSshPtyProvider,
@@ -205,6 +207,19 @@ type RemoteCliBridgeEnv = {
   credentialFile?: string
   hostPlatform: RemoteHostPlatform
   pathDelimiter?: ':' | ';'
+  omoSessionsDir?: string
+}
+
+async function readOptionalRemoteOmoSessionsDir(
+  conn: SshConnection,
+  hostPlatform: RemoteHostPlatform
+): Promise<string | undefined> {
+  try {
+    const raw = (await execCommand(conn, readRemoteOmoSessionsDirCommand(hostPlatform))).trim()
+    return raw || undefined
+  } catch {
+    return undefined
+  }
 }
 
 type ExpectedPtyIdentity = { paneKey?: string; tabId?: string }
@@ -279,6 +294,7 @@ export type SshRelayAiVaultHostInfo = {
   executionHostId: ExecutionHostId
   remoteHome: string
   hostPlatform: RemoteHostPlatform
+  omoSessionsDir?: string
 }
 
 function normalizeRelayGracePeriodSeconds(graceTimeSeconds: number | undefined): number {
@@ -459,7 +475,8 @@ export class SshRelaySession {
       targetId: this.targetId,
       executionHostId: toSshExecutionHostId(this.targetId),
       remoteHome: env.remoteHome,
-      hostPlatform: env.hostPlatform
+      hostPlatform: env.hostPlatform,
+      ...(env.omoSessionsDir ? { omoSessionsDir: env.omoSessionsDir } : {})
     }
   }
 
@@ -563,6 +580,9 @@ export class SshRelaySession {
         prepareOpenCodeRuntime
       } = await deployAndLaunchRelay(conn, undefined, graceTimeSeconds, this.targetId)
       this.hostPlatform = hostPlatform ?? null
+      const omoSessionsDir = hostPlatform
+        ? await readOptionalRemoteOmoSessionsDir(conn, hostPlatform)
+        : undefined
       this.remoteCliBridgeEnv =
         remoteHome && remoteRelayDir && nodePath && sockPath && hostPlatform
           ? {
@@ -573,7 +593,8 @@ export class SshRelaySession {
               sockPath,
               ...(credentialFile ? { credentialFile } : {}),
               hostPlatform,
-              pathDelimiter: hostPlatform.pathDelimiter
+              pathDelimiter: hostPlatform.pathDelimiter,
+              ...(omoSessionsDir ? { omoSessionsDir } : {})
             }
           : null
 
@@ -722,6 +743,9 @@ export class SshRelaySession {
         prepareOpenCodeRuntime
       } = await deployAndLaunchRelay(conn, undefined, graceTimeSeconds, this.targetId)
       this.hostPlatform = hostPlatform ?? null
+      const omoSessionsDir = hostPlatform
+        ? await readOptionalRemoteOmoSessionsDir(conn, hostPlatform)
+        : undefined
       this.remoteCliBridgeEnv =
         remoteHome && remoteRelayDir && nodePath && sockPath && hostPlatform
           ? {
@@ -732,7 +756,8 @@ export class SshRelaySession {
               sockPath,
               ...(credentialFile ? { credentialFile } : {}),
               hostPlatform,
-              pathDelimiter: hostPlatform.pathDelimiter
+              pathDelimiter: hostPlatform.pathDelimiter,
+              ...(omoSessionsDir ? { omoSessionsDir } : {})
             }
           : null
 
@@ -1565,7 +1590,9 @@ export class SshRelaySession {
                   piExtensionSource: getPiAgentStatusExtensionSource('pi'),
                   ompExtensionSource: getPiAgentStatusExtensionSource('omp'),
                   primeAgentExtensionSource: getPiAgentStatusExtensionSource('prime-agent'),
-                  omoExtensionSource: getPiAgentStatusExtensionSource('omo')
+                  omoExtensionSource: getPiAgentStatusExtensionSource('omo'),
+                  // Why: this extension reads ORCA_OMO_PREFILL, so an SSH install needs it too.
+                  omoPrefillExtensionSource: getPiPrefillExtensionSource('omo')
                 }
               : {})
           },

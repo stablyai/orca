@@ -1,4 +1,5 @@
 {
+  "auto.lib.agent.catalog.omo_label": "OmO",
   "sidebar": {
     "revealFiltered": {
       "title": "Reveal hidden workspace?",
@@ -618,6 +619,7 @@
           "060d152fb5": "Trae",
           "muse_label": "Muse",
           "dsh_label": "DeepSeek Harness",
+          "omo_label": "OmO",
           "qoder_label": "Qoder CLI",
           "zcode_label": "ZCode",
           "d443a47995": "Prime Agent",

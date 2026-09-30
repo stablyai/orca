@@ -62,7 +62,8 @@ describe.skipIf(process.platform === 'win32')('WSL public-manager settings lifet
     opencodePluginSource: '// independent v1',
     opencode2PluginSource: '// independent v2',
     piExtensionSource: '// pi',
-    ompExtensionSource: '// omp'
+    ompExtensionSource: '// omp',
+    omoExtensionSource: '// omo'
   }
 
   function createGuest(name: string): {
@@ -304,6 +305,22 @@ describe.skipIf(process.platform === 'win32')('WSL public-manager settings lifet
     expect(readFileSync(omp, 'utf8')).toContain('// omp')
     await manager.ensureForDistro('fixture')
     expect(requests).toHaveLength(5)
+  })
+
+  it('ships and installs the OmO extension for an OmO launch kind', async () => {
+    await manager.ensureForDistro('fixture', undefined, 'omo')
+    expect(requests.at(-1)).toMatchObject({ launchKind: 'omo', omoExtensionSource: '// omo' })
+    const omo = manager.getGuestAgentPath('fixture', 'omo')
+    if (!omo) {
+      throw new Error('missing guest omo agent dir')
+    }
+    expect(readFileSync(join(omo, 'extensions', 'orca-agent-status.ts'), 'utf8')).toContain(
+      '// omo'
+    )
+    // Why: materializing OmO must not create another kind's dir; bare shells and
+    // single-agent launches each own only the kind they asked for.
+    expect(manager.getGuestAgentPath('fixture', 'pi')).toBeNull()
+    expect(manager.getGuestAgentPath('fixture', 'omp')).toBeNull()
   })
 
   it('bounds repeated pre-plugin failures and retries after the cooldown', async () => {

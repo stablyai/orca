@@ -210,6 +210,42 @@ describe('PluginOverlayManager', () => {
     ).toContain('// omp extension')
   })
 
+  it('installs the OmO prefill extension beside its status extension', () => {
+    manager.setSources({
+      omoExtensionSource: '// omo extension',
+      omoPrefillExtensionSource: '// omo prefill'
+    })
+
+    const result = manager.materializePi('tab-kind-omo:0', undefined, 'omo')
+    const extensionsDir = join(result!.sourceAgentDir!, 'extensions')
+
+    expect(result?.sourceAgentDir).toBe(join(homeDir, '.omo', 'agent'))
+    expect(readdirSync(extensionsDir).sort()).toEqual(['orca-agent-status.ts', 'orca-prefill.ts'])
+    expect(readFileSync(join(extensionsDir, 'orca-agent-status.ts'), 'utf8')).toContain(
+      '// omo extension'
+    )
+    expect(readFileSync(join(extensionsDir, 'orca-prefill.ts'), 'utf8')).toContain('// omo prefill')
+  })
+
+  it("does not overwrite a user's same-named remote OmO prefill file", () => {
+    const extensionsDir = join(homeDir, '.omo', 'agent', 'extensions')
+    mkdirSync(extensionsDir, { recursive: true })
+    writeFileSync(join(extensionsDir, 'orca-prefill.ts'), 'user-owned remote prefill')
+
+    manager.setSources({
+      omoExtensionSource: '// omo extension',
+      omoPrefillExtensionSource: '// omo prefill'
+    })
+    manager.materializePi('tab-user-owned-omo:0', undefined, 'omo')
+
+    expect(readFileSync(join(extensionsDir, 'orca-prefill.ts'), 'utf8')).toBe(
+      'user-owned remote prefill'
+    )
+    expect(readFileSync(join(extensionsDir, 'orca-agent-status.ts'), 'utf8')).toContain(
+      '// omo extension'
+    )
+  })
+
   it('uses only the Prime-specific source in the default Prime agent dir', () => {
     manager.setSources({ piExtensionSource: '// pi extension' })
     expect(manager.materializePi('tab-prime-missing:0', undefined, 'prime-agent')).toBeNull()
