@@ -31,3 +31,11 @@ export type WorktreeRemoteBranchConflictEvent = {
   remote: string
   branchName: string
 }
+
+export type LocalBaseRefDriftWarning = {
+  baseRef: string
+  defaultBaseRef: string
+  ahead: number
+  behind: number
+  relation: 'behind' | 'diverged'
+}
