@@ -39,6 +39,18 @@ describe('buildAiVaultResumeCommand', () => {
     ).toBe("cd '/repo/app' && codebuddy --resume 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'")
   })
 
+  it('resumes Qoder sessions with the qodercli --resume flag', () => {
+    const resumeCommand = buildAiVaultResumeCommand({
+      agent: 'qoder',
+      sessionId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+      cwd: '/repo/app',
+      platform: 'darwin'
+    })
+    expect(resumeCommand).toBe(
+      "cd '/repo/app' && qodercli --resume 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'"
+    )
+  })
+
   it('builds a direct queued command for a live cmd shell', () => {
     expect(
       buildAiVaultResumeCommand({
