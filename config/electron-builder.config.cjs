@@ -408,6 +408,7 @@ module.exports = {
     finalizePackagedRipgrep(resourcesDir)
     chmodUnixCliLaunchers(resourcesDir, context.electronPlatformName)
     chmodMacServeSimHelpers(resourcesDir, context.electronPlatformName)
+    ensureSherpaLoaderRpath(resourcesDir, context.electronPlatformName)
     for (const filename of readdirSync(resourcesDir)) {
       if (!filename.startsWith('agent-browser-')) {
         continue
@@ -715,6 +716,31 @@ function chmodUnixCliLaunchers(resourcesDir, electronPlatformName) {
     // Why: packaged Unix installs expose these extraResources as public shell
     // commands, and source/packager mode drift must not ship a non-executable CLI.
     chmodSync(launcherPath, 0o755)
+  }
+}
+
+// Why: sherpa-onnx-darwin-x64 1.12.20 (the newest release whose ONNX Runtime loads on
+// macOS 12) links libonnxruntime via an rpath that only exists on the upstream CI
+// runner, so dlopen fails outside DYLD_LIBRARY_PATH. Add @loader_path before signing.
+function ensureSherpaLoaderRpath(resourcesDir, electronPlatformName) {
+  if (electronPlatformName !== 'darwin') {
+    return
+  }
+  for (const arch of ['x64', 'arm64']) {
+    const addon = join(
+      resourcesDir,
+      'node_modules',
+      `sherpa-onnx-darwin-${arch}`,
+      'sherpa-onnx.node'
+    )
+    if (!existsSync(addon)) {
+      continue
+    }
+    const loadCommands = execFileSync('otool', ['-l', addon], { encoding: 'utf8' })
+    if (/path @loader_path /.test(loadCommands)) {
+      continue
+    }
+    execFileSync('install_name_tool', ['-add_rpath', '@loader_path', addon])
   }
 }
 

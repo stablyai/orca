@@ -547,8 +547,8 @@ importers:
         specifier: 1.12.37
         version: 1.12.37
       sherpa-onnx-darwin-x64:
-        specifier: 1.12.37
-        version: 1.12.37
+        specifier: 1.12.20
+        version: 1.12.20
       sherpa-onnx-linux-arm64:
         specifier: 1.12.37
         version: 1.12.37
@@ -6966,8 +6966,8 @@ packages:
     cpu: [arm64]
     os: [darwin]
 
-  sherpa-onnx-darwin-x64@1.12.37:
-    resolution: {integrity: sha512-2mB1BhEJJLG8Ow/YGAe7c3AL5fSkk9qDk3wmZRsfDW+Gno5eBaUusXseDI0ltjh2mZcW74l9F19ez4CyhwqNQQ==}
+  sherpa-onnx-darwin-x64@1.12.20:
+    resolution: {integrity: sha512-E2fvG/GhJEsG6HJUbr8GifgcQQ975YGb51z6V6njmwgU6a/WvVs7zeLmrt55w9QFhhqNih9GPwF53+zsw4TMsw==}
     cpu: [x64]
     os: [darwin]
 
@@ -14439,7 +14439,7 @@ snapshots:
   sherpa-onnx-darwin-arm64@1.12.37:
     optional: true
 
-  sherpa-onnx-darwin-x64@1.12.37:
+  sherpa-onnx-darwin-x64@1.12.20:
     optional: true
 
   sherpa-onnx-linux-arm64@1.12.37:

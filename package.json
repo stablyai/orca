@@ -318,7 +318,7 @@
     "@orca/windows-registry": "workspace:*",
     "@vscode/windows-process-tree": "0.8.0",
     "sherpa-onnx-darwin-arm64": "1.12.37",
-    "sherpa-onnx-darwin-x64": "1.12.37",
+    "sherpa-onnx-darwin-x64": "1.12.20",
     "sherpa-onnx-linux-arm64": "1.12.37",
     "sherpa-onnx-linux-x64": "1.12.37",
     "sherpa-onnx-win-x64": "1.12.37"
