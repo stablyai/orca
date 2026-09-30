@@ -6060,6 +6060,10 @@
           "empty": "没有匹配的可用工作树。",
           "setParentFor": "为以下工作树设置父级"
         },
+        "WorktreeReviewDecision": {
+          "approved": "已批准",
+          "changesRequested": "请求更改"
+        },
         "WorktreeCardStatusSlot": {
           "branchIdentity": "分支",
           "sleeping": "睡眠"

@@ -5263,6 +5263,10 @@
           "empty": "No hay worktrees elegibles que coincidan.",
           "setParentFor": "Establecer padre para"
         },
+        "WorktreeReviewDecision": {
+          "approved": "Aprobada",
+          "changesRequested": "Cambios solicitados"
+        },
         "WorktreeCardStatusSlot": {
           "branchIdentity": "Rama"
         },

@@ -6137,6 +6137,10 @@
           "empty": "Aucun worktree éligible correspondant.",
           "setParentFor": "Définir le parent pour"
         },
+        "WorktreeReviewDecision": {
+          "approved": "Approuvée",
+          "changesRequested": "Modifications demandées"
+        },
         "WorktreeCardStatusSlot": {
           "branchIdentity": "Branche",
           "sleeping": "En veille"

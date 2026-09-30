@@ -1,6 +1,7 @@
 import { createElement } from 'react'
 import { GitMerge } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
 import { getReviewStateIcon } from '@/components/github/review-state-presentation'
 import { PullRequestIcon } from './WorktreeCardHelpers'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
@@ -69,6 +70,21 @@ export function getActiveReviewDecision(review: WorktreeCardPrDisplay): PRReview
     return null
   }
   return review.reviewDecision ?? null
+}
+
+/** Label for the verdicts the decision dot shows; screen readers can't see the dot. */
+export function getReviewDecisionDotLabel(review: WorktreeCardPrDisplay): string | null {
+  const decision = getActiveReviewDecision(review)
+  if (decision === 'APPROVED') {
+    return translate('auto.components.sidebar.WorktreeReviewDecision.approved', 'Approved')
+  }
+  if (decision === 'CHANGES_REQUESTED') {
+    return translate(
+      'auto.components.sidebar.WorktreeReviewDecision.changesRequested',
+      'Changes requested'
+    )
+  }
+  return null
 }
 
 // Why: review-required is the default for most open PRs, so only a verdict earns a dot.

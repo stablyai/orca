@@ -6060,6 +6060,10 @@
           "empty": "일치하는 적격 워크트리가 없습니다.",
           "setParentFor": "다음 워크트리의 상위 설정"
         },
+        "WorktreeReviewDecision": {
+          "approved": "승인됨",
+          "changesRequested": "변경 요청됨"
+        },
         "WorktreeCardStatusSlot": {
           "branchIdentity": "브랜치",
           "sleeping": "자고 있는"

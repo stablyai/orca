@@ -6060,6 +6060,10 @@
           "empty": "一致する対象ワークツリーがありません。",
           "setParentFor": "次のワークツリーの親を設定"
         },
+        "WorktreeReviewDecision": {
+          "approved": "承認済み",
+          "changesRequested": "変更リクエスト"
+        },
         "WorktreeCardStatusSlot": {
           "branchIdentity": "ブランチ",
           "sleeping": "眠っている"

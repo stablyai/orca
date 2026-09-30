@@ -6196,6 +6196,10 @@
           "empty": "No matching eligible worktrees.",
           "setParentFor": "Set parent for"
         },
+        "WorktreeReviewDecision": {
+          "approved": "Approved",
+          "changesRequested": "Changes requested"
+        },
         "WorktreeCardStatusSlot": {
           "branchIdentity": "Branch",
           "sleeping": "Sleeping"
