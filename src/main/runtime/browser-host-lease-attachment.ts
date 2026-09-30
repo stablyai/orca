@@ -1,3 +1,8 @@
+import {
+  BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY,
+  BrowserClientAutomationSupportedMethods,
+  type BrowserClientAutomationMethod
+} from '../../shared/browser-client-automation-protocol'
 import type { BrowserClientHostedPageInventory } from '../../shared/browser-client-host-protocol'
 import { BrowserHostCommandLedger } from './browser-host-command-ledger'
 import { BrowserExecutionHostGrantRegistry } from './browser-execution-host-grant-registry'
@@ -8,6 +13,7 @@ export type BrowserHostLeaseAttachInput = {
   browserHostClientId: string
   connectionId: string
   pairedDeviceId: string
+  supportedAutomationMethods?: readonly BrowserClientAutomationMethod[]
   hostCapabilities: readonly string[]
   pageCommandProtocolVersion?: 1
   pageInventoryProtocolVersion?: 1
@@ -18,6 +24,15 @@ export type BrowserHostLeaseAttachInput = {
 }
 
 export function assertBrowserHostReconnectNegotiation(input: BrowserHostLeaseAttachInput): void {
+  if (input.supportedAutomationMethods !== undefined) {
+    BrowserClientAutomationSupportedMethods.parse(input.supportedAutomationMethods)
+    if (
+      input.pageCommandProtocolVersion !== 1 ||
+      !input.hostCapabilities.includes(BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY)
+    ) {
+      throw new Error('browser_host_automation_method_negotiation_required')
+    }
+  }
   if (
     input.leaseReconnectProtocolVersion !== undefined &&
     input.leaseReconnectProtocolVersion !== 1
@@ -67,6 +82,13 @@ export function createBrowserHostLeaseState(options: {
       connectionId: input.connectionId,
       pairedDeviceId: input.pairedDeviceId,
       hostCapabilities: Object.freeze([...input.hostCapabilities]),
+      ...(input.supportedAutomationMethods !== undefined
+        ? {
+            supportedAutomationMethods: Object.freeze(
+              BrowserClientAutomationSupportedMethods.parse(input.supportedAutomationMethods)
+            )
+          }
+        : {}),
       ...(input.pageCommandProtocolVersion ? { pageCommandProtocolVersion: 1 as const } : {}),
       ...(options.pageInventory
         ? {

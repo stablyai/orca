@@ -75,6 +75,39 @@ export const BROWSER_CLIENT_AUTOMATION_METHODS = [
 export const BrowserClientAutomationMethod = z.enum(BROWSER_CLIENT_AUTOMATION_METHODS)
 export type BrowserClientAutomationMethod = z.infer<typeof BrowserClientAutomationMethod>
 
+// Explicit sets exclude passthrough: its raw argv cannot be checked against RPC method names.
+export const BrowserClientAutomationSupportedMethods = z
+  .array(
+    BrowserClientAutomationMethod.refine(
+      (method): boolean => method !== 'browser.exec',
+      'Explicit automation methods cannot include browser.exec passthrough'
+    )
+  )
+  .max(BROWSER_CLIENT_AUTOMATION_METHODS.length)
+  .transform((methods) => [...new Set(methods)].sort())
+  .readonly()
+
+export function sameBrowserClientAutomationMethods(
+  left: readonly BrowserClientAutomationMethod[] | undefined,
+  right: readonly BrowserClientAutomationMethod[] | undefined
+): boolean {
+  return left === undefined || right === undefined
+    ? left === right
+    : left.length === right.length && left.every((method) => right.includes(method))
+}
+
+export function assertBrowserClientAutomationMethodSupported(
+  methods: readonly BrowserClientAutomationMethod[] | undefined,
+  command: BrowserClientAutomationCommand
+): void {
+  if (
+    methods !== undefined &&
+    (command.method === 'browser.exec' || !methods.includes(command.method))
+  ) {
+    throw new Error('browser_client_automation_method_unsupported')
+  }
+}
+
 const BrowserClientAutomationParams = z
   .record(z.string(), z.unknown())
   .superRefine((params, context) =>
@@ -125,5 +158,25 @@ function enforceJsonByteBudget(
   } catch {}
   if (bytes > maxBytes) {
     context.addIssue({ code: 'custom', message })
+  }
+}
+
+export function refineBrowserClientAutomationNegotiation(
+  params: {
+    supportedAutomationMethods?: readonly BrowserClientAutomationMethod[]
+    pageCommandProtocolVersion?: 1
+    hostCapabilities: readonly string[]
+  },
+  context: z.core.$RefinementCtx<unknown>
+): void {
+  if (
+    params.supportedAutomationMethods !== undefined &&
+    (params.pageCommandProtocolVersion !== 1 ||
+      !params.hostCapabilities.includes(BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY))
+  ) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Browser automation methods require automation and command negotiation'
+    })
   }
 }

@@ -1,3 +1,4 @@
+import type { BrowserClientAutomationMethod } from '../../shared/browser-client-automation-protocol'
 import type {
   BrowserClientHostedPageInventory,
   BrowserClientHostCommandEvent,
@@ -11,6 +12,7 @@ export type PairedRuntimeBrowserHostLeaseOptions = {
   pairing: PairingOffer
   authorityRuntimeId: string
   browserHostClientId: string
+  supportedAutomationMethods?: readonly BrowserClientAutomationMethod[]
   hostCapabilities: readonly string[]
   pageCommandProtocolVersion?: 1
   pageInventoryProtocolVersion?: 1

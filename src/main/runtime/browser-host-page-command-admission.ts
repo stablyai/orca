@@ -1,5 +1,8 @@
 import type { BrowserClientHostCommandEvent } from '../../shared/browser-client-host-protocol'
-import { BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY } from '../../shared/browser-client-automation-protocol'
+import {
+  BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY,
+  assertBrowserClientAutomationMethodSupported
+} from '../../shared/browser-client-automation-protocol'
 import { BROWSER_CLIENT_FILE_CHANNEL_HOST_CAPABILITY } from '../../shared/browser-client-file-channel-protocol'
 import {
   BROWSER_CLIENT_FILE_CHANNEL_REQUIRED_ERROR,
@@ -32,6 +35,9 @@ export function assertBrowserHostPageCommandAdmission(
     !lease.hostCapabilities.includes(BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY)
   ) {
     throw new Error('browser_host_capability_unavailable')
+  }
+  if (command.type === 'automation') {
+    assertBrowserClientAutomationMethodSupported(lease.supportedAutomationMethods, command)
   }
   if (
     command.type === 'automation' &&

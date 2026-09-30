@@ -1,4 +1,8 @@
 import {
+  assertBrowserClientAutomationMethodSupported,
+  sameBrowserClientAutomationMethods
+} from '../../shared/browser-client-automation-protocol'
+import {
   BrowserClientHostEvent,
   type BrowserClientHostCommandEvent,
   type BrowserClientHostLeaseAuthority
@@ -168,6 +172,17 @@ export class PairedRuntimeBrowserHostLeaseConnection {
         this.fail(new Error('Browser host page command received before readiness'))
         return
       }
+      try {
+        if (parsed.data.command.type === 'automation') {
+          assertBrowserClientAutomationMethodSupported(
+            this.authority?.supportedAutomationMethods,
+            parsed.data.command
+          )
+        }
+      } catch (error) {
+        this.fail(asError(error))
+        return
+      }
       this.options.onCommand(parsed.data, this.rejectReady)
       return
     }
@@ -186,6 +201,10 @@ export class PairedRuntimeBrowserHostLeaseConnection {
       return
     }
     if (
+      !sameBrowserClientAutomationMethods(
+        ready.supportedAutomationMethods,
+        request.params.supportedAutomationMethods
+      ) ||
       !matchesOptionalProtocol(
         ready.pageCommandProtocolVersion,
         request.pageCommandProtocolVersion
@@ -267,6 +286,9 @@ function browserHostLeaseAuthority(
   ready: Extract<ReturnType<typeof BrowserClientHostEvent.parse>, { type: 'ready' }>
 ): BrowserClientHostLeaseAuthority {
   return Object.freeze({
+    ...(ready.supportedAutomationMethods !== undefined
+      ? { supportedAutomationMethods: Object.freeze([...ready.supportedAutomationMethods]) }
+      : {}),
     authorityRuntimeId: options.authorityRuntimeId,
     authorityEpoch: ready.authorityEpoch,
     browserHostClientId: options.browserHostClientId,

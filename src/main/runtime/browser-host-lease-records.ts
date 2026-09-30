@@ -1,3 +1,4 @@
+import type { BrowserClientAutomationMethod } from '../../shared/browser-client-automation-protocol'
 import type { BrowserClientHostedPageInventory } from '../../shared/browser-client-host-protocol'
 import type { BrowserExecutionHostGrantRegistry } from './browser-execution-host-grant-registry'
 import type { BrowserHostCommandLedger } from './browser-host-command-ledger'
@@ -14,6 +15,7 @@ export type BrowserHostLease = Readonly<{
   browserHostGeneration: number
   connectionId: string
   pairedDeviceId: string
+  supportedAutomationMethods?: readonly BrowserClientAutomationMethod[]
   hostCapabilities: readonly string[]
   pageCommandProtocolVersion?: 1
   pageInventoryProtocolVersion?: 1

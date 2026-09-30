@@ -50,6 +50,7 @@ export const BROWSER_CLIENT_HOST_METHODS = [
         connectionId,
         pairedDeviceId,
         hostCapabilities: params.hostCapabilities,
+        supportedAutomationMethods: params.supportedAutomationMethods,
         pageCommandProtocolVersion: params.pageCommandProtocolVersion,
         pageInventoryProtocolVersion: params.pageInventoryProtocolVersion,
         pageInventory: params.pageInventory,
@@ -82,6 +83,9 @@ export const BROWSER_CLIENT_HOST_METHODS = [
         }
         emit({
           type: 'ready',
+          ...(handle.lease.supportedAutomationMethods !== undefined
+            ? { supportedAutomationMethods: handle.lease.supportedAutomationMethods }
+            : {}),
           authorityEpoch: handle.lease.authorityEpoch,
           browserHostGeneration: handle.lease.browserHostGeneration,
           ...(params.pageCommandProtocolVersion

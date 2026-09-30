@@ -1,3 +1,4 @@
+import { sameBrowserClientAutomationMethods } from '../../shared/browser-client-automation-protocol'
 import type {
   BrowserClientHostedPageInventory,
   BrowserClientHostCommandEvent,
@@ -47,6 +48,10 @@ export function sameBrowserClientHostLeaseAuthority(
   right: BrowserClientHostLeaseAuthority
 ): boolean {
   return (
+    sameBrowserClientAutomationMethods(
+      left.supportedAutomationMethods,
+      right.supportedAutomationMethods
+    ) &&
     left.authorityRuntimeId === right.authorityRuntimeId &&
     left.authorityEpoch === right.authorityEpoch &&
     left.browserHostClientId === right.browserHostClientId &&
