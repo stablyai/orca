@@ -17,6 +17,7 @@ type CustomSttEndpointDialogProps = {
   configured: boolean
   baseUrlDraft: string
   modelDraft: string
+  languageDraft: string
   apiKeyDraft: string
   apiKeyConfigured: boolean
   pending: boolean
@@ -25,6 +26,7 @@ type CustomSttEndpointDialogProps = {
   onOpenChange: (open: boolean) => void
   onBaseUrlDraftChange: (value: string) => void
   onModelDraftChange: (value: string) => void
+  onLanguageDraftChange: (value: string) => void
   onApiKeyDraftChange: (value: string) => void
   onSave: () => void
   onClear: () => void
@@ -36,6 +38,7 @@ export function CustomSttEndpointDialog({
   configured,
   baseUrlDraft,
   modelDraft,
+  languageDraft,
   apiKeyDraft,
   apiKeyConfigured,
   pending,
@@ -44,6 +47,7 @@ export function CustomSttEndpointDialog({
   onOpenChange,
   onBaseUrlDraftChange,
   onModelDraftChange,
+  onLanguageDraftChange,
   onApiKeyDraftChange,
   onSave,
   onClear,
@@ -91,6 +95,24 @@ export function CustomSttEndpointDialog({
               placeholder="large-v3"
               disabled={pending}
               onChange={(event) => onModelDraftChange(event.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="custom-stt-language">
+              {translate(
+                'auto.components.settings.CustomSttEndpointDialog.language',
+                'Language (optional)'
+              )}
+            </Label>
+            <Input
+              id="custom-stt-language"
+              value={languageDraft}
+              placeholder={translate(
+                'auto.components.settings.CustomSttEndpointDialog.languagePlaceholder',
+                'Auto-detect (e.g. en, zh, yue)'
+              )}
+              disabled={pending}
+              onChange={(event) => onLanguageDraftChange(event.target.value)}
             />
           </div>
           <div className="space-y-2">

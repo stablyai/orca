@@ -17,6 +17,8 @@ export type OpenAiTranscriptionTarget = {
   url: string
   apiKey: string | null
   apiModel: string
+  /** ISO-639 language hint for the multipart `language` field; undefined = auto-detect. */
+  language?: string
 }
 
 type OpenAiTranscriptionResponse = {
@@ -126,6 +128,9 @@ export class OpenAiTranscriptionSession {
     const form = new FormData()
     form.append('model', target.apiModel)
     form.append('response_format', 'json')
+    if (target.language) {
+      form.append('language', target.language)
+    }
     // A named WAV blob satisfies multipart uploads without temporary files.
     form.append('file', new Blob([wav], { type: 'audio/wav' }), 'dictation.wav')
 

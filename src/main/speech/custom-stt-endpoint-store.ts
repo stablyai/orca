@@ -18,6 +18,11 @@ export type CustomSttEndpointConfig = {
   baseUrl: string
   /** Model id sent in the multipart `model` field, e.g. `large-v3`. */
   model: string
+  /**
+   * Optional ISO-639 language hint sent in the multipart `language` field
+   * (e.g. `en`, `zh`, `yue`). Empty means let the server auto-detect.
+   */
+  language: string
 }
 
 const ENDPOINT_FILE = 'custom-stt-endpoint.json'
@@ -67,7 +72,8 @@ export function readCustomSttEndpointConfig(): CustomSttEndpointConfig | null {
     if (!baseUrl || !model) {
       return null
     }
-    cachedConfig = { baseUrl, model }
+    const language = typeof parsed.language === 'string' ? parsed.language.trim() : ''
+    cachedConfig = { baseUrl, model, language }
     return cachedConfig
   } catch {
     return null
@@ -78,7 +84,9 @@ export function hasCustomSttEndpoint(): boolean {
   return readCustomSttEndpointConfig() !== null
 }
 
-export function saveCustomSttEndpointConfig(config: CustomSttEndpointConfig): void {
+export function saveCustomSttEndpointConfig(
+  config: Omit<CustomSttEndpointConfig, 'language'> & { language?: string }
+): void {
   const baseUrl = normalizeCustomSttBaseUrl(config.baseUrl)
   const model = config.model.trim()
   if (!baseUrl) {
@@ -96,9 +104,11 @@ export function saveCustomSttEndpointConfig(config: CustomSttEndpointConfig): vo
   if (!model) {
     throw new Error('Endpoint model is required')
   }
+  const language = typeof config.language === 'string' ? config.language.trim() : ''
   ensureOrcaDir()
-  writeFileSync(getEndpointPath(), JSON.stringify({ baseUrl, model }, null, 2), { mode: 0o600 })
-  cachedConfig = { baseUrl, model }
+  const stored: CustomSttEndpointConfig = { baseUrl, model, language }
+  writeFileSync(getEndpointPath(), JSON.stringify(stored, null, 2), { mode: 0o600 })
+  cachedConfig = stored
 }
 
 export function clearCustomSttEndpointConfig(): void {

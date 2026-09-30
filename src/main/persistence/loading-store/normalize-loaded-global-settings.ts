@@ -176,6 +176,7 @@ export function normalizeLoadedGlobalSettings(
       // not settings; keep the persisted copy truthful so the UI row cannot go stale.
       customSttBaseUrl: customSttEndpoint?.baseUrl ?? '',
       customSttModel: customSttEndpoint?.model ?? '',
+      customSttLanguage: customSttEndpoint?.language ?? '',
       customSttApiKeyConfigured: hasCustomSttEndpointApiKey()
     }
   }

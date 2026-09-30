@@ -12991,7 +12991,6 @@
           "lan": "Local network · {{address}}",
           "loopback": "This computer · {{address}}"
         },
-<<<<<<< HEAD
         "BundledSkillInstallStatus": {
           "updateServer": "Update Orca on the server to install its skills.",
           "connectHost": "Connect to this SSH host to install its skills."
@@ -13411,7 +13410,9 @@
           "hint": "Works with any OpenAI-compatible /audio/transcriptions server, e.g. a local worker on 127.0.0.1.",
           "clear": "Disconnect",
           "test": "Test",
-          "save": "Save"
+          "save": "Save",
+          "language": "Language (optional)",
+          "languagePlaceholder": "Auto-detect (e.g. en, zh, yue)"
         }
       },
       "right": {
