@@ -165,6 +165,46 @@ describe('getEditingTargetForSshTarget', () => {
     expect(parseRelayGracePeriodSeconds(EMPTY_FORM)).toBe(0)
   })
 
+  it('carries persisted service links into the draft and defaults to none', () => {
+    const withLinks = getEditingTargetForSshTarget({
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'server.example.com',
+      port: 22,
+      username: 'deploy',
+      serviceLinks: [{ label: 'Grafana', url: 'https://grafana.example.com' }]
+    })
+    const withoutLinks = getEditingTargetForSshTarget({
+      id: 'ssh-2',
+      label: 'Other',
+      host: 'other.example.com',
+      port: 22,
+      username: 'deploy'
+    })
+
+    expect(withLinks.serviceLinks).toMatchObject([
+      { label: 'Grafana', url: 'https://grafana.example.com' }
+    ])
+    expect(withLinks.serviceLinks[0]?.id).toBeTruthy()
+    expect(withoutLinks.serviceLinks).toEqual([])
+  })
+
+  it('gives duplicate service links distinct draft ids', () => {
+    const draft = getEditingTargetForSshTarget({
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'server.example.com',
+      port: 22,
+      username: 'deploy',
+      serviceLinks: [
+        { label: 'Grafana', url: 'https://grafana.example.com' },
+        { label: 'Grafana', url: 'https://grafana.example.com' }
+      ]
+    })
+
+    expect(draft.serviceLinks[0]?.id).not.toBe(draft.serviceLinks[1]?.id)
+  })
+
   it('recomputes implicit configHost when a manual target host is edited', () => {
     const draft = getEditingTargetForSshTarget({
       id: 'ssh-1',
@@ -325,8 +365,28 @@ describe('isSshTargetFormDirty', () => {
     { jumpHost: 'bastion' },
     { systemSshConnectionReuse: false },
     { relayGracePeriodSeconds: '600' },
-    { relayKeepAliveUntilReset: false }
+    { relayKeepAliveUntilReset: false },
+    { serviceLinks: [{ id: 'row-1', label: 'Grafana', url: 'https://grafana.example.com' }] }
   ])('detects %o against the open-session baseline', (change) => {
     expect(isSshTargetFormDirty({ ...EMPTY_FORM, ...change }, EMPTY_FORM)).toBe(true)
+  })
+
+  // Why: draft ids are minted per build, so a freshly reopened form carries
+  // different ids for identical links and must still read as clean.
+  it('ignores draft ids when a service-link list matches the baseline field by field', () => {
+    const baseline: EditingTarget = {
+      ...EMPTY_FORM,
+      serviceLinks: [{ id: 'row-1', label: 'Grafana', url: 'https://grafana.example.com' }]
+    }
+
+    expect(
+      isSshTargetFormDirty(
+        {
+          ...baseline,
+          serviceLinks: [{ id: 'row-2', label: 'Grafana', url: 'https://grafana.example.com' }]
+        },
+        baseline
+      )
+    ).toBe(false)
   })
 })

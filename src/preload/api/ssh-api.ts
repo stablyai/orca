@@ -6,6 +6,7 @@ import type {
   SshConfigHostResolution,
   SshConfigImportResult,
   SshConnectionState,
+  SshReadinessReport,
   SshTarget,
   SshTargetAddResult,
   SshTargetCreateInput,
@@ -65,6 +66,7 @@ export type SshApi = {
     resolvedPath: string
     pathFlavor: FilesystemPathFlavor
   }>
+  probeReadiness: (args: { targetId: string }) => Promise<SshReadinessReport>
   onCredentialRequest: (
     callback: (data: {
       requestId: string

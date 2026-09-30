@@ -212,6 +212,31 @@ describe('SshTargetForm', () => {
     act(() => root.unmount())
   })
 
+  it('adds and removes service link rows in the draft', async () => {
+    let form: EditingTarget = EMPTY_FORM
+    const onFormChange = vi.fn((updater: (prev: EditingTarget) => EditingTarget) => {
+      form = updater(form)
+    })
+    const root = await renderForm({ form, onFormChange })
+
+    await act(async () => {
+      button('Add link').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(form.serviceLinks).toMatchObject([{ label: '', url: '' }])
+    expect(form.serviceLinks[0]?.id).toBeTruthy()
+
+    await renderForm({ form, onFormChange }, root)
+    const removeButton = document.querySelector<HTMLButtonElement>('[aria-label="Remove link"]')
+    if (!removeButton) {
+      throw new Error('missing Remove link button')
+    }
+    await act(async () => {
+      removeButton.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(form.serviceLinks).toEqual([])
+    act(() => root.unmount())
+  })
+
   it('opens Advanced by default when the target already has advanced values', async () => {
     const root = await renderForm({
       editingId: 'target-1',

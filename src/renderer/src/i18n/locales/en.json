@@ -8611,6 +8611,16 @@
           "456516603b": "Enter response",
           "c624f64b86": "Continue"
         },
+        "SshServiceLinksEditor": {
+          "title": "Service links",
+          "add": "Add link",
+          "labelField": "Service link label",
+          "labelPlaceholder": "Grafana",
+          "urlField": "Service link URL",
+          "urlPlaceholder": "https://grafana.example.com",
+          "remove": "Remove link",
+          "helper": "Shown as buttons on this host card. http:// and https:// URLs only, without a user name or password in the URL."
+        },
         "SshTargetCard": {
           "a883f5a00f": "terminal timeout: {{value0}}",
           "8ce71262f4": "terminals until reset",
@@ -8674,7 +8684,8 @@
           "addTitle": "Add SSH host",
           "editDescription": "Update connection details for this machine. Changes apply on next connect.",
           "addDescription": "Add a persistent machine you can log into over SSH.",
-          "editingPrefix": "Editing"
+          "editingPrefix": "Editing",
+          "serviceLinksInvalid": "Each service link needs a label of 1 to {{value0}} characters and an http:// or https:// URL, with at most {{value1}} links."
         },
         "TasksPane": {
           "f71d8a9dd3": "Task Providers",
@@ -12215,6 +12226,30 @@
           "usageLabel": "Usage",
           "noAllowance": "Cursor reported no usage allowance for this account.",
           "staleUsage": "Last known usage — the latest refresh failed: {{reason}}"
+        },
+        "SshTargetReadinessSection": {
+          "label": {
+            "node": "Node",
+            "toolchain": "Toolchain",
+            "github": "GitHub",
+            "ghAuth": "GitHub CLI auth",
+            "gitIdentity": "Git identity",
+            "claude": "Claude",
+            "codex": "Codex"
+          },
+          "state": {
+            "ok": "Ready",
+            "miss": "Missing",
+            "unknown": "Unknown"
+          },
+          "loginCommandCopied": "Login command copied",
+          "copyLoginCommand": "Copy login command",
+          "copyLoginCommandFailed": "Could not copy the command.",
+          "checkFailed": "Could not check readiness.",
+          "readiness": "Readiness",
+          "check": "Check",
+          "loginHint": "Run it in a terminal on this host; the sign-in page opens here.",
+          "probeUnsupported": "This host could not run the readiness check. It needs a POSIX shell, so Windows hosts are not checked yet."
         }
       },
       "right": {

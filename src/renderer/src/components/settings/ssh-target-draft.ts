@@ -1,3 +1,4 @@
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
   DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS,
   DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
@@ -6,6 +7,18 @@ import {
   type SshConfigHostResolution,
   type SshTarget
 } from '../../../../shared/ssh-types'
+
+/** One editable service-link row. `id` is render identity only; save stores label and url. */
+export type SshServiceLinkDraft = { id: string; label: string; url: string }
+
+/** Fresh draft row; the id keeps React keys attached to the row, not to its position. */
+export function createSshServiceLinkDraft(label = '', url = ''): SshServiceLinkDraft {
+  return {
+    id: createBrowserUuid(),
+    label,
+    url
+  }
+}
 
 export type EditingTarget = {
   label: string
@@ -20,6 +33,7 @@ export type EditingTarget = {
   systemSshConnectionReuse: boolean
   relayGracePeriodSeconds: string
   relayKeepAliveUntilReset: boolean
+  serviceLinks: SshServiceLinkDraft[]
 }
 
 export const EMPTY_FORM: EditingTarget = {
@@ -34,7 +48,8 @@ export const EMPTY_FORM: EditingTarget = {
   jumpHost: '',
   systemSshConnectionReuse: true,
   relayGracePeriodSeconds: String(DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS),
-  relayKeepAliveUntilReset: DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS === 0
+  relayKeepAliveUntilReset: DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS === 0,
+  serviceLinks: []
 }
 
 export function getEditingTargetForSshTarget(target: SshTarget): EditingTarget {
@@ -58,7 +73,10 @@ export function getEditingTargetForSshTarget(target: SshTarget): EditingTarget {
         : (target.relayGracePeriodSeconds ?? DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS)
     ),
     relayKeepAliveUntilReset:
-      (target.relayGracePeriodSeconds ?? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS) === 0
+      (target.relayGracePeriodSeconds ?? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS) === 0,
+    serviceLinks: (target.serviceLinks ?? []).map((link) =>
+      createSshServiceLinkDraft(link.label, link.url)
+    )
   }
 }
 
@@ -169,6 +187,20 @@ export function hasAdvancedConnectionValues(form: EditingTarget): boolean {
   )
 }
 
+function areServiceLinkDraftsEqual(
+  current: SshServiceLinkDraft[],
+  baseline: SshServiceLinkDraft[]
+): boolean {
+  // Why: ids are minted per draft build, so comparing them would mark every
+  // freshly opened form dirty.
+  return (
+    current.length === baseline.length &&
+    current.every(
+      (link, index) => link.label === baseline[index]?.label && link.url === baseline[index]?.url
+    )
+  )
+}
+
 export function isSshTargetFormDirty(current: EditingTarget, baseline: EditingTarget): boolean {
   return (
     current.label !== baseline.label ||
@@ -182,7 +214,8 @@ export function isSshTargetFormDirty(current: EditingTarget, baseline: EditingTa
     current.jumpHost !== baseline.jumpHost ||
     current.systemSshConnectionReuse !== baseline.systemSshConnectionReuse ||
     current.relayGracePeriodSeconds !== baseline.relayGracePeriodSeconds ||
-    current.relayKeepAliveUntilReset !== baseline.relayKeepAliveUntilReset
+    current.relayKeepAliveUntilReset !== baseline.relayKeepAliveUntilReset ||
+    !areServiceLinkDraftsEqual(current.serviceLinks, baseline.serviceLinks)
   )
 }
 

@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import type { SshConnectionManager } from '../ssh/ssh-connection-manager'
 import type { SshExecOptions } from '../ssh/ssh-connection-utils'
+import { captureSshExecChannel, type SshExecConnection } from '../ssh/ssh-exec-channel-capture'
 import { powerShellCommand, powerShellLiteral } from '../ssh/ssh-remote-powershell'
 import type { FilesystemPathFlavor } from '../../shared/filesystem-entry-types'
 import { sortDirEntries } from '../../shared/file-name-sort'
@@ -68,10 +69,8 @@ export function registerSshBrowseHandler(
   )
 }
 
-type SshBrowseConnection = NonNullable<ReturnType<SshConnectionManager['getConnection']>>
-
 function browseWithPosixShell(
-  conn: SshBrowseConnection,
+  conn: SshExecConnection,
   dirPath: string
 ): Promise<RemoteBrowseResult> {
   // Why: `command ls` skips aliases; `&&` makes a failing ls exit non-zero (not look empty); -1Ap = one-per-line + trailing / on dirs.
@@ -79,7 +78,7 @@ function browseWithPosixShell(
 }
 
 function browseWithWindowsPowerShell(
-  conn: SshBrowseConnection,
+  conn: SshExecConnection,
   dirPath: string
 ): Promise<RemoteBrowseResult> {
   if (/^[\\/]+$/.test(dirPath.trim())) {
@@ -110,135 +109,55 @@ function browseWithWindowsPowerShell(
 }
 
 async function runBrowseCommand(
-  conn: SshBrowseConnection,
+  conn: SshExecConnection,
   command: string,
   pathFlavor: FilesystemPathFlavor,
   options?: SshExecOptions
 ): Promise<RemoteBrowseResult> {
-  const channel = options ? await conn.exec(command, options) : await conn.exec(command)
-
-  return new Promise((resolve, reject) => {
-    let stdout = ''
-    let stderr = ''
-    let exitCode: number | null = null
-    let settled = false
-    let timeout: ReturnType<typeof setTimeout> | null = null
-
-    const cleanup = (): void => {
-      if (timeout) {
-        clearTimeout(timeout)
-        timeout = null
-      }
-      channel.off('data', onStdoutData)
-      channel.stderr.off('data', onStderrData)
-      channel.off('exit', onExit)
-      channel.off('close', onClose)
-      channel.off('error', onError)
-      channel.stderr.off('error', onError)
-    }
-    const rejectOnce = (error: Error): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      cleanup()
-      reject(error)
-    }
-    const closeChannel = (): void => {
-      const closable = channel as { close?: () => void; destroy?: () => void }
-      try {
-        if (typeof closable.close === 'function') {
-          closable.close()
-        } else if (typeof closable.destroy === 'function') {
-          closable.destroy()
-        }
-      } catch {
-        /* best effort */
-      }
-    }
-    const onTimeout = (): void => {
-      // Why: no relay deadline exists during add-project browsing, so bound this raw exec channel or Add Remote Project hangs forever.
-      rejectOnce(new Error('Remote directory listing timed out'))
-      closeChannel()
-    }
-    const resolveOnce = (result: RemoteBrowseResult): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      cleanup()
-      resolve(result)
-    }
-
-    const onStdoutData = (data: Buffer): void => {
-      stdout += data.toString()
-    }
-    const onStderrData = (data: Buffer): void => {
-      stderr += data.toString()
-    }
-    // `exit` fires before `close`; capture the code to tell a failed `ls` (that still printed `pwd`) from an empty listing.
-    const onExit = (code: number | null): void => {
-      exitCode = code
-    }
-    const onError = (error: Error): void => {
-      rejectOnce(error)
-    }
-    const onClose = (): void => {
-      // Why: a null exitCode (channel closed without exit status) isn't success; don't treat empty stdout as an empty dir.
-      if (exitCode !== 0) {
-        const msg =
-          stderr.trim() ||
-          (exitCode === null
-            ? 'Remote listing failed (channel closed without exit status)'
-            : `Remote listing failed (exit ${exitCode})`)
-        rejectOnce(new RemoteBrowseError(msg, exitCode))
-        return
-      }
-      if (stderr.trim() && !stdout.trim()) {
-        rejectOnce(new Error(stderr.trim()))
-        return
-      }
-
-      // Why: Windows OpenSSH exec emits CRLF; split on \r?\n so a trailing \r doesn't defeat the endsWith('/') dir check or leave a stray CR in names.
-      const lines = stdout.trim().split(/\r?\n/)
-      if (lines.length === 0) {
-        rejectOnce(new Error('Empty response from remote'))
-        return
-      }
-
-      const resolvedPath = lines[0]
-      const entries: RemoteDirEntry[] = []
-
-      for (let i = 1; i < lines.length; i++) {
-        const line = lines[i]
-        if (!line || line === './' || line === '../') {
-          continue
-        }
-        if (line.endsWith('/')) {
-          entries.push({ name: line.slice(0, -1), isDirectory: true })
-        } else {
-          entries.push({ name: line, isDirectory: false })
-        }
-      }
-
-      // Sort: directories first, then natural name order (matches the Explorer)
-      sortDirEntries(entries)
-
-      resolveOnce({ entries, resolvedPath, pathFlavor })
-    }
-
-    channel.on('data', onStdoutData)
-    channel.stderr.on('data', onStderrData)
-    channel.on('exit', onExit)
-    channel.on('close', onClose)
-    // Why: SSH exec streams emit `error` on transport loss; without a scoped listener a disappearing remote can become process-fatal.
-    channel.on('error', onError)
-    channel.stderr.on('error', onError)
-    timeout = setTimeout(onTimeout, SSH_BROWSE_TIMEOUT_MS)
-    if (typeof timeout.unref === 'function') {
-      timeout.unref()
-    }
+  const { stdout, stderr, exitCode } = await captureSshExecChannel(conn, command, {
+    timeoutMs: SSH_BROWSE_TIMEOUT_MS,
+    timeoutMessage: 'Remote directory listing timed out',
+    execOptions: options
   })
+
+  // Why: a null exitCode (channel closed without exit status) isn't success; don't treat empty stdout as an empty dir.
+  if (exitCode !== 0) {
+    const msg =
+      stderr.trim() ||
+      (exitCode === null
+        ? 'Remote listing failed (channel closed without exit status)'
+        : `Remote listing failed (exit ${exitCode})`)
+    throw new RemoteBrowseError(msg, exitCode)
+  }
+  if (stderr.trim() && !stdout.trim()) {
+    throw new Error(stderr.trim())
+  }
+
+  // Why: Windows OpenSSH exec emits CRLF; split on \r?\n so a trailing \r doesn't defeat the endsWith('/') dir check or leave a stray CR in names.
+  const lines = stdout.trim().split(/\r?\n/)
+  if (lines.length === 0) {
+    throw new Error('Empty response from remote')
+  }
+
+  const resolvedPath = lines[0]
+  const entries: RemoteDirEntry[] = []
+
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i]
+    if (!line || line === './' || line === '../') {
+      continue
+    }
+    if (line.endsWith('/')) {
+      entries.push({ name: line.slice(0, -1), isDirectory: true })
+    } else {
+      entries.push({ name: line, isDirectory: false })
+    }
+  }
+
+  // Sort: directories first, then natural name order (matches the Explorer)
+  sortDirEntries(entries)
+
+  return { entries, resolvedPath, pathFlavor }
 }
 
 // Why: exit 127 means powershell.exe wasn't found — the host isn't Windows, so surface the original POSIX failure instead.

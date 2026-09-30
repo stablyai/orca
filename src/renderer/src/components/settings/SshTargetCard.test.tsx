@@ -23,14 +23,22 @@ const target: SshTarget = {
 const HOST_KEY_ERROR =
   'Host key verification failed for build-01.internal. The key does not match the entry in your known_hosts file. ssh and git will refuse this host too. Run: ssh-keygen -R build-01.internal'
 
-async function renderCard(state: SshConnectionState | undefined): Promise<HTMLElement> {
+type CardOverrides = {
+  target?: SshTarget
+  onOpenServiceLink?: (url: string) => void
+}
+
+async function renderCard(
+  state: SshConnectionState | undefined,
+  overrides: CardOverrides = {}
+): Promise<HTMLElement> {
   const container = document.createElement('div')
   document.body.appendChild(container)
   await act(async () => {
     createRoot(container).render(
       <TooltipProvider>
         <SshTargetCard
-          target={target}
+          target={overrides.target ?? target}
           state={state}
           testing={false}
           onConnect={vi.fn()}
@@ -40,11 +48,22 @@ async function renderCard(state: SshConnectionState | undefined): Promise<HTMLEl
           onTest={vi.fn()}
           onEdit={vi.fn()}
           onRemove={vi.fn()}
+          onOpenServiceLink={overrides.onOpenServiceLink ?? vi.fn()}
         />
       </TooltipProvider>
     )
   })
   return container
+}
+
+function serviceLinksButton(container: HTMLElement, label: string): HTMLButtonElement {
+  const match = [...container.querySelectorAll('button')].find((candidate) =>
+    candidate.textContent?.includes(label)
+  )
+  if (!match) {
+    throw new Error(`missing ${label} service link button`)
+  }
+  return match
 }
 
 const errorState = (error: string): SshConnectionState => ({
@@ -80,5 +99,40 @@ describe('the connection error on an SSH target card', () => {
     const container = await renderCard(undefined)
 
     expect(container.textContent).not.toContain('Host key verification failed')
+  })
+})
+
+describe('the service links on an SSH target card', () => {
+  const linkUrl = 'https://build-box.example.ts.net'
+  const withServiceLinks: SshTarget = {
+    ...target,
+    serviceLinks: [{ label: 'Grafana', url: linkUrl }]
+  }
+
+  it('renders a ghost button per link', async () => {
+    const container = await renderCard(undefined, { target: withServiceLinks })
+    const button = serviceLinksButton(container, 'Grafana')
+
+    expect(button.getAttribute('data-variant')).toBe('ghost')
+    expect(container.textContent).toContain('Grafana')
+  })
+
+  it('opens the link URL on click', async () => {
+    const onOpenServiceLink = vi.fn()
+    const container = await renderCard(undefined, { target: withServiceLinks, onOpenServiceLink })
+
+    await act(async () => {
+      serviceLinksButton(container, 'Grafana').dispatchEvent(
+        new MouseEvent('click', { bubbles: true })
+      )
+    })
+
+    expect(onOpenServiceLink).toHaveBeenCalledWith(linkUrl)
+  })
+
+  it('renders no link buttons when the target has none', async () => {
+    const container = await renderCard(undefined)
+
+    expect(container.textContent).not.toContain('Grafana')
   })
 })

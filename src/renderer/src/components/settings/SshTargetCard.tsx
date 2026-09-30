@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import {
   CircleStop,
+  ExternalLink,
   Loader2,
   MonitorSmartphone,
   Pencil,
@@ -18,6 +19,8 @@ import {
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { isSshTargetConnecting, type SshTargetBusyAction } from './ssh-target-action-state'
+import { statusColor } from './ssh-status-color'
+import { SshTargetReadinessSection } from './SshTargetReadinessSection'
 import { translate } from '@/i18n/i18n'
 
 // ── Shared status helpers ────────────────────────────────────────────
@@ -32,23 +35,6 @@ export const STATUS_LABELS: Record<SshConnectionStatus, string> = {
   'reconnection-failed': 'Reconnection failed',
   get error() {
     return translate('auto.components.settings.SshTargetCard.18968ede9e', 'Error')
-  }
-}
-
-export function statusColor(status: SshConnectionStatus): string {
-  switch (status) {
-    case 'connected':
-      return 'bg-emerald-500'
-    case 'connecting':
-    case 'deploying-relay':
-    case 'reconnecting':
-      return 'bg-yellow-500'
-    case 'auth-failed':
-    case 'reconnection-failed':
-    case 'error':
-      return 'bg-red-500'
-    case 'disconnected':
-      return 'bg-muted-foreground/40'
   }
 }
 
@@ -91,6 +77,7 @@ type SshTargetCardProps = {
   onTest: (targetId: string) => void | Promise<void>
   onEdit: (target: SshTarget) => void
   onRemove: (targetId: string) => void
+  onOpenServiceLink: (url: string) => void
 }
 
 export function SshTargetCard({
@@ -104,7 +91,8 @@ export function SshTargetCard({
   onResetRelay,
   onTest,
   onEdit,
-  onRemove
+  onRemove,
+  onOpenServiceLink
 }: SshTargetCardProps): React.JSX.Element {
   const status: SshConnectionStatus = state?.status ?? 'disconnected'
   const [actionInFlight, setActionInFlight] = useState<
@@ -286,7 +274,7 @@ export function SshTargetCard({
       ref={handleCardRef}
       data-ssh-target-card=""
       data-ssh-target-label={target.label}
-      className="flex items-center gap-3 rounded-lg border border-border/50 bg-card/40 px-4 py-3"
+      className="flex flex-wrap items-center gap-3 rounded-lg border border-border/50 bg-card/40 px-4 py-3"
     >
       <Server className="size-4 shrink-0 text-muted-foreground" />
 
@@ -301,6 +289,23 @@ export function SshTargetCard({
           {target.identityFile ? ` \u2022 ${target.identityFile}` : ''}
           {` \u2022 ${terminalPersistence}`}
         </p>
+        {/* Why: links are host-scoped shortcuts, so they belong with the endpoint
+            instead of behind a menu; each opens in a browser tab. */}
+        {target.serviceLinks?.length ? (
+          <div className="mt-1 flex flex-wrap items-center gap-1">
+            {target.serviceLinks.map((link) => (
+              <Button
+                key={`${link.url}\u0000${link.label}`}
+                variant="ghost"
+                size="xs"
+                onClick={() => onOpenServiceLink(link.url)}
+              >
+                <ExternalLink className="size-3" />
+                {link.label}
+              </Button>
+            ))}
+          </div>
+        ) : null}
         {/* Why not truncate: host key failures put the remedy (`ssh-keygen -R <host>`) at the end,
             and a one-line clamp with no tooltip made it unreachable even on hover. */}
         {state?.error ? (
@@ -365,6 +370,8 @@ export function SshTargetCard({
           </>
         )}
       </div>
+
+      {status === 'connected' ? <SshTargetReadinessSection targetId={target.id} /> : null}
     </div>
   )
 }
