@@ -166,7 +166,11 @@ After an accepted success or failure report, immediately do exactly one:
 
 Release is post-settlement cleanup, not cancellation. Only an accepted
 settlement authorizes it; no other observation does. If release is uncertain,
-follow its exact recovery receipt and never substitute `terminal close`.
+follow its exact recovery receipt and never substitute `terminal close`. If
+`worker-start` recorded `created_child`, capture `<worktreePath>` from that
+start receipt **before** `worker-release`. After a confirmed released state,
+load `references/recovery-and-cleanup.md` and remove the leftover child unless
+fail-closed.
 
 A valid `worker_done` settles the Task and Dispatch automatically; do not follow
 it with `task-update --status completed`. Enumerate the terminals still owing a
@@ -189,7 +193,7 @@ older CLI rejects `--full`, keep this kernel's safety floor, use that command's
 | You are a dispatched worker and the live preamble does not answer your question, or `check` returned an error | `references/worker-contract.md`           |
 | New worktree, exact workspace, SSH, WSL, or connected-server placement                                        | `references/placement-and-remote.md`      |
 | Inbox replay, follow-up messages, group addresses, or decision gates                                          | `references/messaging-and-gates.md`       |
-| Failed/stopped/unknown attempts, retry, stop, abandon, retain, or uncertain release                           | `references/recovery-and-cleanup.md`      |
+| Failed/stopped/unknown attempts, retry, stop, abandon, retain, uncertain release, or leftover `created_child` | `references/recovery-and-cleanup.md`      |
 | Custom argv or terminal topology that `worker-start` cannot express                                           | `references/low-level-topology.md`        |
 | Any legacy label, adopted Run, compatibility receipt, or takeover                                             | `references/legacy-contract-migration.md` |
 
