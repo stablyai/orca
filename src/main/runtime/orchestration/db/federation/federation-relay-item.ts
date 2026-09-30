@@ -40,7 +40,9 @@ export function settleRemoteAttachmentInRelayTransaction(
   if (attachment.state === state) {
     return
   }
-  if (attachment.state !== 'ready') {
+  // `stop_unknown` settles too: the report is first-hand evidence that the unproven stop never
+  // landed. An in-flight `stopping` still loses to the stop fence, as on the home side.
+  if (!['ready', 'stop_unknown'].includes(attachment.state)) {
     throw new OrchestrationError(
       'request_mismatch',
       `Remote Dispatch ${dispatchId} cannot settle as ${state} from ${attachment.state}.`
@@ -49,9 +51,9 @@ export function settleRemoteAttachmentInRelayTransaction(
   this.db
     .prepare(
       `UPDATE remote_dispatch_attachments
-       SET state = ?, stage = ?, capability_hash = NULL,
+       SET state = ?, stage = ?, capability_hash = NULL, last_error = NULL,
            updated_at = datetime('now')
-       WHERE dispatch_id = ? AND state = 'ready'`
+       WHERE dispatch_id = ? AND state IN ('ready', 'stop_unknown')`
     )
     .run(state, stage, dispatchId)
 }

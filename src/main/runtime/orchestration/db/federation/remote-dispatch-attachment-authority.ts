@@ -172,6 +172,11 @@ export function verifyRemoteAttachmentAuthority(
   }
 ): boolean {
   const attachment = this.getRemoteDispatchAttachment(params.dispatchId)
+  // The hash now survives the stop intent, so the state is what fences an in-flight stop —
+  // matching the home side, where beginWorkerStop's revocation does it.
+  if (attachment?.state === 'stopping') {
+    return false
+  }
   if (
     !attachment?.capability_hash ||
     !params.capability ||

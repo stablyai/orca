@@ -28,8 +28,7 @@ export function beginRemoteAttachmentStop(
   this.db
     .prepare(
       `UPDATE remote_dispatch_attachments
-       SET state = 'stopping', stage = 'stop_requested', capability_hash = NULL,
-           updated_at = datetime('now')
+       SET state = 'stopping', stage = 'stop_requested', updated_at = datetime('now')
        WHERE dispatch_id = ? AND state IN ('ready', 'start_unknown')`
     )
     .run(dispatchId)
@@ -43,7 +42,8 @@ export function settleRemoteAttachmentStop(
   this.db
     .prepare(
       `UPDATE remote_dispatch_attachments
-       SET state = 'stopped', stage = 'process_stopped', updated_at = datetime('now')
+       SET state = 'stopped', stage = 'process_stopped', capability_hash = NULL,
+           updated_at = datetime('now')
        WHERE dispatch_id = ? AND state = 'stopping'`
     )
     .run(dispatchId)

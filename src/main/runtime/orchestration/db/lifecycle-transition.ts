@@ -89,7 +89,8 @@ const LEGAL_TRANSITIONS: Record<LifecycleEntity, Record<string, readonly string[
     start_unknown: ['start_unknown', 'ready', 'failed', 'stopping', 'stopped', 'abandoned'],
     ready: ['ready', 'succeeded', 'failed', 'stopping', 'abandoned'],
     stopping: ['stopping', 'stopped', 'stop_unknown', 'ready', 'failed', 'abandoned'],
-    stop_unknown: ['stop_unknown', 'failed', 'stopped', 'abandoned'],
+    // 'ready': a worker that reports after an unproven stop proves it never stopped.
+    stop_unknown: ['stop_unknown', 'ready', 'failed', 'stopped', 'abandoned'],
     succeeded: ['succeeded'],
     failed: ['failed'],
     stopped: ['stopped'],
