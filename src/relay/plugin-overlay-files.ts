@@ -61,9 +61,14 @@ export function writeOmoPrefillExtension(
   if (kind !== 'omo' || !source) {
     return
   }
-  const prefillPath = join(extensionsDir, 'orca-prefill.ts')
-  if (canOverwriteManagedExtension(prefillPath, marker)) {
-    writeFileSync(prefillPath, source)
+  // Best-effort: a prefill write failure must not throw into materializePi after status was written.
+  try {
+    const prefillPath = join(extensionsDir, 'orca-prefill.ts')
+    if (canOverwriteManagedExtension(prefillPath, marker)) {
+      writeFileSync(prefillPath, source)
+    }
+  } catch {
+    // ignore — status extension already written; prefill is optional
   }
 }
 
