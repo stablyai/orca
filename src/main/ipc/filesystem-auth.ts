@@ -42,6 +42,10 @@ export function authorizeExternalPath(targetPath: string): void {
     // Why: macOS canonicalizes /tmp to /private/tmp during read authorization.
     rememberAuthorizedExternalPath(realpathSync(resolvedTarget))
   } catch {}
+  try {
+    // Why: reads re-check the native realpath, which turns a Windows mapped or subst drive into its target; the JS one above keeps the drive letter.
+    rememberAuthorizedExternalPath(resolve(realpathSync.native(resolvedTarget)))
+  } catch {}
 }
 
 /**
