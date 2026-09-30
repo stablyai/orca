@@ -14,6 +14,7 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   'element-index': '--element-index <n>   Element index from get-app-state',
   title: '--title <text>         Custom title for the terminal tab (omit to reset)',
   enter: '--enter                Append Enter after sending text',
+  environment: '--environment <selector> Connect using a saved environment id or name',
   force:
     '--force                Force worktree removal when supported; does not force branch deletion',
   focus: '--focus                Reveal the created terminal session in Orca',
@@ -42,6 +43,8 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   'no-parent': '--no-parent            Force no parent lineage for unrelated work',
   'no-screenshot': '--no-screenshot       Skip screenshot capture after the operation',
   pages: '--pages <n>           Number of scroll pages',
+  'pairing-code':
+    '--pairing-code <code>  Connect to a remote Orca runtime using an orca://pair?... code',
   'parent-worktree':
     '--parent-worktree <selector> Parent worktree selector such as identity:<identity>, id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<path>, or active/current',
   path: '--path <path>          Path argument for the command',
@@ -49,6 +52,8 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   query: '--query <text>        Search text for matching refs',
   ref: '--ref <ref>            Base ref to persist for the repo',
   repo: '--repo <selector>      Repo selector such as id:<id>, name:<name>, or path:<path>',
+  'retry-request':
+    '--retry-request <id>   Resume the request Orca reported this ID for instead of starting a new one; idempotent',
   'restore-window': '--restore-window     Bring the target app/window forward before the operation',
   session: '--session <id>        Snapshot namespace for a related computer-use workflow',
   setup: '--setup run|skip|inherit Setup policy for repo-defined setup hooks',
@@ -63,6 +68,8 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   'report-path': '--report-path <path>  Report path to include in orchestration payload JSON',
   phase: '--phase <text>        Worker phase to include in orchestration payload JSON',
   'timeout-ms': '--timeout-ms <ms>     Maximum wait time before timing out',
+  'wait-submit':
+    '--wait-submit <seconds> Observe this accepted prompt without resending it (max 3600; needs --text --enter, no --interrupt)',
   'to-element-index': '--to-element-index <n> Destination element index from get-app-state',
   'to-x': '--to-x <x>             Destination window-local x coordinate',
   'to-y': '--to-y <y>             Destination window-local y coordinate',
