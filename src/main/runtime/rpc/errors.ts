@@ -29,6 +29,7 @@ import {
 import { GIT_DIFF_TOO_LARGE_CODE } from '../../../shared/git-diff-transport-budget'
 import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../../shared/automation-owner-conflict'
 import { ARCHIVE_HOOK_FAILED_REMOVAL_CODE } from '../../../shared/worktree/archive-hook-removal-gate'
+import { HOST_LOAD_EXCEEDED_CODE } from '../../../shared/host-load-gate'
 import { NESTED_WORKER_DEPTH_EXCEEDED_CODE } from '../../../shared/nested-worker-depth'
 import { WORKTREE_CREATE_COLLISION_CODE } from '../../../shared/new-workspace/worktree-create-collision'
 import { AGENT_LAUNCH_PANE_ALREADY_LIVE_CODE } from '../../../shared/agent-launch-pane-already-live'
@@ -148,6 +149,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   // with the same code the mobile-allowlist check does, so a caller reads one answer either way.
   'forbidden',
   NESTED_WORKER_DEPTH_EXCEEDED_CODE,
+  HOST_LOAD_EXCEEDED_CODE,
   GIT_DIFF_TOO_LARGE_CODE,
   ARTIFACT_SHARING_DISABLED_CODE,
   AGENT_SKILL_SHARING_DISABLED_CODE,

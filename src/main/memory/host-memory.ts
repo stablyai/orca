@@ -2,6 +2,7 @@ import { runProcess } from '../../shared/child-process/run-process'
 import { readFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import type { HostLoadSample } from '../../shared/host-load-gate'
 import type { HostAvailableMemorySource, HostMemory } from '../../shared/process-stats-types'
 
 const MEMORY_PRESSURE_TIMEOUT_MS = 1_000
@@ -10,6 +11,13 @@ const KIB = 1024
 
 let darwinAvailabilitySupported = true
 let linuxAvailabilitySupported = true
+
+export function collectHostLoad(): HostLoadSample {
+  return {
+    cpuCoreCount: Math.max(1, os.cpus().length),
+    loadAverage1m: nonNegativeNumber(os.loadavg()[0])
+  }
+}
 
 export async function collectHostMemory(): Promise<HostMemory> {
   const total = nonNegativeNumber(os.totalmem())
@@ -25,8 +33,7 @@ export async function collectHostMemory(): Promise<HostMemory> {
     availableMemorySource: preferred?.source ?? 'free-memory',
     usedMemory: used,
     memoryUsagePercent: total > 0 ? (used / total) * 100 : 0,
-    cpuCoreCount: Math.max(1, os.cpus().length),
-    loadAverage1m: nonNegativeNumber(os.loadavg()[0])
+    ...collectHostLoad()
   }
 }
 
@@ -41,8 +48,7 @@ export function fallbackHostMemory(): HostMemory {
     availableMemorySource: 'free-memory',
     usedMemory: used,
     memoryUsagePercent: total > 0 ? (used / total) * 100 : 0,
-    cpuCoreCount: Math.max(1, os.cpus().length),
-    loadAverage1m: nonNegativeNumber(os.loadavg()[0])
+    ...collectHostLoad()
   }
 }
 

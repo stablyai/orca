@@ -105,6 +105,7 @@ optional.
 | `task_not_found`     | No Task with that id, or not in the bound Run (`data.taskId`, `data.runId`)                                           | Check `task-list --json`; create the Task with `task-create` if it does not exist                                              |
 | `task_not_startable` | Task cannot start now: not `ready`, or invalid `--retry-of` (`data.status`, `data.unmetDependencies`, `data.retryOf`) | Wait for running dependencies with `check --wait`; retry or unblock failed ones; inspect `dispatch-show` if already dispatched |
 | `inject_rejected`    | `--inject` refused because no recognized agent runs in the target (`data.terminal`, `data.reason`)                    | Start a recognized agent there or pick another terminal; or dispatch without `--inject` and use `terminal send`                |
+| `host_load_exceeded` | `--max-load` refused the start: Run home per-core load is above the ratio (`data.loadRatio`, `data.maxLoad`)          | Leave the Task ready; keep `check --wait` on running workers and repeat the same `worker-start` after the next settlement      |
 | `runtime_error`      | Any other failure, including a target terminal that already owns an active Dispatch                                   | Read the message, inspect state, and do not retry unchanged                                                                    |
 
 ## Retry, stop, and abandon

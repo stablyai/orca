@@ -29,6 +29,16 @@ import { tearDownFailedWorkerStart } from './failed-worker-start-teardown'
 import { requireWorkerAuthority, type WorkerEffect } from './worker-topology'
 import { prepareLocalWorkerStart } from './worker-start-validation'
 import { deliverAndSettleWorkerStartReadiness } from './worker-start-readiness-settlement'
+import {
+  assertHostLoadPermitsWorkerStart,
+  type WorkerStartExecutionHostId
+} from './worker-start-host-load'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host'
+import { resolveWorktreeHostRouting } from '../../../../worktree-launch-host-repo'
 
 type WorkerStartMutation = {
   callerFingerprint: string
@@ -76,6 +86,14 @@ export async function startLocalWorker(args: {
     : requestedWorktree === 'current'
       ? await runtime.showManagedTerminalWorkspace(`id:${coordinatorWorktreeId}`)
       : await runtime.showManagedTerminalWorkspace(requestedWorktree)
+  assertHostLoadPermitsWorkerStart(
+    params,
+    await resolveWorkerStartExecutionHostId(runtime, {
+      creationWorktree,
+      resolvedWorktree,
+      repoSelector: params.repo
+    })
+  )
   if (params.terminal) {
     await assertExplicitWorkerTerminalUsable({
       runtime,
@@ -267,4 +285,29 @@ export async function startLocalWorker(args: {
       mode
     })
   }
+}
+
+/** The host that will actually run the worker, for the Run-home load gate. */
+async function resolveWorkerStartExecutionHostId(
+  runtime: Pick<OrcaRuntimeService, 'showRepo' | 'listRepos'>,
+  args: {
+    creationWorktree: { repoId: string } | undefined
+    resolvedWorktree: { repoId: string; hostId?: ExecutionHostId } | undefined
+    repoSelector: string | undefined
+  }
+): Promise<WorkerStartExecutionHostId | undefined> {
+  if (args.creationWorktree) {
+    const repo = await runtime.showRepo(args.repoSelector ?? args.creationWorktree.repoId)
+    return getRepoExecutionHostId(repo)
+  }
+  const worktree = args.resolvedWorktree
+  if (!worktree) {
+    return undefined
+  }
+  // A hostless snapshot can still be remote via a legacy row; rival rows must refuse, not guess local.
+  const routing = resolveWorktreeHostRouting(runtime.listRepos(), worktree)
+  if (routing.kind === 'ambiguous') {
+    return 'ambiguous'
+  }
+  return routing.kind === 'resolved' ? routing.hostId : LOCAL_EXECUTION_HOST_ID
 }

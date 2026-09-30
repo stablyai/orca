@@ -5,7 +5,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'worker-start'],
     summary: 'Start one supervised worker on the Run home or a connected Orca server',
     usage:
-      'orca orchestration worker-start (--task <task_id> | --spec <text>) [--on <saved-environment>] [--worktree <current|selector|new-child|new-top-level>] (--agent <agent> | --terminal <handle>) [--task-title <text>] [--deps <json_array>] [--parent <task_id>] [--model <id>] [--effort <level>] [--name <name>] [--repo <selector>] [--base-branch <ref>] [--display-name <text>] [--comment <text>] [--setup <run|skip|inherit>] [--retry-of <dispatch_id>] [--timeout-ms <n>] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
+      'orca orchestration worker-start (--task <task_id> | --spec <text>) [--on <saved-environment>] [--worktree <current|selector|new-child|new-top-level>] (--agent <agent> | --terminal <handle>) [--task-title <text>] [--deps <json_array>] [--parent <task_id>] [--model <id>] [--effort <level>] [--name <name>] [--repo <selector>] [--base-branch <ref>] [--display-name <text>] [--comment <text>] [--setup <run|skip|inherit>] [--retry-of <dispatch_id>] [--timeout-ms <n>] [--max-load <ratio>] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'task',
@@ -27,6 +27,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
       'terminal',
       'retry-of',
       'timeout-ms',
+      'max-load',
       'run',
       'from',
       'retry-request'
@@ -34,6 +35,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     identityFlagRoles: { from: 'caller', terminal: 'target' },
     notes: [
       'Current and existing worktrees never rerun setup; a fresh agent terminal is created unless --terminal is explicit.',
+      '--max-load <ratio> refuses the start with host_load_exceeded while the Run home 1-minute load average divided by its CPU cores is above the ratio; nothing is created, so retry the same command later. It cannot combine with --on. Windows reports no load average, so the gate never trips there.',
       'When reusing --terminal, pass --worktree for that terminal; current means the coordinator worktree.',
       '--agent takes an Orca agent id enabled on the worker server, such as claude, codex, cursor, antigravity, muse, zcode, opencode, or opencode2.',
       '--model supports Claude, Codex, Cursor, Antigravity, and Muse opaque provider model ids; --effort requires --model. Neither can combine with --terminal. Other agents, including opencode and zcode, launch with the model from their own config.',

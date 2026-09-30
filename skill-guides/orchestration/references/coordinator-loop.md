@@ -40,6 +40,25 @@ connected worker server must advertise launch-preference support before Orca
 forwards either field. Compare `launch.requested` with `launch.effective`; never
 claim a model or effort from requested arguments alone.
 
+## Heavy work and host load
+
+Orca does not cap concurrent workers. A wave of test suites, builds, or
+reindexes can saturate the Run home and starve the workers already running.
+For a Task like that, pass `--max-load <ratio>`: the host refuses the start with
+`host_load_exceeded` while its 1-minute load average divided by its CPU cores is
+above the ratio, and creates nothing, so the Task stays `ready`:
+
+```text
+ORCA orchestration worker-start --task <task_id> --worktree current --agent codex --max-load 0.7 --json
+```
+
+On `host_load_exceeded`, do not retry in a loop: continue the `check --wait`
+cycle and repeat the same command after the next `worker_done` or wait timeout.
+`data.loadRatio` and `data.maxLoad` show how far above the limit the host was.
+Light Tasks need no ratio and keep starting in parallel. The flag gates the Run
+home only and cannot combine with `--on`; Windows reports no load average, so
+the gate never trips there.
+
 ## Reuse after settlement
 
 Choose the terminal's next owner before acknowledging the Delivery. When the

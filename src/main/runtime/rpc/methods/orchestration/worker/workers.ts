@@ -13,6 +13,7 @@ import {
   resolveWorkerStartReadinessTimeoutMs
 } from '../../../../../../shared/orchestration-timing-budgets'
 import { assertWorkerStartTaskSpecWithinPromptBudget } from './worker-start-prompt-budget'
+import { assertMaxLoadNotCombinedWithOn } from './worker-start-host-load'
 
 export const ORCHESTRATION_WORKER_START_METHODS = [
   defineMethod({
@@ -50,6 +51,7 @@ export const ORCHESTRATION_WORKER_START_METHODS = [
         )
       }
       await assertWorkerStartTaskSpecWithinPromptBudget(params.spec ?? existingTask!.spec)
+      assertMaxLoadNotCombinedWithOn(params)
       const mode = decideWorkerStartMode({
         params,
         settings: readWorkerStartModeSettings(runtime)

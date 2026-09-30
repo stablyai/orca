@@ -10,6 +10,12 @@ import {
   AutomationOwnerConflictError
 } from '../../../shared/automation-owner-conflict'
 import {
+  HOST_LOAD_EXCEEDED_CODE,
+  HOST_LOAD_EXCEEDED_NEXT_STEPS,
+  evaluateHostLoadGate,
+  hostLoadExceededMessage
+} from '../../../shared/host-load-gate'
+import {
   NESTED_WORKER_DEPTH_EXCEEDED_CODE,
   NESTED_WORKER_DEPTH_EXCEEDED_NEXT_STEPS,
   nestedWorkerDepthExceededMessage
@@ -260,6 +266,30 @@ describe('automation owner conflicts', () => {
   it('still lets an old runtime be classified from the message tail', () => {
     const error = new AutomationOwnerConflictError(AUTOMATION_OWNER_CONFLICT_CODES.ownerChanged)
     expect(error.message.endsWith(`: ${AUTOMATION_OWNER_CONFLICT_CODES.ownerChanged}`)).toBe(true)
+  })
+})
+
+describe('host load gate', () => {
+  it('keeps its code, load sample and next steps instead of collapsing to runtime_error', () => {
+    const verdict = evaluateHostLoadGate({ cpuCoreCount: 8, loadAverage1m: 12 }, 0.7)
+    const failure = mapRuntimeError(
+      'rpc_load',
+      { runtimeId: 'runtime-1' },
+      new OrchestrationError(HOST_LOAD_EXCEEDED_CODE, hostLoadExceededMessage(verdict), {
+        effectsApplied: false,
+        loadRatio: verdict.loadRatio,
+        maxLoad: 0.7,
+        nextSteps: [...HOST_LOAD_EXCEEDED_NEXT_STEPS]
+      })
+    )
+
+    expect(failure.error.code).toBe(HOST_LOAD_EXCEEDED_CODE)
+    expect(failure.error.data).toMatchObject({
+      effectsApplied: false,
+      loadRatio: 1.5,
+      maxLoad: 0.7,
+      nextSteps: [...HOST_LOAD_EXCEEDED_NEXT_STEPS]
+    })
   })
 })
 
