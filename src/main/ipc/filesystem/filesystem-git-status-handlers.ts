@@ -52,12 +52,14 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
         bypassEffectiveUpstreamNegativeCache?: boolean
         reuseLineStats?: boolean
         branchLineTotalMergeBase?: string
+        showSubmoduleChanges?: boolean
         requestToken?: string
       }
     ): Promise<GitStatusResult> => {
       const controller = gitStatusCancellations.begin(event, args.requestToken)
       const options = {
         includeIgnored: args.includeIgnored ?? false,
+        ...(args.showSubmoduleChanges === true ? { showSubmoduleChanges: true } : {}),
         admissionTier: args.admissionTier ?? ('status' as const),
         ...(args.includeLineStats === false ? { includeLineStats: false } : {}),
         ...(args.reuseLineStats === true ? { reuseLineStats: true } : {}),
@@ -87,7 +89,10 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
         return await getStatus(worktreePath, {
           ...options,
           ...gitOptions,
-          ...(sharedLinkPaths.length > 0 ? { sharedLinkPaths } : {})
+          ...(sharedLinkPaths.length > 0 ? { sharedLinkPaths } : {}),
+          // Why: the repo record owns this opt-in, so every status caller gets it
+          // without threading a flag through each refresh path.
+          ...(repo?.showSubmoduleChanges === true ? { showSubmoduleChanges: true } : {})
         })
       } finally {
         gitStatusCancellations.finish(event, args.requestToken, controller)

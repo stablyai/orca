@@ -7,5 +7,7 @@ export type GitProviderStatusOptions = {
   reuseLineStats?: boolean
   /** Merge-base OID to measure the branch line total against; omit to skip the work. */
   branchLineTotalMergeBase?: string
+  /** Read submodule rows even when `.gitmodules` sets `ignore = all`. */
+  showSubmoduleChanges?: boolean
   signal?: AbortSignal
 }

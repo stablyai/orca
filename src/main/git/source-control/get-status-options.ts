@@ -13,6 +13,11 @@ export type GetStatusOptions = GitRuntimeOptions & {
    */
   limit?: number
   bypassEffectiveUpstreamNegativeCache?: boolean
+  /** Pass `--ignore-submodules=none` so submodule rows survive a superproject
+   *  whose `.gitmodules` sets `ignore = all`. Off by default: that config is
+   *  deliberate in most repos, and flipping it would add a gitlink row per
+   *  submodule to every panel. */
+  showSubmoduleChanges?: boolean
   /** Paths Orca may have symlinked into this worktree (per-user shared paths
    *  plus `orca.yaml` shared directories). Untracked entries that are one of
    *  these *and* really symlinks are dropped: Git cannot ignore them when the

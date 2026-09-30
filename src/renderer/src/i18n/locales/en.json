@@ -3984,7 +3984,9 @@
             }
           },
           "tooltip": {
-            "zcode": { "mcp": "MCP" },
+            "zcode": {
+              "mcp": "MCP"
+            },
             "cedb7b99e3": "% used",
             "6d6df77f41": "No data available",
             "7f7f208060": "Monthly",
@@ -10467,7 +10469,14 @@
             "wsl": "wsl",
             "distro": "distro",
             "agentRuntime": "agent runtime",
-            "skillRuntime": "skill runtime"
+            "skillRuntime": "skill runtime",
+            "showSubmoduleChanges": "Show Submodule Changes",
+            "showSubmoduleChangesDescription": "Read submodule changes in Source Control even when this repo hides them.",
+            "submodule": "submodule",
+            "submodules": "submodules",
+            "gitmodules": "gitmodules",
+            "monorepo": "monorepo",
+            "gitlink": "gitlink"
           }
         },
         "runtime": {
@@ -12215,6 +12224,10 @@
           "usageLabel": "Usage",
           "noAllowance": "Cursor reported no usage allowance for this account.",
           "staleUsage": "Last known usage — the latest refresh failed: {{reason}}"
+        },
+        "RepositorySubmoduleChangesSection": {
+          "longDescription": "A repo whose .gitmodules sets ignore = all reports no submodule changes at all, so Source Control stays empty while you work inside a submodule. Turn this on to list them anyway. Each changed submodule adds one row you can expand for its per-file changes, including submodules whose recorded commit simply moved.",
+          "title": "Show Submodule Changes"
         }
       },
       "right": {

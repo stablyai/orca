@@ -21,11 +21,12 @@ import { matchesSettingsSearch } from './settings-search'
 import { useAppStore } from '../../store'
 import { getRepositoryIconSectionId } from './repository-settings-targets'
 import { RepositoryIconPicker } from './RepositoryIconPicker'
-import { getRepositoryPaneSearchEntries } from './repository-search'
+import { getRepositoryPaneSearchEntries, isRepositoryIdentityEntry } from './repository-search'
 import { RepositoryHostSetupsSection } from './RepositoryHostSetupsSection'
 import { RepoSettingsDraftInput } from './RepositorySettingsDraftInput'
 import { RepositoryForkSyncSection } from './RepositoryForkSyncSection'
 import { RepositoryGitHubAccountSection } from './RepositoryGitHubAccountSection'
+import { RepositorySubmoduleChangesSection } from './RepositorySubmoduleChangesSection'
 import { translate } from '@/i18n/i18n'
 import { RepositoryWindowsRuntimeSection } from './RepositoryWindowsRuntimeSection'
 import { matchesRepositoryIdentitySearch } from './repository-identity-search'
@@ -179,21 +180,7 @@ export function RepositoryPane({
   }
 
   const allEntries = getRepositoryPaneSearchEntries(repo, { isLocalWindowsProject })
-  const identityEntryTitles = new Set([
-    translate('auto.components.settings.repository.search.7e1e456a95', 'Display Name'),
-    translate('auto.components.settings.repository.search.b24f00294a', 'Project Icon'),
-    translate('auto.components.settings.repository.search.githubAccount', 'GitHub Account'),
-    translate(
-      'auto.components.settings.repository.search.keepForkUpToDate',
-      'Keep Fork Up to Date'
-    ),
-    translate('auto.components.settings.repository.search.094adbe930', 'Default Worktree Base'),
-    translate('auto.components.settings.repository.search.443d127b5a', 'Worktree Location'),
-    translate('auto.components.settings.repository.search.externalWorktrees', 'External worktrees'),
-    translate('auto.components.settings.repository.search.projectRuntime', 'Project Runtime'),
-    translate('auto.components.settings.repository.search.c5266c2c9d', 'Remove Project')
-  ])
-  const identityEntries = allEntries.filter((entry) => identityEntryTitles.has(entry.title))
+  const identityEntries = allEntries.filter((entry) => isRepositoryIdentityEntry(entry.title))
   const sparsePresetEntries = allEntries.filter((entry) =>
     ['Sparse Checkout Presets'].includes(entry.title)
   )
@@ -370,6 +357,12 @@ export function RepositoryPane({
             />
 
             <RepositoryGitHubAccountSection
+              repo={repo}
+              updateRepo={updateSelectedRepo}
+              forceVisible={forceFullPaneForRepoMatch}
+            />
+
+            <RepositorySubmoduleChangesSection
               repo={repo}
               updateRepo={updateSelectedRepo}
               forceVisible={forceFullPaneForRepoMatch}

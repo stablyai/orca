@@ -33,6 +33,7 @@ export const GIT_METHODS = [
         params.reuseLineStats === undefined &&
         params.branchLineTotalMergeBase === undefined &&
         params.admissionTier === undefined &&
+        params.showSubmoduleChanges === undefined &&
         signal === undefined
           ? undefined
           : {
@@ -46,6 +47,7 @@ export const GIT_METHODS = [
                 ? { bypassEffectiveUpstreamNegativeCache: true }
                 : {}),
               ...(params.reuseLineStats === true ? { reuseLineStats: true } : {}),
+              ...(params.showSubmoduleChanges === true ? { showSubmoduleChanges: true } : {}),
               ...(params.branchLineTotalMergeBase === undefined
                 ? {}
                 : { branchLineTotalMergeBase: params.branchLineTotalMergeBase }),
