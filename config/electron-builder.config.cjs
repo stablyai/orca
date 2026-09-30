@@ -1,4 +1,11 @@
-const { chmodSync, existsSync, readdirSync, readFileSync, writeFileSync } = require('node:fs')
+const {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync
+} = require('node:fs')
 const { execFileSync } = require('node:child_process')
 const { join, resolve } = require('node:path')
 const electronBuilderNativeRebuild = require('./scripts/electron-builder-native-rebuild.cjs')
@@ -728,8 +735,21 @@ function chmodMacServeSimHelpers(resourcesDir, electronPlatformName) {
     join(resourcesDir, 'node_modules', 'serve-sim', 'bin', 'serve-sim-bin'),
     join(resourcesDir, 'node_modules', 'serve-sim', 'dist', 'simcam', 'serve-sim-camera-helper')
   ]
+  // Why: the npm serve-sim-bin targets macOS 14, but Orca supports macOS 12+.
+  // Swap in the helper built by build-serve-sim-helper-macos.mjs (minos 12.0).
+  const compatHelper = resolve(
+    __dirname,
+    '..',
+    'native/serve-sim-helper-macos/.build/release/serve-sim-bin'
+  )
+  if (isMacRelease && !existsSync(compatHelper)) {
+    throw new Error(`Missing macOS 12-compatible serve-sim helper at ${compatHelper}`)
+  }
   for (const helperPath of helperPaths) {
     if (existsSync(helperPath)) {
+      if (helperPath.endsWith('serve-sim-bin') && existsSync(compatHelper)) {
+        copyFileSync(compatHelper, helperPath)
+      }
       chmodSync(helperPath, 0o755)
     }
   }
