@@ -313,7 +313,11 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     filePredicate: (filePath) => basename(filePath) === 'session.jsonl'
   },
   qoder: {
-    rootDirs: () => [QODER_PROJECTS_DIR],
+    rootDirs: (options, wslHomeDirs) =>
+      sessionRootDirs(options.qoderProjectsDir ?? QODER_PROJECTS_DIR, wslHomeDirs, [
+        '.qoder',
+        'projects'
+      ]),
     extensions: ['.jsonl'],
     directoryPredicate: (directoryName) => directoryName !== SUBAGENT_DIR_NAME
   }

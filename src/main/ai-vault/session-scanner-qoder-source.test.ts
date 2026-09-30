@@ -38,4 +38,25 @@ describe('Qoder AI Vault source registration', () => {
       : true
     expect(isNormalDirAllowed).toBe(true)
   })
+
+  it('includes WSL project roots when WSL home directories are provided', () => {
+    const qoderSource = AI_VAULT_AGENT_SOURCES.qoder
+    expect(qoderSource).toBeDefined()
+    if (!qoderSource) {
+      return
+    }
+
+    const defaultProjectDir = join(homedir(), '.qoder', 'projects')
+    const wslHomeDirectory = '/home/wsluser'
+    const expectedWslProjectDir = join(wslHomeDirectory, '.qoder', 'projects')
+
+    const declaredRoots = qoderSource.rootDirs({}, [wslHomeDirectory])
+    expect(declaredRoots).toEqual([defaultProjectDir, expectedWslProjectDir])
+
+    const customOverrideDir = '/custom/qoder/projects'
+    const overriddenRoots = qoderSource.rootDirs({ qoderProjectsDir: customOverrideDir }, [
+      wslHomeDirectory
+    ])
+    expect(overriddenRoots).toEqual([customOverrideDir, expectedWslProjectDir])
+  })
 })
