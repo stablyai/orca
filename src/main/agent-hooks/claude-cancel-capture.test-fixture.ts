@@ -29,12 +29,14 @@ export type CapturedCancel = {
   hooks_before_next_typed_prompt: number[]
 }
 export type CapturedKill = { kind: 'kill'; t: number; needle: string }
-/** Raw `system`/`agents_killed` lines found in the CLI's own session transcript at this instant. */
+/** Raw scrubbed lines the CLI appended to its own session transcript since the previous
+ *  transcript record, in file order; a replay writes them at this position. The idle Ctrl+C
+ *  captures kept only `system`/`agents_killed` lines. */
 export type CapturedTranscriptScan = {
   kind: 'transcript'
   t: number
   label: string
-  agents_killed_records: string[]
+  lines: string[]
 }
 export type CapturedRecord = CapturedHook | CapturedCancel | CapturedKill | CapturedTranscriptScan
 

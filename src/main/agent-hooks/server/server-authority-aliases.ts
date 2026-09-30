@@ -227,6 +227,9 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
     }
     this.clearAssistantMessageRetry(previousOwnerPaneKey)
     this.clearTranscriptPoll(previousOwnerPaneKey)
+    if (transferredStatus) {
+      this.resumeClaudeTranscriptWatch(transferredStatus)
+    }
     // Why: the live process keeps posting the physical source key after detach; persist a chain-safe mapping to the current owner.
     this.legacyPaneKeyAliases.set(physicalPaneKey, {
       stablePaneKey: toPaneKey,

@@ -18,7 +18,6 @@ import {
   writeEndpointFile
 } from '../shared/agent-hook-listener/endpoint-publication'
 import { HOOK_REQUEST_SLOWLORIS_MS } from '../shared/agent-hook-listener/listener-limits'
-import { normalizeHookPayload } from '../shared/agent-hook-listener'
 import { mergeAgentHookRequestHeaders } from '../shared/agent-hook-listener/hook-envelope'
 import { readRequestBody } from '../shared/agent-hook-listener/request-body'
 import { resolveHookSource } from '../shared/agent-hook-listener/source-routing'
@@ -246,6 +245,10 @@ export class RelayAgentHookServer {
     return { port: this.port, token: this.token, endpointFilePath: this.endpointFilePath }
   }
 
+  _getStateForTests(): HookListenerState {
+    return this.state
+  }
+
   // ─── Private ──────────────────────────────────────────────────────
 
   private async handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -275,9 +278,7 @@ export class RelayAgentHookServer {
       }
       const body = await readRequestBody(req)
       const hookBody = mergeAgentHookRequestHeaders(body, req.headers)
-      const event = normalizeHookPayload(this.state, source, hookBody, this.env, {
-        deferCompactOwnershipToClient: true
-      })
+      const event = this.retryScheduler.normalizeHook(source, hookBody)
       if (event) {
         // TODO: once normalizeHookPayload returns validated env/version, drop bodyEnv/bodyVersion and source them from the listener result.
         const env = hookBodyEnv(hookBody)
@@ -334,6 +335,7 @@ export class RelayAgentHookServer {
     this.lastEnvelopeMetaByPaneKey.delete(event.paneKey)
     this.lastEnvelopeMetaByPaneKey.set(event.paneKey, { source, env, version })
     this.forward(buildRelayHookEnvelope(event, source, env, version, options))
+    this.retryScheduler.syncClaudeTranscriptWatch(event, source, env, version)
   }
 
   private ingestSpoolRecord(record: SpoolRecord): void {
@@ -341,9 +343,7 @@ export class RelayAgentHookServer {
       return
     }
     const body = buildSpoolHookBody(record)
-    const event = normalizeHookPayload(this.state, record.source, body, this.env, {
-      deferCompactOwnershipToClient: true
-    })
+    const event = this.retryScheduler.normalizeHook(record.source, body)
     if (!event) {
       return
     }

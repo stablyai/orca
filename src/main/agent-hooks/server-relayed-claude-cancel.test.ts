@@ -2,7 +2,7 @@
 // the hooks go through a real relay-side listener, which owns the provider records, and reach the
 // desktop only as relayed payloads. The relay never learns of the cancel the desktop infers from
 // Ctrl+C, so everything it restates afterwards still says the main agent is working.
-import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -407,7 +407,7 @@ it('keeps a relayed waiting child visible when the main agent is cancelled', () 
 describe('a relayed idle-prompt Ctrl+C that killed a background agent (captured)', () => {
   const records = loadCapture('claude-idle-ctrl-c-bg-agent-hooks')
   const scan = records.find((record) => record.kind === 'transcript')
-  const killedLine = scan?.kind === 'transcript' ? scan.agents_killed_records[0] : undefined
+  const killedLine = scan?.kind === 'transcript' ? scan.lines[0] : undefined
   if (!killedLine) {
     throw new Error('the capture has no agents_killed line')
   }
@@ -443,6 +443,14 @@ describe('a relayed idle-prompt Ctrl+C that killed a background agent (captured)
       vi.setSystemTime(t0 + hook.t * 1000)
       await pane.post({ ...hook.payload, transcript_path: transcript, ...override })
     }
+  }
+
+  /** Hand-built: a line no reason admits, then waits for the relay tick that reads past it. */
+  async function afterRelayTick(pane: SshPane, transcript: string): Promise<void> {
+    appendFileSync(transcript, '{"type":"user"}\n')
+    const end = statSync(transcript).size
+    const cursors = pane.relay._getStateForTests().claudeTranscriptCursorByPaneKey
+    await vi.waitFor(() => expect(cursors.get(PANE)?.offset).toBe(end), { timeout: 3_000 })
   }
 
   async function kill(pane: SshPane, transcript: string): Promise<void> {
@@ -529,6 +537,63 @@ describe('a relayed idle-prompt Ctrl+C that killed a background agent (captured)
       mainAgent: { state: 'done', outcome: 'cancellation' }
     })
     expect(row(pane.desktop).subagents).toBeUndefined()
+  })
+
+  it("keeps the desktop's inferred cancel when the relay ticks past the window with its main agent working", async () => {
+    const pane = await startSshPane(new AgentHookServer())
+    const transcript = transcriptFile()
+    await replay(pane, transcript, [0, 1, 2, 3, 4, 5, 6, 7, 8])
+    expect(pressCtrlC(pane.desktop)).toBe(true)
+    const cancelled = row(pane.desktop)
+    // Hand-built timing: a late main-agent hook of the cancelled turn, which the latch holds.
+    vi.setSystemTime(Date.now() + 100)
+    await pane.post({ ...hookAt(records, 7).payload, transcript_path: transcript })
+    expect(row(pane.desktop)).toEqual(cancelled)
+    vi.setSystemTime(Date.now() + 20_000)
+    const forwarded = vi.spyOn(pane.desktop, 'ingestRemote')
+    await afterRelayTick(pane, transcript)
+    // The relay's cache already shows its records, so its tick has nothing to restate.
+    expect(forwarded).not.toHaveBeenCalled()
+    expect(row(pane.desktop)).toEqual(cancelled)
+    // The child's next hook still names the relay's working main agent; the desktop re-folds it.
+    await pane.post({ ...hookAt(records, 10).payload, transcript_path: transcript })
+    const refolded = row(pane.desktop)
+    expect(refolded.mainAgent).toMatchObject({ state: 'done', outcome: 'cancellation' })
+    await afterRelayTick(pane, transcript)
+    expect(row(pane.desktop)).toEqual(refolded)
+  })
+
+  it('catches up on the relay before it normalizes the next hook', async () => {
+    const pane = await startSshPane(new AgentHookServer())
+    const transcript = transcriptFile()
+    await replay(pane, transcript, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    // Hand-built timing: the next typed prompt reaches the relay before any tick read the line.
+    vi.setSystemTime(killedAt + 120)
+    appendFileSync(transcript, `${killedLine}\n`)
+    await replay(pane, transcript, [11])
+    expect(row(pane.desktop)).toMatchObject({ state: 'working', mainAgent: { state: 'working' } })
+    expect(row(pane.desktop).subagents).toBeUndefined()
+  })
+
+  it('still retires the child on the desktop when the relay read the kill inside a hook the desktop held', async () => {
+    const pane = await startSshPane(new AgentHookServer())
+    const transcript = transcriptFile()
+    await replay(pane, transcript, [0, 1, 2, 3, 4, 5, 6, 7, 8])
+    expect(pressCtrlC(pane.desktop)).toBe(true)
+    // Hand-built timing: the idle Ctrl+C's kill line, then a late main-agent hook of the cancelled
+    // turn reaching the relay before its tick. The relay's catch-up folds the kill into that
+    // hook's row, which the desktop's latch holds as late tool progress.
+    vi.setSystemTime(killedAt + 120)
+    appendFileSync(transcript, `${killedLine}\n`)
+    await pane.post({ ...hookAt(records, 7).payload, transcript_path: transcript })
+    expect(row(pane.desktop).subagents).toEqual([expect.objectContaining({ state: 'working' })])
+    // The relay's next tick restates the kill as the child's own stop, which the desktop re-folds.
+    await vi.waitFor(() => expect(row(pane.desktop).subagents).toBeUndefined(), { timeout: 3_000 })
+    expect(row(pane.desktop)).toMatchObject({
+      state: 'working',
+      workingMode: 'monitoring',
+      mainAgent: { state: 'done', outcome: 'cancellation' }
+    })
   })
 
   it('restores no killed child when the desktop restarts', async () => {

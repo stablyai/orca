@@ -1,15 +1,15 @@
+import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
 import {
   hasPendingAgentResultText,
   preparePendingGrokResultDiscovery
 } from '../../../shared/agent-hook-listener/grok-result-discovery'
 import type { AgentHookSource } from '../../../shared/agent-hook-relay'
-import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import {
-  hookTranscriptPollUpdate,
   shouldPollHookTranscript,
-  transcriptPollAnchor
+  transcriptPollUpdate
 } from '../../../shared/agent-hook-listener/transcript-poll-policy'
 import { CodexSubagentPollScheduler } from '../../../shared/codex-subagent-poll-scheduler'
+import { ClaudeTranscriptWatch } from '../../../shared/agent-hook-listener/claude-transcript-watch-ticks'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import {
   ASSISTANT_MESSAGE_RETRY_ATTEMPTS,
@@ -21,7 +21,7 @@ import { AgentHookServerStatusUpdate } from './server-status-update'
 type TranscriptPoll = {
   source: AgentHookSource
   body: unknown
-  original: AgentHookEventPayload
+  original: EnrichedAgentHookEventPayload
 }
 
 export abstract class AgentHookServerStatusRetries extends AgentHookServerStatusUpdate {
@@ -29,9 +29,17 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     CODEX_SUBAGENT_POLL_MS,
     (paneKey, poll) => this.runTranscriptPoll(paneKey, poll)
   )
+  private readonly claudeTranscriptWatch = new ClaudeTranscriptWatch({
+    state: this.state,
+    isListening: () => this.server !== null,
+    publish: (row) => {
+      this.applyNormalizedStatus(row)
+    }
+  })
 
   protected clearAllTranscriptPolls(): void {
     this.transcriptPollScheduler.clearAll()
+    this.claudeTranscriptWatch.clearAll()
   }
 
   protected clearAssistantMessageRetry(paneKey: string): void {
@@ -45,16 +53,29 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
 
   protected clearTranscriptPoll(paneKey: string): void {
     this.transcriptPollScheduler.clear(paneKey)
-    this.state.claudeAgentsKilledCursorByPaneKey.delete(paneKey)
+    this.claudeTranscriptWatch.clear(paneKey)
+  }
+
+  /** Resumes a moved pane's Claude transcript watch under the key its row and cursor moved to. */
+  protected resumeClaudeTranscriptWatch(moved: EnrichedAgentHookEventPayload): void {
+    // Why: a move is no accepted row; only a cursor one armed may keep ticking.
+    if (this.state.claudeTranscriptCursorByPaneKey.has(moved.paneKey)) {
+      this.claudeTranscriptWatch.sync(moved)
+    }
   }
 
   protected scheduleTranscriptPoll(
     source: AgentHookSource,
     body: unknown,
-    original: AgentHookEventPayload
+    original: EnrichedAgentHookEventPayload
   ): void {
+    if (source === 'claude') {
+      // Why: `original` is the row the store accepted, the only row that may arm or repoint.
+      this.claudeTranscriptWatch.sync(original)
+      return
+    }
     // Why: a nested CLI of another kind inherits ORCA_PANE_KEY, so clearing here would silently end a live poll.
-    if (source !== 'codex' && source !== 'muse' && source !== 'claude') {
+    if (source !== 'codex' && source !== 'muse') {
       return
     }
     this.transcriptPollScheduler.clear(original.paneKey)
@@ -66,19 +87,21 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
 
   private runTranscriptPoll(paneKey: string, poll: TranscriptPoll): void {
     const { source, body, original } = poll
-    const anchor = transcriptPollAnchor(
-      source,
-      this.state.lastStatusByPaneKey.get(original.paneKey),
-      original
-    )
-    if (paneKey !== original.paneKey || !this.server || !anchor) {
+    // Keep the identity check at callback time: a newer event supersedes this
+    // payload even when its pane still has transcript children.
+    if (
+      paneKey !== original.paneKey ||
+      !this.server ||
+      this.state.lastStatusByPaneKey.get(original.paneKey) !== original
+    ) {
       return
     }
-    const update = hookTranscriptPollUpdate(this.state, source, body, anchor, this.env)
-    if (update === null) {
+    const normalized = normalizeHookPayload(this.state, source, body, this.env)
+    if (!normalized) {
       return
     }
-    const next = update ? this.applyNormalizedStatus(update) : anchor
+    const update = transcriptPollUpdate(source, original, normalized)
+    const next = update ? this.applyNormalizedStatus(update) : original
     if (next) {
       this.scheduleTranscriptPoll(source, body, next)
     }

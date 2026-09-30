@@ -18,6 +18,7 @@ import { extractPromptText } from './agent-hook-listener/prompt-fields'
 import { normalizeProviderEvent } from './agent-hook-listener/provider-dispatch'
 import { hasExplicitUserPrompt } from './agent-hook-listener/provider-event-routing'
 import { hasExplicitAmpPrompt } from './agent-hook-listener/providers/amp-events'
+import { claudeRunningNonAgentTask } from './agent-hook-listener/providers/claude-roster-state'
 import {
   resolveOpenCodeSharedServerEnvelope,
   trackOpenCodePaneLaunchToken
@@ -201,9 +202,7 @@ export function normalizeHookPayload(
     toolAgentType: readString(hookPayloadRecord, 'agent_type'),
     ...(source === 'claude'
       ? {
-          claudeRunningNonAgentTask:
-            state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
-            state.claudeActiveSessionCronPaneKeys.has(paneKey)
+          claudeRunningNonAgentTask: claudeRunningNonAgentTask(state, paneKey)
         }
       : {}),
     ...(providerSession ? { providerSession } : {}),

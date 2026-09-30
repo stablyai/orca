@@ -1,6 +1,7 @@
 import { buildSpoolHookBody, type SpoolRecord } from '../../../shared/agent-hook-spool'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
 import { isAgentHookSource, type AgentHookSource } from '../../../shared/agent-hook-relay'
+import { catchUpOnClaudeTranscript } from '../../../shared/agent-hook-listener/providers/claude-transcript-watch'
 import type { NormalizedLocalHook } from './server-types'
 import { AgentHookServerOpenCodeBinder } from './server-opencode-binder'
 
@@ -40,6 +41,9 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     if (!paneKey) {
       return { event: normalizeHookPayload(this.state, source, body, this.env) }
     }
+    // Why before the snapshot: a fact the cursor has passed must not roll back with an event the
+    // store then refuses. It only reads an existing cursor; spool replays after a restart find none.
+    catchUpOnClaudeTranscript(this.state, paneKey)
     const previousRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
     const previousActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
     const event = normalizeHookPayload(this.state, source, body, this.env)

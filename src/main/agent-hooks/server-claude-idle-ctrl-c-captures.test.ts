@@ -79,7 +79,7 @@ function row(server: AgentHookServer) {
 }
 
 function watch(server: AgentHookServer) {
-  return server._getStateForTests().claudeAgentsKilledCursorByPaneKey.get(PANE)
+  return server._getStateForTests().claudeTranscriptCursorByPaneKey.get(PANE)
 }
 
 /** A capture replayed on its own clock, with every hook reporting `transcript` as its session file. */
@@ -106,10 +106,10 @@ function replayer(
 function capturedKill(records: CapturedRecord[], cancelLabel: string, scanLabel: string) {
   const cancel = cancelLabelled(records, cancelLabel)
   const scan = records.find((record) => record.kind === 'transcript' && record.label === scanLabel)
-  if (scan?.kind !== 'transcript' || scan.agents_killed_records.length !== 1) {
+  if (scan?.kind !== 'transcript' || scan.lines.length !== 1) {
     throw new Error(`Captured transcript scan ${scanLabel} has no single agents_killed line`)
   }
-  const line = scan.agents_killed_records[0]
+  const line = scan.lines[0]
   // JSON.parse returns any; the subtype assertion is the shape proof.
   const parsed: Record<string, unknown> = JSON.parse(line)
   expect(parsed).toMatchObject({ type: 'system', subtype: 'agents_killed' })
@@ -193,8 +193,8 @@ describe('an idle-prompt Ctrl+C with a background shell and a background agent (
     })
     expect(row(server).interrupted).toBeUndefined()
     expect(row(server).mainAgent).not.toHaveProperty('outcome')
-    // Nothing is left to watch for.
-    expect(watch(server)).toBeUndefined()
+    // Nothing is left to watch for: the watch disarms after the next read finds nothing.
+    await vi.waitFor(() => expect(watch(server)).toBeUndefined(), { timeout: 3_000 })
 
     // The next typed turn's Stop restates what the CLI now knows: the shell alone.
     await replay([11, 12])
@@ -389,7 +389,8 @@ describe('an idle-prompt Ctrl+C after the background agent already finished (cap
     expect(hookAt(records, 8).payload.hook_event_name).toBe('SubagentStop')
     await replay([8, 9, 10])
     expect(row(server)).toMatchObject({ state: 'done', mainAgent: { state: 'done' } })
-    expect(watch(server)).toBeUndefined()
+    // The watch disarms only after a read, so the last one still serves the ended reason.
+    await vi.waitFor(() => expect(watch(server)).toBeUndefined(), { timeout: 3_000 })
 
     const settled = row(server)
     expect(pressCtrlC(server)).toBe(false)

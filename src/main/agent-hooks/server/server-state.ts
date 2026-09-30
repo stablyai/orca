@@ -218,7 +218,7 @@ export abstract class AgentHookServerState {
   protected abstract scheduleTranscriptPoll(
     source: AgentHookSource,
     body: unknown,
-    original: AgentHookEventPayload
+    original: EnrichedAgentHookEventPayload
   ): void
   protected abstract scheduleAssistantMessageRetry(
     source: AgentHookSource,

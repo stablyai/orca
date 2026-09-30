@@ -11,8 +11,8 @@ import {
 } from '../agent-status-legacy-adapter'
 import type { AgentStatusLegacyIngressCaller } from '../agent-status-legacy-ingress-manifest'
 import type { ClaudeSubagentRoster } from '../claude-subagent-roster'
-import type { JsonlCursor } from '../codex-rollout-jsonl-cursor'
 import type { CodexSubagentRoster } from '../codex-subagent-roster'
+import type { ClaudeTranscriptCursor } from './providers/claude-transcript-watch'
 import type { CodexSubagentTranscriptState } from '../codex-subagent-transcript'
 import type { MuseSessionLogState } from '../muse-session-log'
 import type { AgentHookEventPayload, ToolSnapshot } from './listener-event'
@@ -48,9 +48,9 @@ export type HookListenerState = {
    *  conversation was replaced (/clear, relaunch, resume), so claims the old session owned are void
    *  even when no SessionStart arrives — the backstop for the exits that emit no terminating hook. */
   claudeSessionOwnerByPaneKey: Map<string, string>
-  /** Claude session transcript read from where it ended when armed, only while the pane has working
-   *  agent children; its `agents_killed` record is the CLI's only report that it killed them. */
-  claudeAgentsKilledCursorByPaneKey: Map<string, JsonlCursor>
+  /** One Claude transcript cursor per pane, read from where the file ended when armed, while any
+   *  reason to watch holds (claude-transcript-watch.ts); in memory only. */
+  claudeTranscriptCursorByPaneKey: Map<string, ClaudeTranscriptCursor>
   /** Live thread-spawn children per Codex pane. */
   codexSubagentRosterByPaneKey: Map<string, CodexSubagentRoster>
   /** Incremental parent/child rollout cursors for Codex collaboration v2. */
@@ -116,7 +116,7 @@ export function createHookListenerState(
     claudeActiveSessionCronPaneKeys: new Set(),
     claudeConsumedCompactPromptIdByPaneKey: new Map(),
     claudeSessionOwnerByPaneKey: new Map(),
-    claudeAgentsKilledCursorByPaneKey: new Map(),
+    claudeTranscriptCursorByPaneKey: new Map(),
     codexSubagentRosterByPaneKey: new Map(),
     codexSubagentTranscriptByPaneKey: new Map(),
     codexLeadStateByPaneKey: new Map(),
@@ -207,7 +207,7 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
   state.claudeActiveSessionCronPaneKeys.delete(paneKey)
   state.claudeSessionOwnerByPaneKey.delete(paneKey)
-  state.claudeAgentsKilledCursorByPaneKey.delete(paneKey)
+  state.claudeTranscriptCursorByPaneKey.delete(paneKey)
   state.codexSubagentRosterByPaneKey.delete(paneKey)
   state.codexSubagentTranscriptByPaneKey.delete(paneKey)
   state.codexLeadStateByPaneKey.delete(paneKey)
@@ -286,7 +286,7 @@ export function movePaneCacheState(
   movePaneScopedSetEntries(state.claudeRunningNonAgentTaskPaneKeys, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.claudeActiveSessionCronPaneKeys, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeSessionOwnerByPaneKey, fromPaneKey, toPaneKey)
-  movePaneScopedMapEntries(state.claudeAgentsKilledCursorByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.claudeTranscriptCursorByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.codexSubagentRosterByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.codexSubagentTranscriptByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.codexLeadStateByPaneKey, fromPaneKey, toPaneKey)
@@ -341,7 +341,7 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.claudeRunningNonAgentTaskPaneKeys.clear()
   state.claudeActiveSessionCronPaneKeys.clear()
   state.claudeSessionOwnerByPaneKey.clear()
-  state.claudeAgentsKilledCursorByPaneKey.clear()
+  state.claudeTranscriptCursorByPaneKey.clear()
   state.codexSubagentRosterByPaneKey.clear()
   state.codexSubagentTranscriptByPaneKey.clear()
   state.codexLeadStateByPaneKey.clear()

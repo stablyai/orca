@@ -124,6 +124,15 @@ export function updateClaudeRunningNonAgentTask(
   }
 }
 
+/** The shell fact every Claude row carries as `claudeRunningNonAgentTask`: a running shell or an
+ *  active session cron. The one stamp for every row the listener or its transcript watch builds. */
+export function claudeRunningNonAgentTask(state: HookListenerState, paneKey: string): boolean {
+  return (
+    state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
+    state.claudeActiveSessionCronPaneKeys.has(paneKey)
+  )
+}
+
 export type ClaudePaneStatusResolution = AgentLeadStatusResolution
 
 /** The only writer of the main agent record. The main agent's clock keeps continuity across

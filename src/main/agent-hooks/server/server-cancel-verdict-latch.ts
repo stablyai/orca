@@ -88,11 +88,13 @@ function restatesAnotherPrompt(
  * on the provider's own verdict (any settled `mainAgent`) or a new turn (another prompt, an
  * explicit prompt, a prompt submission, a session start). Child-attributed and replayed events keep the latched main
  * agent and are re-folded with their own child evidence; late main agent work is held.
+ * `restatesRecords`: a local Claude transcript watch row that carries no fact.
  */
 export function resolveCancelVerdictLatch(
   previous: EnrichedAgentHookEventPayload | undefined,
   incoming: AgentHookEventPayload,
-  now: number
+  now: number,
+  restatesRecords = false
 ): CancelVerdictLatchDecision {
   const apply: CancelVerdictLatchDecision = { hold: false, event: incoming }
   if (
@@ -104,6 +106,11 @@ export function resolveCancelVerdictLatch(
     opensNewTurn(incoming)
   ) {
     return apply
+  }
+  // Why: it repeats hooks this latch already judged, and the watch offers it every second: held,
+  // it can never reopen the cancel once the window ends, nor rewrite the row each tick.
+  if (restatesRecords) {
+    return HOLD
   }
   const latched = previous.payload.mainAgent
   // Why: Codex's combine is not this fold; its child events already come reconciled against main's marked record.

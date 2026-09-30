@@ -1,7 +1,7 @@
 // Deferred re-normalization timers for late-arriving agent results: the transcript hadn't caught up
 // when the hook fired, so re-read the same body on a timer and re-apply only if it changed. Both
 // timer families live in one owner so pane teardown and server stop tear both down in one ordered
-// place before the listener caches are cleared.
+// place before the listener caches are cleared. The Claude transcript watch is owned here too.
 import {
   hasPendingAgentResultText,
   preparePendingGrokResultDiscovery
@@ -11,11 +11,12 @@ import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listen
 import type { HookListenerState } from '../shared/agent-hook-listener/listener-state'
 import type { AgentHookSource } from '../shared/agent-hook-relay'
 import {
-  hookTranscriptPollUpdate,
   shouldPollHookTranscript,
-  transcriptPollAnchor
+  transcriptPollUpdate
 } from '../shared/agent-hook-listener/transcript-poll-policy'
 import { CodexSubagentPollScheduler } from '../shared/codex-subagent-poll-scheduler'
+import { ClaudeTranscriptWatch } from '../shared/agent-hook-listener/claude-transcript-watch-ticks'
+import { catchUpOnClaudeTranscriptForHookBody } from '../shared/agent-hook-listener/providers/claude-transcript-watch'
 
 const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
 const ASSISTANT_MESSAGE_RETRY_MS = 50
@@ -42,9 +43,12 @@ export type AgentHookResultRetryHost = {
   ) => void
 }
 
+type HookEnvelopeMeta = { env?: string; version?: string }
+
 export class AgentHookResultRetryScheduler {
   private assistantMessageRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private transcriptPollScheduler: CodexSubagentPollScheduler<TranscriptPoll>
+  private claudeTranscriptWatch: ClaudeTranscriptWatch<HookEnvelopeMeta>
   private host: AgentHookResultRetryHost
 
   constructor(host: AgentHookResultRetryHost) {
@@ -53,6 +57,22 @@ export class AgentHookResultRetryScheduler {
       CODEX_SUBAGENT_POLL_MS,
       (paneKey, poll) => this.runTranscriptPoll(paneKey, poll)
     )
+    this.claudeTranscriptWatch = new ClaudeTranscriptWatch<HookEnvelopeMeta>({
+      state: host.state,
+      isListening: host.isListening,
+      // Why dropped: only the desktop's cancel latch reads it, and a relay envelope names its fields.
+      publish: ({ restatesRecords: _local, ...row }, meta) =>
+        host.applyEvent(row, 'claude', meta?.env, meta?.version)
+    })
+  }
+
+  /** A hook body's normalization, after the pane's Claude transcript catch-up. The relay has no
+   *  accept-or-roll-back step, so the catch-up simply runs first. */
+  normalizeHook(source: AgentHookSource, body: unknown): AgentHookEventPayload | null {
+    catchUpOnClaudeTranscriptForHookBody(this.host.state, source, body)
+    return normalizeHookPayload(this.host.state, source, body, this.host.env, {
+      deferCompactOwnershipToClient: true
+    })
   }
 
   clearAll(): void {
@@ -61,6 +81,7 @@ export class AgentHookResultRetryScheduler {
     }
     this.assistantMessageRetryTimers.clear()
     this.transcriptPollScheduler.clearAll()
+    this.claudeTranscriptWatch.clearAll()
   }
 
   clearAssistantMessageRetry(paneKey: string): void {
@@ -74,7 +95,19 @@ export class AgentHookResultRetryScheduler {
 
   clearTranscriptPoll(paneKey: string): void {
     this.transcriptPollScheduler.clear(paneKey)
-    this.host.state.claudeAgentsKilledCursorByPaneKey.delete(paneKey)
+    this.claudeTranscriptWatch.clear(paneKey)
+  }
+
+  /** Called with every row the relay applied, so the watch arms from accepted rows only. */
+  syncClaudeTranscriptWatch(
+    event: AgentHookEventPayload,
+    source: AgentHookSource,
+    env: string | undefined,
+    version: string | undefined
+  ): void {
+    if (source === 'claude') {
+      this.claudeTranscriptWatch.sync(event, { env, version })
+    }
   }
 
   scheduleTranscriptPoll(
@@ -85,7 +118,7 @@ export class AgentHookResultRetryScheduler {
     version?: string
   ): void {
     // Why: a nested CLI of another kind inherits ORCA_PANE_KEY, so clearing here would silently end a live poll.
-    if (source !== 'codex' && source !== 'muse' && source !== 'claude') {
+    if (source !== 'codex' && source !== 'muse') {
       return
     }
     this.transcriptPollScheduler.clear(original.paneKey)
@@ -103,22 +136,25 @@ export class AgentHookResultRetryScheduler {
 
   private runTranscriptPoll(paneKey: string, poll: TranscriptPoll): void {
     const { source, body, original, env, version } = poll
-    const anchor = transcriptPollAnchor(
-      source,
-      this.host.state.lastStatusByPaneKey.get(original.paneKey),
-      original
-    )
-    if (paneKey !== original.paneKey || !this.host.isListening() || !anchor) {
+    // Keep the identity check at callback time: a newer event supersedes this
+    // payload even when its pane still has transcript children.
+    if (
+      paneKey !== original.paneKey ||
+      !this.host.isListening() ||
+      this.host.state.lastStatusByPaneKey.get(original.paneKey) !== original
+    ) {
       return
     }
-    const update = hookTranscriptPollUpdate(this.host.state, source, body, anchor, this.host.env)
-    if (update === null) {
+    const event = normalizeHookPayload(this.host.state, source, body, this.host.env)
+    if (!event) {
       return
     }
+    const update = transcriptPollUpdate(source, original, event)
+    const next = update ?? original
     if (update) {
       this.host.applyEvent(update, source, env, version)
     }
-    this.scheduleTranscriptPoll(source, body, update ?? anchor, env, version)
+    this.scheduleTranscriptPoll(source, body, next, env, version)
   }
 
   scheduleAssistantMessageRetry(

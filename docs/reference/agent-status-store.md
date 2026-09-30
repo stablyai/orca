@@ -276,15 +276,29 @@ infer the Claude kill from the keypress, which the CLI may swallow (an open
 `system`/`agents_killed` line in the session transcript, written only when it
 really killed every running background agent. The listener on the host that
 runs the session (the desktop for a local pane, the SSH or WSL relay for a
-remote one) watches for that line only while the pane has a working agent child
-and a transcript path it can read locally: armed at the file's end, so a
-resumed or forked session's older lines never count, read incrementally on the
-existing transcript-poll timer, and dropped when the children end or the pane
-closes. A new line retires the children that started by its timestamp with
+remote one) reads it through the pane's Claude transcript watch
+(`claude-transcript-watch.ts`). The watch keeps one cursor per pane while any
+reason to watch holds (today one: a working agent child) and the pane has a
+transcript path that host can read locally. The cursor is armed at the file's
+end, so a resumed, forked or cleared session's older lines never count, and it
+is created or repointed only from a row the host accepted, at the new file's end
+when the session's transcript changes; a change of reasons never resets it. Every
+Claude event first catches up on the existing cursor, before the desktop's
+accept-or-roll-back snapshot (the relay has no such step), and a one-second tick
+reads it too and republishes the row rebuilt from the listener's records when
+the stored row does not show it (on the desktop that is the row after the
+cancel latch and the permission hold; on a relay, its own cache). It disarms only
+after a read that applied nothing with no reason left, or when the pane closes.
+A new line retires the children that started by its timestamp with
 SubagentStop semantics and publishes a `SubagentStop` row attributed to one of
-them, with no verdict stamped; the row keeps monitoring a surviving shell and
+them (a row still waiting on a prompt keeps the hook that raised it), with no
+verdict stamped; the row keeps monitoring a surviving shell and
 settles to done only when nothing is left (`claude-idle-ctrl-c-*` fixtures pin
-this). A relay too old to watch leaves the child on the row until the next
+this). A tick row that carries no fact only restates hooks the store already
+judged, so the desktop's cancel latch holds it: after a late main-agent hook the
+latch refused, the listener's record keeps that hook's evidence (a turn the
+Ctrl+C did not stop still ends as a plain done) and the tick cannot reopen the
+cancel. A relay too old to watch leaves the child on the row until the next
 Stop's inventory, as before. The synthesized row is the fold
 of the cancelled main agent with the child work the pane's owner can see: the
 local listener's roster for a local pane, the row's own subagents and shell fact
@@ -441,9 +455,10 @@ call it.
   same store and admission code but has no live run here; Linux and Windows
   runtime execution, native mobile clients, and mixed-version paired clients
   remain validation gaps.
-- **Performance budget:** publication stays event-driven with no new polling or
-  subprocesses (the Claude `agents_killed` watch above reuses the existing
-  transcript-poll timer and runs only while a pane has working agent children). One mobile projection clones the status snapshot once, builds
+- **Performance budget:** publication stays event-driven with no new
+  subprocesses. The one poll is the Claude transcript watch above: a one-second
+  tick per pane, only while that pane has a reason to watch, costing one `stat`
+  per event and per tick plus the appended bytes. One mobile projection clones the status snapshot once, builds
   pane/handle indexes once, and has a deterministic call-count test; lifecycle
   cleanup is bounded by the existing status and handle inventories, and orcad
   tests prove listeners clean up once on failed startup and repeated stop.

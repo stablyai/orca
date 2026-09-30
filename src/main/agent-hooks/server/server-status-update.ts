@@ -21,13 +21,13 @@ import { AgentHookServerStatusApplication } from './server-status-application'
 
 export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusApplication {
   protected applyNormalizedStatus(
-    incoming: AgentHookEventPayload & { authorityRestartId?: string },
+    incoming: AgentHookEventPayload & { authorityRestartId?: string; restatesRecords?: true },
     onAccepted?: () => void,
     origin: AgentStatusObservationOrigin = 'hook',
     observedAt?: number,
     mutationBefore?: EnrichedAgentHookEventPayload
   ): EnrichedAgentHookEventPayload | undefined {
-    const { authorityRestartId, ...payload } = incoming
+    const { authorityRestartId, restatesRecords, ...payload } = incoming
     if (!this.canWriteLegacyStatusRow(payload)) {
       return undefined
     }
@@ -154,7 +154,12 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     const attachedPayload = attachClaudePermissionToolUseId(previous, identityResolvedPayload)
     // Why before the permission hold: that hold adopts the event's `mainAgent`, and a relay's
     // restatement of a main agent the desktop cancelled must not replace the cancel.
-    const latch = resolveCancelVerdictLatch(previous, attachedPayload, Date.now())
+    const latch = resolveCancelVerdictLatch(
+      previous,
+      attachedPayload,
+      Date.now(),
+      restatesRecords === true
+    )
     if (latch.hold) {
       if (
         attachedPayload.payload.agentType === 'codex' &&
