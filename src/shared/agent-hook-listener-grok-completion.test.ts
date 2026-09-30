@@ -130,7 +130,7 @@ describe('Grok completion observations', () => {
     })
   })
 
-  it('keeps the cancellation on the idle backstop that settles a task the cancel left running', () => {
+  it('keeps a task the cancel left running through the idle restatement, and its verdict', () => {
     normalize({
       hookEventName: 'UserPromptSubmit',
       sessionId: 's-1',
@@ -145,12 +145,25 @@ describe('Grok completion observations', () => {
         backgroundTasks: [{ id: 'task-1', type: 'shell', status: 'running' }]
       })
     ).toMatchObject({ state: 'working', workingMode: 'monitoring' })
-    // A settled row without `interrupted` would announce the cancelled turn as a clean finish.
+    // Why: idle_prompt fires on "turn over, user idle" even while tasks run (measured live), so it
+    // restates the verdict without settling the row the inventory holds open.
     expect(
       normalize({
         hookEventName: 'Notification',
         sessionId: 's-1',
         notificationType: 'idle_prompt'
+      })
+    ).toMatchObject({
+      state: 'working',
+      workingMode: 'monitoring',
+      mainAgent: { state: 'done', outcome: 'cancellation' }
+    })
+    // A session boundary settles the pane whatever the inventory says, still reading interrupted.
+    expect(
+      normalize({
+        hookEventName: 'SessionEnd',
+        sessionId: 's-1',
+        reason: 'shutdown'
       })
     ).toMatchObject({
       state: 'done',

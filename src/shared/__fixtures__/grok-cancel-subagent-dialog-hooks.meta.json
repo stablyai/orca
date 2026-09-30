@@ -1,0 +1,11 @@
+{
+  "source_scenario": "cancel-with-subagent-dialog",
+  "grok_version": "grok 1.0.41 (4220f3b224a6) [stable]",
+  "argv": ["grok", "--always-approve"],
+  "platform": "darwin",
+  "cols": 120,
+  "rows": 40,
+  "recorded_at": "2026-09-24",
+  "clock": "t is seconds since the first record; hook records keep the ps snapshot taken inside the hook",
+  "note": "Grok driven over a real PTY with every hook logged from stdin by a temporary global hook file. Turn 1 starts a background shell (sleep 375) and a background subagent (whose own turn runs sleep 314 in its foreground), then ends: its `stop` lists both in backgroundTasks. Turn 2 runs a foreground sleep 244; Esc mid-turn fires NO hook (the TUI shows a 'Press Ctrl+c to cancel the turn' toast and the turn keeps running); Ctrl+C mid-turn opens the 'Subagents are still running. Stop them?' dialog (still no hook), and answering '2 Continue to run' fires `stop_cancelled` (reason user_interrupt, cancelTrigger ctrl_c) with NO backgroundTasks key while the shell and subagent keep running (ps proves both alive; only the foreground tool died). Turn 3 repeats with sleep 199 and answers '1 Stop running': the same inventory-less `stop_cancelled`, with the subagent and foreground tool already dead at the hook instant, followed by the subagent's `session_end` (subagentType set, sessionId equal to the subagentId from SubagentStart). Nothing restates the inventory until the next turn's stop; quitting fires the main session_end + a stop with reason shutdown. Scrubbed: username replaced by a same-length placeholder."
+}

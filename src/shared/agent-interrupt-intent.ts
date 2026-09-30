@@ -41,6 +41,19 @@ export function isNavigationEscapeIntent(
   )
 }
 
+// Why: Grok cancels only through its own TUI flow and reports every real cancel itself with a
+// `stop_cancelled` hook. Esc mid-turn never cancels (it paints a "Press Ctrl+c to cancel the
+// turn" toast and fires no hook), and Ctrl+C with subagents running opens a "Stop them?" dialog
+// that keeps the turn running until answered — and can be answered "continue". Measured on
+// 1.0.41: src/shared/__fixtures__/grok-cancel-subagent-dialog-hooks.jsonl. So no keypress is
+// evidence a Grok turn ended; only Grok's own hook may cancel the row.
+const SELF_REPORTED_CANCEL_AGENT_TYPES: ReadonlySet<AgentType> = new Set(['grok'])
+
+/** True when this agent reports its own cancels, so no keypress may infer one. */
+export function providerReportsOwnCancel(agentType: AgentType | undefined): boolean {
+  return agentType !== undefined && SELF_REPORTED_CANCEL_AGENT_TYPES.has(agentType)
+}
+
 // Why: these TUIs spend the first Escape on a cancel that can leave the turn running —
 // opencode2 also dismisses its Subagents dock with it — so only the second Escape on the
 // same turn is evidence of an interrupt. Shared so the renderer gate and the server

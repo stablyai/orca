@@ -6,6 +6,7 @@ import { markCodexLeadTurnInterrupted } from '../../../shared/agent-hook-listene
 import {
   isAgentInterruptInputIntent,
   isNavigationEscapeIntent,
+  providerReportsOwnCancel,
   requiresDoubleEscapeInterrupt,
   type AgentInterruptInferenceRequest
 } from '../../../shared/agent-interrupt-intent'
@@ -44,6 +45,11 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
     const agentType: AgentType | undefined = payload.agentType
     // Why: Droid's Ctrl+C exits the CLI (handled by PTY lifecycle) rather than interrupting the current turn.
     if (agentType === 'droid' && request.intent === 'ctrl-c') {
+      return false
+    }
+    // Why: re-checked here, not only in the renderer, so a stale or direct inference request
+    // cannot fabricate a cancel onto an agent whose own hook is the only cancel evidence.
+    if (providerReportsOwnCancel(agentType)) {
       return false
     }
     // Why: these agents use the first Escape as a TUI cancel that can leave the turn running; only a double Escape infers an interrupt.

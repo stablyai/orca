@@ -99,17 +99,22 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
             )
           }
         : terminalOwnedPayload
-    const previousCodexRoot =
-      stateReconciledPayload.payload.agentType === 'codex' &&
+    const childAttributedRootAgentType =
+      stateReconciledPayload.payload.agentType === 'codex' ||
+      stateReconciledPayload.payload.agentType === 'grok'
+        ? stateReconciledPayload.payload.agentType
+        : undefined
+    const previousChildAttributedRoot =
+      childAttributedRootAgentType &&
       stateReconciledPayload.toolAgentId &&
-      previous?.payload.agentType === 'codex'
+      previous?.payload.agentType === childAttributedRootAgentType
         ? previous
         : undefined
     const preservedProviderSession = !stateReconciledPayload.providerSession
-      ? previousCodexRoot?.providerSession
+      ? previousChildAttributedRoot?.providerSession
       : undefined
     const preservedRootModel = !stateReconciledPayload.payload.model
-      ? previousCodexRoot?.payload.model
+      ? previousChildAttributedRoot?.payload.model
       : undefined
     // Why: an SSH relay restart forgets root-only fields; child hooks must not erase durable resume/model identity.
     const rootContextPreservingPayload =

@@ -17,7 +17,7 @@ import {
   hookSupersedesCancel,
   loadCapture,
   type CapturedHook
-} from './claude-cancel-capture.test-fixture'
+} from './agent-cancel-capture.test-fixture'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
   getCohortAtEmitMock: vi.fn(),
