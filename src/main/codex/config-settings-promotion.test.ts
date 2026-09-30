@@ -17,10 +17,10 @@ import type * as Os from 'node:os'
 import { join } from 'node:path'
 import type * as CodexFsUtils from '../codex-accounts/fs-utils'
 
-// Why: temp homes exceed sun_path on macOS but not on Linux; keep asserted config bytes host-independent.
-vi.mock('./codex-daemon-socket-path-guard', async (importOriginal) => ({
+// Why: every Orca-owned home gets the daemon override; keep it out of the asserted config bytes.
+vi.mock('./codex-daemon-auto-start-override', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  applyCodexDaemonSocketGuard: (config: string) => config
+  applyCodexDaemonAutoStartOverride: (config: string) => config
 }))
 
 const { homedirMock, promotionTestState } = vi.hoisted(() => ({

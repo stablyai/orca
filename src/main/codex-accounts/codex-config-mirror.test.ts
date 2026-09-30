@@ -30,11 +30,11 @@ describe('CodexConfigMirror without ~/.codex/config.toml', () => {
   let mirror: CodexConfigMirror
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'orca-codex-accounts-mirror-'))
+    // Why: /tmp keeps the account home's socket path short, so the guard is not the socket limit's.
+    root = mkdtempSync(join(process.platform === 'win32' ? tmpdir() : '/tmp', 'cxa-'))
     testState.fakeHomeDir = join(root, 'user-home')
     mkdirSync(testState.fakeHomeDir)
-    // Long enough to exceed sun_path on every platform, like a real account home.
-    managedHomePath = join(root, 'a'.repeat(80), 'home')
+    managedHomePath = join(root, 'acct', 'home')
     mkdirSync(managedHomePath, { recursive: true })
     const settings = {
       ...getDefaultSettings(testState.fakeHomeDir),
@@ -56,7 +56,7 @@ describe('CodexConfigMirror without ~/.codex/config.toml', () => {
     rmSync(root, { recursive: true, force: true })
   })
 
-  it('still guards every managed home against the daemon socket limit', () => {
+  it('turns shared-server auto-start off in every managed account home', () => {
     mirror.safeSyncToManagedHomes()
 
     expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(

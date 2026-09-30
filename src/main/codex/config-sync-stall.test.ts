@@ -10,10 +10,10 @@ import {
 import { syncSystemConfigIntoManagedCodexHome } from './codex-config-mirror'
 import { getCodexSettingsBaselinePath } from './config-settings-baseline'
 
-// Why: temp homes exceed sun_path on macOS but not on Linux; keep asserted config bytes host-independent.
-vi.mock('./codex-daemon-socket-path-guard', async (importOriginal) => ({
+// Why: every Orca-owned home gets the daemon override; keep it out of the asserted config bytes.
+vi.mock('./codex-daemon-auto-start-override', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  applyCodexDaemonSocketGuard: (config: string) => config
+  applyCodexDaemonAutoStartOverride: (config: string) => config
 }))
 
 let root: string

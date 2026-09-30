@@ -19,7 +19,12 @@ import {
 import { readCodexSettingsBaseline } from './config-settings-baseline'
 import { getCodexConfigSyncStatus, reportCodexConfigSyncOutcome } from './config-sync-stall'
 import { preserveRuntimeConflictValues } from './codex-config-settings-preservation'
-import { applyCodexDaemonSocketGuard } from './codex-daemon-socket-path-guard'
+import { applyCodexDaemonAutoStartOverride } from './codex-daemon-auto-start-override'
+import {
+  ensureCodexDaemonAutoStartOverride,
+  refuseUserCodexHomeAsTarget,
+  writeCodexDaemonAutoStartOverride
+} from './codex-daemon-auto-start-override-write'
 import {
   deduplicateProjectTomlSections,
   getMcpServerTomlSectionName,
@@ -39,10 +44,13 @@ export function syncSystemConfigIntoManagedCodexHome(
     systemHomePath: getSystemCodexHomePath()
   }
 ): void {
+  if (refuseUserCodexHomeAsTarget(homes.runtimeHomePath, homes.systemHomePath)) {
+    return
+  }
   if (!mirrorSystemConfigIntoManagedCodexHome(homes)) {
     // Why: a stalled settings mirror must not also withhold the daemon guard,
-    // or Codex cannot start at all in a long home.
-    ensureCodexDaemonSocketGuard(homes.runtimeHomePath)
+    // or Codex starts a shared server here (or cannot start at all in a long home).
+    ensureCodexDaemonAutoStartOverride(homes.runtimeHomePath)
   }
 }
 
@@ -118,28 +126,6 @@ function mirrorSystemConfigIntoManagedCodexHome(homes: CodexSettingsPromotionHom
   return true
 }
 
-/** Applies only the daemon guard, for passes that have no source config to mirror. */
-export function ensureCodexDaemonSocketGuard(runtimeHomePath: string): void {
-  try {
-    const observation = observeAgentStateFile(join(runtimeHomePath, 'config.toml'))
-    if (observation.kind !== 'indeterminate') {
-      writeCodexDaemonSocketGuard(
-        runtimeHomePath,
-        observation.kind === 'present' ? observation.value : null
-      )
-    }
-  } catch (error) {
-    console.warn('[codex-config] Failed to apply the Codex daemon socket guard:', error)
-  }
-}
-
-function writeCodexDaemonSocketGuard(runtimeHomePath: string, runtimeConfig: string | null): void {
-  const guarded = applyCodexDaemonSocketGuard(runtimeConfig ?? '', runtimeHomePath)
-  if (guarded !== (runtimeConfig ?? '')) {
-    writeFileAtomicallyIfUnchanged(join(runtimeHomePath, 'config.toml'), runtimeConfig, guarded)
-  }
-}
-
 /**
  * Refreshes the retired shared home for PTYs that survived real-home rollout.
  *
@@ -183,7 +169,7 @@ export function syncSystemConfigIntoLegacySharedCodexHome(
         : prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir)
   }
   // Why: retained pre-rollout panes still use this home, so a refresh must keep the daemon guard.
-  const nextRuntimeConfig = applyCodexDaemonSocketGuard(
+  const nextRuntimeConfig = applyCodexDaemonAutoStartOverride(
     mirroredRuntimeConfig,
     homes.runtimeHomePath
   )
@@ -231,7 +217,7 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
   // a 0-byte file is what a half-written or unhydrated cloud-synced home shows.
   if (rawSystemConfig.trim() === '') {
     // Why: no mirror write happens here, but the daemon guard must still land.
-    writeCodexDaemonSocketGuard(
+    writeCodexDaemonAutoStartOverride(
       runtimeHomePath,
       runtimeConfigExists ? runtimeConfigObservation.value : null
     )
@@ -247,7 +233,7 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
 
   const sourceConfigDir = resolveCodexConfigMirrorSourceDirectory(systemHomePath, systemConfigDir)
   if (!runtimeConfigExists) {
-    const freshRuntimeConfig = applyCodexDaemonSocketGuard(
+    const freshRuntimeConfig = applyCodexDaemonAutoStartOverride(
       prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir),
       runtimeHomePath
     )
@@ -276,7 +262,7 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
     ),
     promotionPlan.runtimeValuesToPreserve
   )
-  const nextRuntimeConfig = applyCodexDaemonSocketGuard(preserved.content, runtimeHomePath)
+  const nextRuntimeConfig = applyCodexDaemonAutoStartOverride(preserved.content, runtimeHomePath)
   if (nextRuntimeConfig !== runtimeConfig) {
     writeFileAtomically(runtimeConfigPath, nextRuntimeConfig)
   }

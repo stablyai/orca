@@ -3,10 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { VerifiedCodexResumeSource } from '../codex/codex-session-resume-preparation'
-import {
-  CODEX_DAEMON_OVERRIDE_MARKER,
-  codexDaemonSocketPathExceedsLimit
-} from '../codex/codex-daemon-socket-path-guard'
+import { CODEX_DAEMON_OVERRIDE_MARKER } from '../codex/codex-daemon-auto-start-override'
 
 const mocks = vi.hoisted(() => ({
   hooksEnabled: false,
@@ -56,10 +53,7 @@ vi.mock('./main-process-state', () => ({
 
 import { prepareCodexSessionResumeForLaunch } from './codex-session-resume-launch'
 
-// Why: long enough that the daemon socket overflows sun_path on every host OS.
-const LONG_SEGMENT = 'a'.repeat(60)
-
-describe('Codex session resume daemon socket guard', () => {
+describe('Codex session resume daemon auto-start override', () => {
   let root: string
   let accountHome: string
   let warn: ReturnType<typeof vi.spyOn>
@@ -67,8 +61,8 @@ describe('Codex session resume daemon socket guard', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     root = mkdtempSync(join(tmpdir(), 'orca-resume-guard-'))
-    accountHome = join(root, 'codex-accounts', LONG_SEGMENT, 'home')
-    mocks.systemHomePath = join(root, 'system', LONG_SEGMENT, '.codex')
+    accountHome = join(root, 'codex-accounts', 'acct', 'home')
+    mocks.systemHomePath = join(root, 'system', '.codex')
     mocks.sharedHomePath = join(root, 'codex-runtime-home', 'home')
     for (const home of [accountHome, mocks.systemHomePath, mocks.sharedHomePath]) {
       mkdirSync(home, { recursive: true })
@@ -102,7 +96,6 @@ describe('Codex session resume daemon socket guard', () => {
   }
 
   it('guards the resumed account home when hook repair fails before mirroring config', async () => {
-    expect(codexDaemonSocketPathExceedsLimit(accountHome)).toBe(true)
     writeFileSync(join(accountHome, 'config.toml'), 'model = "gpt-5"\n', 'utf-8')
     mocks.hooksEnabled = true
     mocks.installForLaunchPrep.mockRejectedValue(new Error('Could not parse Codex hooks.json'))
@@ -131,7 +124,6 @@ describe('Codex session resume daemon socket guard', () => {
   })
 
   it('never writes the guard into the real Codex home a migrated resume runs in', async () => {
-    expect(codexDaemonSocketPathExceedsLimit(mocks.systemHomePath)).toBe(true)
     mocks.prepareLegacySharedCodexSessionResume.mockResolvedValue({ useRealCodexHome: true })
 
     const preparation = await resume()

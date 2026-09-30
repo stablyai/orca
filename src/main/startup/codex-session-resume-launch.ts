@@ -7,7 +7,7 @@ import { prepareLegacySharedCodexSessionResume } from '../codex/codex-legacy-ses
 import { ManagedCodexHomeTemporarilyUnavailableError } from '../codex-accounts/host-codex-managed-home-ownership'
 import { codexHookService } from '../codex/hook-service'
 import { ensureRealHomeCodexHookState } from '../codex/codex-real-home-hook-install'
-import { ensureCodexDaemonSocketGuard } from '../codex/codex-config-mirror'
+import { ensureCodexDaemonAutoStartOverride } from '../codex/codex-daemon-auto-start-override-write'
 import { isAgentStatusHooksEnabledForAgent } from '../agent-hooks/managed-agent-hook-controls'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../codex/codex-home-paths'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
@@ -100,7 +100,7 @@ export async function prepareCodexSessionResumeForLaunch(args: {
       }
       if (!isSystemHome) {
         // Why: this pins the resumed pane's CODEX_HOME, and hook repair above can skip or fail before its config mirror applies the daemon guard.
-        ensureCodexDaemonSocketGuard(resumeHome)
+        ensureCodexDaemonAutoStartOverride(resumeHome)
       }
       return resumeHome
     }

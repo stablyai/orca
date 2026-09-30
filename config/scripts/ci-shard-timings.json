@@ -1225,7 +1225,7 @@
       "src/main/codex/codex-config-mirror.test.ts": 181,
       "src/main/codex/codex-config-settings-removal.test.ts": 49,
       "src/main/codex/codex-configured-launch-defaults.test.ts": 30,
-      "src/main/codex/codex-daemon-socket-path-guard.test.ts": 153,
+      "src/main/codex/codex-daemon-auto-start-override.test.ts": 153,
       "src/main/codex/codex-goal-journal-rows.test.ts": 90,
       "src/main/codex/codex-home-paths.test.ts": 76,
       "src/main/codex/codex-hook-legacy-profile-block.test.ts": 132,

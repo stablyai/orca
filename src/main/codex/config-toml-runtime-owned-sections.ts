@@ -1,4 +1,4 @@
-import { stripCodexDaemonOverride } from './codex-daemon-socket-path-guard'
+import { stripCodexDaemonOverride } from './codex-daemon-auto-start-override'
 import {
   createTomlLineScanState,
   getTomlTableHeader,
@@ -173,6 +173,6 @@ export function extractOrdinaryCodexSettings(config: string): string {
       .filter((section) => isRuntimeProjectTomlSection(section.header))
       .map((section) => getTomlSectionHeaderKey(section.header))
   )
-  // Why: the daemon override exists only because Orca's home path is long; ~/.codex is not.
+  // Why: the daemon override is Orca's policy for its own homes, never the user's ~/.codex.
   return stripCodexDaemonOverride(stripRuntimeOwnedTomlSections(config, projectHeaders)).trimEnd()
 }
