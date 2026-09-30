@@ -1,5 +1,32 @@
+// Why: these handlers throw on either selection flag (rejectRemoteSelectionFlags) instead of routing.
+const REJECTED_REMOTE_SELECTION_HELP: Record<string, string> = {
+  'pairing-code': '--pairing-code <code>  Rejected; this command only runs on this machine',
+  environment: '--environment <selector> Rejected; this command only runs on this machine'
+}
+
+const REMOTE_SELECTION_REJECTING_COMMANDS = [
+  'environment list',
+  'host list',
+  'account add',
+  'account list',
+  'artifacts list',
+  'artifacts share',
+  'artifacts update',
+  'artifacts unshare',
+  'artifacts delete',
+  'profile state exports',
+  'profile state rollback',
+  'agent hooks prepare-codex',
+  'agent hooks status',
+  'agent hooks off',
+  'agent hooks on'
+]
+
 /** Per-command flag help, kept out of the shared help chain it would crowd. */
 const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
+  ...Object.fromEntries(
+    REMOTE_SELECTION_REJECTING_COMMANDS.map((command) => [command, REJECTED_REMOTE_SELECTION_HELP])
+  ),
   // Why: these commands read or write this machine's pairing store, so the global routing meaning would be wrong.
   'environment add': {
     'pairing-code':
@@ -9,14 +36,6 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
   'environment show': {
     'pairing-code': '--pairing-code <code>  Not used; reads the environments saved on this machine',
     environment: '--environment <selector> Saved environment id or name to show'
-  },
-  'environment list': {
-    'pairing-code': '--pairing-code <code>  Rejected; this command answers for this machine only',
-    environment: '--environment <selector> Rejected; this command answers for this machine only'
-  },
-  'host list': {
-    'pairing-code': '--pairing-code <code>  Rejected; this command answers for this machine only',
-    environment: '--environment <selector> Rejected; this command answers for this machine only'
   },
   'environment rm': {
     'pairing-code':
