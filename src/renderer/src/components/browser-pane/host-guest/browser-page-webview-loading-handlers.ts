@@ -1,5 +1,4 @@
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react'
-import type { BrowserGrabPayload } from '../../../../../shared/browser-grab-types'
 import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
@@ -9,7 +8,6 @@ import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
 import { translate } from '@/i18n/i18n'
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from './browser-page-guest-recovery'
 import { rememberLiveBrowserUrl } from '../describe-page/live-browser-url-registry'
-import type { BrowserOverlayViewport } from '../describe-page/browser-annotation-geometry'
 import { resolveBrowserWebviewLoadFailure } from '../navigate/browser-webview-load-failure'
 import {
   getBrowserDisplayTitle,
@@ -35,11 +33,8 @@ export type BrowserPageWebviewLoadingHandlersArgs = {
   trackNextLoadingEventRef: MutableRefObject<boolean>
   keepAddressBarFocusRef: MutableRefObject<boolean>
   recoveryNavigationValidationRef: MutableRefObject<BrowserPageRecoveryNavigationValidation | null>
-  clearBrowserPageAnnotationsRef: MutableRefObject<(pageId: string) => void>
   onUpdatePageStateRef: MutableRefObject<(tabId: string, updates: BrowserTabPageState) => void>
   onSetUrlRef: MutableRefObject<BrowserPageUrlSetter>
-  setPendingAnnotationPayload: Dispatch<SetStateAction<BrowserGrabPayload | null>>
-  setBrowserOverlayViewport: Dispatch<SetStateAction<BrowserOverlayViewport>>
   setAddressBarValue: Dispatch<SetStateAction<string>>
   focusAddressBarNow: () => boolean
 }
@@ -62,19 +57,12 @@ export function createBrowserPageWebviewLoadingHandlers({
   trackNextLoadingEventRef,
   keepAddressBarFocusRef,
   recoveryNavigationValidationRef,
-  clearBrowserPageAnnotationsRef,
   onUpdatePageStateRef,
   onSetUrlRef,
-  setPendingAnnotationPayload,
-  setBrowserOverlayViewport,
   setAddressBarValue,
   focusAddressBarNow
 }: BrowserPageWebviewLoadingHandlersArgs): BrowserPageWebviewLoadingHandlers {
   const handleDidStartLoading = (): void => {
-    // Why: a reload replaces the document without changing the URL, invalidating captured element rects like a navigation does.
-    clearBrowserPageAnnotationsRef.current(browserTabId)
-    setPendingAnnotationPayload(null)
-    setBrowserOverlayViewport({ scrollX: 0, scrollY: 0, version: 0 })
     if (!trackNextLoadingEventRef.current) {
       return
     }

@@ -54,7 +54,6 @@ export function useBrowserPageWebviewLifecycle({
   onUpdatePageState,
   onSetUrl,
   setAddressBarValue,
-  setPendingAnnotationPayload,
   setBrowserOverlayViewport,
   setFindOpen,
   focusAddressBarNow,
@@ -72,7 +71,8 @@ export function useBrowserPageWebviewLifecycle({
   activeLoadFailureRef,
   retryGuestRecoveryRef,
   onUpdatePageStateRef,
-  onSetUrlRef
+  onSetUrlRef,
+  cancelGrabSessionRef
 }: {
   browserTabId: string
   browserTabUrl: string
@@ -96,7 +96,6 @@ export function useBrowserPageWebviewLifecycle({
   onUpdatePageState: (tabId: string, updates: BrowserTabPageState) => void
   onSetUrl: BrowserPageUrlSetter
   setAddressBarValue: Dispatch<SetStateAction<string>>
-  setPendingAnnotationPayload: Dispatch<SetStateAction<BrowserGrabPayload | null>>
   setBrowserOverlayViewport: Dispatch<SetStateAction<BrowserOverlayViewport>>
   setFindOpen: Dispatch<SetStateAction<boolean>>
   focusAddressBarNow: () => boolean
@@ -115,6 +114,7 @@ export function useBrowserPageWebviewLifecycle({
   retryGuestRecoveryRef: MutableRefObject<() => void>
   onUpdatePageStateRef: MutableRefObject<(tabId: string, updates: BrowserTabPageState) => void>
   onSetUrlRef: MutableRefObject<BrowserPageUrlSetter>
+  cancelGrabSessionRef: MutableRefObject<() => void>
 }): {
   syncBrowserAnnotationViewportBridge: () => void
 } {
@@ -257,8 +257,8 @@ export function useBrowserPageWebviewLifecycle({
       trackNextLoadingEventRef,
       clearBrowserPageAnnotationsRef,
       onSetUrlRef,
-      setPendingAnnotationPayload,
       setBrowserOverlayViewport,
+      cancelGrabSessionRef,
       setAddressBarValue,
       addBrowserHistoryEntryRef,
       annotationViewportBridgeTokenRef,
