@@ -152,6 +152,7 @@
         "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
         "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI.",
         "cursorToggleDescription": "Show Cursor plan usage when signed in through cursor-agent or Cursor IDE.",
+        "kiroToggleDescription": "Show Kiro subscription credit usage reported by Kiro CLI.",
         "zcodeToggleDescription": "Show ZCode Coding Plan quota usage."
       },
       "menuBarIcon": {
@@ -3836,6 +3837,7 @@
             "codexSignInSuccess": "Signed in to Codex",
             "codexSignInError": "Codex sign-in failed. Please try again.",
             "cursorUsageMenu": "Cursor Usage",
+            "kiroUsageMenu": "Kiro Usage",
             "hiddenUsageProviders": "Also: {{value0}}",
             "zcodeUsageMenu": "ZCode Usage"
           },
@@ -4036,7 +4038,8 @@
                 "message": "Run cursor-agent login in a terminal on the computer running Orca, then retry usage."
               },
               "plan": "Plan"
-            }
+            },
+            "resetOnDate": "Resets on {{value0}}"
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"
@@ -9364,6 +9367,10 @@
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "Usage percentages",
             "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining.",
+            "kiroUsageTitle": "Kiro Usage",
+            "kiroUsageDescription": "Show Kiro subscription credit usage in the status bar.",
+            "kiro": "kiro",
+            "kiroAws": "aws",
             "zcodeUsageTitle": "ZCode Usage",
             "zcodeUsageDescription": "Show ZCode Coding Plan quota usage in the status bar.",
             "zcode": "zcode",

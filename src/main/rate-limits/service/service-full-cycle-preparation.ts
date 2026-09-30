@@ -2,6 +2,7 @@ import { fetchClaudeRateLimits } from '../claude-fetcher'
 import { fetchCodexRateLimits } from '../codex-fetcher'
 import { fetchGeminiRateLimits } from '../gemini-usage-fetcher'
 import { fetchGrokRateLimits } from '../grok-fetcher'
+import { fetchKiroRateLimits } from '../kiro-usage-fetcher'
 import { readGrokAuthSession } from '../grok-auth'
 import { fetchCursorRateLimits } from '../cursor-fetcher'
 import { readCursorAuthSession } from '../cursor-auth'
@@ -45,6 +46,7 @@ export type FetchAllCyclePrepared = {
   ]
   grokResultPromise: Promise<SettledProviderResult>
   cursorResultPromise: Promise<SettledProviderResult>
+  kiroResultPromise: Promise<SettledProviderResult>
   zcodeResultPromise: Promise<SettledProviderResult>
 }
 
@@ -133,6 +135,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
       grok: this.withFetchingStatus(previousState.grok, 'grok'),
       cursor: this.withFetchingStatus(previousState.cursor, 'cursor'),
+      kiro: this.withFetchingStatus(previousState.kiro, 'kiro'),
       zcode: this.withFetchingStatus(previousState.zcode, 'zcode')
     })
 
@@ -159,6 +162,12 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       signal,
       authReadResult: grokAuthReadResult
     }).then(
+      (value) => ({ status: 'fulfilled', value }) as const,
+      (reason) => ({ status: 'rejected', reason }) as const
+    )
+    // Why: Kiro invokes a CLI with a long timeout; keep it outside the shared
+    // allSettled batch so healthy provider snapshots can publish immediately.
+    const kiroResultPromise = fetchKiroRateLimits({ signal }).then(
       (value) => ({ status: 'fulfilled', value }) as const,
       (reason) => ({ status: 'rejected', reason }) as const
     )
@@ -240,6 +249,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       ],
       grokResultPromise,
       cursorResultPromise,
+      kiroResultPromise,
       zcodeResultPromise
     }
   }

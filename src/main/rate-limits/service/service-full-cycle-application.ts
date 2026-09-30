@@ -1,7 +1,10 @@
 import { RateLimitServiceFullCyclePreparation } from './service-full-cycle-preparation'
 import { deriveAntigravityRateLimits } from '../antigravity-usage-mirror'
-import { settleSiblingProviderResult } from './service-sibling-provider-result'
-import type { ProviderRateLimits } from './service-types'
+import {
+  settleSiblingProviderResult,
+  type SettledProviderResult
+} from './service-sibling-provider-result'
+import type { InternalRateLimitState, ProviderRateLimits } from './service-types'
 
 export abstract class RateLimitServiceFullCycleApplication extends RateLimitServiceFullCyclePreparation {
   protected async runFetchAllCycle(
@@ -37,6 +40,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       ],
       grokResultPromise,
       cursorResultPromise,
+      kiroResultPromise,
       zcodeResultPromise
     } = prepared
     if (signal.aborted) {
@@ -194,6 +198,25 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         : this.state.minimax
     })
 
+    await Promise.all([
+      this.applyGrokCursorAndZcodeResults(
+        grokResultPromise,
+        cursorResultPromise,
+        zcodeResultPromise,
+        previousState,
+        signal
+      ),
+      this.applyKiroResult(kiroResultPromise, previousState.kiro, signal)
+    ])
+  }
+
+  private async applyGrokCursorAndZcodeResults(
+    grokResultPromise: Promise<SettledProviderResult>,
+    cursorResultPromise: Promise<SettledProviderResult>,
+    zcodeResultPromise: Promise<SettledProviderResult>,
+    previousState: Pick<InternalRateLimitState, 'grok' | 'cursor' | 'zcode'>,
+    signal: AbortSignal
+  ): Promise<void> {
     const [grokSettled, cursorSettled, zcodeSettled] = await Promise.all([
       grokResultPromise,
       cursorResultPromise,
@@ -205,11 +228,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     const grok = settleSiblingProviderResult('grok', grokSettled)
     const cursor = settleSiblingProviderResult('cursor', cursorSettled)
     const zcode = settleSiblingProviderResult('zcode', zcodeSettled)
-    // Why: the stale policy keeps a recent snapshot through a failed refresh, but
-    // a snapshot belonging to a different Cursor account must not survive the
-    // switch — the Accounts pane would name the new account beside the old
-    // account's figures. Only a known-and-changed identity clears it, so an
-    // errored refresh that reports no account still keeps its own last reading.
+    // A changed Cursor identity must not inherit another account's stale figures.
     const previousCursorAccount = previousState.cursor?.usageMetadata?.authProvenance
     const cursorAccount = cursor.usageMetadata?.authProvenance
     const cursorAccountChanged =
@@ -233,6 +252,23 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         zcode.status === 'error' && !sameZcodeAccount
           ? zcode
           : this.applyStalePolicy(zcode, previousState.zcode)
+    })
+  }
+
+  private async applyKiroResult(
+    resultPromise: Promise<SettledProviderResult>,
+    previousKiro: ProviderRateLimits | null,
+    signal: AbortSignal
+  ): Promise<void> {
+    const settled = await resultPromise
+    if (signal.aborted) {
+      return
+    }
+    const kiro = settleSiblingProviderResult('kiro', settled)
+    this.trackActiveFailureStreak('kiro', kiro)
+    this.updateState({
+      ...this.state,
+      kiro: this.applyStalePolicy(kiro, previousKiro)
     })
   }
 }

@@ -133,7 +133,7 @@ export function UsageOverflowChip({
   )
 }
 
-function getProviderLetter(provider: ProviderRateLimits['provider']): string {
+export function getProviderLetter(provider: ProviderRateLimits['provider']): string {
   switch (provider) {
     case 'claude':
       return 'C'
@@ -151,6 +151,8 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
       return 'R'
     case 'cursor':
       return 'U'
+    case 'kiro':
+      return 'Q'
     case 'zcode':
       return 'Z'
     case 'codex':
