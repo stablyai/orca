@@ -32,6 +32,7 @@ import {
   resolveAgentSocket
 } from './ssh-connection-utils'
 import { resolveEffectiveProxy } from './ssh-proxy-command'
+import { getAuthAgent } from './ssh-private-key-authentication'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
 
@@ -497,34 +498,77 @@ describe('buildConnectConfig', () => {
 
   it('uses agent auth when no explicit key and SSH_AUTH_SOCK is set', () => {
     const config = buildConnectConfig(makeTarget(), null)
-    expect(config.agent).toBe('/tmp/agent.sock')
+    expect(getAuthAgent(config)).toBe('/tmp/agent.sock')
   })
 
-  it('enables agent forwarding when OpenSSH config requests it and an agent is available', () => {
+  it('forwards no agent unless OpenSSH config requests it', () => {
+    const config = buildConnectConfig(makeTarget(), makeResolved({ forwardAgent: false }))
+    expect(getAuthAgent(config)).toBe('/tmp/agent.sock')
+    expect(config.agent).toBeUndefined()
+  })
+
+  it('carries the forwarded agent when OpenSSH config requests it and an agent is available', () => {
     const config = buildConnectConfig(makeTarget(), makeResolved({ forwardAgent: true }))
 
     expect(config.agent).toBe('/tmp/agent.sock')
-    expect(config.agentForward).toBe(true)
+    // Requested per exec so a refusing server cannot fail every channel.
+    expect(config.agentForward).toBeUndefined()
   })
 
-  it('does not enable agent forwarding without a usable agent', () => {
+  it('does not forward an agent without a usable agent', () => {
     const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
     delete process.env.SSH_AUTH_SOCK
 
     try {
       const config = buildConnectConfig(makeTarget(), makeResolved({ forwardAgent: true }))
       expect(config.agent).toBeUndefined()
-      expect(config.agentForward).toBeUndefined()
+      expect(getAuthAgent(config)).toBeUndefined()
     } finally {
       platformSpy.mockRestore()
     }
   })
 
+  it('forwards the socket named by ForwardAgent instead of the auth agent', () => {
+    process.env.WORK_AGENT_SOCK = '/tmp/work-agent.sock'
+    try {
+      const config = buildConnectConfig(
+        makeTarget(),
+        makeResolved({ forwardAgent: true, forwardAgentSocket: '$WORK_AGENT_SOCK' })
+      )
+      expect(config.agent).toBe('/tmp/work-agent.sock')
+      expect(getAuthAgent(config)).toBe('/tmp/agent.sock')
+    } finally {
+      delete process.env.WORK_AGENT_SOCK
+    }
+  })
+
+  it('does not forward when the ForwardAgent variable is unset', () => {
+    const config = buildConnectConfig(
+      makeTarget(),
+      makeResolved({ forwardAgent: true, forwardAgentSocket: '$ORCA_TEST_UNSET_AGENT' })
+    )
+    expect(config.agent).toBeUndefined()
+  })
+
+  it('keeps the forwarded agent when agent authentication is turned off for a fallback', () => {
+    mockReadFileSync.mockReturnValue(Buffer.from('key'))
+    const config = buildConnectConfig(
+      makeTarget({ identityFile: '/home/user/.ssh/custom' }),
+      makeResolved({ forwardAgent: true }),
+      { authenticateWithAgent: false, includePrivateKey: true }
+    )
+    expect(getAuthAgent(config)).toBeUndefined()
+    expect(config.agent).toBe('/tmp/agent.sock')
+    expect(config.privateKey).toEqual(Buffer.from('key'))
+  })
+
   it('uses configured IdentityAgent before SSH_AUTH_SOCK', () => {
     const config = buildConnectConfig(
       makeTarget(),
-      makeResolved({ identityAgent: '/tmp/one-password.sock' })
+      makeResolved({ identityAgent: '/tmp/one-password.sock', forwardAgent: true })
     )
+    expect(getAuthAgent(config)).toBe('/tmp/one-password.sock')
+    // ssh exports IdentityAgent as SSH_AUTH_SOCK, so it is also what gets forwarded.
     expect(config.agent).toBe('/tmp/one-password.sock')
   })
 
@@ -533,11 +577,15 @@ describe('buildConnectConfig', () => {
       makeTarget({ configHost: 'work', identityAgent: '%d/.1password/agent.sock' }),
       makeResolved({ identityAgent: testHomePath('.1password', 'agent.sock') })
     )
-    expect(config.agent).toBe(testHomePath('.1password', 'agent.sock'))
+    expect(getAuthAgent(config)).toBe(testHomePath('.1password', 'agent.sock'))
   })
 
-  it('allows IdentityAgent none to disable agent auth', () => {
-    const config = buildConnectConfig(makeTarget(), makeResolved({ identityAgent: 'none' }))
+  it('allows IdentityAgent none to disable agent auth and forwarding', () => {
+    const config = buildConnectConfig(
+      makeTarget(),
+      makeResolved({ identityAgent: 'none', forwardAgent: true })
+    )
+    expect(getAuthAgent(config)).toBeUndefined()
     expect(config.agent).toBeUndefined()
   })
 
@@ -570,11 +618,17 @@ describe('buildConnectConfig', () => {
     })
     const config = buildConnectConfig(
       makeTarget(),
-      makeResolved({ identityFile: ['/home/user/.ssh/work_key'], identitiesOnly: true })
+      makeResolved({
+        identityFile: ['/home/user/.ssh/work_key'],
+        identitiesOnly: true,
+        forwardAgent: true
+      })
     )
 
-    expect(config.agent).toMatchObject({ kind: 'identity-filtered-agent' })
-    expect(config.agent).toBeInstanceOf(BaseAgent)
+    expect(getAuthAgent(config)).toMatchObject({ kind: 'identity-filtered-agent' })
+    expect(getAuthAgent(config)).toBeInstanceOf(BaseAgent)
+    // IdentitiesOnly narrows what is offered to the server, never what is forwarded.
+    expect(config.agent).toBe('/tmp/agent.sock')
     expect(config.privateKey).toBeUndefined()
     expect(mockReadFileSync).toHaveBeenCalledWith('/home/user/.ssh/work_key.pub')
   })
@@ -583,10 +637,15 @@ describe('buildConnectConfig', () => {
     mockReadFileSync.mockReturnValue(Buffer.from('not-a-key'))
     const config = buildConnectConfig(
       makeTarget(),
-      makeResolved({ identityFile: ['/home/user/.ssh/work_key'], identitiesOnly: true })
+      makeResolved({
+        identityFile: ['/home/user/.ssh/work_key'],
+        identitiesOnly: true,
+        forwardAgent: true
+      })
     )
 
-    expect(config.agent).toBeUndefined()
+    expect(getAuthAgent(config)).toBeUndefined()
+    expect(config.agent).toBe('/tmp/agent.sock')
     expect(config.privateKey).toEqual(Buffer.from('not-a-key'))
   })
 
@@ -596,7 +655,7 @@ describe('buildConnectConfig', () => {
     } as ParsedKey)
     mockReadFileSync.mockReturnValue(Buffer.from('key'))
     const config = buildConnectConfig(makeTarget({ identityFile: '/home/user/.ssh/custom' }), null)
-    expect(config.agent).toBe('/tmp/agent.sock')
+    expect(getAuthAgent(config)).toBe('/tmp/agent.sock')
     expect(config.privateKey).toEqual(Buffer.from('key'))
     expect(mockReadFileSync).toHaveBeenCalledWith('/home/user/.ssh/custom')
   })
@@ -607,7 +666,7 @@ describe('buildConnectConfig', () => {
     )
     mockReadFileSync.mockReturnValue(Buffer.from('encrypted-key'))
     const config = buildConnectConfig(makeTarget({ identityFile: '/home/user/.ssh/custom' }), null)
-    expect(config.agent).toBe('/tmp/agent.sock')
+    expect(getAuthAgent(config)).toBe('/tmp/agent.sock')
     expect(config.privateKey).toBeUndefined()
     expect(mockReadFileSync).toHaveBeenCalledWith('/home/user/.ssh/custom')
   })
@@ -622,7 +681,7 @@ describe('buildConnectConfig', () => {
         null
       )
       expect(config.privateKey).toEqual(Buffer.from('key'))
-      expect(config.agent).toBeUndefined()
+      expect(getAuthAgent(config)).toBeUndefined()
     } finally {
       platformSpy.mockRestore()
     }
@@ -637,7 +696,7 @@ describe('buildConnectConfig', () => {
         identityFile: '/home/user/.ssh/stale'
       }),
       makeResolved({ identityFile: ['/home/user/.ssh/current'] }),
-      { includeAgent: false, includePrivateKey: true }
+      { authenticateWithAgent: false, includePrivateKey: true }
     )
 
     expect(config.privateKey).toEqual(Buffer.from('/home/user/.ssh/current'))
@@ -647,7 +706,7 @@ describe('buildConnectConfig', () => {
   it('expands Windows-style target.identityFile before reading private key', () => {
     mockReadFileSync.mockReturnValue(Buffer.from('key'))
     const config = buildConnectConfig(makeTarget({ identityFile: '~\\.ssh\\custom' }), null, {
-      includeAgent: false,
+      authenticateWithAgent: false,
       includePrivateKey: true
     })
     expect(config.privateKey).toEqual(Buffer.from('key'))
@@ -663,7 +722,7 @@ describe('buildConnectConfig', () => {
       makeTarget(),
       makeResolved({ identityFile: ['/home/user/.ssh/work_key'] })
     )
-    expect(config.agent).toBe('/tmp/agent.sock')
+    expect(getAuthAgent(config)).toBe('/tmp/agent.sock')
     expect(config.privateKey).toEqual(Buffer.from('custom-key'))
   })
 
@@ -672,7 +731,7 @@ describe('buildConnectConfig', () => {
       makeTarget(),
       makeResolved({ identityFile: [testHomePath('.ssh', 'id_ed25519')] })
     )
-    expect(config.agent).toBe('/tmp/agent.sock')
+    expect(getAuthAgent(config)).toBe('/tmp/agent.sock')
     expect(config.privateKey).toBeUndefined()
     expect(mockReadFileSync).not.toHaveBeenCalled()
   })
@@ -682,7 +741,7 @@ describe('buildConnectConfig', () => {
       (p: unknown) => String(p) === testHomePath('.ssh', 'id_ed25519')
     )
     const config = buildConnectConfig(makeTarget(), null)
-    expect(config.agent).toBe('/tmp/agent.sock')
+    expect(getAuthAgent(config)).toBe('/tmp/agent.sock')
     expect(config.privateKey).toBeUndefined()
     expect(mockExistsSync).not.toHaveBeenCalled()
   })
@@ -696,7 +755,7 @@ describe('buildConnectConfig', () => {
     mockReadFileSync.mockReturnValue(Buffer.from('fallback'))
     try {
       const config = buildConnectConfig(makeTarget(), null)
-      expect(config.agent).toBeUndefined()
+      expect(getAuthAgent(config)).toBeUndefined()
       expect(config.privateKey).toEqual(Buffer.from('fallback'))
     } finally {
       platformSpy.mockRestore()
@@ -708,9 +767,9 @@ describe('buildConnectConfig', () => {
     const config = buildConnectConfig(
       makeTarget({ identityFile: '/home/user/.ssh/custom' }),
       null,
-      { includeAgent: false, includePrivateKey: true }
+      { authenticateWithAgent: false, includePrivateKey: true }
     )
-    expect(config.agent).toBeUndefined()
+    expect(getAuthAgent(config)).toBeUndefined()
     expect(config.privateKey).toEqual(Buffer.from('key'))
   })
 })

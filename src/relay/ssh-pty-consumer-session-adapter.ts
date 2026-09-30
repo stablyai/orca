@@ -27,6 +27,7 @@ export class SshPtyConsumerSessionAdapter {
   private readonly session: PtyConsumerSession
   private readonly sourceCredit: SshPtySourceCreditAdapter
   private readonly pausedDeliveryByPty = new Map<string, PtySourceDeliveryIdentity>()
+  private readonly ownerCommittedListeners = new Set<() => void>()
 
   constructor(
     private readonly dispatcher: RelayDispatcher,
@@ -116,6 +117,17 @@ export class SshPtyConsumerSessionAdapter {
    *  active grant. Used to stamp host-attested ownership on a PTY at spawn. */
   clientInstanceIdFor(clientId: number): string | null {
     return this.session.activeClientInstanceId(String(clientId))
+  }
+
+  /** True only for the session owner's active grant — a subscriber also has an active grant. */
+  isSessionOwner(clientId: number): boolean {
+    return this.session.activeGrant(String(clientId))?.role === 'session-owner'
+  }
+
+  /** Fires after an owner grant is published, including one that displaced the previous owner. */
+  onOwnerCommitted(listener: () => void): () => void {
+    this.ownerCommittedListeners.add(listener)
+    return () => this.ownerCommittedListeners.delete(listener)
   }
 
   openDelivery(
@@ -242,6 +254,9 @@ export class SshPtyConsumerSessionAdapter {
       }
       admission.commitPublication()
       this.closeDisplacedOwner(admission.displacedOwner)
+      for (const listener of this.ownerCommittedListeners) {
+        listener()
+      }
     })
     return admission.grant
   }

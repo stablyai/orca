@@ -40,6 +40,23 @@ export const getSshPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate(
+      'auto.components.settings.SshPane.loginShellAgent',
+      'Use SSH agent from login shell'
+    ),
+    description: translate(
+      'auto.components.settings.ssh.search.loginShellAgent',
+      'Use the SSH agent your shell profile configures.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.ssh.search.7efd17e816', 'ssh'),
+      ...translateSearchKeyword('auto.components.settings.ssh.search.agent', 'agent'),
+      ...translateSearchKeyword('auto.components.settings.ssh.search.forwarding', 'forwarding'),
+      ...translateSearchKeyword('auto.components.settings.ssh.search.sshAuthSock', 'SSH_AUTH_SOCK'),
+      ...translateSearchKeyword('auto.components.settings.ssh.search.onePassword', '1Password')
+    ]
+  },
+  {
     title: translate('auto.components.settings.ssh.search.a3058f3605', 'Test Connection'),
     description: translate(
       'auto.components.settings.ssh.search.96ca5d9a0b',

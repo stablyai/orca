@@ -1,5 +1,8 @@
 import type { SshTarget } from '../../shared/ssh-types'
 import { getControlSocketPath, type SystemSshResolvedConfig } from './ssh-control-socket'
+import { isOpenSshConfigBackedTarget } from './ssh-config-backed-target'
+
+export { isOpenSshConfigBackedTarget } from './ssh-config-backed-target'
 
 export type SystemSshBuildArgsOptions = {
   configFile?: string
@@ -82,6 +85,11 @@ export function buildSshArgs(target: SshTarget, options?: SystemSshBuildArgsOpti
 
   if (!useConfigHost && target.identitiesOnly) {
     args.push('-o', 'IdentitiesOnly=yes')
+  }
+
+  // Why both values: an explicit "off" must also beat a `Host *` ForwardAgent in ssh_config.
+  if (!useConfigHost && target.forwardAgent !== undefined) {
+    args.push('-o', `ForwardAgent=${target.forwardAgent ? 'yes' : 'no'}`)
   }
 
   if (!useConfigHost && target.gssapiAuthentication && !options?.gssapiOnly) {
@@ -218,18 +226,4 @@ function shouldUseOpenSshConfigHost(target: SshTarget): boolean {
     return false
   }
   return isOpenSshConfigBackedTarget(target)
-}
-
-export function isOpenSshConfigBackedTarget(
-  target: Pick<SshTarget, 'source' | 'configHost' | 'host'>
-): boolean {
-  if (target.source === 'ssh-config') {
-    return true
-  }
-  if (target.source === 'manual') {
-    return false
-  }
-  // Why: legacy imported aliases have a distinct configHost; manual targets
-  // historically stored configHost=host and still need explicit -p/-i args.
-  return Boolean(target.configHost && target.configHost !== target.host)
 }

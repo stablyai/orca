@@ -50,9 +50,15 @@ export function readLaunchVersion(): string {
 
 // ── Daemon side ─────────────────────────────────────────────────────
 
+/** What an accepted peer said about itself; unauthenticated beyond the endpoint credential. */
+export type RelayClientHello = {
+  clientRole?: string
+  agentSocket?: string
+}
+
 export type DaemonHandshakeCallbacks = {
   // leftover: bytes buffered after the handshake frame; caller must feed the dispatcher before attaching the data listener or they're lost.
-  onAccepted: (sock: Socket, leftover: Buffer) => void
+  onAccepted: (sock: Socket, leftover: Buffer, hello: RelayClientHello) => void
   launchVersion: string
   endpointCredential?: string
 }
@@ -65,12 +71,12 @@ export function setupDaemonHandshake(sock: Socket, cb: DaemonHandshakeCallbacks)
       if (handshakeResolved) {
         return
       }
-      const accepted = handleDaemonHandshakeFrame(sock, frame, cb)
-      if (accepted) {
+      const hello = handleDaemonHandshakeFrame(sock, frame, cb)
+      if (hello) {
         handshakeResolved = true
         const leftover = decoder.drain()
         detachHandshakeListener(sock)
-        cb.onAccepted(sock, leftover)
+        cb.onAccepted(sock, leftover, hello)
       }
     },
     (err) => {
@@ -99,14 +105,14 @@ function handleDaemonHandshakeFrame(
   sock: Socket,
   frame: DecodedFrame,
   cb: DaemonHandshakeCallbacks
-): boolean {
+): RelayClientHello | null {
   const { launchVersion, endpointCredential } = cb
   if (frame.type !== MessageType.Handshake) {
     process.stderr.write(
       `[relay] Protocol violation pre-handshake: type=${frame.type}; closing socket\n`
     )
     sock.destroy()
-    return false
+    return null
   }
   let msg: ReturnType<typeof parseHandshakeMessage>
   try {
@@ -114,12 +120,12 @@ function handleDaemonHandshakeFrame(
   } catch (err) {
     relayLogLine(`[relay] Could not parse handshake: ${(err as Error).message}; closing socket`)
     sock.destroy()
-    return false
+    return null
   }
   if (msg.type !== 'orca-relay-handshake') {
     relayLogLine(`[relay] Unexpected handshake type from client: ${msg.type}; closing socket`)
     sock.destroy()
-    return false
+    return null
   }
   if (msg.version !== launchVersion) {
     relayLogLine(
@@ -137,7 +143,7 @@ function handleDaemonHandshakeFrame(
       /* best-effort — close+exit-42 still wins */
     }
     sock.end()
-    return false
+    return null
   }
   const presented = 'endpointCredential' in msg ? msg.endpointCredential : undefined
   if (endpointCredential !== undefined && presented !== endpointCredential) {
@@ -148,11 +154,14 @@ function handleDaemonHandshakeFrame(
       /* best-effort — the close alone still refuses */
     }
     sock.end()
-    return false
+    return null
   }
   process.stderr.write(`[relay] Handshake OK from version=${msg.version}\n`)
   sock.write(encodeHandshakeFrame({ type: 'orca-relay-handshake-ok', version: launchVersion }))
-  return true
+  return {
+    ...(msg.clientRole !== undefined ? { clientRole: msg.clientRole } : {}),
+    ...(msg.agentSocket !== undefined ? { agentSocket: msg.agentSocket } : {})
+  }
 }
 
 // ── --connect side ──────────────────────────────────────────────────
@@ -167,7 +176,8 @@ export function runConnectHandshake(
   sock: Socket,
   myVersion: string,
   cb: ConnectHandshakeCallbacks,
-  endpointCredential?: string
+  endpointCredential?: string,
+  hello?: RelayClientHello
 ): void {
   let handshakeDone = false
 
@@ -243,7 +253,9 @@ export function runConnectHandshake(
     encodeHandshakeFrame({
       type: 'orca-relay-handshake',
       version: myVersion,
-      ...(endpointCredential ? { endpointCredential } : {})
+      ...(endpointCredential ? { endpointCredential } : {}),
+      ...(hello?.clientRole ? { clientRole: hello.clientRole } : {}),
+      ...(hello?.agentSocket ? { agentSocket: hello.agentSocket } : {})
     })
   )
 }

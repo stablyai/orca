@@ -105,7 +105,7 @@ describe('ordered SSH private-key authentication', () => {
 
   it('offers every fresh ssh -G IdentityFile in order and ignores the imported snapshot', () => {
     const config = buildConnectConfig(makeTarget(), makeResolved(), {
-      includeAgent: false,
+      authenticateWithAgent: false,
       includePrivateKey: true
     })
 
@@ -141,10 +141,10 @@ describe('ordered SSH private-key authentication', () => {
         identityFile: '/keys/manual'
       }),
       makeResolved(),
-      { includeAgent: false, includePrivateKey: true }
+      { authenticateWithAgent: false, includePrivateKey: true }
     )
     const unresolvedImport = buildConnectConfig(makeTarget(), null, {
-      includeAgent: false,
+      authenticateWithAgent: false,
       includePrivateKey: true
     })
 
@@ -162,7 +162,7 @@ describe('ordered SSH private-key authentication', () => {
 
   it('re-offers keyboard-interactive for each partial-success MFA stage', () => {
     const config = buildConnectConfig(makeTarget(), makeResolved(), {
-      includeAgent: false,
+      authenticateWithAgent: false,
       includePrivateKey: true
     })
     config.password = 'stage-one'
@@ -176,7 +176,7 @@ describe('ordered SSH private-key authentication', () => {
 
   it('stops re-offering methods the host no longer accepts after a partial success', () => {
     const config = buildConnectConfig(makeTarget(), makeResolved(), {
-      includeAgent: false,
+      authenticateWithAgent: false,
       includePrivateKey: true
     })
 
@@ -187,7 +187,7 @@ describe('ordered SSH private-key authentication', () => {
 
   it('bounds the number of partial-success stages it will answer', () => {
     const config = buildConnectConfig(makeTarget(), makeResolved(), {
-      includeAgent: false,
+      authenticateWithAgent: false,
       includePrivateKey: true
     })
 
@@ -207,7 +207,7 @@ describe('ordered SSH private-key authentication', () => {
         identityFile: undefined
       }),
       makeResolved(),
-      { includeAgent: false, includePrivateKey: true }
+      { authenticateWithAgent: false, includePrivateKey: true }
     )
 
     expect(nextAuth(config, true)).toMatchObject({ type: 'none' })
@@ -223,7 +223,7 @@ describe('ordered SSH private-key authentication', () => {
 
   it('resets ordered authentication for credential retries without extra key reads', () => {
     const config = buildConnectConfig(makeTarget(), makeResolved(), {
-      includeAgent: false,
+      authenticateWithAgent: false,
       includePrivateKey: true
     })
     const readsAfterResolution = mockReadFileSync.mock.calls.length
@@ -256,7 +256,7 @@ describe('ordered SSH private-key authentication', () => {
     const config = buildConnectConfig(
       makeTarget(),
       makeResolved({ identityFile: ['/keys/first', '/keys/encrypted-second'] }),
-      { includeAgent: false, includePrivateKey: true }
+      { authenticateWithAgent: false, includePrivateKey: true }
     )
 
     expect(getPassphrasePrivateKeyPath(config)).toBe('/keys/encrypted-second')

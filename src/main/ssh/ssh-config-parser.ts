@@ -4,6 +4,7 @@ import { homedir } from 'node:os'
 import type { SshTarget } from '../../shared/ssh-types'
 import { expandSshConfigIncludes } from './ssh-config-include-expander'
 import { resolveSshConfigHomePath } from './ssh-config-path-expansion'
+import { parseForwardAgentValue } from './ssh-g-config-resolution'
 export { parseSshGOutput, resolveWithSshG, type SshResolvedConfig } from './ssh-g-config-resolution'
 
 export type SshConfigHost = {
@@ -14,6 +15,7 @@ export type SshConfigHost = {
   identityFile?: string
   identityAgent?: string
   identitiesOnly?: boolean
+  forwardAgent?: boolean
   gssapiAuthentication?: boolean
   proxyCommand?: string
   proxyUseFdpass?: boolean
@@ -104,6 +106,11 @@ export function parseSshConfig(content: string): SshConfigHost[] {
       case 'identitiesonly':
         for (const host of current) {
           host.identitiesOnly ??= value.toLowerCase() === 'yes'
+        }
+        break
+      case 'forwardagent':
+        for (const host of current) {
+          host.forwardAgent ??= parseForwardAgentValue(value).enabled
         }
         break
       case 'gssapiauthentication':
@@ -296,6 +303,7 @@ export function sshConfigHostsToTargets(
       identityFile: entry.identityFile,
       identityAgent: entry.identityAgent,
       identitiesOnly: entry.identitiesOnly,
+      forwardAgent: entry.forwardAgent,
       gssapiAuthentication: entry.gssapiAuthentication,
       proxyCommand: entry.proxyCommand,
       jumpHost: entry.proxyJump

@@ -157,7 +157,7 @@ function connectWithOrcaConfig(
 ): { ready: Promise<void>; prompts: string[] } {
   const prompts: string[] = []
   const config = buildConnectConfig(target, resolved, {
-    includeAgent: false,
+    authenticateWithAgent: false,
     includePrivateKey: true
   })
   if (password != null) {

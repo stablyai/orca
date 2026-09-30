@@ -9,6 +9,7 @@ import {
   resolveUnencryptedExplicitPrivateKeys
 } from './ssh-auth-resolution'
 import { configurePrivateKeyAuthentication } from './ssh-private-key-authentication'
+import { resolveAgentForwardingIntent } from './ssh-agent-forwarding-intent'
 import { isOpenSshConfigBackedTarget } from './system-ssh-args'
 
 export { findDefaultKeyFile, resolveAgentSocket } from './ssh-auth-resolution'
@@ -180,7 +181,8 @@ export function createSshOperationAbortError(): Error & { name: string } {
 }
 
 type BuildConnectConfigOptions = {
-  includeAgent?: boolean
+  /** Offer the agent's keys to the server. Never affects forwarding. */
+  authenticateWithAgent?: boolean
   includePrivateKey?: boolean
 }
 
@@ -211,26 +213,29 @@ export function buildConnectConfig(
     tryKeyboard: true
   }
 
-  const shouldIncludeAgent = options.includeAgent ?? true
-  const agentSocket = shouldIncludeAgent ? resolveAgentSocket(target, resolved) : undefined
-  const agent = agentSocket ? resolveAgentConfigValue(agentSocket, target, resolved) : undefined
+  const authAgentSocket =
+    (options.authenticateWithAgent ?? true) ? resolveAgentSocket(target, resolved) : undefined
+  const authAgent = authAgentSocket
+    ? resolveAgentConfigValue(authAgentSocket, target, resolved)
+    : undefined
 
-  if (agent) {
-    config.agent = agent
-  }
-
-  if (agent && resolved?.forwardAgent) {
-    config.agentForward = true
+  // Why config.agent only carries the forwarded agent: ssh2 serves auth-agent@openssh.com from it,
+  // while logins use the separate auth agent. `agentForward` itself is requested per exec
+  // (see ssh-agent-forwarding-request.ts) so a server that refuses it cannot fail every channel.
+  const forwarding = resolveAgentForwardingIntent(target, resolved)
+  if (forwarding.enabled) {
+    config.agent = forwarding.socket
   }
 
   const keys =
-    (options.includePrivateKey ?? !agent)
+    (options.includePrivateKey ?? !authAgent)
       ? resolvePrivateKeys(target, resolved)
       : resolveUnencryptedExplicitPrivateKeys(target, resolved)
   configurePrivateKeyAuthentication(
     config as ConnectConfig,
     keys,
-    findEncryptedPrivateKeyPath(keys)
+    findEncryptedPrivateKeyPath(keys),
+    authAgent
   )
 
   return config as ConnectConfig

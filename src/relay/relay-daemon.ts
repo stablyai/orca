@@ -14,6 +14,8 @@ import {
   restrictWindowsRelayEndpointCredential
 } from './relay-endpoint-credential-publication'
 import { SKILL_RELAY_CAPABILITIES } from './skill-install-handler'
+import { agentLinkPathForRelaySocket, RelayAgentSocketBinding } from './relay-agent-socket-binding'
+import { RELAY_CONNECT_BRIDGE_ROLE } from './protocol'
 
 export async function runRelayDaemon(options: RelayLaunchOptions): Promise<void> {
   if (options.detached && options.logFile) {
@@ -48,6 +50,7 @@ export async function runRelayDaemon(options: RelayLaunchOptions): Promise<void>
     launchVersion
   )
   fatalPtyHandler = runtime.ptyHandler
+  const agentSocketBinding = createAgentSocketBinding(options, runtime)
   let reconnectListener: RelayReconnectListener | null = null
   const agentHooks = new RelayAgentHookRuntime(
     primaryChannel.dispatcher,
@@ -69,6 +72,7 @@ export async function runRelayDaemon(options: RelayLaunchOptions): Promise<void>
       primaryChannel.dispatcher.dispose()
       runtime.disposeHandlers()
       agentHooks.stop()
+      agentSocketBinding?.dispose()
       socketOwnership.closeAndCleanup()
     }
   })
@@ -86,7 +90,15 @@ export async function runRelayDaemon(options: RelayLaunchOptions): Promise<void>
         if (!primaryChannel.isAlive) {
           lifecycle.start('socket client closed')
         }
-      }
+      },
+      onClientAccepted: (clientId, hello) => {
+        // Only a --connect bridge speaks for an SSH connection; `orca` CLI clients run inside
+        // relay PTYs and already carry the binding's own link.
+        if (hello.clientRole === RELAY_CONNECT_BRIDGE_ROLE) {
+          agentSocketBinding?.registerBridge(clientId, hello.agentSocket)
+        }
+      },
+      onClientClosed: (clientId) => agentSocketBinding?.forgetClient(clientId)
     }
   )
   const startedAt = Date.now()
@@ -97,7 +109,8 @@ export async function runRelayDaemon(options: RelayLaunchOptions): Promise<void>
     socketOwnership,
     lifecycle,
     options,
-    startedAt
+    startedAt,
+    agentSocketBinding
   )
 
   try {
@@ -138,6 +151,24 @@ export async function runRelayDaemon(options: RelayLaunchOptions): Promise<void>
   }
 }
 
+// Why detached POSIX only: a non-detached relay's own env is its live launch session, and a
+// Windows relay is WMI-launched with no session env and named-pipe agents a symlink cannot proxy.
+function createAgentSocketBinding(
+  options: RelayLaunchOptions,
+  runtime: RelayRuntimeServices
+): RelayAgentSocketBinding | null {
+  if (!options.detached || process.platform === 'win32') {
+    return null
+  }
+  const binding = new RelayAgentSocketBinding({
+    linkPath: agentLinkPathForRelaySocket(options.sockPath),
+    isSessionOwner: (clientId) => runtime.ptyConsumerSessionAdapter.isSessionOwner(clientId)
+  })
+  binding.start()
+  runtime.ptyConsumerSessionAdapter.onOwnerCommitted(() => binding.sessionOwnerChanged())
+  return binding
+}
+
 function registerRelayStatus(
   primaryChannel: RelayPrimaryChannel,
   runtime: RelayRuntimeServices,
@@ -145,7 +176,8 @@ function registerRelayStatus(
   socketOwnership: RelaySocketOwnership,
   lifecycle: RelayGraceLifecycle,
   options: RelayLaunchOptions,
-  startedAt: number
+  startedAt: number,
+  agentSocketBinding: RelayAgentSocketBinding | null
 ): void {
   primaryChannel.dispatcher.onRequest('relay.status', async () => ({
     capabilities: SKILL_RELAY_CAPABILITIES,
@@ -171,6 +203,9 @@ function registerRelayStatus(
       active: runtime.ptyHandler.graceTimerActive,
       deadlineAt: lifecycle.deadlineAt,
       reason: lifecycle.reason
-    }
+    },
+    agentForwarding: agentSocketBinding
+      ? { supported: true, ...agentSocketBinding.snapshot() }
+      : { supported: false }
   }))
 }

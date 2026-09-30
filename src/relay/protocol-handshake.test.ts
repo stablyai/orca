@@ -130,6 +130,35 @@ describe('handshake framing', () => {
     })
   })
 
+  // The daemon turns agentSocket into a symlink target, so a non-string must die at the parser.
+  it.each(['clientRole', 'agentSocket'])('rejects a present %s that is not a string', (field) => {
+    for (const value of [{ toString: 1 }, 7, null, ['/tmp/a.sock'], true]) {
+      const payload = Buffer.from(
+        JSON.stringify({ type: 'orca-relay-handshake', version: '0.1.0', [field]: value })
+      )
+      expect(() => parseHandshakeMessage(payload), `${field}=${JSON.stringify(value)}`).toThrow(
+        new RegExp(`Handshake field ${field} is not a string`)
+      )
+    }
+  })
+
+  it('accepts a bridge handshake that reports its agent socket', () => {
+    const payload = Buffer.from(
+      JSON.stringify({
+        type: 'orca-relay-handshake',
+        version: '0.1.0',
+        clientRole: 'connect-bridge',
+        agentSocket: '/tmp/ssh-abc/agent.42'
+      })
+    )
+    expect(parseHandshakeMessage(payload)).toEqual({
+      type: 'orca-relay-handshake',
+      version: '0.1.0',
+      clientRole: 'connect-bridge',
+      agentSocket: '/tmp/ssh-abc/agent.42'
+    })
+  })
+
   it('still accepts a credential-mismatch reply, which carries no fields', () => {
     const payload = Buffer.from(
       JSON.stringify({ type: 'orca-relay-handshake-credential-mismatch' })

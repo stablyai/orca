@@ -12,7 +12,10 @@ export type SshResolvedConfig = {
   identityFile: string[]
   identityAgent?: string
   identitiesOnly: boolean
+  /** True for any ForwardAgent value other than `no`, matching OpenSSH. */
   forwardAgent: boolean
+  /** Socket named by `ForwardAgent <path>` / `ForwardAgent $VAR`; `$VAR` is expanded at connect time. */
+  forwardAgentSocket?: string
   /**
    * Effective GSSAPIAuthentication, including distro-wide /etc/ssh defaults — except on the
    * HOME-divergent `-F` path (see sshGArgsForHost), where OpenSSH skips the system config.
@@ -324,6 +327,22 @@ function parseKnownHostsFileList(value: string | undefined): string[] {
   return paths.map(resolveSshConfigHomePath)
 }
 
+// Why not `=== 'yes'`: OpenSSH also accepts a socket path or `$VAR`, and `ssh -G` prints either verbatim.
+export function parseForwardAgentValue(value: string | undefined): {
+  enabled: boolean
+  socket?: string
+} {
+  const trimmed = value?.trim()
+  const keyword = trimmed?.toLowerCase()
+  if (!trimmed || keyword === 'no' || keyword === 'false') {
+    return { enabled: false }
+  }
+  if (keyword === 'yes' || keyword === 'true') {
+    return { enabled: true }
+  }
+  return { enabled: true, socket: resolveSshConfigHomePath(trimmed) }
+}
+
 function buildSshResolvedConfig(
   map: Map<string, string>,
   identityFiles: string[]
@@ -336,6 +355,7 @@ function buildSshResolvedConfig(
   const proxyJump = rawJump && rawJump !== 'none' ? rawJump : undefined
   const rawIdentityAgent = map.get('identityagent')
   const identityAgent = rawIdentityAgent ? resolveSshConfigHomePath(rawIdentityAgent) : undefined
+  const forwardAgent = parseForwardAgentValue(map.get('forwardagent'))
   const rawControlPath = map.get('controlpath')
   const controlPath =
     rawControlPath && rawControlPath !== 'none'
@@ -349,7 +369,8 @@ function buildSshResolvedConfig(
     identityFile: identityFiles,
     identityAgent,
     identitiesOnly: map.get('identitiesonly') === 'yes',
-    forwardAgent: map.get('forwardagent') === 'yes',
+    forwardAgent: forwardAgent.enabled,
+    ...(forwardAgent.socket ? { forwardAgentSocket: forwardAgent.socket } : {}),
     gssapiAuthentication: map.get('gssapiauthentication') === 'yes',
     proxyCommand,
     proxyUseFdpass: map.get('proxyusefdpass') === 'yes',

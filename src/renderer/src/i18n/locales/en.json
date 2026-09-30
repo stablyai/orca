@@ -8592,7 +8592,9 @@
           "0e5aa04161": "Host or SSH config alias is required",
           "f1fc50dad2": "Failed to load SSH targets",
           "0cda732f43": "Connection test failed",
-          "terminateUnverifiable": "{{terminals}} remote terminal(s) could not be reached. Reconnect to end them."
+          "terminateUnverifiable": "{{terminals}} remote terminal(s) could not be reached. Reconnect to end them.",
+          "loginShellAgent": "Use SSH agent from login shell",
+          "loginShellAgentHelp": "Use the SSH_AUTH_SOCK your shell profile sets (1Password, Secretive, gpg-agent) for SSH logins and agent forwarding, instead of the one Orca was launched with. Applies to the next connection."
         },
         "SshPassphraseDialog": {
           "d5a234456f": "Cancel",
@@ -8676,7 +8678,12 @@
           "addTitle": "Add SSH host",
           "editDescription": "Update connection details for this machine. Changes apply on next connect.",
           "addDescription": "Add a persistent machine you can log into over SSH.",
-          "editingPrefix": "Editing"
+          "editingPrefix": "Editing",
+          "agentForwarding": "Agent forwarding",
+          "agentForwardingConfig": "Follow SSH config",
+          "agentForwardingOn": "On",
+          "agentForwardingOff": "Off",
+          "agentForwardingHelp": "Lets remote terminals and Git use your local SSH keys, like ssh -A. Turn on only for hosts you trust."
         },
         "TasksPane": {
           "f71d8a9dd3": "Task Providers",
@@ -10533,7 +10540,12 @@
             "f5a691bb6c": "Add SSH Target",
             "d4bcd497c7": "remote",
             "74c6d90d78": "Manage remote SSH targets.",
-            "380a788da7": "SSH Connections"
+            "380a788da7": "SSH Connections",
+            "loginShellAgent": "Use the SSH agent your shell profile configures.",
+            "agent": "agent",
+            "forwarding": "forwarding",
+            "sshAuthSock": "SSH_AUTH_SOCK",
+            "onePassword": "1Password"
           }
         },
         "tasks": {

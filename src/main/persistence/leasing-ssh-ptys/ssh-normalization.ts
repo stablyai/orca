@@ -44,6 +44,9 @@ export function normalizeSshTarget(t: SshTarget): SshTarget {
   if (systemSshConnectionReuse === false) {
     normalized.systemSshConnectionReuse = false
   }
+  if (typeof normalized.forwardAgent !== 'boolean') {
+    delete normalized.forwardAgent
+  }
   return normalized
 }
 

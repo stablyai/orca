@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { isAbsolute, join as pathJoin } from 'node:path'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
+import { resolveAgentForwardingIntent } from './ssh-agent-forwarding-intent'
 
 export type SystemSshResolvedConfig = Pick<
   SshResolvedConfig,
@@ -14,6 +15,7 @@ export type SystemSshResolvedConfig = Pick<
   | 'identityAgent'
   | 'identitiesOnly'
   | 'forwardAgent'
+  | 'forwardAgentSocket'
   | 'proxyCommand'
   | 'proxyJump'
   | 'proxyUseFdpass'
@@ -44,9 +46,13 @@ export function getControlSocketPath(
     return null
   }
 
+  // Why the effective socket and not only the setting: a master forwards the agent it was spawned
+  // with, and the opt-in login-shell agent can change SSH_AUTH_SOCK mid-session.
+  const forwarding = resolveAgentForwardingIntent(target, resolvedConfig ?? null)
   // Why: include both persisted target fields and fresh ssh -G output so a
   // live ControlPersist master is not reused after config-backed routes change.
   const key = JSON.stringify({
+    ...(forwarding.enabled ? { forwardedAgentSocket: forwarding.socket } : {}),
     target: {
       id: target.id,
       configHost: target.configHost || '',
@@ -57,7 +63,9 @@ export function getControlSocketPath(
       jumpHost: target.jumpHost || '',
       identityFile: target.identityFile || '',
       identityAgent: target.identityAgent || '',
-      identitiesOnly: target.identitiesOnly || false
+      identitiesOnly: target.identitiesOnly || false,
+      // Why only when set: a master's forwarding is fixed at spawn, but unset keeps old paths.
+      ...(target.forwardAgent !== undefined ? { forwardAgent: target.forwardAgent } : {})
     },
     resolved: normalizeResolvedConfig(resolvedConfig),
     // Why: a Kerberos-only session must not reuse a master authenticated by a key.
@@ -122,6 +130,10 @@ function normalizeResolvedConfig(
     identityAgent: resolvedConfig.identityAgent || '',
     identitiesOnly: resolvedConfig.identitiesOnly || false,
     forwardAgent: resolvedConfig.forwardAgent || false,
+    // Why only when set: keeps existing masters' paths unchanged for `ForwardAgent yes|no` users.
+    ...(resolvedConfig.forwardAgentSocket
+      ? { forwardAgentSocket: resolvedConfig.forwardAgentSocket }
+      : {}),
     proxyCommand: resolvedConfig.proxyCommand || '',
     proxyJump: resolvedConfig.proxyJump || '',
     proxyUseFdpass: resolvedConfig.proxyUseFdpass || false,

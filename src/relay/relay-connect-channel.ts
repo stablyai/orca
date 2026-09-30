@@ -1,6 +1,6 @@
 import { createConnection } from 'node:net'
 import { DispatcherClientWriter } from './dispatcher-client-writer'
-import { RELAY_SENTINEL } from './protocol'
+import { RELAY_CONNECT_BRIDGE_ROLE, RELAY_SENTINEL } from './protocol'
 import { readLaunchVersion, runConnectHandshake } from './relay-handshake'
 
 const CONNECT_TIMEOUT_MS = 5_000
@@ -82,7 +82,13 @@ export function runRelayConnectChannel(sockPath: string, endpointCredential?: st
           })
         }
       },
-      endpointCredential
+      endpointCredential,
+      // Why this process's env: the bridge is a session on the *current* SSH connection, so its
+      // SSH_AUTH_SOCK is exactly what a fresh `ssh host` would see; the daemon's is launch-time.
+      {
+        clientRole: RELAY_CONNECT_BRIDGE_ROLE,
+        ...(process.env.SSH_AUTH_SOCK ? { agentSocket: process.env.SSH_AUTH_SOCK } : {})
+      }
     )
   })
 

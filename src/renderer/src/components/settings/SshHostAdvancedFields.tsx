@@ -9,8 +9,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
-import { SettingsSwitch } from './SettingsFormControls'
-import type { EditingTarget } from './ssh-target-draft'
+import { SettingsSegmentedControl, SettingsSwitch } from './SettingsFormControls'
+import type { EditingTarget, SshAgentForwardingChoice } from './ssh-target-draft'
 import { translate } from '@/i18n/i18n'
 
 // Why: mirror the composer's "Advanced" disclosure (ghost button + rotating chevron) so the
@@ -80,6 +80,57 @@ export function SshHostAdvancedFields({
               {translate(
                 'auto.components.settings.SshTargetForm.feae1d1e69',
                 'Optional. Equivalent to ProxyJump / ssh -J.'
+              )}
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium">
+              {translate(
+                'auto.components.settings.SshTargetForm.agentForwarding',
+                'Agent forwarding'
+              )}
+            </Label>
+            <div>
+              <SettingsSegmentedControl<SshAgentForwardingChoice>
+                size="sm"
+                value={form.agentForwarding}
+                onChange={(agentForwarding) => onFormChange((f) => ({ ...f, agentForwarding }))}
+                ariaLabel={translate(
+                  'auto.components.settings.SshTargetForm.agentForwarding',
+                  'Agent forwarding'
+                )}
+                options={[
+                  {
+                    value: 'config',
+                    disabled,
+                    label: translate(
+                      'auto.components.settings.SshTargetForm.agentForwardingConfig',
+                      'Follow SSH config'
+                    )
+                  },
+                  {
+                    value: 'on',
+                    disabled,
+                    label: translate(
+                      'auto.components.settings.SshTargetForm.agentForwardingOn',
+                      'On'
+                    )
+                  },
+                  {
+                    value: 'off',
+                    disabled,
+                    label: translate(
+                      'auto.components.settings.SshTargetForm.agentForwardingOff',
+                      'Off'
+                    )
+                  }
+                ]}
+              />
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              {translate(
+                'auto.components.settings.SshTargetForm.agentForwardingHelp',
+                'Lets remote terminals and Git use your local SSH keys, like ssh -A. Turn on only for hosts you trust.'
               )}
             </p>
           </div>

@@ -7,7 +7,8 @@ import { join } from 'node:path'
 import {
   setupDaemonHandshake,
   runConnectHandshake,
-  EXIT_CODE_VERSION_MISMATCH
+  EXIT_CODE_VERSION_MISMATCH,
+  type RelayClientHello
 } from './relay-handshake'
 import {
   encodeHandshakeFrame,
@@ -77,19 +78,21 @@ describe('handshake round-trip over a real Socket pair', () => {
     return s
   }
 
+  type AcceptedPeer = { sock: Socket; leftover: Buffer; hello: RelayClientHello }
+
   function startDaemon(
     version: string,
     endpointCredential?: string
   ): Promise<{
-    accepted: Promise<{ sock: Socket; leftover: Buffer }>
+    accepted: Promise<AcceptedPeer>
   }> {
     return new Promise((resolve) => {
       const acceptedDeferred: {
-        promise: Promise<{ sock: Socket; leftover: Buffer }>
-        resolve: (v: { sock: Socket; leftover: Buffer }) => void
+        promise: Promise<AcceptedPeer>
+        resolve: (v: AcceptedPeer) => void
       } = (() => {
-        let _resolve: (v: { sock: Socket; leftover: Buffer }) => void = () => {}
-        const promise = new Promise<{ sock: Socket; leftover: Buffer }>((r) => {
+        let _resolve: (v: AcceptedPeer) => void = () => {}
+        const promise = new Promise<AcceptedPeer>((r) => {
           _resolve = r
         })
         return { promise, resolve: _resolve }
@@ -100,7 +103,7 @@ describe('handshake round-trip over a real Socket pair', () => {
         setupDaemonHandshake(sock, {
           launchVersion: version,
           endpointCredential,
-          onAccepted: (s, leftover) => acceptedDeferred.resolve({ sock: s, leftover })
+          onAccepted: (s, leftover, hello) => acceptedDeferred.resolve({ sock: s, leftover, hello })
         })
       })
       server.listen(sockPath, () => resolve({ accepted: acceptedDeferred.promise }))
@@ -122,6 +125,33 @@ describe('handshake round-trip over a real Socket pair', () => {
     await vi.waitFor(() => expect(acceptedCb).toHaveBeenCalledTimes(1))
     expect(acceptedCb.mock.calls[0][0].length).toBe(0)
 
+    bridgeSock.destroy()
+  })
+
+  it('delivers the bridge role and agent socket to the daemon', async () => {
+    const { accepted } = await startDaemon('0.1.0+match')
+    const bridgeSock = connect(sockPath)
+    await new Promise<void>((r) => bridgeSock.once('connect', () => r()))
+
+    runConnectHandshake(bridgeSock, '0.1.0+match', { onAccepted: vi.fn() }, undefined, {
+      clientRole: 'connect-bridge',
+      agentSocket: '/tmp/ssh-abc/agent.42'
+    })
+
+    const { hello } = await accepted
+    expect(hello).toEqual({ clientRole: 'connect-bridge', agentSocket: '/tmp/ssh-abc/agent.42' })
+    bridgeSock.destroy()
+  })
+
+  it('reports an empty hello for peers that send no role, such as the orca CLI', async () => {
+    const { accepted } = await startDaemon('0.1.0+match')
+    const bridgeSock = connect(sockPath)
+    await new Promise<void>((r) => bridgeSock.once('connect', () => r()))
+
+    runConnectHandshake(bridgeSock, '0.1.0+match', { onAccepted: vi.fn() })
+
+    const { hello } = await accepted
+    expect(hello).toEqual({})
     bridgeSock.destroy()
   })
 

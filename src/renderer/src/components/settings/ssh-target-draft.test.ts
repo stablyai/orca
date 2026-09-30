@@ -220,6 +220,21 @@ describe('getEditingTargetForSshTarget', () => {
     expect(draft.systemSshConnectionReuse).toBe(false)
   })
 
+  it('maps stored agent forwarding to the three-way choice', () => {
+    const base = { id: 'ssh-1', label: 'Box', host: 'box.example.com', port: 22, username: 'me' }
+
+    expect(getEditingTargetForSshTarget(base).agentForwarding).toBe('config')
+    expect(getEditingTargetForSshTarget({ ...base, forwardAgent: true }).agentForwarding).toBe('on')
+    expect(getEditingTargetForSshTarget({ ...base, forwardAgent: false }).agentForwarding).toBe(
+      'off'
+    )
+    // An imported target's value is only a fallback for when ssh -G cannot run.
+    expect(
+      getEditingTargetForSshTarget({ ...base, source: 'ssh-config', forwardAgent: true })
+        .agentForwarding
+    ).toBe('config')
+  })
+
   it('uses the default persistence for targets without an explicit grace period', () => {
     const draft = getEditingTargetForSshTarget({
       id: 'ssh-1',
@@ -272,7 +287,9 @@ describe('getEditingTargetFromSshConfigHost', () => {
       username: 'ops',
       identityFile: '',
       gssapiAuthentication: true,
-      jumpHost: 'edge'
+      jumpHost: 'edge',
+      // Not copied as an override, so later ~/.ssh/config edits keep applying.
+      agentForwarding: 'config'
     })
     expect(getSshTargetDraftConnectionFields(draft)).toEqual({
       host: 'bastion.prod.example',

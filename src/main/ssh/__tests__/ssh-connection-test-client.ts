@@ -7,15 +7,19 @@ export type MockSshClient = {
   _sock: Socket | undefined
   lastExecCommand?: string
   lastConnectConfig?: unknown
+  execCalls: { cmd: string; agentForward: boolean }[]
   on: (event: string, handler: (...args: unknown[]) => void) => void
   off: (event: string, handler: (...args: unknown[]) => void) => void
   connect: (config?: unknown) => void
   destroy: () => void
   emit: (event: string, ...args: unknown[]) => void
   clearPendingTimers: () => void
-  exec: (cmd: string, cb: (err: Error | undefined, channel: unknown) => void) => void
+  exec: (cmd: string, optionsOrCb: ExecOptionsLike | ExecCallback, maybeCb?: ExecCallback) => void
   sftp: (cb: (err: Error | undefined, channel: unknown) => void) => void
 }
+
+type ExecCallback = (err: Error | undefined, channel: unknown) => void
+type ExecOptionsLike = { agentForward?: boolean }
 
 export type Ssh2ModuleMock = {
   BaseAgent: new () => object
@@ -48,6 +52,8 @@ export const ssh2Mock: {
   connectSequence: ('ready' | 'silent' | Error)[]
   execBehavior: 'callback' | 'pending'
   sftpBehavior: 'callback' | 'pending'
+  /** Mirrors a server that answers auth-agent-req with failure (AllowAgentForwarding no). */
+  refuseAgentForwarding: boolean
   notifyClientCreated: (() => void) | undefined
 } = {
   presentedHostKey: undefined,
@@ -63,6 +69,7 @@ export const ssh2Mock: {
   connectSequence: [],
   execBehavior: 'callback',
   sftpBehavior: 'callback',
+  refuseAgentForwarding: false,
   notifyClientCreated: undefined
 }
 
@@ -79,6 +86,7 @@ export function createSsh2Module(): Ssh2ModuleMock {
     _sock: Socket | undefined = new Socket()
     lastExecCommand?: string
     lastConnectConfig?: unknown
+    execCalls: { cmd: string; agentForward: boolean }[] = []
     private handlers = new Map<string, Set<(...args: unknown[]) => void>>()
     private connectTimer: ReturnType<typeof setTimeout> | null = null
     private handshakeTimer: ReturnType<typeof setTimeout> | null = null
@@ -197,8 +205,18 @@ export function createSsh2Module(): Ssh2ModuleMock {
       }
       throw new Error(ssh2Mock.destroyErrorMessage)
     }
-    exec(cmd: string, cb: (err: Error | undefined, channel: unknown) => void) {
+    exec(cmd: string, optionsOrCb: ExecOptionsLike | ExecCallback, maybeCb?: ExecCallback) {
+      const cb = typeof optionsOrCb === 'function' ? optionsOrCb : maybeCb
+      if (!cb) {
+        throw new Error('exec requires a callback')
+      }
+      const agentForward = typeof optionsOrCb === 'object' && optionsOrCb.agentForward === true
       this.lastExecCommand = cmd
+      this.execCalls.push({ cmd, agentForward })
+      if (agentForward && ssh2Mock.refuseAgentForwarding) {
+        cb(new Error('Unable to request agent forwarding'), undefined)
+        return
+      }
       if (ssh2Mock.execBehavior === 'pending') {
         pendingExecCallback = cb
         return
@@ -238,6 +256,7 @@ export function resetSsh2ClientState(): void {
   ssh2Mock.connectSequence = []
   ssh2Mock.execBehavior = 'callback'
   ssh2Mock.sftpBehavior = 'callback'
+  ssh2Mock.refuseAgentForwarding = false
   ssh2Mock.notifyClientCreated = undefined
   ssh2Mock.presentedHostKey = undefined
   ssh2Mock.lastHostKeyAccepted = undefined

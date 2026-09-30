@@ -4,7 +4,7 @@ import type { SshTarget } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
 import { createIdentityFilteredAgent } from './ssh-agent-identity-filter'
 import { resolveSshConfigHomePath } from './ssh-config-path-expansion'
-import { isOpenSshConfigBackedTarget } from './system-ssh-args'
+import { isOpenSshConfigBackedTarget } from './ssh-config-backed-target'
 
 // Why: ssh2 only tries keys that are explicitly provided. Users with keys in
 // standard locations (e.g. ~/.ssh/id_ed25519) but no SSH agent running would
@@ -48,7 +48,11 @@ function expandIdentityAgentEnv(value: string): string | undefined {
   if (value === 'SSH_AUTH_SOCK') {
     return process.env.SSH_AUTH_SOCK || undefined
   }
+  return expandAgentSocketEnv(value)
+}
 
+/** Expands `$VAR` / `${VAR}` in an agent socket value; undefined when any variable is unset. */
+export function expandAgentSocketEnv(value: string): string | undefined {
   let missingEnv = false
   const expanded = value.replace(/\$(\w+)|\$\{([^}]+)\}/g, (_match, bare, braced) => {
     const envName = String(bare || braced)

@@ -9,9 +9,39 @@ import {
   resetSshConnectionMocks,
   ssh2Mock
 } from './ssh-connection-test-harness'
-import { createCallbacks, createTarget } from './ssh-connection-test-fixtures'
+import { createCallbacks, createResolvedConfig, createTarget } from './ssh-connection-test-fixtures'
 import { SshConnection } from './ssh-connection'
 import { resolveWithSshG } from './ssh-config-parser'
+
+function connectConfigField(config: unknown, key: string): unknown {
+  return typeof config === 'object' && config !== null ? Reflect.get(config, key) : undefined
+}
+
+/** Drains the auth handler ssh2 would call, so tests see which methods reach the server. */
+function offeredAuthMethods(config: unknown): string[] {
+  const handler = connectConfigField(config, 'authHandler')
+  if (typeof handler !== 'function') {
+    throw new Error('connect config has no authHandler')
+  }
+  const methods: string[] = []
+  for (let exhausted = false; !exhausted;) {
+    const next = (attempt: unknown): void => {
+      if (attempt === false) {
+        exhausted = true
+        return
+      }
+      methods.push(
+        typeof attempt === 'string' ? attempt : String(connectConfigField(attempt, 'type'))
+      )
+    }
+    Reflect.apply(handler, undefined, [methods.length === 0 ? null : [], false, next])
+  }
+  return methods
+}
+
+function forwardingResolvedConfig(): ReturnType<typeof createResolvedConfig> {
+  return createResolvedConfig({ forwardAgent: true, proxyUseFdpass: false })
+}
 
 vi.mock('ssh2', async () => (await import('./ssh-connection-test-harness')).createSsh2Module())
 vi.mock('./system-ssh-binary', async () =>
@@ -65,7 +95,7 @@ describe('SshConnection', () => {
       agent?: unknown
       privateKey?: unknown
     }
-    expect(initialConfig.agent).toBe('/tmp/agent.sock')
+    expect(offeredAuthMethods(initialConfig)).toContain('agent')
     expect(initialConfig.privateKey).toBeUndefined()
     expect(callbacks.onCredentialRequest).not.toHaveBeenCalled()
   })
@@ -91,13 +121,56 @@ describe('SshConnection', () => {
         agent?: unknown
         privateKey?: Buffer
       }
-      expect(initialConfig.agent).toBe('/tmp/agent.sock')
+      expect(offeredAuthMethods(initialConfig)).toContain('agent')
       expect(initialConfig.privateKey).toBeUndefined()
-      expect(fallbackConfig.agent).toBeUndefined()
+      expect(offeredAuthMethods(fallbackConfig)).not.toContain('agent')
       expect(fallbackConfig.privateKey).toEqual(Buffer.from('test-key'))
     } finally {
       rmSync(tempDir, { recursive: true, force: true })
     }
+  })
+
+  it('keeps agent forwarding when agent auth fails and a disk key logs in', async () => {
+    vi.stubEnv('SSH_AUTH_SOCK', '/tmp/agent.sock')
+    vi.mocked(resolveWithSshG).mockResolvedValue(forwardingResolvedConfig())
+    const tempDir = mkdtempSync(join(tmpdir(), 'orca-ssh-key-'))
+    const keyPath = join(tempDir, 'id_ed25519')
+    writeFileSync(keyPath, 'test-key')
+    ssh2Mock.connectSequence = [new Error('All configured authentication methods failed'), 'ready']
+
+    try {
+      const conn = new SshConnection(createTarget({ identityFile: keyPath }), createCallbacks())
+
+      await conn.connect()
+
+      expect(clientInstances).toHaveLength(2)
+      const fallbackConfig = clientInstances[1].lastConnectConfig
+      expect(offeredAuthMethods(fallbackConfig)).not.toContain('agent')
+      expect(connectConfigField(fallbackConfig, 'agent')).toBe('/tmp/agent.sock')
+      await conn.exec('true')
+      expect(clientInstances[1].execCalls.at(-1)?.agentForward).toBe(true)
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps agent forwarding on the password retry after agent auth fails', async () => {
+    vi.stubEnv('SSH_AUTH_SOCK', '/tmp/agent.sock')
+    vi.mocked(resolveWithSshG).mockResolvedValue(forwardingResolvedConfig())
+    ssh2Mock.connectSequence = [new Error('All configured authentication methods failed'), 'ready']
+    const onCredentialRequest = vi.fn(async () => 'password-123')
+    const conn = new SshConnection(
+      createTarget({ identityFile: join(tmpdir(), 'missing-key') }),
+      createCallbacks({ onCredentialRequest })
+    )
+
+    await conn.connect()
+
+    expect(clientInstances).toHaveLength(2)
+    const retryConfig = clientInstances[1].lastConnectConfig
+    expect(connectConfigField(retryConfig, 'password')).toBe('password-123')
+    expect(offeredAuthMethods(retryConfig)).not.toContain('agent')
+    expect(connectConfigField(retryConfig, 'agent')).toBe('/tmp/agent.sock')
   })
 
   it('falls back to direct private key auth when the agent socket is unavailable', async () => {
@@ -119,7 +192,7 @@ describe('SshConnection', () => {
         agent?: unknown
         privateKey?: Buffer
       }
-      expect(fallbackConfig.agent).toBeUndefined()
+      expect(offeredAuthMethods(fallbackConfig)).not.toContain('agent')
       expect(fallbackConfig.privateKey).toEqual(Buffer.from('test-key'))
     } finally {
       rmSync(tempDir, { recursive: true, force: true })
@@ -146,7 +219,7 @@ describe('SshConnection', () => {
         agent?: unknown
         privateKey?: Buffer
       }
-      expect(fallbackConfig.agent).toBeUndefined()
+      expect(offeredAuthMethods(fallbackConfig)).not.toContain('agent')
       expect(fallbackConfig.privateKey).toEqual(Buffer.from('test-key'))
     } finally {
       rmSync(tempDir, { recursive: true, force: true })
@@ -172,7 +245,7 @@ describe('SshConnection', () => {
       password?: string
       privateKey?: unknown
     }
-    expect(retryConfig.agent).toBeUndefined()
+    expect(offeredAuthMethods(retryConfig)).not.toContain('agent')
     expect(retryConfig.password).toBe('password-123')
     expect(retryConfig.privateKey).toBeUndefined()
     expect(onCredentialRequest).toHaveBeenCalledWith(
@@ -214,9 +287,9 @@ describe('SshConnection', () => {
         password?: string
         privateKey?: Buffer
       }
-      expect(keyRetryConfig.agent).toBeUndefined()
+      expect(offeredAuthMethods(keyRetryConfig)).not.toContain('agent')
       expect(keyRetryConfig.privateKey).toEqual(Buffer.from('test-key'))
-      expect(passwordRetryConfig.agent).toBeUndefined()
+      expect(offeredAuthMethods(passwordRetryConfig)).not.toContain('agent')
       expect(passwordRetryConfig.privateKey).toEqual(Buffer.from('test-key'))
       expect(passwordRetryConfig.password).toBe('password-123')
     } finally {

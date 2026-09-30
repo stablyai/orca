@@ -1,6 +1,6 @@
 import type { Socket } from 'node:net'
 import type { RelayDispatcher } from './dispatcher'
-import { setupDaemonHandshake } from './relay-handshake'
+import { setupDaemonHandshake, type RelayClientHello } from './relay-handshake'
 import { relayLogLine } from './relay-diagnostic-log'
 import type { RelaySocketOwnership } from './relay-socket-ownership'
 
@@ -8,6 +8,9 @@ type RelayReconnectCallbacks = {
   detachPrimaryInput: () => void
   cancelGrace: (reason: string) => void
   onLastClientClosed: () => void
+  /** Runs before any of the client's bytes reach the dispatcher. */
+  onClientAccepted?: (clientId: number, hello: RelayClientHello) => void
+  onClientClosed?: (clientId: number) => void
 }
 
 export class RelayReconnectListener {
@@ -59,7 +62,8 @@ export class RelayReconnectListener {
     setupDaemonHandshake(socket, {
       launchVersion: this.launchVersion,
       endpointCredential: this.endpointCredential,
-      onAccepted: (acceptedSocket, leftover) => this.attachAcceptedSocket(acceptedSocket, leftover)
+      onAccepted: (acceptedSocket, leftover, hello) =>
+        this.attachAcceptedSocket(acceptedSocket, leftover, hello)
     })
     socket.on('end', () => {
       if (!socket.destroyed) {
@@ -72,7 +76,7 @@ export class RelayReconnectListener {
     socket.on('close', () => this.handleSocketClose(socket))
   }
 
-  private attachAcceptedSocket(socket: Socket, leftover: Buffer): void {
+  private attachAcceptedSocket(socket: Socket, leftover: Buffer, hello: RelayClientHello): void {
     this.callbacks.detachPrimaryInput()
     this.acceptedSocketClient = true
     this.acceptedSocketConnections++
@@ -124,6 +128,7 @@ export class RelayReconnectListener {
       { pauseReads: () => socket.pause(), resumeReads: () => socket.resume() }
     )
     this.socketClients.set(socket, clientId)
+    this.callbacks.onClientAccepted?.(clientId, hello)
     if (leftover.length > 0) {
       this.dispatcher.feedClient(clientId, leftover)
     }
@@ -138,6 +143,7 @@ export class RelayReconnectListener {
     this.socketClients.delete(socket)
     if (clientId !== undefined) {
       this.dispatcher.detachClient(clientId, 'peer-closed')
+      this.callbacks.onClientClosed?.(clientId)
     }
     relayLogLine(`[relay] Socket client closed (clients=${this.socketClients.size})`)
     if (this.socketClients.size === 0) {

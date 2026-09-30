@@ -19,6 +19,7 @@ import { CodexUsageStore } from '../codex-usage/store'
 import { OpenCodeUsageStore } from '../opencode-usage/store'
 import { MuseUsageStore } from '../muse-usage/store'
 import { installRepoMaintenanceIdleGate } from '../repo-maintenance-idle-gate'
+import { bindLoginShellAgentSetting } from '../ssh/ssh-login-shell-agent'
 import { mainProcessState as state } from './main-process-state'
 
 export function initializeMainProcessObservers(): void {
@@ -36,6 +37,8 @@ export function initializeMainProcessObservers(): void {
   )
   // Why: start from empty — disk-hydrated status rows are UI continuity only; only this runtime's hook events keep the computer awake.
   state.agentAwakeService.setStatuses([])
+  // Why here: before any SSH connect, so an opt-in login-shell agent is in place for the first one.
+  bindLoginShellAgentSetting(store)
   state.uninstallRepoMaintenanceIdleGate = installRepoMaintenanceIdleGate({
     isQuitting: () => state.isQuitting,
     getWorkingAgentCount: () => state.agentAwakeService?.getWorkingAgentCount() ?? 0

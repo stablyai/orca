@@ -3,6 +3,7 @@ import { translate } from '@/i18n/i18n'
 import {
   getEditingTargetFromSshConfigHost,
   getSshTargetDraftConnectionFields,
+  getSshTargetForwardAgent,
   hasAdvancedConnectionValues,
   isRelayGracePeriodValid,
   parseRelayGracePeriodSeconds,
@@ -82,6 +83,7 @@ export async function saveNewSshHostFromForm({
   const identityFile = form.identityFile.trim() || undefined
   const proxyCommand = form.proxyCommand.trim() || undefined
   const jumpHost = form.jumpHost.trim() || undefined
+  const forwardAgent = getSshTargetForwardAgent(form)
   const systemSshConnectionReuse = form.systemSshConnectionReuse ? undefined : false
   const target = {
     label: form.label.trim() || (username ? `${username}@${host}` : configHost || host),
@@ -94,6 +96,7 @@ export async function saveNewSshHostFromForm({
     ...(identityFile ? { identityFile } : {}),
     ...(proxyCommand ? { proxyCommand } : {}),
     ...(jumpHost ? { jumpHost } : {}),
+    ...(forwardAgent !== undefined ? { forwardAgent } : {}),
     ...(systemSshConnectionReuse === false ? { systemSshConnectionReuse } : {})
   }
 

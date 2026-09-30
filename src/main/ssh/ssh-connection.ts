@@ -76,7 +76,20 @@ import {
 } from './ssh-reconnect-error-classification'
 import { SshReconnectLadder } from './ssh-reconnect-ladder'
 import { mayUserSshConfigClaimAlias } from './ssh-config-alias-claim'
-import { getPassphrasePrivateKeyPath } from './ssh-private-key-authentication'
+import {
+  getPassphrasePrivateKeyPath,
+  hasAgentAuthentication
+} from './ssh-private-key-authentication'
+import {
+  describeAgentForwardingIntent,
+  resolveAgentForwardingIntent
+} from './ssh-agent-forwarding-intent'
+import { waitForLoginShellAgent } from './ssh-login-shell-agent'
+import {
+  AGENT_FORWARDING_EXEC_OPTIONS,
+  isAgentForwardingRefusedError,
+  SshAgentForwardingRequest
+} from './ssh-agent-forwarding-request'
 import {
   requiresSystemSshForSecurityKey,
   shouldUseSystemSshTransport
@@ -211,6 +224,8 @@ export class SshConnection {
   private keyboardInteractivePasswordState = { passwordAutoAnswered: false }
   private hostKeyFingerprint: string | undefined
   private connectGeneration = 0
+  // Keyed by client so a late exec on a replaced client never reads the new client's state.
+  private readonly agentForwardingByClient = new WeakMap<SshClient, SshAgentForwardingRequest>()
 
   constructor(target: SshTarget, callbacks: SshConnectionCallbacks) {
     this.target = target
@@ -283,16 +298,46 @@ export class SshConnection {
     const client = this.client
     const remoteCommand = options?.wrapCommand === false ? cmd : wrapRemoteCommandForPosixShell(cmd)
     return this.openSessionChannelWithRetry(
-      () =>
-        this.waitForSshCallback(
-          'SSH exec channel timed out',
-          (callback) => client.exec(remoteCommand, callback),
-          (channel) => channel.close(),
-          options?.signal,
-          true
-        ),
+      () => this.openExecChannel(client, remoteCommand, options?.signal),
       options?.signal
     )
+  }
+
+  private async openExecChannel(
+    client: SshClient,
+    remoteCommand: string,
+    signal: AbortSignal | undefined
+  ): Promise<ClientChannel> {
+    const open = (requestAgentForwarding: boolean): Promise<ClientChannel> =>
+      this.waitForSshCallback(
+        'SSH exec channel timed out',
+        (callback) =>
+          requestAgentForwarding
+            ? client.exec(remoteCommand, AGENT_FORWARDING_EXEC_OPTIONS, callback)
+            : client.exec(remoteCommand, callback),
+        (channel) => channel.close(),
+        signal,
+        true
+      )
+    const forwarding = this.agentForwardingByClient.get(client)
+    if (!forwarding?.shouldRequest()) {
+      return open(false)
+    }
+    try {
+      const channel = await open(true)
+      forwarding.markGranted()
+      return channel
+    } catch (error) {
+      if (!isAgentForwardingRefusedError(error)) {
+        throw error
+      }
+      if (forwarding.markRefused()) {
+        console.warn(
+          `[ssh] ${this.target.label} refused agent forwarding; continuing without a forwarded agent`
+        )
+      }
+      return open(false)
+    }
   }
 
   async sftp(options?: AbortSignal | { signal?: AbortSignal }): Promise<SFTPWrapper> {
@@ -807,6 +852,8 @@ export class SshConnection {
     this.keyboardInteractiveCancelled = false
     this.keyboardInteractivePasswordState = { passwordAutoAnswered: false }
 
+    // Why before ssh -G: the opt-in login-shell agent must be in place before auth or forwarding.
+    await waitForLoginShellAgent()
     const resolved = await resolveWithSshG(this.target.configHost || this.target.label).catch(
       () => null
     )
@@ -844,6 +891,11 @@ export class SshConnection {
     this.useSystemSshTransport = false
 
     const config = buildConnectConfig(this.target, resolved)
+    console.warn(
+      `[ssh] Agent forwarding for ${this.target.label}: ${describeAgentForwardingIntent(
+        resolveAgentForwardingIntent(this.target, resolved)
+      )}`
+    )
 
     // Why: ssh2 doesn't support ProxyCommand/ProxyJump natively; spawn the resolved proxy and pipe its stdin/stdout as config.sock.
     const effectiveProxy = resolveEffectiveProxy(this.target, resolved)
@@ -921,9 +973,10 @@ export class SshConnection {
       let credentialRetryConfig = config
 
       // Why: ssh2 parses encrypted privateKey before agent auth; when an agent exists, let it try first and fall back to direct key parsing only if it fails.
-      if (isAgentFallbackError(authError) && config.agent && !config.privateKey) {
+      if (isAgentFallbackError(authError) && hasAgentAuthentication(config) && !config.privateKey) {
+        // Stops offering the agent's keys only; the forwarded agent is kept (buildConnectConfig).
         const keyConfig = buildConnectConfig(this.target, resolved, {
-          includeAgent: false,
+          authenticateWithAgent: false,
           includePrivateKey: true
         })
         // Why: if the agent path failed, password/passphrase retries must not reuse the same agent-only config.
@@ -1627,6 +1680,11 @@ export class SshConnection {
         }
         settled = true
         this.client = client
+        // config.agent is set only when forwarding was requested (buildConnectConfig).
+        this.agentForwardingByClient.set(
+          client,
+          new SshAgentForwardingRequest(config.agent !== undefined)
+        )
         this.proxyProcess = null
         this.setupDisconnectHandler(client)
         cleanupStartupListeners()

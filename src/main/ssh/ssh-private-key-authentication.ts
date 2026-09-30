@@ -1,7 +1,26 @@
-import type { AnyAuthMethod, AuthenticationType, ConnectConfig, NextAuthHandler } from 'ssh2'
+import type {
+  AnyAuthMethod,
+  AuthenticationType,
+  BaseAgent,
+  ConnectConfig,
+  NextAuthHandler
+} from 'ssh2'
 import type { PrivateKeyFile } from './ssh-auth-resolution'
 
 const passphraseKeyPaths = new WeakMap<ConnectConfig, string>()
+// Why not config.agent: ssh2 forwards config.agent, so agent login must be tracked separately or
+// dropping it after a failed login would also drop forwarding.
+const authAgents = new WeakMap<ConnectConfig, BaseAgent | string>()
+
+export type SshAuthAgent = BaseAgent | string
+
+export function hasAgentAuthentication(config: ConnectConfig): boolean {
+  return authAgents.has(config)
+}
+
+export function getAuthAgent(config: ConnectConfig): SshAuthAgent | undefined {
+  return authAgents.get(config)
+}
 
 // Bounds an `AuthenticationMethods a,b,c` ladder so a host that keeps replying
 // "partial success" cannot keep the client prompting forever.
@@ -30,8 +49,9 @@ function buildAuthQueue(
       passphrase: config.passphrase
     })
   }
-  if (config.agent) {
-    queue.push({ type: 'agent', username, agent: config.agent })
+  const authAgent = authAgents.get(config)
+  if (authAgent) {
+    queue.push({ type: 'agent', username, agent: authAgent })
   }
   if (config.tryKeyboard) {
     queue.push('keyboard-interactive')
@@ -42,8 +62,12 @@ function buildAuthQueue(
 export function configurePrivateKeyAuthentication(
   config: ConnectConfig,
   keys: PrivateKeyFile[],
-  passphraseKeyPath?: string
+  passphraseKeyPath?: string,
+  authAgent?: SshAuthAgent
 ): void {
+  if (authAgent) {
+    authAgents.set(config, authAgent)
+  }
   const firstKey = keys[0]
   if (firstKey) {
     config.privateKey = firstKey.contents

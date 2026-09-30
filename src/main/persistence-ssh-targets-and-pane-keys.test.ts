@@ -267,6 +267,28 @@ describe('Store', () => {
     expect(updatedTarget).not.toHaveProperty('systemSshConnectionReuse')
   })
 
+  it('keeps explicit agent forwarding choices and clears them back to following SSH config', async () => {
+    const store = await createStore()
+    store.addSshTarget({
+      id: 'ssh-forward-off',
+      label: 'No forwarding',
+      host: 'shared.example.com',
+      port: 22,
+      username: 'dev',
+      forwardAgent: false
+    })
+
+    expect(store.getSshTarget('ssh-forward-off')?.forwardAgent).toBe(false)
+
+    const cleared = store.updateSshTarget('ssh-forward-off', { forwardAgent: undefined })
+    expect(cleared).not.toHaveProperty('forwardAgent')
+    store.flush()
+    const persisted = readDataFile() as { sshTargets?: Record<string, unknown>[] }
+    expect(persisted.sshTargets?.find((t) => t.id === 'ssh-forward-off')).not.toHaveProperty(
+      'forwardAgent'
+    )
+  })
+
   it('drops retired per-target SSH terminal source-credit selections', async () => {
     const store = await createStore()
     store.addSshTarget({

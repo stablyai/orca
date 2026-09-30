@@ -26,6 +26,10 @@ export type SshTarget = {
   identityAgent?: string
   /** Whether OpenSSH IdentitiesOnly should limit public-key auth attempts. */
   identitiesOnly?: boolean
+  /** ForwardAgent, with the same precedence as identityAgent: for manual targets an explicit
+   *  choice (undefined follows ~/.ssh/config); for `ssh-config` targets the imported value,
+   *  used only when `ssh -G` cannot run. */
+  forwardAgent?: boolean
   /** Whether the host's SSH config explicitly requests GSSAPIAuthentication
    *  (Kerberos). ssh2 has no gssapi-with-mic support, so these targets try the
    *  system OpenSSH transport first. */

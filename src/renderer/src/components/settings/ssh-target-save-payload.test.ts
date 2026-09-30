@@ -43,6 +43,23 @@ describe('buildSshTargetSavePayload', () => {
     })
   })
 
+  it('stores an explicit agent forwarding choice and clears it when following SSH config', () => {
+    const on = buildSshTargetSavePayload({
+      ...EMPTY_FORM,
+      host: 'prod.example.com',
+      agentForwarding: 'on'
+    })
+    const follow = buildSshTargetSavePayload({ ...EMPTY_FORM, host: 'prod.example.com' })
+    if (!on.ok || !follow.ok) {
+      throw new Error('payload should be valid')
+    }
+
+    expect(on.payload.target.forwardAgent).toBe(true)
+    expect(follow.payload.target).not.toHaveProperty('forwardAgent')
+    // updateTarget merges, so following SSH config must send an explicit undefined to clear.
+    expect(follow.payload.updates).toHaveProperty('forwardAgent', undefined)
+  })
+
   it('persists explicit SSH connection reuse opt-outs and bounded relay timeouts', () => {
     const result = buildSshTargetSavePayload({
       ...EMPTY_FORM,

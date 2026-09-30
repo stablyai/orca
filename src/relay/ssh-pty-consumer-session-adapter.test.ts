@@ -689,4 +689,26 @@ describe('SshPtyConsumerSessionAdapter', () => {
 
     expect(adapter.sourceDeliverySnapshot(identity).state).toBe('closed')
   })
+
+  it('reports only the owner grant as session owner, not an active subscriber', async () => {
+    const settle = (_data: Uint8Array, onSettled: (result: { ok: true }) => void): boolean => {
+      onSettled({ ok: true })
+      return true
+    }
+    dispatcher = new RelayDispatcher(settle, { supportsWriteCallback: true }, endpointIdentity)
+    const adapter = new SshPtyConsumerSessionAdapter(dispatcher, 'build-a')
+    dispatcher.feed(openFrame(1))
+    const subscriberId = dispatcher.attachClient(
+      settle,
+      { supportsWriteCallback: true },
+      endpointIdentity
+    )
+    dispatcher.feedClient(subscriberId, openFrame(2, { requestedRole: 'subscriber' }))
+    await flushRequests()
+
+    expect(adapter.isSessionOwner(1)).toBe(true)
+    // Both hold active grants; only one owns the session.
+    expect(adapter.clientInstanceIdFor(subscriberId)).toBe('client-2')
+    expect(adapter.isSessionOwner(subscriberId)).toBe(false)
+  })
 })

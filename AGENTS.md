@@ -92,6 +92,8 @@ Ordinary `pnpm install` covers the host OS and CPU only. Before packaging for an
 
 All changes must consider the SSH use case. Don't assume local-only execution. Before changing anything that reports on, stops, or lists remote work, follow [`docs/reference/ssh-execution-boundary.md`](./docs/reference/ssh-execution-boundary.md): the execution host owns everything that touches execution, and loss of contact is never evidence of process death — the verdict vocabulary is `live` / `unverifiable` / `exited`, with no synonyms.
 
+Before touching SSH authentication, `ForwardAgent` handling, the relay handshake, or how relay-spawned processes get their environment, read [`docs/reference/ssh-agent-forwarding.md`](./docs/reference/ssh-agent-forwarding.md): login and forwarding are separate, and the relay re-points one `SSH_AUTH_SOCK` link on every reconnect.
+
 ## Folder Workspace Use Case
 
 All changes must consider folder workspaces as well as git worktrees. Don't assume every workspace is a git worktree.

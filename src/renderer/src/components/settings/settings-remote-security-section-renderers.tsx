@@ -2,6 +2,7 @@ import { DeveloperPermissionsPane } from './DeveloperPermissionsPane'
 import { PrivacyPane } from './PrivacyPane'
 import { RuntimeEnvironmentsPane } from './RuntimeEnvironmentsPane'
 import { SshPane } from './SshPane'
+import { SshLoginShellAgentSetting } from './SshLoginShellAgentSetting'
 import { SettingsSection } from './SettingsSection'
 import { translate } from '@/i18n/i18n'
 import type { SettingsRenderContext } from './settings-render-context'
@@ -52,7 +53,10 @@ export function renderSshSettingsSection(context: SettingsRenderContext): React.
       searchEntries={navigation.getSectionSearchEntries('ssh')}
     >
       {view.isSectionMounted('ssh') ? (
-        <SshPane addTargetIntentSignal={model.sshHostAddIntentSignal} />
+        <div className="space-y-4">
+          <SshPane addTargetIntentSignal={model.sshHostAddIntentSignal} />
+          <SshLoginShellAgentSetting />
+        </div>
       ) : null}
     </SettingsSection>
   ) : null

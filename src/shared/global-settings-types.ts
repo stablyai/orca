@@ -288,6 +288,8 @@ export type GlobalSettings = {
   browserClientHostedRemoteEnabled?: boolean
   /** Routes SSH-workspace browser pages through the workspace's SSH host; off = plain local browsing. */
   browserSshWorkspaceRoutingEnabled?: boolean
+  /** SSH logins and agent forwarding use the login shell's SSH_AUTH_SOCK instead of Orca's launch value; absent = off. */
+  sshUseLoginShellAgent?: boolean
   /** Per-target opt-outs recorded from the routing error card's "Browse from this device instead". */
   browserSshWorkspaceRoutingDisabledTargetIds?: string[]
   /** Targets whose forwarding preflight the user overrode via "Try anyway" (e.g. PermitOpen allows their sites); skips the probe, never changes egress. */

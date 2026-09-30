@@ -33,12 +33,23 @@ export const MessageType = {
   KeepAlive: 9
 } as const
 
+/** Handshake `clientRole` of a `--connect` bridge, the only peer whose agentSocket is trusted. */
+export const RELAY_CONNECT_BRIDGE_ROLE = 'connect-bridge'
+
 // Why: a pre-dispatcher envelope on a freshly-accepted Unix socket. The daemon
 // reads exactly one Handshake frame before attaching the JSON-RPC dispatcher,
 // to refuse mismatched-version --connect bridges that would otherwise drive a
 // stale daemon.
 export type HandshakeMessage =
-  | { type: 'orca-relay-handshake'; version: string; endpointCredential?: string }
+  | {
+      type: 'orca-relay-handshake'
+      version: string
+      endpointCredential?: string
+      /** RELAY_CONNECT_BRIDGE_ROLE for `--connect` bridges; absent for `--orca-cli` and older peers. */
+      clientRole?: string
+      /** The bridge's own SSH_AUTH_SOCK: the agent this SSH connection forwards, if any. */
+      agentSocket?: string
+    }
   | { type: 'orca-relay-handshake-ok'; version: string }
   | { type: 'orca-relay-handshake-mismatch'; expected: string; got: string }
   // Why a distinct reply: the bridge exits with its own code so the client can tell a refused
@@ -68,7 +79,7 @@ const HANDSHAKE_STRING_FIELDS: Readonly<Record<HandshakeMessage['type'], readonl
 const HANDSHAKE_OPTIONAL_STRING_FIELDS: Readonly<
   Record<HandshakeMessage['type'], readonly string[]>
 > = {
-  'orca-relay-handshake': ['endpointCredential'],
+  'orca-relay-handshake': ['endpointCredential', 'clientRole', 'agentSocket'],
   'orca-relay-handshake-ok': [],
   'orca-relay-handshake-mismatch': [],
   'orca-relay-handshake-credential-mismatch': []

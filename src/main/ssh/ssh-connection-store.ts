@@ -197,6 +197,7 @@ export class SshConnectionStore {
           identityFile: candidate.identityFile,
           identityAgent: candidate.identityAgent,
           identitiesOnly: candidate.identitiesOnly,
+          forwardAgent: candidate.forwardAgent,
           gssapiAuthentication: candidate.gssapiAuthentication,
           proxyCommand: candidate.proxyCommand,
           jumpHost: candidate.jumpHost

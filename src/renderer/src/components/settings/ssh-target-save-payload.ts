@@ -5,6 +5,7 @@ import {
 } from '../../../../shared/ssh-types'
 import {
   getSshTargetDraftConnectionFields,
+  getSshTargetForwardAgent,
   isRelayGracePeriodValid,
   parseRelayGracePeriodSeconds,
   type EditingTarget
@@ -57,6 +58,7 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
   const identityFile = form.identityFile.trim() || undefined
   const proxyCommand = form.proxyCommand.trim() || undefined
   const jumpHost = form.jumpHost.trim() || undefined
+  const forwardAgent = getSshTargetForwardAgent(form)
   const systemSshConnectionReuse = form.systemSshConnectionReuse ? undefined : false
 
   const target: SshTargetCreateInput = {
@@ -70,6 +72,7 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
     ...(identityFile ? { identityFile } : {}),
     ...(proxyCommand ? { proxyCommand } : {}),
     ...(jumpHost ? { jumpHost } : {}),
+    ...(forwardAgent !== undefined ? { forwardAgent } : {}),
     ...(systemSshConnectionReuse === false ? { systemSshConnectionReuse } : {})
   }
 
@@ -85,6 +88,7 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
         gssapiAuthentication: form.gssapiAuthentication || undefined,
         proxyCommand,
         jumpHost,
+        forwardAgent,
         systemSshConnectionReuse,
         source: 'manual'
       }

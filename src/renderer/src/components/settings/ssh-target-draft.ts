@@ -7,6 +7,9 @@ import {
   type SshTarget
 } from '../../../../shared/ssh-types'
 
+/** `config` follows ~/.ssh/config (ForwardAgent); `on`/`off` override it for this host. */
+export type SshAgentForwardingChoice = 'config' | 'on' | 'off'
+
 export type EditingTarget = {
   label: string
   configHost: string
@@ -17,6 +20,7 @@ export type EditingTarget = {
   gssapiAuthentication: boolean
   proxyCommand: string
   jumpHost: string
+  agentForwarding: SshAgentForwardingChoice
   systemSshConnectionReuse: boolean
   relayGracePeriodSeconds: string
   relayKeepAliveUntilReset: boolean
@@ -32,6 +36,7 @@ export const EMPTY_FORM: EditingTarget = {
   gssapiAuthentication: false,
   proxyCommand: '',
   jumpHost: '',
+  agentForwarding: 'config',
   systemSshConnectionReuse: true,
   relayGracePeriodSeconds: String(DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS),
   relayKeepAliveUntilReset: DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS === 0
@@ -51,6 +56,13 @@ export function getEditingTargetForSshTarget(target: SshTarget): EditingTarget {
     gssapiAuthentication: target.gssapiAuthentication === true,
     proxyCommand: target.proxyCommand ?? '',
     jumpHost: target.jumpHost ?? '',
+    // Why config for ssh-config targets: their stored value is only an import-time fallback.
+    agentForwarding:
+      target.source === 'ssh-config' || target.forwardAgent === undefined
+        ? 'config'
+        : target.forwardAgent
+          ? 'on'
+          : 'off',
     systemSshConnectionReuse: target.systemSshConnectionReuse !== false,
     relayGracePeriodSeconds: String(
       target.relayGracePeriodSeconds === 0
@@ -165,8 +177,14 @@ export function hasAdvancedConnectionValues(form: EditingTarget): boolean {
   return (
     form.proxyCommand.trim().length > 0 ||
     form.jumpHost.trim().length > 0 ||
+    form.agentForwarding !== 'config' ||
     !form.systemSshConnectionReuse
   )
+}
+
+/** Undefined follows ~/.ssh/config; the save payloads send it explicitly to clear an override. */
+export function getSshTargetForwardAgent(form: EditingTarget): boolean | undefined {
+  return form.agentForwarding === 'config' ? undefined : form.agentForwarding === 'on'
 }
 
 export function isSshTargetFormDirty(current: EditingTarget, baseline: EditingTarget): boolean {
@@ -180,6 +198,7 @@ export function isSshTargetFormDirty(current: EditingTarget, baseline: EditingTa
     current.gssapiAuthentication !== baseline.gssapiAuthentication ||
     current.proxyCommand !== baseline.proxyCommand ||
     current.jumpHost !== baseline.jumpHost ||
+    current.agentForwarding !== baseline.agentForwarding ||
     current.systemSshConnectionReuse !== baseline.systemSshConnectionReuse ||
     current.relayGracePeriodSeconds !== baseline.relayGracePeriodSeconds ||
     current.relayKeepAliveUntilReset !== baseline.relayKeepAliveUntilReset

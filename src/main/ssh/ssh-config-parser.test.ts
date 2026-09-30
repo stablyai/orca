@@ -149,6 +149,22 @@ Host eq
     })
   })
 
+  it('parses ForwardAgent keywords and treats a socket path as enabled', () => {
+    const config = `
+Host on
+  ForwardAgent yes
+Host off
+  ForwardAgent no
+Host path
+  ForwardAgent ~/.ssh/agent.sock
+Host first-wins
+  ForwardAgent no
+  ForwardAgent yes
+`
+    const byHost = Object.fromEntries(parseSshConfig(config).map((h) => [h.host, h.forwardAgent]))
+    expect(byHost).toEqual({ on: true, off: false, path: true, 'first-wins': false })
+  })
+
   it('parses IdentityAgent with ~ expansion', () => {
     const config = `
 Host myserver
@@ -559,6 +575,25 @@ describe('parseSshGOutput', () => {
     const output = 'hostname example.com\nforwardagent yes\nport 22'
     const result = parseSshGOutput(output)
     expect(result.forwardAgent).toBe(true)
+    expect(result.forwardAgentSocket).toBeUndefined()
+  })
+
+  it('parses a forwardagent socket path as enabled with that socket', () => {
+    // OpenSSH 10.x prints the path verbatim, with `~` already expanded.
+    const result = parseSshGOutput('hostname example.com\nforwardagent /tmp/work-agent.sock')
+    expect(result.forwardAgent).toBe(true)
+    expect(result.forwardAgentSocket).toBe('/tmp/work-agent.sock')
+  })
+
+  it('keeps a forwardagent $VAR unexpanded for connect-time expansion', () => {
+    const result = parseSshGOutput('hostname example.com\nforwardagent $WORK_AGENT_SOCK')
+    expect(result.forwardAgent).toBe(true)
+    expect(result.forwardAgentSocket).toBe('$WORK_AGENT_SOCK')
+  })
+
+  it('expands a leading ~ in a forwardagent path', () => {
+    const result = parseSshGOutput('hostname example.com\nforwardagent ~/.ssh/agent.sock')
+    expect(result.forwardAgentSocket).toBe(testHomePath('.ssh', 'agent.sock'))
   })
 
   it('defaults port to 22 when missing', () => {

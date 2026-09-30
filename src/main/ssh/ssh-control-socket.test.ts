@@ -114,6 +114,42 @@ describe.skipIf(process.platform === 'win32')('getControlSocketPath', () => {
     expect(after).not.toBe(before)
   })
 
+  // A master's agent forwarding is fixed when it spawns, so a changed choice needs a new master.
+  it('changes the path when agent forwarding changes', () => {
+    const ordinary = getControlSocketPath(createTarget(), createResolved())
+
+    expect(getControlSocketPath(createTarget({ forwardAgent: true }), createResolved())).not.toBe(
+      ordinary
+    )
+    expect(
+      getControlSocketPath(
+        createTarget(),
+        createResolved({ forwardAgent: true, forwardAgentSocket: '/tmp/work-agent.sock' })
+      )
+    ).not.toBe(getControlSocketPath(createTarget(), createResolved({ forwardAgent: true })))
+  })
+
+  // The login-shell agent setting rewrites SSH_AUTH_SOCK mid-session; a reused master would keep
+  // forwarding the agent it was spawned with for up to ControlPersist.
+  it('changes the path when the forwarded agent socket changes', () => {
+    const forwarding = createResolved({ forwardAgent: true })
+    vi.stubEnv('SSH_AUTH_SOCK', '/tmp/launchd/Listeners')
+    const before = getControlSocketPath(createTarget(), forwarding)
+    const beforeUnforwarded = getControlSocketPath(createTarget(), createResolved())
+
+    vi.stubEnv('SSH_AUTH_SOCK', '/Users/me/.1password/agent.sock')
+
+    expect(getControlSocketPath(createTarget(), forwarding)).not.toBe(before)
+    expect(getControlSocketPath(createTarget(), createResolved())).toBe(beforeUnforwarded)
+  })
+
+  it('keeps existing paths for targets that never set agent forwarding', () => {
+    // Guards the conditional key fields: adding them unconditionally would orphan live masters.
+    expect(getControlSocketPath(createTarget({ forwardAgent: undefined }), createResolved())).toBe(
+      getControlSocketPath(createTarget(), createResolved())
+    )
+  })
+
   it('uses XDG_RUNTIME_DIR before tmp when it is absolute and private', () => {
     vi.stubEnv('XDG_RUNTIME_DIR', '/run/user/501')
 
