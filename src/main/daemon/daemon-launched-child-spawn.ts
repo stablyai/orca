@@ -1,5 +1,6 @@
 import { forkProcess, type ForkSpec } from '../../shared/child-process/fork-process'
 import { spawnProcess, type SpawnedProcess } from '../../shared/child-process/run-process'
+import { bunOwnedRuntimeArgs } from '../../shared/bun-owned-runtime-args'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { buildDurableDaemonScopeCommand } from './daemon-cgroup-scope'
 import { daemonLogArgs } from './daemon-launch-paths'
@@ -57,12 +58,21 @@ export function spawnDaemonChildProcess(
 ): SpawnedProcess {
   const { forkEntryPath, relocatedExecPath, userDataPath, launchNonce } = options
   const scriptArgs = buildDaemonScriptArgs(options)
+  const usesBun = Boolean(
+    process.versions.bun && (!relocatedExecPath || relocatedExecPath === process.execPath)
+  )
   // Why: run as plain Node so Electron's GPU/display init can't interfere with node-pty's posix_spawn of the spawn-helper.
-  const daemonEnv = {
+  const daemonEnv: NodeJS.ProcessEnv = {
     ...process.env,
     ELECTRON_RUN_AS_NODE: '1',
     // Why: the detached plain-Node daemon has no AppEnvironment, but shell rcfiles must live outside swept tmp.
     ORCA_USER_DATA_PATH: userDataPath
+  }
+  if (usesBun) {
+    delete daemonEnv.ELECTRON_RUN_AS_NODE
+    delete daemonEnv.NODE_OPTIONS
+    delete daemonEnv.NODE_PATH
+    delete daemonEnv.BUN_OPTIONS
   }
   // Why cwd: detached daemons outlive dev worktrees; userData keeps process.cwd() valid after a repo/worktree is deleted.
   // Why detached/stdio: detached+unref outlives Electron; stdout 'ignore' (else blocks exit), stderr 'pipe' captures startup crashes lost in v1.4.129-rc.1.
@@ -83,7 +93,12 @@ export function spawnDaemonChildProcess(
   }
   const scoped = buildDurableDaemonScopeCommand(
     relocatedExecPath ?? process.execPath,
-    [forkEntryPath, ...scriptArgs, '--fresh-daemon-scope'],
+    [
+      ...(usesBun ? bunOwnedRuntimeArgs() : []),
+      forkEntryPath,
+      ...scriptArgs,
+      '--fresh-daemon-scope'
+    ],
     launchNonce,
     daemonEnv
   )

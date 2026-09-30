@@ -1,3 +1,4 @@
+import { bunOwnedRuntimeArgs } from '../../shared/bun-owned-runtime-args'
 import { randomUUID } from 'node:crypto'
 import { ORCAD_BUN_VERSION } from '../../shared/orcad-bun-runtime'
 import { orcadBunRuntimeFilename } from '../../shared/orcad-artifacts'
@@ -21,6 +22,7 @@ export function orcadProfilePreflightCommand(
   return [
     'ORCA_BACKGROUND_LAUNCH=1',
     shellEscape(joinRemotePath(host, directory, orcadBunRuntimeFilename(host.os))),
+    ...bunOwnedRuntimeArgs('linux'),
     shellEscape(joinRemotePath(host, directory, 'orcad.js')),
     ORCAD_PROFILE_PREFLIGHT_FLAG,
     shellEscape(nonce)

@@ -14,7 +14,7 @@ export function selectOrcadSlotRuntimeCommand(
   const target = shellEscape(joinRemotePath(host, directory, ORCAD_BUILD_TARGET_FILENAME))
   return (
     `if [ -e ${target} ] || [ -e ${runtime} ]; then ` +
-    `[ -x ${runtime} ] || exit 78; orcad_runtime=${runtime}; ` +
-    `else orcad_runtime=${shellEscape(legacyNodePath)}; fi`
+    `[ -x ${runtime} ] || exit 78; orcad_runtime=${runtime}; orcad_runtime_flags='--no-env-file --config=/dev/null --no-install'; ` +
+    `else orcad_runtime=${shellEscape(legacyNodePath)}; orcad_runtime_flags=; fi`
   )
 }

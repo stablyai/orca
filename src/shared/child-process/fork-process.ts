@@ -1,3 +1,4 @@
+import { bunOwnedRuntimeArgs } from '../bun-owned-runtime-args'
 // `fork` arm of Orca's child-process chokepoint. Kept beside `run-process.ts` for the same
 // reason that file exists: callers outside this directory must not import `node:child_process`,
 // and a guard test enforces that against a shrinking allowlist.
@@ -33,6 +34,25 @@ export type ForkSpec = {
 
 export function forkProcess(spec: ForkSpec): SpawnedProcess {
   const options: ForkOptions = {
+    // Child cwd must not choose configuration before the helper starts.
+    ...(process.versions.bun && (!spec.execPath || spec.execPath === process.execPath)
+      ? {
+          execArgv: [
+            ...process.execArgv.filter(
+              (arg, index, args) =>
+                arg !== '--no-env-file' &&
+                arg !== '--no-install' &&
+                arg !== '--config' &&
+                arg !== '-c' &&
+                !arg.startsWith('--config=') &&
+                !arg.startsWith('-c=') &&
+                args[index - 1] !== '--config' &&
+                args[index - 1] !== '-c'
+            ),
+            ...bunOwnedRuntimeArgs()
+          ]
+        }
+      : {}),
     cwd: spec.cwd,
     env: spec.env,
     detached: spec.detached,

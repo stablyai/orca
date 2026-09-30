@@ -128,6 +128,7 @@ export function createWindowsBunPtyLaunch(
     command: [
       deps.runtimePath ?? process.execPath,
       '--no-env-file',
+      '--no-install',
       `--config=${configPath}`,
       `--cwd=${directory}`,
       workerPath,

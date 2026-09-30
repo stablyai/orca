@@ -1,3 +1,4 @@
+import { bunOwnedRuntimeArgs } from '../../shared/bun-owned-runtime-args'
 import type { CodexAppServerLaunch } from './codex-app-server-connection'
 
 /** Time the provider gets to exit on its own after its stdin ends, before SIGTERM. */
@@ -162,7 +163,11 @@ export function supervisedPosixLaunch(
   ).toString('base64')
   return {
     command: process.execPath,
-    args: ['-e', POSIX_PROVIDER_SUPERVISOR_SCRIPT],
+    args: [
+      ...(process.versions.bun ? bunOwnedRuntimeArgs() : []),
+      '-e',
+      POSIX_PROVIDER_SUPERVISOR_SCRIPT
+    ],
     // Electron's executable needs Node mode for the inline supervisor. The
     // marker is removed above so providers never inherit Electron semantics.
     env: {

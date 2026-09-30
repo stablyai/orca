@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CodexAppServerLaunch } from './codex-app-server-connection'
 import {
   createProviderSpawnSpec,
@@ -15,8 +15,11 @@ const launch: CodexAppServerLaunch = {
   env: { CODEX_HOME: '/tmp/codex' }
 }
 
+afterEach(() => vi.unstubAllGlobals())
+
 describe('structured provider supervision', () => {
   it('wraps POSIX launches in a detached supervisor and preserves the launch spec', () => {
+    vi.stubGlobal('process', { ...process, versions: { ...process.versions, bun: undefined } })
     const childEnv = { PATH: '/bin', CODEX_HOME: '/tmp/codex' }
     const spec = supervisedPosixLaunch(launch, childEnv)
 
@@ -71,4 +74,24 @@ describe('structured provider supervision', () => {
       supervised: false
     })
   })
+})
+
+it('isolates a Bun-hosted supervisor without changing the provider command', () => {
+  vi.stubGlobal('process', {
+    ...process,
+    platform: 'linux',
+    versions: { ...process.versions, bun: '1.4.2' }
+  })
+  const spec = createProviderSpawnSpec(launch, { PATH: '/bin' }, 'linux')
+  expect(spec.args).toEqual([
+    '--no-env-file',
+    '--config=/dev/null',
+    '--no-install',
+    '-e',
+    POSIX_PROVIDER_SUPERVISOR_SCRIPT
+  ])
+  expect(spec.cwd).toBe(launch.cwd)
+  expect(
+    JSON.parse(Buffer.from(spec.env.ORCA_PROVIDER_SUPERVISOR_SPEC!, 'base64').toString()).command
+  ).toBe(launch.command)
 })

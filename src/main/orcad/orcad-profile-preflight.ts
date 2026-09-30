@@ -1,3 +1,4 @@
+import { bunOwnedRuntimeArgs } from '../../shared/bun-owned-runtime-args'
 import { z } from 'zod'
 import { randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
@@ -29,7 +30,12 @@ export async function preflightBundledOrcadStartup(): Promise<void> {
   // Keep disposable SQLite ownership and native state out of the serving process.
   const result = await runProcess({
     program: join(directory, orcadBunRuntimeFilename(process.platform)),
-    args: [join(directory, 'orcad.js'), ORCAD_STARTUP_PREFLIGHT_FLAG, nonce],
+    args: [
+      ...bunOwnedRuntimeArgs(),
+      join(directory, 'orcad.js'),
+      ORCAD_STARTUP_PREFLIGHT_FLAG,
+      nonce
+    ],
     env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' },
     timeoutMs: ORCAD_PROFILE_PREFLIGHT_TIMEOUT_MS,
     maxOutputBytes: 64 * 1024,

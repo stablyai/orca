@@ -5,7 +5,8 @@ import { pathToFileURL } from 'node:url'
 import {
   externalNativeAddons,
   ORCAD_CHILD_ENTRY_POINTS,
-  ORCAD_ENTRY_POINT
+  ORCAD_ENTRY_POINT,
+  ORCAD_LAUNCHER_ENTRY_POINT
 } from './orcad-entry-build.mjs'
 import { bunProfileTestPaths } from './bun-profile-test-paths.mjs'
 import { bunProfileQualification } from './bun-profile-qualification.mjs'
@@ -63,6 +64,7 @@ export function discoverBunProfileTests(root = ROOT) {
 export async function collectBunProfileInputs({ root = ROOT, entryPoints } = {}) {
   const entries = entryPoints ?? [
     ORCAD_ENTRY_POINT,
+    ORCAD_LAUNCHER_ENTRY_POINT,
     ...Object.values(ORCAD_CHILD_ENTRY_POINTS),
     ...BUILD_SCRIPTS,
     ...discoverBunProfileTests(root)

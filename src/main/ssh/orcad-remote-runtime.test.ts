@@ -65,3 +65,25 @@ describe.skipIf(process.platform === 'win32')('POSIX slot runtime selection', ()
     expect(launch(fixture(), process.execPath)).toMatchObject({ code: 0, stdout: 'selected' })
   })
 })
+
+it.skipIf(process.platform === 'win32')(
+  'limits dotenv isolation flags to bundled Bun slots, preserving legacy Node',
+  () => {
+    for (const bundled of [false, true]) {
+      const directory = fixture()
+      if (bundled) {
+        writeFileSync(join(directory, '.build-target'), 'linux-x64-glibc')
+        symlinkSync(process.execPath, join(directory, 'bun-runtime'))
+      }
+      const result = runProcessSync({
+        program: '/bin/sh',
+        args: [
+          '-c',
+          `${selectOrcadSlotRuntimeCommand(host, directory, process.execPath)}; printf '%s' "$orcad_runtime_flags"`
+        ]
+      })
+      expect(result.code).toBe(0)
+      expect(result.stdout).toBe(bundled ? '--no-env-file --config=/dev/null --no-install' : '')
+    }
+  }
+)

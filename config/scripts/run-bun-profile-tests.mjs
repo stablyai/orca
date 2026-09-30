@@ -1,3 +1,4 @@
+import { bunOwnedRuntimeArgs } from '../../src/shared/bun-owned-runtime-args.ts'
 import { join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
@@ -42,7 +43,12 @@ if (artifact) {
   const nonce = randomUUID()
   const result = runProcessSync({
     program: runtimePath,
-    args: [join(runtimeDir, 'orcad.js'), ORCAD_PROFILE_PREFLIGHT_FLAG, nonce],
+    args: [
+      ...bunOwnedRuntimeArgs(),
+      join(runtimeDir, 'orcad.js'),
+      ORCAD_PROFILE_PREFLIGHT_FLAG,
+      nonce
+    ],
     cwd: root,
     env,
     timeoutMs: 90_000
@@ -66,6 +72,7 @@ if (artifact) {
   ])
 }
 run(runtimePath, [
+  ...bunOwnedRuntimeArgs(),
   join(root, 'node_modules/vitest/vitest.mjs'),
   'run',
   '--config',

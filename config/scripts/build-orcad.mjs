@@ -4,6 +4,8 @@ import { fork, spawnSync } from 'node:child_process'
 import { build } from 'esbuild'
 import {
   buildOrcadEntry,
+  buildOrcadLauncher,
+  ORCAD_BUN_TARGET,
   externalNativeAddons,
   ORCAD_EXTERNAL_MODULES,
   ORCAD_CHILD_ENTRY_POINTS
@@ -88,7 +90,7 @@ async function stageParcelWatcher(target) {
     },
     bundle: true,
     platform: 'node',
-    target: 'node18',
+    target: ORCAD_BUN_TARGET,
     format: 'cjs',
     outfile: join(OUT_DIR, ORCAD_PARCEL_WATCHER_ENTRY),
     external: ['./watcher.node'],
@@ -159,7 +161,7 @@ function buildForkedChild(entryPoint, outfile) {
     entryPoints: [entryPoint],
     bundle: true,
     platform: 'node',
-    target: 'node18',
+    target: ORCAD_BUN_TARGET,
     format: 'cjs',
     outfile,
     external: ORCAD_EXTERNAL_MODULES,
@@ -186,10 +188,11 @@ const childResults = await Promise.all([
   )
 ])
 
-const result = await buildOrcadEntry(OUT_FILE)
+const launcher = await buildOrcadLauncher(OUT_FILE)
+const result = await buildOrcadEntry(join(OUT_DIR, 'orcad-app.js'))
 
 const output = Object.values(result.metafile.outputs).find(
-  (o) => o.entryPoint === 'src/main/orcad/main.ts'
+  (o) => o.entryPoint === 'src/main/orcad/orcad-app.ts'
 )
 // Why check `original` and not just `path`: when electron is bundleable, esbuild
 // rewrites `path` to the resolved file under node_modules and the naive check passes
@@ -211,7 +214,11 @@ function collectImporters(metafiles, matches) {
   return importers
 }
 
-const metafiles = [result.metafile, ...childResults.map((child) => child.metafile)]
+const metafiles = [
+  launcher.metafile,
+  result.metafile,
+  ...childResults.map((child) => child.metafile)
+]
 const electronImporters = collectImporters(
   metafiles,
   (specifier) => specifier === 'electron' || specifier.startsWith('electron/')
@@ -241,24 +248,16 @@ if (graphErrors.length > 0) {
   // install the PTY controller. Once orcad ships, it should become a ratchet entry
   // point so the two numbers cannot drift.
   process.exitCode = 1
-} else {
-  // Why smoke-load and not just read the metafile: the import scan proves no module
-  // *names* electron, but the rollback graph can still fail to resolve under plain Node — a
-  // dynamic require, a missing native, a top-level throw. The plain-node-entry-guard
-  // smoke-loads its entries for exactly this reason, and orcad cannot join that guard
-  // because it is an esbuild artifact rather than a rollup input.
-  // Why an exit code and not a message match: these bundles are minified onto one line, so
-  // Node's uncaught-exception report echoes that whole line — which contains every string
-  // literal in the bundle. A crash therefore "matches" any expected message, and a textual
-  // assertion passes against a bundle that never loaded.
-  const smoke = spawnSync(process.execPath, [OUT_FILE, '--orcad-smoke-load-check'], {
+} else if (targetIsCurrent) {
+  // Exercise the validated entry and application with the shipped runtime.
+  const smoke = spawnSync(bunRuntimeOutput, [OUT_FILE, '--orcad-smoke-load-check'], {
     encoding: 'utf8',
     timeout: 60_000
   })
   const smokeOutput = `${smoke.stdout ?? ''}${smoke.stderr ?? ''}`
   if (smoke.error || smoke.signal || smoke.status !== 0) {
     console.error(
-      `[build-orcad] the bundle lost Node load compatibility.\n` +
+      `[build-orcad] the entry failed to load under bundled Bun.\n` +
         `Expected a clean load-check exit, got status=${smoke.status ?? 'none'} ` +
         `signal=${smoke.signal ?? 'none'} ` +
         `error=${smoke.error?.message ?? 'none'}\n${smokeOutput.slice(0, 2000)}`
@@ -271,7 +270,7 @@ if (graphErrors.length > 0) {
   // token and a PTY — `smoke:orcad-terminal` does that end to end, through orcad.
   // The verdict is carried by the exit code for the same minification reason as above.
   const daemonSmoke = spawnSync(
-    process.execPath,
+    bunRuntimeOutput,
     [
       '-e',
       `const mod = require(${JSON.stringify(DAEMON_OUT_FILE)})\n` +
@@ -287,7 +286,7 @@ if (graphErrors.length > 0) {
   const daemonSmokeOutput = `${daemonSmoke.stdout ?? ''}${daemonSmoke.stderr ?? ''}`
   if (daemonSmoke.error || daemonSmoke.signal || daemonSmoke.status !== 0) {
     console.error(
-      `[build-orcad] the daemon child lost Node load compatibility.\n` +
+      `[build-orcad] the daemon child failed to load under bundled Bun.\n` +
         `Expected a clean load check, got status=${daemonSmoke.status ?? 'none'} ` +
         `signal=${daemonSmoke.signal ?? 'none'} ` +
         `error=${daemonSmoke.error?.message ?? 'none'}\n${daemonSmokeOutput.slice(0, 2000)}`
@@ -304,7 +303,6 @@ if (graphErrors.length > 0) {
 }
 
 try {
-  await smokeProfileStateWorkers(OUT_DIR)
   if (targetIsCurrent) {
     await smokeProfileStateWorkers(OUT_DIR, { runtimePath: bunRuntimeOutput })
   }

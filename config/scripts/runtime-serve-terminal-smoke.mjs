@@ -28,6 +28,8 @@ import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { randomBytes } from 'node:crypto'
 import process from 'node:process'
+import { orcadBunRuntimeFilename } from '../../src/shared/orcad-artifacts.ts'
+import { createServeStopRequest } from '../../src/shared/serve-supervisor-control.ts'
 
 const projectDir = resolve(import.meta.dirname, '../..')
 const serveEntry = join(projectDir, 'out', 'main', 'index.js')
@@ -175,7 +177,8 @@ function resolveLaunch(userDataDir) {
   if (target === 'orcad') {
     return {
       label: `orcad (${ORCAD_ENTRY})`,
-      command: process.execPath,
+      controlIpc: true,
+      command: join(projectDir, 'out', 'orcad', orcadBunRuntimeFilename(process.platform)),
       args: [ORCAD_ENTRY, '--port', String(PORT), '--json'],
       env: { ORCA_USER_DATA: userDataDir }
     }
@@ -231,9 +234,13 @@ async function main() {
   let pairing = null
 
   const child = spawn(launch.command, launch.args, {
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: launch.controlIpc ? ['ignore', 'pipe', 'pipe', 'ipc'] : ['ignore', 'pipe', 'pipe'],
     env: { ...process.env, ...launch.env }
   })
+
+  const stopControl = createServeStopRequest(child)
+  child.on('message', stopControl.handleMessage)
+  child.once('exit', () => child.off('message', stopControl.handleMessage))
 
   try {
     const ready = await waitForReady(child)
@@ -385,7 +392,11 @@ async function main() {
     // waiting for a second 'exit' that will never fire reported a bogus shutdown failure
     // stacked on top of the real error.
     if (child.exitCode === null && child.signalCode === null) {
-      child.kill('SIGTERM')
+      if (launch.controlIpc) {
+        stopControl.request()
+      } else {
+        child.kill('SIGTERM')
+      }
       const exited = await Promise.race([
         new Promise((r) => child.on('exit', () => r(true))),
         // unref'd: the loser of this race must not hold the event loop open after the

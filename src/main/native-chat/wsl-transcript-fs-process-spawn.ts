@@ -1,6 +1,7 @@
 import { fork, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { bunOwnedRuntimeArgs } from '../../shared/bun-owned-runtime-args'
 import { pickAllowedEnv, RUNTIME_ENV_ALLOWLIST } from '../ai-vault/session-scanner-service-env'
 
 const PROCESS_ENTRY_FILENAME = 'wsl-transcript-fs-process-entry.js'
@@ -50,7 +51,7 @@ export function forkWslTranscriptFsProcess(): ChildProcess {
   }
   return fork(entryPath, [], {
     env: wslTranscriptFsProcessForkEnv(),
-    execArgv: [],
+    execArgv: process.versions.bun ? bunOwnedRuntimeArgs() : [],
     serialization: 'advanced',
     stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
     ...(process.platform === 'win32' ? { windowsHide: true } : {})

@@ -1,4 +1,6 @@
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { computeLocalOrcadBuildHash } from '../ssh/orcad-local-build-hash'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -171,4 +173,49 @@ describe('computeOrcadBuildHash', () => {
     // A process with no argv[1] (an embedded host) still has to publish a readiness payload.
     expect(computeOrcadBuildHash('')).toBe('unknown')
   })
+})
+
+describe('shared orcad build identity', () => {
+  let directory: string
+  beforeEach(() => {
+    directory = mkdtempSync(join(tmpdir(), 'orcad-build-identity-'))
+  })
+  afterEach(() => rmSync(directory, { recursive: true, force: true }))
+
+  it('changes matching host and client hashes when only the application changes', () => {
+    const entry = join(directory, 'orcad.js')
+    writeFileSync(entry, 'import("./orcad-app")')
+    writeFileSync(join(directory, 'orcad-app.js'), 'application-a')
+    const first = computeLocalOrcadBuildHash(directory)
+    expect(computeOrcadBuildHash(entry)).toBe(first)
+    writeFileSync(join(directory, 'orcad-app.js'), 'application-b')
+    const second = computeLocalOrcadBuildHash(directory)
+    expect(second).not.toBe(first)
+    expect(computeOrcadBuildHash(entry)).toBe(second)
+    writeFileSync(entry, '// launcher changed\nimport("./orcad-app")')
+    expect(computeLocalOrcadBuildHash(directory)).not.toBe(second)
+    expect(computeOrcadBuildHash(entry)).toBe(computeLocalOrcadBuildHash(directory))
+  })
+
+  it('preserves the original single-bundle hash for older deployments', () => {
+    const entry = join(directory, 'orcad.js')
+    const legacy = 'original single-bundle application'
+    writeFileSync(entry, legacy)
+    const expected = createHash('sha256').update(legacy).digest('hex').slice(0, 16)
+    expect(computeLocalOrcadBuildHash(directory)).toBe(expected)
+    expect(computeOrcadBuildHash(entry)).toBe(expected)
+  })
+
+  it.each(['missing', 'unreadable'])(
+    'refuses a %s application instead of hashing only the launcher',
+    (kind) => {
+      const entry = join(directory, 'orcad.js')
+      writeFileSync(entry, 'import("./orcad-app")')
+      if (kind === 'unreadable') {
+        mkdirSync(join(directory, 'orcad-app.js'))
+      }
+      expect(() => computeLocalOrcadBuildHash(directory)).toThrow()
+      expect(computeOrcadBuildHash(entry)).toBe('unknown')
+    }
+  )
 })

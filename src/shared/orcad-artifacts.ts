@@ -66,6 +66,7 @@ export type OrcadArtifact = {
 
 export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
   { filename: 'orcad.js' },
+  { filename: 'orcad-app.js' },
   // Forked so a native @parcel/watcher fault kills the child, not the server.
   { filename: 'parcel-watcher-process-entry.js' },
   // Forked so PTYs outlive the runtime process; its absence makes every restart destructive.

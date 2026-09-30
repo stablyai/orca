@@ -55,7 +55,7 @@ beforeEach(() => {
   fixture.readVersion.mockResolvedValue(`${identity}\n`)
   fixture.sql.mockResolvedValue({ sqliteVersion: '3.53.2', revision: 1 })
   fixture.native.mockResolvedValue(undefined)
-  fixture.run.mockImplementation(async (spec) => readyResult(spec.args?.[2]))
+  fixture.run.mockImplementation(async (spec) => readyResult(spec.args?.at(-1)))
 })
 
 afterEach(() => {
@@ -72,7 +72,14 @@ describe('bundled Orca startup readiness', () => {
       expect(fixture.run).toHaveBeenCalledOnce()
       expect(fixture.run).toHaveBeenCalledWith({
         program: join('/slot', platform === 'win32' ? 'bun-runtime.exe' : 'bun-runtime'),
-        args: [join('/slot', 'orcad.js'), ORCAD_STARTUP_PREFLIGHT_FLAG, expect.any(String)],
+        args: [
+          '--no-env-file',
+          platform === 'win32' ? '--config=NUL' : '--config=/dev/null',
+          '--no-install',
+          join('/slot', 'orcad.js'),
+          ORCAD_STARTUP_PREFLIGHT_FLAG,
+          expect.any(String)
+        ],
         env: expect.objectContaining({ ORCA_BACKGROUND_LAUNCH: '1' }),
         timeoutMs: 90_000,
         maxOutputBytes: 64 * 1024,
@@ -137,7 +144,7 @@ describe('bundled Orca startup readiness', () => {
     })
     await vi.waitFor(() => expect(fixture.run).toHaveBeenCalledOnce())
     expect(admitted).toBe(false)
-    exit.resolve(readyResult(fixture.run.mock.calls[0]?.[0].args?.[2]))
+    exit.resolve(readyResult(fixture.run.mock.calls[0]?.[0].args?.at(-1)))
     await startup
     expect(admitted).toBe(true)
   })
@@ -146,7 +153,7 @@ describe('bundled Orca startup readiness', () => {
     'refuses a failed child even if it emitted a valid readiness reply: %j',
     async (failure) => {
       fixture.run.mockImplementation(async (spec) => ({
-        ...readyResult(spec.args?.[2]),
+        ...readyResult(spec.args?.at(-1)),
         ...failure,
         stderr: 'native probe failed'
       }))
@@ -155,7 +162,10 @@ describe('bundled Orca startup readiness', () => {
   )
 
   it('preserves configuration exit status from the isolated child', async () => {
-    fixture.run.mockImplementation(async (spec) => ({ ...readyResult(spec.args?.[2]), code: 78 }))
+    fixture.run.mockImplementation(async (spec) => ({
+      ...readyResult(spec.args?.at(-1)),
+      code: 78
+    }))
     const failure = await preflightBundledOrcadStartup().catch((error: unknown) => error)
     expect(resolveOrcadExitCode(failure)).toBe(78)
   })
@@ -180,7 +190,7 @@ describe('bundled Orca startup readiness', () => {
 
   it('rechecks the child artifact identity against the verified installed version', async () => {
     fixture.run.mockImplementation(async (spec) => {
-      const result = readyResult(spec.args?.[2])
+      const result = readyResult(spec.args?.at(-1))
       return { ...result, stdout: result.stdout.replace(identity, '0.1.0+bbbbbbbbbbbb') }
     })
     await expect(preflightBundledOrcadStartup()).rejects.toThrow('invalid readiness identity')

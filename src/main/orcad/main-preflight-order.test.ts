@@ -14,7 +14,6 @@ const { order, profileProbe } = vi.hoisted(() => {
   return { order, profileProbe: vi.fn(async () => {}) }
 })
 
-vi.mock('./orcad-bundled-runtime', () => ({ handoffToBundledOrcad: () => false }))
 vi.mock('./orcad-profile-preflight', () => ({
   preflightBundledOrcadStartup: async () => {
     order.push('profile-admission')
@@ -24,6 +23,7 @@ vi.mock('./orcad-profile-preflight', () => ({
 
 beforeEach(() => {
   vi.resetModules()
+  vi.spyOn(process, 'versions', 'get').mockReturnValue({ ...process.versions, bun: 'test' })
   order.length = 0
 })
 afterEach(() => {
@@ -52,14 +52,14 @@ describe('orcad entry', () => {
     'runs the selected disposable probe without starting a server: $flag',
     async ({ flag, nativeFeatures }) => {
       vi.spyOn(process, 'argv', 'get').mockReturnValue(['runtime', 'orcad.js', flag, 'nonce'])
-      await import('./main')
+      await import('./orcad-app')
       expect(profileProbe).toHaveBeenCalledExactlyOnceWith('nonce', { nativeFeatures })
       expect(order).toEqual([])
     }
   )
 
   it('runs the native preflight before starting the runtime', async () => {
-    await import('./main')
+    await import('./orcad-app')
     await vi.waitFor(() => expect(order).toContain('main'))
 
     expect(order).toEqual(['profile-admission', 'preflight', 'main'])

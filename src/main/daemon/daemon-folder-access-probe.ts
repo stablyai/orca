@@ -3,6 +3,7 @@
 // forked the child, so only a fresh child of the current app binary can tell the user whether
 // restarting the terminal service is the remedy or whether they must re-allow Orca first.
 
+import { bunOwnedRuntimeArgs } from '../../shared/bun-owned-runtime-args'
 import { isAbsolute } from 'node:path'
 import { runProcess } from '../../shared/child-process/run-process'
 import type { DirectoryEnumerationOutcome } from './directory-enumeration-probe'
@@ -72,7 +73,7 @@ export async function probeFolderAccessForFreshDaemon(
   try {
     const result = await runProcess({
       program: process.execPath,
-      args: ['-e', PROBE_SCRIPT, path],
+      args: [...(process.versions.bun ? bunOwnedRuntimeArgs() : []), '-e', PROBE_SCRIPT, path],
       env: probeEnvironment(),
       timeoutMs: PROBE_DEADLINE_MS,
       maxOutputBytes: PROBE_MAX_OUTPUT_BYTES

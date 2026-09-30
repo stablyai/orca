@@ -8,8 +8,7 @@
  * to cross the process boundary: orcad drives it, the daemon performs it, and the verdict
  * travels back over the daemon's socket.
  */
-import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { readOrcadBuildHash } from '../../shared/orcad-build-hash'
 import process from 'node:process'
 import { checkDaemonHealth, type DaemonHealth } from '../daemon/daemon-health'
 import {
@@ -81,7 +80,7 @@ export function computeOrcadBuildHash(entryPath = process.argv[1]): string {
     return 'unknown'
   }
   try {
-    return createHash('sha256').update(readFileSync(entryPath)).digest('hex').slice(0, 16)
+    return readOrcadBuildHash(entryPath)
   } catch {
     return 'unknown'
   }

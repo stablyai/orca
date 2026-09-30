@@ -1,15 +1,12 @@
+import { registerServeSupervisorControl } from '../../shared/serve-supervisor-control'
 import { setRuntimeBrowserCommandsFactory } from '../runtime/runtime-browser-commands-factory'
 import { resolveOrcadBrowserProvider } from './orcad-browser-provider'
 import { acquireOrcadInstanceLock } from './orcad-instance-lock'
-import { ORCAD_BUNDLED_LAUNCHER_ENV } from './orcad-bundled-runtime'
 import { resolveOrcadExitCode } from './orcad-exit-code'
 import {
   acquireProfileStateRuntimeAdmission,
   type ProfileStateRuntimeAdmission
 } from '../persistence/profile-state/profile-state-access'
-
-const bundledLauncherChannel = process.env[ORCAD_BUNDLED_LAUNCHER_ENV] === '1'
-delete process.env[ORCAD_BUNDLED_LAUNCHER_ENV]
 
 function createIdempotentOrcadCleanup(cleanup: () => Promise<void>): () => Promise<void> {
   let completion: Promise<void> | null = null
@@ -21,7 +18,7 @@ function createIdempotentOrcadCleanup(cleanup: () => Promise<void>): () => Promi
 
 export const ORCAD_SHUTDOWN_DEADLINE_MS = 15_000
 
-/** A launcher and its child can both receive the same process-group or service stop signal. */
+/** Repeated service stop signals must not interrupt the durable shutdown. */
 export function installOrcadShutdownSignals(
   stop: () => Promise<void>,
   deadlineMs = ORCAD_SHUTDOWN_DEADLINE_MS
@@ -45,15 +42,10 @@ export function installOrcadShutdownSignals(
   }
   process.on('SIGINT', () => shutdown('SIGINT'))
   process.on('SIGTERM', () => shutdown('SIGTERM'))
+  registerServeSupervisorControl(process, () => shutdown('supervisor'))
   // Headless runtimes survive terminal hangups; INT/TERM are the graceful stop contract.
   if (process.platform !== 'win32') {
     process.on('SIGHUP', () => {})
-  }
-  if (bundledLauncherChannel && typeof process.send === 'function') {
-    process.once('disconnect', () => shutdown('launcher disconnect'))
-    if (!process.connected) {
-      shutdown('launcher disconnect')
-    }
   }
 }
 

@@ -1,3 +1,4 @@
+import { bunOwnedRuntimeArgs } from '../../shared/bun-owned-runtime-args'
 import { localAiVaultScanRoots } from './cached-session-list'
 import type { SessionSearchHostScope } from '../ai-vault-search/session-search-service'
 import { fork, type ChildProcess } from 'node:child_process'
@@ -36,7 +37,7 @@ export function spawnAiVaultServiceProcess(): ChildProcess {
   }
   const child = fork(entryPath, [], {
     stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
-    execArgv: ['--max-old-space-size=384'],
+    execArgv: ['--max-old-space-size=384', ...(process.versions.bun ? bunOwnedRuntimeArgs() : [])],
     env: buildAiVaultServiceEnv(),
     ...(process.platform === 'win32' ? { windowsHide: true } : {})
   })
