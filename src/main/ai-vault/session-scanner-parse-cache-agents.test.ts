@@ -307,3 +307,54 @@ describe('non-resumable formats keep reuse-only caching', () => {
     )
   })
 })
+
+describe('Junie sidecar metadata', () => {
+  it('refreshes index metadata without rereading unchanged events', async () => {
+    const root = await makeTempDir()
+    const sessionsDir = join(root, 'sessions')
+    const sessionId = 'session-260824-144458-r0y6'
+    const sessionDir = join(sessionsDir, sessionId)
+    const eventsPath = join(sessionDir, 'events.jsonl')
+    const indexPath = join(sessionsDir, 'index.jsonl')
+    await mkdir(sessionDir, { recursive: true })
+    await writeFile(
+      eventsPath,
+      `${JSON.stringify({
+        kind: 'UserPromptEvent',
+        prompt: 'keep transcript unchanged',
+        timestampMs: Date.parse('2026-08-24T14:44:58.000Z')
+      })}\n`
+    )
+    const writeIndex = (taskName: string, projectDir: string): Promise<void> =>
+      writeFile(
+        indexPath,
+        `${JSON.stringify({ sessionId, taskName, projectDir, createdAt: 1, updatedAt: 2 })}\n`
+      )
+    await writeIndex('Initial title', '/tmp/initial-project')
+
+    const candidate = async (): Promise<SessionFileCandidate> => {
+      const [events, index] = await Promise.all([stat(eventsPath), stat(indexPath)])
+      return {
+        agent: 'junie',
+        file: {
+          path: eventsPath,
+          mtimeMs: events.mtimeMs,
+          modifiedAt: events.mtime.toISOString(),
+          sizeBytes: events.size,
+          sidecar: { path: indexPath, mtimeMs: index.mtimeMs, sizeBytes: index.size }
+        },
+        codexHome: null
+      }
+    }
+
+    const stats = createSessionParseStats()
+    const first = await parseAgentSessionFileCached(await candidate(), process.platform, stats)
+    expect(first?.title).toBe('Initial title')
+    await writeIndex('Updated title', '/tmp/updated-project')
+    const second = await parseAgentSessionFileCached(await candidate(), process.platform, stats)
+
+    expect(stats).toMatchObject({ fullParses: 1, reused: 1, incremental: 0 })
+    expect(second?.title).toBe('Updated title')
+    expect(second?.cwd).toBe('/tmp/updated-project')
+  })
+})

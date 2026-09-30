@@ -25,7 +25,7 @@ import { GrokHookService, grokHookService } from '../grok/hook-service'
 import { CopilotHookService, copilotHookService } from '../copilot/hook-service'
 import { HermesHookService, hermesHookService } from '../hermes/hook-service'
 import { DevinHookService, devinHookService } from '../devin/hook-service'
-import { junieHookService } from '../junie/hook-service'
+import { JunieHookService, junieHookService } from '../junie/hook-service'
 import { JcodeHookService, jcodeHookService } from '../jcode/hook-service'
 import { KimiHookService, kimiHookService } from '../kimi/hook-service'
 import { museHookService } from '../muse/hook-service'
@@ -406,6 +406,21 @@ describe('remote hook service installers', () => {
     const script = fs.files.get('/home/dev/.orca/agent-hooks/grok-hook.sh')!
     expect(script).toContain('${#GROK_HOME}" -le 4096')
     expect(script).toContain('--data-urlencode "grokHome=${grok_home}"')
+  })
+
+  it('installs remote Junie hooks in the explicit guest JUNIE_HOME', async () => {
+    const customJunieHome = '/srv/junie profile'
+    const { sftp, fs } = createFakeSftp()
+
+    const status = await new JunieHookService().installRemote(sftp, '/home/dev', {
+      junieHomeDir: customJunieHome
+    })
+
+    expect(status.state).toBe('installed')
+    expect(status.configPath).toBe(`${customJunieHome}/config.json`)
+    expect(fs.files.has(`${customJunieHome}/config.json`)).toBe(true)
+    expect(fs.files.has('/home/dev/.junie/config.json')).toBe(false)
+    expect(fs.files.get('/home/dev/.orca/agent-hooks/junie-hook.sh')).toContain('/hook/junie')
   })
 
   it.each(['relative/grok', '/bad\\grok', `/${'x'.repeat(4096)}`])(

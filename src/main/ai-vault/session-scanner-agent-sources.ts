@@ -7,7 +7,10 @@ import type { AiVaultDeletableAgent } from '../../shared/ai-vault-session-deleti
 import { resolveGrokSessionsDir } from '../../shared/grok-session-paths'
 import { resolveKiroHomeDir } from '../../shared/kiro-home'
 import { uniqueCodexSessionsDirs } from './session-scanner-codex-paths'
-import { resolveJunieSessionsDir } from './session-scanner-junie-paths'
+import {
+  junieSessionIndexPathFromEventsPath,
+  resolveJunieSessionsDir
+} from './session-scanner-junie-paths'
 import {
   clineMessagesPathForMetadata,
   isClineSessionMetadataPath
@@ -338,6 +341,7 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
         'sessions'
       ]),
     extensions: ['.jsonl'],
+    contentDependencyPath: junieSessionIndexPathFromEventsPath,
     // Why: each Junie session is <sessions>/session-*/events.jsonl; match only those
     // (not the top-level index.jsonl or per-task terminal-output files).
     filePredicate: (filePath) =>

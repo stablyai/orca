@@ -168,9 +168,13 @@ export class JunieHookService {
   }
 
   // Why: install the Junie hook on the remote box (SFTP handle + resolved remote $HOME); POSIX-only by design.
-  async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
+  async installRemote(
+    sftp: SFTPWrapper,
+    remoteHome: string,
+    options?: { junieHomeDir?: string }
+  ): Promise<AgentHookInstallStatus> {
     // Why: remote-Windows is out of scope for v1; process.platform here is the local box, not the remote, so assume POSIX.
-    const remoteConfigPath = getJunieRemoteConfigPath(remoteHome)
+    const remoteConfigPath = getJunieRemoteConfigPath(remoteHome, options?.junieHomeDir)
     const remoteScriptFileName = getJuniePosixManagedScriptFileName()
     const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/${remoteScriptFileName}`
     // Why: SFTP I/O fails far more often than local fs; wrap the flow so failures surface as a structured error, not an unhandled rejection.

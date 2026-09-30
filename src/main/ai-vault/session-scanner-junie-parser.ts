@@ -9,11 +9,8 @@ import {
   finalizeSession,
   updateTimeline
 } from './session-scanner-accumulator'
-import {
-  junieSessionIdFromEventsPath,
-  junieSessionIndexPathFromEventsPath,
-  readJunieSummaryBySessionId
-} from './session-scanner-junie-paths'
+import { enrichSessionFromSidecar } from './session-scanner-sidecar-enrichment'
+import { junieSessionIdFromEventsPath } from './session-scanner-junie-paths'
 import type {
   FileWithMtime,
   ResumableParseFinalizeOptions,
@@ -52,9 +49,8 @@ type JunieFoldState = {
 
 // Parses a Junie `events.jsonl` transcript into an AI Vault session. Each line is a
 // kotlinx-polymorphic SessionEvent discriminated by `kind` (not `type`), stamped with
-// `timestampMs`; UI events nest under `event.agentEvent`. Title and cwd come from the
-// shared sessions/index.jsonl, which 43% of real sessions are missing — the transcript
-// backfills both.
+// `timestampMs`; UI events nest under `event.agentEvent`. Title and cwd are enriched from
+// the shared sessions/index.jsonl when available — the transcript backfills both otherwise.
 export async function parseJunieSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform,
@@ -80,7 +76,10 @@ export async function parseJunieSessionFile(
     lines.close()
     input.destroy()
   }
-  return state.finalize(platform)
+  const session = await state.finalize(platform)
+  return (
+    await enrichSessionFromSidecar({ agent: 'junie', file, codexHome: null }, session, platform)
+  ).session
 }
 
 /** Incremental fold so an active multi-hundred-megabyte transcript is read once, then only appended lines. */
@@ -125,15 +124,6 @@ async function finalizeJunieFold(
   const accumulator = cloneSessionAccumulator(fold.accumulator)
   accumulator.model = primaryModel(fold.outputTokensByModel)
 
-  const summary = (
-    await readJunieSummaryBySessionId(junieSessionIndexPathFromEventsPath(accumulator.filePath))
-  ).get(accumulator.sessionId)
-  if (summary) {
-    accumulator.title = normalizeTitleText(summary.taskName ?? '') || accumulator.title
-    accumulator.cwd = summary.projectDir ?? accumulator.cwd
-    updateTimeline(accumulator, summary.createdAt)
-    updateTimeline(accumulator, summary.updatedAt)
-  }
   // Why: sessions absent from index.jsonl (43% of a real home — aborted or never-titled
   // runs) have no task name and often no user turn either. The shared
   // `<agent> <first 8 chars of id>` fallback would render every one of them as the same

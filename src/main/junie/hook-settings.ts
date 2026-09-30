@@ -48,8 +48,22 @@ export function getJunieManagedScriptPath(): string {
   return getSharedManagedScriptPath(getJunieManagedScriptFileName())
 }
 
-export function getJunieRemoteConfigPath(remoteHome: string): string {
-  return `${remoteHome.replace(/\/$/, '')}/.junie/config.json`
+export function getJunieRemoteConfigPath(remoteHome: string, junieHomeDir?: string): string {
+  const home = remoteHome.replace(/\/+$/, '') || remoteHome
+  const candidate = junieHomeDir?.trim()
+  const configHome =
+    candidate &&
+    candidate === junieHomeDir &&
+    candidate.startsWith('/') &&
+    !candidate.includes('\\') &&
+    candidate.length <= 4096 &&
+    !Array.from(candidate).some((character) => {
+      const code = character.charCodeAt(0)
+      return code <= 0x1f || code === 0x7f
+    })
+      ? candidate.replace(/\/+$/, '') || '/'
+      : `${home}/.junie`
+  return `${configHome.replace(/\/$/, '')}/config.json`
 }
 
 export function getJunieManagedCommand(scriptPath: string): string {
