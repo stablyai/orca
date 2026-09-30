@@ -202,4 +202,49 @@ describe('SshRelaySession managed hooks', () => {
     session.dispose()
     expect(cleanup).toHaveBeenCalledOnce()
   })
+
+  // Why: a timed-out install left the relay on the old sources (a disabled agent kept its plugin) until the next reconnect.
+  it('retries a settings-triggered plugin install that failed, using the latest settings', async () => {
+    muxRequestMock.mockResolvedValue({ agents: [] })
+    const { mockStore, mockConn, mockPortForward, getMainWindow } = createMockDeps()
+    const settings = getDefaultSettings('/synthetic-home')
+    mockStore.getSettings = () => settings
+    let listener: Parameters<Store['onSettingsChanged']>[0] | undefined
+    mockStore.onSettingsChanged = (callback) => {
+      listener = callback
+      return vi.fn()
+    }
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const session = new SshRelaySession(
+      'target-settings',
+      getMainWindow,
+      mockStore,
+      mockPortForward
+    )
+    await session.establish(mockConn)
+    const installCalls = () =>
+      muxRequestMock.mock.calls.filter(([method]) => method === AGENT_HOOK_INSTALL_PLUGINS_METHOD)
+
+    vi.useFakeTimers()
+    try {
+      const before = installCalls().length
+      muxRequestMock.mockImplementationOnce(async (method: string) => {
+        if (method !== AGENT_HOOK_INSTALL_PLUGINS_METHOD) {
+          return { agents: [] }
+        }
+        throw Object.assign(new Error('timed out'), { code: 'SSH_MUX_REQUEST_TIMEOUT' })
+      })
+      settings.disabledTuiAgents = ['opencode2']
+      listener?.({ disabledTuiAgents: settings.disabledTuiAgents }, settings)
+      await vi.advanceTimersByTimeAsync(60_000)
+
+      const calls = installCalls().slice(before)
+      expect(calls.length).toBeGreaterThan(1)
+      expect(calls.at(-1)?.[1]).toMatchObject({ opencode2PluginSource: '' })
+    } finally {
+      vi.useRealTimers()
+      warn.mockRestore()
+      session.dispose()
+    }
+  })
 })
