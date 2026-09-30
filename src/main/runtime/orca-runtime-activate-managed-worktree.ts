@@ -4,6 +4,7 @@ import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import { navigationTargetsClients, navigationTargetsHost } from '../../shared/runtime-navigation'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
+import type { RuntimeTerminalWait } from '../../shared/runtime-terminal-contracts'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type {
@@ -182,7 +183,7 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
     handle: string,
     agent: TuiAgent,
     timeoutMs: number
-  ): Promise<void> {
+  ): Promise<RuntimeTerminalWait> {
     const initialPtyId =
       this.getLivePtyForHandle(handle)?.pty.ptyId ?? this.getLiveLeafForHandle(handle).leaf.ptyId
     const ptyId = await waitForWorktreeStartupDraft(
@@ -198,6 +199,8 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
     if (!this.ptysById.get(ptyId)?.connected) {
       throw new Error('terminal_handle_stale')
     }
+    // The tui-idle result it stands in for, so callers record the wait-for-setup outcome too.
+    return { handle, condition: 'tui-idle', satisfied: true, status: 'running', exitCode: null }
   }
 
   protected sendStartupFollowupWhenReady(handle: string, followup: WorktreeStartupFollowup): void {

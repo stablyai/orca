@@ -38,7 +38,10 @@ const paneOwnersByPtyIdByLayoutIdentity = new WeakMap<
   Map<string, TerminalPaneOwner>
 >()
 
-function resolvePaneKeyForPtyId(layouts: TerminalLayoutsByTabId, ptyId: string): PaneKey | null {
+export function resolvePaneKeyForPtyId(
+  layouts: TerminalLayoutsByTabId,
+  ptyId: string
+): PaneKey | null {
   let paneOwnersByPtyId = paneOwnersByPtyIdByLayoutIdentity.get(layouts)
   if (!paneOwnersByPtyId) {
     paneOwnersByPtyId = new Map<string, TerminalPaneOwner>()

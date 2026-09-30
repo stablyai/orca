@@ -33,6 +33,7 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   coordinatorHandle: string
   devMode: boolean | undefined
   requestId: string
+  launchedTerminal: boolean
   agent: string | null
   setupReceipt: WorkerSetupReceipt
   launchReceipt: OrchestrationWorkerLaunchReceipt
@@ -56,7 +57,8 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
     taskSpec: task.spec,
     coordinatorHandle: args.coordinatorHandle,
     devMode: args.devMode,
-    requestId: args.requestId
+    requestId: args.requestId,
+    launchedTerminal: args.launchedTerminal
   })
   effects.push({
     kind: 'dispatch_input',

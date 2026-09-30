@@ -29,6 +29,8 @@ export async function deliverWorkerDispatchPreamble(args: {
   coordinatorHandle: string
   devMode: boolean | undefined
   requestId: string
+  /** This start launched the agent, so its first Enter can race the composer. */
+  launchedTerminal: boolean
 }): Promise<{
   prompt?: RuntimeTerminalSend['prompt']
   structuredTurnStart?: WorkerTurnStartObservation
@@ -69,11 +71,10 @@ export async function deliverWorkerDispatchPreamble(args: {
   }
   return {
     prompt: (
-      await runtime.sendTerminalAgentPrompt(
-        terminalHandle,
-        preamble,
-        dispatchPreambleSendOptions(args.requestId)
-      )
+      await runtime.sendTerminalAgentPrompt(terminalHandle, preamble, {
+        ...dispatchPreambleSendOptions(args.requestId),
+        retrySubmitAfterLaunch: args.launchedTerminal
+      })
     ).prompt
   }
 }

@@ -12,6 +12,8 @@ const testState = vi.hoisted(() => ({
     settings: {} as Record<string, unknown>,
     ptyIdsByTabId: { 'tab-1': ['pty-1'] } as Record<string, string[]>,
     runtimePaneTitlesByTabId: {},
+    terminalLayoutsByTabId: {},
+    agentStatusByPaneKey: {},
     tabsByWorktree: {} as Record<string, { id: string }[]>,
     repos: [] as { id: string; connectionId: string | null; executionHostId?: string | null }[],
     worktreesByRepo: {} as Record<string, { id: string; repoId: string }[]>
@@ -44,7 +46,8 @@ vi.mock('@/components/terminal-pane/pty-pre-handler-buffer', () => ({
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   isRemoteRuntimePtyId: testState.isRemoteRuntimePtyId,
   sendRuntimePtyInputVerified: testState.sendRuntimePtyInputVerified,
-  inspectRuntimeTerminalProcess: testState.inspectRuntimeTerminalProcess
+  inspectRuntimeTerminalProcess: testState.inspectRuntimeTerminalProcess,
+  resolvePaneKeyForPtyId: () => PANE_KEY
 }))
 
 vi.mock('@/runtime/runtime-terminal-stream', () => ({
@@ -52,6 +55,7 @@ vi.mock('@/runtime/runtime-terminal-stream', () => ({
 }))
 
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
+const PANE_KEY = 'tab-1:leaf-1'
 const CODEX_COMPOSER_PROMPT_RENDER = '\x1b[1m›\x1b[0m Ask Codex to do anything'
 const RENDER_QUIET_MS = 1500
 const ISSUE_URL = 'https://github.com/stablyai/orca/issues/123'
@@ -70,6 +74,7 @@ describe('post-paste submit retry Enter', () => {
     testState.appState.tabsByWorktree = {}
     testState.appState.repos = []
     testState.appState.worktreesByRepo = {}
+    testState.appState.agentStatusByPaneKey = {}
     testState.ptyObserver = null
     testState.unsubscribe.mockReset()
     testState.subscribeToPtyData.mockReset()
@@ -112,6 +117,60 @@ describe('post-paste submit retry Enter', () => {
       'launch'
     )
     expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it.each(['opencode', 'opencode2'] as const)(
+    '%s gets the retry Enter from its row, for the box that appears before Enter works',
+    async (agent) => {
+      const retryDelayMs = TUI_AGENT_CONFIG[agent].submitRetryDelayMs ?? 0
+      const promise = pasteDraftWhenAgentReady({
+        tabId: 'tab-1',
+        content: ISSUE_URL,
+        agent,
+        submit: true,
+        forcePaste: true
+      })
+      await flushMicrotasks()
+      testState.ptyObserver?.(`${DECSET_BRACKETED_PASTE}\x1b[?25h`)
+      await flushMicrotasks()
+      await vi.advanceTimersByTimeAsync(POST_PASTE_SUBMIT_DELAY_MS)
+
+      expect(enterWrites()).toHaveLength(1)
+      await vi.advanceTimersByTimeAsync(retryDelayMs)
+      await expect(promise).resolves.toBe(true)
+      expect(enterWrites()).toHaveLength(2)
+    }
+  )
+
+  it.each([
+    ['a permission prompt', 'waiting'],
+    ['a started turn', 'working']
+  ])('skips the retry Enter once the pane reports %s after the first Enter', async (_, state) => {
+    testState.sendRuntimePtyInputVerified.mockImplementation(
+      async (_settings: unknown, _ptyId: string, data: string) => {
+        if (data === '\r') {
+          const reported = { [PANE_KEY]: { state, stateStartedAt: 1 } }
+          testState.appState.agentStatusByPaneKey = reported
+        }
+        return true
+      }
+    )
+    const promise = pasteDraftWhenAgentReady({
+      tabId: 'tab-1',
+      content: ISSUE_URL,
+      agent: 'opencode',
+      submit: true,
+      forcePaste: true
+    })
+    await flushMicrotasks()
+    testState.ptyObserver?.(`${DECSET_BRACKETED_PASTE}\x1b[?25h`)
+    await flushMicrotasks()
+    await vi.advanceTimersByTimeAsync(
+      POST_PASTE_SUBMIT_DELAY_MS + (TUI_AGENT_CONFIG.opencode.submitRetryDelayMs ?? 0)
+    )
+
+    await expect(promise).resolves.toBe(true)
+    expect(enterWrites()).toHaveLength(1)
   })
 
   it('sends exactly one Enter for agents without a submit retry delay', async () => {

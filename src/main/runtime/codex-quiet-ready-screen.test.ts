@@ -1,10 +1,9 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { createTranscriptPane } from './agent-transcript-pane-test-harness'
 import {
   readRuntimeFixture,
+  readTimedRuntimeFixture,
   replayTranscript,
   type TranscriptReplayFrame
 } from './agent-transcript-replay-test-harness'
@@ -204,21 +203,12 @@ describe('Codex composer ready screen, frame by frame', () => {
   })
 })
 
-type Timing = { promptSentAtMs: number; chunks: [number, number][] }
-
 function readTimedFixture(name: string): { chunks: string[]; times: number[]; promptAt: number } {
-  const data = readRuntimeFixture(name)
-  const timing: Timing = JSON.parse(
-    readFileSync(join(__dirname, '__fixtures__', `${name}.timing.json`), 'utf8')
-  )
-  const chunks: string[] = []
-  let offset = 0
-  for (const [, length] of timing.chunks) {
-    chunks.push(data.slice(offset, offset + length))
-    offset += length
+  const { chunks, times, promptSentAtMs } = readTimedRuntimeFixture(name)
+  if (promptSentAtMs === undefined) {
+    throw new Error(`${name}.timing.json has no promptSentAtMs`)
   }
-  expect(offset).toBe(data.length)
-  return { chunks, times: timing.chunks.map(([at]) => at), promptAt: timing.promptSentAtMs }
+  return { chunks, times, promptAt: promptSentAtMs }
 }
 
 describe('the quiet lane over recorded chunk timing (default animations)', () => {

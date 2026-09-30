@@ -28,9 +28,14 @@ describe('ZCode readiness from captured terminal bytes', () => {
       launchAgent: 'zcode',
       data: '\x1b[?1049h╭'
     })
-    await expect(
-      runtime.waitForFreshWorkerComposer(handle, 'zcode', 1_000)
-    ).resolves.toBeUndefined()
+    // The tui-idle result shape, so worker start records a wait-for-setup outcome from it.
+    await expect(runtime.waitForFreshWorkerComposer(handle, 'zcode', 1_000)).resolves.toEqual({
+      handle,
+      condition: 'tui-idle',
+      satisfied: true,
+      status: 'running',
+      exitCode: null
+    })
   })
 
   it('never emits an OSC title, so no title lane can settle its wait', () => {

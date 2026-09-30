@@ -16,6 +16,41 @@ export function readRuntimeFixture(name: string): string {
   return readFileSync(join(__dirname, '__fixtures__', `${name}.txt`), 'utf8')
 }
 
+export type TimedRuntimeFixture = {
+  /** The recorded PTY reads, in order; they concatenate to the whole `.txt`. */
+  chunks: string[]
+  /** ms since spawn at which each read arrived. */
+  times: number[]
+  promptSentAtMs?: number
+  /** When recording stopped; no bytes arrived between the last read and this. */
+  recordedUntilMs?: number
+}
+
+/** `<name>.timing.json` holds each read as [ms since spawn, UTF-16 length]. */
+export function readTimedRuntimeFixture(name: string): TimedRuntimeFixture {
+  const data = readRuntimeFixture(name)
+  const timing: {
+    chunks: [number, number][]
+    promptSentAtMs?: number
+    recordedUntilMs?: number
+  } = JSON.parse(readFileSync(join(__dirname, '__fixtures__', `${name}.timing.json`), 'utf8'))
+  const chunks: string[] = []
+  let offset = 0
+  for (const [, length] of timing.chunks) {
+    chunks.push(data.slice(offset, offset + length))
+    offset += length
+  }
+  if (offset !== data.length) {
+    throw new Error(`${name}.timing.json covers ${offset} of ${data.length} chars`)
+  }
+  return {
+    chunks,
+    times: timing.chunks.map(([at]) => at),
+    ...(timing.promptSentAtMs !== undefined ? { promptSentAtMs: timing.promptSentAtMs } : {}),
+    ...(timing.recordedUntilMs !== undefined ? { recordedUntilMs: timing.recordedUntilMs } : {})
+  }
+}
+
 /** A string is cut into fixed 64-char chunks; an array replays the recorded PTY chunks as-is. */
 export async function* replayTranscript(
   data: string | readonly string[],

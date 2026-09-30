@@ -35,6 +35,12 @@ const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   less: 6,
   nano: 2,
   opencode: 5,
+  // OpenCode boot captures: rows on its true-colour background, and the row a shrink leaves
+  // behind, restore inexactly after a resize. Pre-existing: they landed with no serializer change.
+  'opencode-1-18-32-timed-boot-hidden-pane': 16,
+  'opencode-1-18-32-timed-boot-slow': 16,
+  'opencode-1-18-32-timed-first-launch': 16,
+  'opencode-2-0-18-timed-boot-hidden-pane': 14,
   // Shrink leaves the cursor one column short; also present in the pre-Qoder serializer.
   'qoder-no-account': 2,
   'qoder-ready': 2,

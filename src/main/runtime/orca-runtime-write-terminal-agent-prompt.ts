@@ -11,11 +11,16 @@ import {
   AGENT_PROMPT_SUBMIT,
   agentPromptSubmitJoinsPasteFrame,
   getAgentPromptSubmitDelayMs,
+  getAgentSubmitRetryDelayMs,
   getTerminalPasteIngestMs,
   resolveAgentPromptSubmitDelayForAgent
 } from '../../shared/agent-prompt-injection'
-import type { AgentPromptWaitTextCache } from './agent-prompt-submission-verification'
+import type {
+  AgentPromptActivity,
+  AgentPromptWaitTextCache
+} from './agent-prompt-submission-verification'
 import {
+  isAgentPromptStalledError,
   isTerminalSendSettlementAgent,
   resolveAgentPromptEffectTimeoutMs,
   verifyAgentPromptSubmission
@@ -44,6 +49,11 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     const pasteByteLength = Buffer.byteLength(pastePayload, 'utf8')
     const pasteIngestMs = getTerminalPasteIngestMs(writeHostPlatform, pasteByteLength)
     const renderGate = this.createAgentPromptRenderGate(ptyId, pasteIngestMs)
+    // Render-gated agents (claude, codex) already wait for their composer to draw the paste.
+    const submitRetryDelayMs =
+      options.retrySubmitAfterLaunch && !submitWithPaste && !renderGate
+        ? getAgentSubmitRetryDelayMs(this.getPtyAgent(ptyId))
+        : undefined
     const waitTextCache: AgentPromptWaitTextCache = {}
     const preSubmitBaseline = submitWithPaste
       ? this.getAgentPromptActivity(handle, ptyId, waitTextCache)
@@ -107,6 +117,35 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
         throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
       }
     }
+    let submits = 1
+    if (submitRetryDelayMs !== undefined) {
+      try {
+        if (
+          !(await this.observeAgentPromptTurnStartWithin(
+            handle,
+            ptyId,
+            generation,
+            baseline,
+            waitTextCache,
+            submitRetryDelayMs,
+            options
+          ))
+        ) {
+          assertAgentPromptRequestActive(options.signal)
+          this.assertAgentPromptGeneration(ptyId, generation)
+          // A permission prompt drawn after the first Enter must never be answered by the retry.
+          this.assertAgentPromptPermissionSafe(
+            permissionBaseline,
+            this.getAgentPromptActivity(handle, ptyId)
+          )
+          if (this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, options.inputKind)) {
+            submits = 2
+          }
+        }
+      } catch {
+        // The retry is best-effort; a refused one leaves the first Enter's result standing.
+      }
+    }
     const effectTimeoutMs = resolveAgentPromptEffectTimeoutMs(this.getPtyAgent(ptyId))
     if (!options.acceptQueued || !options.requestId) {
       await verifyAgentPromptSubmission({
@@ -115,7 +154,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
         timeoutMs: effectTimeoutMs,
         signal: options.signal
       })
-      return { submits: 1 }
+      return { submits }
     }
     const binding = this.getTerminalPromptRequestBinding(handle)
     const foregroundAgent = this.ptysById.get(ptyId)?.foregroundAgent
@@ -139,7 +178,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     const checkpoint: RuntimeTerminalSend = {
       handle,
       accepted: true,
-      bytesWritten: Buffer.byteLength(pastePayload, 'utf8') + 1,
+      bytesWritten: Buffer.byteLength(pastePayload, 'utf8') + submits,
       prompt: inputAccepted
     }
     options.onInputAccepted?.(checkpoint)
@@ -147,7 +186,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     // receipt; they must not fail a Dispatch merely because Orca cannot prove
     // submission through hooks.
     if (!settlementAgent) {
-      return { submits: 1, prompt: inputAccepted }
+      return { submits, prompt: inputAccepted }
     }
     this.registerAgentPromptRequest(
       ptyId,
@@ -175,7 +214,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       })
       this.forgetAgentPromptRequest(ptyId, generation, options.requestId)
       return {
-        submits: 1,
+        submits,
         prompt: {
           ...inputAccepted,
           stages: ['input_accepted', 'turn_started']
@@ -183,16 +222,70 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       }
     } catch (error) {
       if (error instanceof Error && error.message === 'agent_prompt_stalled') {
-        return { submits: 1, prompt: inputAccepted }
+        return { submits, prompt: inputAccepted }
       }
       if (error instanceof Error && error.message === 'agent_prompt_blocked') {
         this.forgetAgentPromptRequest(ptyId, generation, options.requestId)
         return {
-          submits: 1,
+          submits,
           prompt: { ...inputAccepted, observation: 'permission' }
         }
       }
       throw error
+    }
+  }
+
+  /**
+   * Waits out the retry delay, returning early once this request's turn starts: a turn proves the
+   * first Enter landed. No post (a stuck brief, or hooks that never loaded) just means "retry".
+   */
+  private async observeAgentPromptTurnStartWithin(
+    handle: string,
+    ptyId: string,
+    generation: number,
+    baseline: AgentPromptActivity,
+    waitTextCache: AgentPromptWaitTextCache,
+    timeoutMs: number,
+    options: RuntimeAgentPromptWriteOptions
+  ): Promise<boolean> {
+    if (!options.requestId) {
+      await waitForAgentPromptDelay(timeoutMs, options.signal)
+      return false
+    }
+    const requestId = options.requestId
+    this.registerAgentPromptRequest(
+      ptyId,
+      generation,
+      requestId,
+      baseline.workingSequence,
+      baseline.explicitWorkingStartedAt
+    )
+    try {
+      await verifyAgentPromptSubmission({
+        baseline,
+        readActivity: () => this.getAgentPromptActivity(handle, ptyId, waitTextCache),
+        acceptTurnStart: (evidence) =>
+          this.acceptAgentPromptTurnStart(
+            ptyId,
+            generation,
+            requestId,
+            baseline.workingSequence,
+            baseline.explicitWorkingStartedAt,
+            evidence
+          ),
+        allowOutputEvidence: false,
+        signal: options.signal,
+        timeoutMs
+      })
+      return true
+    } catch (error) {
+      if (isAgentPromptStalledError(error)) {
+        return false
+      }
+      throw error
+    } finally {
+      // The receipt does not observe this turn, so nothing may stay queued behind it.
+      this.forgetAgentPromptRequest(ptyId, generation, requestId)
     }
   }
 }

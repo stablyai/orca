@@ -390,6 +390,32 @@ describe('orchestration new-worktree workers', () => {
     )
   })
 
+  it.each(['zcode', 'opencode'] as const)(
+    'records wait-for-setup success when %s waits on its input box',
+    async (agent) => {
+      mockCreatedWorktree({ startupPolicy: 'wait-for-setup', state: 'running' })
+      vi.spyOn(runtime, 'waitForFreshWorkerComposer').mockResolvedValue({
+        handle: 'term_worker',
+        condition: 'tui-idle',
+        satisfied: true,
+        status: 'running',
+        exitCode: null
+      })
+      const recordStage = vi.spyOn(db, 'recordWorkerStage')
+
+      const { result } = await startWorker({ agent })
+
+      expect(runtime.waitForTerminal).not.toHaveBeenCalled()
+      expect(result).toMatchObject({
+        state: 'ready',
+        setup: { startupPolicy: 'wait-for-setup', state: 'succeeded' }
+      })
+      expect(recordStage).toHaveBeenCalledWith(
+        expect.objectContaining({ stage: 'setup_settled', setupState: 'succeeded' })
+      )
+    }
+  )
+
   it('does not inject task input when the gated setup terminal fails to start', async () => {
     mockCreatedWorktree({ startupPolicy: 'wait-for-setup', state: 'spawn_failed' })
     vi.mocked(runtime.waitForTerminal).mockResolvedValue({

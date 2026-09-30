@@ -2,8 +2,8 @@
  * The `wait-for-setup` gate for a structured worker on a worktree this start created.
  *
  * A PTY worker gets the gate for free: agent-first creation sequences the agent's startup command
- * behind the setup runner, so `tui-idle` cannot arrive until setup exits, and the worker start
- * reads the gate's outcome off that wait. A structured session has no startup command to sequence,
+ * behind the setup runner, so its readiness wait (`tui-idle`, or its input-box marker) cannot
+ * arrive until setup exits, and the worker start reads the gate's outcome off that wait. A structured session has no startup command to sequence,
  * so without this the worker would take its dispatch preamble while `install` was still running,
  * and the repo's wait-for-setup policy would record no evidence at all.
  *

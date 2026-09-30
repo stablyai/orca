@@ -13,6 +13,11 @@ export function agentPromptTakesLeadLine(agent: TuiAgent | null | undefined): bo
   return !agent || TUI_AGENT_CONFIG[agent].pasteNeedsTypedRequest === true
 }
 
+/** The agent row's one extra submit Enter, shared by the renderer's paste and worker start. */
+export function getAgentSubmitRetryDelayMs(agent: TuiAgent | null | undefined): number | undefined {
+  return agent ? TUI_AGENT_CONFIG[agent].submitRetryDelayMs : undefined
+}
+
 /** OMP recognizes a submitted bracketed paste only when Enter shares its PTY write. */
 export function agentPromptSubmitJoinsPasteFrame(agent: TuiAgent | null | undefined): boolean {
   return agent === 'omp'

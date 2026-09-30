@@ -60,7 +60,9 @@ vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   // Why drop the kind: this suite pins write shapes; startup-draft-input-kind.test.ts pins kinds.
   sendRuntimePtyInputVerified: (settings: unknown, ptyId: string, data: string) =>
     testState.sendRuntimePtyInputVerified(settings, ptyId, data),
-  inspectRuntimeTerminalProcess: testState.inspectRuntimeTerminalProcess
+  inspectRuntimeTerminalProcess: testState.inspectRuntimeTerminalProcess,
+  // No pane reports a status here, so the retry Enter stays blind.
+  resolvePaneKeyForPtyId: () => null
 }))
 
 vi.mock('@/runtime/runtime-terminal-stream', () => ({

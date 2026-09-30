@@ -216,6 +216,8 @@ export type RuntimeAgentPromptWriteOptions = Omit<RuntimeTerminalWriteOptions, '
   leadLine?: string
   /** Return an accepted receipt as soon as input lands, instead of waiting for the turn. */
   acceptQueued?: boolean
+  /** First dispatch to an agent Orca just launched: also send the agent row's one retry Enter. */
+  retrySubmitAfterLaunch?: boolean
   observationTimeoutMs?: number
   requestId?: string
   onInputAccepted?: (send: RuntimeTerminalSend) => void
