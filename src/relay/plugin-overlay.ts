@@ -24,13 +24,13 @@ import {
   readdirSync,
   realpathSync,
   statSync,
-  unlinkSync,
   writeFileSync
 } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { mirrorEntry, safeRemoveOverlay } from '../main/pty/overlay-mirror'
 import type { PiAgentKind } from '../shared/pi-agent-kind'
+import { writeOpenCodePluginFile } from '../shared/opencode-plugin-file-write'
 import {
   installOpenCodePluginInCanonicalConfig,
   isRelayOpenCodeOverlayPath,
@@ -214,12 +214,7 @@ export class PluginOverlayManager {
     const pluginsDir = join(overlayDir, 'plugins')
     mkdirSync(pluginsDir, { recursive: true })
     const pluginPath = join(pluginsDir, pluginFileName)
-    try {
-      unlinkSync(pluginPath)
-    } catch {
-      // Fresh overlay or no same-named stale symlink.
-    }
-    writeFileSync(pluginPath, source)
+    writeOpenCodePluginFile(pluginPath, source, 'replace-link')
   }
 
   /** Materialize the OpenCode plugin overlay for `id` (typically the

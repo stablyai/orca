@@ -1,7 +1,8 @@
-import { mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import { resolveOpenCodeConfigDirectory } from '../shared/opencode-config-directory'
 import { isInstalledOpenCodePluginCurrent } from '../shared/opencode-installed-plugin'
+import { writeOpenCodePluginFile } from '../shared/opencode-plugin-file-write'
 
 const RELAY_HOOKS_DIR = '.orca-relay'
 
@@ -20,12 +21,7 @@ export function installOpenCodePluginInCanonicalConfig(
     const pluginPath = join(configDir, 'plugins', pluginFileName)
     mkdirSync(join(configDir, 'plugins'), { recursive: true })
     if (!isInstalledOpenCodePluginCurrent(pluginPath, source)) {
-      try {
-        unlinkSync(pluginPath)
-      } catch {
-        // The file may not exist on the first install.
-      }
-      writeFileSync(pluginPath, source)
+      writeOpenCodePluginFile(pluginPath, source, 'replace-link')
     }
     return true
   } catch (err) {

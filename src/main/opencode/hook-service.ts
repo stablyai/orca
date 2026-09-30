@@ -1,5 +1,6 @@
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { getAppEnvironment } from '../../shared/app-environment'
+import { writeOpenCodePluginFile } from '../../shared/opencode-plugin-file-write'
 import { join } from 'node:path'
 import {
   existsSync,
@@ -8,7 +9,6 @@ import {
   readdirSync,
   realpathSync,
   statSync,
-  unlinkSync,
   writeFileSync
 } from 'node:fs'
 import { createHash } from 'node:crypto'
@@ -284,12 +284,7 @@ export class OpenCodeHookService {
     const pluginPath = join(pluginsDir, this.pluginFileName)
     const source = this.pluginSource()
     if (!isOverlayOpenCodePluginCurrent(pluginPath, source)) {
-      try {
-        unlinkSync(pluginPath)
-      } catch {
-        // File may not exist on a fresh overlay; a real failure surfaces on writeFileSync below.
-      }
-      writeFileSync(pluginPath, source)
+      writeOpenCodePluginFile(pluginPath, source, 'replace-link')
     }
   }
 
@@ -299,7 +294,7 @@ export class OpenCodeHookService {
     const pluginPath = join(pluginsDir, this.pluginFileName)
     const source = this.pluginSource()
     if (!isInstalledOpenCodePluginCurrent(pluginPath, source)) {
-      writeFileSync(pluginPath, source)
+      writeOpenCodePluginFile(pluginPath, source, 'write-through-link')
     }
   }
 }
