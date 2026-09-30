@@ -1,6 +1,6 @@
 /** Strips noise around the agent's output: surrounding whitespace, a single
  *  enclosing fenced code block, lone "Generating…" preamble lines some CLIs
- *  print before the real answer, and a reasoning model's leading think block. */
+ *  print before the real answer, and a reasoning block the output opens with. */
 export function cleanGeneratedCommitMessage(raw: string): string {
   // Why: agent output can include very large generated bodies; normalize and
   // unwrap by scanning boundaries instead of building newline-sized arrays.
@@ -31,24 +31,36 @@ export function cleanGeneratedCommitMessage(raw: string): string {
   return text
 }
 
-const REASONING_OPEN_TAG = '<think>'
-const REASONING_CLOSE_TAG = '</think>'
+// Why: reasoning models print their chain of thought before the answer.
+// DeepSeek-R1, Qwen3 and Kimi K2 use <think>; Kimi-VL-Thinking uses ◁think▷.
+const REASONING_TAGS = [
+  { open: '<think>', close: '</think>' },
+  { open: '◁think▷', close: '◁/think▷' }
+] as const
 
-// Why: reasoning models (DeepSeek-R1, Qwen3, Spark-X2.5) run through a custom
-// command print their reasoning before the answer. Chat templates that prefill
-// `<think>` in the prompt leave only the closing tag in stdout, so a close tag
-// with no open tag before it ends a reasoning block too. An open tag later in
-// the text means the message is quoting the tags, so it is left alone.
 function stripLeadingReasoningBlock(text: string): string {
-  const closeIndex = text.indexOf(REASONING_CLOSE_TAG)
-  if (closeIndex === -1) {
-    return text
+  for (const { open, close } of REASONING_TAGS) {
+    if (!text.startsWith(open)) {
+      continue
+    }
+    const closeIndex = text.indexOf(close, open.length)
+    return closeIndex === -1 ? text : text.slice(closeIndex + close.length).trim()
   }
-  const openIndex = text.indexOf(REASONING_OPEN_TAG)
-  if (openIndex > 0 && openIndex < closeIndex) {
-    return text
+  return text
+}
+
+/** Drops reasoning that ends in a closing tag with no opening tag before it.
+ *  Chat templates that prefill the opening tag in the prompt (Qwen3-Thinking,
+ *  DeepSeek-R1-0528, Kimi K2.5) keep it out of stdout. Only custom commands
+ *  should use this: any other message may legitimately mention the closing tag. */
+export function stripPrefilledReasoningPreamble(text: string): string {
+  for (const { open, close } of REASONING_TAGS) {
+    const closeIndex = text.indexOf(close)
+    if (closeIndex !== -1 && text.lastIndexOf(open, closeIndex) === -1) {
+      return text.slice(closeIndex + close.length).trim()
+    }
   }
-  return text.slice(closeIndex + REASONING_CLOSE_TAG.length).trim()
+  return text
 }
 
 function normalizeGeneratedCommitMessageLineFeeds(value: string): string {
