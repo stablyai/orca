@@ -177,3 +177,45 @@ describe('orca claude-teams CLI handler', () => {
     expect(spawnEnv.ANTHROPIC_API_KEY).toBe('sk-ant-system')
   })
 })
+
+describe('orca status CLI capability docs', () => {
+  it('attaches capabilityDocs on --json for advertised flags', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Test mock fulfills the required RuntimeClient getCliStatus method.
+    const client = {
+      getCliStatus: vi.fn().mockResolvedValue({
+        result: {
+          app: { running: true, pid: 1 },
+          runtime: {
+            state: 'ready',
+            reachable: true,
+            runtimeId: 'rt-1',
+            capabilities: ['aiVault.v1', 'unknown.future.v9']
+          },
+          graph: { state: 'ready' }
+        }
+      })
+    } as unknown as RuntimeClient
+
+    await CORE_HANDLERS.status({
+      flags: new Map(),
+      client,
+      cwd: '/tmp/repo',
+      json: true
+    })
+
+    const payload = JSON.parse(String(log.mock.calls[0]?.[0]))
+    expect(payload).toMatchObject({
+      result: {
+        runtime: {
+          capabilities: ['aiVault.v1', 'unknown.future.v9'],
+          capabilityDocs: {
+            'aiVault.v1': expect.stringMatching(/Agent Session History/)
+          }
+        }
+      }
+    })
+    expect(payload.result.runtime.capabilityDocs['unknown.future.v9']).toBeUndefined()
+    log.mockRestore()
+  })
+})
