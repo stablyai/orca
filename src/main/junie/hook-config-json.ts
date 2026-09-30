@@ -1,6 +1,10 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { applyEdits, modify, parse as parseJsonc, type ParseError } from 'jsonc-parser'
-import { isPlainObject, type HooksConfig } from '../agent-hooks/installer-utils'
+import {
+  isPlainObject,
+  type HookDefinition,
+  type HooksConfig
+} from '../agent-hooks/installer-utils'
 
 /** Junie parses config.json with kotlinx serialization, which accepts neither comments nor
  *  trailing commas — so this reader is strict too. Tolerating what Junie rejects would report
@@ -90,5 +94,26 @@ export function parseJunieHooksConfigText(
   if (parsed === undefined) {
     return null
   }
-  return isPlainObject(parsed) ? (parsed as HooksConfig) : null
+  if (!isPlainObject(parsed)) {
+    return null
+  }
+  const rawHooks = parsed.hooks
+  if (rawHooks === undefined) {
+    return parsed
+  }
+  if (!isPlainObject(rawHooks)) {
+    return null
+  }
+  const hooks: Record<string, HookDefinition[]> = {}
+  for (const [eventName, definitions] of Object.entries(rawHooks)) {
+    if (!Array.isArray(definitions)) {
+      continue
+    }
+    hooks[eventName] = definitions.filter(isHookDefinition)
+  }
+  return { ...parsed, hooks }
+}
+
+function isHookDefinition(value: unknown): value is HookDefinition {
+  return isPlainObject(value)
 }
