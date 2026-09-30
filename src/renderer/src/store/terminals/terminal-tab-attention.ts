@@ -1,6 +1,7 @@
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { findRenamableUnifiedTab } from './renamable-unified-tab'
 
 export function createTerminalTabAttentionActions(
@@ -15,6 +16,7 @@ export function createTerminalTabAttentionActions(
   | 'clearTerminalPaneUnread'
   | 'setTabCustomTitle'
   | 'setTabColor'
+  | 'setTabNeverHibernate'
 > {
   return {
     markTerminalTabUnread: (tabId, reason) => {
@@ -99,6 +101,27 @@ export function createTerminalTabAttentionActions(
       if (item) {
         get().setTabCustomLabel(item.id, title, opts)
       }
+    },
+    setTabNeverHibernate: (tabId, neverHibernate) => {
+      set((s) => {
+        let changed = false
+        const next = { ...s.tabsByWorktree }
+        for (const wId of Object.keys(next)) {
+          next[wId] = next[wId].map((t) => {
+            if (t.id !== tabId || (t.neverHibernate === true) === neverHibernate) {
+              return t
+            }
+            changed = true
+            // Why: drop the key when off so tabs that never opted in keep their persisted shape.
+            const updated: TerminalTab = { ...t, neverHibernate: true }
+            if (!neverHibernate) {
+              delete updated.neverHibernate
+            }
+            return updated
+          })
+        }
+        return changed ? { tabsByWorktree: next } : s
+      })
     },
     setTabColor: (tabId, color) => {
       set((s) => {

@@ -74,6 +74,11 @@ vi.mock('@/i18n/i18n', () => ({
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
+// Covered by its own test; this file's store mock has no tab rows or settings.
+vi.mock('./TerminalTabNeverHibernateMenuItem', () => ({
+  TerminalTabNeverHibernateMenuItem: () => null
+}))
+
 vi.mock('../../store', () => ({
   useAppStore: Object.assign(
     (selector: (state: Record<string, unknown>) => unknown) => selector(storeMock.state),

@@ -24,6 +24,7 @@ Orca only hibernates an agent terminal when **all** of the following are true:
 - No mobile session is currently driving the terminal.
 - No [orchestration](/docs/cli/orchestration) Dispatch is still unsettled (`pending`, `dispatched`, or unknown). Sleep is allowed again after runtime-confirmed `completed`, `failed`, or `circuit_broken`.
 - No live subagent / teammate roster remains on the pane (provider "done" alone is not enough while children are still attached).
+- The tab hasn't been marked [**Never Hibernate**](#keeping-a-tab-awake).
 
 A terminal that fails any check stays running. If a worktree has multiple agent panes, they hibernate together as a unit so a partially-paused worktree never ships.
 
@@ -38,6 +39,12 @@ Under the **Agent hibernation** toggle, **Hibernate after** sets how many idle m
 - The clock starts from the agent's last `done` update; any keystroke, new output, or returning to the agent's terminal tab resets it.
 
 Longer windows trade memory savings for fewer pauses; shorter windows pause more aggressively but cost a resume next time you switch back.
+
+## Keeping a tab awake
+
+Some agents are meant to sit idle and wait — for example an orchestration coordinator that only acts when a worker's message arrives. Right-click the tab and turn on **Never Hibernate** to exempt every agent pane in that tab. The setting is saved with the tab, so it survives restarts, and you can turn it off from the same menu. The item appears in the tab menu while agent hibernation is on.
+
+It only affects automatic hibernation: manually sleeping the worktree still stops the tab's agents. It isn't available for tabs hosted on a remote Orca server yet.
 
 ## Finding sleeping worktrees
 

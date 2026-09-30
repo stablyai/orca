@@ -17899,6 +17899,9 @@
           "switchToChatView": "Switch to chat view",
           "closeTabsToLeft": "Close Tabs To The Left"
         },
+        "TerminalTabNeverHibernateMenuItem": {
+          "neverHibernate": "Never Hibernate"
+        },
         "BrowserTab": {
           "closeOthers": "Close Others",
           "closeTabsToLeft": "Close Tabs To The Left"

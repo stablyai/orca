@@ -100,6 +100,7 @@ const terminalTabSchema = z.object({
   customTitle: z.string().nullable(),
   color: z.string().nullable(),
   isPinned: z.boolean().optional(),
+  neverHibernate: z.boolean().optional(),
   // Why: recovery asks the terminal row who owns the surface, so a row that
   // loses viewMode on reload reads as "not chat-owned" and lets a hidden chat
   // surface remount itself. Declared here so the row survives the parse, with
