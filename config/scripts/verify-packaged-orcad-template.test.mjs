@@ -77,17 +77,17 @@ describe('verifyPackagedOrcadTemplate', () => {
     )
   })
 
-  it('does not ship the unused deployment template in desktop packages', async () => {
+  it('ships the managed deployment template in desktop packages', async () => {
     for (const platform of ['win', 'mac', 'linux']) {
       expect(
         builderConfig[platform].extraResources.some(
           (resource) => typeof resource === 'object' && resource.to.startsWith('orcad-template')
         )
-      ).toBe(false)
+      ).toBe(true)
     }
     const { scripts } = JSON.parse(await readFile(join(process.cwd(), 'package.json'), 'utf8'))
     for (const name of ['build:desktop', 'build:release', 'build:release:parallel']) {
-      expect(scripts[name]).not.toContain('build:orcad-template')
+      expect(scripts[name]).toContain('build:orcad-template')
     }
   })
 })
