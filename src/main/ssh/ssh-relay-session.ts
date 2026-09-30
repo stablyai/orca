@@ -1,1 +1,1 @@
-placeholder
+@file:///workspace/orca-pr24069/content_ssh.txt
