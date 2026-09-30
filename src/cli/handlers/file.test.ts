@@ -87,6 +87,76 @@ describe('orca file CLI handlers', () => {
     expect(vi.mocked(console.log).mock.calls[0][0]).toBe('Opened src/App.tsx.')
   })
 
+  it('opens a positional ./ path without invalid_relative_path', async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo', 'feature')]),
+      okFixture('req_open', {
+        worktree: 'wt-1',
+        relativePath: 'src/App.tsx',
+        kind: 'text',
+        opened: true
+      })
+    )
+
+    await main(['file', 'open', './src/App.tsx'], '/tmp/repo/src')
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', { limit: 10_000 })
+    expect(callMock).toHaveBeenNthCalledWith(2, 'files.open', {
+      worktree: 'id:repo::/tmp/repo',
+      relativePath: 'src/App.tsx'
+    })
+    expect(vi.mocked(console.log).mock.calls[0][0]).toBe('Opened src/App.tsx.')
+  })
+
+  it('opens a positional .\\ path on Windows flavor', async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo', 'feature')]),
+      okFixture('req_open', {
+        worktree: 'wt-1',
+        relativePath: 'src/App.tsx',
+        kind: 'text',
+        opened: true
+      })
+    )
+
+    await main(['file', 'open', '.\\src\\App.tsx'], '/tmp/repo/src')
+
+    expect(callMock).toHaveBeenNthCalledWith(2, 'files.open', {
+      worktree: 'id:repo::/tmp/repo',
+      relativePath: 'src/App.tsx'
+    })
+    expect(vi.mocked(console.log).mock.calls[0][0]).toBe('Opened src/App.tsx.')
+  })
+
+  it('rejects relative worktree root paths like . or ./ as a file-open target', async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo', 'feature')]),
+      worktreeListFixture([buildWorktree('/tmp/repo', 'feature')])
+    )
+
+    const priorExitCode = process.exitCode
+
+    await main(['file', 'open', '.'], '/tmp/repo/src')
+
+    expect(process.exitCode).toBe(1)
+    expect(console.error).toHaveBeenCalledWith(
+      'The selected worktree root is a directory, not a file-open target.'
+    )
+
+    process.exitCode = priorExitCode
+    await main(['file', 'open', './'], '/tmp/repo/src')
+
+    expect(process.exitCode).toBe(1)
+    expect(console.error).toHaveBeenCalledWith(
+      'The selected worktree root is a directory, not a file-open target.'
+    )
+
+    process.exitCode = priorExitCode
+  })
+
   it('opens a staged diff for an explicit worktree without cwd inference', async () => {
     queueFixtures(
       callMock,
@@ -105,6 +175,44 @@ describe('orca file CLI handlers', () => {
 
     expect(callMock).toHaveBeenCalledTimes(1)
     expect(callMock).toHaveBeenCalledWith('files.openDiff', {
+      worktree: 'id:wt-1',
+      relativePath: 'src/App.tsx',
+      staged: true
+    })
+  })
+
+  it('opens a diff with a leading ./ or .\\ path', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_diff_1', {
+        worktree: 'wt-1',
+        relativePath: 'src/App.tsx',
+        kind: 'text',
+        opened: true
+      }),
+      okFixture('req_diff_2', {
+        worktree: 'wt-1',
+        relativePath: 'src/App.tsx',
+        kind: 'text',
+        opened: true
+      })
+    )
+
+    await main(
+      ['file', 'diff', '--path', './src/App.tsx', '--staged', '--worktree', 'id:wt-1'],
+      '/tmp/elsewhere'
+    )
+    await main(
+      ['file', 'diff', '--path', '.\\src\\App.tsx', '--staged', '--worktree', 'id:wt-1'],
+      '/tmp/elsewhere'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'files.openDiff', {
+      worktree: 'id:wt-1',
+      relativePath: 'src/App.tsx',
+      staged: true
+    })
+    expect(callMock).toHaveBeenNthCalledWith(2, 'files.openDiff', {
       worktree: 'id:wt-1',
       relativePath: 'src/App.tsx',
       staged: true
