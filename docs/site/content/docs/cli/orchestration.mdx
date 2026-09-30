@@ -49,9 +49,11 @@ orca orchestration worker-start --task <taskId> --worktree current --agent claud
 Wait for completions (process every message in a Delivery, then ack):
 
 ```bash
-orca orchestration check --wait --types worker_done,escalation,question --timeout-ms 900000 --json
-orca orchestration check --ack <deliveryId> --wait --types worker_done,escalation,question --timeout-ms 900000 --json
+orca orchestration check --wait --types worker_done,escalation,question --timeout-ms 590000 --json
+orca orchestration check --ack <deliveryId> --wait --types worker_done,escalation,question --timeout-ms 590000 --json
 ```
+
+Delegation has two phases. Until the task is submitted, keep readiness short and verified. After submission, the filtered wait is the whole watch: do not poll the worker pane, and treat heartbeats as liveness, not progress — they never wake a filtered wait. Keep `--timeout-ms` under the calling harness's tool-call ceiling (for example 590000 under a 600000 ms limit) so the wait does not get backgrounded; on a genuine timeout, run the wait again.
 
 Worker completion (from the worker pane; include injected IDs):
 
@@ -110,6 +112,8 @@ orca worktree create --name billing-audit --agent codex --json
 orca terminal wait --terminal <workerHandle> --for tui-idle --timeout-ms 60000 --json
 orca orchestration dispatch --task <taskId> --to <workerHandle> --inject --json
 ```
+
+When you drive setup yourself (for example `/model` or `/reasoning` slash commands before injecting the task), keep it one short interactive step: send deterministic setup back to back, and confirm each acknowledgement with `terminal read` polls bounded in seconds. `--for tui-idle` confirms launch readiness and a finished agent turn, not a slash-command acknowledgement; a TUI whose status line keeps repainting may never settle. Verify the model and effort actually in effect before injecting, and escalate to longer waits only after a short check fails.
 
 ## Messaging notes
 

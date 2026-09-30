@@ -74,8 +74,8 @@ describe('orchestration kernel', () => {
       '## Conditional references'
     ]
 
-    // Why: 202 is the budget after the anti-loop nextAction rule; the kernel is always in context.
-    expect(kernel.split('\n').length).toBeLessThanOrEqual(202)
+    // Why: 203 is the budget after the two-phase readiness/wait rule; the kernel is always in context.
+    expect(kernel.split('\n').length).toBeLessThanOrEqual(203)
     for (let index = 1; index < headings.length; index += 1) {
       expect(kernel.indexOf(headings[index])).toBeGreaterThan(kernel.indexOf(headings[index - 1]))
     }
@@ -217,6 +217,23 @@ describe('orchestration kernel', () => {
       '`worker-list --run <run_id> --terminal-state reclaimable --json`'
     )
     expect(squash(kernel)).toContain('do not follow it with `task-update --status completed`')
+  })
+
+  it('separates short verified readiness from quiet waiting on submitted work', () => {
+    const kernel = readKernel()
+    const waitTimeouts = [...kernel.matchAll(/check [^\n]*--wait[^\n]*--timeout-ms (\d+)/gu)].map(
+      (match) => Number(match[1])
+    )
+
+    expect(squash(kernel)).toContain('Delegation has two phases')
+    expect(squash(kernel)).toContain('keep readiness short and verified')
+    expect(squash(kernel)).toContain('the filtered wait is the whole watch: read no pane')
+    expect(squash(kernel)).toContain('heartbeats prove liveness, not progress')
+    // Why: a wait longer than Claude Code's 600000 ms Bash ceiling backgrounds and wakes the model.
+    expect(waitTimeouts.length).toBeGreaterThan(0)
+    for (const timeout of waitTimeouts) {
+      expect(timeout).toBeLessThanOrEqual(590000)
+    }
   })
 
   it('treats long waits and release uncertainty as safe checkpoints', () => {
@@ -454,6 +471,18 @@ describe('owned orchestration references', () => {
     expect(squash(reference)).toContain('creates no supervised worker resource row')
     expect(reference).toContain('Use `worker-start --terminal <handle>`')
     expect(squash(reference)).toContain('never use it for an ownership handoff')
+  })
+
+  it('keeps coordinator-driven setup short without trading away runtime verification', () => {
+    const reference = squash(readReference('low-level-topology.md'))
+
+    expect(reference).toContain('Send deterministic setup back to back in one tool call')
+    expect(reference).toContain('It is not a slash-command acknowledgement')
+    expect(reference).toContain('`terminal read` polls for its expected text, bounded in seconds')
+    expect(reference).toContain('Verify the model and effort actually in effect')
+    expect(reference).toContain('never claim them from requested arguments')
+    expect(reference).toContain('only after a short check fails')
+    expect(reference).toContain('Once the Task is submitted, stop reading the pane')
   })
 
   it('owns legacy labels, read-only degradation, exact recovery, and takeover', () => {
