@@ -92,8 +92,16 @@ function mergeJunieSummary(
     ...session,
     title: normalizeJunieTitle(summary.taskName) ?? session.title,
     cwd,
-    createdAt: toIsoDate(summary.createdAt) ?? session.createdAt,
-    updatedAt: toIsoDate(summary.updatedAt) ?? session.updatedAt
+    createdAt: mergeJunieTimestamp(
+      session.createdAt,
+      toIsoDate(summary.createdAt),
+      (sidecar, session) => sidecar < session
+    ),
+    updatedAt: mergeJunieTimestamp(
+      session.updatedAt,
+      toIsoDate(summary.updatedAt),
+      (sidecar, session) => sidecar > session
+    )
   }
   if (cwd === session.cwd) {
     return merged
@@ -115,8 +123,31 @@ function normalizeJunieTitle(value: string | null): string | null {
   return title ? title : null
 }
 
+function mergeJunieTimestamp(
+  sessionValue: string | null,
+  sidecarValue: string | null,
+  shouldUseSidecar: (sidecarTime: number, sessionTime: number) => boolean
+): string | null {
+  if (!sidecarValue || !sessionValue) {
+    return sidecarValue ?? sessionValue
+  }
+  const sessionTime = Date.parse(sessionValue)
+  const sidecarTime = Date.parse(sidecarValue)
+  if (!Number.isFinite(sidecarTime)) {
+    return sessionValue
+  }
+  if (!Number.isFinite(sessionTime)) {
+    return sidecarValue
+  }
+  return shouldUseSidecar(sidecarTime, sessionTime) ? sidecarValue : sessionValue
+}
+
 function toIsoDate(value: number | null): string | null {
-  return value === null ? null : new Date(value).toISOString()
+  if (value === null || !Number.isFinite(value)) {
+    return null
+  }
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date.toISOString()
 }
 
 /** Fills only what the transcript never recorded; its own records always win. */

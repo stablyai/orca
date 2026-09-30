@@ -350,11 +350,13 @@ describe('Junie sidecar metadata', () => {
     const stats = createSessionParseStats()
     const first = await parseAgentSessionFileCached(await candidate(), process.platform, stats)
     expect(first?.title).toBe('Initial title')
+    expect(first?.updatedAt).toBe('2026-08-24T14:44:58.000Z')
     await writeIndex('Updated title', '/tmp/updated-project')
     const second = await parseAgentSessionFileCached(await candidate(), process.platform, stats)
 
     expect(stats).toMatchObject({ fullParses: 1, reused: 1, incremental: 0 })
     expect(second?.title).toBe('Updated title')
     expect(second?.cwd).toBe('/tmp/updated-project')
+    expect(second?.updatedAt).toBe('2026-08-24T14:44:58.000Z')
   })
 })
