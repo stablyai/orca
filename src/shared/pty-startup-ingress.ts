@@ -144,7 +144,7 @@ export class PtyStartupIngress {
           // split across the boundary and orphan the second.
           this.releaseQueryPending()
         }
-        // Why: ConPTY cannot safely transfer color-query authority to a downstream view.
+        // Why: keep a torn ConPTY candidate whole so it reaches downstream as one query.
         return
       case 'expire':
         this.queryOpen = false
@@ -218,8 +218,8 @@ export class PtyStartupIngress {
             }
             // Unconditional, unlike `releasePendingInSourceOrder`, which withholds a
             // ConPTY candidate: that one releases candidates still *undetermined*,
-            // and on ConPTY an undetermined candidate may be a query it is meant to
-            // suppress. Here the candidate and the tail together parse as `none`, so
+            // and on ConPTY an undetermined candidate may be a query to keep whole.
+            // Here the candidate and the tail together parse as `none`, so
             // whatever the candidate is, the bytes behind it are not its body — which
             // is what makes it safe to stop holding the echo hostage to it.
             this.releaseQueryPending()
@@ -249,8 +249,10 @@ export class PtyStartupIngress {
   private processQuerySpan(span: PtyIngressSourceSpan): void {
     const input = combinePtyIngressSourceSpans(this.queryPending, span)
     this.queryPending = null
-    const suppressConptyQuery = this.ownerBackend === 'windows-conpty'
-    if ((!this.queryOpen || !this.intent) && !this.kittyQueryOpen && !suppressConptyQuery) {
+    // Why unanswered ConPTY queries pass through: downstream replies re-enter via
+    // answerLiveQueryReply, which arms the ConPTY echo projection; swallowing them left
+    // programs like Command Code waiting on OSC 11 forever.
+    if ((!this.queryOpen || !this.intent) && !this.kittyQueryOpen) {
       this.emit(input, false)
       return
     }
@@ -292,7 +294,7 @@ export class PtyStartupIngress {
       if (query.kind === 'kitty' && answered) {
         this.kittyQueryOpen = false
       }
-      if (answered || (suppressConptyQuery && query.kind !== 'kitty')) {
+      if (answered) {
         this.emit(querySpan, true, '')
       } else {
         this.emit(querySpan, false)

@@ -329,24 +329,31 @@ describe('Session', () => {
       expect(session.getSnapshot()?.snapshotAnsi).not.toContain(']10;rgb')
       session.dispose()
 
+      // ConPTY: an owner-unanswerable query reaches the view, and its ESC-stripped echo is contained.
       subprocess = createMockSubprocess()
       createSession({ ownerBackend: 'windows-conpty' })
       session.closeStartupQueryAuthority()
-      const fixedReplyProducers: string[] = []
-      const fixedOnData = vi.fn((data: string) => {
+      const conptyReplyProducers: string[] = []
+      const conptyOnData = vi.fn((data: string) => {
         if (data === query) {
-          fixedReplyProducers.push('remote-visible-renderer')
+          conptyReplyProducers.push('remote-visible-renderer')
           session.write(reply)
         }
       })
-      session.attachClient({ onData: fixedOnData, onExit: () => {} })
+      session.attachClient({ onData: conptyOnData, onExit: () => {} })
+      const conptyEcho = reply.replaceAll('\x1b', '')
 
       subprocess.simulateData(query)
+      subprocess.simulateData(conptyEcho)
       subprocess.simulateData('prompt')
 
-      expect(fixedReplyProducers).toEqual([])
-      expect(subprocess.written).toEqual([])
-      expect(fixedOnData.mock.calls).toEqual([['', query.length, true, query.length], ['prompt']])
+      expect(conptyReplyProducers).toEqual(['remote-visible-renderer'])
+      expect(subprocess.written).toEqual([reply])
+      expect(conptyOnData.mock.calls).toEqual([
+        [query],
+        ['', conptyEcho.length, true, query.length + conptyEcho.length],
+        ['prompt']
+      ])
       expect(session.getSnapshot()?.snapshotAnsi).not.toContain(']10;rgb')
     })
   })

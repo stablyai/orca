@@ -576,7 +576,7 @@ describe('PtyHandler negotiated source publication', () => {
     expect(publication.getDebugSnapshot()).toMatchObject({ sendCommitted: 2 })
   })
 
-  it('settles a suppressed ConPTY query before publishing its prompt', async () => {
+  it('publishes an owner-unanswerable ConPTY query ahead of its prompt', async () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     await spawn({ shellOverride: 'powershell.exe' })
     const query = '\x1b]10;?\x07'
@@ -587,9 +587,7 @@ describe('PtyHandler negotiated source publication', () => {
 
     expect(sourceDataFrames().map((frame) => frame.params)).toEqual([
       expect.objectContaining({
-        data: '',
-        rawLength: query.length,
-        transformed: true,
+        data: query,
         sourceLengthSu: query.length,
         sourceEndSu: query.length
       }),

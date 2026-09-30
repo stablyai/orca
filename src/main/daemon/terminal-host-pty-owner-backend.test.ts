@@ -78,12 +78,15 @@ describe('TerminalHost PTY owner backend', () => {
       }
     })
     const subprocess = await createSession('powershell.exe', 'Ubuntu', onData)
+    const conptyEcho = ']10;rgb:ffff/ffff/ffff\\'
 
     subprocess.emitData('\x1b]10;?\x07')
+    subprocess.emitData(conptyEcho)
 
-    expect(replyProducers).toEqual([])
-    expect(onData).toHaveBeenCalledWith('', '\x1b]10;?\x07'.length, true, '\x1b]10;?\x07'.length)
-    expect(subprocess.write).not.toHaveBeenCalled()
+    expect(replyProducers).toEqual(['renderer'])
+    expect(subprocess.write).toHaveBeenCalledWith('\x1b]10;rgb:ffff/ffff/ffff\x1b\\')
+    // Only the native ConPTY backend projects the ESC-stripped echo.
+    expect(onData).not.toHaveBeenCalledWith(conptyEcho)
   })
 
   it('keeps replies for an actually spawned WSL shell', async () => {
@@ -98,8 +101,10 @@ describe('TerminalHost PTY owner backend', () => {
     const subprocess = await createSession('wsl.exe', undefined, onData)
 
     subprocess.emitData('\x1b]10;?\x07')
+    subprocess.emitData(']10;rgb:ffff/ffff/ffff\\')
 
     expect(replyProducers).toEqual(['renderer'])
     expect(subprocess.write).toHaveBeenCalledWith(reply)
+    expect(onData).toHaveBeenCalledWith(']10;rgb:ffff/ffff/ffff\\')
   })
 })

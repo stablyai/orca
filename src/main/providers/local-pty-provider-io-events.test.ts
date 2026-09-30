@@ -265,7 +265,7 @@ describe('LocalPtyProvider', () => {
       ])
     })
 
-    it('consumes a native Windows OSC color query before renderer delivery', async () => {
+    it('delivers a native Windows OSC color query to the renderer and contains its reply echo', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       const dataHandler = vi.fn()
       provider.onData(dataHandler)
@@ -276,17 +276,16 @@ describe('LocalPtyProvider', () => {
       })
       const onDataCb = mockProc.onData.mock.calls[0][0]
       const query = '\x1b]10;?\x07'
+      const reply = '\x1b]10;rgb:2e2e/3434/3434\x1b\\'
+      const conptyEcho = reply.replaceAll('\x1b', '')
 
       onDataCb(query)
+      expect(dataHandler).toHaveBeenCalledWith({ id, data: query })
 
-      expect(dataHandler).toHaveBeenCalledWith({
-        id,
-        data: '',
-        sequenceChars: query.length,
-        seq: query.length,
-        transformed: true
-      })
-      expect(mockProc.write).not.toHaveBeenCalled()
+      provider.write(id, reply)
+      expect(mockProc.write).toHaveBeenCalledWith(reply)
+      onDataCb(conptyEcho)
+      expect(dataHandler).not.toHaveBeenCalledWith(expect.objectContaining({ data: conptyEcho }))
     })
 
     it('keeps forwarded OSC color replies for a Windows-owned WSL PTY', async () => {

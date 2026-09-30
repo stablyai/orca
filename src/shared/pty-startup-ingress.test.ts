@@ -152,7 +152,7 @@ describe('PtyStartupIngress', () => {
     ])
   })
 
-  it('consumes a native ConPTY color query before any downstream responder at every split', () => {
+  it('hands a native ConPTY color query it cannot answer downstream at every split', () => {
     const query = '\x1b]11;?\x1b\\'
     for (let split = 0; split <= query.length; split += 1) {
       const writes: string[] = []
@@ -168,10 +168,11 @@ describe('PtyStartupIngress', () => {
       ingress.drainAndClose()
 
       expect(writes, `split ${split}`).toEqual([])
-      expect(visible(emissions), `split ${split}`).toBe('')
-      expect(emissions, `split ${split}`).toEqual([
-        { data: '', rawStartSeq: 0, rawEndSeq: query.length, transformed: true }
-      ])
+      expect(visible(emissions), `split ${split}`).toBe(query)
+      expect(
+        emissions.every((emission) => !emission.transformed),
+        `split ${split}`
+      ).toBe(true)
     }
   })
 
@@ -193,14 +194,15 @@ describe('PtyStartupIngress', () => {
     expect(visible(emissions)).toBe('')
   })
 
-  it('keeps a split native ConPTY query private across close, expiry, and snapshot barriers', () => {
+  it('releases a split native ConPTY query whole once the owner cannot answer it', () => {
     vi.useFakeTimers()
     for (const barrier of ['close', 'expire', 'snapshot'] as const) {
+      const writes: string[] = []
       const emissions: PtyIngressEmission[] = []
       const ingress = new PtyStartupIngress({
         ...(barrier === 'expire' ? { intent: { colors: COLORS, deadlineMs: 5_000 } } : {}),
         ownerBackend: 'windows-conpty',
-        write: () => {},
+        write: (data) => writes.push(data),
         onEmission: (emission) => emissions.push(emission)
       })
       ingress.accept('\x1b]10;')
@@ -211,14 +213,11 @@ describe('PtyStartupIngress', () => {
       } else {
         ingress.snapshotBarrier()
       }
-      expect(emissions, barrier).toEqual([])
 
       ingress.accept('?\x07')
 
-      expect(visible(emissions), barrier).toBe('')
-      expect(emissions, barrier).toEqual([
-        { data: '', rawStartSeq: 0, rawEndSeq: '\x1b]10;?\x07'.length, transformed: true }
-      ])
+      expect(writes, barrier).toEqual([])
+      expect(visible(emissions), barrier).toBe('\x1b]10;?\x07')
     }
 
     const malformedEmissions: PtyIngressEmission[] = []
@@ -250,7 +249,7 @@ describe('PtyStartupIngress', () => {
     expect(visible(emissions)).toBe('\x1b]10;')
   })
 
-  it('keeps POSIX, WSL, malformed, and unrelated output unchanged', () => {
+  it('keeps POSIX, WSL, malformed, unrelated, and post-deadline output unchanged', () => {
     const input = 'typed\x1b[A\x1b]12;?\x1b\\\x1b]10;not-a-query\x07'
     vi.useFakeTimers()
     for (const ownerBackend of ['posix-pty', 'windows-wsl'] as const) {
@@ -276,7 +275,7 @@ describe('PtyStartupIngress', () => {
     nativeIngress.accept(`${input}\x1b]10;?\x07`)
 
     expect(writes).toEqual([])
-    expect(visible(emissions)).toBe(input)
+    expect(visible(emissions)).toBe(`${input}\x1b]10;?\x07`)
   })
 
   it('swallows a cooked POSIX echo of its own reply without re-sending it', () => {

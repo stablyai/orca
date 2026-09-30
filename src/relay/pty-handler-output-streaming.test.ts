@@ -423,7 +423,7 @@ describe('PtyHandler', () => {
     }
   })
 
-  it('consumes a color query at a native Windows SSH relay owner', async () => {
+  it('forwards a color query the native Windows SSH relay owner cannot answer', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     try {
@@ -438,17 +438,12 @@ describe('PtyHandler', () => {
       mockPtySpawn.mockReturnValue(term)
       await dispatcher.callRequest('pty.spawn', { shellOverride: 'powershell.exe' })
 
-      dataCallback!('\x1b]10;?\x07')
+      const query = '\x1b]10;?\x07'
+      dataCallback!(query)
       vi.advanceTimersByTime(8)
 
       expect(term.write).not.toHaveBeenCalled()
-      expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
-        id: PTY_1,
-        data: '',
-        rawLength: '\x1b]10;?\x07'.length,
-        seq: '\x1b]10;?\x07'.length,
-        transformed: true
-      })
+      expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', { id: PTY_1, data: query })
     } finally {
       if (originalPlatform) {
         Object.defineProperty(process, 'platform', originalPlatform)
