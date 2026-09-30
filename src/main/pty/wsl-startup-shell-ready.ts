@@ -34,7 +34,7 @@ export function wslStartupCommandWaitsForShellReady(args: {
   )
 }
 
-/** Asks the guest wrapper (or the login script, for an unwrapped shell) for the ready marker. */
+/** Asks the guest's bash/zsh wrapper or fish prompt hook for the ready marker; other shells time out. */
 export function requestWslShellReadyMarker(env: Record<string, string>): void {
   env[SHELL_STARTUP_FEATURE_ENV] = 'ready'
   // Why: wsl.exe only imports Windows env vars that WSLENV names.

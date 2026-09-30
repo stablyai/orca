@@ -137,29 +137,33 @@ export function buildWslInteractiveLoginShellCommand(): string {
     '      _orca_wsl_shell_wrapped=1',
     '    fi',
     '    ;;',
+    '  fish)',
+    '    case ",${ORCA_SHELL_FEATURES:-}," in',
+    '      *,ready,*)',
+    '        unset ORCA_SHELL_FEATURES',
+    `        exec "$_orca_wsl_shell" -l -C ${quotePosixShell(WSL_FISH_SHELL_READY_INIT)}`,
+    '        ;;',
+    '    esac',
+    '    ;;',
     'esac',
-    WSL_UNWRAPPED_SHELL_READY_BLOCK,
+    // Why no marker for the rest: without a prompt hook it could only come before
+    // the shell's own startup files, which can still eat the command. They wait
+    // out the host's timeout instead. Consumed so it never leaks into the shell.
+    '[ -n "$_orca_wsl_shell_wrapped" ] || unset ORCA_SHELL_FEATURES',
     'exec "$_orca_wsl_shell" -l'
   ].join('\n')
 }
 
 /**
- * Runs just before an unwrapped guest shell is exec'd (fish, sh, or bash/zsh
- * whose wrapper is missing).
+ * Guest fish reports ready from its first prompt, after config.fish.
  *
- * Why: the host holds a startup command until the guest reports ready (see
- * wsl-startup-shell-ready.ts). A wrapped shell reports from its prompt; an
- * unwrapped one never would, and its command would sit out the whole timeout.
- * Marking here still waits out the WSL boot and login, which is where the
- * typed-too-early command was lost (#24188). The channel is consumed either way
- * so it cannot leak into the user's shell. The marker must match
- * SHELL_READY_MARKER_ESCAPED in src/main/providers/local-pty-shell-ready-marker.ts.
+ * Why: fish has no wrapper dir, so the host holds a WSL startup command until
+ * this fires (wsl-startup-shell-ready.ts, #24188). Must stay identical to
+ * getFishShellReadyInitCommand(SHELL_READY_MARKER_ESCAPED) in src/main/shell-templates.ts.
  */
-export const WSL_UNWRAPPED_SHELL_READY_BLOCK = [
-  'if [ -z "$_orca_wsl_shell_wrapped" ]; then',
-  '  case ",${ORCA_SHELL_FEATURES:-}," in',
-  "    *,ready,*) printf '\\033]777;orca-shell-ready\\007' ;;",
-  '  esac',
-  '  unset ORCA_SHELL_FEATURES',
-  'fi'
+export const WSL_FISH_SHELL_READY_INIT = [
+  'function __orca_shell_ready_marker --on-event fish_prompt',
+  '  builtin printf "\\033]777;orca-shell-ready\\007"',
+  '  functions -e __orca_shell_ready_marker',
+  'end'
 ].join('\n')

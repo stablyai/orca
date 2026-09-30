@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { WSL_UNWRAPPED_SHELL_READY_BLOCK } from '../../shared/wsl-login-shell-command'
+import { WSL_FISH_SHELL_READY_INIT } from '../../shared/wsl-login-shell-command'
+import { getFishShellReadyInitCommand } from '../shell-templates'
 import { SHELL_READY_MARKER_ESCAPED } from '../providers/local-pty-shell-ready-marker'
 import {
   requestWslShellReadyMarker,
@@ -41,6 +42,6 @@ describe('requestWslShellReadyMarker', () => {
   })
 })
 
-it('the login script emits the same marker the wrappers do', () => {
-  expect(WSL_UNWRAPPED_SHELL_READY_BLOCK).toContain(`'${SHELL_READY_MARKER_ESCAPED}'`)
+it('guest fish reports ready exactly like host fish', () => {
+  expect(WSL_FISH_SHELL_READY_INIT).toBe(getFishShellReadyInitCommand(SHELL_READY_MARKER_ESCAPED))
 })
