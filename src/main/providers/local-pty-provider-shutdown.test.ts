@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as MacosTccLoginShell from './macos-tcc-login-shell'
+import * as ptyJob from '../windows/windows-pty-job'
 
 const {
   existsSyncMock,
@@ -502,6 +503,23 @@ describe('LocalPtyProvider', () => {
         expect.any(Function),
         expect.objectContaining({ ownsRoot: expect.any(Function) })
       )
+    })
+
+    it('anchors a job-less Windows fallback to the still-owned native handle', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const identity = vi.spyOn(ptyJob, 'readPtyRootCreationTimeMs').mockReturnValue(1234)
+      try {
+        const { id } = await provider.spawn({ cols: 80, rows: 24 })
+        await provider.shutdown(id, { immediate: true })
+        expect(identity).toHaveBeenCalledWith(mockProc)
+        expect(killWithDescendantSweepMock).toHaveBeenCalledWith(
+          mockProc.pid,
+          expect.any(Function),
+          expect.objectContaining({ expectedRootCreationTimeMs: 1234 })
+        )
+      } finally {
+        identity.mockRestore()
+      }
     })
 
     it('win32 graceful shutdown of a plain shell does not taskkill the tree', async () => {

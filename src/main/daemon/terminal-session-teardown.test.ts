@@ -219,11 +219,19 @@ describe('pty job ownership reaches the daemon teardown path', () => {
     ['plain shell', undefined],
     ['agent session', { agent: 'claude' } as unknown as Session['launchAgent']]
   ])("hands the sweep this session's job on %s teardown", async (_case, launchAgent) => {
-    const session = createPlainShellSession({ launchAgent })
+    const session = createPlainShellSession({
+      launchAgent,
+      spawnIdentity: { rootCreationTimeMs: 777 }
+    })
     const teardown = new TerminalSessionTeardown(new Map([['s1', session]]))
 
     await teardown.killSession('s1', session, true)
 
+    expect(killWithDescendantSweepMock).toHaveBeenCalledWith(
+      session.pid,
+      expect.any(Function),
+      expect.objectContaining({ expectedRootCreationTimeMs: 777 })
+    )
     expect(sweepTerminateOwnedTree()()).toBe('terminated')
     expect(session.terminateOwnedTree).toHaveBeenCalled()
   })

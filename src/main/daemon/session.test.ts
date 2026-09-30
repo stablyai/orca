@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Session } from './session'
+import type { SpawnTreeIdentity } from './session-subprocess-handle'
 import { SESSION_FORCE_KILL_RETRY_MS } from './session-termination-controller'
 import type { SessionState, ShellReadyState } from './types'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -41,6 +42,7 @@ function createMockSubprocess() {
       return resumeCalls
     },
     foregroundProcess: null as string | null,
+    spawnIdentity: undefined as SpawnTreeIdentity | undefined,
     getForegroundProcess(): string | null {
       return this.foregroundProcess
     },
@@ -718,6 +720,18 @@ describe('Session', () => {
         terminateOwnedTree?: () => string
       }
       expect(deps.terminateOwnedTree?.()).toBe('terminated')
+    })
+
+    it('agent kill anchors the sweep to the spawn-captured root creation time', () => {
+      // Without the anchor the Windows probe proves only ancestry, so a PID
+      // recycled onto another Orca descendant reads as ours (#10680).
+      createSession({ launchAgent: 'claude' })
+      subprocess.spawnIdentity = { rootCreationTimeMs: 555 }
+      session.kill()
+      const deps = killWithDescendantSweepMock.mock.calls[0][2] as {
+        expectedRootCreationTimeMs?: number
+      }
+      expect(deps.expectedRootCreationTimeMs).toBe(555)
     })
 
     it('agent kill root callback is a no-op after the session already exited', () => {

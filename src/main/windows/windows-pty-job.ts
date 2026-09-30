@@ -30,6 +30,7 @@ import { recordSelfInitiatedTreeKill } from '../crash-reporting/self-initiated-t
 const requireFromMain = createRequire(__filename)
 
 type ConptyNative = {
+  getShellCreationTime?: (id: number, shellPid: number) => number | undefined
   terminateJob: (id: number, shellPid: number) => boolean
   listJobProcessIds: (id: number, shellPid: number) => number[] | null
   assignCurrentProcessToJob: () => boolean
@@ -91,6 +92,30 @@ function ptyJobTarget(proc: IPty): { id: number; shellPid: number } | null {
     return null
   }
   return { id: id as number, shellPid: shellPid as number }
+}
+
+/** A stable shell-handle read, never a PID lookup or an ancestry-derived baseline. */
+export function readPtyRootCreationTimeMs(proc: IPty): number | undefined {
+  const nativeProc: IPty & { _agent?: { _useConpty?: unknown } } = proc
+  // winpty has a separate handle-id counter, so an id/PID pair alone is not a spawn receipt.
+  if (nativeProc._agent?._useConpty !== true) {
+    return undefined
+  }
+  const target = ptyJobTarget(proc)
+  const native = nativeLoader()
+  if (!target || !native?.getShellCreationTime) {
+    return undefined
+  }
+  try {
+    const creationTimeMs = native.getShellCreationTime(target.id, target.shellPid)
+    return typeof creationTimeMs === 'number' &&
+      Number.isSafeInteger(creationTimeMs) &&
+      creationTimeMs > 0
+      ? creationTimeMs
+      : undefined
+  } catch {
+    return undefined
+  }
 }
 
 export type JobTerminationOutcome = 'terminated' | 'unavailable'

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { BUNDLED_RIPGREP_PLATFORMS, bundledRipgrepBinaryName } from './bundled-ripgrep'
 import {
   ORCAD_RIPGREP_ARTIFACTS,
+  ORCAD_WINDOWS_GUEST_TREE_KILL_ARTIFACTS,
   ORCAD_RIPGREP_LICENSE_ARTIFACTS,
   orcadArtifactFilenames
 } from './orcad-artifacts'
@@ -15,6 +16,13 @@ describe('standalone runtime artifacts', () => {
     )
     expect(ORCAD_RIPGREP_ARTIFACTS).toEqual(expected)
     expect(orcadArtifactFilenames()).toEqual(expect.arrayContaining(expected))
+  })
+
+  it('requires both guest cleanup architectures only for Windows runtimes', () => {
+    expect(orcadArtifactFilenames('win32-x64')).toEqual(
+      expect.arrayContaining([...ORCAD_WINDOWS_GUEST_TREE_KILL_ARTIFACTS])
+    )
+    expect(orcadArtifactFilenames('linux-x64-glibc')).not.toContain('guest-tree-kill/manifest.json')
   })
 
   it('ships the binary redistribution notices with every install', () => {

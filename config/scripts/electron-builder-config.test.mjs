@@ -1,3 +1,5 @@
+import { writeGuestTreeKillArtifactsFixture } from '../../src/shared/guest-tree-kill-artifacts-test-fixture.ts'
+import { guestTreeKillSourceHash } from './build-guest-tree-kill.mjs'
 import { existsSync } from 'node:fs'
 import { chmod, lstat, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
@@ -532,17 +534,29 @@ describe('arch-aware packaging guard', () => {
   // guard, and the bundle guard has its own suite.
   let scratch
   let bundleDir
+  let guestHelperDir
   beforeAll(async () => {
     scratch = await mkdtemp(join(tmpdir(), 'orca-electron-builder-guard-'))
     bundleDir = join(scratch, 'mobile-web')
     await writeMobileWebBundleFixtureTree({ outDir: bundleDir })
+    guestHelperDir = join(scratch, 'guest-tree-kill')
+    writeGuestTreeKillArtifactsFixture(guestHelperDir)
+    const { readFileSync, writeFileSync } = require('node:fs')
+    const manifestPath = join(guestHelperDir, 'manifest.json')
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+    manifest.sourceSha256 = guestTreeKillSourceHash()
+    writeFileSync(manifestPath, JSON.stringify(manifest))
   })
   afterAll(async () => {
     await rm(scratch, { recursive: true, force: true })
   })
 
   const packHost = (arch) =>
-    electronBuilderConfig.beforePack({ electronPlatformName: process.platform, arch }, bundleDir)
+    electronBuilderConfig.beforePack(
+      { electronPlatformName: process.platform, arch },
+      bundleDir,
+      guestHelperDir
+    )
 
   it('allows packaging the host platform and architecture', () => {
     expect(() => packHost(HOST_ARCH)).not.toThrow()
@@ -570,7 +584,11 @@ describe('arch-aware packaging guard', () => {
       (resource) => resource.to === join('node_modules', '@vscode', 'windows-process-tree')
     )
     const packWindows = () =>
-      electronBuilderConfig.beforePack({ electronPlatformName: 'win32', arch: 1 }, bundleDir)
+      electronBuilderConfig.beforePack(
+        { electronPlatformName: 'win32', arch: 1 },
+        bundleDir,
+        guestHelperDir
+      )
     if (process.platform === 'win32' || windowsAddon) {
       expect(packWindows).not.toThrow()
     } else {

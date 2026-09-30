@@ -11,6 +11,10 @@ import {
 import { join, win32 as winPath } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
 import {
+  assertGuestTreeKillArtifacts,
+  GUEST_TREE_KILL_RESOURCE_DIR
+} from '../../shared/guest-tree-kill-artifacts'
+import {
   buildDaemonHostManifest,
   daemonHostExeName,
   destPath,
@@ -134,6 +138,15 @@ function missingProcessTreeFiles(packageDir: string): boolean {
   )
 }
 
+function hasGuestTreeKillArtifacts(resourcesPath: string): boolean {
+  try {
+    assertGuestTreeKillArtifacts(join(resourcesPath, GUEST_TREE_KILL_RESOURCE_DIR))
+    return true
+  } catch {
+    return false
+  }
+}
+
 function hostRootDir(): string {
   // Prefer LOCAL appData (see LOCAL_HOST_ROOT_NAME); fall back to userData only if LOCALAPPDATA is unset.
   const localAppData = process.env.LOCALAPPDATA
@@ -171,6 +184,9 @@ export function getRelocatedDaemonHost(): RelocatedDaemonHost | null {
   if (missingProcessTreeFiles(destPath(dest, processTreeRelDir(sources)))) {
     return null
   }
+  if (!hasGuestTreeKillArtifacts(join(dest, 'resources'))) {
+    return null
+  }
   return { execPath, entryPath }
 }
 
@@ -190,7 +206,10 @@ export function materializeRelocatedDaemonHost(): RelocatedDaemonHost | null {
   // Checked against the source before copying: the mirror check below would refuse
   // the result anyway, and re-copying ~260MB on every launch to reach that verdict
   // is the loop this shares its list with the copy plan to prevent.
-  if (missingProcessTreeFiles(sources.windowsProcessTreeDir)) {
+  if (
+    missingProcessTreeFiles(sources.windowsProcessTreeDir) ||
+    !hasGuestTreeKillArtifacts(sources.resourcesPath)
+  ) {
     return null
   }
   const version = getAppEnvironment().getVersion()
