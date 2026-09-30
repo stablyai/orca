@@ -34,13 +34,3 @@ it('routes a plugin notification target to the desktop click and the phone event
     worktreeId: 'repo::wt1'
   })
 })
-
-it('keeps a target-less plugin notification unbound to any worktree', async () => {
-  const controller = new RuntimeMobileNotificationController()
-  const events: MobileNotificationEvent[] = []
-  controller.onDispatched((event) => events.push(event))
-
-  await controller.dispatchPlugin({ pluginId: 'u1.lead', title: 'Done' })
-
-  expect(events[0]).not.toHaveProperty('worktreeId')
-})

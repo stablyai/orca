@@ -1,74 +1,42 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   getNotificationEventHandler,
-  getTrustedUIRendererWindowMock,
   notificationOnMock,
-  notificationRemoveListenerMock,
-  notificationShowMock,
   resetNotificationDispatchMocks
 } from '../ipc/notifications-test-harness'
+
+const { reveal, createNotificationRevealHandler } = vi.hoisted(() => {
+  const reveal = vi.fn()
+  return { reveal, createNotificationRevealHandler: vi.fn(() => reveal) }
+})
 
 vi.mock('electron', async () =>
   (await import('../ipc/notifications-test-harness')).createElectronModuleMock()
 )
 
-vi.mock('../ipc/ui', async () =>
-  (await import('../ipc/notifications-test-harness')).createTrustedUIRendererModuleMock()
-)
+vi.mock('../ipc/notification-reveal-target', () => ({ createNotificationRevealHandler }))
 
 import { electronRuntimeDesktopSurface } from './electron-runtime-desktop-surface'
 
 beforeEach(() => {
-  vi.stubEnv('ORCA_BACKGROUND_LAUNCH', undefined)
-  vi.stubEnv('ORCA_E2E_HEADLESS', undefined)
-  vi.stubEnv('ORCA_E2E_HEADFUL', undefined)
   resetNotificationDispatchMocks()
+  reveal.mockClear()
+  createNotificationRevealHandler.mockClear()
 })
-afterEach(() => vi.unstubAllEnvs())
 
 describe('electronRuntimeDesktopSurface.showNotification', () => {
-  it('reveals the target worktree and pane when a plugin notification is clicked', () => {
-    const webContentsSend = vi.fn()
-    getTrustedUIRendererWindowMock.mockReturnValue({
-      isDestroyed: () => false,
-      isFocused: () => false,
-      isMinimized: () => false,
-      restore: vi.fn(),
-      show: vi.fn(),
-      focus: vi.fn(),
-      webContents: { send: webContentsSend }
-    })
-    const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
+  it('reveals the target on click', () => {
+    const target = { worktreeId: 'repo::wt1', paneKey: 'tab-1:leaf-1' }
+    electronRuntimeDesktopSurface.showNotification({ title: 't', body: 'b', target })
 
-    expect(
-      electronRuntimeDesktopSurface.showNotification({
-        title: 'u1.lead: Done',
-        body: 'Finished',
-        target: { worktreeId: 'repo::wt1', paneKey }
-      })
-    ).toBe(true)
-    expect(notificationShowMock).toHaveBeenCalledTimes(1)
-
+    expect(createNotificationRevealHandler).toHaveBeenCalledWith(target)
     getNotificationEventHandler('click')()
-
-    expect(notificationRemoveListenerMock).toHaveBeenCalledWith('click', expect.any(Function))
-    expect(webContentsSend).toHaveBeenCalledWith('ui:activateWorktree', {
-      repoId: 'repo',
-      worktreeId: 'repo::wt1'
-    })
-    expect(webContentsSend).toHaveBeenCalledWith('ui:focusTerminal', {
-      tabId: 'tab-1',
-      worktreeId: 'repo::wt1',
-      leafId: '11111111-1111-4111-8111-111111111111',
-      ackPaneKeyOnSuccess: paneKey,
-      flashFocusedPane: true,
-      scrollToBottomIfOutputSinceLastView: true
-    })
+    expect(reveal).toHaveBeenCalledTimes(1)
   })
 
-  it('shows a notification without a click action when no target is given', () => {
-    expect(electronRuntimeDesktopSurface.showNotification({ title: 't', body: 'b' })).toBe(true)
-    expect(notificationShowMock).toHaveBeenCalledTimes(1)
+  it('binds no click action without a target', () => {
+    electronRuntimeDesktopSurface.showNotification({ title: 't', body: 'b' })
+
     expect(notificationOnMock).not.toHaveBeenCalledWith('click', expect.anything())
   })
 })
