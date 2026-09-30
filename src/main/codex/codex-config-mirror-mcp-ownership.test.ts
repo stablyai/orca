@@ -22,6 +22,30 @@ beforeEach(() => {
 afterEach(() => rmSync(root, { recursive: true, force: true }))
 
 describe('canonical MCP ownership during config mirroring', () => {
+  it('binds mirrored MCP header helpers to each account home', () => {
+    const sourceHome = systemHomePath
+    const canonical = [
+      '[mcp_servers.time]',
+      `http_headers_helper = "/usr/bin/env CODEX_HOME=${sourceHome} python headers.py"`,
+      '',
+      '[mcp_servers.other]',
+      'http_headers_helper = "python unrelated.py"',
+      ''
+    ].join('\n')
+    writeFileSync(join(systemHomePath, 'config.toml'), canonical, 'utf-8')
+    const firstHome = join(root, 'account homes', 'first', 'home')
+    const secondHome = join(root, 'account homes', 'second', 'home')
+    for (const runtimeHomePath of [firstHome, secondHome]) {
+      mkdirSync(runtimeHomePath, { recursive: true })
+      syncSystemConfigIntoManagedCodexHome({ runtimeHomePath, systemHomePath: sourceHome })
+      const mirrored = readFileSync(join(runtimeHomePath, 'config.toml'), 'utf-8')
+      expect(mirrored).toContain(`CODEX_HOME='${runtimeHomePath}'`)
+      expect(mirrored).toContain('http_headers_helper = "python unrelated.py"')
+      expect(mirrored).not.toContain(`CODEX_HOME=${sourceHome}`)
+    }
+    expect(readFileSync(join(systemHomePath, 'config.toml'), 'utf-8')).toBe(canonical)
+  })
+
   it('does not duplicate a server defined inline in the canonical MCP table', () => {
     writeFileSync(
       join(runtimeHomePath, 'config.toml'),

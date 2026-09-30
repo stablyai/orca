@@ -241,7 +241,7 @@ yay -S stably-orca-bin
 - **Twitter / X:** 关注 **[@orca_build](https://x.com/orca_build)** 获取更新和公告。
 - **微信:** 扫码加入 Orca 社区微信第 10 群。
 
-  <img src="../assets/wechat-qr-group10.jpg" alt="Orca 社区微信第 10 群二维码" width="160" />
+  <img src="../assets/wechat-qr-group10.png" alt="Orca 社区微信第 10 群二维码" width="160" />
 
 - **反馈与想法:** 我们发布很快。缺少什么功能？[提交功能请求](https://github.com/stablyai/orca/issues)。
 - **隐私:** 查看[隐私与遥测文档](https://www.onorca.dev/docs/telemetry)，了解 Orca 收集哪些匿名使用数据以及如何退出。
