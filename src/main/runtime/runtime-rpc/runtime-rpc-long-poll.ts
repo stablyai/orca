@@ -12,11 +12,13 @@ export const LONG_POLL_CAP = 16
 export const ASK_LONG_POLL_SHARE = 0.5
 // Why: eight host slots preserve four-host overlap for two independently paired desktops.
 export const BROWSER_HOST_LONG_POLL_SHARE = 0.5
-// Why: asks and permanent hosts together retain the prior quarter-budget reservation for waits.
+// Why: human-paced waits and permanent hosts must leave a quarter of the budget for ordinary waits.
 export const SPECIALIZED_LONG_POLL_SHARE = 0.75
 
-// Why: 'ask' is metered separately from 'wait' — same keepalive/abort wiring, its own sub-cap.
-export type RuntimeLongPollClass = 'ask' | 'browser-host' | 'wait'
+// Why: an open editor can outlive a task; bound it separately from agent waits.
+export const EDITOR_LONG_POLL_SHARE = 0.25
+
+export type RuntimeLongPollClass = 'ask' | 'browser-host' | 'editor' | 'wait'
 
 // Why: single classifier for long-poll requests (handlers that block on an external event), shared by counter/abort/keepalive. See §3.1.
 export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollClass | null {
@@ -28,6 +30,12 @@ export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollCla
   }
   if (request.method === 'browser.clientHost.attach') {
     return 'browser-host'
+  }
+  if (request.method === 'files.edit') {
+    const params = request.params
+    return typeof params === 'object' && params !== null && 'wait' in params && params.wait === true
+      ? 'editor'
+      : null
   }
   if (request.method === 'terminal.wait') {
     return 'wait'

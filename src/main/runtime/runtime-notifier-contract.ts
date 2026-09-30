@@ -1,3 +1,4 @@
+import type { ExternalEditorResult } from '../../shared/external-editor'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import type { TerminalRevealIdentity } from '../../shared/terminal-reveal-identity'
@@ -21,6 +22,11 @@ import type {
 type DriverState = RuntimeTerminalDriverState
 
 export type RuntimeNotifier = {
+  editLocalFile?(
+    filePath: string,
+    wait: boolean,
+    signal?: AbortSignal
+  ): Promise<ExternalEditorResult>
   automationsChanged?(payload: {
     selector?: { kind: 'self' } | { kind: 'ssh'; targetId: string } | { kind: 'orphan' }
     reason?: 'definition' | 'run' | 'usage'

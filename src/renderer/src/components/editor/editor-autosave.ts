@@ -9,6 +9,8 @@ import {
 } from '../../../../shared/constants'
 import { clampNumber } from '@/lib/terminal-theme'
 
+export const ORCA_EDITOR_RELEASE_EXTERNAL_SAVE_WAIT_EVENT = 'orca:editor-release-external-save-wait'
+
 export const ORCA_EDITOR_QUIESCE_FILE_SAVES_EVENT = 'orca:editor-quiesce-file-saves'
 export const ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT = 'orca:editor-external-file-change'
 export const ORCA_EDITOR_SAVE_FILE_EVENT = 'orca:editor-save-file'
@@ -28,11 +30,15 @@ export type EditorPathMutationTarget = {
   }
 }
 
-export type EditorSaveQuiesceTarget = { fileId: string } | EditorPathMutationTarget
+export type EditorSaveQuiesceTarget =
+  | { fileId: string }
+  | EditorPathMutationTarget
+  | { externalEditorWaitId: string }
 
 export type EditorSaveQuiesceDetail = EditorSaveQuiesceTarget & {
   claim: () => void
   resolve: () => void
+  reject: (error: unknown) => void
 }
 
 export type EditorSaveFileTarget = {
@@ -164,8 +170,18 @@ export function getOpenFilesForExternalFileChange(
   })
 }
 
+/** Drop a cancelled caller's observation without interrupting its disk writes. */
+export function releaseExternalEditorSaveWait(requestId: string): void {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent(ORCA_EDITOR_RELEASE_EXTERNAL_SAVE_WAIT_EVENT, { detail: requestId })
+    )
+  }
+}
+
+/** External completion requires an owning save queue even after its tab disappears. */
 export async function requestEditorSaveQuiesce(target: EditorSaveQuiesceTarget): Promise<void> {
-  await new Promise<void>((resolve) => {
+  await new Promise<void>((resolve, reject) => {
     let claimed = false
     window.dispatchEvent(
       new CustomEvent<EditorSaveQuiesceDetail>(ORCA_EDITOR_QUIESCE_FILE_SAVES_EVENT, {
@@ -174,15 +190,18 @@ export async function requestEditorSaveQuiesce(target: EditorSaveQuiesceTarget):
           claim: () => {
             claimed = true
           },
-          resolve
+          resolve,
+          reject
         }
       })
     )
-    // Why: discard/delete flows also run when no editor tab is mounted. Let
-    // those external mutations proceed immediately instead of hanging forever
-    // waiting on a quiesce listener that does not exist in that UI state.
+    // External callers require an owning queue; ordinary cleanup can run without mounted editors.
     if (!claimed) {
-      resolve()
+      if ('externalEditorWaitId' in target) {
+        reject(new Error('Editor save controller is unavailable.'))
+      } else {
+        resolve()
+      }
     }
   })
 }

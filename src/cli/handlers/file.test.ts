@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { resolve } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
 
@@ -54,6 +57,48 @@ describe('orca file CLI handlers', () => {
     process.exitCode = undefined
     vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => vi.unstubAllEnvs())
+
+  it('edits a temporary file without requiring a workspace and waits for close', async () => {
+    vi.stubEnv('ORCA_CLI_CWD', '')
+    const directory = await mkdtemp(resolve(tmpdir(), 'orca-cli-editor-'))
+    const filePath = resolve(directory, 'prompt.txt')
+    try {
+      await writeFile(filePath, 'prompt')
+      callMock.mockResolvedValue(okFixture('edit', { filePath, closed: true }))
+      await main(['file', 'edit', '--wait', 'prompt.txt'], directory)
+      expect(callMock).toHaveBeenCalledExactlyOnceWith(
+        'files.edit',
+        { filePath, wait: true },
+        { timeoutMs: 2_147_483_647 }
+      )
+      expect(process.exitCode).toBeUndefined()
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('fails when a host does not confirm closure', async () => {
+    vi.stubEnv('ORCA_CLI_CWD', '')
+    callMock.mockResolvedValue(okFixture('edit', { filePath: '/tmp/prompt', closed: false }))
+    await main(['file', 'edit', '--wait', '/tmp/prompt'], '/tmp')
+    expect(process.exitCode).toBe(1)
+  })
+
+  it('refuses SSH shim paths before sending any request to the desktop', async () => {
+    vi.stubEnv('ORCA_CLI_CWD', '/remote/project')
+    await main(['file', 'edit', '--wait', '/tmp/prompt'], '/remote/project')
+    expect(callMock).not.toHaveBeenCalled()
+    expect(process.exitCode).toBe(1)
+  })
+
+  it('refuses a paired runtime before sending a local path', async () => {
+    vi.stubEnv('ORCA_CLI_CWD', '')
+    await main(['file', 'edit', '--wait', '/tmp/prompt', '--environment', 'remote'], '/tmp')
+    expect(callMock).not.toHaveBeenCalled()
+    expect(process.exitCode).toBe(1)
   })
 
   it('prints group help with file commands', async () => {

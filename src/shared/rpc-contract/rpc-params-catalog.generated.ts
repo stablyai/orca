@@ -169,6 +169,7 @@ import {
 } from './files-mutation-params'
 import {
   DocPreviewFileRead,
+  FileEdit,
   FileListAll,
   FileOpenDiff,
   FilePathSearch,
@@ -759,6 +760,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'files.createDirNoClobber': FileMutationOpen,
   'files.createFile': FileMutationOpen,
   'files.delete': FileDelete,
+  'files.edit': FileEdit,
   'files.list': WorktreeSelector,
   'files.listAll': FileListAll,
   'files.listMarkdownDocuments': WorktreeSelector,

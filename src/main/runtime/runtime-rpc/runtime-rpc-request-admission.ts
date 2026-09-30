@@ -36,7 +36,8 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
 
     try {
       return await this.dispatcher.dispatch(request, {
-        signal: longPoll ? context?.signal : undefined
+        // A bounded editor open still needs to release its renderer request on disconnect.
+        signal: longPoll || request.method === 'files.edit' ? context?.signal : undefined
       })
     } finally {
       this.releaseLongPoll(longPoll)
@@ -57,12 +58,19 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
       return 'long-poll capacity reached; retry with backoff'
     }
     if (
-      (longPoll === 'ask' || longPoll === 'browser-host') &&
-      this.activeAskLongPolls + this.activeBrowserHostLongPolls >= this.specializedLongPollCap
+      (longPoll === 'ask' || longPoll === 'browser-host' || longPoll === 'editor') &&
+      this.activeAskLongPolls + this.activeBrowserHostLongPolls + this.activeEditorLongPolls >=
+        this.specializedLongPollCap
     ) {
+      if (longPoll === 'editor') {
+        return 'files.edit wait capacity reached; close an editor tab and retry'
+      }
       return longPoll === 'ask'
         ? 'orchestration.ask capacity reached; retry with backoff'
         : 'browser-host capacity reached; retry with backoff'
+    }
+    if (longPoll === 'editor' && this.activeEditorLongPolls >= this.editorLongPollCap) {
+      return 'files.edit wait capacity reached; close an editor tab and retry'
     }
     if (longPoll === 'ask' && this.activeAskLongPolls >= this.askLongPollCap) {
       return 'orchestration.ask capacity reached; retry with backoff'
@@ -77,7 +85,9 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
       return 'browser-host capacity reached; retry with backoff'
     }
     this.activeLongPolls += 1
-    if (longPoll === 'ask') {
+    if (longPoll === 'editor') {
+      this.activeEditorLongPolls += 1
+    } else if (longPoll === 'ask') {
       this.activeAskLongPolls += 1
     } else if (longPoll === 'browser-host') {
       this.activeBrowserHostLongPolls += 1
@@ -96,7 +106,9 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
       return
     }
     this.activeLongPolls = Math.max(0, this.activeLongPolls - 1)
-    if (longPoll === 'ask') {
+    if (longPoll === 'editor') {
+      this.activeEditorLongPolls = Math.max(0, this.activeEditorLongPolls - 1)
+    } else if (longPoll === 'ask') {
       this.activeAskLongPolls = Math.max(0, this.activeAskLongPolls - 1)
     } else if (longPoll === 'browser-host') {
       this.activeBrowserHostLongPolls = Math.max(0, this.activeBrowserHostLongPolls - 1)

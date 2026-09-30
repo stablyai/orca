@@ -12,6 +12,7 @@ import {
   shouldDeleteUntouchedUntitledFile
 } from '../tabs/untitled-file-cleanup'
 
+/** History preserves user-facing state without inheriting live caller ownership. */
 export function createRecentlyClosedEditorTabs(
   set: EditorSet,
   get: EditorGet
@@ -152,7 +153,13 @@ export function createRecentlyClosedEditorTabs(
           ) {
             continue
           }
-          const { id: _id, isDirty: _dirty, mirroredFromRuntimeSession: _mirrored, ...snap } = f
+          const {
+            id: _id,
+            isDirty: _dirty,
+            mirroredFromRuntimeSession: _mirrored,
+            externalEditorWaitIds: _externalEditorWaitIds,
+            ...snap
+          } = f
           const position = positionIndex.positionFor(f.id)
           nextRecentClosed = [
             {

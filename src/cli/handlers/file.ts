@@ -1,3 +1,4 @@
+import { editFile } from './file-edit'
 import type { GitStatusEntry, GitStatusResult } from '../../shared/git-status-types'
 import type { RuntimeFileOpenResult, RuntimeWorktreeRecord } from '../../shared/runtime-types'
 import { isRuntimePathAbsolute, relativePathInsideRoot } from '../../shared/cross-platform-path'
@@ -192,6 +193,7 @@ function formatFileDiff(result: RuntimeFileOpenResult): string {
 }
 
 export const FILE_HANDLERS: Record<string, CommandHandler> = {
+  'file edit': editFile,
   'file open': async (ctx) => {
     const path = getRequiredStringFlag(ctx.flags, 'path')
     const worktree = await getFileWorktreeSelector(ctx)

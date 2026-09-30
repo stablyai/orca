@@ -7,6 +7,7 @@ import { limitQuickOpenSearchReplyBySerializedBytes } from '../../../../shared/q
 import { FileOpen, WorktreeSelector } from './files-target-schemas'
 import { FILE_TERMINAL_ARTIFACT_METHODS } from './files-terminal-artifact-methods'
 import {
+  FileEdit,
   FilePathsExist,
   DocPreviewFileRead,
   FileListAll,
@@ -23,6 +24,16 @@ import {
 let filesWatchSubscriptionSeq = 0
 
 export const FILE_METHODS = [
+  defineMethod({
+    name: 'files.edit',
+    params: FileEdit,
+    handler: async (params, { runtime, signal, clientKind, connectionId }) => {
+      if (clientKind !== undefined || connectionId !== undefined) {
+        throw new Error('External editing requires a local desktop connection.')
+      }
+      return runtime.editLocalFile(params.filePath, params.wait, signal)
+    }
+  }),
   defineMethod({
     name: 'files.list',
     params: WorktreeSelector,

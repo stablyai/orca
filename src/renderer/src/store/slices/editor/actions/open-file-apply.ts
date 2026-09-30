@@ -33,6 +33,7 @@ export type OpenFileApplyScratch = {
   editorItemIsPreview: boolean
 }
 
+/** Newly opened views must not inherit pending callers from copied file records. */
 export function applyOpenFileToState(
   s: AppState,
   file: Omit<OpenFile, 'id' | 'isDirty'>,
@@ -174,6 +175,7 @@ export function applyOpenFileToState(
     }
   }
 
+  const { externalEditorWaitIds: _externalEditorWaitIds, ...newFileInput } = file
   // Why: scope preview replacement to worktreeId + targetGroupId so link clicks in group B don't evict group A's previews.
   let newFiles = s.openFiles
   if (isPreview) {
@@ -195,7 +197,7 @@ export function applyOpenFileToState(
       newFiles = s.openFiles.map((f, i) =>
         i === existingPreviewIdx
           ? {
-              ...file,
+              ...newFileInput,
               id,
               isDirty: false,
               isPreview: true,
@@ -222,6 +224,7 @@ export function applyOpenFileToState(
           id: _rid,
           isDirty: _rdirty,
           mirroredFromRuntimeSession: _rmirrored,
+          externalEditorWaitIds: _replacedExternalEditorWaitIds,
           ...snap
         } = replacedPreview
         const stack = s.recentlyClosedEditorTabsByWorktree[worktreeId] ?? []
@@ -284,7 +287,7 @@ export function applyOpenFileToState(
     openFiles: [
       ...newFiles,
       {
-        ...file,
+        ...newFileInput,
         id,
         isDirty: false,
         isPreview: isPreview || undefined,

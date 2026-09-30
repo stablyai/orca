@@ -79,7 +79,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   },
   {
     name: 'file',
-    keys: ['file open', 'file diff', 'file open-changed'],
+    keys: ['file edit', 'file open', 'file diff', 'file open-changed'],
     load: async () => (await import('./handlers/file.js')).FILE_HANDLERS
   },
   {
