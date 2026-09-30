@@ -555,6 +555,29 @@ describe('buildWorkspaceSessionPayload', () => {
     ])
     expect(payload.activeFileIdByWorktree).toEqual({ 'wt-1': ownedId })
   })
+
+  // Why: the fold keeps the first row per tuple, and the mirror's raw-path duplicate can be the
+  // selected one — folding its id away used to drop the active pointer (and with it the 'editor'
+  // tab-type marker), so the next launch reopened the worktree on a terminal tab.
+  it('remaps the active file id to the retained row when the selected duplicate is folded', () => {
+    const ownedId = 'editor:wt-1:env-a:%2Ftmp%2Fdemo.ts'
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({
+        openFiles: [
+          createEditFile(ownedId, '/tmp/demo.ts', 'env-a'),
+          createEditFile('/tmp/demo.ts', '/tmp/demo.ts', 'env-a')
+        ],
+        activeFileIdByWorktree: { 'wt-1': '/tmp/demo.ts' },
+        activeTabTypeByWorktree: { 'wt-1': 'editor' }
+      })
+    )
+
+    expect(payload.openFilesByWorktree?.['wt-1'].map((row) => row.filePath)).toEqual([
+      '/tmp/demo.ts'
+    ])
+    expect(payload.activeFileIdByWorktree).toEqual({ 'wt-1': ownedId })
+    expect(payload.activeTabTypeByWorktree).toEqual({ 'wt-1': 'editor' })
+  })
 })
 
 describe('a launch pane in the saved session', () => {

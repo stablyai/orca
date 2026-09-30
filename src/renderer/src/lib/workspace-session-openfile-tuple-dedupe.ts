@@ -11,20 +11,32 @@ import { runtimeOwnerKey } from '../store/slices/editor/file-ids/editor-file-ids
  * order stable; rows owned by a different runtime environment are distinct files here and
  * are never folded (cross-environment identity is a separate, unsolved problem).
  */
-export function dedupeOpenFilesByOwnerTuple(files: readonly OpenFile[]): OpenFile[] {
-  const seen = new Set<string>()
+export type OwnerTupleFold = {
+  files: OpenFile[]
+  /**
+   * Why: worktree state (the active-file pointer) is keyed by the removed row's id, so callers
+   * need the fold's removed→retained mapping to re-point it at the row that survived.
+   */
+  retainedIdByRemovedId: ReadonlyMap<string, string>
+}
+
+export function foldOpenFilesByOwnerTuple(files: readonly OpenFile[]): OwnerTupleFold {
+  const retainedIdByTupleKey = new Map<string, string>()
   const result: OpenFile[] = []
+  const retainedIdByRemovedId = new Map<string, string>()
   for (const file of files) {
     const key = JSON.stringify([
       file.filePath,
       file.worktreeId,
       runtimeOwnerKey(file.runtimeEnvironmentId)
     ])
-    if (seen.has(key)) {
+    const retainedId = retainedIdByTupleKey.get(key)
+    if (retainedId !== undefined) {
+      retainedIdByRemovedId.set(file.id, retainedId)
       continue
     }
-    seen.add(key)
+    retainedIdByTupleKey.set(key, file.id)
     result.push(file)
   }
-  return result
+  return { files: result, retainedIdByRemovedId }
 }

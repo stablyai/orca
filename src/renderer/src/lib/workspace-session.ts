@@ -12,7 +12,7 @@ import type { OpenFile } from '../store/slices/editor'
 import { buildPersistedUnifiedTabSessionData } from './workspace-session-unified-tabs'
 import { buildLastVisitedAtByWorktreeId } from './workspace-session-focus-recency'
 import { buildSleepingAgentSessionData } from './workspace-session-sleeping-agents'
-import { dedupeOpenFilesByOwnerTuple } from './workspace-session-openfile-tuple-dedupe'
+import { foldOpenFilesByOwnerTuple } from './workspace-session-openfile-tuple-dedupe'
 import { buildActiveConnectionIdsAtShutdown } from './workspace-session-reconnect-targets'
 import { withoutStagedBrowserTabs } from './workspace-session-staged-browser-tabs'
 import { buildBrowserSessionData } from './workspace-session-browser-tabs'
@@ -131,7 +131,9 @@ export function buildEditorSessionData(
 > {
   // Why: the mirror can re-append a duplicate (path, worktree, runtime) row per launch (#23967);
   // hydration already folds that repeat, so persist one row per owner tuple, first occurrence wins.
-  const editFiles = dedupeOpenFilesByOwnerTuple(openFiles.filter((f) => f.mode === 'edit'))
+  const { files: editFiles, retainedIdByRemovedId } = foldOpenFilesByOwnerTuple(
+    openFiles.filter((f) => f.mode === 'edit')
+  )
   const byWorktree: Record<string, PersistedOpenFile[]> = {}
   const editFileIdsByWorktree: Record<string, Set<string>> = {}
   for (const f of editFiles) {
@@ -163,8 +165,14 @@ export function buildEditorSessionData(
 
   const activeFileEntries: [string, string][] = []
   for (const [worktreeId, fileId] of Object.entries(activeFileIdByWorktree)) {
-    if (fileId && editFileIdsByWorktree[worktreeId]?.has(fileId)) {
-      activeFileEntries.push([worktreeId, fileId])
+    if (!fileId) {
+      continue
+    }
+    // Why: the folded duplicate may be the row this pointer names; remap it to the retained row
+    // so the selection — and the 'editor' tab-type marker gated on it — survives persistence.
+    const retainedFileId = retainedIdByRemovedId.get(fileId) ?? fileId
+    if (editFileIdsByWorktree[worktreeId]?.has(retainedFileId)) {
+      activeFileEntries.push([worktreeId, retainedFileId])
     }
   }
   const persistedActiveFileIdByWorktree = Object.fromEntries(activeFileEntries) as Record<
