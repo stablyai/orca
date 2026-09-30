@@ -22,7 +22,9 @@ export async function refreshLocalBaseRefForWorktreeCreate(
     baseBranch,
     remoteTrackingRef,
     remoteTrackingBase,
-    options
+    options,
+    // Why: a local base already at the remote needs no refresh, so its owner checkout (possibly dirty) is irrelevant.
+    (behind) => behind > 0
   )
   if (!evaluation) {
     return undefined
