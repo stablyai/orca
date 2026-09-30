@@ -23,7 +23,9 @@ function subagentRowKey(parentPaneKey: string, subagentId: string): string {
 }
 
 /** The lifecycle word every reader of a CLI row already understands; the row's own dot says more. */
-function agentRowStateFor(displayState: AgentChildDisplayState): AgentRowState {
+function agentRowStateFor(
+  displayState: AgentChildDisplayState
+): Exclude<AgentRowState, 'unreported'> {
   const runState = agentChildRunStateFor(displayState)
   // A CLI row carries monitoring as `working` plus its `workingMode`.
   return runState === 'monitoring' ? 'working' : runState

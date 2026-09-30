@@ -999,6 +999,9 @@
         "symlink": "Les liens symboliques ne peuvent pas être attachés.",
         "permissionDenied": "Autorisation refusée.",
         "unsupported": "Type de fichier non pris en charge."
+      },
+      "agentRowState": {
+        "noStatusReported": "Aucun état signalé"
       }
     },
     "hooks": {

@@ -3,6 +3,7 @@ import { Activity, CircleCheck, CircleDashed } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { AgentWorkingSpinner } from '@/components/AgentWorkingSpinner'
+import { agentNoStatusReportedLabel } from '@/lib/agent-row-decay-state'
 import {
   StateIndicatorTooltip,
   type StateIndicatorTooltipSide
@@ -35,6 +36,9 @@ export type AgentDotState =
   // held there, and never rendered as 'done' or 'working' — it asserts nothing about
   // the agent, only about what Orca last heard.
   | 'unverifiable'
+  // Why: the title names the agent and nothing says what it is doing. Not 'idle' (no rest
+  // evidence) and not 'unverifiable' (Orca never heard a status, so none went quiet).
+  | 'unreported'
   // Why: the sidebar's title-based status flow (StatusIndicator/WorktreeCard)
   // collapses blocked + waiting into a single "needs attention" state. Keep
   // this as a distinct member so that flow can render without inventing a new
@@ -63,6 +67,8 @@ export function agentStateLabel(state: AgentDotState): string {
       return 'Idle'
     case 'unverifiable':
       return 'No recent update'
+    case 'unreported':
+      return agentNoStatusReportedLabel()
     case 'permission':
       return 'Needs attention'
   }
@@ -132,6 +138,16 @@ export const AgentStateDot = React.memo(function AgentStateDot({
         aria-label={agentStateLabel(state)}
       >
         <CircleDashed className={cn('text-amber-500', icon)} aria-hidden="true" />
+      </span>
+    )
+  } else if (state === 'unreported') {
+    // Why: the same "incomplete information" ring, muted: nothing went wrong, so no warning.
+    indicator = (
+      <span
+        className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
+        aria-label={agentStateLabel(state)}
+      >
+        <CircleDashed className={cn('text-muted-foreground', icon)} aria-hidden="true" />
       </span>
     )
   } else if (state === 'permission' || state === 'waiting') {

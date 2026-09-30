@@ -19,6 +19,8 @@ const SUMMARY_STATE_ORDER: AgentDotState[] = [
   'done',
   // Why: below every reporting state, above true idle — the pane is still held.
   'unverifiable',
+  // Why: sorts with idle; it asserts no activity, so it never outranks a reporting state.
+  'unreported',
   'idle'
 ]
 
@@ -46,6 +48,8 @@ export function formatSummaryStateLabel(state: AgentDotState): string {
       return 'idle'
     case 'unverifiable':
       return 'not reporting'
+    case 'unreported':
+      return 'no status reported'
     case 'permission':
       return 'needs attention'
   }

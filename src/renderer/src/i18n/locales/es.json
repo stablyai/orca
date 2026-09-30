@@ -733,6 +733,9 @@
             "totalTooLarge": "{{fileName}} superaría el total de {{maxSize}} de archivos adjuntos."
           }
         }
+      },
+      "agentRowState": {
+        "noStatusReported": "Sin estado informado"
       }
     },
     "hooks": {

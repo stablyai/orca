@@ -900,6 +900,9 @@
         "symlink": "シンボリックリンクは接続できません。",
         "permissionDenied": "アクセスが拒否されました。",
         "unsupported": "サポートされていないファイル形式です。"
+      },
+      "agentRowState": {
+        "noStatusReported": "ステータス未報告"
       }
     },
     "hooks": {

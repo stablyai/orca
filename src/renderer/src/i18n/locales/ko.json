@@ -900,6 +900,9 @@
         "symlink": "심볼릭 링크는 첨부할 수 없습니다.",
         "permissionDenied": "액세스가 거부되었습니다.",
         "unsupported": "지원되지 않는 파일 형식입니다."
+      },
+      "agentRowState": {
+        "noStatusReported": "상태 미보고"
       }
     },
     "hooks": {

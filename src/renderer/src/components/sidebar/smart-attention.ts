@@ -1,4 +1,6 @@
-import { classifyTitleActivity, isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
+import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
+import { readAgentTitleActivity } from '../../../../shared/agent-title-status'
+import type { AgentTitleActivity } from '../../../../shared/agent-title-core'
 import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
 import { agentTurnStoppedByUser } from '../../../../shared/agent-main-agent-verdict'
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
@@ -6,7 +8,6 @@ import { resolveDecayedAgentRowState } from '@/lib/agent-row-decay-state'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { isSyntheticAgentPermissionTitle } from '../../../../shared/synthetic-agent-title'
 import { resolveRuntimePaneTitleLeafId } from '@/lib/runtime-pane-title-leaf-id'
-import type { AgentStatus } from '../../../../shared/agent-detection'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
@@ -114,7 +115,7 @@ export type PaneInput =
   // pane's PTY — losing the reporting stream is not the same as nothing running there.
   | { kind: 'hook'; entry: AgentStatusEntry; hasLivePty: boolean }
   // Why: TerminalTab has no per-tab lastActivityAt; the worktree-level value suffices for cross-worktree ordering.
-  | { kind: 'title'; status: AgentStatus | null; worktreeLastActivityAt: number }
+  | { kind: 'title'; status: AgentTitleActivity | null; worktreeLastActivityAt: number }
 
 /**
  * Resolve a worktree's class + attention timestamp from its panes' inputs.
@@ -199,7 +200,7 @@ export function resolveAttention(panes: PaneInput[], now: number): WorktreeAtten
         cls = 3
         ts = pane.worktreeLastActivityAt
       } else {
-        // 'idle' or null: nothing to assert; pane stays in Class 4.
+        // 'idle', 'unreported' (a bare agent name asserts no activity) or null: never attention.
         continue
       }
     }
@@ -333,7 +334,7 @@ export function collectTabPaneInputs(
       // Why: unmounted tabs (restored-but-unvisited) expose only the legacy tab title.
       panes.push({
         kind: 'title',
-        status: classifyTitleActivity(tab.title),
+        status: readAgentTitleActivity(tab.title),
         worktreeLastActivityAt
       })
     }
@@ -353,7 +354,7 @@ export function collectTabPaneInputs(
     if ((leafId !== null && coveredLeafIds.has(leafId)) || hasSingleUnmappedHook) {
       continue
     }
-    panes.push({ kind: 'title', status: classifyTitleActivity(title), worktreeLastActivityAt })
+    panes.push({ kind: 'title', status: readAgentTitleActivity(title), worktreeLastActivityAt })
   }
   return panes
 }

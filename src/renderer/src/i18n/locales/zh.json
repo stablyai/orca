@@ -900,6 +900,9 @@
         "symlink": "无法附加符号链接。",
         "permissionDenied": "没有访问权限。",
         "unsupported": "不支持的文件类型。"
+      },
+      "agentRowState": {
+        "noStatusReported": "未报告状态"
       }
     },
     "hooks": {

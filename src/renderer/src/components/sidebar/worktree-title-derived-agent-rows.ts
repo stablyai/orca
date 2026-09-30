@@ -1,7 +1,9 @@
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { formatAgentTypeLabel, isClaudeManagementTitle } from '@/lib/agent-status'
-import { isCursorAgentTitle } from '../../../../shared/agent-title-core'
-import { classifyTitleActivity, resolveTitleActivityLabel } from '@/lib/pane-agent-evidence'
+import { isCursorAgentTitle, type AgentTitleActivity } from '../../../../shared/agent-title-core'
+import { readAgentTitleActivity } from '../../../../shared/agent-title-status'
+import { resolveTitleActivityLabel } from '@/lib/pane-agent-evidence'
+import { agentNoStatusReportedLabel, type AgentRowState } from '@/lib/agent-row-decay-state'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import type {
   AgentStatusEntry,
@@ -161,10 +163,10 @@ function buildTitleDerivedAgentRow(args: {
   // the management/list screen as active work.
   // Why (cursor): the native `cursor agent` literal is deliberately status-less so a
   // redraw cannot stomp hook state — but it still identifies a live pane, so the row
-  // reads idle instead of vanishing (#10258).
-  const titleStatus = isClaudeAgentsTitle
+  // stays instead of vanishing (#10258), saying nothing about what Cursor is doing.
+  const titleStatus: AgentTitleActivity | null = isClaudeAgentsTitle
     ? 'idle'
-    : (classifyTitleActivity(title) ?? (isCursorAgentTitle(title) ? 'idle' : null))
+    : (readAgentTitleActivity(title) ?? (isCursorAgentTitle(title) ? 'unreported' : null))
   const label = isClaudeAgentsTitle ? 'Claude Code' : resolveTitleActivityLabel(title)
   if (!isTerminalLeafId(args.leafId)) {
     return null
@@ -190,12 +192,11 @@ function buildTitleDerivedAgentRow(args: {
   if (!agentType) {
     return null
   }
-  // Why: the title sets activity only; a plain title on a process-identified pane is idle.
-  const status = titleStatus ?? 'idle'
+  // Why: the title sets activity only; a plain title on a process-identified pane says nothing.
+  const status = titleStatus ?? 'unreported'
   const rowLabel = agentType === titleAgentType && label ? label : formatAgentTypeLabel(agentType)
   const rowState = titleStatusToRowState(status)
-  const secondary =
-    status === 'permission' ? 'Needs input' : status === 'working' ? 'Running' : 'Idle'
+  const secondary = titleActivitySecondaryText(status)
   const entryState: AgentStatusState = rowState === 'waiting' ? 'waiting' : 'working'
   const entry: AgentStatusEntry = {
     paneKey,
@@ -212,8 +213,8 @@ function buildTitleDerivedAgentRow(args: {
     // render, not observed once, so a counter would churn a new revision per frame and break
     // memoization. Deriving revision from `now` keeps the stamp deterministic in the same clock
     // the row already publishes as updatedAt, and monotonic for the pane.
-    // The origin tag is the point: `entryState` above collapses a title-derived IDLE row to
-    // 'working' while the row itself reports idle. That contradiction is out of scope here —
+    // The origin tag is the point: `entryState` above collapses a title-derived IDLE or
+    // UNREPORTED row to 'working' while the row itself reports idle/unreported. That contradiction is out of scope here —
     // this tag is what makes it findable instead of indistinguishable from a real hook row.
     observation: {
       origin: 'title',
@@ -277,16 +278,28 @@ export function resolveAgentTypeFromTerminalTitle(
     : null
 }
 
-function titleStatusToRowState(
-  status: 'working' | 'permission' | 'idle'
-): AgentStatusState | 'idle' {
-  if (status === 'permission') {
-    return 'waiting'
+function titleStatusToRowState(status: AgentTitleActivity): AgentRowState {
+  switch (status) {
+    case 'permission':
+      return 'waiting'
+    case 'working':
+    case 'idle':
+    case 'unreported':
+      return status
   }
-  if (status === 'working') {
-    return 'working'
+}
+
+function titleActivitySecondaryText(status: AgentTitleActivity): string {
+  switch (status) {
+    case 'permission':
+      return 'Needs input'
+    case 'working':
+      return 'Running'
+    case 'idle':
+      return 'Idle'
+    case 'unreported':
+      return agentNoStatusReportedLabel()
   }
-  return 'idle'
 }
 
 /**

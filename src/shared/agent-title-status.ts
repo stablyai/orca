@@ -25,7 +25,7 @@ import {
   isPiAgentTitle,
   isPiTerminalTitle
 } from './agent-title-core'
-import type { AgentStatus } from './agent-title-core'
+import type { AgentStatus, AgentTitleActivity } from './agent-title-core'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
 import {
   getPiCompatibleTitleSeparatorStatus,
@@ -185,7 +185,7 @@ function canonicalizeBrailleSpinnerFrame(title: string): string {
   return canonical
 }
 
-function computeAgentStatusFromTitle(title: string): AgentStatus | null {
+function computeAgentTitleActivity(title: string): AgentTitleActivity | null {
   const qoderStatus = qoderTitleStatus(title)
   if (qoderStatus) {
     return qoderStatus
@@ -276,15 +276,28 @@ function computeAgentStatusFromTitle(title: string): AgentStatus | null {
     return null
   }
 
-  return 'idle'
+  // Why: a name says which agent is here, never what it is doing — it lies mid-turn
+  // (Droid, Cursor), at boot (Grok, OpenCode) and when a shell auto-title writes it.
+  return 'unreported'
 }
 
 /**
- * Pure in `title`, so it is memoized on the title string: sidebar/tab selectors
- * re-ask for the same unchanged titles on every store write.
+ * What a title says the agent is doing: `null` when no agent is in it, `unreported`
+ * when only its name is. Pure in `title`, so it is memoized on the title string:
+ * sidebar/tab selectors re-ask for the same unchanged titles on every store write.
  */
-export const detectAgentStatusFromTitle: (title: string) => AgentStatus | null =
-  memoizeTitleClassification(computeAgentStatusFromTitle)
+export const readAgentTitleActivity: (title: string) => AgentTitleActivity | null =
+  memoizeTitleClassification(computeAgentTitleActivity)
+
+/**
+ * Temporary: `readAgentTitleActivity` with `unreported` read as `idle`, so readers that
+ * settle, deliver or clean up on a title keep today's behavior until each moves over.
+ * Deleted with its last importer (PR-4); agent-title-idle-wrapper-ratchet.test.ts pins them.
+ */
+export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
+  const activity = readAgentTitleActivity(title)
+  return activity === 'unreported' ? 'idle' : activity
+}
 
 /**
  * True when a quarter-circle spinner frame is the only agent evidence a title carries.

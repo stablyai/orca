@@ -68,7 +68,8 @@ function agentRow(
     entry: {
       paneKey,
       worktreeId: WORKSPACE,
-      state: state === 'idle' || state === 'unverifiable' ? 'done' : state,
+      state:
+        state === 'idle' || state === 'unverifiable' || state === 'unreported' ? 'done' : state,
       prompt: paneKey === PANE_A ? 'Review agent A' : 'Review agent B',
       lastAssistantMessage: 'Result details',
       stateStartedAt: 2000,

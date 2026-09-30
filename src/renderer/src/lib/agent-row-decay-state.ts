@@ -1,11 +1,15 @@
+import { translate } from '@/i18n/i18n'
 import {
   agentStatusEvidenceObservedAt,
   type AgentStatusEntry,
   type AgentStatusState
 } from '../../../shared/agent-status-types'
 
-/** Row states: the hook-reported statuses plus the two Orca derives when an entry goes stale. */
-export type AgentRowState = AgentStatusState | 'idle' | 'unverifiable'
+/**
+ * Row states: the hook-reported statuses, the two Orca derives when an entry goes stale, and
+ * `unreported` — a title-derived row whose title names the agent but says nothing it is doing.
+ */
+export type AgentRowState = AgentStatusState | 'idle' | 'unverifiable' | 'unreported'
 
 type DecayInput = Pick<AgentStatusEntry, 'state' | 'restoredUnconfirmed'>
 
@@ -53,4 +57,9 @@ export function agentNoUpdateLabel(
   now: number
 ): string {
   return `No update in ${formatCompactDuration(now - agentStatusEvidenceObservedAt(entry))}`
+}
+
+/** The one phrase for an `unreported` row, wherever it shows: row text, dot tooltip, aria label. */
+export function agentNoStatusReportedLabel(): string {
+  return translate('auto.lib.agentRowState.noStatusReported', 'No status reported')
 }

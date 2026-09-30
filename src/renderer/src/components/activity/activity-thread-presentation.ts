@@ -2,6 +2,7 @@ import type { AgentDotState } from '@/components/AgentStateDot'
 import { formatAgentTypeLabel } from '@/lib/agent-status'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { showsAgentToolPreview } from '@/lib/agent-row-tool-preview'
+import { agentNoStatusReportedLabel } from '@/lib/agent-row-decay-state'
 import {
   agentMainAgentVerdict,
   agentVerdictDisplayMark
@@ -205,6 +206,8 @@ export function threadAgentStateLabel(thread: AgentPaneThread): string {
         'auto.components.activity.ActivityPrototypePage.state.unverifiable',
         'No recent update'
       )
+    case 'unreported':
+      return agentNoStatusReportedLabel()
     case 'permission':
       return translate(
         'auto.components.activity.ActivityPrototypePage.state.permission',

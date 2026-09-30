@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { applyAgentRowLineage } from '@/components/dashboard/agent-row-lineage'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
@@ -5,6 +7,8 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { buildWorktreeAgentRows } from './worktree-agent-rows'
 import type { TitleDerivedPaneForeground } from './title-derived-pane-agent-identity'
+import { extractAllOscTitles } from '../../../../shared/osc-title-extraction'
+import { GROK_STARTUP_PTY_TRACE } from '../../../../shared/__fixtures__/grok-startup-pty-trace'
 
 const LEAF_ID_1 = '77777777-7777-4777-8777-777777777777'
 const LEAF_ID_2 = '88888888-8888-4888-8888-888888888888'
@@ -66,7 +70,7 @@ describe('buildTitleDerivedAgentRows', () => {
     })
 
     expect(rows.map((row) => [row.agentType, row.state, row.entry.lastAssistantMessage])).toEqual([
-      ['antigravity', 'idle', 'Idle'],
+      ['antigravity', 'unreported', 'No status reported'],
       ['codex', 'working', 'Running']
     ])
     expect(rows.map((row) => row.paneKey)).toEqual([
@@ -299,7 +303,7 @@ describe('buildTitleDerivedAgentRows', () => {
   })
 
   // #10258: Cursor's native title is deliberately status-less, which used to hide the pane.
-  it('adds an idle Cursor row for the bare native cursor-agent title', () => {
+  it('keeps a Cursor row for the bare native cursor-agent title, reporting no status', () => {
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1', { launchAgent: 'cursor', title: 'Cursor Agent' })],
       entries: [],
@@ -311,7 +315,7 @@ describe('buildTitleDerivedAgentRows', () => {
     })
 
     expect(rows.map((row) => [row.agentType, row.state, row.entry.lastAssistantMessage])).toEqual([
-      ['cursor', 'idle', 'Idle']
+      ['cursor', 'unreported', 'No status reported']
     ])
   })
 
@@ -454,10 +458,10 @@ describe('hook-less agent rows identified by the foreground process', () => {
   it('keeps a launched Codex row when Codex retitles the pane to the project name', () => {
     const foreground = processRead('codex')
     expect(summarize(rowsFor({ title: 'Codex', launchAgent: 'codex', foreground }))).toEqual([
-      ['codex', 'idle', 'Codex', 'Idle']
+      ['codex', 'unreported', 'Codex', 'No status reported']
     ])
     expect(summarize(rowsFor({ title: 'demo-repo', launchAgent: 'codex', foreground }))).toEqual([
-      ['codex', 'idle', 'Codex', 'Idle']
+      ['codex', 'unreported', 'Codex', 'No status reported']
     ])
   })
 
@@ -494,14 +498,14 @@ describe('hook-less agent rows identified by the foreground process', () => {
       summarize(
         rowsFor({ title: 'demo-repo', launchAgent: 'codex', foreground: processRead('codex') })
       )
-    ).toEqual([['codex', 'idle', 'Codex', 'Idle']])
+    ).toEqual([['codex', 'unreported', 'Codex', 'No status reported']])
   })
 
   it('rows a hand-typed agent from its foreground process, whatever its title says', () => {
     for (const agent of ['codex', 'claude', 'gemini', 'opencode', 'grok'] as const) {
       const rows = rowsFor({ title: 'demo-repo', foreground: processRead(agent) })
       expect(rows.map((row) => [row.paneKey, row.agentType, row.state])).toEqual([
-        [PANE_KEY, agent, 'idle']
+        [PANE_KEY, agent, 'unreported']
       ])
     }
   })
@@ -531,7 +535,7 @@ describe('hook-less agent rows identified by the foreground process', () => {
       ['codex', 'working', 'Codex', 'Running']
     ])
     expect(summarize(rowsFor({ title: 'demo-repo', foreground }))).toEqual([
-      ['codex', 'idle', 'Codex', 'Idle']
+      ['codex', 'unreported', 'Codex', 'No status reported']
     ])
     // A title naming another agent does not outrank the process that is actually running.
     expect(summarize(rowsFor({ title: '⠋ Gemini CLI', foreground }))).toEqual([
@@ -637,7 +641,7 @@ describe('split-pane runtime title attribution', () => {
     const rows = rowsFor({ '-1': 'Codex', '-2': '⠋ Codex' }, makeSplitLayout(), ['pty-a', 'pty-b'])
 
     expect(rows.map((row) => [row.paneKey, row.state, row.entry.lastAssistantMessage])).toEqual([
-      [makePaneKey('tab-1', LEAF_ID_1), 'idle', 'Idle'],
+      [makePaneKey('tab-1', LEAF_ID_1), 'unreported', 'No status reported'],
       [makePaneKey('tab-1', LEAF_ID_2), 'working', 'Running']
     ])
   })
@@ -645,7 +649,7 @@ describe('split-pane runtime title attribution', () => {
   it('lets a revealed tab’s live slots outrank the parked slots it left behind', () => {
     // Revealing a parked tab mounts live slots without clearing the parked ones, so
     // both id spaces describe the same two leaves at once. The live pair is current:
-    // leaf 1 has finished, leaf 2 is still working.
+    // leaf 1 shows only its name, leaf 2 is still working.
     const rows = rowsFor(
       { '-1': '⠋ Codex', '-2': '⠋ Codex', 1: 'Codex', 2: '⠋ Codex' },
       makeSplitLayout(),
@@ -653,7 +657,7 @@ describe('split-pane runtime title attribution', () => {
     )
 
     expect(rows.map((row) => [row.paneKey, row.state])).toEqual([
-      [makePaneKey('tab-1', LEAF_ID_1), 'idle'],
+      [makePaneKey('tab-1', LEAF_ID_1), 'unreported'],
       [makePaneKey('tab-1', LEAF_ID_2), 'working']
     ])
   })
@@ -670,7 +674,7 @@ describe('split-pane runtime title attribution', () => {
         .map((row) => [row.paneKey, row.agentType, row.state])
         .sort((a, b) => (a[0] < b[0] ? -1 : 1))
     ).toEqual([
-      [makePaneKey('tab-1', LEAF_ID_1), 'antigravity', 'idle'],
+      [makePaneKey('tab-1', LEAF_ID_1), 'antigravity', 'unreported'],
       [makePaneKey('tab-1', LEAF_ID_2), 'codex', 'working'],
       [makePaneKey('tab-1', LEAF_ID_3), 'gemini', 'working']
     ])
@@ -693,7 +697,7 @@ describe('split-pane runtime title attribution', () => {
 
     expect(rows.map((row) => [row.paneKey, row.agentType, row.state])).toEqual([
       [makePaneKey('tab-1', LEAF_ID_2), 'codex', 'working'],
-      [makePaneKey('tab-1', LEAF_ID_3), 'gemini', 'idle']
+      [makePaneKey('tab-1', LEAF_ID_3), 'gemini', 'unreported']
     ])
     expect(rows.some((row) => row.paneKey === makePaneKey('tab-1', LEAF_ID_1))).toBe(false)
   })
@@ -719,8 +723,60 @@ describe('split-pane runtime title attribution', () => {
     const rows = rowsFor({ 2: 'Codex', 4: '⠋ Gemini CLI' }, survivingLayout, ['pty-old', 'pty-new'])
 
     expect(rows.map((row) => [row.paneKey, row.agentType, row.state])).toEqual([
-      [makePaneKey('tab-1', LEAF_ID_2), 'codex', 'idle'],
+      [makePaneKey('tab-1', LEAF_ID_2), 'codex', 'unreported'],
       [makePaneKey('tab-1', LEAF_ID_3), 'gemini', 'working']
     ])
+  })
+})
+
+describe('a title that only names the agent', () => {
+  const PANE_KEY = makePaneKey('tab-1', LEAF_ID_1)
+
+  function summarizeTitle(title: string) {
+    return buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: { 'tab-1': { 1: title } },
+      ptyIdsByTabId: { 'tab-1': ['pty-agent'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    }).map((row) => [row.paneKey, row.agentType, row.state, row.entry.lastAssistantMessage])
+  }
+
+  // Committed fixture bytes: OpenCode 1.18.32 names itself before any session title.
+  it("reads OpenCode's recorded boot title as no status reported", () => {
+    const transcript = readFileSync(
+      resolve(__dirname, '../../../../main/daemon/__fixtures__/pty-transcripts/opencode.txt'),
+      'utf8'
+    )
+    const bootTitle = extractAllOscTitles(transcript)[0]
+    expect(bootTitle).toBe('OpenCode')
+
+    expect(summarizeTitle(bootTitle)).toEqual([
+      [PANE_KEY, 'opencode', 'unreported', 'No status reported']
+    ])
+  })
+
+  // Committed fixture bytes: grok 1.0.0 writes its bare name 274 ms after spawn, before its input box.
+  it("reads Grok's recorded boot title as no status reported", () => {
+    const bootTitle = extractAllOscTitles(GROK_STARTUP_PTY_TRACE[0].data ?? '')[0]
+    expect(bootTitle).toBe('grok')
+
+    expect(summarizeTitle(bootTitle)).toEqual([
+      [PANE_KEY, 'grok', 'unreported', 'No status reported']
+    ])
+  })
+
+  // Hand-built title: the shape a busy agy pane shows (no agy recording carries an OSC title).
+  it('reads a bare agy title as no status reported and keeps the row', () => {
+    expect(summarizeTitle('agy')).toEqual([
+      [PANE_KEY, 'antigravity', 'unreported', 'No status reported']
+    ])
+  })
+
+  // Control, hand-built: a rest keyword is evidence, so the ready path still reads Idle.
+  it('still reads Idle when the title carries a rest marker', () => {
+    expect(summarizeTitle('agy ready')).toEqual([[PANE_KEY, 'antigravity', 'idle', 'Idle']])
   })
 })

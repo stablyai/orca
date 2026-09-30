@@ -1026,6 +1026,9 @@
         "symlink": "Symbolic links cannot be attached.",
         "permissionDenied": "Permission denied.",
         "unsupported": "Unsupported file type."
+      },
+      "agentRowState": {
+        "noStatusReported": "No status reported"
       }
     },
     "hooks": {

@@ -96,6 +96,15 @@ describe('AgentStateDot', () => {
     expect(markup).not.toContain('data-agent-spinner')
   })
 
+  it('renders unreported as a muted dashed ring, never the amber lost-contact ring', () => {
+    const markup = renderMarkup('unreported')
+
+    expect(markup).toContain('lucide-circle-dashed')
+    expect(markup).toContain('text-muted-foreground')
+    expect(markup).not.toContain('text-amber-500')
+    expect(markup).toContain('aria-label="No status reported"')
+  })
+
   it.each(['blocked', 'interrupted'] satisfies AgentDotState[])(
     'renders %s as a red attention dot',
     (state) => {
@@ -116,6 +125,7 @@ describe('AgentStateDot', () => {
     'done',
     'idle',
     'unverifiable',
+    'unreported',
     'permission'
   ] satisfies AgentDotState[]
 

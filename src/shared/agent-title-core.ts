@@ -16,6 +16,8 @@ import { getWrapperTitleSegments } from './terminal-title-wrapper-segments'
 export { AGY_AGENT_NAME_RE, DROID_AGENT_NAME_RE, HERMES_AGENT_NAME_RE, titleHasAgentName }
 
 export type AgentStatus = 'working' | 'permission' | 'idle'
+/** `unreported`: an agent's name is in the title and nothing in it says what the agent is doing. */
+export type AgentTitleActivity = AgentStatus | 'unreported'
 
 export const CLAUDE_IDLE = '\u2733' // ✳
 const CLAUDE_COMMAND_RE = String.raw`(?:.*[\\/])?claude(?:\.(?:exe|cmd|bat|ps1))?`
