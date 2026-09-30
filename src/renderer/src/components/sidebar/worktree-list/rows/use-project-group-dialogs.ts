@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { selectProjectGroupRemovalTargets } from '@/store/slices/project-group-removal-targets'
+import { getCatalogEntryExecutionHostId } from '@/lib/catalog-entry-execution-host'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -86,14 +87,18 @@ export function useProjectGroupDialogs(args: {
       if (repo.projectGroupId === groupId) {
         return
       }
-      void moveProjectToGroup(repo.id, groupId)
+      const executionHostId = getCatalogEntryExecutionHostId(
+        projectGroups.find((group) => group.id === groupId)
+      )
+      void moveProjectToGroup(repo.id, groupId, undefined, { executionHostId })
     },
-    [moveProjectToGroup]
+    [moveProjectToGroup, projectGroups]
   )
 
   const handleRemoveProjectFromGroup = useCallback(
     (repo: Repo) => {
-      void moveProjectToGroup(repo.id, null)
+      const executionHostId = getCatalogEntryExecutionHostId(repo)
+      void moveProjectToGroup(repo.id, null, undefined, { executionHostId })
     },
     [moveProjectToGroup]
   )
@@ -113,7 +118,8 @@ export function useProjectGroupDialogs(args: {
       if (nameDialog.type === 'create-from-repo') {
         const group = await createProjectGroup(name)
         if (group) {
-          await moveProjectToGroup(nameDialog.repo.id, group.id)
+          const executionHostId = getCatalogEntryExecutionHostId(group)
+          await moveProjectToGroup(nameDialog.repo.id, group.id, undefined, { executionHostId })
         }
         return
       }

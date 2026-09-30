@@ -1,4 +1,5 @@
 import { MARINE_CREATURES } from './marine-creatures'
+import { stripKnownHarnessEnvelope } from './harness-injected-user-turns'
 
 // Why: post-generation sanitization still bounds the leaf so a long model dump
 // cannot become an unreadable branch. The *prompt* stays general — users can
@@ -121,7 +122,7 @@ export function buildBranchNamePrompt(context: BranchNameWorkContext, customProm
     'Output ONLY the branch name on a single line, nothing else.',
     ''
   )
-  sections.push('User request:', context.firstPrompt.trim())
+  sections.push('User request:', stripKnownHarnessEnvelope(context.firstPrompt))
   const assistant = context.assistantMessage?.trim()
   if (assistant) {
     sections.push('', "Agent's initial response:", assistant)
