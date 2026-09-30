@@ -15,15 +15,17 @@ export type OwnerTupleFold = {
   files: OpenFile[]
   /**
    * Why: worktree state (the active-file pointer) is keyed by the removed row's id, so callers
-   * need the fold's removed→retained mapping to re-point it at the row that survived.
+   * need the fold's removed→retained mapping to re-point it at the row that survived. Scoped
+   * per worktree because a raw-path id is just the absolute path string, which other worktrees
+   * can carry as a live row — a fold in one worktree must never re-point those.
    */
-  retainedIdByRemovedId: ReadonlyMap<string, string>
+  retainedIdByRemovedId: ReadonlyMap<string, ReadonlyMap<string, string>>
 }
 
 export function foldOpenFilesByOwnerTuple(files: readonly OpenFile[]): OwnerTupleFold {
   const retainedIdByTupleKey = new Map<string, string>()
   const result: OpenFile[] = []
-  const retainedIdByRemovedId = new Map<string, string>()
+  const retainedIdByRemovedId = new Map<string, Map<string, string>>()
   for (const file of files) {
     const key = JSON.stringify([
       file.filePath,
@@ -32,7 +34,13 @@ export function foldOpenFilesByOwnerTuple(files: readonly OpenFile[]): OwnerTupl
     ])
     const retainedId = retainedIdByTupleKey.get(key)
     if (retainedId !== undefined) {
-      retainedIdByRemovedId.set(file.id, retainedId)
+      // A tuple can never span worktrees, so each removed id maps inside its own worktree only.
+      let removedIdsInWorktree = retainedIdByRemovedId.get(file.worktreeId)
+      if (!removedIdsInWorktree) {
+        removedIdsInWorktree = new Map()
+        retainedIdByRemovedId.set(file.worktreeId, removedIdsInWorktree)
+      }
+      removedIdsInWorktree.set(file.id, retainedId)
       continue
     }
     retainedIdByTupleKey.set(key, file.id)

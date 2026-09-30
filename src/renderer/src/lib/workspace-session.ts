@@ -170,7 +170,11 @@ export function buildEditorSessionData(
     }
     // Why: the folded duplicate may be the row this pointer names; remap it to the retained row
     // so the selection — and the 'editor' tab-type marker gated on it — survives persistence.
-    const retainedFileId = retainedIdByRemovedId.get(fileId) ?? fileId
+    // Only remap when the id no longer names a retained row in this worktree: the same raw-path
+    // id can also be a live row here or in another worktree, and that pointer must stay put.
+    const retainedFileId = editFileIdsByWorktree[worktreeId]?.has(fileId)
+      ? fileId
+      : (retainedIdByRemovedId.get(worktreeId)?.get(fileId) ?? fileId)
     if (editFileIdsByWorktree[worktreeId]?.has(retainedFileId)) {
       activeFileEntries.push([worktreeId, retainedFileId])
     }

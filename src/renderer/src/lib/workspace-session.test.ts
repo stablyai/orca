@@ -99,13 +99,14 @@ function createSnapshot(overrides: Partial<AppState> = {}): AppState {
 function createEditFile(
   id: string,
   filePath: string,
-  runtimeEnvironmentId?: string | null
+  runtimeEnvironmentId?: string | null,
+  worktreeId = 'wt-1'
 ): AppState['openFiles'][number] {
   return {
     id,
     filePath,
     relativePath: filePath.slice(1),
-    worktreeId: 'wt-1',
+    worktreeId,
     language: 'typescript',
     runtimeEnvironmentId,
     mode: 'edit',
@@ -576,6 +577,53 @@ describe('buildWorkspaceSessionPayload', () => {
       '/tmp/demo.ts'
     ])
     expect(payload.activeFileIdByWorktree).toEqual({ 'wt-1': ownedId })
+    expect(payload.activeTabTypeByWorktree).toEqual({ 'wt-1': 'editor' })
+  })
+
+  // Why: raw-path ids are the absolute filePath string, so the same id can name a live row in a
+  // second worktree while the first worktree's fold removed its own copy of that id — remapping
+  // across the fold's worktree boundary hijacked the live worktree's pointer onto a foreign row
+  // (and the whitelist then dropped it, losing the selection and the 'editor' marker).
+  it('does not remap an active id that is still live in its own worktree', () => {
+    const ownedId = 'editor:wt-1:env-a:%2Ftmp%2Fdemo.ts'
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({
+        openFiles: [
+          createEditFile(ownedId, '/tmp/demo.ts', 'env-a'),
+          createEditFile('/tmp/demo.ts', '/tmp/demo.ts', 'env-a'),
+          createEditFile('/tmp/demo.ts', '/tmp/demo.ts', undefined, 'wt-2')
+        ],
+        activeFileIdByWorktree: { 'wt-2': '/tmp/demo.ts' },
+        activeTabTypeByWorktree: { 'wt-2': 'editor' }
+      })
+    )
+
+    expect(payload.openFilesByWorktree?.['wt-2'].map((row) => row.filePath)).toEqual([
+      '/tmp/demo.ts'
+    ])
+    expect(payload.activeFileIdByWorktree).toEqual({ 'wt-2': '/tmp/demo.ts' })
+    expect(payload.activeTabTypeByWorktree).toEqual({ 'wt-2': 'editor' })
+  })
+
+  // Why: hydration gives the local row a raw-path id and the remote row an owned id, and the
+  // mirror re-appends a raw-path duplicate of the remote tuple — the local row's id then is both
+  // live (its own tuple) and a removed key (the remote tuple's fold), and the pointer naming the
+  // local row must stay on it instead of sliding to the remote row.
+  it('prefers a live row over the fold mapping when both claim the active id', () => {
+    const ownedId = 'editor:wt-1:env-a:%2Ftmp%2Fdemo.ts'
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({
+        openFiles: [
+          createEditFile('/tmp/demo.ts', '/tmp/demo.ts', undefined),
+          createEditFile(ownedId, '/tmp/demo.ts', 'env-a'),
+          createEditFile('/tmp/demo.ts', '/tmp/demo.ts', 'env-a')
+        ],
+        activeFileIdByWorktree: { 'wt-1': '/tmp/demo.ts' },
+        activeTabTypeByWorktree: { 'wt-1': 'editor' }
+      })
+    )
+
+    expect(payload.activeFileIdByWorktree).toEqual({ 'wt-1': '/tmp/demo.ts' })
     expect(payload.activeTabTypeByWorktree).toEqual({ 'wt-1': 'editor' })
   })
 })

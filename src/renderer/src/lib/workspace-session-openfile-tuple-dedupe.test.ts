@@ -65,18 +65,31 @@ describe('foldOpenFilesByOwnerTuple', () => {
   })
 
   // Why: the removed rows keep distinct ids, so callers need the removed→retained mapping to
-  // re-point worktree state (the active-file pointer) at the row that survived the fold.
-  it('maps every removed row to the retained row it duplicated', () => {
+  // re-point worktree state (the active-file pointer) at the row that survived the fold. It is
+  // scoped per worktree because raw-path ids are absolute path strings another worktree can
+  // carry as a live row — worktree wt-2's fold of '/tmp/a.ts' must not blur into wt-1's.
+  it('maps every removed row to the retained row it duplicated, scoped to its worktree', () => {
     const folded = foldOpenFilesByOwnerTuple([
       row('editor:wt-1:env-a:%2Ftmp%2Fa.ts', '/tmp/a.ts', { runtimeEnvironmentId: 'env-a' }),
       row('/tmp/a.ts', '/tmp/a.ts', { runtimeEnvironmentId: 'env-a' }),
-      row('editor:wt-1:env-a:%2Ftmp%2Fa.ts#2', '/tmp/a.ts', { runtimeEnvironmentId: 'env-a' })
+      row('editor:wt-1:env-a:%2Ftmp%2Fa.ts#2', '/tmp/a.ts', { runtimeEnvironmentId: 'env-a' }),
+      row('editor:wt-2:env-a:%2Ftmp%2Fa.ts', '/tmp/a.ts', {
+        worktreeId: 'wt-2',
+        runtimeEnvironmentId: 'env-a'
+      }),
+      row('/tmp/a.ts', '/tmp/a.ts', { worktreeId: 'wt-2', runtimeEnvironmentId: 'env-a' })
     ])
 
-    expect(folded.files.map((file) => file.id)).toEqual(['editor:wt-1:env-a:%2Ftmp%2Fa.ts'])
-    expect(Object.fromEntries(folded.retainedIdByRemovedId)).toEqual({
+    expect(folded.files.map((file) => file.id)).toEqual([
+      'editor:wt-1:env-a:%2Ftmp%2Fa.ts',
+      'editor:wt-2:env-a:%2Ftmp%2Fa.ts'
+    ])
+    expect(Object.fromEntries(folded.retainedIdByRemovedId.get('wt-1') ?? [])).toEqual({
       '/tmp/a.ts': 'editor:wt-1:env-a:%2Ftmp%2Fa.ts',
       'editor:wt-1:env-a:%2Ftmp%2Fa.ts#2': 'editor:wt-1:env-a:%2Ftmp%2Fa.ts'
+    })
+    expect(Object.fromEntries(folded.retainedIdByRemovedId.get('wt-2') ?? [])).toEqual({
+      '/tmp/a.ts': 'editor:wt-2:env-a:%2Ftmp%2Fa.ts'
     })
   })
 })
