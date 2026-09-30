@@ -51,4 +51,6 @@ export type AgentStatusApi = {
 export type AgentAwakeApi = {
   getStatus: () => Promise<ComputerAwakeStatus>
   onChanged: (callback: (status: ComputerAwakeStatus) => void) => () => void
+  /** Seconds since the last OS-level input; null when the platform cannot report it. */
+  getSystemIdleSeconds: () => Promise<number | null>
 }

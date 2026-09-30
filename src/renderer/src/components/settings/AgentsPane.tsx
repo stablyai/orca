@@ -6,6 +6,7 @@ import { getAgentCatalog } from '@/lib/agent-catalog'
 import { useDetectedAgents, type AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import { useAppStore } from '@/store'
 import { AgentAwakeSetting } from './AgentAwakeSetting'
+import { SleepyModeSetting } from './SleepyModeSetting'
 import { AgentCacheTimerSection } from './AgentCacheTimerSection'
 import { AgentRuntimeSetting } from './AgentRuntimeSetting'
 import { CodexTerminalServerIsolationSetting } from './CodexTerminalServerIsolationSetting'
@@ -271,7 +272,10 @@ export function AgentsPane({
       ) : null}
       <AgentGeneratedTabTitlesSetting settings={settings} updateSettings={updateSettings} />
       {!isPairedWebClientWindow() ? (
-        <AgentAwakeSetting settings={settings} updateSettings={updateSettings} />
+        <>
+          <AgentAwakeSetting settings={settings} updateSettings={updateSettings} />
+          <SleepyModeSetting settings={settings} updateSettings={updateSettings} />
+        </>
       ) : null}
       <AgentCacheTimerSection settings={settings} updateSettings={updateSettings} />
       <AgentPermissionsSetting
