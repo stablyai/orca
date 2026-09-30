@@ -9,6 +9,7 @@ import { createCodebuddySessionResumeState } from './session-scanner-codebuddy-p
 import { createGeminiJsonlSessionResumeState } from './session-scanner-gemini-parsers'
 import { createCopilotSessionResumeState } from './session-scanner-copilot-parser'
 import { createCursorSessionResumeState } from './session-scanner-cursor-parser'
+import { createQoderSessionResumeState } from './session-scanner-qoder-parser'
 import { countSubagentTranscripts } from './session-scanner-subagent-transcripts'
 import { countOmpSubagentTranscripts } from './session-scanner-omp-subagent-transcripts'
 import type { ResumableSessionParseState, SessionFileCandidate } from './session-scanner-types'
@@ -76,6 +77,8 @@ function resumableStateFactoryFor(
         : null
     case 'antigravity':
       return (messages) => createAntigravitySessionResumeState(candidate.file, messages)
+    case 'qoder':
+      return (messages) => createQoderSessionResumeState(candidate.file, messages)
     case 'devin':
     case 'grok':
     case 'hermes':
