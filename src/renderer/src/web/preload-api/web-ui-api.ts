@@ -7,6 +7,7 @@ import type { FeatureInteractionId } from '../../../../shared/feature-interactio
 import { omitPairingLocalUiFields } from '../../../../shared/pairing-local-ui-fields'
 import type { PairedUiState } from '../../../../shared/pairing-local-ui-fields'
 import {
+  clipboardHasImage,
   readClipboardImagePngBase64,
   readClipboardImageThumbnail,
   saveClipboardImageAsTempFileInRuntime,
@@ -159,6 +160,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       return saveClipboardImageAsTempFileInRuntime(contentBase64, args)
     },
     readClipboardImageThumbnail: () => readClipboardImageThumbnail().catch(() => null),
+    clipboardHasImage,
     writeClipboardText: writeWebClipboardText,
     writeTerminalClipboardText: writeWebClipboardText,
     writeSelectionClipboardText: () =>

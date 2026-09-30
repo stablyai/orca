@@ -230,6 +230,32 @@ export function useNativeChatComposerPaste({
   const pasteFromClipboard = useCallback(() => {
     void (async () => {
       const owner = resolveAttachmentOwner()
+      if (owner.kind === 'runtime') {
+        // Why: Cmd+V has no paste event, and a remote owner cannot save a local
+        // file. Thumbnail failure is not "no image" — an oversized image still
+        // has to show the unsupported notice instead of inserting caption text.
+        let imagePresent: boolean | null
+        try {
+          imagePresent = await window.api.ui.clipboardHasImage()
+        } catch {
+          return
+        }
+        if (disabledRef.current || imagePresent === null) {
+          return
+        }
+        if (imagePresent) {
+          setNotice(nativeChatLocalAttachmentUnsupportedNotice())
+          return
+        }
+        const text = await window.api.ui
+          .readClipboardText({ maxBytes: NATIVE_CHAT_CONTEXT_PASTE_MAX_BYTES })
+          .catch(() => '')
+        if (disabledRef.current || text.length === 0) {
+          return
+        }
+        insertTypedText(text)
+        return
+      }
       // not-ready still saves locally: with no event in hand this is the only
       // way to LEARN whether the clipboard holds an image. An image then gets
       // the not-ready notice (never a local-path attach for a possibly-remote
