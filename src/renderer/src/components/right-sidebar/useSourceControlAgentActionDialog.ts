@@ -44,6 +44,7 @@ export function useSourceControlAgentActionDialog({
   onLaunchAccepted,
   onLaunchAborted,
   onLaunched,
+  allowExistingAgentSession,
   onStart
 }: SourceControlAgentActionDialogProps): UseSourceControlAgentActionDialogResult {
   const settings = useAppStore((state) => state.settings)
@@ -237,6 +238,8 @@ export function useSourceControlAgentActionDialog({
 
   const { autoLaunchPending } = useSavedSourceControlAgentActionAutoStart({
     open,
+    // Why: a saved recipe would otherwise launch a new agent before the user can pick a running one.
+    autoStartEnabled: !(allowExistingAgentSession && worktreeId),
     openCycle,
     detectionReady: detectedOpenCycle === openCycle,
     actionId,
@@ -256,11 +259,7 @@ export function useSourceControlAgentActionDialog({
     isStarting,
     detectedAgents,
     disabledAgents,
-    onAutoStart: ({ detectedAgents: agentsForLaunch, saveTargetValue: matchedTargetValue }) =>
-      startWithDetectedAgents({
-        detectedAgents: agentsForLaunch,
-        saveTargetValueOverride: matchedTargetValue
-      })
+    onAutoStart: startWithDetectedAgents
   })
 
   const statusCopy = buildSourceControlAgentStatusCopy({
@@ -308,6 +307,8 @@ export function useSourceControlAgentActionDialog({
     agentArgs,
     agentArgsApply,
     commandTemplate,
+    trimmedCommandInput,
+    connectionUnavailable,
     saveLaunchRecipe,
     saveTargetValue,
     saveTargets,

@@ -12183,10 +12183,11 @@
             "653c105ecc": "Plus d'actions sur la PR",
             "f316a8ca2b": "Aucun commentaire non résolu sélectionné.",
             "d00ebdc402": "Résoudre {{value0}} commentaires avec l'IA",
-            "5eb2163b6b": "Vérifiez le prompt avant de lancer un agent. Une fois le prompt livré, Orca résout les fils sélectionnés côté hôte et répond aux commentaires qu'il ne peut pas résoudre.",
-            "f273f2271c": "Agent lancé. {{value0}} marqués résolus, {{value1}} réponses envoyées, {{value2}} ignorés, {{value3}} échecs.{{value4}}",
-            "aa95b81a3a": "Agent lancé. {{value0}} marqués résolus, {{value1}} réponses envoyées, {{value2}} ignorés, {{value3}} échecs.",
-            "495b2f8c4b": "Agent lancé, mais impossible de résoudre ou de répondre aux commentaires sélectionnés.",
+            "4fb38a23bd": "Vérifiez le prompt avant de l'envoyer à un agent. Une fois le prompt livré, Orca résout les fils sélectionnés côté hôte et répond aux commentaires qu'il ne peut pas résoudre.",
+            "564203239a": "Vérifiez le prompt avant de l'envoyer à un agent.",
+            "933fef4e81": "Prompt livré. {{value0}} marqués résolus, {{value1}} réponses envoyées, {{value2}} ignorés, {{value3}} échecs.{{value4}}",
+            "459623e327": "Prompt livré. {{value0}} marqués résolus, {{value1}} réponses envoyées, {{value2}} ignorés, {{value3}} échecs.",
+            "4fb2bc97a5": "Prompt livré, mais impossible de résoudre ou de répondre aux commentaires sélectionnés.",
             "3c3ad3a1d2": "Agent lancé. Aucun des commentaires sélectionnés ne peut être marqué résolu côté hôte.",
             "review": {
               "auto_retry": "Orca réessaiera à {{time}}.",
@@ -12681,6 +12682,13 @@
             "38b899cc02": "Tous les dépôts",
             "808cfe0a3b": "Ce dépôt",
             "994cddd1f7": "Ne pas enregistrer"
+          },
+          "SourceControlExistingAgentSendMenu": {
+            "trigger": "Envoyer à un agent en cours",
+            "label": "Envoyer le prompt à",
+            "sending": "Envoi du prompt...",
+            "sent": "Prompt envoyé.",
+            "empty": "Aucun agent en cours dans cet espace de travail"
           },
           "SourceControlAgentActionDialogForm": {
             "013c9ac04a": "Enregistrer pour",

@@ -10517,10 +10517,11 @@
             "653c105ecc": "Más acciones de PR",
             "f316a8ca2b": "No hay comentarios sin resolver seleccionados.",
             "d00ebdc402": "Resolver comentarios de {{value0}} con IA",
-            "5eb2163b6b": "Revisa el prompt antes de iniciar un agente. Una vez entregado el prompt, Orca resuelve los hilos seleccionados en el host y responde a los comentarios que no puede resolver.",
-            "f273f2271c": "Agente iniciado. Marcados como resueltos: {{value0}}; respondidos: {{value1}}; omitidos: {{value2}}; con error: {{value3}}.{{value4}}",
-            "aa95b81a3a": "Agente iniciado. Marcados como resueltos: {{value0}}; respondidos: {{value1}}; omitidos: {{value2}}; con error: {{value3}}.",
-            "495b2f8c4b": "Agente iniciado, pero no se pudieron resolver ni responder los comentarios seleccionados.",
+            "4fb38a23bd": "Revisa el prompt antes de enviarlo a un agente. Una vez entregado el prompt, Orca resuelve los hilos seleccionados en el host y responde a los comentarios que no puede resolver.",
+            "564203239a": "Revisa el prompt antes de enviarlo a un agente.",
+            "933fef4e81": "Prompt entregado. Marcados como resueltos: {{value0}}; respondidos: {{value1}}; omitidos: {{value2}}; con error: {{value3}}.{{value4}}",
+            "459623e327": "Prompt entregado. Marcados como resueltos: {{value0}}; respondidos: {{value1}}; omitidos: {{value2}}; con error: {{value3}}.",
+            "4fb2bc97a5": "Prompt entregado, pero no se pudieron resolver ni responder los comentarios seleccionados.",
             "3c3ad3a1d2": "Agente iniciado. No se puede marcar ningún comentario seleccionado como resuelto en el host.",
             "review": {
               "auto_retry": "Orca reintentará a las {{time}}.",
@@ -10989,6 +10990,13 @@
             "38b899cc02": "Todos los repositorios",
             "808cfe0a3b": "Este repositorio",
             "994cddd1f7": "No guardar"
+          },
+          "SourceControlExistingAgentSendMenu": {
+            "trigger": "Enviar a un agente en ejecución",
+            "label": "Enviar prompt a",
+            "sending": "Enviando prompt...",
+            "sent": "Prompt enviado.",
+            "empty": "No hay agentes en ejecución en este espacio de trabajo"
           },
           "SourceControlAgentActionDialogForm": {
             "013c9ac04a": "Guardar para",

@@ -15,6 +15,8 @@ const NO_SAVED_RECEIPT_KEY = '__no_saved_receipt__'
 
 type UseSavedSourceControlAgentActionAutoStartArgs = {
   open: boolean
+  /** False keeps the dialog visible even when the saved recipe matches. */
+  autoStartEnabled?: boolean
   openCycle: number
   detectionReady: boolean
   actionId: SourceControlLaunchActionId
@@ -36,7 +38,7 @@ type UseSavedSourceControlAgentActionAutoStartArgs = {
   disabledAgents: TuiAgent[] | undefined
   onAutoStart: (args: {
     detectedAgents: TuiAgent[]
-    saveTargetValue: SavedSourceControlAgentActionTargetValue
+    saveTargetValueOverride: SavedSourceControlAgentActionTargetValue
   }) => Promise<boolean>
 }
 
@@ -129,6 +131,7 @@ function buildReceiptKey(input: {
 
 export function useSavedSourceControlAgentActionAutoStart({
   open,
+  autoStartEnabled = true,
   openCycle,
   detectionReady,
   actionId,
@@ -174,7 +177,7 @@ export function useSavedSourceControlAgentActionAutoStart({
     [actionId, repo, repoId, savedLaunchRecipe, settings]
   )
   const receiptKey = useMemo(() => {
-    if (!savedAgentId || !matchedSavedReceiptTargetValue) {
+    if (!autoStartEnabled || !savedAgentId || !matchedSavedReceiptTargetValue) {
       return null
     }
     return buildReceiptKey({
@@ -190,6 +193,7 @@ export function useSavedSourceControlAgentActionAutoStart({
     })
   }, [
     actionId,
+    autoStartEnabled,
     baseCommandInput,
     connectionId,
     matchedSavedReceiptTargetValue,
@@ -255,7 +259,7 @@ export function useSavedSourceControlAgentActionAutoStart({
     autoStartedOpenCycleRef.current = openCycle
     void onAutoStart({
       detectedAgents,
-      saveTargetValue: matchedSavedReceiptTargetValue
+      saveTargetValueOverride: matchedSavedReceiptTargetValue
     })
       .then((launched) => {
         if (!launched) {

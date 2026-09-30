@@ -60,6 +60,8 @@ type SourceControlAgentActionDialogFormProps = {
   deliveryPlan: SourceControlAgentActionDeliveryPlanState
   canStart: boolean
   isStarting: boolean
+  /** Optional footer control that sends the prompt to a running agent instead. */
+  existingAgentSendMenu?: React.ReactNode
   startLabel: string
   onSelectedAgentChange: (agent: TuiAgent | null) => void
   onAgentArgsChange: (value: string) => void
@@ -106,6 +108,7 @@ export function SourceControlAgentActionDialogForm({
   deliveryPlan,
   canStart,
   isStarting,
+  existingAgentSendMenu,
   startLabel,
   onSelectedAgentChange,
   onAgentArgsChange,
@@ -386,6 +389,7 @@ export function SourceControlAgentActionDialogForm({
             'Cancel'
           )}
         </Button>
+        {existingAgentSendMenu}
         <Button type="button" size="sm" disabled={!canStart} onClick={onStart}>
           {isStarting ? (
             <RefreshCw className="size-4 animate-spin" />

@@ -295,6 +295,8 @@ export function ChecksPanelActiveContent({
         connectionId={activeConnectionId}
         repoId={repo?.id ?? null}
         promptDelivery="submit-after-ready"
+        // Why: queued review comments can go to a running agent; the ack still waits for onLaunched.
+        allowExistingAgentSession={agentComposerState?.actionId === 'resolveComments'}
         launchPlatform={activeSourceControlLaunchPlatform}
         launchSource={agentComposerState?.launchSource ?? 'task_page'}
         savedAgentId={

@@ -12267,10 +12267,11 @@
             "653c105ecc": "More PR actions",
             "f316a8ca2b": "No unresolved comments selected.",
             "d00ebdc402": "Resolve {{value0}} Comments With AI",
-            "5eb2163b6b": "Review the prompt before starting an agent. After the prompt is delivered, Orca resolves the selected host threads and replies to comments it cannot resolve.",
-            "f273f2271c": "Started the agent. Marked {{value0}} resolved, replied to {{value1}}, skipped {{value2}}, failed {{value3}}.{{value4}}",
-            "aa95b81a3a": "Started the agent. Marked {{value0}} resolved, replied to {{value1}}, skipped {{value2}}, failed {{value3}}.",
-            "495b2f8c4b": "Started the agent, but could not resolve or reply on the selected comments.",
+            "4fb38a23bd": "Review the prompt before sending it to an agent. After the prompt is delivered, Orca resolves the selected host threads and replies to comments it cannot resolve.",
+            "564203239a": "Review the prompt before sending it to an agent.",
+            "933fef4e81": "Delivered the prompt. Marked {{value0}} resolved, replied to {{value1}}, skipped {{value2}}, failed {{value3}}.{{value4}}",
+            "459623e327": "Delivered the prompt. Marked {{value0}} resolved, replied to {{value1}}, skipped {{value2}}, failed {{value3}}.",
+            "4fb2bc97a5": "Delivered the prompt, but could not resolve or reply on the selected comments.",
             "3c3ad3a1d2": "Started the agent. No selected comments can be marked resolved on the host.",
             "review": {
               "auto_retry": "Orca will retry at {{time}}.",
@@ -12765,6 +12766,13 @@
             "38b899cc02": "All repositories",
             "808cfe0a3b": "This repository",
             "994cddd1f7": "Don't save"
+          },
+          "SourceControlExistingAgentSendMenu": {
+            "trigger": "Send to running agent",
+            "label": "Send prompt to",
+            "sending": "Sending prompt...",
+            "sent": "Prompt sent.",
+            "empty": "No running agents in this workspace"
           },
           "SourceControlAgentActionDialogForm": {
             "013c9ac04a": "Save for",
