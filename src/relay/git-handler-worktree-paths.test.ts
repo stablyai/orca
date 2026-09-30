@@ -45,8 +45,14 @@ describe('relay worktree path parsing', () => {
     const worktreePath = '/repo-feature\nremote'
     let listCount = 0
     const git = vi.fn<GitExec>(async (args) => {
-      if (args[0] === 'rev-parse') {
+      if (args[0] === 'rev-parse' && args[1] === '--git-common-dir') {
         return { stdout: '/repo/.git\n', stderr: '' }
+      }
+      if (args.join(' ') === 'rev-parse --verify --quiet HEAD^{commit}') {
+        return { stdout: 'base123\n', stderr: '' }
+      }
+      if (args.join(' ') === 'merge-base base123 1') {
+        return { stdout: '1\n', stderr: '' }
       }
       if (args[0] === 'worktree' && args[1] === 'list') {
         listCount += 1
@@ -57,7 +63,7 @@ describe('relay worktree path parsing', () => {
                   { path: '/repo', branch: 'main' },
                   { path: worktreePath, branch: 'feature/newline' }
                 )
-              : nulWorktreeList({ path: '/repo', branch: 'main' }),
+              : lineWorktreeList({ path: '/repo', branch: 'main' }),
           stderr: ''
         }
       }
@@ -66,7 +72,16 @@ describe('relay worktree path parsing', () => {
 
     await removeWorktreeWithCapabilityCache(git, { worktreePath })
 
-    expect(git).toHaveBeenCalledWith(['branch', '-d', '--', 'feature/newline'], resolvedRepoPath())
+    expect(git).toHaveBeenCalledWith(['worktree', 'remove', worktreePath], resolvedRepoPath())
+    expect(git).toHaveBeenCalledWith(['merge-base', 'base123', '1'], resolvedRepoPath())
+    expect(git).toHaveBeenCalledWith(
+      ['update-ref', '-d', 'refs/heads/feature/newline', '1'],
+      resolvedRepoPath()
+    )
+    expect(git).not.toHaveBeenCalledWith(
+      ['branch', '-d', '--', 'feature/newline'],
+      expect.any(String)
+    )
   })
 
   it('falls back to line-block worktree listing when remote Git rejects -z', async () => {
@@ -74,8 +89,14 @@ describe('relay worktree path parsing', () => {
     let listCount = 0
     const git = vi.fn<GitExec>(async (args, cwd) => {
       calls.push(`${cwd}$ ${args.join(' ')}`)
-      if (args[0] === 'rev-parse') {
+      if (args[0] === 'rev-parse' && args[1] === '--git-common-dir') {
         return { stdout: '/repo/.git\n', stderr: '' }
+      }
+      if (args.join(' ') === 'rev-parse --verify --quiet HEAD^{commit}') {
+        return { stdout: 'base123\n', stderr: '' }
+      }
+      if (args.join(' ') === 'merge-base base123 1') {
+        return { stdout: '1\n', stderr: '' }
       }
       if (args[0] === 'worktree' && args[1] === 'list' && args.includes('-z')) {
         throw Object.assign(new Error("unknown switch `z'"), {
@@ -105,7 +126,14 @@ describe('relay worktree path parsing', () => {
       `${resolvedRepoPath()}$ worktree list --porcelain -z`,
       `${resolvedRepoPath()}$ worktree list --porcelain`,
       `${resolvedRepoPath()}$ worktree remove /repo-feature`,
-      `${resolvedRepoPath()}$ branch -d -- feature/test`
+      `${resolvedRepoPath()}$ config --get branch.feature/test.base`,
+      `${resolvedRepoPath()}$ symbolic-ref --quiet refs/remotes/origin/HEAD`,
+      `${resolvedRepoPath()}$ rev-parse --verify --quiet HEAD^{commit}`,
+      `${resolvedRepoPath()}$ merge-base base123 1`,
+      `${resolvedRepoPath()}$ worktree list --porcelain`,
+      `${resolvedRepoPath()}$ update-ref -d refs/heads/feature/test 1`,
+      `${resolvedRepoPath()}$ worktree list --porcelain`,
+      `${resolvedRepoPath()}$ config --remove-section branch.feature/test`
     ])
   })
 })

@@ -1,6 +1,7 @@
 import type { RemoveWorktreeResult } from '../shared/worktree/create-types'
 import type { GitWorktreeInfo } from '../shared/worktree/types'
 import { assertWorktreeUnlockedForRemoval } from '../shared/worktree/removal'
+import { BranchDeletionUnverifiedError } from '../shared/git-branch-delete-verification'
 import { areWorktreePathsEqual, formatWorktreeRemovalError } from './ipc/worktree-logic'
 import { gitExecFileAsync } from './git/runner'
 import { listWorktreesStrict, type GitWorktreeExecOptions } from './git/worktree'
@@ -114,6 +115,10 @@ export async function recoverLocalWindowsWorktreeRemoval(
   // Why: recovery can recursively delete the remaining directory, so a Git
   // lock must reject the attempt before classification or any side effects.
   assertWorktreeUnlockedForRemoval(args.registeredWorktree)
+
+  if (args.error instanceof BranchDeletionUnverifiedError) {
+    return undefined
+  }
 
   if (!(await isRecoverableWindowsFilesystemRemovalFailure(args))) {
     return undefined
