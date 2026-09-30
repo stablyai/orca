@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ClaudeAgentTeamsService, type AgentTeamsTerminalApi } from './claude-agent-teams-service'
+import type { AgentStartupShell } from '../../shared/tui-agent-startup-shell'
 
-function createServiceWithLeader(): {
+function createServiceWithLeader(paneShell: AgentStartupShell = 'posix'): {
   service: ClaudeAgentTeamsService
   teamId: string
   token: string
@@ -14,14 +15,22 @@ function createServiceWithLeader(): {
     leaderHandle: 'leader-handle',
     baseEnv: { PATH: '/usr/bin' },
     shimDir: '/tmp/orca-shim',
-    shimBin: '/usr/bin/orca'
+    shimBin: '/usr/bin/orca',
+    paneShell
   })
   expect(launch.env.ORCA_AGENT_TEAMS_SHIM_DIR).toBe('/tmp/orca-shim')
   const splitCalls: { handle: string; direction?: string; command?: string; envPane?: string }[] =
     []
   let splitCount = 0
+  // Why track liveness: the real runtime resolves the split source handle to a
+  // live PTY and throws when it has none, so a mock that splits happily from a
+  // closed terminal would hide exactly the ordering bugs these tests guard.
+  const liveHandles = new Set(['leader-handle'])
   const api: AgentTeamsTerminalApi = {
     splitTerminal: vi.fn(async (handle, opts) => {
+      if (!liveHandles.has(handle)) {
+        throw new Error(`no live terminal for handle ${handle}`)
+      }
       splitCount += 1
       splitCalls.push({
         handle,
@@ -29,6 +38,7 @@ function createServiceWithLeader(): {
         command: opts.command,
         envPane: opts.env?.TMUX_PANE
       })
+      liveHandles.add(`teammate-${splitCount}`)
       return { handle: `teammate-${splitCount}`, tabId: 'tab-1', paneRuntimeId: -1 }
     }),
     readTerminal: vi.fn(async (handle) => ({
@@ -44,7 +54,10 @@ function createServiceWithLeader(): {
       bytesWritten: action.text?.length ?? 0
     })),
     focusTerminal: vi.fn(async (handle) => ({ handle, tabId: 'tab-1', worktreeId: 'wt-1' })),
-    closeTerminal: vi.fn(async (handle) => ({ handle, tabId: 'tab-1', ptyKilled: true })),
+    closeTerminal: vi.fn(async (handle) => {
+      liveHandles.delete(handle)
+      return { handle, tabId: 'tab-1', ptyKilled: true }
+    }),
     showTerminal: vi.fn(async (handle) => ({
       handle,
       worktreeId: 'wt-1',
@@ -189,6 +202,43 @@ describe('ClaudeAgentTeamsService', () => {
     expect(api.closeTerminal).toHaveBeenLastCalledWith('teammate-2')
   })
 
+  it('re-spells the teammate command for PowerShell panes', async () => {
+    const { service, teamId, token, leaderPane, api, splitCalls } =
+      createServiceWithLeader('powershell')
+    const request = (argv: string[], envPane = leaderPane) =>
+      service.handleTmuxCompat({ teamId, token, envPane, argv }, api)
+
+    await request([
+      'split-window',
+      '-d',
+      '-t',
+      leaderPane,
+      '-h',
+      '-P',
+      '-F',
+      '#{pane_id}',
+      '--',
+      'cat'
+    ])
+    await request(['set-option', '-p', '-t', '%2', 'remain-on-exit', 'failed'])
+    await expect(
+      request([
+        'respawn-pane',
+        '-k',
+        '-t',
+        '%2',
+        '--',
+        "cd 'C:\\repo' && env CLAUDECODE=1 'C:\\claude.exe' --agent-id a"
+      ])
+    ).resolves.toMatchObject({ exitCode: 0 })
+
+    // Why: `cat` holds the placeholder pane open under sh; PowerShell's `cat` prompts for a path.
+    expect(splitCalls[0]?.command).toBe('Wait-Event')
+    expect(splitCalls.at(-1)?.command).toBe(
+      "Set-Location 'C:\\repo' -ErrorAction Stop; $env:CLAUDECODE = '1'; & 'C:\\claude.exe' '--agent-id' 'a'"
+    )
+  })
+
   it('removes the pane when replacement split fails after a confirmed placeholder stop', async () => {
     const { service, teamId, token, leaderPane, api } = createServiceWithLeader()
     const request = (argv: string[], envPane = leaderPane) =>
@@ -239,18 +289,22 @@ describe('ClaudeAgentTeamsService', () => {
     ).resolves.toMatchObject({ stdout: '%1\n%2\n' })
   })
 
-  it('does not launch a replacement when the placeholder stop is unconfirmed', async () => {
+  it('does not launch a replacement when the placeholder stop stays unconfirmed after every retry', async () => {
     const { service, teamId, token, leaderPane, api, splitCalls } = createServiceWithLeader()
     const request = (argv: string[], envPane = leaderPane) =>
       service.handleTmuxCompat({ teamId, token, envPane, argv }, api)
 
     await request(['split-window', '-t', leaderPane, '-h', '-P', '-F', '#{pane_id}', 'cat'])
-    vi.mocked(api.closeTerminal).mockResolvedValueOnce({
+    const unconfirmed = {
       handle: 'teammate-1',
       tabId: 'tab-1',
       ptyKilled: false,
-      ptyStopVerdict: 'live'
-    })
+      ptyStopVerdict: 'live' as const
+    }
+    vi.mocked(api.closeTerminal)
+      .mockResolvedValueOnce(unconfirmed)
+      .mockResolvedValueOnce(unconfirmed)
+      .mockResolvedValueOnce(unconfirmed)
 
     await expect(
       request(['respawn-pane', '-k', '-t', '%2', '--', 'claude --agent-id a'])
@@ -265,6 +319,115 @@ describe('ClaudeAgentTeamsService', () => {
 
     await request(['kill-pane', '-t', '%2'])
     expect(api.closeTerminal).toHaveBeenLastCalledWith('teammate-1')
+  })
+
+  // Why: a team launch closes several placeholder panes at once, and PTY
+  // teardown confirmation can lag a single closeTerminal() call under that
+  // contention (see claude-agent-teams-tmux-dispatcher.ts closeUntilConfirmed).
+  // A retry that then confirms the stop must land the replacement, not block it.
+  it('launches a replacement when a later retry confirms the placeholder stop', async () => {
+    const { service, teamId, token, leaderPane, api, splitCalls } = createServiceWithLeader()
+    const request = (argv: string[], envPane = leaderPane) =>
+      service.handleTmuxCompat({ teamId, token, envPane, argv }, api)
+
+    await request(['split-window', '-t', leaderPane, '-h', '-P', '-F', '#{pane_id}', 'cat'])
+    vi.mocked(api.closeTerminal).mockResolvedValueOnce({
+      handle: 'teammate-1',
+      tabId: 'tab-1',
+      ptyKilled: false,
+      ptyStopVerdict: 'unverifiable',
+      ptyStopReason: 'a follow-up stop was issued but its outcome could not be verified'
+    })
+
+    await expect(
+      request(['respawn-pane', '-k', '-t', '%2', '--', 'claude --agent-id a'])
+    ).resolves.toMatchObject({ ok: true })
+    expect(api.closeTerminal).toHaveBeenCalledTimes(2)
+    expect(splitCalls).toHaveLength(2)
+  })
+
+  // Why: each shim invocation is its own process, so a team launch reaches the
+  // service as overlapping requests. Respawn closes a pane's terminal before
+  // re-splitting from the pane it was split from, and those origins chain, so
+  // without serialization the later teammates split from a handle that the
+  // earlier respawn has already closed — they fail and lose their panes.
+  it('lands every teammate when respawns overlap', async () => {
+    const { service, teamId, token, leaderPane, api, splitCalls } = createServiceWithLeader()
+    const request = (argv: string[], envPane = leaderPane) =>
+      service.handleTmuxCompat({ teamId, token, envPane, argv }, api)
+
+    const holdingPanes: string[] = []
+    for (const _teammate of ['alpha', 'beta', 'gamma']) {
+      const split = await request([
+        'split-window',
+        '-d',
+        '-t',
+        leaderPane,
+        '-h',
+        '-P',
+        '-F',
+        '#{pane_id}',
+        '--',
+        'cat'
+      ])
+      holdingPanes.push(split.stdout.trim())
+    }
+    expect(holdingPanes).toEqual(['%2', '%3', '%4'])
+
+    const responses = await Promise.all(
+      holdingPanes.map((paneId, index) =>
+        request(['respawn-pane', '-k', '-t', paneId, '--', `claude --agent-id ${index}`])
+      )
+    )
+
+    expect(responses.map((response) => response.exitCode)).toEqual([0, 0, 0])
+    await expect(
+      request(['list-panes', '-t', 'orca:0', '-F', '#{pane_id}'])
+    ).resolves.toMatchObject({ stdout: '%1\n%2\n%3\n%4\n' })
+    // each replacement splits from the live terminal that now backs its origin pane.
+    expect(splitCalls.slice(3).map((call) => [call.handle, call.command, call.envPane])).toEqual([
+      ['leader-handle', 'claude --agent-id 0', '%2'],
+      ['teammate-4', 'claude --agent-id 1', '%3'],
+      ['teammate-5', 'claude --agent-id 2', '%4']
+    ])
+  })
+
+  it('does not dispatch a queued command after its team is torn down', async () => {
+    const { service, teamId, token, leaderPane, api, splitCalls } = createServiceWithLeader()
+    const request = (argv: string[], envPane = leaderPane) =>
+      service.handleTmuxCompat({ teamId, token, envPane, argv }, api)
+
+    await request(['split-window', '-t', leaderPane, '-h', '-P', '-F', '#{pane_id}', 'cat'])
+    const queued = request(['respawn-pane', '-k', '-t', '%2', '--', 'claude --agent-id a'])
+    service.removeTeamForLeaderHandle('leader-handle')
+
+    await expect(queued).resolves.toMatchObject({
+      ok: false,
+      stderr: 'tmux: stale or unauthorized agent team\n'
+    })
+    expect(api.closeTerminal).not.toHaveBeenCalled()
+    expect(splitCalls.map((call) => call.command)).toEqual(['cat'])
+  })
+
+  it('does not launch a replacement when the placeholder handle goes stale unconfirmed', async () => {
+    const { service, teamId, token, leaderPane, api, splitCalls } = createServiceWithLeader()
+    const request = (argv: string[], envPane = leaderPane) =>
+      service.handleTmuxCompat({ teamId, token, envPane, argv }, api)
+
+    await request(['split-window', '-t', leaderPane, '-h', '-P', '-F', '#{pane_id}', 'cat'])
+    vi.mocked(api.closeTerminal)
+      .mockResolvedValueOnce({
+        handle: 'teammate-1',
+        tabId: 'tab-1',
+        ptyKilled: false,
+        ptyStopVerdict: 'unverifiable'
+      })
+      .mockRejectedValueOnce(new Error('terminal_handle_stale'))
+
+    await expect(
+      request(['respawn-pane', '-k', '-t', '%2', '--', 'claude --agent-id a'])
+    ).resolves.toMatchObject({ ok: false, exitCode: 1 })
+    expect(splitCalls).toHaveLength(1)
   })
 
   it('refuses to respawn the leader pane', async () => {
