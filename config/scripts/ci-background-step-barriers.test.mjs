@@ -57,13 +57,22 @@ describe('CI background step barriers', () => {
     expect(steps.findIndex((step) => step.id === 'changed-code-quality')).toBeGreaterThan(install)
   })
 
-  it('finishes both mobile typechecks before allocating test workers', () => {
+  it('runs both mobile typechecks sequentially before allocating test workers', () => {
     const steps = mobile.jobs.verify.steps
-    assertJoinedBefore(steps, 'production-types', (step) => step.name === 'Test')
-    const ratchet = steps.findIndex((step) => step.name === 'Typecheck tests (ratchet)')
-    const join = steps.findIndex((step) => step.wait === 'production-types')
-    expect(steps[ratchet].background).toBeUndefined()
-    expect(ratchet).toBeLessThan(join)
+    const production = steps.findIndex((step) => step.run === 'pnpm typecheck')
+    const ratchet = steps.findIndex((step) => step.run === 'pnpm run check:tests-typecheck')
+    const test = steps.findIndex((step) => step.name === 'Test')
+    expect(production).toBeGreaterThanOrEqual(0)
+    expect(ratchet).toBeGreaterThan(production)
+    expect(test).toBeGreaterThan(ratchet)
+    // Neither typecheck may run in the background: pnpm can install before
+    // either command, so overlap races on the same virtual store.
+    for (const index of [production, ratchet]) {
+      expect(steps[index].background).toBeUndefined()
+    }
+    for (const step of steps) {
+      expect([step.wait].flat()).not.toContain('production-types')
+    }
   })
 
   it('waits for WebKit and the bundle before any browser tests', () => {
