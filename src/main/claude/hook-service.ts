@@ -23,6 +23,7 @@ import {
 } from './windows-hook-files'
 
 export { getManagedScript }
+import { refreshExistingManagedHookSettings } from './managed-hook-settings-refresh'
 import { getManagedStatusLineScript } from './statusline-script'
 import {
   applyManagedHooks,
@@ -156,6 +157,8 @@ export class ClaudeHookService {
       getStatusLineScriptPath(this.options.settings),
       getManagedStatusLineScript('local')
     )
+    // Why: Grok imports ~/.claude settings after Claude CLI is gone; rewrite stale commands in place (#17202).
+    await refreshExistingManagedHookSettings(this.options.settings)
   }
 
   install(options: ClaudeHookInstallOptions = {}): AgentHookInstallStatus {
