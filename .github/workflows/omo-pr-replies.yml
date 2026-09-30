@@ -1,50 +1,58 @@
 name: temp omo pr review replies
 on:
+  workflow_dispatch:
   push:
     branches: [feat/omo-native-tui-agent]
     paths:
       - '.github/workflows/omo-pr-replies.yml'
       - '.github/omo-pr-replies.trigger'
+permissions:
+  contents: read
 jobs:
   reply:
     runs-on: ubuntu-latest
     steps:
-      - name: Probe available PAT secrets (booleans only)
-        id: probe
-        env:
-          HAS_PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN != '' }}
-          HAS_GH_PAT: ${{ secrets.GH_PAT != '' }}
-          HAS_GITHUB_PERSONAL_ACCESS_TOKEN: ${{ secrets.GITHUB_PERSONAL_ACCESS_TOKEN != '' }}
-          HAS_GH_TOKEN_SECRET: ${{ secrets.GH_TOKEN != '' }}
-          HAS_ORCA_PAT: ${{ secrets.ORCA_PAT != '' }}
-          HAS_WEDREAMER_PAT: ${{ secrets.WEDREAMER_PAT != '' }}
+      - name: Probe PAT secrets
         run: |
-          echo "HAS_PERSONAL_ACCESS_TOKEN=$HAS_PERSONAL_ACCESS_TOKEN"
-          echo "HAS_GH_PAT=$HAS_GH_PAT"
-          echo "HAS_GITHUB_PERSONAL_ACCESS_TOKEN=$HAS_GITHUB_PERSONAL_ACCESS_TOKEN"
-          echo "HAS_GH_TOKEN_SECRET=$HAS_GH_TOKEN_SECRET"
-          echo "HAS_ORCA_PAT=$HAS_ORCA_PAT"
-          echo "HAS_WEDREAMER_PAT=$HAS_WEDREAMER_PAT"
+          echo "HAS_PERSONAL_ACCESS_TOKEN=${{ secrets.PERSONAL_ACCESS_TOKEN != '' }}"
+          echo "HAS_GH_PAT=${{ secrets.GH_PAT != '' }}"
+          echo "HAS_GITHUB_PERSONAL_ACCESS_TOKEN=${{ secrets.GITHUB_PERSONAL_ACCESS_TOKEN != '' }}"
+          echo "HAS_GH_TOKEN=${{ secrets.GH_TOKEN != '' }}"
+          echo "HAS_ORCA_PAT=${{ secrets.ORCA_PAT != '' }}"
+          echo "HAS_WEDREAMER_PAT=${{ secrets.WEDREAMER_PAT != '' }}"
 
-      - name: Post review thread replies as wedreamer
-        if: ${{ secrets.PERSONAL_ACCESS_TOKEN != '' || secrets.GH_PAT != '' || secrets.GITHUB_PERSONAL_ACCESS_TOKEN != '' || secrets.GH_TOKEN != '' || secrets.ORCA_PAT != '' || secrets.WEDREAMER_PAT != '' }}
+      - name: Choose token
+        id: tok
+        run: |
+          if [ -n "${{ secrets.PERSONAL_ACCESS_TOKEN }}" ]; then
+            echo "name=PERSONAL_ACCESS_TOKEN" >> "$GITHUB_OUTPUT"
+          elif [ -n "${{ secrets.GH_PAT }}" ]; then
+            echo "name=GH_PAT" >> "$GITHUB_OUTPUT"
+          elif [ -n "${{ secrets.GITHUB_PERSONAL_ACCESS_TOKEN }}" ]; then
+            echo "name=GITHUB_PERSONAL_ACCESS_TOKEN" >> "$GITHUB_OUTPUT"
+          elif [ -n "${{ secrets.GH_TOKEN }}" ]; then
+            echo "name=GH_TOKEN" >> "$GITHUB_OUTPUT"
+          elif [ -n "${{ secrets.ORCA_PAT }}" ]; then
+            echo "name=ORCA_PAT" >> "$GITHUB_OUTPUT"
+          elif [ -n "${{ secrets.WEDREAMER_PAT }}" ]; then
+            echo "name=WEDREAMER_PAT" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=" >> "$GITHUB_OUTPUT"
+            echo "No PAT secret configured; cannot reply as wedreamer to upstream PR."
+          fi
+
+      - name: Post replies
+        if: steps.tok.outputs.name != ''
         env:
-          GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN || secrets.GH_PAT || secrets.GITHUB_PERSONAL_ACCESS_TOKEN || secrets.GH_TOKEN || secrets.ORCA_PAT || secrets.WEDREAMER_PAT }}
+          GH_TOKEN: ${{ secrets[steps.tok.outputs.name] }}
         run: |
           set -euo pipefail
           whoami_login=$(gh api user -q .login)
           echo "authenticated_as=$whoami_login"
           test "$whoami_login" = "wedreamer"
-
           post_reply() {
-            local parent="$1"
-            local body="$2"
-            gh api -X POST repos/stablyai/orca/pulls/24069/comments \
-              -f body="$body" \
-              -F in_reply_to="$parent" \
-              --jq '.id'
+            gh api -X POST repos/stablyai/orca/pulls/24069/comments -f body="$2" -F in_reply_to="$1" --jq .id
           }
-
           post_reply 4145764433 "Fixed in ca021a60 — OmO sessions-dir probe no longer awaits before ready; result applied asynchronously when still current."
           post_reply 4145795026 "Fixed in ca021a60 — removed await-before-ready race on establish; omoSessionsDir applied async with mux/current checks."
           post_reply 4145795064 "Fixed in ca021a60 — reconnect likewise does not await OmO probe before ready; async apply checks abortController + mux.isDisposed()."
