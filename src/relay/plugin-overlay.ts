@@ -37,7 +37,7 @@ import {
   type OpenCodeAgent
 } from './opencode-canonical-config'
 import { writeRelayOmpStatusExtension } from './omp-status-extension'
-type LegacyOverlayAgentKind = Exclude<PiAgentKind, 'prime-agent'>
+type LegacyOverlayAgentKind = Exclude<PiAgentKind, 'prime-agent' | 'omo'>
 const RELAY_HOOKS_DIR = '.orca-relay'
 const OPENCODE_OVERLAY_SUBDIR = 'opencode-overlays'
 const OPENCODE2_OVERLAY_SUBDIR = 'opencode2-overlays'
@@ -67,7 +67,8 @@ function withOrcaManagedPiExtensionMarker(source: string): string {
 const PI_AGENT_HOME_DIR_NAME: Record<PiAgentKind, string> = {
   pi: '.pi',
   omp: '.omp',
-  'prime-agent': '.prime'
+  'prime-agent': '.prime',
+  omo: '.omo'
 }
 function safeDirName(input: string): string {
   // Why: paneKey embeds tabId:paneId where tabId may itself contain
@@ -89,6 +90,8 @@ export type PluginSources = {
   ompExtensionSource?: string
   /** Source body of Prime Agent's `orca-agent-status.ts` to install in its real agent dir. */
   primeAgentExtensionSource?: string
+  /** Source body of OmO Native's `orca-agent-status.ts` to install in ~/.omo/agent. */
+  omoExtensionSource?: string
 }
 /** Result of installing Pi-compatible status into a real agent home or OMP fallback path. */
 export type MaterializePiResult = {
@@ -115,7 +118,8 @@ export class PluginOverlayManager {
   private piExtensionSources: Record<PiAgentKind, string | null> = {
     pi: null,
     omp: null,
-    'prime-agent': null
+    'prime-agent': null,
+    omo: null
   }
   private homeDir: string
   private opencodeRoot: string
@@ -155,6 +159,9 @@ export class PluginOverlayManager {
       this.piExtensionSources['prime-agent'] = withOrcaManagedPiExtensionMarker(
         sources.primeAgentExtensionSource
       )
+    }
+    if (typeof sources.omoExtensionSource === 'string') {
+      this.piExtensionSources.omo = withOrcaManagedPiExtensionMarker(sources.omoExtensionSource)
     }
   }
   hasOpenCodeSource(agent: 'opencode' | 'opencode2' = 'opencode'): boolean {

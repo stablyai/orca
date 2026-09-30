@@ -38,6 +38,11 @@ describe('agent session resume metadata', () => {
       { key: 'session_id', id: 'prime-session', transcriptPath: '/tmp/prime-session.jsonl' }
     ],
     [
+      'omo',
+      { session_id: 'omo-session', session_file: '/tmp/omo-session.jsonl' },
+      { key: 'session_id', id: 'omo-session', transcriptPath: '/tmp/omo-session.jsonl' }
+    ],
+    [
       'copilot',
       { session_id: '940237d9-c712-48e8-bca1-fd75fc4a8d4b' },
       { key: 'session_id', id: '940237d9-c712-48e8-bca1-fd75fc4a8d4b' }
@@ -73,6 +78,11 @@ describe('agent session resume metadata', () => {
       'prime-agent',
       { key: 'session_id', id: 's1', transcriptPath: '/tmp/prime-session.jsonl' },
       ['prime-agent', '--resume', '/tmp/prime-session.jsonl']
+    ],
+    [
+      'omo',
+      { key: 'session_id', id: 's1', transcriptPath: '/tmp/omo-session.jsonl' },
+      ['omo', '--session', '/tmp/omo-session.jsonl']
     ],
     ['copilot', { key: 'session_id', id: 's1' }, ['copilot', '--resume=s1']],
     [

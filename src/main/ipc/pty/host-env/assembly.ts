@@ -97,6 +97,8 @@ export function buildPtyHostEnv(
     opts.agentStatusHooksEnabled && isTuiAgentEnabled('omp', opts.disabledTuiAgents)
   const shouldInstallPrimeAgentExtensions =
     opts.agentStatusHooksEnabled && isTuiAgentEnabled('prime-agent', opts.disabledTuiAgents)
+  const shouldInstallOmoExtensions =
+    opts.agentStatusHooksEnabled && isTuiAgentEnabled('omo', opts.disabledTuiAgents)
   // Why: source shadows are agent-scoped; trusting the other kind's source reintroduces Pi/OMP extension-state shadowing.
   const preexistingPiAgentDir = resolvePiAgentSourceDir(baseEnv, 'pi')
   const preexistingOmpAgentDir =
@@ -107,6 +109,10 @@ export function buildPtyHostEnv(
     piAgentKind === 'prime-agent'
       ? resolvePiAgentSourceDir(baseEnv, 'prime-agent')
       : resolveScopedPiAgentSourceDir(baseEnv, 'prime-agent')
+  const preexistingOmoAgentDir =
+    piAgentKind === 'omo'
+      ? resolvePiAgentSourceDir(baseEnv, 'omo')
+      : resolveScopedPiAgentSourceDir(baseEnv, 'omo')
 
   restoreOrStripOverlayEnv(
     baseEnv,
@@ -200,6 +206,7 @@ export function buildPtyHostEnv(
     clearPiAgentShadowEnv(baseEnv, 'pi')
     clearPiAgentShadowEnv(baseEnv, 'omp')
     clearPiAgentShadowEnv(baseEnv, 'prime-agent')
+    clearPiAgentShadowEnv(baseEnv, 'omo')
     // Why: bare shells historically defaulted to Pi + OMP shadow prep and
     // created ~/.<agent>/agent even when the user never launches those agents
     // (#10196). Only create default homes on an explicit Pi/OMP launch;
@@ -241,6 +248,14 @@ export function buildPtyHostEnv(
       Object.assign(baseEnv, primeEnv)
       exposePiManagedExtensionEnv(baseEnv, 'prime-agent', primeEnv)
     }
+
+    if (shouldInstallOmoExtensions && piAgentKind === 'omo' && !opts.isWsl) {
+      const omoEnv = piTitlebarExtensionService.buildPtyEnv(id, preexistingOmoAgentDir, 'omo', {
+        materializeDefaultHome: explicitPiAgentKind === 'omo'
+      })
+      Object.assign(baseEnv, omoEnv)
+      exposePiManagedExtensionEnv(baseEnv, 'omo', omoEnv)
+    }
   } else {
     // Why: nested PTYs must not inherit stale source or overlay state from another agent.
     restoreOrStripOverlayEnv(baseEnv, {
@@ -259,6 +274,8 @@ export function buildPtyHostEnv(
     delete baseEnv.ORCA_OMP_STATUS_EXTENSION
     delete baseEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR
     delete baseEnv.ORCA_PRIME_AGENT_STATUS_EXTENSION
+    delete baseEnv.ORCA_OMO_SOURCE_AGENT_DIR
+    delete baseEnv.ORCA_OMO_STATUS_EXTENSION
   }
 
   if (opts.isWsl && opts.agentStatusHooksEnabled) {

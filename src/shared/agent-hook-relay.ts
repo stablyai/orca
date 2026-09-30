@@ -49,6 +49,7 @@ const AGENT_HOOK_SOURCES = [
   'pi',
   'omp',
   'prime-agent',
+  'omo',
   'droid',
   'command-code',
   'grok',

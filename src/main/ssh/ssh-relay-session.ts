@@ -1564,7 +1564,8 @@ export class SshRelaySession {
               ? {
                   piExtensionSource: getPiAgentStatusExtensionSource('pi'),
                   ompExtensionSource: getPiAgentStatusExtensionSource('omp'),
-                  primeAgentExtensionSource: getPiAgentStatusExtensionSource('prime-agent')
+                  primeAgentExtensionSource: getPiAgentStatusExtensionSource('prime-agent'),
+                  omoExtensionSource: getPiAgentStatusExtensionSource('omo')
                 }
               : {})
           },

@@ -12,18 +12,20 @@ import { getCommandTokenPathBasename, getFirstCommandToken } from './command-tok
  * (otherwise switching agents in the same workspace silently shadows the
  * other agent's user extensions).
  */
-export type PiAgentKind = 'pi' | 'omp' | 'prime-agent'
+export type PiAgentKind = 'pi' | 'omp' | 'prime-agent' | 'omo'
 
 export const PRIMARY_AGENT_DIR_ENV_BY_KIND: Readonly<Record<PiAgentKind, string>> = {
   pi: 'PI_CODING_AGENT_DIR',
   omp: 'PI_CODING_AGENT_DIR',
-  'prime-agent': 'PRIME_AGENT_CODING_AGENT_DIR'
+  'prime-agent': 'PRIME_AGENT_CODING_AGENT_DIR',
+  omo: 'OMO_CODING_AGENT_DIR'
 }
 
 export const SOURCE_AGENT_DIR_ENV_BY_KIND: Readonly<Record<PiAgentKind, string>> = {
   pi: 'ORCA_PI_SOURCE_AGENT_DIR',
   omp: 'ORCA_OMP_SOURCE_AGENT_DIR',
-  'prime-agent': 'ORCA_PRIME_AGENT_SOURCE_AGENT_DIR'
+  'prime-agent': 'ORCA_PRIME_AGENT_SOURCE_AGENT_DIR',
+  omo: 'ORCA_OMO_SOURCE_AGENT_DIR'
 }
 
 /**
@@ -34,7 +36,12 @@ export const SOURCE_AGENT_DIR_ENV_BY_KIND: Readonly<Record<PiAgentKind, string>>
 export function isPiCompatibleAgentType(
   agentType: string | null | undefined
 ): agentType is PiAgentKind {
-  return agentType === 'pi' || agentType === 'omp' || agentType === 'prime-agent'
+  return (
+    agentType === 'pi' ||
+    agentType === 'omp' ||
+    agentType === 'prime-agent' ||
+    agentType === 'omo'
+  )
 }
 
 function getLaunchBinary(command: string): string {
@@ -46,6 +53,8 @@ function getLaunchBinary(command: string): string {
 const PI_LAUNCH_BINARY = getLaunchBinary(TUI_AGENT_CONFIG.pi.launchCmd)
 const OMP_LAUNCH_BINARY = getLaunchBinary(TUI_AGENT_CONFIG.omp.launchCmd)
 const PRIME_AGENT_LAUNCH_BINARY = getLaunchBinary(TUI_AGENT_CONFIG['prime-agent'].launchCmd)
+// omo only — raw 'senpi' defaults to ~/.senpi/agent, a different home.
+const OMO_LAUNCH_BINARY = getLaunchBinary(TUI_AGENT_CONFIG.omo.launchCmd)
 
 export function detectExplicitPiAgentKindFromCommand(
   command: string | undefined
@@ -59,6 +68,9 @@ export function detectExplicitPiAgentKindFromCommand(
   }
   if (binary === PRIME_AGENT_LAUNCH_BINARY) {
     return 'prime-agent'
+  }
+  if (binary === OMO_LAUNCH_BINARY) {
+    return 'omo'
   }
   return binary === PI_LAUNCH_BINARY ? 'pi' : null
 }

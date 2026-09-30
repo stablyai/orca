@@ -48,18 +48,21 @@ export function createInstallPluginsHandler(
     const pi = params.piExtensionSource
     const omp = params.ompExtensionSource
     const primeAgent = params.primeAgentExtensionSource
+    const omo = params.omoExtensionSource
     // Why: bound per-source bytes so a buggy/hostile host can't OOM the guest relay.
     assertPluginSourceUnderByteCap('opencodePluginSource', opencode)
     assertPluginSourceUnderByteCap('opencode2PluginSource', opencode2)
     assertPluginSourceUnderByteCap('piExtensionSource', pi)
     assertPluginSourceUnderByteCap('ompExtensionSource', omp)
     assertPluginSourceUnderByteCap('primeAgentExtensionSource', primeAgent)
+    assertPluginSourceUnderByteCap('omoExtensionSource', omo)
     pluginOverlay.setSources({
       opencodePluginSource: typeof opencode === 'string' ? opencode : undefined,
       opencode2PluginSource: typeof opencode2 === 'string' ? opencode2 : undefined,
       piExtensionSource: typeof pi === 'string' ? pi : undefined,
       ompExtensionSource: typeof omp === 'string' ? omp : undefined,
-      primeAgentExtensionSource: typeof primeAgent === 'string' ? primeAgent : undefined
+      primeAgentExtensionSource: typeof primeAgent === 'string' ? primeAgent : undefined,
+      omoExtensionSource: typeof omo === 'string' ? omo : undefined
     })
     let opencodeDir: string | undefined
     const launchKind =

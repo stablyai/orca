@@ -20,7 +20,9 @@ import {
   openClawParser,
   parseMuseRemoteContent,
   piParser,
+  omoParser,
   primeAgentParser,
+  remoteOmoSessionsSegments,
   remoteOmpSessionsSegments,
   remotePathSegments,
   remotePiSessionsSegments,
@@ -127,6 +129,7 @@ export function remoteSessionSources(
       remotePrimeAgentSessionsSegments(),
       primeAgentParser
     ),
+    jsonlSource('omo', remoteHome, hostPlatform, remoteOmoSessionsSegments(), omoParser),
     jsonlSource(
       'muse',
       remoteHome,
