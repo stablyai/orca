@@ -3,7 +3,7 @@
 // Nothing a viewer does keeps an agent alive or starts one: a chat on screen and a chat in a
 // background tab are the same to this sweep. Every few minutes it looks at each open conversation
 // and stops the provider child of one that has been quiet for the idle window and owes no work,
-// then drops the open journal handle of one that is only a cache. The conversation itself — its
+// then drops the in-memory fold of one that is only a cache. The conversation itself — its
 // record, tab, status row and readers — is untouched, and the next send starts a new child.
 //
 // Owed work is derived on every tick, never stored, so there is nothing to disagree with it.

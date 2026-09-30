@@ -87,14 +87,14 @@ export abstract class UsageProviderStoreLifecycle<
   }
 
   /** Local identity only; callers must use the usage store on the execution host. */
-  getAnalyticsSessionId(providerSessionId: string): Promise<AnalyticsSessionId> {
+  getAnalyticsSessionIds(providerSessionIds: readonly string[]): Promise<AnalyticsSessionId[]> {
     if (!this.analyticsSessionIds) {
       const { dir, name } = parse(this.config.resolveCacheFile())
       this.analyticsSessionIds = new AnalyticsSessionIdStore(
         join(dir, `${name}-analytics-session-ids.json`)
       )
     }
-    return this.analyticsSessionIds.getOrCreate(providerSessionId)
+    return this.analyticsSessionIds.getOrCreate(providerSessionIds)
   }
 
   /** Await queued cache writes so quit does not drop the final snapshot. */
@@ -199,7 +199,7 @@ export abstract class UsageProviderStoreLifecycle<
         this.tokenReporter = new AgentTokenUsageReporter(
           join(dir, `${name}-token-usage.json`),
           config.provider,
-          (id) => this.getAnalyticsSessionId(id)
+          (ids) => this.getAnalyticsSessionIds(ids)
         )
       }
       await this.tokenReporter.report(config.selectSessions(this.state))

@@ -10,7 +10,6 @@ import {
   NATIVE_CHAT_RAIL_MAX_TICKS,
   type NativeChatRailItem
 } from './native-chat-message-rail-items'
-import { selectNativeChatActiveTurnKey } from '../../../../shared/native-chat-turn-status'
 
 function text(id: string, body: string, role: NativeChatMessage['role'] = 'assistant') {
   return {
@@ -43,11 +42,10 @@ function slotsOf(messages: NativeChatMessage[]) {
   return buildNativeChatTranscriptSlots({
     messages,
     turnKeys,
-    activeTurnKey: selectNativeChatActiveTurnKey(messages),
+    liveTurnKey: undefined,
     receipts: new Map<string, NativeChatResolvedPrompt>(),
     turnStatuses: { active: null, completedByTurn: {} },
     turnDiffs: new Map<string, NativeChatTurnDiff>(),
-    showTurnStatus: false,
     expandedTurnKeys: new Set<string>(),
     isWorking: false,
     lifecycleWorking: false

@@ -67,6 +67,9 @@ describe('send', () => {
     if (!result.ok) {
       throw new Error(`expected a send, got ${result.refusal.code}`)
     }
+    if (!('submission' in result.value)) {
+      throw new Error('expected the submission arm')
+    }
     // Answered once accepted; the delivery loop hands it over after.
     expect(result.value.submission).toMatchObject({
       dispatchState: 'pending',

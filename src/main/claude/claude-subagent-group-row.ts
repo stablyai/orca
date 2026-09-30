@@ -46,7 +46,7 @@ export function writeClaudeSubagentGroupRow(
   group: RosterGroup
 ): void {
   const agents = [...group.entries.values()].map((tracked) => tracked.entry)
-  const options = { coalescingKey: `claude-subagents:${group.groupId}` }
+  const options = { coalescingKey: `claude-subagents:${group.groupId}`, turnScope: group.turnScope }
   if (agents.length === 0) {
     // The row's last child turned out not to be a subagent. An empty roster is
     // not a roster of nothing, so the row goes rather than reading "Ran 0".

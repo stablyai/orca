@@ -142,14 +142,14 @@ describe('CodexStructuredSessionAdapter.cancelTurn', () => {
         turnId: 'turn-1',
         fence: 7
       })
-    ).resolves.toEqual({ cancelled: false })
+    ).resolves.toEqual({ cancelled: false, refusal: {} })
     await expect(
       (await acquired(absent)).cancelTurn({
         sessionId: 'session-1',
         turnId: 'turn-1',
         fence: 7
       })
-    ).resolves.toEqual({ cancelled: false })
+    ).resolves.toEqual({ cancelled: false, refusal: {} })
   })
 
   it('rethrows an unsettled interrupt so the turn is not shown as cancelled', async () => {
@@ -228,14 +228,22 @@ describe('CodexStructuredSessionAdapter.cancelTurn', () => {
 
     await expect(
       adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-1', fence: 7 })
-    ).resolves.toEqual({ cancelled: false })
+    ).resolves.toEqual({ cancelled: false, unconfirmed: true })
     expect(events).toContainEqual(expect.objectContaining({ method: 'turn/completed' }))
   })
 
   it('accepts an immediate resend after verified interruption', async () => {
     let nextTurn = 0
     const codex = fakeCodex()
-    codex.routes['turn/start'] = () => ({ turn: { id: `turn-${++nextTurn}` } })
+    codex.routes['turn/start'] = () => {
+      // Codex opens each turn it answers; a send's dispatch waits for that.
+      const turnId = `turn-${++nextTurn}`
+      codex.connections[0].handlers.onNotification?.('turn/started', {
+        threadId: THREAD_ID,
+        turn: { id: turnId }
+      })
+      return { turn: { id: turnId } }
+    }
     codex.routes['turn/interrupt'] = () => {
       completeTurn(codex)
       return {}

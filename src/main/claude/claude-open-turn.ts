@@ -5,15 +5,21 @@
 // keeping a copy, so there is nothing to disagree with.
 
 import type { AgentSessionContextUsage } from '../../shared/agent-session-context-usage'
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
+import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalItemIdentity,
+  type AgentJournalTurnScope
+} from '../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import {
-  claudeTurnLifecycleIdentity,
+  claudeCurrentTurnIdentity,
   claudeTurnLifecycleItem,
   type ClaudeCurrentTurn,
   type ClaudeTurnEnd
 } from './claude-turn-lifecycle-item'
 import { writeClaudeTurnRow } from './claude-turn-row-revision'
+import type { ClaudeCommandTurn } from './claude-command-turn'
 import { createClaudeTurnOpener, type ClaudeTurnSource } from './claude-turn-opening'
 
 export type ClaudeOpenTurnDeps = {
@@ -55,9 +61,21 @@ export class ClaudeOpenTurn {
 
   /** The open turn's row, where a fact about the running turn lands. */
   get identity(): AgentJournalItemIdentity | null {
-    return this.current
-      ? claudeTurnLifecycleIdentity(this.current.sessionId, this.current.turnId)
-      : null
+    return this.current ? claudeCurrentTurnIdentity(this.current) : null
+  }
+
+  /** The conversation command the open turn is, if it is one. */
+  get command(): ClaudeCommandTurn | null {
+    return this.current?.command ?? null
+  }
+
+  /** Which turn a row written now belongs to: the open one, or none. A subagent's rows too —
+   *  its work is its parent turn's. */
+  get turnScope(): AgentJournalTurnScope {
+    const identity = this.identity
+    return identity
+      ? { kind: 'turn', turnItemId: agentJournalItemKey(identity) }
+      : AGENT_JOURNAL_THREAD_SCOPE
   }
 
   get groupKey(): string | null {
@@ -97,6 +115,32 @@ export class ClaudeOpenTurn {
     this.current = turn
     this.publish(turn)
     this.deps.sink.setActivity?.(null)
+  }
+
+  /** A conversation command the host opened a turn for. Its row is the host's, already written,
+   *  so only an end is published; the command's result is what ends it. */
+  beginCommand(turn: ClaudeCurrentTurn): void {
+    this.deps.onOpen?.()
+    if (this.current) {
+      this.deps.settleChildren(this.groupKey)
+      this.publish(this.current, { state: 'interrupted', completedAt: turn.startedAt })
+    }
+    this.current = turn
+    this.deps.sink.setActivity?.(null)
+  }
+
+  /** Orca asked the provider to stop the command `turnId` names. */
+  commandInterruptRequested(turnId: string): void {
+    if (this.current?.command && this.current.turnId === turnId) {
+      this.current.command.interruptRequested = true
+    }
+  }
+
+  /** The command was never sent; its turn is the host's to settle. */
+  forgetCommand(turnId: string): void {
+    if (this.current?.command && this.current.turnId === turnId) {
+      this.current = null
+    }
   }
 
   /** The provider produced, so a turn is running. Idempotent: every frame of one

@@ -1,4 +1,4 @@
-import { joinPath, normalizeRelativePath } from '@/lib/path'
+import { getRelativePathInsideRoot, joinPath, normalizeRelativePath } from '@/lib/path'
 import { compareFileNames } from '../../../../shared/file-name-sort'
 import {
   FILE_NAME_FILTER_QUERY_MAX_BYTES,
@@ -107,13 +107,15 @@ function createSyntheticNode(
   }
 }
 
+/** Builds a filtered subtree for the display root while retaining worktree-relative paths on synthetic nodes. */
 export function createNameFilteredFileExplorerProjection({
   collapsedPaths,
   ignoredSet,
   nameFilter,
   showDotfiles,
   showGitIgnoredFiles,
-  worktreePath
+  worktreePath,
+  displayRootPath = worktreePath
 }: {
   collapsedPaths?: ReadonlySet<string>
   ignoredSet: Set<string>
@@ -121,6 +123,7 @@ export function createNameFilteredFileExplorerProjection({
   showDotfiles: boolean
   showGitIgnoredFiles: boolean
   worktreePath: string
+  displayRootPath?: string
 }): FileExplorerRowProjection {
   const visibleFlatRows: TreeNode[] = []
   const rowsByPath = new Map<string, TreeNode>()
@@ -137,7 +140,10 @@ export function createNameFilteredFileExplorerProjection({
   const rootChildren = new Map<string, SyntheticTreeEntry>()
   for (const rawRelativePath of nameFilter.relativePaths) {
     const relativePath = normalizeRelativePath(rawRelativePath)
-    if (!relativePath) {
+    if (
+      !relativePath ||
+      getRelativePathInsideRoot(joinPath(worktreePath, relativePath), displayRootPath) === null
+    ) {
       continue
     }
     if (!showDotfiles && isDotfileRelativePath(relativePath)) {
@@ -178,7 +184,16 @@ export function createNameFilteredFileExplorerProjection({
     }
   }
 
-  appendNameFilteredEntries(rootChildren.values(), visibleFlatRows, rowsByPath, collapsedPaths)
+  let displayChildren = rootChildren
+  const scope = getRelativePathInsideRoot(displayRootPath, worktreePath)
+  for (const segment of scope ? splitPathSegments(scope) : []) {
+    const entry = displayChildren.get(segment)
+    if (!entry) {
+      return createFileExplorerRowProjectionFromParts(visibleFlatRows, rowsByPath)
+    }
+    displayChildren = entry.children
+  }
+  appendNameFilteredEntries(displayChildren.values(), visibleFlatRows, rowsByPath, collapsedPaths)
   return createFileExplorerRowProjectionFromParts(visibleFlatRows, rowsByPath)
 }
 

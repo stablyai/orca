@@ -1,9 +1,11 @@
 // The session's latest request and what became of it: the verdict a sidebar row reports once
-// the session is idle, and whether there is a request to list at all.
+// the session is idle, whether there is a request to list at all, and the prompt and answer its row
+// quotes.
 //
 // A request is either a turn, whose record carries the provider's verdict, or a send that never
-// became one because the agent or its start refused it. A send inside a running turn (a steer)
-// is not a request of its own: the turn it joined answers for it.
+// became one because the agent or its start refused it. A send its handover placed inside a
+// running turn (a steer) is not a request of its own: the turn it joined answers for it. Nor is a
+// conversation command.
 
 import type {
   AgentJournalRenderItem,
@@ -16,6 +18,12 @@ import { isRootAgentJournalItem } from './agent-session-journal-producer'
 import { readAgentJournalTurn, readAgentJournalTurnOutcome } from './agent-session-turn-record'
 import { classifyDispatchRejection } from './structured-agent-session-dispatch-rejection'
 import { isUnansweredStructuredAgentSessionDispatch } from './structured-agent-session-unanswered-dispatch'
+import {
+  isStructuredAgentSessionCommandEntry,
+  isStructuredAgentSessionCommandRow,
+  structuredAgentSessionCommandTurnItemIds
+} from './structured-agent-session-command-entry'
+import type { NativeChatBlock } from './native-chat-types'
 
 export type StructuredAgentSessionLatestRequest = {
   kind: 'turn' | 'refused-send'
@@ -36,9 +44,16 @@ export function latestStructuredAgentSessionRequest(
   submissions: readonly AgentJournalSubmission[]
 ): StructuredAgentSessionLatestRequest | null {
   const rejected = rejectedSubmissionsByItem(submissions)
+  const commandTurns = structuredAgentSessionCommandTurnItemIds(items)
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index]
-    if (!item || !isRootAgentJournalItem(item)) {
+    // A conversation command is not a request: the verdict stays the last real request's.
+    if (
+      !item ||
+      !isRootAgentJournalItem(item) ||
+      commandTurns.has(item.itemId) ||
+      isStructuredAgentSessionCommandEntry(item.body)
+    ) {
       continue
     }
     const turn = readAgentJournalTurn(item.body)
@@ -56,7 +71,8 @@ export function latestStructuredAgentSessionRequest(
     if (
       submission &&
       classifyDispatchRejection(submission).verdict === 'failure' &&
-      !deliveredIntoRunningTurn(items, index, submission)
+      // Handed into a running turn (a steer): that turn answers for it.
+      item.turnScope?.kind !== 'turn'
     ) {
       return {
         kind: 'refused-send',
@@ -111,35 +127,70 @@ function rejectedSubmissionsByItem(
   return rejected
 }
 
-/** A send handed over while the turn before it was still running joined that turn. Read off the
- *  host clock, because a turn record's end revises it in place and keeps no sequence of its own.
- *  A send never handed over reached no turn. */
-function deliveredIntoRunningTurn(
-  items: readonly AgentJournalRenderItem[],
-  index: number,
-  submission: AgentJournalSubmission
-): boolean {
-  // Older hosts dispatched a send as they recorded it.
-  const deliveredAt =
-    submission.handedOverAt ?? (submission.handoverRecorded ? undefined : submission.submittedAt)
-  if (deliveredAt === undefined) {
-    return false
-  }
-  for (let previous = index - 1; previous >= 0; previous -= 1) {
-    const item = items[previous]
-    const turn = readAgentJournalTurn(item?.body)
-    if (item && turn) {
-      const endedAt = turnEndedAt(item, turn)
-      return turn.state === 'running' || (endedAt !== undefined && endedAt > deliveredAt)
-    }
-  }
-  return false
-}
-
 /** A turn recovery settled ended when that settle was written: when the user learns it stopped. */
 function turnEndedAt(
   item: AgentJournalRenderItem,
   turn: AgentJournalTurnLifecycle
 ): number | undefined {
   return item.recoveredAt ?? turn.completedAt
+}
+
+function messageProse(blocks: readonly NativeChatBlock[]): string {
+  return blocks.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n')
+}
+
+/** The newest prompt the session's own user turn carries, as the sidebar quotes
+ *  it. Scoped to root rows for the same reason the assistant line is: a provider
+ *  that journals a subagent's own prompt would otherwise requote it as the
+ *  session's. */
+export function latestStructuredAgentSessionPrompt(
+  items: readonly AgentJournalRenderItem[]
+): string {
+  const body = latestStructuredAgentSessionUserItem(items)?.body
+  return body?.kind === 'message' ? messageProse(body.blocks) : ''
+}
+
+export function latestStructuredAgentSessionUserItem(
+  items: readonly AgentJournalRenderItem[]
+): AgentJournalRenderItem | null {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index]
+    if (
+      item?.body.kind === 'message' &&
+      item.body.role === 'user' &&
+      isRootAgentJournalItem(item) &&
+      !isStructuredAgentSessionCommandEntry(item.body)
+    ) {
+      return item
+    }
+  }
+  return null
+}
+
+/** The newest prose THE SESSION'S OWN AGENT wrote in the latest user turn — not a
+ *  subagent's, whose rows share this journal and are usually the newer ones while
+ *  a child runs. Tool-only assistant items are skipped; the user boundary clears
+ *  prose from the preceding turn. */
+export function latestStructuredAgentSessionAssistantMessage(
+  items: readonly AgentJournalRenderItem[]
+): string {
+  const commandTurns = structuredAgentSessionCommandTurnItemIds(items)
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index]
+    const body = item?.body
+    // A command and what its turn produced are not the conversation's latest answer.
+    if (!isRootAgentJournalItem(item) || isStructuredAgentSessionCommandRow(item, commandTurns)) {
+      continue
+    }
+    if (body?.kind === 'message' && body.role === 'user') {
+      return ''
+    }
+    if (body?.kind === 'message' && body.role === 'assistant') {
+      const prose = messageProse(body.blocks)
+      if (prose.trim()) {
+        return prose
+      }
+    }
+  }
+  return ''
 }

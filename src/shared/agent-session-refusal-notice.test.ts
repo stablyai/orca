@@ -362,7 +362,10 @@ describe('the notice for every reason a host names', () => {
       if (words && 'cause' in words) {
         const retryNow = words.action === 'retry' && words.step === 'tryAgain'
         expect(words.step !== undefined && !retryNow, cell).toBe(
-          words.action === 'wait' || words.action === 'actFirst' || words.action === 'goElsewhere'
+          words.action === 'wait' ||
+            words.action === 'actFirst' ||
+            words.action === 'goElsewhere' ||
+            words.action === 'updateOrca'
         )
         expect(retryNow, cell).toBe(words.cause === 'historyUnavailable')
       }
@@ -534,6 +537,22 @@ describe('a chat whose history the host could not open', () => {
       'journalUnavailable',
       'send',
       "Orca couldn't open this chat's history right now. Your message was not sent. Try again."
+    ],
+    // Only an update gets past it, so it never says to try again.
+    [
+      'journalWrittenByNewerOrca',
+      'send',
+      'Chats were saved by a newer Orca. Your message was not sent. Update Orca to keep using them.'
+    ],
+    [
+      'journalWrittenByNewerOrca',
+      'stop',
+      "Chats were saved by a newer Orca. The agent wasn't stopped. Update Orca to keep using them."
+    ],
+    [
+      'journalWrittenByNewerOrca',
+      'answer',
+      'Chats were saved by a newer Orca. Your answer was not sent. Update Orca to keep using them.'
     ]
   ] as const)('%s on %s', (reason, write, expected) => {
     expect(notice({ reason }, write)).toBe(expected)

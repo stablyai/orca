@@ -6,15 +6,16 @@
 
 import { agentJournalLinkageFields } from '../../../shared/agent-session-journal-producer'
 import type { JournalItemAppendOptions } from '../agent-session-journal/journal-store-contracts'
-import type { StructuredAgentSessionAppendOptions } from './structured-agent-session-event-sink'
+import type { StructuredAgentSessionItemAppendOptions } from './structured-agent-session-event-sink'
 
 export function structuredAgentSessionJournalAppendOptions(
   fence: number,
-  options: StructuredAgentSessionAppendOptions
+  options: StructuredAgentSessionItemAppendOptions
 ): JournalItemAppendOptions {
   return {
     fence,
     ...(options.observedAt === undefined ? {} : { observedAt: options.observedAt }),
+    turnScope: options.turnScope,
     ...agentJournalLinkageFields(options)
   }
 }

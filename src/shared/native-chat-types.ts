@@ -208,6 +208,8 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   turnId?: string
   /** How a user message was delivered when it was not an ordinary prompt. */
   sentAs?: AgentJournalMessageSendMode
+  /** Accepted but not yet handed to the agent: drawn after everything the agent has done. */
+  queued?: true
   /** Set only by the structured projection, on rows the journal holds, and ranks
    *  them ahead of time. Terminal-backed messages never carry it, and worker reads strip it. */
   journalPosition?: AgentJournalPosition

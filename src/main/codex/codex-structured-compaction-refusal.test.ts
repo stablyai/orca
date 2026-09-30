@@ -1,6 +1,7 @@
 // A compaction Codex refuses up front keeps Codex's own words for the chat's failure row.
 
 import { describe, expect, it } from 'vitest'
+import { structuredAgentSessionCommandTurn } from '../native-chat/agent-session-wire/structured-agent-session-command-turn'
 import { CodexAppServerRequestError } from './codex-app-server-connection'
 import { acquired, fakeCodex } from './codex-structured-session-adapter-fixture'
 
@@ -17,12 +18,25 @@ describe('Codex compaction refused at the request', () => {
       }
     })
     const adapter = await acquired(codex)
+    const turn = structuredAgentSessionCommandTurn('cmd-1')
 
     await expect(
-      adapter.compact({ turnId: 'compact-1', sessionId: 'session-1', fence: 7 })
+      adapter.compact({
+        sessionId: 'session-1',
+        fence: 7,
+        command: {
+          clientMessageId: 'cmd-1',
+          ...turn,
+          running: { kind: 'turn', turnId: turn.turnId, state: 'running' }
+        }
+      })
     ).resolves.toEqual({
-      outcome: 'failed',
-      detail: { text: 'thread has nothing to compact', audience: 'person' }
+      state: 'rejected',
+      reason: 'The provider did not accept this message: thread has nothing to compact.',
+      rejection: {
+        kind: 'providerRejected',
+        detail: { text: 'thread has nothing to compact', audience: 'person' }
+      }
     })
   })
 })

@@ -86,19 +86,6 @@ export function restoreRemoteTreeCommand(
   return `if [ ! -e ${shellEscape(destination)} ] && [ ! -L ${shellEscape(destination)} ]; then mv ${shellEscape(source)} ${shellEscape(destination)} && echo MOVED; else echo BUSY; fi`
 }
 
-export function promoteRemoteTreeContentsCommand(
-  host: RemoteHostPlatform,
-  sourcePath: string,
-  destinationPath: string
-): string {
-  if (!isWindowsRemoteHost(host)) {
-    return `cp -a ${shellEscape(sourcePath)}/. ${shellEscape(destinationPath)}/ && rm -rf ${shellEscape(sourcePath)}`
-  }
-  return powerShellCommand(
-    `$ErrorActionPreference = 'Stop'; Get-ChildItem -LiteralPath ${powerShellLiteral(sourcePath)} -Force -ErrorAction Stop | Copy-Item -Destination ${powerShellLiteral(destinationPath)} -Recurse -Force -ErrorAction Stop; Remove-Item -LiteralPath ${powerShellLiteral(sourcePath)} -Recurse -Force -ErrorAction Stop`
-  )
-}
-
 export function writeRemoteEmptyFileCommand(host: RemoteHostPlatform, remotePath: string): string {
   if (!isWindowsRemoteHost(host)) {
     return `touch ${shellEscape(remotePath)}`
@@ -274,19 +261,6 @@ export function relayLivenessProbeCommand(
       powerShellNativeArg(dir),
       ...windowsOptions.pipePaths.map((pipePath) => powerShellNativeArg(pipePath))
     ].join(' ')
-  )
-}
-
-export function commandInRemoteDirectory(
-  host: RemoteHostPlatform,
-  remoteDir: string,
-  command: string
-): string {
-  if (!isWindowsRemoteHost(host)) {
-    return `cd ${shellEscape(remoteDir)} && ${command}`
-  }
-  return powerShellCommand(
-    `Set-Location -ErrorAction Stop -LiteralPath ${powerShellLiteral(remoteDir)}; ${command}`
   )
 }
 

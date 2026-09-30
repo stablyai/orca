@@ -8,6 +8,7 @@ import { isClaudeAuthSwitchInProgress } from '../claude-accounts/live-pty-gate'
 import { openClaudeStreamJsonConnection } from './claude-stream-json-connection'
 import { buildClaudePermissionCallbacks } from './claude-structured-inbound-control'
 import { resolveClaudeReplayTurn } from './claude-replay-turn-resolution'
+import { claudeSessionStateEndsTurn } from './claude-session-state-turn-over'
 import {
   readClaudeCapabilities,
   readClaudeFrameString,
@@ -117,10 +118,17 @@ export async function acquireClaudeSession({
       if (message.type === 'result' && sessions.get(sessionId) === liveSession) {
         persistClaudeTurnResumePoint(sessionId, liveSession, deps)
       }
+      // The CLI idles only once its queue drains, so it holds none of this session's sends.
+      if (claudeSessionStateEndsTurn(message) && sessions.get(sessionId) === liveSession) {
+        deps.onSessionIdle?.({ sessionId })
+      }
     }
+    // Settled after the turn this echo opens is emitted: a send read as answered before its turn
+    // lands reads as nothing running, and Stop and Working blink off in between.
+    const settlements: (() => void)[] = []
     const turnOrigin = liveSession
       ? resolveClaudeReplayTurn(liveSession, message, (settlement) =>
-          deps.onDispatchSettledLate?.({ sessionId, ...settlement })
+          settlements.push(() => deps.onDispatchSettledLate?.({ sessionId, ...settlement }))
         )
       : null
     const startsTurn = turnOrigin !== null
@@ -138,6 +146,9 @@ export async function acquireClaudeSession({
         ...observedAt
       })
     )
+    for (const settle of settlements) {
+      settle()
+    }
   }
   const { canUseTool, onUserDialog } = buildClaudePermissionCallbacks({
     sessionId,

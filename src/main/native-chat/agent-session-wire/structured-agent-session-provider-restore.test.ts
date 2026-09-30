@@ -14,6 +14,7 @@ import {
 } from './structured-agent-session-host-test-data'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 
 const CLAUDE_SESSION = 'claude-session'
 const hosts: StructuredAgentSessionHost[] = []
@@ -56,7 +57,7 @@ function createHost(
   const host = new StructuredAgentSessionHost({
     store,
     adapter: claudeAdapter(),
-    journalRoot: root,
+    journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     probeOwner,

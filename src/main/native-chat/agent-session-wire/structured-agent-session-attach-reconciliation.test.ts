@@ -10,9 +10,11 @@ import { agentSessionRecordFixture } from '../../../shared/agent-session-record.
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import { projectStructuredAgentSessionStatusState } from '../../../shared/structured-agent-session-projection'
 import { digestPayload } from '../agent-session-journal/journal-payload-bounds'
-import { journalDirectoryFor } from '../agent-session-journal/journal-paths'
 import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
-import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
+import {
+  createTrackedJournalOpener,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { openTestAttachConversation } from './structured-agent-session-attach-test-conversation'
 import {
@@ -68,10 +70,7 @@ function adapterWith(providerHistoryWindow?: () => Promise<ProviderHistoryWindow
 async function crashedJournal(clientMessageId = 'cm_1', text = 'deploy the thing') {
   const journal = await journals.open({
     identity: IDENTITY,
-    journalDir: journalDirectoryFor(root, {
-      workspaceId: IDENTITY.workspaceId,
-      sessionId: IDENTITY.sessionId
-    })
+    stateDirectory: root
   })
   await journal.appendSubmission({
     clientMessageId,
@@ -86,8 +85,7 @@ async function attach(adapter: StructuredAgentSessionAdapter) {
   const attached = await attachJournal({
     record: RECORD,
     params: PARAMS,
-    journalRoot: root,
-    openConversation: openTestAttachConversation(root),
+    openConversation: openTestAttachConversation(openTestJournalHostDatabase(root)),
     adapter
   })
   journals.track(attached.journal)
@@ -167,10 +165,7 @@ describe('attachJournal restart reconciliation', () => {
   it('leaves a message the open conversation still has queued alone (W4′e)', async () => {
     const journal = await journals.open({
       identity: IDENTITY,
-      journalDir: journalDirectoryFor(root, {
-        workspaceId: IDENTITY.workspaceId,
-        sessionId: IDENTITY.sessionId
-      })
+      stateDirectory: root
     })
     await journal.appendSubmission({
       clientMessageId: 'queued',
@@ -185,8 +180,6 @@ describe('attachJournal restart reconciliation', () => {
     const attached = await attachJournal({
       record: RECORD,
       params: PARAMS,
-      journalRoot: root,
-
       adapter,
       openConversation: async () => journal
     })

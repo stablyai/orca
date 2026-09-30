@@ -52,8 +52,7 @@ type StructuredSessionMessageListProps = {
   allowFileUriLinks?: boolean
   isVisible?: boolean
   onLinkClick?: (...args: unknown[]) => void
-  showTurnStatus?: boolean
-  showLiveTurnActivity?: boolean
+  awaitingInput?: 'shown' | 'unshown' | null
   isWorking?: boolean
   runtimeContext?: unknown
   session?: { hasMore: boolean; loadingEarlier: boolean; loadEarlier: () => Promise<void> }
@@ -82,17 +81,19 @@ export function createStructuredSessionMocks() {
     readRefusal: absent<AgentSessionRefusalReference>(),
     messages: null as null | unknown[],
     messageListProps: initialMessageListProps,
-    composerProps: null as null | {
+    composerProps: nullable<{
       launchSeed?: NativeChatLaunchSeed
       structuredTransport?: Record<string, unknown>
       isWorking?: boolean
-    },
+      onStop?: () => void
+    }>(),
     approvalCardProps: initialApprovalCardProps,
     questionCardProps: null as NativeChatQuestionCardProps | null,
     promptItems: [] as AgentJournalRenderItem[],
     journalItems: new Array<AgentJournalRenderItem>(),
     respond: vi.fn<(...args: never[]) => unknown>(),
     cancel: vi.fn<(...args: never[]) => unknown>(),
+    stop: vi.fn<() => unknown>(),
     handlePasteEvent: vi.fn<(...args: never[]) => unknown>(),
     pasteFromClipboard: vi.fn<(...args: never[]) => unknown>(),
     submissions: [] as unknown[],
@@ -100,6 +101,8 @@ export function createStructuredSessionMocks() {
     showBackgroundTasks: false,
     isWorking: false,
     turnId: null as string | null,
+    // Unset: Stop follows the turn, as against an older host.
+    canStop: nullable<boolean>(),
     supportsBackgroundTaskStop: false,
     supportsBackgroundTaskStopAll: true,
     backgroundTasks: [] as AgentSessionBackgroundTask[],
@@ -179,6 +182,8 @@ export function createStructuredSessionMocks() {
               supportsStopAll: mocks.supportsBackgroundTaskStopAll
             },
             turnId: mocks.turnId,
+            canStop: mocks.canStop ?? mocks.turnId !== null,
+            stop: mocks.stop,
             threadGoal: mocks.threadGoal,
             cancel: mocks.cancel,
             stopBackgroundTask: (taskId?: string) =>
@@ -289,6 +294,7 @@ export function createStructuredSessionMocks() {
     mocks.journalItems = []
     mocks.respond.mockReset()
     mocks.cancel.mockReset()
+    mocks.stop.mockReset()
     mocks.handlePasteEvent.mockReset()
     mocks.pasteFromClipboard.mockReset()
     mocks.submissions = []
@@ -296,6 +302,7 @@ export function createStructuredSessionMocks() {
     mocks.showBackgroundTasks = false
     mocks.isWorking = false
     mocks.turnId = null
+    mocks.canStop = null
     mocks.supportsBackgroundTaskStop = false
     mocks.supportsBackgroundTaskStopAll = true
     mocks.stopBackgroundTask.mockReset()

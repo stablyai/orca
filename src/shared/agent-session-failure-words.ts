@@ -16,6 +16,7 @@ import {
   type SubmissionRejectionFact,
   type SubmissionRejectionKind
 } from './agent-session-failure'
+import type { AgentSessionConversationCommand } from './agent-session-conversation-command'
 import type { AgentSessionWireRefusalCode } from './agent-session-wire-refusals'
 import {
   DISPATCH_REJECTED_CANCELLED,
@@ -52,7 +53,7 @@ export type AgentSessionFailureWordsContext = {
   provider?: 'claude' | 'codex'
   /** The conversation command a failed start was for, so the next step is to run it again
    *  rather than to send a message. */
-  command?: 'clear'
+  command?: AgentSessionConversationCommand
   /** The surface retries for the person — its own Retry beside the words, or a read that reconnects
    *  on its own — so they leave out sending or trying again. */
   retryControl?: boolean
@@ -109,7 +110,7 @@ function quotingPersonDetail(lead: string, detail: ProviderDiagnostic | undefine
 
 /** What to do once the start can work, for a sentence that ends in it. */
 function retryStep({ command }: AgentSessionFailureWordsContext): string {
-  return command === 'clear' ? 'run /clear again' : 'send your message again'
+  return command ? `run /${command} again` : 'send your message again'
 }
 
 /** The next step after a start or restart that failed: the command, or the message, again. */
@@ -117,7 +118,7 @@ function startRetry({ command, retryControl }: AgentSessionFailureWordsContext):
   if (retryControl) {
     return ''
   }
-  return command === 'clear' ? ' Run /clear again.' : ' Send your message to try again.'
+  return command ? ` Run /${command} again.` : ' Send your message to try again.'
 }
 
 function couldNot(verb: string): Sentence {
@@ -201,9 +202,16 @@ const FAILURE_SENTENCES = {
     retryControl
       ? 'This message was not delivered.'
       : 'This message was not delivered. Send it again to continue.',
+  commandRefused: ({ retryControl }) =>
+    `This command didn't run.${retryControl ? '' : ' Try it again.'}`,
   compactionFailed: (_, fact) => quotingPersonDetail('Compaction failed', fact.detail),
   compactionUnconfirmed: () => 'Compaction completion is unconfirmed.',
   cancelUnconfirmed: () => 'Cancellation was not confirmed.',
+  // The agent was reached and declined, so the sentence says that, not that the Stop was lost.
+  stopRefused: ({ agentName }, fact) =>
+    fact.detail?.audience === 'person'
+      ? quotingPersonDetail(`${agentName ?? 'The agent'} didn't stop`, fact.detail)
+      : `${agentName ?? 'The agent'} had no turn running to stop.`,
   answerUnconfirmed: () => 'Your answer was recorded but the agent did not confirm it.',
   hostFault: ({ retryControl }) =>
     `Orca ran into a problem, so this didn't go through.${retryControl ? '' : ' Try again.'}`,

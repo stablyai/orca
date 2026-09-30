@@ -121,6 +121,9 @@ export class OrcaRuntimeWithRuntimeId {
 
   protected structuredAgentSessionTabRestorePromise: Promise<void> | null = null
 
+  // Whether the last tab restore ran with chats on disk but no host to list them.
+  protected structuredAgentSessionInventoryUnverifiable = false
+
   protected structuredAgentSessionStartupRestorePromise: Promise<void> | null = null
 
   protected mobileSessionTabsChangeSequence = 0

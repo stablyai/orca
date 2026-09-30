@@ -25,7 +25,7 @@ type UnexpectedExitLifecycleEvent = StructuredAgentSessionEndedEvent & {
 export type StructuredAgentSessionUnexpectedExitSession = Pick<
   StructuredAgentSessionHostSession,
   'child' | 'lastEndedChild'
-> & { journal: DeadGenerationJournal & Pick<AgentSessionJournal, 'cursor'> }
+> & { journal: DeadGenerationJournal & Pick<AgentSessionJournal, 'cursor' | 'itemBody'> }
 
 export type StructuredAgentSessionUnexpectedExitContext<
   TSession extends StructuredAgentSessionUnexpectedExitSession = StructuredAgentSessionHostSession
@@ -106,7 +106,7 @@ export async function settleUnexpectedStructuredAgentSessionExit<
         stableSettlementId,
         verdict: { state: 'interrupted', completedAt: observedAt },
         exitedDuringStartup,
-        failureTextContext: structuredAgentSessionFailureWordsContext(record),
+        failureTextContext: structuredAgentSessionFailureWordsContext(record, session.journal),
         // A failed start always says why: no response was running to carry the reason.
         showUnexpectedExitOutcome:
           exitedDuringStartup ||

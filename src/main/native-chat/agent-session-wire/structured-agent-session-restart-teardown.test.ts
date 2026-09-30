@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { expect, it, vi } from 'vitest'
 import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
 import { attach, hostTestState } from './structured-agent-session-host-test-harness'
@@ -49,12 +50,14 @@ it.each(['approval', 'question', 'completed'])(
     }
     events.appendItem(
       { provider: 'codex', threadId: THREAD, turnId: 'working', ordinal: 1 },
-      { kind: 'turn', turnId: 'working', state: 'running' }
+      { kind: 'turn', turnId: 'working', state: 'running' },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await host.flushStreamedEvents(SESSION)
     events.appendItem(
       { provider: 'codex', threadId: THREAD, turnId: 'working', ordinal: 2 },
-      { kind: 'status', text: 'Provider is requesting approval' }
+      { kind: 'status', text: 'Provider is requesting approval' },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     events.appendItem(
       { provider: 'codex', threadId: THREAD, turnId: 'working', ordinal: 3 },
@@ -65,7 +68,7 @@ it.each(['approval', 'question', 'completed'])(
             kind: event === 'approval' ? 'approval' : 'question'
           }
         : { kind: 'turn', turnId: 'working', state: 'completed' },
-      { lifecycle: true }
+      { lifecycle: true, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await host.flushAllStreamedEvents()
     const offered = await new AgentSessionRecoveryCapsule(root).list(NOW)
@@ -90,7 +93,8 @@ it.each(['approval', 'question', 'completed'] as const)(
     }
     events.appendItem(
       { provider: 'codex', threadId: THREAD, turnId: 'working', ordinal: 1 },
-      { kind: 'turn', turnId: 'working', state: 'running' }
+      { kind: 'turn', turnId: 'working', state: 'running' },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await host.flushStreamedEvents(SESSION)
     host.deps.adapter.closeSession = async () => {
@@ -103,7 +107,8 @@ it.each(['approval', 'question', 'completed'] as const)(
         },
         event === 'completed'
           ? { kind: 'turn', turnId: 'working', state: 'completed' }
-          : { ...pendingApproval().body, question: 'Which action?', kind: event }
+          : { ...pendingApproval().body, question: 'Which action?', kind: event },
+        { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
       )
       return true
     }
@@ -123,7 +128,8 @@ it('marks a settled chat whose subagent was still running', async () => {
   }
   events.appendItem(
     { provider: 'codex', threadId: THREAD, turnId: 'settled', ordinal: 1 },
-    { kind: 'turn', turnId: 'settled', state: 'completed' }
+    { kind: 'turn', turnId: 'settled', state: 'completed' },
+    { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   await host.flushStreamedEvents(SESSION)
   host.deps.adapter.backgroundTaskState = () => ({
@@ -153,7 +159,8 @@ it('offers nothing for a chat whose child was not proven stopped', async () => {
   }
   events.appendItem(
     { provider: 'codex', threadId: THREAD, turnId: 'working', ordinal: 1 },
-    { kind: 'turn', turnId: 'working', state: 'running' }
+    { kind: 'turn', turnId: 'working', state: 'running' },
+    { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   await host.flushStreamedEvents(SESSION)
   host.deps.adapter.closeSession = async () => false

@@ -95,6 +95,9 @@ export type AgentStatusEntry = {
   stateStartedAt: number
   /** `updatedAt` of the write that switched into `state`; see AgentStateHistoryEntry.observedAt. */
   stateObservedAt?: number
+  /** When the main agent's current turn began, as the hook server stamped it. Absent from old hosts
+   *  and writers without a turn clock; readers fall back to `stateStartedAt`. */
+  turnStartedAt?: number
   agentType?: AgentType
   /** Provider model currently used by this session. */
   model?: string

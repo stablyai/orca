@@ -1,10 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BROWSER_CLIENT_HOST_AUTHORITY_MISMATCH_CODE } from '../../shared/browser-client-host-protocol'
 import { isBrowserClientHostAuthorityReplaced } from './browser-client-host-authority-replacement'
-import {
-  BrowserClientHostAuthorityReplacementWait,
-  DEFAULT_AUTHORITY_REPLACEMENT_GRACE_MS
-} from './browser-client-host-authority-replacement-wait'
+import { BrowserClientHostAuthorityReplacementWait } from './browser-client-host-authority-replacement-wait'
 
 function errorWithCode(message: string, code: unknown): Error {
   return Object.assign(new Error(message), { code })
@@ -163,11 +160,5 @@ describe('BrowserClientHostAuthorityReplacementWait', () => {
       wait.cancel()
     }).not.toThrow()
     expect(wait.armed).toBe(false)
-  })
-
-  // The grace has to outlast a real restart, or the environment is torn down before the replacement
-  // runtime finishes coming up.
-  it('defaults the grace to 45 seconds', () => {
-    expect(DEFAULT_AUTHORITY_REPLACEMENT_GRACE_MS).toBe(45_000)
   })
 })

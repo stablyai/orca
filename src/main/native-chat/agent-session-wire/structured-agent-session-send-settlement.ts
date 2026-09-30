@@ -5,9 +5,10 @@ import type {
 import type { AgentSessionSendResult } from '../../../shared/agent-session-wire'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { isStructuredAgentSessionCommandTurnId } from './structured-agent-session-command-turn'
 
 /** What a settlement read needs of a journal. */
-type SendSettlementJournal = Pick<AgentSessionJournal, 'submissions' | 'cursor'>
+type SendSettlementJournal = Pick<AgentSessionJournal, 'submissions' | 'cursor' | 'activeTurnId'>
 
 type SettledSend = {
   cursor: AgentJournalCursor
@@ -16,8 +17,9 @@ type SettledSend = {
 
 type SendSettlement = SettledSend | 'pending' | 'missing'
 
-/** What ends a wait: the provider's answer, or only the host handing the message over. */
-export type SendSettlementPoint = 'answered' | 'handed-over'
+/** What ends a wait: the provider's answer, the host handing the message over, or either that or
+ *  the message waiting behind a running command, which hands nothing over until it ends. */
+export type SendSettlementPoint = 'answered' | 'handed-over' | 'handed-over-or-behind-command'
 
 export type SendSettlementWaitOptions = {
   signal?: AbortSignal
@@ -55,10 +57,16 @@ function settledSend(
     return 'missing'
   }
   const waiting =
-    until === 'handed-over'
-      ? isQueuedAgentJournalSubmission(submission)
-      : submission.dispatchState === 'pending'
+    until === 'answered'
+      ? submission.dispatchState === 'pending'
+      : isQueuedAgentJournalSubmission(submission) &&
+        !(until === 'handed-over-or-behind-command' && runningCommand(journal))
   return waiting ? 'pending' : { cursor: journal.cursor(), value: { clientMessageId, submission } }
+}
+
+function runningCommand(journal: SendSettlementJournal): boolean {
+  const turnId = journal.activeTurnId()
+  return turnId !== null && isStructuredAgentSessionCommandTurnId(turnId)
 }
 
 function abortError(signal: AbortSignal): Error {

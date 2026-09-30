@@ -39,6 +39,29 @@ describe('mobileStructuredSendDelivery', () => {
     }
   })
 
+  it('classifies a queued draft answer as accepted and spends its id, replays included', () => {
+    // The host holds the message now; a later identical send is a new message.
+    for (const state of ['waiting', 'dispatched', 'returned', 'withdrawn'] as const) {
+      const queued: StructuredAgentSessionMutationCallResult<AgentSessionSendResult> = {
+        status: 'accepted',
+        value: {
+          clientMessageId: 'client-1',
+          queued: { messageId: 'client-1', position: 1, state }
+        }
+      }
+      expect(mobileStructuredSendDelivery(queued)).toEqual({
+        outcome: 'accepted',
+        operationIdSpent: true,
+        error: null
+      })
+      expect(mobileStructuredSendDelivery(queued, true)).toEqual({
+        outcome: 'accepted',
+        operationIdSpent: true,
+        error: null
+      })
+    }
+  })
+
   it('does not report a retained payload replay as a new accepted send', () => {
     for (const dispatchState of ['accepted', 'pending'] as const) {
       expect(mobileStructuredSendDelivery(accepted(dispatchState), true)).toEqual({

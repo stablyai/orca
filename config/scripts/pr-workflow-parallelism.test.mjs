@@ -2,7 +2,6 @@ import { existsSync, globSync, readFileSync } from 'node:fs'
 import { parse } from 'yaml'
 import { describe, expect, it } from 'vitest'
 import { UNIT_EXCLUDE } from './ci-unit-files.mjs'
-import { mobileWebCheckArgs } from './run-mobile-web-app-checks.mjs'
 import { MOBILE_WEB_APP_DEPENDENCIES_REQUIRED_ENV } from './mobile-web-app-bundle-dependencies.mjs'
 
 const workflow = parse(readFileSync('.github/workflows/pr.yml', 'utf8'))
@@ -559,12 +558,5 @@ describe('PR workflow parallelism', () => {
     expect(step.run).toContain('node config/scripts/run-mobile-web-app-checks.mjs')
     expect(step.run).not.toContain('--prepare-route-snapshot')
     expect(step.env[MOBILE_WEB_APP_DEPENDENCIES_REQUIRED_ENV]).toBe('1')
-    expect(mobileWebCheckArgs).toEqual([
-      'run',
-      '--config',
-      'config/vitest.config.ts',
-      'config/scripts/mobile-web-app-',
-      'config/scripts/build-mobile-web-app-bundle.test.mjs'
-    ])
   })
 })

@@ -13,7 +13,6 @@ import type { NativeChatDiffReveal, NativeChatDiffTarget } from './native-chat-t
  *  object so a row's props change only when that row's own slot does. */
 export type NativeChatTranscriptRowContext = {
   expandSignal: boolean
-  showTurnStatus: boolean
   revealedDiff: NativeChatDiffReveal | null
   taskListPredecessors: ReadonlyMap<string, NativeChatTaskListPredecessors>
   expandedTurnIds: ReadonlySet<string>
@@ -74,7 +73,6 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           onLinkClick={context.onLinkClick}
           allowFileUriLinks={context.allowFileUriLinks}
           deliveryNotice={context.deliveryNotices?.get(message.id)}
-          structuredActivityUi={context.showTurnStatus}
           folded={slot.folded}
           subagentLabel={slot.subagentLabel}
           runtimeContext={context.runtimeContext}

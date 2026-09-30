@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -14,7 +15,7 @@ import {
   buildJournalTombstoneRow,
   journalLifecycleBatchRowBuilder
 } from './journal-row-builders'
-import { createTrackedJournalOpener } from './journal-store-test-open'
+import { createTrackedJournalOpener } from './journal-host-database-test-support'
 
 // A row's producer is fixed by the write that created it. A revision naming no
 // producer — a settlement, a prompt answer, a reopen sweep — keeps it; a
@@ -79,7 +80,8 @@ function seeded() {
         seq,
         fence: 1,
         ts: 1_000 + seq,
-        ...(stamp ? { linkage: stamp } : {})
+        ...(stamp ? { linkage: stamp } : {}),
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
       })
     )
   }
@@ -90,7 +92,12 @@ function seeded() {
       journalLifecycleBatchRowBuilder(
         () => state,
         `settle-${seq}`,
-        identities.map((identity) => ({ kind: 'item' as const, identity, body: text('settled') })),
+        identities.map((identity) => ({
+          kind: 'item' as const,
+          identity,
+          body: text('settled'),
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        })),
         { fence: 1 }
       )(seq, 1_000 + seq)
     )
@@ -165,7 +172,7 @@ describe('producer inheritance across a reopen', () => {
         agent: 'codex',
         providerHandle: { kind: 'codex', threadId: 'root' }
       },
-      journalDir: root,
+      stateDirectory: root,
       now: () => 1_000
     })
 
@@ -180,15 +187,35 @@ describe('producer inheritance across a reopen', () => {
 
   it('replays an inherited producer from disk exactly as it was folded live', async () => {
     const journal = await open()
-    await journal.appendItem(child, text('working'), { fence: 1, ...linkage })
-    await journal.appendItem(own, text('working'), { fence: 1 })
-    await journal.appendItem(child, text('still working'), { fence: 1 })
+    await journal.appendItem(child, text('working'), {
+      fence: 1,
+      ...linkage,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+    await journal.appendItem(own, text('working'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+    await journal.appendItem(child, text('still working'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     await journal.appendLifecycleBatch({
       settlementId: 'settle-1',
       fence: 1,
       mutations: [
-        { kind: 'item', identity: child, body: text('settled') },
-        { kind: 'item', identity: own, body: text('settled') }
+        {
+          kind: 'item',
+          identity: child,
+          body: text('settled'),
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        },
+        {
+          kind: 'item',
+          identity: own,
+          body: text('settled'),
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        }
       ]
     })
     const live = journal.snapshot().items

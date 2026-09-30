@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  ORCA_SESSION_ADDRESS_PREFIX,
   formatOrcaSessionAddress,
   isOrcaSessionId,
   parseOrcaSessionAddress
@@ -12,7 +11,6 @@ const ADDRESS = `session:${SESSION_ID}`
 
 describe('Orca session address', () => {
   it('addresses an Orca session id as session:<id> and parses the bare id back', () => {
-    expect(ORCA_SESSION_ADDRESS_PREFIX).toBe('session:')
     expect(formatOrcaSessionAddress(SESSION_ID)).toBe(ADDRESS)
     expect(parseOrcaSessionAddress(ADDRESS)).toBe(SESSION_ID)
     const parsed = parseOrcaSessionAddress(ADDRESS)

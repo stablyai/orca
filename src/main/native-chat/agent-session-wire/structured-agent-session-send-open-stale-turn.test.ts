@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // A send can be what opens a conversation this process has not read yet: a chat nobody has on
 // screen after the app died, sent to from a phone or the CLI. Whatever that journal shows running
 // belongs to a generation that is gone, so it is settled when the journal opens, not only when a
@@ -24,6 +25,7 @@ import {
   HOST_TEST_THREAD as THREAD,
   hostTestMessage
 } from './structured-agent-session-host-test-data'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 
 /** Delivery runs on its own serialized steps; under a loaded runner they take more than a second. */
 function eventually(assertion: () => unknown): Promise<unknown> {
@@ -51,7 +53,8 @@ async function relaunchAfterCrashMidTurn(
   }
   events.appendItem(
     { provider: 'codex', threadId: THREAD, turnId: 'crashed-turn', ordinal: 1 },
-    { kind: 'turn', turnId: 'crashed-turn', state: 'running' }
+    { kind: 'turn', turnId: 'crashed-turn', state: 'running' },
+    { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   await dying.host.flushStreamedEvents(SESSION)
   // An empty renewal queues behind every record write, so they are on disk.
@@ -73,7 +76,7 @@ async function relaunchAfterCrashMidTurn(
   const host = new StructuredAgentSessionHost({
     store,
     adapter: { ...adapter(), acquire },
-    journalRoot: relaunched,
+    journalDatabase: openTestJournalHostDatabase(relaunched),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-next',
     probeOwner: async () => probe,

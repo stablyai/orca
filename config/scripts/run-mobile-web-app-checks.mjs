@@ -9,7 +9,7 @@ import { PAGE_ROUTE_MODULES } from './mobile-web-app-page-route-modules.mjs'
 import { spawnProcess } from './script-child-process.mjs'
 
 const require = createRequire(import.meta.url)
-export const mobileWebCheckArgs = [
+const mobileWebCheckArgs = [
   'run',
   '--config',
   'config/vitest.config.ts',

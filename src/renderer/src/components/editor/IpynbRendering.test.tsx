@@ -11,7 +11,7 @@ vi.mock('@/i18n/i18n', () => ({
   i18n: { language: 'en' },
   translate: (_key: string, fallback: string) => fallback
 }))
-vi.mock('./use-document-dark-theme', () => ({ useDocumentDarkTheme: () => true }))
+vi.mock('@/hooks/use-document-dark-theme', () => ({ useDocumentDarkTheme: () => true }))
 vi.mock('@/lib/monaco-setup', () => ({ monaco: {} }))
 vi.mock('./MonacoCodeExcerpt', () => ({
   useMonacoColorizedLines: () => []

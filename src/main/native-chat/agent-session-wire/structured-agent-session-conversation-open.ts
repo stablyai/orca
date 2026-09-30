@@ -9,7 +9,7 @@
 // wakes. Nothing here starts a provider child.
 
 import type { AgentJournalResetReason } from '../../../shared/agent-session-journal-types'
-import { journalDirectoryFor } from '../agent-session-journal/journal-paths'
+import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { openAgentSessionJournalWithRecovery } from './agent-session-journal-recovery'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
@@ -37,13 +37,17 @@ export type OpenedStructuredAgentSessionConversation = {
 export type StructuredAgentSessionConversationOpenDeps = {
   store: Pick<AgentSessionRecordStore, 'getRecord'>
   adapter: Pick<StructuredAgentSessionAdapter, 'historyFilePath'>
-  journalRoot: string
+  journalDatabase: JournalHostDatabase
   onEventSinkError?: StructuredAgentSessionHostDeps['onEventSinkError']
 }
 
 /** An acquisition's own open: its reserve cleared the record's death evidence, so it settles
  *  what the gone generation left running itself, from what it read before. */
-export type StructuredAgentSessionConversationOpenOptions = { acquisition?: boolean }
+export type StructuredAgentSessionConversationOpenOptions = {
+  acquisition?: boolean
+  /** A restore's open, which copies no per-chat file: see `AgentSessionJournal.whenImported`. */
+  deferPerSessionImport?: boolean
+}
 
 export type StructuredAgentSessionConversationOpenContext = {
   deps: StructuredAgentSessionConversationOpenDeps
@@ -90,12 +94,10 @@ export async function openStructuredAgentSessionConversationJournal(
   const identity = journalIdentityFor(record, params)
   const opened = await openAgentSessionJournalWithRecovery({
     identity,
-    journalDir: journalDirectoryFor(deps.journalRoot, {
-      workspaceId: record.location.workspaceId,
-      sessionId
-    }),
+    database: deps.journalDatabase,
     fence,
-    historyFilePath: (await deps.adapter.historyFilePath?.({ identity })) ?? null
+    historyFilePath: (await deps.adapter.historyFilePath?.({ identity })) ?? null,
+    deferPerSessionImport: options.deferPerSessionImport
   })
   try {
     // A queued row found here is a leftover the delivery loop's first step rejects; a handed-over

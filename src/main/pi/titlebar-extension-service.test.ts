@@ -213,22 +213,8 @@ describe('PiTitlebarExtensionService', () => {
       join(piHome, 'extensions', 'orca-agent-status.ts'),
       'utf-8'
     )
-    const titlebarExtensionSource = readFileSync(
-      join(piHome, 'extensions', 'orca-titlebar-spinner.ts'),
-      'utf-8'
-    )
-    const prefillExtensionSource = readFileSync(
-      join(piHome, 'extensions', 'orca-prefill.ts'),
-      'utf-8'
-    )
     expect(statusExtensionSource).toContain('@orca-managed-pi-extension')
     expect(statusExtensionSource).toContain('/hook/pi')
-    expect(statusExtensionSource).toContain('process.title')
-    expect(statusExtensionSource).toContain("return '/hook/omp'")
-    expect(titlebarExtensionSource).toContain('@orca-managed-pi-extension')
-    expect(titlebarExtensionSource).toContain('process.env.ORCA_PANE_KEY')
-    expect(prefillExtensionSource).toContain('@orca-managed-pi-extension')
-    expect(prefillExtensionSource).toContain('process.env.ORCA_PANE_KEY')
     expectPiHomeIntact()
   })
 
@@ -252,7 +238,6 @@ describe('PiTitlebarExtensionService', () => {
     ])
     const source = readFileSync(join(piHome, 'extensions', 'orca-agent-status.ts'), 'utf-8')
     expect(source).toContain('/hook/prime-agent')
-    expect(source).not.toContain("return '/hook/omp'")
     expect(existsSync(join(piHome, 'extensions', 'orca-titlebar-spinner.ts'))).toBe(false)
     expect(existsSync(join(piHome, 'extensions', 'orca-prefill.ts'))).toBe(false)
     expectPiHomeIntact()

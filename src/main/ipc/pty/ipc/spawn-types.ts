@@ -104,7 +104,6 @@ export type PtySpawnIpcDeps = {
     providerSession?: AgentProviderSessionMetadata
     target: CodexAccountSelectionTarget
     launchEnv?: NodeJS.ProcessEnv
-    workspacePath?: string
   }) => PreparedCodexResumeHome | null
   noCodexResumeLaunch: (command: string | undefined) => CodexResumeLaunch
   resolveCodexResumeLaunch: (

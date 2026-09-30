@@ -22,6 +22,7 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { AgentSessionRecordStore } from './agent-session-record-store'
 import { createStructuredClaudeRuntimeAdapter } from './structured-claude-runtime-adapter'
+import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 
 const caller = { callerKey: 'desktop' }
 const PROVIDER_SESSION_ID = claudeSessionIdForOrcaSession(HOST_TEST_SESSION)
@@ -125,7 +126,7 @@ beforeEach(async () => {
     adapter: new StructuredAgentSessionAdapterRouter({ claude: adapter, codex: adapter }, () =>
       adapter.closeAll()
     ),
-    journalRoot: directory,
+    journalDatabase: openTestJournalHostDatabase(directory),
     claimKeyId: 'key',
     now: () => HOST_TEST_NOW,
     probeOwner: async () => ({ outcome: 'exit-observed' })

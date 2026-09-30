@@ -12,7 +12,8 @@ import {
   MAX_CODEX_GENERIC_TURN_BUCKETS
 } from './codex-structured-journal-limits'
 import { readCodexTurnId } from './codex-structured-thread-facts'
-import type { CodexRowLinkage } from './codex-subagent-linkage'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
+import type { CodexRowAttribution } from './codex-subagent-linkage'
 
 const OVERFLOW_BUCKET = '__codex-generic-overflow__'
 /** `producer` is absent only on the overflow bucket, which pools every thread's
@@ -59,7 +60,7 @@ export class CodexJournalGenericFrames {
 
   constructor(
     private readonly deps: Pick<CodexJournalTranslatorDeps, 'sink' | 'schedule' | 'coalesceMs'> & {
-      linkageFor: CodexRowLinkage
+      attributionFor: CodexRowAttribution
     },
     private readonly activeTurn: (threadId: string) => string | null
   ) {
@@ -102,10 +103,10 @@ export class CodexJournalGenericFrames {
       provider: 'orca' as const,
       clientMessageId: `provider-frame:codex:${this.fallbackSequence}`
     }
-    const linkage = this.deps.linkageFor(threadId, frameTurnId)
+    const attribution = this.deps.attributionFor(threadId, frameTurnId)
     const admission = this.deps.sink.tryAppendItem
-      ? this.deps.sink.tryAppendItem(identity, translated.body, linkage)
-      : (this.deps.sink.appendItem(identity, translated.body, linkage), CODEX_JOURNAL_ADMITTED)
+      ? this.deps.sink.tryAppendItem(identity, translated.body, attribution)
+      : (this.deps.sink.appendItem(identity, translated.body, attribution), CODEX_JOURNAL_ADMITTED)
     if (!admission.accepted) {
       this.fallbackSequence -= 1
       return admission
@@ -139,11 +140,12 @@ export class CodexJournalGenericFrames {
         provider: 'orca' as const,
         clientMessageId: `provider-frame-suppressed:codex:${bucket}`
       }
+      // A summary across evicted turns names no producer and belongs to no turn.
       const options = {
         coalescingKey: `provider-frame-suppressed:codex:${bucket}`,
         ...(summary.producer
-          ? this.deps.linkageFor(summary.producer.threadId, summary.producer.turnId)
-          : {})
+          ? this.deps.attributionFor(summary.producer.threadId, summary.producer.turnId)
+          : { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
       }
       const admission = this.deps.sink.tryAppendItem
         ? this.deps.sink.tryAppendItem(identity, { kind: 'status', text }, options)

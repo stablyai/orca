@@ -120,6 +120,22 @@ describe('the words written beside a failure fact', () => {
     )
   })
 
+  it('names /compact as the next step for the start a /compact needed', () => {
+    const compact = (kind: AgentSessionFailureKind) =>
+      agentSessionFailureSentence({ kind }, 'rejection', {
+        agentName: 'Claude',
+        command: 'compact'
+      })
+    expect(compact('notSignedIn')).toBe(
+      'Claude is not signed in for the selected account. Sign in, then run /compact again.'
+    )
+    expect(compact('startFailed')).toBe("Claude couldn't start. Run /compact again.")
+    expect(compact('restartFailed')).toBe("Claude couldn't restart. Run /compact again.")
+    expect(compact('providerStartFailed')).toBe(
+      'Claude stopped before it finished starting. Run /compact again.'
+    )
+  })
+
   it('names the agent that stopped starting, and a failed start or restart gives a next step', () => {
     const sentence = (kind: AgentSessionFailureKind, agentName?: string) =>
       agentSessionFailureSentence({ kind }, 'rejection', { agentName })
@@ -167,6 +183,23 @@ describe('the words written beside a failure fact', () => {
     expect(
       agentSessionFailureWords({ kind: 'providerExited' }, { surface: 'rejection' }).reason
     ).toBe('The agent stopped before this message was sent.')
+  })
+
+  it('says a refused Stop reached the agent, which declined it', () => {
+    const refused = (detail?: { text: string; audience: 'person' | 'log' }, agentName?: string) =>
+      agentSessionFailureWords(
+        { kind: 'stopRefused', ...(detail ? { detail } : {}) },
+        { surface: 'row', agentName }
+      ).text
+    expect(refused(undefined, 'Codex')).toBe('Codex had no turn running to stop.')
+    expect(refused()).toBe('The agent had no turn running to stop.')
+    expect(refused({ text: 'no active turn to interrupt.', audience: 'person' }, 'Codex')).toBe(
+      "Codex didn't stop: no active turn to interrupt."
+    )
+    // Words Codex wrote for the log are never quoted to a person.
+    expect(refused({ text: 'rpc -32600', audience: 'log' }, 'Codex')).toBe(
+      'Codex had no turn running to stop.'
+    )
   })
 
   it('says what frees a chat a terminal agent still holds, without naming its process', () => {

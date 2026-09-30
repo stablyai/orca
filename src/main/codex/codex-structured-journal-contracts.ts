@@ -4,6 +4,7 @@ import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-sessio
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
 import type { CodexSubagentExecutions } from './codex-subagent-executions'
+import type { StructuredAgentSessionCommandRun } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 
 export type CodexJournalTranslatorDeps = {
   sink: StructuredAgentSessionEventSink
@@ -34,6 +35,13 @@ export type CodexJournalTranslatorDeps = {
 
 export type CodexJournalTranslator = {
   handle: (event: CodexStructuredSessionEvent) => CodexJournalTranslationAdmission
+  /** Before Orca sends a conversation command: the next primary turn carries it out, and that
+   *  turn's end is the command's. */
+  beginCommand: (command: StructuredAgentSessionCommandRun) => void
+  /** The command was never taken. */
+  forgetCommand: (turnId: string) => void
+  /** The provider turn a Stop naming `turnId` interrupts; undefined while a command has none. */
+  commandProviderTurnId: (turnId: string) => string | undefined
   cancelPrompt: (journalItemId: string) => CodexJournalTranslationAdmission
   restoreThread: (
     threadId: string,

@@ -38,6 +38,9 @@ export type CodexDispatchEchoes = {
    * read after it; a send that end settles is no longer armed.
    */
   bindTurn: (clientMessageId: string, threadId: string, turnId: string) => CodexTurnEnd | null
+  /** The turn the latest armed send was answered into that is neither in `openTurnIds` nor ended:
+   *  one Codex has picked for the send but not opened. */
+  answeredUnopenedTurn: (threadId: string, openTurnIds: ReadonlySet<string>) => string | null
   /**
    * Records a turn's end and returns the sends bound to it that it settles: all of them unless it
    * completed, which echoes its pending input first, so one it never echoed waits for recovery.
@@ -52,7 +55,10 @@ export type CodexDispatchEchoes = {
 }
 
 export function createCodexDispatchEchoes(): CodexDispatchEchoes {
-  const armed = new Map<string, { requestedAt: number | null; sequence: number; turn?: string }>()
+  const armed = new Map<
+    string,
+    { requestedAt: number | null; sequence: number; turn?: { threadId: string; turnId: string } }
+  >()
   const endedTurns = new Map<string, CodexTurnEnd>()
   let nextSequence = 0
   const turnKey = (threadId: string, turnId: string): string => JSON.stringify([threadId, turnId])
@@ -79,13 +85,22 @@ export function createCodexDispatchEchoes(): CodexDispatchEchoes {
       if (!entry) {
         return null
       }
-      const turn = turnKey(threadId, turnId)
-      entry.turn = turn
-      const end = endedTurns.get(turn) ?? null
+      entry.turn = { threadId, turnId }
+      const end = endedTurns.get(turnKey(threadId, turnId)) ?? null
       if (end && settles(end)) {
         armed.delete(clientMessageId)
       }
       return end
+    },
+    answeredUnopenedTurn: (threadId, openTurnIds) => {
+      const answered = [...armed.values()].flatMap(({ turn }) =>
+        turn?.threadId === threadId &&
+        !openTurnIds.has(turn.turnId) &&
+        !endedTurns.has(turnKey(threadId, turn.turnId))
+          ? [turn.turnId]
+          : []
+      )
+      return answered.at(-1) ?? null
     },
     endTurn: (threadId, turnId, end) => {
       const turn = turnKey(threadId, turnId)
@@ -101,7 +116,9 @@ export function createCodexDispatchEchoes(): CodexDispatchEchoes {
         return []
       }
       const settled = [...armed].flatMap(([clientMessageId, entry]) =>
-        entry.turn === turn ? [clientMessageId] : []
+        entry.turn && turnKey(entry.turn.threadId, entry.turn.turnId) === turn
+          ? [clientMessageId]
+          : []
       )
       for (const clientMessageId of settled) {
         armed.delete(clientMessageId)

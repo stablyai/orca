@@ -22,6 +22,8 @@ export class StructuredAgentSessionConversations extends Map<
     private readonly delivery: {
       deliver: (sessionId: string, journal: AgentSessionJournal) => void
       onDeliveryError: (sessionId: string, error: unknown) => void
+      /** A conversation became held: state that waited on it (queued drafts) re-derives. */
+      onOpened?: (sessionId: string) => void
       now: () => number
     }
   ) {
@@ -49,7 +51,9 @@ export class StructuredAgentSessionConversations extends Map<
       })
     })
     this.activity.set(sessionId, this.delivery.now())
-    return super.set(sessionId, session)
+    const adopted = super.set(sessionId, session)
+    this.delivery.onOpened?.(sessionId)
+    return adopted
   }
 
   override delete(sessionId: string): boolean {

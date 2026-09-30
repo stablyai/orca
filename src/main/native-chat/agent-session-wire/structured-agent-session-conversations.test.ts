@@ -1,10 +1,11 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
+import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import { hostTestAttachParams } from './structured-agent-session-host-test-data'
@@ -30,7 +31,7 @@ afterEach(async () => {
 
 async function openJournal(name: string): Promise<AgentSessionJournal> {
   root ??= await mkdtemp(join(tmpdir(), 'orca-conversations-'))
-  return journals.open({ identity: IDENTITY, journalDir: join(root, name) })
+  return journals.open({ identity: IDENTITY, stateDirectory: join(root, name) })
 }
 
 function session(journal: AgentSessionJournal) {
@@ -45,7 +46,7 @@ function appendStatus(journal: AgentSessionJournal, text: string) {
   return journal.appendItem(
     { provider: 'orca', clientMessageId: text },
     { kind: 'status', text },
-    { fence: 0 }
+    { fence: 0, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
 }
 

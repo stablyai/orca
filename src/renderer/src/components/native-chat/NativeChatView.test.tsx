@@ -35,8 +35,10 @@ function renderResolution(
   )
 }
 
+const notComposing = (): boolean => false
+
 function DraftProbe({ paneKey, sessionId }: { paneKey: string; sessionId: string | null }) {
-  const { draft, setDraft } = useNativeChatDraft(paneKey)
+  const { draft, setDraft } = useNativeChatDraft(paneKey, notComposing)
   return (
     <label>
       Session {sessionId ?? 'none'}

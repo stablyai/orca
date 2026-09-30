@@ -29,6 +29,8 @@ export function handleCodexSessionExit(input: {
     return false
   }
   session.exitObservedAt ??= Date.now()
+  // Before the admission check: the child is gone whether or not its end was admitted.
+  session.turnOpenWaits.releaseAll()
   const event: StructuredAgentSessionEndedEvent = {
     type: 'ended',
     sessionId: input.sessionId,

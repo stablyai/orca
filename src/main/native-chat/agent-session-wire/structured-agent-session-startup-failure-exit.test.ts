@@ -4,6 +4,7 @@ import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
 } from '../../../shared/agent-session-record.test-fixture'
+import { structuredAgentSessionCompactBody } from './structured-agent-session-command-turn'
 import {
   settleUnexpectedStructuredAgentSessionExit,
   type StructuredAgentSessionUnexpectedExitContext,
@@ -22,6 +23,7 @@ function startedSession(): StructuredAgentSessionUnexpectedExitSession & {
     child: { generation: GENERATION, fence: 7, phase: 'ready' },
     journal: {
       cursor: () => ({ epoch: 'epoch-1', sequence: 0 }),
+      itemBody: () => null,
       // Nothing ran: the start failed before any response or acknowledged prompt.
       snapshot: () => ({ items: [] }),
       appendLifecycleBatch: vi.fn(async () => ({ epoch: 'epoch-1', sequence: 1 })),
@@ -137,6 +139,32 @@ describe('a provider that ends before it finished starting', () => {
             }
           })
         ]
+      })
+    )
+  })
+
+  it('names /compact as the next step when the start that failed was carrying it', async () => {
+    const base = startedSession()
+    const session = {
+      ...base,
+      child: { generation: GENERATION, fence: 7, phase: 'starting' as const },
+      journal: {
+        ...base.journal,
+        submissions: () => [{ clientMessageId: 'compact-1', dispatchState: 'pending' as const }],
+        itemBody: () => structuredAgentSessionCompactBody()
+      }
+    }
+
+    await settleUnexpectedStructuredAgentSessionExit(contextFor(session), ended)
+
+    const text = 'Claude stopped before it finished starting. Run /compact again.'
+    expect(session.journal.rejectPendingSubmissions).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ reason: text })
+    )
+    expect(session.journal.appendLifecycleBatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mutations: [expect.objectContaining({ body: expect.objectContaining({ text }) })]
       })
     )
   })

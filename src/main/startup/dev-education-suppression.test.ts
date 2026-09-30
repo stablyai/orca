@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
+import { getDefaultUIState } from '../../shared/constants'
 import {
   getDefaultOnboardingState,
-  getDefaultUIState,
   ONBOARDING_FINAL_STEP,
   ONBOARDING_FLOW_VERSION
-} from '../../shared/constants'
+} from '../../shared/onboarding-defaults'
 import { CONTEXTUAL_TOUR_IDS } from '../../shared/contextual-tours'
 import { FEATURE_INTERACTION_IDS } from '../../shared/feature-interactions'
 import { FEATURE_TIP_IDS } from '../../shared/feature-tips'

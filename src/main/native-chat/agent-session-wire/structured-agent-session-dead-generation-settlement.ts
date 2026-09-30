@@ -5,9 +5,10 @@ import {
 } from '../../../shared/agent-session-failure'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import type {
-  AgentJournalItemBody,
-  AgentJournalRenderItem
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalItemBody,
+  type AgentJournalRenderItem
 } from '../../../shared/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { partitionJournalLifecycleMutations } from '../agent-session-journal/journal-lifecycle-batch-partition'
@@ -30,6 +31,10 @@ import {
   turnVerdictFromDeathEvidence,
   type StructuredAgentSessionTurnVerdict
 } from './structured-agent-session-stale-turn-verdict'
+import {
+  exitedRootTurnScope,
+  runningRootTurnScope
+} from './structured-agent-session-exit-turn-scope'
 
 /** Bounds the exit reason the lease keeps as log evidence; a provider diagnostic is held to the
  *  same cap. */
@@ -144,6 +149,7 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
         mutations.push(structuredAgentSessionStartFailureRow(startKey, startupFailure))
       }
     } else if (showUnexpectedExitOutcome) {
+      // The turn the exit ended, and an error so no fold ever hides why it stopped.
       mutations.push({
         kind: 'item',
         identity: { provider: 'orca', clientMessageId: input.settlementId },
@@ -155,15 +161,22 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
               ...input.failureTextContext,
               surface: 'row'
             }
-          )
-        }
+          ),
+          tone: 'error'
+        },
+        turnScope: exitedRootTurnScope(items, input.verdict)
       })
     }
     for (const item of items) {
       const identity = parseAgentJournalItemKey(item.itemId)
       const body = terminalDeadGenerationBody(item)
       if (identity && body) {
-        mutations.push({ kind: 'item', identity, body })
+        mutations.push({
+          kind: 'item',
+          identity,
+          body,
+          turnScope: item.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE
+        })
       }
     }
     mutations.push(...runningTurnLifecycleRevisions(items, input.verdict))
@@ -212,7 +225,12 @@ export async function settleStaleStructuredAgentSessionState(input: {
     const identity = parseAgentJournalItemKey(item.itemId)
     const body = terminalDeadGenerationBody(item)
     if (identity && body) {
-      mutations.push({ kind: 'item', identity, body })
+      mutations.push({
+        kind: 'item',
+        identity,
+        body,
+        turnScope: item.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE
+      })
     }
   }
   const proven = provenUnverifiableTurnRevisions(items, input.deathEvidence, journal)
@@ -240,8 +258,10 @@ export async function settleStaleStructuredAgentSessionState(input: {
         ...agentSessionFailureWords(agentSessionFailureFact('providerExited'), {
           ...input.failureTextContext,
           surface: 'row'
-        })
-      }
+        }),
+        tone: 'error'
+      },
+      turnScope: runningRootTurnScope(items)
     })
   }
   for (const chunk of partitionJournalLifecycleMutations(settlementId, mutations)) {

@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type {
@@ -63,7 +64,11 @@ describe('resolved revisions', () => {
     const deferred = createDeferredStructuredAgentSessionEventSink()
     const bytes = estimateStructuredAgentSessionItemBytes(ROW, text('abc'))
     for (const suffix of ['a', 'b', 'c']) {
-      expect(deferred.sink.tryReviseResolvedItem?.(bytes, appendSuffix(suffix))).toEqual({
+      expect(
+        deferred.sink.tryReviseResolvedItem?.(bytes, appendSuffix(suffix), {
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        })
+      ).toEqual({
         accepted: true
       })
     }
@@ -77,7 +82,9 @@ describe('resolved revisions', () => {
   it('skips a revision that resolves to nothing', async () => {
     const rows = new Map<string, AgentJournalItemBody>()
     const deferred = createDeferredStructuredAgentSessionEventSink()
-    deferred.sink.tryReviseResolvedItem?.(1_000, () => null)
+    deferred.sink.tryReviseResolvedItem?.(1_000, () => null, {
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     const target = journalTarget(rows)
     deferred.bind(target)
     await expect(deferred.drained()).resolves.toEqual({ ok: true })
@@ -88,8 +95,12 @@ describe('resolved revisions', () => {
     const rows = new Map<string, AgentJournalItemBody>()
     const deferred = createDeferredStructuredAgentSessionEventSink()
     const bytes = estimateStructuredAgentSessionItemBytes(ROW, text('a'))
-    deferred.sink.tryReviseResolvedItemAndPublish?.(bytes, appendSuffix('a'))
-    deferred.sink.tryReviseResolvedItemAndPublish?.(bytes, () => null)
+    deferred.sink.tryReviseResolvedItemAndPublish?.(bytes, appendSuffix('a'), {
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+    deferred.sink.tryReviseResolvedItemAndPublish?.(bytes, () => null, {
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     const target = journalTarget(rows)
     const published: string[] = []
     vi.mocked(target.publish).mockImplementation(() =>
@@ -105,10 +116,14 @@ describe('resolved revisions', () => {
     const rows = new Map<string, AgentJournalItemBody>()
     const deferred = createDeferredStructuredAgentSessionEventSink()
     const bytes = estimateStructuredAgentSessionItemBytes(ROW, text('a'))
-    deferred.sink.tryReviseResolvedItem?.(bytes, () => ({
-      identity: ROW,
-      body: text('a'.repeat(64))
-    }))
+    deferred.sink.tryReviseResolvedItem?.(
+      bytes,
+      () => ({
+        identity: ROW,
+        body: text('a'.repeat(64))
+      }),
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
     deferred.bind(journalTarget(rows))
     await expect(deferred.drained()).resolves.toMatchObject({ ok: false })
     expect(rows.size).toBe(0)

@@ -309,9 +309,8 @@ describe.skipIf(process.platform === 'win32')('Codex shell launch preflight', ()
 
   // Regression for #16893: an unquoted `(type -t codex)` expands to zero words when
   // codex is absent, so `test` saw `= file` (2 args) and printed "Missing argument
-  // at index 3" on every fish pane launch. Needs a valid executable
-  // ORCA_CODEX_LAUNCH_PREFLIGHT so the `and` chain reaches the second `test`, and
-  // the real `-l -C` launch shape both shell-ready call sites use.
+  // at index 3" on every fish pane launch. Uses the real `-l -C` launch shape both
+  // shell-ready call sites use.
   it.skipIf(!fishAvailable)('stays silent and installs no wrapper when codex is absent', () => {
     const { bin, preflight } = createFishSandbox('orca-codex-fish-absent-')
 

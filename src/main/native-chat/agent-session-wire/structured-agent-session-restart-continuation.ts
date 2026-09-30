@@ -6,16 +6,20 @@
 // message asks the agent to verify its last action before repeating it, and the launch toast
 // reports what happened.
 
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalMessageItem
+} from '../../../shared/agent-session-journal-types'
 import {
   readAgentSessionFailureFact,
   type UnreadAgentSessionFailureFact
 } from '../../../shared/agent-session-failure'
 import type { AgentSessionRefusalReference } from '../../../shared/agent-session-wire-refusals'
-import type {
-  AgentSessionMutationEnvelope,
-  AgentSessionMutationResult,
-  AgentSessionSendResult
+import {
+  agentSessionSendSubmission,
+  type AgentSessionMutationEnvelope,
+  type AgentSessionMutationResult,
+  type AgentSessionSendResult
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
@@ -92,9 +96,13 @@ export function restartContinuationDeps(
         }
       }),
     awaitSettlement: async (sessionId, clientMessageId) =>
-      (await host.awaitSendSettlement(sessionId, clientMessageId))?.value.submission,
+      agentSessionSendSubmission(
+        (await host.awaitSendSettlement(sessionId, clientMessageId))?.value
+      ),
     awaitHandedOver: async (sessionId, clientMessageId) =>
-      (await host.awaitSendHandedOver(sessionId, clientMessageId))?.value.submission,
+      agentSessionSendSubmission(
+        (await host.awaitSendHandedOver(sessionId, clientMessageId))?.value
+      ),
     onNoteFailed: host.onNoteFailed,
     note: restartNoteWriter(host)
   }
@@ -113,7 +121,8 @@ function restartNoteWriter(
     await session.journal.appendItem(
       { provider: 'orca', clientMessageId: `restart-continuation:${sessionId}:${host.now()}` },
       { kind: 'status', text, ...(tone ? { tone } : {}) },
-      { fence }
+      // About the conversation, not any turn in it.
+      { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
   }
 }
@@ -151,8 +160,10 @@ export type StructuredAgentSessionContinuationDeps = {
   }) => Promise<{
     ok: boolean
     refusal?: { code: string }
-    /** The submission is where the provider's answer lives; the envelope only says Orca took it. */
-    value?: { submission?: { dispatchState?: string; reason?: string | null } }
+    /** The submission is where the provider's answer lives; the envelope only says Orca took it.
+     *  A continuation never sends `delivery`, so a queued answer cannot arrive; the key exists so
+     *  the host's union return stays assignable. */
+    value?: { submission?: { dispatchState?: string; reason?: string | null }; queued?: unknown }
   }>
   /**
    * Waits for that send's dispatch to stop being `pending`, through the host's existing settlement

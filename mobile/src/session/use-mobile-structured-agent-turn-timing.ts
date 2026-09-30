@@ -4,6 +4,7 @@ import type {
   AgentJournalSubmission
 } from '../../../src/shared/agent-session-journal-types'
 import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-turn-status'
+import type { NativeChatTurnJournal } from '../../../src/shared/native-chat-turn-membership'
 import type { StructuredAgentHostClock } from '../../../src/shared/structured-agent-session-reducer'
 import { selectStructuredAgentTurnBars } from '../../../src/shared/structured-agent-session-turn-timing'
 import {
@@ -12,10 +13,8 @@ import {
 } from '../../../src/shared/structured-agent-turn-clock-anchor'
 
 /** Host-recorded turn timing for the structured lane: settled durations straight
- *  off the journal, the transcript key that owns the running turn's bar, each
- *  row's owning turn, and a
- *  skew-free start for the live counter whose host-to-local conversion is latched
- *  once per turn. */
+ *  off the journal, and a skew-free start for the live counter whose host-to-local
+ *  conversion is latched once per turn. */
 export function useMobileStructuredAgentTurnTiming(
   {
     items,
@@ -29,14 +28,15 @@ export function useMobileStructuredAgentTurnTiming(
   turnId: string | null
 ): {
   settledTurns: NativeChatSettledTurns
+  /** What places each transcript row in its turn; the same read desktop makes. */
+  turnJournal: NativeChatTurnJournal
   workingStartedAt: number | null
-  activeTurnOpenedBy: string | null
-  turnKeysByItemId: ReadonlyMap<string, string>
 } {
-  const { settledTurns, runningTiming, activeTurnOpenedBy, turnKeysByItemId } = useMemo(
+  const { settledTurns, runningTiming } = useMemo(
     () => selectStructuredAgentTurnBars(items, submissions, turnId),
     [items, submissions, turnId]
   )
+  const turnJournal = useMemo(() => ({ items, submissions }), [items, submissions])
   const [latch, setLatch] = useState<StructuredAgentTurnClockLatch | null>(null)
   // Stamp during render (React's derive-from-props pattern) so the first paint of
   // a new turn already counts from the right instant.
@@ -50,10 +50,5 @@ export function useMobileStructuredAgentTurnTiming(
   if (step.latch !== latch) {
     setLatch(step.latch)
   }
-  return {
-    settledTurns,
-    workingStartedAt: step.workingStartedAt,
-    activeTurnOpenedBy,
-    turnKeysByItemId
-  }
+  return { settledTurns, turnJournal, workingStartedAt: step.workingStartedAt }
 }

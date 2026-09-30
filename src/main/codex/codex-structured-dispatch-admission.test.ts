@@ -7,6 +7,7 @@ import {
   acquiredCodexAdapter,
   echoUserMessage,
   fakeCodexAppServer,
+  openAfterTurnStarts,
   startTurn,
   CODEX_TEST_THREAD_ID,
   CODEX_TEST_USER_MESSAGE,
@@ -215,8 +216,9 @@ describe('codex dispatch admission', () => {
     await expect(send(adapter, 'client-unknown', 1_700_000_000_100)).rejects.toThrow(
       'request timed out after write'
     )
-    await send(adapter, 'client-later', 1_700_000_000_400)
-    startTurn(connection, 'turn-later')
+    const later = send(adapter, 'client-later', 1_700_000_000_400)
+    await openAfterTurnStarts(connection, 2, () => startTurn(connection, 'turn-later'))
+    await later
     echoUserMessage(connection, {
       turnId: 'turn-later',
       itemId: 'item-later',
@@ -279,9 +281,10 @@ describe('codex dispatch admission', () => {
     const adapter = await acquiredCodexAdapter({ codex, settlements, sink: recorded.sink })
     const connection = codex.connections[0]!
 
-    await send(adapter, 'client-opening', 1_700_000_000_600)
-    await send(adapter, 'client-queued', 1_700_000_000_200)
-    startTurn(connection, 'turn-1')
+    const opening = send(adapter, 'client-opening', 1_700_000_000_600)
+    const queued = send(adapter, 'client-queued', 1_700_000_000_200)
+    await openAfterTurnStarts(connection, 2, () => startTurn(connection, 'turn-1'))
+    await Promise.all([opening, queued])
     await send(adapter, 'client-mid-turn', 1_700_000_000_100)
 
     echoUserMessage(connection, {
@@ -325,8 +328,9 @@ describe('codex dispatch admission', () => {
     const adapter = await acquiredCodexAdapter({ codex, settlements, sink: recorded.sink })
     const connection = codex.connections[0]!
 
-    await send(adapter, 'client-late-echo', 1_700_000_000_100)
-    startTurn(connection, 'turn-1')
+    const sending = send(adapter, 'client-late-echo', 1_700_000_000_100)
+    await openAfterTurnStarts(connection, 1, () => startTurn(connection, 'turn-1'))
+    await sending
     connection.handlers.onNotification?.('turn/completed', {
       threadId: CODEX_TEST_THREAD_ID,
       turn: { id: 'turn-1' }

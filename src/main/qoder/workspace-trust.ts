@@ -1,10 +1,7 @@
 import { realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join, posix } from 'node:path'
+import { join } from 'node:path'
 import { isPlainObject, readHooksJson, writeHooksJson } from '../agent-hooks/installer-utils'
-import { parseHooksJsonText } from '../agent-hooks/hooks-json-read'
-import { isENOENT } from '../ipc/filesystem-path-containment'
-import type { IFilesystemProvider } from '../providers/types'
 
 // Qoder 1.1.64 writes this exact shape after accepting its folder-trust prompt.
 export function withQoderTrustedWorkspace(
@@ -44,35 +41,4 @@ export function markQoderWorkspaceTrusted(workspacePath: string): void {
   if (updated && updated !== config) {
     writeHooksJson(configPath, updated)
   }
-}
-
-export async function markRemoteQoderWorkspaceTrusted(
-  fsProvider: IFilesystemProvider,
-  remoteHome: string,
-  workspacePath: string
-): Promise<void> {
-  const configDir = posix.join(remoteHome, '.qoder')
-  const configPath = posix.join(configDir, 'settings.json')
-  let config: Record<string, unknown> | null
-  try {
-    const result = await fsProvider.readFile(configPath)
-    if (result.isBinary) {
-      return
-    }
-    config = parseHooksJsonText(result.content)
-  } catch (error) {
-    if (!isENOENT(error)) {
-      return
-    }
-    config = {}
-  }
-  if (!config) {
-    return
-  }
-  const updated = withQoderTrustedWorkspace(config, workspacePath)
-  if (!updated || updated === config) {
-    return
-  }
-  await fsProvider.createDir(configDir)
-  await fsProvider.writeFile(configPath, `${JSON.stringify(updated, null, 2)}\n`)
 }

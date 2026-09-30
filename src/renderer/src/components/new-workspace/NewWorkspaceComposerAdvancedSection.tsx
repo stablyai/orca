@@ -61,6 +61,8 @@ type NewWorkspaceComposerAdvancedSectionProps = Pick<
   | 'onSparseSelectPreset'
   | 'canUseSparseCheckout'
 > & {
+  sparseEditing?: boolean
+  onSparseEditingChange: (editing: boolean) => void
   branchNameInputId: string
   setupConfigLabel: string
   setupRunLabel: string
@@ -72,6 +74,8 @@ type NewWorkspaceComposerAdvancedSectionProps = Pick<
 
 export function NewWorkspaceComposerAdvancedSection({
   advancedOpen,
+  sparseEditing,
+  onSparseEditingChange,
   smartNameSelection,
   name,
   onNameValueChange,
@@ -144,7 +148,8 @@ export function NewWorkspaceComposerAdvancedSection({
   return (
     <div
       className={cn(
-        'grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out',
+        'grid transition-[grid-template-rows] duration-200 ease-out',
+        advancedOpen && sparseEditing ? 'overflow-visible' : 'overflow-hidden',
         !advancedOpen && '!mt-2',
         advancedOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
       )}
@@ -353,7 +358,9 @@ export function NewWorkspaceComposerAdvancedSection({
                 )}
               </label>
               <SparseCheckoutPresetSelect
+                key={repoId}
                 repoId={repoId}
+                onEditingChange={onSparseEditingChange}
                 presets={sparsePresets}
                 selectedPresetId={sparseSelectedPresetId}
                 onSelectPreset={onSparseSelectPreset}

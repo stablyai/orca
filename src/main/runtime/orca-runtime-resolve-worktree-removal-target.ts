@@ -243,8 +243,6 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
       throw new Error(`Agent ${agent} does not take a startup prompt on its launch command.`)
     }
 
-    await this.markWorkspaceTrustedForAgent(agent, workspace.connectionId, workspace.path)
-
     return {
       ...opts,
       command: startupPlan.launchCommand,

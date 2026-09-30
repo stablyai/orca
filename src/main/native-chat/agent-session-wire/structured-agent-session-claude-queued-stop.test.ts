@@ -17,6 +17,7 @@ import {
 } from '../../claude/claude-structured-session-test-support'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { structuredClaudeLifecycleEvent } from '../../runtime/structured-claude-runtime-adapter'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
   HOST_TEST_NOW as NOW,
@@ -81,7 +82,7 @@ beforeEach(async () => {
   host = new StructuredAgentSessionHost({
     store,
     adapter: Object.assign(adapter, { supportsCreate: () => true }),
-    journalRoot: root,
+    journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     now: () => NOW

@@ -45,10 +45,13 @@ describe('structured mailbox pointer host', () => {
     // then delivered mid-turn, which Codex coalesces into the running turn and Claude folds into
     // it -- either way folded into work already in flight rather than read as a new instruction.
     const items = [runningTurn(), ...transcript(500)]
-    hostRef.current = { journalSnapshot: () => ({ items }) }
+    const submissions = [{ clientMessageId: 'op1', dispatchState: 'unknown' }]
+    hostRef.current = { journalSnapshot: () => ({ items, submissions }) }
+    // The recorded sends ride along: the lane reads what its own operation id settled as.
     expect(await createStructuredMailboxPointerHost().readGateFacts('s1')).toEqual({
       turnRunning: true,
-      awaitingHuman: false
+      awaitingHuman: false,
+      submissions
     })
   })
 

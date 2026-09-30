@@ -214,13 +214,6 @@ export function getCommitMessageAgentCapability(
   return spec ? toCommitMessageAgentCapability(spec) : undefined
 }
 
-export function getCommitMessageModelCapability(
-  agentId: TuiAgent,
-  modelId: string
-): CommitMessageModelCapability | undefined {
-  return getCommitMessageAgentCapability(agentId)?.models.find((m) => m.id === modelId)
-}
-
 /** Ordered list of agents that have a non-interactive mode wired up. */
 export function listCommitMessageAgentIds(): TuiAgent[] {
   return Object.keys(COMMIT_MESSAGE_AGENT_SPECS) as TuiAgent[]

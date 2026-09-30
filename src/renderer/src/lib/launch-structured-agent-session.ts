@@ -108,10 +108,6 @@ function definitiveStructuredAgentSessionCreateErrorCode(error: unknown): string
   return null
 }
 
-export function isDefinitiveStructuredAgentSessionCreateError(error: unknown): boolean {
-  return definitiveStructuredAgentSessionCreateErrorCode(error) !== null
-}
-
 export function createStructuredAgentSessionLaunchIntent(
   worktreeId: string,
   agent: AgentSessionHandleProvider,

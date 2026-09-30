@@ -8,9 +8,7 @@ import { ManagedCodexHomeTemporarilyUnavailableError } from '../codex-accounts/h
 import { codexHookService } from '../codex/hook-service'
 import { ensureRealHomeCodexHookState } from '../codex/codex-real-home-hook-install'
 import { ensureCodexDaemonSocketGuard } from '../codex/codex-config-mirror'
-import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
-import { markCodexProjectTrusted } from '../agent-trust-presets'
-import { awaitAgentTrustWriteWithinDeadline } from '../agent-trust-write-deadline'
+import { isAgentStatusHooksEnabledForAgent } from '../agent-hooks/managed-agent-hook-controls'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../codex/codex-home-paths'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { mainProcessState as state } from './main-process-state'
@@ -19,7 +17,6 @@ export async function prepareCodexSessionResumeForLaunch(args: {
   providerSession: AgentProviderSessionMetadata
   target: CodexAccountSelectionTarget
   launchEnv?: NodeJS.ProcessEnv
-  workspacePath?: string
 }): Promise<CodexSessionResumePreparation | null> {
   const runtimeHome = state.codexRuntimeHome
   const store = state.store
@@ -37,7 +34,7 @@ export async function prepareCodexSessionResumeForLaunch(args: {
   // readable alias wins. A throw here refuses the whole resume instead
   // (#STA-4422).
   const selectedAccountCodexHome = runtimeHome.resolveSelectedHostAccountCodexHomePathForResume()
-  // Why: a `fresh` outcome must skip migration, trust and hook repair entirely — there is
+  // Why: a `fresh` outcome must skip migration and hook repair entirely — there is
   // no verified origin home to prepare, so the PTY layer drops the resume argv (#10793).
   const preparation = await prepareCodexSessionResume({
     sessionId: args.providerSession.id,
@@ -82,21 +79,10 @@ export async function prepareCodexSessionResumeForLaunch(args: {
         )
       }
       const resumeHome = migrated.useRealCodexHome ? systemHomePath : sessionSource.homePath
-      if (args.workspacePath) {
-        try {
-          // Why: the PTY spawn waits on the home this resolver returns, so the write stays ahead of the agent's trust menu — bounded so a wedged lane cannot hang the resume.
-          await awaitAgentTrustWriteWithinDeadline(markCodexProjectTrusted(args.workspacePath), {
-            preset: 'codex',
-            workspacePath: args.workspacePath
-          })
-        } catch (error) {
-          console.warn('[codex-project-trust] failed to pre-mark resumed workspace:', error)
-        }
-      }
       const isSystemHome =
         normalizeRuntimePathForComparison(resumeHome) ===
         normalizeRuntimePathForComparison(systemHomePath)
-      const hooksEnabled = isAgentStatusHooksEnabled(store.getSettings())
+      const hooksEnabled = isAgentStatusHooksEnabledForAgent(store.getSettings(), 'codex')
       try {
         if (isSystemHome) {
           await ensureRealHomeCodexHookState({

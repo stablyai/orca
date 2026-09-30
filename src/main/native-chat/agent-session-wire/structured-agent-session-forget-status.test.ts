@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // Removing a session from the host's map and removing its status row are ONE operation.
 //
 // The store keeps a row until told to drop it, and `structuredHostOwned` bypasses the staleness
@@ -15,7 +16,10 @@ import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { makeStructuredAgentStatusSubject } from '../../../shared/agent-status-subject'
 import { AgentHookServer } from '../../agent-hooks/server'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
+import {
+  createTrackedJournalOpener,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { attachStructuredAgentSession } from './structured-agent-session-attach-orchestration'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
@@ -106,16 +110,16 @@ async function workingSession(): Promise<{
   journal: AgentSessionJournal
   records: Map<string, AgentSessionRecord>
 }> {
-  const journal = await journals.open({ identity: IDENTITY, journalDir: join(root, SESSION) })
+  const journal = await journals.open({ identity: IDENTITY, stateDirectory: join(root, SESSION) })
   await journal.appendItem(
     PROMPT,
     { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'ship it' }] },
-    { fence: 1 }
+    { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   await journal.appendItem(
     TURN,
     { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } },
-    { fence: 1 }
+    { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   const sessions = new Map<string, StructuredAgentSessionHostSession>([
     [
@@ -170,7 +174,11 @@ function attachContext(
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial context double; the attach reads only the members defined here.
   return {
-    deps: { store: { getRecord: () => null }, claimKeyId: 'key-1', journalRoot: root },
+    deps: {
+      store: { getRecord: () => null },
+      claimKeyId: 'key-1',
+      journalDatabase: openTestJournalHostDatabase(root)
+    },
     runtimeState: {
       resolveRecovery: async () => undefined,
       eventSinkFor: () => eventSink,

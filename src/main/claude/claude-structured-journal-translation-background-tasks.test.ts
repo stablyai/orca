@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import type {
@@ -201,7 +202,8 @@ describe('claude journal translation — background task rows', () => {
     deferred.bind(target)
     deferred.sink.appendItem(
       { provider: 'orca', clientMessageId: 'blocked-prefill' },
-      { kind: 'message', role: 'system', blocks: [{ type: 'text', text: 'prefill' }] }
+      { kind: 'message', role: 'system', blocks: [{ type: 'text', text: 'prefill' }] },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await appendEntered.promise
     const notification = systemFrame({

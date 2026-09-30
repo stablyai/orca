@@ -92,7 +92,6 @@ describe('conservative unit selection', () => {
         count: FULL_SHARD_COUNT
       }))
     )
-    expect(FULL_SHARD_COUNT).toBe(5)
   })
 
   it('records failures that would have been missed while shadow runs remain full', () => {

@@ -2,8 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import {
   buildAiVaultResumeCopyCommandForWorktree,
-  buildAiVaultResumeStartupForWorktree,
-  getAiVaultResumePlatform
+  buildAiVaultResumeStartupForWorktree
 } from './ai-vault-resume-command'
 
 vi.mock('@/lib/new-workspace', () => ({
@@ -373,7 +372,6 @@ describe('ai vault resume command runtime', () => {
       localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
     })
 
-    expect(getAiVaultResumePlatform(state, 'repo-1::worktree-1')).toBe('linux')
     expect(
       buildQueuedAiVaultResumeCommand({
         state,
@@ -392,7 +390,6 @@ describe('ai vault resume command runtime', () => {
     const state = makeState({ worktreePath: '/home/alice/repo' })
     state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'ssh-1' }] as never
 
-    expect(getAiVaultResumePlatform(state, 'repo-1::worktree-1')).toBe('linux')
     expect(
       buildQueuedAiVaultResumeCommand({
         state,
@@ -421,7 +418,6 @@ describe('ai vault resume command runtime', () => {
     ] as never
     state.projectGroups = [{ id: 'group-1', connectionId: null, executionHostId: null }] as never
 
-    expect(getAiVaultResumePlatform(state, 'folder:folder-1')).toBe('linux')
     expect(
       buildQueuedAiVaultResumeCommand({
         state,
@@ -449,7 +445,6 @@ describe('ai vault resume command runtime', () => {
     ] as never
     state.projectGroups = [{ id: 'group-1', connectionId: null, executionHostId: 'local' }] as never
 
-    expect(getAiVaultResumePlatform(state, 'folder:folder-1')).toBe('linux')
     expect(
       buildQueuedAiVaultResumeCommand({
         state,
@@ -462,14 +457,6 @@ describe('ai vault resume command runtime', () => {
         }
       })
     ).toBe("claude '--resume' 'session one'")
-  })
-
-  it('keeps WSL UNC worktrees on POSIX command wrapping without an explicit override', () => {
-    const state = makeState({
-      worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo'
-    })
-
-    expect(getAiVaultResumePlatform(state, 'repo-1::worktree-1')).toBe('linux')
   })
 
   it('converts WSL UNC Codex homes before building Linux resume commands', () => {

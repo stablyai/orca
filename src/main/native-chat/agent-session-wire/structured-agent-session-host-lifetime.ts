@@ -2,8 +2,8 @@
 //
 // Two operations, because they end two different things. Stopping the agent ends the provider
 // child and hands the lease back; the conversation — its open journal, its status row and its
-// readers — stays, and the next send starts a new child. Closing the conversation drops the open
-// journal handle, a cache the next read or write reopens.
+// readers — stays, and the next send starts a new child. Closing the conversation drops its
+// in-memory fold, a cache the next read or write rebuilds from the host's journal database.
 //
 // Both are written for a caller already inside the session's serialize: the queue is not
 // reentrant, so every public entry point takes it once and calls these.
@@ -183,10 +183,10 @@ export function structuredAgentSessionConversationClosable(
 }
 
 /**
- * Drops the conversation's open handle. The entry leaves the map BEFORE the handle closes, so a
- * lock-free reader sees an open handle or none — never one that is closing — and one arriving
- * after the delete waits behind this step and reopens. Answers false, closing nothing, when the
- * handle is still more than a cache.
+ * Drops the conversation's open fold: a map delete, then its admitted writes drain. The entry
+ * leaves the map first, so a lock-free reader sees an open conversation or none — never one that
+ * is closing — and one arriving after the delete waits behind this step and reopens. Answers
+ * false, closing nothing, when the conversation is still more than a cache.
  */
 export async function closeStructuredAgentSessionConversationUnderSerialize(
   context: Pick<StructuredAgentSessionLifetimeContext, 'sessions'> & {

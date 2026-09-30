@@ -11,7 +11,7 @@ import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
 } from '../../shared/agent-session-turn-record'
-import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-store-test-open'
+import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import {
   createDeferredStructuredAgentSessionEventSink,
   type StructuredAgentSessionEventSink
@@ -221,7 +221,7 @@ describe('codex turn lifecycle rows', () => {
         providerHandle: { kind: 'codex', threadId: THREAD_ID }
       },
       now: () => 9_000,
-      journalDir: join(root, SESSION_ID)
+      stateDirectory: join(root, SESSION_ID)
     })
     const deferred = createDeferredStructuredAgentSessionEventSink()
     const translator = createCodexJournalTranslator({

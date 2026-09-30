@@ -19,6 +19,7 @@ vi.mock('@/runtime/runtime-host-contact-regained', () => ({
   subscribeRuntimeHostContactRegained: mocks.watchHostContact
 }))
 
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { startStructuredAgentSessionReadTransport } from './structured-agent-session-read-transport'
 
 type SubscribeAttempt = {
@@ -390,6 +391,55 @@ describe('structured agent-session read transport unattached refusals', () => {
     }
   })
 
+  // As `mapRuntimeError` sends a thrown refusal (pinned in `rpc/errors.test.ts`): its message is the
+  // bare code, and its reason rides in data.
+  function thrownRefusal(details: Record<string, unknown>) {
+    return {
+      code: 'runtime_error',
+      message: 'agent_session_journal_unreadable',
+      data: { refusal: { code: 'agent_session_journal_unreadable', details } }
+    }
+  }
+  const JOURNAL_CORRUPT = {
+    code: 'agent_session_journal_unreadable',
+    details: { reason: 'journalCorrupt' }
+  }
+
+  it("hands the pane a thrown refusal's reason from the stream and a rejected read", async () => {
+    vi.useFakeTimers()
+    try {
+      const applyError = vi.fn()
+      const streamed = startWithHydration(async () => undefined, applyError)
+      await flushPromises()
+      attempts[0].onError(thrownRefusal(JOURNAL_CORRUPT.details))
+      attempts[0].closed.resolve({ unsubscribe: attempts[0].unsubscribe })
+      await flushPromises()
+      expect(applyError).toHaveBeenCalledExactlyOnceWith(
+        'agent_session_journal_unreadable',
+        JOURNAL_CORRUPT
+      )
+      streamed.dispose()
+
+      const rejectedError = vi.fn()
+      const refused = new RuntimeRpcCallError({
+        id: 'req-1',
+        ok: false,
+        error: thrownRefusal(JOURNAL_CORRUPT.details)
+      })
+      const rejected = startWithHydration(async () => {
+        throw refused
+      }, rejectedError)
+      await flushPromises()
+      expect(rejectedError).toHaveBeenCalledExactlyOnceWith(
+        'agent_session_journal_unreadable',
+        JOURNAL_CORRUPT
+      )
+      rejected.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('re-opens after a failed open and leaves the error once the conversation reads (P2-04)', async () => {
     vi.useFakeTimers()
     try {
@@ -397,7 +447,7 @@ describe('structured agent-session read transport unattached refusals', () => {
       const applyEvent = vi.fn()
       const transport = startWithHydration(async () => undefined, applyError, applyEvent)
       await flushPromises()
-      attempts[0].onError({ code: 'agent_session_journal_unreadable', message: 'disk full' })
+      attempts[0].onError({ code: 'runtime_error', message: 'disk full' })
       attempts[0].closed.resolve({ unsubscribe: attempts[0].unsubscribe })
       await flushPromises()
       expect(applyError).toHaveBeenCalledExactlyOnceWith('disk full')

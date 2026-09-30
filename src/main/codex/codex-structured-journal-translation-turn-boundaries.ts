@@ -2,7 +2,10 @@ import type {
   AgentJournalTurnLifecycle,
   AgentJournalTurnOutcome
 } from '../../shared/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../shared/agent-session-journal-item-key'
+import {
+  agentJournalItemKey,
+  agentJournalSubmissionKey
+} from '../../shared/agent-session-journal-item-key'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import {
   CODEX_JOURNAL_ADMITTED,
@@ -27,7 +30,10 @@ import {
   readCodexTurnId,
   readCodexTurnStatus
 } from './codex-structured-thread-facts'
-import type { CodexRowLinkage } from './codex-subagent-linkage'
+import type { CodexRowAttribution } from './codex-subagent-linkage'
+import type { CodexJournalCommandTurn } from './codex-journal-command-turn'
+import { readRecord, readString } from './codex-item-field-readers'
+import { recordCodexCommandTurnClaim } from './codex-command-turn-claim'
 
 type TurnBoundaryEvent = {
   sessionId: string
@@ -59,7 +65,8 @@ export class CodexJournalTurnBoundaries {
       clearPromptTurn?: (threadId: string, turnId: string) => void
       flushSuppression: () => CodexJournalTranslationAdmission
       resetActivity: (threadId: string) => void
-      linkageFor: CodexRowLinkage
+      attributionFor: CodexRowAttribution
+      commands: CodexJournalCommandTurn
       now?: () => number
     }
   ) {}
@@ -73,15 +80,20 @@ export class CodexJournalTurnBoundaries {
       return { accepted: false, reason: 'backpressure' }
     }
     const startedAt = this.receiptTime(event)
-    const admission = publishCodexTurnLifecycle({
-      sink: this.deps.sink,
-      primaryThreadId: this.deps.primaryThreadId(),
-      sessionId: event.sessionId,
-      threadId: event.threadId,
-      turnId,
-      state: 'running',
-      startedAt
-    })
+    const command =
+      event.threadId === this.deps.primaryThreadId() ? this.deps.commands.claim(turnId) : null
+    // The command's turn is the record: this turn writes none, and its rows join the command's.
+    const admission = command
+      ? recordCodexCommandTurnClaim(this.deps.sink, agentJournalItemKey(command.identity), turnId)
+      : publishCodexTurnLifecycle({
+          sink: this.deps.sink,
+          primaryThreadId: this.deps.primaryThreadId(),
+          sessionId: event.sessionId,
+          threadId: event.threadId,
+          turnId,
+          state: 'running',
+          startedAt
+        })
     if (admission.accepted) {
       this.deps.activeTurns.remember(
         event.threadId,
@@ -156,15 +168,20 @@ export class CodexJournalTurnBoundaries {
     // turn boundary is no evidence contact was lost. Only `settleSession` may
     // write `unverifiable`.
     const status = readCodexTurnStatus(event.params)
-    const turnLifecycle =
-      event.threadId === this.deps.primaryThreadId()
-        ? this.settled(event.threadId, turnId, {
-            state: codexTurnLifecycleState(status),
-            outcome: codexTurnOutcome(status),
-            completedAt: this.receiptTime(event),
-            durationMs: readCodexTurnDurationMs(event.params)
-          })
-        : null
+    const completedAt = this.receiptTime(event)
+    const commandEnd = this.deps.commands.end(turnId, {
+      status,
+      error: readString(readRecord(readRecord(readRecord(event.params).turn).error), 'message'),
+      completedAt
+    })
+    const turnLifecycle = this.ownsRecord(event.threadId, turnId)
+      ? this.settled(event.threadId, turnId, {
+          state: codexTurnLifecycleState(status),
+          outcome: codexTurnOutcome(status),
+          completedAt,
+          durationMs: readCodexTurnDurationMs(event.params)
+        })
+      : null
     const requestOrigin = this.deps.activeTurns.requestOrigin(event.threadId, turnId)
     const latestDispatchSequence = this.deps.activeTurns.latestDispatchSequence(
       event.threadId,
@@ -180,7 +197,8 @@ export class CodexJournalTurnBoundaries {
       activeItems: this.deps.items.activeItems,
       pendingPrompts: this.deps.pendingPrompts,
       ...(this.deps.clearPromptTurn ? { clearPromptTurn: this.deps.clearPromptTurn } : {}),
-      linkageFor: this.deps.linkageFor
+      attributionFor: this.deps.attributionFor,
+      commandEnd
     })
     if (admission.accepted) {
       if (turnLifecycle) {
@@ -193,6 +211,7 @@ export class CodexJournalTurnBoundaries {
       }
       this.deps.items.ordinals.forgetTurn(event.threadId, turnId)
       this.deps.activeTurns.forget(event.threadId, turnId)
+      this.deps.commands.settled(turnId)
       this.deps.resetActivity(event.threadId)
     }
     return admission
@@ -216,9 +235,15 @@ export class CodexJournalTurnBoundaries {
     }
   }
 
+  /** Whether this translator writes the turn's record: a primary turn no command claimed. */
+  ownsRecord(threadId: string, turnId: string): boolean {
+    return threadId === this.deps.primaryThreadId() && !this.deps.commands.isCarrying(turnId)
+  }
+
   clear(): void {
     this.deps.activeTurns.clear()
     this.recentTurns.clear()
+    this.deps.commands.clear()
   }
 
   private receiptTime(event: TurnBoundaryEvent): number {

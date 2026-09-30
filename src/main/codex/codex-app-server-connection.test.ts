@@ -21,6 +21,7 @@ const originalCodexHome = process.env.CODEX_HOME
 
 afterEach(() => {
   vi.useRealTimers()
+  vi.restoreAllMocks()
   if (originalCodexHome === undefined) {
     delete process.env.CODEX_HOME
   } else {
@@ -340,11 +341,40 @@ describe('openCodexAppServerConnection', () => {
     )
 
     child.stdout.write(`${JSON.stringify({ id: 'late-string-id', result: { value: 1 } })}\n`)
-    child.stdout.write(`${JSON.stringify({ id: 999, result: { value: 2 } })}\n`)
+    child.stdout.write(`${JSON.stringify({ id: null, error: { message: 'parse error' } })}\n`)
     await vi.waitFor(() => expect(frames).toHaveLength(2))
 
-    expect(frames.map((frame) => frame.kind)).toEqual(['frame:unclassified', 'response:unmatched'])
+    expect(frames.map((frame) => frame.kind)).toEqual(['frame:unclassified', 'frame:unclassified'])
     await connection.close()
+  })
+
+  it('logs a reply to a timed-out request instead of surfacing it as a frame', async () => {
+    vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { child, spawnImpl, written } = stubChild()
+    answerInitialize(child)
+    const frames: string[] = []
+    const connection = await openCodexAppServerConnection(
+      { command: 'codex', args: ['app-server'] },
+      { onUnhandledFrame: (kind) => frames.push(kind) },
+      spawnImpl
+    )
+
+    const slow = rejection(connection.request('turn/interrupt', undefined, { timeoutMs: 50 }))
+    await vi.advanceTimersByTimeAsync(60)
+    expect((await slow).name).toBe('CodexAppServerTimeoutError')
+    const id = Number(written.find((frame) => frame.method === 'turn/interrupt')?.id)
+    child.stdout.write(`${JSON.stringify({ id, result: {} })}\n`)
+    child.stdout.write(`${JSON.stringify({ id: 999, error: { message: 'no such request' } })}\n`)
+    await vi.waitFor(() => expect(warn).toHaveBeenCalledTimes(2))
+
+    expect(frames).toEqual([])
+    expect(warn.mock.calls.map((call) => call[0])).toEqual([
+      `[codex-app-server] late reply to turn/interrupt after timeout (id ${id})`,
+      '[codex-app-server] reply with no waiting request (id 999)'
+    ])
+    expect(warn.mock.calls[1][1]).toBe('no such request')
+    await vi.advanceTimersByTimeAsync(0)
   })
 
   it('fails in-flight requests and reports an unexpected exit once', async () => {

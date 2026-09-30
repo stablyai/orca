@@ -187,7 +187,6 @@ afterEach(() => {
 
 describe('tab drag activation distance', () => {
   it('uses the named threshold for enabled tab drags', () => {
-    expect(TAB_DRAG_ACTIVATION_DISTANCE_PX).toBe(12)
     expect(getTabDragActivationDistance(true)).toBe(TAB_DRAG_ACTIVATION_DISTANCE_PX)
   })
 

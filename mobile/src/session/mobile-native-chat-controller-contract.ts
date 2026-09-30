@@ -10,6 +10,7 @@ import type {
   NativeChatLiveTurnIndicator,
   NativeChatSettledTurns
 } from '../../../src/shared/native-chat-turn-status'
+import type { NativeChatTurnJournal } from '../../../src/shared/native-chat-turn-membership'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { MobileNativeChatPendingMessage } from './use-mobile-native-chat-drafts'
 import type { useMobileNativeChatSession } from './use-mobile-native-chat-session'
@@ -37,10 +38,8 @@ export type MobileNativeChatController = {
   /** Structured lane: host-recorded turn timing for the per-turn status rows. */
   nativeChatWorkingStartedAt: number | null
   nativeChatSettledTurns: NativeChatSettledTurns | null
-  /** Structured lane: the user message the host says opened the running turn. */
-  nativeChatActiveTurnOpenedBy: string | null
-  /** Structured lane: the turn that owns each journal item's row. */
-  nativeChatTurnKeysByItemId: ReadonlyMap<string, string> | null
+  /** Structured lane: the journal that places each transcript row in its turn. */
+  nativeChatTurnJournal: NativeChatTurnJournal | null
   nativeChatCanStop: boolean
   nativeChatStreamingText?: string
   /** Agent mid-turn, regardless of whether chat is the visible view. */

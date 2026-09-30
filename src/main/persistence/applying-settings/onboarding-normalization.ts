@@ -5,12 +5,12 @@ import type {
 } from '../../../shared/onboarding-state-types'
 import type { NotificationSettings } from '../../../shared/notification-settings-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import { getDefaultNotificationSettings } from '../../../shared/notification-settings-defaults'
 import {
-  getDefaultNotificationSettings,
   getDefaultOnboardingState,
   ONBOARDING_FINAL_STEP,
   ONBOARDING_FLOW_VERSION
-} from '../../../shared/constants'
+} from '../../../shared/onboarding-defaults'
 
 export function normalizeNotificationSettings(value: unknown): NotificationSettings {
   const defaults = getDefaultNotificationSettings()

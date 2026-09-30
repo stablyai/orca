@@ -23,6 +23,7 @@ import {
   hostTestAttachParams,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 
 const CALLER = { callerKey: 'client-1' }
 const CHILD_PID = 4321
@@ -95,7 +96,7 @@ function host(
   return new StructuredAgentSessionHost({
     store,
     adapter,
-    journalRoot: generationRoot(generation),
+    journalDatabase: openTestJournalHostDatabase(generationRoot(generation)),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     now: () => NOW,

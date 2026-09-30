@@ -1,4 +1,8 @@
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalRowAttribution
+} from '../../shared/agent-session-journal-types'
 import { createAgentSessionDeltaCoalescer } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import { CodexItemStreamRetention } from './codex-item-stream-retention'
 import { appendCodexItemAndPublish } from './codex-structured-journal-sink'
@@ -51,12 +55,14 @@ export function createCodexStructuredItemStreams(
   const states = new CodexItemStreamRetention(deps.maxMetadataBytes)
   const checkpointLengths = new Map<string, number>()
   const pendingCheckpoints = new Set<string>()
-  // Which thread and turn produced each stream, resolved to linkage per append
+  // Which thread and turn produced each stream, resolved to its attribution per append
   // so a parent learned after the first checkpoint still reaches the row.
   const producers = new Map<string, { threadId: string; turnId: string | null }>()
-  const linkageOf = (key: string) => {
+  const attributionOf = (key: string): AgentJournalRowAttribution => {
     const producer = producers.get(key)
-    return producer ? deps.linkageFor(producer.threadId, producer.turnId) : {}
+    return producer
+      ? deps.attributionFor(producer.threadId, producer.turnId)
+      : { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   }
   // Patch updates are authoritative item snapshots. Keep the latest rejected
   // snapshot until the journal admits it; unlike streamed deltas, there is no
@@ -114,7 +120,7 @@ export function createCodexStructuredItemStreams(
     }
     return appendCodexItemAndPublish(deps.sink, state.identity, translated.body, {
       coalescingKey: `checkpoint:${agentJournalItemKey(state.identity)}`,
-      ...linkageOf(key)
+      ...attributionOf(key)
     }).accepted
   }
 
@@ -191,7 +197,7 @@ export function createCodexStructuredItemStreams(
       deps.sink,
       pending.identity,
       pending.body,
-      linkageOf(key)
+      attributionOf(key)
     )
     if (!admission.accepted) {
       return admission

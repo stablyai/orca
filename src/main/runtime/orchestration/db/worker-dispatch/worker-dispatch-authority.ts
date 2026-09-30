@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto'
 import { OrchestrationError } from '../../orchestration-error'
 import { hashDispatchCapability } from '../dispatch-capability-hash'
 import type { OrchestrationDb } from '../orchestration-db'
-import { structuredWorkerOrcaSessionIdForIncarnation } from '../../../structured-worker-identity'
+import { dispatchAssigneeOrcaSessionId } from '../../dispatch-assignee-orca-session-id'
 
 export function prepareStartingWorkerAuthority(
   this: OrchestrationDb,
@@ -64,7 +64,7 @@ export function prepareStartingWorkerAuthority(
       .run(
         params.handle,
         params.paneKey,
-        structuredWorkerOrcaSessionIdForIncarnation(params.processIncarnation),
+        dispatchAssigneeOrcaSessionId(params.processIncarnation),
         params.processIncarnation,
         params.hostScope ?? null,
         hashDispatchCapability(capability),

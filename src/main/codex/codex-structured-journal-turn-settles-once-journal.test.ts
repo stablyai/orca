@@ -10,7 +10,7 @@ import {
   completedStructuredAgentTurnSeconds,
   selectStructuredAgentRunningTurnTiming
 } from '../../shared/structured-agent-session-turn-timing'
-import { openAgentSessionJournal } from '../native-chat/agent-session-journal/journal-store-factory'
+import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 
@@ -18,6 +18,7 @@ const SESSION = 'session-codex-failed-turn'
 const THREAD = 'thread-abc'
 const TURN = 'turn-1'
 
+const journals = createTrackedJournalOpener()
 const cleanups: (() => Promise<void>)[] = []
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0)) {
@@ -27,7 +28,7 @@ afterEach(async () => {
 
 async function session() {
   const root = await mkdtemp(join(tmpdir(), 'orca-codex-failed-turn-'))
-  const journal = await openAgentSessionJournal({
+  const journal = await journals.open({
     identity: {
       sessionId: SESSION,
       workspaceId: 'workspace-1',
@@ -35,14 +36,14 @@ async function session() {
       agent: 'codex',
       providerHandle: { kind: 'codex', threadId: THREAD }
     },
-    journalDir: root,
+    stateDirectory: root,
     now: () => 1_000
   })
   const deferred = createDeferredStructuredAgentSessionEventSink()
   deferred.bind({ journal, fence: 1, publish: () => {} })
   cleanups.push(async () => {
     deferred.close()
-    await journal.close()
+    await journals.closeAll()
     await rm(root, { recursive: true, force: true })
   })
   const translator = createCodexJournalTranslator({

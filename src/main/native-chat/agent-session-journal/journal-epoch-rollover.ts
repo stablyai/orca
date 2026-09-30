@@ -6,22 +6,22 @@
 // rather than retained — nothing would ever shed them.
 
 import { journalRowSchemaVersion } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionProviderHandle } from '../../../shared/agent-session-journal-types'
-import type Database from '../../sqlite/sync-database'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
+import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalLoad } from './journal-open'
 import { clearJournalRepairMarker } from './journal-repair-marker'
 import { applyJournalRow, createJournalReducerState } from './journal-reducer'
 import {
-  deleteAllJournalRows,
+  deleteJournalEpochRows,
   insertJournalRow,
-  upsertJournalSessionRow
+  publishJournalSessionEpoch,
+  readJournalSessionEpoch
 } from './journal-row-table'
 import type { AgentJournalEpochReason, JournalRow } from './journal-row-schema'
 
 export function publishNewEpoch(input: {
-  db: Database.Database
-  sessionId: string
-  providerHandle: AgentSessionProviderHandle
+  database: JournalHostDatabase
+  identity: AgentSessionJournalIdentity
   epoch: string
   reason: AgentJournalEpochReason
   fence: number
@@ -32,7 +32,7 @@ export function publishNewEpoch(input: {
   const row: JournalRow = {
     kind: 'epoch',
     reason: input.reason,
-    providerHandle: input.providerHandle,
+    providerHandle: input.identity.providerHandle,
     // Carries no body: an older host must keep reading a turn-free session past row 1.
     v: journalRowSchemaVersion([]),
     epoch: input.epoch,
@@ -41,22 +41,21 @@ export function publishNewEpoch(input: {
     ts: input.now
   }
 
-  input.db.exec('BEGIN IMMEDIATE')
-  try {
-    deleteAllJournalRows(input.db)
-    clearJournalRepairMarker(input.db, input.sessionId)
-    insertJournalRow(input.db, input.sessionId, row)
-    upsertJournalSessionRow(input.db, input.sessionId, input.epoch, input.now)
-    input.db.exec('COMMIT')
-  } catch (error) {
-    input.db.exec('ROLLBACK')
-    throw error
-  }
+  const { sessionId } = input.identity
+  input.database.transaction((db) => {
+    const retired = readJournalSessionEpoch(db, sessionId)
+    if (retired !== null) {
+      deleteJournalEpochRows(db, sessionId, retired)
+    }
+    clearJournalRepairMarker(db, sessionId)
+    insertJournalRow(db, sessionId, row)
+    publishJournalSessionEpoch(db, input.identity, input.epoch)
+  })
 
   // COMMIT landed: on disk the superseded prefix is gone and this epoch is the
   // live one. The caller adopts that immediately, or a later failure leaves the
   // store writing into an epoch that no longer exists.
-  const state = createJournalReducerState(input.sessionId, input.epoch)
+  const state = createJournalReducerState(sessionId, input.epoch)
   applyJournalRow(state, row)
   state.oldestSequence = 1
   input.onPublished({ state, readOnly: false, corrupt: false, malformedRows: 0 })

@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import { makeStructuredAgentStatusSubject } from '../../../shared/agent-status-subject'
-import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
+import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import {
   StructuredAgentSessionStatusFeed,
   type StructuredAgentSessionStatusSink
@@ -34,7 +34,7 @@ async function feedWith(sink: StructuredAgentSessionStatusSink) {
       agent: 'codex',
       providerHandle: { kind: 'codex', threadId: 'thread-1' }
     },
-    journalDir: join(root, SESSION)
+    stateDirectory: join(root, SESSION)
   })
   const session = indexedStatusFeedSession({ journal })
   return new StructuredAgentSessionStatusFeed({

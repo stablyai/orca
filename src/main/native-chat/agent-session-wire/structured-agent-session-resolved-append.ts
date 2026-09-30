@@ -4,7 +4,7 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
 import type {
-  StructuredAgentSessionAppendOptions,
+  StructuredAgentSessionItemAppendOptions,
   StructuredAgentSessionEventSink,
   StructuredAgentSessionRevisionJournal
 } from './structured-agent-session-event-sink'
@@ -30,7 +30,7 @@ export function createStructuredAgentSessionResolvedAppend(
   const submit = (
     reservedBytes: number,
     resolve: (journal: StructuredAgentSessionRevisionJournal) => ResolvedItem | null,
-    options: StructuredAgentSessionAppendOptions,
+    options: Omit<StructuredAgentSessionItemAppendOptions, 'coalescingKey'>,
     publish: boolean
   ) =>
     queue.submit(
@@ -58,7 +58,7 @@ export function createStructuredAgentSessionResolvedAppend(
       options
     )
   const identityOnly = (publish: boolean) =>
-    ((identitySizeBound, body, resolveIdentity, options = {}) =>
+    ((identitySizeBound, body, resolveIdentity, options) =>
       submit(
         estimateStructuredAgentSessionItemBytes(identitySizeBound, body) + (publish ? 1 : 0),
         (journal) => {
@@ -71,11 +71,11 @@ export function createStructuredAgentSessionResolvedAppend(
   return {
     tryAppendResolvedItem: identityOnly(false),
     tryAppendResolvedItemAndPublish: identityOnly(true),
-    tryReviseResolvedItem: (reservedBytes, resolve, options = {}) =>
+    tryReviseResolvedItem: (reservedBytes, resolve, options) =>
       submit(reservedBytes, resolve, options, false),
-    tryReviseResolvedItemAndPublish: (reservedBytes, resolve, options = {}) =>
+    tryReviseResolvedItemAndPublish: (reservedBytes, resolve, options) =>
       submit(reservedBytes + 1, resolve, options, true),
-    tryAppendLifecycleTransition: (identitySizeBound, body, resolveIdentity, options = {}) => {
+    tryAppendLifecycleTransition: (identitySizeBound, body, resolveIdentity, options) => {
       const bytes = estimateStructuredAgentSessionItemBytes(identitySizeBound, body)
       return queue.submit(
         {

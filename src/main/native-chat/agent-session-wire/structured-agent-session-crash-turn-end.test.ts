@@ -11,6 +11,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import {
   completedStructuredAgentTurnSeconds,
@@ -18,7 +20,10 @@ import {
 } from '../../../shared/structured-agent-session-turn-timing'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { AGENT_SESSION_STORE_FILE_NAME } from '../../runtime/agent-session-record-store-file'
-import { journalDirectoryFor } from '../agent-session-journal/journal-paths'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import {
   AgentSessionAcquisitionExitUnprovenError,
@@ -120,10 +125,7 @@ async function seedClaudeToolTurn(): Promise<void> {
       agent: 'claude',
       providerHandle: { kind: 'claude', sessionId: PROVIDER_SESSION, leafUuid: null }
     },
-    journalDir: journalDirectoryFor(root, {
-      workspaceId: LOCATION.workspaceId,
-      sessionId: SESSION
-    }),
+    database: openTestJournalHostDatabase(root),
     now: () => now
   })
   await journal.appendSubmission({
@@ -132,10 +134,16 @@ async function seedClaudeToolTurn(): Promise<void> {
     body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'run the loop' }] },
     fence: 13
   })
+  const turnIdentity = {
+    provider: 'claude' as const,
+    sessionId: PROVIDER_SESSION,
+    uuid: 'uuid-turn'
+  }
+  const turnScope = { kind: 'turn' as const, turnItemId: agentJournalItemKey(turnIdentity) }
   await journal.appendItem(
-    { provider: 'claude', sessionId: PROVIDER_SESSION, uuid: 'uuid-turn' },
+    turnIdentity,
     { kind: 'turn', turnId: 'turn-1', state: 'running', startedAt: now },
-    { fence: 13 }
+    { fence: 13, turnScope }
   )
   now = TOOL_STARTED_AT
   await journal.appendItem(
@@ -146,7 +154,7 @@ async function seedClaudeToolTurn(): Promise<void> {
       input: { command: 'for i in $(seq 90); do sleep 1; done' },
       state: 'running'
     },
-    { fence: 13 }
+    { fence: 13, turnScope }
   )
   await journal.close()
 }
@@ -162,7 +170,7 @@ function openHost(overrides: Partial<StructuredAgentSessionHostDeps>): void {
       setOption: vi.fn(),
       supportsCreate: () => true
     },
-    journalRoot: root,
+    journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-new',
     now: () => RELAUNCHED_AT,
@@ -185,6 +193,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await host?.flushAllStreamedEvents()
+  closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -363,7 +372,8 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
         // The new child is already working when its start lands, ahead of the queued revision.
         events?.appendItem(
           { provider: 'claude', sessionId: PROVIDER_SESSION, uuid: 'uuid-turn-2' },
-          { kind: 'turn', turnId: 'turn-2', state: 'running', startedAt: RELAUNCHED_AT }
+          { kind: 'turn', turnId: 'turn-2', state: 'running', startedAt: RELAUNCHED_AT },
+          { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
         )
         return {
           process,

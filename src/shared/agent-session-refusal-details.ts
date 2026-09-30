@@ -24,8 +24,9 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'journalWriteFailed',
     // The conversation's state
     'conversationCleared',
-    /** A /clear that never committed; its replacement conversation may not exist. */
+    /** Older hosts only: a /clear that never committed; its replacement may not exist. */
     'clearUnconfirmed',
+    /** Older hosts only: a command blocked behind that /clear. */
     'conversationCommandUnconfirmed',
     'conversationCommandInFlight',
     'handoffInFlight',
@@ -95,7 +96,9 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     /** SQLite reports the chat's journal damaged or not a database; no retry reads past it. */
     'journalCorrupt',
     /** Any other failed open, which can clear. */
-    'journalUnavailable'
+    'journalUnavailable',
+    /** A newer Orca wrote the journal, or this chat's rows; only an update writes past it. */
+    'journalWrittenByNewerOrca'
   ],
   structured_agent_session_unsupported: [
     'clientCapabilityMissing',

@@ -4,8 +4,6 @@
 // (used directly — mobile ships English only) so the two surfaces never drift.
 // Everything here is pure; each platform owns its own clock.
 
-import type { NativeChatMessage } from './native-chat-types'
-
 export const NATIVE_CHAT_TURN_STATUS_COPY = {
   thinking: 'Thinking',
   working: 'Working…',
@@ -105,20 +103,6 @@ export type NativeChatTurnTimingByTurn = Readonly<Record<string, NativeChatTurnT
 
 /** The live turn's key when the transcript has no user message to hang it on. */
 export const NATIVE_CHAT_UNANCHORED_TURN_KEY = '__unanchored__'
-
-/** The user message whose bar carries the live clock: the one the host says opened
- *  the running turn — a message sent while it runs is not that one — else, when the
- *  host names none, the latest user message. */
-export function selectNativeChatActiveTurnKey(
-  messages: readonly NativeChatMessage[],
-  activeTurnOpenedBy?: string | null
-): string {
-  return (
-    activeTurnOpenedBy ??
-    messages.findLast((message) => message.role === 'user')?.id ??
-    NATIVE_CHAT_UNANCHORED_TURN_KEY
-  )
-}
 
 /** The turn-timing state machine, lifted out of the React hook so desktop and
  *  mobile stamp start/stop identically. Returns the same reference when nothing

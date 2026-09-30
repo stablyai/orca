@@ -213,7 +213,7 @@ export async function openCodexAppServerConnection(
       // Why: per request, not per session — a chat session outlives every call,
       // so only the individual call can carry a deadline.
       const timer = setTimeout(() => {
-        dispatcher.deletePending(id)
+        dispatcher.timeOutPending(id)
         reject(new CodexAppServerTimeoutError(`codex app-server ${method} exceeded ${timeoutMs}ms`))
       }, timeoutMs)
       dispatcher.addPending(id, { method, resolve, reject, timer })

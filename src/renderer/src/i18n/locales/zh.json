@@ -3966,7 +3966,12 @@
             "checkLabel": "{{value0}} 个待检查的聊天",
             "checkAriaOne": "恢复后有 1 个待检查的聊天。点击查看详情。",
             "checkAria": "恢复后有 {{value0}} 个待检查的聊天。点击查看详情。",
-            "checkTooltip": "重启后 Orca 未能恢复或未能确认已恢复的聊天。点击查看详情。"
+            "checkTooltip": "重启后 Orca 未能恢复或未能确认已恢复的聊天。点击查看详情。",
+            "resumingLabelOne": "正在恢复 1 个聊天",
+            "resumingLabel": "正在恢复 {{value0}} 个聊天",
+            "resumingAriaOne": "正在恢复 1 个聊天。点击查看详情。",
+            "resumingAria": "正在恢复 {{value0}} 个聊天。点击查看详情。",
+            "resumingTooltip": "正在恢复中断的聊天并请它们继续…"
           }
         }
       },
@@ -8949,6 +8954,9 @@
             "0d1c334987": "合盖",
             "ff8de8a2ad": "显示器",
             "0d752916f8": "钩子",
+            "agent-trust-trust": "信任",
+            "agent-trust-folder": "文件夹",
+            "agent-trust-worktree": "工作树",
             "6984d4291a": "状态",
             "13b20636a6": "等待",
             "8599603496": "完成",
@@ -10714,6 +10722,10 @@
         "agent-status-hooks-copy": {
           "7707c15abb": "智能体状态钩子",
           "a68a642835": "在 Orca 中显示工作中、等待中和完成状态。关闭后将移除 Orca 管理的钩子并停止重新安装。"
+        },
+        "agent-workspace-trust-copy": {
+          "title": "Orca 启动智能体时信任该文件夹",
+          "description": "Orca 启动的智能体会跳过“Do you trust this folder?”提示，因此项目的智能体钩子和设置会立即运行。若关闭此项，每个智能体在某个文件夹中首次运行时都会询问。在你没有看着时运行的智能体（例如编排工作进程、自动化以及从手机启动的智能体）会停在该提问处等待，直到你在它们的终端中作答。已信任的文件夹仍保持信任。"
         },
         "agent-generated-tab-title-copy": {
           "19ad21615a": "自动生成标签页标题",
@@ -17330,6 +17342,8 @@
         "historyUnreadable": "Orca 无法读取此聊天的已保存历史记录。",
         "historyUnusable": "无法加载此聊天。",
         "historyUnavailable": "Orca 目前无法打开此聊天的历史记录。",
+        "savedByNewerOrca": "这些聊天由更新版本的 Orca 保存。",
+        "updateOrcaToKeepUsing": "请更新 Orca 以继续使用这些聊天。",
         "unsupported": "运行此聊天的 Orca 不支持此操作。请更新 Orca 后重试。",
         "unreachable": "Orca 无法连接到智能体。",
         "recordFailed": "Orca 无法将其记录到此聊天的历史记录中。",
@@ -17646,6 +17660,7 @@
       "railEmptyMessage": "信息",
       "ask": {
         "awaiting": "等待用户输入：",
+        "awaitingUnnamed": "等待用户输入",
         "asked": "问：",
         "questionCount": "{{value0}} 问题"
       },
@@ -18491,5 +18506,63 @@
   },
   "common": {
     "retry": "重试"
+  },
+  "fileExplorer": {
+    "root": {
+      "label": "文件浏览器根目录",
+      "full": "仓库根目录",
+      "viewing": "当前视图：{{path}}",
+      "back": "返回 {{path}}",
+      "searchScope": "搜索范围：工作区文件",
+      "retry": "重试",
+      "omittedFiles": "稀疏检出中排除的文件不会被搜索。",
+      "viewOnly": "稀疏检出 · 更改视图不会更改已检出的文件。",
+      "sparseStatus": "稀疏检出",
+      "scopeDetails": "关于稀疏检出范围",
+      "scopeExplanation": "文件夹选择器只改变显示范围，不会改变检出的文件。仓库根目录视图也会显示根目录和上级文件夹中已检出的文件。",
+      "searchExplanation": "“名称”筛选当前查看的文件夹。“内容”搜索整个工作区。稀疏检出排除的文件不会被搜索。",
+      "findInFolder": "在 {{path}} 中查找",
+      "folderLoadError": "无法加载此文件夹：",
+      "emptyFolder": "此文件夹中没有文件"
+    }
+  },
+  "sparsePreset": {
+    "nameRequired": "请输入名称。",
+    "nameTooLong": "名称不能超过80个字符。",
+    "nameExists": "名为“{{name}}”的预设已存在。",
+    "name": "名称",
+    "namePlaceholder": "Web应用与共享UI",
+    "directories": "目录",
+    "pathHelp": "每行输入一个相对于仓库的目录。路径中的空格会保留。",
+    "coneHelp": "Git还会保留仓库根目录以及这些目录的父文件夹中的文件。",
+    "cancel": "取消",
+    "save": "保存预设",
+    "new": "新建稀疏检出预设",
+    "edit": "编辑稀疏检出预设",
+    "description": "选择新工作区要检出的文件夹。",
+    "saveFailed": "无法保存预设。请重试。",
+    "loading": "正在加载预设...",
+    "details": "会检出哪些文件？",
+    "finishEditing": "保存或取消预设后，即可继续创建工作区。",
+    "pathInstructions": "每行输入一个文件夹，使用相对于仓库根目录的路径。",
+    "retryLoad": "重试加载预设",
+    "fullCheckout": "完整检出",
+    "checkoutPreset": "检出预设",
+    "search": "查找预设…",
+    "noMatches": "没有匹配的预设。",
+    "allFiles": "仓库中的所有文件",
+    "editNamed": "编辑 {{name}}",
+    "addPath": "Add a folder",
+    "findPath": "Find a folder…",
+    "noPathMatches": "No folders found.",
+    "repositoryRoot": "Repository root",
+    "loadingPaths": "Reading folders…",
+    "pathsUnavailable": "Could not read this folder. Type the path instead.",
+    "pathAdded": "Added",
+    "openFolder": "Open {{name}}",
+    "findOrTypePath": "Find a folder, or type any path…",
+    "addTypedPath": "Add",
+    "noDirectories": "No folders added yet.",
+    "removePath": "Remove {{name}}"
   }
 }

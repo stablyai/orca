@@ -17,6 +17,7 @@ import {
   resetHostTestOperationIds
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
+import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 
 const SWEEP_MS = 5
 const RETRY_GAP_MS = 10 * 60_000
@@ -81,7 +82,7 @@ beforeEach(async () => {
   host = new StructuredAgentSessionHost({
     store,
     adapter,
-    journalRoot: root,
+    journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-1',
     idleSweep: { intervalMs: SWEEP_MS, idleMs: STRUCTURED_AGENT_SESSION_IDLE_MS },

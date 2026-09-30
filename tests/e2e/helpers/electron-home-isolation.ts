@@ -9,6 +9,8 @@ const RESTRICTED_ENV_KEYS = new Set([
   'HOMEPATH',
   'CODEX_HOME',
   'ORCA_CODEX_HOME',
+  // Why: Orca's spawn hook writes Claude folder trust into the config this names.
+  'CLAUDE_CONFIG_DIR',
   'ORCA_E2E_USER_DATA_DIR',
   'ORCA_E2E_HOME_DIR',
   'ZDOTDIR',

@@ -1,0 +1,64 @@
+// Host wiring for mid-turn queueing: builds the serialized drain from the
+// host's mutation context and exposes the draft actions (Send, Delete, Resume), so the host
+// class stays a description of its surface.
+
+import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
+import type {
+  StructuredAgentSessionCaller,
+  StructuredAgentSessionHostSession
+} from './structured-agent-session-host-types'
+import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
+import { StructuredAgentSessionQueuedMessageDrain } from './structured-agent-session-queued-messages'
+import { retireEndedQueuePause } from './structured-agent-session-queued-pause'
+import {
+  deleteQueuedStructuredAgentMessage,
+  resumeStructuredAgentQueue,
+  sendQueuedStructuredAgentMessage
+} from './structured-agent-session-queued-mutations'
+
+/** `sessions` are the live conversations (their `touch` is the idle sweep's activity renewal,
+ *  which the drain's schedule rides); everything else comes from the host's mutation context,
+ *  read lazily because the host's fields are still initializing when this is built. */
+export function wireStructuredAgentSessionQueuedMessages(
+  sessions: ReadonlyMap<string, StructuredAgentSessionHostSession> & {
+    touch: (sessionId: string) => void
+  },
+  context: () => StructuredAgentSessionMutationContext
+) {
+  const drain = new StructuredAgentSessionQueuedMessageDrain({
+    sessions,
+    getRecord: (sessionId) => context().deps.store.getRecord(sessionId),
+    serialize: (sessionId, task) => context().serialize(sessionId, task),
+    flushStreamedEvents: (sessionId) => context().flushStreamedEvents(sessionId),
+    conversationFence: (sessionId) =>
+      structuredAgentSessionConversationFence(context().deps.store, sessionId),
+    wakeDelivery: (sessionId) => context().wakeDelivery(sessionId),
+    onError: (sessionId, error) => context().deps.onEventSinkError?.({ sessionId, error })
+  })
+  return {
+    drain,
+    /** Every journal publish: turn, submission, prompt, command and Stop
+     *  settlements are all commits, and each re-derives the drain's gates —
+     *  and retires a queue pause a person's started turn already ended. */
+    onJournalActivity: (sessionId: string) => {
+      sessions.touch(sessionId)
+      const journal = sessions.get(sessionId)?.journal
+      if (journal && !journal.isReadOnly) {
+        void retireEndedQueuePause(sessionId, journal)
+      }
+      drain.schedule(sessionId)
+    },
+    queuedMessageSend: (
+      caller: StructuredAgentSessionCaller,
+      params: Parameters<typeof sendQueuedStructuredAgentMessage>[2]
+    ) => sendQueuedStructuredAgentMessage(context(), caller, params),
+    queuedMessageDelete: (
+      caller: StructuredAgentSessionCaller,
+      params: Parameters<typeof deleteQueuedStructuredAgentMessage>[2]
+    ) => deleteQueuedStructuredAgentMessage(context(), caller, params),
+    queuedMessagesResume: (
+      caller: StructuredAgentSessionCaller,
+      params: Parameters<typeof resumeStructuredAgentQueue>[2]
+    ) => resumeStructuredAgentQueue(context(), caller, params)
+  }
+}

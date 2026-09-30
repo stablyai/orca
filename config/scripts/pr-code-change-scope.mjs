@@ -53,8 +53,11 @@ const GIT_COMPAT_PREFIXES = [
 ]
 
 // Why narrow: the contract pins Codex's read-repair, so it runs when the heal that
-// depends on it, its app-server transport, or the contract itself changes.
+// depends on it, its app-server transport, or the contract itself changes. The same
+// job pins --no-daemon for Orca's codex shell wrapper.
 const CODEX_INDEX_HEAL_CONTRACT_PREFIXES = [
+  'src/main/pty/codex-no-daemon-binary-contract',
+  'src/main/pty/codex-shell-launch-preflight',
   'src/main/codex/codex-index-heal-binary-contract',
   'src/main/codex/codex-session-index-heal',
   'src/main/codex/codex-app-server-session',

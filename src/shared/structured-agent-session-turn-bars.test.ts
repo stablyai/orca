@@ -5,9 +5,9 @@ import type {
   AgentJournalTurnLifecycle
 } from './agent-session-journal-types'
 import type { NativeChatMessage } from './native-chat-types'
+import { nativeChatTurnMembership } from './native-chat-turn-membership'
 import {
   reduceNativeChatTurnTiming,
-  selectNativeChatActiveTurnKey,
   selectNativeChatTurnStatuses,
   type NativeChatTurnTimingByTurn
 } from './native-chat-turn-status'
@@ -150,6 +150,42 @@ function message(id: string, role: NativeChatMessage['role'] = 'user'): NativeCh
   return { id, role, blocks: [{ type: 'text', text: id }], timestamp: null, source: 'transcript' }
 }
 
+/** The row whose bar carries the running clock, as a surface places it. These journals are from a
+ *  host that states no row's turn, so the bar follows the running record's named opener. */
+function barOf(
+  transcript: readonly NativeChatMessage[],
+  snapshot: {
+    items: readonly AgentJournalRenderItem[]
+    submissions: readonly AgentJournalSubmission[]
+  }
+): string | undefined {
+  return nativeChatTurnMembership(transcript, snapshot).liveTurnKey
+}
+
+/** The same journal from a host that states each row's turn: a user row belongs to no turn, a
+ *  steer to the turn `steers` names, and any other row to the root turn record before it. */
+function scoped(
+  items: readonly AgentJournalRenderItem[],
+  steers: ReadonlyMap<string, string> = new Map()
+): AgentJournalRenderItem[] {
+  let open: string | null = null
+  return items.map((item) => {
+    const steered = steers.get(item.itemId)
+    if (item.body.kind === 'turn') {
+      open = item.itemId
+    }
+    const turnItemId =
+      steered ??
+      (item.body.kind === 'turn' || (item.body.kind === 'message' && item.body.role === 'user')
+        ? null
+        : open)
+    return {
+      ...item,
+      turnScope: turnItemId ? { kind: 'turn' as const, turnItemId } : { kind: 'thread' as const }
+    }
+  })
+}
+
 describe('a send queued behind a running Claude turn', () => {
   it('leaves the live bar with the prompt that opened the running turn', () => {
     const bars = selectStructuredAgentTurnBars(
@@ -157,9 +193,8 @@ describe('a send queued behind a running Claude turn', () => {
       whileQueued.submissions,
       whileQueued.turnId
     )
-    expect(bars.activeTurnOpenedBy).toBe('orca:A')
     const transcript = [message('orca:prior'), message('orca:A'), message('orca:B')]
-    expect(selectNativeChatActiveTurnKey(transcript, bars.activeTurnOpenedBy)).toBe('orca:A')
+    expect(barOf(transcript, whileQueued)).toBe('orca:A')
     // A was sent into an idle session: it counts from its own send, as before.
     expect(bars.runningTiming).toEqual({
       state: 'running',
@@ -172,7 +207,8 @@ describe('a send queued behind a running Claude turn', () => {
 
   it("moves the bar to B when its own turn opens, counting from A's end", () => {
     const bars = selectStructuredAgentTurnBars(whileB.items, whileB.submissions, whileB.turnId)
-    expect(bars.activeTurnOpenedBy).toBe('orca:B')
+    const transcript = [message('orca:prior'), message('orca:A'), message('orca:B')]
+    expect(barOf(transcript, whileB)).toBe('orca:B')
     expect(bars.settledTurns.get('orca:A')).toEqual({ startedAt: A.started, workedSeconds: 17 })
     expect(bars.runningTiming && structuredAgentTurnOrigin(bars.runningTiming)).toBe(A.ended)
     // A client attaching 3 s into turn 2 counts 3 s, not the 13 s B waited behind turn 1.
@@ -195,7 +231,6 @@ describe('a send queued behind a running Claude turn', () => {
     expect(Math.floor((B.ended - liveOriginB) / 1000)).toBe(51)
     expect(A.ended - A.sent + (B.ended - liveOriginB)).toBe(B.ended - A.sent)
     expect(selectStructuredAgentTurnBars(settled.items, settled.submissions, null)).toMatchObject({
-      activeTurnOpenedBy: null,
       runningTiming: null
     })
   })
@@ -210,7 +245,7 @@ describe('a send queued behind a running Claude turn', () => {
       now: number
     ) => {
       const bars = selectStructuredAgentTurnBars(snapshot.items, snapshot.submissions, turnId)
-      const activeTurnKey = selectNativeChatActiveTurnKey(transcript, bars.activeTurnOpenedBy)
+      const activeTurnKey = barOf(transcript, snapshot)!
       const workingStartedAt = structuredAgentTurnLocalStartedAt(bars.runningTiming!, now, now)
       timing = reduceNativeChatTurnTiming(timing, {
         activeTurnKey,
@@ -281,7 +316,7 @@ describe('a send Codex folds into the running turn', () => {
 
   it('keeps exactly one bar, under the opening prompt, live and settled', () => {
     const live = selectStructuredAgentTurnBars(items, submissions, 't1')
-    expect(selectNativeChatActiveTurnKey(transcript, live.activeTurnOpenedBy)).toBe('orca:first')
+    expect(barOf(transcript, { items, submissions })).toBe('orca:first')
     expect(live.runningTiming && structuredAgentTurnOrigin(live.runningTiming)).toBe(1_000)
 
     let timing: NativeChatTurnTimingByTurn = {}
@@ -296,7 +331,7 @@ describe('a send Codex folds into the running turn', () => {
     const after = selectStructuredAgentTurnBars(ended, submissions, null)
     // The turn is over: nothing names an owner, so the key falls back to the newest prompt,
     // which never ran a turn of its own and so has nothing to settle.
-    const activeTurnKey = selectNativeChatActiveTurnKey(transcript, after.activeTurnOpenedBy)
+    const activeTurnKey = barOf(transcript, { items: ended, submissions })!
     expect(activeTurnKey).toBe('orca:second')
     timing = reduceNativeChatTurnTiming(timing, {
       activeTurnKey,
@@ -324,9 +359,7 @@ describe('turns whose host names no opener', () => {
       turn(2, 1_100, { turnId: 't1', state: 'running', startedAt: 1_100 }),
       user(3, 'u2', 2_000)
     ]
-    const bars = selectStructuredAgentTurnBars(items, [], 't1')
-    expect(bars.activeTurnOpenedBy).toBeNull()
-    expect(selectNativeChatActiveTurnKey([message('orca:u1'), message('orca:u2')], null)).toBe(
+    expect(barOf([message('orca:u1'), message('orca:u2')], { items, submissions: [] })).toBe(
       'orca:u2'
     )
     // Settled timing keeps its journal-order attribution.
@@ -344,7 +377,9 @@ describe('turns whose host names no opener', () => {
         userItemId: self
       })
     ]
-    expect(selectStructuredAgentTurnBars(items, [], 'resumed').activeTurnOpenedBy).toBe(self)
+    expect(barOf([message('orca:u1')], { items, submissions: [] })).toBe(self)
+    // A host that states each row's turn anchors it the same way.
+    expect(barOf([message('orca:u1')], { items: scoped(items), submissions: [] })).toBe(self)
   })
 
   it('keeps the running bar on the send Codex opened a turn for before it echoes it', () => {
@@ -364,21 +399,22 @@ describe('turns whose host names no opener', () => {
       user(4, 'second', 3_000),
       turn(5, 3_100, { turnId: 't2', state: 'running', startedAt: 3_100, userItemId: key })
     ]
+    const transcript = [message('orca:first'), message('orca:second')]
     const submissions = [accepted('first', 'claude:first'), accepted('second', null)]
-    const bars = selectStructuredAgentTurnBars(items, submissions, 't2')
-    expect(bars.activeTurnOpenedBy).toBe('orca:second')
-    expect(bars.turnKeysByItemId.get('orca:second')).toBe('orca:second')
-    // A turn with no send in flight still anchors to its own record.
-    const selfOpened = selectStructuredAgentTurnBars(
-      items,
-      [accepted('first', 'claude:first'), accepted('second', 'claude:second')],
-      't2'
-    )
-    expect(selfOpened.activeTurnOpenedBy).toBe('legacy:claude:55368cfb:turn-lifecycle%3At2')
+    for (const journal of [items, scoped(items)]) {
+      const membership = nativeChatTurnMembership(transcript, { items: journal, submissions })
+      expect(membership.liveTurnKey).toBe('orca:second')
+      expect(membership.turnKeys[1]).toBe('orca:second')
+      // A turn with no send in flight still anchors to its own record.
+      const selfOpened = [accepted('first', 'claude:first'), accepted('second', 'claude:second')]
+      expect(barOf(transcript, { items: journal, submissions: selfOpened })).toBe(
+        'legacy:claude:55368cfb:turn-lifecycle%3At2'
+      )
+    }
   })
 
   it('names nothing for the unanchored transcript', () => {
-    expect(selectNativeChatActiveTurnKey([message('a', 'assistant')], null)).toBe('__unanchored__')
+    expect(nativeChatTurnMembership([message('a', 'assistant')], null).liveTurnKey).toBeUndefined()
   })
 })
 
@@ -431,45 +467,57 @@ describe('the previous turn has no recorded end', () => {
 })
 
 describe('which turn owns each transcript row', () => {
+  /** Each drawn row's turn, by id, as a surface places it. */
   const keysOf = (snapshot: {
-    turnId: string | null
     items: AgentJournalRenderItem[]
     submissions: AgentJournalSubmission[]
-  }) =>
-    selectStructuredAgentTurnBars(snapshot.items, snapshot.submissions, snapshot.turnId)
-      .turnKeysByItemId
+  }): ReadonlyMap<string, string | undefined> => {
+    const transcript = snapshot.items.flatMap((item) =>
+      item.body.kind === 'turn'
+        ? []
+        : [
+            message(
+              item.itemId,
+              item.body.kind === 'message' && item.body.role === 'user' ? 'user' : 'tool'
+            )
+          ]
+    )
+    const { turnKeys } = nativeChatTurnMembership(transcript, snapshot)
+    return new Map(transcript.map((row, index) => [row.id, turnKeys[index]]))
+  }
+  const turn1Record = `legacy:claude:55368cfb:turn-lifecycle%3A${turn1.turnId}`
 
   it('keeps the rows Claude produces after a mid-turn send with the turn that ran them', () => {
     // The #23621 shape: B lands mid-turn and three tool calls follow, one turn.
-    const midTurn = {
-      turnId: turn1.turnId,
-      items: [
-        user(54, 'A', A.sent),
-        turn(57, T + 77_224, {
-          ...turn1,
-          state: 'running',
-          startedAt: A.started,
-          requestedAt: A.sent
-        }),
-        tool(58, T + 77_300),
-        user(60, 'B', B.sent),
-        tool(61, T + 80_100),
-        tool(62, T + 80_200),
-        tool(63, T + 80_300)
-      ],
-      submissions: [accepted('A', turn1.userItemId), accepted('B', null)]
-    }
-    const keys = keysOf(midTurn)
-    expect(keys.get('orca:A')).toBe('orca:A')
-    expect(keys.get('orca:B')).toBe('orca:A')
-    for (const sequence of [58, 61, 62, 63]) {
-      expect(keys.get(`orca:claude-tool%3A${sequence}`)).toBe('orca:A')
+    const items = [
+      user(54, 'A', A.sent),
+      turn(57, T + 77_224, {
+        ...turn1,
+        state: 'running',
+        startedAt: A.started,
+        requestedAt: A.sent
+      }),
+      tool(58, T + 77_300),
+      user(60, 'B', B.sent),
+      tool(61, T + 80_100),
+      tool(62, T + 80_200),
+      tool(63, T + 80_300)
+    ]
+    const submissions = [accepted('A', turn1.userItemId), accepted('B', null)]
+    const steer = new Map([['orca:B', turn1Record]])
+    for (const journal of [items, scoped(items, steer)]) {
+      const keys = keysOf({ items: journal, submissions })
+      expect(keys.get('orca:A')).toBe('orca:A')
+      expect(keys.get('orca:B')).toBe('orca:A')
+      for (const sequence of [58, 61, 62, 63]) {
+        expect(keys.get(`orca:claude-tool%3A${sequence}`)).toBe('orca:A')
+      }
     }
   })
 
-  it('leaves a fresh tail send unowned until the turn proves it continued past it', () => {
+  it('leaves a fresh tail send in its own group until the turn proves it continued past it', () => {
     // B is the newest row: nothing after it says the running turn absorbed it.
-    expect(keysOf(whileQueued).has('orca:B')).toBe(false)
+    expect(keysOf(whileQueued).get('orca:B')).toBe('orca:B')
     // B's own turn opened: B is an opener and keys itself.
     expect(keysOf(whileB).get('orca:B')).toBe('orca:B')
     expect(keysOf(whileB).get(`orca:claude-tool%3A58`)).toBe('orca:A')
@@ -477,10 +525,11 @@ describe('which turn owns each transcript row', () => {
 
   it('folds a Codex-coalesced send into the turn its provider key names', () => {
     const key = 'codex:thread:t1:0'
+    const record = 'legacy:codex:s:turn-lifecycle%3At1'
     const items: AgentJournalRenderItem[] = [
       user(1, 'first', 1_000),
       {
-        itemId: 'legacy:codex:s:turn-lifecycle%3At1',
+        itemId: record,
         revision: 1,
         sequence: 2,
         observedAt: 1_200,
@@ -497,10 +546,12 @@ describe('which turn owns each transcript row', () => {
       tool(4, 5_000)
     ]
     const submissions = [accepted('first', key), accepted('second', key)]
-    const keys = keysOf({ turnId: 't1', items, submissions })
-    expect(keys.get('orca:first')).toBe('orca:first')
-    expect(keys.get('orca:second')).toBe('orca:first')
-    expect(keys.get('orca:claude-tool%3A4')).toBe('orca:first')
+    for (const journal of [items, scoped(items, new Map([['orca:second', record]]))]) {
+      const keys = keysOf({ items: journal, submissions })
+      expect(keys.get('orca:first')).toBe('orca:first')
+      expect(keys.get('orca:second')).toBe('orca:first')
+      expect(keys.get('orca:claude-tool%3A4')).toBe('orca:first')
+    }
   })
 
   it('keys a provider-opened turn and its rows to the turn record itself', () => {
@@ -515,18 +566,27 @@ describe('which turn owns each transcript row', () => {
       }),
       tool(3, 6_000)
     ]
-    const keys = keysOf({ turnId: 'resumed', items, submissions: [] })
-    // u1 predates the wake turn and never opened one: positional grouping keeps it.
-    expect(keys.has('orca:u1')).toBe(false)
-    expect(keys.get('orca:claude-tool%3A3')).toBe(self)
+    for (const journal of [items, scoped(items)]) {
+      const keys = keysOf({ items: journal, submissions: [] })
+      // u1 predates the wake turn and never opened one: it keeps its own group.
+      expect(keys.get('orca:u1')).toBe('orca:u1')
+      expect(keys.get('orca:claude-tool%3A3')).toBe(self)
+    }
   })
 
-  it('attributes nothing for an older host that names no opener', () => {
+  it('groups by position for an older host that names no opener', () => {
     const items = [
       user(1, 'u1', 1_000),
       turn(2, 1_100, { turnId: 't1', state: 'running', startedAt: 1_100 }),
-      tool(3, 1_200)
+      tool(3, 1_200),
+      user(4, 'u2', 1_300),
+      tool(5, 1_400)
     ]
-    expect(keysOf({ turnId: 't1', items, submissions: [] }).size).toBe(0)
+    expect([...keysOf({ items, submissions: [] }).values()]).toEqual([
+      'orca:u1',
+      'orca:u1',
+      'orca:u2',
+      'orca:u2'
+    ])
   })
 })

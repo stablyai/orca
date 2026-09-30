@@ -3,7 +3,12 @@ import type {
   AgentSessionSendResult
 } from '../../../../shared/agent-session-wire'
 import {
+  agentSessionRefusalFailure,
+  readAgentSessionErrorRefusal
+} from '../../../../shared/agent-session-write-failure'
+import {
   disposeStructuredAgentSessionSendFailure,
+  disposeStructuredAgentSessionSendRefusal,
   disposeStructuredAgentSessionSendResult,
   type StructuredAgentSessionSendDisposition
 } from '../../../../shared/structured-agent-session-send-disposition'
@@ -118,22 +123,40 @@ export function dispatchStructuredAgentSessionOutboxEntry(args: {
           createOperationId: args.createOperationId
         })
       )
-      return result.ok
-        ? result.value.submission.dispatchState === 'accepted' ||
-            result.value.submission.dispatchState === 'pending'
-        : false
+      if (!result.ok) {
+        return false
+      }
+      // A queued answer retired the entry; the queue keeps moving.
+      if ('queued' in result.value) {
+        return true
+      }
+      return (
+        result.value.submission.dispatchState === 'accepted' ||
+        result.value.submission.dispatchState === 'pending'
+      )
     } catch (caught) {
       if (args.dispatchGenerationRef.current !== args.dispatchGeneration) {
         return false
       }
+      const input = {
+        entries: args.outboxRef.current,
+        entry: args.next,
+        blockedClientMessageId: args.blockedIdRef.current
+      }
+      const thrown = readAgentSessionErrorRefusal(caught)
+      const refusal = thrown ? agentSessionRefusalFailure(thrown) : undefined
       args.applyDisposition(
-        disposeStructuredAgentSessionSendFailure({
-          entries: args.outboxRef.current,
-          entry: args.next,
-          blockedClientMessageId: args.blockedIdRef.current,
-          cause: caught,
-          isDeliveryUnknown: isDesktopDeliveryUnknown
-        })
+        refusal
+          ? disposeStructuredAgentSessionSendRefusal({
+              ...input,
+              refusal,
+              createOperationId: args.createOperationId
+            })
+          : disposeStructuredAgentSessionSendFailure({
+              ...input,
+              cause: caught,
+              isDeliveryUnknown: isDesktopDeliveryUnknown
+            })
       )
       return false
     }

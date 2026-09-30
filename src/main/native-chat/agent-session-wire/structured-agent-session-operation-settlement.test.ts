@@ -29,7 +29,7 @@ async function context(): Promise<AgentSessionTurnContext> {
         agent: 'codex',
         providerHandle: { kind: 'codex', threadId: THREAD }
       },
-      journalDir: join(hostTestState().root, 'settlement')
+      stateDirectory: join(hostTestState().root, 'settlement')
     }),
     fence: 1,
     adapter: adapter(),

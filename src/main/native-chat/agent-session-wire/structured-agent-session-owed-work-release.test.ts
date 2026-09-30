@@ -29,6 +29,7 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 
 const CALLER = { callerKey: 'client-1' }
 const SWEEP_MS = 5
@@ -88,7 +89,7 @@ beforeEach(async () => {
   host = new StructuredAgentSessionHost({
     store,
     adapter: Object.assign(adapter, { supportsCreate: () => true }),
-    journalRoot: root,
+    journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     idleSweep: { intervalMs: SWEEP_MS, idleMs: IDLE_MS },

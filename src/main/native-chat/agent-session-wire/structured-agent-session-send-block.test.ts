@@ -13,22 +13,19 @@ function withCommand(command: AgentSessionConversationCommandRecord) {
 const COMMAND = { operationId: 'operation-1', callerKey: 'client-1', runtimeFence: 7 }
 
 describe('a send refused by the conversation command it follows', () => {
-  it('says a /clear that never committed did not finish, not that the chat was cleared', () => {
-    const blocked = structuredAgentSessionSendBlock(
-      withCommand({
-        ...COMMAND,
-        command: 'clear',
-        state: 'unknown',
-        phase: 'prepared',
-        replacementSessionId: 'clear-replacement-1'
-      })
-    )
-
-    expect(blocked?.refusal).toMatchObject({
-      code: 'agent_session_operation_invalid',
-      details: { reason: 'clearUnconfirmed' },
-      message: "The last /clear didn't finish. Start a new chat to continue."
-    })
+  // A clear's commit is its only durable write, so a record short of it never changed the chat.
+  it("lets a send follow a /clear that never committed, as an older build's record leaves one", () => {
+    expect(
+      structuredAgentSessionSendBlock(
+        withCommand({
+          ...COMMAND,
+          command: 'clear',
+          state: 'unknown',
+          phase: 'prepared',
+          replacementSessionId: 'clear-replacement-1'
+        })
+      )
+    ).toBeNull()
   })
 
   it('says a committed /clear cleared the conversation', () => {
@@ -48,14 +45,12 @@ describe('a send refused by the conversation command it follows', () => {
     })
   })
 
-  it('keeps an unconfirmed /compact as an unconfirmed command', () => {
-    const blocked = structuredAgentSessionSendBlock(
-      withCommand({ ...COMMAND, command: 'compact', state: 'unknown', phase: 'prepared' })
-    )
-
-    expect(blocked?.refusal).toMatchObject({
-      details: { reason: 'conversationCommandUnconfirmed' }
-    })
+  it("lets a send follow an older build's unconfirmed /compact, whose child this host no longer runs", () => {
+    expect(
+      structuredAgentSessionSendBlock(
+        withCommand({ ...COMMAND, command: 'compact', state: 'unknown', phase: 'prepared' })
+      )
+    ).toBeNull()
   })
 
   it('lets a send follow a /clear whose new conversation failed to start', () => {

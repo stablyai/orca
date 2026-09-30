@@ -79,7 +79,13 @@ function claudeWriteFailureRejection(error: unknown): AgentJournalDispatchReject
 
 export async function dispatchClaudeTurn(
   session: ClaudeSession,
-  input: { clientMessageId?: string; body: AgentJournalMessageItem; requestedAt?: number },
+  input: {
+    clientMessageId?: string
+    body: AgentJournalMessageItem
+    requestedAt?: number
+    /** The frame's uuid, for a caller that correlates the provider's answer to it. */
+    sentUuid?: string
+  },
   beforeDispatch?: () => Promise<void>
 ): Promise<AgentSessionDispatchOutcome> {
   let content: unknown[]
@@ -98,7 +104,7 @@ export async function dispatchClaudeTurn(
   // Read the sent content, not the journal blocks: only the mapped trailing prompt decides
   // whether Claude runs a command, so the two cannot disagree about which frame settles this.
   const acceptsResult = claudeDispatchInvokesSlashCommand(content)
-  const sentUuid = randomUUID()
+  const sentUuid = input.sentUuid ?? randomUUID()
   const arm = () => {
     ++session.dispatchSequence
     // A context report asked for before this send may land after it and misstate the context.

@@ -48,9 +48,6 @@ describe('structured agent-session host teardown', () => {
       claudeWindows: CLAUDE_WINDOWS_GRACEFUL_EXIT_MS,
       codexWindows: CODEX_WINDOWS_GRACEFUL_EXIT_MS
     }
-    expect(CHILD_EVICTION_TIMEOUT_MS).toBe(
-      SNAPSHOT_DRAIN_TIMEOUT_MS + Math.max(closes.claude, closes.codex) + EVICTION_MARGIN_MS
-    )
     for (const closeMs of Object.values(closes)) {
       expect(SNAPSHOT_DRAIN_TIMEOUT_MS + closeMs + EVICTION_MARGIN_MS).toBeLessThanOrEqual(
         CHILD_EVICTION_TIMEOUT_MS

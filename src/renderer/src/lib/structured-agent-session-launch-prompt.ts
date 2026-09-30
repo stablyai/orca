@@ -119,6 +119,11 @@ async function dispatchStructuredLaunchPrompt(
       )
       return false
     }
+    if ('queued' in result.value) {
+      // The host holds the draft; the outbox entry is spent.
+      mutateEntry(entry, () => null)
+      return true
+    }
     const dispatchState = result.value.submission.dispatchState
     mutateEntry(entry, (current) =>
       dispatchState === 'accepted'

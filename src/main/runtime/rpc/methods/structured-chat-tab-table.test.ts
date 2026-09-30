@@ -33,6 +33,7 @@ import { SESSION_TAB_METHODS } from './session-tabs'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
 import { commitStructuredAgentSessionCreate } from './structured-agent-session-create'
 import { closeStructuredAgentSessionChild } from '../../structured-agent-session-close'
+import { openTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 
 const WORKTREE = `id:${HOST_TEST_LOCATION.workspaceId}`
 const SOURCE_TAB = `structured-agent-session-${HOST_TEST_SESSION}`
@@ -93,7 +94,7 @@ async function openHost(): Promise<void> {
   host = new StructuredAgentSessionHost({
     store,
     adapter: providerAdapter(),
-    journalRoot: directory,
+    journalDatabase: openTestJournalHostDatabase(directory),
     claimKeyId: 'key',
     now: () => HOST_TEST_NOW,
     mintSpawnToken: () => `spawn-${acquisitions}`

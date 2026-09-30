@@ -11,6 +11,7 @@
 // with no client attached and nothing on screen. A child now exists because work asked for it — a
 // send, through the delivery loop — not because a record survived on disk.
 
+import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
 import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
@@ -72,7 +73,9 @@ async function restoreOneStructuredAgentSessionReadUnderSerialize(
 export async function restoreStructuredAgentSessionsOnRestart(
   input: StructuredAgentSessionReadRestoreDeps & { records: AgentSessionRecord[] }
 ): Promise<void> {
-  await mapWithConcurrency(input.records, JOURNAL_RESTORE_CONCURRENCY, ({ sessionId }) =>
-    restoreOneStructuredAgentSessionRead(input, sessionId)
-  )
+  await mapWithConcurrency(input.records, JOURNAL_RESTORE_CONCURRENCY, async ({ sessionId }) => {
+    // A journal open is synchronous SQLite: without a macrotask per chat the restore is one long task.
+    await yieldToEventLoop()
+    await restoreOneStructuredAgentSessionRead(input, sessionId)
+  })
 }

@@ -8,6 +8,7 @@ import type {
 } from '../../shared/runtime-types'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
+import { holdAgentSessionInventory } from './structured-agent-session-inventory-hold'
 import type { Tab } from '../../shared/tab-types'
 import {
   resolveTerminalCloseTarget,
@@ -294,26 +295,24 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
 
   /**
    * Answers one client's session-tabs question: whether this runtime has taken back *that* client's
-   * client-hosted pages yet, then that client's own tab selection.
+   * client-hosted pages yet and can say which chats exist, then that client's own tab selection.
    *
-   * The hold is decided here and nowhere else, and it is set or cleared rather than only set, so a
-   * frame built for one client can never carry another client's answer.
+   * The holds are decided here and nowhere else, and each is set or cleared rather than only set,
+   * so a frame built for one client can never carry another client's, or an earlier, answer.
    */
   protected projectMobileSessionTabsForClient(
     result: RuntimeMobileSessionTabsResult,
     clientNavigationId?: string
   ): RuntimeMobileSessionTabsResult {
     return this.clientSessionTabSelections.project(
-      this.withClientHostedPagesHold(result, clientNavigationId),
+      this.withSessionTabsHolds(result, clientNavigationId),
       clientNavigationId
     )
   }
 
-  protected withClientHostedPagesHold(
-    result: RuntimeMobileSessionTabsResult,
-    clientNavigationId: string | undefined
-  ): RuntimeMobileSessionTabsResult {
-    return this.clientHostedPageReconciliation.holdFor(result, clientNavigationId, Date.now())
+  protected withSessionTabsHolds(result: RuntimeMobileSessionTabsResult, navigationId?: string) {
+    const held = this.clientHostedPageReconciliation.holdFor(result, navigationId, Date.now())
+    return holdAgentSessionInventory(held, this.structuredAgentSessionInventoryUnverifiable)
   }
 
   protected async refreshMobileSessionPtyRecords(

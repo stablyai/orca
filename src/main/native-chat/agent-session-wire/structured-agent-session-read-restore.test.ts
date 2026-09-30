@@ -13,6 +13,10 @@ import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { journalDirectoryFor } from '../agent-session-journal/journal-paths'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { restoreStructuredAgentSessionRead } from './structured-agent-session-read-restore'
 
 const SESSION_ID = 'codex_read_restore_fixture'
@@ -50,7 +54,7 @@ const store = {
 let journalRoot: string
 const openDeps = () => ({
   store,
-  journalRoot,
+  journalDatabase: openTestJournalHostDatabase(journalRoot),
   adapter: {}
 })
 const opened: AgentSessionJournal[] = []
@@ -71,6 +75,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await Promise.allSettled(opened.splice(0).map((journal) => journal.close()))
+  closeTestJournalHostDatabases()
   await rm(journalRoot, { recursive: true, force: true })
 })
 

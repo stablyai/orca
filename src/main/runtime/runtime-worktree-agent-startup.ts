@@ -1,4 +1,3 @@
-import { markQoderWorkspaceTrusted } from '../qoder/workspace-trust'
 import { agentStartedTelemetry } from '../agent-launch/agent-started-telemetry'
 import type { AgentLaunchPreferences } from '../../shared/agent-session-host-authority'
 import type { Repo } from '../../shared/repo-types'
@@ -6,22 +5,14 @@ import type { TuiAgent } from '../../shared/tui-agent'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import { repoIsRemote } from '../../shared/agent-launch-remote'
 import { getRepoSshConnectionId } from '../../shared/execution-host'
-import { isTuiAgent, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
+import { isTuiAgent } from '../../shared/tui-agent-config'
 import { isTuiAgentEnabled, pickTuiAgent } from '../../shared/tui-agent-selection'
 import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '../../shared/tui-agent-startup'
 import {
-  markAntigravityWorkspaceTrusted,
-  markCodexProjectTrusted,
-  markCopilotFolderTrusted,
-  markCursorWorkspaceTrusted
-} from '../agent-trust-presets'
-import { awaitAgentTrustWriteWithinDeadline } from '../agent-trust-write-deadline'
-import {
   detectInstalledAgentsWithShellPathHydration,
   detectRemoteAgents
 } from '../preflight/agent-detection'
-import { markRemoteAgentWorkspaceTrusted } from '../remote-agent-trust-presets'
 import type { RuntimeStore } from './runtime-store-contract'
 
 export type WorktreeStartupDraftPaste = { agent: TuiAgent; content: string }
@@ -180,50 +171,5 @@ export function buildWorktreeStartupForAgent(
           }
         }
       : {})
-  }
-}
-
-export async function markLocalWorktreeTrusted(
-  agent: TuiAgent,
-  workspacePath: string
-): Promise<void> {
-  const preset = TUI_AGENT_CONFIG[agent].preflightTrust
-  if (!preset) {
-    return
-  }
-  try {
-    if (preset === 'qoder') {
-      markQoderWorkspaceTrusted(workspacePath)
-    } else if (preset === 'cursor') {
-      markCursorWorkspaceTrusted(workspacePath)
-    } else if (preset === 'copilot') {
-      markCopilotFolderTrusted(workspacePath)
-    } else if (preset === 'codex') {
-      // Why: the Codex write queues behind any in-flight hook grant, so the agent must not launch until it lands. Bounded so a wedged lane degrades to the agent's own prompt instead of stalling the launch.
-      await awaitAgentTrustWriteWithinDeadline(markCodexProjectTrusted(workspacePath), {
-        preset,
-        workspacePath
-      })
-    } else if (preset === 'antigravity') {
-      markAntigravityWorkspaceTrusted(workspacePath)
-    }
-  } catch {
-    // Best-effort: the user can still accept the agent trust prompt manually.
-  }
-}
-
-export async function markRemoteWorktreeTrusted(
-  agent: TuiAgent,
-  connectionId: string,
-  workspacePath: string
-): Promise<void> {
-  const preset = TUI_AGENT_CONFIG[agent].preflightTrust
-  if (!preset) {
-    return
-  }
-  try {
-    await markRemoteAgentWorkspaceTrusted({ preset, connectionId, workspacePath })
-  } catch {
-    // Best-effort: the user can still accept the remote agent trust prompt manually.
   }
 }

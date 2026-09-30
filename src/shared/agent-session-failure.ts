@@ -34,9 +34,13 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   'chatClosed',
   'hostRestarted',
   'notDelivered',
+  /** A conversation command the chat's state refused when its turn to run came. */
+  'commandRefused',
   'compactionFailed',
   'compactionUnconfirmed',
   'cancelUnconfirmed',
+  /** A Stop naming no turn reached the agent, which ended nothing while the chat read working. */
+  'stopRefused',
   'answerUnconfirmed',
   'hostFault',
   /** Orca stopped an agent whose start never finished. */
@@ -55,6 +59,7 @@ const STATUS_ROW_ONLY_FAILURE_KINDS = [
   'compactionFailed',
   'compactionUnconfirmed',
   'cancelUnconfirmed',
+  'stopRefused',
   'answerUnconfirmed',
   'providerRetrying'
 ] as const satisfies readonly AgentSessionFailureKind[]
@@ -116,7 +121,8 @@ export type AgentSessionFailureFact = {
   kind: AgentSessionFailureKind
   /** Provider-authored only; absent whenever Orca wrote the words. */
   detail?: ProviderDiagnostic
-  /** On `restartFailed` and `startFailed`: the refusal that kept the agent from starting. */
+  /** On `restartFailed` and `startFailed`: the refusal that kept the agent from starting. On
+   *  `commandRefused`: the refusal that kept the command from running. */
   refusal?: AgentSessionRefusalReference
   /** On `attachmentInvalid`: which check the attachment failed. */
   attachment?: AgentSessionAttachmentProblem

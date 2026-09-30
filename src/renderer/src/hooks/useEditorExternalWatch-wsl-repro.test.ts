@@ -10,7 +10,7 @@ vi.mock('@/components/editor/editor-autosave', async (importOriginal) => {
 
 import { useAppStore } from '@/store'
 import { notifyEditorExternalFileChange } from '@/components/editor/editor-autosave'
-import { createExternalWatchEventHandler } from './useEditorExternalWatch'
+import { buildEditorExternalWatchEventHandler as createExternalWatchEventHandler } from './editor-external-watch-event-reconciliation'
 
 const worktreePath = '\\\\wsl.localhost\\Ubuntu\\workspace\\repo'
 const restoredPath = '//wsl.localhost/Ubuntu/workspace/repo/file.ts'

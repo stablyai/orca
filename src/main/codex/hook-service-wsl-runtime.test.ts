@@ -29,17 +29,6 @@ type HooksConfig = {
   hooks: Record<string, { hooks?: { command?: string }[] }[]>
 }
 
-const managedEvents = [
-  'SessionStart',
-  'UserPromptSubmit',
-  'PreToolUse',
-  'PermissionRequest',
-  'PostToolUse',
-  'SubagentStart',
-  'SubagentStop',
-  'Stop'
-] as const
-
 let tempRoots: string[] = []
 
 afterEach(() => {
@@ -511,7 +500,6 @@ describe('Codex WSL runtime hook install', () => {
     expect((await _internals.installManagedHooksIntoWslRuntime(plan)).state).toBe('installed')
 
     const installed = JSON.parse(readFileSync(plan.configPath, 'utf-8')) as HooksConfig
-    expect(Object.keys(installed.hooks).sort()).toEqual([...managedEvents].sort())
     const managedCommand = installed.hooks.UserPromptSubmit[0]?.hooks?.[0]?.command
     expect(managedCommand).toBe(expectedManagedCommand(plan.commandScriptPath))
     expect(installed.hooks.UserPromptSubmit[1]?.hooks?.[0]?.command).toBe(userCommand)

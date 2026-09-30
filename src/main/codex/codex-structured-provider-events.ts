@@ -24,6 +24,7 @@ export function translateCodexNotification(input: {
 }): CodexJournalTranslationAdmission {
   const { sessionId, session, method, params, observedAt, dispatchSequenceAtReceipt } = input
   codexRewind.observeCodexRewindActivity(session, method, params)
+  session.turnOpenWaits.observe(session.threadId, method, params)
   if (input.turnCancellation.handleNotification(sessionId, session, method, params, observedAt)) {
     return { accepted: true }
   }

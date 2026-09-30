@@ -68,16 +68,16 @@ describe('subscription recordings', () => {
       expect(() => transport.frame(`${CLIENT_EVENTS}#2`, null, changed)).toThrow(
         'Missing subscription payload'
       )
-      // The host's own end of stream, in the two responses it really sends: the `end` event as a
-      // streaming frame, then the unary reply the dispatcher sends once the handler returns. The
-      // second is what closes the stream here, and the registry reports it to the listener as an
-      // error — so the disposer below has no subscription left and publishes no unsubscribe.
+      // The host's streamed `end` closes the stream, so a later reply for the id reaches nothing
+      // and the disposer below has no subscription left to unsubscribe.
       transport.frame(`${CLIENT_EVENTS}#1`, null, {
         ok: true,
         streaming: true,
         result: { type: 'end' }
       })
-      transport.frame(`${CLIENT_EVENTS}#1`, null, { ok: true })
+      expect(() => transport.frame(`${CLIENT_EVENTS}#1`, null, { ok: true })).toThrow(
+        'No open stream for frame'
+      )
       expect(() =>
         transport.frame(`${CLIENT_EVENTS}#1`, null, {
           ok: false,
@@ -86,12 +86,7 @@ describe('subscription recordings', () => {
       ).toThrow('No open stream for frame')
       dispose()
       expect(transport.payloads.map((payload) => payload.name)).toEqual([`${CLIENT_EVENTS}#1`])
-      expect(events).toEqual([
-        readyFrame('sub-1').result,
-        changed.result,
-        { type: 'end' },
-        { type: 'error', message: 'Streaming request ended before it was ready.', error: undefined }
-      ])
+      expect(events).toEqual([readyFrame('sub-1').result, changed.result, { type: 'end' }])
     } finally {
       transport.dispose()
       await clock.flush()

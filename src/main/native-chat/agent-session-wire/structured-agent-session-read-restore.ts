@@ -1,6 +1,7 @@
-import { findJournalFileFormatRemnant } from '../agent-session-journal/journal-file-format-remnant'
 import { existsSync } from 'node:fs'
-import { journalDatabaseFile, journalDirectoryFor } from '../agent-session-journal/journal-paths'
+import { findJournalFileFormatRemnant } from '../agent-session-journal/journal-file-format-remnant'
+import { legacyJournalDatabaseFile } from '../agent-session-journal/journal-paths'
+import { readJournalSessionEpoch } from '../agent-session-journal/journal-row-table'
 import {
   openStructuredAgentSessionConversationJournal,
   type OpenedStructuredAgentSessionConversation,
@@ -20,13 +21,22 @@ export async function restoreStructuredAgentSessionRead(
   if (!record) {
     return null
   }
-  const journalDir = journalDirectoryFor(deps.journalRoot, {
-    workspaceId: record.location.workspaceId,
-    sessionId
-  })
-  // A session still in the pre-SQLite format has no `journal.db`; the open imports it.
-  if (!existsSync(journalDatabaseFile(journalDir)) && !findJournalFileFormatRemnant(journalDir)) {
-    return null
+  const database = deps.journalDatabase
+  if (readJournalSessionEpoch(database.db, sessionId) === null) {
+    // Not in the host's database yet: its history may still sit in a per-chat file the open
+    // imports, or in the pre-SQLite format the open explains.
+    const legacyDirectory = database.legacyDirectoryFor({
+      workspaceId: record.location.workspaceId,
+      sessionId
+    })
+    if (
+      !existsSync(legacyJournalDatabaseFile(legacyDirectory)) &&
+      !findJournalFileFormatRemnant(legacyDirectory)
+    ) {
+      return null
+    }
   }
-  return openStructuredAgentSessionConversationJournal(deps, record)
+  return openStructuredAgentSessionConversationJournal(deps, record, {
+    deferPerSessionImport: true
+  })
 }

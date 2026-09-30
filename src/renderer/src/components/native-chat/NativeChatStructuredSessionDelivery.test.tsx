@@ -18,7 +18,6 @@ const mocks = vi.hoisted(() => ({
   messageListProps: null as null | {
     allowFileUriLinks?: boolean
     onLinkClick?: (...args: unknown[]) => void
-    showTurnStatus?: boolean
     runtimeContext?: unknown
   },
   composerProps: null as null | {

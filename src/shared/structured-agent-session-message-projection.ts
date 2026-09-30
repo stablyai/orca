@@ -1,6 +1,7 @@
 import type { AgentJournalRenderItem, AgentJournalSubmission } from './agent-session-journal-types'
 import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
 import { agentJournalItemPosition } from './agent-session-journal-position'
+import { isQueuedAgentJournalSubmission } from './agent-session-queued-submission'
 import type { NativeChatMessage } from './native-chat-types'
 import {
   reconcileStructuredAgentSessionOutbox,
@@ -31,8 +32,25 @@ export function projectStructuredAgentSessionMessages(
     }
   }
   const journalled = new Set(visibleItems.map((item) => item.itemId))
+  // Not delivered yet, so nothing the agent does meanwhile — a command it waits behind — comes
+  // after it. Its handover places it in the conversation.
+  const queued = new Set(
+    submissions
+      .filter(isQueuedAgentJournalSubmission)
+      .map((submission) => agentJournalSubmissionKey(submission.clientMessageId))
+  )
+  const delivered: NativeChatMessage[] = []
+  const held: NativeChatMessage[] = []
+  for (const message of projectItems(visibleItems)) {
+    if (queued.has(message.id)) {
+      held.push({ ...message, queued: true })
+    } else {
+      delivered.push(message)
+    }
+  }
   return [
-    ...projectItems(visibleItems),
+    ...delivered,
+    ...held,
     ...optimistic
       .filter((entry) => !journalled.has(agentJournalSubmissionKey(entry.clientMessageId)))
       .map((entry): NativeChatMessage => {

@@ -6,6 +6,7 @@ import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wi
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
 import type { AgentSessionSpawnTokenScan } from '../../runtime/agent-session-spawn-token-process-scan'
+import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type {
   StructuredAgentSessionAdapter,
@@ -95,7 +96,8 @@ export type StructuredAgentSessionHostDeps = {
   adapter: StructuredAgentSessionAdapter
   /** Optional advisory recovery storage, independent of conversation backups. */
   recoveryCapsule?: AgentSessionRecoveryCapsule
-  journalRoot: string
+  /** The host's one chat journal database. */
+  journalDatabase: JournalHostDatabase
   claimKeyId: string
   probeOwner?: (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>
   probeOwners?: (

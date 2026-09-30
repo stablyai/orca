@@ -20,6 +20,7 @@ import { createClaudeJournalTranslator } from './claude-structured-journal-trans
 import { readClaudeStructuredSessionOptions } from './claude-structured-session-options'
 import type { ClaudeSession } from './claude-structured-session-state'
 import { CLAUDE_STRUCTURED_BASE_OPTIONS } from './claude-structured-launch-resolution'
+import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 
 // These drive the real SDK against the scripted fake CLI, so every assertion is
 // about the environment, argv and frames a real child actually saw.
@@ -380,7 +381,7 @@ describe('Claude stream-json connection', () => {
         agent: 'claude',
         providerHandle: { kind: 'claude', sessionId: SESSION_ID, leafUuid: 'leaf-1' }
       },
-      journalDir: join(scenario.cwd, 'journal'),
+      database: openTestJournalHostDatabase(join(scenario.cwd, 'journal')),
       now: () => 1_700_000_000_000,
       mintEpoch: () => 'epoch-1'
     })

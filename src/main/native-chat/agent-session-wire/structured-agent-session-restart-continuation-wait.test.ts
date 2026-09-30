@@ -13,7 +13,8 @@ const MESSAGE = 'continuation-1'
 let submission: AgentJournalSubmission
 const journal = {
   submissions: (): AgentJournalSubmission[] => [submission],
-  cursor: () => ({ epoch: 'epoch-1', sequence: 1 })
+  cursor: () => ({ epoch: 'epoch-1', sequence: 1 }),
+  activeTurnId: () => null
 }
 
 beforeEach(() => {

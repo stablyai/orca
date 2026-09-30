@@ -34,9 +34,15 @@ describe('agentSession.send reply timing', () => {
     await call('agentSession.send', sendParams(), STRUCTURED_CLIENT)
 
     expect(hostCalls.waitForSendSettlement).toHaveBeenCalledWith(SESSION, 'client-1', {
-      until: 'handed-over',
+      until: 'handed-over-or-behind-command',
       budgetMs: STRUCTURED_AGENT_SESSION_START_WAIT_MS
     })
+  })
+
+  it("marks a client's send as the user's own, which alone lifts a Stop's queue pause", async () => {
+    hostCalls.send.mockResolvedValueOnce(pendingSendResult())
+    await call('agentSession.send', sendParams(), STRUCTURED_CLIENT)
+    expect(hostCalls.send.mock.calls[0]?.[1]).toMatchObject({ userSend: true })
   })
 
   it('answers at acceptance for the local desktop and paired desktop clients (W2)', async () => {

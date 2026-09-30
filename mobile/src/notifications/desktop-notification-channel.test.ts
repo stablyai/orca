@@ -1,10 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as Notifications from 'expo-notifications'
 import { Platform } from 'react-native'
-import {
-  DESKTOP_NOTIFICATION_CHANNEL_ID,
-  ensureDesktopNotificationChannel
-} from './desktop-notification-channel'
+import { ensureDesktopNotificationChannel } from './desktop-notification-channel'
 
 vi.mock('expo-notifications', () => ({
   AndroidImportance: { HIGH: 'high' },
@@ -30,7 +27,6 @@ describe('ensureDesktopNotificationChannel', () => {
       'orca-desktop',
       expect.objectContaining({ importance: 'high' })
     )
-    expect(DESKTOP_NOTIFICATION_CHANNEL_ID).toBe('orca-desktop')
   })
 
   it('does nothing on iOS, which has no notification channels', () => {

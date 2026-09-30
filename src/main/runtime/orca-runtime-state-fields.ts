@@ -96,14 +96,12 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
         args: AiVaultPrepareSessionResumeArgs
       ) => Promise<AiVaultPrepareSessionResumeResult>
       prepareCodexStructuredLaunch?: (input: {
-        workspacePath: string
         launchEnv: NodeJS.ProcessEnv
       }) => string | null | Promise<string | null>
       // Why a sibling of prepare: record-less catalog reads must resolve the
       // same launch home with none of launch prep's side effects (no sync, no
       // bridge, no cleared selection).
       resolveCodexStructuredLaunchHome?: (input: {
-        workspacePath: string
         launchEnv: NodeJS.ProcessEnv
       }) => string | null | Promise<string | null>
       buildAgentHookPtyEnv?: () => Record<string, string>

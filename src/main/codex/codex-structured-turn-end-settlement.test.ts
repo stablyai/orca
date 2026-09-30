@@ -36,17 +36,23 @@ async function turnEndRig() {
       body: CODEX_TEST_USER_MESSAGE,
       fence: 7
     })
+  // Codex answers a cold send before it opens the turn.
+  const sendAndOpen = async (clientMessageId: string) => {
+    const sending = send(clientMessageId)
+    await vi.waitFor(() => expect(turns.turnId).not.toBeNull())
+    turns.start()
+    return sending
+  }
   const settledIds = () => settlements.map(({ clientMessageId }) => clientMessageId)
   const categoryOf = (settlement: LateSettlement | undefined) =>
     settlement && 'state' in settlement ? classifyDispatchRejection(settlement).category : null
-  return { codex, turns, adapter, send, settlements, settledIds, categoryOf, bodies }
+  return { codex, turns, adapter, send, sendAndOpen, settlements, settledIds, categoryOf, bodies }
 }
 
 describe('a Codex send its turn ended without echoing', () => {
   it('is withdrawn when the turn is interrupted, once', async () => {
     const rig = await turnEndRig()
-    await expect(rig.send('client-1')).resolves.toEqual({ state: 'admitted' })
-    rig.turns.start()
+    await expect(rig.sendAndOpen('client-1')).resolves.toEqual({ state: 'admitted' })
 
     rig.turns.end('interrupted')
 
@@ -62,8 +68,7 @@ describe('a Codex send its turn ended without echoing', () => {
 
   it('is rejected in Codex words when its failed turn ends without echoing it', async () => {
     const rig = await turnEndRig()
-    await rig.send('client-1')
-    rig.turns.start()
+    await rig.sendAndOpen('client-1')
 
     rig.codex.connections[0]!.handlers.onNotification?.('error', {
       threadId: CODEX_TEST_THREAD_ID,
@@ -87,8 +92,7 @@ describe('a Codex send its turn ended without echoing', () => {
 
   it('is accepted when Codex records it after the error that fails its turn', async () => {
     const rig = await turnEndRig()
-    await rig.send('client-1')
-    rig.turns.start()
+    await rig.sendAndOpen('client-1')
     rig.turns.echo('client-1')
     await rig.send('client-2')
 
@@ -113,8 +117,7 @@ describe('a Codex send its turn ended without echoing', () => {
 
   it('stays pending, still armed, when its turn completes without echoing it', async () => {
     const rig = await turnEndRig()
-    await rig.send('client-1')
-    rig.turns.start()
+    await rig.sendAndOpen('client-1')
 
     rig.turns.end('completed')
     expect(rig.settlements).toEqual([])
@@ -131,8 +134,7 @@ describe('a Codex send its turn ended without echoing', () => {
 
   it('accepts a send its turn echoed, with its key, exactly once', async () => {
     const rig = await turnEndRig()
-    await rig.send('client-1')
-    rig.turns.start()
+    await rig.sendAndOpen('client-1')
     rig.turns.echo('client-1')
 
     rig.turns.end('interrupted')
@@ -153,8 +155,7 @@ describe('a Codex send its turn ended without echoing', () => {
 
   it('ignores an echo that arrives after the withdrawal', async () => {
     const rig = await turnEndRig()
-    await rig.send('client-1')
-    rig.turns.start()
+    await rig.sendAndOpen('client-1')
     rig.turns.end('interrupted')
 
     rig.turns.echo('client-1')
@@ -165,8 +166,7 @@ describe('a Codex send its turn ended without echoing', () => {
 
   it('settles each of two sends steered into one interrupted turn once', async () => {
     const rig = await turnEndRig()
-    await rig.send('client-1')
-    rig.turns.start()
+    await rig.sendAndOpen('client-1')
     await rig.send('client-2')
     expect(rig.turns.turnId).toBe('turn-1')
 
@@ -275,8 +275,7 @@ describe('a Codex send its turn ended without echoing', () => {
 
   it('ignores a turn end on a child thread', async () => {
     const rig = await turnEndRig()
-    await rig.send('client-1')
-    rig.turns.start()
+    await rig.sendAndOpen('client-1')
 
     rig.codex.connections[0]!.handlers.onNotification?.('turn/completed', {
       threadId: 'thread-child',

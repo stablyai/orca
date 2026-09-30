@@ -37,7 +37,6 @@ function createDeps() {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the create only forwards the store to the mocked request helper, which never reads it.
     store: {} as unknown as CreateParams[2]['store'],
     canSpawn: () => true,
-    markTrusted: vi.fn(),
     createTerminal,
     pasteDraft: vi.fn(),
     sendFollowup: vi.fn(),

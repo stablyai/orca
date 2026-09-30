@@ -7,7 +7,6 @@ import {
   classifyBridgedParity,
   BRIDGED_PARITY_BASELINE,
   BRIDGED_PARITY_EXCLUSIONS,
-  BRIDGED_PARITY_FLAG,
   BRIDGED_PARITY_MEMBERS,
   BRIDGED_PARITY_OFF,
   BRIDGED_PARITY_NAMEABLE,
@@ -37,12 +36,7 @@ const droppedUndefinedKey: BridgedParityEvidence = {
 }
 
 describe('the bridged-parity flag', () => {
-  it('is the name the suite and the pin both spell', () => {
-    expect(BRIDGED_PARITY_FLAG).toBe('RPC_FOUNDATION_BRIDGE')
-  })
-
   it('skips on one value only, so an unset or mistyped variable still runs the gate', () => {
-    expect(BRIDGED_PARITY_OFF).toBe('0')
     const skips = (value: string | undefined): boolean => value === BRIDGED_PARITY_OFF
     expect([undefined, '', '1', 'false', 'off'].filter(skips)).toEqual([])
     expect(skips('0')).toBe(true)

@@ -99,7 +99,7 @@ export function decideStructuredSessionPointerDelivery(input: {
  * adapters cannot tell them apart — so it must retain. Treating it as delivered
  * would drop mail whenever a child died mid-send.
  */
-export function structuredDispatchDelivered(state: StructuredDispatchState): boolean {
+export function structuredDispatchDelivered(state: StructuredDispatchState): state is 'accepted' {
   return state === 'accepted'
 }
 

@@ -24,7 +24,6 @@ const mockRegisterEagerPtyBuffer = vi.fn()
 const mockSubscribeToPtyData = vi.fn()
 const mockSubscribeToPtyExit = vi.fn()
 const mockPasteDraftWhenAgentReady = vi.fn()
-const mockMarkTrusted = vi.fn()
 const mockDispatchEvent = vi.fn()
 const mockGetAgentLaunchPlatformForRepo = vi.fn<() => NodeJS.Platform>()
 const state = createAgentBackgroundSessionTestState({
@@ -81,7 +80,6 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
       updateTabPtyId: mockUpdateTabPtyId,
       dispatchEvent: mockDispatchEvent,
       kill: mockKill,
-      markTrusted: mockMarkTrusted,
       spawn: mockSpawn,
       write: mockWrite
     })
@@ -602,11 +600,6 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
       prompt: 'run the automation'
     })
 
-    expect(mockMarkTrusted).toHaveBeenCalledWith({
-      preset: 'codex',
-      workspacePath: '/srv/proj',
-      connectionId: 'ssh-1'
-    })
     expect(mockSpawn).toHaveBeenCalledWith(
       expect.objectContaining({ connectionId: 'ssh-1', cwd: '/srv/proj' })
     )

@@ -1,7 +1,8 @@
 // One structured-session mutation, fenced and idempotent.
 //
 // The client operation id is keyed on (session, method, payload) so a retry of
-// the same request reuses it and the host upserts one row instead of two, and
+// the same request reuses it and the host upserts one row instead of two (a
+// payload naming no target gets a new one on every call), and
 // every result is discarded unless the runtime fence it was issued against is
 // still the current one. A write that did not happen is reported once, in the
 // person's words, by the caller that knows where to say it; nothing latches.
@@ -17,6 +18,7 @@ import {
 } from '../../../../shared/agent-session-write-failure'
 import { agentSessionRefusalOperationState } from '../../../../shared/agent-session-refusal-retry'
 import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/structured-agent-session-mutation'
+import { structuredAgentSessionWriteNamesItsTarget } from '../../../../shared/structured-agent-session-operation-identity'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
@@ -75,9 +77,16 @@ export function useStructuredAgentSessionMutate(args: {
       }
       const targetFence = stateRef.current.fence
       const key = `${sessionId}:${fingerprintMethod}:${JSON.stringify(fields)}`
+      // A write naming no target acts on whatever is in flight when the host reaches it, so every
+      // press is its own write; one naming its target keeps its id for a retry to replay.
+      const namesTarget = structuredAgentSessionWriteNamesItsTarget(fingerprintMethod, fields)
       const clientOperationId =
-        operationIdOverride ?? operationIds.current.get(key) ?? structuredSessionOperationId()
-      operationIds.current.set(key, clientOperationId)
+        operationIdOverride ??
+        (namesTarget ? operationIds.current.get(key) : undefined) ??
+        structuredSessionOperationId()
+      if (namesTarget) {
+        operationIds.current.set(key, clientOperationId)
+      }
       let result: AgentSessionMutationResult<T>
       try {
         result = await callStructuredAgentSession<AgentSessionMutationResult<T>>(target, method, {
@@ -108,7 +117,13 @@ export function useStructuredAgentSessionMutate(args: {
           : { kind: 'dropped' }
       }
       if (!result.ok) {
-        if (agentSessionRefusalOperationState(result.refusal.code) === 'settled-rejected') {
+        const operationState = agentSessionRefusalOperationState(result.refusal.code)
+        // Cancel's plan recovers no unknown ledger row, so a kept id would earn the same refusal
+        // until it expires, and Stop for that turn would do nothing.
+        if (
+          operationState === 'settled-rejected' ||
+          (operationState === 'unknown' && fingerprintMethod === 'agentSession.cancel')
+        ) {
           operationIds.current.delete(key)
         }
         return enabledRef.current && stateRef.current.fence === targetFence

@@ -340,114 +340,145 @@
       "demotionRule": "Keep experimental or demote if output differs, discarded bytes return, settled capture remains reachable, cancellation loses its tail, or the deterministic encoding budget regresses. Never weaken the oracle or increase retries to obtain a pass."
     },
     {
-      "id": "agent-session.trust-preflight-completion",
-      "title": "Agent launch preflight waits for its trust owner to settle",
+      "id": "agent-session.spawn-workspace-trust",
+      "title": "Agent PTY spawns wait for a bounded workspace trust write",
       "maturity": "experimental",
       "protection": "partial",
       "owner": "agent-session-runtime",
       "layer": "cross-layer-unit",
       "surfaces": [
-        "agent trust IPC",
-        "remote (SSH) agent workspace trust writer",
-        "renderer agent preflight",
-        "Codex continuation launch admission",
-        "main-process worktree startup trust",
-        "Codex launch and resume preparation"
+        "renderer PTY spawn builder",
+        "runtime PTY spawn builder",
+        "structured Codex chat create intent",
+        "agent workspace trust dispatcher",
+        "execution-host workspace trust writer (main and SSH relay)",
+        "SSH relay agent workspace trust"
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "ssh"],
-      "coverageNotes": "Actual main IPC handler, renderer preflight, session-continuation caller and config mutation queue with fake Electron bridge, config writer, launch and remote owner, plus the actual main-process worktree-startup, Codex quick-launch-prep and Codex resume-prep modules with mocked trust writer, runtime home and hook service. Counts prove admission ordering and the per-call trust-write bound only; no native PTY/CLI, actual config mutation or live provider evidence. Because codexHookService and ensureRealHomeCodexHookState are both mocked and isHostSystemDefaultRealHomeSelected defaults to false, no suite drives either config.toml lane the two launch-prep sites re-enter after the trust write, so nothing here speaks to whether a launch as a whole is bounded. The remote-preset suite calls markRemoteAgentWorkspaceTrusted directly and asserts its artifact shapes plus its unresolvable-home bail-out; nothing exercises markRemoteWorktreeTrusted, the unbounded caller that wraps it on the launch paths, so the SSH side of the bound is unmeasured here.",
-      "motivatingLinks": ["https://github.com/stablyai/orca/blob/main/src/main/ipc/agent-trust.ts"],
-      "invariant": "Every local Codex trust write a launch waits on - the five markCodexProjectTrusted call sites - settles before that launch proceeds, or is abandoned at a bounded deadline; rejected, abandoned and SSH-unreachable writes leave the workspace untrusted and never fall back to local trust. Two limits sit outside that claim and are not asserted. First, the deadline bounds the write, not the whole launch: a caller whose next step re-enters the same config.toml lane can still wait on that lane after its own write is abandoned. Second, one Codex trust write a launch waits on is not bounded at all - the remote write reached through markRemoteWorktreeTrusted in runtime/runtime-worktree-agent-startup.ts, which derives preset 'codex' from TUI_AGENT_CONFIG the same way the local path does and is awaited ahead of the agent spawn on every SSH launch path. Only the agentTrust:markTrusted handler's remote write is capped.",
-      "oracle": "Held local write or actual queue predecessor yields zero continuation launch calls until release, then exactly one; delayed local rejection settles successfully afterward. SSH awaits its remote writer and never invokes local trust. A never-settling local or SSH write resolves the handler at the deadline with a named warning, no leaked timer and no local fallback, and a rejection arriving after the deadline stays handled. An already-complete write admits the launch on microtasks with zero timers. Two concurrent launches for one workspace settle independently. In the main-process worktree-startup, Codex quick-launch-prep and Codex resume-prep modules a never-settling write resolves the caller at the deadline, still yields the launch home or resume outcome, leaks no timer, and writes no other preset artifact; the write stays ordered before the runtime-home and hook-repair steps the spawn waits on. Those three module cases mock codexHookService, so they establish that the write is abandoned at the deadline, not that the launch around it is bounded. No case drives markRemoteWorktreeTrusted, so nothing here bounds the remote Codex write that fronts an SSH launch; the remote-preset suite checks only what markRemoteAgentWorkspaceTrusted writes and when it bails out, never how long it may take.",
+      "coverageNotes": "The actual renderer and runtime spawn-option builders with a mocked dispatcher, the spawn hook with a mocked dispatcher, the structured Codex create intent with a mocked dispatcher, the dispatcher with mocked preset writers and the real Claude config writer on a temp file, the execution-host writer and the relay spawn function with every real preset writer under a throwaway home, and the relay pty.spawn handler with a mocked trust function. Proves the builders await trust before returning, the fresh-launch and setting gates, the per-preset deadlines, that SSH launches hand every preset to the relay, and, for the agents that inherit trust from a home (Claude, Copilot, Qoder), the refusal of any stored path that is a root, a home or a folder above one, while Codex, Cursor and Antigravity still trust a home. No native PTY, agent CLI, live SSH host or WSL guest.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/blob/main/src/main/agent-workspace-trust.ts"
+      ],
+      "invariant": "A fresh PTY launch of an agent with a trust preset pre-trusts its workspace root (for Codex, whose lookup keys on its start folder, the folder it starts in, including a floating terminal's) before the provider spawn, in both spawn builders, on the host that runs the agent: main for local and WSL launches, the SSH relay on its own disk for SSH launches. It never waits past the preset's deadline: 20 s for local Codex, the short budget for every other write, local or on the relay. A failed or abandoned write lets the launch proceed untrusted, so the agent asks. Restored or reattached panes, spawns with no launch command and the setting turned off are never trusted; for an agent whose trust on a home covers the folders below it (Claude, Copilot, Qoder), no writer stores a path that is a root, a home or a folder above one, and an unknown home writes nothing; Codex, Cursor and Antigravity, whose trust on a home covers only the home, trust it as they did before; and a WSL launch never writes the Windows home. A structured Codex chat, which has no PTY, pre-trusts its folder the same way when it is created, under the same setting.",
+      "oracle": "A trust write held pending keeps each builder from returning until it settles. A never-settling local Codex write resolves the dispatcher only after the long deadline; a never-settling local Claude write resolves after the short budget with a named warning. Rejected and throwing writes, and a throwing guard, resolve with a warning. Restored panes, spawns without a command and the setting off make no dispatcher call; Codex in a floating terminal or a workspace subfolder is trusted at that folder, and every other preset at the workspace root. Creating a structured Codex chat trusts its folder before launch preparation, and nothing with the setting off. An SSH launch returns the relay field for every preset and calls no writer, and the relay's pty.spawn starts no process until that launch's trust call settles. A home, a folder above one, a root, a symlink to a home and a missing path that climbs back to the home through `..` write no Claude, Copilot or Qoder trust file, on this machine and on the relay, and the home writes Codex, Cursor and Antigravity trust.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts tests/e2e/agent-trust-completion.unit.test.ts src/renderer/src/lib/agent-trust-preflight.test.ts src/renderer/src/lib/launch-agent-session-continuation.test.ts src/main/remote-agent-trust-presets.test.ts src/main/startup/codex-launch-trust-write-deadline.test.ts src/main/runtime/runtime-worktree-agent-startup.test.ts"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty/spawn-options-agent-workspace-trust.test.ts src/main/agent-workspace-trust-spawn.test.ts src/main/agent-workspace-trust.test.ts src/main/execution-host-workspace-trust.test.ts src/relay/agent-workspace-trust-spawn.test.ts src/relay/agent-workspace-trust-spawn-guard-failure.test.ts src/relay/pty-handler-agent-workspace-trust.test.ts src/main/runtime/orca-runtime-structured-agent-session-create-intent.test.ts"
       ],
       "testFiles": [
-        "tests/e2e/agent-trust-completion.unit.test.ts",
-        "src/renderer/src/lib/agent-trust-preflight.test.ts",
-        "src/renderer/src/lib/launch-agent-session-continuation.test.ts",
-        "src/main/remote-agent-trust-presets.test.ts",
-        "src/main/startup/codex-launch-trust-write-deadline.test.ts",
-        "src/main/runtime/runtime-worktree-agent-startup.test.ts"
+        "src/main/ipc/pty/spawn-options-agent-workspace-trust.test.ts",
+        "src/main/agent-workspace-trust-spawn.test.ts",
+        "src/main/agent-workspace-trust.test.ts",
+        "src/main/execution-host-workspace-trust.test.ts",
+        "src/relay/agent-workspace-trust-spawn.test.ts",
+        "src/relay/agent-workspace-trust-spawn-guard-failure.test.ts",
+        "src/relay/pty-handler-agent-workspace-trust.test.ts",
+        "src/main/runtime/orca-runtime-structured-agent-session-create-intent.test.ts"
       ],
       "assertionRefs": [
         {
-          "file": "tests/e2e/agent-trust-completion.unit.test.ts",
+          "file": "src/main/ipc/pty/spawn-options-agent-workspace-trust.test.ts",
           "assertions": [
-            "holds the actual session-continuation launch call until the local write settles",
-            "keeps renderer preflight pending behind the actual config mutation queue",
-            "settles best-effort only after a queued local trust failure",
-            "bounds a never-settling local write and continues untrusted",
-            "admits an already-complete write without waiting for any timer",
-            "absorbs a local rejection that arrives after the deadline",
-            "bounds a never-settling SSH trust write without a local fallback",
-            "settles two concurrent launches for the same workspace independently",
-            "keeps remote failures best-effort without a local fallback"
+            "trusts Codex in a floating terminal at the resolved folder it starts in",
+            "holds the spawn until the trust write settles",
+            "never re-runs trust for a restored pane or a spawn with no launch command"
           ]
         },
         {
-          "file": "src/main/startup/codex-launch-trust-write-deadline.test.ts",
+          "file": "src/main/agent-workspace-trust-spawn.test.ts",
           "assertions": [
-            "bounds a never-settling write in quick-launch prep and still returns the launch home",
-            "keeps the quick-launch trust write ahead of the home the spawn waits on",
-            "bounds a never-settling write in resume prep and still resolves the resume home",
-            "keeps the resume trust write ahead of the hook repair that precedes the spawn",
-            "contains a rejected resume trust write without trusting the workspace elsewhere"
+            "does nothing with the setting off",
+            "does nothing for a restored or reattached pane",
+            "trusts Codex in a floating terminal at the folder it starts in",
+            "trusts Codex at a subfolder it starts in, which its lookup keys on"
           ]
         },
         {
-          "file": "src/main/runtime/runtime-worktree-agent-startup.test.ts",
+          "file": "src/main/agent-workspace-trust.test.ts",
           "assertions": [
-            "waits for the Codex trust write before resolving",
-            "bounds a never-settling Codex trust write instead of holding the launch open"
+            "contains a rejected or throwing write so the launch proceeds",
+            "gives only Codex the long deadline its shared config lane needs",
+            "gives a local Claude write a short budget, after which Claude asks",
+            "never pre-trusts %s for an agent that inherits trust from it",
+            "trusts the home folder for Codex, Cursor and Antigravity, whose trust there stays there",
+            "hands an SSH %s launch to the relay instead of writing anything here"
+          ]
+        },
+        {
+          "file": "src/main/execution-host-workspace-trust.test.ts",
+          "assertions": [
+            "writes no %s trust",
+            "guards exactly the agents that inherit trust from a home",
+            "trusts a home folder workspace for %s, whose trust there covers only the home",
+            "writes no %s trust when the host knows no home"
+          ]
+        },
+        {
+          "file": "src/relay/agent-workspace-trust-spawn.test.ts",
+          "assertions": [
+            "writes %s trust on the relay host's own disk",
+            "trusts the relay home for %s, whose trust there covers only the home",
+            "leaves Antigravity to ask, since its writer is unverified on SSH hosts"
+          ]
+        },
+        {
+          "file": "src/relay/agent-workspace-trust-spawn-guard-failure.test.ts",
+          "assertions": ["skips %s trust and never fails the spawn"]
+        },
+        {
+          "file": "src/relay/pty-handler-agent-workspace-trust.test.ts",
+          "assertions": [
+            "writes the launch's trust with its final env before the agent's process starts"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orca-runtime-structured-agent-session-create-intent.test.ts",
+          "assertions": [
+            "pre-trusts the chat folder before launch preparation, as a Codex terminal launch does",
+            "writes nothing with the setting off, and still prepares the launch"
           ]
         }
       ],
       "evidenceRuns": [
         {
-          "date": "2026-09-27",
+          "date": "2026-09-29",
           "runner": "local",
           "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts tests/e2e/agent-trust-completion.unit.test.ts src/renderer/src/lib/agent-trust-preflight.test.ts src/renderer/src/lib/launch-agent-session-continuation.test.ts src/main/remote-agent-trust-presets.test.ts src/main/startup/codex-launch-trust-write-deadline.test.ts src/main/runtime/runtime-worktree-agent-startup.test.ts",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty/spawn-options-agent-workspace-trust.test.ts src/main/agent-workspace-trust-spawn.test.ts src/main/agent-workspace-trust.test.ts src/main/execution-host-workspace-trust.test.ts src/relay/agent-workspace-trust-spawn.test.ts src/relay/agent-workspace-trust-spawn-guard-failure.test.ts src/relay/pty-handler-agent-workspace-trust.test.ts src/main/runtime/orca-runtime-structured-agent-session-create-intent.test.ts",
           "result": "passed",
-          "durationSeconds": 0.413,
-          "summary": "53 tests across six suites pass: 15 trust-completion (four deadline cases), 8 renderer preflight, 7 continuation-launch, 6 remote-preset, 5 Codex launch/resume prep deadline and 12 worktree-startup tests. Six of those are the bound and ordering cases this candidate adds. No native launch, PTY or actual config write."
+          "durationSeconds": 4.16,
+          "summary": "201 tests across eight suites pass, run through node_modules/.bin/vitest with a throwaway HOME. No native launch, PTY or live SSH host."
         }
       ],
       "runtimeBudget": {
         "p95Seconds": 10,
-        "scope": "Focused mocked preflight/continuation/remote trust suites; p95 not established."
+        "scope": "Focused spawn-builder, hook, dispatcher, execution-host writer and relay suites; p95 not established."
       },
       "flakeHistory": {
         "status": "not-started",
-        "evidence": "Author and independent local mocked evidence; CI soak and native platform evidence pending."
+        "evidence": "Local mocked evidence only; CI soak pending."
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "Trust-completion suite, re-run at the earlier head. Pre-await implementation: 5 fail/10 pass - the three launch-admission orderings plus the never-settling local and SSH cases, the SSH one only by exhausting the test timeout. Unbounded-await implementation: 3 fail/12 pass - never-settling local write, post-deadline rejection and never-settling SSH write all hang to the test timeout. The already-complete-write case passes unbounded too, so it is a timer control, not a red. Launch-prep and worktree-startup suites, this head: with the three call sites reverted to a bare await, 3 fail/14 pass - the quick-launch, resume and worktree-startup never-settling cases each hang to the 30s vitest timeout; restored, 17 pass. Whole gate at this head: 53 pass across six suites."
+        "evidence": "Each named case failed with its fix removed and passed restored: the builder's await turned into a fire-and-forget call fails the hold case; guarding every preset fails each Codex, Cursor and Antigravity home case, and guarding none fails each Claude, Copilot and Qoder home, root, symlink and `..` case; dropping the unknown-home rule fails every no-home case; the relay deriving only Claude from launchAgent fails each non-Claude relay case; the dispatcher handing only Claude to the relay fails each SSH preset case; dropping the relay's Antigravity return fails its case; letting the host writer's catch rethrow fails every guard-failure case; dropping resolve() from the guard's forms fails the missing `..` path case for every guarded preset; marking Codex as trusted at the workspace root, or a builder dropping the start folder, fails the Codex floating-terminal and subfolder cases; removing the relay handler's trust call, or not awaiting it, fails the relay handler case; removing the structured Codex create intent's trust call fails its pre-trust case, and dropping its setting check fails its setting-off case."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "No new subprocess, polling, retry or trust operation. Each of the five markCodexProjectTrusted call sites a launch awaits is capped by one per-call deadline timer, cleared on settlement, so none of those five can hold its caller indefinitely; the five share that one timer shape and no site gained a second write or a retry. The cap covers the local Codex writes only - the remote write through markRemoteWorktreeTrusted is still awaited with no timer, so an SSH launch can still be held open by a trust write. It also bounds the trust write, not the launch. At startup/codex-launch-preparation.ts the first awaited step after the write is ensureRealHomeHooksIfSelected, not codexHookService.prepareRuntimeHomeForLaunch: when the host system-default real home is selected it calls ensureRealHomeCodexHookState, which acquires runExclusivelyForCodexTrustConfig directly on ~/.codex/config.toml, the same lane the abandoned write still holds a queue slot for. When the real home is not selected that call returns without awaiting the lane and runtimeHome.prepareForCodexLaunchAsync is synchronous on this non-WSL path, so the first re-entry is prepareRuntimeHomeForLaunch through runExclusivelyForRuntimeAndSystemTrustConfig. At startup/codex-session-resume-launch.ts the first awaited step is the hook branch: ensureRealHomeCodexHookState when the resume home is ~/.codex, otherwise installForLaunchPrep or refreshRuntimeUserHooksForLaunchPrep through runExclusivelyForRuntimeAndSystemTrustConfig, whose inner acquire is that same ~/.codex/config.toml. Either way a wedged lane still stalls those two launches one step after the write is abandoned, and the earliest such step is the real-home ensure, not the hook-service call the gate used to name. Only markLocalWorktreeTrusted in runtime/runtime-worktree-agent-startup.ts has nothing after its Codex branch, so only it has an end-to-end bounded launch path. Reliability fix, no performance gain claim."
+        "evidence": "Plain shells and agents without a preset add no trust I/O; the hook returns after the preset check. A local Codex write is capped at 20 s and every other write, local or on the relay, at the short budget, each by one timer cleared on settlement. An SSH launch adds no round trip: the field rides the existing pty.spawn request. The deadline bounds the wait, not the write: an abandoned write still lands later. The local Claude writer reads and parses Claude's config synchronously on the main thread before its lock."
       },
       "knownGaps": [
         "CI soak pending.",
-        "No live Codex CLI, PTY, trust prompt, native Electron app or actual trust-config mutation was exercised.",
-        "Windows/Linux/WSL/daemon/remote-runtime behavior was not executed; remote owner is mocked. No routing/wire/PTY ownership change.",
-        "Abandoning a write at the deadline does not cancel it; a legitimate slow write (WSL grant sessions run to 30s) can land after the launch already started, restoring the pre-fix ordering for that case only.",
-        "The deadline value is a reasoned cap over observed lane holders, not a measured p95.",
-        "All five awaited local Codex trust writes (markCodexProjectTrusted) are now bounded by the same helper: the agentTrust:markTrusted IPC handler, ipc/worktree-remote.ts, runtime/runtime-worktree-agent-startup.ts, startup/codex-launch-preparation.ts and startup/codex-session-resume-launch.ts. Four have a test in these suites; the ipc/worktree-remote.ts site is bounded but still has no test here. A sixth awaited Codex trust write - the remote one through markRemoteWorktreeTrusted - is not bounded at all; see the remote gap below.",
-        "Bounding the trust write does not bound the launch at two of the three new sites, and on both the first unbounded re-entry is earlier than the hook-service call. In startup/codex-launch-preparation.ts the next awaited call after the abandoned write is ensureRealHomeHooksIfSelected, which is conditional: only when the target is not WSL and runtimeHome.isHostSystemDefaultRealHomeSelected(launchEnv) is true does it call ensureRealHomeCodexHookState, which chains behind that module's own serial ensure promise and then acquires runExclusivelyForCodexTrustConfig on ~/.codex/config.toml (it skips the lane only when hooks are enabled, the lane is already unavailable and its retry backoff has not elapsed). When the real home is not selected that call returns without awaiting the lane, runtimeHome.prepareForCodexLaunchAsync is synchronous on the non-WSL path, and the first re-entry is codexHookService.prepareRuntimeHomeForLaunch. In startup/codex-session-resume-launch.ts the next awaited call is the hook branch: ensureRealHomeCodexHookState when the resume home is ~/.codex, otherwise installForLaunchPrep or refreshRuntimeUserHooksForLaunchPrep. All of those reach the same unbounded per-config.toml serial queue (runExclusivelyForCodexTrustConfig, FIFO with no depth cap and no timeout) on ~/.codex/config.toml; the runExclusivelyForRuntimeAndSystemTrustConfig wrapper takes the runtime home's config.toml first, and markCodexProjectTrusted itself takes both. A wedged lane therefore still stalls a quick-launch or a resume one step after the write is abandoned, and the abandoned write keeps its queue slot ahead of that step. The new launch-prep tests mock codexHookService and ensureRealHomeCodexHookState wholesale and default the real-home selection to false, so no test in these suites can catch this residual stall. Only markLocalWorktreeTrusted in runtime/runtime-worktree-agent-startup.ts, which has nothing after its Codex branch, is bounded end to end.",
-        "The cap remains per call site, not global. Two launches racing the same wedged lane each wait their own deadline, so the worst case a user can see is one deadline per launch, not one shared cap.",
-        "The remote (SSH) trust write reached through markRemoteWorktreeTrusted in runtime/runtime-worktree-agent-startup.ts is still awaited unbounded; only the agentTrust:markTrusted handler's remote write is capped. It is a Codex trust write a launch waits on, not merely an adjacent one: it reads TUI_AGENT_CONFIG[agent].preflightTrust, which is 'codex' for the codex agent, and markRemoteAgentWorkspaceTrusted then branches into markRemoteCodexProjectTrusted. Its only production caller is markRemoteWorkspaceTrustedForAgent in runtime/orca-runtime-activate-managed-worktree.ts, reached with a connectionId from seven launch entry points. On orca-runtime-create-agent-session.ts, orca-runtime-get-agent-session-execution-namespace.ts, orca-runtime-terminal-create-deduplication.ts, runtime-remote-managed-worktree-create.ts and runtime-folder-worktree-create.ts (wired in by orca-runtime-create-managed-worktree.ts) the await sits directly before the createTerminal that spawns the agent; on orca-runtime-resolve-mobile-session-terminal-command.ts and orca-runtime-resolve-worktree-removal-target.ts it instead gates the launch command those functions return for their caller to spawn, so the launch still waits on it. It chains a session.resolveHome multiplexer round trip, an SFTP realpath, a read, a createDir and a write, none with a timeout, over a link that may be half-open - so an SSH Codex launch can still hang with nothing happening, the same failure this branch bounds locally. Deliberately left out of scope here, and deliberately left out of the invariant."
+        "No live agent CLI, PTY, trust prompt, native Electron app, SSH host or WSL guest was exercised.",
+        "Abandoning a write at the deadline does not cancel it; a slow write can land after the agent already asked.",
+        "The deadline values are reasoned caps, not measured p95s.",
+        "Antigravity over SSH is not written on the relay (its writer is unverified there), so it still asks."
       ],
       "promotionCriteria": [
-        "Retain pending-write/queue/launch-boundary red-green evidence and remote owner assertions; obtain actual platform/session evidence and CI soak before promotion."
+        "Retain the hold, deadline and home or root red/green evidence; obtain native platform and SSH evidence and a CI soak before promotion."
       ],
-      "demotionRule": "Remain experimental until repeated independent/CI evidence; investigate ordering or unbounded-wait regressions without weakening completion or deadline assertions."
+      "demotionRule": "Remain experimental until repeated independent or CI evidence; investigate ordering or unbounded-wait regressions without weakening the hold or deadline assertions."
     },
     {
       "id": "settings.general-section-lifetime",
@@ -461,20 +492,9 @@
         "app version and remote update display",
         "autosave settings draft"
       ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "remote-runtime",
-        "ssh",
-        "wsl"
-      ],
-      "coveredPlatforms": [
-        "macos"
-      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "remote-runtime", "ssh", "wsl"],
+      "coveredPlatforms": ["macos"],
       "coveredProviders": [],
       "coverageNotes": "Actual GeneralPane, update/version and remote-status components with mocked store/API; actual autosave form. Windows runtime on/off simulated. No physical updater, paired host, settings write or native input.",
       "motivatingLinks": [
@@ -485,9 +505,7 @@
       "commands": [
         "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/GeneralPane.section-lifetime.test.tsx"
       ],
-      "testFiles": [
-        "src/renderer/src/components/settings/GeneralPane.section-lifetime.test.tsx"
-      ],
+      "testFiles": ["src/renderer/src/components/settings/GeneralPane.section-lifetime.test.tsx"],
       "assertionRefs": [
         {
           "file": "src/renderer/src/components/settings/GeneralPane.section-lifetime.test.tsx",
@@ -551,20 +569,9 @@
         "Grok and Cursor account status",
         "Codex pending sign-in link"
       ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "remote-runtime",
-        "ssh",
-        "wsl"
-      ],
-      "coveredPlatforms": [
-        "macos"
-      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "remote-runtime", "ssh", "wsl"],
+      "coveredPlatforms": ["macos"],
       "coveredProviders": [],
       "coverageNotes": "Actual AccountsPane, Grok, Cursor and Codex login components; synthetic APIs/store with Windows account support enabled/disabled. No real account, keychain or provider action.",
       "motivatingLinks": [
@@ -575,9 +582,7 @@
       "commands": [
         "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/AccountsPane.section-lifetime.test.tsx"
       ],
-      "testFiles": [
-        "src/renderer/src/components/settings/AccountsPane.section-lifetime.test.tsx"
-      ],
+      "testFiles": ["src/renderer/src/components/settings/AccountsPane.section-lifetime.test.tsx"],
       "assertionRefs": [
         {
           "file": "src/renderer/src/components/settings/AccountsPane.section-lifetime.test.tsx",

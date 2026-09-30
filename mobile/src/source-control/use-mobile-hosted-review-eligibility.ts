@@ -54,7 +54,7 @@ export function shouldFetchMobileHostedReviewEligibility(
   return input.connState === 'connected' && input.client !== null && !!input.branch
 }
 
-export function eligibilityStateAfterMobileHostedReviewError(): MobileCreatePrEligibilityState {
+function eligibilityStateAfterMobileHostedReviewError(): MobileCreatePrEligibilityState {
   return { kind: 'error' }
 }
 

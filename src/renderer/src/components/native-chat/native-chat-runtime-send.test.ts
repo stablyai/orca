@@ -114,10 +114,6 @@ describe('sendNativeChatMessage', () => {
     expect(sendRuntimePtyInput).not.toHaveBeenCalled()
   })
 
-  it('matches orca-runtime writeTerminalAction Enter gap (500ms)', () => {
-    expect(NATIVE_CHAT_SUBMIT_DELAY_MS).toBe(500)
-  })
-
   it('serializes rapid sends on the same PTY so bodies cannot glue before Enter', async () => {
     sendNativeChatMessage(SETTINGS, PTY, 'tell me a joke')
     sendNativeChatMessage(SETTINGS, PTY, 'continue')

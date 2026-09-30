@@ -48,7 +48,6 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 export type AttachFlowInput = {
   store: AgentSessionRecordStore
   adapter: StructuredAgentSessionAdapter
-  journalRoot: string
   authority: AgentSessionAttachAuthority
   callerKey: string
   params: AgentSessionAttachParams
@@ -227,7 +226,6 @@ export async function performAttach(
     attached = await attachJournal({
       record,
       params,
-      journalRoot: input.journalRoot,
       adapter: input.adapter,
       openConversation: input.openConversation,
       providerHistoryWindow

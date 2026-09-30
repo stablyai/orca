@@ -97,7 +97,10 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
       payload: getOptionalStructuredMessagePayload(flags),
       // Why: pane key is the remint-stable sender identity the runtime verifies lifecycle ownership against; older runtimes strip it.
       // A session names itself by its id alone.
-      senderPaneKey: from === undefined ? undefined : process.env.ORCA_PANE_KEY || undefined,
+      senderPaneKey:
+        from === undefined || readInjectedAgentSessionId()
+          ? undefined
+          : process.env.ORCA_PANE_KEY || undefined,
       waitForLifecycleSettlement: type === 'worker_done' ? true : undefined,
       devMode: isDevCliInvocation()
     }

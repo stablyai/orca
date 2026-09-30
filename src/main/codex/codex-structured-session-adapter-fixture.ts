@@ -89,6 +89,19 @@ export function fakeCodex(routes: Record<string, Route> = {}): {
   return { connections, openConnection, routes }
 }
 
+/** A `turn/start` route for a Codex that opened the turn before its answer was read. */
+export function answerWithOpenedTurn(
+  codex: Pick<ReturnType<typeof fakeCodex>, 'connections'>,
+  turnId: string
+): Route {
+  return () => {
+    codex.connections
+      .at(-1)
+      ?.handlers.onNotification?.('turn/started', { threadId: THREAD_ID, turn: { id: turnId } })
+    return { turn: { id: turnId } }
+  }
+}
+
 export function adapterFor(
   codex: ReturnType<typeof fakeCodex>,
   launch: Partial<CodexStructuredLaunch> = {},

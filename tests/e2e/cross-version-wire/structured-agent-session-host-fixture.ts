@@ -53,6 +53,9 @@ export function structuredHostStub(
     })),
     waitForSendSettlement: vi.fn(),
     cancel: vi.fn(async () => ({ ok: true, replayed: false })),
+    queuedMessageSend: vi.fn(async () => ({ ok: true, replayed: false })),
+    queuedMessageDelete: vi.fn(async () => ({ ok: true, replayed: false })),
+    queuedMessagesResume: vi.fn(async () => ({ ok: true, replayed: false })),
     rewind: vi.fn(async () => ({
       ok: true,
       replayed: false,
@@ -75,6 +78,7 @@ export function structuredHostStub(
     modelCatalog: vi.fn(() => ({ origin: 'unknown' as const })),
     readCommands: vi.fn(() => ({ commands: [{ name: 'clear', kind: 'command' as const }] })),
     history: vi.fn(() => ({ ok: true, page: { items: [] } })),
+    sessionAgent: vi.fn(() => null),
     journalSnapshot: vi.fn(() => ({
       sessionId,
       cursor: { epoch: 'epoch-a', sequence: 0 },

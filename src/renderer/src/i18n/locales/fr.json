@@ -4069,7 +4069,12 @@
             "checkLabel": "{{value0}} chats à vérifier",
             "checkAriaOne": "1 chat à vérifier après la reprise. Cliquez pour plus de détails.",
             "checkAria": "{{value0}} chats à vérifier après la reprise. Cliquez pour plus de détails.",
-            "checkTooltip": "Chats qu'Orca n'a pas pu reprendre, ou dont il n'a pas pu confirmer la reprise, après le redémarrage. Cliquez pour plus de détails."
+            "checkTooltip": "Chats qu'Orca n'a pas pu reprendre, ou dont il n'a pas pu confirmer la reprise, après le redémarrage. Cliquez pour plus de détails.",
+            "resumingLabelOne": "Reprise d’1 conversation",
+            "resumingLabel": "Reprise de {{value0}} conversations",
+            "resumingAriaOne": "Reprise d’1 conversation. Cliquez pour voir les détails.",
+            "resumingAria": "Reprise de {{value0}} conversations. Cliquez pour voir les détails.",
+            "resumingTooltip": "Restauration des conversations interrompues et demande de poursuite…"
           }
         }
       },
@@ -9109,6 +9114,9 @@
             "0d1c334987": "couvercle",
             "ff8de8a2ad": "écran",
             "0d752916f8": "hooks",
+            "agent-trust-trust": "confiance",
+            "agent-trust-folder": "dossier",
+            "agent-trust-worktree": "worktree",
             "6984d4291a": "statut",
             "13b20636a6": "en attente",
             "8599603496": "terminé",
@@ -10855,6 +10863,10 @@
         "agent-status-hooks-copy": {
           "7707c15abb": "Hooks de statut des agents",
           "a68a642835": "Affiche les états en cours, en attente et terminé dans Orca. Désactivez pour supprimer les hooks gérés par Orca et arrêter de les réinstaller."
+        },
+        "agent-workspace-trust-copy": {
+          "title": "Faire confiance au dossier quand Orca lance un agent",
+          "description": "Les agents lancés par Orca ignorent leur question « Do you trust this folder? » : les hooks et paramètres d'agent du projet s'exécutent donc tout de suite. Sans cette option, chaque agent pose la question la première fois qu'il s'exécute dans un dossier. Les agents qui tournent sans que vous les surveilliez, comme les workers d'orchestration, les automatisations et les agents lancés depuis votre téléphone, attendront à cette question jusqu'à ce que vous y répondiez dans leur terminal. Les dossiers déjà approuvés le restent."
         },
         "agent-generated-tab-title-copy": {
           "19ad21615a": "Générer automatiquement les titres des onglets",
@@ -17429,6 +17441,8 @@
         "historyUnreadable": "Orca n'a pas pu lire l'historique enregistré de ce chat.",
         "historyUnusable": "Impossible de charger ce chat.",
         "historyUnavailable": "Orca n'a pas pu ouvrir l'historique de ce chat pour le moment.",
+        "savedByNewerOrca": "Les chats ont été enregistrés par une version plus récente d'Orca.",
+        "updateOrcaToKeepUsing": "Mettez à jour Orca pour continuer à les utiliser.",
         "unsupported": "L'instance d'Orca qui exécute ce chat ne le prend pas en charge. Mettez Orca à jour, puis réessayez.",
         "unreachable": "Orca n'a pas pu joindre l'agent.",
         "recordFailed": "Orca n'a pas pu l'enregistrer dans l'historique de ce chat.",
@@ -17745,6 +17759,7 @@
       "railEmptyMessage": "Message",
       "ask": {
         "awaiting": "En attente de la saisie de l'utilisateur :",
+        "awaitingUnnamed": "En attente de la saisie de l'utilisateur",
         "asked": "Demandé:",
         "questionCount": "{{value0}} questions"
       },
@@ -18491,5 +18506,63 @@
   },
   "common": {
     "retry": "Réessayer"
+  },
+  "fileExplorer": {
+    "root": {
+      "label": "Racine de l’explorateur",
+      "full": "Racine du dépôt",
+      "viewing": "Vue : {{path}}",
+      "back": "Revenir à {{path}}",
+      "searchScope": "Portée : fichiers de l’espace de travail",
+      "retry": "Réessayer",
+      "omittedFiles": "Les fichiers exclus par le checkout partiel ne sont pas recherchés.",
+      "viewOnly": "Checkout partiel · Changer de vue ne modifie pas les fichiers extraits.",
+      "sparseStatus": "Extraction partielle",
+      "scopeDetails": "À propos de la portée de l’extraction partielle",
+      "scopeExplanation": "Le sélecteur de dossiers change l’affichage, pas les fichiers extraits. La racine du dépôt inclut les fichiers extraits à la racine et dans les dossiers parents.",
+      "searchExplanation": "Noms filtre le dossier affiché. Contenu recherche dans tout l’espace de travail. Les fichiers exclus de l’extraction partielle ne sont pas recherchés.",
+      "findInFolder": "Rechercher dans {{path}}",
+      "folderLoadError": "Impossible de charger ce dossier :",
+      "emptyFolder": "Aucun fichier dans ce dossier"
+    }
+  },
+  "sparsePreset": {
+    "nameRequired": "Le nom est obligatoire.",
+    "nameTooLong": "Le nom doit contenir au maximum 80 caractères.",
+    "nameExists": "Un préréglage nommé « {{name}} » existe déjà.",
+    "name": "Nom",
+    "namePlaceholder": "Application web et interface partagée",
+    "directories": "Répertoires",
+    "pathHelp": "Un répertoire relatif au dépôt par ligne. Les espaces dans les chemins sont conservés.",
+    "coneHelp": "Git conserve également les fichiers à la racine du dépôt et dans les dossiers parents de ces répertoires.",
+    "cancel": "Annuler",
+    "save": "Enregistrer le préréglage",
+    "new": "Nouveau préréglage de checkout partiel",
+    "edit": "Modifier le préréglage de checkout partiel",
+    "description": "Choisissez les dossiers à extraire dans un nouvel espace de travail.",
+    "saveFailed": "Impossible d’enregistrer le préréglage. Réessayez.",
+    "loading": "Chargement des préréglages...",
+    "details": "Quels fichiers sont extraits ?",
+    "finishEditing": "Enregistrez ou annulez le préréglage pour poursuivre la création de votre espace de travail.",
+    "pathInstructions": "Un dossier par ligne, avec un chemin relatif à la racine du dépôt.",
+    "retryLoad": "Réessayer de charger les préréglages",
+    "fullCheckout": "Extraction complète",
+    "checkoutPreset": "Préréglage d’extraction",
+    "search": "Rechercher un préréglage…",
+    "noMatches": "Aucun préréglage correspondant.",
+    "allFiles": "Tous les fichiers du dépôt",
+    "editNamed": "Modifier {{name}}",
+    "addPath": "Add a folder",
+    "findPath": "Find a folder…",
+    "noPathMatches": "No folders found.",
+    "repositoryRoot": "Repository root",
+    "loadingPaths": "Reading folders…",
+    "pathsUnavailable": "Could not read this folder. Type the path instead.",
+    "pathAdded": "Added",
+    "openFolder": "Open {{name}}",
+    "findOrTypePath": "Find a folder, or type any path…",
+    "addTypedPath": "Add",
+    "noDirectories": "No folders added yet.",
+    "removePath": "Remove {{name}}"
   }
 }

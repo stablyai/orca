@@ -11,12 +11,12 @@ import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatC
 import { useNativeChatFontScale } from './use-native-chat-font-scale'
 import { useNativeChatCanSend } from './use-native-chat-can-send'
 import { NativeChatInteractiveCard } from './NativeChatInteractiveCard'
+import { useNativeChatInteractivePromptCard } from './use-native-chat-interactive-prompt-card'
 import { NativeChatEmptyState } from './NativeChatEmptyState'
 import { useNativeChatInteractiveSend } from './use-native-chat-interactive-send'
-import {
-  shouldClearNativeChatWorkingSuppression,
-  shouldShowNativeChatWorking
-} from './native-chat-working-suppression'
+import { shouldClearNativeChatWorkingSuppression } from './native-chat-working-suppression'
+import { resolveNativeChatTerminalTurn } from './native-chat-terminal-turn'
+import { useNativeChatTerminalTurnTiming } from './use-native-chat-terminal-turn-timing'
 import {
   appendPendingSendCache,
   launchPromptAsMessage,
@@ -251,6 +251,11 @@ export function NativeChatResolvedView({
     paneLaunchPrompt?.failed ? launchPromptMessage?.id : null,
     sessionAfterCommandBoundaries.messages
   )
+  const promptCard = useNativeChatInteractivePromptCard({
+    paneKey,
+    messages: sessionAfterCommandBoundaries.messages,
+    transcriptSettled: session.readPhase === 'ready'
+  })
 
   // The streaming preview bubble (if any) sits after the transcript but before
   // the optimistic user echoes — same order mobile uses.
@@ -313,11 +318,14 @@ export function NativeChatResolvedView({
       previousWorkingEpochRef.current = null
     }
   }, [liveWorking, workingInterrupted, hookWorkingEpoch])
-  const isWorking = shouldShowNativeChatWorking({
+  const { isWorking, turnActive, awaitingInput } = resolveNativeChatTerminalTurn({
     isConversation,
     working: liveWorking,
-    interrupted: workingInterrupted
+    hookAwaitingInput: session.hookAwaitingInput === true,
+    interrupted: workingInterrupted,
+    hasPromptCard: promptCard !== null
   })
+  const turnTiming = useNativeChatTerminalTurnTiming(paneKey, session.messages, turnActive)
 
   const stopAgent = useCallback(() => {
     setWorkingInterrupted(true)
@@ -399,11 +407,11 @@ export function NativeChatResolvedView({
           <NativeChatMessageList
             session={sessionWithPending}
             isVisible={isVisible}
-            isWorking={isWorking}
+            isWorking={turnActive}
             expandSignal={false}
             fontScale={fontScale.scale}
-            workingStartedAt={hookWorkingEpoch}
-            showTurnStatus={false}
+            {...turnTiming}
+            awaitingInput={awaitingInput}
             onLinkClick={onLinkClick}
             allowFileUriLinks={fileLinkContext !== null}
             deliveryNotices={launchPromptDeliveryNotices}
@@ -414,11 +422,9 @@ export function NativeChatResolvedView({
           (mobile parity). A question card supplies its own answer input, so it
           fully replaces the composer while active — no stray "Send a message". */}
       <NativeChatInteractiveCard
-        paneKey={paneKey}
+        card={promptCard}
         send={interactiveSend}
         canSend={canSend}
-        messages={sessionAfterCommandBoundaries.messages}
-        transcriptSettled={session.readPhase === 'ready'}
         onShowingQuestionChange={setQuestionActive}
         answerInputRef={questionAnswerInputRef}
       />

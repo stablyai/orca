@@ -155,6 +155,38 @@ describe('a chat write the host refused', () => {
     )
   })
 
+  it('says to update Orca for a Stop refused on a journal a newer Orca wrote', async () => {
+    mocks.call.mockImplementation((_target, method) =>
+      method === 'agentSession.options'
+        ? Promise.resolve(OPTIONS)
+        : Promise.resolve({
+            ok: false,
+            // As the host answers it (pinned in `journal-open-failure.test.ts`).
+            refusal: {
+              code: 'agent_session_journal_unreadable',
+              message: 'Chats were saved by a newer Orca. Update Orca to keep using them.',
+              details: { reason: 'journalWrittenByNewerOrca' }
+            }
+          })
+    )
+    const { result } = renderHook(() =>
+      useStructuredAgentSession({
+        sessionId: 'session-1',
+        target: LOCAL_TARGET,
+        agent: 'claude',
+        isVisible: true
+      })
+    )
+
+    await act(async () => {
+      await expect(result.current.cancel('turn-1')).resolves.toBeNull()
+    })
+
+    expect(mocks.toastError).toHaveBeenCalledExactlyOnceWith(
+      "Chats were saved by a newer Orca. The agent wasn't stopped. Update Orca to keep using them."
+    )
+  })
+
   it('answers a refused conversation command inline, where the command was typed', async () => {
     mocks.call.mockImplementation((_target, method) =>
       method === 'agentSession.options'

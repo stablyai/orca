@@ -224,7 +224,7 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   // look exactly like a cold start, and only the hit/miss/unprovable split tells the two apart.
   startMainThreadChurnProbe({ extraStats: () => ({ diffCache: settledDiffCache.stats() }) })
   // Why: acquire AFTER configureDevUserDataPath — Electron derives lock identity from `userData`, so dev/packaged lock in separate namespaces.
-  // Why skip in dev: parallel `pnpm dev` from multiple worktrees would make the second exit silently; packaged keeps the lock (corruption PR #1326 / #1312).
+  // Why dev locks too: two processes on one profile corrupt its stores (PR #1326 / #1312); parallel `pnpm dev` needs ORCA_DEV_USER_DATA_PATH per copy.
   const bypass = shouldBypassSingleInstanceLock({ isDev, isServeMode: state.isServeMode })
   const skip = shouldSkipSingleInstanceLock({ isDev, isServeMode: state.isServeMode })
   if (bypass) {
@@ -236,12 +236,16 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
     logStartupDiagnostic('single-instance-lock-result', {
       acquired: hasLock,
       bypassed: bypass,
-      skippedForDev: skip
+      skippedForE2E: skip
     })
   }
   if (!hasLock) {
     // Why: a false-negative lock loss otherwise looks like a silent crash on packaged macOS; `open --stderr` can capture this line.
-    logSingleInstanceLockFailure()
+    // In dev it is the line `pnpm dev` prints before exiting.
+    logSingleInstanceLockFailure({
+      isDevDesktop: isDev && !state.isServeMode,
+      userDataPath: app.getPath('userData')
+    })
     // Why: a graceful quit is deferred pre-ready, so this launch would still walk into Linux display init and SIGSEGV (#11935).
     app.exit(SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE)
     return false

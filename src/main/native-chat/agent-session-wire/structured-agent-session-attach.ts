@@ -184,7 +184,6 @@ export type AttachedJournal = {
 export async function attachJournal(input: {
   record: AgentSessionRecord
   params: AgentSessionAttachParams
-  journalRoot: string
   adapter: StructuredAgentSessionAdapter
   /** The host's open conversation, whose journal the attach adopts. */
   openConversation: (record: AgentSessionRecord) => Promise<AgentSessionJournal>

@@ -6,6 +6,7 @@ import type { ClaudeChildToolQueries } from './claude-child-tool-queries'
 import type { ClaudeContextReportPart, ClaudeContextReportTarget } from './claude-context-facts'
 import type { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
+import type { ClaudeCommandStart } from './claude-command-turn'
 
 export type ClaudeJournalTranslator = {
   handle: (event: ClaudeStructuredSessionEvent) => void
@@ -13,6 +14,14 @@ export type ClaudeJournalTranslator = {
   /** The open turn's provider id — the same id its journal row carries, and the one
    *  a client's Stop names. Sole owner: no reader keeps a copy to disagree with. */
   readonly currentTurnId: string | null
+  /** The open turn's id while it is a conversation command's. */
+  readonly commandTurnId: string | null
+  /** Makes the host's command turn the open one until the command's result ends it. */
+  beginCommand: (start: ClaudeCommandStart) => void
+  /** The command was never sent. */
+  forgetCommand: (turnId: string) => void
+  /** Orca asked Claude to stop the command `turnId` names. */
+  commandInterruptRequested: (turnId: string) => void
   /** True while a turn is open and the provider's current request cycle has
    *  done root work since its init — the state in which the CLI folds an
    *  arriving send into the turn. */

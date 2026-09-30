@@ -1,6 +1,5 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { preflightAgentTrust } from '@/lib/agent-trust-preflight'
 import { activateAndRevealWorktree, type ActivateAndRevealResult } from '@/lib/worktree-activation'
 import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
 import {
@@ -146,20 +145,10 @@ export async function executeWorktreeCreation(
     ? undefined
     : buildWorktreeCreationStartupOpt(preparedRequest, backendSpawned)
 
-  if (worktree.path && !structuredLaunch) {
-    const repoConnectionId =
-      useAppStore.getState().repos.find((repo) => repo.id === worktree.repoId)?.connectionId ?? null
-    await preflightAgentTrust({
-      agent: preparedRequest.agent,
-      workspacePath: worktree.path,
-      connectionId: repoConnectionId
-    })
-  }
-
   // `createWorktree` already inserted the real worktree row. Leaving for an app
   // view keeps the create in the background, while selecting another workspace
   // means the user still expects this task-launch handoff when it becomes ready;
-  // the entry guard prevents a late trust preflight from reviving a cancelled create.
+  // the entry guard keeps a cancelled create from being revived.
   const completionState = useAppStore.getState()
   const shouldActivateOnCompletion =
     completionState.pendingWorktreeCreations[creationId] !== undefined &&

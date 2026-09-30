@@ -7,6 +7,7 @@ import {
   reconcileStructuredAgentSessionOutbox,
   type StructuredAgentSessionOutboxEntry
 } from '../../../../shared/structured-agent-session-outbox'
+import { withdrawUnsentStructuredAgentSessionOutboxEntries } from '../../../../shared/structured-agent-session-outbox-stop-withdrawal'
 import {
   journalAnswersInFlightSend,
   type StructuredAgentSessionSendDisposition
@@ -20,28 +21,26 @@ import {
 } from './structured-agent-session-outbox-dispatch'
 import { getStructuredAgentLaunchPromptDispatch } from '@/lib/structured-agent-session-launch-prompt'
 import { useStructuredAgentSessionOutboxOwnerChange } from '@/runtime/structured-agent-session-accepted-send-capability'
+import { useStructuredAgentSessionOutboxUnconfirmedProbe } from './use-structured-agent-session-outbox-unconfirmed-probe'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { useStructuredAgentSessionWithdrawnRestore } from './structured-agent-session-withdrawn-message-restore'
 
 export function structuredSessionOperationId(): string {
   return createStructuredAgentSessionOperationId(createBrowserUuid)
 }
-
-const UNCONFIRMED_PROBE_BASE_DELAY_MS = 1_000
-/** No attempt ceiling: a transport outage outlives any fixed budget, and giving up
- *  restores the wedge this fixes. Growth caps the rate at one status query per 16s.
- *  A refusal that blocks the head still ends probing until a manual Retry (or, on an older
- *  host, a fence change), because the entry leaves `unconfirmed`. */
-const UNCONFIRMED_PROBE_MAX_DELAY_MS = 16_000
 
 export function useStructuredAgentSessionOutbox(args: {
   sessionId: string
   target: RuntimeClientTarget
   fence: number | null
   submissions: readonly AgentJournalSubmission[]
+  /** The composer that gets back what a Stop withdrew from this client's outbox. */
+  composerScopeKey?: string
 }) {
-  const { fence, sessionId, submissions, target } = args
+  const { composerScopeKey, fence, sessionId, submissions, target } = args
   // What resends, unblocks and drops a send in flight besides a Retry or a new send; see the hook.
   const owner = useStructuredAgentSessionOutboxOwnerChange(target, fence)
+  const restoreWithdrawn = useStructuredAgentSessionWithdrawnRestore(sessionId, composerScopeKey)
   const [outbox, setOutbox] = useState<StructuredAgentSessionOutboxEntry[]>(() =>
     readMountedStructuredAgentSessionOutbox(sessionId, fence, readOutbox)
   )
@@ -52,7 +51,6 @@ export function useStructuredAgentSessionOutbox(args: {
   const inFlightIdRef = useRef<string | null>(null)
   const dispatchGenerationRef = useRef(0)
   const blockedIdRef = useRef<string | null>(null)
-  const probeAttemptsRef = useRef({ id: null as string | null, attempts: 0 })
   const [error, setError] = useState<string | null>(null)
   const [errorSession, setErrorSession] = useState(sessionId)
   // Render-time reset (react.dev: adjusting state when a prop changes), so the
@@ -70,7 +68,6 @@ export function useStructuredAgentSessionOutbox(args: {
     dispatchGenerationRef.current += 1
     inFlightIdRef.current = null
     blockedIdRef.current = null
-    probeAttemptsRef.current = { id: null, attempts: 0 }
   }, [owner.ownerChange, owner.targetKey, sessionId])
 
   useEffect(() => {
@@ -108,6 +105,7 @@ export function useStructuredAgentSessionOutbox(args: {
       next.some((entry, index) => entry !== current[index]) ||
       next.length !== current.length
     ) {
+      restoreWithdrawn.byHost(current, submissions)
       outboxRef.current = next
       setOutbox(next)
       writeOutbox(sessionId, next)
@@ -128,7 +126,7 @@ export function useStructuredAgentSessionOutbox(args: {
     ) {
       setError(null)
     }
-  }, [sessionId, submissions])
+  }, [restoreWithdrawn, sessionId, submissions])
 
   // The one place that owns the refs, the React state and the storage write.
   const applyDisposition = useCallback(
@@ -216,46 +214,14 @@ export function useStructuredAgentSessionOutbox(args: {
     }
   }, [applyDisposition, fence, outbox, sessionId, target])
 
-  // A transport-side unknown may never have reached the host, and nothing else
-  // moves it out of `unconfirmed`, so one wedges the whole FIFO queue. Re-issuing
-  // the same envelope without `retryUnknown` is idempotent: the operation ledger
-  // replays a recorded outcome, or the host performs a genuine first delivery.
-  // A host-confirmed unknown stays parked until the user explicitly asks Retry
-  // to replay the same operation.
-  // The first `unconfirmed` entry is the one holding the queue, at whatever index it sits: an
-  // unconfirmed tail behind an admitted head would otherwise wedge until the head cleared,
-  // which is the wedge this probe exists to prevent.
-  const blocker = outbox.find((entry) => entry.state === 'unconfirmed')
-  // Depend on primitives: `submissions` is rebuilt on every streaming batch, so an
-  // array-identity dep would reset the backoff forever while the agent is working.
-  // A non-null `retryAfterUnknownSubmittedAt` means the user already retried, so
-  // another request would repeat that explicit action. Only entries that have
-  // never been retried are safe to probe automatically.
-  const probeId =
-    blocker && blocker.sessionId === sessionId && blocker.retryAfterUnknownSubmittedAt === null
-      ? blocker.clientMessageId
-      : null
-  const probeSettled =
-    probeId !== null && submissions.some((submission) => submission.clientMessageId === probeId)
-  useEffect(() => {
-    if (probeId === null || probeSettled || !owner.attached) {
-      return
-    }
-    const attempts = probeAttemptsRef.current.id === probeId ? probeAttemptsRef.current.attempts : 0
-    const timer = setTimeout(
-      () => {
-        probeAttemptsRef.current = { id: probeId, attempts: attempts + 1 }
-        const next = outboxRef.current.map((entry) =>
-          entry.clientMessageId === probeId ? { ...entry, state: 'queued' as const } : entry
-        )
-        outboxRef.current = next
-        setOutbox(next)
-        writeOutbox(sessionId, next)
-      },
-      Math.min(UNCONFIRMED_PROBE_BASE_DELAY_MS * 2 ** attempts, UNCONFIRMED_PROBE_MAX_DELAY_MS)
-    )
-    return () => clearTimeout(timer)
-  }, [owner.attached, owner.ownerChange, owner.targetKey, probeId, probeSettled, sessionId])
+  useStructuredAgentSessionOutboxUnconfirmedProbe({
+    sessionId,
+    outbox,
+    submissions,
+    owner,
+    outboxRef,
+    setOutbox
+  })
 
   const send = useCallback(
     (text: string, attachments: readonly { path: string; previewUri: string }[] = []): boolean => {
@@ -281,6 +247,22 @@ export function useStructuredAgentSessionOutbox(args: {
     },
     [sessionId]
   )
+
+  // Before the Stop goes out, so the drain has nothing left to send after it.
+  const withdrawUnsent = useCallback((): void => {
+    const next = withdrawUnsentStructuredAgentSessionOutboxEntries(
+      outboxRef.current,
+      submissions,
+      blockedIdRef.current,
+      inFlightIdRef.current
+    )
+    if (next.length !== outboxRef.current.length) {
+      restoreWithdrawn.byStop(outboxRef.current.filter((entry) => !next.includes(entry)))
+      outboxRef.current = next
+      setOutbox(next)
+      writeOutbox(sessionId, next)
+    }
+  }, [restoreWithdrawn, sessionId, submissions])
 
   const retry = (clientMessageId: string): void => {
     // Another message's Retry must not send the one the queue is held on.
@@ -340,5 +322,12 @@ export function useStructuredAgentSessionOutbox(args: {
     outboxRef.current = next
     setOutbox(next)
   }
-  return { outbox, error, blockedClientMessageId: blockedIdRef.current, send, retry }
+  return {
+    outbox,
+    error,
+    blockedClientMessageId: blockedIdRef.current,
+    send,
+    retry,
+    withdrawUnsent
+  }
 }

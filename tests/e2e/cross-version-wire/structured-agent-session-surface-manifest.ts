@@ -64,6 +64,23 @@ export const STRUCTURED_CALLS: {
   },
   { method: 'agentSession.send', hostMethod: 'send', result: { ok: true, replayed: false } },
   { method: 'agentSession.cancel', hostMethod: 'cancel', result: { ok: true, replayed: false } },
+  // Draft mutations for mid-turn queueing. Methods exist ahead of the
+  // capability's advertisement; only capability-gated clients ever call them.
+  {
+    method: 'agentSession.queuedMessageSend',
+    hostMethod: 'queuedMessageSend',
+    result: { ok: true, replayed: false }
+  },
+  {
+    method: 'agentSession.queuedMessageDelete',
+    hostMethod: 'queuedMessageDelete',
+    result: { ok: true, replayed: false }
+  },
+  {
+    method: 'agentSession.queuedMessagesResume',
+    hostMethod: 'queuedMessagesResume',
+    result: { ok: true, replayed: false }
+  },
   {
     method: REWIND_METHOD,
     hostMethod: 'rewind',
@@ -250,6 +267,13 @@ export function paramsFor(method: string): unknown {
         envelope: envelope({ method: 'agentSession.cancel', fields: { turnId: 'turn-1' }, fence }),
         turnId: 'turn-1'
       }
+    case 'agentSession.queuedMessageSend':
+    case 'agentSession.queuedMessageDelete': {
+      const fields = { messageId: 'queued-1' }
+      return { envelope: envelope({ method, fields, fence }), ...fields }
+    }
+    case 'agentSession.queuedMessagesResume':
+      return { envelope: envelope({ method, fields: {}, fence }) }
     case 'agentSession.respondToApproval':
     case 'agentSession.respondToQuestion': {
       const fields = { itemId: 'item-1', expectedRevision: 1, optionId: 'allow' }

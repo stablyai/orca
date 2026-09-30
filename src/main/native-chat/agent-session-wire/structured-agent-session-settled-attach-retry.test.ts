@@ -24,6 +24,7 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -112,7 +113,7 @@ beforeEach(async () => {
   host = new StructuredAgentSessionHost({
     store,
     adapter: adapter(),
-    journalRoot: root,
+    journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     now: () => NOW
@@ -139,7 +140,7 @@ describe('settled attach retry', () => {
     host = new StructuredAgentSessionHost({
       store,
       adapter: { ...adapter(), historyFilePath },
-      journalRoot: root,
+      journalDatabase: openTestJournalHostDatabase(root),
       claimKeyId: 'key-1',
       mintSpawnToken: () => 'spawn-a',
       now: () => NOW
@@ -196,7 +197,7 @@ describe('settled attach retry', () => {
     host = new StructuredAgentSessionHost({
       store,
       adapter: adapter(),
-      journalRoot: root,
+      journalDatabase: openTestJournalHostDatabase(root),
       claimKeyId: 'key-1',
       mintSpawnToken,
       now: () => NOW
@@ -240,7 +241,7 @@ describe('settled attach retry', () => {
     host = new StructuredAgentSessionHost({
       store,
       adapter: adapter(),
-      journalRoot: root,
+      journalDatabase: openTestJournalHostDatabase(root),
       claimKeyId: 'key-1',
       mintSpawnToken,
       // A host that cannot read another process's environment, so no scan can prove anything.
@@ -270,7 +271,7 @@ describe('settled attach retry', () => {
     host = new StructuredAgentSessionHost({
       store,
       adapter: adapter(),
-      journalRoot: root,
+      journalDatabase: openTestJournalHostDatabase(root),
       claimKeyId: 'key-1',
       mintSpawnToken,
       // A host that cannot read another process's environment, so no scan can prove anything.
@@ -327,7 +328,7 @@ describe('settled attach retry', () => {
     host = new StructuredAgentSessionHost({
       store,
       adapter: adapter(),
-      journalRoot: root,
+      journalDatabase: openTestJournalHostDatabase(root),
       claimKeyId: 'key-1',
       mintSpawnToken: () => 'spawn-restarted',
       probeOwner: async () => ({ outcome: 'pid-absent' }),

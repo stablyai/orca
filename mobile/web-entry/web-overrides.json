@@ -200,6 +200,10 @@
     {
       "file": "src/notifications/desktop-notification-channel.web.ts",
       "reason": "The page creates no Android notification channel and the native file already returns early off Android, so what this sibling changes is the import of expo-notifications, whose import-time read breaks the document for the reason push-token.web.ts beside it gives."
+    },
+    {
+      "file": "src/app-update/use-wall-app-update.web.ts",
+      "reason": "The update checker runs in the app, not the page. The native file hands the compatibility wall the release that check found; this one offers none, so the wall inside the page keeps its store or releases link and the page bundle never carries the checker."
     }
   ]
 }

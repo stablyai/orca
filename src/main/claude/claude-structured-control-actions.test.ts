@@ -249,6 +249,10 @@ describe('answerClaudePrompt', () => {
         resolve: resolvePrompt
       },
       currentTurnId: null,
+      commandTurnId: null,
+      beginCommand: vi.fn(),
+      forgetCommand: vi.fn(),
+      commandInterruptRequested: vi.fn(),
       flush: vi.fn(),
       contextActivity: 0,
       markContextActivity: vi.fn(),

@@ -225,19 +225,3 @@ export function getLineageChildrenInlineStyle(offset: number | string): {
     width: `calc(100% - ${inlineOffset})`
   }
 }
-
-export function getLineageEffectiveChildStart(args: {
-  parentContentStart?: number
-  lineageChildrenWrapperOffset: number
-  nestedRowSurfaceInset: number
-  cardSurfaceMargin: number
-  flushCardContentInset: number
-}): number {
-  return (
-    (args.parentContentStart ?? 0) +
-    args.lineageChildrenWrapperOffset +
-    args.nestedRowSurfaceInset +
-    args.cardSurfaceMargin +
-    args.flushCardContentInset
-  )
-}

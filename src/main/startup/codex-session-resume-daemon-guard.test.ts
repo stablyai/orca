@@ -20,7 +20,6 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({ app: { getPath: vi.fn(() => '/tmp/orca-user-data') } }))
-vi.mock('../agent-trust-presets', () => ({ markCodexProjectTrusted: async () => {} }))
 vi.mock('../codex/hook-service', () => ({
   codexHookService: {
     installForLaunchPrep: mocks.installForLaunchPrep,
@@ -31,7 +30,7 @@ vi.mock('../codex/codex-real-home-hook-install', () => ({
   ensureRealHomeCodexHookState: mocks.ensureRealHomeCodexHookState
 }))
 vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
-  isAgentStatusHooksEnabled: () => mocks.hooksEnabled
+  isAgentStatusHooksEnabledForAgent: () => mocks.hooksEnabled
 }))
 vi.mock('../codex/codex-home-paths', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -98,8 +97,7 @@ describe('Codex session resume daemon socket guard', () => {
   function resume(): ReturnType<typeof prepareCodexSessionResumeForLaunch> {
     return prepareCodexSessionResumeForLaunch({
       providerSession: { key: 'session_id', id: 'abc' },
-      target: { runtime: 'host' },
-      workspacePath: join(root, 'workspace')
+      target: { runtime: 'host' }
     })
   }
 

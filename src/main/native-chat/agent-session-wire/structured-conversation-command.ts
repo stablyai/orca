@@ -9,6 +9,10 @@ import type {
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult
 } from '../../../shared/agent-session-wire'
+import {
+  agentSessionLeaseAdmitsWriter,
+  agentSessionLeaseIsReleased
+} from '../../../shared/agent-session-lease-adjudication'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import {
   attachFingerprintFields,
@@ -22,40 +26,21 @@ import {
 } from './structured-agent-session-send-preparation'
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
-import { conversationCommandBlocked } from './structured-conversation-command-admission'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import {
-  agentSessionFailureFact,
-  type AgentSessionFailureFact
-} from '../../../shared/agent-session-failure'
+  conversationCommandInFlight,
+  conversationCommandBlocked
+} from './structured-conversation-command-admission'
+import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
 import {
   agentSessionFailureWords,
   type AgentSessionFailureWordsContext
 } from '../../../shared/agent-session-failure-words'
 import { structuredAgentSessionStartFailureFact } from './structured-agent-session-failure-text'
-import type { StructuredSessionCompactionResult } from './structured-session-compaction'
-
-/** A compaction that did not succeed, keeping only what the provider wrote for a person. */
-function compactionFailure(
-  result: StructuredSessionCompactionResult
-): AgentSessionFailureFact | undefined {
-  switch (result.outcome) {
-    case 'compacted':
-      return undefined
-    case 'unconfirmed':
-      return agentSessionFailureFact('compactionUnconfirmed')
-    case 'failed':
-      return agentSessionFailureFact('compactionFailed', { detail: result.detail })
-  }
-}
-
-function compactionStatusBody(failure: AgentSessionFailureFact | undefined) {
-  return failure
-    ? { kind: 'status' as const, ...agentSessionFailureWords(failure, { surface: 'row' }) }
-    : { kind: 'status' as const, text: 'Conversation compacted.' }
-}
+import { carryQueuedMessagesToClearReplacement } from './structured-agent-session-queued-mutations'
 
 /** A command's `error` is the sentence its row shows. */
-function conversationCommandFailure(
+export function conversationCommandFailure(
   failure: AgentSessionFailureFact | undefined,
   context: AgentSessionFailureWordsContext = {}
 ) {
@@ -75,6 +60,76 @@ export type ConversationReplacement = {
   sessionId: string
   workspaceId: string
   agent: 'claude' | 'codex'
+}
+
+/** The replacement a /clear try names, and the operation id of its start. */
+function clearReplacementIds(sessionId: string, callerKey: string, operationId: string) {
+  const digest = createHash('sha256')
+    .update(JSON.stringify([sessionId, callerKey, operationId]))
+    .digest('hex')
+  return {
+    sessionId: `clear-${digest.slice(0, 40)}`,
+    attachOperationId: `${parseAgentSessionOperationTimestamp(operationId)}-${digest.slice(0, 32)}`
+  }
+}
+
+/**
+ * The try this caller's /clear finishes: the oldest since its last commit whose replacement start
+ * reached the ledger, else this one. Read from the ledger in admission order, so a retry under a
+ * fresh operation id finds the replacement an earlier try started.
+ */
+function clearTryToFinish(
+  store: AgentSessionRecordStore,
+  sessionId: string,
+  callerKey: string,
+  clearFingerprint: string,
+  operationId: string
+): string {
+  const committed = store.getRecord(sessionId)?.conversationCommand
+  let earliest: string | null = null
+  for (const row of store.listOperationRows()) {
+    if (row.callerKey !== callerKey || row.fingerprint !== clearFingerprint) {
+      continue
+    }
+    // The record also names a commit whose ledger settlement a crash lost.
+    if (
+      row.outcome.status === 'succeeded' ||
+      (committed?.phase === 'committed' &&
+        committed.callerKey === callerKey &&
+        committed.operationId === row.operationId)
+    ) {
+      earliest = null
+    } else if (earliest === null) {
+      const start = store.getOperationRow(
+        callerKey,
+        clearReplacementIds(sessionId, callerKey, row.operationId).attachOperationId
+      )
+      // Only a start that succeeded left a conversation to finish; replaying any other repeats it.
+      if (start?.outcome.status === 'succeeded') {
+        earliest = row.operationId
+      }
+    }
+  }
+  return earliest ?? operationId
+}
+
+/** Another caller's uncommitted /clear holds a replacement whose agent is running. One whose stop
+ *  is merely unproven gates nothing: only that caller's own start would ever settle it. */
+function otherCallersClearIsLive(
+  store: AgentSessionRecordStore,
+  sessionId: string,
+  callerKey: string,
+  clearFingerprint: string
+): boolean {
+  return store.listOperationRows().some((row) => {
+    if (row.callerKey === callerKey || row.fingerprint !== clearFingerprint) {
+      return false
+    }
+    const replacement = store.getRecord(
+      clearReplacementIds(sessionId, row.callerKey, row.operationId).sessionId
+    )
+    return replacement !== null && agentSessionLeaseAdmitsWriter(replacement.lease)
+  })
 }
 
 export function runStructuredConversationCommand(
@@ -114,61 +169,53 @@ export function runStructuredConversationCommand(
             return outcome.conversationCommand
           }
           const prior = matching()
-          if (prior?.phase === 'committed') {
-            return prior
-          }
-          if (command === 'compact' && prior && outcome.status !== 'unknown') {
-            return {
-              command,
-              state: 'unknown',
-              error: 'Compaction completion is unconfirmed; it was not run again.'
-            }
-          }
-          return outcome.status === 'succeeded' && command === 'compact'
-            ? { command, state: 'completed' }
-            : null
+          return prior?.phase === 'committed' ? prior : null
         },
-        rerunWhenReplayMissing: () => command === 'clear' && matching()?.phase === 'prepared',
+        // Nothing the chat reads is written before the commit, so a clear with no committed answer
+        // changed nothing and runs again, finishing the replacement its earliest try started.
+        rerunWhenReplayMissing: () => command === 'clear',
         run: async (ctx) => {
           await host.flushStreamedEvents(sessionId)
           const record = store.getRecord(sessionId)!
-          const prior = matching()
-          const blocked =
-            prior?.phase === 'prepared' && command === 'clear'
-              ? null
-              : conversationCommandBlocked(ctx, record)
+          const blocked = conversationCommandBlocked(ctx, record)
           if (blocked) {
             return { ok: false, refusal: blocked }
           }
-          const replacementSessionId =
-            command === 'clear'
-              ? (prior?.replacementSessionId ??
-                `clear-${createHash('sha256')
-                  .update(JSON.stringify([sessionId, caller.callerKey, clientOperationId]))
-                  .digest('hex')
-                  .slice(0, 40)}`)
-              : undefined
-          const prepared = {
+          let ids: ReturnType<typeof clearReplacementIds> | undefined
+          if (command === 'clear') {
+            const clearFingerprint = computeAgentSessionPayloadFingerprint({
+              method: 'agentSession.conversationCommand',
+              sessionId,
+              fields: { command }
+            })
+            if (otherCallersClearIsLive(store, sessionId, caller.callerKey, clearFingerprint)) {
+              return { ok: false, refusal: conversationCommandInFlight() }
+            }
+            ids = clearReplacementIds(
+              sessionId,
+              caller.callerKey,
+              clearTryToFinish(
+                store,
+                sessionId,
+                caller.callerKey,
+                clearFingerprint,
+                clientOperationId
+              )
+            )
+          }
+          const replacementSessionId = ids?.sessionId
+          const base = {
             command,
             runtimeFence: ctx.fence,
             operationId: clientOperationId,
             callerKey: caller.callerKey,
-            phase: 'prepared' as const,
-            state: 'unknown' as const,
             ...(replacementSessionId ? { replacementSessionId } : {})
           }
-          await store.setConversationCommand(sessionId, ctx.fence, prepared)
-          let failure: AgentSessionFailureFact | undefined
-          if (command === 'clear' && replacementSessionId) {
+          if (ids) {
             const attach: AgentSessionAttachParams = {
               envelope: {
-                sessionId: replacementSessionId,
-                clientOperationId: `${parseAgentSessionOperationTimestamp(clientOperationId)}-${createHash(
-                  'sha256'
-                )
-                  .update(JSON.stringify([sessionId, caller.callerKey, clientOperationId]))
-                  .digest('hex')
-                  .slice(0, 32)}`,
+                sessionId: ids.sessionId,
+                clientOperationId: ids.attachOperationId,
                 expectedRuntimeFence: null,
                 payloadFingerprint: ''
               },
@@ -183,20 +230,28 @@ export function runStructuredConversationCommand(
             }
             attach.envelope.payloadFingerprint = computeAgentSessionPayloadFingerprint({
               method: 'agentSession.attach',
-              sessionId: replacementSessionId,
+              sessionId: ids.sessionId,
               fields: attachFingerprintFields(attach)
             })
             const acquired = await host.attach(caller, attach)
-            if (!acquired.ok) {
+            const replacement = store.getRecord(ids.sessionId)
+            // An earlier try started this replacement and a restart or the idle sweep has since
+            // stopped it: attach can't replay a settled start, but the new conversation is at rest.
+            const startedAndAtRest =
+              replacement !== null &&
+              agentSessionLeaseIsReleased(replacement.lease) &&
+              store.getOperationRow(caller.callerKey, attach.envelope.clientOperationId)?.outcome
+                .status === 'succeeded'
+            if (!acquired.ok && !startedAndAtRest) {
               if (
                 !isDefinitiveAgentSessionCreateRefusal(acquired.refusal.code) &&
-                store.getRecord(replacementSessionId)?.lease.claimStatus !== 'released'
+                replacement?.lease.claimStatus !== 'released'
               ) {
                 throw new Error(acquired.refusal.message)
               }
               // The refusal's message is Orca's log text; the result keeps its situation instead.
               const failed = {
-                ...prepared,
+                ...base,
                 replacementSessionId: undefined,
                 phase: 'committed' as const,
                 state: 'completed' as const,
@@ -211,78 +266,20 @@ export function runStructuredConversationCommand(
               await store.setConversationCommand(sessionId, ctx.fence, failed)
               return { ok: true, value: failed }
             }
-          } else {
-            if (!ctx.adapter.compact) {
-              throw new Error('Compaction is unavailable for this provider.')
-            }
-            const identity = {
-              provider: 'orca' as const,
-              clientMessageId: `compact:${clientOperationId}`
-            }
-            await ctx.journal.appendItem(
-              identity,
-              {
-                kind: 'status',
-                text: 'Compacting conversation…',
-                turnLifecycle: { turnId: `compact:${clientOperationId}`, state: 'running' }
-              },
-              { fence: ctx.fence }
-            )
-            try {
-              failure = compactionFailure(
-                await ctx.adapter.compact({
-                  turnId: `compact:${clientOperationId}`,
-                  sessionId,
-                  fence: ctx.fence,
-                  onLateResult: (result) =>
-                    context.serialize(sessionId, async () => {
-                      if (
-                        matching()?.phase !== 'prepared' ||
-                        context.sessions.get(sessionId)?.journal !== ctx.journal
-                      ) {
-                        return
-                      }
-                      await host.flushStreamedEvents(sessionId)
-                      const late = compactionFailure(result)
-                      await ctx.journal.appendItem(identity, compactionStatusBody(late), {
-                        fence: ctx.fence
-                      })
-                      await store.setConversationCommand(sessionId, ctx.fence, {
-                        ...prepared,
-                        phase: 'committed',
-                        state: 'completed',
-                        ...conversationCommandFailure(late)
-                      })
-                      await store.recordOperationOutcome({
-                        callerKey: caller.callerKey,
-                        operationId: clientOperationId,
-                        outcome: {
-                          status: 'succeeded',
-                          sessionId,
-                          conversationCommand: matching()!
-                        }
-                      })
-                    })
-                })
-              )
-              await host.flushStreamedEvents(sessionId)
-            } catch (cause) {
-              await ctx.journal.appendItem(
-                identity,
-                compactionStatusBody(agentSessionFailureFact('compactionUnconfirmed')),
-                { fence: ctx.fence }
-              )
-              throw cause
-            }
-            await ctx.journal.appendItem(identity, compactionStatusBody(failure), {
-              fence: ctx.fence
+            // Carry the source's drafts to the replacement, the same for every client version:
+            // the cards stay visible where the user now is, and no text rides the wire.
+            // Bookkeeping — a failure is reported and never fails the clear.
+            await carryQueuedMessagesToClearReplacement(ctx, {
+              replacementSessionId: ids.sessionId,
+              replacementJournal: context.sessions.get(ids.sessionId)?.journal,
+              callerKey: caller.callerKey,
+              operationId: clientOperationId
             })
           }
           const completed = {
-            ...prepared,
+            ...base,
             phase: 'committed' as const,
-            state: 'completed' as const,
-            ...conversationCommandFailure(failure)
+            state: 'completed' as const
           }
           await store.setConversationCommand(sessionId, ctx.fence, completed)
           return { ok: true, value: completed }

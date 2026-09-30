@@ -66,10 +66,10 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
 
   // Why: gate on the DIRECT page id, not ownerTabId — a popup has no device-metrics override of its
   // own, so inheriting the owner tab's preset would pair a mobile UA with a desktop viewport.
-  protected hasMobileViewportPreset(guestWebContentsId: number): boolean {
+  protected hasMobileViewportApplied(guestWebContentsId: number): boolean {
     const browserPageId = this.tabIdByWebContentsId.get(guestWebContentsId)
     const preset = browserPageId ? this.viewportPresetByTabId.get(browserPageId) : undefined
-    return preset?.guestWebContentsId === guestWebContentsId && preset.override?.mobile === true
+    return preset?.guestWebContentsId === guestWebContentsId && preset.applied?.mobile === true
   }
 
   /**
@@ -108,7 +108,7 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
   private resolveGuestTabIdentity(guest: Electron.WebContents, url: string): BrowserTabIdentity {
     return resolveBrowserTabIdentity({
       url,
-      mobile: this.hasMobileViewportPreset(guest.id),
+      mobile: this.hasMobileViewportApplied(guest.id),
       processIdentity: getBrowserProcessUserAgentIdentity()
     })
   }

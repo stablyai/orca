@@ -71,7 +71,7 @@ export function getTerminalTheme(
   return getTheme(selection)
 }
 
-export function getTerminalThemePreview(
+function getTerminalThemePreview(
   name: string,
   settings?: Pick<GlobalSettings, 'terminalCustomThemes'>,
   fallbackMode: 'dark' | 'light' = 'dark'

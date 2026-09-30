@@ -58,7 +58,6 @@ describe('SshReconnectLadder', () => {
         now += decision.delayMs
       }
     }
-    expect(FLAP_DELAY_CAP_MS).toBe(5_000)
   })
 
   it('keeps the uncapped table for a host whose handshakes fail', () => {

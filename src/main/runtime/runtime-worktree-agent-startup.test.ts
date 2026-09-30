@@ -3,19 +3,8 @@ import type { Repo } from '../../shared/repo-types'
 import { tuiAgentToAgentKind } from '../../shared/agent-kind'
 
 const mocks = vi.hoisted(() => ({
-  markAntigravityWorkspaceTrusted: vi.fn(),
-  markCodexProjectTrusted: vi.fn(),
-  markCopilotFolderTrusted: vi.fn(),
-  markCursorWorkspaceTrusted: vi.fn(),
   detectRemoteAgents: vi.fn(),
   detectInstalledAgentsWithShellPathHydration: vi.fn()
-}))
-
-vi.mock('../agent-trust-presets', () => ({
-  markAntigravityWorkspaceTrusted: mocks.markAntigravityWorkspaceTrusted,
-  markCodexProjectTrusted: mocks.markCodexProjectTrusted,
-  markCopilotFolderTrusted: mocks.markCopilotFolderTrusted,
-  markCursorWorkspaceTrusted: mocks.markCursorWorkspaceTrusted
 }))
 
 vi.mock('../preflight/agent-detection', () => ({
@@ -23,11 +12,9 @@ vi.mock('../preflight/agent-detection', () => ({
   detectInstalledAgentsWithShellPathHydration: mocks.detectInstalledAgentsWithShellPathHydration
 }))
 
-import { AGENT_TRUST_WRITE_DEADLINE_MS } from '../agent-trust-write-deadline'
 import {
   buildWorktreeStartupForAgent,
-  buildWorktreeStartupForDraft,
-  markLocalWorktreeTrusted
+  buildWorktreeStartupForDraft
 } from './runtime-worktree-agent-startup'
 
 function makeRepo(fields: Partial<Repo>): Repo {
@@ -180,93 +167,4 @@ describe('buildWorktreeStartupForDraft agent detection', () => {
       })
     }
   )
-})
-
-describe('markLocalWorktreeTrusted', () => {
-  it('waits for the Codex trust write before resolving', async () => {
-    let finish!: () => void
-    mocks.markCodexProjectTrusted.mockReturnValue(
-      new Promise<void>((resolve) => {
-        finish = resolve
-      })
-    )
-    let settled = false
-    const marking = markLocalWorktreeTrusted('codex', '/workspace/app').then(() => {
-      settled = true
-    })
-
-    await Promise.resolve()
-    expect(settled).toBe(false)
-    finish()
-    await marking
-    expect(mocks.markCodexProjectTrusted).toHaveBeenCalledWith('/workspace/app')
-  })
-
-  it('contains a rejected Codex trust write', async () => {
-    mocks.markCodexProjectTrusted.mockRejectedValueOnce(new Error('write failed'))
-
-    await expect(markLocalWorktreeTrusted('codex', '/workspace/app')).resolves.toBeUndefined()
-  })
-
-  /**
-   * Why this test exists: Orca has two trust dispatch chains — the renderer's
-   * preflightAgentTrust (via the agentTrust:markTrusted IPC) and this main-process
-   * one, which is the only path `orchestration worker-start` takes. Adding
-   * `preflightTrust: 'antigravity'` to TUI_AGENT_CONFIG clears the `!preset` guard
-   * here but matched none of the cursor/copilot/codex branches, so every supervised
-   * agy worker still failed at agent_readiness with 'agent-trust-workspace' while
-   * the renderer-side unit tests passed. Verified live: with the branch added, the
-   * worktree is appended to ~/.gemini/antigravity-cli/settings.json and the dispatch
-   * reaches worker_done.
-   */
-  it('writes the agy workspace trust artifact on the orchestration path', async () => {
-    await markLocalWorktreeTrusted('antigravity', '/workspace/app')
-
-    expect(mocks.markAntigravityWorkspaceTrusted).toHaveBeenCalledWith('/workspace/app')
-  })
-
-  it('contains a throwing agy trust write', async () => {
-    mocks.markAntigravityWorkspaceTrusted.mockImplementationOnce(() => {
-      throw new Error('write failed')
-    })
-
-    await expect(markLocalWorktreeTrusted('antigravity', '/workspace/app')).resolves.toBeUndefined()
-  })
-
-  it('bounds a never-settling Codex trust write instead of holding the launch open', async () => {
-    vi.useFakeTimers()
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    let release!: () => void
-    const write = new Promise<void>((resolve) => {
-      release = resolve
-    })
-    mocks.markCodexProjectTrusted.mockClear()
-    mocks.markCursorWorkspaceTrusted.mockClear()
-    mocks.markCopilotFolderTrusted.mockClear()
-    mocks.markAntigravityWorkspaceTrusted.mockClear()
-    mocks.markCodexProjectTrusted.mockReturnValueOnce(write)
-    let settled = false
-    const marking = markLocalWorktreeTrusted('codex', '/workspace/app').then(() => {
-      settled = true
-    })
-    try {
-      await vi.advanceTimersByTimeAsync(AGENT_TRUST_WRITE_DEADLINE_MS - 1)
-      expect(settled).toBe(false)
-      await vi.advanceTimersByTimeAsync(2)
-      await marking
-      expect(settled).toBe(true)
-      expect(String(warn.mock.calls[0]?.[0])).toContain('did not settle')
-      expect(vi.getTimerCount()).toBe(0)
-      // Fails closed: giving up writes nothing, retries nothing and never
-      // substitutes another preset's artifact, so Codex still prompts.
-      expect(mocks.markCodexProjectTrusted).toHaveBeenCalledTimes(1)
-      expect(mocks.markCursorWorkspaceTrusted).not.toHaveBeenCalled()
-      expect(mocks.markCopilotFolderTrusted).not.toHaveBeenCalled()
-      expect(mocks.markAntigravityWorkspaceTrusted).not.toHaveBeenCalled()
-    } finally {
-      warn.mockRestore()
-      release()
-      vi.useRealTimers()
-    }
-  })
 })

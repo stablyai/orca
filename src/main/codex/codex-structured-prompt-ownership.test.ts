@@ -261,7 +261,7 @@ describe('Codex live prompt ownership', () => {
         fence: 7,
         prompt: { itemId: 'journal-prompt' }
       })
-    ).resolves.toEqual({ cancelled: false })
+    ).resolves.toEqual({ cancelled: false, refusal: {} })
     await adapter.answerPrompt({
       sessionId: 'session-1',
       itemId: 'journal-prompt',

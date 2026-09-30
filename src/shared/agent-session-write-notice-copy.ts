@@ -26,6 +26,8 @@ export const AGENT_SESSION_WRITE_NOTICE_COPY = {
   historyUnreadable: "Orca couldn't read this chat's saved history.",
   historyUnusable: 'Unable to load this chat.',
   historyUnavailable: "Orca couldn't open this chat's history right now.",
+  savedByNewerOrca: 'Chats were saved by a newer Orca.',
+  updateOrcaToKeepUsing: 'Update Orca to keep using them.',
   unsupported: "The Orca running this chat doesn't support this. Update Orca, then try again.",
   unreachable: "Orca couldn't reach the agent.",
   recordFailed: "Orca couldn't record it in this chat's history.",

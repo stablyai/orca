@@ -16,6 +16,7 @@ import {
   USER_MESSAGE,
   acquired,
   adapterFor,
+  answerWithOpenedTurn,
   fakeCodex,
   identityFor
 } from './codex-structured-session-adapter-fixture'
@@ -371,7 +372,8 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
 
 describe('CodexStructuredSessionAdapter.dispatch', () => {
   it('admits a send as soon as Codex owns it', async () => {
-    const codex = fakeCodex({ 'turn/start': () => ({ turn: { id: 'turn-1' } }) })
+    const codex = fakeCodex()
+    codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'turn-1')
     const adapter = await acquired(codex)
 
     const outcome = await adapter.dispatch({
@@ -512,9 +514,9 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
           }
         ],
         nextCursor: null
-      }),
-      'turn/start': () => ({ turn: { id: 'turn-1' } })
+      })
     })
+    codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'turn-1')
     const adapter = await acquired(codex)
 
     await adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'gpt-5', fence: 7 })

@@ -93,6 +93,7 @@ describe('provider-exit settlement', () => {
       child: { generation: GENERATION, fence: 7, phase: 'ready' },
       journal: {
         cursor: () => ({ epoch: 'epoch-1', sequence: 0 }),
+        itemBody: () => null,
         snapshot: () => ({
           items: [lifecycleItem('turn-1', 1, { state: 'running', startedAt: 1_000 })]
         }),
@@ -165,6 +166,7 @@ describe('provider-exit settlement', () => {
       child: { generation: GENERATION, fence: 7, phase: 'ready' },
       journal: {
         cursor: () => ({ epoch: 'epoch-1', sequence: 0 }),
+        itemBody: () => null,
         snapshot: () => ({ items }),
         appendLifecycleBatch,
         markPendingSubmissionsUnknown: vi.fn(async () => [])
@@ -223,7 +225,18 @@ describe('provider-exit settlement', () => {
           body: {
             kind: 'status',
             text: exitOutcome('The agent'),
-            failure: { kind: 'providerExited' }
+            failure: { kind: 'providerExited' },
+            tone: 'error'
+          },
+          // The exit belongs to the turn it ended.
+          turnScope: {
+            kind: 'turn',
+            turnItemId: agentJournalItemKey({
+              provider: 'codex',
+              threadId: 'thread-1',
+              turnId: 'turn-2',
+              ordinal: 0
+            })
           }
         },
         {
@@ -235,7 +248,8 @@ describe('provider-exit settlement', () => {
             state: 'interrupted',
             startedAt: 30,
             completedAt: 1_234
-          }
+          },
+          turnScope: { kind: 'thread' }
         }
       ]
     })
@@ -271,6 +285,7 @@ describe('provider-exit settlement', () => {
         child: { generation: GENERATION, fence: 7, phase: 'ready' },
         journal: {
           cursor: () => ({ epoch: 'epoch-1', sequence: 0 }),
+          itemBody: () => null,
           snapshot: () => ({ items }),
           appendLifecycleBatch,
           markPendingSubmissionsUnknown: vi.fn(async () => []),
@@ -313,7 +328,8 @@ describe('provider-exit settlement', () => {
             body: {
               kind: 'status',
               text: exitOutcome('Claude'),
-              failure: { kind: 'providerExited' }
+              failure: { kind: 'providerExited' },
+              tone: 'error'
             }
           })
         ])
@@ -327,6 +343,7 @@ describe('provider-exit settlement', () => {
       child: { generation: GENERATION, fence: 7, phase: 'ready' },
       journal: {
         cursor: () => ({ epoch: 'epoch-1', sequence: 0 }),
+        itemBody: () => null,
         snapshot: () => ({ items: [] }),
         appendLifecycleBatch: vi.fn(async () => ({ epoch: 'epoch-1', sequence: 1 })),
         markPendingSubmissionsUnknown,
@@ -364,7 +381,8 @@ describe('provider-exit settlement', () => {
             body: {
               kind: 'status',
               text: exitOutcome('Claude'),
-              failure: { kind: 'providerExited' }
+              failure: { kind: 'providerExited' },
+              tone: 'error'
             }
           })
         ]
@@ -377,6 +395,7 @@ describe('provider-exit settlement', () => {
       child: { generation: GENERATION, fence: 7, phase: 'ready' },
       journal: {
         cursor: () => ({ epoch: 'epoch-1', sequence: 0 }),
+        itemBody: () => null,
         markPendingSubmissionsUnknown: vi.fn(async () => []),
         rejectPendingSubmissions: vi.fn(async () => []),
         snapshot: () => ({

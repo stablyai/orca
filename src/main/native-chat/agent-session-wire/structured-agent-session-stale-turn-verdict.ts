@@ -7,9 +7,10 @@
 // with no end at all, until a proof naming its owner is written and revises it.
 
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalTurnLifecycle
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalRenderItem,
+  type AgentJournalTurnLifecycle
 } from '../../../shared/agent-session-journal-types'
 import {
   agentJournalTurnBody,
@@ -95,7 +96,14 @@ function turnLifecycleRevision(
 ): JournalLifecycleMutationInput[] {
   const identity = parseAgentJournalItemKey(item.itemId)
   return identity
-    ? [{ kind: 'item', identity, body: agentJournalTurnBody(settledLifecycle(turn, verdict)) }]
+    ? [
+        {
+          kind: 'item',
+          identity,
+          body: agentJournalTurnBody(settledLifecycle(turn, verdict)),
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        }
+      ]
     : []
 }
 
