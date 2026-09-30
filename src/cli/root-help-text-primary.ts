@@ -114,6 +114,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  orchestration worker-read Read bounded output from one supervised worker',
   '  orchestration worker-stop Fence one Dispatch; stop only its supervised worker',
   '  orchestration worker-abandon Fence an uncertain worker without claiming it stopped',
+  '  orchestration worker-reconcile-attachment Retire an abandoned remote attachment without closing its terminal',
   "  orchestration worker-release Release a settled worker's terminal after archiving its output",
   '  orchestration worker-retain Keep a worker terminal live for debugging',
   '  orchestration worker-list Report worker terminal resource accounting',

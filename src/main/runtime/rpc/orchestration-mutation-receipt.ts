@@ -154,6 +154,14 @@ export function isResumablePendingWorkerDone(
   return isWorkerDoneSend(method, params) && receipt === EFFECT_FREE_WORKER_DONE_CHECKPOINT
 }
 
+/** Attachment reconcile is idempotent, so a restart may replay the same pending request. */
+export function isResumablePendingAttachmentReconcile(method: string): boolean {
+  return (
+    method === 'orchestration.workerReconcileAttachment' ||
+    method === 'orchestration.federationReconcileAttachment'
+  )
+}
+
 export function readWorkerDoneReplayNudge(
   method: string,
   params: unknown,

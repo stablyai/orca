@@ -355,7 +355,8 @@ import {
   FederationDispatchParams,
   FederationFleetSnapshotParams,
   FederationOutputReadParams,
-  FederationReadParams
+  FederationReadParams,
+  FederationReconcileAttachmentParams
 } from './orchestration-federation-control-params'
 import {
   FederationAckParams,
@@ -996,6 +997,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.federationPull': FederationPullParams,
   'orchestration.federationRead': FederationReadParams,
   'orchestration.federationReadOutput': FederationOutputReadParams,
+  'orchestration.federationReconcileAttachment': FederationReconcileAttachmentParams,
   'orchestration.federationRelease': FederationDispatchParams,
   'orchestration.federationShow': FederationDispatchParams,
   'orchestration.federationStop': FederationDispatchParams,
@@ -1018,6 +1020,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.workerAbandon': WorkerDispatchParams,
   'orchestration.workerList': WorkerListParams,
   'orchestration.workerRead': WorkerReadParams,
+  'orchestration.workerReconcileAttachment': WorkerDispatchParamsOfOrchestrationWorkerStopParams,
   'orchestration.workerRelease': WorkerDispatchParamsOfOrchestrationWorkerReleaseSchemasParams,
   'orchestration.workerRetain': WorkerRetainParams,
   'orchestration.workerShow': WorkerDispatchParams,

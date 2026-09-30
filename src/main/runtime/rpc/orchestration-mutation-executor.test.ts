@@ -4,6 +4,7 @@ import { OrcaRuntimeService } from '../orca-runtime'
 import { OrchestrationDb } from '../orchestration/db'
 import type { RpcRequest } from './core'
 import { OrchestrationMutationExecutor } from './orchestration-mutation-executor'
+import { hashCanonical, replayStableCallerParams } from './orchestration-mutation-receipt'
 
 const promptParams = {
   terminal: 'term-prompt',
@@ -46,6 +47,7 @@ function createHarness() {
   vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue('window-1:leaf-prompt')
   return {
     db,
+    runtime,
     executor: new OrchestrationMutationExecutor(runtime),
     bindTerminal: (next: { generation: number; processIncarnation: string }) => {
       binding.mockReturnValue({ ptyId: 'pty-prompt', ...next })
@@ -198,6 +200,81 @@ describe('terminal prompt mutation receipt retry boundary', () => {
       code: 'operation_unknown'
     })
     expect(invoke).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['orchestration.workerReconcileAttachment', { dispatch: 'ctx_home_abandoned' }],
+    [
+      'orchestration.federationReconcileAttachment',
+      {
+        dispatchId: 'ctx_home_abandoned',
+        expectedRuntimeEpoch: 'epoch-remote',
+        expectedTerminalHandle: 'term_saved',
+        expectedPaneKey: 'tab_saved:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        expectedProcessIncarnation: 'runtime:pty:saved'
+      }
+    ]
+  ] as const)(
+    'replays a pending %s after restart when the attachment is already reconciled',
+    async (method, params) => {
+      const harness = createHarness()
+      databases.push(harness.db)
+      const requestId = '11111111-1111-4111-8111-111111111111'
+      const fingerprint = harness.db.getOrCreateLocalMutationCallerFingerprint()
+      harness.db.beginMutationReceipt({
+        callerFingerprint: fingerprint,
+        requestId,
+        method,
+        payloadHash: hashCanonical({
+          method,
+          params: replayStableCallerParams(harness.runtime, params)
+        })
+      })
+      const invoke = vi.fn().mockResolvedValue({
+        dispatchId: 'ctx_home_abandoned',
+        state: 'abandoned',
+        alreadyReconciled: true,
+        processAction: 'none'
+      })
+
+      await expect(
+        harness.executor.run(workerStartRequest(method, requestId, params), params, invoke)
+      ).resolves.toMatchObject({
+        alreadyReconciled: true,
+        processAction: 'none',
+        mutation: { requestId, replayed: true }
+      })
+      expect(invoke).toHaveBeenCalledOnce()
+      expect(harness.db.getMutationReceipt(fingerprint, requestId)?.state).toBe('completed')
+    }
+  )
+
+  it('keeps a changed reconcile payload fenced after a pending restart', async () => {
+    const harness = createHarness()
+    databases.push(harness.db)
+    const method = 'orchestration.workerReconcileAttachment'
+    const requestId = '22222222-2222-4222-8222-222222222222'
+    const fingerprint = harness.db.getOrCreateLocalMutationCallerFingerprint()
+    harness.db.beginMutationReceipt({
+      callerFingerprint: fingerprint,
+      requestId,
+      method,
+      payloadHash: hashCanonical({
+        method,
+        params: replayStableCallerParams(harness.runtime, { dispatch: 'ctx_original' })
+      })
+    })
+    const invoke = vi.fn()
+
+    await expect(
+      harness.executor.run(
+        workerStartRequest(method, requestId, { dispatch: 'ctx_other' }),
+        { dispatch: 'ctx_other' },
+        invoke
+      )
+    ).rejects.toMatchObject({ code: 'request_mismatch' })
+    expect(invoke).not.toHaveBeenCalled()
+    expect(harness.db.getMutationReceipt(fingerprint, requestId)?.state).toBe('pending')
   })
 })
 

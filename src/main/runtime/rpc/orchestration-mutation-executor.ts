@@ -12,6 +12,7 @@ import {
   EFFECT_FREE_WORKER_DONE_CHECKPOINT,
   getPendingWorkerStartRecovery,
   hashCanonical,
+  isResumablePendingAttachmentReconcile,
   isResumablePendingWorkerDone,
   markReplayedPromptIncarnationReplaced,
   readPromptBasePayloadHash,
@@ -136,9 +137,13 @@ export class OrchestrationMutationExecutor {
     const resumedPendingWorkerDone =
       begun.disposition === 'pending' &&
       isResumablePendingWorkerDone(request.method, params, begun.row.receipt)
+    const resumedPendingReconcile =
+      begun.disposition === 'pending' && isResumablePendingAttachmentReconcile(request.method)
     const resumedPendingMutation =
       begun.disposition === 'pending' &&
-      (request.method === 'orchestration.workerRelease' || resumedPendingWorkerDone)
+      (request.method === 'orchestration.workerRelease' ||
+        resumedPendingWorkerDone ||
+        resumedPendingReconcile)
 
     if (begun.disposition === 'completed') {
       const active = this.inFlight.get(key)
@@ -196,7 +201,11 @@ export class OrchestrationMutationExecutor {
           { requestId }
         )
       }
-      if (request.method !== 'orchestration.workerRelease' && !resumedPendingWorkerDone) {
+      if (
+        request.method !== 'orchestration.workerRelease' &&
+        !resumedPendingWorkerDone &&
+        !resumedPendingReconcile
+      ) {
         const recovery = getPendingWorkerStartRecovery(request.method, begun.row.receipt)
         throw new OrchestrationError(
           'operation_unknown',

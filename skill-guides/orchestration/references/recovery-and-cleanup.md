@@ -133,6 +133,15 @@ deletes the worktree, setup terminal, configured tabs, or unrelated processes.
 `worker-abandon` fences orchestration while accepting that resources may remain
 live; it performs no remote, process, or filesystem action.
 
+After that abandon, a federated attachment can still occupy its pane. The
+explicit follow-up is `worker-reconcile-attachment`. It retires that one
+attachment only when the saved peer, runtime epoch, terminal, pane, and process
+incarnation still match, and it revokes that attachment's capability and mailbox
+consumer. It does not close the terminal, stop the agent turn, or prove the
+work ceased — confirm the turn is canceled or held before reusing the terminal.
+An older server rejects the command and changes nothing. A lost receipt is
+uncertain: retry the same request id, and do not infer that nothing was written.
+
 ## Retain and release
 
 ```text

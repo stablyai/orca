@@ -6,6 +6,14 @@ export const FederationDispatchParams = z.object({
   dispatchId: requiredString('Missing Dispatch ID')
 })
 
+export const FederationReconcileAttachmentParams = z.object({
+  dispatchId: requiredString('Missing Dispatch ID'),
+  expectedRuntimeEpoch: requiredString('Missing runtime epoch'),
+  expectedTerminalHandle: requiredString('Missing terminal handle'),
+  expectedPaneKey: requiredString('Missing pane key'),
+  expectedProcessIncarnation: requiredString('Missing process incarnation')
+})
+
 export const FederationReadParams = FederationDispatchParams.extend({
   cursor: OptionalFiniteNumber,
   limit: OptionalFiniteNumber
