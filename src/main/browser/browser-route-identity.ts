@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto'
 
+export { isBrowserRoutePartition } from '../../shared/browser-route-partition'
+
 const MAX_IDENTITY_LENGTH = 512
 const PARTITION_IDENTITY_VERSION = 1
-const BROWSER_ROUTE_PARTITION_RE = /^persist:orca-browser-v1-[a-f0-9]{64}$/
 
 export type BrowserRoutePartitionIdentity = Readonly<{
   orcaProfileId: string
@@ -81,10 +82,6 @@ export function deriveLocalSshBrowserRoutePartitionStorageScope(scope: {
     ['orca-profile', scope.orcaProfileId],
     ['local-ssh-target', scope.targetId]
   ])
-}
-
-export function isBrowserRoutePartition(value: string): boolean {
-  return BROWSER_ROUTE_PARTITION_RE.test(value)
 }
 
 function digest(value: unknown): string {

@@ -64,6 +64,43 @@ export function resolveGuestMouseWheelZoomDirection(
   return deltaY < 0 ? 'in' : 'out'
 }
 
+type ViewportWheelArgs = {
+  browserTabId: string
+  resolveRenderer: ResolveRenderer
+  isViewportPresetActive?: () => boolean
+  canViewportScroll?: (mouse: Electron.MouseWheelInputEvent) => boolean
+  onViewportWheelConsumed?: (deltaX: number, deltaY: number) => void
+}
+
+/** Pans an emulated viewport with a wheel event; true when the host took the wheel. */
+export function forwardGuestViewportWheel(
+  args: ViewportWheelArgs,
+  mouse: Electron.MouseInputEvent
+): boolean {
+  if (
+    !args.isViewportPresetActive?.() ||
+    mouse.type !== 'mouseWheel' ||
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: type is mouseWheel, so Electron sent a MouseWheelInputEvent.
+    !args.canViewportScroll?.(mouse as Electron.MouseWheelInputEvent)
+  ) {
+    return false
+  }
+  const { deltaX, deltaY } = mouse as Electron.MouseWheelInputEvent
+  const safeDeltaX = typeof deltaX === 'number' && Number.isFinite(deltaX) ? deltaX : 0
+  const safeDeltaY = typeof deltaY === 'number' && Number.isFinite(deltaY) ? deltaY : 0
+  if (safeDeltaX === 0 && safeDeltaY === 0) {
+    return false
+  }
+  // Why: the host owns panning once emulation makes the guest viewport larger than the pane.
+  args.onViewportWheelConsumed?.(safeDeltaX, safeDeltaY)
+  args.resolveRenderer(args.browserTabId)?.send('ui:scrollBrowserPage', {
+    browserPageId: args.browserTabId,
+    deltaX: safeDeltaX,
+    deltaY: safeDeltaY
+  })
+  return true
+}
+
 export function setupGuestMouseWheelZoomForwarding(args: {
   browserTabId: string
   guest: Electron.WebContents
@@ -93,26 +130,19 @@ export function setupGuestMouseWheelZoomForwarding(args: {
       return
     }
     if (
-      !isViewportPresetActive?.() ||
-      mouse.type !== 'mouseWheel' ||
-      !canViewportScroll?.(mouse as Electron.MouseWheelInputEvent)
+      forwardGuestViewportWheel(
+        {
+          browserTabId,
+          resolveRenderer,
+          isViewportPresetActive,
+          canViewportScroll,
+          onViewportWheelConsumed
+        },
+        mouse
+      )
     ) {
-      return
+      event.preventDefault()
     }
-    const { deltaX, deltaY } = mouse as Electron.MouseWheelInputEvent
-    const safeDeltaX = typeof deltaX === 'number' && Number.isFinite(deltaX) ? deltaX : 0
-    const safeDeltaY = typeof deltaY === 'number' && Number.isFinite(deltaY) ? deltaY : 0
-    if (safeDeltaX === 0 && safeDeltaY === 0) {
-      return
-    }
-    // Why: the host owns panning once emulation makes the guest viewport larger than the pane.
-    event.preventDefault()
-    onViewportWheelConsumed?.(safeDeltaX, safeDeltaY)
-    resolveRenderer(browserTabId)?.send('ui:scrollBrowserPage', {
-      browserPageId: browserTabId,
-      deltaX: safeDeltaX,
-      deltaY: safeDeltaY
-    })
   }
 
   guest.on('before-mouse-event', handler)

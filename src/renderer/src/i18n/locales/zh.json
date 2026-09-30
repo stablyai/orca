@@ -12037,6 +12037,16 @@
           "usageDescription": "Cursor 按两个随账单周期重置的额度池计费，用完后按需计费。",
           "usageLabel": "用量",
           "usageTitle": "每月套餐用量"
+        },
+        "offscreenBrowserPages": {
+          "detail": "浏览器标签页在后台离屏渲染，再把画面绘制到面板里。agent 在网页里点击或输入时，不会移动焦点，也不会打断你在终端里的输入法拼字。对切换之后新打开的标签页生效。",
+          "search": {
+            "title": "不抢焦点的浏览器页面",
+            "description": "浏览器标签页改为离屏渲染，agent 点击和输入网页时不会抢走终端的焦点。",
+            "keywordBrowser": "浏览器",
+            "keywordFocus": "焦点",
+            "keywordIme": "输入法"
+          }
         }
       },
       "right": {

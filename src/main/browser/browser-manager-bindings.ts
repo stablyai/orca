@@ -1,8 +1,19 @@
 import { resolveRendererWebContents } from './browser-guest-renderer-target'
 import { setupGuestContextMenu } from './browser-guest-context-menu'
-import { setupGrabShortcutForwarding } from './browser-guest-grab-shortcuts'
-import { setupGuestMouseWheelZoomForwarding } from './browser-guest-wheel-zoom'
-import { setupGuestShortcutForwarding } from './browser-guest-shortcut-forwarding'
+import {
+  handleGrabShortcutInput,
+  setupGrabShortcutForwarding
+} from './browser-guest-grab-shortcuts'
+import {
+  forwardGuestViewportWheel,
+  setupGuestMouseWheelZoomForwarding
+} from './browser-guest-wheel-zoom'
+import {
+  createGuestShortcutForwardContext,
+  setupGuestShortcutForwarding,
+  type GuestShortcutForwardingArgs
+} from './browser-guest-shortcut-forwarding'
+import { setOffscreenPageShortcutContext } from './offscreen-page-keyboard-routing'
 import { BrowserManagerGrab } from './browser-manager-grab'
 
 export abstract class BrowserManagerBindings extends BrowserManagerGrab {
@@ -38,28 +49,91 @@ export abstract class BrowserManagerBindings extends BrowserManagerGrab {
     )
   }
 
+  /**
+   * The grab gesture for a key typed into an offscreen page, whose keys never pass through the
+   * guest's before-input-event. Returns true when the key is Orca's and must not reach the page.
+   */
+  handleOffscreenPageGrabKey(
+    browserTabId: string,
+    guest: Electron.WebContents,
+    input: Pick<Electron.Input, 'type' | 'key' | 'code' | 'meta' | 'control' | 'alt' | 'shift'>
+  ): boolean {
+    return handleGrabShortcutInput(
+      {
+        browserTabId,
+        guest,
+        resolveRenderer: (tabId) =>
+          resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId),
+        hasActiveGrabOp: (tabId) => this.hasActiveGrabOp(tabId),
+        getKeybindings: () => this.settingsResolver?.().keybindings
+      },
+      input
+    )
+  }
+
+  /** Viewport-preset panning for an offscreen page's wheel, which before-mouse-event never sees. */
+  handleOffscreenPageViewportWheel(
+    browserTabId: string,
+    guest: Electron.WebContents,
+    wheel: Electron.MouseWheelInputEvent
+  ): boolean {
+    return forwardGuestViewportWheel(this.viewportWheelArgs(browserTabId, guest), wheel)
+  }
+
+  private viewportWheelArgs(browserTabId: string, guest: Electron.WebContents) {
+    return {
+      browserTabId,
+      resolveRenderer: (tabId: string) =>
+        resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId),
+      isViewportPresetActive: () => {
+        const state = this.viewportPresetByTabId.get(browserTabId)
+        return state?.guestWebContentsId === guest.id && state.requested !== null
+      },
+      canViewportScroll: (mouse: Electron.MouseWheelInputEvent) =>
+        this.canViewportScroll(browserTabId, mouse),
+      onViewportWheelConsumed: (deltaX: number, deltaY: number) =>
+        this.recordViewportScrollDelta(browserTabId, deltaX, deltaY)
+    }
+  }
+
   // Why: a focused webview guest is a separate process, so its key events never reach the renderer; intercept and forward app shortcuts.
-  protected setupShortcutForwarding(browserTabId: string, guest: Electron.WebContents): void {
+  // An offscreen page's keys reach the Orca window instead, whose key routing consults the same context.
+  protected setupShortcutForwarding(
+    browserTabId: string,
+    guest: Electron.WebContents,
+    isOffscreen = false
+  ): void {
     const previousCleanup = this.shortcutForwardingCleanupByTabId.get(browserTabId)
     if (previousCleanup) {
       previousCleanup()
       this.shortcutForwardingCleanupByTabId.delete(browserTabId)
     }
 
+    const args = this.shortcutForwardingArgs(browserTabId)
+    if (isOffscreen) {
+      setOffscreenPageShortcutContext(browserTabId, createGuestShortcutForwardContext(args))
+      this.shortcutForwardingCleanupByTabId.set(browserTabId, () =>
+        setOffscreenPageShortcutContext(browserTabId, null)
+      )
+      return
+    }
     this.shortcutForwardingCleanupByTabId.set(
       browserTabId,
-      setupGuestShortcutForwarding({
-        browserTabId,
-        guest,
-        resolveRenderer: (tabId) =>
-          resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId),
-        shouldForwardDictationShortcut: () => this.shouldForwardDictationShortcut?.() ?? false,
-        isMobileEmulatorEnabled: () => this.settingsResolver?.().mobileEmulatorEnabled !== false,
-        getKeybindings: () => this.settingsResolver?.().keybindings,
-        resolveWorktreeId: (tabId) => this.worktreeIdByTabId.get(tabId) ?? null,
-        resolveWorkspaceId: (tabId) => this.workspaceIdByPageId.get(tabId) ?? null
-      })
+      setupGuestShortcutForwarding({ ...args, guest })
     )
+  }
+
+  private shortcutForwardingArgs(browserTabId: string): GuestShortcutForwardingArgs {
+    return {
+      browserTabId,
+      resolveRenderer: (tabId) =>
+        resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId),
+      shouldForwardDictationShortcut: () => this.shouldForwardDictationShortcut?.() ?? false,
+      isMobileEmulatorEnabled: () => this.settingsResolver?.().mobileEmulatorEnabled !== false,
+      getKeybindings: () => this.settingsResolver?.().keybindings,
+      resolveWorktreeId: (tabId) => this.worktreeIdByTabId.get(tabId) ?? null,
+      resolveWorkspaceId: (tabId) => this.workspaceIdByPageId.get(tabId) ?? null
+    }
   }
 
   protected setupMouseWheelZoomForwarding(browserTabId: string, guest: Electron.WebContents): void {
@@ -72,17 +146,8 @@ export abstract class BrowserManagerBindings extends BrowserManagerGrab {
     this.mouseWheelZoomCleanupByTabId.set(
       browserTabId,
       setupGuestMouseWheelZoomForwarding({
-        browserTabId,
         guest,
-        resolveRenderer: (tabId) =>
-          resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId),
-        isViewportPresetActive: () => {
-          const state = this.viewportPresetByTabId.get(browserTabId)
-          return state?.guestWebContentsId === guest.id && state.requested !== null
-        },
-        canViewportScroll: (mouse) => this.canViewportScroll(browserTabId, mouse),
-        onViewportWheelConsumed: (deltaX, deltaY) =>
-          this.recordViewportScrollDelta(browserTabId, deltaX, deltaY)
+        ...this.viewportWheelArgs(browserTabId, guest)
       })
     )
   }

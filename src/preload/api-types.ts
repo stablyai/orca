@@ -1,3 +1,4 @@
+import type { OffscreenPageApi } from './api/offscreen-page-bridge'
 import type {
   ClaudeAccountsApi,
   CodexAccountsApi,
@@ -118,6 +119,7 @@ export type PreloadApi = {
   skills: SkillsApi
   pet: PetApi
   browser: BrowserApi
+  offscreenPage: OffscreenPageApi
   emulator: EmulatorApi
   hooks: HooksApi
   ephemeralVm: EphemeralVmApi

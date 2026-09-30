@@ -16,6 +16,7 @@ import {
   type NativeFileDropPathEntry,
   type NativeFileDropRejectedPayload
 } from '../shared/native-file-drop'
+import { claimOffscreenPageFileDrop } from './api/offscreen-page-bridge'
 
 /** Joins the synchronous unload checkpoint with its durable renderer write. */
 export async function awaitBeforeUnloadCheckpoint(): Promise<void> {
@@ -112,6 +113,9 @@ export function installNativeFileDropHandlers(): void {
     'drop',
     (event) => {
       if (event.dataTransfer?.types.includes(ORCA_INTERNAL_FILE_DRAG_TYPE)) {
+        return
+      }
+      if (claimOffscreenPageFileDrop(event)) {
         return
       }
       event.preventDefault()

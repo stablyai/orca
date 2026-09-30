@@ -5,9 +5,14 @@ const DEBUGGER_COMMAND_TIMEOUT_MS = 8_000
 export function sendDebuggerCommand(
   dbg: WebContents['debugger'],
   method: string,
-  params: Record<string, unknown> = {}
+  params: Record<string, unknown> = {},
+  sessionId?: string
 ): Promise<unknown> {
-  return runDebuggerCommandWithTimeout(method, () => dbg.sendCommand(method, params))
+  return runDebuggerCommandWithTimeout(method, () =>
+    sessionId === undefined
+      ? dbg.sendCommand(method, params)
+      : dbg.sendCommand(method, params, sessionId)
+  )
 }
 
 export async function runDebuggerCommandWithTimeout(

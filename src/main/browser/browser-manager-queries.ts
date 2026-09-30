@@ -62,7 +62,9 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
     }
     if (!offscreen) {
       const guest = webContents.fromId(webContentsId)
-      if (!guest || guest.isDestroyed() || guest.getType() !== 'webview') {
+      const isPageGuest =
+        guest?.getType() === 'webview' || this.rendererOffscreenGuestRendererIds.has(webContentsId)
+      if (!guest || guest.isDestroyed() || !isPageGuest) {
         return null
       }
     }

@@ -228,6 +228,8 @@ export type GlobalSettings = {
   openAgentTabsInChatByDefault?: boolean
   /** Experimental native chat surface for Claude/Codex sessions; off by default. */
   experimentalNativeChat?: boolean
+  /** Desktop browser tabs render offscreen so page input can't take the host window's focus. */
+  experimentalOffscreenBrowserPages?: boolean
   /** Opt-in updated structured runtime; off keeps the existing PTY-backed native chat path. */
   experimentalStructuredNativeChat?: boolean
   /** Opt-in: resume working structured chats automatically on the next launch. Off still offers

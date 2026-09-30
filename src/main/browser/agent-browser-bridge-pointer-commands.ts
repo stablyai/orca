@@ -10,6 +10,7 @@ import {
   type CdpPointerState
 } from './cdp-pointer-input'
 import { acquireElectronDebugger } from './electron-debugger-lease'
+import { sendPageMouseEvent } from './offscreen-page-frames'
 import { AgentBrowserBridgeInputCommands } from './agent-browser-bridge-input-commands'
 
 type CdpPointerEventParams = {
@@ -61,7 +62,7 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
       if (focus) {
         wc.focus()
       }
-      await wc.debugger.sendCommand('Input.dispatchMouseEvent', params)
+      await sendPageMouseEvent(wc, params)
       return result
     } catch (error) {
       Object.assign(state, preDispatch)

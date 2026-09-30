@@ -353,6 +353,10 @@ vi.mock('../../window/clipboard-ipc-handlers', () => ({
   setTrustedClipboardRendererWebContentsId: setTrustedClipboardRendererWebContentsIdMock
 }))
 
+vi.mock('../offscreen-page', () => ({
+  registerOffscreenPageHandlers: vi.fn()
+}))
+
 vi.mock('../browser', () => ({
   registerBrowserHandlers: registerBrowserHandlersMock,
   setAgentBrowserBridgeRef: setAgentBrowserBridgeRefMock

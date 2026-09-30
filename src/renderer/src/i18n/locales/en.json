@@ -12224,6 +12224,16 @@
         },
         "UnsealedCredentialNotice": {
           "body": "{{credential}} is stored unencrypted — this system has no OS keyring Orca can use. Anyone who can read your disk or a backup of it can read the credential. Install and unlock gnome-keyring or kwallet, then save it again to seal it."
+        },
+        "offscreenBrowserPages": {
+          "detail": "Browser tabs render offscreen and paint into the pane, so an agent clicking or typing in a page never moves focus or interrupts IME composition in your terminal. Applies to tabs opened after the change.",
+          "search": {
+            "title": "Focus-safe browser pages",
+            "description": "Render browser tabs offscreen so agent clicks and typing never take focus from your terminal.",
+            "keywordBrowser": "browser",
+            "keywordFocus": "focus",
+            "keywordIme": "ime"
+          }
         }
       },
       "right": {

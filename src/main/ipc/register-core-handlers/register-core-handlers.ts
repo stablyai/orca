@@ -1,3 +1,4 @@
+import { registerOffscreenPageHandlers } from '../offscreen-page'
 import { app } from 'electron'
 import { registerAppHandlers } from '../app'
 import { registerCliHandlers } from '../cli'
@@ -201,6 +202,7 @@ export function registerCoreHandlers(
     onBeforeSignOut: lifecycleOptions.onBeforeOrcaProfileSignOut
   })
   registerBrowserHandlers()
+  registerOffscreenPageHandlers()
   registerShellHandlers(store)
   registerPetHandlers()
   registerSessionHandlers(store, runtime)
