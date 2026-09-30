@@ -1,5 +1,6 @@
 import { getCommitMessageAgentSpec, type CommitMessageAgentSpec } from './commit-message-agent-spec'
 import { GROK_MODEL_LIST_ARGS, parseGrokModelList } from './grok-model-list-probe'
+import { KIRO_MODEL_LIST_ARGS, parseKiroModelList } from './kiro-model-list-probe'
 import { OMP_MODEL_LIST_ARGS, parseOmpModelList } from './omp-model-list-probe'
 import type { TuiAgent } from './tui-agent'
 
@@ -23,6 +24,19 @@ const MODEL_DISCOVERY_ONLY_SPECS: Partial<Record<TuiAgent, AgentModelProbeSpec>>
     // second model list here that can drift from it.
     models: [],
     defaultModelId: 'grok-4.6'
+  },
+  kiro: {
+    id: 'kiro',
+    label: 'Kiro',
+    binary: 'kiro-cli',
+    modelSource: 'dynamic',
+    modelDiscovery: {
+      binary: 'kiro-cli',
+      args: KIRO_MODEL_LIST_ARGS,
+      parse: parseKiroModelList
+    },
+    models: [],
+    defaultModelId: 'auto'
   },
   omp: {
     id: 'omp',

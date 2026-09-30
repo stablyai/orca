@@ -62,11 +62,17 @@ export type AgentSessionOptionCatalog = {
   supportsWorkerLaunchPreferences?: true
   /** Launch-safe options for opaque model ids that are absent from the static catalog. */
   unknownModelOptions?: CatalogOption[]
+  /** Resolve model-specific launch options when the static seed cannot enumerate the account catalog. */
+  resolveModelOptions?: (modelId: string) => CatalogOption[]
+  /** Preserve CLI or user-configured option defaults unless a value is selected explicitly. */
+  launchOptionDefaults?: false
   composeModelValue?: (modelId: string, values: Record<string, SessionOptionValue>) => string
   /** Why: a seeded id the CLI has retired is a fatal launch, so a successful probe
    * must be able to drop it rather than only add. Membership only — option menus
    * still come from the seed. */
   discoveredModelsAreAuthoritative?: true
+  /** The probe supplies model-specific option menus rather than only model identities. */
+  discoveredModelOptionsAreAuthoritative?: true
   /** Set only when the `isDefault` model is provably what the CLI runs with no model
    * flag, so an untouched draft may show it as selected. Off means `isDefault` stays
    * decorative: agents whose default comes from account or user config would otherwise

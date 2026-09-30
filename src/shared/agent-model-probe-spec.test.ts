@@ -53,6 +53,21 @@ describe('getAgentModelProbeSpec', () => {
     expect(listCommitMessageAgentIds()).not.toContain('grok')
   })
 
+  it('discovers Kiro models without adding Kiro to commit-message generation', () => {
+    const spec = getAgentModelProbeSpec('kiro')!
+    expect(spec).toMatchObject({
+      id: 'kiro',
+      binary: 'kiro-cli',
+      modelSource: 'dynamic',
+      defaultModelId: 'auto',
+      modelDiscovery: {
+        binary: 'kiro-cli',
+        args: ['chat', '--list-models', '--format', 'json']
+      }
+    })
+    expect(getCommitMessageAgentSpec('kiro')).toBeUndefined()
+  })
+
   it('is undefined for an agent in neither registry', () => {
     expect(getAgentModelProbeSpec('aider')).toBeUndefined()
   })

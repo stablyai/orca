@@ -91,6 +91,35 @@ describe('orchestration worker launch preferences', () => {
     ).toEqual({ model: 'gpt-5.6-sol' })
   })
 
+  it('passes a Kiro model and effort through the shared catalog', () => {
+    expect(
+      resolveWorkerLaunchPreferences({
+        agent: 'kiro',
+        model: 'claude-opus-5',
+        effort: 'high'
+      })
+    ).toEqual({
+      preferences: { model: 'claude-opus-5', effort: 'high' },
+      receipt: {
+        requested: { agent: 'kiro', model: 'claude-opus-5', effort: 'high' },
+        effective: { agent: 'kiro', model: 'claude-opus-5', effort: 'high' }
+      }
+    })
+  })
+
+  it('rejects Kiro effort levels absent from the selected model', () => {
+    expect(() =>
+      resolveWorkerLaunchPreferences({ agent: 'kiro', model: 'claude-opus-4.6', effort: 'xhigh' })
+    ).toThrow('does not support effort xhigh')
+    expect(
+      resolveWorkerLaunchPreferences({ agent: 'kiro', model: 'gpt-5.6-sol', effort: 'none' })
+        .preferences
+    ).toEqual({ model: 'gpt-5.6-sol', effort: 'none' })
+    expect(() =>
+      resolveWorkerLaunchPreferences({ agent: 'kiro', model: 'future-model', effort: 'high' })
+    ).toThrow('does not support effort high')
+  })
+
   it.each([
     {
       model: 'gpt-5.6-sol',

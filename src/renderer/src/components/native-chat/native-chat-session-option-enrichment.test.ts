@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { CatalogModel } from '../../../../shared/agent-session-option-catalog'
+import {
+  getAgentSessionOptionCatalog,
+  type CatalogModel
+} from '../../../../shared/agent-session-option-catalog'
+import { createNativeChatSessionOptionRecord } from '../../../../shared/native-chat-session-option-state'
+import { buildNativeChatSessionOptionSnapshot } from '../../../../shared/native-chat-session-option-snapshot'
 import {
   discoverNativeChatCatalogModels,
   resolveNativeChatModelDiscoveryHostKey
@@ -242,6 +247,54 @@ describe('native chat session option enrichment', () => {
       ['effort'],
       ['effort']
     ])
+  })
+
+  it('publishes per-model Kiro effort choices through the real discovery path', async () => {
+    mocks.discoverRuntimeCommitMessageModels.mockResolvedValue({
+      success: true,
+      catalogOrigin: 'probe',
+      models: [
+        { id: 'claude-opus-4.6', label: 'Opus 4.6', isDefault: true },
+        { id: 'gpt-5.6-sol', label: 'GPT 5.6 Sol' },
+        { id: 'unknown-model', label: 'Unknown' }
+      ]
+    })
+    const discover = vi.fn(() =>
+      discoverNativeChatCatalogModels('kiro', {
+        settings: {},
+        worktreeId: 'repo::/worktree',
+        worktreePath: '/worktree'
+      })
+    )
+    const listener = vi.fn()
+    subscribeNativeChatEnrichedModels('kiro', 'ssh:kiro', listener)
+
+    ensureNativeChatModelEnrichment({ agent: 'kiro', hostKey: 'ssh:kiro', discover })
+    await vi.waitFor(() => expect(listener).toHaveBeenCalledOnce())
+
+    const models = readNativeChatEnrichedModels('kiro', 'ssh:kiro')!
+    expect(models.find(({ id }) => id === 'claude-opus-4.6')?.options[0]?.kind).toMatchObject({
+      choices: expect.not.arrayContaining([expect.objectContaining({ value: 'xhigh' })])
+    })
+    expect(models.find(({ id }) => id === 'gpt-5.6-sol')?.options[0]?.kind).toMatchObject({
+      choices: expect.arrayContaining([expect.objectContaining({ value: 'none' })])
+    })
+    expect(models.find(({ id }) => id === 'unknown-model')?.options).toEqual([])
+
+    const record = createNativeChatSessionOptionRecord('kiro')
+    record.model = { value: 'claude-opus-4.6', source: 'applied' }
+    const snapshot = buildNativeChatSessionOptionSnapshot({
+      catalog: getAgentSessionOptionCatalog('kiro')!,
+      models,
+      record,
+      mode: 'draft',
+      modelLabel: 'Model',
+      liveTransport: 'catalog'
+    })
+    expect(snapshot.map(({ id }) => id)).toEqual(['model', 'effort'])
+    expect(snapshot.find(({ id }) => id === 'effort')?.kind).toMatchObject({
+      choices: expect.not.arrayContaining([expect.objectContaining({ value: 'xhigh' })])
+    })
   })
 
   it('publishes no default when an older host omits the flag entirely', async () => {

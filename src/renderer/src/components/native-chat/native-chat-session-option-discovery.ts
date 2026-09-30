@@ -155,6 +155,8 @@ export async function discoverNativeChatCatalogModels(
             effortLevelIds: model.thinkingLevels?.map(({ id }) => id) ?? [],
             supportsFastMode: model.supportsFastMode
           })
-        : []
+        : catalog?.discoveredModelOptionsAreAuthoritative
+          ? (catalog.resolveModelOptions?.(model.id) ?? [])
+          : []
   }))
 }

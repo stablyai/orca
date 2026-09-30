@@ -21,7 +21,7 @@ when an older CLI rejects the flag. A nested worker must respect
 
 ## Launch preferences
 
-For a fresh Claude, Codex, Cursor, Antigravity, or Muse terminal, `--model`
+For a fresh Claude, Codex, Cursor, Antigravity, Muse, or Kiro terminal, `--model`
 accepts an opaque provider model ID. Pass it only when the user named a model;
 otherwise omit it so the worker inherits the user's configured agent default.
 Add `--effort` only when that model supports it:

@@ -7,6 +7,23 @@ import {
 import { resolveAgentLaunchCommand } from './tui-agent-launch-command'
 
 describe('tui agent startup session options', () => {
+  it('places native Kiro model and effort flags after the chat subcommand', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'kiro',
+      prompt: 'review this candidate',
+      sessionOptions: { model: 'claude-opus-5', effort: 'high' },
+      sessionOptionsOverrideAgentArgs: true,
+      agentArgs: '--trust-all-tools',
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe(
+      "kiro-cli chat --tui '--trust-all-tools' '--model' 'claude-opus-5' '--effort' 'high'"
+    )
+    expect(plan?.sessionOptions).toEqual({ model: 'claude-opus-5', effort: 'high' })
+  })
+
   it('emits catalog options before user arguments without recording an overridden model', () => {
     const plan = buildAgentStartupPlan({
       agent: 'claude',
