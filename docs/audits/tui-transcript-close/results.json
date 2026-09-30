@@ -1,0 +1,30 @@
+{
+  "comparison": "Actual structured host/store/journal/transcript watcher; baseline removes only the successful-close stop callback in a temporary Vite transform",
+  "sourceHashes": {
+    "src/main/native-chat/agent-session-wire/structured-agent-session-handoff-owner-close.ts": {
+      "before": "a8f6d3a932c50784e9f614276989e4ef84b85eed0df4a2e0877df28e8d4640e5",
+      "after": "1cb420c0c27248eea74e07b6ce84530036fbabe656c360e814f9d937a35ba0d7"
+    },
+    "src/main/native-chat/agent-session-wire/structured-tui-transcript-close.test.ts": {
+      "current": "bd3109b31f01bf84566ce26d1fc2c6d2cd9c7bbb64e0d95e445a0515ed32cf9f"
+    }
+  },
+  "before": {
+    "exitCode": 1,
+    "passed": 0,
+    "failed": 4,
+    "failedCases": [
+      "retires the transcript watcher when a live TUI session closes",
+      "keeps live history when terminal stop is unverified and retires it on retry",
+      "keeps the watcher until the durable owner transition succeeds",
+      "keeps transcript cleanup complete when later journal eviction needs retry"
+    ]
+  },
+  "after": {
+    "exitCode": 0,
+    "passed": 4,
+    "failed": 0,
+    "failedCases": []
+  },
+  "passed": true
+}

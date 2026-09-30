@@ -1,3 +1,7 @@
+import {
+  readPersistedProfileState,
+  mutateStoppedProfileState
+} from './helpers/persisted-profile-state'
 /**
  * A LOCAL agent that FINISHED its turn must not be respawned when the app
  * reopens the workspace.
@@ -15,8 +19,7 @@
  *   pnpm exec playwright test tests/e2e/finished-agent-ghost-resume.spec.ts \
  *     --config tests/playwright.config.ts --project electron-headless --workers=1
  */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import path from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
 import type { ElectronApplication } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { TEST_REPO_PATH_FILE } from './global-setup'
@@ -31,7 +34,6 @@ import {
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 import { createHostRendererTerminalTab } from './helpers/host-created-terminal-retention-oracle'
-import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 
 const PROVIDER_SESSION_ID = 'e2e-finished-agent-session'
 
@@ -43,13 +45,8 @@ type PersistedRecord = {
 }
 
 function readPersistedRecords(userDataDir: string): Record<string, PersistedRecord> {
-  const dataPath = path.join(
-    userDataDir,
-    'profiles',
-    DEFAULT_LOCAL_ORCA_PROFILE_ID,
-    'orca-data.json'
-  )
-  const data = JSON.parse(readFileSync(dataPath, 'utf8')) as {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test owns the persisted fixture; optional fields are checked at use sites.
+  const data = readPersistedProfileState(userDataDir) as {
     workspaceSession?: { sleepingAgentSessionsByPaneKey?: Record<string, PersistedRecord> }
   }
   return data.workspaceSession?.sleepingAgentSessionsByPaneKey ?? {}
@@ -57,24 +54,20 @@ function readPersistedRecords(userDataDir: string): Record<string, PersistedReco
 
 /** Make the resume hermetic: the respawned tab echoes instead of running codex. */
 function stubPersistedResumeCommand(userDataDir: string): PersistedRecord {
-  const dataPath = path.join(
-    userDataDir,
-    'profiles',
-    DEFAULT_LOCAL_ORCA_PROFILE_ID,
-    'orca-data.json'
-  )
-  const data = JSON.parse(readFileSync(dataPath, 'utf8')) as {
-    workspaceSession?: { sleepingAgentSessionsByPaneKey?: Record<string, PersistedRecord> }
-  }
-  const record = Object.values(data.workspaceSession?.sleepingAgentSessionsByPaneKey ?? {}).find(
-    (candidate) => candidate.providerSession?.id === PROVIDER_SESSION_ID
-  )
-  if (!record) {
-    throw new Error('Expected the finished agent turn to leave a persisted record')
-  }
-  record.launchConfig = { agentCommand: 'echo', agentArgs: '', agentEnv: {} }
-  writeFileSync(dataPath, `${JSON.stringify(data, null, 2)}\n`, 'utf8')
-  return record
+  return mutateStoppedProfileState(userDataDir, (state) => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test owns the persisted fixture; optional fields are checked at use sites.
+    const data = state as {
+      workspaceSession?: { sleepingAgentSessionsByPaneKey?: Record<string, PersistedRecord> }
+    }
+    const record = Object.values(data.workspaceSession?.sleepingAgentSessionsByPaneKey ?? {}).find(
+      (candidate) => candidate.providerSession?.id === PROVIDER_SESSION_ID
+    )
+    if (!record) {
+      throw new Error('Expected the finished agent turn to leave a persisted record')
+    }
+    record.launchConfig = { agentCommand: 'echo', agentArgs: '', agentEnv: {} }
+    return record
+  })
 }
 
 test.describe.configure({ mode: 'serial' })

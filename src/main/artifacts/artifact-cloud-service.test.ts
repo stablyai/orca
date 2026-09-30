@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
   app: { isPackaged: false },
@@ -43,7 +43,10 @@ const cloudB: OrcaProfileCloudSummary = {
   linkedAt: 2
 }
 
-function createResponse(slug = 'artifact-a', expiresAt = '2026-09-06T00:00:00.000Z'): Response {
+function createResponse(
+  slug = 'artifact-a',
+  expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+): Response {
   return new Response(
     JSON.stringify({
       artifact: {
@@ -91,6 +94,12 @@ const writeRequest = {
   apiUrl,
   authToken: 'token-a'
 }
+
+beforeEach(() => {
+  // Keep fixed response expirations independent of the runner's wall clock.
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime('2026-08-07T00:00:00.000Z')
+})
 
 afterEach(async () => {
   vi.useRealTimers()

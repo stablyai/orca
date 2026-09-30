@@ -1,3 +1,4 @@
+import { ownRetainedString } from '../../shared/own-retained-string'
 import type { TerminalModes } from './types'
 
 type MouseTrackingMode = NonNullable<TerminalModes['mouseTrackingMode']>
@@ -105,10 +106,10 @@ export class TerminalMouseModeMirror {
       return tail
     }
     if (tail.startsWith('\x1b[?')) {
-      return this.isIncompleteParams(tail.slice(3)) ? tail : ''
+      return this.isIncompleteParams(tail.slice(3)) ? ownRetainedString(tail) : ''
     }
     if (tail.startsWith('\x9b?')) {
-      return this.isIncompleteParams(tail.slice(2)) ? tail : ''
+      return this.isIncompleteParams(tail.slice(2)) ? ownRetainedString(tail) : ''
     }
     return ''
   }

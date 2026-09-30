@@ -112,7 +112,18 @@ export function parseGitHistoryLog(stdout: string): GitHistoryItem[] {
       continue
     }
 
-    const lines = record.split('\n')
+    const lines: string[] = []
+    let messageStart = 0
+    for (let field = 0; field < 8; field += 1) {
+      const newline = record.indexOf('\n', messageStart)
+      if (newline === -1) {
+        lines.push(record.slice(messageStart))
+        messageStart = record.length
+        break
+      }
+      lines.push(record.slice(messageStart, newline))
+      messageStart = newline + 1
+    }
     const hash = lines[0]?.trim() ?? ''
     if (!/^[0-9a-fA-F]{40,64}$/.test(hash)) {
       continue
@@ -125,7 +136,7 @@ export function parseGitHistoryLog(stdout: string): GitHistoryItem[] {
     const decorateField = lines[6] ?? ''
     const isLegacyGit = decorateField === UNEXPANDED_DECORATE_PLACEHOLDER
     const decorations = isLegacyGit ? (lines[7] ?? '') : decorateField
-    const message = lines.slice(8).join('\n').replace(/\n$/, '')
+    const message = record.slice(messageStart).replace(/\n$/, '')
 
     items.push({
       id: hash,

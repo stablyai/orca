@@ -1,7 +1,7 @@
 /** Picking worker terminals, sending a task's dispatch preamble, and warning about hung dispatches. */
 import type { OrchestrationDb } from './db'
 import type { TaskRow } from './types'
-import { buildDispatchPreamble } from './preamble'
+import { buildDispatchPreamble, dispatchPreambleSendOptions } from './preamble'
 import type { CoordinatorRuntime, WorktreeDrift } from './coordinator-runtime-contract'
 import {
   DISPATCH_STALE_THRESHOLD,
@@ -32,7 +32,7 @@ export async function listAvailableWorkerTerminals(
   runtime: CoordinatorRuntime,
   coordinatorHandle: string,
   worktree: string | undefined
-): Promise<string[]> {
+): Promise<string[] | null> {
   try {
     const result = await runtime.listTerminals(worktree, undefined, {
       includeVisualLayouts: false
@@ -55,7 +55,8 @@ export async function listAvailableWorkerTerminals(
       )
       .map((t) => t.handle)
   } catch {
-    return []
+    // A failed census cannot authorize creating another worker.
+    return null
   }
 }
 
@@ -132,11 +133,15 @@ export async function dispatchTaskToWorker(params: {
   let gateContext = ''
   if (gates.length > 0) {
     const latest = gates.at(-1)!
-    gateContext = `\n\n--- DECISION GATE RESOLVED ---\nQuestion: ${latest.question}\nResolution: ${latest.resolution}\n---\n`
+    gateContext = `\n\n--- DECISION GATE RESOLVED ---\nQuestion: ${latest.question}\nResolution: ${latest.resolution}\n\n---\n`
   }
 
   try {
-    await runtime.sendTerminalAgentPrompt(targetHandle, preamble + gateContext)
+    await runtime.sendTerminalAgentPrompt(
+      targetHandle,
+      preamble + gateContext,
+      dispatchPreambleSendOptions(dispatch.id)
+    )
   } catch (err) {
     // Why (#16095): Enter is written before submission is verified, so a stall is only ever an
     // unobserved turn start — never proof the preamble is missing. Failing here would reset the

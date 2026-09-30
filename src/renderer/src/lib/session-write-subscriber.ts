@@ -14,7 +14,10 @@ type UnifiedTab = UnifiedTabsByWorktree[string][number]
 const TERMINAL_TAB_LIVE_TITLE_KEYS = new Set<keyof TerminalTab>(['title'])
 // Why: this handoff flag is stripped from workspace sessions, so toggling it
 // alone should not rebuild and rewrite the durable session payload.
-const TERMINAL_TAB_TRANSIENT_SESSION_KEYS = new Set<keyof TerminalTab>(['pendingActivationSpawn'])
+const TERMINAL_TAB_TRANSIENT_SESSION_KEYS = new Set<keyof TerminalTab>([
+  'pendingActivationSpawn',
+  'recovery'
+])
 
 function terminalTabChangedForSession(prev: TerminalTab, next: TerminalTab): boolean {
   if (prev === next) {
@@ -198,7 +201,7 @@ export function createSessionWriteSubscriber({
     return false
   }
 
-  const unsub = store.subscribe((state) => {
+  const evaluateSessionState = (state: AppState): void => {
     if (!shouldPersistWorkspaceSession(state)) {
       return
     }
@@ -233,12 +236,13 @@ export function createSessionWriteSubscriber({
       prev === null
         ? [...SESSION_RELEVANT_FIELDS]
         : SESSION_RELEVANT_FIELDS.filter((key) => prev?.[key] !== next[key])
+    // Equivalent projections still consume the new source identities.
+    prevTabsSource = state.tabsByWorktree
+    prevUnifiedTabsSource = state.unifiedTabsByWorktree
     if (changedFields.length === 0 && pendingChangedFields.size === 0) {
       return
     }
     prev = next
-    prevTabsSource = state.tabsByWorktree
-    prevUnifiedTabsSource = state.unifiedTabsByWorktree
     for (const field of changedFields) {
       pendingChangedFields.add(field)
     }
@@ -251,7 +255,14 @@ export function createSessionWriteSubscriber({
       return
     }
     armFlushTimer()
-  })
+  }
+
+  // Why evaluate once here: `prev === null` is what bootstraps the first full write, so a writer
+  // created when the session gate is *already* open owed that write to whatever unrelated store
+  // tick happened to arrive next. Catalog refreshes no longer publish when nothing changed, so
+  // that incidental wake-up is not guaranteed; seed from the current state instead.
+  evaluateSessionState(store.getState())
+  const unsub = store.subscribe(evaluateSessionState)
 
   const unsubGateOpen = subscribeToPersistGateOpen?.(() => {
     if (pendingChangedFields.size === 0 || timer !== null) {

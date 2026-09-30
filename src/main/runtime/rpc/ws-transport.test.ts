@@ -88,13 +88,6 @@ describe('WebSocketTransport', () => {
     })
   }
 
-  it('starts and stops cleanly', async () => {
-    const { transport } = await createTransport()
-
-    await transport.start()
-    await transport.stop()
-  })
-
   it('arms heartbeat only while accepted connections exist', async () => {
     const { transport } = await createTransport()
     await transport.start()

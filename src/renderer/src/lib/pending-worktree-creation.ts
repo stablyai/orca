@@ -108,6 +108,9 @@ export type WorktreeCreationRequest = {
   /** Launch context delivered only as an unsent TUI-input draft (argv prefill or
    *  startup paste); completion seeds the chat-composer copy from it. */
   launchDraftPrompt?: string
+  /** How a structured launch delivers `launchDraftPrompt ?? quickPrompt`; decided once by the
+   *  composer beside `agentLaunchRoute`, never re-derived from the prompt fields. */
+  promptDelivery?: 'draft' | 'auto-submit'
   quickTelemetry: AgentStartedTelemetry | null
   /** When the composer stays open for sequential creates, completion must not
    *  steal focus from the next workspace name field. */
@@ -135,8 +138,6 @@ export type PendingWorktreeCreation = {
   loaderVisible: boolean
   error?: string
   provisioningLog?: string
-  /** Existing worktree whose uncertain structured launch must be reconciled instead of recreated. */
-  structuredLaunchRecoveryWorktreeId?: string
   request: WorktreeCreationRequest
 }
 
@@ -167,7 +168,7 @@ export function findPendingLinkedWorkItemCreationId(
  *  loader and the sidebar row so the two never drift. Caller handles the error
  *  case; this only covers the in-progress states. */
 export function getCreationProgressLabel(
-  entry: Pick<PendingWorktreeCreation, 'phase' | 'indeterminate'>
+  entry: Pick<PendingWorktreeCreation, 'phase' | 'indeterminate' | 'request'>
 ): string {
   if (entry.phase === 'provisioning-vm') {
     return 'Provisioning VM…'

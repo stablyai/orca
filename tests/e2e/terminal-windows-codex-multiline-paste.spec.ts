@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
+import { attachRepoAndOpenTerminal } from './helpers/orca-restart'
 import {
   focusActiveTerminalInput,
   getTerminalContent,
@@ -54,33 +55,8 @@ async function activateTestRepository(
   page: Parameters<typeof focusActiveTerminalInput>[0],
   repoPath: string
 ): Promise<void> {
-  await page.evaluate(async (targetRepoPath) => {
-    const normalizePath = (value: string): string => value.replaceAll('\\', '/').toLowerCase()
-    await window.api.repos.add({ path: targetRepoPath })
-    const store = window.__store
-    if (!store) {
-      throw new Error('Orca store unavailable')
-    }
-    await store.getState().fetchRepos()
-    const repo = store
-      .getState()
-      .repos.find((candidate) => normalizePath(candidate.path) === normalizePath(targetRepoPath))
-    if (!repo) {
-      throw new Error('Seeded repository unavailable')
-    }
-    await store.getState().updateRepo(repo.id, { externalWorktreeVisibility: 'show' })
-    await store.getState().fetchWorktrees(repo.id)
-    const worktree = store
-      .getState()
-      .worktreesByRepo[repo.id]?.find(
-        (candidate) => normalizePath(candidate.path) === normalizePath(targetRepoPath)
-      )
-    if (!worktree) {
-      throw new Error('Seeded worktree unavailable')
-    }
-    store.getState().setActiveWorktree(worktree.id)
-    store.getState().createTab(worktree.id)
-  }, repoPath)
+  const worktreeId = await attachRepoAndOpenTerminal(page, repoPath)
+  await page.evaluate((id) => window.__store!.getState().createTab(id), worktreeId)
 }
 
 function pasteCollectorScript(

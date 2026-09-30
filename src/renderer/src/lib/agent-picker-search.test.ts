@@ -3,7 +3,6 @@ import {
   AGENT_PICKER_QUERY_MAX_BYTES,
   agentPickerBlankTerminalMatches,
   getAgentPickerCommandValue,
-  isAgentPickerQueryTooLarge,
   searchAgentPickerEntries
 } from './agent-picker-search'
 import { AGENT_CATALOG, type AgentCatalogEntry } from './agent-catalog'
@@ -25,6 +24,15 @@ afterEach(() => {
 })
 
 describe('agent picker search', () => {
+  it.each(['oh-my-pi', 'oh my pi', 'OH-MY-PI'])('finds OMP by its project name: %s', (query) => {
+    expect(searchAgentPickerEntries(AGENT_CATALOG, query).map((agent) => agent.id)).toEqual(['omp'])
+  })
+
+  it('does not offer unavailable OMP through a search alias', () => {
+    const available = AGENT_CATALOG.filter((agent) => agent.id !== 'omp')
+    expect(searchAgentPickerEntries(available, 'oh-my-pi')).toEqual([])
+  })
+
   it('keeps catalog order for an empty query', () => {
     expect(searchAgentPickerEntries(agents, '').map((agent) => agent.id)).toEqual(
       agents.map((agent) => agent.id)
@@ -85,7 +93,6 @@ describe('agent picker search', () => {
       }
     ] as AgentCatalogEntry[]
 
-    expect(isAgentPickerQueryTooLarge(oversizedQuery)).toBe(true)
     expect(searchAgentPickerEntries(throwingAgents, oversizedQuery)).toEqual([])
     expect(agentPickerBlankTerminalMatches(oversizedQuery)).toBe(false)
     expect(

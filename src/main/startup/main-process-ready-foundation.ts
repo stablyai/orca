@@ -11,7 +11,8 @@ import {
 } from '../hang-watchdog/hang-detection-marker'
 import { browserCertificateTrustController } from '../browser/browser-manager'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
-import { Store, getCanonicalUserDataPath } from '../persistence'
+import { getCanonicalUserDataPath } from '../persistence'
+import { createProfileStateStoreForStartup } from '../persistence/profile-state/profile-state-startup-authority'
 import { initializeBrowserClientHostId } from '../browser/browser-client-host-id'
 import { scheduleSecretProtectionGapReport } from '../host/deferred-secret-protection-report'
 import { initSshHostKeyStoreFile } from '../ssh/ssh-host-key-store'
@@ -41,6 +42,7 @@ import { registerDocPreviewGrantHandlers } from '../ipc/doc-preview-grant-ipc'
 import { initializeBrowserSessionsForApp } from '../browser/browser-session-startup'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
 import { logStartupMilestone } from './startup-diagnostics'
+import { writeHttp1CompatibilityMarker } from './http1-compatibility-marker'
 import { mainProcessState as state } from './main-process-state'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
 import { syncMacMenuBarIcon } from './main-window-actions'
@@ -48,6 +50,7 @@ import { updateGpuAccelerationAboutPanel } from './gpu-lifecycle'
 import { reconcileManagedWslCliRegistrations } from '../cli/wsl-cli-registration-reconciliation'
 import { createWslCliReconciliationStartupBarrier } from './wsl-cli-reconciliation-startup-barrier'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
+import { reportProfileStateWriteFailure } from './profile-state-write-failure'
 
 export async function initializeReadyFoundation(): Promise<void> {
   logStartupMilestone('app-ready')
@@ -133,13 +136,39 @@ export async function initializeReadyFoundation(): Promise<void> {
   // Why this early: the first window stamps the hosting id into its renderer's argv, so the durable
   // read has to have happened by then or the renderer and the browser-host lease disagree.
   initializeBrowserClientHostId(profile.profileDirectory)
-  const store = new Store({
+  const profileState = await createProfileStateStoreForStartup({
     dataFile: profile.dataFile,
-    storageAuthority: state.isServeMode ? 'runtime' : 'desktop'
+    databaseFile: profile.stateDatabaseFile,
+    profileId: profile.profile.id,
+    runtime: 'desktop',
+    storageAuthority: state.isServeMode ? 'runtime' : 'desktop',
+    onPersistenceFailure: reportProfileStateWriteFailure
   })
+  state.profileStateStartup = {
+    backend: profileState.backend,
+    classification: profileState.classification,
+    runtime: 'desktop',
+    migrated: profileState.migrated
+  }
+  const store = profileState.store
   state.store = store
   // Why: create pending readiness before the guard can observe the default session.
-  const initialProxyApplication = applyElectronProxySettings(store.getSettings())
+  // Why parked on state instead of awaited here: Dock/Launchpad launches don't inherit shell
+  // proxy env vars, so the persisted proxy must land before any app-owned network fetcher runs —
+  // but the guard below already holds every default-session request until this settles, so
+  // awaiting it inline only delayed window creation. Runtime launch awaits it before the first
+  // fetcher (the desktop relay / headless serve).
+  state.initialProxyApplicationReady = applyElectronProxySettings(store.getSettings()).then(
+    (result) => {
+      if (result.source === 'invalid-settings') {
+        // Why (STA-3442): a silent DIRECT fallback made a dead configured proxy undiagnosable.
+        console.warn('[proxy] persisted proxy settings are invalid; using direct networking')
+      }
+    },
+    () => {
+      console.warn('[proxy] Failed to apply network proxy settings')
+    }
+  )
   installElectronProxyRequestGuard(session.defaultSession)
   // Why armed here and not at install time: the report remembers what it last said, and
   // that state lives beside the profile data file, which does not exist until now.
@@ -178,9 +207,22 @@ export async function initializeReadyFoundation(): Promise<void> {
   }
   wslHookRelayManager.setManagedHookSettingsResolver(() => state.store?.getSettings() ?? null)
   logStartupMilestone('store-loaded')
+  // Why: pre-`ready` startup reads this flag from a marker so it never has to parse orca-data.json.
+  writeHttp1CompatibilityMarker(
+    canonicalUserDataPath,
+    store.getSettings().electronHttp1CompatibilityMode === true,
+    profile.profile.id
+  )
   // Why: apply initial fallback WSL distro from store settings for global git/CLI calls.
   setDefaultWslDistroOverride(store.getSettings().terminalWindowsWslDistro ?? null)
   store.onSettingsChanged((updates, settings) => {
+    if ('electronHttp1CompatibilityMode' in updates) {
+      writeHttp1CompatibilityMarker(
+        canonicalUserDataPath,
+        settings.electronHttp1CompatibilityMode === true,
+        profile.profile.id
+      )
+    }
     if ('terminalWindowsWslDistro' in updates) {
       // Why: synchronize fallback WSL distro updates to runner.
       setDefaultWslDistroOverride(settings.terminalWindowsWslDistro ?? null)
@@ -234,16 +276,6 @@ export async function initializeReadyFoundation(): Promise<void> {
   applyAppIcon(store.getSettings().appIcon)
   if (shouldSuppressDevEducation({ isDev: is.dev })) {
     suppressDevEducationForStore(store)
-  }
-  try {
-    // Why: Dock/Launchpad launches don't inherit shell proxy env vars, so apply the persisted proxy before any app-owned network fetchers run.
-    const proxyApplyResult = await initialProxyApplication
-    if (proxyApplyResult.source === 'invalid-settings') {
-      // Why (STA-3442): a silent DIRECT fallback made a dead configured proxy undiagnosable.
-      console.warn('[proxy] persisted proxy settings are invalid; using direct networking')
-    }
-  } catch {
-    console.warn('[proxy] Failed to apply network proxy settings')
   }
   // Why: the partition installer reads the proxy through this resolver, so register it before sessions materialize.
   setBrowserNetworkProxySettingsResolver(() => state.store!.getSettings())

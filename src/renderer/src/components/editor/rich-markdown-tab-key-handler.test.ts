@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { Editor } from '@tiptap/core'
+import { Editor, type JSONContent } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
@@ -8,7 +8,7 @@ import { createRichMarkdownExtensions } from './rich-markdown-extensions'
 import { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'
 import { createRichMarkdownKeyHandler, type KeyHandlerContext } from './rich-markdown-key-handler'
 
-function createEditor(content: object): Editor {
+function createEditor(content: JSONContent): Editor {
   // Why: each Editor needs its own marked registry; sharing one module-scoped
   // extension accumulates tokenizer state across tests.
   return new Editor({
@@ -43,7 +43,7 @@ function createMarkdownEditor(markdown: string): Editor {
  * editor has no plain-text markdown paste transform. The DOM-less test env
  * cannot parse HTML, so assert against the node shapes that paste produces.
  */
-function createNodeEditor(content: object): Editor {
+function createNodeEditor(content: JSONContent): Editor {
   return new Editor({
     element: null,
     extensions: createRichMarkdownExtensions({
@@ -53,18 +53,18 @@ function createNodeEditor(content: object): Editor {
   })
 }
 
-function para(text: string): object {
+function para(text: string): JSONContent {
   return { type: 'paragraph', content: [{ type: 'text', text }] }
 }
 
-function bullets(...items: object[][]): object {
+function bullets(...items: JSONContent[][]): JSONContent {
   return {
     type: 'bulletList',
     content: items.map((content) => ({ type: 'listItem', content }))
   }
 }
 
-function tasks(...items: object[][]): object {
+function tasks(...items: JSONContent[][]): JSONContent {
   return {
     type: 'taskList',
     content: items.map((content) => ({
@@ -75,7 +75,7 @@ function tasks(...items: object[][]): object {
   }
 }
 
-function doc(...content: object[]): object {
+function doc(...content: JSONContent[]): JSONContent {
   return { type: 'doc', content }
 }
 
@@ -175,7 +175,7 @@ function createContext(editor: Editor): KeyHandlerContext {
   }
 }
 
-function bulletListDocument(): object {
+function bulletListDocument(): JSONContent {
   return {
     type: 'doc',
     content: [
@@ -196,7 +196,7 @@ function bulletListDocument(): object {
   }
 }
 
-function parentAndFixesDocument(): object {
+function parentAndFixesDocument(): JSONContent {
   return {
     type: 'doc',
     content: [
@@ -226,7 +226,7 @@ function parentAndFixesDocument(): object {
   }
 }
 
-function taskListDocument(): object {
+function taskListDocument(): JSONContent {
   return {
     type: 'doc',
     content: [

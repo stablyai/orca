@@ -1,4 +1,5 @@
 import type { AgentStatus } from '../../shared/agent-detection'
+import type { AgentStatusState } from '../../shared/agent-status-types'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { RuntimeSyncedLeaf } from '../../shared/runtime-types'
@@ -10,6 +11,7 @@ import type { HeadlessEmulator } from '../daemon/headless-emulator'
 import type { PtyProviderBufferSnapshot } from '../providers/types'
 import type { RetainedTailRedrawCursor } from './terminal-tail-redraw-buffer'
 import type { TerminalTailWaitState } from './terminal-wait-tail-state'
+import type { TerminalCommandPaint } from './terminal-command-paint'
 import type { PtyShellOwnershipMirror } from './pty-shell-ownership-mirror'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
@@ -53,6 +55,12 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   wslDistro: string | null
   tabId: string | null
   paneKey: string | null
+  /**
+   * `graphSequence` when `paneKey` was last written. A surface recorded since the last graph
+   * statement has not yet been offered one that could contradict it — see
+   * pty-recorded-surface-topology.ts.
+   */
+  surfaceRecordedAtGraphSequence: number
   launchConfig: SleepingAgentLaunchConfig | null
   launchToken: string | null
   launchIncarnationId: PtyIncarnationId | null
@@ -65,6 +73,10 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   lastExitCause: TerminalExitCause | null
   lastAgentStatus: AgentStatus | null
   lastAgentStatusObservedLive: boolean
+  /** Latest first-party state from the agent's own OSC 9999 status stream — what the
+   *  agent SAYS it is doing, as opposed to `lastAgentStatus`, which is inferred from its
+   *  OSC title. Optional: absent until a payload lands. */
+  lastExplicitAgentStatus?: { state: AgentStatusState; updatedAt: number } | null
   lastAgentStatusStartedAtEpochMs: number | null
   lastAgentStatusRichInvalidatedAtEpochMs: number | null
   lastOscTitle: string | null
@@ -76,6 +88,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   title: string | null
   titleUpdatedAt: number | null
   lastOutputAt: number | null
+  /** See terminal-command-paint.ts; absent until the pane's first output, and again after a gap or a new process. */
+  commandPaint?: TerminalCommandPaint
 }
 
 export type RuntimePtyTabCloseAuthority = {

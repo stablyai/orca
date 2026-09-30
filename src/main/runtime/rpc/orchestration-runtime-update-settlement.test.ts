@@ -62,6 +62,7 @@ function createUpdateHarness(): Harness {
 
   const oldRuntimeDb = new OrchestrationDb(dbPath)
   const task = oldRuntimeDb.createTask({
+    runId: 'run_legacy_local',
     spec: 'finish work across an app update',
     createdByTerminalHandle: COORDINATOR_HANDLE
   })
@@ -284,12 +285,11 @@ describe('orchestration runtime update settlement', () => {
 
     expect(spoofed).toMatchObject({ ok: false, error: { code: 'stable_pane_required' } })
     expect(firstResult).toMatchObject({
-      run: {
-        id: harness.adoptedRunId,
-        coordinator_handle: CURRENT_COORDINATOR_HANDLE,
-        coordinator_pane_key: CURRENT_COORDINATOR_PANE
-      }
+      run: { id: harness.adoptedRunId, coordinator_handle: CURRENT_COORDINATOR_HANDLE }
     })
+    expect(harness.db.getRun(harness.adoptedRunId)?.coordinator_pane_key).toBe(
+      CURRENT_COORDINATOR_PANE
+    )
     expect(replayResult).toMatchObject({
       run: firstResult.run,
       mutation: { requestId: 'authenticated-takeover', replayed: true }

@@ -310,6 +310,12 @@ export async function readGitCommonHeadIdentities(
         cache.entries.delete(name)
       }
     }
+    // Failed entries may have no cached identity; retire their retry markers on the same evidence.
+    for (const name of cache.unverified) {
+      if (!present.has(name)) {
+        cache.unverified.delete(name)
+      }
+    }
   }
   if (entryNames === null || scope.all || scope.listing) {
     await relist()

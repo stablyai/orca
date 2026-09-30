@@ -47,6 +47,14 @@ export function getOrcaManagedCodexHomePath(): string {
   return managedHomePath
 }
 
+/** Config files an Orca-launched local Codex reads trust from, in the hook installer's lock order. */
+export function getLocalCodexTrustConfigFiles(): string[] {
+  return [
+    join(getOrcaManagedCodexHomePath(), 'config.toml'),
+    join(getSystemCodexHomePath(), 'config.toml')
+  ]
+}
+
 export function getCodexSessionBackfillStateDirPath(): string {
   return join(getOrcaUserDataPath(), 'codex-session-backfill')
 }

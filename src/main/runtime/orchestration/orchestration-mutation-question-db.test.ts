@@ -77,6 +77,7 @@ describe('OrchestrationDb mutation and question state', () => {
     it('accepts a question message in the fresh canonical schema', () => {
       const d = createDb()
       const message = d.insertMessage({
+        runId: 'run_legacy_local',
         from: 'worker',
         to: 'run:run_1',
         subject: 'Need input',

@@ -1,6 +1,11 @@
 import type { AppState } from '@/store/types'
+import type { AgentMainAgentStatus } from '../../../../shared/main-agent-status'
 import { AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS, graphState } from './graph-state'
 import type { AgentStatusProjectionCacheEntry } from './types'
+
+function mainAgentKey(mainAgent: AgentMainAgentStatus | undefined) {
+  return mainAgent ? [mainAgent.state, mainAgent.outcome ?? null, mainAgent.stateStartedAt] : null
+}
 
 function serializeAgentStatusEntry(
   paneKey: string,
@@ -14,13 +19,15 @@ function serializeAgentStatusEntry(
     prompt: entry.prompt,
     updatedAtBucket: Math.floor(entry.updatedAt / AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS),
     stateStartedAt: entry.stateStartedAt,
+    turnStartedAt: entry.turnStartedAt ?? null,
     agentType: entry.agentType ?? null,
     terminalTitle: entry.terminalTitle ?? null,
     stateHistory: entry.stateHistory.map((history) => ({
       state: history.state,
       prompt: history.prompt,
       startedAt: history.startedAt,
-      interrupted: history.interrupted ?? null
+      interrupted: history.interrupted ?? null,
+      mainAgent: mainAgentKey(history.mainAgent)
     })),
     toolName: entry.toolName ?? null,
     toolInput: entry.toolInput ?? null,
@@ -28,7 +35,9 @@ function serializeAgentStatusEntry(
     interactivePrompt: entry.interactivePrompt ?? null,
     lastAssistantMessage: entry.lastAssistantMessage ?? null,
     lastAssistantMessageIsToolOutput: entry.lastAssistantMessageIsToolOutput ?? null,
-    interrupted: entry.interrupted ?? null
+    interrupted: entry.interrupted ?? null,
+    // A failure changes the verdict and leaves `interrupted` as it was.
+    mainAgent: mainAgentKey(entry.mainAgent)
   })
 }
 
@@ -40,15 +49,31 @@ export function buildRuntimeMobileAgentStatusProjection(
     return cached.projection
   }
 
+  const nextEntries = Object.entries(agentStatusByPaneKey)
+  // Same key set, same entry objects: the sorted join would be character-identical to the cached
+  // string, so skip the O(N log N) sort and the O(bytes) join. Equal sizes plus every next key
+  // present in the cache proves the key sets match; a removal fails the size check and an addition
+  // fails the lookup. The cached Map is exactly what a rebuild would produce, so reuse it too.
+  if (
+    cached != null &&
+    nextEntries.length === cached.entries.size &&
+    nextEntries.every(([paneKey, entry]) => cached.entries.get(paneKey)?.entry === entry)
+  ) {
+    graphState.cachedAgentStatusProjection = {
+      ...cached,
+      source: agentStatusByPaneKey
+    }
+    return cached.projection
+  }
+
   // A status ping replaces one entry and re-spreads the map; reuse every other entry.
   const entries = new Map<string, AgentStatusProjectionCacheEntry>()
   const parts: string[] = []
+  let projectionUnchanged = cached != null && nextEntries.length === cached.entries.size
   // Code-unit order, not `localeCompare`: this projection is only ever compared with `===`, so it
   // must be deterministic, not locale-correct — and an ICU collator per comparison is ~4.5k calls
   // per ping at the 500-entry cap.
-  for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey).sort(([a], [b]) =>
-    a < b ? -1 : a > b ? 1 : 0
-  )) {
+  for (const [paneKey, entry] of nextEntries.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
     const previous = cached?.entries.get(paneKey)
     const entryCache =
       previous?.entry === entry
@@ -56,8 +81,10 @@ export function buildRuntimeMobileAgentStatusProjection(
         : { entry, projection: serializeAgentStatusEntry(paneKey, entry) }
     entries.set(paneKey, entryCache)
     parts.push(entryCache.projection)
+    projectionUnchanged &&= previous?.projection === entryCache.projection
   }
-  const projection = `[${parts.join(',')}]`
+  // Same-bucket heartbeats must not rejoin every pane's accumulated preview text.
+  const projection = projectionUnchanged && cached ? cached.projection : `[${parts.join(',')}]`
   graphState.cachedAgentStatusProjection = {
     source: agentStatusByPaneKey,
     entries,

@@ -61,7 +61,7 @@ export function normalizeSshRemotePtyLease(value: unknown): SshRemotePtyLease | 
     return null
   }
   const now = Date.now()
-  const pendingKill = normalizeSshPendingPtyKill(raw.pendingKill)
+  const pendingKill = normalizeSshPendingPtyKill(raw.pendingKill, raw.ptyId)
   return {
     targetId: raw.targetId,
     ptyId: raw.ptyId,

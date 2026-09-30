@@ -5,6 +5,13 @@ const liveClaudePtyIds = new Set<string>()
 // survived the app restart inside the daemon.
 const seededUnconfirmedPtyIds = new Set<string>()
 let switchInProgress = false
+// Woken by endClaudeAuthSwitch so a caller past the point of no return can wait the
+// swap out instead of refusing. See whenClaudeAuthSwitchSettles.
+const switchSettledListeners = new Set<() => void>()
+
+/** A managed account swap is a credential-file rewrite, not a network round trip;
+ *  anything past this is a wedged switch, and refusing beats waiting forever. */
+export const CLAUDE_AUTH_SWITCH_SETTLE_TIMEOUT_MS = 15_000
 
 export type ClaudeLivePtyPersistence = {
   addClaudeLivePtySessionId(sessionId: string): void
@@ -81,6 +88,35 @@ export function markClaudePtyExited(ptyId: string): void {
   notifyDrainedOnTransition(hadLivePtys)
 }
 
+/**
+ * Register a structured Claude child with the same gate the terminal path uses.
+ *
+ * The gate is what makes the managed OAuth refresh defer instead of rotating a
+ * single-use refresh token out from under a running Claude (runtime-auth-sync.ts).
+ * A structured session's child is as much a live Claude as a PTY's is, so it has to
+ * hold the gate too — otherwise a refresh mid-turn breaks its next API call while an
+ * identical terminal session is protected.
+ *
+ * Deliberately not persisted, unlike markClaudePtySpawned: these children are direct
+ * children of this process and cannot survive a restart, so seeding them back on the
+ * next launch would hold the gate closed for a process that is provably gone.
+ */
+export function markClaudeStructuredChildSpawned(childKey: string): void {
+  liveClaudePtyIds.add(structuredChildGateId(childKey))
+}
+
+export function markClaudeStructuredChildExited(childKey: string): void {
+  const hadLivePtys = liveClaudePtyIds.size > 0
+  liveClaudePtyIds.delete(structuredChildGateId(childKey))
+  notifyDrainedOnTransition(hadLivePtys)
+}
+
+// Namespaced so a structured child can never collide with a daemon PTY session id,
+// which confirmSeededClaudeLivePtys reconciles against the daemon's own list.
+function structuredChildGateId(childKey: string): string {
+  return `claude-structured:${childKey}`
+}
+
 export function hasLiveClaudePtys(): boolean {
   return liveClaudePtyIds.size > 0
 }
@@ -93,7 +129,44 @@ export function beginClaudeAuthSwitch(): void {
 }
 
 export function endClaudeAuthSwitch(): void {
+  const wasInProgress = switchInProgress
   switchInProgress = false
+  if (!wasInProgress) {
+    return
+  }
+  // Each listener removes itself as it settles; Set iteration is defined over that.
+  for (const listener of switchSettledListeners) {
+    listener()
+  }
+}
+
+/**
+ * Resolves `true` once no account switch is running, `false` if one is still running
+ * at the deadline.
+ *
+ * Exists for callers that have already done irreversible work — a structured acquire
+ * has closed the old child by the time it resolves its launch, so turning a switch
+ * into a refusal there strands the user with a dead session and no replacement.
+ * Waiting for the swap and then launching against it is the recoverable answer;
+ * refusing is only correct when nothing has been torn down yet.
+ */
+export function whenClaudeAuthSwitchSettles(
+  timeoutMs = CLAUDE_AUTH_SWITCH_SETTLE_TIMEOUT_MS
+): Promise<boolean> {
+  if (!switchInProgress) {
+    return Promise.resolve(true)
+  }
+  return new Promise<boolean>((resolve) => {
+    const settle = (settled: boolean): void => {
+      switchSettledListeners.delete(listener)
+      clearTimeout(timer)
+      resolve(settled)
+    }
+    const listener = (): void => settle(true)
+    switchSettledListeners.add(listener)
+    const timer = setTimeout(() => settle(false), timeoutMs)
+    timer.unref?.()
+  })
 }
 
 export function isClaudeAuthSwitchInProgress(): boolean {

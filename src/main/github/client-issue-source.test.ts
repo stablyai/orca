@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GithubApiRepositoryModule from './github-api-repository'
 import type * as GhUtils from './gh-utils'
 
+// Keep legacy REST request/failure coverage; API-boundary suites exercise the GraphQL path.
+vi.mock('./client/list/work-item-search-page', () => ({ usesGraphqlWorkItemSearch: () => false }))
+
 const {
   execFileAsyncMock,
   ghExecFileAsyncMock,

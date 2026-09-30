@@ -395,4 +395,35 @@ describe('getSubmoduleStatus', () => {
     expect(result.didHitLimit).toBe(true)
     expect(result.statusLength).toBe(2)
   })
+
+  it('overlaps the inner status, index and HEAD reads instead of serializing them', async () => {
+    const OLD_OID = 'a'.repeat(40)
+    const NEW_OID = 'b'.repeat(40)
+    readFileMock.mockResolvedValue('gitdir: /repo/flutter_mine/.git\n')
+    existsSyncMock.mockReturnValue(false)
+    const events: string[] = []
+    gitExecFileAsyncMock.mockReset()
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      const name = args.includes('status') ? 'status' : args[0]
+      events.push(`start:${name}`)
+      if (name === 'status') {
+        // Hold the inner status open so a serialized caller could not have started the oid reads.
+        await new Promise((resolve) => setTimeout(resolve, 5))
+      }
+      events.push(`end:${name}`)
+      if (name === 'ls-files') {
+        return { stdout: `160000 ${OLD_OID} 0\tflutter_mine\n` }
+      }
+      if (name === 'rev-parse') {
+        return { stdout: `${NEW_OID}\n` }
+      }
+      return { stdout: '' }
+    })
+
+    await getSubmoduleStatus('/repo', 'flutter_mine')
+
+    // Serialized reads only start ls-files/rev-parse once the inner status has resolved.
+    expect(events.indexOf('start:ls-files')).toBeLessThan(events.indexOf('end:status'))
+    expect(events.indexOf('start:rev-parse')).toBeLessThan(events.indexOf('end:status'))
+  })
 })

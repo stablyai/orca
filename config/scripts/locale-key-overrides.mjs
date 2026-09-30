@@ -12,6 +12,9 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   // Bare "Cursor" terminal/theme settings = on-screen カーソル, not the Cursor product.
   'auto.components.settings.TerminalWindowSection.c9e1fdf42f': { ja: 'カーソル' },
   'auto.components.onboarding.ThemeStep.ab2a583a97': { ja: 'カーソル' },
+  // File-row "Duplicate" is the action, and it sits beside "Copy" (复制) in the same menu; keyed
+  // because the skills-dialog chip shares the English string but reads as a noun.
+  'auto.components.right.sidebar.FileExplorerRow.0fec99bfd7': { zh: '创建副本' },
   'menu.reportCrash': { ko: '크래시 신고...', zh: '报告崩溃...', ja: 'クラッシュを報告...' },
   'menu.showMobileButton': {
     ko: 'Orca 모바일 버튼 표시',
@@ -36,6 +39,8 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   'menu.exploreOrca': { ko: 'Orca 둘러보기', zh: '探索 Orca', ja: 'Orca を探索' },
   'worktreeJumpPalette.matchLabel.issue': { ko: '이슈', zh: '议题', ja: 'Issue' },
   'worktreeJumpPalette.matchLabel.comment': { ko: '댓글', zh: '评论', ja: 'コメント' },
+  // Bare "Run" is an automation run, not jogging; MT renders the sports sense (zh 跑步).
+  'worktreeJumpPalette.matchLabel.automation': { ko: '실행', zh: '运行', ja: '実行' },
   'auto.hooks.useSettingsNavigationMetadata.13241992bd': {
     ko: '일반',
     zh: '通用',
@@ -592,6 +597,11 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   },
   // Port forwarding "Forward" is 転送, not the browser-navigation 進む.
   'auto.components.right.sidebar.PortsPanel.c9d106547a': { ja: '転送' },
+  // Bare "Back" is browser-back Retour, not Dos (anatomy); bare "MRs" is the
+  // GitLab filter, not Mme; the "ssh" search keyword must stay Latin, not Chut.
+  'browser.navigation.back': { fr: 'Retour' },
+  'auto.components.task.page.chrome.task.page.gitlab.filters.e157d7ce4d': { fr: 'MR' },
+  'auto.components.settings.browser.search.sshWorkspaceRouting.ssh': { fr: 'ssh' },
   // Worktree badge: stand-alone 主要な leaves the adnominal な dangling — align with the Tooltip's プライマリ.
   'auto.components.sidebar.WorktreeCard.7d517f82e2': { ja: 'プライマリ' },
   'auto.components.WorktreeJumpPalette.739bda980c': { ja: 'プライマリ' }

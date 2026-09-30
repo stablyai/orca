@@ -4,8 +4,8 @@
  * Pids are reused within minutes on a busy host, and reuse happens precisely in the recovery
  * case, so a bare pid match is never proof. Every element of the identity tuple is unavailable
  * somewhere — start time costs a CIM query on Windows and is missing in some containers, /proc
- * does not exist on macOS — so an exact but unanswerable identity stays fenced in `recovering`;
- * an ownerless, unattributable reservation enters `manual-recovery`.
+ * does not exist on macOS — so an unanswerable identity reports `indeterminate` and is never read
+ * as alive or dead.
  */
 
 import { readFile } from 'node:fs/promises'
@@ -15,7 +15,10 @@ import type {
 } from '../../shared/agent-session-lease-adjudication'
 import type { AgentSessionProcessIdentity } from '../../shared/agent-session-record'
 import { runProcess } from '../../shared/child-process/run-process'
-import { readWindowsProcessTableFresh } from '../windows/windows-process-table'
+import {
+  isWindowsProcessStartTimeAvailable,
+  readWindowsProcessIdentityTableFresh
+} from '../windows/windows-process-table'
 
 /** Start times drift by scheduler granularity and clock reads; compare with a tolerance. */
 export const PROCESS_START_TIME_TOLERANCE_MS = 2_000
@@ -111,12 +114,40 @@ async function readDarwinProcessStartTimesMs(
 }
 
 async function readWindowsProcessStartTimeMs(pid: number): Promise<number | null> {
+  // No shipped addon build exposes the creation-time flag, so without this the
+  // whole table gets scanned to produce `null` every time.
+  if (!isWindowsProcessStartTimeAvailable()) {
+    return null
+  }
   try {
-    const row = (await readWindowsProcessTableFresh()).find((candidate) => candidate.pid === pid)
+    // Identity flag set: only the creation time is read, so no command line is
+    // worth an `OpenProcess` per process here.
+    const row = (await readWindowsProcessIdentityTableFresh()).find(
+      (candidate) => candidate.pid === pid
+    )
     return row?.creationTimeMs ?? null
   } catch {
     return null
   }
+}
+
+async function readWindowsProcessStartTimesMs(
+  pids: readonly number[]
+): Promise<Map<number, number | null>> {
+  const observed = new Map<number, number | null>(pids.map((pid) => [pid, null]))
+  if (pids.length === 0 || !isWindowsProcessStartTimeAvailable()) {
+    return observed
+  }
+  try {
+    const table = await readWindowsProcessIdentityTableFresh()
+    const startTimesByPid = new Map(table.map((row) => [row.pid, row.creationTimeMs ?? null]))
+    for (const pid of pids) {
+      observed.set(pid, startTimesByPid.get(pid) ?? null)
+    }
+  } catch {
+    // A missing process table is unknown, never evidence that every owner exited.
+  }
+  return observed
 }
 
 /**
@@ -147,6 +178,9 @@ export async function readProcessStartTimesMs(
   if (platform === 'darwin') {
     const table = await readDarwinProcessStartTimesMs(uniquePids)
     return new Map(uniquePids.map((pid) => [pid, table.get(pid) ?? null]))
+  }
+  if (platform === 'win32') {
+    return readWindowsProcessStartTimesMs(uniquePids)
   }
   return new Map(
     await Promise.all(

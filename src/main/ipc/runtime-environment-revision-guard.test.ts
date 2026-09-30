@@ -26,4 +26,24 @@ describe('runtimeEnvironmentRevisionFailure', () => {
     expect(runtimeEnvironmentRevisionFailure(environment, undefined, 'repo.list')).toBeNull()
     expect(runtimeEnvironmentRevisionFailure(environment, 20, 'repo.list')).toBeNull()
   })
+
+  it('fails a queued call when the saved runtime identity changed', () => {
+    expect(
+      runtimeEnvironmentRevisionFailure(environment, 20, 'files.writeBase64', 'runtime-a')
+    ).toEqual({
+      id: 'files.writeBase64',
+      ok: false,
+      error: {
+        code: 'runtime_environment_changed',
+        message: 'Runtime environment identity changed; refresh and try again'
+      },
+      _meta: { runtimeId: 'runtime-b' }
+    })
+  })
+
+  it('accepts a queued call when both pairing and runtime identity still match', () => {
+    expect(
+      runtimeEnvironmentRevisionFailure(environment, 20, 'files.writeBase64', 'runtime-b')
+    ).toBeNull()
+  })
 })

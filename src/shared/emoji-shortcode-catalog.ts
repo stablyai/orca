@@ -1,8 +1,21 @@
-import emojiShortcodes from 'emojibase-data/en/shortcodes/emojibase.json'
-
 export type StandardEmojiShortcodeEntry = {
   emoji: string
   shortcode: string
+}
+
+/** Shape of `emojibase-data/en/shortcodes/emojibase.json`: hexcode -> shortcode or aliases. */
+export type EmojiShortcodeDataset = Readonly<Record<string, string | readonly string[]>>
+
+let loadDataset: (() => EmojiShortcodeDataset) | null = null
+
+/**
+ * Why injected instead of statically imported: the renderer must keep its eager copy (a
+ * dynamic import there returned an empty catalog mid-load and persisted `:wink:` literally),
+ * but a static import here also inlines the same 166 KB into out/main/index.js and JSON.parses
+ * it on every launch. Main supplies a lazy require instead; both stay synchronous.
+ */
+export function setEmojiShortcodeDatasetLoader(load: () => EmojiShortcodeDataset): void {
+  loadDataset = load
 }
 
 // Skin-tone aliases (`wave_tone3`) are ~40% of the dataset and would drown the suggestion list.
@@ -23,7 +36,10 @@ function loadCatalog(): EmojiShortcodeCatalog {
   if (catalog) {
     return catalog
   }
-  const grouped = Object.entries(emojiShortcodes).flatMap(([hexcode, value]) => {
+  if (!loadDataset) {
+    throw new Error('Emoji shortcode dataset loader was never registered')
+  }
+  const grouped = Object.entries(loadDataset()).flatMap(([hexcode, value]) => {
     const shortcodes = (typeof value === 'string' ? [value] : value).filter(
       (shortcode) => !SKIN_TONE_SHORTCODE.test(shortcode)
     )

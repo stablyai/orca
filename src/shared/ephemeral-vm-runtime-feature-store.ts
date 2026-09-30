@@ -143,7 +143,7 @@ function mergeFeatureEntries(
   for (const entry of required) {
     merged.set(featureIdentity(entry), entry)
   }
-  return sortFeatures([...merged.values()])
+  return sortRuntimeFeatures([...merged.values()])
 }
 
 export function featureEntryFromRuntime(
@@ -164,11 +164,26 @@ export function featureEntryFromRuntime(
   }
 }
 
-export function restoreRuntimeFeatures(
-  runtime: EphemeralVmRuntimeRecord,
+export function restoreRuntimeFeatureList(
+  runtimes: readonly EphemeralVmRuntimeRecord[],
   features: readonly EphemeralVmRuntimeFeatureEntry[]
+): EphemeralVmRuntimeRecord[] {
+  const byIdentity = new Map<string, EphemeralVmRuntimeFeatureEntry>()
+  for (const feature of features) {
+    const identity = featureIdentity(feature)
+    if (!byIdentity.has(identity)) {
+      byIdentity.set(identity, feature)
+    }
+  }
+  return runtimes.map((runtime) =>
+    restoreRuntimeFeatures(runtime, byIdentity.get(featureIdentity(runtime)))
+  )
+}
+
+function restoreRuntimeFeatures(
+  runtime: EphemeralVmRuntimeRecord,
+  feature: EphemeralVmRuntimeFeatureEntry | undefined
 ): EphemeralVmRuntimeRecord {
-  const feature = features.find((entry) => featureIdentity(entry) === featureIdentity(runtime))
   if (!feature) {
     return runtime
   }
@@ -225,15 +240,16 @@ function parseFeatureRecords(records: unknown[]): EphemeralVmRuntimeFeatureStore
       features.push(parsed.data)
     }
   }
-  return { writable: true, features: sortFeatures(features), retainedRecords }
+  return { writable: true, features: sortRuntimeFeatures(features), retainedRecords }
 }
 
-function sortFeatures(
-  features: readonly EphemeralVmRuntimeFeatureEntry[]
-): EphemeralVmRuntimeFeatureEntry[] {
-  return [...features].sort((left, right) =>
-    featureIdentity(left).localeCompare(featureIdentity(right))
-  )
+export function sortRuntimeFeatures<T extends { id: string; recipeId: string; createdAt: number }>(
+  features: readonly T[]
+): T[] {
+  return features
+    .map((feature) => ({ feature, identity: featureIdentity(feature) }))
+    .sort((left, right) => left.identity.localeCompare(right.identity))
+    .map(({ feature }) => feature)
 }
 
 function runtimeFeatureStoreValue(
@@ -242,6 +258,6 @@ function runtimeFeatureStoreValue(
 ): { version: 1; records: unknown[] } {
   return {
     version: 1,
-    records: [...sortFeatures(features), ...snapshot.retainedRecords]
+    records: [...sortRuntimeFeatures(features), ...snapshot.retainedRecords]
   }
 }

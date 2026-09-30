@@ -82,6 +82,7 @@ function createChipStore(): {
 }
 
 type ProbeArgs = {
+  agent?: 'claude' | 'omp'
   disabled: boolean
   resolveAttachmentOwner: () => NativeChatAttachmentOwner
   attachResolvedPaths: (paths: string[], connectionId?: string | null) => void
@@ -101,6 +102,7 @@ function Probe({ onReady, ...args }: ProbeArgs): null {
 let root: Root | null = null
 
 async function renderProbe(args: {
+  agent?: 'claude' | 'omp'
   disabled?: boolean
   resolveAttachmentOwner: () => NativeChatAttachmentOwner
   attachResolvedPaths?: (paths: string[], connectionId?: string | null) => void
@@ -117,6 +119,7 @@ async function renderProbe(args: {
     await act(async () => {
       root?.render(
         createElement(Probe, {
+          agent: args.agent ?? 'claude',
           disabled,
           resolveAttachmentOwner: args.resolveAttachmentOwner,
           attachResolvedPaths: args.attachResolvedPaths ?? (() => {}),
@@ -213,6 +216,38 @@ describe('useNativeChatComposerPaste', () => {
     // The optimistic chip must not outlive a failed save.
     expect(store.chips).toHaveLength(0)
   })
+
+  it.each(['event', 'menu'] as const)(
+    'attaches OMP clipboard images for reference delivery via %s paste',
+    async (source) => {
+      mocks.saveClipboardImageAsTempFile.mockResolvedValue('/remote/tmp/omp.png')
+      mocks.readClipboardImageThumbnail.mockResolvedValue(null)
+      const store = createChipStore()
+      const attachResolvedPaths = vi.fn()
+      const setNotice = vi.fn()
+      const probe = await renderProbe({
+        agent: 'omp',
+        resolveAttachmentOwner: () => sshOwner,
+        store,
+        attachResolvedPaths,
+        setNotice
+      })
+      await act(async () => {
+        if (source === 'event') {
+          probe.latest().handlePaste(imagePasteEvent())
+        } else {
+          probe.latest().pasteFromClipboard()
+        }
+      })
+      expect(mocks.saveClipboardImageAsTempFile).toHaveBeenCalledWith({ connectionId: 'conn-1' })
+      if (source === 'event') {
+        expect(store.chips[0]?.path).toBe('/remote/tmp/omp.png')
+      } else {
+        expect(attachResolvedPaths).toHaveBeenCalledWith(['/remote/tmp/omp.png'], 'conn-1')
+      }
+      expect(setNotice.mock.calls.every(([notice]) => notice === null)).toBe(true)
+    }
+  )
 
   it('saves on the SSH host and settles the chip on the returned remote path', async () => {
     mocks.saveClipboardImageAsTempFile.mockResolvedValue('/remote/tmp/orca-paste-1.png')
@@ -414,6 +449,6 @@ describe('useNativeChatComposerPaste', () => {
     await act(async () => {
       rejectSave(new Error('sftp down'))
     })
-    expect(setNotice).not.toHaveBeenCalled()
+    expect(setNotice.mock.calls.every(([notice]) => notice === null)).toBe(true)
   })
 })

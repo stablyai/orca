@@ -113,20 +113,20 @@ export function CommitNotices({
           role={createPrIntentNotice.tone === 'destructive' ? 'alert' : 'status'}
           aria-live="polite"
           className={cn(
-            'mt-1 flex min-w-0 items-center gap-1.5 text-[11px]',
+            'mt-1 flex min-w-0 flex-col items-start gap-1 text-[11px]',
             createPrIntentNotice.tone === 'destructive'
               ? 'text-destructive'
               : 'text-muted-foreground'
           )}
         >
           {/* Why: Create Review blockers carry recovery steps; truncating hides the action the user needs in a narrow sidebar. */}
-          <span className="min-w-0 flex-1 break-words leading-4 [overflow-wrap:anywhere]">
+          <span className="min-w-0 self-stretch break-words leading-4 [overflow-wrap:anywhere]">
             {createPrIntentNotice.message}
           </span>
           {createPrIntentNotice.action === 'settings' && onOpenSourceControlAiSettings ? (
             <button
               type="button"
-              className="shrink-0 font-medium text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground"
+              className="text-left font-medium text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground"
               onClick={() => onOpenSourceControlAiSettings()}
             >
               {translate(

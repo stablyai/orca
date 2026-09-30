@@ -16,6 +16,7 @@ import {
   launchPairedElectronClient
 } from './helpers/paired-electron-client'
 import { getTerminalContent, waitForActivePanePtyId } from './helpers/terminal'
+import { readFreshTerminalInventory } from './helpers/terminal-inventory-observation'
 
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-paired-materialize-'))
 const fixturePath = path.join(scratch, 'materialize-terminal.mjs')
@@ -316,18 +317,17 @@ async function runMaterializationJourney(
   await tab.click()
   await expect.poll(() => getTerminalContent(page), { timeout: 10_000 }).toContain(marker)
 
-  const listed = await callRuntime<RuntimeTerminalListResult>(
-    page,
-    environmentId,
-    'terminal.list',
-    {
-      worktree: `id:${worktreeId}`,
-      requireFreshPtyLiveness: true
-    }
-  )
-  expect(
-    listed.terminals.filter((terminal) => terminal.tabId === created.tab.parentTabId)
-  ).toHaveLength(1)
+  await expect
+    .poll(async () => {
+      const listed = await readFreshTerminalInventory(() =>
+        callRuntime<RuntimeTerminalListResult>(page, environmentId, 'terminal.list', {
+          worktree: `id:${worktreeId}`,
+          requireFreshPtyLiveness: true
+        })
+      )
+      return listed?.terminals.filter((terminal) => terminal.tabId === created.tab.parentTabId)
+    })
+    .toHaveLength(1)
   await callRuntime(page, environmentId, 'terminal.closeTab', { terminal: replacementHandle })
 }
 
@@ -354,15 +354,7 @@ test('materializes a stopped terminal on reconnect from a headed paired host', a
   }
 })
 
-// Why fixme: this journey's fault injection cannot be set up on a headless `orca serve` host.
-// `terminal.stopExact` keeps returning terminal_exact_stop_failed because stopAndWait's
-// keep-history verification window expires before the parked PTY is observed gone, so the pane
-// never reaches pending-handle and the reconnect behavior is never exercised. That precondition
-// fails identically on this PR's base, so it is a pre-existing exact-stop defect rather than a
-// reconnect-activation one. The recovery behavior itself was confirmed by hand in this topology
-// (the host materializes the pending surface and the client rebinds to the replacement PTY);
-// re-enable once exact stop settles deterministically against a serve host.
-test.fixme('materializes a stopped terminal on reconnect from a headless folder host', async ({
+test('materializes a stopped terminal on reconnect from a headless folder host', async ({
   testRepoPath
 }, testInfo) => {
   test.setTimeout(150_000)

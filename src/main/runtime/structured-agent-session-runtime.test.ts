@@ -4,12 +4,17 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentSessionClaimStatus,
+  AgentSessionExecutionLocation,
   AgentSessionProcessIdentity,
   AgentSessionRecord
 } from '../../shared/agent-session-record'
+import { __setWindowsProcessTreeLoaderForTests } from '../windows/windows-process-table'
+import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import {
   createStructuredAgentSessionOwnerProbe,
-  createStructuredAgentSessionOwnerProbes,
+  createStructuredAgentSessionOwnerProbes
+} from './structured-agent-session-owner-probe'
+import {
   ensureStructuredAgentSessionHost,
   hasPersistedStructuredAgentSessionStore,
   stopStructuredAgentSessionRuntime
@@ -183,17 +188,6 @@ describe('structured agent-session owner probe', () => {
 
     expect(result.outcome).toBe('indeterminate')
   })
-
-  it('releases only a reservation carrying durable pre-spawn proof', async () => {
-    const probe = deadProbe()
-    const result = await createStructuredAgentSessionOwnerProbe(
-      HOST_ID,
-      probe
-    )(record(null, { processlessAt: 1_800_000_000_000, claimStatus: 'reserved' }))
-
-    expect(probe).not.toHaveBeenCalled()
-    expect(result).toEqual({ outcome: 'reservation-unused' })
-  })
 })
 
 describe('structured agent-session runtime install', () => {
@@ -208,58 +202,61 @@ describe('structured agent-session runtime install', () => {
     vi.restoreAllMocks()
   })
 
-  it('starts orphan reaping and reports failures without failing installation', async () => {
+  it('holds stop until the model catalog has written its coalesced save', async () => {
     stateDirectory = await mkdtemp(join(tmpdir(), 'orca-structured-runtime-'))
-    const failure = new Error('scan failed')
-    const reapOrphanChildren = vi.fn(async () => {
-      throw failure
+    await ensureStructuredAgentSessionHost({
+      stateDirectory,
+      hostId: HOST_ID,
+      claimKeyId: 'key-1',
+      resolveWorkspacePath: async () => stateDirectory!,
+      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+      resolveEnvironment: async () => ({})
     })
-    const onError = vi.fn()
-
-    await expect(
-      ensureStructuredAgentSessionHost({
-        stateDirectory,
-        hostId: HOST_ID,
-        claimKeyId: 'key-1',
-        resolveWorkspacePath: async () => stateDirectory!,
-        resolveEnvironment: async () => ({}),
-        reapOrphanChildren,
-        onError
-      })
-    ).resolves.toBeDefined()
-
-    await vi.waitFor(() =>
-      expect(onError).toHaveBeenCalledWith({
-        scope: 'agent-session-orphan-child-reaper',
-        error: failure
+    let finishWrite = (): void => {}
+    vi.spyOn(agentModelCatalogStore, 'flushPersistence').mockReturnValue(
+      new Promise<void>((resolve) => {
+        finishWrite = resolve
       })
     )
-    expect(reapOrphanChildren).toHaveBeenCalledWith({ store: expect.anything() })
+
+    // Quit joins this stop to its teardown barrier; the unref'd coalesce timer never fires after it.
+    let stopped = false
+    const stop = stopStructuredAgentSessionRuntime().then(() => {
+      stopped = true
+    })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(stopped).toBe(false)
+    finishWrite()
+    await stop
+    expect(stopped).toBe(true)
   })
 
-  it('logs an orphan-reaper failure when no reporter is configured', async () => {
+  it('does not infer Windows process identity support from an injected reader', async () => {
     stateDirectory = await mkdtemp(join(tmpdir(), 'orca-structured-runtime-'))
-    const failure = new Error('scan failed')
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-
-    await expect(
-      ensureStructuredAgentSessionHost({
+    const originalPlatform = process.platform
+    const location: AgentSessionExecutionLocation = {
+      executionHostId: 'local',
+      wslDistro: null,
+      workspaceId: 'workspace-1',
+      workspaceKind: 'folder'
+    }
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    __setWindowsProcessTreeLoaderForTests(() => null)
+    try {
+      const host = await ensureStructuredAgentSessionHost({
         stateDirectory,
         hostId: HOST_ID,
         claimKeyId: 'key-1',
         resolveWorkspacePath: async () => stateDirectory!,
         resolveEnvironment: async () => ({}),
-        reapOrphanChildren: async () => {
-          throw failure
-        }
+        resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+        readProcessStartTime: async () => 1_700_000_000_000
       })
-    ).resolves.toBeDefined()
 
-    await vi.waitFor(() =>
-      expect(consoleError).toHaveBeenCalledWith(
-        '[structured-agent-session] orphan reaper failed',
-        failure
-      )
-    )
+      expect(host.supportsCreate(location, 'codex')).toBe(false)
+    } finally {
+      __setWindowsProcessTreeLoaderForTests()
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
   })
 })

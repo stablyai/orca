@@ -1,4 +1,5 @@
 import type { IpcMainInvokeEvent } from 'electron'
+import { abortWhenRendererGone } from './renderer-lifetime-abort'
 
 export type SenderScopedRequestCancellations = {
   /** Registers a cancellable request; aborts any previous request that reused the token. */
@@ -13,38 +14,67 @@ export type SenderScopedRequestCancellations = {
   cancel: (event: IpcMainInvokeEvent, requestToken: string) => void
 }
 
-/**
- * Registry for renderer-cancellable IPC requests. Keys are scoped to the
- * issuing webContents so one window's token can never cancel another window's
- * request, and reusing a token aborts the previous request before the new one
- * registers.
- */
+type SenderRequests = {
+  controllers: Map<string, AbortController>
+  lifetime: ReturnType<typeof abortWhenRendererGone>
+}
+
+/** Requests belong to the issuing document; one window cannot cancel another's work. */
 export function createSenderScopedRequestCancellations(): SenderScopedRequestCancellations {
-  const controllers = new Map<string, AbortController>()
-  const keyFor = (event: IpcMainInvokeEvent, requestToken: string): string =>
-    `${event.sender.id}\0${requestToken}`
+  const senders = new Map<number, SenderRequests>()
+  const release = (senderId: number, requests: SenderRequests): void => {
+    if (senders.get(senderId) === requests) {
+      senders.delete(senderId)
+    }
+    requests.lifetime.dispose()
+  }
+  const requestsFor = (event: IpcMainInvokeEvent): SenderRequests => {
+    const senderId = event.sender.id
+    let requests = senders.get(senderId)
+    if (!requests) {
+      const lifetime = abortWhenRendererGone(event.sender)
+      const owned: SenderRequests = { controllers: new Map(), lifetime }
+      senders.set(senderId, owned)
+      lifetime.signal.addEventListener(
+        'abort',
+        () => {
+          // Detach before abort callbacks can finish old requests or register new ones.
+          release(senderId, owned)
+          for (const controller of owned.controllers.values()) {
+            controller.abort()
+          }
+          owned.controllers.clear()
+        },
+        { once: true }
+      )
+      requests = owned
+    }
+    return requests
+  }
   return {
     begin: (event, requestToken) => {
       if (!requestToken) {
         return null
       }
-      const key = keyFor(event, requestToken)
-      controllers.get(key)?.abort()
+      senders.get(event.sender.id)?.controllers.get(requestToken)?.abort()
       const controller = new AbortController()
-      controllers.set(key, controller)
+      requestsFor(event).controllers.set(requestToken, controller)
       return controller
     },
     finish: (event, requestToken, controller) => {
       if (!requestToken || !controller) {
         return
       }
-      const key = keyFor(event, requestToken)
-      if (controllers.get(key) === controller) {
-        controllers.delete(key)
+      const requests = senders.get(event.sender.id)
+      if (requests?.controllers.get(requestToken) === controller) {
+        requests.controllers.delete(requestToken)
+        if (requests.controllers.size === 0) {
+          release(event.sender.id, requests)
+        }
       }
     },
     cancel: (event, requestToken) => {
-      controllers.get(keyFor(event, requestToken))?.abort()
+      senders.get(event.sender.id)?.controllers.get(requestToken)?.abort()
     }
   }
 }

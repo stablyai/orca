@@ -117,12 +117,12 @@ describe('AgentBrowserBridge', () => {
     expect((snapshotCall![1] as string[])[cdpIdx + 1]).toBe('9222')
 
     await bridge.click('@e1')
-    await bridge.mouseMove(10, 20)
+    await bridge.scroll('down')
     await bridge.setOffline('on')
     await bridge.consoleLog()
     await bridge.exec('get title')
 
-    for (const command of ['click', 'mouse', 'set', 'console', 'get']) {
+    for (const command of ['click', 'scroll', 'set', 'console', 'get']) {
       const call = execFileMock.mock.calls.find((candidate: unknown[]) =>
         (candidate[1] as string[]).includes(command)
       )
@@ -207,15 +207,6 @@ describe('AgentBrowserBridge', () => {
       code: 'browser_tab_not_found',
       message: 'Browser page tab-1 is no longer available'
     })
-  })
-
-  it('handles malformed JSON from agent-browser', async () => {
-    execFileMock.mockImplementation(
-      (_bin: string, _args: string[], _opts: unknown, cb: ExecFileCallback) => {
-        cb(null, 'not json at all', '')
-      }
-    )
-    await expect(bridge.snapshot()).rejects.toThrow()
   })
 
   // ── exec passthrough ──

@@ -1,5 +1,4 @@
-import { CLOSE_TERMINAL_PANE_EVENT } from '@/constants/terminal'
-import type { CloseTerminalPaneDetail } from '@/constants/terminal'
+import { applyClosedTerminalLeafNotice } from '@/components/terminal-pane/closed-terminal-leaf-notice'
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
 import { detectLanguage } from '@/lib/language-detect'
 import { runSleepWorktree } from '@/components/sidebar/sleep-worktree-flow'
@@ -28,7 +27,7 @@ export function registerMobileAndTerminalCloseIpcBridge(
           runtimeEnvironmentId,
           mode: 'edit'
         })
-        store.setActiveTabType('editor')
+        store.setActiveTabType('editor', worktreeId)
         store.revealWorktreeInSidebar(worktreeId)
       }
     )
@@ -46,21 +45,19 @@ export function registerMobileAndTerminalCloseIpcBridge(
         store.openDiff(worktreeId, filePath, relativePath, language, staged, {
           runtimeEnvironmentId
         })
-        store.setActiveTabType('editor')
+        store.setActiveTabType('editor', worktreeId)
         store.revealWorktreeInSidebar(worktreeId)
       }
     )
   )
 
   unsubs.push(
-    window.api.ui.onCloseTerminal(({ tabId, paneRuntimeId }) => {
-      if (paneRuntimeId != null) {
-        // Why: route pane closes via the lifecycle hook for sibling promotion (falls through to closeTab on the last pane).
-        const detail: CloseTerminalPaneDetail = { tabId, paneRuntimeId }
-        window.dispatchEvent(new CustomEvent(CLOSE_TERMINAL_PANE_EVENT, { detail }))
+    window.api.ui.onCloseTerminal((target) => {
+      if (target.kind === 'pane') {
+        applyClosedTerminalLeafNotice(target.tabId, target.leafId)
       } else {
         // Why: the CLI/RPC caller is answered immediately, so it cannot wait on a modal.
-        closeTerminalTab(tabId, { skipRunningProcessConfirm: true })
+        closeTerminalTab(target.tabId, { skipRunningProcessConfirm: true })
       }
     })
   )

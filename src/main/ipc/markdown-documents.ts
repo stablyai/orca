@@ -1,6 +1,11 @@
-import { readdir } from 'node:fs/promises'
 import { basename as pathBasename, extname, isAbsolute, join, relative, resolve } from 'node:path'
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
+import { spawnBundledRipgrep } from '../ripgrep/bundled-ripgrep-spawn'
+import { parseWslPath } from '../wsl'
+import {
+  isRipgrepMissingCwdExit,
+  ripgrepMissingCwdError
+} from '../../shared/ripgrep-process-availability'
 
 function normalizeRelativePath(path: string): string {
   return path.replace(/[\\/]+/g, '/').replace(/^\/+/, '')
@@ -88,34 +93,132 @@ export function markdownDocumentsFromRelativePaths(
     .sort((a, b) => a.relativePath.localeCompare(b.relativePath))
 }
 
-export async function listMarkdownDocuments(rootPath: string): Promise<MarkdownDocument[]> {
-  const documents: MarkdownDocument[] = []
+const MARKDOWN_LISTING_TIMEOUT_MS = 15_000
+const MAX_MARKDOWN_PATH_BYTES = 1024 * 1024
 
-  async function visitDirectory(dirPath: string): Promise<void> {
-    const entries = await readdir(dirPath, { withFileTypes: true })
-    for (const entry of entries) {
-      if (entry.isSymbolicLink()) {
-        continue
+export async function listMarkdownDocuments(
+  rootPath: string,
+  options: { wslDistro?: string } = {}
+): Promise<MarkdownDocument[]> {
+  const child = spawnBundledRipgrep(
+    [
+      '--files',
+      '--hidden',
+      '--no-ignore',
+      '--no-config',
+      '--null',
+      '--path-separator',
+      '/',
+      // Directory-only globs preserve hidden Markdown files without traversing hidden folders.
+      '--glob',
+      '**',
+      '--glob',
+      '!**/.*/',
+      '--glob',
+      '**/.github/',
+      '--glob',
+      '!**/node_modules/',
+      '.'
+    ],
+    {
+      cwd: rootPath,
+      wslDistro: options.wslDistro,
+      wslDistroForOutput: parseWslPath(rootPath)?.distro ?? options.wslDistro,
+      stdio: ['ignore', 'pipe', 'pipe']
+    }
+  )
+
+  return new Promise((resolveListing, reject) => {
+    const documents: MarkdownDocument[] = []
+    let carry = ''
+    let stderr = ''
+    let settled = false
+    const finish = (error?: Error): void => {
+      if (settled) {
+        return
       }
-
-      const entryPath = join(dirPath, entry.name)
-      if (entry.isDirectory()) {
-        if (entry.name === '.git' || entry.name === 'node_modules') {
-          continue
+      settled = true
+      clearTimeout(timer)
+      child.stdout?.off('data', onData)
+      child.stderr?.off('data', onStderr)
+      child.stdout?.off('error', onError)
+      child.stderr?.off('error', onError)
+      child.off('close', onClose)
+      child.off('error', onError)
+      // A spawn or pipe error can arrive after a timeout has already settled the listing.
+      child.on('error', ignoreLateError)
+      child.stdout?.on('error', ignoreLateError)
+      child.stderr?.on('error', ignoreLateError)
+      carry = ''
+      if (error) {
+        if (child.pid !== undefined) {
+          try {
+            child.kill('SIGKILL')
+          } catch {
+            // The process may have exited before the timeout or stream error arrived.
+          }
         }
-        if (entry.name.startsWith('.') && entry.name !== '.github') {
-          continue
-        }
-        await visitDirectory(entryPath)
-        continue
-      }
-
-      if (entry.isFile() && isMarkdownDocumentName(entry.name)) {
-        documents.push(markdownDocumentFromFilePath(rootPath, entryPath))
+        documents.length = 0
+        child.stdout?.resume()
+        child.stderr?.resume()
+        reject(error)
+      } else {
+        resolveListing(documents.sort((a, b) => a.relativePath.localeCompare(b.relativePath)))
       }
     }
-  }
-
-  await visitDirectory(rootPath)
-  return documents.sort((a, b) => a.relativePath.localeCompare(b.relativePath))
+    const onError = (error: Error): void => finish(error)
+    const onStderr = (chunk: string): void => {
+      stderr = (stderr + chunk).slice(0, 4096)
+    }
+    const onData = (chunk: string): void => {
+      carry += chunk
+      let start = 0
+      let end: number
+      while ((end = carry.indexOf('\0', start)) !== -1) {
+        const path = carry.slice(start, end)
+        if (Buffer.byteLength(path) > MAX_MARKDOWN_PATH_BYTES) {
+          finish(new Error('Markdown document path exceeds the listing limit'))
+          return
+        }
+        if (!path.startsWith('./') || path.split('/').includes('..')) {
+          finish(new Error('Invalid path in Markdown document listing'))
+          return
+        }
+        if (isMarkdownDocumentName(path)) {
+          documents.push(markdownDocumentFromFilePath(rootPath, join(rootPath, path.slice(2))))
+        }
+        start = end + 1
+      }
+      carry = carry.slice(start)
+      if (Buffer.byteLength(carry) > MAX_MARKDOWN_PATH_BYTES) {
+        finish(new Error('Markdown document path exceeds the listing limit'))
+      }
+    }
+    const onClose = (code: number | null, signal: NodeJS.Signals | null): void => {
+      if (isRipgrepMissingCwdExit(code)) {
+        finish(ripgrepMissingCwdError(rootPath))
+      } else if (signal || (code !== 0 && code !== 1)) {
+        finish(new Error(`Markdown document listing failed (${signal ?? code}): ${stderr.trim()}`))
+      } else if (carry) {
+        finish(new Error('Incomplete path in Markdown document listing'))
+      } else {
+        finish()
+      }
+    }
+    const timer = setTimeout(
+      () => finish(new Error('Markdown document listing timed out')),
+      MARKDOWN_LISTING_TIMEOUT_MS
+    )
+    timer.unref?.()
+    child.stdout?.setEncoding('utf8')
+    child.stderr?.setEncoding('utf8')
+    child.stdout?.on('data', onData)
+    child.stderr?.on('data', onStderr)
+    child.stdout?.on('error', onError)
+    child.stderr?.on('error', onError)
+    child.once('error', onError)
+    child.once('close', onClose)
+  })
 }
+
+function ignoreLateError(): void {}

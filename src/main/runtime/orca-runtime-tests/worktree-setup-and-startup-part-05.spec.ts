@@ -122,7 +122,7 @@ describe('OrcaRuntimeService', () => {
     expect(metaById[result.worktree.id]).toMatchObject({ createdWithAgent: 'claude' })
   })
 
-  it('pre-marks remote Codex workspaces trusted before pasting startup drafts', async () => {
+  it('launches a remote Codex startup draft with its declared agent on the SSH host', async () => {
     detectRemoteAgentsMock.mockResolvedValue(['codex'])
     muxRequestMock.mockResolvedValue({ resolvedPath: '/home/dev' })
     const created = {
@@ -189,7 +189,11 @@ describe('OrcaRuntimeService', () => {
     }
     const fsProvider = {
       realpath: vi.fn().mockResolvedValue('/remote/mobile-codex-draft'),
-      readFile: vi.fn().mockRejectedValue(new Error('missing config')),
+      readFile: vi
+        .fn()
+        .mockRejectedValue(
+          new Error("ENOENT: no such file or directory, stat '/home/dev/.codex/config.toml'")
+        ),
       createDir: vi.fn().mockResolvedValue(undefined),
       writeFile: vi.fn().mockResolvedValue(undefined)
     }
@@ -212,26 +216,15 @@ describe('OrcaRuntimeService', () => {
       })
 
       expect(detectRemoteAgentsMock).not.toHaveBeenCalled()
-      expect(muxRequestMock).toHaveBeenCalledWith('session.resolveHome', { path: '~' })
-      expect(fsProvider.createDir).toHaveBeenCalledWith('/home/dev/.codex')
-      expect(fsProvider.writeFile).toHaveBeenCalledWith(
-        '/home/dev/.codex/config.toml',
-        expect.stringContaining('[projects."/remote/mobile-codex-draft"]')
-      )
-      expect(fsProvider.writeFile).toHaveBeenCalledWith(
-        '/home/dev/.codex/config.toml',
-        expect.stringContaining('trust_level = "trusted"')
-      )
       expect(spawn).toHaveBeenCalledWith(
         expect.objectContaining({
           cwd: '/remote/mobile-codex-draft',
           command: "codex '--dangerously-bypass-approvals-and-sandbox'",
           connectionId: 'ssh-1',
-          worktreeId: result.worktree.id
+          worktreeId: result.worktree.id,
+          // The spawn builder pre-trusts the workspace on the SSH host for this agent.
+          launchAgent: 'codex'
         })
-      )
-      expect(fsProvider.writeFile.mock.invocationCallOrder[0]).toBeLessThan(
-        spawn.mock.invocationCallOrder[0]!
       )
       expect(metaById[result.worktree.id]).toMatchObject({ createdWithAgent: 'codex' })
     } finally {
@@ -240,7 +233,7 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('pre-marks remote Codex workspaces trusted before explicit startup commands', async () => {
+  it('launches a remote explicit Codex startup command with its declared agent on the SSH host', async () => {
     muxRequestMock.mockResolvedValue({ resolvedPath: '/home/dev' })
     const created = {
       path: '/remote/mobile-codex-command',
@@ -302,7 +295,11 @@ describe('OrcaRuntimeService', () => {
     }
     const fsProvider = {
       realpath: vi.fn().mockResolvedValue('/remote/mobile-codex-command'),
-      readFile: vi.fn().mockRejectedValue(new Error('missing config')),
+      readFile: vi
+        .fn()
+        .mockRejectedValue(
+          new Error("ENOENT: no such file or directory, stat '/home/dev/.codex/config.toml'")
+        ),
       createDir: vi.fn().mockResolvedValue(undefined),
       writeFile: vi.fn().mockResolvedValue(undefined)
     }
@@ -326,25 +323,15 @@ describe('OrcaRuntimeService', () => {
       })
 
       expect(detectRemoteAgentsMock).not.toHaveBeenCalled()
-      expect(muxRequestMock).toHaveBeenCalledWith('session.resolveHome', { path: '~' })
-      expect(fsProvider.writeFile).toHaveBeenCalledWith(
-        '/home/dev/.codex/config.toml',
-        expect.stringContaining('[projects."/remote/mobile-codex-command"]')
-      )
-      expect(fsProvider.writeFile).toHaveBeenCalledWith(
-        '/home/dev/.codex/config.toml',
-        expect.stringContaining('trust_level = "trusted"')
-      )
       expect(spawn).toHaveBeenCalledWith(
         expect.objectContaining({
           cwd: '/remote/mobile-codex-command',
           command: 'codex',
           connectionId: 'ssh-1',
-          worktreeId: result.worktree.id
+          worktreeId: result.worktree.id,
+          // The spawn builder pre-trusts the workspace on the SSH host for this agent.
+          launchAgent: 'codex'
         })
-      )
-      expect(fsProvider.writeFile.mock.invocationCallOrder[0]).toBeLessThan(
-        spawn.mock.invocationCallOrder[0]!
       )
       expect(metaById[result.worktree.id]).toMatchObject({ createdWithAgent: 'codex' })
     } finally {

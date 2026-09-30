@@ -1,9 +1,13 @@
-import type { WebContents } from 'electron'
+import {
+  AutomationDispatchCancelledError,
+  requestAutomationDispatch,
+  type AutomationRendererChannel
+} from './automation-dispatch-request'
+export type { AutomationRendererChannel } from './automation-dispatch-request'
 import type { Store } from '../persistence'
 import {
   isFinalAutomationRunStatus,
   type Automation,
-  type AutomationDispatchRequest,
   type AutomationDispatchResult,
   type AutomationPrecheckResult,
   type AutomationRun
@@ -12,19 +16,21 @@ import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
 import { runAutomationPrecheck } from './precheck-runner'
 import { resolveAutomationRunTarget, type AutomationRunTargetResult } from './run-target-resolution'
-import { collectAutomationRunUsage } from './run-usage-collection'
+import { writeAutomationRunUsage } from './run-usage-collection'
 import type { HeadlessAutomationDispatcher } from './headless-dispatch'
-import { clearAutomationDispatchTokens, createAutomationDispatchToken } from './dispatch-tokens'
-import { runHeadlessAutomationDispatch } from './headless-dispatch-runner'
+import { clearAutomationDispatchTokens } from './dispatch-tokens'
 import {
   AutomationRunCompletionWatcher,
   type AutomationRunTerminalObserver
 } from './run-completion-watcher'
 import { createAutomationRunWriter, type AutomationRunWriter } from './automation-run-writer'
+import { reportAutomationScheduleDrift } from './schedule-drift-report'
 import {
   describeScheduledRefusal,
+  missedBeyondGrace,
+  recordMissedRun,
   recordRefusedAutomationRun,
-  NO_DISPATCH_HOST
+  recordUnevaluableAutomation
 } from './dispatch-refusal'
 import type {
   AutomationsChangedPayload,
@@ -37,9 +43,11 @@ export class AutomationService {
   private readonly store: Store
   private readonly tickMs: number
   private timer: ReturnType<typeof setInterval> | null = null
-  private webContents: WebContents | null = null
+  private webContents: AutomationRendererChannel | null = null
   private rendererReady = false
   private evaluating = false
+  private stopped = false
+  private dispatchGeneration = 0
   private readonly claudeUsage: ClaudeUsageStore | null
   private readonly codexUsage: CodexUsageStore | null
   private readonly allowRemoteHostScheduling: boolean
@@ -88,7 +96,7 @@ export class AutomationService {
     this.publish?.(payload)
   }
 
-  setWebContents(webContents: WebContents | null): void {
+  setWebContents(webContents: AutomationRendererChannel | null): void {
     this.webContents = webContents
     this.rendererReady = false
   }
@@ -105,10 +113,12 @@ export class AutomationService {
     if (this.timer) {
       return
     }
+    this.stopped = false
     this.timer = setInterval(() => {
       void this.evaluateDueRuns()
     }, this.tickMs)
     this.completionWatcher?.reconcileRetainedRuns(this.store.listAutomationRuns())
+    reportAutomationScheduleDrift(this.store.listAutomations())
     // Why: headless serve never gets a renderer-ready IPC, but due runs still
     // need the same startup catch-up pass desktop gets after renderer attach.
     if (this.rendererReady || this.headlessDispatcher) {
@@ -120,6 +130,8 @@ export class AutomationService {
   }
 
   stop(): void {
+    this.stopped = true
+    this.dispatchGeneration += 1
     this.completionWatcher?.dispose()
     if (!this.timer) {
       return
@@ -129,19 +141,21 @@ export class AutomationService {
   }
 
   async runNow(automationId: string): Promise<AutomationRun> {
+    const generation = this.dispatchGeneration
     const automation = this.store.listAutomations().find((entry) => entry.id === automationId)
     if (!automation) {
       throw new Error('Automation not found.')
     }
-    const run = this.runs.createRun(automation, Date.now(), 'manual')
-    return await this.requestDispatch(automation, run, this.resolveTarget(automation))
+    const target = this.resolveTarget(automation)
+    const run = await this.runs.createRun(automation, Date.now(), 'manual')
+    return await this.requestDispatch(automation, run, target, generation)
   }
 
   /** The run-history row doc:94 pairs with the typed refusal an execute fence throws. */
-  recordRefusedRun(automationId: string): void {
+  async recordRefusedRun(automationId: string): Promise<void> {
     const automation = this.store.listAutomations().find((entry) => entry.id === automationId)
     if (automation) {
-      recordRefusedAutomationRun({
+      await recordRefusedAutomationRun({
         store: this.store,
         runs: this.runs,
         automation,
@@ -188,7 +202,7 @@ export class AutomationService {
   }
 
   async markDispatchResult(result: AutomationDispatchResult): Promise<AutomationRun> {
-    const run = this.runs.updateRun(result)
+    const run = await this.runs.updateRun(result)
     clearAutomationDispatchTokens(run.automationId, run.id)
     if (!isFinalAutomationRunStatus(run.status)) {
       if (run.status === 'dispatched') {
@@ -204,39 +218,44 @@ export class AutomationService {
     if (run.usage) {
       return run
     }
-    const usage = await collectAutomationRunUsage({
-      automation: this.store.listAutomations().find((entry) => entry.id === run.automationId),
+    return await writeAutomationRunUsage({
+      store: this.store,
+      runs: this.runs,
       run,
       claudeUsage: this.claudeUsage,
       codexUsage: this.codexUsage
     })
-    // Why: the run is final during the await above, so a concurrent create-time
-    // retention prune may have evicted it — the usage write must not throw then.
-    if (!this.store.listAutomationRuns(run.automationId).some((entry) => entry.id === run.id)) {
-      return run
-    }
-    return this.runs.updateRun({
-      runId: run.id,
-      status: run.status,
-      workspaceId: run.workspaceId,
-      terminalSessionId: run.terminalSessionId,
-      usage,
-      error: run.error
-    })
   }
 
   private async evaluateDueRuns(): Promise<void> {
-    if (this.evaluating) {
+    if (this.evaluating || this.stopped) {
       return
     }
     this.evaluating = true
+    const generation = this.dispatchGeneration
     try {
       const now = Date.now()
       for (const automation of this.store.listAutomations()) {
+        if (this.stopped || generation !== this.dispatchGeneration) {
+          break
+        }
         if (!automation.enabled || automation.nextRunAt > now) {
           continue
         }
-        await this.evaluateAutomation(automation, now)
+        // Isolated per record (#16303): an unreadable schedule throws out of the
+        // occurrence math, and an uncaught throw here skipped every later due row.
+        try {
+          await this.evaluateAutomation(automation, now)
+        } catch (error) {
+          if (
+            !(error instanceof AutomationDispatchCancelledError) &&
+            !this.stopped &&
+            generation === this.dispatchGeneration &&
+            this.store.listAutomations().some((current) => current.id === automation.id)
+          ) {
+            await recordUnevaluableAutomation({ runs: this.runs, automation, error })
+          }
+        }
       }
     } finally {
       this.evaluating = false
@@ -244,21 +263,15 @@ export class AutomationService {
   }
 
   private async evaluateAutomation(automation: Automation, now: number): Promise<void> {
+    const generation = this.dispatchGeneration
     const scheduledFor = this.store.getLatestAutomationOccurrence(automation, now)
     if (scheduledFor === null) {
-      this.store.advanceAutomationNextRun(automation.id, now)
+      await this.runs.advanceNextRun(automation.id, now)
       return
     }
-    const graceMs = automation.missedRunGraceMinutes * 60 * 1000
-    if (now - scheduledFor > graceMs) {
-      const missed = this.runs.createRun(automation, scheduledFor)
-      this.runs.updateRun({
-        runId: missed.id,
-        status: 'skipped_missed',
-        workspaceId: automation.workspaceId,
-        error: 'Orca was unavailable during the missed-run grace window.'
-      })
-      this.store.advanceAutomationNextRun(automation.id, now)
+    if (missedBeyondGrace({ automation, scheduledFor, now, tickMs: this.tickMs })) {
+      await recordMissedRun({ runs: this.runs, automation, scheduledFor })
+      await this.runs.advanceNextRun(automation.id, now)
       return
     }
 
@@ -266,14 +279,20 @@ export class AutomationService {
     // */5 automation would otherwise write ~288 identical rows a day — past
     // retention, which would evict the automation's real history.
     const target = this.resolveTarget(automation)
-    const refusal = describeScheduledRefusal({ target, canDispatch: this.canDispatch() })
-    if (refusal && this.runs.repeatSkip(automation.id, refusal, scheduledFor)) {
-      this.store.advanceAutomationNextRun(automation.id, now)
+    const canDispatch = this.canDispatchToRenderer() || Boolean(this.headlessDispatcher)
+    const refusal = describeScheduledRefusal({ target, canDispatch })
+    if (refusal && (await this.runs.repeatSkip(automation.id, refusal, scheduledFor))) {
+      await this.runs.advanceNextRun(automation.id, now)
       return
     }
 
-    await this.requestDispatch(automation, this.runs.createRun(automation, scheduledFor), target)
-    this.store.advanceAutomationNextRun(automation.id, now)
+    await this.requestDispatch(
+      automation,
+      await this.runs.createRun(automation, scheduledFor),
+      target,
+      generation
+    )
+    await this.runs.advanceNextRun(automation.id, now)
   }
 
   private resolveTarget(automation: Automation): AutomationRunTargetResult {
@@ -287,56 +306,27 @@ export class AutomationService {
     return Boolean(webContents && !webContents.isDestroyed() && this.rendererReady)
   }
 
-  /** Headless serve counts: it launches runs with no window at all. */
-  private canDispatch(): boolean {
-    return this.canDispatchToRenderer() || Boolean(this.headlessDispatcher)
-  }
-
-  private async requestDispatch(
+  private requestDispatch(
     automation: Automation,
     run: AutomationRun,
-    target: AutomationRunTargetResult
+    target: AutomationRunTargetResult,
+    generation: number
   ): Promise<AutomationRun> {
-    if (!target.ok) {
-      return this.runs.updateRun({
-        runId: run.id,
-        status: 'skipped_unavailable',
-        workspaceId: automation.workspaceId,
-        error: target.error
-      })
-    }
-    if (!this.canDispatchToRenderer()) {
-      if (this.headlessDispatcher) {
-        return await runHeadlessAutomationDispatch({
-          automation,
-          run,
-          target,
-          dispatcher: this.headlessDispatcher,
-          runs: this.runs,
-          runPrecheck: () => this.runPrecheck(automation.id, run.id),
-          markDispatchResult: (result) => this.markDispatchResult(result),
-          watchRun: (dispatched) => this.completionWatcher?.watch(dispatched)
-        })
-      }
-      return this.runs.updateRun({
-        runId: run.id,
-        status: 'skipped_unavailable',
-        workspaceId: automation.workspaceId,
-        error: NO_DISPATCH_HOST
-      })
-    }
-    const updated = this.runs.updateRun({
-      runId: run.id,
-      status: 'dispatching',
-      workspaceId: automation.workspaceId,
-      error: null
-    })
-    const payload: AutomationDispatchRequest = {
+    return requestAutomationDispatch(
+      {
+        store: this.store,
+        runs: this.runs,
+        isActive: () => !this.stopped && generation === this.dispatchGeneration,
+        getRenderer: () => (this.canDispatchToRenderer() ? this.webContents : null),
+        headlessDispatcher: this.headlessDispatcher,
+        resolveTarget: (current) => this.resolveTarget(current),
+        runPrecheck: () => this.runPrecheck(automation.id, run.id),
+        markDispatchResult: (result) => this.markDispatchResult(result),
+        watchRun: (dispatched) => this.completionWatcher?.watch(dispatched)
+      },
       automation,
-      run: updated,
-      dispatchToken: createAutomationDispatchToken(automation.id, updated.id)
-    }
-    this.webContents?.send('automations:dispatchRequested', payload)
-    return updated
+      run,
+      target
+    )
   }
 }

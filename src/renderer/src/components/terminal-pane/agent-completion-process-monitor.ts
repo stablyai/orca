@@ -18,7 +18,6 @@ export function createAgentCompletionProcessMonitor({
   establishAgentEvidence,
   clearAgentRunEvidence,
   hasPendingHookDone,
-  hasPendingCodexAttention,
   dispatchCompletion
 }: ProcessMonitorOptions) {
   const remoteInspection: RemoteInspectionState = {
@@ -47,7 +46,7 @@ export function createAgentCompletionProcessMonitor({
     createAgentCompletionPollScheduler({ options, state, pendingTitle, requestInspection })
 
   function handleRecognizedProcess(process: RecognizedAgentProcess): void {
-    state.pendingProcessExitAgent = null
+    state.pendingProcessExit = null
     const replayIdentity = identityScope.getLast()
     if (
       !state.lastForegroundAgent &&
@@ -101,14 +100,25 @@ export function createAgentCompletionProcessMonitor({
     enqueueAgentProcessInspection({
       priority,
       canRun: () => !state.disposed,
+      // Local reads all resolve out of one process-table capture; remote ones each cost their
+      // own execution-host round trip and stay admitted one at a time.
+      sharesHostObservation: options.isRemotePtyId?.(ptyId) !== true,
       run: async () => {
         let inspectedRecognizedAgent = false
         let inspectionSucceeded = false
         try {
-          const result = await (expectedIncarnationIdAtRequest
-            ? options.inspectProcess(options.getSettings(), ptyId, {
-                expectedIncarnationId: expectedIncarnationIdAtRequest
-              })
+          // Only a cadence tick on a local pane reads nothing but the name; every other read
+          // (pending-title, remote) needs the full capture and must not ask for the cheap one.
+          const inspectOptions = {
+            ...(expectedIncarnationIdAtRequest
+              ? { expectedIncarnationId: expectedIncarnationIdAtRequest }
+              : {}),
+            ...(priority === 'cadence' && options.isRemotePtyId?.(ptyId) !== true
+              ? { steadyState: true }
+              : {})
+          }
+          const result = await (Object.keys(inspectOptions).length > 0
+            ? options.inspectProcess(options.getSettings(), ptyId, inspectOptions)
             : options.inspectProcess(options.getSettings(), ptyId))
           if (
             !state.disposed &&
@@ -128,7 +138,6 @@ export function createAgentCompletionProcessMonitor({
                 identityScope,
                 clearAgentRunEvidence,
                 hasPendingHookDone,
-                hasPendingCodexAttention,
                 scheduleNextPoll,
                 handleRecognizedProcess,
                 dispatchCompletion,
@@ -138,7 +147,7 @@ export function createAgentCompletionProcessMonitor({
             inspectionSucceeded = true
           }
         } catch {
-          state.pendingProcessExitAgent = null
+          state.pendingProcessExit = null
           state.consecutiveInspectionErrors += 1
         } finally {
           state.inspectionInFlight = false

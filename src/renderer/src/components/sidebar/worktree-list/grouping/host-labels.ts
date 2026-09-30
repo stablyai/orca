@@ -153,17 +153,17 @@ export function getHostWorktreeCounts(
   if (worktrees.length === 0) {
     return undefined
   }
-  const counts = new Map<ExecutionHostId, number>()
+  // Derived from the id map rather than repeating its dedupe walk: every caller asks for both,
+  // and a host's count is exactly the length of its id list by construction.
   // Dedup by host, not by bare id: the same id on two hosts is two workspaces
   // and has to be counted under each of them (STA-4343).
-  const seenIdentities = new Set<string>()
-  for (const worktree of worktrees) {
-    if (seenIdentities.has(getWorktreeHostIdentity(worktree))) {
-      continue
-    }
-    seenIdentities.add(getWorktreeHostIdentity(worktree))
-    const hostId = getWorktreeExecutionHostId(worktree, repoMap.get(worktree.repoId), defaultHostId)
-    counts.set(hostId, (counts.get(hostId) ?? 0) + 1)
+  const idsByHost = getHostWorktreeIds(worktrees, repoMap, defaultHostId)
+  if (!idsByHost) {
+    return undefined
+  }
+  const counts = new Map<ExecutionHostId, number>()
+  for (const [hostId, ids] of idsByHost) {
+    counts.set(hostId, ids.length)
   }
   return counts
 }
@@ -179,10 +179,12 @@ export function getHostWorktreeIds(
   const idsByHost = new Map<ExecutionHostId, string[]>()
   const seenIdentities = new Set<string>()
   for (const worktree of worktrees) {
-    if (seenIdentities.has(getWorktreeHostIdentity(worktree))) {
+    // Hoisted: the identity string was built twice per row, once to test and once to record.
+    const identity = getWorktreeHostIdentity(worktree)
+    if (seenIdentities.has(identity)) {
       continue
     }
-    seenIdentities.add(getWorktreeHostIdentity(worktree))
+    seenIdentities.add(identity)
     const hostId = getWorktreeExecutionHostId(worktree, repoMap.get(worktree.repoId), defaultHostId)
     const ids = idsByHost.get(hostId) ?? []
     ids.push(worktree.id)

@@ -4,7 +4,11 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
 
-import { getProviderDisplayName } from './usage-error-copy'
+import {
+  getProviderDisplayName,
+  getProviderUsageErrorMessage,
+  getProviderUsageStatusLabel
+} from './usage-error-copy'
 
 describe('getProviderDisplayName', () => {
   it('returns the Antigravity brand name', () => {
@@ -28,5 +32,27 @@ describe('getProviderDisplayName', () => {
     // Why: provider id is a closed union, but TypeScript may not enforce
     // exhaustiveness on dynamic callers. Fallback keeps logging safe.
     expect(getProviderDisplayName('unknown-provider' as never)).toBe('unknown-provider')
+  })
+})
+
+describe('unsubscribed OpenCode Go accounts', () => {
+  const noSubscription = {
+    provider: 'opencode-go',
+    session: null,
+    weekly: null,
+    monthly: null,
+    updatedAt: 0,
+    error:
+      'This OpenCode account has no OpenCode Go subscription. Subscribe at opencode.ai to see Go usage.',
+    status: 'error',
+    usageMetadata: { failureKind: 'no-subscription' }
+  } as const
+
+  it('labels the entitlement verdict instead of a refresh failure', () => {
+    expect(getProviderUsageStatusLabel(noSubscription)).toBe('No subscription')
+  })
+
+  it('keeps the specific message rather than the generic auth copy', () => {
+    expect(getProviderUsageErrorMessage(noSubscription)).toBe(noSubscription.error)
   })
 })

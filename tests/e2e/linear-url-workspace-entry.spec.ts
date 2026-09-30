@@ -1,3 +1,4 @@
+import { openSidebarWorkspaceComposer } from './helpers/sidebar-project-dialog'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
@@ -22,6 +23,14 @@ const LINEAR_ISSUE: LinearIssue = {
   priority: 2,
   estimate: null,
   updatedAt: '2026-08-12T00:00:00.000Z'
+}
+
+declare global {
+  // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
+  interface Window {
+    // Set by the fixture below while a Linear lookup is deliberately held open.
+    __orcaTestReleaseLinearLookup?: () => void
+  }
 }
 
 function pasteChord(): string {
@@ -85,7 +94,7 @@ async function installLinearFixture(
 
 async function releaseHeldLinearLookup(page: Page): Promise<void> {
   await page.evaluate(() => {
-    const release = Reflect.get(window, '__orcaTestReleaseLinearLookup')
+    const release = window.__orcaTestReleaseLinearLookup
     if (typeof release !== 'function') {
       throw new Error('Linear lookup is not held')
     }
@@ -96,6 +105,10 @@ async function releaseHeldLinearLookup(page: Page): Promise<void> {
 
 async function pasteLinearUrl(page: Page, input: ReturnType<Page['locator']>): Promise<void> {
   await page.evaluate((text) => window.api.ui.writeClipboardText(text), LINEAR_URL)
+  // X selection ownership is async; pasting before it lands delivers stale text.
+  await expect
+    .poll(() => page.evaluate(() => window.api.ui.readClipboardText()), { timeout: 5_000 })
+    .toBe(LINEAR_URL)
   await input.focus()
   await page.keyboard.press(pasteChord())
 }
@@ -118,7 +131,7 @@ test.describe('Linear URL workspace entry', () => {
     orcaPage
   }, testInfo) => {
     await installLinearFixture(orcaPage, LINEAR_ISSUE, null)
-    await orcaPage.getByRole('button', { name: 'New workspace', exact: true }).click()
+    await openSidebarWorkspaceComposer(orcaPage)
     const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
     const input = dialog.locator('[data-workspace-name-input="true"]')
     await expect(input).toBeVisible()
@@ -126,9 +139,7 @@ test.describe('Linear URL workspace entry', () => {
     await pasteLinearUrl(orcaPage, input)
     await expect
       .poll(() =>
-        orcaPage.evaluate(
-          () => typeof Reflect.get(window, '__orcaTestReleaseLinearLookup') === 'function'
-        )
+        orcaPage.evaluate(() => typeof window.__orcaTestReleaseLinearLookup === 'function')
       )
       .toBe(true)
     await input.press('Enter')
@@ -168,7 +179,7 @@ test.describe('Linear URL workspace entry', () => {
     orcaPage
   }) => {
     await installLinearFixture(orcaPage, null)
-    await orcaPage.getByRole('button', { name: 'New workspace', exact: true }).click()
+    await openSidebarWorkspaceComposer(orcaPage)
     const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
     const input = dialog.locator('[data-workspace-name-input="true"]')
 

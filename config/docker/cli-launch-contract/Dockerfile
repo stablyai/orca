@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=ubuntu:24.04
+ARG BASE_IMAGE=ubuntu@sha256:4fbb8e6a8395de5a7550b33509421a2bafbc0aab6c06ba2cef9ebffbc7092d90
 FROM ${BASE_IMAGE}
 
 ARG LIBASOUND_PACKAGE=libasound2t64
@@ -6,8 +6,13 @@ ARG LIBASOUND_PACKAGE=libasound2t64
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install Electron's link-time libraries without adding a display server or FUSE.
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends \
+# Why: archive.ubuntu.com mid-sync returns Hash Sum mismatch / wrong-size indexes and stalls per-package fetches; retry with bounded timeouts and drop half-synced lists between attempts.
+RUN for attempt in 1 2 3 4 5; do \
+      apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 update && break; \
+      if [ "$attempt" = 5 ]; then exit 100; fi; \
+      rm -rf /var/lib/apt/lists/*; sleep 20; \
+    done \
+  && apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 install -y --no-install-recommends \
     bash \
     ca-certificates \
     coreutils \

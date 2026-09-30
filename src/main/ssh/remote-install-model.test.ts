@@ -1,4 +1,11 @@
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { ORCAD_RIPGREP_ARTIFACTS } from '../../shared/orcad-artifacts'
+import { probeRemoteInstallCompleteCommand } from './ssh-remote-commands'
+import { getRemoteHostPlatform } from './ssh-remote-platform'
 
 import {
   inventoryRemoteInstallDirs,
@@ -14,10 +21,52 @@ import {
 const RELAY_DIRS = ['relay-0.1.0+abcdef123456', 'relay-v0.1.0', 'relay-1.2.3']
 const ORCAD_DIRS = ['orcad-0.1.0+abcdef123456', 'orcad-v0.1.0', 'orcad-1.2.3']
 
+it.each([false, true])(
+  'requires the executable and both profile workers on Windows=%s',
+  (isWindows) => {
+    const artifacts = ORCAD_INSTALL_MODEL.requiredArtifacts(isWindows)
+    expect(artifacts).toContain(isWindows ? 'bun-runtime.exe' : 'bun-runtime')
+    expect(artifacts).not.toContain(isWindows ? 'bun-runtime' : 'bun-runtime.exe')
+    expect(artifacts).toContain('profile-state-writer-worker-entry.js')
+    expect(artifacts).toContain('profile-state-backup-worker-entry.js')
+    expect(artifacts.includes('windows-process-tree.node')).toBe(isWindows)
+  }
+)
+
 describe('remote install namespace', () => {
   it('names each model its own version dir', () => {
     expect(remoteInstallDirName(RELAY_INSTALL_MODEL, '0.1.0+aa')).toBe('relay-0.1.0+aa')
     expect(remoteInstallDirName(ORCAD_INSTALL_MODEL, '0.1.0+aa')).toBe('orcad-0.1.0+aa')
+  })
+
+  it('requires every shipped search binary in a completed standalone runtime install', () => {
+    const required = ORCAD_INSTALL_MODEL.requiredArtifacts(false)
+    expect(required).toEqual(expect.arrayContaining([...ORCAD_RIPGREP_ARTIFACTS]))
+    expect(ORCAD_INSTALL_MODEL.requiredArtifacts(true)).toEqual(
+      expect.arrayContaining([...ORCAD_RIPGREP_ARTIFACTS])
+    )
+  })
+
+  it.skipIf(process.platform === 'win32')('rejects an install missing its search binary', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orcad-remote-probe-'))
+    try {
+      const required = [...ORCAD_INSTALL_MODEL.requiredArtifacts(false), '.install-complete']
+      for (const filename of required) {
+        const path = join(dir, filename)
+        mkdirSync(dirname(path), { recursive: true })
+        writeFileSync(path, '')
+      }
+      const command = probeRemoteInstallCompleteCommand(
+        getRemoteHostPlatform('linux-x64'),
+        dir,
+        required
+      )
+      expect(execFileSync('sh', ['-c', command], { encoding: 'utf8' }).trim()).toBe('OK')
+      rmSync(join(dir, ORCAD_RIPGREP_ARTIFACTS[0]))
+      expect(execFileSync('sh', ['-c', command], { encoding: 'utf8' }).trim()).toBe('MISSING')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   it('keeps the relay listing pattern byte-identical to the one it shipped with', () => {

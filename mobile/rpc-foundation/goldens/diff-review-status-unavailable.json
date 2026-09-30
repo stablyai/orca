@@ -1,0 +1,91 @@
+{
+  "operation": "session.diff-review-load",
+  "family": "session.diff-review",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "1cae30b028e6b967575d65f18e8a0e868583e993",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
+  "adapterSha256": "a8016eb61915cf80a3bdeb622ee67d35be8b4b9862a75e4ef2e8f4ff8e93e7f2",
+  "scenarioSha256": "182f37fbe6ae7c0694b50d603ecd4a03bc9a8c7c9738ebb775b47eb5f3b9660f",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "14804a5e414f": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "kind": "unavailable",
+        "message": "Update Orca desktop to review changes on mobile."
+      }
+    },
+    "168d1f64ca9b": {
+      "name": "git.status#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
+    },
+    "45d1ea7c0b42": {
+      "name": "git.status#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "55c07df45014": {
+      "branchCompare": "unloaded",
+      "diff": "unloaded",
+      "snapshot": {
+        "kind": "unavailable",
+        "message": "Update Orca desktop to review changes on mobile."
+      }
+    }
+  },
+  "recording": {
+    "scenario": "diff-review-status-unavailable",
+    "checkpoints": [
+      {
+        "id": "unavailable",
+        "observation": {
+          "sender": ["45d1ea7c0b42"],
+          "payloads": ["168d1f64ca9b"],
+          "settlements": {
+            "unavailable": "14804a5e414f"
+          },
+          "state": "55c07df45014",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

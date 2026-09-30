@@ -108,13 +108,6 @@ export function shellPathSupportsPtyStartupBarrier(shellPath: string): boolean {
   return shellName === 'zsh' || shellName === 'bash' || shellName === 'fish'
 }
 
-export function supportsPtyStartupBarrier(env: Record<string, string>): boolean {
-  if (process.platform === 'win32') {
-    return false
-  }
-  return shellPathSupportsPtyStartupBarrier(resolvePtyShellPath(env))
-}
-
 export type ShellLaunchConfig = {
   args: string[] | null
   env: Record<string, string>
@@ -133,7 +126,8 @@ const UNWRAPPED: ShellLaunchConfig = {
  */
 export function getShellLaunchConfig(
   shellPath: string,
-  features: readonly ShellStartupFeature[]
+  features: readonly ShellStartupFeature[],
+  options: { hasStartupCommand?: boolean } = {}
 ): ShellLaunchConfig {
   const shellName = pathWin32.basename(basename(shellPath)).toLowerCase()
 
@@ -184,17 +178,18 @@ export function getShellLaunchConfig(
     }
   }
 
-  // Why: mirrors local-pty-shell-ready.ts; markerless fish stays unwrapped. The
-  // selection is baked into the init command, so fish needs no feature env var.
-  if (shellName === 'fish' && features.includes('ready')) {
+  // Why: mirrors local-pty-shell-ready.ts; markerless fish stays unwrapped unless a
+  // startup command (e.g. Orca's Codex launch) needs the codex wrapper. The selection
+  // is baked into the init command, so fish needs no feature env var.
+  if (shellName === 'fish' && (features.includes('ready') || options.hasStartupCommand)) {
     return {
       args: [
         '-l',
         '-C',
-        `${getFishShellReadyInitCommand(SHELL_READY_MARKER)}\n${getFishCodexShellLaunchPreflight()}`
+        `${getFishShellReadyInitCommand(SHELL_READY_MARKER, features.includes('ready'))}\n${getFishCodexShellLaunchPreflight()}`
       ],
       env: {},
-      supportsReadyMarker: true
+      supportsReadyMarker: features.includes('ready')
     }
   }
 

@@ -1,6 +1,9 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { RESET_AFTER_BYTE_GAP } from '../../../../shared/terminal-mode-reset-profiles'
+import {
+  buildKittyKeyboardRestore,
+  RESET_AFTER_BYTE_GAP
+} from '../../../../shared/terminal-mode-reset-profiles'
 import { flushAsyncTicks, createDeferred } from './pty-connection-test-async'
 import { NORMAL_BUFFER_PROLOGUE } from './pty-connection-test-constants'
 import {
@@ -17,6 +20,9 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+
+// An abandon re-asserts the (known-zero) mirror's kitty flags after grounding the gap.
+const ABANDONED_RESTORE_GAP = `${RESET_AFTER_BYTE_GAP}${buildKittyKeyboardRestore(0)}`
 
 const {
   resetAndRefreshAllTerminalWebglAtlases,
@@ -206,10 +212,10 @@ describe('connectPanePty', () => {
     const warningIndex = written.findIndex((data) => data.includes('main recovery was unavailable'))
     const combinedLiveIndex = written.indexOf(firstLive + secondLive)
     expect(warningIndex).toBeGreaterThanOrEqual(0)
-    expect(written[warningIndex - 1]).toBe(RESET_AFTER_BYTE_GAP)
+    expect(written[warningIndex - 1]).toBe(ABANDONED_RESTORE_GAP)
     // Exactly one: writeRestoreUnavailableWarning already grounds the gap, so a
     // second unconditional write here was pure duplication.
-    expect(written.filter((data) => data === RESET_AFTER_BYTE_GAP)).toHaveLength(1)
+    expect(written.filter((data) => data === ABANDONED_RESTORE_GAP)).toHaveLength(1)
     expect(combinedLiveIndex).toBeGreaterThan(warningIndex)
 
     snapshot.resolve({
@@ -276,7 +282,7 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(10)
 
     const written = pane.terminal.write.mock.calls.map(([data]) => data as string)
-    const resetIndex = written.indexOf(RESET_AFTER_BYTE_GAP)
+    const resetIndex = written.indexOf(ABANDONED_RESTORE_GAP)
     const liveIndex = written.findIndex((data) => data.includes('live-after-reveal'))
     expect(resetIndex).toBeGreaterThanOrEqual(0)
     expect(liveIndex).toBeGreaterThanOrEqual(0)
@@ -319,13 +325,13 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(10)
 
     const written = pane.terminal.write.mock.calls.map(([data]) => data as string)
-    const resetIndex = written.indexOf(RESET_AFTER_BYTE_GAP)
+    const resetIndex = written.indexOf(ABANDONED_RESTORE_GAP)
     const liveIndex = written.indexOf(live)
     expect(resetIndex).toBeGreaterThanOrEqual(0)
     expect(liveIndex).toBeGreaterThan(resetIndex)
     // The re-arm arm grounds in rearmRemoteHiddenOutputRestoreInsteadOfWarning,
     // so the abandon body must not ground a second time.
-    expect(written.filter((data) => data === RESET_AFTER_BYTE_GAP)).toHaveLength(1)
+    expect(written.filter((data) => data === ABANDONED_RESTORE_GAP)).toHaveLength(1)
     expect(written.join('')).not.toContain('main recovery was unavailable')
 
     disposable.dispose()
@@ -383,8 +389,8 @@ describe('connectPanePty', () => {
     expect(liveIndex).toBeGreaterThan(warningIndex)
     // This arm gives up on recovery too, so the gap is grounded exactly once
     // before the blocked foreground is drained under it.
-    expect(written.filter((data) => data === RESET_AFTER_BYTE_GAP)).toHaveLength(1)
-    expect(written.indexOf(RESET_AFTER_BYTE_GAP)).toBeLessThan(liveIndex)
+    expect(written.filter((data) => data === ABANDONED_RESTORE_GAP)).toHaveLength(1)
+    expect(written.indexOf(ABANDONED_RESTORE_GAP)).toBeLessThan(liveIndex)
     disposable.dispose()
   })
 

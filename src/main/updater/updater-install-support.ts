@@ -10,7 +10,7 @@ import { disarmUpdateInstallExitWatchdog } from '../update-install-exit-watchdog
 import { resetMacInstallState } from '../updater-mac-install'
 import type { LinuxPackageInstallRecovery, UpdateStatus } from '../../shared/update-status-types'
 import { compareVersions } from '../updater-fallback'
-import { PRE_QUIT_CLEANUP_TIMEOUT_MS } from './updater-state'
+import { PRE_QUIT_CLEANUP_TIMEOUT_MS, REQUIRED_PRE_QUIT_CLEANUP_TIMEOUT_MS } from './updater-state'
 import { UpdaterCheckState } from './updater-check-state'
 
 export abstract class UpdaterInstallSupport extends UpdaterCheckState {
@@ -137,6 +137,10 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
       return
     }
 
+    const timeoutMs =
+      this.onBeforeQuitFailure === 'abort'
+        ? REQUIRED_PRE_QUIT_CLEANUP_TIMEOUT_MS
+        : PRE_QUIT_CLEANUP_TIMEOUT_MS
     let timeout: ReturnType<typeof setTimeout> | null = null
     const cleanup = Promise.resolve()
       .then(() => this.onBeforeQuitCleanup?.())
@@ -146,29 +150,42 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
           { errorType: error instanceof Error ? error.name : typeof error },
           {
             level: 'warn',
-            message: 'Pre-quit cleanup failed; continuing update install'
+            message:
+              this.onBeforeQuitFailure === 'abort'
+                ? 'Pre-quit cleanup failed; aborting update install'
+                : 'Pre-quit cleanup failed; continuing update install'
           }
         )
+        if (this.onBeforeQuitFailure === 'abort') {
+          throw error
+        }
       })
     const timeoutResult = new Promise<'timeout'>((resolve) => {
-      timeout = setTimeout(() => resolve('timeout'), PRE_QUIT_CLEANUP_TIMEOUT_MS)
+      timeout = setTimeout(() => resolve('timeout'), timeoutMs)
     })
 
-    const result = await Promise.race([cleanup.then(() => 'done' as const), timeoutResult])
-    if (result === 'timeout') {
-      recordUpdaterLifecycle(
-        'pre_quit_cleanup_timeout',
-        { timeoutMs: PRE_QUIT_CLEANUP_TIMEOUT_MS },
-        {
-          level: 'warn',
-          message: `Pre-quit cleanup exceeded ${PRE_QUIT_CLEANUP_TIMEOUT_MS}ms; continuing update install`
+    try {
+      const result = await Promise.race([cleanup.then(() => 'done' as const), timeoutResult])
+      if (result === 'timeout') {
+        recordUpdaterLifecycle(
+          'pre_quit_cleanup_timeout',
+          { timeoutMs },
+          {
+            level: 'warn',
+            message:
+              this.onBeforeQuitFailure === 'abort'
+                ? `Pre-quit cleanup exceeded ${timeoutMs}ms; aborting update install`
+                : `Pre-quit cleanup exceeded ${timeoutMs}ms; continuing update install`
+          }
+        )
+        if (this.onBeforeQuitFailure === 'abort') {
+          throw new Error(`Pre-quit cleanup exceeded ${timeoutMs}ms before update install`)
         }
-      )
-      return
-    }
-
-    if (timeout) {
-      clearTimeout(timeout)
+      }
+    } finally {
+      if (timeout) {
+        clearTimeout(timeout)
+      }
     }
   }
 

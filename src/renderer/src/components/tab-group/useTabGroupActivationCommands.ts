@@ -52,7 +52,7 @@ export function useTabGroupActivationCommands({
         })
       }
       setActiveTab(terminalId)
-      setActiveTabType('terminal')
+      setActiveTabType('terminal', worktreeId)
       const activeLeafId = worktreeState.terminalLayoutsByTabId[terminalId]?.activeLeafId ?? null
       // Why: restore xterm focus to the store-active leaf so keyboard input can't drift to a sibling pane.
       focusTerminalTabSurface(terminalId, activeLeafId)
@@ -99,11 +99,11 @@ export function useTabGroupActivationCommands({
       focusGroup(worktreeId, groupId)
       activateTab(item.id)
       if (item.contentType === 'simulator') {
-        setActiveTabType('simulator')
+        setActiveTabType('simulator', worktreeId)
         // simulator has no editor file entity
       } else {
         setActiveFile(item.entityId)
-        setActiveTabType('editor')
+        setActiveTabType('editor', worktreeId)
       }
     },
     [activateTab, focusGroup, groupId, groupTabs, setActiveFile, setActiveTabType, worktreeId]
@@ -134,7 +134,7 @@ export function useTabGroupActivationCommands({
         })
       }
       setActiveBrowserTab(browserTabId)
-      setActiveTabType('browser')
+      setActiveTabType('browser', worktreeId)
     },
     [activateTab, focusGroup, groupId, groupTabs, setActiveBrowserTab, setActiveTabType, worktreeId]
   )

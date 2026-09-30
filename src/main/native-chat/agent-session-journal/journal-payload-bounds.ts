@@ -1,11 +1,9 @@
 // Payload bounds for tool output and diffs.
 //
-// A looping agent must not be able to fill the host disk, and a 40 MB tool
-// result must not be inlined into a row that every reconnecting client
-// replays. A bounded payload keeps a head plus the original byte length and
-// digest; the remainder lives in the content-addressed blob store under the
-// same retention as its epoch. Crossing a bound is always marked — never a
-// silent drop.
+// A 40 MB tool result must not be inlined into a row that every reconnecting
+// client replays. A bounded payload keeps a head plus the original byte length
+// and digest; the remainder is discarded. Crossing a bound is always marked —
+// never a silent drop.
 
 import { createHash } from 'node:crypto'
 import type { AgentJournalBoundedPayload } from '../../../shared/agent-session-journal-types'
@@ -13,18 +11,10 @@ import type { AgentJournalBoundedPayload } from '../../../shared/agent-session-j
 export type JournalPayloadLimits = {
   /** Bytes of the payload kept inline on the row. */
   inlineHeadBytes: number
-  /** Total bytes of journal rows one session may hold before appends are refused. */
-  maxSessionBytes: number
-  /** Appends allowed inside `appendWindowMs`, bounding a runaway agent's rate. */
-  maxAppendsPerWindow: number
-  appendWindowMs: number
 }
 
 export const DEFAULT_JOURNAL_PAYLOAD_LIMITS: JournalPayloadLimits = {
-  inlineHeadBytes: 16 * 1024,
-  maxSessionBytes: 256 * 1024 * 1024,
-  maxAppendsPerWindow: 5000,
-  appendWindowMs: 60_000
+  inlineHeadBytes: 16 * 1024
 }
 
 /** Marker appended to a clipped inline string so the UI never presents a
@@ -38,10 +28,8 @@ export function digestPayload(payload: string): string {
   return createHash('sha256').update(payload, 'utf8').digest('hex')
 }
 
-/**
- * Clip `payload` to the inline head. `truncated` means the remainder must be
- * written to the blob store under `digest` before the row is appended.
- */
+/** Clip `payload` to the inline head. `truncated` means the remainder was
+ *  discarded; `digest` and `byteLength` describe the original. */
 export function boundPayload(
   payload: string,
   limits: JournalPayloadLimits
@@ -60,7 +48,7 @@ export function boundPayload(
 }
 
 /** Bound a plain string that must stay a string (a tool-result block's output),
- *  keeping the explicit marker inline. Returns the blob payload to persist. */
+ *  keeping the explicit marker inline. */
 export function boundInlineText(
   payload: string,
   limits: JournalPayloadLimits
@@ -75,7 +63,7 @@ export function boundInlineText(
   }
 }
 
-/** Keep arbitrary tool input JSON bounded before lifecycle admission. */
+/** Keep arbitrary tool input JSON bounded before it reaches a row. */
 export function boundToolInput(input: unknown, limits: JournalPayloadLimits): unknown {
   let encoded: string
   try {

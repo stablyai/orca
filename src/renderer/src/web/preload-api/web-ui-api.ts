@@ -1,3 +1,4 @@
+import { createWebExplorerRootSync } from './web-explorer-root-sync'
 import type { PreloadApi } from '../../../../preload/api-types'
 import { assertClipboardTextWithinLimitWithYield } from '../../../../shared/clipboard-text'
 import type { ReadClipboardTextOptions } from '../../../../shared/clipboard-text'
@@ -23,12 +24,30 @@ import { callRuntimeResult } from './web-runtime-calls'
 import { requireActiveEnvironmentOrNull } from './web-runtime-session'
 import { UI_STORAGE_KEY, noopUnsubscribe, writeJson } from './web-storage'
 
+/** Combines browser-local preferences with host persistence; acknowledged writes remain distinct from best-effort writes. */
 export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
+  const explorerRoots = createWebExplorerRootSync()
+  /** Captures the target host and strips browser-local or unsupported fields before sending a UI update. */
+  const prepareHostUpdates = (updates: Parameters<PreloadApi['ui']['set']>[0]) => {
+    const environmentId = requireActiveEnvironmentOrNull()?.id
+    const hostUpdates = omitPairingLocalUiFields(updates)
+    explorerRoots.prepare(environmentId, hostUpdates)
+    return { environmentId, hostUpdates }
+  }
   let zoomLevel = readLocalWebUIState().uiZoomLevel
   return {
+    /** Hydrates from the active host after replaying pending roots, falling back to local state on failure or host changes. */
     get: async () => {
       try {
+        const environmentId = requireActiveEnvironmentOrNull()?.id
         const result = await callRuntimeResult<{ ui: PairedUiState }>('ui.get', undefined, 15_000)
+        if (environmentId !== requireActiveEnvironmentOrNull()?.id) {
+          return readLocalWebUIState()
+        }
+        await explorerRoots.read(environmentId, result.ui)
+        if (environmentId !== requireActiveEnvironmentOrNull()?.id) {
+          return readLocalWebUIState()
+        }
         const local = readLocalWebUIState()
         const next = {
           ...mergeHostWebUIState(local, result.ui),
@@ -49,28 +68,35 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
         return readLocalWebUIState()
       }
     },
+    /** Persists locally first and attempts the host write without propagating offline failures to fire-and-forget callers. */
     set: async (updates) => {
       const next = mergeWebUIState(readLocalWebUIState(), updates)
       writeJson(UI_STORAGE_KEY, next)
       zoomLevel = next.uiZoomLevel
       // Why strip here too when the host also strips: an old host predating that strip would
       // otherwise persist this browser's runtime:web-* keys over the desktop profile's order.
-      const hostUpdates = omitPairingLocalUiFields(updates)
+      const { environmentId, hostUpdates } = prepareHostUpdates(updates)
       try {
         await callRuntimeResult('ui.set', hostUpdates, 15_000)
+        explorerRoots.acknowledge(environmentId, hostUpdates)
       } catch {
         // Why: unpaired/offline web clients still need local UI persistence.
       }
     },
-    // Why a separate entry point: set must stay best-effort for its many fire-and-forget
-    // callers, but the diff writer must NOT fold a patch the host never received into its
-    // baseline — that write would silently never be retried (STA-5781).
+    /** Rejects failed or stripped host updates so the diff writer cannot acknowledge preferences the host never received. */
     setWithAck: async (updates) => {
       const next = mergeWebUIState(readLocalWebUIState(), updates)
       writeJson(UI_STORAGE_KEY, next)
       zoomLevel = next.uiZoomLevel
-      const hostUpdates = omitPairingLocalUiFields(updates)
+      const { environmentId, hostUpdates } = prepareHostUpdates(updates)
       await callRuntimeResult('ui.set', hostUpdates, 15_000)
+      explorerRoots.acknowledge(environmentId, hostUpdates)
+      if (
+        updates.explorerDisplayRootByWorktree !== undefined &&
+        hostUpdates.explorerDisplayRootByWorktree === undefined
+      ) {
+        throw new Error('Explorer root preference is pending host support')
+      }
     },
     recordFeatureInteraction: async (id: FeatureInteractionId) => {
       const current = readLocalWebUIState()

@@ -4,18 +4,36 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
-import {
-  composeWorktreeHostIdentity,
-  getWorktreeHostIdentity
-} from '../../../shared/worktree/host-qualified-identity'
+import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../shared/worktree/types'
 import { isExecutionHostAliasForWorktree } from './worktree-execution-host-alias'
 
 type PaletteWorktreeIdentity = Pick<Worktree, 'hostId' | 'id' | 'runtimeOwnerEnvironmentId'>
 
+export function getPaletteWorktreeExecutionHostId(
+  worktree: PaletteWorktreeIdentity
+): ExecutionHostId | undefined {
+  const runtimeOwner = worktree.runtimeOwnerEnvironmentId?.trim()
+  return runtimeOwner ? toRuntimeExecutionHostId(runtimeOwner) : worktree.hostId
+}
+
+export function getPaletteWorktreeIdentity(worktree: PaletteWorktreeIdentity): string {
+  return composeWorktreeHostIdentity(getPaletteWorktreeExecutionHostId(worktree), worktree.id)
+}
+
 export type PaletteWorktreeIndex<T extends PaletteWorktreeIdentity = Worktree> = {
   byHostIdentity: ReadonlyMap<string, T>
   byBareId: ReadonlyMap<string, T>
+}
+
+export function dedupePaletteWorktrees<T extends PaletteWorktreeIdentity>(
+  worktrees: readonly T[]
+): T[] {
+  const byIdentity = new Map<string, T>()
+  for (const worktree of worktrees) {
+    byIdentity.set(getPaletteWorktreeIdentity(worktree), worktree)
+  }
+  return [...byIdentity.values()]
 }
 
 export function buildPaletteWorktreeIndex<T extends PaletteWorktreeIdentity>(
@@ -23,19 +41,21 @@ export function buildPaletteWorktreeIndex<T extends PaletteWorktreeIdentity>(
 ): PaletteWorktreeIndex<T> {
   const byHostIdentity = new Map<string, T>()
   const byBareId = new Map<string, T>()
+  const byPhysicalHostIdentity = new Map<string, T | null>()
   for (const worktree of worktrees) {
-    byHostIdentity.set(getWorktreeHostIdentity(worktree), worktree)
-    if (worktree.runtimeOwnerEnvironmentId) {
-      byHostIdentity.set(
-        composeWorktreeHostIdentity(
-          toRuntimeExecutionHostId(worktree.runtimeOwnerEnvironmentId),
-          worktree.id
-        ),
-        worktree
-      )
-    }
+    byHostIdentity.set(getPaletteWorktreeIdentity(worktree), worktree)
     if (!byBareId.has(worktree.id)) {
       byBareId.set(worktree.id, worktree)
+    }
+    const physicalIdentity = composeWorktreeHostIdentity(worktree.hostId, worktree.id)
+    byPhysicalHostIdentity.set(
+      physicalIdentity,
+      byPhysicalHostIdentity.has(physicalIdentity) ? null : worktree
+    )
+  }
+  for (const [physicalIdentity, worktree] of byPhysicalHostIdentity) {
+    if (worktree && !byHostIdentity.has(physicalIdentity)) {
+      byHostIdentity.set(physicalIdentity, worktree)
     }
   }
   return { byHostIdentity, byBareId }

@@ -273,6 +273,22 @@ describe('worktree scan admin-fingerprint gate', () => {
     }
   })
 
+  it('resolves a just-created id after invalidation even within both cache TTLs', async () => {
+    const { runtime, list } = makeRuntime()
+    listWorktreesStrictMock.mockResolvedValueOnce([
+      { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true }
+    ])
+    await list()
+    await expect(runtime.showManagedWorktree(`id:${WORKTREE_ID}`)).rejects.toThrow(
+      'selector_not_found'
+    )
+    runtime.invalidateWorktreeCatalog(REPO_ID)
+    await expect(runtime.showManagedWorktree(`id:${WORKTREE_ID}`)).resolves.toMatchObject({
+      id: WORKTREE_ID
+    })
+    expect(scanCount()).toBe(2)
+  })
+
   it('scans when the probe cannot describe the repo', async () => {
     vi.useFakeTimers()
     try {

@@ -44,6 +44,8 @@ export const ZH_VALUE_OVERRIDES = {
   'Loading labels': '加载标签',
   // Why: MT rendered the "Pin Tab" action as "引脚标签" (noun reading of "pin"); pair it with 取消固定标签.
   'Pin Tab': '固定标签',
+  // Why: MT read "Duplicate" as the adjective (重复); it is the action, and the menu is already on 选项卡.
+  'Duplicate Tab': '复制选项卡',
   Approved: '已批准',
   Strike: '删除线',
   Bold: '粗体',

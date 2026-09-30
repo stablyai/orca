@@ -6,6 +6,7 @@ import Database from '../sqlite/sync-database'
 import { buildOpenCodeSqliteCandidatePath } from './session-scanner-opencode-sqlite-paths'
 import { listOpenCodeSqliteSessions } from './session-scanner-opencode-sqlite-discovery'
 import { parseOpenCodeSqliteSession } from './session-scanner-opencode-sqlite'
+import { captureOpenCodeSqliteSession } from './session-scanner-opencode-sqlite-capture'
 import { withFullFirstUserPromptCapture } from './session-scanner-first-user-prompt-capture'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 
@@ -477,6 +478,20 @@ describe('parseOpenCodeSqliteSession', () => {
     expect(session!.messageCount).toBe(0)
     expect(session!.totalTokens).toBe(0)
     expect(session!.previewMessages).toEqual([])
+  })
+
+  // The preview may degrade to nothing, but the search index may not: an empty
+  // capture is committed under a complete-read cursor, so the session would stay
+  // unsearchable with nothing on its row to say why and no retry.
+  it('refuses to capture a transcript it cannot read the message parts of', async () => {
+    const { db, path } = createTempDb()
+    applyMinimalOpenCodeSchema(db)
+    db.prepare(`INSERT INTO session VALUES ('ses_minimal', 1777634000000, 1777634001000)`).run()
+    db.close()
+
+    await expect(
+      captureOpenCodeSqliteSession({ dbPath: path, sessionId: 'ses_minimal', platform: 'darwin' })
+    ).rejects.toThrow(/unreadable message-part schema/)
   })
 
   it('extracts model from older modelID schema', async () => {

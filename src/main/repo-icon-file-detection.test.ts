@@ -1,4 +1,6 @@
-import { readFile, stat } from 'node:fs/promises'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import type * as FsPromisesModule from 'node:fs/promises'
 import { describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostFilesystemRoute } from './providers/execution-host-provider-dispatch'
@@ -134,5 +136,57 @@ describe('detectRepoFileIcon connection boundary', () => {
     ).resolves.toBeNull()
 
     expect(stat).toHaveBeenCalled()
+  })
+})
+
+describe('declared repo icons through production filesystem routes', () => {
+  it.each([
+    ['local', false],
+    ['ssh', false],
+    ['local', true],
+    ['ssh', true]
+  ] as const)('preserves declared icon detection on %s (no icon: %s)', async (kind, noIcon) => {
+    const directory = await mkdtemp(join(tmpdir(), 'orca-icon-href-'))
+    const source = noIcon
+      ? 'a'.repeat(256 * 1024)
+      : `${'a'.repeat(32768)}{ rel: "icon", href: "/first.png", href: "/chosen.png" }`
+    try {
+      await mkdir(join(directory, 'public'))
+      await writeFile(join(directory, 'index.html'), source)
+      await writeFile(join(directory, 'public', 'chosen.png'), Buffer.from(PNG_BASE64, 'base64'))
+      const provider = remoteFilesystemProvider({
+        stat: async (path) => {
+          const info = await stat(path)
+          return {
+            type: info.isFile() ? 'file' : 'directory',
+            size: info.size,
+            mtime: info.mtimeMs
+          }
+        },
+        readFile: async (path) => {
+          const buffer = await readFile(path)
+          const isBinary = path.endsWith('.png')
+          return {
+            content: buffer.toString(isBinary ? 'base64' : 'utf8'),
+            isBinary,
+            mimeType: isBinary ? 'image/png' : 'text/html'
+          }
+        }
+      })
+      const route: ExecutionHostFilesystemRoute =
+        kind === 'local' ? { kind: 'local', hostId: 'local' } : sshRoute('icon-oracle', provider)
+      await expect(detectRepoFileIcon(directory, route)).resolves.toEqual(
+        noIcon
+          ? null
+          : {
+              type: 'image',
+              src: `data:image/png;base64,${PNG_BASE64}`,
+              source: 'file',
+              label: 'public/chosen.png'
+            }
+      )
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
   })
 })

@@ -130,7 +130,13 @@ describe('agent hook completion store sync', () => {
         notifications: { enabled: false, agentTaskComplete: false }
       }
     })
-    expect(shouldSyncAgentHookCompletionForStoreUpdate(trackingDisabled, previous)).toBe(true)
+    expect(shouldSyncAgentHookCompletionForStoreUpdate(trackingDisabled, previous)).toBe(false)
+    expect(
+      shouldSyncAgentHookCompletionForStoreUpdate(
+        createState({ ...previous, settings: null }),
+        previous
+      )
+    ).toBe(true)
   })
 
   it('treats tab order and duplicate-id worktree precedence as liveness inputs', () => {

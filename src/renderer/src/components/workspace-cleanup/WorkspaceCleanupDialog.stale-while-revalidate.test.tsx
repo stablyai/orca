@@ -120,8 +120,7 @@ function installApi(cachedScan: WorkspaceCleanupScanResult | null): ScanRig {
       scan: rig.scan,
       getCachedScan: vi.fn().mockResolvedValue(cachedScan),
       dismiss: vi.fn().mockResolvedValue(undefined),
-      clearDismissals: vi.fn().mockResolvedValue(undefined),
-      hasKillableLocalProcesses: vi.fn().mockResolvedValue({ hasKillableProcesses: false })
+      clearDismissals: vi.fn().mockResolvedValue(undefined)
     },
     workspaceSpace: {
       getCachedAnalysis: vi.fn().mockResolvedValue(null),

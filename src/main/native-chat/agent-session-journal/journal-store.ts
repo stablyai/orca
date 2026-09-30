@@ -1,5 +1,7 @@
-// Append-only journal store for one agent session.
+// Append-only journal store for one agent session. It owns the chat's fold and write queue, and no
+// connection: every statement goes through the host's one journal database.
 
+import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
 import { randomUUID } from 'node:crypto'
 import type {
   AgentJournalAcceptanceReceipt,
@@ -8,23 +10,32 @@ import type {
   AgentJournalItemIdentity,
   AgentJournalSnapshot,
   AgentJournalSubmission,
+  AgentJournalThreadGoal,
+  AgentJournalTurnLifecycle,
+  AgentJournalTurnScope,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { currentAgentSessionThreadGoalBySequence } from '../../../shared/agent-session-thread-goal'
+import type { AgentSessionContextUsage } from '../../../shared/agent-session-context-usage'
+import { latestStructuredAgentContextFacts } from '../../../shared/structured-agent-session-context-usage'
 import {
-  compactJournal,
-  DEFAULT_JOURNAL_COMPACTION_POLICY,
-  type JournalCompactionPolicy
-} from './journal-compaction'
+  activeStructuredAgentSessionTurnIdBySequence,
+  liveStructuredAgentSessionTurnScope,
+  newestStructuredAgentSessionTurnBySequence
+} from '../../../shared/structured-agent-session-live-turn'
 import type { JournalReplacementItem } from './journal-epoch-replacement'
 import { readJournalSince } from './journal-cursor'
-import type { JournalLoad } from './journal-open'
-import { DEFAULT_JOURNAL_PAYLOAD_LIMITS } from './journal-payload-bounds'
-import { markJournalPendingSubmissionsUnknown } from './journal-pending-submission-recovery'
+import type { JournalHostDatabase } from './journal-host-database'
+import { readJournalRowsAfterCursor, type JournalLoad } from './journal-open'
+import {
+  markJournalPendingSubmissionsUnknown,
+  rejectJournalPendingSubmissions,
+  rejectJournalQueuedSubmissions
+} from './journal-pending-submission-recovery'
 import {
   applyJournalRow,
   createJournalReducerState,
-  referencedBlobDigests,
   renderJournalState,
   resolveJournalItemId,
   type JournalReducerState
@@ -37,121 +48,95 @@ import {
 import type {
   AgentSessionJournalOptions,
   JournalAppendResult,
-  JournalBlobInput,
   JournalItemAppendOptions,
   JournalLifecycleBatchInput,
   JournalReadSince,
+  JournalSubmissionConsume,
   JournalSubmissionInput,
   JournalTombstoneInput,
   ResolveDispatchInput
 } from './journal-store-contracts'
-import type { AgentJournalEpochReason, JournalRow } from './journal-row-schema'
-import { assertJournalWritable, JournalAppendBudget } from './journal-write-guards'
-import { journalDirectoryBytes } from './journal-physical-quota'
-import type { JournalLifecycleReservation } from './journal-lifecycle-capacity'
-import { JournalLifecycleAdmission } from './journal-lifecycle-admission'
-import { JournalRowWriter } from './journal-row-writer'
-import { JournalEpochController } from './journal-epoch-controller'
-import { journalStoreLoadedFields, openJournalStoreState } from './journal-store-open'
-import { JournalItemAppender } from './journal-item-appender'
-import { JournalLifecycleBatchAppender } from './journal-lifecycle-batch-appender'
+import { queuedMessageConsumeHook, type JournalQueuedMessages } from './journal-queued-messages'
+import type { AgentJournalEpochReason } from './journal-row-schema'
+import type { JournalRowWriter } from './journal-row-writer'
+import type { JournalEpochController } from './journal-epoch-controller'
+import { JournalWriteQueue } from './journal-write-queue'
+import { createJournalStoreCollaborators } from './journal-store-collaborators'
+import { journalStoreLoadedFields } from './journal-store-open'
+import type { JournalItemAppender } from './journal-item-appender'
+import type { JournalLifecycleBatchAppender } from './journal-lifecycle-batch-appender'
 
 export { AgentSessionJournalError } from './journal-write-guards'
 
 export class AgentSessionJournal {
   private readonly identity: AgentSessionJournalIdentity
-  private readonly journalDir: string
-  private readonly budget: JournalAppendBudget
-  private readonly compaction: JournalCompactionPolicy
-  private readonly autoCompact: boolean
+  private readonly database: JournalHostDatabase
   private readonly now: () => number
   private readonly mintEpoch: () => string
-  private readonly loaded: JournalLoad | null | undefined
 
   private state: JournalReducerState
-  private tailRows: JournalRow[] = []
-  private compactedThrough = 0
-  private sizeBytes = 0
   private readOnly = false
   private malformedRows = 0
-  private readonly lifecycleAdmission: JournalLifecycleAdmission
+  private openedCorrupt = false
+  private openedThrough: AgentJournalCursor = { epoch: '', sequence: 0 }
+  private onCommitted: (() => void) | null = null
+  private readonly queue: JournalWriteQueue
   private readonly rowWriter: JournalRowWriter
   private readonly epochController: JournalEpochController
   private readonly itemAppender: JournalItemAppender
   private readonly lifecycleBatchAppender: JournalLifecycleBatchAppender
-  /** Serializes sequence assignment with the durable write behind it. */
-  private writes: Promise<unknown> = Promise.resolve()
+  private readonly restore: () => Promise<void>
+  /** Draft rows queued while the agent works; never reducer input or owed work. */
+  readonly queuedMessages: JournalQueuedMessages
 
   constructor(options: AgentSessionJournalOptions) {
     this.identity = options.identity
-    this.journalDir = options.journalDir
-    this.budget = new JournalAppendBudget(
-      options.identity.sessionId,
-      options.limits ?? DEFAULT_JOURNAL_PAYLOAD_LIMITS
-    )
-    this.autoCompact = options.autoCompact ?? true
-    this.compaction = options.compaction ?? DEFAULT_JOURNAL_COMPACTION_POLICY
+    this.database = options.database
     this.now = options.now ?? (() => Date.now())
     this.mintEpoch = options.mintEpoch ?? randomUUID
-    this.loaded = options.loaded
     this.state = createJournalReducerState(options.identity.sessionId, '')
-    this.lifecycleAdmission = new JournalLifecycleAdmission(
-      options.identity.sessionId,
-      this.budget.maxSessionBytes,
-      (itemId) => resolveJournalItemId(this.state, itemId),
-      this.budget.maxAppendsPerWindow
-    )
-    this.rowWriter = new JournalRowWriter({
-      journalDir: this.journalDir,
-      sessionId: options.identity.sessionId,
-      budget: this.budget,
-      lifecycleAdmission: this.lifecycleAdmission,
-      autoCompact: this.autoCompact,
-      compaction: this.compaction,
-      now: this.now,
-      serialize: (run) => this.serializeWrite(run),
-      readOnly: () => this.readOnly,
-      setReadOnly: (readOnly) => {
-        this.readOnly = readOnly
-      },
-      physicalBytes: () => this.sizeBytes,
-      highestFence: () => this.state.highestFence,
-      nextSequence: () => this.state.lastSequence + 1,
-      tailRows: () => this.tailRows,
-      referencedBlobDigests: () => referencedBlobDigests(this.state),
-      compact: (now, policy) => this.compact(now, policy),
-      commit: (row, physicalBytes) => {
-        applyJournalRow(this.state, row)
-        this.tailRows.push(row)
-        this.sizeBytes = physicalBytes
-      }
-    })
-    this.epochController = new JournalEpochController({
+    // Serializes sequence assignment with the durable write behind it.
+    this.queue = new JournalWriteQueue(options.identity.sessionId)
+    const collaborators = createJournalStoreCollaborators({
       identity: this.identity,
-      journalDir: this.journalDir,
-      budget: this.budget,
-      compaction: this.compaction,
+      legacyDirectory: this.database.legacyDirectoryFor(this.identity),
       now: this.now,
       mintEpoch: this.mintEpoch,
-      serialize: (run) => this.serializeWrite(run),
+      serialize: (run) => this.queue.serialize(run),
+      deferPerSessionImport: options.deferPerSessionImport === true,
+      owe: (work) => this.queue.owe(work),
+      database: () => this.database,
+      state: () => this.state,
       readOnly: () => this.readOnly,
       setReadOnly: (readOnly) => {
         this.readOnly = readOnly
       },
-      highestFence: () => this.state.highestFence,
       cursor: this.cursor,
-      adopt: (loaded) => this.adoptLoadedJournal(loaded)
-    })
-    this.itemAppender = new JournalItemAppender({
+      adopt: (loaded) => {
+        this.adoptLoadedJournal(loaded)
+        this.onCommitted?.()
+      },
+      commit: (row) => {
+        applyJournalRow(this.state, row)
+        this.onCommitted?.()
+      },
+      setOpenedCorrupt: (corrupt) => {
+        this.openedCorrupt = corrupt
+      },
+      notifyCommitted: () => this.onCommitted?.(),
+      malformedRows: () => this.malformedRows,
+      setMalformedRows: (count) => {
+        this.malformedRows = count
+      },
       journal: () => this,
-      state: () => this.state,
-      enqueue: (build, blobs) => this.enqueue(build, blobs)
+      enqueue: (build) => this.rowWriter.enqueue(build)
     })
-    this.lifecycleBatchAppender = new JournalLifecycleBatchAppender({
-      state: () => this.state,
-      cursor: this.cursor,
-      enqueue: (build) => this.enqueue(build)
-    })
+    this.rowWriter = collaborators.rowWriter
+    this.epochController = collaborators.epochController
+    this.itemAppender = collaborators.itemAppender
+    this.lifecycleBatchAppender = collaborators.lifecycleBatchAppender
+    this.queuedMessages = collaborators.queuedMessages
+    this.restore = collaborators.restore
   }
 
   get isReadOnly(): boolean {
@@ -162,35 +147,55 @@ export class AgentSessionJournal {
     return this.state.epoch
   }
 
-  get directory(): string {
-    return this.journalDir
+  /** Whether a row at this sequence was on disk when this handle opened, so an earlier handle
+   *  wrote it. Sequences restart with each epoch, so a row of a later epoch never was. */
+  wroteBeforeOpen(sequence: number | undefined): boolean {
+    return (
+      sequence !== undefined &&
+      this.state.epoch === this.openedThrough.epoch &&
+      sequence <= this.openedThrough.sequence
+    )
   }
 
-  /** Highest sequence folded into the snapshot; rows at or below it are no
-   *  longer individually replayable. */
-  get compactionBoundary(): number {
-    return this.compactedThrough
+  /** What the last open's repair did. */
+  get repair(): { malformedRows: number } {
+    return { malformedRows: this.malformedRows }
+  }
+
+  /** The open replayed an unusable prefix: the chat is owed a rebuild from provider history. */
+  get needsRebuild(): boolean {
+    return this.openedCorrupt
   }
 
   async open(): Promise<void> {
-    await openJournalStoreState({
-      journalDir: this.journalDir,
-      sessionId: this.identity.sessionId,
-      maxBytes: this.budget.maxSessionBytes,
-      loaded: this.loaded,
-      start: () => this.epochController.start('session_created', 0),
-      adopt: (loaded) => this.adoptLoadedJournal(loaded),
-      tailRows: () => this.tailRows,
-      snapshot: this.snapshot,
-      rebuildLifecycle: (snapshot, bytes) => this.lifecycleAdmission.rebuild(snapshot, bytes),
-      appendDisclosure: (identity, body, fence) => this.appendItem(identity, body, { fence }),
-      highestFence: () => this.state.highestFence,
-      malformedRows: () => this.malformedRows,
-      readOnly: () => this.readOnly,
-      setPhysicalBytes: (bytes) => {
-        this.sizeBytes = bytes
-      }
-    })
+    await this.restore()
+    this.openedThrough = this.cursor()
+  }
+
+  /** Refuses every later write and resolves once the admitted ones have landed. Holds no
+   *  connection, so there is nothing to release and nothing that can fail. */
+  close(): Promise<void> {
+    this.queue.markClosed()
+    return this.queue.drain()
+  }
+
+  /** Told of every durable change, epoch replacements included, so a reader learns of a write
+   *  without its writer saying so. One listener: a later call replaces it. It must not throw. */
+  observeCommits(listener: () => void): void {
+    this.onCommitted = listener
+  }
+
+  /**
+   * Resolves once the chat's rows are in the host's database. A restore's open serves a chat still
+   * in its per-chat file from a read-only fold of it; the copy runs before the chat's first write,
+   * and a reader that needs rows (forward pages, catch-up) awaits it here.
+   */
+  whenImported(): Promise<void> {
+    return this.queue.serialize(async () => undefined)
+  }
+
+  get importPending(): boolean {
+    return this.queue.owing
   }
 
   cursor = (): AgentJournalCursor => ({
@@ -200,7 +205,49 @@ export class AgentSessionJournal {
 
   snapshot = (): AgentJournalSnapshot => renderJournalState(this.state)
 
+  /** Visits reduced items without allocating and sorting a full snapshot. */
+  visitItems = (
+    visit: (itemId: string, sequence: number, body: AgentJournalItemBody) => void
+  ): void => {
+    for (const item of this.state.items.values()) {
+      visit(item.itemId, item.sequence, item.body)
+    }
+  }
+
+  /** One reduced item's body by its journal key, for a writer revising a row it can name. */
+  itemBody = (itemId: string): AgentJournalItemBody | null =>
+    this.state.items.get(itemId)?.body ?? null
+
+  /** The turn this journal has published as running — the same read a client's snapshot gives,
+   *  without materialising one. */
+  activeTurnId = (): string | null =>
+    activeStructuredAgentSessionTurnIdBySequence(this.state.items.values())
+
+  /** Where a row written now belongs: the running turn, or the conversation. */
+  liveTurnScope = (): AgentJournalTurnScope =>
+    liveStructuredAgentSessionTurnScope(this.state.items.values())
+
+  /** The newest turn record whatever state it settled in, for readers that need the outcome. */
+  newestTurn = (): AgentJournalTurnLifecycle | null =>
+    newestStructuredAgentSessionTurnBySequence(this.state.items.values())
+
+  /** The latest goal the whole journal records, not only a client's loaded page. */
+  threadGoal = (): AgentJournalThreadGoal | null =>
+    currentAgentSessionThreadGoalBySequence(this.state.items.values()) ?? null
+
+  /** The newest context facts the whole journal records, not only a client's loaded page. */
+  contextUsage = (): AgentSessionContextUsage =>
+    latestStructuredAgentContextFacts(this.state.items.values())
+
+  /** Includes revisions and completion tombstones, whose timestamps disappear from render items. */
+  lastActivityAt = (): number => this.state.lastActivityAt
+
+  /** Fence of the writer that created the item, while it is in the timeline. */
+  itemFence = (itemId: string): number | undefined => this.state.itemFences.get(itemId)
+
   submissions = (): AgentJournalSubmission[] => [...this.state.submissions.values()]
+
+  submission = (clientMessageId: string) => this.state.submissions.get(clientMessageId)
 
   pendingSubmissions = (): AgentJournalSubmission[] =>
     this.submissions().filter((entry) => entry.dispatchState === 'pending')
@@ -212,27 +259,20 @@ export class AgentSessionJournal {
 
   canonicalItemId = (itemId: string): string => resolveJournalItemId(this.state, itemId)
 
-  reserveLifecycleCapacity(token: JournalLifecycleReservation): Promise<boolean> {
-    return this.serializeCapacityMutation(async () => {
-      this.sizeBytes = await journalDirectoryBytes(this.journalDir)
-      return this.lifecycleAdmission.reserve(token, this.sizeBytes)
-    })
-  }
-
-  transferLifecycleCapacity(fromId: string, toId: string): Promise<boolean> {
-    return this.serializeCapacityMutation(() => this.lifecycleAdmission.transfer(fromId, toId))
-  }
-
-  releaseLifecycleCapacity(id: string): Promise<void> {
-    return this.serializeCapacityMutation(() => this.lifecycleAdmission.release(id))
-  }
-
-  lifecycleCapacityState = (): { reservedBytes: number; reservedAppendSlots: number } =>
-    this.lifecycleAdmission.state
-
-  readSince(cursor: AgentJournalCursor): JournalReadSince {
+  readSince(cursor: AgentJournalCursor, limit?: number): JournalReadSince {
     return readJournalSince(
-      { state: this.state, tailRows: this.tailRows, readOnly: this.readOnly },
+      {
+        state: this.state,
+        rowsAfter: (afterSequence) =>
+          readJournalRowsAfterCursor(
+            this.database.db,
+            this.identity.sessionId,
+            this.state.epoch,
+            afterSequence,
+            limit
+          ),
+        readOnly: this.readOnly
+      },
       cursor,
       () => this.cursor()
     )
@@ -243,19 +283,9 @@ export class AgentSessionJournal {
   appendItem(
     identity: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
-    options: JournalItemAppendOptions = { fence: 0 }
+    options: JournalItemAppendOptions
   ): Promise<JournalAppendResult> {
     return this.itemAppender.append(identity, body, options)
-  }
-
-  /** Blob-before-row admission on the same serialized path as sequence assignment. */
-  appendItemWithBlobs(
-    identity: AgentJournalItemIdentity,
-    body: AgentJournalItemBody,
-    blobs: readonly JournalBlobInput[],
-    options: JournalItemAppendOptions = { fence: 0 }
-  ): Promise<JournalAppendResult> {
-    return this.itemAppender.appendWithBlobs(identity, body, blobs, options)
   }
 
   appendTombstone(
@@ -263,8 +293,8 @@ export class AgentSessionJournal {
     options: JournalTombstoneInput
   ): Promise<AgentJournalCursor> {
     const itemId = agentJournalItemKey(identity)
-    return this.enqueue(journalTombstoneRowBuilder(() => this.state, itemId, options.fence)).then(
-      (row) => ({ epoch: row.epoch, sequence: row.seq })
+    return this.rowWriter.append(
+      journalTombstoneRowBuilder(() => this.state, itemId, options.fence)
     )
   }
 
@@ -277,50 +307,49 @@ export class AgentSessionJournal {
    * anything, and it doubles as the optimistic user bubble so an accepted echo
    * reconciles into an existing slot instead of appending a second copy.
    */
-  appendSubmission(input: JournalSubmissionInput): Promise<AgentJournalCursor> {
-    return this.enqueue(
-      journalSubmissionRowBuilder(() => this.state, this.identity.providerHandle, input)
-    ).then((row) => ({ epoch: row.epoch, sequence: row.seq }))
+  appendSubmission(
+    input: JournalSubmissionInput,
+    /** Present: this submission is a queued draft's conversion, and the draft's
+     *  state transition commits in the SAME transaction — exactly-once consume. */
+    consume?: JournalSubmissionConsume
+  ): Promise<AgentJournalCursor> {
+    return this.rowWriter.append(
+      journalSubmissionRowBuilder(() => this.state, this.identity.providerHandle, input, consume),
+      consume && queuedMessageConsumeHook(this.queuedMessages, input.clientMessageId, consume)
+    )
   }
 
   /**
-   * Advance a submission to exactly one of accepted / rejected / unknown.
+   * Record a dispatch transition, including a proven retry returning to pending.
    *
    * Accepting REQUIRES the provider identity rather than a free-form id: the
    * adopted key is what the provider's echo will upsert into, so a mismatched
    * string here would silently give the user a second copy of their own message.
    */
   resolveDispatch(input: ResolveDispatchInput): Promise<AgentJournalCursor> {
-    return this.enqueue(journalDispatchRowBuilder(() => this.state, input)).then((row) => ({
-      epoch: row.epoch,
-      sequence: row.seq
-    }))
+    return this.rowWriter.append(journalDispatchRowBuilder(() => this.state, input))
   }
 
-  /** On restart every `pending` submission becomes `unknown` before the session
-   *  accepts a writer. Orca never re-sends on the user's behalf. */
-  async markPendingSubmissionsUnknown(fence: number): Promise<string[]> {
-    return markJournalPendingSubmissionsUnknown(this, fence)
+  /** Retire unanswered sends after their execution owner ended, without assuming delivery. */
+  async markPendingSubmissionsUnknown(fence: number, reason?: string): Promise<string[]> {
+    return markJournalPendingSubmissionsUnknown(this, fence, reason)
   }
 
-  async compact(
-    now = this.now(),
-    policy: JournalCompactionPolicy = this.compaction
-  ): Promise<void> {
-    assertJournalWritable(this.readOnly, this.identity.sessionId)
-    const result = await compactJournal({
-      journalDir: this.journalDir,
-      state: this.state,
-      tailRows: this.tailRows,
-      policy,
-      now,
-      maxSessionBytes: this.budget.maxSessionBytes,
-      sessionId: this.identity.sessionId
-    })
-    this.tailRows = result.tailRows
-    this.compactedThrough = result.compactedThrough
-    this.state.oldestSequence = result.oldestSequence
-    this.sizeBytes = await journalDirectoryBytes(this.journalDir)
+  /** Reject unanswered sends after an owner that never proved its start ended: none was written. */
+  async rejectPendingSubmissions(
+    fence: number,
+    rejection: AgentJournalDispatchRejection
+  ): Promise<string[]> {
+    return rejectJournalPendingSubmissions(this, fence, rejection)
+  }
+
+  /** Reject sends accepted but never handed over, optionally only those `which` names. */
+  async rejectQueuedSubmissions(
+    fence: number,
+    rejection: AgentJournalDispatchRejection,
+    which?: (submission: AgentJournalSubmission) => boolean
+  ): Promise<string[]> {
+    return rejectJournalQueuedSubmissions(this, fence, rejection, which)
   }
 
   /** The escape hatch for corruption, an unreconcilable prefix, a forked handle,
@@ -339,26 +368,5 @@ export class AgentSessionJournal {
 
   private adoptLoadedJournal(loaded: JournalLoad): void {
     Object.assign(this, journalStoreLoadedFields(loaded))
-  }
-
-  /**
-   * Assign the next sequence, make the row durable, and fold it through the
-   * SAME reducer replay uses — all inside one serialized step, so concurrent
-   * callers cannot interleave and mint the same sequence.
-   */
-  private enqueue(
-    build: (seq: number, ts: number) => JournalRow,
-    blobs: readonly JournalBlobInput[] = []
-  ): Promise<JournalRow> {
-    return this.rowWriter.enqueue(build, blobs)
-  }
-
-  private serializeCapacityMutation = <T>(runMutation: () => Promise<T> | T): Promise<T> =>
-    this.serializeWrite(async () => runMutation())
-
-  private serializeWrite<T>(runWrite: () => Promise<T>): Promise<T> {
-    const run = this.writes.then(runWrite)
-    this.writes = run.catch(() => undefined)
-    return run
   }
 }

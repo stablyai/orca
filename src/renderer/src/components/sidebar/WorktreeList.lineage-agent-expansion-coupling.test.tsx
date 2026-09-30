@@ -1,5 +1,9 @@
 // @vitest-environment happy-dom
 
+vi.mock('@/components/confirmation-dialog-context', () => ({
+  useConfirmationDialog: () => vi.fn().mockResolvedValue(false)
+}))
+
 // Regression test for the child-worktrees <-> agent-list expansion coupling:
 // in a worktree card that shows BOTH inline agent rows (with orchestration
 // lineage) AND a "N children" child-worktrees chip, toggling the child-worktrees
@@ -459,6 +463,8 @@ describe('WorktreeCard agent-list <-> child-worktrees expansion coupling', () =>
       for (const root of mountedRoots.splice(0)) {
         root.unmount()
       }
+      // Lazy markdown imports must finish before Vitest tears down the module environment.
+      await vi.dynamicImportSettled()
     })
     document.body.innerHTML = ''
     clearWorktreeAgentExpansionStateForTests()

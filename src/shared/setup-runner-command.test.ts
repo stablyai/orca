@@ -82,7 +82,7 @@ describe('buildSetupRunnerCommand', () => {
 
     expect(command).not.toContain('cmd.exe /c')
     expect(command).toMatch(
-      /^powershell\.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand [A-Za-z0-9+/=]+$/
+      /^powershell\.exe -NoProfile -NonInteractive -EncodedCommand [A-Za-z0-9+/=]+$/
     )
   })
 
@@ -129,7 +129,7 @@ describe('buildSetupRunnerCommand cmd metacharacter guard', () => {
       })
 
       expect(command).toMatch(
-        /^powershell\.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand [A-Za-z0-9+/=]+$/
+        /^powershell\.exe -NoProfile -NonInteractive -EncodedCommand [A-Za-z0-9+/=]+$/
       )
     }
   )

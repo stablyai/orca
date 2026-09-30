@@ -13,8 +13,11 @@ type DeleteWorktreeFailureToastOptions = {
   forceDeleteReason: WorktreeForceDeleteReason | null
   lockReason?: string | null
   hasKnownChanges?: boolean
+  /** The archive hook refused this removal, so the user may waive it (#19334). */
+  canWaiveArchiveHook?: boolean
   onViewChanges: () => void
   onForceDelete: () => void
+  onDeleteAnyway: () => void
   worktreeId: string
   worktreeName: string
 }
@@ -26,16 +29,20 @@ function deleteWorktreeFailureToastId(worktreeId: string): string {
 function DeleteWorktreeFailureToastBody({
   description,
   canForceDelete,
+  canWaiveArchiveHook,
   showViewChanges,
   onViewChanges,
   onForceDelete,
+  onDeleteAnyway,
   toastId
 }: {
   description?: string
   canForceDelete: boolean
+  canWaiveArchiveHook: boolean
   showViewChanges: boolean
   onViewChanges: () => void
   onForceDelete: () => void
+  onDeleteAnyway: () => void
   toastId: string
 }): React.JSX.Element {
   const viewChanges = (): void => {
@@ -45,6 +52,10 @@ function DeleteWorktreeFailureToastBody({
   const forceDelete = (): void => {
     toast.dismiss(toastId)
     onForceDelete()
+  }
+  const deleteAnyway = (): void => {
+    toast.dismiss(toastId)
+    onDeleteAnyway()
   }
 
   return (
@@ -63,6 +74,14 @@ function DeleteWorktreeFailureToastBody({
             {translate('auto.components.sidebar.delete.worktree.flow.2b20ce87b3', 'Force Delete')}
           </Button>
         ) : null}
+        {canWaiveArchiveHook ? (
+          <Button type="button" variant="destructive" size="sm" onClick={deleteAnyway}>
+            {translate(
+              'auto.components.sidebar.delete.worktree.failure.archive.waiver',
+              'Delete Anyway'
+            )}
+          </Button>
+        ) : null}
       </div>
     </div>
   )
@@ -74,8 +93,10 @@ export function showDeleteWorktreeFailureToast({
   forceDeleteReason,
   lockReason,
   hasKnownChanges,
+  canWaiveArchiveHook,
   onViewChanges,
   onForceDelete,
+  onDeleteAnyway,
   worktreeId,
   worktreeName
 }: DeleteWorktreeFailureToastOptions): void {
@@ -96,13 +117,16 @@ export function showDeleteWorktreeFailureToast({
       <DeleteWorktreeFailureToastBody
         description={toastCopy.description}
         canForceDelete={canForceDelete}
+        canWaiveArchiveHook={canWaiveArchiveHook === true}
         showViewChanges={!isLockedWorktreeRemovalError(error) || hasKnownChanges === true}
         onViewChanges={onViewChanges}
         onForceDelete={onForceDelete}
+        onDeleteAnyway={onDeleteAnyway}
         toastId={id}
       />
     ),
-    duration: canForceDelete ? Infinity : 10000,
+    // A toast offering a destructive choice must not expire before the user reads the reason.
+    duration: canForceDelete || canWaiveArchiveHook === true ? Infinity : 10000,
     dismissible: true
   })
 }

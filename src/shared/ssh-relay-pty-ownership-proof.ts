@@ -1,4 +1,7 @@
-import type { ForegroundProcessEvidence } from './foreground-process-evidence'
+import {
+  isForegroundProcessEvidence,
+  type ForegroundProcessEvidence
+} from './foreground-process-evidence'
 
 /** Which relay PTYs a client may prove it orphaned, and therefore may stop (#9819).
  *
@@ -104,9 +107,10 @@ export const RELAY_PTY_SWEEP_MAX_PER_PASS = 8
 export const RELAY_PTY_SWEEP_MAX_EVIDENCE_AGE_MS = 5_000
 
 /** The host's own answer to "is anything running in this pane?". Only a positive "no" clears the
- *  sweep; every other shape — an older host, an unreadable process table, an observation too old to
- *  describe now, a named foreground process, any other process group on the pane's terminal — is a
- *  reason to leave the process alone. */
+ *  sweep; every other shape — an older host, a malformed record, an unreadable process table, an
+ *  observation too old to describe now, a named foreground process, any other process group on the
+ *  pane's terminal, any other member of the shell's own process group — is a reason to leave the
+ *  process alone. */
 function foregroundSkipReason(
   evidence: ForegroundProcessEvidence | undefined,
   context: RelayPtySweepContext
@@ -115,6 +119,20 @@ function foregroundSkipReason(
     // A host that never published it, or a Windows host where it is not collected. Absence of the
     // observation is not the observation of absence.
     return 'host published no foreground-process observation'
+  }
+  // The record reaches this decision straight off the wire — `mapSshPtyProcessList` validates the
+  // ownership fields and spreads the rest through, and `PtyProcessListAdmission` is not on the
+  // sweep path. Shape-check it here, because the age gate below is the one comparison in this file
+  // that a malformed field defaults toward the kill: a non-numeric `capturedAgeMs` makes the sum
+  // `NaN`, and `NaN > budget` is FALSE, so the entry would pass the freshness gate.
+  if (!isForegroundProcessEvidence(evidence)) {
+    return 'host foreground observation is malformed'
+  }
+  if (
+    !Number.isFinite(context.evidenceAgeSinceListingMs) ||
+    !Number.isFinite(context.maximumEvidenceAgeMs)
+  ) {
+    return 'sweep has no usable evidence-age budget'
   }
   // Before anything is read out of it: an observation is only a claim about the instant it was
   // taken. Age is checked on both verdicts because a stale `unverifiable` is no better.
@@ -130,9 +148,11 @@ function foregroundSkipReason(
     return 'host observes a named foreground process'
   }
   if (evidence.shellOwnsEveryTtyProcessGroup !== true) {
-    // Something other than the shell's own process group is attached to the pane's terminal — a
-    // foreground command, a job backgrounded with `&`, a Ctrl-Z'd editor — or this host predates
-    // the field. The stop would SIGKILL that group, so none of those is a pane to reclaim.
+    // The host saw work inside the stop's blast radius: another process group on the pane's
+    // terminal (a foreground command, a job backgrounded with `&`, a Ctrl-Z'd editor), or another
+    // member of the shell's OWN process group (a `set +m` background job, a child that dropped the
+    // controlling terminal) — or this host predates the field. `killpg` reaches all of it, so none
+    // of those is a pane to reclaim.
     return 'host does not attest an idle shell'
   }
   return null

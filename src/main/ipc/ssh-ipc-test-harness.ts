@@ -25,6 +25,7 @@ export type SshLeaseStoreMock = {
   upsertSshPtyConsumerRecovery: Mock
   removeSshPtyConsumerRecovery: Mock
   getSshRemotePtyLeases: Mock
+  reconcileSshRemotePtyLeasesForTarget: Mock
   markSshRemotePtyLease: Mock
   markSshRemotePtyLeases: Mock
   markSshRemotePtyLeasesAsync: Mock
@@ -102,6 +103,7 @@ export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
     upsertSshPtyConsumerRecovery: vi.fn(),
     removeSshPtyConsumerRecovery: vi.fn(),
     getSshRemotePtyLeases: vi.fn().mockReturnValue([]),
+    reconcileSshRemotePtyLeasesForTarget: vi.fn(),
     markSshRemotePtyLease: vi.fn(),
     markSshRemotePtyLeases: vi.fn(),
     markSshRemotePtyLeasesAsync: vi.fn(),

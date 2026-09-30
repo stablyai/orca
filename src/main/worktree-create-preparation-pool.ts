@@ -1,3 +1,4 @@
+import { worktreePreparationGit } from './git/worktree-create-git-executor'
 import { randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
@@ -11,7 +12,7 @@ import { prepareWorktreeCreateCheckout } from './git/worktree-create-preparation
 import { toHostFilesystemPath } from './host-tree-removal'
 import { preparationEntryKey, preparationPathKey } from './worktree-create-preparation-claim'
 import {
-  cleanupStalePreparations,
+  startStalePreparationCleanup,
   hasPendingStalePreparationCleanup,
   resetStalePreparationCleanupForTests
 } from './worktree-create-preparation-stale-cleanup'
@@ -38,6 +39,8 @@ export type PreparationEntry = {
   createdAt: number
   ready: Promise<void>
   expiration: NodeJS.Timeout
+  controller: AbortController
+  checkoutStarted: boolean
 }
 
 export type StartPreparationArgs = {
@@ -48,7 +51,18 @@ export type StartPreparationArgs = {
   options: AddWorktreeOptions
 }
 
+export type DeferredPreparation = {
+  args: StartPreparationArgs
+  kind: 'explicit' | 'automatic'
+}
+
 const preparations = new Map<string, PreparationEntry>()
+export type PreparationClaim = {
+  entry: PreparationEntry
+  requestedKey: string
+  pendingPreparations: Map<string, DeferredPreparation>
+}
+const claims = new Set<PreparationClaim>()
 
 /** One repo on one Git host: the scope a stranded discard is retried under. */
 function preparationHostKey(repoPathKey: string, wslDistro: string): string {
@@ -57,7 +71,7 @@ function preparationHostKey(repoPathKey: string, wslDistro: string): string {
 
 /** A prepared checkout is a create that is either in flight or imminent. */
 export function hasPendingPreparations(): boolean {
-  return preparations.size > 0 || hasPendingStalePreparationCleanup()
+  return preparations.size > 0 || claims.size > 0 || hasPendingStalePreparationCleanup()
 }
 
 function pathOps(path: string): Pick<typeof posix, 'dirname' | 'join'> {
@@ -68,6 +82,9 @@ async function discardEntry(entry: PreparationEntry): Promise<void> {
   // A failed checkout self-discards, but that self-discard is best-effort too, so it can strand the
   // registration for the same reason the discard here can. Enrol either way.
   await entry.ready.catch(() => {})
+  if (!entry.checkoutStarted) {
+    return
+  }
   await discardPreparationWithRetry({
     hostKey: preparationHostKey(entry.repoPathKey, entry.wslDistro),
     repoPath: entry.repoPath,
@@ -78,7 +95,7 @@ async function discardEntry(entry: PreparationEntry): Promise<void> {
 
 function discardEntryInBackground(entry: PreparationEntry): void {
   // Tracked, not bare `void`: the test reset must be able to settle it before dropping the registry.
-  trackPreparationDiscard(discardEntry(entry))
+  trackPreparationDiscard(worktreePreparationGit.run(() => discardEntry(entry)))
 }
 
 function expireEntry(entry: PreparationEntry): void {
@@ -86,6 +103,7 @@ function expireEntry(entry: PreparationEntry): void {
     return
   }
   preparations.delete(entry.key)
+  entry.controller.abort()
   discardEntryInBackground(entry)
 }
 
@@ -118,6 +136,7 @@ function enforcePreparationLimit(
     }
     preparations.delete(victim.key)
     clearTimeout(victim.expiration)
+    victim.controller.abort()
     discardEntryInBackground(victim)
   }
 }
@@ -139,12 +158,87 @@ export function findPreparation(
 
 /** Removes an entry from the pool so no other create can claim it. Callers must run this in the
  *  same synchronous turn as the selection that produced `entry`. */
-export function takePreparation(entry: PreparationEntry): void {
+export function takePreparation(
+  entry: PreparationEntry,
+  requestedCanonicalBase = entry.canonicalBase
+): PreparationClaim {
   preparations.delete(entry.key)
   clearTimeout(entry.expiration)
+  const requestedKey = preparationEntryKey(
+    entry.repoPathKey,
+    entry.workspaceRootKey,
+    requestedCanonicalBase,
+    entry.wslDistro
+  )
+  const claim = { entry, requestedKey, pendingPreparations: new Map<string, DeferredPreparation>() }
+  claims.add(claim)
+  return claim
 }
 
-export function startPreparation({
+function matchingClaim(args: StartPreparationArgs): PreparationClaim | undefined {
+  const key = preparationEntryKey(
+    preparationPathKey(args.repoPath),
+    preparationPathKey(args.workspaceRoot),
+    args.canonicalBase,
+    args.options.wslDistro ?? ''
+  )
+  return [...claims]
+    .toReversed()
+    .find((claim) => claim.entry.key === key || claim.requestedKey === key)
+}
+
+/** Preserve one request per canonical key, with explicit prefetch taking precedence. */
+function deferPreparationForClaim(
+  args: StartPreparationArgs,
+  kind: DeferredPreparation['kind']
+): boolean {
+  const matching = matchingClaim(args)
+  if (!matching) {
+    return false
+  }
+  const key = preparationEntryKey(
+    preparationPathKey(args.repoPath),
+    preparationPathKey(args.workspaceRoot),
+    args.canonicalBase,
+    args.options.wslDistro ?? ''
+  )
+  if (kind === 'explicit' || !matching.pendingPreparations.has(key)) {
+    matching.pendingPreparations.set(key, { args, kind })
+  }
+  return true
+}
+
+/** A second release is inert, including after a test reset. */
+export function releasePreparationClaim(claim: PreparationClaim): {
+  released: boolean
+  pendingPreparations: DeferredPreparation[]
+} {
+  if (!claims.delete(claim)) {
+    return { released: false, pendingPreparations: [] }
+  }
+  return { released: true, pendingPreparations: [...claim.pendingPreparations.values()] }
+}
+
+export function startPreparation(
+  args: StartPreparationArgs,
+  kind: DeferredPreparation['kind'] = 'explicit'
+): Promise<void> {
+  const existing = findPreparation(
+    preparationPathKey(args.repoPath),
+    preparationPathKey(args.workspaceRoot),
+    args.canonicalBase,
+    args.options.wslDistro ?? ''
+  )
+  if (existing) {
+    return existing.ready
+  }
+  if (deferPreparationForClaim(args, kind)) {
+    return Promise.resolve()
+  }
+  return worktreePreparationGit.run(() => startBackgroundPreparation(args))
+}
+
+function startBackgroundPreparation({
   repoPath,
   workspaceRoot,
   baseBranch,
@@ -163,6 +257,10 @@ export function startPreparation({
     WORKTREE_CREATE_PREPARATION_DIRECTORY
   )
   const preparedPath = pathOps(workspaceRoot).join(preparationRoot, preparationId)
+  const controller = new AbortController()
+  const signal = options.signal
+    ? AbortSignal.any([options.signal, controller.signal])
+    : controller.signal
   const entry = {} as PreparationEntry
   const expiration = setTimeout(() => expireEntry(entry), WORKTREE_CREATE_PREPARATION_TTL_MS)
   expiration.unref()
@@ -179,17 +277,23 @@ export function startPreparation({
     options,
     createdAt: Date.now(),
     expiration,
+    controller,
+    checkoutStarted: false,
     ready: (async () => {
-      await cleanupStalePreparations(preparationHostKey(repoPathKey, wslDistro), repoPath, options)
-      await mkdir(toHostFilesystemPath(preparationRoot), { recursive: true })
-      // Already canonical, so the add re-resolves nothing.
-      await prepareWorktreeCreateCheckout(
+      await startStalePreparationCleanup(
+        preparationHostKey(repoPathKey, wslDistro),
         repoPath,
-        preparedPath,
-        canonicalBase,
-        lockReason,
         options
       )
+      signal.throwIfAborted()
+      await mkdir(toHostFilesystemPath(preparationRoot), { recursive: true })
+      signal.throwIfAborted()
+      // Already canonical, so the add re-resolves nothing.
+      entry.checkoutStarted = true
+      await prepareWorktreeCreateCheckout(repoPath, preparedPath, canonicalBase, lockReason, {
+        ...options,
+        signal
+      })
     })()
   } satisfies PreparationEntry)
   preparations.set(key, entry)
@@ -205,7 +309,8 @@ export function startPreparation({
 export async function _resetPreparationPoolForTests(): Promise<void> {
   const entries = [...preparations.values()]
   preparations.clear()
-  resetStalePreparationCleanupForTests()
+  claims.clear()
+  await resetStalePreparationCleanupForTests()
   await Promise.all(
     entries.map(async (entry) => {
       clearTimeout(entry.expiration)

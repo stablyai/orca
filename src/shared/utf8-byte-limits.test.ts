@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   clampUtf8TextPrefix,
+  getUtf8ByteLength,
   getUtf8ChunkEndIndex,
   isUtf8ByteLengthWithinLimit,
   measureUtf8ByteLength,
@@ -127,5 +128,35 @@ describe('isUtf8ByteLengthWithinLimit', () => {
     { name: 'text with positive infinity', text: '😀', maxBytes: Infinity, expected: true }
   ])('$name', ({ text, maxBytes, expected }) => {
     expect(isUtf8ByteLengthWithinLimit(text, maxBytes)).toBe(expected)
+  })
+})
+
+describe('isUtf8ByteLengthWithinLimit native fast path', () => {
+  // The bounded check runs through TextEncoder.encodeInto; it must agree with the scan it replaced
+  // for every boundary shape, lone surrogates included.
+  const samples = [
+    '',
+    'a',
+    'ascii only text',
+    'caf\u00e9',
+    '\u20ac\u20ac\u20ac',
+    '\ud83d\ude00\ud83d\ude00',
+    '\ud83d',
+    '\ude00',
+    'mixed \u00e9 \u20ac \ud83d\ude00 tail',
+    'x'.repeat(64)
+  ]
+
+  it('matches the scanning implementation at every limit around the boundary', () => {
+    for (const text of samples) {
+      const exactBytes = getUtf8ByteLength(text)
+      for (let maxBytes = 1; maxBytes <= exactBytes + 2; maxBytes += 1) {
+        expect({ text, maxBytes, within: isUtf8ByteLengthWithinLimit(text, maxBytes) }).toEqual({
+          text,
+          maxBytes,
+          within: text.length <= maxBytes && exactBytes <= maxBytes
+        })
+      }
+    }
   })
 })

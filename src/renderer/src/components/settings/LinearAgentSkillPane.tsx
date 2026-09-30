@@ -107,12 +107,13 @@ export function LinearAgentSkillPane(): React.JSX.Element {
       className="space-y-6 py-2"
     >
       <LinearAgentSkillGuide
-        status={{
+        readiness={{
           connected: linearConnected,
-          connectionChecking,
+          checking: connectionChecking,
           skillInstalled: skillSetup.skillInstalled,
           skillChecking: skillSetup.skillChecking,
-          visibleInTasks
+          skillUnverifiable: skillSetup.skillUnverifiable,
+          visible: visibleInTasks
         }}
         onOpenTaskSources={openTaskSources}
         onManageLinearAccess={

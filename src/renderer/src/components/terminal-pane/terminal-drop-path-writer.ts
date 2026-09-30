@@ -72,7 +72,7 @@ export async function writeTerminalDropPathsToCapturedTarget({
         )
       : `${shellEscapePath(path, targetShell)} `
     const writeResult = await runTerminalPasteOperationWithTimeout(
-      () => writeTerminalPastePtyInput(liveTransport, payload),
+      () => writeTerminalPastePtyInput(liveTransport, payload, 'driving'),
       operationTimeoutMs
     )
     if (writeResult.timedOut) {

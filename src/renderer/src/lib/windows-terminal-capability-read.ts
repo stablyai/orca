@@ -49,16 +49,13 @@ export async function readWindowsTerminalCapabilities(
   }
 
   if (target.kind === 'local') {
-    const [wslAvailable, wslDistros, pwshAvailable, gitBashAvailable, hostPlatform] =
+    const [wslAvailable, wslDistros, pwshAvailable, gitBashAvailable, runtimeStatus] =
       await Promise.all([
         window.api.wsl.isAvailable().catch(() => false),
         window.api.wsl.listDistros().catch(() => []),
         window.api.pwsh.isAvailable().catch(() => false),
         window.api.gitBash.isAvailable().catch(() => false),
-        window.api.runtime
-          .getStatus()
-          .then((status) => status.hostPlatform ?? null)
-          .catch(() => null)
+        window.api.runtime.getStatus().catch(() => null)
       ])
     const reconciledWslAvailable = await reconcileWslAvailability(wslAvailable, wslDistros, () =>
       window.api.wsl.isAvailable()
@@ -68,7 +65,10 @@ export async function readWindowsTerminalCapabilities(
       wslDistros,
       pwshAvailable,
       gitBashAvailable,
-      hostPlatform,
+      hostPlatform: runtimeStatus?.hostPlatform ?? null,
+      ...(runtimeStatus?.windowsProcessStartTimeAvailable !== undefined
+        ? { windowsProcessStartTimeAvailable: runtimeStatus.windowsProcessStartTimeAvailable }
+        : {}),
       isLoading: false
     }
   }

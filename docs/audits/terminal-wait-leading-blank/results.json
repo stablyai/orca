@@ -1,0 +1,172 @@
+{
+  "node": "v26.6.0",
+  "platform": "darwin",
+  "architecture": "arm64",
+  "revision": "9558152a04c499c666192dd08906be8ada09e1dc",
+  "source": "src/main/runtime/terminal-wait-tail-window.ts",
+  "hashes": {
+    "before": "e6bc10e924d45bf4bfbd6fabf4404f160107cf7235b11c4e140cd6c78cff9146",
+    "after": "8df53ea8f92461549d727f251dae7cb4415d4208228ec5f60df9dcf13b863b86",
+    "reportedVersion": "e6bc10e924d45bf4bfbd6fabf4404f160107cf7235b11c4e140cd6c78cff9146"
+  },
+  "supportingSourceHashes": {
+    "src/main/runtime/terminal-wait-detection.ts": "226d09d2d8f7f1d692fb8ba1ed340818e6bd402b74d7bd98d86b1868a09503f0",
+    "src/main/runtime/orca-runtime-terminal-projection.ts": "70b815cf26864719b30b64845c0035093c16b9d85cb4bb8d25c4ae5fa63c3026",
+    "src/main/runtime/terminal-tail-read.ts": "3517bb22b9bf4bdf2f3acee8ceac9ca71221964cfa3f16be1f7b2ad22212b476",
+    "src/main/runtime/terminal-tail-state.ts": "a6f41a683d5f03023e4f6d20d653ebf069b036f82100c908a775a1890c49b2ef",
+    "src/main/runtime/terminal-wait-tail-state.ts": "61acc15fb8b9ce7faa0a2df80a7b6bae09dfed103c15b9c6c35a66d6ad585db1",
+    "src/main/daemon/headless-emulator.ts": "ace96102285c3967cd9544e7696fe73e1ac6df576b476939aa9819f5c298bab6",
+    "src/main/runtime/terminal-wait-tail-window.test.ts": "0faab1ca7b01e43ab555fd7fe2979975b818c22f25eca4f74dea3eb04f02c66b"
+  },
+  "reportedVersionSourceMatchesBaseline": true,
+  "childTimeoutMs": 2000,
+  "childHeapLimitMiB": 128,
+  "scope": "Helper termination and producer controls; no incident attribution or retained-byte claim.",
+  "results": {
+    "before": [
+      {
+        "name": "leading newline only",
+        "timedOut": true,
+        "childTerminated": true,
+        "code": null,
+        "signal": "SIGTERM",
+        "elapsedMs": 2004
+      },
+      {
+        "name": "leading newline and text",
+        "timedOut": true,
+        "childTerminated": true,
+        "code": null,
+        "signal": "SIGTERM",
+        "elapsedMs": 2002
+      },
+      {
+        "name": "blank screen classification",
+        "timedOut": true,
+        "childTerminated": true,
+        "code": null,
+        "signal": "SIGTERM",
+        "elapsedMs": 2002
+      },
+      {
+        "name": "leading blank trust dialog",
+        "timedOut": true,
+        "childTerminated": true,
+        "code": null,
+        "signal": "SIGTERM",
+        "elapsedMs": 2002
+      },
+      {
+        "name": "leading blank ready header",
+        "timedOut": true,
+        "childTerminated": true,
+        "code": null,
+        "signal": "SIGTERM",
+        "elapsedMs": 2002
+      },
+      {
+        "name": "enough nonblank rows",
+        "timedOut": false,
+        "childTerminated": true,
+        "code": 0,
+        "signal": null,
+        "elapsedMs": 32,
+        "value": 7
+      },
+      {
+        "name": "production producer controls",
+        "timedOut": false,
+        "childTerminated": true,
+        "code": 0,
+        "signal": null,
+        "elapsedMs": 36,
+        "value": {
+          "rawRowsStartBlank": true,
+          "visibleRows": ["ordinary output"],
+          "projectedTail": ["ordinary output"],
+          "visibleClassification": null,
+          "ordinaryTailClassification": null,
+          "clippedPreviewStartsNewline": true,
+          "retainedTailStartsNewline": false,
+          "retainedTailClassification": null,
+          "emptyTailFallbackStartsNewline": true
+        }
+      }
+    ],
+    "after": [
+      {
+        "name": "leading newline only",
+        "timedOut": false,
+        "childTerminated": true,
+        "code": 0,
+        "signal": null,
+        "elapsedMs": 34,
+        "value": 0
+      },
+      {
+        "name": "leading newline and text",
+        "timedOut": false,
+        "childTerminated": true,
+        "code": 0,
+        "signal": null,
+        "elapsedMs": 33,
+        "value": 0
+      },
+      {
+        "name": "blank screen classification",
+        "timedOut": false,
+        "childTerminated": true,
+        "code": 0,
+        "signal": null,
+        "elapsedMs": 33,
+        "value": null
+      },
+      {
+        "name": "leading blank trust dialog",
+        "timedOut": false,
+        "childTerminated": true,
+        "code": 0,
+        "signal": null,
+        "elapsedMs": 33,
+        "value": "agent-trust-workspace"
+      },
+      {
+        "name": "leading blank ready header",
+        "timedOut": false,
+        "childTerminated": true,
+        "code": 0,
+        "signal": null,
+        "elapsedMs": 33,
+        "value": true
+      },
+      {
+        "name": "enough nonblank rows",
+        "timedOut": false,
+        "childTerminated": true,
+        "code": 0,
+        "signal": null,
+        "elapsedMs": 32,
+        "value": 7
+      },
+      {
+        "name": "production producer controls",
+        "timedOut": false,
+        "childTerminated": true,
+        "code": 0,
+        "signal": null,
+        "elapsedMs": 37,
+        "value": {
+          "rawRowsStartBlank": true,
+          "visibleRows": ["ordinary output"],
+          "projectedTail": ["ordinary output"],
+          "visibleClassification": null,
+          "ordinaryTailClassification": null,
+          "clippedPreviewStartsNewline": true,
+          "retainedTailStartsNewline": false,
+          "retainedTailClassification": null,
+          "emptyTailFallbackStartsNewline": true
+        }
+      }
+    ]
+  }
+}

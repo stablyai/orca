@@ -1,16 +1,18 @@
+import { createMarkdownTokenizerStart } from './markdown-tokenizer-start'
 import type { AnyExtension } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
+import { RichMarkdownTrailingParagraph } from './rich-markdown-trailing-paragraph'
 import Link from '@tiptap/extension-link'
 import { Code } from '@tiptap/extension-code'
 import Image from '@tiptap/extension-image'
 import Placeholder from '@tiptap/extension-placeholder'
 import TaskItem from '@tiptap/extension-task-item'
-import { Table } from '@tiptap/extension-table'
+import { RichMarkdownTable } from './rich-markdown-table'
 import { TableCell } from '@tiptap/extension-table-cell'
 import { TableHeader } from '@tiptap/extension-table-header'
 import { TableRow } from '@tiptap/extension-table-row'
 import { BlockMath, InlineMath } from '@tiptap/extension-mathematics'
-import { Markdown } from '@tiptap/markdown'
+import { createRichMarkdownExtension } from './rich-markdown-extension'
 import { createLowlight, common } from 'lowlight'
 import {
   acquireLocalImageSrcLease,
@@ -37,17 +39,12 @@ import type { RichMarkdownEditorCodec } from './rich-markdown-source-transport'
 import { createRichMarkdownHtmlSuperscriptLink } from './rich-markdown-html-superscript-link'
 import type { RichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-html-superscript-link-context'
 import { RichMarkdownOrderedList } from './rich-markdown-ordered-list'
+import { RichMarkdownParagraph } from './rich-markdown-paragraph'
 import { RichMarkdownCodeBlockLowlight } from './rich-markdown-lowlight'
 import { RichMarkdownTaskList } from './rich-markdown-task-list'
 import { createCachedLowlight } from './rich-markdown-lowlight-cache'
 
 const lowlight = createCachedLowlight(createLowlight(common))
-
-const RichMarkdownLink = Link.extend({
-  // Why: link's priority must stay below code's default 100 so Markdown
-  // serializes code-styled labels as [`label`](href).
-  priority: 90
-})
 
 const RichMarkdownCode = Code.extend({
   // Why: Markdown supports linked code labels, so code cannot exclude the link
@@ -77,8 +74,12 @@ export function createRichMarkdownExtensions({
       link: false,
       code: false,
       codeBlock: false,
-      orderedList: false
+      orderedList: false,
+      paragraph: false,
+      trailingNode: false
     }),
+    RichMarkdownParagraph,
+    RichMarkdownTrailingParagraph,
     RichMarkdownCode,
     RichMarkdownCodeBlockLowlight.extend({
       addNodeView() {
@@ -92,7 +93,7 @@ export function createRichMarkdownExtensions({
       lowlight,
       defaultLanguage: null
     }),
-    RichMarkdownLink.configure({
+    Link.configure({
       openOnClick: false,
       autolink: true,
       linkOnPaste: true
@@ -116,8 +117,12 @@ export function createRichMarkdownExtensions({
           // native image drag (which sends image bytes) from conflicting with
           // ProseMirror's node-level drag (which serializes the schema node
           // for relocation within the document).
-          const dom = document.createElement('div')
+          const dom = document.createElement('span')
+          // Why: the wrapper sits in inline content, so it must not introduce a
+          // block box or the surrounding text would break onto its own line.
+          dom.style.display = 'inline-block'
           dom.style.lineHeight = '0'
+          dom.style.maxWidth = '100%'
 
           const img = document.createElement('img')
           img.draggable = false
@@ -205,7 +210,11 @@ export function createRichMarkdownExtensions({
         }
       }
     }).configure({
-      allowBase64: true
+      allowBase64: true,
+      // Why: the markdown parser nests images inside paragraphs, so a block image
+      // node yields a schema-invalid document that only throws on the first edit
+      // that reassembles the paragraph.
+      inline: true
     }),
     RichMarkdownOrderedList,
     RichMarkdownTaskList,
@@ -213,7 +222,7 @@ export function createRichMarkdownExtensions({
       nested: true
     }),
     ...createOrcaDetailsExtensions(),
-    Table.configure({
+    RichMarkdownTable.configure({
       resizable: false
     }),
     TableRow,
@@ -224,7 +233,16 @@ export function createRichMarkdownExtensions({
         throwOnError: false
       }
     }),
-    BlockMath.configure({
+    BlockMath.extend({
+      markdownTokenizer:
+        BlockMath.config.markdownTokenizer &&
+        typeof BlockMath.config.markdownTokenizer !== 'function'
+          ? {
+              ...BlockMath.config.markdownTokenizer,
+              start: createMarkdownTokenizerStart('$$')
+            }
+          : BlockMath.config.markdownTokenizer
+    }).configure({
       katexOptions: {
         displayMode: true,
         throwOnError: false
@@ -238,7 +256,7 @@ export function createRichMarkdownExtensions({
     createRawMarkdownHtmlBlock(codec.transport),
     createMarkdownDocLink(codec.transport),
     DragSelectionGuard,
-    Markdown.configure({
+    createRichMarkdownExtension(codec, htmlSuperscriptLinks).configure({
       marked: codec.marked,
       markedOptions: {
         gfm: true

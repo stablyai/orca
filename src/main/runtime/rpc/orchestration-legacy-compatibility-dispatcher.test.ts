@@ -191,7 +191,9 @@ describe('legacy compatibility through RpcDispatcher', () => {
       launchTokenHash: createHash('sha256').update('worker-token').digest('hex'),
       processIncarnation: 'process-1'
     })
-    harness.db.updateTaskStatus(harness.taskId, 'ready')
+    // Recreate the pre-boundary state where A settled before a current attempt was persisted.
+    const sqlite = (harness.db as unknown as { db: Database.Database }).db
+    sqlite.prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(harness.taskId)
     const currentDispatch = createRootDispatch(
       harness.db,
       harness.taskId,
@@ -700,11 +702,11 @@ describe('legacy compatibility through RpcDispatcher', () => {
       )
       expect(first).toMatchObject({
         ok: true,
-        result: { binding: { consumerGeneration: 1 }, mutation: { replayed: false } }
+        result: { run: { consumer_generation: 1 }, mutation: { replayed: false } }
       })
       expect(replay).toMatchObject({
         ok: true,
-        result: { binding: { consumerGeneration: 1 }, mutation: { replayed: true } }
+        result: { run: { consumer_generation: 1 }, mutation: { replayed: true } }
       })
       expect(harness.db.getRun(harness.adoptedRunId)?.consumer_generation).toBe(1)
     }

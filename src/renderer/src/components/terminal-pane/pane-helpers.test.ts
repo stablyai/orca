@@ -69,6 +69,8 @@ describe('fitAndFocusPanes', () => {
       )
     }
 
+    matches = vi.fn(() => false)
+
     closest: (selector: string) => Element | null
   }
 
@@ -90,6 +92,7 @@ describe('fitAndFocusPanes', () => {
     vi.stubGlobal('HTMLElement', FakeHTMLElement)
     vi.stubGlobal('document', {
       activeElement,
+      querySelectorAll: vi.fn(() => []),
       querySelector: vi.fn((selector: string) =>
         selector === '[data-tab-rename-input="true"]' && renameInputMounted
           ? (new FakeHTMLElement({ tagName: 'INPUT' }) as unknown as Element)

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -28,6 +28,74 @@ vi.mock('node:os', async () => {
 
 describe('CodexAccountService.addAccountFromHome', () => {
   registerCodexAccountsTestHomes()
+
+  it('imports and switches personal and enterprise accounts sharing an email independently', async () => {
+    vi.doMock('../codex-cli/command', () => ({ resolveCodexCommand: () => 'codex' }))
+    const sourceHomes = [
+      mkdtempSync(join(tmpdir(), 'orca-codex-personal-')),
+      mkdtempSync(join(tmpdir(), 'orca-codex-enterprise-'))
+    ]
+    const email = 'same@example.com'
+    const credentials = ['plus', 'enterprise'].map((plan) => {
+      const parsed = JSON.parse(createCodexAuthJson(email, `provider-${plan}`, `refresh-${plan}`))
+      const payload = Buffer.from(
+        JSON.stringify({
+          email,
+          'https://api.openai.com/auth': {
+            chatgpt_account_id: `provider-${plan}`,
+            chatgpt_plan_type: plan
+          }
+        })
+      ).toString('base64url')
+      parsed.tokens.id_token = `header.${payload}.signature`
+      return JSON.stringify(parsed)
+    })
+
+    try {
+      sourceHomes.forEach((home, index) => {
+        writeFileSync(join(home, 'auth.json'), credentials[index], 'utf-8')
+      })
+      const store = createStore(createSettings())
+      const runtimeHome = createRuntimeHome()
+      const { CodexAccountService } = await import('./service')
+      const service = new CodexAccountService(
+        store as never,
+        createRateLimits() as never,
+        runtimeHome as never
+      )
+
+      await service.addAccountFromHome(sourceHomes[0])
+      const result = await service.addAccountFromHome(sourceHomes[1])
+      const accounts = store.getSettings().codexManagedAccounts
+      expect(result.accounts).toHaveLength(2)
+      expect(new Set(accounts.map((account) => account.id)).size).toBe(2)
+      expect(new Set(accounts.map((account) => account.managedHomePath)).size).toBe(2)
+      expect(accounts.map((account) => account.email)).toEqual([email, email])
+      expect(accounts.map((account) => account.workspaceLabel)).toEqual([
+        'Personal (Plus)',
+        'Enterprise'
+      ])
+      expect(accounts.map((account) => account.providerAccountId)).toEqual([
+        'provider-plus',
+        'provider-enterprise'
+      ])
+
+      for (const account of accounts) {
+        const selected = await service.selectAccount(account.id)
+        expect(selected.activeAccountId).toBe(account.id)
+        expect(store.getSettings().activeCodexManagedAccountIdsByRuntime?.host).toBe(account.id)
+        accounts.forEach((entry, index) => {
+          expect(readFileSync(join(entry.managedHomePath, 'auth.json'), 'utf-8')).toBe(
+            credentials[index]
+          )
+        })
+      }
+      expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalledTimes(4)
+    } finally {
+      sourceHomes.forEach((home) => rmSync(home, { recursive: true, force: true }))
+      vi.doUnmock('../codex-cli/command')
+    }
+  })
 
   it('registers a managed Codex account by importing an authenticated CODEX_HOME', async () => {
     vi.doMock('../codex-cli/command', () => ({ resolveCodexCommand: () => 'codex' }))

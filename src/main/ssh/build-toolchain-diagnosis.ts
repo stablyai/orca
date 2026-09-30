@@ -163,3 +163,66 @@ export function formatMissingToolchainError(
   ]
   return lines.join('\n')
 }
+
+const NODE_HEADERS_TARBALL_RE = /node-v[0-9.]+-headers\.tar\.gz/i
+
+/**
+ * Whether a native-deps failure is node-gyp failing to download Node headers from nodejs.org.
+ *
+ * Why it needs naming: the raw output is forty lines of `gyp http` and stack frames around one
+ * `ECONNREFUSED`, and it reads as a broken host or a broken Orca. Which of two things it is
+ * depends on what the local-headers export found first, so the formatter takes that answer.
+ */
+export function isNodeHeadersDownloadFailure(message: string): boolean {
+  // Why `configure error` is required: node-gyp's fetch client logs `attempt N failed with <code>`
+  // on retries it then recovers from, so a network token alone also matches a build that got its
+  // headers and died later for an unrelated reason. Only the configure step downloads headers.
+  return (
+    /gyp ERR! configure error/i.test(message) &&
+    NODE_HEADERS_TARBALL_RE.test(message) &&
+    /\b(ECONNREFUSED|ENOTFOUND|ETIMEDOUT|EHOSTUNREACH|ENETUNREACH|EAI_AGAIN|ECONNRESET)\b/.test(
+      message
+    )
+  )
+}
+
+const NODE_HEADERS_CONTEXT =
+  'node-pty has no prebuilt binary for Linux, so it must be compiled on the remote host, and ' +
+  'node-gyp fetches the Node.js headers from nodejs.org unless the Node install provides them ' +
+  'at <prefix>/include/node.'
+
+/**
+ * @param localHeadersDir what the local-headers export found: a dir it exported, `null` when
+ *   the host's Node ships no matching headers, `undefined` when the answer never came back.
+ *
+ * Why the exported-dir case is its own message: the export is the fix, so node-gyp downloading
+ * anyway means its `nodedir` env keys were not honoured (a future npm dropping the passthrough,
+ * a wrapper scrubbing the env). That is an Orca defect, not a host problem, and must not be
+ * reported as one -- it names the dir so the report is checkable.
+ */
+export function formatNodeHeadersDownloadError(
+  underlyingError: string,
+  localHeadersDir: string | null | undefined
+): string {
+  const lines = localHeadersDir
+    ? [
+        `The remote host could not download the Node.js headers needed to compile node-pty, even ` +
+          `though its Node install ships matching headers at ${localHeadersDir}/include/node and ` +
+          `Orca pointed node-gyp at them. node-gyp ignored that setting; this is an Orca defect, ` +
+          `please report it with the log below.`,
+        '',
+        'Workaround on the remote host until then: allow outbound HTTPS to nodejs.org, or point ' +
+          'npm at a mirror: npm config set disturl https://<mirror>/dist'
+      ]
+    : [
+        'The remote host could not download the Node.js headers needed to compile node-pty, and ' +
+          `its Node install has no local headers matching its own version. ${NODE_HEADERS_CONTEXT}`,
+        '',
+        'Fix one of the following on the remote host, then reconnect:',
+        '  - Install Node.js from an official build or a version manager (nvm, fnm, volta, n), ' +
+          'which ship headers for exactly the Node they run; or',
+        '  - Allow outbound HTTPS to nodejs.org, or point npm at a mirror: ' +
+          'npm config set disturl https://<mirror>/dist'
+      ]
+  return [...lines, '', `Underlying install error: ${underlyingError}`].join('\n')
+}

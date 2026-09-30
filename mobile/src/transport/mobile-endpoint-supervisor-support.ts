@@ -1,8 +1,8 @@
 import { RelayOuterError } from './mobile-relay-e2ee-link'
 import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
+import { ReplacementAuthenticationTimeoutError } from './replacement-session-authentication'
 import type { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
-import type { HostProfile } from './types'
 import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
 
 // Why: a suspect session that survived a failed replacement dial must come down,
@@ -40,10 +40,10 @@ export class RelayDialAbortedError extends Error {
 // cell assignment, persist it durably, then dial once more.
 export async function dialRelayThroughDirectorFallback(args: {
   resumeToken: string
-  relay: () => HostProfile['relay']
+  relay: () => MobileRelayEndpoint
   dial: () => Promise<RelayDialResult>
   resolveRelay: (input: {
-    relay: NonNullable<HostProfile['relay']>
+    relay: MobileRelayEndpoint
     resumeToken: string
   }) => Promise<MobileRelayEndpoint>
   persistResolvedRelay: (resolved: MobileRelayEndpoint) => Promise<void>
@@ -53,8 +53,7 @@ export async function dialRelayThroughDirectorFallback(args: {
   if (
     first.ok ||
     first.error instanceof RelayDialAbortedError ||
-    !isDirectorResolutionFailure(first.error) ||
-    !relay
+    !isDirectorResolutionFailure(first.error)
   ) {
     return first
   }
@@ -68,31 +67,15 @@ export async function dialRelayThroughDirectorFallback(args: {
 }
 
 export function isDirectorResolutionFailure(error: Error): boolean {
+  // Why: a cell that took relay-auth and went quiet is the right cell working slowly;
+  // re-resolving it just doubles the wait against the same contended window.
+  if (error instanceof ReplacementAuthenticationTimeoutError) {
+    return error.stage === null || error.stage === 'opening'
+  }
   return (
     !(error instanceof MobileE2EEAuthenticationError) &&
     (!(error instanceof RelayOuterError) || [4409, 4503, 1006].includes(error.code))
   )
-}
-
-export function relayWebSocketUrl(relay: { cellUrl: string; relayHostId: string }): string {
-  const url = new URL(relay.cellUrl)
-  url.protocol = 'wss:'
-  url.pathname = `/v1/connect/${encodeURIComponent(relay.relayHostId)}`
-  return url.toString()
-}
-
-export async function persistRelayHost(
-  host: HostProfile,
-  relay: MobileRelayEndpoint,
-  saveHost: (host: HostProfile) => Promise<void>
-): Promise<HostProfile> {
-  const endpoints = [
-    ...(host.endpoints ?? [{ id: 'direct-primary', kind: 'lan' as const, url: host.endpoint }])
-  ].filter(({ kind }) => kind !== 'relay')
-  endpoints.push({ id: 'relay-primary', kind: 'relay', url: relayWebSocketUrl(relay) })
-  const updated = { ...host, endpoints, relayHostId: relay.relayHostId, relay }
-  await saveHost(updated)
-  return updated
 }
 
 export function encodeBase64Url(value: Uint8Array): string {

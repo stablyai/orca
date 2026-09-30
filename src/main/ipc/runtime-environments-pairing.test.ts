@@ -1,3 +1,5 @@
+import type { RuntimeHostStatusSnapshot } from '../../shared/runtime-host-status'
+import { resetRuntimeEnvironmentStatusOwners } from './runtime-environment-request-connections'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -44,6 +46,7 @@ const {
 }))
 
 vi.mock('electron', () => ({
+  BrowserWindow: { getAllWindows: () => [] },
   app: { getPath: getPathMock },
   ipcMain: {
     handle: handleMock,
@@ -58,18 +61,23 @@ vi.mock('../../shared/remote-runtime-client', () => ({
   subscribeRemoteRuntimeRequest: subscribeRemoteRuntimeRequestMock
 }))
 
-vi.mock('./runtime-environment-request-connections', () => ({
-  sendRemoteRuntimeConnectionRequest: sendRemoteRuntimeConnectionRequestMock,
-  sendRemoteRuntimeSharedControlRequest: sendRemoteRuntimeSharedControlRequestMock,
-  subscribeRemoteRuntimeSharedControlRequest: subscribeRemoteRuntimeSharedControlRequestMock,
-  getRemoteRuntimeSharedControlDiagnostics: getRemoteRuntimeSharedControlDiagnosticsMock,
-  reconnectRemoteRuntimeSharedControlConnection: reconnectRemoteRuntimeSharedControlConnectionMock,
-  retryRemoteRuntimeSharedControlConnectionsNow: retryRemoteRuntimeSharedControlConnectionsNowMock,
-  retryRemoteRuntimeSharedControlConnectionNow: retryRemoteRuntimeSharedControlConnectionNowMock,
-  ensureRemoteRuntimeSharedControlConnection: vi.fn(),
-  pauseRemoteRuntimeSharedControlRetry: vi.fn(),
-  closeRemoteRuntimeRequestConnection: closeRemoteRuntimeRequestConnectionMock
-}))
+vi.mock('./runtime-environment-request-connections', async () => {
+  const { withRuntimeStatusOwners } = await import('./runtime-environments-ipc-test-harness')
+  return withRuntimeStatusOwners({
+    sendRemoteRuntimeConnectionRequest: sendRemoteRuntimeConnectionRequestMock,
+    sendRemoteRuntimeSharedControlRequest: sendRemoteRuntimeSharedControlRequestMock,
+    subscribeRemoteRuntimeSharedControlRequest: subscribeRemoteRuntimeSharedControlRequestMock,
+    getRemoteRuntimeSharedControlDiagnostics: getRemoteRuntimeSharedControlDiagnosticsMock,
+    reconnectRemoteRuntimeSharedControlConnection:
+      reconnectRemoteRuntimeSharedControlConnectionMock,
+    retryRemoteRuntimeSharedControlConnectionsNow:
+      retryRemoteRuntimeSharedControlConnectionsNowMock,
+    retryRemoteRuntimeSharedControlConnectionNow: retryRemoteRuntimeSharedControlConnectionNowMock,
+    ensureRemoteRuntimeSharedControlConnection: vi.fn(),
+    pauseRemoteRuntimeSharedControlRetry: vi.fn(),
+    closeRemoteRuntimeRequestConnection: closeRemoteRuntimeRequestConnectionMock
+  })
+})
 
 import { registerRuntimeEnvironmentHandlers } from './runtime-environments'
 import { channelHandlerLookup, pairingCode } from './runtime-environments-ipc-test-harness'
@@ -125,6 +133,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   afterEach(() => {
+    resetRuntimeEnvironmentStatusOwners()
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
@@ -132,6 +141,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     registerRuntimeEnvironmentHandlers(store as never)
 
     expect(handleMock.mock.calls.map((call) => call[0])).toEqual([
+      'runtimeEnvironments:getStatusSnapshots',
       'runtimeEnvironments:list',
       'runtimeEnvironments:addFromPairingCode',
       'runtimeEnvironments:verifyAndAddFromPairingCode',
@@ -166,6 +176,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'runtimeEnvironments:retryControlConnection',
       'runtimeEnvironments:prepareBrowserClientHostPlacement',
       'runtimeEnvironments:getStatus',
+      'runtimeEnvironments:getStatusSnapshots',
       'runtimeEnvironments:call',
       'runtimeEnvironments:subscribe',
       'runtimeEnvironments:unsubscribe',
@@ -467,6 +478,13 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       ok: false,
       error: { code: 'runtime_manually_disconnected' }
     })
+    const getSnapshots = handler<undefined, RuntimeHostStatusSnapshot[]>(
+      'runtimeEnvironments:getStatusSnapshots'
+    )
+    // A new renderer only has the snapshot read, not the earlier disconnect event.
+    expect(await getSnapshots(null, undefined)).toMatchObject([
+      { environmentId: added.environment.id, retired: true, transport: 'disconnected' }
+    ])
     const call = handler<
       { selector: string; method: string },
       { ok: boolean; error?: { code: string } }
@@ -492,6 +510,10 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       result: { runtimeId: 'runtime-remote' }
     })
     expect(sendRemoteRuntimeRequestMock).toHaveBeenCalledOnce()
+    expect(await getSnapshots(null, undefined)).toMatchObject([
+      { environmentId: added.environment.id, verification: 'verified' }
+    ])
+    expect((await getSnapshots(null, undefined))[0].retired).not.toBe(true)
   })
 
   it('marks environments owned by ephemeral VM runtimes in the public list', async () => {

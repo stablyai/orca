@@ -4,6 +4,7 @@ import { describeQuoteStrippedJsonFlag } from './quote-stripped-json-flag'
 
 export function getRequiredStringFlag(flags: Map<string, string | boolean>, name: string): string {
   const value = flags.get(name)
+  rejectValuelessFlag(value, name)
   if (typeof value === 'string' && value.length > 0) {
     return value
   }
@@ -15,6 +16,7 @@ export function getRequiredStringFlagAllowingEmpty(
   name: string
 ): string {
   const value = flags.get(name)
+  rejectValuelessFlag(value, name)
   if (typeof value === 'string') {
     return value
   }
@@ -26,7 +28,22 @@ export function getOptionalStringFlag(
   name: string
 ): string | undefined {
   const value = flags.get(name)
+  rejectValuelessFlag(value, name)
   return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
+/**
+ * A valued flag whose value the shell (or a missing variable) ate parses as `true`. Dropping it
+ * silently mints a fresh mutation identity and can deliver a prompt twice (#15180), so every
+ * valued-flag accessor refuses the damaged shape by name.
+ */
+export function rejectValuelessFlag(value: string | boolean | undefined, name: string): void {
+  if (value === true) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `--${name} requires a value; it was passed with none.`
+    )
+  }
 }
 
 /**
@@ -64,6 +81,7 @@ export function getOptionalNumberFlag(
   name: string
 ): number | undefined {
   const value = flags.get(name)
+  rejectValuelessFlag(value, name)
   if (typeof value !== 'string' || value.length === 0) {
     return undefined
   }
@@ -131,6 +149,7 @@ export function getOptionalNullableNumberFlag(
   name: string
 ): number | null | undefined {
   const value = flags.get(name)
+  rejectValuelessFlag(value, name)
   if (value === 'null') {
     return null
   }

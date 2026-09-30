@@ -56,7 +56,7 @@ describe('BrowserPane webview preferences', () => {
       'persist:orca-browser-session-profile-1'
     )
     expect(ensuredWebview?.webview.getAttribute('webpreferences')).toBe(
-      ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE
+      `${ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE},transparent=false`
     )
     expect(registryMocks.registerPersistentWebview).toHaveBeenCalledWith(
       'browser-page-1',

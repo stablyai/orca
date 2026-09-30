@@ -83,7 +83,7 @@ describe('browser notice formatting', () => {
         origin: 'https://example.com',
         action: 'opened-in-orca'
       })
-    ).toBe('https://example.com opened a new page in Orca.')
+    ).toBeNull()
 
     expect(
       formatPopupNotice({

@@ -1,5 +1,6 @@
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import type { IPtyProvider, PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from './types'
+import type { WriteSettlement } from '../../shared/pty-write-settlement'
 import { toAppSshPtyId, toRelaySshPtyId } from './ssh-pty-id'
 import { createSshPtyAppliedSizeReader } from './ssh-pty-applied-size'
 import type {
@@ -45,7 +46,7 @@ export class SshPtyProvider implements IPtyProvider {
   deleteWorktreeHistory = (worktreeId: string): Promise<void> =>
     this.rpcOperations.deleteWorktreeHistory(worktreeId)
   write = (id: string, data: string): boolean => this.rpcOperations.write(id, data)
-  writeWithSettlement = (id: string, data: string): Promise<boolean> =>
+  writeWithSettlement = (id: string, data: string): Promise<WriteSettlement> =>
     this.rpcOperations.writeWithSettlement(id, data)
   resize = (id: string, cols: number, rows: number): void =>
     this.rpcOperations.resize(id, cols, rows)
@@ -54,6 +55,7 @@ export class SshPtyProvider implements IPtyProvider {
   getCwd = (id: string): Promise<string> => this.rpcOperations.getCwd(id)
   getInitialCwd = (id: string): Promise<string> => this.rpcOperations.getInitialCwd(id)
   clearBuffer = (id: string): Promise<void> => this.rpcOperations.clearBuffer(id)
+  resetInputModes = (id: string): Promise<void> => this.rpcOperations.resetInputModes(id)
   closeStartupQueryAuthority = (id: string): Promise<number> =>
     this.rpcOperations.closeStartupQueryAuthority(id)
   acknowledgeDataEvent = (id: string, charCount: number): void =>
@@ -63,7 +65,7 @@ export class SshPtyProvider implements IPtyProvider {
     this.rpcOperations.getForegroundProcess(id)
   inspectProcess = (
     id: string,
-    options?: { expectedIncarnationId?: string }
+    options?: { expectedIncarnationId?: string; scanChildProcesses?: boolean }
   ): Promise<PtyProcessInspection> => this.rpcOperations.inspectProcess(id, options)
   serialize = (ids: string[]): Promise<string> => this.rpcOperations.serialize(ids)
   revive = (state: string): Promise<void> => this.rpcOperations.revive(state)

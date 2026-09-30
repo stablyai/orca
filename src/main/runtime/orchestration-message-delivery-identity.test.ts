@@ -1,3 +1,4 @@
+import { settledWriteStub } from '../providers/settled-pty-write-stub'
 import { spawn } from 'node:child_process'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -70,7 +71,12 @@ function createRuntime(
   })
   const write = vi.fn(() => true)
   runtime.setOrchestrationDb(db)
-  runtime.setPtyController({ write, kill: vi.fn(), getForegroundProcess: async () => null })
+  runtime.setPtyController({
+    write,
+    writeWithSettlement: settledWriteStub(write),
+    kill: vi.fn(),
+    getForegroundProcess: async () => null
+  })
   runtime.registerPty(PTY_ID, WORKTREE_ID, null, {
     tabId: TAB_ID,
     leafId: LEAF_ID,
@@ -104,9 +110,9 @@ function createRuntime(
 
 async function driveToLiveIdle(runtime: OrcaRuntimeService): Promise<void> {
   await runtime.listTerminals()
-  runtime.onPtyData(PTY_ID, '\x1b]0;Codex working\x07', 1)
-  runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 2)
-  await Promise.resolve()
+  const working = runtime.acceptPtyDataBounded(PTY_ID, '\x1b]0;Codex working\x07', 1)
+  const done = runtime.acceptPtyDataBounded(PTY_ID, '\x1b]0;Codex done\x07', 2)
+  await Promise.all([working.completion, done.completion])
 }
 
 async function check(
@@ -136,7 +142,7 @@ async function check(
 function pointerPayloads(write: ReturnType<typeof vi.fn>): string[] {
   return write.mock.calls
     .map(([, payload]) => String(payload))
-    .filter((payload) => payload.includes('orca orchestration check'))
+    .filter((payload) => payload.includes('orchestration check'))
 }
 
 async function runBuiltCli(

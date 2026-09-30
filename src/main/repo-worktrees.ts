@@ -1,6 +1,12 @@
+import { preserveFolderUpgradeWorktreePath } from './folder-upgrade-worktree-path'
 import type { Repo } from '../shared/repo-types'
 import type { GitWorktreeInfo } from '../shared/worktree/types'
-import { listWorktreeGraph, listWorktrees, listWorktreesStrict } from './git/worktree'
+import {
+  listWorktreeGraph,
+  listWorktrees,
+  listWorktreesSharedStrictAllowingTrueEmpty,
+  listWorktreesStrict
+} from './git/worktree'
 import { isFolderRepo } from '../shared/repo-kind'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
 import { resolveGitRouteForHost } from './providers/execution-host-provider-dispatch'
@@ -43,6 +49,29 @@ export async function listRepoWorktrees(
   repo: Repo,
   options?: LocalRepoWorktreeListOptions
 ): Promise<GitWorktreeInfo[]> {
+  return listRoutedRepoWorktrees(repo, options, listWorktrees)
+}
+
+/**
+ * The detected scan's listing: a Git or host failure rejects instead of softening to `[]`, so a
+ * failed scan cannot be published as an authoritative empty listing and prune the repo's worktrees
+ * (#1158's retention guard only fires when the listing admits it failed).
+ */
+export async function listRepoWorktreesForDetectedScan(
+  repo: Repo,
+  options?: LocalRepoWorktreeListOptions
+): Promise<GitWorktreeInfo[]> {
+  return listRoutedRepoWorktrees(repo, options, listWorktreesSharedStrictAllowingTrueEmpty)
+}
+
+async function listRoutedRepoWorktrees(
+  repo: Repo,
+  options: LocalRepoWorktreeListOptions | undefined,
+  listLocal: (
+    repoPath: string,
+    options?: LocalRepoWorktreeListOptions
+  ) => Promise<GitWorktreeInfo[]>
+): Promise<GitWorktreeInfo[]> {
   if (isFolderRepo(repo)) {
     return [createFolderWorktree(repo)]
   }
@@ -65,9 +94,10 @@ export async function listRepoWorktrees(
     }
     return await route.provider.listWorktrees(repo.path)
   }
-  return hasLocalRepoWorktreeListOptions(options)
-    ? await listWorktrees(repo.path, options)
-    : await listWorktrees(repo.path)
+  const worktrees = hasLocalRepoWorktreeListOptions(options)
+    ? await listLocal(repo.path, options)
+    : await listLocal(repo.path)
+  return preserveFolderUpgradeWorktreePath(repo, worktrees)
 }
 
 /**
@@ -94,9 +124,10 @@ export async function listRepoWorktreeGraph(
   if (route.kind === 'ssh') {
     return route.provider ? await route.provider.listWorktrees(repo.path) : []
   }
-  return hasLocalRepoWorktreeListOptions(options)
+  const worktrees = hasLocalRepoWorktreeListOptions(options)
     ? await listWorktreeGraph(repo.path, options)
     : await listWorktreeGraph(repo.path)
+  return preserveFolderUpgradeWorktreePath(repo, worktrees)
 }
 
 export async function listLocalRepoWorktreesStrict(
@@ -109,7 +140,8 @@ export async function listLocalRepoWorktreesStrict(
   if (isFolderRepo(repo)) {
     return [createFolderWorktree(repo)]
   }
-  return hasLocalRepoWorktreeListOptions(options)
+  const worktrees = hasLocalRepoWorktreeListOptions(options)
     ? await listWorktreesStrict(repo.path, options)
     : await listWorktreesStrict(repo.path)
+  return preserveFolderUpgradeWorktreePath(repo, worktrees)
 }

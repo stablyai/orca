@@ -82,11 +82,10 @@ vi.mock('./browser-media-access', () => ({
   requestSystemMediaAccess: async () => false
 }))
 vi.mock('./browser-session-ua', () => ({
-  cleanElectronUserAgent: (userAgent: string) => userAgent,
-  setupClientHintsOverride: vi.fn()
+  installBrowserSessionUserAgentPolicy: vi.fn(() => vi.fn())
 }))
-vi.mock('./browser-session-user-agent-mode', () => ({
-  setBrowserSessionUserAgentMode: vi.fn()
+vi.mock('./browser-process-user-agent', () => ({
+  getBrowserProcessUserAgentIdentity: () => ({ mode: 'clean', userAgent: 'Mozilla/5.0 Orca' })
 }))
 vi.mock('./browser-webauthn-access', () => ({
   allowsBrowserWebAuthnPermission: () => false,
@@ -113,8 +112,7 @@ function profileFor(partition: string): BrowserSessionProfile {
     scope: 'isolated',
     partition,
     label: partition,
-    source: null,
-    userAgentMode: 'clean'
+    source: null
   }
 }
 

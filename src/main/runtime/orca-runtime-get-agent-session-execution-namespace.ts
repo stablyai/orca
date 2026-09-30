@@ -87,8 +87,7 @@ export class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends OrcaRuntim
 
   async ensureAgentSession(
     request: RuntimeEnsureAgentSessionRequest,
-    _caller: RuntimeAgentSessionRpcCaller = {},
-    handoffAuthority?: { spawnToken: string; providerRoot: string; sessionId: string }
+    _caller: RuntimeAgentSessionRpcCaller = {}
   ): Promise<RuntimeEnsureAgentSessionResult> {
     if (request.kind === 'automatic') {
       // Legacy renderer sleep records are migration evidence, not host authority.
@@ -98,11 +97,7 @@ export class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends OrcaRuntim
       throw new Error('runtime_unavailable')
     }
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(request.worktree)
-    const resolvedNamespace = this.getAgentSessionExecutionNamespace(workspace, request.agent)
-    const namespace =
-      resolvedNamespace && handoffAuthority
-        ? { ...resolvedNamespace, providerRoot: handoffAuthority.providerRoot }
-        : resolvedNamespace
+    const namespace = this.getAgentSessionExecutionNamespace(workspace, request.agent)
     if (
       !namespace ||
       !(await this.executionOwnerSupportsAgentSessionOperation(workspace, 'resume', _caller.signal))
@@ -138,16 +133,10 @@ export class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends OrcaRuntim
         request.agentArgs !== undefined
           ? request.agentArgs
           : resolveTuiAgentLaunchArgs(request.agent, settings.agentDefaultArgs),
-      agentEnv: {
-        ...resolveTuiAgentLaunchEnv(request.agent, settings.agentDefaultEnv),
-        ...(handoffAuthority && request.agent === 'codex'
-          ? { CODEX_HOME: handoffAuthority.providerRoot }
-          : handoffAuthority && request.agent === 'claude'
-            ? { CLAUDE_CONFIG_DIR: handoffAuthority.providerRoot }
-            : {})
-      },
+      agentEnv: resolveTuiAgentLaunchEnv(request.agent, settings.agentDefaultEnv),
       ompResumeFilePath: request.ompResumeFilePath,
       sessionOptions: this.toAgentSessionOptions(request.launchPreferences),
+      sessionOptionsOverrideAgentArgs: Boolean(request.launchPreferences),
       platform,
       shell,
       isRemote
@@ -155,7 +144,6 @@ export class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends OrcaRuntim
     if (!startup) {
       throw new Error('agent_session_identity_required')
     }
-    await this.markWorkspaceTrustedForAgent(request.agent, workspace.connectionId, workspace.path)
     if (_caller.signal?.aborted) {
       throw new Error('client_disconnected')
     }
@@ -165,16 +153,11 @@ export class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends OrcaRuntim
       launchConfig: startup.launchConfig,
       startupCommandDelivery: startup.startupCommandDelivery,
       launchAgent: request.agent,
+      terminalKittyKeyboardProtocol: request.terminalKittyKeyboardProtocol,
       presentation: request.presentation ?? 'background',
       tabId: request.placement?.tabId,
       leafId: request.placement?.leafId,
       agentSessionClaim: claim,
-      ...(handoffAuthority
-        ? {
-            launchToken: handoffAuthority.spawnToken,
-            structuredAgentSessionId: handoffAuthority.sessionId
-          }
-        : {}),
       signal: _caller.signal
     })
     return {

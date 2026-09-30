@@ -598,6 +598,8 @@ describe('OrcaRuntimeService', () => {
         tabId: 'tab-1',
         worktreeId: TEST_WORKTREE_ID,
         connectionId: null,
+        // The pane's handle rides the event so the store's row can rejoin its terminal.
+        terminalHandle: expect.stringMatching(/^term_/),
         payload: {
           state: 'working',
           prompt: 'ship it',

@@ -8,6 +8,13 @@ export type OrchestrationWorkerServer = {
   environmentId: string
   name: string
   peerFingerprint: string
+  pairingRevision?: number
+}
+
+/** Callers that already proved the contract, or that pin the pairing generation they resolved against. */
+export type OrchestrationEnvironmentCallOptions = {
+  contractVerified?: boolean
+  expectedEnvironmentPairingRevision?: number
 }
 
 export type OrchestrationEnvironmentTransport = {
@@ -17,7 +24,8 @@ export type OrchestrationEnvironmentTransport = {
     method: string,
     params: unknown,
     timeoutMs?: number,
-    envelope?: RuntimeOrchestrationEnvelope
+    envelope?: RuntimeOrchestrationEnvelope,
+    expectedEnvironmentPairingRevision?: number
   ): Promise<RuntimeRpcResponse<unknown>>
 }
 

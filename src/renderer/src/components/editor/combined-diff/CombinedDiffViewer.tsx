@@ -38,6 +38,7 @@ import {
 import { useCombinedDiffNotesActions } from './review-controls/use-combined-diff-notes-actions'
 import { useCombinedDiffSectionActions } from './review-controls/use-combined-diff-section-actions'
 import { useCombinedDiffViewPreferences } from './review-controls/use-combined-diff-view-preferences'
+import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 
 export default function CombinedDiffViewer({
   file,
@@ -64,9 +65,7 @@ export default function CombinedDiffViewer({
   )
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[file.worktreeId])
   const canOpenWorkspaceFileBrowserForPath = useWorkspaceFileBrowserActionPredicate(file.worktreeId)
-  const isDark =
-    settings?.theme === 'dark' ||
-    (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+  const isDark = useDocumentDarkTheme()
 
   const [sections, setSections] = useState<DiffSection[]>([])
   const [sectionHeights, setSectionHeights] = useState<Record<number, number>>({})
@@ -348,6 +347,7 @@ export default function CombinedDiffViewer({
           <CombinedDiffFileTree
             mode={entrySet.treeMode}
             worktreePath={file.filePath}
+            sourceWorkspaceId={file.worktreeId}
             entries={entrySet.entries}
             sectionIndexByKey={treeNavigation.sectionIndexByKey}
             activeSectionKey={treeNavigation.activeTreeSectionKey}

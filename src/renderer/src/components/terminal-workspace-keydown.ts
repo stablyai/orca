@@ -1,22 +1,16 @@
 import { toast } from 'sonner'
+import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
 import type { KeybindingActionId } from '../../../shared/keybindings'
 import { keybindingMatchesAction } from '../../../shared/keybindings'
 import { matchesRecentTabSwitcherChord } from '../../../shared/window-shortcut-policy'
 import { useAppStore } from '../store'
-import {
-  handleSwitchRecentTab,
-  handleSwitchTab,
-  handleSwitchTabAcrossAllTypes,
-  handleSwitchTerminalTab
-} from '../hooks/ipc-tab-switch'
 import {
   createFloatingWorkspaceBrowserTab,
   createFloatingWorkspaceMarkdownTab,
   createFloatingWorkspaceTerminalTab,
   handleEmptyFloatingWorkspacePanelCloseShortcut,
   isEventTargetInsideFloatingWorkspacePanel,
-  isFloatingWorkspacePanelFocused,
-  switchFloatingWorkspaceTab
+  isFloatingWorkspacePanelFocused
 } from '@/lib/floating-workspace-terminal-actions'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import {
@@ -38,8 +32,6 @@ export function handleTerminalWorkspaceKeyDown(
   const {
     activeWorktreeId,
     handleCloseAllFiles,
-    handleCloseBrowserTab,
-    handleCloseFile,
     handleNewAgentTab,
     handleNewBrowserTab,
     handleNewFile,
@@ -180,16 +172,9 @@ export function handleTerminalWorkspaceKeyDown(
     if (floatingPanelOwnsEvent) {
       return
     }
-    const state = useAppStore.getState()
-    if (state.activeTabType === 'terminal' && context === 'terminal') {
-      return
-    }
-    event.preventDefault()
-    notifyTerminalCapture('tab.close')
-    if (state.activeTabType === 'editor' && state.activeFileId) {
-      handleCloseFile(state.activeFileId)
-    } else if (state.activeTabType === 'browser' && state.activeBrowserTabId) {
-      handleCloseBrowserTab(state.activeBrowserTabId)
+    if (dispatchWorkspaceTabCommand({ type: 'close', context })) {
+      event.preventDefault()
+      notifyTerminalCapture('tab.close')
     }
     return
   }
@@ -211,7 +196,7 @@ export function handleTerminalWorkspaceKeyDown(
     event.preventDefault()
     event.stopPropagation()
     event.stopImmediatePropagation()
-    handleSwitchRecentTab()
+    dispatchWorkspaceTabCommand({ type: 'previous-recent' })
     return
   }
   const switchSameTypeDirection = matchShortcut('tab.nextSameType')
@@ -237,17 +222,11 @@ export function handleTerminalWorkspaceKeyDown(
           ? 'tab.nextSameType'
           : 'tab.previousSameType'
     )
-    if (floatingWorkspaceFocused) {
-      switchFloatingWorkspaceTab(
-        useAppStore.getState(),
-        switchAllTypesDirection ?? switchSameTypeDirection ?? 1,
-        switchAllTypesDirection !== null ? 'all-types' : 'same-type'
-      )
-    } else if (switchAllTypesDirection !== null) {
-      handleSwitchTabAcrossAllTypes(switchAllTypesDirection)
-    } else {
-      handleSwitchTab(switchSameTypeDirection ?? 1)
-    }
+    dispatchWorkspaceTabCommand({
+      type: 'switch',
+      direction: switchAllTypesDirection ?? switchSameTypeDirection ?? 1,
+      scope: switchAllTypesDirection !== null ? 'all-types' : 'same-type'
+    })
   }
   const terminalTabDirection = matchShortcut('tab.nextTerminal')
     ? 1
@@ -258,10 +237,10 @@ export function handleTerminalWorkspaceKeyDown(
     event.preventDefault()
     event.stopPropagation()
     event.stopImmediatePropagation()
-    if (floatingWorkspaceFocused) {
-      switchFloatingWorkspaceTab(useAppStore.getState(), terminalTabDirection, 'terminal')
-    } else {
-      handleSwitchTerminalTab(terminalTabDirection)
-    }
+    dispatchWorkspaceTabCommand({
+      type: 'switch',
+      direction: terminalTabDirection,
+      scope: 'terminal'
+    })
   }
 }

@@ -1,13 +1,7 @@
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { formatResetCreditExpiry } from './tooltip'
 
-export function getCodexAccountSyncKey(settings: GlobalSettings | null | undefined): string {
-  if (!settings) {
-    return 'no-settings'
-  }
-  return `${settings.activeRuntimeEnvironmentId?.trim() || 'local'}:${settings.activeCodexManagedAccountId ?? 'system'}:${JSON.stringify(settings.activeCodexManagedAccountIdsByRuntime ?? null)}:${settings.codexManagedAccounts.map((account) => `${account.id}:${account.updatedAt}`).join('|')}`
-}
+export { getCodexAccountSyncKey } from './provider-account-sync-key'
 
 export function getCodexResetProjection(
   codex: ProviderRateLimits,

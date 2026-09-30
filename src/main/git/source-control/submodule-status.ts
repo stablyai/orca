@@ -26,17 +26,22 @@ export async function getSubmoduleStatus(
   const submoduleWorktreePath = resolveSubmoduleWorktreePath(worktreePath, submodulePath)
   const limit = resolveGitStatusLimit(options.limit)
   // Why: staged expansion only represents HEAD→index; scanning the submodule worktree is wasted work.
-  const workingResult = options.staged
-    ? ({ entries: [], conflictOperation: 'unknown' } satisfies GitStatusResult)
-    : await getStatus(submoduleWorktreePath, options)
-  // Why: a moved gitlink (clean worktree) has no status rows; surface the parent-commit→checkout range as inner rows.
-  const fromOid = options.staged
-    ? await readGitlinkOidFromTree(worktreePath, 'HEAD', submodulePath, options)
-    : (await readGitlinkOidFromIndex(worktreePath, submodulePath, options)) ||
-      (await readGitlinkOidFromTree(worktreePath, 'HEAD', submodulePath, options))
-  const toOid = options.staged
-    ? await readGitlinkOidFromIndex(worktreePath, submodulePath, options)
-    : await readWorkingSubmoduleHead(submoduleWorktreePath, options)
+  // These three reads are independent, so they run concurrently — on SSH/WSL each one is a real round trip.
+  const [workingResult, fromOid, toOid] = await Promise.all([
+    options.staged
+      ? Promise.resolve<GitStatusResult>({ entries: [], conflictOperation: 'unknown' })
+      : getStatus(submoduleWorktreePath, options),
+    // Why: a moved gitlink (clean worktree) has no status rows; surface the parent-commit→checkout range as inner rows.
+    options.staged
+      ? readGitlinkOidFromTree(worktreePath, 'HEAD', submodulePath, options)
+      : readGitlinkOidFromIndex(worktreePath, submodulePath, options).then(
+          (indexOid) =>
+            indexOid || readGitlinkOidFromTree(worktreePath, 'HEAD', submodulePath, options)
+        ),
+    options.staged
+      ? readGitlinkOidFromIndex(worktreePath, submodulePath, options)
+      : readWorkingSubmoduleHead(submoduleWorktreePath, options)
+  ])
   if (fromOid && toOid && fromOid !== toOid) {
     const rangeEntries = await computeSubmoduleRangeEntries(
       submoduleWorktreePath,

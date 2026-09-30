@@ -74,7 +74,7 @@ export async function fetchBrowserClientUploadFiles(options: {
         throw new Error('browser_client_upload_transfer_stalled')
       }
     }
-    files.push({ remotePath, contents: Buffer.concat(chunks) })
+    files.push({ remotePath, contents: chunks.length === 1 ? chunks[0] : Buffer.concat(chunks) })
   }
   return files
 }

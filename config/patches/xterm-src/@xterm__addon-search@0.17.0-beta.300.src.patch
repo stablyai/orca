@@ -1,0 +1,231 @@
+diff --git a/src/SearchEngine.ts b/src/SearchEngine.ts
+index 1760bc2bd1fd274d23e2032fde631b39c739f0d9..5b3c5cc5e861356b87e8a15c55797f45bac20a5c 100644
+--- a/src/SearchEngine.ts
++++ b/src/SearchEngine.ts
+@@ -76,6 +76,9 @@ export class SearchEngine {
+     // Search from startRow + 1 to end
+     if (!result) {
+       for (let y = startRow + 1; y < this._terminal.buffer.active.baseY + this._terminal.rows; y++) {
++        if (this._isRowCoveredByEarlierSearch(y)) {
++          continue;
++        }
+         searchPosition.startRow = y;
+         searchPosition.startCol = 0;
+         result = this._findInLine(term, searchPosition, searchOptions);
+@@ -127,6 +130,9 @@ export class SearchEngine {
+     // Search from startRow + 1 to end
+     if (!result) {
+       for (let y = startRow + 1; y < this._terminal.buffer.active.baseY + this._terminal.rows; y++) {
++        if (this._isRowCoveredByEarlierSearch(y)) {
++          continue;
++        }
+         searchPosition.startRow = y;
+         searchPosition.startCol = 0;
+         result = this._findInLine(term, searchPosition, searchOptions);
+@@ -138,6 +144,11 @@ export class SearchEngine {
+     // If we hit the bottom and didn't search from the very top wrap back up
+     if (!result && startRow !== 0) {
+       for (let y = 0; y < startRow; y++) {
++        // Row 0 is never skipped: it can be a continuation whose line start was trimmed from the
++        // scrollback, and nothing earlier in this loop has searched it.
++        if (y > 0 && this._isRowCoveredByEarlierSearch(y)) {
++          continue;
++        }
+         searchPosition.startRow = y;
+         searchPosition.startCol = 0;
+         result = this._findInLine(term, searchPosition, searchOptions);
+@@ -237,6 +248,22 @@ export class SearchEngine {
+       (((searchIndex + term.length) === line.length) || (Constants.NON_WORD_CHARACTERS.includes(line[searchIndex + term.length])));
+   }
+ 
++  /** `_isWholeWord` gated on the option, so a rejected hit can be stepped past instead of ending the scan. */
++  private _satisfiesWholeWord(searchIndex: number, line: string, term: string, searchOptions: ISearchOptions): boolean {
++    return !searchOptions.wholeWord || this._isWholeWord(searchIndex, line, term);
++  }
++
++  /**
++   * Whether an earlier `_findInLine` in this same call already scanned this row's line from an
++   * equal or lower offset, which makes rescanning it pure O(rows^2) work on one long line. Sound
++   * for every option because `_findInLine` returns the first accepted match at or after its
++   * offset, which is monotone in that offset. Only valid once such a search has happened — the
++   * wrap-around loop starts at row 0, whose line start may have been trimmed from the scrollback.
++   */
++  private _isRowCoveredByEarlierSearch(row: number): boolean {
++    return this._terminal.buffer.active.getLine(row)?.isWrapped === true;
++  }
++
+   /**
+    * Searches a line for a search term. Takes the provided terminal line and searches the text line,
+    * which may contain subsequent terminal lines if the text is wrapped. If the provided line number
+@@ -250,23 +277,26 @@ export class SearchEngine {
+    * @returns The search result if it was found.
+    */
+   private _findInLine(term: string, searchPosition: ISearchPosition, searchOptions: ISearchOptions = {}, isReverseSearch: boolean = false): ISearchResult | undefined {
+-    const row = searchPosition.startRow;
+-    const col = searchPosition.startCol;
+-
+     // Ignore wrapped lines, only consider on unwrapped line (first row of command string).
+-    const firstLine = this._terminal.buffer.active.getLine(row);
+-    if (firstLine?.isWrapped) {
+-      if (isReverseSearch) {
++    if (isReverseSearch) {
++      // Reverse search never rewinds: its caller carries startCol down the rows of the line. Row 0
++      // is searched even when wrapped, since its line start may have been trimmed from the scrollback.
++      if (searchPosition.startRow > 0 && this._terminal.buffer.active.getLine(searchPosition.startRow)?.isWrapped) {
+         searchPosition.startCol += this._terminal.cols;
+         return;
+       }
+-
+-      // This will iterate until we find the line start.
+-      // When we find it, we will search using the calculated start column.
+-      searchPosition.startRow--;
+-      searchPosition.startCol += this._terminal.cols;
+-      return this._findInLine(term, searchPosition, searchOptions);
++    } else {
++      // A loop rather than recursion: one frame per wrapped row overflows the stack on a line long
++      // enough to fill the scrollback. Bounded at row 0 because after a reflow the buffer's ring
++      // holds stale entries at negative indices, so `getLine(-1)` answers with a wrapped line.
++      while (searchPosition.startRow > 0 && this._terminal.buffer.active.getLine(searchPosition.startRow)?.isWrapped) {
++        searchPosition.startRow--;
++        searchPosition.startCol += this._terminal.cols;
++      }
+     }
++    const row = searchPosition.startRow;
++    const col = searchPosition.startCol;
++
+     let cache = this._lineCache.getLineFromCache(row);
+     if (!cache) {
+       cache = this._lineCache.translateBufferLineToStringWithWrap(row, true);
+@@ -274,7 +304,7 @@ export class SearchEngine {
+     }
+     const [stringLine, offsets] = cache;
+ 
+-    const offset = this._bufferColsToStringOffset(row, col);
++    const offset = this._bufferColsToStringOffset(row, col, offsets);
+     let searchTerm = term;
+     let searchStringLine = stringLine;
+     if (!searchOptions.regex) {
+@@ -289,32 +319,46 @@ export class SearchEngine {
+       if (isReverseSearch) {
+         // This loop will get the resultIndex of the _last_ regex match in the range 0..offset
+         while (foundTerm = searchRegex.exec(searchStringLine.slice(0, offset))) {
+-          resultIndex = searchRegex.lastIndex - foundTerm[0].length;
+-          term = foundTerm[0];
+-          searchRegex.lastIndex -= (term.length - 1);
++          const matchIndex = searchRegex.lastIndex - foundTerm[0].length;
++          if (foundTerm[0].length > 0 && this._satisfiesWholeWord(matchIndex, searchStringLine, foundTerm[0], searchOptions)) {
++            resultIndex = matchIndex;
++            term = foundTerm[0];
++          }
++          searchRegex.lastIndex = matchIndex + 1;
+         }
+       } else {
+-        foundTerm = searchRegex.exec(searchStringLine.slice(offset));
+-        if (foundTerm && foundTerm[0].length > 0) {
+-          resultIndex = offset + (searchRegex.lastIndex - foundTerm[0].length);
+-          term = foundTerm[0];
++        // Driven over the whole line from `offset` rather than over `slice(offset)`: a slice
++        // re-anchors ^ and \b at whatever column the row happened to wrap at, and only
++        // first-accepted-match-at-or-after-offset is monotone in `offset`, which is what lets
++        // `_isRowCoveredByEarlierSearch` skip a wrapped row an earlier scan already covered.
++        searchRegex.lastIndex = offset;
++        while (foundTerm = searchRegex.exec(searchStringLine)) {
++          const matchIndex = searchRegex.lastIndex - foundTerm[0].length;
++          if (foundTerm[0].length > 0 && this._satisfiesWholeWord(matchIndex, searchStringLine, foundTerm[0], searchOptions)) {
++            resultIndex = matchIndex;
++            term = foundTerm[0];
++            break;
++          }
++          // A zero-length or rejected match would otherwise repeat forever.
++          searchRegex.lastIndex = matchIndex + 1;
+         }
+       }
++    } else if (isReverseSearch) {
++      let matchIndex = offset - searchTerm.length >= 0 ? searchStringLine.lastIndexOf(searchTerm, offset - searchTerm.length) : -1;
++      // `lastIndexOf` clamps a negative fromIndex to 0, so index 0 has to end the walk.
++      while (matchIndex >= 0 && !this._satisfiesWholeWord(matchIndex, searchStringLine, searchTerm, searchOptions)) {
++        matchIndex = matchIndex > 0 ? searchStringLine.lastIndexOf(searchTerm, matchIndex - 1) : -1;
++      }
++      resultIndex = matchIndex;
+     } else {
+-      if (isReverseSearch) {
+-        if (offset - searchTerm.length >= 0) {
+-          resultIndex = searchStringLine.lastIndexOf(searchTerm, offset - searchTerm.length);
+-        }
+-      } else {
+-        resultIndex = searchStringLine.indexOf(searchTerm, offset);
++      let matchIndex = searchStringLine.indexOf(searchTerm, offset);
++      while (matchIndex >= 0 && !this._satisfiesWholeWord(matchIndex, searchStringLine, searchTerm, searchOptions)) {
++        matchIndex = searchStringLine.indexOf(searchTerm, matchIndex + 1);
+       }
++      resultIndex = matchIndex;
+     }
+ 
+     if (resultIndex >= 0) {
+-      if (searchOptions.wholeWord && !this._isWholeWord(resultIndex, searchStringLine, term)) {
+-        return;
+-      }
+-
+       // Adjust the row number and search index if needed since a "line" of text can span multiple
+       // rows
+       let startRowOffset = 0;
+@@ -365,12 +409,21 @@ export class SearchEngine {
+     return offset;
+   }
+ 
+-  private _bufferColsToStringOffset(startRow: number, cols: number): number {
+-    let lineIndex = startRow;
+-    let offset = 0;
+-    let line = this._terminal.buffer.active.getLine(lineIndex);
+-    while (cols > 0 && line) {
+-      for (let i = 0; i < cols && i < this._terminal.cols; i++) {
++  /**
++   * `cols` counts from the start of the logical line, so summing the cells of every row before the
++   * resume point costs O(line) per call and the highlight-all pass makes one call per match.
++   * `lineOffsets` already holds the string offset each wrapped row starts at — the same map used
++   * above to turn a match index back into a row — so only the last, partial row needs cells. It is
++   * also the map the row a match lands on is read from, which the cell sum disagreed with by one
++   * for a row whose trailing cell is the null placeholder of a wide character that wrapped.
++   */
++  private _bufferColsToStringOffset(startRow: number, cols: number, lineOffsets: number[]): number {
++    const rowsBack = Math.min(Math.floor(cols / this._terminal.cols), lineOffsets.length - 1);
++    let offset = lineOffsets[rowsBack];
++    const line = this._terminal.buffer.active.getLine(startRow + rowsBack);
++    if (line) {
++      const colsInRow = Math.min(cols - rowsBack * this._terminal.cols, this._terminal.cols);
++      for (let i = 0; i < colsInRow; i++) {
+         const cell = line.getCell(i);
+         if (!cell) {
+           break;
+@@ -380,12 +433,6 @@ export class SearchEngine {
+           offset += cell.getCode() === 0 ? 1 : cell.getChars().length;
+         }
+       }
+-      lineIndex++;
+-      line = this._terminal.buffer.active.getLine(lineIndex);
+-      if (line && !line.isWrapped) {
+-        break;
+-      }
+-      cols -= this._terminal.cols;
+     }
+     return offset;
+   }
+diff --git a/src/SearchLineCache.ts b/src/SearchLineCache.ts
+index 526f4bfcc74a881bb39b400ec79a25d33d602303..19b22f2f70e50a6b01d07966e15727cc5271c776 100644
+--- a/src/SearchLineCache.ts
++++ b/src/SearchLineCache.ts
+@@ -109,9 +109,13 @@ export class SearchLineCache extends Disposable {
+   public translateBufferLineToStringWithWrap(lineIndex: number, trimRight: boolean): LineCacheEntry {
+     const strings = [];
+     const lineOffsets = [0];
++    // A single line longer than the whole scrollback leaves every buffer row wrapped, and the
++    // buffer's ring answers an out-of-range row by cycling back to the start, so an unbounded walk
++    // never reaches an unwrapped line.
++    const bufferLength = this._terminal.buffer.active.length;
+     let line = this._terminal.buffer.active.getLine(lineIndex);
+     while (line) {
+-      const nextLine = this._terminal.buffer.active.getLine(lineIndex + 1);
++      const nextLine = lineIndex + 1 < bufferLength ? this._terminal.buffer.active.getLine(lineIndex + 1) : undefined;
+       const lineWrapsToNext = nextLine ? nextLine.isWrapped : false;
+       let string = line.translateToString(!lineWrapsToNext && trimRight);
+       if (lineWrapsToNext && nextLine) {

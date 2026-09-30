@@ -14,7 +14,8 @@ import {
   installMainWindowCloseLifecycle,
   WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS
 } from './main-window-close-lifecycle'
-import type { CreateMainWindowOptions } from './main-window-contracts'
+import type { CreateMainWindowOptions, MainWindowLoadObserver } from './main-window-contracts'
+import { mainWindowLoadErrorCode } from './main-window-load-error-code'
 import { installMainWindowFocusLifecycle } from './main-window-focus-lifecycle'
 import { installMainWindowShortcutRouting } from './main-window-shortcut-routing'
 import { installMainWindowStateLifecycle } from './main-window-state-lifecycle'
@@ -33,12 +34,25 @@ import { installWindowsPathRegistryChangeListener } from '../pty/windows-path-re
 
 export { WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS }
 
-export function loadMainWindow(mainWindow: BrowserWindow): void {
-  if (is.dev && process.env.ELECTRON_RENDERER_URL) {
-    void mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
-  } else {
-    void mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
-  }
+export function loadMainWindow(mainWindow: BrowserWindow, observer?: MainWindowLoadObserver): void {
+  const load =
+    is.dev && process.env.ELECTRON_RENDERER_URL
+      ? mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
+      : mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+  // Observe each load promise so failures cannot leave recovery waiting silently.
+  load.then(
+    () => observer?.onLoaded?.(),
+    (cause: unknown) => {
+      const error = cause instanceof Error ? cause : new Error(String(cause))
+      const errorCode = mainWindowLoadErrorCode(error)
+      // Keep durable diagnostics path-free and exclude shutdown/navigation aborts.
+      if (!mainWindow.isDestroyed() && errorCode !== 'ERR_ABORTED') {
+        recordDurableCrashBreadcrumb('main_window_load_failed', { errorCode })
+      }
+      console.error('[window] Main window load failed', error)
+      observer?.onError?.(error)
+    }
+  )
 }
 
 export function createMainWindow(
@@ -158,8 +172,9 @@ export function createMainWindow(
     }
     forceRepaint(mainWindow)
     mainWindow.webContents.send('system:resumed')
+    // Give a suspended recovery load its full budget on wake.
+    focus.notifySystemResume()
   }
-  powerMonitor.on('resume', onSystemResume)
 
   const state = installMainWindowStateLifecycle({
     mainWindow,
@@ -172,9 +187,11 @@ export function createMainWindow(
     isWindowClosing: state.isWindowClosing,
     mainWindow,
     opts,
-    reloadMainWindow: () => loadMainWindow(mainWindow),
+    reloadMainWindow: (observer) => loadMainWindow(mainWindow, observer),
     rendererWebContentsId
   })
+  // Register after focus is initialized because the resume callback uses it.
+  powerMonitor.on('resume', onSystemResume)
   installMainWindowShortcutRouting({ focus, mainWindow, opts, store })
   const closeLifecycle = installMainWindowCloseLifecycle({
     focus,

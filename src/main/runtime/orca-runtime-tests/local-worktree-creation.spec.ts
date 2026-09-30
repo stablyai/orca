@@ -6,7 +6,7 @@ import {
   computeWorktreePathMock,
   deleteWorktreeHistoryDirMock,
   ensurePathWithinWorkspaceMock,
-  getBaseRefDefault,
+  resolveDefaultBaseRefWithLocalGit,
   getBranchConflictKind,
   getPRForBranchMock,
   gitRunner,
@@ -348,7 +348,7 @@ describe('OrcaRuntimeService', () => {
           suggestLocalBaseRefUpdate: true
         }
       )
-      expect(getBaseRefDefault).toHaveBeenCalled()
+      expect(resolveDefaultBaseRefWithLocalGit).toHaveBeenCalledWith({ cwd: TEST_REPO_PATH })
     } finally {
       getReposSpy.mockRestore()
       gitSpy.mockRestore()
@@ -398,7 +398,9 @@ describe('OrcaRuntimeService', () => {
         createdWorktree.path,
         'local-branch-base',
         'develop',
-        false
+        false,
+        false,
+        {}
       )
     } finally {
       getReposSpy.mockRestore()
@@ -452,7 +454,9 @@ describe('OrcaRuntimeService', () => {
         createdWorktree.path,
         'slash-local-base',
         'team/feature',
-        false
+        false,
+        false,
+        {}
       )
       expect(gitSpy).not.toHaveBeenCalledWith(
         [
@@ -533,17 +537,23 @@ describe('OrcaRuntimeService', () => {
       branchNameOverride: 'feature/something'
     })
 
+    // Why: an explicit branch override adopts the local branch before the conflict
+    // probe, so no lazy adoption callback is handed to getBranchConflictKind.
     expect(getBranchConflictKind).toHaveBeenCalledWith(
       TEST_REPO_PATH,
       'feature/something',
-      'origin/feature/something'
+      'origin/feature/something',
+      {},
+      undefined
     )
     expect(addWorktree).toHaveBeenCalledWith(
       TEST_REPO_PATH,
       '/tmp/workspaces/feature-something',
       'feature/something',
       'origin/feature/something',
-      false
+      false,
+      false,
+      {}
     )
     expect(resolveLocalGitUsernameMock).not.toHaveBeenCalled()
     expect(result.worktree).toMatchObject({

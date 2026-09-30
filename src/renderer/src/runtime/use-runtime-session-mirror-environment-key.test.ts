@@ -22,7 +22,7 @@ import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-envi
 import type { AppState } from '@/store/types'
 import {
   selectRuntimeSessionMirrorTargetInputs,
-  useRuntimeSessionMirrorEnvironmentKey
+  useRuntimeSessionMirrorEnvironmentKeys
 } from './use-runtime-session-mirror-environment-key'
 import { useWebSessionTabsSync } from './web-session-tabs-sync'
 
@@ -95,7 +95,7 @@ function seedMirrorState(): void {
   )
 }
 
-describe('useRuntimeSessionMirrorEnvironmentKey', () => {
+describe('useRuntimeSessionMirrorEnvironmentKeys', () => {
   beforeEach(() => {
     getMirrorTargets.mockClear()
     seedMirrorState()
@@ -123,10 +123,10 @@ describe('useRuntimeSessionMirrorEnvironmentKey', () => {
       ])
     )
     useAppStore.setState({ repos, worktreesByRepo })
-    const hook = renderHook(() => useRuntimeSessionMirrorEnvironmentKey())
+    const hook = renderHook(() => useRuntimeSessionMirrorEnvironmentKeys())
     const initialCallCount = getMirrorTargets.mock.calls.length
 
-    expect(hook.result.current).toBe('env-a\u0001runtime-a\u00011\u0001101')
+    expect(hook.result.current.environmentKey).toBe('env-a\u0001runtime-a\u00011\u0001101')
     expect(initialCallCount).toBe(1)
 
     act(() => {
@@ -231,17 +231,17 @@ describe('useRuntimeSessionMirrorEnvironmentKey', () => {
         activeRuntimeEnvironmentId: null
       }
     })
-    const hook = renderHook(() => useRuntimeSessionMirrorEnvironmentKey())
+    const hook = renderHook(() => useRuntimeSessionMirrorEnvironmentKeys())
 
-    expect(hook.result.current).toBe('')
+    expect(hook.result.current.environmentKey).toBe('')
     act(() => useAppStore.setState(change(useAppStore.getState())))
 
-    expect(hook.result.current).toBe('env-b\u0001runtime-b\u00012\u0001201')
+    expect(hook.result.current.environmentKey).toBe('env-b\u0001runtime-b\u00012\u0001201')
     expect(getMirrorTargets).toHaveBeenCalledTimes(2)
   })
 
   it('rebuilds the key when connection or pairing identity changes', () => {
-    const hook = renderHook(() => useRuntimeSessionMirrorEnvironmentKey())
+    const hook = renderHook(() => useRuntimeSessionMirrorEnvironmentKeys())
 
     act(() => {
       useAppStore.setState({
@@ -256,7 +256,7 @@ describe('useRuntimeSessionMirrorEnvironmentKey', () => {
         ]) as AppState['runtimeStatusByEnvironmentId']
       })
     })
-    expect(hook.result.current).toBe('env-a\u0001runtime-a\u00012\u0001101')
+    expect(hook.result.current.environmentKey).toBe('env-a\u0001runtime-a\u00012\u0001101')
 
     act(() => {
       useAppStore.setState({
@@ -265,12 +265,12 @@ describe('useRuntimeSessionMirrorEnvironmentKey', () => {
         ] as PublicKnownRuntimeEnvironment[]
       })
     })
-    expect(hook.result.current).toBe('env-a\u0001runtime-a\u00012\u0001102')
+    expect(hook.result.current.environmentKey).toBe('env-a\u0001runtime-a\u00012\u0001102')
     expect(getMirrorTargets).toHaveBeenCalledTimes(3)
   })
 
   it('clears the key when status, environment, or the final owner disappears', () => {
-    const hook = renderHook(() => useRuntimeSessionMirrorEnvironmentKey())
+    const hook = renderHook(() => useRuntimeSessionMirrorEnvironmentKeys())
     const onlineStatus = useAppStore.getState().runtimeStatusByEnvironmentId.get('env-a')!
     const environments = useAppStore.getState().runtimeEnvironments
 
@@ -279,18 +279,18 @@ describe('useRuntimeSessionMirrorEnvironmentKey', () => {
         runtimeStatusByEnvironmentId: new Map([['env-a', { ...onlineStatus, status: null }]])
       })
     })
-    expect(hook.result.current).toBe('')
+    expect(hook.result.current.environmentKey).toBe('')
 
     act(() => {
       useAppStore.setState({ runtimeStatusByEnvironmentId: new Map([['env-a', onlineStatus]]) })
     })
-    expect(hook.result.current).toBe('env-a\u0001runtime-a\u00011\u0001101')
+    expect(hook.result.current.environmentKey).toBe('env-a\u0001runtime-a\u00011\u0001101')
 
     act(() => useAppStore.setState({ runtimeEnvironments: [] }))
-    expect(hook.result.current).toBe('')
+    expect(hook.result.current.environmentKey).toBe('')
 
     act(() => useAppStore.setState({ runtimeEnvironments: environments }))
-    expect(hook.result.current).toBe('env-a\u0001runtime-a\u00011\u0001101')
+    expect(hook.result.current.environmentKey).toBe('env-a\u0001runtime-a\u00011\u0001101')
 
     act(() => {
       useAppStore.setState({
@@ -300,7 +300,7 @@ describe('useRuntimeSessionMirrorEnvironmentKey', () => {
         }
       })
     })
-    expect(hook.result.current).toBe('')
+    expect(hook.result.current.environmentKey).toBe('')
     expect(getMirrorTargets).toHaveBeenCalledTimes(6)
   })
 

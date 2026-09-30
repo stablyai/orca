@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import * as monaco from 'monaco-editor'
+import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import { afterEach, describe, expect, it } from 'vitest'
 import { syncContentUpdate } from './monaco-content-sync'
 

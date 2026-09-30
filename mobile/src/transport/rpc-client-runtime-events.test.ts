@@ -14,6 +14,10 @@ vi.mock('./e2ee', () => ({
   decryptBytes: (bytes: Uint8Array) => bytes
 }))
 
+vi.mock('./mobile-runtime-capability-negotiation', () => ({
+  negotiateMobileRuntimeCapabilities: (args: { onReady: () => void }) => args.onReady()
+}))
+
 class RuntimeEventTestSocket {
   static CONNECTING = 0
   static OPEN = 1
@@ -129,6 +133,32 @@ describe('runtime client-event stream disposal', () => {
     expect(listener).not.toHaveBeenCalled()
     expect(sentRequests(socket, 'runtime.clientEvents.unsubscribe')).toEqual([
       expect.objectContaining({ params: { subscriptionId: 'runtime-events:late' } })
+    ])
+    client.close()
+  })
+
+  it('releases the replayed registration on the new socket when disposed before its ready', async () => {
+    const { client, socket: first } = connectReadyClient()
+    const unsubscribe = client.subscribe('runtime.clientEvents.subscribe', null, () => {})
+    const request = sentRequests(first, 'runtime.clientEvents.subscribe')[0]!
+    emitReady(first, request.id, 'runtime-events:first-socket')
+
+    first.close()
+    await vi.advanceTimersByTimeAsync(500)
+    const second = sockets.at(-1)!
+    expect(second).not.toBe(first)
+    second.open()
+    second.receive(JSON.stringify({ type: 'e2ee_ready' }))
+    second.receive('encrypted:{"type":"e2ee_authenticated"}')
+    expect(sentRequests(second, 'runtime.clientEvents.subscribe')).toEqual([
+      expect.objectContaining({ id: request.id })
+    ])
+
+    unsubscribe()
+    emitReady(second, request.id, 'runtime-events:second-socket')
+
+    expect(sentRequests(second, 'runtime.clientEvents.unsubscribe')).toEqual([
+      expect.objectContaining({ params: { subscriptionId: 'runtime-events:second-socket' } })
     ])
     client.close()
   })

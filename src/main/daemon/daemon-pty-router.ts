@@ -12,6 +12,7 @@ import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 import { shouldHandoffDaemonHistory } from './daemon-history-handoff'
 import type { DaemonPtyRouterDataEvent, DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
 import { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
+import type { WriteSettlement } from '../../shared/pty-write-settlement'
 
 export class DaemonPtyRouter implements IPtyProvider {
   private current: DaemonPtyAdapter
@@ -93,7 +94,7 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.adapterFor(id).write(id, data)
   }
 
-  writeWithSettlement(id: string, data: string): Promise<boolean> {
+  writeWithSettlement(id: string, data: string): Promise<WriteSettlement> {
     return this.adapterFor(id).writeWithSettlement(id, data)
   }
 
@@ -161,6 +162,10 @@ export class DaemonPtyRouter implements IPtyProvider {
     await this.adapterFor(id).clearBuffer(id)
   }
 
+  async resetInputModes(id: string): Promise<void> {
+    await this.adapterFor(id).resetInputModes(id)
+  }
+
   async closeStartupQueryAuthority(id: string): Promise<number> {
     return (await this.adapterFor(id).closeStartupQueryAuthority?.(id)) ?? 0
   }
@@ -179,7 +184,7 @@ export class DaemonPtyRouter implements IPtyProvider {
 
   async inspectProcess(
     id: string,
-    options?: { expectedIncarnationId?: string }
+    options?: { expectedIncarnationId?: string; steadyState?: boolean }
   ): Promise<PtyProcessInspection> {
     return this.adapterForInspection(id).inspectProcess(id, options)
   }

@@ -1,4 +1,5 @@
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { AgentWorkspaceTrustSpawnRequest } from '../../shared/agent-workspace-trust-spawn-request'
 import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
@@ -12,6 +13,7 @@ import type {
 import type { PtyProcessInfo } from './pty-process-info'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 import type { TerminalOwner } from '../../shared/terminal-owner'
+import type { WriteSettlement } from '../../shared/pty-write-settlement'
 
 export type {
   PtyBackgroundStreamEvent,
@@ -76,6 +78,8 @@ export type PtySpawnOptions = {
   isNewSession?: boolean
   /** Host setting forwarded additively to the process owner; old owners ignore it. */
   historyIsolationEnabled?: boolean
+  /** SSH only: workspace the relay pre-trusts for `launchAgent` before spawning; old relays ignore it. */
+  agentWorkspaceTrust?: AgentWorkspaceTrustSpawnRequest
   /** Attach the named session atomically or fail without creating a process. */
   attachOnly?: boolean
   /** Exact persisted owner expected by an attach-only routing decision. */
@@ -87,6 +91,8 @@ export type PtySpawnOptions = {
    *  changing the user's persistent default shell setting. Only consulted on
    *  Windows; ignored on macOS/Linux where shell selection is not exposed. */
   shellOverride?: string
+  /** Optional Unix interactive profile args; ignored for command and agent launches. */
+  terminalShellArgs?: string[]
   /** Preferred WSL distro for generic `wsl.exe` launches. Worktree/session
    *  distro still wins when the cwd already identifies a WSL distro. */
   terminalWindowsWslDistro?: string | null
@@ -140,7 +146,10 @@ export type IPtyProvider = {
   /** Exact provider readback: false only when the provider answered that the PTY is absent. */
   probePtyLiveness?: (id: string) => Promise<boolean | null>
   write(id: string, data: string): boolean | void
-  writeWithSettlement?: (id: string, data: string) => Promise<boolean>
+  /** Three-valued settlement for writes whose delivery a durable claim depends on.
+   *  Required: a provider that answers this from its own fire-and-forget `write` is
+   *  fabricating a handoff, so every provider must settle or say it cannot. */
+  writeWithSettlement: (id: string, data: string) => WriteSettlement | Promise<WriteSettlement>
   resize(id: string, cols: number, rows: number): void
   /**
    * Producer-side flow control: stop/restart reading the underlying PTY so a
@@ -218,6 +227,8 @@ export type IPtyProvider = {
   getCwd(id: string): Promise<string>
   getInitialCwd(id: string): Promise<string>
   clearBuffer(id: string): Promise<void>
+  /** Grounds the host's own terminal models (Reset Terminal); renderers ground themselves. */
+  resetInputModes(id: string): Promise<void>
   /** Ordered handoff from startup source authority to the live/hidden view authority. */
   closeStartupQueryAuthority?: (id: string) => Promise<number> | number
   acknowledgeDataEvent(id: string, charCount: number): void

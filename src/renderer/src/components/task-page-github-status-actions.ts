@@ -82,7 +82,7 @@ export function getTaskPageGitHubDuplicateTargetErrorMessage(
 }
 
 export function getTaskPageGitHubDuplicateCandidates(
-  items: GitHubWorkItem[],
+  items: readonly GitHubWorkItem[],
   currentIssueNumber: number,
   query: string
 ): GitHubWorkItem[] {

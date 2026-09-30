@@ -71,7 +71,7 @@ describe('generateCommitMessageFromContext', () => {
       error:
         'agent CLI command produced too much output. Check the agent CLI configuration and try again.'
     })
-    expectChildTerminated(child)
+    await expectChildTerminated(child)
   })
 
   it('passes prepared provider environment to local agent subprocesses', async () => {

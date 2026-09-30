@@ -1,7 +1,14 @@
+import {
+  closeTestStores,
+  testState,
+  createStore,
+  writeDataFile,
+  readDataFile,
+  makeRepo,
+  makeTerminalTab
+} from './persistence-test-harness'
 // Why this file exists: deregistering a project used to strand every row it owned. No sweeper could
-// reach them -- the missing-directory prune is gated on the repo still being registered, and a
-// paired client's mirror of a remote host's rows is keyed by ids that client never registers, so the
-// owning host's removal never reached it (#17776).
+// reach them because the missing-directory prune is gated on the repo still being registered.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
@@ -10,14 +17,6 @@ import { getDefaultWorkspaceSession } from '../shared/constants'
 import { composeWorktreeHostIdentity } from '../shared/worktree/host-qualified-identity'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../shared/workspace-scope'
 import type { PersistedState } from '../shared/persisted-state-types'
-import {
-  testState,
-  createStore,
-  writeDataFile,
-  readDataFile,
-  makeRepo,
-  makeTerminalTab
-} from './persistence-test-harness'
 
 vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(),
@@ -69,7 +68,8 @@ describe('deregistered repo residue', () => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-orphan-sweep-'))
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
@@ -103,7 +103,7 @@ describe('deregistered repo residue', () => {
     expect(session.sleepingAgentSessionsByPaneKey ?? {}).toEqual({})
   })
 
-  it("sweeps a remote host's session partition the owning host's removal can never reach", async () => {
+  it('keeps a remote session whose repo is not registered on the desktop', async () => {
     writeDataFile({
       schemaVersion: 1,
       repos: [makeRepo({ id: LIVE_REPO, path: '/workspace/live' })],
@@ -117,8 +117,10 @@ describe('deregistered repo residue', () => {
     store.flush()
 
     const partition = store.getWorkspaceSession(RUNTIME_HOST)
-    expect(partition.tabsByWorktree).toEqual({})
-    expect(partition.activeTabTypeByWorktree).toEqual({})
+    expect(partition.tabsByWorktree[GONE_WORKTREE]).toHaveLength(1)
+    expect(partition.activeTabTypeByWorktree).toEqual(
+      sessionFor(GONE_WORKTREE).activeTabTypeByWorktree
+    )
   })
 
   it('keeps rows for every registered repo, on any execution host', async () => {
@@ -186,6 +188,31 @@ describe('deregistered repo residue', () => {
     expect(reloaded.sweepDeregisteredRepoResidue()).toEqual([])
   })
 
+  // A close record names its workspace only in its value, so like a sleeping agent it must seed the
+  // sweep itself or a removed project's records wait out the TTL.
+  it("drops a close record that is the orphan repo's only residue, and self-clears", async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [makeRepo({ id: LIVE_REPO, path: '/workspace/live' })],
+      worktreeMeta: {},
+      workspaceSession: {
+        ...getDefaultWorkspaceSession(),
+        closedTerminalTabTombstonesByTabId: {
+          'tab-gone': { worktreeId: GONE_WORKTREE, closedAt: Date.now(), reason: 'user' },
+          'tab-live': { worktreeId: LIVE_WORKTREE, closedAt: Date.now(), reason: 'user' }
+        }
+      }
+    })
+
+    const store = await createStore()
+    store.flush()
+    expect(
+      Object.keys(store.getWorkspaceSession('local').closedTerminalTabTombstonesByTabId ?? {})
+    ).toEqual(['tab-live'])
+    const reloaded = await createStore()
+    expect(reloaded.sweepDeregisteredRepoResidue()).toEqual([])
+  })
+
   // The session scalars are pruned by bespoke rules, not by owner key, so no owner-key loop reaches
   // them. Each has to be able to seed the sweep on its own or an orphan named only there is stuck.
   it.each([
@@ -204,15 +231,13 @@ describe('deregistered repo residue', () => {
       schemaVersion: 1,
       repos: [makeRepo({ id: LIVE_REPO, path: '/workspace/live' })],
       worktreeMeta: {},
-      workspaceSessionsByHostId: {
-        [RUNTIME_HOST]: { ...getDefaultWorkspaceSession(), ...session }
-      }
+      workspaceSession: { ...getDefaultWorkspaceSession(), ...session }
     })
 
     const store = await createStore()
     store.flush()
 
-    const partition = store.getWorkspaceSession(RUNTIME_HOST)
+    const partition = store.getWorkspaceSession()
     expect(partition.activeWorktreeId ?? null).toBeNull()
     expect(partition.activeWorkspaceKey ?? null).toBeNull()
     expect(partition.activeWorktreeIdsOnShutdown ?? []).toEqual([])

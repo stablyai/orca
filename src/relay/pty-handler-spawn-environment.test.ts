@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
@@ -335,6 +336,33 @@ describe('PtyHandler', () => {
       }
     )
 
+    it.each(['process', 'client'])(
+      'drops an ORCA_CODEX_LAUNCH_PREFLIGHT from the relay %s env',
+      async (source) => {
+        const inherited = '/opt/orca/bin/orca'
+        const previous = process.env.ORCA_CODEX_LAUNCH_PREFLIGHT
+        if (source === 'process') {
+          process.env.ORCA_CODEX_LAUNCH_PREFLIGHT = inherited
+        }
+        try {
+          await dispatcher.callRequest('pty.spawn', {
+            cols: 80,
+            rows: 24,
+            ...(source === 'client' ? { env: { ORCA_CODEX_LAUNCH_PREFLIGHT: inherited } } : {})
+          })
+        } finally {
+          if (previous === undefined) {
+            delete process.env.ORCA_CODEX_LAUNCH_PREFLIGHT
+          } else {
+            process.env.ORCA_CODEX_LAUNCH_PREFLIGHT = previous
+          }
+        }
+
+        const spawnEnv = mockPtySpawn.mock.calls.at(-1)?.[2]?.env as Record<string, string>
+        expect(spawnEnv.ORCA_CODEX_LAUNCH_PREFLIGHT).toBeUndefined()
+      }
+    )
+
     it('drops an ORCA_HISTFILE handed over in the client env', async () => {
       await dispatcher.callRequest('pty.spawn', {
         cols: 80,
@@ -512,6 +540,73 @@ describe('PtyHandler', () => {
     }
   })
 
+  it('keeps the image protocol hint consistent after renderer and augmenter overrides', async () => {
+    handler.addEnvAugmenter(() => ({ ORCA_IMAGE_PROTOCOL: 'sixel' }))
+    await dispatcher.callRequest('pty.spawn', {
+      cols: 80,
+      rows: 24,
+      env: { ORCA_IMAGE_PROTOCOL: 'none' }
+    })
+    expect(mockPtySpawn.mock.calls[0][2].env.ORCA_IMAGE_PROTOCOL).toBe('kitty')
+  })
+
+  it('waits for execution-host environment resolution before spawning', async () => {
+    const entered = Promise.withResolvers<void>()
+    const resolved = Promise.withResolvers<Record<string, string>>()
+    handler.addEnvAugmenter(() => {
+      entered.resolve()
+      return resolved.promise
+    })
+    const spawning = dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })
+    await entered.promise
+    expect(mockPtySpawn).not.toHaveBeenCalled()
+    resolved.resolve({ PI_CONFIG_DIR: '.evaluated-profile' })
+    await spawning
+    expect(mockPtySpawn.mock.calls[0]?.[2]?.env.PI_CONFIG_DIR).toBe('.evaluated-profile')
+  })
+
+  it('does not spawn when canceled during environment resolution', async () => {
+    const entered = Promise.withResolvers<void>()
+    const resolved = Promise.withResolvers<Record<string, string>>()
+    handler.addEnvAugmenter(() => {
+      entered.resolve()
+      return resolved.promise
+    })
+    const abort = new AbortController()
+    const spawning = dispatcher.callRequest(
+      'pty.spawn',
+      { cols: 80, rows: 24 },
+      {
+        signal: abort.signal,
+        isStale: () => abort.signal.aborted
+      }
+    )
+    const rejected = expect(spawning).rejects.toThrow('client_disconnected')
+    await entered.promise
+    abort.abort()
+    resolved.resolve({ PI_CONFIG_DIR: '.evaluated-profile' })
+    await rejected
+    expect(mockPtySpawn).not.toHaveBeenCalled()
+    expect(handler.activePtyCount).toBe(0)
+  })
+
+  it('disposes a creation already awaiting its execution environment', async () => {
+    const entered = Promise.withResolvers<void>()
+    const resolved = Promise.withResolvers<Record<string, string>>()
+    handler.addEnvAugmenter(() => {
+      entered.resolve()
+      return resolved.promise
+    })
+    const spawning = dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })
+    await entered.promise
+    const disposal = handler.dispose({ waitForPhysicalExit: false })
+    expect(mockPtySpawn).not.toHaveBeenCalled()
+    resolved.resolve({ PI_CONFIG_DIR: '.evaluated-profile' })
+    await spawning
+    await disposal
+    expect(mockPtyInstance.kill).toHaveBeenCalled()
+    expect(handler.activePtyCount).toBe(0)
+  })
   it('applies env augmenters after process.env and renderer-supplied env (augmenter wins on key conflict)', async () => {
     handler.addEnvAugmenter(() => ({
       ORCA_AGENT_HOOK_PORT: '12345',
@@ -536,6 +631,54 @@ describe('PtyHandler', () => {
     expect(callArgs.env.ORCA_PANE_KEY).toBe('augmenter-wins')
     // Renderer-supplied keys not in augmenter map flow through:
     expect(callArgs.env.ORCA_TAB_ID).toBe('tab-1')
+  })
+
+  it('mirrors pane identity onto its scrub-safe aliases for a remote spawn', async () => {
+    // Why the relay and not just the shared helper: a remote pane's env is built here, and an
+    // agent whose harness drops KEY/TOKEN names (DSH) has nothing to attribute its hooks to.
+    await dispatcher.callRequest('pty.spawn', {
+      cols: 80,
+      rows: 24,
+      env: { ORCA_PANE_KEY: 'tab-1:0', ORCA_AGENT_LAUNCH_TOKEN: 't' }
+    })
+
+    const callArgs = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
+    expect(callArgs.env.ORCA_AGENT_PANE).toBe('tab-1:0')
+    expect(callArgs.env.ORCA_AGENT_LAUNCH).toBe('t')
+    expect(callArgs.env.ORCA_PANE_KEY).toBe('tab-1:0')
+  })
+
+  it("drops an alias the relay's own env carries when the spawn claims no identity", async () => {
+    // Why: the relay is itself startable from an Orca pane, so inheriting either name would
+    // attribute this pane's hooks to whichever row started the relay.
+    const previous = {
+      pane: process.env.ORCA_PANE_KEY,
+      launch: process.env.ORCA_AGENT_LAUNCH_TOKEN,
+      paneAlias: process.env.ORCA_AGENT_PANE
+    }
+    process.env.ORCA_PANE_KEY = 'relays-own-pane'
+    process.env.ORCA_AGENT_LAUNCH_TOKEN = 'relays-own-launch'
+    process.env.ORCA_AGENT_PANE = 'stale-alias'
+    try {
+      await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })
+    } finally {
+      for (const [key, value] of [
+        ['ORCA_PANE_KEY', previous.pane],
+        ['ORCA_AGENT_LAUNCH_TOKEN', previous.launch],
+        ['ORCA_AGENT_PANE', previous.paneAlias]
+      ] as const) {
+        if (value === undefined) {
+          delete process.env[key]
+        } else {
+          process.env[key] = value
+        }
+      }
+    }
+
+    const callArgs = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
+    expect(callArgs.env.ORCA_PANE_KEY).toBeUndefined()
+    expect(callArgs.env.ORCA_AGENT_PANE).toBeUndefined()
+    expect(callArgs.env.ORCA_AGENT_LAUNCH).toBeUndefined()
   })
 
   it('passes PTY and explicit launch identity to env augmenters', async () => {
@@ -651,6 +794,7 @@ describe('PtyHandler', () => {
     expect(spawnEnv.name).toBe('xterm-256color')
     expect(spawnEnv.env.TERM).toBe('xterm-256color')
     expect(spawnEnv.env.TERM_PROGRAM).toBe('Orca')
+    expect(spawnEnv.env.ORCA_IMAGE_PROTOCOL).toBe('kitty')
   })
 
   it('expands variables in PATH before spawning a Windows relay shell', async () => {

@@ -1,0 +1,87 @@
+import { memo } from 'react'
+import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import { MessageRow, type NativeChatDeliveryNotice } from './NativeChatMessageRow'
+import { NativeChatResolutionReceipt } from './NativeChatResolutionReceipt'
+import { NativeChatWorkingStatus } from './NativeChatWorkingStatus'
+import { NativeChatTurnDiffRollup } from './NativeChatTurnDiffRollup'
+import type { NativeChatTaskListPredecessors } from './native-chat-task-list-history'
+import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
+import type { NativeChatDiffReveal, NativeChatDiffTarget } from './native-chat-turn-diffs'
+
+/** Everything a row needs that is the same for every row. Held as one memoized
+ *  object so a row's props change only when that row's own slot does. */
+export type NativeChatTranscriptRowContext = {
+  expandSignal: boolean
+  revealedDiff: NativeChatDiffReveal | null
+  taskListPredecessors: ReadonlyMap<string, NativeChatTaskListPredecessors>
+  expandedTurnIds: ReadonlySet<string>
+  /** Keyed by message id: the user messages that did not go through, each with its own words. */
+  deliveryNotices?: ReadonlyMap<string, NativeChatDeliveryNotice>
+  allowFileUriLinks: boolean
+  runtimeContext?: RuntimeFileOperationArgs | null
+  onLinkClick?: CommentMarkdownLinkClickHandler
+  onToggleExpandedTurn: (turnKey: string) => void
+  onScrollMessageToTop: (element: HTMLElement) => void
+  onRevealDiff: (target: NativeChatDiffTarget) => void
+}
+
+/** One transcript row: the message (or the receipt standing in for it), the turn
+ *  status under it, and the turn's diff rollup.
+ *
+ *  These three were siblings in the transcript column and took their spacing from
+ *  it. Windowing needs one element per row to position and measure, so the
+ *  wrapper carries that spacing itself — the gap BETWEEN rows is the window's. */
+export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
+  slot,
+  context
+}: {
+  slot: NativeChatTranscriptSlot
+  context: NativeChatTranscriptRowContext
+}): React.JSX.Element {
+  const { message, turnKey, status, receipt, turnDiff } = slot
+  const predecessors = context.taskListPredecessors.get(message.id)
+  const expanded = turnKey ? context.expandedTurnIds.has(turnKey) : undefined
+  const statusRow = status ? (
+    <NativeChatWorkingStatus
+      startedAt={status.startedAt}
+      workedSeconds={status.workedSeconds}
+      expanded={expanded === true}
+      onToggleExpanded={
+        slot.turnFolds && turnKey ? () => context.onToggleExpandedTurn(turnKey) : undefined
+      }
+    />
+  ) : null
+  return (
+    <div className="flex flex-col gap-5">
+      {/* A turn with no user bubble carries its bar above its first row. */}
+      {slot.statusAbove ? statusRow : null}
+      {receipt ? (
+        <NativeChatResolutionReceipt body={receipt} disclosureId={message.id} />
+      ) : (
+        <MessageRow
+          message={message}
+          previousTodoWrite={predecessors?.todowrite}
+          previousUpdatePlan={predecessors?.update_plan}
+          revealedDiff={
+            context.revealedDiff?.messageId === message.id ? context.revealedDiff : undefined
+          }
+          expandSignal={context.expandSignal}
+          activeTurnIsWorking={slot.activeTurnIsWorking}
+          trailingRun={slot.trailingRun}
+          onScrollMessageToTop={context.onScrollMessageToTop}
+          onLinkClick={context.onLinkClick}
+          allowFileUriLinks={context.allowFileUriLinks}
+          deliveryNotice={context.deliveryNotices?.get(message.id)}
+          folded={slot.folded}
+          subagentLabel={slot.subagentLabel}
+          runtimeContext={context.runtimeContext}
+        />
+      )}
+      {slot.statusAbove ? null : statusRow}
+      {turnDiff ? (
+        <NativeChatTurnDiffRollup diff={turnDiff} onReveal={context.onRevealDiff} />
+      ) : null}
+    </div>
+  )
+})

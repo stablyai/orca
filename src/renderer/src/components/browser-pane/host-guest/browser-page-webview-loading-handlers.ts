@@ -78,10 +78,10 @@ export function createBrowserPageWebviewLoadingHandlers({
     if (!trackNextLoadingEventRef.current) {
       return
     }
-    faviconUrlRef.current = null
+    // Why the favicon isn't cleared here: it is dropped on the cross-origin did-start-navigation
+    // instead, because Chromium won't re-announce an unchanged icon for a same-origin load.
     onUpdatePageStateRef.current(browserTabId, {
-      loading: true,
-      faviconUrl: null
+      loading: true
     })
   }
 

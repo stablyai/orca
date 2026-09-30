@@ -6,6 +6,9 @@ import { parseExecutionHostId } from '../../../../../../shared/execution-host'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { getActiveRuntimeTarget } from '../../../../runtime/runtime-rpc-client'
 import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control-huge-repo-warning-dismissals'
+import { forgetWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+import { readIpcErrorDetail } from '@/lib/ipc-error'
+import { isArchiveHookRemovalError } from '../../../../../../shared/worktree/archive-hook-removal-gate'
 import { showPreservedBranchToast } from '@/components/sidebar/preserved-branch-toast'
 import {
   resolveWorktreeOperationRouteResult,
@@ -222,6 +225,7 @@ export function createRemoveWorktree(
 
       // Why: invalidate stale probes once deletion is authoritative, so an old toast can't mutate a same-path replacement.
       forgetHugeRepoWarningDismissalsForWorktrees([worktreeId])
+      forgetWorktreeSleepIntent(worktreeId)
       // Why: forget-local is legal while the host is unreachable, so record the removal here too — otherwise an
       // in-flight metadata read that snapshotted this row re-appends it, and disconnected polls never drop it.
       if (hostId && parseExecutionHostId(hostId)?.kind === 'ssh') {
@@ -247,7 +251,8 @@ export function createRemoveWorktree(
         worktreeId,
         hostId,
         requiredExecutionHostId,
-        terminalPtyIdsBeforeRemoval
+        terminalPtyIdsBeforeRemoval,
+        catalogVersion: removalResult?.catalogVersion
       })
       // Why: Source Control may be unmounted during deletion, so it can't be the only stale-draft cleanup path.
       clearSessionCommitDraftForWorktree(worktreeId)
@@ -295,13 +300,18 @@ export function createRemoveWorktree(
     } catch (err) {
       // Why: git refusing a non-force delete for dirty/untracked files is a handled user decision, not an app error.
       console.warn('Failed to remove worktree:', err)
-      const error = err instanceof Error ? err.message : String(err)
+      // The raw message arrives wrapped in Electron's IPC channel and class names; this string is
+      // read by a user in a toast, and the refusal sentence has to lead it.
+      const error = readIpcErrorDetail(err) ?? (err instanceof Error ? err.message : String(err))
       const forceDeleteReason = classifyWorktreeForceDeleteReason(
         error,
         force,
         options?.allowUnverifiedPtyStop === true
       )
       const locked = isLockedWorktreeRemovalError(error)
+      // Why (#19334): the refusal is the only failure a retry can clear by waiving rather than by
+      // fixing state, so the toast needs to know it may offer that choice.
+      const canWaiveArchiveHook = isArchiveHookRemovalError(error)
       set((s) => ({
         deleteStateByWorktreeId: {
           ...s.deleteStateByWorktreeId,
@@ -311,6 +321,7 @@ export function createRemoveWorktree(
             error,
             canForceDelete: forceDeleteReason !== null,
             forceDeleteReason,
+            ...(canWaiveArchiveHook ? { canWaiveArchiveHook: true } : {}),
             ...(locked ? { lockReason: getLockedWorktreeRemovalReason(error) } : {})
           }
         }

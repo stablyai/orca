@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import {
+  remapAcknowledgedAgentPaneKeys,
   remapActivityClearedAtPaneKeys,
   remapManuallyUnreadTurnPaneKeys
 } from './pane-key-remapping'
@@ -29,5 +30,17 @@ describe('remapManuallyUnreadTurnPaneKeys', () => {
       turns: stable,
       changed: false
     })
+  })
+
+  it('returns the caller map untouched when no key needs remapping', () => {
+    const remap = new Map([['tab-1', new Map([[STABLE_LEAF_ID, STABLE_LEAF_ID]])]])
+    const stable = { [makePaneKey('tab-1', STABLE_LEAF_ID)]: 1 }
+
+    const result = remapAcknowledgedAgentPaneKeys(stable, remap)
+
+    // Why identity and not just equality: this runs on every session write against a map that
+    // grows with every pane ever opened, so a rebuilt-then-discarded copy is pure garbage.
+    expect(result.acknowledgements).toBe(stable)
+    expect(result.changed).toBe(false)
   })
 })

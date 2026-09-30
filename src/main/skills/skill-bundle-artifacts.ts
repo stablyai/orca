@@ -18,7 +18,7 @@ export type SkillBundleArtifacts = {
 }
 
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/)
-const snapshotShape = {
+const snapshotFields = {
   releaseRevision: z.number().int().positive(),
   packageDigest: sha256Schema,
   gitTreeSha: z.string().regex(/^[a-f0-9]{40}$/),
@@ -38,7 +38,7 @@ const snapshotShape = {
     )
     .min(1)
 }
-const knownSnapshotSchema = z.object(snapshotShape).strict()
+const knownSnapshotSchema = z.object(snapshotFields).strict()
 const manifestSchema = z
   .object({
     schemaVersion: z.literal(2),
@@ -47,7 +47,7 @@ const manifestSchema = z
         .object({
           name: z.string().regex(/^[a-z0-9][a-z0-9._-]*$/),
           sourcePath: z.string().min(1),
-          ...snapshotShape
+          ...snapshotFields
         })
         .strict()
     )

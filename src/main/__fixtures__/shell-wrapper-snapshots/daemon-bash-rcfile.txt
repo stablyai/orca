@@ -39,8 +39,8 @@ __orca_restore_agent_teams_path
 # their normal argv shape.
 __orca_omp_should_skip_extension() {
   case "${1:-}" in
-    help|--help|-h|--version|-v) return 0 ;;
-    __complete|acp|agents|auth-broker|auth-gateway|bench|commit|completions|config|dry-balance|gallery|grep|grievances|install|join|models|plugin|read|say|search|setup|shell|ssh|stats|tiny-models|token|ttsr|update|usage|worktree|q|wt) return 0 ;;
+    'help'|'--help'|'-h'|'--version'|'-v') return 0 ;;
+    '__complete'|'acp'|'agents'|'auth-broker'|'auth-gateway'|'bench'|'commit'|'completions'|'config'|'dry-balance'|'gallery'|'grep'|'grievances'|'install'|'join'|'models'|'plugin'|'read'|'say'|'search'|'setup'|'shell'|'ssh'|'stats'|'tiny-models'|'token'|'ttsr'|'update'|'usage'|'worktree'|'q'|'wt') return 0 ;;
   esac
   return 1
 }
@@ -104,11 +104,22 @@ fi
 # Why || : twice — zsh alone aborts inside the substitution, but every shell's
 # assignment adopts its exit status, so an absent codex trips set -e in bash too.
 __orca_codex_binary="$(unalias codex 2>/dev/null || :; command -v codex 2>/dev/null || :)"
-if [[ -n "${ORCA_CODEX_LAUNCH_PREFLIGHT:-}" && -x "${ORCA_CODEX_LAUNCH_PREFLIGHT}" && -n "${__orca_codex_binary:-}" && -x "${__orca_codex_binary}" ]]; then
+if [[ -n "${__orca_codex_binary:-}" && -x "${__orca_codex_binary}" ]]; then
   # Why the function reserved word: it suppresses alias expansion of the name,
   # which otherwise rewrites this header at parse time and aborts the whole file.
   function codex {
-    "${ORCA_CODEX_LAUNCH_PREFLIGHT}" agent hooks prepare-codex >/dev/null 2>&1 || :
+    # Why local: zsh's warn_create_global warns for each global a function creates.
+    local __orca_codex_arg __orca_codex_isolate="${ORCA_CODEX_ISOLATE:-1}"
+    if [[ -n "${ORCA_CODEX_LAUNCH_PREFLIGHT:-}" && -x "${ORCA_CODEX_LAUNCH_PREFLIGHT}" ]]; then
+      "${ORCA_CODEX_LAUNCH_PREFLIGHT}" agent hooks prepare-codex >/dev/null 2>&1 || :
+    fi
+    for __orca_codex_arg in "$@"; do
+      case "$__orca_codex_arg" in agents|queue|--no-daemon|--remote|--remote=*) __orca_codex_isolate=0 ;; esac
+    done
+    # Why probe every launch: a cached answer goes stale across an upgrade, and 0.155 and older exit 2 on the flag.
+    if [[ "$__orca_codex_isolate" != 0 ]]; then
+      case "$(command codex --help 2>/dev/null </dev/null)" in *--no-daemon*) set -- --no-daemon "$@" ;; esac
+    fi
     command codex "$@"
   }
 fi
@@ -127,10 +138,6 @@ __orca_osc133_precmd() {
     unset __orca_in_command
   fi
   printf "\033]133;A\007"
-  # Why: emit the shell-ready marker here (not a trailing PROMPT_COMMAND entry)
-  # so a framework that must be last in PROMPT_COMMAND — bash-preexec — is not
-  # displaced by one of Orca's own hooks.
-  [[ -n "$__orca_ready_marker" ]] && printf "\033]777;orca-shell-ready\007"
   return "$exit_code"
 }
 __orca_osc133_preexec() {
@@ -188,6 +195,11 @@ __orca_osc133_epilogue() {
   unset __orca_in_prompt_command
   __orca_adopt_outer_debug_trap
   trap '__orca_osc133_preexec' DEBUG
+  # Readline renders PS1 after entering raw mode; prompt hooks still run in cooked mode.
+  if [[ -n "$__orca_ready_marker" ]]; then
+    PS1="${PS1-}"'\[\e]777;orca-shell-ready\a\]'
+    __orca_ready_marker=""
+  fi
 }
 __orca_normalize_prompt_command_part() {
   local __orca_value="$1" __orca_output_name="$2" __orca_character __orca_chunk

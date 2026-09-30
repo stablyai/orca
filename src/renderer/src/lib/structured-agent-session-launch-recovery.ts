@@ -1,18 +1,17 @@
 import type { AgentSessionHistoryResult } from '../../../shared/agent-session-wire'
 import {
-  launchStructuredCodexSession,
+  launchStructuredAgentSession,
   StructuredAgentSessionCreateRefusalError,
   type StructuredAgentSessionLaunchIntent
-} from '@/lib/launch-structured-codex-session'
+} from '@/lib/launch-structured-agent-session'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync'
-import { useAppStore } from '@/store'
 
-export type StructuredCodexLaunchReceipt = { sessionId: string; fence: number }
+export type StructuredAgentLaunchReceipt = { sessionId: string; fence: number }
 
 export type StructuredLaunchRecoveryState = {
   intent: StructuredAgentSessionLaunchIntent
-  promise: Promise<StructuredCodexLaunchReceipt>
+  promise: Promise<StructuredAgentLaunchReceipt>
   visibilityUnknown: boolean
   cancelled: boolean
   onVisibilityChanged?: () => void
@@ -32,10 +31,7 @@ function throwIfLaunchCancelled(state: StructuredLaunchRecoveryState): void {
 }
 
 async function verifyPublishedSession(state: StructuredLaunchRecoveryState): Promise<void> {
-  if (hasAdoptedStructuredSession(state.intent)) {
-    return
-  }
-  const snapshots = await refreshLocalStructuredSessionTabs()
+  const snapshots = await refreshLocalStructuredSessionTabs(undefined, { authoritative: true })
   throwIfLaunchCancelled(state)
   const published = snapshots.some(
     (snapshot) =>
@@ -44,27 +40,14 @@ async function verifyPublishedSession(state: StructuredLaunchRecoveryState): Pro
         (tab) => tab.type === 'agent-session' && tab.sessionId === state.intent.sessionId
       )
   )
-  if (!published && !hasAdoptedStructuredSession(state.intent)) {
+  if (!published) {
     throw new Error('structured session tab publication unavailable')
   }
 }
 
-function hasAdoptedStructuredSession(intent: StructuredAgentSessionLaunchIntent): boolean {
-  return Boolean(
-    useAppStore
-      .getState()
-      .unifiedTabsByWorktree[intent.worktreeId]?.some(
-        (tab) =>
-          tab.contentType === 'agent-session' &&
-          tab.entityId === intent.sessionId &&
-          tab.worktreeId === intent.worktreeId
-      )
-  )
-}
-
 async function recoverPublishedSessionReceipt(
   state: StructuredLaunchRecoveryState
-): Promise<StructuredCodexLaunchReceipt> {
+): Promise<StructuredAgentLaunchReceipt> {
   await verifyPublishedSession(state)
   const history = await callStructuredAgentSession<AgentSessionHistoryResult>(
     { kind: 'local' },
@@ -82,10 +65,10 @@ async function recoverPublishedSessionReceipt(
 async function retrySameIntent(
   state: StructuredLaunchRecoveryState,
   priorError: unknown
-): Promise<StructuredCodexLaunchReceipt> {
+): Promise<StructuredAgentLaunchReceipt> {
   throwIfLaunchCancelled(state)
   try {
-    const receipt = await launchStructuredCodexSession(state.intent)
+    const receipt = await launchStructuredAgentSession(state.intent)
     throwIfLaunchCancelled(state)
     await verifyPublishedSession(state)
     return receipt
@@ -111,11 +94,11 @@ async function retrySameIntent(
 
 export async function launchAndReconcile(
   state: StructuredLaunchRecoveryState
-): Promise<StructuredCodexLaunchReceipt> {
+): Promise<StructuredAgentLaunchReceipt> {
   throwIfLaunchCancelled(state)
-  let receipt: StructuredCodexLaunchReceipt
+  let receipt: StructuredAgentLaunchReceipt
   try {
-    receipt = await launchStructuredCodexSession(state.intent)
+    receipt = await launchStructuredAgentSession(state.intent)
   } catch (error) {
     if (state.cancelled) {
       throw new StructuredAgentSessionLaunchCancelledError()
@@ -143,7 +126,7 @@ export async function launchAndReconcile(
 
 export async function reconcileUnknownLaunch(
   state: StructuredLaunchRecoveryState
-): Promise<StructuredCodexLaunchReceipt> {
+): Promise<StructuredAgentLaunchReceipt> {
   throwIfLaunchCancelled(state)
   state.visibilityUnknown = false
   state.onVisibilityChanged?.()

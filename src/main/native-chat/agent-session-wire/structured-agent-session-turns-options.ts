@@ -1,4 +1,4 @@
-import type { AgentSessionOptionResult } from '../../../shared/agent-session-wire'
+import { refuse, type AgentSessionOptionResult } from '../../../shared/agent-session-wire'
 import { isAgentSessionOptionRejectedError } from './structured-agent-session-option-error'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 
@@ -17,11 +17,16 @@ export async function performSetOption(
     if (isAgentSessionOptionRejectedError(error)) {
       return {
         ok: false,
-        refusal: { code: 'agent_session_operation_invalid', message: error.message }
+        refusal: refuse(
+          'agent_session_operation_invalid',
+          { reason: error.refusalReason },
+          error.message
+        )
       }
     }
     throw error
   }
   await ctx.persistOptions(applied ?? { [input.key]: input.value })
+  ctx.publish()
   return { ok: true, value: { ...input, ...(applied ? { options: { ...applied } } : {}) } }
 }

@@ -14,7 +14,9 @@ const mocks = vi.hoisted(() => ({
   updaterCheck: vi.fn(),
   shellOpenUrl: vi.fn(),
   useShortcutKeyDetails: vi.fn(),
-  settings: { defaultTuiAgent: 'codex' as 'blank' | 'codex' | null },
+  settings: { defaultTuiAgent: 'codex' },
+  /** Counts evaluations of the feedback chunk; a dynamic import evaluates it exactly once. */
+  feedbackChunkLoads: 0,
   setupProgress: {
     ready: true,
     coreDoneCount: 2,
@@ -58,7 +60,18 @@ vi.mock('../setup-guide/SetupGuideProgressRing', () => ({
 }))
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
-  DropdownMenu: ({ children }: { children: ReactNode }) => <>{children}</>,
+  DropdownMenu: ({
+    children,
+    onOpenChange
+  }: {
+    children: ReactNode
+    onOpenChange?: (open: boolean) => void
+  }) => (
+    <>
+      <button data-testid="open-menu" onClick={() => onOpenChange?.(true)} />
+      {children}
+    </>
+  ),
   DropdownMenuContent: ({ children }: { children: ReactNode }) => <>{children}</>,
   DropdownMenuItem: ({
     children,
@@ -116,9 +129,10 @@ vi.mock('sonner', () => ({
   }
 }))
 
-vi.mock('./SidebarFeedbackDialog', () => ({
-  SidebarFeedbackDialog: () => <div data-testid="feedback-dialog" />
-}))
+vi.mock('./SidebarFeedbackDialog', () => {
+  mocks.feedbackChunkLoads += 1
+  return { SidebarFeedbackDialog: () => <div data-testid="feedback-dialog" /> }
+})
 
 function installWindowApi(): void {
   Object.assign(window, {
@@ -331,6 +345,21 @@ describe('SidebarSettingsHelpMenu', () => {
       includePrerelease: false,
       includePerfPrerelease: false
     })
+  })
+
+  // No other test in this file opens the menu or selects Send Feedback, so the 0 -> 1
+  // transition below is this warm and nothing else, whatever order the tests run in.
+  it('warms the feedback chunk when the menu opens, before Send Feedback is selected', async () => {
+    const container = await renderMenu()
+    expect(mocks.feedbackChunkLoads).toBe(0)
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="open-menu"]')?.click()
+    })
+
+    expect(mocks.feedbackChunkLoads).toBe(1)
+    // Warming must not mount the dialog: it stays behind its own open state.
+    expect(document.body.querySelector('[data-testid="feedback-dialog"]')).toBeNull()
   })
 
   it('renders shortcut keys in the settings tooltip', () => {

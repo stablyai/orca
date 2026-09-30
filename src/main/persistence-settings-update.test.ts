@@ -1,11 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { writeFileSync, rmSync, mkdtempSync } from 'node:fs'
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
-import type { GlobalSettings } from '../shared/global-settings-types'
-import type { PersistedState } from '../shared/persisted-state-types'
-import { getDefaultWorkspaceSession } from '../shared/constants'
 import {
+  closeTestStores,
   testState,
   createStore,
   writeDataFile,
@@ -14,6 +8,14 @@ import {
   makeRepo,
   makeTerminalTab
 } from './persistence-test-harness'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { writeFileSync, rmSync, mkdtempSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import type { GlobalSettings } from '../shared/global-settings-types'
+import type { PersistedState } from '../shared/persisted-state-types'
+import { getDefaultWorkspaceSession } from '../shared/constants'
+
 import {
   getLocalWorktreeScanGeneration,
   isLocalWorktreeScanGenerationCurrent
@@ -67,7 +69,8 @@ describe('Store', () => {
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
   // ── 9. Settings: get/update ────────────────────────────────────────

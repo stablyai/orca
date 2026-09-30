@@ -1,18 +1,24 @@
-import { mkdtemp, readdir, rm } from 'node:fs/promises'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+// Republishing an epoch is ONE transaction.
+
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type {
-  AgentJournalItemBody,
+  AgentJournalItemIdentity,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
-import { DEFAULT_JOURNAL_COMPACTION_POLICY } from './journal-compaction'
+import type { JournalHostDatabase } from './journal-host-database'
 import { replaceJournalEpoch } from './journal-epoch-replacement'
-import { putJournalBlob, readJournalBlob } from './journal-blob-store'
-import { boundPayload, DEFAULT_JOURNAL_PAYLOAD_LIMITS } from './journal-payload-bounds'
-import { journalDirectoryBytes } from './journal-physical-quota'
-import { JournalAppendBudget } from './journal-write-guards'
-import { openAgentSessionJournal } from './journal-store-factory'
+import type { JournalLoad } from './journal-open'
+import type { AgentSessionJournal } from './journal-store'
+import { readJournalSessionEpoch } from './journal-row-table'
+import {
+  createTrackedJournalOpener,
+  openTestJournalHostDatabase,
+  readTestJournalRows
+} from './journal-host-database-test-support'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
@@ -22,152 +28,106 @@ const IDENTITY: AgentSessionJournalIdentity = {
   providerHandle: { kind: 'codex', threadId: 'thread-1' }
 }
 
+const PEER: AgentSessionJournalIdentity = {
+  ...IDENTITY,
+  sessionId: 'session-peer',
+  providerHandle: { kind: 'codex', threadId: 'thread-peer' }
+}
+
 let root: string
 let clock = 1_000
-
-beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'orca-journal-replace-'))
-  clock = 1_000
-})
-
-afterEach(async () => {
-  await rm(root, { recursive: true, force: true })
-})
+let database: JournalHostDatabase
+const journals = createTrackedJournalOpener()
 
 function now(): number {
   clock += 1
   return clock
 }
 
-function toolBody(output: ReturnType<typeof boundPayload>): AgentJournalItemBody {
-  return {
-    kind: 'tool-call',
-    name: 'shell',
-    input: {},
-    state: 'completed',
-    output
-  }
+/** Rows stored under the chat and epoch, whatever the chat's pointer names. */
+function storedRows(sessionId: string, epoch: string): number {
+  return Number(
+    database.db
+      .prepare('SELECT count(*) AS total FROM journal_rows WHERE session_id = ? AND epoch = ?')
+      .get(sessionId, epoch)?.total
+  )
 }
 
-describe('journal epoch replacement', () => {
-  it('publishes one observable replacement and prunes stale root blobs afterward', async () => {
-    const limits = { ...DEFAULT_JOURNAL_PAYLOAD_LIMITS, inlineHeadBytes: 8 }
-    const stalePayload = 'stale'.repeat(1_000)
-    const retainedPayload = 'retained'.repeat(1_000)
-    const stale = boundPayload(stalePayload, limits)
-    const retained = boundPayload(retainedPayload, limits)
-    const published: unknown[] = []
-    await putJournalBlob(root, stale.digest, stalePayload)
+function item(ordinal: number): AgentJournalItemIdentity {
+  return { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal }
+}
 
-    await replaceJournalEpoch({
-      journalDir: root,
-      identity: IDENTITY,
-      reason: 'handle_forked',
-      fence: 2,
-      items: [
-        {
-          identity: { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 0 },
-          body: toolBody(retained),
-          blobs: [{ digest: retained.digest, payload: retainedPayload }]
-        }
-      ],
-      budget: new JournalAppendBudget(IDENTITY.sessionId, {
-        ...limits,
-        maxSessionBytes: 512 * 1024
-      }),
-      compaction: DEFAULT_JOURNAL_COMPACTION_POLICY,
-      now,
-      mintEpoch: () => 'epoch-new',
-      onSnapshotPublished: (loaded) => published.push(loaded)
+function replace(input: {
+  items: Parameters<typeof replaceJournalEpoch>[0]['items']
+  onPublished?: (loaded: JournalLoad) => void
+}): void {
+  replaceJournalEpoch({
+    database,
+    identity: IDENTITY,
+    reason: 'legacy_import',
+    fence: 1,
+    items: input.items,
+    now,
+    mintEpoch: () => `epoch-${clock}`,
+    onPublished: input.onPublished ?? (() => undefined)
+  })
+}
+
+beforeEach(async () => {
+  root = await mkdtemp(join(tmpdir(), 'orca-journal-replace-'))
+  clock = 1_000
+  database = openTestJournalHostDatabase(root)
+})
+
+afterEach(async () => {
+  try {
+    database.close()
+  } catch {
+    // Already closed by the case.
+  }
+  await journals.closeAll()
+  await rm(root, { recursive: true, force: true })
+})
+
+describe('journal epoch replacement', () => {
+  it('publishes one observable replacement', () => {
+    const published: JournalLoad[] = []
+
+    replace({
+      items: [{ identity: item(1), body: { kind: 'status', text: 'republished' } }],
+      onPublished: (loaded) => published.push(loaded)
     })
 
     expect(published).toHaveLength(1)
-    expect(await readJournalBlob(root, stale.digest)).toBeNull()
-    expect(await readJournalBlob(root, retained.digest)).toBe(retainedPayload)
-    expect((published[0] as { sizeBytes: number }).sizeBytes).toBe(
-      await journalDirectoryBytes(root)
-    )
+    const epoch = readJournalSessionEpoch(database.db, IDENTITY.sessionId)
+    expect(epoch).toBe(published[0]?.state.epoch)
+    expect(readTestJournalRows(database.db, IDENTITY.sessionId, epoch ?? '')).toHaveLength(2)
   })
 
-  it('keeps root blobs and reports no publication when replacement never becomes authoritative', async () => {
-    const limits = { ...DEFAULT_JOURNAL_PAYLOAD_LIMITS, inlineHeadBytes: 8, maxSessionBytes: 6_000 }
-    const stalePayload = 'stale'.repeat(500)
-    const stale = boundPayload(stalePayload, limits)
-    const published: unknown[] = []
-    await putJournalBlob(root, stale.digest, stalePayload)
+  // Keyed by identity: a retired epoch's rows go by (chat, epoch), and no other chat's go with them.
+  it.each([
+    [
+      'a replace',
+      (journal: AgentSessionJournal) =>
+        journal.replaceEpochItems('legacy_import', 1, [
+          { identity: item(9), body: { kind: 'status', text: 'republished' } }
+        ])
+    ],
+    ['a rollover', (journal: AgentSessionJournal) => journal.rollEpoch('handle_forked', 1)]
+  ])('discards every superseded row in the same transaction as %s', async (_name, retire) => {
+    const journal = await journals.open({ identity: IDENTITY, stateDirectory: root })
+    const peer = await journals.open({ identity: PEER, stateDirectory: root })
+    const scope = { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    await journal.appendItem(item(1), { kind: 'status', text: 'old' }, scope)
+    await journal.appendItem(item(2), { kind: 'status', text: 'older' }, scope)
+    await peer.appendItem(item(1), { kind: 'status', text: 'peer' }, scope)
+    const before = journal.epoch
 
-    await expect(
-      replaceJournalEpoch({
-        journalDir: root,
-        identity: IDENTITY,
-        reason: 'handle_forked',
-        fence: 2,
-        items: [
-          {
-            identity: { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 0 },
-            body: {
-              kind: 'message',
-              role: 'assistant',
-              blocks: [{ type: 'text', text: 'x'.repeat(10_000) }]
-            }
-          }
-        ],
-        budget: new JournalAppendBudget(IDENTITY.sessionId, limits),
-        compaction: DEFAULT_JOURNAL_COMPACTION_POLICY,
-        now,
-        mintEpoch: () => 'epoch-new',
-        onSnapshotPublished: (loaded) => published.push(loaded)
-      })
-    ).rejects.toMatchObject({ code: 'journal_bound_exceeded' })
+    await retire(journal)
 
-    expect(published).toHaveLength(0)
-    expect(await readJournalBlob(root, stale.digest)).toBe(stalePayload)
-    expect((await readdir(root)).some((name) => name.startsWith('.epoch-replacement-'))).toBe(false)
-  })
-
-  it('charges replacement blobs cumulatively and rolls back staging on quota refusal', async () => {
-    const limits = { ...DEFAULT_JOURNAL_PAYLOAD_LIMITS, inlineHeadBytes: 8, maxSessionBytes: 7_000 }
-    const journal = await openAgentSessionJournal({
-      identity: IDENTITY,
-      journalDir: root,
-      limits,
-      autoCompact: false,
-      now,
-      mintEpoch: () => `epoch-${clock}`
-    })
-    const existingPayload = 'existing'.repeat(250)
-    const existing = boundPayload(existingPayload, limits)
-    await journal.appendItemWithBlobs(
-      { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 0 },
-      toolBody(existing),
-      [{ digest: existing.digest, payload: existingPayload }],
-      { fence: 1 }
-    )
-
-    const replacementPayload = 'replacement'.repeat(200)
-    const replacement = boundPayload(replacementPayload, limits)
-    const secondPayload = 'second'.repeat(200)
-    const second = boundPayload(secondPayload, limits)
-    await expect(
-      journal.replaceEpochItems('handle_forked', 2, [
-        {
-          identity: { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 1 },
-          body: toolBody(replacement),
-          blobs: [{ digest: replacement.digest, payload: replacementPayload }]
-        },
-        {
-          identity: { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 2 },
-          body: toolBody(second),
-          blobs: [{ digest: second.digest, payload: secondPayload }]
-        }
-      ])
-    ).rejects.toMatchObject({ code: 'journal_bound_exceeded' })
-
-    expect(journal.epoch).toMatch(/^epoch-/)
-    expect(await readJournalBlob(root, existing.digest)).toBe(existingPayload)
-    expect(await readJournalBlob(root, replacement.digest)).toBeNull()
-    expect(await readJournalBlob(root, second.digest)).toBeNull()
-    expect((await readdir(root)).some((name) => name.startsWith('.epoch-replacement-'))).toBe(false)
-    expect(await journalDirectoryBytes(root)).toBeLessThanOrEqual(limits.maxSessionBytes)
+    expect(journal.epoch).not.toBe(before)
+    expect(storedRows(IDENTITY.sessionId, before)).toBe(0)
+    expect(storedRows(IDENTITY.sessionId, journal.epoch)).toBe(journal.cursor().sequence)
+    expect(storedRows(PEER.sessionId, peer.epoch)).toBe(2)
   })
 })

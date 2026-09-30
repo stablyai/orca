@@ -5,6 +5,7 @@ import type { RpcClient } from '../../transport/rpc-client'
 import { triggerError, triggerSuccess } from '../../platform/haptics'
 import { parseGitHubPrReference } from '../../source-control/github-pr-link-parse'
 import { linkMobilePr } from '../../source-control/mobile-pr-link'
+import { TEXT_INPUT_FONT_SIZE } from '../../platform/text-input-font-size'
 
 type Props = {
   client: RpcClient | null
@@ -117,7 +118,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     color: colors.textPrimary,
-    fontSize: typography.bodySize
+    fontSize: TEXT_INPUT_FONT_SIZE
   },
   error: { color: colors.statusRed, fontSize: typography.metaSize, marginTop: spacing.md },
   submit: {

@@ -21,8 +21,6 @@ vi.mock('electron', () => ({
   webUtils: { getPathForFile: vi.fn(() => '') }
 }))
 
-vi.mock('@electron-toolkit/preload', () => ({ electronAPI: {} }))
-
 describe('native preload linux package recovery methods', () => {
   const originalContextIsolated = Object.getOwnPropertyDescriptor(process, 'contextIsolated')
 

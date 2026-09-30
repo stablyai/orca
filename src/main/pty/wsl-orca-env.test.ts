@@ -62,13 +62,16 @@ describe('addOrcaWslInteropEnv', () => {
       ORCA_TERMINAL_HANDLE: 'term_wsl',
       ORCA_USER_DATA_PATH: 'C:\\Users\\jin\\AppData\\Roaming\\Orca',
       ORCA_CLI_COMMAND: 'orca-ide',
+      ORCA_WSL_CLI_DIR: 'C:\\Users\\jin\\AppData\\Roaming\\Orca\\wsl-managed-cli\\hash',
       ORCA_CODEX_LAUNCH_PREFLIGHT: 'C:\\Program Files\\Orca\\resources\\bin\\orca.exe',
+      ORCA_OMP_FRESH_CONFIG: 'C:\\Orca\\fresh-session.yml',
       ORCA_OMP_STATUS_EXTENSION: 'C:\\Users\\jin\\.omp\\agent\\extensions\\orca-agent-status.ts',
       ORCA_PRIME_AGENT_STATUS_EXTENSION: 'C:\\stale\\orca-agent-status.ts',
       ORCA_PANE_KEY: 'tab-1:leaf-1',
       ORCA_TAB_ID: 'tab-1',
       ORCA_WORKTREE_ID: 'repo::\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
       ORCA_AGENT_LAUNCH_TOKEN: 'launch-secret',
+      ORCA_OPENCODE_AGENT: 'opencode2',
       ORCA_AGENT_HOOK_PORT: '4567',
       ORCA_AGENT_HOOK_TOKEN: 'token',
       ORCA_AGENT_HOOK_ENV: 'dev',
@@ -85,13 +88,16 @@ describe('addOrcaWslInteropEnv', () => {
     expect(env.WSLENV).toContain('ORCA_TERMINAL_HANDLE/u')
     expect(env.WSLENV).toContain('ORCA_USER_DATA_PATH/p')
     expect(env.WSLENV).toContain('ORCA_CLI_COMMAND/u')
+    expect(env.WSLENV).toContain('ORCA_WSL_CLI_DIR/p')
     expect(env.WSLENV).toContain('ORCA_CODEX_LAUNCH_PREFLIGHT/p')
     expect(env.WSLENV).toContain('ORCA_OMP_STATUS_EXTENSION/p')
+    expect(env.WSLENV).toContain('ORCA_OMP_FRESH_CONFIG/p')
     expect(env.WSLENV).not.toContain('ORCA_PRIME_AGENT_STATUS_EXTENSION')
     expect(env.WSLENV).toContain('ORCA_PANE_KEY/u')
     expect(env.WSLENV).toContain('ORCA_TAB_ID/u')
     expect(env.WSLENV).toContain('ORCA_WORKTREE_ID/u')
     expect(env.WSLENV).toContain('ORCA_AGENT_LAUNCH_TOKEN/u')
+    expect(env.WSLENV).toContain('ORCA_OPENCODE_AGENT/u')
     expect(env.WSLENV).toContain('ORCA_AGENT_HOOK_PORT/u')
     expect(env.WSLENV).toContain('ORCA_AGENT_HOOK_TOKEN/u')
     expect(env.WSLENV).toContain('ORCA_AGENT_HOOK_ENV/u')
@@ -204,6 +210,12 @@ describe('addOrcaWslInteropEnv', () => {
     addOrcaWslInteropEnv(env)
 
     expect(env.WSLENV).toBe('ORCA_TERMINAL_HANDLE/u:ORCA_SHELL_READY_ROOT/p')
+  })
+
+  it('crosses the inline-image protocol hint into the guest untranslated (/u)', () => {
+    const env: Record<string, string> = { ORCA_IMAGE_PROTOCOL: 'kitty' }
+    addOrcaWslInteropEnv(env)
+    expect(env.WSLENV).toContain('ORCA_IMAGE_PROTOCOL/u')
   })
 
   it('marks the WSL hook relay version for import on relay spawn envs', () => {

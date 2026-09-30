@@ -25,7 +25,7 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
 
   async inspectProcess(
     id: string,
-    options?: { expectedIncarnationId?: string }
+    options?: { expectedIncarnationId?: string; steadyState?: boolean }
   ): Promise<PtyProcessInspection> {
     if (this.protocolVersion < GET_FOREGROUND_PROCESS_PROTOCOL_VERSION) {
       return clientOnlyUnverifiableInspection('old_host')
@@ -47,7 +47,9 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
       sessionId: id,
       ...(options?.expectedIncarnationId
         ? { expectedIncarnationId: options.expectedIncarnationId }
-        : {})
+        : {}),
+      // Additive: an older daemon ignores it and pays for the full capture.
+      ...(options?.steadyState === true ? { steadyState: true } : {})
     })
   }
 

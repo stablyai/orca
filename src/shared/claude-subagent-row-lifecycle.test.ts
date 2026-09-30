@@ -24,6 +24,11 @@
  *     bursts. Fixed: teammate rows park as idle (never gating the pane
  *     'working') and revive via the next SubagentStart.
  *
+ *  4. "Still working" hours after a rate-limited child: an API error (429)
+ *     ends a child's turn with only a StopFailure carrying its agent_id — no
+ *     SubagentStop or TeammateIdle (captured live on 2.1.280). Fixed: that
+ *     StopFailure ends the child's turn exactly as SubagentStop does.
+ *
  * Drives the real production pipeline (normalizeHookPayload) whose
  * `payload.subagents` snapshots the sidebar renders 1:1 as child rows.
  */
@@ -301,5 +306,111 @@ describe('claude subagent sidebar row lifecycle', () => {
     expect(stop?.payload.state).toBe('done')
     expect(stop?.payload.interrupted).toBe(true)
     expect(stop?.payload.subagents).toBeUndefined()
+  })
+
+  // Captured on claude 2.1.280 against an API that answered the child with a 429.
+  const rateLimitedStopFailure = (agentId: string, agentType: string): Record<string, unknown> => ({
+    hook_event_name: 'StopFailure',
+    agent_id: agentId,
+    agent_type: agentType,
+    error: 'rate_limit',
+    last_assistant_message: 'API Error: Request rejected (429) · usage limit'
+  })
+
+  it('parks a rate-limited teammate idle so the finished lead reads done', () => {
+    claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'spawn the helper' })
+    claudeEvent({
+      hook_event_name: 'SubagentStart',
+      agent_id: 'ahelper-5f4e189c7003c291',
+      agent_type: 'helper'
+    })
+    const teammateTasks = [
+      { id: 'ttfehv0wp', type: 'teammate', status: 'running', description: 'helper task' }
+    ]
+    const leadStop = claudeEvent({
+      hook_event_name: 'Stop',
+      last_assistant_message: 'Helper is on it.',
+      background_tasks: teammateTasks
+    })
+    expect(leadStop?.payload.state).toBe('working')
+
+    const failed = claudeEvent(rateLimitedStopFailure('ahelper-5f4e189c7003c291', 'helper'))
+    expect(failed?.payload.state).toBe('done')
+    expect(failed?.payload.mainAgent?.state).toBe('done')
+    expect(failed?.payload.lastAssistantMessage).toBe('Helper is on it.')
+    expect(failed?.payload.subagents).toEqual([
+      expect.objectContaining({ id: 'ahelper-5f4e189c7003c291', state: 'idle' })
+    ])
+
+    // Claude keeps listing the failed teammate as running; that must not revive it.
+    claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'next' })
+    const nextStop = claudeEvent({ hook_event_name: 'Stop', background_tasks: teammateTasks })
+    expect(nextStop?.payload.state).toBe('done')
+  })
+
+  it('settles done when a teammate is rate-limited before the lead stops (captured order)', () => {
+    claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'spawn the helper' })
+    claudeEvent({
+      hook_event_name: 'SubagentStart',
+      agent_id: 'ahelper-27f64cea4c5b8ded',
+      agent_type: 'helper'
+    })
+    claudeEvent({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: 'toolu_sleep1' })
+
+    const failed = claudeEvent(rateLimitedStopFailure('ahelper-27f64cea4c5b8ded', 'helper'))
+    expect(failed?.payload.state).toBe('working')
+    expect(failed?.payload.subagents).toEqual([
+      expect.objectContaining({ id: 'ahelper-27f64cea4c5b8ded', state: 'idle' })
+    ])
+
+    claudeEvent({ hook_event_name: 'PostToolUse', tool_name: 'Bash', tool_use_id: 'toolu_sleep1' })
+    const leadStop = claudeEvent({
+      hook_event_name: 'Stop',
+      last_assistant_message: 'LEAD_DONE',
+      background_tasks: [
+        { id: 'txq288jxw', type: 'teammate', status: 'running', description: 'helper task' }
+      ]
+    })
+    expect(leadStop?.payload.state).toBe('done')
+    expect(leadStop?.payload.lastAssistantMessage).toBe('LEAD_DONE')
+  })
+
+  it('removes a rate-limited one-shot background child that outlived the lead turn', () => {
+    claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'research in background' })
+    claudeEvent({
+      hook_event_name: 'SubagentStart',
+      agent_id: 'a6324370b7bede0c7',
+      agent_type: 'general-purpose'
+    })
+    const leadStop = claudeEvent({
+      hook_event_name: 'Stop',
+      background_tasks: [{ id: 'a6324370b7bede0c7', type: 'subagent', status: 'running' }]
+    })
+    expect(leadStop?.payload.state).toBe('working')
+
+    const failed = claudeEvent(rateLimitedStopFailure('a6324370b7bede0c7', 'general-purpose'))
+    expect(failed?.payload.state).toBe('done')
+    expect(failed?.payload.subagents).toBeUndefined()
+  })
+
+  it('keeps the pane working when one of two children is rate-limited', () => {
+    claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'two helpers' })
+    claudeEvent({
+      hook_event_name: 'SubagentStart',
+      agent_id: 'afirst-1a2b3c4d',
+      agent_type: 'first'
+    })
+    claudeEvent({
+      hook_event_name: 'SubagentStart',
+      agent_id: 'asecond-5e6f7a8b',
+      agent_type: 'second'
+    })
+
+    const failed = claudeEvent(rateLimitedStopFailure('afirst-1a2b3c4d', 'first'))
+    expect(failed?.payload.state).toBe('working')
+    expect(failed?.payload.subagents).toEqual([
+      expect.objectContaining({ id: 'afirst-1a2b3c4d', state: 'idle' }),
+      expect.objectContaining({ id: 'asecond-5e6f7a8b', state: 'working' })
+    ])
   })
 })

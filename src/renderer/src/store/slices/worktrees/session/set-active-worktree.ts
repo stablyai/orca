@@ -24,6 +24,7 @@ import {
 } from '../listing/detected-worktree-meta'
 import { persistPassiveWorktreeMetaForOwner } from '../listing/worktree-owner-settings'
 import { resolveActivatedWorktreeSurface } from './active-worktree-surface'
+import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import {
   pendingActivationTerminalPrepCancels,
   shouldDeferActivationTerminalPrep
@@ -206,20 +207,25 @@ export function createSetActiveWorktree(
       }
     })
 
+    // Why: any activation is an explicit wake (null is the sleep flow clearing selection).
+    // Cleared after the set() above so a pane still waiting on the marker connects once,
+    // in the remounted generation, instead of connecting and then being remounted.
+    clearWorktreeSleepIntent(worktreeId)
+
     if (worktreeId && shouldPrepareTerminalTabs) {
       const prepareTerminalTabs = (): void => {
         pendingActivationTerminalPrepCancels.delete(worktreeId)
         set((s) => {
           if (s.activeWorktreeId !== worktreeId) {
-            return {}
+            return s
           }
           const tabs = s.tabsByWorktree[worktreeId] ?? []
           if (tabs.length === 0) {
-            return {}
+            return s
           }
           const allDead = tabs.every((tab) => !tabHasLivePty(s.ptyIdsByTabId, tab.id))
           if (!allDead && !shouldTagTerminalTabs) {
-            return {}
+            return s
           }
           return {
             tabsByWorktree: {

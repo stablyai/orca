@@ -75,7 +75,12 @@ export function normalizeRetirableGeneratedName(name: string): string | null {
 /** A sparse create error carries this marker only when its rollback also failed, leaving the path
  *  occupied even though creation rejected. */
 export function failedWorktreeCreationNeedsRetirement(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && Reflect.get(error, 'cleanupFailed') === true
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'cleanupFailed' in error &&
+    error.cleanupFailed === true
+  )
 }
 
 async function getRetirementProbePath(

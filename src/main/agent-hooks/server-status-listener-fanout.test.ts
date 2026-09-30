@@ -364,6 +364,39 @@ describe('AgentHookServer listener replay', () => {
     expect(listener).toHaveBeenCalledWith({ paneKey: PANE })
   })
 
+  it('fans out one pane clear per status evicted by tab teardown', () => {
+    const server = new AgentHookServer()
+    const siblingPane = makePaneKey('tab-1', '22222222-2222-4222-8222-222222222222')
+    const otherTabPane = makePaneKey('tab-2', '33333333-3333-4333-8333-333333333333')
+    for (const paneKey of [PANE, siblingPane, otherTabPane]) {
+      server.ingestRemote(
+        {
+          paneKey,
+          payload: { state: 'working', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+    }
+    const clearListener = vi.fn()
+    const statusListener = vi.fn()
+    server.subscribePaneStatusClear(clearListener)
+    server.subscribeStatusChanges(statusListener)
+    const evidenceObservedAtByPaneKey = (
+      server as unknown as { evidenceObservedAtByPaneKey: Map<string, number> }
+    ).evidenceObservedAtByPaneKey
+    expect(evidenceObservedAtByPaneKey.size).toBe(3)
+
+    server.dropStatusEntriesByTabPrefix('tab-1')
+
+    expect(clearListener.mock.calls.map(([clear]) => clear)).toEqual([
+      { paneKey: PANE },
+      { paneKey: siblingPane }
+    ])
+    expect(statusListener).toHaveBeenCalledOnce()
+    expect(server.getStatusSnapshot()).toEqual([expect.objectContaining({ paneKey: otherTabPane })])
+    expect([...evidenceObservedAtByPaneKey.keys()]).toEqual([otherTabPane])
+  })
+
   it('batches connection cleanup and retains sibling and local statuses', () => {
     const server = new AgentHookServer()
     const paneKeyAt = (prefix: string, index: number): string =>

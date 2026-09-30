@@ -37,10 +37,12 @@ function disposeCachedNotificationSound(): void {
 }
 
 export const notificationsApi = {
+  getDesktopAwayState: (): Promise<boolean | undefined> =>
+    ipcRenderer.invoke('notifications:getDesktopAwayState'),
   dispatch: (args: Record<string, unknown>): Promise<NotificationDispatchResult> =>
     ipcRenderer.invoke('notifications:dispatch', args),
-  dismiss: (ids: string[]): Promise<NotificationDismissResult> =>
-    ipcRenderer.invoke('notifications:dismiss', ids),
+  dismiss: (ids: string[], paneKeys?: string[]): Promise<NotificationDismissResult> =>
+    ipcRenderer.invoke('notifications:dismiss', ids, paneKeys),
   openSystemSettings: (): Promise<void> => ipcRenderer.invoke('notifications:openSystemSettings'),
   getPermissionStatus: (): Promise<NotificationPermissionStatusResult> =>
     ipcRenderer.invoke('notifications:getPermissionStatus'),

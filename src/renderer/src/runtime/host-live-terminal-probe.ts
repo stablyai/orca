@@ -1,5 +1,6 @@
 import type { RuntimeTerminalListResult } from '../../../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import { hostScopeCensusIsComplete } from '../../../shared/runtime-listing-host-scope'
 
 /**
  * Asks the host whether ANY terminal is live in an environment, for the one
@@ -74,10 +75,12 @@ async function probeHost(
   if (response.ok === false || !isTerminalListResult(response.result)) {
     return 'unverifiable'
   }
-  // An omitted execution host is an incomplete census. In particular, a relay
-  // can list its local PTYs while an SSH child host is still starting up.
+  // A host this listing owed coverage for and did not deliver leaves an incomplete census — a
+  // relay can list its local PTYs while an SSH child host is still starting up. A peer runtime
+  // is not such a host: it answers `--environment` for itself, and reading its disclosure entry
+  // as a gap latched this probe forever (#18595).
   const hostScope = response.result.hostScope
-  if (hostScope && hostScope.omittedHostIds.length > 0) {
+  if (hostScope && !hostScopeCensusIsComplete(hostScope)) {
     return 'unverifiable'
   }
   const { terminals, totalCount } = response.result

@@ -1,4 +1,7 @@
-import { isPathInsideOrEqual } from './cross-platform-path'
+import {
+  createNormalizedPathInsideOrEqualMatcher,
+  normalizeRuntimePathForComparison
+} from './cross-platform-path'
 import type { AiVaultListArgs, AiVaultListResult } from './ai-vault-types'
 
 export const DEFAULT_AI_VAULT_SCAN_LIMIT = 1000
@@ -40,10 +43,12 @@ export function truncateAiVaultListResult(
   }
   const selectedIds = new Set(result.sessions.slice(0, depth).map((session) => session.id))
   if (scopePaths.length > 0) {
+    const scopeMatchers = scopePaths.map(createNormalizedPathInsideOrEqualMatcher)
     let scopedCount = 0
     for (const session of result.sessions) {
       const cwd = session.cwd
-      if (cwd && scopePaths.some((scopePath) => isPathInsideOrEqual(scopePath, cwd))) {
+      const normalizedCwd = cwd ? normalizeRuntimePathForComparison(cwd) : null
+      if (normalizedCwd !== null && scopeMatchers.some((matches) => matches(normalizedCwd))) {
         selectedIds.add(session.id)
         if (++scopedCount >= depth) {
           break

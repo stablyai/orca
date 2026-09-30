@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { app, ipcMain } from 'electron'
 import { constants } from 'node:fs'
 import { copyFile, mkdir, writeFile } from 'node:fs/promises'
 import { basename, dirname } from 'node:path'
@@ -16,9 +16,17 @@ import type {
   ImportSkipReason,
   ResolveDroppedPathsResult,
   StagedExternalImportSource
-} from './filesystem-import-result-types'
+} from '../../shared/filesystem-import-result-types'
 import { importOneSource } from './filesystem-import-local'
-import { stageOneSourceForRuntimeUpload } from './filesystem-runtime-upload-staging'
+import {
+  stagedRuntimeUploadByteLength,
+  stageOneSourceForRuntimeUpload
+} from './filesystem-runtime-upload-staging'
+import { streamExternalFileToRuntime } from './runtime-upload-file-stream'
+import { abortWhenRendererGone } from './renderer-lifetime-abort'
+import { sweepAbandonedRuntimeUploadTempPath } from './runtime-upload-temp-sweep'
+import type { RuntimeUploadFileStreamRequest } from '../../shared/runtime-upload-staging-contract'
+import { resolveEnvironment } from '../../shared/runtime-environment-store'
 
 /**
  * IPC handlers for file/folder creation and renaming.
@@ -196,10 +204,51 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       args: { sourcePaths: string[] }
     ): Promise<{ sources: StagedExternalImportSource[] }> => {
       const sources: StagedExternalImportSource[] = []
+      // Why: one budget for the whole drop — per-source counters would let five
+      // 2 GB files through a ceiling meant to cap the drop.
+      let totalBytes = 0
       for (const sourcePath of args.sourcePaths) {
-        sources.push(await stageOneSourceForRuntimeUpload(sourcePath))
+        const source = await stageOneSourceForRuntimeUpload(sourcePath, totalBytes)
+        totalBytes += stagedRuntimeUploadByteLength(source)
+        sources.push(source)
       }
       return { sources }
+    }
+  )
+
+  // Why: the file handle and the runtime socket both live in main, so the byte
+  // pump runs here. The renderer keeps deconflict/commit/rollback orchestration
+  // and never sees file contents.
+  ipcMain.handle(
+    'fs:uploadExternalFileToRuntime',
+    async (event, args: RuntimeUploadFileStreamRequest): Promise<{ byteLength: number }> => {
+      const userDataPath = app.getPath('userData')
+      // Why: the streamer's manual-disconnect check keys on the environment id,
+      // and the renderer may pass any selector the store resolves.
+      const request = {
+        ...args,
+        environmentId: resolveEnvironment(userDataPath, args.environmentId).id
+      }
+      // Why: the renderer's own loop died with its window. Now that the bytes
+      // move in main, a reload or close has to stop the transfer explicitly,
+      // or a multi-GB upload outlives the window that asked for it.
+      const lifetime = abortWhenRendererGone(event.sender)
+      try {
+        return await streamExternalFileToRuntime({
+          ...request,
+          userDataPath,
+          signal: lifetime.signal
+        })
+      } catch (error) {
+        if (lifetime.signal.aborted) {
+          // Why: the renderer owns temp cleanup, and it is gone — so the
+          // abandoned temp path is only collectable from here.
+          await sweepAbandonedRuntimeUploadTempPath(userDataPath, request)
+        }
+        throw error
+      } finally {
+        lifetime.dispose()
+      }
     }
   )
 

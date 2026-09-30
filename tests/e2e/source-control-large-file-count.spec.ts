@@ -21,11 +21,17 @@ import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 import {
+  hasCapturedGitStatusRetry,
+  installGitStatusRetryBarrier,
+  restoreGitStatusRetryHandler
+} from './helpers/git-status-retry-barrier'
+import {
   createLargeFileCountRepo,
   removeLargeFileCountRepo,
   removeLargeFileCountUntrackedTree
 } from './large-file-count-fixtures'
 import { DEFAULT_GIT_STATUS_LIMIT } from '../../src/shared/git-status-limit'
+import { RIGHT_SIDEBAR_MIN_WIDTH } from '../../src/renderer/src/components/right-sidebar/right-sidebar-width'
 
 // Matches the large-diff freeze budget: a blocking stall past 1s is the
 // "UI becomes unresponsive" symptom reported in #8013.
@@ -411,12 +417,17 @@ test.describe('Source Control large file count (#8013)', () => {
         rendererWorkingSetMb: { before: workingSetBeforeMb, after: workingSetAfterMb }
       })
 
-      const tooManyChangesBanner = orcaPage.getByText('Too many changes detected.', {
-        exact: false
-      })
+      const tooManyChangesBanner = orcaPage.getByTestId('too-many-changes-banner')
       await expect(tooManyChangesBanner).toBeVisible()
       if (process.env.ORCA_LARGE_FILE_SCREENSHOT_PATH) {
-        await orcaPage.screenshot({ path: process.env.ORCA_LARGE_FILE_SCREENSHOT_PATH })
+        // Narrowest supported sidebar is where the banner layout is worst.
+        await orcaPage.evaluate((minWidth) => {
+          window.__store?.getState().setRightSidebarWidth(minWidth)
+          document.documentElement.classList.add('dark')
+        }, RIGHT_SIDEBAR_MIN_WIDTH)
+        await tooManyChangesBanner.screenshot({
+          path: process.env.ORCA_LARGE_FILE_SCREENSHOT_PATH
+        })
       }
 
       expect(measurement.didHitLimit).toBe(true)
@@ -434,13 +445,17 @@ test.describe('Source Control large file count (#8013)', () => {
       )
       expect(hugeState).not.toBeNull()
 
-      // Why: watcher refreshes stay parked while huge; the visible Retry is the
-      // explicit recovery path after the underlying change count drops.
-      removeLargeFileCountUntrackedTree(fixture.repoPath)
-      await expect(tooManyChangesBanner).toBeVisible()
-      const retryButton = tooManyChangesBanner.locator('..').getByRole('button', { name: 'Retry' })
+      const retryButton = tooManyChangesBanner.getByRole('button', { name: 'Retry' })
       await expect(retryButton).toBeVisible()
-      await retryButton.click()
+      // Keep automatic refreshes from removing Retry before its real request starts.
+      await installGitStatusRetryBarrier(electronApp, fixture.repoPath)
+      try {
+        await retryButton.click()
+        await expect.poll(() => hasCapturedGitStatusRetry(electronApp)).toBe(true)
+        removeLargeFileCountUntrackedTree(fixture.repoPath)
+      } finally {
+        await restoreGitStatusRetryHandler(electronApp)
+      }
       await expect(tooManyChangesBanner).not.toBeVisible()
       await expect
         .poll(() =>

@@ -5,7 +5,7 @@ import type { AgentDotState } from '../worktree/agent-row-display'
 
 // Per-agent state indicator, 1:1 with desktop AgentStateDot
 // (src/renderer/src/components/AgentStateDot.tsx): yellow spinner for 'working',
-// emerald for 'done', red for blocked/waiting/interrupted (attention), neutral
+// emerald for 'done', red for blocked/waiting/interrupted/failed (attention), neutral
 // for idle. Distinct from the worktree-level AgentSpinner, which collapses the
 // agent vocabulary into the 5-state rollup the sidebar dot uses.
 const DOT_COLORS: Record<Exclude<AgentDotState, 'working' | 'monitoring'>, string> = {
@@ -13,6 +13,7 @@ const DOT_COLORS: Record<Exclude<AgentDotState, 'working' | 'monitoring'>, strin
   blocked: '#ef4444',
   waiting: '#ef4444',
   interrupted: '#ef4444',
+  failed: '#ef4444',
   idle: 'rgba(115,115,115,0.4)'
 }
 const WORKING_COLOR = '#eab308'

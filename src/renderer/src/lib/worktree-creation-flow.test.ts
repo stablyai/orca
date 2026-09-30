@@ -581,36 +581,6 @@ describe('staged background worktree creation', () => {
     })
   })
 
-  it('does not reveal a workspace cancelled during post-create trust preflight', async () => {
-    let resolveTrust!: () => void
-    const markTrusted = vi.fn(
-      () =>
-        new Promise<void>((resolve) => {
-          resolveTrust = resolve
-        })
-    )
-    globalThis.window = { api: { agentTrust: { markTrusted } } } as never
-    store.repos = [{ id: 'repo-1', connectionId: null }]
-    store.createWorktree.mockResolvedValueOnce({
-      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo/wt-1' }
-    })
-
-    const started = continueBackgroundWorktreeCreation(
-      'creation-1',
-      makeRequest({ agent: 'codex' }),
-      { revealCreationSurface: false }
-    )
-
-    expect(started).toBe(true)
-    await vi.waitFor(() => expect(markTrusted).toHaveBeenCalledTimes(1))
-    delete store.pendingWorktreeCreations['creation-1']
-    store.activePendingCreationId = null
-    resolveTrust()
-    await vi.waitFor(() => expect(ensureWorktreeHasInitialTerminal).toHaveBeenCalledTimes(1))
-
-    expect(activateAndRevealWorktree).not.toHaveBeenCalled()
-  })
-
   // Why: one-click "Start workspace from issue" commonly backgrounds, so the
   // user-moved-on path is the common delivery for the repo's issue command; it
   // must thread through as the 5th positional arg, not be dropped to undefined.

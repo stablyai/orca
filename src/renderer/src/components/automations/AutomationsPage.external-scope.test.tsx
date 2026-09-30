@@ -20,6 +20,7 @@ import {
   RUNTIME_SELF_FILTER,
   settleHostQueries
 } from './automations-page-test-harness'
+import { listedExternalEntries } from './automations-page-listed-items'
 import { makeExternalManager } from './automations-page-fixtures'
 
 installAutomationsPageHarness()
@@ -117,7 +118,7 @@ describe('AutomationsPage external manager probes', () => {
     await renderPage()
     await settleHostQueries()
 
-    expect(mocks.listPanel?.filteredExternalAutomationEntries).toEqual([])
+    expect(listedExternalEntries()).toEqual([])
   })
 
   it('drops the previous host rows when the selection moves, not when the new probe lands', async () => {
@@ -127,7 +128,7 @@ describe('AutomationsPage external manager probes', () => {
 
     const { rerender } = await renderPage()
     await settleHostQueries()
-    expect(mocks.listPanel?.filteredExternalAutomationEntries.length).toBeGreaterThan(0)
+    expect(listedExternalEntries().length).toBeGreaterThan(0)
 
     // The new host never answers, so anything still listed belongs to the old one.
     api.automations.listExternalManagerForOwner.mockImplementation(
@@ -137,7 +138,7 @@ describe('AutomationsPage external manager probes', () => {
     await rerender()
     await settleHostQueries()
 
-    expect(mocks.listPanel?.filteredExternalAutomationEntries).toEqual([])
+    expect(listedExternalEntries()).toEqual([])
   })
 
   it('reports a host it could not check rather than showing it as clean', async () => {

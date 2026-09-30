@@ -1,24 +1,17 @@
-// Where a session journal lives.
+// Where a chat's history lived when the journal was one database per chat.
 //
-// Host-side per-workspace state, keyed by workspace id — never inside the
-// user's working tree. A journal in the tree would show up in `git status`,
-// vanish with `git worktree remove`, and have no defined home in a folder
-// workspace that is not a repository at all. Keying by id rather than by path
-// makes a worktree, a folder workspace, a WSL distro, and an SSH host identical.
-//
-// The host environment port supplies the root so desktop Electron and the
-// headless/SSH runtime resolve their own durable state directories.
+// Nothing writes here any more: the host's one database replaced it. The importer copies a file it
+// finds here on that chat's first use and deletes it once the copy verifies; the pre-SQLite format
+// remnant check looks here too.
+// Host-side per-workspace state, keyed by hashed ids — never inside the user's working tree.
 
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
-import { getAppEnvironment } from '../../../shared/app-environment'
 
 const JOURNAL_DIR_NAME = 'agent-session-journal'
 
-/** Filesystem-safe, collision-resistant segment for an arbitrary id. Ids come
- *  from providers and workspaces and can contain path separators or characters
- *  Windows rejects, so they are hashed rather than sanitized. */
+/** Filesystem-safe, collision-resistant segment for an arbitrary id. */
 export function journalPathSegment(value: string): string {
   return createHash('sha256').update(value, 'utf8').digest('hex').slice(0, 32)
 }
@@ -36,7 +29,9 @@ export function journalDirectoryFor(
   )
 }
 
-/** Default host state root. */
-export function defaultJournalRoot(): Promise<string> {
-  return Promise.resolve(getAppEnvironment().getPath('userData'))
+const LEGACY_JOURNAL_DATABASE_FILE = 'journal.db'
+
+/** The per-chat SQLite file inside the directory `journalDirectoryFor` names. */
+export function legacyJournalDatabaseFile(journalDir: string): string {
+  return join(journalDir, LEGACY_JOURNAL_DATABASE_FILE)
 }

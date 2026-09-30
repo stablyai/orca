@@ -23,6 +23,7 @@ import type {
   MobileSessionTab,
   Terminal
 } from './mobile-session-route-types'
+import { useMobileSessionTabActionTargets } from './use-mobile-session-tab-action-targets'
 import type { MobileSessionFoundationModel } from './use-mobile-session-foundation'
 
 export function useMobileSessionScreenState(scope: MobileSessionFoundationModel) {
@@ -90,19 +91,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const [createTabAgentOptions, setCreateTabAgentOptions] = useState<MobileNewTabAgentOption[]>([])
   const [showCreateBrowserModal, setShowCreateBrowserModal] = useState(false)
   const [showHeaderMoreActions, setShowHeaderMoreActions] = useState(false)
-  const [actionTarget, setActionTarget] = useState<Terminal | null>(null)
-  const [markdownActionTarget, setMarkdownActionTarget] = useState<Extract<
-    MobileSessionTab,
-    { type: 'markdown' }
-  > | null>(null)
-  const [fileActionTarget, setFileActionTarget] = useState<Extract<
-    MobileSessionTab,
-    { type: 'file' }
-  > | null>(null)
-  const [browserActionTarget, setBrowserActionTarget] = useState<Extract<
-    MobileSessionTab,
-    { type: 'browser' }
-  > | null>(null)
+  const sessionTabActionTargets = useMobileSessionTabActionTargets()
   const [discardMarkdownTarget, setDiscardMarkdownTarget] = useState<Extract<
     MobileSessionTab,
     { type: 'markdown' }
@@ -130,7 +119,9 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const [canPaste, setCanPaste] = useState(false)
   const [showDictationSetup, setShowDictationSetup] = useState(false)
   // 'hold' = press-and-hold mic, 'toggle' = tap-to-start/stop; mirrors Settings ▸ Voice ▸ Dictation Mode.
-  const [dictationMode, setDictationMode] = useState<'toggle' | 'hold'>('toggle')
+  // Holds the host's spelling verbatim, and undefined once a setup reply arrives without one: only
+  // the two arms below bind mic handlers, so anything else leaves the button as inert as it starts.
+  const [dictationMode, setDictationMode] = useState<string | undefined>('toggle')
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const toastOpacityRef = useRef(new Animated.Value(0))
   const toastHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -211,14 +202,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     setShowCreateBrowserModal,
     showHeaderMoreActions,
     setShowHeaderMoreActions,
-    actionTarget,
-    setActionTarget,
-    markdownActionTarget,
-    setMarkdownActionTarget,
-    fileActionTarget,
-    setFileActionTarget,
-    browserActionTarget,
-    setBrowserActionTarget,
+    ...sessionTabActionTargets,
     discardMarkdownTarget,
     setDiscardMarkdownTarget,
     leaveDrafts,

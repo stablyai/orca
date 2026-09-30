@@ -53,6 +53,10 @@ export function useTerminalBulkCloseActions(controller: TerminalCloseController)
           closeTerminalTab(unifiedTab.entityId, { skipRunningProcessConfirm: true })
           continue
         }
+        if (unifiedTab?.contentType === 'agent-session') {
+          state.closeUnifiedTab(unifiedTab.id)
+          continue
+        }
         if ((state.tabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)) {
           closeTab(id)
         } else if (

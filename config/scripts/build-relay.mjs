@@ -24,6 +24,7 @@ import {
   RELAY_BUILD_PLATFORMS,
   RELAY_VERSION_FILENAME,
   RELAY_WINDOWS_PROCESS_TREE_FILENAME,
+  RELAY_OPENCODE_SQLITE_READER_FILENAME,
   relayOptionalArtifactFilenames,
   isWindowsRelayPlatform,
   relayArtifactFilenames
@@ -35,6 +36,13 @@ const ROOT = join(__dirname, '..', '..')
 const RELAY_ENTRY = join(ROOT, 'src', 'relay', 'relay.ts')
 const WATCHER_ENTRY = join(ROOT, 'src', 'main', 'ipc', 'parcel-watcher-process-entry.ts')
 const AI_VAULT_SERVICE_ENTRY = join(ROOT, 'src', 'relay', 'ai-vault-service-entry.ts')
+const OPENCODE_SQLITE_READER_ENTRY = join(
+  ROOT,
+  'src',
+  'main',
+  'ai-vault',
+  'session-scanner-opencode-sqlite-process-entry.ts'
+)
 const WSL_TRANSCRIPT_FS_PROCESS_ENTRY = join(
   ROOT,
   'src',
@@ -56,6 +64,13 @@ const NODE_PTY_CONSOLE_LIST_PATCH_SOURCE = join(
   'config',
   'relay-assets',
   NODE_PTY_CONSOLE_LIST_PATCH_FILENAME
+)
+const NODE_PTY_WINDOWS_TEARDOWN_PATCH_FILENAME = 'node-pty-1.1.0-windows-pty-teardown-patch.cjs'
+const NODE_PTY_WINDOWS_TEARDOWN_PATCH_SOURCE = join(
+  ROOT,
+  'config',
+  'relay-assets',
+  NODE_PTY_WINDOWS_TEARDOWN_PATCH_FILENAME
 )
 const NODE_PTY_MASTER_CLOEXEC_PATCH_FILENAME = 'node-pty-1.1.0-master-cloexec-patch.cjs'
 const NODE_PTY_MASTER_CLOEXEC_PATCH_SOURCE = join(
@@ -103,13 +118,7 @@ const OUT_ROOT = process.env.ORCA_RELAY_OUT_ROOT ?? join(ROOT, 'out', 'relay')
 
 const RELAY_VERSION = '0.1.0'
 
-for (const platform of RELAY_BUILD_PLATFORMS) {
-  const outDir = join(OUT_ROOT, platform)
-  // Why: a stale companion left by an earlier build would otherwise satisfy the
-  // manifest check and be hashed into .version, shipping mixed-generation bytes.
-  rmSync(outDir, { recursive: true, force: true })
-  mkdirSync(outDir, { recursive: true })
-
+async function buildRelayBundles(outDir) {
   await build({
     entryPoints: [RELAY_ENTRY],
     bundle: true,
@@ -126,18 +135,6 @@ for (const platform of RELAY_BUILD_PLATFORMS) {
       'process.env.NODE_ENV': '"production"'
     }
   })
-
-  if (isWindowsRelayPlatform(platform)) {
-    copyFileSync(
-      NODE_PTY_CONSOLE_LIST_PATCH_SOURCE,
-      join(outDir, NODE_PTY_CONSOLE_LIST_PATCH_FILENAME)
-    )
-  }
-  copyFileSync(
-    NODE_PTY_MASTER_CLOEXEC_PATCH_SOURCE,
-    join(outDir, NODE_PTY_MASTER_CLOEXEC_PATCH_FILENAME)
-  )
-  stageWindowsProcessTreeAddon(platform, outDir)
 
   await build({
     entryPoints: [WATCHER_ENTRY],
@@ -167,6 +164,19 @@ for (const platform of RELAY_BUILD_PLATFORMS) {
     define: {
       'process.env.NODE_ENV': '"production"'
     }
+  })
+
+  await build({
+    entryPoints: [OPENCODE_SQLITE_READER_ENTRY],
+    bundle: true,
+    platform: 'node',
+    target: 'node18',
+    format: 'cjs',
+    outfile: join(outDir, RELAY_OPENCODE_SQLITE_READER_FILENAME),
+    external: ['electron', 'bun:sqlite'],
+    sourcemap: false,
+    minify: true,
+    define: { 'process.env.NODE_ENV': '"production"' }
   })
 
   // Why beside the service: the spawn resolves this child next to its own
@@ -202,6 +212,44 @@ for (const platform of RELAY_BUILD_PLATFORMS) {
       'process.env.NODE_ENV': '"production"'
     }
   })
+}
+
+let bundledSourceDir
+let bundledFilenames = []
+
+for (const platform of RELAY_BUILD_PLATFORMS) {
+  const outDir = join(OUT_ROOT, platform)
+  // Why: a stale companion left by an earlier build would otherwise satisfy the
+  // manifest check and be hashed into .version, shipping mixed-generation bytes.
+  rmSync(outDir, { recursive: true, force: true })
+  mkdirSync(outDir, { recursive: true })
+
+  // The JavaScript selects its host at runtime; only native addons and patches vary.
+  if (bundledSourceDir) {
+    for (const filename of bundledFilenames) {
+      copyFileSync(join(bundledSourceDir, filename), join(outDir, filename))
+    }
+  } else {
+    await buildRelayBundles(outDir)
+    bundledSourceDir = outDir
+    bundledFilenames = readdirSync(outDir)
+  }
+
+  if (isWindowsRelayPlatform(platform)) {
+    copyFileSync(
+      NODE_PTY_CONSOLE_LIST_PATCH_SOURCE,
+      join(outDir, NODE_PTY_CONSOLE_LIST_PATCH_FILENAME)
+    )
+    copyFileSync(
+      NODE_PTY_WINDOWS_TEARDOWN_PATCH_SOURCE,
+      join(outDir, NODE_PTY_WINDOWS_TEARDOWN_PATCH_FILENAME)
+    )
+  }
+  copyFileSync(
+    NODE_PTY_MASTER_CLOEXEC_PATCH_SOURCE,
+    join(outDir, NODE_PTY_MASTER_CLOEXEC_PATCH_FILENAME)
+  )
+  stageWindowsProcessTreeAddon(platform, outDir)
 
   // Why: include a content hash so the deploy check detects code changes even
   // when RELAY_VERSION hasn't been bumped. Hashing the whole manifest means a

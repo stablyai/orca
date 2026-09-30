@@ -6,6 +6,37 @@ import {
 } from './runtime-mobile-file-path-search'
 
 describe('rankRuntimeMobileFilePaths', () => {
+  it('preserves basename matching, ordering and total counts for unusual paths', () => {
+    const paths = [
+      '',
+      '/',
+      'a/',
+      'a//b.ts',
+      'b.ts',
+      'B.TS',
+      'a\\b.ts',
+      '界/😀.ts',
+      '.hidden',
+      'a/./b.ts'
+    ]
+    for (const query of ['', ' ', 'b', '.ts', '😀', '/', 'a\\', 'missing']) {
+      for (const limit of [0, 1, 3, 100]) {
+        const q = query.trim().toLowerCase()
+        const prefix = paths.filter((path) => {
+          const lower = path.toLowerCase()
+          return lower.startsWith(q) || (lower.split('/').pop() ?? lower).startsWith(q)
+        })
+        const other = paths.filter(
+          (path) => !prefix.includes(path) && path.toLowerCase().includes(q)
+        )
+        expect(rankRuntimeMobileFilePaths(paths, query, limit)).toEqual({
+          paths: [...prefix, ...other].slice(0, limit),
+          totalCount: prefix.length + other.length
+        })
+      }
+    }
+  })
+
   it('ranks path and basename prefixes before substrings and caps output', () => {
     expect(
       rankRuntimeMobileFilePaths(

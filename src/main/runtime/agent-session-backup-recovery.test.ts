@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { evaluateAgentSessionAcquisition } from '../../shared/agent-session-lease-adjudication'
-import { isAgentSessionRecord } from '../../shared/agent-session-record'
+import { isPersistedAgentSessionRecord } from '../../shared/agent-session-record'
 import { agentSessionLeaseFixture } from '../../shared/agent-session-record.test-fixture'
 import { AgentSessionRecordStore } from './agent-session-record-store'
 import {
@@ -27,7 +27,6 @@ async function seedLiveSession(sessionId: string): Promise<number> {
     },
     provider: 'codex',
     accountHome: { variable: 'CODEX_HOME', path: join(root, 'codex-home') },
-    runtimeKind: 'native',
     expectedFence: null,
     spawnToken: 'seed-live',
     claimKeyId: 'key-1',
@@ -101,7 +100,6 @@ async function seedSession(sessionId: string): Promise<number> {
     },
     provider: 'codex',
     accountHome: { variable: 'CODEX_HOME', path: join(root, 'codex-home') },
-    runtimeKind: 'native',
     expectedFence: null,
     spawnToken: 'seed',
     claimKeyId: 'key-1',
@@ -187,6 +185,120 @@ describe('recovery from the committed backup', () => {
     expect(granted.decision === 'granted' && granted.nextFence).toBeGreaterThan(fence + 1)
   })
 
+  it('does not reissue a grant after two backup fallbacks and a backup rotation', async () => {
+    await seedSession('session-a')
+    await seedSession('session-b')
+    const loaded = await loadAgentSessionStore(storePath, 'local')
+    const record = loaded.state.records.get('session-a')
+    if (!record) {
+      throw new Error('seeded session missing')
+    }
+    loaded.state.records.set('session-a', {
+      ...record,
+      lease: {
+        ...record.lease,
+        runtimeFence: 7,
+        claimStatus: 'released',
+        handoffStage: null,
+        reservedSpawnToken: null
+      }
+    })
+    // Two commits put the prepared generation in the backup, just as normal rotation would.
+    await saveAgentSessionStore(storePath, loaded.state, { primaryStatus: 'validated' })
+    await saveAgentSessionStore(storePath, loaded.state, { primaryStatus: 'validated' })
+    const identity = {
+      location: record.location,
+      provider: record.provider,
+      accountHome: record.accountHome,
+      runtimeKind: record.lease.runtimeKind,
+      claimKeyId: record.lease.claimKeyId
+    }
+
+    await rm(storePath, { force: true })
+    const first = await openStore()
+    await first.retireClaimKey(`retire-${operationId()}`, NOW)
+    await first.reconcileOnRestart({
+      probe: async () => ({ outcome: 'reservation-unused' }),
+      now: NOW
+    })
+    expect(first.getRecord('session-a')?.lease).toMatchObject({
+      runtimeFence: 7,
+      minimumNextFence: 9,
+      unreconciled: false
+    })
+    const firstGrant = await first.reserveOwner({
+      ...identity,
+      sessionId: 'session-a',
+      expectedFence: 7,
+      spawnToken: 'first-recovery',
+      handoffOperationId: null,
+      probe: { outcome: 'reservation-unused' },
+      operation: { callerKey: 'test', operationId: operationId(), fingerprint: 'first-recovery' },
+      now: NOW
+    })
+    const firstFence = firstGrant.record.lease.runtimeFence
+    const rotated = (await loadAgentSessionStore(`${storePath}.bak`, 'local')).state.records.get(
+      'session-a'
+    )
+    expect(rotated?.lease).toMatchObject({ runtimeFence: 7, minimumNextFence: 9 })
+
+    // The primary's grant is lost, but its owner may still hold that exact fence.
+    await rm(storePath, { force: true })
+    const second = await openStore()
+    await second.retireClaimKey(`retire-${operationId()}`, NOW)
+    await second.reconcileOnRestart({
+      probe: async () => ({ outcome: 'reservation-unused' }),
+      now: NOW
+    })
+    const secondGrant = await second.reserveOwner({
+      ...identity,
+      sessionId: 'session-a',
+      expectedFence: 7,
+      spawnToken: 'second-recovery',
+      handoffOperationId: null,
+      probe: { outcome: 'reservation-unused' },
+      operation: { callerKey: 'test', operationId: operationId(), fingerprint: 'second-recovery' },
+      now: NOW
+    })
+    expect(secondGrant.record.lease.runtimeFence).toBeGreaterThan(firstFence)
+    expect((await openStore()).getRecord('session-a')?.lease.runtimeFence).toBe(
+      secondGrant.record.lease.runtimeFence
+    )
+  })
+
+  it.each([
+    [Number.MAX_SAFE_INTEGER - 2, Number.MAX_SAFE_INTEGER],
+    [Number.MAX_SAFE_INTEGER - 1, null]
+  ])('keeps the recovered floor safe at fence %i', async (runtimeFence, expectedFloor) => {
+    await seedSession('session-a')
+    await seedSession('session-b')
+    const backupPath = `${storePath}.bak`
+    const backup = JSON.parse(await readFile(backupPath, 'utf-8'))
+    backup.records['session-a'].lease.runtimeFence = runtimeFence
+    await writeFile(backupPath, JSON.stringify(backup))
+    await rm(storePath, { force: true })
+
+    const recovered = await openStore()
+    if (expectedFloor === null) {
+      await expect(recovered.retireClaimKey(`retire-${operationId()}`, NOW)).rejects.toThrow(
+        'agent_session_fence_exhausted'
+      )
+      await expect(stat(storePath)).rejects.toMatchObject({ code: 'ENOENT' })
+      const preserved = (await loadAgentSessionStore(backupPath, 'local')).state.records.get(
+        'session-a'
+      )?.lease
+      expect(preserved?.runtimeFence).toBe(runtimeFence)
+      expect(preserved?.minimumNextFence).toBeUndefined()
+    } else {
+      await recovered.retireClaimKey(`retire-${operationId()}`, NOW)
+      expect(recovered.getRecord('session-a')?.lease).toMatchObject({
+        runtimeFence,
+        minimumNextFence: expectedFloor
+      })
+      expect((await openStore()).getRecord('session-a')?.lease.minimumNextFence).toBe(expectedFloor)
+    }
+  })
+
   it('leaves recovered records valid, so the next load does not quarantine them', async () => {
     await seedLiveSession('session-a')
     await seedSession('session-b')
@@ -199,7 +311,7 @@ describe('recovery from the committed backup', () => {
     // A `live` lease means a provider handle proven at exactly lease.runtimeFence. Recovery that
     // rewrote the fence broke that, so the record failed validation, was quarantined on the next
     // load, and dropped straight back to the same backup.
-    expect(isAgentSessionRecord(record)).toBe(true)
+    expect(isPersistedAgentSessionRecord(record)).toBe(true)
   })
 
   it('carries ownership evidence forward verbatim', async () => {

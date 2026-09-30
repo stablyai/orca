@@ -80,12 +80,13 @@ describe('AgentHookServer listener replay', () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
     const order: string[] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: spies on protected AgentHookServer methods that exist on the instance.
     const internal = server as unknown as {
       scheduleAssistantMessageRetry: (...args: unknown[]) => void
-      scheduleCodexSubagentPoll: (...args: unknown[]) => void
+      scheduleTranscriptPoll: (...args: unknown[]) => void
     }
     const originalAssistantRetry = internal.scheduleAssistantMessageRetry.bind(server)
-    const originalCodexRetry = internal.scheduleCodexSubagentPoll.bind(server)
+    const originalTranscriptPoll = internal.scheduleTranscriptPoll.bind(server)
     const assistantRetry = vi
       .spyOn(internal, 'scheduleAssistantMessageRetry')
       .mockImplementation((...args) => {
@@ -93,10 +94,10 @@ describe('AgentHookServer listener replay', () => {
         originalAssistantRetry(...args)
       })
     const codexRetry = vi
-      .spyOn(internal, 'scheduleCodexSubagentPoll')
+      .spyOn(internal, 'scheduleTranscriptPoll')
       .mockImplementation((...args) => {
         order.push('codex-retry')
-        originalCodexRetry(...args)
+        originalTranscriptPoll(...args)
       })
     const unsubscribeStatus = server.subscribeStatusChanges(() => order.push('status-change'))
     server.setListener(() => {
@@ -131,12 +132,13 @@ describe('AgentHookServer listener replay', () => {
   it('fails open after a throwing callback with cache retained and retries skipped', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: spies on protected AgentHookServer methods that exist on the instance.
     const internal = server as unknown as {
       scheduleAssistantMessageRetry: (...args: unknown[]) => void
-      scheduleCodexSubagentPoll: (...args: unknown[]) => void
+      scheduleTranscriptPoll: (...args: unknown[]) => void
     }
     const assistantRetry = vi.spyOn(internal, 'scheduleAssistantMessageRetry')
-    const codexRetry = vi.spyOn(internal, 'scheduleCodexSubagentPoll')
+    const codexRetry = vi.spyOn(internal, 'scheduleTranscriptPoll')
     server.setListener(() => {
       throw new Error('listener failed')
     })

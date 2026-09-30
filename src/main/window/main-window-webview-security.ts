@@ -111,7 +111,7 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
 
   mainWindow.webContents.on('did-attach-webview', (_event, guest) => {
     if (isDocPreviewSession(guest.session)) {
-      // Why: preview guests never join browser-tab routing, popups or anti-detection; the
+      // Why: preview guests never join browser-tab routing, popups or auth-identity tracking; the
       // workspace-doc profile is what refuses all three. The attach is also the point a live window
       // exists to receive read failures for that guest.
       setDocPreviewFailureSink(mainWindow.webContents)

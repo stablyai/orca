@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as RunProcess from '../../shared/child-process/run-process'
 
 const {
   childSpawnMock,
@@ -20,6 +21,13 @@ const {
 
 vi.mock('node:child_process', () => ({
   spawn: childSpawnMock
+}))
+
+// The chokepoint is the seam: assertions see what the fetcher asked for, before shim resolution.
+vi.mock('../../shared/child-process/run-process', async (importOriginal) => ({
+  ...(await importOriginal<typeof RunProcess>()),
+  spawnProcess: (spec: { program: string; args?: readonly string[] }) =>
+    childSpawnMock(spec.program, spec.args ?? [], spec)
 }))
 
 vi.mock('node:fs/promises', () => ({
@@ -51,8 +59,7 @@ vi.mock('./codex-auth-presence', () => ({
 import { fetchCodexRateLimits } from './codex-fetcher'
 import { probeCodexAuthPresence } from './codex-auth-presence'
 import { getActiveHiddenRateLimitPtyCount } from './hidden-pty-cleanup'
-import { getCmdExePath } from '../win32-utils'
-import { CODEX_READ_ONLY_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
+import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
 
 function makeDisposable() {
   return { dispose: vi.fn() }
@@ -724,7 +731,7 @@ describe('fetchCodexRateLimits', () => {
         "export CODEX_HOME='\\''/home/alice/.local/share/orca/account/home'\\''"
       )
       expect(shellCommand).toContain(
-        "exec codex '\\''-c'\\'' '\\''approval_policy=never'\\'' '\\''-s'\\'' '\\''read-only'\\'' '\\''-a'\\'' '\\''never'\\'' '\\''app-server'\\'' <&3 >&4 3<&- 4>&-"
+        "exec codex '\\''-c'\\'' '\\''approval_policy=never'\\'' '\\''-c'\\'' '\\''features.plugins=false'\\'' '\\''-s'\\'' '\\''read-only'\\'' '\\''-a'\\'' '\\''never'\\'' '\\''app-server'\\'' <&3 >&4 3<&- 4>&-"
       )
       expect(shellCommand.match(/<&3 >&4 3<&- 4>&-/g)).toHaveLength(3)
       expect(shellCommand.match(/exec codex [^\n]+<&3 >&4 3<&- 4>&-/g)).toHaveLength(3)
@@ -787,8 +794,9 @@ describe('fetchCodexRateLimits', () => {
       await resultPromise
 
       const [spawnFile, spawnArgs, spawnOptions] = childSpawnMock.mock.calls[0]
-      expect(spawnFile).toBe(getCmdExePath())
-      expect(spawnArgs).toEqual(['/d', '/c', codexCommand, ...CODEX_READ_ONLY_APP_SERVER_ARGS])
+      // Pre-wrapping in cmd.exe would hide the npm shim from spawnProcess's resolver.
+      expect(spawnFile).toBe(codexCommand)
+      expect(spawnArgs).toEqual([...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS])
       expect(spawnOptions).toEqual(
         expect.objectContaining({
           env: expect.objectContaining({ CODEX_HOME: 'C:\\Users\\alice\\.codex' })
@@ -848,6 +856,7 @@ describe('fetchCodexRateLimits', () => {
         "export CODEX_HOME='\\''/home/alice/.local/share/orca/account/home'\\''"
       )
       expect(shellCommand).toContain('exec codex ')
+      expect(shellCommand).toContain('features.plugins=false')
       expect(shellCommand).not.toContain('_orca_codex')
       expect(shellCommand).not.toContain('wsl-codex-path')
       expect(spawnOptions).toEqual(

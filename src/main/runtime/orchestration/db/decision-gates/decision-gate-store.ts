@@ -1,8 +1,8 @@
 import type { DecisionGateRow, DispatchContextRow, GateStatus } from '../../types'
 import { OrchestrationError } from '../../orchestration-error'
-import { LEGACY_RUN_ID } from '../contract-constants'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
+import { transitionLifecycleWithDb } from '../lifecycle-transition'
 
 // ── Decision Gates ──
 
@@ -17,6 +17,16 @@ export function createGate(
 ): DecisionGateRow {
   this.db.exec('SAVEPOINT create_gate')
   try {
+    const task = this.getTask(gate.taskId)
+    if (!task) {
+      throw new OrchestrationError(
+        'lifecycle_not_found',
+        `Task ${gate.taskId} was not found while creating a decision gate.`,
+        { taskId: gate.taskId }
+      )
+    }
+    const runId = task.run_id
+    this.requireRun(runId)
     const active = this.db
       .prepare(
         `SELECT * FROM dispatch_contexts
@@ -64,15 +74,14 @@ export function createGate(
       .prepare(
         'INSERT INTO decision_gates (id, run_id, task_id, question, options) VALUES (?, ?, ?, ?, ?)'
       )
-      .run(
-        id,
-        this.getTask(gate.taskId)?.run_id ?? LEGACY_RUN_ID,
-        gate.taskId,
-        gate.question,
-        optionsJson
-      )
+      .run(id, runId, gate.taskId, gate.question, optionsJson)
     this.completeActiveDispatchesForTask(gate.taskId)
-    this.db.prepare("UPDATE tasks SET status = 'blocked' WHERE id = ?").run(gate.taskId)
+    transitionLifecycleWithDb(this.db, {
+      entity: 'task',
+      id: gate.taskId,
+      from: task.status,
+      to: 'blocked'
+    })
     const created = this.db.prepare('SELECT * FROM decision_gates WHERE id = ?').get(id) as
       | DecisionGateRow
       | undefined

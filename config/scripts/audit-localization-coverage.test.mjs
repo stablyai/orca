@@ -50,6 +50,7 @@ describe('localization coverage file skipping', () => {
 
   it('skips test-only modules that sit beside their spec', () => {
     expect(skipped('src/renderer/src/components/browser-pane/stream-test-harness.ts')).toBe(true)
+    expect(skipped('src/renderer/src/runtime/browser-tab-creation-test-rig.ts')).toBe(true)
     expect(skipped('src/renderer/src/hooks/ipc-events-test-fixtures.ts')).toBe(true)
     expect(skipped('src/renderer/src/lib/session-test-state.ts')).toBe(true)
     expect(skipped('src/renderer/src/store/slices/routing-fixture.ts')).toBe(true)

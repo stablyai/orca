@@ -23,6 +23,7 @@ vi.mock('../../store', () => ({
 }))
 
 import { TerminalOverlaySlot } from './TerminalOverlaySlot'
+import { registerTabGroupBody } from '../tab-group/tab-group-body-geometry'
 
 const GROUP_ID = 'group-react185'
 const TAB_ID = 'tab-react185'
@@ -52,6 +53,7 @@ let capturedResizeCallback: (() => void) | null = null
 let container: HTMLDivElement
 let bodyEl: HTMLDivElement
 let bodyRect: DOMRect
+let unregisterBody: () => void
 let root: Root
 
 class CapturingResizeObserver {
@@ -103,12 +105,14 @@ beforeEach(() => {
   bodyRect = createRect({ top: 32, height: 568 })
   bodyEl.getBoundingClientRect = () => bodyRect
   document.body.appendChild(bodyEl)
+  unregisterBody = registerTabGroupBody(GROUP_ID, bodyEl)
 })
 
 afterEach(() => {
   act(() => {
     root?.unmount()
   })
+  unregisterBody()
   container?.remove()
   bodyEl?.remove()
   vi.unstubAllGlobals()
@@ -174,7 +178,8 @@ describe('TerminalPaneOverlayLayer fallback measure<->fit loop (React #185)', ()
       capturedResizeCallback?.()
     })
 
-    expect(terminalPaneRenderCount - rendersAfterMount).toBe(1)
+    // Geometry updates belong to the host and do not rerender terminal content.
+    expect(terminalPaneRenderCount - rendersAfterMount).toBe(0)
     expect(overlay?.style.top).toBe('34px')
     expect(overlay?.style.width).toBe('760px')
   })

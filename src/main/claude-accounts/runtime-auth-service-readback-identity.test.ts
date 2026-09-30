@@ -70,7 +70,7 @@ describe('ClaudeRuntimeAuthService', () => {
   it('rejects wrong-shaped refreshed credentials during read-back', async () => {
     const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
     const originalCredentials = createClaudeCredentialsJson('user@example.com', 'original')
-    const wrongShapedRefresh = `${JSON.stringify({
+    const malformedRefresh = `${JSON.stringify({
       claudeAiOauth: {
         email: 'user@example.com',
         expiresAt: Date.now() + 120_000
@@ -91,7 +91,7 @@ describe('ClaudeRuntimeAuthService', () => {
     settings.activeClaudeManagedAccountId = 'account-1'
     await service.syncForCurrentSelection()
 
-    writeFileSync(runtimeCredentialsPath, wrongShapedRefresh, 'utf-8')
+    writeFileSync(runtimeCredentialsPath, malformedRefresh, 'utf-8')
     await service.syncForCurrentSelection()
 
     expect(readManagedCredentialsForTest('account-1', managedAuthPath)).toBe(originalCredentials)

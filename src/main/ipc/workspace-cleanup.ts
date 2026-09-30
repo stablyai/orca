@@ -1,14 +1,8 @@
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence'
-import type { IPtyProvider } from '../providers/types'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { listRegisteredPtys } from '../memory/pty-registry'
-import { getSshPtyProvider } from './pty'
 import {
   WORKSPACE_CLEANUP_CLASSIFIER_VERSION,
   type WorkspaceCleanupDismissArgs,
-  type WorkspaceCleanupLocalProcessArgs,
-  type WorkspaceCleanupLocalProcessResult,
   type WorkspaceCleanupScanArgs,
   type WorkspaceCleanupScanResult,
   type WorkspaceCleanupSnapshotPruneBatchArgs,
@@ -30,11 +24,6 @@ import {
 
 export { scanWorkspaceCleanup }
 
-type WorkspaceCleanupHandlerDeps = {
-  runtime?: OrcaRuntimeService
-  getLocalPtyProvider?: () => IPtyProvider
-}
-
 // Why: module scope — handler re-registration on a new main window must not
 // orphan the previous window's controllers in a discarded map.
 const activeScans = new Map<string, AbortController>()
@@ -47,17 +36,13 @@ function getBroadScanModeKey(senderId: number, args: WorkspaceCleanupScanArgs): 
   return `${senderId}\0${args.includeAllWorkspaces === true}`
 }
 
-export function registerWorkspaceCleanupHandlers(
-  store: Store,
-  deps: WorkspaceCleanupHandlerDeps = {}
-): void {
+export function registerWorkspaceCleanupHandlers(store: Store): void {
   const snapshotDirectory = store.getProfileStorageDirectory()
   ipcMain.removeHandler('workspaceCleanup:scan')
   ipcMain.removeHandler('workspaceCleanup:cancelScan')
   ipcMain.removeHandler('workspaceCleanup:getCachedScan')
   ipcMain.removeHandler('workspaceCleanup:dismiss')
   ipcMain.removeHandler('workspaceCleanup:clearDismissals')
-  ipcMain.removeHandler('workspaceCleanup:hasKillableLocalProcesses')
   ipcMain.removeHandler('workspaceCleanup:beginRemovalSnapshotPruneBatch')
   ipcMain.removeHandler('workspaceCleanup:recordRemovalSnapshotPrune')
   ipcMain.removeHandler('workspaceCleanup:finishRemovalSnapshotPruneBatch')
@@ -162,16 +147,6 @@ export function registerWorkspaceCleanupHandlers(
   })
 
   ipcMain.handle(
-    'workspaceCleanup:hasKillableLocalProcesses',
-    async (
-      _event,
-      args: WorkspaceCleanupLocalProcessArgs
-    ): Promise<WorkspaceCleanupLocalProcessResult> => ({
-      hasKillableProcesses: await hasKillableProcesses(args, deps)
-    })
-  )
-
-  ipcMain.handle(
     'workspaceCleanup:beginRemovalSnapshotPruneBatch',
     (_event, args: WorkspaceCleanupSnapshotPruneBatchArgs) => {
       if (isSnapshotPruneBatchId(args?.batchId)) {
@@ -213,93 +188,4 @@ function getWorkspaceCleanupScanKey(senderId: number, scanId: unknown): string |
   return typeof scanId === 'string' && scanId.length > 0 && scanId.length <= 128
     ? `${senderId}\0${scanId}`
     : null
-}
-
-async function hasKillableProcesses(
-  args: WorkspaceCleanupLocalProcessArgs,
-  deps: WorkspaceCleanupHandlerDeps
-): Promise<boolean | null> {
-  const { worktreeId } = args
-  if (typeof worktreeId !== 'string' || worktreeId.length === 0) {
-    return false
-  }
-
-  let livenessUnknown = false
-  if (deps.runtime) {
-    try {
-      if (await deps.runtime.hasTerminalsForWorktree(worktreeId)) {
-        return true
-      }
-    } catch {
-      livenessUnknown = true
-    }
-  }
-
-  if (args.connectionId) {
-    return hasKillableSshProcesses(args.connectionId, args.worktreePath ?? '', livenessUnknown)
-  }
-
-  const registryPtyIds = new Set(
-    listRegisteredPtys()
-      .filter((entry) => entry.worktreeId === worktreeId)
-      .map((entry) => entry.ptyId)
-  )
-
-  const provider = deps.getLocalPtyProvider?.()
-  if (!provider) {
-    return registryPtyIds.size > 0 ? true : null
-  }
-
-  try {
-    const prefix = `${worktreeId}@@`
-    const sessions = await provider.listProcesses()
-    if (
-      sessions.some((session) => session.id.startsWith(prefix) || registryPtyIds.has(session.id))
-    ) {
-      return true
-    }
-    return livenessUnknown ? null : false
-  } catch {
-    return registryPtyIds.size > 0 ? true : null
-  }
-}
-
-async function hasKillableSshProcesses(
-  connectionId: string,
-  worktreePath: string,
-  livenessUnknown: boolean
-): Promise<boolean | null> {
-  const provider = getSshPtyProvider(connectionId)
-  if (!provider) {
-    return null
-  }
-
-  try {
-    const normalizedWorktreePath = normalizeRemotePath(worktreePath)
-    const sessions = await provider.listProcesses()
-    if (
-      sessions.some((session) => {
-        if (session.id.startsWith(`${worktreePath}@@`)) {
-          return true
-        }
-        return (
-          normalizedWorktreePath.length > 0 &&
-          isPathWithin(normalizeRemotePath(session.cwd), normalizedWorktreePath)
-        )
-      })
-    ) {
-      return true
-    }
-    return livenessUnknown ? null : false
-  } catch {
-    return null
-  }
-}
-
-function normalizeRemotePath(path: string): string {
-  return path.replace(/\\/g, '/').replace(/\/+$/, '')
-}
-
-function isPathWithin(candidatePath: string, parentPath: string): boolean {
-  return candidatePath === parentPath || candidatePath.startsWith(`${parentPath}/`)
 }

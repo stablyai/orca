@@ -81,7 +81,7 @@ describe('Bitbucket pull request creation', () => {
     })
     globalThis.fetch = fetchMock as unknown as typeof fetch
 
-    await expect(createBitbucketPullRequest('/repo', CREATE_INPUT)).resolves.toEqual({
+    await expect(createBitbucketPullRequest('/repo', CREATE_INPUT, 'local')).resolves.toEqual({
       ok: true,
       number: 42,
       url: 'https://bitbucket.org/team/repo/pull-requests/42'
@@ -94,7 +94,7 @@ describe('Bitbucket pull request creation', () => {
     const fetchMock = vi.fn(async () => createdPullRequestResponse())
     globalThis.fetch = fetchMock as unknown as typeof fetch
 
-    const result = await createBitbucketPullRequest('/repo', CREATE_INPUT)
+    const result = await createBitbucketPullRequest('/repo', CREATE_INPUT, 'local')
 
     // No env var and no stored credential: fail closed rather than POST anonymously.
     expect(result).toMatchObject({ ok: false, code: 'auth_required' })
@@ -108,7 +108,7 @@ describe('Bitbucket pull request creation', () => {
     // Why: the composer hides the Draft toggle for Bitbucket, so a `true` here
     // is an unreachable persisted default the user cannot clear.
     await expect(
-      createBitbucketPullRequest('/repo', { ...CREATE_INPUT, draft: true })
+      createBitbucketPullRequest('/repo', { ...CREATE_INPUT, draft: true }, 'local')
     ).resolves.toMatchObject({ ok: true, number: 42 })
     expect(JSON.parse(String((fetchMock.mock.calls[0] as never[])[1]['body']))).not.toHaveProperty(
       'draft'
@@ -147,7 +147,7 @@ describe('Bitbucket pull request creation', () => {
     })
     globalThis.fetch = fetchMock as unknown as typeof fetch
 
-    expect(await createBitbucketPullRequest('/repo', CREATE_INPUT)).toMatchObject({
+    expect(await createBitbucketPullRequest('/repo', CREATE_INPUT, 'local')).toMatchObject({
       ok: false,
       code: 'already_exists',
       existingReview: { number: 7, url: 'https://bitbucket.org/team/repo/pull-requests/7' }
@@ -159,7 +159,7 @@ describe('Bitbucket pull request creation', () => {
       Response.json({ error: { message: 'Unauthorized' } }, { status: 401 })
     ) as unknown as typeof fetch
 
-    const result = await createBitbucketPullRequest('/repo', CREATE_INPUT)
+    const result = await createBitbucketPullRequest('/repo', CREATE_INPUT, 'local')
 
     expect(result).toMatchObject({ ok: false, code: 'auth_required' })
     expect(!result.ok && result.error).toContain('Settings')
@@ -172,9 +172,11 @@ describe('Bitbucket pull request creation', () => {
     })
     globalThis.fetch = vi.fn() as unknown as typeof fetch
 
-    await expect(createBitbucketPullRequest('/repo', CREATE_INPUT)).resolves.toMatchObject({
-      ok: false,
-      code: 'unsupported_provider'
-    })
+    await expect(createBitbucketPullRequest('/repo', CREATE_INPUT, 'local')).resolves.toMatchObject(
+      {
+        ok: false,
+        code: 'unsupported_provider'
+      }
+    )
   })
 })

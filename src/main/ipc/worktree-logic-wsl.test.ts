@@ -16,6 +16,7 @@ vi.mock('../wsl', () => ({
 import {
   computeWorktreePath,
   computeWorktreePathAsync,
+  computeWorkspaceRootAsync,
   getWorktreePathSettings
 } from './worktree-logic'
 import {
@@ -30,6 +31,26 @@ describe('computeWorktreePath WSL layout', () => {
     getWslHomeMock.mockReset()
     getWslHomeAsyncMock.mockReset()
     parseWslPathMock.mockReset()
+  })
+
+  it('reuses an asynchronously resolved root for every name candidate without a sync probe', async () => {
+    parseWslPathMock.mockReturnValue({ distro: 'Ubuntu', linuxPath: '/home/jin/repo' })
+    const repoPath = String.raw`\\wsl.localhost\Ubuntu\home\jin\repo`
+    const home = String.raw`\\wsl.localhost\Ubuntu\home\jin`
+    const settings = { workspaceDir: 'C:\\workspaces', nestWorkspaces: true }
+    let resolveHome!: (home: string) => void
+    getWslHomeAsyncMock.mockReturnValue(new Promise<string>((resolve) => (resolveHome = resolve)))
+    const pendingRoot = computeWorkspaceRootAsync(repoPath, settings)
+    expect(getWslHomeMock).not.toHaveBeenCalled()
+    resolveHome(home)
+    const root = await pendingRoot
+    for (const name of ['feature', 'feature-2', 'feature-3']) {
+      expect(computeWorktreePath(name, repoPath, settings, root)).toBe(
+        win32.join(home, 'orca', 'workspaces', 'repo', name)
+      )
+    }
+    expect(getWslHomeAsyncMock).toHaveBeenCalledExactlyOnceWith('Ubuntu')
+    expect(getWslHomeMock).not.toHaveBeenCalled()
   })
 
   it('places WSL repo worktrees under the distro home workspace root', () => {

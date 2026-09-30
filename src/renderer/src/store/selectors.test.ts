@@ -695,6 +695,7 @@ describe('selectFloatingWorkspaceHasUnread', () => {
           if (typeof property === 'string') {
             terminalUnreadReads += 1
           }
+          // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: only Reflect.get forwards a raw string|symbol key with the proxy receiver.
           return Reflect.get(target, property, receiver)
         }
       }

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { IPty } from 'node-pty'
+import { runProcess } from '../../shared/child-process/run-process'
 import {
   isPtyJobOwnershipAvailable,
   listPtyJobProcessIds,
@@ -31,6 +32,14 @@ function isAlive(pid: number): boolean {
   } catch (error) {
     // An inaccessible process is still alive; only a missing pid proves exit.
     return (error as NodeJS.ErrnoException).code === 'EPERM'
+  }
+}
+
+// Teardown is asynchronous; poll instead of guessing how long the job takes.
+async function waitUntilDead(pid: number, timeoutMs = 30_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (isAlive(pid) && Date.now() < deadline) {
+    await sleep(50)
   }
 }
 
@@ -94,6 +103,21 @@ describeOnWindows('ConPTY job ownership', () => {
     expect(isPtyJobOwnershipAvailable()).toBe(true)
   })
 
+  it('keeps the native table intact while shell cleanup overlaps new terminals', async () => {
+    const result = await runProcess({
+      program: process.execPath,
+      args: [join(process.cwd(), 'config', 'scripts', 'windows-pty-table-stress.cjs')],
+      env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' },
+      timeoutMs: 90_000
+    })
+    const status = result.code === null ? 'null' : `0x${(result.code >>> 0).toString(16)}`
+    expect(
+      result,
+      `Native host exited ${status} (${result.signal}); timedOut=${result.timedOut}\n${result.stdout}\n${result.stderr}`
+    ).toMatchObject({ code: 0, timedOut: false })
+    expect(result.stdout).toContain('"phase":"complete"')
+  }, 100_000)
+
   it('counts a detached grandchild as part of the pane tree', async () => {
     const { proc, grandchildPid } = await spawnShellWithDetachedGrandchild()
 
@@ -108,7 +132,8 @@ describeOnWindows('ConPTY job ownership', () => {
     expect(isAlive(grandchildPid)).toBe(true)
 
     expect(terminatePtyJob(proc)).toBe('terminated')
-    await sleep(1_500)
+    await waitUntilDead(proc.pid)
+    await waitUntilDead(grandchildPid)
 
     expect(isAlive(proc.pid)).toBe(false)
     expect(isAlive(grandchildPid)).toBe(false)
@@ -161,7 +186,7 @@ describeOnWindows('ConPTY job ownership', () => {
 
     await vi.waitFor(() => expect(existsSync(marker)).toBe(true), { timeout: 15_000 })
     expect(output).not.toMatch(/Access is denied/i)
-    rmSync(marker, { force: true })
+    await vi.waitFor(() => rmSync(marker, { force: true }))
   }, 60_000)
 
   it('stops answering once the tree is gone, rather than claiming it is empty', async () => {

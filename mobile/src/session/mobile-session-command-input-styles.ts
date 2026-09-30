@@ -1,6 +1,7 @@
 import { StyleSheet } from 'react-native'
 
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
+import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 
 export const mobileSessionCommandInputStyles = StyleSheet.create({
   createWarningBanner: {
@@ -157,7 +158,7 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
     borderRadius: radii.input,
     paddingHorizontal: spacing.md,
     paddingVertical: 0,
-    fontSize: 14,
+    fontSize: TEXT_INPUT_FONT_SIZE,
     fontFamily: typography.monoFamily,
     marginRight: spacing.sm
   },

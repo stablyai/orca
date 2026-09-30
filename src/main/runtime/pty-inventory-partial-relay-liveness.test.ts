@@ -1,3 +1,4 @@
+import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 import { describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { makePaneKey } from '../../shared/stable-pane-id'
@@ -50,7 +51,8 @@ function createRuntime(options: { sessions?: unknown[]; vouchesForRetainedPty?: 
   calls: ListCall[]
 } {
   const meta: Record<string, Record<string, unknown>> = { [WORKSPACE]: { hostId: 'local' } }
-  const store = {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This runtime fixture supplies the persistence and graph methods exercised by the test.
+  const store = withDurableRuntimeStore({
     getRepos: () => [REPO],
     getRepo: (id: string) => (id === REPO_ID ? REPO : undefined),
     getAllWorktreeMeta: () => meta,
@@ -62,7 +64,7 @@ function createRuntime(options: { sessions?: unknown[]; vouchesForRetainedPty?: 
     getWorkspaceSession: () => getDefaultWorkspaceSession(),
     setWorkspaceSession: () => {},
     flushOrThrow: () => {}
-  } as never
+  }) as never
   const calls: ListCall[] = []
   const runtime = new OrcaRuntimeService(store)
   runtime.setPtyController({

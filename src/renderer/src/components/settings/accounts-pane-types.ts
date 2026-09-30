@@ -103,8 +103,13 @@ export type AccountsPaneSectionModel = {
   codexRateLimitTarget: RateLimitRuntimeTarget
   setRemoveCodexTarget: Dispatch<SetStateAction<RemoveAccountTarget | null>>
   runCodexAccountAction: CodexAccountActionRunner
-  recordOpenCodeSettingEdit: (field: 'cookie' | 'workspaceId') => void
+  recordOpenCodeSettingEdit: (field: 'cookie' | 'workspaceId' | 'apiKey') => void
   miniMaxRateLimits: ProviderRateLimits | null
+  miniMaxApiKeyDraft: string
+  setMiniMaxApiKeyDraft: Dispatch<SetStateAction<string>>
+  miniMaxApiKeyConfigured: boolean
+  saveMiniMaxApiKey: () => Promise<void>
+  clearMiniMaxApiKey: () => Promise<void>
   miniMaxCookieDraft: string
   setMiniMaxCookieDraft: Dispatch<SetStateAction<string>>
   miniMaxConfigured: boolean

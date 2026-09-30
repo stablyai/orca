@@ -91,6 +91,33 @@ describe('Session History session drag data', () => {
     expect(read && 'sessionCwd' in read).toBe(true)
   })
 
+  it('round-trips a structured session without a legacy resume command', () => {
+    const transfer = createTransfer()
+    const payload: AiVaultSessionDragPayload = {
+      agent: 'codex',
+      sessionId: 'session-structured',
+      structuredSession: { sessionId: 'session-structured', workspaceId: 'worktree-1' },
+      title: 'Native chat',
+      command: ''
+    }
+
+    writeAiVaultSessionDragData(transfer, payload)
+
+    expect(readAiVaultSessionDragData(transfer)).toEqual(payload)
+  })
+
+  it('still rejects a blank resume command for an ordinary CLI session', () => {
+    const transfer = createTransfer()
+    writeAiVaultSessionDragData(transfer, {
+      agent: 'codex',
+      sessionId: 'session-cli',
+      title: 'CLI session',
+      command: ''
+    })
+
+    expect(readAiVaultSessionDragData(transfer)).toBeNull()
+  })
+
   it('keeps sessionCwd absent when an older serializer omitted it', () => {
     const transfer = createTransfer()
     transfer.setData(

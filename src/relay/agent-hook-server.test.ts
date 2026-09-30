@@ -168,7 +168,7 @@ describe('RelayAgentHookServer', () => {
     internals = server as unknown as RelayServerInternals
     const retryScheduler = internals.retryScheduler
     const originalAssistantRetry = retryScheduler.scheduleAssistantMessageRetry.bind(retryScheduler)
-    const originalCodexRetry = retryScheduler.scheduleCodexSubagentPoll.bind(retryScheduler)
+    const originalTranscriptPoll = retryScheduler.scheduleTranscriptPoll.bind(retryScheduler)
     const assistantRetry = vi
       .spyOn(retryScheduler, 'scheduleAssistantMessageRetry')
       .mockImplementation((...args) => {
@@ -176,10 +176,10 @@ describe('RelayAgentHookServer', () => {
         originalAssistantRetry(...args)
       })
     const codexRetry = vi
-      .spyOn(retryScheduler, 'scheduleCodexSubagentPoll')
+      .spyOn(retryScheduler, 'scheduleTranscriptPoll')
       .mockImplementation((...args) => {
         order.push('codex-retry')
-        originalCodexRetry(...args)
+        originalTranscriptPoll(...args)
       })
     await server.start()
     try {
@@ -217,7 +217,7 @@ describe('RelayAgentHookServer', () => {
     const internals = server as unknown as RelayServerInternals
     const retryScheduler = internals.retryScheduler
     const assistantRetry = vi.spyOn(retryScheduler, 'scheduleAssistantMessageRetry')
-    const codexRetry = vi.spyOn(retryScheduler, 'scheduleCodexSubagentPoll')
+    const codexRetry = vi.spyOn(retryScheduler, 'scheduleTranscriptPoll')
     await server.start()
     try {
       const { port, token } = server.getCoordinates()

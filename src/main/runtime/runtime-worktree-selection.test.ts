@@ -1,5 +1,39 @@
 import { describe, expect, it } from 'vitest'
-import { runtimeRepoMatchesExecutionHost } from './runtime-worktree-selection'
+import {
+  getRuntimeWorktreeRemovalOptionsKey,
+  runtimeRepoMatchesExecutionHost
+} from './runtime-worktree-selection'
+
+describe('getRuntimeWorktreeRemovalOptionsKey', () => {
+  it('separates a waived archive-hook retry from the attempt about to refuse on it (#19334)', () => {
+    const strict = getRuntimeWorktreeRemovalOptionsKey({ runHooks: true })
+    expect(
+      getRuntimeWorktreeRemovalOptionsKey({ runHooks: true, allowFailedArchiveHook: true })
+    ).not.toBe(strict)
+  })
+
+  it('keeps every waiver on its own axis, so none of them coalesce', () => {
+    const keys = [
+      {},
+      { force: true },
+      { runHooks: true },
+      { allowUnverifiedPtyStop: true },
+      { allowFailedArchiveHook: true }
+    ].map(getRuntimeWorktreeRemovalOptionsKey)
+    expect(new Set(keys).size).toBe(keys.length)
+  })
+
+  it('treats an omitted option as its off value', () => {
+    expect(getRuntimeWorktreeRemovalOptionsKey({})).toBe(
+      getRuntimeWorktreeRemovalOptionsKey({
+        force: false,
+        runHooks: false,
+        allowUnverifiedPtyStop: false,
+        allowFailedArchiveHook: false
+      })
+    )
+  })
+})
 
 describe('runtimeRepoMatchesExecutionHost', () => {
   it('matches an unstamped SSH repo against its own host (#11163)', () => {

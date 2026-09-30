@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Terminal } from '@xterm/xterm'
+import { Terminal, type ITheme } from '@xterm/xterm'
+import { useShallow } from 'zustand/react/shallow'
 import '@xterm/xterm/css/xterm.css'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { subscribeToTerminalUserInput } from '@/components/terminal-pane/terminal-user-input-signal'
@@ -10,14 +11,15 @@ import { replayPreviewConnectionSnapshot } from './preview-terminal-snapshot-rep
 import { useEffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
 import {
   buildPreviewAppearanceOptions,
-  buildPreviewTerminalOptions
+  buildPreviewTerminalOptions,
+  previewAdvertisesKittyKeyboard
 } from './preview-terminal-options'
 import { syncPreviewTerminalLigatures } from './preview-terminal-ligatures'
 import { installPreviewTerminalCompatibility } from './preview-terminal-compatibility'
 import { createPreviewClipboardPaster } from './preview-terminal-paste'
 import { installPreviewImeBridge, type PreviewImeBridge } from './preview-terminal-ime-bridge'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
-import { translate } from '@/i18n/i18n'
+import { terminalPreviewUnavailableMessage } from './terminal-preview-unavailable-message'
 import { getBuiltinTheme, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
@@ -26,6 +28,7 @@ import { createPreviewGridClaim } from './preview-grid-claim'
 import { createPreviewBoxFit } from './preview-terminal-box-fit'
 import { installPreviewTerminalAppMenuClipboard } from './preview-terminal-app-menu-clipboard'
 import { installPreviewTerminalRightClickPaste } from './preview-terminal-right-click-paste'
+import { installTerminalNativeCopyGutterTrim } from '@/components/terminal-pane/terminal-native-copy-gutter'
 import { isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
 import type { TerminalPreviewDataPayload } from '../../../../shared/terminal-preview'
 
@@ -70,7 +73,7 @@ export function AgentTerminalPreview({
   const settingsRef = useRef(settings)
   const macOptionAsAltRef = useRef(macOptionAsAlt)
   const terminalInputRef = useRef(terminalInput)
-  const { terminalTheme, terminalMode } = useMemo(() => {
+  const { terminalTheme: composedTheme, terminalMode } = useMemo(() => {
     if (!settings) {
       return { terminalTheme: null, terminalMode: 'dark' as const }
     }
@@ -81,6 +84,10 @@ export function AgentTerminalPreview({
     )
     return { terminalTheme: theme, terminalMode: appearance.mode }
   }, [settings, systemPrefersDark])
+  // Settings arrive as cloned snapshots; compare theme values before reconnecting.
+  const retainTheme = useShallow((theme: ITheme | null) => theme)
+  const terminalTheme = retainTheme(composedTheme)
+  const terminalMinimumContrastRatio = settings?.terminalMinimumContrastRatio
   // A null snapshot means no serializer knows this pty (it died or was never
   // spawned this session) — say so instead of painting a silent blank terminal.
   const [ptyGone, setPtyGone] = useState(false)
@@ -95,6 +102,7 @@ export function AgentTerminalPreview({
     terminalInputRef.current = terminalInput
   }, [settings, macOptionAsAlt, terminalInput])
 
+  // Font changes retain the replay-driven fit, grid claim and input-owner reset.
   useEffect(() => {
     setPtyGone(false)
     const container = containerRef.current
@@ -107,10 +115,15 @@ export function AgentTerminalPreview({
     let userInputDisposable: { dispose: () => void } | null = null
     let imeBridge: PreviewImeBridge | null = null
     let disposeKeyHandler: (() => void) | null = null
+    let disposeNativeCopyGutterTrim: (() => void) | null = null
     let disposeTerminalCompatibility: (() => void) | null = null
+    // Why one read: the xterm's advertisement and its mirror must never disagree.
+    const mountTerminalInput = terminalInputRef.current
     // Why: mirrors the pane's tracker — the policy needs the flags the TUI
     // negotiated, and this preview parses the same output stream the pane does.
-    const kittyKeyboardModes = new TerminalKittyKeyboardModeTracker()
+    const kittyKeyboardModes = new TerminalKittyKeyboardModeTracker({
+      kittyKeyboard: previewAdvertisesKittyKeyboard(mountTerminalInput)
+    })
     let refreshInFlight = false
     let refreshAgain = false
     let retryTimer: ReturnType<typeof setTimeout> | null = null
@@ -215,15 +228,6 @@ export function AgentTerminalPreview({
       })
     }
 
-    const installTerminalCompatibility = (): void => {
-      if (!terminal) {
-        return
-      }
-      disposeTerminalCompatibility = installPreviewTerminalCompatibility(terminal, {
-        getSettings: () => settingsRef.current
-      })
-    }
-
     const installInputRouting = (): void => {
       if (!terminal) {
         return
@@ -255,7 +259,7 @@ export function AgentTerminalPreview({
         terminal = new Terminal(
           buildPreviewTerminalOptions({
             settings: settingsRef.current,
-            terminalInput: terminalInputRef.current,
+            terminalInput: mountTerminalInput,
             macOptionIsMeta: macOptionAsAltRef.current === 'true',
             theme: terminalTheme,
             themeMode: terminalMode,
@@ -272,7 +276,10 @@ export function AgentTerminalPreview({
           return
         }
         terminalRef.current = terminal
-        installTerminalCompatibility()
+        disposeTerminalCompatibility = installPreviewTerminalCompatibility(terminal, {
+          getSettings: () => settingsRef.current
+        })
+        disposeNativeCopyGutterTrim = installTerminalNativeCopyGutterTrim(terminal).dispose
         installInputRouting()
         installImeNativeTextBridge()
         installKeyHandler()
@@ -340,6 +347,8 @@ export function AgentTerminalPreview({
         disposeTerminalCompatibility = null
         disposeKeyHandler?.()
         disposeKeyHandler = null
+        disposeNativeCopyGutterTrim?.()
+        disposeNativeCopyGutterTrim = null
         terminal?.dispose()
         terminal = null
         terminalRef.current = null
@@ -395,11 +404,23 @@ export function AgentTerminalPreview({
       disposeImeNativeTextBridge()
       disposeTerminalCompatibility?.()
       disposeKeyHandler?.()
+      disposeNativeCopyGutterTrim?.()
       void window.api.terminalPreview.unsubscribe(ptyId)
       terminal?.dispose()
       terminalRef.current = null
     }
-  }, [ptyId, terminalTheme, terminalMode])
+  }, [
+    ptyId,
+    terminalTheme,
+    terminalMode,
+    terminalMinimumContrastRatio,
+    settings?.terminalFontSize,
+    settings?.terminalFontFamily,
+    settings?.terminalFontWeight,
+    settings?.terminalFontWeightBold,
+    settings?.terminalLineHeight,
+    settings?.terminalLigatures
+  ])
 
   // Why: appearance settings must land on the open terminal, and the OS input
   // source can flip Option-as-Alt with no settings change at all. A remount
@@ -430,10 +451,7 @@ export function AgentTerminalPreview({
     >
       {ptyGone ? (
         <div className="absolute inset-0 flex items-center justify-center px-2.5 py-8 text-center text-[11px] text-muted-foreground">
-          {translate(
-            'dashboardPopout.terminal.closed',
-            "No live terminal — this agent's pane has closed."
-          )}
+          {terminalPreviewUnavailableMessage({ ptyId })}
         </div>
       ) : null}
       <div

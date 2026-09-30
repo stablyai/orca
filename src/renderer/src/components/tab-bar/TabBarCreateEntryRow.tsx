@@ -184,7 +184,9 @@ function getActionPresentation(
   }
   if (option.kind === 'tab') {
     return {
-      detail: option.option.matchedText ?? option.option.title,
+      detail: option.option.matchedTexts?.length
+        ? option.option.matchedTexts.join(' · ')
+        : (option.option.matchedText ?? option.option.title),
       icon: getOpenTabIcon(option.option),
       label: translate('auto.components.tab.bar.TabBarCreateEntry.8f0a1c4d92', 'Switch to tab'),
       showDetail: true

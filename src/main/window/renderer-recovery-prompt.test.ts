@@ -1,10 +1,13 @@
 import type { MessageBoxOptions, MessageBoxReturnValue } from 'electron'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
+import { ensureMainI18n, mainI18n } from '../i18n/main-i18n'
 import type { InstallDirAclPoisonDiagnosis } from '../startup/windows-install-dir-acl-recovery'
 import {
   presentRendererRecoveryPrompt,
   type RendererRecoveryPromptDeps
 } from './renderer-recovery-prompt'
+
+vi.mock('electron', () => ({ app: { getLocale: () => 'en-US' } }))
 
 const POISON: InstallDirAclPoisonDiagnosis = {
   detail: "Windows permissions on Orca's install folder are blocking its own sandboxed processes.",
@@ -43,15 +46,58 @@ function harness(overrides: Partial<RendererRecoveryPromptDeps> & { responses?: 
 }
 
 describe('presentRendererRecoveryPrompt', () => {
+  beforeEach(async () => {
+    await ensureMainI18n()
+    await mainI18n.changeLanguage('en')
+  })
+
+  afterEach(() => {
+    mainI18n.removeResourceBundle('en', 'translation')
+  })
+
+  it('interpolates the recovery count', async () => {
+    const { run, shown } = harness({ recentRecoveryCount: 7 })
+    await run()
+    expect(shown[0].detail).toContain('Orca tried to recover 7 times in a row')
+    expect(shown[0].detail).not.toContain('{{')
+  })
+
+  it.each([
+    { responses: [1, 0], reloads: 1, quits: 0 },
+    { responses: [1, 2], reloads: 0, quits: 1 }
+  ])(
+    'dispatches translated buttons by response index: $responses',
+    async ({ responses, reloads, quits }) => {
+      mainI18n.addResourceBundle('en', 'translation', {
+        rendererRecovery: { reload: 'Recharger', copyCommands: 'Copier', quit: 'Quitter' }
+      })
+      const { run, shown, copied, reload, quit } = harness({ diagnose: () => POISON, responses })
+      await run()
+      expect(shown[0].buttons).toEqual(['Recharger', 'Copier', 'Quitter'])
+      expect(copied).toEqual([POISON.commands.join('\r\n')])
+      expect(reload).toHaveBeenCalledTimes(reloads)
+      expect(quit).toHaveBeenCalledTimes(quits)
+    }
+  )
+
   it('offers reload and quit with the generic cause when nothing is diagnosed', async () => {
     const { run, shown, reload, quit } = harness({ responses: [0] })
     await run()
     expect(shown).toHaveLength(1)
     expect(shown[0].buttons).toEqual(['Reload', 'Quit'])
-    expect(shown[0].cancelId).toBe(1)
+    // Escape lands on cancelId, and this box is window-modal over the window it is about: it must not quit.
+    expect(shown[0].cancelId).toBe(0)
     expect(shown[0].detail).toContain('graphics-driver or installation problem')
     expect(reload).toHaveBeenCalledOnce()
     expect(quit).not.toHaveBeenCalled()
+  })
+
+  it('names the stalled reload instead of claiming a repeated crash', async () => {
+    const { run, shown } = harness({ failure: 'reload-stalled', responses: [1] })
+    await run()
+    expect(shown[0].message).toContain('stopped responding while reloading')
+    expect(shown[0].detail).toContain('never finished loading')
+    expect(shown[0].detail).not.toContain('times in a row')
   })
 
   it('quits on the last button', async () => {
@@ -65,7 +111,7 @@ describe('presentRendererRecoveryPrompt', () => {
     const { run, shown } = harness({ diagnose: () => POISON, responses: [0] })
     await run()
     expect(shown[0].buttons).toEqual(['Reload', 'Copy Commands', 'Quit'])
-    expect(shown[0].cancelId).toBe(2)
+    expect(shown[0].cancelId).toBe(0)
     expect(shown[0].detail).toContain(POISON.detail)
     expect(shown[0].detail).toContain('graphics driver')
   })

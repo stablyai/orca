@@ -114,4 +114,18 @@ describe('shouldUploadRemoteEditorFileDrop', () => {
     })
     expect(JSON.stringify(message)).not.toContain('secret')
   })
+
+  it('names the drop whose file items carried no readable path (#15782)', () => {
+    expect(
+      getNativeFileDropRejectionMessage({
+        byteLength: 0,
+        pathCount: 2,
+        reason: 'unresolved-paths',
+        target: 'rejected'
+      })
+    ).toEqual({
+      description: 'Save them to disk first, then drop the saved files.',
+      title: "Orca couldn't read a path for the dropped files."
+    })
+  })
 })

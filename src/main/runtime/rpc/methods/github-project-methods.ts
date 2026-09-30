@@ -1,135 +1,26 @@
-import { z } from 'zod'
-import { defineMethod, type RpcMethod } from '../core'
-import { OptionalString, requiredString } from '../schemas'
-import { IssueUpdate } from './github-issue-update-schema'
+import { defineMethod } from '../core'
 import { SlugRepo } from './github-repo-target-schemas'
+import {
+  ClearProjectItemField,
+  GithubProjectListAccessibleParams,
+  ProjectItemField,
+  ProjectRef,
+  ProjectViewTable,
+  ProjectViews,
+  ProjectWorkItemDetailsBySlug,
+  SlugAssignableUsers,
+  SlugIssueComment,
+  SlugIssueCommentDelete,
+  SlugIssueCommentEdit,
+  SlugIssueTypeUpdate,
+  SlugIssueUpdate,
+  SlugPullRequestUpdate
+} from '../../../../shared/rpc-contract/github-project-params'
 
-const SlugAssignableUsers = SlugRepo.extend({
-  seedLogins: z.array(z.string()).optional()
-})
-
-const ProjectOwnerType = z.enum(['organization', 'user'])
-
-const ProjectViewTable = z.object({
-  owner: requiredString('Missing owner'),
-  // Why: Enterprise host identity must survive RPC parsing; Zod strips
-  // undeclared fields before the runtime can host-qualify gh requests.
-  host: OptionalString,
-  ownerType: ProjectOwnerType,
-  projectNumber: z.number().int().positive(),
-  viewId: OptionalString,
-  viewNumber: z.number().int().positive().optional(),
-  viewName: OptionalString,
-  queryOverride: OptionalString
-})
-
-const ProjectWorkItemDetailsBySlug = SlugRepo.extend({
-  number: z.number().int().positive(),
-  type: z.enum(['issue', 'pr'])
-})
-
-const ProjectRef = z.object({
-  input: requiredString('Missing project reference'),
-  // Why: Enterprise host identity must survive RPC parsing; Zod strips
-  // undeclared fields before the runtime can host-qualify gh requests.
-  host: OptionalString
-})
-
-const ProjectViews = z.object({
-  owner: requiredString('Missing owner'),
-  // Why: Enterprise host identity must survive RPC parsing; Zod strips
-  // undeclared fields before the runtime can host-qualify gh requests.
-  host: OptionalString,
-  ownerType: ProjectOwnerType,
-  projectNumber: z.number().int().positive()
-})
-
-const ProjectItemField = z.object({
-  projectId: requiredString('Missing project ID'),
-  // Why: Enterprise host identity must survive RPC parsing; Zod strips
-  // undeclared fields before the runtime can host-qualify gh requests.
-  host: OptionalString,
-  itemId: requiredString('Missing item ID'),
-  fieldId: requiredString('Missing field ID'),
-  value: z.any()
-})
-
-const ClearProjectItemField = z.object({
-  projectId: requiredString('Missing project ID'),
-  // Why: Enterprise host identity must survive RPC parsing; Zod strips
-  // undeclared fields before the runtime can host-qualify gh requests.
-  host: OptionalString,
-  itemId: requiredString('Missing item ID'),
-  fieldId: requiredString('Missing field ID')
-})
-
-const SlugIssueUpdate = z.object({
-  owner: requiredString('Missing owner'),
-  repo: requiredString('Missing repo'),
-  // Why: Enterprise host identity must survive RPC parsing; Zod strips
-  // undeclared fields before the runtime can host-qualify gh requests.
-  host: OptionalString,
-  number: z.number().int().positive(),
-  updates: IssueUpdate
-})
-
-const SlugPullRequestUpdate = z.object({
-  owner: requiredString('Missing owner'),
-  repo: requiredString('Missing repo'),
-  // Why: Enterprise host identity must survive RPC parsing; Zod strips
-  // undeclared fields before the runtime can host-qualify gh requests.
-  host: OptionalString,
-  number: z.number().int().positive(),
-  updates: z.object({
-    state: z.enum(['open', 'closed']).optional(),
-    title: OptionalString,
-    body: OptionalString
-  })
-})
-
-const SlugIssueTypeUpdate = z.object({
-  owner: requiredString('Missing owner'),
-  repo: requiredString('Missing repo'),
-  // Why: Enterprise host identity must survive RPC parsing; Zod strips
-  // undeclared fields before the runtime can host-qualify gh requests.
-  host: OptionalString,
-  number: z.number().int().positive(),
-  issueTypeId: z.string().nullable()
-})
-
-const SlugIssueComment = z.object({
-  owner: requiredString('Missing owner'),
-  repo: requiredString('Missing repo'),
-  // Why: Enterprise host identity must survive RPC parsing; Zod strips
-  // undeclared fields before the runtime can host-qualify gh requests.
-  host: OptionalString,
-  number: z.number().int().positive(),
-  body: requiredString('Comment body required')
-})
-
-const SlugIssueCommentEdit = z.object({
-  owner: requiredString('Missing owner'),
-  repo: requiredString('Missing repo'),
-  // Why: Enterprise host identity must survive RPC parsing; Zod strips
-  // undeclared fields before the runtime can host-qualify gh requests.
-  host: OptionalString,
-  commentId: z.number().int().positive(),
-  body: requiredString('Comment body required')
-})
-
-const SlugIssueCommentDelete = z.object({
-  owner: requiredString('Missing owner'),
-  repo: requiredString('Missing repo'),
-  // Why: Enterprise host identity must survive RPC parsing; Zod strips
-  // undeclared fields before the runtime can host-qualify gh requests.
-  host: OptionalString,
-  commentId: z.number().int().positive()
-})
-
-export const GITHUB_PROJECT_METHODS: RpcMethod[] = [
+export const GITHUB_PROJECT_METHODS = [
   defineMethod({
     name: 'github.project.listAccessible',
-    params: z.object({ host: OptionalString }),
+    params: GithubProjectListAccessibleParams,
     handler: async (params, { runtime }) => runtime.listGitHubProjects(params)
   }),
   defineMethod({

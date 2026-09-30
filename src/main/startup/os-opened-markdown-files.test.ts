@@ -304,3 +304,84 @@ describe('resolveOpenedMarkdownDocuments', () => {
     expect(authorizeExternalPath).not.toHaveBeenCalled()
   })
 })
+
+describe('OsOpenedMarkdownFileState delivery cap', () => {
+  it('stops merging an OS file batch at the pending delivery cap', () => {
+    const state = new OsOpenedMarkdownFileState()
+    const includes = vi.spyOn(Array.prototype, 'includes')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    let probes: number
+    try {
+      state.captureFilePaths(
+        Array.from({ length: 10000 }, (_, index) => resolve(`/notes/${index}.md`))
+      )
+      probes = includes.mock.calls.length
+    } finally {
+      includes.mockRestore()
+      warn.mockRestore()
+    }
+    expect(probes).toBeLessThan(100)
+    expect(state.consume()).toEqual(
+      Array.from({ length: MAX_PENDING_OS_OPENED_MARKDOWN_FILES }, (_, index) =>
+        resolve(`/notes/${index}.md`)
+      )
+    )
+  })
+
+  // Why: the cap drops files the user explicitly asked to open. Pin which end is
+  // dropped (the tail, in shell order) and that the loss is reported, not silent.
+  it('keeps the first paths in shell order and reports the dropped tail', () => {
+    const state = new OsOpenedMarkdownFileState()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const total = MAX_PENDING_OS_OPENED_MARKDOWN_FILES + 8
+    const paths = Array.from({ length: total }, (_, index) =>
+      resolve(`/notes/${String(index).padStart(3, '0')}.md`)
+    )
+    try {
+      expect(state.captureFilePaths(paths)).toBe(true)
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining(`Dropped 8 of ${total} OS-opened markdown files`)
+      )
+    } finally {
+      warn.mockRestore()
+    }
+    expect(state.consume()).toEqual(paths.slice(0, MAX_PENDING_OS_OPENED_MARKDOWN_FILES))
+  })
+
+  it('stays silent for a batch that fits under the cap', () => {
+    const state = new OsOpenedMarkdownFileState()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      state.captureFilePaths(
+        Array.from({ length: MAX_PENDING_OS_OPENED_MARKDOWN_FILES }, (_, index) =>
+          resolve(`/notes/${index}.md`)
+        )
+      )
+      expect(warn).not.toHaveBeenCalled()
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('reports a drop when an already-full queue rejects a later batch', () => {
+    const state = new OsOpenedMarkdownFileState()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      state.captureFilePaths(
+        Array.from({ length: MAX_PENDING_OS_OPENED_MARKDOWN_FILES }, (_, index) =>
+          resolve(`/first/${index}.md`)
+        )
+      )
+      expect(warn).not.toHaveBeenCalled()
+      state.captureFilePaths([resolve('/second/a.md'), resolve('/second/b.md')])
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('Dropped 2 of 2'))
+    } finally {
+      warn.mockRestore()
+    }
+    expect(state.consume()).toEqual(
+      Array.from({ length: MAX_PENDING_OS_OPENED_MARKDOWN_FILES }, (_, index) =>
+        resolve(`/first/${index}.md`)
+      )
+    )
+  })
+})

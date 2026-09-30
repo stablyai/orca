@@ -37,10 +37,13 @@ import type { AgentHookTarget } from './agent-hook-types'
 const AGENT_HOOK_SOURCES = [
   'claude',
   'codex',
+  'qoder',
+  'codebuddy',
   'gemini',
   'antigravity',
   'amp',
   'opencode',
+  'opencode2',
   'mimo-code',
   'cursor',
   'pi',
@@ -52,7 +55,10 @@ const AGENT_HOOK_SOURCES = [
   'copilot',
   'hermes',
   'devin',
-  'kimi'
+  'kimi',
+  'muse',
+  'zcode',
+  'dsh'
 ] as const
 
 export type AgentHookSource = (typeof AGENT_HOOK_SOURCES)[number]
@@ -85,8 +91,10 @@ export type AgentHookRelayEnvelope = {
   promptInteractionKey?: string
   /** Hook discriminator preserved for main-process transition rules. */
   hookEventName?: string
-  /** Claude's provider-owned user-prompt UUID. */
+  /** Provider-owned turn identity (Claude UUID or opaque Grok prompt id). */
   providerPromptId?: string
+  /** The row belongs to an observed Grok prompt boundary whose opaque id may be absent. */
+  grokPromptBoundary?: true
   /** Active Claude compact generation, keyed by provider prompt identity. */
   compactTrigger?: 'manual' | 'auto'
   /** Claude tool execution id, when the source hook provides one. */
@@ -215,6 +223,8 @@ export type AgentHookInstallManagedHooksParams = {
   hostKeyFingerprint?: string
   /** Positively detected and enabled agents allowed to mutate remote config. */
   agents: readonly AgentHookTarget[]
+  /** Execution-host Claude version; absent means retain the legacy hook set. */
+  claudeVersion?: string
 }
 
 /** Feature-flag env var. Read once at process start by Orca and the relay.

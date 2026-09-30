@@ -16,12 +16,12 @@ import type { Automation } from '../../../../shared/automations-types'
 import {
   api,
   installAutomationsPageHarness,
-  listedRow,
   mocks,
   renderPage,
   scopedList,
   settleHostQueries
 } from './automations-page-test-harness'
+import { listedRow, listedRows } from './automations-page-listed-items'
 import { makeAutomation } from './automations-page-fixtures'
 
 installAutomationsPageHarness()
@@ -42,7 +42,7 @@ function desktopStoreHolds(automations: Automation[]): void {
 
 /** The next-run column reads this; the mocked list panel renders only names. */
 function listedNextRunAt(): number | null | undefined {
-  return mocks.listPanel?.filteredRows[0]?.automation.nextRunAt
+  return listedRows()[0]?.automation.nextRunAt
 }
 
 describe('AutomationsPage run visibility', () => {

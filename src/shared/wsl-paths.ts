@@ -3,8 +3,23 @@ export type WslUncPathInfo = {
   linuxPath: string
 }
 
+const SLASH_CHAR_CODE = '/'.charCodeAt(0)
+const BACKSLASH_CHAR_CODE = '\\'.charCodeAt(0)
+
+function isPathSeparatorCharCode(charCode: number): boolean {
+  return charCode === SLASH_CHAR_CODE || charCode === BACKSLASH_CHAR_CODE
+}
+
 export function parseWslUncPath(path: string): WslUncPathInfo | null {
-  const normalized = path.replace(/\\/g, '/')
+  // The match is anchored at `//` after the fold, so only two leading separators can ever reach it.
+  // Every POSIX path pays the fold + regex otherwise, and this is on the FS-event storm path.
+  if (
+    !isPathSeparatorCharCode(path.charCodeAt(0)) ||
+    !isPathSeparatorCharCode(path.charCodeAt(1))
+  ) {
+    return null
+  }
+  const normalized = path.includes('\\') ? path.replace(/\\/g, '/') : path
   const match = normalized.match(/^\/\/(wsl\.localhost|wsl\$)\/([^/]+)(\/.*)?$/i)
   if (!match) {
     return null

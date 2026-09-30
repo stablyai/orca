@@ -261,7 +261,7 @@ export function applyHostedReviewLinkClear(
       nextWorktrees === s.worktreesByRepo &&
       nextDetectedWorktrees === s.detectedWorktreesByRepo
     ) {
-      return {}
+      return s
     }
     return {
       ...(nextWorktrees !== s.worktreesByRepo

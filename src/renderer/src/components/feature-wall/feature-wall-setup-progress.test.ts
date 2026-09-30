@@ -9,6 +9,7 @@ import {
   getFirstIncompleteFeatureWallSetupStepId
 } from '../../../../shared/feature-wall-setup-steps'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { getDefaultSettings } from '../../../../shared/constants'
 
 function makeInput(
   overrides: Partial<FeatureWallSetupProgressInput> = {}
@@ -47,9 +48,12 @@ describe('getFeatureWallSetupProgress', () => {
     ['codex', true],
     [null, false]
   ] as const)('counts default agent %s as configured: %s', (defaultTuiAgent, done) => {
+    const settings = getDefaultSettings('/home/test')
+    settings.defaultTuiAgent = defaultTuiAgent
+    settings.notifications.enabled = false
     const progress = getFeatureWallSetupProgress(
       makeInput({
-        settings: { defaultTuiAgent, notifications: {} } as never
+        settings
       })
     )
 
@@ -146,12 +150,13 @@ describe('getFeatureWallSetupProgress', () => {
   it.each(['blank', 'claude'] as const)(
     'marks all active steps complete with default %s without historical terminal split interaction',
     (defaultTuiAgent) => {
+      const settings = getDefaultSettings('/home/test')
+      settings.defaultTuiAgent = defaultTuiAgent
+      settings.notifications.enabled = true
+      settings.notifications.agentTaskComplete = true
       const progress = getFeatureWallSetupProgress(
         makeInput({
-          settings: {
-            defaultTuiAgent,
-            notifications: { enabled: true, agentTaskComplete: true }
-          } as never,
+          settings,
           featureInteractions: {
             browser: { firstInteractedAt: 1_700_000_000_000, interactionCount: 1 }
           },

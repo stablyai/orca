@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { buildRegistry } from '../core'
+import { eraseRpcMethods, buildRegistry } from '../core'
 import { CLIPBOARD_TEXT_WRITE_MAX_BYTES } from '../../../../shared/clipboard-text'
 
 const computerMocks = vi.hoisted(() => ({
@@ -249,7 +249,7 @@ describe('computer RPC methods', () => {
 })
 
 function findMethod(name: string) {
-  const method = COMPUTER_METHODS.find((candidate) => candidate.name === name)
+  const method = eraseRpcMethods(COMPUTER_METHODS).find((candidate) => candidate.name === name)
   if (!method) {
     throw new Error(`missing method ${name}`)
   }

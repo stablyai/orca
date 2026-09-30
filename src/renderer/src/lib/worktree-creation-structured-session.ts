@@ -1,161 +1,100 @@
 import { useAppStore } from '@/store'
-import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
 import { activateAndRevealWorktree, type ActivateAndRevealResult } from '@/lib/worktree-activation'
-import {
-  cancelStructuredCodexLaunch,
-  startStructuredCodexLaunch
-} from '@/lib/structured-agent-session-launch'
-import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-codex-session'
-import { activateStructuredAgentSessionById } from '@/lib/structured-agent-session-tab-activation'
-import { preflightAgentTrust } from '@/lib/agent-trust-preflight'
+import { isAgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
+import type { AgentLaunchRoute } from '@/lib/agent-launch-routing'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
-import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
-import { closeStructuredAgentSession } from '@/runtime/structured-agent-session-close'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/structured-agent-session-provisional-tab'
 
 export type WorktreeCreationStructuredSessionResult = {
   accepted: boolean
   cancelled: boolean
-  visibilityUnknown: boolean
   activation: ActivateAndRevealResult | false
   primaryTabId: string | null
 }
 
-async function retireCancelledStructuredSession(
-  worktreeId: string,
-  sessionId: string
-): Promise<void> {
-  const target = { kind: 'local' } as const
-  await closeStructuredAgentSession(target, sessionId).catch(() => undefined)
-  await callRuntimeRpc(target, 'session.tabs.close', {
-    worktree: toRuntimeWorktreeSelector(worktreeId),
-    tabId: `agent-session:${sessionId}`,
-    reason: 'user'
-  }).catch(() => undefined)
-}
-
-export async function launchStructuredWorktreeSession(args: {
+type LaunchStructuredWorktreeSessionArgs = {
   creationId: string
   request: WorktreeCreationRequest
+  /** Required: a non-structured route opens no session here, so the caller must have gated on it. */
+  agentLaunchRoute: AgentLaunchRoute
   worktreeId: string
   shouldActivateOnCompletion: boolean
-  fallbackStartupOpt: WorktreeStartupPayload | undefined
   activation: ActivateAndRevealResult | false
   primaryTabId: string | null
-  recoverUnknownLaunch?: boolean
-}): Promise<WorktreeCreationStructuredSessionResult> {
+}
+
+export async function launchStructuredWorktreeSession(
+  args: LaunchStructuredWorktreeSessionArgs
+): Promise<WorktreeCreationStructuredSessionResult> {
   let { activation, primaryTabId } = args
-  let accepted = true
-  let visibilityUnknown = false
-  if (args.request.agent !== 'codex') {
-    return { accepted, cancelled: false, visibilityUnknown, activation, primaryTabId }
+  const settled = { accepted: true, cancelled: false }
+  const { agent } = args.request
+  if (!isAgentSessionHandleProvider(agent)) {
+    return { ...settled, activation, primaryTabId }
   }
-  if (!useAppStore.getState().pendingWorktreeCreations[args.creationId]) {
-    return { accepted, cancelled: true, visibilityUnknown, activation, primaryTabId }
+  const isCancelled = (): boolean =>
+    !useAppStore.getState().pendingWorktreeCreations[args.creationId]
+  if (isCancelled()) {
+    return { ...settled, cancelled: true, activation, primaryTabId }
   }
-
-  const launch = startStructuredCodexLaunch(
-    args.worktreeId,
-    args.recoverUnknownLaunch
-      ? {}
-      : { prompt: args.request.launchDraftPrompt ?? args.request.quickPrompt }
-  )
-  let cancelled = false
-  const cancelLaunch = (): void => {
-    if (cancelled) {
-      return
-    }
-    cancelled = true
-    cancelStructuredCodexLaunch(args.worktreeId, launch.sessionId)
-  }
+  // Why: the composer decided route and delivery mode before the worktree existed, and the request
+  // carries that verdict in renderer memory for the life of the create; re-entering with it is what
+  // keeps a retry from re-resolving against a host that has changed since.
+  const plan = adoptAgentSessionLaunchVerdict({
+    route: args.agentLaunchRoute,
+    agent,
+    prompt: args.request.launchDraftPrompt ?? args.request.quickPrompt,
+    ...(args.request.promptDelivery ? { promptDelivery: args.request.promptDelivery } : {})
+  })
+  const abandoned = new AbortController()
+  let ownershipTransferred = false
   const unsubscribe = useAppStore.subscribe((state) => {
-    if (!state.pendingWorktreeCreations[args.creationId]) {
-      cancelLaunch()
+    if (!ownershipTransferred && !state.pendingWorktreeCreations[args.creationId]) {
+      abandoned.abort()
     }
   })
-  if (!useAppStore.getState().pendingWorktreeCreations[args.creationId]) {
-    cancelLaunch()
-  }
-  const refusalFallback = launch.claimDefinitiveRefusalFallback(async () => {
-    accepted = false
-    if (cancelled) {
-      return
-    }
-    if (args.request.pendingFirstAgentMessageRename) {
-      await useAppStore
-        .getState()
-        .updateWorktreeMeta(args.worktreeId, { pendingFirstAgentMessageRename: true })
-        .catch(() => undefined)
-    }
-    if (cancelled) {
-      return
-    }
-    const worktree = useAppStore
-      .getState()
-      .allWorktrees?.()
-      .find((candidate) => candidate.id === args.worktreeId)
-    if (args.request.agent && worktree?.path) {
-      const repoConnectionId = useAppStore
-        .getState()
-        .repos.find((repo) => repo.id === args.request.repoId)?.connectionId
-      await preflightAgentTrust({
-        agent: args.request.agent,
-        workspacePath: worktree.path,
-        connectionId: repoConnectionId
-      })
-    }
-    if (cancelled) {
-      return
-    }
-    if (args.shouldActivateOnCompletion) {
-      const fallbackActivation = activateAndRevealWorktree(args.worktreeId, {
-        sidebarRevealBehavior: 'auto',
-        createNewTerminalForStartup: true,
-        ...(args.fallbackStartupOpt ? { startup: args.fallbackStartupOpt } : {})
-      })
-      activation = fallbackActivation
-      primaryTabId = fallbackActivation === false ? null : fallbackActivation.primaryTabId
-      return
-    }
-    primaryTabId = ensureWorktreeHasInitialTerminal(
-      useAppStore.getState(),
-      args.worktreeId,
-      args.fallbackStartupOpt,
-      undefined,
-      undefined,
-      undefined,
-      { activateCreatedTabs: false, createNewTerminalForStartup: true }
-    )
-  })
-
   try {
-    const receipt = await launch.launchResult
-    if (cancelled) {
-      await retireCancelledStructuredSession(args.worktreeId, launch.sessionId)
-      return { accepted, cancelled, visibilityUnknown, activation, primaryTabId }
-    }
-    if (args.shouldActivateOnCompletion) {
-      activateStructuredAgentSessionById({
-        worktreeId: args.worktreeId,
-        sessionId: receipt.sessionId
-      })
-    }
-  } catch (error) {
-    if (cancelled) {
-      await retireCancelledStructuredSession(args.worktreeId, launch.sessionId)
-      return { accepted, cancelled, visibilityUnknown, activation, primaryTabId }
-    }
-    if (error instanceof StructuredAgentSessionCreateRefusalError) {
-      await refusalFallback
-    } else {
-      visibilityUnknown = launch.isVisibilityUnknown()
-      if (visibilityUnknown) {
-        launch.releaseCallerAfterUnknownOutcome()
+    const launch = beginStructuredAgentSessionProvisionalLaunch({
+      plan,
+      hooks: { signal: abandoned.signal },
+      target: { worktreeId: args.worktreeId },
+      activate: args.shouldActivateOnCompletion,
+      beforeOpen: () => {
+        // Why: cancellation can arrive through the launch signal while reveal is running, before
+        // the pending-creation store snapshot has caught up.
+        if (abandoned.signal.aborted || isCancelled()) {
+          return false
+        }
+        if (args.shouldActivateOnCompletion && !activation) {
+          try {
+            activation = activateAndRevealWorktree(args.worktreeId, {
+              providesInitialSurface: true
+            })
+          } catch (error) {
+            // Why: without a revealed workspace the provisional tab has no visible owner.
+            console.error('worktree create: structured chat reveal failed', args.worktreeId, error)
+            activation = false
+            return false
+          }
+          if (activation === false) {
+            return false
+          }
+          primaryTabId = activation.primaryTabId
+        }
+        return !abandoned.signal.aborted && !isCancelled()
       }
+    })
+    ownershipTransferred = launch !== null
+    if (launch) {
+      primaryTabId = launch.tab.id
     }
+  } catch {
+    // Why: nothing awaits this creation's caller, so an escaped throw would strand the panel
+    // mid-create. Report it the way a failed launch already does; the launch layer toasts it.
+    return { ...settled, activation, primaryTabId }
   } finally {
     unsubscribe()
   }
-  return { accepted, cancelled, visibilityUnknown, activation, primaryTabId }
+  return { ...settled, activation, primaryTabId }
 }

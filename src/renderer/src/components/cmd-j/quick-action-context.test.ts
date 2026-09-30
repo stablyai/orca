@@ -254,6 +254,62 @@ describe('Cmd+J quick action context', () => {
     expect(context.isLoading).toBe(true)
   })
 
+  it('exposes chat split actions only on the workspace surface', () => {
+    const worktree = {
+      id: 'wt-1',
+      repoId: 'repo-1',
+      path: '/repo/wt',
+      displayName: 'Workspace',
+      branch: 'main',
+      createdAt: 0
+    } as Worktree
+    const state = {
+      activeWorktreeId: 'wt-1',
+      worktreesByRepo: { 'repo-1': [worktree] },
+      repos: [{ id: 'repo-1', path: '/repo', displayName: 'Repo', addedAt: 0 }],
+      sshConnectionStates: new Map(),
+      activeGroupIdByWorktree: { 'wt-1': 'group-1' },
+      groupsByWorktree: {
+        'wt-1': [
+          {
+            id: 'group-1',
+            worktreeId: 'wt-1',
+            activeTabId: 'chat-1',
+            tabOrder: ['chat-1', 'other-1']
+          }
+        ]
+      },
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'chat-1',
+            entityId: 'session-1',
+            groupId: 'group-1',
+            worktreeId: 'wt-1',
+            contentType: 'agent-session'
+          }
+        ]
+      },
+      activeView: 'settings',
+      settings: null
+    } as unknown as AppState
+
+    const buildContext = (activeView: AppState['activeView']) =>
+      buildCmdJQuickActionContext({
+        state: { ...state, activeView },
+        activeGroupSnapshot: null,
+        openNewBrowserTab: async () => {},
+        openNewMarkdownFile: async () => {},
+        openNewTerminalTab: async () => {},
+        openCreateWorkspace: () => {},
+        deleteActiveWorkspace: () => {},
+        openAddQuickCommand: () => {}
+      })
+
+    expect(buildContext('terminal').canSplitActiveChat).toBe(true)
+    expect(buildContext('settings').canSplitActiveChat).toBe(false)
+  })
+
   it('runtime re-check returns unavailable without invoking the action helper', async () => {
     const calls: string[] = []
     const action = getCmdJQuickActions().find((entry) => entry.id === 'new-terminal-tab')
@@ -334,5 +390,34 @@ describe('Cmd+J quick action context', () => {
 
     await expect(action?.run(context)).resolves.toEqual({ status: 'ok' })
     expect(calls).toEqual(['delete'])
+  })
+
+  it('offers and runs split actions only for an active movable chat', async () => {
+    const calls: string[] = []
+    const action = getCmdJQuickActions().find((entry) => entry.id === 'split-chat-right')
+    const context = {
+      ...ctx({}),
+      activeWorktree: null,
+      runtimeMode: 'local-desktop' as const,
+      openNewBrowserTab: async () => {},
+      openNewMarkdownFile: async () => {},
+      openNewTerminalTab: async () => {},
+      openCreateWorkspace: () => {},
+      deleteActiveWorkspace: () => {},
+      openAddQuickCommand: () => {},
+      canSplitActiveChat: true,
+      splitActiveChat: (direction: string) => {
+        calls.push(direction)
+        return true
+      }
+    } satisfies CmdJQuickActionContext
+
+    expect(action?.isAvailable(context)).toEqual({ available: true })
+    await expect(action?.run(context)).resolves.toEqual({ status: 'ok' })
+    expect(calls).toEqual(['right'])
+    expect(action?.isAvailable({ ...context, canSplitActiveChat: false })).toEqual({
+      available: false,
+      reason: 'no-active-chat'
+    })
   })
 })

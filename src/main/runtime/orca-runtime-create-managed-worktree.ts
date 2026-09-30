@@ -4,9 +4,11 @@ import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktre
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
 import { isFolderRepo } from '../../shared/repo-kind'
-import { getRepoSshConnectionId } from '../../shared/execution-host'
+import { resolveWorktreeCreateRoute } from '../worktree-create-execution-host-route'
+import { ExecutionHostNotDispatchableError } from '../providers/execution-host-provider-dispatch'
 import { createRuntimeFolderWorktree } from './runtime-folder-worktree-create'
 import { createRuntimeLocalManagedWorktree } from './runtime-local-worktree-create'
+import type { PreparationRearmHolder } from '../worktree-create-preparation'
 import { prepareRuntimeLocalWorktreeSetup } from './runtime-local-worktree-setup'
 import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
 import { startRuntimeLocalWorktreeTerminals } from './runtime-local-worktree-terminal-startup'
@@ -14,6 +16,21 @@ import { startRuntimeLocalWorktreeTerminals } from './runtime-local-worktree-ter
 export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWorktreeTerminalProvisioningHost {
   async createManagedWorktree(
     args: RuntimeManagedWorktreeCreateArgs
+  ): Promise<CreateWorktreeResult> {
+    // Why a holder fired in `finally`: consuming a prepared checkout empties a pool slot, so a
+    // create that fails anywhere after that — include copy, push target, terminal startup — must
+    // still arm the replacement. On success it fires last, once the startup terminals are up.
+    const rearm: PreparationRearmHolder = { fire: () => {} }
+    try {
+      return await this.performManagedWorktreeCreate(args, rearm)
+    } finally {
+      rearm.fire()
+    }
+  }
+
+  private async performManagedWorktreeCreate(
+    args: RuntimeManagedWorktreeCreateArgs,
+    rearm: PreparationRearmHolder
   ): Promise<CreateWorktreeResult> {
     if (!this.store) {
       throw new Error('runtime_unavailable')
@@ -42,12 +59,21 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
             repo,
             args.startupAgent,
             args.startupPrompt,
-            args.startupLaunchPreferences
+            args.startupLaunchPreferences,
+            {
+              ...(args.startupAgentArgs !== undefined ? { agentArgs: args.startupAgentArgs } : {}),
+              ...(args.startupLaunchSource ? { launchSource: args.startupLaunchSource } : {})
+            }
           )
         : null
     const draftStartup =
       !args.startup && !agentStartup && args.startupDraft
-        ? await this.buildStartupForDraft(repo, args.startupDraft, requestedAgent)
+        ? await this.buildStartupForDraft(
+            repo,
+            args.startupDraft,
+            requestedAgent,
+            args.startupLaunchSource
+          )
         : null
     const effectiveStartup = args.startup ?? agentStartup?.startup ?? draftStartup?.startup
     const effectiveStartupFollowup = agentStartup?.followup
@@ -57,13 +83,13 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
         draftStartup?.agent ??
         (requestedAgentEnabled ? requestedAgent : undefined))
     const effectiveDraftPaste = args.startupDraftPaste ?? draftStartup?.draftPaste
-    // Resolve the execution host once: SSH ownership has two spellings, and reading the raw
-    // `connectionId` field routes an `executionHostId: 'ssh:*'`-only repo down the local path,
-    // which runs `git worktree add` on the client against a remote path.
-    const sshConnectionId = getRepoSshConnectionId(repo)
+    // Resolve the execution host once, shared with the `worktrees:create` IPC entry point so the
+    // two cannot answer differently for the same repo. Reading the raw `connectionId` field routes
+    // an `executionHostId: 'ssh:*'`-only repo down the local path, which runs `git worktree add` on
+    // the client against a remote path.
+    const createRoute = resolveWorktreeCreateRoute(repo)
     if (isFolderRepo(repo)) {
-      // A folder workspace is a registration, not a filesystem create, so it is host-agnostic —
-      // except for the agent trust write, which must land on the host that will run the agent.
+      // A folder workspace is a registration, not a filesystem create, so it is host-agnostic.
       return createRuntimeFolderWorktree({
         request: args,
         repo,
@@ -75,8 +101,6 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
           store: this.store,
           ptySpawnAvailable: Boolean(this.ptyController?.spawn),
           createTerminal: (selector, options) => this.createTerminal(selector, options),
-          markTrusted: (agent, path) =>
-            this.markWorkspaceTrustedForAgent(agent, sshConnectionId, path),
           pasteDraft: (handle, draft) => this.pasteStartupDraftWhenReady(handle, draft),
           sendFollowup: (handle, followup) => this.sendStartupFollowupWhenReady(handle, followup),
           invalidateResolvedWorktrees: () => this.invalidateResolvedWorktreeCache(),
@@ -97,20 +121,21 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
     const lineageInput =
       args.lineage || args.comment ? { ...args.lineage, comment: args.comment } : undefined
     const lineageResolution = await this.resolveLineageForWorktreeCreate(lineageInput)
-    if (sshConnectionId) {
-      // Why normalize the row: the remote-create pipeline reads `repo.connectionId!` at every
-      // depth, so hand it the connection the resolved host actually names.
-      const result = await this.createManagedRemoteWorktree(
-        { ...repo, connectionId: sshConnectionId },
-        {
-          ...args,
-          activate: args.activate,
-          ...(effectiveStartup ? { startup: effectiveStartup } : {}),
-          ...(effectiveStartupFollowup ? { startupFollowup: effectiveStartupFollowup } : {}),
-          ...(effectiveCreatedWithAgent ? { createdWithAgent: effectiveCreatedWithAgent } : {}),
-          ...(effectiveDraftPaste ? { startupDraftPaste: effectiveDraftPaste } : {})
-        }
-      )
+    if (createRoute.kind === 'runtime') {
+      throw new ExecutionHostNotDispatchableError(createRoute.hostId)
+    }
+    if (createRoute.kind === 'ssh') {
+      // `createRoute.repo` carries the resolved connection in `connectionId`, because the
+      // remote-create pipeline still reads `repo.connectionId!` at every depth. See the workaround
+      // note in worktree-create-execution-host-route.ts.
+      const result = await this.createManagedRemoteWorktree(createRoute.repo, {
+        ...args,
+        activate: args.activate,
+        ...(effectiveStartup ? { startup: effectiveStartup } : {}),
+        ...(effectiveStartupFollowup ? { startupFollowup: effectiveStartupFollowup } : {}),
+        ...(effectiveCreatedWithAgent ? { createdWithAgent: effectiveCreatedWithAgent } : {}),
+        ...(effectiveDraftPaste ? { startupDraftPaste: effectiveDraftPaste } : {})
+      })
       const recordedLineage = this.recordCreatedWorktreeLineage(result.worktree, lineageResolution)
       this.emitWorktreeLifecycle({
         kind: 'created',
@@ -152,7 +177,8 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
         fetchRemote: (path, remote, ...options) =>
           this.fetchRemoteWithCache(path, remote, ...options),
         onWorktreeMetadataPersisted: (persistedWorktree) =>
-          this.recordCreatedWorktreeLineage(persistedWorktree, lineageResolution)
+          this.recordCreatedWorktreeLineage(persistedWorktree, lineageResolution),
+        rearm
       })
     const settings = createSettings
     const { lineage, workspaceLineage, warnings: lineageWarnings } = metadataResult
@@ -211,7 +237,6 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
       warning,
       ports: {
         canSpawn: Boolean(this.ptyController?.spawn),
-        markTrusted: (agent, path) => this.markLocalWorkspaceTrustedForAgent(agent, path),
         createTerminal: (selector, options) => this.createTerminal(selector, options),
         pasteDraft: (handle, draft) => this.pasteStartupDraftWhenReady(handle, draft),
         sendFollowup: (handle, followup) => this.sendStartupFollowupWhenReady(handle, followup),

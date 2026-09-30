@@ -228,3 +228,17 @@ export function elementParam(
   }
   return element
 }
+
+/**
+ * Tools that only observe, and so may be safely re-sent to a fresh helper.
+ *
+ * Why an allowlist: a helper can die after running an operation but before
+ * writing its reply, so a replayed mutation is a second click, keystroke or
+ * paste. Only the observation tools are provably safe to repeat, and a tool
+ * added later has to opt in rather than inherit a replay by default.
+ */
+const OBSERVATION_TOOLS = new Set(['handshake', 'list_apps', 'list_windows', 'get_app_state'])
+
+export function isReplayableTool(tool: string): boolean {
+  return OBSERVATION_TOOLS.has(tool)
+}

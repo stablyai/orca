@@ -1,6 +1,7 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { vi } from 'vitest'
+import { ConfirmationDialogContext } from '@/components/confirmation-dialog-context'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 
@@ -20,10 +21,14 @@ export async function loadWorktreeList(): Promise<void> {
 
 export async function renderWorktreeListMarkup(): Promise<string> {
   return renderToStaticMarkup(
-    React.createElement(WorktreeList!, {
-      scrollOffsetRef: { current: 0 },
-      scrollAnchorRef: { current: null }
-    })
+    React.createElement(
+      ConfirmationDialogContext.Provider,
+      { value: async () => false },
+      React.createElement(WorktreeList!, {
+        scrollOffsetRef: { current: 0 },
+        scrollAnchorRef: { current: null }
+      })
+    )
   )
 }
 

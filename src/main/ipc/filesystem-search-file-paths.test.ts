@@ -3,19 +3,17 @@ import type { ChildProcess } from 'node:child_process'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
 import type * as GitRunner from '../git/runner'
+import type * as BundledRipgrepPath from '../ripgrep/bundled-ripgrep-path'
 import { isFileListingCancellation } from '../../shared/file-listing-cancellation'
-import {
-  RipgrepLaunchFailureError,
-  RipgrepUnavailableError
-} from '../../shared/ripgrep-process-availability'
+import { RipgrepUnavailableError } from '../../shared/ripgrep-process-availability'
 
 const {
-  checkRgAvailableMock,
+  bundledRipgrepCommandMock,
   getLocalGitOptionsForRegisteredWorktreeMock,
   resolveAuthorizedPathMock,
   wslAwareSpawnMock
 } = vi.hoisted(() => ({
-  checkRgAvailableMock: vi.fn(),
+  bundledRipgrepCommandMock: vi.fn(),
   getLocalGitOptionsForRegisteredWorktreeMock: vi.fn(),
   resolveAuthorizedPathMock: vi.fn(),
   wslAwareSpawnMock: vi.fn()
@@ -30,8 +28,9 @@ vi.mock('./filesystem-auth', () => ({
   resolveAuthorizedPath: resolveAuthorizedPathMock
 }))
 
-vi.mock('./rg-availability', () => ({
-  checkRgAvailable: checkRgAvailableMock
+vi.mock('../ripgrep/bundled-ripgrep-path', async (importOriginal) => ({
+  ...(await importOriginal<typeof BundledRipgrepPath>()),
+  bundledRipgrepCommand: bundledRipgrepCommandMock
 }))
 
 vi.mock('./local-worktree-runtime-options', () => ({
@@ -56,6 +55,12 @@ function createMockProcess(spawned = true): ChildProcess {
   return child
 }
 
+const BUNDLED_ERROR = "Orca's bundled search tool (ripgrep) could not start"
+
+// Why Object.create and not `{} as Store`: this path never reads the store, and the changed-code
+// quality gate rejects type assertions.
+const UNUSED_STORE: Store = Object.create(null)
+
 function createSpawnError(code: string): NodeJS.ErrnoException {
   return Object.assign(new Error(`spawn rg ${code}`), { code })
 }
@@ -70,8 +75,10 @@ describe('searchQuickOpenFilePaths', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     resolveAuthorizedPathMock.mockImplementation(async (path) => path)
-    checkRgAvailableMock.mockResolvedValue(true)
     getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({})
+    bundledRipgrepCommandMock.mockImplementation((options?: { wsl?: boolean }) =>
+      options?.wsl ? '/bundled/linux/rg' : '/bundled/rg'
+    )
   })
 
   it('finds fuzzy matches after 100k paths without returning excluded worktrees', async () => {
@@ -85,6 +92,7 @@ describe('searchQuickOpenFilePaths', () => {
     await flushMicrotasks()
 
     expect(wslAwareSpawnMock).toHaveBeenCalledTimes(1)
+    expect(wslAwareSpawnMock.mock.calls[0][0]).toBe('/bundled/rg')
     expect(wslAwareSpawnMock.mock.calls[0][1]).toContain('--no-ignore-vcs')
     ;(child.stdout as unknown as EventEmitter).emit(
       'data',
@@ -120,21 +128,8 @@ describe('searchQuickOpenFilePaths', () => {
     expect(child.kill).toHaveBeenCalledOnce()
   })
 
-  it('requires ripgrep instead of retaining an unbounded fallback inventory', async () => {
+  it('spawns the bundled Linux rg inside the registered WSL runtime', async () => {
     getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({ wslDistro: 'Ubuntu' })
-    checkRgAvailableMock.mockResolvedValue(false)
-
-    await expect(
-      searchQuickOpenFilePaths('C:\\repo', {} as Store, { query: 'target', limit: 32 })
-    ).rejects.toThrow('Quick Open search requires ripgrep')
-    expect(wslAwareSpawnMock).not.toHaveBeenCalled()
-  })
-
-  it('retries transient WSL rg availability pressure before showing install guidance', async () => {
-    getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({ wslDistro: 'Ubuntu' })
-    checkRgAvailableMock
-      .mockRejectedValueOnce(new RipgrepLaunchFailureError('rg check failed (EAGAIN)'))
-      .mockResolvedValueOnce(true)
     const child = createMockProcess()
     wslAwareSpawnMock.mockReturnValue(child)
 
@@ -147,10 +142,15 @@ describe('searchQuickOpenFilePaths', () => {
     child.emit('close', 0, null)
 
     await expect(promise).resolves.toMatchObject({ paths: ['src/target.ts'] })
-    expect(checkRgAvailableMock).toHaveBeenCalledTimes(2)
+    expect(bundledRipgrepCommandMock).toHaveBeenCalledWith({ wsl: true })
+    expect(wslAwareSpawnMock).toHaveBeenCalledWith(
+      '/bundled/linux/rg',
+      expect.any(Array),
+      expect.objectContaining({ cwd: 'C:\\repo', wslDistro: 'Ubuntu' })
+    )
   })
 
-  it('retries a transient rg spawn failure instead of demanding a ripgrep install', async () => {
+  it('retries a transient rg spawn failure instead of reporting the bundled rg broken', async () => {
     const failed = createMockProcess(false)
     const succeeded = createMockProcess()
     wslAwareSpawnMock.mockReturnValueOnce(failed).mockReturnValueOnce(succeeded)
@@ -196,9 +196,14 @@ describe('searchQuickOpenFilePaths', () => {
     expect(wslAwareSpawnMock).toHaveBeenCalledTimes(2)
   })
 
-  it('still reports a missing ripgrep binary when rg is genuinely absent', async () => {
+  // Why both events: a failed spawn emits 'error' and THEN 'close' with a negative code. Emitting
+  // only 'error' lets the async cwd check win a race it loses in production.
+  it('reports the bundled-ripgrep error when rg genuinely cannot start', async () => {
     const child = createMockProcess(false)
     wslAwareSpawnMock.mockReturnValue(child)
+    // Why a root that exists: an ENOENT spawn error is also what a vanished workspace looks like,
+    // so this stays about the binary only while the search root is actually reachable.
+    resolveAuthorizedPathMock.mockImplementation(async () => process.cwd())
     const promise = searchQuickOpenFilePaths('/repo', {} as Store, {
       query: 'target',
       limit: 32
@@ -206,12 +211,45 @@ describe('searchQuickOpenFilePaths', () => {
     await flushMicrotasks()
 
     child.emit('error', createSpawnError('ENOENT'))
+    child.emit('close', -2, null)
 
-    await expect(promise).rejects.toThrow('Quick Open search requires ripgrep')
+    await expect(promise).rejects.toThrow(BUNDLED_ERROR)
     expect(wslAwareSpawnMock).toHaveBeenCalledTimes(1)
   })
 
-  it('reports install guidance when ripgrep is unavailable on the retry', async () => {
+  // Why close(97): the WSL wrapper's "cd failed" code. It is above rg's own 0/1/2, so a handler
+  // that checks it after the unavailable branch reports a broken install instead.
+  it('names the unreachable root when the WSL wrapper cannot enter it', async () => {
+    const child = createMockProcess()
+    wslAwareSpawnMock.mockReturnValue(child)
+    const promise = searchQuickOpenFilePaths('/repo', UNUSED_STORE, {
+      query: 'target',
+      limit: 32
+    })
+    await flushMicrotasks()
+
+    child.emit('close', 97, null)
+
+    await expect(promise).rejects.toThrow('Search root is not reachable: /repo')
+  })
+
+  it('names the unreachable root when the workspace is gone, not the bundled binary', async () => {
+    const child = createMockProcess(false)
+    wslAwareSpawnMock.mockReturnValue(child)
+    resolveAuthorizedPathMock.mockImplementation(async () => '/definitely/not/here')
+    const promise = searchQuickOpenFilePaths('/repo', {} as Store, {
+      query: 'target',
+      limit: 32
+    })
+    await flushMicrotasks()
+
+    child.emit('error', createSpawnError('ENOENT'))
+    child.emit('close', -2, null)
+
+    await expect(promise).rejects.toThrow('Search root is not reachable: /definitely/not/here')
+  })
+
+  it('reports the bundled-ripgrep error when rg is unavailable on the retry', async () => {
     const failed = createMockProcess(false)
     wslAwareSpawnMock.mockReturnValueOnce(failed).mockImplementationOnce(() => {
       throw new RipgrepUnavailableError()
@@ -224,7 +262,7 @@ describe('searchQuickOpenFilePaths', () => {
 
     failed.emit('error', createSpawnError('EAGAIN'))
 
-    await expect(promise).rejects.toThrow('Quick Open search requires ripgrep')
+    await expect(promise).rejects.toThrow(BUNDLED_ERROR)
     expect(wslAwareSpawnMock).toHaveBeenCalledTimes(2)
   })
 

@@ -53,7 +53,8 @@ function createHarness(
     shutdown
   } as unknown as IPtyProvider
   const store = {
-    getSshRemotePtyLeases: vi.fn().mockReturnValue(leases)
+    getSshRemotePtyLeases: vi.fn().mockReturnValue(leases),
+    reconcileSshRemotePtyLeasesForTarget: vi.fn()
   } as unknown as Store
   return { provider, store, shutdown }
 }
@@ -176,6 +177,20 @@ describe('sweepOrphanedRelayPtys', () => {
     expect(harness.shutdown).not.toHaveBeenCalled()
   })
 
+  it('leaves a PTY whose expired lease names a recycled relay id alone', async () => {
+    // `relayIdRecycled` is the one expired lease the reattach predicate refuses, so it is the case
+    // most likely to be mistaken for a licence to kill. The sweep asks a different question: this
+    // id now names some OTHER incarnation, which makes a stop more dangerous, not less.
+    const harness = createHarness(
+      [hostEntry()],
+      [{ ...lease('pty-1', 'expired'), relayIdRecycled: true }]
+    )
+
+    await run(harness)
+
+    expect(harness.shutdown).not.toHaveBeenCalled()
+  })
+
   it('leaves alone a lease the real supersede path expired when a pane re-leased', async () => {
     // Drives the actual persistence operation rather than asserting the state by hand, so this
     // stays true only while supersede really does leave the predecessor's process running.
@@ -199,7 +214,7 @@ describe('sweepOrphanedRelayPtys', () => {
       clearBindingsForTarget: () => {},
       clearBindingsForLeases: () => false,
       flush: () => {},
-      flushDurableStateOrThrowAsync: async () => {}
+      runDurableMutation: async (mutate) => mutate().value
     }
     // The same pane re-leases under a new relay id; pty-1 is expired, never terminated.
     upsertSshRemotePtyLease(operations, {

@@ -1,9 +1,11 @@
 import type { CodexRateLimitResetOutcome, ProviderRateLimits } from '../../shared/rate-limit-types'
-import { spawn } from 'node:child_process'
 import { isCodexAuthError } from '../../shared/codex-auth-errors'
 import { buildWslExecArgs, buildWslLoginShellCommand } from '../../shared/wsl-login-shell-command'
 import { parseWslUncPath } from '../../shared/wsl-paths'
-import { CODEX_READ_ONLY_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
+import {
+  CODEX_DISABLE_PLUGINS_ARGS,
+  CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS
+} from '../codex-cli/codex-read-only-app-server-args'
 import { resolveCodexCommand } from '../codex-cli/command'
 // Why: import from the shared module, not the codex-cli re-export, so a test that
 // mocks '../codex-cli/command' does not have to restate this pure helper.
@@ -15,7 +17,8 @@ import {
 import { isCodexStateDbBackfillPending } from '../codex/codex-state-db'
 import { startCodexStateDbBackfillRecoveryInBackground } from '../codex/codex-state-db-backfill-recovery'
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
-import { getCmdExePath, getSpawnArgsForWindows } from '../win32-utils'
+import { spawnProcess } from '../../shared/child-process/run-process'
+import { getCmdExePath } from '../win32-utils'
 import { probeCodexAuthPresence } from './codex-auth-presence'
 import {
   fetchCodexRateLimitsViaBackend,
@@ -43,6 +46,11 @@ const RPC_TIMEOUT_MS = 10_000
 const WSL_RPC_TIMEOUT_MS = 25_000
 const RPC_INIT_TIMEOUT_MS = 30_000
 const WSL_RPC_INIT_TIMEOUT_MS = 40_000
+
+// Keep the PTY fallback aligned with the RPC probe: rate-limit collection does
+// not need marketplace/plugin startup, and those background clones can outlive
+// the short-lived probe process.
+const CODEX_RATE_LIMIT_PLUGIN_ARGS = CODEX_DISABLE_PLUGINS_ARGS
 
 export type FetchCodexRateLimitsOptions = CodexRateLimitFetchOptions
 
@@ -96,24 +104,22 @@ async function fetchViaRpc(options?: CodexRateLimitFetchOptions): Promise<Provid
   if (options?.signal?.aborted) {
     return abortedCodexRateLimitResult()
   }
-  const codexArgs = [...CODEX_READ_ONLY_APP_SERVER_ARGS]
+  const codexArgs = [...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS]
   const wslCodex = options?.codexHomePath
     ? buildWslCodexCommand(options.codexHomePath, codexArgs, true)
     : null
   const codexCommand = wslCodex ? 'codex' : resolveCodexCommand()
-  const { spawnCmd, spawnArgs } = wslCodex
-    ? { spawnCmd: wslCodex.command, spawnArgs: wslCodex.args }
-    : getSpawnArgsForWindows(codexCommand, codexArgs)
-  const spawnOptions = {
-    stdio: ['pipe', 'pipe', 'pipe'] as ['pipe', 'pipe', 'pipe'],
+  // Why the bare CLI: spawnProcess resolves an npm `codex.cmd` shim past cmd.exe itself.
+  const child = spawnProcess({
+    program: wslCodex ? wslCodex.command : codexCommand,
+    args: wslCodex ? wslCodex.args : codexArgs,
+    stdio: ['pipe', 'pipe', 'pipe'],
     cwd: resolveHiddenRateLimitPtyCwd(),
-    windowsHide: true,
     env: withCliRuntimeOnPath(codexCommand, {
       ...(wslCodex ? processEnvWithoutCodexHome() : process.env),
       ...(options?.codexHomePath && !wslCodex ? { CODEX_HOME: options.codexHomePath } : {})
     })
-  }
-  const child = spawn(spawnCmd, spawnArgs, spawnOptions)
+  })
   return readCodexRateLimitsViaRpc({
     child: child as CodexRpcRateLimitChild,
     codexCommand,
@@ -126,13 +132,17 @@ async function fetchViaRpc(options?: CodexRateLimitFetchOptions): Promise<Provid
 
 function resolvePtyCommand(options?: CodexRateLimitFetchOptions) {
   const wslCodex = options?.codexHomePath
-    ? buildWslCodexCommand(options.codexHomePath, [], false)
+    ? buildWslCodexCommand(options.codexHomePath, [...CODEX_RATE_LIMIT_PLUGIN_ARGS], false)
     : null
   const codexCommand = wslCodex ? 'codex' : resolveCodexCommand()
   const isWin32 = process.platform === 'win32'
   return {
     command: wslCodex ? wslCodex.command : isWin32 ? getCmdExePath() : codexCommand,
-    args: wslCodex ? wslCodex.args : isWin32 ? ['/d', '/c', codexCommand] : [],
+    args: wslCodex
+      ? wslCodex.args
+      : isWin32
+        ? ['/d', '/c', codexCommand, ...CODEX_RATE_LIMIT_PLUGIN_ARGS]
+        : [...CODEX_RATE_LIMIT_PLUGIN_ARGS],
     cwd: resolveHiddenRateLimitPtyCwd(),
     env: withCliRuntimeOnPath(codexCommand, {
       ...(wslCodex ? processEnvWithoutCodexHome() : process.env),

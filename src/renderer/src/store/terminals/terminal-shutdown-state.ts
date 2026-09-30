@@ -12,6 +12,7 @@ import {
   type RetainedAgentEntry
 } from '../slices/agent-status'
 import type { TerminalStoreGet, TerminalStoreSet } from './terminal-state'
+import { copyOnWriteRecord } from '../copy-on-write-record'
 
 export function commitTerminalShutdownState({
   exitGuardPtyIds,
@@ -45,120 +46,102 @@ export function commitTerminalShutdownState({
             clearTransientTerminalState(tab, index)
           )
         }
-    const ptyIdsByTabId = {
-      ...state.ptyIdsByTabId,
-      ...Object.fromEntries(tabs.map((tab) => [tab.id, [] as string[]] as const))
-    }
-    const runtimePaneTitlesByTabId = keepIdentifiers
-      ? state.runtimePaneTitlesByTabId
-      : { ...state.runtimePaneTitlesByTabId }
-    const suppressedPtyExitIds = {
-      ...state.suppressedPtyExitIds,
-      ...Object.fromEntries(exitGuardPtyIds.map((ptyId) => [ptyId, true] as const))
-    }
-    const pendingPtyShutdownIds = { ...state.pendingPtyShutdownIds }
-    for (const ptyId of exitGuardPtyIds) {
-      const remainingOwners = (pendingPtyShutdownIds[ptyId] ?? 0) - 1
-      if (remainingOwners > 0) {
-        pendingPtyShutdownIds[ptyId] = remainingOwners
-      } else {
-        delete pendingPtyShutdownIds[ptyId]
+    // Why copy-on-write everywhere below: a worktree whose panes already exited hits
+    // this with nothing to clear, and unconditional spreads then hand every map a new
+    // identity for no data change. ptyIdsByTabId is the costly one — six components
+    // select it whole, and selectLivePtyIdsForWorktree memoizes per sidebar card on
+    // its identity, so churning it rebuilds that record once per card.
+    const ptyIdsByTabId = copyOnWriteRecord(state.ptyIdsByTabId)
+    for (const tab of tabs) {
+      // Why `!== undefined`: an absent key is not an empty array, and the spread this
+      // replaces created the key. Only an already-empty entry can be skipped.
+      const current = state.ptyIdsByTabId[tab.id]
+      if (current === undefined || current.length > 0) {
+        ptyIdsByTabId.set(tab.id, [])
       }
     }
-
-    // Sleeping terminals retain restart intent, but a wake can receive a different live PTY id.
-    const pendingCodexPaneRestartIds = keepIdentifiers
-      ? state.pendingCodexPaneRestartIds
-      : { ...state.pendingCodexPaneRestartIds }
-    const codexRestartNoticeByPtyId = { ...state.codexRestartNoticeByPtyId }
+    const suppressedPtyExitIds = copyOnWriteRecord(state.suppressedPtyExitIds)
+    const pendingPtyShutdownIds = copyOnWriteRecord(state.pendingPtyShutdownIds)
+    const pendingCodexPaneRestartIds = copyOnWriteRecord(state.pendingCodexPaneRestartIds)
+    const codexRestartNoticeByPtyId = copyOnWriteRecord(state.codexRestartNoticeByPtyId)
     for (const ptyId of exitGuardPtyIds) {
+      if (state.suppressedPtyExitIds[ptyId] !== true) {
+        suppressedPtyExitIds.set(ptyId, true)
+      }
+      // An absent owner count meant `delete` of a missing key, which changed nothing.
+      if (ptyId in state.pendingPtyShutdownIds) {
+        const remainingOwners = (state.pendingPtyShutdownIds[ptyId] ?? 0) - 1
+        if (remainingOwners > 0) {
+          pendingPtyShutdownIds.set(ptyId, remainingOwners)
+        } else {
+          pendingPtyShutdownIds.delete(ptyId)
+        }
+      }
+      // Sleeping terminals retain restart intent, but a wake can receive a different live PTY id.
       if (!keepIdentifiers) {
-        delete pendingCodexPaneRestartIds[ptyId]
+        pendingCodexPaneRestartIds.delete(ptyId)
       }
-      delete codexRestartNoticeByPtyId[ptyId]
+      codexRestartNoticeByPtyId.delete(ptyId)
     }
 
-    const pendingSetupSplitByTabId = { ...state.pendingSetupSplitByTabId }
-    const pendingIssueCommandSplitByTabId = { ...state.pendingIssueCommandSplitByTabId }
-    const terminalLayoutsByTabId = { ...state.terminalLayoutsByTabId }
-    let unreadTerminalTabs = state.unreadTerminalTabs
-    let unreadTerminalPanes = state.unreadTerminalPanes
-    let unreadAgentCompletionPanes = state.unreadAgentCompletionPanes
-    let lastTerminalInputAtByPaneKey = state.lastTerminalInputAtByPaneKey
+    const runtimePaneTitlesByTabId = copyOnWriteRecord(state.runtimePaneTitlesByTabId)
+    const pendingSetupSplitByTabId = copyOnWriteRecord(state.pendingSetupSplitByTabId)
+    const pendingIssueCommandSplitByTabId = copyOnWriteRecord(state.pendingIssueCommandSplitByTabId)
+    const terminalLayoutsByTabId = copyOnWriteRecord(state.terminalLayoutsByTabId)
+    const lastKnownRelayPtyIdByTabId = copyOnWriteRecord(state.lastKnownRelayPtyIdByTabId)
+    const unreadTerminalTabs = copyOnWriteRecord(state.unreadTerminalTabs)
+    const unreadTerminalPanes = copyOnWriteRecord(state.unreadTerminalPanes)
+    const unreadAgentCompletionPanes = copyOnWriteRecord(state.unreadAgentCompletionPanes)
+    const lastTerminalInputAtByPaneKey = copyOnWriteRecord(state.lastTerminalInputAtByPaneKey)
 
     for (const tab of tabs) {
-      if (!keepIdentifiers) {
-        delete runtimePaneTitlesByTabId[tab.id]
-      }
-      delete pendingSetupSplitByTabId[tab.id]
-      delete pendingIssueCommandSplitByTabId[tab.id]
-      if (unreadTerminalTabs[tab.id]) {
-        if (unreadTerminalTabs === state.unreadTerminalTabs) {
-          unreadTerminalTabs = { ...state.unreadTerminalTabs }
-        }
-        delete unreadTerminalTabs[tab.id]
-      }
-      for (const paneKey of Object.keys(unreadTerminalPanes)) {
-        if (paneKey.startsWith(`${tab.id}:`)) {
-          if (unreadTerminalPanes === state.unreadTerminalPanes) {
-            unreadTerminalPanes = { ...unreadTerminalPanes }
-          }
-          delete unreadTerminalPanes[paneKey]
+      pendingSetupSplitByTabId.delete(tab.id)
+      pendingIssueCommandSplitByTabId.delete(tab.id)
+      unreadTerminalTabs.delete(tab.id)
+      const panePrefix = `${tab.id}:`
+      for (const paneKey of Object.keys(state.unreadTerminalPanes)) {
+        if (paneKey.startsWith(panePrefix)) {
+          unreadTerminalPanes.delete(paneKey)
         }
       }
-      for (const paneKey of Object.keys(unreadAgentCompletionPanes)) {
-        if (paneKey.startsWith(`${tab.id}:`)) {
-          if (unreadAgentCompletionPanes === state.unreadAgentCompletionPanes) {
-            unreadAgentCompletionPanes = { ...unreadAgentCompletionPanes }
-          }
-          delete unreadAgentCompletionPanes[paneKey]
+      for (const paneKey of Object.keys(state.unreadAgentCompletionPanes)) {
+        if (paneKey.startsWith(panePrefix)) {
+          unreadAgentCompletionPanes.delete(paneKey)
         }
       }
-      for (const paneKey of Object.keys(lastTerminalInputAtByPaneKey)) {
-        if (paneKey.startsWith(`${tab.id}:`)) {
-          if (lastTerminalInputAtByPaneKey === state.lastTerminalInputAtByPaneKey) {
-            lastTerminalInputAtByPaneKey = { ...lastTerminalInputAtByPaneKey }
-          }
-          delete lastTerminalInputAtByPaneKey[paneKey]
+      for (const paneKey of Object.keys(state.lastTerminalInputAtByPaneKey)) {
+        if (paneKey.startsWith(panePrefix)) {
+          lastTerminalInputAtByPaneKey.delete(paneKey)
         }
       }
       if (!keepIdentifiers) {
-        const layout = terminalLayoutsByTabId[tab.id]
-        if (layout?.ptyIdsByLeafId) {
-          terminalLayoutsByTabId[tab.id] = { ...layout, ptyIdsByLeafId: {} }
+        runtimePaneTitlesByTabId.delete(tab.id)
+        lastKnownRelayPtyIdByTabId.delete(tab.id)
+        const layout = state.terminalLayoutsByTabId[tab.id]
+        // Why the emptiness check: replacing an already-empty map with a fresh {} is
+        // the same value with a new identity.
+        if (layout?.ptyIdsByLeafId && Object.keys(layout.ptyIdsByLeafId).length > 0) {
+          terminalLayoutsByTabId.set(tab.id, { ...layout, ptyIdsByLeafId: {} })
         }
-      }
-    }
-
-    const lastKnownRelayPtyIdByTabId = keepIdentifiers
-      ? state.lastKnownRelayPtyIdByTabId
-      : { ...state.lastKnownRelayPtyIdByTabId }
-    if (!keepIdentifiers) {
-      for (const tab of tabs) {
-        delete lastKnownRelayPtyIdByTabId[tab.id]
       }
     }
 
     return {
       tabsByWorktree,
-      ptyIdsByTabId,
-      lastKnownRelayPtyIdByTabId,
-      runtimePaneTitlesByTabId,
-      suppressedPtyExitIds,
-      pendingPtyShutdownIds,
-      pendingCodexPaneRestartIds,
-      codexRestartNoticeByPtyId,
-      pendingSetupSplitByTabId,
-      pendingIssueCommandSplitByTabId,
-      terminalLayoutsByTabId,
-      ...(unreadTerminalTabs !== state.unreadTerminalTabs ? { unreadTerminalTabs } : {}),
-      ...(unreadTerminalPanes !== state.unreadTerminalPanes ? { unreadTerminalPanes } : {}),
-      ...(unreadAgentCompletionPanes !== state.unreadAgentCompletionPanes
-        ? { unreadAgentCompletionPanes }
-        : {}),
-      ...(lastTerminalInputAtByPaneKey !== state.lastTerminalInputAtByPaneKey
-        ? { lastTerminalInputAtByPaneKey }
-        : {})
+      ptyIdsByTabId: ptyIdsByTabId.read(),
+      lastKnownRelayPtyIdByTabId: lastKnownRelayPtyIdByTabId.read(),
+      runtimePaneTitlesByTabId: runtimePaneTitlesByTabId.read(),
+      suppressedPtyExitIds: suppressedPtyExitIds.read(),
+      pendingPtyShutdownIds: pendingPtyShutdownIds.read(),
+      pendingCodexPaneRestartIds: pendingCodexPaneRestartIds.read(),
+      codexRestartNoticeByPtyId: codexRestartNoticeByPtyId.read(),
+      pendingSetupSplitByTabId: pendingSetupSplitByTabId.read(),
+      pendingIssueCommandSplitByTabId: pendingIssueCommandSplitByTabId.read(),
+      terminalLayoutsByTabId: terminalLayoutsByTabId.read(),
+      unreadTerminalTabs: unreadTerminalTabs.read(),
+      unreadTerminalPanes: unreadTerminalPanes.read(),
+      unreadAgentCompletionPanes: unreadAgentCompletionPanes.read(),
+      lastTerminalInputAtByPaneKey: lastTerminalInputAtByPaneKey.read()
     }
   })
 
@@ -174,7 +157,10 @@ export function commitTerminalShutdownState({
             ).records
           : state.sleepingAgentSessionsByPaneKey
       return {
-        sleepingAgentSessionsByPaneKey: { ...base, ...sleepingAgentSessionRecords }
+        sleepingAgentSessionsByPaneKey: {
+          ...base,
+          ...sleepingAgentSessionRecords
+        }
       }
     })
   } else {

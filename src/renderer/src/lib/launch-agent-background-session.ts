@@ -28,8 +28,10 @@ import {
   subscribeToRuntimeTerminalData,
   toRemoteRuntimePtyId
 } from '@/runtime/runtime-terminal-stream'
-import { createSshBackgroundStartupDelivery } from '@/lib/ssh-background-startup-delivery'
-import { shouldUseShellReadyStartupDelivery } from '../../../shared/codex-startup-delivery'
+import {
+  createSshBackgroundStartupDelivery,
+  sshBackgroundLaunchWaitsForShellReady
+} from '@/lib/ssh-background-startup-delivery'
 import { isMainTerminalSideEffectAuthorityForPty } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import { runBestEffortAgentBackgroundCleanups } from '@/lib/agent-background-session-cleanup'
@@ -63,18 +65,6 @@ export async function launchAgentBackgroundSession(
     worktreePath: worktree.path,
     repo
   })
-  const preflight = requireTuiAgentConfig(agent).preflightTrust
-  if (preflight && worktree.path && window.api.agentTrust?.markTrusted) {
-    try {
-      await window.api.agentTrust.markTrusted({
-        preset: preflight,
-        workspacePath: worktree.path,
-        ...(launchHost.connectionId ? { connectionId: launchHost.connectionId } : {})
-      })
-    } catch {
-      // Best-effort: the user can still accept the trust prompt.
-    }
-  }
   const { platform: launchPlatform, isRemote } = launchHost
   const startupShell = resolveLocalWindowsAgentStartupShell({
     platform: launchPlatform,
@@ -115,12 +105,8 @@ export async function launchAgentBackgroundSession(
   const sshStartupDelivery = createSshBackgroundStartupDelivery({
     command: sshConnectionId ? startupPlan.launchCommand : null,
     waitForShellReady:
-      Boolean(sshConnectionId) &&
-      shouldUseShellReadyStartupDelivery({
-        command: startupPlan.launchCommand,
-        startupCommandDelivery: startupPlan.startupCommandDelivery
-      }),
-    write: (ptyId, data) => window.api.pty.write(ptyId, data)
+      Boolean(sshConnectionId) && sshBackgroundLaunchWaitsForShellReady(startupPlan),
+    write: (ptyId, data) => window.api.pty.write(ptyId, data, 'launch')
   })
   // Route by the worktree's owner host, not the focused runtime.
   const runtimeTarget = getActiveRuntimeTarget(
@@ -223,6 +209,7 @@ export async function launchAgentBackgroundSession(
       })
       ptyId = result.id
       spawned = result
+      sshStartupDelivery.applyHostShellReadyArmed(result.shellReadyArmed)
     }
     const adopted = await adoptAgentBackgroundSessionTab({
       store,

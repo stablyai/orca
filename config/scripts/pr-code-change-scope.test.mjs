@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -7,7 +7,8 @@ import {
   classifyPrJobs,
   isDocsOnlyPath,
   PR_CHECK_JOBS,
-  shouldRunPrChecks
+  shouldRunPrChecks,
+  STATIC_ANALYSIS_SCAN_ROOTS
 } from './pr-code-change-scope.mjs'
 
 const projectDir = resolve(import.meta.dirname, '../..')
@@ -86,6 +87,17 @@ describe('docs-only path classification', () => {
   it('does not start desktop PR Checks for mobile-only diffs', () => {
     expect(shouldRunPrChecks(['mobile/src/App.tsx', 'mobile/package.json'])).toBe(false)
   })
+
+  it('does not start desktop PR Checks for cloud-only diffs', () => {
+    expect(
+      shouldRunPrChecks([
+        'cloud/apps/relay/src/index.ts',
+        'cloud/package.json',
+        'cloud/.gitleaks.toml',
+        '.github/workflows/cloud-verify.yml'
+      ])
+    ).toBe(false)
+  })
 })
 
 describe('per-job path classification', () => {
@@ -117,6 +129,9 @@ describe('per-job path classification', () => {
     expectClassification(['src/shared/git-binary-compatibility.test.ts'], {
       git_compatibility: true
     })
+    expectClassification(['.github/actions/prepare-git-compatibility/action.yml'], {
+      git_compatibility: true
+    })
   })
 
   it('runs the Codex index-heal contract only when the heal or its transport changes', () => {
@@ -138,6 +153,13 @@ describe('per-job path classification', () => {
     expectClassification(['src/main/codex/codex-index-heal-binary-contract.test.ts'], {
       codex_index_heal_contract: true
     })
+    for (const file of ['src/main/agent-trust-presets.ts', 'src/main/codex/config-toml-trust.ts']) {
+      expectClassification([file], {
+        codex_index_heal_contract: true,
+        package: true,
+        package_windows: true
+      })
+    }
     // Keep the real-binary gate live when a transport or launch dependency changes.
     for (const file of [
       'src/main/codex/codex-app-server-capability-signal.ts',
@@ -183,6 +205,10 @@ describe('per-job path classification', () => {
 
   it('runs Linux packaging when an artifact contract changes', () => {
     for (const file of [
+      'config/scripts/package-linux-formats.mjs',
+      'config/scripts/script-child-process.mjs',
+      'config/scripts/space-sharing-copy.mjs',
+      '.github/actions/prepare-linux-package-fixture/action.yml',
       'config/docker/cli-launch-contract/Dockerfile',
       'config/docker/cli-launch-contract/run-cli-case.sh',
       'config/docker/headless-pairing/Dockerfile',
@@ -192,7 +218,36 @@ describe('per-job path classification', () => {
       'config/scripts/run-headless-linux-pairing-docker.mjs',
       'config/scripts/static-appimage-package-contract.cjs'
     ]) {
-      expectClassification([file], { package: true })
+      expectClassification([file], {
+        package: true,
+        mobile_web_app: file === 'config/scripts/script-child-process.mjs'
+      })
+    }
+  })
+
+  it('runs Linux packaging for the daemon shutdown descendant oracle and its production paths', () => {
+    for (const file of [
+      'config/docker/daemon-shutdown-descendants/Dockerfile',
+      'config/docker/daemon-shutdown-descendants/bundle-entry.ts',
+      'config/docker/daemon-shutdown-descendants/fixture.cjs',
+      'config/docker/daemon-shutdown-descendants/run-case.sh',
+      'config/scripts/run-daemon-shutdown-descendants-docker.mjs'
+    ]) {
+      expectClassification([file], {
+        package: true,
+        mobile_web_app: file === 'config/scripts/script-child-process.mjs'
+      })
+    }
+    for (const file of [
+      'src/main/daemon/terminal-host.ts',
+      'src/main/daemon/terminal-session-teardown.ts',
+      'src/main/daemon/terminal-host-session-shutdown.ts',
+      'src/main/daemon/terminal-descendant-shutdown.ts',
+      'src/main/pty-descendant-termination.ts',
+      'src/main/pty-descendant-exit-verification.ts',
+      'src/main/pty-process-table-parser.ts'
+    ]) {
+      expectClassification([file], { package: true, package_windows: true })
     }
   })
 
@@ -243,6 +298,42 @@ describe('per-job path classification', () => {
     })
   })
 
+  it('runs the mobile web app job for the builder, the page source and the shell policy', () => {
+    for (const file of [
+      'config/scripts/build-mobile-web-app-bundle.mjs',
+      'config/scripts/run-mobile-web-app-checks.mjs',
+      'config/scripts/script-child-process.mjs',
+      'src/shared/child-process/run-process.ts',
+      'config/scripts/mobile-web-app-route-manifest.mjs',
+      'mobile/web-entry/index.tsx',
+      'mobile/app/h/[hostId]/index.tsx',
+      'mobile/src/transport/client-context.web.tsx',
+      'mobile/modules/orca-mobile-web-shell/ios/MobileWebShellCsp.swift',
+      // The vendored Expo module the page resolves a .web.ts out of.
+      'mobile/packages/expo-two-way-audio/src/ExpoTwoWayAudioModule.web.ts'
+    ]) {
+      expect(classifyPrJobs([file]).mobile_web_app, file).toBe(true)
+    }
+  })
+
+  it('runs it on a mobile-only diff, which should_run alone would skip', () => {
+    const classified = classifyPrJobs(['mobile/app/h/[hostId]/tasks.tsx'])
+    expect(classified.should_run).toBe(false)
+    expect(classified.mobile_web_app).toBe(true)
+  })
+
+  it('needs no package.json prefix, because package.json already forces every job', () => {
+    // build:mobile-web is defined there, so the job has to run on an edit to it. A prefix
+    // that broad is not how: GLOBAL_FORCE_FILES already covers the file.
+    expect(classifyPrJobs(['package.json']).mobile_web_app).toBe(true)
+  })
+
+  it('leaves it off for changes that cannot reach the page', () => {
+    for (const file of ['docs/reference/x.md', 'src/main/orcad/orcad-native-preflight.ts']) {
+      expect(classifyPrJobs([file]).mobile_web_app, file).toBe(false)
+    }
+  })
+
   it('runs cross-version wire checks for every working-tree wire module', () => {
     for (const file of [
       'src/shared/protocol-version.ts',
@@ -266,6 +357,9 @@ describe('per-job path classification', () => {
       'src/main/runtime/rpc/methods/structured-agent-session-hold.ts',
       'src/main/runtime/rpc/methods/structured-agent-session-schemas.ts',
       'src/main/runtime/rpc/methods/terminal.ts',
+      'src/main/runtime/runtime-worktree-agent-rows.ts',
+      'src/main/runtime/runtime-worktree-pty-agent-sources.ts',
+      'src/shared/runtime-worktree-contracts.ts',
       'src/renderer/src/runtime/remote-runtime-terminal-multiplexer.ts'
     ]) {
       expectClassification([file], {
@@ -305,6 +399,54 @@ describe('per-job path classification', () => {
     }
   })
 
+  // Why: static analysis lints changed mobile files with a type-aware pass, and
+  // mobile is a separate pnpm project. Without its node_modules every mobile type
+  // resolves to an `error` type and the changed-code gate fails on phantom
+  // findings, which is exactly how a react-test-renderer union broke a PR.
+  it('installs mobile dependencies exactly when mobile files change', () => {
+    expect(classifyPrJobs([]).mobile_dependencies).toBe(true)
+    expect(classifyPrJobs(['README.md']).mobile_dependencies).toBe(false)
+    expect(classifyPrJobs(['src/main/index.ts']).mobile_dependencies).toBe(false)
+    expect(
+      classifyPrJobs(['src/main/index.ts', 'mobile/src/session/a.test.ts']).mobile_dependencies
+    ).toBe(true)
+    // Why true: a mobile-only diff still skips the desktop suite, but the repo-wide audits lint
+    // mobile/, so static analysis runs and its changed-code pass needs the mobile types.
+    expect(classifyPrJobs(['mobile/package.json']).mobile_dependencies).toBe(true)
+    expect(classifyPrJobs(['mobile/package.json']).should_run).toBe(false)
+    expect(classifyPrJobs(['README.md', 'mobile/src/a.ts']).mobile_dependencies).toBe(true)
+  })
+
+  // Why: `mobile/` is desktop-irrelevant for every other job, so a mobile-only diff used to skip
+  // the audits that do lint it. That is how #20702 landed two duplicate imports which then failed
+  // this gate on every later PR's merge ref until #20895 swept them.
+  it('runs static analysis for a mobile-only diff without dragging in the desktop suite', () => {
+    const result = classifyPrJobs([
+      'mobile/src/test-support/rpc-recording/adapters/push-registration-mount-adapters.ts'
+    ])
+    expect(result.static_analysis).toBe(true)
+    expect(result.mobile_dependencies).toBe(true)
+    expect(result.should_run).toBe(false)
+    for (const job of ['typecheck', 'test', 'package', 'package_windows', 'git_compatibility']) {
+      expect(result[job], job).toBe(false)
+    }
+  })
+
+  // The ratchet: adding a tree to an audit command has to widen this trigger on its own.
+  it('runs static analysis for every tree the audit commands scan', () => {
+    expect(STATIC_ANALYSIS_SCAN_ROOTS).toEqual(
+      expect.arrayContaining(['src', 'config', 'tests', 'mobile'])
+    )
+    for (const root of STATIC_ANALYSIS_SCAN_ROOTS) {
+      expect(classifyPrJobs([`${root}/changed-file.ts`]).static_analysis, root).toBe(true)
+    }
+  })
+
+  it('leaves diffs the audits never read out of static analysis', () => {
+    expect(classifyPrJobs(['README.md']).static_analysis).toBe(false)
+    expect(classifyPrJobs(['cloud/apps/relay/src/index.ts']).static_analysis).toBe(false)
+  })
+
   it('keeps unit-test-only diffs out of packaging', () => {
     expectClassification(['src/main/git/git-status.test.ts'], {
       git_compatibility: true
@@ -324,38 +466,155 @@ describe('per-job path classification', () => {
     expect(result.stdout).toContain('package=false\n')
     expect(result.stdout).toContain('test=true\n')
   })
+
+  // A long-lived PR whose base.sha has gone stale diffs thousands of files, so the writer
+  // outruns one pipe buffer. A single fd-0 read then returns early, breaks the writer's pipe,
+  // and still exits 0 -- emitting no pairs at all, which silently skips every lane.
+  it('classifies a path that arrives after the first pipe buffer', async () => {
+    const filler = Array.from(
+      { length: 12_000 },
+      (_, index) => `docs/reference/generated-placeholder-${index}.md`
+    )
+    const input = `${[...filler, 'config/patches/xterm-upstream.json'].join('\n')}\n`
+    expect(input.length).toBeGreaterThan(64 * 1024)
+
+    const child = spawn(process.execPath, ['config/scripts/pr-code-change-scope.mjs'], {
+      cwd: projectDir,
+      stdio: ['pipe', 'pipe', 'pipe']
+    })
+    let stdout = ''
+    let stderr = ''
+    let brokePipe = false
+    child.stdout.setEncoding('utf8')
+    child.stderr.setEncoding('utf8')
+    child.stdout.on('data', (chunk) => (stdout += chunk))
+    child.stderr.on('data', (chunk) => (stderr += chunk))
+    child.stdin.on('error', (error) => {
+      brokePipe ||= error.code === 'EPIPE'
+    })
+
+    const exitCode = await new Promise((resolvePromise) => {
+      child.on('close', resolvePromise)
+      let offset = 0
+      const step = () => {
+        if (offset >= input.length) {
+          child.stdin.end()
+          return
+        }
+        child.stdin.write(input.slice(offset, offset + 64 * 1024))
+        offset += 64 * 1024
+        setTimeout(step, 20)
+      }
+      step()
+    })
+
+    expect(stderr).not.toContain('EAGAIN')
+    expect(brokePipe).toBe(false)
+    expect(exitCode, stderr).toBe(0)
+    expect(stdout).toContain('should_run=true\n')
+    expect(stdout).toContain('xterm_patch_sync=true\n')
+  })
 })
 
 describe('PR Checks skip wiring', () => {
+  it('runs the candidate daemon shutdown Docker oracle in the existing Linux package job', () => {
+    const steps = prWorkflow.jobs.package.steps
+    const install = steps.findIndex(
+      (step) => step.uses === './.github/actions/install-node-dependencies'
+    )
+    const oracle = steps.findIndex(
+      (step) => step.name === 'Verify Linux daemon shutdown descendant cleanup'
+    )
+    expect(install).toBeGreaterThan(-1)
+    expect(oracle).toBeGreaterThan(install)
+    expect(steps[oracle].run).toBe('node config/scripts/run-daemon-shutdown-descendants-docker.mjs')
+    expect(steps[oracle].env.ORCA_BACKGROUND_LAUNCH).toBe('1')
+  })
+
   it('classifies the PR range with a tested script and expands renames', () => {
     const classify = prWorkflow.jobs.code_paths.steps.find(
       (step) => step.name === 'Classify changed paths'
     )
     expect(classify.run).toContain('--diff-filter=ACDMR')
     expect(classify.run).toContain('--no-renames')
-    expect(classify.run).toContain('--merge-base "$BASE_SHA" "$HEAD_SHA"')
+    // HEAD is the merge commit, so HEAD^1 is the base side and no merge base is computed.
+    // That is what lets this job check out shallowly, which every other job waits on.
+    expect(classify.run).toContain('node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA"')
+    expect(classify.run).toContain('"$DIFF_BASE" HEAD')
+    expect(classify.run).not.toContain('--merge-base "$')
     expect(classify.run).toContain('node config/scripts/pr-code-change-scope.mjs')
     expect(classify.run).toContain('tee -a "$GITHUB_OUTPUT"')
-    for (const jobName of ['should_run', 'native_cache_changed', ...expensiveJobs]) {
+    expect(prWorkflow.jobs.code_paths.outputs.should_run).toBe(
+      '${{ steps.filter.outputs.should_run }}'
+    )
+    for (const jobName of ['native_cache_changed', ...expensiveJobs]) {
       expect(prWorkflow.jobs.code_paths.outputs[jobName], jobName).toBe(
-        `\${{ steps.filter.outputs.${jobName} }}`
+        `\${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.${jobName} }}`
       )
     }
   })
 
-  it('keeps the cheap root-directory guard on docs-only PRs', () => {
-    expect(prWorkflow.jobs.root_directory_guard.if).toBeUndefined()
-    expect(prWorkflow.jobs.root_directory_guard.needs).toBeUndefined()
+  it('gives static analysis the mobile types its type-aware pass resolves', () => {
+    expect(prWorkflow.jobs.code_paths.outputs.mobile_dependencies).toBe(
+      '${{ steps.filter.outputs.mobile_dependencies }}'
+    )
+    const steps = prWorkflow.jobs.static_analysis.steps
+    const install = steps.findIndex(
+      (step) => step.uses === './.github/actions/install-mobile-dependencies'
+    )
+    const gate = steps.findIndex((step) => step.name === 'Enforce changed-code quality')
+    expect(install).toBeGreaterThan(-1)
+    expect(install).toBeLessThan(gate)
+    expect(steps[install].if).toBe("needs.code_paths.outputs.mobile_dependencies == 'true'")
+    // The install itself moved into the action the packaging jobs share; assert it there so
+    // this job cannot keep the step while the action stops installing anything.
+    const action = parse(
+      readFileSync(
+        join(projectDir, '.github/actions/install-mobile-dependencies/action.yml'),
+        'utf8'
+      )
+    )
+    const [installStep] = action.runs.steps
+    expect(installStep['working-directory']).toBe('mobile')
+    expect(installStep.run).toContain('--frozen-lockfile')
+  })
+
+  it('keeps the root and README guards on docs-only PRs without another runner', () => {
+    const detector = prWorkflow.jobs.code_paths
+    expect(detector.if).toBeUndefined()
+    expect(detector.needs).toBeUndefined()
+    for (const name of ['Reject new root-level files and folders', 'Check README local links']) {
+      const step = detector.steps.find((candidate) => candidate.name === name)
+      expect(step).toBeDefined()
+      expect(step.if).toBeUndefined()
+    }
+    expect(prWorkflow.jobs.root_directory_guard).toBeUndefined()
   })
 
   it('gates each expensive job on its classifier and cache prerequisite', () => {
     for (const jobName of expensiveJobs.filter((jobName) => jobName !== 'test')) {
-      expect(prWorkflow.jobs[jobName].needs, jobName).toEqual(['code_paths'])
+      expect(prWorkflow.jobs[jobName].needs, jobName).toEqual(
+        ['package', 'package_windows'].includes(jobName)
+          ? ['code_paths', 'static_analysis', 'typecheck']
+          : ['code_paths']
+      )
       expect(prWorkflow.jobs[jobName].if, jobName).toBe(
         `needs.code_paths.outputs.${jobName} == 'true'`
       )
     }
-    expect(prWorkflow.jobs.test.needs).toEqual(['code_paths', 'test_native_cache'])
+    expect(prWorkflow.jobs.test.needs).toEqual([
+      'code_paths',
+      'unit_plan',
+      'test_native_cache',
+      'static_analysis',
+      'typecheck'
+    ])
+    // Planning is deliberately NOT behind the static-analysis gate: it consumes nothing those
+    // jobs produce, so gating it only made the shards queue behind it. It still has to succeed
+    // before the shards run, or the matrix would expand from an empty assignment.
+    expect(prWorkflow.jobs.unit_plan.needs).toEqual(['code_paths'])
+    expect(prWorkflow.jobs.unit_plan.if).toBe("needs.code_paths.outputs.test == 'true'")
+    expect(prWorkflow.jobs.test.if).toContain("needs.unit_plan.result == 'success'")
     expect(prWorkflow.jobs.test.if).toContain("needs.code_paths.outputs.test == 'true'")
     expect(prWorkflow.jobs.test.if).toContain("needs.test_native_cache.result == 'success'")
     expect(prWorkflow.jobs.test.if).toContain("needs.test_native_cache.result == 'skipped'")
@@ -371,10 +630,11 @@ describe('PR Checks skip wiring', () => {
   })
 
   it('skips e2e detection on docs-only PRs without dropping the draft gate', () => {
-    expect(prWorkflow.jobs['e2e-paths'].needs).toEqual(['code_paths'])
-    expect(prWorkflow.jobs['e2e-paths'].if).toBe(
-      "github.event.pull_request.draft != true && needs.code_paths.outputs.should_run == 'true'"
+    const filter = prWorkflow.jobs.code_paths.steps.find((step) => step.id === 'e2e_filter')
+    expect(filter.if).toBe(
+      "github.event.pull_request.draft != true && steps.filter.outputs.should_run == 'true'"
     )
+    expect(prWorkflow.jobs['e2e-paths']).toBeUndefined()
   })
 
   it('lets verify pass skipped jobs the classifier turned off', () => {
@@ -383,12 +643,12 @@ describe('PR Checks skip wiring', () => {
     )
     expect(prWorkflow.jobs.verify.needs[0]).toBe('code_paths')
     expect(verifyStep.env.SHOULD_RUN).toBe('${{ needs.code_paths.outputs.should_run }}')
-    expect(verifyStep.run).toContain('"$ROOT_DIRECTORY_GUARD" != "success"')
+    expect(verifyStep.run).toContain('"$CODE_PATHS" != "success"')
     expect(verifyStep.run).toContain('# Require success when the PR has code-relevant changes')
     expect(verifyStep.run).toContain('expected skipped')
     expect(verifyStep.run).toContain('expected success')
     for (const job of prWorkflow.jobs.verify.needs) {
-      if (job === 'code_paths' || job === 'root_directory_guard') {
+      if (job === 'code_paths') {
         continue
       }
       const envVar = `${job.replaceAll('-', '_').toUpperCase()}_SHOULD_RUN`

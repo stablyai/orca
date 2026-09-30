@@ -127,9 +127,12 @@ jobs:
           esac
           # Bare: a work-tree repo refuses to fetch over its own checked-out
           # branch. tree:0 keeps the fetch to the commit graph — no trees, no
-          # blobs — so this stays cheap next to the build it fronts.
+          # blobs — so this stays cheap next to the build it fronts. reftable
+          # because this repo has branches that differ only in casing, and the
+          # files backend cannot store both on a case-insensitive runner disk —
+          # it fails the entire fetch, not just the one ref.
           scratch="$RUNNER_TEMP/vet-requested-ref"
-          git init -q --bare "$scratch"
+          git init -q --bare --ref-format=reftable "$scratch"
           git -C "$scratch" fetch -q --filter=tree:0 "$REPO_URL" '+refs/heads/*:refs/heads/*' '+refs/tags/*:refs/tags/*'
           # Branch first to keep actions/checkout's old tie-break: bare
           # rev-parse would prefer the tag when a branch shares its name.
@@ -163,7 +166,8 @@ jobs:
           # always comes from the dispatch ref — naming the branch here instead
           # applies main's current copy of this file to an arbitrary branch.
           ref: ${{ steps.vetted.outputs.sha }}
-          fetch-depth: 0
+          # Version helpers only read HEAD; published versions come from the release API.
+          fetch-depth: 1
           # This job only reads stablyai/orca and never pushes; every write goes
           # to the adhoc repo through a minted App token passed by env. Not
           # persisting the checkout credential shrinks the blast radius if a build
@@ -180,6 +184,9 @@ jobs:
         with:
           node-version-file: package.json
           cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            mobile/pnpm-lock.yaml
 
       - name: Cache electron-builder downloads
         uses: actions/cache@v5
@@ -191,13 +198,19 @@ jobs:
           restore-keys: |
             electron-builder-mac-
 
+      # Why both CPUs: the mac config packages x64 and arm64 from this arm64
+      # runner, so the install must carry both variants of the native optional deps.
       - name: Install dependencies
         uses: nick-fields/retry@v4
         with:
           timeout_minutes: 10
           max_attempts: 3
           retry_wait_seconds: 30
-          command: pnpm install --frozen-lockfile
+          command: pnpm install --frozen-lockfile --cpu=current,x64,arm64
+
+      # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
+      # build resolves React Native and Expo from mobile/node_modules.
+      - uses: ./.github/actions/install-mobile-dependencies
 
       # Why: signing is what makes an adhoc build installable over an existing
       # Orca, so a missing cert must fail here rather than after a 20-minute build.
@@ -229,11 +242,14 @@ jobs:
             fi
           done
           echo "head_sha=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
-          # Why the main repo's tags: package.json on a branch is as stale as the
-          # main it forked from, and stable patches never merge back into it.
-          published="$(GH_TOKEN="$MAIN_REPO_TOKEN" gh release list \
-            --repo "$GITHUB_REPOSITORY" --limit 100 --exclude-drafts \
-            --json tagName --jq '.[].tagName' || true)"
+          # Why git tags, not GitHub releases: unpublishing a buggy cut deletes the
+          # GitHub release and leaves the tag, which still owns that number.
+          # Releases-only let adhoc sit on a number already taken, so the updater
+          # would not install it. Empty on failure — the script then falls back
+          # to package.json.
+          published="$(GH_TOKEN="$MAIN_REPO_TOKEN" gh api \
+            "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v" \
+            --jq '.[].ref | sub("^refs/tags/"; "")' || true)"
           ORCA_PUBLISHED_VERSIONS="$published" ORCA_ADHOC_LABEL="${LABEL:-$REF}" \
             node config/scripts/adhoc-build-version.mjs \
             >"$RUNNER_TEMP/adhoc-identity.txt"

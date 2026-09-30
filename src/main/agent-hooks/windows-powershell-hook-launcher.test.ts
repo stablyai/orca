@@ -46,7 +46,6 @@ describe('windows PowerShell hook launcher', () => {
     // it. Restoring either denied switch re-breaks every hook on an AV host.
     const command = wrapWindowsPowerShellEncodedCommand('exit 0')
 
-    expect(WINDOWS_POWERSHELL_HOOK_SWITCHES).toBe('-NoProfile')
     expect(command).toMatch(/ -NoProfile -EncodedCommand [A-Za-z0-9+/=]+$/)
   })
 

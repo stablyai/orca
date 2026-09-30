@@ -5,6 +5,7 @@ import { Badge } from '../ui/badge'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
 import { showDeleteWorktreeFailureToast } from '../sidebar/delete-worktree-failure-toast'
 import { showLocalBaseRefUpdateSuggestionToast } from '../sidebar/local-base-ref-suggestion-toast'
+import { useOrcaProfileAuthStatusRefresh } from '@/hooks/use-orca-profile-auth-status-refresh'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -101,6 +102,13 @@ function showDeleteFailureToast(): void {
     ),
     canForceDelete: true,
     forceDeleteReason: 'dirty',
+    onDeleteAnyway: () =>
+      toast.error(
+        translate(
+          'auto.components.settings.DevToolsPane.deleteAnywayClicked',
+          'Delete Anyway clicked'
+        )
+      ),
     onViewChanges: () =>
       toast.message(
         translate(
@@ -131,12 +139,12 @@ function showDeleteFailureToast(): void {
 // progress; this surfaces it (and its status) in dev when the env vars are set.
 function OrcaCloudDevSubsection(): React.JSX.Element {
   const authStatus = useAppStore((s) => s.orcaProfileAuthStatus)
-  const connecting = useAppStore((s) => s.orcaProfileConnecting)
   const connect = useAppStore((s) => s.connectCurrentOrcaProfile)
   const signOut = useAppStore((s) => s.signOutCurrentOrcaProfile)
   const refresh = useAppStore((s) => s.fetchOrcaProfileAuthStatus)
   const configured = authStatus?.configured === true
   const connected = authStatus?.state === 'connected'
+  useOrcaProfileAuthStatusRefresh()
 
   return (
     <section className="space-y-3">
@@ -161,23 +169,11 @@ function OrcaCloudDevSubsection(): React.JSX.Element {
           </p>
           <div className="flex flex-wrap gap-2">
             {connected ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={connecting}
-                onClick={() => void signOut()}
-              >
+              <Button type="button" variant="outline" size="sm" onClick={() => void signOut()}>
                 {translate('auto.components.settings.DevToolsPane.orcaCloudSignOut', 'Sign out')}
               </Button>
             ) : (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={connecting}
-                onClick={() => void connect()}
-              >
+              <Button type="button" variant="outline" size="sm" onClick={() => void connect()}>
                 {translate(
                   'auto.components.settings.DevToolsPane.orcaCloudConnect',
                   'Connect profile'

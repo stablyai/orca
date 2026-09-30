@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { RELAY_LSOF_PROBE_JS } from '../../shared/child-process/posix-lsof-probe'
 
 const execCommand = vi.fn()
 vi.mock('./ssh-relay-deploy-helpers', () => ({
@@ -20,6 +21,9 @@ import {
 import type { SshConnection } from './ssh-connection'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The mocked execCommand never dereferences the connection; the Windows path returns before using it.
+const connection = {} as SshConnection
+
 const SOCK = '/home/u/.orca-remote/relay-0.1.0+aaaa/relay-deadbeef.sock'
 const POSIX_HOST = getRemoteHostPlatform('linux-x64')
 const WINDOWS_HOST = getRemoteHostPlatform('win32-x64')
@@ -32,17 +36,24 @@ describe('parseRelayEndpointIncumbentProbe', () => {
   it('reports live when the socket accepted a connection', () => {
     const incumbent = parseRelayEndpointIncumbentProbe(
       SOCK,
-      probeOutput(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=4242 yes 13'])
+      probeOutput([
+        'PRESENT=yes',
+        'LISTEN=accepted',
+        'HOLDERS_SOURCE=lsof',
+        'HOLDER=4242 yes 13 11'
+      ])
     )
     expect(incumbent.verdict).toBe('live')
     expect(incumbent.evidence).toBe('accepted-connection')
-    expect(incumbent.holders).toEqual([{ pid: 4242, matchesRelayArgv: true, childCount: 13 }])
+    expect(incumbent.holders).toEqual([
+      { pid: 4242, matchesRelayArgv: true, childCount: 13, unrecognizedChildCount: 11 }
+    ])
   })
 
   it('reports live when a process still holds an inode that refuses connections', () => {
     const incumbent = parseRelayEndpointIncumbentProbe(
       SOCK,
-      probeOutput(['PRESENT=yes', 'LISTEN=refused', 'HOLDERS_SOURCE=lsof', 'HOLDER=91 yes 2'])
+      probeOutput(['PRESENT=yes', 'LISTEN=refused', 'HOLDERS_SOURCE=lsof', 'HOLDER=91 yes 2 2'])
     )
     expect(incumbent.verdict).toBe('live')
     expect(incumbent.evidence).toBe('holder-process')
@@ -85,7 +96,12 @@ describe('parseRelayEndpointIncumbentProbe', () => {
   it('drops holder lines that do not carry a usable pid', () => {
     const incumbent = parseRelayEndpointIncumbentProbe(
       SOCK,
-      probeOutput(['PRESENT=yes', 'LISTEN=refused', 'HOLDERS_SOURCE=lsof', 'HOLDER=- no unknown'])
+      probeOutput([
+        'PRESENT=yes',
+        'LISTEN=refused',
+        'HOLDERS_SOURCE=lsof',
+        'HOLDER=- no unknown unknown'
+      ])
     )
     expect(incumbent.holders).toEqual([])
     expect(incumbent.verdict).toBe('exited')
@@ -94,33 +110,70 @@ describe('parseRelayEndpointIncumbentProbe', () => {
   it('keeps an unreadable child count as null rather than zero', () => {
     const [holder] = parseRelayEndpointIncumbentProbe(
       SOCK,
-      probeOutput(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=7 yes unknown'])
+      probeOutput([
+        'PRESENT=yes',
+        'LISTEN=accepted',
+        'HOLDERS_SOURCE=lsof',
+        'HOLDER=7 yes unknown unknown'
+      ])
     ).holders
     expect(holder.childCount).toBeNull()
+    expect(holder.unrecognizedChildCount).toBeNull()
+  })
+
+  it('keeps a holder line with no unrecognized-child field unreapable', () => {
+    const incumbent = parseRelayEndpointIncumbentProbe(
+      SOCK,
+      probeOutput(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=7 yes 0'])
+    )
+    expect(incumbent.holders[0].unrecognizedChildCount).toBeNull()
+    expect(isReapableRelayHusk(incumbent)).toBe(false)
   })
 })
 
 describe('probeRelayEndpointIncumbent', () => {
-  it('never asserts death when the probe itself could not run', async () => {
-    execCommand.mockRejectedValueOnce(new Error('channel closed'))
+  it('keeps the whole probe alive long enough to return a bounded lsof result', async () => {
+    execCommand.mockResolvedValueOnce(
+      probeOutput(['PRESENT=yes', 'LISTEN=refused', 'HOLDERS_SOURCE=unavailable'])
+    )
+
+    await probeRelayEndpointIncumbent(connection, POSIX_HOST, '/usr/bin/node', SOCK)
+
+    expect(execCommand).toHaveBeenCalledWith(expect.anything(), expect.any(String), {
+      wrapCommand: true,
+      signal: undefined
+    })
+  })
+
+  it('keeps a confirmed timeout or rejection unverifiable and unenumerable', async () => {
+    execCommand.mockRejectedValueOnce(
+      Object.assign(new Error('lsof timed out after 5s'), { sshChannelCloseConfirmed: true })
+    )
     const incumbent = await probeRelayEndpointIncumbent(
-      {} as SshConnection,
+      connection,
       POSIX_HOST,
       '/usr/bin/node',
       SOCK
     )
     expect(incumbent.verdict).toBe('unverifiable')
+    expect(incumbent.holdersEnumerable).toBe(false)
     expect(incumbent.holders).toEqual([])
+  })
+
+  it('rethrows an unconfirmed termination instead of masking it as unverifiable', async () => {
+    const unconfirmed = Object.assign(new Error('remote channel close was not confirmed'), {
+      sshChannelCloseConfirmed: false
+    })
+    execCommand.mockRejectedValueOnce(unconfirmed)
+
+    await expect(
+      probeRelayEndpointIncumbent(connection, POSIX_HOST, '/usr/bin/node', SOCK)
+    ).rejects.toBe(unconfirmed)
   })
 
   it('does not shell out on Windows hosts, where the endpoint is a named pipe', async () => {
     execCommand.mockClear()
-    const incumbent = await probeRelayEndpointIncumbent(
-      {} as SshConnection,
-      WINDOWS_HOST,
-      'node.exe',
-      SOCK
-    )
+    const incumbent = await probeRelayEndpointIncumbent(connection, WINDOWS_HOST, 'node.exe', SOCK)
     expect(execCommand).not.toHaveBeenCalled()
     expect(incumbent.verdict).toBe('unverifiable')
   })
@@ -128,15 +181,20 @@ describe('probeRelayEndpointIncumbent', () => {
 
 describe('relayEndpointIncumbentProbeCommand', () => {
   it('ANDs the lsof selectors so it cannot match unrelated unix-socket holders', () => {
-    expect(relayEndpointIncumbentProbeCommand('/usr/bin/node', SOCK)).toContain(
-      'lsof -t -a -U "$sock"'
-    )
+    expect(RELAY_LSOF_PROBE_JS).toContain("['-t', '-a', '-U', process.argv[1]]")
   })
 
-  it('never mutates the host: no unlink, no signal', () => {
+  it('never unlinks the relay endpoint', () => {
     const command = relayEndpointIncumbentProbeCommand('/usr/bin/node', SOCK)
     expect(command).not.toMatch(/\brm\b/)
-    expect(command).not.toMatch(/\bkill\b/)
+  })
+
+  it('bounds only lsof and keeps the connect-probe output available', () => {
+    const command = relayEndpointIncumbentProbeCommand('/usr/bin/node', SOCK)
+    expect(RELAY_LSOF_PROBE_JS).toContain("spawn('lsof'")
+    expect(command).toContain('}, 5000)')
+    expect(command).toContain("printf 'HOLDERS_SOURCE=unavailable\\n'")
+    expect(command.indexOf("printf 'LISTEN=%s\\n'")).toBeLessThan(command.indexOf('child = spawn('))
   })
 })
 
@@ -172,27 +230,36 @@ describe('mayLaunchOverRelayEndpoint', () => {
 describe('isReapableRelayHusk', () => {
   const husk = parseRelayEndpointIncumbentProbe(
     SOCK,
-    probeOutput(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=500 yes 0'])
+    probeOutput(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=500 yes 0 0'])
   )
 
-  it('accepts a single proven relay holder with zero children', () => {
+  it('accepts a single proven relay holder with no unaccounted-for children', () => {
     expect(isReapableRelayHusk(husk)).toBe(true)
   })
 
-  it('refuses a relay that still holds children', () => {
+  it('accepts a relay whose only children are its own service processes (#13614)', () => {
+    const withServices = parseRelayEndpointIncumbentProbe(
+      SOCK,
+      probeOutput(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=500 yes 2 0'])
+    )
+    expect(withServices.holders[0].childCount).toBe(2)
+    expect(isReapableRelayHusk(withServices)).toBe(true)
+  })
+
+  it('refuses a relay that still holds children it could not account for', () => {
     expect(
       isReapableRelayHusk({
         ...husk,
-        holders: [{ pid: 500, matchesRelayArgv: true, childCount: 1 }]
+        holders: [{ pid: 500, matchesRelayArgv: true, childCount: 3, unrecognizedChildCount: 1 }]
       })
     ).toBe(false)
   })
 
-  it('refuses a holder whose child count could not be read', () => {
+  it('refuses a holder whose unrecognized-child count could not be read', () => {
     expect(
       isReapableRelayHusk({
         ...husk,
-        holders: [{ pid: 500, matchesRelayArgv: true, childCount: null }]
+        holders: [{ pid: 500, matchesRelayArgv: true, childCount: 0, unrecognizedChildCount: null }]
       })
     ).toBe(false)
   })
@@ -201,7 +268,7 @@ describe('isReapableRelayHusk', () => {
     expect(
       isReapableRelayHusk({
         ...husk,
-        holders: [{ pid: 500, matchesRelayArgv: false, childCount: 0 }]
+        holders: [{ pid: 500, matchesRelayArgv: false, childCount: 0, unrecognizedChildCount: 0 }]
       })
     ).toBe(false)
   })
@@ -211,8 +278,8 @@ describe('isReapableRelayHusk', () => {
       isReapableRelayHusk({
         ...husk,
         holders: [
-          { pid: 500, matchesRelayArgv: true, childCount: 0 },
-          { pid: 501, matchesRelayArgv: true, childCount: 0 }
+          { pid: 500, matchesRelayArgv: true, childCount: 0, unrecognizedChildCount: 0 },
+          { pid: 501, matchesRelayArgv: true, childCount: 0, unrecognizedChildCount: 0 }
         ]
       })
     ).toBe(false)

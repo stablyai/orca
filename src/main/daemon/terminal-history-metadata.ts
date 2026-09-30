@@ -4,6 +4,7 @@ import { getHistorySessionDirName } from './history-paths'
 import { isValidTerminalHistorySize } from './terminal-history-dimensions'
 import { readTerminalHistoryJson } from './terminal-history-file-reader'
 import { TERMINAL_HISTORY_META_MAX_BYTES } from './terminal-history-file-limits'
+import { PRIVATE_FILE_MODE, tightenPathMode } from './daemon-private-file-modes'
 
 export type SessionMeta = {
   cwd: string
@@ -44,13 +45,21 @@ export function readTerminalHistoryMetaFromDir(dir: string): SessionMeta | null 
   }
 }
 
+/** meta.json records the session's cwd, so it is private like the rest of the tree. */
+export function writeTerminalHistoryMeta(dir: string, meta: SessionMeta): void {
+  const metaPath = join(dir, 'meta.json')
+  writeFileSync(metaPath, JSON.stringify(meta, null, 2), { mode: PRIVATE_FILE_MODE })
+  // `mode` applies only at creation, so a rewrite of an older daemon's file needs the chmod.
+  tightenPathMode(metaPath, PRIVATE_FILE_MODE)
+}
+
 export function updateTerminalHistoryMeta(dir: string, updates: Partial<SessionMeta>): void {
   const meta = readTerminalHistoryMetaFromDir(dir)
   if (!meta) {
     return
   }
   Object.assign(meta, updates)
-  writeFileSync(join(dir, 'meta.json'), JSON.stringify(meta, null, 2))
+  writeTerminalHistoryMeta(dir, meta)
 }
 
 function isSessionMeta(value: unknown): value is SessionMeta {

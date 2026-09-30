@@ -1,33 +1,49 @@
 // The effects behind send / cancel / respond / setOption.
 //
-// Admission (lease, fence, idempotency) has already passed by the time anything
+// Admission (writer lease, idempotency) has already passed by the time anything
 // here runs; these functions own only the journal writes and the adapter call,
 // in that order. Journal first is deliberate: a crash between the two leaves a
 // row the next attach settles as `unknown`, whereas the reverse would lose a
 // turn the provider already accepted.
 
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
+import {
+  agentSessionFailureWords,
+  type AgentSessionFailureWordsContext
+} from '../../../shared/agent-session-failure-words'
 import type {
-  AgentSessionCancelResult,
-  AgentSessionSendResult,
-  AgentSessionWireRefusal
+  AgentJournalMessageItem,
+  AgentJournalSubmission
+} from '../../../shared/agent-session-journal-types'
+import {
+  refuse,
+  type AgentSessionRefusalReason,
+  type AgentSessionSendResult,
+  type AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
+import { isAgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
+import { DISPATCH_DOUBT_PERSISTENCE_FAILED } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type {
   AgentSessionDispatchOutcome,
-  StructuredAgentSessionAdapter
+  StructuredAgentSessionAdapter,
+  StructuredAgentSessionProviderChildPhase
 } from './structured-agent-session-adapter'
+import { structuredAgentSessionStartFailure } from './structured-agent-session-failure-text'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import {
-  dispatchReservationId,
-  JOURNAL_DISPATCH_RESERVATION_BYTES,
-  JOURNAL_TURN_TERMINAL_RESERVATION_BYTES,
-  lifecycleReservationIdForItem,
-  tentativeTurnReservationId
-} from '../agent-session-journal/journal-lifecycle-capacity'
-
+  handOverStructuredAgentSessionCommand,
+  structuredAgentSessionHandoverOrigin,
+  type StructuredAgentSessionCommandHandoverContext
+} from './structured-agent-session-command-turn'
+import {
+  classifyJournalOpenFailure,
+  isJournalWrittenByNewerOrca,
+  journalOpenRefusal
+} from '../agent-session-journal/journal-open-failure'
 export { performSetOption } from './structured-agent-session-turns-options'
 export { performPrompt } from './structured-agent-session-turns-prompt'
+export { performCancel } from './structured-agent-session-turns-cancel'
 
 export type AgentSessionTurnContext = {
   sessionId: string
@@ -38,7 +54,15 @@ export type AgentSessionTurnContext = {
   persistOptions: (options: Readonly<Record<string, string>>) => Promise<void>
   /** Opaque client identity recorded as the resolver of a prompt. */
   resolvedBy: string
+  /** Republishes state kept outside the journal, such as the record's options or rewind phase.
+   *  Journal appends reach readers on their own. */
   publish: () => void
+  /** Drains provider lifecycle already accepted by the execution host. */
+  flushStreamedEvents: () => Promise<void>
+  /** What the host holds about the child this dispatch is for, read at the moment it is needed. */
+  providerChildPhase?: () => StructuredAgentSessionProviderChildPhase | undefined
+  /** Who a Stop's refusal row names. */
+  failureTextContext?: AgentSessionFailureWordsContext
   now: () => number
 }
 
@@ -46,193 +70,190 @@ export type TurnOutcome<TValue> =
   | { ok: true; value: TValue }
   | { ok: false; refusal: AgentSessionWireRefusal }
 
-function invalid(message: string): { ok: false; refusal: AgentSessionWireRefusal } {
-  return { ok: false, refusal: { code: 'agent_session_operation_invalid', message } }
+function invalid(
+  reason: AgentSessionRefusalReason<'agent_session_operation_invalid'>,
+  message: string
+): { ok: false; refusal: AgentSessionWireRefusal } {
+  return { ok: false, refusal: refuse('agent_session_operation_invalid', { reason }, message) }
 }
 
-/** A thrown adapter error is indistinguishable from a lost reply, so it settles
- *  as `unknown` rather than as a rejection. */
+/** A thrown adapter error is indistinguishable from a lost reply, so it settles as `unknown`
+ *  rather than as a rejection — unless the child had not proven its start. Such a child has
+ *  accepted nothing (input is written only after it initializes), so a dispatch it could not
+ *  take is provably unwritten and is rejected with the cause the adapter gave. */
 async function dispatchSafely(
-  ctx: AgentSessionTurnContext,
+  ctx: AgentSessionHandoverContext,
   clientMessageId: string,
-  body: AgentJournalMessageItem
+  body: AgentJournalMessageItem,
+  requestedAt: number
 ): Promise<AgentSessionDispatchOutcome> {
   try {
     return await ctx.adapter.dispatch({
       sessionId: ctx.sessionId,
       clientMessageId,
       body,
-      fence: ctx.fence
+      fence: ctx.fence,
+      requestedAt
     })
   } catch (error) {
+    if (ctx.providerChildPhase?.() === 'starting') {
+      return {
+        state: 'rejected',
+        ...structuredAgentSessionStartFailure({ error }, ctx.failureTextContext)
+      }
+    }
     return { state: 'unknown', reason: error instanceof Error ? error.message : String(error) }
   }
 }
 
-async function appendStatus(
-  ctx: AgentSessionTurnContext,
-  clientMessageId: string,
-  text: string
-): Promise<void> {
-  await ctx.journal.appendItem(
-    { provider: 'orca', clientMessageId },
-    { kind: 'status', text },
-    { fence: ctx.fence }
-  )
-  ctx.publish()
-}
-
+/**
+ * One id, one delivery. A submission that already exists replays its recorded
+ * outcome and NEVER goes back on the wire, whatever state it is in and whatever
+ * `retryUnknown` the client sent: `unknown` cannot prove non-delivery — that is
+ * the whole content of the word — and one message reached the model five times
+ * when this was a judgement call instead of an invariant. A distinct send after
+ * a terminal rejection uses a fresh id, which is a first delivery.
+ *
+ * Accepting only records the message; the session's delivery loop hands it over.
+ */
 export async function performSend(
   ctx: AgentSessionTurnContext,
   input: {
     clientMessageId: string
     payloadFingerprint: string
     body: AgentJournalMessageItem
-    retryUnknown?: true
+    /** Who asked for the turn; absent on callers that predate it. */
+    origin?: 'client' | 'host'
   }
 ): Promise<TurnOutcome<AgentSessionSendResult>> {
   const existing = ctx.journal
     .submissions()
     .find((entry) => entry.clientMessageId === input.clientMessageId)
   if (existing && existing.payloadFingerprint !== input.payloadFingerprint) {
-    return invalid(`Message id ${input.clientMessageId} was already used for another send.`)
+    return invalid(
+      'messageIdReused',
+      `Message id ${input.clientMessageId} was already used for another send.`
+    )
   }
-  if (existing && !(input.retryUnknown && existing.dispatchState === 'unknown')) {
+  if (existing) {
     return {
       ok: true,
       value: { clientMessageId: input.clientMessageId, submission: existing }
     }
   }
-  if (!(input.retryUnknown && existing?.dispatchState === 'unknown')) {
-    const dispatchReservation = dispatchReservationId(input.clientMessageId)
-    const tentativeReservation = tentativeTurnReservationId(input.clientMessageId)
-    const dispatchReserved = await ctx.journal.reserveLifecycleCapacity({
-      id: dispatchReservation,
-      bytes: JOURNAL_DISPATCH_RESERVATION_BYTES,
-      appendSlots: 1
-    })
-    const turnReserved =
-      dispatchReserved &&
-      (await ctx.journal.reserveLifecycleCapacity({
-        id: tentativeReservation,
-        bytes: JOURNAL_TURN_TERMINAL_RESERVATION_BYTES,
-        appendSlots: 1
-      }))
-    if (!dispatchReserved || !turnReserved) {
-      await ctx.journal.releaseLifecycleCapacity(dispatchReservation)
-      await ctx.journal.releaseLifecycleCapacity(tentativeReservation)
-      return invalid('The session does not have enough durable capacity to start another turn.')
+  try {
+    await ctx.journal.appendSubmission({ ...input, fence: ctx.fence, handoverRecorded: true })
+  } catch (error) {
+    // Damage SQLite proves is the chat's, and no retry writes past it: say so, as an open does. So
+    // does a chat holding a newer Orca's rows, which only an update writes past, and a refusal the
+    // journal already classified (a copy that did not verify).
+    if (
+      isAgentSessionRefusalError(error) ||
+      classifyJournalOpenFailure(error) === 'journalCorrupt' ||
+      isJournalWrittenByNewerOrca(error)
+    ) {
+      return { ok: false, refusal: journalOpenRefusal(error) }
     }
-    try {
-      await ctx.journal.appendSubmission({ ...input, fence: ctx.fence })
-    } catch (error) {
-      await ctx.journal.releaseLifecycleCapacity(dispatchReservation)
-      await ctx.journal.releaseLifecycleCapacity(tentativeReservation)
-      throw error
-    }
-    ctx.publish()
-  } else {
-    const retryReserved = await ctx.journal.reserveLifecycleCapacity({
-      id: dispatchReservationId(input.clientMessageId),
-      bytes: JOURNAL_DISPATCH_RESERVATION_BYTES,
-      appendSlots: 1
-    })
-    if (!retryReserved) {
-      return invalid('The session does not have enough durable capacity to retry this turn.')
+    return invalid('journalWriteFailed', 'The message could not be recorded and was not sent.')
+  }
+  return {
+    ok: true,
+    value: {
+      clientMessageId: input.clientMessageId,
+      submission: requireSubmission(ctx, input.clientMessageId)
     }
   }
+}
 
-  const outcome = await dispatchSafely(ctx, input.clientMessageId, input.body)
+export type AgentSessionHandoverContext = StructuredAgentSessionCommandHandoverContext
+
+/**
+ * Hands one queued submission to the provider. The `dispatch{pending}` row goes first: a crash
+ * after it leaves a message in doubt, never one that reads as queued and so provably unwritten.
+ */
+export async function handOverSubmission(
+  ctx: AgentSessionHandoverContext,
+  submission: AgentJournalSubmission
+): Promise<void> {
+  const { clientMessageId } = submission
+  const body = ctx.journal.itemBody(agentJournalSubmissionKey(clientMessageId))
+  if (body?.kind !== 'message') {
+    await ctx.journal.resolveDispatch({
+      clientMessageId,
+      state: 'rejected',
+      ...agentSessionFailureWords(agentSessionFailureFact('hostFault'), { surface: 'rejection' }),
+      fence: ctx.fence
+    })
+    return
+  }
+  if (body.command) {
+    await handOverStructuredAgentSessionCommand(ctx, submission, body)
+    return
+  }
+  // The message joins the turn running at handover, a steer, or opens its own.
+  await ctx.journal.resolveDispatch({
+    clientMessageId,
+    state: 'pending',
+    fence: ctx.fence,
+    turnScope: ctx.journal.liveTurnScope()
+  })
+  // The handover row's instant on the host clock; the turn this dispatch opens records it so the
+  // live counter never re-anchors at turn-open.
+  const outcome = await dispatchSafely(
+    ctx,
+    clientMessageId,
+    body,
+    structuredAgentSessionHandoverOrigin(ctx.journal, submission)
+  )
+  // An admission needs no dispatch row: the submission is already pending.
+  if (outcome.state === 'admitted') {
+    return
+  }
   try {
     await ctx.journal.resolveDispatch(
       outcome.state === 'accepted'
         ? {
-            clientMessageId: input.clientMessageId,
+            clientMessageId,
             state: 'accepted',
             providerIdentity: outcome.providerIdentity,
             fence: ctx.fence
           }
-        : {
-            clientMessageId: input.clientMessageId,
-            state: outcome.state,
-            reason: outcome.reason,
-            fence: ctx.fence
-          }
+        : outcome.state === 'rejected'
+          ? {
+              clientMessageId,
+              state: 'rejected',
+              reason: outcome.reason,
+              rejection: outcome.rejection,
+              fence: ctx.fence
+            }
+          : { clientMessageId, state: 'unknown', reason: outcome.reason, fence: ctx.fence }
     )
   } catch (error) {
     // A failed resolution must not strand a pending row; an unknown result is
-    // explicitly replayable and keeps tentative capacity for that retry.
+    // explicitly replayable.
     try {
       await ctx.journal.resolveDispatch({
-        clientMessageId: input.clientMessageId,
+        clientMessageId,
         state: 'unknown',
-        reason: 'dispatch_result_persistence_failed',
-        fence: ctx.fence,
-        recovered: true
+        reason: DISPATCH_DOUBT_PERSISTENCE_FAILED,
+        fence: ctx.fence
       })
     } catch {
-      await ctx.journal.releaseLifecycleCapacity(dispatchReservationId(input.clientMessageId))
+      // Nothing further to record; the pending row is settled on the next open.
     }
-    ctx.publish()
     throw error
   }
-  if (outcome.state === 'accepted') {
-    // Codex publishes its running lifecycle row under the legacy turn identity,
-    // while the dispatch response identifies the user's message item.  Bind the
-    // tentative turn reservation to the lifecycle identity so a response that
-    // wins the race with turn/started cannot strand that row at the quota edge.
-    const reservationTarget =
-      outcome.providerIdentity.provider === 'codex'
-        ? {
-            provider: 'legacy' as const,
-            agent: 'codex' as const,
-            sessionId: ctx.sessionId,
-            recordId: `turn-lifecycle:${outcome.providerIdentity.turnId}`
-          }
-        : outcome.providerIdentity
-    await ctx.journal.transferLifecycleCapacity(
-      tentativeTurnReservationId(input.clientMessageId),
-      lifecycleReservationIdForItem(
-        ctx.journal.canonicalItemId(agentJournalItemKey(reservationTarget))
-      )
-    )
-  } else if (outcome.state === 'rejected') {
-    await ctx.journal.releaseLifecycleCapacity(tentativeTurnReservationId(input.clientMessageId))
-  }
-  ctx.publish()
+}
 
+function requireSubmission(
+  ctx: AgentSessionTurnContext,
+  clientMessageId: string
+): AgentJournalSubmission {
   const submission = ctx.journal
     .submissions()
-    .find((entry) => entry.clientMessageId === input.clientMessageId)
+    .find((entry) => entry.clientMessageId === clientMessageId)
   if (!submission) {
     throw new Error('agent_session_submission_lost')
   }
-  return { ok: true, value: { clientMessageId: input.clientMessageId, submission } }
-}
-
-export async function performCancel(
-  ctx: AgentSessionTurnContext,
-  input: { clientOperationId: string; turnId: string }
-): Promise<TurnOutcome<AgentSessionCancelResult>> {
-  let cancelled = false
-  let note = 'Cancellation requested.'
-  try {
-    cancelled = (
-      await ctx.adapter.cancelTurn({
-        sessionId: ctx.sessionId,
-        turnId: input.turnId,
-        fence: ctx.fence
-      })
-    ).cancelled
-    if (!cancelled) {
-      note = 'The provider had already finished this turn.'
-    }
-  } catch (error) {
-    note = `Cancellation was not confirmed: ${
-      error instanceof Error ? error.message : String(error)
-    }`
-  }
-  // Keyed by the operation id so a replayed cancel upserts one item, not two.
-  await appendStatus(ctx, input.clientOperationId, note)
-  return { ok: true, value: { turnId: input.turnId, cancelled } }
+  return submission
 }

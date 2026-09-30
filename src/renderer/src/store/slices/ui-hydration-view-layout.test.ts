@@ -487,6 +487,24 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(setUI).toHaveBeenCalledWith({ groupBy: 'none', collapsedGroups: [] })
   })
 
+  it('hydrates persisted per-worktree explorer roots', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        explorerDisplayRootByWorktree: {
+          'repo-1::/repo': '/',
+          'repo-2::/repo': 'packages/app'
+        }
+      })
+    )
+
+    expect(store.getState().explorerDisplayRootByWorktree).toEqual({
+      'repo-1::/repo': '/',
+      'repo-2::/repo': 'packages/app'
+    })
+  })
+
   it('hydrates persisted per-worktree dotfile visibility', () => {
     const store = createUIStore()
 

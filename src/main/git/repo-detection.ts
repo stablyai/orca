@@ -13,7 +13,7 @@ let warnedMarkerFallbackThisSession = false
 /** Check if a path is a valid git repository (regular or bare). */
 export function isGitRepo(path: string): boolean {
   try {
-    if (!existsSync(path) || !statSync(path).isDirectory()) {
+    if (!statSync(path, { throwIfNoEntry: false })?.isDirectory()) {
       return false
     }
   } catch {
@@ -104,7 +104,7 @@ function canonicalizeGitDirPath(path: string): string {
 /** Return the main-checkout path only when `path` is a linked worktree. */
 export function getLinkedWorktreeMainRepoRoot(path: string): string | null {
   try {
-    if (!existsSync(path) || !statSync(path).isDirectory()) {
+    if (!statSync(path, { throwIfNoEntry: false })?.isDirectory()) {
       return null
     }
     if (gitExecFileSync(['rev-parse', '--is-inside-work-tree'], { cwd: path }).trim() !== 'true') {

@@ -5,7 +5,6 @@ import type { PtyControllerInventory } from './runtime-pty-controller-contract'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 
 export type LegacyWorkerTerminalRecoveryResult = {
-  blockedPaneCount: number
   adoptedDispatchIds: string[]
   exitedDispatchIds: string[]
   deferredDispatchIds: string[]

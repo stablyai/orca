@@ -1,0 +1,53 @@
+{
+  "tests": {
+    "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/pty-subprocess-env-retention.test.ts src/main/daemon/pty-subprocess-handle-lifecycle.test.ts src/main/daemon/pty-subprocess-foreground-identity.test.ts src/main/daemon/pty-subprocess-foreground-scan-cadence.test.ts src/main/daemon/pty-subprocess-env-inheritance.test.ts src/main/daemon/pty-subprocess-io-failure-cleanup.test.ts",
+    "passed": 114,
+    "skipped": 4,
+    "files": 6,
+    "exitCode": 0
+  },
+  "baselineOverlay": {
+    "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config docs/audits/native-pty-spawn-env-retention/before.config.mjs src/main/daemon/pty-subprocess-env-retention.test.ts src/main/daemon/pty-subprocess-handle-lifecycle.test.ts",
+    "passed": 29,
+    "expectedFailed": 1,
+    "failure": "releases completed spawn arguments while a live handle still forwards data and exit",
+    "exitCode": 1
+  },
+  "typecheck": {
+    "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm tc:node",
+    "exitCode": 0
+  },
+  "lint": {
+    "files": [
+      "src/main/daemon/pty-subprocess/subprocess-handle.ts",
+      "src/main/daemon/pty-subprocess-env-retention.test.ts",
+      "docs/audits/native-pty-spawn-env-retention/sources.cjs",
+      "docs/audits/native-pty-spawn-env-retention/scenario.cjs",
+      "docs/audits/native-pty-spawn-env-retention/reproduce.cjs",
+      "docs/audits/native-pty-spawn-env-retention/before.config.mjs"
+    ],
+    "ordinary": "pnpm exec oxlint --no-ignore <files>",
+    "typeAware": "pnpm exec oxlint --no-ignore --type-aware --config config/oxlint-code-quality-type-aware.json <files> --deny-warnings",
+    "exitCodes": [0, 0]
+  },
+  "changedQuality": {
+    "command": "ORCA_BACKGROUND_LAUNCH=1 ORCA_CODE_QUALITY_BASE=b5fc27171c0273e0b9e2af873259e85724aea8c3 pnpm run check:code-quality:changed",
+    "exitCode": 0,
+    "changedFiles": 2,
+    "newFindings": 0
+  },
+  "proofs": {
+    "node": "ORCA_BACKGROUND_LAUNCH=1 node --expose-gc --max-old-space-size=128 docs/audits/native-pty-spawn-env-retention/reproduce.cjs",
+    "electron": "Installed Electron executable with ELECTRON_RUN_AS_NODE=1, ORCA_BACKGROUND_LAUNCH=1, --expose-gc --max-old-space-size=128 and the same proof path.",
+    "exitCodes": [0, 0]
+  },
+  "format": "Each source and artifact TS/CJS/MJS/MD/JSON file checked using oxfmt --stdin-filepath; patch excluded.",
+  "gitDiffCheckExitCode": 0,
+  "crlfLoaderControl": {
+    "runtimes": ["Node 26.6.0", "Electron 43.7.0 / Node 24.21.0"],
+    "syntheticCrlfReads": 2,
+    "identicalBeforeAfterSourcesAndHashes": true,
+    "productWrites": false,
+    "namedSourceHashesVerifiedAsCanonicalLf": true
+  }
+}

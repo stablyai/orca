@@ -13,18 +13,126 @@ export type ProcessTableRow = {
   command: string
 }
 
+// Why guarded: this module is the renderer-safe half of the process-table pair, and the renderer
+// runs sandboxed with contextIsolation, where a bare `process` read throws at module evaluation
+// and takes the whole chunk — and the app — down with it. Only hosts ever run these argv.
+const HOST_IS_DARWIN = typeof process !== 'undefined' && process.platform === 'darwin'
+
 /** Columns used by the evidence reader. Keep command last so its spaces survive parsing. */
 export const PS_ARGS = (
-  process.platform === 'darwin'
+  HOST_IS_DARWIN
     ? ['-axo', 'pid=,ppid=,pgid=,tpgid=,stat=,tty=,lstart=,command=']
     : ['-axo', 'pid=,ppid=,pgid=,tpgid=,stat=,tty=,etimes=,command=']
 ) as readonly string[]
+
+/**
+ * Cheap tier: the same job-control columns without `tty=` (0.29s of the 0.34s on a
+ * 1,900-process Mac) or `command=` (per-pid argv read, 1.15s on Linux). Enough to prove a
+ * pane's subtree is unchanged since the last full capture; never enough to name a process.
+ * No `etimes=` on Linux: it is elapsed seconds, so it changes every tick; the stable start
+ * marker comes from `/proc/<pid>/stat` for the pane subtree only.
+ */
+export const CHEAP_PS_ARGS = (
+  HOST_IS_DARWIN
+    ? ['-axo', 'pid=,ppid=,pgid=,tpgid=,stat=,lstart=']
+    : ['-axo', 'pid=,ppid=,pgid=,tpgid=,stat=']
+) as readonly string[]
+
+/**
+ * Shell-proof tier: job control plus argv, dropping only the columns the shell predicate never
+ * reads — macOS `tty=` (0.29s of the 0.34s on a 1,900-process Mac) and the start marker. Enough
+ * to name a pane's foreground process; never enough to correlate a pid across captures.
+ */
+export const SHELL_FOREGROUND_PS_ARGS = [
+  '-axo',
+  'pid=,ppid=,pgid=,tpgid=,stat=,command='
+] as readonly string[]
+
+/**
+ * Parse a {@link SHELL_FOREGROUND_PS_ARGS} capture, anchored to exactly those columns.
+ * Not {@link parseProcessTableRows}: with no `tty=` to absorb it, that parser's optional
+ * tty/start pair eats the head of an argv shaped `python 3 app.py`, and a command-less zombie
+ * row parses into a garbage pid/stat pair.
+ *
+ * Lenient per row like its siblings, but a capture yielding none is unreadable rather than a
+ * machine with no processes: the shell proof must not read that as "the shell is gone".
+ */
+export function parseShellForegroundRows(stdout: string): ProcessTableRow[] {
+  const rows: ProcessTableRow[] = []
+  for (const rawLine of stdout.split(/\r?\n/)) {
+    const match = rawLine.trim().match(/^(\d+)\s+(\d+)\s+(-?\d+)\s+(-?\d+)\s+(\S+)\s+(.+)$/)
+    const pid = match ? Number(match[1]) : 0
+    if (match && Number.isSafeInteger(pid) && pid > 0) {
+      rows.push({
+        pid,
+        ppid: Number(match[2]),
+        pgid: Number(match[3]),
+        tpgid: Number(match[4]),
+        stat: match[5],
+        command: match[6]
+      })
+    }
+  }
+  if (rows.length === 0) {
+    throw new ProcessTableCaptureError('empty_capture')
+  }
+  return rows
+}
+
+export type CheapProcessTableRow = {
+  pid: number
+  ppid: number
+  pgid: number
+  tpgid: number
+  stat: string
+  /** Host start marker when the column set carries one (macOS `lstart`). */
+  startTime?: string
+}
+
+/**
+ * Parse a {@link CHEAP_PS_ARGS} capture. Lenient on purpose: a dropped row can only make a
+ * fingerprint DIFFER from the strict full-capture one, which escalates to the full capture --
+ * the safe direction. An empty capture is unreadable, not "no processes".
+ */
+export function parseCheapProcessTableRows(stdout: string): CheapProcessTableRow[] {
+  const rows: CheapProcessTableRow[] = []
+  for (const rawLine of stdout.split(/\r?\n/)) {
+    const match = rawLine.trim().match(/^(\d+)\s+(\d+)\s+(-?\d+)\s+(-?\d+)\s+(\S+)(?:\s+(.+?))?$/)
+    if (!match) {
+      continue
+    }
+    const pid = Number(match[1])
+    if (!Number.isSafeInteger(pid) || pid <= 0) {
+      continue
+    }
+    rows.push({
+      pid,
+      ppid: Number(match[2]),
+      pgid: Number(match[3]),
+      tpgid: Number(match[4]),
+      stat: match[5],
+      ...(match[6] !== undefined ? { startTime: match[6] } : {})
+    })
+  }
+  if (rows.length === 0) {
+    throw new ProcessTableCaptureError('empty_capture')
+  }
+  return rows
+}
 
 // Why: execFile's 1MB default leaves ~3x headroom (326KB / 1,460 processes, and
 // a single 5KB argv row is ordinary), so a busy host overflows it and then EVERY
 // capture fails — a readable process table degrading into permanent
 // "unverifiable". Matches the sibling reader in pty-descendant-termination.ts.
 export const PS_MAX_BUFFER_BYTES = 32 * 1024 * 1024
+
+/** How much older than its own await a TTL-cached capture may be, on top of the capture's own
+ *  duration. Reported ages carry both, so this alone is not the staleness bound.
+ *
+ *  Why here and not beside the reader that applies it: the renderer's cadence scheduler pulls a
+ *  pane's next poll forward by at most this much, and the reader is a `node:child_process` module
+ *  the renderer must never reach. */
+export const PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS = 500
 
 /**
  * Parse legacy or evidence-shaped `ps` output into rows. Tolerates CRLF so a

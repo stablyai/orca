@@ -12,6 +12,7 @@ type GitHubSubmitResolutionInput = Pick<
   | 'selectedRepoGitHubSourceContext'
   | 'selectedRepoIsGit'
   | 'setBaseBranch'
+  | 'setBaseBranchNamesWorkspace'
   | 'setBranchNameOverride'
   | 'setBranchNameOverridePreservesNameEdits'
   | 'setCompareBaseRef'
@@ -62,6 +63,7 @@ export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
     selectedRepoGitHubSourceContext,
     selectedRepoIsGit,
     setBaseBranch,
+    setBaseBranchNamesWorkspace,
     setBranchNameOverride,
     setBranchNameOverridePreservesNameEdits,
     setCompareBaseRef,
@@ -133,6 +135,7 @@ export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
               : {})
           }
           setBaseBranch(selectedPrStartPoint.baseBranch)
+          setBaseBranchNamesWorkspace(true)
           setCompareBaseRef(selectedPrStartPoint.compareBaseRef)
           setPushTarget(selectedPrStartPoint.pushTarget)
           if (selectedPrStartPoint.branchNameOverride) {
@@ -234,6 +237,7 @@ export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
       lastAutoNameRef.current = resolution.workspaceName
       if (prStartPoint) {
         setBaseBranch(prStartPoint.baseBranch)
+        setBaseBranchNamesWorkspace(true)
         setCompareBaseRef(prStartPoint.compareBaseRef)
         setPushTarget(prStartPoint.pushTarget)
         if (prStartPoint.branchNameOverride) {
@@ -263,6 +267,7 @@ export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
       branchAutoNameRef,
       lastAutoNameRef,
       setBaseBranch,
+      setBaseBranchNamesWorkspace,
       setBranchNameOverride,
       setBranchNameOverridePreservesNameEdits,
       setCompareBaseRef,

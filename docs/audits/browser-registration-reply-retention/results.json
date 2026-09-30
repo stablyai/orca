@@ -1,0 +1,58 @@
+{
+  "comparison": "Actual renderer guest session, recovery controller and persistent guest registry with deferred IPC replies; baseline reverses only fix.patch in a temporary source transform.",
+  "provenance": {
+    "node": "v26.6.0",
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "sourceHashes": {
+    "src/renderer/src/components/browser-pane/host-guest/browser-page-guest-recovery.ts": {
+      "before": "044280571771c4e90d07f5f5426878539f2b1729d9a4482c59d8fd236e7d4177",
+      "after": "2efdea1c4223b2f4114548a7f6ec4b576e1c6bde7819a07dc096d5167c2ba42c"
+    },
+    "src/renderer/src/components/browser-pane/host-guest/browser-page-webview-guest-session.ts": {
+      "before": "2fe17f0fe4f8ef6ca7cff7ca5731d9d725dbf4b5e7944264e30f12241317fc6d",
+      "after": "a78cc98873e93834bf07b47bbf5d92da888dfbccef06551aa6ac3c8f6e9f29f8"
+    },
+    "src/renderer/src/components/browser-pane/host-guest/browser-page-registration-ownership.test.ts": {
+      "current": "992b4730cd5546720b8b52366955386ad900d057f95c13beb6b92e5369bf5c1e",
+      "observed": "ebc38ebb195295170e8c355ecda539f3f2e75bb80548dbf4e97a17a7cd88c661"
+    }
+  },
+  "before": {
+    "exitCode": 1,
+    "passed": 6,
+    "failed": 10,
+    "after1000ClosedGuests": {
+      "liveWebviews": 0,
+      "registeredGuestIds": 1000,
+      "lateAnnotationSyncs": 1000,
+      "unregisterCalls": 1000
+    },
+    "failedCases": [
+      "renderer registration completion ownership does not restore 1000 closed IDs from delayed successful replies",
+      "renderer registration completion ownership keeps the replacement ID after an older reply arrives",
+      "renderer registration completion ownership keeps a new ID when the same DOM webview swaps its guest",
+      "renderer registration completion ownership a new session retries a disposed session registration on the same persistent guest and ref",
+      "renderer registration completion ownership a disposed listener cannot act after the same guest and ref are reused",
+      "renderer registration completion ownership does not restore a registry-removed guest before listener disposal runs",
+      "renderer registration completion ownership does not restore metadata when the current listener ref has moved",
+      "renderer registration completion ownership ignores a reply after reading the guest identity starts throwing",
+      "renderer registration completion ownership does not issue repair after a pending validation outlives its owner",
+      "renderer registration completion ownership does not clear a newer guest recovery error from a pending old repair reply"
+    ]
+  },
+  "after": {
+    "exitCode": 0,
+    "passed": 16,
+    "failed": 0,
+    "after1000ClosedGuests": {
+      "liveWebviews": 0,
+      "registeredGuestIds": 0,
+      "lateAnnotationSyncs": 0,
+      "unregisterCalls": 1000
+    },
+    "failedCases": []
+  },
+  "passed": true
+}

@@ -9,11 +9,13 @@ const {
 } = require('node:fs')
 const { dirname, join, resolve } = require('node:path')
 const { builtinModules, createRequire } = require('node:module')
+const { PE_MACHINE, readPeMachine } = require('./scripts/windows-pe-machine.cjs')
 
 const projectDir = resolve(__dirname, '..')
 const requireFromProject = createRequire(join(projectDir, 'package.json'))
 
 const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
+  '@anthropic-ai/claude-agent-sdk',
   '@electron-toolkit/utils',
   '@linear/sdk',
   '@parcel/watcher',
@@ -34,7 +36,7 @@ const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
 ]
 const WINDOWS_PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   '@vscode/windows-process-tree',
-  'windows-native-registry'
+  '@orca/windows-registry'
 ]
 
 const NODE_PTY_PREBUILD_PREFIX_BY_PLATFORM = {
@@ -56,6 +58,11 @@ const ELECTRON_ARCHITECTURE_BY_ENUM = {
   4: 'universal'
 }
 const PACKAGED_NATIVE_ARCHITECTURES = new Set(['ia32', 'x64', 'arm', 'arm64'])
+const PACKAGED_MAIN_REQUIRED_FILES = [
+  'out/main/index.js',
+  'out/main/agent-hooks/managed-agent-hook-controls.js'
+]
+const PACKAGED_MAIN_SOURCE_RE = /^out\/main\/.+\.js$/
 const TYPE_DECLARATION_ARTIFACT_RE = /\.d\.(?:c|m)?ts(?:\.map)?$/
 const JS_SOURCE_MAP_ARTIFACT_RE = /\.(?:c|m)?js\.map$/
 const VERSIONED_ONNXRUNTIME_DYLIB_RE = /^libonnxruntime\.\d[\d.]*\.dylib$/
@@ -223,22 +230,39 @@ function verifyPackagedMainRuntimeDeps(resourcesDir, asar = require('@electron/a
     return
   }
 
-  const mainFiles = ['out/main/index.js', 'out/main/agent-hooks/managed-agent-hook-controls.js']
   const entries = asar.listPackage(asarPath)
-  const missing = new Set()
-
-  for (const file of mainFiles) {
-    const entry = findAsarEntry(entries, file)
-    if (!entry) {
+  for (const file of PACKAGED_MAIN_REQUIRED_FILES) {
+    if (!findAsarEntry(entries, file)) {
       throw new Error(`Packaged main file ${file} was not found in ${asarPath}`)
+    }
+  }
+
+  const missing = new Set()
+  // Why every emitted main file rather than the entry points alone: rolldown hoists
+  // modules shared by two entries into out/main/chunks, so an entry's own bare imports
+  // move out from under a fixed file list and silently stop being checked.
+  for (const entry of entries) {
+    if (!PACKAGED_MAIN_SOURCE_RE.test(normalizeAsarEntryPath(entry))) {
+      continue
     }
 
     // Why: @electron/asar lists entries with host separators; Windows returns
     // backslashes, and extractFile expects that same host-style path.
     const internalPath = entry.replace(/^[\\/]+/, '')
     const source = asar.extractFile(asarPath, internalPath).toString('utf8')
-    for (const match of source.matchAll(/require\(["']([^"']+)["']\)/g)) {
-      const specifier = match[1]
+    // Why the lookbehind: Orca has its own registry methods named `require`, so a
+    // minified `registry.require('some-id')` must not read as a bare specifier.
+    // Why it readmits `...`: a dot that ends a spread is not member access, and
+    // the two error directions are not symmetric -- a false positive fails the
+    // release build loudly, a false negative is this guard going blind.
+    // Known limit: a specifier inside an embedded source string counts too, and
+    // ssh-relay-deploy's remote probe names node-pty that way. A remote-only
+    // dependency added to that script would fail desktop packaging here; telling
+    // the two apart needs a parser, not a wider pattern.
+    for (const match of source.matchAll(
+      /(?:(?<![.\w])|(?<=\.\.\.))(?:require|import)\s*\(\s*(["'`])([^"'`$]+)\1\s*\)/g
+    )) {
+      const specifier = match[2]
       if (!isPackagedExternalSpecifier(specifier)) {
         continue
       }
@@ -344,6 +368,16 @@ function ensurePackagedNodePtyConptyRuntime(nodePtyDir, electronArch) {
   }
 }
 
+/** Whether node-pty's source build holds a conpty.node the `electronArch` slice could load. */
+function conptyTargetsArch(nodePtyDir, electronArch) {
+  const releaseAddon = join(nodePtyDir, 'build', 'Release', 'conpty.node')
+  if (!existsSync(releaseAddon)) {
+    return false
+  }
+  // Null (not a PE) counts as unloadable, so a truncated or quarantined build keeps the fallback.
+  return readPeMachine(releaseAddon) === PE_MACHINE[normalizeNodePtyWindowsArch(electronArch)]
+}
+
 function prunePackagedNodePty(resourcesDir, electronPlatformName, electronArch) {
   const nodePtyDir = join(resourcesDir, 'node_modules', 'node-pty')
   if (!existsSync(nodePtyDir)) {
@@ -365,14 +399,14 @@ function prunePackagedNodePty(resourcesDir, electronPlatformName, electronArch) 
   // require, and its caller resolves null with silent: true), and removes the
   // winpty backend that node-pty still selects below Windows build 18309.
   //
-  // Why the arch check: a cross-arch package copies the host's build/Release,
-  // so its mere presence does not mean it matches electronArch -- deleting the
-  // target-arch prebuild would then remove the only loadable binary.
-  if (
-    electronPlatformName === 'win32' &&
-    electronArch === process.arch &&
-    existsSync(join(nodePtyDir, 'build', 'Release', 'conpty.node'))
-  ) {
+  // Why the arch check: a cross-HOST package can copy a build/Release that is not a Windows
+  // binary at all, so its mere presence does not mean the target can load it -- deleting the
+  // target-arch prebuild would then remove the only loadable binary. This used to approximate
+  // that with `electronArch === process.arch`, which also skipped the arm64 slice cross-built on
+  // an x64 Windows host -- a rebuild that DOES emit a correct arm64 addon. That slice kept the
+  // unpatched prebuild as a reachable fallback for any later load failure of build/Release.
+  // Read the PE header instead of guessing.
+  if (electronPlatformName === 'win32' && conptyTargetsArch(nodePtyDir, electronArch)) {
     const prebuildDir = join(nodePtyDir, 'prebuilds', `win32-${electronArch}`)
     for (const staleFallback of ['conpty.node', 'conpty.pdb']) {
       rmSync(join(prebuildDir, staleFallback), { force: true })
@@ -413,7 +447,7 @@ function prunePackagedParcelWatcher(resourcesDir, electronPlatformName, electron
   }
 
   // Why: we package every installed @parcel/watcher-<platform> optional
-  // subpackage (supportedArchitectures fetches all), but each build only needs
+  // subpackage (pnpm install:release fetches every CPU), but each build only needs
   // its own platform/architecture binaries. Keep the core package and matching
   // native variants; drop the rest.
   const keepPrefix = PARCEL_WATCHER_PLATFORM_PREFIX_BY_PLATFORM[electronPlatformName]
@@ -488,6 +522,75 @@ function prunePackagedZodSources(resourcesDir) {
   rmSync(join(resourcesDir, 'node_modules', 'zod', 'src'), { recursive: true, force: true })
 }
 
+// Why: electron-builder only warns on a missing extraResources source, so a host-only
+// install would silently ship a foreign-arch slice without its native addons.
+function assertPackagedNativeVariantsInstalled(electronPlatformName, electronArch) {
+  const architecture = normalizeElectronArchitecture(electronArch)
+  const nodeModulesDir = join(projectDir, 'node_modules')
+  const isInstalled = (name) => existsSync(join(nodeModulesDir, name, 'package.json'))
+  const missing = []
+
+  const rootOptionalDependencies =
+    JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf8')).optionalDependencies ?? {}
+  // Why win32 is always x64: winSpeechNativeResource packages sherpa-onnx-win-x64 for every
+  // Windows target (there is no sherpa-onnx-win-arm64; it runs under emulation).
+  const sherpaName =
+    electronPlatformName === 'win32'
+      ? 'sherpa-onnx-win-x64'
+      : `sherpa-onnx-${electronPlatformName}-${architecture}`
+  if (sherpaName in rootOptionalDependencies && !isInstalled(sherpaName)) {
+    missing.push(sherpaName)
+  }
+
+  // Why prefix, not equality: linux variants carry a libc suffix (watcher-linux-x64-glibc),
+  // mirroring what prunePackagedParcelWatcher keeps.
+  const watcherPrefix = `watcher-${electronPlatformName}-${architecture}`
+  const parcelDir = join(nodeModulesDir, '@parcel')
+  if (isInstalled('@parcel/watcher')) {
+    const watcherOptionalDependencies = Object.keys(
+      JSON.parse(readFileSync(join(parcelDir, 'watcher', 'package.json'), 'utf8'))
+        .optionalDependencies ?? {}
+    )
+    const expectedVariants = watcherOptionalDependencies.filter((name) =>
+      name.startsWith(`@parcel/${watcherPrefix}`)
+    )
+    // Why not withFileTypes: pnpm links the variants, so isDirectory() is false for them.
+    const hasVariant = readdirSync(parcelDir).some(
+      (name) => name.startsWith(watcherPrefix) && isInstalled(`@parcel/${name}`)
+    )
+    if (expectedVariants.length > 0 && !hasVariant) {
+      missing.push(...expectedVariants)
+    }
+  }
+
+  // Why one package: @vscode/windows-process-tree is the only os: win32 npm addon;
+  // @orca/windows-registry is a workspace link present on every host, so its presence proves nothing.
+  const missingWindowsAddons = []
+  if (electronPlatformName === 'win32' && !isInstalled('@vscode/windows-process-tree')) {
+    missingWindowsAddons.push('@vscode/windows-process-tree')
+  }
+
+  if (missing.length === 0 && missingWindowsAddons.length === 0) {
+    return
+  }
+  // Why separate remedies: install:release widens only the CPU set, so the os: win32 addon
+  // never arrives on a non-Windows host and is compiled only by the Windows-only rebuild.
+  const remedies = []
+  if (missing.length > 0) {
+    remedies.push('Run pnpm install:release to install another architecture.')
+  }
+  if (missingWindowsAddons.length > 0) {
+    remedies.push(
+      'Windows packaging requires a Windows host: the Windows addons are installed only where ' +
+        'os: win32 matches and compiled only by the Windows-only rebuild.'
+    )
+  }
+  throw new Error(
+    `Packaging ${electronPlatformName}/${architecture} requires native variants that are not installed: ` +
+      `${[...new Set([...missing, ...missingWindowsAddons])].sort().join(', ')}. ${remedies.join(' ')}`
+  )
+}
+
 function prunePackagedRuntimeNodeModules(resourcesDir, electronPlatformName, electronArch) {
   const architecture = normalizeElectronArchitecture(electronArch)
   prunePackagedNodePty(resourcesDir, electronPlatformName, architecture)
@@ -511,9 +614,11 @@ function pruneMatchingFiles(directory, shouldPrune) {
 
 module.exports = {
   PACKAGED_RUNTIME_PACKAGE_ROOTS,
+  assertPackagedNativeVariantsInstalled,
   createPackagedRuntimeNodeModuleResources,
   findAsarEntry,
   isPackagedExternalSpecifier,
+  normalizeNodePtyWindowsArch,
   packageNameFromSpecifier,
   prunePackagedNodePty,
   prunePackagedParcelWatcher,

@@ -26,6 +26,8 @@ import {
 type UseFileExplorerTreeResult = {
   dirCache: Record<string, DirCache>
   setDirCache: Dispatch<SetStateAction<Record<string, DirCache>>>
+  /** Workspace whose committed root listing owns the rendered cache. */
+  sourceWorkspaceId: string | null
   /** Dirs with a read in flight — kept out of dirCache so the row projection does not rebuild. */
   loadingDirPaths: ReadonlySet<string>
   rootCache: DirCache | undefined
@@ -44,6 +46,7 @@ type UseFileExplorerTreeResult = {
   resetAndLoad: () => void
 }
 
+/** Owns worktree-addressed directory caches and load tokens; display scoping changes traversal rather than cache identity. */
 export function useFileExplorerTree(
   worktreePath: string | null,
   expanded: Set<string>,
@@ -54,6 +57,7 @@ export function useFileExplorerTree(
     EMPTY_FILE_EXPLORER_LOADING_DIRS
   )
   const [rootError, setRootError] = useState<string | null>(null)
+  const [sourceWorkspaceId, setSourceWorkspaceId] = useState<string | null>(null)
   const dirCacheRef = useRef(dirCache)
   dirCacheRef.current = dirCache
   // Why the ref is authoritative rather than a render mirror: writing it during render is unsafe
@@ -108,6 +112,7 @@ export function useFileExplorerTree(
         }
         if (depth === -1) {
           setRootError(null)
+          setSourceWorkspaceId(activeWorktreeId?.trim() || null)
         }
         const children = fileExplorerEntriesToTreeNodes(
           listing.entries,
@@ -132,9 +137,17 @@ export function useFileExplorerTree(
           // empty worktree. Preserve the message so the UI can distinguish
           // "no files" from "could not read this worktree".
           setRootError(error instanceof Error ? error.message : String(error))
+          setSourceWorkspaceId(null)
           rootReadFailedRef.current = true
         }
-        setDirCache((prev) => ({ ...prev, [dirPath]: { children: [] } }))
+        setDirCache((prev) => ({
+          ...prev,
+          [dirPath]: {
+            ...prev[dirPath],
+            children: prev[dirPath]?.children ?? [],
+            error: error instanceof Error ? error.message : String(error)
+          }
+        }))
         updateLoadingDirPaths((prev) => clearFileExplorerDirsLoading(prev, [dirPath]))
         return !options?.failOnError
       }
@@ -267,6 +280,7 @@ export function useFileExplorerTree(
     dirLoadTrackerRef.current.reset()
     staleDirsRef.current.clear()
     setDirCache({})
+    setSourceWorkspaceId(null)
     updateLoadingDirPaths(() => EMPTY_FILE_EXPLORER_LOADING_DIRS)
     setRootError(null)
     if (worktreePath) {
@@ -277,6 +291,7 @@ export function useFileExplorerTree(
   return {
     dirCache,
     setDirCache,
+    sourceWorkspaceId,
     loadingDirPaths,
     rootCache,
     rootError,

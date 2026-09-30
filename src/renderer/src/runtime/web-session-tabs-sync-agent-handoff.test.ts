@@ -3,7 +3,9 @@ import type { Tab } from '../../../shared/tab-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import {
   confirmWebAgentSessionHandoffAfterCreate,
-  recordWebAgentSessionHandoff
+  MAX_WEB_AGENT_SESSION_HANDOFFS,
+  recordWebAgentSessionHandoff,
+  resolveWebAgentSessionHandoff
 } from './web-agent-session-handoff'
 import {
   applyWebSessionTabsSnapshot,
@@ -29,6 +31,33 @@ vi.mock('../store', () => ({
 
 describe('applyWebSessionTabsSnapshot', () => {
   beforeEach(resetWebSessionTabsSyncTestState)
+
+  it('bounds unresolved handoff churn', () => {
+    for (let index = 0; index < MAX_WEB_AGENT_SESSION_HANDOFFS + 4; index += 1) {
+      recordWebAgentSessionHandoff({
+        environmentId: ENV,
+        worktreeId: WT,
+        provisionalTabId: `provisional-${index}`,
+        hostTabId: `host-${index}`,
+        hostTerminalHandle: `terminal-${index}`
+      })
+    }
+
+    expect(
+      resolveWebAgentSessionHandoff({
+        environmentId: ENV,
+        worktreeId: WT,
+        provisionalTabId: 'provisional-0'
+      })
+    ).toBeNull()
+    expect(
+      resolveWebAgentSessionHandoff({
+        environmentId: ENV,
+        worktreeId: WT,
+        provisionalTabId: `provisional-${MAX_WEB_AGENT_SESSION_HANDOFFS + 3}`
+      })
+    ).toBe(`host-${MAX_WEB_AGENT_SESSION_HANDOFFS + 3}`)
+  })
 
   it('keeps a provisional Claude tab when the host Claude surface is unrelated', () => {
     const staleLocalAgentTab: TerminalTab = {

@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import type { HostSectionRow } from './host-section-rows'
 import {
@@ -149,26 +147,5 @@ describe('getCyclableWorktreeIds', () => {
     ]
 
     expect(getCyclableWorktreeIds(rows, 'single-location')).toEqual(['visible-after-host'])
-  })
-})
-
-describe('WorktreeList keyboard cycling', () => {
-  it('cycles over the rendered rows instead of rebuilding a parallel layout', () => {
-    const source = readFileSync(
-      fileURLToPath(new URL('./worktree-list/navigation/use-keyboard.ts', import.meta.url)),
-      'utf8'
-    )
-    const navigateWorktree = source.slice(
-      source.indexOf('const navigateWorktree = useCallback('),
-      source.indexOf('const handleContainerKeyDown = useCallback(')
-    )
-
-    // Why: a second buildRows call drifts from the rendered layout (host sections,
-    // pinned placement); cycling must read the same rows the viewport renders.
-    expect(navigateWorktree).toContain('getCyclableWorktrees(rows, pinnedDisplayPolicy)')
-    expect(navigateWorktree).toContain('getWorktreeHostIdentity')
-    expect(navigateWorktree).toContain('executionHostId: nextWorktree.hostId')
-    expect(navigateWorktree).toContain('resolveCycledWorktreeId')
-    expect(navigateWorktree).not.toContain('buildRows(')
   })
 })

@@ -53,7 +53,6 @@ export async function openChecks(page: Page, worktreeId: string): Promise<void> 
           // instead of hanging on a locator that stopped matching mid-action.
           await checksButton.click({ timeout: 2_000 }).catch(() => undefined)
         }
-        await page.waitForTimeout(250)
         return page.evaluate(() => window.__store?.getState().rightSidebarTab)
       },
       { timeout: 10_000 }
@@ -67,7 +66,7 @@ export async function seedCreatePrComposer(page: Page): Promise<{
   prWorktreePath: string
   primaryBranch: string
 }> {
-  return page.evaluate(async () => {
+  const seeded = await page.evaluate(async () => {
     const store =
       window.__store ??
       (() => {
@@ -101,6 +100,7 @@ export async function seedCreatePrComposer(page: Page): Promise<{
     const eligibility = {
       provider: 'github' as const,
       review: null,
+      reviewLookupOutcome: 'not_found' as const,
       canCreate: true,
       blockedReason: null,
       nextAction: null,
@@ -121,7 +121,7 @@ export async function seedCreatePrComposer(page: Page): Promise<{
         ...current.remoteStatusesByWorktree,
         [prWorktree.id]: {
           hasUpstream: true,
-          upstreamName: `origin/${branch}`,
+          upstreamName: primaryBranch,
           ahead: 0,
           behind: 0
         }
@@ -130,6 +130,10 @@ export async function seedCreatePrComposer(page: Page): Promise<{
         args.branch === branch ? eligibility : { ...eligibility, canCreate: false },
       fetchHostedReviewForBranch: async () => null,
       fetchPRForBranch: async () => null,
+      enqueueGitHubPRRefresh: () => undefined,
+      // Ignore provider work queued before this generation-only fixture was installed.
+      getEffectiveGitHubPRRefreshState: () => undefined,
+      prRefreshStates: {},
       fetchUpstreamStatus: async () => undefined,
       setUpstreamStatus: () => undefined
     }))
@@ -141,6 +145,12 @@ export async function seedCreatePrComposer(page: Page): Promise<{
       primaryBranch
     }
   })
+  // Checks reads fresh Git state instead of the seeded store cache.
+  execFileSync('git', ['branch', '--set-upstream-to', seeded.primaryBranch], {
+    cwd: seeded.prWorktreePath,
+    stdio: 'pipe'
+  })
+  return seeded
 }
 
 export async function seedCommitMessageComposer(page: Page): Promise<{

@@ -45,6 +45,14 @@ describe('HeadlessEmulator', () => {
       )
     })
 
+    it('parses a write synchronously through xterm _core.writeSync', () => {
+      // Why: the durable rebase trusts that the live snapshot already holds every
+      // drained record; writeSync is false when xterm drops the private API.
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24, scrollback: 10 })
+      expect(emulator.writeSync('SYNC_PARSED')).toBe(true)
+      expect(emulator.getBufferTailLines(24).join('\n')).toContain('SYNC_PARSED')
+    })
+
     it('captures colored text', async () => {
       emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
       await emulator.write('\x1b[31mred text\x1b[0m')

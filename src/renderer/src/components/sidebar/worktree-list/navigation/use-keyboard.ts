@@ -3,17 +3,20 @@ import type React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { focusRuntimeTerminalSurface } from '@/runtime/sync-runtime-graph'
+import { hasVisibleOverlay } from '@/lib/visible-overlay'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import {
-  composeWorktreeHostIdentity,
-  getWorktreeHostIdentity
-} from '../../../../../../shared/worktree/host-qualified-identity'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { keybindingMatchesAction } from '../../../../../../shared/keybindings'
 import type { HostSectionRow } from '../../host-section-rows'
 import type { PinnedWorktreeDisplayPolicy } from '../grouping/row-types'
 import type { RenderRow } from '../listing/render-row'
-import { getCyclableWorktrees, resolveCycledWorktreeId } from '../../worktree-keyboard-cycle'
+import {
+  getCyclableRowIdentity,
+  getCyclableWorktreeRows,
+  resolveActiveCycleIdentity,
+  resolveCycledWorktreeId
+} from '../../worktree-keyboard-cycle'
 import { findPreferredRenderRowIndexForWorktreeIdentity } from './render-row-lookup'
 
 function isEditableTarget(target: EventTarget | null): boolean {
@@ -65,33 +68,31 @@ export function useWorktreeListKeyboardNavigation(args: {
       // Why: cycle over the rows the sidebar actually rendered — collapsing a group
       // means "not now", and a rebuilt near-copy would drift from what is on screen
       // (host sections, pinned placement, folder workspaces).
-      const worktrees = getCyclableWorktrees(rows, pinnedDisplayPolicy)
-      const worktreeIdentities = worktrees.map(getWorktreeHostIdentity)
+      const worktreeRows = getCyclableWorktreeRows(rows, pinnedDisplayPolicy)
       const nextWorktreeIdentity = resolveCycledWorktreeId({
-        worktreeIds: worktreeIdentities,
-        activeWorktreeId: activeWorktreeId
-          ? composeWorktreeHostIdentity(
-              activeWorkspaceExecutionHostId ?? undefined,
-              activeWorktreeId
-            )
-          : null,
+        worktreeIds: worktreeRows.map(getCyclableRowIdentity),
+        activeWorktreeId: resolveActiveCycleIdentity({
+          rows: worktreeRows,
+          activeWorktreeId,
+          activeWorkspaceExecutionHostId
+        }),
         direction
       })
       if (nextWorktreeIdentity === null) {
         return
       }
-      const nextWorktree = worktrees.find(
-        (worktree) => getWorktreeHostIdentity(worktree) === nextWorktreeIdentity
-      )
+      const nextWorktree = worktreeRows.find(
+        (row) => getCyclableRowIdentity(row) === nextWorktreeIdentity
+      )?.worktree
       if (!nextWorktree) {
         return
       }
 
       // Why: keyboard cycling is real navigation; route through the activation helper that records history.
-      activateAndRevealWorktree(
-        nextWorktree.id,
-        nextWorktree.hostId ? { executionHostId: nextWorktree.hostId } : {}
-      )
+      activateAndRevealWorktree(nextWorktree.id, {
+        navigationIntent: 'user-open',
+        ...(nextWorktree.hostId ? { executionHostId: nextWorktree.hostId } : {})
+      })
 
       const rowIndex = findPreferredRenderRowIndexForWorktreeIdentity(
         renderRows,
@@ -113,13 +114,19 @@ export function useWorktreeListKeyboardNavigation(args: {
   )
 
   useEffect(() => {
+    const endListNavigation = () => {
+      scrollRef.current?.removeAttribute('data-keyboard-navigation')
+    }
     const handleKeyDown = (e: KeyboardEvent) => {
       if (activeModal !== 'none' || isEditableTarget(e.target)) {
         return
       }
 
       const platform = getShortcutPlatform()
-      if (keybindingMatchesAction('sidebar.focusWorktreeList', e, platform, keybindings)) {
+      if (
+        keybindingMatchesAction('sidebar.focusWorktreeList', e, platform, keybindings) &&
+        !hasVisibleOverlay()
+      ) {
         scrollRef.current?.focus()
         e.preventDefault()
         return
@@ -130,7 +137,8 @@ export function useWorktreeListKeyboardNavigation(args: {
         : keybindingMatchesAction('worktree.navigateDown', e, platform, keybindings)
           ? 'down'
           : null
-      if (direction) {
+      if (direction && !hasVisibleOverlay()) {
+        endListNavigation()
         markDirectScrollInput()
         navigateWorktree(direction)
         e.preventDefault()
@@ -138,31 +146,50 @@ export function useWorktreeListKeyboardNavigation(args: {
     }
 
     window.addEventListener('keydown', handleKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
+    window.addEventListener('pointerdown', endListNavigation, { capture: true })
+    window.addEventListener('focusout', endListNavigation, { capture: true })
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, { capture: true })
+      window.removeEventListener('pointerdown', endListNavigation, { capture: true })
+      window.removeEventListener('focusout', endListNavigation, { capture: true })
+    }
   }, [activeModal, keybindings, markDirectScrollInput, navigateWorktree, scrollRef])
 
   const handleContainerKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      if (
+        e.defaultPrevented ||
+        e.target !== e.currentTarget ||
+        activeModal !== 'none' ||
+        hasVisibleOverlay()
+      ) {
+        return
+      }
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-        if (e.target !== e.currentTarget) {
-          return
-        }
+        // The focused DOM node owns navigation, including while a new terminal mounts.
+        e.currentTarget.setAttribute('data-keyboard-navigation', '')
         markDirectScrollInput()
         navigateWorktree(e.key === 'ArrowUp' ? 'up' : 'down')
         e.preventDefault()
       } else if (e.key === 'Enter') {
-        const helper = document.querySelector(
-          '.xterm-helper-textarea'
-        ) as HTMLTextAreaElement | null
-        if (helper) {
-          helper.focus()
+        const { activeView, activeWorktreeId, activeTabType, activeTabId, tabsByWorktree } =
+          useAppStore.getState()
+        if (
+          activeView === 'terminal' &&
+          activeTabType === 'terminal' &&
+          activeWorktreeId &&
+          activeTabId &&
+          tabsByWorktree[activeWorktreeId]?.some((tab) => tab.id === activeTabId)
+        ) {
+          // The registered manager owns the active split; unavailable surfaces keep list focus.
+          focusRuntimeTerminalSurface(activeTabId, null, activeWorktreeId)
         }
         e.preventDefault()
       } else if (['PageUp', 'PageDown', 'Home', 'End', ' '].includes(e.key)) {
         markDirectScrollInput()
       }
     },
-    [markDirectScrollInput, navigateWorktree]
+    [activeModal, markDirectScrollInput, navigateWorktree]
   )
 
   return { handleContainerKeyDown }

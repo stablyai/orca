@@ -3,7 +3,13 @@ import {
   sanitizeCrashReportDetails,
   type CrashReportDetailValue
 } from '../../shared/crash-reporting'
-import { getSystemMemoryAtGoneDetails, memoryKBFieldMB } from './gone-time-system-memory'
+import { getSystemMemoryDetails, memoryKBFieldMB } from './system-memory-details'
+import {
+  PRE_GONE_SYSTEM_MEMORY_SAMPLE_INTERVAL_MS,
+  preGoneSystemMemoryDetails,
+  resetPreGoneSystemMemorySamplingForTest,
+  startPreGoneSystemMemorySampling
+} from './pre-gone-host-memory'
 
 type ProcessMetricLike = {
   pid?: unknown
@@ -204,8 +210,9 @@ export function samplePreGoneProcessMetrics(nowMs: number = Date.now()): void {
   }
 }
 
-export function startPreGoneProcessMetricsSampling(
-  intervalMs: number = PROCESS_METRICS_PRE_GONE_SAMPLE_INTERVAL_MS
+export function startPreGoneCrashSampling(
+  intervalMs: number = PROCESS_METRICS_PRE_GONE_SAMPLE_INTERVAL_MS,
+  systemMemoryIntervalMs: number = PRE_GONE_SYSTEM_MEMORY_SAMPLE_INTERVAL_MS
 ): void {
   if (preGoneSampleTimer) {
     return
@@ -213,14 +220,16 @@ export function startPreGoneProcessMetricsSampling(
   samplePreGoneProcessMetrics()
   preGoneSampleTimer = setInterval(() => samplePreGoneProcessMetrics(), intervalMs)
   preGoneSampleTimer.unref?.()
+  startPreGoneSystemMemorySampling(systemMemoryIntervalMs)
 }
 
-export function resetPreGoneProcessMetricsSamplingForTest(): void {
+export function resetPreGoneCrashSamplingForTest(): void {
   if (preGoneSampleTimer) {
     clearInterval(preGoneSampleTimer)
   }
   preGoneSampleTimer = null
   preGoneSample = null
+  resetPreGoneSystemMemorySamplingForTest()
 }
 
 const PROCESS_METRICS_KEY_PREFIX = 'processMetrics'
@@ -271,7 +280,7 @@ export function buildProcessGoneCrashDetails(
   const crashDetails: CrashReportDetails = {
     ...sanitizedDetails,
     ...liveMetricDetails,
-    ...getSystemMemoryAtGoneDetails()
+    ...getSystemMemoryDetails()
   }
   // Why: with the crasher gone, Largest names a survivor — flag that so the
   // live buckets are read as "everyone else", not as the crashed process.
@@ -290,8 +299,10 @@ export function buildProcessGoneCrashDetails(
   if (liveMetricDetails[crashedBucketCountKey] === 0 || sampledSameBucketProcessVanished) {
     crashDetails.processMetricsCrashedProcessAbsent = true
   }
+  const nowMs = Date.now()
   if (preGoneSample) {
-    Object.assign(crashDetails, preGoneSampleDetails(preGoneSample, Date.now()))
+    Object.assign(crashDetails, preGoneSampleDetails(preGoneSample, nowMs))
   }
+  Object.assign(crashDetails, preGoneSystemMemoryDetails(nowMs))
   return crashDetails
 }

@@ -1,13 +1,13 @@
 import { ipcRenderer } from 'electron'
-import type { AgentSessionPtyWriteRefusal } from '../../shared/agent-session-pty-write-admission'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
+import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../shared/agent-session-resume'
 import type { TuiAgent } from '../../shared/tui-agent'
-import type { PtyListedSession } from '../../shared/pty-listed-session'
+import type { PtyListedSession, PtySessionListScope } from '../../shared/pty-listed-session'
 import type {
   PtyRendererDeliveryHealthReply,
   PtyRendererDeliveryStateReport
@@ -37,12 +37,15 @@ export const ptySessionControlApi = {
     sessionId?: string
     shellOverride?: string
     projectRuntime?: ProjectExecutionRuntimeResolution
+    terminalKittyKeyboardProtocol?: boolean
     terminalColorQueryReplies?: { foreground?: string; background?: string }
     // Why: marks the PTY hidden before its first byte so the delivery gate + model responder own spawn-time queries (terminal-query-authority.md §races).
     initiallyHidden?: boolean
     // Why: closes the SIGKILL race (INVESTIGATION.md) — main sync-flushes the (worktreeId, tabId, leafId → ptyId) binding before pty:spawn returns.
     tabId?: string
     leafId?: string
+    // Why: a pane with a live owner is otherwise reattached; a restart names the PTY main must stop first.
+    replacesPtyId?: string
     // Why: loose typing on purpose — renderer owns launch metadata, main owns whether the launch happened and validates (telemetry-plan.md §Agent launch semantics).
     telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
   }): Promise<{
@@ -66,23 +69,17 @@ export const ptySessionControlApi = {
     coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
     startupCwdFallback?: { kind: 'worktree'; cwd: string }
     agentResumeUnavailable?: true
+    /** Host verdict on the shell-ready marker; absent when the execution host predates the field. */
+    shellReadyArmed?: boolean
   }> => ipcRenderer.invoke('pty:spawn', opts),
-  write: (id: string, data: string): void => {
-    ipcRenderer.send('pty:write', { id, data })
+  write: (id: string, data: string, inputKind: TerminalInputKind): void => {
+    ipcRenderer.send('pty:write', { id, data, inputKind })
   },
-  writeAccepted: (id: string, data: string): Promise<boolean> =>
-    ipcRenderer.invoke('pty:writeAccepted', { id, data }),
-  onWriteUnavailable: (
-    callback: (payload: {
-      id: string
-      /** Set only when a durable agent-session lease refused the write; absent otherwise. */
-      agentSessionRefusal?: AgentSessionPtyWriteRefusal
-    }) => void
-  ): (() => void) => {
-    const handler = (
-      _event: Electron.IpcRendererEvent,
-      payload: { id: string; agentSessionRefusal?: AgentSessionPtyWriteRefusal }
-    ): void => callback(payload)
+  writeAccepted: (id: string, data: string, inputKind: TerminalInputKind): Promise<boolean> =>
+    ipcRenderer.invoke('pty:writeAccepted', { id, data, inputKind }),
+  onWriteUnavailable: (callback: (payload: { id: string }) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: { id: string }): void =>
+      callback(payload)
     ipcRenderer.on('pty:writeUnavailable', handler)
     return () => ipcRenderer.removeListener('pty:writeUnavailable', handler)
   },
@@ -100,6 +97,9 @@ export const ptySessionControlApi = {
   },
   clearBuffer: (id: string): void => {
     ipcRenderer.send('pty:clearBuffer', { id })
+  },
+  resetInputModes: (id: string): void => {
+    ipcRenderer.send('pty:resetInputModes', { id })
   },
   ackColdRestore: (id: string): void => {
     ipcRenderer.send('pty:ackColdRestore', { id })
@@ -148,7 +148,8 @@ export const ptySessionControlApi = {
   },
   kill: (id: string, opts?: { keepHistory?: boolean }): Promise<void> =>
     ipcRenderer.invoke('pty:kill', { id, keepHistory: opts?.keepHistory ?? false }),
-  listSessions: (): Promise<PtyListedSession[]> => ipcRenderer.invoke('pty:listSessions'),
+  listSessions: (scope?: PtySessionListScope): Promise<PtyListedSession[]> =>
+    ipcRenderer.invoke('pty:listSessions', scope),
   getAuthoritativeBufferSnapshotCapabilities: (
     ids: string[]
   ): Promise<{ id: string; authoritative: boolean | null }[]> =>

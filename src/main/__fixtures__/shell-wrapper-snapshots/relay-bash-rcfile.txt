@@ -31,8 +31,8 @@ fi
 # their normal argv shape.
 __orca_omp_should_skip_extension() {
   case "${1:-}" in
-    help|--help|-h|--version|-v) return 0 ;;
-    __complete|acp|agents|auth-broker|auth-gateway|bench|commit|completions|config|dry-balance|gallery|grep|grievances|install|join|models|plugin|read|say|search|setup|shell|ssh|stats|tiny-models|token|ttsr|update|usage|worktree|q|wt) return 0 ;;
+    'help'|'--help'|'-h'|'--version'|'-v') return 0 ;;
+    '__complete'|'acp'|'agents'|'auth-broker'|'auth-gateway'|'bench'|'commit'|'completions'|'config'|'dry-balance'|'gallery'|'grep'|'grievances'|'install'|'join'|'models'|'plugin'|'read'|'say'|'search'|'setup'|'shell'|'ssh'|'stats'|'tiny-models'|'token'|'ttsr'|'update'|'usage'|'worktree'|'q'|'wt') return 0 ;;
   esac
   return 1
 }
@@ -88,6 +88,32 @@ if [[ -n "${ORCA_OMP_STATUS_EXTENSION:-}" ]]; then
   function omp { __orca_omp "$@"; }
 fi
 
+# Why: a typed alias expands inside the shell, after pane launch prep.
+# Why unalias inside the substitution: an alias named codex makes command -v
+# report the alias text, and the subshell leaves the user's own alias intact.
+# Why || : twice — zsh alone aborts inside the substitution, but every shell's
+# assignment adopts its exit status, so an absent codex trips set -e in bash too.
+__orca_codex_binary="$(unalias codex 2>/dev/null || :; command -v codex 2>/dev/null || :)"
+if [[ -n "${__orca_codex_binary:-}" && -x "${__orca_codex_binary}" ]]; then
+  # Why the function reserved word: it suppresses alias expansion of the name,
+  # which otherwise rewrites this header at parse time and aborts the whole file.
+  function codex {
+    # Why local: zsh's warn_create_global warns for each global a function creates.
+    local __orca_codex_arg __orca_codex_isolate="${ORCA_CODEX_ISOLATE:-1}"
+    if [[ -n "${ORCA_CODEX_LAUNCH_PREFLIGHT:-}" && -x "${ORCA_CODEX_LAUNCH_PREFLIGHT}" ]]; then
+      "${ORCA_CODEX_LAUNCH_PREFLIGHT}" agent hooks prepare-codex >/dev/null 2>&1 || :
+    fi
+    for __orca_codex_arg in "$@"; do
+      case "$__orca_codex_arg" in agents|queue|--no-daemon|--remote|--remote=*) __orca_codex_isolate=0 ;; esac
+    done
+    # Why probe every launch: a cached answer goes stale across an upgrade, and 0.155 and older exit 2 on the flag.
+    if [[ "$__orca_codex_isolate" != 0 ]]; then
+      case "$(command codex --help 2>/dev/null </dev/null)" in *--no-daemon*) set -- --no-daemon "$@" ;; esac
+    fi
+    command codex "$@"
+  }
+fi
+unset __orca_codex_binary
 if [[ -n "${ORCA_HISTFILE:-}" ]]; then
   HISTFILE="$ORCA_HISTFILE"
   builtin unset ORCA_HISTFILE

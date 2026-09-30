@@ -131,3 +131,33 @@ a hole in the matrix.
 
   No strong `GLIBC_` node may exceed `2.31`, and no `GLIBCXX_`/`CXXABI_` node may
   exceed `3.4.28`/`1.3.12` — what stock Ubuntu 20.04 ships.
+
+## Runtime floor: the `environ` race below glibc 2.41 (Electron ≥ 43.7.0)
+
+Separate from the build floor above, one glibc runtime bug constrains which
+Electron we may ship. Before glibc 2.41, `setenv`/`unsetenv` reallocate the
+`environ` array and **free** the old one, so a concurrent `getenv()` on another
+thread reads freed memory. Ubuntu 20.04–24.04 (2.31–2.39) are all below that
+line, so every Linux target we support is exposed.
+
+Electron 43.5.0 made that latent race reachable on every launch: it started
+setting `GDK_GL=disable` around `gtk_init()` and unsetting it right after, while
+in the same change moving FontConfig warm-up onto a thread-pool thread that runs
+concurrently and calls `getenv()` constantly
+([electron#53070](https://github.com/electron/electron/pull/53070)). The result
+is a browser-process use-after-free about a second into startup — no window, no
+GPU child involved, and the corruption surfaces wherever the next allocation
+lands, which is why reports name unrelated frames (`gtk_widget_realize`,
+libxcb-dri3, FontConfig/expat). Orca 1.4.199/1.4.200 shipped that runtime and
+died on launch on Ubuntu + NVIDIA/X11
+([#20081](https://github.com/stablyai/orca/issues/20081)).
+
+Electron 43.7.0 fixes it by overriding `setenv`/`unsetenv`/`putenv`/`clearenv`
+so a published `environ` is never freed, deferring to glibc on 2.41+
+([electron#53491](https://github.com/electron/electron/pull/53491), backported
+to 42/43/44/45). **Do not downgrade Electron below 43.7.0, or move to another
+line, without confirming that backport is in the target release** —
+`config/scripts/electron-runtime-floor.test.ts` fails the suite if the pin drops
+below the floor. Orca itself writes `process.env` during early startup
+(`patchPackagedProcessPath`, `configureOrcaUserDataPathEnv`,
+`hydrate-shell-path`), so it is a first-class trigger, not just a bystander.

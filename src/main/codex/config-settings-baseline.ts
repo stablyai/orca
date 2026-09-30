@@ -15,12 +15,24 @@ export type CodexSettingsConflict = {
 export type CodexSettingsBaseline = {
   settings: ReadonlyMap<string, string | null>
   conflicts: ReadonlyMap<string, CodexSettingsConflict>
+  /**
+   * Plugin/marketplace tables the last mirror made canonical, with the fields a
+   * three-way needs. An absent entry means "never mirrored", so a runtime-only
+   * table reads as an addition rather than as a canonical removal.
+   */
+  registrations: ReadonlyMap<string, ReadonlyMap<string, string>>
+  /** MCP server names the last mirror copied from the canonical source. */
+  mcpServers: ReadonlySet<string>
+  mcpServerRoot: boolean
 }
 
 type StoredSettingsBaseline = {
-  version: 1 | 2
+  version: 1 | 2 | 3
   settings: Record<string, string | null>
   conflicts?: Record<string, CodexSettingsConflict>
+  registrations?: Record<string, Record<string, string>>
+  mcpServers?: string[]
+  mcpServerRoot?: boolean
 }
 
 /**
@@ -74,12 +86,43 @@ function readParsedCodexSettingsBaseline(
         conflicts.set(key, conflict)
       }
     }
-    return { settings, conflicts }
+    return {
+      settings,
+      conflicts,
+      registrations: readStoredRegistrations(parsed.registrations),
+      mcpServers: readStoredMcpServers(parsed.mcpServers),
+      // Older mirrors owned the whole MCP root; retain that removal policy for one pass.
+      mcpServerRoot: parsed.mcpServers === undefined || parsed.mcpServerRoot === true
+    }
   } catch (error) {
     // Why: invalid baseline state is still `null` — resetting it is the intent,
     // and only a read that FAILED must be preserved.
     return isDefinitiveAbsence(error) || isRebuildableBaselineError(error) ? null : 'unreadable'
   }
+}
+
+function readStoredMcpServers(stored: string[] | undefined): ReadonlySet<string> {
+  return new Set((stored ?? []).filter((name): name is string => typeof name === 'string'))
+}
+
+function readStoredRegistrations(
+  stored: Record<string, Record<string, string>> | undefined
+): Map<string, ReadonlyMap<string, string>> {
+  const registrations = new Map<string, ReadonlyMap<string, string>>()
+  for (const [key, fields] of Object.entries(stored ?? {})) {
+    if (!fields || typeof fields !== 'object' || Array.isArray(fields)) {
+      continue
+    }
+    registrations.set(
+      key,
+      new Map(
+        Object.entries(fields).filter((entry): entry is [string, string] => {
+          return typeof entry[1] === 'string'
+        })
+      )
+    )
+  }
+  return registrations
 }
 
 /** Why: known-present baseline state outside its parse/capacity contract is rebuildable, not unreadable. */
@@ -96,11 +139,20 @@ export function writeCodexSettingsBaseline(
   baseline: CodexSettingsBaseline
 ): void {
   const file: StoredSettingsBaseline = {
-    version: 2,
-    settings: Object.fromEntries(baseline.settings)
+    version: 3,
+    settings: Object.fromEntries(baseline.settings),
+    mcpServers: [...baseline.mcpServers]
   }
   if (baseline.conflicts.size > 0) {
     file.conflicts = Object.fromEntries(baseline.conflicts)
+  }
+  if (baseline.registrations.size > 0) {
+    file.registrations = Object.fromEntries(
+      [...baseline.registrations].map(([key, fields]) => [key, Object.fromEntries(fields)])
+    )
+  }
+  if (baseline.mcpServerRoot) {
+    file.mcpServerRoot = true
   }
   const baselinePath = getCodexSettingsBaselinePath(runtimeHomePath)
   const serialized = `${JSON.stringify(file, null, 2)}\n`
@@ -130,7 +182,7 @@ function isStoredSettingsBaseline(value: unknown): value is StoredSettingsBaseli
   }
   const candidate = value as Partial<StoredSettingsBaseline>
   return (
-    (candidate.version === 1 || candidate.version === 2) &&
+    (candidate.version === 1 || candidate.version === 2 || candidate.version === 3) &&
     !!candidate.settings &&
     typeof candidate.settings === 'object' &&
     !Array.isArray(candidate.settings)

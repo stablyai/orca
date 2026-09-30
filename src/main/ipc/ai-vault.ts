@@ -58,15 +58,7 @@ import {
   type RuntimeAiVaultSessionTitleResolver
 } from './ai-vault-session-title-routing'
 import { projectStructuredAiVaultSessions } from '../ai-vault/structured-session-ownership'
-
-const AI_VAULT_ALL_HOST_RUNTIME_TIMEOUT_MS = 3_000
-// Why: a remote home with many agent roots routinely needs seconds to walk,
-// stat and parse. The old shared 3s bound emptied healthy SSH hosts in the
-// all-hosts view; the relay gets a real scan budget and the whole leg (relay
-// attempt plus any legacy crawl) stays bounded so one host can't hold the
-// merge open.
-const AI_VAULT_ALL_HOST_SSH_RELAY_TIMEOUT_MS = 15_000
-const AI_VAULT_ALL_HOST_SSH_TIMEOUT_MS = 20_000
+import { AI_VAULT_ALL_HOST_TIMEOUT_MS } from './ai-vault-all-host-timeouts'
 
 type AiVaultHandlerOptions = AiVaultSessionSources &
   AiVaultResumeHandlerOptions & {
@@ -159,8 +151,8 @@ async function scanAiVaultSessionsByHostScope(
           scan: () =>
             scanSshAiVaultSessions(hostInfo.targetId, args, {
               signal,
-              timeoutMs: AI_VAULT_ALL_HOST_SSH_TIMEOUT_MS,
-              relayTimeoutMs: AI_VAULT_ALL_HOST_SSH_RELAY_TIMEOUT_MS
+              timeoutMs: AI_VAULT_ALL_HOST_TIMEOUT_MS.sshScan,
+              relayTimeoutMs: AI_VAULT_ALL_HOST_TIMEOUT_MS.sshScanRelay
             })
         })
       ),
@@ -175,7 +167,7 @@ async function scanAiVaultSessionsByHostScope(
               hostInfo,
               scanner: handlerOptions.scanRuntimeAiVaultSessions,
               listArgs: args,
-              options: { signal, timeoutMs: AI_VAULT_ALL_HOST_RUNTIME_TIMEOUT_MS }
+              options: { signal, timeoutMs: AI_VAULT_ALL_HOST_TIMEOUT_MS.runtimeScan }
             })
         })
       )
@@ -210,14 +202,16 @@ async function scanAiVaultSessionsByHostScope(
   })
 }
 
-function getActiveRuntimeAiVaultHostInfosResult(): AiVaultHostDiscoveryResult<RuntimeAiVaultHostInfo> {
+export function getActiveRuntimeAiVaultHostInfosResult(): AiVaultHostDiscoveryResult<RuntimeAiVaultHostInfo> {
   return discoverAiVaultHosts(() => handlerOptions.getActiveRuntimeAiVaultHostInfos?.() ?? [], {
     path: 'runtime environments',
     fallbackMessage: 'Runtime hosts are unavailable.'
   })
 }
 
-function getActiveSshAiVaultHostInfosResult(): AiVaultHostDiscoveryResult<{ targetId: string }> {
+export function getActiveSshAiVaultHostInfosResult(): AiVaultHostDiscoveryResult<{
+  targetId: string
+}> {
   return discoverAiVaultHosts(getActiveSshAiVaultHostInfos, {
     path: 'SSH hosts',
     fallbackMessage: 'SSH hosts are unavailable.'

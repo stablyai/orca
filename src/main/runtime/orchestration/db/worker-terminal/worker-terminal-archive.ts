@@ -1,4 +1,5 @@
 import type {
+  WorkerTerminalArchiveKind,
   WorkerTerminalResourceRow,
   WorkerTerminalArchiveRow,
   WorkerTerminalArchiveStatus,
@@ -12,7 +13,7 @@ export function storeWorkerTerminalArchive(
   params: {
     dispatchId: string
     resourceId: string
-    kind: 'transcript_pin' | 'terminal_tail'
+    kind: WorkerTerminalArchiveKind
     content: string
   }
 ): void {
@@ -31,7 +32,7 @@ export function commitWorkerTerminalArchiveForRelease(
   params: {
     dispatchId: string
     resourceId: string
-    kind?: 'transcript_pin' | 'terminal_tail'
+    kind?: WorkerTerminalArchiveKind
     content?: string
     archiveSource: 'transcript' | 'terminal'
     archiveStatus: Extract<WorkerTerminalArchiveStatus, 'captured' | 'empty'>

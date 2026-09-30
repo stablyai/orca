@@ -8,12 +8,14 @@ import type {
 import {
   createAgentCompletionIdentityScope,
   getAgentCompletionCoordinatorIdentityCountForTest,
-  resetAgentCompletionCoordinatorIdentitiesForTest,
-  type LastCompletionIdentity
+  resetAgentCompletionCoordinatorIdentitiesForTest
 } from './agent-completion-identity-store'
 import { createAgentCompletionProcessMonitor } from './agent-completion-process-monitor'
 import { createPendingTitleController } from './agent-completion-pending-title'
-import { createAgentCompletionNotificationController } from './agent-completion-notification-controller'
+import {
+  createAgentCompletionNotificationController,
+  type CompletionState
+} from './agent-completion-notification-controller'
 import { createAgentCompletionTitleObserver } from './agent-completion-title-observer'
 import { createAgentCompletionHookObserver } from './agent-completion-hook-observer'
 import { createAgentCompletionLifecycle } from './agent-completion-lifecycle'
@@ -29,20 +31,19 @@ export function createAgentCompletionCoordinator(
   let agentIdentityEstablished = false
   let hasAgentRunEvidence = false
   let lastTitleStatus: AgentStatus | null = null
-  const completionState = {
+  const completionState: CompletionState = {
     currentTurn: 0,
     workingStatusObserved: false,
     requiresFreshWorking: false,
-    lastCompletionToken: null as string | null,
+    lastCompletionToken: null,
     lastCompletionAt: 0,
-    lastCompletedTurn: null as number | null,
-    lastCompletionSource: null as CompletionSource | null,
-    lastCompletionIdentity: null as LastCompletionIdentity | null,
-    lastAttentionToken: null as string | null,
-    pendingHookDoneTimer: null as ReturnType<typeof setTimeout> | null,
-    pendingHookDoneTitle: null as string | null,
-    pendingHookDonePayload: null as AgentCompletionStatusSnapshot | null,
-    pendingCodexAttentionTimer: null as ReturnType<typeof setTimeout> | null
+    lastCompletedTurn: null,
+    lastCompletionSource: null,
+    lastCompletionIdentity: null,
+    lastAttentionToken: null,
+    pendingHookDoneTimer: null,
+    pendingHookDoneTitle: null,
+    pendingHookDonePayload: null
   }
   // Why: output/title activity can arrive before async PTY bind; only re-arm cadence after bind starts process tracking.
   const processState = {
@@ -55,7 +56,7 @@ export function createAgentCompletionCoordinator(
     pollTimerTier: null as 'active' | 'idle' | 'hidden' | 'no-evidence' | null,
     lastPaneActivityAt: null,
     hasAgentRunEvidence: false,
-    pendingProcessExitAgent: null as RecognizedAgentProcess | null,
+    pendingProcessExit: null,
     lastForegroundAgent: null as RecognizedAgentProcess | null,
     processSession: 0
   }
@@ -70,6 +71,7 @@ export function createAgentCompletionCoordinator(
     agentIdentityEstablished = true
     hasAgentRunEvidence = true
     processState.hasAgentRunEvidence = true
+    processState.pendingProcessExit = null
     processMonitor?.scheduleNextPoll()
   }
 
@@ -78,16 +80,12 @@ export function createAgentCompletionCoordinator(
     hasAgentRunEvidence = false
     completionState.workingStatusObserved = false
     processState.hasAgentRunEvidence = false
-    processState.pendingProcessExitAgent = null
+    processState.pendingProcessExit = null
     dropPendingTitle()
   }
 
   function clearPendingHookDone(): void {
     notification.clearPendingHookDone()
-  }
-
-  function clearPendingCodexAttention(): void {
-    notification.clearPendingCodexAttention()
   }
 
   function dispatchCompletion(
@@ -168,7 +166,6 @@ export function createAgentCompletionCoordinator(
     establishAgentEvidence,
     clearAgentRunEvidence,
     hasPendingHookDone: () => completionState.pendingHookDoneTimer !== null,
-    hasPendingCodexAttention: () => completionState.pendingCodexAttentionTimer !== null,
     dispatchCompletion
   })
 
@@ -242,8 +239,6 @@ export function createAgentCompletionCoordinator(
     ) {
       return false
     }
-    // Why: cancel debounced attention when a Codex resume surfaces as a working title (else false banner #8387); placed after the replay guard so a stale post-completion replay can't drop it.
-    clearPendingCodexAttention()
     completionState.workingStatusObserved = true
     completionState.requiresFreshWorking = false
     if (!hasUnconsumedStampedTail()) {
@@ -272,7 +267,6 @@ export function createAgentCompletionCoordinator(
     establishAgentEvidence,
     recordPaneActivity,
     clearPendingHookDone,
-    clearPendingCodexAttention,
     dispatchAttention,
     dispatchCompletion: (source, title, override) =>
       dispatchCompletion(
@@ -300,7 +294,6 @@ export function createAgentCompletionCoordinator(
     processState,
     identityScope,
     clearPendingHookDone,
-    clearPendingCodexAttention,
     dropPendingTitle,
     clearWorkingBoundary,
     incrementGeneration: () => processMonitor.incrementGeneration(),

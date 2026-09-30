@@ -36,7 +36,7 @@ export class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends OrcaRunt
         this.ptyController!.hasChildProcesses?.(ptyId) ?? Promise.resolve(false),
       subscribeToData: (ptyId, listener) => this.subscribeToTerminalData(ptyId, listener),
       readRecentOutput: (ptyId) => this.recentPtyOutputById.get(ptyId)?.read(),
-      write: (ptyId, data) => this.ptyController?.write(ptyId, data)
+      write: (ptyId, data, inputKind) => this.ptyController?.write(ptyId, data, inputKind)
     }
   }
 
@@ -50,18 +50,12 @@ export class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends OrcaRunt
 
     const repo = await this.resolveRepoSelector(args.repoSelector)
     const store = this.requireStore()
-    const baseBranch = await prefetchWorktreeCreateBase({
+    await prefetchWorktreeCreateBase({
       repo,
       baseBranch: args.baseBranch,
       runtime: this,
-      gitOptions: getWorktreeCreatePrefetchGitOptions(store, repo)
+      gitOptions: getWorktreeCreatePrefetchGitOptions(store, repo),
+      prepareCheckout: (base) => prepareWorktreeCreateForRepo(store, repo, base)
     })
-    if (baseBranch) {
-      try {
-        await prepareWorktreeCreateForRepo(store, repo, baseBranch)
-      } catch {
-        // Why: speculative preparation is an optimistic warm-up; the real create path reports failures.
-      }
-    }
   }
 }

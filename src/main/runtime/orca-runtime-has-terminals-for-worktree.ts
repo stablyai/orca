@@ -55,6 +55,12 @@ export class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntimeWithStopE
     const revision = this.graphReloadLifecycle.begin(windowId)
     this.setTerminalSideEffectConsumerAvailable(false)
     this.rememberDetachedPreAllocatedLeaves()
+    // A null incarnation is safe within one graph diff, but cannot prove a same-id PTY survived a renderer reload.
+    for (const [ptyId, retained] of this.handleByPtyIncarnation) {
+      if (retained.incarnationId === null) {
+        this.invalidatePtyIncarnationHandle(ptyId)
+      }
+    }
     const retainedHandles = new Set([
       ...this.handleByPtyId.values(),
       ...[...this.handleByPtyIncarnation.values()].map((record) => record.handle)

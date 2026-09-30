@@ -23,7 +23,7 @@ vi.mock('./resume-sleeping-agent-session', () => ({
 // the gating, not the predicate internals.
 const isPassiveSpy = vi.fn()
 vi.mock('./sleeping-agent-pane-ownership', () => ({
-  isPassiveCompletedHibernationEvidence: (record: unknown) => isPassiveSpy(record),
+  activationTreatsNoteAsFinished: (record: unknown) => isPassiveSpy(record),
   recordPaneIsOwnedByPreservedPane: () => false,
   getProviderSessionClaimKey: (record: {
     worktreeId: string

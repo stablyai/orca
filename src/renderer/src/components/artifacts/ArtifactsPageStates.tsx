@@ -22,13 +22,11 @@ export function ArtifactsPageErrorBanner({
 }
 
 export function ArtifactsPageAuthState({
-  connecting,
   needsReconnect,
   configured,
   onConnect,
   onOpenAccountSettings
 }: {
-  connecting: boolean
   needsReconnect: boolean
   configured: boolean
   onConnect: () => void
@@ -62,15 +60,13 @@ export function ArtifactsPageAuthState({
         </p>
       </div>
       {configured ? (
-        <Button size="sm" disabled={connecting} onClick={onConnect}>
-          {connecting
-            ? translate('auto.components.artifacts.ArtifactsPage.signingIn', 'Signing in…')
-            : needsReconnect
-              ? translate(
-                  'auto.components.artifacts.ArtifactsPage.signInAgainAction',
-                  'Sign in again'
-                )
-              : translate('auto.components.artifacts.ArtifactsPage.signIn', 'Sign in to Orca')}
+        <Button size="sm" onClick={onConnect}>
+          {needsReconnect
+            ? translate(
+                'auto.components.artifacts.ArtifactsPage.signInAgainAction',
+                'Sign in again'
+              )
+            : translate('auto.components.artifacts.ArtifactsPage.signIn', 'Sign in to Orca')}
         </Button>
       ) : (
         <div className="flex flex-col items-center gap-2">

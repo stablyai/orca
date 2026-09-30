@@ -1,9 +1,9 @@
 import type { AppState } from '../types'
+import { resolveAgentStatusLiveEntryMainAgent } from './agent-status-live-entry-main-agent'
+import { resolveAgentStatusLiveEntryStateHistory } from './agent-status-live-entry-state-history'
 import {
-  AGENT_STATE_HISTORY_MAX,
   agentSubagentsEqual,
   type MigrationUnsupportedPtyEntry,
-  type AgentStateHistoryEntry,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import {
@@ -74,38 +74,12 @@ export function buildAgentStatusLiveEntry(
 ): AgentStatusLiveEntryBuild | AgentStatusLiveEntryRejection {
   const { state, paneKey, payload, terminalTitle, timing, routing, metadata, updatedAt } = args
   const existing = state.agentStatusByPaneKey[paneKey]
-  if (existing && updatedAt < existing.updatedAt) {
+  if (existing && updatedAt < existing.updatedAt && !timing?.allowOlderTimestamp) {
     return { entry: null, reason: 'stale' }
   }
   const effectiveTitle = terminalTitle ?? existing?.terminalTitle
-  let history: AgentStateHistoryEntry[] = existing?.stateHistory ?? []
-  let lastCompletedAssistantMessage = existing?.lastCompletedAssistantMessage
-  const boundaryLandsOnRealDone =
-    existing?.state === 'done' &&
-    existing.sessionBoundary !== true &&
-    payload.state === 'done' &&
-    payload.sessionBoundary === true
-  if (
-    existing &&
-    (existing.state !== payload.state || boundaryLandsOnRealDone) &&
-    !(existing.state === 'done' && existing.sessionBoundary === true)
-  ) {
-    history = [
-      ...history,
-      {
-        state: existing.state,
-        prompt: existing.prompt,
-        startedAt: existing.stateStartedAt,
-        interrupted: existing.interrupted
-      }
-    ]
-    if (history.length > AGENT_STATE_HISTORY_MAX) {
-      history = history.slice(history.length - AGENT_STATE_HISTORY_MAX)
-    }
-    if (existing.state === 'done') {
-      lastCompletedAssistantMessage = existing.lastAssistantMessage
-    }
-  }
+  const { history, lastCompletedAssistantMessage, stateObservedAt } =
+    resolveAgentStatusLiveEntryStateHistory(existing, payload, updatedAt)
   const identity = resolveAgentStatusIdentity({
     existing: existing
       ? {
@@ -139,6 +113,11 @@ export function buildAgentStatusLiveEntry(
       : existing && existing.state === payload.state
         ? existing.stateStartedAt
         : updatedAt)
+  // Why: a writer with no turn clock (an OSC repaint) keeps the host's stamp only within one state;
+  // a state change it cannot date must not inherit another turn's start.
+  const turnStartedAt =
+    timing?.turnStartedAt ??
+    (existing && existing.state === payload.state ? existing.turnStartedAt : undefined)
   if (
     existing &&
     shouldSuppressInheritedTerminalStatus({
@@ -217,6 +196,7 @@ export function buildAgentStatusLiveEntry(
       : undefined) ??
     matchedRegistryLaunchConfig ??
     matchedSleepingLaunchConfig
+  const mainAgent = resolveAgentStatusLiveEntryMainAgent(existing, payload, identity.agentType)
   const entry: AgentStatusEntry = {
     state: payload.state,
     workingMode: payload.workingMode,
@@ -227,10 +207,14 @@ export function buildAgentStatusLiveEntry(
     ...(timing?.evidenceObservedAt !== undefined
       ? { evidenceObservedAt: timing.evidenceObservedAt }
       : {}),
+    ...(metadata?.structuredHostOwned === true ? { structuredHostOwned: true as const } : {}),
     stateStartedAt,
+    stateObservedAt,
+    ...(turnStartedAt !== undefined ? { turnStartedAt } : {}),
     agentType: identity.agentType,
     model:
       payload.model ?? (existing?.agentType === identity.agentType ? existing.model : undefined),
+    ...(payload.modelSwitchCommand ? { modelSwitchCommand: payload.modelSwitchCommand } : {}),
     paneKey,
     terminalHandle: statusTerminalHandle,
     worktreeId:
@@ -255,9 +239,11 @@ export function buildAgentStatusLiveEntry(
     lastAssistantMessageIsToolOutput: payload.lastAssistantMessageIsToolOutput,
     ...(lastCompletedAssistantMessage ? { lastCompletedAssistantMessage } : {}),
     orchestration,
+    ...(payload.subagentObservation ? { subagentObservation: payload.subagentObservation } : {}),
     subagents: agentSubagentsEqual(existing?.subagents, payload.subagents)
       ? existing?.subagents
       : payload.subagents,
+    ...(mainAgent ? { mainAgent } : {}),
     ...(providerSession ? { providerSession } : {}),
     ...(metadata?.terminalResumeEligible === false
       ? { terminalResumeEligible: false as const }

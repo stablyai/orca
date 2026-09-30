@@ -523,7 +523,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       }
       send.mockClear()
 
-      expect(transport.sendInput('ls\r')).toBe(true)
+      expect(transport.sendInput('ls\r', 'driving')).toBe(true)
       await vi.runOnlyPendingTimersAsync()
       expect(runtimeCall).not.toHaveBeenCalled()
       const inputFrame = decodeTerminalStreamFrame(send.mock.calls[0][0])

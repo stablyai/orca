@@ -96,7 +96,9 @@ export function listResult(
     totalCount: terminals.length,
     truncated: options.truncated ?? false,
     ...(options.hostScope === undefined
-      ? { hostScope: { hostIds: [ENVIRONMENT_ID], omittedHostIds: [] } }
+      ? // A host names the execution hosts it covered, not its own environment id: answering
+        // `terminal.list` on a paired runtime reports `local` (verified against a live runtime).
+        { hostScope: { hostIds: ['local'], omittedHostIds: [] } }
       : { hostScope: options.hostScope })
   }
 }

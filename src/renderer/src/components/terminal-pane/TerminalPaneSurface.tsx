@@ -9,7 +9,7 @@ import TerminalPaneHeaderOverlay from './TerminalPaneHeaderOverlay'
 import { isPaneOwnerUnverifiedError, TerminalErrorToast } from './TerminalErrorToast'
 import { requestTerminalPaneRecovery } from './terminal-pane-recovery'
 import { TerminalSessionStateSaveFailureDialog } from './TerminalSessionStateSaveFailureDialog'
-import { TerminalLinkActionPopover } from './TerminalLinkActionPopover'
+import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { TerminalAgentSessionForkDialog } from './TerminalAgentSessionForkDialog'
 import { SessionRestoredBannerPortals } from './SessionRestoredBannerPortals'
 import { handleInternalTerminalFileDrop } from './terminal-drop-handler'
@@ -32,6 +32,8 @@ export function TerminalPaneSurface({
   const {
     activePane,
     activePaneCanContinueInNewSession,
+    activePaneCanToggleChat,
+    activePaneIsChatLeaf,
     activatePaneTitleInteraction,
     agentSessionContinuation,
     agentSessionFork,
@@ -39,13 +41,17 @@ export function TerminalPaneSurface({
     closeTerminalLinkActions,
     contextMenu,
     contextMenuCanContinueInNewSession,
+    contextMenuCanToggleChat,
+    contextMenuIsChatView,
     cwd,
     daemonActions,
     dismissTerminalError,
     expectedLayoutLeafIdsAttr,
     expandedPaneId,
+    effectiveChatViewMode,
     handleCancelClose,
     handleConfirmClose,
+    handleContextMenuToggleNativeChat,
     handlePrimarySelectionAuxClick,
     handlePrimarySelectionMiddleMouseDown,
     handleRemoveTitle,
@@ -54,8 +60,10 @@ export function TerminalPaneSurface({
     handleRenameSubmit,
     handleRequestClosePane,
     handleStartRename,
+    handleToggleNativeChat,
     hiddenStartupStyle,
     isActive,
+    isTabPinned,
     keybindings,
     managedPanes,
     managerRef,
@@ -82,15 +90,16 @@ export function TerminalPaneSurface({
     saveQuickCommand,
     searchOpen,
     searchStateRef,
+    searchInputRef,
     sessionRestoredBannerPaneIds,
-    sessionStateSaveFailureOpen,
+    sessionStateSaveFailureMessage,
     setAgentSessionContinuation,
     setAgentSessionFork,
     setContainerRef,
     setQuickCommandEditorOpen,
     setRenameValue,
     setSearchOpen,
-    setSessionStateSaveFailureOpen,
+    setSessionStateSaveFailureMessage,
     showSplitButton,
     showSshReconnectOverlay,
     splitTerminalPaneFromHeader,
@@ -111,6 +120,7 @@ export function TerminalPaneSurface({
         className="absolute inset-0 min-h-0 min-w-0"
         data-native-file-drop-target="terminal"
         data-terminal-tab-id={tabId}
+        data-terminal-chat-view={effectiveChatViewMode && activePaneIsChatLeaf ? 'true' : undefined}
         data-terminal-layout-leaf-ids={expectedLayoutLeafIdsAttr}
         data-pane-title-surface={titleUsesLightSurface ? 'light' : 'dark'}
         style={terminalContainerStyle}
@@ -168,7 +178,10 @@ export function TerminalPaneSurface({
                       return requestTerminalPaneRecovery({
                         tabId,
                         ptyId,
-                        reason: 'reattach-unverifiable'
+                        reason: 'reattach-unverifiable',
+                        // The user asking again is the new trigger that reopens
+                        // a reason an observed failure has closed.
+                        trigger: 'user'
                       }).then((recovered) => {
                         if (recovered) {
                           dismissTerminalError()
@@ -188,8 +201,9 @@ export function TerminalPaneSurface({
       <DaemonActionDialog api={daemonActions} />
       {isActive && (
         <TerminalSessionStateSaveFailureDialog
-          open={sessionStateSaveFailureOpen}
-          onDismiss={() => setSessionStateSaveFailureOpen(false)}
+          open={sessionStateSaveFailureMessage !== null}
+          failureMessage={sessionStateSaveFailureMessage ?? ''}
+          onDismiss={() => setSessionStateSaveFailureMessage(null)}
           onOpenSpaceAnalyzer={openDiskSpaceAnalyzer}
         />
       )}
@@ -200,6 +214,7 @@ export function TerminalPaneSurface({
             onClose={() => setSearchOpen(false)}
             searchAddon={activePane.searchAddon ?? null}
             searchStateRef={searchStateRef}
+            inputRef={searchInputRef}
           />,
           activePane.container
         )}
@@ -228,9 +243,13 @@ export function TerminalPaneSurface({
         onEqualizePaneSizes={contextMenu.onEqualizePaneSizes}
         onClosePane={contextMenu.onClosePane}
         onClearScreen={contextMenu.onClearScreen}
+        onResetTerminal={contextMenu.onResetTerminal}
         canContinueAgentSessionInNewSession={contextMenuCanContinueInNewSession}
         onContinueAgentSessionInNewSession={contextMenu.onContinueAgentSessionInNewSession}
         onForkAgentSession={() => void contextMenu.onForkAgentSession()}
+        canToggleNativeChat={contextMenuCanToggleChat}
+        isNativeChatView={contextMenuIsChatView}
+        onToggleNativeChat={handleContextMenuToggleNativeChat}
         onCopyAgentSessionContext={() => void contextMenu.onCopyAgentSessionContext()}
         quickCommandHosts={visibleQuickCommandHosts}
         quickCommandHostLoadFailed={quickCommandHostLoadFailed}
@@ -251,10 +270,7 @@ export function TerminalPaneSurface({
         canCopyAgentSessionId={menuAgentSessionId !== null}
         onCopyAgentSessionId={() => void contextMenu.onCopyAgentSessionId()}
       />
-      <TerminalLinkActionPopover
-        request={terminalLinkActionRequest}
-        onClose={closeTerminalLinkActions}
-      />
+      <LinkActionPopover request={terminalLinkActionRequest} onClose={closeTerminalLinkActions} />
       {quickCommandEditorOpen ? (
         <TerminalQuickCommandEditorDialog
           command={quickCommandDraft}
@@ -289,6 +305,7 @@ export function TerminalPaneSurface({
         cwd={cwd ?? ''}
         showAlwaysOnHeaders={isActive && terminalContentVisible}
         showSplitButton={showSplitButton}
+        isTabPinned={isTabPinned}
         paneCount={paneCount}
         activePaneId={activePane?.id}
         panes={managedPanes}
@@ -303,6 +320,9 @@ export function TerminalPaneSurface({
         hiddenStartupStyle={hiddenStartupStyle}
         managerRef={managerRef}
         paneTransportsRef={paneTransportsRef}
+        canToggleNativeChat={activePaneCanToggleChat}
+        isChatViewMode={activePaneIsChatLeaf}
+        onToggleNativeChat={handleToggleNativeChat}
         canContinueAgentSessionInNewSession={activePaneCanContinueInNewSession}
         onContinueAgentSessionInNewSession={(pane) =>
           contextMenu.runForPane(pane.id, contextMenu.onContinueAgentSessionInNewSession)

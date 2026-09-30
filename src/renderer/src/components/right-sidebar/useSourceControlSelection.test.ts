@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import {
   getSelectionRangeKeys,
-  reconcileSelectionKeys,
   reconcileSourceControlSelectionState,
   type FlatEntry
 } from './source-control/listing/use-selection'
@@ -24,20 +23,42 @@ function makeEntry(
   }
 }
 
-describe('reconcileSelectionKeys', () => {
-  it('drops selections that no longer exist in the visible list', () => {
-    const flatEntries = [
-      makeEntry('unstaged::a.ts', 'unstaged', 'a.ts'),
-      makeEntry('staged::b.ts', 'staged', 'b.ts')
-    ]
-
-    expect(
-      reconcileSelectionKeys(new Set(['unstaged::a.ts', 'untracked::gone.ts']), flatEntries)
-    ).toEqual(new Set(['unstaged::a.ts']))
-  })
-})
-
 describe('reconcileSourceControlSelectionState', () => {
+  it('returns the same references without scanning rows when nothing is selected', () => {
+    const selectedKeys: ReadonlySet<string> = new Set()
+    let keyReads = 0
+    const flatEntries = Array.from({ length: 50 }, (_, index) => ({
+      get key() {
+        keyReads += 1
+        return `file-${index}.ts`
+      }
+    })) as unknown as Parameters<typeof reconcileSourceControlSelectionState>[0]['flatEntries']
+
+    const result = reconcileSourceControlSelectionState({
+      selectedKeys,
+      anchorKey: null,
+      flatEntries
+    })
+
+    expect(keyReads).toBe(0)
+    expect(result.selectedKeys).toBe(selectedKeys)
+    expect(result.anchorKey).toBeNull()
+  })
+
+  it('still drops an anchor that is no longer visible when nothing is selected', () => {
+    const selectedKeys: ReadonlySet<string> = new Set()
+    const result = reconcileSourceControlSelectionState({
+      selectedKeys,
+      anchorKey: 'gone.ts',
+      flatEntries: [{ key: 'kept.ts' }] as unknown as Parameters<
+        typeof reconcileSourceControlSelectionState
+      >[0]['flatEntries']
+    })
+
+    expect(result.anchorKey).toBeNull()
+    expect(result.selectedKeys).toBe(selectedKeys)
+  })
+
   it('keeps selected keys and anchor identity when all keys are still visible', () => {
     const flatEntries = [
       makeEntry('unstaged::a.ts', 'unstaged', 'a.ts'),

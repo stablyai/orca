@@ -27,6 +27,7 @@ import {
   type WorkspaceCleanupRemoveOptions,
   type WorkspaceCleanupRemoveResult
 } from './workspace-cleanup-removal'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 export type { WorkspaceCleanupFailure, WorkspaceCleanupRemoveOptions, WorkspaceCleanupRemoveResult }
 export { enrichWorkspaceCleanupCandidates, WORKSPACE_CLEANUP_ENRICHMENT_CONCURRENCY }
@@ -150,7 +151,7 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
     if (existing.has(identity)) {
       return null
     }
-    const attemptId = crypto.randomUUID()
+    const attemptId = createBrowserUuid()
     existing.set(identity, attemptId)
     return attemptId
   },

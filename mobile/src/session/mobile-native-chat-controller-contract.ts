@@ -6,6 +6,11 @@ import type {
 } from '../../../src/shared/native-chat-ask'
 import type { detectAgentPermission } from './mobile-native-chat-permission'
 import type { parseAgentQuestion } from './mobile-native-chat-question'
+import type {
+  NativeChatLiveTurnIndicator,
+  NativeChatSettledTurns
+} from '../../../src/shared/native-chat-turn-status'
+import type { NativeChatTurnJournal } from '../../../src/shared/native-chat-turn-membership'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { MobileNativeChatPendingMessage } from './use-mobile-native-chat-drafts'
 import type { useMobileNativeChatSession } from './use-mobile-native-chat-session'
@@ -25,7 +30,17 @@ export type MobileNativeChatController = {
   chatPending: MobileNativeChatPendingMessage[]
   chatImagePreviewsByMessageId: Record<string, string[]>
   nativeChatSession: ReturnType<typeof useMobileNativeChatSession>
+  /** Structured lane: drives the per-turn status row and live tool progress. */
+  nativeChatStructured: boolean
   nativeChatAgentWorking: boolean
+  /** What labels the live turn's one indicator row; null off the structured lane. */
+  nativeChatTurnIndicator: NativeChatLiveTurnIndicator | null
+  /** Structured lane: host-recorded turn timing for the per-turn status rows. */
+  nativeChatWorkingStartedAt: number | null
+  nativeChatSettledTurns: NativeChatSettledTurns | null
+  /** Structured lane: the journal that places each transcript row in its turn. */
+  nativeChatTurnJournal: NativeChatTurnJournal | null
+  nativeChatCanStop: boolean
   nativeChatStreamingText?: string
   /** Agent mid-turn, regardless of whether chat is the visible view. */
   nativeChatStreamLive: boolean
@@ -45,6 +60,10 @@ export type MobileNativeChatController = {
     selections: AskAnswerSelection[]
   ) => Promise<boolean>
   handleNativeChatCancelAsk: () => Promise<boolean>
+  handleNativeChatCancelPrompt?: (prompt?: {
+    itemId: string
+    expectedRevision: number
+  }) => Promise<boolean>
   handleNativeChatRespondPermission: (text: string) => Promise<boolean>
   handleNativeChatStop: () => void
   nativeChatFilePaths: string[]
@@ -58,7 +77,13 @@ export type MobileNativeChatController = {
   handleNativeChatSendWithOutcome: (
     text: string,
     images?: string[],
-    deadline?: number
+    deadline?: number,
+    attachments?: readonly {
+      id?: string
+      path: string
+      previewUri: string
+      contentFingerprint?: string
+    }[]
   ) => Promise<MobileNativeChatSendOutcome>
   /** Launch-context text still parked on the agent's TUI input line, or null.
    *  Image sends read it to size their leading clear (one Ctrl+U per line). */

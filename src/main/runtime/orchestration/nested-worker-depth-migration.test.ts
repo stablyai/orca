@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
+import { dropDerivedDeliverySchema } from './db/schema/derived-delivery-test-fixture'
 import { OrchestrationDb } from './db'
 import { resolveOrchestrationMigrationStartVersion } from './orchestration-schema-version-skew'
 import { SCHEMA_VERSION } from './db/contract-constants'
@@ -32,8 +33,10 @@ describe('nested worker depth migration (v30)', () => {
     fresh.close()
 
     const oldDb = new Database(dbPath)
+    dropDerivedDeliverySchema(oldDb)
     oldDb.exec('ALTER TABLE dispatch_contexts DROP COLUMN depth')
     oldDb.exec('ALTER TABLE remote_dispatch_attachments DROP COLUMN depth')
+    oldDb.exec('ALTER TABLE remote_dispatch_attachments DROP COLUMN home_run_id')
     oldDb.pragma('user_version = 29')
     oldDb
       .prepare(
@@ -78,7 +81,7 @@ describe('nested worker depth migration (v30)', () => {
       )
       .run()
 
-    const task = db.createTask({ spec: 'post-upgrade nesting attempt' })
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'post-upgrade nesting attempt' })
     expect(() =>
       db!.createDispatchContext({
         taskId: task.id,
@@ -94,6 +97,7 @@ describe('nested worker depth migration (v30)', () => {
     // replay migrations from v6 instead of starting at 29.
     const dbPath = createV29Database()
     const oldDb = new Database(dbPath)
+    dropDerivedDeliverySchema(oldDb)
     expect(resolveOrchestrationMigrationStartVersion(oldDb, 29, SCHEMA_VERSION)).toBe(29)
     oldDb.close()
   })

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   getAllWindowsMock,
@@ -29,6 +29,15 @@ vi.mock('../tray/system-tray', async () =>
 )
 
 import { registerNotificationHandlers } from './notifications'
+import { structuredAgentSessionPaneKey } from '../../shared/structured-agent-session-projection'
+
+// These cases exercise foreground behavior against Electron mocks.
+beforeEach(() => {
+  vi.stubEnv('ORCA_BACKGROUND_LAUNCH', undefined)
+  vi.stubEnv('ORCA_E2E_HEADLESS', undefined)
+  vi.stubEnv('ORCA_E2E_HEADFUL', undefined)
+})
+afterEach(() => vi.unstubAllEnvs())
 
 describe('registerNotificationHandlers', () => {
   beforeEach(() => {
@@ -103,6 +112,99 @@ describe('registerNotificationHandlers', () => {
       flashFocusedPane: true,
       scrollToBottomIfOutputSinceLastView: true
     })
+  })
+
+  it('reveals the chat tab for a structured session click, where no PTY leaf exists', async () => {
+    const webContentsSend = vi.fn()
+    const mainWindow = {
+      isDestroyed: () => false,
+      isFocused: () => false,
+      isMinimized: () => false,
+      restore: vi.fn(),
+      show: vi.fn(),
+      focus: vi.fn(),
+      webContents: { send: webContentsSend }
+    }
+    getTrustedUIRendererWindowMock.mockReturnValue(mainWindow)
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: true,
+          suppressWhenFocused: true
+        }
+      })
+    } as never)
+
+    // The real minting, so the synthetic leaf this asserts against is the one the chat uses.
+    const paneKey = structuredAgentSessionPaneKey('chat-tab', 'session-abc')
+    const handler = getDispatchHandler()
+    expect(
+      await handler(
+        {},
+        {
+          source: 'agent-task-complete',
+          surface: 'agent-session',
+          worktreeId: 'repo::wt1',
+          paneKey
+        }
+      )
+    ).toEqual({ delivered: true })
+
+    getNotificationEventHandler('click')()
+
+    expect(webContentsSend).toHaveBeenCalledWith('ui:activateWorktree', {
+      repoId: 'repo',
+      worktreeId: 'repo::wt1'
+    })
+    expect(webContentsSend).toHaveBeenCalledWith('ui:focusEditorTab', {
+      tabId: 'chat-tab',
+      worktreeId: 'repo::wt1',
+      userInitiated: true
+    })
+    expect(webContentsSend).not.toHaveBeenCalledWith('ui:focusTerminal', expect.anything())
+  })
+
+  it('reveals a chat in a folder workspace, whose id carries no repo to activate', async () => {
+    const webContentsSend = vi.fn()
+    getTrustedUIRendererWindowMock.mockReturnValue({
+      isDestroyed: () => false,
+      isFocused: () => false,
+      isMinimized: () => false,
+      restore: vi.fn(),
+      show: vi.fn(),
+      focus: vi.fn(),
+      webContents: { send: webContentsSend }
+    })
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: true,
+          suppressWhenFocused: true
+        }
+      })
+    } as never)
+
+    await getDispatchHandler()(
+      {},
+      {
+        source: 'agent-task-complete',
+        surface: 'agent-session',
+        worktreeId: 'folder:fw-1',
+        paneKey: structuredAgentSessionPaneKey('chat-tab', 'session-abc')
+      }
+    )
+    getNotificationEventHandler('click')()
+
+    expect(webContentsSend).toHaveBeenCalledWith('ui:focusEditorTab', {
+      tabId: 'chat-tab',
+      worktreeId: 'folder:fw-1',
+      userInitiated: true
+    })
+    expect(webContentsSend).not.toHaveBeenCalledWith('ui:activateWorktree', expect.anything())
   })
 
   it('clears the retained notification fallback timer when the native notification closes', async () => {

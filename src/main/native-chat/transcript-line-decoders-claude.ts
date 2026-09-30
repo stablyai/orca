@@ -3,6 +3,8 @@
 import {
   NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
   type NativeChatBlock,
+  type NativeChatEditPatch,
+  type NativeChatEditPatchHunk,
   type NativeChatMessage
 } from '../../shared/native-chat-types'
 import {
@@ -14,6 +16,59 @@ import {
 import { imageSourcePathFromText } from '../../shared/native-chat-image-transcript-markers'
 import { claudeContentBlocks } from './transcript-record-blocks'
 import { claudeInterruptedMessageId } from './transcript-turn-markers'
+
+const MAX_EDIT_PATCH_HUNKS = 40
+const MAX_EDIT_PATCH_HUNK_LINES = 400
+
+/** Claude reports an edit as a snippet pair on the call, which cannot locate the
+ *  change in the file. The result record carries the hunks it resolved against
+ *  the real file, so keep them for the renderer's line-number gutter. */
+function claudeEditPatch(record: Record<string, unknown>): NativeChatEditPatch | null {
+  const result = asRecord(record.toolUseResult)
+  const raw = result?.structuredPatch
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return null
+  }
+  const hunks: NativeChatEditPatchHunk[] = []
+  for (const entry of raw.slice(0, MAX_EDIT_PATCH_HUNKS)) {
+    const hunk = asRecord(entry)
+    const lines = hunk?.lines
+    if (
+      typeof hunk?.oldStart !== 'number' ||
+      typeof hunk.newStart !== 'number' ||
+      !Array.isArray(lines)
+    ) {
+      continue
+    }
+    hunks.push({
+      oldStart: hunk.oldStart,
+      oldLines: typeof hunk.oldLines === 'number' ? hunk.oldLines : 0,
+      newStart: hunk.newStart,
+      newLines: typeof hunk.newLines === 'number' ? hunk.newLines : 0,
+      lines: lines
+        .slice(0, MAX_EDIT_PATCH_HUNK_LINES)
+        .flatMap((line) => (typeof line === 'string' ? [line] : []))
+    })
+  }
+  if (hunks.length === 0) {
+    return null
+  }
+  const filePath = extractString(result?.filePath)
+  return { ...(filePath ? { filePath } : {}), hunks }
+}
+
+/** Attaches the resolved hunks to the record's tool result, which is the only
+ *  block in a Claude result turn. */
+function withEditPatch(blocks: NativeChatBlock[], patch: NativeChatEditPatch): NativeChatBlock[] {
+  let attached = false
+  return blocks.map((block) => {
+    if (attached || block.type !== 'tool-result') {
+      return block
+    }
+    attached = true
+    return { ...block, editPatch: patch }
+  })
+}
 
 export function decodeClaudeTranscriptLine(
   line: string,
@@ -41,7 +96,9 @@ export function decodeClaudeTranscriptLine(
     }
   }
   const message = asRecord(record.message)
-  const decodedBlocks = claudeContentBlocks(message?.content)
+  const editPatch = claudeEditPatch(record)
+  const contentBlocks = claudeContentBlocks(message?.content)
+  const decodedBlocks = editPatch ? withEditPatch(contentBlocks, editPatch) : contentBlocks
   if (decodedBlocks.length === 0) {
     return null
   }

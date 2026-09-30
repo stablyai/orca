@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type Database from '../../sqlite/sync-database'
 import { OrchestrationDb } from './db'
-import { ORCHESTRATION_RUN_METHODS } from '../rpc/methods/orchestration-runs'
+import { ORCHESTRATION_RUN_METHODS } from '../rpc/methods/orchestration/runs/runs'
 
 function sqliteFor(db: OrchestrationDb): Database.Database {
   return (db as unknown as { db: Database.Database }).db

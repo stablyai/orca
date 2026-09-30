@@ -8,6 +8,7 @@ import { OrchestrationError } from '../../orchestration-error'
 import { DISPATCH_CIRCUIT_BREAK_FAILURES } from '../dispatch-context/dispatch-circuit-breaker'
 import type { OrchestrationDb } from '../orchestration-db'
 import { reconcileTaskAfterDispatchInterruption } from '../dispatch-context/task-dispatch-reconciliation'
+import { transitionLifecycleWithDb } from '../lifecycle-transition'
 
 export function listLegacyWorkerTerminalRecoveryRows(
   this: OrchestrationDb
@@ -49,40 +50,53 @@ export function reconcileMissingWorkerTerminal(
       const failureCount = dispatch.failure_count + 1
       const dispatchStatus: DispatchStatus =
         failureCount >= DISPATCH_CIRCUIT_BREAK_FAILURES ? 'circuit_broken' : 'failed'
-      this.db
-        .prepare(
-          `UPDATE dispatch_contexts
-           SET status = ?, failure_count = ?, last_failure = ?,
-               completed_at = datetime('now'),
-               capability_revoked_at = COALESCE(capability_revoked_at, datetime('now'))
-           WHERE id = ? AND status IN ('pending', 'dispatched')`
-        )
-        .run(dispatchStatus, failureCount, reason, dispatchId)
+      transitionLifecycleWithDb(this.db, {
+        entity: 'dispatch',
+        id: dispatchId,
+        from: dispatch.status,
+        to: dispatchStatus,
+        projection: {
+          failure_count: failureCount,
+          last_failure: reason,
+          completed_at: new Date().toISOString(),
+          capability_revoked_at: dispatch.capability_revoked_at ?? new Date().toISOString()
+        }
+      })
       if (!stopWasPending) {
         const taskStatus: TaskStatus = dispatchStatus === 'circuit_broken' ? 'failed' : 'ready'
         reconcileTaskAfterDispatchInterruption(this, dispatch.task_id, dispatchId)
-        this.db
-          .prepare(
-            `UPDATE tasks
-             SET status = ?, completed_at = CASE WHEN ? = 'failed' THEN datetime('now') ELSE NULL END
-             WHERE id = ? AND status IN ('dispatched', 'blocked')
-               AND NOT EXISTS (
-                 SELECT 1 FROM dispatch_contexts
-                 WHERE task_id = tasks.id AND status IN ('pending', 'dispatched')
-               )`
-          )
-          .run(taskStatus, taskStatus, dispatch.task_id)
+        const task = this.getTask(dispatch.task_id)
+        if (
+          task &&
+          ['dispatched', 'blocked'].includes(task.status) &&
+          !this.db
+            .prepare(
+              "SELECT 1 FROM dispatch_contexts WHERE task_id = ? AND status IN ('pending', 'dispatched')"
+            )
+            .get(dispatch.task_id)
+        ) {
+          transitionLifecycleWithDb(this.db, {
+            entity: 'task',
+            id: dispatch.task_id,
+            from: task.status,
+            to: taskStatus,
+            projection: { completed_at: taskStatus === 'failed' ? new Date().toISOString() : null }
+          })
+        }
       }
       this.closeQuestionsForDispatch(dispatchId)
     }
-    this.db
-      .prepare(
-        `UPDATE worker_dispatches
-         SET state = ?, stage = 'terminal_missing', last_error = ?, updated_at = datetime('now')
-         WHERE dispatch_id = ?
-           AND state IN ('starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown')`
-      )
-      .run(stopWasPending ? 'stopped' : 'abandoned', reason, dispatchId)
+    transitionLifecycleWithDb(this.db, {
+      entity: 'worker',
+      id: dispatchId,
+      from: worker.state,
+      to: stopWasPending ? 'stopped' : 'abandoned',
+      projection: {
+        stage: 'terminal_missing',
+        last_error: reason,
+        updated_at: new Date().toISOString()
+      }
+    })
     this.db.exec('COMMIT')
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
   } catch (error) {

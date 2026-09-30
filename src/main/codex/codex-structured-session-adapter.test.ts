@@ -1,141 +1,25 @@
 import { describe, expect, it, vi } from 'vitest'
-import type {
-  AgentJournalMessageItem,
-  AgentSessionJournalIdentity
-} from '../../shared/agent-session-journal-types'
-import { CodexAppServerRequestError } from './codex-app-server-connection'
-import type {
-  CodexAppServerConnection,
-  CodexAppServerConnectionHandlers,
-  CodexAppServerLaunch,
-  openCodexAppServerConnection
+import { AgentSessionPromptAnswerRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import {
+  CodexAppServerRequestError,
+  type openCodexAppServerConnection
 } from './codex-app-server-connection'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { CODEX_SPAWN_TOKEN_ENV } from './codex-structured-owner-identity'
-import { encodeCodexQuestionOptionId } from './codex-structured-prompt-replies'
 import {
   CodexStructuredSessionAdapter,
   type CodexStructuredLaunch,
-  type CodexStructuredSessionAdapterDeps,
   type CodexStructuredSessionEvent
 } from './codex-structured-session-adapter'
-
-const THREAD_ID = 'thread-abc'
-
-function identityFor(sessionId: string): AgentSessionJournalIdentity {
-  return {
-    sessionId,
-    workspaceId: 'ws-1',
-    hostId: 'host-1',
-    agent: 'codex',
-    providerHandle: { kind: 'codex', threadId: THREAD_ID }
-  }
-}
-
-const USER_MESSAGE: AgentJournalMessageItem = {
-  kind: 'message',
-  role: 'user',
-  blocks: [{ type: 'text', text: 'ship it' }]
-}
-
-type Route = (params: Record<string, unknown> | undefined) => unknown
-
-// `closed` is readonly on the real connection; the fake flips it so a test can
-// kill the child at a chosen moment.
-type FakeConnection = Omit<CodexAppServerConnection, 'closed'> & {
-  closed: boolean
-  launch: CodexAppServerLaunch
-  handlers: CodexAppServerConnectionHandlers
-  calls: { method: string; params?: Record<string, unknown> }[]
-  replies: { id: number | string; result?: unknown; code?: number; message?: string }[]
-  closeCount: number
-}
-
-/** Stands in for a live `codex app-server`: every RPC is answered from `routes`,
- *  and the test drives Codex's own traffic through `handlers`. */
-function fakeCodex(routes: Record<string, Route> = {}): {
-  connections: FakeConnection[]
-  openConnection: typeof openCodexAppServerConnection
-  routes: Record<string, Route>
-} {
-  const connections: FakeConnection[] = []
-  const openConnection = (async (launch, handlers = {}) => {
-    const connection: FakeConnection = {
-      launch,
-      handlers,
-      calls: [],
-      replies: [],
-      closeCount: 0,
-      pid: 4321,
-      closed: false,
-      request: async (method, params) => {
-        connection.calls.push({ method, params })
-        const route = routes[method]
-        return route ? route(params) : {}
-      },
-      notify: () => {},
-      respond: (id, result) => connection.replies.push({ id, result }),
-      respondWithError: (id, code, message) => connection.replies.push({ id, code, message }),
-      close: async () => {
-        connection.closeCount += 1
-        connection.closed = true
-        return true
-      }
-    }
-    connections.push(connection)
-    return connection
-  }) as typeof openCodexAppServerConnection
-  routes['thread/start'] ??= () => ({
-    thread: { id: THREAD_ID, path: '/rollouts/abc.jsonl' },
-    model: 'gpt-live',
-    reasoningEffort: 'medium'
-  })
-  routes['thread/resume'] ??= (params) => ({
-    thread: { id: (params as { threadId: string }).threadId },
-    model: 'gpt-live',
-    reasoningEffort: 'medium'
-  })
-  return { connections, openConnection, routes }
-}
-
-function adapterFor(
-  codex: ReturnType<typeof fakeCodex>,
-  launch: Partial<CodexStructuredLaunch> = {},
-  events: CodexStructuredSessionEvent[] = [],
-  processControl: Partial<
-    Pick<CodexStructuredSessionAdapterDeps, 'captureTurnProcesses' | 'terminateTurnProcesses'>
-  > = {}
-): CodexStructuredSessionAdapter {
-  let acquisitionGeneration = 0
-  return new CodexStructuredSessionAdapter({
-    resolveLaunch: async () => ({
-      command: 'codex',
-      args: ['app-server'],
-      cwd: '/work/repo',
-      codexHome: null,
-      resumeThreadId: null,
-      ...launch
-    }),
-    onEvent: (event) => events.push(event),
-    openConnection: codex.openConnection,
-    readProcessStartTime: async () => 1_700_000_000_000,
-    captureTurnProcesses: async () => ({ platform: 'win32', identities: new Map() }),
-    terminateTurnProcesses: async () => true,
-    now: () => 1_700_000_000_500,
-    mintAcquisitionGeneration: () => `generation-${++acquisitionGeneration}`,
-    ...processControl
-  })
-}
-
-async function acquired(
-  codex: ReturnType<typeof fakeCodex>,
-  launch: Partial<CodexStructuredLaunch> = {},
-  events: CodexStructuredSessionEvent[] = []
-): Promise<CodexStructuredSessionAdapter> {
-  const adapter = adapterFor(codex, launch, events)
-  await adapter.acquire({ identity: identityFor('session-1'), fence: 7, spawnToken: 'spawn-9' })
-  return adapter
-}
+import {
+  THREAD_ID,
+  USER_MESSAGE,
+  acquired,
+  adapterFor,
+  answerWithOpenedTurn,
+  fakeCodex,
+  identityFor
+} from './codex-structured-session-adapter-fixture'
 
 describe('CodexStructuredSessionAdapter.acquire', () => {
   it('starts a new thread and reports the process and link the lease will prove', async () => {
@@ -150,7 +34,13 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
 
     expect(codex.connections[0].launch.env).toEqual({
       [CODEX_SPAWN_TOKEN_ENV]: 'spawn-9',
-      CODEX_HOME: '/codex/home'
+      CODEX_HOME: '/codex/home',
+      ORCA_AGENT_SESSION_ID: 'session-1',
+      ORCA_STRUCTURED_SESSION: '1',
+      ORCA_CLI_COMMAND: expect.stringMatching(/^[^:;]*[\\/]cli[\\/]bin[\\/]orca-dev$/),
+      ORCA_USER_DATA_PATH: expect.any(String),
+      // The test host is unpackaged, so this app's CLI is the dev launcher dir, first on PATH.
+      PATH: expect.stringMatching(/^[^:;]*[\\/]cli[\\/]bin[:;]/)
     })
     expect(codex.connections[0].launch.cwd).toBe('/work/repo')
     expect(codex.connections[0].calls[0]).toEqual({
@@ -171,6 +61,20 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       observedAt: 1_700_000_000_500
     })
     expect(acquisition.acquisitionGeneration).toBe('generation-1')
+  })
+
+  // A thread opened on Codex's configured default and then given a turn on the chosen model
+  // reads to Codex as a model switch, and it injects the chosen model's whole prompt again.
+  it('opens the thread on the model the session chose, not on the configured default', async () => {
+    const codex = fakeCodex()
+    const adapter = adapterFor(codex, { model: 'gpt-chosen' })
+
+    await adapter.acquire({ identity: identityFor('session-1'), fence: 7, spawnToken: 'spawn-9' })
+
+    expect(codex.connections[0].calls[0]).toEqual({
+      method: 'thread/start',
+      params: { cwd: '/work/repo', model: 'gpt-chosen' }
+    })
   })
 
   it('resumes the thread the durable handle chain names, not the client one', async () => {
@@ -196,6 +100,42 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     })
     expect(acquisition.link.origin).toBe('resumed')
     expect(acquisition.link.handle).toEqual({ provider: 'codex', threadId: 'thread-proven' })
+  })
+
+  it('starts a thread in place of a creation Codex never saved, and says which it replaced', async () => {
+    const codex = fakeCodex({
+      'thread/resume': () => {
+        throw new CodexAppServerRequestError(
+          'thread/resume',
+          -32600,
+          'codex app-server thread/resume failed: no rollout found for thread id thread-unsaved'
+        )
+      }
+    })
+    const adapter = adapterFor(codex, {
+      resumeThreadId: 'thread-unsaved',
+      supersedeIfUnsaved: true
+    })
+
+    const acquisition = await adapter.acquire({
+      identity: identityFor('session-1'),
+      fence: 9,
+      spawnToken: 'spawn-9'
+    })
+
+    expect(codex.connections[0].calls.map((call) => call.method)).toEqual([
+      'thread/resume',
+      'thread/start'
+    ])
+    expect(acquisition.link).toEqual({
+      linkId: `codex-9-${THREAD_ID}`,
+      handle: { provider: 'codex', threadId: THREAD_ID },
+      origin: 'created',
+      supersedesKey: 'codex:"thread-unsaved"',
+      mintedAtFence: 9,
+      observedAt: 1_700_000_000_500
+    })
+    expect(codex.connections[0].closeCount).toBe(0)
   })
 
   it('refuses a resume that lands on a different thread and reaps the child', async () => {
@@ -253,8 +193,9 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       sessionId: 'session-1',
       itemId: 'codex-item-early',
       kind: 'approval',
-      optionId: 'accept',
-      fence: 7
+      response: { kind: 'option', optionId: 'accept' },
+      fence: 7,
+      commit: async () => undefined
     })
     expect(codex.connections[0].replies).toEqual([{ id: 5, result: { decision: 'accept' } }])
   })
@@ -285,7 +226,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     })
 
     codex.connections[0].handlers.onNotification?.('item/completed', {
-      item: { type: 'userMessage', id: 'message-1', text: 'hello' }
+      item: { type: 'agentMessage', id: 'message-1', text: 'hello' }
     })
 
     await vi.waitFor(() => {
@@ -430,8 +371,9 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
 })
 
 describe('CodexStructuredSessionAdapter.dispatch', () => {
-  it('accepts a turn Codex names in its response', async () => {
-    const codex = fakeCodex({ 'turn/start': () => ({ turn: { id: 'turn-1' } }) })
+  it('admits a send as soon as Codex owns it', async () => {
+    const codex = fakeCodex()
+    codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'turn-1')
     const adapter = await acquired(codex)
 
     const outcome = await adapter.dispatch({
@@ -449,10 +391,9 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
       fence: 7
     })
 
-    expect(outcome).toEqual({
-      state: 'accepted',
-      providerIdentity: { provider: 'codex', threadId: THREAD_ID, turnId: 'turn-1', ordinal: 0 }
-    })
+    // Identity is not knowable here: a send coalesced into a running turn shares
+    // that turn's id, so the echo settles which message landed where.
+    expect(outcome).toEqual({ state: 'admitted' })
     expect(codex.connections[0].calls[1].params).toEqual({
       threadId: THREAD_ID,
       clientUserMessageId: 'client-1',
@@ -464,7 +405,7 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
     })
   })
 
-  it('accepts a turn named only by the notification that raced the ack', async () => {
+  it('admits a send on a build whose turn/start answers before the turn is named', async () => {
     const codex = fakeCodex()
     const events: CodexStructuredSessionEvent[] = []
     const adapter = await acquired(codex, {}, events)
@@ -483,8 +424,7 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
       fence: 7
     })
 
-    expect(outcome).toMatchObject({ state: 'accepted' })
-    expect(outcome).toMatchObject({ providerIdentity: { turnId: 'turn-late' } })
+    expect(outcome).toEqual({ state: 'admitted' })
     expect(events.at(-1)).toMatchObject({ type: 'notification', method: 'turn/started' })
   })
 
@@ -508,39 +448,13 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
       fence: 7
     })
 
-    expect(outcome).toEqual({
-      state: 'accepted',
-      providerIdentity: { provider: 'codex', threadId: THREAD_ID, turnId: 'turn-root', ordinal: 0 }
-    })
+    expect(outcome).toEqual({ state: 'admitted' })
     // Each event carries the thread it actually came from, so the journal can
     // keep a subagent's turn out of the root conversation.
     expect(events.map((event) => (event.type === 'notification' ? event.threadId : null))).toEqual([
       'thread-child',
       THREAD_ID
     ])
-  })
-
-  it('settles unknown rather than failed when Codex never names the turn', async () => {
-    vi.useFakeTimers()
-    try {
-      const codex = fakeCodex()
-      const adapter = await acquired(codex)
-
-      const dispatching = adapter.dispatch({
-        sessionId: 'session-1',
-        clientMessageId: 'client-1',
-        body: USER_MESSAGE,
-        fence: 7
-      })
-      await vi.advanceTimersByTimeAsync(10_000)
-
-      expect(await dispatching).toEqual({
-        state: 'unknown',
-        reason: 'codex app-server started a turn it did not name in time'
-      })
-    } finally {
-      vi.useRealTimers()
-    }
   })
 
   it('rejects only when Codex answered and declined', async () => {
@@ -558,7 +472,12 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
         body: USER_MESSAGE,
         fence: 7
       })
-    ).toEqual({ state: 'rejected', reason: 'turn already running' })
+    ).toEqual({
+      // Built without Codex's own words, so nothing is quoted and no detail is invented.
+      state: 'rejected',
+      reason: 'The provider did not accept this message.',
+      rejection: { kind: 'providerRejected' }
+    })
   })
 
   it('rethrows a dead child so the wire settles the submission unknown', async () => {
@@ -595,9 +514,9 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
           }
         ],
         nextCursor: null
-      }),
-      'turn/start': () => ({ turn: { id: 'turn-1' } })
+      })
     })
+    codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'turn-1')
     const adapter = await acquired(codex)
 
     await adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'gpt-5', fence: 7 })
@@ -605,6 +524,9 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
     await expect(
       adapter.setOption({ sessionId: 'session-1', key: 'sandboxEscape', value: 'yes', fence: 7 })
     ).rejects.toThrow('no thread option named sandboxEscape')
+    await expect(
+      adapter.setOption({ sessionId: 'session-1', key: 'approvalPolicy', value: 'never', fence: 7 })
+    ).rejects.toThrow('no thread option named approvalPolicy')
     await adapter.dispatch({
       sessionId: 'session-1',
       clientMessageId: 'client-1',
@@ -638,8 +560,9 @@ describe('CodexStructuredSessionAdapter prompts', () => {
       sessionId: 'session-1',
       itemId: 'codex:thread-abc:turn-1:3',
       kind: 'approval',
-      optionId: 'accept',
-      fence: 7
+      response: { kind: 'option', optionId: 'accept' },
+      fence: 7,
+      commit: async () => undefined
     })
 
     expect(events.at(-1)).toMatchObject({ type: 'prompt', codexItemId: 'codex-item-1' })
@@ -650,8 +573,9 @@ describe('CodexStructuredSessionAdapter prompts', () => {
         sessionId: 'session-1',
         itemId: 'codex:thread-abc:turn-1:3',
         kind: 'approval',
-        optionId: 'decline',
-        fence: 7
+        response: { kind: 'option', optionId: 'decline' },
+        fence: 7,
+        commit: async () => undefined
       })
     ).rejects.toThrow('no longer waiting on')
     expect(codex.connections[0].replies).toHaveLength(1)
@@ -690,8 +614,9 @@ describe('CodexStructuredSessionAdapter prompts', () => {
         sessionId: 'session-1',
         itemId: 'codex-item-1',
         kind: 'approval',
-        optionId: 'accept',
-        fence: 7
+        response: { kind: 'option', optionId: 'accept' },
+        fence: 7,
+        commit: async () => undefined
       })
     ).rejects.toThrow('no longer waiting on')
   })
@@ -776,8 +701,9 @@ describe('CodexStructuredSessionAdapter prompts', () => {
         sessionId: 'session-1',
         itemId,
         kind: 'approval',
-        optionId,
-        fence: 7
+        response: { kind: 'option', optionId },
+        fence: 7,
+        commit: async () => undefined
       })
     }
 
@@ -796,16 +722,20 @@ describe('CodexStructuredSessionAdapter prompts', () => {
     const adapter = await acquired(codex)
 
     askApproval(codex)
+    const commit = vi.fn(async () => undefined)
 
     await expect(
       adapter.answerPrompt({
         sessionId: 'session-1',
         itemId: 'codex-item-1',
         kind: 'approval',
-        optionId: 'yolo',
-        fence: 7
+        response: { kind: 'option', optionId: 'yolo' },
+        fence: 7,
+        commit
       })
-    ).rejects.toThrow('is not a Codex approval decision')
+    ).rejects.toThrow(AgentSessionPromptAnswerRejectedError)
+    // Refused before the journal records an answer the agent never receives.
+    expect(commit).not.toHaveBeenCalled()
     expect(codex.connections[0].replies).toEqual([])
   })
 
@@ -830,8 +760,9 @@ describe('CodexStructuredSessionAdapter prompts', () => {
       sessionId: 'session-1',
       itemId: 'codex-item-2',
       kind: 'question',
-      optionId: encodeCodexQuestionOptionId('q1', 'yes'),
-      fence: 7
+      response: { kind: 'answers', answers: [{ questionId: 'q1', optionIds: [], other: 'yes' }] },
+      fence: 7,
+      commit: async () => undefined
     })
     expect(codex.connections[0].replies).toEqual([])
 
@@ -839,8 +770,9 @@ describe('CodexStructuredSessionAdapter prompts', () => {
       sessionId: 'session-1',
       itemId: 'codex-item-2',
       kind: 'question',
-      optionId: encodeCodexQuestionOptionId('q2', 'no'),
-      fence: 7
+      response: { kind: 'answers', answers: [{ questionId: 'q2', optionIds: [], other: 'no' }] },
+      fence: 7,
+      commit: async () => undefined
     })
 
     expect(codex.connections[0].replies).toEqual([
@@ -874,8 +806,9 @@ describe('CodexStructuredSessionAdapter prompts', () => {
         sessionId: 'session-1',
         itemId: 'codex-item-gone',
         kind: 'approval',
-        optionId: 'accept',
-        fence: 7
+        response: { kind: 'option', optionId: 'accept' },
+        fence: 7,
+        commit: async () => undefined
       })
     ).rejects.toThrow('no longer waiting on codex-item-gone')
   })

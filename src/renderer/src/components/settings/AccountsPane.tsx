@@ -18,6 +18,7 @@ import {
   getAccountsClaudeSearchEntries,
   getAccountsCodexSearchEntries,
   getAccountsGeminiSearchEntries,
+  getAccountsCursorSearchEntries,
   getAccountsGrokSearchEntries,
   getAccountsLocationSearchEntries,
   getAccountsMiniMaxSearchEntries,
@@ -26,6 +27,7 @@ import {
 } from './accounts-search'
 import { getRemoteAccountsPaneScope } from './provider-account-scope'
 import { ProviderHostScopeControl } from './ProviderHostScopeControl'
+import { SettingsSectionStack } from './SettingsSectionStack'
 import { matchesSettingsSearch } from './settings-search'
 import { getCodexAccountAuthWarning } from './codex-account-auth-warning'
 import { getCodexConfigSyncWarning } from './codex-config-sync-warning'
@@ -34,8 +36,8 @@ import {
   providerAccountIsActiveInView,
   providerAccountMatchesView
 } from './provider-account-visibility'
-import { Separator } from '../ui/separator'
 import { GrokAccountsSection } from './GrokAccountsSection'
+import { CursorAccountsSection } from './CursorAccountsSection'
 import type {
   AccountsPaneProps,
   AccountsPaneSectionModel,
@@ -78,8 +80,12 @@ export function AccountsPane({
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
-  const recordedOpenCodeSettingEditsRef = useRef<Set<'cookie' | 'workspaceId'>>(new Set())
+  const recordedOpenCodeSettingEditsRef = useRef<Set<'cookie' | 'workspaceId' | 'apiKey'>>(
+    new Set()
+  )
   const [miniMaxCookieDraft, setMiniMaxCookieDraft] = useState('')
+  const [miniMaxApiKeyDraft, setMiniMaxApiKeyDraft] = useState('')
+  const [miniMaxApiKeyConfigured, setMiniMaxApiKeyConfigured] = useState(false)
   const [miniMaxConfigured, setMiniMaxConfigured] = useState(false)
   const [miniMaxCredentialBusy, setMiniMaxCredentialBusy] = useState(false)
   const localAccountRuntime = getSelectedAccountRuntime(
@@ -212,7 +218,7 @@ export function AccountsPane({
   const accountRuntimeUnavailable =
     accountRuntime.runtime === 'wsl' && !wslAvailable && !wslCapabilitiesLoading
 
-  const recordOpenCodeSettingEdit = (field: 'cookie' | 'workspaceId'): void => {
+  const recordOpenCodeSettingEdit = (field: 'cookie' | 'workspaceId' | 'apiKey'): void => {
     if (recordedOpenCodeSettingEditsRef.current.has(field)) {
       return
     }
@@ -222,18 +228,23 @@ export function AccountsPane({
   const refreshMiniMaxCredentialStatus = async (): Promise<void> => {
     try {
       const status = await window.api.minimaxCredentials.getStatus()
-      setMiniMaxConfigured(status.configured)
+      setMiniMaxConfigured(status.cookieConfigured)
+      setMiniMaxApiKeyConfigured(status.apiKeyConfigured)
     } catch (error) {
       console.error('Failed to load MiniMax credential status:', error)
     }
   }
-  const { saveMiniMaxCookie, clearMiniMaxCookie } = createMiniMaxCredentialActions({
-    miniMaxCookieDraft,
-    setMiniMaxCookieDraft,
-    setMiniMaxConfigured,
-    setMiniMaxCredentialBusy,
-    recordFeatureInteraction
-  })
+  const { saveMiniMaxCookie, clearMiniMaxCookie, saveMiniMaxApiKey, clearMiniMaxApiKey } =
+    createMiniMaxCredentialActions({
+      miniMaxCookieDraft,
+      setMiniMaxCookieDraft,
+      miniMaxApiKeyDraft,
+      setMiniMaxApiKeyDraft,
+      setMiniMaxApiKeyConfigured,
+      setMiniMaxConfigured,
+      setMiniMaxCredentialBusy,
+      recordFeatureInteraction
+    })
 
   useEffect(() => {
     void refreshMiniMaxCredentialStatus()
@@ -335,6 +346,11 @@ export function AccountsPane({
     runCodexAccountAction,
     recordOpenCodeSettingEdit,
     miniMaxRateLimits,
+    miniMaxApiKeyDraft,
+    setMiniMaxApiKeyDraft,
+    miniMaxApiKeyConfigured,
+    saveMiniMaxApiKey,
+    clearMiniMaxApiKey,
     miniMaxCookieDraft,
     setMiniMaxCookieDraft,
     miniMaxConfigured,
@@ -365,18 +381,16 @@ export function AccountsPane({
       : null,
     matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
       <GrokAccountsSection key="grok" />
+    ) : null,
+    matchesSettingsSearch(searchQuery, getAccountsCursorSearchEntries()) ? (
+      <CursorAccountsSection key="cursor" />
     ) : null
-  ].filter(Boolean)
+  ]
 
   return (
     <div className="space-y-8">
       {renderAccountsRemovalDialogs(model, removeCodexTarget, removeClaudeTarget)}
-      {visibleSections.map((section, index) => (
-        <div key={index} className="space-y-8">
-          {index > 0 ? <Separator /> : null}
-          {section}
-        </div>
-      ))}
+      <SettingsSectionStack sections={visibleSections} spacing="group" />
     </div>
   )
 }

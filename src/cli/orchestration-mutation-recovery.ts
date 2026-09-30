@@ -167,6 +167,19 @@ export function renderCommand(
   return shell === 'powershell' && rendered ? `& ${rendered}` : rendered
 }
 
+export function renderResolvedOrchestrationCommand(
+  command: string,
+  executable = resolveOrchestrationCliExecutable(),
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env
+): string {
+  const parts = parseCommandLine(command)
+  if (parts?.[0] !== 'orca') {
+    return command
+  }
+  return renderCommand([executable, ...parts.slice(1)], platform, env)
+}
+
 function resolveRecoveryShell(
   platform: NodeJS.Platform,
   env: NodeJS.ProcessEnv

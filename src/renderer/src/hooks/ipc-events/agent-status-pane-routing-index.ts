@@ -12,6 +12,7 @@ type AgentStatusPaneResolution = {
   repoConnectionResolved: boolean
   owningWorktreeId: string | undefined
   titleUsesTabTitle: boolean
+  tabTitle: string | undefined
 }
 
 type AgentStatusWorktreeConnectionResolution = {
@@ -186,7 +187,8 @@ export function resolvePaneKeyFromRoutingIndex(
       repoConnectionId: null,
       repoConnectionResolved: false,
       owningWorktreeId: undefined,
-      titleUsesTabTitle: false
+      titleUsesTabTitle: false,
+      tabTitle: undefined
     }
   }
   const { tabId, leafId } = parsed
@@ -199,7 +201,8 @@ export function resolvePaneKeyFromRoutingIndex(
       repoConnectionId: null,
       repoConnectionResolved: false,
       owningWorktreeId: undefined,
-      titleUsesTabTitle: false
+      titleUsesTabTitle: false,
+      tabTitle: undefined
     }
   }
   const connection = resolveWorktreeConnectionFromRoutingIndex(index, tab.owningWorktreeId)
@@ -219,7 +222,8 @@ export function resolvePaneKeyFromRoutingIndex(
         repoConnectionId: connection.repoConnectionId,
         repoConnectionResolved: connection.repoConnectionResolved,
         owningWorktreeId: tab.owningWorktreeId,
-        titleUsesTabTitle: false
+        titleUsesTabTitle: false,
+        tabTitle: undefined
       }
     }
   }
@@ -233,6 +237,7 @@ export function resolvePaneKeyFromRoutingIndex(
     repoConnectionId: connection.repoConnectionId,
     repoConnectionResolved: connection.repoConnectionResolved,
     owningWorktreeId: tab.owningWorktreeId,
-    titleUsesTabTitle: paneTitle === undefined
+    titleUsesTabTitle: paneTitle === undefined,
+    tabTitle: tab.title
   }
 }

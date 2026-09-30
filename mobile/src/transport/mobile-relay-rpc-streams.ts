@@ -4,9 +4,12 @@ import {
   type TerminalSnapshotState
 } from './rpc-client-terminal-binary-frame'
 import {
+  buildStreamUnsubscribe,
   buildTerminalUnsubscribeParams,
   updateTerminalSubscriptionViewport
 } from './rpc-client-terminal-subscription'
+import { buildReadyStreamUnsubscribe } from './rpc-client-server-subscription'
+import { isStreamingOpenerReply } from './rpc-acceptance-policies'
 import type { RpcClient } from './rpc-client'
 import type { RpcResponse, RpcSuccess } from './types'
 
@@ -22,6 +25,37 @@ type StreamRecord = {
   streamIds: Set<number>
   subscriptionId?: string
   cancelled: boolean
+  /** Position in this session's send order, or null while unsent. */
+  sendOrder: number | null
+  receivedSnapshot?: boolean
+}
+
+type StreamUnsubscribe = { method: string; params: Record<string, unknown> }
+
+/** The host cleanup slot an unsubscribe names; the rest of its params never identify a sibling. */
+function unsubscribeSlot({ method, params }: StreamUnsubscribe): string | null {
+  if (!('subscriptionId' in params)) {
+    return null
+  }
+  const client =
+    'client' in params && typeof params.client === 'object' && params.client !== null
+      ? params.client
+      : null
+  const clientId = client && 'id' in client ? client.id : null
+  return JSON.stringify([method, params.subscriptionId, clientId])
+}
+
+/** Unsubscribe derived from the subscribe params alone (no server-assigned id). */
+function buildParamsUnsubscribe(
+  method: string,
+  params: unknown,
+  requestId: string
+): StreamUnsubscribe | null {
+  if (method === 'terminal.subscribe') {
+    const unsubscribeParams = buildTerminalUnsubscribeParams(params)
+    return unsubscribeParams ? { method: 'terminal.unsubscribe', params: unsubscribeParams } : null
+  }
+  return buildStreamUnsubscribe(method, params, requestId)
 }
 
 type StreamManagerOptions = {
@@ -32,9 +66,14 @@ type StreamManagerOptions = {
 
 export class MobileRelayRpcStreams {
   private readonly streams = new Map<string, StreamRecord>()
+  private readonly cancelledSubscriptions = new Map<
+    string,
+    { method: string; unsubscribe?: StreamUnsubscribe }
+  >()
   private readonly terminalListeners = new Map<number, (result: unknown) => void>()
   private readonly terminalSnapshots = new Map<number, TerminalSnapshotState>()
   private activeBrowserStream: StreamRecord | null = null
+  private sendCount = 0
 
   constructor(private readonly options: StreamManagerOptions) {}
 
@@ -51,13 +90,15 @@ export class MobileRelayRpcStreams {
       listener,
       onBinaryFrame: subscribeOptions?.onBinaryFrame,
       streamIds: new Set(),
-      cancelled: false
+      cancelled: false,
+      sendOrder: null
     }
     this.streams.set(id, stream)
     void this.options
       .waitForConnected()
       .then(() => {
         if (!stream.cancelled) {
+          stream.sendOrder = ++this.sendCount
           if (!this.options.sendFrame({ id, method, params: stream.params })) {
             this.fail(id, stream, 'Connection interrupted')
           }
@@ -75,6 +116,30 @@ export class MobileRelayRpcStreams {
   }
 
   handleResponse(response: RpcResponse): boolean {
+    const cancelled = this.cancelledSubscriptions.get(response.id)
+    if (cancelled) {
+      if (!response.ok) {
+        this.cancelledSubscriptions.delete(response.id)
+      } else if (response.result && typeof response.result === 'object') {
+        const result = response.result as { subscriptionId?: unknown; type?: unknown }
+        if (result.type === 'end') {
+          this.cancelledSubscriptions.delete(response.id)
+        } else if (result.type === 'snapshot' && cancelled.unsubscribe) {
+          this.cancelledSubscriptions.delete(response.id)
+          this.options.sendFrame({ id: this.options.nextId(), ...cancelled.unsubscribe })
+        } else if (typeof result.subscriptionId === 'string') {
+          this.cancelledSubscriptions.delete(response.id)
+          const unsubscribe = buildReadyStreamUnsubscribe(cancelled.method, result.subscriptionId)
+          if (unsubscribe) {
+            this.options.sendFrame({ id: this.options.nextId(), ...unsubscribe })
+          }
+        }
+      }
+      if (response.ok && !isStreamingOpenerReply(response)) {
+        this.cancelledSubscriptions.delete(response.id)
+      }
+      return true
+    }
     const stream = this.streams.get(response.id)
     if (!stream) {
       return false
@@ -86,6 +151,9 @@ export class MobileRelayRpcStreams {
     const result = (response as RpcSuccess).result
     if (result && typeof result === 'object') {
       const metadata = result as { subscriptionId?: unknown; streamId?: unknown; type?: unknown }
+      if (stream.method === 'session.tabs.subscribe' && metadata.type === 'snapshot') {
+        stream.receivedSnapshot = true
+      }
       if (typeof metadata.subscriptionId === 'string') {
         stream.subscriptionId = metadata.subscriptionId
       }
@@ -97,8 +165,7 @@ export class MobileRelayRpcStreams {
         this.activeBrowserStream = stream
       }
       if (metadata.type === 'end') {
-        stream.listener(result)
-        this.remove(response.id)
+        this.finish(response.id, stream, result)
         return true
       }
     }
@@ -125,6 +192,7 @@ export class MobileRelayRpcStreams {
       stream.cancelled = true
     }
     this.streams.clear()
+    this.cancelledSubscriptions.clear()
     this.terminalListeners.clear()
     this.terminalSnapshots.clear()
     this.activeBrowserStream = null
@@ -136,23 +204,72 @@ export class MobileRelayRpcStreams {
       return
     }
     stream.cancelled = true
-    if (stream.method === 'terminal.subscribe') {
-      const params = buildTerminalUnsubscribeParams(stream.params)
-      if (params) {
-        this.options.sendFrame({
-          id: this.options.nextId(),
-          method: 'terminal.unsubscribe',
-          params
-        })
+    if (stream.sendOrder !== null) {
+      const byParams = buildParamsUnsubscribe(stream.method, stream.params, id)
+      if (stream.method === 'terminal.subscribe') {
+        if (byParams) {
+          this.sendUnsubscribe(byParams, stream.sendOrder, id)
+        }
+      } else {
+        const unsubscribe = stream.subscriptionId
+          ? buildReadyStreamUnsubscribe(stream.method, stream.subscriptionId)
+          : null
+        if (byParams && stream.method === 'session.tabs.subscribe' && !stream.receivedSnapshot) {
+          // The host registers cleanup only after resolving the initial snapshot.
+          this.cancelledSubscriptions.set(id, { method: stream.method, unsubscribe: byParams })
+        } else if (unsubscribe || byParams) {
+          this.sendUnsubscribe((unsubscribe ?? byParams)!, stream.sendOrder)
+        } else if (
+          stream.method === 'browser.screencast' ||
+          stream.method === 'runtime.clientEvents.subscribe'
+        ) {
+          // Keep only the cleanup route while the server assigns its subscription ID.
+          this.cancelledSubscriptions.set(id, { method: stream.method })
+        } else if (stream.subscriptionId) {
+          this.sendUnsubscribe(
+            {
+              method: stream.method.replace(/\.subscribe$/, '.unsubscribe'),
+              params: { subscriptionId: stream.subscriptionId }
+            },
+            stream.sendOrder
+          )
+        }
       }
-    } else if (stream.subscriptionId) {
-      this.options.sendFrame({
-        id: this.options.nextId(),
-        method: stream.method.replace(/\.subscribe$/, '.unsubscribe'),
-        params: { subscriptionId: stream.subscriptionId }
-      })
     }
     this.remove(id)
+  }
+
+  /** Skip when a same-slot sibling sent later has already evicted this stream on the host. */
+  private sendUnsubscribe(
+    unsubscribe: StreamUnsubscribe,
+    sendOrder: number,
+    terminalRequestId?: string
+  ): void {
+    if (this.hasNewerSlotOwner(unsubscribe, sendOrder)) {
+      return
+    }
+    // Why: added after the sibling check; an old host strips it and would evict the live sibling.
+    const params = terminalRequestId
+      ? { ...unsubscribe.params, requestId: terminalRequestId }
+      : unsubscribe.params
+    this.options.sendFrame({ id: this.options.nextId(), method: unsubscribe.method, params })
+  }
+
+  private hasNewerSlotOwner(unsubscribe: StreamUnsubscribe, sendOrder: number): boolean {
+    const slot = unsubscribeSlot(unsubscribe)
+    if (slot === null) {
+      return false
+    }
+    for (const [siblingId, sibling] of this.streams) {
+      if (sibling.cancelled || sibling.sendOrder === null || sibling.sendOrder < sendOrder) {
+        continue
+      }
+      const siblingUnsubscribe = buildParamsUnsubscribe(sibling.method, sibling.params, siblingId)
+      if (siblingUnsubscribe && unsubscribeSlot(siblingUnsubscribe) === slot) {
+        return true
+      }
+    }
+    return false
   }
 
   private remove(id: string): void {
@@ -174,10 +291,12 @@ export class MobileRelayRpcStreams {
     if (stream.cancelled || this.streams.get(id) !== stream) {
       return
     }
-    try {
-      stream.listener({ type: 'error', message, error })
-    } finally {
-      this.remove(id)
-    }
+    this.finish(id, stream, { type: 'error', message, error })
+  }
+
+  /** Removed first, so the listener's dispose cannot name a host-ended stream. */
+  private finish(id: string, stream: StreamRecord, result: unknown): void {
+    this.remove(id)
+    stream.listener(result)
   }
 }

@@ -4,6 +4,8 @@ import type { ExecutionHostId } from './execution-host'
 export const ORCA_PROFILE_INDEX_SCHEMA_VERSION = 1
 export const DEFAULT_LOCAL_ORCA_PROFILE_ID = 'local-default'
 export const DEFAULT_LOCAL_ORCA_PROFILE_NAME = 'Personal'
+/** Main -> renderer push when the stored auth status changed without the renderer asking. */
+export const ORCA_PROFILE_AUTH_STATUS_CHANGED_CHANNEL = 'orcaProfiles:authStatusChanged'
 const LEGACY_ORCA_BROWSER_SESSION_PARTITION_PREFIX = 'persist:orca-browser-session-'
 
 export type OrcaProfileAvatar = {

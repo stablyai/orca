@@ -1,0 +1,89 @@
+{
+  "publicationTopic": "np-oom-scan-retained-text-slices",
+  "baselineSha256": "969daeddb4f4fde9d53e80b008438aa2942526af940ae9eb4f08cd9440a0f914",
+  "fixedSha256": "4c7fd9e66d1b2aa948dab72196c3e6fd9df7c646dcf0a15279ee5520bb0a2a7b",
+  "tailOnlySha256": "5d68af2f66e1466b5a642fa9bb301b8f04ccd2c2741dd5731faac7a2f30c5be5",
+  "dependencies": {
+    "src/main/plugins/plugin-log-buffer.ts": "c378984b0435b957265b8071f5d2da8a3cbd659a8d2bea67b363b49e573ffdd8",
+    "src/main/plugins/plugin-host-process.ts": "825b938a5fe510944c26e9b503afeb3a0da13b570558a111adc2f9edc21cce6b",
+    "src/main/plugins/plugin-worker-manager.ts": "b95bfac2b674b6ecf6da6ba0d08b98596e67f05bf0dff02e8133049b4d5a1e70",
+    "src/main/plugins/plugin-worker-startup.ts": "4b1e3ffb800e387a7a6f677ceef27a4d72f1b0aca467b54994f0b4518137fa2e",
+    "src/main/plugins/plugin-service.ts": "057bcb8af5067112f8aec498ad7824b005dfe9ed7880b3e0745ed54fcfb75420",
+    "src/shared/plugins/plugin-host-protocol.ts": "6f6ce9cfda1d30879695c7c8979b1d0ae93600a3d4417a6cd3c832235d3ae689",
+    "src/shared/own-retained-string.ts": "addea88bc11c725192be2ff617b91315a875113844c95de03e5529cf3d7ef2e2",
+    "src/shared/owned-utf16-suffix.ts": "1ca0bb35dfff2d9f3c02caee3d05b0e0c97378df71c878622acf703524d2c475"
+  },
+  "namedRevisions": {
+    "HEAD": {
+      "revision": "2e83de3154c4ee1bbeea816734b892c34500a5cc",
+      "sources": {
+        "src/main/plugins/plugin-worker-output-buffer.ts": "969daeddb4f4fde9d53e80b008438aa2942526af940ae9eb4f08cd9440a0f914",
+        "src/main/plugins/plugin-log-buffer.ts": "c378984b0435b957265b8071f5d2da8a3cbd659a8d2bea67b363b49e573ffdd8",
+        "src/main/plugins/plugin-host-process.ts": "825b938a5fe510944c26e9b503afeb3a0da13b570558a111adc2f9edc21cce6b",
+        "src/main/plugins/plugin-worker-manager.ts": "b95bfac2b674b6ecf6da6ba0d08b98596e67f05bf0dff02e8133049b4d5a1e70",
+        "src/main/plugins/plugin-worker-startup.ts": "4b1e3ffb800e387a7a6f677ceef27a4d72f1b0aca467b54994f0b4518137fa2e",
+        "src/main/plugins/plugin-service.ts": "057bcb8af5067112f8aec498ad7824b005dfe9ed7880b3e0745ed54fcfb75420",
+        "src/shared/plugins/plugin-host-protocol.ts": "6f6ce9cfda1d30879695c7c8979b1d0ae93600a3d4417a6cd3c832235d3ae689",
+        "src/shared/own-retained-string.ts": "addea88bc11c725192be2ff617b91315a875113844c95de03e5529cf3d7ef2e2",
+        "src/shared/owned-utf16-suffix.ts": "1ca0bb35dfff2d9f3c02caee3d05b0e0c97378df71c878622acf703524d2c475"
+      }
+    },
+    "main": {
+      "revision": "f78483ec29891ab11f49bb25e6cd628837b1242e",
+      "sources": {
+        "src/main/plugins/plugin-worker-output-buffer.ts": "969daeddb4f4fde9d53e80b008438aa2942526af940ae9eb4f08cd9440a0f914",
+        "src/main/plugins/plugin-log-buffer.ts": "c378984b0435b957265b8071f5d2da8a3cbd659a8d2bea67b363b49e573ffdd8",
+        "src/main/plugins/plugin-host-process.ts": "825b938a5fe510944c26e9b503afeb3a0da13b570558a111adc2f9edc21cce6b",
+        "src/main/plugins/plugin-worker-manager.ts": "b95bfac2b674b6ecf6da6ba0d08b98596e67f05bf0dff02e8133049b4d5a1e70",
+        "src/main/plugins/plugin-worker-startup.ts": "4b1e3ffb800e387a7a6f677ceef27a4d72f1b0aca467b54994f0b4518137fa2e",
+        "src/main/plugins/plugin-service.ts": "057bcb8af5067112f8aec498ad7824b005dfe9ed7880b3e0745ed54fcfb75420",
+        "src/shared/plugins/plugin-host-protocol.ts": "6f6ce9cfda1d30879695c7c8979b1d0ae93600a3d4417a6cd3c832235d3ae689",
+        "src/shared/own-retained-string.ts": "addea88bc11c725192be2ff617b91315a875113844c95de03e5529cf3d7ef2e2",
+        "src/shared/owned-utf16-suffix.ts": "1ca0bb35dfff2d9f3c02caee3d05b0e0c97378df71c878622acf703524d2c475"
+      }
+    },
+    "np-oom-scan-retained-text-slices": {
+      "revision": "0d2efbc0d3b4f902b9bc02f5451c6ff4291405cf",
+      "sources": {
+        "src/main/plugins/plugin-worker-output-buffer.ts": "969daeddb4f4fde9d53e80b008438aa2942526af940ae9eb4f08cd9440a0f914",
+        "src/main/plugins/plugin-log-buffer.ts": "c378984b0435b957265b8071f5d2da8a3cbd659a8d2bea67b363b49e573ffdd8",
+        "src/main/plugins/plugin-host-process.ts": "825b938a5fe510944c26e9b503afeb3a0da13b570558a111adc2f9edc21cce6b",
+        "src/main/plugins/plugin-worker-manager.ts": "b95bfac2b674b6ecf6da6ba0d08b98596e67f05bf0dff02e8133049b4d5a1e70",
+        "src/main/plugins/plugin-worker-startup.ts": "4b1e3ffb800e387a7a6f677ceef27a4d72f1b0aca467b54994f0b4518137fa2e",
+        "src/main/plugins/plugin-service.ts": "057bcb8af5067112f8aec498ad7824b005dfe9ed7880b3e0745ed54fcfb75420",
+        "src/shared/plugins/plugin-host-protocol.ts": "6f6ce9cfda1d30879695c7c8979b1d0ae93600a3d4417a6cd3c832235d3ae689",
+        "src/shared/own-retained-string.ts": "addea88bc11c725192be2ff617b91315a875113844c95de03e5529cf3d7ef2e2",
+        "src/shared/owned-utf16-suffix.ts": "1ca0bb35dfff2d9f3c02caee3d05b0e0c97378df71c878622acf703524d2c475"
+      }
+    },
+    "291b4ddd6f1c1af480169885e0fda7f9c78ff053": {
+      "revision": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+      "sources": {
+        "src/main/plugins/plugin-worker-output-buffer.ts": "969daeddb4f4fde9d53e80b008438aa2942526af940ae9eb4f08cd9440a0f914",
+        "src/main/plugins/plugin-log-buffer.ts": "c378984b0435b957265b8071f5d2da8a3cbd659a8d2bea67b363b49e573ffdd8",
+        "src/main/plugins/plugin-host-process.ts": "825b938a5fe510944c26e9b503afeb3a0da13b570558a111adc2f9edc21cce6b",
+        "src/main/plugins/plugin-worker-manager.ts": "b95bfac2b674b6ecf6da6ba0d08b98596e67f05bf0dff02e8133049b4d5a1e70",
+        "src/main/plugins/plugin-worker-startup.ts": "4b1e3ffb800e387a7a6f677ceef27a4d72f1b0aca467b54994f0b4518137fa2e",
+        "src/main/plugins/plugin-service.ts": "057bcb8af5067112f8aec498ad7824b005dfe9ed7880b3e0745ed54fcfb75420",
+        "src/shared/plugins/plugin-host-protocol.ts": "6f6ce9cfda1d30879695c7c8979b1d0ae93600a3d4417a6cd3c832235d3ae689",
+        "src/shared/own-retained-string.ts": "addea88bc11c725192be2ff617b91315a875113844c95de03e5529cf3d7ef2e2",
+        "src/shared/owned-utf16-suffix.ts": "1ca0bb35dfff2d9f3c02caee3d05b0e0c97378df71c878622acf703524d2c475"
+      }
+    },
+    "e0826956fcfc532f5a1e55b5e081f2e57e553c43": {
+      "revision": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+      "sources": {
+        "src/main/plugins/plugin-worker-output-buffer.ts": "969daeddb4f4fde9d53e80b008438aa2942526af940ae9eb4f08cd9440a0f914",
+        "src/main/plugins/plugin-log-buffer.ts": "c378984b0435b957265b8071f5d2da8a3cbd659a8d2bea67b363b49e573ffdd8",
+        "src/main/plugins/plugin-host-process.ts": "825b938a5fe510944c26e9b503afeb3a0da13b570558a111adc2f9edc21cce6b",
+        "src/main/plugins/plugin-worker-manager.ts": "b95bfac2b674b6ecf6da6ba0d08b98596e67f05bf0dff02e8133049b4d5a1e70",
+        "src/main/plugins/plugin-worker-startup.ts": "4b1e3ffb800e387a7a6f677ceef27a4d72f1b0aca467b54994f0b4518137fa2e",
+        "src/main/plugins/plugin-service.ts": "057bcb8af5067112f8aec498ad7824b005dfe9ed7880b3e0745ed54fcfb75420",
+        "src/shared/plugins/plugin-host-protocol.ts": "6f6ce9cfda1d30879695c7c8979b1d0ae93600a3d4417a6cd3c832235d3ae689",
+        "src/shared/own-retained-string.ts": null,
+        "src/shared/owned-utf16-suffix.ts": "1ca0bb35dfff2d9f3c02caee3d05b0e0c97378df71c878622acf703524d2c475"
+      }
+    }
+  },
+  "historicalScope": "v1.4.198 has the identical parser, ring and caller modules but lacks own-retained-string.ts. The baseline bundle imports only the unchanged parser/ring. Fixed and tail-only variants use the recorded publication helper; this is not a historical application binary."
+}

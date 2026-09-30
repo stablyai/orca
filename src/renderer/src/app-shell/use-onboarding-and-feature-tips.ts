@@ -11,6 +11,7 @@ import {
   trackOrcaCliFeatureTipShown
 } from '../components/feature-tips/feature-tip-telemetry'
 import { useAppStore } from '../store'
+import { isWebClientLocation } from '../lib/web-client-location'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
 
 export type OnboardingGate = ReturnType<typeof useOnboardingAndFeatureTips>
@@ -99,7 +100,8 @@ export function useOnboardingAndFeatureTips() {
       persistedUIReady,
       promptedThisSession: promptedThisSessionRef.current,
       settings,
-      suppressedByOnboardingThisSession: suppressedByOnboardingThisSessionRef.current
+      suppressedByOnboardingThisSession: suppressedByOnboardingThisSessionRef.current,
+      webClient: isWebClientLocation()
     })
 
     if (featureTipsDecision.kind === 'suppress-for-onboarding') {
@@ -120,7 +122,10 @@ export function useOnboardingAndFeatureTips() {
     }
     // Why: mark seen on show so a quit/crash before dismiss doesn't reappear it next launch.
     actions.markFeatureTipsSeen([featureTipsDecision.tipId])
-    actions.openModal('feature-tips', { source: 'app_open', tipId: featureTipsDecision.tipId })
+    actions.openModal('feature-tips', {
+      source: 'app_open',
+      tipId: featureTipsDecision.tipId
+    })
   }, [
     activeModal,
     actions,

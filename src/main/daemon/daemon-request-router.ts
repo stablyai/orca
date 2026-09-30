@@ -105,12 +105,17 @@ export class DaemonRequestRouter {
         return {
           foregroundProcess: this.options.host.getForegroundProcess(request.payload.sessionId)
         }
-      case 'inspectProcess':
-        return request.payload.expectedIncarnationId
-          ? this.options.host.inspectProcess(request.payload.sessionId, {
-              expectedIncarnationId: request.payload.expectedIncarnationId
-            })
+      case 'inspectProcess': {
+        const options = {
+          ...(request.payload.expectedIncarnationId
+            ? { expectedIncarnationId: request.payload.expectedIncarnationId }
+            : {}),
+          ...(request.payload.steadyState === true ? { steadyState: true } : {})
+        }
+        return Object.keys(options).length > 0
+          ? this.options.host.inspectProcess(request.payload.sessionId, options)
           : this.options.host.inspectProcess(request.payload.sessionId)
+      }
       case 'confirmForegroundProcess':
         return {
           foregroundProcess: await this.options.host.confirmForegroundProcess(
@@ -123,6 +128,9 @@ export class DaemonRequestRouter {
         }
       case 'clearScrollback':
         this.options.host.clearScrollback(request.payload.sessionId)
+        return {}
+      case 'resetInputModes':
+        this.options.host.resetInputModes(request.payload.sessionId)
         return {}
       case 'listSessions':
         return { sessions: this.options.host.listSessions() }
@@ -198,7 +206,11 @@ export class DaemonRequestRouter {
       await this.options.host.kill(sessionId, { immediate })
     } catch (error) {
       if (!(canceledPendingSpawn && error instanceof SessionNotFoundError)) {
-        this.options.log.log('session-kill-failed', attribution)
+        this.options.log.log('session-kill-failed', {
+          ...attribution,
+          errorName: error instanceof Error ? error.name : typeof error,
+          error: error instanceof Error ? error.message : String(error)
+        })
         throw error
       }
     }

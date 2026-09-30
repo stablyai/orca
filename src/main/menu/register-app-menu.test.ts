@@ -72,6 +72,20 @@ function getSubmenu(
 }
 
 describe('registerAppMenu', () => {
+  it('shows the Settings hint when the user assigns a shortcut', () => {
+    registerAppMenu({
+      ...buildMenuOptions(),
+      getKeybindings: () => ({ 'app.settings': ['Mod+Comma'] })
+    })
+
+    const submenu = getSubmenu(getTemplate(), isMac ? 'Orca' : 'File')
+    expect(submenu).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: `Settings\t${isMac ? '⌘,' : 'Ctrl+,'}` })
+      ])
+    )
+  })
+
   it('toggles missing default-on appearance settings from visible to hidden', () => {
     expect(getNextDefaultOnAppearanceSettingValue(undefined)).toBe(false)
     expect(getNextDefaultOnAppearanceSettingValue(true)).toBe(false)
@@ -381,10 +395,8 @@ describe('registerAppMenu', () => {
 
     const fileLabels = getSubmenu(template, 'File').map((item) => item.label)
     expect(fileLabels).not.toContain(`Export as PDF...\t${isMac ? '⌘⇧E' : 'Ctrl+Shift+E'}`)
-    expect(fileLabels[0]).toBe(`Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`)
-    expect(fileLabels).toEqual(
-      expect.arrayContaining([`Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`, 'Exit'])
-    )
+    expect(fileLabels[0]).toBe('Settings')
+    expect(fileLabels).toEqual(expect.arrayContaining(['Settings', 'Exit']))
 
     const helpLabels = getSubmenu(template, 'Help').map((item) => item.label)
     expect(helpLabels).toEqual(
@@ -403,9 +415,7 @@ describe('registerAppMenu', () => {
     const template = getTemplate()
     const appSubmenu = getSubmenu(template, 'Orca')
     const appLabels = appSubmenu.map((item) => item.label)
-    expect(appLabels).toEqual(
-      expect.arrayContaining(['Check for Updates...', `Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`])
-    )
+    expect(appLabels).toEqual(expect.arrayContaining(['Check for Updates...', 'Settings']))
     // Why: on macOS File should NOT duplicate Settings/Exit — those live in
     // the system app menu. Without global Export, there is no File item left.
     expect(template.find((item) => item.label === 'File')).toBeUndefined()

@@ -20,6 +20,8 @@ import {
   type BrowserZoomState
 } from './browser-touch-geometry'
 import type { BrowserPointerModifier } from './MobileBrowserPointerModifiers'
+import type { BrowserDialogState } from './mobile-browser-stream-events'
+import type { BrowserPageCommandSend, BrowserPageParams } from './use-mobile-browser-request'
 import type { BrowserScreencastFrameMetadata } from '../transport/browser-screencast-protocol'
 
 import { useMobileBrowserCommands } from './use-mobile-browser-commands'
@@ -28,11 +30,9 @@ const SCROLL_START_SLOP = 22
 const LONG_PRESS_MS = 550
 const WHEEL_INTERVAL_MS = 70
 
-type BrowserPageParams = { worktree: string; page: string }
 type PanGesture = { x: number; y: number; offsetX: number; offsetY: number }
 type SendBrowserRequest = (
-  method: string,
-  params?: Record<string, unknown>,
+  send: BrowserPageCommandSend,
   options?: { showBusy?: boolean; suppressError?: boolean; timeoutMs?: number }
 ) => Promise<unknown | null>
 
@@ -51,7 +51,7 @@ type MobileBrowserInteractionArgs = {
   pinchRef: { current: PinchGesture | null }
   pointerModifiers: BrowserPointerModifier[]
   sendBrowserRequest: SendBrowserRequest
-  setDialog: Dispatch<SetStateAction<{ dialogType: string; message: string } | null>>
+  setDialog: Dispatch<SetStateAction<BrowserDialogState | null>>
   setError: Dispatch<SetStateAction<string | null>>
   setKeyboardValue: Dispatch<SetStateAction<string>>
   scrollingRef: { current: boolean }

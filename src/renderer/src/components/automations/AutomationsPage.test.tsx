@@ -24,13 +24,13 @@ import {
   api,
   DESKTOP_SELF_OWNER,
   installAutomationsPageHarness,
-  listedRow,
   mocks,
   renderPage,
   rows,
   scopedList,
   SELF_PRECONDITION
 } from './automations-page-test-harness'
+import { listedRow, listedExternalEntries } from './automations-page-listed-items'
 import {
   makeAutomation,
   makeExternalManager,
@@ -147,7 +147,7 @@ describe('AutomationsPage list rendering', () => {
     api.automations.updateExternalForOwner.mockResolvedValue(undefined)
 
     await renderPage()
-    const entry = mocks.listPanel?.filteredExternalAutomationEntries[0]
+    const entry = listedExternalEntries()[0]
     if (!entry) {
       throw new Error('no external entry to edit')
     }
@@ -177,7 +177,7 @@ describe('AutomationsPage list rendering', () => {
     api.automations.runExternalActionForOwner.mockResolvedValue(undefined)
 
     await renderPage()
-    const entry = mocks.listPanel?.filteredExternalAutomationEntries[0]
+    const entry = listedExternalEntries()[0]
     if (!entry) {
       throw new Error('no external entry to act on')
     }
@@ -217,7 +217,7 @@ describe('AutomationsPage list rendering', () => {
     api.automations.listExternalRunsForOwner.mockResolvedValue({ runs: [], total: 0 })
 
     const { container } = await renderPage()
-    const entry = mocks.listPanel?.filteredExternalAutomationEntries[0]
+    const entry = listedExternalEntries()[0]
     if (!entry) {
       throw new Error('no external entry to read runs for')
     }

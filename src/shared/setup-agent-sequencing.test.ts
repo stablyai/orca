@@ -15,10 +15,7 @@ import {
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
 } from './setup-agent-sequencing'
-import {
-  DEFAULT_SETUP_AGENT_STARTUP_POLICY,
-  shouldWaitForSetupBeforeAgentStartup
-} from './setup-agent-startup-policy'
+import { shouldWaitForSetupBeforeAgentStartup } from './setup-agent-startup-policy'
 
 const TEMP_DIRS: string[] = []
 const WINDOWS_PROCESS_TEST_TIMEOUT_MS = 30_000
@@ -31,7 +28,6 @@ afterEach(() => {
 
 describe('createSequencedSetupAgentCommands', () => {
   it('defaults agent startup to immediate unless the wait policy is explicit', () => {
-    expect(DEFAULT_SETUP_AGENT_STARTUP_POLICY).toBe('start-immediately')
     expect(getDefaultRepoHookSettings().setupAgentStartupPolicy).toBe('start-immediately')
     expect(shouldWaitForSetupBeforeAgentStartup(undefined)).toBe(false)
     expect(shouldWaitForSetupBeforeAgentStartup('start-immediately')).toBe(false)
@@ -120,6 +116,20 @@ describe('createSequencedSetupAgentCommands', () => {
     expect(decoded.indexOf(SETUP_COMPLETE_MESSAGE)).toBeLessThan(
       decoded.indexOf('Invoke-Expression $startup')
     )
+  })
+
+  it('doubles typographic single quotes in native Windows gate literals', () => {
+    const commands = createSequencedSetupAgentCommands({
+      runnerScriptPath: 'C:\\O\u2019Brien\\.git\\orca\\setup-runner.cmd',
+      platform: 'windows',
+      startupCommand: 'codex',
+      nonce: 'nonce-3'
+    })
+    const decoded = Buffer.from(
+      commands.setupCommand.split('-EncodedCommand ')[1] ?? '',
+      'base64'
+    ).toString('utf16le')
+    expect(decoded).toContain("$runner = 'C:\\O\u2019\u2019Brien\\.git\\orca\\setup-runner.cmd'")
   })
 
   it('leaves the failure and timeout messages as the only other outcomes', () => {
@@ -271,13 +281,13 @@ describe('createSequencedSetupAgentCommands', () => {
     const startupPowerShell = decodePowerShellScript(result.startupCommand)
 
     expect(result.setupCommand).toContain(
-      'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand'
+      'powershell.exe -NoProfile -NonInteractive -EncodedCommand'
     )
     expect(setupPowerShell).toContain("$runner = 'C:\\repo\\.git\\orca\\setup-runner.cmd'")
     expect(setupPowerShell).toContain('$nonce + ":" + $setupStatus')
     expect(result.startupCommand.match(/powershell\.exe/g)).toHaveLength(1)
     expect(result.startupCommand).toContain(
-      'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand'
+      'powershell.exe -NoProfile -NonInteractive -EncodedCommand'
     )
     expect(startupPowerShell).toContain('AddSeconds(3)')
     expect(startupPowerShell).toContain('Missing setup marker path.')
@@ -292,6 +302,31 @@ describe('createSequencedSetupAgentCommands', () => {
     expect(result.startupEnv).toEqual({
       [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: "codex --model gpt-5 'fix !PATH! & test'"
     })
+    // Why: `-EncodedCommand` is not execution-policy gated — only `-File` is — so the switch
+    // was a no-op, and base64 beside `-ExecutionPolicy Bypass` is a heavily EDR-flagged shape.
+    // The base64 itself must stay: these strings are typed into a terminal pane.
+    expect(result.setupCommand).not.toMatch(/-ExecutionPolicy/i)
+    expect(result.startupCommand).not.toMatch(/-ExecutionPolicy/i)
+    // Why: dropping the switch alone would break a user startup command that invokes a
+    // `.ps1` — a `.ps1` IS policy gated even though `-EncodedCommand` is not. The relief
+    // moves into the payload, where it is not part of the flagged command-line shape.
+    expect(startupPowerShell).toContain(
+      'Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -ErrorAction Stop'
+    )
+    // Why `-ErrorAction Stop` and a reporting catch: autoload can fail for reasons that are
+    // not about policy at all (a 5.1 install with duplicate extended type data fails every
+    // cmdlet in Microsoft.PowerShell.Security), and the old SilentlyContinue plus `catch {}`
+    // hid that -- the user saw only their own script being refused. The catch must report and
+    // must NOT rethrow, or a broken policy cmdlet would take the whole startup with it.
+    expect(startupPowerShell).not.toContain('catch {}')
+    expect(startupPowerShell).toMatch(/catch \{ \[Console\]::Error\.WriteLine\(/)
+    expect(startupPowerShell).toContain('$_.FullyQualifiedErrorId')
+    expect(startupPowerShell).not.toMatch(/catch \{[^}]*throw/)
+    // Why: the autoloaded module's progress record would otherwise corrupt this gate's stderr.
+    expect(startupPowerShell).toContain("$ProgressPreference = 'SilentlyContinue'")
+    expect(startupPowerShell).toContain('$ProgressPreference = $orcaProgress')
+    // The setup gate only ever launches a .cmd/.bat runner, so it needs no relief.
+    expect(setupPowerShell).not.toMatch(/Set-ExecutionPolicy/i)
   })
 
   it('launches a batch runner through the cmd launcher inside a Git Bash gate', () => {
@@ -307,7 +342,7 @@ describe('createSequencedSetupAgentCommands', () => {
     })
 
     expect(result.setupCommand).toContain(
-      'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand'
+      'powershell.exe -NoProfile -NonInteractive -EncodedCommand'
     )
     expect(result.setupCommand).not.toMatch(/bash\s+\S*setup-runner/)
     expect(decodePowerShellScript(result.setupCommand)).toContain(

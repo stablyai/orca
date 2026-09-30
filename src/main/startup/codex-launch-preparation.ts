@@ -1,10 +1,9 @@
 import { app } from 'electron'
 import type { CodexHomeLaunchContext } from '../ipc/pty'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
-import { markCodexProjectTrusted } from '../agent-trust-presets'
 import { codexHookService } from '../codex/hook-service'
 import { getDefaultWslDistro } from '../wsl'
-import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
+import { isAgentStatusHooksEnabledForAgent } from '../agent-hooks/managed-agent-hook-controls'
 import { ensureRealHomeCodexHookState } from '../codex/codex-real-home-hook-install'
 import { mainProcessState as state } from './main-process-state'
 
@@ -17,18 +16,6 @@ export async function prepareCodexRuntimeHomeForLaunch(
   if (!runtimeHome) {
     throw new Error('Codex runtime home service is not initialized')
   }
-  if (
-    target?.runtime !== 'wsl' &&
-    launchContext?.launchAgent === 'codex' &&
-    launchContext.workspacePath
-  ) {
-    try {
-      // Why: renderer quick-launch cannot await trust IPC before its PTY mounts; launch prep runs before every recognized Codex spawn.
-      await markCodexProjectTrusted(launchContext.workspacePath)
-    } catch (error) {
-      console.warn('[codex-project-trust] failed to pre-mark launch workspace:', error)
-    }
-  }
   const ensureRealHomeHooksIfSelected = async (): Promise<boolean> => {
     if (target?.runtime === 'wsl' || !runtimeHome.isHostSystemDefaultRealHomeSelected(launchEnv)) {
       return false
@@ -38,7 +25,7 @@ export async function prepareCodexRuntimeHomeForLaunch(
     // the pane spawns. An incapable grant flips the lane gate so the launch
     // below falls back to the managed home instead of a status-blind pane.
     await ensureRealHomeCodexHookState({
-      hooksEnabled: isAgentStatusHooksEnabled(state.store?.getSettings()),
+      hooksEnabled: isAgentStatusHooksEnabledForAgent(state.store?.getSettings(), 'codex'),
       userDataPath: app.getPath('userData')
     })
     return true
@@ -70,7 +57,7 @@ export async function prepareCodexRuntimeHomeForLaunch(
     target?.runtime === 'wsl'
       ? { runtime: 'wsl' as const, wslDistro: target.wslDistro?.trim() || getDefaultWslDistro() }
       : target
-  const hooksEnabled = isAgentStatusHooksEnabled(state.store?.getSettings())
+  const hooksEnabled = isAgentStatusHooksEnabledForAgent(state.store?.getSettings(), 'codex')
   try {
     // Why: honor the persisted off switch so post-startup launches can't reinstall removed hooks.
     const status = await codexHookService.prepareRuntimeHomeForLaunch(

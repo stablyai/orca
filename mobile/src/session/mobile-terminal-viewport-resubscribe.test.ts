@@ -239,6 +239,7 @@ describe('runTerminalViewportFitPass', () => {
     viewportMeasured?: boolean
     viewport?: { cols: number; rows: number } | null
     measured?: { cols: number; rows: number } | null
+    sentViewport?: { cols: number; rows: number } | null
     budget?: TerminalViewportResubscribeBudget
   }) {
     const budget = overrides.budget ?? new TerminalViewportResubscribeBudget()
@@ -251,7 +252,7 @@ describe('runTerminalViewportFitPass', () => {
     const scheduled: { fn: () => void; ms: number }[] = []
     const webView = {
       awaitReady: () => Promise.resolve(),
-      measureFitDimensions: () => Promise.resolve(overrides.measured ?? PHONE)
+      fitDimensions: () => (overrides.measured === undefined ? PHONE : overrides.measured)
     }
     const unsubscribeTerminal = vi.fn((handle: string) => {
       terminalUnsubsRef.current.delete(handle)
@@ -266,6 +267,7 @@ describe('runTerminalViewportFitPass', () => {
       seq: 1,
       hostCols: overrides.hostCols ?? null,
       hostRows: overrides.hostRows ?? null,
+      sentViewport: overrides.sentViewport ?? null,
       budget,
       diagnostics,
       viewportRef: { current: overrides.viewport ?? null },
@@ -273,7 +275,7 @@ describe('runTerminalViewportFitPass', () => {
       subscribeSeqRef: { current: new Map([[HANDLE, 1]]) },
       initializedHandlesRef: { current: new Set([HANDLE]) },
       terminalUnsubsRef,
-      terminalFrameHeightRef: { current: 0 },
+      terminalFrameRef: { current: { width: 390, height: 600 } },
       getTerminalRef: () => webView,
       unsubscribeTerminal,
       subscribeToTerminal,
@@ -311,6 +313,38 @@ describe('runTerminalViewportFitPass', () => {
     expect(h.args.viewportRef.current).toEqual(PHONE)
     expect(h.args.viewportMeasuredRef.current).toBe(true)
     expect(h.budget.attempts(HANDLE)).toBe(1)
+  })
+
+  it('re-measures a stale sent viewport after the flag was cleared, and resubscribes at the phone size', async () => {
+    const stale = { cols: 80, rows: 30 }
+    const h = makeHarness({
+      hostCols: stale.cols,
+      hostRows: stale.rows,
+      viewportMeasured: false,
+      viewport: stale,
+      sentViewport: stale,
+      measured: PHONE
+    })
+    runTerminalViewportFitPass(h.args)
+    await settle()
+    expect(h.unsubscribeTerminal).toHaveBeenCalledTimes(1)
+    expect(h.subscribeToTerminal).toHaveBeenCalledTimes(1)
+    expect(h.args.viewportRef.current).toEqual(PHONE)
+  })
+
+  it('re-measures locally and skips the round trip when the host matches the viewport the subscribe carried', async () => {
+    const h = makeHarness({
+      hostCols: PHONE.cols,
+      hostRows: PHONE.rows,
+      viewportMeasured: false,
+      viewport: PHONE,
+      sentViewport: PHONE
+    })
+    runTerminalViewportFitPass(h.args)
+    await settle()
+    expect(h.unsubscribeTerminal).not.toHaveBeenCalled()
+    expect(h.subscribeToTerminal).not.toHaveBeenCalled()
+    expect(h.budget.attempts(HANDLE)).toBe(0)
   })
 
   it('treats an equal fresh measure as convergence instead of resubscribing', async () => {

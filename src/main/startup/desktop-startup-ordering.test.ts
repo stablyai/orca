@@ -66,7 +66,12 @@ describe('startup ordering', () => {
     )
     expect(desktopStartup).toContain('recordRuntimeRpcStartFailure(')
     // Why: `void`, not `await` — awaiting the dialog would park the rest of startup behind a modal.
-    expect(desktopStartup).toMatch(/void showRuntimeRpcStartupFailureDialog\(\s*win,/)
+    // It chains off the i18n barrier (published before this phase starts) so the translated strings
+    // it reads are loaded, which is a wait on i18n only, never on the dialog itself.
+    expect(desktopStartup).toMatch(
+      /void state\.mainProcessI18nReady\.then\(\(\) =>\s*showRuntimeRpcStartupFailureDialog\(\s*win,/
+    )
+    expect(desktopStartup).not.toMatch(/await[^\n]*showRuntimeRpcStartupFailureDialog\(/)
     // Why (#11025): a bare console.error here is exactly what left the CLI dead but the app healthy.
     expect(desktopStartup).not.toContain(
       "console.error('[runtime] Failed to start local RPC transport:'"
@@ -97,6 +102,30 @@ describe('startup ordering', () => {
     expect(foundationSource.slice(profileIndex, initIndex)).not.toMatch(/\bawait\b/)
     // Why the count: a second call site would leave the ordering claim above ambiguous.
     expect(foundationSource.split('initializeBrowserClientHostId(')).toHaveLength(2)
+  })
+
+  it('fails closed with offline recovery guidance when profile state is unreadable', () => {
+    const entrySource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+
+    expect(entrySource).toContain('formatProfileStateStartupFailure')
+    expect(entrySource).toContain('formatProfileStateStartupFailure(error) ??')
+    expect(entrySource).toContain('presentProfileStateStartupRecoveryDialog')
+    expect(entrySource).toContain('!state.isServeMode && !isBackgroundLaunch()')
+    expect(entrySource).toContain(
+      "console.warn('[profile-state] Recovery dialog failed; exiting safely:'"
+    )
+    expect(entrySource).toContain('app.exit(1)')
+  })
+
+  it('initializes telemetry before publishing profile-state authority selection', () => {
+    const source = readFileSync(
+      join(process.cwd(), 'src/main/startup/main-process-observers.ts'),
+      'utf8'
+    )
+    const telemetryInit = source.indexOf('initTelemetry(store)')
+    const authoritySelection = source.indexOf("track('profile_state_authority_selected'")
+    expect(telemetryInit).toBeGreaterThanOrEqual(0)
+    expect(authoritySelection).toBeGreaterThan(telemetryInit)
   })
 
   it('requires daemon authority before restored-subagent liveness runs', () => {

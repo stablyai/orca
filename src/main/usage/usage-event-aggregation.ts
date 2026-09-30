@@ -2,6 +2,11 @@
  * Folds attributed usage events into per-session and per-day rollups. Shared by every
  * event-based usage provider so a token-accounting fix lands in all of them at once.
  */
+import {
+  indexUsageSessionBreakdowns,
+  usageLocationModelKey,
+  type UsageSessionBreakdownIndex
+} from './usage-session-breakdown-index'
 import { mergeUsageDailyAggregates, mergeUsageSessions } from './usage-rollup-merge'
 import {
   usageDailyAggregateKey,
@@ -71,9 +76,10 @@ export function createUsageEventAggregation<
   function foldLocation(
     target: UsageLocationBreakdown<TMetric>[],
     event: TEvent,
-    eventMetric: TMetric
+    eventMetric: TMetric,
+    index: UsageSessionBreakdownIndex<TMetric>['locations']
   ): void {
-    const existing = target.find((entry) => entry.locationKey === event.projectKey) ?? null
+    const existing = index.get(event.projectKey)
     if (existing) {
       existing.eventCount++
       existing.inputTokens += event.inputTokens
@@ -85,7 +91,7 @@ export function createUsageEventAggregation<
       return
     }
 
-    target.push({
+    const entry: UsageLocationBreakdown<TMetric> = {
       locationKey: event.projectKey,
       projectLabel: event.projectLabel,
       repoId: event.repoId,
@@ -97,16 +103,19 @@ export function createUsageEventAggregation<
       reasoningOutputTokens: event.reasoningOutputTokens,
       totalTokens: event.totalTokens,
       ...eventMetric
-    })
+    }
+    target.push(entry)
+    index.set(event.projectKey, entry)
   }
 
   function foldModel(
     target: UsageModelBreakdown<TMetric>[],
     event: TEvent,
-    eventMetric: TMetric
+    eventMetric: TMetric,
+    index: UsageSessionBreakdownIndex<TMetric>['models']
   ): void {
     const key = event.model ?? 'unknown'
-    const existing = target.find((entry) => entry.modelKey === key) ?? null
+    const existing = index.get(key)
     if (existing) {
       existing.eventCount++
       existing.inputTokens += event.inputTokens
@@ -118,7 +127,7 @@ export function createUsageEventAggregation<
       return
     }
 
-    target.push({
+    const entry: UsageModelBreakdown<TMetric> = {
       modelKey: key,
       modelLabel: event.model ?? 'Unknown model',
       eventCount: 1,
@@ -128,19 +137,19 @@ export function createUsageEventAggregation<
       reasoningOutputTokens: event.reasoningOutputTokens,
       totalTokens: event.totalTokens,
       ...eventMetric
-    })
+    }
+    target.push(entry)
+    index.set(key, entry)
   }
 
   function foldLocationModel(
     target: UsageLocationModelBreakdown<TMetric>[],
     event: TEvent,
-    eventMetric: TMetric
+    eventMetric: TMetric,
+    index: UsageSessionBreakdownIndex<TMetric>['locationModels']
   ): void {
     const modelKey = event.model ?? 'unknown'
-    const existing =
-      target.find(
-        (entry) => entry.locationKey === event.projectKey && entry.modelKey === modelKey
-      ) ?? null
+    const existing = index.get(usageLocationModelKey(event.projectKey, modelKey))
     if (existing) {
       existing.eventCount++
       existing.inputTokens += event.inputTokens
@@ -152,7 +161,7 @@ export function createUsageEventAggregation<
       return
     }
 
-    target.push({
+    const entry: UsageLocationModelBreakdown<TMetric> = {
       locationKey: event.projectKey,
       modelKey,
       modelLabel: event.model ?? 'Unknown model',
@@ -165,7 +174,9 @@ export function createUsageEventAggregation<
       reasoningOutputTokens: event.reasoningOutputTokens,
       totalTokens: event.totalTokens,
       ...eventMetric
-    })
+    }
+    target.push(entry)
+    index.set(usageLocationModelKey(event.projectKey, modelKey), entry)
   }
 
   function finalizeSessions(
@@ -209,6 +220,7 @@ export function createUsageEventAggregation<
   } {
     const sessionsById = new Map<string, UsageSession<TMetric>>()
     const dailyByKey = new Map<string, UsageDailyAggregate<TMetric>>()
+    const breakdownsBySession = new Map<string, UsageSessionBreakdownIndex<TMetric>>()
 
     for (const event of events) {
       const eventMetric = metric.fromEvent(event)
@@ -229,9 +241,19 @@ export function createUsageEventAggregation<
       session.totalReasoningOutputTokens += event.reasoningOutputTokens
       session.totalTokens += event.totalTokens
       metric.fold(session, eventMetric)
-      foldLocation(session.locationBreakdown, event, eventMetric)
-      foldModel(session.modelBreakdown, event, eventMetric)
-      foldLocationModel(session.locationModelBreakdown, event, eventMetric)
+      let breakdowns = breakdownsBySession.get(event.sessionId)
+      if (!breakdowns) {
+        breakdowns = indexUsageSessionBreakdowns(session)
+        breakdownsBySession.set(event.sessionId, breakdowns)
+      }
+      foldLocation(session.locationBreakdown, event, eventMetric, breakdowns.locations)
+      foldModel(session.modelBreakdown, event, eventMetric, breakdowns.models)
+      foldLocationModel(
+        session.locationModelBreakdown,
+        event,
+        eventMetric,
+        breakdowns.locationModels
+      )
 
       const dailyKey = usageDailyAggregateKey(event)
       const daily = dailyByKey.get(dailyKey) ?? createEmptyDailyAggregate(event)

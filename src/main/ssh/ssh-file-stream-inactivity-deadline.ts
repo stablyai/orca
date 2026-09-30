@@ -24,8 +24,11 @@ export function createSshFileStreamInactivityDeadline(
     }
   }
   const arm = (): void => {
-    clearTimer()
     if (suspended) {
+      return
+    }
+    if (timer) {
+      timer.refresh()
       return
     }
     timer = setTimeout(onTimeout, SSH_FILE_STREAM_INACTIVITY_TIMEOUT_MS)

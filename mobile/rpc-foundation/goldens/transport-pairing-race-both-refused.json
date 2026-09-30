@@ -1,0 +1,127 @@
+{
+  "operation": "transport.pairing-race",
+  "family": "transport.pairing-race",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "1cae30b028e6b967575d65f18e8a0e868583e993",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
+  "adapterSha256": "34b382b13fe75e8ef4002325287c95b3c4db62eeaaf3762af7fbaf6f836c2fa1",
+  "scenarioSha256": "4f0ddbea3c08ea3e90f6e707215a4831f06aed408065b45d0771028d256d6b12",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "1329c4d27ca9": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "direct and relay pairing paths both failed",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "d00f14d72061": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "unauthorized",
+            "message": "direct refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "d25369399414": {
+      "outcome": "failed: direct and relay pairing paths both failed"
+    },
+    "e7b5d7d57a61": {
+      "name": "status.get#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "ef9375cc97a1": {
+      "name": "status.get#2",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "unauthorized",
+            "message": "relay refused"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "f1834177e593": {
+      "name": "status.get#2",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    }
+  },
+  "recording": {
+    "scenario": "transport-pairing-race-both-refused",
+    "checkpoints": [
+      {
+        "id": "both-paths-failed",
+        "observation": {
+          "sender": ["d00f14d72061", "ef9375cc97a1"],
+          "payloads": ["e7b5d7d57a61", "f1834177e593"],
+          "settlements": {
+            "race": "1329c4d27ca9"
+          },
+          "state": "d25369399414",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

@@ -536,7 +536,8 @@ describe('SshChannelMultiplexer', () => {
       mux.notifyWithSettlement('pty.data', { id: 'pty-1', data: 'x' }, settled)
 
       expect(settled).toHaveBeenCalledWith({
-        ok: false,
+        outcome: 'refused',
+        reason: 'transport_disposed',
         error: expect.objectContaining({
           message: 'SSH connection lost, reconnecting...',
           code: 'CONNECTION_LOST'

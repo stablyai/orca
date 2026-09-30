@@ -136,35 +136,6 @@ describe('createLinearSlice invalidation', () => {
     ).toMatchObject({ items: [{ id: 'LIST' }] })
   })
 
-  it('caches teams by workspace and dedupes fresh reads', async () => {
-    const store = createTestStore()
-    linearListTeams.mockResolvedValueOnce([team('team-1')])
-
-    await expect(store.getState().listLinearTeams('workspace-1')).resolves.toMatchObject([
-      { id: 'team-1' }
-    ])
-    await expect(store.getState().listLinearTeams('workspace-1')).resolves.toMatchObject([
-      { id: 'team-1' }
-    ])
-
-    expect(linearListTeams).toHaveBeenCalledTimes(1)
-    expect(store.getState().getCachedLinearTeams('workspace-1')).toMatchObject([{ id: 'team-1' }])
-  })
-
-  it('patches issue-cache entries keyed by workspace-qualified ids', () => {
-    const store = createTestStore()
-    store.setState({
-      linearIssueCache: {
-        'workspace-1::issue-id': { data: issue('issue-id'), fetchedAt: Date.now() }
-      }
-    })
-
-    store.getState().patchLinearIssue('issue-id', { title: 'Updated' })
-
-    expect(store.getState().linearIssueCache['workspace-1::issue-id'].data?.title).toBe('Updated')
-    expect(store.getState().linearIssueCache['workspace-1::issue-id'].fetchedAt).toBe(0)
-  })
-
   it('refreshing a linked Linear issue invalidates stale issue collection caches', async () => {
     const store = createTestStore()
     linearGetIssue.mockResolvedValueOnce(issue('issue-id'))

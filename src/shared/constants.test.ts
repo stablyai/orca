@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest'
+import { DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY, getDefaultSettings } from './constants'
+import { getDefaultNotificationSettings } from './notification-settings-defaults'
 import {
-  DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY,
-  getDefaultNotificationSettings,
   getDefaultPrimarySelectionMiddleClickPaste,
-  getDefaultTerminalRightClickToPaste,
-  getDefaultSettings
-} from './constants'
+  getDefaultTerminalRightClickToPaste
+} from './terminal-platform-defaults'
 
 describe('getDefaultSettings', () => {
   it('uses platform-consistent separators for the default workspace directory', () => {
@@ -137,6 +136,7 @@ describe('getDefaultSettings', () => {
       codex: '--dangerously-bypass-approvals-and-sandbox',
       gemini: '--yolo',
       cursor: '--yolo',
+      muse: '--yolo',
       copilot: '--yolo',
       grok: '--permission-mode bypassPermissions'
     })
@@ -180,5 +180,10 @@ describe('MiniMax defaults', () => {
     // MiniMax usage endpoint exposes by default.
     expect(settings.minimaxGroupId).toBe('')
     expect(settings.minimaxUsageModels).toBe('general')
+  })
+
+  it('defaults the MiniMax endpoint to overseas', () => {
+    const settings = getDefaultSettings('/tmp')
+    expect(settings.minimaxEndpoint).toBe('overseas')
   })
 })

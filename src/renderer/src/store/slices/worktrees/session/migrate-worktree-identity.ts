@@ -14,7 +14,10 @@ export function createMigrateWorktreeIdentity(
     }
     // Why: invalidate pre-rename toast actions before publishing the new path, carrying the dismissal forward.
     migrateHugeRepoWarningDismissal(oldWorktreeId, newWorktreeId)
-    set((s) => buildWorktreeRenameState(s, oldWorktreeId, newWorktreeId))
+    set((s) => {
+      const patch = buildWorktreeRenameState(s, oldWorktreeId, newWorktreeId)
+      return Object.keys(patch).length > 0 ? patch : s
+    })
     migrateHostedReviewLinkMutationGeneration(oldWorktreeId, newWorktreeId)
   }
 }

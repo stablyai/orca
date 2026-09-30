@@ -194,4 +194,13 @@ describe('formatMessagePointer', () => {
   it('pluralizes a batched pointer', () => {
     expect(formatMessagePointer(3)).toContain('3 orchestration messages')
   })
+
+  it('uses the terminal-resolved CLI command', () => {
+    expect(formatMessagePointer(1, 'run:run_wsl', 'orca-ide')).toContain(
+      '`orca-ide orchestration check --run run_wsl`'
+    )
+    expect(formatMessagePointer(1, 'run:run_dev', 'orca-dev')).toContain(
+      '`orca-dev orchestration check --run run_dev`'
+    )
+  })
 })

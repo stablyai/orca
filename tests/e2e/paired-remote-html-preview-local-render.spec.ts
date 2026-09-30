@@ -582,7 +582,10 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
       return { before, after: document.activeElement?.tagName ?? null }
     })
     console.log(`[preview-e2e] before-focus ${JSON.stringify(guestFocus)}`)
-    const confirmationTitle = page.getByRole('heading', { name: 'Open link to example.com?' })
+    const confirmation = page.getByRole('dialog', { name: 'Open link to example.com?' })
+    const confirmationTitle = confirmation.getByRole('heading', {
+      name: 'Open link to example.com?'
+    })
     await expect
       .poll(
         async () => {
@@ -601,8 +604,8 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
         }
       )
       .toBe(true)
-    await expect(page.getByText(EXTERNAL_LINK_URL, { exact: true })).toBeVisible()
-    await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await expect(confirmation.getByText(EXTERNAL_LINK_URL, { exact: true })).toBeVisible()
+    await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click()
     await expect(confirmationTitle).not.toBeVisible()
     const afterCancel = await readPairedHtmlPreviewInventory(page, inventoryArgs)
     expect({
@@ -620,7 +623,7 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
       }
       await page.mouse.click(point.x, point.y)
       await expect(confirmationTitle).toBeVisible({ timeout: 30_000 })
-      await page.getByRole('button', { name: 'Open link', exact: true }).click()
+      await confirmation.getByRole('button', { name: 'Open link', exact: true }).click()
       await expect
         .poll(
           async () => {

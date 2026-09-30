@@ -1,9 +1,11 @@
+import { stripCodexDaemonOverride } from './codex-daemon-socket-path-guard'
 import {
   createTomlLineScanState,
   getTomlTableHeader,
   isTomlStructuralLine,
   updateTomlLineScanState
 } from './config-toml-line-scan'
+import { parseTomlTableHeaderPath } from './config-toml-key-path'
 import {
   normalizeCodexProjectPathForLookup,
   normalizeCodexProjectPathForRevocationLookup,
@@ -90,6 +92,17 @@ export function isRuntimeProjectTomlSection(header: string): boolean {
   return parseCodexProjectHeaderPath(header) !== null
 }
 
+const CODEX_MCP_SERVER_TABLE_ROOT = 'mcp_servers'
+
+/** Returns the decoded MCP server name for an owner table or nested descendant. */
+export function getMcpServerTomlSectionName(header: string): string | null {
+  const table = parseTomlTableHeaderPath(header)
+  if (!table || table.isArray || table.segments[0] !== CODEX_MCP_SERVER_TABLE_ROOT) {
+    return null
+  }
+  return table.segments[1] ?? null
+}
+
 export function getTomlSectionHeaderKey(header: string): string {
   const projectPath = parseCodexProjectHeaderPath(header)
   return projectPath === null
@@ -160,5 +173,6 @@ export function extractOrdinaryCodexSettings(config: string): string {
       .filter((section) => isRuntimeProjectTomlSection(section.header))
       .map((section) => getTomlSectionHeaderKey(section.header))
   )
-  return stripRuntimeOwnedTomlSections(config, projectHeaders).trimEnd()
+  // Why: the daemon override exists only because Orca's home path is long; ~/.codex is not.
+  return stripCodexDaemonOverride(stripRuntimeOwnedTomlSections(config, projectHeaders)).trimEnd()
 }

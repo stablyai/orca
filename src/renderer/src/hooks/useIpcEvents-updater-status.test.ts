@@ -281,10 +281,11 @@ describe('useIpcEvents updater integration', () => {
     }))
     vi.doMock('@/lib/zoom-events', () => ({ dispatchZoomLevelChanged: vi.fn() }))
 
-    const makeEvents = (target: Record<string, unknown> = {}): Record<string, unknown> =>
+    const makeEvents = (
+      target: Record<string | symbol, unknown> = {}
+    ): Record<string | symbol, unknown> =>
       new Proxy(target, {
-        get: (namespace, prop) =>
-          prop in namespace ? Reflect.get(namespace, prop) : () => () => {}
+        get: (namespace, prop) => (prop in namespace ? namespace[prop] : () => () => {})
       })
 
     vi.stubGlobal('window', {

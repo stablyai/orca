@@ -67,7 +67,6 @@ describe('DaemonClient', () => {
     closeOnHello?: boolean
     onControlMessage?: (msg: unknown) => string | null
     onHello?: (msg: HelloMessage) => void
-    onStreamHello?: (msg: HelloMessage) => void
     rejectVersion?: boolean
     suppressHelloResponse?: boolean
     omitHelloIdentity?: boolean
@@ -127,9 +126,6 @@ describe('DaemonClient', () => {
                     : {})
                 })
               )
-              if (hello.role === 'stream') {
-                opts?.onStreamHello?.(hello)
-              }
             } else if (opts?.onControlMessage) {
               const response = opts.onControlMessage(msg)
               if (response) {
@@ -145,20 +141,6 @@ describe('DaemonClient', () => {
   }
 
   describe('connect', () => {
-    it('establishes connection with hello handshake', async () => {
-      const hellos: HelloMessage[] = []
-      await startMockDaemon({
-        onStreamHello: (msg) => hellos.push(msg)
-      })
-
-      client = new DaemonClient({ socketPath, tokenPath })
-      await client.ensureConnected()
-
-      expect(client.isConnected()).toBe(true)
-      // Both control and stream sockets should have sent hello
-      await waitFor(() => hellos.length > 0)
-    })
-
     it('captures one matching endpoint identity from both authenticated sockets', async () => {
       const identity = {
         pid: 123,
@@ -514,50 +496,6 @@ describe('DaemonClient', () => {
   })
 
   describe('events', () => {
-    it('receives stream events', async () => {
-      let streamSocket: Socket | null = null
-      await startMockDaemon({
-        onStreamHello: () => {
-          // We need to capture the stream socket to send events on it
-        }
-      })
-
-      // Capture stream socket from server
-      const origListener = server.listeners('connection')[0] as (s: Socket) => void
-      server.removeAllListeners('connection')
-      let socketCount = 0
-      server.on('connection', (socket) => {
-        socketCount++
-        if (socketCount === 2) {
-          streamSocket = socket
-        }
-        origListener(socket)
-      })
-
-      const events: DaemonEvent[] = []
-      client = new DaemonClient({ socketPath, tokenPath })
-      client.onEvent((event) => events.push(event as DaemonEvent))
-      await client.ensureConnected()
-
-      await waitFor(() => streamSocket !== null)
-
-      // Send a data event on the stream socket
-      const event: DaemonEvent = {
-        type: 'event',
-        event: 'data',
-        sessionId: 'session-1',
-        payload: { data: 'hello from daemon' }
-      }
-      streamSocket!.write(encodeNdjson(event))
-
-      await waitFor(() => events.length > 0)
-      expect(events[0]).toMatchObject({
-        type: 'event',
-        event: 'data',
-        sessionId: 'session-1'
-      })
-    })
-
     it('preserves UTF-8 stream events split inside multibyte characters', async () => {
       let streamSocket: Socket | null = null
       await startMockDaemon()
@@ -704,7 +642,7 @@ describe('DaemonClient', () => {
 
       await expect(
         client.notifyWithSettlement('write', { data: 'x'.repeat(NDJSON_MAX_LINE_BYTES) })
-      ).resolves.toBe(false)
+      ).resolves.toEqual({ outcome: 'refused', reason: 'encode_failed' })
       expect(writeSpy).not.toHaveBeenCalled()
       expect(client.isConnected()).toBe(true)
     })
@@ -737,7 +675,11 @@ describe('DaemonClient', () => {
 
       await expect(
         client.notifyWithSettlement('write', { sessionId: 'session-1', data: 'hello' })
-      ).resolves.toBe(false)
+      ).resolves.toEqual({
+        outcome: 'unverifiable',
+        reason: 'transport_settlement_lost',
+        bytesHandedToTransport: true
+      })
       expect(client.isConnected()).toBe(false)
     })
 
@@ -754,9 +696,14 @@ describe('DaemonClient', () => {
         { sessionId: 'session-1', data: 'hello' },
         5000
       )
+      const settled = expect(pending).resolves.toEqual({
+        outcome: 'unverifiable',
+        reason: 'settlement_timeout',
+        bytesHandedToTransport: true
+      })
       await vi.advanceTimersByTimeAsync(5000)
 
-      await expect(pending).resolves.toBe(false)
+      await settled
       expect(client.isConnected()).toBe(false)
     })
   })

@@ -1,7 +1,8 @@
 import { getSharedManagedScriptPath } from '../agent-hooks/installer-utils'
 import {
   buildPosixHookPayloadCapture,
-  buildPosixHookSpoolLines
+  buildPosixHookSpoolLines,
+  WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD
 } from '../agent-hooks/hook-stdin-contract'
 
 export function getManagedScriptFileName(): string {
@@ -30,7 +31,7 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       // Why (#11549 class): missing Orca context means a user-wide hook fired outside an
       // Orca pane. ReadToEnd blocks forever if that caller abandons the pipe, so the guard
       // must run before the hook owns stdin; the payload would be discarded anyway.
-      'if (-not $env:ORCA_AGENT_HOOK_PORT -or -not $env:ORCA_AGENT_HOOK_TOKEN -or -not $env:ORCA_PANE_KEY) { exit 0 }',
+      WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD,
       '$inputData = [Console]::In.ReadToEnd()',
       'if ([string]::IsNullOrWhiteSpace($inputData)) { exit 0 }',
       'try {',
