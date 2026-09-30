@@ -1,0 +1,11 @@
+{
+  "source_scenario": "r7-w6b-run2",
+  "claude_version": "2.1.285 (Claude Code)",
+  "platform": "darwin",
+  "cols": 120,
+  "rows": 40,
+  "recorded_at": "2026-09-30",
+  "clock": "t is seconds since the first hook; hook records keep only the ps rows of the rig's sleep processes, taken inside the hook; a transcript line's t is the rig's poll time, so take write order from the line's own timestamp",
+  "note": "Claude launches a two-agent background workflow (agent 1 runs `sleep 120.07`) and the turn ends (its Stop lists it). The driver opens /tasks and pauses it with `p` while agent 1 runs: the pause kills the agent with no SubagentStop, and the panel reads \"paused\" with no resume key. No hook, no main-transcript row for 6.6 min. The next typed turn's Stop lists nothing; Claude's /exit dialog still lists the workflow as running.",
+  "scrub": "Username was already a placeholder in the capture run. Every UUID (session, prompt, message, turn and row ids, and the ids inside transcript_path, agent_transcript_path, transcriptDir, scriptPath, <output-file> and <diagnostics>) is replaced by a placeholder distinct to this fixture (bc); each workflow agent id by a same-shape placeholder abc…; msg_ ids by a same-length placeholder. Claude task ids, tool_use ids and wf_ run ids are verbatim. Transcript: only `queue-operation` lines and the interrupt notice row are kept (the rest, including ~56 KB prompt_snapshot attachments carrying the system prompt, are dropped)."
+}

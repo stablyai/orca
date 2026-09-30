@@ -39,10 +39,10 @@ const CLAUDE_SESSION_OWNER_EVENTS: ReadonlySet<string> = new Set([
  *  emits SessionEnd on /clear, but Orca previously did not install it and older binaries emit none.
  *
  *  Voids only what the replaced session provably owned. Deliberately NOT voided:
- *  - `claudeNonAgentWorkByPaneKey`: a background shell is an OS process that survives /clear
- *    (capture r3-clear-run1), and Claude writes its end into the new session's transcript. Claude's
- *    own end record, a fresh inventory, a new process's SessionStart or a certified process death
- *    retires it.
+ *  - `claudeNonAgentWorkByPaneKey`: a background shell or workflow survives /clear (captures
+ *    r3-clear-run1, r6-w4-run1), and Claude writes its end into the new session's transcript.
+ *    Claude's own end record, a fresh inventory, a new process's SessionStart or a certified
+ *    process death retires it.
  *  - `confirmedTeammate` roster rows: persistent in-process teammates a lead replacement can't end.
  *  - `claudeLeadStateByPaneKey`: the caller's own fold overwrites it anyway. */
 export function voidClaimsOfReplacedClaudeSession(

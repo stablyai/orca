@@ -161,7 +161,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       restatesRecords === true ? 'restates-records' : transcriptFact === true ? 'fact' : undefined
     )
     if (latch.hold) {
-      // Why: the latch holds the row, not the evidence; a shell launched by a hook in flight at the
+      // Why: the latch holds the row, not the evidence; a task launched by a hook in flight at the
       // Ctrl+C still runs, and the store accepted the event for this pane.
       onAccepted?.()
       if (

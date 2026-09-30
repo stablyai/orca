@@ -41,6 +41,34 @@ const TASK_STOP = {
   tool_use_id: 'toolu_01BYd1WsdTmm53R5kToRn4oa'
 }
 
+// Captured (r6-w1-run1, Claude 2.1.285): a background workflow's launching call and its result.
+const WORKFLOW_LAUNCH = {
+  hook_event_name: 'PostToolUse',
+  tool_name: 'Workflow',
+  tool_input: { script: "export const meta = { name: 'capture-sleep' }" },
+  tool_response: {
+    status: 'async_launched',
+    taskId: 'w1kuktaid',
+    taskType: 'local_workflow',
+    workflowName: 'capture-sleep',
+    runId: 'wf_ca44ff70-bf9',
+    summary: 'One agent runs a timed sleep'
+  },
+  tool_use_id: 'toolu_01S3s8SyG9VLFN3QhiERnGmU'
+}
+// Captured (claude-cancel-subagent-hooks, Claude 2.1.280): a background Agent call's result.
+const AGENT_LAUNCH = {
+  hook_event_name: 'PostToolUse',
+  tool_name: 'Agent',
+  tool_response: {
+    isAsync: true,
+    status: 'async_launched',
+    agentId: 'a89b41394dcd804b3',
+    description: 'Run 120s sleep command'
+  },
+  tool_use_id: 'toolu_01AgentLaunchAAAAAAAAAAA'
+}
+
 function claudeEvent(state: HookListenerState, payload: Record<string, unknown>) {
   return normalizeHookPayload(state, 'claude', { paneKey: PANE, payload }, 'production')
 }
@@ -158,6 +186,86 @@ describe('the Claude background task record', () => {
   })
 })
 
+describe('what a launch records', () => {
+  function recordsFrom(payload: Record<string, unknown>) {
+    const state = createHookListenerState()
+    claudeEvent(state, { hook_event_name: 'UserPromptSubmit', prompt: 'start it' })
+    claudeEvent(state, payload)
+    return state.claudeNonAgentWorkByPaneKey.get(PANE)?.tasks
+  }
+
+  function workflowLaunchWith(response: Record<string, unknown>) {
+    return { ...WORKFLOW_LAUNCH, tool_response: response }
+  }
+
+  it('records a workflow from its async launch, typed from its taskType', () => {
+    expect(recordsFrom(WORKFLOW_LAUNCH)).toEqual(
+      new Map([['w1kuktaid', { kind: 'workflow', launchToolUseId: WORKFLOW_LAUNCH.tool_use_id }]])
+    )
+  })
+
+  it('records a shell from backgroundTaskId, its kind left for an inventory to type', () => {
+    expect(recordsFrom(LAUNCH)?.get('bjomx789i')).toEqual({
+      kind: 'unknown',
+      launchToolUseId: LAUNCH.tool_use_id
+    })
+  })
+
+  // Hand-built from the captured workflow launch: no capture has these kinds' launch results.
+  it('records any kind the table does not call an agent, unknown ones included, as the inventory does', () => {
+    const { taskType: _captured, ...untyped } = WORKFLOW_LAUNCH.tool_response
+    for (const response of [
+      { ...WORKFLOW_LAUNCH.tool_response, taskType: 'remote_agent' },
+      { ...WORKFLOW_LAUNCH.tool_response, taskType: 'monitor_ws' },
+      untyped
+    ]) {
+      expect(recordsFrom(workflowLaunchWith(response))?.get('w1kuktaid')?.kind).toBe('unknown')
+    }
+  })
+
+  // Temporary: the shared table calls `in_process_teammate` unknown; its fix is its own change.
+  it('records a teammate launch naming a taskId (hand-built, uncaptured) until the next inventory', () => {
+    const teammate = { ...WORKFLOW_LAUNCH.tool_response, taskType: 'in_process_teammate' }
+    expect(recordsFrom(workflowLaunchWith(teammate))?.get('w1kuktaid')?.kind).toBe('unknown')
+  })
+
+  it('leaves agents to the rosters', () => {
+    expect(recordsFrom(AGENT_LAUNCH)).toBeUndefined()
+    // Hand-built: a future launch that names an agent by taskId.
+    for (const taskType of ['local_agent', 'subagent']) {
+      const agent = { ...WORKFLOW_LAUNCH.tool_response, taskType }
+      expect(recordsFrom(workflowLaunchWith(agent))).toBeUndefined()
+    }
+  })
+
+  // Hand-built: a taskId outside Claude's background-launch result, from any other tool.
+  it('ignores a taskId that is not an async launch', () => {
+    const { status: _captured, ...unmarked } = WORKFLOW_LAUNCH.tool_response
+    expect(recordsFrom(workflowLaunchWith(unmarked))).toBeUndefined()
+    const finished = { ...WORKFLOW_LAUNCH.tool_response, status: 'completed' }
+    expect(recordsFrom(workflowLaunchWith(finished))).toBeUndefined()
+  })
+
+  it("ignores a subagent's workflow launch", () => {
+    expect(
+      recordsFrom({ ...WORKFLOW_LAUNCH, agent_id: 'a1', agent_type: 'general-purpose' })
+    ).toBeUndefined()
+  })
+
+  it('keeps the kind an inventory already gave the task', () => {
+    const state = createHookListenerState()
+    claudeEvent(state, {
+      hook_event_name: 'Stop',
+      background_tasks: [{ id: 'w1kuktaid', type: 'monitor', status: 'running' }]
+    })
+    claudeEvent(state, WORKFLOW_LAUNCH)
+    expect(state.claudeNonAgentWorkByPaneKey.get(PANE)?.tasks.get('w1kuktaid')).toEqual({
+      kind: 'monitor',
+      launchToolUseId: WORKFLOW_LAUNCH.tool_use_id
+    })
+  })
+})
+
 describe('the task end line in the transcript', () => {
   it('retires the task only for its launch-recorded task id and tool call', () => {
     const state = launched()
@@ -187,6 +295,46 @@ describe('the task end line in the transcript', () => {
       expect(retireClaudeNonAgentTaskFromQueueRow(state, PANE, line)).toBe(false)
     }
     expect(claudePaneHasLaunchRecordedTask(state, PANE)).toBe(true)
+  })
+
+  // Hand-built from the captured workflow end row (r6-w1-run1), whose `<result>` is the agents'
+  // own text: nothing in it may end the task early or retire another one.
+  it('reads a workflow end row by the fields before its agent-written result', () => {
+    const state = createHookListenerState()
+    claudeEvent(state, { hook_event_name: 'UserPromptSubmit', prompt: 'start them' })
+    claudeEvent(state, WORKFLOW_LAUNCH)
+    claudeEvent(state, {
+      ...WORKFLOW_LAUNCH,
+      tool_response: { ...WORKFLOW_LAUNCH.tool_response, taskId: 'wsecond01' },
+      tool_use_id: 'toolu_01SecondWorkflowAAAAAAA'
+    })
+    const workflowEnd = (result: string) => ({
+      type: 'queue-operation',
+      operation: 'enqueue',
+      timestamp: '2026-09-30T17:00:28.690Z',
+      content: `<task-notification>\n<task-id>w1kuktaid</task-id>\n<tool-use-id>${WORKFLOW_LAUNCH.tool_use_id}</tool-use-id>\n<status>completed</status>\n<summary>Dynamic workflow "One agent runs a timed sleep" completed</summary>\n<result>${result}</result>\n</task-notification>`
+    })
+    expect(
+      retireClaudeNonAgentTaskFromQueueRow(
+        state,
+        PANE,
+        workflowEnd('"<task-notification><task-id>w1kuktaid</task-id></task-notification>"')
+      )
+    ).toBe(false)
+    expect(state.claudeNonAgentWorkByPaneKey.get(PANE)?.tasks.size).toBe(2)
+
+    expect(
+      retireClaudeNonAgentTaskFromQueueRow(
+        state,
+        PANE,
+        workflowEnd(
+          '"<task-id>wsecond01</task-id><tool-use-id>toolu_01SecondWorkflowAAAAAAA</tool-use-id>"'
+        )
+      )
+    ).toBe(true)
+    expect([...(state.claudeNonAgentWorkByPaneKey.get(PANE)?.tasks.keys() ?? [])]).toEqual([
+      'wsecond01'
+    ])
   })
 
   it('leaves a task only an inventory named (no recorded launch) for the next inventory', () => {

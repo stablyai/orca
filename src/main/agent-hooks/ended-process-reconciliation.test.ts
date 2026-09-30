@@ -97,7 +97,12 @@ describe('reconcileEndedProcessForPaneKeys', () => {
     const server = await startServer()
     try {
       claudeRow(server, 'done')
-      recordClaudeNonAgentTaskLaunch(server._getStateForTests(), PANE, 'btest0001', 'toolu_test')
+      recordClaudeNonAgentTaskLaunch(
+        server._getStateForTests(),
+        PANE,
+        { taskId: 'btest0001', kind: 'unknown' },
+        'toolu_test'
+      )
       server._getStateForTests().claudeActiveSessionCronPaneKeys.add(PANE)
 
       expect(server.reconcileEndedProcessForPaneKeys([PANE])).toBe(1)

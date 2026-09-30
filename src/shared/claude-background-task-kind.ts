@@ -3,7 +3,8 @@ import type { AgentChildWorkKind } from './agent-status-child-work'
 /**
  * The one table of what Claude calls a task. The SDK stream names tasks
  * `local_*`/`monitor`; the hook payload's `background_tasks` inventory names
- * them `subagent`/`teammate`/`shell`. Both lanes classify here so neither can
+ * them `subagent`/`teammate`/`shell`/`workflow`, and a hook's launch result
+ * names its `taskType` `local_*`. Every lane classifies here so none can
  * drift on which kinds are agents.
  */
 export function classifyClaudeBackgroundTaskKind(taskType: unknown): AgentChildWorkKind {
@@ -14,6 +15,7 @@ export function classifyClaudeBackgroundTaskKind(taskType: unknown): AgentChildW
     case 'teammate':
       return 'agent'
     case 'local_workflow':
+    case 'workflow':
       return 'workflow'
     case 'local_bash':
     case 'shell':

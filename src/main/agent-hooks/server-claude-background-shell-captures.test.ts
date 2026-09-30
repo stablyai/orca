@@ -5,19 +5,27 @@
 // record of a task ending with no hook (a Ctrl+C'd turn's shell, a /tasks kill) is the
 // `queue-operation` line Claude appends to its transcript; the stories append the captured line
 // where it was written and let the listener's transcript watch find it on a real tick.
-import { appendFileSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { appendFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AgentHookServer, _internals } from './server'
+import { _internals } from './server'
 import { buildBody, PANE, postHookEvent } from './server.test-fixtures'
+import { cancelLabelled, hookAt, loadCapture } from './claude-cancel-capture.test-fixture'
 import {
-  cancelLabelled,
-  hookAt,
-  loadCapture,
-  type CapturedRecord,
-  type CapturedTranscriptScan
-} from './claude-cancel-capture.test-fixture'
+  captureEpoch,
+  cleanUpCaptureReplays,
+  pressCtrlC,
+  queueLine,
+  replayer,
+  row,
+  startServer,
+  storedTaskFact,
+  temporaryDir,
+  transcriptFile,
+  watch,
+  watchCaughtUp,
+  writeCaptured
+} from './claude-background-task-capture.test-fixture'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
   getCohortAtEmitMock: vi.fn(),
@@ -26,9 +34,6 @@ const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
 
 vi.mock('../telemetry/client', () => ({ track: trackMock }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: getCohortAtEmitMock }))
-
-const temporaryPaths: string[] = []
-const running: AgentHookServer[] = []
 
 beforeEach(() => {
   _internals.resetCachesForTests()
@@ -40,108 +45,10 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  for (const server of running.splice(0)) {
-    server.stop()
-  }
-  for (const path of temporaryPaths.splice(0)) {
-    rmSync(path, { recursive: true, force: true })
-  }
+  cleanUpCaptureReplays()
   vi.useRealTimers()
   vi.restoreAllMocks()
 })
-
-function temporaryDir(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'orca-background-shell-'))
-  temporaryPaths.push(dir)
-  return dir
-}
-
-function transcriptFile(): string {
-  const path = join(temporaryDir(), 'session.jsonl')
-  writeFileSync(path, '')
-  return path
-}
-
-async function startServer(): Promise<AgentHookServer> {
-  const server = new AgentHookServer()
-  running.push(server)
-  await server.start({ env: 'production' })
-  return server
-}
-
-function row(server: AgentHookServer) {
-  const entry = server.getStatusSnapshotForPane(PANE)[0]
-  if (!entry) {
-    throw new Error('the pane has no row')
-  }
-  return entry
-}
-
-function storedShellFact(server: AgentHookServer): boolean | undefined {
-  return server._getStateForTests().lastStatusByPaneKey.get(PANE)?.claudeRunningNonAgentTask
-}
-
-function watch(server: AgentHookServer) {
-  return server._getStateForTests().claudeTranscriptCursorByPaneKey.get(PANE)
-}
-
-/** The renderer's part: capture the row as the baseline and, once the settle window passes with
- *  no hook, ask the server to infer from the Ctrl+C. */
-function pressCtrlC(server: AgentHookServer): boolean {
-  const baseline = row(server)
-  return server.inferInterrupt({
-    paneKey: PANE,
-    baselineUpdatedAt: baseline.receivedAt,
-    baselineStateStartedAt: baseline.stateStartedAt,
-    baselinePrompt: baseline.prompt,
-    baselineAgentType: 'claude',
-    intent: 'ctrl-c'
-  })
-}
-
-function queueLine(records: CapturedRecord[], label: string): CapturedTranscriptScan {
-  const scan = records.find((record) => record.kind === 'transcript' && record.label === label)
-  if (scan?.kind !== 'transcript' || scan.lines.length !== 1) {
-    throw new Error(`Captured transcript line ${label} not found`)
-  }
-  return scan
-}
-
-/** The capture's t=0 on the wall clock, from the stamp Claude wrote on its enqueue line. */
-function captureEpoch(records: CapturedRecord[]): number {
-  const scan = queueLine(records, 'queue-operation-enqueue')
-  // JSON.parse returns any; the timestamp is checked by Date.parse.
-  const parsed: Record<string, unknown> = JSON.parse(scan.lines[0])
-  return Date.parse(String(parsed.timestamp)) - scan.t * 1000
-}
-
-/** Replays hooks on the capture's clock, pointing each session's transcript at a temp file. */
-function replayer(server: AgentHookServer, records: CapturedRecord[], files: Map<string, string>) {
-  const t0 = captureEpoch(records)
-  return async (indices: number[]) => {
-    for (const index of indices) {
-      const hook = hookAt(records, index)
-      vi.setSystemTime(t0 + hook.t * 1000)
-      const reported = String(hook.payload.transcript_path)
-      const transcript = files.get(reported) ?? files.get('*')
-      await expect(
-        postHookEvent(server, buildBody({ ...hook.payload, transcript_path: transcript }))
-      ).resolves.toMatchObject({ status: 204 })
-    }
-  }
-}
-
-/** Appends a captured transcript line at its captured instant. */
-function writeCaptured(records: CapturedRecord[], scan: CapturedTranscriptScan, path: string) {
-  vi.setSystemTime(captureEpoch(records) + scan.t * 1000)
-  appendFileSync(path, `${scan.lines[0]}\n`)
-}
-
-/** Waits for a tick to have read everything the transcript holds. */
-async function watchCaughtUp(server: AgentHookServer, transcript: string): Promise<void> {
-  const size = statSync(transcript).size
-  await vi.waitFor(() => expect(watch(server)?.offset).toBe(size), { timeout: 3_000 })
-}
 
 describe('Ctrl+C in the turn that launched a background shell (captured, 2.1.284)', () => {
   const records = loadCapture('claude-background-shell-ctrl-c-hooks')
@@ -170,7 +77,7 @@ describe('Ctrl+C in the turn that launched a background shell (captured, 2.1.284
       mainAgent: { state: 'done', outcome: 'cancellation' }
     })
     expect(row(server).interrupted).toBeUndefined()
-    expect(storedShellFact(server)).toBe(true)
+    expect(storedTaskFact(server)).toBe(true)
 
     // The next typed turn's Stop lists the same shell running.
     await replay([7, 9, 8])
@@ -187,7 +94,7 @@ describe('Ctrl+C in the turn that launched a background shell (captured, 2.1.284
     writeCaptured(records, killedAtExit, transcript)
     await vi.waitFor(() => expect(row(server).state).toBe('done'), { timeout: 3_000 })
     expect(row(server).workingMode).toBeUndefined()
-    expect(storedShellFact(server)).toBe(false)
+    expect(storedTaskFact(server)).toBe(false)
   })
 
   it('retires the shell only on a line naming both its task id and its launching call', async () => {
@@ -338,10 +245,10 @@ describe('a /tasks kill during a running turn (captured, 2.1.285)', () => {
     const replay = replayer(server, records, new Map([['*', transcript]]))
     await replay([0, 1, 2, 3, 4, 5, 6, 7, 8])
     expect(row(server)).toMatchObject({ state: 'working', mainAgent: { state: 'working' } })
-    expect(storedShellFact(server)).toBe(true)
+    expect(storedTaskFact(server)).toBe(true)
 
     writeCaptured(records, queueLine(records, 'queue-operation-enqueue'), transcript)
-    await vi.waitFor(() => expect(storedShellFact(server)).toBe(false), { timeout: 3_000 })
+    await vi.waitFor(() => expect(storedTaskFact(server)).toBe(false), { timeout: 3_000 })
     expect(row(server)).toMatchObject({ state: 'working', mainAgent: { state: 'working' } })
 
     // 40 s later the turn's next tool boundary absorbs the notification, and its Stop lists nothing.
@@ -419,7 +326,7 @@ describe('/clear while a background shell runs (captured, 2.1.285)', () => {
     await replay([9])
     expect(row(server)).toMatchObject({ state: 'working', mainAgent: { state: 'working' } })
     appendFileSync(cleared, `${completed.lines[0]}\n`)
-    await vi.waitFor(() => expect(storedShellFact(server)).toBe(false), { timeout: 3_000 })
+    await vi.waitFor(() => expect(storedTaskFact(server)).toBe(false), { timeout: 3_000 })
     expect(row(server)).toMatchObject({ state: 'working', mainAgent: { state: 'working' } })
 
     await replay([10])

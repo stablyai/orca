@@ -246,23 +246,32 @@ reader does not mistake them for drift:
 - The Claude hook lane knows a background shell (or monitor, or workflow) by
   Claude's task id, in one per-pane record (`claude-non-agent-work.ts`) on the
   host that runs the session. A task enters it from the main agent's launching
-  `PostToolUse` (`tool_response.backgroundTaskId`, with that call's
-  `tool_use_id`) or from the `background_tasks` inventory Claude attaches to
-  `Stop`, which replaces the record. It leaves on the next inventory that omits
-  it, on a `TaskStop` result naming it, or on the `queue-operation` `enqueue`
-  line Claude writes to its transcript the moment the task ends (finished,
-  killed with its turn's Ctrl+C, or from `/tasks` while Claude idles), read by
-  the transcript watch below and trusted only when both its task id and its
-  tool-use id match the launch Orca recorded, since a prompt typed while Claude
-  is busy writes the same kind of line. A task can end before Orca handles its
-  launching hook, so its line can precede where the watch reads from; accepting
-  the launch reads back a bounded tail once for that exact pair. A `startup` or
-  `resume` `SessionStart` clears the record with the pane's children and crons,
-  since a new process can never end its predecessor's tasks. `/clear` keeps it:
-  the shell survives and reports its end in the new session's transcript, and
-  the pane stays on the tail of the last turn that ended, keeping that turn's
-  verdict and turn stamp so the shell's end is not announced as a new turn (not
-  yet after an Esc, which Orca does not infer, so that turn never ended). The
+  `PostToolUse`, with that call's `tool_use_id`, or from the
+  `background_tasks` inventory Claude attaches to `Stop`, which replaces the
+  record. The launch reader takes a shell's `tool_response.backgroundTaskId`;
+  otherwise a `status: "async_launched"` result's `taskId` and `taskType`,
+  captured only for workflows (`local_workflow`). It skips kinds the shared
+  kind table calls an agent, since agents belong to the subagent roster, and
+  admits unknown kinds. It skips any other result, such as a remote
+  `remote_launched` launch, which the next inventory still records. A task
+  leaves on the next inventory that omits it, on a `TaskStop` result naming
+  it, or on the `queue-operation` `enqueue` line Claude writes to its
+  transcript the moment the task ends, read by the transcript watch below and
+  trusted only when both its task id and its tool-use id match the launch Orca
+  recorded, since a prompt typed while Claude is busy writes the same kind of
+  line. Claude writes that line for a shell however it ended (finished, killed
+  with its turn's Ctrl+C, or from `/tasks` while Claude idles) and for a
+  workflow that completes, but not for a workflow stopped or paused from
+  `/tasks`, which leaves only on the next inventory. A task can end before
+  Orca handles its launching hook, so its line can precede where the watch
+  reads from; accepting the launch reads back a bounded tail once for that
+  exact pair. A `startup` or `resume` `SessionStart` clears the record with the
+  pane's children and crons, since a new process can never end its
+  predecessor's tasks. `/clear` keeps it: the task survives and reports its end
+  in the new session's transcript, and the pane stays on the tail of the last
+  turn that ended, keeping that turn's verdict and turn stamp so the task's end
+  is not announced as a new turn (not yet after an Esc, which Orca does not
+  infer, so that turn never ended). The
   pane's process ending, its PTY exiting and the relay stopping clear it with
   the rest of the pane. The desktop keeps no copy for a relayed pane; it reads
   the row's `claudeRunningNonAgentTask`, which the relay restates on every row.

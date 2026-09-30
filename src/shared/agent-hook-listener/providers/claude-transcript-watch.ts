@@ -1,7 +1,8 @@
 // Claude records some of what it does only in its session transcript, with no hook: killing every
 // background agent on an idle-prompt Ctrl+C (an id-less `system`/`agents_killed` row, the
 // claude-idle-ctrl-c-* fixtures), and the end of a background task, however it ended (a
-// `queue-operation` row carrying its task notification, the claude-background-shell-* fixtures).
+// `queue-operation` row carrying its task notification, the claude-background-shell-* and
+// claude-background-workflow-* fixtures).
 // The host that runs the session keeps one cursor per pane while any reason to watch holds, reads
 // it before every Claude event and on a timer, applies what it reads to the listener's records as
 // facts, and restates the row those records now make.
@@ -89,10 +90,10 @@ const CLAUDE_TRANSCRIPT_WATCH_REASONS = {
     admits: (line) => line.includes('"agents_killed"'),
     apply: applyAgentsKilled
   },
-  /** A background task whose launch Orca recorded, which Claude can end with no hook (a /tasks
-   *  kill, or an end the Ctrl+C that cancelled its turn never reports). Dies when the record holds
-   *  no launch-recorded task: its end row, TaskStop, the next inventory, a new process's
-   *  SessionStart, pane teardown. */
+  /** A background task whose launch Orca recorded, which Claude can end with no hook (a shell's
+   *  /tasks kill, or any task's end after the Ctrl+C that cancelled its turn). Dies when the
+   *  record holds no launch-recorded task: its end row, TaskStop, the next inventory, a new
+   *  process's SessionStart, pane teardown. */
   'recorded-task': {
     holds: claudePaneHasLaunchRecordedTask,
     admits: mayBeClaudeTaskEndLine,

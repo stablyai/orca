@@ -1,0 +1,11 @@
+{
+  "source_scenario": "r7-w6a-run1",
+  "claude_version": "2.1.285 (Claude Code)",
+  "platform": "darwin",
+  "cols": 120,
+  "rows": 40,
+  "recorded_at": "2026-09-30",
+  "clock": "t is seconds since the first hook; hook records keep only the ps rows of the rig's sleep processes, taken inside the hook; a transcript line's t is the rig's poll time, so take write order from the line's own timestamp",
+  "note": "Claude launches a two-agent background workflow whose script waits 20 s between the agents (`setTimeout`), and the turn ends normally (its Stop lists it). Agent 1's SubagentStop, then 20.1 s with no agent, no hook and no main-transcript row, then agent 2's SubagentStart. Write order by Claude's own row timestamp: end row 18:06:08.108Z; the report turn's UserPromptSubmit hook is 40 ms later (the fixture `t` of the line is the rig's poll time, which lands after the hook).",
+  "scrub": "Username was already a placeholder in the capture run. Every UUID (session, prompt, message, turn and row ids, and the ids inside transcript_path, agent_transcript_path, transcriptDir, scriptPath, <output-file> and <diagnostics>) is replaced by a placeholder distinct to this fixture (bb); each workflow agent id by a same-shape placeholder abb…; msg_ ids by a same-length placeholder. Claude task ids, tool_use ids and wf_ run ids are verbatim. Transcript: only `queue-operation` lines and the interrupt notice row are kept (the rest, including ~56 KB prompt_snapshot attachments carrying the system prompt, are dropped)."
+}

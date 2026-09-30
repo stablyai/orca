@@ -1,0 +1,15 @@
+{
+  "source_scenario": "r6-w4-run1",
+  "claude_version": "2.1.285 (Claude Code)",
+  "platform": "darwin",
+  "cols": 120,
+  "rows": 40,
+  "recorded_at": "2026-09-30",
+  "clock": "t is seconds since the first hook; hook records keep only the ps rows of the rig's sleep processes, taken inside the hook; a transcript line's t is the rig's poll time, so take write order from the line's own timestamp",
+  "note": "Claude launches a one-agent background workflow (`sleep 45.07`) and the turn ends (its Stop lists it). /clear: SessionEnd (clear), SessionStart (clear) under a new session id. The agent's later hooks carry the NEW session id and no prompt id. The end row (completed, the launch's ids) lands in the NEW session's transcript, whose `<output-file>` and diagnostics still name the old session. Write order by Claude's own row timestamp: end row 17:09:27.467Z; the report turn's UserPromptSubmit hook is 42 ms later. `file` names which transcript a line is in.",
+  "scrub": "Username was already a placeholder in the capture run. Every UUID (session, prompt, message, turn and row ids, and the ids inside transcript_path, agent_transcript_path, transcriptDir, scriptPath, <output-file> and <diagnostics>) is replaced by a placeholder distinct to this fixture (b9); each workflow agent id by a same-shape placeholder ab9…; msg_ ids by a same-length placeholder. Claude task ids, tool_use ids and wf_ run ids are verbatim. Transcript: only `queue-operation` lines and the interrupt notice row are kept (the rest, including ~56 KB prompt_snapshot attachments carrying the system prompt, are dropped).",
+  "files": [
+    "00000000-0000-4000-8000-0000b9000005.jsonl",
+    "00000000-0000-4000-8000-0000b9000000.jsonl"
+  ]
+}

@@ -2,10 +2,14 @@
 // Claude's own task id. It starts at the tool call that launches the task or at the inventory Claude
 // attaches to Stop, and ends at Claude's own record of the task's end: the next inventory, a
 // TaskStop result, or the task-notification row Claude writes to its transcript when the task
-// ends. A new process's session start ends them too; /clear does not, since a shell outlives it.
+// ends. A new process's session start ends them too; /clear does not, since the task outlives it.
 import type { AgentChildWorkKind } from '../../agent-status-child-work'
+import { isAgentChildWorkKind } from '../../agent-status-child-work-liveness'
 import type { ClaudeBackgroundNonAgentTask } from '../../claude-background-task-inventory'
-import { isClaudeBackgroundTaskStatusTerminal } from '../../claude-background-task-kind'
+import {
+  classifyClaudeBackgroundTaskKind,
+  isClaudeBackgroundTaskStatusTerminal
+} from '../../claude-background-task-kind'
 import { readJsonlCursor } from '../../codex-rollout-jsonl-cursor'
 import type { AgentHookEventPayload } from '../listener-event'
 import type { HookListenerState } from '../listener-state'
@@ -70,21 +74,43 @@ export function claudePaneHasLaunchRecordedTask(
   return tasks !== undefined && [...tasks.values()].some((task) => task.launchToolUseId)
 }
 
-/** The main agent's launching tool call named a background task (`tool_response.backgroundTaskId`).
- *  Its kind is unknown until an inventory types it, which fails active. */
+export type ClaudeBackgroundTaskLaunch = { taskId: unknown; kind: AgentChildWorkKind }
+
+/** The background task a tool result launched, if any: a shell's `backgroundTaskId`, its kind
+ *  unknown until an inventory types it (r1-s1); otherwise an `async_launched` result's `taskId`
+ *  and `taskType` (captured for workflows, r6-w1..w4). Skips agent kinds, since agents are the
+ *  rosters', but admits unknown ones, which fail active. Skips any other result, e.g. a remote
+ *  `remote_launched` launch, which the next inventory still records. */
+export function readClaudeBackgroundTaskLaunch(
+  response: Record<string, unknown>
+): ClaudeBackgroundTaskLaunch | undefined {
+  if (response.backgroundTaskId !== undefined) {
+    return { taskId: response.backgroundTaskId, kind: 'unknown' }
+  }
+  if (response.status !== 'async_launched' || response.taskId === undefined) {
+    return undefined
+  }
+  // Temporary: a teammate launch (uncaptured) reads unknown until the table calls it an agent.
+  const kind = classifyClaudeBackgroundTaskKind(response.taskType)
+  return isAgentChildWorkKind(kind) ? undefined : { taskId: response.taskId, kind }
+}
+
+/** The main agent's launching tool call named a background task. A kind an inventory already gave
+ *  it wins over the launch's. */
 export function recordClaudeNonAgentTaskLaunch(
   state: HookListenerState,
   paneKey: string,
-  taskId: unknown,
+  launch: ClaudeBackgroundTaskLaunch,
   launchToolUseId: unknown
 ): void {
+  const { taskId } = launch
   if (!isClaudeTaskId(taskId)) {
     return
   }
   const previous = state.claudeNonAgentWorkByPaneKey.get(paneKey)
   const tasks = new Map(previous?.tasks)
   const added = addCapped(tasks, taskId, {
-    kind: tasks.get(taskId)?.kind ?? 'unknown',
+    kind: tasks.get(taskId)?.kind ?? launch.kind,
     ...(isClaudeTaskId(launchToolUseId) ? { launchToolUseId } : {})
   })
   writeClaudeNonAgentWork(state, paneKey, tasks, (previous?.hasUnnamedRunning ?? false) || !added)
@@ -145,11 +171,13 @@ function readTaskNotificationField(body: string, field: string): string | undefi
 }
 
 /** Claude writes a `queue-operation` `enqueue` row carrying a task's notification the moment the
- *  task ends, however it ended: finished, killed with its turn's Ctrl+C, or from /tasks, even
- *  while Claude idles and sends no hook (r1-s1, r1-s9, r3-tasks-run1). A prompt typed while Claude
- *  is busy writes the same row with only its text (r3-typed-run1), so the row carries no provenance
- *  of its own: it retires a task only when it is exactly one terminal notification naming both the
- *  task id and the tool call Orca recorded at launch, which Claude mints fresh for each launch.
+ *  task ends, even while Claude idles and sends no hook: a shell however it ended (finished, killed
+ *  with its turn's Ctrl+C or from /tasks: r1-s1, r1-s9, r3-tasks-run1), a workflow only when it
+ *  completes (r6-w1, r6-w2; one stopped or paused from /tasks writes nothing, r6-w3, r7-w6b, so it
+ *  leaves on the next inventory). A prompt typed while Claude is busy writes the same row with
+ *  only its text (r3-typed-run1), so the row carries no provenance of its own: it retires a task
+ *  only when it is exactly one terminal notification naming both the task id and the tool call
+ *  Orca recorded at launch, which Claude mints fresh for each launch.
  *  Returns whether a task was retired. */
 export function retireClaudeNonAgentTaskFromQueueRow(
   state: HookListenerState,

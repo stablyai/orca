@@ -53,6 +53,23 @@ describe('Claude background task status', () => {
     ).toBe('working')
   })
 
+  it("types a workflow the way the launch that named it did, from Claude's inventory name", () => {
+    // Captured (r6-w1-run1, Claude 2.1.285): the launch turn's Stop.
+    const result = readClaudeBackgroundAgentTasks({
+      background_tasks: [
+        {
+          id: 'w1kuktaid',
+          type: 'workflow',
+          status: 'running',
+          description: 'One agent runs a timed sleep',
+          name: 'capture-sleep'
+        }
+      ]
+    })
+    expect(result.runningNonAgentTasks).toEqual([{ id: 'w1kuktaid', kind: 'workflow' }])
+    expect(result.tasks).toEqual([])
+  })
+
   it('fails unknown, partial, or malformed task entries active but ignores terminal entries', () => {
     for (const status of ['queued', undefined]) {
       expect(

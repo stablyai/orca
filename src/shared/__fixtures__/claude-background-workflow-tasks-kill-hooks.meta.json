@@ -1,0 +1,11 @@
+{
+  "source_scenario": "r6-w3-run1",
+  "claude_version": "2.1.285 (Claude Code)",
+  "platform": "darwin",
+  "cols": 120,
+  "rows": 40,
+  "recorded_at": "2026-09-30",
+  "clock": "t is seconds since the first hook; hook records keep only the ps rows of the rig's sleep processes, taken inside the hook; a transcript line's t is the rig's poll time, so take write order from the line's own timestamp",
+  "note": "Claude launches a one-agent background workflow (`sleep 150.07`); the launch turn's Stop lists it. At the idle prompt the driver opens /tasks and stops the workflow with `x`. Nothing reaches the main transcript and no hook fires, not even SubagentStop. The agent's own sidechain file gets a denied tool result and an interrupt row (not kept: the watch never reads sidechains), and the run-state file says `status: killed`. The next typed turn's Stop, 135 s later, lists nothing.",
+  "scrub": "Username was already a placeholder in the capture run. Every UUID (session, prompt, message, turn and row ids, and the ids inside transcript_path, agent_transcript_path, transcriptDir, scriptPath, <output-file> and <diagnostics>) is replaced by a placeholder distinct to this fixture (b8); each workflow agent id by a same-shape placeholder ab8…; msg_ ids by a same-length placeholder. Claude task ids, tool_use ids and wf_ run ids are verbatim. Transcript: only `queue-operation` lines and the interrupt notice row are kept (the rest, including ~56 KB prompt_snapshot attachments carrying the system prompt, are dropped)."
+}

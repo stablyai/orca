@@ -264,7 +264,12 @@ describe('agent hook extraction boundaries', () => {
     state.warnedVersions.add('old-version')
     state.warnedEnvs.add('development->production')
     state.lastPromptByPaneKey.set(PANE, 'prompt')
-    recordClaudeNonAgentTaskLaunch(state, PANE, 'btest0001', 'toolu_test')
+    recordClaudeNonAgentTaskLaunch(
+      state,
+      PANE,
+      { taskId: 'btest0001', kind: 'unknown' },
+      'toolu_test'
+    )
     state.codexLeadStateByPaneKey.set(PANE, { state: 'working', stateStartedAt: 1 })
     state.grokActiveTurnByPaneKey.set(PANE, { promptId: 'prompt-1' })
 

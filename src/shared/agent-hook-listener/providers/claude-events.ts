@@ -28,6 +28,7 @@ import {
 import { buildClaudeStatusPayload } from './claude-status-build'
 import {
   claudePaneHasNonAgentWork,
+  readClaudeBackgroundTaskLaunch,
   recordClaudeNonAgentTaskLaunch,
   replaceClaudeNonAgentWorkFromInventory,
   retireClaudeNonAgentTask
@@ -41,8 +42,8 @@ const CLAUDE_TASK_STOP_TOOL_NAMES: ReadonlySet<string> = new Set([
 ])
 
 /** A tool result that starts or stops a background task. Only the main agent's own launch is
- *  recorded: a subagent's shell is its own work. A stop is Claude's confirmed result naming the
- *  task, whoever called it, and only a task the record holds is retired. */
+ *  recorded: a subagent's shell or workflow is its own work. A stop is Claude's confirmed result
+ *  naming the task, whoever called it, and only a task the record holds is retired. */
 function applyClaudeBackgroundTaskToolResult(
   state: HookListenerState,
   paneKey: string,
@@ -61,13 +62,9 @@ function applyClaudeBackgroundTaskToolResult(
     }
     return
   }
-  if (eventAgentId === undefined && response.backgroundTaskId !== undefined) {
-    recordClaudeNonAgentTaskLaunch(
-      state,
-      paneKey,
-      response.backgroundTaskId,
-      readString(hookPayload, 'tool_use_id')
-    )
+  const launch = eventAgentId === undefined ? readClaudeBackgroundTaskLaunch(response) : undefined
+  if (launch) {
+    recordClaudeNonAgentTaskLaunch(state, paneKey, launch, readString(hookPayload, 'tool_use_id'))
   }
 }
 
@@ -107,8 +104,8 @@ export function normalizeClaudeEvent(
     }
     // Why: a new session owns the pane; stale children/crons must not gate its idle row back up to
     // 'working' (same reset Codex does on SessionStart). A new process can never end its
-    // predecessor's background tasks either, but /clear keeps the process, whose shells report
-    // their end in the new session's transcript (r3-clear-run1).
+    // predecessor's background tasks either, but /clear keeps the process, whose shells and
+    // workflows report their end in the new session's transcript (r3-clear-run1, r6-w4-run1).
     const keepsTasks = sessionStartSource === 'clear'
     state.claudeSubagentRosterByPaneKey.delete(paneKey)
     state.claudeActiveSessionCronPaneKeys.delete(paneKey)
@@ -116,8 +113,8 @@ export function normalizeClaudeEvent(
       state.claudeNonAgentWorkByPaneKey.delete(paneKey)
     }
     const previousLead = state.claudeLeadStateByPaneKey.get(paneKey)
-    // Why: a shell that outlives /clear keeps the pane on the tail of the last turn that ended, so
-    // that turn's verdict and stamp stay and the shell's end is not announced as a new turn.
+    // Why: a task that outlives /clear keeps the pane on the tail of the last turn that ended, so
+    // that turn's verdict and stamp stay and the task's end is not announced as a new turn.
     // Otherwise a new session's main agent starts its own clock, not the old session's last Stop.
     const record =
       keepsTasks && previousLead?.state === 'done' && claudePaneHasNonAgentWork(state, paneKey)
