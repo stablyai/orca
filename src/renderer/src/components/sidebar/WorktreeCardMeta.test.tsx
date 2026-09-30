@@ -323,6 +323,7 @@ describe('WorktreeCardDetailsHover', () => {
 
     expect(markup).toContain('data-review-decision-dot')
     expect(markup).toMatch(/<svg[^>]*class="[^"]*size-3\.5/)
+    expect(markup).toContain('Linked PR #1 · Approved')
   })
 
   it('shows the Jira icon badge and linked issue details', () => {
