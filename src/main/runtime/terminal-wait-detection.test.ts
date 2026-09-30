@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  detectExplicitIdleStatusFromTitle,
   detectTerminalWaitBlockedReason,
   isKnownReadyPromptPreview,
   isMuseReadyPromptPreview
@@ -581,4 +582,26 @@ describe('isMuseReadyPromptPreview', () => {
     expect(detectTerminalWaitBlockedReason(waitText)).toBe('agent-trust-workspace')
     expect(isMuseReadyPromptPreview(waitText)).toBe(false)
   })
+})
+
+describe('detectExplicitIdleStatusFromTitle', () => {
+  it.each([
+    'π > qa-tri-14-omp-qa-routing',
+    'OMP > qa-tri-14-omp-qa-routing',
+    'Pi > my-project',
+    'zsh | π > dir',
+    'π - my-project',
+    'Codex ready',
+    '✳ Claude Code',
+    '◇ Gemini CLI'
+  ])('accepts explicit idle title %j', (title) => {
+    expect(detectExplicitIdleStatusFromTitle(title)).toBe('idle')
+  })
+
+  it.each(['π : my-project', 'π ! my-project', 'π ⠋ my-project', 'Codex YOLO', 'zsh', ''])(
+    'rejects non-idle or non-explicit title %j',
+    (title) => {
+      expect(detectExplicitIdleStatusFromTitle(title)).toBeNull()
+    }
+  )
 })

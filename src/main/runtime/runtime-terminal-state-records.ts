@@ -42,6 +42,7 @@ export type RuntimeLeafRecord = RuntimeSyncedLeaf &
     lastAgentStatusObservedLive: boolean
     lastOscTitle: string | null
     lastOscTitleAt: number | null
+    lastOscTitleStaleWorkingClear?: boolean
     paneTitleUpdatedAt: number | null
   }
 
@@ -87,6 +88,7 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   lastOscTitle: string | null
   lastOscTitleAt: number | null
   lastOscTitleEpochMs: number | null
+  lastOscTitleStaleWorkingClear?: boolean
   managementTitle: string | null
   managementTitleAt: number | null
   controllerTitle: string | null

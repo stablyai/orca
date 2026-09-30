@@ -1,5 +1,6 @@
 import type { AgentStatus } from './agent-status'
 import { isOpenCodeNativeTitle } from '../../../shared/opencode-terminal-title'
+import { getPiStateTitleStatus } from '../../../shared/pi-state-title-marker'
 import { classifyTitleActivity, resolveTitleActivityLabel } from '@/lib/pane-agent-evidence'
 
 const EXPLICIT_IDLE_SEND_TITLE_RE = /(^|\s)(ready|idle|done)(\s|$|[.!?])/i
@@ -31,6 +32,7 @@ function isExplicitIdleSendTitle(title: string): boolean {
     title.startsWith(CLAUDE_IDLE_PREFIX) ||
     title.startsWith('* ') ||
     title.includes(GEMINI_IDLE_PREFIX) ||
-    title.startsWith(PI_IDLE_PREFIX)
+    title.startsWith(PI_IDLE_PREFIX) ||
+    getPiStateTitleStatus(title) === 'idle'
   )
 }

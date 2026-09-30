@@ -51,6 +51,7 @@ export type TuiIdleEvidenceRecord = {
   lastAgentStatus: AgentStatus | null
   lastOutputAt: number | null
   lastOscTitle?: string | null
+  lastOscTitleStaleWorkingClear?: boolean
 }
 
 export type FirstPartyAgentStatus = {
@@ -69,7 +70,15 @@ export function hasExplicitIdleTitle(
   // one dropped an explicit `Codex ready` to the tier-3 lane and delayed it by the
   // whole quiescence window.
   for (const title of [rendererTitle, record.lastOscTitle]) {
-    if (title && detectExplicitIdleStatusFromTitle(title) === 'idle') {
+    if (!title) {
+      continue
+    }
+    // Why: a title synthesized by the 3s stale-title clear timer is not genuine
+    // agent idle evidence; it must not satisfy tier 1 readiness.
+    if (record.lastOscTitleStaleWorkingClear && title === record.lastOscTitle) {
+      continue
+    }
+    if (detectExplicitIdleStatusFromTitle(title) === 'idle') {
       return true
     }
   }
@@ -264,9 +273,9 @@ export function evaluateTuiIdle(input: TuiIdleEvaluationInput): TuiIdleVerdict {
       ? READY_STRONG
       : { kind: 'pending', quietForeground: 'closed' }
   }
-  // Why the title before the body: both are tier 1, so either settles, but the title is a
-  // memoized lookup and the body is a fresh multi-KB scan. Same verdict, cheaper order.
-  if (hasExplicitIdleTitle(input.record, input.rendererTitle) || input.readPositiveBodyEvidence()) {
+  // Why explicit title before working status: a genuine idle title outranks retained working
+  // status, while timer-cleared titles are already rejected by hasExplicitIdleTitle.
+  if (hasExplicitIdleTitle(input.record, input.rendererTitle)) {
     return READY_STRONG
   }
   // Why beside the title lane, not after the veto: both are tier 1, and a first-party `done`
@@ -280,6 +289,11 @@ export function evaluateTuiIdle(input: TuiIdleEvaluationInput): TuiIdleVerdict {
     return input.firstPartyStatus?.state === 'working'
       ? WORKING
       : { kind: 'pending', quietForeground: 'closed' }
+  }
+  // Why positive body evidence after fresh working status: a retained prompt from a previous turn
+  // in the terminal tail must not bypass a fresh active turn report.
+  if (input.readPositiveBodyEvidence()) {
+    return READY_STRONG
   }
   // Why after the veto: a first-party working account outranks inferred body evidence.
   // Why before the working title: Codex can leave a stale spinner title after a turn, and a
@@ -363,7 +377,9 @@ export function ptyTuiIdleEvidence(
     record: pty,
     readTailBlockedReason: () => detectTerminalWaitBlockedReason(waitText()),
     readPositiveBodyEvidence: () =>
-      (agent !== 'qoder' && source.getAdoptedPtyIdleStatus(pty) === 'idle') ||
+      (!pty.lastOscTitleStaleWorkingClear &&
+        agent !== 'qoder' &&
+        source.getAdoptedPtyIdleStatus(pty) === 'idle') ||
       isKnownReadyPromptBody(
         waitText(),
         agent,

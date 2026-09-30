@@ -10,9 +10,12 @@ import {
   hasQuietReadyScreen,
   isTuiIdleReadyVerdict,
   nameOnlyIdleNeedsCorroboration,
+  ptyTuiIdleEvidence,
+  type TuiIdleEvidenceSource,
   type TuiIdleEvaluationInput,
   type TuiIdleEvidenceRecord
 } from './tui-idle-evidence'
+import { makeTuiIdlePty } from './tui-idle-wait-test-harness'
 
 const QUIESCENCE_MS = 3000
 
@@ -109,6 +112,62 @@ describe('evaluateTuiIdle ranking', () => {
       })
     )
     expect(verdict).toEqual({ kind: 'ready-strong' })
+  })
+
+  it('refuses an explicit idle title synthesized by the stale working clear timer', () => {
+    const verdict = evaluateTuiIdle(
+      input({
+        ...noMuse,
+        agent: 'omp',
+        record: record({
+          lastAgentStatus: 'idle',
+          lastOscTitle: 'π > my-project',
+          lastOscTitleStaleWorkingClear: true
+        })
+      })
+    )
+    expect(verdict).not.toEqual({ kind: 'ready-strong' })
+  })
+
+  it('rejects stale-timer cleared titles and stays working when first-party status is working', () => {
+    const verdict = evaluateTuiIdle(
+      input({
+        ...noMuse,
+        agent: 'omp',
+        record: record({
+          lastAgentStatus: 'idle',
+          lastOscTitle: 'π > my-project',
+          lastOscTitleStaleWorkingClear: true
+        }),
+        firstPartyStatus: { state: 'working', updatedAt: Date.now() }
+      })
+    )
+    expect(verdict).toEqual({ kind: 'working' })
+  })
+
+  it('settles ready-strong on genuine Pi/OMP explicit idle title', () => {
+    const verdict = evaluateTuiIdle(
+      input({
+        ...noMuse,
+        agent: 'omp',
+        record: record({ lastAgentStatus: 'idle', lastOscTitle: 'π > my-project' }),
+        firstPartyStatus: { state: 'working', updatedAt: Date.now() - 5000 }
+      })
+    )
+    expect(verdict).toEqual({ kind: 'ready-strong' })
+  })
+
+  it('does not let positive body evidence bypass fresh first-party working status', () => {
+    const verdict = evaluateTuiIdle(
+      input({
+        ...noMuse,
+        agent: 'claude',
+        record: record({ lastAgentStatus: null }),
+        readPositiveBodyEvidence: () => true,
+        firstPartyStatus: { state: 'working', updatedAt: Date.now() }
+      })
+    )
+    expect(verdict).toEqual({ kind: 'working' })
   })
 
   it('calls a name-only title weak, even for an agent it is the only rest signal of', () => {
@@ -276,5 +335,25 @@ describe('a DSH pane settles tui-idle on its own hook', () => {
   it('leaves other agents on the title lanes', () => {
     // Scoped on purpose: an agent whose hooks report child turns can emit `done` mid-turn.
     expect(ready({ agent: 'claude' })).toBe(false)
+  })
+})
+
+describe('ptyTuiIdleEvidence stale working clear handling', () => {
+  it('excludes adopted pty idle status when lastOscTitleStaleWorkingClear is set', () => {
+    const pty = makeTuiIdlePty({
+      lastOscTitle: 'π > my-project',
+      lastOscTitleStaleWorkingClear: true
+    })
+
+    const source: TuiIdleEvidenceSource = {
+      getPaneAgent: () => 'omp',
+      getAdoptedPtyIdleStatus: () => 'idle',
+      getFirstPartyAgentStatus: () => null,
+      readScreenLines: () => [],
+      quiescenceMs: 1000
+    }
+
+    const input = ptyTuiIdleEvidence(source, pty, () => '')
+    expect(input.readPositiveBodyEvidence()).toBe(false)
   })
 })

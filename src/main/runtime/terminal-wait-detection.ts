@@ -7,6 +7,7 @@ import {
 } from '../../shared/agent-detection'
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
 import type { TuiAgent } from '../../shared/tui-agent'
+import { getPiStateTitleStatus } from '../../shared/pi-state-title-marker'
 import { findAntigravityReadyPromptIndex } from './antigravity-terminal-readiness'
 import {
   findCodexHeaderIndex,
@@ -35,7 +36,8 @@ function computeExplicitIdleStatusFromTitle(title: string): AgentStatus | null {
     title.startsWith(CLAUDE_IDLE_PREFIX) ||
     title.startsWith('* ') ||
     title.includes(GEMINI_IDLE_PREFIX) ||
-    title.startsWith(PI_IDLE_PREFIX)
+    title.startsWith(PI_IDLE_PREFIX) ||
+    getPiStateTitleStatus(title) === 'idle'
   ) {
     return 'idle'
   }

@@ -36,6 +36,7 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
       pty.lastOscTitle = recordedTitle
       pty.lastOscTitleAt = identityOnlyTitle ? null : observedAt
       pty.lastOscTitleEpochMs = observedAtEpochMs
+      pty.lastOscTitleStaleWorkingClear = meta?.staleWorkingTitleClear === true
       pty.lastAgentStatus = agentStatus
       pty.lastAgentStatusObservedLive = true
       if (prevStatus === 'working' && agentStatus === null) {
@@ -105,6 +106,7 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
       const prevLeafTitle = leaf.lastOscTitle
       leaf.lastOscTitle = recordedTitle
       leaf.lastOscTitleAt = identityOnlyTitle ? null : this.nextTitleObservationSequence()
+      leaf.lastOscTitleStaleWorkingClear = meta?.staleWorkingTitleClear === true
       // Why: when a new OSC title doesn't classify as an agent state (e.g.
       // bare shell title after the agent exits), clear lastAgentStatus so
       // it is no longer sticky. Tui-idle waiters that needed the previous
@@ -178,6 +180,7 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
       pty.lastOscTitle = null
       pty.lastOscTitleAt = null
       pty.lastOscTitleEpochMs = null
+      pty.lastOscTitleStaleWorkingClear = false
       pty.lastAgentStatus = null
       // Why: the prior process's first-party status would otherwise veto idle for its
       // replacement — a stale `working` keeps tui-idle unresolved on the new generation.
@@ -196,6 +199,7 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
     for (const leaf of this.getLeavesForPty(ptyId)) {
       leaf.lastOscTitle = null
       leaf.lastOscTitleAt = null
+      leaf.lastOscTitleStaleWorkingClear = false
       leaf.lastAgentStatus = null
       leaf.lastAgentStatusObservedLive = false
       leaf.waitBlockedAt = null
