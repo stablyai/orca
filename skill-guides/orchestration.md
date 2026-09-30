@@ -100,8 +100,13 @@ ORCA status --json
 ORCA orchestration run-create --objective "<objective>" --json
 ORCA orchestration worker-start --spec "<worker A task>" --worktree current --agent codex --json
 ORCA orchestration worker-start --spec "<worker B task>" --worktree current --agent claude --json
-ORCA orchestration check --wait --types "worker_done,escalation,question" --timeout-ms 900000 --json
+ORCA orchestration check --wait --types "worker_done,escalation,question" --timeout-ms 590000 --json
 ```
+
+Delegation has two phases. Until the Task is submitted, keep readiness short and
+verified (custom setup: `references/low-level-topology.md`). After, the filtered
+wait is the whole watch: read no pane; heartbeats prove liveness, not progress.
+Keep `--timeout-ms` under the harness tool-call ceiling (590000 under 600000 ms).
 
 If `worker-start` exits non-zero, do not relaunch. Read the receipt's
 `failedStage` and `residualResources`, then load
@@ -121,7 +126,7 @@ active Dispatch, and decide each settled terminal's next owner before the ack:
 ```text
 ORCA orchestration reply --id <message_id> --body "<answer>" --json
 ORCA orchestration worker-release --dispatch <dispatch_id> --json
-ORCA orchestration check --ack <delivery_id> --wait --types "worker_done,escalation,question" --timeout-ms 900000 --json
+ORCA orchestration check --ack <delivery_id> --wait --types "worker_done,escalation,question" --timeout-ms 590000 --json
 ```
 
 Keep waiting until every expected Dispatch settles. A timeout or empty result is

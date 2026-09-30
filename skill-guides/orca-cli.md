@@ -179,7 +179,7 @@ Terminal rules:
 - An older host reports a legacy `old-host` fallback for an ordinary send and refuses `--wait-submit` or `--retry-request` before input, because it cannot provide durable replay.
 - For structured coordination, invoke the `orchestration` skill; it uses `orca orchestration ...` commands for messages, handoffs, task DAGs, dispatches, inbox/reply flows, and coordinator loops. A receiving agent can run `orca orchestration check --peek --format --json` to render its unread mail in agent-readable form; this checks the caller's inbox and does not remotely deliver input to another terminal.
 - Use `terminal create --worktree active --command "<agent>"` for a fresh agent in the current worktree. Use `worktree create --agent <agent>` only for a separate checkout (agent in the first terminal — do not also `terminal create` the same agent).
-- Use `terminal wait --for tui-idle` for agent CLIs such as Claude Code, Gemini, Codex, OMP, Pi, and Grok; always pass `--timeout-ms`.
+- Use `terminal wait --for tui-idle` for agent CLIs such as Claude Code, Gemini, Codex, OMP, Pi, and Grok; always pass `--timeout-ms`. It proves launch readiness or a finished turn, not a slash-command acknowledgement: poll `terminal read` for the expected text instead.
 - For long output, use cursor reads. After a limited tail preview, page from `oldestCursor`; after a cursor read, continue with `nextCursor` while `limited` is true and `nextCursor !== latestCursor`.
 - `--direction horizontal` splits left/right. `--direction vertical` splits top/bottom.
 
